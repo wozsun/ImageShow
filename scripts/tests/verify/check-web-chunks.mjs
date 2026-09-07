@@ -168,7 +168,9 @@ async function assetCompression(file) {
 
 function assertModulesExcluded(files, label, forbidden) {
   const violations = [...modulesIn(files)].filter((module) => (
-    forbidden.some((pattern) => pattern.test(module))
+    forbidden.some((pattern) => typeof pattern === "string"
+      ? pattern === module
+      : pattern.test(module))
   ));
   if (violations.length) {
     throw new Error(
@@ -650,9 +652,9 @@ if (
 }
 assertDynamicTarget(authenticatedShell, imageAdmin, "image administrator route");
 assertInitialModuleRoots(
-  staticClosure([imageAdmin.file]),
+  staticClosure([authenticatedShell.file, imageAdmin.file]),
   "image administrator initial route",
-  [imageAdmin.facade]
+  [authenticatedShell.facade, imageAdmin.facade]
 );
 
 const imageRoleRoutes = [
@@ -677,9 +679,19 @@ for (const route of [...imageRoleRoutes, ...superRoleRoutes]) {
   );
 }
 
+const checkMaintenanceOnlyModules = [
+  checkMaintenance.facade,
+  /^src\/styles\/admin\/check-maintenance\.css$/,
+  /^src\/pages\/admin\/storage\/StorageBackendMigrationDialog\.tsx$/,
+  /^src\/lib\/api\/storage-backend-image-migration\.ts$/
+];
 const superOnlyModules = [
-  /^src\/pages\/admin\/(?:SettingsPage|AdvancedConfigPage|StorageSettings|UserAdmin|LogPage|CheckMaintenanceCapability)\.tsx$/,
-  /^src\/styles\/admin\/(?:advanced-config|settings|storage|logs|check-maintenance)\.css$/
+  settingsPage.facade,
+  userAdmin.facade,
+  logPage.facade,
+  /^src\/pages\/admin\/(?:advanced-config|storage)\//,
+  ...checkMaintenanceOnlyModules,
+  /^src\/styles\/admin\/(?:advanced-config|settings|storage|logs)\.css$/
 ];
 const imageRoleFacades = [
   adminShell.facade,
@@ -733,12 +745,7 @@ assertDynamicTarget(
 assertModulesExcluded(
   checkReadOnlyClosure,
   "image administrator Check route",
-  [
-    /^src\/pages\/admin\/check\/CheckMaintenanceCapability\.tsx$/,
-    /^src\/styles\/admin\/check-maintenance\.css$/,
-    /^src\/pages\/admin\/storage\/StorageBackendMigrationDialog\.tsx$/,
-    /^src\/lib\/api\/storage-backend-image-migration\.ts$/
-  ]
+  checkMaintenanceOnlyModules
 );
 for (const [target, label] of [
   [ingestion, "ingestion workflow"],

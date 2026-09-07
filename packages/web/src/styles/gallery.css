@@ -241,13 +241,6 @@ body:has(.gallery-page) { min-height: 100dvh; }
   border-color: var(--public-color-gallery-menu-selection-border);
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .facet-select-menu.public-gallery-menu
-    .facet-mode-switch button:not(:disabled):hover {
-    filter: var(--pressable-hover-brighten-filter);
-  }
-}
-
 .facet-select-menu.public-gallery-menu .facet-mode-switch {
   background: var(--public-color-gallery-menu-surface);
 }
@@ -418,10 +411,6 @@ body:has(.gallery-page) { min-height: 100dvh; }
     transform-style: preserve-3d;
     backface-visibility: hidden;
     will-change: transform;
-  }
-
-  button.tile:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]):hover {
-    filter: none;
   }
 }
 

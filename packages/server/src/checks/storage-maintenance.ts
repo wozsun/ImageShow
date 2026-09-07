@@ -120,7 +120,7 @@ async function maintainStorageUnderLock(
   );
 }
 
-export function maintainStorage(callerSignal?: AbortSignal) {
+function maintainStorage(callerSignal?: AbortSignal) {
   callerSignal?.throwIfAborted();
   const maintain = () => withStorageLocationWriteLock((lockSignal) => (
     maintainStorageUnderLock(lockSignal, callerSignal)

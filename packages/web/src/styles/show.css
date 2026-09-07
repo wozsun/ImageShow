@@ -185,7 +185,8 @@
 }
 
 .show-density-dialog > article {
-  width: min(400px, 100%);
+  width: max-content;
+  max-width: 100%;
   padding: 24px clamp(12px, 4vw, 24px);
   color: var(--public-color-text-primary);
   background: var(--public-color-gallery-menu-surface);

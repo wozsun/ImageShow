@@ -6,7 +6,6 @@
 
 :root[data-color-scheme="dark"] .image-detail-admin-details {
   color-scheme: dark;
-  --pressable-hover-filter: var(--pressable-hover-brighten-filter);
 }
 
 .image-detail-admin-actions {

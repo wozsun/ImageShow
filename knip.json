@@ -3,7 +3,9 @@
   "workspaces": {
     ".": {
       "entry": [
+        "scripts/build/process-tree.d.mts",
         "scripts/tests/final-*.test.ts",
+        "scripts/tests/server/isolation/*.mts",
         "scripts/tests/verify/source-contract.mjs",
         "scripts/tests/verify/version-contract.mjs",
         "scripts/tests/verify/markdown-links.mjs",

@@ -12,8 +12,6 @@
   --pressable-scale-small: .97;
   --pressable-scale-medium: .98;
   --pressable-scale-large: .99;
-  --pressable-hover-brighten-filter: brightness(1.2);
-  --pressable-hover-filter: brightness(.97);
 }
 
 :root[data-color-scheme="dark"] {
@@ -439,10 +437,6 @@ button.active, .button {
   left: calc(100% - var(--labeled-switch-edge-gap) - var(--labeled-switch-thumb-width));
 }
 
-@media (hover: hover) and (pointer: fine) {
-  button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]):hover,
-  .button:not(:disabled):hover { filter: var(--pressable-hover-filter); }
-}
 .icon { width: 36px; padding: 0; flex: 0 0 36px; }
 
 .close { color: var(--color-close); }
@@ -586,15 +580,14 @@ button.active, .button {
   animation: menu-pop-out .12s ease-in forwards;
 }
 .copy-button {
-  transition: color .16s ease, background-color .16s ease, border-color .16s ease, transform .1s ease, filter .16s ease;
+  transition: color .16s ease, background-color .16s ease, border-color .16s ease, transform .1s ease;
 }
 .pressable {
   transition:
     color .16s ease,
     background-color .16s ease,
     border-color .16s ease,
-    transform var(--pressable-transition-duration, .1s) ease,
-    filter .16s ease;
+    transform var(--pressable-transition-duration, .1s) ease;
 }
 .copy-button:active { transform: scale(var(--pressable-scale-small, .97)); }
 .copy-button.is-copied {

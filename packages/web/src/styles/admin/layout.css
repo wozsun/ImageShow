@@ -338,7 +338,6 @@ body:has(.admin > .workspace-contained) {
 .admin > aside .admin-nav-group-trigger:hover > :is(.admin-nav-group-main, .admin-nav-caret) {
   color: var(--admin-color-navigation-active-text);
   background: transparent;
-  filter: none;
 }
 .admin-nav-group-trigger.active {
   background: var(--admin-color-navigation-active);

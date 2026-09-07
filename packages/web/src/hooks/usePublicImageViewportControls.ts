@@ -125,6 +125,9 @@ function usePublicImageNavigationVisibility(
       // 等同一次焦点转移完成，避免读取到仍在导航内的旧焦点。
       queueMicrotask(restartAutoHide);
     };
+    const onSelectionChange = () => {
+      if (navigationStack.contains(document.activeElement)) restartAutoHide();
+    };
     const observer = new MutationObserver(restartAutoHide);
     observer.observe(navigationStack, {
       attributes: true,
@@ -137,6 +140,7 @@ function usePublicImageNavigationVisibility(
     navigationStack.addEventListener("focusout", onFocusOut);
     document.addEventListener("click", restartAutoHide, { capture: true, passive: true });
     document.addEventListener("visibilitychange", restartAutoHide);
+    document.addEventListener("selectionchange", onSelectionChange);
     restartAutoHide();
     return () => {
       disposed = true;
@@ -148,6 +152,7 @@ function usePublicImageNavigationVisibility(
       navigationStack.removeEventListener("focusout", onFocusOut);
       document.removeEventListener("click", restartAutoHide, true);
       document.removeEventListener("visibilitychange", restartAutoHide);
+      document.removeEventListener("selectionchange", onSelectionChange);
     };
   }, [autoHideAfterMs, lockedOpen, paused, stage, toolbarRef]);
 

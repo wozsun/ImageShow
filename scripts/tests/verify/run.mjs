@@ -4,10 +4,14 @@ import {
   signalProcessTree,
   spawnManaged
 } from "../../build/process-tree.mjs";
+import {
+  completeVerificationEnvironment
+} from "../support/verification-environment.ts";
 
 const workspaceRoot = resolve(import.meta.dirname, "../../..");
 const windows = process.platform === "win32";
 const children = new Map();
+const childEnvironment = completeVerificationEnvironment(process.env);
 let interruptedExitCode = 0;
 let interruptedSignal = "";
 
@@ -30,6 +34,7 @@ class CommandFailure extends Error {
 const phases = {
   source: [
     ["workspace types", "npm", ["run", "check"]],
+    ["test types", "npx", ["--no-install", "tsc", "--project", "scripts/tests/tsconfig.json"]],
     ["dead code", "npm", ["run", "knip"]],
     ["semantic colors", "npm", ["run", "check:colors"]],
     ["generated icons", "npm", ["run", "icons:check"]],
@@ -113,6 +118,10 @@ function runCommand(
       : ["/d", "/s", "/c", command, ...arguments_];
     const child = spawnManaged(executable, commandArguments, {
       cwd: workspaceRoot,
+      // Scenario selectors belong to direct diagnostic commands. Every verify
+      // mode must execute the complete acceptance surface even when a caller
+      // has left a selector in its shell environment.
+      env: childEnvironment,
       stdio: cooperativeShutdown
         ? ["inherit", "inherit", "inherit", "ipc"]
         : "inherit",

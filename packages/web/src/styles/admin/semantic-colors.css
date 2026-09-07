@@ -172,7 +172,6 @@
 :root[data-ui-context="admin"][data-color-scheme="dark"],
 :root[data-color-scheme="dark"] :is([data-admin-dialog], .image-detail-admin-details) {
   color-scheme: dark;
-  --pressable-hover-filter: var(--pressable-hover-brighten-filter);
 }
 
 /*

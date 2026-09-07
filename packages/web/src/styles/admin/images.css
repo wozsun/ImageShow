@@ -147,7 +147,6 @@
   text-align: left;
 }
 .admin-image-card-detail:disabled { opacity: 1; cursor: wait; }
-.admin-image-card-detail:not(:disabled):hover { filter: none; }
 .admin-image-card-thumb {
   position: relative;
   display: block;

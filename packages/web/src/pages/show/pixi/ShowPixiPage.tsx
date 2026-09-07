@@ -451,8 +451,9 @@ export function ShowPixiPage({
             <article>
               <h2 id="show-density-warning-title">性能提示</h2>
               <p id="show-density-warning-description">
-                继续显示更多图片会占用更多内存和 GPU，<br />
-                可能会<strong>卡顿掉帧</strong>。
+                增加同屏图片数量对设备性能要求较高，<br />
+                在部分设备上可能会出现<strong>卡顿、掉帧</strong>现象。<br />
+                请<strong>谨慎考虑</strong>后决定是否继续。
               </p>
               <footer>
                 <button ref={densityCancelButtonRef} type="button" onClick={() => requestClose()}>取消</button>

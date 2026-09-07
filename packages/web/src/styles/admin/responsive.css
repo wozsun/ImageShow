@@ -152,7 +152,6 @@
     color: var(--admin-color-navigation-active-text);
     background: var(--admin-color-navigation-hover);
     border-color: var(--admin-color-control-border-selected);
-    filter: none;
   }
 }
 

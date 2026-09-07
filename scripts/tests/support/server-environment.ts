@@ -1,10 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync } from "node:fs";
-import { rm } from "node:fs/promises";
 import { join, toNamespacedPath } from "node:path";
 import { after } from "node:test";
 import { runtimeConfigEnvironmentBindings } from "../../../packages/server/src/config/runtime-config-environment.ts";
-import { temporaryTestRoot } from "./test-directory.ts";
+import { terminateSharedTestProcesses } from "./process-runner.ts";
+import {
+  cleanupTestDirectories,
+  registerTestDirectory,
+  temporaryTestRoot
+} from "./test-directory.ts";
 
 // Each scenario owns its configuration seeds, independent of the host shell.
 for (const { environmentVariable } of runtimeConfigEnvironmentBindings) {
@@ -13,7 +17,9 @@ for (const { environmentVariable } of runtimeConfigEnvironmentBindings) {
 
 // Complete setup synchronously before the suite imports Server runtime paths.
 mkdirSync(temporaryTestRoot, { recursive: true });
-const dataDirectory = mkdtempSync(join(temporaryTestRoot, "server-environment-"));
+const dataDirectory = registerTestDirectory(
+  mkdtempSync(join(temporaryTestRoot, "server-environment-"))
+);
 Object.assign(process.env, {
   NODE_ENV: "development",
   IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: toNamespacedPath(dataDirectory),
@@ -30,4 +36,19 @@ Object.assign(process.env, {
   ADMIN_PASSWORD: randomUUID()
 });
 
-after(() => rm(dataDirectory, { recursive: true, force: true }));
+after(async () => {
+  const errors: unknown[] = [];
+  try {
+    await terminateSharedTestProcesses();
+  } catch (error) {
+    errors.push(error);
+  }
+  try {
+    await cleanupTestDirectories();
+  } catch (error) {
+    errors.push(error);
+  }
+  if (errors.length > 0) {
+    throw new AggregateError(errors, "Server 测试共享资源未能全部清理");
+  }
+});

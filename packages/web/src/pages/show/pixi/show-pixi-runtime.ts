@@ -3,7 +3,10 @@ import { AccessibilitySystem, Application, extensions, loadEnvironmentExtensions
 import type { ShowOrder } from "@imageshow/shared/browser";
 import type { ShowImage } from "../show-layout.js";
 import { ShowPixiFloatScene } from "./show-pixi-float-scene.js";
-import { ShowPixiTextureCache } from "./show-pixi-texture-cache.js";
+import {
+  ShowPixiTextureCache,
+  type ShowPixiTextureCacheOptions
+} from "./show-pixi-texture-cache.js";
 import type {
   ShowPixiRuntimeSnapshot,
   ShowPixiSceneController,
@@ -62,6 +65,20 @@ declare global {
 }
 
 const frameSampleCapacity = 36_000;
+
+export function showPixiTextureCacheOptions(
+  width: number,
+  generateMipmaps: boolean
+): ShowPixiTextureCacheOptions {
+  const compact = width <= 760;
+  return {
+    maximumEntries: compact ? 720 : 1_800,
+    maximumPixels: compact ? 24_000_000 : 52_000_000,
+    maximumInFlight: compact ? 12 : 16,
+    maximumUnreferenced: compact ? 48 : 96,
+    generateMipmaps
+  };
+}
 
 export class ShowPixiRuntime {
   readonly app: Application;
@@ -154,18 +171,14 @@ export class ShowPixiRuntime {
     this.#speed = options.speed;
     this.#statsElement = options.statsElement;
     const initialWidth = host.clientWidth || window.innerWidth;
-    const compact = initialWidth <= 760;
     const renderer = app.renderer as typeof app.renderer & {
       gl?: WebGLRenderingContext | WebGL2RenderingContext;
     };
-    this.#textureCache = new ShowPixiTextureCache({
-      maximumEntries: compact ? 720 : 1_800,
-      maximumPixels: compact ? 24_000_000 : 52_000_000,
-      maximumInFlight: compact ? 8 : 12,
-      maximumUnreferenced: compact ? 48 : 96,
-      generateMipmaps: typeof WebGL2RenderingContext !== "undefined"
+    this.#textureCache = new ShowPixiTextureCache(showPixiTextureCacheOptions(
+      initialWidth,
+      typeof WebGL2RenderingContext !== "undefined"
         && renderer.gl instanceof WebGL2RenderingContext
-    });
+    ));
     app.canvas.className = "show-pixi-canvas";
     app.canvas.dataset.showPixiCanvas = "";
     app.canvas.setAttribute("aria-hidden", "true");

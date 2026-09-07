@@ -33,7 +33,7 @@ type WaterfallSceneOptions = ShowPixiSceneOptions & {
   onManualVerticalMovement: (delta: number, pointerType?: string) => void;
 };
 
-const waterfallMaximumSprites = (width: number) => width <= 760 ? 640 : 1_600;
+const waterfallMaximumSprites = (width: number) => width <= 760 ? 960 : 2_800;
 const waterfallOverscan = 0.35;
 function intersectionArea(card: ShowCardSlot, width: number, height: number) {
   const left = Math.max(0, card.x);

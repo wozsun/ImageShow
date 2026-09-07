@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { extname, relative, resolve } from "node:path";
+import { parse as parseYaml } from "yaml";
 import { API as TypeScriptAPI } from "typescript/unstable/sync";
 import {
   isCallExpression,
@@ -355,24 +356,136 @@ function parseRuntimeExampleValue(binding, raw) {
   return JSON.parse(decoded);
 }
 
-function serviceBlock(compose, service) {
-  const match = new RegExp(
-    `^  ${service}:\\r?\\n([\\s\\S]*?)(?=^  [a-z][a-z0-9-]*:|^volumes:)`,
-    "m"
-  ).exec(compose);
-  if (!match) throw new Error(`source-contract: missing Compose service ${service}`);
-  return match[1];
+function objectRecord(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`source-contract: ${label} must be a mapping`);
+  }
+  return value;
 }
 
-function environmentKeyList(serviceSource) {
-  const environment = /^    environment:\r?\n([\s\S]*?)(?=^    \S)/m.exec(serviceSource);
-  if (!environment) return [];
-  return [...environment[1].matchAll(/^      ([A-Z][A-Z0-9_]*):/gm)]
-    .map((match) => match[1]);
+function composeService(compose, name) {
+  const services = objectRecord(compose.services, "Compose services");
+  const service = services[name];
+  if (!service) throw new Error(`source-contract: missing Compose service ${name}`);
+  return objectRecord(service, `Compose service ${name}`);
 }
 
-function environmentKeys(serviceSource) {
-  return new Set(environmentKeyList(serviceSource));
+function composeEnvironment(service) {
+  const environment = service.environment;
+  if (environment === undefined || environment === null) return new Map();
+  if (!Array.isArray(environment)) {
+    return new Map(Object.entries(objectRecord(
+      environment,
+      "Compose service environment"
+    )).map(([key, value]) => [key, value === null ? null : String(value)]));
+  }
+  const entries = new Map();
+  for (const item of environment) {
+    if (typeof item !== "string") {
+      throw new Error("source-contract: Compose environment list entries must be strings");
+    }
+    const separator = item.indexOf("=");
+    const key = separator === -1 ? item : item.slice(0, separator);
+    const value = separator === -1 ? null : item.slice(separator + 1);
+    if (entries.has(key)) {
+      throw new Error(`source-contract: duplicate Compose environment key ${key}`);
+    }
+    entries.set(key, value);
+  }
+  return entries;
+}
+
+function composePortBinding(service, expected) {
+  return (service.ports ?? []).some((binding) => {
+    if (typeof binding === "string") {
+      const match = /^(.*):(\d+):(\d+)(?:\/tcp)?$/.exec(binding);
+      return match
+        && match[1] === expected.hostIp
+        && Number(match[2]) === expected.published
+        && Number(match[3]) === expected.target;
+    }
+    if (!binding || typeof binding !== "object" || Array.isArray(binding)) {
+      return false;
+    }
+    return String(binding.host_ip ?? "") === expected.hostIp
+      && Number(binding.published) === expected.published
+      && Number(binding.target) === expected.target
+      && (binding.protocol ?? "tcp") === "tcp";
+  });
+}
+
+function composeVolumeMount(service, expected) {
+  return (service.volumes ?? []).some((mount) => {
+    if (typeof mount === "string") {
+      const parts = mount.split(":");
+      if (parts.length < 2 || parts.length > 3) return false;
+      const [source, target, rawOptions = ""] = parts;
+      const options = new Set(rawOptions.split(",").filter(Boolean));
+      const type = source.startsWith(".") || source.startsWith("/")
+        ? "bind"
+        : "volume";
+      return source === expected.source
+        && target === expected.target
+        && type === expected.type
+        && !options.has("ro");
+    }
+    if (!mount || typeof mount !== "object" || Array.isArray(mount)) {
+      return false;
+    }
+    return mount.source === expected.source
+      && mount.target === expected.target
+      && mount.type === expected.type
+      && (mount.read_only === undefined || mount.read_only === false);
+  });
+}
+
+const composeVolumeContractFixtures = [
+  [
+    { volumes: ["redis_data:/data"] },
+    { source: "redis_data", target: "/data", type: "volume" },
+    true
+  ],
+  [
+    { volumes: ["./data:/app/data:rw"] },
+    { source: "./data", target: "/app/data", type: "bind" },
+    true
+  ],
+  [
+    { volumes: ["redis_data:/data:ro"] },
+    { source: "redis_data", target: "/data", type: "volume" },
+    false
+  ],
+  [
+    { volumes: [{
+      type: "bind", source: "redis_data", target: "/data"
+    }] },
+    { source: "redis_data", target: "/data", type: "volume" },
+    false
+  ],
+  [
+    { volumes: [{
+      type: "volume", source: "redis_data", target: "/data", read_only: true
+    }] },
+    { source: "redis_data", target: "/data", type: "volume" },
+    false
+  ],
+  [
+    { volumes: [{
+      type: "volume", source: "redis_data", target: "/data", read_only: false
+    }] },
+    { source: "redis_data", target: "/data", type: "volume" },
+    true
+  ]
+];
+for (const [service, expected, accepted] of composeVolumeContractFixtures) {
+  assert.equal(
+    composeVolumeMount(service, expected),
+    accepted,
+    `source-contract: Compose volume parser fixture drifted: ${JSON.stringify({
+      service,
+      expected
+    })}`
+  );
 }
 
 const runtimeDefaultEntries = new Map(objectLeafEntries(appConfig.runtimeDefaults));
@@ -488,8 +601,17 @@ assertSameSet(
   runtimeDefaultPaths
 );
 const composeSource = await readFile(resolve(workspaceRoot, "compose.yaml"), "utf8");
-const imageShowServiceSource = serviceBlock(composeSource, "imageshow");
-const defaultComposeRuntimeSeeds = environmentKeys(imageShowServiceSource);
+let compose;
+try {
+  compose = objectRecord(parseYaml(composeSource), "Compose document");
+} catch (error) {
+  throw new Error("source-contract: compose.yaml is not valid YAML", {
+    cause: error
+  });
+}
+const imageShowService = composeService(compose, "imageshow");
+const imageShowEnvironment = composeEnvironment(imageShowService);
+const defaultComposeRuntimeSeeds = new Set(imageShowEnvironment.keys());
 const runtimeBindingByPath = new Map(
   runtimeConfigEnvironmentBindings.map((binding) => [binding.path, binding])
 );
@@ -546,7 +668,6 @@ if (missingInterpolationExamples.length) {
     + JSON.stringify(missingInterpolationExamples)
   );
 }
-const imageShowEnvironment = environmentKeyList(imageShowServiceSource);
 const expectedImageShowEnvironment = [
   "DATABASE_NAME",
   "DATABASE_USER",
@@ -557,13 +678,14 @@ const expectedImageShowEnvironment = [
 ];
 assertSameSet(
   "source-contract: ImageShow default Compose environment whitelist drifted",
-  new Set(imageShowEnvironment),
+  new Set(imageShowEnvironment.keys()),
   new Set(expectedImageShowEnvironment)
 );
-const postgresqlServiceSource = serviceBlock(composeSource, "postgresql");
+const postgresqlService = composeService(compose, "postgresql");
+const postgresqlEnvironment = composeEnvironment(postgresqlService);
 assertSameSet(
   "source-contract: PostgreSQL default Compose environment whitelist drifted",
-  environmentKeys(postgresqlServiceSource),
+  new Set(postgresqlEnvironment.keys()),
   new Set(["POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"])
 );
 for (const [applicationKey, postgresqlKey, variable, defaultValue] of [
@@ -571,37 +693,68 @@ for (const [applicationKey, postgresqlKey, variable, defaultValue] of [
   ["DATABASE_USER", "POSTGRES_USER", "DATABASE_USER", "imageshow"]
 ]) {
   const interpolation = "${" + variable + ":-" + defaultValue + "}";
-  if (!imageShowServiceSource.includes(`      ${applicationKey}: ${interpolation}`)) {
+  if (imageShowEnvironment.get(applicationKey) !== interpolation) {
     throw new Error(`source-contract: ImageShow ${applicationKey} must use ${interpolation}`);
   }
-  if (!postgresqlServiceSource.includes(`      ${postgresqlKey}: ${interpolation}`)) {
+  if (postgresqlEnvironment.get(postgresqlKey) !== interpolation) {
     throw new Error(`source-contract: PostgreSQL ${postgresqlKey} must use ${interpolation}`);
   }
 }
 const requiredDatabasePassword = "${DATABASE_PASSWORD:?}";
-if (!imageShowServiceSource.includes(`      DATABASE_PASSWORD: ${requiredDatabasePassword}`)) {
+if (imageShowEnvironment.get("DATABASE_PASSWORD") !== requiredDatabasePassword) {
   throw new Error("source-contract: ImageShow database password must be required without a default");
 }
-if (!postgresqlServiceSource.includes(`      POSTGRES_PASSWORD: ${requiredDatabasePassword}`)) {
+if (postgresqlEnvironment.get("POSTGRES_PASSWORD") !== requiredDatabasePassword) {
   throw new Error("source-contract: PostgreSQL password must share the required database password");
 }
-if (!imageShowServiceSource.includes("      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}")) {
+if (imageShowEnvironment.get("ADMIN_USERNAME") !== "${ADMIN_USERNAME:-admin}") {
   throw new Error("source-contract: default Compose administrator username drifted");
 }
-if (!imageShowServiceSource.includes("      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?}")) {
+if (imageShowEnvironment.get("ADMIN_PASSWORD") !== "${ADMIN_PASSWORD:?}") {
   throw new Error("source-contract: administrator password must be required without a default");
 }
-if (!/^    security_opt:\r?\n      - no-new-privileges:true$/m.test(imageShowServiceSource)) {
+const securityOptions = new Set((imageShowService.security_opt ?? []).map(String));
+if (!securityOptions.has("no-new-privileges:true")) {
   throw new Error("source-contract: ImageShow default Compose privilege hardening drifted");
 }
-const redisServiceSource = serviceBlock(composeSource, "redis");
-if (environmentKeys(redisServiceSource).size !== 0) {
+const redisService = composeService(compose, "redis");
+if (composeEnvironment(redisService).size !== 0) {
   throw new Error("source-contract: Redis default Compose environment must be empty");
 }
-if (!/^    volumes:\r?\n      - redis_data:\/data$/m.test(redisServiceSource)) {
+if (!composeVolumeMount(redisService, {
+  source: "redis_data",
+  target: "/data",
+  type: "volume"
+})) {
   throw new Error("source-contract: default Compose Redis must retain its data volume");
 }
-if (!/^\s{6}- "127\.0\.0\.1:5518:5518"$/m.test(composeSource)) {
+if (!composeVolumeMount(
+  postgresqlService,
+  {
+    source: "postgresql18_data",
+    target: "/var/lib/postgresql",
+    type: "volume"
+  }
+)) {
+  throw new Error("source-contract: default Compose PostgreSQL must retain its data volume");
+}
+if (!composeVolumeMount(imageShowService, {
+  source: "./data",
+  target: "/app/data",
+  type: "bind"
+})) {
+  throw new Error("source-contract: default Compose ImageShow must retain its data bind mount");
+}
+assertSameSet(
+  "source-contract: default Compose named volumes drifted",
+  new Set(Object.keys(objectRecord(compose.volumes, "Compose volumes"))),
+  new Set(["postgresql18_data", "redis_data"])
+);
+if (!composePortBinding(imageShowService, {
+  hostIp: "127.0.0.1",
+  published: 5518,
+  target: 5518
+})) {
   throw new Error("source-contract: default Compose port mapping must stay fixed at 127.0.0.1:5518:5518");
 }
 

@@ -33,18 +33,26 @@ packages/web ─────► packages/shared
 - `docs/CONFIG.md` 与 `docs/DEPLOY.md` 分别维护配置与部署说明；`docs/guide/` 保存当前架构、
   数据库、流程和 API 等指南。文档使用相对 Markdown 链接，可直接在仓库中阅读。
 
-长期行为测试保留 Server 和 Web 两个入口，门禁编排位于 `scripts/tests/verify/`。
+长期行为测试保留只负责编排的 Server 和 Web 两个入口；具体用例按稳定领域位于
+`scripts/tests/server/` 与 `scripts/tests/web/`，门禁编排位于 `scripts/tests/verify/`。
 颜色识别用例归入源码阶段的语义颜色门禁，正文压缩收益用例归入构建阶段的 Web 产物门禁；
 包版本、配置和依赖方向由各自门禁统一核对。
-固定夹具采用合成数据；运行时配置、日志与生成夹具通过 `support/` 创建在根目录
+测试专用 `scripts/tests/tsconfig.json` 在 source 阶段无产物检查统一入口、领域套件、支撑与
+普通隔离脚本，不扩大生产 workspace 的构建输入。固定夹具采用合成数据；运行时配置、日志与生成夹具通过 `support/` 创建在根目录
 `tests/tmp/` 的唯一目录中。Server 入口先设置隔离数据路径，再导入应用模块；数据库、Redis
 和生产镜像使用本次创建的一次性资源，结束后清理。
 
 根目录 `tests/` 被 Git 忽略，用于临时测试、真实资源验收、基线测量、日志、截图、浏览器
 profile 和额外工作树；长期测试不依赖其中预存的文件、个人凭据或既有业务数据。
 `data/` 只保存应用配置、存储、日志和接入临时数据。两处测试目录均不进入 Docker build
-context、生产镜像或 GitHub Actions。Web 测试使用根目录开发依赖 `linkedom` 真实挂载
-React 组件；生产构建和运行镜像不安装该依赖。
+context、生产镜像或 GitHub Actions。Web 测试使用根目录开发依赖 `linkedom` 挂载 React
+组件并通过公开 DOM 事件验证交互；模拟 DOM 不承担真实 CSS 排版或 GPU 呈现结论。生产构建
+和运行镜像不安装该依赖。数据库集成中的 schema、冷 Redis 与 readiness 可独立选择；
+配置、身份、图片事务与读模型、Redis 业务命令、接入队列与提交、存储迁移及维护、raw 和
+孤儿清理进一步拆为 strict `.mts` 场景，各自使用独立数据库，可单独选择并分别计时。
+公共夹具只准备本次资源和故障注入，业务断言留在所属场景；运行环境统一关闭数据库连接、
+Redis、存储 driver 和 raw 目录游标。子进程统一由测试进程树所有者收口，
+`verify:*` 总入口不继承定向选择器。
 
 ## 本地门禁与发布职责
 
@@ -462,9 +470,10 @@ hooks ──► lib
   安全区；回顶按钮的固定外层与 `show.css` 的展映外壳使用 `100dvh`，底部操作继续在各自外层内
   按安全区定位。展映尺寸变化由既有 ResizeObserver 传递给画布，不另建 JS 视口状态。
   展映只在自动播放期间启用三秒无点击隐藏，计时器、`click` 监听、整组导航的鼠标进出与焦点转移、
-  菜单展开观察均由该 owner 管理。
+  选区变化监听和菜单展开观察均由该 owner 管理。
   `lib/ui/public-navigation.ts` 统一判定导航内的悬停或焦点；精细悬停设备保护导航内的悬停与焦点，
   触控设备只保护 `:focus-visible`，忽略触摸残留的悬停与筛选关闭后的普通按钮焦点。交互期间取消计时并暂停滚动收起，
+  只读文本框的非键盘焦点按其实际文字选区判定保护；选区取消后残留焦点不阻止收起，选区变化由同一计时 owner 重新评估。
   首页独立 `AppHeader` 复用该判定保护滚动收起；焦点移出在同一次焦点转移完成后重新读取。
   导航以外的鼠标移动不重置计时；菜单、移动筛选面板或详情展开时同样暂停，所有保护条件解除后
   且展映仍在自动播放时重新计满三秒，隐藏仍写入同一导航阶段。计时 Effect 在布局阶段清理，过期回调核对释放状态、
@@ -489,7 +498,9 @@ hooks ──► lib
 - `lib/` 保存无界面代码；HTTP 客户端、query key 和共享查询 Hook 集中在 `lib/api/`。
   首页、画廊与展映的主导航滚动阈值和鼠标顶部唤出高度由 `lib/ui/public-navigation.ts` 统一定义；共享公开端
   入场缓动与首页导航淡入时长由 `styles/base.css` 的 motion token 提供，页面样式
-  只保留自身阶段和区块时长。`lib/ui/preload-intent.ts` 将普通交互元素的鼠标悬浮、
+  只保留自身阶段和区块时长。按钮与卡片通过各自的位移、边框、背景或阴影表达悬浮反馈，
+  悬浮时保持图片本身的亮度；共享按压缩放由 `styles/base.css` 管理。
+  `lib/ui/preload-intent.ts` 将普通交互元素的鼠标悬浮、
   键盘聚焦和指针按下统一映射到同一被动预加载动作；接管指针激活生命周期的控件
   仍就近使用捕获阶段事件，公共能力不改变模块、查询或业务激活的所有权。该极小
   跨页面机制归入 `app-foundation`，不产生独立微型请求，也不反向引入后台实现。
@@ -568,10 +579,12 @@ hooks ──► lib
   该字段默认值由 Shared 唯一提供，首次播种通过 `SITE_SHOW_AUTOPLAY`；普通设置 DTO 不包含
   `site.show`、`site.home.browse_target` 或 `site.gallery.enabled`，这些新增项由配置文件或高级配置维护。
   `ShowPixiPage` 根据当前查询构造明确目标模式的链接，`ShowControls` 以 React Router `Link` 渲染；
+  模式提示及读屏状态通过同一显示映射呈现“瀑布 / 漂浮”，URL 和配置枚举保留 `waterfall / float`。
   手动切换始终保留显式 `mode`，筛选与顺序更新保留模式参数的显式或缺省状态，模式切换不重建图片查询。
   `pixi/show-pixi-runtime.ts` 唯一持有 Pixi Application、ticker、ResizeObserver、页面可见性、
   reduced-motion、context lost / restored、场景租约和共享纹理 LRU；纹理入口直接读取真实
   `thumb_url`，按屏幕尺寸选择 LOD、限制并发与像素预算，并在 WebGL2 生成 mipmap。
+  纹理加载并发按运行时创建时的画布宽度确定：不超过 760px 为 12，超过为 16，瀑布与漂浮共用。
   原图比例参与解码裁剪，缓存共享同规格引用；容量不足的卡片持有可取消等待，在引用释放后
   重新领取纹理，不重新布局。网络传输失败暂停该 URL，同源连续失败暂停该来源；浏览器恢复
   联网或用户恢复播放时统一允许传输重试。运行时还捕获文档内真实图片的 `load` 事件：详情成功加载
@@ -593,6 +606,7 @@ hooks ──► lib
   `waterfall` 通过 ImageShow 自有窄相机处理坐标换算、drag、wheel、pinch、惯性、中心锚定缩放与
   可视区域，独立竖列只保留视口缓冲内 Sprite。相机只从拖动、普通滚轮和惯性平移分支上报导航纵向位移；
   `show-pixi-layout.ts` 定义 `3G` 提示阈值与 `8G` 上限；`ShowPixiPage` 唯一持有本次挂载的确认状态及待应用密度比例。
+  瀑布 Sprite 驻留上限按当前画布宽度划分：不超过 760px 为 960 张，超过为 2800 张，包含屏内及屏外缓冲。
   按钮与相机共用列数请求入口，wheel / pinch 在跨过 `3G` 前同步取得允许的缩放值，普通缩放帧仍留在相机内。
   未确认时停在 `3G`，确认后应用请求；比例按当前视口换算。提示复用 `DialogFrame` 的焦点、页面锁和退场回调，
   只加载展映自身样式；运行时通过同一个 `dialogOpen` 状态暂停详情或提示背后的画布输入与动画。

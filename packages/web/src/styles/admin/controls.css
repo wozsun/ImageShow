@@ -104,11 +104,6 @@
   border: 1px solid var(--admin-color-border-muted);
   border-radius: 6px;
   background: var(--admin-color-surface-primary);
-  transition: filter .16s ease;
-}
-.reorder-control-group:hover,
-.reorder-control-group:focus-within {
-  filter: var(--pressable-hover-filter);
 }
 .reorder-control-group > button.icon.reorder-step-button {
   width: 28px;
@@ -119,9 +114,6 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-}
-.reorder-control-group:hover > button.icon.reorder-step-button:hover {
-  filter: none;
 }
 .reorder-control-group > .reorder-pointer-handle,
 .reorder-control-group > button.icon.reorder-step-button.is-next {

@@ -11,6 +11,11 @@ const orderLabels: Record<ShowOrder, string> = {
   oldest: "最旧"
 };
 
+const sceneLabels: Record<ShowPixiSceneKind, string> = {
+  waterfall: "瀑布",
+  float: "漂浮"
+};
+
 const orderIcons: Record<ShowOrder, IconName> = {
   random: "shuffle-line",
   latest: "sort-desc",
@@ -55,7 +60,7 @@ export function ShowControls({
     : running ? "暂停自动滚动" : "继续自动滚动";
   const currentSize = sizeDescription;
   const nextScene = scene === "waterfall" ? "float" : "waterfall";
-  const sceneLabel = `当前模式：${scene}；点击切换为 ${nextScene}`;
+  const sceneLabel = `当前模式：${sceneLabels[scene]}；点击切换为${sceneLabels[nextScene]}`;
   return (
     <>
       <div className="show-density-actions" data-show-control="">
@@ -136,7 +141,7 @@ export function ShowControls({
       </div>
       <span className="sr-only" aria-live="polite">
         当前排列顺序：{orderLabels[order]}
-        ；当前模式：{scene}
+        ；当前模式：{sceneLabels[scene]}
       </span>
     </>
   );

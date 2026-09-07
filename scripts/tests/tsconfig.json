@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2025", "DOM", "DOM.Iterable", "ESNext.Collection"],
+    "noEmit": true,
+    "rootDir": "../..",
+    "types": ["node"],
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "@imageshow/shared": ["./packages/shared/src/app-config.ts"],
+      "@imageshow/shared/browser": ["./packages/shared/src/browser.ts"]
+    }
+  },
+  "include": [
+    "final-*.test.ts",
+    "server/**/*.ts",
+    "server/**/*.mts",
+    "support/**/*.ts",
+    "web/**/*.ts",
+    "../../packages/server/src/**/*.d.ts",
+    "../../packages/web/src/**/*.d.ts"
+  ]
+}

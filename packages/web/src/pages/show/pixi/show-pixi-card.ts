@@ -3,6 +3,7 @@ import {
   Container,
   Graphics,
   PerspectiveMesh,
+  Polygon,
   Rectangle,
   type FederatedPointerEvent,
   type Renderer,
@@ -121,6 +122,7 @@ export class ShowPixiCard {
   readonly visual = new Container();
   readonly surface = new Graphics();
   readonly #hitArea = new Rectangle();
+  readonly #perspectiveHitArea = new Polygon(new Array<number>(8).fill(0));
   key = "";
   image: ShowImage | null = null;
   width = 1;
@@ -576,7 +578,7 @@ export class ShowPixiCard {
     const hoverScale = Math.max(0.01, this.root.scale.x);
     const perspective = perspectiveDistancePixels
       / Math.max(0.01, this.#renderScale * hoverScale);
-    const project = (x: number, y: number, output: Float32Array, offset: number) => {
+    const project = (x: number, y: number, output: Float32Array | number[], offset: number) => {
       const axisDot = axisX * x + axisY * y;
       const rotatedX = x * cosine + axisX * axisDot * oneMinusCosine;
       const rotatedY = y * cosine + axisY * axisDot * oneMinusCosine;
@@ -601,6 +603,14 @@ export class ShowPixiCard {
       corners[0]!, corners[1]!, corners[2]!, corners[3]!,
       corners[4]!, corners[5]!, corners[6]!, corners[7]!
     );
+    // Hit the projected card bounds, excluding the snapshot's shadow padding.
+    // The root transform already applies camera and hover scaling to both.
+    const hitPoints = this.#perspectiveHitArea.points;
+    project(-this.width / 2, -this.height / 2, hitPoints, 0);
+    project(this.width / 2, -this.height / 2, hitPoints, 2);
+    project(this.width / 2, this.height / 2, hitPoints, 4);
+    project(-this.width / 2, this.height / 2, hitPoints, 6);
+    this.root.hitArea = this.#perspectiveHitArea;
     if (this.#hovered) {
       if (!this.#edgeLight) {
         this.#edgeLight = new ShowPixiEdgeLight(this.#palette.activeBorder, this.#palette.edgeLight);
@@ -677,6 +687,7 @@ export class ShowPixiCard {
   }
 
   #releasePerspectiveSurface() {
+    this.root.hitArea = this.#hitArea;
     this.#releaseEdgeLight();
     const mesh = this.#perspectiveMesh;
     const texture = this.#perspectiveTexture;

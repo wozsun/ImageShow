@@ -181,8 +181,6 @@
   opacity: .45;
   cursor: not-allowed;
 }
-.image-detail-original.is-disabled:hover,
-.image-detail-source.is-disabled:hover { filter: none; }
 .image-detail-admin-module-error {
   display: flex;
   align-items: center;
