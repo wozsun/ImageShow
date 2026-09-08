@@ -455,7 +455,7 @@ hooks ──► lib
   几何和拖拽状态，逐帧位置以同一手柄 ref 的 transform 更新，不把连续滚动提升为根渲染。
   `components/layout/PublicStarfield.tsx` 与随组件加载的 `styles/public-starfield.css` 统一提供
   展映、画廊及其嵌入页的固定非平铺星点；SVG 按视口等比裁切，点径保持屏幕像素大小。
-  页面仅拥有背景层位置、透明度、遮罩与底色，不再另行绘制平铺星点。
+  页面仅拥有背景层位置、透明度、遮罩与底色；画廊与展映以深色渐变和星空组成背景。
   `components/feedback/DialogLayerPortal.tsx` 是顶层动态视口和嵌套弹窗坐标系的唯一 owner；
   移动图片详情的根层关闭控件继续复用共享 `DirectActivationButton`，不在页面入口复制触控
   关闭分支。
@@ -551,7 +551,9 @@ hooks ──► lib
   与候选目录由同目录组件分别维护，首屏控制器只拥有背景与顶层阶段，目录区块单次
   揭示 Hook 就近维护，避免路由组件同时掌握全部首页交互。
 - `pages/gallery/` 就近拥有 cursor / ID 数据窗口、typed-array 瀑布流索引、半屏滞回虚拟窗口、
-  共享可见性观察器、查询级揭示 high-water 与开发统计；导航状态机由
+  共享可见性观察器、查询级揭示 high-water 与开发统计；当视口外下一屏触及已有内容末尾时，
+  下一页判断随滚动帧更新，不等待半屏布局滞回，续批仍固定 60 条并由同一数据窗口去重与限并发。
+  导航状态机由
   `hooks/usePublicImageViewportControls.ts` 统一提供给画廊与展映；跨页面可复用的 DOM
   图片加载、解码和并发调度留在
   `components/image/`，页面层只设置画廊任务的优先级、暂停和驻留边界。无界面的

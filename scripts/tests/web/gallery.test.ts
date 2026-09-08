@@ -161,7 +161,7 @@ test("[Web/画廊] 首页目录、瀑布流、分页预载与滚动导航组成�
     lockedOpen: false
   }), initialPublicImageNavigationState);
 });
-test("[Web/画廊] 画廊渲染窗口只在半屏边界重定位并覆盖图片驻留区", () => {
+test("[Web/画廊] 常规滚动画廊渲染窗口按半屏重定位并覆盖图片驻留区", () => {
   const viewportHeight = 800;
   const initial = createGalleryRenderViewport(0, viewportHeight);
   assert.deepEqual(initial, {
@@ -808,6 +808,70 @@ test("[Web/画廊] 自然尺寸批量回填后远页水合、删除和 resize �
   dataWindow.setGeometry({ contentWidth: 210, gap: 10, columnCount: 1 });
   const remaining = dataWindow.positionForId(second!.id)!;
   assert.equal(remaining.height, (remaining.width - 2) * 0.75 + 2);
+});
+
+test("[Web/画廊] 下一屏跨界立即续批，慢响应后按停留位置补齐并在末页停止", async (t) => {
+  activateGalleryRestorationSession();
+  t.after(activateGalleryRestorationSession);
+  const h = await createConfigStreamHarness(t);
+  let visibleStart = 0;
+  t.after(installProperties(h.window, {
+    innerHeight: 800, scrollY: 0, scrollTo() {}, scrollBy() {}
+  }));
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const { useGalleryDataWindow } = await import("../../../packages/web/src/pages/gallery/useGalleryDataWindow.ts");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  t.after(() => client.clear());
+  let current!: ReturnType<typeof useGalleryDataWindow>;
+  function Probe() {
+    const ref = h.React.useRef<HTMLDivElement | null>(null);
+    const attach = h.React.useCallback((element: HTMLDivElement | null) => {
+      ref.current = element;
+      if (element) element.getBoundingClientRect = () => ({ top: -visibleStart } as DOMRect);
+    }, []);
+    current = useGalleryDataWindow({
+      geometry: { contentWidth: 900, columnCount: 3, gap: 0 }, geometryReady: true,
+      imageQuery: "view=gallery&order=latest", navigationKey: "preload",
+      restorePosition: false, pinnedImageId: null, windowRef: ref
+    });
+    return h.React.createElement("div", { ref: attach });
+  }
+  const page = (start: number, height = 300) => {
+    const payload = syntheticGalleryPage({ count: 60, start, total: 185 });
+    return { ...payload, items: payload.items.map(item => ({ ...item, width: 300, height })) };
+  };
+  const scrollTo = async (start: number) => {
+    assert.ok(start <= current.snapshot.totalHeight - 800, "滚动位置在当前文档内可达");
+    visibleStart = start;
+    h.window.dispatchEvent(new Event("scroll"));
+    await h.flush();
+  };
+  await h.render(h.React.createElement(QueryClientProvider, { client }, h.React.createElement(Probe)));
+  await h.respond(0, page(0));
+  assert.equal(current.snapshot.totalHeight, 6000);
+  await scrollTo(4399);
+  assert.equal(h.pending.length, 1, "下一屏尚未触及末尾时不续批");
+  await scrollTo(4400);
+  assert.equal(h.pending.length, 2, "仅再滚动 1px 即跨界，不等待半屏");
+  assert.equal(new URL(h.pending[1]!.path, "https://img.example").searchParams.get("limit"), "60");
+  await scrollTo(4670);
+  assert.equal(h.pending.length, 2, "慢响应期间同一 cursor 只保留一个请求");
+  await h.respond(1, page(60, 10));
+  assert.ok(current.snapshot.totalHeight > 6000 && current.snapshot.totalHeight < 6270,
+    "宽幅图续批的末尾位于缓存预加载终点与实际下一屏终点之间");
+  assert.equal(h.pending.length, 3, "响应后按已停留的实时位置继续补齐下一屏");
+  await h.respond(2, page(120));
+  await h.flush();
+  assert.equal(h.pending.length, 3, "已有内容覆盖下一屏后停止补充");
+  await scrollTo(current.snapshot.totalHeight - 1600);
+  assert.equal(h.pending.length, 4);
+  await h.respond(3, page(180));
+  await scrollTo(current.snapshot.totalHeight - 800);
+  assert.equal(current.snapshot.compactItems, 185);
+  assert.equal(current.snapshot.hasNextPage, false);
+  assert.equal(h.pending.length, 4, "末页后不再请求");
+  assert.deepEqual(h.pending.map(request => new URL(request.path, "https://img.example").searchParams.get("cursor")),
+    [null, "cursor-60", "cursor-120", "cursor-180"]);
 });
 
 test("[Web/画廊] Strict Mode 浏览轮次隔离迟到请求，缺确认时按需验证并显式重试", async (t) => {

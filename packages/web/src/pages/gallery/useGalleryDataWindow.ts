@@ -280,12 +280,16 @@ export function useGalleryDataWindow({
       if (!element) return;
       const viewportHeight = Math.max(1, window.innerHeight);
       const visibleStart = Math.max(0, -element.getBoundingClientRect().top);
+      const next = createGalleryRenderViewport(visibleStart, viewportHeight);
+      const entersPreloadRange = controller.isNextPageWithinPreloadRange(next.preloadEnd)
+        && !controller.isNextPageWithinPreloadRange(viewportRef.current.preloadEnd);
+      // Crossing the next-screen boundary must not wait for a half-screen
+      // render step. Other scroll frames retain the existing layout cadence.
       if (!shouldRefreshGalleryRenderViewport(
         viewportRef.current,
         visibleStart,
         viewportHeight
-      )) return;
-      const next = createGalleryRenderViewport(visibleStart, viewportHeight);
+      ) && !entersPreloadRange) return;
       viewportRef.current = next;
       setViewport(next);
     };
@@ -350,7 +354,18 @@ export function useGalleryDataWindow({
 
   useEffect(() => {
     if (!geometryReady) return;
-    const requests = controller.updateViewport(viewport, pinnedImageId);
+    const element = windowRef.current;
+    const liveViewport = element && !isPageScrollLocked()
+      && routeRestorationRef.current?.controller !== controller
+      ? createGalleryRenderViewport(
+        Math.max(0, -element.getBoundingClientRect().top), window.innerHeight
+      )
+      : viewport;
+    // A completed page may expose another boundary after scrolling stopped
+    // inside a render step. Use the live next screen when repumping requests.
+    const requests = controller.updateViewport({
+      ...viewport, preloadEnd: liveViewport.preloadEnd
+    }, pinnedImageId);
     if (requestPauseRef.current?.controller === controller) return;
     const active = activeRequestsRef.current.get(controller);
     const available = Math.max(
@@ -365,7 +380,8 @@ export function useGalleryDataWindow({
     pinnedImageId,
     requestSlotRevision,
     snapshot.revision,
-    viewport
+    viewport,
+    windowRef
   ]);
 
   useEffect(() => () => {

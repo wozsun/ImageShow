@@ -39,8 +39,7 @@ body:has(.gallery-page) { min-height: 100dvh; }
 }
 
 .gallery-atmosphere,
-.gallery-starfield,
-.gallery-page::after {
+.gallery-starfield {
   position: fixed;
   top: 0;
   right: 0;
@@ -55,31 +54,12 @@ body:has(.gallery-page) { min-height: 100dvh; }
   z-index: -3;
   contain: paint;
   background:
-    radial-gradient(
-      ellipse 52% 40% at -9% 18%,
-      var(--public-color-gallery-atmosphere-left),
-      transparent 73%
-    ),
-    radial-gradient(
-      ellipse 48% 40% at 106% 29%,
-      var(--public-color-gallery-atmosphere-right),
-      transparent 74%
-    ),
-    radial-gradient(
-      ellipse 58% 38% at 68% 108%,
-      var(--public-color-gallery-atmosphere-bottom),
-      transparent 76%
-    ),
     linear-gradient(
       135deg,
       var(--public-color-gallery-sky-left),
       var(--public-color-gallery-sky-center) 46%,
       var(--public-color-gallery-sky-right)
     );
-}
-
-.gallery-page::after {
-  content: "";
 }
 
 .gallery-starfield {
@@ -101,36 +81,6 @@ body:has(.gallery-page) { min-height: 100dvh; }
     var(--public-color-gallery-mask-soft) 82%,
     var(--public-color-gallery-mask-edge)
   );
-}
-
-.gallery-page::after {
-  z-index: -1;
-  opacity: .7;
-  background:
-    radial-gradient(
-      ellipse 72% 30% at -27% 21%,
-      transparent 67%,
-      var(--public-color-gallery-orbit-left) 67.5%,
-      transparent 68.2%
-    ),
-    radial-gradient(
-      ellipse 80% 36% at -31% 24%,
-      transparent 72%,
-      var(--public-color-gallery-orbit-left-soft) 72.4%,
-      transparent 73%
-    ),
-    radial-gradient(
-      ellipse 70% 32% at 128% 76%,
-      transparent 68%,
-      var(--public-color-gallery-orbit-right) 68.5%,
-      transparent 69.2%
-    ),
-    radial-gradient(
-      ellipse 78% 38% at 132% 72%,
-      transparent 73%,
-      var(--public-color-gallery-orbit-right-soft) 73.4%,
-      transparent 74%
-    );
 }
 
 .gallery-toolbar {
@@ -568,9 +518,5 @@ body:has(.gallery-page) { min-height: 100dvh; }
 @media (max-width: 760px) {
   .gallery-starfield {
     opacity: .48;
-  }
-
-  .gallery-page::after {
-    opacity: .5;
   }
 }

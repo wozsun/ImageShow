@@ -220,7 +220,6 @@ export function ShowPixiStage({
         onPointerMoveCapture={handFocusToPointer}
         onPointerDownCapture={handFocusToPointer}
       />
-      <div className="show-vignette" aria-hidden="true" />
       <div ref={accessibilityRef} className="show-pixi-accessibility sr-only" role="list">
         {visibleItems.map(({ key, image }) => (
           <div key={key} role="listitem">

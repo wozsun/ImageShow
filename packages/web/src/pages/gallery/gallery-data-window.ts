@@ -246,6 +246,11 @@ export class GalleryDataWindow {
     return cursor ? 60 : this.#initialLimit;
   }
 
+  isNextPageWithinPreloadRange(preloadEnd: number) {
+    return Boolean(this.#pages.at(-1)?.nextCursor)
+      && preloadEnd >= this.#layout.minimumColumnHeight;
+  }
+
   restart() {
     this.#pendingCursors.clear();
     this.#failedCursors.clear();
@@ -621,8 +626,7 @@ export class GalleryDataWindow {
         kind: "hydrate" as const
       }));
     const lastPage = this.#pages.at(-1)!;
-    const append = lastPage.nextCursor
-      && this.#lastViewport.preloadEnd >= this.#layout.minimumColumnHeight
+    const append = this.isNextPageWithinPreloadRange(this.#lastViewport.preloadEnd)
       && this.#requestAvailable(lastPage.nextCursor)
       ? [{ cursor: lastPage.nextCursor, kind: "append" as const }]
       : [];
@@ -833,8 +837,7 @@ export class GalleryDataWindow {
         (pageIndex >= 0 && desired.has(pageIndex))
         || (
           cursor === appendCursor
-          && appendCursor !== ""
-          && this.#lastViewport.preloadEnd >= this.#layout.minimumColumnHeight
+          && this.isNextPageWithinPreloadRange(this.#lastViewport.preloadEnd)
         )
       ) {
         continue;

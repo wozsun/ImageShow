@@ -7,10 +7,6 @@
   overflow: hidden;
 }
 
-.show-page::after {
-  content: none;
-}
-
 .show-page .sr-only {
   position: absolute !important;
   width: 1px !important;
@@ -31,16 +27,6 @@
   touch-action: none;
   cursor: grab;
   background:
-    radial-gradient(
-      ellipse 48% 38% at 88% 14%,
-      var(--public-color-gallery-atmosphere-right),
-      transparent 72%
-    ),
-    radial-gradient(
-      ellipse 54% 42% at 5% 88%,
-      var(--public-color-gallery-atmosphere-left),
-      transparent 74%
-    ),
     linear-gradient(
       145deg,
       var(--public-color-gallery-sky-left),
@@ -56,14 +42,6 @@
   overflow: hidden;
   pointer-events: none;
   opacity: .58;
-}
-
-.show-vignette {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  box-shadow: inset 0 0 90px var(--public-color-gallery-mask-soft);
 }
 
 .show-interaction-hint {
