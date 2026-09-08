@@ -3,14 +3,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   emptyGalleryFilters,
-  galleryApiSearchParams,
+  imageBrowseApiSearchParams,
   galleryFiltersFromSearchParams,
   galleryHref,
   galleryRandomRequestDevice,
   showModeFromSearchParams,
   showOrderFromSearchParams,
-  showOrderedApiSearchParams,
-  showRouteSearchParams
+  updateImageBrowseSearchParams
 } from "../../../packages/web/src/lib/gallery/gallery-query.ts";
 import {
   publicHomeBrowsePath,
@@ -280,22 +279,22 @@ test("[Web/公开导航] 移动画廊与展映关闭筛选后，触摸残留的�
 });
 test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前参数契约", () => {
   const filters = galleryFiltersFromSearchParams(new URLSearchParams(
-    "device=pc&brightness=dark&theme=stage,editorial&tag=concert,red-carpet&author=startrail-photo"
+    "device=pc&brightness=dark&theme=editorial,stage&tag=concert,red-carpet&author=startrail-photo"
   ));
   assert.deepEqual(filters, {
     device: "pc",
     brightness: "dark",
-    theme: "stage,editorial",
+    theme: "editorial,stage",
     tag: "concert,red-carpet",
     author: "startrail-photo"
   });
   assert.equal(
     galleryHref(filters),
-    "/gallery?device=pc&brightness=dark&theme=stage%2Ceditorial&tag=concert%2Cred-carpet&author=startrail-photo"
+    "/gallery?device=pc&brightness=dark&theme=editorial%2Cstage&tag=concert%2Cred-carpet&author=startrail-photo"
   );
   assert.equal(
     galleryHref(filters, "/embed/gallery"),
-    "/embed/gallery?device=pc&brightness=dark&theme=stage%2Ceditorial&tag=concert%2Cred-carpet&author=startrail-photo"
+    "/embed/gallery?device=pc&brightness=dark&theme=editorial%2Cstage&tag=concert%2Cred-carpet&author=startrail-photo"
   );
   assert.equal(galleryHref(emptyGalleryFilters), "/gallery");
   assert.equal(
@@ -311,22 +310,25 @@ test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前�
     "/gallery?device=auto&brightness=light&theme=stage"
   );
   assert.equal(
-    galleryApiSearchParams(automaticDevice, "random", {
+    imageBrowseApiSearchParams(automaticDevice, "random", {
+      view: "gallery", limit: 60,
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
     }).toString(),
-    "device=pc&brightness=light&theme=stage&shuffle=1"
+    "brightness=light&device=pc&limit=60&order=random&theme=stage&view=gallery"
   );
   assert.equal(
-    galleryApiSearchParams(automaticDevice, "latest", {
+    imageBrowseApiSearchParams(automaticDevice, "latest", {
+      view: "gallery", limit: 60,
       userAgent: "Mozilla/5.0 (iPhone)"
     }).toString(),
-    "device=mb&brightness=light&theme=stage"
+    "brightness=light&device=mb&limit=60&order=latest&theme=stage&view=gallery"
   );
   assert.equal(
-    galleryApiSearchParams(automaticDevice, "latest", {
+    imageBrowseApiSearchParams(automaticDevice, "latest", {
+      view: "gallery", limit: 60,
       userAgent: "unrecognized-client"
     }).toString(),
-    "brightness=light&theme=stage"
+    "brightness=light&limit=60&order=latest&theme=stage&view=gallery"
   );
   assert.equal(galleryRandomRequestDevice(""), "all");
   assert.equal(galleryRandomRequestDevice("auto"), "");
@@ -349,16 +351,35 @@ test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前�
     showOrderFromSearchParams(new URLSearchParams("order=invalid"), "random"),
     "random"
   );
+  const implicit = updateImageBrowseSearchParams(new URLSearchParams(), { theme: "stage" });
+  assert.equal(implicit.toString(), "theme=stage");
+  assert.equal(showOrderFromSearchParams(implicit, "random"), "random");
+  assert.equal(showOrderFromSearchParams(implicit, "latest"), "latest");
+  assert.equal(updateImageBrowseSearchParams(implicit, emptyGalleryFilters).toString(), "");
+  const explicit = new URLSearchParams("order=oldest&mode=float&tag=concert&tag=stage");
+  const selected = updateImageBrowseSearchParams(explicit, { theme: "stage" });
+  assert.equal(selected.toString(), "order=oldest&mode=float&tag=concert&tag=stage&theme=stage");
+  assert.equal(explicit.toString(), "order=oldest&mode=float&tag=concert&tag=stage");
+  const cleared = updateImageBrowseSearchParams(selected, emptyGalleryFilters);
+  assert.equal(cleared.toString(), "order=oldest&mode=float");
+  const ordered = updateImageBrowseSearchParams(selected, { order: "random" });
+  assert.equal(ordered.toString(), "order=random&mode=float&tag=concert&tag=stage&theme=stage");
+  assert.equal(showOrderFromSearchParams(ordered, "latest"), "random");
   assert.equal(
-    showRouteSearchParams(filters, "oldest", "float").toString(),
-    "device=pc&brightness=dark&theme=stage%2Ceditorial&tag=concert%2Cred-carpet&author=startrail-photo&order=oldest&mode=float"
+    updateImageBrowseSearchParams(implicit, { mode: "float" }).toString(),
+    "theme=stage&mode=float"
   );
   assert.equal(
-    showOrderedApiSearchParams(automaticDevice, "oldest", {
+    updateImageBrowseSearchParams(ordered, { mode: "waterfall" }).toString(),
+    "order=random&mode=waterfall&tag=concert&tag=stage&theme=stage"
+  );
+  assert.equal(
+    imageBrowseApiSearchParams(automaticDevice, "oldest", {
+      view: "show", limit: 100,
       cursor: "cursor-token",
       userAgent: "Mozilla/5.0 (iPhone)"
     }).toString(),
-    "device=mb&brightness=light&theme=stage&cursor=cursor-token&order=oldest"
+    "brightness=light&cursor=cursor-token&device=mb&limit=100&order=oldest&theme=stage&view=show"
   );
   assert.deepEqual(
     galleryFiltersFromSearchParams(new URLSearchParams("device=all")),

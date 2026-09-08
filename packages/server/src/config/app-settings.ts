@@ -6,7 +6,6 @@ import type {
 import { ApiError } from "../core/api-error.ts";
 import {
   ingestionCommitConcurrency,
-  galleryLimit,
   galleryOrder,
   homeBackground,
   homeBannerLabel,
@@ -54,7 +53,6 @@ const appSettingsSchema = z.strictObject({
     root: siteRoot.optional(),
     home: siteHomeConfigSchema.optional(),
     gallery: z.strictObject({
-      limit: galleryLimit.optional(),
       order: galleryOrder.optional()
     }).optional(),
     random_method: randomDefaultMethod.optional()
@@ -155,7 +153,6 @@ export function getSettingsForAdmin(): AdminSettings {
         banner_title: home.banner_title
       },
       gallery: {
-        limit: gallery.limit,
         order: gallery.order
       },
       random_method

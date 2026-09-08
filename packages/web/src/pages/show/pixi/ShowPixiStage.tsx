@@ -9,6 +9,7 @@ import {
 import type { ShowOrder } from "@imageshow/shared/browser";
 import { PublicStarfield } from "../../../components/layout/PublicStarfield.js";
 import type { ShowImage } from "../show-layout.js";
+import type { ShowCandidateUsage } from "../show-data-pool.js";
 import { ShowPixiRuntime } from "./show-pixi-runtime.js";
 import type {
   ShowPixiSceneKind,
@@ -17,9 +18,7 @@ import type {
 
 function imageLabel(image: ShowImage) {
   const title = image.title?.trim();
-  const author = image.author?.trim();
-  if (title && author) return `${title}，作者 ${author}`;
-  return title || author || `图片 ${image.id.slice(-12)}`;
+  return title || `图片 ${image.id.slice(-12)}`;
 }
 
 export function ShowPixiStage({
@@ -28,6 +27,7 @@ export function ShowPixiStage({
   dialogOpen,
   floatSizeIndex,
   images,
+  hasMore,
   onColumnsChange,
   onFloatSizeIndexChange,
   onManualVerticalMovement,
@@ -46,11 +46,12 @@ export function ShowPixiStage({
   dialogOpen: boolean;
   floatSizeIndex: number;
   images: readonly ShowImage[];
+  hasMore: boolean;
   onColumnsChange: (columns: number) => number;
   onFloatSizeIndexChange: (index: number) => number;
   onManualVerticalMovement: (delta: number, pointerType?: string) => void;
   onMotionActiveChange: (active: boolean) => void;
-  onNeedImages: () => void;
+  onNeedImages: (usage: ShowCandidateUsage) => void;
   onOpen: (image: ShowImage, opener: HTMLElement) => void;
   order: ShowOrder;
   reducedMotion: boolean;
@@ -120,6 +121,7 @@ export function ShowPixiStage({
       return ShowPixiRuntime.create(host, {
         scene,
         images,
+        hasMore,
         dataKey,
         order,
         waterfallColumns,
@@ -138,8 +140,8 @@ export function ShowPixiStage({
         onMotionActiveChange: (active) => {
           if (!disposed) callbackRef.current.onMotionActiveChange(active);
         },
-        onNeedImages: () => {
-          if (!disposed) callbackRef.current.onNeedImages();
+        onNeedImages: (usage) => {
+          if (!disposed) callbackRef.current.onNeedImages(usage);
         },
         onOpen: (image) => {
           // Canvas activation comes from a pointer, not the keyboard proxy.
@@ -179,8 +181,8 @@ export function ShowPixiStage({
 
   useEffect(() => runtime?.setScene(scene), [runtime, scene]);
   useEffect(() => {
-    runtime?.setImages(images, dataKey, order);
-  }, [runtime, images, dataKey, order]);
+    runtime?.setImages(images, dataKey, order, hasMore);
+  }, [runtime, images, dataKey, order, hasMore]);
   useEffect(() => {
     runtime?.setWaterfallColumns(waterfallColumns);
   }, [runtime, waterfallColumns]);

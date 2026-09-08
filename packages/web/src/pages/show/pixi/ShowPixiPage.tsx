@@ -10,7 +10,6 @@ import {
 import { useSearchParams } from "react-router";
 import type {
   ShowDensity,
-  ShowOrder,
   SiteShowSettings
 } from "@imageshow/shared/browser";
 import { AppLoadingRegion } from "../../../components/feedback/AppLoadingScreen.js";
@@ -30,15 +29,15 @@ import {
   galleryRandomRequestDevice,
   showModeFromSearchParams,
   showOrderFromSearchParams,
-  showRouteSearchParams,
+  updateImageBrowseSearchParams,
   type GalleryFilters
 } from "../../../lib/gallery/gallery-query.js";
 import { buildRandomUrl } from "../../../lib/gallery/random-url.js";
-import type { GalleryImageCard } from "../../../lib/types.js";
 import { publicNavigationAutoHideDelayMs } from "../../../lib/ui/public-navigation.js";
 import { ShowControls } from "../ShowControls.js";
 import type { ShowImage } from "../show-layout.js";
 import { useShowData } from "../useShowData.js";
+import { showInitialBatchLimit } from "../show-browse.js";
 import {
   clampShowFloatSizeIndex,
   clampShowWaterfallColumns,
@@ -56,22 +55,6 @@ import "../../../styles/gallery.css";
 import "../../../styles/gallery-responsive.css";
 import "../../../styles/show.css";
 import "../../../styles/show-pixi.css";
-
-function imageDetailCard(image: ShowImage): GalleryImageCard {
-  return {
-    id: image.id,
-    title: image.title?.trim() ?? "",
-    device: image.device,
-    brightness: image.brightness,
-    theme: image.theme,
-    author: image.author?.trim() ?? "",
-    thumb_url: image.thumb_url,
-    width: image.width,
-    height: image.height,
-    tags: image.tags,
-    image_time: image.image_time
-  };
-}
 
 function configuredWaterfallColumns(
   density: ShowWaterfallDensity,
@@ -128,7 +111,7 @@ export function ShowPixiPage({
     configuredScene
   ), [configuredScene, routeQuery]);
   const sourceKey = useMemo(
-    () => showRouteSearchParams(filters, order).toString(),
+    () => JSON.stringify({ filters, order }),
     [filters, order]
   );
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
@@ -144,14 +127,17 @@ export function ShowPixiPage({
   const [pendingWaterfallDensity, setPendingWaterfallDensity] = useState<number | null>(null);
   const waterfallDensityConfirmedRef = useRef(false);
   const densityCancelButtonRef = useRef<HTMLButtonElement | null>(null);
-  const [selected, setSelected] = useState<GalleryImageCard | null>(null);
+  const [selected, setSelected] = useState<ShowImage | null>(null);
   const densityWarningOpen = pendingWaterfallDensity !== null;
   const dialogOpen = Boolean(selected) || densityWarningOpen;
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const decreaseButtonRef = useRef<HTMLButtonElement | null>(null);
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const { data: facets } = useGalleryFacets();
-  const data = useShowData(filters, sourceKey, order);
+  const data = useShowData(filters, sourceKey, order, showInitialBatchLimit({
+    width: window.innerWidth, height: window.innerHeight, mode: scene,
+    columns: waterfallColumns, floatSizeIndex, device: filters.device
+  }));
   const playbackRunning = running && !data.initialLoading && !data.error
     && data.images.length > 0;
   const {
@@ -186,7 +172,7 @@ export function ShowPixiPage({
 
   const openImageDetail = useCallback((image: ShowImage, opener: HTMLElement) => {
     detailReturnFocusRef.current = opener;
-    setSelected(imageDetailCard(image));
+    setSelected(image);
   }, []);
 
   useLayoutEffect(() => {
@@ -227,6 +213,10 @@ export function ShowPixiPage({
   }, [resetManualNavigation, sourceKey]);
 
   useEffect(() => {
+    if (selected) {
+      const updated = data.images.find((image) => image.id === selected.id);
+      if (updated && updated !== selected) setSelected(updated);
+    }
     if (
       !selected
       || data.images.some((image) => image.id === selected.id)
@@ -282,25 +272,16 @@ export function ShowPixiPage({
     ));
   }, [waterfallDensity]);
 
-  const setShowSearch = (
-    nextFilters: GalleryFilters,
-    nextOrder: ShowOrder
-  ) => setRouteSearchParams(showRouteSearchParams(
-    nextFilters,
-    nextOrder,
-    routeSearchParams.has("mode") ? scene : undefined
-  ));
   const getShowModeHref = (nextScene: ShowPixiSceneKind) => {
-    const params = new URLSearchParams(routeSearchParams);
-    params.set("mode", nextScene);
+    const params = updateImageBrowseSearchParams(routeSearchParams, { mode: nextScene });
     return `?${params.toString()}`;
   };
   const updateFilter = (key: keyof GalleryFilters, value: string) => {
-    setShowSearch({ ...filters, [key]: value }, order);
+    setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { [key]: value }));
   };
   const clearFilters = () => {
     if (!Object.values(filters).some(Boolean)) return;
-    setShowSearch(emptyGalleryFilters, order);
+    setRouteSearchParams((current) => updateImageBrowseSearchParams(current, emptyGalleryFilters));
   };
   const randomUrl = buildRandomUrl({
     origin: window.location.origin,
@@ -326,6 +307,7 @@ export function ShowPixiPage({
       className={`page gallery-page show-page show-pixi-page${embedded ? " is-embedded" : ""}`}
       data-show-renderer="pixi"
       data-show-navigation-visible={headerVisible || toolbarVisible}
+      data-public-navigation-visible={headerVisible || toolbarVisible}
       style={{
         "--gallery-toolbar-height": toolbarHeight
           ? `${toolbarHeight}px`
@@ -366,6 +348,7 @@ export function ShowPixiPage({
         dialogOpen={dialogOpen}
         floatSizeIndex={floatSizeIndex}
         images={data.images}
+        hasMore={data.hasMore}
         onColumnsChange={requestWaterfallColumns}
         onFloatSizeIndexChange={(index) => {
           const next = clampShowFloatSizeIndex(index);
@@ -419,7 +402,7 @@ export function ShowPixiPage({
               waterfallDensity
             ));
           }}
-          onOrderChange={(nextOrder) => setShowSearch(filters, nextOrder)}
+          onOrderChange={(nextOrder) => setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { order: nextOrder }))}
           onReset={() => {
             if (scene === "waterfall") {
               setWaterfallColumns(waterfallDensity.defaultColumns);

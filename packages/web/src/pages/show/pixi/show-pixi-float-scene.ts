@@ -1,6 +1,7 @@
 import { Container, type Renderer } from "pixi.js";
 import type { ShowOrder } from "@imageshow/shared/browser";
-import { shuffledShowImages } from "../show-data-pool.js";
+import type { ShowCandidateUsage } from "../show-data-pool.js";
+import { shuffledImageBatch } from "../../../lib/gallery/image-browse.js";
 import type { ShowImage } from "../show-layout.js";
 import {
   ShowPixiCard,
@@ -140,7 +141,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   readonly #inputElement: HTMLElement;
   readonly #onManualVerticalMovement: (delta: number, pointerType?: string) => void;
   readonly #onSizeIndexChange: (index: number) => number;
-  readonly #onNeedImages: () => void;
+  readonly #onNeedImages: (usage: ShowCandidateUsage) => void;
   readonly #onOpen: (image: ShowImage, key: string) => void;
   readonly #onVisibleItems: (items: readonly ShowPixiVisibleItem[]) => void;
   readonly #cards: FloatCardState[] = [];
@@ -241,6 +242,9 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     if (event.cancelable) event.preventDefault();
   };
   #images: ShowImage[] = [];
+  readonly #consumedIds = new Set<string>();
+  #hasMore = false;
+  #lastUsageSignature = "";
   #meanImageRatio = 1;
   #imageCursor = 0;
   #width: number;
@@ -260,7 +264,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   #nextSpacingAt = 0;
   #pathCursor = 0;
   #nextVisibleAt = 0;
-  #lastVisibleSignature = "";
+  #lastVisibleSignature: string | null = null;
   #recycledSprites = 0;
   #rejectedSprites = 0;
   #layoutRevision = 0;
@@ -294,7 +298,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     this.#reducedMotion = options.reducedMotion;
     this.root.sortableChildren = true;
     this.root.eventMode = "passive";
-    this.setImages(options.images, options.dataKey, options.order);
+    this.setImages(options.images, options.dataKey, options.order, options.hasMore);
     this.#addInputListeners();
   }
 
@@ -335,13 +339,13 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     this.#layoutRevision += 1;
   }
 
-  setImages(images: readonly ShowImage[], dataKey: string, order: ShowOrder) {
-    this.#lastVisibleSignature = "";
+  setImages(images: readonly ShowImage[], dataKey: string, order: ShowOrder, hasMore: boolean) {
+    this.#lastVisibleSignature = null;
     const replacing = dataKey !== this.#dataKey || order !== this.#order;
     const incoming = new Map(images.map((image) => [image.id, image]));
-    // Preserve the current random candidate order on append/metadata updates.
-    // Reshuffling all 800 DTOs before taking 500 would evict visible cards.
-    const retained = order === "random" && !replacing
+    // Candidate order is already committed by the network owner. Preserve
+    // resident identities while making room for its next unconsumed entries.
+    const retained = !replacing
       ? this.#images.flatMap((image) => {
         const updated = incoming.get(image.id);
         incoming.delete(image.id);
@@ -351,12 +355,18 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     const additions = [...incoming.values()];
     const nextImages = [
       ...retained,
-      ...(order === "random" ? shuffledShowImages(additions) : additions)
+      ...additions
     ].slice(0, 500);
     this.#dataKey = dataKey;
     this.#order = order;
     const previousCursor = this.#imageCursor;
     this.#images = nextImages;
+    this.#hasMore = hasMore || images.length > nextImages.length;
+    this.#lastUsageSignature = "";
+    const nextIds = new Set(nextImages.map((image) => image.id));
+    for (const id of this.#consumedIds) {
+      if (replacing || !nextIds.has(id)) this.#consumedIds.delete(id);
+    }
     this.#meanImageRatio = nextImages.length
       ? nextImages.reduce((total, image) => total + imageRatio(image), 0) / nextImages.length
       : 1;
@@ -393,12 +403,12 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
         }
         this.#cards.length = 0;
       }
-      for (const state of this.#cards) {
+      for (const state of [...this.#cards]) {
         const currentId = state.card.image?.id;
         const nextImage = currentId ? imageMap.get(currentId) : undefined;
         if (!nextImage) {
-          this.#assignState(state, false);
-          this.#recycledSprites += 1;
+          if (this.#assignState(state, false)) this.#recycledSprites += 1;
+          else this.#removeCard(this.#cards.indexOf(state));
           continue;
         }
         const width = this.#cardWidth(state);
@@ -414,7 +424,6 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       }
     }
     if (!this.#cards.length) this.#fillInitialComposition();
-    if (this.#images.length < 96) this.#onNeedImages();
     this.#refreshTexturePrefetches();
     this.#layoutRevision += 1;
   }
@@ -612,6 +621,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     for (const state of this.#cards) state.card.destroy();
     this.#cards.length = 0;
     this.#images = [];
+    this.#consumedIds.clear();
     this.root.removeAllListeners();
     this.root.destroy({ children: true });
   }
@@ -751,7 +761,6 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     }
     if (recycled) {
       this.#refreshTexturePrefetches();
-      if (this.#images.length < 96) this.#onNeedImages();
     }
   }
 
@@ -880,7 +889,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   ) {
     const plan = (initial ? null : this.#prefetchQueues[direction].shift())
       ?? this.#createImagePlan();
-    if (!plan) return;
+    if (!plan) return false;
     const { image, serial, widthFactor } = plan;
     state.widthFactor = widthFactor;
     state.phase = noise(serial, 4) * Math.PI * 2;
@@ -923,6 +932,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     this.#applyCardTransform(state);
     state.card.setVisible(true);
     this.#layoutRevision += 1;
+    return true;
   }
 
   #retargetSize(state: FloatCardState) {
@@ -1165,8 +1175,22 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
 
   #createImagePlan(): FloatImagePlan | null {
     if (!this.#images.length) return null;
-    const image = this.#images[this.#imageCursor % this.#images.length];
-    this.#imageCursor = (this.#imageCursor + 1) % this.#images.length;
+    let image = this.#images.find((candidate) => !this.#consumedIds.has(candidate.id));
+    if (!image) {
+      if (this.#hasMore) return null;
+      if (this.#imageCursor === 0 && this.#order === "random") {
+        this.#images = shuffledImageBatch(this.#images);
+      }
+      const active = this.#referencedImageIds();
+      let index = this.#imageCursor % this.#images.length;
+      for (let offset = 0; offset < this.#images.length; offset += 1) {
+        const candidate = (index + offset) % this.#images.length;
+        if (!active.has(this.#images[candidate]!.id)) { index = candidate; break; }
+      }
+      image = this.#images[index]!;
+      this.#imageCursor = (index + 1) % this.#images.length;
+    }
+    this.#consumedIds.add(image.id);
     const serial = this.#serial++;
     return {
       image,
@@ -1218,6 +1242,27 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       plan.textureKey = textureKey;
       plan.lease = this.#textureCache.acquire(plan.image.thumb_url, lod, () => undefined);
     }
+    this.#requestCandidates();
+  }
+
+  #requestCandidates() {
+    const available = this.#images.filter((image) => !this.#consumedIds.has(image.id)).length;
+    if (available >= 100) return;
+    const active = this.#referencedImageIds();
+    const signature = `${this.#dataKey}:${this.#consumedIds.size}:${available}:${[...active].join(",")}`;
+    if (signature === this.#lastUsageSignature) return;
+    this.#lastUsageSignature = signature;
+    this.#onNeedImages({
+      dataKey: this.#dataKey, activeIds: [...active], consumedIds: [...this.#consumedIds], available, capacity: 500
+    });
+  }
+
+  #referencedImageIds() {
+    const active = new Set(this.#cards.flatMap((state) => state.card.image ? [state.card.image.id] : []));
+    for (const queue of Object.values(this.#prefetchQueues)) {
+      for (const plan of queue) active.add(plan.image.id);
+    }
+    return active;
   }
 
   #releaseImagePlan(plan: FloatImagePlan) {

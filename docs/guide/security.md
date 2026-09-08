@@ -126,7 +126,8 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | --- | --- | --- |
 | 普通 SPA HTML | `max-age=0`、内容 ETag、支持 304 | 强制禁止嵌入；完整 CSP 候选与 Trusted Types 先 report-only |
 | `/embed/home`、`/embed/show`、`/embed/gallery` | `no-store`，仍带内容 ETag | 仅移除 `X-Frame-Options`，CSP 精确生成 `frame-ancestors` |
-| 确定性公共 JSON API | `max-age=0`、最长 30 秒共享缓存窗口、内容弱 ETag 与 304；按入口决定 `Sec-Fetch-Site`，统一 `Vary: Accept-Encoding` | 不返回后台字段；受保护读取拒绝跨站 / 同站跨源；`shuffle` 保持 `no-store` |
+| 公开列表与详情 | 浏览器 30 秒 / 共享缓存 60 秒；每日随机页收口至当日剩余时间；内容弱 ETag 与 304 | 仅 ready 公开投影；错误、可见性与周期判断先于条件验证；缓存键保留完整查询参数 |
+| 其他确定性公共 JSON API | `max-age=0`、最长 30 秒共享缓存窗口、内容弱 ETag 与 304；按入口决定 `Sec-Fetch-Site`，统一 `Vary: Accept-Encoding` | 不返回后台字段；受保护读取拒绝跨站 / 同站跨源 |
 | 确定性管理只读 JSON | `private, no-cache`、完整 envelope 内容弱 ETag 与 304 | 仅浏览器私有保存且每次重验证；身份鉴权先于内容生成，禁止 CDN 共享 |
 | 登录、其他管理 API、错误、404、健康检查 | `no-store` 或 `private, no-store` | `auth/me`、ALTCHA、检查状态、日志、SSE、后台字节、预览、敏感配置与写接口不缓存；登录限流的 429 使用纯数字 `Retry-After` |
 | CSP report、OPTIONS、204 | `no-store` | 只允许各自方法，先做 Host / Fetch Metadata 检查，取消不需要的正文；不启用 CORS |

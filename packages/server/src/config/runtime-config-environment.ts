@@ -51,7 +51,6 @@ export const runtimeConfigEnvironmentBindings = [
   { path: "site.show.drift_speed", environmentVariable: "SITE_SHOW_DRIFT_SPEED", valueKind: "number" },
   { path: "site.show.order", environmentVariable: "SITE_SHOW_ORDER", valueKind: "string" },
   { path: "site.gallery.enabled", environmentVariable: "SITE_GALLERY_ENABLED", valueKind: "boolean" },
-  { path: "site.gallery.limit", environmentVariable: "SITE_GALLERY_LIMIT", valueKind: "number" },
   { path: "site.gallery.order", environmentVariable: "SITE_GALLERY_ORDER", valueKind: "string" },
   { path: "site.gallery.public_original_button", environmentVariable: "SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON", valueKind: "boolean" },
   { path: "site.random_method", environmentVariable: "SITE_RANDOM_METHOD", valueKind: "string" },

@@ -34,7 +34,10 @@ import {
   reusableGalleryRestorationSession,
   type GalleryScrollAnchor
 } from "./gallery-restoration.js";
-import { galleryImagePageQueryOptions } from "./gallery-images-query.js";
+import { galleryImagePageQueryOptions, galleryInitialBatchLimit } from "./gallery-images-query.js";
+import { isApiClientError } from "../../lib/api/client.js";
+import { imageMatchesFilters } from "../../lib/gallery/image-browse.js";
+import { galleryFiltersFromSearchParams } from "../../lib/gallery/gallery-query.js";
 import type { GalleryDataWindowMetrics } from "./gallery-debug-stats.js";
 import type { EditableImageSnapshot } from "../../lib/types.js";
 import {
@@ -95,7 +98,11 @@ export function useGalleryDataWindow({
         navigationKey,
         imageDataRevision: imageDataRevision(queryClient),
         geometry,
-        controller: new GalleryDataWindow({ geometry }),
+        controller: new GalleryDataWindow({
+          geometry,
+          initialLimit: galleryInitialBatchLimit(geometry, window.innerHeight, new URLSearchParams(imageQuery).get("device") ?? ""),
+          randomOrder: new URLSearchParams(imageQuery).get("order") === "random"
+        }),
         anchor: null
       };
     },
@@ -298,7 +305,7 @@ export function useGalleryDataWindow({
     };
   }, [controller, windowRef]);
 
-  const fetchPage = useCallback((intent: GalleryPageIntent) => {
+  const fetchPage = useCallback((intent: GalleryPageIntent, forceValidation = false) => {
     let active = activeRequestsRef.current.get(controller);
     if (!active) {
       active = new Map();
@@ -313,7 +320,8 @@ export function useGalleryDataWindow({
     const request: GalleryPageRequest | null = controller.claimRequest(intent);
     if (!request) return;
     const options = galleryImagePageQueryOptions(
-      imageQuery, request.cursor, imageDataRevision(queryClient).sequence, queryScope
+      imageQuery, request.cursor, imageDataRevision(queryClient).sequence, queryScope,
+      controller.pageLimit(request.cursor), forceValidation || controller.needsValidation(request.cursor)
     );
     const pending = queryClient.fetchQuery(options)
       .then((payload) => {
@@ -361,6 +369,11 @@ export function useGalleryDataWindow({
   ]);
 
   useEffect(() => () => {
+    controller.invalidatePendingRequests();
+    void queryClient.cancelQueries({
+      queryKey: [...queryKeys.publicImages, imageQuery, queryScope],
+      exact: false
+    });
     if (anchorFrameRef.current !== null) {
       window.cancelAnimationFrame(anchorFrameRef.current);
       anchorFrameRef.current = null;
@@ -374,7 +387,7 @@ export function useGalleryDataWindow({
     if (requestPauseRef.current?.controller === controller) {
       requestPauseRef.current = null;
     }
-  }, [controller]);
+  }, [controller, imageQuery, queryClient, queryScope]);
 
   const positions = useMemo(() => controller.windowPositions({
     start: viewport.start,
@@ -459,6 +472,12 @@ export function useGalleryDataWindow({
   ]);
 
   const retry = useCallback(() => {
+    const error = controller.snapshot().error;
+    if (isApiClientError(error) && error.code === "cursor_expired") {
+      window.scrollTo({ top: 0 });
+      fetchPage(controller.restart());
+      return;
+    }
     const cursor = controller.snapshot().errorRequest?.cursor;
     if (cursor === undefined) return;
     const request = controller.retryRequest(cursor);
@@ -483,15 +502,18 @@ export function useGalleryDataWindow({
     requestPauseRef.current = { controller, token: pauseToken };
     let intent: GalleryPageIntent | null = null;
     preserveAnchor(() => {
+      if (typeof image !== "string" && !imageMatchesFilters(
+        image, galleryFiltersFromSearchParams(new URLSearchParams(imageQuery)), window.navigator.userAgent
+      )) {
+        controller.invalidatePendingRequests();
+        controller.removeImage(imageId);
+        return;
+      }
       intent = controller.prepareImageRefresh(
         imageId,
         typeof image === "string" ? undefined : image
       );
     });
-    if (!intent) {
-      requestPauseRef.current = null;
-      return;
-    }
     const refreshIntent = intent;
 
     void settlePendingPageRequests().then(() => {
@@ -499,10 +521,10 @@ export function useGalleryDataWindow({
       if (pause?.controller !== controller || pause.token !== pauseToken) return;
       // Claim the authoritative hydration while the automatic request pump is
       // still paused, then reopen the remaining nearby slots.
-      fetchPage(refreshIntent);
+      if (refreshIntent) fetchPage(refreshIntent, true);
       requestPauseRef.current = null;
     });
-  }, [controller, fetchPage, preserveAnchor, settlePendingPageRequests]);
+  }, [controller, fetchPage, imageQuery, preserveAnchor, settlePendingPageRequests]);
 
   const removeImage = useCallback(async (imageId: string) => {
     // Fence responses synchronously before awaiting Query cancellation. Even a

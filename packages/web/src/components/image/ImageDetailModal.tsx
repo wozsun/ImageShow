@@ -134,8 +134,8 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const authQuery = useAuthMe();
   const showAdminDetails = admin
     || authQuery.data?.authenticated === true;
-  const detailLoading = !admin && props.detailLoading === true;
-  const detailError = !admin ? props.detailError?.trim() ?? "" : "";
+  const detailLoading = !editedSnapshot && !admin && props.detailLoading === true;
+  const detailError = !editedSnapshot && !admin ? props.detailError?.trim() ?? "" : "";
   const onDetailRetry = !admin ? props.onDetailRetry : undefined;
   const exit = useAnimatedClose(onClose);
   const handleItemTrashed = useCallback((imageId: string) => {
@@ -149,6 +149,10 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
     setEditedSnapshot(nextItem);
     props.onItemUpdated?.(nextItem);
   }, [props.onItemUpdated]);
+  const handleItemRefreshRequested = useCallback((imageId: string) => {
+    setEditedSnapshot((current) => current?.id === imageId ? null : current);
+    props.onItemRefreshRequested?.(imageId);
+  }, [props.onItemRefreshRequested]);
   usePageScrollLock();
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const frameRef = useRef<HTMLDivElement | null>(null);
@@ -295,9 +299,9 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                         </dd>
                       </>
                     )}
-                    <dt>设备</dt><dd>{deviceOptionLabel(item.device)}</dd>
-                    <dt>亮度</dt><dd>{brightnessOptionLabel(item.brightness)}</dd>
-                    <dt>主题</dt><dd>{themeLabel}</dd>
+                    <dt>设备</dt><dd>{detailLoading ? "加载中" : detailError ? "加载失败" : deviceOptionLabel(item.device)}</dd>
+                    <dt>亮度</dt><dd>{detailLoading ? "加载中" : detailError ? "加载失败" : brightnessOptionLabel(item.brightness)}</dd>
+                    <dt>主题</dt><dd>{detailLoading ? "加载中" : detailError ? "加载失败" : themeLabel}</dd>
                     {item.tags.length > 0 && (
                       <>
                         <dt className="image-detail-tags-label">标签</dt>
@@ -349,7 +353,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                           adminItem={adminItem}
                           adminStorageLabel={adminStorageLabel}
                           onItemUpdated={handleItemUpdated}
-                          onItemRefreshRequested={props.onItemRefreshRequested}
+                          onItemRefreshRequested={handleItemRefreshRequested}
                           onItemTrashCommitted={props.onTrashCommitted}
                           onItemTrashed={handleItemTrashed}
                           onNestedDialogChange={setNestedDialogOpen}

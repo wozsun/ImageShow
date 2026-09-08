@@ -86,7 +86,7 @@ export const publicStaticCacheControl = "public, max-age=3600, s-maxage=86400, s
 export const publicProxyImageCacheControl = "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=604800, stale-if-error=2592000";
 export const publicRedirectCacheControl = "public, max-age=300, s-maxage=3600, stale-while-revalidate=3600, stale-if-error=86400";
 const publicApiCacheControl = "public, max-age=0, s-maxage=30, stale-while-revalidate=30, stale-if-error=30";
-export const publicListCacheControl = publicApiCacheControl;
+export const publicImageCacheControl = "public, max-age=30, s-maxage=60";
 export const publicMetadataCacheControl = publicApiCacheControl;
 export const publicConfigCacheControl = publicApiCacheControl;
 export const robotsCacheControl = "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400, stale-if-error=86400";

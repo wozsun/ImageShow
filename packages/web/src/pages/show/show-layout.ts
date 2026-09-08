@@ -1,14 +1,10 @@
 import {
-  showOrders,
-  type ImageCardBaseDto,
-  type ShowOrder
+  type ShowImageCardDto
 } from "@imageshow/shared/browser";
 
 export const showLayoutColumnWidth = 360;
 
-export type ShowImage = ImageCardBaseDto & {
-  object_url?: string;
-};
+export type ShowImage = ShowImageCardDto;
 
 export type ShowPoint = {
   x: number;
@@ -53,13 +49,6 @@ export type ShowCardSlot = ShowCardGeometry & {
 function finitePositive(value: number, fallback: number) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
-
-export function nextShowOrder(order: ShowOrder): ShowOrder {
-  const index = showOrders.indexOf(order);
-  return showOrders[(index + 1) % showOrders.length];
-}
-
-export type { ShowOrder };
 
 function showImageAspectRatio(image: ShowImage) {
   const width = finitePositive(image.width, 16);

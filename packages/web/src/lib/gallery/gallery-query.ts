@@ -1,9 +1,10 @@
 import {
   detectDeviceFromUserAgent,
   showModes,
-  showOrders,
+  publicImageOrders,
   type ShowMode,
-  type ShowOrder
+  type ShowOrder,
+  type PublicImageView
 } from "@imageshow/shared/browser";
 
 export type GalleryFilters = {
@@ -16,7 +17,7 @@ export type GalleryFilters = {
 
 const galleryDevices = new Set(["pc", "mb", "auto"]);
 const galleryBrightnesses = new Set(["dark", "light"]);
-const showOrderSet = new Set<ShowOrder>(showOrders);
+const showOrderSet = new Set<ShowOrder>(publicImageOrders);
 const showModeSet = new Set<ShowMode>(showModes);
 const selectorPattern = /^!?[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 
@@ -37,7 +38,7 @@ function selectorValue(params: URLSearchParams, key: string) {
   )];
   const hasIncludes = tokens.some((value) => !value.startsWith("!"));
   const hasExcludes = tokens.some((value) => value.startsWith("!"));
-  return hasIncludes && hasExcludes ? "" : tokens.join(",");
+  return hasIncludes && hasExcludes ? "" : tokens.sort().join(",");
 }
 
 export function galleryFiltersFromSearchParams(
@@ -80,21 +81,23 @@ export function showModeFromSearchParams(
   return showModeSet.has(value) ? value : fallback;
 }
 
-export function showRouteSearchParams(
-  filters: GalleryFilters,
-  order: ShowOrder,
-  mode?: ShowMode
+/** Patch user choices without materializing defaults from the resolved view. */
+export function updateImageBrowseSearchParams(
+  current: URLSearchParams,
+  changes: Partial<GalleryFilters & { order: ShowOrder; mode: ShowMode }>
 ) {
-  const params = galleryRouteSearchParams(filters);
-  params.set("order", order);
-  if (mode) params.set("mode", mode);
+  const params = new URLSearchParams(current);
+  for (const [key, value] of Object.entries(changes)) {
+    if (value) params.set(key, value);
+    else params.delete(key);
+  }
   return params;
 }
 
-export function galleryApiSearchParams(
+export function imageBrowseApiSearchParams(
   filters: GalleryFilters,
-  order: string,
-  options: { cursor?: string; userAgent?: string } = {}
+  order: ShowOrder,
+  options: { view: PublicImageView; limit?: number; cursor?: string; userAgent?: string }
 ) {
   const params = new URLSearchParams();
   const projectedDevice = filters.device === "auto"
@@ -104,21 +107,15 @@ export function galleryApiSearchParams(
     params.set("device", projectedDevice);
   }
   if (filters.brightness) params.set("brightness", filters.brightness);
-  if (filters.theme) params.set("theme", filters.theme);
-  if (filters.tag) params.set("tag", filters.tag);
-  if (filters.author) params.set("author", filters.author);
+  for (const key of ["theme", "tag", "author"] as const) {
+    const value = selectorValue(new URLSearchParams({ [key]: filters[key] }), key);
+    if (value) params.set(key, value);
+  }
   if (options.cursor) params.set("cursor", options.cursor);
-  if (order === "random") params.set("shuffle", "1");
-  return params;
-}
-
-export function showOrderedApiSearchParams(
-  filters: GalleryFilters,
-  order: Exclude<ShowOrder, "random">,
-  options: { cursor?: string; userAgent?: string } = {}
-) {
-  const params = galleryApiSearchParams(filters, "latest", options);
   params.set("order", order);
+  params.set("view", options.view);
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  params.sort();
   return params;
 }
 

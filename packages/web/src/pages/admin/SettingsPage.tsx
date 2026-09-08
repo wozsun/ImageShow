@@ -238,15 +238,6 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
               />
             </label>
             <label>
-              画廊每次加载数量
-              <NumberInput
-                min={1}
-                max={200}
-                value={settings.site.gallery.limit}
-                onChange={(value) => updateSiteGallery({ limit: value })}
-              />
-            </label>
-            <label>
               画廊排序
               <SelectMenu
                 disabled={busy}

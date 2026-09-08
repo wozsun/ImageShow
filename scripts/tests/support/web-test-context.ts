@@ -18,7 +18,7 @@ import {
   type GalleryImageCardDto,
   type ImageUpdateResponseDto,
   type PublicImageListResponseDto,
-  type RandomImageJsonItemDto
+  type ShowImageCardDto
 } from "../../../packages/shared/src/browser.ts";
 import type {
   EditableImageSnapshot,
@@ -437,21 +437,13 @@ export async function createPublicNavigationHarness(
     scroll: async (scrollY: number) => { overrides.scrollY = scrollY; await dispatch(window, "scroll"); }
   };
 }
-export function showImages(count: number): RandomImageJsonItemDto[] {
+export function showImages(count: number): ShowImageCardDto[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `00000000-0000-7000-8000-${String(index).padStart(12, "0")}`,
     title: `Image ${index}`,
-    author: `author-${index % 5}`,
-    object_url: `/media/${index}.webp`,
     thumb_url: `/thumbs/${index}.webp`,
-    device: index % 2 ? "pc" : "mb",
-    brightness: index % 3 ? "dark" : "light",
-    theme: `theme-${index % 7}`,
-    tags: [`tag-${index % 11}`],
-    diff_original: false,
     width: index % 2 ? 1600 : 900,
-    height: index % 2 ? 900 : 1600,
-    image_time: new Date(1_700_000_000_000 + index * 1000).toISOString()
+    height: index % 2 ? 900 : 1600
   }));
 }
 export function createCameraTestElement(width = 800, height = 600) {
@@ -533,7 +525,9 @@ export function installPixiPaletteFixture(t: TestContext) {
 }
 export function createFloatSceneHarness(
   t: TestContext,
-  { width = 1440, height = 900, sizeIndex = defaultShowFloatSizeIndex, count = 700 } = {}
+  { width = 1440, height = 900, sizeIndex = defaultShowFloatSizeIndex, count = 700, hasMore = count > 500 }: {
+    width?: number; height?: number; sizeIndex?: number; count?: number; hasMore?: boolean;
+  } = {}
 ) {
   installPixiPaletteFixture(t);
   const dpr = Object.getOwnPropertyDescriptor(globalThis, "devicePixelRatio");
@@ -584,6 +578,7 @@ export function createFloatSceneHarness(
     height,
     sizeIndex,
     images: showImages(count),
+    hasMore,
     dataKey: "desktop-float",
     order: "latest",
     inputElement: target.element,

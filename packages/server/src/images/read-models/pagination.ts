@@ -1,98 +1,21 @@
+import { pool, type DatabaseReader } from "../../core/database/pools.ts";
+import type { PublicImageView } from "@imageshow/shared/browser";
 import {
-  pool,
-  type DatabaseReader
-} from "../../core/database/pools.ts";
-import { decodeImageCursor, encodeImageCursor } from "../cursor.ts";
+  encodeImageCursor,
+  type ImageBrowseContext,
+  type ImageBrowsePosition
+} from "../cursor.ts";
 import {
   adminImageListPresentationColumns,
   adminImageListPresentationColumnsWithTags,
-  publicImageCards,
+  imageTagsPresentationColumn,
+  publicImageCardsWithTags,
+  publicShowImageCards,
   type ImageRecordWithTags,
-  type PublicImageCardRecord
+  type PublicImageCardRecord,
+  type PublicShowImageRecord
 } from "../presenter.ts";
 import type { PageWindow } from "../page-window.ts";
-import type { PublicImageOrder } from "@imageshow/shared/browser";
-
-const publicImageCardColumns = [
-  "id",
-  "device",
-  "brightness",
-  "theme",
-  "width",
-  "height",
-  "ext",
-  "object_key",
-  "storage_slug",
-  "author",
-  "title",
-  "image_time",
-  "status"
-].join(", ");
-
-type ImageRowPosition =
-  | { kind: "cursor"; cursor?: string; limit: number }
-  | { kind: "offset"; window: PageWindow };
-
-type DeferredProjection = {
-  sourceColumns: string;
-};
-
-async function fetchImageRows<Row>(
-  where: string[],
-  params: unknown[],
-  columns: string,
-  reader: DatabaseReader,
-  position: ImageRowPosition,
-  deferredProjection?: DeferredProjection,
-  order: PublicImageOrder = "latest"
-) {
-  const ascending = order === "oldest";
-  const comparison = ascending ? ">" : "<";
-  const direction = ascending ? "ASC" : "DESC";
-  if (position.kind === "cursor" && position.cursor !== undefined) {
-    const decoded = decodeImageCursor(position.cursor);
-    params.push(decoded.imageTime, decoded.id);
-    where.push(
-      `(image_time, id) ${comparison} ($${params.length - 1}::timestamptz, $${params.length}::uuid)`
-    );
-  }
-  const cursorPosition = position.kind === "cursor";
-  if (cursorPosition) {
-    params.push(position.limit + 1);
-  } else {
-    params.push(position.window.limit, position.window.start);
-  }
-  const limitParameter = cursorPosition ? params.length : params.length - 1;
-  const offsetClause = cursorPosition ? "" : ` OFFSET $${params.length}`;
-  const orderedWindow = `FROM metadata
-     WHERE ${where.join(" AND ")}
-     ORDER BY image_time ${direction}, id ${direction}
-     LIMIT $${limitParameter}${offsetClause}`;
-  const sql = deferredProjection && !cursorPosition
-    ? `SELECT ${columns}
-         FROM (
-           SELECT ${deferredProjection.sourceColumns}
-             ${orderedWindow}
-         ) metadata
-        ORDER BY image_time ${direction}, id ${direction}`
-    : `SELECT ${columns}${cursorPosition ? ", image_time::text AS cursor_image_time" : ""}
-       ${orderedWindow}`;
-  const result = await reader.query(sql, params);
-  const limit = cursorPosition ? position.limit : position.window.limit;
-  const visibleRows = result.rows.slice(0, limit) as Row[];
-  const hasNext = cursorPosition && result.rows.length > limit;
-  const last = visibleRows.at(-1) as (Row & {
-    id: string;
-    cursor_image_time: string;
-  }) | undefined;
-  return {
-    rows: visibleRows,
-    hasNext,
-    nextCursor: cursorPosition && hasNext && last
-      ? encodeImageCursor(last)
-      : null
-  };
-}
 
 export async function fetchAdminImageOffsetRows(
   where: string[],
@@ -100,37 +23,97 @@ export async function fetchAdminImageOffsetRows(
   window: PageWindow,
   reader: DatabaseReader = pool
 ) {
-  const page = await fetchImageRows<ImageRecordWithTags>(
-    where,
-    params,
-    adminImageListPresentationColumnsWithTags,
-    reader,
-    { kind: "offset", window },
-    { sourceColumns: adminImageListPresentationColumns }
+  const result = await reader.query(
+    `SELECT ${adminImageListPresentationColumnsWithTags}
+       FROM (
+         SELECT ${adminImageListPresentationColumns}
+           FROM metadata
+          WHERE ${where.join(" AND ")}
+          ORDER BY image_time DESC, id DESC
+          LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+       ) metadata
+      ORDER BY image_time DESC, id DESC`,
+    [...params, window.limit, window.start]
   );
-  return page.rows;
+  return result.rows as ImageRecordWithTags[];
 }
 
+/** Selection and tag hydration share one PostgreSQL statement snapshot. */
 export async function fetchPublicImageCardPage(
   where: string[],
-  params: unknown[],
+  filterParams: unknown[],
   limit: number,
-  order: PublicImageOrder,
-  cursor?: string,
+  context: ImageBrowseContext,
+  view: PublicImageView,
+  position: ImageBrowsePosition | undefined,
   reader: DatabaseReader = pool
 ) {
-  const page = await fetchImageRows<
-    PublicImageCardRecord & { cursor_image_time: string }
-  >(
-    where,
-    params,
-    publicImageCardColumns,
-    reader,
-    { kind: "cursor", cursor, limit },
-    undefined,
-    order
-  );
-  const rows = page.rows;
-  const items = await publicImageCards(rows, reader);
-  return { rows, items, nextCursor: page.nextCursor };
+  const params = [...filterParams];
+  const parameter = (value: unknown) => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+  const count = parameter(limit + 1);
+  const columns = [
+    "id", "title", "width", "height", "object_key", "storage_slug",
+    "image_time::text AS cursor_image_time",
+    ...(view === "gallery" ? [
+      "device", "brightness", "theme", "author", "image_time"
+    ] : [])
+  ].join(", ");
+  let selection: string;
+  let ordering: string;
+  if (context.order === "random") {
+    const start = parameter(context.start.toString(16).padStart(12, "0"));
+    const boundary = position
+      ? `(right(id::text, 12), id) > (${parameter(position.id.slice(-12))}, ${parameter(position.id)}::uuid)`
+      : null;
+    const phases = position?.phase === 1 ? [1] : [0, 1];
+    selection = phases.map((phase) => {
+      const clauses = [
+        ...where,
+        `right(id::text, 12) ${phase === 0 ? ">=" : "<"} ${start}`,
+        ...(boundary && phase === position?.phase ? [boundary] : [])
+      ];
+      return `(SELECT ${columns}, right(id::text, 12) AS suffix, ${phase} AS phase
+                 FROM metadata
+                WHERE ${clauses.join(" AND ")}
+                ORDER BY right(id::text, 12), id
+                LIMIT ${count})`;
+    }).join(" UNION ALL ");
+    ordering = "phase, suffix, id";
+  } else {
+    const direction = context.order === "oldest" ? "ASC" : "DESC";
+    const comparison = context.order === "oldest" ? ">" : "<";
+    const clauses = [...where];
+    if (position) clauses.push(
+      `(image_time, id) ${comparison} (${parameter(position.imageTime)}::timestamptz, ${parameter(position.id)}::uuid)`
+    );
+    selection = `SELECT ${columns}, image_time AS sort_time
+                   FROM metadata WHERE ${clauses.join(" AND ")}
+                  ORDER BY image_time ${direction}, id ${direction} LIMIT ${count}`;
+    ordering = `sort_time ${direction}, id ${direction}`;
+  }
+  const sql = `SELECT metadata.*${view === "gallery" ? `, ${imageTagsPresentationColumn}` : ""}
+                 FROM (${selection}) metadata
+                ORDER BY ${ordering} LIMIT ${count}`;
+  type PositionRow = { id: string; cursor_image_time: string };
+  const present = async <Row extends PublicShowImageRecord & PositionRow, Item>(
+    format: (rows: Row[]) => Promise<Item[]>
+  ) => {
+    const result = await reader.query(sql, params);
+    const rows = result.rows.slice(0, limit) as Row[];
+    const last = rows.at(-1);
+    const nextCursor = result.rows.length > limit && last
+      ? encodeImageCursor(last, context)
+      : null;
+    return { rows, nextCursor, items: await format(rows) };
+  };
+  return view === "show"
+    ? present((rows: Array<PublicShowImageRecord & PositionRow>) => (
+        publicShowImageCards(rows, { reader })
+      ))
+    : present((rows: Array<PublicImageCardRecord & PositionRow & { tags: string[] }>) => (
+        publicImageCardsWithTags(rows, { reader })
+      ));
 }

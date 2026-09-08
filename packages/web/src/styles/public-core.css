@@ -1,2 +1,53 @@
 @import "./public-semantic-colors.css";
 @import "./public-layout.css";
+
+.public-round-control {
+  width: 48px;
+  min-height: 48px;
+  height: 48px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: var(--public-color-action-primary);
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+}
+
+.public-round-surface {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  background: var(--public-color-gallery-back-to-top);
+  border: 1px solid var(--public-color-border-default);
+  border-radius: 50%;
+  box-shadow: 0 10px 28px var(--public-shadow-gallery-back-to-top);
+  pointer-events: none;
+}
+
+.public-round-surface .app-icon {
+  width: 21px;
+  height: 21px;
+  display: block;
+}
+
+.public-round-control:disabled { opacity: .62; }
+
+.public-round-control:not(:disabled):hover .public-round-surface,
+.public-round-control:focus-visible .public-round-surface {
+  border-color: var(--public-color-gallery-tile-border-hover);
+}
+
+
+.public-floating-controls { opacity: .9; transition: opacity 180ms ease; }
+[data-public-navigation-visible="false"].public-floating-controls,
+[data-public-navigation-visible="false"] .public-floating-controls { opacity: .3; }
+.public-floating-controls:has(:focus-visible) { opacity: 1; }
+.public-floating-controls[hidden] { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .public-floating-controls:hover { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-floating-controls { transition: none; }
+}

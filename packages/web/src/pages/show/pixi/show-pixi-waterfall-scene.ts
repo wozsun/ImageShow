@@ -1,6 +1,6 @@
 import { Container, type Renderer } from "pixi.js";
 import type { ShowOrder } from "@imageshow/shared/browser";
-import { ShowDataPool, shuffledShowImages } from "../show-data-pool.js";
+import { ShowDataPool, type ShowCandidateUsage } from "../show-data-pool.js";
 import {
   showLayoutColumnWidth,
   type ShowCardSlot,
@@ -53,7 +53,7 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
   readonly #perspectiveCoordinator = new ShowPixiPerspectiveCoordinator();
   readonly #textureCache: ShowPixiTextureCache;
   readonly #renderer: Renderer;
-  readonly #onNeedImages: () => void;
+  readonly #onNeedImages: (usage: ShowCandidateUsage) => void;
   readonly #onOpen: (image: ShowImage, key: string) => void;
   readonly #onVisibleItems: (items: readonly ShowPixiVisibleItem[]) => void;
   readonly #onColumnsChange: (columns: number) => number;
@@ -66,10 +66,10 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
   #reducedMotion: boolean;
   #dataKey = "";
   #order: ShowOrder = "random";
-  #imageCount = 0;
+  #lastUsageRevision = -1;
   #imageIds = new Set<string>();
   #lastReconcileAt = 0;
-  #lastVisibleSignature = "";
+  #lastVisibleSignature: string | null = null;
   #recycledSprites = 0;
   #rejectedSprites = 0;
   #visibleSprites = 0;
@@ -108,7 +108,7 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
     this.root = this.#camera.root;
     this.root.sortableChildren = true;
     this.#camera.moveCorner(-showLayoutColumnWidth / 2, 0);
-    this.setImages(options.images, options.dataKey, options.order);
+    this.setImages(options.images, options.dataKey, options.order, options.hasMore);
     this.#reconcile(true);
   }
 
@@ -136,14 +136,15 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
     this.#reconcile(true);
   }
 
-  setImages(images: readonly ShowImage[], dataKey: string, order: ShowOrder) {
-    this.#lastVisibleSignature = "";
-    const arranged = order === "random" ? shuffledShowImages(images) : [...images];
+  setImages(images: readonly ShowImage[], dataKey: string, order: ShowOrder, hasMore: boolean) {
+    this.#lastVisibleSignature = null;
+    const arranged = images;
     const replacing = this.#dataKey !== dataKey || this.#order !== order;
     const imageMap = new Map(arranged.map((image) => [image.id, image]));
     this.#dataKey = dataKey;
     this.#order = order;
-    this.#imageCount = arranged.length;
+    this.#pool.setStreaming(hasMore, order === "random");
+    this.#lastUsageRevision = -1;
     if (replacing) {
       this.#clearCards();
       this.#controller.clear();
@@ -340,8 +341,9 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
       this.#onVisibleItems(visibleItems);
     }
     const poolStats = this.#pool.snapshot();
-    if ((snapshot.missingCards > 0 || poolStats.available < 96) && this.#imageCount < 800) {
-      this.#onNeedImages();
+    if ((snapshot.missingCards > 0 || poolStats.available < 100) && this.#lastUsageRevision !== this.#pool.revision) {
+      this.#lastUsageRevision = this.#pool.revision;
+      this.#onNeedImages(this.#pool.usage(this.#dataKey));
     }
   }
 
@@ -351,7 +353,7 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
       card.destroy();
     }
     this.#cards.clear();
-    this.#lastVisibleSignature = "";
+    this.#lastVisibleSignature = null;
   }
 
   #clampColumns(columns: number) {

@@ -191,12 +191,6 @@
     padding-right: max(16px, calc(env(safe-area-inset-right) + 12px));
     padding-bottom: max(16px, calc(env(safe-area-inset-bottom) + 12px));
   }
-  .gallery-back-to-top {
-    right: max(24px, calc(env(safe-area-inset-right) + 20px));
-    bottom: max(24px, calc(env(safe-area-inset-bottom) + 20px));
-    width: 42px;
-    min-height: 42px;
-  }
 }
 
 /* Keep accessibility overrides after desktop and mobile declarations. */
@@ -209,7 +203,6 @@
   .tile { transition: none; }
   .tile:hover { transform: none; }
   .tile-image-shell img { transition: none; }
-  .gallery-back-to-top { transition: none; }
   .gallery-filter-chevron,
   .gallery-page .gallery-toolbar > .gallery-filter-panel {
     transform: none;

@@ -3,9 +3,9 @@ import type {
   Device,
   PublicImageDetailDto,
   PublicImageListResponseDto,
-  PublicImageOrder
+  PublicImageOrder,
+  PublicImageView
 } from "@imageshow/shared/browser";
-import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { coalesce } from "../../core/coalesce.ts";
 import {
@@ -14,13 +14,16 @@ import {
 } from "../../core/database/public-fallback.ts";
 import { pool, type DatabaseReader } from "../../core/database/pools.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
+import { createImageBrowseContext, decodeImageCursor } from "../cursor.ts";
 import {
   readReadyImageById,
   readReadyImageCursorPage
 } from "../ready-cache/query.ts";
 import {
   publicImageCardsWithTags,
+  publicShowImageCards,
   publicImageDetail,
+  imageTagsPresentationColumn,
   type PublicImageDetailRecord
 } from "../presenter.ts";
 import { buildResolvedReadyImageListFilters } from "./list-filters.ts";
@@ -34,65 +37,56 @@ export type PublicImageListQuery = {
   tag?: string;
   author?: string;
   cursor?: string;
-  limit?: number;
+  limit: number;
+  view: PublicImageView;
   order?: PublicImageOrder;
-  shuffle?: boolean;
 };
-
-function withShuffle(
-  query: PublicImageListQuery,
-  payload: PublicImageListResponseDto
-): PublicImageListResponseDto {
-  if (!query.shuffle || payload.items.length < 2) return payload;
-  const items = [...payload.items];
-  for (let index = items.length - 1; index > 0; index -= 1) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    [items[index], items[randomIndex]] = [items[randomIndex], items[index]];
-  }
-  return { ...payload, items };
-}
 
 async function listPublicImagesWithAccess(
   query: PublicImageListQuery,
   signal: AbortSignal | undefined,
-  database: PublicDatabaseReadAccess
-): Promise<PublicImageListResponseDto> {
-  const limit = query.limit ?? getRuntimeConfig().site.gallery.limit;
+  database: PublicDatabaseReadAccess,
+  now: number
+): Promise<PublicImageListResponseDto<PublicImageView>> {
+  const limit = query.limit;
   const order = query.order ?? "latest";
   const plan = await resolveImageFilterPlan(query, database);
+  const context = createImageBrowseContext(order, now);
+  const position = query.cursor === undefined
+    ? undefined : decodeImageCursor(query.cursor, context);
   const cached = await readReadyImageCursorPage(
     plan,
     limit,
-    order,
-    query.cursor,
+    context,
+    position,
     signal,
     Boolean(database.reader)
   );
   if (cached.status === "hit") {
-    return withShuffle(query, {
-      items: await publicImageCardsWithTags(cached.value.items.map((item) => ({
-        ...item,
-        status: "ready"
-      })), database),
+    return {
+      items: query.view === "show"
+        ? await publicShowImageCards(cached.value.items, database)
+        : await publicImageCardsWithTags(cached.value.items, database),
       next_cursor: cached.value.nextCursor
-    });
+    };
   }
 
-  const fallbackKey = JSON.stringify({ ...query, limit, order });
+  const fallbackKey = JSON.stringify({ ...query, limit, context });
   const load = async (reader: DatabaseReader) => {
     const { params, where } = buildResolvedReadyImageListFilters(plan);
     const page = await fetchPublicImageCardPage(
       where,
       params,
       limit,
-      order,
-      query.cursor,
+      context,
+      query.view,
+      position,
       reader
     );
     return {
       items: page.items,
       next_cursor: page.nextCursor
-    } satisfies PublicImageListResponseDto;
+    } satisfies PublicImageListResponseDto<PublicImageView>;
   };
   const payload = database.reader
     ? await load(database.reader)
@@ -100,18 +94,19 @@ async function listPublicImagesWithAccess(
         `public-images:postgres:${fallbackKey}`,
         () => load(pool)
       );
-  return withShuffle(query, payload);
+  return payload;
 }
 
 export function listPublicImages(
   query: PublicImageListQuery,
-  signal?: AbortSignal
-): Promise<PublicImageListResponseDto> {
+  signal?: AbortSignal,
+  now = Date.now()
+): Promise<PublicImageListResponseDto<PublicImageView>> {
   return signal
     ? withPublicDatabaseRead(signal, (database, databaseSignal) => (
-        listPublicImagesWithAccess(query, databaseSignal, database)
+        listPublicImagesWithAccess(query, databaseSignal, database, now)
       ))
-    : listPublicImagesWithAccess(query, undefined, {});
+    : listPublicImagesWithAccess(query, undefined, {}, now);
 }
 
 async function getPublicImageWithAccess(
@@ -131,7 +126,9 @@ async function getPublicImageWithAccess(
               storage_slug,
               description,
               source,
-              original
+              original,
+              author, device, brightness, theme, image_time,
+              ${imageTagsPresentationColumn}
          FROM metadata
         WHERE id=$1 AND status='ready'
         LIMIT 1`,

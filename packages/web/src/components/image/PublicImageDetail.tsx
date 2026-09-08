@@ -1,8 +1,9 @@
 import { useMemo, useState, type RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { PublicImageDetailResponseDto } from "@imageshow/shared/browser";
+import type { PublicImageDetailResponseDto, ShowImageCardDto } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
+import { completePublicDetailValidation, publicDetailValidation } from "../../lib/api/image-data-revision.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
 import type {
   EditableImageSnapshot,
@@ -11,8 +12,14 @@ import type {
 } from "../../lib/types.js";
 import { ImageDetailModal } from "./ImageDetailModal.js";
 
-function imagePlaceholder(card: GalleryImageCard): PublicImageItem {
+function imagePlaceholder(card: ShowImageCardDto | GalleryImageCard): PublicImageItem {
   return {
+    device: "pc",
+    brightness: "light",
+    theme: "",
+    author: "",
+    tags: [],
+    image_time: "",
     ...card,
     description: "",
     object_url: "",
@@ -30,7 +37,7 @@ export function PublicImageDetail({
   onItemRefreshRequested,
   returnFocusRef,
 }: {
-  card: GalleryImageCard;
+  card: ShowImageCardDto | GalleryImageCard;
   onClose: () => void;
   onTrashCommitted?: (imageId: string) => void | Promise<void>;
   onTrashed?: (imageId: string) => void;
@@ -45,7 +52,14 @@ export function PublicImageDetail({
       queryKey: [...queryKeys.publicImageDetail, card.id],
       // The tiny metadata request is reusable across StrictMode's simulated
       // remount. Full-image DOM work remains owned and cancelled by the modal.
-      queryFn: () => api(`/api/images/${encodeURIComponent(card.id)}`),
+      queryFn: async ({ queryKey, client }) => {
+        const validation = publicDetailValidation(client, card.id);
+        const response = await api<PublicImageDetailResponseDto>(`/api/images/${encodeURIComponent(card.id)}`, {
+          ...(validation || client.getQueryState(queryKey)?.isInvalidated ? { cache: "no-cache" as const } : {})
+        });
+        if (validation) completePublicDetailValidation(client, card.id, validation);
+        return response;
+      },
       gcTime: 0,
       enabled: !trashCommitted
     });

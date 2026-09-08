@@ -3,6 +3,8 @@ import { appConfig } from "@imageshow/shared";
 import {
   adminImagePageLimit,
   publicImageOrders,
+  publicImageViews,
+  publicImageBrowseLimit,
   type ImageUpdateItemInputDto,
   type ImageUpdateRequestDto,
   slugMaxLength,
@@ -186,10 +188,9 @@ export const listQuery = z.strictObject({
   status: z.literal("ready").default("ready"),
   // The image cursor decoder owns format validation and its stable API error.
   cursor: z.string().optional(),
-  limit: safePositiveIntegerInput
-    .max(appConfig.pagination.maxLimit).optional(),
+  view: z.enum(publicImageViews),
+  limit: safePositiveIntegerInput.max(publicImageBrowseLimit),
   order: z.enum(publicImageOrders).default("latest"),
-  shuffle: z.enum(["1", "true"]).optional().transform(Boolean)
 }) satisfies z.ZodType<PublicImageListQuery>;
 
 export const adminImageListQuery = z.strictObject({

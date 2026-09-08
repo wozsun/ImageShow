@@ -75,6 +75,17 @@ function parsedItem(raw: string | null, expectedMember: string) {
   return item;
 }
 
+export function readyImageWindowIndexIsValid(
+  index: ReadyImageFilterIndex,
+  raw: boolean | ReadyImageFilterIndexValidation
+) {
+  const validation = raw === true ? "valid" : raw === false ? "invalid" : raw;
+  if (validation === "invalid" && index.kind === "core") {
+    throw new ReadyImageCoreCacheError("Ready-image core index validation failed");
+  }
+  return validation === "valid";
+}
+
 export async function readReadyImageOrderedWindow(
   index: ReadyImageFilterIndex,
   start: number,
@@ -87,18 +98,7 @@ export async function readReadyImageOrderedWindow(
       mode,
       () => dependencies.validate(index)
     );
-    const validation = raw === true
-      ? "valid"
-      : raw === false
-        ? "invalid"
-        : raw;
-    if (validation === "valid") return true;
-    if (validation === "invalid" && index.kind === "core") {
-      throw new ReadyImageCoreCacheError(
-        "Ready-image core index validation failed"
-      );
-    }
-    return false;
+    return readyImageWindowIndexIsValid(index, raw);
   };
   if (!await indexIsValid()) return null;
   const total = Number(await executeRedisCommand(

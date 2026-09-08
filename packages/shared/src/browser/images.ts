@@ -1,7 +1,10 @@
 import type { Brightness, Device } from "./common.ts";
 
-export const publicImageOrders = ["latest", "oldest"] as const;
+export const publicImageOrders = ["random", "latest", "oldest"] as const;
 export type PublicImageOrder = (typeof publicImageOrders)[number];
+export const publicImageViews = ["show", "gallery"] as const;
+export type PublicImageView = (typeof publicImageViews)[number];
+export const publicImageBrowseLimit = 800;
 
 export const adminImageListReadStartedAtHeader =
   "X-ImageShow-Read-Started-At";
@@ -38,16 +41,19 @@ export type GalleryStatsDto = {
   authors: Array<GalleryStatsFacetDto & { link: string }>;
 };
 
-export type ImageCardBaseDto = {
+export type ShowImageCardDto = {
   id: string;
   title: string;
+  thumb_url: string;
+  width: number;
+  height: number;
+};
+
+export type ImageCardBaseDto = ShowImageCardDto & {
   device: Device;
   brightness: Brightness;
   theme: string;
   author: string;
-  thumb_url: string;
-  width: number;
-  height: number;
   tags: string[];
   image_time: string;
 };
@@ -58,7 +64,10 @@ export type ImageCardBaseDto = {
  */
 export type GalleryImageCardDto = ImageCardBaseDto;
 
-export type PublicImageDetailDto = {
+export type PublicImageDetailDto = Pick<
+  ImageCardBaseDto,
+  "device" | "brightness" | "theme" | "author" | "tags" | "image_time"
+> & {
   id: string;
   description: string;
   object_url: string;
@@ -68,8 +77,8 @@ export type PublicImageDetailDto = {
 
 export type ImageDetailItemDto = ImageCardBaseDto & PublicImageDetailDto;
 
-export type PublicImageListResponseDto = {
-  items: GalleryImageCardDto[];
+export type PublicImageListResponseDto<View extends PublicImageView = "gallery"> = {
+  items: Array<View extends "show" ? ShowImageCardDto : GalleryImageCardDto>;
   next_cursor: string | null;
 };
 

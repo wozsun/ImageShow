@@ -1,5 +1,5 @@
 import {
-  galleryOrders,
+  publicImageOrders,
   type GalleryOrder
 } from "@imageshow/shared/browser";
 
@@ -82,11 +82,12 @@ export const commonImageBrightnessOptions: readonly SelectOption[] = [
 
 const galleryOrderLabels: Record<GalleryOrder, string> = {
   latest: "最新优先",
+  oldest: "最旧优先",
   random: "随机打乱"
 };
 
 export const galleryOrderSelectOptions: readonly SelectOption[] =
-  galleryOrders.map((value) => ({
+  publicImageOrders.map((value) => ({
     value,
     label: galleryOrderLabels[value]
   }));

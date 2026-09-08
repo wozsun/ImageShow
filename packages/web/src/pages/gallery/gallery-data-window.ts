@@ -1,4 +1,5 @@
 import type { PublicImageListResponseDto } from "@imageshow/shared/browser";
+import { shuffledImageBatch } from "../../lib/gallery/image-browse.js";
 import {
   galleryDataWindowFullItemBudget,
   galleryMaxMountedTiles
@@ -189,6 +190,10 @@ export class GalleryDataWindow {
   readonly #listeners = new Set<() => void>();
   readonly #layout: CompactMasonryLayout;
   readonly #fullItemBudget: number;
+  readonly #initialLimit: number;
+  readonly #randomOrder: boolean;
+  readonly #confirmedEdits = new Map<string, EditableImageSnapshot>();
+  readonly #removedIds = new Set<string>();
   readonly #pendingCursors = new Map<
     string,
     Pick<GalleryPageRequest, "kind" | "token">
@@ -214,13 +219,19 @@ export class GalleryDataWindow {
 
   constructor({
     geometry,
-    fullItemBudget = galleryDataWindowFullItemBudget
+    fullItemBudget = galleryDataWindowFullItemBudget,
+    initialLimit = 60,
+    randomOrder = false
   }: {
     geometry: GalleryCompactGeometry;
     fullItemBudget?: number;
+    initialLimit?: number;
+    randomOrder?: boolean;
   }) {
     this.#layout = new CompactMasonryLayout(geometry);
     this.#fullItemBudget = Math.max(1, Math.floor(fullItemBudget));
+    this.#initialLimit = initialLimit;
+    this.#randomOrder = randomOrder;
     this.#snapshot = this.#createSnapshot();
   }
 
@@ -230,6 +241,20 @@ export class GalleryDataWindow {
   };
 
   snapshot = () => this.#snapshot;
+
+  pageLimit(cursor: string) {
+    return cursor ? 60 : this.#initialLimit;
+  }
+
+  restart() {
+    this.#pendingCursors.clear();
+    this.#failedCursors.clear();
+    this.#confirmedEdits.clear();
+    this.#removedIds.clear();
+    this.#resetPages();
+    this.#commit();
+    return { cursor: "", kind: "initial" as const };
+  }
 
   debugSnapshot = (): GalleryDataWindowDebugSnapshot => ({
     ...this.#snapshot,
@@ -332,31 +357,35 @@ export class GalleryDataWindow {
     for (const page of this.#pages) {
       page.items = null;
       page.fullBytes = 0;
+      page.needsRefresh = true;
     }
     this.#fullBytes = 0;
     this.#commit();
+  }
+
+  needsValidation(cursor: string) {
+    return this.#pages.some((page) => page.cursor === cursor && page.needsRefresh);
   }
 
   prepareImageRefresh(
     imageId: string,
     authoritativeItem?: EditableImageSnapshot
   ): GalleryPageIntent | null {
+    if (!authoritativeItem) this.#confirmedEdits.delete(imageId);
     const itemIndex = this.indexOfId(imageId);
     if (itemIndex < 0) return null;
     const pageIndex = this.#pageIndexAtItem(itemIndex);
     const page = this.#pages[pageIndex];
     if (!page) return null;
 
-    // A successful edit establishes a newer authority boundary than every
-    // page request that was already in flight. Fence all of those responses
-    // before the Hook awaits network cancellation, then rehydrate the exact
-    // cursor page so filter membership and cursor-chain changes are reconciled
-    // by the same replacement path as ordinary far-page recovery.
+    // Fence reads started before the edit. Confirmed snapshots update the
+    // card directly; only a missing authority needs a source validation.
     this.#pendingCursors.clear();
     this.#failedCursors.delete(page.cursor);
     const offset = itemIndex - page.startIndex;
     const currentItem = page.items?.[offset];
     if (currentItem && authoritativeItem?.id === imageId) {
+      this.#confirmedEdits.set(imageId, authoritativeItem);
       const nextItem = galleryCardFromSnapshot(
         currentItem,
         authoritativeItem
@@ -375,9 +404,10 @@ export class GalleryDataWindow {
       }
     }
     this.#activePageIndexes.add(pageIndex);
-    page.needsRefresh = true;
+    // One card's confirmation cannot validate other cards on this page.
+    page.needsRefresh ||= !authoritativeItem;
     this.#commit();
-    return { cursor: page.cursor, kind: "hydrate" };
+    return page.needsRefresh ? { cursor: page.cursor, kind: "hydrate" } : null;
   }
 
   updateViewport(
@@ -535,6 +565,8 @@ export class GalleryDataWindow {
   }
 
   removeImage(imageId: string) {
+    this.#removedIds.add(imageId);
+    this.#confirmedEdits.delete(imageId);
     const index = this.indexOfId(imageId);
     if (index < 0) {
       return { removed: false, index: -1, focusId: null as string | null };
@@ -590,7 +622,7 @@ export class GalleryDataWindow {
       }));
     const lastPage = this.#pages.at(-1)!;
     const append = lastPage.nextCursor
-      && this.#lastViewport.preloadEnd >= lastPage.top
+      && this.#lastViewport.preloadEnd >= this.#layout.minimumColumnHeight
       && this.#requestAvailable(lastPage.nextCursor)
       ? [{ cursor: lastPage.nextCursor, kind: "append" as const }]
       : [];
@@ -630,12 +662,10 @@ export class GalleryDataWindow {
     payload: PublicImageListResponseDto
   ) {
     const page = this.#pages[pageIndex]!;
-    // `shuffle=1` deliberately returns the same keyset page in a new order on
-    // every request. Preserve this session's original order when the ID set is
-    // unchanged; only a real insertion/deletion invalidates later boundaries.
+    // Preserve the accepted batch order when validation keeps its members.
     const orderedItems = itemsInStoredOrder(
       page.ids,
-      payload.items,
+      this.#currentItems(payload.items),
       page.items
     );
     if (!orderedItems) {
@@ -665,7 +695,13 @@ export class GalleryDataWindow {
   }
 
   #appendPage(cursor: string, payload: PublicImageListResponseDto) {
-    const items = [...payload.items];
+    const recent = new Set(this.#pages.slice(-34).flatMap((page) => page.ids));
+    const candidates = this.#currentItems(payload.items).filter((item) => {
+      if (recent.has(item.id)) return false;
+      recent.add(item.id);
+      return true;
+    });
+    const items = this.#randomOrder ? shuffledImageBatch(candidates) : candidates;
     const page: GalleryWindowPage = {
       cursor,
       nextCursor: payload.next_cursor ?? "",
@@ -716,6 +752,13 @@ export class GalleryDataWindow {
     this.#idCharacters = 0;
     this.#fullBytes = 0;
     this.#layout.truncate(0);
+  }
+
+  #currentItems(items: readonly GalleryImageCard[]) {
+    return items.filter((item) => !this.#removedIds.has(item.id)).map((item) => {
+      const snapshot = this.#confirmedEdits.get(item.id);
+      return snapshot ? galleryCardFromSnapshot(item, snapshot) : item;
+    });
   }
 
   #applyRetention() {
@@ -791,7 +834,7 @@ export class GalleryDataWindow {
         || (
           cursor === appendCursor
           && appendCursor !== ""
-          && this.#lastViewport.preloadEnd >= this.#pages.at(-1)!.top
+          && this.#lastViewport.preloadEnd >= this.#layout.minimumColumnHeight
         )
       ) {
         continue;

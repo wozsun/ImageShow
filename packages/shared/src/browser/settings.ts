@@ -1,5 +1,6 @@
 import type { LogLevel, SiteVersionSettings } from "./common.ts";
 import type { ImportSourceTypeDto } from "./ingestion.ts";
+import type { PublicImageOrder } from "./images.ts";
 
 export const siteRoots = ["home", "show", "gallery"] as const;
 export type SiteRoot = (typeof siteRoots)[number];
@@ -13,11 +14,8 @@ export type RandomDefaultMethod = (typeof randomDefaultMethods)[number];
 export const randomMethods = [...randomDefaultMethods, "json"] as const;
 export type RandomMethod = (typeof randomMethods)[number];
 
-export const galleryOrders = ["latest", "random"] as const;
-export type GalleryOrder = (typeof galleryOrders)[number];
-
-export const showOrders = ["random", "latest", "oldest"] as const;
-export type ShowOrder = (typeof showOrders)[number];
+export type GalleryOrder = PublicImageOrder;
+export type ShowOrder = PublicImageOrder;
 
 export const showModes = ["waterfall", "float"] as const;
 export type ShowMode = (typeof showModes)[number];
@@ -44,7 +42,6 @@ export type SiteShowSettings = {
 
 export type SiteGallerySettings = {
   enabled: boolean;
-  limit: number;
   order: GalleryOrder;
   public_original_button: boolean;
 };
@@ -198,7 +195,7 @@ export type SiteSettings = Pick<
   | "home"
   | "random_method"
 > & {
-  gallery: Pick<SiteGallerySettings, "enabled" | "limit" | "order">;
+  gallery: Pick<SiteGallerySettings, "enabled" | "order">;
   show: SiteShowSettings;
 };
 
@@ -218,7 +215,7 @@ export type AdminSiteSettings = Omit<
   SiteSettings,
   "domain" | "home" | "icon" | "show" | "gallery"
 > & {
-  gallery: Pick<SiteGallerySettings, "limit" | "order">;
+  gallery: Pick<SiteGallerySettings, "order">;
   home: Pick<
     SiteHomeSettings,
     "background" | "banner_label" | "banner_title"

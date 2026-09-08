@@ -205,21 +205,14 @@ SPA `description`；空值回退到站点名，首次播种或热加载后影响
 
 控制公开画廊入口、`/gallery` 与嵌入画廊；关闭后直接访问、根入口和首页目标均使用公共目标解析器，配置选择原样保留。配置文件或高级配置热加载后生效。
 
-#### site.gallery.limit
-
-- 环境变量：`SITE_GALLERY_LIMIT`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `60`；1–200 项
-
-公开画廊未显式指定页量时使用的分页量；普通设置或热加载后影响新查询。
-
 #### site.gallery.order
 
 - 环境变量：`SITE_GALLERY_ORDER`
 - Compose：显式映射
-- 类型、默认值与范围：枚举；默认 `"latest"`；`latest`、`random`
+- 类型、默认值与范围：枚举；默认 `"latest"`；`random`、`latest`、`oldest`
 
-画廊默认排序；普通设置或热加载后影响新查询。
+画廊默认排序；普通设置或热加载后影响新查询。页面右下角可以切换排序并保留筛选。
+页面首批按视口需求向上选择 60 / 120 / 180，续批固定 60；最短列剩余覆盖不足约一屏时补图。
 
 #### site.gallery.public_original_button
 

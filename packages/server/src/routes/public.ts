@@ -1,16 +1,15 @@
 import type { Context, Hono } from "hono";
 import type { PublicImageDetailResponseDto } from "@imageshow/shared/browser";
+import { ApiError } from "../core/api-error.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
 import {
-  noStoreCacheControl,
   publicConfigCacheControl,
-  publicListCacheControl,
+  publicImageCacheControl,
   publicMetadataCacheControl
 } from "../core/http/headers.ts";
 import { blockCrossSiteFetch } from "../core/http/request-security.ts";
 import {
   apiErrorResponse,
-  apiSuccess,
   cacheableApiSuccess
 } from "../core/http/responses.ts";
 import {
@@ -60,12 +59,16 @@ export function registerPublicRoutes(app: Hono) {
       listQuery,
       Object.fromEntries(new URL(c.req.url).searchParams)
     );
-    const response = await listPublicImages(q, c.req.raw.signal);
-    if (q.shuffle) {
-      c.header("Cache-Control", noStoreCacheControl);
-      return c.json(apiSuccess(response));
+    const startedAt = Date.now();
+    const response = await listPublicImages(q, c.req.raw.signal, startedAt);
+    let cacheControl = publicImageCacheControl;
+    if (q.order === "random") {
+      const endOfDay = (Math.floor(startedAt / 86_400_000) + 1) * 86_400_000;
+      const remaining = Math.floor((endOfDay - Date.now()) / 1_000);
+      if (remaining < 0) throw new ApiError(409, "cursor_expired", "Image browse cursor has expired");
+      cacheControl = `public, max-age=${Math.min(30, remaining)}, s-maxage=${Math.min(60, remaining)}`;
     }
-    return cacheableApiSuccess(c, response, publicListCacheControl);
+    return cacheableApiSuccess(c, response, cacheControl);
   });
 
   app.get("/api/site-config", async (c) => cacheableApiSuccess(
@@ -121,7 +124,7 @@ export function registerPublicRoutes(app: Hono) {
         c.req.raw.signal
       )
     } satisfies PublicImageDetailResponseDto;
-    return cacheableApiSuccess(c, response, publicMetadataCacheControl);
+    return cacheableApiSuccess(c, response, publicImageCacheControl);
   });
 
   // Both route shapes share handlers; the Host/prefix guard opens only the

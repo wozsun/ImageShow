@@ -16,6 +16,7 @@ import { PublicStarfield } from "../../components/layout/PublicStarfield.js";
 // 当前详情共享 JS + CSS 实测压缩后不足 6 KiB；画廊首击直接使用，继续随路由
 // 加载可避免新增请求和 Suspense 边界。
 import { PublicImageDetail } from "../../components/image/PublicImageDetail.js";
+import { PublicImageOrderButton } from "../../components/navigation/PublicImageOrderButton.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
 import {
@@ -41,11 +42,12 @@ import {
   usePublicImageViewportControls
 } from "../../hooks/usePublicImageViewportControls.js";
 import {
-  galleryApiSearchParams,
+  imageBrowseApiSearchParams,
   emptyGalleryFilters,
   galleryFiltersFromSearchParams,
   galleryRandomRequestDevice,
-  galleryRouteSearchParams,
+  updateImageBrowseSearchParams,
+  showOrderFromSearchParams,
   type GalleryFilters
 } from "../../lib/gallery/gallery-query.js";
 import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
@@ -57,7 +59,7 @@ import "../../styles/gallery-responsive.css";
 
 export function GalleryPage({
   embedded = false,
-  order
+  order: defaultOrder
 }: {
   embedded?: boolean;
   order: GalleryOrder;
@@ -69,6 +71,7 @@ export function GalleryPage({
   const navigationType = useNavigationType();
   const [routeSearchParams, setRouteSearchParams] = useSearchParams();
   const routeQuery = routeSearchParams.toString();
+  const order = showOrderFromSearchParams(routeSearchParams, defaultOrder);
   const filters = useMemo(
     () => galleryFiltersFromSearchParams(new URLSearchParams(routeQuery)),
     [routeQuery]
@@ -113,7 +116,7 @@ export function GalleryPage({
 
   const userAgent = window.navigator.userAgent;
   const imageQuery = useMemo(
-    () => galleryApiSearchParams(filters, order, { userAgent }).toString(),
+    () => imageBrowseApiSearchParams(filters, order, { userAgent, view: "gallery" }).toString(),
     [filters, order, userAgent]
   );
   const revealRegistry = useMemo(
@@ -160,12 +163,12 @@ export function GalleryPage({
 
   const updateFilter = (key: keyof GalleryFilters, value: string) => {
     setRouteSearchParams(
-      galleryRouteSearchParams({ ...filters, [key]: value })
+      (current) => updateImageBrowseSearchParams(current, { [key]: value })
     );
   };
   const clearFilters = () => {
     if (!Object.values(filters).some(Boolean)) return;
-    setRouteSearchParams(galleryRouteSearchParams(emptyGalleryFilters));
+    setRouteSearchParams((current) => updateImageBrowseSearchParams(current, emptyGalleryFilters));
   };
 
   const columnCount = useGalleryColumnCount();
@@ -336,21 +339,23 @@ export function GalleryPage({
           />
         )}
         {nextPageLoading && <p className="gallery-loading">加载中</p>}
-        <div className="gallery-floating-controls">
-          <button
+        <div className="gallery-floating-controls public-floating-controls"
+          data-public-navigation-visible={headerVisible || toolbarVisible}
+          hidden={Boolean(selected)}>
+          {showBackToTop && <button
             type="button"
-            className={`gallery-back-to-top pressable${showBackToTop ? " is-visible" : ""}`}
+            className="public-round-control pressable"
             aria-label="回到顶部"
             title="回到顶部"
-            aria-hidden={!showBackToTop}
-            tabIndex={showBackToTop ? 0 : -1}
             onClick={(event) => {
               event.currentTarget.blur();
               scrollPublicImagePageToTop();
             }}
           >
-            <Icon name="arrow-up-line" />
-          </button>
+            <span className="public-round-surface"><Icon name="arrow-up-line" /></span>
+          </button>}
+          <PublicImageOrderButton order={order}
+            onChange={(next) => setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { order: next }))} />
         </div>
         {selected && (
           <PublicImageDetail

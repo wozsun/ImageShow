@@ -395,7 +395,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
       let cursor;
       for (const pageIndex of [0, 1]) {
         const query = {
-          status: "ready", theme: matrixTheme, limit: 3, order, cursor
+          status: "ready", view: "gallery", theme: matrixTheme, limit: 3, order, cursor
         } as const;
         const page = await publicImagesReadModel.listPublicImages(
           query, new AbortController().signal

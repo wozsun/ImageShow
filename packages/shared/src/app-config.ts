@@ -175,7 +175,6 @@ export const appConfig = {
       },
       gallery: {
         enabled: true,
-        limit: 60,
         order: "latest",
         public_original_button: false
       },

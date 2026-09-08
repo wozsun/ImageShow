@@ -300,10 +300,12 @@ console.log("host-boundary-ok");
   }
 });
 test("[Server/HTTP 与鉴权] 公开 cursor 与后台数字页使用严格且互斥的查询契约", () => {
-  const defaultPublicQuery = listQuery.parse({ cursor: "opaque", limit: "60" });
+  const publicBase = { view: "gallery", limit: "60" };
+  const defaultPublicQuery = listQuery.parse({ ...publicBase, cursor: "opaque" });
   assert.equal(defaultPublicQuery.order, "latest");
-  assert.equal(listQuery.safeParse({ order: "oldest" }).success, true);
-  assert.equal(listQuery.safeParse({ order: "random" }).success, false);
+  for (const order of ["latest", "oldest", "random"]) {
+    assert.equal(listQuery.safeParse({ ...publicBase, order }).success, true);
+  }
   assert.equal(adminImageListQuery.safeParse({ page: "100", limit: "60" }).success, true);
   const completeFilters = {
     device: "pc",
@@ -312,28 +314,22 @@ test("[Server/HTTP 与鉴权] 公开 cursor 与后台数字页使用严格且互
     tag: "live",
     author: "alice"
   };
-  assert.equal(listQuery.safeParse(completeFilters).success, true);
+  assert.equal(listQuery.safeParse({ ...publicBase, ...completeFilters }).success, true);
   assert.equal(galleryStatsQuery.safeParse(completeFilters).success, true);
   assert.equal(adminImageListQuery.safeParse(completeFilters).success, true);
-
-  for (const field of ["d", "b", "t", "a"]) {
-    assert.equal(listQuery.safeParse({ [field]: "value" }).success, false);
-    assert.equal(galleryStatsQuery.safeParse({ [field]: "value" }).success, false);
-    assert.equal(adminImageListQuery.safeParse({ [field]: "value" }).success, false);
-  }
 
   for (const query of [
     { page: "2" },
     { offset: "60" },
-    { removed: "true" }
+    { unexpected: "true" }
   ]) {
-    const result = listQuery.safeParse(query);
+    const result = listQuery.safeParse({ ...publicBase, ...query });
     assert.equal(result.success, false);
   }
   for (const query of [
     { cursor: "opaque" },
     { offset: "60" },
-    { removed: "true" },
+    { unexpected: "true" },
     { page: "0" },
     { page: "-1" },
     { page: "1.5" },

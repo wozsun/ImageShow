@@ -95,6 +95,11 @@ const storageIngestionScenarios = [
     script: join(isolationRoot, "image-read-consistency.mts")
   },
   {
+    id: "public-image-browse",
+    name: "公开两档分页、随机环形边界与条件缓存",
+    script: join(isolationRoot, "public-image-browse.mts")
+  },
+  {
     id: "redis-business-commands",
     name: "Redis 业务 Lua 的冷加载、并发、事务与缓存完整性",
     script: join(isolationRoot, "redis-business-commands.mts")

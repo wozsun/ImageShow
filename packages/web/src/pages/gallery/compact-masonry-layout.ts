@@ -142,6 +142,10 @@ export class CompactMasonryLayout {
     return total;
   }
 
+  get minimumColumnHeight() {
+    return Math.max(0, Math.min(...this.#columnHeights) - this.#geometry.gap);
+  }
+
   get itemByteLength() {
     return this.#ratios.byteLength
       + this.#resolvedRatios.byteLength

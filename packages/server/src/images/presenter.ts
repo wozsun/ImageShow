@@ -5,16 +5,15 @@ import {
   type Device,
   type EditableImageSnapshotDto,
   type GalleryImageCardDto,
+  type ShowImageCardDto,
   type PublicImageDetailDto
 } from "@imageshow/shared/browser";
-import type { DatabaseReader } from "../core/database/pools.ts";
 import type {
   PublicDatabaseReadAccess
 } from "../core/database/public-fallback.ts";
 import { storageBackendLabel } from "../storage/backends/label.ts";
 import { listStorageBackends } from "../storage/backends/registry.ts";
 import { publicImageUrls } from "../storage/objects/public-urls.ts";
-import { getTagsForImages } from "../tags/query.ts";
 import { publicOriginalAccessUrl } from "./original-link.ts";
 
 type DatabaseNumber = number | string;
@@ -98,7 +97,7 @@ export const adminImageListPresentationColumns = [
  * Read tags in the same PostgreSQL statement as compact image projections so
  * metadata and associations share one statement-level MVCC snapshot.
  */
-const imageTagsPresentationColumn = `ARRAY(
+export const imageTagsPresentationColumn = `ARRAY(
   SELECT it.tag_slug
     FROM image_tag it
    WHERE it.image_id = metadata.id
@@ -173,6 +172,15 @@ export type PublicImageDetailRecord = Pick<
   | "description"
   | "source"
   | "original"
+  | "author"
+  | "device"
+  | "brightness"
+  | "theme"
+> & { image_time: DatabaseTimestamp; tags: string[] };
+
+export type PublicShowImageRecord = Pick<
+  PublicImageCardRecord,
+  "id" | "title" | "width" | "height" | "object_key" | "storage_slug"
 >;
 
 type PublicImageUrlRecord = Pick<
@@ -301,6 +309,12 @@ export async function publicImageDetail(
   const { urls } = await publicUrlsForRow(row, access);
   return {
     id: row.id,
+    author: row.author ?? "",
+    device: row.device,
+    brightness: row.brightness,
+    theme: row.theme,
+    tags: row.tags,
+    image_time: serializeTimestamp(row.image_time),
     description: row.description,
     source: row.source || null,
     object_url: urls.object_url,
@@ -312,42 +326,43 @@ export async function publicImageDetail(
   };
 }
 
+async function publicShowImageCard(
+  row: PublicShowImageRecord,
+  access: PublicDatabaseReadAccess
+): Promise<ShowImageCardDto> {
+  const { urls } = await publicUrlsForRow(row, access);
+  return {
+    id: row.id,
+    title: row.title,
+    thumb_url: urls.thumb_url,
+    width: Number(row.width),
+    height: Number(row.height)
+  };
+}
+
+export async function publicShowImageCards(
+  rows: PublicShowImageRecord[],
+  access: PublicDatabaseReadAccess = {}
+) {
+  if (!rows.length) return [];
+  await listStorageBackends(access);
+  return Promise.all(rows.map((row) => publicShowImageCard(row, access)));
+}
+
 async function publicImageCard(
   row: PublicImageCardRecord,
   tags: string[],
   access: PublicDatabaseReadAccess
 ): Promise<GalleryImageCardDto> {
-  const { urls } = await publicUrlsForRow(row, access);
   return {
-    id: row.id,
+    ...await publicShowImageCard(row, access),
     device: row.device,
     brightness: row.brightness,
     theme: row.theme,
     author: row.author ?? "",
-    width: Number(row.width),
-    height: Number(row.height),
-    title: row.title,
     tags,
     image_time: serializeTimestamp(row.image_time),
-    thumb_url: urls.thumb_url
   };
-}
-
-export async function publicImageCards(
-  rows: PublicImageCardRecord[],
-  reader?: DatabaseReader
-) {
-  if (!rows.length) return [];
-  const database = { reader };
-  const [tagMap] = await Promise.all([
-    getTagsForImages(rows.map((row) => row.id), reader),
-    listStorageBackends(database)
-  ]);
-  return Promise.all(rows.map((row) => publicImageCard(
-    row,
-    tagMap.get(row.id) ?? [],
-    database
-  )));
 }
 
 export function publicImageCardsWithTags(

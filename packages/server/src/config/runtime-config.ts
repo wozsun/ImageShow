@@ -9,7 +9,6 @@ import {
   altchaTtlSeconds,
   ingestionCommitConcurrency,
   embedAllowedOrigins,
-  galleryLimit,
   galleryOrder,
   homeBackground,
   homeBannerLabel,
@@ -91,7 +90,6 @@ const runtimeConfigSchema = z.strictObject({
     }),
     gallery: z.strictObject({
       enabled: z.boolean(),
-      limit: galleryLimit,
       order: galleryOrder,
       public_original_button: z.boolean()
     }),

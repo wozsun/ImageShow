@@ -2,6 +2,7 @@ import "pixi.js/unsafe-eval";
 import { AccessibilitySystem, Application, extensions, loadEnvironmentExtensions, type Ticker } from "pixi.js";
 import type { ShowOrder } from "@imageshow/shared/browser";
 import type { ShowImage } from "../show-layout.js";
+import type { ShowCandidateUsage } from "../show-data-pool.js";
 import { ShowPixiFloatScene } from "./show-pixi-float-scene.js";
 import {
   ShowPixiTextureCache,
@@ -19,6 +20,7 @@ import { ShowPixiWaterfallScene } from "./show-pixi-waterfall-scene.js";
 type ShowPixiRuntimeOptions = {
   scene: ShowPixiSceneKind;
   images: readonly ShowImage[];
+  hasMore: boolean;
   dataKey: string;
   order: ShowOrder;
   waterfallColumns: number;
@@ -31,7 +33,7 @@ type ShowPixiRuntimeOptions = {
   onFloatSizeIndexChange: (index: number) => number;
   onManualVerticalMovement: (delta: number, pointerType?: string) => void;
   onMotionActiveChange: (active: boolean) => void;
-  onNeedImages: () => void;
+  onNeedImages: (usage: ShowCandidateUsage) => void;
   onOpen: (image: ShowImage, key: string) => void;
   onVisibleItems: (items: readonly ShowPixiVisibleItem[]) => void;
 };
@@ -101,6 +103,7 @@ export class ShowPixiRuntime {
   #scene: ShowPixiSceneController | null = null;
   #sceneKind: ShowPixiSceneKind;
   #images: readonly ShowImage[];
+  #hasMore: boolean;
   #dataKey: string;
   #order: ShowOrder;
   #waterfallColumns: number;
@@ -162,6 +165,7 @@ export class ShowPixiRuntime {
     this.#options = options;
     this.#sceneKind = options.scene;
     this.#images = options.images;
+    this.#hasMore = options.hasMore;
     this.#dataKey = options.dataKey;
     this.#order = options.order;
     this.#waterfallColumns = options.waterfallColumns;
@@ -299,11 +303,12 @@ export class ShowPixiRuntime {
     this.#publishStats();
   }
 
-  setImages(images: readonly ShowImage[], dataKey: string, order: ShowOrder) {
+  setImages(images: readonly ShowImage[], dataKey: string, order: ShowOrder, hasMore: boolean) {
     this.#images = images;
+    this.#hasMore = hasMore;
     this.#dataKey = dataKey;
     this.#order = order;
-    this.#scene?.setImages(images, dataKey, order);
+    this.#scene?.setImages(images, dataKey, order, hasMore);
   }
 
   setWaterfallColumns(columns: number) {
@@ -425,6 +430,7 @@ export class ShowPixiRuntime {
   #createScene(kind: ShowPixiSceneKind) {
     const common = {
       images: this.#images,
+      hasMore: this.#hasMore,
       dataKey: this.#dataKey,
       order: this.#order,
       width: Math.max(1, this.#host.clientWidth),

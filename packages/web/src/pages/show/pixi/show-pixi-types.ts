@@ -1,5 +1,6 @@
 import type { Container, Renderer } from "pixi.js";
 import type { ShowMode, ShowOrder } from "@imageshow/shared/browser";
+import type { ShowCandidateUsage } from "../show-data-pool.js";
 import type { ShowImage } from "../show-layout.js";
 
 export type ShowPixiSceneKind = ShowMode;
@@ -69,6 +70,7 @@ export type ShowPixiRuntimeSnapshot = ShowPixiSceneStats & {
 
 export type ShowPixiSceneOptions = {
   images: readonly ShowImage[];
+  hasMore: boolean;
   dataKey: string;
   order: ShowOrder;
   width: number;
@@ -76,7 +78,7 @@ export type ShowPixiSceneOptions = {
   renderer: Renderer;
   running: boolean;
   reducedMotion: boolean;
-  onNeedImages: () => void;
+  onNeedImages: (usage: ShowCandidateUsage) => void;
   onOpen: (image: ShowImage, key: string) => void;
   onVisibleItems: (items: readonly ShowPixiVisibleItem[]) => void;
 };
@@ -88,7 +90,7 @@ export interface ShowPixiSceneController {
   destroy(): void;
   focusCard(key: string | null): void;
   resize(width: number, height: number): void;
-  setImages(images: readonly ShowImage[], dataKey: string, order: ShowOrder): void;
+  setImages(images: readonly ShowImage[], dataKey: string, order: ShowOrder, hasMore: boolean): void;
   setInputEnabled(enabled: boolean): void;
   setMotion(running: boolean, reducedMotion: boolean): void;
   stats(): ShowPixiSceneStats;

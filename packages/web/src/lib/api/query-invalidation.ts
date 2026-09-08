@@ -7,7 +7,7 @@ import type {
   IngestionVocabularyDto
 } from "@imageshow/shared/browser";
 import { queryKeys } from "./query-keys.js";
-import { advanceImageDataRevision } from "./image-data-revision.js";
+import { advanceImageDataRevision, markPublicDetailValidation } from "./image-data-revision.js";
 import {
   adminImageListValidationCovers
 } from "./admin-image-list-validation.js";
@@ -105,6 +105,7 @@ export function invalidateImageDataAfterMetadataSave(
 ) {
   if (!updates.length) return Promise.resolve([]);
   advanceImageDataRevision(client);
+  markPublicDetailValidation(client, updates.map((update) => update.id));
   const changesDevice = updatesField(updates, "device");
   const changesBrightness = updatesField(updates, "brightness");
   const changesTheme = updatesField(updates, "theme");
@@ -124,17 +125,22 @@ export function invalidateImageDataAfterMetadataSave(
       queryKey: [...queryKeys.adminImageInfo, update.id],
       exact: true
     })];
-    if (!authoritativeIds.has(update.id)) {
+    requests.push((async () => {
+      const queryKey = [...queryKeys.publicImageDetail, update.id];
+      // Retire a pre-commit promise as well as its HTTP freshness. A closed
+      // modal must not join that promise when it immediately opens again.
+      await client.cancelQueries({ queryKey, exact: true });
+      if (authoritativeIds.has(update.id)) return;
       // Without the authoritative snapshot every editable field may already
       // have committed despite the lost confirmation. The active public
       // detail owns a wider projection than its Gallery card, so the exact
       // detail must re-read instead of retaining stale fields over the card's
       // background page refresh.
-      requests.push(client.invalidateQueries({
-        queryKey: [...queryKeys.publicImageDetail, update.id],
+      await client.invalidateQueries({
+        queryKey,
         exact: true
-      }));
-    }
+      });
+    })());
     return requests;
   });
   return Promise.all([

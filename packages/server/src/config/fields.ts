@@ -2,14 +2,13 @@ import { z } from "zod";
 import { isIP } from "node:net";
 import { appConfig } from "@imageshow/shared";
 import {
-  galleryOrders,
+  publicImageOrders,
   homeBrowseTargets,
   importSourceTypes,
   logLevels,
   randomDefaultMethods,
   showDensities,
   showModes,
-  showOrders,
   siteRoots
 } from "@imageshow/shared/browser";
 import { isRootRelativeOrHttpsUrl } from "../core/url-validation.ts";
@@ -17,10 +16,10 @@ import { isRootRelativeOrHttpsUrl } from "../core/url-validation.ts";
 export const siteRoot = z.enum(siteRoots);
 export const homeBrowseTarget = z.enum(homeBrowseTargets);
 export const randomDefaultMethod = z.enum(randomDefaultMethods);
-export const galleryOrder = z.enum(galleryOrders);
+export const galleryOrder = z.enum(publicImageOrders);
 export const showDensity = z.enum(showDensities);
 export const showMode = z.enum(showModes);
-export const showOrder = z.enum(showOrders);
+export const showOrder = z.enum(publicImageOrders);
 export const showDriftSpeed = z.coerce.number().int().min(10).max(60);
 
 export const siteName = z.string().trim().min(1);
@@ -118,7 +117,6 @@ export const ingestionListPageSize = z.coerce.number().int().min(1).max(100);
 export const uploadMaxItems = z.coerce.number().int().min(1)
   .max(appConfig.ingestion.uploadSoftLimitMax);
 export const imagePageSize = z.coerce.number().int().min(10).max(appConfig.pagination.maxLimit);
-export const galleryLimit = z.coerce.number().int().positive().max(appConfig.pagination.maxLimit);
 export const recentUploads = z.coerce.number().int().min(1).max(60);
 
 export const uploadBrowserConcurrency = z.coerce.number().int().min(1).max(8);

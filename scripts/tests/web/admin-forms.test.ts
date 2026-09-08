@@ -1816,7 +1816,7 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
   await edit("unsaved"); await publish("background"); assert.equal(input().value, "unsaved");
   const number = h.document.querySelector<HTMLInputElement>('input[type="number"]')!;
   await h.React.act(async () => {
-    inputText(h.window, number, "77");
+    inputText(h.window, number, "47");
     await Promise.resolve();
   });
   Object.defineProperty(h.document,"activeElement",{configurable:true,get:()=>number});
@@ -1824,7 +1824,7 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
     dispatchDomEvent(h.window, number, "focusout", { relatedTarget: null });
   };
   await h.React.act(async () => { save().click(); save().click(); });
-  assert.equal(JSON.parse(String(h.pending[0].body)).site.gallery.limit,77,"锁定前同步结算数字输入，提交当前可见值");
+  assert.equal(JSON.parse(String(h.pending[0].body)).admin.recent_uploads,47,"锁定前同步结算数字输入，提交当前可见值");
   delete (h.document as any).activeElement;
   assert.equal(h.pending.length, 1); assert.equal(locked(), true);
   assert.ok([...h.document.querySelectorAll('.select-trigger')].every((element) => element.hasAttribute("disabled")));

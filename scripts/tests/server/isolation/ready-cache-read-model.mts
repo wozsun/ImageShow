@@ -182,6 +182,7 @@ await runIntegrationScenario(async (runtime) => {
     }
     const publicPage = await publicImages.listPublicImages({
       status: "ready",
+      view: "gallery",
       theme,
       tag,
       author,
