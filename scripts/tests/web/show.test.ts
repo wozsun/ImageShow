@@ -1270,12 +1270,34 @@ test("[Web/展映] float 桌面三种尺寸保持混排宽度、卡片与候选�
       assert.ok(prefetches >= 12 && prefetches <= 36, "上下队列共享一个总预算");
       const targetWidth = showFloatDefaultWidth(1440) * showFloatSizeSteps[sizeIndex];
       const widths = floatCardPositions(h.scene).map((card) => card.width / targetWidth);
-      assert.ok(widths.every((width) => width >= 0.5 && width <= 1.3));
-      assert.ok(Math.min(...widths) < 0.7 && Math.max(...widths) > 1.1);
+      assert.ok(widths.every((width) => width >= 0.7 && width <= 1.2));
+      assert.ok(Math.min(...widths) < 0.8 && Math.max(...widths) > 1.1);
       assert.ok(h.scene.stats().coverageRatio > 0);
     });
   }
 });
+test("[Web/展映] float 横竖长图保持真实比例，并在各视口保留完整图面的观看空间", async (t) => {
+  for (const [width, height] of [[359, 800], [390, 844], [844, 390], [768, 1024], [1440, 900], [3840, 2160]] as const) {
+    await t.test(`${width}×${height}`, (t) => {
+      const h = createFloatSceneHarness(t, { width, height, sizeIndex: 10 });
+      const images = showImages(80).map((image, index) => ({
+        ...image, width: index % 2 ? 3000 : 900, height: index % 2 ? 900 : 3000
+      }));
+      h.scene.setImages(images, "long-image-viewing", "latest", false);
+      const cards = floatCardPositions(h.scene);
+      assert.ok(cards.length > 0);
+      for (const card of cards) {
+        const ratio = card.width / card.height;
+        assert.ok(Math.min(Math.abs(ratio - 3 / 10), Math.abs(ratio - 10 / 3)) < 1e-8);
+        const cosine = Math.abs(Math.cos(card.rotation));
+        const sine = Math.abs(Math.sin(card.rotation));
+        assert.ok(card.width * cosine + card.height * sine < width);
+        assert.ok(card.height * cosine + card.width * sine < height);
+      }
+    });
+  }
+});
+
 test("[Web/展映] float 暂停时连续双向补图，保留反向预取并接管已加载纹理", (t) => {
   const h = createFloatSceneHarness(t);
   const initialCount = h.scene.stats().activeSprites;
@@ -1699,6 +1721,49 @@ test("[Web/展映] 展映长距离二维移动保持卡片有界并填满驻留�
   assert.ok(pool.snapshot().retained <= 800);
   assert.equal(pool.snapshot().active, controller.snapshot().cards.length);
 });
+
+test("[Web/展映] 瀑布在上下边缘间隙暂停保留候选，进入边缘只消费实际入场图片", () => {
+  const viewport = { width: 808, height: 734 };
+  const scale = viewport.width / (3 * 360);
+  const residence: ShowResidencePolicy = {
+    horizontalOverscanScreens: 0.35, verticalOverscanScreens: 0.35
+  };
+  for (const edge of ["top", "bottom"] as const) {
+    const pool = new ShowDataPool(800);
+    pool.setStreaming(true, false);
+    pool.add(showImages(700));
+    const controller = new ShowWindowController(pool);
+    const camera = { x: -viewport.width / 6, y: 0 };
+    controller.reconcile(camera, viewport, scale, residence);
+    const column = controller.snapshot().cards.filter((card) => card.column === 0);
+    assert.ok(column.length > 1);
+    const boundary = edge === "top"
+      ? column[0]!.y - 0.5
+      : column.at(-1)!.y + column.at(-1)!.height + 0.5;
+    camera.y = boundary * scale + (edge === "top"
+      ? viewport.height * 0.35 : -viewport.height * 1.35);
+    controller.reconcile(camera, viewport, scale, residence);
+    const before = controller.snapshot();
+    const usage = pool.usage("paused");
+    const revision = pool.revision;
+    for (let frame = 0; frame < 1_000; frame += 1) {
+      controller.reconcile(camera, viewport, scale, residence);
+    }
+    assert.deepEqual(controller.snapshot(), before, edge);
+    assert.deepEqual(pool.usage("paused"), usage, edge);
+    assert.equal(pool.revision, revision, edge);
+
+    camera.y += (edge === "top" ? -8 : 8) * scale;
+    controller.reconcile(camera, viewport, scale, residence);
+    const previous = new Set(usage.consumedIds);
+    const consumed = pool.usage("entered").consumedIds.filter((id) => !previous.has(id));
+    const entered = controller.snapshot().cards
+      .map((card) => card.image.id).filter((id) => !previous.has(id));
+    assert.ok(entered.length > 0, edge);
+    assert.deepEqual(new Set(consumed), new Set(entered), edge);
+  }
+});
+
 test("[Web/展映] 展映远距离横移只保留驻留列并为回程生成新卡位", () => {
   const pool = new ShowDataPool(800);
   pool.add(showImages(800));

@@ -366,7 +366,7 @@ export function ShowPixiPage({
         speed={settings.drift_speed}
         waterfallColumns={waterfallColumns}
       >
-        <p className="show-interaction-hint">
+        <p className="show-interaction-hint public-floating-label">
           <span className="show-interaction-hint-pointer">
             {scene === "waterfall"
               ? "拖动平移；滚轮纵移；Ctrl + 滚轮或双指缩放"

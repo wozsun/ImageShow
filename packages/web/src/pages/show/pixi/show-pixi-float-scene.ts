@@ -35,7 +35,9 @@ type FloatSceneOptions = ShowPixiSceneOptions & {
 
 type FloatCardState = {
   card: ShowPixiCard;
+  cruiseSpeed: number;
   drift: number;
+  driftFactor: number;
   driftRate: number;
   entryOffset: number;
   phase: number;
@@ -70,8 +72,8 @@ const wheelScrollResponseMs = 86;
 const wheelScrollStopDistance = 0.08;
 const floatRotationAmplitude = 3 * Math.PI / 180;
 const floatHoverStraightenMs = 240;
-const floatMinimumWidthFactor = 0.5;
-const floatMaximumWidthFactor = 1.3;
+const floatMinimumWidthFactor = 0.7;
+const floatMaximumWidthFactor = 1.2;
 const floatMeanWidthSquared = (
   floatMinimumWidthFactor ** 2
   + floatMinimumWidthFactor * floatMaximumWidthFactor
@@ -93,7 +95,7 @@ function noise(value: number, salt: number) {
 
 function imageRatio(image: ShowImage) {
   if (image.width <= 0 || image.height <= 0) return 1;
-  return Math.min(1.9, Math.max(0.56, image.height / image.width));
+  return image.height / image.width;
 }
 
 function floatCardFootprint(
@@ -412,6 +414,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
           continue;
         }
         const width = this.#cardWidth(state);
+        state.drift = Math.min(16, width * state.driftFactor);
         state.card.assign(
           state.card.key,
           nextImage,
@@ -561,7 +564,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     }
     if (moving && this.#elapsed >= this.#nextPathAt) {
       this.#adjustHorizontalPath();
-      this.#nextPathAt = this.#elapsed + 80;
+      this.#nextPathAt = this.#elapsed + Math.max(24, Math.min(80, 2_000 / this.#cards.length));
     }
     if (moving && this.#elapsed >= this.#nextSpacingAt) {
       this.#balanceFlowSpacing();
@@ -859,7 +862,9 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     card.setInteractionEnabled(this.#inputEnabled);
     const state: FloatCardState = {
       card,
+      cruiseSpeed: 28,
       drift: 0,
+      driftFactor: 0,
       driftRate: 0,
       entryOffset: 24,
       phase: 0,
@@ -892,8 +897,10 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     if (!plan) return false;
     const { image, serial, widthFactor } = plan;
     state.widthFactor = widthFactor;
+    const width = this.#cardWidth(state, image);
     state.phase = noise(serial, 4) * Math.PI * 2;
-    state.drift = 6 + noise(serial, 5) * 10;
+    state.driftFactor = 0.025 + noise(serial, 5) * 0.045;
+    state.drift = Math.min(16, width * state.driftFactor);
     state.driftRate = 0.0001 + noise(serial, 6) * 0.00008;
     state.rotationPhase = noise(serial, 12) * Math.PI * 2;
     state.rotationRate = Math.PI * 2 / (24_000 + noise(serial, 13) * 16_000);
@@ -902,14 +909,14 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     state.velocityX = 0;
     // Start near the configured speed; spacing feedback gently adjusts it
     // during the journey so neighboring cards do not remain locked together.
-    state.speed = 28 + (noise(serial, 7) - 0.5) * 0.08;
+    state.cruiseSpeed = 28 * (0.85 + noise(serial, 7) * 0.3);
+    state.speed = state.cruiseSpeed;
     state.entryOffset = 24
       + noise(serial, 10) * Math.min(20, this.#height * 0.025);
     state.retiring = false;
     state.targetY = null;
     state.card.root.alpha = 1;
     state.card.setInteractionEnabled(this.#inputEnabled);
-    const width = this.#cardWidth(state);
     const height = width * imageRatio(image);
     state.card.assign(
       `float:${serial}`,
@@ -925,9 +932,16 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     state.y = initial
       ? noise(serial, 9) * this.#height
       : this.#chooseStreamY(height, state.entryOffset, serial, state, true, direction);
-    state.xRatio = initial
-      ? 0.5
-      : this.#choosePlacement(serial, width, height, state.y, state).xRatio;
+    if (initial) {
+      state.xRatio = 0.5;
+    } else {
+      const placement = this.#choosePlacement(
+        serial, width, height, state.y, state,
+        Math.min(24, height * 0.2, this.#streamBuffer() * 0.1)
+      );
+      state.xRatio = placement.xRatio;
+      state.y = placement.y;
+    }
     state.x = state.xRatio * this.#width;
     this.#applyCardTransform(state);
     state.card.setVisible(true);
@@ -939,6 +953,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     const image = state.card.image;
     if (!image) return;
     const width = this.#cardWidth(state);
+    state.drift = Math.min(16, width * state.driftFactor);
     state.card.assign(
       state.card.key,
       image,
@@ -980,7 +995,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   #advanceHorizontalMotion(state: FloatCardState, elapsed: number) {
     const targetX = state.xRatio * this.#width + Math.sin(state.phase) * state.drift;
     const driftVelocity = Math.cos(state.phase) * state.drift * state.driftRate * 1_000;
-    const maximumVelocity = Math.min(10, Math.max(4, state.card.targetWidth * 0.015));
+    const maximumVelocity = Math.min(12, Math.max(6, state.card.targetWidth * 0.025));
     const desiredVelocity = Math.max(-maximumVelocity, Math.min(
       maximumVelocity, (targetX - state.x) / 4 + driftVelocity
     ));
@@ -991,37 +1006,42 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     state.x += (previousVelocity + state.velocityX) / 2 * elapsed / 1_000;
   }
 
-  #cardWidth(state: FloatCardState) {
+  #cardWidth(state: FloatCardState, image = state.card.image) {
+    return this.#imageWidth(image ? imageRatio(image) : this.#meanImageRatio, state.widthFactor);
+  }
+
+  #imageWidth(ratio: number, factor: number) {
     const base = showFloatDefaultWidth(this.#width);
-    return base * showFloatSizeSteps[this.#sizeIndex] * state.widthFactor;
+    const angle = 0.085 + floatRotationAmplitude;
+    const widthLimit = Math.max(24, this.#width - 56) / (Math.cos(angle) + ratio * Math.sin(angle));
+    const heightLimit = Math.max(24, this.#height - 128) / (ratio * Math.cos(angle) + Math.sin(angle));
+    const minimumBase = Math.sqrt(this.#width * (this.#height + this.#streamBuffer() * 2) * this.#densityFactor()
+      / (this.#maximumCards() * floatMeanWidthSquared * this.#meanImageRatio));
+    return Math.min(Math.max(base * showFloatSizeSteps[this.#sizeIndex], minimumBase) * factor, widthLimit, heightLimit);
   }
 
   #targetCount() {
-    const base = showFloatDefaultWidth(this.#width);
-    const size = showFloatSizeSteps[this.#sizeIndex];
-    const scaled = base * size;
     // Cover the visible viewport plus the retained half-screen buffers above
     // and below it. This keeps visible density stable while both off-screen
     // bands remain populated and texture-ready. The existing hard Sprite cap
     // still bounds the result at every size.
     const retainedHeight = this.#height + this.#streamBuffer() * 2;
-    const densityFactor = this.#width <= 760 ? 0.56 : 0.84;
-    // Budget the mixed widths by their mean squared factor. Larger size steps
-    // also account for portrait area while retaining small gap-filling cards.
-    const portraitFactor = 1 + Math.max(0, this.#meanImageRatio - 1)
-      * Math.min(1, Math.max(0, (size - 1) * 2));
-    const estimate = Math.round(
-      this.#width * retainedHeight / Math.max(
-        1, scaled * scaled * floatMeanWidthSquared * portraitFactor
-      )
-      * densityFactor
-    );
-    const minimum = this.#width <= 760 ? 6 : 8;
+    const sample = this.#images.slice(0, 64);
+    const meanArea = sample.length ? sample.reduce((area, image, index) => {
+      const ratio = imageRatio(image);
+      return area + this.#imageWidth(ratio, floatWidthFactor(index)) ** 2 * ratio;
+    }, 0) / sample.length : this.#imageWidth(1, 1) ** 2;
+    const estimate = Math.round(this.#width * retainedHeight / Math.max(1, meanArea) * this.#densityFactor());
+    const minimum = 6;
     return Math.min(this.#maximumCards(), Math.max(minimum, estimate));
   }
 
   #maximumCards() {
-    return this.#width <= 760 ? 96 : 180;
+    return Math.floor(Math.min(180, 96 + Math.max(0, this.#width - 760) * 0.15));
+  }
+
+  #densityFactor() {
+    return (0.52 + 0.16 * Math.max(0, Math.min(1, (this.#width - 360) / 1_080))) * 1.3;
   }
 
   #streamBuffer() {
@@ -1208,8 +1228,6 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
         Math.ceil(this.#targetCount() / 3)
       ))
       : 0;
-    const baseWidth = showFloatDefaultWidth(this.#width)
-      * showFloatSizeSteps[this.#sizeIndex];
     const pending: {
       plan: FloatImagePlan;
       textureKey: string;
@@ -1228,8 +1246,8 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       }
       for (const plan of queue) {
         const { image, widthFactor } = plan;
-        const width = baseWidth * widthFactor;
         const ratio = imageRatio(image);
+        const width = this.#imageWidth(ratio, widthFactor);
         const lod = showPixiTextureLod(image, width, ratio);
         const textureKey = `${image.id}:${image.thumb_url}:${lod.pixelWidth}x${lod.pixelHeight}`;
         if (plan.textureKey === textureKey && plan.lease) continue;
@@ -1299,6 +1317,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     let best = { xRatio: center, y: candidateY };
     let bestScore = Number.POSITIVE_INFINITY;
     const candidateArea = Math.max(1, footprint.width * footprint.height);
+    const cardOrder = this.#cards.indexOf(ignoredState);
     const predictMovement = this.#running && !this.#reducedMotion && !this.#hasManualMovement();
     const candidateSpeed = predictMovement && !ignoredState.card.isInteractionActive
       ? this.#verticalSpeed(ignoredState)
@@ -1315,6 +1334,8 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
           existing.drift
         );
         return {
+          order: this.#cards.indexOf(existing),
+          currentX: existing.x,
           x: (existing.x + targetX) / 2,
           y: existing.y,
           targetY: existing.targetY ?? existing.y,
@@ -1335,7 +1356,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       const y = candidateY + ((attempt + 1) % 3 - 1) * verticalSpread;
       const targetY = ignoredState.targetY ?? y;
       const sampleTimes = [0];
-      if (candidateSpeed > 0) {
+      if (candidateSpeed > 0 && !local) {
         const halfHeight = Math.min(this.#height / 2, footprint.height / 2);
         // Check the path while the card can be fully viewed, as well as the
         // near future when adjusting a card that is already on screen.
@@ -1343,8 +1364,10 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
           const seconds = (targetY - centerY) / candidateSpeed;
           if (seconds > 0) sampleTimes.push(seconds);
         }
-        if (local) sampleTimes.push(3);
       }
+      // Nearby steering resolves what can obstruct viewing now; distant
+      // lifecycle predictions belong to entry placement.
+      if (candidateSpeed > 0 && local) sampleTimes.push(3);
       const bucket = Math.min(5, Math.max(0, Math.floor(ratio * 6)));
       let score = local
         ? candidateArea * 0.4 * ((ratio - center) * this.#width / Math.max(1, width)) ** 2
@@ -1354,6 +1377,21 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
           candidateArea,
           existing.width * existing.height
         ));
+        if (local) {
+          const currentOverlap = rectanglesOverlap({
+            x: ignoredState.x, y: ignoredState.y, ...footprint
+          }, { ...existing, x: existing.currentX }) / sharedArea;
+          if (currentOverlap > 0.5) {
+            // Give coincident cards different escape directions while their
+            // normal velocity smoothing keeps the movement gradual.
+            const separationX = ignoredState.x - existing.currentX;
+            const direction = Math.abs(separationX) > 1
+              ? Math.sign(separationX) : cardOrder < existing.order ? -1 : 1;
+            const movement = (ratio - center) * this.#width / Math.max(1, width);
+            score -= candidateArea * (currentOverlap - 0.5)
+              * movement * direction * 12;
+          }
+        }
         for (const seconds of sampleTimes) {
           const overlapArea = rectanglesOverlap({
             x: ratio * this.#width,
@@ -1422,27 +1460,36 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   }
 
   #balanceFlowSpacing() {
-    const ordered = this.#cards
+    const cards = this.#cards
       .filter((state) => !state.retiring)
       .map((state) => {
         const exit = this.#exitBoundary(state);
         const phase = (state.y - exit) / (this.#entryBoundary(state) - exit);
-        return { state, phase: ((phase % 1) + 1) % 1 };
-      })
-      .sort((left, right) => left.phase - right.phase);
-    if (ordered.length < 2) return;
-    const targetGap = 1 / ordered.length;
-    for (let index = 0; index < ordered.length; index += 1) {
-      const { state, phase } = ordered[index];
+        const footprint = floatCardFootprint(
+          state.card.targetWidth, state.card.targetHeight, state.card.baseRotation, state.drift
+        );
+        return { state, width: footprint.width, phase: ((phase % 1) + 1) % 1 };
+      });
+    if (cards.length < 2) return;
+    // Only neighbors whose horizontal footprints meet can obstruct viewing.
+    // Distant columns must not pull an overlapping pair back to equal speeds.
+    for (const { state, width, phase } of cards) {
       if (state.card.isInteractionActive || state.targetY !== null) continue;
-      const previous = ordered[(index + ordered.length - 1) % ordered.length].phase;
-      const next = ordered[(index + 1) % ordered.length].phase;
-      const gapAhead = (phase - previous + 1) % 1;
-      const gapBehind = (next - phase + 1) % 1;
+      let gapAhead = 1;
+      let gapBehind = 1;
+      let neighbors = 0;
+      for (const other of cards) {
+        if (other.state === state
+          || Math.abs(other.state.x - state.x) >= (other.width + width) / 2) continue;
+        neighbors += 1;
+        gapAhead = Math.min(gapAhead, (phase - other.phase + 1) % 1);
+        gapBehind = Math.min(gapBehind, (other.phase - phase + 1) % 1);
+      }
+      const targetGap = 1 / (neighbors + 1);
       const adjustment = Math.max(-0.3, Math.min(
         0.3, (gapAhead - gapBehind) / targetGap * 0.3
       ));
-      state.speed += (28 * (1 + adjustment) - state.speed) * 0.2;
+      state.speed += (state.cruiseSpeed * (1 + adjustment) - state.speed) * 0.2;
     }
   }
 

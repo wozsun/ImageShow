@@ -40,14 +40,33 @@
 }
 
 
-.public-floating-controls { opacity: .9; transition: opacity 180ms ease; }
-[data-public-navigation-visible="false"].public-floating-controls,
-[data-public-navigation-visible="false"] .public-floating-controls { opacity: .3; }
-.public-floating-controls:has(:focus-visible) { opacity: 1; }
+.public-floating-controls,
+.public-floating-label { opacity: .8; transition: opacity 180ms ease; }
+:where([data-public-navigation-visible="false"]).public-floating-controls,
+:where([data-public-navigation-visible="false"]) :is(.public-floating-controls, .public-floating-label) {
+  opacity: var(--public-floating-idle-opacity, .3);
+  animation: public-floating-dim 180ms ease 5s forwards;
+}
+.public-floating-controls:focus-within,
+:where(.show-page):has(.public-floating-controls:focus-within) .public-floating-label {
+  opacity: .95;
+  animation: none;
+}
 .public-floating-controls[hidden] { display: none; }
 @media (hover: hover) and (pointer: fine) {
-  .public-floating-controls:hover { opacity: 1; }
+  .public-floating-controls:hover,
+  :where(.show-page):has(.public-floating-controls:hover) .public-floating-label {
+    opacity: .95;
+    animation: none;
+  }
+}
+@keyframes public-floating-dim {
+  to { opacity: .1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .public-floating-controls { transition: none; }
+  .public-floating-controls,
+  .public-floating-label {
+    transition: none;
+    animation-duration: 0s;
+  }
 }

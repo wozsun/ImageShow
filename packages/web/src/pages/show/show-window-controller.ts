@@ -1,6 +1,7 @@
 import { ShowDataPool } from "./show-data-pool.js";
 import {
   showLayoutColumnWidth,
+  showCardGap,
   showCardGeometry,
   showCardRect,
   showLayoutNoise,
@@ -226,16 +227,15 @@ export class ShowWindowController {
     while (column.cards[0].y > resident.top) {
       const first = column.cards[0];
       const ordinal = column.nextTopOrdinal;
+      // The seam is independent of the next image's height. A candidate is
+      // consumed only when its slot will enter the resident window.
+      if (first.y - showCardGap(columnIndex, ordinal) <= resident.top) break;
       const next = this.#claimCard(columnIndex, column, ordinal);
       if (!next) {
         this.#missingCards += 1;
         break;
       }
       const y = first.y - next.height - next.gapAfter;
-      if (y + next.height <= resident.top) {
-        this.pool.release(next.key);
-        break;
-      }
       column.nextTopOrdinal -= 1;
       column.cards.unshift({
         ...next,
@@ -246,16 +246,12 @@ export class ShowWindowController {
 
     while (true) {
       const last = column.cards[column.cards.length - 1];
-      if (last.y + last.height >= resident.bottom) break;
+      const y = last.y + last.height + last.gapAfter;
+      if (y >= resident.bottom) break;
       const ordinal = column.nextBottomOrdinal;
       const next = this.#claimCard(columnIndex, column, ordinal);
       if (!next) {
         this.#missingCards += 1;
-        break;
-      }
-      const y = last.y + last.height + last.gapAfter;
-      if (y >= resident.bottom) {
-        this.pool.release(next.key);
         break;
       }
       column.nextBottomOrdinal += 1;

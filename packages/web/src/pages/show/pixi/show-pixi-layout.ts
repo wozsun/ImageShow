@@ -62,7 +62,7 @@ export const showFloatDefaultWidth = (viewportWidth: number) => {
   const width = Number.isFinite(viewportWidth) && viewportWidth > 0
     ? viewportWidth
     : 360;
-  return width / showWaterfallDensity(width).defaultColumns * 0.8;
+  return Math.min(width * 0.4, Math.sqrt(width) * 8);
 };
 
 export const clampShowFloatSizeIndex = (index: number) => Math.min(

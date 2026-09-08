@@ -66,6 +66,10 @@ export function showLayoutNoise(column: number, ordinal: number, salt: number) {
   return raw - Math.floor(raw);
 }
 
+export function showCardGap(column: number, ordinal: number) {
+  return 4 + showLayoutNoise(column, ordinal, 3) * 2;
+}
+
 export function showCardGeometry(
   image: ShowImage,
   column: number,
@@ -86,7 +90,7 @@ export function showCardGeometry(
     height: width / showImageAspectRatio(image),
     // Keep the world seam compact because the normal plane can exceed 2x at
     // wide breakpoints; the visible gap remains below Gallery's own gutter.
-    gapAfter: 4 + showLayoutNoise(column, ordinal, 3) * 2,
+    gapAfter: showCardGap(column, ordinal),
     // Stable cards stay almost upright. The stronger tilt belongs to the
     // temporary hover preview and does not inflate every compositor surface.
     angle: (showLayoutNoise(column, ordinal, 4) - 0.5) * 0.5,
