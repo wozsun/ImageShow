@@ -3025,7 +3025,7 @@ test("[Web/后台访问] 图片后台真实挂载保持弹窗页码、操作后�
     const image = (serial: string): AdminImageListItemDto => ({
       ...galleryCard(`00000000-0000-7000-8000-${serial}`),
       description: "",
-      object_url: `/full/${serial.slice(-2)}/00000000-0000-7000-8000-${serial}.webp`,
+      object_url: `/images/full/${serial.slice(-2)}/00000000-0000-7000-8000-${serial}.webp`,
       original_url: null,
       source: null,
       thumb_url: "",
@@ -4305,7 +4305,7 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
       title: "原图入口真值表",
       description: "",
       source: null,
-      object_url: "https://static.example.com/full/544.webp",
+      object_url: "https://img.example.com/images/full/544.webp",
       thumb_url: "",
       device: "pc",
       brightness: "dark",
@@ -4333,13 +4333,12 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
     const renderScenario = async ({
       auth,
       publicOriginalButton,
-      originalUrl = "https://static.example.com/link/00000000-0000-7000-8000-000000000544",
+      originalUrl = "https://img.example.com/images/link/00000000-0000-7000-8000-000000000544",
       sourceUrl = null,
       admin = false,
       objectUrl,
       detailLoading = false,
-      detailError = "",
-      staticUrl = "https://static.example.com"
+      detailError = ""
     }: {
       auth: AuthScenario;
       publicOriginalButton: boolean;
@@ -4349,7 +4348,6 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
       objectUrl?: string;
       detailLoading?: boolean;
       detailError?: string;
-      staticUrl?: string;
     }): Promise<OriginalActionSnapshot> => {
       localStorage.clear();
       const client = new QueryClient({
@@ -4363,7 +4361,6 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
       });
       client.setQueryData(queryKeys.siteConfig, {
         site: {
-          static_url: staticUrl,
           gallery: { public_original_button: publicOriginalButton }
         }
       });
@@ -4483,7 +4480,7 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
       assert.equal(pendingTitle.titleFocusable, false, "无直链标题不占用 Tab 焦点");
     }
     const loadedTitle = await renderScenario({ auth: "guest", publicOriginalButton: false });
-    assert.equal(loadedTitle.titleHref, "https://static.example.com/full/544.webp");
+    assert.equal(loadedTitle.titleHref, "https://img.example.com/images/full/544.webp");
     assert.equal(loadedTitle.titleFocusable, true);
 
     for (const auth of ["pending", "expired", "guest"] as const) {
@@ -4499,15 +4496,8 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
     assert.equal(publicEnabled.present, true);
     assert.equal(
       publicEnabled.href,
-      "https://static.example.com/link/00000000-0000-7000-8000-000000000544"
+      "https://img.example.com/images/link/00000000-0000-7000-8000-000000000544"
     );
-    for (const admin of [false, true]) {
-      const sameOrigin = await renderScenario({
-        auth: admin ? "super" : "guest", publicOriginalButton: true, admin,
-        originalUrl: "https://img.example.com/static/link/00000000-0000-7000-8000-000000000544"
-      });
-      assert.equal(sameOrigin.href, "https://img.example.com/static/link/00000000-0000-7000-8000-000000000544");
-    }
     assert.equal(
       publicEnabled.sourceHref,
       null,
@@ -5314,7 +5304,7 @@ test("[Web/后台访问] 缩略图真实挂载只请求一次并忽略快速换�
       const container = document.createElement("div");
       document.body.append(container);
       const root = createRoot(container);
-      const prefix = `https://static.example.test/${lateOutcome}`;
+      const prefix = `https://img.example.test/images/full/${lateOutcome}`;
       const sourceA = `${prefix}-a.webp`;
       const sourceB = `${prefix}-b.webp`;
       const sourceC = `${prefix}-c.webp`;

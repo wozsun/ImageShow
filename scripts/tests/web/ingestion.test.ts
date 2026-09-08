@@ -14161,9 +14161,6 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       preferences_etag: 'W/"workflow-window-preferences"',
       version_settings: { enabled: true, link_enabled: true }
     });
-    client.setQueryData(queryKeys.siteConfig, {
-      site: { static_url: "https://static.example.com" }
-    });
     client.setQueryData(queryKeys.galleryFacets, {
       themes: [],
       tags: [],
@@ -14881,8 +14878,8 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
         imageId: "019f8457-063a-7031-a580-7a432dc7fd8e",
         serverAccepted: true,
         status: "received",
-        preview: "https://static.example/new-incarnation.webp",
-        previewFull: "https://static.example/new-incarnation-full.webp"
+        preview: "https://img.example/images/thumbs/new-incarnation.webp",
+        previewFull: "https://img.example/images/full/new-incarnation.webp"
       })]);
       await Promise.resolve();
     });
@@ -14944,7 +14941,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       sessionId: focusSessionId,
       imageId: focusImageId,
       serverAccepted: true,
-      preview: "https://static.example/first-bound-focus.webp"
+      preview: "https://img.example/images/thumbs/first-bound-focus.webp"
     });
     await React.act(async () => {
       setHarnessJobs?.([firstBoundFocus]);
@@ -14977,7 +14974,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       imageId: focusImageId,
       serverAccepted: true,
       status: "ready",
-      preview: "https://static.example/event-first-focus.webp"
+      preview: "https://img.example/images/thumbs/event-first-focus.webp"
     });
     await React.act(async () => {
       setHarnessJobs?.([eventFirstCanonical]);

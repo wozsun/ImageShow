@@ -1309,7 +1309,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
       return record;
     },
     displayUrlForOriginalComparison: async () =>
-      `https://img.example.com/full/${item.object_key}`,
+      `https://img.example.com/images/full/${item.object_key}`,
     supportsDirectAccess: async () => direct,
     proxyExternalImage: async (...args: unknown[]) => {
       proxyCalls.push(args);

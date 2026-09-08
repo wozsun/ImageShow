@@ -179,7 +179,6 @@ export const appConfig = {
         public_original_button: false
       },
       random_method: "redirect",
-      static_subdomain: "",
       robots_enabled: false
     },
     embed: {

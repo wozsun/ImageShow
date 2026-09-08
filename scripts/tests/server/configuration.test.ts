@@ -594,10 +594,6 @@ assert.deepEqual(siteConfigPayload().site.show, {
 });
 assert.equal(siteConfigPayload().site.gallery.enabled, true);
 assert.equal(siteConfigPayload().site.gallery.public_original_button, false);
-assert.equal(
-  siteConfigPayload().site.static_url,
-  "/static"
-);
 assert.equal("description" in getSettingsForAdmin().site, false);
 assert.equal(getSettingsForAdmin().site.root, "home");
 assert.equal("browse_target" in getSettingsForAdmin().site.home, false);
@@ -1058,7 +1054,6 @@ assert.ok(root);
 const config = runtimeConfigDefaults();
 config.site.name = "示例 <画廊>";
 config.site.description = '图片 "说明" <安全>';
-config.site.static_subdomain = "assets";
 await writeFile(join(root, "config.json"), JSON.stringify(config));
 initializeRuntimeConfig();
 const app = new Hono();
@@ -1088,8 +1083,6 @@ const inlineText = described.slice(
 assert.equal(inlineText.includes("<"), false);
 const inlineConfig = JSON.parse(inlineText);
 assert.equal(inlineConfig.site.description, '图片 "说明" <安全>');
-assert.equal(inlineConfig.site.static_url, "/static");
-assert.equal(described.includes('<link rel="preconnect"'), false);
 
 // All embedded public pages share the same enable switch and ancestor policy.
 for (const path of ["/embed/home", "/embed/show", "/embed/gallery"]) {
@@ -1177,21 +1170,4 @@ test("[Server/配置] 存储显示名统一使用配置值并为缺省名称提�
     storage_slug: "archive",
     storage_display_name: null
   }), "archive");
-});
-test("[Server/配置] 静态出口默认空值并由当前配置归一化、严格校验和环境播种保留", () => {
-  assert.equal(runtimeConfigDefaults().site.static_subdomain, "");
-  for (const value of ["", "static", "media"]) {
-    const config = runtimeConfigFromEnvironment({SITE_STATIC_SUBDOMAIN:value});
-    assert.equal(config.site.static_subdomain,value);
-    assert.equal(normalizeRuntimeConfig(config).site.static_subdomain,value);
-    assert.equal(parseRuntimeConfig(config).site.static_subdomain,value);
-    assert.equal(materializeImportedRuntimeConfig(config, "target.example.com").site.static_subdomain,value);
-  }
-  const missing = structuredClone(runtimeConfigDefaults());
-  delete (missing.site as Partial<RuntimeConfig["site"]>).static_subdomain;
-  assert.equal(normalizeRuntimeConfig(missing).site.static_subdomain, "");
-  assert.equal(runtimeConfigFromEnvironment({}).site.static_subdomain, "");
-  for (const value of ["-static", "static-", "static.example", "a".repeat(64), "UPPER"]) {
-    assert.throws(() => runtimeConfigFromEnvironment({SITE_STATIC_SUBDOMAIN:value}));
-  }
 });

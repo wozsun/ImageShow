@@ -32,7 +32,6 @@ import {
   updateRuntimeConfig
 } from "./runtime-config-store.ts";
 import { effectiveEmbedAncestorSources } from "./embed-ancestors.ts";
-import { staticLocalBaseUrl } from "./site-host.ts";
 import type { RuntimeConfigPatch } from "./runtime-config.ts";
 
 const siteHomeConfigSchema = z.strictObject({
@@ -228,8 +227,7 @@ export function siteConfigPayload(): SiteConfigDto {
         enabled: gallery.enabled,
         order: gallery.order,
         public_original_button: gallery.public_original_button
-      },
-      static_url: staticLocalBaseUrl()
+      }
     },
     embed: {
       enabled: effectiveEmbedAncestorSources(runtime).length > 0

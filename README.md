@@ -55,6 +55,8 @@ docker compose up -d
 - 在服务器防火墙和云平台安全组中放行 `80`、`443` 端口。
 - 在服务器上配置反向代理：使用该域名，转发目标填写 `http://127.0.0.1:5518`，申请证书并启用 HTTPS。具体配置见[反向代理示例](docs/DEPLOY.md#反向代理与-https)。
 
+应用图片通过主站 `/images` 提供，反向代理须原样转发路径。图片入口与存储直链说明见[主机与图片资源](docs/guide/image-resources.md)。
+
 完成后，将以下地址中的域名替换为自己的域名：
 
 - 打开 `https://img.example.com/admin`，使用用户名 `admin` 和 `.env` 中的 `ADMIN_PASSWORD` 登录，上传图片。

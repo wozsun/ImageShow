@@ -99,7 +99,7 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
 
 `mode=proxy` 从图片所属 local 或 S3 后端读取已入库图片字节，并附带
 `X-Image-Info`；它不声明 `Accept-Ranges`。`mode=redirect` 返回 302 跳转到公开 URL。
-域名未设置、为空或为 `example.com` 时，应用提供的图片 URL 使用 `/static/...` 同源路径：
+域名未设置、为空或为 `example.com` 时，应用提供的图片 URL 使用 `/images/...` 同源路径：
 浏览器会按访问地址解析，API 客户端应以请求 origin 解析 JSON 图片地址及相对 `Location`。
 已配置公开地址的 S3 对象继续返回存储直链。
 这里的 `proxy` 只是返回传输方式，与图片接入模式无关。
@@ -115,8 +115,8 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
       "id": "019f8457-063a-7002-a580-7a432dc7fd8d",
       "title": "示例图片",
       "author": "photographer",
-      "object_url": "https://img.example.com/static/full/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
-      "thumb_url": "https://img.example.com/static/thumbs/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
+      "object_url": "https://img.example.com/images/full/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
+      "thumb_url": "https://img.example.com/images/thumbs/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
       "device": "pc",
       "brightness": "dark",
       "theme": "theme",
@@ -139,5 +139,5 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
 只写 `mode=json` 等同 `limit=1`，但仍返回数组。`limit` 是上限而非数量保证。GET 与 HEAD 都为
 `no-store`；HEAD 返回与 GET 一致的状态、内容类型和内容长度，但不发送正文。
 
-随机图只通过主站 `https://<域名>/random` 提供，不设置专用子域；主机边界见
-[主机与资源子域](./subdomains.md)。
+随机图通过主站 `https://<域名>/random` 提供；主机边界见
+[主机与图片资源](./image-resources.md)。

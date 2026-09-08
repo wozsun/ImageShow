@@ -57,7 +57,7 @@ export function galleryCardDto(
     brightness: "dark",
     theme: "none",
     author: "",
-    thumb_url: "/thumbs/" + id + ".webp",
+    thumb_url: "/images/thumbs/" + id + ".webp",
     width,
     height,
     tags: [],
@@ -138,8 +138,8 @@ export function adminImageListItem(
     description: "",
     source: null,
     original: "fixture.jpg",
-    object_url: "/full/01/00000000-0000-7000-8000-000000000001.jpg",
-    thumb_url: "/thumbs/01/00000000-0000-7000-8000-000000000001.webp",
+    object_url: "/images/full/01/00000000-0000-7000-8000-000000000001.jpg",
+    thumb_url: "/images/thumbs/01/00000000-0000-7000-8000-000000000001.webp",
     device: "pc",
     brightness: "dark",
     theme: "none",
@@ -178,7 +178,7 @@ export function editableImage(
     tags: ["tag"],
     thumb_url: "/thumb/" + id,
     object_url: "/image/" + id,
-    original_url: "/static/link/" + id,
+    original_url: "/images/link/" + id,
     width: 1920,
     height: 1080,
     image_size: 1024,
@@ -441,7 +441,7 @@ export function showImages(count: number): ShowImageCardDto[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `00000000-0000-7000-8000-${String(index).padStart(12, "0")}`,
     title: `Image ${index}`,
-    thumb_url: `/thumbs/${index}.webp`,
+    thumb_url: `/images/thumbs/${index}.webp`,
     width: index % 2 ? 1600 : 900,
     height: index % 2 ? 900 : 1600
   }));

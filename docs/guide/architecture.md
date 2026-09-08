@@ -2,17 +2,17 @@
 
 ImageShow 是一个 npm workspaces 单仓项目：服务端使用 Hono 与 Node.js 26，前端使用
 React 与 Vite，共享 HTTP 契约和稳定常量位于 `packages/shared`。生产镜像只运行编译后的
-JavaScript，并由同一个 Hono 应用按主机名提供 SPA、公共 API、管理 API 和图片出口。
+JavaScript，并由同一个 Hono 应用在主站提供 SPA、公共 API、管理 API 和图片出口。
 
 ## 整体结构
 
-![ImageShow 架构图：客户端经反向代理按 Host 分流到 Hono 应用，应用读写 PostgreSQL、Redis 与存储后端，后台 Worker 分别消费 PostgreSQL jobs 与 Redis 内容接入状态](./assets/architecture.svg)
+![ImageShow 架构图：客户端经反向代理访问 Hono 应用，应用校验 Host 并读写 PostgreSQL、Redis 与存储后端，后台 Worker 分别消费 PostgreSQL jobs 与 Redis 内容接入状态](./assets/architecture.svg)
 
 ```text
 浏览器 / API 客户端
         │ HTTPS
         ▼
-可信反向代理 ──► Host 分流与安全响应头
+可信反向代理 ──► Host 校验与安全响应头
         │
         ▼
 Hono HTTP 应用 ──► PostgreSQL（业务真相）
@@ -28,19 +28,19 @@ Hono HTTP 应用 ──► PostgreSQL（业务真相）
 
 ## 请求与主机边界
 
-应用在 `http-app.ts` 中按规范化后的 `Host` 分流：
+应用在 `http-app.ts` 中统一校验规范化后的 `Host`，各入口按路径注册：
 
-| 主机 | 职责 |
+| 入口 | 职责 |
 | --- | --- |
 | `<站点域名>` | SPA、公共 API、管理 API、健康检查与 `/random` |
-| 主站 `/static`（默认），或配置的资源子域 | 当前资源根下的 `/full/*`、`/thumbs/*` 对象字节，以及 `/link/<id>` 外部 HTTPS 原图直连决策 / 代理；模式互斥 |
+| 主站 `/images` | `/images/full/*`、`/images/thumbs/*` 对象字节，以及 `/images/link/<id>` 外部 HTTPS 原图直连决策 / 代理 |
 
-随机、外链和主题都不拥有专用子域。显式域名下未注册子域返回 404；域名为空或 `example.com`
-时接受访问 Host，使用同源 `/static` 路径且不启用资源子域，不持久化或缓存请求域名。
+显式域名下只接受主站 Host，其他 Host 返回 404；域名为空或 `example.com`
+时接受格式合法的访问 Host，使用同源 `/images` 路径，不持久化或缓存请求域名。
 嵌入页只在配置开启时提供，
 并由文档响应的 CSP
 `frame-ancestors` 限定父页面；它不会扩大 API 的跨源权限。完整路由见
-[主机与资源子域](./subdomains.md)，请求来源、鉴权与响应头见[安全](./security.md)。
+[主机与图片资源](./image-resources.md)，请求来源、鉴权与响应头见[安全](./security.md)。
 应用只接受最外层可信代理覆盖后的 `Host`、单值协议和单值客户端 IP，不解析
 `X-Forwarded-Host` 或多级 `X-Forwarded-For`；应用端口必须只对该代理可达。
 

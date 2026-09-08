@@ -21,6 +21,6 @@
 - 系统设计：[架构总览](guide/architecture.md)、[项目结构](guide/project-structure.md)
 - 开发验证：[长期测试与本地门禁](../scripts/tests/README.md)
 - 运行契约：[配置说明](CONFIG.md)、[数据库结构](guide/database.md)、[存储](guide/storage.md)、[安全](guide/security.md)
-- 功能出口：[功能与流程](guide/flows.md)、[随机图 API](guide/random-api.md)、[主机与资源子域](guide/subdomains.md)
+- 功能出口：[功能与流程](guide/flows.md)、[随机图 API](guide/random-api.md)、[主机与图片资源](guide/image-resources.md)
 
 本地结论、比较决策和验收说明统一放在被 Git 忽略的 `tests/report/`，不替代上述现行指南。

@@ -118,7 +118,7 @@ await runIntegrationScenario(async (runtime) => {
     await vocabCache.refreshEntityVocabularies(["theme", "tag", "author"]);
     await runtimeAvailability.requireOperationalRedis();
     await runtime.runtimeConfigStore.updateRuntimeConfig({
-      site: { domain: "images.example", static_subdomain: "static" }
+      site: { domain: "images.example" }
     });
     const displayed = await publicUrls.publicImageUrls(
       imagePaths.storageObjectKey(imageIds[2], "webp"), "local"
@@ -135,7 +135,7 @@ await runIntegrationScenario(async (runtime) => {
     const databaseDetails = await Promise.all(imageIds.map((id) => (
       publicImages.getPublicImage(id)
     )));
-    assert.ok(databaseDetails[0].original_url?.endsWith(`/link/${imageIds[0]}`));
+    assert.equal(databaseDetails[0].original_url, `https://images.example/images/link/${imageIds[0]}`);
     assert.equal(databaseDetails[1].original_url, null);
     assert.equal(databaseDetails[2].original_url, null);
     assert.deepEqual(databaseDetails.map((item) => item.source), [

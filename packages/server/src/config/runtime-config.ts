@@ -57,11 +57,6 @@ import {
   weiboRequestDelaySeconds
 } from "./fields.ts";
 
-const subdomainLabel = z.string().trim().regex(
-  /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)?$/,
-  "must be empty or a lowercase DNS label"
-);
-
 const runtimeConfigSchema = z.strictObject({
   site: z.strictObject({
     name: siteName,
@@ -94,7 +89,6 @@ const runtimeConfigSchema = z.strictObject({
       public_original_button: z.boolean()
     }),
     random_method: randomDefaultMethod,
-    static_subdomain: subdomainLabel,
     robots_enabled: z.boolean()
   }),
   embed: z.strictObject({

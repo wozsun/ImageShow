@@ -30,7 +30,7 @@ docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 \
 
 应用只需挂载 `/app/data`，其中保存 `config.json`、本地存储对象和日志。PostgreSQL、Redis 凭据只来自显式环境变量，不写入 `config.json`。`ADMIN_USERNAME` / `ADMIN_PASSWORD` 仅在数据库没有 super 管理员时创建首个账号。
 
-仓库 `.env.example` 是变量目录，`.env` 为 Compose 提供插值。默认 Compose 逐项映射最小白名单：ImageShow 收到数据库名、用户名、密码和首次管理员用户名、密码，PostgreSQL 收到对应的三个 `POSTGRES_*`。ImageShow 另通过 `${SITE_DOMAIN:-}` 接收可选域名；强烈建议首次部署前在 `.env` 中设置实际域名。未设置、为空或为 `example.com` 时，项目只提供访问 Host 与同源 `/static` 资源路径的基础回退，不启用资源子域。已有 `data/config.json` 时继续使用保存的域名。数据库名、数据库用户名和管理员用户名保留默认值；`DATABASE_PASSWORD` 与 `ADMIN_PASSWORD` 没有默认值，必须在 `.env` 或宿主环境中显式设置，缺失或空值会在 Compose 展开阶段直接失败。需要额外 RuntimeConfig 首次 seed 时，先按 [配置说明](CONFIG.md#环境变量)逐项扩展 ImageShow 的 `environment` 映射。
+仓库 `.env.example` 是变量目录，`.env` 为 Compose 提供插值。默认 Compose 逐项映射最小白名单：ImageShow 收到数据库名、用户名、密码和首次管理员用户名、密码，PostgreSQL 收到对应的三个 `POSTGRES_*`。ImageShow 另通过 `${SITE_DOMAIN:-}` 接收可选域名；强烈建议首次部署前在 `.env` 中设置实际域名。未设置、为空或为 `example.com` 时，项目只提供访问 Host 与同源 `/images` 资源路径的基础回退。已有 `data/config.json` 时继续使用保存的域名。数据库名、数据库用户名和管理员用户名保留默认值；`DATABASE_PASSWORD` 与 `ADMIN_PASSWORD` 没有默认值，必须在 `.env` 或宿主环境中显式设置，缺失或空值会在 Compose 展开阶段直接失败。需要额外 RuntimeConfig 首次 seed 时，先按 [配置说明](CONFIG.md#环境变量)逐项扩展 ImageShow 的 `environment` 映射。
 
 应用容器的停止宽限必须至少为 50 秒。进程先停止接收请求，再协调 Worker、在途 HTTP、存储 driver 和数据库连接池；不要用短于该边界的外层编排超时提前强杀。
 
@@ -93,16 +93,16 @@ npm run admin:reset-password -- <username>
 
 ## 反向代理与 HTTPS
 
-生产环境必须由可信反向代理终止 TLS，默认只需主站证书；配置非空资源子域时再覆盖该子域。应用端口只绑定到回环或明确的同机私有网络；不需要通配 DNS 或通配证书。仓库 Compose 固定把 `5518` 映射到 `127.0.0.1`。代理必须覆盖而不是追加访客传入的 `Host`、`X-Real-IP`、`X-Forwarded-For` 和 `X-Forwarded-Proto`。应用只使用 `Host`、单值 `X-Forwarded-Proto` 和单值客户端 IP 头，不解析 `X-Forwarded-Host` 或多级 `X-Forwarded-For`。容器化代理可把上游改到同机私有 Docker 网络，但仍不得让不可信客户端绕过代理直连应用端口。
+生产环境必须由可信反向代理终止 TLS，证书覆盖主站域名。应用端口只绑定到回环或明确的同机私有网络；不需要通配 DNS 或通配证书。仓库 Compose 固定把 `5518` 映射到 `127.0.0.1`。代理必须覆盖而不是追加访客传入的 `Host`、`X-Real-IP`、`X-Forwarded-For` 和 `X-Forwarded-Proto`。应用只使用 `Host`、单值 `X-Forwarded-Proto` 和单值客户端 IP 头，不解析 `X-Forwarded-Host` 或多级 `X-Forwarded-For`。容器化代理可把上游改到同机私有 Docker 网络，但仍不得让不可信客户端绕过代理直连应用端口。
 
 以下先列出代理产品无关的必要行为：
 
-- TLS 证书覆盖主站；仅非空 `site.static_subdomain` 模式需要额外子域 DNS 与证书。HTTP 重定向到 HTTPS。
+- TLS 证书覆盖主站。HTTP 重定向到 HTTPS。
 - 覆盖上述四个请求头；客户端 IP 必须是单跳、单值地址，不传访客提供的代理链。
 - 请求体上限覆盖 200 MiB 单图和 128 MiB JSONL；长时内容接入和存储检查允许至少 300 秒。
 - 上传流按部署需要关闭请求缓冲；Ingestion 控制 JSON 和 raw 上传都使用固定短路由，代理不得按 session 或 metadata 生成 location。
 - 不覆盖应用的 `Cache-Control`、`Vary`、CSP 或其他安全响应头，不另设应用响应缓存。
-- `static` 资源域的公开图片响应允许主站跨域读取；无凭据媒体可设置 `Access-Control-Allow-Origin: *`，供 Show WebGL 纹理读取使用。主站与 API 响应不因此开放 CORS。
+- 外部对象存储或 CDN 的公开图片响应允许主站跨域读取；无凭据媒体可设置 `Access-Control-Allow-Origin: *`，供 Show WebGL 纹理读取使用。主站与 API 响应不因此开放 CORS。
 
 随后只给出一份可替换的 Nginx 最简示例；ImageShow 不检测代理品牌，也不依赖 Nginx。
 
@@ -110,7 +110,7 @@ ImageShow 已负责 ETag、304、Range、压缩、静态预压缩和缓存头。
 
 ### 最少配置
 
-下面采用默认空 `site.static_subdomain`，所有资源由主站 `/static` 提供。
+以下示例将应用图片路径 `/images` 与页面、API 一起原样转发到应用。
 
 ```nginx
 server {
@@ -145,16 +145,7 @@ server {
 }
 ```
 
-若改用 `site.static_subdomain: "static"`，为 `static.img.example.com` 配置 DNS 和证书，把它加入上面的两个 `server_name`，并仅在该资源 Host 的图片响应上提供 CORS。可在 `http` 层增加：
-
-```nginx
-map $host $imageshow_static_cors_origin {
-  default "";
-  static.img.example.com "*";
-}
-```
-
-然后在 HTTPS server 中加入 `add_header Access-Control-Allow-Origin $imageshow_static_cors_origin always;`。路径需原样转发，不剥除 `/static`；不要同时开放另一模式的资源路径。默认同源模式会发送主站 Cookie，但资源处理器不消费它；详见[主机与资源出口](guide/subdomains.md)。
+路径需原样转发，不剥除 `/images`。同源图片请求会发送主站 Cookie，公开图片处理器不消费它；详见[主机与图片资源](guide/image-resources.md)。
 
 不要使用会拼接访客输入的 `$proxy_add_x_forwarded_for`；可信代理必须把两个来源 IP 头都覆盖为同一个单值客户端地址。
 
@@ -170,7 +161,7 @@ location /api/admin/ingestion/ {
 }
 ```
 
-应用不发送 HSTS。只有确认 TLS、证书续期及主站与资源域都由同一部署边界掌握时，才在最外层代理或 CDN 配置 HSTS。若启用 `/embed/*`，代理不得重新注入 `X-Frame-Options` 或覆盖应用生成的 CSP `frame-ancestors`；完整安全边界见[安全说明](guide/security.md)。
+应用不发送 HSTS。只有确认主站 TLS 与证书续期均受部署方管理时，才在最外层代理或 CDN 配置 HSTS；策略若覆盖子域，也须确认其全部处于同一管理边界。若启用 `/embed/*`，代理不得重新注入 `X-Frame-Options` 或覆盖应用生成的 CSP `frame-ancestors`；完整安全边界见[安全说明](guide/security.md)。
 
 ## 本地发布门禁与镜像清理
 

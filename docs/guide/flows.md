@@ -796,8 +796,8 @@ image_time、description、source、object_url 与 original_url。同图按 ID �
 未登录访客的公开“原图”按钮还受 `site.gallery.public_original_button` 控制；关闭时不渲染按钮
 或可聚焦占位，不影响当前展示图的原生保存。服务端确认已登录的管理员复用同一份管理详情
 认证结果，但同样等待详情返回非空链接；不增加第二套会话判别或原图接口。只有 `original` 是
-另一个 HTTPS URL 时，服务端才把当前资源根（默认主站 `/static`，可配置独立资源子域）下的
-`/link/<id>` 作为访问链接返回；Web 只消费这条权威链接。动作的 DOM、键盘焦点与视觉顺序固定为
+另一个 HTTPS URL 时，服务端才把主站 `/images/link/<id>` 作为访问链接返回；Web 只消费这条
+权威链接。动作的 DOM、键盘焦点与视觉顺序固定为
 “来源”在左、“原图”在右。服务端在一次图片解析中复用按原图 URL 与 User-Agent 家族缓存的
 直连探测结果，可直连时返回不可缓存的 302，否则在同一请求内使用受限请求代理，并保留
 HEAD、条件请求与代理响应缓存语义。公开出口在当前资源根的一次图片查询内完成，只读取
@@ -1111,7 +1111,7 @@ listener 仍只观察旧内存快照；PostgreSQL 正常提交或 xid8 确认已
 
 ## HTTP 缓存与按需加载
 
-- hash 静态资源、稳定的 `/full/*` 与可证明存在的 `/thumbs/*` 使用 immutable；非 hash
+- hash 静态资源、稳定的 `/images/full/*` 与可证明存在的 `/images/thumbs/*` 使用 immutable；非 hash
   品牌资源使用短浏览器缓存。动态公共 JSON 立即重验证，随机接口与管理写请求不缓存。
 - 公共与管理 DTO 只包含一个缩略图地址。配置公开 URL 的 S3 直接指向最终对象；local 与
   无公开 URL 的 S3 使用应用当前资源出口。ready 与 deleted 管理项复用同一稳定公开媒体

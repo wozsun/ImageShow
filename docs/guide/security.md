@@ -90,7 +90,7 @@
   会同时授权该后缀下全部现有和未来子域，因此 `site.domain` 及额外通配符都必须处于可信
   DNS 管理边界，不得把公共托管后缀作为安全边界。CSP 原生支持这类 host-source，因此
   响应不根据可能缺失的 `Origin` 或可被父页面关闭的 `Referer` 猜测并反射来源。禁用嵌入、
-  未知 Host、静态资源域或其他路径继续不可嵌入。SPA 以 report-only 模式同时观测完整资源
+  未知 Host 或其他路径继续不可嵌入。SPA 以 report-only 模式同时观测完整资源
   策略与脚本 Trusted Types；白名单只列出实际出现的 `imageshow-altcha-worker`、
   `svelte-trusted-html`、`decodeHTMLEntitiesPolicy` 与 `AGPolicy`，不放行任意策略名，也不
   提供放行任意脚本 URL 或 HTML 的默认策略。候选策略明确覆盖 script、Worker、connect、
@@ -99,7 +99,7 @@
   策略。同源 `/api/security/csp-report` 只接受 POST，经 Fetch Metadata 拒绝跨站 / 同站
   跨源，声明体积上限为 64 KiB，并立即取消正文流；它不解析 JSON、不写日志、数据库或
   Redis。登录页在 ALTCHA 首次挂载前预设隐藏 footer 与 logo，使组件不渲染会被 Trusted
-  Types 拒绝的动态 HTML footer。显式设置域名时，应用只接受 `site.domain` 与已配置的资源子域，
+  Types 拒绝的动态 HTML footer。显式设置域名时，应用只接受 `site.domain`，
   其他未知 Host 返回不可缓存的 404；域名为空或 `example.com` 时接受格式合法的访问 Host，
   图片地址使用同源路径，不把请求 Host 写入共享缓存、队列或持久配置。生产部署强烈建议设置域名，
   并由反向代理限制允许的 Host；基础回退不替代鉴权、CSRF 或代理配置。
@@ -135,7 +135,7 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | 随机 proxy / redirect / JSON | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
 | 外链原图 proxy / redirect | 当前资源根下唯一公开入口的 direct 302 使用 `private, no-store`；proxy 继承已校验源站策略或使用 fallback，URL 命名空间弱 ETag、Last-Modified 与 304；后台 `private, no-store` | 单次公开图片解析、HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、验证结果严格绑定请求 URL、`Referrer-Policy: no-referrer` |
 | Ingestion SSE | `no-store, no-transform` | 每个已显示的 owner + queue 使用一个固定 GET 路径；不压缩、不缓冲，30 秒串行鉴权 heartbeat，断开即清理 listener / scope |
-| 资源出口与未知 Host | 默认主站 `/static`；显式域名下可选择独立资源子域；仅开放对应资源根下的 `/full/*`、`/thumbs/*`、`/link/<id>`；独立子域另可开放 `/robots.txt`；失败 `no-store` | 两种资源模式互斥；显式域名拒绝未知 Host，基础回退使用访问 Host 与同源路径；同源资源不读会话、不写 Cookie，不按 Cookie 改变缓存 |
+| 图片出口与未知 Host | 主站 `/images/full/*`、`/images/thumbs/*`、`/images/link/<id>` 提供公开图片；失败 `no-store` | 显式域名只接受主站 Host，基础回退使用访问 Host 与同源路径；公开图片不读会话、不写 Cookie，不按 Cookie 改变缓存 |
 
 确定性管理只读 JSON 包括偏好、管理员列表、存储选项 / 后端，以及已有的设置、
 词表、图片列表与管理详情；写后仍由各领域精确失效查询，内容未变化的再次读取返回 304。
@@ -143,7 +143,7 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 304 缓存或固定这项实时表示。
 
 稳定图片地址本身不是管理员授权边界。图片进入回收站后会退出所有公开发现入口，但已知的
-`/full/*`、`/thumbs/*` 或 S3 `public_base_url` 直链仍可访问；后台列表和动作权限继续由
+`/images/full/*`、`/images/thumbs/*` 或 S3 `public_base_url` 直链仍可访问；后台列表和动作权限继续由
 管理 API 独立强制。永久删除会同时清理源对象。
 
 当前不发送 COEP 或 CORP：页面允许 HTTPS 外链图片，静态 / 随机 / 原图出口也需要被
@@ -211,9 +211,8 @@ Worker 与嵌入页。应用没有跨源 API 契约，不返回 `Access-Control-
 - 外链导入下载会为每个已通过安全校验的当前目标生成仅含 `https` origin 的
   `Referer`，用于微博图床等基础防盗链。重定向后按新目标重新生成，不透传图片
   路径、查询参数、来源页面或管理员输入的任意 Referer。
-- 公共图片数据接口 `/api/images`、`/api/images/:id`、`/api/gallery-facets` 与 `/api/gallery-stats` 的**跨源保护**：借 Fetch Metadata（`Sec-Fetch-Site`）拒绝**跨站 / 同站跨源**读取，只放行同源（前端自身）、直接导航（`none`）与**不发该头**的老浏览器 / 非浏览器客户端（优雅降级，不误伤展映与画廊）。嵌入页中的数据请求仍由 iframe 内的同源应用发出，不增加 CORS、跨源凭据或后台写权限。它是跨源护栏、不是反爬墙——省略该头的客户端仍可访问，合规爬虫由 robots.txt 兜。（`/api/site-config` 不设限——它是内联进 SPA 的启动配置，需在任意首屏场景下可加载；返回内容只包含公开页面实际消费的站点名称、图标、根路径、首页、展映设置、画廊启用状态与排序、派生 static 资源根地址、有效嵌入开关和详情行为，不包含嵌入来源列表、原始部署字段、后台版本显示策略、服务端分页默认值、随机出口默认方式、安全验证开关、登录页背景、上传限制或处理并发。）
-- **robots.txt（按主机区分，默认关闭）**：由 `config.json` 的 `site.robots_enabled`
-  控制，**默认 `false`**——此时 `/robots.txt` 对所有主机返回 404、不提供任何抓取规则。
-  开启后按主机区分：主站**仅放行首页**（站点描述），画廊 / 接口 / 静态资源 / 后台
-  一律不许抓取；`static.` 资源域整站禁抓。最终文本带内容弱 ETag，`If-None-Match`
-  命中返回无正文 304；主机或首页启用配置改变正文时 ETag 同步变化。
+- 公共图片数据接口 `/api/images`、`/api/images/:id`、`/api/gallery-facets` 与 `/api/gallery-stats` 的**跨源保护**：借 Fetch Metadata（`Sec-Fetch-Site`）拒绝**跨站 / 同站跨源**读取，只放行同源（前端自身）、直接导航（`none`）与**不发该头**的老浏览器 / 非浏览器客户端（优雅降级，不误伤展映与画廊）。嵌入页中的数据请求仍由 iframe 内的同源应用发出，不增加 CORS、跨源凭据或后台写权限。它是跨源护栏、不是反爬墙——省略该头的客户端仍可访问，合规爬虫由 robots.txt 兜。（`/api/site-config` 不设限——它是内联进 SPA 的启动配置，需在任意首屏场景下可加载；返回内容只包含公开页面实际消费的站点名称、图标、根路径、首页、展映设置、画廊启用状态与排序、有效嵌入开关和详情行为，不包含嵌入来源列表、原始部署字段、后台版本显示策略、服务端分页默认值、随机出口默认方式、安全验证开关、登录页背景、上传限制或处理并发。）
+- **robots.txt（默认关闭）**：由 `config.json` 的 `site.robots_enabled` 控制，默认 `false`，
+  此时 `/robots.txt` 返回 404。开启后仅允许抓取已启用的首页（站点描述），画廊 / 接口 /
+  图片资源 / 后台均禁止抓取。最终文本带内容弱 ETag，`If-None-Match` 命中返回无正文 304；
+  首页启用配置改变正文时 ETag 同步变化。

@@ -149,12 +149,13 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 租约内先通过 store 的专用阶段持久化候选文件，再等待 PostgreSQL 事务结果；只有正常提交、确认
 已提交或结果 unknown 时才发布候选，确认回滚只恢复旧文件且不发布中间快照。
 
-`config/site-host.ts` 是资源根 URL、路径前缀和 Host 判断的共同入口：域名为空或 `example.com`
-时接受格式合法的访问 Host，使用 `/static` 同源路径，不向配置、共享缓存或队列写入请求域名，
-也不启用资源子域。显式域名下，空 `static_subdomain` 选择主站 `/static`，非空选择资源子域。
-`http-app.ts` 在公共资源、OPTIONS 与 SPA 之前执行
-模式与 Host 隔离；`routes/public.ts` 的两组路径共用相同资源处理器，热加载只切换当前出口。
-不按版本添加转发或迁移。公开资源不读取管理员会话，S3 已配置公开 URL 的对象仍使用直链。
+`config/site-host.ts` 是图片资源根 URL 和 Host 判断的共同入口：域名为空或 `example.com`
+时接受格式合法的访问 Host，使用 `/images` 同源路径，不向配置、共享缓存或队列写入请求域名；
+显式域名下只接受主站 Host，并生成 `https://<site.domain>/images` 地址。
+`http-app.ts` 在公共资源、OPTIONS 与 SPA 之前执行统一 Host 校验；`routes/public.ts` 直接注册
+`/images/full/*`、`/images/thumbs/*` 与 `/images/link/:id`，未匹配请求使用通用路由处理。
+公开资源不读取管理员会话，S3 已配置公开 URL 的对象使用直链；图片 URL 由服务端生成，
+公开站点配置只投影页面实际消费的字段。
 
 `storage/drivers/local.ts` 在缓冲写、复制和流式写入创建候选前及 link 发布前检查取消，
 缓冲写同时向文件写入传递 signal。不可中断的本地复制等待当前 I/O 完成后检查取消并清理候选。

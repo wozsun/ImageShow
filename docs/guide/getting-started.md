@@ -5,7 +5,7 @@
 展开阶段直接失败。`.env` 为 Compose 提供插值，`services.imageshow.environment` 的显式
 映射构成应用容器的环境变量集合。`SITE_DOMAIN` 已有可选映射，强烈建议首次部署前在 `.env`
 中填写实际域名，不带协议或路径。未设置、为空或为 `example.com` 时，项目使用访问 Host 与
-同源 `/static` 资源路径，不启用资源子域；已有站点通过 `data/config.json` / 高级配置修改域名。
+同源 `/images` 资源路径；已有站点通过 `data/config.json` / 高级配置修改域名。
 内置拓扑使用 Server 的 `UTC` 时区默认值。
 
 默认 Compose 提供单机部署：一台主机只运行一个 ImageShow 应用实例，PostgreSQL 与 Redis

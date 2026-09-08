@@ -57,7 +57,6 @@ export type RuntimeSiteSettings = {
   show: SiteShowSettings;
   gallery: SiteGallerySettings;
   random_method: RandomDefaultMethod;
-  static_subdomain: string;
   robots_enabled: boolean;
 };
 
@@ -208,7 +207,6 @@ export type PublicSiteSettings = Pick<
     "enabled" | "order" | "public_original_button"
   >;
   show: SiteShowSettings;
-  static_url: string;
 };
 
 export type AdminSiteSettings = Omit<

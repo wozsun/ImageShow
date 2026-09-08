@@ -1,48 +1,28 @@
 import { getRuntimeConfig } from "./runtime-config-store.ts";
 
 type HostParts = { hostname: string; port: string };
-type SiteHostKind = "site" | "static" | "";
 
 export function hasExplicitSiteDomain(domain: string) {
   return domain !== "" && domain !== "example.com";
 }
 
-function siteHostKind(hostHeader: string): SiteHostKind {
+export function isAllowedSiteHost(hostHeader: string) {
   const raw = hostHeader.trim().toLowerCase();
-  if (!/^[a-z0-9.-]+(?::\d{1,5})?$/.test(raw)) return "";
+  if (!/^[a-z0-9.-]+(?::\d{1,5})?$/.test(raw)) return false;
   const current = splitHost(raw);
   const site = getRuntimeConfig().site;
-  if (!current.hostname) return "";
-  if (current.port && (Number(current.port) < 1 || Number(current.port) > 65_535)) return "";
-  if (!hasExplicitSiteDomain(site.domain)) return "site";
+  if (!current.hostname) return false;
+  if (current.port && (Number(current.port) < 1 || Number(current.port) > 65_535)) return false;
+  if (!hasExplicitSiteDomain(site.domain)) return true;
   const root = splitHost(site.domain);
-  if (root.port && current.port !== root.port) return "";
-  if (current.hostname === root.hostname) return "site";
-  if (!site.static_subdomain) return "";
-  const staticHostname = `${site.static_subdomain}.${root.hostname}`;
-  return current.hostname === staticHostname ? "static" : "";
+  return current.hostname === root.hostname && (!root.port || current.port === root.port);
 }
 
-export function isAllowedSiteHost(hostHeader: string) {
-  return Boolean(siteHostKind(hostHeader));
-}
-
-export function isStaticSiteHost(hostHeader: string) {
-  return siteHostKind(hostHeader) === "static";
-}
-
-export function staticLocalBaseUrl() {
+export function imageResourceBaseUrl() {
   const site = getRuntimeConfig().site;
   // Same-origin paths follow the request Host without storing it in shared DTOs.
-  if (!hasExplicitSiteDomain(site.domain)) return "/static";
-  return site.static_subdomain
-    ? `https://${site.static_subdomain}.${site.domain}`
-    : `https://${site.domain}${staticResourcePathPrefix()}`;
-}
-
-export function staticResourcePathPrefix() {
-  const site = getRuntimeConfig().site;
-  return hasExplicitSiteDomain(site.domain) && site.static_subdomain ? "" : "/static";
+  if (!hasExplicitSiteDomain(site.domain)) return "/images";
+  return `https://${site.domain}/images`;
 }
 
 function splitHost(value: string): HostParts {

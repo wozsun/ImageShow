@@ -134,7 +134,7 @@ import {
   initializeRuntimeConfig
 } from "../../../packages/server/src/config/runtime-config-store.ts";
 
-test("[Server/HTTP 与鉴权] Host 出口严格区分主站、static 资源域与未知 Host", async () => {
+test("[Server/HTTP 与鉴权] 主站 Host、图片路径与域名热加载遵循统一边界", async () => {
   const repositoryRoot = resolve(import.meta.dirname, "../../..");
   const helperRoot = await createTestDirectory("imageshow-host-boundary-");
   const helperPath = join(helperRoot, "verify-host-boundary.mjs");
@@ -157,14 +157,13 @@ import {
   initializeRuntimeConfig,
   updateRuntimeConfig
 } from ${JSON.stringify(runtimeConfigStoreUrl)};
-import { staticLocalBaseUrl } from ${JSON.stringify(siteHostUrl)};
+import { imageResourceBaseUrl } from ${JSON.stringify(siteHostUrl)};
 import { createHttpApp } from ${JSON.stringify(httpAppUrl)};
 
 initializeRuntimeConfig();
 const config = getRuntimeConfig();
 assert.equal(config.site.domain, "img.example.com");
-assert.equal(config.site.static_subdomain, "assets");
-assert.equal(staticLocalBaseUrl(), "https://assets.img.example.com");
+assert.equal(imageResourceBaseUrl(), "https://img.example.com/images");
 
 const app = createHttpApp({
   businessGateIsOpen: () => true,
@@ -180,102 +179,55 @@ async function status(host, path, method = "GET") {
 }
 
 assert.equal(await status("img.example.com", "/random", "POST"), 405);
-assert.equal(await status("img.example.com", "/api/ping", "OPTIONS"), 204);
-assert.equal(
-  await status("assets.img.example.com", "/api/ping", "OPTIONS"),
-  404
-);
-assert.equal(
-  await status("assets.img.example.com", "/full/8d/example.webp", "OPTIONS"),
-  204
-);
-assert.equal(
-  await status("assets.img.example.com", "/link/not-a-uuid"),
-  400
-);
-assert.equal(
-  await status("img.example.com", "/link/not-a-uuid"),
-  404
-);
-assert.equal(await status("assets.img.example.com", "/random", "POST"), 404);
+assert.equal(await status("IMG.EXAMPLE.COM", "/api/ping", "OPTIONS"), 204);
+for (const path of ["/images/full/example.webp", "/images/thumbs/example.webp"]) {
+  assert.equal(await status("img.example.com", path, "OPTIONS"), 204);
+}
 for (const method of ["GET", "HEAD", "OPTIONS"]) {
-  assert.equal(await status("assets.img.example.com", "/link/not-a-uuid", method), method === "OPTIONS" ? 204 : 400);
-  if (method === "OPTIONS") continue;
-  for (const host of ["img.example.com", "assets.img.example.com", "unknown.img.example.com"]) {
-    for (const path of ["/link/not-a-uuid/extra", "/link/"]) {
+  assert.equal(await status("img.example.com", "/images/link/not-a-uuid", method), method === "OPTIONS" ? 204 : 400);
+  for (const host of ["unknown.img.example.com", "another.example.com"]) {
+    for (const path of ["/", "/api/ping", "/images/link/not-a-uuid"]) {
       assert.equal(await status(host, path, method), 404, host + path + method);
     }
   }
 }
-
-for (const host of [
-  "unknown.img.example.com",
-  "another.img.example.com",
-  "foo.assets.img.example.com"
-]) {
-  assert.equal(await status(host, "/"), 404, host);
-}
-await updateRuntimeConfig({site:{static_subdomain:""}});
-assert.equal(staticLocalBaseUrl(), "https://img.example.com/static");
-assert.equal(await status("assets.img.example.com", "/full/test.webp"),404);
-assert.equal(await status("img.example.com", "/link/not-a-uuid"),404);
-assert.equal(await status("img.example.com", "/static/link/not-a-uuid"),400);
-assert.equal(await status("img.example.com", "/static/full/test.webp","OPTIONS"),204);
-for (const method of ["GET", "HEAD", "OPTIONS"]) {
-  assert.equal(await status("img.example.com", "/static/link/not-a-uuid", method), method === "OPTIONS" ? 204 : 400);
-  if (method === "OPTIONS") continue;
-  for (const host of ["img.example.com", "assets.img.example.com", "unknown.img.example.com"]) {
-    for (const path of ["/static/link/not-a-uuid/extra", "/static/link/"]) {
-      assert.equal(await status(host, path, method), 404, host + path + method);
-    }
+for (const path of ["/unknown", "/images", "/images/link/", "/images/link/not-a-uuid/extra"]) {
+  for (const method of ["GET", "HEAD", "POST"]) {
+    assert.equal(await status("img.example.com", path, method), 404, path + method);
   }
 }
-for (const path of ["/full/test.webp","/thumbs/test.webp","/static","/static/","/static/api/site-config","/static/admin","/static/random","/static/assets/test.js","/static/static/full/test.webp"]) {
-  for (const method of ["GET","HEAD","POST","OPTIONS"]) assert.equal(await status("img.example.com",path,method),404,path+method);
+assert.equal(await status("img.example.com", "/unknown", "OPTIONS"), 204);
+for (const domain of ["img.example.com:5518", "local.example:5518"]) {
+  await updateRuntimeConfig({ site: { domain } });
+  assert.equal(imageResourceBaseUrl(), "https://" + domain + "/images");
+  assert.equal(await status(domain, "/images/link/not-a-uuid"), 400);
+  assert.equal(await status(domain.split(":")[0], "/images/link/not-a-uuid"), 404);
 }
-const publicConfig = await app.request("http://internal.test/api/site-config", {headers:{Host:"img.example.com"}});
-assert.equal((await publicConfig.json()).site.static_url,"https://img.example.com/static");
-for (const domain of ["img.example.com:5518","local.example:5518"]) {
-  await updateRuntimeConfig({site:{domain}});
-  assert.equal(staticLocalBaseUrl(),"https://"+domain+"/static");
-  assert.equal(await status(domain,"/static/link/not-a-uuid"),400);
-  assert.equal(await status(domain.split(":")[0],"/static/link/not-a-uuid"),404);
-}
-await updateRuntimeConfig({site:{domain:"img.example.com",static_subdomain:"media"}});
-assert.equal(staticLocalBaseUrl(),"https://media.img.example.com");
-assert.equal(await status("img.example.com","/static/link/not-a-uuid"),404);
-assert.equal(await status("media.img.example.com","/link/not-a-uuid"),400);
-assert.equal(await status("assets.img.example.com","/link/not-a-uuid"),404);
 for (const domain of ["", "example.com"]) {
-  for (const static_subdomain of ["", "assets"]) {
-    await updateRuntimeConfig({site:{domain,static_subdomain}});
-    assert.equal(staticLocalBaseUrl(), "/static");
-    for (const host of ["localhost:5518", "127.0.0.1:5518", "first.example.com", "second.example.com:8443"]) {
-      assert.equal(await status(host, "/api/ping", "OPTIONS"), 204, host);
-      assert.equal(await status(host, "/static/link/not-a-uuid"), 400, host);
-      assert.equal(await status(host, "/full/test.webp", "OPTIONS"), 404, host);
-      const response = await app.request("http://internal.test/api/site-config", {headers:{Host:host}});
-      assert.equal(response.status, 200);
-      const resourceRoot = (await response.json()).site.static_url;
-      assert.equal(resourceRoot, "/static");
-      for (const scheme of ["http", "https"]) {
-        assert.equal(new URL(resourceRoot + "/thumbs/test.webp", scheme + "://" + host).href,
-          scheme + "://" + host + "/static/thumbs/test.webp");
-      }
+  await updateRuntimeConfig({ site: { domain } });
+  assert.equal(imageResourceBaseUrl(), "/images");
+  for (const host of ["localhost:5518", "127.0.0.1:5518", "first.example.com", "second.example.com:8443"]) {
+    assert.equal(await status(host, "/api/ping", "OPTIONS"), 204, host);
+    assert.equal(await status(host, "/images/link/not-a-uuid"), 400, host);
+    const response = await app.request("http://internal.test/api/site-config", { headers: { Host: host } });
+    assert.equal(response.status, 200);
+    for (const scheme of ["http", "https"]) {
+      assert.equal(new URL(imageResourceBaseUrl() + "/thumbs/test.webp", scheme + "://" + host).href,
+        scheme + "://" + host + "/images/thumbs/test.webp");
     }
-    for (const host of ["", "bad host", "evil.test/path", "user@evil.test", "one.test,two.test", "local.test:0", "local.test:65536"]) {
-      assert.equal(await status(host, "/api/ping", "OPTIONS"), 404, host);
-    }
-    const crossSite = await app.request("http://internal.test/api/ping", {
-      method: "OPTIONS", headers: {Host:"localhost:5518", "Sec-Fetch-Site":"cross-site"}
-    });
-    assert.equal(crossSite.status, 403);
   }
+  for (const host of ["", "bad host", "evil.test/path", "user@evil.test", "one.test,two.test", "local.test:0", "local.test:65536"]) {
+    assert.equal(await status(host, "/api/ping", "OPTIONS"), 404, host);
+  }
+  const crossSite = await app.request("http://internal.test/api/ping", {
+    method: "OPTIONS", headers: { Host: "localhost:5518", "Sec-Fetch-Site": "cross-site" }
+  });
+  assert.equal(crossSite.status, 403);
 }
-await updateRuntimeConfig({site:{domain:"restored.example.com",static_subdomain:"assets"}});
+await updateRuntimeConfig({ site: { domain: "restored.example.com" } });
 assert.equal(await status("localhost:5518", "/api/ping", "OPTIONS"), 404);
 assert.equal(await status("restored.example.com", "/api/ping", "OPTIONS"), 204);
-assert.equal(staticLocalBaseUrl(), "https://assets.restored.example.com");
+assert.equal(imageResourceBaseUrl(), "https://restored.example.com/images");
 console.log("host-boundary-ok");
 `;
   try {
@@ -289,8 +241,7 @@ console.log("host-boundary-ok");
         ...process.env,
         NODE_ENV: "development",
         IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: toNamespacedPath(helperRoot),
-        SITE_DOMAIN: "img.example.com",
-        SITE_STATIC_SUBDOMAIN: "assets"
+        SITE_DOMAIN: "img.example.com"
       },
       timeoutMs: 30_000
     });
