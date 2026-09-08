@@ -52,6 +52,9 @@ export class ShowPixiEdgeLight {
       texture, vertices: this.#positions, uvs: this.#uvs, indices,
       roundPixels: false
     });
+    // The pointer owns one small textured ring; batch it with the photo so
+    // releasing the ring does not leave a binding in the shared mesh shader.
+    this.mesh.geometry.batchMode = "batch";
     this.mesh.autoUpdate = false;
     this.mesh.eventMode = "none";
   }

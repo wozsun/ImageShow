@@ -175,6 +175,9 @@ export class ShowPixiCard {
     this.#renderer = renderer;
     this.#palette = cardPalette(renderer);
     this.#perspectiveCoordinator = perspectiveCoordinator;
+    // The rounded photo and fixed glow bands stay bounded. Batch them so
+    // snapshot rendering does not create separate cached texture bind groups.
+    this.surface.context.batchMode = "batch";
     this.root.sortableChildren = false;
     this.root.eventMode = "dynamic";
     this.root.cursor = "pointer";
@@ -677,6 +680,9 @@ export class ShowPixiCard {
       verticesY: 16,
       roundPixels: false
     });
+    // This bounded textured grid can share the card batch. The default mesh
+    // shader otherwise keeps its last snapshot bound after the mesh is removed.
+    mesh.geometry.batchMode = "batch";
     mesh.eventMode = "none";
     this.#perspectiveTexture = texture;
     this.#perspectiveMesh = mesh;
