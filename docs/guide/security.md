@@ -19,6 +19,7 @@
   条件失败不会创建已登出或已失效的 key，也不会覆盖改密中的新 payload；依赖失败不续发 Cookie。
   其他管理 API 和长连接认证心跳仍只校验、不续期。Web 不建立会话定时器：首次直达后台沿用
   必需认证读取，公开页仅在已有 `site_session_hint` 时沿用其一次探针，公开页与后台之间切换不补请求。
+  原图按钮关闭时的图片详情也复用该会话校验且不续期；无有效会话时返回访客投影，原图链接为 null。
 - 客户端地址、协议和 Host 只信任最外层代理覆盖后的单跳值：应用使用原始 `Host`、精确的
   `http` / `https` 协议值，以及单个合法 IP 的 `X-Real-IP` 或 `X-Forwarded-For`；不解析
   `X-Forwarded-Host`，逗号分隔的代理链和无效 IP 归为 `unknown`。因此应用端口必须只对可信
@@ -126,16 +127,17 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | --- | --- | --- |
 | 普通 SPA HTML | `max-age=0`、内容 ETag、支持 304 | 强制禁止嵌入；完整 CSP 候选与 Trusted Types 先 report-only |
 | `/embed/home`、`/embed/show`、`/embed/gallery` | `no-store`，仍带内容 ETag | 仅移除 `X-Frame-Options`，CSP 精确生成 `frame-ancestors` |
-| 公开列表与详情 | 浏览器 30 秒 / 共享缓存 60 秒；每日随机页收口至当日剩余时间；内容弱 ETag 与 304 | 仅 ready 公开投影；错误、可见性与周期判断先于条件验证；缓存键保留完整查询参数 |
+| 公开列表 | 浏览器 30 秒 / 共享缓存 60 秒；每日随机页收口至当日剩余时间；内容弱 ETag 与 304 | 仅 ready 公开投影；错误、可见性与周期判断先于条件验证；缓存键保留完整查询参数 |
+| 图片详情 `/api/images/<id>` | 原图按钮开启时浏览器 30 秒 / CDN 60 秒，关闭时 `private, no-cache`；`Vary: Cookie`、内容弱 ETag 与 304 | 关闭时校验现有会话，访客原图链接为 null，已登录管理员取得公开链接；共享数据库行后单独投影，私有详情不共享 |
 | 其他确定性公共 JSON API | `max-age=0`、最长 30 秒共享缓存窗口、内容弱 ETag 与 304；按入口决定 `Sec-Fetch-Site`，统一 `Vary: Accept-Encoding` | 不返回后台字段；受保护读取拒绝跨站 / 同站跨源 |
 | 确定性管理只读 JSON | `private, no-cache`、完整 envelope 内容弱 ETag 与 304 | 仅浏览器私有保存且每次重验证；身份鉴权先于内容生成，禁止 CDN 共享 |
 | 登录、其他管理 API、错误、404、健康检查 | `no-store` 或 `private, no-store` | `auth/me`、ALTCHA、检查状态、日志、SSE、后台字节、预览、敏感配置与写接口不缓存；登录限流的 429 使用纯数字 `Retry-After` |
 | CSP report、OPTIONS、204 | `no-store` | 只允许各自方法，先做 Host / Fetch Metadata 检查，取消不需要的正文；不启用 CORS |
 | hash 资产、稳定图片、HEAD、206、304 | hash 资产 / 稳定图片 `immutable`；非 hash 品牌资源短缓存；ETag、Last-Modified、单 Range | 304 无正文；206 保留完整对象验证器；416 返回 `Content-Range: bytes */总长` |
 | 随机 proxy / redirect / JSON | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
-| 外链原图 proxy / redirect | 当前资源根下唯一公开入口的 direct 302 使用 `private, no-store`；proxy 继承已校验源站策略或使用 fallback，URL 命名空间弱 ETag、Last-Modified 与 304；后台 `private, no-store` | 单次公开图片解析、HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、验证结果严格绑定请求 URL、`Referrer-Policy: no-referrer` |
+| 外链原图 proxy / redirect | 单一公开入口；直连 302 公开短缓存，proxy 继承源站策略或使用 CDN fallback；`Vary: User-Agent`、URL 命名空间弱 ETag、Last-Modified 与 304；错误和失败回退不缓存 | 不读取会话或按钮开关；正常图片与回收站均可访问；HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、验证器绑定 URL、`Referrer-Policy: no-referrer` |
 | Ingestion SSE | `no-store, no-transform` | 每个已显示的 owner + queue 使用一个固定 GET 路径；不压缩、不缓冲，30 秒串行鉴权 heartbeat，断开即清理 listener / scope |
-| 图片出口与未知 Host | 主站 `/images/full/*`、`/images/thumbs/*`、`/images/link/<id>` 提供公开图片；失败 `no-store` | 显式域名只接受主站 Host，基础回退使用访问 Host 与同源路径；公开图片不读会话、不写 Cookie，不按 Cookie 改变缓存 |
+| 图片出口与未知 Host | 主站 `/images/full/*`、`/images/thumbs/*`、`/images/original/<id>` 统一公开；失败 `no-store` | 显式域名只接受主站 Host，基础回退使用访问 Host 与同源路径；图片出口不读会话、不写 Cookie，原图按钮开关只控制详情链接显示 |
 
 确定性管理只读 JSON 包括偏好、管理员列表、存储选项 / 后端，以及已有的设置、
 词表、图片列表与管理详情；写后仍由各领域精确失效查询，内容未变化的再次读取返回 304。

@@ -225,8 +225,7 @@ export function siteConfigPayload(): SiteConfigDto {
       show,
       gallery: {
         enabled: gallery.enabled,
-        order: gallery.order,
-        public_original_button: gallery.public_original_button
+        order: gallery.order
       }
     },
     embed: {

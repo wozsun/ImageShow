@@ -52,6 +52,7 @@ export function clearAdminCacheAfterLogin(client: QueryClient) {
     queryKeys.adminCheckStatus,
     queryKeys.adminImages,
     queryKeys.adminImageInfo,
+    queryKeys.publicImageDetail,
     queryKeys.tags,
     queryKeys.themes,
     queryKeys.authors,
@@ -129,7 +130,7 @@ export function invalidateImageDataAfterMetadataSave(
       const queryKey = [...queryKeys.publicImageDetail, update.id];
       // Retire a pre-commit promise as well as its HTTP freshness. A closed
       // modal must not join that promise when it immediately opens again.
-      await client.cancelQueries({ queryKey, exact: true });
+      await client.cancelQueries({ queryKey });
       if (authoritativeIds.has(update.id)) return;
       // Without the authoritative snapshot every editable field may already
       // have committed despite the lost confirmation. The active public
@@ -137,8 +138,7 @@ export function invalidateImageDataAfterMetadataSave(
       // detail must re-read instead of retaining stale fields over the card's
       // background page refresh.
       await client.invalidateQueries({
-        queryKey,
-        exact: true
+        queryKey
       });
     })());
     return requests;
@@ -246,8 +246,7 @@ export async function invalidateImageDataAfterTrash(
   // 当前公开详情在移入回收站后必然返回 404。先终止可能尚未完成的旧读取，但不改变
   // 它的 freshness；详情关闭后 gcTime: 0 会自然回收它。
   await Promise.all(imageIds.map((imageId) => client.cancelQueries({
-    queryKey: [...queryKeys.publicImageDetail, imageId],
-    exact: true
+    queryKey: [...queryKeys.publicImageDetail, imageId]
   })));
   // 查询所有者会在 mutation 提交时先把当前 ID 集合设为 disabled。这里不能再把仍
   // active 的详情标为 stale，否则关闭动画期间的窗口聚焦或网络重连仍可能读取 404。

@@ -241,9 +241,6 @@ async function adminImageListItem(
   return {
     ...base,
     original: row.original,
-    original_url: row.status === "deleted" && base.original_url
-      ? `/api/admin/images/${encodeURIComponent(row.id)}/original`
-      : base.original_url,
     status: row.status,
     purge_pending: row.purge_job_id !== null,
     object_key: row.object_key,
@@ -304,7 +301,8 @@ export async function editableImageSnapshotsWithTags(
 
 export async function publicImageDetail(
   row: PublicImageDetailRecord,
-  access: PublicDatabaseReadAccess = {}
+  access: PublicDatabaseReadAccess = {},
+  includeOriginal = false
 ): Promise<PublicImageDetailDto> {
   const { urls } = await publicUrlsForRow(row, access);
   return {
@@ -318,11 +316,11 @@ export async function publicImageDetail(
     description: row.description,
     source: row.source || null,
     object_url: urls.object_url,
-    original_url: publicOriginalAccessUrl(
+    original_url: includeOriginal ? publicOriginalAccessUrl(
       row.id,
       row.original,
       urls.object_url
-    )
+    ) : null
   };
 }
 

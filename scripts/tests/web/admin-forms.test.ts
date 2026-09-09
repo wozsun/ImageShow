@@ -232,8 +232,7 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
       },
       gallery: {
         enabled: true,
-        order: "latest",
-        public_original_button: false
+        order: "latest"
       }
     },
     embed: { enabled: false }

@@ -593,7 +593,7 @@ assert.deepEqual(siteConfigPayload().site.show, {
   order: "random"
 });
 assert.equal(siteConfigPayload().site.gallery.enabled, true);
-assert.equal(siteConfigPayload().site.gallery.public_original_button, false);
+assert.deepEqual(siteConfigPayload().site.gallery, { enabled: true, order: "latest" });
 assert.equal("description" in getSettingsForAdmin().site, false);
 assert.equal(getSettingsForAdmin().site.root, "home");
 assert.equal("browse_target" in getSettingsForAdmin().site.home, false);
@@ -708,7 +708,7 @@ assert.equal(getRuntimeConfig().weibo.source_enabled, false);
 assert.equal(getRuntimeConfig().normalize.quality_step, 11);
 assert.equal(getRuntimeConfig().normalize.quality, 79);
 assert.equal(getRuntimeConfig().site.gallery.public_original_button, true);
-assert.equal(siteConfigPayload().site.gallery.public_original_button, true);
+assert.deepEqual(siteConfigPayload().site.gallery, { enabled: true, order: "latest" });
 assert.equal("public_original_button" in getSettingsForAdmin().site.gallery, false);
 assert.deepEqual(getSettingsForAdmin().import.keep_original_link, ["jsonl"]);
 assert.equal(getSettingsForAdmin().import.auto_import, false);
@@ -723,7 +723,7 @@ await writeFile(join(root, "config.json"), JSON.stringify(mixed));
 const reloaded = await reloadRuntimeConfigFromDisk();
 assert.equal(reloaded.site.root, "gallery");
 assert.equal(reloaded.site.gallery.public_original_button, false);
-assert.equal(siteConfigPayload().site.gallery.public_original_button, false);
+assert.deepEqual(siteConfigPayload().site.gallery, { enabled: true, order: "latest" });
 assert.equal(unknownSiteKey in reloaded.site, false);
 const reloadedPersisted = JSON.parse(await readFile(join(root, "config.json"), "utf8"));
 assert.deepEqual(reloadedPersisted, reloaded);

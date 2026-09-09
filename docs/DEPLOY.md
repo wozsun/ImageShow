@@ -30,7 +30,7 @@ docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 \
 
 应用只需挂载 `/app/data`，其中保存 `config.json`、本地存储对象和日志。PostgreSQL、Redis 凭据只来自显式环境变量，不写入 `config.json`。`ADMIN_USERNAME` / `ADMIN_PASSWORD` 仅在数据库没有 super 管理员时创建首个账号。
 
-仓库 `.env.example` 是变量目录，`.env` 为 Compose 提供插值。默认 Compose 逐项映射最小白名单：ImageShow 收到数据库名、用户名、密码和首次管理员用户名、密码，PostgreSQL 收到对应的三个 `POSTGRES_*`。ImageShow 另通过 `${SITE_DOMAIN:-}` 接收可选域名；强烈建议首次部署前在 `.env` 中设置实际域名。未设置、为空或为 `example.com` 时，项目只提供访问 Host 与同源 `/images` 资源路径的基础回退。已有 `data/config.json` 时继续使用保存的域名。数据库名、数据库用户名和管理员用户名保留默认值；`DATABASE_PASSWORD` 与 `ADMIN_PASSWORD` 没有默认值，必须在 `.env` 或宿主环境中显式设置，缺失或空值会在 Compose 展开阶段直接失败。需要额外 RuntimeConfig 首次 seed 时，先按 [配置说明](CONFIG.md#环境变量)逐项扩展 ImageShow 的 `environment` 映射。
+仓库 `.env.example` 是变量目录，`.env` 为 Compose 提供插值。默认 Compose 逐项映射最小白名单：ImageShow 收到数据库名、用户名、密码和首次管理员用户名、密码，PostgreSQL 收到对应的三个 `POSTGRES_*`。ImageShow 另通过 `${SITE_DOMAIN:-}` 接收可选域名，通过 `${SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON:-false}` 接收访客原图按钮的首次播种值；强烈建议首次部署前在 `.env` 中设置实际域名。未设置、为空或为 `example.com` 时，项目只提供访问 Host 与同源 `/images` 资源路径的基础回退。已有 `data/config.json` 时继续使用保存的域名。数据库名、数据库用户名和管理员用户名保留默认值；`DATABASE_PASSWORD` 与 `ADMIN_PASSWORD` 没有默认值，必须在 `.env` 或宿主环境中显式设置，缺失或空值会在 Compose 展开阶段直接失败。需要额外 RuntimeConfig 首次 seed 时，先按 [配置说明](CONFIG.md#环境变量)逐项扩展 ImageShow 的 `environment` 映射。
 
 应用容器的停止宽限必须至少为 50 秒。进程先停止接收请求，再协调 Worker、在途 HTTP、存储 driver 和数据库连接池；不要用短于该边界的外层编排超时提前强杀。
 
@@ -146,6 +146,12 @@ server {
 ```
 
 路径需原样转发，不剥除 `/images`。同源图片请求会发送主站 Cookie，公开图片处理器不消费它；详见[主机与图片资源](guide/image-resources.md)。
+
+原图按钮开关为 `site.gallery.public_original_button`，首次播种变量为
+`SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON`，默认关闭。开关只决定访客详情是否返回原图链接；
+`/images/original/<id>` 始终公开，使用应用给出的重定向 / 代理缓存策略，并保留 `Vary: User-Agent`。
+`/api/images/<id>` 则必须保留 `Vary: Cookie`：关闭按钮时的私有详情不能进入共享缓存，
+开启时可按浏览器 30 秒、CDN 60 秒缓存。已知 URL 的直接访问与按钮开关无关。
 
 不要使用会拼接访客输入的 `$proxy_add_x_forwarded_for`；可信代理必须把两个来源 IP 头都覆盖为同一个单值客户端地址。
 

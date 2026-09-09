@@ -202,10 +202,7 @@ export type PublicSiteSettings = Pick<
   RuntimeSiteSettings,
   "name" | "description" | "icon" | "root" | "home"
 > & {
-  gallery: Pick<
-    SiteGallerySettings,
-    "enabled" | "order" | "public_original_button"
-  >;
+  gallery: Pick<SiteGallerySettings, "enabled" | "order">;
   show: SiteShowSettings;
 };
 

@@ -44,6 +44,6 @@ export function publicOriginalAccessUrl(
   displayUrl: string
 ) {
   return hasDistinctOriginalUrl(original, displayUrl)
-    ? `${imageResourceBaseUrl()}/link/${encodeURIComponent(id)}`
+    ? `${imageResourceBaseUrl()}/original/${encodeURIComponent(id)}`
     : null;
 }

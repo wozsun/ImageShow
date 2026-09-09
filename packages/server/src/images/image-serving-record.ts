@@ -69,29 +69,23 @@ function readyImageServingRecord(
 
 export async function readImageServingRecordById(
   id: string,
-  options: {
-    includeDeleted?: boolean;
-    database?: PublicDatabaseReadAccess;
-  } = {},
+  database: PublicDatabaseReadAccess = {},
   dependencies: ImageServingRecordDependencies =
     defaultImageServingRecordDependencies
 ): Promise<ImageServingRecord | null> {
-  const includeDeleted = options.includeDeleted === true;
   const cached = await dependencies.readReadyImageById(id);
   if (cached.cached && cached.value) {
     return readyImageServingRecord(cached.value);
   }
-  if (cached.cached && !includeDeleted) return null;
-
-  const row = await readDatabase(options.database ?? {}, async (reader) => (
+  const row = await readDatabase(database, async (reader) => (
     (await reader.query<ImageServingRecord>(
       `SELECT id, object_key, original, ext, storage_slug, device, brightness, theme,
               status, description, source, updated_at::text AS updated_at
          FROM metadata
         WHERE id=$1
-          AND ($2::boolean OR status='ready')
+          AND status IN ('ready', 'deleted')
         LIMIT 1`,
-      [id, includeDeleted]
+      [id]
     )).rows[0]
   ));
   return row ?? null;

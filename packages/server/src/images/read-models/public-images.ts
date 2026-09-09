@@ -111,12 +111,13 @@ export function listPublicImages(
 
 async function getPublicImageWithAccess(
   id: string,
-  database: PublicDatabaseReadAccess
+  database: PublicDatabaseReadAccess,
+  includeOriginal: boolean
 ): Promise<PublicImageDetailDto> {
   const cached = await readReadyImageById(id);
   if (cached.cached) {
     if (!cached.value) throw new ApiError(404, "not_found", "Image not found");
-    return publicImageDetail(cached.value, database);
+    return publicImageDetail(cached.value, database, includeOriginal);
   }
 
   const load = async (reader: DatabaseReader) => {
@@ -135,23 +136,23 @@ async function getPublicImageWithAccess(
       [id]
     );
     if (!result.rows[0]) throw new ApiError(404, "not_found", "Image not found");
-    return publicImageDetail(
-      result.rows[0] as PublicImageDetailRecord,
-      { reader }
-    );
+    return result.rows[0] as PublicImageDetailRecord;
   };
-  return database.reader
-    ? load(database.reader)
-    : coalesce(`public-image:postgres:${id}`, () => load(pool));
+  const row = database.reader
+    ? await load(database.reader)
+    : await coalesce(`public-image:postgres:${id}`, () => load(pool));
+  // Share the database row, then decide link visibility for each request.
+  return publicImageDetail(row, database, includeOriginal);
 }
 
 export function getPublicImage(
   id: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  includeOriginal = false
 ): Promise<PublicImageDetailDto> {
   return signal
     ? withPublicDatabaseRead(signal, (database) => (
-        getPublicImageWithAccess(id, database)
+        getPublicImageWithAccess(id, database, includeOriginal)
       ))
-    : getPublicImageWithAccess(id, {});
+    : getPublicImageWithAccess(id, {}, includeOriginal);
 }

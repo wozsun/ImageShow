@@ -298,31 +298,31 @@ test("[Server/缓存与 Redis] serving record 统一 Redis 命中、空命中与
 
   idCache = { cached: true, value: null };
   assert.equal(
-    await readImageServingRecordById(item.id, {}, dependencies),
+    await readImageServingRecordById(item.id, { reader }, dependencies),
     null
   );
-  assert.equal(queryParameters.length, 0);
+  assert.equal(queryParameters.length, 1, "ready 空命中仍需检查回收站记录");
 
   queryRows = [deletedRow];
   const deleted = await readImageServingRecordById(
     item.id,
-    { includeDeleted: true, database: { reader } },
+    { reader },
     dependencies
   );
   assert.equal(deleted?.status, "deleted");
-  assert.deepEqual(queryParameters.at(-1), [item.id, true]);
+  assert.deepEqual(queryParameters.at(-1), [item.id]);
 
   idCache = { cached: false };
   queryRows = [readyRow];
   assert.equal(
     (await readImageServingRecordById(
       item.id,
-      { database: { reader } },
+      { reader },
       dependencies
     ))?.status,
     "ready"
   );
-  assert.deepEqual(queryParameters.at(-1), [item.id, false]);
+  assert.deepEqual(queryParameters.at(-1), [item.id]);
 
   assert.equal(
     (await readImageServingRecordByObjectKey(

@@ -40,8 +40,10 @@ SITE_DOMAIN=example.com
 （最终以用户名 + Argon2id 密码哈希保存到数据库），已有 super 时应用不会用它们覆盖账号或
 密码。默认 `compose.yaml` 每次展开仍要求两个密码非空。
 
-默认 Compose 向 ImageShow 注入数据库三项、首次管理员两项及可选的 `SITE_DOMAIN`；
-后者通过 `${SITE_DOMAIN:-}` 读取 `.env`，未设置时传入空值。ImageShow 与 PostgreSQL 在各自 `environment`
+默认 Compose 向 ImageShow 注入数据库三项、首次管理员两项，以及 `SITE_DOMAIN` 和
+`SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON`。域名通过 `${SITE_DOMAIN:-}` 读取 `.env`，未设置时传入空值；
+原图按钮通过 `${SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON:-false}` 读取首次播种值，默认关闭。
+ImageShow 与 PostgreSQL 在各自 `environment`
 中直接插值同一组数据库值。内置拓扑的数据库 host / port 与 Redis
 host / port / db / password 使用 Server 代码默认值；连接外部 PostgreSQL / Redis 时，
 在 Compose override 或其他部署清单中逐项映射相应可选变量。Compose

@@ -76,7 +76,6 @@ import {
 import {
   immutableCacheControl,
   noStoreCacheControl,
-  privateNoStoreCacheControl,
   publicProxyImageCacheControl,
   publicRedirectCacheControl
 } from "../../../packages/server/src/core/http/headers.ts";
@@ -109,7 +108,6 @@ import {
   servePublicStoredThumbnail
 } from "../../../packages/server/src/images/stored-image-serving.ts";
 import {
-  serveAdminExternalOriginal,
   servePublicExternalOriginal
 } from "../../../packages/server/src/images/external-original-serving.ts";
 import {
@@ -1301,11 +1299,9 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   const proxyCalls: unknown[][] = [];
   let direct = false;
   let readCount = 0;
-  let readOptions: unknown;
   const dependencies = {
-    readImageServingRecordById: async (_id: string, options: unknown) => {
+    readImageServingRecordById: async () => {
       readCount += 1;
-      readOptions = options;
       return record;
     },
     displayUrlForOriginalComparison: async () =>
@@ -1344,6 +1340,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   });
   assert.deepEqual(proxyCalls[0]?.[3], {
     "Cache-Control": noStoreCacheControl,
+    Vary: "User-Agent",
     "Referrer-Policy": "no-referrer"
   });
   assert.equal(proxyCalls[0]?.[4], publicProxyImageCacheControl);
@@ -1360,42 +1357,103 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   assert.equal(directRedirect.headers.get("Location"), item.original);
   assert.equal(
     directRedirect.headers.get("Cache-Control"),
-    privateNoStoreCacheControl
+    publicRedirectCacheControl
   );
   assert.equal(directRedirect.headers.get("Referrer-Policy"), "no-referrer");
 
-  const adminResponse = await serveAdminExternalOriginal(
+  assert.equal(directRedirect.headers.get("Vary"), "User-Agent");
+  const deletedResponse = await servePublicExternalOriginal(
     item.id,
-    "fixture-agent",
-    new AbortController().signal,
+    { userAgent: "fixture-agent" },
     {
       ...dependencies,
-      readImageServingRecordById: async (_id: string, options: unknown) => {
-        readOptions = options;
-        return { ...record, status: "deleted" as const };
-      }
-    } as never
+      readImageServingRecordById: async () => ({ ...record, status: "deleted" as const })
+    }
   );
-  assert.equal(adminResponse.status, 302);
-  assert.equal(adminResponse.headers.get("Location"), item.original);
-  assert.deepEqual(readOptions, { includeDeleted: true });
+  assert.equal(deletedResponse.status, 302);
+  assert.equal(deletedResponse.headers.get("Location"), item.original);
+  assert.equal(deletedResponse.headers.get("Cache-Control"), publicRedirectCacheControl);
 
-  await assert.rejects(
-    servePublicExternalOriginal(
-      item.id,
-      { userAgent: "fixture-agent" },
-      {
+  for (const unavailable of [null, { ...record, original: "" }, {
+    ...record, original: `https://img.example.com/images/full/${item.object_key}`
+  }]) {
+    await assert.rejects(
+      servePublicExternalOriginal(item.id, {}, {
         ...dependencies,
-        readImageServingRecordById: async () => ({
-          ...record,
-          status: "deleted" as const
-        })
-      } as never
-    ),
-    (error: { status?: number; code?: string }) =>
-      error.status === 404 && error.code === "not_found"
-  );
+        readImageServingRecordById: async () => unavailable
+      }),
+      (error: { status?: number; code?: string }) =>
+        error.status === 404 && error.code === "not_found"
+    );
+  }
 });
+test("[Server/图片] 原图代理继承缓存策略，条件请求及 HEAD 释放上游正文", async (t) => {
+  const { proxyExternalImage } = await import("../../../packages/server/src/images/external-image-proxy.ts");
+  const { proxyEtagForUpstream } = await import("../../../packages/server/src/core/http/proxy-validators.ts");
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const url = "https://original.example.test/image.png";
+  const image = await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } }).png().toBuffer();
+  const updatedAt = "2026-09-01T00:00:00.000Z";
+  const baseHeaders = { "Cache-Control": noStoreCacheControl, Vary: "User-Agent" };
+  const expires = "Wed, 09 Sep 2037 00:00:00 GMT";
+  const policies: Array<{ headers: Record<string, string>; cache: string | null; expires: string | null }> = [
+      { headers: {}, cache: publicProxyImageCacheControl, expires: null },
+      { headers: { "Cache-Control": "public, max-age=120" }, cache: "public, max-age=120", expires: null },
+      { headers: { "Cache-Control": "no-store" }, cache: "no-store", expires: null },
+      { headers: { Expires: expires }, cache: null, expires }
+  ];
+  for (const method of ["GET", "HEAD"] as const) {
+    for (const policy of policies) {
+      let cancelled = 0;
+      globalThis.fetch = async (input, init) => {
+        assert.equal(String(input), url);
+        assert.equal(init?.method, method);
+        const headers = new Headers(init?.headers);
+        assert.equal(headers.get("Referer"), "https://original.example.test/");
+        return new Response(new ReadableStream({
+          start(controller) { controller.enqueue(image); if (method === "GET") controller.close(); },
+          cancel() { cancelled++; }
+        }), { headers: { "content-type": "image/png", etag: '"origin"', ...policy.headers } });
+      };
+      const response = await proxyExternalImage(url, "png", {
+        method, validators: { resourceUpdatedAt: updatedAt }
+      }, baseHeaders, publicProxyImageCacheControl);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("Cache-Control"), policy.cache);
+      assert.equal(response.headers.get("Expires"), policy.expires);
+      assert.equal(response.headers.get("Vary"), "User-Agent");
+      assert.equal(response.headers.get("ETag"), proxyEtagForUpstream(url, '"origin"'));
+      if (method === "HEAD") {
+        assert.equal(await response.text(), "");
+        assert.equal(cancelled, 1);
+      } else {
+        assert.deepEqual(Buffer.from(await response.arrayBuffer()), image);
+      }
+    }
+  }
+  globalThis.fetch = async (_input, init) => {
+    assert.equal(new Headers(init?.headers).get("If-None-Match"), '"origin"');
+    return new Response(null, { status: 304, headers: { etag: '"origin"' } });
+  };
+  const revalidated = await proxyExternalImage(url, "png", {
+    method: "GET", validators: { resourceUpdatedAt: updatedAt, ifNoneMatch: proxyEtagForUpstream(url, '"origin"')! }
+  }, baseHeaders, publicProxyImageCacheControl);
+  assert.equal(revalidated.status, 304);
+  assert.equal(await revalidated.text(), "");
+  assert.equal(revalidated.headers.get("Cache-Control"), null, "304 未提供新策略时保留已有缓存策略");
+  assert.equal(revalidated.headers.get("Vary"), "User-Agent");
+  let failedBodyCancelled = 0;
+  globalThis.fetch = async () => new Response(new ReadableStream({ cancel() { failedBodyCancelled++; } }), { status: 503 });
+  const fallback = await proxyExternalImage(url, "png", { method: "GET" }, baseHeaders, publicProxyImageCacheControl);
+  assert.equal(fallback.status, 302);
+  assert.equal(fallback.headers.get("Location"), url);
+  assert.equal(fallback.headers.get("Cache-Control"), "no-store");
+  assert.equal(failedBodyCancelled, 1);
+  await assert.rejects(proxyExternalImage("https://127.0.0.1/private.png", "png", { method: "GET" }, baseHeaders, publicProxyImageCacheControl),
+    (error: { code?: string }) => error.code === "external_image_rejected");
+});
+
 test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既有格式与质量边界", async () => {
   initializeRuntimeConfig();
   configureSharpRuntime();
@@ -2162,12 +2220,12 @@ test("[Server/图片] 安全抓取在预取消时不联网，原图代理头部�
   const { proxyExternalImage } = await import("../../../packages/server/src/images/external-image-proxy.ts");
   const originalFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = originalFetch; });
-  let fetches = 0; let fallbacks = 0;
+  let fetches = 0;
   globalThis.fetch = async () => { fetches++; throw Error("must not fetch"); };
   const pre = new AbortController(); pre.abort();
   await assert.rejects(safeFetchExternalImage("https://example.com/image", { signal: pre.signal, timeoutMs: 1000 }), (e: any) => e.code === "external_image_cancelled");
-  await assert.rejects(proxyExternalImage("https://example.com/image", "png", { method: "GET", signal: pre.signal }, {}, undefined, () => { fallbacks++; return new Response(); }));
-  assert.equal(fetches, 0); assert.equal(fallbacks, 0);
+  await assert.rejects(proxyExternalImage("https://example.com/image", "png", { method: "GET", signal: pre.signal }, {}));
+  assert.equal(fetches, 0);
   const image = await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } }).png().toBuffer();
   for (const phase of ["headers", "body"] as const) {
     const abort = new AbortController(); const reason = new Error("cancel " + phase);
@@ -2179,7 +2237,7 @@ test("[Server/图片] 安全抓取在预取消时不联网，原图代理头部�
       if (phase === "headers") return new Promise<Response>((_resolve, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }));
       return new Response(new ReadableStream({ start(controller) { controller.enqueue(image); signal.addEventListener("abort", () => controller.error(signal.reason), { once: true }); } }), { headers: { "content-type": "image/png" } });
     };
-    const pending = proxyExternalImage("https://example.com/image", "png", { method: "GET", signal: abort.signal }, {}, undefined, () => { fallbacks++; return new Response(); });
+    const pending = proxyExternalImage("https://example.com/image", "png", { method: "GET", signal: abort.signal }, {});
     if (phase === "headers") {
       const rejection = assert.rejects(pending, (error) => error === reason);
       await fetched; abort.abort(reason); await rejection;
@@ -2189,7 +2247,7 @@ test("[Server/图片] 安全抓取在预取消时不联网，原图代理头部�
       assert.deepEqual((await reader.read()).value, image);
       const rejection = assert.rejects(reader.read()); abort.abort(reason); await rejection;
     }
-    assert.equal(signal.aborted, true); assert.equal(fallbacks, 0);
+    assert.equal(signal.aborted, true);
   }
   const redirected = new AbortController();
   globalThis.fetch = async () => { fetches++; return new Response(new ReadableStream({ cancel() { redirected.abort(); } }), { status: 302, headers: { location: "https://example.com/next" } }); };
@@ -2197,7 +2255,7 @@ test("[Server/图片] 安全抓取在预取消时不联网，原图代理头部�
   await assert.rejects(safeFetchExternalImage("https://example.com/start", { timeoutMs: 1000, signal: redirected.signal }), (e: any) => e.code === "external_image_cancelled");
   assert.equal(fetches - beforeRedirect, 1);
 });
-test("[Server/图片] 专属原图等待共享探测时单个 HTTP 取消不影响另一消费者", async () => {
+test("[Server/图片] 公开原图等待共享探测时单个 HTTP 取消不影响另一消费者", async () => {
   const item = servingReadyCacheItem();
   let resolveProbe!: (value: boolean) => void;
   let started!: () => void;
@@ -2212,7 +2270,7 @@ test("[Server/图片] 专属原图等待共享探测时单个 HTTP 取消不影�
   };
   const cancelled = new AbortController(); const other = new AbortController();
   const first = servePublicExternalOriginal(item.id, { signal: cancelled.signal }, dependencies as never);
-  const second = serveAdminExternalOriginal(item.id, "", other.signal, dependencies as never);
+  const second = servePublicExternalOriginal(item.id, { signal: other.signal }, dependencies as never);
   await ready;
   const reason = new Error("caller left");
   const rejected = assert.rejects(first, (error) => error === reason);

@@ -90,7 +90,8 @@ import {
 } from "../../../packages/web/src/pages/admin/images/ImageAdminFilters.tsx";
 import {
   galleryCard,
-  adminImageListItem
+  adminImageListItem,
+  createConfigStreamHarness
 } from "../support/web-test-context.ts";
 import {
   inputText
@@ -98,6 +99,85 @@ import {
 import {
   installControlledClock
 } from "../support/controlled-clock.ts";
+
+test("[Web/后台访问] 公开详情等待首次认证，按身份读取并隔离迟到结果", async (t) => {
+  const { registerHooks } = await import("node:module");
+  const hooks = registerHooks({ load(url, context, next) {
+    return url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : next(url, context);
+  } });
+  t.after(() => hooks.deregister());
+  const { PublicImageDetail } = await import("../../../packages/web/src/components/image/PublicImageDetail.tsx");
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const { MemoryRouter } = await import("react-router");
+  const { AuthSessionProvider } = await import("../../../packages/web/src/hooks/useAuthSession.tsx");
+  const { clearAdminCacheAfterLogin } = await import("../../../packages/web/src/lib/api/query-invalidation.ts");
+  const h = await createConfigStreamHarness(t, { honorAbort: false });
+  Object.assign(h.window, { scrollTo() {}, scrollY: 0 });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  t.after(() => { client.clear(); clearCsrfToken(); });
+  client.setQueryData(queryKeys.galleryFacets, { devices: [], brightnesses: [], themes: [], tags: [], authors: [] });
+  const id = "00000000-0000-7000-8000-000000000544";
+  const card = galleryCard(id);
+  const url = `/images/original/${id}`;
+  const item = { ...adminImageListItem({ id }), original_url: url };
+  client.setQueryData([...queryKeys.adminImageInfo, id], { item });
+  const authenticated = (username: string) => ({
+    ok: true, authenticated: true, username, role: "super", permissions: [],
+    csrf_token: "detail-test", application_version: "current-test", preferences: {},
+    preferences_etag: 'W/"detail-test"', version_settings: { enabled: true, link_enabled: true }
+  });
+  const guest = { ok: true, authenticated: false, altcha_enabled: false, login_background: "" };
+  const detailRequests = () => h.pending.filter(request => request.path === `/api/images/${id}`);
+  const originalLink = () => h.document.querySelector<HTMLAnchorElement>(".image-detail-original")?.getAttribute("href") ?? null;
+  const settle = async (predicate: () => boolean) => {
+    for (let attempt = 0; attempt < 60 && !predicate(); attempt++) await h.flush();
+    assert.ok(predicate(), `详情未收敛: ${h.pending.map(request => request.path).join(", ")}`);
+  };
+  await h.render(h.React.createElement(h.React.StrictMode, null,
+    h.React.createElement(QueryClientProvider, { client },
+      h.React.createElement(MemoryRouter, { initialEntries: ["/admin"] },
+        h.React.createElement(AuthSessionProvider, null,
+          h.React.createElement(PublicImageDetail, { card, onClose() {}, returnFocusRef: { current: null } }))))));
+  const authRequest = h.pending.findLast(request => request.path === "/api/admin/auth/me" && !request.signal?.aborted);
+  assert.ok(authRequest);
+  assert.equal(detailRequests().length, 0, "首次认证完成前不发送访客详情再重复读取管理员详情");
+  await h.React.act(async () => authRequest.resolve(Response.json(authenticated("admin-a"))));
+  await settle(() => detailRequests().length === 1);
+  assert.equal(detailRequests()[0]!.credentials, "same-origin");
+  await h.React.act(async () => detailRequests()[0]!.resolve(Response.json({ ok: true, item })));
+  await settle(() => originalLink() === url);
+  assert.equal(detailRequests().length, 1, "StrictMode 重挂共用详情请求");
+  const authCount = h.pending.filter(request => request.path === "/api/admin/auth/me").length;
+
+  await h.React.act(async () => client.setQueryData(queryKeys.me, guest));
+  await settle(() => detailRequests().length === 2);
+  assert.equal(originalLink(), null, "退出后立即丢弃管理员详情");
+  assert.equal(detailRequests()[1]!.credentials, "omit");
+  // Switch identity while the visitor request is still in flight.
+  await h.React.act(async () => {
+    clearAdminCacheAfterLogin(client);
+    client.setQueryData(queryKeys.me, authenticated("admin-b"));
+  });
+  await settle(() => detailRequests().length === 3);
+  await h.React.act(async () => detailRequests()[2]!.resolve(Response.json({ ok: true, item })));
+  await settle(() => originalLink() === url);
+  await h.React.act(async () => detailRequests()[1]!.resolve(Response.json({ ok: true, item: { ...item, original_url: null } })));
+  await h.flush();
+  assert.equal(originalLink(), url, "迟到访客结果不覆盖新登录身份");
+
+  await h.React.act(async () => { void client.invalidateQueries({ queryKey: [...queryKeys.publicImageDetail, id] }); });
+  await settle(() => detailRequests().length === 4);
+  await h.React.act(async () => client.setQueryData(queryKeys.me, guest));
+  await settle(() => detailRequests().length === 5);
+  await h.React.act(async () => detailRequests()[4]!.resolve(Response.json({ ok: true, item: { ...item, original_url: null } })));
+  await settle(() => client.getQueryState([...queryKeys.publicImageDetail, id, null])?.status === "success");
+  await h.React.act(async () => detailRequests()[3]!.resolve(Response.json({ ok: true, item })));
+  await h.flush();
+  assert.equal(originalLink(), null, "迟到管理员结果不重新显示访客原图按钮");
+  assert.equal(h.pending.filter(request => request.path === "/api/admin/auth/me").length, authCount);
+  await h.render(null);
+  await h.flush();
+});
 
 test("[Web/后台访问] 图片管理保留连续选择、直接分页和管理员外观语义", () => {
   const pageIds = ["a", "b", "c", "d", "e"];
@@ -3815,7 +3895,7 @@ test("[Web/后台访问] 图片后台真实挂载保持弹窗页码、操作后�
     }
   }
 });
-test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复用权威详情", async () => {
+test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复用权威详情", async (t) => {
   const { QueryClient } = await import("@tanstack/react-query");
   const createClient = () => {
     const client = new QueryClient({
@@ -3831,8 +3911,12 @@ test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复�
       queryKeys.tags,
       queryKeys.authors
     ]) client.setQueryData(key, {});
-    client.setQueryData([...queryKeys.publicImageDetail, "image-1"], {});
+    for (const identity of [null, "image-admin", "super-admin"]) {
+      client.setQueryData([...queryKeys.publicImageDetail, "image-1", identity], {});
+    }
+    client.setQueryData([...queryKeys.publicImageDetail, "image-2", null], {});
     client.setQueryData([...queryKeys.adminImageInfo, "image-1"], {});
+    t.after(() => client.clear());
     return client;
   };
   const invalidated = (
@@ -3855,7 +3939,7 @@ test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复�
   assert.equal(invalidated(titleClient, queryKeys.galleryStats), false);
   assert.equal(invalidated(titleClient, queryKeys.galleryFacets), false);
   assert.equal(
-    invalidated(titleClient, [...queryKeys.publicImageDetail, "image-1"]),
+    invalidated(titleClient, [...queryKeys.publicImageDetail, "image-1", null]),
     false
   );
 
@@ -3882,14 +3966,35 @@ test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复�
   assert.equal(
     invalidated(
       missingSnapshotClient,
-      [...queryKeys.publicImageDetail, "image-1"]
+      [...queryKeys.publicImageDetail, "image-1", null]
     ),
     true
   );
 
-  titleClient.clear();
-  membershipClient.clear();
-  missingSnapshotClient.clear();
+  for (const identity of [null, "image-admin", "super-admin"]) {
+    assert.equal(invalidated(missingSnapshotClient,
+      [...queryKeys.publicImageDetail, "image-1", identity]), true);
+  }
+  assert.equal(invalidated(missingSnapshotClient,
+    [...queryKeys.publicImageDetail, "image-2", null]), false);
+
+  const { invalidateImageDataAfterTrash } = await import("../../../packages/web/src/lib/api/query-invalidation.ts");
+  const pendingClient = createClient();
+  const lateResponses: Array<() => void> = [];
+  const pendingDetails = [null, "image-admin", "super-admin"].map(identity => pendingClient.fetchQuery({
+    queryKey: [...queryKeys.publicImageDetail, "image-1", identity],
+    queryFn: () => new Promise<object>(resolve => lateResponses.push(() => resolve({ original_url: "/images/original/image-1" })))
+  }));
+  const retired = Promise.allSettled(pendingDetails);
+  assert.equal(lateResponses.length, 3);
+  await invalidateImageDataAfterTrash(pendingClient, ["image-1"]);
+  await retired;
+  for (const resolve of lateResponses) resolve();
+  await Promise.resolve();
+  for (const identity of [null, "image-admin", "super-admin"]) {
+    assert.equal(pendingClient.getQueryState([...queryKeys.publicImageDetail, "image-1", identity])?.fetchStatus, "idle");
+    assert.deepEqual(pendingClient.getQueryData([...queryKeys.publicImageDetail, "image-1", identity]), {}, "迟到结果不覆盖提交前已退休的详情");
+  }
 });
 test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重建结束只刷新一次", async () => {
   const React = await import("react");
@@ -4187,7 +4292,7 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
     }
   }
 });
-test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关、认证状态与后台调用方", async () => {
+test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、标题和后台入口", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
   );
@@ -4332,8 +4437,7 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
     }>;
     const renderScenario = async ({
       auth,
-      publicOriginalButton,
-      originalUrl = "https://img.example.com/images/link/00000000-0000-7000-8000-000000000544",
+      originalUrl = "https://img.example.com/images/original/00000000-0000-7000-8000-000000000544",
       sourceUrl = null,
       admin = false,
       objectUrl,
@@ -4341,7 +4445,6 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
       detailError = ""
     }: {
       auth: AuthScenario;
-      publicOriginalButton: boolean;
       originalUrl?: string | null;
       sourceUrl?: string | null;
       admin?: boolean;
@@ -4357,11 +4460,6 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
             staleTime: Number.POSITIVE_INFINITY,
             refetchOnWindowFocus: false
           }
-        }
-      });
-      client.setQueryData(queryKeys.siteConfig, {
-        site: {
-          gallery: { public_original_button: publicOriginalButton }
         }
       });
       client.setQueryData(queryKeys.galleryFacets, {
@@ -4418,6 +4516,7 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
                   ? React.createElement(ImageDetailModal, {
                       item: adminImageListItem({
                         id: publicItem(originalUrl).id,
+                        status: "deleted",
                         original_url: originalUrl
                       }),
                       admin: true,
@@ -4474,29 +4573,28 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
       { objectUrl: "", detailError: "详情加载失败" },
       { objectUrl: "  " }
     ]) {
-      const pendingTitle = await renderScenario({ auth: "guest", publicOriginalButton: false, ...state });
+      const pendingTitle = await renderScenario({ auth: "guest", ...state });
       assert.equal(pendingTitle.titleText, "原图入口真值表");
       assert.equal(pendingTitle.titleHref, null, "占位标题不得生成当前页空链接");
       assert.equal(pendingTitle.titleFocusable, false, "无直链标题不占用 Tab 焦点");
     }
-    const loadedTitle = await renderScenario({ auth: "guest", publicOriginalButton: false });
+    const loadedTitle = await renderScenario({ auth: "guest" });
     assert.equal(loadedTitle.titleHref, "https://img.example.com/images/full/544.webp");
     assert.equal(loadedTitle.titleFocusable, true);
 
     for (const auth of ["pending", "expired", "guest"] as const) {
       assert.equal((await renderScenario({
         auth,
-        publicOriginalButton: false
-      })).present, false, `${auth} 不得绕过关闭的公开开关`);
+        originalUrl: null
+      })).present, false, `${auth} 的详情未提供链接时隐藏原图按钮`);
     }
     const publicEnabled = await renderScenario({
       auth: "guest",
-      publicOriginalButton: true
     });
     assert.equal(publicEnabled.present, true);
     assert.equal(
       publicEnabled.href,
-      "https://img.example.com/images/link/00000000-0000-7000-8000-000000000544"
+      "https://img.example.com/images/original/00000000-0000-7000-8000-000000000544"
     );
     assert.equal(
       publicEnabled.sourceHref,
@@ -4515,18 +4613,15 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
     );
     for (const auth of ["image", "super"] as const) {
       assert.equal((await renderScenario({
-        auth,
-        publicOriginalButton: false
-      })).present, true, `${auth} 管理员必须复用既有认证结果显示原图`);
+        auth
+      })).present, true, `${auth} 管理员使用详情提供的原图链接`);
     }
     assert.equal((await renderScenario({
       auth: "pending",
-      publicOriginalButton: false,
       admin: true
     })).present, true, "后台调用方必须继续由 admin 上下文显示原图");
     const unavailableOriginal = await renderScenario({
       auth: "guest",
-      publicOriginalButton: true,
       originalUrl: null
     });
     assert.equal(unavailableOriginal.present, false);
@@ -4534,18 +4629,18 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
     assert.equal(unavailableOriginal.ariaDisabled, null);
     for (const auth of ["guest", "image", "super"] as const) {
       for (const state of [{ detailLoading: true }, { detailError: "详情加载失败" }, {}]) {
-        const pending = await renderScenario({ auth, publicOriginalButton: true, originalUrl: null, ...state });
+        const pending = await renderScenario({ auth, originalUrl: null, ...state });
         assert.equal(pending.present, false);
         assert.equal(pending.actionClasses.length, 1);
         assert.ok(pending.actionClasses[0]!.includes("image-detail-source"));
         assert.equal(pending.sourceAriaDisabled, "true");
       }
     }
-    const sourceReady = await renderScenario({ auth: "guest", publicOriginalButton: true, originalUrl: null, sourceUrl: "https://source.example/item" });
+    const sourceReady = await renderScenario({ auth: "guest", originalUrl: null, sourceUrl: "https://source.example/item" });
     assert.equal(sourceReady.sourceHref, "https://source.example/item");
     assert.equal(sourceReady.sourceAriaDisabled, "false");
-    const deleted = await renderScenario({ auth: "super", publicOriginalButton: false, admin: true, originalUrl: "/api/admin/images/00000000-0000-7000-8000-000000000544/original" });
-    assert.equal(deleted.href, "/api/admin/images/00000000-0000-7000-8000-000000000544/original");
+    const deleted = await renderScenario({ auth: "super", admin: true, originalUrl: "https://img.example.com/images/original/00000000-0000-7000-8000-000000000544" });
+    assert.equal(deleted.href, "https://img.example.com/images/original/00000000-0000-7000-8000-000000000544");
   } finally {
     window.HTMLElement.prototype.focus = originalFocus;
     window.HTMLElement.prototype.blur = originalBlur;

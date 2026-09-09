@@ -11,6 +11,7 @@ import type {
   PublicImageItem
 } from "../../lib/types.js";
 import { ImageDetailModal } from "./ImageDetailModal.js";
+import { useAuthMe } from "../../hooks/useAuthSession.js";
 
 function imagePlaceholder(card: ShowImageCardDto | GalleryImageCard): PublicImageItem {
   return {
@@ -47,21 +48,26 @@ export function PublicImageDetail({
 }) {
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
   const [trashCommitted, setTrashCommitted] = useState(false);
+  const authQuery = useAuthMe();
+  const authIdentity = authQuery.data?.authenticated
+    ? authQuery.data.username
+    : null;
   const { data, isPending, isFetching, isError, error, refetch } =
     useQuery<PublicImageDetailResponseDto>({
-      queryKey: [...queryKeys.publicImageDetail, card.id],
+      queryKey: [...queryKeys.publicImageDetail, card.id, authIdentity],
       // The tiny metadata request is reusable across StrictMode's simulated
       // remount. Full-image DOM work remains owned and cancelled by the modal.
       queryFn: async ({ queryKey, client }) => {
         const validation = publicDetailValidation(client, card.id);
         const response = await api<PublicImageDetailResponseDto>(`/api/images/${encodeURIComponent(card.id)}`, {
+          credentials: authIdentity ? "same-origin" : "omit",
           ...(validation || client.getQueryState(queryKey)?.isInvalidated ? { cache: "no-cache" as const } : {})
         });
         if (validation) completePublicDetailValidation(client, card.id, validation);
         return response;
       },
       gcTime: 0,
-      enabled: !trashCommitted
+      enabled: !trashCommitted && !(authQuery.isPending && authQuery.isFetching)
     });
   const detail = data?.item.id === card.id ? data.item : null;
   const item = useMemo(

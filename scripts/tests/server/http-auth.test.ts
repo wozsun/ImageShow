@@ -184,14 +184,14 @@ for (const path of ["/images/full/example.webp", "/images/thumbs/example.webp"])
   assert.equal(await status("img.example.com", path, "OPTIONS"), 204);
 }
 for (const method of ["GET", "HEAD", "OPTIONS"]) {
-  assert.equal(await status("img.example.com", "/images/link/not-a-uuid", method), method === "OPTIONS" ? 204 : 400);
+  assert.equal(await status("img.example.com", "/images/original/not-a-uuid", method), method === "OPTIONS" ? 204 : 400);
   for (const host of ["unknown.img.example.com", "another.example.com"]) {
-    for (const path of ["/", "/api/ping", "/images/link/not-a-uuid"]) {
+    for (const path of ["/", "/api/ping", "/images/original/not-a-uuid"]) {
       assert.equal(await status(host, path, method), 404, host + path + method);
     }
   }
 }
-for (const path of ["/unknown", "/images", "/images/link/", "/images/link/not-a-uuid/extra"]) {
+for (const path of ["/unknown", "/images", "/images/original/", "/images/original/not-a-uuid/extra"]) {
   for (const method of ["GET", "HEAD", "POST"]) {
     assert.equal(await status("img.example.com", path, method), 404, path + method);
   }
@@ -200,15 +200,15 @@ assert.equal(await status("img.example.com", "/unknown", "OPTIONS"), 204);
 for (const domain of ["img.example.com:5518", "local.example:5518"]) {
   await updateRuntimeConfig({ site: { domain } });
   assert.equal(imageResourceBaseUrl(), "https://" + domain + "/images");
-  assert.equal(await status(domain, "/images/link/not-a-uuid"), 400);
-  assert.equal(await status(domain.split(":")[0], "/images/link/not-a-uuid"), 404);
+  assert.equal(await status(domain, "/images/original/not-a-uuid"), 400);
+  assert.equal(await status(domain.split(":")[0], "/images/original/not-a-uuid"), 404);
 }
 for (const domain of ["", "example.com"]) {
   await updateRuntimeConfig({ site: { domain } });
   assert.equal(imageResourceBaseUrl(), "/images");
   for (const host of ["localhost:5518", "127.0.0.1:5518", "first.example.com", "second.example.com:8443"]) {
     assert.equal(await status(host, "/api/ping", "OPTIONS"), 204, host);
-    assert.equal(await status(host, "/images/link/not-a-uuid"), 400, host);
+    assert.equal(await status(host, "/images/original/not-a-uuid"), 400, host);
     const response = await app.request("http://internal.test/api/site-config", { headers: { Host: host } });
     assert.equal(response.status, 200);
     for (const scheme of ["http", "https"]) {

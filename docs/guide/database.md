@@ -88,7 +88,7 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 | `md5` | 文件 MD5，32 位十六进制；用于判重 |
 | `width` / `height` | 像素尺寸 |
 | `image_size` / `thumbnail_size` | 标准化图片字节数 / 缩略图字节数 |
-| `title` / `description` / `source` / `original` | 标题 / 描述 / 来源页面 / 可公开原图链接；标题和描述在去除首尾空白后分别最多 80 / 500 个普通汉字，外部链接仅允许 HTTPS |
+| `title` / `description` / `source` / `original` | 标题 / 描述 / 来源页面 / 外部原图链接；`site.gallery.public_original_button` 只决定访客详情是否返回原图链接，原图 URL 始终公开；标题和描述在去除首尾空白后分别最多 80 / 500 个普通汉字，外部链接仅允许 HTTPS |
 | `image_time` | 图片展示 / 图库排序时间；JSONL 可指定，同一前端批次未指定时共享 `batch_time`，省略时使用会话创建时间 |
 | `deleted_at` | 移入回收站时间 |
 | `purge_job_id` | 可空的持久彻底删除任务归属；非空时图片不可恢复，执行状态由对应 `background_job` 持有；不建立外键 |

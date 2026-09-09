@@ -33,7 +33,7 @@ Hono HTTP 应用 ──► PostgreSQL（业务真相）
 | 入口 | 职责 |
 | --- | --- |
 | `<站点域名>` | SPA、公共 API、管理 API、健康检查与 `/random` |
-| 主站 `/images` | `/images/full/*`、`/images/thumbs/*` 对象字节，以及 `/images/link/<id>` 外部 HTTPS 原图直连决策 / 代理 |
+| 主站 `/images` | `/images/full/*`、`/images/thumbs/*` 对象字节，以及始终公开且可缓存的 `/images/original/<id>` 外部原图直连决策 / 代理 |
 
 显式域名下只接受主站 Host，其他 Host 返回 404；域名为空或 `example.com`
 时接受格式合法的访问 Host，使用同源 `/images` 路径，不持久化或缓存请求域名。

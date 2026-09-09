@@ -25,9 +25,10 @@ packages/web ─────► packages/shared
   [测试说明](../../scripts/tests/README.md)维护入口、运行前提和资源范围。
 - `Dockerfile` 只安装三个 workspace 的构建依赖（不安装根目录本地门禁工具）并完成编译，
   再单独安装 server/shared 的生产依赖；运行镜像只携带生产依赖、编译产物和运维入口。
-- `compose.yaml` 提供单实例 ImageShow、PostgreSQL 与 Redis 的标准部署，只把 `.env` 用作
+- `compose.yaml` 提供单实例 ImageShow、PostgreSQL 与 Redis 的标准部署，把 `.env` 用作
   数据库名、用户名、密码和首次管理员用户名、密码的显式插值来源；可选的 `SITE_DOMAIN`
-  紧随其后，用于首次生成站点配置。数据库名、数据库用户名和管理员
+  与 `SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON` 紧随其后，仅在配置文件不存在时播种域名和
+  访客原图按钮配置，未设置时分别使用空值和 `false`。数据库名、数据库用户名和管理员
   用户名有默认值，两个密码必须显式设置；
   `.env.example` 另行承担部署变量与全部首次 seed 的完整目录。
 - `docs/CONFIG.md` 与 `docs/DEPLOY.md` 分别维护配置与部署说明；`docs/guide/` 保存当前架构、
@@ -153,9 +154,18 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 时接受格式合法的访问 Host，使用 `/images` 同源路径，不向配置、共享缓存或队列写入请求域名；
 显式域名下只接受主站 Host，并生成 `https://<site.domain>/images` 地址。
 `http-app.ts` 在公共资源、OPTIONS 与 SPA 之前执行统一 Host 校验；`routes/public.ts` 直接注册
-`/images/full/*`、`/images/thumbs/*` 与 `/images/link/:id`，未匹配请求使用通用路由处理。
+`/images/full/*`、`/images/thumbs/*` 与 `/images/original/:id`，未匹配请求使用通用路由处理。
 公开资源不读取管理员会话，S3 已配置公开 URL 的对象使用直链；图片 URL 由服务端生成，
 公开站点配置只投影页面实际消费的字段。
+
+`images/original-link.ts` 统一生成 `/images/original/<id>`，正常图片、后台及回收站均使用此公开
+缓存入口；资源处理器不读会话或按钮开关，直连 302 使用公开短缓存，代理继承源站策略或使用
+CDN fallback，保留 HEAD、条件请求、取消处理与 `Vary: User-Agent`。
+`site.gallery.public_original_button` 默认关闭，只决定详情是否向访客返回链接。
+`/api/images/:id` 在关闭时复用现有会话校验并使用私有重验证缓存，访客返回空链接、已登录
+管理员返回公开链接；开启时不读会话并使用浏览器 30 秒 / CDN 60 秒缓存，始终带 `Vary: Cookie`。
+详情只合并数据库行读取，链接显示投影在每个请求内独立生成；Web 按图片 ID 与认证身份隔离
+详情查询，由服务端链接决定按钮显示，不额外读取按钮开关或发起会话探针。
 
 `storage/drivers/local.ts` 在缓冲写、复制和流式写入创建候选前及 link 发布前检查取消，
 缓冲写同时向文件写入传递 signal。不可中断的本地复制等待当前 I/O 完成后检查取消并清理候选。

@@ -267,7 +267,7 @@ export async function validateAdminSessionById(
   return (await validateAdminSessionSnapshotById(id))?.session ?? null;
 }
 
-async function readAdminSession(
+export async function readAdminSession(
   context: Context
 ): Promise<AdminSession | null> {
   const id = getCookie(context, adminSessionCookie);

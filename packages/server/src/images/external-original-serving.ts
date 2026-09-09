@@ -9,8 +9,8 @@ import { raceWithAbortSignal } from "../core/abort.ts";
 import { safeFetchExternalImage } from "../core/external-image-fetch.ts";
 import {
   noStoreCacheControl,
-  privateNoStoreCacheControl,
   publicProxyImageCacheControl,
+  publicRedirectCacheControl,
   safeResponseHeaderValue
 } from "../core/http/headers.ts";
 import {
@@ -119,24 +119,20 @@ const defaultExternalOriginalServingDependencies:
 
 async function resolveExternalOriginal(
   id: string,
-  options: {
-    includeDeleted?: boolean;
-    database?: PublicDatabaseReadAccess;
-  },
+  database: PublicDatabaseReadAccess,
   dependencies: ExternalOriginalServingDependencies
 ) {
-  const record = await dependencies.readImageServingRecordById(id, options);
+  const record = await dependencies.readImageServingRecordById(id, database);
   const original = record?.original ?? "";
   if (
     !record
-    || (!options.includeDeleted && record.status !== "ready")
     || !/^https:\/\//i.test(original)
   ) {
     throw new ApiError(404, "not_found", "Original link not found");
   }
   const displayUrl = await dependencies.displayUrlForOriginalComparison(
     record,
-    options.database
+    database
   );
   if (!hasDistinctOriginalUrl(original, displayUrl)) {
     throw new ApiError(404, "not_found", "Original link not found");
@@ -144,22 +140,24 @@ async function resolveExternalOriginal(
   return { url: original, updatedAt: record.updated_at };
 }
 
+type ExternalOriginalRequest = {
+  userAgent?: string;
+  method?: "GET" | "HEAD";
+  ifNoneMatch?: string;
+  ifModifiedSince?: string;
+  signal?: AbortSignal;
+};
+
 export async function servePublicExternalOriginal(
   id: string,
-  request: {
-    userAgent?: string;
-    method?: "GET" | "HEAD";
-    ifNoneMatch?: string;
-    ifModifiedSince?: string;
-    signal?: AbortSignal;
-  } = {},
+  request: ExternalOriginalRequest = {},
   dependencies: ExternalOriginalServingDependencies =
     defaultExternalOriginalServingDependencies
 ) {
   const signal = request.signal ?? new AbortController().signal;
   const original = await withPublicDatabaseRead(
     signal,
-    (database) => resolveExternalOriginal(id, { database }, dependencies)
+    (database) => resolveExternalOriginal(id, database, dependencies)
   );
   signal.throwIfAborted();
   const direct = await raceWithAbortSignal(signal, dependencies.supportsDirectAccess(
@@ -171,7 +169,8 @@ export async function servePublicExternalOriginal(
       status: 302,
       headers: {
         Location: safeResponseHeaderValue("Location", original.url),
-        "Cache-Control": privateNoStoreCacheControl,
+        "Cache-Control": publicRedirectCacheControl,
+        Vary: "User-Agent",
         "Referrer-Policy": "no-referrer"
       }
     });
@@ -190,45 +189,9 @@ export async function servePublicExternalOriginal(
     },
     {
       "Cache-Control": noStoreCacheControl,
+      Vary: "User-Agent",
       "Referrer-Policy": "no-referrer"
     },
     publicProxyImageCacheControl
-  );
-}
-
-export async function serveAdminExternalOriginal(
-  id: string,
-  userAgent: string,
-  signal: AbortSignal,
-  dependencies: ExternalOriginalServingDependencies =
-    defaultExternalOriginalServingDependencies
-) {
-  signal.throwIfAborted();
-  const original = await resolveExternalOriginal(
-    id,
-    { includeDeleted: true },
-    dependencies
-  );
-  signal.throwIfAborted();
-  const direct = await raceWithAbortSignal(signal, dependencies.supportsDirectAccess(original.url, userAgent));
-  signal.throwIfAborted();
-  if (direct) {
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: safeResponseHeaderValue("Location", original.url),
-        "Cache-Control": privateNoStoreCacheControl,
-        "Referrer-Policy": "no-referrer"
-      }
-    });
-  }
-  return dependencies.proxyExternalImage(
-    original.url,
-    externalImageExt(original.url),
-    { method: "GET", signal },
-    {
-      "Cache-Control": privateNoStoreCacheControl,
-      "Referrer-Policy": "no-referrer"
-    }
   );
 }

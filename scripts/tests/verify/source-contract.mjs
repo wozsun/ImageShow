@@ -674,7 +674,8 @@ const expectedImageShowEnvironment = [
   "DATABASE_PASSWORD",
   "ADMIN_USERNAME",
   "ADMIN_PASSWORD",
-  "SITE_DOMAIN"
+  "SITE_DOMAIN",
+  "SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON"
 ];
 assertSameSet(
   "source-contract: ImageShow default Compose environment whitelist drifted",

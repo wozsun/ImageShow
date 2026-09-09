@@ -25,7 +25,7 @@ ImageShow 的配置按生效边界分为三类：部署环境变量、`/app/data
 
 运行时配置模块本身不读取或写入文件。主进程在装配 HTTP 路由、注册配置变更监听器和启动 Worker 前显式初始化进程内快照；初始化失败时不会继续连接数据库或监听端口。Docker healthcheck 只读取并在内存中归一化已经存在的 `config.json`，缺失或非法时直接失败并等待主进程恢复，不负责首次生成或写回。管理员密码恢复只依赖 PostgreSQL 和 Redis 部署配置，不初始化运行时配置。由此，单纯导入配置或 HTTP 应用模块不会创建目录、写文件或启动服务。
 
-管理端 `GET /api/admin/settings` 只返回设置页和图片工作流实际读取的最小字段集。除设置页可编辑字段外，仅保留共享接入限制、上传数量、Import 数量和页面工作流所需的只读值；部署配置、完整 `appConfig`、Server raw / 迁移准入、外链抓取超时和内部调度常量留在各自权威配置或代码边界。`POST /api/admin/settings` 同样只接受设置页公开的可编辑字段，并以嵌套 patch 合并，未公开配置不会因保存设置页而被默认值覆盖。`import.keep_original_link` 与 `import.auto_import` 只为内容接入工作流保留在读取 DTO 中，不进入普通设置写入；`weibo.source_enabled` 与 `normalize.quality_step` 不进入普通设置读写 DTO。这些字段统一通过高级配置或配置文件维护。`embed` 不进入普通后台设置的读取或保存 DTO，只通过 `data/config.json` 维护；公开站点配置仅返回前端路由实际消费的有效嵌入开关，不返回来源列表，并额外返回公开路由实际消费的完整 `site.show`，以及公开详情实际消费的 `site.gallery.public_original_button` 有效布尔值。该开关只控制未登录访客是否可在公开详情看到已经由详情读取返回的非空原图访问链接；加载中、失败或无链接时不渲染入口。服务端确认已登录的管理员复用管理详情的认证结果并始终具备显示权限，但同样等待权威链接到达。该开关不进入普通设置读写 DTO，普通设置保存不会读取、修改或覆盖它。`site.domain`、`site.description`、`site.icon` 与 `site.home.enabled` 保留在运行时配置中，但不进入普通设置页及其读写 DTO。普通站点设置暂维持 5.6.2 的字段范围；`site.home.browse_target`、完整 `site.show.*` （含 `autoplay`）及 `site.gallery.enabled` 只通过配置文件或高级配置维护，并支持首次环境变量播种。普通设置接口不返回或接受这些新增字段，保存时不会覆盖它们；画廊分页量和排序仍可编辑。其中 `site.description` 只用于 HTML `description`。这些字段都需要通过配置文件或高级配置维护；公开站点配置投影会返回描述，供 SPA 路由切换后维护同一 meta。
+管理端 `GET /api/admin/settings` 只返回设置页和图片工作流实际读取的最小字段集。除设置页可编辑字段外，仅保留共享接入限制、上传数量、Import 数量和页面工作流所需的只读值；部署配置、完整 `appConfig`、Server raw / 迁移准入、外链抓取超时和内部调度常量留在各自权威配置或代码边界。`POST /api/admin/settings` 同样只接受设置页公开的可编辑字段，并以嵌套 patch 合并，未公开配置不会因保存设置页而被默认值覆盖。`import.keep_original_link` 与 `import.auto_import` 只为内容接入工作流保留在读取 DTO 中，不进入普通设置写入；`weibo.source_enabled` 与 `normalize.quality_step` 不进入普通设置读写 DTO。这些字段统一通过高级配置或配置文件维护。`embed` 不进入普通后台设置的读取或保存 DTO，只通过 `data/config.json` 维护；公开站点配置仅返回前端路由实际消费的有效嵌入开关，不返回来源列表，并额外返回公开路由实际消费的完整 `site.show`。`site.gallery.public_original_button` 在服务端决定是否向访客详情返回原图链接，不进入公开站点配置或普通设置读写 DTO；普通设置保存不会覆盖它。详情接口按公开策略与管理员会话生成可空原图链接，前端只根据非空链接显示原图按钮；加载中、失败或无链接时不渲染入口。`site.domain`、`site.description`、`site.icon` 与 `site.home.enabled` 保留在运行时配置中，但不进入普通设置页及其读写 DTO。普通站点设置暂维持 5.6.2 的字段范围；`site.home.browse_target`、完整 `site.show.*` （含 `autoplay`）及 `site.gallery.enabled` 只通过配置文件或高级配置维护，并支持首次环境变量播种。普通设置接口不返回或接受这些新增字段，保存时不会覆盖它们；画廊分页量和排序仍可编辑。其中 `site.description` 只用于 HTML `description`。这些字段都需要通过配置文件或高级配置维护；公开站点配置投影会返回描述，供 SPA 路由切换后维护同一 meta。
 
 普通设置未修改时跟随共享 settings 查询更新；存在未保存修改时保留当前表单，后台回读不整份覆盖。点击「保存应用配置」或「读取配置文件」后，全表单与两个操作按钮暂时禁止编辑，避免提交期间产生新的输入。请求最多等待 15 秒，失败或超时解除锁定并保留提交内容；超时不代表服务端一定未写入，可重试保存或主动读取文件确认。读取文件成功会明确替换当前修改。两个 POST 接口与 GET 一样返回规范化的 `{ settings }`；页面取消旧 settings 回读后直接发布该结果，只失效其他必要投影，不再额外 GET 配置。离页取消当前请求。
 
@@ -45,11 +45,15 @@ ImageShow 的配置按生效边界分为三类：部署环境变量、`/app/data
 
 `weibo.author_slugs` 与 `WEIBO_AUTHOR_SLUGS` 已从当前 RuntimeConfig、首次播种和配置包契约中删除；微博导入只按 PostgreSQL 作者身份查询。启动、手动「读取配置文件」、高级配置保存和配置包导入都只按当前默认结构投影，再次出现旧字段时直接作为未知字段删除，不读取其值、不触发迁移，也不影响已经写入 PostgreSQL 的作者身份。这是来源无关的当前结构归一化，不是旧版本迁移层。
 
-`site.gallery.show_original_button` 已由当前结构中的 `site.gallery.public_original_button` 取代；不读取、迁移或双读旧值。已有配置在启动或手动重载时直接删除旧字段，并在新字段缺失时按默认值 `false` 补齐；合法的新字段值原样保留并随完整配置原子写回。这同样只依赖当前结构归一化，不建立升级兼容层。
+## 原图链接显示
+
+`site.gallery.public_original_button` 控制是否向未登录访客的图片详情返回原图链接，默认 `false`。
+已登录管理员或开关开启时，存在独立原图就返回公开链接；否则返回 `null`。
+原图资源始终通过 `/images/original/<id>` 公开提供并允许缓存，开关不限制直接访问。
 
 ## RuntimeConfig 参数目录
 
-以下各项是 `data/config.json` 的完整叶子参数参考，也是 `.env.example` 中全部字段的首次播种目录。环境变量仅在文件不存在时参与一次完整配置生成；后续启动、重启、普通设置、高级配置、配置包和手动重载都以持久化配置为准。默认应用容器环境包含数据库与管理员设置，以及可选映射的 `SITE_DOMAIN`；其余 RuntimeConfig 字段标为“显式映射”，由部署者扩展 Compose 后进入容器。所有现行配置都可经高级配置保存或手动重载热生效；普通设置页只开放其中的非敏感常用子集。数值除明确注明外均为整数，布尔环境值只接受 `true`、`false`。
+以下各项是 `data/config.json` 的完整叶子参数参考，也是 `.env.example` 中全部字段的首次播种目录。环境变量仅在文件不存在时参与一次完整配置生成；后续启动、重启、普通设置、高级配置、配置包和手动重载都以持久化配置为准。默认应用容器环境包含数据库与管理员设置，以及 `SITE_DOMAIN`、`SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON` 映射；其余 RuntimeConfig 字段标为“显式映射”，由部署者扩展 Compose 后进入容器。所有现行配置都可经高级配置保存或手动重载热生效；普通设置页只开放其中的非敏感常用子集。数值除明确注明外均为整数，布尔环境值只接受 `true`、`false`。
 
 ### site
 
@@ -217,10 +221,22 @@ SPA `description`；空值回退到站点名，首次播种或热加载后影响
 #### site.gallery.public_original_button
 
 - 环境变量：`SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON`
-- Compose：显式映射
+- Compose：默认注入
 - 类型、默认值与范围：布尔；默认 `false`
 
-控制未登录访客的公开画廊详情是否渲染独立“原图”入口；服务端确认已登录的管理员不受该开关影响。首次播种、完整配置、配置包或热加载后生效，不进入普通设置；关闭不影响当前展示图的原生保存。
+控制未登录访客是否在图片详情取得原图链接，适用于画廊、展映及其共享详情。
+
+- `false`：访客详情中的 `original_url` 为 `null`；已登录管理员取得公开原图链接。
+- `true`：访客和已登录管理员都取得公开原图链接。
+- 没有与展示图不同的合法 HTTPS 原图时，始终返回 `null`。
+
+原图按钮只消费服务端返回的非空链接。正常图片、后台及回收站统一使用公开且可缓存的
+`/images/original/<id>`；该资源出口不读取会话或本开关，直接拼接有效 URL 同样可访问。
+详情 JSON 在开关关闭时因登录状态产生不同内容，使用 `private, no-cache`；开启时使用
+`public, max-age=30, s-maxage=60`，始终带 `Vary: Cookie`，避免访客详情复用已登录结果。
+原图直连 302 使用公开短缓存；代理继承源站缓存策略，缺省使用站内 CDN fallback。
+支持首次播种、完整配置、高级配置、配置包及热加载，不进入普通设置或公开站点配置 DTO。
+环境变量只在配置文件不存在时播种；已有安装应在配置文件或高级配置中修改此字段。
 
 #### site.random_method
 
@@ -687,15 +703,15 @@ super 管理员可在「设置 → 高级配置」导出或导入 JSON 配置包
 
 - 进入的目标与变量：ImageShow：`ADMIN_USERNAME=admin`、`ADMIN_PASSWORD` 必填且无默认值；只在数据库没有 super 时由应用读取。
 
-### 首次站点域名
+### 首次站点配置
 
-- 进入的目标与变量：ImageShow：`SITE_DOMAIN` 使用 `${SITE_DOMAIN:-}` 可选映射，强烈建议在 `.env` 设置实际域名；只在配置文件不存在时采用。
+- 进入的目标与变量：ImageShow 默认映射 `SITE_DOMAIN` 与 `SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON`，分别使用 `${SITE_DOMAIN:-}` 和 `${SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON:-false}`；只在配置文件不存在时播种域名和访客原图按钮配置。强烈建议在 `.env` 设置实际域名。
 
-ImageShow 与 PostgreSQL 在各自 `environment` 中直接插值同一组数据库名、用户名和密码，这三项位于 `imageshow.environment` 前部，`ADMIN_*` 和可选的 `SITE_DOMAIN` 依次跟随。内置拓扑使用 Server 的 `UTC`、`postgresql:5432`、`redis:6379/0` 代码默认值；Redis 服务在项目私有网络内采用无密码连接。所有默认变量均使用明确插值；`SITE_DOMAIN` 未设置时传入空值，使用访问 Host 与同源资源路径的基础回退，不会自动发现或持久化一个站点域名。两个密码使用 `:?` 必填插值，未设置或空值都会在 Compose 展开阶段失败；部署者必须分别提供不同的随机强密码。数据库名、数据库用户名和管理员用户名继续使用当前默认值。
+ImageShow 与 PostgreSQL 在各自 `environment` 中直接插值同一组数据库名、用户名和密码，这三项位于 `imageshow.environment` 前部，`ADMIN_*`、`SITE_DOMAIN` 和 `SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON` 依次跟随。内置拓扑使用 Server 的 `UTC`、`postgresql:5432`、`redis:6379/0` 代码默认值；Redis 服务在项目私有网络内采用无密码连接。所有默认变量均使用明确插值；`SITE_DOMAIN` 未设置时传入空值，使用访问 Host 与同源资源路径的基础回退，不会自动发现或持久化一个站点域名。两个密码使用 `:?` 必填插值，未设置或空值都会在 Compose 展开阶段失败；部署者必须分别提供不同的随机强密码。数据库名、数据库用户名和管理员用户名继续使用当前默认值。
 
 本地开发或自动化测试可用 `IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY` 将配置、存储、临时文件和日志整体指向一次性隔离目录，避免测试触碰仓库的真实 `data/`。该变量在 `NODE_ENV=production` 时被忽略，生产容器的数据目录仍固定为 `/app/data`。
 
-`.env.example` 提供全部 RuntimeConfig 首次播种变量目录；默认应用容器环境只注入上述设置。变量名严格由完整路径转成大写下划线，不增加类型后缀，例如 `site.root → SITE_ROOT`、`embed.allowed_origins → EMBED_ALLOWED_ORIGINS`、`weibo.request_delay_seconds → WEIBO_REQUEST_DELAY_SECONDS`。除默认已有的 `SITE_DOMAIN` 外，部署者确需启用其他值时，必须在 `services.imageshow.environment` 中逐项增加映射并重建，例如：
+`.env.example` 提供全部 RuntimeConfig 首次播种变量目录；默认应用容器环境只注入上述设置。变量名严格由完整路径转成大写下划线，不增加类型后缀，例如 `site.root → SITE_ROOT`、`embed.allowed_origins → EMBED_ALLOWED_ORIGINS`、`weibo.request_delay_seconds → WEIBO_REQUEST_DELAY_SECONDS`。除默认已有的 `SITE_DOMAIN` 与 `SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON` 外，部署者确需启用其他值时，必须在 `services.imageshow.environment` 中逐项增加映射并重建，例如：
 
 ```yaml
 services:

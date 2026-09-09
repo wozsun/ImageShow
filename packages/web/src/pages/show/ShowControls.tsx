@@ -7,8 +7,8 @@ import type { ShowPixiSceneKind } from "./pixi/show-pixi-types.js";
 
 const orderLabels: Record<ShowOrder, string> = {
   random: "乱序",
-  latest: "最新",
-  oldest: "最旧"
+  latest: "最新优先",
+  oldest: "最旧优先"
 };
 
 const sceneLabels: Record<ShowPixiSceneKind, string> = {
@@ -96,7 +96,7 @@ export function ShowControls({
         </button>
       </div>
       <div className="show-corner-actions public-floating-controls" data-show-control="">
-        <PublicImageOrderButton order={order} onChange={onOrderChange} />
+        <PublicImageOrderButton order={order} onChange={onOrderChange} labels={orderLabels} />
         <button
           type="button"
           className="public-round-control pressable"

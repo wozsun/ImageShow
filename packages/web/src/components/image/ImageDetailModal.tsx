@@ -19,7 +19,7 @@ import type {
   ImageDetailItem,
   PublicImageItem
 } from "../../lib/types.js";
-import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
+import { useGalleryFacets } from "../../lib/api/site-data.js";
 import {
   createGalleryTaxonomyDisplayFormatter
 } from "../../lib/gallery/card-display.js";
@@ -125,17 +125,18 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const { onClose } = props;
   const [editedSnapshot, setEditedSnapshot] =
     useState<EditableImageSnapshot | null>(null);
-  const item = applyEditedSnapshot(props.item, editedSnapshot);
   const admin = props.admin === true;
+  const authQuery = useAuthMe();
+  const showAdminDetails = admin
+    || authQuery.data?.authenticated === true;
+  const currentSnapshot = showAdminDetails ? editedSnapshot : null;
+  const item = applyEditedSnapshot(props.item, currentSnapshot);
   const adminItem = props.admin === true
     ? applyEditedSnapshot(props.item, editedSnapshot)
     : null;
   const adminStorageLabel = props.admin ? props.storageLabel : undefined;
-  const authQuery = useAuthMe();
-  const showAdminDetails = admin
-    || authQuery.data?.authenticated === true;
-  const detailLoading = !editedSnapshot && !admin && props.detailLoading === true;
-  const detailError = !editedSnapshot && !admin ? props.detailError?.trim() ?? "" : "";
+  const detailLoading = !currentSnapshot && !admin && props.detailLoading === true;
+  const detailError = !currentSnapshot && !admin ? props.detailError?.trim() ?? "" : "";
   const onDetailRetry = !admin ? props.onDetailRetry : undefined;
   const exit = useAnimatedClose(onClose);
   const handleItemTrashed = useCallback((imageId: string) => {
@@ -172,7 +173,6 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
     onEscape: () => exit.requestClose(),
     paused: nestedDialogOpen
   });
-  const { data: siteConfig } = useSiteConfig();
   const { data: facets } = useGalleryFacets();
   const taxonomyDisplay = useMemo(
     () => createGalleryTaxonomyDisplayFormatter(facets),
@@ -192,8 +192,6 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const sourceAvailable = Boolean(item.source);
   const sourceStateLabel = detailError ? "详情加载失败" : detailLoading ? "来源加载中" : sourceAvailable ? "打开来源页面" : "暂无来源";
   const originalHref = item.original_url?.trim() ?? "";
-  const showOriginalAction = showAdminDetails
-    || siteConfig?.site.gallery.public_original_button === true;
   const imageAspectRatio = item.width > 0 && item.height > 0
     ? `${item.width} / ${item.height}`
     : "16 / 9";
@@ -330,7 +328,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                     >
                       <Icon name="external-link-line" />来源
                     </a>
-                    {showOriginalAction && originalHref && (
+                    {originalHref && (
                       <a
                         className="button pressable image-detail-original"
                         href={originalHref}

@@ -2,7 +2,11 @@ import type { Context, Hono } from "hono";
 import type { PublicImageDetailResponseDto } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { readAdminSession } from "../users/admin-session.ts";
 import {
+  appendVaryHeader,
+  privateRevalidationCacheControl,
   publicConfigCacheControl,
   publicImageCacheControl,
   publicMetadataCacheControl
@@ -118,13 +122,21 @@ export function registerPublicRoutes(app: Hono) {
   });
 
   app.get("/api/images/:id", blockCrossSiteFetch, async (c) => {
+    const id = parse(uuidInput, c.req.param("id"));
+    const publicOriginalButton = getRuntimeConfig().site.gallery.public_original_button;
+    // Link visibility can depend on the session; the resource URL stays public.
+    appendVaryHeader(c, "Cookie");
+    const includeOriginal = publicOriginalButton || Boolean(await readAdminSession(c));
     const response = {
       item: await getPublicImage(
-        parse(uuidInput, c.req.param("id")),
-        c.req.raw.signal
+        id,
+        c.req.raw.signal,
+        includeOriginal
       )
     } satisfies PublicImageDetailResponseDto;
-    return cacheableApiSuccess(c, response, publicImageCacheControl);
+    return cacheableApiSuccess(c, response, publicOriginalButton
+      ? publicImageCacheControl
+      : privateRevalidationCacheControl);
   });
 
   app.get("/images/full/*", async (c) => servePublicStoredObject(
@@ -135,7 +147,7 @@ export function registerPublicRoutes(app: Hono) {
     c.req.path.slice("/images/thumbs/".length),
     storedResponseRequest(c)
   ));
-  app.get("/images/link/:id", async (c) => servePublicExternalOriginal(
+  app.get("/images/original/:id", async (c) => servePublicExternalOriginal(
     parse(uuidInput, c.req.param("id")),
     {
       userAgent: c.req.header("user-agent") ?? "",

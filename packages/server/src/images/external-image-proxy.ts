@@ -19,8 +19,6 @@ import { contentType } from "../storage/objects/keys.ts";
 export const externalImageProxyTimeoutMs = 12_000;
 export const externalImageProxyUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
-type ProxyFallback = () => Response | Promise<Response>;
-
 export type ExternalProxyRequest = {
   method: "GET" | "HEAD";
   signal?: AbortSignal;
@@ -45,13 +43,12 @@ export async function proxyExternalImage(
   ext: string,
   request: ExternalProxyRequest,
   baseHeaders: Record<string, string> = {},
-  fallbackCacheControl?: string,
-  fallback?: ProxyFallback
+  fallbackCacheControl?: string
 ): Promise<Response> {
   request.signal?.throwIfAborted();
   const redirectFallback = async () => {
     request.signal?.throwIfAborted();
-    return fallback ? fallback() : new Response(null, {
+    return new Response(null, {
       status: 302,
       headers: {
         ...baseHeaders,
@@ -65,7 +62,6 @@ export async function proxyExternalImage(
   try {
     origin = `${new URL(externalUrl).origin}/`;
   } catch {
-    if (fallback) return fallback();
     throw new ApiError(400, "external_image_rejected", "外部图片请求未通过安全校验");
   }
 
@@ -167,7 +163,6 @@ export async function proxyExternalImage(
   } catch (error) {
     request.signal?.throwIfAborted();
     if (isExternalImageRejection(error)) {
-      if (fallback) return fallback();
       throw error;
     }
     return redirectFallback();
@@ -184,14 +179,11 @@ function proxyExternalResponseHeaders(
 ) {
   const headers = new Headers(baseHeaders);
   if (fallbackCacheControl) {
-    // 代理图优先继承源站缓存策略；只有源站没有声明时才使用站内 CDN fallback。
     const originCacheControl = safeUpstreamResponseHeader(
-      "Cache-Control",
-      upstream.headers.get("cache-control")
+      "Cache-Control", upstream.headers.get("cache-control")
     );
     const originExpires = safeUpstreamResponseHeader(
-      "Expires",
-      upstream.headers.get("expires")
+      "Expires", upstream.headers.get("expires")
     );
     if (originCacheControl) {
       headers.set("Cache-Control", originCacheControl);
@@ -200,9 +192,7 @@ function proxyExternalResponseHeaders(
       headers.delete("Cache-Control");
       headers.set("Expires", originExpires);
     } else if (upstream.status === 304) {
-      // A 304 that omits cache metadata means “retain the stored response's
-      // policy”. Do not replace it with either the base no-store value or the
-      // normal 200 fallback policy.
+      // An upstream 304 without a new policy retains the stored policy.
       headers.delete("Cache-Control");
       headers.delete("Expires");
     } else {
