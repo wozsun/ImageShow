@@ -1,7 +1,7 @@
 :root {
   --admin-color-altcha-border: light-dark(#d0d5dd, #636c76);
   --admin-color-altcha-checkbox-border: light-dark(#98a2b3, #6e7681);
-  --admin-color-altcha-text-secondary: light-dark(#667085, #b1bac4);
+  --admin-color-altcha-text-secondary: light-dark(#667085, #a5aeb9);
 }
 
 .login-altcha-shell {

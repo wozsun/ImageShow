@@ -1,10 +1,10 @@
 :root {
-  --admin-color-entity-surface-pinned: light-dark(#f7f9fc, #1c2128);
-  --admin-color-entity-slug-surface: light-dark(#eef2f7, #21262d);
+  --admin-color-entity-surface-pinned: light-dark(#f7f9fc, #151a21);
+  --admin-color-entity-slug-surface: light-dark(#eef2f7, #1a1f26);
   --admin-color-role-super-text: light-dark(#1559b7, #79c0ff);
-  --admin-color-role-super-surface: light-dark(#dbeafe, #15447a);
+  --admin-color-role-super-surface: light-dark(#dbeafe, #103969);
   --admin-color-role-image-text: light-dark(#3730a3, #a5b4fc);
-  --admin-color-role-image-surface: light-dark(#e0e7ff, #25264f);
+  --admin-color-role-image-surface: light-dark(#e0e7ff, #1e1f44);
 }
 
 .admin-scroll-list { max-height: calc(100svh - 210px); overflow-y: auto; padding-right: 2px; }

@@ -1,5 +1,5 @@
 :root {
-  /* The public gallery and dark admin detail share this surface contract. */
+  /* Shared detail defaults; admin dialogs remap surfaces and controls locally. */
   --color-detail-backdrop-clear: rgba(13, 18, 28, 0);
   --color-detail-surface: #101722;
   --color-detail-surface-raised: #182131;

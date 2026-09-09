@@ -1,8 +1,8 @@
 :root {
-  --admin-color-overview-label: light-dark(#4a5563, #c9d1d9);
+  --admin-color-overview-label: light-dark(#4a5563, #bfc8d2);
   --admin-color-overview-hint: light-dark(#8a93a2, #8b949e);
-  --admin-color-overview-chip: light-dark(#64748b, #b1bac4);
-  --admin-color-overview-recent-surface: light-dark(#f1f4f8, #1c2128);
+  --admin-color-overview-chip: light-dark(#64748b, #a5aeb9);
+  --admin-color-overview-recent-surface: light-dark(#f1f4f8, #151a21);
 }
 
 .overview-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }

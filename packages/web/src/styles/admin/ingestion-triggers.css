@@ -1,6 +1,6 @@
 :root {
-  --admin-color-ingestion-menu-border: light-dark(#d5dce5, #3d444d);
-  --admin-color-ingestion-menu-focus-surface: light-dark(#f1f4f8, #1c2128);
+  --admin-color-ingestion-menu-border: light-dark(#d5dce5, #353c45);
+  --admin-color-ingestion-menu-focus-surface: light-dark(#f1f4f8, #151a21);
 }
 
 .ingestion-triggers { display: flex; gap: 10px; }

@@ -1,7 +1,7 @@
 :root {
   --admin-color-log-surface: #111827;
   --admin-color-log-border: #232b38;
-  --admin-color-log-text: #e5edf8;
+  --admin-color-log-text: light-dark(#e5edf8, #d8dfe7);
   --admin-color-log-empty: #9aa4b2;
 }
 

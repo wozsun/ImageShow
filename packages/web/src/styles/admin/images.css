@@ -1,6 +1,6 @@
 :root {
-  --admin-color-image-card-divider: light-dark(#edf1f5, #21262d);
-  --admin-color-workflow-filter-surface: light-dark(#f3f6fa, #1b222c);
+  --admin-color-image-card-divider: light-dark(#edf1f5, #1a1f26);
+  --admin-color-workflow-filter-surface: light-dark(#f3f6fa, #141b25);
   --admin-shadow-panel: light-dark(rgba(32, 42, 56, .16), rgba(0, 0, 0, .48));
 }
 

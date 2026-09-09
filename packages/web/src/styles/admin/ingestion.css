@@ -1,13 +1,13 @@
 :root {
   --admin-color-neutral-text: light-dark(#646a73, #8b949e);
-  --admin-color-neutral-surface: light-dark(#f3f4f5, #15191f);
-  --admin-color-neutral-border: light-dark(#d9dde2, #2a3038);
+  --admin-color-neutral-surface: light-dark(#f3f4f5, #0f1319);
+  --admin-color-neutral-border: light-dark(#d9dde2, #232931);
   --admin-color-modal-overlay: light-dark(rgba(13, 18, 28, .76), rgba(0, 0, 0, .64));
-  --admin-color-ingestion-divider-strong: light-dark(#e1e6ed, #30363d);
-  --admin-color-ingestion-divider-muted: light-dark(#e8ecf1, #272d35);
-  --admin-color-ingestion-hover-surface: light-dark(#f4f6f8, #252d38);
-  --admin-color-ingestion-dropzone-hover: light-dark(#f5f9ff, #182c40);
-  --admin-color-ingestion-summary: light-dark(#435062, #c9d1d9);
+  --admin-color-ingestion-divider-strong: light-dark(#e1e6ed, #282e36);
+  --admin-color-ingestion-divider-muted: light-dark(#e8ecf1, #20262e);
+  --admin-color-ingestion-hover-surface: light-dark(#f4f6f8, #1e2631);
+  --admin-color-ingestion-dropzone-hover: light-dark(#f5f9ff, #122438);
+  --admin-color-ingestion-summary: light-dark(#435062, #bfc8d2);
 }
 
 .ingestion-overlay {

@@ -3,9 +3,9 @@
  * 该样式必须跟随上传或编辑能力加载，不能依赖图片列表路由或另一弹窗预先加载。
  */
 :root {
-  --admin-color-workflow-trigger-surface: light-dark(#f7f9fc, #1c2128);
-  --admin-color-workflow-content-surface: light-dark(#edf1f5, #21262d);
-  --admin-color-preview-close-surface: light-dark(rgba(255, 255, 255, .92), rgba(22, 27, 34, .92));
+  --admin-color-workflow-trigger-surface: light-dark(#f7f9fc, #151a21);
+  --admin-color-workflow-content-surface: light-dark(#edf1f5, #1a1f26);
+  --admin-color-preview-close-surface: light-dark(rgba(255, 255, 255, .92), rgba(16, 21, 28, .92));
   --admin-shadow-workflow-panel: light-dark(rgba(32, 42, 56, .16), rgba(0, 0, 0, .48));
   --admin-shadow-preview: light-dark(rgba(0, 0, 0, .4), rgba(0, 0, 0, .64));
 }

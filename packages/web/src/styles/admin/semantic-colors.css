@@ -7,37 +7,37 @@
  */
 :root {
   /* Foundations */
-  --admin-color-canvas: light-dark(#f4f7fb, #0d1117);
-  --admin-color-surface-primary: light-dark(#fff, #161b22);
-  --admin-color-text-primary: light-dark(#172033, #f0f6fc);
-  --admin-color-text-secondary: light-dark(#5f6c7d, #b1bac4);
-  --admin-color-text-label: light-dark(#3e4a5c, #c9d1d9);
+  --admin-color-canvas: light-dark(#f4f7fb, #090d13);
+  --admin-color-surface-primary: light-dark(#fff, #10151c);
+  --admin-color-text-primary: light-dark(#172033, #d8dfe7);
+  --admin-color-text-secondary: light-dark(#5f6c7d, #a5aeb9);
+  --admin-color-text-label: light-dark(#3e4a5c, #bfc8d2);
   --admin-color-text-subtle: light-dark(#8b97a7, #8b949e);
   --admin-color-text-on-emphasis: #fff;
   --admin-color-border-control: light-dark(#c8d3e1, #636c76);
-  --admin-color-border-default: light-dark(#d8e1ec, #30363d);
-  --admin-color-border-muted: light-dark(#e0e7ef, #2d333b);
-  --admin-color-border-card: light-dark(#dbe4ee, #30363d);
+  --admin-color-border-default: light-dark(#d8e1ec, #282e36);
+  --admin-color-border-muted: light-dark(#e0e7ef, #252b33);
+  --admin-color-border-card: light-dark(#dbe4ee, #282e36);
   --admin-color-action-primary: #1f6feb;
   --admin-color-action-primary-dark: light-dark(#1559b7, #79c0ff);
   --admin-color-action-text: light-dark(#1559b7, #79b8ff);
-  --admin-color-thumbnail-surface: light-dark(#e8eef5, #21262d);
+  --admin-color-thumbnail-surface: light-dark(#e8eef5, #1a1f26);
 
   /* Controls and shared states */
   --admin-color-control-text-tertiary: light-dark(#97a1b0, #8b949e);
   --admin-color-control-placeholder: light-dark(#9ba5b1, #555d67);
-  --admin-color-control-surface-muted: light-dark(#eef2f7, #21262d);
-  --admin-color-control-surface-hover: light-dark(#eef5ff, #1d2e40);
-  --admin-color-control-surface-subtle-hover: light-dark(#f1f3f6, #20252c);
+  --admin-color-control-surface-muted: light-dark(#eef2f7, #1a1f26);
+  --admin-color-control-surface-hover: light-dark(#eef5ff, #162638);
+  --admin-color-control-surface-subtle-hover: light-dark(#f1f3f6, #191e25);
   --admin-color-control-border-hover: light-dark(#aeb8c5, #6e7681);
   --admin-color-control-border-selected: light-dark(#9fc2f5, #619de7);
   --admin-color-control-switch-thumb: light-dark(#d8dee7, #484f58);
   --admin-color-control-changed: light-dark(#d99a00, #e3b341);
-  --admin-color-control-changed-surface: light-dark(#fff8e8, #2d2717);
+  --admin-color-control-changed-surface: light-dark(#fff8e8, #262012);
   --admin-color-control-changed-emphasis: light-dark(#e4bd58, #d29922);
   --admin-color-control-changed-ring: light-dark(rgba(228, 189, 88, .34), rgba(221, 193, 126, .46));
-  --admin-color-tag-action: light-dark(#6b7686, #b1bac4);
-  --admin-color-tag-action-hover: light-dark(#384150, #f0f6fc);
+  --admin-color-tag-action: light-dark(#6b7686, #a5aeb9);
+  --admin-color-tag-action-hover: light-dark(#384150, #d8dfe7);
   --admin-color-close: light-dark(#d98c8c, #ff7b72);
   --admin-color-close-hover: light-dark(#c25b5b, #ffa198);
   --admin-color-thumbnail-placeholder: light-dark(#9aa6b4, #8b949e);
@@ -64,15 +64,15 @@
   --admin-color-success-text: light-dark(#245236, #8fd8a3);
   --admin-color-success-text-strong: light-dark(#1b6f40, #72c68b);
   --admin-color-success-text-emphasis: light-dark(#24723c, #70bbae);
-  --admin-color-success-surface: light-dark(#eaf8ee, #173126);
-  --admin-color-success-surface-soft: light-dark(#f2fbf5, #16312a);
-  --admin-color-success-surface-subtle: light-dark(#f2fbf5, #142824);
-  --admin-color-success-surface-emphasis: light-dark(#dff3e5, #253d35);
-  --admin-color-success-surface-hover: light-dark(#cdeedb, #2d523b);
+  --admin-color-success-surface: light-dark(#eaf8ee, #12291f);
+  --admin-color-success-surface-soft: light-dark(#f2fbf5, #112922);
+  --admin-color-success-surface-subtle: light-dark(#f2fbf5, #10211c);
+  --admin-color-success-surface-emphasis: light-dark(#dff3e5, #1e352d);
+  --admin-color-success-surface-hover: light-dark(#cdeedb, #254833);
   --admin-color-success-border: light-dark(#9fd3ad, #4d795b);
   --admin-color-success-border-soft: light-dark(#a9bdb0, #5a695f);
   --admin-color-success-border-strong: light-dark(#78b78a, #3f6f67);
-  --admin-color-success-progress: light-dark(#ccebd7, #304f3b);
+  --admin-color-success-progress: light-dark(#ccebd7, #284633);
   --admin-color-success-action: light-dark(#2f8f5b, #72c68b);
   --admin-color-success-action-hover: light-dark(#11522d, #8fd8a3);
 
@@ -82,12 +82,12 @@
   --admin-color-warning-text-soft: light-dark(#795a0a, #d0ae7d);
   --admin-color-duplicate-text: light-dark(#906400, #d0ae7d);
   --admin-color-warning-action: light-dark(#a75b00, #e3b341);
-  --admin-color-warning-surface: light-dark(#fff8e8, #2d2717);
-  --admin-color-warning-surface-soft: light-dark(#fffaf0, #231f15);
-  --admin-color-warning-surface-subtle: light-dark(#fff9e9, #302b22);
-  --admin-color-warning-surface-emphasis: light-dark(#fff1cc, #3b3018);
-  --admin-color-warning-surface-strong: light-dark(#f9e7af, #3b3018);
-  --admin-color-warning-progress: light-dark(#f7e7ae, #4a3a18);
+  --admin-color-warning-surface: light-dark(#fff8e8, #262012);
+  --admin-color-warning-surface-soft: light-dark(#fffaf0, #1c1910);
+  --admin-color-warning-surface-subtle: light-dark(#fff9e9, #28241b);
+  --admin-color-warning-surface-emphasis: light-dark(#fff1cc, #322811);
+  --admin-color-warning-surface-strong: light-dark(#f9e7af, #322811);
+  --admin-color-warning-progress: light-dark(#f7e7ae, #413212);
   --admin-color-warning-border: light-dark(#f0d38a, #7d661c);
   --admin-color-warning-border-soft: light-dark(#d8bc70, #86745d);
   --admin-color-warning-border-strong: light-dark(#ecc659, #9e7f24);
@@ -96,10 +96,10 @@
   --admin-color-danger-text: light-dark(#a12b2b, #cc7975);
   --admin-color-danger-text-subtle: light-dark(#a1605c, #c29590);
   --admin-color-danger-text-strong: light-dark(#84271f, #d98a85);
-  --admin-color-danger-surface: light-dark(#fff2f0, #2a1d1e);
-  --admin-color-danger-button-surface: light-dark(#ffeded, #2a1d1e);
-  --admin-color-danger-surface-hover: light-dark(#ffe7e3, #362426);
-  --admin-color-danger-progress: light-dark(#f7cece, #472e30);
+  --admin-color-danger-surface: light-dark(#fff2f0, #231719);
+  --admin-color-danger-button-surface: light-dark(#ffeded, #231719);
+  --admin-color-danger-surface-hover: light-dark(#ffe7e3, #2e1e20);
+  --admin-color-danger-progress: light-dark(#f7cece, #3f2628);
   --admin-color-danger-border: light-dark(#e8aaa4, #75494c);
   --admin-color-danger-border-strong: light-dark(#de8b83, #8b5357);
   --admin-color-danger-border-subtle: light-dark(#ead5d5, #472e30);
@@ -109,14 +109,14 @@
   /* Pending and informational */
   --admin-color-pending-text: light-dark(#245eaa, #79c0ff);
   --admin-color-pending-text-strong: light-dark(#294f78, #a5d6ff);
-  --admin-color-pending-surface: light-dark(#e2efff, #14253d);
-  --admin-color-pending-progress: light-dark(#d3e4ff, #1e3a5f);
+  --admin-color-pending-surface: light-dark(#e2efff, #102035);
+  --admin-color-pending-progress: light-dark(#d3e4ff, #173152);
   --admin-color-pending-border: light-dark(#86afe8, #315d8c);
   --admin-color-pending-text-soft: light-dark(#2f6ea9, #6ba3d4);
-  --admin-color-pending-surface-soft: light-dark(#eaf3ff, #102033);
+  --admin-color-pending-surface-soft: light-dark(#eaf3ff, #0d1b2c);
   --admin-color-pending-border-soft: light-dark(#aec9e8, #2b4d70);
   --admin-color-pending-text-subtle: light-dark(#3776a1, #5d87ab);
-  --admin-color-pending-surface-subtle: light-dark(#f2f7ff, #0c1b29);
+  --admin-color-pending-surface-subtle: light-dark(#f2f7ff, #0a1723);
   --admin-color-pending-border-subtle: light-dark(#d7e2e6, #253d55);
 
   /* Context aliases consumed by base.css while the admin domain is active. */
@@ -177,13 +177,13 @@
 }
 
 /*
- * 画廊和后台暗色详情使用 semantic-colors.css 中唯一的共享契约。这里只覆写
- * 后台亮色右侧详情表面；近黑图片区保持共享值。整框本身不设边界，避免任何
+ * 后台详情的右侧表面与操作使用当前后台配色；公开画廊使用共享详情默认值。
+ * 近黑图片区保持共享值。整框本身不设边界，避免任何
  * 线条跨过黑色图片舞台，明暗模式都只依靠表面颜色自然分区。
  */
-:root[data-ui-context="admin"][data-color-scheme="light"] [data-admin-dialog] {
+:root[data-ui-context="admin"] [data-admin-dialog] {
   --color-detail-surface: var(--admin-color-surface-primary);
-  --color-detail-surface-raised: #fafbfd;
+  --color-detail-surface-raised: light-dark(#fafbfd, #151a21);
   --color-detail-border: var(--admin-color-border-default);
   --color-detail-shadow: var(--admin-shadow-control-resting);
   --color-detail-text-primary: var(--admin-color-text-primary);
@@ -192,7 +192,7 @@
   --color-detail-action-fill: var(--admin-color-action-primary);
   --color-detail-success: var(--admin-color-success-text);
   --color-detail-error: var(--admin-color-danger-text);
-  --color-detail-fade-clear: rgba(250, 251, 253, 0);
+  --color-detail-fade-clear: light-dark(rgba(250, 251, 253, 0), rgba(21, 26, 33, 0));
   --color-detail-chip-text: var(--admin-color-text-primary);
   --color-detail-chip-surface: var(--admin-color-control-surface-muted);
   --color-detail-chip-border: var(--admin-color-border-control);

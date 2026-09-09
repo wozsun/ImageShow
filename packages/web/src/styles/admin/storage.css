@@ -1,13 +1,13 @@
 :root {
-  --admin-color-storage-border: light-dark(#e2e6ec, #30363d);
-  --admin-color-storage-action-border: light-dark(#eef1f5, #272d35);
-  --admin-color-storage-default-surface: light-dark(#e8f1ff, #1b3856);
+  --admin-color-storage-border: light-dark(#e2e6ec, #282e36);
+  --admin-color-storage-action-border: light-dark(#eef1f5, #20262e);
+  --admin-color-storage-default-surface: light-dark(#e8f1ff, #14304b);
   --admin-color-storage-disabled-text: light-dark(#6b7280, #8b949e);
-  --admin-color-storage-disabled-surface: light-dark(#f3f4f6, #21262d);
-  --admin-color-storage-label: light-dark(#4a525d, #c9d1d9);
+  --admin-color-storage-disabled-surface: light-dark(#f3f4f6, #1a1f26);
+  --admin-color-storage-label: light-dark(#4a525d, #bfc8d2);
   --admin-color-storage-meta: light-dark(#8a93a0, #8b949e);
   --admin-color-storage-add-border: light-dark(#c4ccd6, #636c76);
-  --admin-color-storage-add-surface: light-dark(#fafbfc, #161b22);
+  --admin-color-storage-add-surface: light-dark(#fafbfc, #10151c);
   --admin-color-storage-toggle-border: light-dark(#d0d5dd, #636c76);
   --admin-shadow-storage-default: light-dark(rgba(31, 111, 235, .25), rgba(65, 132, 191, .38));
 }
