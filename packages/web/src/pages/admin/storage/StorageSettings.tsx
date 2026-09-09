@@ -355,6 +355,8 @@ export function StorageSettings() {
           title={`删除“${storageBackendDisplay(actionDialog.backend)}”？`}
           description="此操作只删除存储后端配置，不会主动删除存储对象。服务端会再次确认它不是默认后端，且没有图片、内容接入会话、旧对象删除任务或暂存对象。删除后如需恢复，必须重新创建并配置该后端。"
           confirmLabel="确认删除"
+          requireFinalConfirmation
+          pendingIcon="delete-bin-5-line"
           errorMessage={actionDialog.error}
           busy={Boolean(busy)}
           onClose={() => setActionDialog(null)}

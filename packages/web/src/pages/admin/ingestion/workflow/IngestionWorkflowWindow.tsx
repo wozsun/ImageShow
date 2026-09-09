@@ -739,6 +739,8 @@ export function IngestionWorkflowWindow({
                 pendingCleanup?.count ?? 0
               )}
               pendingLabel="清空中"
+              confirmIcon="delete-bin-2-line"
+              pendingIcon="delete-bin-5-line"
               successLabel="已清空"
               closeOnBackdrop
               returnFocusRef={cleanupReturnFocusRef}

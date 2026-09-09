@@ -204,7 +204,9 @@ export function UserAdmin() {
         <ConfirmDialog
           title="删除管理员"
           description={`删除图片管理员「${confirmDelete.username}」，该账号将无法再登录，此操作无法撤销。`}
-          confirmLabel="删除"
+          confirmLabel="确认删除"
+          requireFinalConfirmation
+          pendingIcon="delete-bin-5-line"
           busy={mutation === "delete"}
           onClose={() => setConfirmDelete(null)}
           onConfirm={remove}
@@ -248,7 +250,7 @@ function UserCard({ user, onResetPassword, onDelete }: {
               <AdminIcon name="key-2-line" />
             </button>
             <button
-              className="icon danger-button"
+              className="icon danger-button is-subtle"
               type="button"
               title="删除管理员"
               onClick={onDelete}

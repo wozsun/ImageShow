@@ -3404,7 +3404,7 @@ test("[Web/后台访问] 图片后台真实挂载保持弹窗页码、操作后�
           assert.ok(permanentDelete);
           assert.equal(
             permanentDelete.querySelector("path")?.getAttribute("d"),
-            ADMIN_ICONS["delete-bin-7-line"]
+            ADMIN_ICONS["delete-bin-line"]
           );
           const purgeForm = purgeDialog.querySelector<HTMLFormElement>("form");
           assert.ok(purgeForm);

@@ -620,7 +620,7 @@ pre {
 /*危险动作按钮（删除等）。*/
 .danger-button, button.danger-button {
   color: var(--admin-color-danger-text);
-  background: var(--admin-color-danger-surface);
+  background: var(--admin-color-danger-button-surface);
   border-color: var(--admin-color-danger-border);
 }
 .danger-button:hover, button.danger-button:hover { color: var(--admin-color-danger-text-strong); background: var(--admin-color-danger-surface-hover); border-color: var(--admin-color-danger-border-strong); }
@@ -633,6 +633,16 @@ button.danger-button.confirm-dialog-final-confirmation.is-armed {
   color: var(--admin-color-text-on-emphasis);
   background: var(--admin-color-danger-action-hover);
   border-color: var(--admin-color-danger-action-hover);
+}
+button.danger-button.is-subtle:not(.is-armed) {
+  color: var(--admin-color-danger-text-subtle);
+  background: var(--color-control-surface);
+  border-color: var(--color-control-border);
+}
+button.danger-button.is-subtle.is-armed {
+  color: var(--admin-color-danger-text);
+  background: var(--admin-color-danger-button-surface);
+  border-color: var(--admin-color-danger-border);
 }
 
 @media (prefers-reduced-motion: reduce) {

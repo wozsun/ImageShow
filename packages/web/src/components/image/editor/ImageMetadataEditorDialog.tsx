@@ -100,7 +100,6 @@ export function ImageMetadataEditorDialog({
   const listRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const restoreTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const trashTriggerRef = useRef<HTMLButtonElement | null>(null);
   const migrateTriggerRef = useRef<HTMLButtonElement | null>(null);
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
   // 父级刷新可能清空选择或因筛选移除图片；弹窗独立持有固定会话 ID、活动成员、
@@ -131,7 +130,6 @@ export function ImageMetadataEditorDialog({
   const [common, setCommon] = useState(emptyCommonAttributes);
   const [commonExpanded, setCommonExpanded] = useState(false);
   const [restoreConfirmation, setRestoreConfirmation] = useState(false);
-  const [trashConfirmation, setTrashConfirmation] = useState(false);
   const [restoreError, setRestoreError] = useState("");
   const [migrating, setMigrating] = useState(false);
   const permissions = useAdminPermissions();
@@ -255,7 +253,6 @@ export function ImageMetadataEditorDialog({
         (canMigrateStorage && migrating)
         || preview
         || restoreConfirmation
-        || trashConfirmation
       )}
       initialFocusRef={closeButtonRef}
       returnFocusRef={returnFocusRef}
@@ -412,38 +409,27 @@ export function ImageMetadataEditorDialog({
                     </button>
                   )}
                   {trashAvailable && (
-                    multipleItems ? (
-                      <button
-                        ref={trashTriggerRef}
-                        className="icon danger-button image-editor-trash-trigger"
-                        type="button"
-                        title="删除这些图片"
-                        aria-label="删除这些图片"
-                        disabled={busy || !activeItems.length}
-                        onClick={() => {
-                          trashAction.clearError();
-                          setTrashConfirmation(true);
-                        }}
-                      >
-                        <AdminIcon name="delete-bin-6-line" />
-                      </button>
-                    ) : (
-                      <TwoStepConfirmIconButton
-                        className="icon danger-button image-editor-trash-trigger"
-                        idleIcon="delete-bin-6-line"
-                        confirmIcon="delete-bin-2-line"
-                        idleLabel="删除此图片"
-                        confirmLabel="再次点击确认删除此图片"
-                        idleTitle="删除此图片"
-                        confirmTitle="再次点击确认删除"
-                        disabled={busy || !activeItems.length}
-                        busy={trashAction.pending}
-                        onConfirm={() => {
-                          trashAction.clearError();
-                          void trashActiveImages(requestClose);
-                        }}
-                      />
-                    )
+                    <TwoStepConfirmIconButton
+                      className="icon danger-button is-subtle image-editor-trash-trigger"
+                      idleIcon="delete-bin-line"
+                      confirmIcon="delete-bin-2-line"
+                      busyIcon="delete-bin-5-line"
+                      idleLabel={multipleItems
+                        ? `删除这 ${activeItems.length} 张图片`
+                        : "删除此图片"}
+                      confirmLabel={multipleItems
+                        ? `再次点击确认删除这 ${activeItems.length} 张图片`
+                        : "再次点击确认删除此图片"}
+                      busyLabel={multipleItems
+                        ? `正在删除这 ${activeItems.length} 张图片`
+                        : "删除中"}
+                      disabled={busy || !activeItems.length}
+                      busy={trashAction.pending}
+                      onConfirm={() => {
+                        trashAction.clearError();
+                        void trashActiveImages(requestClose);
+                      }}
+                    />
                   )}
                 </div>
               )}
@@ -502,18 +488,6 @@ export function ImageMetadataEditorDialog({
               returnFocusRef={restoreTriggerRef}
               onClose={() => setRestoreConfirmation(false)}
               onConfirm={restoreAllChanges}
-            />
-          )}
-          {multipleItems && trashConfirmation && (
-            <ConfirmDialog
-              title="确认批量删除图片"
-              description={`这 ${activeItems.length} 张图片将移入回收站并退出站点发现，可以稍后恢复。`}
-              confirmLabel="确认删除"
-              pendingLabel="删除中"
-              errorMessage={trashAction.errorMessage}
-              returnFocusRef={trashTriggerRef}
-              onClose={() => setTrashConfirmation(false)}
-              onConfirm={() => trashActiveImages(requestClose)}
             />
           )}
         </>

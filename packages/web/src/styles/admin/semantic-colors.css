@@ -94,8 +94,10 @@
 
   /* Status: danger */
   --admin-color-danger-text: light-dark(#a12b2b, #cc7975);
+  --admin-color-danger-text-subtle: light-dark(#a1605c, #c29590);
   --admin-color-danger-text-strong: light-dark(#84271f, #d98a85);
   --admin-color-danger-surface: light-dark(#fff2f0, #2a1d1e);
+  --admin-color-danger-button-surface: light-dark(#ffeded, #2a1d1e);
   --admin-color-danger-surface-hover: light-dark(#ffe7e3, #362426);
   --admin-color-danger-progress: light-dark(#f7cece, #472e30);
   --admin-color-danger-border: light-dark(#e8aaa4, #75494c);

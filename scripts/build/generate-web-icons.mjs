@@ -62,7 +62,7 @@ const iconGroups = [
       "delete-bin-2-line",
       "delete-bin-5-line",
       "delete-bin-6-line",
-      "delete-bin-7-line",
+      "delete-bin-line",
       "download-cloud-2-line",
       "drag-move-2-fill",
       "file-list-line",

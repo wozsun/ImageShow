@@ -1745,6 +1745,157 @@ test("[Web/后台表单] 日志等级保存隔离旧读取，跨文件缓存采�
   assert.equal(select("日志写入等级").hasAttribute("disabled"), false);
   assert.equal(h.pending.length, 5, "失败提交不发起刷新");
 });
+for (const count of [1, 2]) {
+  test(`[Web/后台表单] 图片编辑 ${count} 张删除以按钮二次确认提交并保留未完成成员`, async (t) => {
+    const h = await createConfigStreamHarness(t);
+    h.window.scrollTo = () => {};
+    const clock = installControlledClock(t, h.window);
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+    const { MemoryRouter } = await import("react-router");
+    const { AuthSessionProvider } = await import("../../../packages/web/src/hooks/useAuthSession.tsx");
+    const { ImageMetadataEditorDialog } = await import("../../../packages/web/src/components/image/editor/ImageMetadataEditorDialog.tsx");
+    const { ADMIN_ICONS } = await import("../../../packages/web/src/components/icon/admin-icons.generated.ts");
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    t.after(() => client.clear());
+    client.setQueryData(queryKeys.me, { authenticated: true, username: "reviewer", role: "image", permissions: [] });
+    client.setQueryData(queryKeys.storageOptions, { backends: [] });
+    const items = Array.from({ length: count }, (_, index) => editableImage(`image-${index}`));
+    const committed: string[][] = [];
+    let closed = 0;
+    await h.render(h.React.createElement(QueryClientProvider, { client },
+      h.React.createElement(MemoryRouter, { initialEntries: ["/admin/images"] },
+        h.React.createElement(AuthSessionProvider, null,
+          h.React.createElement(ImageMetadataEditorDialog, {
+            items, pageSize: 10, themes: [], allTags: [], authors: [],
+            onClose: () => { closed += 1; },
+            onSaved: async () => {},
+            onTrashCommitted: (ids) => { committed.push(ids); }
+          })))));
+    const button = () => h.document.querySelector<HTMLButtonElement>(".image-editor-trash-trigger")!;
+    const click = async () => h.React.act(async () => button().click());
+    assert.equal(button().getAttribute("aria-label"), count === 1 ? "删除此图片" : "删除这 2 张图片");
+    await click();
+    assert.equal(button().getAttribute("aria-pressed"), "true");
+    assert.equal(button().querySelector("path")?.getAttribute("d"), ADMIN_ICONS["delete-bin-2-line"]);
+    assert.equal(h.pending.length, 0, "首次点击只进入确认");
+    await h.React.act(async () => dispatchDomEvent(h.window, h.document.body, "pointerdown"));
+    assert.equal(button().getAttribute("aria-pressed"), "false");
+    await click();
+    assert.equal(h.pending.length, 0, "取消确认后需要重新确认");
+    await click();
+    assert.equal(h.pending[0].path, "/api/admin/images/trash");
+    assert.deepEqual(JSON.parse(String(h.pending[0].body)), { ids: items.map((item) => item.id) });
+    assert.equal(button().hasAttribute("disabled"), true);
+    assert.equal(button().querySelector("path")?.getAttribute("d"), ADMIN_ICONS["delete-bin-5-line"]);
+    // 首次只有前 count - 1 项成功，最后一项由权威快照确认仍可编辑。
+    const succeeded = items.slice(0, -1).map((item) => item.id);
+    const remaining = items.at(-1)!;
+    await h.respond(0, { trashed: succeeded.length, results: succeeded.map((id) => ({ id, status: "trashed" })) });
+    assert.equal(h.pending[1].path, "/api/admin/images/snapshot");
+    assert.deepEqual(JSON.parse(String(h.pending[1].body)), { ids: [remaining.id] });
+    await h.respond(1, { items: [remaining] });
+    await clock.advanceBy(500);
+    await h.flush();
+    assert.equal(closed, 0);
+    assert.match(h.document.querySelector('[role="alert"]')!.textContent!, /仍可编辑/);
+    assert.deepEqual(committed, succeeded.length ? [succeeded] : []);
+    assert.equal(button().hasAttribute("disabled"), false);
+    assert.equal(button().getAttribute("aria-label"), count === 1 ? "删除此图片" : "删除这 1 张图片");
+    await click();
+    assert.equal(h.pending.length, 2, "未完成成员再次删除仍需确认");
+    await click();
+    assert.deepEqual(JSON.parse(String(h.pending[2].body)), { ids: [remaining.id] });
+    await h.respond(2, { trashed: 1, results: [{ id: remaining.id, status: "trashed" }] });
+    await clock.advanceBy(500);
+    await h.flush();
+    await h.React.act(async () => dispatchDomEvent(h.window, h.document.querySelector(".image-editor-overlay")!, "animationend"));
+    assert.equal(closed, 1, "所有活动成员删除成功后关闭编辑窗口");
+    assert.deepEqual(committed.flat(), items.map((item) => item.id));
+  });
+}
+
+for (const kind of ["user", "storage"] as const) {
+  test(`[Web/后台表单] ${kind} 删除经过最终确认，取消重置且失败后重新确认`, async (t) => {
+    const h = await createConfigStreamHarness(t);
+    h.window.scrollTo = () => {};
+    const clock = installControlledClock(t, h.window);
+    const { registerHooks } = await import("node:module");
+    const hooks = registerHooks({ load(url, context, next) {
+      return url.endsWith(".css")
+        ? { format: "module", source: "", shortCircuit: true }
+        : next(url, context);
+    } });
+    const Component = await (kind === "user"
+      ? import("../../../packages/web/src/pages/admin/UserAdmin.tsx").then((module) => module.UserAdmin)
+      : import("../../../packages/web/src/pages/admin/storage/StorageSettings.tsx").then((module) => module.StorageSettings)
+    ).finally(() => hooks.deregister());
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+    const { ADMIN_ICONS } = await import("../../../packages/web/src/components/icon/admin-icons.generated.ts");
+    const { ActionFeedbackProvider } = await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    t.after(() => client.clear());
+    const backend = {
+      slug: "archive", display_name: "Archive", type: "local", enabled: false,
+      is_default: false, image_count: 0, ingestion_session_count: 0,
+      cleanup_job_count: 0, failed_cleanup_job_count: 0, exhausted_cleanup_job_count: 0,
+      deletion: { action: "delete", blockers: [] }
+    } satisfies StorageBackendAdmin;
+    const data = kind === "user"
+      ? { items: [{ username: "reviewer", role: "image" }] }
+      : { backends: [backend] };
+    client.setQueryData(kind === "user" ? queryKeys.users : queryKeys.storageBackends, data);
+    await h.render(h.React.createElement(QueryClientProvider, { client },
+      h.React.createElement(ActionFeedbackProvider, null, h.React.createElement(Component))));
+    const entry = () => h.document.querySelector<HTMLButtonElement>(
+      kind === "user" ? 'button[title="删除管理员"]' : ".storage-card-actions .danger-button"
+    )!;
+    const dialog = () => h.document.querySelector<HTMLFormElement>(".confirm-dialog form")!;
+    const confirm = () => dialog().querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    const submit = async () => h.React.act(async () => dispatchDomEvent(h.window, dialog(), "submit"));
+    const cancel = async () => {
+      await h.React.act(async () => dialog().querySelector<HTMLButtonElement>('button[type="button"]')!.click());
+      await h.React.act(async () => dispatchDomEvent(h.window, h.document.querySelector(".confirm-dialog")!, "animationend"));
+      await h.flush();
+    };
+    await h.React.act(async () => entry().click());
+    assert.equal(confirm().getAttribute("aria-pressed"), "false");
+    await submit();
+    assert.equal(confirm().getAttribute("aria-pressed"), "true");
+    assert.equal(confirm().querySelector("path")?.getAttribute("d"), ADMIN_ICONS["delete-bin-2-line"]);
+    assert.equal(h.pending.length, 0, "首次确认只进入最终确认，不提交删除");
+    await h.React.act(async () => dispatchDomEvent(h.window, confirm(), "focusout"));
+    assert.equal(confirm().getAttribute("aria-pressed"), "false");
+    await submit();
+    await cancel();
+    assert.equal(h.pending.length, 0, "取消不提交删除");
+    await h.React.act(async () => entry().click());
+    assert.equal(confirm().getAttribute("aria-pressed"), "false", "重新打开从初始确认开始");
+    await submit();
+    await submit();
+    const deletePath = kind === "user" ? "/api/admin/users/reviewer/delete" : "/api/admin/storage/backends/archive/delete";
+    assert.equal(h.pending[0].path, deletePath);
+    assert.equal(confirm().hasAttribute("disabled"), true);
+    assert.equal(confirm().querySelector("path")?.getAttribute("d"), ADMIN_ICONS["delete-bin-5-line"]);
+    await h.respond(0, { error: "delete_failed" }, 500);
+    if (kind === "storage") await h.respond(1, data);
+    await clock.advanceBy(500);
+    await h.flush();
+    assert.equal(confirm().hasAttribute("disabled"), false);
+    const beforeRetry = h.pending.length;
+    await submit();
+    assert.equal(h.pending.length, beforeRetry, "失败重试仍需最终确认");
+    assert.equal(confirm().getAttribute("aria-pressed"), "true");
+    await submit();
+    assert.equal(h.pending[beforeRetry].path, deletePath);
+    await h.respond(beforeRetry, { ok: true });
+    await h.respond(beforeRetry + 1, kind === "user" ? { items: [] } : { backends: [] });
+    await clock.advanceBy(500);
+    await h.flush();
+    await h.React.act(async () => dispatchDomEvent(h.window, h.document.querySelector(".confirm-dialog")!, "animationend"));
+    assert.equal(h.document.querySelector(".confirm-dialog"), null, "成功后关闭确认窗口");
+  });
+}
+
 test("[Web/后台表单] 词条卡片同 slug 按字段保护 dirty，clean 跟随权威且成功保存立即归于 clean", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { VocabularyAdminCard } = await import("../../../packages/web/src/pages/admin/VocabularyAdminCard.tsx");

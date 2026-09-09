@@ -15,7 +15,7 @@ export function ConfirmDialog({
   finalConfirmationIcon = "delete-bin-2-line",
   closeOnBackdrop = false,
   danger = true,
-  confirmIcon = "delete-bin-6-line",
+  confirmIcon = "delete-bin-line",
   pendingIcon = confirmIcon,
   pendingLabel = "处理中",
   successLabel = "操作成功",

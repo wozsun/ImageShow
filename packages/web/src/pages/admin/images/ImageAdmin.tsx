@@ -393,6 +393,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                   ref={batchTrashConfirmation.targetRef}
                   className={[
                     "danger-button",
+                    "is-subtle",
                     "two-step-confirm-text-button",
                     batchTrashConfirmation.armed ? "is-armed" : ""
                   ].filter(Boolean).join(" ")}
@@ -429,7 +430,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                     ? "delete-bin-5-line"
                     : batchTrashConfirmation.armed
                       ? "delete-bin-2-line"
-                      : "delete-bin-6-line"} />
+                      : "delete-bin-line"} />
                   <StableButtonLabel
                     idle={batchTrashConfirmation.armed
                       ? "确认删除"
@@ -441,7 +442,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
               )}
               {view === "deleted" && canPurgeImage && (
                 <button
-                  className="danger-button"
+                  className="danger-button is-subtle"
                   type="button"
                   disabled={interfaceBusy || (!selected.length && !items.length)}
                   onClick={() => {
@@ -461,7 +462,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                     );
                   }}
                 >
-                  <AdminIcon name="delete-bin-7-line" />
+                  <AdminIcon name="delete-bin-6-line" />
                   <StableButtonLabel
                     idle={selected.length ? "删除已选图" : "清空回收站"}
                     busyText={
@@ -596,7 +597,6 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
           confirmDisabled={Boolean(confirmError)}
           requireFinalConfirmation
           finalConfirmationLabel="确认删除"
-          confirmIcon="delete-bin-7-line"
           finalConfirmationIcon="delete-bin-2-line"
           pendingIcon="delete-bin-5-line"
           pendingLabel="正在删除"

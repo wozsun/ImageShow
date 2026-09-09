@@ -41,7 +41,6 @@
 .storage-cleanup-retry { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--admin-color-warning-border-strong); background: var(--admin-color-warning-surface); color: var(--admin-color-warning-action); font-size: 12px; font-weight: 600; cursor: pointer; }
 .storage-cleanup-retry:disabled { cursor: default; opacity: .7; }
 .storage-card-actions-right { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-.storage-card-actions .icon.is-danger { color: var(--admin-color-danger-action); }
 .storage-card-actions .storage-backend-migrate-action { color: var(--admin-color-action-text); }
 .storage-card-actions .storage-blocked-action { color: var(--admin-color-warning-text-strong); }
 .storage-add-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 132px; border: 1px dashed var(--admin-color-storage-add-border); border-radius: 12px; background: var(--admin-color-storage-add-surface); color: var(--admin-color-storage-label); font-size: 14px; cursor: pointer; }

@@ -157,8 +157,8 @@ export function AdminImageCard({
                 <AdminIcon name="pencil-line" />
               </button>
               <TwoStepConfirmIconButton
-                className="danger-button"
-                idleIcon="delete-bin-6-line"
+                className="danger-button is-subtle"
+                idleIcon="delete-bin-line"
                 confirmIcon="delete-bin-2-line"
                 busyIcon="delete-bin-5-line"
                 idleLabel={`删除图片：${title}`}
@@ -191,7 +191,7 @@ export function AdminImageCard({
               {canPurge && (
                 <button
                   type="button"
-                  className="danger-button"
+                  className="danger-button is-subtle"
                   title="永久删除"
                   aria-label={`永久删除图片：${title}`}
                   disabled={
@@ -202,7 +202,7 @@ export function AdminImageCard({
                   }
                   onClick={onPurge}
                 >
-                  <AdminIcon name="delete-bin-7-line" />
+                  <AdminIcon name="delete-bin-6-line" />
                 </button>
               )}
             </>

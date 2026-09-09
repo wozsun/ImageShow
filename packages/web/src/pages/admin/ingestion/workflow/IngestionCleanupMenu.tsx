@@ -119,7 +119,7 @@ export function IngestionCleanupMenu({
         disabled={allDisabled}
         onActivate={() => menu.open ? menu.requestClose() : menu.openMenu()}
       >
-        <AdminIcon name="delete-bin-6-line" />
+        <AdminIcon name="delete-bin-line" />
       </DirectActivationButton>
       {popup}
     </>

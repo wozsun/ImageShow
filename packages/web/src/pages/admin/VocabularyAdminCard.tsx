@@ -192,7 +192,7 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
               />
               {canDelete && (
                 <button
-                  className="icon danger-button"
+                  className="icon danger-button is-subtle"
                   type="button"
                   disabled={cardBusy}
                   title={`删除${noun}`}

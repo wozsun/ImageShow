@@ -199,7 +199,7 @@ export function StorageBackendCard({
             className={[
               "icon",
               backend.deletion.action === "delete"
-                ? "is-danger"
+                ? "danger-button is-subtle"
                 : backend.deletion.action === "migrate"
                   ? "storage-backend-migrate-action"
                   : "storage-blocked-action"

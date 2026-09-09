@@ -361,6 +361,7 @@ function VocabularyAdminContent({ kind, settings }: {
           confirmLabel="确认删除"
           requireFinalConfirmation
           finalConfirmationLabel="再次确认"
+          pendingIcon="delete-bin-5-line"
           busy={mutation === "delete"}
           onClose={() => setConfirmDelete(null)}
           onConfirm={remove}
