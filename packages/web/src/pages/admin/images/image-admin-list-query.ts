@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import {
   adminImageListReadStartedAtHeader,
   type AdminImageListResponseDto
@@ -67,7 +68,7 @@ function normalizedScope(
     view,
     device: filters.device || "",
     brightness: filters.brightness || "",
-    theme: view === "unset" ? "none" : filters.theme || "",
+    theme: view === "unset" ? unsetThemeFilter : filters.theme || "",
     tag: filters.tag || "",
     author: filters.author || "",
     pageSize
@@ -119,7 +120,7 @@ export function adminImageListQuery(
     page: String(page),
     limit: String(pageSize)
   });
-  if (view === "unset") params.set("theme", "none");
+  if (view === "unset") params.set("theme", unsetThemeFilter);
   else if (filters.theme) params.set("theme", filters.theme);
   if (filters.device) params.set("device", filters.device);
   if (filters.brightness) params.set("brightness", filters.brightness);

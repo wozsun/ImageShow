@@ -20,7 +20,7 @@ export function servingReadyCacheItem(overrides: Record<string, unknown> = {}) {
     ext: "jpg",
     device: "pc",
     brightness: "dark",
-    theme: "none",
+    theme: null,
     storage_slug: "local",
     author: "",
     tags: [],

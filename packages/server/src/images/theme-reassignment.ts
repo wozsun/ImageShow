@@ -54,7 +54,7 @@ function reserveReadyReassignment(
   };
 }
 
-async function reassignThemeImageToNone(
+async function clearImageThemeAssociation(
   theme: string,
   candidate: ThemeReassignImage,
   progress: ThemeReassignProgress,
@@ -88,7 +88,7 @@ async function reassignThemeImageToNone(
         const committed = await withTransaction(async (client) => {
           const result = await client.query(
             `UPDATE metadata
-                SET theme='none',
+                SET theme=NULL,
                     updated_at=now()
               WHERE id=$1
                 AND theme=$2
@@ -115,7 +115,7 @@ async function reassignThemeImageToNone(
   });
 }
 
-export async function reassignThemeImagesToNone(
+export async function clearThemeImageAssociations(
   theme: string,
   upperBoundImageId: string | null,
   progress: ThemeReassignProgress,
@@ -138,7 +138,7 @@ export async function reassignThemeImagesToNone(
     const results = await mapWithWorkerPool(
       images,
       THEME_REASSIGN_CONCURRENCY,
-      (candidate) => reassignThemeImageToNone(
+      (candidate) => clearImageThemeAssociation(
         theme,
         candidate,
         progress,

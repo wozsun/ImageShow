@@ -1,5 +1,4 @@
 :root {
-  --admin-color-image-card-divider: light-dark(#edf1f5, #1a1f26);
   --admin-color-workflow-filter-surface: light-dark(#f3f6fa, #141b25);
   --admin-shadow-panel: light-dark(rgba(32, 42, 56, .16), rgba(0, 0, 0, .48));
 }
@@ -21,7 +20,6 @@
 }
 
 .image-list-toolbar-actions button { white-space: nowrap; flex-shrink: 0; }
-.image-card-density-switch { flex: 0 0 auto; }
 .image-list-check-label {
   display: inline-flex;
   align-items: center;
@@ -186,8 +184,6 @@
   white-space: nowrap;
 }
 .admin-image-card-meta .app-icon { width: 1rem; height: 1rem; flex-basis: 1rem; }
-.admin-image-card-footer { display: contents; }
-.admin-image-card-meta.is-footer { display: none; }
 .admin-image-card-actions {
   grid-area: actions;
   align-self: stretch;
@@ -199,47 +195,6 @@
   width: 36px;
   min-height: 0;
   padding: 0;
-}
-
-.admin-image-grid[data-density="spacious"] .admin-image-card {
-  min-height: 0;
-  grid-template-columns: 22px minmax(0, 1fr);
-  grid-template-areas:
-    "check detail"
-    "footer footer";
-  gap: 12px;
-}
-.admin-image-grid[data-density="spacious"] .admin-image-card-detail {
-  min-height: 64px;
-  grid-template-columns: 64px minmax(0, 1fr);
-}
-.admin-image-grid[data-density="spacious"] .admin-image-card-thumb {
-  width: 64px;
-  height: 64px;
-}
-.admin-image-grid[data-density="spacious"] .admin-image-card-meta.is-inline { display: none; }
-.admin-image-grid[data-density="spacious"] .admin-image-card-footer {
-  grid-area: footer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--admin-color-image-card-divider);
-}
-.admin-image-grid[data-density="spacious"] .admin-image-card-meta.is-footer {
-  display: flex;
-  margin-right: auto;
-}
-.admin-image-grid[data-density="spacious"] .admin-image-card-actions {
-  align-self: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-.admin-image-grid[data-density="spacious"] .admin-image-card-actions button {
-  min-height: 34px;
-  height: 34px;
 }
 
 /* 图片管理页只在本文件维护桌面、窄桌面和移动端三档布局。 */
@@ -602,18 +557,7 @@
     gap: 4px;
     font-size: 15px;
   }
-  .image-list-toolbar-actions > .image-card-density-switch {
-    --labeled-switch-width: 56px;
-    --labeled-switch-thumb-width: 12px;
-    --labeled-switch-thumb-height: 20px;
-    --labeled-switch-edge-gap: 4px;
-    --labeled-switch-label-gap: 3px;
-    grid-column: 2;
-    align-self: center;
-    justify-self: end;
-    font-size: 12px;
-  }
-  .admin-image-grid[data-density] { grid-template-columns: 1fr; }
+  .admin-image-grid { grid-template-columns: 1fr; }
   .admin-image-card {
     grid-template-columns: 20px minmax(0, 1fr) 36px;
     gap: 8px;
@@ -625,37 +569,17 @@
   }
   .admin-image-card-thumb { width: 72px; height: 72px; }
   .admin-image-card-actions { gap: 4px; }
-  .admin-image-grid[data-density="spacious"] .admin-image-card {
-    min-height: 0;
-    grid-template-columns: 20px minmax(0, 1fr);
-    gap: 8px;
-  }
-  .admin-image-grid[data-density="spacious"] .admin-image-card-detail {
-    min-height: 56px;
-    grid-template-columns: 56px minmax(0, 1fr);
-    gap: 12px;
-  }
-  .admin-image-grid[data-density="spacious"] .admin-image-card-thumb {
-    width: 56px;
-    height: 56px;
-  }
-  .admin-image-grid[data-density="spacious"] .admin-image-card-actions {
-    gap: 8px;
-  }
   .image-list-toolbar { align-items: stretch; }
 }
 
 @media (max-width: 492px) {
   .image-list-toolbar {
     grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-rows: 36px auto;
     row-gap: 8px;
   }
   .image-list-selection {
     grid-column: 1;
-    grid-row: 1;
-  }
-  .image-list-toolbar-actions > .image-card-density-switch {
-    grid-column: 2;
     grid-row: 1;
   }
   .image-list-batch-actions {

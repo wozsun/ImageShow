@@ -18,7 +18,7 @@ const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
   const committedFixtures = async (ids: readonly string[], owners: string[], imageTime: string) => {
     for (const [index, id] of ids.entries()) {
       await runtime.databasePools.pool.query(
-        "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, theme, ext, md5, image_time) VALUES ($1,$2,'local',$3,'pc','dark','none','webp',$4,$5)",
+        "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, theme, ext, md5, image_time) VALUES ($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,$5)",
         [id, owners[index], storageObjectKey(id, "webp"), "a".repeat(32), imageTime]
       );
     }
@@ -27,7 +27,7 @@ const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
   const serviceDraft = {
     device: "auto" as const,
     brightness: "auto" as const,
-    theme: "none",
+    theme: null,
     author: "",
     title: "service batch",
     description: "",

@@ -23,7 +23,7 @@ type AdminImageCommonRecord = {
   id: string;
   device: Device;
   brightness: Brightness;
-  theme: string;
+  theme: string | null;
   width: DatabaseNumber;
   height: DatabaseNumber;
   object_key: string;

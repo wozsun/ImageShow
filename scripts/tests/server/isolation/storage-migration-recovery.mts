@@ -43,7 +43,7 @@ const localAccess = await registry.resolveStorageAccess("local");
     await database.pool.query(
       "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
         + "theme, ext, md5, image_size, thumbnail_size, status, deleted_at) VALUES "
-        + "($1, 'integration-admin', $2, $3, 'pc', 'dark', 'none', 'webp', $4, $5, $5, "
+        + "($1, 'integration-admin', $2, $3, 'pc', 'dark', NULL, 'webp', $4, $5, $5, "
         + "'deleted', now())",
       [
         id,
@@ -134,7 +134,7 @@ const localAccess = await registry.resolveStorageAccess("local");
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
       + "theme, ext, md5, image_size, thumbnail_size) VALUES "
-      + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', 'none', 'webp', $3, $4, 0)",
+      + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, $4, 0)",
     [
       thumbnailMissingMigrationId,
       thumbnailMissingMigrationKey,
@@ -321,7 +321,7 @@ const localAccess = await registry.resolveStorageAccess("local");
         "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
           + "brightness, theme, ext, md5, image_size, thumbnail_size, status, "
           + "deleted_at) VALUES ($1, 'integration-admin', $2, $3, 'pc', 'dark', "
-          + "'none', 'webp', $4, $5, $5, 'deleted', now())",
+          + "NULL, 'webp', $4, $5, $5, 'deleted', now())",
         [
           id,
           existingTargetSource,
@@ -453,7 +453,7 @@ const localAccess = await registry.resolveStorageAccess("local");
     await database.pool.query(
       "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
         + "brightness, theme, ext, md5, image_size, thumbnail_size, status, deleted_at) "
-        + "VALUES ($1, 'integration-admin', $2, $3, 'pc', 'dark', 'none', 'webp', $4, $5, $5, "
+        + "VALUES ($1, 'integration-admin', $2, $3, 'pc', 'dark', NULL, 'webp', $4, $5, $5, "
         + "'deleted', now())",
       [
         id,

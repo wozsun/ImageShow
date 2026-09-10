@@ -13,13 +13,12 @@ import { adminApiBasePath } from "../../lib/constants.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import type { ReorderDirection } from "../../lib/ui/reorder.js";
 
-export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, pinned = false, canDelete = false, reorderBusy, canMovePrevious, canMoveNext, onMove, onReorderControlRef, onDragStart, onDragEnter, onDragEnd }: {
+export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, canDelete = false, reorderBusy, canMovePrevious, canMoveNext, onMove, onReorderControlRef, onDragStart, onDragEnter, onDragEnd }: {
   kind: "themes" | "tags" | "authors";
   item: AdminEntityDto;
   onChanged: (item?: AuthorDto) => void | Promise<void>;
   onDelete: () => void;
   onError: (error: unknown) => void;
-  pinned?: boolean;
   canDelete?: boolean;
   reorderBusy: boolean;
   canMovePrevious: boolean;
@@ -117,34 +116,22 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
   return (
     <div
       ref={cardRef}
-      className={`entity-card${pinned ? " is-pinned" : ""}${dragging ? " is-dragging" : ""}`}
-      onDragEnter={() => { if (!pinned) onDragEnter?.(item.slug); }}
-      onDragOver={(event) => { if (!pinned) event.preventDefault(); }}
+      className={`entity-card${dragging ? " is-dragging" : ""}`}
+      onDragEnter={() => { onDragEnter?.(item.slug); }}
+      onDragOver={(event) => { event.preventDefault(); }}
     >
       <div className="entity-card-row">
         <SlugChip value={item.slug} ariaLabel={`${noun} slug`} />
-        {pinned
-          ? (
-            // none 卡片同样用输入框（禁用、不可编辑），与其他卡片的显示名框完全对齐。
-            <input
-              className="entity-display-input"
-              value={item.display_name || "未设置"}
-              disabled
-              aria-label="未设置（不可编辑）"
-            />
-          )
-          : (
-            <input
-              className="entity-display-input"
-              value={display}
-              onChange={(event) => setForm({ ...form, display: event.target.value })}
-              placeholder="显示名"
-              disabled={cardBusy}
-              maxLength={64}
-            />
-          )}
+        <input
+          className="entity-display-input"
+          value={display}
+          onChange={(event) => setForm({ ...form, display: event.target.value })}
+          placeholder="显示名"
+          disabled={cardBusy}
+          maxLength={64}
+        />
       </div>
-      {isAuthor && !pinned && (
+      {isAuthor && (
         <div className="entity-card-row entity-card-link-row">
           <input
             className="entity-link-input"
@@ -162,47 +149,41 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
       )}
       <div className="entity-card-foot">
         <span className="muted entity-count">{item.image_count} 张</span>
-        {pinned
-          ? <span className="muted entity-pinned-note">未设置主题的图片归于此</span>
-          : (
-            <>
-              {(dirty || saveStatus.status !== "idle") && (
-                <AsyncActionButton
-                  type="button"
-                  className="button"
-                  status={saveStatus.status}
-                  presentation={savePresentation}
-                  disabled={cardBusy || (!dirty && saveStatus.status === "idle")}
-                  onClick={() => void save()}
-                />
-              )}
-              <ReorderControls
-                itemLabel={`${noun} ${item.slug}`}
-                busy={cardBusy}
-                canMovePrevious={canMovePrevious}
-                canMoveNext={canMoveNext}
-                onMove={onMove}
-                onControlRef={onReorderControlRef}
-                dragPreviewRef={cardRef}
-                onDragStart={begin}
-                onDragEnd={() => {
-                  setDragging(false);
-                  onDragEnd?.();
-                }}
-              />
-              {canDelete && (
-                <button
-                  className="icon danger-button is-subtle"
-                  type="button"
-                  disabled={cardBusy}
-                  title={`删除${noun}`}
-                  onClick={onDelete}
-                >
-                  <AdminIcon name="delete-bin-6-line" />
-                </button>
-              )}
-            </>
-          )}
+        {(dirty || saveStatus.status !== "idle") && (
+          <AsyncActionButton
+            type="button"
+            className="button"
+            status={saveStatus.status}
+            presentation={savePresentation}
+            disabled={cardBusy || (!dirty && saveStatus.status === "idle")}
+            onClick={() => void save()}
+          />
+        )}
+        <ReorderControls
+          itemLabel={`${noun} ${item.slug}`}
+          busy={cardBusy}
+          canMovePrevious={canMovePrevious}
+          canMoveNext={canMoveNext}
+          onMove={onMove}
+          onControlRef={onReorderControlRef}
+          dragPreviewRef={cardRef}
+          onDragStart={begin}
+          onDragEnd={() => {
+            setDragging(false);
+            onDragEnd?.();
+          }}
+        />
+        {canDelete && (
+          <button
+            className="icon danger-button is-subtle"
+            type="button"
+            disabled={cardBusy}
+            title={`删除${noun}`}
+            onClick={onDelete}
+          >
+            <AdminIcon name="delete-bin-6-line" />
+          </button>
+        )}
       </div>
     </div>
   );

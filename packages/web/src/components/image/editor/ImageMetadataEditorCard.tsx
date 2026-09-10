@@ -4,6 +4,7 @@ import { ImageThumbnail } from "../ImageThumbnail.js";
 import {
   formatBytes,
   formatDimensions,
+  formatImageClassification,
   shortImageId
 } from "../../../lib/ui/formatters.js";
 import {
@@ -103,10 +104,10 @@ export function ImageMetadataEditorCard({
               ) : null}
             </div>
             <span className="image-editor-desktop-summary">
-              {formatDimensions(item.width, item.height)} · {item.theme} · {item.device}/{item.brightness} · {storageName}
+              {formatDimensions(item.width, item.height)} · {formatImageClassification(item)} · {storageName}
             </span>
             <span className="image-editor-summary-line image-editor-mobile-summary">
-              {formatDimensions(item.width, item.height)} · {item.device}/{item.brightness} · {item.theme}
+              {formatDimensions(item.width, item.height)} · {formatImageClassification(item)}
             </span>
             <span className="image-editor-summary-line image-editor-mobile-summary">
               {item.image_size ? formatBytes(item.image_size) : "大小未记录"} · {storageName}

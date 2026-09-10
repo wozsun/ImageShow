@@ -23,10 +23,7 @@ export const passwordChangeInput = z.strictObject({
 });
 
 const adminPreferenceInputFields = {
-  color_scheme: z.enum(adminPreferenceValueOptions.color_scheme).optional(),
-  image_card_density: z.enum(
-    adminPreferenceValueOptions.image_card_density
-  ).optional()
+  color_scheme: z.enum(adminPreferenceValueOptions.color_scheme).optional()
 } satisfies Record<keyof typeof adminPreferenceValueOptions, z.ZodType>;
 
 export const adminPreferencesInput = z.strictObject(adminPreferenceInputFields)

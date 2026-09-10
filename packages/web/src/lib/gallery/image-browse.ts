@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { detectDeviceFromUserAgent, type EditableImageSnapshotDto } from "@imageshow/shared/browser";
 import type { GalleryFilters } from "./gallery-query.js";
 
@@ -20,7 +21,7 @@ export function imageMatchesFilters(
     ? detectDeviceFromUserAgent(userAgent) : filters.device;
   return (!device || image.device === device)
     && (!filters.brightness || image.brightness === filters.brightness)
-    && matchesSelector([image.theme], filters.theme)
+    && matchesSelector([image.theme ?? unsetThemeFilter], filters.theme)
     && matchesSelector(image.tags, filters.tag)
     && matchesSelector([image.author], filters.author);
 }

@@ -29,7 +29,7 @@ try {
     await database.pool.query(
       "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
         + "brightness, theme, ext, md5, status) VALUES "
-        + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', 'none', 'webp', $3, $4)",
+        + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, $4)",
       [id, imagePaths.storageObjectKey(id, "webp"), duplicateMd5, index === 0 ? "ready" : "deleted"]
     );
   }
@@ -65,7 +65,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     await database.pool.query(
       "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
         + "brightness, theme, ext, md5, author, image_time, deleted_at, title) "
-        + "VALUES ($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', 'none', "
+        + "VALUES ($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, "
         + "'webp', $3, $4, $5, now(), $6)",
       [
         id,
@@ -157,7 +157,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
       + "brightness, theme, ext, md5, author, image_time, deleted_at, title) "
-      + "VALUES ($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', 'none', "
+      + "VALUES ($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, "
       + "'webp', $3, 'alice', '2026-08-16T00:00:00.000Z', now(), "
       + "'pagination-concurrent')",
     [
@@ -307,7 +307,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     },
     {
       name: "unset",
-      query: { status: "ready", theme: "none", page: 1, limit: 3 }
+      query: { status: "ready", theme: "~unset", page: 1, limit: 3 }
     },
     {
       name: "device",
@@ -569,7 +569,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     await assert.rejects(
       adminImagesReadModel.listAdminImages({
         status: "ready",
-        theme: "none",
+        theme: "~unset",
         page: 1,
         limit: 1
       }),

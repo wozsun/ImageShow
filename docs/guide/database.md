@@ -3,7 +3,8 @@
 PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 `packages/server/schema.sql` 完整定义上一已封版版本的干净安装基线；`author` 可空身份两列、
 三项长期 CHECK、非空身份复合唯一索引、`metadata.purge_job_id` 与“非空时必须为 deleted”的
-长期 CHECK 都属于该基线；`schema-additions.sql` 承载当前发布的当期增量，目前为注释占位。
+长期 CHECK 都属于该基线；`schema-additions.sql` 仍为注释占位。6.2.0 的主题约束与数据转换
+由独立 `schema-theme-null.sql` 和离线迁移 CLI 承载，不放入默认自动 additions。
 随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一 Redis 图片投影的权威 revision
 单行表均属于基线。PostgreSQL
 是最终图片、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
@@ -18,7 +19,8 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 
 数据库生命周期由上一已封版版本的干净基线、当前 additions 和轻量 readiness 组成。单应用进程
 启动时，空数据库在一个事务中先执行 `schema.sql`，再执行当前 `schema-additions.sql`；符合该
-基线的非空数据库执行 additions 后直接进入 readiness。当前 additions 不含可执行语句；
+基线的非空数据库须先执行本版离线主题迁移，随后启动执行 additions 并进入 readiness。空库
+在同一事务内于基线之后执行主题迁移 SQL，直接获得当前可空结构。当前 additions 不含可执行语句；
 additions、readiness 或干净初始化任一步失败都会回滚本次结构事务。全部连接固定使用
 `search_path=public`；单实例部署按顺序完成 schema 和管理员播种。readiness 在启动事务的
 同一连接上顺序执行 SQL，包括作者与图片 CHECK 约束读取，不并发调用该 client 的 query。
@@ -82,7 +84,7 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 | `object_key` (UNIQUE) | 标准化完整展示图在所属后端中的对象键；固定为 `<UUID 尾部两位>/<UUID>.<ext>` |
 | `device` | 设备：`pc`（横屏）/ `mb`（竖屏），由宽高比或用户选择得到 |
 | `brightness` | 亮度：`dark` / `light`，上传默认自动识别 |
-| `theme` | 主题 slug；`none` 表示无主题 |
+| `theme` | 可空主题外键；SQL `NULL` / API `null` 表示无主题，无默认值 |
 | `author` | 作者 slug，可空，外键 → `author.slug`，删除作者时自动置空 |
 | `ext` | 扩展名：`jpg` / `png` / `webp` / `gif` / `avif` |
 | `md5` | 文件 MD5，32 位十六进制；用于判重 |
@@ -158,6 +160,35 @@ OFFSET 跳过的行水合标签。total、metadata 与 tags 属于同一事务�
 窗口；上述 ready SQL 是 coordinator 重建、revision 改变或派生索引暂不可读时的回源证据。
 当前样本下既有索引已满足当前范围，因此不新增 schema、稀疏锚点或持久化排名表；
 deleted 深页的外部排序若在真实规模中成为可测瓶颈，再依据独立数据决定索引或其他方案。
+
+## 6.2.0 无主题受控迁移
+
+既有 6.1.x 数据库停止所有 ImageShow 写入者后，由 `imageshow migrate-theme-null --apply --offline`
+在单一事务及表锁中删除 `metadata.theme` 的非空约束和默认值，只把 `theme='none'` 的正式图片与
+回收站图片改为 SQL `NULL`，解除关联后删除保留词条。其他主题、图片字段、时间和全部存储对象
+保持原值。本次事务同时从管理员偏好中移除旧 `image_card_density`，保留外观等其他偏好及账号字段。
+同一事务推进 `ready_image_revision`，启动时旧 Redis 图片投影无法通过 revision 读门；
+词表缓存使用新进程 epoch 失效。此操作不清空 Redis、不访问图片文件。
+
+该入口只接受上一封版的 `NOT NULL DEFAULT 'none'` 结构或当前可空结构；主题与偏好清理均完成后重复执行
+不再改数据或推进 revision。未知或部分手工结构先失败，由维护者排查；事务失败整体回滚，
+COMMIT 结果未知时先重新盘点确认。readiness 长期要求 theme 可空、无默认值，保留外键。
+停机、备份和恢复顺序见 [部署说明](../DEPLOY.md#620-无主题升级)。
+
+HTTP、JSONL 和未完成 Redis draft 在 6.2.0 过渡期间将旧 `none` 转成 `null`；Upload intent、
+canonical、冻结 commit 继续使用原有身份、版本、TTL 和恢复链。请求 / 提交 / 语义哈希仅在计算
+摘要时保留旧主题表示，避免同一已冻结请求在重试时发生身份冲突；它不写回正式图片主题。
+已存在的 Redis 原始 snapshot 在读取时转换，在后续原子变更时按当前空值结构写回，未完成内容
+仍只以队列 canonical 为权威。当前 Lua draft 校验允许 JSON null。升级时旧页面应刷新；旧请求
+可继续安全归一化，过期令牌沿现有 snapshot / 重连路径恢复。
+
+筛选统一用查询专用 `~unset` 标记（如 `theme=~unset` 或 `theme=!~unset`），不占用任何合法主题
+slug；`none` 旧 URL 本版映射到此筛选。虚拟“未设置”项只用于图库筛选与统计，不是数据库词条，
+不可编辑、删除或参与词条重排；主题管理只列出真实主题。无主题图片 DTO 返回 `theme: null`。
+排除普通主题时包含无主题图片，排除 `~unset` 才排除空值。全量、交叉筛选与随机索引采用同一语义。
+
+6.2.1 只有在全部受控数据库迁移核对完成、所有使用 6.2.0 兼容哈希的接入意图、完成回执和冻结请求已完成并到期后，才清理本节的
+迁移专用路径并将最终结构合入干净安装基线；不跳过 6.2.0。6.2.2 再提供分体应用按钮与批量清空。
 
 ## ready_image_revision —— Redis 投影权威修订号
 
@@ -254,14 +285,14 @@ HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退�
 | `username` (PK) | 用户名 |
 | `password_hash` | Argon2id PHC 密码哈希；数据库约束基本格式和长度，应用校验参数安全范围 |
 | `role` | `super` / `image` |
-| `preferences` | 管理员界面偏好 JSONB；顶层必须是对象、最大 4 KiB，当前可保存 `color_scheme` 与 `image_card_density` |
+| `preferences` | 管理员界面偏好 JSONB；顶层必须是对象、最大 4 KiB，当前保存 `color_scheme` |
 | `created_at` / `updated_at` | 时间戳 |
 
-仅在数据库没有 super 时，首次启动才使用 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 创建首个 super；已有 super 的账号、密码和偏好始终以 PostgreSQL 为准。偏好 PATCH 使用 JSONB 顶层合并，不同键的并发修改由同一账号行串行化后各自保留；API 只返回当前 shared schema 认识的键。`color_scheme` 只接受 `light` / `dark` / `system`，缺失时使用 `system` 并由浏览器实时解析；`image_card_density` 缺失时使用紧凑。默认值集中在 shared，数据库只保存用户选择的模式，不保存自动模式解析出的设备明暗结果。
+仅在数据库没有 super 时，首次启动才使用 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 创建首个 super；已有 super 的账号、密码和偏好始终以 PostgreSQL 为准。偏好 PATCH 使用 JSONB 顶层合并，不同键的并发修改由同一账号行串行化后各自保留；API 只返回当前 shared schema 认识的键。`color_scheme` 只接受 `light` / `dark` / `system`，缺失时使用 `system` 并由浏览器实时解析。默认值集中在 shared，数据库只保存用户选择的模式，不保存自动模式解析出的设备明暗结果。
 
 ## tag / theme / image_tag —— 标签与主题
 
-`tag` 与 `theme` 都使用小写 slug、显示名、排序和时间戳。主题是一图一值，直接存在 `metadata.theme`；标签是一图多值，通过 `image_tag(image_id, tag_slug)` 关联。
+`tag` 与 `theme` 都使用小写 slug、显示名、排序和时间戳。主题是一图至多一值，直接存在可空 `metadata.theme`；标签是一图多值，通过 `image_tag(image_id, tag_slug)` 关联。
 
 图片标签关联与 Ingestion commit 对最终解析、去重后的 tag slug 按排序顺序组合取得
 共享 advisory lock，并在锁内使用同一列表幂等确保缺失标签存在、替换

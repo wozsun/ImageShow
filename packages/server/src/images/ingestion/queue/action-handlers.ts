@@ -110,7 +110,7 @@ function metadataForAction(
       ? prepared.detected_brightness
       : patch.brightness;
   }
-  if (patch.theme?.trim()) metadata.theme = patch.theme;
+  if (patch.theme !== undefined) metadata.theme = patch.theme;
   if (patch.author?.trim()) metadata.author = patch.author;
   if (patch.tags?.length) {
     metadata.tags = [...new Set([...metadata.tags, ...patch.tags])];

@@ -1,3 +1,4 @@
+import { imageThemeInput } from "../../metadata-theme.ts";
 import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
@@ -23,7 +24,7 @@ const jsonlRowSchema = z.object({
   tags: normalizedImageTagSlugsSchema.optional(),
   title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength).optional(),
   description: z.string().trim().max(appConfig.imageMetadata.descriptionMaxLength).optional(),
-  theme: slug.optional(),
+  theme: imageThemeInput.optional(),
   device: z.enum([...appConfig.devices, "auto"]).optional(),
   brightness: z.enum([...appConfig.brightnesses, "auto"]).optional(),
   storage_slug: slug.optional()

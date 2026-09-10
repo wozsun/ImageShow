@@ -397,7 +397,7 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
   const draft = {
     device: "auto" as const,
     brightness: "auto" as const,
-    theme: "none",
+    theme: null,
     author: "",
     title: "title",
     description: "",
@@ -1973,7 +1973,7 @@ test("[Server/内容接入] 同一 execution 可接力草稿版本且身份变�
     metadata: {
       device: "auto",
       brightness: "auto",
-      theme: "none",
+      theme: null,
       author: "",
       title: "before edit",
       description: "",
@@ -2256,7 +2256,7 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
       metadata: {
         device: "auto",
         brightness: "auto",
-        theme: "none",
+        theme: null,
         author: "",
         title: "",
         description: "",
@@ -2286,7 +2286,7 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
         metadata: {
           device: "auto",
           brightness: "auto",
-          theme: "none",
+          theme: null,
           author: "",
           title: "",
           description: "",
@@ -2527,7 +2527,7 @@ test("[Server/内容接入] 已启动事务的 expiry 只通过原子 cutoff 收
       metadata: {
         device: "auto",
         brightness: "auto",
-        theme: "none",
+        theme: null,
         author: "",
         title: "",
         description: "",
@@ -2649,7 +2649,7 @@ test("[Server/内容接入] PG 完成清理不会越过新的 session incarnatio
     metadata: {
       device: "auto",
       brightness: "auto",
-      theme: "none",
+      theme: null,
       author: "",
       title: "",
       description: "",
@@ -2726,7 +2726,7 @@ test("[Server/内容接入] PG 完成会清退保留 commit 的 failed canonical
     metadata: {
       device: "auto",
       brightness: "auto",
-      theme: "none",
+      theme: null,
       author: "",
       title: "",
       description: "",
@@ -2759,7 +2759,7 @@ test("[Server/内容接入] PG 完成会清退保留 commit 的 failed canonical
       metadata: {
         device: "auto",
         brightness: "auto",
-        theme: "none",
+        theme: null,
         author: "",
         title: "",
         description: "",
@@ -2921,7 +2921,7 @@ test("[Server/内容接入] recovery 严格先收敛 expiry 并只重排一次�
     metadata: {
       device: "auto",
       brightness: "auto",
-      theme: "none",
+      theme: null,
       author: "",
       title: imageId,
       description: "",
@@ -3097,7 +3097,7 @@ test("[Server/内容接入] 恢复按实际扫描边界越过缺失 canonical �
       metadata: {
         device: "auto",
         brightness: "auto",
-        theme: "none",
+        theme: null,
         author: "",
         title: label,
         description: "",

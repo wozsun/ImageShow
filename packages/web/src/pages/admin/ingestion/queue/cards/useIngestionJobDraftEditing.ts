@@ -72,7 +72,7 @@ export function useIngestionJobDraftEditing({
   const focus = useCallback((field: ImageDraftDeferredField) => {
     const current = jobRef.current;
     if (busyRef.current || !ingestionJobAttributesEditable(current)) return;
-    const value = current.draft[field];
+    const value = current.draft[field] ?? "";
     replaceSession({
       field,
       incarnation: current.attemptKey,

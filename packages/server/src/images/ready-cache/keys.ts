@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { createHash } from "node:crypto";
 import {
   brightnesses,
@@ -75,7 +76,8 @@ export function readyImageAttributeIndexKey(
   if (
     !READY_IMAGE_NAMED_ATTRIBUTE_KINDS.includes(spec.kind)
     || spec.value.length > READY_IMAGE_ATTRIBUTE_SLUG_MAX_LENGTH
-    || !slugPattern.test(spec.value)
+    || (!(spec.kind === "theme" && spec.value === unsetThemeFilter)
+      && !slugPattern.test(spec.value))
   ) {
     throw new Error("Invalid ready-image named attribute");
   }
@@ -107,7 +109,7 @@ export function readyImageAttributeIndexSpec(
     )
     && value
     && value.length <= READY_IMAGE_ATTRIBUTE_SLUG_MAX_LENGTH
-    && slugPattern.test(value)
+    && ((kind === "theme" && value === unsetThemeFilter) || slugPattern.test(value))
   ) {
     return {
       kind: kind as typeof READY_IMAGE_NAMED_ATTRIBUTE_KINDS[number],

@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { appConfig } from "@imageshow/shared";
 import {
   brightnesses,
@@ -159,15 +160,18 @@ async function readPublicGalleryStats(
         client,
         plan,
         ["theme"],
-        (where, rowLimit) => `SELECT t.slug,
-                            t.display_name,
-                            count(m.id)::int AS image_count
+        (where, rowLimit) => `SELECT slug, display_name, image_count FROM (
+                       SELECT t.slug, t.display_name, count(m.id)::int AS image_count,
+                              t.sort_order, false AS is_unset
                        FROM theme t
                        LEFT JOIN metadata m
                          ON m.theme=t.slug
                         AND ${where}
                       GROUP BY t.slug, t.display_name, t.sort_order
-                      ORDER BY (t.slug='none') DESC, t.sort_order ASC, t.slug ASC
+                      UNION ALL
+                       SELECT '${unsetThemeFilter}', '未设置', count(*)::int, 0, true
+                         FROM metadata m WHERE m.theme IS NULL AND ${where}
+                      ) facets ORDER BY is_unset DESC, sort_order ASC, slug ASC
                       LIMIT ${rowLimit}`
       );
       const tagRows = await filteredRows<FacetCountRow>(

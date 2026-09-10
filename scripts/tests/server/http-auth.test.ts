@@ -511,7 +511,7 @@ test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验�
     ext: "avif",
     device: "pc",
     brightness: "dark",
-    theme: "none",
+    theme: null,
     storage_slug: "local",
     author: "alice",
     tags: ["stage", "concert", "stage"],
@@ -538,7 +538,7 @@ test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验�
     "device:pc",
     "brightness:dark",
     "axis:pc:dark",
-    "theme:none",
+    "theme:~unset",
     "tag:concert",
     "tag:stage",
     "author:alice"

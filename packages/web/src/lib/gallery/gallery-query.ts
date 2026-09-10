@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import {
   detectDeviceFromUserAgent,
   showModes,
@@ -34,7 +35,12 @@ function selectorValue(params: URLSearchParams, key: string) {
     params.getAll(key)
       .flatMap((value) => value.split(","))
       .map((value) => value.trim().toLowerCase())
-      .filter((value) => selectorPattern.test(value))
+      // 6.2.0 transition for existing gallery/show bookmarks.
+      .map((value) => key === "theme"
+        ? value === "none" ? unsetThemeFilter : value === "!none" ? `!${unsetThemeFilter}` : value
+        : value)
+      .filter((value) => selectorPattern.test(value)
+        || (key === "theme" && [unsetThemeFilter, `!${unsetThemeFilter}`].includes(value)))
   )];
   const hasIncludes = tokens.some((value) => !value.startsWith("!"));
   const hasExcludes = tokens.some((value) => value.startsWith("!"));

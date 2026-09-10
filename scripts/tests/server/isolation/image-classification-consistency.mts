@@ -29,7 +29,7 @@ const readReadyRevision = async () => BigInt(String((
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
       + "theme, ext, md5, thumbnail_size, title) VALUES "
-      + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', 'none', 'webp', $3, $4, 'before')",
+      + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, $4, 'before')",
     [
       classificationRollbackId,
       classificationRollbackSource,
@@ -125,7 +125,7 @@ const readReadyRevision = async () => BigInt(String((
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
       + "theme, ext, md5, image_size, thumbnail_size, status) VALUES "
-      + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', 'none', 'webp', $3, $4, $4, "
+      + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, $4, $4, "
       + "'ready')",
     [
       classificationId,
@@ -200,7 +200,7 @@ const readReadyRevision = async () => BigInt(String((
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
       + "theme, ext, md5, thumbnail_size) VALUES "
-      + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', 'none', 'webp', $3, 0)",
+      + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, 0)",
     [
       classificationMissingThumbId,
       classificationMissingThumbSource,

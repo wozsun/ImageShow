@@ -23,7 +23,7 @@ const databaseCheck = await import("../../../../packages/server/src/checks/datab
 const sharedAppConfig = await import("@imageshow/shared");
 const localAccess = await registry.resolveStorageAccess("local");
 const foregroundImage = randomUUID();
-await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_slug,object_key,device,brightness,theme,ext,md5) VALUES ($1,'integration-admin','ready','local',$2,'pc','dark','none','webp',$3)",[foregroundImage,imagePaths.storageObjectKey(foregroundImage,"webp"),"0".repeat(32)]);
+await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_slug,object_key,device,brightness,theme,ext,md5) VALUES ($1,'integration-admin','ready','local',$2,'pc','dark',NULL,'webp',$3)",[foregroundImage,imagePaths.storageObjectKey(foregroundImage,"webp"),"0".repeat(32)]);
   const claimTrashPurgeJob = async () => {
     for (let attempt = 0; attempt < 200; attempt += 1) {
       const job = await jobs.claimBackgroundJob("trash.purge");
@@ -60,7 +60,7 @@ await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_sl
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
       + "brightness, theme, ext, md5, thumbnail_size, deleted_at) VALUES "
-      + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', 'none', 'webp', $3, $4, now())",
+      + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, $4, now())",
     [
       uncertainImage,
       uncertainObjectKey,
@@ -133,7 +133,7 @@ await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_sl
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
       + "brightness, theme, ext, md5, thumbnail_size, deleted_at) VALUES "
-      + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', 'none', "
+      + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, "
       + "'webp', $3, $4, now())",
     [
       admittedCancelImage,
@@ -224,7 +224,7 @@ await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_sl
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
       + "brightness, theme, ext, md5, thumbnail_size, deleted_at) VALUES "
-      + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', 'none', 'webp', $3, $4, now())",
+      + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, $4, now())",
     [
       interruptedImage,
       interruptedObjectKey,
@@ -283,7 +283,7 @@ await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_sl
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
       + "theme, ext, md5, thumbnail_size) VALUES ($1, 'integration-admin', 'local', $2, 'pc', "
-      + "'dark', 'none', 'webp', $3, $4)",
+      + "'dark', NULL, 'webp', $3, $4)",
     [
       concurrentImage,
       concurrentObjectKey,
@@ -387,7 +387,7 @@ await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_sl
       await database.pool.query(
         "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
           + "brightness, theme, ext, md5, thumbnail_size, deleted_at) VALUES "
-          + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', 'none', 'webp', $3, "
+          + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, "
           + "$4, clock_timestamp() - ($5 || ' seconds')::interval)",
         [
           id,

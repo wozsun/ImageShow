@@ -2627,7 +2627,7 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
   }
   const unsetTarget = new URL(unsetUrl, "https://imageshow.test");
   assert.equal(unsetTarget.searchParams.get("status"), "ready");
-  assert.equal(unsetTarget.searchParams.get("theme"), "none");
+  assert.equal(unsetTarget.searchParams.get("theme"), "~unset");
   assert.equal(unsetTarget.searchParams.get("page"), "1");
 
 });
@@ -2716,7 +2716,7 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
         headers: { "Content-Type": "application/json" }
       });
     }
-    if (url.searchParams.get("theme") === "none") {
+    if (url.searchParams.get("theme") === "~unset") {
       return new Promise<Response>((resolve) => {
         resolveUnsetPage = resolve;
       });
@@ -2874,7 +2874,7 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     assert.equal(latest.totalPages, 3);
     assert.equal(requests.some((value) => {
       const url = new URL(value);
-      return url.searchParams.get("theme") === "none"
+      return url.searchParams.get("theme") === "~unset"
         && url.searchParams.get("page") !== "1";
     }), false);
 
@@ -2906,7 +2906,7 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
       .map((value) => new URL(value))
       .filter((url) => (
         url.searchParams.get("status") === "ready"
-        && url.searchParams.get("theme") !== "none"
+        && url.searchParams.get("theme") !== "~unset"
       ))
       .map((url) => url.searchParams.get("page"));
     assert.equal(readyPages.filter((page) => page === "50").length, 2);

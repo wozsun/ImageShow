@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | `device` | `pc` / `mb` / `all` / `auto` | 设备；缺省在请求边界归一为 `auto`，按 User-Agent 推断，无法识别时使用全部设备；`all` 显式使用全部设备 |
 | `brightness` | `dark` / `light` | 亮度，缺省两者皆可 |
-| `theme` | 逗号分隔主题 | 缺省全部；`theme=a,b` 为包含，`theme=!a,!b` 为排除，二者不可混用 |
+| `theme` | 逗号分隔主题 | 缺省全部；`theme=a,b` 为包含，`theme=!a,!b` 为排除，二者不可混用；`~unset` 选无主题 |
 | `tag` | 逗号分隔标签 | 缺省全部；包含为“任一”，`!` 前缀为排除，二者不可混用 |
 | `author` | 逗号分隔作者 | 缺省全部；`author=x,y` 为包含，`author=!x,!y` 为排除，二者不可混用 |
 | `id` | 完整 UUID 或末 12 位 | 只从匹配到的可用图片中随机选择，可用逗号或重复参数给出多个值 |
@@ -16,7 +16,9 @@
 | `limit` | 大于 0 的整数 | 仅显式指定 `mode=json` 时有效；缺省为 1，最多返回 200 张 |
 
 `theme` / `tag` / `author` 可填 slug 或显示名，服务端会先解析成 slug，再按字段排序去重并生成
-稳定筛选签名。基础随机、主题、标签和作者筛选都复用
+稳定筛选签名。`theme=~unset` 只选无主题，`theme=!~unset` 只选已设主题；排除普通主题仍
+包含空主题。`~unset` 只用于查询，不是主题词条；JSON 图片响应的无主题为 `null`。6.2.0
+过渡期间旧 `theme=none` / `theme=!none` 映射到对应空值选择器。基础随机、主题、标签和作者筛选都复用
 `imageshow:cache:images:*` 就绪图片投影：无筛选直接使用根层核心 `index:all`，轴 / 主题 /
 标签 / 作者 ZSET 与组合结果统一位于 `imageshow:cache:images:derived:*`。核心重建只建立
 根层投影；公开请求首次使用某个属性时立即进入 PostgreSQL fallback，并触发独立的
@@ -98,7 +100,7 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
 ## 返回方式
 
 `mode=proxy` 从图片所属 local 或 S3 后端读取已入库图片字节，并附带
-`X-Image-Info`；它不声明 `Accept-Ranges`。`mode=redirect` 返回 302 跳转到公开 URL。
+`X-Image-Info`（设备-明暗-主题-ID，无主题时主题段为空）；它不声明 `Accept-Ranges`。`mode=redirect` 返回 302 跳转到公开 URL。
 域名未设置、为空或为 `example.com` 时，应用提供的图片 URL 使用 `/images/...` 同源路径：
 浏览器会按访问地址解析，API 客户端应以请求 origin 解析 JSON 图片地址及相对 `Location`。
 已配置公开地址的 S3 对象继续返回存储直链。

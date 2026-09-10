@@ -268,14 +268,6 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
                 ariaLabel="随机图默认模式"
               />
             </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={settings.admin.show_unset_theme_card}
-                onChange={(event) => updateAdmin({ show_unset_theme_card: event.target.checked })}
-              />
-              主题管理显示「未设置」卡片
-            </label>
           </section>
           <section className="settings-card-wide">
             <h2><AdminIcon name="image-line" />图片设置</h2>

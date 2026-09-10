@@ -68,7 +68,7 @@ export async function commitIngestionSessionSnapshot(
   try {
     const resolvedTags = await resolveTagNames(commit.metadata.tags);
     const vocabularyLocks = vocabularyAssociationLockRequests([
-      ...(commit.metadata.theme && commit.metadata.theme !== "none"
+      ...(commit.metadata.theme
         ? [{ entity: "theme" as const, slug: commit.metadata.theme }]
         : []),
       ...(commit.metadata.author

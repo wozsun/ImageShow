@@ -83,7 +83,6 @@ export const runtimeConfigEnvironmentBindings = [
   { path: "admin.login_background", environmentVariable: "ADMIN_LOGIN_BACKGROUND", valueKind: "string" },
   { path: "admin.image_page_size", environmentVariable: "ADMIN_IMAGE_PAGE_SIZE", valueKind: "number" },
   { path: "admin.recent_uploads", environmentVariable: "ADMIN_RECENT_UPLOADS", valueKind: "number" },
-  { path: "admin.show_unset_theme_card", environmentVariable: "ADMIN_SHOW_UNSET_THEME_CARD", valueKind: "boolean" },
   { path: "security.session_ttl_seconds", environmentVariable: "SECURITY_SESSION_TTL_SECONDS", valueKind: "number" },
   { path: "security.login_failure_window_seconds", environmentVariable: "SECURITY_LOGIN_FAILURE_WINDOW_SECONDS", valueKind: "number" },
   { path: "security.login_max_failures", environmentVariable: "SECURITY_LOGIN_MAX_FAILURES", valueKind: "number" },

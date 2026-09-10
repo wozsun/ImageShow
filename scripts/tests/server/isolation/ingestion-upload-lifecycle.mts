@@ -69,7 +69,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   const ingestionMetadata = {
     device: "auto" as const,
     brightness: "auto" as const,
-    theme: "none",
+    theme: null,
     author: "",
     title: "current domain",
     description: "",
@@ -2242,7 +2242,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
       + "theme, ext, md5) VALUES ($1, $2, 'local', $3, 'pc', 'dark', "
-      + "'none', 'webp', $4)",
+      + "NULL, 'webp', $4)",
     [
       completedUpload.session.image_id,
       ingestionOwner,
@@ -2282,7 +2282,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
       await database.pool.query(
         "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
           + "theme, ext, md5) VALUES ($1, $2, 'local', $3, 'pc', 'dark', "
-          + "'none', 'webp', $4)",
+          + "NULL, 'webp', $4)",
         [
           statusBarrierImageId,
           ingestionOwner,
@@ -2335,7 +2335,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
       + "theme, ext, md5) VALUES ($1, $2, 'local', $3, 'pc', 'dark', "
-      + "'none', 'webp', $4)",
+      + "NULL, 'webp', $4)",
     [
       pgOnlyImageId,
       ingestionOwner,

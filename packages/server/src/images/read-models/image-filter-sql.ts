@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { brightnesses, devices } from "@imageshow/shared/browser";
 import type {
   ImageFilterDimension,
@@ -88,12 +89,18 @@ export function buildImageFilterSql(
     if (omitted.has(axis)) continue;
     const selection = selectedValues(group);
     if (!selection) continue;
-    const matches = `${prefix}${column}=ANY(${bind(selection.values)}::text[])`;
+    const includesNull = column === "theme" && selection.values.includes(unsetThemeFilter);
+    const values = includesNull
+      ? selection.values.filter((value) => value !== unsetThemeFilter)
+      : selection.values;
+    const matches = `${prefix}${column}=ANY(${bind(values)}::text[])`;
     where.push(selection.exclude
-      ? column === "author"
-        ? `(${prefix}author IS NULL OR NOT (${matches}))`
-        : `NOT (${matches})`
-      : matches);
+      ? includesNull
+        ? `(${prefix}${column} IS NOT NULL AND NOT (${matches}))`
+        : `(${prefix}${column} IS NULL OR NOT (${matches}))`
+      : includesNull
+        ? `(${prefix}${column} IS NULL OR ${matches})`
+        : matches);
   }
 
   if (!omitted.has("tag")) {

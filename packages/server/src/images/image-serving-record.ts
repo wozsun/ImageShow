@@ -17,7 +17,7 @@ export type ImageServingRecord = {
   storage_slug: string;
   device: "pc" | "mb";
   brightness: "dark" | "light";
-  theme: string;
+  theme: string | null;
   status: "ready" | "deleted";
   description: string;
   source: string;

@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
 import type {
   CSSProperties,
@@ -62,7 +63,7 @@ export function HomeHero({
 }) {
   const totalImages = stats?.total_images ?? 0;
   const themeCount = stats?.themes.filter(
-    (item) => item.slug !== "none"
+    (item) => item.slug !== unsetThemeFilter
   ).length ?? 0;
   const siteStats = [
     { label: "全站图片", value: totalImages, unit: "张", primary: true },

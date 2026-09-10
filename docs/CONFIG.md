@@ -488,14 +488,6 @@ Upload / Import、缩略图维修与亮度重算共享的 Server 图片处理准
 
 概览最近上传数量；普通设置或热加载后影响新查询。
 
-#### admin.show_unset_theme_card
-
-- 环境变量：`ADMIN_SHOW_UNSET_THEME_CARD`
-- Compose：显式映射
-- 类型、默认值与范围：布尔；默认 `true`
-
-主题页未设置卡片；普通设置或热加载后影响新渲染。
-
 #### security.session_ttl_seconds
 
 - 环境变量：`SECURITY_SESSION_TTL_SECONDS`

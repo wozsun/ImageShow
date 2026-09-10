@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { pool, type DatabaseReader } from "../../../core/database/pools.ts";
 import { withPublicDatabaseRead } from "../../../core/database/public-fallback.ts";
 import { getRedisConnectionState, redis } from "../../../core/redis/client.ts";
@@ -62,7 +63,9 @@ function attributeSourceQuery(
     conditions.push(`m.device=${bind(spec.device)}`);
     conditions.push(`m.brightness=${bind(spec.brightness)}`);
   } else {
-    conditions.push(`m.${spec.kind}=${bind(spec.value)}`);
+    conditions.push(spec.kind === "theme" && spec.value === unsetThemeFilter
+      ? "m.theme IS NULL"
+      : `m.${spec.kind}=${bind(spec.value)}`);
   }
   const time = bind(cursor?.imageTime ?? null);
   const id = bind(cursor?.id ?? null);

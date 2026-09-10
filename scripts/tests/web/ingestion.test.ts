@@ -11964,7 +11964,7 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
         defaults: {
           device: "pc",
           brightness: "dark",
-          theme: "none",
+          theme: "",
           author: "",
           tags: []
         },
@@ -12645,7 +12645,7 @@ test("[Web/内容接入] 本地重试按 completed 与 discarded 结果保留或
         defaults: {
           device: "pc",
           brightness: "dark",
-          theme: "none",
+          theme: "",
           author: "",
           tags: []
         },
@@ -12866,7 +12866,7 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
         defaults: {
           device: "pc",
           brightness: "dark",
-          theme: "none",
+          theme: "",
           author: "",
           tags: []
         },
@@ -12973,7 +12973,7 @@ test("[Web/内容接入] Upload 与 Import 接管只使用固定短路由和 1 +
   const metadata = {
     device: "auto" as const,
     brightness: "auto" as const,
-    theme: "none",
+    theme: null,
     author: "",
     title: "最大字段由 JSON 承载",
     description: "description",
@@ -13237,7 +13237,7 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
     metadata: {
       device: "auto" as const,
       brightness: "auto" as const,
-      theme: "none",
+      theme: null,
       author: "",
       title: "event item",
       description: "",
@@ -13500,7 +13500,7 @@ test("[Web/内容接入] 队列 progress 以当前 revision 同步页内与离�
     metadata: {
       device: "auto" as const,
       brightness: "auto" as const,
-      theme: "none",
+      theme: null,
       author: "",
       title: "waiting item",
       description: "",
@@ -13849,7 +13849,7 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
   });
   for (const key of allKeys) client.setQueryData([...key, "fixture"], {});
   const vocabulary: IngestionVocabularyDto = {
-    themes: [{ slug: "none", display_name: "未分类" }],
+    themes: [{ slug: "~unset", display_name: "未设置" }],
     tags: [{ slug: "existing-tag", display_name: "既有标签" }],
     authors: [{ slug: "existing-author", display_name: "既有作者" }]
   };
@@ -14014,13 +14014,13 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
 test("[Web/内容接入] 元数据保存只在词条超出共享接入词表时刷新一次", async () => {
   const { QueryClient, QueryObserver } = await import("@tanstack/react-query");
   const vocabulary: IngestionVocabularyDto = {
-    themes: [{ slug: "none", display_name: "未分类" }],
+    themes: [{ slug: "~unset", display_name: "未设置" }],
     authors: [{ slug: "known-author", display_name: "已有作者" }],
     tags: [{ slug: "known-tag", display_name: "已有标签" }]
   };
   for (const scenario of [
     { updates: [{ id: "one", title: "仅标题" }], reads: 0 },
-    { updates: [{ id: "one", theme: "none", author: "known-author", tags: ["known-tag"] }], reads: 0 },
+    { updates: [{ id: "one", theme: null, author: "known-author", tags: ["known-tag"] }], reads: 0 },
     { updates: [{ id: "one", author: "", tags: [] }], reads: 0 },
     { updates: [{ id: "one", theme: "new-theme" }], reads: 1 },
     { updates: [{ id: "one", author: "new-author" }], reads: 1 },

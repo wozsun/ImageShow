@@ -78,8 +78,7 @@ const appSettingsSchema = z.strictObject({
   admin: z.strictObject({
     login_background: loginBackground.optional(),
     image_page_size: imagePageSize.optional(),
-    recent_uploads: recentUploads.optional(),
-    show_unset_theme_card: z.boolean().optional()
+    recent_uploads: recentUploads.optional()
   }).optional()
 }).refine(
   hasDefinedSetting,
@@ -141,7 +140,7 @@ export function getSettingsForAdmin(): AdminSettings {
     max_size_kb,
     skip_webp_under_kb
   } = settings.normalize;
-  const { login_background, image_page_size, recent_uploads, show_unset_theme_card } = settings.admin;
+  const { login_background, image_page_size, recent_uploads } = settings.admin;
   return {
     site: {
       name,
@@ -181,7 +180,7 @@ export function getSettingsForAdmin(): AdminSettings {
       skip_webp_under_kb
     },
     thumbnail: settings.thumbnail,
-    admin: { login_background, image_page_size, recent_uploads, show_unset_theme_card }
+    admin: { login_background, image_page_size, recent_uploads }
   };
 }
 

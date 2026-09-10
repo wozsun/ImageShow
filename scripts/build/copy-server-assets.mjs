@@ -45,7 +45,7 @@ async function precompressDir(dir) {
 }
 
 await mkdir(serverDist, { recursive: true });
-const databaseAssets = ["schema.sql", "schema-additions.sql"];
+const databaseAssets = ["schema.sql", "schema-additions.sql", "schema-theme-null.sql"];
 await Promise.all(databaseAssets.map(async (asset) => {
   await rm(resolve(serverDist, asset), { force: true });
   await cp(resolve(serverPackage, asset), resolve(serverDist, asset));

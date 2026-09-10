@@ -130,103 +130,91 @@ export function AdminImageCard({
           <strong title={title}>{title}</strong>
           <span title={classification}>{classification}</span>
           <AdminImageCardMetadata
-            placement="inline"
             storage={storage}
             deletedAt={trashStatus}
           />
         </span>
       </button>
-      <footer className="admin-image-card-footer">
-        <AdminImageCardMetadata
-          placement="footer"
-          storage={storage}
-          deletedAt={trashStatus}
-        />
-        <div className="admin-image-card-actions">
-          {item.status === "ready" ? (
-            <>
+      <div className="admin-image-card-actions">
+        {item.status === "ready" ? (
+          <>
+            <button
+              type="button"
+              title="编辑"
+              aria-label={`编辑图片：${title}`}
+              aria-busy={editPending || undefined}
+              disabled={busy || editDisabled || editPending}
+              {...preloadIntentProps(onPreloadEdit)}
+              onClick={(event) => onEdit(event.currentTarget)}
+            >
+              <AdminIcon name="pencil-line" />
+            </button>
+            <TwoStepConfirmIconButton
+              className="danger-button is-subtle"
+              idleIcon="delete-bin-line"
+              confirmIcon="delete-bin-2-line"
+              busyIcon="delete-bin-5-line"
+              idleLabel={`删除图片：${title}`}
+              confirmLabel={`再次点击确认删除图片：${title}`}
+              busyLabel={`删除中：${title}`}
+              idleTitle="删除"
+              confirmTitle="再次点击确认删除"
+              busyTitle="删除中"
+              disabled={busy || actionsDisabled || detailPending}
+              busy={busy}
+              onConfirm={onTrash}
+            />
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              title="恢复"
+              aria-label={`恢复图片：${title}`}
+              disabled={
+                busy
+                || actionsDisabled
+                || detailPending
+                || item.purge_pending
+              }
+              onClick={onRestore}
+            >
+              <AdminIcon name="arrow-go-back-line" />
+            </button>
+            {canPurge && (
               <button
                 type="button"
-                title="编辑"
-                aria-label={`编辑图片：${title}`}
-                aria-busy={editPending || undefined}
-                disabled={busy || editDisabled || editPending}
-                {...preloadIntentProps(onPreloadEdit)}
-                onClick={(event) => onEdit(event.currentTarget)}
-              >
-                <AdminIcon name="pencil-line" />
-              </button>
-              <TwoStepConfirmIconButton
                 className="danger-button is-subtle"
-                idleIcon="delete-bin-line"
-                confirmIcon="delete-bin-2-line"
-                busyIcon="delete-bin-5-line"
-                idleLabel={`删除图片：${title}`}
-                confirmLabel={`再次点击确认删除图片：${title}`}
-                busyLabel={`删除中：${title}`}
-                idleTitle="删除"
-                confirmTitle="再次点击确认删除"
-                busyTitle="删除中"
-                disabled={busy || actionsDisabled || detailPending}
-                busy={busy}
-                onConfirm={onTrash}
-              />
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                title="恢复"
-                aria-label={`恢复图片：${title}`}
+                title="永久删除"
+                aria-label={`永久删除图片：${title}`}
                 disabled={
                   busy
                   || actionsDisabled
                   || detailPending
                   || item.purge_pending
                 }
-                onClick={onRestore}
+                onClick={onPurge}
               >
-                <AdminIcon name="arrow-go-back-line" />
+                <AdminIcon name="delete-bin-6-line" />
               </button>
-              {canPurge && (
-                <button
-                  type="button"
-                  className="danger-button is-subtle"
-                  title="永久删除"
-                  aria-label={`永久删除图片：${title}`}
-                  disabled={
-                    busy
-                    || actionsDisabled
-                    || detailPending
-                    || item.purge_pending
-                  }
-                  onClick={onPurge}
-                >
-                  <AdminIcon name="delete-bin-6-line" />
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      </footer>
+            )}
+          </>
+        )}
+      </div>
     </article>
   );
 }
 
 function AdminImageCardMetadata({
-  placement,
   storage,
   deletedAt
 }: {
-  placement: "inline" | "footer";
   storage: string;
   deletedAt: string;
 }) {
-  const className = `admin-image-card-meta is-${placement}`;
-
   if (storage) {
     return (
-      <span className={className} title={`存储：${storage}`}>
+      <span className="admin-image-card-meta" title={`存储：${storage}`}>
         <AdminIcon name="hard-drive-2-line" />
         <span>{storage}</span>
       </span>
@@ -234,7 +222,7 @@ function AdminImageCardMetadata({
   }
 
   if (deletedAt) {
-    return <span className={className} title={deletedAt}>{deletedAt}</span>;
+    return <span className="admin-image-card-meta" title={deletedAt}>{deletedAt}</span>;
   }
   return null;
 }

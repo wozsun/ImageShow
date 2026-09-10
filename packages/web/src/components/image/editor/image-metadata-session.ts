@@ -67,7 +67,7 @@ function draftFromImage(item: ImageEditorItem): ImageDraft {
     original: item.original,
     device: item.device,
     brightness: item.brightness,
-    theme: item.theme === "none" ? "" : item.theme,
+    theme: item.theme,
     author: item.author === "none" ? "" : item.author,
     tags: [...item.tags]
   };

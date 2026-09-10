@@ -22,7 +22,7 @@ export async function getOverviewStats(): Promise<AdminOverviewDto> {
     pool.query(`
       SELECT
         count(*) FILTER (WHERE status='ready')::int AS gallery,
-        count(*) FILTER (WHERE status='ready' AND theme='none')::int AS theme_unset,
+        count(*) FILTER (WHERE status='ready' AND theme IS NULL)::int AS theme_unset,
         count(*) FILTER (WHERE status='deleted')::int AS trash,
         count(*)::int AS total,
         count(*) FILTER (WHERE sb.type='local')::int AS local,
@@ -42,7 +42,7 @@ export async function getOverviewStats(): Promise<AdminOverviewDto> {
     pool.query(`
       SELECT theme, count(*)::int AS count
       FROM metadata
-      WHERE status='ready'
+      WHERE status='ready' AND theme IS NOT NULL
       GROUP BY theme
       ORDER BY count DESC, theme ASC
       LIMIT 8

@@ -27,7 +27,7 @@ export async function createMaintenanceFixture(runtime: IntegrationRuntime) {
     const thumb = paths.thumbnailObjectKey(key);
     await runtime.databasePools.pool.query(
       "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, theme, ext, md5, image_size, thumbnail_size) "
-        + "VALUES ($1,'integration-admin','local',$2,'pc','dark','none','png',$3,$4,$5)",
+        + "VALUES ($1,'integration-admin','local',$2,'pc','dark',NULL,'png',$3,$4,$5)",
       [id, key, createHash("md5").update(body).digest("hex"), body.length, options.confirmedSize ?? 0]
     );
     if (options.source !== false) await access.driver.writeBuffer("full", key, body, "image/png");

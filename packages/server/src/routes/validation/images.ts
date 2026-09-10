@@ -1,3 +1,5 @@
+import { imageThemeInput } from "../../images/metadata-theme.ts";
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
@@ -33,8 +35,7 @@ const classificationBrightnesses = [
 const imageMetadataFieldInputs = {
   device: z.enum(classificationDevices),
   brightness: z.enum(classificationBrightnesses),
-  theme: z.string().trim().toLowerCase().min(1)
-    .max(appConfig.themeMaxLength).regex(slugPattern),
+  theme: imageThemeInput,
   author: z.string().trim().toLowerCase().max(slugMaxLength)
     .refine(
       (value) => value === "" || slugPattern.test(value),
@@ -54,7 +55,7 @@ const imageMetadataFieldInputs = {
 export const imageMetadataCreateInput = z.strictObject({
   device: imageMetadataFieldInputs.device,
   brightness: imageMetadataFieldInputs.brightness,
-  theme: imageMetadataFieldInputs.theme.default("none"),
+  theme: imageMetadataFieldInputs.theme.default(null),
   author: imageMetadataFieldInputs.author.default(""),
   title: imageMetadataFieldInputs.title.default(""),
   description: imageMetadataFieldInputs.description.default(""),
@@ -153,7 +154,8 @@ function galleryStatsSelector(noun: string) {
         tokens.length === 0
         || tokens.some((token) => {
           const slug = token.replace(/^!/, "");
-          return slug.length > slugMaxLength || !slugPattern.test(slug);
+          return !(noun === "主题" && slug === unsetThemeFilter)
+            && (slug.length > slugMaxLength || !slugPattern.test(slug));
         })
       ) {
         context.addIssue({

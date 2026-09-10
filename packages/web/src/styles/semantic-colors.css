@@ -22,7 +22,6 @@
   --bootstrap-color-control-text-primary: #f0f6fc;
   --bootstrap-color-control-text-secondary: #b1bac4;
   --bootstrap-color-control-text-tertiary: #8b949e;
-  --bootstrap-color-control-label: #c9d1d9;
   --bootstrap-color-control-surface: #161b22;
   --bootstrap-color-control-surface-muted: #21262d;
   --bootstrap-color-control-surface-hover: #1d2e40;
@@ -34,7 +33,6 @@
   --bootstrap-color-control-border-selected: #619de7;
   --bootstrap-color-control-action-text: #79b8ff;
   --bootstrap-color-control-invalid: #cc7975;
-  --bootstrap-color-control-switch-thumb: #484f58;
   --bootstrap-color-feedback-success-text: #8fd8a3;
   --bootstrap-color-feedback-success-surface: #173126;
   --bootstrap-color-feedback-success-border: #4d795b;
@@ -62,7 +60,6 @@
   --public-color-control-text-primary: #20242a;
   --public-color-control-text-secondary: #66717f;
   --public-color-control-text-tertiary: #97a1b0;
-  --public-color-control-label: #495260;
   --public-color-control-surface: #fff;
   --public-color-control-surface-muted: #eef2f7;
   --public-color-control-surface-hover: #eef5ff;
@@ -74,12 +71,10 @@
   --public-color-control-border-selected: #9fc2f5;
   --public-color-control-action: #1f6feb;
   --public-color-control-invalid: #d64545;
-  --public-color-control-switch-thumb: #d8dee7;
   --public-color-thumbnail-surface: #e8edf3;
   --public-color-thumbnail-placeholder: #9aa6b4;
   --public-color-image-placeholder-dark: #111820;
   --public-shadow-control-floating: rgba(20, 30, 44, .18);
-  --public-shadow-control-resting: rgba(20, 30, 44, .12);
 
   /* Shared feedback roles in the public domain */
   --public-color-feedback-success-text: #245236;
@@ -111,7 +106,6 @@
   --color-control-text-secondary: var(--public-color-control-text-secondary);
   --color-control-text-tertiary: var(--public-color-control-text-tertiary);
   --color-control-text-on-action: var(--public-color-text-strong);
-  --color-control-label: var(--public-color-control-label);
   --color-control-surface: var(--public-color-control-surface);
   --color-control-surface-muted: var(--public-color-control-surface-muted);
   --color-control-surface-hover: var(--public-color-control-surface-hover);
@@ -124,12 +118,10 @@
   --color-control-action: var(--public-color-control-action);
   --color-control-action-text: var(--public-color-control-action);
   --color-control-invalid: var(--public-color-control-invalid);
-  --color-control-switch-thumb: var(--public-color-control-switch-thumb);
   --color-thumbnail-surface: var(--public-color-thumbnail-surface);
   --color-thumbnail-placeholder: var(--public-color-thumbnail-placeholder);
   --color-image-placeholder-dark: var(--public-color-image-placeholder-dark);
   --color-shadow-control-floating: var(--public-shadow-control-floating);
-  --color-shadow-control-resting: var(--public-shadow-control-resting);
   --color-feedback-success-text: var(--public-color-feedback-success-text);
   --color-feedback-success-surface: var(--public-color-feedback-success-surface);
   --color-feedback-success-border: var(--public-color-feedback-success-border);
@@ -149,7 +141,6 @@
   --color-control-text-primary: var(--bootstrap-color-control-text-primary);
   --color-control-text-secondary: var(--bootstrap-color-control-text-secondary);
   --color-control-text-tertiary: var(--bootstrap-color-control-text-tertiary);
-  --color-control-label: var(--bootstrap-color-control-label);
   --color-control-surface: var(--bootstrap-color-control-surface);
   --color-control-surface-muted: var(--bootstrap-color-control-surface-muted);
   --color-control-surface-hover: var(--bootstrap-color-control-surface-hover);
@@ -161,7 +152,6 @@
   --color-control-border-selected: var(--bootstrap-color-control-border-selected);
   --color-control-action-text: var(--bootstrap-color-control-action-text);
   --color-control-invalid: var(--bootstrap-color-control-invalid);
-  --color-control-switch-thumb: var(--bootstrap-color-control-switch-thumb);
   --color-feedback-success-text: var(--bootstrap-color-feedback-success-text);
   --color-feedback-success-surface: var(--bootstrap-color-feedback-success-surface);
   --color-feedback-success-border: var(--bootstrap-color-feedback-success-border);

@@ -1,8 +1,9 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { SlugComboInput } from "./SlugComboInput.js";
 import type { FacetOption } from "../../lib/types.js";
 
-export function ThemeInput({ themes, value, className, ...rest }: {
-  value: string;
+export function ThemeInput({ themes, value, className, placeholder, ...rest }: {
+  value: string | null;
   onChange: (value: string) => void;
   themes: FacetOption[];
   placeholder?: string;
@@ -13,13 +14,13 @@ export function ThemeInput({ themes, value, className, ...rest }: {
   onFocus?: () => void;
   onBlur?: () => void;
 }) {
-  const unsetClass = value === "none" ? " is-placeholder-value" : "";
   return (
     <SlugComboInput
-      options={themes}
+      options={themes.filter((item) => item.slug !== unsetThemeFilter)}
       noun="主题"
-      value={value}
-      className={`${className ?? ""}${unsetClass}`.trim()}
+      value={value ?? ""}
+      placeholder={value === null ? "未设置" : placeholder}
+      className={className}
       {...rest}
     />
   );

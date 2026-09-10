@@ -142,8 +142,7 @@ const runtimeConfigSchema = z.strictObject({
   admin: z.strictObject({
     login_background: loginBackground,
     image_page_size: imagePageSize,
-    recent_uploads: recentUploads,
-    show_unset_theme_card: z.boolean()
+    recent_uploads: recentUploads
   }),
   security: z.strictObject({
     session_ttl_seconds: sessionTtlSeconds,

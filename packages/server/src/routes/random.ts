@@ -66,7 +66,7 @@ async function respondRandom(c: Context, url: URL) {
         message: "Not Found: No available images"
       });
     }
-    const imageInfo = `${picked.device}-${picked.brightness}-${picked.theme}-${picked.id}`;
+    const imageInfo = `${picked.device}-${picked.brightness}-${picked.theme ?? ""}-${picked.id}`;
     const baseHeaders = {
       "Cache-Control": noStoreCacheControl,
       "X-Image-Info": safeResponseHeaderValue("X-Image-Info", imageInfo)

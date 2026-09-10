@@ -22,8 +22,10 @@ export function facetDisplayName(
   return option ? displayNameOrSlug(option) : slug;
 }
 
-export function formatImageClassification(item: AdminImageListItem) {
-  return `${item.theme} · ${item.device}/${item.brightness}`;
+export function formatImageClassification(
+  item: Pick<AdminImageListItem, "device" | "brightness" | "theme">
+) {
+  return [`${item.device}/${item.brightness}`, item.theme].filter(Boolean).join(" · ");
 }
 
 export function formatDate(value: string) {

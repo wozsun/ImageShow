@@ -15,7 +15,6 @@ import {
   ActionFeedbackRegion,
   useActionFeedbackTarget
 } from "../../../components/feedback/ActionFeedbackRegion.js";
-import { LabeledSwitch } from "../../../components/form/LabeledSwitch.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
 import { AdminPagination } from "../../../components/navigation/AdminPagination.js";
 import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
@@ -37,7 +36,6 @@ import {
   invalidateImageDataAfterAdminListMutation,
   invalidateImageDataAfterMetadataSave
 } from "../../../lib/api/query-invalidation.js";
-import { useAdminPreference } from "../../../hooks/useAdminPreferences.js";
 import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
 import { useAdminImageDetailCapability } from "../../../components/image/useAdminImageDetailCapability.js";
 import { useImageEditorCapability } from "../../../components/image/editor/useImageEditorCapability.js";
@@ -78,7 +76,6 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const [filters, setFilters] = useState<ImageAdminFilterValues>(
     emptyImageAdminFilters
   );
-  const [cardDensity, setCardDensity] = useAdminPreference("image_card_density");
   const [batchTrashPending, setBatchTrashPending] = useState(false);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const permissions = useAdminPermissions();
@@ -347,16 +344,6 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                 variant="page"
               />
             )}
-            <LabeledSwitch
-              className="image-card-density-switch"
-              checked={cardDensity === "spacious"}
-              checkedLabel="宽松"
-              uncheckedLabel="紧凑"
-              ariaLabel="图片卡片密度"
-              onChange={(spacious) => {
-                setCardDensity(spacious ? "spacious" : "compact");
-              }}
-            />
             <div className="image-list-batch-actions">
               {(view === "ready" || view === "unset") && (
                 <button
@@ -486,7 +473,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
         className="admin-scroll-region"
         ref={gridRef}
       >
-        <div className="admin-image-grid" data-density={cardDensity}>
+        <div className="admin-image-grid">
           {items.map((item) => (
             <AdminImageCard
               key={item.id}

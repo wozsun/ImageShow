@@ -1,3 +1,4 @@
+import { themeIntentHashValue } from "../../metadata-theme.ts";
 import { createHash } from "node:crypto";
 import type { ImageDraftDto } from "@imageshow/shared/browser";
 import type {
@@ -33,7 +34,7 @@ export function ingestionIntentRequestHash(input: IngestionIntentHashInput) {
     metadata: {
       device: input.metadata.device,
       brightness: input.metadata.brightness,
-      theme: input.metadata.theme,
+      theme: themeIntentHashValue(input.metadata.theme),
       author: input.metadata.author,
       title: input.metadata.title,
       description: input.metadata.description,

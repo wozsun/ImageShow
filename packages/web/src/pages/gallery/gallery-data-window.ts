@@ -97,7 +97,7 @@ export type GalleryDataWindowDebugSnapshot = GalleryDataWindowSnapshot & {
 function estimateCardBytes(item: GalleryImageCard) {
   const stringCharacters = item.id.length
     + item.title.length
-    + item.theme.length
+    + (item.theme?.length ?? 0)
     + item.author.length
     + item.thumb_url.length
     + item.image_time.length

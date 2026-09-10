@@ -78,7 +78,6 @@
 .entity-count { margin-right: auto; white-space: nowrap; }
 
 .user-card .entity-card-foot { justify-content: flex-end; }
-.entity-pinned-note { white-space: nowrap; font-size: 13px; }
 
 .entity-card.is-pinned { background: var(--admin-color-entity-surface-pinned); border-style: dashed; }
 .entity-card.is-dragging { opacity: .55; }

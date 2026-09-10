@@ -25,7 +25,7 @@ export async function createIngestionScenarioFixture(runtime: IntegrationRuntime
     return key;
   };
   const serviceDraft: ImageDraftDto = {
-    device: "auto", brightness: "auto", theme: "none", author: "", title: "service batch",
+    device: "auto", brightness: "auto", theme: null, author: "", title: "service batch",
     description: "", source: "", original: "", tags: []
   };
   const ingestionMetadata: ImageDraftDto = { ...serviceDraft, title: "current domain" };

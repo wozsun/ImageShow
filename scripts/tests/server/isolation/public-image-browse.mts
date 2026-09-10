@@ -29,7 +29,7 @@ await runIntegrationScenario(async (runtime) => {
     await pool.query(
       `INSERT INTO metadata (id, created_by, status, storage_slug, object_key,
         device, brightness, theme, ext, md5, image_time, title, width, height)
-       VALUES ($1, 'integration-admin', 'ready', 'local', $2, 'pc', 'dark', 'none',
+       VALUES ($1, 'integration-admin', 'ready', 'local', $2, 'pc', 'dark', NULL,
          'webp', $3, $4, $5, 1600, 900)`,
       [id, storageObjectKey(id, "webp"), createHash("md5").update(id).digest("hex"),
         `2026-09-01T00:00:00.00000${Math.floor(index / 2)}Z`, `Image ${index}`]

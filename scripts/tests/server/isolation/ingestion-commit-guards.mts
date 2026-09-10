@@ -494,7 +494,7 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
       + "brightness, theme, ext, md5, width, height, image_size, "
       + "thumbnail_size, image_time, title) VALUES "
-      + "($1,$2,'local',$3,'pc','dark','none','webp',$4,1200,800,$5,$6,$7,$8)",
+      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,1200,800,$5,$6,$7,$8)",
     [
       commitImageId,
       conflictingCommitActor,

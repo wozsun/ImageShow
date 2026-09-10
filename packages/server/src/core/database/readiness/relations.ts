@@ -7,12 +7,16 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
     column_name: string;
     type_name: string;
     type_modifier: number;
+    not_null: boolean;
+    default_value: string | null;
   }>(
     `SELECT relation.relname AS table_name,
             relation.relkind::text AS relation_kind,
             attribute.attname AS column_name,
             type.typname AS type_name,
-            attribute.atttypmod::int AS type_modifier
+            attribute.atttypmod::int AS type_modifier,
+            attribute.attnotnull AS not_null,
+            pg_get_expr(defaults.adbin, defaults.adrelid) AS default_value
        FROM pg_class relation
        JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
        JOIN pg_attribute attribute
@@ -20,6 +24,8 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
         AND attribute.attnum > 0
         AND NOT attribute.attisdropped
        JOIN pg_type type ON type.oid=attribute.atttypid
+       LEFT JOIN pg_attrdef defaults
+         ON defaults.adrelid=attribute.attrelid AND defaults.adnum=attribute.attnum
       WHERE namespace.nspname='public'
         AND relation.relname = ANY($1::text[])`,
     [requiredTableNames]
@@ -53,6 +59,10 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
         incompatible.push(`${table}.${column}`);
       }
     }
+  }
+  const theme = actualColumns.get("metadata.theme");
+  if (theme && (theme.not_null || theme.default_value !== null)) {
+    throw new Error("metadata.theme must be nullable without a default; for a 6.1.x database stop ImageShow, back up data and run imageshow migrate-theme-null --apply --offline using 6.2.0");
   }
   if (incompatible.length) {
     throw new Error(

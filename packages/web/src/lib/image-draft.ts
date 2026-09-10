@@ -22,8 +22,9 @@ export function mergeCommonImageAttributes(
   };
 }
 
-export function normalizeTheme(value: string) {
-  return value.trim().toLowerCase() || "none";
+export function normalizeTheme(value: string | null) {
+  const theme = value?.trim().toLowerCase();
+  return !theme || theme === "none" ? null : theme;
 }
 
 export function normalizeAuthor(value: string) {

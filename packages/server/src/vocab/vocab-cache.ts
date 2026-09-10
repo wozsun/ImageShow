@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { randomUUID } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import { coalesce } from "../core/coalesce.ts";
@@ -128,9 +129,10 @@ async function loadThemeVocab(
   const rows = await readVocabularyRows<VocabEntry>(
     `SELECT slug, display_name
        FROM theme
-      ORDER BY (slug = 'none') DESC, sort_order ASC, slug ASC`,
+      ORDER BY sort_order ASC, slug ASC`,
     access
   );
+  rows.unshift({ slug: unsetThemeFilter, display_name: "未设置" });
   await cacheEntityVocabulary("theme", THEME_VOCAB_KEY, revision, rows, access);
   return rows;
 }
@@ -167,7 +169,7 @@ async function loadAdminThemeList(revision: number) {
        FROM theme t
        LEFT JOIN metadata m ON m.theme = t.slug AND m.status = 'ready'
       GROUP BY t.slug, t.display_name, t.sort_order
-      ORDER BY (t.slug = 'none') DESC, t.sort_order ASC, t.slug ASC`
+      ORDER BY t.sort_order ASC, t.slug ASC`
   );
   await cacheAdminEntityList("theme", ADMIN_THEME_LIST_KEY, revision, rows);
   return rows;

@@ -703,7 +703,6 @@ try {
       + "Content-Length: 100\\r\\n\\r\\n{'); "
       + "await new Promise((resolve) => setTimeout(resolve, 25)); "
       + "process.kill(1, 'SIGTERM'); "
-      + "await new Promise((resolve) => setTimeout(resolve, 25)); "
       + "process.kill(1, 'SIGINT'); socket.destroy();"
   ], { allowFailure: true });
   await waitFor(

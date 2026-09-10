@@ -61,7 +61,7 @@ export type ImportManifestItemDto = {
   tags?: string[];
   title?: string;
   description?: string;
-  theme?: string;
+  theme?: string | null;
   device?: Device | "auto";
   brightness?: Brightness | "auto";
   storage_slug?: string;

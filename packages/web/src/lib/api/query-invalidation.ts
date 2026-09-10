@@ -172,7 +172,7 @@ async function invalidateIngestionVocabulary(
     const tags = new Set(vocabulary.tags.map(({ slug }) => slug));
     const authors = new Set(vocabulary.authors.map(({ slug }) => slug));
     const changed = items.some((item) => (
-      (item.theme !== undefined && !themes.has(item.theme))
+      (item.theme != null && !themes.has(item.theme))
       || (item.author !== undefined && item.author !== "" && !authors.has(item.author))
       || item.tags?.some((tag) => !tags.has(tag))
     ));

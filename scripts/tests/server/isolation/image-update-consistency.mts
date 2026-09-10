@@ -38,7 +38,7 @@ const readReadyRevision = async () => BigInt(String((
     await database.pool.query(
       "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
         + "theme, ext, md5) VALUES ($1, 'integration-admin', 'local', $2, 'pc', 'dark', "
-        + "'none', 'webp', $3)",
+        + "NULL, 'webp', $3)",
       [
         id,
         imagePaths.storageObjectKey(id, "webp"),
@@ -383,6 +383,29 @@ const readReadyRevision = async () => BigInt(String((
   assert.equal(Number((await database.pool.query(
     "SELECT count(*)::int AS count FROM tag WHERE slug='cache-repair-tag'"
   )).rows[0].count), 1);
+
+  const themeMutations = await import("../../../../packages/server/src/themes/mutations.ts");
+  const readThemeImage = async () => (await database.pool.query(
+    "SELECT theme, object_key, md5, image_time, author FROM metadata WHERE id=$1",
+    [imageUpdateIds.first]
+  )).rows[0];
+  const originalThemeImage = await readThemeImage();
+  assert.equal(originalThemeImage.theme, null);
+  assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, theme: "clearable" }])).updated, 1);
+  assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, title: "retain-theme" }])).updated, 1);
+  assert.equal((await readThemeImage()).theme, "clearable");
+  assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, theme: null }])).updated, 1);
+  assert.deepEqual(await readThemeImage(), originalThemeImage);
+  await imageUpdate.updateImages([
+    { id: imageUpdateIds.first, theme: "clearable" },
+    { id: imageUpdateIds.third, theme: "clearable" },
+    { id: imageUpdateIds.fourth, theme: "retained" }
+  ]);
+  await database.pool.query("UPDATE metadata SET status='deleted', deleted_at=now() WHERE id=$1", [imageUpdateIds.third]);
+  await themeMutations.deleteTheme("clearable");
+  assert.deepEqual(await readThemeImage(), originalThemeImage);
+  assert.equal((await database.pool.query("SELECT theme FROM metadata WHERE id=$1", [imageUpdateIds.third])).rows[0].theme, null);
+  assert.equal((await database.pool.query("SELECT theme FROM metadata WHERE id=$1", [imageUpdateIds.fourth])).rows[0].theme, "retained");
 
   await database.pool.query(
     "DELETE FROM metadata WHERE id=ANY($1::uuid[])",

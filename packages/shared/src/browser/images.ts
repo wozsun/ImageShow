@@ -1,5 +1,8 @@
 import type { Brightness, Device } from "./common.ts";
 
+/** Query-only selector and virtual facet identity; never a stored theme slug. */
+export const unsetThemeFilter = "~unset";
+
 export const publicImageOrders = ["random", "latest", "oldest"] as const;
 export type PublicImageOrder = (typeof publicImageOrders)[number];
 export const publicImageViews = ["show", "gallery"] as const;
@@ -52,7 +55,7 @@ export type ShowImageCardDto = {
 export type ImageCardBaseDto = ShowImageCardDto & {
   device: Device;
   brightness: Brightness;
-  theme: string;
+  theme: string | null;
   author: string;
   tags: string[];
   image_time: string;
@@ -94,7 +97,7 @@ export type RandomImageJsonItemDto = {
   thumb_url: string;
   device: Device;
   brightness: Brightness;
-  theme: string;
+  theme: string | null;
   tags: string[];
   diff_original: boolean;
   width: number;
@@ -142,7 +145,7 @@ export type EditableImageSnapshotDto = {
   original: string;
   device: Device;
   brightness: Brightness;
-  theme: string;
+  theme: string | null;
   author: string;
   tags: string[];
   thumb_url: string;
@@ -185,7 +188,7 @@ export type ImageSnapshotResponseDto = {
 export type ImageDraftDto = {
   device: Device | "auto";
   brightness: Brightness | "auto";
-  theme: string;
+  theme: string | null;
   author: string;
   title: string;
   description: string;

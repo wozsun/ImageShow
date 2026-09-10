@@ -4,7 +4,6 @@ export async function assertRequiredSeedRows(database: DatabaseReader) {
   const row = (await database.query<{
     revision_ready: boolean;
     local_storage_ready: boolean;
-    none_theme_ready: boolean;
     unsupported_storage_types: string[];
   }>(
     `SELECT (
@@ -16,9 +15,6 @@ export async function assertRequiredSeedRows(database: DatabaseReader) {
               SELECT 1 FROM storage_backend
                WHERE slug='local' AND type='local'
             ) AS local_storage_ready,
-            EXISTS (
-              SELECT 1 FROM theme WHERE slug='none'
-            ) AS none_theme_ready,
             ARRAY(
               SELECT DISTINCT type
                 FROM storage_backend
@@ -28,8 +24,7 @@ export async function assertRequiredSeedRows(database: DatabaseReader) {
   )).rows[0];
   const missing = [
     !row?.revision_ready && "ready_image_revision singleton",
-    !row?.local_storage_ready && "storage_backend.local",
-    !row?.none_theme_ready && "theme.none"
+    !row?.local_storage_ready && "storage_backend.local"
   ].filter((value): value is string => Boolean(value));
   if (missing.length) {
     throw new Error(

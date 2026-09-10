@@ -51,7 +51,7 @@ docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 \
 
 ## PostgreSQL 与 Redis
 
-`schema.sql` 完整定义上一已封版版本的干净安装基线，其中包括作者身份、`metadata.purge_job_id` 及其长期 CHECK；`schema-additions.sql` 承载当前发布增量，目前为注释占位。空数据库依次执行两者；符合该基线的非空数据库执行 additions 后直接进入只读 readiness，整个结构过程受同一事务保护，并以当前最小结构作为启动条件。单应用进程合同不为第二个重叠启动者取得 bootstrap lock；首次启动、停止后的顺序重启、已有数据启动，以及事务回滚后的顺序恢复仍使用同一初始化路径。`metadata.created_by TEXT NOT NULL` 与后台任务当前类型约束属于基线。应用的自动结构职责限定为干净初始化、单周期 additions 和最小 readiness；破坏性 DDL 与数据整理由维护者另行执行。additions 全部受控应用后，下一发布把定义并入基线并恢复注释占位；部署与备份恢复按相邻发布顺序经过承载 additions 的版本，不能以新基线替代旧非空数据库的中间升级。精确白名单与拒绝条件以 [数据库结构](guide/database.md#启动与结构契约)为准。
+`schema.sql` 完整定义上一已封版版本的干净安装基线，其中包括作者身份、`metadata.purge_job_id` 及其长期 CHECK；`schema-additions.sql` 承载当前发布增量，目前为注释占位。6.2.0 空数据库在基线之后执行专项主题迁移 SQL，再执行 additions；既有数据库须先完成下述离线迁移，再启动执行 additions 与只读 readiness，整个结构过程受同一事务保护，并以当前最小结构作为启动条件。单应用进程合同不为第二个重叠启动者取得 bootstrap lock；首次启动、停止后的顺序重启、已有数据启动，以及事务回滚后的顺序恢复仍使用同一初始化路径。`metadata.created_by TEXT NOT NULL` 与后台任务当前类型约束属于基线。应用的自动结构职责限定为干净初始化、单周期 additions 和最小 readiness；破坏性 DDL 与数据整理由维护者另行执行。additions 全部受控应用后，下一发布把定义并入基线并恢复注释占位；部署与备份恢复按相邻发布顺序经过承载 additions 的版本，不能以新基线替代旧非空数据库的中间升级。精确白名单与拒绝条件以 [数据库结构](guide/database.md#启动与结构契约)为准。
 
 Redis 只保存会话、限流、统一就绪图片投影和可重建派生缓存。连接必须支持 Redis 8 以及 `INCREX`、`ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与 `DELEX ... IFEQ`；应用会用带 5 秒 TTL 的隔离探针键实际验证成功、条件失败、缺失、TTL 语义和 ACL 权限。Redis 不是真相源，不能通过清理 PostgreSQL 来修复 Redis 状态，也不保存不可重建的业务数据。在应用停止时把其专用 Redis DB 替换为空库是安全的冷启动操作，但会使管理员会话、限流状态和全部派生投影失效；启动后必须等待投影重建并重新登录。Redis unavailable 时 Ingestion worker 停止领取，孤儿素材周期也跳过 raw 与 `_uploads` 删除；恢复后重新从稳定 canonical 引用开始，不把断线期间的 Redis 缺失当成对象删除证据。
 
@@ -62,6 +62,53 @@ Redis ACL 还必须允许业务原子脚本使用的 `EVAL` 与 `EVALSHA`。应�
 后台概览在既有 `/overview` 请求中与 PostgreSQL 统计并行，只对固定核心图片投影键执行一组准确的 `MEMORY USAGE ... SAMPLES 0`，不 `SCAN` ImageShow 键空间，也不读取派生、会话或限流键；并发概览请求在进程内单飞合并这组测量。当前测量失败不会使概览整体失败：界面明确显示未知，或把可用的 meta 历史值标为“最近完整重建”，不会冒充当前容量。重建进度轮询不做内存测量，重建完成后的既有概览刷新才重新测量一次。
 
 检查页轻量状态使用固定命令读取连接、revision、图片数量、最后更新时间、完整重建时间和最近一次成功完整重建的核心内存快照，不会扫描键空间或执行 `MEMORY USAGE`。检查页先用这份结果立即渲染，再由唯一查询 owner 在后台自动执行一次 Redis 深检；检测不阻塞轻量状态，进行中会禁用 Redis 和“全部”两个可能重复扫描的入口。深检以 10 秒总期限、最多 100,000 个唯一键和每批最多 128 条测量命令扫描 `imageshow:*`，汇总当前核心 / 派生投影的键数、成员数和内存；完整结果原地更新两张卡，之后手动 Redis 检查继续复用同一查询。超过期限或键上限会返回 `complete: false` 与明确原因，不得把部分汇总当成总量或覆盖此前完整快照；请求真正断开时服务端仍通过 `AbortSignal` 停止继续安排扫描或测量批次。界面只把深检的核心键数与内存填入核心卡；“图片成员”显示值继续使用轻量状态中的 `item_count`，不显示各核心键成员数之和。派生卡展示深检的键数、结果成员数与内存。`INFO MEMORY` 卡片只描述整个 Redis 实例。
+
+## 6.2.0 无主题升级
+
+6.1.x 到 6.2.0 需要一次受控停机迁移。先在应用运行时盘点图片与主题数量，保留当前镜像的
+不可变 ID / digest，并保留可重新加载的旧镜像备份或可拉取的版本镜像，再准备 6.2.0 镜像。`imageshow migrate-theme-null --inspect` 只读输出数据库名、
+全部图片数、待转换的正式 / 回收站数量、既有空主题及真实主题数量，不修改数据。
+
+1. 停止唯一 ImageShow 应用并等待排空，停止所有其他数据库写入者，关闭旧后台标签页。
+2. 在同一停机窗口备份 PostgreSQL（例如 `pg_dump -Fc`）、Redis 快照及 `data/`，保留原图与
+   缩略图已有备份。若使用外部存储，保留现有对象和版本；迁移不读取或搬动这些对象。
+   记录数据库、镜像、备份位置、时间、大小与摘要。确认备份文件可读取，恢复演练使用独立数据库。
+3. 使用 **6.2.0 镜像**、与应用完全相同的数据库连接运行下列命令。CLI 检查没有其他数据库
+   client，取得主题、metadata、revision、管理员表锁，并在同一事务完成精确转换及 readiness。
+   10 秒锁等待或 10 分钟单条 SQL 超时会失败回滚，不在旧应用运行时重试。
+4. 命令成功后启动 6.2.0；重新读取主题空值和真实主题数量，核对图片总数、其他 metadata 与
+   对象键一致。等 Redis 图片投影从 PostgreSQL 重建并恢复 readiness，再开放访问。
+5. 清理 CDN 上缓存的 HTML、公开配置、图片数据 / 详情、facets、stats 与随机 JSON 响应；
+   此处是 API 元数据缓存，完整图、缩略图和外部原图对象地址保持不变。刷新所有客户端。
+
+已有 Compose 的 `imageshow` 服务须先指定 6.2.0 镜像（本地开发使用已构建的候选）：
+
+```bash
+docker compose stop imageshow
+# 在此完成并记录停机备份；以下 apply 必须在备份与执行范围已确认后运行。
+docker compose run --rm --no-deps --entrypoint imageshow imageshow migrate-theme-null --inspect
+docker compose run --rm --no-deps --entrypoint imageshow imageshow migrate-theme-null --apply --offline
+docker compose up -d imageshow
+```
+
+也可在相同连接环境中使用 `node packages/server/dist/theme-null-migration-cli.js`，参数相同。
+不要直接把新镜像启动失败当作数据库已迁移；非空旧结构只返回明确的离线迁移指引。
+新装直接在空数据库中完成当前结构，不需要先建旧库或手工运行 CLI。
+
+SQL 只把占位 `none` 关联转为 NULL，删除已解除引用的保留词条，取消列的非空 / 默认值并
+原子推进 ready revision，同时删除管理员偏好中的旧 `image_card_density` 键，保留其他偏好与账号字段；
+不更改其他图片属性或对象。完整重跑已迁移结构和已清理偏好是 no-op，未知 / 部分
+手工结构会停止。迁移事务失败时保留旧镜像和原备份，排除原因后重试；若 COMMIT 回包丢失，
+先用只读盘点与结构读取确认结果，不能假定回滚。
+
+需要回退时停止新应用，以停机备份恢复到**独立数据库和 Redis 实例 / volume**，恢复对应
+`data/` 快照并切回原镜像，再核对结果和切换连接；保留失败现场。不要仅把应用降回 6.1.x，
+也不要把新增空主题猜测性改回 `none`。迁移后恢复过业务写入的库，回退会涉及这些新数据，
+应单独核对和决定处理范围。
+
+未完成接入队列和已冻结请求在 6.2.0 内沿原身份恢复；旧 `none` 草稿读取转为 null，冻结哈希
+保持可重放，缓存按 revision / 进程 epoch 收敛，无需清空 Redis。全部受控库核对成功后才能
+进入 6.2.1 清理，同时必须等所有使用 6.2.0 兼容哈希的接入任务、完成回执 / 冻结请求完成并到期；6.2.2 的分体按钮单独实施。
 
 ## 健康检查与停机
 

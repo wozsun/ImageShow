@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import {
   brightnesses,
   devices,
@@ -39,7 +40,7 @@ export type ReadyImageSourceRow = {
   ext: string;
   device: string;
   brightness: string;
-  theme: string;
+  theme: string | null;
   storage_slug: string;
   author: string;
   tags: string[];
@@ -63,7 +64,7 @@ export type ReadyImageCacheItem = {
   ext: string;
   device: Device;
   brightness: Brightness;
-  theme: string;
+  theme: string | null;
   storage_slug: string;
   author: string;
   tags: string[];
@@ -135,7 +136,7 @@ export function readyImageCacheItemFromRow(
     ext: String(row.ext ?? ""),
     device: row.device as Device,
     brightness: row.brightness as Brightness,
-    theme: String(row.theme ?? "none"),
+    theme: row.theme === null ? null : String(row.theme),
     storage_slug: String(row.storage_slug ?? ""),
     author: String(row.author ?? ""),
     tags,
@@ -158,8 +159,8 @@ export function readyImageCacheItemFromRow(
     || !imageExtensions.has(item.ext)
     || !devices.includes(item.device)
     || !brightnesses.includes(item.brightness)
-    || item.theme.length > slugMaxLength
-    || !slugPattern.test(item.theme)
+    || (item.theme !== null && (item.theme.length > slugMaxLength
+      || !slugPattern.test(item.theme)))
     || item.storage_slug.length > slugMaxLength
     || !slugPattern.test(item.storage_slug)
     || (item.author && (
@@ -180,7 +181,9 @@ export function parseReadyImageCacheItem(
     if (
       !Array.isArray(value)
       || value.length !== 21
-      || value.slice(0, 8).some((field) => typeof field !== "string")
+      || value.slice(0, 8).some((field, index) => (
+        index === 5 ? field !== null && typeof field !== "string" : typeof field !== "string"
+      ))
       || !Array.isArray(value[8])
       || value[8].some((tag) => typeof tag !== "string")
       || value.slice(9, 12).some((field) => typeof field !== "number")
@@ -292,7 +295,7 @@ export function readyImageStatFields(item: ReadyImageCacheItem) {
     `device:${item.device}`,
     `brightness:${item.brightness}`,
     `axis:${item.device}:${item.brightness}`,
-    `theme:${item.theme}`,
+    `theme:${item.theme ?? unsetThemeFilter}`,
     ...item.tags.map((tag) => `tag:${tag}`),
     ...(item.author ? [`author:${item.author}`] : [])
   ];

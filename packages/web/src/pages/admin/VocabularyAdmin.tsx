@@ -131,17 +131,10 @@ function VocabularyAdminContent({ kind, settings }: {
   const slugError = slugInvalid ? slugFormatHint : createError;
   const externalBusy = Boolean(mutation) || createAction.pending;
   const pageSize = settings.admin.image_page_size;
-  const isFixedVocabularyEntry = (item: VocabularyEntry) => (
-    kind === "themes" && item.slug === "none"
-  );
-  // 主题页按配置决定是否展示钉住的「未设置 / none」占位卡片；其它类别无此卡片。
-  // 只过滤展示用列表，order（含 none）保持完整，拖拽排序逻辑不受影响。
-  const showUnsetCard = settings.admin.show_unset_theme_card;
   const reorder = usePersistedReorder<VocabularyEntry>({
     items: data?.items,
     externalBusy,
     getKey: (item) => item.slug,
-    isFixed: isFixedVocabularyEntry,
     itemLabel: (items, movedSlug) => {
       const item = items.find((candidate) => candidate.slug === movedSlug);
       return `${copy.noun}“${item?.display_name || movedSlug}”`;
@@ -165,11 +158,7 @@ function VocabularyAdminContent({ kind, settings }: {
       error
     ),
     focus: {
-      itemKeys: (items) => (
-        kind === "themes" && !showUnsetCard
-          ? items.filter((item) => item.slug !== "none")
-          : items
-      ).map((item) => item.slug),
+      itemKeys: (items) => items.map((item) => item.slug),
       page,
       pageSize,
       onPageChange: setPage
@@ -177,11 +166,8 @@ function VocabularyAdminContent({ kind, settings }: {
   });
   const { order } = reorder;
   const operationBusy = reorder.busy;
-  const visibleItems = kind === "themes" && !showUnsetCard
-    ? order.filter((item) => item.slug !== "none")
-    : order;
-  const totalPages = Math.max(1, Math.ceil(visibleItems.length / pageSize));
-  const pageItems = visibleItems.slice((page - 1) * pageSize, page * pageSize);
+  const totalPages = Math.max(1, Math.ceil(order.length / pageSize));
+  const pageItems = order.slice((page - 1) * pageSize, page * pageSize);
   useEffect(() => { setPage((current) => Math.min(current, totalPages)); }, [totalPages]);
 
   const create = async (event: FormEvent) => {
@@ -247,7 +233,7 @@ function VocabularyAdminContent({ kind, settings }: {
     <section className="workspace workspace-paged">
       <WorkspaceHeader
         title={`${copy.noun}管理`}
-        description={`第 ${page} / ${totalPages} 页 · 共 ${visibleItems.length} 个${copy.noun}${isFetching ? " · 加载中" : ""}`}
+        description={`第 ${page} / ${totalPages} 页 · 共 ${order.length} 个${copy.noun}${isFetching ? " · 加载中" : ""}`}
         feedbackTarget={feedbackTarget}
       />
       <p
@@ -320,7 +306,6 @@ function VocabularyAdminContent({ kind, settings }: {
                 key={item.slug}
                 kind={kind}
                 item={item}
-                pinned={isFixedVocabularyEntry(item)}
                 canDelete={canDelete}
                 reorderBusy={operationBusy}
                 canMovePrevious={Boolean(position && position.position > 1)}

@@ -180,7 +180,7 @@ export async function createReadyIngestionFixture(
   const metadata: ImageDraftDto = {
     device: "auto",
     brightness: "auto",
-    theme: "none",
+    theme: null,
     author: "",
     title: `integration ${label}`,
     description: "",

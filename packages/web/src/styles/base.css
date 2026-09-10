@@ -365,78 +365,6 @@ button.active, .button {
   border-color: var(--color-control-border);
 }
 
-.labeled-switch {
-  --labeled-switch-width: 64px;
-  --labeled-switch-height: 36px;
-  --labeled-switch-thumb-width: 12px;
-  --labeled-switch-thumb-height: 22px;
-  --labeled-switch-edge-gap: 5px;
-  --labeled-switch-label-gap: 4px;
-  --labeled-switch-track-background: var(--color-control-surface);
-  --labeled-switch-track-border: var(--color-control-border);
-  --labeled-switch-label-color: var(--color-control-label);
-  --labeled-switch-thumb-background: var(--color-control-switch-thumb);
-  --labeled-switch-thumb-border: var(--color-control-border-hover);
-
-  --pressable-active-scale: var(--pressable-scale-medium, .98);
-
-  position: relative;
-  width: var(--labeled-switch-width);
-  min-width: var(--labeled-switch-width);
-  min-height: var(--labeled-switch-height);
-  height: var(--labeled-switch-height);
-  padding:
-    0
-    var(--labeled-switch-edge-gap)
-    0
-    calc(
-      var(--labeled-switch-edge-gap)
-      + var(--labeled-switch-thumb-width)
-      + var(--labeled-switch-label-gap)
-    );
-  overflow: hidden;
-  color: var(--labeled-switch-label-color);
-  background: var(--labeled-switch-track-background);
-  border-color: var(--labeled-switch-track-border);
-  font-size: 13px;
-  line-height: 1;
-}
-.labeled-switch.is-checked {
-  padding:
-    0
-    calc(
-      var(--labeled-switch-edge-gap)
-      + var(--labeled-switch-thumb-width)
-      + var(--labeled-switch-label-gap)
-    )
-    0
-    var(--labeled-switch-edge-gap);
-}
-.labeled-switch-label {
-  min-width: 0;
-  width: 100%;
-  overflow: hidden;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.labeled-switch-thumb {
-  position: absolute;
-  top: 50%;
-  left: var(--labeled-switch-edge-gap);
-  width: var(--labeled-switch-thumb-width);
-  height: var(--labeled-switch-thumb-height);
-  border: 1px solid var(--labeled-switch-thumb-border);
-  border-radius: 4px;
-  background: var(--labeled-switch-thumb-background);
-  box-shadow: 0 1px 2px var(--color-shadow-control-resting);
-  transform: translateY(-50%);
-  transition: left .16s cubic-bezier(.2, .8, .2, 1);
-}
-.labeled-switch.is-checked .labeled-switch-thumb {
-  left: calc(100% - var(--labeled-switch-edge-gap) - var(--labeled-switch-thumb-width));
-}
-
 .icon { width: 36px; padding: 0; flex: 0 0 36px; }
 
 .close { color: var(--color-close); }
@@ -569,11 +497,11 @@ button.active, .button {
   color: var(--public-color-navigation-mobile-link);
   background: transparent;
   border-color: transparent;
+  border-radius: 6px;
 }
 .mobile-nav-dropdown a.active {
   color: var(--public-color-text-strong);
   background: var(--public-color-action-soft);
-  border-radius: 6px;
 }
 .mobile-nav-dropdown.is-closing {
   pointer-events: none;

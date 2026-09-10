@@ -738,7 +738,7 @@ latest / oldest 分别按 `image_time,id` 降序 / 升序分页，保留微秒�
 
 show 投影固定为 id、title、thumb_url、width、height；gallery 在其基础上提供 author、device、
 brightness、theme、tags、image_time。卡片标题使用去除首尾空白后的 title，空标题使用图片身份提示。
-主题与标签只返回稳定 slug，显示名复用 facets。PG 按用途窄投影，Redis 复用同一 rich ready-cache；
+主题返回稳定 slug 或 `null`，标签返回稳定 slug，显示名复用 facets。PG 按用途窄投影，Redis 复用同一 rich ready-cache；
 随机读取在既有尾段索引上扫描并探测筛选成员，达到单次 4096 扫描预算时回源同序 PG 读取。
 
 列表使用 `public, max-age=30, s-maxage=60`，随机页新鲜期另收口至 UTC 当日剩余秒数。
@@ -759,7 +759,7 @@ brightness、theme、tags、image_time。卡片标题使用去除首尾空白后
 画廊挂载时无条件并发请求
 `gallery-facets`；该查询以同一 query key 在会话内长期复用，并由词表或图片成员变化显式失效。
 Web 通过同一纯投影把 facets 建成 slug 显示映射，卡片与详情首帧共同消费：标签以 `/` 连接，
-主题与标签同时存在时以 ` · ` 分隔，主题 `none` 不进入卡片副标题。列表先到或 facets 失败时
+主题与标签同时存在时以 ` · ` 分隔，主题为 `null` 时不进入卡片副标题。列表先到或 facets 失败时
 显示 slug，facets 成功后原位更新显示名；图片列表不等待该辅助查询，也不因其失败而不可用。
 
 长时间滚动使用数据窗口而不是无限 React Query pages：
@@ -901,6 +901,9 @@ Facet 内联搜索框显式隐藏浏览器为 `type="search"` 提供的原生搜
 筛选。当前页可以普通选择、全选或用 Shift 建立连续区间；翻页、换视图、换筛选或项目
 离开列表时清理失效选择，不跨页保留。
 
+图片列表固定使用紧凑卡片布局。分类摘要先显示设备 / 明暗，再追加非空主题；无主题不显示占位文字。
+移动端工具栏保留全选与批量操作的位置，窄屏第一行固定为 36px，批量操作继续位于第二行。
+
 “清空”以一次筛选状态替换同时移除这五项，不循环触发单项变化。它不改变图库 / 无主题 /
 回收站视图，并沿用普通筛选变化的收敛：清除当前选择与瞬时反馈、返回第一页并把列表滚动到
 顶部；无主题视图中暂时不参与查询的主题值也会删除。最终只建立一次无额外筛选的查询键，并
@@ -994,8 +997,12 @@ Gallery 先用同一次权威快照原位替换命中卡片，再后台重读唯
 游标或顺序改变时，数据窗口才原子调整对应成员、几何与锚点。列表、详情、facet、stats、
 overview 和词表分别只在自身字段受影响时刷新；公开编辑与后台编辑共用同一 mutation、
 快照和编辑会话能力，不建立第二个公开查询所有者。
+图片更新省略 `theme` 表示不修改，显式 `theme: null` 表示清空；接入创建的缺省主题为 null。
+单图编辑清空主题输入后保存即发送 null。默认属性栏未填写仍不应用，不隐式清空已有图片。
+“未设置”统计入口使用 `~unset` 查询选择器，与真实主题词条分离。
+
 分类变化由 `images/image-update-item.ts` 直接提交 metadata；主题删除通过
-`images/theme-reassignment.ts` 把受影响图片改为 `none`。两者拥有逐图锁、图片 revision、
+`images/theme-reassignment.ts` 把受影响图片的主题解除为 `NULL`。两者拥有逐图锁、图片 revision、
 mutation fence 和提交后 cache handoff。对象传输由单图、批量与整后端迁移通过
 `images/storage-location/` 的图片位置能力发起，并复用 storage 域的对象验证、持久清理与共享传输
 准入。主题领域只编排词表删除、重试和最终同步。

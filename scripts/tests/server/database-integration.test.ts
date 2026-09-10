@@ -4,7 +4,8 @@ import {
   randomUUID
 } from "node:crypto";
 import {
-  rm
+  rm,
+  readFile
 } from "node:fs/promises";
 import {
   join,
@@ -776,6 +777,10 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         definition: "CHECK (type = ANY (ARRAY['move.cleanup'::text, "
           + "'trash.purge'::text, 'cache.rebuild'::text]))"
       }]);
+      assert.deepEqual((await client.query(
+        `SELECT is_nullable, column_default FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='metadata' AND column_name='theme'`
+      )).rows, [{ is_nullable: "YES", column_default: null }]);
       const authorColumns = await client.query<{
         column_name: string;
         data_type: string;
@@ -878,6 +883,82 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
       await client.query("DELETE FROM author WHERE slug LIKE 'identity-test-%'");
     });
     });
+
+    await runDatabaseScenario(
+      "schema-baseline",
+      "6.2.0 离线迁移保留数据、拒绝在线写入并支持事务回滚和重跑",
+      120_000,
+      async () => {
+        const legacy = databaseName("theme_upgrade");
+        await createDatabase(legacy);
+        const baseline = await readFile(resolve(workspace, "packages/server/schema.sql"), "utf8");
+        const migration = await readFile(resolve(workspace, "packages/server/schema-theme-null.sql"), "utf8");
+        const ids = [randomUUID(), randomUUID(), randomUUID()];
+        await withClient(legacy, async (client) => {
+          await client.query(baseline);
+          await client.query("INSERT INTO theme(slug,display_name) VALUES('real','用户显示名')");
+          await client.query(
+            "INSERT INTO admin_account(username,password_hash,preferences) VALUES('upgrade-admin',$1,$2)",
+            ["$argon2id$v=19$m=65536,t=3,p=1$" + "a".repeat(22) + "$" + "b".repeat(43),
+              JSON.stringify({ color_scheme: "dark", image_card_density: "spacious" })]
+          );
+          for (const [index, id] of ids.entries()) {
+            await client.query(
+              `INSERT INTO metadata(id,created_by,storage_slug,object_key,device,brightness,theme,ext,md5,status,title)
+               VALUES($1,'upgrade-admin','local',$2,'pc','dark',$3,'webp',$4,$5,'保留属性')`,
+              [id, id + ".webp", index === 2 ? "real" : "none", String(index).repeat(32), index === 1 ? "deleted" : "ready"]
+            );
+          }
+        });
+        const before = await dataDump(legacy);
+        const schemaBefore = await schemaDump(legacy);
+        const runMigration = (args: string[]) => runProcess(process.execPath, [
+          resolve(workspace, "packages/server/src/theme-null-migration-cli.ts"), ...args
+        ], {
+          cwd: workspace, allowFailure: true, timeoutMs: 30_000,
+          env: { ...process.env, DATABASE_HOST: "127.0.0.1", DATABASE_PORT: String(port),
+            DATABASE_NAME: legacy, DATABASE_USER: "postgres", DATABASE_PASSWORD: password }
+        });
+        assert.equal((await runMigration(["--inspect"])).code, 0);
+        const refused = await initialize(legacy, true);
+        assert.notEqual(refused.code, 0);
+        assert.match(processResultText(refused), /migrate-theme-null/);
+        await withClient(legacy, async (client) => {
+          assert.notEqual((await runMigration(["--apply", "--offline"])).code, 0);
+          await client.query("BEGIN");
+          await client.query(migration);
+          await assert.rejects(client.query("SELECT 1/0"));
+          await client.query("ROLLBACK");
+          await client.query("BEGIN");
+          await client.query("ALTER TABLE metadata ALTER COLUMN theme DROP DEFAULT");
+          await assert.rejects(client.query(migration), /Unexpected metadata.theme contract/);
+          await client.query("ROLLBACK");
+        });
+        assert.equal(await dataDump(legacy), before);
+        assert.equal(await schemaDump(legacy), schemaBefore);
+        const original = await withClient(legacy, async (client) => ({
+          rows: (await client.query("SELECT to_jsonb(m) AS item FROM metadata m ORDER BY id")).rows,
+          accounts: (await client.query("SELECT to_jsonb(a) AS item FROM admin_account a ORDER BY username")).rows,
+          revision: (await client.query("SELECT revision::text FROM ready_image_revision")).rows[0].revision
+        }));
+        const applied = await runMigration(["--apply", "--offline"]);
+        assert.equal(applied.code, 0, processResultText(applied));
+        await withClient(legacy, async (client) => {
+          assert.deepEqual((await client.query("SELECT to_jsonb(m) AS item FROM metadata m ORDER BY id")).rows,
+            original.rows.map(({ item }) => ({ item: { ...item, theme: item.theme === "none" ? null : item.theme } })));
+          assert.equal((await client.query("SELECT revision::text FROM ready_image_revision")).rows[0].revision,
+            String(BigInt(original.revision) + 1n));
+          assert.deepEqual((await client.query("SELECT slug,display_name FROM theme ORDER BY slug")).rows,
+            [{ slug: "real", display_name: "用户显示名" }]);
+          assert.deepEqual((await client.query("SELECT to_jsonb(a) AS item FROM admin_account a ORDER BY username")).rows,
+            original.accounts.map(({ item }) => ({ item: { ...item, preferences: { color_scheme: "dark" } } })));
+        });
+        const migrated = await Promise.all([dataDump(legacy), schemaDump(legacy)]);
+        assert.equal((await runMigration(["--apply", "--offline"])).code, 0);
+        await initialize(legacy);
+        assert.deepEqual(await Promise.all([dataDump(legacy), schemaDump(legacy)]), migrated);
+      }
+    );
 
     await runDatabaseScenario(
       "storage-ingestion",

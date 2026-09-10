@@ -44,7 +44,8 @@ export async function persistIngestionImage(
     }
 
     const createdEntityKinds = new Set<EntityCacheKind>();
-    if (await ensureThemeWithMutationLockHeld(client, commit.metadata.theme)) {
+    if (commit.metadata.theme !== null
+      && await ensureThemeWithMutationLockHeld(client, commit.metadata.theme)) {
       createdEntityKinds.add("theme");
     }
     if (await ensureAuthorWithMutationLockHeld(client, commit.metadata.author)) {

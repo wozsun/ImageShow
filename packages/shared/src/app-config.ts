@@ -220,8 +220,7 @@ export const appConfig = {
     admin: {
       login_background: "",
       image_page_size: adminImagePageLimit,
-      recent_uploads: 16,
-      show_unset_theme_card: true
+      recent_uploads: 16
     },
     security: {
       session_ttl_seconds: 7 * 24 * 60 * 60,

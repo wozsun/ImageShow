@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import type { GalleryStatsFacetDto } from "@imageshow/shared/browser";
 import { displayNameOrSlug } from "../../lib/ui/formatters.js";
 
@@ -33,7 +34,7 @@ export function homeThemesWithUnsetLast<T extends { slug: string }>(
   const configured: T[] = [];
   const unset: T[] = [];
   for (const item of items) {
-    (item.slug === "none" ? unset : configured).push(item);
+    (item.slug === unsetThemeFilter ? unset : configured).push(item);
   }
   return [...configured, ...unset];
 }
@@ -63,7 +64,7 @@ export function facetLabel(item: {
   slug: string;
   display_name?: string;
 }) {
-  if (item.slug === "none" && !item.display_name?.trim()) return "未设置";
+  if (item.slug === unsetThemeFilter && !item.display_name?.trim()) return "未设置";
   return displayNameOrSlug(item);
 }
 

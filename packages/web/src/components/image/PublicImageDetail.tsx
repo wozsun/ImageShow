@@ -17,7 +17,7 @@ function imagePlaceholder(card: ShowImageCardDto | GalleryImageCard): PublicImag
   return {
     device: "pc",
     brightness: "light",
-    theme: "",
+    theme: null,
     author: "",
     tags: [],
     image_time: "",

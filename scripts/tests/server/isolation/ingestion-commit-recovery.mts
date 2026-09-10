@@ -42,7 +42,7 @@ await runIntegrationScenario(async (runtime) => {
       "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
         + "brightness, theme, ext, md5, width, height, image_size, "
         + "thumbnail_size, image_time, title) VALUES "
-        + "($1,'integration-conflict','local',$2,'pc','dark','none','webp',"
+        + "($1,'integration-conflict','local',$2,'pc','dark',NULL,'webp',"
         + "$3,1200,800,$4,$5,$6,'conflicting owner')",
       [
         fixture.imageId,

@@ -1,3 +1,4 @@
+import { themeIntentHashValue } from "../../metadata-theme.ts";
 import type {
   AdminImageListItemDto,
   ImageDraftDto,
@@ -39,7 +40,7 @@ function commitIntentHash(
     commit_request_id: input.commit_request_id,
     expected_md5: input.expected_md5,
     duplicate_decision: input.duplicate_decision,
-    metadata: input.metadata,
+    metadata: { ...input.metadata, theme: themeIntentHashValue(input.metadata.theme) },
     storage_slug: session.storage_slug,
     prepared_generation: session.prepared?.generation ?? ""
   });

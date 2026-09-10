@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 function validateDerivedRegistryScript(
   maximumArgument: number,
   itemCountArgument: number,
@@ -49,7 +50,7 @@ local function valid_attribute_key(value)
   local suffix = string.sub(
     value, string.len(attribute_index_prefix) + 1
   )
-  if attribute_axis_suffixes[suffix] then return true end
+  if attribute_axis_suffixes[suffix] or suffix == 'theme:${unsetThemeFilter}' then return true end
   for _, kind_prefix in ipairs(named_attribute_prefixes) do
     if has_prefix(suffix, kind_prefix) then
       return valid_slug(string.sub(suffix, string.len(kind_prefix) + 1))

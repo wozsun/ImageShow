@@ -19,7 +19,7 @@ function displayNameMap(
 /**
  * Build one formatter per facets snapshot so every mounted tile can resolve
  * its stable slugs without rebuilding vocabulary maps. A missing or failed
- * facets query falls back to slugs; the reserved `none` theme stays hidden.
+ * facets query falls back to slugs; an unset theme stays hidden.
  */
 export function createGalleryTaxonomyDisplayFormatter(
   facets: GalleryDisplayFacets | undefined
@@ -27,15 +27,13 @@ export function createGalleryTaxonomyDisplayFormatter(
   const themeNames = displayNameMap(facets?.themes ?? []);
   const tagNames = displayNameMap(facets?.tags ?? []);
   return ({ theme, tags }: GalleryCardTaxonomy) => {
-    const themeLabel = theme === "none"
-      ? themeNames.get(theme) ?? "未设置"
-      : themeNames.get(theme) ?? theme;
+    const themeLabel = theme === null ? "未设置" : themeNames.get(theme) ?? theme;
     const tagLabels = tags.map((tag) => tagNames.get(tag) ?? tag);
     return {
       themeLabel,
       tagLabels,
       subtitle: [
-        theme === "none" ? "" : themeLabel,
+        theme === null ? "" : themeLabel,
         tagLabels.join("/")
       ].filter(Boolean).join(" · ")
     };

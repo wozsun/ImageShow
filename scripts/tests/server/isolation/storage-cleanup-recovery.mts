@@ -28,7 +28,7 @@ const localAccess = await registry.resolveStorageAccess("local");
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
       + "theme, ext, md5, thumbnail_size) VALUES ($1, 'integration-admin', 'local', $2, 'pc', "
-      + "'light', 'none', 'webp', $3, $4)",
+      + "'light', NULL, 'webp', $3, $4)",
     [
       foregroundImage,
       foregroundNextKey,

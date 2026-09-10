@@ -114,6 +114,8 @@ core / config
   创建 HTTP 应用，初始化 / 校验 schema，再完成管理员初始化、启动 Worker 和 HTTP 服务，
   并处理优雅退出。
 - `src/admin-password-cli.ts` 是管理员密码恢复入口。
+- `src/theme-null-migration-cli.ts` 是 6.2.0 离线主题迁移入口，默认须显式选择只读盘点或
+  停机执行；独立 `schema-theme-null.sql` 不进入非空库自动 additions，空库装配在事务内复用它。
 - `src/healthcheck-cli.ts` 是容器 readiness 检查入口。
 - `images/mutation-sync-policy.ts` 只定义图片变更总量的纯决策与结果契约；
   `images/mutation-sync.ts` 持有写栅栏并执行精准发布或安排全量重建，领域 SQL 只负责在
@@ -122,7 +124,7 @@ core / config
   `coordinator.ts` 只装配该进程唯一实例。四态、单一活动校验 / 重建任务、revision 与
   planned mutation fence 共同位于状态机边界内。
 
-两个 CLI 都直接依赖所需基础设施，不导入 HTTP 应用，也不会触发主服务启动；
+这些 CLI 都直接依赖所需基础设施，不导入 HTTP 应用，也不会触发主服务启动；
 healthcheck 只读现有配置快照，密码恢复不初始化运行时配置。
 
 ### 稳定领域边界
@@ -266,7 +268,9 @@ Ingestion staging 孤儿按代码内固定 100 项渐进删除。
 `checks/database-check.ts`，正常图片请求不探测任务完整性。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
 请求级派生计数失效；`images/image-update-item.ts` 是单图 metadata、author / theme / tag
 创建、完整标签替换与分类 metadata 更新的 PostgreSQL 事务所有者；主题删除的图片重分配由
-`images/theme-reassignment.ts` 拥有。两者都保持 `object_key` 不变，并在同一图片事务中推进
+`images/theme-reassignment.ts` 拥有，删除主题后将图片关联置为 NULL。`images/metadata-theme.ts`
+拥有共享 HTTP / JSONL nullable slug schema 和 6.2.0 旧主题值、冻结哈希过渡；查询专用
+`~unset` 由 shared browser 契约提供，虚拟统计项由 vocab / read model 构造，不进入主题表。两者都保持 `object_key` 不变，并在同一图片事务中推进
 revision、交接同一 mutation sync。
 
 `images/ingestion/` 是 Upload 与 Import 共用的统一内容接入领域，稳定子目录表达允许依赖方向：

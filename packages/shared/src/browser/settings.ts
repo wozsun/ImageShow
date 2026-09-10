@@ -152,7 +152,6 @@ export type AdminPanelSettings = {
   login_background: string;
   image_page_size: number;
   recent_uploads: number;
-  show_unset_theme_card: boolean;
 };
 
 export type RuntimeConfig = {

@@ -132,7 +132,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
       + "brightness, theme, ext, md5, status) VALUES "
-      + "($1,$2,'local',$3,'pc','dark','none','webp',$4,'ready')",
+      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,'ready')",
     [
       actionFirst.image_id,
       actionOwner,
@@ -756,7 +756,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
       + "brightness, theme, ext, md5, status) VALUES "
-      + "($1,$2,'local',$3,'pc','dark','none','webp',$4,'ready')",
+      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,'ready')",
     [
       duplicateRecoveryImageId,
       actionOwner,
@@ -814,7 +814,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
       + "brightness, theme, ext, md5, status) VALUES "
-      + "($1,$2,'local',$3,'pc','dark','none','webp',$4,'ready')",
+      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,'ready')",
     [
       duplicateIntentImageId,
       actionOwner,
@@ -1037,7 +1037,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
       + "brightness, theme, ext, md5, status) VALUES "
-      + "($1,$2,'local',$3,'pc','dark','none','webp',$4,'ready')",
+      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,'ready')",
     [
       completedCommitActionReady.image_id,
       actionOwner,
@@ -1240,7 +1240,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
       + "brightness, theme, ext, md5, status) VALUES "
-      + "($1,$2,'local',$3,'pc','dark','none','webp',$4,'ready')",
+      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,'ready')",
     [
       clearCompletedReady.image_id,
       actionOwner,
@@ -1287,7 +1287,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
       + "brightness, theme, ext, md5, status) VALUES "
-      + "($1,$2,'local',$3,'pc','dark','none','webp',$4,'ready')",
+      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,'ready')",
     [
       deferredCompletedReady.image_id,
       actionOwner,

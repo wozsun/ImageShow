@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import {
   brightnesses,
   devices,
@@ -54,7 +55,7 @@ async function readFacetsFromPostgres(
   const row = (await reader.query(
     `SELECT
        ARRAY(
-         SELECT DISTINCT m.theme
+         SELECT DISTINCT COALESCE(m.theme, '${unsetThemeFilter}')
            FROM metadata m
           WHERE m.status='ready'
           LIMIT $1

@@ -1,6 +1,5 @@
 import type { PoolClient } from "pg";
 import { pool } from "../core/database/pools.ts";
-import { ApiError } from "../core/api-error.ts";
 import {
   assertVocabularyCreated,
   assertVocabularyFound,
@@ -11,13 +10,13 @@ import {
 import {
   executeThemeImageReassignmentPlan,
   readThemeReassignPlan,
-  reassignThemeImagesToNone,
+  clearThemeImageAssociations,
   type ThemeReassignProgress
 } from "../images/theme-reassignment.ts";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 
 async function insertTheme(client: PoolClient, slug: string) {
-  if (!slug || slug === "none") return false;
+  if (!slug) return false;
   const result = await client.query(
     `INSERT INTO theme(slug, sort_order)
      VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM theme))
@@ -41,6 +40,7 @@ export function ensureThemeWithMutationLockHeld(
 }
 
 export async function createTheme(slug: string, displayName: string) {
+  // 6.2.0 keeps this input reserved while old requests still map it to null.
   assertVocabularySlug("theme", slug, { reserved: ["none"] });
 
   await withVocabularyMutationLock("theme", slug, async (signal) => {
@@ -59,7 +59,6 @@ export async function createTheme(slug: string, displayName: string) {
 }
 
 export async function updateThemeDisplayName(slug: string, displayName: string) {
-  if (slug === "none") throw new ApiError(400, "invalid_theme", "The reserved 'none' theme cannot be renamed", { slug });
   const result = await pool.query("UPDATE theme SET display_name = $2, updated_at = now() WHERE slug = $1", [slug, displayName]);
   assertVocabularyFound("theme", result.rowCount);
   await synchronizeVocabularyMutation({ entity: "theme" });
@@ -70,7 +69,7 @@ export async function reorderThemes(slugs: string[]) {
   await pool.query(
     `UPDATE theme t SET sort_order = v.ord, updated_at = now()
      FROM unnest($1::text[]) WITH ORDINALITY AS v(slug, ord)
-     WHERE t.slug = v.slug AND t.slug <> 'none'`,
+     WHERE t.slug = v.slug`,
     [slugs]
   );
   await synchronizeVocabularyMutation({ entity: "theme" });
@@ -108,7 +107,7 @@ async function deleteThemeAndReassign(
       upperBoundImageId: string | null,
       exactReadyLimit: number | null
     ) => {
-      const reassigned = await reassignThemeImagesToNone(
+      const reassigned = await clearThemeImageAssociations(
         slug,
         upperBoundImageId,
         progress,
@@ -147,9 +146,6 @@ async function deleteThemeAndReassign(
 }
 
 export async function deleteTheme(slug: string) {
-  if (slug === "none") {
-    throw new ApiError(400, "invalid_theme", "The reserved 'none' theme cannot be deleted", { slug });
-  }
   const progress: ThemeReassignProgress = {
     readyCommitted: 0,
     readyReserved: 0

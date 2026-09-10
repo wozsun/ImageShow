@@ -1,3 +1,4 @@
+import { themeIntentHashValue } from "../../metadata-theme.ts";
 import { createHash } from "node:crypto";
 import type { IngestionQueueSummaryDto } from "@imageshow/shared/browser";
 import type {
@@ -43,7 +44,18 @@ export function ingestionSessionSemanticHash(
     message?: string;
     progress?: number | null;
   };
-  return semanticIngestionSessionHash(semantic);
+  return semanticIngestionSessionHash({
+    ...semantic,
+    metadata: semantic.metadata && {
+      ...semantic.metadata, theme: themeIntentHashValue(semantic.metadata.theme)
+    },
+    ...(semantic.commit ? { commit: {
+      ...semantic.commit,
+      metadata: semantic.commit.metadata && {
+        ...semantic.commit.metadata, theme: themeIntentHashValue(semantic.commit.metadata.theme)
+      }
+    } } : {})
+  });
 }
 
 export function presentIngestionQueueSummary(

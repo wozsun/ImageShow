@@ -73,7 +73,7 @@ try {
     await databasePools.pool.query(
       "INSERT INTO metadata (id, created_by, storage_slug, object_key, "
         + "device, brightness, theme, ext, md5, image_time, title) VALUES "
-        + "($1,$2,'local',$3,'pc','dark','none','webp',$4,$5,$6)",
+        + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,$5,$6)",
       [
         persistedImageId,
         owner,
@@ -95,7 +95,7 @@ try {
       metadata: {
         device: "auto",
         brightness: "auto",
-        theme: "none",
+        theme: null,
         author: "",
         title: "discardable runtime",
         description: "",
@@ -166,7 +166,7 @@ try {
       metadata: {
         device: "auto",
         brightness: "auto",
-        theme: "none",
+        theme: null,
         author: "",
         title: "new runtime after cold start",
         description: "",

@@ -1,3 +1,4 @@
+import { unsetThemeFilter } from "@imageshow/shared/browser";
 import {
   brightnesses,
   devices,
@@ -69,13 +70,14 @@ function exactCountRecord(
 
 function boundedCountRecord(
   value: unknown,
-  maximum: number
+  maximum: number,
+  allowUnsetTheme = false
 ): value is CountRecord {
   return countRecord(value)
     && Object.values(value).every((count) => count <= maximum)
     && Object.keys(value).every((key) => (
       key.length <= slugMaxLength
-      && slugPattern.test(key)
+      && ((allowUnsetTheme && key === unsetThemeFilter) || slugPattern.test(key))
     ));
 }
 
@@ -121,7 +123,7 @@ function validSnapshot(value: unknown): value is ReadyImageCountSnapshot {
     || !exactCountRecord(snapshot.axes, axisKeys, total)
     || !exactCountRecord(snapshot.devices, devices, total)
     || !exactCountRecord(snapshot.brightnesses, brightnesses, total)
-    || !boundedCountRecord(snapshot.themes, total)
+    || !boundedCountRecord(snapshot.themes, total, true)
     || !boundedCountRecord(snapshot.tags, total)
     || !boundedCountRecord(snapshot.authors, total)
   ) {
@@ -204,7 +206,7 @@ function assertGlobalStats(stats: Map<string, number>, expectedTotal: number) {
     const slug = field.slice(separator + 1);
     return (prefix === "theme" || prefix === "tag" || prefix === "author")
       && slug.length <= slugMaxLength
-      && slugPattern.test(slug);
+      && ((prefix === "theme" && slug === unsetThemeFilter) || slugPattern.test(slug));
   };
   if (
     [...stats].some(([field, count]) => (

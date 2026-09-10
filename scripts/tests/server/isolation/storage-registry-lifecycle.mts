@@ -155,7 +155,7 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
       + "theme, ext, md5, thumbnail_size) VALUES "
-      + "($1, 'integration-admin', $2, $3, 'pc', 'dark', 'none', 'webp', $4, 1)",
+      + "($1, 'integration-admin', $2, $3, 'pc', 'dark', NULL, 'webp', $4, 1)",
     [inaccessibleAliasImage, inaccessibleAlias, inaccessibleAliasKey, "0".repeat(32)]
   );
   registry.invalidateStorageBackendRegistry();

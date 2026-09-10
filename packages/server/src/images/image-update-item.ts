@@ -44,7 +44,7 @@ type UpdateImageRecord = {
   id: string;
   device: Device;
   brightness: Brightness;
-  theme: string;
+  theme: string | null;
   width: number | string | null;
   height: number | string | null;
   object_key: string;
@@ -254,7 +254,7 @@ async function commitImageUpdate({
 
     if (
       locked.theme !== nextClassification.theme
-      && nextClassification.theme !== "none"
+      && nextClassification.theme !== null
       && await ensureThemeWithMutationLockHeld(
         client,
         nextClassification.theme
@@ -288,7 +288,7 @@ async function commitImageUpdate({
             AND object_key=$11
             AND device=$12
             AND brightness=$13
-            AND theme=$14
+            AND theme IS NOT DISTINCT FROM $14
           RETURNING id`,
         [
           item.id,
@@ -387,7 +387,7 @@ async function mutateImageItem(
       target = {
         device: resolvedDevice ?? sourceImage.device,
         brightness: resolvedBrightness ?? sourceImage.brightness,
-        theme: item.theme ?? sourceImage.theme
+        theme: item.theme === undefined ? sourceImage.theme : item.theme
       };
     }
 
@@ -435,7 +435,7 @@ export async function updateImageItem(
     ...(item.author
       ? [{ entity: "author" as const, slug: item.author }]
       : []),
-    ...(item.theme && item.theme !== "none"
+    ...(item.theme
       ? [{ entity: "theme" as const, slug: item.theme }]
       : []),
     ...(resolvedTags ?? []).map((slug) => ({
