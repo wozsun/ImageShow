@@ -37,6 +37,13 @@
   transform: scale(var(--pressable-scale-large, .99));
 }
 
+/* 四字标签保持居中；按钮内容区不足以容纳两侧留白时隐藏装饰勾。 */
+@container home-axis-button (max-width: 96px) {
+  .home-axis-check {
+    display: none;
+  }
+}
+
 @media (max-width: 980px) {
   .home-banner {
     grid-template-columns: 1fr;
@@ -320,11 +327,6 @@
 @media (max-width: 380px) {
   .home-filter-bar {
     padding-inline: 10px;
-  }
-
-  .home-axis-group button > .home-axis-check {
-    left: 2px;
-    font-size: 12px;
   }
 
   .home-filter-bar > div > strong {

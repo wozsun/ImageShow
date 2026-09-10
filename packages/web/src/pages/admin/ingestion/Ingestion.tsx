@@ -44,6 +44,16 @@ const EMPTY_FACET_OPTIONS: FacetOption[] = [];
 type ImportSourceDialogModule =
   typeof import("./import/ImportSourceDialog.js");
 
+function initialAttributeDefaults(): IngestionAttributeDefaults {
+  return {
+    device: "auto",
+    brightness: "auto",
+    theme: "",
+    author: "",
+    tags: []
+  };
+}
+
 export function Ingestion({
   settings,
   activation,
@@ -73,13 +83,7 @@ export function Ingestion({
     useState<ImportSourceMode>("urls");
   const [importParseErrors, setImportParseErrors] =
     useState<ImportManifestParseError[]>([]);
-  const [defaults, setDefaults] = useState<IngestionAttributeDefaults>({
-    device: "auto",
-    brightness: "auto",
-    theme: "",
-    author: "",
-    tags: []
-  });
+  const [defaults, setDefaults] = useState(initialAttributeDefaults);
   const workflowReturnFocusRef = useRef<HTMLElement | null>(null);
   const processedActivationRef = useRef(0);
   const intentFenceRef = useRef(new AsyncIntentFence());
@@ -243,6 +247,7 @@ export function Ingestion({
       setOpen(false);
       setSourceDialogOpen(false);
       setSourceDialogPending(false);
+      setDefaults(initialAttributeDefaults());
     };
   }, [
     activation,

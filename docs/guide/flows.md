@@ -83,7 +83,9 @@ Import： accept ─► queued ─► downloading ─► received ─► prepari
   或数组放进 URL，也不按卡片建立独立请求。Web 只接受 pair 匹配且
   `(version, progress_seq)` 单调向前的状态；UUID 可以规范化大小写，session ID 不得改写大小写。
 - 关闭或按 Escape 不会等待清理，也不会中止请求或未完成任务；关闭路径按点击时冻结的队列水位，
-  异步删除当时已经完成的卡片与 Redis completed 回执，正式图片不受影响。动作尚未成功时快速
+  异步删除当时已经完成的卡片与 Redis completed 回执，正式图片不受影响。主窗口退场完成时，
+  默认设备和明暗重置为 `auto`，默认主题、作者和标签清空；已有任务的属性和冻结请求保持原值。
+  关闭来源输入、图片预览或详情子弹窗不重置主窗口默认属性。动作尚未成功时快速
   重开，允许继续看到尚未清理完成的旧卡片；动作每个分页响应一旦返回，组合队列就按该批逐项
   结果同步移除已确认清理的卡片，不等待后续 continuation，后续批失败也不会撤销此前成功 pair；
   若续页因动作凭证失效而失败，先恢复共享登录态，再由本动作结束时的同一 owner recovery 收敛，
@@ -147,6 +149,9 @@ Import： accept ─► queued ─► downloading ─► received ─► prepari
   触控板事件继续走原生路径。新增标签把输入末端带回视野；增删和 ResizeObserver 重新计算两端
   状态，原生滚动跨越首尾边界时只在方向状态变化处同步提交按钮可用性，避免按钮落后一帧闪现。
   标签可以经过按钮下方；按钮不可用时退出命中测试，原位置仍属于标签内容窗口。
+  箭头、键盘和纯纵向滚轮转横移沿用窗口的平滑滚动；共享弹窗边界消费手指横拖时显式即时滚动，
+  不受该 CSS 平滑影响。连续同向滚轮按未抵达的目标累计位移，反向输入从当前可见位置回退；
+  直接操作或滚动完成后释放滚轮目标。减少动态效果时窗口关闭平滑。
   已经由 Server 接管且确有可写 sync target 的草稿 fence 必须在提交动作真正执行前排空；
   未接管占位上的默认值不会妨碍同一 owner 内其他 ready canonical 提交。可重试写回错误由草稿
   owner 独立保留，SSE 重连只清状态通道错误，不会让重试入口消失。清理、提交和取消按钮是否
@@ -158,8 +163,10 @@ Import： accept ─► queued ─► downloading ─► received ─► prepari
   等待未来水位自动扩大旧点击。
 
 JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`title`、
-`description`、`theme`、`device`、`brightness` 与 `storage_slug`。行内字段优先于窗口
-默认值；显式空标签和 `auto` 分类也是有效选择。完整数量、并发、文件大小和处理参数以
+`description`、`theme`、`device`、`brightness` 与 `storage_slug`。设备、明暗、主题和作者等
+单值字段优先采用行内值，显式 `auto` 分类仍是有效选择。标签按来源标签在前、窗口默认标签在后
+合并去重；省略 `tags` 或提供 `tags: []` 都会带入默认标签，微博自动生成的年份标签也与默认标签
+同时保留。合并后仍遵守每张图片最多 50 个标签的边界。完整数量、并发、文件大小和处理参数以
 [配置说明](../CONFIG.md#runtimeconfig-参数目录)为准。
 
 `import.keep_original_link` 按 `url`、`jsonl`、`weibo` 来源决定是否把实际下载 URL 写入
@@ -474,6 +481,8 @@ Redis operational 周期变化或 scope 废止后旧 token 本来就不能继续
 “应用到全部”的 Server payload 与 ready 卡片属性策略使用同一稀疏语义：device / brightness
 保留 `auto` 供 Server 按检测结果解析，未选择的空 theme、空 author 和空 tags 不发送，也不清空
 canonical 已有值；尚未接管的本地前缀仍按其阶段和清单显式字段规则应用同一组窗口默认值。
+标签在本地初始、ready 和服务端接管阶段统一追加并去重，默认标签为空时保留任务现有标签，
+不因清单提供过 `tags` 而跳过追加。
 “应用到全部”只按 accepted-order 水位选择成员，不按点击时状态或 semantic revision 筛选；
 每次 CAS 冲突都重读最新 active canonical，在其上重新计算稀疏 patch，因此保留未被 patch
 覆盖的并发编辑，而同一字段以实际后成功的动作结果为准。整队列清空同样只按 accepted-order

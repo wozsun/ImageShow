@@ -1019,9 +1019,13 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     "<!doctype html><html><body><div id=root></div><button id=outside>外部</button></body></html>"
   );
   const React = await import("react");
+  const resizeCallbacks = new Map<Element, () => void>();
   class TestResizeObserver {
-    constructor(_callback: ResizeObserverCallback) {}
-    observe() {}
+    callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) { this.callback = callback; }
+    observe(target: Element) {
+      resizeCallbacks.set(target, () => this.callback([], this as unknown as ResizeObserver));
+    }
     unobserve() {}
     disconnect() {}
   }
@@ -1110,7 +1114,7 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
   try {
     const { createRoot } = await import("react-dom/client");
     const changes: string[][] = [];
-    const renderTagInputs = (disabled: boolean) => React.createElement(
+    const renderTagInputs = (disabled: boolean, value = ["alpha", "beta"]) => React.createElement(
       React.Fragment,
       null,
       React.createElement(TagInput, {
@@ -1124,7 +1128,7 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
       }),
       React.createElement(TagInput, {
         key: "target",
-        value: ["alpha", "beta"],
+        value,
         onChange: (next: string[]) => changes.push(next),
         suggestions: [{
           slug: "draft-pending",
@@ -1244,6 +1248,30 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     const movingWheel = await dispatchWheel(forward, 0, 40);
     assert.equal(movingWheel.defaultPrevented, true, "按钮覆盖区的鼠标滚轮也应归标签框所有");
     assert.equal(scrollLeft, 40, "标签框内纯纵向滚轮应转换为横向位移");
+    viewport.dispatchEvent(new window.Event("scrollend"));
+    const wheelTargets: number[] = [];
+    Object.defineProperty(viewport, "scrollLeft", {
+      configurable: true,
+      get: () => scrollLeft,
+      set: (value: number) => { wheelTargets.push(value); }
+    });
+    await dispatchWheel(viewport, 0, 40);
+    scrollLeft = 45;
+    await dispatchWheel(viewport, 0, 40);
+    assert.deepEqual(wheelTargets, [80, 120], "平滑尚未抵达时连续滚轮应累计目标位移");
+    await dispatchWheel(viewport, 0, -20);
+    assert.equal(wheelTargets.at(-1), 25, "反向滚轮从当前可见位置立即回退");
+    viewport.dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
+    scrollLeft = 90;
+    await dispatchWheel(viewport, 0, 40);
+    assert.equal(wheelTargets.at(-1), 130, "直接操作后不沿用旧滚轮目的地");
+    scrollLeft = 130;
+    viewport.dispatchEvent(new window.Event("scrollend"));
+    Object.defineProperty(viewport, "scrollLeft", {
+      configurable: true,
+      get: () => scrollLeft,
+      set: (value: number) => { scrollLeft = value; }
+    });
     scrollLeft = 200;
     const edgeWheel = await dispatchWheel(forward, 0, 40);
     assert.equal(edgeWheel.defaultPrevented, true, "到达横向边界后不得把滚轮交还页面");
@@ -1603,6 +1631,29 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
       ],
       "焦点真正离开整个控件后才结算草稿"
     );
+
+    viewport.dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
+    scrollLeft = 100;
+    Object.defineProperty(viewport, "scrollLeft", {
+      configurable: true,
+      get: () => scrollLeft,
+      set: (value: number) => { wheelTargets.push(value); }
+    });
+    await dispatchWheel(viewport, 0, -40);
+    assert.equal(wheelTargets.at(-1), 60);
+    await React.act(async () => {
+      root.render(renderTagInputs(false, ["alpha", "beta", "portal-choice"]));
+      await Promise.resolve();
+    });
+    assert.equal(wheelTargets.at(-1), scrollWidth, "外部建议更新标签后应显示输入末端");
+    scrollLeft = 200;
+    await dispatchWheel(viewport, 0, -40);
+    assert.equal(wheelTargets.at(-1), 160, "新增标签定位后不再沿用此前滚轮目标");
+    clientWidth = 120;
+    await React.act(async () => resizeCallbacks.get(viewport)?.());
+    scrollLeft = 180;
+    await dispatchWheel(viewport, 0, -40);
+    assert.equal(wheelTargets.at(-1), 140, "尺寸变化后滚轮从新的可见位置继续");
 
     await unmountRoot();
     unmountRoot = undefined;

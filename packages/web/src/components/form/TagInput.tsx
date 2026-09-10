@@ -79,6 +79,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
   const imeSession = useImeInputSession(text);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const wheelTargetRef = useRef<{ left: number; direction: number } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const backwardNavigationRef = useRef<HTMLButtonElement | null>(null);
   const forwardNavigationRef = useRef<HTMLButtonElement | null>(null);
@@ -158,6 +159,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
 
   const revealEditor = useCallback(() => {
     if (disabled) return;
+    wheelTargetRef.current = null;
     const input = inputRef.current;
     const box = scrollRef.current;
     input?.focus({ preventScroll: true });
@@ -271,6 +273,9 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
   useLayoutEffect(() => {
     const box = scrollRef.current;
     if (!box) return;
+    // Controlled values and vocabulary labels can change content geometry,
+    // including updates from suggestion portals outside the native control.
+    wheelTargetRef.current = null;
     const previous = previousEditingStateRef.current;
     if (
       value.length > previous.valueLength
@@ -278,7 +283,9 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
         text !== previous.text
         && inputRef.current === box.ownerDocument.activeElement
       )
-    ) box.scrollLeft = box.scrollWidth;
+    ) {
+      box.scrollLeft = box.scrollWidth;
+    }
     previousEditingStateRef.current = {
       text,
       valueLength: value.length
@@ -291,6 +298,15 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
     const box = scrollRef.current;
     if (!control || !box) return;
     const ownerWindow = box.ownerDocument.defaultView;
+    const releaseWheelTarget = () => {
+      wheelTargetRef.current = null;
+    };
+    const onScrollEnd = () => {
+      const target = wheelTargetRef.current;
+      if (target !== null && Math.abs(box.scrollLeft - target.left) < 1) {
+        releaseWheelTarget();
+      }
+    };
     const onWheel = (event: WheelEvent) => {
       const finePointer = ownerWindow?.matchMedia?.("(any-pointer: fine)")
         .matches ?? true;
@@ -301,21 +317,48 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
         deltaX: event.deltaX,
         deltaY: event.deltaY
       });
-      if (delta === null) return;
+      if (delta === null) {
+        releaseWheelTarget();
+        return;
+      }
       if (event.cancelable) event.preventDefault();
-      const target = tagWheelScrollTarget(box, delta);
-      if (Math.abs(target - box.scrollLeft) < 1) return;
+      // Native smooth scrolling has not reached scrollLeft's destination yet.
+      // Accumulate same-direction samples against that destination, while a
+      // reversal starts at the visible position for an immediate response.
+      const pending = wheelTargetRef.current;
+      const target = tagWheelScrollTarget({
+        clientWidth: box.clientWidth,
+        scrollWidth: box.scrollWidth,
+        scrollLeft: pending?.direction === Math.sign(delta)
+          ? pending.left
+          : box.scrollLeft
+      }, delta);
+      if (target === pending?.left) return;
+      wheelTargetRef.current = { left: target, direction: Math.sign(delta) };
       box.scrollLeft = target;
       refreshScrollAvailability();
     };
     control.addEventListener("wheel", onWheel, { passive: false });
+    box.addEventListener("scrollend", onScrollEnd);
+    const directInputEvents = ["pointerdown", "touchstart", "keydown", "input"];
+    for (const type of directInputEvents) {
+      control.addEventListener(type, releaseWheelTarget, { passive: true });
+    }
     const resizeObserver = typeof ownerWindow?.ResizeObserver === "function"
-      ? new ownerWindow.ResizeObserver(refreshScrollAvailability)
+      ? new ownerWindow.ResizeObserver(() => {
+          releaseWheelTarget();
+          refreshScrollAvailability();
+        })
       : null;
     resizeObserver?.observe(box);
     refreshScrollAvailability();
     return () => {
       control.removeEventListener("wheel", onWheel);
+      releaseWheelTarget();
+      box.removeEventListener("scrollend", onScrollEnd);
+      for (const type of directInputEvents) {
+        control.removeEventListener(type, releaseWheelTarget);
+      }
       resizeObserver?.disconnect();
     };
   }, [refreshScrollAvailability]);
@@ -368,6 +411,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
     onChange(value.filter((item) => item !== tag));
   };
   const scrollTags = (direction: -1 | 1) => {
+    wheelTargetRef.current = null;
     const box = scrollRef.current;
     if (!box) return false;
     const boxRect = box.getBoundingClientRect();

@@ -78,8 +78,7 @@ function initialAttributePatch(
     ...(!provided.has("device") ? { device: defaults.device } : {}),
     ...(!provided.has("brightness") ? { brightness: defaults.brightness } : {}),
     ...(!provided.has("theme") ? { theme: defaults.theme } : {}),
-    ...(!provided.has("author") ? { author: defaults.author } : {}),
-    ...(!provided.has("tags") ? { tags: [...defaults.tags] } : {})
+    ...(!provided.has("author") ? { author: defaults.author } : {})
   };
 }
 
@@ -93,15 +92,11 @@ function readyAttributePatch(
   const brightness = defaults.brightness === "auto"
     ? job.detectedClassification?.brightness
     : defaults.brightness;
-  const tags = defaults.tags.length
-    ? [...new Set([...job.draft.tags, ...defaults.tags])]
-    : undefined;
   return {
     ...(device ? { device } : {}),
     ...(brightness ? { brightness } : {}),
     ...(defaults.theme.trim() ? { theme: defaults.theme } : {}),
-    ...(defaults.author.trim() ? { author: defaults.author } : {}),
-    ...(tags ? { tags } : {})
+    ...(defaults.author.trim() ? { author: defaults.author } : {})
   };
 }
 
@@ -110,9 +105,15 @@ export function ingestionAttributeDefaultsPatch(
   defaults: IngestionAttributeDefaults
 ): Partial<ImageDraft> {
   const phase = ingestionAttributePhase(job);
-  if (phase === "initial") return initialAttributePatch(job, defaults);
-  if (phase === "ready") return readyAttributePatch(job, defaults);
-  return {};
+  if (phase === "locked") return {};
+  return {
+    ...(phase === "initial"
+      ? initialAttributePatch(job, defaults)
+      : readyAttributePatch(job, defaults)),
+    ...(defaults.tags.length
+      ? { tags: [...new Set([...job.draft.tags, ...defaults.tags])] }
+      : {})
+  };
 }
 
 export function ingestionAttributeDefaultsActionMetadata(

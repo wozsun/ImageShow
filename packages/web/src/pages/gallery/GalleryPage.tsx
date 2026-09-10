@@ -342,10 +342,12 @@ export function GalleryPage({
         <div className="gallery-floating-controls public-floating-controls"
           data-public-navigation-visible={headerVisible || toolbarVisible}
           hidden={Boolean(selected)}>
-          {showBackToTop && <button
+          <button
             type="button"
-            className="public-round-control pressable"
+            className={`public-round-control pressable gallery-back-to-top${showBackToTop ? " is-visible" : ""}`}
             aria-label="回到顶部"
+            aria-hidden={!showBackToTop}
+            inert={!showBackToTop}
             title="回到顶部"
             onClick={(event) => {
               event.currentTarget.blur();
@@ -353,7 +355,7 @@ export function GalleryPage({
             }}
           >
             <span className="public-round-surface"><Icon name="arrow-up-line" /></span>
-          </button>}
+          </button>
           <PublicImageOrderButton order={order}
             onChange={(next) => setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { order: next }))} />
         </div>

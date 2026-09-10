@@ -951,7 +951,15 @@ test("[Web/共享交互] 弹窗触摸边界按意图区分纵向与标签横向 
     ),
     false
   );
-  const horizontalOwner = horizontalMetrics(50);
+  const horizontalOwner = {
+    ...horizontalMetrics(50),
+    scrollTo(options: ScrollToOptions | number = {}, _y?: number) {
+      assert.equal(typeof options, "object");
+      if (typeof options === "number") return;
+      assert.equal(options.behavior, "instant", "触摸位移不应再次经过平滑插值");
+      this.scrollLeft = options.left ?? this.scrollLeft;
+    }
+  };
   assert.equal(consumeDialogHorizontalTouchMove(horizontalOwner, -20), true);
   assert.equal(horizontalOwner.scrollLeft, 70);
 
@@ -1032,6 +1040,10 @@ test("[Web/共享交互] 弹窗触摸边界按意图区分纵向与标签横向 
     }
   };
   setHorizontalMetrics(tags, horizontalMetrics(0));
+  tags.scrollTo = ((options: ScrollToOptions) => {
+    assert.equal(options.behavior, "instant");
+    tags.scrollLeft = options.left ?? tags.scrollLeft;
+  }) as HTMLElement["scrollTo"];
 
   try {
     assert.equal(findDialogTouchScrollOwner(target, frame), article);

@@ -171,6 +171,7 @@
 }
 
 .home-axis-group button {
+  container: home-axis-button / inline-size;
   position: relative;
   min-width: 0;
   min-height: 42px;

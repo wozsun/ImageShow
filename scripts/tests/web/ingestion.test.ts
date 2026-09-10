@@ -280,6 +280,53 @@ test("[Web/内容接入] 内容接入模块保持 view、草稿、上传与清�
   assert.equal(cleanupActionType("uncommitted"), "clear_uncommitted");
   assert.equal(cleanupActionType("completed"), "clear_completed");
 });
+test("[Web/内容接入] 导入与批量默认标签追加去重且保留来源单值和冻结提交", () => {
+  const defaults = {
+    device: "pc" as const,
+    brightness: "light" as const,
+    theme: "default-theme",
+    author: "default-author",
+    tags: ["shared", "preset"]
+  };
+  for (const sourceType of ["jsonl", "weibo"] as const) {
+    for (const tags of [undefined, [], ["2026", "shared", "2026"]]) {
+      const [job] = createManifestImportJobs([{
+        line: 1,
+        batch_position: 0,
+        original: "https://example.com/image.jpg",
+        theme: "source-theme",
+        author: "source-author",
+        tags
+      }], defaults, "local", sourceType, true);
+      assert.ok(job);
+      const expected = tags?.length ? ["2026", "shared", "preset"] : defaults.tags;
+      assert.deepEqual(job.draft.tags, expected);
+      assert.equal(job.draft.theme, "source-theme");
+      assert.equal(job.draft.author, "source-author");
+      if (tags?.length) assert.deepEqual(tags, ["2026", "shared", "2026"],
+        "合并不能改写来源数组");
+      for (const status of ["queued", "ready"] as const) {
+        const editable = { ...job, status };
+        const patch = ingestionAttributeDefaultsPatch(editable, {
+          ...defaults, tags: ["preset", "later"]
+        });
+        assert.deepEqual(patch.tags, [...expected, "later"]);
+        const applied = { ...editable, draft: { ...editable.draft, ...patch } };
+        assert.deepEqual(ingestionAttributeDefaultsPatch(applied, {
+          ...defaults, tags: ["preset", "later"]
+        }).tags, patch.tags, "重复应用保持幂等");
+        assert.equal(ingestionAttributeDefaultsPatch(applied, {
+          ...defaults, tags: []
+        }).tags, undefined, "空默认标签不能擦除已有标签");
+      }
+      assert.deepEqual(ingestionAttributeDefaultsPatch({
+        ...job, status: "committing"
+      }, defaults), {}, "冻结提交不再修改草稿");
+    }
+  }
+  assert.deepEqual(defaults.tags, ["shared", "preset"]);
+});
+
 test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq 单调合并服务端状态", () => {
   assert.deepEqual(summarizeIngestionJobs([
     ingestionJob({ id: "waiting-download", status: "queued" }),
@@ -15574,6 +15621,20 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
           "关闭并重开 import owner 后必须保留 JSONL 行级错误"
         );
       }
+
+      const defaultTags = document.querySelector<HTMLInputElement>(
+        "input[aria-label='默认标签']"
+      );
+      assert.ok(defaultTags);
+      assert.equal(document.querySelector(".ingestion-defaults .tag-chip"), null,
+        `${kind} 重开主窗口时默认标签必须清空`);
+      await React.act(async () => {
+        defaultTags.value = `preset-${kind}`;
+        defaultTags.dispatchEvent(new window.Event("focusout", { bubbles: true }));
+        await Promise.resolve();
+      });
+      assert.equal(document.querySelector(".ingestion-defaults .tag-chip")?.textContent,
+        `preset-${kind}`, "离开默认标签输入框应提交当前默认值");
 
       const closeButton = document.querySelector<HTMLButtonElement>(
         ".ingestion-close-button"

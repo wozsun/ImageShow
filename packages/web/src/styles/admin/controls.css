@@ -434,6 +434,7 @@ textarea.is-changed,
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -647,6 +648,7 @@ button.danger-button.is-subtle.is-armed {
 
 @media (prefers-reduced-motion: reduce) {
   .edit-modal form { animation: none; }
+  .tag-input-scroll-window { scroll-behavior: auto; }
 }
 .account-form {
   max-width: 420px;

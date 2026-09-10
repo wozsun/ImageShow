@@ -416,6 +416,19 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
       download_url: "https://example.com/image.jpg"
     }]
   }).success, true);
+  for (const [tags, expected] of [[tags50, true], [tags51, false]] as const) {
+    assert.equal(importAcceptInput.safeParse({
+      items: [{
+        ...commonIngestionMetadata,
+        idempotency_key: imageId,
+        batch_key: secondImageId,
+        batch_position: 0,
+        source_type: "jsonl",
+        download_url: "https://example.com/image.jpg",
+        tags
+      }]
+    }).success, expected, "Import 合并后的标签仍受 50 个唯一标签边界约束");
+  }
 
   const uploadWithRepeatedTags = uploadIntentInput.parse({
     items: [{

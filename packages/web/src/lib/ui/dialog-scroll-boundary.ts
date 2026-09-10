@@ -51,7 +51,7 @@ export function canDialogHorizontalScrollOwnerConsumeTouchMove(
 }
 
 export function consumeDialogHorizontalTouchMove(
-  owner: DialogHorizontalScrollMetrics,
+  owner: DialogHorizontalScrollMetrics & Pick<HTMLElement, "scrollTo">,
   touchDeltaX: number
 ) {
   const maximum = Math.max(0, owner.scrollWidth - owner.clientWidth);
@@ -62,7 +62,9 @@ export function consumeDialogHorizontalTouchMove(
   // scrollLeft is a double. Preserve every post-intent subpixel delta instead
   // of dropping high-refresh touch samples after lastClientX has advanced.
   if (next === owner.scrollLeft) return false;
-  owner.scrollLeft = next;
+  // Touch movement must remain direct even when button navigation uses CSS
+  // smooth scrolling on this same viewport.
+  owner.scrollTo({ left: next, behavior: "instant" });
   return true;
 }
 

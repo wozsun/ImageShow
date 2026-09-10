@@ -40,7 +40,7 @@ function createManifestItemDraft(
     brightness: valueOrDefault(item.brightness, defaults.brightness),
     theme: valueOrDefault(item.theme, defaults.theme),
     author: valueOrDefault(item.author, defaults.author),
-    tags: item.tags === undefined ? [...defaults.tags] : [...item.tags]
+    tags: [...new Set([...(item.tags ?? []), ...defaults.tags])]
   };
 }
 

@@ -47,8 +47,9 @@
   opacity: var(--public-floating-idle-opacity, .3);
   animation: public-floating-dim 180ms ease 5s forwards;
 }
-.public-floating-controls:focus-within,
-:where(.show-page):has(.public-floating-controls:focus-within) .public-floating-label {
+/* 指针点击保留的普通焦点不阻止淡出，键盘可见焦点继续保护操作。 */
+.public-floating-controls:has(:focus-visible),
+:where(.show-page):has(.public-floating-controls :focus-visible) .public-floating-label {
   opacity: .95;
   animation: none;
 }

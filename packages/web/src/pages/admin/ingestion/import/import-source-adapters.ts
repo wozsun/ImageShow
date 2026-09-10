@@ -114,7 +114,7 @@ const jsonlAdapter: ImportSourceModeAdapter = {
   emptySubmitText: "无有效清单",
   parseText: "解析清单",
   hint: (maxItems) => (
-    `每行一个 JSON，最多 ${maxItems} 条；行内字段优先于默认属性。`
+    `每行一个 JSON，最多 ${maxItems} 条；单值字段优先，标签与默认标签合并。`
   ),
   hasInput: (text) => Boolean(text.trim()),
   parse: async (text, signal) => {

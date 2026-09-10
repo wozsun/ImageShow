@@ -200,6 +200,7 @@
   .gallery-virtual-tile.is-gallery-card-reveal-subsequent {
     animation: none;
   }
+  .gallery-back-to-top { transition: none; }
   .tile { transition: none; }
   .tile:hover { transform: none; }
   .tile-image-shell img { transition: none; }
