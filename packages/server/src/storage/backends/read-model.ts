@@ -64,6 +64,7 @@ export async function getStorageBackendsForAdmin(): Promise<
         ...summary,
         type: "s3" as const,
         deletion,
+        content_md5: backend.capabilities?.content_md5 ?? null,
         s3: {
           ...s3,
           secret_access_key_configured: Boolean(secret_access_key)

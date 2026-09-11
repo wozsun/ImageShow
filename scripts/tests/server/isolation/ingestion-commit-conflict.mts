@@ -27,7 +27,7 @@ await runIntegrationScenario(async (runtime) => {
   await runWithReadyIngestionFixture(runtime, "commit-conflict", async (fixture) => {
     const committing = await freezeFixtureCommit(fixture);
     const foreignBody = Buffer.from(`foreign-object:${fixture.imageId}`);
-    await fixture.localDriver.writeBuffer(
+    await fixture.driver.writeBuffer(
       "full",
       fixture.finalObjectKey,
       foreignBody,
@@ -45,7 +45,7 @@ await runIntegrationScenario(async (runtime) => {
       )
     );
     assert.deepEqual(
-      await fixture.localDriver.readBuffer("full", fixture.finalObjectKey),
+      await fixture.driver.readBuffer("full", fixture.finalObjectKey),
       foreignBody,
       "unowned formal bytes must remain untouched"
     );

@@ -13,7 +13,7 @@ import {
   assertObjectNotPendingCleanup,
   setIngestionCandidateGuardConfirmationDeadline
 } from "../cleanup/service.ts";
-import type { ReadablePrefix, StoragePrefix } from "./keys.ts";
+import type { StoragePrefix } from "./keys.ts";
 import { shareStorageNamespace } from "./namespace.ts";
 
 export type StorageAccess = {
@@ -30,6 +30,18 @@ export type StorageObjectDigest = {
   sha256: string;
   md5?: string;
 };
+
+const verifiedStorageTarget = Symbol("verifiedStorageTarget");
+
+/** Reuse only while holding the storage location and image mutation locks. */
+export type VerifiedStorageTarget = Readonly<{
+  [verifiedStorageTarget]: true;
+  storage: StorageAccess;
+  prefix: StoragePrefix;
+  key: string;
+  expected: Readonly<StorageObjectDigest>;
+  exists: boolean;
+}>;
 
 type CandidateObject = {
   prefix: StoragePrefix;
@@ -161,6 +173,25 @@ function sameDigest(left: StorageObjectDigest, right: StorageObjectDigest) {
   return left.size === right.size && left.sha256 === right.sha256;
 }
 
+async function verifyWrittenObject(input: {
+  storage: StorageAccess;
+  prefix: StoragePrefix;
+  key: string;
+  expected: StorageObjectDigest;
+  sourceSlug: string;
+  signal?: AbortSignal;
+}) {
+  const { storage, prefix, key, expected, sourceSlug, signal } = input;
+  const stored = await digestStorageObject(storage, prefix, key, { signal })
+    .catch(() => {
+      signal?.throwIfAborted();
+      throw transferIntegrityFailure(storage, prefix, key, sourceSlug);
+    });
+  if (!sameDigest(stored, expected)) {
+    throw transferIntegrityFailure(storage, prefix, key, sourceSlug);
+  }
+}
+
 function digestMatchesExpected(
   digest: StorageObjectDigest,
   expected: SourceDigestExpectation
@@ -175,23 +206,34 @@ function digestMatchesExpected(
  * An absent object is writable; an existing object is adoptable only when its
  * strong digest already matches the frozen commit manifest.
  */
-export async function assertStorageTargetAdoptable(input: {
+export async function verifyStorageTarget(input: {
   storage: StorageAccess;
-  prefix: ReadablePrefix;
+  prefix: StoragePrefix;
   key: string;
-  expected: SourceDigestExpectation;
+  expected: StorageObjectDigest;
   signal?: AbortSignal;
-}) {
-  const { storage, prefix, key, expected, signal } = input;
+}): Promise<VerifiedStorageTarget> {
+  const { storage, prefix, key, signal } = input;
+  const expected = { ...input.expected };
   await assertObjectNotPendingCleanup(storage.config, prefix, key);
-  if (!await storage.driver.exists(prefix, key, { signal })) return;
-  const existing = await digestStorageObject(storage, prefix, key, {
-    includeMd5: Boolean(expected.md5),
-    signal
-  });
-  if (!digestMatchesExpected(existing, expected)) {
-    throw objectConflict(storage, prefix, key, storage.config.slug);
+  const exists = await storage.driver.exists(prefix, key, { signal });
+  if (exists) {
+    const existing = await digestStorageObject(storage, prefix, key, {
+      includeMd5: Boolean(expected.md5),
+      signal
+    });
+    if (!digestMatchesExpected(existing, expected)) {
+      throw objectConflict(storage, prefix, key, storage.config.slug);
+    }
   }
+  return {
+    [verifiedStorageTarget]: true,
+    storage,
+    prefix,
+    key,
+    expected,
+    exists
+  };
 }
 
 async function cleanupCandidate(
@@ -241,15 +283,12 @@ async function cleanupAttemptedCandidate(
   await cleanupCandidate(object, cleanup, transferError, options);
 }
 
-/** Publish a local file as a guarded formal object and verify the stored bytes. */
+/** Publish a verified source using confirmed upload checksums or readback. */
 export async function writeVerifiedFileToStorage(input: {
-  storage: StorageAccess;
+  target: VerifiedStorageTarget;
   sourcePath: string;
   contentType: string;
   onProgress?: (bytes: number) => Promise<void>;
-  toPrefix: StoragePrefix;
-  toKey: string;
-  expectedSource: StorageObjectDigest;
   sourceMismatch?: SourceMismatchError;
   cleanupCandidate?: CandidateCleanup;
   /** Matching pre-write guard owned under the image storage mutation lock. */
@@ -260,13 +299,10 @@ export async function writeVerifiedFileToStorage(input: {
   signal?: AbortSignal;
 }): Promise<{ created: boolean; sourceDigest: StorageObjectDigest }> {
   const {
-    storage,
+    target,
     sourcePath,
     contentType,
     onProgress,
-    toPrefix,
-    toKey,
-    expectedSource,
     sourceMismatch = {
       status: 502,
       code: "storage_source_integrity_failed",
@@ -276,8 +312,12 @@ export async function writeVerifiedFileToStorage(input: {
     ownedIngestionCandidateGuard,
     signal
   } = input;
+  const { storage, prefix: toPrefix, key: toKey, expected: expectedSource } = target;
+  const verifyUpload = storage.config.type === "s3"
+    && storage.config.capabilities?.content_md5 === true;
   const sourceDigest = await digestReadable(
-    createReadStream(sourcePath, { signal }), Boolean(expectedSource.md5)
+    createReadStream(sourcePath, { signal }),
+    verifyUpload || Boolean(expectedSource.md5)
   );
   if (!digestMatchesExpected(sourceDigest, expectedSource)) {
     throw new ApiError(
@@ -293,16 +333,7 @@ export async function writeVerifiedFileToStorage(input: {
   await assertObjectNotPendingCleanup(storage.config, toPrefix, toKey, {
     ownedIngestionCandidateGuard
   });
-  if (await storage.driver.exists(toPrefix, toKey, { signal })) {
-    const existing = await digestStorageObject(
-      storage,
-      toPrefix,
-      toKey,
-      { signal }
-    );
-    if (!sameDigest(existing, sourceDigest)) {
-      throw objectConflict(storage, toPrefix, toKey, storage.config.slug);
-    }
+  if (target.exists) {
     await onProgress?.(sourceDigest.size);
     return { created: false, sourceDigest };
   }
@@ -316,13 +347,12 @@ export async function writeVerifiedFileToStorage(input: {
     ? storage.config.s3.task_timeout_seconds * 1_000
     : 0;
   if (s3UncertaintyWindowMs && ownedIngestionCandidateGuard) {
-    // Cover the upload request, its verification read, and one complete
-    // remote-settlement window before issuing the request. The error path
-    // extends this from the actual rejection time as an additional safeguard.
+    // Cover the upload, any readback and one remote-settlement window.
+    // The error path extends this from the actual rejection time.
     await setIngestionCandidateGuardConfirmationDeadline(
       ownedIngestionCandidateGuard.imageId,
       ownedIngestionCandidateGuard.token,
-      new Date(Date.now() + s3UncertaintyWindowMs * 3),
+      new Date(Date.now() + s3UncertaintyWindowMs * (verifyUpload ? 2 : 3)),
       { signal }
     );
     signal?.throwIfAborted();
@@ -348,7 +378,7 @@ export async function writeVerifiedFileToStorage(input: {
     try {
       await storage.driver.writeStream(toPrefix, toKey, body, sourceDigest.size, contentType, {
         signal,
-        expectedMd5: sourceDigest.md5,
+        expectedMd5: verifyUpload ? sourceDigest.md5 : undefined,
         atomicCandidateToken: ownedIngestionCandidateGuard?.token
       });
       await onProgress?.(transferred);
@@ -357,27 +387,15 @@ export async function writeVerifiedFileToStorage(input: {
       source.destroy();
       await Promise.all([bodyClosed, sourceClosed]);
     }
-    const copied = await digestStorageObject(
-      storage,
-      toPrefix,
-      toKey,
-      { signal }
-    ).catch(() => {
-      signal?.throwIfAborted();
-      throw transferIntegrityFailure(
+    if (!verifyUpload) {
+      await verifyWrittenObject({
         storage,
-        toPrefix,
-        toKey,
-        storage.config.slug
-      );
-    });
-    if (!sameDigest(copied, sourceDigest)) {
-      throw transferIntegrityFailure(
-        storage,
-        toPrefix,
-        toKey,
-        storage.config.slug
-      );
+        prefix: toPrefix,
+        key: toKey,
+        expected: sourceDigest,
+        sourceSlug: storage.config.slug,
+        signal
+      });
     }
     if (s3UncertaintyWindowMs && ownedIngestionCandidateGuard) {
       await setIngestionCandidateGuardConfirmationDeadline(
@@ -590,8 +608,9 @@ function verifiedTransferReadable(input: {
   signal?: AbortSignal;
 }) {
   const { source, prefix, key, opened, expected, signal } = input;
-  let complete = false;
+  let digest: StorageObjectDigest | undefined;
   const body = Readable.from((async function* () {
+    const sha256 = createHash("sha256");
     const md5 = expected.md5 ? createHash("md5") : undefined;
     let size = 0;
     try {
@@ -601,6 +620,7 @@ function verifiedTransferReadable(input: {
           ? chunk
           : Buffer.from(chunk as Uint8Array);
         size += bytes.byteLength;
+        sha256.update(bytes);
         md5?.update(bytes);
         yield bytes;
       }
@@ -613,14 +633,18 @@ function verifiedTransferReadable(input: {
       ) {
         throw storageSourceIntegrityFailure(source, prefix, key);
       }
-      complete = true;
+      digest = {
+        size,
+        sha256: sha256.digest("hex"),
+        ...(actualMd5 ? { md5: actualMd5 } : {})
+      };
     } finally {
       if (!opened.body.destroyed && !opened.body.readableEnded) {
         opened.body.destroy();
       }
     }
   })());
-  return { body, complete: () => complete };
+  return { body, digest: () => digest };
 }
 
 /**
@@ -748,6 +772,9 @@ export async function ensureVerifiedObjectAtDestination(input: {
         }
       );
     } else {
+      const verifyUpload = target.config.type === "s3"
+        && target.config.capabilities?.content_md5 === true
+        && expected.md5 !== undefined;
       const verified = verifiedTransferReadable({
         source,
         prefix,
@@ -764,15 +791,26 @@ export async function ensureVerifiedObjectAtDestination(input: {
         verified.body,
         expected.size,
         contentType,
-        { signal, expectedMd5: expected.md5 }
+        { signal, expectedMd5: verifyUpload ? expected.md5 : undefined }
       );
-      if (!verified.complete()) {
+      const sourceDigest = verified.digest();
+      if (!sourceDigest) {
         throw transferIntegrityFailure(
           target,
           prefix,
           key,
           source.config.slug
         );
+      }
+      if (target.config.type === "s3" && !verifyUpload) {
+        await verifyWrittenObject({
+          storage: target,
+          prefix,
+          key,
+          expected: sourceDigest,
+          sourceSlug: source.config.slug,
+          signal
+        });
       }
     }
     signal?.throwIfAborted();

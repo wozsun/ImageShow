@@ -52,7 +52,7 @@ export type ReadyIngestionFixture = {
   finalThumbnailKey: string;
   imageBody: Buffer;
   imageId: string;
-  localDriver: Awaited<ReturnType<
+  driver: Awaited<ReturnType<
     IntegrationRuntime["storageRegistry"]["resolveStorageAccess"]
   >>["driver"];
   owner: string;
@@ -74,7 +74,7 @@ async function cleanupFixtureResources(fixture: ReadyIngestionFixture) {
     finalObjectKey,
     finalThumbnailKey,
     imageId,
-    localDriver,
+    driver,
     repositoryKeys,
     runtime,
     preparedImageFile,
@@ -116,7 +116,7 @@ async function cleanupFixtureResources(fixture: ReadyIngestionFixture) {
     const uniqueObjects = [...new Map(
       objects.map((object) => [`${object.prefix}\0${object.key}`, object])
     ).values()];
-    await localDriver.removeObjects(uniqueObjects);
+    await driver.removeObjects(uniqueObjects);
   } catch (error) {
     errors.push(error);
   }
@@ -138,7 +138,8 @@ async function cleanupFixtureResources(fixture: ReadyIngestionFixture) {
 
 export async function createReadyIngestionFixture(
   runtime: IntegrationRuntime,
-  label: string
+  label: string,
+  storageSlug = "local"
 ): Promise<ReadyIngestionFixture> {
   const repositoryModule = await import(
     runtime.moduleUrl("packages/server/src/images/ingestion/repository.ts")
@@ -203,7 +204,7 @@ export async function createReadyIngestionFixture(
     request_hash: createHash("sha256").update(`${label}:${imageId}`).digest("hex"),
     import_download: { url: `https://example.com/${label}.webp` },
     metadata,
-    storage_slug: "local",
+    storage_slug: storageSlug,
     status: "queued",
     phase: "queued",
     message: "queued",
@@ -237,7 +238,7 @@ export async function createReadyIngestionFixture(
   const finalObjectKey = imagePaths.storageObjectKey(imageId, "webp");
   const finalThumbnailKey = imagePaths.thumbnailObjectKey(finalObjectKey);
   const repositoryKeys = sessionKeys.ingestionSessionKeys(owner, "import", sessionId);
-  const localAccess = await runtime.storageRegistry.resolveStorageAccess("local");
+  const storage = await runtime.storageRegistry.resolveStorageAccess(storageSlug);
   const repository = new repositoryModule.IngestionSessionRepository(
     runtime.redisClient.redis
   );
@@ -312,7 +313,7 @@ export async function createReadyIngestionFixture(
       finalThumbnailKey,
       imageBody,
       imageId,
-      localDriver: localAccess.driver,
+      driver: storage.driver,
       owner,
       prepared,
       ready,
@@ -333,7 +334,7 @@ export async function createReadyIngestionFixture(
         finalThumbnailKey,
         imageBody,
         imageId,
-        localDriver: localAccess.driver,
+        driver: storage.driver,
         owner,
         prepared,
         ready: template,
@@ -376,9 +377,10 @@ export async function freezeFixtureCommit(fixture: ReadyIngestionFixture) {
 export async function runWithReadyIngestionFixture(
   runtime: IntegrationRuntime,
   label: string,
-  work: (fixture: ReadyIngestionFixture) => Promise<void>
+  work: (fixture: ReadyIngestionFixture) => Promise<void>,
+  storageSlug = "local"
 ) {
-  const fixture = await createReadyIngestionFixture(runtime, label);
+  const fixture = await createReadyIngestionFixture(runtime, label, storageSlug);
   const errors: unknown[] = [];
   try {
     await work(fixture);

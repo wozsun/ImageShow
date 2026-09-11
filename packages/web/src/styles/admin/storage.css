@@ -23,11 +23,12 @@
 .storage-backend-card.is-default { border-color: var(--admin-color-action-primary); box-shadow: 0 0 0 1px var(--admin-shadow-storage-default); }
 .storage-backend-card.is-off { opacity: 0.7; }
 .storage-backend-card.is-dragging { opacity: 0.55; }
-.storage-card-body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
-.storage-card-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 16px; color: var(--admin-color-text-primary); }
-.storage-card-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.storage-card-meta { font-size: 13px; color: var(--admin-color-storage-meta); }
-.storage-default-toggle { flex: 0 0 auto; min-height: 28px; gap: 5px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--admin-color-storage-toggle-border); background: var(--admin-color-surface-primary); color: var(--admin-color-storage-label); font-size: 12px; font-weight: 600; }
+.storage-card-body { display: grid; grid-template: "title toggle" auto "meta checksum" 1fr / minmax(0, 1fr) auto; align-items: start; gap: 4px 12px; flex: 1; min-width: 0; }
+.storage-card-title { grid-area: title; align-self: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; color: var(--admin-color-text-primary); }
+.storage-card-meta, .storage-card-checksum { font-size: 13px; color: var(--admin-color-storage-meta); }
+.storage-card-meta { grid-area: meta; min-width: 0; overflow-wrap: anywhere; }
+.storage-card-checksum { grid-area: checksum; justify-self: center; text-align: center; white-space: nowrap; }
+.storage-default-toggle { grid-area: toggle; justify-self: center; min-height: 28px; gap: 5px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--admin-color-storage-toggle-border); background: var(--admin-color-surface-primary); color: var(--admin-color-storage-label); font-size: 12px; font-weight: 600; }
 .storage-default-toggle.is-default { border-color: var(--admin-color-control-border-selected); background: var(--admin-color-storage-default-surface); color: var(--admin-color-action-text); }
 .storage-default-toggle.is-default:disabled { opacity: 1; cursor: default; }
 .storage-default-toggle .app-icon { width: 14px; height: 14px; flex-basis: 14px; }

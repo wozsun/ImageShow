@@ -44,9 +44,8 @@ const withS3SettingsDefaults = (settings: z.infer<typeof s3SettingsPatchSchema>)
 
 export const s3SettingsSchema = s3SettingsPatchSchema.transform(withS3SettingsDefaults);
 
-// Configuration packages are read by the target version. Extra settings from
-// another version are ignored, while any invalid current setting rejects only
-// that backend entry.
+// Configuration packages retain recognized settings; an invalid current value
+// rejects only that backend entry.
 export const looseS3SettingsSchema = z.object({
   ...s3SettingsPatchShape,
   connect_timeout_seconds: z.number().int().min(1).max(120).optional(),
@@ -57,6 +56,20 @@ export const looseS3SettingsSchema = z.object({
 
 export type S3Settings = z.infer<typeof s3SettingsSchema>;
 export type S3SettingsPatch = z.infer<typeof s3SettingsPatchSchema>;
+
+const s3CapabilitiesSchema = z.strictObject({
+  content_md5: z.boolean()
+});
+
+export type S3Capabilities = z.infer<typeof s3CapabilitiesSchema>;
+
+/** Server-owned probe results share the backend's persisted configuration. */
+export const storedS3ConfigSchema = s3SettingsPatchSchema.extend({
+  capabilities: s3CapabilitiesSchema.optional()
+}).transform(({ capabilities, ...settings }) => ({
+  s3: withS3SettingsDefaults(settings),
+  ...(capabilities ? { capabilities } : {})
+}));
 
 export function mergeS3Settings(
   patch: S3SettingsPatch = {},
@@ -78,6 +91,7 @@ type LocalStorageConfig = StorageConfigBase & {
 export type S3StorageConfig = StorageConfigBase & {
   type: "s3";
   s3: S3Settings;
+  capabilities?: S3Capabilities;
 };
 
 export type StorageConfig = LocalStorageConfig | S3StorageConfig;

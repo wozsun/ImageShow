@@ -5,7 +5,10 @@ import {
   withTransactionOnClient
 } from "../../core/database/transactions.ts";
 import { pool } from "../../core/database/pools.ts";
-import { withAdvisoryLock } from "../../core/database/advisory-locks.ts";
+import {
+  runWithAdvisoryLockAcquisitionSignal,
+  withAdvisoryLock
+} from "../../core/database/advisory-locks.ts";
 import {
   mergeS3Settings,
   sameStorageBackendSettings,
@@ -16,6 +19,7 @@ import {
 import {
   normalizedNamespaceIdentities,
   storageConfigFromRow,
+  storedS3ConfigJson,
   type StorageBackendConfigRow
 } from "./record.ts";
 import {
@@ -219,8 +223,14 @@ async function updateStorageBackendUnderLock(
       )).rows[0] as ExistingStorageProbe | undefined
     : undefined;
   signal.throwIfAborted();
-  if (driverChanged) {
-    await validateStorageBackendCandidate(
+  const needsProbe = driverChanged || (
+    input.s3 !== undefined
+    && Object.keys(input.s3).some((field) => field !== "public_base_url")
+    && nextConfig.type === "s3"
+    && nextConfig.capabilities === undefined
+  );
+  if (needsProbe) {
+    const result = await validateStorageBackendCandidate(
       nextConfig,
       existingObject,
       verifiedEndpointRebind
@@ -228,6 +238,9 @@ async function updateStorageBackendUnderLock(
         : undefined,
       signal
     );
+    if (nextConfig.type === "s3") {
+      nextConfig.capabilities = result.capabilities;
+    }
     signal.throwIfAborted();
   }
 
@@ -308,10 +321,10 @@ async function updateStorageBackendUnderLock(
           );
         }
 
-        const configJson = !configChanged
+        const configJson = !configChanged && !needsProbe
           ? null
           : nextConfig.type === "s3"
-            ? JSON.stringify(nextConfig.s3)
+            ? storedS3ConfigJson(nextConfig)
             : null;
         await client.query(
           `UPDATE storage_backend
@@ -369,43 +382,26 @@ async function settleStorageBackendUpdate(
 
 export async function updateStorageBackend(
   slug: string,
-  input: StorageBackendUpdateInput
+  input: StorageBackendUpdateInput,
+  signal?: AbortSignal
 ) {
   const backendLockKey = `imageshow:storage-backend:${slug}`;
-  const updateWithBackendLock = () =>
-    settleStorageBackendUpdate((receipt) =>
-      withAdvisoryLock(backendLockKey, (signal, lockClient) =>
-        updateStorageBackendUnderLock(
-          slug,
-          input,
-          signal,
-          lockClient,
-          receipt
-        )
-      )
-    );
-
   const needsLocationWriteLock = input.s3
     ? Object.keys(input.s3).some((field) => field !== "public_base_url")
     : false;
-  if (!needsLocationWriteLock) {
-    await updateWithBackendLock();
-    return;
-  }
-
-  // S3 settings can affect the physical location or an active transport.
-  // Exclude active readers before retiring the old driver so a multi-request
-  // operation cannot be interrupted halfway through by a harmless config edit.
-  await settleStorageBackendUpdate((receipt) =>
-    withStorageLocationWriteAndAdvisoryLock(
-      backendLockKey,
-      (signal, lockClient) => updateStorageBackendUnderLock(
+  const update = () => settleStorageBackendUpdate((receipt) => {
+    const work = (lockSignal: AbortSignal, lockClient: PoolClient) =>
+      updateStorageBackendUnderLock(
         slug,
         input,
-        signal,
+        signal ? AbortSignal.any([signal, lockSignal]) : lockSignal,
         lockClient,
         receipt
-      )
-    )
-  );
+      );
+    // Transport changes exclude active readers before retiring the old driver.
+    return needsLocationWriteLock
+      ? withStorageLocationWriteAndAdvisoryLock(backendLockKey, work)
+      : withAdvisoryLock(backendLockKey, work);
+  });
+  await (signal ? runWithAdvisoryLockAcquisitionSignal(signal, update) : update());
 }

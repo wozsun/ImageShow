@@ -9,8 +9,11 @@ import type { AdminSession } from "../../../../packages/server/src/users/admin-s
 import { installProperties } from "../../support/property-descriptors.ts";
 import { withCommitFault } from "./database-faults.mts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
+import { createS3HttpFixture } from "../../support/s3-http-fixture.ts";
 
 await runIntegrationScenario(async (runtime) => {
+  const s3 = await createS3HttpFixture();
+  try {
   const { importConfigPackage } = await import(
     "../../../../packages/server/src/config/config-package.ts"
   );
@@ -43,8 +46,8 @@ await runIntegrationScenario(async (runtime) => {
     storage_backends: [{
       slug, display_name: slug, enabled: true, is_default: false,
       s3: {
-        endpoint: "objects.example.com", bucket: "gallery",
-        access_key_id: "fixture-key", secret_access_key: "fixture-secret"
+        ...s3.settings,
+        capabilities: { content_md5: false }
       }
     }]
   });
@@ -53,6 +56,21 @@ await runIntegrationScenario(async (runtime) => {
     runtime.storageRegistry.invalidateStorageBackendRegistry();
     await store.replaceRuntimeConfig(baseline);
   };
+
+  const rejectedPackage = input("probe-success", "Must remain unchanged");
+  rejectedPackage.storage_backends.push({
+    ...rejectedPackage.storage_backends[0]!, slug: "probe-failure",
+    s3: { ...rejectedPackage.storage_backends[0]!.s3, root_path: "/fail" }
+  });
+  s3.state.putError = (request) => request.key.startsWith("fail/")
+    ? { status: 403, code: "AccessDenied", message: "controlled import rejection" } : undefined;
+  await assert.rejects(importConfigPackage(rejectedPackage, {}), { name: "AccessDenied" });
+  assert.equal(await backend("probe-success"), null);
+  assert.equal(await backend("probe-failure"), null);
+  assert.deepEqual(store.getRuntimeConfig(), baseline);
+  assert.deepEqual(await persisted(), baseline);
+  assert.equal(s3.objects.size, 0);
+  s3.state.putError = undefined;
 
   for (const mode of ["success", "rolled_back", "committed", "unknown"] as const) {
     const slug = `package-${mode.replaceAll("_", "-")}`;
@@ -88,7 +106,7 @@ await runIntegrationScenario(async (runtime) => {
         assert.equal(store.getRuntimeConfig().site.domain, baseline.site.domain);
         assert.equal(store.getRuntimeConfig().site.description, baseline.site.description);
         assert.equal((await backend(slug))?.config.secret_access_key ?? null,
-          mode === "unknown" ? null : "fixture-secret");
+          mode === "unknown" ? null : s3.settings.secret_access_key);
       }
     } finally { remove(); await reset(slug); }
   }
@@ -223,11 +241,14 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(response.status, 400);
     assert.equal((await response.json()).code, "config_slug_mapping_invalid");
     assert.deepEqual(store.getRuntimeConfig(), baseline);
-    assert.equal((await backend("route-existing"))?.config.secret_access_key, "fixture-secret");
+    assert.equal((await backend("route-existing"))?.config.secret_access_key, s3.settings.secret_access_key);
+    assert.deepEqual((await backend("route-existing"))?.config.capabilities, { content_md5: true },
+      "导入须按本次探測结果保存能力");
   } finally { await reset("route-existing"); }
   const imported = await request("import", {
     package: { config: { site: { name: "Imported Through Route" } } }, slug_mappings: {}
   });
   assert.equal(imported.status, 200);
   assert.equal(store.getRuntimeConfig().site.name, "Imported Through Route");
+  } finally { await s3.close(); }
 });

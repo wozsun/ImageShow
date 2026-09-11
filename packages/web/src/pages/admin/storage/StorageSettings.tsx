@@ -146,6 +146,12 @@ export function StorageSettings() {
       reportAdminUiError("storage.connection_test", error);
       return false;
     } finally {
+      await client.invalidateQueries({
+        queryKey: queryKeys.storageBackends,
+        exact: true
+      }).catch((error) => {
+        reportAdminUiError("storage.connection_test.refresh", error);
+      });
       setBusy("");
     }
   };

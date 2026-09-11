@@ -714,6 +714,7 @@ test("[Web/后台表单] 存储编辑只提交变化字段并省略空凭据", (
     enabled: true,
     is_default: false,
     type: "s3",
+    content_md5: null,
     image_count: 0,
     ingestion_session_count: 0,
     cleanup_job_count: 0,
@@ -1852,6 +1853,52 @@ for (const count of [1, 2]) {
     assert.deepEqual(committed.flat(), items.map((item) => item.id));
   });
 }
+
+test("[Web/后台表单] 存储能力显示三态，连接测试后刷新一次注册表", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  h.window.scrollTo = () => {};
+  const clock = installControlledClock(t, h.window);
+  const { registerHooks } = await import("node:module");
+  const hooks = registerHooks({ load(url, context, next) {
+    return url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : next(url, context);
+  } });
+  const { StorageSettings } = await import("../../../packages/web/src/pages/admin/storage/StorageSettings.tsx")
+    .finally(() => hooks.deregister());
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const { ActionFeedbackProvider } = await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  t.after(() => client.clear());
+  const backend = {
+    slug: "archive", display_name: "Archive", type: "s3", enabled: true,
+    is_default: false, image_count: 0, ingestion_session_count: 0,
+    cleanup_job_count: 0, failed_cleanup_job_count: 0, exhausted_cleanup_job_count: 0,
+    deletion: { action: "delete", blockers: [] }, content_md5: null,
+    s3: { ...storageBackendS3FormSettings(), secret_access_key_configured: true }
+  } satisfies StorageBackendAdmin;
+  client.setQueryData(queryKeys.storageBackends, { backends: [backend] });
+  await h.render(h.React.createElement(QueryClientProvider, { client },
+    h.React.createElement(ActionFeedbackProvider, null, h.React.createElement(StorageSettings))));
+  const checksum = () => h.document.querySelector(".storage-card-checksum")?.textContent ?? "";
+  assert.equal(checksum(), "");
+  for (const content_md5 of [true, false, null]) {
+    await h.React.act(async () => client.setQueryData(queryKeys.storageBackends, { backends: [{ ...backend, content_md5 }] }));
+    await h.flush();
+    assert.equal(checksum(), content_md5 === null ? "" : content_md5 ? "支持MD5校验" : "不支持MD5校验");
+  }
+  await h.React.act(async () => h.document.querySelector<HTMLButtonElement>('button[title="编辑"]')!.click());
+  await h.React.act(async () => h.document.querySelector<HTMLButtonElement>(".storage-test-button")!.click());
+  assert.equal(h.pending[0]!.path, "/api/admin/storage/test");
+  assert.deepEqual(JSON.parse(String(h.pending[0]!.body)), { slug: "archive" });
+  await h.respond(0, { ok: true });
+  assert.deepEqual(h.pending.map((request) => request.path), [
+    "/api/admin/storage/test", "/api/admin/storage/backends"
+  ]);
+  await h.respond(1, { backends: [{ ...backend, content_md5: true }] });
+  await h.React.act(async () => clock.advanceBy(500));
+  await h.flush();
+  assert.equal(checksum(), "支持MD5校验");
+  assert.equal(h.pending.length, 2);
+});
 
 for (const kind of ["user", "storage"] as const) {
   test(`[Web/后台表单] ${kind} 删除经过最终确认，取消重置且失败后重新确认`, async (t) => {

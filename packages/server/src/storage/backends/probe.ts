@@ -2,6 +2,7 @@ import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
 import {
   mergeS3Settings,
+  storageDriverSignature,
   type StorageBackendTestInput,
   type StorageConfig
 } from "./config.ts";
@@ -84,7 +85,6 @@ export async function validateStorageBackendCandidate(
         candidate: driver,
         signal
       });
-      return;
     }
     const result = await driver.selfTest({ signal });
     if (!result.writable) {
@@ -95,6 +95,7 @@ export async function validateStorageBackendCandidate(
       );
     }
     signal?.throwIfAborted();
+    return result;
   } finally {
     await Promise.resolve().then(() => driver.close?.()).catch((error) => {
       logger.warn("storage_probe_driver_close_failed", {
@@ -115,9 +116,13 @@ export async function resolveStorageTestConfig(
 
   const currentS3 = current?.type === "s3" ? current.s3 : undefined;
   const candidate = mergeS3Settings(input.s3, currentS3);
-  return {
+  const config: StorageConfig = {
     slug: "(test)",
     type: "s3",
     s3: candidate
   };
+  if (current && storageDriverSignature(current) === storageDriverSignature(config)) {
+    config.slug = current.slug;
+  }
+  return config;
 }

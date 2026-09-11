@@ -93,11 +93,11 @@ await runIntegrationScenario(async (runtime) => {
       new AbortController().signal
     );
     assert.equal(
-      await fixture.localDriver.exists("full", fixture.finalObjectKey),
+      await fixture.driver.exists("full", fixture.finalObjectKey),
       false
     );
     assert.equal(
-      await fixture.localDriver.exists("thumbs", fixture.finalThumbnailKey),
+      await fixture.driver.exists("thumbs", fixture.finalThumbnailKey),
       false
     );
   });

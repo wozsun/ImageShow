@@ -38,7 +38,8 @@ export async function previewConfigPackage(value: unknown) {
 
 export async function importConfigPackage(
   value: unknown,
-  slugMappings: Record<string, string>
+  slugMappings: Record<string, string>,
+  signal?: AbortSignal
 ) {
   const pkg = parseConfigPackage(value);
   return withRuntimeConfigWriteLease(async () => {
@@ -98,7 +99,8 @@ export async function importConfigPackage(
         },
         (transactionId) => {
           importTransactionId = transactionId;
-        }
+        },
+        signal
       );
       publishRuntimeConfigForPackageImport(importedRuntimeConfig);
     } catch (error) {

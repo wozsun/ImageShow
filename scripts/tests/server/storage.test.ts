@@ -105,8 +105,11 @@ import {
   removeDriverObjectsAndConfirm
 } from "../../../packages/server/src/storage/drivers/removal.ts";
 import {
-  ensureVerifiedObjectAtDestination
+  ensureVerifiedObjectAtDestination,
+  verifyStorageTarget,
+  writeVerifiedFileToStorage
 } from "../../../packages/server/src/storage/objects/transfer.ts";
+import { createS3HttpFixture } from "../support/s3-http-fixture.ts";
 import {
   manageStorageDriver
 } from "../../../packages/server/src/storage/drivers/lifecycle.ts";
@@ -713,7 +716,7 @@ test("[Server/存储] S3 自检在调用方取消后仍独立清理已落地探�
     assert.equal(cleanupSignals.length, 1);
     assert.equal(
       commands.filter((name) => name === "HeadObjectCommand").length,
-      2,
+      4,
       "独立清理必须预检并确认探针已经消失"
     );
     assert.equal(commands.includes("DeleteObjectsCommand"), true);
@@ -721,6 +724,138 @@ test("[Server/存储] S3 自检在调用方取消后仍独立清理已落地探�
     backend.close();
   }
 });
+test("[Server/存储] S3 MD5 探测通过实际 SDK 区分校验、忽略和不支持", async (t) => {
+  const fixture = await createS3HttpFixture();
+  const backend = new S3Backend({ slug: "probe", type: "s3", s3: fixture.settings });
+  try {
+    for (const capability of ["enforced", "ignored", "unsupported"] as const) {
+      await t.test(capability, async () => {
+        fixture.state.capability = capability;
+        fixture.requests.length = 0;
+        const result = await backend.selfTest();
+        assert.deepEqual(result.capabilities, { content_md5: capability === "enforced" });
+        const puts = fixture.requests.filter((request) => request.method === "PUT");
+        assert.equal(puts.length, capability === "ignored" ? 3 : 2);
+        assert.equal(puts[0]!.headers["content-md5"],
+          createHash("md5").update(puts[0]!.body).digest("base64"));
+        if (capability !== "unsupported") {
+          assert.equal(Buffer.from(String(puts[1]!.headers["content-md5"]), "base64").length, 16);
+          assert.notEqual(puts[1]!.headers["content-md5"],
+            createHash("md5").update(puts[1]!.body).digest("base64"));
+          assert.equal(puts[1]!.status, capability === "enforced" ? 400 : 200);
+        }
+        assert.equal(fixture.requests.filter((request) => request.method === "GET").length,
+          capability === "enforced" ? 0 : 1);
+        for (const request of puts) {
+          assert.equal(request.headers["content-length"], "32");
+          assert.equal(request.body.length, 32);
+          assert.equal(request.headers["content-encoding"], undefined);
+          assert.equal(request.headers["x-amz-sdk-checksum-algorithm"], undefined);
+          assert.equal(request.headers["x-amz-trailer"], undefined);
+          if (request.headers["content-md5"]) {
+            assert.match(request.headers.authorization!, /SignedHeaders=[^,]*content-md5/u);
+          }
+        }
+        assert.equal(fixture.objects.size, 0, "全部探针必须完成删除确认");
+      });
+    }
+    for (const failure of [
+      { code: "AccessDenied", status: 403, wrongOnly: false },
+      { code: "BadDigest", status: 400, wrongOnly: false },
+      { code: "InvalidDigest", status: 400, wrongOnly: true },
+      { code: "RequestTimeout", status: 400, wrongOnly: true },
+      { code: "NotImplemented", status: 501, wrongOnly: true }
+    ]) {
+      await t.test(`探测错误 ${failure.code}`, async () => {
+        fixture.state.capability = "enforced";
+        fixture.requests.length = 0;
+        fixture.state.putError = (request) => !failure.wrongOnly || request.key.endsWith("-invalid")
+          ? { ...failure, message: "controlled provider failure" } : undefined;
+        await assert.rejects(backend.selfTest(), { name: failure.code });
+        const puts = fixture.requests.filter((request) => request.method === "PUT");
+        assert.equal(puts.length, failure.wrongOnly ? 2 : 1);
+        assert.equal(puts.every((request) => Boolean(request.headers["content-md5"])), true,
+          "真实错误必须结束探测，不能改用无校验上传掩盖错误");
+        assert.equal(fixture.objects.size, 0);
+      });
+    }
+    fixture.state.putError = undefined;
+    fixture.state.capability = "ignored";
+    fixture.state.readBody = (body) => Buffer.alloc(body.length);
+    await assert.rejects(backend.selfTest(), { code: "storage_test_failed" });
+    assert.equal(fixture.objects.size, 0);
+  } finally {
+    backend.close();
+    await fixture.close();
+  }
+});
+
+test("[Server/存储] 已预检的 S3 目标按能力上传或回读，并复用已匹配的内容", async (t) => {
+  mockCleanupLeaseReads(t);
+  const fixture = await createS3HttpFixture();
+  const directory = await createTestDirectory("storage-integrity");
+  const body = Buffer.from("prepared image with a strong manifest digest");
+  const sourcePath = join(directory, "image.webp");
+  await writeFile(sourcePath, body);
+  const expected = {
+    size: body.length, sha256: createHash("sha256").update(body).digest("hex"),
+    md5: createHash("md5").update(body).digest("hex")
+  };
+  try {
+    for (const supported of [true, false, undefined]) {
+      const config: S3StorageConfig = {
+        slug: "commit", type: "s3", s3: fixture.settings,
+        ...(supported === undefined ? {} : { capabilities: { content_md5: supported } })
+      };
+      const driver = new S3Backend(config);
+      const storage = { config, driver };
+      try {
+        fixture.state.capability = supported ? "enforced" : "unsupported";
+        fixture.requests.length = 0;
+        for (const prefix of ["full", "thumbs"] as const) {
+          const key = `${String(supported)}.webp`;
+          const target = await verifyStorageTarget({ storage, prefix, key, expected });
+          const result = await writeVerifiedFileToStorage({ target, sourcePath, contentType: "image/webp" });
+          assert.equal(result.created, true);
+          assert.deepEqual(fixture.objects.get(`${prefix}/${key}`), body);
+        }
+        const counts = Object.fromEntries(["HEAD", "PUT", "GET"].map((method) => [
+          method, fixture.requests.filter((request) => request.method === method).length
+        ]));
+        assert.deepEqual(counts, { HEAD: 2, PUT: 2, GET: supported ? 0 : 2 });
+        for (const request of fixture.requests) {
+          if (request.method === "PUT") {
+            assert.equal(request.headers["content-md5"], supported
+              ? Buffer.from(expected.md5, "hex").toString("base64") : undefined);
+          }
+          if (request.method === "GET") assert.equal(request.headers["x-amz-checksum-mode"], undefined);
+        }
+        fixture.requests.length = 0;
+        const target = await verifyStorageTarget({ storage, prefix: "full", key: `${String(supported)}.webp`, expected });
+        assert.equal((await writeVerifiedFileToStorage({ target, sourcePath, contentType: "image/webp" })).created, false);
+        assert.deepEqual(fixture.requests.map((request) => request.method), ["HEAD", "GET"]);
+        fixture.objects.set("full/conflict.webp", Buffer.alloc(body.length));
+        await assert.rejects(verifyStorageTarget({ storage, prefix: "full", key: "conflict.webp", expected }),
+          { code: "storage_object_conflict" });
+
+        if (!supported) {
+          fixture.state.readBody = (stored) => Buffer.alloc(stored.length);
+          const corrupt = await verifyStorageTarget({ storage, prefix: "full", key: `corrupt-${supported}.webp`, expected });
+          let cleanupKey = "";
+          await assert.rejects(writeVerifiedFileToStorage({ target: corrupt, sourcePath, contentType: "image/webp",
+            cleanupCandidate: async (object) => { cleanupKey = object.key; }
+          }), { code: "storage_transfer_integrity_failed" });
+          assert.equal(cleanupKey, `corrupt-${supported}.webp`);
+          fixture.state.readBody = undefined;
+        }
+      } finally { driver.close(); }
+    }
+  } finally {
+    await fixture.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序分块和有限恢复", async (t) => {
   type DeleteHandler = (
     keys: string[],
@@ -1066,6 +1201,7 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
   ): S3StorageConfig => ({
     slug,
     type: "s3",
+    capabilities: { content_md5: true },
     s3: mergeS3Settings({
       endpoint: "https://cos.ap-jakarta.example.test",
       region: "ap-jakarta",
@@ -1273,6 +1409,42 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
     missingSource.close();
   }
 });
+test("[Server/存储] 流式迁移到不支持 MD5 的后端以目标正文完成校验", async (t) => {
+  mockCleanupLeaseReads(t);
+  const fixture = await createS3HttpFixture();
+  const body = Buffer.from("migration source with verified content");
+  const sourceConfig: S3StorageConfig = {
+    type: "s3", slug: "source", s3: { ...fixture.settings, root_path: "/source" }
+  };
+  const targetConfig: S3StorageConfig = {
+    type: "s3", slug: "target", capabilities: { content_md5: false },
+    s3: { ...fixture.settings, root_path: "/target", access_key_id: randomUUID() }
+  };
+  const source = { config: sourceConfig, driver: new S3Backend(sourceConfig) };
+  const target = { config: targetConfig, driver: new S3Backend(targetConfig) };
+  fixture.state.capability = "unsupported";
+  try {
+    for (const corrupt of [false, true]) {
+      const key = `image-${corrupt}.webp`;
+      fixture.objects.set(`source/full/${key}`, body);
+      fixture.state.beforeRequest = async (request) => {
+        fixture.state.readBody = corrupt && request.method === "GET" && request.key.startsWith("target/")
+          ? (stored) => Buffer.alloc(stored.length) : undefined;
+      };
+      const transfer = ensureVerifiedObjectAtDestination({ source, target, prefix: "full", key,
+        expected: { size: body.length, md5: createHash("md5").update(body).digest("hex") },
+        contentType: "image/webp", cleanupCandidate: async () => {}
+      });
+      if (corrupt) await assert.rejects(transfer, { code: "storage_transfer_integrity_failed" });
+      else {
+        assert.deepEqual(await transfer, { created: true });
+        assert.deepEqual(fixture.objects.get(`target/full/${key}`), body);
+        assert.equal(fixture.requests.find((request) => request.method === "PUT")!.headers["content-md5"], undefined);
+      }
+    }
+  } finally { source.driver.close(); target.driver.close(); await fixture.close(); }
+});
+
 test("[Server/存储] 跨 driver 迁移在目标提前拒绝、退休与取消时释放源流", async (context) => {
   mockCleanupLeaseReads(context);
   const baseDriver = (overrides: Partial<StorageDriver>): StorageDriver => ({

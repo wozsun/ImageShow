@@ -109,22 +109,20 @@ export function StorageBackendCard({
       }}
     >
       <div className="storage-card-body">
-        <div className="storage-card-title">
-          <strong title={title}>{title}</strong>
-          <AsyncActionButton
-            type="button"
-            className={`storage-default-toggle${backend.is_default ? " is-default" : ""}`}
-            status={defaultStatus}
-            presentation={defaultPresentation}
-            disabled={cardBusy || backend.is_default || !backend.enabled}
-            title={backend.is_default
-              ? "当前默认上传后端"
-              : backend.enabled
-                ? "设为默认上传后端"
-                : "启用后才能设为默认"}
-            onClick={() => void onSetDefault()}
-          />
-        </div>
+        <strong className="storage-card-title" title={title}>{title}</strong>
+        <AsyncActionButton
+          type="button"
+          className={`storage-default-toggle${backend.is_default ? " is-default" : ""}`}
+          status={defaultStatus}
+          presentation={defaultPresentation}
+          disabled={cardBusy || backend.is_default || !backend.enabled}
+          title={backend.is_default
+            ? "当前默认上传后端"
+            : backend.enabled
+              ? "设为默认上传后端"
+              : "启用后才能设为默认"}
+          onClick={() => void onSetDefault()}
+        />
         <div className="storage-card-meta">
           {backend.slug} · {storageTypeLabel(backend.type)} · {backend.image_count} 张图片
           {backend.ingestion_session_count > 0
@@ -137,6 +135,11 @@ export function StorageBackendCard({
             ? `（${backend.failed_cleanup_job_count} 项失败）`
             : ""}
         </div>
+        {backend.type === "s3" && backend.content_md5 !== null && (
+          <span className="storage-card-checksum">
+            {backend.content_md5 ? "支持MD5校验" : "不支持MD5校验"}
+          </span>
+        )}
       </div>
       <div className="storage-card-actions">
         <span className="storage-card-actions-left">

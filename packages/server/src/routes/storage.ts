@@ -76,7 +76,7 @@ export function registerStorageRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/storage/backends`, requireSuperAdmin, async (c) => {
     const input = parse(storageBackendCreateInput, await readJsonBody(c));
-    await createStorageBackend(input);
+    await createStorageBackend(input, c.req.raw.signal);
     return c.json(apiSuccess());
   });
 
@@ -107,7 +107,7 @@ export function registerStorageRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/storage/backends/:slug`, requireSuperAdmin, async (c) => {
     const slug = parse(storageSlugInput, c.req.param("slug"));
     const input = parse(storageBackendUpdateInput, await readJsonBody(c));
-    await updateStorageBackend(slug, input);
+    await updateStorageBackend(slug, input, c.req.raw.signal);
     return c.json(apiSuccess());
   });
 

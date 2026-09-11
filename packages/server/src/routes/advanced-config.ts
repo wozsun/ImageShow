@@ -85,7 +85,7 @@ export function registerAdvancedConfigRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/advanced-config/import`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {
     const input = parse(importInput, await readJsonBody(c));
-    await importConfigPackage(input.package, input.slug_mappings);
+    await importConfigPackage(input.package, input.slug_mappings, c.req.raw.signal);
     return c.json(apiSuccess());
   });
 }

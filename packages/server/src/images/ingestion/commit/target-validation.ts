@@ -1,5 +1,5 @@
 import { ApiError } from "../../../core/api-error.ts";
-import { assertStorageTargetAdoptable } from "../../../storage/objects/transfer.ts";
+import { verifyStorageTarget } from "../../../storage/objects/transfer.ts";
 import { readDuplicateSnapshotByMd5 } from "../../read-models/duplicates.ts";
 import type {
   IngestionPreparedManifest,
@@ -8,12 +8,12 @@ import type {
 import { IngestionSessionRepository } from "../repository.ts";
 
 type CommitTargetAvailability = Omit<
-  Parameters<typeof assertStorageTargetAdoptable>[0],
+  Parameters<typeof verifyStorageTarget>[0],
   "signal"
 >;
 
 /** Cancel and drain sibling digests before releasing the storage lock. */
-export async function assertCommitTargetsAvailable(
+export async function verifyCommitTargets(
   targets: readonly CommitTargetAvailability[],
   signal: AbortSignal
 ) {
@@ -23,7 +23,7 @@ export async function assertCommitTargetsAvailable(
   let firstFailure: unknown;
   const checks = targets.map(async (target) => {
     try {
-      await assertStorageTargetAdoptable({
+      return await verifyStorageTarget({
         ...target,
         signal: checkSignal
       });
@@ -39,6 +39,7 @@ export async function assertCommitTargetsAvailable(
   await Promise.allSettled(checks);
   signal.throwIfAborted();
   if (failed) throw firstFailure;
+  return Promise.all(checks);
 }
 
 export async function assertCurrentCommitExecution(

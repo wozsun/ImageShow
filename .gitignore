@@ -1,27 +1,26 @@
-# OS metadata
-.DS_Store
+# Version-controlled project files
+/*
+!/.dockerignore
+!/.env.example
+!/.github/
+!/.gitignore
+!/compose.yaml
+!/Dockerfile
+!/docs/
+!/knip.json
+!/LICENSE
+!/package-lock.json
+!/package.json
+!/packages/
+!/README.md
+!/scripts/
+!/tsconfig.base.json
 
-# Local secrets and operator-only files
+# Local files and generated output
+.DS_Store
 .env
 *.key
-compose.override.yaml
-AGENTS.md
-TODO.md
-
-# Dependencies and generated output
 node_modules/
 dist/
 *.tsbuildinfo
 *.log
-
-# Local test runs, measurements, and worktrees
-/tests/
-
-# Runtime and local tool data
-data/
-postgres/
-redis/
-nginx/
-.codex/
-.agents/
-.playwright-cli/

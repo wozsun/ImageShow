@@ -283,26 +283,6 @@ const localAccess = await registry.resolveStorageAccess("local");
     "ingestion-guarded-late-publish"
   );
   const guardedLatePublishToken = randomUUID();
-  await cleanup.enqueueObjectsForCleanup(
-    guardedLatePublishImage,
-    [{
-      prefix: "full",
-      key: guardedLatePublishKey,
-      backend: "local"
-    }],
-    "ingestion_commit_candidate_guard",
-    { guardToken: guardedLatePublishToken }
-  );
-  let guardedLatePublishJob = (await database.pool.query(
-    "UPDATE background_job SET status='running', execution_token=$2 "
-      + "WHERE type='move.cleanup' AND target_id=$1 RETURNING *",
-    [guardedLatePublishImage, randomUUID()]
-  )).rows[0];
-  assert.equal(
-    guardedLatePublishJob.payload.confirm_absent_after,
-    undefined,
-    "worker 领取预建 guard 时可以尚未观察到 S3 请求窗口"
-  );
   let lateGuardPublish;
   const guardedSourcePath = join(runtime.dataDirectory, "guarded-source.webp");
   await writeFile(guardedSourcePath, guardedLatePublishBody);
@@ -340,20 +320,34 @@ const localAccess = await registry.resolveStorageAccess("local");
       }
     })
   };
+  const guardedTarget = await objectTransfer.verifyStorageTarget({
+    storage: guardedTransferStorage,
+    prefix: "full",
+    key: guardedLatePublishKey,
+    expected: {
+      size: guardedLatePublishBody.length,
+      sha256: createHash("sha256").update(guardedLatePublishBody).digest("hex")
+    }
+  });
+  await cleanup.enqueueObjectsForCleanup(
+    guardedLatePublishImage,
+    [{ prefix: "full", key: guardedLatePublishKey, backend: "local" }],
+    "ingestion_commit_candidate_guard",
+    { guardToken: guardedLatePublishToken }
+  );
+  let guardedLatePublishJob = (await database.pool.query(
+    "UPDATE background_job SET status='running', execution_token=$2 "
+      + "WHERE type='move.cleanup' AND target_id=$1 RETURNING *",
+    [guardedLatePublishImage, randomUUID()]
+  )).rows[0];
+  assert.equal(guardedLatePublishJob.payload.confirm_absent_after, undefined,
+    "worker 领取预建 guard 时可以尚未观察到 S3 请求窗口");
   const guardedTransferStartedAt = Date.now();
   await assert.rejects(
     objectTransfer.writeVerifiedFileToStorage({
-      storage: guardedTransferStorage,
+      target: guardedTarget,
       sourcePath: guardedSourcePath,
       contentType: "image/webp",
-      toPrefix: "full",
-      toKey: guardedLatePublishKey,
-      expectedSource: {
-        size: guardedLatePublishBody.length,
-        sha256: createHash("sha256")
-          .update(guardedLatePublishBody)
-          .digest("hex")
-      },
       ownedIngestionCandidateGuard: {
         imageId: guardedLatePublishImage,
         token: guardedLatePublishToken
@@ -418,26 +412,22 @@ const localAccess = await registry.resolveStorageAccess("local");
     "预建 guard 必须在完整窗口后删除迟到发布且未入库的正式候选"
   );
 
+  for (const contentMd5 of [false, true]) {
   const settledGuardImage = randomUUID();
   const settledGuardKey = imagePaths.storageObjectKey(
     settledGuardImage,
     "webp"
   );
   const settledGuardToken = randomUUID();
-  await cleanup.enqueueObjectsForCleanup(
-    settledGuardImage,
-    [{ prefix: "full", key: settledGuardKey, backend: "local" }],
-    "ingestion_commit_candidate_guard",
-    { guardToken: settledGuardToken }
-  );
   let settledTargetBody: Buffer | undefined;
-  const settledSourceBody = Buffer.from("ingestion-guard-settled-copy");
+  const settledSourceBody = Buffer.from("ingestion-guard-settled-upload");
   const settledSourcePath = join(runtime.dataDirectory, "settled-source.webp");
   await writeFile(settledSourcePath, settledSourceBody);
   const settledTransferStorage: StorageAccess = {
     config: {
       slug: "local",
       type: "s3",
+      capabilities: { content_md5: contentMd5 },
       s3: { ...mergeS3Settings(), task_timeout_seconds: 0.5 }
     },
     driver: controlledStorageDriver({
@@ -454,24 +444,40 @@ const localAccess = await registry.resolveStorageAccess("local");
         };
       },
       async exists() { return false; },
-      async writeStream(_prefix, _key, body) {
+      async writeStream(_prefix, _key, body, _size, _type, options) {
+        const deadline = (await database.pool.query(
+          "SELECT payload->>'confirm_absent_after' AS deadline FROM background_job WHERE target_id=$1",
+          [settledGuardImage]
+        )).rows[0]?.deadline;
+        assert.ok(Date.parse(deadline) >= Date.now() + (contentMd5 ? 800 : 1_300));
+        assert.equal(options?.expectedMd5, contentMd5
+          ? createHash("md5").update(settledSourceBody).digest("hex") : undefined);
         const chunks: Buffer[] = [];
         for await (const chunk of body) chunks.push(Buffer.from(chunk));
         settledTargetBody = Buffer.concat(chunks);
       }
     })
   };
+  const settledTarget = await objectTransfer.verifyStorageTarget({
+    storage: settledTransferStorage,
+    prefix: "full",
+    key: settledGuardKey,
+    expected: {
+      size: settledSourceBody.length,
+      sha256: createHash("sha256").update(settledSourceBody).digest("hex")
+    }
+  });
+  await cleanup.enqueueObjectsForCleanup(
+    settledGuardImage,
+    [{ prefix: "full", key: settledGuardKey, backend: "local" }],
+    "ingestion_commit_candidate_guard",
+    { guardToken: settledGuardToken }
+  );
   assert.deepEqual(
     await objectTransfer.writeVerifiedFileToStorage({
-      storage: settledTransferStorage,
+      target: settledTarget,
       sourcePath: settledSourcePath,
       contentType: "image/webp",
-      toPrefix: "full",
-      toKey: settledGuardKey,
-      expectedSource: {
-        size: settledSourceBody.length,
-        sha256: createHash("sha256").update(settledSourceBody).digest("hex")
-      },
       ownedIngestionCandidateGuard: {
         imageId: settledGuardImage,
         token: settledGuardToken
@@ -481,7 +487,8 @@ const localAccess = await registry.resolveStorageAccess("local");
       created: true,
       sourceDigest: {
         size: settledSourceBody.length,
-        sha256: createHash("sha256").update(settledSourceBody).digest("hex")
+        sha256: createHash("sha256").update(settledSourceBody).digest("hex"),
+        ...(contentMd5 ? { md5: createHash("md5").update(settledSourceBody).digest("hex") } : {})
       }
     }
   );
@@ -498,6 +505,7 @@ const localAccess = await registry.resolveStorageAccess("local");
     "DELETE FROM background_job WHERE type='move.cleanup' AND target_id=$1",
     [settledGuardImage]
   );
+  }
 
   const admittedCleanupImage = randomUUID();
   const admittedCleanupKey = imagePaths.storageObjectKey(

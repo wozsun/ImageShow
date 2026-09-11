@@ -39,7 +39,7 @@ import { persistIngestionImage } from "./persistence.ts";
 import { removeIngestionPreparedFiles } from "../raw/prepared.ts";
 import { ingestionCleanupRetryQueue } from "../cleanup/retry-queue.ts";
 import {
-  assertCommitTargetsAvailable,
+  verifyCommitTargets,
   assertCurrentCommitExecution,
   assertCurrentDuplicateDecision
 } from "./target-validation.ts";
@@ -103,14 +103,15 @@ export async function commitIngestionSessionSnapshot(
           // commit can adopt. Reject unrelated pre-existing bytes before the
           // guard exists, otherwise its handler could delete those bytes when
           // this commit fails without publishing PostgreSQL truth.
-          await assertCommitTargetsAvailable([
+          const [imageTarget, thumbnailTarget] = await verifyCommitTargets([
             {
               storage,
               prefix: "full",
               key: commit.final_object_key,
               expected: {
                 size: prepared.size,
-                sha256: prepared.prepared_image_sha256
+                sha256: prepared.prepared_image_sha256,
+                md5: prepared.md5
               }
             },
             {
@@ -128,31 +129,17 @@ export async function commitIngestionSessionSnapshot(
           // guard until this commit has either published PostgreSQL truth or
           // released the lock after failure/cancel. Missing objects are safe;
           // unreferenced created objects therefore always have durable owner.
-          const guardedObjects: MoveCleanupObjectInput[] = [
-            {
-              prefix: "full",
-              key: commit.final_object_key,
-              backend: session.storage_slug
-            },
-            {
-              prefix: "thumbs" as const,
-              key: thumbnailKey,
-              backend: session.storage_slug
-            }
-          ];
+          const guardedObjects: MoveCleanupObjectInput[] = [imageTarget, thumbnailTarget]
+            .map(({ storage: targetStorage, prefix, key }) => ({
+              prefix,
+              key,
+              backend: targetStorage.config.slug
+            }));
           if (storage.config.type === "local") {
-            guardedObjects.push(
-              {
-                prefix: "full",
-                key: `${commit.final_object_key}.candidate-${candidateGuardToken}`,
-                backend: session.storage_slug
-              },
-              {
-                prefix: "thumbs",
-                key: `${thumbnailKey}.candidate-${candidateGuardToken}`,
-                backend: session.storage_slug
-              }
-            );
+            guardedObjects.push(...guardedObjects.map((object) => ({
+              ...object,
+              key: `${object.key}.candidate-${candidateGuardToken}`
+            })));
           }
           await enqueueObjectsForCleanup(
             session.image_id,
@@ -181,17 +168,10 @@ export async function commitIngestionSessionSnapshot(
                 commit.duplicate_decision
               );
               await writeVerifiedFileToStorage({
-                storage,
+                target: imageTarget,
                 sourcePath: ingestionPreparedPath(prepared.prepared_image_path),
                 contentType: contentType(prepared.ext),
                 onProgress: (bytes) => reportUpload(bytes),
-                toPrefix: "full",
-                toKey: commit.final_object_key,
-                expectedSource: {
-                  size: prepared.size,
-                  sha256: prepared.prepared_image_sha256,
-                  md5: prepared.md5
-                },
                 sourceMismatch: {
                   status: 409,
                   code: "storage_object_conflict",
@@ -204,16 +184,10 @@ export async function commitIngestionSessionSnapshot(
                 signal: executionSignal
               });
               await writeVerifiedFileToStorage({
-                storage,
+                target: thumbnailTarget,
                 sourcePath: ingestionPreparedPath(prepared.prepared_thumbnail_path),
                 contentType: "image/webp",
                 onProgress: (bytes) => reportUpload(prepared.size + bytes),
-                toPrefix: "thumbs",
-                toKey: thumbnailKey,
-                expectedSource: {
-                  size: prepared.thumbnail_size,
-                  sha256: prepared.prepared_thumbnail_sha256
-                },
                 sourceMismatch: {
                   status: 409,
                   code: "storage_object_conflict",

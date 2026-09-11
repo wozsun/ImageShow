@@ -150,7 +150,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 `config/runtime-config-store.ts` 唯一拥有进程内 RuntimeConfig、listener 与 FIFO 写租约。普通设置、
 高级配置和磁盘重载都先完成所需原子文件写入，再替换内存并逐个通知 listener；同步 listener
 异常只记录结构化错误，不中断后续 listener 或反转已持久化结果。`config/config-package.ts` 在同一
-租约内先通过 store 的专用阶段持久化候选文件，再等待 PostgreSQL 事务结果；只有正常提交、确认
+租约内先完成导入后端的存储探测，再通过 store 的专用阶段持久化候选文件并等待 PostgreSQL 事务结果；只有正常提交、确认
 已提交或结果 unknown 时才发布候选，确认回滚只恢复旧文件且不发布中间快照。
 
 `config/site-host.ts` 是图片资源根 URL 和 Host 判断的共同入口：域名为空或 `example.com`
@@ -177,6 +177,22 @@ CDN fallback，保留 HEAD、条件请求、取消处理与 `Vary: User-Agent`�
 缓冲写同时向文件写入传递 signal。取消后等待已开始的文件 I/O 收口并清理候选。
 每次自检使用独立随机 key，读写受请求 signal 控制，清理使用独立 10 秒准入预算并等待已开始
 的文件 I/O 收口；失败或取消仅删除本次探针对象。
+
+`storage/objects/transfer.ts` 拥有接入正式目标预检与本地文件写入。`verifyStorageTarget`
+返回绑定存储访问、对象键、冻结摘要和存在状态的只读结果，仅在同一存储位置与图片修改锁内复用；
+`writeVerifiedFileToStorage` 消费该结果并校验本地源文件，已确认能力的 S3 使用预计算
+Content-MD5 校验上传，其余 S3 与 local 使用写后回读。跨后端流式搬迁同样按目标能力与
+现有 MD5 选择上传校验或 S3 回读；回读共用大小与 SHA-256 核对。清理保护归属、远端结果
+不确定窗口和流资源收口仍由传输边界处理。
+
+`storage/backends/config.ts` 分别定义可编辑的 S3 设置与服务端维护的能力结果；`record.ts`
+在同一 `storage_backend.config` JSONB 中解析和保存两者。`drivers/s3.ts` 使用同一流式 PUT
+路径探测正确与错误 Content-MD5，SDK 仅添加协议要求的自动校验。`backends/probe.ts`
+统一完成候选验证和临时 driver 收口；创建、连接参数变更及配置包导入先探测再持久化。
+`self-test.ts` 只在探测连接与当前连接仍相同时回写结果，后台输入及配置包只传递可编辑设置。
+`backends/read-model.ts` 将结果投影为管理员 DTO 的 `content_md5: boolean | null`，
+`StorageBackendCard.tsx` 通过同一网格列将默认按钮与其下方的能力文字居中对齐；`StorageSettings.tsx` 通过已有列表查询
+刷新状态，连接测试结束只失效该查询。
 
 `routes/` 当前保留 18 个直属文件。`admin-vocabulary.ts` 在一个 HTTP 能力边界中声明 tags、
 themes 与 authors 三组同构 CRUD，通用 registrar 为文件内私有实现；每组仍分别注入自己的
@@ -345,7 +361,8 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
   按 session / image 分层，来源继续由 canonical 保存。
 - `commit/worker.ts` 继续唯一拥有 execution fencing、storage / advisory lock 顺序、prepared
   对象采用、事务开始后的不可取消边界和完成发布时机；`target-validation.ts`、
-  `persistence.ts`、`completion.ts` 分别承接数据库写入和完成发布；提交后的本地文件清理
+  `persistence.ts`、`completion.ts` 分别承接目标与执行权校验、数据库写入和完成发布；目标
+  校验在任一任务失败时取消并排空其余任务，成功后把结果交给同次提交的写入阶段。提交后的本地文件清理
   由 worker 的 `finally` 交接，不单设暂存清理类。
 - `cancel/coordinator.ts` 保留 resolving / irreversible boundary、abort 顺序、mutation limiter
   单例和响应丢失后的真相核对；`items.ts` 与 `retired-cleanup.ts` 不建立第二状态 owner。

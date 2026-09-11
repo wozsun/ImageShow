@@ -232,9 +232,11 @@ Import 下载与 prepare 会在各自取得完整事实的 Server 边界再次�
    UUIDv7 request ID、重复决定和完整 metadata；Server 冻结 intent hash、prepared generation、
    只由 UUID 尾部两位分片的规范正式对象键及当前认证 username。API 返回 `accepted` 后立即结束，
    不等待正式对象写入或数据库。
-   worker 在 storage、图片、词表和同 MD5 advisory lock 内，先为两个确定正式键写入持久
-   `move.cleanup` candidate guard，再从本地流式写入并回读校验候选，并在不可逆协调器的临界区完成最后一次 token
-   复验后启动单个 PostgreSQL 事务。guard 登记前会拒绝强摘要不匹配的预存正式对象；本次
+   worker 在 storage、图片、词表和同 MD5 advisory lock 内，先核对两个正式目标并保存本次预检结果，
+   再为确定正式键登记持久 `move.cleanup` candidate guard。写入阶段复用目标预检，校验本地
+   处理结果后流式写入；已确认支持 Content-MD5 的 S3 通过预计算摘要校验展示图和缩略图的
+   上传正文，其余 S3 与 local 写入后回读大小与 SHA-256。两份对象完成后，在不可逆协调器的临界区完成最后一次 token
+   复验并启动单个 PostgreSQL 事务。guard 登记前会拒绝强摘要不匹配的预存正式对象；本次
    attempt 只旁路自身唯一 guard token，旧删除租约继续阻断采用。guard 与提交共用单图存储
    变更锁：写入或事务失败时由 handler 删除未引用候选，PostgreSQL 正式引用成立时则保留对象。
    所有新 INSERT 显式写入
@@ -1125,7 +1127,8 @@ mutation fence 和提交后 cache handoff。对象传输由单图、批量与整
 版本按自身当前能力逐项识别，但不搬运数据库业务数据、Redis、图片对象或部署连接。配置项与修改方式见
 [配置说明](../CONFIG.md)，模块所有权见[项目结构](./project-structure.md#packagesserver)。
 
-配置包导入在单一 FIFO 写租约内先原子持久化候选 `config.json`，此时普通请求和运行配置
+配置包导入在单一 FIFO 写租约内先完成每个 S3 后端的连接与上传校验能力探测；全部通过后，
+在数据库事务中登记后端及探测结果，并原子持久化候选 `config.json`。此时普通请求和运行配置
 listener 仍只观察旧内存快照；PostgreSQL 正常提交或 xid8 确认已提交后才发布候选一次。确认
 回滚时只原子恢复旧文件，结果 unknown 时保留并发布候选后返回明确 503，交由检查页和管理员
 核对存储后端注册表。listener 的同步异常逐个隔离记录，不改变已经稳定的文件或数据库结果。

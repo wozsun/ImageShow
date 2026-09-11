@@ -1,5 +1,6 @@
 import type { Readable } from "node:stream";
 import type { StorageType } from "@imageshow/shared/browser";
+import type { S3Capabilities } from "../backends/config.ts";
 import type { StoragePrefix } from "../objects/keys.ts";
 import type {
   StorageKeyListing,
@@ -79,6 +80,7 @@ export type StorageSelfTest = {
   storage_dir?: string;
   bucket?: string;
   endpoint?: string;
+  capabilities?: S3Capabilities;
 };
 
 export interface StorageDriver {

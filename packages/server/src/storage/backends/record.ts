@@ -1,5 +1,6 @@
 import {
-  s3SettingsSchema,
+  storedS3ConfigSchema,
+  type S3StorageConfig,
   type StorageBackendRecord,
   type StorageConfig
 } from "./config.ts";
@@ -31,7 +32,7 @@ export function storageConfigFromRow(
         slug: row.slug,
         type: "s3",
         namespace_identities: namespaceIdentities,
-        s3: s3SettingsSchema.parse(raw)
+        ...storedS3ConfigSchema.parse(raw)
       };
     case "local":
       return {
@@ -42,6 +43,13 @@ export function storageConfigFromRow(
     default:
       throw new Error(`Unsupported storage backend type: ${row.type}`);
   }
+}
+
+export function storedS3ConfigJson(config: S3StorageConfig) {
+  return JSON.stringify({
+    ...config.s3,
+    ...(config.capabilities ? { capabilities: config.capabilities } : {})
+  });
 }
 
 export function storageBackendRecordFromRow(

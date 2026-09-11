@@ -510,7 +510,7 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
   } finally {
     restoreGuardQuery();
   }
-  assert.equal(commitWriteCalls, 0, "候选 guard 未落库前不得开始正式复制");
+  assert.equal(commitWriteCalls, 0, "候选 guard 未落库前不得开始正式写入");
   const conflictingCommitActor = "current-conflicting-actor-" + randomUUID();
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
@@ -539,7 +539,7 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
       ),
       (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_image_owner_conflict"
     );
-    assert.equal(commitWriteCalls, 2, "guard 成功后 full/thumb 才能开始复制");
+    assert.equal(commitWriteCalls, 2, "guard 成功后 full/thumb 才能开始写入");
     assert.equal(
       (await database.pool.query(
         "SELECT created_by FROM metadata WHERE id=$1",
@@ -553,7 +553,7 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
         + "AND target_id=$1 AND payload->>'reason'=$2",
       [commitImageId, "ingestion_commit_candidate_guard"]
     )).rows[0];
-    assert.ok(commitGuardJob, "复制前必须已经持久化正式候选 guard");
+    assert.ok(commitGuardJob, "写入前必须已经持久化正式候选 guard");
     assert.match(commitGuardJob.payload.guard_token, /^[0-9a-f-]{36}$/i);
     const commitFullCandidateKey = committedObjectKey
       + ".candidate-" + commitGuardJob.payload.guard_token;

@@ -1,4 +1,5 @@
-import type { Readable } from "node:stream";
+import { Readable } from "node:stream";
+import { finished } from "node:stream/promises";
 import {
   CopyObjectCommand,
   DeleteObjectsCommand,
@@ -8,10 +9,11 @@ import {
   PutObjectCommand,
   S3Client,
   type DeleteObjectsCommandOutput,
-  type GetObjectCommandOutput
+  type GetObjectCommandOutput,
+  type S3ServiceException
 } from "@aws-sdk/client-s3";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { getIngestionMaxFileBytes } from "../../config/app-settings.ts";
 import { missingS3Fields, type S3StorageConfig } from "../backends/config.ts";
@@ -75,6 +77,17 @@ function contentMd5FromHex(value: string | undefined) {
   return Buffer.from(value, "hex").toString("base64");
 }
 
+function isContentMd5Unsupported(error: unknown) {
+  const failure = error as Partial<S3ServiceException> | undefined;
+  const status = failure?.$metadata?.httpStatusCode;
+  if (status !== 400 && status !== 501) return false;
+  const { name = "", message = "" } = failure!;
+  return ["NotImplemented", "NotSupported", "UnsupportedHeader", "InvalidRequest", "InvalidArgument"]
+    .includes(name)
+    && /content[-_ ]?md5/iu.test(message)
+    && /not supported|not implemented|unsupported/iu.test(message);
+}
+
 function deleteObjectsCommandWithContentMd5(
   input: ConstructorParameters<typeof DeleteObjectsCommand>[0]
 ) {
@@ -128,6 +141,11 @@ function storageS3Client(config: S3StorageConfig): S3CommandClient {
     endpoint,
     region: config.s3.region || "auto",
     forcePathStyle: config.s3.force_path_style,
+    // Optional upload integrity is negotiated by our probe. Keep the wire
+    // format identical for probes and uploads, including endpoints without
+    // AWS's automatic CRC32 / streaming-trailer support.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
     requestHandler: new NodeHttpHandler({
       connectionTimeout: config.s3.connect_timeout_seconds * 1000
     }),
@@ -612,18 +630,16 @@ export class S3Backend implements StorageDriver {
   ): Promise<StorageSelfTest> {
     const missing = missingS3Fields(this.config.s3);
     if (missing.length) throw new ApiError(400, "storage_config_incomplete", "Storage config incomplete", { missing });
-    const key = `.storage-test-${randomUUID()}`;
+    const probeId = randomUUID();
+    const keys = [
+      `.storage-test-${probeId}-valid`,
+      `.storage-test-${probeId}-invalid`
+    ] as const;
     let result: StorageSelfTest | undefined;
     let testError: unknown;
     try {
-      await this.writeBuffer(
-        "full",
-        key,
-        Buffer.from("ok"),
-        "text/plain",
-        options
-      );
-      if (!await this.exists("full", key, options)) {
+      const contentMd5 = await this.probeContentMd5(keys, options);
+      if (!await this.exists("full", keys[0], options)) {
         throw new ApiError(
           502,
           "storage_test_failed",
@@ -634,7 +650,8 @@ export class S3Backend implements StorageDriver {
         backend: "s3",
         writable: true,
         bucket: this.config.s3.bucket,
-        endpoint: this.config.s3.endpoint
+        endpoint: this.config.s3.endpoint,
+        capabilities: { content_md5: contentMd5 }
       };
     } catch (error) {
       testError = error;
@@ -644,12 +661,15 @@ export class S3Backend implements StorageDriver {
     try {
       // A PUT can materialize before its response is lost or the caller is
       // cancelled. Cleanup therefore uses its own bounded S3 request budget.
-      const [removed] = await this.removeObjects([{
+      const removed = await this.removeObjects(keys.map((key) => ({
         prefix: "full",
         key
-      }]);
-      if (removed?.status === "failed" || removed?.status === "unknown") {
-        throw new Error(removed.error.message);
+      })));
+      const failure = removed.find((item) => (
+        item.status === "failed" || item.status === "unknown"
+      ));
+      if (failure?.error) {
+        throw new Error(failure.error.message);
       }
     } catch (error) {
       cleanupError = error;
@@ -659,7 +679,7 @@ export class S3Backend implements StorageDriver {
         502,
         "storage_test_cleanup_failed",
         "S3 self-test object could not be fully removed",
-        { reason: errorMessage(cleanupError) }
+        { reason: errorMessage(cleanupError), keys }
       );
       if (testError) {
         throw new AggregateError(
@@ -670,7 +690,67 @@ export class S3Backend implements StorageDriver {
       throw failure;
     }
     if (testError) throw testError;
+    options.signal?.throwIfAborted();
     return result!;
+  }
+
+  private async probeContentMd5(
+    [validKey, invalidKey]: readonly [string, string],
+    options: StorageRequestOptions
+  ) {
+    const bytes = randomBytes(32);
+    const digest = createHash("md5").update(bytes).digest();
+    const put = async (key: string, expectedMd5?: string) => {
+      const body = Readable.from([bytes]);
+      const closed = finished(body, { cleanup: true }).catch(() => undefined);
+      try {
+        await this.writeStream(
+          "full", key, body, bytes.length, "application/octet-stream",
+          { ...options, expectedMd5 }
+        );
+      } finally {
+        body.destroy();
+        await closed;
+      }
+    };
+    const verifyReadback = async () => {
+      await put(validKey);
+      const readback = await openedReadToBuffer(
+        await this.openRead("full", validKey, undefined, options),
+        bytes.length
+      );
+      if (!readback.equals(bytes)) {
+        throw new ApiError(
+          502,
+          "storage_test_failed",
+          "S3 self-test object failed content verification"
+        );
+      }
+      return false;
+    };
+
+    try {
+      await put(validKey, digest.toString("hex"));
+    } catch (error) {
+      options.signal?.throwIfAborted();
+      if (!isContentMd5Unsupported(error)) throw error;
+      return verifyReadback();
+    }
+
+    // Keep the header well-formed: only a mismatching digest can prove that
+    // the provider checks bytes, rather than merely validating header syntax.
+    digest[0] = digest[0]! ^ 1;
+    try {
+      await put(invalidKey, digest.toString("hex"));
+    } catch (error) {
+      options.signal?.throwIfAborted();
+      const failure = error as Partial<S3ServiceException> | undefined;
+      if (failure?.$metadata?.httpStatusCode === 400 && failure.name === "BadDigest") {
+        return true;
+      }
+      if (!isContentMd5Unsupported(error)) throw error;
+    }
+    return verifyReadback();
   }
 
   async pruneEmptyDirs(_options?: StoragePruneOptions): Promise<number> {

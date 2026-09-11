@@ -5,9 +5,12 @@ import {
   withTransactionOnClient
 } from "../../core/database/transactions.ts";
 import type {
+  S3StorageConfig,
   StorageBackendCreateInput,
   StorageBackendImportInput
 } from "./config.ts";
+import { storedS3ConfigJson } from "./record.ts";
+import { validateStorageBackendCandidate } from "./probe.ts";
 import {
   invalidateStorageBackendRegistry
 } from "./registry.ts";
@@ -26,7 +29,10 @@ function isForeignKeyViolation(error: unknown) {
   );
 }
 
-export async function createStorageBackend(input: StorageBackendCreateInput) {
+export async function createStorageBackend(
+  input: StorageBackendCreateInput,
+  signal?: AbortSignal
+) {
   if (input.slug === "local") {
     throw new ApiError(
       400,
@@ -34,6 +40,16 @@ export async function createStorageBackend(input: StorageBackendCreateInput) {
       "'local' 是内置后端，不能新建"
     );
   }
+  const config: S3StorageConfig = {
+    slug: input.slug,
+    type: "s3",
+    s3: input.s3
+  };
+  const result = await validateStorageBackendCandidate(
+    config, undefined, undefined, signal
+  );
+  config.capabilities = result.capabilities;
+  signal?.throwIfAborted();
   try {
     await pool.query(
       `INSERT INTO storage_backend(
@@ -43,7 +59,7 @@ export async function createStorageBackend(input: StorageBackendCreateInput) {
          $1, $2, $3, $4::jsonb, true,
          (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM storage_backend)
        )`,
-      [input.slug, input.display_name, "s3", JSON.stringify(input.s3)]
+      [input.slug, input.display_name, "s3", storedS3ConfigJson(config)]
     ).catch((error: unknown) => {
       if (
         error
@@ -67,11 +83,26 @@ export async function createStorageBackend(input: StorageBackendCreateInput) {
 export async function importStorageBackends(
   backends: StorageBackendImportInput[],
   beforeCommit: () => void | Promise<void>,
-  onTransactionId: (transactionId: string) => void
+  onTransactionId: (transactionId: string) => void,
+  signal?: AbortSignal
 ) {
+  const configs: S3StorageConfig[] = [];
+  for (const backend of backends) {
+    const config: S3StorageConfig = {
+      slug: backend.slug,
+      type: "s3",
+      s3: backend.config
+    };
+    const result = await validateStorageBackendCandidate(
+      config, undefined, undefined, signal
+    );
+    configs.push({ ...config, capabilities: result.capabilities });
+  }
+  signal?.throwIfAborted();
   try {
     await withTransaction(
       async (client) => {
+        signal?.throwIfAborted();
         const highestSortOrder = Number((await client.query(
           "SELECT COALESCE(MAX(sort_order), 0) AS value FROM storage_backend"
         )).rows[0]?.value ?? 0);
@@ -87,7 +118,7 @@ export async function importStorageBackends(
               backend.slug,
               backend.display_name,
               "s3",
-              JSON.stringify(backend.config),
+              storedS3ConfigJson(configs[index]!),
               backend.enabled,
               highestSortOrder + index + 1
             ]
@@ -110,6 +141,7 @@ export async function importStorageBackends(
             [importedDefault.slug]
           );
         }
+        signal?.throwIfAborted();
         await beforeCommit();
       },
       { onTransactionId }
