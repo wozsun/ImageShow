@@ -85,10 +85,8 @@ export async function withReadyImageCacheWriteFence<T>(
 ): Promise<T> {
   pendingFenceHolders += 1;
   const previous = fenceTail;
-  let release: () => void = () => undefined;
-  fenceTail = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const { promise, resolve: release } = Promise.withResolvers<void>();
+  fenceTail = promise;
   await previous;
   try {
     await readersDrained;

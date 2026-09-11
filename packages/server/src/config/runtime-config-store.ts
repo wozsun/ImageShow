@@ -69,10 +69,8 @@ export async function withRuntimeConfigWriteLease<T>(
   if (runtimeConfigWriteLeaseContext.getStore()) return await work();
 
   const predecessor = runtimeConfigWriteLeaseTail;
-  let release: () => void = () => undefined;
-  runtimeConfigWriteLeaseTail = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const { promise, resolve: release } = Promise.withResolvers<void>();
+  runtimeConfigWriteLeaseTail = promise;
   await predecessor;
   try {
     return await runtimeConfigWriteLeaseContext.run(true, work);

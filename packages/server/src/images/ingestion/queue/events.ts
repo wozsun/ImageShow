@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { appConfig } from "@imageshow/shared";
 import type {
   AdminImageListItemDto,
@@ -93,19 +94,9 @@ function eventSession(
 
 function waitForHeartbeat(signal: AbortSignal, delayMs: number) {
   if (signal.aborted) return Promise.resolve(false);
-  return new Promise<boolean>((resolve) => {
-    const timer = setTimeout(
-      () => finish(true),
-      delayMs
-    );
-    timer.unref();
-    const onAbort = () => finish(false);
-    const finish = (elapsed: boolean) => {
-      clearTimeout(timer);
-      signal.removeEventListener("abort", onAbort);
-      resolve(elapsed);
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
+  return delay(delayMs, true, { signal, ref: false }).catch((error: unknown) => {
+    if (signal.aborted) return false;
+    throw error;
   });
 }
 

@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import { createHash } from "node:crypto";
+import { hash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { appConfig } from "../shared/src/app-config.ts";
@@ -128,10 +128,7 @@ function rootSetChunkName(prefix: string, roots: string[]) {
   const assignedNames = new Set(assignments.values());
   let name = baseName;
   if (assignedNames.has(name)) {
-    name = `${baseName}-${createHash("sha256")
-      .update(rootKey)
-      .digest("hex")
-      .slice(0, 6)}`;
+    name = `${baseName}-${hash("sha256", rootKey, "hex").slice(0, 6)}`;
   }
   assignments.set(rootKey, name);
   return name;
@@ -305,7 +302,7 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         // 独立 facade 使用简洁的 PascalCase 职责名，合并与共享块使用
         // kebab-case 职责名；内容哈希独立负责缓存失效，不按字符数截断。
@@ -353,7 +350,7 @@ export default defineConfig({
     }
   },
   worker: {
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         entryFileNames: ({ name }) => javascriptAssetPattern(name),
         chunkFileNames: ({ name }) => javascriptAssetPattern(name),

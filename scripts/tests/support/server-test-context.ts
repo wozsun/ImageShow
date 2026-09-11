@@ -54,12 +54,3 @@ export function readyCacheMeta(revision = "1") {
     lastError: ""
   };
 }
-export function deferredPromise<T>() {
-  let resolvePromise!: (value: T | PromiseLike<T>) => void;
-  let rejectPromise!: (reason?: unknown) => void;
-  const promise = new Promise<T>((resolve, reject) => {
-    resolvePromise = resolve;
-    rejectPromise = reject;
-  });
-  return { promise, resolve: resolvePromise, reject: rejectPromise };
-}

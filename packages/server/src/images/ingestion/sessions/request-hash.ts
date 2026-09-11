@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { hash } from "node:crypto";
 import type { ImageDraftDto } from "@imageshow/shared/browser";
 import type {
   IngestionQueueType,
@@ -21,7 +21,7 @@ export type IngestionIntentHashInput = Readonly<{
 }>;
 
 export function ingestionIntentRequestHash(input: IngestionIntentHashInput) {
-  return createHash("sha256").update(stableJson({
+  return hash("sha256", stableJson({
     queue: input.queue,
     source_type: input.source_type,
     batch_key: input.batch_key,
@@ -44,5 +44,5 @@ export function ingestionIntentRequestHash(input: IngestionIntentHashInput) {
     storage_slug: input.storage_slug,
     expected_size: input.expected_size,
     max_long_edge: input.max_long_edge
-  })).digest("hex");
+  }), "hex");
 }

@@ -43,10 +43,7 @@ export async function tryWithInactiveIngestionTempPath<T>(
   if (activeTempPaths.has(identity) || deletingTempPaths.has(identity)) {
     return null;
   }
-  let settle!: () => void;
-  const deleting = new Promise<void>((resolvePromise) => {
-    settle = resolvePromise;
-  });
+  const { promise: deleting, resolve: settle } = Promise.withResolvers<void>();
   deletingTempPaths.set(identity, deleting);
   try {
     return await work();
@@ -121,10 +118,7 @@ export async function pruneIngestionTempDirectory(path: string) {
     activeTempDirectories.has(identity)
     || scanningTempDirectories.has(identity)
   ) return;
-  let settle!: () => void;
-  const pruning = new Promise<void>((resolvePromise) => {
-    settle = resolvePromise;
-  });
+  const { promise: pruning, resolve: settle } = Promise.withResolvers<void>();
   pruningTempDirectories.set(identity, pruning);
   try {
     await rmdir(path);

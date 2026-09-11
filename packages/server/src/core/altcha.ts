@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { createHash, createHmac, randomBytes } from "node:crypto";
+import { createHmac, hash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import {
   createChallenge,
@@ -81,7 +81,7 @@ async function reserveChallengeRequest(c: Context) {
   const security = getRuntimeConfig().security;
   const ipLimit = security.login_max_failures * 3;
   const globalLimit = security.login_global_max_attempts * 5;
-  const source = createHash("sha256").update(requestClientIp(c)).digest("base64url");
+  const source = hash("sha256", requestClientIp(c), "base64url");
   const [ipReservation, globalReservation] = await reserveRedisWindows([
     {
       key: temporaryKey("challenge-rate-ip", source),

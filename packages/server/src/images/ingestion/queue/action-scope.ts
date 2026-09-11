@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { hash, randomBytes } from "node:crypto";
 import type { IngestionQueueActionResultDto } from "@imageshow/shared/browser";
 import { ApiError } from "../../../core/api-error.ts";
 import { logger } from "../../../core/logger.ts";
@@ -326,5 +326,5 @@ export function verifyIngestionActionWatermark(input: Readonly<{
 }
 
 export function ingestionActionWatermarkHash(token: string) {
-  return createHash("sha256").update(token, "utf8").digest("hex");
+  return hash("sha256", token, "hex");
 }

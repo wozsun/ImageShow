@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { hash } from "node:crypto";
 import type { PublicImageOrder } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { normalizedUuidSchema } from "../core/uuid.ts";
@@ -141,7 +141,7 @@ export function createImageBrowseContext(
     order,
     period,
     start: date === null ? 0 : Number.parseInt(
-      createHash("sha256").update(`browse:${date}`).digest("hex").slice(0, 12), 16
+      hash("sha256", `browse:${date}`, "hex").slice(0, 12), 16
     )
   };
 }

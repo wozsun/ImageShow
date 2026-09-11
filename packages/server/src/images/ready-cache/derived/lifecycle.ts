@@ -20,10 +20,8 @@ let derivedCacheLifecycleTail: Promise<void> = Promise.resolve();
 
 async function withDerivedCacheLifecycle<T>(work: () => Promise<T>) {
   const previous = derivedCacheLifecycleTail;
-  let release: () => void = () => undefined;
-  derivedCacheLifecycleTail = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const { promise, resolve: release } = Promise.withResolvers<void>();
+  derivedCacheLifecycleTail = promise;
   await previous;
   try {
     return await work();

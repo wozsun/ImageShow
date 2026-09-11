@@ -148,9 +148,6 @@ import {
 import {
   streamIngestionQueueEvents
 } from "../../../packages/server/src/images/ingestion/queue/events.ts";
-import {
-  deferredPromise
-} from "../support/server-test-context.ts";
 
 test("[Server/内容接入] 内容接入草稿批量更新在保护层后仍使用内容接入正文预算", async () => {
   const app = new Hono();
@@ -952,7 +949,7 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
 
   await t.test("两种来源合计最多持有 N 个 准备与本地结果发布", async (subtest) => {
     const itemCount = limit + 2;
-    const gates = Array.from({ length: itemCount }, () => deferredPromise<void>());
+    const gates = Array.from({ length: itemCount }, () => Promise.withResolvers<void>());
     const sources = Array.from(
       { length: itemCount },
       (_, index) => index % 2 ? "import" : "upload"
@@ -1006,7 +1003,7 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
 
   await t.test("当前 prepare 与磁盘 raw 后继各自最多一批", async (subtest) => {
     const itemCount = limit * 2 + 1;
-    const gates = Array.from({ length: itemCount }, () => deferredPromise<void>());
+    const gates = Array.from({ length: itemCount }, () => Promise.withResolvers<void>());
     const materializationStarts: number[] = [];
     const preparationStarts: number[] = [];
     let activePreparations = 0;
@@ -1071,7 +1068,7 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
   });
 
   await t.test("取消等待项不会进入图片处理或本地结果发布", async (subtest) => {
-    const gates = Array.from({ length: limit }, () => deferredPromise<void>());
+    const gates = Array.from({ length: limit }, () => Promise.withResolvers<void>());
     subtest.after(() => gates.forEach((gate) => gate.resolve()));
     const active = gates.map((gate) => withIngestionPreparationAdmission(
       new AbortController().signal,
@@ -1194,7 +1191,7 @@ test("[Server/内容接入] Import 后继窗口在 Normalize 准入时交接并�
   };
 
   await t.test("仅预取一批并在图片处理许可交接后立即补位", async (subtest) => {
-    const gates = Array.from({ length: limit + 1 }, () => deferredPromise<void>());
+    const gates = Array.from({ length: limit + 1 }, () => Promise.withResolvers<void>());
     const starts: number[] = [];
     const markNormalizationAdmitted: Array<(() => void) | undefined> = [];
     subtest.after(() => gates.forEach((gate) => gate.resolve()));
@@ -1264,7 +1261,7 @@ test("[Server/内容接入] Import 后继窗口在 Normalize 准入时交接并�
   });
 
   await t.test("取消等待项不会启动远程素材化", async (subtest) => {
-    const gates = Array.from({ length: limit }, () => deferredPromise<void>());
+    const gates = Array.from({ length: limit }, () => Promise.withResolvers<void>());
     const starts: number[] = [];
     subtest.after(() => gates.forEach((gate) => gate.resolve()));
     const active = gates.map((gate, index) => withImportPrefetchAdmission(
@@ -1383,7 +1380,7 @@ console.log("import-prefetch-reload-ok");
   });
 });
 test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重载和取消释放语义", async (t) => {
-  type Gate = ReturnType<typeof deferredPromise<void>>;
+  type Gate = ReturnType<typeof Promise.withResolvers<void>>;
   const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
   const waitFor = async (predicate: () => boolean, message: string) => {
     for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -1400,9 +1397,9 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
     let limit = 1;
     const limiter = new DynamicConcurrencyLimiter(() => limit, cancellationError);
     const releases = [
-      deferredPromise<void>(),
-      deferredPromise<void>(),
-      deferredPromise<void>()
+      Promise.withResolvers<void>(),
+      Promise.withResolvers<void>(),
+      Promise.withResolvers<void>()
     ];
     const starts: string[] = [];
     subtest.after(() => releases.forEach((release) => release.resolve()));
@@ -1451,9 +1448,9 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
     let limit = 2;
     const limiter = new DynamicConcurrencyLimiter(() => limit, cancellationError);
     const releases = [
-      deferredPromise<void>(),
-      deferredPromise<void>(),
-      deferredPromise<void>()
+      Promise.withResolvers<void>(),
+      Promise.withResolvers<void>(),
+      Promise.withResolvers<void>()
     ];
     const starts: number[] = [];
     subtest.after(() => releases.forEach((release) => release.resolve()));
@@ -1479,7 +1476,7 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
 
   await t.test("等待与交接取消、活动异常和启动 hook 异常均释放数量许可", async (subtest) => {
     const limiter = new DynamicConcurrencyLimiter(() => 1, cancellationError);
-    const firstRelease = deferredPromise<void>();
+    const firstRelease = Promise.withResolvers<void>();
     const waitingController = new AbortController();
     const handoffError = new Error("cancelled at permit handoff");
     let handoffAbortReads = 0;
@@ -1542,7 +1539,7 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
   await t.test("活动取消释放数量许可", async () => {
     const limiter = new DynamicConcurrencyLimiter(() => 1, cancellationError);
     const controller = new AbortController();
-    const started = deferredPromise<void>();
+    const started = Promise.withResolvers<void>();
     const cancellation = new Error("active cancelled");
     const active = limiter.run(controller.signal, async () => {
       started.resolve();
@@ -1564,9 +1561,9 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
     let limit = 3;
     const limiter = new DynamicWeightedLimiter(() => limit, cancellationError);
     const releases = [
-      deferredPromise<void>(),
-      deferredPromise<void>(),
-      deferredPromise<void>()
+      Promise.withResolvers<void>(),
+      Promise.withResolvers<void>(),
+      Promise.withResolvers<void>()
     ];
     const starts: string[] = [];
     subtest.after(() => releases.forEach((release) => release.resolve()));
@@ -1617,7 +1614,7 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
 
   await t.test("加权许可处理等待取消、交接取消和异常释放", async (subtest) => {
     const limiter = new DynamicWeightedLimiter(() => 2, cancellationError);
-    const firstRelease = deferredPromise<void>();
+    const firstRelease = Promise.withResolvers<void>();
     const waitingController = new AbortController();
     const handoffError = new Error("weighted handoff cancelled");
     let handoffAbortReads = 0;
@@ -1674,7 +1671,7 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
 
   await t.test("多个批次固定串行并逐项轮转", async (subtest) => {
     const scheduler = schedulerWithoutDelay();
-    const firstRelease = deferredPromise<void>();
+    const firstRelease = Promise.withResolvers<void>();
     const order: string[] = [];
     let active = 0;
     let maximumActive = 0;
@@ -1749,8 +1746,8 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
   });
 
   await t.test("排队、延迟等待和活动请求取消均不启动后续项", async (subtest) => {
-    const waitStarted = deferredPromise<void>();
-    const releaseWait = deferredPromise<void>();
+    const waitStarted = Promise.withResolvers<void>();
+    const releaseWait = Promise.withResolvers<void>();
     const controller = new AbortController();
     const cancellation = new Error("cancelled during delayed wait");
     let starts = 0;
@@ -1807,7 +1804,7 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
   });
 
   await t.test("取消访客创建先收口旧握手再让下一批创建", async (subtest) => {
-    const firstIdentitySettled = deferredPromise<void>();
+    const firstIdentitySettled = Promise.withResolvers<void>();
     const firstController = new AbortController();
     const cancellation = new Error("cancelled during visitor creation");
     let creations = 0;

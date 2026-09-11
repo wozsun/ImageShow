@@ -3,12 +3,12 @@ import { z } from "zod";
 
 const UUID_V7_MAX_TIMESTAMP = 0xffffffffffff;
 
-export const normalizedUuidSchema = z.string().uuid()
+export const normalizedUuidSchema = z.uuid()
   .transform((value) => value.toLowerCase());
 
-export const normalizedUuidV7Schema = normalizedUuidSchema.refine((value) => (
-  value[14] === "7" && ["8", "9", "a", "b"].includes(value[19] ?? "")
-), "必须使用 RFC 9562 UUIDv7");
+export const normalizedUuidV7Schema = normalizedUuidSchema.pipe(
+  z.uuidv7({ error: "必须使用 RFC 9562 UUIDv7" })
+);
 
 export function randomUuidV7() {
   return randomUUIDv7();

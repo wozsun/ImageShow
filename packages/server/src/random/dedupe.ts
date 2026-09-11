@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { hash } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import { redis } from "../core/redis/client.ts";
 import { execRedisPipeline } from "../core/redis/pipeline.ts";
@@ -7,7 +7,7 @@ import { getRedisOperationalState } from "../core/runtime-availability.ts";
 const RECENT_PREFIX = "imageshow:random_recent:";
 
 function shortHash(value: string) {
-  return createHash("sha1").update(value).digest("base64url").slice(0, 16);
+  return hash("sha1", value, "base64url").slice(0, 16);
 }
 
 function recentKey(clientId: string, signature: string) {

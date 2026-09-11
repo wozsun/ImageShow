@@ -1,11 +1,9 @@
-import { createHash } from "node:crypto";
+import { hash } from "node:crypto";
 
 const credentialVersionPattern = /^[A-Za-z0-9_-]{43}$/u;
 
 export function adminCredentialVersion(passwordHash: string) {
-  return createHash("sha256")
-    .update(passwordHash)
-    .digest("base64url");
+  return hash("sha256", passwordHash, "base64url");
 }
 
 export type AdminCredentialTransitionVersions = [string, string];

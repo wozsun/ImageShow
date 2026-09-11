@@ -112,16 +112,6 @@ function abortActiveBestEffort(
   }
 }
 
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
-    reject = rejectPromise;
-  });
-  return { promise, resolve, reject };
-}
-
 function matchingActiveSession(
   session: StoredIngestionSession | null,
   pair: IngestionSessionPair
@@ -276,7 +266,7 @@ async function cancelLoadedIngestionSessions(
   };
   const items = loaded.map(({ input }) => input);
   const sessions = loaded.map(({ session }) => session);
-  const committedGate = deferred<CommittedIngestionResults>();
+  const committedGate = Promise.withResolvers<CommittedIngestionResults>();
   // A database_started boundary never awaits the gate. Mark its possible
   // rejection as observed while cancellable boundaries still receive it.
   void committedGate.promise.catch(() => undefined);
@@ -299,7 +289,7 @@ async function cancelLoadedIngestionSessions(
     const key = pairKey(pair);
     let work = workByPair.get(key);
     if (!work) {
-      const admission = deferred<void>();
+      const admission = Promise.withResolvers<void>();
       const boundary = coordinator.cancelBoundary(pair, async () => {
         // Holding this pair's critical section before the shared PostgreSQL
         // read closes the final cancellable-to-database-started race without

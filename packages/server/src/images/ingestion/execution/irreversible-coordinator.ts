@@ -22,10 +22,7 @@ export class IngestionIrreversibleCoordinator {
   async #critical<T>(pair: IngestionSessionPair, work: () => Promise<T>) {
     const key = pairKey(pair);
     const previous = this.#tails.get(key) ?? Promise.resolve();
-    let release!: () => void;
-    const turn = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const { promise: turn, resolve: release } = Promise.withResolvers<void>();
     const tail = previous.then(() => turn);
     this.#tails.set(key, tail);
     await previous;

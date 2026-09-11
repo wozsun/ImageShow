@@ -47,10 +47,8 @@ async function queueAdditionalLockWork<T>(
     throw new Error("Cannot nest combined storage advisory locks");
   }
   const previous = held.additionalLockQueue.tail;
-  let releaseTurn!: () => void;
-  held.additionalLockQueue.tail = new Promise<void>((resolve) => {
-    releaseTurn = resolve;
-  });
+  const { promise, resolve: releaseTurn } = Promise.withResolvers<void>();
+  held.additionalLockQueue.tail = promise;
   await previous;
   try {
     held.signal.throwIfAborted();

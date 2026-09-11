@@ -59,9 +59,6 @@ import {
   spawnSharedTestProcess
 } from "../support/process-runner.ts";
 import {
-  deferredPromise
-} from "../support/server-test-context.ts";
-import {
   createTestDirectory
 } from "../support/test-directory.ts";
 import {
@@ -495,9 +492,9 @@ test("[Server/数据库与进程] Worker 重复停止会中止并排空同一个
 });
 test("[Server/数据库与进程] Worker 不丢弃已经发出的迟到续租失败", async () => {
   for (const scenario of ["lost", "error"] as const) {
-    const renewalStarted = deferredPromise<void>();
-    const renewalResult = deferredPromise<boolean>();
-    const handlerResult = deferredPromise<string>();
+    const renewalStarted = Promise.withResolvers<void>();
+    const renewalResult = Promise.withResolvers<boolean>();
+    const handlerResult = Promise.withResolvers<string>();
     const renewalError = new Error("injected renewal failure");
     let leaseLostCalls = 0;
     const renewalErrors: unknown[] = [];
@@ -555,8 +552,8 @@ test("[Server/数据库与进程] Worker 不丢弃已经发出的迟到续租失
   }
 });
 test("[Server/数据库与进程] Worker 停止原因优先于在途续租的迟到结果", async () => {
-  const renewalStarted = deferredPromise<void>();
-  const renewalResult = deferredPromise<boolean>();
+  const renewalStarted = Promise.withResolvers<void>();
+  const renewalResult = Promise.withResolvers<boolean>();
   let leaseLostCalls = 0;
   let completion: WorkerExecutionCompletion<string> | undefined;
   const coordinator = new WorkerExecutionCoordinator<{ id: string }, string>({
@@ -825,8 +822,8 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
   assert.deepEqual(recoveredClient.releases, [false]);
   assert.equal(recoveryAdmissionReleases, 2);
 
-  const activeStarted = deferredPromise<void>();
-  const activeGate = deferredPromise<never>();
+  const activeStarted = Promise.withResolvers<void>();
+  const activeGate = Promise.withResolvers<never>();
   const activeClient = new FakePublicClient(async () => {
     activeStarted.resolve();
     return activeGate.promise;
@@ -861,8 +858,8 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
   assert.deepEqual(activeClient.releases, [true]);
   assert.equal(activeAdmissionReleases, 1);
 
-  const checkoutGate = deferredPromise<FakePublicClient>();
-  const checkoutStarted = deferredPromise<void>();
+  const checkoutGate = Promise.withResolvers<FakePublicClient>();
+  const checkoutStarted = Promise.withResolvers<void>();
   const checkoutClient = new FakePublicClient();
   let checkoutAdmissionReleases = 0;
   const checkoutScope = createPublicDatabaseReadScope({

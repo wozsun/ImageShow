@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { abortSignalError, raceWithAbortSignal } from "../../../core/abort.ts";
 import { WeiboImportError } from "./weibo-types.ts";
 
@@ -36,22 +37,9 @@ function waitForDelay(delayMs: number, signal: AbortSignal) {
   signal.throwIfAborted();
   if (delayMs <= 0) return Promise.resolve();
 
-  return new Promise<void>((resolve, reject) => {
-    let settled = false;
-    const finish = (work: () => void) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      signal.removeEventListener("abort", abort);
-      work();
-    };
-    const abort = () => finish(() => reject(abortSignalError(
-      signal,
-      "Weibo request wait aborted"
-    )));
-    const timer = setTimeout(() => finish(resolve), delayMs);
-    signal.addEventListener("abort", abort, { once: true });
-    if (signal.aborted) abort();
+  return delay(delayMs, undefined, { signal }).catch((error: unknown) => {
+    if (signal.aborted) throw abortSignalError(signal, "Weibo request wait aborted");
+    throw error;
   });
 }
 

@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import type { Redis } from "ioredis";
 import { errorMessage } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
@@ -63,17 +64,9 @@ async function clearReadyImageCacheForRebuild(
 
 function wait(ms: number, signal?: AbortSignal) {
   signal?.throwIfAborted();
-  return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", aborted);
-      resolve();
-    }, ms);
-    const aborted = () => {
-      clearTimeout(timer);
-      reject(signal?.reason);
-    };
-    signal?.addEventListener("abort", aborted, { once: true });
-    if (signal?.aborted) aborted();
+  return delay(ms, undefined, { signal }).catch((error: unknown) => {
+    signal?.throwIfAborted();
+    throw error;
   });
 }
 

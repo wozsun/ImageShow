@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { hash } from "node:crypto";
 import type { IngestionQueueSummaryDto } from "@imageshow/shared/browser";
 import type {
   IngestionSessionSnapshot,
@@ -20,7 +20,7 @@ export function stableJson(value: unknown): string {
 }
 
 export function semanticIngestionSessionHash(value: unknown) {
-  return createHash("sha256").update(stableJson(value)).digest("hex");
+  return hash("sha256", stableJson(value), "hex");
 }
 
 export function ingestionSessionSemanticHash(

@@ -1,5 +1,5 @@
 import { unsetThemeFilter } from "@imageshow/shared/browser";
-import { createHash } from "node:crypto";
+import { hash } from "node:crypto";
 import {
   brightnesses,
   devices,
@@ -136,7 +136,7 @@ export function readyImageAttributeIndexTemporaryKey(token: string) {
 }
 
 function filterDigest(signature: string) {
-  return createHash("sha256").update(signature).digest("hex");
+  return hash("sha256", signature, "hex");
 }
 
 export function readyImageFilterKey(signature: string) {

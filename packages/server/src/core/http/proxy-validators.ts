@@ -1,11 +1,11 @@
-import { createHash } from "node:crypto";
+import { hash } from "node:crypto";
 import { ifNoneMatchCandidates } from "./validators.ts";
 
 const proxyEtagPrefix = "imageshow-proxy";
 const maxUpstreamEtagBytes = 512;
 
 function originalUrlHash(originalUrl: string) {
-  return createHash("sha256").update(originalUrl).digest("base64url");
+  return hash("sha256", originalUrl, "base64url");
 }
 
 function safeUpstreamEtag(value: string | null | undefined) {

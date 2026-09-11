@@ -29,10 +29,7 @@ export async function withImportPrefetchAdmission<Result>(
   let observed: Promise<PrefetchWorkOutcome<Result>> | undefined;
   await importPrefetchAdmission.run(signal, async () => {
     let admitted = false;
-    let markAdmitted!: () => void;
-    const normalizationAdmitted = new Promise<void>((resolve) => {
-      markAdmitted = resolve;
-    });
+    const { promise: normalizationAdmitted, resolve: markAdmitted } = Promise.withResolvers<void>();
     const workPromise = Promise.resolve().then(() => work(() => {
       if (admitted) return;
       admitted = true;

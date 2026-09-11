@@ -13,7 +13,7 @@ import {
   type S3ServiceException
 } from "@aws-sdk/client-s3";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, hash, randomBytes, randomUUID } from "node:crypto";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { getIngestionMaxFileBytes } from "../../config/app-settings.ts";
 import { missingS3Fields, type S3StorageConfig } from "../backends/config.ts";
@@ -61,12 +61,12 @@ function canonicalS3Endpoint(value: string) {
 }
 
 function serverCopyCompatibility(config: S3StorageConfig) {
-  return createHash("sha256").update(JSON.stringify([
+  return hash("sha256", JSON.stringify([
     canonicalS3Endpoint(config.s3.endpoint),
     config.s3.region.trim() || "auto",
     config.s3.access_key_id,
     config.s3.secret_access_key ?? ""
-  ])).digest("base64url");
+  ]), "base64url");
 }
 
 function contentMd5FromHex(value: string | undefined) {

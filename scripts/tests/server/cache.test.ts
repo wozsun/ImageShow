@@ -94,7 +94,6 @@ import {
   imageId,
   servingReadyCacheItem,
   readyCacheMeta,
-  deferredPromise,
   type ReadyImageSampleDependencies
 } from "../support/server-test-context.ts";
 
@@ -437,10 +436,10 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
     { acquired: true, value: "redis" }
   );
 
-  const manualProbeEntered = deferredPromise<void>();
-  const finishManualProbe = deferredPromise<void>();
-  const manualRebuildEntered = deferredPromise<void>();
-  const finishManualRebuild = deferredPromise<void>();
+  const manualProbeEntered = Promise.withResolvers<void>();
+  const finishManualProbe = Promise.withResolvers<void>();
+  const manualRebuildEntered = Promise.withResolvers<void>();
+  const finishManualRebuild = Promise.withResolvers<void>();
   probe = async () => {
     manualProbeEntered.resolve();
     await finishManualProbe.promise;
@@ -473,12 +472,12 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
     return persistedMeta;
   };
 
-  const currentValidationEntered = deferredPromise<void>();
-  const finishCurrentValidation = deferredPromise<void>();
-  const currentValidationHeldAtFence = deferredPromise<void>();
-  const finishCurrentValidationFence = deferredPromise<void>();
-  const pendingRebuildEntered = deferredPromise<void>();
-  const finishPendingRebuild = deferredPromise<void>();
+  const currentValidationEntered = Promise.withResolvers<void>();
+  const finishCurrentValidation = Promise.withResolvers<void>();
+  const currentValidationHeldAtFence = Promise.withResolvers<void>();
+  const finishCurrentValidationFence = Promise.withResolvers<void>();
+  const pendingRebuildEntered = Promise.withResolvers<void>();
+  const finishPendingRebuild = Promise.withResolvers<void>();
   validate = async () => {
     currentValidationEntered.resolve();
     await finishCurrentValidation.promise;
@@ -537,9 +536,9 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
     capabilities
   };
   revision = "2";
-  const reconnectRebuild = deferredPromise<ReturnType<typeof readyCacheMeta>>();
-  const reconnectValidationEntered = deferredPromise<void>();
-  const finishReconnectValidation = deferredPromise<void>();
+  const reconnectRebuild = Promise.withResolvers<ReturnType<typeof readyCacheMeta>>();
+  const reconnectValidationEntered = Promise.withResolvers<void>();
+  const finishReconnectValidation = Promise.withResolvers<void>();
   validate = async () => {
     reconnectValidationEntered.resolve();
     await finishReconnectValidation.promise;
@@ -606,8 +605,8 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   assert.equal(coordinator.getStatus().readable, true);
 
   const failedValidation = new Error("controlled validation failure");
-  const failedValidationEntered = deferredPromise<void>();
-  const finishFailedValidation = deferredPromise<void>();
+  const failedValidationEntered = Promise.withResolvers<void>();
+  const finishFailedValidation = Promise.withResolvers<void>();
   validate = async () => {
     failedValidationEntered.resolve();
     await finishFailedValidation.promise;
@@ -630,7 +629,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   assert.equal(coordinator.getStatus().readable, true);
 
   revision = "3";
-  const mutationRebuild = deferredPromise<ReturnType<typeof readyCacheMeta>>();
+  const mutationRebuild = Promise.withResolvers<ReturnType<typeof readyCacheMeta>>();
   rebuild = async ({ signal } = {}) => {
     rebuildCalls += 1;
     const meta = await mutationRebuild.promise;
@@ -665,10 +664,10 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
     reason: "ready",
     capabilities
   };
-  const validationEntered = deferredPromise<void>();
-  const finishValidation = deferredPromise<void>();
-  const validationFinishedInsideFence = deferredPromise<void>();
-  const finishFence = deferredPromise<void>();
+  const validationEntered = Promise.withResolvers<void>();
+  const finishValidation = Promise.withResolvers<void>();
+  const validationFinishedInsideFence = Promise.withResolvers<void>();
+  const finishFence = Promise.withResolvers<void>();
   let pauseFenceOnce = true;
   validate = async () => {
     validationEntered.resolve();
@@ -695,8 +694,8 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   afterWriteFence = async () => undefined;
 
   const staleRefreshFailure = new Error("stale connection refresh failure");
-  const failureHandlingEntered = deferredPromise<void>();
-  const finishFailureHandling = deferredPromise<void>();
+  const failureHandlingEntered = Promise.withResolvers<void>();
+  const finishFailureHandling = Promise.withResolvers<void>();
   handleValidationFailure = async () => {
     validationFailureCalls += 1;
     failureHandlingEntered.resolve();
@@ -732,8 +731,8 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
 
   const rebuildFailure = new Error("controlled rebuild failure");
   const validationFailureCallsBeforeRebuild = validationFailureCalls;
-  const rebuildFailureStarted = deferredPromise<void>();
-  const finishRebuildFailure = deferredPromise<void>();
+  const rebuildFailureStarted = Promise.withResolvers<void>();
+  const finishRebuildFailure = Promise.withResolvers<void>();
   const rebuildCallsBeforeSharedFailure = rebuildCalls;
   rebuild = async () => {
     rebuildCalls += 1;
@@ -763,8 +762,8 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
     1
   );
 
-  const degradedValidationEntered = deferredPromise<void>();
-  const finishDegradedValidation = deferredPromise<void>();
+  const degradedValidationEntered = Promise.withResolvers<void>();
+  const finishDegradedValidation = Promise.withResolvers<void>();
   validate = async () => {
     degradedValidationEntered.resolve();
     await finishDegradedValidation.promise;
@@ -780,8 +779,8 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
 
   revision = "4";
   persistedMeta = readyCacheMeta("4");
-  const finalRebuildEntered = deferredPromise<void>();
-  const finishFinalRebuild = deferredPromise<ReturnType<typeof readyCacheMeta>>();
+  const finalRebuildEntered = Promise.withResolvers<void>();
+  const finishFinalRebuild = Promise.withResolvers<ReturnType<typeof readyCacheMeta>>();
   rebuild = async () => {
     rebuildCalls += 1;
     finalRebuildEntered.resolve();
@@ -789,7 +788,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   };
   const finalRebuild = coordinator.requestRebuild();
   await finalRebuildEntered.promise;
-  const lateJoinStarted = deferredPromise<
+  const lateJoinStarted = Promise.withResolvers<
     ReturnType<typeof coordinator.requestRebuild>
   >();
   finishFinalRebuild.resolve(persistedMeta);
@@ -808,7 +807,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   assert.equal(coordinator.getStatus().meta?.appliedRevision, "5");
   assert.equal(coordinator.getStatus().readable, true);
 
-  const shutdownRebuild = deferredPromise<ReturnType<typeof readyCacheMeta>>();
+  const shutdownRebuild = Promise.withResolvers<ReturnType<typeof readyCacheMeta>>();
   rebuild = async ({ signal } = {}) => {
     rebuildCalls += 1;
     const meta = await shutdownRebuild.promise;
@@ -1212,7 +1211,7 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
   assert.equal(limited.scanned_keys, 2);
   assert.equal(limited.image_projection_usage.derived.key_count, 0);
 
-  const pendingScan = deferredPromise<[string, string[]]>();
+  const pendingScan = Promise.withResolvers<[string, string[]]>();
   let pendingScanCalls = 0;
   let pendingPipelineCalls = 0;
   const slowClient = {
@@ -1238,7 +1237,7 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
   assert.equal(pendingScanCalls, 1);
   assert.equal(pendingPipelineCalls, 0);
 
-  const abortScan = deferredPromise<[string, string[]]>();
+  const abortScan = Promise.withResolvers<[string, string[]]>();
   const abortController = new AbortController();
   const aborted = inspectRedisKeyspaceDeep({
     client: {
@@ -2036,7 +2035,7 @@ test("[Server/缓存与 Redis] Redis 必需能力探针验证条件成功、失�
   );
 });
 test("[Server/缓存与 Redis] Redis 命令能力探针取消后不再调度阶段且原子收口探针键", async () => {
-  const pendingIncrex = deferredPromise<unknown>();
+  const pendingIncrex = Promise.withResolvers<unknown>();
   let pipelineCreations = 0;
   const increxCommands: string[] = [];
   const increxController = new AbortController();
@@ -2062,10 +2061,10 @@ test("[Server/缓存与 Redis] Redis 命令能力探针取消后不再调度阶�
   await delay(10);
   assert.equal(pipelineCreations, 0);
 
-  const pendingArrayPipeline = deferredPromise<
+  const pendingArrayPipeline = Promise.withResolvers<
     Array<[Error | null, unknown]>
   >();
-  const pipelineStarted = deferredPromise<void>();
+  const pipelineStarted = Promise.withResolvers<void>();
   const arrayCommands: string[] = [];
   const arrayController = new AbortController();
   const arrayProbe = readRequiredRedisCommandCapabilities({
@@ -2118,7 +2117,7 @@ test("[Server/缓存与 Redis] Redis 命令能力探针取消后不再调度阶�
   assert.deepEqual(arrayCommands, scheduledAtReturn);
 });
 test("[Server/缓存与 Redis] Redis 手动检查总期限覆盖连接与固定命令且保留请求取消原因", async () => {
-  const pendingPing = deferredPromise<void>();
+  const pendingPing = Promise.withResolvers<void>();
   let fixedCommandCalls = 0;
   const unusedClient = {
     status: "ready",
@@ -2152,7 +2151,7 @@ test("[Server/缓存与 Redis] Redis 手动检查总期限覆盖连接与固定�
   assert.equal(pingDeadline.deep_inspection.reason, "deadline");
   assert.equal(fixedCommandCalls, 0);
 
-  const pendingInfo = deferredPromise<string>();
+  const pendingInfo = Promise.withResolvers<string>();
   const fixedDeadline = await inspectRedisState(undefined, {
     deadlineMs: 20,
     dependencies: {
