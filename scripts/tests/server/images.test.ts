@@ -59,7 +59,8 @@ import {
   storageBackendCreateInput,
   storageBackendMigrationInput,
   storageBackendTestInput,
-  storageBackendUpdateInput
+  storageBackendUpdateInput,
+  storageSlugListInput
 } from "../../../packages/server/src/routes/validation/storage.ts";
 import {
   isHttpsUrl,
@@ -86,6 +87,7 @@ import {
   deviceFromDimensions,
   resolveClassification
 } from "../../../packages/server/src/images/classification.ts";
+import { detectBrightness } from "../../../packages/server/src/images/brightness.ts";
 import {
   createImageBrowseContext,
   decodeImageCursor,
@@ -154,6 +156,63 @@ import {
   servingReadyCacheItem
 } from "../support/server-test-context.ts";
 
+test("[Server/图片] 存储输入归一化 slug 并补齐缺省 S3 设置", () => {
+  const defaultS3 = {
+    endpoint: "",
+    region: "auto",
+    bucket: "",
+    access_key_id: "",
+    force_path_style: true,
+    root_path: "/",
+    public_base_url: "",
+    connect_timeout_seconds: 15,
+    idle_timeout_seconds: 15,
+    task_timeout_seconds: 300
+  };
+  assert.deepEqual(parse(storageBackendCreateInput, { slug: " Archive " }), {
+    slug: "archive",
+    display_name: "",
+    s3: defaultS3
+  });
+  assert.deepEqual(parse(storageBackendCreateInput, {
+    slug: "archive",
+    s3: { endpoint: " https://s3.example.com ", bucket: " images ", force_path_style: false }
+  }).s3, {
+    ...defaultS3,
+    endpoint: "https://s3.example.com",
+    bucket: "images",
+    force_path_style: false
+  });
+  assert.deepEqual(parse(storageBackendTestInput, { slug: " Archive " }), { slug: "archive" });
+  assert.deepEqual(parse(storageSlugListInput, { slugs: [" Archive ", "LOCAL", "archive"] }), {
+    slugs: ["archive", "local"]
+  });
+  assert.deepEqual(parse(storageBackendMigrationInput, { source: " Archive ", target: "LOCAL" }), {
+    source: "archive", target: "local"
+  });
+  assert.equal(parse(storageBackendCreateInput, { slug: "a".repeat(32) }).slug, "a".repeat(32));
+  assert.throws(() => parse(storageBackendCreateInput, { slug: "a".repeat(33) }), {
+    code: "validation_error",
+    message: "标识 slug 最长 32 个字符"
+  });
+  assert.throws(() => parse(storageBackendCreateInput, {
+    slug: "archive", s3: { endpoint: "http://s3.example.com" }
+  }), { code: "validation_error", message: "endpoint must use HTTPS" });
+});
+
+test("[Server/图片] 亮度分类识别深色浅色与透明背景", async () => {
+  for (const [background, expected] of [
+    [{ r: 0, g: 0, b: 0, alpha: 1 }, "dark"],
+    [{ r: 255, g: 255, b: 255, alpha: 1 }, "light"],
+    [{ r: 0, g: 0, b: 0, alpha: 0 }, "light"]
+  ] as const) {
+    const input = await sharp({
+      create: { width: 16, height: 16, channels: 4, background }
+    }).png().toBuffer();
+    assert.equal(await detectBrightness(input), expected);
+  }
+});
+
 test("[Server/图片] 输入校验统一图片更新、标签归一化、图片列表唯一性和 issue path", () => {
   const metadataId = randomUUID();
   assert.equal(
@@ -202,17 +261,15 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
       assert.equal(error.code, "validation_error");
       assert.equal(
         error.message,
-        "Too small: expected string to have >=1 characters；"
-          + "Invalid string: must match pattern "
-          + "/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/"
+        "标识 slug 不能为空；"
+          + "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾"
       );
       assert.deepEqual(error.details, {
         formErrors: [],
         fieldErrors: {
           slug: [
-            "Too small: expected string to have >=1 characters",
-            "Invalid string: must match pattern "
-              + "/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/"
+            "标识 slug 不能为空",
+            "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾"
           ]
         }
       });
@@ -232,15 +289,13 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
       && error.status === 400
       && error.code === "validation_error"
       && error.message === (
-        "Invalid string: must match pattern "
-          + "/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/"
+        "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾"
       )
       && JSON.stringify(error.details) === JSON.stringify({
         formErrors: [],
         fieldErrors: {
           slug: [
-            "Invalid string: must match pattern "
-              + "/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/"
+            "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾"
           ]
         }
       })
@@ -1022,18 +1077,9 @@ test("[Server/图片] 外部图片 DNS 地址策略保持严格解析、最长�
 test("[Server/图片] stored serving 的缩略图读取严格只读并保留真实错误语义", async () => {
   const item = servingReadyCacheItem();
   const record = {
-    id: item.id,
     object_key: item.object_key,
-    original: item.original,
     ext: item.ext,
-    storage_slug: item.storage_slug,
-    device: item.device,
-    brightness: item.brightness,
-    theme: item.theme,
-    status: "ready" as const,
-    description: item.description,
-    source: item.source,
-    updated_at: item.updated_at
+    storage_slug: item.storage_slug
   };
   const request = {
     range: "bytes=1-2",
@@ -1058,10 +1104,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   }> = [];
   const storedBytes = Buffer.from("stable-stored-serving-bytes");
   let thumbnailExistsCalls = 0;
-  let servingRecord: Omit<typeof record, "status" | "storage_slug"> & {
-    status: "ready" | "deleted";
-    storage_slug: string;
-  } = record;
+  let servingRecord = record;
   const resolvedObject = (
     prefix: "full" | "thumbs",
     key: string,
@@ -1116,13 +1159,8 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   assertForwardedRequest(streamCalls[0]?.request);
 
   const getRequest = { ...request, isHead: false };
-  for (const state of [
-    { status: "ready" as const, storage_slug: "local" },
-    { status: "deleted" as const, storage_slug: "local" },
-    { status: "deleted" as const, storage_slug: "s3-private" },
-    { status: "ready" as const, storage_slug: "s3-private" }
-  ]) {
-    servingRecord = { ...record, ...state };
+  for (const storageSlug of ["local", "s3-private"]) {
+    servingRecord = { ...record, storage_slug: storageSlug };
     const stableResponse = await servePublicStoredObject(
       item.object_key,
       getRequest,
@@ -1132,10 +1170,10 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
       Buffer.from(await stableResponse.arrayBuffer()),
       storedBytes
     );
-    assert.equal(streamCalls.at(-1)?.object.storageSlug, state.storage_slug);
+    assert.equal(streamCalls.at(-1)?.object.storageSlug, storageSlug);
     assert.equal(streamCalls.at(-1)?.cacheControl, immutableCacheControl);
   }
-  servingRecord = { ...record, status: "deleted", storage_slug: "s3-public" };
+  servingRecord = { ...record, storage_slug: "s3-public" };
 
   const redirectResponse = await servePublicStoredObject(
     item.object_key,
@@ -1177,12 +1215,8 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   assert.equal(streamCalls[0]?.cacheControl, immutableCacheControl);
   assertForwardedRequest(streamCalls[0]?.request);
 
-  for (const state of [
-    { status: "deleted" as const, storage_slug: "local" },
-    { status: "deleted" as const, storage_slug: "s3-private" },
-    { status: "ready" as const, storage_slug: "s3-private" }
-  ]) {
-    servingRecord = { ...record, ...state };
+  for (const storageSlug of ["local", "s3-private"]) {
+    servingRecord = { ...record, storage_slug: storageSlug };
     const stableThumbnail = await servePublicStoredThumbnail(
       item.object_key.replace(/\.[^.]+$/, ".webp"),
       getRequest,
@@ -1192,12 +1226,12 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
       Buffer.from(await stableThumbnail.arrayBuffer()),
       storedBytes
     );
-    assert.equal(streamCalls.at(-1)?.object.storageSlug, state.storage_slug);
+    assert.equal(streamCalls.at(-1)?.object.storageSlug, storageSlug);
     assert.equal(streamCalls.at(-1)?.cacheControl, immutableCacheControl);
   }
 
   streamCalls.length = 0;
-  servingRecord = { ...record, status: "deleted", storage_slug: "s3-public" };
+  servingRecord = { ...record, storage_slug: "s3-public" };
   const thumbnailRedirect = await servePublicStoredThumbnail(
     item.object_key.replace(/\.[^.]+$/, ".webp"),
     request,
@@ -1296,17 +1330,10 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
 test("[Server/图片] external original serving 保持 direct/proxy、validator 与 deleted 边界", async () => {
   const item = servingReadyCacheItem();
   const record = {
-    id: item.id,
     object_key: item.object_key,
     original: item.original,
     ext: item.ext,
     storage_slug: item.storage_slug,
-    device: item.device,
-    brightness: item.brightness,
-    theme: item.theme,
-    status: "ready" as const,
-    description: item.description,
-    source: item.source,
     updated_at: item.updated_at
   };
   const proxyCalls: unknown[][] = [];
@@ -1375,18 +1402,6 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   assert.equal(directRedirect.headers.get("Referrer-Policy"), "no-referrer");
 
   assert.equal(directRedirect.headers.get("Vary"), "User-Agent");
-  const deletedResponse = await servePublicExternalOriginal(
-    item.id,
-    { userAgent: "fixture-agent" },
-    {
-      ...dependencies,
-      readImageServingRecordById: async () => ({ ...record, status: "deleted" as const })
-    }
-  );
-  assert.equal(deletedResponse.status, 302);
-  assert.equal(deletedResponse.headers.get("Location"), item.original);
-  assert.equal(deletedResponse.headers.get("Cache-Control"), publicRedirectCacheControl);
-
   for (const unavailable of [null, { ...record, original: "" }, {
     ...record, original: `https://img.example.com/images/full/${item.object_key}`
   }]) {

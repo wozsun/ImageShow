@@ -45,11 +45,7 @@ async function precompressDir(dir) {
 }
 
 await mkdir(serverDist, { recursive: true });
-const databaseAssets = ["schema.sql", "schema-additions.sql"];
-await Promise.all(databaseAssets.map(async (asset) => {
-  await rm(resolve(serverDist, asset), { force: true });
-  await cp(resolve(serverPackage, asset), resolve(serverDist, asset));
-}));
+await cp(resolve(serverPackage, "schema.sql"), resolve(serverDist, "schema.sql"));
 await rm(serverPublic, { recursive: true, force: true });
 await cp(webDist, serverPublic, {
   recursive: true,
@@ -66,7 +62,7 @@ if (existsSync(resolve(serverPublic, ".vite"))) {
 await precompressDir(serverPublic);
 
 console.log(
-  "assemble-server: database SQL assets -> dist, web -> dist/public; "
+  "assemble-server: schema.sql -> dist, web -> dist/public; "
   + `precompressed br${staticAssetCompression.brotliQuality}/`
   + `gzip${staticAssetCompression.gzipLevel}; smaller-body-only`
 );

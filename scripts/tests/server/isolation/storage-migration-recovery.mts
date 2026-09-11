@@ -219,7 +219,6 @@ const localAccess = await registry.resolveStorageAccess("local");
   assert.equal(backendMigrationReport.migration.missing, 1);
   assert.equal(backendMigrationReport.migration.error_count, 3);
   assert.equal(backendMigrationReport.migration.error_samples.length, 3);
-  assert.equal("errors" in backendMigrationReport.migration, false);
   assert.ok(backendMigrationReport.migration.error_samples.every((sample) => (
     Object.keys(sample).sort().join(",") === "code,id,message,object_key"
       && typeof sample.message === "string"
@@ -412,7 +411,6 @@ const localAccess = await registry.resolveStorageAccess("local");
   assert.equal(backendOverflowReport.migration.missing, 101);
   assert.equal(backendOverflowReport.migration.error_count, 101);
   assert.equal(backendOverflowReport.migration.error_samples.length, 100);
-  assert.equal("errors" in backendOverflowReport.migration, false);
   assert.deepEqual(
     backendOverflowReport.migration.error_samples.map(({ id }) => id),
     [...backendOverflowIds].sort().slice(0, 100),

@@ -1,10 +1,9 @@
 # 数据库结构
 
 PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
-`packages/server/schema.sql` 完整定义上一已封版版本的干净安装基线；`author` 可空身份两列、
+`packages/server/schema.sql` 完整定义当前版本的干净安装结构；`author` 可空身份两列、
 三项长期 CHECK、非空身份复合唯一索引、`metadata.purge_job_id` 与“非空时必须为 deleted”的
-长期 CHECK，以及可空、无默认值的主题外键都属于该基线；主题表只保存真实词条，
-`schema-additions.sql` 仍为注释占位。
+长期 CHECK，以及可空、无默认值的主题外键都属于该结构；主题表只保存真实词条。
 随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一 Redis 图片投影的权威 revision
 单行表均属于基线。PostgreSQL
 是最终图片、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
@@ -17,19 +16,22 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 
 ## 启动与结构契约
 
-数据库生命周期由上一已封版版本的干净基线、当前 additions 和轻量 readiness 组成。单应用进程
-启动时，空数据库在一个事务中先执行 `schema.sql`，再执行当前 `schema-additions.sql`；符合该
-基线的非空数据库执行 additions 并进入 readiness。当前 additions 不含可执行语句；
-additions、readiness 或干净初始化任一步失败都会回滚本次结构事务。全部连接固定使用
+数据库启动由干净初始化与轻量 readiness 组成。空数据库在一个事务中执行完整 `schema.sql`，
+然后进行只读 readiness；非空数据库只进行只读 readiness，不执行结构或数据变更。
+干净初始化或 readiness 失败都会回滚本次事务。全部连接固定使用
 `search_path=public`；单实例部署按顺序完成 schema 和管理员播种。readiness 在启动事务的
 同一连接上顺序执行 SQL，包括作者与图片 CHECK 约束读取，不并发调用该 client 的 query。
 
-additions 是每个发布周期经明确审查的受限结构增量或一次性数据变化入口。全部受控非空数据库应用
-当期 additions 并通过核对后，下一发布以结果结构更新 `schema.sql` 基线，并将 additions 恢复为
-注释占位。部署和备份恢复按相邻发布顺序经过承载 additions 的版本；自动结构操作限定为当期
-明确声明的 additions，其他结构与数据整理由维护者在停机、备份和恢复验证后执行。
-当前基线直接定义 `metadata.created_by TEXT NOT NULL`、后台任务类型约束、作者身份与 purge 任务
-归属结构；非空数据库通过 additions 与 readiness 收敛到同一当前结构契约。
+空库判定只查询系统目录中的用户关系，不读取业务数据。存在用户表、视图、物化视图、序列或
+外部表的数据库均走非空分支；只有额外表而缺少应用必需表时仍会明确失败。
+readiness 对额外表不读取数据、不要求读写权限、不报错或自动删除；应用未消费的额外列、
+索引和约束也继续容忍。
+
+维护者在升级前按实际变更处理既有数据库的结构新增、修改、删除和必要数据整理，并明确停机、
+备份与恢复方案。应用不自动补表、回填、修改既有结构或对齐完整 schema。
+当前完整结构包括 `metadata.created_by TEXT NOT NULL`、后台任务类型约束、作者身份与 purge
+任务归属；既有数据库必须在启动前满足当前运行时所需的最小契约。历史数据的结构前置与
+固定迁移入口见[版本升级](../DEPLOY.md#版本升级)。
 
 readiness 只读核对当前运行时所需业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
 并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的 SELECT / INSERT /
@@ -140,26 +142,6 @@ COUNT，再判断 `PageWindow.start >= total`，最后才执行目标窗口 SELE
 排序、LIMIT 与 OFFSET，外层只为最终至多 `limit` 行投影 `image_tag`，因此深页不会为被
 OFFSET 跳过的行水合标签。total、metadata 与 tags 属于同一事务快照；提交后的 presenter
 只格式化该事务已经返回的结果集。
-
-### 数字页查询计划证据
-
-2026-08-15 在本地 Docker PostgreSQL 18 上用独立临时数据库生成 120,000 张图片
-（90,000 ready、30,000 deleted）和 47,142 条 `image_tag`，执行
-`EXPLAIN (ANALYZE, BUFFERS)`。页面大小均为 60；表已 `VACUUM (ANALYZE)`，下表是一次
-代表性采样，不作为跨机器延迟承诺：
-
-| 路径 | COUNT rows / Buffers / 耗时 | OFFSET 与窗口计划 | 窗口 Buffers / Sort / 耗时 |
-| --- | --- | --- | --- |
-| ready 无筛选深页 | 90,000 / hit 300、read 145 / 9.801 ms | OFFSET 60,000；索引扫描 60,060，返回 60 | hit 3,511；无 Sort；13.160 ms |
-| ready 典型组合（设备、明暗、主题、作者、标签） | 1,500 / hit 1,935、read 11 / 10.622 ms | OFFSET 1,200；组合筛选 1,500，返回 60 | hit 2,133；quicksort 435 kB；8.860 ms |
-| deleted 无筛选深页 | 30,000 / hit 183 / 3.155 ms | OFFSET 20,000；扫描 30,000，返回 60 | hit 1,213、temp read 513 / written 657；external merge 5,240 kB；27.092 ms |
-| deleted 作者 + 标签较差路径 | 1,429 / hit 3,430 / 10.523 ms | OFFSET 1,000；组合筛选 1,429，返回 60 | hit 3,611；quicksort 417 kB；13.464 ms |
-| ready 合法越界 | 10,286 / hit 95、read 2 / 2.710 ms | 应用比较 total 后不执行窗口 SELECT | 无 OFFSET、Sort 或标签水合 |
-
-四条有效页计划的标签子计划均只执行 60 次。ready 正常热路径由 Redis rank 直接读取目标
-窗口；上述 ready SQL 是 coordinator 重建、revision 改变或派生索引暂不可读时的回源证据。
-当前样本下既有索引已满足当前范围，因此不新增 schema、稀疏锚点或持久化排名表；
-deleted 深页的外部排序若在真实规模中成为可测瓶颈，再依据独立数据决定索引或其他方案。
 
 ## 空主题契约
 
@@ -314,5 +296,5 @@ Server 在同一作者事务中同步清空或替换身份。管理端作者 DTO
 核心统计与词表 / 计数；旧 revision 的按需作者索引由读取端拒绝并重建，避免删除与并发
 关联互相覆盖。
 
-当前运行时只读取已经写入 PostgreSQL 的作者身份，不在启动时从旧配置或现有链接补齐数据。
-`weibo.author_slugs` 等非当前结构字段只由全局配置投影作为未知字段清理，不触发版本迁移。
+当前运行时只读取已经写入 PostgreSQL 的作者身份。身份解析与更新由作者管理入口负责，
+数据库启动只核对现行结构和受支持身份，不补齐业务数据。

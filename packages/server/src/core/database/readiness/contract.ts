@@ -20,8 +20,8 @@ type TableReadiness = {
 const readWritePrivileges = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
 
 // This is deliberately limited to columns referenced by current runtime SQL.
-// schema.sql is the complete clean-install baseline. A release may add a
-// separately reviewed, one-cycle schema-additions.sql delta before readiness.
+// schema.sql defines the complete current structure for clean installs.
+// Existing databases must satisfy this contract before the application starts.
 export const databaseReadiness = {
   storage_backend: {
     columns: {

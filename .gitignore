@@ -19,7 +19,8 @@ dist/
 
 # Runtime and local tool data
 data/
-cert/
+postgres/
+redis/
 nginx/
 .codex/
 .agents/

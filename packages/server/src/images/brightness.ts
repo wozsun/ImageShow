@@ -87,6 +87,6 @@ async function imageBrightnessHistogram(input: Buffer | string): Promise<number[
   return hist;
 }
 
-export async function detectBrightness(input: Buffer | string): Promise<Exclude<Brightness, "none">> {
+export async function detectBrightness(input: Buffer | string): Promise<Brightness> {
   return classifyBrightnessHistogram(await imageBrightnessHistogram(input));
 }

@@ -9,25 +9,16 @@ import {
 } from "./ready-cache/query.ts";
 import type { ReadyImageCacheItem } from "./ready-cache/model.ts";
 
-export type ImageServingRecord = {
-  id: string;
+type StoredImageServingRecord = {
   object_key: string;
-  original: string;
   ext: string;
   storage_slug: string;
-  device: "pc" | "mb";
-  brightness: "dark" | "light";
-  theme: string | null;
-  status: "ready" | "deleted";
-  description: string;
-  source: string;
-  updated_at: string;
 };
 
-type StoredImageServingRecord = Pick<
-  ImageServingRecord,
-  "id" | "object_key" | "ext" | "storage_slug" | "status"
->;
+export type ImageServingRecord = StoredImageServingRecord & {
+  original: string;
+  updated_at: string;
+};
 
 export type ImageServingRecordDependencies = {
   readReadyImageById: typeof readReadyImageById;
@@ -48,22 +39,13 @@ function readDatabase<T>(
   return read(access.reader ?? pool);
 }
 
-function readyImageServingRecord(
+function storedImageServingRecord(
   item: ReadyImageCacheItem
-): ImageServingRecord {
+): StoredImageServingRecord {
   return {
-    id: item.id,
     object_key: item.object_key,
-    original: item.original,
     ext: item.ext,
-    storage_slug: item.storage_slug,
-    device: item.device,
-    brightness: item.brightness,
-    theme: item.theme,
-    status: "ready",
-    description: item.description,
-    source: item.source,
-    updated_at: item.updated_at
+    storage_slug: item.storage_slug
   };
 }
 
@@ -75,12 +57,15 @@ export async function readImageServingRecordById(
 ): Promise<ImageServingRecord | null> {
   const cached = await dependencies.readReadyImageById(id);
   if (cached.cached && cached.value) {
-    return readyImageServingRecord(cached.value);
+    return {
+      ...storedImageServingRecord(cached.value),
+      original: cached.value.original,
+      updated_at: cached.value.updated_at
+    };
   }
   const row = await readDatabase(database, async (reader) => (
     (await reader.query<ImageServingRecord>(
-      `SELECT id, object_key, original, ext, storage_slug, device, brightness, theme,
-              status, description, source, updated_at::text AS updated_at
+      `SELECT object_key, original, ext, storage_slug, updated_at::text AS updated_at
          FROM metadata
         WHERE id=$1
           AND status IN ('ready', 'deleted')
@@ -99,12 +84,12 @@ export async function readImageServingRecordByObjectKey(
 ): Promise<StoredImageServingRecord | null> {
   const cached = await dependencies.readReadyImageByObjectKey(objectKey);
   if (cached.cached && cached.value) {
-    return readyImageServingRecord(cached.value);
+    return storedImageServingRecord(cached.value);
   }
 
   const row = await readDatabase(database, async (reader) => (
     (await reader.query<StoredImageServingRecord>(
-      `SELECT id, object_key, ext, storage_slug, status
+      `SELECT object_key, ext, storage_slug
          FROM metadata
         WHERE object_key=$1
           AND status IN ('ready', 'deleted')
@@ -123,12 +108,12 @@ export async function readImageServingRecordByThumbKey(
 ): Promise<StoredImageServingRecord | null> {
   const cached = await dependencies.readReadyImageByThumbKey(thumbKey);
   if (cached.cached && cached.value) {
-    return readyImageServingRecord(cached.value);
+    return storedImageServingRecord(cached.value);
   }
 
   const row = await readDatabase(database, async (reader) => (
     (await reader.query<StoredImageServingRecord>(
-      `SELECT id, object_key, ext, storage_slug, status
+      `SELECT object_key, ext, storage_slug
          FROM metadata
         WHERE (object_key=$1
            OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1)

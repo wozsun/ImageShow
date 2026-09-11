@@ -250,7 +250,7 @@ test("[Server/内容接入] 导入清单、下载进度与微博入口使用同�
     original: "https://submitted.example.com/ignored.jpg",
     device: "auto" as const,
     brightness: "auto" as const,
-    theme: "",
+    theme: null,
     author: "",
     tags: []
   };

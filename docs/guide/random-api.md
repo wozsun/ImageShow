@@ -132,11 +132,12 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
 }
 ```
 
-`title`、`author` 与 `diff_original` 是随机 JSON 的既有公开契约；其中 `diff_original` 继续按
-“登记了另一条 HTTPS 原图”计算，不因站内详情链路调整而改变或删除。站内画廊 / 展映页面批次不
-依赖该布尔值；描述、来源与可空的原图访问链接在点击后由公开详情接口读取。展映的乱序模式使用
-当前筛选请求 `limit=200`，仍受同一去重、缓存和 PostgreSQL 有界降级约束，不建立展映专用随机池；
-按 ID 定向读取也继续使用同一随机 JSON 契约。
+`title` 为图片标题，`author` 为作者 slug；`diff_original` 表示图片登记了另一条合法 HTTPS
+原图。按 ID 定向读取采用同一 JSON 格式。
+
+站内画廊和展映通过 `/api/images` 获取图片列表，展映使用 `view=show` 并在乱序时打乱返回
+批次。描述、来源和可空的原图访问链接在打开图片详情时读取。列表与随机图共用图片读取和
+缓存基础设施，批次大小及续取规则见[功能与流程](./flows.md)。
 
 只写 `mode=json` 等同 `limit=1`，但仍返回数组。`limit` 是上限而非数量保证。GET 与 HEAD 都为
 `no-store`；HEAD 返回与 GET 一致的状态、内容类型和内容长度，但不发送正文。

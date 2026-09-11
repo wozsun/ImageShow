@@ -6,15 +6,15 @@
 ## 部署与升级职责
 
 - 准备单个 Compose 项目、一个 ImageShow 应用、一个 PostgreSQL 和一个 Redis。
-- 管理 `.env`、宿主环境与 Compose 环境映射、`data/` bind mount、PostgreSQL volume 与尽力保留临时态的 Redis volume。
+- 管理 `.env`、Compose 环境映射，以及 `data/`、`postgres/`、`redis/` 三个持久化挂载目录。
 - 配置唯一可信反向代理、HTTPS、Host 与转发头覆盖，并阻止公网直连应用端口。
 - 拉取或构建镜像，原位停止和启动应用，检查 `/livez`、`/readyz` 与三个容器健康状态。
-- 在部署前确认数据库 additions、备份与隔离恢复路径，不跳过承载当前增量的发布。
+- 在升级前按目标版本要求人工处理既有数据库结构与数据，确认备份及隔离恢复路径。
 - 在后台不可登录时使用独立密码恢复入口，并核对 PostgreSQL / Redis 可用性。
 
 首次安装从[快速开始](../getting-started.md)开始；生产拓扑、Nginx、停机与健康检查见
 [生产部署](../../DEPLOY.md)。配置来源和环境变量见[配置说明](../../CONFIG.md)，数据库
-基线与安全新增边界见[数据库结构](../database.md#启动与结构契约)。
+初始化与最小就绪契约见[数据库结构](../database.md#启动与结构契约)。
 
 ## 数据安全边界
 

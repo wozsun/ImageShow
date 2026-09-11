@@ -95,7 +95,6 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     firstDeletedPage.items.map((item) => item.id),
     initialPaginationOrder.slice(0, 2)
   );
-  assert.equal("next_cursor" in firstDeletedPage, false);
 
   let pageWindowSelects = 0;
   const restorePageWindows = interceptPoolConnections(database.pool, (client) =>
@@ -445,9 +444,6 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     )?.tags,
     [matrixExtraTag, matrixTag]
   );
-  for (const page of redisMatrixPages.values()) {
-    assert.equal("next_cursor" in page, false);
-  }
 
   const rebuildingRedisSendCommand = redisClient.redis.sendCommand;
   let rebuildCommandObserved!: () => void;

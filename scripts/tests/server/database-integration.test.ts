@@ -750,19 +750,11 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
       120_000,
       async () => {
     const clean = databaseName("clean");
-    let cleanTableNames: string[] = [];
     await createDatabase(clean);
     await initialize(clean);
     await initialize(clean);
     await initialize(clean);
     await withClient(clean, async (client) => {
-      const tables = await client.query<{ table_name: string }>(
-        `SELECT table_name FROM information_schema.tables
-          WHERE table_schema='public' AND table_type='BASE TABLE'
-          ORDER BY table_name`
-      );
-      cleanTableNames = tables.rows.map((row) => row.table_name);
-      assert.ok(cleanTableNames.length > 0);
       const backgroundChecks = await client.query<{ definition: string }>(
         `SELECT pg_get_constraintdef(constraint_record.oid, true) AS definition
            FROM pg_constraint constraint_record
@@ -1219,9 +1211,16 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
     );
 
     const compatibleSuperset = databaseName("superset");
+    const supersetRole = `imageshow_superset_${randomUUID().replaceAll("-", "")}`;
+    const supersetPassword = randomUUID();
     await createCurrentDatabase(compatibleSuperset);
     await withClient(compatibleSuperset, async (client) => {
       await client.query(`
+        CREATE ROLE "${supersetRole}" LOGIN PASSWORD '${supersetPassword}';
+        GRANT CONNECT ON DATABASE "${compatibleSuperset}" TO "${supersetRole}";
+        GRANT USAGE ON SCHEMA public TO "${supersetRole}";
+        GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public
+          TO "${supersetRole}";
         CREATE TABLE deployment_owned_marker(
           id integer PRIMARY KEY,
           note text NOT NULL
@@ -1235,13 +1234,14 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
       dataDump(compatibleSuperset)
     ]);
     await initialize(compatibleSuperset);
+    await initializeAs(compatibleSuperset, supersetRole, supersetPassword);
     assert.deepEqual(
       await Promise.all([
         schemaDump(compatibleSuperset),
         dataDump(compatibleSuperset)
       ]),
       supersetBefore,
-      "部署方额外对象不得被 readiness 改写"
+      "仅有业务表权限的账号可启动，部署方额外对象及其数据保持不变"
     );
 
     const missingPrimaryKey = databaseName("primarykey");

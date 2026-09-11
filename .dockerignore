@@ -22,6 +22,8 @@ TODO.md
 *.key
 compose.override.yaml
 data
+postgres
+redis
 cert
 nginx
 

@@ -14,16 +14,14 @@ export async function initializeDatabaseSchema() {
   }
 }
 
-type DatabaseAsset = "schema.sql" | "schema-additions.sql";
-
-function databaseAssetPath(asset: DatabaseAsset) {
+function databaseSchemaPath() {
   const candidates = [
-    join(import.meta.dirname, "..", "..", asset),
-    join(import.meta.dirname, "..", "..", "..", asset)
+    join(import.meta.dirname, "..", "..", "schema.sql"),
+    join(import.meta.dirname, "..", "..", "..", "schema.sql")
   ];
   const path = candidates.find((candidate) => existsSync(candidate));
   if (!path) {
-    throw new Error(`PostgreSQL database asset is missing: ${asset}`);
+    throw new Error("PostgreSQL database asset is missing: schema.sql");
   }
   return path;
 }
@@ -50,16 +48,12 @@ function databaseReadinessError(error: unknown) {
 
 async function initializeDatabaseSchemaOnClient(client: PoolClient) {
   const empty = await databaseHasNoUserRelations(client);
-  const [schema, additions] = await Promise.all([
-    empty
-      ? readFile(databaseAssetPath("schema.sql"), "utf8")
-      : Promise.resolve(null),
-    readFile(databaseAssetPath("schema-additions.sql"), "utf8")
-  ]);
+  const schema = empty
+    ? await readFile(databaseSchemaPath(), "utf8")
+    : null;
   await client.query("BEGIN");
   try {
     if (schema) await client.query(schema);
-    await client.query(additions);
     await assertCoreDatabaseReady(client);
     await client.query("COMMIT");
   } catch (error) {

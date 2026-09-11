@@ -67,16 +67,15 @@ PostgreSQL 是图片、词表、后台任务、存储注册表和管理员账号
 当前 schema 共 9 张表，其中 `ready_image_revision` 是图片投影 revision 单行表。schema
 不保存迁移账本或应用版本号。
 
-`schema.sql` 完整定义上一已封版版本的干净安装基线；当前发布的空库依次执行它与
-`schema-additions.sql`，再进行只读 readiness；非空库于启动时执行 additions 和 readiness。
+`schema.sql` 完整定义当前版本的干净安装结构；空库在同一事务中执行它与只读 readiness，
+非空库只进行只读 readiness。任一步失败回滚本次事务。
 空主题直接由基线中的可空、无默认值主题外键表示，主题表只保存真实词条。
 作者身份两列、长期 CHECK、
 非空身份复合唯一索引、`metadata.created_by TEXT NOT NULL`、`metadata.purge_job_id` 及其长期
-CHECK 和后台任务的三种当前类型约束都属于基线；当前 additions 为注释占位。additions 只为
-一个发布周期内经审查的受限增量保留固定入口；全部受控非空数据库确认增量
-后，下一发布把定义并入 `schema.sql` 并恢复注释占位。自动结构职责由干净初始化、单周期
-additions 和最小 readiness 构成；其他结构整理必须显式停机、备份并验证恢复。允许的 additions
-和 readiness 契约以
+CHECK 和后台任务的三种当前类型约束都属于完整结构。既有数据库的结构新增、修改、删除和
+数据整理由维护者在升级前显式处理，先停机、备份并明确恢复路径。额外表不参与 readiness，
+不读取其数据、不要求读写权限；必需结构、约束、种子或权限不满足仍明确失败。
+干净初始化和 readiness 契约以
 [数据库结构](./database.md)为唯一说明。
 
 ### Redis
@@ -168,22 +167,6 @@ PostgreSQL / Redis 命令，不扫描键空间或逐键读取内存；Redis 图�
 Redis 或“全部”检查的第二次扫描，之后手动运行 Redis 检查仍复用同一查询。未完成的部分
 汇总不会替换已有快照。Redis `INFO MEMORY` 始终只表示整个实例，不会与 ImageShow 投影
 汇总相加或替代。
-
-### 浏览器传输验收
-
-浏览器验收覆盖匿名 Home / Show / Gallery / 公开详情、后台 9 图上传、图片编辑、已登录 Home /
-Show / Gallery 和其他后台页面。每个公开路由分别测量全新持久 profile 冷访问、同一 SPA 连续访问，
-以及关闭后重开同一 profile 的磁盘缓存；上传和编辑另测写后状态。采样保留浏览器请求、真实
-网络请求、缓存命中、状态码、header、body、编码、媒体清单、失败 / 取消和页面可用时间，
-不同缓存状态不混算 percentile。媒体身份使用固定源序号与内容 MD5，默认随机首页背景单独
-证明一次请求链路。
-
-`tests/benchmarks/runtime-transfer/run-current-workload.ps1` 只运行一个明确的当前镜像，使用
-隔离 Compose、全新数据库、Redis 与浏览器 profile；完整工作负载固定执行 50 次 9 图内容接入并
-要求最终 450 张图片全部 ready、容器零重启且没有非预期失败。脚本输出每轮原始事实，报告
-字段只描述本次镜像、工作负载和运行环境。生产构建由 `check-web-chunks` 验证权限闭包、
-懒加载边界、资源 owner、内容哈希与重复产物，并用实际有效字节发现资源合并候选；资源治理
-以真实构建图和同行关系为依据，不把按页面冻结的请求数或响应体积作为绝对预算。
 
 ### 图片字节
 

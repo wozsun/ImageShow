@@ -27,10 +27,11 @@ packages/web ─────► packages/shared
   再单独安装 server/shared 的生产依赖；运行镜像只携带生产依赖、编译产物和运维入口。
 - `compose.yaml` 提供单实例 ImageShow、PostgreSQL 与 Redis 的标准部署，把 `.env` 用作
   数据库名、用户名、密码和首次管理员用户名、密码的显式插值来源；可选的 `SITE_DOMAIN`
-  与 `SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON` 紧随其后，仅在配置文件不存在时播种域名和
-  访客原图按钮配置，未设置时分别使用空值和 `false`。数据库名、数据库用户名和管理员
+  仅在配置文件不存在时播种域名，未设置时使用空值。数据库名、数据库用户名和管理员
   用户名有默认值，两个密码必须显式设置；
   `.env.example` 另行承担部署变量与全部首次 seed 的完整目录。
+  三个服务分别挂载 `data/`、`postgres/`、`redis/`，对应应用、PostgreSQL 和 Redis 数据。
+  这些运行目录均被 Git 和 Docker 构建上下文忽略。
 - `docs/CONFIG.md` 与 `docs/DEPLOY.md` 分别维护配置与部署说明；`docs/guide/` 保存当前架构、
   数据库、流程和 API 等指南。文档使用相对 Markdown 链接，可直接在仓库中阅读。
 
@@ -140,7 +141,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `random/` | 随机查询校验、规范 `auto` / `all` 到候选设备轴的选择、Redis 8 Array 最近历史、定向 id 与有界 pivot 普通随机 PG 降级查询及随机出口编排；纯 User-Agent 设备识别由 `@imageshow/shared/browser` 提供给 Server 与 Web，Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
 | `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。 |
 | `checks/` | PostgreSQL / Redis 独立轻量状态、数据库 / Redis / 存储手动深度检查、“全部”中的回收站一致性结果，以及显式触发的存储维护；状态页自动 Redis 深检与手动 Redis 检查复用同一有界扫描和 pipeline，只返回当前汇总。 |
-| `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存；`authors/identity.ts` 唯一拥有作者链接到平台身份的当前解析和管理投影，微博导入按身份批量查询 PostgreSQL，不保留旧配置迁移 owner。 |
+| `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存；`authors/identity.ts` 唯一拥有作者链接到平台身份的当前解析和管理投影，微博导入按身份批量查询 PostgreSQL。 |
 | `users/` | 管理员初始化、账号变更、Redis 登录会话、逐请求 PostgreSQL 角色与密码代际核对、操作授权、密码恢复、偏好和会话失效；不维护管理员凭据 Redis 投影。 |
 | `types/` | 仅放缺失的编译期声明，不承载运行时代码。 |
 
@@ -166,6 +167,9 @@ CDN fallback，保留 HEAD、条件请求、取消处理与 `Vary: User-Agent`�
 管理员返回公开链接；开启时不读会话并使用浏览器 30 秒 / CDN 60 秒缓存，始终带 `Vary: Cookie`。
 详情只合并数据库行读取，链接显示投影在每个请求内独立生成；Web 按图片 ID 与认证身份隔离
 详情查询，由服务端链接决定按钮显示，不额外读取按钮开关或发起会话探针。
+`images/image-serving-record.ts` 统一资源读取的 Redis 命中与 PostgreSQL 回源：完整图和缩略图
+只投影对象键、扩展名与存储后端，原图入口再读取外部原图地址和更新时间。图片状态仅用于
+查询可服务的正式 / 回收站记录；分类与展示文字由图片详情和列表的读模型负责。
 
 `storage/drivers/local.ts` 在缓冲写、复制和流式写入创建候选前及 link 发布前检查取消，
 缓冲写同时向文件写入传递 signal。不可中断的本地复制等待当前 I/O 完成后检查取消并清理候选。
@@ -180,9 +184,10 @@ schema、查询、变更和删除权限，不把领域业务搬进路由。`publ
 或缓存契约；不按行数与相邻文件合并。`http-app.ts` 仍显式展示公开路由、管理员 session、
 CSRF、请求体限制和各管理能力的装配顺序。
 
-`routes/validation/` 不提供 `index.ts` 或旧路径转发：`parse.ts` 唯一把 Zod 问题映射为稳定的
+`routes/validation/parse.ts` 唯一把 Zod 问题映射为稳定的
 HTTP `validation_error`，`primitives.ts` 只复用 UUID、slug、HTTPS 和安全整数等无业务语义原语，
-其余文件分别拥有对应请求 schema。公开列表、后台列表与画廊统计的领域查询类型由各自
+其余文件分别拥有对应请求 schema。存储创建、测试、迁移、重排和路径参数共用同一 HTTP slug
+原语及错误提示，配置包保留独立的领域校验。公开列表、后台列表与画廊统计的领域查询类型由各自
 `images/read-models/` 模块导出，路由 schema 以 `z.ZodType` 对其作编译期约束；图片更新直接使用
 `@imageshow/shared/browser` 的 `ImageUpdateItemInputDto`。JSONL 与 HTTP 共用
 `images/metadata-tags.ts` 的标签归一化 schema，cursor 复用 `core/uuid.ts` 的规范 UUID 原语，
@@ -190,7 +195,9 @@ HTTP `validation_error`，`primitives.ts` 只复用 UUID、slug、HTTPS 和安�
 
 `core/database/` 按 PostgreSQL 生命周期边界拆分：`pools.ts` 只接收显式配置并拥有主查询与
 advisory lock 两个连接池；`transactions.ts`、`advisory-locks.ts` 和 `schema.ts` 分别拥有
-事务、锁与干净安装编排。advisory lock 调度信号只取消连接取得与锁等待；锁内回调收到独立的
+事务、锁与数据库启动编排；空库在事务内执行当前完整 `schema.sql` 并核对 readiness，非空库
+只做只读 readiness。既有结构变更由维护者在启动前处理，额外表不参与数据或权限检查。
+advisory lock 调度信号只取消连接取得与锁等待；锁内回调收到独立的
 父锁 / 当前连接失效信号，由具体领域决定是否再合并请求、lease 或 deadline。`readiness.ts`
 是唯一总入口，按固定顺序调用
 `readiness/relations.ts`、`privileges.ts`、`indexes.ts`、`checks.ts`、`foreign-keys.ts` 与 `seeds.ts`；
@@ -261,8 +268,7 @@ Ingestion staging 孤儿按代码内固定 100 项渐进删除。
 回收站的移入 / 恢复集中于
 `images/trash-mutations.ts`；`images/trash-purge.ts` 拥有任务原子绑定与按 job 逐图执行，
 `images/trash-purge-job.ts` 只把领域批次结果映射为通用任务结果，
-`images/trash-purge-maintenance.ts` 集中维护入口触发的全部耗尽任务重试与异常引用修复；数据库
-启动由当前 additions 与 readiness 组成。深度诊断仍属于
+`images/trash-purge-maintenance.ts` 集中维护入口触发的全部耗尽任务重试与异常引用修复。深度诊断属于
 `checks/database-check.ts`，正常图片请求不探测任务完整性。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
 请求级派生计数失效；`images/image-update-item.ts` 是单图 metadata、author / theme / tag
 创建、完整标签替换与分类 metadata 更新的 PostgreSQL 事务所有者；主题删除的图片重分配由
@@ -308,7 +314,7 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
   pool、tick、drain 或不可取消边界协调器；HTTP、Worker 和恢复流程仍复用核心 Redis client 上
   的同一 command runner 与 listener hub。
 - `sessions/projection.ts` 只拥有稳定哈希与实际使用的 metadata 汇总展示；单项汇总变化的 Server
-  权威位于 Redis Lua，不再维护测试专用 TypeScript 投影镜像。
+  权威位于 Redis Lua，TypeScript 负责命令调用与结果解析。
 - `images/processing.ts` 在编码轮次前后检查执行取消；已启动的转换与并行缩略图全部收口后才归还，
   Worker 继续持有现有 Normalize、buffer 和 raw 租约，取消不启动下一轮降质或质量回补。
 - `repository.ts` 保留命令调用边界、错误翻译与事件发布 facade；实际职责分别由
@@ -451,7 +457,7 @@ hooks ──► lib
   `components/feedback/AdminSettingsBoundary.tsx` 复用 `useAdminSettings` 的唯一查询，
   只在取得真实配置后挂载后台图库、词表与设置表单；初次失败提供重试，后台刷新失败时
   保留已有配置和页面状态。图库将该快照经 `IngestionLauncher` 传给 `Ingestion`，
-  接入页不再重新订阅设置或写死分页、数量、体积、长边、并发和导入策略的回退值。
+  接入页复用该设置快照中的分页、数量、体积、长边、并发和导入策略。
   `components/form/TagInput.tsx` 统一拥有按需覆盖、由父框圆角裁切的 22px 边缘按钮与单行标签
   viewport；相邻 `tag-input-scroll.ts` 纯模型计算逐项边界、两端状态与滚轮像素，不把 Upload /
   Import 的默认值和逐图入口拆成四套交互。`TagInput` 本身只把 DOM 几何接到纯模型，并在非交互
@@ -498,11 +504,11 @@ hooks ──► lib
   唤出导航，但保留上拖收起、滚轮显隐与移动端拖动显隐，手动位置采样仍连续更新。
   `ShowPixiPage` 将该 owner 的导航可见性映射到页面属性；`show.css` 据此统一控制两种展映模式的
   底部按钮 30% 不透明度与操作提示 20% 不透明度；提示在次级文字色中混入 30% 白色，
-  配以 70% 不透明度的深灰描边，导航收起时文字与描边整体淡化，不再隐藏。
+  配以 70% 不透明度的深灰描边，导航收起时文字与描边整体淡化并保持可见。
   按钮组外扩 24px 的 hover 区域或键盘可见焦点可同步恢复
   两侧控件和提示，不新增导航状态或计时器。
   画廊直接调用共享导航 Hook，不传入自动隐藏时长，只保留滚动显隐；共享 owner 只测量滚动阶段所需的筛选栏高度，
-  不维护已移除的画廊计时保护区。展映计时时长由 `lib/ui/public-navigation.ts` 的统一常量提供。
+  展映计时时长由 `lib/ui/public-navigation.ts` 的统一常量提供。
   画廊回顶按钮按一屏滚动阈值切换可见性，在排列按钮上方固定位置以 `120ms` 淡入或淡出；
   退场开始即退出点击和键盘焦点范围，透明度归零后隐藏表面。CSS 过渡允许中途反转，
   整组透明度仍由共享样式管理，减少动态效果时直接切换显隐。
@@ -511,8 +517,8 @@ hooks ──► lib
   有限入场动效。共享
   `usePageScrollLock.ts` 计数化冻结应用根、安装弹窗触摸边界并在最后释放时恢复页面滚动；
   `useDialogFocus.ts` 在相同层级归还 opener，页面和角色模块不得建立第二套 body 锁；
-  `useAnimatedClose.ts` 在退场动画完成回调返回前同步提交表面卸载与调用方交互解锁，使首个
-  无弹窗或菜单的绘制帧不再保留背景禁用状态。
+  `useAnimatedClose.ts` 在退场动画完成回调返回前同步提交表面卸载与调用方交互解锁，
+  使弹窗与菜单全部关闭后的首帧恢复背景交互。
   `useDismissiblePanel.ts` 还允许把外置的相邻操作登记为同一交互表面，并单独广播子菜单收起；
   移动画廊与后台图片筛选据此让清空关闭 Select / Facet，却不改变外层面板状态。
 - `lib/` 保存无界面代码；HTTP 客户端、query key 和共享查询 Hook 集中在 `lib/api/`。
@@ -608,7 +614,7 @@ hooks ──► lib
   保留区前追加贴合基线的 ASCII `...`。标题和省略号不可选，链接提供只读文本框语义；首次点击或
   键盘聚焦时通过原生 Selection 全选实际 URL 节点，焦点内后续点击保留局部选择，失焦后重置。
   复制按钮不使用截断后的显示文本。
-- `pages/show/` 就近拥有公开展映编排、真实图片查询与 `pixi/` 生产运行时；不保留旧实现对照入口。
+- `pages/show/` 就近拥有公开展映编排、真实图片查询与 `pixi/` 生产运行时。
   三种排序共用 `GET /api/images?view=show`，首次接收的随机批次只在 Web 洗牌。
   `useShowData.ts` 独占请求代次、游标与最多 800 个唯一 DTO；场景反馈已消费及仍引用的 ID，
   数据流退役无引用旧项并持续续取，有限池可循环，近期 ID 集合有界。删除与编辑隔离旧响应，
@@ -653,7 +659,7 @@ hooks ──► lib
   未确认时停在 `3G`，确认后应用请求；比例按当前视口换算。提示复用 `DialogFrame` 的焦点、页面锁和退场回调，
   只加载展映自身样式；运行时通过同一个 `dialogOpen` 状态暂停详情或提示背后的画布输入与动画。
   相机与 float 控制器都在拖动和松手惯性中保留指针类型，普通滚轮不继承前次拖动的输入类型。
-  场景不再用相机顶部坐标差推断手动位移，按钮缩放、Ctrl + 滚轮、双指缩放、锚点修正、resize 与自动巡航均不触发导航显隐。
+  导航显隐由手动位移事件驱动；按钮缩放、Ctrl + 滚轮、双指缩放、锚点修正、resize 与自动巡航均不触发导航显隐。
   自动巡航在手动运动结束后立即恢复，不使用固定等待或按时间猜测手动位移。
   `ShowPixiFloatScene` 直接拥有屏幕坐标、生命周期空档、混合尺寸面积密度、路径预测与速度间距反馈，
   以同一速度计算推进图片和预测遮挡；70%–120% 的宽度序列同时用于实际卡片和纹理预取。
@@ -843,10 +849,9 @@ ALTCHA PBKDF2 Worker 必须由浏览器通过独立 URL 创建，且只在实际
 登录页首屏脚本。具有相同入口根的 emitted JS 与相同 owner 的 CSS 分组仅供合并评估，
 不单独导致失败；内容完全重复的资产会使门禁失败。
 
-当前镜像的运行时传输、浏览器 profile 和 450 图 Upload 工作负载只属于本地发布验收，保存在被
-Git 忽略的 `tests/benchmarks/`，工作负载自身的检查也保留在该目录。
-这些测量不属于受跟踪的长期测试或默认门禁，不进入 npm 命令、Actions 或生产镜像。权威的
-固定媒体身份和验收边界见[架构总览](./architecture.md#浏览器传输验收)。
+运行时传输、浏览器缓存与接入负载测量使用根目录 `tests/` 下的隔离资源，原始数据保留在
+各自测量目录，结论写入 `tests/report/`。测量范围与工作负载按当次授权确定，不作为受跟踪
+测试的前置依赖，也不进入 Actions 或生产镜像。
 
 ## docs
 

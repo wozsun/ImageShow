@@ -255,21 +255,20 @@ test("[Server/缓存与 Redis] 公开 PostgreSQL 回源在缓存命中时零准�
 });
 test("[Server/缓存与 Redis] serving record 统一 Redis 命中、空命中与 PostgreSQL fallback", async () => {
   const item = servingReadyCacheItem();
-  const readyRow = {
-    id: item.id,
+  const storedRow = {
     object_key: item.object_key,
-    original: item.original,
     ext: item.ext,
-    storage_slug: item.storage_slug,
-    device: item.device,
-    brightness: item.brightness,
-    theme: item.theme,
-    status: "ready" as const,
-    description: item.description,
-    source: item.source,
+    storage_slug: item.storage_slug
+  };
+  const readyRow = {
+    ...storedRow,
+    original: item.original,
     updated_at: item.updated_at
   };
-  const deletedRow = { ...readyRow, status: "deleted" as const };
+  const deletedRow = {
+    ...readyRow,
+    original: "https://source.example.com/deleted.jpg"
+  };
   let idCache: unknown = { cached: true, value: item };
   let objectCache: unknown = { cached: true, value: item };
   let thumbCache: unknown = { cached: true, value: item };
@@ -292,8 +291,7 @@ test("[Server/缓存与 Redis] serving record 统一 Redis 命中、空命中与
     {},
     dependencies
   );
-  assert.equal(cached?.object_key, item.object_key);
-  assert.equal(cached?.status, "ready");
+  assert.deepEqual(cached, readyRow);
   assert.equal(queryParameters.length, 0);
 
   idCache = { cached: true, value: null };
@@ -309,50 +307,58 @@ test("[Server/缓存与 Redis] serving record 统一 Redis 命中、空命中与
     { reader },
     dependencies
   );
-  assert.equal(deleted?.status, "deleted");
+  assert.deepEqual(deleted, deletedRow);
   assert.deepEqual(queryParameters.at(-1), [item.id]);
 
   idCache = { cached: false };
   queryRows = [readyRow];
-  assert.equal(
-    (await readImageServingRecordById(
+  assert.deepEqual(
+    await readImageServingRecordById(
       item.id,
       { reader },
       dependencies
-    ))?.status,
-    "ready"
+    ),
+    cached
   );
   assert.deepEqual(queryParameters.at(-1), [item.id]);
 
-  assert.equal(
-    (await readImageServingRecordByObjectKey(
+  const queriesBeforeStoredCache = queryParameters.length;
+  assert.deepEqual(
+    await readImageServingRecordByObjectKey(
       item.object_key,
       { reader },
       dependencies
-    ))?.id,
-    item.id
+    ),
+    storedRow
   );
+  const thumbKey = item.object_key.replace(/\.[^.]+$/, ".webp");
+  assert.deepEqual(
+    await readImageServingRecordByThumbKey(thumbKey, { reader }, dependencies),
+    storedRow
+  );
+  assert.equal(queryParameters.length, queriesBeforeStoredCache);
   objectCache = { cached: true, value: null };
-  queryRows = [deletedRow];
-  assert.equal(
-    (await readImageServingRecordByObjectKey(
+  queryRows = [storedRow];
+  assert.deepEqual(
+    await readImageServingRecordByObjectKey(
       item.object_key,
       { reader },
       dependencies
-    ))?.status,
-    "deleted"
+    ),
+    storedRow
   );
+  assert.deepEqual(queryParameters.at(-1), [item.object_key]);
 
   thumbCache = { cached: true, value: null };
-  queryRows = [deletedRow];
-  assert.equal(
-    (await readImageServingRecordByThumbKey(
-      item.object_key.replace(/\.[^.]+$/, ".webp"),
+  assert.deepEqual(
+    await readImageServingRecordByThumbKey(
+      thumbKey,
       { reader },
       dependencies
-    ))?.status,
-    "deleted"
+    ),
+    storedRow
   );
+  assert.deepEqual(queryParameters.at(-1), [thumbKey]);
 });
 test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision、mutation 与 shutdown 行为", async () => {
   type CoordinatorDependencies = NonNullable<

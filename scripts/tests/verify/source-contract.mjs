@@ -674,8 +674,7 @@ const expectedImageShowEnvironment = [
   "DATABASE_PASSWORD",
   "ADMIN_USERNAME",
   "ADMIN_PASSWORD",
-  "SITE_DOMAIN",
-  "SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON"
+  "SITE_DOMAIN"
 ];
 assertSameSet(
   "source-contract: ImageShow default Compose environment whitelist drifted",
@@ -723,21 +722,21 @@ if (composeEnvironment(redisService).size !== 0) {
   throw new Error("source-contract: Redis default Compose environment must be empty");
 }
 if (!composeVolumeMount(redisService, {
-  source: "redis_data",
+  source: "./redis",
   target: "/data",
-  type: "volume"
+  type: "bind"
 })) {
-  throw new Error("source-contract: default Compose Redis must retain its data volume");
+  throw new Error("source-contract: default Compose Redis must retain its data bind mount");
 }
 if (!composeVolumeMount(
   postgresqlService,
   {
-    source: "postgresql18_data",
+    source: "./postgres",
     target: "/var/lib/postgresql",
-    type: "volume"
+    type: "bind"
   }
 )) {
-  throw new Error("source-contract: default Compose PostgreSQL must retain its data volume");
+  throw new Error("source-contract: default Compose PostgreSQL must retain its data bind mount");
 }
 if (!composeVolumeMount(imageShowService, {
   source: "./data",
@@ -746,11 +745,6 @@ if (!composeVolumeMount(imageShowService, {
 })) {
   throw new Error("source-contract: default Compose ImageShow must retain its data bind mount");
 }
-assertSameSet(
-  "source-contract: default Compose named volumes drifted",
-  new Set(Object.keys(objectRecord(compose.volumes, "Compose volumes"))),
-  new Set(["postgresql18_data", "redis_data"])
-);
 if (!composePortBinding(imageShowService, {
   hostIp: "127.0.0.1",
   published: 5518,

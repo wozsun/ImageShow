@@ -39,13 +39,14 @@ ADMIN_PASSWORD=
 
 ### 2. 启动服务
 
-在同一目录中执行以下命令，创建数据目录并启动服务：
+在同一目录中启动服务：
 
 ```bash
-sudo install -d -o 1000 -g 1000 data
 docker compose pull
 docker compose up -d
 ```
+
+应用数据、PostgreSQL 和 Redis 分别保存在部署目录下的 `data/`、`postgres/`、`redis/`。
 
 ### 3. 配置域名并访问
 
@@ -54,8 +55,6 @@ docker compose up -d
 - 在域名管理页面添加 DNS 解析，将该域名指向服务器公网 IP。
 - 在服务器防火墙和云平台安全组中放行 `80`、`443` 端口。
 - 在服务器上配置反向代理：使用该域名，转发目标填写 `http://127.0.0.1:5518`，申请证书并启用 HTTPS。具体配置见[反向代理示例](docs/DEPLOY.md#反向代理与-https)。
-
-应用图片通过主站 `/images` 提供，反向代理须原样转发路径。图片入口与存储直链说明见[主机与图片资源](docs/guide/image-resources.md)。
 
 完成后，将以下地址中的域名替换为自己的域名：
 

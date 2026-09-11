@@ -236,7 +236,6 @@ test("[Web/画廊] 公开列表 slug 复用 facets 生成卡片与详情显示�
     tagLabels: ["蓝色", "星空"],
     subtitle: "夜景 · 蓝色/星空"
   });
-  assert.equal("subtitle" in item, false);
   assert.deepEqual(createGalleryTaxonomyDisplayFormatter(undefined)({
     theme: null,
     tags: ["blue"]

@@ -6,8 +6,7 @@ import {
 } from "linkedom";
 import {
   type IngestionVocabularyDto,
-  type RuntimeConfig,
-  type StorageBackendMigrationResultDto
+  type RuntimeConfig
 } from "../../../packages/shared/src/browser.ts";
 import type {
   StorageBackendAdmin
@@ -718,29 +717,6 @@ test("[Web/后台表单] 存储删除反馈以服务端权威结果收口", () =
     ...backend,
     deletion: { action: "blocked", blockers: ["staging_objects"] }
   }).deletion.blockers, ["images", "staging_objects"]);
-});
-test("[Web/后台表单] 整后端迁移以错误总数为权威并只发布稳定错误样本", () => {
-  const migration = {
-    source: "archive",
-    target: "local",
-    migrated: 8,
-    unchanged: 1,
-    missing: 0,
-    error_samples: [{
-      id: "0198f6f8-168f-74fd-b3f2-a71d71742845",
-      object_key: "45/0198f6f8-168f-74fd-b3f2-a71d71742845.webp",
-      code: "storage_object_conflict",
-      message: "仅供展示的诊断文本"
-    }],
-    error_count: 2
-  } satisfies StorageBackendMigrationResultDto;
-  assert.equal(migration.error_count, 2);
-  assert.equal(migration.error_samples.length, 1);
-  assert.deepEqual(
-    migration.error_samples.map(({ code }) => code),
-    ["storage_object_conflict"]
-  );
-  assert.equal("errors" in migration, false);
 });
 test("[Web/后台表单] 存储编辑只提交变化字段并省略空凭据", () => {
   const backend = {

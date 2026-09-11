@@ -1,4 +1,4 @@
--- ImageShow clean-install baseline from the previous sealed release.
+-- ImageShow complete current schema for clean installs.
 -- This schema creates no migration ledger or persistent version marker.
 
 -- Storage registry

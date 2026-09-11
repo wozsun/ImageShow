@@ -1,8 +1,4 @@
 import { z } from "zod";
-import {
-  slugMaxLength,
-  slugPattern
-} from "@imageshow/shared/browser";
 import type {
   StorageBackendCreateInput,
   StorageBackendTestInput,
@@ -15,12 +11,6 @@ import {
 import { requestSlugInput } from "./primitives.ts";
 
 export const storageSlugInput = requestSlugInput;
-
-// Backend create/test historically used Zod's default slug issue messages,
-// while migration, reorder and path parameters used the shared request slug
-// messages. Keep those HTTP error contracts distinct.
-const storageBackendSlugInput = z.string().trim().toLowerCase().min(1)
-  .max(slugMaxLength).regex(slugPattern);
 
 export const storageSlugListInput = z.strictObject({
   slugs: z.array(storageSlugInput).min(1).max(2000)
@@ -48,9 +38,9 @@ const s3SettingsUpdateSchema = nonEmptySettingsObject.pipe(
 );
 
 export const storageBackendCreateInput = z.strictObject({
-  slug: storageBackendSlugInput,
+  slug: storageSlugInput,
   display_name: storageDisplayInput.optional().default(""),
-  s3: s3SettingsSchema.optional().prefault({})
+  s3: s3SettingsSchema.prefault({})
 }) satisfies z.ZodType<StorageBackendCreateInput>;
 
 export const storageBackendUpdateInput = z.strictObject({
@@ -63,7 +53,7 @@ export const storageBackendUpdateInput = z.strictObject({
 ) satisfies z.ZodType<StorageBackendUpdateInput>;
 
 export const storageBackendTestInput = z.strictObject({
-  slug: storageBackendSlugInput.optional(),
+  slug: storageSlugInput.optional(),
   s3: s3SettingsPatchSchema.optional()
 }).refine(
   (value) => Object.values(value).some((field) => field !== undefined),

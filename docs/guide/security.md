@@ -58,7 +58,7 @@
   管理员与超级管理员可通过现有作者查看 / 编辑权限读取管理端只读 `derived_identity`；未认证
   请求仍先被鉴权拒绝。公共图片、Gallery facet、Ingestion browser DTO、日志与错误都不返回
   原始身份列，唯一冲突也只使用稳定错误码，不回显 UID、作者 slug 或链接。
-- Compose 内置 Redis 使用不固定次版本的 `redis:8` 镜像，在项目私有网络内通过容器端口提供无密码连接；直接使用镜像默认启动命令并保留 `/data` volume。该 volume 提供尽力而为的重启保留；Redis 数据丢失时会话、限流、派生状态和未完全入库内容允许消失，PostgreSQL 中已正式提交的图片不受影响。Redis 内存上限、淘汰策略和容器硬限制由部署方管理，ImageShow 通过 `INFO MEMORY` 提供运维观测；启动与 `/readyz` 检查连接，并在自有 5 秒 TTL 隔离探针键上实际执行 `INCREX`、`ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与 `DELEX ... IFEQ` 五项必需能力，同时验证条件失败、缺失和 TTL 保留；命令存在但 ACL 拒绝执行仍视为不可用。首次校验成功前后台与公开业务都由冷启动门拒绝；运行期 Redis 故障时后台在会话读取前统一返回 `503 redis_unavailable`，不能伪装成 401 或触发浏览器清除登录状态，公开只读业务才允许有界 PostgreSQL 回源。连接启用了认证的外部 Redis 时，可通过 `REDIS_PASSWORD` 向应用提供密码。
+- Compose 内置 Redis 使用不固定次版本的 `redis:8` 镜像，在项目私有网络内通过容器端口提供无密码连接；直接使用镜像默认启动命令，将宿主 `./redis` 挂载到 `/data`。该目录提供尽力而为的重启保留；Redis 数据丢失时会话、限流、派生状态和未完全入库内容允许消失，PostgreSQL 中已正式提交的图片不受影响。Redis 内存上限、淘汰策略和容器硬限制由部署方管理，ImageShow 通过 `INFO MEMORY` 提供运维观测；启动与 `/readyz` 检查连接，并在自有 5 秒 TTL 隔离探针键上实际执行 `INCREX`、`ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与 `DELEX ... IFEQ` 五项必需能力，同时验证条件失败、缺失和 TTL 保留；命令存在但 ACL 拒绝执行仍视为不可用。首次校验成功前后台与公开业务都由冷启动门拒绝；运行期 Redis 故障时后台在会话读取前统一返回 `503 redis_unavailable`，不能伪装成 401 或触发浏览器清除登录状态，公开只读业务才允许有界 PostgreSQL 回源。连接启用了认证的外部 Redis 时，可通过 `REDIS_PASSWORD` 向应用提供密码。
 - 管理端界面偏好接口只使用鉴权会话中的用户名定位 `admin_account.preferences`，不接受客户端传入目标账号。接口只接受 shared 注册的键与值域，PATCH 在 PostgreSQL 行内原子合并并返回完整投影；JSONB 顶层必须是对象且最大 4 KiB。GET 使用 `private, no-cache` 与内容 ETag，`/api/admin/auth/me` 的认证首帧同时携带完全相同偏好表示的 ETag，五分钟内由前端查询缓存直接复用，更久后的窗口聚焦 / 重连显式带该验证器条件读取，设置未变化时即使此前没有访问过偏好 URL 也返回 304。浏览器缓存键按用户名隔离，`localStorage` 仅承担首帧显示、断网 pending 和多标签同步，不参与鉴权，也不保存会话或 CSRF token。PostgreSQL 尚无某键时，已校验的本地值可补写一次；删除账号时偏好随该行自然删除。
 - 登录失败限流：每 IP + 用户名 60 秒内 5 次失败即拦截，叠加 180 秒内 10 次尝试的全局兜底（阈值与窗口均可在 `config.json` 的 `security.*` 调整）。两个固定窗口在一次 Redis 服务端原子操作中按来源到全局的顺序使用 `INCREX ... UBOUND ... EX ... ENX` 预留；前一窗口已拒绝时不再消耗后续共享额度。达到上限后计数不再增长，后续请求也不会延长首次建立的 TTL。
 - 登录前置安全验证使用完全自托管的 ALTCHA：服务端签发带 HMAC 的
@@ -170,7 +170,7 @@ Worker 与嵌入页。应用没有跨源 API 契约，不返回 `Access-Control-
   有硬上限的 POST JSON；SSE、preview、raw PUT 和 snapshot 固定短 URL 不承载数组或草稿。
   消费 JSON 的写路由统一要求 `application/json` 或带 `+json` 后缀的媒体类型；缺失、
   空白、截断、中止或语法错误正文稳定返回 `400 invalid_json`。正文对象使用 strict
-  schema 拒绝未知或已删除字段，全可选更新至少包含一个有效字段；这类在写模型接纳前
+  schema 拒绝未知字段，全可选更新至少包含一个有效字段；这类在写模型接纳前
   被拒绝的请求不进入领域写入、缓存 / registry 失效或管理员操作审计。
   URL 输入窗口与 JSONL 解析最多允许 1000 项，微博输入最多 50 条；JSONL / 微博
   schema 另有
@@ -213,7 +213,7 @@ Worker 与嵌入页。应用没有跨源 API 契约，不返回 `Access-Control-
 - 外链导入下载会为每个已通过安全校验的当前目标生成仅含 `https` origin 的
   `Referer`，用于微博图床等基础防盗链。重定向后按新目标重新生成，不透传图片
   路径、查询参数、来源页面或管理员输入的任意 Referer。
-- 公共图片数据接口 `/api/images`、`/api/images/:id`、`/api/gallery-facets` 与 `/api/gallery-stats` 的**跨源保护**：借 Fetch Metadata（`Sec-Fetch-Site`）拒绝**跨站 / 同站跨源**读取，只放行同源（前端自身）、直接导航（`none`）与**不发该头**的老浏览器 / 非浏览器客户端（优雅降级，不误伤展映与画廊）。嵌入页中的数据请求仍由 iframe 内的同源应用发出，不增加 CORS、跨源凭据或后台写权限。它是跨源护栏、不是反爬墙——省略该头的客户端仍可访问，合规爬虫由 robots.txt 兜。（`/api/site-config` 不设限——它是内联进 SPA 的启动配置，需在任意首屏场景下可加载；返回内容只包含公开页面实际消费的站点名称、图标、根路径、首页、展映设置、画廊启用状态与排序、有效嵌入开关和详情行为，不包含嵌入来源列表、原始部署字段、后台版本显示策略、服务端分页默认值、随机出口默认方式、安全验证开关、登录页背景、上传限制或处理并发。）
+- 公共图片数据接口 `/api/images`、`/api/images/:id`、`/api/gallery-facets` 与 `/api/gallery-stats` 的**跨源保护**：借 Fetch Metadata（`Sec-Fetch-Site`）拒绝**跨站 / 同站跨源**读取，只放行同源（前端自身）、直接导航（`none`）与**不发该头**的老浏览器 / 非浏览器客户端（优雅降级，不误伤展映与画廊）。嵌入页中的数据请求仍由 iframe 内的同源应用发出，不增加 CORS、跨源凭据或后台写权限。它是跨源护栏、不是反爬墙——省略该头的客户端仍可访问，合规爬虫由 robots.txt 兜。（`/api/site-config` 不设限——它是内联进 SPA 的启动配置，需在任意首屏场景下可加载；返回内容只包含公开页面实际消费的站点名称、图标、根路径、首页、展映设置、画廊启用状态与排序、有效嵌入开关，不包含嵌入来源列表、原始部署字段、后台版本显示策略、服务端分页默认值、随机出口默认方式、安全验证开关、登录页背景、上传限制或处理并发。）
 - **robots.txt（默认关闭）**：由 `config.json` 的 `site.robots_enabled` 控制，默认 `false`，
   此时 `/robots.txt` 返回 404。开启后仅允许抓取已启用的首页（站点描述），画廊 / 接口 /
   图片资源 / 后台均禁止抓取。最终文本带内容弱 ETag，`If-None-Match` 命中返回无正文 304；
