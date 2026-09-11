@@ -77,8 +77,8 @@ function initialAttributePatch(
   return {
     ...(!provided.has("device") ? { device: defaults.device } : {}),
     ...(!provided.has("brightness") ? { brightness: defaults.brightness } : {}),
-    ...(!provided.has("theme") ? { theme: defaults.theme } : {}),
-    ...(!provided.has("author") ? { author: defaults.author } : {})
+    ...(!provided.has("theme") && defaults.theme.trim() ? { theme: defaults.theme } : {}),
+    ...(!provided.has("author") && defaults.author.trim() ? { author: defaults.author } : {})
   };
 }
 
@@ -138,6 +138,13 @@ export function canApplyIngestionAttributeDefaults(
     job.draft,
     ingestionAttributeDefaultsPatch(job, defaults)
   );
+}
+
+export function canClearIngestionAttribute(job: IngestionJob) {
+  return !job.commitIntent
+    && ["queued", "uploading", "downloading", "received", "processing", "ready", "failed"].includes(job.status)
+    && job.failureStage !== "commit"
+    && job.failureStage !== "cancel";
 }
 
 export function draftWithDetectedClassification(

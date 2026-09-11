@@ -515,6 +515,9 @@ export type IngestionQueueActionInputDto = {
   action_watermark: string;
   continuation?: string;
   metadata?: Partial<ImageDraftDto>;
+  // Exact captured handoffs supplement the queue watermark without including
+  // other tasks accepted after the confirmation opened.
+  items?: IngestionSessionPairDto[];
   max_semantic_revision?: number;
 };
 

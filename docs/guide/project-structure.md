@@ -536,11 +536,14 @@ hooks ──► lib
   `useDocumentMotionPause.ts` 统一把文档隐藏状态交给首页加载 / 刷新反馈和画廊尚未结束的
   有限入场动效。共享
   `usePageScrollLock.ts` 计数化冻结应用根、安装弹窗触摸边界并在最后释放时恢复页面滚动；
-  `useDialogFocus.ts` 在相同层级归还 opener，页面和角色模块不得建立第二套 body 锁；
+  `useDialogFocus.ts` 只处理当前顶层弹窗的 Escape / Tab，并在相同层级归还有效 opener；
+  `lib/ui/dialog-layer.ts` 提供触摸边界和键盘处理共用的顶层判断。页面和角色模块不得建立第二套 body 锁；
   `useAnimatedClose.ts` 在退场动画完成回调返回前同步提交表面卸载与调用方交互解锁，
   使弹窗与菜单全部关闭后的首帧恢复背景交互。
   `useDismissiblePanel.ts` 还允许把外置的相邻操作登记为同一交互表面，并单独广播子菜单收起；
   移动画廊与后台图片筛选据此让清空关闭 Select / Facet，却不改变外层面板状态。
+  工作流默认属性面板通过 `lib/ui/interaction-surface.ts` 把 Portal 菜单、清空确认层和返回焦点控件
+  登记到当前面板；子菜单优先消费 Escape，确认层关闭后恢复有效触发控件，面板随后才允许收起。
 - `lib/` 保存无界面代码；HTTP 客户端、query key 和共享查询 Hook 集中在 `lib/api/`。
   首页、画廊与展映的主导航滚动阈值和鼠标顶部唤出高度由 `lib/ui/public-navigation.ts` 统一定义；共享公开端
   入场缓动与首页导航淡入时长由 `styles/base.css` 的 motion token 提供，页面样式
@@ -734,8 +737,16 @@ hooks ──► lib
   写回；当前结构之外的字段直接删除。
 - `queue/model/ingestion-status-summary.ts` 是单项服务端状态桶纯函数，快照移除与取消释放分别
   解析输入后复用；不保存队列状态，也不替代 Redis 汇总权威。
-- `import/ImportSplitButton.tsx` 复用共享 anchored menu 的焦点外关闭及按来源决定 Escape 归焦；
-  键盘打开与悬停打开分开处理焦点。来源标签页维护 roving tabindex 和关联 tabpanel，保留指针输入流程。
+- `components/actions/SplitActionButton.tsx` 与 `styles/admin/split-action-button.css` 统一拥有
+  导入入口和默认属性栏的分体按钮、悬停、键盘导航与菜单退场；`import/ImportSplitButton.tsx`
+  只装配来源动作和预载意图。键盘打开与悬停打开分开处理焦点，菜单仍复用 anchored menu。
+  来源标签页维护 roving tabindex 和关联 tabpanel，保留指针输入流程。
+- `components/form/WorkflowAttributeActions.tsx` 只拥有清空主题、标签、作者或三项的确认窗口，
+  `lib/image-draft.ts` 提供显式空值 patch。图片编辑器冻结本次活动 ID 并更新原会话草稿；
+  `workflow/useIngestionQueueSubmitActions.ts` 冻结队列水位、数量上限与失败重试集合，
+  `useIngestionQueue.ts` 在确认存续期间只保留本地 ID / attempt 到首个 canonical pair 的交接身份。
+  服务端 `queue/action.ts` 为属性动作接收有界精确 pair，复用原权限、指纹和 metadata CAS，
+  草稿、队列状态与持久数据仍由原所有者维护。
 - `LogPage.tsx` 保存等级成功后取消旧日志读取，将已确认等级写入所有现有日志文件查询，
   只刷新当前活动文件一次；刷新失败保留确认值，不新增等级查询或延时同步。
 - `SettingsPage.tsx` 仅拥有当前未保存表单，后台回读只在 clean 状态更新；保存与重载禁用整个表单，

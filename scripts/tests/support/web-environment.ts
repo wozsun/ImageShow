@@ -33,6 +33,17 @@ if (!environmentState[environmentKey]) {
   };
   if (!elementPrototype.attachEvent) elementPrototype.attachEvent = () => {};
   if (!elementPrototype.detachEvent) elementPrototype.detachEvent = () => {};
+  // linkedom has no layout engine. Supply the standard visibility query for
+  // connected fixtures; geometry-specific cases can override it per element.
+  if (!elementPrototype.getClientRects) {
+    elementPrototype.getClientRects = function () {
+      const rects = this.isConnected && !this.closest("[hidden]")
+        && this.style.display !== "none" ? [this.getBoundingClientRect()] : [];
+      return Object.assign(rects, {
+        item: (index: number) => rects[index] ?? null
+      });
+    };
+  }
   const globals = {
     window,
     self: window,

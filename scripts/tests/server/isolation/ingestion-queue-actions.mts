@@ -1362,6 +1362,95 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     "DELETE FROM metadata WHERE id = ANY($1::uuid[])",
     [[clearCompletedReady.image_id, deferredCompletedReady.image_id]]
   );
+  const pairOf = (session: IngestionSessionSnapshot) => ({
+    session_id: session.session_id, image_id: session.image_id
+  });
+  const readActive = async (session: IngestionSessionSnapshot) => activeSession(
+    await ingestionRepository.readSession(actionOwner, session.session_id)
+  );
+  const seedAttributes = async (label: string) => {
+    const session = await createActionReadySession(label);
+    const updated = await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [{
+      ...pairOf(session), expected_version: session.version,
+      metadata: {
+        ...session.metadata, theme: "theme-a", author: "author-a", tags: ["tag-a", "tag-b"],
+        device: "pc", brightness: "dark", description: "保留说明", source: "https://example.com/source",
+        original: "https://example.com/original.webp"
+      }
+    }]);
+    assert.equal(updated[0].status, "changed");
+    return readActive(session);
+  };
+  const clearMetadataCases = [{ theme: null }, { tags: [] }, { author: "" }, { theme: null, tags: [], author: "" }];
+  for (const [index, metadata] of clearMetadataCases.entries()) {
+    const session = await seedAttributes(`clear-field-${index}`);
+    const result = await runAction(ingestionRepository, {
+      queue: "import", action: "apply_metadata", action_request_id: coreUuid.randomUuidV7(),
+      action_watermark: actionPage.action_watermark, items: [pairOf(session)], metadata
+    });
+    assert.equal(result.changed, 1);
+    assert.equal(result.continuation, undefined);
+    const current = await readActive(session);
+    assert.deepEqual(current.metadata, { ...session.metadata, ...metadata });
+    assert.deepEqual(current.prepared, session.prepared, "分类清空不重写准备结果或正式对象身份");
+    assert.equal(current.image_id, session.image_id);
+    assert.equal(current.storage_slug, session.storage_slug);
+  }
+  const frozenTarget = await seedAttributes("clear-before-watermark");
+  const clearPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
+    repository: ingestionRepository, tokens: actionTokens, session: actionSession,
+    actionScope: actionScope.id, queue: "import", offset: 0, limit: 10
+  });
+  const handoffTarget = await seedAttributes("clear-captured-handoff");
+  const laterTarget = await seedAttributes("clear-later-bystander");
+  await runAction(ingestionRepository, {
+    queue: "import", action: "apply_metadata", action_request_id: coreUuid.randomUuidV7(),
+    action_watermark: clearPage.action_watermark, metadata: { author: "" }
+  });
+  assert.equal((await readActive(frozenTarget)).metadata.author, "");
+  assert.deepEqual((await readActive(handoffTarget)).metadata, handoffTarget.metadata);
+  assert.deepEqual((await readActive(laterTarget)).metadata, laterTarget.metadata);
+  const exactClear = {
+    queue: "import" as const, action: "apply_metadata" as const, action_request_id: coreUuid.randomUuidV7(),
+    action_watermark: clearPage.action_watermark, items: [pairOf(handoffTarget)],
+    metadata: { theme: null, tags: [], author: "" }
+  };
+  const exactResult = await runAction(ingestionRepository, exactClear);
+  assert.equal(exactResult.changed, 1, "原确认成员接管到旧水位之后仍可按精确身份处理");
+  assert.deepEqual((await readActive(handoffTarget)).metadata, { ...handoffTarget.metadata, ...exactClear.metadata });
+  assert.deepEqual((await readActive(laterTarget)).metadata, laterTarget.metadata, "精确补批不扫描后来任务");
+  const afterClear = await readActive(handoffTarget);
+  assert.equal((await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [{
+    ...pairOf(afterClear), expected_version: afterClear.version,
+    metadata: { ...afterClear.metadata, author: "edited-after-clear" }
+  }]))[0].status, "changed");
+  assert.deepEqual(await runAction(ingestionRepository, exactClear), exactResult);
+  assert.equal((await readActive(handoffTarget)).metadata.author, "edited-after-clear", "丢失响应重放不覆盖后续编辑");
+  await assert.rejects(runAction(ingestionRepository, {
+    ...exactClear, items: [pairOf(laterTarget)]
+  }), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_action_request_conflict");
+  const incarnationResult = await runAction(ingestionRepository, {
+    ...exactClear, action_request_id: coreUuid.randomUuidV7(),
+    items: [{ ...pairOf(laterTarget), image_id: coreUuid.randomUuidV7() }]
+  });
+  assert.equal(incarnationResult.items[0].status, "skipped");
+  assert.deepEqual((await readActive(laterTarget)).metadata, laterTarget.metadata);
+  const foreignOwner = `foreign-clear-${randomUUID()}`;
+  const foreignSessionId = ingestionSessionIdentity.createIngestionSessionId(foreignOwner, "import", "foreign-clear");
+  const foreignDraft = {
+    ...importCanonicalWithoutHash, owner: foreignOwner, session_id: foreignSessionId,
+    image_id: coreUuid.randomUuidV7(), metadata: laterTarget.metadata
+  };
+  const foreign = activeSession((await ingestionRepository.acceptImportSession({
+    ...foreignDraft,
+    semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(foreignDraft)
+  }, displayOrderKey(foreignSessionId, 1, Date.now()), Date.now())).session);
+  const foreignResult = await runAction(ingestionRepository, {
+    ...exactClear, action_request_id: coreUuid.randomUuidV7(), items: [pairOf(foreign)]
+  });
+  assert.equal(foreignResult.items[0].status, "skipped");
+  assert.deepEqual(activeSession(await ingestionRepository.readSession(foreignOwner, foreignSessionId)).metadata, foreign.metadata,
+    "直接指定其他管理员的任务身份也不能绕过 owner 隔离");
   actionScope.close();
 
 });

@@ -17,6 +17,7 @@ import {
 } from "../lib/ui/menu-position.js";
 import { isWithinAnchoredPopupBoundary } from "../lib/ui/anchored-popup-boundary.js";
 import { isDocumentFallbackFocusTarget } from "../lib/ui/focus-target.js";
+import { topDialogFrame } from "../lib/ui/dialog-layer.js";
 
 const outsidePressEvents = ["pointerdown", "touchstart"] as const;
 
@@ -228,12 +229,17 @@ export function useAnchoredMenu(options: {
     let onKeyDown: ((event: KeyboardEvent) => void) | undefined;
     if (closeOnEscape) {
       onKeyDown = (event) => {
-        if (event.key !== "Escape") return;
+        if (event.key !== "Escape" || event.defaultPrevented
+          || event.isComposing || event.keyCode === 229) return;
+        const ownerDialog = triggerRef.current?.closest("[data-dialog-frame]") ?? null;
+        if (ownerDialog !== topDialogFrame(document)) return;
         event.preventDefault();
+        event.stopImmediatePropagation();
+        if (closing) return;
         if (restoreFocusOnEscapeRef.current?.() ?? true) requestCloseAndRestoreFocus();
         else requestClose();
       };
-      document.addEventListener("keydown", onKeyDown);
+      document.addEventListener("keydown", onKeyDown, true);
     }
     let onFocusIn: ((event: FocusEvent) => void) | undefined;
     if (closeOnFocusOutside) {
@@ -260,10 +266,10 @@ export function useAnchoredMenu(options: {
         document.removeEventListener(eventName, onOutsidePress, true);
       }
       resizeObserver.disconnect();
-      if (onKeyDown) document.removeEventListener("keydown", onKeyDown);
+      if (onKeyDown) document.removeEventListener("keydown", onKeyDown, true);
       if (onFocusIn) document.removeEventListener("focusin", onFocusIn);
     };
-  }, [open, menuNode, updatePosition, requestClose, requestCloseAndRestoreFocus, triggerRef, closeOnEscape, closeOnFocusOutside]);
+  }, [open, closing, menuNode, updatePosition, requestClose, requestCloseAndRestoreFocus, triggerRef, closeOnEscape, closeOnFocusOutside]);
 
   useEffect(() => {
     if (!open || closing) return;

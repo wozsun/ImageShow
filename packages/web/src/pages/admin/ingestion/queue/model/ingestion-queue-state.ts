@@ -3,12 +3,13 @@ import type {
   IngestionCommitIntent,
   IngestionJob
 } from "../../../../../lib/types.js";
-import { normalizeAuthor, normalizeTheme } from "../../../../../lib/image-draft.js";
+import { imageAttributeClearPatch, normalizeAuthor, normalizeTheme, type ClearableImageAttribute } from "../../../../../lib/image-draft.js";
 import type { IngestionAttributeDefaults } from "./ingestion-attribute-defaults.js";
 import { webUuidV7 } from "./ingestion-identity.js";
 import { ingestionJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
 import {
   classificationOverrideFor,
+  canClearIngestionAttribute,
   imageDraftPatchChanges,
   ingestionAttributeDefaultsPatch
 } from "./ingestion-attribute-policy.js";
@@ -90,6 +91,11 @@ export type IngestionQueueAction =
   | {
       type: "apply-defaults";
       defaults: IngestionAttributeDefaults;
+      attempts: ReadonlyMap<string, string>;
+    }
+  | {
+      type: "clear-attribute";
+      field: ClearableImageAttribute;
       attempts: ReadonlyMap<string, string>;
     }
   | {
@@ -688,12 +694,15 @@ export function reduceIngestionQueue(
       if (jobs.length === state.jobs.length && page === state.page) return state;
       return { jobs, page };
     }
+    case "clear-attribute":
     case "apply-defaults": {
       const jobs = mapJobsWithIdentity(
         state.jobs,
         (job) => {
           if (action.attempts.get(job.id) !== job.attemptKey) return job;
-          const patch = ingestionAttributeDefaultsPatch(job, action.defaults);
+          const patch = action.type === "clear-attribute"
+            ? canClearIngestionAttribute(job) ? imageAttributeClearPatch(action.field) : {}
+            : ingestionAttributeDefaultsPatch(job, action.defaults);
           if (!imageDraftPatchChanges(job.draft, patch)) return job;
           return {
             ...patchJobDraft(job, patch),

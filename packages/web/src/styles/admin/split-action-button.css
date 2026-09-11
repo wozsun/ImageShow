@@ -1,0 +1,73 @@
+:root {
+  --admin-color-split-menu-border: light-dark(#d5dce5, #353c45);
+  --admin-color-split-menu-focus-surface: light-dark(#f1f4f8, #151a21);
+}
+
+.split-action-button { position: relative; display: inline-flex; }
+.split-action-button .split-action-main { min-width: 100px; border-radius: 6px 0 0 6px; }
+.split-action-menu-trigger { width: 34px; min-width: 34px; padding: 0; border-left: 0; border-radius: 0 6px 6px 0; }
+.split-action-menu {
+  --split-action-menu-gap: 6px;
+
+  position: fixed;
+  z-index: 12;
+  padding-top: var(--split-action-menu-gap);
+  transform-origin: top center;
+  animation: split-action-menu-in 80ms cubic-bezier(.2, .8, .2, 1);
+}
+.split-action-menu[data-dialog-portal-menu] { z-index: 100; }
+.split-action-menu-surface {
+  padding: 5px;
+  border: 1px solid var(--admin-color-split-menu-border);
+  border-radius: 6px;
+  background: var(--admin-color-surface-primary);
+  box-shadow: 0 8px 24px var(--admin-shadow-menu);
+  overflow-y: auto;
+}
+.split-action-menu.opens-up {
+  padding-top: 0;
+  padding-bottom: var(--split-action-menu-gap);
+  transform-origin: bottom center;
+  animation-name: split-action-menu-in-up;
+}
+.split-action-menu.is-closing {
+  pointer-events: none;
+  animation: split-action-menu-out 60ms ease-in forwards;
+}
+.split-action-menu.opens-up.is-closing { animation-name: split-action-menu-out-up; }
+.split-action-menu button {
+  width: 100%;
+  min-height: 34px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.split-action-menu button:hover,
+.split-action-menu button:focus-visible { background: var(--admin-color-split-menu-focus-surface); }
+
+@keyframes split-action-menu-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes split-action-menu-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes split-action-menu-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-6px); }
+}
+
+@keyframes split-action-menu-out-up {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .split-action-menu { animation: none; }
+}

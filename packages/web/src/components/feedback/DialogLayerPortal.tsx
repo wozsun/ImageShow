@@ -1,9 +1,11 @@
 import { cloneElement, useContext, useRef, type ReactElement } from "react";
 import { createPortal } from "react-dom";
 import { DialogPortalTargetContext } from "./DialogPortalContext.js";
+import { InteractionSurfaceContext } from "../../lib/ui/interaction-surface.js";
 
 type DialogLayerElement = ReactElement<{
   "data-dialog-layer"?: "root" | "nested";
+  "data-interaction-surface"?: string;
 }>;
 
 /**
@@ -13,6 +15,7 @@ type DialogLayerElement = ReactElement<{
  */
 export function DialogLayerPortal({ children }: { children: DialogLayerElement }) {
   const parentDialogPortalTargetRef = useContext(DialogPortalTargetContext);
+  const interactionSurface = useContext(InteractionSurfaceContext);
   const portalTargetRef = useRef<HTMLElement | null | undefined>(undefined);
   if (portalTargetRef.current === undefined) {
     portalTargetRef.current = parentDialogPortalTargetRef
@@ -22,7 +25,8 @@ export function DialogLayerPortal({ children }: { children: DialogLayerElement }
         : document.body;
   }
   const layer = cloneElement(children, {
-    "data-dialog-layer": parentDialogPortalTargetRef ? "nested" : "root"
+    "data-dialog-layer": parentDialogPortalTargetRef ? "nested" : "root",
+    "data-interaction-surface": interactionSurface?.id
   });
   // Freeze the destination for this mount. When parent and child dialogs open
   // together, the parent ref is still null during the child's first render and

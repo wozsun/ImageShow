@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   ImageDraftDto,
   IngestionQueueActionResultDto,
-  IngestionQueueActionTypeDto
+  IngestionQueueActionTypeDto,
+  IngestionSessionPairDto
 } from "@imageshow/shared/browser";
 import { webUuidV7 } from "./model/ingestion-identity.js";
 import { isApiClientError } from "../../../../lib/api/client.js";
@@ -17,6 +18,7 @@ export type FrozenIngestionQueueAction = Readonly<{
   actionRequestId: string;
   action: IngestionQueueActionTypeDto;
   metadata?: Partial<ImageDraftDto>;
+  items?: IngestionSessionPairDto[];
   maxSemanticRevision?: number;
   actionScope: string;
   actionWatermark: string;
@@ -31,8 +33,27 @@ export type IngestionQueueActionRunOptions = Readonly<{
 
 const maximumActionBatches = 10_000;
 
+type UnconfirmedActionPage = {
+  actionRequestId: string;
+  actionScope: string;
+  connectionGeneration: number;
+  continuation: string | undefined;
+  batch: number;
+  processed: number;
+  changed: number;
+  failed: number;
+  items: IngestionQueueActionResultDto["items"];
+  seenContinuations: Set<string>;
+};
+
 function staleActionError() {
   return new Error("内容接入队列状态已变化，请刷新后重新执行");
+}
+
+function actionResultIsUnknown(error: unknown) {
+  return !isApiClientError(error)
+    || error.status >= 500
+    || error.code === "invalid_json_response";
 }
 
 async function executeWithResponseRetry(
@@ -50,13 +71,14 @@ async function executeWithResponseRetry(
         action_watermark: frozen.actionWatermark,
         ...(continuation ? { continuation } : {}),
         ...(frozen.metadata ? { metadata: frozen.metadata } : {}),
+        ...(frozen.items ? { items: frozen.items } : {}),
         ...(frozen.maxSemanticRevision === undefined
           ? {}
           : { max_semantic_revision: frozen.maxSemanticRevision })
       }, frozen.actionScope, signal);
     } catch (error) {
       if (signal.aborted) throw error;
-      if (isApiClientError(error) && error.status < 500) throw error;
+      if (!actionResultIsUnknown(error)) throw error;
       lastError = error;
     }
   }
@@ -81,6 +103,7 @@ export function useIngestionQueueActions(
   const actionTailRef = useRef<Promise<void>>(Promise.resolve());
   const authorityRecoveryRequestedRef = useRef(false);
   const lastActionTimestampRef = useRef(0);
+  const unconfirmedPageRef = useRef<UnconfirmedActionPage | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [, setConnectionRetainEpoch] = useState(0);
@@ -117,8 +140,13 @@ export function useIngestionQueueActions(
       pendingRunsRef.current = 0;
       blockingRunsRef.current = 0;
       connectionHoldRef.current = false;
+      unconfirmedPageRef.current = null;
     };
   }, [connectionHoldRef]);
+
+  useEffect(() => {
+    unconfirmedPageRef.current = null;
+  }, [server.actionScope, server.connectionGeneration]);
 
   const freeze = useCallback((
     action: IngestionQueueActionTypeDto,
@@ -170,29 +198,47 @@ export function useIngestionQueueActions(
     const execute = async () => {
       setNotice("");
       const controller = new AbortController();
+      const retained = unconfirmedPageRef.current;
+      const resumed = retained?.actionRequestId === frozen.actionRequestId
+        && retained.actionScope === frozen.actionScope
+        && retained.connectionGeneration === frozen.connectionGeneration
+        ? retained : null;
+      if (!resumed) unconfirmedPageRef.current = null;
       let requiresAuthorityRecovery = false;
       let authSessionRecovered = false;
       try {
         await before?.();
-        let continuation: string | undefined;
-        let processed = 0;
-        let changed = 0;
-        let failed = 0;
-        const items: IngestionQueueActionResultDto["items"] = [];
+        let continuation = resumed?.continuation;
+        let processed = resumed?.processed ?? 0;
+        let changed = resumed?.changed ?? 0;
+        let failed = resumed?.failed ?? 0;
+        const items: IngestionQueueActionResultDto["items"] = resumed?.items.slice() ?? [];
         const completed: CompletedIngestionObservation[] = [];
-        const seenContinuations = new Set<string>();
+        const seenContinuations = new Set(resumed?.seenContinuations);
         try {
-          for (let batch = 0; batch < maximumActionBatches; batch += 1) {
+          for (let batch = resumed?.batch ?? 0; batch < maximumActionBatches; batch += 1) {
             const current = serverRef.current;
             if (
               current.connectionGeneration !== frozen.connectionGeneration
               || current.actionScope !== frozen.actionScope
             ) throw staleActionError();
-            const response = await executeWithResponseRetry(
-              frozen,
-              continuation,
-              controller.signal
-            );
+            let response: IngestionQueueActionResultDto;
+            try {
+              response = await executeWithResponseRetry(frozen, continuation, controller.signal);
+            } catch (error) {
+              // The server replays only its last action page. Keep that exact
+              // cursor and earlier results when a response is still unknown;
+              // returning to page one would lose the server's replay boundary.
+              unconfirmedPageRef.current = !controller.signal.aborted
+                && actionResultIsUnknown(error)
+                ? {
+                    actionRequestId: frozen.actionRequestId,
+                    actionScope: frozen.actionScope,
+                    connectionGeneration: frozen.connectionGeneration,
+                    continuation, batch, processed, changed, failed, items, seenContinuations
+                  } : null;
+              throw error;
+            }
             completed.push(...response.items.flatMap((item) => (
               item.completed_item
                 ? [{ pair: item, item: item.completed_item }]
@@ -207,6 +253,7 @@ export function useIngestionQueueActions(
             // delayed or fail; the callback must not start a proof snapshot.
             options?.onBatchResult?.(response);
             if (!response.continuation) {
+              unconfirmedPageRef.current = null;
               const failures = items.filter((item) => item.status === "failed");
               setNotice(failures.length === 1
                 ? failures[0]?.message || "队列操作失败"

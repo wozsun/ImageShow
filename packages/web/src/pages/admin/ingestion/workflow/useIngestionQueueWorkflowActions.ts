@@ -748,6 +748,7 @@ export function useIngestionQueueWorkflowActions({
 
   const {
     applyDefaultsToQueue,
+    prepareAttributeClear,
     commitReadyJobs
   } = useIngestionQueueSubmitActions({
     queue,
@@ -791,6 +792,7 @@ export function useIngestionQueueWorkflowActions({
     armCleanupAction,
     confirmCleanupAction,
     applyDefaultsToQueue,
+    prepareAttributeClear,
     armClearQueue,
     confirmClearQueue,
     commitReadyJobs,

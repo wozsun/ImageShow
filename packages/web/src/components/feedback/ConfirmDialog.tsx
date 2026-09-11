@@ -93,6 +93,8 @@ export function ConfirmDialog({
           tabIndex={-1}
           onSubmit={(event) => {
             event.preventDefault();
+            event.stopPropagation();
+            if (blocked || confirmDisabled) return;
             if (requireFinalConfirmation && !finalConfirmationActive) {
               setFinalConfirmationArmed(true);
               return;

@@ -1,4 +1,7 @@
 import { useCallback } from "react";
+import { ingestionBatchHardLimit, type IngestionSessionPairDto } from "@imageshow/shared/browser";
+import { imageAttributeClearPatch, type PrepareImageAttributeClear } from "../../../../lib/image-draft.js";
+import type { FrozenIngestionQueueAction } from "../queue/useIngestionQueueActions.js";
 import type { IngestionJob } from "../../../../lib/types.js";
 import type { IngestionAttributeDefaults } from "../queue/model/ingestion-attribute-defaults.js";
 import { ingestionAttributeDefaultsActionMetadata } from "../queue/model/ingestion-attribute-policy.js";
@@ -100,5 +103,83 @@ export function useIngestionQueueSubmitActions({
     queue.server.status
   ]);
 
-  return { applyDefaultsToQueue, commitReadyJobs };
+  const prepareAttributeClear: PrepareImageAttributeClear = (field) => {
+    const summary = queue.server.summary;
+    const metadata = imageAttributeClearPatch(field);
+    const frozen = queue.actions.freeze("apply_metadata", metadata);
+    if (!frozen || !summary) {
+      queue.server.refresh();
+      return null;
+    }
+    const local = queue.captureLocalAttributeClear(field, queue.server.lastAcceptedOrder ?? 0);
+    const pending: Array<{
+      frozen: FrozenIngestionQueueAction;
+      retryItems?: IngestionSessionPairDto[];
+    }> = summary.unfinished - summary.committing - summary.resolving > 0
+      ? [{ frozen }] : [];
+    let prepared = false;
+    let disposed = false;
+    return {
+      count: queue.uncommittedCount,
+      maximumCount: true,
+      dispose: () => {
+        disposed = true;
+        local.dispose();
+      },
+      apply: async () => {
+        if (disposed) throw new Error("当前清空范围已失效，请重新选择");
+        if (!prepared) {
+          const pairs = local.apply();
+          const exactBatches: typeof pending = [];
+          for (let offset = 0; offset < pairs.length; offset += ingestionBatchHardLimit) {
+            const exact = queue.actions.freeze("apply_metadata", metadata);
+            if (!exact || exact.actionScope !== frozen.actionScope
+              || exact.connectionGeneration !== frozen.connectionGeneration) {
+              throw new Error("队列连接已变化，请重新选择清空范围");
+            }
+            exactBatches.push({
+              frozen: { ...exact, items: pairs.slice(offset, offset + ingestionBatchHardLimit) }
+            });
+          }
+          pending.push(...exactBatches);
+          prepared = true;
+          local.dispose();
+        }
+        if (!pending.length) await queue.flushPendingUpdates();
+        while (pending.length) {
+          const current = pending[0]!;
+          if (current.retryItems) {
+            const retry = queue.actions.freeze("apply_metadata", metadata);
+            if (!retry || retry.actionScope !== frozen.actionScope
+              || retry.connectionGeneration !== frozen.connectionGeneration) {
+              throw new Error("队列连接已变化，请重新选择清空范围");
+            }
+            current.frozen = { ...retry, items: current.retryItems };
+            current.retryItems = undefined;
+          }
+          const result = await queue.actions.run(current.frozen, queue.flushPendingUpdates);
+          if (!result) throw new Error("队列操作结果尚未确认，请重试；已完成的修改会保留");
+          const failures = result.items.filter((item) => item.status === "failed");
+          if (failures.length) {
+            // Retry only failed identities. Successful members and tasks added
+            // after confirmation are never recaptured by a retry.
+            const retryBatches = [];
+            for (let offset = 0; offset < failures.length; offset += ingestionBatchHardLimit) {
+              retryBatches.push({
+                frozen: current.frozen,
+                retryItems: failures.slice(offset, offset + ingestionBatchHardLimit).map((item) => ({
+                  session_id: item.session_id, image_id: item.image_id
+                }))
+              });
+            }
+            pending.splice(0, 1, ...retryBatches);
+            throw new Error(`${failures.length} 个任务清空失败：${failures[0]?.message ?? "请重试"}`);
+          }
+          pending.shift();
+        }
+      }
+    };
+  };
+
+  return { applyDefaultsToQueue, prepareAttributeClear, commitReadyJobs };
 }

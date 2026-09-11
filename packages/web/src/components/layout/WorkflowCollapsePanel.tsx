@@ -7,6 +7,7 @@ import {
 } from "../../hooks/useMediaQuery.js";
 import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import { Icon } from "../icon/Icon.js";
+import { InteractionSurfaceContext } from "../../lib/ui/interaction-surface.js";
 
 export function WorkflowCollapsePanel({
   className,
@@ -31,7 +32,9 @@ export function WorkflowCollapsePanel({
     open: expanded,
     onOpenChange: onExpandedChange,
     enabled: mobileLayout,
-    resetKey: mobileLayout
+    resetKey: mobileLayout,
+    portalSelector: `[data-interaction-surface="${contentId}"]`,
+    closeOnEscape: true
   });
 
   return (
@@ -54,15 +57,17 @@ export function WorkflowCollapsePanel({
       <AnchoredMenuDismissSignalContext.Provider
         value={disclosure.menuDismissSignal}
       >
-        <div
-          ref={disclosure.panelRef}
-          id={contentId}
-          className={`workflow-collapse-content ${contentClassName}`}
-          aria-hidden={disclosure.panelHidden}
-          inert={disclosure.panelHidden}
-        >
-          {children}
-        </div>
+        <InteractionSurfaceContext.Provider value={{ id: contentId, returnFocusRef: disclosure.triggerRef }}>
+          <div
+            ref={disclosure.panelRef}
+            id={contentId}
+            className={`workflow-collapse-content ${contentClassName}`}
+            aria-hidden={disclosure.panelHidden}
+            inert={disclosure.panelHidden}
+          >
+            {children}
+          </div>
+        </InteractionSurfaceContext.Provider>
       </AnchoredMenuDismissSignalContext.Provider>
     </div>
   );

@@ -53,6 +53,12 @@ import type {
   ServerQueueConnectionSnapshot
 } from "./model/ingestion-handoff-runtime.js";
 import { ingestionStatusSummary } from "./model/ingestion-status-summary.js";
+import type { ClearableImageAttribute } from "../../../../lib/image-draft.js";
+import { canClearIngestionAttribute } from "./model/ingestion-attribute-policy.js";
+
+type CapturedAttributeTarget = Pick<IngestionJob, "id" | "attemptKey" | "sessionId" | "imageId" | "serverAcceptedOrder"> & {
+  retired?: boolean;
+};
 
 function revokeObjectUrl(job: IngestionJob) {
   if (job.objectUrl?.startsWith("blob:")) URL.revokeObjectURL(job.objectUrl);
@@ -235,6 +241,9 @@ export function useIngestionQueue(
   const [resolvedReleaseEpoch, setResolvedReleaseEpoch] = useState(0);
   const stateRef = useRef(state);
   const jobsRef = useRef(state.jobs);
+  // Confirmation retains identities only. Drafts and execution remain owned
+  // by this queue and the existing canonical/draft synchronization owners.
+  const attributeTargetsRef = useRef(new Set<Map<string, CapturedAttributeTarget>>());
   const handoffJobsRef = useRef(new Map<string, IngestionJob>());
   const detachedProvisionalHandoffsRef = useRef(
     new Map<string, DetachedProvisionalHandoff>()
@@ -260,6 +269,29 @@ export function useIngestionQueue(
     const current = stateRef.current;
     const next = reduceIngestionQueue(current, action);
     if (next === current) return false;
+    const attributeJobs = attributeTargetsRef.current.size
+      ? new Map(next.jobs.map((job) => [job.id, job])) : null;
+    for (const targets of attributeTargetsRef.current) {
+      for (const target of targets.values()) {
+        if (target.retired) continue;
+        const latest = attributeJobs?.get(target.id);
+        if (latest && latest.attemptKey !== target.attemptKey) {
+          target.retired = true;
+          continue;
+        }
+        const binding = action.type === "bind-server" && action.id === target.id
+          && current.jobs.some((job) => job.id === target.id && job.attemptKey === target.attemptKey)
+          ? { ...action.binding, serverAccepted: true } : latest;
+        if (binding?.serverAccepted !== true || !binding.sessionId || !binding.imageId) continue;
+        if (target.imageId && (target.imageId !== binding.imageId || target.sessionId !== binding.sessionId)) {
+          target.retired = true;
+          continue;
+        }
+        target.sessionId = binding.sessionId;
+        target.imageId = binding.imageId;
+        target.serverAcceptedOrder = binding.serverAcceptedOrder;
+      }
+    }
     stateRef.current = next;
     jobsRef.current = next.jobs;
     setState(next);
@@ -1459,6 +1491,44 @@ export function useIngestionQueue(
     });
   }, [dispatch]);
 
+  const captureLocalAttributeClear = useCallback((
+    field: ClearableImageAttribute,
+    coveredAcceptedOrder: number
+  ) => {
+    const targets = new Map<string, CapturedAttributeTarget>(captureBrowserActionJobs(canClearIngestionAttribute).map((job) => [
+      job.id,
+      {
+        id: job.id,
+        attemptKey: job.attemptKey,
+        ...(ingestionJobHasServerAuthority(job) ? {
+          sessionId: job.sessionId,
+          imageId: job.imageId,
+          serverAcceptedOrder: job.serverAcceptedOrder
+        } : {})
+      } satisfies CapturedAttributeTarget
+    ]));
+    attributeTargetsRef.current.add(targets);
+    return {
+      dispose: () => { attributeTargetsRef.current.delete(targets); },
+      apply: () => {
+        const pairs = new Map<string, IngestionSessionPairDto>();
+        const attempts = new Map<string, string>();
+        for (const target of targets.values()) {
+          if (target.retired) continue;
+          if (target.sessionId && target.imageId) {
+            if (target.serverAcceptedOrder !== undefined && target.serverAcceptedOrder <= coveredAcceptedOrder) continue;
+            const pair = { session_id: target.sessionId, image_id: target.imageId };
+            pairs.set(serverIngestionPairKey(pair), pair);
+          } else {
+            attempts.set(target.id, target.attemptKey);
+          }
+        }
+        dispatch({ type: "clear-attribute", field, attempts });
+        return [...pairs.values()];
+      }
+    };
+  }, [captureBrowserActionJobs, dispatch]);
+
   const setPage = useCallback((next: number | ((current: number) => number)) => {
     const page = typeof next === "function" ? next(stateRef.current.page) : next;
     dispatch({
@@ -1806,7 +1876,8 @@ export function useIngestionQueue(
     projectCompletedCleanupBatch,
     recoverAfterSuccessfulAction,
     removeLibraryDuplicate,
-    applyDefaultsToLocalJobs
+    applyDefaultsToLocalJobs,
+    captureLocalAttributeClear
   };
 }
 

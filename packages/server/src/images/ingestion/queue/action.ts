@@ -14,7 +14,7 @@ import {
   signIngestionQueueActionContinuation
 } from "./action-protocol.ts";
 import type { IngestionSessionPair } from "../sessions/model.ts";
-import type { IngestionSessionRepository } from "../repository.ts";
+import { ingestionSessionIncarnationMismatch, type IngestionSessionRepository } from "../repository.ts";
 import type { IngestionTokenService } from "../sessions/token-service.ts";
 
 function actionScopeChecker(input: Readonly<{
@@ -62,12 +62,33 @@ export async function runIngestionQueueAction(input: Readonly<{
       : {}),
     execute: async () => {
       assertScope();
-      const scanned = await input.repository.scanAction(
-        input.session.username,
-        input.request.queue,
-        resolved.watermark.max_accepted_order,
-        resolved.cursor
-      );
+      const exactSessions = input.request.items
+        ? await input.repository.readSessions(input.session.username, input.request.items)
+        : null;
+      const skipped: IngestionQueueActionResultDto["items"] = [];
+      const scanned = exactSessions && input.request.items
+        ? {
+            items: exactSessions.flatMap((session, index) => {
+              if (!session || session === ingestionSessionIncarnationMismatch
+                || session.queue !== input.request.queue) {
+                skipped.push({
+                  ...input.request.items![index]!,
+                  status: "skipped",
+                  code: "ingestion_action_predicate_changed",
+                  message: "任务身份已变化或不属于当前队列"
+                });
+                return [];
+              }
+              return [session];
+            }),
+            nextCursor: null
+          }
+        : await input.repository.scanAction(
+            input.session.username,
+            input.request.queue,
+            resolved.watermark.max_accepted_order,
+            resolved.cursor
+          );
       assertScope();
       const items = await executeIngestionQueueActionBatch({
         repository: input.repository,
@@ -79,6 +100,7 @@ export async function runIngestionQueueAction(input: Readonly<{
         abortActive: input.abortActive,
         assertScope
       });
+      items.push(...skipped);
       assertScope();
       const continuation = signIngestionQueueActionContinuation({
         tokens: input.tokens,

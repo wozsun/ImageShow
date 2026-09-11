@@ -14363,6 +14363,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
         onRemoveJob() {},
         onConfirmDuplicateJob() {},
         onApplyDefaults() { applyDefaultsCount += 1; },
+        onPrepareAttributeClear: () => null,
         onCleanupAction() { cleanupRunCount += 1; },
         onArmCleanupAction: (_action, confirmationCount) => ({
           count: confirmationCount
@@ -16008,7 +16009,7 @@ test("[Web/内容接入] 导入组合按钮共同预载且来源选择在菜单�
       ".import-source-main"
     );
     const menuButton = container.querySelector<HTMLButtonElement>(
-      ".import-source-menu-trigger"
+      '[aria-label="更多导入方式"]'
     );
     const uploadButton = [...container.querySelectorAll<HTMLButtonElement>(
       ".ingestion-trigger"
@@ -16064,7 +16065,7 @@ test("[Web/内容接入] 导入组合按钮共同预载且来源选择在菜单�
       "来源激活不得延迟到菜单退出动画完成后"
     );
     const closingMenu = document.querySelector<HTMLElement>(
-      ".import-source-menu.is-closing"
+      '[role="menu"][aria-label="更多导入方式"].is-closing'
     );
     assert.ok(closingMenu);
     await dispatch(closingMenu, "animationend");

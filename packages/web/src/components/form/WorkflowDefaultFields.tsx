@@ -1,4 +1,5 @@
-import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
+import { WorkflowAttributeActions } from "./WorkflowAttributeActions.js";
+import type { PrepareImageAttributeClear } from "../../lib/image-draft.js";
 import { AuthorInput } from "./AuthorInput.js";
 import { SelectMenu } from "./SelectMenu.js";
 import { TagInput } from "./TagInput.js";
@@ -30,7 +31,10 @@ export function WorkflowDefaultFields({
   disabled = false,
   applyDisabled = false,
   applyReady = false,
-  onApply
+  onApply,
+  onPrepareClear,
+  clearScope,
+  clearScopeLabel
 }: {
   values: WorkflowDefaultValues;
   onChange: {
@@ -56,6 +60,9 @@ export function WorkflowDefaultFields({
   applyDisabled?: boolean;
   applyReady?: boolean;
   onApply: () => void;
+  onPrepareClear: PrepareImageAttributeClear;
+  clearScope: string;
+  clearScopeLabel: string;
 }) {
   const changedClass = (field: WorkflowDefaultField) => (
     changed[field] ? " is-changed" : ""
@@ -108,14 +115,14 @@ export function WorkflowDefaultFields({
           disabled={disabled}
         />
       </div>
-      <DirectActivationButton
-        type="button"
-        className={`apply-to-all-button${applyReady ? " is-ready" : ""}`}
-        disabled={applyDisabled}
-        onActivate={onApply}
-      >
-        应用到全部
-      </DirectActivationButton>
+      <WorkflowAttributeActions
+        key={clearScope}
+        disabled={disabled || applyDisabled}
+        ready={applyReady}
+        scopeLabel={clearScopeLabel}
+        onApply={onApply}
+        onPrepareClear={onPrepareClear}
+      />
     </>
   );
 }

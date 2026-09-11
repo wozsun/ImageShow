@@ -262,6 +262,7 @@ export const ingestionQueueActionInput = z.strictObject({
     .max(appConfig.ingestionRuntime.tokenMaxBytes)
     .optional(),
   metadata: ingestionActionMetadataInput.optional(),
+  items: z.array(ingestionPairInput).min(1).max(ingestionBatchHardLimit).optional(),
   max_semantic_revision: z.number().int().nonnegative()
     .max(Number.MAX_SAFE_INTEGER)
     .optional()
@@ -272,6 +273,16 @@ export const ingestionQueueActionInput = z.strictObject({
       path: ["metadata"],
       message: "应用到全部需要 metadata"
     });
+  }
+  if (value.items) {
+    addDuplicateIngestionPairIssues(value.items, context);
+    if (value.action !== "apply_metadata" || value.continuation) {
+      context.addIssue({
+        code: "custom",
+        path: ["items"],
+        message: "精确任务集合只用于属性动作，不能同时携带分页游标"
+      });
+    }
   }
   if (value.action !== "apply_metadata" && value.metadata) {
     context.addIssue({

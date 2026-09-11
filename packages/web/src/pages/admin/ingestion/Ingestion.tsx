@@ -478,6 +478,7 @@ export function Ingestion({
           onRemoveJob={requestRemoveJob}
           onConfirmDuplicateJob={confirmDuplicateJob}
           onApplyDefaults={queueWorkflow.applyDefaultsToQueue}
+          onPrepareAttributeClear={queueWorkflow.prepareAttributeClear}
           onCleanupAction={queueWorkflow.runCleanupAction}
           onArmCleanupAction={queueWorkflow.armCleanupAction}
           onConfirmCleanupAction={queueWorkflow.confirmCleanupAction}

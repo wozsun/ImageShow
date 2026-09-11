@@ -25,6 +25,7 @@ import ipaddr from "ipaddr.js";
 import sharp from "sharp";
 import {
   adminApiBasePath,
+  ingestionBatchHardLimit,
   detectDeviceFromUserAgent
 } from "../../../packages/shared/src/browser.ts";
 import {
@@ -636,6 +637,29 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     ...boundedCompletedCleanup,
     action: "clear_queue"
   }).success, false, "semantic revision 上限只允许关闭时清理完成态");
+  const exactAttributeAction = {
+    queue: "import", action: "apply_metadata", action_request_id: secondImageId,
+    action_watermark: "signed-watermark", metadata: { theme: null, tags: [], author: "" },
+    items: [{ session_id: sessionId, image_id: imageId }]
+  };
+  assert.deepEqual(ingestionQueueActionInput.parse(exactAttributeAction), exactAttributeAction);
+  for (const invalid of [
+    { ...exactAttributeAction, items: [] },
+    { ...exactAttributeAction, items: [...exactAttributeAction.items, ...exactAttributeAction.items] },
+    { ...exactAttributeAction, items: [{ session_id: sessionId, image_id: "invalid" }] },
+    { ...exactAttributeAction, continuation: "signed-continuation" },
+    { ...exactAttributeAction, action: "clear_queue", metadata: undefined }
+  ]) assert.equal(ingestionQueueActionInput.safeParse(invalid).success, false);
+  const boundedPairs = Array.from({ length: ingestionBatchHardLimit + 1 }, (_, index) => ({
+    session_id: sessionId,
+    image_id: `01900000-0000-7000-8000-${String(index).padStart(12, "0")}`
+  }));
+  assert.equal(ingestionQueueActionInput.safeParse({
+    ...exactAttributeAction, items: boundedPairs.slice(0, ingestionBatchHardLimit)
+  }).success, true);
+  assert.equal(ingestionQueueActionInput.safeParse({
+    ...exactAttributeAction, items: boundedPairs
+  }).success, false);
   const invalidCommitId = ingestionCommitIntentInput.safeParse({
     items: [{
       ...commitBinding,

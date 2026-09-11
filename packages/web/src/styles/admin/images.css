@@ -108,7 +108,6 @@
   filter: grayscale(.18);
   cursor: wait;
 }
-.apply-to-all-button.is-ready { background: var(--admin-color-action-primary); border-color: var(--admin-color-action-primary); color: var(--admin-color-text-on-emphasis); }
 .admin-image-card-checkbox-hit-area {
   grid-area: check;
   width: 32px;

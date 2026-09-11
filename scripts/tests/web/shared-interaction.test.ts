@@ -1617,7 +1617,7 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
       });
       return React.createElement(
         "div",
-        { ref: frameRef, tabIndex: -1 },
+        { ref: frameRef, "data-dialog-frame": "", tabIndex: -1 },
         React.createElement("button", {
           ref: closeRef,
           id: "strict-dialog-close"

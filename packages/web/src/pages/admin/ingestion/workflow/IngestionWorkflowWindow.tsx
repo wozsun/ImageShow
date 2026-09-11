@@ -15,6 +15,7 @@ import { ImageDetailModal } from "../../../../components/image/ImageDetailModal.
 import { ImagePreviewModal } from "../../../../components/image/ImagePreviewModal.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
 import type { SelectOption } from "../../../../lib/ui/select-options.js";
+import type { PrepareImageAttributeClear } from "../../../../lib/image-draft.js";
 import { useTwoStepConfirmation } from "../../../../hooks/useTwoStepConfirmation.js";
 import { useIngestionDuplicateDetails } from "../queue/useIngestionDuplicateDetails.js";
 import type {
@@ -74,6 +75,7 @@ type IngestionWorkflowWindowProps = {
   onRemoveJob: (job: IngestionJob) => void;
   onConfirmDuplicateJob: (job: IngestionJob) => void;
   onApplyDefaults: () => void;
+  onPrepareAttributeClear: PrepareImageAttributeClear;
   onCleanupAction: (action: IngestionCleanupActionId) => void;
   onArmCleanupAction: (
     action: IngestionCleanupActionId,
@@ -218,6 +220,7 @@ export function IngestionWorkflowWindow({
   onRemoveJob,
   onConfirmDuplicateJob,
   onApplyDefaults,
+  onPrepareAttributeClear,
   onCleanupAction,
   onArmCleanupAction,
   onConfirmCleanupAction,
@@ -611,6 +614,9 @@ export function IngestionWorkflowWindow({
               authors={authors}
               applyDisabled={queue.summary.unfinishedCount === 0}
               onApply={onApplyDefaults}
+              onPrepareClear={onPrepareAttributeClear}
+              clearScope={confirmationScope}
+              clearScopeLabel={mode === "upload" ? "当前上传队列" : "当前导入队列"}
             />
             <IngestionWorkflowQueueBody
               listRef={listRef}

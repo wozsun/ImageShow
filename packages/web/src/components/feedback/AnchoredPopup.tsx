@@ -16,6 +16,7 @@ import {
 } from "../../lib/ui/menu-position.js";
 import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 import { DialogPortalTargetContext } from "./DialogPortalContext.js";
+import { InteractionSurfaceContext } from "../../lib/ui/interaction-surface.js";
 
 type AnchoredPopupProps = Omit<
   ComponentPropsWithoutRef<"div">,
@@ -70,6 +71,7 @@ export function AnchoredPopup({
   ...props
 }: AnchoredPopupProps) {
   const dialogPortalTargetRef = useContext(DialogPortalTargetContext);
+  const interactionSurface = useContext(InteractionSurfaceContext);
   const popupElementRef = useRef<HTMLElement | null>(null);
   const fixedOriginProbeRef = useRef<HTMLSpanElement | null>(null);
   const [fixedOrigin, setFixedOrigin] = useState({ left: 0, top: 0 });
@@ -104,7 +106,7 @@ export function AnchoredPopup({
   );
 
   return createPortal(
-    <div className={anchoredPopupBoundaryClass}>
+    <div className={anchoredPopupBoundaryClass} data-interaction-surface={interactionSurface?.id}>
       {!dialogPortalTarget && (
         <span
           ref={fixedOriginProbeRef}

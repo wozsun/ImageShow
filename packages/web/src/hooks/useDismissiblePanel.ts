@@ -8,6 +8,7 @@ import {
 } from "react";
 import { isDocumentFallbackFocusTarget } from "../lib/ui/focus-target.js";
 import { anchoredPopupBoundarySelector } from "../lib/ui/anchored-popup-boundary.js";
+import { topDialogFrame } from "../lib/ui/dialog-layer.js";
 
 const outsideInteractionEvents = [
   "pointerdown",
@@ -127,6 +128,7 @@ export function useDismissiblePanel({
   enabled = true,
   resetKey,
   auxiliarySurfaceRef,
+  closeOnEscape = false,
   portalSelector = defaultPortalSelector
 }: {
   open: boolean;
@@ -134,6 +136,7 @@ export function useDismissiblePanel({
   enabled?: boolean;
   resetKey?: unknown;
   auxiliarySurfaceRef?: RefObject<HTMLElement | null>;
+  closeOnEscape?: boolean;
   portalSelector?: string;
 }) {
   const openRef = useRef(open);
@@ -253,6 +256,20 @@ export function useDismissiblePanel({
       }
       setOpen(false);
     };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!closeOnEscape || event.key !== "Escape" || event.defaultPrevented
+        || event.isComposing || event.keyCode === 229) return;
+      if (topDialogFrame(document) !== panel.closest("[data-dialog-frame]")) return;
+      // Owned menus get the first Escape, including their exit animation.
+      if ([...document.querySelectorAll(portalSelector)].some((surface) => (
+        surface.matches(anchoredPopupBoundarySelector)
+        || surface.querySelector(anchoredPopupBoundarySelector)
+      ))) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setOpen(false, { restoreFocus: true });
+    };
+    if (closeOnEscape) document.addEventListener("keydown", onKeyDown, true);
     // touchstart covers iOS scroll gestures whose pointerdown is delayed or
     // omitted. Pointer/wheel/click/focus retain mouse, keyboard and assistive
     // input semantics.
@@ -266,6 +283,7 @@ export function useDismissiblePanel({
       );
     }
     return () => {
+      if (closeOnEscape) document.removeEventListener("keydown", onKeyDown, true);
       for (const eventName of outsideInteractionEvents) {
         document.removeEventListener(eventName, closeOnOutsideInteraction, true);
       }
@@ -274,6 +292,7 @@ export function useDismissiblePanel({
     enabled,
     open,
     portalSelector,
+    closeOnEscape,
     setOpen,
     auxiliarySurfaceRef
   ]);

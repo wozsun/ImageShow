@@ -25,7 +25,7 @@ import type {
   ImageEditorItem,
   ImageDraft
 } from "../../../lib/types.js";
-import { mergeCommonImageAttributes } from "../../../lib/image-draft.js";
+import { imageAttributeClearPatch, mergeCommonImageAttributes, type PrepareImageAttributeClear } from "../../../lib/image-draft.js";
 import {
   useImageMetadataOperations
 } from "./useImageMetadataOperations.js";
@@ -244,6 +244,23 @@ export function ImageMetadataEditorDialog({
     if (allTrashed) requestClose();
     return allTrashed;
   };
+  const prepareAttributeClear: PrepareImageAttributeClear = (field) => {
+    if (busy) return null;
+    const ids = new Set(session.activeIds);
+    return {
+      count: ids.size,
+      apply: async () => {
+        const patch = imageAttributeClearPatch(field);
+        setSession((current) => ({
+          ...current,
+          drafts: Object.fromEntries(Object.entries(current.drafts).map(([id, draft]) => [
+            id,
+            ids.has(id) && current.activeIds.includes(id) ? { ...draft, ...patch } : draft
+          ]))
+        }));
+      }
+    };
+  };
   return (
     <DialogFrame
       className="modal edit-modal image-editor-overlay"
@@ -342,8 +359,11 @@ export function ImageMetadataEditorDialog({
                     tags: "批量标签"
                   }}
                   changed={commonChanged}
-                  applyDisabled={busy}
+                  applyDisabled={busy || !activeItems.length}
                   applyReady={commonHasValue}
+                  clearScope={sessionItemIds.join(",")}
+                  clearScopeLabel="本次批量编辑"
+                  onPrepareClear={prepareAttributeClear}
                   onApply={() => setSession((current) => ({
                     ...current,
                     drafts: Object.fromEntries(

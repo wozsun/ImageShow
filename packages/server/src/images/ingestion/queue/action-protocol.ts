@@ -65,6 +65,7 @@ function actionPayloadHash(input: IngestionQueueActionInputDto) {
   return semanticIngestionSessionHash({
     action: input.action,
     metadata: input.metadata ?? null,
+    items: input.items ?? null,
     max_semantic_revision: input.max_semantic_revision ?? null
   });
 }

@@ -1,5 +1,7 @@
-import { useEffectEvent, useLayoutEffect, useRef, type RefObject } from "react";
+import { useContext, useEffectEvent, useLayoutEffect, useRef, type RefObject } from "react";
 import { getPageScrollLockFocusTarget } from "./usePageScrollLock.js";
+import { topDialogFrame } from "../lib/ui/dialog-layer.js";
+import { InteractionSurfaceContext } from "../lib/ui/interaction-surface.js";
 
 const FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -36,15 +38,20 @@ export function useDialogFocus({
   paused?: boolean;
 }) {
   const handleEscape = useEffectEvent(onEscape);
+  const interactionSurface = useContext(InteractionSurfaceContext);
   const returnFocusTargetRef = useRef<HTMLElement | null>(null);
   const hasActivatedRef = useRef(false);
   const wasActiveRef = useRef(false);
 
   const restoreFocus = useEffectEvent(() => {
     if (!wasActiveRef.current) return;
-    const currentTarget = returnFocusRef?.current;
-    const returnFocus = currentTarget?.isConnected ? currentTarget : returnFocusTargetRef.current;
-    if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
+    const returnFocus = [
+      returnFocusRef?.current,
+      returnFocusTargetRef.current,
+      interactionSurface?.returnFocusRef.current
+    ].find((target) => target?.isConnected && !target.closest("[inert]")
+      && !target.matches(":disabled") && target.getClientRects().length > 0);
+    returnFocus?.focus({ preventScroll: true });
   });
 
   // active 表示弹窗是否存在；paused 只暂停父级 trap，不归还焦点。Ingestion 这类常驻组件
@@ -81,6 +88,7 @@ export function useDialogFocus({
     hasActivatedRef.current = true;
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || topDialogFrame(document) !== container) return;
       if (event.key === "Escape") {
         if (event.isComposing || event.keyCode === 229) return;
         event.preventDefault();

@@ -111,9 +111,11 @@ function metadataForAction(
       : patch.brightness;
   }
   if (patch.theme !== undefined) metadata.theme = patch.theme;
-  if (patch.author?.trim()) metadata.author = patch.author;
-  if (patch.tags?.length) {
-    metadata.tags = [...new Set([...metadata.tags, ...patch.tags])];
+  if (patch.author !== undefined) metadata.author = patch.author;
+  if (patch.tags !== undefined) {
+    metadata.tags = patch.tags.length
+      ? [...new Set([...metadata.tags, ...patch.tags])]
+      : [];
   }
   return metadata;
 }

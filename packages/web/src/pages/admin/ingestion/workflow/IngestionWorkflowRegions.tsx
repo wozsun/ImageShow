@@ -1,5 +1,6 @@
 import { useState, type RefObject } from "react";
 import { WorkflowDefaultFields } from "../../../../components/form/WorkflowDefaultFields.js";
+import type { PrepareImageAttributeClear } from "../../../../lib/image-draft.js";
 import { SelectMenu } from "../../../../components/form/SelectMenu.js";
 import { AdminIcon } from "../../../../components/icon/AdminIcon.js";
 import { WorkflowCollapsePanel } from "../../../../components/layout/WorkflowCollapsePanel.js";
@@ -185,7 +186,10 @@ export function IngestionWorkflowDefaults({
   tags,
   authors,
   applyDisabled,
-  onApply
+  onApply,
+  onPrepareClear,
+  clearScope,
+  clearScopeLabel
 }: {
   defaults: IngestionAttributeDefaults;
   expanded: boolean;
@@ -196,6 +200,9 @@ export function IngestionWorkflowDefaults({
   authors: FacetOption[];
   applyDisabled: boolean;
   onApply: () => void;
+  onPrepareClear: PrepareImageAttributeClear;
+  clearScope: string;
+  clearScopeLabel: string;
 }) {
   const summary = [
     uploadCommonDeviceOptions.find(
@@ -252,6 +259,9 @@ export function IngestionWorkflowDefaults({
         }}
         applyDisabled={applyDisabled}
         onApply={onApply}
+        onPrepareClear={onPrepareClear}
+        clearScope={clearScope}
+        clearScopeLabel={clearScopeLabel}
       />
     </WorkflowCollapsePanel>
   );
