@@ -442,8 +442,6 @@ local function assert_draft(value, marker)
     or not valid_string_array(value.tags) then
     error((marker or 'INGESTION_QUEUE_STRUCTURE') .. ' metadata_shape')
   end
-  -- 6.2.0 reads old canonical/intent drafts without dropping the queue.
-  if value.theme == 'none' then value.theme = cjson.null end
 end
 
 local function assert_import_download(value)

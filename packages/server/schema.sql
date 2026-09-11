@@ -37,8 +37,6 @@ CREATE TABLE theme (
   CHECK (length(display_name) <= 64)
 );
 
-INSERT INTO theme(slug, display_name) VALUES('none', '未设置');
-
 CREATE TABLE tag (
   slug TEXT PRIMARY KEY,
   display_name TEXT NOT NULL DEFAULT '',
@@ -92,7 +90,7 @@ CREATE TABLE metadata (
   object_key TEXT NOT NULL UNIQUE,
   device TEXT NOT NULL,
   brightness TEXT NOT NULL,
-  theme TEXT NOT NULL DEFAULT 'none',
+  theme TEXT,
   author TEXT,
   ext TEXT NOT NULL,
   md5 TEXT NOT NULL,

@@ -35,10 +35,6 @@ function selectorValue(params: URLSearchParams, key: string) {
     params.getAll(key)
       .flatMap((value) => value.split(","))
       .map((value) => value.trim().toLowerCase())
-      // 6.2.0 transition for existing gallery/show bookmarks.
-      .map((value) => key === "theme"
-        ? value === "none" ? unsetThemeFilter : value === "!none" ? `!${unsetThemeFilter}` : value
-        : value)
       .filter((value) => selectorPattern.test(value)
         || (key === "theme" && [unsetThemeFilter, `!${unsetThemeFilter}`].includes(value)))
   )];

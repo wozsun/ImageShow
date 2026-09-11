@@ -278,6 +278,11 @@ test("[Web/公开导航] 移动画廊与展映关闭筛选后，触摸残留的�
   }
 });
 test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前参数契约", () => {
+  for (const theme of ["~unset", "!~unset", "none", "!none"]) {
+    const selected = galleryFiltersFromSearchParams(new URLSearchParams({ theme }));
+    assert.equal(selected.theme, theme);
+    assert.equal(imageBrowseApiSearchParams(selected, "latest", { view: "gallery" }).get("theme"), theme);
+  }
   const filters = galleryFiltersFromSearchParams(new URLSearchParams(
     "device=pc&brightness=dark&theme=editorial,stage&tag=concert,red-carpet&author=startrail-photo"
   ));

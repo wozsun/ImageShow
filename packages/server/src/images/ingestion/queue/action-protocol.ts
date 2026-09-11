@@ -1,4 +1,3 @@
-import { themeIntentHashValue } from "../../metadata-theme.ts";
 import {
   ingestionQueueActionTypes,
   type IngestionQueueActionInputDto,
@@ -65,10 +64,7 @@ function isContinuationClaims(
 function actionPayloadHash(input: IngestionQueueActionInputDto) {
   return semanticIngestionSessionHash({
     action: input.action,
-    metadata: input.metadata ? {
-      ...input.metadata,
-      ...(input.metadata.theme !== undefined ? { theme: themeIntentHashValue(input.metadata.theme) } : {})
-    } : null,
+    metadata: input.metadata ?? null,
     max_semantic_revision: input.max_semantic_revision ?? null
   });
 }

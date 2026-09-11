@@ -24,7 +24,7 @@ export function mergeCommonImageAttributes(
 
 export function normalizeTheme(value: string | null) {
   const theme = value?.trim().toLowerCase();
-  return !theme || theme === "none" ? null : theme;
+  return theme || null;
 }
 
 export function normalizeAuthor(value: string) {

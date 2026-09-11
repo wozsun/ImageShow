@@ -40,8 +40,7 @@ export function ensureThemeWithMutationLockHeld(
 }
 
 export async function createTheme(slug: string, displayName: string) {
-  // 6.2.0 keeps this input reserved while old requests still map it to null.
-  assertVocabularySlug("theme", slug, { reserved: ["none"] });
+  assertVocabularySlug("theme", slug);
 
   await withVocabularyMutationLock("theme", slug, async (signal) => {
     signal.throwIfAborted();

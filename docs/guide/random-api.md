@@ -17,8 +17,8 @@
 
 `theme` / `tag` / `author` 可填 slug 或显示名，服务端会先解析成 slug，再按字段排序去重并生成
 稳定筛选签名。`theme=~unset` 只选无主题，`theme=!~unset` 只选已设主题；排除普通主题仍
-包含空主题。`~unset` 只用于查询，不是主题词条；JSON 图片响应的无主题为 `null`。6.2.0
-过渡期间旧 `theme=none` / `theme=!none` 映射到对应空值选择器。基础随机、主题、标签和作者筛选都复用
+包含空主题。`~unset` 只用于查询，不是主题词条；JSON 图片响应的无主题为 `null`。
+基础随机、主题、标签和作者筛选都复用
 `imageshow:cache:images:*` 就绪图片投影：无筛选直接使用根层核心 `index:all`，轴 / 主题 /
 标签 / 作者 ZSET 与组合结果统一位于 `imageshow:cache:images:derived:*`。核心重建只建立
 根层投影；公开请求首次使用某个属性时立即进入 PostgreSQL fallback，并触发独立的

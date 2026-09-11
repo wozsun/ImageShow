@@ -21,8 +21,6 @@ import {
   suggestionMenuSize
 } from "./SuggestionList.js";
 
-const hiddenSuggestionSlugs = new Set(["none"]);
-
 export function SlugComboInput({
   value,
   onChange,
@@ -106,7 +104,7 @@ export function SlugComboInput({
 
   const query = normalizeFacetSearchQuery(focused ? editingValue : value);
 
-  const matches = facetSuggestions(options, query, hiddenSuggestionSlugs);
+  const matches = facetSuggestions(options, query);
   const suggestionOpen = open && matches.length > 0;
 
   const typedSlug = parseFacetSlug(focused ? editingValue : value);

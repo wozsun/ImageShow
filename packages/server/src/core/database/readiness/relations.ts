@@ -62,7 +62,7 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
   }
   const theme = actualColumns.get("metadata.theme");
   if (theme && (theme.not_null || theme.default_value !== null)) {
-    throw new Error("metadata.theme must be nullable without a default; for a 6.1.x database stop ImageShow, back up data and run imageshow migrate-theme-null --apply --offline using 6.2.0");
+    throw new Error("metadata.theme must be nullable without a default");
   }
   if (incompatible.length) {
     throw new Error(

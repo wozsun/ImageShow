@@ -14,9 +14,9 @@ export async function initializeDatabaseSchema() {
   }
 }
 
-type DatabaseAsset = "schema.sql" | "schema-additions.sql" | "schema-theme-null.sql";
+type DatabaseAsset = "schema.sql" | "schema-additions.sql";
 
-export function databaseAssetPath(asset: DatabaseAsset) {
+function databaseAssetPath(asset: DatabaseAsset) {
   const candidates = [
     join(import.meta.dirname, "..", "..", asset),
     join(import.meta.dirname, "..", "..", "..", asset)
@@ -58,11 +58,7 @@ async function initializeDatabaseSchemaOnClient(client: PoolClient) {
   ]);
   await client.query("BEGIN");
   try {
-    if (schema) {
-      await client.query(schema);
-      // A new database has no user data; existing databases use the offline CLI.
-      await client.query(await readFile(databaseAssetPath("schema-theme-null.sql"), "utf8"));
-    }
+    if (schema) await client.query(schema);
     await client.query(additions);
     await assertCoreDatabaseReady(client);
     await client.query("COMMIT");

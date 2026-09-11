@@ -2,8 +2,4 @@
 
 set -e
 
-if [ "$1" = "migrate-theme-null" ]; then
-  shift
-  exec node /app/packages/server/dist/theme-null-migration-cli.js "$@"
-fi
 exec node /app/packages/server/dist/admin-password-cli.js "$@"

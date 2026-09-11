@@ -391,11 +391,17 @@ const readReadyRevision = async () => BigInt(String((
   )).rows[0];
   const originalThemeImage = await readThemeImage();
   assert.equal(originalThemeImage.theme, null);
-  assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, theme: "clearable" }])).updated, 1);
-  assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, title: "retain-theme" }])).updated, 1);
-  assert.equal((await readThemeImage()).theme, "clearable");
-  assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, theme: null }])).updated, 1);
-  assert.deepEqual(await readThemeImage(), originalThemeImage);
+  await themeMutations.createTheme("none", "普通主题");
+  const themeQuery = await import("../../../../packages/server/src/themes/query.ts");
+  assert.deepEqual(await themeQuery.resolveThemeSlugs(["none", "~unset"]), ["none", "~unset"]);
+  for (const theme of ["clearable", "none"]) {
+    assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, theme }])).updated, 1);
+    assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, title: "retain-theme" }])).updated, 1);
+    assert.equal((await readThemeImage()).theme, theme);
+    assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, theme: null }])).updated, 1);
+    assert.deepEqual(await readThemeImage(), originalThemeImage);
+  }
+  await themeMutations.deleteTheme("none");
   await imageUpdate.updateImages([
     { id: imageUpdateIds.first, theme: "clearable" },
     { id: imageUpdateIds.third, theme: "clearable" },

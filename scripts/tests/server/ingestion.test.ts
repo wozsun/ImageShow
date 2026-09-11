@@ -209,6 +209,12 @@ test("[Server/内容接入] 导入清单、下载进度与微博入口使用同�
   assert.equal(manifest.items[0]?.image_time, "2020-04-30T16:00:00.000Z");
   assert.deepEqual(manifest.items[0]?.tags, ["concert"]);
   assert.deepEqual(manifest.errors.map(({ line }) => line), [2, 3]);
+  const themes = [null, "none", "night"];
+  const themedManifest = parseJsonlManifest(themes.map((theme, index) => (
+    JSON.stringify({ original: `https://img.example.com/${index}.jpg`, theme })
+  )).join("\n"), { maxItems: 3 });
+  assert.deepEqual(themedManifest.errors, []);
+  assert.deepEqual(themedManifest.items.map((item) => item.theme), themes);
   const weiboPost = {
     source_url: "https://weibo.com/1234567890/Example",
     weibo_id: "123",
@@ -459,6 +465,7 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
     { ...hashInput, metadata: { ...draft, device: "pc" as const } },
     { ...hashInput, metadata: { ...draft, brightness: "dark" as const } },
     { ...hashInput, metadata: { ...draft, theme: "night" } },
+    { ...hashInput, metadata: { ...draft, theme: "none" } },
     { ...hashInput, metadata: { ...draft, author: "author" } },
     { ...hashInput, metadata: { ...draft, title: "changed" } },
     { ...hashInput, metadata: { ...draft, description: "changed" } },
@@ -490,7 +497,8 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
     progress_seq: 0,
     last_semantic_revision: 0,
     discard_at: 0,
-    status: "received"
+    status: "received",
+    metadata: draft
   };
   assert.equal(
     ingestionSessionSemanticHash(semantic as never),
@@ -505,6 +513,18 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
     } as never)
   );
 
+  assert.notEqual(
+    ingestionSessionSemanticHash(semantic as never),
+    ingestionSessionSemanticHash({
+      ...semantic, metadata: { ...draft, theme: "none" }
+    } as never)
+  );
+  assert.notEqual(
+    ingestionSessionSemanticHash({ ...semantic, commit: { metadata: draft } } as never),
+    ingestionSessionSemanticHash({
+      ...semantic, commit: { metadata: { ...draft, theme: "none" } }
+    } as never)
+  );
   let now = 1_000;
   const tokens = new IngestionTokenService({
     rootKey: new Uint8Array(32).fill(7),

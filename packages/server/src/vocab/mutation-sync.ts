@@ -43,12 +43,10 @@ export function withVocabularyMutationLock<T>(
 
 export function assertVocabularySlug(
   entity: VocabularyEntity,
-  slug: string,
-  options: { reserved?: readonly string[] } = {}
+  slug: string
 ) {
   if (
-    options.reserved?.includes(slug)
-    || slug.length > slugMaxLength
+    slug.length > slugMaxLength
     || !slugPattern.test(slug)
   ) {
     const label = vocabularyLabels[entity];

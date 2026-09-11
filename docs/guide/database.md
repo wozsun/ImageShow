@@ -3,8 +3,8 @@
 PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 `packages/server/schema.sql` 完整定义上一已封版版本的干净安装基线；`author` 可空身份两列、
 三项长期 CHECK、非空身份复合唯一索引、`metadata.purge_job_id` 与“非空时必须为 deleted”的
-长期 CHECK 都属于该基线；`schema-additions.sql` 仍为注释占位。6.2.0 的主题约束与数据转换
-由独立 `schema-theme-null.sql` 和离线迁移 CLI 承载，不放入默认自动 additions。
+长期 CHECK，以及可空、无默认值的主题外键都属于该基线；主题表只保存真实词条，
+`schema-additions.sql` 仍为注释占位。
 随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一 Redis 图片投影的权威 revision
 单行表均属于基线。PostgreSQL
 是最终图片、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
@@ -19,8 +19,7 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 
 数据库生命周期由上一已封版版本的干净基线、当前 additions 和轻量 readiness 组成。单应用进程
 启动时，空数据库在一个事务中先执行 `schema.sql`，再执行当前 `schema-additions.sql`；符合该
-基线的非空数据库须先执行本版离线主题迁移，随后启动执行 additions 并进入 readiness。空库
-在同一事务内于基线之后执行主题迁移 SQL，直接获得当前可空结构。当前 additions 不含可执行语句；
+基线的非空数据库执行 additions 并进入 readiness。当前 additions 不含可执行语句；
 additions、readiness 或干净初始化任一步失败都会回滚本次结构事务。全部连接固定使用
 `search_path=public`；单实例部署按顺序完成 schema 和管理员播种。readiness 在启动事务的
 同一连接上顺序执行 SQL，包括作者与图片 CHECK 约束读取，不并发调用该 client 的 query。
@@ -45,7 +44,8 @@ readiness 的结论只由这套运行时最小契约决定；应用未消费的�
 对象不进入启动判断，也不会触发自动结构对齐。
 
 readiness 不复制 `schema.sql` 的可空性、默认值、无消费者 CHECK、触发器或普通查询索引；作者
-身份 CHECK 与复合唯一索引，以及 purge 任务归属 CHECK 因当前读写直接依赖而属于明确例外。
+身份 CHECK 与复合唯一索引、purge 任务归属 CHECK，以及主题的可空性与无默认值要求，
+因当前读写直接依赖而属于明确例外。
 应用未消费的表、列、索引和约束位于启动契约之外。破坏性清理由维护者在停机、备份和恢复验证后
 单独执行，不属于应用启动职责。
 
@@ -161,34 +161,21 @@ OFFSET 跳过的行水合标签。total、metadata 与 tags 属于同一事务�
 当前样本下既有索引已满足当前范围，因此不新增 schema、稀疏锚点或持久化排名表；
 deleted 深页的外部排序若在真实规模中成为可测瓶颈，再依据独立数据决定索引或其他方案。
 
-## 6.2.0 无主题受控迁移
+## 空主题契约
 
-既有 6.1.x 数据库停止所有 ImageShow 写入者后，由 `imageshow migrate-theme-null --apply --offline`
-在单一事务及表锁中删除 `metadata.theme` 的非空约束和默认值，只把 `theme='none'` 的正式图片与
-回收站图片改为 SQL `NULL`，解除关联后删除保留词条。其他主题、图片字段、时间和全部存储对象
-保持原值。本次事务同时从管理员偏好中移除旧 `image_card_density`，保留外观等其他偏好及账号字段。
-同一事务推进 `ready_image_revision`，启动时旧 Redis 图片投影无法通过 revision 读门；
-词表缓存使用新进程 epoch 失效。此操作不清空 Redis、不访问图片文件。
+`metadata.theme` 是可空、无默认值的主题外键；SQL `NULL` 表示无主题，非空值必须引用真实
+主题词条。readiness 核对该列类型、可空性、无默认值及外键。删除主题时在图片事务内将关联
+置为 NULL，并推进图片投影 revision；其他图片属性及对象键保持不变。
 
-该入口只接受上一封版的 `NOT NULL DEFAULT 'none'` 结构或当前可空结构；主题与偏好清理均完成后重复执行
-不再改数据或推进 revision。未知或部分手工结构先失败，由维护者排查；事务失败整体回滚，
-COMMIT 结果未知时先重新盘点确认。readiness 长期要求 theme 可空、无默认值，保留外键。
-停机、备份和恢复顺序见 [部署说明](../DEPLOY.md#620-无主题升级)。
-
-HTTP、JSONL 和未完成 Redis draft 在 6.2.0 过渡期间将旧 `none` 转成 `null`；Upload intent、
-canonical、冻结 commit 继续使用原有身份、版本、TTL 和恢复链。请求 / 提交 / 语义哈希仅在计算
-摘要时保留旧主题表示，避免同一已冻结请求在重试时发生身份冲突；它不写回正式图片主题。
-已存在的 Redis 原始 snapshot 在读取时转换，在后续原子变更时按当前空值结构写回，未完成内容
-仍只以队列 canonical 为权威。当前 Lua draft 校验允许 JSON null。升级时旧页面应刷新；旧请求
-可继续安全归一化，过期令牌沿现有 snapshot / 重连路径恢复。
+HTTP、JSONL、Redis draft 与图片 DTO 使用 `theme: null` 表示无主题；非空输入沿用通用 slug
+校验。接入请求、队列动作、提交意图与 canonical 语义哈希直接使用当前 metadata 值，
+null 与任意字符串 slug 有不同身份。未完成内容仍只以队列 canonical 为权威，沿现行版本、
+TTL 和恢复链处理；Lua 与 TypeScript draft 校验均接受 JSON null。
 
 筛选统一用查询专用 `~unset` 标记（如 `theme=~unset` 或 `theme=!~unset`），不占用任何合法主题
-slug；`none` 旧 URL 本版映射到此筛选。虚拟“未设置”项只用于图库筛选与统计，不是数据库词条，
-不可编辑、删除或参与词条重排；主题管理只列出真实主题。无主题图片 DTO 返回 `theme: null`。
-排除普通主题时包含无主题图片，排除 `~unset` 才排除空值。全量、交叉筛选与随机索引采用同一语义。
-
-6.2.1 只有在全部受控数据库迁移核对完成、所有使用 6.2.0 兼容哈希的接入意图、完成回执和冻结请求已完成并到期后，才清理本节的
-迁移专用路径并将最终结构合入干净安装基线；不跳过 6.2.0。6.2.2 再提供分体应用按钮与批量清空。
+slug。虚拟“未设置”项只用于图库筛选与统计，不是数据库词条，不可编辑、删除或参与词条重排；
+主题管理只列出真实主题。排除普通主题时包含无主题图片，排除 `~unset` 才排除空值。
+全量、交叉筛选与随机索引采用同一语义。既有部署的升级顺序见[部署说明](../DEPLOY.md#版本升级)。
 
 ## ready_image_revision —— Redis 投影权威修订号
 

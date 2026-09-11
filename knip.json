@@ -26,7 +26,7 @@
       ]
     },
     "packages/server": {
-      "entry": ["src/healthcheck-cli.ts", "src/theme-null-migration-cli.ts"]
+      "entry": ["src/healthcheck-cli.ts"]
     },
     "packages/web": {
       "ignoreDependencies": ["remixicon"]

@@ -1,4 +1,3 @@
-import { upgradeThemeValue } from "../../metadata-theme.ts";
 import {
   ingestionQueueTypes,
   ingestionSessionStatuses,
@@ -130,8 +129,7 @@ function parseDraft(value: unknown, context: string) {
     ["dark", "light", "auto"],
     `${context}.brightness`
   );
-  draft.theme = upgradeThemeValue(draft.theme === null
-    ? null : stringValue(draft.theme, `${context}.theme`));
+  if (draft.theme !== null) stringValue(draft.theme, `${context}.theme`);
   for (const field of [
     "author",
     "title",

@@ -68,7 +68,7 @@ function draftFromImage(item: ImageEditorItem): ImageDraft {
     device: item.device,
     brightness: item.brightness,
     theme: item.theme,
-    author: item.author === "none" ? "" : item.author,
+    author: item.author,
     tags: [...item.tags]
   };
 }
@@ -106,8 +106,7 @@ export function fieldsChangedFor(
     device: draft.device !== item.device,
     brightness: draft.brightness !== item.brightness,
     theme: normalizeTheme(draft.theme) !== normalizeTheme(item.theme),
-    author: normalizeAuthor(draft.author)
-      !== normalizeAuthor(item.author === "none" ? "" : item.author),
+    author: normalizeAuthor(draft.author) !== normalizeAuthor(item.author),
     tags: tagsChanged(draft.tags, item.tags ?? [])
   };
 }

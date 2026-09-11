@@ -541,6 +541,29 @@ for (const itemCount of [1, 3]) {
     }
   });
 }
+test("[Web/后台表单] 普通主题和作者 slug 保留原值并可显式清空", () => {
+  const id = "slug-image";
+  const item = editableImage(id, { theme: "none", author: "none" });
+  let state = createImageMetadataSession([item]);
+  const draft = state.drafts[id]!;
+  assert.equal(draft.theme, "none");
+  assert.equal(draft.author, "none");
+  assert.deepEqual(changedMetadataUpdate(item, draft, fieldsChangedFor(item, draft)), { id });
+
+  const cleared = { ...draft, theme: null, author: "" };
+  const update = changedMetadataUpdate(item, cleared, fieldsChangedFor(item, cleared));
+  assert.deepEqual(update, { id, theme: null, author: "" });
+  const attempt: ImageMetadataSaveAttempt = {
+    activeIds: [id], items: [update], response: null
+  };
+  const authority = [editableImage(id, { theme: null, author: "" })];
+  state = reconcileImageMetadataSession({ ...state, drafts: { [id]: cleared } }, attempt, authority);
+  const saved = state.drafts[id]!;
+  assert.equal(saved.theme, null);
+  assert.equal(saved.author, "");
+  assert.deepEqual(changedMetadataUpdate(authority[0]!, saved, fieldsChangedFor(authority[0]!, saved)), { id });
+});
+
 test("[Web/后台表单] 可空来源可添加和清空，权威回读收敛草稿及丢失回执", () => {
   const id = "source-image";
   let state = createImageMetadataSession([editableImage(id, { source: null })]);
