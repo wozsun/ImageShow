@@ -1,11 +1,8 @@
 import { appConfig } from "@imageshow/shared";
 import { pool } from "../core/database/pools.ts";
 import { errorMessage } from "../core/api-error.ts";
-import { inspectIngestionRawOrphans } from "../images/ingestion/raw/orphan-scanner.ts";
+import { inspectIngestionTempOrphans } from "../images/ingestion/raw/orphan-scanner.ts";
 import { ingestionOrphanCutoffs } from "../images/ingestion/cleanup/retention.ts";
-import {
-  parseIngestionStagingCleanupKey
-} from "../images/ingestion/staging-keys.ts";
 import { resolveStorageAccess } from "../storage/backends/registry.ts";
 import {
   assertCanonicalImageObjectKey,
@@ -14,7 +11,6 @@ import {
 import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/objects/key-listing.ts";
 import {
   activeIngestionStorageReferences,
-  classifyStagingKeys,
   collectStorageBackendGroupSnapshot,
   ingestionFinalStorageReferences,
   mergeActiveIngestionSessions,
@@ -38,9 +34,6 @@ export async function checkStorage(signal?: AbortSignal) {
   const orphanObjects: Array<Record<string, unknown>> = [];
   const orphanThumbs: Array<Record<string, unknown>> = [];
   const unavailableBackends: Array<Record<string, unknown>> = [];
-  const activeStagingFiles: Array<Record<string, unknown>> = [];
-  const retainedStagingFiles: Array<Record<string, unknown>> = [];
-  const orphanStagingFiles: Array<Record<string, unknown>> = [];
   const activeBeforeEnumeration = await activeIngestionStorageReferences({ signal });
   const { sessionsByBackend: sessionsBeforeEnumeration } = activeBeforeEnumeration;
   const checkedAt = Date.now();
@@ -48,7 +41,7 @@ export async function checkStorage(signal?: AbortSignal) {
   const incompleteListings: Array<{
     backend: string;
     namespace: string;
-    prefix: "full" | "thumbs" | "_uploads";
+    prefix: "full" | "thumbs";
     scanned: number;
     limit: number;
   }> = [];
@@ -73,7 +66,7 @@ export async function checkStorage(signal?: AbortSignal) {
   }));
 
   // 检查本身不持有维护锁。枚举后再读取一次会话，并与枚举前快照取并集，
-  // 避免刚创建的内容接入会话已经写入暂存对象、却被首轮快照漏掉而瞬时误报。
+  // 保护枚举期间新增的正式候选和本地临时文件引用，避免快照时差造成误报。
   const [
     rowsAfterEnumerationResult,
     activeSessionsAfterEnumeration
@@ -87,9 +80,9 @@ export async function checkStorage(signal?: AbortSignal) {
     rowsAfterEnumeration
   );
   const { sessionsByBackend: sessionsAfterEnumeration } = activeSessionsAfterEnumeration;
-  const rawReferencePaths = new Set([
-    ...activeBeforeEnumeration.rawPaths,
-    ...activeSessionsAfterEnumeration.rawPaths
+  const tempReferencePaths = new Set([
+    ...activeBeforeEnumeration.tempPaths,
+    ...activeSessionsAfterEnumeration.tempPaths
   ]);
 
   for (const captured of storageSnapshots) {
@@ -98,13 +91,11 @@ export async function checkStorage(signal?: AbortSignal) {
     const namespace = storageBackendGroupName(group);
     const {
       full,
-      thumbs,
-      _uploads: stagingListing
+      thumbs
     } = captured.snapshot;
     const listings = [
       ["full", full],
-      ["thumbs", thumbs],
-      ["_uploads", stagingListing]
+      ["thumbs", thumbs]
     ] as const;
     for (const [prefix, listing] of listings) {
       if (!listing.complete) {
@@ -182,80 +173,6 @@ export async function checkStorage(signal?: AbortSignal) {
         sessionsAfterEnumeration.get(slug) ?? new Map()
       ])
     );
-    const staging = classifyStagingKeys(stagingListing.keys, activeSessions);
-    const activePreparedSessions = new Map(
-      [...activeSessions.values()].flatMap((session) => [
-        session.prepared_image_key,
-        session.prepared_thumbnail_key
-      ].filter((key): key is string => Boolean(key)).map((key) => [
-        key,
-        session
-      ] as const))
-    );
-    const selectedBackend = group.backends.find((candidate) => (
-      candidate.slug === backend
-    ));
-    for (const key of staging.orphan) {
-      const parsed = parseIngestionStagingCleanupKey(key);
-      const identity = parsed
-        && (!parsed.local_atomic_candidate
-          || selectedBackend?.type === "local")
-        ? parsed
-        : null;
-      const activeCandidateSession = identity?.local_atomic_candidate
-        ? activePreparedSessions.get(identity.base_key)
-        : undefined;
-      if (activeCandidateSession) {
-        activeStagingFiles.push({
-          key,
-          backend,
-          namespace,
-          storage_slug: activeCandidateSession.storage_slug,
-          session_id: activeCandidateSession.id,
-          status: activeCandidateSession.status,
-          discard_at: activeCandidateSession.discard_at
-        });
-        continue;
-      }
-      if (!identity) {
-        retainedStagingFiles.push({
-          key,
-          backend,
-          namespace,
-          reason: "暂存键不符合当前 attempt generation 结构，无法证明年龄，保守保留"
-        });
-      } else if (identity.created_at >= cutoffs.stagingCutoff) {
-        retainedStagingFiles.push({
-          key,
-          backend,
-          namespace,
-          session_id: identity.session_id,
-          created_at: identity.created_at,
-          eligible_after: identity.created_at
-            + (checkedAt - cutoffs.stagingCutoff),
-          reason: "尚未超过 24 小时、一个清理周期与安全余量的统一门槛"
-        });
-      } else {
-        orphanStagingFiles.push({
-          key,
-          backend,
-          namespace,
-          session_id: identity.session_id,
-          created_at: identity.created_at
-        });
-      }
-    }
-    for (const { key, session } of staging.active) {
-      activeStagingFiles.push({
-        key,
-        backend,
-        namespace,
-        storage_slug: session.storage_slug,
-        session_id: session.id,
-        status: session.status,
-        discard_at: session.discard_at
-      });
-    }
     for (const session of activeSessions.values()) {
       for (const reference of ingestionFinalStorageReferences(session)) {
         if (reference.prefix === "full") referencedFullKeys.add(reference.key);
@@ -304,9 +221,9 @@ export async function checkStorage(signal?: AbortSignal) {
       }
     }
   }
-  const staleRaw = await inspectIngestionRawOrphans({
-    keep: rawReferencePaths,
-    rawCutoff: cutoffs.rawCutoff,
+  const staleTemp = await inspectIngestionTempOrphans({
+    keep: tempReferencePaths,
+    fileCutoff: cutoffs.fileCutoff,
     partCutoff: cutoffs.partCutoff,
     signal
   });
@@ -316,13 +233,12 @@ export async function checkStorage(signal?: AbortSignal) {
     pending_thumbnail_repairs: pendingThumbnailRepairs,
     orphan_objects: orphanObjects,
     orphan_thumbs: orphanThumbs,
-    active_staging_files: activeStagingFiles,
-    retained_staging_files: retainedStagingFiles,
-    orphan_staging_files: orphanStagingFiles,
-    stale_ingestion_raw_files: staleRaw.raw,
-    stale_ingestion_part_files: staleRaw.part,
-    incomplete_ingestion_raw_scan: staleRaw.complete ? [] : [{
-      limit: appConfig.ingestionRuntime.orphanCleanupMaxRawEntriesPerCycle,
+    stale_ingestion_raw_files: staleTemp.raw,
+    stale_ingestion_part_files: staleTemp.part,
+    stale_ingestion_prepared_files: staleTemp.prepared,
+    ingestion_temp_space: { total_bytes: staleTemp.total_bytes, retained_bytes: staleTemp.retained_bytes, complete: staleTemp.complete },
+    incomplete_ingestion_temp_scan: staleTemp.complete ? [] : [{
+      limit: appConfig.ingestionRuntime.orphanCleanupMaxTempEntriesPerCycle,
       reason: "内容接入临时目录扫描达到固定上限；当前 stale 统计不是完整结果"
     }],
     incomplete_listings: incompleteListings,

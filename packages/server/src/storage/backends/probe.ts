@@ -12,8 +12,7 @@ import {
 import type { StorageDriver } from "../drivers/driver.ts";
 import { assertCanonicalImageObjectKey } from "../objects/image-paths.ts";
 import {
-  verifyStorageEndpointRebind,
-  type StagingNamespaceSnapshot
+  verifyStorageEndpointRebind
 } from "./endpoint-rebind.ts";
 
 export type ExistingStorageProbe = {
@@ -67,7 +66,6 @@ export async function validateStorageBackendCandidate(
   existingObject?: ExistingStorageProbe,
   endpointRebind?: {
     currentConfig: StorageConfig;
-    currentStaging: StagingNamespaceSnapshot;
   },
   signal?: AbortSignal
 ) {
@@ -84,7 +82,6 @@ export async function validateStorageBackendCandidate(
           endpointRebind.currentConfig
         ).driver,
         candidate: driver,
-        currentStaging: endpointRebind.currentStaging,
         signal
       });
       return;

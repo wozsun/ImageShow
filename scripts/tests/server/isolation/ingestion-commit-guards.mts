@@ -1,6 +1,7 @@
 import { activeSession, preparedSession, committingSession, completedSession } from "./ingestion-scenario-fixture.mts";
 import { repositoryWithOverrides } from "./ingestion-scenario-fixture.mts";
 import assert from "node:assert/strict";
+import { access } from "node:fs/promises";
 import { removeDriverObject } from "./storage-fixture.mts";
 import { interceptSqlQueries } from "./database-faults.mts";
 import { createHash, randomUUID } from "node:crypto";
@@ -19,6 +20,7 @@ const registry = await import("../../../../packages/server/src/storage/backends/
 const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
 const runtimeConfigStore = await import("../../../../packages/server/src/config/runtime-config-store.ts");
 const objectAccess = await import("../../../../packages/server/src/storage/objects/access.ts");
+const preparedFiles = await import("../../../../packages/server/src/images/ingestion/raw/prepared.ts");
 const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
 const ingestionSessionTransitions = await import(
   "../../../../packages/server/src/images/ingestion/sessions/transitions.ts"
@@ -37,7 +39,7 @@ const ingestionSessionProjection = await import(
   "../../../../packages/server/src/images/ingestion/sessions/projection.ts"
 );
 const ingestionSessionKeys = await import("../../../../packages/server/src/images/ingestion/sessions/keys.ts");
-const ingestionStagingKeys = await import("../../../../packages/server/src/images/ingestion/staging-keys.ts");
+const ingestionPaths = await import("../../../../packages/server/src/images/ingestion/raw/paths.ts");
 const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
 const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
 const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate: importCanonicalWithoutHash } = await createIngestionScenarioFixture(runtime);
@@ -83,39 +85,27 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
   ), commitAcceptedAt)).session);
   const commitPreparationToken = coreUuid.randomUuidV7();
   const commitGeneration = coreUuid.randomUuidV7();
-  const commitImageKey = ingestionStagingKeys.ingestionStagingImageKey({
+  const commitImageKey = ingestionPaths.ingestionPreparedFile({
     session_id: commitSessionId,
     image_id: commitImageId,
     generation: commitGeneration,
     execution_token: commitPreparationToken
-  });
-  const commitThumbnailKey = ingestionStagingKeys.ingestionStagingThumbnailKey({
+  }, "image");
+  const commitThumbnailKey = ingestionPaths.ingestionPreparedFile({
     session_id: commitSessionId,
     image_id: commitImageId,
     generation: commitGeneration,
     execution_token: commitPreparationToken
-  });
+  }, "thumb");
   const commitImageBody = Buffer.from("current-real-commit-image-" + commitImageId);
   const commitThumbnailBody = Buffer.from(
     "current-real-commit-thumbnail-" + commitImageId
   );
-  await objectAccess.writeStorageBuffer(
-    "_uploads",
-    commitImageKey,
-    commitImageBody,
-    "image/webp",
-    "local"
-  );
-  await objectAccess.writeStorageBuffer(
-    "_uploads",
-    commitThumbnailKey,
-    commitThumbnailBody,
-    "image/webp",
-    "local"
-  );
+  await preparedFiles.writeIngestionPreparedFile(commitImageKey, commitImageBody, new AbortController().signal);
+  await preparedFiles.writeIngestionPreparedFile(commitThumbnailKey, commitThumbnailBody, new AbortController().signal);
   const realPrepared = {
-    prepared_image_key: commitImageKey,
-    prepared_thumbnail_key: commitThumbnailKey,
+    prepared_image_path: commitImageKey,
+    prepared_thumbnail_path: commitThumbnailKey,
     prepared_image_sha256: createHash("sha256")
       .update(commitImageBody)
       .digest("hex"),
@@ -380,14 +370,46 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
     committedObjectKey
   );
   const commitStorageAccess = await registry.resolveStorageAccess("local");
-  const originalCommitCopy = commitStorageAccess.driver.copy.bind(
+  const originalCommitWrite = commitStorageAccess.driver.writeStream.bind(
     commitStorageAccess.driver
   );
-  let commitCopyCalls = 0;
-  commitStorageAccess.driver.copy = async (...args) => {
-    commitCopyCalls += 1;
-    return originalCommitCopy(...args);
+  let commitWriteCalls = 0;
+  commitStorageAccess.driver.writeStream = async (...args) => {
+    commitWriteCalls += 1;
+    return originalCommitWrite(...args);
   };
+  await database.pool.query(
+    "UPDATE storage_backend SET enabled=false, is_default=false WHERE slug='local'"
+  );
+  registry.invalidateStorageBackendRegistry();
+  try {
+    await assert.rejects(
+      ingestionCommitWorker.commitIngestionSessionSnapshot(
+        ingestionRepository,
+        realCommitCoordinator,
+        frozenCommitSession,
+        new AbortController().signal
+      ),
+      (error: unknown) => error instanceof Error
+        && "code" in error && error.code === "storage_backend_disabled"
+    );
+    await access(ingestionPaths.ingestionPreparedPath(commitImageKey));
+    await access(ingestionPaths.ingestionPreparedPath(commitThumbnailKey));
+    assert.equal(commitWriteCalls, 0);
+    assert.equal(Number((await database.pool.query(
+      "SELECT count(*)::int AS count FROM metadata WHERE id=$1",
+      [commitImageId]
+    )).rows[0]?.count), 0);
+    assert.equal(Number((await database.pool.query(
+      "SELECT count(*)::int AS count FROM background_job WHERE target_id=$1",
+      [commitImageId]
+    )).rows[0]?.count), 0);
+  } finally {
+    await database.pool.query(
+      "UPDATE storage_backend SET enabled=true, is_default=true WHERE slug='local'"
+    );
+    registry.invalidateStorageBackendRegistry();
+  }
   const preExistingConflictBody = Buffer.from(
     "unowned-formal-conflict-" + commitImageId
   );
@@ -443,7 +465,7 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
     true,
     "任一正式目标冲突时必须取消并排空另一条摘要读取后再释放锁"
   );
-  assert.equal(commitCopyCalls, 0);
+  assert.equal(commitWriteCalls, 0);
   assert.equal(Number((await database.pool.query(
     "SELECT count(*)::int AS count FROM background_job "
       + "WHERE type='move.cleanup' AND target_id=$1 "
@@ -488,7 +510,7 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
   } finally {
     restoreGuardQuery();
   }
-  assert.equal(commitCopyCalls, 0, "候选 guard 未落库前不得开始正式复制");
+  assert.equal(commitWriteCalls, 0, "候选 guard 未落库前不得开始正式复制");
   const conflictingCommitActor = "current-conflicting-actor-" + randomUUID();
   await database.pool.query(
     "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
@@ -517,7 +539,7 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
       ),
       (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_image_owner_conflict"
     );
-    assert.equal(commitCopyCalls, 2, "guard 成功后 full/thumb 才能开始复制");
+    assert.equal(commitWriteCalls, 2, "guard 成功后 full/thumb 才能开始复制");
     assert.equal(
       (await database.pool.query(
         "SELECT created_by FROM metadata WHERE id=$1",
@@ -553,7 +575,7 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
     await commitStorageAccess.driver.writeBuffer(
       committedObjectPrefix,
       commitFullCandidateKey,
-      Buffer.from("simulated-local-copy-crash"),
+      Buffer.from("simulated-local-write-crash"),
       "image/webp"
     );
     commitGuardJob = (await database.pool.query(
@@ -590,7 +612,7 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
         "local"
       ),
       false,
-      "guard 必须清理 local 原子复制崩溃候选"
+      "guard 必须清理 local 原子写入崩溃候选"
     );
     await assert.rejects(
       ingestionCommitWorker.commitIngestionSessionSnapshot(
@@ -602,7 +624,7 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
       (error: unknown) => error instanceof Error && "code" in error && error.code === "storage_object_cleanup_pending"
     );
     assert.equal(
-      commitCopyCalls,
+      commitWriteCalls,
       2,
       "旧 guard 未收口时不得旁路其删除租约"
     );
@@ -616,7 +638,7 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
       frozenCommitSession,
       new AbortController().signal
     );
-    assert.equal(commitCopyCalls, 4, "同一 guard 只能放行持锁的本次重试");
+    assert.equal(commitWriteCalls, 4, "同一 guard 只能放行持锁的本次重试");
     let retriedCommitGuardJob = (await database.pool.query(
       "SELECT * FROM background_job WHERE type='move.cleanup' "
         + "AND target_id=$1 AND payload->>'reason'=$2 "
@@ -627,7 +649,7 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
     assert.notEqual(
       retriedCommitGuardJob.payload.guard_token,
       commitGuardJob.payload.guard_token,
-      "每次复制尝试必须只旁路本次新建 guard"
+      "每次写入尝试必须只旁路本次新建 guard"
     );
     const retriedThumbnailCandidateKey = committedThumbnailKey
       + ".candidate-" + retriedCommitGuardJob.payload.guard_token;
@@ -671,14 +693,14 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
         "local"
       ),
       false,
-      "PG 正式引用不应保留 local 原子复制临时候选"
+      "PG 正式引用不应保留 local 原子写入临时候选"
     );
     assert.equal(
       await jobs.markBackgroundJobSucceeded(retriedCommitGuardJob),
       true
     );
   } finally {
-    commitStorageAccess.driver.copy = originalCommitCopy;
+    commitStorageAccess.driver.writeStream = originalCommitWrite;
   }
   const committedActorRow = (await database.pool.query(
     "SELECT created_by, image_time, title, source, original FROM metadata WHERE id=$1",
@@ -698,24 +720,8 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
   );
   assert.equal(completedCommitRetry[0].status, "completed");
   assert.equal(completedCommitRetry[0].completed_item.id, commitImageId);
-  assert.equal(
-    await objectAccess.storageObjectExists(
-      "_uploads",
-      commitImageKey,
-      "local"
-    ),
-    false,
-    "PostgreSQL 提交后必须清理精确 staging 图片"
-  );
-  assert.equal(
-    await objectAccess.storageObjectExists(
-      "_uploads",
-      commitThumbnailKey,
-      "local"
-    ),
-    false,
-    "PostgreSQL 提交后必须清理精确 staging 缩略图"
-  );
+  await assert.rejects(access(ingestionPaths.ingestionPreparedPath(commitImageKey)), { code: "ENOENT" });
+  await assert.rejects(access(ingestionPaths.ingestionPreparedPath(commitThumbnailKey)), { code: "ENOENT" });
   const completedCommitReceipt = completedSession(await ingestionRepository.readSession(
     commitActor,
     commitSessionId

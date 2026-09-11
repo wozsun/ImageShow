@@ -23,6 +23,7 @@ export type StorageRequestOptions = {
 };
 
 export type StorageStreamWriteOptions = StorageRequestOptions & {
+  atomicCandidateToken?: string;
   /** Expected hexadecimal MD5 when the destination protocol can verify it. */
   expectedMd5?: string;
 };
@@ -72,11 +73,6 @@ export type StoragePruneOptions = StorageRequestOptions & {
   maxEntries?: number;
 };
 
-export type StorageCopyOptions = StorageRequestOptions & {
-  /** Stable local atomic-candidate suffix owned by a durable cleanup guard. */
-  atomicCandidateToken?: string;
-};
-
 export type StorageSelfTest = {
   backend: StorageType;
   writable: boolean;
@@ -122,13 +118,6 @@ export interface StorageDriver {
     objects: readonly StorageObjectReference[],
     options?: StorageRemoveOptions
   ): Promise<StorageRemovalResult[]>;
-  copy(
-    fromPrefix: StoragePrefix,
-    fromKey: string,
-    toPrefix: StoragePrefix,
-    toKey: string,
-    options?: StorageCopyOptions
-  ): Promise<void>;
   serverCopySource(
     prefix: StoragePrefix,
     key: string,

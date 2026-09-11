@@ -116,8 +116,8 @@ await runIntegrationScenario(async (runtime) => {
     const intent = intents[0]!;
     const received = activeSession(await settleWithin(receiveUploadIntentBody(service, "raw-lock-owner", intent.credential, new Response(body).body)));
     assert.equal(received.status, "received");
-    assert.deepEqual(await readFile(raw.ingestionRawPath("upload", received, received.raw_generation)), body);
-    protectedRawPaths.add(raw.ingestionRawPath("upload", received, received.raw_generation));
+    assert.deepEqual(await readFile(raw.ingestionRawPath(received, received.raw_generation)), body);
+    protectedRawPaths.add(raw.ingestionRawPath(received, received.raw_generation));
 
     const createRawSession = async (label: string, status: "preparing" | "failed") => {
       const now = Date.now();
@@ -130,7 +130,7 @@ await runIntegrationScenario(async (runtime) => {
         status, phase: status === "preparing" ? "prepare-waiting" : "failed", message: status,
         execution_token: status === "preparing" ? randomUuidV7() : "", raw_generation: randomUuidV7(), raw_size: body.length
       }))).session);
-      const path = raw.ingestionRawPath("import", session, session.raw_generation);
+      const path = raw.ingestionRawPath(session, session.raw_generation);
       await mkdir(dirname(path), { recursive: true }); await writeFile(path, body);
       return { session, path };
     };
@@ -167,15 +167,15 @@ await runIntegrationScenario(async (runtime) => {
       await settleWithin(Promise.race([transcodeEntered.promise, pendingPrepare.then(() => assert.fail("transcode must start"))]));
       assert.equal(admissions, 1);
       assert.equal(progress[0], "normalizing");
-      await removeIngestionRaw("import", preparing.session, preparing.session.raw_generation);
+      await removeIngestionRaw(preparing.session, preparing.session.raw_generation);
       assert.deepEqual(await readFile(preparing.path), body);
       prepareStop.abort(prepareReason);
-      await removeIngestionRaw("import", preparing.session, preparing.session.raw_generation);
+      await removeIngestionRaw(preparing.session, preparing.session.raw_generation);
       assert.deepEqual(await readFile(preparing.path), body, "in-flight transcode retains the raw lease after cancellation");
       transcodeGate.resolve();
       await assert.rejects(settleWithin(pendingPrepare), error => error === prepareReason);
       assert.deepEqual(await readFile(preparing.path), body);
-      await removeIngestionRaw("import", preparing.session, preparing.session.raw_generation);
+      await removeIngestionRaw(preparing.session, preparing.session.raw_generation);
       await assert.rejects(stat(preparing.path), { code: "ENOENT" });
     } finally {
       prepareStop.abort(prepareReason); blockerGate.resolve(); transcodeGate.resolve();
@@ -190,23 +190,23 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(cancellation[0]?.status, "discarded");
     assert.equal(scheduled.length, 1);
     const newGeneration = randomUuidV7();
-    const newRaw = raw.ingestionRawPath("import", retired.session, newGeneration);
+    const newRaw = raw.ingestionRawPath(retired.session, newGeneration);
     await writeFile(newRaw, "next generation");
     await scheduled[0]!();
     await assert.rejects(stat(retired.path), { code: "ENOENT" });
     assert.equal(await readFile(newRaw, "utf8"), "next generation");
-    await removeIngestionRaw("import", retired.session, newGeneration);
+    await removeIngestionRaw(retired.session, newGeneration);
   } finally { await runtime.runtimeConfigStore.replaceRuntimeConfig(previous); }
 
   const cursorPair = { session_id: identity.createIngestionSessionId("raw-cursor", "import", "tail"), image_id: randomUuidV7() };
   const cursorNow = Date.now();
-  const cursorPaths = Array.from({ length: 9 }, (_, index) => raw.ingestionRawPath("import", cursorPair, randomUuidV7At(new Date(cursorNow + index))));
+  const cursorPaths = Array.from({ length: 9 }, (_, index) => raw.ingestionRawPath(cursorPair, randomUuidV7At(new Date(cursorNow + index))));
   await mkdir(dirname(cursorPaths[0]!), { recursive: true });
   for (const path of cursorPaths) { await writeFile(path, "cursor"); await utimes(path, new Date(1_000), new Date(1_000)); }
   const cursorKept = cursorPaths.slice(0, -1);
   const keep = new Set([...protectedRawPaths, ...cursorKept]);
   const tail = cursorPaths.at(-1)!;
-  const restoreBudget = installProperties(appConfig.ingestionRuntime, { orphanCleanupMaxRawEntriesPerCycle: 4 });
+  const restoreBudget = installProperties(appConfig.ingestionRuntime, { orphanCleanupMaxTempEntriesPerCycle: 4 });
   let slice = new AbortController();
   let slicedCycles = 0;
   let injectSlice = false;
@@ -226,21 +226,21 @@ await runIntegrationScenario(async (runtime) => {
     }
   });
   try {
-    const preview = await scanner.inspectIngestionRawOrphans({ keep, rawCutoff: cursorNow, partCutoff: cursorNow });
+    const preview = await scanner.inspectIngestionTempOrphans({ keep, fileCutoff: cursorNow, partCutoff: cursorNow });
     assert.equal(preview.complete, false);
     assert.equal((await readdir(dirname(tail))).length, cursorPaths.length);
     injectSlice = true;
     let removed = 0;
     for (let cycle = 0; cycle < 30 && removed === 0; cycle += 1) {
       slice = new AbortController();
-      const report = await scanner.cleanupIngestionRawOrphans({ keep, rawCutoff: cursorNow, partCutoff: cursorNow, signal: slice.signal });
+      const report = await scanner.cleanupIngestionTempOrphans({ keep, fileCutoff: cursorNow, partCutoff: cursorNow, signal: slice.signal });
       removed += report.removed;
       if (slice.signal.aborted) assert.equal(report.complete, false);
     }
     assert.ok(slicedCycles > 1, "repeated time slices must preserve forward progress past retained files");
     assert.equal(removed, 1);
     await assert.rejects(stat(tail), { code: "ENOENT" });
-    await scanner.closeIngestionRawCleanupCursor();
+    await scanner.closeIngestionTempCleanupCursor();
     injectSlice = false;
     await writeFile(tail, "cursor");
     await utimes(tail, new Date(1_000), new Date(1_000));
@@ -248,17 +248,17 @@ await runIntegrationScenario(async (runtime) => {
     let budgetCycles = 0;
     for (let cycle = 0; cycle < 20 && removed === 0; cycle += 1) {
       budgetCycles += 1;
-      removed += (await scanner.cleanupIngestionRawOrphans({ keep, rawCutoff: cursorNow, partCutoff: cursorNow })).removed;
+      removed += (await scanner.cleanupIngestionTempOrphans({ keep, fileCutoff: cursorNow, partCutoff: cursorNow })).removed;
     }
     assert.ok(budgetCycles > 1, "the entry budget must split the traversal into multiple cycles");
     assert.equal(removed, 1, "the bounded cursor eventually reaches the orphan after retained files");
     await assert.rejects(stat(tail), { code: "ENOENT" });
     for (const path of cursorKept) assert.equal(await readFile(path, "utf8"), "cursor");
-    await scanner.closeIngestionRawCleanupCursor();
+    await scanner.closeIngestionTempCleanupCursor();
     restoreBudget();
-    await scanner.cleanupIngestionRawOrphans({ keep: protectedRawPaths, rawCutoff: cursorNow, partCutoff: cursorNow });
-    await scanner.closeIngestionRawCleanupCursor();
+    await scanner.cleanupIngestionTempOrphans({ keep: protectedRawPaths, fileCutoff: cursorNow, partCutoff: cursorNow });
+    await scanner.closeIngestionTempCleanupCursor();
     await assert.rejects(stat(dirname(tail)), { code: "ENOENT" });
     await assert.rejects(stat(dirname(dirname(tail))), { code: "ENOENT" });
-  } finally { restoreRead(); restoreBudget(); await scanner.closeIngestionRawCleanupCursor(); }
+  } finally { restoreRead(); restoreBudget(); await scanner.closeIngestionTempCleanupCursor(); }
 });

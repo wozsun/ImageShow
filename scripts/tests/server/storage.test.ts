@@ -30,7 +30,8 @@ import {
 import {
   pathToFileURL
 } from "node:url";
-import test from "node:test";
+import test, { after, type TestContext } from "node:test";
+import { pool, configureDatabasePools, closeDatabasePools } from "../../../packages/server/src/core/database/pools.ts";
 import {
   createTestDirectory
 } from "../support/test-directory.ts";
@@ -59,14 +60,6 @@ import {
 import {
   handleApiError
 } from "../../../packages/server/src/core/http/responses.ts";
-import {
-  IngestionCommitStagingCleanup
-} from "../../../packages/server/src/images/ingestion/commit/staging-cleanup.ts";
-import {
-  ingestionStagingImageKey,
-  ingestionStagingThumbnailKey,
-  stagingSessionId
-} from "../../../packages/server/src/images/ingestion/staging-keys.ts";
 import {
   missingS3Fields,
   mergeS3Settings,
@@ -102,9 +95,6 @@ import {
   STORAGE_ADMIN_LIST_MAX_KEYS
 } from "../../../packages/server/src/storage/objects/key-listing.ts";
 import {
-  captureStagingNamespaceSnapshot
-} from "../../../packages/server/src/storage/backends/endpoint-rebind.ts";
-import {
   isMissingFileError
 } from "../../../packages/server/src/storage/objects/not-found.ts";
 import type {
@@ -133,6 +123,18 @@ import {
 import {
   imageId
 } from "../support/server-test-context.ts";
+
+function mockCleanupLeaseReads(context: TestContext) {
+  configureDatabasePools({
+    host: "database.invalid", port: 5432, name: "imageshow_test",
+    user: "imageshow_test", password: process.env.DATABASE_PASSWORD!
+  });
+  context.mock.method(pool, "query", async (sql: string) => {
+    assert.match(sql, /background_job/u);
+    return { rows: [] };
+  });
+}
+after(closeDatabasePools);
 
 function s3CommandName(command: unknown) {
   return (command as { constructor: { name: string } }).constructor.name;
@@ -257,38 +259,7 @@ test("[Server/存储] 存储键列举保持固定批大小、显式完整性和�
   assert.equal(isMissingFileError({ code: "EACCES" }), false);
   assert.equal(isMissingFileError({ code: "EIO" }), false);
 
-  const snapshotAbort = new AbortController();
-  const capturedOptions: Array<Parameters<StorageDriver["listKeys"]>[1]> = [];
-  const snapshotDriver = {
-    listKeys(_prefix, options) {
-      capturedOptions.push(options);
-      return batchStorageKeys([
-        "opaque-key-without-ingestion-shape",
-        "session/attempt/image.webp"
-      ], options);
-    }
-  } as StorageDriver;
-  const snapshot = await captureStagingNamespaceSnapshot(
-    snapshotDriver,
-    snapshotAbort.signal
-  );
-  assert.equal(capturedOptions[0]?.signal, snapshotAbort.signal);
-  assert.equal(capturedOptions[0]?.maxKeys, STORAGE_ADMIN_LIST_MAX_KEYS);
-  assert.deepEqual([...snapshot.keys], [
-    "opaque-key-without-ingestion-shape",
-    "session/attempt/image.webp"
-  ]);
 
-  const cancelledSnapshot = new AbortController();
-  const cancelledReason = new Error("cancel staging snapshot");
-  cancelledSnapshot.abort(cancelledReason);
-  await assert.rejects(
-    () => captureStagingNamespaceSnapshot(
-      snapshotDriver,
-      cancelledSnapshot.signal
-    ),
-    (error) => error === cancelledReason
-  );
 });
 test("[Server/存储] local / S3 配置只按实际连接参数复用 driver", () => {
   const current = s3SettingsSchema.parse({
@@ -1079,7 +1050,8 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
     }
   });
 });
-test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单次流式传输", async () => {
+test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单次流式传输", async (context) => {
+  mockCleanupLeaseReads(context);
   const body = Buffer.from("server-copy-and-stream-source");
   const expectedMd5 = createHash("md5").update(body).digest("hex");
   const missingObject = () => Object.assign(new Error("not found"), {
@@ -1131,9 +1103,9 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
           copyCalls += 1;
           assert.deepEqual(command.input, {
             Bucket: "copy-target-bucket",
-            CopySource: "source-bucket/migration/_uploads/object.webp",
+            CopySource: "source-bucket/migration/full/object.webp",
             CopySourceIfMatch: '"source-etag"',
-            Key: "migration/_uploads/object.webp"
+            Key: "migration/full/object.webp"
           });
           return {};
         },
@@ -1216,7 +1188,7 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
           config: config("copy-target", "copy-target-bucket"),
           driver: compatibleTarget
         },
-        prefix: "_uploads",
+        prefix: "full",
         key: "object.webp",
         expected: { size: body.byteLength, md5: expectedMd5 },
         contentType: "image/webp"
@@ -1238,7 +1210,7 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
           ),
           driver: streamTarget
         },
-        prefix: "_uploads",
+        prefix: "full",
         key: "object.webp",
         expected: { size: body.byteLength, md5: expectedMd5 },
         contentType: "image/webp"
@@ -1256,7 +1228,7 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
           config: config("copy-target", "copy-target-bucket"),
           driver: compatibleTarget
         },
-        prefix: "_uploads",
+        prefix: "full",
         key: "object.webp",
         expected: { size: body.byteLength, md5: "0".repeat(32) },
         contentType: "image/webp"
@@ -1278,7 +1250,7 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
           config: config("existing-target", "existing-target-bucket"),
           driver: existingTarget
         },
-        prefix: "_uploads",
+        prefix: "full",
         key: "source-missing.webp",
         expected: { size: body.byteLength, md5: expectedMd5 },
         contentType: "image/webp"
@@ -1301,7 +1273,8 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
     missingSource.close();
   }
 });
-test("[Server/存储] 跨 driver 迁移在目标提前拒绝、退休与取消时释放源流", async () => {
+test("[Server/存储] 跨 driver 迁移在目标提前拒绝、退休与取消时释放源流", async (context) => {
+  mockCleanupLeaseReads(context);
   const baseDriver = (overrides: Partial<StorageDriver>): StorageDriver => ({
     async exists() { return false; },
     async openRead() { throw new Error("unexpected openRead"); },
@@ -1314,7 +1287,6 @@ test("[Server/存储] 跨 driver 迁移在目标提前拒绝、退休与取消�
         status: "missing" as const
       }));
     },
-    async copy() {},
     serverCopySource() { return undefined; },
     supportsServerCopySource() { return false; },
     async copyFromServerSource() {
@@ -1382,7 +1354,7 @@ test("[Server/存储] 跨 driver 迁移在目标提前拒绝、退休与取消�
     const transfer = ensureVerifiedObjectAtDestination({
       source: { config: config(`${mode}-source`, `${mode}-source-key`), driver: source },
       target: { config: config(`${mode}-target`, `${mode}-target-key`), driver: target },
-      prefix: "_uploads",
+      prefix: "full",
       key: `${mode}.webp`,
       expected: { size: 16 },
       contentType: "image/webp",
@@ -1405,7 +1377,8 @@ test("[Server/存储] 跨 driver 迁移在目标提前拒绝、退休与取消�
     assert.equal(targetClosed, 1, `${mode} 必须释放 target driver lease`);
   }
 });
-test("[Server/存储] 预存在迁移目标只在源完整性通过后读取目标", async () => {
+test("[Server/存储] 预存在迁移目标只在源完整性通过后读取目标", async (context) => {
+  mockCleanupLeaseReads(context);
   const wrongBody = Buffer.from("wrong-source");
   const expectedBody = Buffer.from("expected-source");
   let targetReads = 0;
@@ -1421,7 +1394,6 @@ test("[Server/存储] 预存在迁移目标只在源完整性通过后读取目�
         status: "missing" as const
       }));
     },
-    async copy() {},
     serverCopySource() { return undefined; },
     supportsServerCopySource() { return false; },
     async copyFromServerSource() {},
@@ -1470,7 +1442,7 @@ test("[Server/存储] 预存在迁移目标只在源完整性通过后读取目�
           }
         })
       },
-      prefix: "_uploads",
+      prefix: "full",
       key: "existing.webp",
       expected: {
         size: wrongBody.byteLength,
@@ -1728,7 +1700,6 @@ test("[Server/存储] S3 响应期限和 driver 引用退休覆盖完整流生�
           status: "missing" as const
         }));
       },
-      async copy() {},
       serverCopySource() { return undefined; },
       supportsServerCopySource() { return false; },
       async copyFromServerSource() {},
@@ -1857,55 +1828,6 @@ test("[Server/存储] S3 响应期限和 driver 引用退休覆盖完整流生�
   await assert.rejects(firstClose, (error) => error === closeFailure);
   await assert.rejects(repeatedClose, (error) => error === closeFailure);
   assert.equal(failedCloseCalls, 1, "driver 只关闭一次");
-});
-test("[Server/存储] 提交后两个暂存对象只调用一次批量清理并仅重试未完成项", async () => {
-  const immediateCalls: string[][] = [];
-  const retainedCalls: string[][] = [];
-  const plan = new IngestionCommitStagingCleanup(
-    "local",
-    ["prepared-image", "prepared-thumbnail"],
-    {
-      removeImmediately: async (keys) => {
-        immediateCalls.push([...keys]);
-        return [keys[1]!];
-      },
-      removeRetained: async (keys) => {
-        retainedCalls.push([...keys]);
-      },
-      schedule: async (work) => work()
-    }
-  );
-
-  plan.markDatabaseCommitted();
-  assert.equal(await plan.removeNow(), 1);
-  assert.deepEqual(immediateCalls, [[
-    "prepared-image",
-    "prepared-thumbnail"
-  ]]);
-  await plan.scheduleRemainingRemoval();
-  assert.deepEqual(retainedCalls, [["prepared-thumbnail"]]);
-
-  const requestFailureRetained: string[][] = [];
-  const failedPlan = new IngestionCommitStagingCleanup(
-    "local",
-    ["prepared-image", "prepared-thumbnail"],
-    {
-      removeImmediately: async () => {
-        throw new Error("injected request-level deletion failure");
-      },
-      removeRetained: async (keys) => {
-        requestFailureRetained.push([...keys]);
-      },
-      schedule: async (work) => work()
-    }
-  );
-  failedPlan.markDatabaseCommitted();
-  assert.equal(await failedPlan.removeNow(), 2);
-  await failedPlan.scheduleRemainingRemoval();
-  assert.deepEqual(requestFailureRetained, [[
-    "prepared-image",
-    "prepared-thumbnail"
-  ]]);
 });
 test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空间保持统一", () => {
   const s3 = s3SettingsSchema.parse({
@@ -2072,21 +1994,7 @@ test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空
     /Unsafe storage path/
   );
 
-  const attemptId = "019f75ca-1219-7e89-a625-268a49963cec";
-  const sessionId = `A${"b".repeat(42)}`;
-  assert.equal(stagingSessionId(ingestionStagingImageKey({
-    session_id: sessionId,
-    image_id: imageId,
-    generation: attemptId,
-    execution_token: attemptId
-  })), sessionId);
-  assert.equal(stagingSessionId(ingestionStagingThumbnailKey({
-    session_id: sessionId,
-    image_id: imageId,
-    generation: attemptId,
-    execution_token: attemptId
-  })), sessionId);
-  assert.equal(stagingSessionId("unexpected-object.bin"), "");
+
 });
 test("[Server/存储] Local 驱动取消阻止发布，候选清理及并行自检互相隔离", async () => {
   const root = await createTestDirectory("local-contract-");
@@ -2105,13 +2013,12 @@ const driver = new LocalBackend();
 const stopped = new AbortController(); const reason = new Error("cancelled"); stopped.abort(reason);
 for (const work of [
   () => driver.writeBuffer("full","pre.bin",Buffer.from("x"),"text/plain",{signal:stopped.signal}),
-  () => driver.copy("full","missing.bin","full","pre.bin",{signal:stopped.signal}),
   () => driver.selfTest({signal:stopped.signal})
 ]) await assert.rejects(work,(error)=>error===reason);
 await assert.rejects(fsp.access(directory));
 await fsp.mkdir(join(directory,"full"),{recursive:true});
 await fsp.writeFile(join(directory,"full/source.bin"),"source");
-const originalWrite = fsp.writeFile; const originalCopy = fsp.copyFile; const originalMkdir = fsp.mkdir;
+const originalWrite = fsp.writeFile; const originalMkdir = fsp.mkdir;
 try {
   const abort = new AbortController();
   fsp.writeFile = async (path,body,options) => {
@@ -2121,19 +2028,12 @@ try {
   await assert.rejects(driver.writeBuffer("full","buffer.bin",Buffer.from("x"),"text/plain",{signal:abort.signal}),(error)=>error===reason);
   assert.deepEqual(await fsp.readdir(join(directory,"full")),["source.bin"]);
 } finally {fsp.writeFile=originalWrite;syncBuiltinESMExports();}
-try {
-  const abort = new AbortController();
-  fsp.copyFile = async (...args) => {await originalCopy(...args);abort.abort(reason);};syncBuiltinESMExports();
-  await assert.rejects(driver.copy("full","source.bin","full","copy.bin",{signal:abort.signal}),(error)=>error===reason);
-  assert.deepEqual(await fsp.readdir(join(directory,"full")),["source.bin"]);
-} finally {fsp.copyFile=originalCopy;syncBuiltinESMExports();}
-for (const method of ["buffer","copy","stream"]) {
+for (const method of ["buffer","stream"]) {
   const abort = new AbortController();
   try {
     fsp.mkdir = async (...args) => {const value=await originalMkdir(...args);abort.abort(reason);return value;};syncBuiltinESMExports();
     const body=Readable.from(["source"]);
     const work = method==="buffer" ? driver.writeBuffer("full","mkdir.bin",Buffer.from("x"),"text/plain",{signal:abort.signal})
-      : method==="copy" ? driver.copy("full","source.bin","full","mkdir.bin",{signal:abort.signal})
       : driver.writeStream("full","mkdir.bin",body,6,"text/plain",{signal:abort.signal});
     await assert.rejects(work,(error)=>error===reason);body.destroy();
     assert.deepEqual(await fsp.readdir(join(directory,"full")),["source.bin"]);
@@ -2155,12 +2055,12 @@ for (const populated of [false,true]) {
   } finally {fsp.opendir=originalOpendir;syncBuiltinESMExports();}
 }
 // Real concurrent probes must not touch an existing file or one another.
-await fsp.mkdir(join(directory,"_uploads"),{recursive:true});
-await fsp.writeFile(join(directory,"_uploads/.storage-test"),"existing");
+await fsp.mkdir(join(directory,"full"),{recursive:true});
+await fsp.writeFile(join(directory,"full/.storage-test"),"existing");
 const outcomes = await Promise.all(Array.from({length:12},()=>driver.selfTest()));
 assert.ok(outcomes.every((result)=>result.writable));
-assert.deepEqual(await fsp.readdir(join(directory,"_uploads")),[".storage-test"]);
-assert.equal(await fsp.readFile(join(directory,"_uploads/.storage-test"),"utf8"),"existing");
+assert.deepEqual((await fsp.readdir(join(directory,"full"))).sort(),[".storage-test", "source.bin"]);
+assert.equal(await fsp.readFile(join(directory,"full/.storage-test"),"utf8"),"existing");
 const cancelledProbe = new LocalBackend();const cancel = new AbortController();
 const write = cancelledProbe.writeBuffer.bind(cancelledProbe);
 cancelledProbe.writeBuffer = async (...args) => {await write(...args);cancel.abort(reason);};
@@ -2172,7 +2072,7 @@ cancelledProbe.removeObjects = async (objects,options) => {
 const [failed,succeeded]=await Promise.allSettled([cancelledProbe.selfTest({signal:cancel.signal}),driver.selfTest()]);
 assert.equal(failed.status,"rejected");assert.equal(failed.reason,reason);
 assert.equal(succeeded.status,"fulfilled");
-assert.deepEqual(await fsp.readdir(join(directory,"_uploads")),[".storage-test"]);
+assert.deepEqual((await fsp.readdir(join(directory,"full"))).sort(),[".storage-test", "source.bin"]);
 console.log("local-contract-ok");
 `;
   try {

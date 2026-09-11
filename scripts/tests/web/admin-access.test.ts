@@ -5919,9 +5919,11 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
     pending_thumbnail_repairs: [],
     orphan_objects: [],
     orphan_thumbs: [],
-    active_staging_files: [],
-    retained_staging_files: [],
-    orphan_staging_files: [],
+    stale_ingestion_raw_files: { count: 0, oldest_modified_at: null },
+    stale_ingestion_part_files: { count: 0, oldest_modified_at: null },
+    stale_ingestion_prepared_files: { count: 0, oldest_modified_at: null },
+    ingestion_temp_space: { total_bytes: 0, retained_bytes: 0, complete: true },
+    incomplete_ingestion_temp_scan: [],
     incomplete_listings: [],
     unavailable_backends: []
   };

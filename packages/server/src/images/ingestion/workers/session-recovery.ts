@@ -56,7 +56,6 @@ const defaultDependencies: IngestionSessionRecoveryDependencies = {
   rawExists: async (session) => {
     if (!session.raw_generation) return false;
     return access(ingestionRawPath(
-      session.queue,
       session,
       session.raw_generation
     )).then(() => true, () => false);

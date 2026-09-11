@@ -297,10 +297,6 @@ function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
                   <dt>可清理对象</dt>
                   <dd>{summary.removable_objects.toLocaleString()}</dd>
                 </div>
-                <div>
-                  <dt>受保护内容接入暂存</dt>
-                  <dd>{summary.protected_staging_objects.toLocaleString()}</dd>
-                </div>
               </dl>}
             </section>
             <section className="storage-maintenance-section">

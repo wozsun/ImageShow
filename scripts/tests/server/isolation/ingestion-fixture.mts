@@ -34,16 +34,16 @@ type IngestionProjectionModule = typeof import(
 type IngestionRepositoryModule = typeof import(
   "../../../../packages/server/src/images/ingestion/repository.ts"
 );
-type IngestionStagingKeysModule = typeof import(
-  "../../../../packages/server/src/images/ingestion/staging-keys.ts"
+type IngestionPathsModule = typeof import(
+  "../../../../packages/server/src/images/ingestion/raw/paths.ts"
 );
 type IngestionTransitionsModule = typeof import(
   "../../../../packages/server/src/images/ingestion/sessions/transitions.ts"
 );
-type ObjectAccessModule = typeof import(
-  "../../../../packages/server/src/storage/objects/access.ts"
+type PreparedFilesModule = typeof import(
+  "../../../../packages/server/src/images/ingestion/raw/prepared.ts"
 );
-type StorageObjectPrefix = "_uploads" | "full" | "thumbs";
+type StorageObjectPrefix = "full" | "thumbs";
 
 export type ReadyIngestionFixture = {
   commitIntent: CommitIntentModule;
@@ -64,8 +64,8 @@ export type ReadyIngestionFixture = {
   repositoryKeys: ReturnType<IngestionKeysModule["ingestionSessionKeys"]>;
   runtime: IntegrationRuntime;
   sessionId: string;
-  stagingImageKey: string;
-  stagingThumbnailKey: string;
+  preparedImageFile: string;
+  preparedThumbnailFile: string;
   thumbnailBody: Buffer;
 };
 
@@ -77,8 +77,8 @@ async function cleanupFixtureResources(fixture: ReadyIngestionFixture) {
     localDriver,
     repositoryKeys,
     runtime,
-    stagingImageKey,
-    stagingThumbnailKey
+    preparedImageFile,
+    preparedThumbnailFile
   } = fixture;
   const errors: unknown[] = [];
   let guardedObjects: Array<{ key: string; prefix: StorageObjectPrefix }> = [];
@@ -93,7 +93,7 @@ async function cleanupFixtureResources(fixture: ReadyIngestionFixture) {
       Array.isArray(payload.objects)
         ? payload.objects.flatMap(({ key, prefix }) => (
             typeof key === "string"
-              && (prefix === "_uploads" || prefix === "full" || prefix === "thumbs")
+              && (prefix === "full" || prefix === "thumbs")
               ? [{ key, prefix }]
               : []
           ))
@@ -109,8 +109,6 @@ async function cleanupFixtureResources(fixture: ReadyIngestionFixture) {
   }
   try {
     const objects: Array<{ key: string; prefix: StorageObjectPrefix }> = [
-      { prefix: "_uploads", key: stagingImageKey },
-      { prefix: "_uploads", key: stagingThumbnailKey },
       { prefix: "full", key: finalObjectKey },
       { prefix: "thumbs", key: finalThumbnailKey },
       ...guardedObjects
@@ -119,6 +117,12 @@ async function cleanupFixtureResources(fixture: ReadyIngestionFixture) {
       objects.map((object) => [`${object.prefix}\0${object.key}`, object])
     ).values()];
     await localDriver.removeObjects(uniqueObjects);
+  } catch (error) {
+    errors.push(error);
+  }
+  try {
+    const { removeIngestionPreparedFiles } = await import("../../../../packages/server/src/images/ingestion/raw/prepared.ts");
+    await removeIngestionPreparedFiles([preparedImageFile, preparedThumbnailFile]);
   } catch (error) {
     errors.push(error);
   }
@@ -148,9 +152,9 @@ export async function createReadyIngestionFixture(
   const transitions = await import(
     runtime.moduleUrl("packages/server/src/images/ingestion/sessions/transitions.ts")
   ) as IngestionTransitionsModule;
-  const stagingKeys = await import(
-    runtime.moduleUrl("packages/server/src/images/ingestion/staging-keys.ts")
-  ) as IngestionStagingKeysModule;
+  const paths = await import(
+    runtime.moduleUrl("packages/server/src/images/ingestion/raw/paths.ts")
+  ) as IngestionPathsModule;
   const sessionKeys = await import(
     runtime.moduleUrl("packages/server/src/images/ingestion/sessions/keys.ts")
   ) as IngestionKeysModule;
@@ -160,9 +164,9 @@ export async function createReadyIngestionFixture(
   const imagePaths = await import(
     runtime.moduleUrl("packages/server/src/storage/objects/image-paths.ts")
   ) as ImagePathsModule;
-  const objectAccess = await import(
-    runtime.moduleUrl("packages/server/src/storage/objects/access.ts")
-  ) as ObjectAccessModule;
+  const preparedFiles = await import(
+    runtime.moduleUrl("packages/server/src/images/ingestion/raw/prepared.ts")
+  ) as PreparedFilesModule;
   const coreUuid = await import(
     runtime.moduleUrl("packages/server/src/core/uuid.ts")
   ) as CoreUuidModule;
@@ -220,14 +224,14 @@ export async function createReadyIngestionFixture(
   };
   const generation = coreUuid.randomUuidV7();
   const executionToken = coreUuid.randomUuidV7();
-  const stagingInput = {
+  const preparedInput = {
     session_id: sessionId,
     image_id: imageId,
     generation,
     execution_token: executionToken
   };
-  const stagingImageKey = stagingKeys.ingestionStagingImageKey(stagingInput);
-  const stagingThumbnailKey = stagingKeys.ingestionStagingThumbnailKey(stagingInput);
+  const preparedImageFile = paths.ingestionPreparedFile(preparedInput, "image");
+  const preparedThumbnailFile = paths.ingestionPreparedFile(preparedInput, "thumb");
   const imageBody = Buffer.from(`integration-image:${label}:${imageId}`);
   const thumbnailBody = Buffer.from(`integration-thumbnail:${label}:${imageId}`);
   const finalObjectKey = imagePaths.storageObjectKey(imageId, "webp");
@@ -238,8 +242,8 @@ export async function createReadyIngestionFixture(
     runtime.redisClient.redis
   );
   const prepared: IngestionPreparedManifest = {
-    prepared_image_key: stagingImageKey,
-    prepared_thumbnail_key: stagingThumbnailKey,
+    prepared_image_path: preparedImageFile,
+    prepared_thumbnail_path: preparedThumbnailFile,
     prepared_image_sha256: createHash("sha256").update(imageBody).digest("hex"),
     prepared_thumbnail_sha256: createHash("sha256").update(thumbnailBody).digest("hex"),
     original_size: imageBody.length,
@@ -270,20 +274,8 @@ export async function createReadyIngestionFixture(
 
   let fixture: ReadyIngestionFixture | undefined;
   try {
-    await objectAccess.writeStorageBuffer(
-      "_uploads",
-      stagingImageKey,
-      imageBody,
-      "image/webp",
-      "local"
-    );
-    await objectAccess.writeStorageBuffer(
-      "_uploads",
-      stagingThumbnailKey,
-      thumbnailBody,
-      "image/webp",
-      "local"
-    );
+    await preparedFiles.writeIngestionPreparedFile(preparedImageFile, imageBody, new AbortController().signal);
+    await preparedFiles.writeIngestionPreparedFile(preparedThumbnailFile, thumbnailBody, new AbortController().signal);
     const queued = (await repository.acceptImportSession(
       template,
       identity.createIngestionDisplayOrderKey(
@@ -328,8 +320,8 @@ export async function createReadyIngestionFixture(
       repositoryKeys,
       runtime,
       sessionId,
-      stagingImageKey,
-      stagingThumbnailKey,
+      preparedImageFile,
+      preparedThumbnailFile,
       thumbnailBody
     };
     return fixture;
@@ -349,8 +341,8 @@ export async function createReadyIngestionFixture(
         repositoryKeys,
         runtime,
         sessionId,
-        stagingImageKey,
-        stagingThumbnailKey,
+        preparedImageFile,
+        preparedThumbnailFile,
         thumbnailBody
       } satisfies ReadyIngestionFixture;
     try {

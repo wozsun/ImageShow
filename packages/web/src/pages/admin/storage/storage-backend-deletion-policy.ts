@@ -1,5 +1,4 @@
 import {
-  storageBackendDeletionStateFromBlockers,
   type StorageBackendDeleteAction,
   type StorageBackendDeleteBlocker
 } from "@imageshow/shared/browser";
@@ -11,8 +10,7 @@ const storageBackendDeleteBlockers = new Set<StorageBackendDeleteBlocker>([
   "default",
   "images",
   "ingestion_sessions",
-  "cleanup_jobs",
-  "staging_objects"
+  "cleanup_jobs"
 ]);
 const storageBackendDeleteActions = new Set<StorageBackendDeleteAction>([
   "delete",
@@ -46,8 +44,6 @@ export function storageBackendDeletionReasons(
         return `仍有 ${backend.ingestion_session_count} 个未清理内容接入会话；请等待会话清理完成。`;
       case "cleanup_jobs":
         return `仍有 ${backend.cleanup_job_count} 个旧对象删除任务；请等待任务完成，耗尽重试的任务可在卡片上重新排队。`;
-      case "staging_objects":
-        return "后端仍有上传暂存对象；请先运行存储检查并清理无效暂存。";
     }
   });
 }
@@ -106,22 +102,5 @@ export function storageBackendAfterDeleteRejection(
       action,
       blockers
     }
-  };
-}
-
-export function storageBackendWithHiddenStagingBlocker(
-  backend: StorageBackendAdmin,
-  responseBackend: StorageBackendAdmin | null
-) {
-  if (
-    !responseBackend?.deletion.blockers.includes("staging_objects")
-    || backend.deletion.blockers.includes("staging_objects")
-  ) return backend;
-  return {
-    ...backend,
-    deletion: storageBackendDeletionStateFromBlockers([
-      ...backend.deletion.blockers,
-      "staging_objects"
-    ])
   };
 }

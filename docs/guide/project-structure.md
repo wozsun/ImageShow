@@ -25,6 +25,8 @@ packages/web ─────► packages/shared
   [测试说明](../../scripts/tests/README.md)维护入口、运行前提和资源范围。
 - `Dockerfile` 只安装三个 workspace 的构建依赖（不安装根目录本地门禁工具）并完成编译，
   再单独安装 server/shared 的生产依赖；运行镜像只携带生产依赖、编译产物和运维入口。
+  `.dockerignore` 仅放行根包清单、`tsconfig.base.json`、`packages/`、`scripts/build/` 与
+  `scripts/runtime/`，并排除本机依赖及生成文件。
 - `compose.yaml` 提供单实例 ImageShow、PostgreSQL 与 Redis 的标准部署，把 `.env` 用作
   数据库名、用户名、密码和首次管理员用户名、密码的显式插值来源；可选的 `SITE_DOMAIN`
   仅在配置文件不存在时播种域名，未设置时使用空值。数据库名、数据库用户名和管理员
@@ -171,8 +173,8 @@ CDN fallback，保留 HEAD、条件请求、取消处理与 `Vary: User-Agent`�
 只投影对象键、扩展名与存储后端，原图入口再读取外部原图地址和更新时间。图片状态仅用于
 查询可服务的正式 / 回收站记录；分类与展示文字由图片详情和列表的读模型负责。
 
-`storage/drivers/local.ts` 在缓冲写、复制和流式写入创建候选前及 link 发布前检查取消，
-缓冲写同时向文件写入传递 signal。不可中断的本地复制等待当前 I/O 完成后检查取消并清理候选。
+`storage/drivers/local.ts` 在缓冲写和流式写入创建候选前及 link 发布前检查取消，
+缓冲写同时向文件写入传递 signal。取消后等待已开始的文件 I/O 收口并清理候选。
 每次自检使用独立随机 key，读写受请求 signal 控制，清理使用独立 10 秒准入预算并等待已开始
 的文件 I/O 收口；失败或取消仅删除本次探针对象。
 
@@ -247,17 +249,16 @@ storage/
 `images/theme-reassignment.ts` 持有主题删除时的图片 SQL、revision 和 cache handoff，主题领域仍
 拥有词表删除、重试与最终词表同步。`storage/objects/image-transfer-admission.ts` 是所选图片与
 整后端迁移共用的活动逐图搬迁许可 owner，两个生产者直接复用同一个代码内固定 5 项容量。
-Endpoint 重绑定的完整 `_uploads` 键集合证明位于 `storage/backends/endpoint-rebind.ts`；键按
-不透明完整值比较，不解析或重复证明 Ingestion session 分组。
-`storage/objects/removal-admission.ts` 是 durable cleanup、orphan / retired、检查维护和回收站删除的
+Endpoint 重绑定的双向随机挑战与精确探针清理位于 `storage/backends/endpoint-rebind.ts`；
+`probe.ts` 同时负责候选地址对既有图片的有界读取。
+`storage/objects/removal-admission.ts` 是 durable cleanup、检查维护和回收站删除的
 唯一活动存储清理许可 owner，固定只允许一个 provider 中性 `removeObjects(1…N)` 调用；同一调用
 涉及多个 driver group 时逐组向该 FIFO 交接，不预占多个排队位置。持久 `move.cleanup` 同时只领取
 一个任务，回收站永久删除也逐图取得清理许可后才处理下一项，避免在共享许可前堆积持锁连接。
 显式维护按主要资源分流：repair 由 Normalize 容量调度，但替换未采用缩略图时仍取得唯一 cleanup
 许可；remove 直接由 cleanup 容量调度。两个资源池并行推进，取消或失败时先在独占位置锁内全部
-收口，正常输出再按原候选顺序合并；Ingestion raw / staging 清理重试每次只向清理入口交接一个 attempt，
-失败退避期间释放该 worker，让后续候选先行。
-Ingestion staging 孤儿按代码内固定 100 项渐进删除。
+收口，正常输出再按原候选顺序合并。Ingestion 临时文件使用独立的本地清理队列，
+每次执行一个 attempt，失败退避释放许可。
 `checks/storage-check.ts` 只生成无写入权限的存储预览；显式写维护按稳定职责拆分：
 `checks/storage-maintenance-plan.ts` 重读 PostgreSQL、Ingestion 引用和完整存储快照并生成候选，
 `checks/storage-thumbnail-repair.ts` 负责缩略图写入与校验，`checks/storage-orphan-cleanup.ts`
@@ -284,7 +285,7 @@ ingestion/
 ├─ sessions/    # 最低层 canonical / intent model、key、codec、命令与 Lua
 │  └─ scripts/  # projection、canonical、intents、queue、discovery
 ├─ queue/       # snapshot、SSE、action、watermark、草稿 CAS 与展示投影
-├─ raw/         # 路径、lease、流式接收、Server 准入、generation 与孤儿扫描
+├─ raw/         # 接入文件路径、lease、流式接收、处理结果读写与本地孤儿扫描
 ├─ sources/     # 安全远端下载、JSONL 与微博适配
 ├─ execution/   # heartbeat、version fencing 与不可取消边界
 ├─ commit/      # intent、最终准入、校验、持久化、完成发布、补偿与 coordinator
@@ -294,11 +295,10 @@ ingestion/
 ├─ repository.ts
 ├─ runtime-repository.ts
 ├─ runtime.ts
-├─ session-service.ts
-└─ staging-keys.ts
+└─ session-service.ts
 ```
 
-`sessions` 是不依赖其他 ingestion 子域的协议底层。`raw` 在其上实现 raw 文件与上传接管；
+`sessions` 是不依赖其他 ingestion 子域的协议底层。`raw` 在其上实现本地接入文件与上传接管；
 `execution` 组合 session fencing 与 repository facade；`sources` 使用 `sessions`、`raw` 和
 `execution` 完成远端接收；`commit` 组合 `sessions`、`execution`、`cleanup`、storage、database
 与 vocab；`cancel` 组合 `sessions`、`execution`、`commit`、`cleanup` 与 `raw`。`queue` 内部的
@@ -340,17 +340,20 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
   `session-update.ts` 负责 active canonical 草稿和 ready duplicate decision 的 CAS。
 - `raw/lease-registry.ts` 是 `active`、`deleting`、`scanning`、`pruning` 可变状态的唯一 owner；
   `paths.ts` 只处理身份与路径，`files.ts` 处理 generation 精确对象操作，`orphan-scanner.ts`
-  处理游标扫描和目录修剪，`upload.ts` 收口 credential claim、流式写入与 canonical 转换。
+  处理游标扫描和目录修剪，`prepared.ts` 处理本地结果原子发布、受限预览读取及精确清理，
+  `upload.ts` 收口 credential claim、流式写入与 canonical 转换。磁盘路径统一为 `data/temp`，
+  按 session / image 分层，来源继续由 canonical 保存。
 - `commit/worker.ts` 继续唯一拥有 execution fencing、storage / advisory lock 顺序、prepared
   对象采用、事务开始后的不可取消边界和完成发布时机；`target-validation.ts`、
-  `persistence.ts`、`staging-cleanup.ts`、`completion.ts` 只承接可独立命名的阶段。
+  `persistence.ts`、`completion.ts` 分别承接数据库写入和完成发布；提交后的本地文件清理
+  由 worker 的 `finally` 交接，不单设暂存清理类。
 - `cancel/coordinator.ts` 保留 resolving / irreversible boundary、abort 顺序、mutation limiter
   单例和响应丢失后的真相核对；`items.ts` 与 `retired-cleanup.ts` 不建立第二状态 owner。
 - `workers/ingestion-worker.ts` 只编排 download、prepare、commit 与恢复扫描；
   `workers/import-prefetch.ts` 按 Normalize 容量维护 FIFO 后继窗口，许可覆盖 Import 远程素材化到
   实际取得图片处理许可。`workers/preparation-admission.ts` 是 Upload / Import 共用的唯一进程级
-  prepare / staging publication owner，容量同样由 Normalize 配置派生，覆盖等待图片处理到两个
-  `_uploads` 对象及 ready canonical 发布。`raw/upload-admission.ts`、`images/normalization-admission.ts` 和
+  准备与本地结果发布 owner，容量同样由 Normalize 配置派生，覆盖等待图片处理到两个
+  本地处理结果及 ready canonical 发布。`raw/upload-admission.ts`、`images/normalization-admission.ts` 和
   `commit/admission.ts` 分别是 raw PUT、全部 Sharp 重工作与最终入库的进程级唯一资源 owner；
   Worker 从 `normalize.concurrency=N` 派生 Import 与 Upload 各自的 pre-commit dispatch slot；Import 在取得
   Normalize 许可时交还，Upload 在本项 prepare 完成时交还，两类补位各使用独立 frozen-tail 游标。
@@ -361,9 +364,9 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
   `workers/session-recovery.ts` 复用同一 repository 做启动、Redis 重连和 expiry 收敛；
   `execution/session.ts` 只拥有同一执行 token 下 heartbeat、progress、阶段发布和失败落盘。
 - `cleanup/storage-references.ts` 有界读取 active canonical 的对象引用；`retention.ts`、
-  `orphans.ts` 与 `orphan-worker.ts` 负责 60 秒保守周期、完整存储列表、namespace 复核和
-  停机排空；`retry-queue.ts` 只清理可由年龄扫描重新发现的 raw / staging。正式 full / thumbs
-  仍在复制前由持久 `move.cleanup` guard 接管。
+  `orphans.ts` 与 `orphan-worker.ts` 负责 60 秒保守周期、稳定 Redis 引用与本地扫描，以及
+  停机排空；`retry-queue.ts` 有界重试本地临时文件清理，耗尽后由年龄扫描重新发现。
+  正式 full / thumbs 在写入前由持久 `move.cleanup` guard 接管。
 
 Server 队列模块与 Web 队列 owner 的连接关系保持不变：
 

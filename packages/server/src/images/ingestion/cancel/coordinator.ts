@@ -578,7 +578,7 @@ async function cancelLoadedIngestionSessions(
   const retiredSessions = [...sessionsPendingCleanup.values()];
   // The commit path installs a persistent move.cleanup guard before copying
   // any formal full/thumb candidate. Cancellation only needs best-effort
-  // cleanup for disposable raw and staging material here.
+  // cleanup for disposable local ingestion files here.
   if (retiredSessions.length) {
     await scheduleCleanup(() => cleanupRetiredSessions(retiredSessions));
   }

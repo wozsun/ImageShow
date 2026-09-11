@@ -2,27 +2,22 @@ import type { Dir, Dirent } from "node:fs";
 import { opendir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { appConfig } from "@imageshow/shared";
+import { statIngestionTempIfExists } from "./files.ts";
 import {
-  ingestionQueueTypes,
-  type IngestionQueueType,
-  type IngestionSessionPair
-} from "../sessions/model.ts";
-import { statIngestionRawIfExists } from "./files.ts";
-import {
-  closeIngestionRawScanDirectory,
-  ingestionRawPathIsActive,
-  openIngestionRawScanDirectory,
-  pruneIngestionRawDirectory,
-  rawPathIdentity,
-  tryWithInactiveIngestionRawPath,
-  type IngestionRawScanDirectory
+  closeIngestionTempScanDirectory,
+  ingestionTempPathIsActive,
+  openIngestionTempScanDirectory,
+  pruneIngestionTempDirectory,
+  tempPathIdentity,
+  tryWithInactiveIngestionTempPath,
+  type IngestionTempScanDirectory
 } from "./lease-registry.ts";
 import {
-  ingestionRawRoot,
-  ingestionRawSessionDirectory,
-  isIngestionRawImageName,
-  isIngestionRawSessionName,
-  parseIngestionRawFileName
+  ingestionTempRoot,
+  ingestionTempSessionDirectory,
+  isIngestionTempImageName,
+  isIngestionTempSessionName,
+  parseIngestionTempFileName
 } from "./paths.ts";
 
 async function openDirectoryIfExists(path: string) {
@@ -34,53 +29,41 @@ async function openDirectoryIfExists(path: string) {
   }
 }
 
-type IngestionRawFileEntry = Readonly<{
+type IngestionTempFileEntry = Readonly<{
   path: string;
   modifiedAt: number;
-  queue: IngestionQueueType;
-  pair: IngestionSessionPair;
-  raw_generation: string;
-  execution_token: string | null;
-  kind: "raw" | "part";
+  kind: "raw" | "part" | "prepared";
+  size: number;
 }>;
 
-type IngestionRawScanBudget = {
+type IngestionTempScanBudget = {
   remaining: number;
   complete: boolean;
 };
 
-async function ingestionRawFileEntry(
-  queue: IngestionQueueType,
-  sessionName: string,
-  imageName: string,
+async function ingestionTempFileEntry(
   imagePath: string,
   file: Dirent,
   signal?: AbortSignal
-): Promise<IngestionRawFileEntry | null> {
+): Promise<IngestionTempFileEntry | null> {
   if (!file.isFile()) return null;
-  const parsedName = parseIngestionRawFileName(file.name);
+  const parsedName = parseIngestionTempFileName(file.name);
   if (!parsedName) return null;
   const path = join(imagePath, file.name);
-  const info = await statIngestionRawIfExists(path);
+  const info = await statIngestionTempIfExists(path);
   signal?.throwIfAborted();
   if (!info?.isFile()) return null;
   return {
     path,
     modifiedAt: info.mtimeMs,
-    queue,
-    pair: {
-      session_id: sessionName,
-      image_id: imageName.toLowerCase()
-    },
-    raw_generation: parsedName.rawGeneration,
-    execution_token: parsedName.executionToken,
-    kind: parsedName.executionToken ? "part" : "raw"
+    kind: parsedName.kind,
+    size: info.size
   };
 }
 
 async function* directoryEntries(
   path: string,
-  budget: IngestionRawScanBudget,
+  budget: IngestionTempScanBudget,
   signal?: AbortSignal
 ) {
   signal?.throwIfAborted();
@@ -97,158 +80,127 @@ async function* directoryEntries(
   }
 }
 
-async function* listIngestionRawFiles(
-  queue: IngestionQueueType,
-  budget: IngestionRawScanBudget,
-  signal?: AbortSignal,
-  pruneEmptyDirectories = false
+async function* listIngestionTempFiles(
+  budget: IngestionTempScanBudget,
+  signal?: AbortSignal
 ) {
-  const root = ingestionRawRoot(queue);
+  const root = ingestionTempRoot();
   for await (const session of directoryEntries(root, budget, signal)) {
-    if (!session.isDirectory() || !isIngestionRawSessionName(session.name)) {
+    if (!session.isDirectory() || !isIngestionTempSessionName(session.name)) {
       continue;
     }
     const sessionPath = join(root, session.name);
     for await (const image of directoryEntries(sessionPath, budget, signal)) {
-      if (!image.isDirectory() || !isIngestionRawImageName(image.name)) continue;
+      if (!image.isDirectory() || !isIngestionTempImageName(image.name)) continue;
       const imagePath = join(sessionPath, image.name);
       for await (const file of directoryEntries(imagePath, budget, signal)) {
-        const entry = await ingestionRawFileEntry(
-          queue,
-          session.name,
-          image.name,
+        const entry = await ingestionTempFileEntry(
           imagePath,
           file,
           signal
         );
         if (entry) yield entry;
       }
-      if (pruneEmptyDirectories) {
-        await pruneIngestionRawDirectory(imagePath);
-      }
-    }
-    if (pruneEmptyDirectories) {
-      await pruneIngestionRawDirectory(sessionPath);
     }
   }
 }
 
-type RawCleanupOpenDirectory = IngestionRawScanDirectory;
-
-type RawCleanupImageCursor = RawCleanupOpenDirectory & Readonly<{
-  name: string;
-}> & {
+type TempCleanupImageCursor = IngestionTempScanDirectory & {
   pendingFile: Dirent | null;
 };
 
-type RawCleanupSessionCursor = RawCleanupOpenDirectory & {
-  queue: IngestionQueueType;
-  name: string;
-  image: RawCleanupImageCursor | null;
+type TempCleanupSessionCursor = IngestionTempScanDirectory & {
+  image: TempCleanupImageCursor | null;
   pendingImage: Dirent | null;
 };
 
-const rawCleanupCursor: {
-  queueIndex: number;
+const tempCleanupCursor: {
   root: Dir | null;
   pendingSession: Dirent | null;
-  session: RawCleanupSessionCursor | null;
+  session: TempCleanupSessionCursor | null;
   passSplit: boolean;
 } = {
-  queueIndex: 0,
   root: null,
   pendingSession: null,
   session: null,
   passSplit: false
 };
 
-async function closeRawCleanupImage() {
-  const image = rawCleanupCursor.session?.image ?? null;
-  if (rawCleanupCursor.session) rawCleanupCursor.session.image = null;
-  await closeIngestionRawScanDirectory(image);
+async function closeTempCleanupImage() {
+  const image = tempCleanupCursor.session?.image ?? null;
+  if (tempCleanupCursor.session) tempCleanupCursor.session.image = null;
+  await closeIngestionTempScanDirectory(image);
 }
 
-async function closeRawCleanupSession() {
-  const session = rawCleanupCursor.session;
-  rawCleanupCursor.session = null;
-  await closeIngestionRawScanDirectory(session);
+async function closeTempCleanupSession() {
+  const session = tempCleanupCursor.session;
+  tempCleanupCursor.session = null;
+  await closeIngestionTempScanDirectory(session);
 }
 
-async function closeRawCleanupRoot() {
-  const root = rawCleanupCursor.root;
-  rawCleanupCursor.root = null;
-  rawCleanupCursor.pendingSession = null;
+async function closeTempCleanupRoot() {
+  const root = tempCleanupCursor.root;
+  tempCleanupCursor.root = null;
+  tempCleanupCursor.pendingSession = null;
   await root?.close().catch(() => undefined);
 }
 
-function acknowledgeRawCleanupFile() {
-  const image = rawCleanupCursor.session?.image;
+function acknowledgeTempCleanupFile() {
+  const image = tempCleanupCursor.session?.image;
   if (image) image.pendingFile = null;
 }
 
-export async function closeIngestionRawCleanupCursor() {
-  await closeRawCleanupImage();
-  await closeRawCleanupSession();
-  await closeRawCleanupRoot();
-  rawCleanupCursor.queueIndex = 0;
-  rawCleanupCursor.passSplit = false;
+export async function closeIngestionTempCleanupCursor() {
+  await closeTempCleanupImage();
+  await closeTempCleanupSession();
+  await closeTempCleanupRoot();
+  tempCleanupCursor.passSplit = false;
 }
 
-type RawCleanupStep =
-  | Readonly<{ kind: "file"; entry: IngestionRawFileEntry }>
+type TempCleanupStep =
+  | Readonly<{ kind: "file"; entry: IngestionTempFileEntry }>
   | Readonly<{ kind: "paused" }>
   | Readonly<{ kind: "complete"; complete: boolean }>;
 
-async function nextRawCleanupFile(
-  budget: IngestionRawScanBudget,
+async function nextTempCleanupFile(
+  budget: IngestionTempScanBudget,
   signal?: AbortSignal
-): Promise<RawCleanupStep> {
+): Promise<TempCleanupStep> {
   for (;;) {
     signal?.throwIfAborted();
     if (budget.remaining <= 0) {
-      rawCleanupCursor.passSplit = true;
+      tempCleanupCursor.passSplit = true;
       return { kind: "paused" };
     }
-    const queue = ingestionQueueTypes[rawCleanupCursor.queueIndex];
-    if (!queue) {
-      const complete = !rawCleanupCursor.passSplit;
-      rawCleanupCursor.queueIndex = 0;
-      rawCleanupCursor.passSplit = false;
-      return { kind: "complete", complete };
-    }
-    if (!rawCleanupCursor.root) {
-      rawCleanupCursor.root = await openDirectoryIfExists(ingestionRawRoot(queue));
+    if (!tempCleanupCursor.root) {
+      tempCleanupCursor.root = await openDirectoryIfExists(ingestionTempRoot());
       signal?.throwIfAborted();
-      if (!rawCleanupCursor.root) {
-        rawCleanupCursor.queueIndex += 1;
-        continue;
-      }
+      if (!tempCleanupCursor.root) return { kind: "complete", complete: true };
     }
 
-    const currentSession = rawCleanupCursor.session;
+    const currentSession = tempCleanupCursor.session;
     if (!currentSession) {
-      const entry = rawCleanupCursor.pendingSession
-        ?? await rawCleanupCursor.root.read();
-      rawCleanupCursor.pendingSession = entry;
+      const entry = tempCleanupCursor.pendingSession
+        ?? await tempCleanupCursor.root.read();
+      tempCleanupCursor.pendingSession = entry;
       signal?.throwIfAborted();
       if (!entry) {
-        await closeRawCleanupRoot();
-        rawCleanupCursor.queueIndex += 1;
-        continue;
+        await closeTempCleanupRoot();
+        const complete = !tempCleanupCursor.passSplit;
+        tempCleanupCursor.passSplit = false;
+        return { kind: "complete", complete };
       }
       budget.remaining -= 1;
-      if (!entry.isDirectory() || !isIngestionRawSessionName(entry.name)) {
-        rawCleanupCursor.pendingSession = null;
+      if (!entry.isDirectory() || !isIngestionTempSessionName(entry.name)) {
+        tempCleanupCursor.pendingSession = null;
         continue;
       }
-      const path = ingestionRawSessionDirectory(queue, entry.name);
-      const opened = await openIngestionRawScanDirectory(path, signal);
-      rawCleanupCursor.pendingSession = null;
+      const path = ingestionTempSessionDirectory(entry.name);
+      const opened = await openIngestionTempScanDirectory(path, signal);
+      tempCleanupCursor.pendingSession = null;
       if (opened) {
-        rawCleanupCursor.session = {
+        tempCleanupCursor.session = {
           ...opened,
-          queue,
-          name: entry.name,
           image: null,
           pendingImage: null
         };
@@ -264,22 +216,21 @@ async function nextRawCleanupFile(
       signal?.throwIfAborted();
       if (!entry) {
         const path = currentSession.path;
-        await closeRawCleanupSession();
-        await pruneIngestionRawDirectory(path);
+        await closeTempCleanupSession();
+        await pruneIngestionTempDirectory(path);
         continue;
       }
       budget.remaining -= 1;
-      if (!entry.isDirectory() || !isIngestionRawImageName(entry.name)) {
+      if (!entry.isDirectory() || !isIngestionTempImageName(entry.name)) {
         currentSession.pendingImage = null;
         continue;
       }
       const path = join(currentSession.path, entry.name);
-      const opened = await openIngestionRawScanDirectory(path, signal);
+      const opened = await openIngestionTempScanDirectory(path, signal);
       currentSession.pendingImage = null;
       if (opened) {
         currentSession.image = {
           ...opened,
-          name: entry.name,
           pendingFile: null
         };
       }
@@ -292,15 +243,12 @@ async function nextRawCleanupFile(
     signal?.throwIfAborted();
     if (!file) {
       const path = currentImage.path;
-      await closeRawCleanupImage();
-      await pruneIngestionRawDirectory(path);
+      await closeTempCleanupImage();
+      await pruneIngestionTempDirectory(path);
       continue;
     }
     budget.remaining -= 1;
-    const entry = await ingestionRawFileEntry(
-      currentSession.queue,
-      currentSession.name,
-      currentImage.name,
+    const entry = await ingestionTempFileEntry(
       currentImage.path,
       file,
       signal
@@ -310,32 +258,32 @@ async function nextRawCleanupFile(
   }
 }
 
-async function removeInactiveIngestionRawEntry(
-  entry: IngestionRawFileEntry,
+async function removeInactiveIngestionTempEntry(
+  entry: IngestionTempFileEntry,
   input: Readonly<{
     keep: ReadonlySet<string>;
-    rawCutoff: number;
+    fileCutoff: number;
     partCutoff: number;
     signal?: AbortSignal;
   }>
 ) {
-  const identity = rawPathIdentity(entry.path);
-  if (input.keep.has(identity) || ingestionRawPathIsActive(entry.path)) {
+  const identity = tempPathIdentity(entry.path);
+  if (input.keep.has(identity) || ingestionTempPathIsActive(entry.path)) {
     return false;
   }
-  const cutoff = entry.kind === "part" ? input.partCutoff : input.rawCutoff;
+  const cutoff = entry.kind === "part" ? input.partCutoff : input.fileCutoff;
   if (entry.modifiedAt >= cutoff) return false;
-  const removed = await tryWithInactiveIngestionRawPath(
+  const removed = await tryWithInactiveIngestionTempPath(
     entry.path,
     async () => {
       input.signal?.throwIfAborted();
-      if (input.keep.has(identity) || ingestionRawPathIsActive(entry.path)) {
+      if (input.keep.has(identity) || ingestionTempPathIsActive(entry.path)) {
         return false;
       }
-      const current = await statIngestionRawIfExists(entry.path);
+      const current = await statIngestionTempIfExists(entry.path);
       input.signal?.throwIfAborted();
       if (!current?.isFile() || current.mtimeMs >= cutoff) return false;
-      if (ingestionRawPathIsActive(entry.path)) return false;
+      if (ingestionTempPathIsActive(entry.path)) return false;
       await rm(entry.path, { force: true });
       return true;
     }
@@ -343,34 +291,34 @@ async function removeInactiveIngestionRawEntry(
   return removed === true;
 }
 
-export async function cleanupIngestionRawOrphans(input: Readonly<{
+export async function cleanupIngestionTempOrphans(input: Readonly<{
   keep: ReadonlySet<string>;
-  rawCutoff: number;
+  fileCutoff: number;
   partCutoff: number;
   signal?: AbortSignal;
   stopSignal?: AbortSignal;
 }>) {
-  const budget: IngestionRawScanBudget = {
-    remaining: appConfig.ingestionRuntime.orphanCleanupMaxRawEntriesPerCycle,
+  const budget: IngestionTempScanBudget = {
+    remaining: appConfig.ingestionRuntime.orphanCleanupMaxTempEntriesPerCycle,
     complete: true
   };
-  const keep = new Set([...input.keep].map(rawPathIdentity));
+  const keep = new Set([...input.keep].map(tempPathIdentity));
   let removed = 0;
   try {
     for (;;) {
-      const next = await nextRawCleanupFile(budget, input.signal);
+      const next = await nextTempCleanupFile(budget, input.signal);
       if (next.kind === "complete") {
         return { removed, complete: next.complete };
       }
       if (next.kind === "paused") break;
-      if (await removeInactiveIngestionRawEntry(next.entry, { ...input, keep })) {
+      if (await removeInactiveIngestionTempEntry(next.entry, { ...input, keep })) {
         removed += 1;
       }
-      acknowledgeRawCleanupFile();
+      acknowledgeTempCleanupFile();
     }
   } catch (error) {
     if (input.stopSignal?.aborted) {
-      await closeIngestionRawCleanupCursor();
+      await closeIngestionTempCleanupCursor();
       input.stopSignal.throwIfAborted();
     }
     if (input.signal?.aborted) {
@@ -380,40 +328,50 @@ export async function cleanupIngestionRawOrphans(input: Readonly<{
       // IngestionOrphanCleanupWorker.stop().
       return { removed, complete: false };
     }
-    await closeIngestionRawCleanupCursor();
+    await closeIngestionTempCleanupCursor();
     throw error;
   }
   return { removed, complete: false };
 }
 
-export async function inspectIngestionRawOrphans(input: Readonly<{
+export async function inspectIngestionTempOrphans(input: Readonly<{
   keep: ReadonlySet<string>;
-  rawCutoff: number;
+  fileCutoff: number;
   partCutoff: number;
   signal?: AbortSignal;
 }>) {
-  const budget: IngestionRawScanBudget = {
-    remaining: appConfig.ingestionRuntime.orphanCleanupMaxRawEntriesPerCycle,
+  const budget: IngestionTempScanBudget = {
+    remaining: appConfig.ingestionRuntime.orphanCleanupMaxTempEntriesPerCycle,
     complete: true
   };
-  const keep = new Set([...input.keep].map(rawPathIdentity));
+  const keep = new Set([...input.keep].map(tempPathIdentity));
   const summaries = {
     raw: { count: 0, oldest_modified_at: null as number | null },
-    part: { count: 0, oldest_modified_at: null as number | null }
+    part: { count: 0, oldest_modified_at: null as number | null },
+    prepared: { count: 0, oldest_modified_at: null as number | null }
   };
-  for (const queue of ingestionQueueTypes) {
-    for await (const entry of listIngestionRawFiles(queue, budget, input.signal)) {
-      input.signal?.throwIfAborted();
-      const identity = rawPathIdentity(entry.path);
-      if (keep.has(identity) || ingestionRawPathIsActive(entry.path)) continue;
-      const cutoff = entry.kind === "part" ? input.partCutoff : input.rawCutoff;
-      if (entry.modifiedAt >= cutoff) continue;
-      const summary = summaries[entry.kind];
-      summary.count += 1;
-      summary.oldest_modified_at = summary.oldest_modified_at === null
-        ? entry.modifiedAt
-        : Math.min(summary.oldest_modified_at, entry.modifiedAt);
+  let totalBytes = 0;
+  let retainedBytes = 0;
+  for await (const entry of listIngestionTempFiles(budget, input.signal)) {
+    totalBytes += entry.size;
+    input.signal?.throwIfAborted();
+    const retained = keep.has(tempPathIdentity(entry.path)) || ingestionTempPathIsActive(entry.path);
+    if (retained) {
+      retainedBytes += entry.size;
+      continue;
     }
+    const cutoff = entry.kind === "part" ? input.partCutoff : input.fileCutoff;
+    if (entry.modifiedAt >= cutoff) continue;
+    const summary = summaries[entry.kind];
+    summary.count += 1;
+    summary.oldest_modified_at = summary.oldest_modified_at === null
+      ? entry.modifiedAt
+      : Math.min(summary.oldest_modified_at, entry.modifiedAt);
   }
-  return { ...summaries, complete: budget.complete };
+  return {
+    ...summaries,
+    total_bytes: totalBytes,
+    retained_bytes: retainedBytes,
+    complete: budget.complete
+  };
 }

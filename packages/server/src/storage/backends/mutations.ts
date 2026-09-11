@@ -8,17 +8,14 @@ import type {
   StorageBackendCreateInput,
   StorageBackendImportInput
 } from "./config.ts";
-import { storageConfigFromRow } from "./record.ts";
 import {
-  invalidateStorageBackendRegistry,
-  resolveStorageAccessForConfig
+  invalidateStorageBackendRegistry
 } from "./registry.ts";
 import {
   readStorageBackendSnapshot,
   storageBackendUsage
 } from "./usage.ts";
 import { resolveStorageBackendDeletionState } from "./deletion.ts";
-import { captureStagingNamespaceSnapshot } from "./endpoint-rebind.ts";
 import { withStorageLocationWriteAndAdvisoryLock } from "../maintenance-lock.ts";
 
 function isForeignKeyViolation(error: unknown) {
@@ -165,23 +162,9 @@ export async function deleteStorageBackend(slug: string) {
       }
 
       if (
-        !usage.image_count
-        && !usage.ingestion_session_count
-        && !usage.cleanup_job_count
-      ) {
-        const config = storageConfigFromRow(snapshot);
-        const staging = await captureStagingNamespaceSnapshot(
-          resolveStorageAccessForConfig(config).driver,
-          signal
-        );
-        usage.staging_object_count = staging.keys.size;
-        signal.throwIfAborted();
-      }
-      if (
         usage.image_count
         || usage.ingestion_session_count
         || usage.cleanup_job_count
-        || usage.staging_object_count
       ) {
         const deletion = resolveStorageBackendDeletionState({
           ...snapshot,
@@ -190,7 +173,7 @@ export async function deleteStorageBackend(slug: string) {
         throw new ApiError(
           409,
           "storage_backend_in_use",
-          "该存储后端仍有图片、未清理内容接入会话、旧对象删除任务或暂存对象，无法删除",
+          "该存储后端仍有图片、未清理内容接入会话、旧对象删除任务，无法删除",
           { ...usage, deletion }
         );
       }

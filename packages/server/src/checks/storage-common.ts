@@ -1,5 +1,4 @@
 import { errorMessage } from "../core/api-error.ts";
-import { stagingSessionId } from "../images/ingestion/staging-keys.ts";
 import type {
   ActiveIngestionStorageReference
 } from "../images/ingestion/cleanup/storage-references.ts";
@@ -26,11 +25,6 @@ type IngestionFinalStorageReference = {
   key: string;
 };
 
-type ClassifiedStagingKey = {
-  key: string;
-  session: ActiveIngestionStorageReference;
-};
-
 export function ingestionFinalStorageReferences(
   session: Pick<ActiveIngestionStorageReference, "final_object_key">
 ): IngestionFinalStorageReference[] {
@@ -40,31 +34,6 @@ export function ingestionFinalStorageReferences(
     { prefix: "full", key },
     { prefix: "thumbs", key: thumbnailObjectKey(key) }
   ];
-}
-
-export function classifyStagingKeys(
-  keys: string[],
-  activeSessions: ReadonlyMap<string, ActiveIngestionStorageReference>
-) {
-  const active: ClassifiedStagingKey[] = [];
-  const orphan: string[] = [];
-
-  for (const key of keys) {
-    const session = activeSessions.get(stagingSessionId(key));
-    if (
-      session
-      && (
-        key === session.prepared_image_key
-        || key === session.prepared_thumbnail_key
-      )
-    ) {
-      active.push({ key, session });
-    } else {
-      orphan.push(key);
-    }
-  }
-
-  return { active, orphan };
 }
 
 export function mergeActiveIngestionSessions(

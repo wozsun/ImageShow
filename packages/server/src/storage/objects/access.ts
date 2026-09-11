@@ -47,23 +47,6 @@ export async function readStorageBuffer(
   return (await resolveStorageAccess(slug)).driver.readBuffer(prefix, key, options);
 }
 
-export async function writeStorageBuffer(
-  prefix: StoragePrefix,
-  key: string,
-  body: Buffer,
-  contentType: string,
-  slug?: string,
-  options?: StorageRequestOptions
-) {
-  return (await resolveStorageAccess(slug)).driver.writeBuffer(
-    prefix,
-    key,
-    body,
-    contentType,
-    options
-  );
-}
-
 export type StorageRemovalRequest = Readonly<{
   prefix: StoragePrefix;
   key: string;
@@ -180,15 +163,6 @@ export function assertStorageRemovalResults(
   }
 }
 
-export async function collectStorageKeys(
-  prefix: StoragePrefix,
-  slug?: string,
-  options?: StorageKeyListOptions
-) {
-  const { driver } = await resolveStorageAccess(slug);
-  return collectStorageKeyListing(driver.listKeys(prefix, options));
-}
-
 /** Collect every current namespace through one driver and cancel sibling scans on failure. */
 export async function collectStorageNamespaceSnapshot(
   slug: string,
@@ -203,8 +177,8 @@ export async function collectStorageNamespaceSnapshot(
     driver.listKeys(prefix, { ...options, signal })
   ));
   try {
-    const [full, thumbs, uploads] = await Promise.all(tasks);
-    return { full, thumbs, _uploads: uploads };
+    const [full, thumbs] = await Promise.all(tasks);
+    return { full, thumbs };
   } catch (error) {
     siblingAbort.abort(error);
     await Promise.allSettled(tasks);

@@ -1,3 +1,4 @@
+import { createReadStream } from "node:fs";
 import { createHash, type Hash } from "node:crypto";
 import { Readable } from "node:stream";
 import { finished } from "node:stream/promises";
@@ -137,36 +138,23 @@ export async function digestStorageObject(
   key: string,
   options: StorageRequestOptions & { includeMd5?: boolean } = {}
 ): Promise<StorageObjectDigest> {
+  const opened = await storage.driver.openRead(prefix, key, undefined, { signal: options.signal });
+  return digestReadable(opened.body, Boolean(options.includeMd5));
+}
+
+async function digestReadable(body: Readable, includeMd5: boolean): Promise<StorageObjectDigest> {
   const sha256 = createHash("sha256");
-  const md5 = options.includeMd5 ? createHash("md5") : undefined;
+  const md5 = includeMd5 ? createHash("md5") : undefined;
   const hashes = md5 ? [sha256, md5] : [sha256];
-  const opened = await storage.driver.openRead(
-    prefix,
-    key,
-    undefined,
-    { signal: options.signal }
-  );
   let size = 0;
   try {
-    for await (const chunk of opened.body) {
-      size += updateHashes(hashes, chunk);
-    }
-    // Async iteration completes on `end`, while FileHandle-backed streams may
-    // close their descriptor on the following turn. Wait for the complete
-    // stream lifecycle so an immediately-following move cleanup can unlink the
-    // local source on Windows as reliably as it can on Linux.
-    await finished(opened.body, { cleanup: true });
+    for await (const chunk of body) size += updateHashes(hashes, chunk);
+    await finished(body, { cleanup: true });
   } finally {
-    if (!opened.body.destroyed && !opened.body.readableEnded) {
-      opened.body.destroy();
-    }
-    await finished(opened.body, { cleanup: true }).catch(() => undefined);
+    body.destroy();
+    await finished(body, { cleanup: true }).catch(() => undefined);
   }
-  return {
-    size,
-    sha256: sha256.digest("hex"),
-    ...(md5 ? { md5: md5.digest("hex") } : {})
-  };
+  return { size, sha256: sha256.digest("hex"), ...(md5 ? { md5: md5.digest("hex") } : {}) };
 }
 
 function sameDigest(left: StorageObjectDigest, right: StorageObjectDigest) {
@@ -253,21 +241,18 @@ async function cleanupAttemptedCandidate(
   await cleanupCandidate(object, cleanup, transferError, options);
 }
 
-/**
- * Copy within one physical backend using the driver's native copy primitive.
- * Source and target are streamed for hashing, which avoids a second full
- * in-memory copy for S3 Ingestion commits and storage-location moves.
- */
-export async function copyVerifiedObjectWithinStorage(input: {
+/** Publish a local file as a guarded formal object and verify the stored bytes. */
+export async function writeVerifiedFileToStorage(input: {
   storage: StorageAccess;
-  fromPrefix: StoragePrefix;
-  fromKey: string;
+  sourcePath: string;
+  contentType: string;
+  onProgress?: (bytes: number) => Promise<void>;
   toPrefix: StoragePrefix;
   toKey: string;
-  expectedSource?: SourceDigestExpectation;
+  expectedSource: StorageObjectDigest;
   sourceMismatch?: SourceMismatchError;
   cleanupCandidate?: CandidateCleanup;
-  /** Matching pre-copy guard owned under the image storage mutation lock. */
+  /** Matching pre-write guard owned under the image storage mutation lock. */
   ownedIngestionCandidateGuard?: Readonly<{
     imageId: string;
     token: string;
@@ -276,11 +261,12 @@ export async function copyVerifiedObjectWithinStorage(input: {
 }): Promise<{ created: boolean; sourceDigest: StorageObjectDigest }> {
   const {
     storage,
-    fromPrefix,
-    fromKey,
+    sourcePath,
+    contentType,
+    onProgress,
     toPrefix,
     toKey,
-    expectedSource = {},
+    expectedSource,
     sourceMismatch = {
       status: 502,
       code: "storage_source_integrity_failed",
@@ -290,11 +276,8 @@ export async function copyVerifiedObjectWithinStorage(input: {
     ownedIngestionCandidateGuard,
     signal
   } = input;
-  const sourceDigest = await digestStorageObject(
-    storage,
-    fromPrefix,
-    fromKey,
-    { includeMd5: Boolean(expectedSource.md5), signal }
+  const sourceDigest = await digestReadable(
+    createReadStream(sourcePath, { signal }), Boolean(expectedSource.md5)
   );
   if (!digestMatchesExpected(sourceDigest, expectedSource)) {
     throw new ApiError(
@@ -302,21 +285,14 @@ export async function copyVerifiedObjectWithinStorage(input: {
       sourceMismatch.code,
       sourceMismatch.message,
       {
-        backend: storage.config.slug,
-        prefix: fromPrefix,
-        key: fromKey
+        backend: storage.config.slug
       }
     );
   }
 
-  if (fromPrefix === toPrefix && fromKey === toKey) {
-    return { created: false, sourceDigest };
-  }
-  if (toPrefix !== "_uploads") {
-    await assertObjectNotPendingCleanup(storage.config, toPrefix, toKey, {
-      ownedIngestionCandidateGuard
-    });
-  }
+  await assertObjectNotPendingCleanup(storage.config, toPrefix, toKey, {
+    ownedIngestionCandidateGuard
+  });
   if (await storage.driver.exists(toPrefix, toKey, { signal })) {
     const existing = await digestStorageObject(
       storage,
@@ -327,6 +303,7 @@ export async function copyVerifiedObjectWithinStorage(input: {
     if (!sameDigest(existing, sourceDigest)) {
       throw objectConflict(storage, toPrefix, toKey, storage.config.slug);
     }
+    await onProgress?.(sourceDigest.size);
     return { created: false, sourceDigest };
   }
 
@@ -339,7 +316,7 @@ export async function copyVerifiedObjectWithinStorage(input: {
     ? storage.config.s3.task_timeout_seconds * 1_000
     : 0;
   if (s3UncertaintyWindowMs && ownedIngestionCandidateGuard) {
-    // Cover the CopyObject request, its verification read, and one complete
+    // Cover the upload request, its verification read, and one complete
     // remote-settlement window before issuing the request. The error path
     // extends this from the actual rejection time as an additional safeguard.
     await setIngestionCandidateGuardConfirmationDeadline(
@@ -352,16 +329,34 @@ export async function copyVerifiedObjectWithinStorage(input: {
   }
 
   try {
-    await storage.driver.copy(
-      fromPrefix,
-      fromKey,
-      toPrefix,
-      toKey,
-      {
-        signal,
-        atomicCandidateToken: ownedIngestionCandidateGuard?.token
+    const source = createReadStream(sourcePath, { signal });
+    const sourceClosed = finished(source, { cleanup: true }).catch(() => undefined);
+    let transferred = 0;
+    let lastProgressAt = 0;
+    const body = Readable.from((async function* () {
+      for await (const chunk of source) {
+        signal?.throwIfAborted();
+        transferred += (chunk as Buffer).byteLength;
+        yield chunk;
+        if (onProgress && Date.now() - lastProgressAt >= 500) {
+          await onProgress(transferred);
+          lastProgressAt = Date.now();
+        }
       }
-    );
+    })());
+    const bodyClosed = finished(body, { cleanup: true }).catch(() => undefined);
+    try {
+      await storage.driver.writeStream(toPrefix, toKey, body, sourceDigest.size, contentType, {
+        signal,
+        expectedMd5: sourceDigest.md5,
+        atomicCandidateToken: ownedIngestionCandidateGuard?.token
+      });
+      await onProgress?.(transferred);
+    } finally {
+      body.destroy();
+      source.destroy();
+      await Promise.all([bodyClosed, sourceClosed]);
+    }
     const copied = await digestStorageObject(
       storage,
       toPrefix,
@@ -652,13 +647,11 @@ export async function ensureVerifiedObjectAtDestination(input: {
   );
   const sharedNamespace = shareStorageNamespace(source.config, target.config);
   if (sharedNamespace) {
-    if (prefix !== "_uploads") {
-      await assertObjectNotPendingCleanup(
-        target.config,
-        prefix,
-        key
-      );
-    }
+    await assertObjectNotPendingCleanup(
+      target.config,
+      prefix,
+      key
+    );
     await validateTransferSource(
       source,
       prefix,
@@ -682,9 +675,7 @@ export async function ensureVerifiedObjectAtDestination(input: {
     return { created: false };
   }
 
-  if (prefix !== "_uploads") {
-    await assertObjectNotPendingCleanup(target.config, prefix, key);
-  }
+  await assertObjectNotPendingCleanup(target.config, prefix, key);
   if (await target.driver.exists(prefix, key, { signal })) {
     const sourceDigest = await digestStorageObject(
       source,

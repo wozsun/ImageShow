@@ -6,7 +6,7 @@ export function controlledStorageDriver(overrides: Partial<StorageDriver>): Stor
   return {
     exists: unexpected, openRead: unexpected, readBuffer: unexpected,
     writeBuffer: unexpected, writeStream: unexpected, removeObjects: unexpected,
-    copy: unexpected, serverCopySource: unexpected, supportsServerCopySource: unexpected,
+    serverCopySource: unexpected, supportsServerCopySource: unexpected,
     copyFromServerSource: unexpected, listKeys: unexpected, selfTest: unexpected,
     pruneEmptyDirs: unexpected, ...overrides
   };
@@ -14,7 +14,7 @@ export function controlledStorageDriver(overrides: Partial<StorageDriver>): Stor
 
 export async function removeDriverObject(
   driver: StorageDriver,
-  prefix: "_uploads" | "full" | "thumbs",
+  prefix: "full" | "thumbs",
   key: string
 ) {
   const [result] = await driver.removeObjects([{ prefix, key }]);

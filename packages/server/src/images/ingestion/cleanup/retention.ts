@@ -12,15 +12,14 @@ function ingestionOrphanCleanupSafetyMs() {
 export function ingestionOrphanCutoffs(now = Date.now()) {
   const cleanupCycleAndSafety = ingestionOrphanCleanupIntervalMs()
     + ingestionOrphanCleanupSafetyMs();
-  const rawRetention = appConfig.ingestionRuntime.importSessionIdleTtlSeconds * 1000
+  const fileRetention = appConfig.ingestionRuntime.importSessionIdleTtlSeconds * 1000
     + cleanupCycleAndSafety;
   const requestRetention = Math.max(
     appConfig.ingestionRuntime.uploadClaimStaleSeconds * 1000,
     getRuntimeConfig().import.fetch_timeout_seconds * 1000
   ) + cleanupCycleAndSafety;
   return {
-    rawCutoff: now - rawRetention,
-    partCutoff: now - requestRetention,
-    stagingCutoff: now - rawRetention
+    fileCutoff: now - fileRetention,
+    partCutoff: now - requestRetention
   };
 }

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { copyFile, link, mkdir, open, opendir, rm, rmdir, writeFile, access } from "node:fs/promises";
+import { link, mkdir, open, opendir, rm, rmdir, writeFile, access } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -10,7 +10,6 @@ import { ApiError } from "../../core/api-error.ts";
 import { safeStoragePath, STORAGE_PREFIXES, type StoragePrefix } from "../objects/keys.ts";
 import type {
   OpenedRead,
-  StorageCopyOptions,
   StorageDriver,
   StorageObjectReference,
   StoragePruneOptions,
@@ -231,7 +230,11 @@ export class LocalBackend implements StorageDriver {
     const target = safeStoragePath(prefix, key);
     await mkdir(dirname(target), { recursive: true });
     options.signal?.throwIfAborted();
-    const candidate = `${target}.candidate-${randomUUID()}`;
+    const candidateToken = options.atomicCandidateToken ?? randomUUID();
+    if (options.atomicCandidateToken && !uuidV7TokenPattern.test(candidateToken)) {
+      throw new RangeError("Invalid local atomic candidate token");
+    }
+    const candidate = `${target}.candidate-${candidateToken.toLowerCase()}`;
     const output = createWriteStream(candidate, { flags: "wx" });
     await withLocalCandidate(candidate, async () => {
       await pipeline(body, output, { signal: options.signal });
@@ -288,34 +291,6 @@ export class LocalBackend implements StorageDriver {
     });
   }
 
-  async copy(
-    fromPrefix: StoragePrefix,
-    fromKey: string,
-    toPrefix: StoragePrefix,
-    toKey: string,
-    options: StorageCopyOptions = {}
-  ) {
-    options.signal?.throwIfAborted();
-    const target = safeStoragePath(toPrefix, toKey);
-    await mkdir(dirname(target), { recursive: true });
-    options.signal?.throwIfAborted();
-    const candidateToken = options.atomicCandidateToken ?? randomUUID();
-    if (
-      options.atomicCandidateToken
-      && !uuidV7TokenPattern.test(candidateToken)
-    ) {
-      throw new RangeError("Invalid local atomic candidate token");
-    }
-    const candidate = `${target}.candidate-${candidateToken.toLowerCase()}`;
-    await withLocalCandidate(candidate, async () => {
-      await copyFile(safeStoragePath(fromPrefix, fromKey), candidate);
-      // Publish only a complete same-directory candidate and never overwrite a
-      // target that appeared after the caller's existence check.
-      options.signal?.throwIfAborted();
-      await link(candidate, target);
-    });
-  }
-
   serverCopySource(
     _prefix: StoragePrefix,
     _key: string,
@@ -353,8 +328,8 @@ export class LocalBackend implements StorageDriver {
     const key = `.storage-test-${randomUUID()}`;
     let testError: unknown;
     try {
-      await this.writeBuffer("_uploads", key, Buffer.from("ok"), "text/plain", options);
-      if (!await this.exists("_uploads", key, options)) {
+      await this.writeBuffer("full", key, Buffer.from("ok"), "text/plain", options);
+      if (!await this.exists("full", key, options)) {
         throw new Error("Local self-test object could not be read back");
       }
     } catch (error) {
@@ -363,7 +338,7 @@ export class LocalBackend implements StorageDriver {
     try {
       // The caller may cancel after publication. Cleanup has its own budget
       // and only owns this probe's unique object, including uncertain writes.
-      const [removed] = await this.removeObjects([{ prefix: "_uploads", key }], {
+      const [removed] = await this.removeObjects([{ prefix: "full", key }], {
         signal: AbortSignal.timeout(10_000)
       });
       if (removed?.status !== "removed" && removed?.status !== "missing") {

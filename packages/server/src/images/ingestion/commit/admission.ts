@@ -8,9 +8,8 @@ import {
   DynamicWeightedLimiter
 } from "../../../core/concurrency.ts";
 
-// Internal memory admission for prepared image plus thumbnail buffers. This is
-// intentionally not deployment configuration: operators tune item concurrency,
-// while the 2C4G baseline owns this invariant.
+// Bound the total prepared bytes admitted to concurrent storage transfers.
+// Item concurrency remains the public deployment control.
 const INGESTION_COMMIT_BYTE_BUDGET_BYTES = 256 * 1024 * 1024;
 
 const ingestionCommitAdmission = new DynamicConcurrencyLimiter(

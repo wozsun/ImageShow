@@ -8,8 +8,7 @@ import { ingestionPreviewPath } from "@imageshow/shared/browser";
 import { ApiError } from "../../../core/api-error.ts";
 import { privateNoStoreCacheControl } from "../../../core/http/headers.ts";
 import { contentType } from "../../../storage/objects/keys.ts";
-import { readStorageBuffer } from "../../../storage/objects/access.ts";
-import { withStorageLocationReadLock } from "../../../storage/maintenance-lock.ts";
+import { readIngestionPreparedFile } from "../raw/prepared.ts";
 import {
   committedIngestionResultForOwner,
   readCommittedIngestionResultsByImageIds
@@ -200,34 +199,24 @@ export async function readIngestionPreview(
   requestSignal?: AbortSignal
 ) {
   const session = await preparedSession(repository, owner, pair);
-  return withStorageLocationReadLock(async (lockSignal) => {
-    const signal = requestSignal
-      ? AbortSignal.any([requestSignal, lockSignal])
-      : lockSignal;
-    signal.throwIfAborted();
-    const current = await preparedSession(repository, owner, pair);
-    if (
-      current.version !== session.version
-      || current.prepared?.generation !== session.prepared?.generation
-    ) {
-      throw new ApiError(409, "ingestion_version_conflict", "内容接入任务版本已变化");
+  requestSignal?.throwIfAborted();
+  const current = await preparedSession(repository, owner, pair);
+  if (
+    current.version !== session.version
+    || current.prepared?.generation !== session.prepared?.generation
+  ) {
+    throw new ApiError(409, "ingestion_version_conflict", "内容接入任务版本已变化");
+  }
+  const key = variant === "full"
+    ? current.prepared!.prepared_image_path
+    : current.prepared!.prepared_thumbnail_path;
+  const buffer = await readIngestionPreparedFile(key, requestSignal);
+  return new Response(buffer as unknown as BodyInit, {
+    headers: {
+      "Content-Type": variant === "full"
+        ? contentType(current.prepared!.ext)
+        : "image/webp",
+      "Cache-Control": privateNoStoreCacheControl
     }
-    const key = variant === "full"
-      ? current.prepared!.prepared_image_key
-      : current.prepared!.prepared_thumbnail_key;
-    const buffer = await readStorageBuffer(
-      "_uploads",
-      key,
-      current.storage_slug,
-      { signal }
-    );
-    return new Response(buffer as unknown as BodyInit, {
-      headers: {
-        "Content-Type": variant === "full"
-          ? contentType(current.prepared!.ext)
-          : "image/webp",
-        "Cache-Control": privateNoStoreCacheControl
-      }
-    });
   });
 }

@@ -10,7 +10,6 @@ type StorageBackendDeletionInput = {
   image_count: number;
   ingestion_session_count: number;
   cleanup_job_count: number;
-  staging_object_count?: number;
 };
 
 function positiveCount(value: number | undefined) {
@@ -37,9 +36,6 @@ export function resolveStorageBackendDeletionState(
     blockers.push("ingestion_sessions");
   }
   if (positiveCount(input.cleanup_job_count)) blockers.push("cleanup_jobs");
-  if (positiveCount(input.staging_object_count)) {
-    blockers.push("staging_objects");
-  }
 
   return storageBackendDeletionStateFromBlockers(blockers);
 }

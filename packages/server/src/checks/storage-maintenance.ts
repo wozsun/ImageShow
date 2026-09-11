@@ -20,7 +20,6 @@ import { maintainTrashPurgeTasks } from "../images/trash-purge-maintenance.ts";
 
 function summarizeMaintenance(
   items: readonly MaintenanceItem[],
-  activeStagingObjectsRetained: number,
   prunedDirectories: number
 ) {
   const count = (outcome: MaintenanceOutcome) => (
@@ -32,7 +31,6 @@ function summarizeMaintenance(
     removed: count("removed"),
     skipped: count("skipped"),
     failed: count("failed"),
-    active_staging_objects_retained: activeStagingObjectsRetained,
     pruned_dirs: prunedDirectories,
     items
   };
@@ -115,7 +113,6 @@ async function maintainStorageUnderLock(
   items.push(...pruned.failures);
   return summarizeMaintenance(
     items,
-    plan.activeStagingObjectsRetained,
     pruned.prunedDirectories
   );
 }

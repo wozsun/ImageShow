@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { access } from "node:fs/promises";
+import { ingestionPreparedPath } from "../../../../packages/server/src/images/ingestion/raw/paths.ts";
 import type { IngestionSessionSnapshot } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
 import {
   runIntegrationScenario
@@ -56,14 +58,8 @@ await runIntegrationScenario(async (runtime) => {
       await fixture.localDriver.readBuffer("thumbs", fixture.finalThumbnailKey),
       fixture.thumbnailBody
     );
-    assert.equal(
-      await fixture.localDriver.exists("_uploads", fixture.stagingImageKey),
-      false
-    );
-    assert.equal(
-      await fixture.localDriver.exists("_uploads", fixture.stagingThumbnailKey),
-      false
-    );
+    await assert.rejects(access(ingestionPreparedPath(fixture.preparedImageFile)), { code: "ENOENT" });
+    await assert.rejects(access(ingestionPreparedPath(fixture.preparedThumbnailFile)), { code: "ENOENT" });
     assert.equal(
       (await fixture.repository.readSession(
         fixture.owner,

@@ -8,19 +8,18 @@ import sharp, { type Metadata } from "sharp";
 import { ApiError } from "../../../core/api-error.ts";
 import { nodeReadableFromWeb } from "../../../storage/objects/stream-buffer.ts";
 import type {
-  IngestionQueueType,
   IngestionSessionPair
 } from "../sessions/model.ts";
 import {
-  ingestionRawPathIsActive,
-  pruneIngestionRawParents,
-  tryWithInactiveIngestionRawPath
+  ingestionTempPathIsActive,
+  pruneIngestionTempParents,
+  tryWithInactiveIngestionTempPath
 } from "./lease-registry.ts";
 import { ingestionRawPartPath, ingestionRawPath } from "./paths.ts";
 
 const allowedRawExtensions = new Set(["jpg", "png", "webp", "gif", "avif"]);
 
-export async function statIngestionRawIfExists(path: string) {
+export async function statIngestionTempIfExists(path: string) {
   try {
     return await stat(path);
   } catch (error) {
@@ -39,7 +38,7 @@ export async function publishIngestionRawPart(
     await link(partPath, rawPath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    const existing = await statIngestionRawIfExists(rawPath);
+    const existing = await statIngestionTempIfExists(rawPath);
     if (!existing?.isFile()) throw error;
   }
   // Publication already succeeded; a leftover part is an orphan-cleanup
@@ -86,9 +85,8 @@ export async function receiveUploadRaw(
     heartbeat?: () => Promise<void>;
   }>
 ) {
-  const rawPath = ingestionRawPath("upload", input.pair, input.raw_generation);
+  const rawPath = ingestionRawPath(input.pair, input.raw_generation);
   const partPath = ingestionRawPartPath(
-    "upload",
     input.pair,
     input.raw_generation,
     input.execution_token
@@ -161,39 +159,36 @@ export async function receiveUploadRaw(
 }
 
 export async function removeIngestionRaw(
-  queue: IngestionQueueType,
   pair: IngestionSessionPair,
   rawGeneration: string
 ) {
-  const path = ingestionRawPath(queue, pair, rawGeneration);
-  const removed = await tryWithInactiveIngestionRawPath(path, async () => {
-    if (ingestionRawPathIsActive(path)) return false;
+  const path = ingestionRawPath(pair, rawGeneration);
+  const removed = await tryWithInactiveIngestionTempPath(path, async () => {
+    if (ingestionTempPathIsActive(path)) return false;
     await rm(path, { force: true });
     return true;
   });
-  if (removed) await pruneIngestionRawParents(path);
+  if (removed) await pruneIngestionTempParents(path);
 }
 
 /** Delete an exact raw generation while the caller owns its active-path lease. */
 export async function removeOwnedIngestionRaw(
-  queue: IngestionQueueType,
   pair: IngestionSessionPair,
   rawGeneration: string
 ) {
-  const path = ingestionRawPath(queue, pair, rawGeneration);
+  const path = ingestionRawPath(pair, rawGeneration);
   await rm(path, { force: true });
-  await pruneIngestionRawParents(path);
+  await pruneIngestionTempParents(path);
 }
 
 export async function removeIngestionRawPart(
-  queue: IngestionQueueType,
   pair: IngestionSessionPair,
   rawGeneration: string,
   executionToken: string
 ) {
-  const path = ingestionRawPartPath(queue, pair, rawGeneration, executionToken);
-  // Part-file callers execute inside withActiveIngestionRawPaths and therefore
+  const path = ingestionRawPartPath(pair, rawGeneration, executionToken);
+  // Part-file callers execute inside withActiveIngestionTempPaths and therefore
   // already own the exclusion lease that makes this exact unlink safe.
   await rm(path, { force: true });
-  await pruneIngestionRawParents(path);
+  await pruneIngestionTempParents(path);
 }

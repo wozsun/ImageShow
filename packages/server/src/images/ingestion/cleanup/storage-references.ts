@@ -5,7 +5,7 @@ import {
   requireOperationalRedis
 } from "../../../core/runtime-availability.ts";
 import { ingestionSessionRepository } from "../runtime-repository.ts";
-import { ingestionRawPath } from "../raw/paths.ts";
+import { ingestionRawPath, ingestionPreparedPath } from "../raw/paths.ts";
 import type {
   IngestionSessionSnapshot,
   StoredIngestionSession
@@ -19,8 +19,8 @@ export type ActiveIngestionStorageReference = {
   storage_slug: string;
   final_object_key: string | null;
   raw_generation: string;
-  prepared_image_key: string | null;
-  prepared_thumbnail_key: string | null;
+  prepared_image_path: string | null;
+  prepared_thumbnail_path: string | null;
   discard_at: number;
 };
 
@@ -40,8 +40,8 @@ function activeStorageReference(
     storage_slug: active.storage_slug,
     final_object_key: active.commit?.final_object_key ?? null,
     raw_generation: active.raw_generation,
-    prepared_image_key: prepared?.prepared_image_key ?? null,
-    prepared_thumbnail_key: prepared?.prepared_thumbnail_key ?? null,
+    prepared_image_path: prepared?.prepared_image_path ?? null,
+    prepared_thumbnail_path: prepared?.prepared_thumbnail_path ?? null,
     discard_at: active.discard_at
   };
 }
@@ -56,8 +56,8 @@ function storageProjection(session: StoredIngestionSession) {
     active.storage_slug,
     active.final_object_key ?? "",
     active.raw_generation,
-    active.prepared_image_key ?? "",
-    active.prepared_thumbnail_key ?? ""
+    active.prepared_image_path ?? "",
+    active.prepared_thumbnail_path ?? ""
   ].join("\0");
 }
 
@@ -156,22 +156,18 @@ export async function activeIngestionStorageReferences(
     string,
     Map<string, ActiveIngestionStorageReference>
   >();
-  const stagingKeysByBackend = new Map<string, Set<string>>();
-  const rawPaths = new Set<string>();
+  const tempPaths = new Set<string>();
   for (const row of rows) {
     const sessions = sessionsByBackend.getOrInsertComputed(
       row.storage_slug,
       () => new Map()
     );
     sessions.set(row.id, row);
-    const stagingKeys = stagingKeysByBackend.getOrInsertComputed(
-      row.storage_slug,
-      () => new Set()
-    );
-    if (row.prepared_image_key) stagingKeys.add(row.prepared_image_key);
-    if (row.prepared_thumbnail_key) stagingKeys.add(row.prepared_thumbnail_key);
+    for (const file of [row.prepared_image_path, row.prepared_thumbnail_path]) {
+      if (file) tempPaths.add(ingestionPreparedPath(file));
+    }
     if (row.raw_generation) {
-      rawPaths.add(ingestionRawPath(row.queue, {
+      tempPaths.add(ingestionRawPath({
         session_id: row.id,
         image_id: row.image_id
       }, row.raw_generation));
@@ -180,8 +176,7 @@ export async function activeIngestionStorageReferences(
   return {
     rows,
     sessionsByBackend,
-    stagingKeysByBackend,
-    rawPaths
+    tempPaths
   };
 }
 

@@ -41,8 +41,8 @@ export type ImportDownload = Readonly<{
 }>;
 
 export type IngestionPreparedManifest = Readonly<{
-  prepared_image_key: string;
-  prepared_thumbnail_key: string;
+  prepared_image_path: string;
+  prepared_thumbnail_path: string;
   original_size: number;
   original_width: number;
   original_height: number;

@@ -46,7 +46,7 @@ const storageIngestionScenarios = [
   },
   {
     id: "ingestion-orphan-lifecycle",
-    name: "接入孤儿的引用保护、批次与跨周期清理",
+    name: "接入临时文件的引用保护、用量与孤儿清理",
     script: join(isolationRoot, "ingestion-orphan-lifecycle.mts")
   },
   {
@@ -56,7 +56,7 @@ const storageIngestionScenarios = [
   },
   {
     id: "local-io-lifecycle",
-    name: "Local 对象读取、复制与目录生命周期",
+    name: "Local 对象读写、取消与目录生命周期",
     script: join(isolationRoot, "local-io-lifecycle.mts")
   },
   {

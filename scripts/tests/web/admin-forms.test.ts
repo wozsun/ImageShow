@@ -42,8 +42,7 @@ import {
 } from "../../../packages/web/src/components/image/editor/image-editor-trash.ts";
 import {
   storageBackendAfterDeleteRejection,
-  storageBackendDeletionReasons,
-  storageBackendWithHiddenStagingBlocker
+  storageBackendDeletionReasons
 } from "../../../packages/web/src/pages/admin/storage/storage-backend-deletion-policy.ts";
 import {
   storageBackendEditConfigPatch,
@@ -77,7 +76,7 @@ import {
   installControlledClock
 } from "../support/controlled-clock.ts";
 
-test("[Web/后台表单] 存储维护预览区分可修复、不可修复、可删除与受保护项", () => {
+test("[Web/后台表单] 存储维护预览区分可修复、缺失原图、可清理与受阻项", () => {
   assert.deepEqual(storageMaintenancePreview({
     missing_objects: [{ id: "missing-source", backend: "local", namespace: "local" }],
     missing_thumbs: [
@@ -95,11 +94,6 @@ test("[Web/后台表单] 存储维护预览区分可修复、不可修复、可�
     ],
     orphan_thumbs: [
       { key: "orphan-thumb", backend: "archive", namespace: "archive" }
-    ],
-    active_staging_files: [{ key: "active-upload", namespace: "local" }],
-    retained_staging_files: [{ key: "retained-upload", namespace: "local" }],
-    orphan_staging_files: [
-      { key: "orphan-upload", backend: "local", namespace: "local" }
     ],
     incomplete_listings: [
       { backend: "archive", namespace: "archive", prefix: "full" },
@@ -120,12 +114,11 @@ test("[Web/后台表单] 存储维护预览区分可修复、不可修复、可�
   }), {
     repairable_thumbnails: 2,
     missing_originals: 1,
-    removable_objects: 3,
-    protected_staging_objects: 2,
+    removable_objects: 2,
     blocked_namespaces: 2,
     unavailable_logical_backends: 1,
     blocked_items: 3,
-    preview_items: 6
+    preview_items: 5
   });
   assert.equal(storageMaintenancePreview({ missing_objects: [] }), null);
 });
@@ -713,10 +706,6 @@ test("[Web/后台表单] 存储删除反馈以服务端权威结果收口", () =
   ));
   assert.ok(rejected);
   assert.deepEqual(rejected.deletion.blockers, ["ingestion_sessions", "cleanup_jobs"]);
-  assert.deepEqual(storageBackendWithHiddenStagingBlocker(backend, {
-    ...backend,
-    deletion: { action: "blocked", blockers: ["staging_objects"] }
-  }).deletion.blockers, ["images", "staging_objects"]);
 });
 test("[Web/后台表单] 存储编辑只提交变化字段并省略空凭据", () => {
   const backend = {

@@ -6,14 +6,7 @@ import {
 } from "../../../core/database/advisory-locks.ts";
 import { logger } from "../../../core/logger.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
-import { assertStorageWriteTarget } from "../../../storage/backends/registry.ts";
-import { withStorageLocationReadLock } from "../../../storage/maintenance-lock.ts";
-import {
-  assertStorageRemovalResults,
-  removeStorageObjectsAndConfirm,
-  writeStorageBuffer
-} from "../../../storage/objects/access.ts";
-import { contentType } from "../../../storage/objects/keys.ts";
+import { removeIngestionPreparedFiles, writeIngestionPreparedFile } from "../raw/prepared.ts";
 import { detectBrightness } from "../../brightness.ts";
 import { deviceFromDimensions } from "../../classification.ts";
 import { withNormalizationAdmission } from "../../normalization-admission.ts";
@@ -28,55 +21,41 @@ import {
   refreshIngestionExecutionSession,
   updateIngestionExecutionProgress
 } from "../execution/session.ts";
-import {
-  removeOwnedIngestionRaw,
-} from "../raw/files.ts";
-import { withActiveIngestionRawPaths } from "../raw/lease-registry.ts";
-import { ingestionRawPath } from "../raw/paths.ts";
+import { removeOwnedIngestionRaw } from "../raw/files.ts";
+import { withActiveIngestionTempPaths } from "../raw/lease-registry.ts";
+import { ingestionRawPath, ingestionPreparedFile, ingestionPreparedPath } from "../raw/paths.ts";
 import type {
   IngestionSessionSnapshot,
   StoredIngestionSession
 } from "../sessions/model.ts";
 import { ingestionSessionSemanticHash } from "../sessions/projection.ts";
 import { IngestionSessionRepository } from "../repository.ts";
-import {
-  ingestionStagingImageKey,
-  ingestionStagingThumbnailKey
-} from "../staging-keys.ts";
 import { withIngestionPreparationAdmission } from "./preparation-admission.ts";
 
 function requiredDeviceFromDimensions(width: number, height: number) {
   return deviceFromDimensions(width, height) ?? "pc";
 }
 
-async function currentPreparingSession(
-  repository: IngestionSessionRepository,
-  expected: IngestionSessionSnapshot
-) {
-  return refreshIngestionExecutionSession(repository, expected);
-}
-
 export function preparedAttemptIsReferenced(
   current: StoredIngestionSession | null,
   expected: Pick<IngestionSessionSnapshot, "image_id">,
-  imageKey: string,
-  thumbnailKey: string
+  imageFile: string,
+  thumbnailFile: string
 ) {
   return Boolean(
     current
     && current.image_id === expected.image_id
     && "prepared" in current
-    && current.prepared?.prepared_image_key === imageKey
-    && current.prepared.prepared_thumbnail_key === thumbnailKey
+    && current.prepared?.prepared_image_path === imageFile
+    && current.prepared.prepared_thumbnail_path === thumbnailFile
   );
 }
 
 async function cleanupPreparedAttempt(
   repository: IngestionSessionRepository,
   session: IngestionSessionSnapshot,
-  storageSlug: string,
-  imageKey: string,
-  thumbnailKey: string
+  imageFile: string,
+  thumbnailFile: string
 ) {
   const removeIfUnreferenced = async () => {
     const current = await repository.readSession(session.owner, session.session_id);
@@ -85,19 +64,10 @@ async function cleanupPreparedAttempt(
     if (preparedAttemptIsReferenced(
       current,
       session,
-      imageKey,
-      thumbnailKey
+      imageFile,
+      thumbnailFile
     )) return;
-    await withStorageLocationReadLock(async (signal) => {
-      const results = await removeStorageObjectsAndConfirm([
-        { prefix: "_uploads", key: imageKey, storageSlug },
-        { prefix: "_uploads", key: thumbnailKey, storageSlug }
-      ], { signal });
-      assertStorageRemovalResults(
-        results,
-        "Prepared Ingestion attempt cleanup failed"
-      );
-    });
+    await removeIngestionPreparedFiles([imageFile, thumbnailFile]);
   };
   try {
     await removeIfUnreferenced();
@@ -106,12 +76,11 @@ async function cleanupPreparedAttempt(
     logger.warn("ingestion_prepared_attempt_cleanup_deferred", {
       session_id: session.session_id,
       image_id: session.image_id,
-      storage_slug: storageSlug,
       error: errorMessage(error)
     });
   }
   // The retry re-reads Redis before every delete attempt. Unknown ownership
-  // therefore remains fail-closed without losing the exact staging keys.
+  // therefore remains fail-closed without losing the exact local file references.
   await ingestionCleanupRetryQueue.enqueue(removeIfUnreferenced);
 }
 
@@ -132,21 +101,20 @@ export async function prepareIngestionSessionSnapshot(
     throw new ApiError(409, "invalid_ingestion_state", "内容接入任务不能进入处理阶段");
   }
   const preparedGeneration = randomUuidV7();
-  const keyInput = {
+  const attemptIdentity = {
     session_id: session.session_id,
     image_id: session.image_id,
     generation: preparedGeneration,
     execution_token: session.execution_token
   };
-  const preparedImageKey = ingestionStagingImageKey(keyInput);
-  const preparedThumbnailKey = ingestionStagingThumbnailKey(keyInput);
+  const preparedImageFile = ingestionPreparedFile(attemptIdentity, "image");
+  const preparedThumbnailFile = ingestionPreparedFile(attemptIdentity, "thumb");
   const rawPath = ingestionRawPath(
-    session.queue,
     session,
     session.raw_generation
   );
   const transcode = dependencies.transcode ?? transcodeStoredImage;
-  let enteredStorageBoundary = false;
+  let enteredLocalWrite = false;
 
   const prepareAndPublish = async () => {
     const runtime = getRuntimeConfig();
@@ -174,7 +142,7 @@ export async function prepareIngestionSessionSnapshot(
         signal
       );
       signal.throwIfAborted();
-      current = await currentPreparingSession(repository, current);
+      current = await refreshIngestionExecutionSession(repository, current);
       current = await updateIngestionExecutionProgress(
         repository,
         current,
@@ -190,7 +158,7 @@ export async function prepareIngestionSessionSnapshot(
       );
       const detectedBrightness = await detectBrightness(normalized.thumbnail);
       signal.throwIfAborted();
-      current = await currentPreparingSession(repository, current);
+      current = await refreshIngestionExecutionSession(repository, current);
       return { normalized, detectedDevice, detectedBrightness };
     });
     const { normalized, detectedDevice, detectedBrightness } = normalizedState;
@@ -199,87 +167,68 @@ export async function prepareIngestionSessionSnapshot(
       current,
       {
         phase: "staging",
-        message: "写入处理后的图片和缩略图",
+        message: "在本地保存处理结果和缩略图",
         progress: null
       }
     );
-    return withStorageLocationReadLock(async (lockSignal) => {
-      const storageSignal = AbortSignal.any([signal, lockSignal]);
-      storageSignal.throwIfAborted();
-      await assertStorageWriteTarget(session.storage_slug);
-      storageSignal.throwIfAborted();
-      enteredStorageBoundary = true;
-      const writes = await Promise.allSettled([
-        writeStorageBuffer(
-          "_uploads",
-          preparedImageKey,
-          normalized.processed,
-          contentType(normalized.ext),
-          session.storage_slug,
-          { signal: storageSignal }
-        ),
-        writeStorageBuffer(
-          "_uploads",
-          preparedThumbnailKey,
-          normalized.thumbnail,
-          "image/webp",
-          session.storage_slug,
-          { signal: storageSignal }
-        )
-      ]);
-      const failure = writes.find(
-        (result): result is PromiseRejectedResult => result.status === "rejected"
-      );
-      if (failure) throw failure.reason;
-      storageSignal.throwIfAborted();
-      current = await currentPreparingSession(repository, current);
-      const duplicates = await captureIngestionDuplicateCheck(normalized.md5);
-      return mutateIngestionExecution(
-        repository,
-        current,
-        (latest) => {
-          const nextWithoutHash = {
-            ...latest,
-            status: "ready" as const,
-            phase: "ready",
-            message: duplicates.check.match_count
-              ? "处理完成，请确认重复图片"
-              : "处理完成，可以提交",
-            progress: 100,
-            execution_token: "",
-            raw_generation: "",
-            raw_size: 0,
-            prepared: {
-              prepared_image_key: preparedImageKey,
-              prepared_thumbnail_key: preparedThumbnailKey,
-              original_size: normalized.sourceSize,
-              original_width: normalized.sourceWidth,
-              original_height: normalized.sourceHeight,
-              width: normalized.width,
-              height: normalized.height,
-              ext: normalized.ext,
-              md5: normalized.md5,
-              prepared_image_sha256: sha256Buffer(normalized.processed),
-              prepared_thumbnail_sha256: sha256Buffer(normalized.thumbnail),
-              size: normalized.size,
-              thumbnail_size: normalized.thumbnail.byteLength,
-              quality: normalized.quality,
-              transcoded: normalized.transcoded,
-              detected_device: detectedDevice,
-              detected_brightness: detectedBrightness,
-              duplicate_count: duplicates.check.match_count,
-              generation: preparedGeneration
-            },
-            error: undefined,
-            semantic_hash: ""
-          };
-          return {
-            ...nextWithoutHash,
-            semantic_hash: ingestionSessionSemanticHash(nextWithoutHash)
-          };
-        }
-      );
-    });
+    signal.throwIfAborted();
+    enteredLocalWrite = true;
+    const writes = await Promise.allSettled([
+      writeIngestionPreparedFile(preparedImageFile, normalized.processed, signal),
+      writeIngestionPreparedFile(preparedThumbnailFile, normalized.thumbnail, signal)
+    ]);
+    const failure = writes.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected"
+    );
+    if (failure) throw failure.reason;
+    signal.throwIfAborted();
+    current = await refreshIngestionExecutionSession(repository, current);
+    const duplicates = await captureIngestionDuplicateCheck(normalized.md5);
+    return mutateIngestionExecution(
+      repository,
+      current,
+      (latest) => {
+        const nextWithoutHash = {
+          ...latest,
+          status: "ready" as const,
+          phase: "ready",
+          message: duplicates.check.match_count
+            ? "处理完成，请确认重复图片"
+            : "处理完成，可以提交",
+          progress: 100,
+          execution_token: "",
+          raw_generation: "",
+          raw_size: 0,
+          prepared: {
+            prepared_image_path: preparedImageFile,
+            prepared_thumbnail_path: preparedThumbnailFile,
+            original_size: normalized.sourceSize,
+            original_width: normalized.sourceWidth,
+            original_height: normalized.sourceHeight,
+            width: normalized.width,
+            height: normalized.height,
+            ext: normalized.ext,
+            md5: normalized.md5,
+            prepared_image_sha256: sha256Buffer(normalized.processed),
+            prepared_thumbnail_sha256: sha256Buffer(normalized.thumbnail),
+            size: normalized.size,
+            thumbnail_size: normalized.thumbnail.byteLength,
+            quality: normalized.quality,
+            transcoded: normalized.transcoded,
+            detected_device: detectedDevice,
+            detected_brightness: detectedBrightness,
+            duplicate_count: duplicates.check.match_count,
+            generation: preparedGeneration
+          },
+          error: undefined,
+          semantic_hash: ""
+        };
+        return {
+          ...nextWithoutHash,
+          semantic_hash: ingestionSessionSemanticHash(nextWithoutHash)
+        };
+      }
+    );
   };
 
   const prepareAttempt = async () => {
@@ -289,7 +238,6 @@ export async function prepareIngestionSessionSnapshot(
       prepareAndPublish
     );
     await removeOwnedIngestionRaw(
-      session.queue,
       session,
       session.raw_generation
     ).catch((error) => {
@@ -303,20 +251,23 @@ export async function prepareIngestionSessionSnapshot(
   };
 
   try {
-    return await withActiveIngestionRawPaths([rawPath], () => (
+    const paths = [rawPath, ...[preparedImageFile, preparedThumbnailFile].flatMap((file) => {
+      const path = ingestionPreparedPath(file);
+      return [path, path + ".part"];
+    })];
+    return await withActiveIngestionTempPaths(paths, () => (
       runWithAdvisoryLockAcquisitionSignal(
         signal,
         prepareAttempt
       )
     ));
   } catch (error) {
-    if (enteredStorageBoundary) {
+    if (enteredLocalWrite) {
       await cleanupPreparedAttempt(
         repository,
         session,
-        session.storage_slug,
-        preparedImageKey,
-        preparedThumbnailKey
+        preparedImageFile,
+        preparedThumbnailFile
       );
     }
     throw error;

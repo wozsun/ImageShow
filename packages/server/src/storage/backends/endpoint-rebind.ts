@@ -1,49 +1,8 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import type { StorageDriver } from "../drivers/driver.ts";
-import {
-  collectStorageKeyListing,
-  STORAGE_ADMIN_LIST_MAX_KEYS
-} from "../objects/key-listing.ts";
 
 const storageProbePrefix = ".storage-test-";
-
-export type StagingNamespaceSnapshot = {
-  keys: Set<string>;
-};
-
-/** Enumerate `_uploads` once and retain every opaque complete object key. */
-export async function captureStagingNamespaceSnapshot(
-  driver: StorageDriver,
-  signal?: AbortSignal
-): Promise<StagingNamespaceSnapshot> {
-  signal?.throwIfAborted();
-  const listing = await collectStorageKeyListing(driver.listKeys("_uploads", {
-    signal,
-    maxKeys: STORAGE_ADMIN_LIST_MAX_KEYS
-  }));
-  signal?.throwIfAborted();
-  if (!listing.complete) {
-    throw new Error("Storage staging namespace listing was incomplete");
-  }
-  const keys = new Set(
-    listing.keys
-      .filter((key) => !key.startsWith(storageProbePrefix))
-  );
-  return { keys };
-}
-
-function sameKeys(first: ReadonlySet<string>, second: ReadonlySet<string>) {
-  return first.size === second.size
-    && [...first].every((key) => second.has(key));
-}
-
-function stagingSnapshotsMatch(
-  current: StagingNamespaceSnapshot,
-  candidate: StagingNamespaceSnapshot
-) {
-  return sameKeys(current.keys, candidate.keys);
-}
 
 function endpointMismatch(reason: string) {
   return new ApiError(
@@ -56,7 +15,7 @@ function endpointMismatch(reason: string) {
 
 async function removeChallengeObject(driver: StorageDriver, key: string) {
   const [result] = await driver.removeObjects([{
-    prefix: "_uploads",
+    prefix: "full",
     key
   }]);
   if (result?.status === "failed" || result?.status === "unknown") {
@@ -79,14 +38,14 @@ async function verifyBidirectionalChallenge(
   try {
     signal?.throwIfAborted();
     await current.writeBuffer(
-      "_uploads",
+      "full",
       currentKey,
       currentChallenge,
       "application/octet-stream",
       { signal }
     );
     const readThroughCandidate = await candidate.readBuffer(
-      "_uploads",
+      "full",
       currentKey,
       { signal }
     );
@@ -95,14 +54,14 @@ async function verifyBidirectionalChallenge(
     }
 
     await candidate.writeBuffer(
-      "_uploads",
+      "full",
       candidateKey,
       candidateChallenge,
       "application/octet-stream",
       { signal }
     );
     const readThroughCurrent = await current.readBuffer(
-      "_uploads",
+      "full",
       candidateKey,
       { signal }
     );
@@ -154,31 +113,12 @@ async function verifyBidirectionalChallenge(
   }
 }
 
-/** Prove two access endpoints expose the same complete staging namespace. */
+/** Verify both endpoints expose the same writable object namespace. */
 export async function verifyStorageEndpointRebind(input: {
   current: StorageDriver;
   candidate: StorageDriver;
-  currentStaging: StagingNamespaceSnapshot;
   signal?: AbortSignal;
 }) {
-  let candidateStaging: StagingNamespaceSnapshot;
-  try {
-    candidateStaging = await captureStagingNamespaceSnapshot(
-      input.candidate,
-      input.signal
-    );
-  } catch (error) {
-    input.signal?.throwIfAborted();
-    throw endpointMismatch(errorMessage(error));
-  }
-  input.signal?.throwIfAborted();
-  if (!stagingSnapshotsMatch(input.currentStaging, candidateStaging)) {
-    throw endpointMismatch("staging_snapshot_mismatch");
-  }
-  await verifyBidirectionalChallenge(
-    input.current,
-    input.candidate,
-    input.signal
-  );
+  await verifyBidirectionalChallenge(input.current, input.candidate, input.signal);
   input.signal?.throwIfAborted();
 }

@@ -190,7 +190,7 @@ JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`titl
 
 资源准入按职责只有一个 owner：活动浏览器页面管理预览、凭据和 raw PUT 窗口，Server raw
 接收管理所有客户端的上传流，Upload / Import 共用的 preparation owner 管理从等待 Normalize 到
-`_uploads` 与 ready 发布的全部接入处理，normalize 管理全部 Sharp 重工作，commit 管理两类来源
+本地处理结果与 ready 发布的全部接入处理，normalize 管理全部 Sharp 重工作，commit 管理两类来源
 的最终入库。preparation owner 和 Import 一批远端后继窗口都由 Normalize 容量派生。直接调用
 API 仍进入对应的 Server 准入；页面窗口只限制单端工作，不替代服务端资源边界。
 `ingestion.max_file_size_mb` 与
@@ -221,9 +221,9 @@ Import 下载与 prepare 会在各自取得完整事实的 Server 边界再次�
    `preparing` 状态和 `prepare-waiting` phase，表示 raw 已完整但仍在等待 Normalize 许可；它在
    页面显示“待处理”并计入“等待中”。只有真正进入全局 Normalize 许可回调后，Server 才发布
    `normalizing` phase，页面随之进入“处理中”。Sharp 校验格式、尺寸和 EXIF 展示方向，
-   按配置生成 processed image 与 thumbnail，计算 MD5/SHA-256、设备和明暗，再在 storage location
-   shared advisory lock 内写入 `_uploads`；两个对象及 ready canonical 发布完成后才释放 preparation
-   许可。图片重工作结束即释放 Normalize 许可，因此慢存储不会占用其他图片处理入口。下载 /
+   按配置生成 processed image 与 thumbnail，计算 MD5/SHA-256、设备和明暗，再原子发布到
+   本地临时目录；两个文件及 ready canonical 发布完成后清理原始文件并释放 preparation
+   许可。图片重工作结束即释放 Normalize 许可。下载 /
    prepare 期间的草稿编辑可以推进 semantic version；worker
    在 heartbeat、progress 和阶段发布的 CAS 冲突后重读 canonical，只在状态和 execution token
    仍属于同一次执行时接力新版 version，并以最新草稿完成阶段。状态、图片身份或 token 已变化时
@@ -231,19 +231,19 @@ Import 下载与 prepare 会在各自取得完整事实的 Server 边界再次�
 4. **commit**请求只受理不可变意图。每项携带 pair、expected version、prepared MD5、稳定
    UUIDv7 request ID、重复决定和完整 metadata；Server 冻结 intent hash、prepared generation、
    只由 UUID 尾部两位分片的规范正式对象键及当前认证 username。API 返回 `accepted` 后立即结束，
-   不等待对象复制或数据库。
+   不等待正式对象写入或数据库。
    worker 在 storage、图片、词表和同 MD5 advisory lock 内，先为两个确定正式键写入持久
-   `move.cleanup` candidate guard，再复制候选，并在不可逆协调器的临界区完成最后一次 token
+   `move.cleanup` candidate guard，再从本地流式写入并回读校验候选，并在不可逆协调器的临界区完成最后一次 token
    复验后启动单个 PostgreSQL 事务。guard 登记前会拒绝强摘要不匹配的预存正式对象；本次
    attempt 只旁路自身唯一 guard token，旧删除租约继续阻断采用。guard 与提交共用单图存储
-   变更锁：复制或事务失败时由 handler 删除未引用候选，PostgreSQL 正式引用成立时则保留对象。
+   变更锁：写入或事务失败时由 handler 删除未引用候选，PostgreSQL 正式引用成立时则保留对象。
    所有新 INSERT 显式写入
    `metadata.created_by`；该字段只取冻结的 server actor，不接受客户端输入，也不进入 browser DTO。
 
 最终入库同时取得 `ingestion.commit_concurrency=N` 的数量许可和代码内 `256 MiB` prepared 字节
-许可；两者都覆盖正式对象复制、PostgreSQL 事务、暂存清理与缓存发布。提交 intent 的批量建模
+许可；两者都覆盖正式对象写入、PostgreSQL 事务、暂存清理与缓存发布。提交 intent 的批量建模
 使用代码内固定 10 个 worker，只建立不可变意图，不占用最终入库许可。Ingestion Worker 以同一个
-进程级 preparation owner 限制 Upload / Import 合计最多 `N` 个 prepare / staging publication；
+进程级 preparation owner 限制 Upload / Import 合计最多 `N` 个 准备与本地结果发布；
 该值与两类 pre-commit dispatch slot 均由 `normalize.concurrency=N` 派生。Import 在真正取得
 Normalize 许可时立即交还 slot，因而正在下载或持有磁盘 raw 的后继始终最多为 `N`；尚未取得
 preparation 许可的后继不生成 Prepared Buffer。Upload 在本项 prepare 完成时交还 slot，中央 Normalize
@@ -251,8 +251,8 @@ preparation 许可的后继不生成 Prepared Buffer。Upload 在本项 prepare 
 frozen-tail 游标，
 Import 的 queued 与恢复后的 received 仍共用 Redis runnable FIFO。commit dispatch window 由数量
 许可派生为 `N + ceil(N / 2)`，等待数量或字节许可的任务也占用该窗口；commit 完成后的
-事件补位继续使用自己的 frozen-tail 游标。提交成功后的 prepared image 与 thumbnail 由同一个
-N=2 删除调用收口，逐项失败只重试未确认的键。
+事件补位继续使用自己的 frozen-tail 游标。上传等待与字节进度属于提交阶段；PostgreSQL
+提交成功后按精确文件引用删除本地结果，清理失败进入有界重试，提交失败则保留有效结果。
 
 `metadata WHERE id=image_id` 是唯一完成判据。相同 commit request ID 与相同 hash 可安全重试；
 worker 在 PostgreSQL 事务前失败时，当前 version 可把同一冻结意图重新排入 committing，
@@ -280,8 +280,8 @@ Redis 会话读取，再发起 PostgreSQL
 内容接入入口在共享存储选项加载成功后打开，首次使用不临时回退到本地存储；加载失败可重试入口。
 来源解析后的自动导入使用提交时的当前存储选择和默认属性。
 每个 canonical 锁定 `storage_slug`。默认后端后续变化只影响新任务；ready 任务不能临时
-换后端。原始字节只进入 `data/tmp/upload|import`，浏览器不直传 S3；远端 `_uploads` 只保存
-processed image 与 prepared thumbnail。
+换后端。所有接入文件统一进入 `data/temp/<session>/<image>/`，以 generation、execution token
+和文件名区分原始文件、处理结果及写入中文件。浏览器预览读取主站鉴权的本地结果。
 
 ### 队列分页与状态同步
 
@@ -540,7 +540,7 @@ worker 停止取得新任务并中止仍可
 安全中止的阶段，未完成会话的恢复以 Redis canonical 为准。重连和启动使用同一个有界恢复
 入口，committing 状态始终先批量核对 PostgreSQL。
 
-raw、`.part`、prepared staging 和正式候选的物理回收必须复验当前 canonical / generation
+原始文件、`.part`、处理结果和正式候选的物理回收必须复验当前 canonical / generation
 及 PostgreSQL 正式引用；结果未知时保留，不从文件路径反建业务状态。正式候选仍交给持久
 `move.cleanup` 重试。canonical 不使用 Redis 原生过期事件：expires scanner 按 queue 分页读取
 服务端 `discard_at`，Lua 再复核 version、execution token 与截止时间并原子移除 canonical、
@@ -550,12 +550,10 @@ owner / runnable / expires 索引、计数和 revision；committing 仍先经过
 incarnation 不会被旧清理递归删除，其他遗留项仍由保守年龄扫描收口。
 
 独立的单实例孤儿清理 worker 每 60 秒运行。它只在 Redis operational 且 canonical 引用形成
-稳定有界快照时处理本地 raw 与存储暂存：当前进程仍在接收、下载、Sharp prepare 或发布的
-raw / `.part` 由
-活跃租约保护；`_uploads` 必须完整列举，并在删除前取得 storage location write lock、重新
-确认物理 namespace 未变以及枚举前后精确 prepared key。local 原子发布崩溃遗留的精确
-`.candidate-<UUID>` 只沿其基础 attempt key 判定引用与年龄；无法解析的非协议键、近期 generation、
-Redis 异常和不完整列表全部保留。详细 age gate 与维护边界见[存储](./storage.md)。
+稳定有界快照时处理本地原始文件、处理结果和写入中文件。接收、下载、Sharp prepare、预览
+和提交都持有精确路径租约；扫描只删除未被引用、无活跃租约且超过年龄门槛的文件，按游标
+跨周期继续，及时释放句柄并修剪空目录。检查页展示陈旧文件与本地空间，并标记扫描是否完整。
+详细年龄门槛与维护边界见[存储](./storage.md)。
 
 ## 公开浏览与图片出口
 
@@ -1093,12 +1091,11 @@ mutation fence 和提交后 cache handoff。对象传输由单图、批量与整
 区域的角色公共部分呈现当前状态、PostgreSQL / Redis revision 指纹、最近错误、刷新和准确
 占用；手动重建、存储维护和整后端迁移在服务端确认超级管理员权限后才加载维护能力模块。
 检查页只保留一个“存储维护”入口，弹窗同时使用当前只读存储与回收站检查结果预览缺图、
-可修复缩略图、孤儿对象、活动 Ingestion 和持久彻底删除任务，
+可修复缩略图、孤儿对象和持久彻底删除任务，
 但必须由超级管理员再次确认。执行端在独占存储位置锁内重新读取 PostgreSQL 和 `full`、
-`thumbs`、`_uploads` 三个完整
-命名空间；预览同时包含缺失缩略图与数据库标记为尚未最终采用的缩略图，并按物理命名空间
+`thumbs` 两个完整命名空间；预览同时包含缺失缩略图与数据库标记为尚未最终采用的缩略图，并按物理命名空间
 去重受阻情况，不把不完整组或不可读逻辑后端的相关项算作
-可执行维修 / 删除。Redis 中仍活动的 canonical 继续持有自己的暂存对象。不完整列举不会生成
+可执行维修 / 删除。Redis 中仍活动的 canonical 继续保护正式候选。不完整列举不会生成
 修复或删除候选。维修直接写回并校验当前 local / S3 对象，
 不创建后台缩略图任务；孤儿删除进入固定单调用的 provider 中性 1…N 契约，并逐项返回
 `removed`、`missing`、`failed` 或 `unknown`。请求中止后不再启动后续 driver 调用；直接被中断的

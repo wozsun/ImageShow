@@ -10,7 +10,6 @@ await runIntegrationScenario(async (runtime) => {
   const { pool } = runtime.databasePools;
   const { maintainStorageAndPurgeTasks } = await import("../../../../packages/server/src/checks/storage-maintenance.ts");
   const { checkStorage } = await import("../../../../packages/server/src/checks/storage-check.ts");
-  const { cleanupIngestionOrphans } = await import("../../../../packages/server/src/images/ingestion/cleanup/orphans.ts");
   const locks = await import("../../../../packages/server/src/storage/maintenance-lock.ts");
   const migration = await import("../../../../packages/server/src/images/storage-location/image-migration.ts");
   const incompleteKey = "orphan/incomplete.webp";
@@ -25,21 +24,21 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(await access.driver.exists("full", incompleteKey), true);
   } finally { access.driver.listKeys = originalList; await removeDriverObject(access.driver, "full", incompleteKey); }
 
-  for (const sharedWait of [true, false]) {
+  {
     const blocker = await pool.connect();
     const stop = new AbortController();
-    const reason = new Error(sharedWait ? "cancel orphan lock wait" : "cancel maintenance lock wait");
+    const reason = new Error("cancel maintenance lock wait");
     let pending: Promise<unknown> | undefined;
     try {
-      await blocker.query(sharedWait ? "SELECT pg_advisory_lock(hashtext($1))" : "SELECT pg_advisory_lock_shared(hashtext($1))", ["imageshow:storage-location"]);
-      pending = sharedWait ? cleanupIngestionOrphans(Date.now(), stop.signal) : maintainStorageAndPurgeTasks(stop.signal);
+      await blocker.query("SELECT pg_advisory_lock_shared(hashtext($1))", ["imageshow:storage-location"]);
+      pending = maintainStorageAndPurgeTasks(stop.signal);
       void pending.catch(() => undefined);
-      await waitForStorageLockWait(pool, sharedWait);
+      await waitForStorageLockWait(pool, false);
       stop.abort(reason);
       await assert.rejects(settleWithin(pending), error => error === reason);
     } finally {
       stop.abort(reason);
-      await blocker.query(sharedWait ? "SELECT pg_advisory_unlock(hashtext($1))" : "SELECT pg_advisory_unlock_shared(hashtext($1))", ["imageshow:storage-location"]);
+      await blocker.query("SELECT pg_advisory_unlock_shared(hashtext($1))", ["imageshow:storage-location"]);
       blocker.release();
       await Promise.allSettled(pending ? [pending] : []);
     }

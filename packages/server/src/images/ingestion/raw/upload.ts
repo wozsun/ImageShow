@@ -11,7 +11,7 @@ import {
   removeOwnedIngestionRaw,
   removeIngestionRawPart
 } from "./files.ts";
-import { withActiveIngestionRawPaths } from "./lease-registry.ts";
+import { withActiveIngestionTempPaths } from "./lease-registry.ts";
 import { ingestionRawPartPath, ingestionRawPath } from "./paths.ts";
 import { withRawUploadAdmission } from "./upload-admission.ts";
 import { assertImageIdentity } from "../sessions/identity.ts";
@@ -61,14 +61,13 @@ async function receiveUploadIntentBodyUnderAdmission(
     session_id: claimed.session_id,
     image_id: claimed.candidate_image_id
   };
-  const rawPath = ingestionRawPath("upload", pair, rawGeneration);
+  const rawPath = ingestionRawPath(pair, rawGeneration);
   const partPath = ingestionRawPartPath(
-    "upload",
     pair,
     rawGeneration,
     executionToken
   );
-  return withActiveIngestionRawPaths([rawPath, partPath], async () => {
+  return withActiveIngestionTempPaths([rawPath, partPath], async () => {
     let published = false;
     try {
       signal.throwIfAborted();
@@ -132,12 +131,11 @@ async function receiveUploadIntentBodyUnderAdmission(
           retainPublishedRaw = true;
         }
         if (!retainPublishedRaw) {
-          await removeOwnedIngestionRaw("upload", pair, rawGeneration)
+          await removeOwnedIngestionRaw(pair, rawGeneration)
             .catch(() => undefined);
         }
       } else {
         await removeIngestionRawPart(
-          "upload",
           pair,
           rawGeneration,
           executionToken

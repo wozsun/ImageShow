@@ -19,7 +19,6 @@ import { s3CopySource, s3ListPrefix, storageS3ObjectName, type StoragePrefix } f
 import { openedReadToBuffer } from "../objects/stream-buffer.ts";
 import type {
   OpenedRead,
-  StorageCopyOptions,
   StorageDriver,
   StorageObjectReference,
   StoragePruneOptions,
@@ -477,20 +476,6 @@ export class S3Backend implements StorageDriver {
     });
   }
 
-  async copy(
-    fromPrefix: StoragePrefix,
-    fromKey: string,
-    toPrefix: StoragePrefix,
-    toKey: string,
-    options: StorageCopyOptions = {}
-  ) {
-    await this.send(new CopyObjectCommand({
-      Bucket: this.bucket,
-      CopySource: s3CopySource(this.config, fromPrefix, fromKey),
-      Key: this.name(toPrefix, toKey)
-    }), options);
-  }
-
   serverCopySource(
     prefix: StoragePrefix,
     key: string,
@@ -632,13 +617,13 @@ export class S3Backend implements StorageDriver {
     let testError: unknown;
     try {
       await this.writeBuffer(
-        "_uploads",
+        "full",
         key,
         Buffer.from("ok"),
         "text/plain",
         options
       );
-      if (!await this.exists("_uploads", key, options)) {
+      if (!await this.exists("full", key, options)) {
         throw new ApiError(
           502,
           "storage_test_failed",
@@ -660,7 +645,7 @@ export class S3Backend implements StorageDriver {
       // A PUT can materialize before its response is lost or the caller is
       // cancelled. Cleanup therefore uses its own bounded S3 request budget.
       const [removed] = await this.removeObjects([{
-        prefix: "_uploads",
+        prefix: "full",
         key
       }]);
       if (removed?.status === "failed" || removed?.status === "unknown") {

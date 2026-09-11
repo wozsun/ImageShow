@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { controlledStorageDriver, removeDriverObject } from "./storage-fixture.mts";
@@ -302,6 +304,8 @@ const localAccess = await registry.resolveStorageAccess("local");
     "worker 领取预建 guard 时可以尚未观察到 S3 请求窗口"
   );
   let lateGuardPublish;
+  const guardedSourcePath = join(runtime.dataDirectory, "guarded-source.webp");
+  await writeFile(guardedSourcePath, guardedLatePublishBody);
   const guardedTransferStorage: StorageAccess = {
     config: {
       slug: "local",
@@ -309,28 +313,18 @@ const localAccess = await registry.resolveStorageAccess("local");
       s3: { ...mergeS3Settings(), task_timeout_seconds: 0.5 }
     },
     driver: controlledStorageDriver({
-      async openRead(prefix, key) {
-        assert.equal(prefix, "_uploads");
-        assert.equal(key, "guarded-source.webp");
-        return {
-          body: Readable.from([guardedLatePublishBody]),
-          size: guardedLatePublishBody.length,
-          totalSize: guardedLatePublishBody.length,
-          backend: "s3"
-        };
-      },
       async exists() { return false; },
-      async copy(_fromPrefix, _fromKey, toPrefix, toKey) {
+      async writeStream(toPrefix, toKey) {
         assert.equal(toPrefix, "full");
         assert.equal(toKey, guardedLatePublishKey);
-        const armedBeforeCopy = (await database.pool.query(
+        const armedBeforeWrite = (await database.pool.query(
           "SELECT payload->>'confirm_absent_after' AS deadline "
             + "FROM background_job WHERE id=$1",
           [guardedLatePublishJob.id]
         )).rows[0]?.deadline;
         assert.ok(
-          Date.parse(armedBeforeCopy) >= Date.now() + 1_300,
-          "CopyObject 请求不得先于持久 guard 窗口"
+          Date.parse(armedBeforeWrite) >= Date.now() + 1_300,
+          "PutObject 请求不得先于持久 guard 窗口"
         );
         lateGuardPublish = new Promise((resolve, reject) => {
           setTimeout(() => {
@@ -342,16 +336,16 @@ const localAccess = await registry.resolveStorageAccess("local");
             ).then(resolve, reject);
           }, 50);
         });
-        throw new Error("injected CopyObject response loss");
+        throw new Error("injected PutObject response loss");
       }
     })
   };
   const guardedTransferStartedAt = Date.now();
   await assert.rejects(
-    objectTransfer.copyVerifiedObjectWithinStorage({
+    objectTransfer.writeVerifiedFileToStorage({
       storage: guardedTransferStorage,
-      fromPrefix: "_uploads",
-      fromKey: "guarded-source.webp",
+      sourcePath: guardedSourcePath,
+      contentType: "image/webp",
       toPrefix: "full",
       toKey: guardedLatePublishKey,
       expectedSource: {
@@ -365,7 +359,7 @@ const localAccess = await registry.resolveStorageAccess("local");
         token: guardedLatePublishToken
       }
     }),
-    /injected CopyObject response loss/
+    /injected PutObject response loss/
   );
   const persistedGuardDeadline = (await database.pool.query(
     "SELECT payload->>'confirm_absent_after' AS deadline "
@@ -374,7 +368,7 @@ const localAccess = await registry.resolveStorageAccess("local");
   )).rows[0]?.deadline;
   assert.ok(
     Date.parse(persistedGuardDeadline) >= guardedTransferStartedAt + 1_400,
-    "CopyObject 发出前必须让预建 guard 覆盖请求、校验与迟到发布窗口"
+    "PutObject 发出前必须让预建 guard 覆盖请求、校验与迟到发布窗口"
   );
   const staleGuardOutcome = await cleanupJob.handleMoveCleanupJob(
     guardedLatePublishJob,
@@ -438,6 +432,8 @@ const localAccess = await registry.resolveStorageAccess("local");
   );
   let settledTargetBody: Buffer | undefined;
   const settledSourceBody = Buffer.from("ingestion-guard-settled-copy");
+  const settledSourcePath = join(runtime.dataDirectory, "settled-source.webp");
+  await writeFile(settledSourcePath, settledSourceBody);
   const settledTransferStorage: StorageAccess = {
     config: {
       slug: "local",
@@ -446,14 +442,10 @@ const localAccess = await registry.resolveStorageAccess("local");
     },
     driver: controlledStorageDriver({
       async openRead(prefix, key) {
-        const body = prefix === "_uploads"
-          ? settledSourceBody
-          : settledTargetBody;
+        const body = settledTargetBody;
+        assert.equal(prefix, "full");
         assert.ok(body);
-        assert.equal(
-          key,
-          prefix === "_uploads" ? "settled-source.webp" : settledGuardKey
-        );
+        assert.equal(key, settledGuardKey);
         return {
           body: Readable.from([body]),
           size: body.length,
@@ -462,14 +454,18 @@ const localAccess = await registry.resolveStorageAccess("local");
         };
       },
       async exists() { return false; },
-      async copy() { settledTargetBody = Buffer.from(settledSourceBody); }
+      async writeStream(_prefix, _key, body) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of body) chunks.push(Buffer.from(chunk));
+        settledTargetBody = Buffer.concat(chunks);
+      }
     })
   };
   assert.deepEqual(
-    await objectTransfer.copyVerifiedObjectWithinStorage({
+    await objectTransfer.writeVerifiedFileToStorage({
       storage: settledTransferStorage,
-      fromPrefix: "_uploads",
-      fromKey: "settled-source.webp",
+      sourcePath: settledSourcePath,
+      contentType: "image/webp",
       toPrefix: "full",
       toKey: settledGuardKey,
       expectedSource: {
@@ -496,7 +492,7 @@ const localAccess = await registry.resolveStorageAccess("local");
       [settledGuardImage]
     )).rows[0]?.armed,
     false,
-    "CopyObject 与目标摘要均确认后应解除 guard 的不确定窗口"
+    "PutObject 与目标摘要均确认后应解除 guard 的不确定窗口"
   );
   await database.pool.query(
     "DELETE FROM background_job WHERE type='move.cleanup' AND target_id=$1",

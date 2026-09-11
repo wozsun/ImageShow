@@ -39,9 +39,12 @@ export async function createIngestionScenarioFixture(runtime: IntegrationRuntime
     message: "queued", progress: null, version: 0, progress_seq: 0, last_semantic_revision: 0,
     accepted_at: 0, accepted_order: 0, execution_token: "", raw_generation: "", raw_size: 0, discard_at: 0
   };
+  const { ingestionPreparedFile } = await import("../../../../packages/server/src/images/ingestion/raw/paths.ts");
+  const preparedIdentity = { ...importTemplate, generation: templateId, execution_token: templateId };
   const body = Buffer.from("queue-prepared-fixture");
   const preparedTemplate: IngestionPreparedManifest = {
-    prepared_image_key: "template.webp", prepared_thumbnail_key: "template-thumb.webp",
+    prepared_image_path: ingestionPreparedFile(preparedIdentity, "image"),
+    prepared_thumbnail_path: ingestionPreparedFile(preparedIdentity, "thumb"),
     prepared_image_sha256: createHash("sha256").update(body).digest("hex"),
     prepared_thumbnail_sha256: createHash("sha256").update(body).digest("hex"),
     original_size: body.length, original_width: 1200, original_height: 800,

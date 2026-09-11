@@ -3,7 +3,7 @@ import { errorMessage } from "../../../core/api-error.ts";
 import { logger } from "../../../core/logger.ts";
 import { cleanupIngestionOrphans } from "./orphans.ts";
 import { ingestionOrphanCleanupIntervalMs } from "./retention.ts";
-import { closeIngestionRawCleanupCursor } from "../raw/orphan-scanner.ts";
+import { closeIngestionTempCleanupCursor } from "../raw/orphan-scanner.ts";
 
 export class IngestionOrphanCleanupWorker {
   #timer: NodeJS.Timeout | null = null;
@@ -27,11 +27,8 @@ export class IngestionOrphanCleanupWorker {
     this.#running = cleanupIngestionOrphans(Date.now(), controller.signal)
       .then((report) => {
         if (
-          report.raw_removed
-          || report.staging_removed
-          || report.staging_failed
-          || report.incomplete_namespaces
-          || report.incomplete_raw_scans
+          report.temp_removed
+          || report.incomplete_temp_scans
         ) {
           logger.info("ingestion_orphan_cleanup_completed", report);
         }
@@ -55,7 +52,7 @@ export class IngestionOrphanCleanupWorker {
     this.#timer = null;
     this.#controller?.abort(new Error("Ingestion orphan cleanup worker stopping"));
     const running = this.#running ?? Promise.resolve();
-    this.#cursorClose = running.then(() => closeIngestionRawCleanupCursor());
+    this.#cursorClose = running.then(() => closeIngestionTempCleanupCursor());
   }
 
   async drain(timeoutMs = appConfig.backgroundJob.drainTimeoutMs) {

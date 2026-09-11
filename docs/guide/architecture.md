@@ -174,11 +174,10 @@ Redis 或“全部”检查的第二次扫描，之后手动运行 Redis 检查�
 类型可以注册多个后端；领域代码不按类型拼接第二套对象路径。驱动、对象完整性、位置
 迁移、远端请求期限、流 lease 与退役规则以[存储](./storage.md)为唯一说明。
 
-Upload 与 Import 的 raw 素材先进入 `data/tmp`。两类来源共用一个由 Normalize 容量派生的进程级
-preparation owner，从等待图片处理一直持有到 `_uploads` 与 ready canonical 发布，因此服务端合计
-最多保留 `N` 份正在处理或等待发布的 Prepared Buffer。服务端完成校验、标准化、缩略图和
-摘要后，才把 processed image 与 prepared thumbnail 写入选定后端的 `_uploads`；Ingestion
-流程不让浏览器向对象存储直传原始或处理后字节。
+Upload 与 Import 的原始文件、处理结果和缩略图统一保存在 `data/temp`。两类来源共用由
+Normalize 容量派生的 preparation owner，从等待处理到本地原子发布与 ready 登记，合计最多
+持有 `N` 份处理中的缓冲。ready 后清理原始文件，预览读取本地结果，提交时才流式写入
+所选后端的正式对象并校验完整性。
 
 ## 一致性边界
 
@@ -197,12 +196,10 @@ preparation owner，从等待图片处理一直持有到 `_uploads` 与 ready ca
 有效字节时，维修在生成前确认对象是否仍存在；记录为 0 时不执行结果无消费者的提前探测，
 而是在源完整性校验与生成后统一复核当前位置及缩略图，再决定采用、替换或跳过。
 
-内容接入临时素材由另一个单实例周期 worker 保守回收。它在短时 storage location read lock 内
-完整列举每个 `_uploads` 物理组，删除阶段再取得 write lock，复核物理 namespace、Redis
-operational 状态及枚举前后精确引用；raw 另由进程内活跃路径租约保护。这个 worker
-只读取 Redis canonical 引用，不从 PostgreSQL 或文件反建内容接入状态，也不把临时素材逐项复制
-成 `background_job`。
-正式提交则在复制两个确定候选前创建一条持久 `move.cleanup` guard，使进程崩溃后仍能按
+内容接入临时素材由单实例周期 worker 按本地目录的有界游标扫描回收，原始文件、处理结果和
+写入中文件统一使用 canonical 精确引用、活跃路径租约及年龄门槛。检查页展示本地暂存数量与空间，
+独立于正式对象的存储维护。临时文件只承载内容，恢复仍以 Redis canonical 为权威。
+正式提交则在写入两个确定候选前创建一条持久 `move.cleanup` guard，使进程崩溃后仍能按
 PostgreSQL 最终引用决定删除或保留；S3 写入的不确定窗口在请求前写入该 guard，handler 取得
 单图锁后重读窗口，避免把尚未可见的迟到发布误判为清理完成。
 
@@ -212,7 +209,7 @@ PostgreSQL 最终引用决定删除或保留；S3 写入的不确定窗口在请
 
 Redis Ingestion canonical 以 pair、version 和 execution token 隔离下载、prepare、commit、取消
 与恢复。commit 按 prepared 最终 MD5、pair、图片和词表取得 PostgreSQL advisory lock，只
-串行真正冲突的内容；对象复制到 PostgreSQL 事务 settle 全程持有 storage location shared
+串行真正冲突的内容；正式对象写入到 PostgreSQL 事务 settle 全程持有 storage location shared
 lock。进程内不可逆协调器只保存 `cancellable -> database_started -> settled`，并让 worker
 的最后一次 token 复验、事务启动与取消判断共享一个临界区；它不构成持久队列或多实例协议。
 下载或 prepare 持有同一 execution token 时，草稿更新可以合法推进 semantic version；worker
@@ -313,10 +310,10 @@ active 时继续等待同代后续 revision；批量 status 返回的 active DTO
 提供显式维护。启动路径只核对当前最小结构，不解释旧逐行状态或旧任务 payload。
 
 Ingestion 另有一个单实例 Redis worker。Upload / Import 共用最多 `N` 个 preparation 许可，覆盖
-等待 Normalize、图片重工作、两个 staging 对象与 ready canonical 发布；完整 raw 在等待
+等待 Normalize、图片重工作、两个本地处理结果与 ready canonical 发布；完整 raw 在等待
 Normalize 时保持内部 `preparing + prepare-waiting`，对 Web 投影为“待处理”和 waiting，实际取得
 Normalize 许可并发布 `normalizing` phase 后才进入 processing / running。Normalize 完成后释放 CPU
-许可但继续持有 preparation 许可，因此慢存储不会产生无界 Prepared Buffer，也不会占住维护入口。
+许可但继续持有 preparation 许可，因此本地发布等待不会产生无界 Prepared Buffer，也不会占住维护入口。
 Import 与 Upload 各自持有最多 `N` 个 pre-commit
 dispatch slot，其中 `N` 是图片标准化容量：Import 的 queued 与恢复后的 received 共用跨扫描页
 FIFO，slot 覆盖远程素材化直至实际取得 Normalize 许可；Upload 的 slot 覆盖整项 prepare，中央
@@ -328,7 +325,7 @@ commit 从其数量许可 `N` 派生 `N + ceil(N / 2)` 个 dispatch slot，等�
 Redis operational gate 关闭时停止领取并中止仍可安全中止的阶段，
 恢复后先运行有界 expiry / canonical 恢复入口。同一生命周期还启动独立的
 60 秒孤儿素材清理周期，并在停机时中止、排空；Redis unavailable 时该周期不删除任何素材。
-Ingestion 执行与临时素材周期不进入持久任务表；只有 commit 的两个确定正式候选在复制前写入
+Ingestion 执行与临时素材周期不进入持久任务表；只有 commit 的两个确定正式候选在写入前登记
 既有 `move.cleanup` guard，raw 与 prepared generation 不逐项持久化。
 
 任务表与状态字段见[数据库结构](./database.md)，对象清理协议见[存储](./storage.md)。

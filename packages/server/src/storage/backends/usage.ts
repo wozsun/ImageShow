@@ -8,7 +8,6 @@ export type StorageBackendUsage = {
   image_count: number;
   ingestion_session_count: number;
   cleanup_job_count: number;
-  staging_object_count: number;
 };
 
 export type StorageBackendSnapshot = {
@@ -28,14 +27,12 @@ type StorageBackendSnapshotRow = Omit<
 >;
 
 export function storageBackendUsage(
-  row: Record<string, unknown>,
-  stagingObjectCount = 0
+  row: Record<string, unknown>
 ): StorageBackendUsage {
   return {
     image_count: Number(row.image_count ?? 0),
     ingestion_session_count: Number(row.ingestion_session_count ?? 0),
-    cleanup_job_count: Number(row.cleanup_job_count ?? 0),
-    staging_object_count: stagingObjectCount
+    cleanup_job_count: Number(row.cleanup_job_count ?? 0)
   };
 }
 
@@ -47,15 +44,14 @@ export function assertPhysicalLocationChangeAllowed(
     !changedFields.length
     || (!usage.image_count
       && !usage.ingestion_session_count
-      && !usage.cleanup_job_count
-      && !usage.staging_object_count)
+      && !usage.cleanup_job_count)
   ) {
     return;
   }
   throw new ApiError(
     409,
     "storage_location_change_requires_migration",
-    "该后端仍有图片、未清理内容接入会话、旧对象删除任务或暂存对象，物理位置暂不可变更",
+    "该后端仍有图片、未清理内容接入会话、旧对象删除任务，物理位置暂不可变更",
     { fields: changedFields, ...usage }
   );
 }

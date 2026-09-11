@@ -453,7 +453,7 @@ end
 
 local function assert_prepared(value)
   assert_exact_fields(value, {
-    'prepared_image_key', 'prepared_thumbnail_key', 'original_size',
+    'prepared_image_path', 'prepared_thumbnail_path', 'original_size',
     'original_width', 'original_height', 'width', 'height', 'ext', 'md5',
     'prepared_image_sha256', 'prepared_thumbnail_sha256',
     'size', 'thumbnail_size', 'quality', 'transcoded', 'detected_device',
@@ -468,10 +468,10 @@ local function assert_prepared(value)
       error('INGESTION_QUEUE_STRUCTURE prepared_shape')
     end
   end
-  if type(value.prepared_image_key) ~= 'string'
-    or value.prepared_image_key == ''
-    or type(value.prepared_thumbnail_key) ~= 'string'
-    or value.prepared_thumbnail_key == ''
+  if type(value.prepared_image_path) ~= 'string'
+    or value.prepared_image_path == ''
+    or type(value.prepared_thumbnail_path) ~= 'string'
+    or value.prepared_thumbnail_path == ''
     or (value.ext ~= 'jpg' and value.ext ~= 'png'
       and value.ext ~= 'webp' and value.ext ~= 'gif' and value.ext ~= 'avif')
     or not valid_hash(value.md5, 16)

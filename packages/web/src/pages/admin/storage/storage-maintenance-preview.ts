@@ -35,9 +35,6 @@ export function storageMaintenancePreview(result: unknown) {
     "pending_thumbnail_repairs",
     "orphan_objects",
     "orphan_thumbs",
-    "active_staging_files",
-    "retained_staging_files",
-    "orphan_staging_files",
     "incomplete_listings",
     "unavailable_backends"
   ];
@@ -79,8 +76,7 @@ export function storageMaintenancePreview(result: unknown) {
   )).length;
   const orphanIssues = [
     ...issueList(storage, "orphan_objects"),
-    ...issueList(storage, "orphan_thumbs"),
-    ...issueList(storage, "orphan_staging_files")
+    ...issueList(storage, "orphan_thumbs")
   ];
   const removableObjects = orphanIssues.filter((issue) => !groupBlocked(issue)).length;
   const blockedItems = [
@@ -92,14 +88,11 @@ export function storageMaintenancePreview(result: unknown) {
     && !groupBlocked(issue)
     && unavailableSlugs.has(issueText(issue, "backend"))
   )).length;
-  const protectedStagingObjects = issueList(storage, "active_staging_files").length
-    + issueList(storage, "retained_staging_files").length;
 
   return {
     repairable_thumbnails: repairableThumbnails,
     missing_originals: missingObjects.length,
     removable_objects: removableObjects,
-    protected_staging_objects: protectedStagingObjects,
     blocked_namespaces: blockedNamespaces.size,
     unavailable_logical_backends: unavailableSlugs.size,
     blocked_items: blockedItems,

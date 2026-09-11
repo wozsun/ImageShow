@@ -34,7 +34,7 @@ const dataDirectory = bootstrapEnvironment.nodeEnvironment === "production"
 export const runtimePaths = Object.freeze({
   configDirectory: dataDirectory,
   storageDirectory: join(dataDirectory, "storage"),
-  tempDirectory: join(dataDirectory, "tmp"),
+  tempDirectory: join(dataDirectory, "temp"),
   logDirectory: join(dataDirectory, "log"),
   configFile: join(dataDirectory, "config.json")
 });

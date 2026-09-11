@@ -10,7 +10,7 @@ import { DynamicConcurrencyLimiter } from "../../../core/concurrency.ts";
  * retain processed image buffers while staging them. Its capacity follows the
  * sole public Normalize setting, but remains held after CPU normalization
  * releases its shared permit and until the ready canonical references both
- * published staging objects.
+ * published local prepared files.
  */
 const ingestionPreparationAdmission = new DynamicConcurrencyLimiter(
   () => getRuntimeConfig().normalize.concurrency,

@@ -10,7 +10,7 @@ import {
 import {
   removeIngestionRawPart,
 } from "../raw/files.ts";
-import { withActiveIngestionRawPaths } from "../raw/lease-registry.ts";
+import { withActiveIngestionTempPaths } from "../raw/lease-registry.ts";
 import { ingestionRawPartPath, ingestionRawPath } from "../raw/paths.ts";
 import type { IngestionSessionSnapshot } from "../sessions/model.ts";
 import { ingestionSessionSemanticHash } from "../sessions/projection.ts";
@@ -42,15 +42,14 @@ export async function downloadIngestionSessionSnapshot(
     throw new ApiError(409, "invalid_ingestion_state", "导入任务不能进入下载阶段");
   }
   const rawGeneration = randomUuidV7();
-  const rawPath = ingestionRawPath("import", session, rawGeneration);
+  const rawPath = ingestionRawPath(session, rawGeneration);
   const partPath = ingestionRawPartPath(
-    "import",
     session,
     rawGeneration,
     session.execution_token
   );
   const resolvedDependencies = { ...defaultDependencies, ...dependencies };
-  return withActiveIngestionRawPaths([rawPath, partPath], () => (
+  return withActiveIngestionTempPaths([rawPath, partPath], () => (
     withIngestionExecutionHeartbeat(
       repository,
       session,
@@ -127,7 +126,6 @@ export async function downloadIngestionSessionSnapshot(
         } catch (error) {
           await progressUpdateChain.catch(() => undefined);
           await removeIngestionRawPart(
-            "import",
             session,
             rawGeneration,
             session.execution_token

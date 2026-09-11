@@ -1,9 +1,6 @@
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 import {
-  randomUUID
-} from "node:crypto";
-import {
   rm,
   writeFile
 } from "node:fs/promises";
@@ -19,6 +16,7 @@ import {
   pathToFileURL
 } from "node:url";
 import test from "node:test";
+import { installProperties } from "../support/property-descriptors.ts";
 import {
   createTestDirectory
 } from "../support/test-directory.ts";
@@ -30,7 +28,7 @@ import {
 } from "hono";
 import {
   appConfig
-} from "../../../packages/shared/src/app-config.ts";
+} from "@imageshow/shared";
 import {
   adminApiBasePath,
   ingestionUpdatePath
@@ -46,9 +44,6 @@ import {
   DynamicConcurrencyLimiter,
   DynamicWeightedLimiter
 } from "../../../packages/server/src/core/concurrency.ts";
-import {
-  uuidV7Timestamp
-} from "../../../packages/server/src/core/uuid.ts";
 import {
   limitIngestionControlBody,
   limitProtectedAdminRequestBody
@@ -126,11 +121,7 @@ import {
   preparedAttemptIsReferenced
 } from "../../../packages/server/src/images/ingestion/workers/prepare-session.ts";
 import {
-  ingestionStagingImageKey,
-  parseIngestionStagingCleanupKey
-} from "../../../packages/server/src/images/ingestion/staging-keys.ts";
-import {
-  ingestionRawPath
+  ingestionRawPath, ingestionPreparedFile, ingestionPreparedPath, parseIngestionTempFileName
 } from "../../../packages/server/src/images/ingestion/raw/paths.ts";
 import {
   extractWeiboPost,
@@ -651,44 +642,14 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
     image_id: createImageId(new Date("2026-08-23T01:02:03.456Z"), 1)
   };
   const generation = createImageId(new Date("2026-08-23T01:02:04.456Z"), 2);
-  assert.equal(ingestionRawPath("upload", pathPair, generation).includes(
+  assert.equal(ingestionRawPath(pathPair, generation).includes(
     pathPair.session_id
   ), true);
-  const stagingExecutionToken = createImageId(
-    new Date("2026-08-23T01:02:05.456Z"),
-    3
-  );
-  const stagingKey = ingestionStagingImageKey({
-    ...pathPair,
-    generation,
-    execution_token: stagingExecutionToken
-  });
-  assert.equal(stagingKey.startsWith(`${pathPair.session_id}/`), true);
-  assert.equal(uuidV7Timestamp(generation), Date.parse("2026-08-23T01:02:04.456Z"));
-  const stagingIdentity = {
-    session_id: pathPair.session_id,
-    image_id: pathPair.image_id,
-    generation,
-    execution_token: stagingExecutionToken,
-    kind: "image",
-    created_at: Date.parse("2026-08-23T01:02:04.456Z")
-  };
-  assert.deepEqual(parseIngestionStagingCleanupKey(stagingKey), {
-    ...stagingIdentity,
-    base_key: stagingKey,
-    local_atomic_candidate: false
-  });
-  const localCandidateKey = `${stagingKey}.candidate-${randomUUID()}`;
-  assert.deepEqual(parseIngestionStagingCleanupKey(localCandidateKey), {
-    ...stagingIdentity,
-    base_key: stagingKey,
-    local_atomic_candidate: true
-  });
-  assert.equal(
-    parseIngestionStagingCleanupKey(`${stagingKey}.candidate-not-a-uuid`),
-    null
-  );
-  assert.equal(parseIngestionStagingCleanupKey("malformed.image.webp"), null);
+  const file = ingestionPreparedFile({ ...pathPair, generation, execution_token: generation }, "image");
+  assert.ok(ingestionPreparedPath(file).endsWith(file.replaceAll("/", process.platform === "win32" ? "\\" : "/")));
+  assert.deepEqual(parseIngestionTempFileName(file.split("/").at(-1)!), { kind: "prepared" });
+  assert.deepEqual(parseIngestionTempFileName(file.split("/").at(-1)! + ".part"), { kind: "part" });
+  assert.throws(() => ingestionPreparedPath("../escape.webp"), { code: "unsafe_path" });
 
   const pair = { session_id: "session", image_id: "image" };
   const coordinator = new IngestionIrreversibleCoordinator();
@@ -989,7 +950,7 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
     assert.fail(message);
   };
 
-  await t.test("两种来源合计最多持有 N 个 prepare / staging publication", async (subtest) => {
+  await t.test("两种来源合计最多持有 N 个 准备与本地结果发布", async (subtest) => {
     const itemCount = limit + 2;
     const gates = Array.from({ length: itemCount }, () => deferredPromise<void>());
     const sources = Array.from(
@@ -1109,7 +1070,7 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
     assert.equal(ingestionPreparationAdmissionSnapshot().waiting, 0);
   });
 
-  await t.test("取消等待项不会进入图片处理或 staging publication", async (subtest) => {
+  await t.test("取消等待项不会进入图片处理或本地结果发布", async (subtest) => {
     const gates = Array.from({ length: limit }, () => deferredPromise<void>());
     subtest.after(() => gates.forEach((gate) => gate.resolve()));
     const active = gates.map((gate) => withIngestionPreparationAdmission(
@@ -2147,116 +2108,36 @@ test("[Server/内容接入] 同一 execution 可接力草稿版本且身份变�
       && error.code === "ingestion_execution_fenced"
   );
 });
-type CleanupRetryQueueOptions = Readonly<{
-  capacity?: () => number;
-  lossy?: boolean;
-  maxAttempts?: () => number;
-  retryDelayMs?: () => number;
-}>;
-const CleanupRetryQueue = ingestionCleanupRetryQueue.constructor as unknown as {
-  new(options?: CleanupRetryQueueOptions): typeof ingestionCleanupRetryQueue;
-};
-test("[Server/内容接入] Ingestion 清理重试队列满载时背压且不丢失精确任务", async () => {
-  const queue = new CleanupRetryQueue({
-    capacity: () => 2,
-    retryDelayMs: () => 0
+test("[Server/内容接入] 清理重试有界并让后续任务先于退避重试执行", async () => {
+  const restore = installProperties(appConfig.ingestionRuntime, {
+    cleanupRetryQueueCapacity: 2, cleanupRetryMaxAttempts: 2
   });
   let release!: () => void;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let started = 0;
-  let completed = 0;
-  let thirdStarted = false;
-  const work = async () => {
-    started += 1;
-    await gate;
-    completed += 1;
-  };
-
-  await queue.enqueue(work);
-  await queue.enqueue(work);
-  let thirdAdmitted = false;
-  const thirdAdmission = queue.enqueue(async () => {
-    thirdStarted = true;
-    completed += 1;
-  }).then(() => {
-    thirdAdmitted = true;
-  });
-  await delay(0);
-  assert.equal(started, 1);
-  assert.equal(thirdAdmitted, false);
-  assert.equal(thirdStarted, false);
-
-  release();
-  await thirdAdmission;
-  while (completed < 3) await delay(0);
-  assert.equal(started, 2);
-  assert.equal(thirdStarted, true);
-
-  const retrying = new CleanupRetryQueue({
-    capacity: () => 1,
-    retryDelayMs: () => 0
-  });
-  let attempts = 0;
-  await retrying.enqueue(async () => {
-    attempts += 1;
-    if (attempts === 1) throw new Error("transient cleanup failure");
-  });
-  while (attempts < 2) await delay(0);
-
-  const fairRetry = new CleanupRetryQueue({
-    capacity: () => 2,
-    retryDelayMs: () => 25
-  });
-  const attemptOrder: string[] = [];
-  let fairAttempts = 0;
-  await fairRetry.enqueue(async () => {
-    fairAttempts += 1;
-    attemptOrder.push(`retry-${fairAttempts}`);
-    if (fairAttempts === 1) throw new Error("retry after another cleanup");
-  });
-  while (fairAttempts < 1) await delay(0);
-  await fairRetry.enqueue(async () => {
-    attemptOrder.push("later-cleanup");
-  });
-  while (!attemptOrder.includes("later-cleanup")) await delay(0);
-  assert.deepEqual(attemptOrder.slice(0, 2), ["retry-1", "later-cleanup"]);
-  while (fairAttempts < 2) await delay(1);
-});
-test("[Server/内容接入] 可再发现的清理材料在满载与永久失败时保持有界", async () => {
-  const queue = new CleanupRetryQueue({
-    capacity: () => 1,
-    lossy: true,
-    maxAttempts: () => 2,
-    retryDelayMs: () => 0
-  });
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const order: string[] = [];
   let attempts = 0;
   let overflowRan = false;
-  await queue.enqueue(async () => {
-    attempts += 1;
-    await gate;
-    throw new Error("permanent disposable cleanup failure");
-  });
-  await queue.enqueue(async () => {
-    overflowRan = true;
-  });
-  assert.equal(overflowRan, false, "满载时不得让请求等待无界后台工作");
-  release();
-  while (attempts < 2) await delay(0);
-  await delay(0);
-  let recovered = false;
-  await queue.enqueue(async () => {
-    recovered = true;
-  });
-  while (!recovered) await delay(0);
-  assert.equal(attempts, 2);
-  assert.equal(overflowRan, false);
+  try {
+    await ingestionCleanupRetryQueue.enqueue(async () => {
+      attempts += 1;
+      order.push("retry-" + attempts);
+      await gate;
+      throw new Error("disposable cleanup failure");
+    });
+    await ingestionCleanupRetryQueue.enqueue(async () => { order.push("later-cleanup"); });
+    await ingestionCleanupRetryQueue.enqueue(async () => { overflowRan = true; });
+    release();
+    for (let wait = 0; attempts < 2 && wait < 300; wait += 1) await delay(10);
+    await delay(0);
+    assert.deepEqual(order, ["retry-1", "later-cleanup", "retry-2"]);
+    assert.equal(overflowRan, false);
+    let recovered = false;
+    await ingestionCleanupRetryQueue.enqueue(async () => { recovered = true; });
+    await delay(0);
+    assert.equal(recovered, true);
+  } finally { release(); restore(); }
 });
+
 test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封住全部提交边界", async () => {
   const owner = "cancel-batch-owner";
   const coordinator = new IngestionIrreversibleCoordinator();
@@ -2890,8 +2771,8 @@ test("[Server/内容接入] 迟到失败接力同 execution 草稿版本且 prep
   const current = {
     image_id: "image",
     prepared: {
-      prepared_image_key: "attempt/image",
-      prepared_thumbnail_key: "attempt/thumb"
+      prepared_image_path: "attempt/image",
+      prepared_thumbnail_path: "attempt/thumb"
     }
   };
   assert.equal(preparedAttemptIsReferenced(

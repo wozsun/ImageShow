@@ -658,9 +658,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   ), /conversion response lost/);
   const unknownRawCanonical = requiredValue(unknownRawCanonicals[0]);
   const unknownRawPair = { session_id: unknownRawCanonical.session_id, image_id: unknownRawCanonical.image_id };
-  const retainedUnknownRawPath = ingestionRawFiles.ingestionRawPath(
-    "upload",
-    unknownRawPair,
+  const retainedUnknownRawPath = ingestionRawFiles.ingestionRawPath(unknownRawPair,
     unknownRawCanonical.raw_generation
   );
   assert.deepEqual(
@@ -1937,8 +1935,8 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   );
 
   const preparedManifest = {
-    prepared_image_key: "current/prepared-image.webp",
-    prepared_thumbnail_key: "current/prepared-thumbnail.webp",
+    prepared_image_path: "current/prepared-image.webp",
+    prepared_thumbnail_path: "current/prepared-thumbnail.webp",
     original_size: 10,
     original_width: 100,
     original_height: 100,

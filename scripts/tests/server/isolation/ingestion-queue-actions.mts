@@ -43,7 +43,7 @@ const ingestionSessionIdentity = await import("../../../../packages/server/src/i
 const ingestionSessionProjection = await import(
   "../../../../packages/server/src/images/ingestion/sessions/projection.ts"
 );
-const ingestionStagingKeys = await import("../../../../packages/server/src/images/ingestion/staging-keys.ts");
+const ingestionPaths = await import("../../../../packages/server/src/images/ingestion/raw/paths.ts");
 const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
 const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
 const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate: importCanonicalWithoutHash,
@@ -91,18 +91,18 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     const executionToken = coreUuid.randomUuidV7();
     const prepared = {
       ...realPrepared,
-      prepared_image_key: ingestionStagingKeys.ingestionStagingImageKey({
+      prepared_image_path: ingestionPaths.ingestionPreparedFile({
         session_id: sessionId,
         image_id: imageId,
         generation,
         execution_token: executionToken
-      }),
-      prepared_thumbnail_key: ingestionStagingKeys.ingestionStagingThumbnailKey({
+      }, "image"),
+      prepared_thumbnail_path: ingestionPaths.ingestionPreparedFile({
         session_id: sessionId,
         image_id: imageId,
         generation,
         execution_token: executionToken
-      }),
+      }, "thumb"),
       md5: createHash("md5").update(label).digest("hex"),
       generation
     };

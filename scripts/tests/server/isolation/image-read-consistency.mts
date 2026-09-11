@@ -538,11 +538,8 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   }
   assert.deepEqual(await ingestionOrphanCleanup.cleanupIngestionOrphans(), {
     skipped: true,
-    raw_removed: 0,
-    staging_removed: 0,
-    staging_failed: 0,
-    incomplete_namespaces: 0,
-    incomplete_raw_scans: 0
+    temp_removed: 0,
+    incomplete_temp_scans: 0
   });
   await runtimeAvailability.requireOperationalRedis();
   await readyCacheCoordinator.requestReadyImageCacheRebuild();

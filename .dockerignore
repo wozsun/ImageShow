@@ -1,34 +1,16 @@
-# Dependencies and generated output
+# Production build inputs
+*
+!package.json
+!package-lock.json
+!tsconfig.base.json
+!packages
+!scripts
+scripts/*
+!scripts/build
+!scripts/runtime
+
+# Generated files
 **/node_modules
 **/dist
-*.tsbuildinfo
-*.log
-
-# Tests and local tooling
-**/test
-**/tests
-**/*.test.*
-**/*.spec.*
-.codex
-.codex-baseline-*
-.agents
-.playwright-cli
-/output/playwright
-AGENTS.md
-TODO.md
-
-# Runtime data and secrets
-.env
-*.key
-compose.override.yaml
-data
-postgres
-redis
-cert
-nginx
-
-# Repository and non-build project assets
-.git
-.github
-/docs
-.DS_Store
+**/*.tsbuildinfo
+**/*.log

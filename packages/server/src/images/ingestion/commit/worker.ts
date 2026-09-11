@@ -1,3 +1,7 @@
+import { ingestionPreparedPath } from "../raw/paths.ts";
+import { withActiveIngestionTempPaths } from "../raw/lease-registry.ts";
+import { updateIngestionExecutionProgress } from "../execution/session.ts";
+import { contentType } from "../../../storage/objects/keys.ts";
 import type { AdminImageListItemDto } from "@imageshow/shared/browser";
 import { ApiError, errorMessage } from "../../../core/api-error.ts";
 import {
@@ -11,7 +15,10 @@ import {
   refreshEntityVocabularies
 } from "../../../vocab/vocab-cache.ts";
 import { vocabularyAssociationLockRequests } from "../../../vocab/mutation-sync.ts";
-import { resolveStorageAccess } from "../../../storage/backends/registry.ts";
+import {
+  assertStorageWriteTarget,
+  resolveStorageAccessForConfig
+} from "../../../storage/backends/registry.ts";
 import { thumbnailObjectKey } from "../../../storage/objects/image-paths.ts";
 import {
   imageStorageMutationLockKey,
@@ -22,14 +29,15 @@ import {
   type MoveCleanupObjectInput
 } from "../../../storage/cleanup/service.ts";
 import {
-  copyVerifiedObjectWithinStorage
+  writeVerifiedFileToStorage
 } from "../../../storage/objects/transfer.ts";
 import { withImageMutationSync } from "../../mutation-sync.ts";
 import { adminImageListItemsWithTags } from "../../presenter.ts";
 import { publishCompletedReceipt } from "./completion.ts";
 import { ingestionContentLockKey } from "./duplicate-confirmation.ts";
 import { persistIngestionImage } from "./persistence.ts";
-import { IngestionCommitStagingCleanup } from "./staging-cleanup.ts";
+import { removeIngestionPreparedFiles } from "../raw/prepared.ts";
+import { ingestionCleanupRetryQueue } from "../cleanup/retry-queue.ts";
 import {
   assertCommitTargetsAvailable,
   assertCurrentCommitExecution,
@@ -56,14 +64,11 @@ export async function commitIngestionSessionSnapshot(
 
   const prepared = session.prepared;
   const commit = session.commit;
-  const stagingKeys = [
-    prepared.prepared_image_key,
-    prepared.prepared_thumbnail_key
+  const preparedFiles = [
+    prepared.prepared_image_path,
+    prepared.prepared_thumbnail_path
   ];
-  const stagingCleanup = new IngestionCommitStagingCleanup(
-    session.storage_slug,
-    stagingKeys
-  );
+  let databaseCommitted = false;
   const candidateGuardToken = randomUuidV7();
   try {
     const resolvedTags = await resolveTagNames(commit.metadata.tags);
@@ -90,7 +95,9 @@ export async function commitIngestionSessionSnapshot(
         ],
         async (lockSignal) => {
           const combinedSignal = AbortSignal.any([signal, lockSignal]);
-          const storage = await resolveStorageAccess(session.storage_slug);
+          const storage = resolveStorageAccessForConfig(
+            await assertStorageWriteTarget(session.storage_slug)
+          );
           const thumbnailKey = thumbnailObjectKey(commit.final_object_key);
           // A guard may own only an absent target or content this frozen
           // commit can adopt. Reject unrelated pre-existing bytes before the
@@ -116,7 +123,7 @@ export async function commitIngestionSessionSnapshot(
               }
             }
           ], combinedSignal);
-          // Register the exact formal candidates before either copy. The job
+          // Register the exact formal candidates before either write. The job
           // worker takes the same image storage lock, so it cannot observe the
           // guard until this commit has either published PostgreSQL truth or
           // released the lock after failure/cancel. Missing objects are safe;
@@ -153,7 +160,15 @@ export async function commitIngestionSessionSnapshot(
             "ingestion_commit_candidate_guard",
             { guardToken: candidateGuardToken }
           );
-          await withIngestionExecutionHeartbeat(
+          const reportUpload = async (bytes: number) => {
+            await updateIngestionExecutionProgress(repository, session, {
+              phase: "uploading",
+              message: "写入所选存储并校验完整性",
+              progress: Math.min(95, Math.floor(bytes / (prepared.size + prepared.thumbnail_size) * 95))
+            });
+          };
+          await reportUpload(0);
+          await withActiveIngestionTempPaths(preparedFiles.map(ingestionPreparedPath), () => withIngestionExecutionHeartbeat(
             repository,
             session,
             combinedSignal,
@@ -165,10 +180,11 @@ export async function commitIngestionSessionSnapshot(
                 prepared,
                 commit.duplicate_decision
               );
-              await copyVerifiedObjectWithinStorage({
+              await writeVerifiedFileToStorage({
                 storage,
-                fromPrefix: "_uploads",
-                fromKey: prepared.prepared_image_key,
+                sourcePath: ingestionPreparedPath(prepared.prepared_image_path),
+                contentType: contentType(prepared.ext),
+                onProgress: (bytes) => reportUpload(bytes),
                 toPrefix: "full",
                 toKey: commit.final_object_key,
                 expectedSource: {
@@ -187,10 +203,11 @@ export async function commitIngestionSessionSnapshot(
                 },
                 signal: executionSignal
               });
-              await copyVerifiedObjectWithinStorage({
+              await writeVerifiedFileToStorage({
                 storage,
-                fromPrefix: "_uploads",
-                fromKey: prepared.prepared_thumbnail_key,
+                sourcePath: ingestionPreparedPath(prepared.prepared_thumbnail_path),
+                contentType: "image/webp",
+                onProgress: (bytes) => reportUpload(prepared.size + bytes),
                 toPrefix: "thumbs",
                 toKey: thumbnailKey,
                 expectedSource: {
@@ -210,7 +227,7 @@ export async function commitIngestionSessionSnapshot(
               });
               executionSignal.throwIfAborted();
             }
-          );
+          ));
 
           const persisted = await withImageMutationSync(async (mutationBatch) => {
             const result = await coordinator.beginDatabaseTransaction(
@@ -227,9 +244,9 @@ export async function commitIngestionSessionSnapshot(
               combinedSignal
             );
             // From this point PostgreSQL is authoritative. Freeze the exact
-            // staging cleanup keys before any cache, receipt, or cleanup await
-            // can fail and erase the prepared keys from Redis recovery state.
-            stagingCleanup.markDatabaseCommitted();
+            // prepared file paths before any cache, receipt, or cleanup await
+            // can fail and erase the prepared paths from Redis recovery state.
+            databaseCommitted = true;
             if (result.inserted) mutationBatch.add({ id: session.image_id });
             return result;
           });
@@ -273,28 +290,24 @@ export async function commitIngestionSessionSnapshot(
                 error: errorMessage(error)
               });
             });
-          const remainingStagingKeyCount = await stagingCleanup.removeNow(
-            combinedSignal
-          );
-          if (remainingStagingKeyCount) {
-            logger.warn("ingestion_staging_cleanup_deferred", {
-              session_id: session.session_id,
-              image_id: session.image_id,
-              remaining_key_count: remainingStagingKeyCount
-            });
-          }
           return persisted.image;
         }
       )
     );
-    await stagingCleanup.scheduleRemainingRemoval();
     return attempt.acquired ? attempt.value : null;
-  } catch (error) {
-    // Formal full/thumb candidates were guarded before copy.
-    // Only disposable staging cleanup remains for the bounded retry queue.
-    await stagingCleanup.scheduleRemainingRemoval();
-    throw error;
   } finally {
     coordinator.unregisterCancellable(session);
+    if (databaseCommitted) {
+      try {
+        await removeIngestionPreparedFiles(preparedFiles);
+      } catch (error) {
+        logger.warn("ingestion_prepared_cleanup_deferred", {
+          session_id: session.session_id,
+          image_id: session.image_id,
+          error: errorMessage(error)
+        });
+        await ingestionCleanupRetryQueue.enqueue(() => removeIngestionPreparedFiles(preparedFiles));
+      }
+    }
   }
 }

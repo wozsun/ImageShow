@@ -3,7 +3,6 @@ import { ApiError } from "../../core/api-error.ts";
 import type { StoragePrefix } from "../objects/keys.ts";
 import type {
   OpenedRead,
-  StorageCopyOptions,
   StorageDriver,
   StorageObjectReference,
   StoragePruneOptions,
@@ -139,22 +138,6 @@ class ManagedStorageDriver implements StorageDriver {
   ) {
     return this.usingReference(() => (
       this.driver.removeObjects(objects, options)
-    ));
-  }
-
-  copy(
-    fromPrefix: StoragePrefix,
-    fromKey: string,
-    toPrefix: StoragePrefix,
-    toKey: string,
-    options?: StorageCopyOptions
-  ) {
-    return this.usingReference(() => this.driver.copy(
-      fromPrefix,
-      fromKey,
-      toPrefix,
-      toKey,
-      options
     ));
   }
 

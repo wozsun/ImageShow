@@ -1,14 +1,9 @@
 import { pool } from "../core/database/pools.ts";
-import { ingestionOrphanCutoffs } from "../images/ingestion/cleanup/retention.ts";
-import {
-  parseIngestionStagingCleanupKey
-} from "../images/ingestion/staging-keys.ts";
 import { thumbnailObjectKey } from "../storage/objects/image-paths.ts";
 import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/objects/key-listing.ts";
 import type { StoragePrefix } from "../storage/objects/keys.ts";
 import {
   activeIngestionStorageReferences,
-  classifyStagingKeys,
   collectStorageBackendGroupSnapshot,
   ingestionFinalStorageReferences,
   mergeActiveIngestionSessions,
@@ -84,21 +79,6 @@ function failedNamespaceItem(
   };
 }
 
-function skippedUploadItem(
-  backend: string,
-  key: string,
-  reason: string
-): MaintenanceItem {
-  return {
-    action: "remove_object",
-    outcome: "skipped",
-    backend,
-    prefix: "_uploads",
-    key,
-    reason
-  };
-}
-
 function retainedRowsForGroup(
   rows: readonly MaintenanceImage[],
   group: StorageBackendGroup
@@ -138,8 +118,7 @@ async function captureMaintenanceGroups(
     }
     const incomplete = ([
       ["full", result.snapshot.full],
-      ["thumbs", result.snapshot.thumbs],
-      ["_uploads", result.snapshot._uploads]
+      ["thumbs", result.snapshot.thumbs]
     ] as const).filter(([, listing]) => !listing.complete);
     if (incomplete.length) {
       for (const [prefix, listing] of incomplete) {
@@ -173,11 +152,9 @@ function buildMaintenanceCandidates(
     >>["rows"][number]>
   >,
   groups: readonly CapturedMaintenanceGroup[],
-  initial: readonly MaintenanceCandidate[],
-  stagingCutoff: number
+  initial: readonly MaintenanceCandidate[]
 ) {
   const candidates = [...initial];
-  let activeStagingObjectsRetained = 0;
 
   for (const { group, backend, snapshot } of groups) {
     const retainedRows = retainedRowsForGroup(rows, group);
@@ -221,66 +198,12 @@ function buildMaintenanceCandidates(
       }
     }
 
-    const staging = classifyStagingKeys(
-      snapshot._uploads.keys.toSorted(),
-      activeSessions
-    );
-    activeStagingObjectsRetained += staging.active.length;
-    const activePreparedKeys = new Set(
-      [...activeSessions.values()].flatMap((session) => [
-        session.prepared_image_key,
-        session.prepared_thumbnail_key
-      ].filter((key): key is string => Boolean(key)))
-    );
-    const selectedBackend = group.backends.find((candidate) => (
-      candidate.slug === backend
-    ));
-    for (const key of staging.orphan) {
-      const identity = parseIngestionStagingCleanupKey(key);
-      const acceptedIdentity = identity
-        && (!identity.local_atomic_candidate
-          || selectedBackend?.type === "local")
-        ? identity
-        : null;
-      if (
-        acceptedIdentity?.local_atomic_candidate
-        && activePreparedKeys.has(acceptedIdentity.base_key)
-      ) {
-        activeStagingObjectsRetained += 1;
-      } else if (!acceptedIdentity) {
-        candidates.push({
-          kind: "result",
-          item: skippedUploadItem(
-            backend,
-            key,
-            "暂存键不符合当前 attempt generation 结构，无法证明年龄，保守保留"
-          )
-        });
-      } else if (acceptedIdentity.created_at >= stagingCutoff) {
-        candidates.push({
-          kind: "result",
-          item: skippedUploadItem(
-            backend,
-            key,
-            "暂存对象尚未超过 24 小时、一个清理周期与安全余量的统一门槛"
-          )
-        });
-      } else {
-        candidates.push({
-          kind: "remove",
-          backend,
-          prefix: "_uploads",
-          key
-        });
-      }
-    }
   }
-  return { candidates, activeStagingObjectsRetained };
+  return { candidates };
 }
 
 export async function buildStorageMaintenancePlan(
-  signal: AbortSignal,
-  now = Date.now()
+  signal: AbortSignal
 ) {
   signal.throwIfAborted();
   const [rowsResult, ingestionReferences, groups] = await Promise.all([
@@ -295,11 +218,9 @@ export async function buildStorageMaintenancePlan(
     rowsResult.rows,
     ingestionReferences.sessionsByBackend,
     capture.captured,
-    capture.candidates,
-    ingestionOrphanCutoffs(now).stagingCutoff
+    capture.candidates
   );
   return {
-    activeStagingObjectsRetained: built.activeStagingObjectsRetained,
     candidates: built.candidates,
     capturedGroups: capture.captured
   };

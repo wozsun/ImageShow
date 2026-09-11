@@ -232,12 +232,12 @@ DELETE 发出后失锁时由后继重新采用同一对象。
 | `created_at` / `updated_at` | 时间戳 |
 
 `metadata.storage_slug` 以外键引用它；后端需先迁走图片、清理 Redis active canonical、
-未解决 `move.cleanup` 和 `_uploads` 暂存对象才能删除。后端注册表同时
+未解决 `move.cleanup`才能删除。后端注册表同时
 管理配置快照与按签名复用的 driver/client 生命周期；只有 driver 连接参数变化或后端
 删除才会安全退役相关实例，显示名、启停、默认项和排序变化只刷新注册表快照。S3 的
 bucket / root_path 是物理布局；仍有
-图片、任意 active canonical、未解决清理任务或暂存对象时不允许原地修改。S3 endpoint 可在
-独占位置锁内通过 `_uploads` 完整快照、既有对象的有界 Range 读取和双向随机挑战证明
+图片、任意 active canonical、未解决清理任务时不允许原地修改。S3 endpoint 可在
+独占位置锁内通过既有对象的有界 Range 读取和双向随机挑战证明
 为同一命名空间的访问别名；成功后合并全部相交后端的 `namespace_identities`，使别名
 等价关系保持传递性；已在集合中或与其他注册项共享 identity 的空后端也不得无证明地
 脱离该集合。验证失败不写配置；COMMIT 回包丢失时按事务 ID 查询确定结果，

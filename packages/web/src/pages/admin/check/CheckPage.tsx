@@ -365,12 +365,11 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   pending_thumbnail_repairs: "待重新确认的缩略图",
   orphan_objects: "游离的原图",
   orphan_thumbs: "游离的缩略图",
-  active_staging_files: "有效的内容接入暂存文件",
-  retained_staging_files: "由内容接入会话保留的暂存文件",
-  orphan_staging_files: "失效的内容接入暂存文件",
-  stale_ingestion_raw_files: "陈旧的内容接入 raw 文件",
+  stale_ingestion_raw_files: "陈旧的内容接入原始文件",
+  stale_ingestion_prepared_files: "陈旧的内容接入处理结果",
+  ingestion_temp_space: "本地接入临时空间",
   stale_ingestion_part_files: "陈旧的内容接入 .part 文件",
-  incomplete_ingestion_raw_scan: "未完整扫描的内容接入临时目录",
+  incomplete_ingestion_temp_scan: "临时文件扫描不完整",
   incomplete_listings: "未完整列举的存储命名空间",
   unavailable_backends: "无法访问的后端",
   // 存储维护
@@ -379,7 +378,6 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   removed: "已删除对象",
   skipped: "已安全跳过",
   failed: "维护失败数量",
-  active_staging_objects_retained: "已保留有效内容接入暂存",
   pruned_dirs: "已回收空目录",
   items: "逐项维护明细",
   failures: "失败项",
@@ -421,9 +419,9 @@ function isIssueKey(key: string) {
   return [
     "issues", "operations", "failures", "failed", "unavailable_backends", "incomplete_listings", "error", "error_count",
     "missing_objects", "missing_thumbs", "pending_thumbnail_repairs",
-    "orphan_objects", "orphan_thumbs", "orphan_staging_files",
-    "stale_ingestion_raw_files", "stale_ingestion_part_files",
-    "incomplete_ingestion_raw_scan", "ready_cache_mismatch"
+    "orphan_objects", "orphan_thumbs",
+    "stale_ingestion_raw_files", "stale_ingestion_part_files", "stale_ingestion_prepared_files",
+    "incomplete_ingestion_temp_scan", "ready_cache_mismatch"
   ].includes(key);
 }
 
@@ -470,7 +468,7 @@ function countCheckIssues(result: Record<string, unknown>) {
     if (key === "ok") continue;
     if (isIssueKey(key)) {
       if (
-        (key === "stale_ingestion_raw_files" || key === "stale_ingestion_part_files")
+        (key === "stale_ingestion_raw_files" || key === "stale_ingestion_part_files" || key === "stale_ingestion_prepared_files")
         && value
         && typeof value === "object"
       ) {

@@ -1,9 +1,5 @@
 import { mapWithWorkerPool } from "../../../core/concurrency.ts";
-import { withStorageLocationReadLock } from "../../../storage/maintenance-lock.ts";
-import {
-  assertStorageRemovalResults,
-  removeStorageObjectsAndConfirm
-} from "../../../storage/objects/access.ts";
+import { removeIngestionPreparedFiles } from "../raw/prepared.ts";
 import { removeIngestionRaw } from "../raw/files.ts";
 import type { IngestionSessionSnapshot } from "../sessions/model.ts";
 
@@ -14,27 +10,13 @@ async function cleanupRetiredSession(session: IngestionSessionSnapshot) {
   // the time a retry runs. Old parts and unknown generations remain age-scan
   // work.
   const cleanups: Promise<unknown>[] = session.raw_generation
-    ? [removeIngestionRaw(session.queue, session, session.raw_generation)]
+    ? [removeIngestionRaw(session, session.raw_generation)]
     : [];
   if (session.prepared) {
-    cleanups.push(withStorageLocationReadLock(async (signal) => {
-      const removals = await removeStorageObjectsAndConfirm([
-        {
-          prefix: "_uploads",
-          key: session.prepared!.prepared_image_key,
-          storageSlug: session.storage_slug
-        },
-        {
-          prefix: "_uploads",
-          key: session.prepared!.prepared_thumbnail_key,
-          storageSlug: session.storage_slug
-        }
-      ], { signal });
-      assertStorageRemovalResults(
-        removals,
-        "Retired Ingestion staging cleanup failed"
-      );
-    }));
+    cleanups.push(removeIngestionPreparedFiles([
+      session.prepared.prepared_image_path,
+      session.prepared.prepared_thumbnail_path
+    ]));
   }
   const results = await Promise.allSettled(cleanups);
   const failures = results.flatMap((result) => (

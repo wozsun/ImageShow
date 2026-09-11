@@ -64,13 +64,13 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
   const admittedRemovalKey = cleanupAdmissionPrefix + ".active.webp";
   const queuedRemovalKey = cleanupAdmissionPrefix + ".queued.webp";
   await localAccess.driver.writeBuffer(
-    "_uploads",
+    "full",
     admittedRemovalKey,
     Buffer.from("active-cleanup-admission"),
     "image/webp"
   );
   await localAccess.driver.writeBuffer(
-    "_uploads",
+    "full",
     queuedRemovalKey,
     Buffer.from("queued-cleanup-admission"),
     "image/webp"
@@ -104,7 +104,7 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
   try {
     const activeRemoval = objectAccess.removeStorageObjectsAndConfirm([
       {
-        prefix: "_uploads",
+        prefix: "full",
         key: admittedRemovalKey,
         storageSlug: "local"
       }
@@ -115,7 +115,7 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
     await admittedRemovalStarted;
     const queuedRemoval = objectAccess.removeStorageObjectsAndConfirm([
       {
-        prefix: "_uploads",
+        prefix: "full",
         key: queuedRemovalKey,
         storageSlug: "local"
       }
@@ -139,14 +139,14 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
   assert.equal(queuedRemovalOutcome.reason, queuedAdmissionReason);
   assert.equal(queuedRemovalStarted, false);
   assert.equal(
-    await localAccess.driver.exists("_uploads", admittedRemovalKey),
+    await localAccess.driver.exists("full", admittedRemovalKey),
     false
   );
   assert.equal(
-    await localAccess.driver.exists("_uploads", queuedRemovalKey),
+    await localAccess.driver.exists("full", queuedRemovalKey),
     true,
     "取消的中央准入等待不得启动后续 driver 删除"
   );
-  await removeDriverObject(localAccess.driver, "_uploads", queuedRemovalKey);
+  await removeDriverObject(localAccess.driver, "full", queuedRemovalKey);
 
 });

@@ -32,8 +32,7 @@ import { StorageBackendCard } from "./StorageBackendCard.js";
 import { StorageBackendMigrationDialog } from "./StorageBackendMigrationDialog.js";
 import { StorageBackendDeletionBlockedDialog } from "./StorageBackendDeletionBlockedDialog.js";
 import {
-  storageBackendAfterDeleteRejection,
-  storageBackendWithHiddenStagingBlocker
+  storageBackendAfterDeleteRejection
 } from "./storage-backend-deletion-policy.js";
 
 type StorageActionDialog =
@@ -187,12 +186,7 @@ export function StorageSettings() {
         refreshedBackend ?? backend,
         result.error
       );
-      const currentBackend = refreshedBackend
-        ? storageBackendWithHiddenStagingBlocker(
-          refreshedBackend,
-          responseBackend
-        )
-        : null;
+      const currentBackend = refreshedBackend ?? null;
       const rejectedBackend = currentBackend
         ? currentBackend.deletion.action === "delete"
           ? null

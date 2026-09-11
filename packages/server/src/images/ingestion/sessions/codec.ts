@@ -152,8 +152,8 @@ function parseImportDownload(value: unknown) {
 function parsePrepared(value: unknown) {
   const prepared = record(value, "prepared manifest");
   exactFields(prepared, [
-    "prepared_image_key",
-    "prepared_thumbnail_key",
+    "prepared_image_path",
+    "prepared_thumbnail_path",
     "original_size",
     "original_width",
     "original_height",
@@ -172,10 +172,10 @@ function parsePrepared(value: unknown) {
     "duplicate_count",
     "generation"
   ], "prepared manifest");
-  nonEmptyString(prepared.prepared_image_key, "prepared.prepared_image_key");
+  nonEmptyString(prepared.prepared_image_path, "prepared.prepared_image_path");
   nonEmptyString(
-    prepared.prepared_thumbnail_key,
-    "prepared.prepared_thumbnail_key"
+    prepared.prepared_thumbnail_path,
+    "prepared.prepared_thumbnail_path"
   );
   for (const field of [
     "original_size",

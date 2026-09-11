@@ -2,67 +2,67 @@ import type { Dir } from "node:fs";
 import { opendir, rmdir } from "node:fs/promises";
 import { dirname, normalize, resolve } from "node:path";
 
-const activeRawPaths = new Map<string, number>();
-const deletingRawPaths = new Map<string, Promise<void>>();
-const activeRawDirectories = new Map<string, number>();
-const pruningRawDirectories = new Map<string, Promise<void>>();
-const scanningRawDirectories = new Map<string, number>();
+const activeTempPaths = new Map<string, number>();
+const deletingTempPaths = new Map<string, Promise<void>>();
+const activeTempDirectories = new Map<string, number>();
+const pruningTempDirectories = new Map<string, Promise<void>>();
+const scanningTempDirectories = new Map<string, number>();
 
-export function rawPathIdentity(path: string) {
+export function tempPathIdentity(path: string) {
   const identity = normalize(resolve(path));
   return process.platform === "win32" ? identity.toLowerCase() : identity;
 }
 
-async function retainActiveRawPath(identity: string) {
+async function retainActiveTempPath(identity: string) {
   for (;;) {
-    const deleting = deletingRawPaths.get(identity);
+    const deleting = deletingTempPaths.get(identity);
     if (deleting) {
       await deleting;
       continue;
     }
-    activeRawPaths.set(identity, (activeRawPaths.get(identity) ?? 0) + 1);
+    activeTempPaths.set(identity, (activeTempPaths.get(identity) ?? 0) + 1);
     return;
   }
 }
 
-function releaseActiveRawPath(identity: string) {
-  const count = activeRawPaths.get(identity) ?? 0;
-  if (count <= 1) activeRawPaths.delete(identity);
-  else activeRawPaths.set(identity, count - 1);
+function releaseActiveTempPath(identity: string) {
+  const count = activeTempPaths.get(identity) ?? 0;
+  if (count <= 1) activeTempPaths.delete(identity);
+  else activeTempPaths.set(identity, count - 1);
 }
 
-export function ingestionRawPathIsActive(path: string) {
-  return activeRawPaths.has(rawPathIdentity(path));
+export function ingestionTempPathIsActive(path: string) {
+  return activeTempPaths.has(tempPathIdentity(path));
 }
 
-export async function tryWithInactiveIngestionRawPath<T>(
+export async function tryWithInactiveIngestionTempPath<T>(
   path: string,
   work: () => Promise<T>
 ) {
-  const identity = rawPathIdentity(path);
-  if (activeRawPaths.has(identity) || deletingRawPaths.has(identity)) {
+  const identity = tempPathIdentity(path);
+  if (activeTempPaths.has(identity) || deletingTempPaths.has(identity)) {
     return null;
   }
   let settle!: () => void;
   const deleting = new Promise<void>((resolvePromise) => {
     settle = resolvePromise;
   });
-  deletingRawPaths.set(identity, deleting);
+  deletingTempPaths.set(identity, deleting);
   try {
     return await work();
   } finally {
-    deletingRawPaths.delete(identity);
+    deletingTempPaths.delete(identity);
     settle();
   }
 }
 
-function rawLeaseDirectories(paths: readonly string[]) {
+function tempLeaseDirectories(paths: readonly string[]) {
   const directories = new Map<string, string>();
   for (const path of paths) {
     const imageDirectory = resolve(dirname(path));
     const sessionDirectory = resolve(dirname(imageDirectory));
     for (const directory of [imageDirectory, sessionDirectory]) {
-      directories.set(rawPathIdentity(directory), directory);
+      directories.set(tempPathIdentity(directory), directory);
     }
   }
   return [...directories.entries()]
@@ -70,38 +70,38 @@ function rawLeaseDirectories(paths: readonly string[]) {
     .toSorted((left, right) => left.identity.localeCompare(right.identity));
 }
 
-async function retainActiveRawDirectory(identity: string) {
+async function retainActiveTempDirectory(identity: string) {
   for (;;) {
-    const pruning = pruningRawDirectories.get(identity);
+    const pruning = pruningTempDirectories.get(identity);
     if (pruning) {
       await pruning;
       continue;
     }
-    activeRawDirectories.set(
+    activeTempDirectories.set(
       identity,
-      (activeRawDirectories.get(identity) ?? 0) + 1
+      (activeTempDirectories.get(identity) ?? 0) + 1
     );
     return;
   }
 }
 
-function releaseActiveRawDirectory(identity: string) {
-  const count = activeRawDirectories.get(identity) ?? 0;
-  if (count <= 1) activeRawDirectories.delete(identity);
-  else activeRawDirectories.set(identity, count - 1);
+function releaseActiveTempDirectory(identity: string) {
+  const count = activeTempDirectories.get(identity) ?? 0;
+  if (count <= 1) activeTempDirectories.delete(identity);
+  else activeTempDirectories.set(identity, count - 1);
 }
 
-function retainScanningRawDirectory(identity: string) {
-  scanningRawDirectories.set(
+function retainScanningTempDirectory(identity: string) {
+  scanningTempDirectories.set(
     identity,
-    (scanningRawDirectories.get(identity) ?? 0) + 1
+    (scanningTempDirectories.get(identity) ?? 0) + 1
   );
 }
 
-function releaseScanningRawDirectory(identity: string) {
-  const count = scanningRawDirectories.get(identity) ?? 0;
-  if (count <= 1) scanningRawDirectories.delete(identity);
-  else scanningRawDirectories.set(identity, count - 1);
+function releaseScanningTempDirectory(identity: string) {
+  const count = scanningTempDirectories.get(identity) ?? 0;
+  if (count <= 1) scanningTempDirectories.delete(identity);
+  else scanningTempDirectories.set(identity, count - 1);
 }
 
 function ignorableEmptyDirectoryError(error: unknown) {
@@ -113,83 +113,83 @@ function ignorableEmptyDirectoryError(error: unknown) {
     || code === "EPERM";
 }
 
-export async function pruneIngestionRawDirectory(path: string) {
-  const identity = rawPathIdentity(path);
-  const pending = pruningRawDirectories.get(identity);
+export async function pruneIngestionTempDirectory(path: string) {
+  const identity = tempPathIdentity(path);
+  const pending = pruningTempDirectories.get(identity);
   if (pending) return pending;
   if (
-    activeRawDirectories.has(identity)
-    || scanningRawDirectories.has(identity)
+    activeTempDirectories.has(identity)
+    || scanningTempDirectories.has(identity)
   ) return;
   let settle!: () => void;
   const pruning = new Promise<void>((resolvePromise) => {
     settle = resolvePromise;
   });
-  pruningRawDirectories.set(identity, pruning);
+  pruningTempDirectories.set(identity, pruning);
   try {
     await rmdir(path);
   } catch (error) {
     if (!ignorableEmptyDirectoryError(error)) throw error;
   } finally {
-    pruningRawDirectories.delete(identity);
+    pruningTempDirectories.delete(identity);
     settle();
   }
 }
 
-export async function pruneIngestionRawParents(path: string) {
+export async function pruneIngestionTempParents(path: string) {
   const imageDirectory = resolve(dirname(path));
-  await pruneIngestionRawDirectory(imageDirectory);
-  await pruneIngestionRawDirectory(resolve(dirname(imageDirectory)));
+  await pruneIngestionTempDirectory(imageDirectory);
+  await pruneIngestionTempDirectory(resolve(dirname(imageDirectory)));
 }
 
-export async function withActiveIngestionRawPaths<T>(
+export async function withActiveIngestionTempPaths<T>(
   paths: readonly string[],
   work: () => Promise<T>
 ) {
-  const directories = rawLeaseDirectories(paths);
+  const directories = tempLeaseDirectories(paths);
   for (const directory of directories) {
-    await retainActiveRawDirectory(directory.identity);
+    await retainActiveTempDirectory(directory.identity);
   }
-  const identities = [...new Set(paths.map(rawPathIdentity))].toSorted();
-  for (const identity of identities) await retainActiveRawPath(identity);
+  const identities = [...new Set(paths.map(tempPathIdentity))].toSorted();
+  for (const identity of identities) await retainActiveTempPath(identity);
   try {
     return await work();
   } finally {
-    for (const identity of identities) releaseActiveRawPath(identity);
+    for (const identity of identities) releaseActiveTempPath(identity);
     for (const directory of directories) {
-      releaseActiveRawDirectory(directory.identity);
+      releaseActiveTempDirectory(directory.identity);
     }
     for (const directory of directories.toSorted((left, right) => (
       right.path.length - left.path.length
     ))) {
-      await pruneIngestionRawDirectory(directory.path).catch(() => undefined);
+      await pruneIngestionTempDirectory(directory.path).catch(() => undefined);
     }
   }
 }
 
-export type IngestionRawScanDirectory = Readonly<{
+export type IngestionTempScanDirectory = Readonly<{
   path: string;
   identity: string;
   directory: Dir;
 }>;
 
-async function closeRawDirectoryBestEffort(directory: Dir | null) {
+async function closeTempDirectoryBestEffort(directory: Dir | null) {
   await directory?.close().catch(() => undefined);
 }
 
-export async function openIngestionRawScanDirectory(
+export async function openIngestionTempScanDirectory(
   path: string,
   signal?: AbortSignal
-): Promise<IngestionRawScanDirectory | null> {
-  const identity = rawPathIdentity(path);
+): Promise<IngestionTempScanDirectory | null> {
+  const identity = tempPathIdentity(path);
   for (;;) {
     signal?.throwIfAborted();
-    const pruning = pruningRawDirectories.get(identity);
+    const pruning = pruningTempDirectories.get(identity);
     if (pruning) {
       await pruning;
       continue;
     }
-    retainScanningRawDirectory(identity);
+    retainScanningTempDirectory(identity);
     let directory: Dir | null = null;
     try {
       try {
@@ -199,22 +199,22 @@ export async function openIngestionRawScanDirectory(
       }
       signal?.throwIfAborted();
       if (!directory) {
-        releaseScanningRawDirectory(identity);
+        releaseScanningTempDirectory(identity);
         return null;
       }
       return { path, identity, directory };
     } catch (error) {
-      await closeRawDirectoryBestEffort(directory);
-      releaseScanningRawDirectory(identity);
+      await closeTempDirectoryBestEffort(directory);
+      releaseScanningTempDirectory(identity);
       throw error;
     }
   }
 }
 
-export async function closeIngestionRawScanDirectory(
-  state: IngestionRawScanDirectory | null
+export async function closeIngestionTempScanDirectory(
+  state: IngestionTempScanDirectory | null
 ) {
   if (!state) return;
   await state.directory.close().catch(() => undefined);
-  releaseScanningRawDirectory(state.identity);
+  releaseScanningTempDirectory(state.identity);
 }

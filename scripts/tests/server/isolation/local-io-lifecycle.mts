@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Readable } from "node:stream";
 import { once } from "node:events";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -33,9 +34,9 @@ await runIntegrationScenario(async (runtime) => {
 
   await driver.writeBuffer("full", "source.bin", Buffer.from("source"), "application/octet-stream");
   await driver.writeBuffer("full", "target.bin", Buffer.from("target"), "application/octet-stream");
-  await assert.rejects(driver.copy("full", "source.bin", "full", "target.bin"));
+  await assert.rejects(driver.writeStream("full", "target.bin", Readable.from([Buffer.from("source")]), 6, "application/octet-stream"));
   assert.equal((await driver.readBuffer("full", "target.bin")).toString(), "target");
-  await driver.copy("full", "source.bin", "full", "copied.bin");
+  await driver.writeStream("full", "copied.bin", Readable.from([Buffer.from("source")]), 6, "application/octet-stream");
   assert.equal((await driver.readBuffer("full", "copied.bin")).toString(), "source");
   const listing = await collectStorageKeyListing(driver.listKeys("full"));
   assert.deepEqual({ ...listing, keys: listing.keys.toSorted() }, { complete: true, count: 3, keys: ["copied.bin", "source.bin", "target.bin"] });

@@ -19,8 +19,7 @@ import {
   type StorageBackendConfigRow
 } from "./record.ts";
 import {
-  invalidateStorageBackendRegistry,
-  resolveStorageAccessForConfig
+  invalidateStorageBackendRegistry
 } from "./registry.ts";
 import {
   assertPhysicalLocationChangeAllowed,
@@ -32,10 +31,6 @@ import {
   validateStorageBackendCandidate,
   type ExistingStorageProbe
 } from "./probe.ts";
-import {
-  captureStagingNamespaceSnapshot,
-  type StagingNamespaceSnapshot
-} from "./endpoint-rebind.ts";
 import {
   withStorageLocationWriteAndAdvisoryLock
 } from "../maintenance-lock.ts";
@@ -189,24 +184,13 @@ async function updateStorageBackendUnderLock(
     ? changedPhysicalLocationFields(currentConfig, nextConfig)
     : [];
   const snapshotUsage = storageBackendUsage(snapshot);
-  let currentStaging: StagingNamespaceSnapshot | undefined;
   let verifiedEndpointRebind = false;
   if (configuredNamespaceChanged) {
-    if (!endpointRebindCandidate) {
-      assertPhysicalLocationChangeAllowed(changedFields, snapshotUsage);
-    }
-    currentStaging = await captureStagingNamespaceSnapshot(
-      resolveStorageAccessForConfig(currentConfig).driver,
-      signal
-    );
-    snapshotUsage.staging_object_count = currentStaging.keys.size;
-    signal.throwIfAborted();
     if (endpointRebindCandidate) {
       verifiedEndpointRebind = Boolean(
         snapshotUsage.image_count
         || snapshotUsage.ingestion_session_count
         || snapshotUsage.cleanup_job_count
-        || snapshotUsage.staging_object_count
       );
       if (
         !verifiedEndpointRebind
@@ -239,8 +223,8 @@ async function updateStorageBackendUnderLock(
     await validateStorageBackendCandidate(
       nextConfig,
       existingObject,
-      verifiedEndpointRebind && currentStaging
-        ? { currentConfig, currentStaging }
+      verifiedEndpointRebind
+        ? { currentConfig }
         : undefined,
       signal
     );

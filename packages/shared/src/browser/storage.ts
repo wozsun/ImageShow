@@ -5,8 +5,7 @@ export type StorageBackendDeleteBlocker =
   | "default"
   | "images"
   | "ingestion_sessions"
-  | "cleanup_jobs"
-  | "staging_objects";
+  | "cleanup_jobs";
 
 export type StorageBackendDeleteAction = "delete" | "migrate" | "blocked";
 

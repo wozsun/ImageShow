@@ -127,10 +127,10 @@ export async function createIntegrationRuntime(): Promise<IntegrationRuntime> {
 async function closeIntegrationRuntime(runtime: IntegrationRuntime) {
   const errors: unknown[] = [];
   try {
-    const { closeIngestionRawCleanupCursor } = await import(
+    const { closeIngestionTempCleanupCursor } = await import(
       "../../../../packages/server/src/images/ingestion/raw/orphan-scanner.ts"
     );
-    await closeIngestionRawCleanupCursor();
+    await closeIngestionTempCleanupCursor();
   } catch (error) {
     errors.push(error);
   }

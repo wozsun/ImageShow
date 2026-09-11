@@ -3,7 +3,7 @@ import { runtimePaths } from "../../config/bootstrap-env.ts";
 import { ApiError } from "../../core/api-error.ts";
 import type { S3StorageConfig } from "../backends/config.ts";
 
-export const STORAGE_PREFIXES = ["full", "thumbs", "_uploads"] as const;
+export const STORAGE_PREFIXES = ["full", "thumbs"] as const;
 export type StoragePrefix = typeof STORAGE_PREFIXES[number];
 export type ReadablePrefix = "full" | "thumbs";
 
