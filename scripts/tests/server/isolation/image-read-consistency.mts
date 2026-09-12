@@ -325,6 +325,14 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
       query: { status: "ready", theme: matrixTheme, page: 2, limit: 3 }
     },
     {
+      name: "theme-oldest-first",
+      query: { status: "ready", theme: matrixTheme, order: "oldest", page: 1, limit: 3 }
+    },
+    {
+      name: "theme-oldest-last",
+      query: { status: "ready", theme: matrixTheme, order: "oldest", page: 2, limit: 3 }
+    },
+    {
       name: "tag",
       query: { status: "ready", tag: matrixTag, page: 1, limit: 6 }
     },
@@ -433,6 +441,12 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     matrixOrder.slice(3)
   );
   assert.equal(lastThemePage.items.length, 3, "末页恰好填满时不得少读");
+  assert.deepEqual(
+    [...redisMatrixPages.get("theme-oldest-first")!.items,
+      ...redisMatrixPages.get("theme-oldest-last")!.items].map((item) => item.id),
+    [...matrixOrder].reverse(),
+    "oldest admin pages must reverse both time and UUID ordering"
+  );
   assert.deepEqual(redisMatrixPages.get("zero"), { items: [], total: 0 });
   assert.deepEqual(
     redisMatrixPages.get("combined")!.items.map((item) => item.id),
@@ -576,6 +590,53 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   await runtimeAvailability.requireOperationalRedis();
   await readyCacheCoordinator.requestReadyImageCacheRebuild();
 
+  const sortRows = matrixIds.map((id, index) => ({
+    id,
+    image_time: `2026-08-${20 + Math.floor(index / 2)}T00:00:00.000Z`,
+    created_at: `2026-08-${24 - Math.floor(index / 2)}T00:00:00.000Z`,
+    unset: index < 2
+  }));
+  for (const row of sortRows) {
+    await database.pool.query(
+      "UPDATE metadata SET image_time=$2, created_at=$3, theme=$4 WHERE id=$1",
+      [row.id, row.image_time, row.created_at, row.unset ? null : matrixTheme]
+    );
+  }
+  await readyCacheCoordinator.requestReadyImageCacheRebuild();
+  for (const status of ["ready", "deleted"] as const) {
+    if (status === "deleted") {
+      await database.pool.query(
+        "UPDATE metadata SET status='deleted', deleted_at=now() WHERE id=ANY($1::uuid[])",
+        [matrixIds]
+      );
+    }
+    for (const sort_by of ["image_time", "created_at"] as const) {
+      for (const order of ["latest", "oldest"] as const) {
+        for (const unset of [false, true]) {
+          const expected = sortRows.filter((row) => !unset || row.unset).sort((a, b) => {
+            const comparison = a[sort_by].localeCompare(b[sort_by]) || a.id.localeCompare(b.id);
+            return order === "latest" ? -comparison : comparison;
+          });
+          const seen: string[] = [];
+          for (let page = 1; page <= Math.ceil(expected.length / 2) + 1; page += 1) {
+            const result = await adminImagesReadModel.listAdminImages({
+              status, sort_by, order, tag: matrixTag,
+              ...(unset ? { theme: "~unset" } : {}), page, limit: 2
+            });
+            assert.equal(result.total, expected.length);
+            assert.deepEqual(result.items.map((item) => item.id),
+              expected.slice((page - 1) * 2, page * 2).map((row) => row.id),
+              `${status}/${sort_by}/${order}/unset=${unset}/page=${page}`);
+            seen.push(...result.items.map((item) => item.id));
+          }
+          assert.deepEqual(seen, expected.map((row) => row.id));
+        }
+        assert.deepEqual(await adminImagesReadModel.listAdminImages({
+          status, sort_by, order, tag: "pagination-missing", page: 1, limit: 2
+        }), { items: [], total: 0 });
+      }
+    }
+  }
   await database.pool.query(
     "DELETE FROM metadata WHERE id = ANY($1::uuid[])",
     [matrixIds]

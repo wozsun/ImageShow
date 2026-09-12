@@ -4,6 +4,7 @@ import {
   useState
 } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { defaultAdminImageSort, type AdminImageSort } from "@imageshow/shared/browser";
 import type { ImageAdminFilterValues } from "./ImageAdminFilters.js";
 import type { ImageAdminView } from "./useImageAdminOperations.js";
 import {
@@ -20,13 +21,15 @@ import {
 export function useImageAdminPageNavigation({
   view,
   filters,
-  pageSize
+  pageSize,
+  sort = defaultAdminImageSort
 }: {
   view: ImageAdminView;
   filters: ImageAdminFilterValues;
   pageSize: number;
+  sort?: Readonly<AdminImageSort>;
 }) {
-  const scopeKey = imageAdminPaginationScopeKey(view, filters, pageSize);
+  const scopeKey = imageAdminPaginationScopeKey(view, filters, pageSize, sort);
   const [state, setState] = useState<ImageAdminPageState>({
     scopeKey,
     page: 1,
@@ -40,7 +43,8 @@ export function useImageAdminPageNavigation({
       filters,
       scopeKey,
       pageNumber,
-      pageSize
+      pageSize,
+      sort
     )
   });
   // Total belongs to the normalized scope, not to one numeric page. Keep the

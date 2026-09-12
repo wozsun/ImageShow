@@ -1,6 +1,8 @@
-import { unsetThemeFilter } from "@imageshow/shared/browser";
 import {
+  unsetThemeFilter,
+  defaultAdminImageSort,
   adminImageListReadStartedAtHeader,
+  type AdminImageSort,
   type AdminImageListResponseDto
 } from "@imageshow/shared/browser";
 import type { QueryClient } from "@tanstack/react-query";
@@ -62,7 +64,8 @@ export function resolveImageAdminScopeTotal({
 function normalizedScope(
   view: ImageAdminView,
   filters: ImageAdminFilterValues,
-  pageSize: number
+  pageSize: number,
+  sort: Readonly<AdminImageSort>
 ) {
   return {
     view,
@@ -71,6 +74,8 @@ function normalizedScope(
     theme: view === "unset" ? unsetThemeFilter : filters.theme || "",
     tag: filters.tag || "",
     author: filters.author || "",
+    sort_by: sort.sort_by,
+    order: sort.order,
     pageSize
   };
 }
@@ -78,9 +83,10 @@ function normalizedScope(
 export function imageAdminPaginationScopeKey(
   view: ImageAdminView,
   filters: ImageAdminFilterValues,
-  pageSize: number
+  pageSize: number,
+  sort: Readonly<AdminImageSort> = defaultAdminImageSort
 ) {
-  return JSON.stringify(normalizedScope(view, filters, pageSize));
+  return JSON.stringify(normalizedScope(view, filters, pageSize, sort));
 }
 
 export function effectiveImageAdminPage(
@@ -113,10 +119,13 @@ export function adminImageListQuery(
   filters: ImageAdminFilterValues,
   scopeKey: string,
   page: number,
-  pageSize: number
+  pageSize: number,
+  sort: Readonly<AdminImageSort> = defaultAdminImageSort
 ) {
   const params = new URLSearchParams({
     status: view === "deleted" ? "deleted" : "ready",
+    sort_by: sort.sort_by,
+    order: sort.order,
     page: String(page),
     limit: String(pageSize)
   });

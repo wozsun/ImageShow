@@ -51,11 +51,24 @@ export const adminPermissions = {
 export type AdminPermission =
   (typeof adminPermissions)[keyof typeof adminPermissions];
 
+export const adminImageSortFields = ["image_time", "created_at"] as const;
+export const adminImageOrders = ["latest", "oldest"] as const;
+export type AdminImageSort = {
+  sort_by: (typeof adminImageSortFields)[number];
+  order: (typeof adminImageOrders)[number];
+};
+export const defaultAdminImageSort: Readonly<AdminImageSort> = {
+  sort_by: "image_time",
+  order: "latest"
+};
+
 // 管理端界面偏好以 PostgreSQL 为权威，并由浏览器本地存储提供首帧与离线兜底。
 // 将键和值域集中在 shared；新增偏好时，类型、服务端校验和前端投影会同步暴露缺口。
 export const adminColorSchemes = ["light", "dark", "system"] as const;
 export const adminPreferenceValueOptions = {
-  color_scheme: adminColorSchemes
+  color_scheme: adminColorSchemes,
+  image_sort_by: adminImageSortFields,
+  image_sort_order: adminImageOrders
 } as const;
 export const adminPreferencesMaxBytes = 4 * 1024;
 
@@ -71,7 +84,9 @@ export type AdminPreferenceValues = {
 
 export const defaultAdminPreferences: Readonly<AdminPreferenceValues> =
   Object.freeze({
-    color_scheme: "system"
+    color_scheme: "system",
+    image_sort_by: defaultAdminImageSort.sort_by,
+    image_sort_order: defaultAdminImageSort.order
   });
 
 export type AdminPreferences = Partial<AdminPreferenceValues>;

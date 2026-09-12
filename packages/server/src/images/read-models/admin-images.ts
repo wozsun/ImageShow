@@ -1,10 +1,12 @@
 import type {
   AdminImageListResponseDto,
+  AdminImageSort,
   Brightness,
   Device,
   ImageSnapshotResponseDto,
   ImageAdminInfoDto
 } from "@imageshow/shared/browser";
+import { defaultAdminImageSort } from "@imageshow/shared/browser";
 import { pool } from "../../core/database/pools.ts";
 import {
   withReadOnlyRepeatableReadTransaction
@@ -37,32 +39,37 @@ export type AdminImageListQuery = {
   author?: string;
   page: number;
   limit: number;
-};
+} & Partial<AdminImageSort>;
 
 export async function listAdminImages(
   query: AdminImageListQuery
 ): Promise<AdminImageListResponseDto> {
   const window = createPageWindow(query.page, query.limit);
+  const sort: AdminImageSort = {
+    sort_by: query.sort_by ?? defaultAdminImageSort.sort_by,
+    order: query.order ?? defaultAdminImageSort.order
+  };
   let readyPlan: Awaited<ReturnType<typeof resolveImageFilterPlan>>
     | null = null;
   if (query.status === "ready") {
     readyPlan = await resolveImageFilterPlan(query, { redisMode: "required" });
-    const cached = await readReadyImagePageWindow(
-      readyPlan,
-      window
-    );
-    if (cached.status === "redis_unavailable") throw cached.error;
-    if (cached.status === "hit") {
-      const images = await adminImageListItemsWithTags(cached.value.items.map((item) => ({
-        ...item,
-        status: "ready",
-        deleted_at: null,
-        purge_job_id: null
-      })));
-      return {
-        items: images,
-        total: cached.value.total
-      };
+    // The ready index is ordered by image_time. Entry time uses PostgreSQL's
+    // authoritative order instead of reordering only the cached page.
+    if (sort.sort_by === "image_time") {
+      const cached = await readReadyImagePageWindow(readyPlan, window, sort.order);
+      if (cached.status === "redis_unavailable") throw cached.error;
+      if (cached.status === "hit") {
+        const images = await adminImageListItemsWithTags(cached.value.items.map((item) => ({
+          ...item,
+          status: "ready",
+          deleted_at: null,
+          purge_job_id: null
+        })));
+        return {
+          items: images,
+          total: cached.value.total
+        };
+      }
     }
   }
   const { params, where } = readyPlan
@@ -85,7 +92,8 @@ export async function listAdminImages(
             [...where],
             [...params],
             window,
-            client
+            client,
+            sort
           );
       return { rows, total };
     }

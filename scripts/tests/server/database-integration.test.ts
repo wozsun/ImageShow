@@ -91,7 +91,7 @@ const storageIngestionScenarios = [
   },
   {
     id: "image-read-consistency",
-    name: "图片分页的事务快照、Redis 回源等价和中断边界",
+    name: "图片排序分页的事务快照、Redis 回源等价和中断边界",
     script: join(isolationRoot, "image-read-consistency.mts")
   },
   {
@@ -141,7 +141,7 @@ const storageIngestionScenarios = [
   },
   {
     id: "auth-author-contracts",
-    name: "作者身份的权限、事务和公开输出，以及登录会话续期",
+    name: "作者身份与账号偏好的权限、事务、公开输出和登录会话续期",
     script: join(isolationRoot, "auth-author-contracts.mts")
   },
   {

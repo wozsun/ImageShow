@@ -11,7 +11,7 @@ import {
   type ImageBrowseContext,
   type ImageBrowsePosition
 } from "../cursor.ts";
-import type { PublicImageOrder } from "@imageshow/shared/browser";
+import type { AdminImageSort, PublicImageOrder } from "@imageshow/shared/browser";
 import {
   getReadyImageCacheCoordinatorStatus,
   reportReadyImageCacheFailure,
@@ -425,7 +425,8 @@ export function readReadyImageCursorPage(
 
 export function readReadyImagePageWindow(
   plan: ImageFilterPlan,
-  window: PageWindow
+  window: PageWindow,
+  order: AdminImageSort["order"] = "latest"
 ): Promise<ReadyImagePageReadResult<ReadyImageCacheWindow>> {
   return resolvedReadyImagePage(
     plan,
@@ -434,7 +435,7 @@ export function readReadyImagePageWindow(
       present: (value) => value
     }),
     window.limit,
-    "latest",
+    order,
     undefined,
     false,
     "required"

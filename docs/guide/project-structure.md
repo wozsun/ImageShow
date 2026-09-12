@@ -463,7 +463,9 @@ mutation hold 与 rebuild requirement；归组没有增加第二个状态机或�
 `ordered-window.ts` 承载 ZSET 时间窗口、HMGET 与有效性校验，`random-window.ts` 在既有
 尾段索引按 `suffix,id` 读取两段环形窗口并验证筛选成员，达到扫描预算时回源 PG。
 `images/read-models/pagination.ts` 分别选择 show 五字段、gallery 卡片及后台编辑投影；
-后台使用安全 offset，公开使用 cursor。标签与选中行在同一 SQL 快照投影，URL 由共同 presenter 生成。
+后台使用安全 offset，按图片 / 入库时间与 UUID 同向排序；图片时间的 ready 页复用 Redis
+正反序窗口，入库时间及回收站由 PostgreSQL 排序分页。公开使用 cursor。标签与选中行在同一
+SQL 快照投影，URL 由共同 presenter 生成。
 独立详情提供完整元数据和链接；Web 从列表保留基础项并按 ID 组装，显示名复用 facets。
 
 领域模块可以依赖 `core/` 和 `config/`，但基础设施不能反向导入具体路由。跨领域调用直接
@@ -593,10 +595,14 @@ hooks ──► lib
   角色或路由。
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
 - `pages/admin/images/useImageAdminPageNavigation.ts` 是后台图库、无主题与回收站数字页的唯一查询
-  owner，只保存规范化 scope、目标 page 与最近成功的 scope total 快照，并让 React Query
+  owner，只保存包含排序依据和方向的规范化 scope、目标 page 与最近成功的 scope total 快照，并让 React Query
   处理取消、键隔离、90 秒新鲜缓存和重试；筛选整体清空通过该 owner 显式归一到第一页，因此
   无主题视图中仅删除隐藏主题值时也保留相同分页收敛。同目录 `images/image-admin-list-query.ts` 只构造规范化
   scope、query key、数字页 URL 与纯 total 仲裁模型；页面状态只消费这两个所有者提供的结果。
+  `ImageAdmin.tsx` 以账号偏好初始化当前页面的图片 / 入库、最新 / 最旧两维排序，双分区按钮
+  独立更新对应维度并经 `useAdminPreferences` 保存。其他窗口更新偏好不改变当前页的排序快照；
+  切换时保留筛选，复用分页 owner 返回首屏并清除选择与瞬时反馈。排序类型、可选值、默认值及
+  偏好注册由 `shared/browser/common.ts` 统一提供，HTTP schema 拒绝未知字段及非法枚举值。
   `images/ImageAdminFilters.tsx` 以自身容器宽度同步 CSS 的 `947px` 单双行边界，并实际切换筛选项
   DOM 分组，保证单行、双行与移动布局的视觉顺序和键盘顺序一致；设备 / 亮度与三类 Facet 分别
   以 `120px`、`150px` 为弹性基准和下限，五类筛选与清空按钮均不显示额外上方标题。

@@ -6,6 +6,7 @@ import {
 } from "linkedom";
 import {
   adminPermissions,
+  type AdminPreferences,
   type AdminCheckStatusDto,
   type AdminImageListItemDto,
   type AdminOverviewDto,
@@ -2599,6 +2600,8 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
   assert.equal(target.searchParams.get("theme"), "night");
   assert.equal(target.searchParams.get("tag"), "blue");
   assert.equal(target.searchParams.get("author"), "alice");
+  assert.equal(target.searchParams.get("sort_by"), "image_time");
+  assert.equal(target.searchParams.get("order"), "latest");
 
   const unsetOptions = adminImageListQuery(
     "unset",
@@ -2963,7 +2966,7 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     }
   }
 });
-test("[Web/后台访问] 图片后台真实挂载保持弹窗页码、操作后夹紧并按权限隐藏永久删除", async (t) => {
+test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页码、操作后夹紧及权限", async (t) => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
   );
@@ -3853,6 +3856,127 @@ test("[Web/后台访问] 图片后台真实挂载保持弹窗页码、操作后�
       }
     };
 
+    const runSortScenario = async () => {
+      const username = "sort-preference-admin";
+      const client = new QueryClient({ defaultOptions: {
+        queries: { retry: false, refetchOnWindowFocus: false }
+      } });
+      client.setQueryData(queryKeys.me, {
+        authenticated: true, username, role: "image", permissions: [],
+        csrf_token: "sort-token", application_version: "current-test",
+        preferences: {}, preferences_etag: 'W/"sort-preferences"',
+        version_settings: { enabled: true, link_enabled: true }
+      });
+      client.setQueryData(queryKeys.settings, { settings: {
+        admin: { image_page_size: 1 }, ingestion: { list_page_size: 1 }
+      } });
+      client.setQueryData(queryKeys.ingestionVocabulary, { themes: [], tags: [], authors: [] });
+      client.setQueryData(queryKeys.storageOptions, { backends: [] });
+      let saved: AdminPreferences = {};
+      const patches: AdminPreferences[] = [];
+      const requests: URL[] = [];
+      let releaseFirstPatch!: () => void;
+      const firstPatchGate = new Promise<void>((resolve) => { releaseFirstPatch = resolve; });
+      let offline = false;
+      const previousFetch = globalThis.fetch;
+      globalThis.fetch = async (input, init) => {
+        const url = new URL(String(input), "https://imageshow.test");
+        if (url.pathname === "/api/admin/images") {
+          requests.push(url);
+          return jsonResponse({
+            items: [{ ...image(String(url.searchParams.get("page")).padStart(12, "0")), status: "ready" }],
+            total: 3
+          });
+        }
+        if (url.pathname === "/api/admin/preferences") {
+          assert.equal(init?.method, "PATCH");
+          const patch = JSON.parse(String(init.body)) as AdminPreferences;
+          patches.push(patch);
+          if (offline) throw new Error("controlled preference offline");
+          if (patches.length === 1) await firstPatchGate;
+          saved = { ...saved, ...patch };
+          return jsonResponse({ preferences: saved });
+        }
+        if (url.pathname === "/api/admin/ingestion/vocabulary") {
+          return jsonResponse({ themes: [], tags: [], authors: [] });
+        }
+        throw new Error(`unexpected sorting request: ${url.pathname}`);
+      };
+      const root = createRoot(container);
+      const render = async (visit: number) => React.act(async () => {
+        root.render(React.createElement(QueryClientProvider, { client },
+          React.createElement(MemoryRouter, { initialEntries: ["/admin/images"] },
+            React.createElement(AuthSessionProvider, null,
+              React.createElement(AdminPreferencesProvider, {
+                username, serverPreferences: {},
+                serverPreferencesEtag: 'W/"sort-preferences"', serverPreferencesUpdatedAt: 1
+              }, React.createElement(ActionFeedbackProvider, null,
+                React.createElement(React.StrictMode, null, React.createElement(ImageAdmin, { key: visit }))
+              ))
+            )
+          )
+        ));
+      });
+      const sortButtons = () => [...container.querySelectorAll<HTMLButtonElement>(
+        '[role="group"][aria-label="图片列表排序"] > button'
+      )];
+      const labels = () => sortButtons().map((button) => button.textContent);
+      const cacheKey = `imageshow.admin.preferences.${username}`;
+      try {
+        await render(1);
+        await waitFor(() => requests.length === 1, "default sort did not load once in Strict Mode");
+        assert.deepEqual(labels(), ["图片", "最新"]);
+        assert.equal(patches.length, 0, "reading defaults must not write preferences");
+        await click(buttonWithText("下一页"));
+        await waitFor(() => requests.at(-1)?.searchParams.get("page") === "2", "page 2 did not load");
+        await click(sortButtons()[0]!);
+        await waitFor(() => patches.length === 1, "field preference was not queued");
+        assert.equal(requests.at(-1)?.searchParams.get("page"), "1");
+        await click(sortButtons()[1]!);
+        await click(sortButtons()[0]!);
+        assert.deepEqual(labels(), ["图片", "最旧"]);
+        releaseFirstPatch();
+        await waitFor(() => saved.image_sort_by === "image_time"
+          && saved.image_sort_order === "oldest", "queued sort writes did not converge");
+        assert.deepEqual(patches, [
+          { image_sort_by: "created_at" }, { image_sort_order: "oldest" }, { image_sort_by: "image_time" }
+        ], "each click saves only its changed dimension");
+        assert.equal(new Set(requests.map((url) =>
+          `${url.searchParams.get("sort_by")}/${url.searchParams.get("order")}`)).size, 4);
+        await render(2);
+        assert.deepEqual(labels(), ["图片", "最旧"], "re-entry must restore the saved selection");
+        const requestCount = requests.length;
+        localStorage.setItem(cacheKey, JSON.stringify({
+          values: { image_sort_by: "created_at", image_sort_order: "latest" }, pending: {}
+        }));
+        const storageEvent = new window.Event("storage");
+        Object.defineProperties(storageEvent, {
+          key: { value: cacheKey }, storageArea: { value: localStorage }
+        });
+        await React.act(async () => window.dispatchEvent(storageEvent));
+        assert.deepEqual(labels(), ["图片", "最旧"], "another window must not reorder the active list");
+        assert.equal(requests.length, requestCount);
+        await render(3);
+        assert.deepEqual(labels(), ["入库", "最新"], "the next visit consumes synchronized preferences");
+        offline = true;
+        await click(sortButtons()[1]!);
+        await waitFor(() => patches.length === 4, "offline preference was not attempted");
+        assert.deepEqual(labels(), ["入库", "最旧"]);
+        assert.equal(JSON.parse(localStorage.getItem(cacheKey)!).pending.image_sort_order, "oldest");
+        offline = false;
+        await React.act(async () => window.dispatchEvent(new window.Event("online")));
+        await waitFor(() => patches.length === 5
+          && Object.keys(JSON.parse(localStorage.getItem(cacheKey)!).pending).length === 0,
+        "reconnection did not persist the pending preference");
+      } finally {
+        releaseFirstPatch();
+        await React.act(async () => root.unmount());
+        client.clear();
+        globalThis.fetch = previousFetch;
+      }
+    };
+
+    await runSortScenario();
     await runMutationScenario("restore");
     await runMutationScenario("purge");
     await runMutationScenario("purge-unknown");

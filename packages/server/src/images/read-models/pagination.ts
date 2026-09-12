@@ -1,5 +1,9 @@
 import { pool, type DatabaseReader } from "../../core/database/pools.ts";
-import type { PublicImageView } from "@imageshow/shared/browser";
+import {
+  defaultAdminImageSort,
+  type AdminImageSort,
+  type PublicImageView
+} from "@imageshow/shared/browser";
 import {
   encodeImageCursor,
   type ImageBrowseContext,
@@ -21,18 +25,22 @@ export async function fetchAdminImageOffsetRows(
   where: string[],
   params: unknown[],
   window: PageWindow,
-  reader: DatabaseReader = pool
+  reader: DatabaseReader = pool,
+  sort: Readonly<AdminImageSort> = defaultAdminImageSort
 ) {
+  const field = sort.sort_by === "created_at" ? "created_at" : "image_time";
+  const direction = sort.order === "oldest" ? "ASC" : "DESC";
+  const ordering = `${field} ${direction}, id ${direction}`;
   const result = await reader.query(
     `SELECT ${adminImageListPresentationColumnsWithTags}
        FROM (
          SELECT ${adminImageListPresentationColumns}
            FROM metadata
           WHERE ${where.join(" AND ")}
-          ORDER BY image_time DESC, id DESC
+          ORDER BY ${ordering}
           LIMIT $${params.length + 1} OFFSET $${params.length + 2}
        ) metadata
-      ORDER BY image_time DESC, id DESC`,
+      ORDER BY ${ordering}`,
     [...params, window.limit, window.start]
   );
   return result.rows as ImageRecordWithTags[];

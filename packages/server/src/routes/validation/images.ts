@@ -4,6 +4,9 @@ import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
   adminImagePageLimit,
+  adminImageSortFields,
+  adminImageOrders,
+  defaultAdminImageSort,
   publicImageOrders,
   publicImageViews,
   publicImageBrowseLimit,
@@ -198,6 +201,8 @@ export const listQuery = z.strictObject({
 export const adminImageListQuery = z.strictObject({
   ...imageListFilterFields,
   status: z.enum(["ready", "deleted"]).default("ready"),
+  sort_by: z.enum(adminImageSortFields).default(defaultAdminImageSort.sort_by),
+  order: z.enum(adminImageOrders).default(defaultAdminImageSort.order),
   page: safePositiveIntegerInput.default(1),
   limit: safePositiveIntegerInput.max(appConfig.pagination.maxLimit)
     .default(adminImagePageLimit)

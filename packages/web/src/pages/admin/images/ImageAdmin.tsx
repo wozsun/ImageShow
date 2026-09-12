@@ -6,7 +6,11 @@ import {
 } from "react";
 import { useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { adminPermissions, type AdminSettings } from "@imageshow/shared/browser";
+import {
+  adminPermissions,
+  type AdminImageSort,
+  type AdminSettings
+} from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
 import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
@@ -37,6 +41,7 @@ import {
   invalidateImageDataAfterMetadataSave
 } from "../../../lib/api/query-invalidation.js";
 import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
+import { useAdminPreference } from "../../../hooks/useAdminPreferences.js";
 import { useAdminImageDetailCapability } from "../../../components/image/useAdminImageDetailCapability.js";
 import { useImageEditorCapability } from "../../../components/image/editor/useImageEditorCapability.js";
 import type {
@@ -76,6 +81,13 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const [filters, setFilters] = useState<ImageAdminFilterValues>(
     emptyImageAdminFilters
   );
+  const [preferredSortBy, setPreferredSortBy] = useAdminPreference("image_sort_by");
+  const [preferredOrder, setPreferredOrder] = useAdminPreference("image_sort_order");
+  // Account preferences seed each visit; other windows must not reorder an active list.
+  const [sort, setSort] = useState<AdminImageSort>(() => ({
+    sort_by: preferredSortBy,
+    order: preferredOrder
+  }));
   const [batchTrashPending, setBatchTrashPending] = useState(false);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const permissions = useAdminPermissions();
@@ -96,7 +108,8 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const navigation = useImageAdminPageNavigation({
     view,
     filters,
-    pageSize
+    pageSize,
+    sort
   });
   const {
     items,
@@ -220,6 +233,16 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const clearFilters = () => {
     applyFilters({ ...emptyImageAdminFilters });
   };
+  const changeSort = (next: AdminImageSort) => {
+    if (interfaceBusy) return;
+    navigation.resetPage();
+    setSort(next);
+    if (next.sort_by !== sort.sort_by) setPreferredSortBy(next.sort_by);
+    if (next.order !== sort.order) setPreferredOrder(next.order);
+    clearImageSelection();
+    resetTransientState();
+    gridRef.current?.scrollTo({ top: 0, left: 0 });
+  };
   const changeView = (next: typeof view) => {
     if (next === routeView || interfaceBusy) return;
     setSearchParams(next === "ready" ? {} : { view: next }, { replace: true });
@@ -244,6 +267,10 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     )
   );
   const confirmCopy = imageAdminConfirmationCopy(confirmAction);
+  const sortFieldLabel = sort.sort_by === "image_time" ? "图片" : "入库";
+  const nextSortFieldLabel = sort.sort_by === "image_time" ? "入库" : "图片";
+  const sortOrderLabel = sort.order === "latest" ? "最新" : "最旧";
+  const nextSortOrderLabel = sort.order === "latest" ? "最旧" : "最新";
   const pageStatusSuffix = isFetching
     ? " · 加载中"
     : hasCurrentPageData
@@ -344,6 +371,37 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                 variant="page"
               />
             )}
+            <div className="image-list-sort-control" role="group" aria-label="图片列表排序">
+              <button
+                type="button"
+                data-shifted={sort.sort_by === "created_at"}
+                disabled={interfaceBusy}
+                aria-label={`按${sortFieldLabel}时间排序；点击切换为${nextSortFieldLabel}时间`}
+                title={`按${sortFieldLabel}时间排序；点击切换为${nextSortFieldLabel}时间`}
+                onClick={() => changeSort({
+                  ...sort,
+                  sort_by: sort.sort_by === "image_time" ? "created_at" : "image_time"
+                })}
+              >
+                <span className="image-list-sort-label">{sortFieldLabel}</span>
+                <span className="image-list-sort-thumb" aria-hidden="true" />
+              </button>
+              <span className="image-list-sort-divider" aria-hidden="true" />
+              <button
+                type="button"
+                data-shifted={sort.order === "oldest"}
+                disabled={interfaceBusy}
+                aria-label={`${sortOrderLabel}优先；点击切换为${nextSortOrderLabel}优先`}
+                title={`${sortOrderLabel}优先；点击切换为${nextSortOrderLabel}优先`}
+                onClick={() => changeSort({
+                  ...sort,
+                  order: sort.order === "latest" ? "oldest" : "latest"
+                })}
+              >
+                <span className="image-list-sort-label">{sortOrderLabel}</span>
+                <span className="image-list-sort-thumb" aria-hidden="true" />
+              </button>
+            </div>
             <div className="image-list-batch-actions">
               {(view === "ready" || view === "unset") && (
                 <button

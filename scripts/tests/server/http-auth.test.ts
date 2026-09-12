@@ -258,6 +258,15 @@ test("[Server/HTTP 与鉴权] 公开 cursor 与后台数字页使用严格且互
     assert.equal(listQuery.safeParse({ ...publicBase, order }).success, true);
   }
   assert.equal(adminImageListQuery.safeParse({ page: "100", limit: "60" }).success, true);
+  assert.equal(adminImageListQuery.parse({}).sort_by, "image_time");
+  assert.equal(adminImageListQuery.parse({}).order, "latest");
+  for (const sort_by of ["image_time", "created_at"]) {
+    for (const order of ["latest", "oldest"]) {
+      const query = adminImageListQuery.parse({ sort_by, order });
+      assert.equal(query.sort_by, sort_by);
+      assert.equal(query.order, order);
+    }
+  }
   const completeFilters = {
     device: "pc",
     brightness: "dark",
@@ -279,6 +288,9 @@ test("[Server/HTTP 与鉴权] 公开 cursor 与后台数字页使用严格且互
   }
   for (const query of [
     { cursor: "opaque" },
+    { sort_by: "updated_at" },
+    { order: "random" },
+    { sort_by: "created_at DESC; SELECT 1" },
     { offset: "60" },
     { unexpected: "true" },
     { page: "0" },

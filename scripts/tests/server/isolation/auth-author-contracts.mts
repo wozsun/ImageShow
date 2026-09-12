@@ -300,6 +300,67 @@ await authorMutations.deleteAuthor("identity-route-image");
   const hotRenewalTtl = await redisClient.redis.ttl(slidingSessionKey);
   assert.ok(hotRenewalTtl > 470 && hotRenewalTtl <= 480);
 
+  const preferenceRoutes = await import("../../../../packages/server/src/routes/admin-preferences.ts");
+  const preferenceStore = await import("../../../../packages/server/src/users/preferences.ts");
+  const preferenceApp = new Hono();
+  preferenceApp.onError((error, context) => httpResponses.handleApiError(context, error));
+  preferenceApp.use("/api/admin/*", adminSession.requireAdminSession);
+  preferenceApp.use("/api/admin/*", async (context, next) => {
+    if (context.req.method !== "GET") return adminSession.requireAdminCsrf(context, next);
+    await next();
+  });
+  preferenceRoutes.registerAdminPreferenceRoutes(preferenceApp);
+  const csrf = (await renewedResponse.json()).csrf_token;
+  const preferenceRequest = (body?: unknown, authenticated = true, csrfToken = csrf) => (
+    preferenceApp.request("http://imageshow.test/api/admin/preferences", {
+      method: body === undefined ? "GET" : "PATCH",
+      headers: {
+        "content-type": "application/json",
+        ...(authenticated ? { cookie: "imageshow_session=" + sessionId } : {}),
+        "x-csrf-token": csrfToken
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) })
+    })
+  );
+  assert.equal((await preferenceRequest(undefined, false)).status, 401);
+  assert.equal((await preferenceRequest({ image_sort_order: "oldest" }, true, "wrong")).status, 403);
+  for (const body of [
+    { image_sort_by: "updated_at" }, { image_sort_order: "random" },
+    { image_sort_by: "image_time", username: "someone-else" }, {}
+  ]) assert.equal((await preferenceRequest(body)).status, 400);
+  await database.pool.query(
+    "INSERT INTO admin_account(username, password_hash, role) "
+      + "SELECT 'preference-peer', password_hash, 'image' FROM admin_account WHERE username='integration-admin'"
+  );
+  await Promise.all([
+    preferenceStore.updateAdminPreferences("integration-admin", { color_scheme: "dark" }),
+    preferenceStore.updateAdminPreferences("integration-admin", { image_sort_by: "created_at" }),
+    preferenceStore.updateAdminPreferences("integration-admin", { image_sort_order: "oldest" })
+  ]);
+  assert.deepEqual(await preferenceStore.readAdminPreferences("integration-admin"), {
+    color_scheme: "dark", image_sort_by: "created_at", image_sort_order: "oldest"
+  });
+  for (const image_sort_by of ["image_time", "created_at"] as const) {
+    for (const image_sort_order of ["latest", "oldest"] as const) {
+      const response = await preferenceRequest({ image_sort_by, image_sort_order });
+      assert.equal(response.status, 200);
+      assert.deepEqual((await response.json()).preferences, {
+        color_scheme: "dark", image_sort_by, image_sort_order
+      });
+    }
+  }
+  assert.deepEqual(await preferenceStore.readAdminPreferences("preference-peer"), {});
+  const savedPreferences = await preferenceRequest();
+  const authWithPreferences = await authMe();
+  const authPayload = await authWithPreferences.json();
+  assert.deepEqual(authPayload.preferences, (await savedPreferences.json()).preferences);
+  assert.equal(authPayload.preferences_etag, savedPreferences.headers.get("etag"));
+  const unchangedPreferences = await preferenceApp.request("http://imageshow.test/api/admin/preferences", {
+    headers: { cookie: "imageshow_session=" + sessionId, "if-none-match": authPayload.preferences_etag }
+  });
+  assert.equal(unchangedPreferences.status, 304);
+  await database.pool.query("DELETE FROM admin_account WHERE username='preference-peer'");
+
   assert.equal(await redisClient.redis.del(slidingSessionKey), 1);
   const expiredProbeResponse = await authMe();
   assert.equal(expiredProbeResponse.status, 200);
