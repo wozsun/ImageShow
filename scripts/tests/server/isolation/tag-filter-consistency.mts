@@ -24,7 +24,8 @@ await runIntegrationScenario(async (runtime) => {
   registerPublicRoutes(app);
   registerRandomRoutes(app);
   const tags = ["matrix-a", "matrix-b", "matrix-c", "matrix-d"];
-  const allTags = [...tags, "matrix-empty", "matrix-alias", "matrix-symbols"];
+  const budgetTags = Array.from({ length: 9 }, (_, index) => `budget-${index}`);
+  const allTags = [...tags, "matrix-empty", "matrix-alias", "matrix-symbols", ...budgetTags];
   const rows = Array.from({ length: 64 }, (_, index) => ({
     id: randomUUID(), mask: Math.floor(index / 4),
     device: index % 4 < 2 ? "pc" : "mb",
@@ -36,7 +37,7 @@ await runIntegrationScenario(async (runtime) => {
   await pool.query("INSERT INTO author(slug, display_name) VALUES ('matrix-alice','作者甲'),('matrix-bob','作者乙')");
   for (const [index, slug] of allTags.entries()) {
     await pool.query("INSERT INTO tag(slug, display_name) VALUES ($1,$2)",
-      [slug, ["城市", "夜景", "雨景", "森林", "空标签", "matrix-a", "A&B+C#%"][index]]);
+      [slug, ["城市", "夜景", "雨景", "森林", "空标签", "matrix-a", "A&B+C#%"][index] ?? slug]);
   }
   for (const [index, row] of rows.entries()) {
     await pool.query(`INSERT INTO metadata(id, created_by, status, storage_slug, object_key,
@@ -45,6 +46,8 @@ await runIntegrationScenario(async (runtime) => {
     [row.id, storageObjectKey(row.id, "webp"), row.device, row.brightness, row.theme,
       row.author, createHash("md5").update(row.id).digest("hex"), `Matrix ${index}`]);
     const members = tags.filter((_tag, bit) => row.mask & (1 << bit));
+    if (index === 0) members.push(...budgetTags);
+    else if (index < budgetTags.length) members.push(budgetTags[index]!);
     if (index === 63) members.push("matrix-alias", "matrix-symbols");
     for (const tag of members) await pool.query("INSERT INTO image_tag(image_id,tag_slug) VALUES ($1,$2)", [row.id, tag]);
   }
@@ -143,6 +146,36 @@ await runIntegrationScenario(async (runtime) => {
       }
       const facets = await (await get("/api/gallery-facets")).json();
       assert.ok(facets.tags.some((tag: { slug: string }) => tag.slug === "matrix-empty"));
+    }
+    // All sources are real, warm Redis indexes. Legal expressions that exceed
+    // the set-operation budget must preserve every branch through PostgreSQL.
+    for (const slug of budgetTags) {
+      const plan = await resolveImageFilterPlan({ tag: [slug] });
+      const deadline = Date.now() + 5_000;
+      let sampled = await sampleReadyImages(plan, 200);
+      while (!sampled.cached && Date.now() < deadline) {
+        await delay(20);
+        sampled = await sampleReadyImages(plan, 200);
+      }
+      assert.equal(sampled.cached, true, `warm source ${slug}`);
+    }
+    for (const entry of [
+      { tags: [budgetTags.join(",")], expected: rows.slice(0, 9) },
+      { tags: [`all:${budgetTags.join(",")}`, "matrix-c"], expected: rows.filter((row, index) => index === 0 || Boolean(row.mask & 4)) }
+    ]) {
+      const base = await resolveImageFilterPlan({});
+      const plan = createImageFilterPlan({
+        devices: base.axes.map(axis => axis.device),
+        brightnesses: base.axes.map(axis => axis.brightness),
+        theme: base.theme, author: base.author,
+        tag: parseTagFilter(entry.tags, "mixed").expression
+      });
+      assert.equal((await sampleReadyImages(plan, 200)).cached, false);
+      const query = new URLSearchParams({ device: "all", mode: "json", limit: "200" });
+      entry.tags.forEach(tag => query.append("tag", tag));
+      const response = await get(`/random?${query}`);
+      assert.equal(response.status, 200, await response.clone().text());
+      assert.deepEqual(ids((await response.json()).items), ids(entry.expected));
     }
     // Warm derived intersections must follow real mutation boundaries immediately.
     const path = "/api/images?view=gallery&limit=800&tag=all:matrix-a,matrix-b";

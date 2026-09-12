@@ -1,5 +1,5 @@
 import { ImageSource, Texture } from "pixi.js";
-import { readRequest } from "../../../lib/api/read-request-retry.js";
+import { requestWithDeadline } from "../../../lib/api/request-deadline.js";
 import type { ShowPixiTextureStats } from "./show-pixi-types.js";
 
 type TextureListener = (
@@ -133,7 +133,7 @@ async function bitmapTexture(
     );
   };
   // Bound transport through the last response byte; decoding owns no network slot timer.
-  const blob = await readRequest(async (requestSignal) => {
+  const blob = await requestWithDeadline(async (requestSignal) => {
     const response = await fetch(url, {
       credentials: "omit",
       mode: "cors",

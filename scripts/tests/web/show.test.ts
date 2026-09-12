@@ -1,6 +1,7 @@
 import "../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createServer } from "node:http";
 import {
   parseHTML
 } from "linkedom";
@@ -76,6 +77,40 @@ import { installControlledClock } from "../support/controlled-clock.ts";
 const unchangedTextureLods: ShowPixiTextureCache["fitResidentLods"] = (requests) => (
   requests.map(({ lod }) => lod)
 );
+
+const nativeFetch = globalThis.fetch;
+
+test("[Web/展映] HTTP 错误立即中止未结束的响应正文且保留显式恢复分类", async (t) => {
+  const closed = Promise.withResolvers<void>();
+  let requests = 0;
+  const server = createServer((_request, response) => {
+    requests++;
+    response.writeHead(404, { "content-type": "text/plain" });
+    response.write("unfinished error response");
+    response.on("close", () => closed.resolve());
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const h = await createTextureRecoveryHarness(t);
+  const restoreFetch = installProperties(globalThis, { fetch: nativeFetch });
+  const timeout = setTimeout(() => closed.reject(new Error("错误响应正文仍在传输")), 2_000);
+  try {
+    const card = h.card("error-body", () => {}, `http://127.0.0.1:${address.port}/image`);
+    await closed.promise;
+    await h.flush();
+    assert.equal(card.isTextureReady, false);
+    assert.equal(h.cache.stats().inFlight, 0);
+    assert.equal(h.cache.stats().failures, 1);
+    h.cache.resumeTransportRequests();
+    await h.flush();
+    assert.equal(requests, 1, "HTTP 错误不因清理被误归类为联网可重试故障");
+  } finally {
+    clearTimeout(timeout);
+    restoreFetch();
+  }
+});
 
 function pixiPointerEvent(
   x: number,

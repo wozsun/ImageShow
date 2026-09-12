@@ -1,4 +1,5 @@
 import { isApiClientError } from "./client.js";
+import { requestWithDeadline } from "./request-deadline.js";
 
 // 仅供明确只读的 API 使用；Query 查询直接采用此策略，不再在 queryFn 内套重试。
 export const readRequestRetryOptions = {
@@ -15,26 +16,6 @@ export const readRequestRetryOptions = {
     return 500 * 2 ** failureCount;
   }
 };
-
-// 包含连接和完整响应体读取；成功、失败及外部取消后均清理本次计时器。
-export async function readRequest<T>(
-  request: (signal: AbortSignal) => Promise<T>,
-  signal?: AbortSignal
-): Promise<T> {
-  signal?.throwIfAborted();
-  const controller = new AbortController();
-  const requestSignal = signal
-    ? AbortSignal.any([signal, controller.signal])
-    : controller.signal;
-  const timer = setTimeout(() => {
-    controller.abort(new DOMException("读取请求超时", "TimeoutError"));
-  }, 30_000);
-  try {
-    return await request(requestSignal);
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 function waitForRetry(delayMs: number, signal?: AbortSignal) {
   signal?.throwIfAborted();
@@ -60,7 +41,7 @@ export async function retryReadRequest<T>(
   for (let failureCount = 0; ; failureCount += 1) {
     signal?.throwIfAborted();
     try {
-      return await readRequest(request, signal);
+      return await requestWithDeadline(request, signal);
     } catch (error) {
       signal?.throwIfAborted();
       if (!readRequestRetryOptions.retry(failureCount, error)) throw error;

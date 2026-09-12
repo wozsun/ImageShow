@@ -159,6 +159,7 @@ export function createHttpApp(
   registerSecurityReportRoutes(app);
 
   const adminReadPostPaths = new Set([
+    `${adminApiBasePath}/images/snapshot`,
     ingestionDuplicatesPath,
     ingestionStatusPath
   ]);

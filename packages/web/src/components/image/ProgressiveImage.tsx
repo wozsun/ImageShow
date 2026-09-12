@@ -46,6 +46,8 @@ export function ProgressiveImage({
   const fullTaskRef = useRef<ImageLoadTaskHandle | null>(null);
   const thumbTaskRef = useRef<ImageLoadTaskHandle | null>(null);
   const [fullReady, setFullReady] = useState(false);
+  const [fullFailed, setFullFailed] = useState(false);
+  const [fullAttempt, setFullAttempt] = useState(0);
   const [thumbVisible, setThumbVisible] = useState(Boolean(thumbSrc));
   const [thumbFailed, setThumbFailed] = useState(false);
   const [decodeResult, setDecodeResult] =
@@ -72,6 +74,7 @@ export function ProgressiveImage({
   useLayoutEffect(() => {
     const image = fullImageRef.current;
     setFullReady(false);
+    setFullFailed(false);
     setDecodeResult(null);
     if (!image || !fullSrc) return;
 
@@ -92,6 +95,7 @@ export function ProgressiveImage({
     void task.result.then((result) => {
       if (!current || fullTaskRef.current !== task) return;
       if (result.status === "completed") setFullReady(true);
+      if (result.status === "failed") setFullFailed(true);
     });
 
     return () => {
@@ -100,7 +104,7 @@ export function ProgressiveImage({
       clearImageElement(image);
       if (fullTaskRef.current === task) fullTaskRef.current = null;
     };
-  }, [fullSrc, imageKey, scheduler]);
+  }, [fullSrc, imageKey, scheduler, fullAttempt]);
 
   useLayoutEffect(() => {
     if (!thumbRendered) return;
@@ -201,6 +205,20 @@ export function ProgressiveImage({
               decodeResult ? String(decodeResult.decoded) : undefined
             }
           />
+        </div>
+      )}
+      {fullFailed && (
+        <div className="progressive-image-error" role="status">
+          <span>图片加载失败</span>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setFullAttempt((attempt) => attempt + 1);
+            }}
+          >
+            重试
+          </button>
         </div>
       )}
     </div>

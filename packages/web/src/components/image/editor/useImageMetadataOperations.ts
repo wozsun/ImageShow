@@ -5,6 +5,7 @@ import type {
 } from "@imageshow/shared/browser";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import { api } from "../../../lib/api/client.js";
+import { requestWithDeadline } from "../../../lib/api/request-deadline.js";
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
@@ -16,7 +17,7 @@ import {
   type ImageMetadataSaveReport,
   type ImageMetadataUpdate
 } from "./image-metadata-session.js";
-import type { ImageEditorSavedHandler } from "./image-editor-types.js";
+import type { ImageEditorSavedHandler, ImageMetadataSaveCommit } from "./image-editor-types.js";
 
 function reportImageUpdateFailures(response: ImageUpdateResponseDto) {
   if (!response.failed) return;
@@ -51,9 +52,17 @@ export function useImageMetadataOperations({
     }
   };
 
+  const publishSaved = async (commit: ImageMetadataSaveCommit) => {
+    try {
+      await onSaved(commit);
+    } catch (error) {
+      reportAdminUiError("image_metadata.update_refresh", error);
+    }
+  };
+
   const finishAttempt = async (
     attempt: ImageMetadataSaveAttempt,
-    notifySaved: boolean
+    initialAttempt: boolean
   ): Promise<ImageMetadataSaveOutcome> => {
     const authoritativeItems = await readAuthoritativeSnapshot();
     const report = createImageMetadataSaveReport(
@@ -63,27 +72,19 @@ export function useImageMetadataOperations({
     setLastSaveReport(report);
     setPendingAttempt(authoritativeItems ? null : attempt);
 
-    // mutation 每轮只触发一次集中图片查询失效。权威快照失败后的再次确认只重读
-    // snapshot，不重复 mutation，也不重复失效父级查询。
-    if (notifySaved) {
-      try {
-        const updatedIds = new Set(report.results.flatMap((result) => (
-          result.status === "updated" ? [result.id] : []
-        )));
-        // 响应和权威快照同时丢失时，提交结果仍属未知。沿真实尝试字段做一次
-        // 保守失效与命中页回读，后续“再次确认”只读取 snapshot，不能遗漏
-        // 这次可能已经提交的写入，也不能重放 mutation。
-        const committedUpdates = authoritativeItems === null
-          && attempt.response === null
-          ? attempt.items
-          : attempt.items.filter((item) => updatedIds.has(item.id));
-        await onSaved({
-          authoritativeItems,
-          updates: committedUpdates
-        });
-      } catch (error) {
-        reportAdminUiError("image_metadata.update_refresh", error);
-      }
+    // 写响应未知时，首次保守刷新可能早于服务端提交；人工确认首次取得权威快照后，
+    // 还需交接已确认结果。已有写响应的保存已在提交后刷新，不重复失效。
+    if (initialAttempt || (attempt.response === null && authoritativeItems !== null)) {
+      const updatedIds = new Set(report.results.flatMap((result) => (
+        result.status === "updated" ? [result.id] : []
+      )));
+      // 没有写回执时，当前值不能证明 auto 等指令是否执行。仍按尝试字段刷新并
+      // 交接权威当前值；保存状态和草稿继续独立保留未确认意图，不能重放写入。
+      const committedUpdates = attempt.response === null
+        ? attempt.items
+        : attempt.items.filter((item) => updatedIds.has(item.id));
+      // 立即交接权威数据；派生查询继续由父页面负责，不阻塞编辑器结束保存或关闭。
+      void publishSaved({ authoritativeItems, updates: committedUpdates });
     }
     return { attempt, authoritativeItems, report };
   };
@@ -100,22 +101,19 @@ export function useImageMetadataOperations({
       let attempt = retryAttempt;
       if (!attempt) {
         setLastSaveReport(null);
-        let response: ImageUpdateResponseDto | null = null;
+        const request = { items: structuredClone(items) } satisfies ImageUpdateRequestDto;
+        attempt = { activeIds: [...activeIds], items: request.items, response: null };
         try {
-          const request = { items } satisfies ImageUpdateRequestDto;
-          response = await api<ImageUpdateResponseDto>(
-            `${adminApiBasePath}/images/update`,
-            { method: "POST", body: JSON.stringify(request) }
-          );
+          const body = JSON.stringify(request);
+          const response = await requestWithDeadline((signal) => api<ImageUpdateResponseDto>(
+            `${adminApiBasePath}/images/update`, { method: "POST", body, signal }
+          ));
+          attempt.response = response;
           reportImageUpdateFailures(response);
         } catch (error) {
+          // 停止等待不能证明服务端未执行；只确认冻结的这一轮，不重放写入。
           reportAdminUiError("image_metadata.update", error);
         }
-        attempt = {
-          activeIds: [...activeIds],
-          items,
-          response
-        };
       }
 
       outcome = await finishAttempt(attempt, !retryAttempt);

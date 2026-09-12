@@ -1785,6 +1785,68 @@ test("[Web/后台表单] 日志等级保存隔离旧读取，跨文件缓存采�
   assert.equal(select("日志写入等级").hasAttribute("disabled"), false);
   assert.equal(h.pending.length, 5, "失败提交不发起刷新");
 });
+test("[Web/后台表单] 权威保存完成后列表读取挂起不锁住编辑器，刷新错误仍归列表查询", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  h.window.scrollTo = () => {};
+  const clock = installControlledClock(t, h.window, { includeGlobalTimers: true });
+  const { QueryClient, QueryClientProvider, QueryObserver } = await import("@tanstack/react-query");
+  const { MemoryRouter } = await import("react-router");
+  const { AuthSessionProvider } = await import("../../../packages/web/src/hooks/useAuthSession.tsx");
+  const { registerHooks } = await import("node:module");
+  const hooks = registerHooks({ load(url, context, next) {
+    return url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : next(url, context);
+  } });
+  const { ImageMetadataEditorDialog } = await import("../../../packages/web/src/components/image/editor/ImageMetadataEditorDialog.tsx")
+    .finally(() => hooks.deregister());
+  const { adminImageListQuery } = await import("../../../packages/web/src/pages/admin/images/image-admin-list-query.ts");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } } });
+  t.after(() => client.clear());
+  client.setQueryData(queryKeys.me, { authenticated: true, username: "reviewer", role: "image", permissions: [] });
+  client.setQueryData(queryKeys.storageOptions, { backends: [] });
+  const before = editableImage("00000000-0000-7000-8000-000000000633");
+  const after = { ...before, title: "saved title" };
+  const listOptions = adminImageListQuery("ready", { device: "", brightness: "", theme: "", tag: "", author: "" }, "all", 1, 20);
+  client.setQueryData(listOptions.queryKey, { items: [before], total: 1, etag: "" });
+  const list = new QueryObserver(client, listOptions);
+  const unsubscribe = list.subscribe(() => {});
+  t.after(unsubscribe);
+  let closed = 0;
+  await h.render(h.React.createElement(QueryClientProvider, { client },
+    h.React.createElement(MemoryRouter, { initialEntries: ["/admin/images"] },
+      h.React.createElement(AuthSessionProvider, null,
+        h.React.createElement(ImageMetadataEditorDialog, {
+          items: [before], pageSize: 10, themes: [], allTags: [], authors: [],
+          onClose: () => { closed++; }, onTrashCommitted: async () => {},
+          onSaved: async (commit) => {
+            assert.ok(commit);
+            await invalidateImageDataAfterMetadataSave(client, commit.updates, commit.authoritativeItems);
+          }
+        })))));
+  await h.React.act(async () => inputText(h.window, h.document.querySelector<HTMLInputElement>('input[placeholder="标题"]')!, "saved title"));
+  const save = [...h.document.querySelectorAll("button")].find(button => button.textContent?.includes("保存1项"));
+  assert.ok(save);
+  assert.equal(save.disabled, false);
+  await h.React.act(async () => dispatchDomEvent(h.window, save.closest("form")!, "submit"));
+  assert.ok(h.pending[0].path.endsWith("/images/update"));
+  await h.respond(0, imageUpdateResponse([before.id]));
+  assert.ok(h.pending[1].path.endsWith("/images/snapshot"));
+  await h.respond(1, { items: [after] });
+  assert.match(h.pending[2].path, /\/images\?/u);
+  assert.equal(list.getCurrentResult().isFetching, true);
+  await clock.advanceBy(500);
+  await h.flush();
+  assert.equal(h.document.querySelector<HTMLButtonElement>('button[title="关闭"]')!.disabled, false);
+  assert.ok(h.document.querySelector(".image-editor-save-badge.is-saved"));
+  await h.React.act(async () => h.document.querySelector<HTMLButtonElement>('button[title="关闭"]')!.click());
+  await h.React.act(async () => dispatchDomEvent(h.window, h.document.querySelector(".image-editor-overlay")!, "animationend"));
+  assert.equal(closed, 1, "派生查询未返回时也能正常关闭已保存编辑器");
+  await h.render(null);
+  await h.respond(2, { error: "list refresh unavailable" }, 503);
+  assert.equal(list.getCurrentResult().isError, true);
+  assert.equal(list.getCurrentResult().isFetching, false);
+  assert.equal(h.pending.filter(request => request.path.endsWith("/images/update")).length, 1);
+});
+
 for (const count of [1, 2]) {
   test(`[Web/后台表单] 图片编辑 ${count} 张删除以按钮二次确认提交并保留未完成成员`, async (t) => {
     const h = await createConfigStreamHarness(t);
@@ -1793,7 +1855,13 @@ for (const count of [1, 2]) {
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { MemoryRouter } = await import("react-router");
     const { AuthSessionProvider } = await import("../../../packages/web/src/hooks/useAuthSession.tsx");
-    const { ImageMetadataEditorDialog } = await import("../../../packages/web/src/components/image/editor/ImageMetadataEditorDialog.tsx");
+    // 定向运行也要准备组件的 CSS 导入，不能依赖其他用例已经预载编辑器。
+    const { registerHooks } = await import("node:module");
+    const hooks = registerHooks({ load(url, context, next) {
+      return url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : next(url, context);
+    } });
+    const { ImageMetadataEditorDialog } = await import("../../../packages/web/src/components/image/editor/ImageMetadataEditorDialog.tsx")
+      .finally(() => hooks.deregister());
     const { ADMIN_ICONS } = await import("../../../packages/web/src/components/icon/admin-icons.generated.ts");
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
     t.after(() => client.clear());

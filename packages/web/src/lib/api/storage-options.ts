@@ -4,7 +4,8 @@ import { api } from "./client.js";
 import { adminApiBasePath } from "../constants.js";
 import { storageBackendLabel } from "../ui/select-options.js";
 import { queryKeys } from "./query-keys.js";
-import { readRequest, readRequestRetryOptions } from "./read-request-retry.js";
+import { readRequestRetryOptions } from "./read-request-retry.js";
+import { requestWithDeadline } from "./request-deadline.js";
 import type {
   StorageBackendOptionDto,
   StorageBackendOptionsResponseDto
@@ -29,7 +30,7 @@ export function storageNameResolver(backends: StorageBackendOption[]) {
 export const storageOptionsQueryOptions =
   queryOptions<StorageBackendOptionsResponseDto>({
     queryKey: queryKeys.storageOptions,
-    queryFn: ({ signal }) => readRequest(
+    queryFn: ({ signal }) => requestWithDeadline(
       (requestSignal) => api(`${adminApiBasePath}/storage/options`, { signal: requestSignal }), signal
     ),
     ...readRequestRetryOptions,

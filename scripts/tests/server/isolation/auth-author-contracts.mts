@@ -311,6 +311,40 @@ await authorMutations.deleteAuthor("identity-route-image");
   });
   preferenceRoutes.registerAdminPreferenceRoutes(preferenceApp);
   const csrf = (await renewedResponse.json()).csrf_token;
+  const { createHttpApp } = await import("../../../../packages/server/src/http-app.ts");
+  const { logger } = await import("../../../../packages/server/src/core/logger.ts");
+  const fullApp = createHttpApp({
+    businessGateIsOpen: () => true,
+    requireRedis: async () => undefined
+  });
+  const auditEntries: string[] = [];
+  const originalInfo = logger.info;
+  const originalWarn = logger.warn;
+  logger.info = (message) => { auditEntries.push(message); };
+  logger.warn = (message) => { auditEntries.push(message); };
+  const snapshotId = "00000000-0000-7000-8000-000000000633";
+  const host = runtimeConfigStore.getRuntimeConfig().site.domain || "imageshow.test";
+  const imageRequest = (path: string, body: unknown, token = csrf) => fullApp.request(`http://${host}/api/admin/images/${path}`, {
+    method: "POST",
+    headers: {
+      host, "content-type": "application/json",
+      cookie: "imageshow_session=" + sessionId, "x-csrf-token": token
+    },
+    body: JSON.stringify(body)
+  });
+  try {
+    const snapshot = await imageRequest("snapshot", { ids: [snapshotId] });
+    assert.equal(snapshot.status, 200, await snapshot.clone().text());
+    assert.deepEqual((await snapshot.json()).items, []);
+    assert.equal((await imageRequest("snapshot", { ids: [snapshotId] }, "wrong")).status, 403);
+    assert.deepEqual(auditEntries, [], "只读图片快照保留鉴权及 CSRF，但不记作写操作");
+    const mutation = await imageRequest("update", { items: [{ id: snapshotId, title: "missing" }] });
+    assert.equal(mutation.status, 200, await mutation.clone().text());
+    assert.equal(auditEntries.filter(message => message === "admin action").length, 1);
+  } finally {
+    logger.info = originalInfo;
+    logger.warn = originalWarn;
+  }
   const preferenceRequest = (body?: unknown, authenticated = true, csrfToken = csrf) => (
     preferenceApp.request("http://imageshow.test/api/admin/preferences", {
       method: body === undefined ? "GET" : "PATCH",

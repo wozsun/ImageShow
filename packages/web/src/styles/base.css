@@ -456,6 +456,24 @@ button.active, .button {
   animation: none;
 }
 
+.progressive-image-error {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--color-control-surface);
+  color: var(--color-control-text-primary);
+  border: 1px solid var(--color-control-border);
+  font-size: .875rem;
+}
+
 .actions, .inline-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .pressable:active {
   transform: scale(var(--pressable-active-scale, var(--pressable-scale-medium, .98)));
