@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useRef,
   useState,
@@ -64,28 +65,19 @@ export function ShowPixiStage({
   const accessibilityRef = useRef<HTMLDivElement | null>(null);
   const statsRef = useRef<HTMLOutputElement | null>(null);
   const runtimeRef = useRef<ShowPixiRuntime | null>(null);
-  const callbackRef = useRef({
-    onColumnsChange,
-    onFloatSizeIndexChange,
-    onManualVerticalMovement,
-    onMotionActiveChange,
-    onNeedImages,
-    onOpen
-  });
+  // Effect 创建的实例保持不变，回调由 React 读取最新已提交的 props。
+  const handleColumnsChange = useEffectEvent(onColumnsChange);
+  const handleFloatSizeIndexChange = useEffectEvent(onFloatSizeIndexChange);
+  const handleManualVerticalMovement = useEffectEvent(onManualVerticalMovement);
+  const handleMotionActiveChange = useEffectEvent(onMotionActiveChange);
+  const handleNeedImages = useEffectEvent(onNeedImages);
+  const handleOpen = useEffectEvent(onOpen);
   const [runtime, setRuntime] = useState<ShowPixiRuntime | null>(null);
   const [visibleItems, setVisibleItems] = useState<readonly ShowPixiVisibleItem[]>([]);
   const [initializationError, setInitializationError] = useState("");
   const [diagnosticsEnabled] = useState(() => (
     import.meta.env.DEV || window.__imageShowPixiDiagnostics === true
   ));
-  callbackRef.current = {
-    onColumnsChange,
-    onFloatSizeIndexChange,
-    onManualVerticalMovement,
-    onMotionActiveChange,
-    onNeedImages,
-    onOpen
-  };
 
   const handFocusToPointer = (event: PointerEvent<HTMLDivElement>) => {
     if (!event.isTrusted || dialogOpen || !(event.target instanceof HTMLCanvasElement)) return;
@@ -130,25 +122,21 @@ export function ShowPixiStage({
         reducedMotion,
         speed,
         statsElement: statsRef.current,
-        onColumnsChange: (columns) => callbackRef.current.onColumnsChange(columns),
-        onFloatSizeIndexChange: (index) => (
-          callbackRef.current.onFloatSizeIndexChange(index)
-        ),
-        onManualVerticalMovement: (delta, pointerType) => (
-          callbackRef.current.onManualVerticalMovement(delta, pointerType)
-        ),
+        onColumnsChange: handleColumnsChange,
+        onFloatSizeIndexChange: handleFloatSizeIndexChange,
+        onManualVerticalMovement: handleManualVerticalMovement,
         onMotionActiveChange: (active) => {
-          if (!disposed) callbackRef.current.onMotionActiveChange(active);
+          if (!disposed) handleMotionActiveChange(active);
         },
         onNeedImages: (usage) => {
-          if (!disposed) callbackRef.current.onNeedImages(usage);
+          if (!disposed) handleNeedImages(usage);
         },
         onOpen: (image) => {
           // Canvas activation comes from a pointer, not the keyboard proxy.
           // Restoring focus to that proxy would grant a persistent focus/motion
           // lease to a card that was only clicked. Keyboard activation below
           // still returns to its actual button for continued navigation.
-          callbackRef.current.onOpen(image, host);
+          handleOpen(image, host);
         },
         onVisibleItems: publishVisible
       });

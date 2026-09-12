@@ -29,6 +29,115 @@ import {
   installProperties
 } from "../support/property-descriptors.ts";
 
+test("[Web/共享交互] 媒体查询保持当前快照、独立订阅及卸载清理", async (t) => {
+  const React = await import("react");
+  const { createRoot } = await import("react-dom/client");
+  const { renderToString } = await import("react-dom/server");
+  const { useMediaQuery, mobileViewportMediaQuery } = await import(
+    "../../../packages/web/src/hooks/useMediaQuery.ts"
+  );
+  const { window, document } = parseHTML("<html><body><div id=root></div></body></html>");
+  const restore = installProperties(globalThis, { window, document });
+  const queries = new Map<string, { matches: boolean; listeners: Set<() => void>; added: number }>();
+  const state = (query: string) => {
+    if (!queries.has(query)) queries.set(query, { matches: false, listeners: new Set(), added: 0 });
+    return queries.get(query)!;
+  };
+  const motionQuery = "(prefers-reduced-motion: reduce)";
+  state(mobileViewportMediaQuery).matches = true;
+  const restoreMedia = installProperties(window, {
+    matchMedia: (query: string) => ({
+      get matches() { return state(query).matches; },
+      addEventListener(type: string, listener: () => void) {
+        assert.equal(type, "change");
+        state(query).added++;
+        state(query).listeners.add(listener);
+      },
+      removeEventListener(type: string, listener: () => void) {
+        assert.equal(type, "change");
+        assert.equal(state(query).listeners.delete(listener), true);
+      }
+    })
+  });
+  const root = createRoot(document.getElementById("root")!);
+  let unmounted = false;
+  t.after(async () => {
+    if (!unmounted) await React.act(async () => root.unmount());
+    restoreMedia();
+    restore();
+  });
+  const commits: { query: string; matches: boolean }[] = [];
+  function Probe({ query }: { query: string }) {
+    const matches = useMediaQuery(query);
+    React.useLayoutEffect(() => { commits.push({ query, matches }); });
+    return React.createElement("output", null, String(matches));
+  }
+  const pendingRender = Promise.withResolvers<void>();
+  let suspended = 0;
+  function Block({ active }: { active: boolean }) {
+    if (active) { suspended++; throw pendingRender.promise; }
+    return null;
+  }
+  const render = (query: string, second = false, blocked = false) => root.render(
+    React.createElement(React.StrictMode, null,
+      React.createElement(React.Suspense, { fallback: "pending" },
+        React.createElement(Probe, { query }),
+        second ? React.createElement(Probe, { query: motionQuery }) : null,
+        React.createElement(Block, { active: blocked })))
+  );
+  await React.act(async () => render(mobileViewportMediaQuery));
+  assert.ok(commits.every((commit) => commit.matches), "首帧即使用当前移动视口");
+  assert.equal(state(mobileViewportMediaQuery).listeners.size, 1);
+  const added = state(mobileViewportMediaQuery).added;
+  await React.act(async () => render(mobileViewportMediaQuery));
+  assert.equal(state(mobileViewportMediaQuery).added, added, "无关重渲染不重新订阅");
+  await React.act(async () => {
+    state(mobileViewportMediaQuery).matches = false;
+    for (const listener of state(mobileViewportMediaQuery).listeners) listener();
+  });
+  assert.equal(document.querySelector("output")!.textContent, "false");
+  await React.act(async () => {
+    state(mobileViewportMediaQuery).matches = true;
+    for (const listener of state(mobileViewportMediaQuery).listeners) listener();
+  });
+  assert.equal(document.querySelector("output")!.textContent, "true");
+  await React.act(async () => React.startTransition(() => render(motionQuery, false, true)));
+  assert.ok(suspended > 0);
+  assert.equal(state(motionQuery).listeners.size, 0, "未提交的查询不开始订阅");
+  assert.equal(state(mobileViewportMediaQuery).listeners.size, 1);
+  await React.act(async () => {
+    state(mobileViewportMediaQuery).matches = false;
+    for (const listener of state(mobileViewportMediaQuery).listeners) listener();
+  });
+  assert.equal(document.querySelector("output")!.textContent, "false", "等待中的渲染不阻断已提交查询更新");
+  await React.act(async () => render(mobileViewportMediaQuery));
+  await React.act(async () => {
+    state(mobileViewportMediaQuery).matches = true;
+    for (const listener of state(mobileViewportMediaQuery).listeners) listener();
+  });
+  commits.length = 0;
+  await React.act(async () => render(motionQuery, true));
+  assert.ok(commits.every((commit) => !commit.matches), "切换 query 的提交不混入前一 query 快照");
+  assert.equal(state(mobileViewportMediaQuery).listeners.size, 0);
+  assert.equal(state(motionQuery).listeners.size, 2);
+  await React.act(async () => {
+    state(motionQuery).matches = true;
+    for (const listener of state(motionQuery).listeners) listener();
+  });
+  assert.deepEqual([...document.querySelectorAll("output")].map((el) => el.textContent), ["true", "true"]);
+  await React.act(async () => render(motionQuery));
+  assert.equal(state(motionQuery).listeners.size, 1, "一个消费者卸载不撤销另一个订阅");
+  await React.act(async () => root.unmount());
+  unmounted = true;
+  assert.ok([...queries.values()].every((query) => query.listeners.size === 0));
+  const restoreNoWindow = installProperties(globalThis, { window: undefined });
+  try {
+    assert.equal(renderToString(React.createElement(Probe, { query: motionQuery })), "<output>false</output>");
+  } finally {
+    restoreNoWindow();
+  }
+});
+
 test("[Web/共享交互] Web UUID 只使用安全随机源并设置 UUIDv7 时间、版本与 variant", () => {
   const timestamp = Date.UTC(2026, 7, 23, 1, 2, 3, 456);
   const uuid = webUuidV7(timestamp);

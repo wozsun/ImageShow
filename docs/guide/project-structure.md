@@ -512,6 +512,9 @@ hooks ──► lib
   移动图片详情的根层关闭控件继续复用共享 `DirectActivationButton`，不在页面入口复制触控
   关闭分支。
 - `hooks/` 保存跨页面且主要管理 React 生命周期或交互行为的 Hook。
+  `useMediaQuery.ts` 以每个消费者独立的 MediaQueryList 提供外部快照订阅；React 直接读取
+  浏览器当前匹配值，query 变化时替换订阅，卸载时释放。只把需要改变组件结构或行为的查询
+  带入 React，纯视觉响应式差异仍由 CSS 处理。
   菜单与折叠面板的 DOM 监听由各自 Effect 的 AbortController 统一注销，Pixi runtime 的
   DOM 监听由实例独立注销；RAF、观察器、Ticker 与纹理仍由原 owner 分别释放。
   首页、画廊与展映的导航
@@ -667,6 +670,9 @@ hooks ──► lib
   `pixi/show-pixi-runtime.ts` 唯一持有 Pixi Application、ticker、ResizeObserver、页面可见性、
   reduced-motion、context lost / restored、场景租约和共享纹理 LRU；纹理入口直接读取真实
   `thumb_url`，按屏幕尺寸选择 LOD、限制并发与像素预算，并在 WebGL2 生成 mipmap。
+  `ShowPixiStage` 用 Effect Event 将实例的列数、尺寸、手动位移、运动、补图和打开图片回调
+  接到最新已提交的 React props；回调更新不重建实例。异步初始化与卸载仍由创建 Effect
+  管理，DOM 键盘代理直接使用 JSX 事件并保留实际返回焦点目标。
   纹理加载并发按运行时创建时的画布宽度确定：不超过 760px 为 12，超过为 16，瀑布与漂浮共用。
   原图比例参与解码裁剪，缓存共享同规格引用；容量不足的卡片持有可取消等待，在引用释放后
   重新领取纹理，不重新布局。网络传输失败暂停该 URL，同源连续失败暂停该来源；浏览器恢复

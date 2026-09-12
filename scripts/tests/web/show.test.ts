@@ -90,6 +90,139 @@ function pixiPointerEvent(
   } as unknown as FederatedPointerEvent;
 }
 
+test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命周期", async (t) => {
+  const React = await import("react");
+  const { createRoot } = await import("react-dom/client");
+  const { registerHooks } = await import("node:module");
+  const hooks = registerHooks({
+    load(url, context, next) {
+      if (url.endsWith(".css")) return { format: "module", source: "", shortCircuit: true };
+      const loaded = next(url, context);
+      if (url.endsWith("/ShowPixiStage.tsx")) {
+        return { ...loaded, source: `import.meta.env = { DEV: false };\n${loaded.source}` };
+      }
+      return loaded;
+    }
+  });
+  t.after(() => hooks.deregister());
+  const { ShowPixiStage } = await import("../../../packages/web/src/pages/show/pixi/ShowPixiStage.tsx");
+  const { window, document } = parseHTML("<html><body><div id=root></div></body></html>");
+  const restore = installProperties(globalThis, { window, document, React });
+  const root = createRoot(document.getElementById("root")!);
+  let unmounted = false;
+  t.after(async () => {
+    if (!unmounted) await React.act(async () => root.unmount());
+    restore();
+  });
+  type Options = Parameters<typeof ShowPixiRuntime.create>[1];
+  const creations: {
+    host: HTMLElement;
+    options: Options;
+    ready: ReturnType<typeof Promise.withResolvers<ShowPixiRuntime>>;
+    instance: ShowPixiRuntime;
+    destroys: number;
+  }[] = [];
+  t.mock.method(ShowPixiRuntime, "create", (host: HTMLElement, options: Options) => {
+    const ready = Promise.withResolvers<ShowPixiRuntime>();
+    const creation = {
+      host, options, ready, destroys: 0,
+      instance: {
+        setScene() {}, setImages() {}, setWaterfallColumns() {}, setFloatSizeIndex() {},
+        setSpeed() {}, setRunning() {}, setDialogOpen() {}, focusCard() {},
+        destroy() { creation.destroys++; }
+      } as unknown as ShowPixiRuntime
+    };
+    creations.push(creation);
+    return ready.promise;
+  });
+  const calls: { name: string; revision: number; args: unknown[] }[] = [];
+  const images = showImages(2);
+  const usage: Parameters<Options["onNeedImages"]>[0] = {
+    dataKey: "stage", activeIds: [images[0].id], consumedIds: [], available: 1, capacity: 800
+  };
+  const callbacks = (revision: number) => ({
+    onColumnsChange: (value: number) => { calls.push({ name: "columns", revision, args: [value] }); return value + revision; },
+    onFloatSizeIndexChange: (value: number) => { calls.push({ name: "float", revision, args: [value] }); return value + revision; },
+    onManualVerticalMovement: (delta: number, pointerType?: string) => { calls.push({ name: "movement", revision, args: [delta, pointerType] }); },
+    onMotionActiveChange: (active: boolean) => { calls.push({ name: "motion", revision, args: [active] }); },
+    onNeedImages: (next: typeof usage) => { calls.push({ name: "need", revision, args: [next] }); },
+    onOpen: (image: typeof images[number], opener: HTMLElement) => { calls.push({ name: "open", revision, args: [image, opener] }); }
+  });
+  const pendingRender = Promise.withResolvers<void>();
+  let suspended = 0;
+  function Block({ active }: { active: boolean }) {
+    if (active) { suspended++; throw pendingRender.promise; }
+    return null;
+  }
+  const render = (revision: number, blocked = false, key = "current") => root.render(
+    React.createElement(React.StrictMode, null,
+      React.createElement(React.Suspense, { fallback: "pending" },
+        React.createElement(ShowPixiStage, {
+          key, dataKey: "stage", dialogOpen: false, floatSizeIndex: 5, images, hasMore: true,
+          order: "latest", reducedMotion: false, running: false, scene: "waterfall", speed: 28,
+          waterfallColumns: 4, ...callbacks(revision)
+        }, React.createElement(Block, { active: blocked }))))
+  );
+  const assertCallbacks = async (revision: number) => {
+    calls.length = 0;
+    const options = creations[0].options;
+    await React.act(async () => {
+      assert.equal(options.onColumnsChange(3), 3 + revision);
+      assert.equal(options.onFloatSizeIndexChange(5), 5 + revision);
+      options.onManualVerticalMovement(12, "touch");
+      options.onMotionActiveChange(true);
+      options.onNeedImages(usage);
+      options.onOpen(images[0], "slot");
+    });
+    assert.deepEqual(calls.map(({ name, revision }) => [name, revision]),
+      ["columns", "float", "movement", "motion", "need", "open"].map((name) => [name, revision]));
+    assert.deepEqual(calls[2].args, [12, "touch"]);
+    assert.equal(calls[4].args[0], usage);
+    assert.equal(calls[5].args[0], images[0]);
+    assert.equal(calls[5].args[1], creations[0].host);
+  };
+  await React.act(async () => render(1));
+  assert.equal(creations.length, 1, "Strict Mode 丢弃的 setup 不创建实例");
+  await React.act(async () => render(2));
+  await assertCallbacks(2);
+  await React.act(async () => creations[0].ready.resolve(creations[0].instance));
+  await React.act(async () => React.startTransition(() => render(3, true)));
+  assert.ok(suspended > 0, "新版本已经渲染但尚未提交");
+  await assertCallbacks(2);
+  await React.act(async () => render(4));
+  assert.equal(creations.length, 1, "回调更新不重建实例");
+  await assertCallbacks(4);
+  await React.act(async () => {
+    creations[0].options.onVisibleItems([{ key: "slot", image: images[0] }]);
+    await new Promise((resolve) => setTimeout(resolve, 260));
+  });
+  calls.length = 0;
+  const proxy = document.querySelector<HTMLButtonElement>("[data-show-pixi-proxy]")!;
+  assert.ok(proxy);
+  await React.act(async () => proxy.dispatchEvent(new window.Event("click", { bubbles: true })));
+  assert.equal(calls[0].revision, 4);
+  assert.equal(calls[0].args[1], proxy, "JSX 键盘代理仍归焦实际按钮");
+  await React.act(async () => render(5, false, "late"));
+  assert.equal(creations[0].destroys, 1);
+  assert.equal(creations.length, 2);
+  await React.act(async () => render(6, false, "failure"));
+  await React.act(async () => creations[1].ready.resolve(creations[1].instance));
+  assert.equal(creations[1].destroys, 1, "过期异步初始化结果被销毁");
+  await React.act(async () => creations[2].ready.reject(new Error("controlled initialization failure")));
+  assert.match(document.querySelector('[role="alert"]')!.textContent!, /controlled initialization failure/u);
+  calls.length = 0;
+  await React.act(async () => root.unmount());
+  unmounted = true;
+  await React.act(async () => {
+    for (const { options } of creations) {
+      options.onMotionActiveChange(true);
+      options.onNeedImages(usage);
+      options.onVisibleItems([]);
+    }
+  });
+  assert.equal(calls.length, 0, "已退休 Effect 不再发布运动或补图状态");
+});
+
 test("[Web/展映] Pixi waterfall 的按钮步长和密度边界严格限制为 0.5G 至 8G", () => {
   const desktop = showWaterfallDensity(1440);
   assert.deepEqual(desktop, {
