@@ -399,6 +399,8 @@ snapshot 覆盖该 revision 后才解除；确认它不属于当前页时不要�
 先注册 listener，再发送只含 revision 与 action scope 的 `ready`。客户端收到 `ready` 后立即
 废止旧 revision、pair 进度和 watermark，使旧页只可展示、不可驱动全局操作，再用非负
 offset 与有上限的 limit 请求当前组合页；不保留非当前页卡片，也没有固定 2 秒轮询。
+初始缓冲、待发与在途写入共用每连接 1,000 条 / 1 MiB 的序列化事件预算，超限关闭连接，
+由现有重连与快照恢复。周期验权独立于快照和慢读写入；会话失效即关闭并释放连接资源。
 读取 owner 会在当前 offset 保留最多一页普通 Server DTO 作为有界替补，页面 reducer 仍只挂载
 当前组合页剩余槽位和当前文档已接管 pair；替补不创建卡片、Blob URL 或草稿 owner。这样当前
 文档 pair 逐项进入排除集合时，可以用已有 revision 从替补补齐展示槽位，不必为了同一批任务

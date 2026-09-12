@@ -137,25 +137,37 @@ export async function replaceImageTagAssociations(
   slugs: string[],
   signal?: AbortSignal
 ) {
+  signal?.throwIfAborted();
+  const uniqueSlugs = [...new Set(slugs)];
   let createdTag = false;
-  for (const slug of slugs) {
-    signal?.throwIfAborted();
+  if (uniqueSlugs.length) {
     const inserted = await client.query(
-      `INSERT INTO tag(slug, sort_order)
-       VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tag))
+      `WITH missing AS (
+         SELECT input.slug, input.ord
+           FROM unnest($1::text[]) WITH ORDINALITY AS input(slug, ord)
+          WHERE NOT EXISTS (SELECT 1 FROM tag WHERE tag.slug = input.slug)
+       )
+       INSERT INTO tag(slug, sort_order)
+       SELECT slug,
+              (SELECT COALESCE(MAX(sort_order), 0) FROM tag)
+                + row_number() OVER (ORDER BY ord)
+         FROM missing
+        ORDER BY ord
        ON CONFLICT (slug) DO NOTHING
        RETURNING slug`,
-      [slug]
+      [uniqueSlugs]
     );
     if (inserted.rowCount) createdTag = true;
   }
   signal?.throwIfAborted();
   await client.query("DELETE FROM image_tag WHERE image_id = $1", [imageId]);
-  for (const slug of slugs) {
+  if (uniqueSlugs.length) {
     signal?.throwIfAborted();
     await client.query(
-      "INSERT INTO image_tag(image_id, tag_slug) VALUES($1, $2) ON CONFLICT DO NOTHING",
-      [imageId, slug]
+      `INSERT INTO image_tag(image_id, tag_slug)
+       SELECT $1, slug FROM unnest($2::text[]) AS input(slug)
+       ON CONFLICT DO NOTHING`,
+      [imageId, uniqueSlugs]
     );
   }
   signal?.throwIfAborted();

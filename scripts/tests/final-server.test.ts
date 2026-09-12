@@ -1,9 +1,11 @@
 import "./support/server-environment.ts";
 import "./server/configuration.test.ts";
+import "./server/release-version.test.ts";
 import "./server/http-auth.test.ts";
 import "./server/database-process.test.ts";
 import "./server/cache.test.ts";
 import "./server/storage.test.ts";
 import "./server/images.test.ts";
 import "./server/ingestion.test.ts";
+import "./server/ingestion-events.test.ts";
 import "./server/database-integration.test.ts";

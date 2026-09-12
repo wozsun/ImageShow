@@ -74,9 +74,11 @@ Redis、存储 driver 和 raw 目录游标。子进程统一由测试进程树�
 `npm run icons:check`。`npm run check` 直接检查 shared / Server / Web 源码，不先构建
 shared，也不写生产产物。
 
-本地 source 门禁核对根包、三个 workspace 与 lockfile 版本。GitHub Dev Action 只接受 `dev`
+本地 source 门禁与 GitHub Dev/Release Action 共用 `scripts/tests/verify/version-contract.mjs`，
+核对根包、三个 workspace 与 lockfile 版本；两条 Action 在登录仓库前完成检查。
+GitHub Dev Action 只接受 `dev`
 分支，显式只构建 `linux/amd64`、关闭默认 provenance 证明清单，并把同一次生产构建推送到
-Docker Hub、腾讯云 TCR 与阿里云杭州 ACR；Release Action 核对 release tag、根包版本、`main`
+Docker Hub、腾讯云 TCR 与阿里云杭州 ACR；Release Action 核对 release tag 与完整包版本、`main`
 祖先关系及三仓同提交 `:dev` digest，只把各仓已验证的单平台 manifest 原样添加版本与 `latest`
 标签，任一校验失败即退出且不重新构建。公开 Action 使用稳定主版本标签，job 不设置项目自定义
 总运行时限。Actions 不运行
@@ -261,7 +263,9 @@ storage/
 不为只传递同一记录的 prepare / switch / settlement 阶段拆分文件和中间契约。
 `selected-images-migration.ts` 只负责管理接口的 1..N 保序结果，
 `storage-backend-migration.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语。
-分类 metadata 与正式对象位置相互独立：`image-update-item.ts` 直接提交分类 metadata，根层
+分类 metadata 与正式对象位置相互独立：`image-update-item.ts` 直接提交分类 metadata。
+`tags/mutations.ts` 在调用方事务内以集合 SQL 创建缺失标签并替换关联，去重保留首次出现顺序；
+新增标签按该顺序分配排序值，revision 和提交后缓存失效仍由调用方汇总。
 `images/theme-reassignment.ts` 持有主题删除时的图片 SQL、revision 和 cache handoff，主题领域仍
 拥有词表删除、重试与最终词表同步。`storage/objects/image-transfer-admission.ts` 是所选图片与
 整后端迁移共用的活动逐图搬迁许可 owner，两个生产者直接复用同一个代码内固定 5 项容量。
@@ -336,6 +340,9 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
 - `repository.ts` 保留命令调用边界、错误翻译与事件发布 facade；实际职责分别由
   `sessions/command-runner.ts`、`replies.ts`、`intent-store.ts`、`listener-hub.ts` 和
   `queue/store.ts` 承接。facade 与内部模块不复制 key 推导、严格解析或业务校验。
+- `sessions/model.ts` 以 Zod 严格 schema 定义 active canonical、终态回执、Upload intent 和
+  queue metadata，并推导服务端类型；`codec.ts` 负责 JSON / hash reply 解码与解析错误边界。
+  存储 schema 不引入 HTTP 补齐、转换或额外业务约束，不进入浏览器 DTO。
 - `sessions/import-metadata.ts` 统一投影 Import 接管与首次提交冻结时受 RuntimeConfig 控制的
   `original` 和微博 `source`，只接收配置快照与纯 DTO；session service 与 commit intent 复用
   同一规则，提交意图冻结后的重试继续使用已冻结值。
@@ -354,6 +361,9 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
   `action-protocol.ts` 校验 watermark / continuation，并让冻结最大 accepted order 后的扫描游标
   从 1 单调向上推进；`action-handlers.ts` 执行逐项动作，
   `session-update.ts` 负责 active canonical 草稿和 ready duplicate decision 的 CAS。
+  每条 SSE 连接的初始缓冲、待发队列和在途写入共用 1,000 条 / 1 MiB 序列化事件预算；
+  超限关闭当前连接，由既有重连与 snapshot 恢复。周期验权串行执行，独立于快照与流写入，
+  慢读不延后验权；关闭后统一释放订阅、作用域、队列与等待。
 - `raw/lease-registry.ts` 是 `active`、`deleting`、`scanning`、`pruning` 可变状态的唯一 owner；
   `paths.ts` 只处理身份与路径，`files.ts` 处理 generation 精确对象操作，`orphan-scanner.ts`
   处理游标扫描和目录修剪，`prepared.ts` 处理本地结果原子发布、受限预览读取及精确清理，
@@ -501,7 +511,10 @@ hooks ──► lib
   `components/feedback/DialogLayerPortal.tsx` 是顶层动态视口和嵌套弹窗坐标系的唯一 owner；
   移动图片详情的根层关闭控件继续复用共享 `DirectActivationButton`，不在页面入口复制触控
   关闭分支。
-- `hooks/` 保存跨页面且主要管理 React 生命周期或交互行为的 Hook；首页、画廊与展映的导航
+- `hooks/` 保存跨页面且主要管理 React 生命周期或交互行为的 Hook。
+  菜单与折叠面板的 DOM 监听由各自 Effect 的 AbortController 统一注销，Pixi runtime 的
+  DOM 监听由实例独立注销；RAF、观察器、Ticker 与纹理仍由原 owner 分别释放。
+  首页、画廊与展映的导航
   共用 `usePageScrollMovement.ts` 管理 RAF 合并、页面锁定和有界滚动位移采样，
   `usePublicNavigationEntrance.ts` 保证公开主导航在 SPA 会话内只入场一次，
   `usePublicNavigationTopEdgeReveal.ts` 统一识别鼠标移入视口顶部 36 CSS px；首页由独立

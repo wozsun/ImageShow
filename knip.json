@@ -8,7 +8,6 @@
         "scripts/tests/final-*.test.ts",
         "scripts/tests/server/isolation/*.mts",
         "scripts/tests/verify/source-contract.mjs",
-        "scripts/tests/verify/version-contract.mjs",
         "scripts/tests/verify/markdown-links.mjs",
         "scripts/tests/verify/check-web-chunks.mjs",
         "scripts/tests/verify/runtime-image.mjs"

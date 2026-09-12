@@ -27,7 +27,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate release tag
+      - name: Validate complete version and release tag
         shell: bash
         run: |
           set -euo pipefail
@@ -35,15 +35,7 @@ jobs:
             echo "This workflow only runs for v* tags, got: ${GITHUB_REF}" >&2
             exit 1
           fi
-          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Release tags must use v<major>.<minor>.<patch>, got: ${GITHUB_REF_NAME}" >&2
-            exit 1
-          fi
-          package_version="$(node -p "require('./package.json').version")"
-          if [[ "${GITHUB_REF_NAME}" != "v${package_version}" ]]; then
-            echo "Release tag ${GITHUB_REF_NAME} does not match package version v${package_version}" >&2
-            exit 1
-          fi
+          node scripts/tests/verify/version-contract.mjs --tag "${GITHUB_REF_NAME}"
           if ! git merge-base --is-ancestor "${GITHUB_SHA}" "origin/main"; then
             echo "Release tag ${GITHUB_REF_NAME} does not point to a commit on main" >&2
             exit 1

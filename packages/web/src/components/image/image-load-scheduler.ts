@@ -89,10 +89,7 @@ export class ImageLoadScheduler {
       };
     }
 
-    let resolveResult!: (result: ImageLoadTaskResult) => void;
-    const result = new Promise<ImageLoadTaskResult>((resolve) => {
-      resolveResult = resolve;
-    });
+    const { promise: result, resolve: resolveResult } = Promise.withResolvers<ImageLoadTaskResult>();
     const task: ImageLoadTask = {
       id: this.#nextId++,
       sequence: this.#nextSequence++,

@@ -385,6 +385,66 @@ const readReadyRevision = async () => BigInt(String((
   )).rows[0].count), 1);
 
   const themeMutations = await import("../../../../packages/server/src/themes/mutations.ts");
+  const tagMutations = await import("../../../../packages/server/src/tags/mutations.ts");
+  const { withTransactionOnClient } = await import("../../../../packages/server/src/core/database/transactions.ts");
+  const tagClient = await database.pool.connect();
+  const rollback = new Error("rollback tag contract fixture");
+  const tagsBefore = (await tagClient.query("SELECT slug, sort_order FROM tag ORDER BY slug")).rows;
+  const imageBefore = await readAtomicImage(imageUpdateIds.first);
+  const revisionBeforeTagCases = await readReadyRevision();
+  try {
+    await assert.rejects(withTransactionOnClient(tagClient, async (client) => {
+      const maximum = Number((await client.query("SELECT COALESCE(MAX(sort_order), 0) AS value FROM tag")).rows[0].value);
+      const result = await tagMutations.replaceImageTags(client, imageUpdateIds.first, [
+        "set-second", "cache-repair-tag", "set-first", "set-second"
+      ]);
+      assert.equal(result.createdTag, true);
+      assert.deepEqual((await client.query(
+        "SELECT slug, sort_order FROM tag WHERE slug=ANY($1::text[]) ORDER BY sort_order",
+        [["set-second", "set-first"]]
+      )).rows, [
+        { slug: "set-second", sort_order: maximum + 1 },
+        { slug: "set-first", sort_order: maximum + 2 }
+      ]);
+      assert.deepEqual((await client.query(
+        "SELECT tag_slug FROM image_tag WHERE image_id=$1 ORDER BY tag_slug", [imageUpdateIds.first]
+      )).rows.map((row) => row.tag_slug), ["cache-repair-tag", "set-first", "set-second"]);
+      assert.equal((await tagMutations.replaceImageTags(client, imageUpdateIds.first, ["set-first"])).createdTag, false);
+      assert.equal((await tagMutations.replaceImageTags(client, imageUpdateIds.first, [])).createdTag, false);
+      assert.equal((await client.query("SELECT count(*)::int AS count FROM image_tag WHERE image_id=$1", [imageUpdateIds.first])).rows[0].count, 0);
+      assert.equal(BigInt((await client.query("SELECT revision::text FROM ready_image_revision")).rows[0].revision), revisionBeforeTagCases + 1n);
+      throw rollback;
+    }), (error) => error === rollback);
+    const controller = new AbortController();
+    const cancelled = new Error("cancel tag replacement after a database operation");
+    await assert.rejects(withTransactionOnClient(tagClient, async (client) => {
+      const cancelAfterQuery = new Proxy(client, {
+        get(target, property, receiver) {
+          if (property !== "query") return Reflect.get(target, property, receiver);
+          return async (text: string, values?: unknown[]) => {
+            const result = await target.query(text, values);
+            controller.abort(cancelled);
+            return result;
+          };
+        }
+      });
+      await tagMutations.replaceImageTagAssociations(cancelAfterQuery, imageUpdateIds.first, ["cancelled-set"], controller.signal);
+    }), (error) => error === cancelled);
+    assert.deepEqual((await tagClient.query("SELECT slug, sort_order FROM tag ORDER BY slug")).rows, tagsBefore);
+    assert.deepEqual(await readAtomicImage(imageUpdateIds.first), imageBefore);
+    assert.equal(await readReadyRevision(), revisionBeforeTagCases);
+  } finally {
+    tagClient.release();
+  }
+
+  const concurrentTags = await Promise.all([
+    imageUpdate.updateImages([{ id: imageUpdateIds.third, tags: ["shared-set", "left-set"] }]),
+    imageUpdate.updateImages([{ id: imageUpdateIds.fourth, tags: ["shared-set", "right-set"] }])
+  ]);
+  assert.ok(concurrentTags.every((result) => result.updated === 1 && result.failed === 0));
+  assert.deepEqual((await readAtomicImage(imageUpdateIds.third)).tags, ["left-set", "shared-set"]);
+  assert.deepEqual((await readAtomicImage(imageUpdateIds.fourth)).tags, ["right-set", "shared-set"]);
+  assert.equal((await database.pool.query("SELECT count(*)::int AS count FROM tag WHERE slug='shared-set'")).rows[0].count, 1);
   const readThemeImage = async () => (await database.pool.query(
     "SELECT theme, object_key, md5, image_time, author FROM metadata WHERE id=$1",
     [imageUpdateIds.first]
@@ -425,7 +485,8 @@ const readReadyRevision = async () => BigInt(String((
       "left-tag",
       "right-tag",
       "atomic-fail",
-      "cache-repair-tag"
+      "cache-repair-tag",
+      "shared-set", "left-set", "right-set"
     ]]
   );
 });

@@ -26,6 +26,9 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v7
 
+      - name: Validate complete version and dev branch
+        run: node scripts/tests/verify/version-contract.mjs --branch dev
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 

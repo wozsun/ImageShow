@@ -90,14 +90,6 @@ export class ShowPixiRuntime {
   readonly #motionQuery: MediaQueryList;
   readonly #options: Omit<ShowPixiRuntimeOptions, "statsElement">;
   readonly #tick: (ticker: Ticker) => void;
-  readonly #onVisibilityChange: () => void;
-  readonly #onOnline: () => void;
-  readonly #onImageLoad: (event: Event) => void;
-  readonly #onPointerPresence: (event: PointerEvent) => void;
-  readonly #onPointerLeave: () => void;
-  readonly #onMotionChange: () => void;
-  readonly #onContextLost: (event: Event) => void;
-  readonly #onContextRestored: () => void;
   readonly #longTaskObserver: PerformanceObserver | null;
   readonly #debugApi: ShowPixiDebugApi;
   #scene: ShowPixiSceneController | null = null;
@@ -119,6 +111,7 @@ export class ShowPixiRuntime {
   #contextRestores = 0;
   #contextLossExtension: WEBGL_lose_context | null = null;
   #speed: number;
+  readonly #listenerController = new AbortController();
   #destroyed = false;
   #debugExposed = false;
   #statsElement: HTMLOutputElement | null;
@@ -160,6 +153,7 @@ export class ShowPixiRuntime {
     app: Application,
     options: ShowPixiRuntimeOptions
   ) {
+    const { signal } = this.#listenerController;
     this.#host = host;
     this.app = app;
     this.#options = options;
@@ -187,7 +181,7 @@ export class ShowPixiRuntime {
     app.canvas.dataset.showPixiCanvas = "";
     app.canvas.setAttribute("aria-hidden", "true");
     host.appendChild(app.canvas);
-    this.#onPointerPresence = (event) => {
+    const onPointerPresence = (event: PointerEvent) => {
       if (
         !event.isTrusted || event.target !== app.canvas
         || this.#dialogOpen || this.#hidden || this.#contextLost
@@ -201,26 +195,26 @@ export class ShowPixiRuntime {
         && event.clientY >= bounds.top && event.clientY < bounds.bottom
       );
     };
-    this.#onPointerLeave = () => this.#setPointerInside(false);
+    const onPointerLeave = () => this.#setPointerInside(false);
     // Listen above the canvas so a real pointer can enable hit testing before
     // Pixi handles a down/over event. Its synthetic document moves never pass
     // through this host and cannot reactivate the last pointer position.
     for (const type of ["pointerover", "pointermove", "pointerdown"] as const) {
-      host.addEventListener(type, this.#onPointerPresence, { capture: true, passive: true });
+      host.addEventListener(type, onPointerPresence, { capture: true, passive: true, signal });
     }
-    app.canvas.addEventListener("pointerleave", this.#onPointerLeave);
-    app.canvas.addEventListener("pointercancel", this.#onPointerLeave);
-    window.addEventListener("blur", this.#onPointerLeave);
-    this.#onOnline = () => this.#textureCache.resumeTransportRequests();
-    window.addEventListener("online", this.#onOnline);
-    this.#onImageLoad = (event) => {
+    app.canvas.addEventListener("pointerleave", onPointerLeave, { signal });
+    app.canvas.addEventListener("pointercancel", onPointerLeave, { signal });
+    window.addEventListener("blur", onPointerLeave, { signal });
+    const onOnline = () => this.#textureCache.resumeTransportRequests();
+    window.addEventListener("online", onOnline, { signal });
+    const onImageLoad = (event: Event) => {
       const image = event.target;
       if (!(image instanceof HTMLImageElement) || image.naturalWidth === 0) return;
       this.#textureCache.retryFailedUrl(image.currentSrc || image.src);
     };
     // DOM detail images and WebGL textures have separate loaders. Their native
     // success event can release a matching failed URL without resetting cards.
-    document.addEventListener("load", this.#onImageLoad, true);
+    document.addEventListener("load", onImageLoad, { capture: true, signal });
     this.#tick = (ticker) => {
       const frameMs = Math.max(0, ticker.elapsedMS);
       this.#scene?.update(frameMs);
@@ -237,20 +231,20 @@ export class ShowPixiRuntime {
     this.#resizeObserver = new ResizeObserver(() => this.#resize());
     this.#resizeObserver.observe(host);
     this.#motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    this.#onMotionChange = () => {
+    const onMotionChange = () => {
       this.#reducedMotion = this.#motionQuery.matches;
       this.#applyMotionState();
     };
-    this.#motionQuery.addEventListener("change", this.#onMotionChange);
-    this.#onVisibilityChange = () => {
+    this.#motionQuery.addEventListener("change", onMotionChange, { signal });
+    const onVisibilityChange = () => {
       this.#hidden = document.hidden;
       if (this.#hidden) this.#setPointerInside(false);
       this.#applyMotionState();
       if (this.#hidden) app.stop();
       else if (!this.#contextLost) app.start();
     };
-    document.addEventListener("visibilitychange", this.#onVisibilityChange);
-    this.#onContextLost = (event) => {
+    document.addEventListener("visibilitychange", onVisibilityChange, { signal });
+    const onContextLost = (event: Event) => {
       event.preventDefault();
       this.#contextLost = true;
       this.#setPointerInside(false);
@@ -259,15 +253,15 @@ export class ShowPixiRuntime {
       app.stop();
       this.#publishStats();
     };
-    this.#onContextRestored = () => {
+    const onContextRestored = () => {
       this.#contextLost = false;
       this.#contextRestores += 1;
       this.#applyMotionState();
       if (!this.#hidden) app.start();
       this.#publishStats();
     };
-    app.canvas.addEventListener("webglcontextlost", this.#onContextLost);
-    app.canvas.addEventListener("webglcontextrestored", this.#onContextRestored);
+    app.canvas.addEventListener("webglcontextlost", onContextLost, { signal });
+    app.canvas.addEventListener("webglcontextrestored", onContextRestored, { signal });
     this.#longTaskObserver = this.#createLongTaskObserver();
     this.#createScene(options.scene);
     this.#applyMotionState();
@@ -386,18 +380,7 @@ export class ShowPixiRuntime {
     }
     this.#longTaskObserver?.disconnect();
     this.#resizeObserver.disconnect();
-    this.#motionQuery.removeEventListener("change", this.#onMotionChange);
-    document.removeEventListener("visibilitychange", this.#onVisibilityChange);
-    for (const type of ["pointerover", "pointermove", "pointerdown"] as const) {
-      this.#host.removeEventListener(type, this.#onPointerPresence, true);
-    }
-    this.app.canvas.removeEventListener("pointerleave", this.#onPointerLeave);
-    this.app.canvas.removeEventListener("pointercancel", this.#onPointerLeave);
-    window.removeEventListener("blur", this.#onPointerLeave);
-    window.removeEventListener("online", this.#onOnline);
-    document.removeEventListener("load", this.#onImageLoad, true);
-    this.app.canvas.removeEventListener("webglcontextlost", this.#onContextLost);
-    this.app.canvas.removeEventListener("webglcontextrestored", this.#onContextRestored);
+    this.#listenerController.abort();
     const tickerListenersBeforeRemoval = this.app.ticker.count;
     this.app.ticker.remove(this.#tick);
     const runtimeTickerRemoved = this.app.ticker.count < tickerListenersBeforeRemoval;

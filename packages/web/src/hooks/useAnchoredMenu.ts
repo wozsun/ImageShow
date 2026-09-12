@@ -178,6 +178,8 @@ export function useAnchoredMenu(options: {
 
   useEffect(() => {
     if (!open) return;
+    const listeners = new AbortController();
+    const { signal } = listeners;
     let positionFrame: number | undefined;
     let observedAnchor: HTMLElement | null = null;
     let resizeObserver: ResizeObserver;
@@ -206,17 +208,17 @@ export function useAnchoredMenu(options: {
         requestClose();
       }
     };
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    window.visualViewport?.addEventListener("resize", update);
-    window.visualViewport?.addEventListener("scroll", update);
+    window.addEventListener("resize", update, { signal });
+    window.addEventListener("scroll", update, { capture: true, signal });
+    window.visualViewport?.addEventListener("resize", update, { signal });
+    window.visualViewport?.addEventListener("scroll", update, { signal });
     for (const eventName of outsidePressEvents) {
       document.addEventListener(
         eventName,
         onOutsidePress,
         eventName === "touchstart"
-          ? { capture: true, passive: true }
-          : true
+          ? { capture: true, passive: true, signal }
+          : { capture: true, signal }
       );
     }
 
@@ -226,9 +228,8 @@ export function useAnchoredMenu(options: {
     syncObservedAnchor();
     if (menuNode) resizeObserver.observe(menuNode);
 
-    let onKeyDown: ((event: KeyboardEvent) => void) | undefined;
     if (closeOnEscape) {
-      onKeyDown = (event) => {
+      const onKeyDown = (event: KeyboardEvent) => {
         if (event.key !== "Escape" || event.defaultPrevented
           || event.isComposing || event.keyCode === 229) return;
         const ownerDialog = triggerRef.current?.closest("[data-dialog-frame]") ?? null;
@@ -239,11 +240,10 @@ export function useAnchoredMenu(options: {
         if (restoreFocusOnEscapeRef.current?.() ?? true) requestCloseAndRestoreFocus();
         else requestClose();
       };
-      document.addEventListener("keydown", onKeyDown, true);
+      document.addEventListener("keydown", onKeyDown, { capture: true, signal });
     }
-    let onFocusIn: ((event: FocusEvent) => void) | undefined;
     if (closeOnFocusOutside) {
-      onFocusIn = (event) => {
+      const onFocusIn = (event: FocusEvent) => {
         const target = event.target;
         if (isDocumentFallbackFocusTarget(document, target)) return;
         if (!(target instanceof Node)) return;
@@ -254,20 +254,12 @@ export function useAnchoredMenu(options: {
           requestClose();
         }
       };
-      document.addEventListener("focusin", onFocusIn);
+      document.addEventListener("focusin", onFocusIn, { signal });
     }
     return () => {
       if (positionFrame !== undefined) window.cancelAnimationFrame(positionFrame);
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-      window.visualViewport?.removeEventListener("resize", update);
-      window.visualViewport?.removeEventListener("scroll", update);
-      for (const eventName of outsidePressEvents) {
-        document.removeEventListener(eventName, onOutsidePress, true);
-      }
+      listeners.abort();
       resizeObserver.disconnect();
-      if (onKeyDown) document.removeEventListener("keydown", onKeyDown, true);
-      if (onFocusIn) document.removeEventListener("focusin", onFocusIn);
     };
   }, [open, closing, menuNode, updatePosition, requestClose, requestCloseAndRestoreFocus, triggerRef, closeOnEscape, closeOnFocusOutside]);
 

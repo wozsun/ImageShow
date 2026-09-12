@@ -9,6 +9,34 @@ if (!environmentState[environmentKey]) {
   const { window, document } = parseHTML(
     "<!doctype html><html><body></body></html>"
   );
+  // linkedom ignores AddEventListenerOptions.signal. Model its cancellation
+  // on the shared prototype so every test document retires scoped listeners.
+  const eventTargetPrototype = window.EventTarget.prototype;
+  const originalAdd = eventTargetPrototype.addEventListener;
+  const originalRemove = eventTargetPrototype.removeEventListener;
+  const abortCleanups = new WeakMap<EventTarget, Map<string, Map<EventListenerOrEventListenerObject, () => void>>>();
+  eventTargetPrototype.addEventListener = function (type, listener, options) {
+    const signal = typeof options === "object" ? options?.signal : undefined;
+    if (signal?.aborted || !listener) return;
+    originalAdd.call(this, type, listener, options);
+    if (!signal) return;
+    let events = abortCleanups.get(this);
+    if (!events) abortCleanups.set(this, events = new Map());
+    let listeners = events.get(type);
+    if (!listeners) events.set(type, listeners = new Map());
+    if (listeners.has(listener)) return;
+    const abort = () => this.removeEventListener(type, listener, options);
+    listeners.set(listener, () => {
+      signal.removeEventListener("abort", abort);
+      listeners.delete(listener);
+      if (!listeners.size) events.delete(type);
+    });
+    signal.addEventListener("abort", abort, { once: true });
+  };
+  eventTargetPrototype.removeEventListener = function (type, listener, options) {
+    if (listener) abortCleanups.get(this)?.get(type)?.get(listener)?.();
+    originalRemove.call(this, type, listener, options);
+  };
   Object.defineProperty(document, "oninput", {
     configurable: true,
     writable: true,

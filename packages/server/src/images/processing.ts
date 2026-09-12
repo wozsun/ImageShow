@@ -17,7 +17,7 @@ export function configureSharpRuntime() {
 }
 
 type ImageInput = Buffer | string;
-export type ImageExt = "jpg" | "png" | "webp" | "gif" | "avif";
+type ImageExt = "jpg" | "png" | "webp" | "gif" | "avif";
 type SharpMetadata = Awaited<ReturnType<ReturnType<typeof sharp>["metadata"]>>;
 
 type StoredImageMetadata = {

@@ -34,7 +34,8 @@ import { presentIngestionQueueSummary } from "../sessions/projection.ts";
 import { presentIngestionSession } from "./session-view.ts";
 import type { IngestionTokenService } from "../sessions/token-service.ts";
 
-const initialMutationBufferLimit = 1_000;
+const pendingEventLimit = 1_000;
+const pendingByteLimit = 1024 * 1024;
 type IngestionQueueEventRepository = Pick<
   IngestionSessionRepository,
   "snapshot" | "subscribe"
@@ -120,35 +121,47 @@ export function streamIngestionQueueEvents(
   context.header("X-Accel-Buffering", "no");
   const response = streamSSE(context, async (stream) => {
     const controller = new AbortController();
+    const pending: Array<{ event: string; data: string; bytes: number }> = [];
+    let pendingCount = 0;
+    let pendingBytes = 0;
+    let wakeWriter = Promise.withResolvers<void>();
+    let authentication: Promise<void> | undefined;
     const close = (reason: unknown) => {
       if (!controller.signal.aborted) controller.abort(reason);
+      wakeWriter.resolve();
       if (!stream.closed && !stream.aborted) stream.abort();
     };
     const closeFromRequest = () => close(
       context.req.raw.signal.reason ?? new Error("Ingestion SSE request closed")
     );
-    context.req.raw.signal.addEventListener("abort", closeFromRequest, {
-      once: true
-    });
+    context.req.raw.signal.addEventListener("abort", closeFromRequest, { once: true });
     stream.onAbort(closeFromRequest);
+    if (context.req.raw.signal.aborted) closeFromRequest();
     let unsubscribeQueue: () => void = () => undefined;
     let unregisterSession: () => void = () => undefined;
     let closeScope: () => void = () => undefined;
-    let writes = Promise.resolve();
-    const enqueue = (event: string, payload: IngestionQueueEventDto) => {
-      const write = writes.then(async () => {
-        controller.signal.throwIfAborted();
-        await raceWithAbortSignal(
-          controller.signal,
-          stream.writeSSE({ event, data: JSON.stringify(payload) }),
-          "Ingestion SSE write aborted"
-        );
-      });
-      writes = write.catch((error) => close(error));
-      return write;
+    const enqueue = (event: string, payload: IngestionQueueEventDto, first = false) => {
+      if (controller.signal.aborted) return;
+      const data = JSON.stringify(payload);
+      const bytes = Buffer.byteLength(`event: ${event}\ndata: ${data}\n\n`);
+      // Include the in-flight write and the pre-snapshot buffer in one budget.
+      if (pendingCount >= pendingEventLimit || pendingBytes + bytes > pendingByteLimit) {
+        close(new Error("Ingestion SSE pending event budget exceeded"));
+        return;
+      }
+      const item = { event, data, bytes };
+      if (first) pending.unshift(item);
+      else pending.push(item);
+      pendingCount += 1;
+      pendingBytes += bytes;
+      wakeWriter.resolve();
     };
+    const sessionMatches = (session: AdminSession | null) => session
+      && session.username === input.session.username
+      && session.role === input.session.role;
 
     try {
+      controller.signal.throwIfAborted();
       unregisterSession = registerAdminSessionConnection({
         sessionId: input.session.id,
         close: () => close(new Error("Administrator session invalidated"))
@@ -158,11 +171,7 @@ export function streamIngestionQueueEvents(
         validateSession(input.session.id),
         "Ingestion SSE authentication aborted"
       );
-      if (
-        !validated
-        || validated.username !== input.session.username
-        || validated.role !== input.session.role
-      ) return;
+      if (!sessionMatches(validated)) return;
       controller.signal.throwIfAborted();
       const scope = actionScopes.open(
         input.session,
@@ -170,112 +179,84 @@ export function streamIngestionQueueEvents(
         () => close(new Error("Ingestion action scope invalidated"))
       );
       closeScope = scope.close;
-
-      let readySent = false;
-      let initialOverflow = false;
-      const buffered: IngestionQueueMutation[] = [];
-      const mutationPayload = (mutation: IngestionQueueMutation) => {
-        if (!mutation.session) {
-          throw new Error("Ingestion queue mutation omitted its session identity");
-        }
-        const payload: IngestionQueueEventDto = {
-          type: "mutation",
-          queue: input.queue,
-          kind: mutation.kind,
-          revision: mutation.metadata.revision,
-          last_accepted_order: mutation.metadata.last_accepted_order,
-          summary: presentIngestionQueueSummary(mutation.metadata),
-          session: eventSession(mutation.session, mutation.completedItem),
-          ...(mutation.kind === "progress"
-            ? {}
-            : {
-                action_watermark: actionScopes.sign(
-                  actionScopes.require({
-                    id: scope.id,
-                    sessionId: input.session.id,
-                    owner: input.session.username,
-                    queue: input.queue
-                  }),
-                  mutation.metadata,
-                  input.tokens
-                )
-              })
-        };
-        return payload;
-      };
-      const emitMutation = (mutation: IngestionQueueMutation) => {
-        if (!readySent) {
-          if (buffered.length >= initialMutationBufferLimit) {
-            initialOverflow = true;
-            close(new Error("Ingestion SSE initial mutation buffer overflow"));
-          } else {
-            buffered.push(mutation);
-          }
-          return;
-        }
-        try {
-          void enqueue("mutation", mutationPayload(mutation)).catch(close);
-        } catch (error) {
-          close(error);
-        }
-      };
-      unsubscribeQueue = input.repository.subscribe(
-        input.session.username,
-        input.queue,
-        emitMutation
-      );
-      const initial = await raceWithAbortSignal(
-        controller.signal,
-        input.repository.snapshot(
-          input.session.username,
-          input.queue,
-          0,
-          0
-        ),
-        "Ingestion SSE initial snapshot aborted"
-      );
-      actionScopes.require({
+      const requireScope = () => actionScopes.require({
         id: scope.id,
         sessionId: input.session.id,
         owner: input.session.username,
         queue: input.queue
       });
-      await enqueue("ready", {
+      let readySent = false;
+      // Authentication is serial but independent of snapshot and socket writes.
+      authentication = (async () => {
+        while (await waitForHeartbeat(controller.signal, authenticationHeartbeatMs)) {
+          const current = await raceWithAbortSignal(
+            controller.signal,
+            validateSession(input.session.id),
+            "Ingestion SSE authentication aborted"
+          );
+          if (!sessionMatches(current)) {
+            close(new Error("Administrator session invalidated"));
+            return;
+          }
+          requireScope();
+          if (readySent) enqueue("ping", { type: "ping", queue: input.queue });
+        }
+      })().catch(close);
+      const emitMutation = (mutation: IngestionQueueMutation) => {
+        if (controller.signal.aborted) return;
+        try {
+          if (!mutation.session) {
+            throw new Error("Ingestion queue mutation omitted its session identity");
+          }
+          enqueue("mutation", {
+            type: "mutation",
+            queue: input.queue,
+            kind: mutation.kind,
+            revision: mutation.metadata.revision,
+            last_accepted_order: mutation.metadata.last_accepted_order,
+            summary: presentIngestionQueueSummary(mutation.metadata),
+            session: eventSession(mutation.session, mutation.completedItem),
+            ...(mutation.kind === "progress" ? {} : {
+              action_watermark: actionScopes.sign(requireScope(), mutation.metadata, input.tokens)
+            })
+          });
+        } catch (error) {
+          close(error);
+        }
+      };
+      unsubscribeQueue = input.repository.subscribe(
+        input.session.username, input.queue, emitMutation
+      );
+      const initial = await raceWithAbortSignal(
+        controller.signal,
+        input.repository.snapshot(input.session.username, input.queue, 0, 0),
+        "Ingestion SSE initial snapshot aborted"
+      );
+      requireScope();
+      enqueue("ready", {
         type: "ready",
         queue: input.queue,
         revision: initial.metadata.revision,
         action_scope: scope.id
-      });
-      while (buffered.length && !controller.signal.aborted) {
-        const batch = buffered.splice(0);
-        for (const mutation of batch) {
-          await enqueue("mutation", mutationPayload(mutation));
+      }, true);
+      while (!controller.signal.aborted) {
+        const next = pending.shift();
+        if (!next) {
+          wakeWriter = Promise.withResolvers<void>();
+          await wakeWriter.promise;
+          continue;
         }
-      }
-      if (initialOverflow || controller.signal.aborted) return;
-      readySent = true;
-
-      while (await waitForHeartbeat(
-        controller.signal,
-        authenticationHeartbeatMs
-      )) {
-        const heartbeatSession = await raceWithAbortSignal(
-          controller.signal,
-          validateSession(input.session.id),
-          "Ingestion SSE authentication aborted"
-        );
-        if (
-          !heartbeatSession
-          || heartbeatSession.username !== input.session.username
-          || heartbeatSession.role !== input.session.role
-        ) break;
-        actionScopes.require({
-          id: scope.id,
-          sessionId: input.session.id,
-          owner: input.session.username,
-          queue: input.queue
-        });
-        await enqueue("ping", { type: "ping", queue: input.queue });
+        try {
+          await raceWithAbortSignal(
+            controller.signal,
+            stream.writeSSE(next),
+            "Ingestion SSE write aborted"
+          );
+          if (next.event === "ready") readySent = true;
+        } finally {
+          pendingCount -= 1;
+          pendingBytes -= next.bytes;
+        }
       }
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -286,14 +267,13 @@ export function streamIngestionQueueEvents(
         });
       }
     } finally {
-      if (!controller.signal.aborted) {
-        controller.abort(new Error("Ingestion SSE closed"));
-      }
+      close(new Error("Ingestion SSE closed"));
+      pending.length = 0;
       unsubscribeQueue();
       unregisterSession();
       closeScope();
       context.req.raw.signal.removeEventListener("abort", closeFromRequest);
-      await writes.catch(() => undefined);
+      await authentication;
     }
   });
   response.headers.set("Cache-Control", "no-store, no-transform");

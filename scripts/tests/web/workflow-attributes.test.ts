@@ -303,8 +303,12 @@ test("[Web/批量属性] 移动浮层拥有菜单与确认框，按层关闭且�
     () => removeListener("keydown", captureKeys),
     installProperties(document, {
       addEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) {
-        if (type === "keydown" && (options === true || typeof options === "object" && options.capture)) keyCaptures.add(listener);
-        else addListener(type, listener, options);
+        if (type === "keydown" && (options === true || typeof options === "object" && options.capture)) {
+          const signal = typeof options === "object" ? options.signal : undefined;
+          if (signal?.aborted) return;
+          keyCaptures.add(listener);
+          signal?.addEventListener("abort", () => keyCaptures.delete(listener), { once: true });
+        } else addListener(type, listener, options);
       },
       removeEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) {
         if (type === "keydown" && (options === true || typeof options === "object" && options.capture)) keyCaptures.delete(listener);

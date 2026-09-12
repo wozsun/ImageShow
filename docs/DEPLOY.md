@@ -133,6 +133,10 @@ CDN 保留完整查询参数并遵守应用的 `Cache-Control`、`Vary` 和条�
 通过后推送 `dev`，等待三仓镜像分发成功，再同步 `main` 和版本标签；Release 复用同提交镜像，
 不重新构建。流程和产物边界见[项目结构](guide/project-structure.md)。
 
+Dev 与 Release 在登录镜像仓库前共同运行 `scripts/tests/verify/version-contract.mjs`，
+核对根包、三个 workspace 与 lockfile 全部版本；Dev 同时要求 `dev` 分支，Release 要求
+标签与包版本一致。版本不一致时不会进入镜像仓库登录和发布步骤。
+
 只删除已核对、无容器引用且不再用于回滚的精确镜像 ID：
 
 ```bash

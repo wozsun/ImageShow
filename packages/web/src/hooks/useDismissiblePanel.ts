@@ -195,6 +195,8 @@ export function useDismissiblePanel({
     if (!enabled || !open || !panel || !trigger) return;
 
     let frame: number | undefined;
+    const listeners = new AbortController();
+    const { signal } = listeners;
     const updateAvailableHeight = () => {
       frame = undefined;
       const visualViewport = window.visualViewport;
@@ -216,16 +218,14 @@ export function useDismissiblePanel({
     };
 
     updateAvailableHeight();
-    window.addEventListener("resize", scheduleUpdate);
-    window.visualViewport?.addEventListener("resize", scheduleUpdate);
-    window.visualViewport?.addEventListener("scroll", scheduleUpdate);
+    window.addEventListener("resize", scheduleUpdate, { signal });
+    window.visualViewport?.addEventListener("resize", scheduleUpdate, { signal });
+    window.visualViewport?.addEventListener("scroll", scheduleUpdate, { signal });
     const resizeObserver = new ResizeObserver(scheduleUpdate);
     resizeObserver.observe(trigger);
     return () => {
       if (frame !== undefined) window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", scheduleUpdate);
-      window.visualViewport?.removeEventListener("resize", scheduleUpdate);
-      window.visualViewport?.removeEventListener("scroll", scheduleUpdate);
+      listeners.abort();
       resizeObserver.disconnect();
     };
   }, [enabled, open, semantics.panelRef, semantics.triggerRef]);
@@ -235,6 +235,8 @@ export function useDismissiblePanel({
     const trigger = semantics.triggerRef.current;
     if (!enabled || !open || !panel || !trigger) return;
 
+    const listeners = new AbortController();
+    const { signal } = listeners;
     const closeOnOutsideInteraction = (event: Event) => {
       if (isWithinPanelSurface(
         panel,
@@ -269,7 +271,7 @@ export function useDismissiblePanel({
       event.stopImmediatePropagation();
       setOpen(false, { restoreFocus: true });
     };
-    if (closeOnEscape) document.addEventListener("keydown", onKeyDown, true);
+    if (closeOnEscape) document.addEventListener("keydown", onKeyDown, { capture: true, signal });
     // touchstart covers iOS scroll gestures whose pointerdown is delayed or
     // omitted. Pointer/wheel/click/focus retain mouse, keyboard and assistive
     // input semantics.
@@ -278,16 +280,11 @@ export function useDismissiblePanel({
         eventName,
         closeOnOutsideInteraction,
         eventName === "touchstart"
-          ? { capture: true, passive: true }
-          : true
+          ? { capture: true, passive: true, signal }
+          : { capture: true, signal }
       );
     }
-    return () => {
-      if (closeOnEscape) document.removeEventListener("keydown", onKeyDown, true);
-      for (const eventName of outsideInteractionEvents) {
-        document.removeEventListener(eventName, closeOnOutsideInteraction, true);
-      }
-    };
+    return () => listeners.abort();
   }, [
     enabled,
     open,
