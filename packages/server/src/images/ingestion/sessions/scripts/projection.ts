@@ -27,12 +27,10 @@ local function projection(snapshot)
   end
   local prepare_waiting = snapshot.status == 'preparing'
     and snapshot.phase == 'prepare-waiting'
-  if snapshot.status == 'queued'
-    or snapshot.status == 'received'
-    or prepare_waiting then
+  if snapshot.status == 'queued' then
     result.waiting = 1
   elseif snapshot.status == 'downloading'
-    or snapshot.status == 'preparing' then
+    or (snapshot.status == 'preparing' and not prepare_waiting) then
     result.running = 1
   end
   local duplicate_count = 0

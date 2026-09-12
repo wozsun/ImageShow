@@ -46,6 +46,6 @@ export function useImageBrowseRoute() {
     params, filters: parsed.filters, error, ready,
     facets: facetsQuery.data, updateSearchParams, browseSearch: readableFilterSearch(linkParams),
     isFilterEdit: location.state?.imageBrowseFilterEdit === true,
-    retryVocabulary: () => { void facetsQuery.refetch(); }
+    retryVocabulary: () => { void facetsQuery.refetch({ cancelRefetch: false }); }
   };
 }

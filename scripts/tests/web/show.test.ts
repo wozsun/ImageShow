@@ -1228,6 +1228,35 @@ test("[Web/展映] 驻留预算共享同图副本，集合缩小后恢复目标�
   assert.equal(h.requests.length, 0, "选择解码尺寸本身不发请求或占用纹理");
 });
 
+test("[Web/展映] 下载挂起时纹理等待节点有界，恢复后只加载仍有效的任务", async (t) => {
+  const h = await createTextureRecoveryHarness(t, {
+    maximumEntries: 4, maximumInFlight: 2, maximumUnreferenced: 2
+  });
+  const releaseFirst = h.hold("held-first");
+  const releaseSecond = h.hold("held-second");
+  const lod = { pixelWidth: 16, pixelHeight: 16 };
+  const acquire = (id: string) => h.cache.acquire(`https://textures.example/${id}.webp`, lod, () => {});
+  const first = acquire("held-first");
+  const second = acquire("held-second");
+  for (let index = 0; index < 10_000; index += 1) {
+    acquire(`recycled-${index % 800}`).release();
+  }
+  assert.equal(h.cache.stats().entries, 4);
+  assert.equal(h.cache.stats().inFlight, 2);
+  assert.ok(h.cache.stats().queued <= 2, "实际等待节点随淘汰同步释放");
+  const valid = acquire("still-needed");
+  releaseFirst();
+  releaseSecond();
+  await h.flush();
+  assert.deepEqual(h.requests, ["held-first", "held-second", "still-needed"].map(
+    (id) => `https://textures.example/${id}.webp`
+  ));
+  first.release(); second.release(); valid.release();
+  h.cache.destroy();
+  assert.equal(h.cache.stats().queued, 0);
+  assert.equal(h.cache.stats().entries, 0);
+});
+
 test("[Web/展映] 纹理容量释放唤醒等待卡片且不重置位置，销毁卡片取消等待", async (t) => {
   const h = await createTextureRecoveryHarness(t);
   const first = h.card("first");

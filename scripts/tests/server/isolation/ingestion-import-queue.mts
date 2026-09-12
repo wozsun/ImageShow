@@ -1016,8 +1016,10 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     },
     importCreatedAt + 2
   ));
-  assert.equal(receivedImport.metadata.waiting, 1);
+  assert.equal(receivedImport.metadata.waiting, 0);
   assert.equal(receivedImport.metadata.running, 0);
+  assert.equal(receivedImport.metadata.total, acceptedImport.metadata.total);
+  assert.equal(receivedImport.metadata.unfinished, acceptedImport.metadata.unfinished);
   const receivedRunnableScore = Number(await redisClient.redis.zscore(
     importTestKeys.runnable,
     importTestKeys.canonical

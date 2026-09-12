@@ -1,7 +1,7 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { api } from "./client.js";
 import { queryKeys } from "./query-keys.js";
-import { readRequestRetryOptions } from "./read-request-retry.js";
+import { readRequest, readRequestRetryOptions } from "./read-request-retry.js";
 import {
   ingestionVocabularyPath,
   type IngestionVocabularyDto
@@ -11,7 +11,9 @@ import {
 // ingestionVocabulary。会话内永久保留，避免编辑器和内容接入窗口反复挂载时重新读取。
 export const ingestionVocabularyQueryOptions = queryOptions<IngestionVocabularyDto>({
   queryKey: queryKeys.ingestionVocabulary,
-  queryFn: ({ signal }) => api(ingestionVocabularyPath, { signal }),
+  queryFn: ({ signal }) => readRequest(
+    (requestSignal) => api(ingestionVocabularyPath, { signal: requestSignal }), signal
+  ),
   ...readRequestRetryOptions,
   staleTime: Number.POSITIVE_INFINITY,
   gcTime: Number.POSITIVE_INFINITY,

@@ -337,7 +337,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     readyCount: 0,
     unfinishedCount: 4,
     duplicateJobs: 0,
-    waitingJobs: 2,
+    waitingJobs: 1,
     runningJobs: 2,
     commitQueuedJobs: 0,
     committingJobs: 0,
@@ -387,9 +387,11 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   );
   assert.equal(
     summarizeIngestionJobs([waitingForNormalization]).waitingJobs,
-    1,
-    "取得 Normalize 许可前必须计入等待数量"
+    0,
+    "完整 raw 待处理不计入等待数量"
   );
+  assert.equal(summarizeIngestionJobs([waitingForNormalization]).runningJobs, 0);
+  assert.equal(summarizeIngestionJobs([waitingForNormalization]).unfinishedCount, 1);
   const normalizationStarted = ingestionJobFromServerItem({
     ...prepareWaitingItem,
     phase: "normalizing",
@@ -14701,6 +14703,15 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
     assert.match(waitingSummary, /共\s*1\s*张图片/u);
     assert.match(waitingSummary, /1\s*张等待中/u);
     assert.match(waitingSummary, /0\s*张处理中/u);
+
+    await React.act(async () => {
+      setHarnessJobs?.([{ ...waitingSummaryJob, status: "received" }]);
+      await Promise.resolve();
+    });
+    const receivedSummary = dialog.querySelector(".ingestion-summary-primary")?.textContent ?? "";
+    assert.match(receivedSummary, /共\s*1\s*张图片/u);
+    assert.match(receivedSummary, /0\s*张等待中/u);
+    assert.match(receivedSummary, /0\s*张处理中/u);
 
     const firstConfirmationJob = ingestionJob({
       id: "window-confirmation-first",

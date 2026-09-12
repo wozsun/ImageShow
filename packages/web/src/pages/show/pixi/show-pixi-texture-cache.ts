@@ -9,7 +9,7 @@ type TextureListener = (
 type TextureEntry = {
   key: string;
   url: string;
-  state: "queued" | "loading" | "ready" | "failed";
+  state: "queued" | "loading" | "ready";
   texture: Texture | null;
   bitmap: ImageBitmap | null;
   controller: AbortController | null;
@@ -231,12 +231,12 @@ async function bitmapTexture(
 }
 
 export class ShowPixiTextureCache {
-  readonly #blockedOrigins = new Map<string, number>();
+  readonly #blockedOrigins = new Set<string>();
   readonly #entries = new Map<string, TextureEntry>();
   readonly #failedUrls = new Map<string, boolean>();
   readonly #availabilityListeners = new Map<() => void, string>();
   readonly #originTransportFailures = new Map<string, number>();
-  readonly #queue: TextureEntry[] = [];
+  readonly #queue = new Set<TextureEntry>();
   readonly #options: ShowPixiTextureCacheOptions;
   readonly #maximumFailedUrls: number;
   #destroyed = false;
@@ -316,7 +316,7 @@ export class ShowPixiTextureCache {
         touchedAt: performance.now()
       };
       this.#entries.set(key, entry);
-      this.#queue.push(entry);
+      this.#queue.add(entry);
       this.#reservedPixels += reservation;
     }
     entry.references += 1;
@@ -324,8 +324,6 @@ export class ShowPixiTextureCache {
     if (entry.state === "ready") {
       const texture = entry.texture;
       queueMicrotask(() => listener(texture, false));
-    } else if (entry.state === "failed") {
-      queueMicrotask(() => listener(null, false));
     } else {
       entry.listeners.add(listener);
     }
@@ -410,7 +408,6 @@ export class ShowPixiTextureCache {
 
   stats(): ShowPixiTextureStats {
     let ready = 0;
-    let queued = 0;
     let referenced = 0;
     let mipmapped = 0;
     let lod128 = 0;
@@ -419,7 +416,6 @@ export class ShowPixiTextureCache {
     for (const entry of this.#entries.values()) {
       if (entry.state === "ready") ready += 1;
       if (entry.texture?.source.autoGenerateMipmaps) mipmapped += 1;
-      if (entry.state === "queued") queued += 1;
       if (entry.references > 0) referenced += 1;
       if (entry.pixelWidth <= 128) lod128 += 1;
       else if (entry.pixelWidth <= 256) lod256 += 1;
@@ -428,7 +424,7 @@ export class ShowPixiTextureCache {
     return {
       entries: this.#entries.size,
       ready,
-      queued,
+      queued: this.#queue.size,
       inFlight: this.#inFlight,
       referenced,
       reservedPixels: this.#reservedPixels,
@@ -445,7 +441,7 @@ export class ShowPixiTextureCache {
   destroy() {
     if (this.#destroyed) return;
     this.#destroyed = true;
-    this.#queue.length = 0;
+    this.#queue.clear();
     for (const entry of this.#entries.values()) {
       entry.controller?.abort(new DOMException("Pixi 纹理缓存已卸载", "AbortError"));
       entry.listeners.clear();
@@ -480,12 +476,12 @@ export class ShowPixiTextureCache {
     while (
       !this.#destroyed
       && this.#inFlight < this.#options.maximumInFlight
-      && this.#queue.length
+      && this.#queue.size
     ) {
-      const entry = this.#queue.shift();
-      if (!entry || this.#entries.get(entry.key) !== entry) continue;
+      const entry = this.#queue.values().next().value!;
+      this.#queue.delete(entry);
       if (this.#isBlocked(entry.url)) {
-        this.#discardFailedEntry(entry, true, false, false);
+        this.#discardFailedEntry(entry, { countFailure: false });
         continue;
       }
       if (entry.references === 0) {
@@ -517,7 +513,7 @@ export class ShowPixiTextureCache {
         if (projected > this.#options.maximumPixels) {
           bitmap?.close();
           texture.destroy(true);
-          this.#discardFailedEntry(entry, true, false);
+          this.#discardFailedEntry(entry);
           return;
         }
         this.#reservedPixels = projected;
@@ -538,7 +534,7 @@ export class ShowPixiTextureCache {
           this.#recordTransportFailure(entry.url);
         }
         const transportFailure = error instanceof TextureTransportError;
-        this.#discardFailedEntry(entry, true, true, true, transportFailure);
+        this.#discardFailedEntry(entry, { blockUrl: true, transportFailure });
       }).finally(() => {
         entry.controller = null;
         this.#inFlight = Math.max(0, this.#inFlight - 1);
@@ -565,6 +561,8 @@ export class ShowPixiTextureCache {
   }
 
   #evict(entry: TextureEntry) {
+    // FIFO Set supports immediate removal even while all download slots hang.
+    this.#queue.delete(entry);
     this.#entries.delete(entry.key);
     this.#reservedPixels -= entry.reservedPixels;
     entry.listeners.clear();
@@ -582,12 +580,12 @@ export class ShowPixiTextureCache {
 
   #discardFailedEntry(
     entry: TextureEntry,
-    retryable: boolean,
-    blockUrl: boolean,
-    countFailure = true,
-    transportFailure = false
+    { blockUrl = false, countFailure = true, transportFailure = false }: {
+      blockUrl?: boolean;
+      countFailure?: boolean;
+      transportFailure?: boolean;
+    } = {}
   ) {
-    entry.state = "failed";
     if (countFailure) this.#failures += 1;
     if (blockUrl) this.#rememberFailedUrl(entry.url, transportFailure);
     if (this.#entries.get(entry.key) === entry) {
@@ -598,7 +596,7 @@ export class ShowPixiTextureCache {
       );
       entry.reservedPixels = 0;
     }
-    for (const listener of entry.listeners) listener(null, retryable);
+    for (const listener of entry.listeners) listener(null, true);
     entry.listeners.clear();
     this.#notifyAvailable();
   }
@@ -649,7 +647,7 @@ export class ShowPixiTextureCache {
     }
     this.#originTransportFailures.delete(origin);
     this.#blockedOrigins.delete(origin);
-    this.#blockedOrigins.set(origin, performance.now());
+    this.#blockedOrigins.add(origin);
     while (this.#blockedOrigins.size > 32) {
       const oldest = this.#blockedOrigins.keys().next().value;
       if (oldest === undefined) break;

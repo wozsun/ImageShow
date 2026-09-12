@@ -23,8 +23,66 @@ import {
   publicNavigationTopEdgeRevealHeight
 } from "../../../packages/web/src/lib/ui/public-navigation.ts";
 import {
-  createPublicNavigationHarness
+  createPublicNavigationHarness,
+  createConfigStreamHarness
 } from "../support/web-test-context.ts";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router";
+import { useImageBrowseRoute } from "../../../packages/web/src/hooks/useImageBrowseRoute.ts";
+import { TagFilterErrorState } from "../../../packages/web/src/components/feedback/TagFilterErrorState.tsx";
+import { api } from "../../../packages/web/src/lib/api/client.ts";
+import { queryKeys } from "../../../packages/web/src/lib/api/query-keys.ts";
+
+test("[Web/公开导航] 旧词表未知标签可保留 URL 重新验证，恢复图片读取且刷新去重", async (t) => {
+  for (const path of ["/gallery", "/show", "/embed/gallery", "/embed/show"]) {
+    await t.test(path, async (t) => {
+      const h = await createConfigStreamHarness(t);
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+      t.after(() => client.clear());
+      client.setQueryData(queryKeys.galleryFacets, { themes: [], tags: [], authors: [] });
+      let route!: ReturnType<typeof useImageBrowseRoute>;
+      function Harness() {
+        route = useImageBrowseRoute();
+        const images = useQuery({
+          queryKey: ["test-browse-images", route.filters.tag],
+          queryFn: ({ signal }) => api(`/api/images?tag=${route.filters.tag}`, { signal }),
+          enabled: route.ready
+        });
+        return route.error ? h.React.createElement(TagFilterErrorState, {
+          error: route.error,
+          onRetry: route.retryVocabulary,
+          onClear: () => route.updateSearchParams(params => { params.delete("tag"); return params; })
+        }) : h.React.createElement("output", null, images.isSuccess ? "图片已读取" : "加载中");
+      }
+      await h.render(h.React.createElement(QueryClientProvider, { client },
+        h.React.createElement(MemoryRouter, { initialEntries: [`${path}?tag=new-tag&theme=null`] },
+          h.React.createElement(Harness))));
+      assert.equal(h.pending.length, 0);
+      const retry = () => [...h.document.querySelectorAll("button")].find(
+        button => button.textContent === "刷新标签并重试"
+      )!;
+      assert.ok(retry());
+      await h.React.act(async () => { retry().click(); retry().click(); });
+      assert.equal(h.pending.length, 1);
+      assert.equal(h.pending[0].path, "/api/gallery-facets");
+      assert.equal(h.pending[0].cache, "no-cache", "显式重试重新验证浏览器与中间缓存");
+      await h.respond(0, { themes: [], authors: [], tags: [] });
+      assert.ok(retry(), "服务端仍未知时可再次刷新，原条件保留");
+      assert.equal(route.params.toString(), "tag=new-tag&theme=null");
+      await h.React.act(async () => { retry().click(); });
+      await h.respond(1, { themes: [], authors: [], tags: [{ slug: "new-tag", display_name: "新标签", count: 1 }] });
+      assert.equal(route.ready, true);
+      assert.equal(route.params.toString(), "tag=new-tag&theme=null");
+      assert.equal(h.pending[2].path, "/api/images?tag=new-tag");
+      await h.respond(2, { items: [] });
+      assert.equal(h.document.querySelector("output")?.textContent, "图片已读取");
+      await h.React.act(async () => route.updateSearchParams(params => { params.set("tag", "all:"); return params; }));
+      await h.flush();
+      assert.equal(retry(), undefined, "语法错误不通过刷新词表重试");
+      assert.equal(h.pending.length, 3);
+    });
+  }
+});
 
 test("[Web/公开导航] 站点根入口保持 home、show、gallery 与关闭回退语义", () => {
   function site(

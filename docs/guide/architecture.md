@@ -316,7 +316,7 @@ active 时继续等待同代后续 revision；批量 status 返回的 active DTO
 
 Ingestion 另有一个单实例 Redis worker。Upload / Import 共用最多 `N` 个 preparation 许可，覆盖
 等待 Normalize、图片重工作、两个本地处理结果与 ready canonical 发布；完整 raw 在等待
-Normalize 时保持内部 `preparing + prepare-waiting`，对 Web 投影为“待处理”和 waiting，实际取得
+Normalize 时保持内部 `preparing + prepare-waiting`，对 Web 投影为“待处理”，只计入总数和未完成数；实际取得
 Normalize 许可并发布 `normalizing` phase 后才进入 processing / running。Normalize 完成后释放 CPU
 许可但继续持有 preparation 许可，因此本地发布等待不会产生无界 Prepared Buffer，也不会占住维护入口。
 Import 与 Upload 各自持有最多 `N` 个 pre-commit

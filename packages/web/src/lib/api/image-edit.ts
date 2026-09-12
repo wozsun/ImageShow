@@ -10,9 +10,9 @@ export function readEditableImageSnapshots(
   // POST 仅查询快照；冻结同一批 ID，重试不改变本次读取意图。
   const body = JSON.stringify({ ids: imageIds });
   return retryReadRequest(
-    () => api<ImageSnapshotResponseDto>(
+    (requestSignal) => api<ImageSnapshotResponseDto>(
       `${adminApiBasePath}/images/snapshot`,
-      { method: "POST", body, signal }
+      { method: "POST", body, signal: requestSignal }
     ),
     signal
   );

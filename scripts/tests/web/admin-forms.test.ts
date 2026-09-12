@@ -2116,9 +2116,9 @@ test("[Web/后台表单] 词表首份请求尚未完成时新词条提交隔离�
 test("[Web/后台表单] 单项服务端状态桶覆盖等待、执行、重复待决和全部终态", async () => {
   const { ingestionStatusSummary } = await import("../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-status-summary.ts");
   const cases = [
-    ["queued", false, false, "waiting"], ["received", false, false, "waiting"],
+    ["queued", false, false, "waiting"], ["received", false, false, null],
     ["downloading", false, false, "running"], ["preparing", false, false, "running"],
-    ["preparing", false, true, "waiting"], ["ready", false, false, "ready"],
+    ["preparing", false, true, null], ["ready", false, false, "ready"],
     ["ready", true, false, "duplicate_pending"], ["committing", false, false, "committing"],
     ["resolving", false, false, "resolving"], ["completed", true, true, "completed"],
     ["failed", true, true, "failed"]
@@ -2127,6 +2127,6 @@ test("[Web/后台表单] 单项服务端状态桶覆盖等待、执行、重复�
     const summary = ingestionStatusSummary(status, duplicate, waiting);
     assert.equal(summary.total, 1); assert.equal(summary.unfinished, status === "completed" ? 0 : 1);
     const { total, unfinished, ...buckets } = summary;
-    assert.deepEqual(Object.entries(buckets).filter(([, value]) => value), [[bucket, 1]]);
+    assert.deepEqual(Object.entries(buckets).filter(([, value]) => value), bucket ? [[bucket, 1]] : []);
   }
 });

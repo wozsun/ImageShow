@@ -26,11 +26,6 @@ const processingIngestionStatuses = new Set<IngestionJob["status"]>([
   "cancelling"
 ]);
 
-const waitingIngestionStatuses = new Set<IngestionJob["status"]>([
-  "queued",
-  "received"
-]);
-
 const commitOwnedStatuses = new Set<IngestionJob["status"]>([
   "commit-queued",
   "committing",
@@ -570,7 +565,7 @@ export function summarizeIngestionJobs(jobs: IngestionJob[]): IngestionJobSummar
       summary.runningJobs += 1;
       continue;
     }
-    if (waitingIngestionStatuses.has(job.status)) {
+    if (job.status === "queued") {
       summary.waitingJobs += 1;
       continue;
     }

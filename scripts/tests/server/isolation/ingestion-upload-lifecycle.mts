@@ -1501,8 +1501,10 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   ));
   assert.equal(ingestionListenerCalls, 2);
   assert.equal(ingestionAsyncListenerCalls, 2);
-  assert.equal(preparedTransition.metadata.waiting, 1);
+  assert.equal(preparedTransition.metadata.waiting, 0);
   assert.equal(preparedTransition.metadata.running, 0);
+  assert.equal(preparedTransition.metadata.total, convertedUpload.metadata.total);
+  assert.equal(preparedTransition.metadata.unfinished, convertedUpload.metadata.unfinished);
   const progressUpload = activeResult(await ingestionRepository.updateProgress(
     preparedTransition.session,
     preparedTransition.session.version,

@@ -35,13 +35,29 @@ async function settleRequests() {
   await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
-test("[Web/后台只读重试] 保存后快照失败只重试三次，人工确认不重放写入或失效", async (t) => {
+function stalledResponse(init: RequestInit | undefined, phase: "headers" | "body") {
+  const signal = init?.signal;
+  assert.ok(signal, "读取必须把取消和超时传给实际 fetch");
+  signal.throwIfAborted();
+  if (phase === "headers") return new Promise<Response>((_resolve, reject) => {
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+  });
+  return Promise.resolve(new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('{"items":'));
+      signal.addEventListener("abort", () => controller.error(signal.reason), { once: true });
+    }
+  })));
+}
+
+for (const failure of ["503", "headers", "body"] as const) {
+test(`[Web/后台只读重试] 保存后快照失败只重试三次，人工确认不重放写入或失效 / ${failure}`, async (t) => {
   t.after(installProperties(window, { location: { pathname: "/admin/images", href: "http://imageshow.test/admin/images" } }));
   let writes = 0;
   let snapshots = 0;
   let invalidations = 0;
   let recovered = false;
-  const { clock } = createReadHarness(t, async (input) => {
+  const { clock } = createReadHarness(t, async (input, init) => {
     if (String(input).endsWith("/logs/client-errors")) return Response.json({ ok: true });
     if (String(input).endsWith("/images/update")) {
       writes += 1;
@@ -49,7 +65,10 @@ test("[Web/后台只读重试] 保存后快照失败只重试三次，人工确�
     }
     assert.ok(String(input).endsWith("/images/snapshot"));
     snapshots += 1;
-    return recovered ? Response.json({ items: [] }) : Response.json({ error: "busy" }, { status: 503 });
+    if (recovered) return Response.json({ items: [] });
+    return failure === "503"
+      ? Response.json({ error: "busy" }, { status: 503 })
+      : stalledResponse(init, failure);
   }, true);
   const container = document.createElement("div");
   document.body.append(container);
@@ -66,8 +85,13 @@ test("[Web/后台只读重试] 保存后快照失败只重试三次，人工确�
     await React.act(async () => { pending = operations.save([{ id: imageId, title: "changed" }], [imageId]).finally(() => { finished = true; }); });
     await React.act(async () => { await settleRequests(); });
     assert.equal(snapshots, 1);
-    for (const delay of [500, 1_000, 2_000]) {
-      await React.act(async () => { await clock.advanceBy(delay); await settleRequests(); });
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (failure !== "503") {
+        await React.act(async () => { await clock.advanceBy(30_000); await settleRequests(); });
+      }
+      if (attempt < 3) {
+        await React.act(async () => { await clock.advanceBy(500 * 2 ** attempt); await settleRequests(); });
+      }
     }
     assert.equal(operations.pendingReconciliation, true);
     await React.act(async () => { await clock.advanceBy(500); await settleRequests(); });
@@ -88,6 +112,7 @@ test("[Web/后台只读重试] 保存后快照失败只重试三次，人工确�
     container.remove();
   }
 });
+}
 
 for (const { name, options, data } of sharedReads) {
   // Each descriptor has its own result type; the tests observe JSON and query
@@ -165,6 +190,64 @@ for (const { name, options, data } of sharedReads) {
     assert.ok(isCancelledError(await result));
     assert.equal(requestSignal?.aborted, true);
     await clock.advanceBy(4_000);
+    assert.equal(requests, 1);
+  });
+
+  for (const phase of ["headers", "body"] as const) {
+    test(`[Web/后台只读重试] ${name}挂起 ${phase} 超时后共享重试且释放计时器`, async (t) => {
+      let requests = 0;
+      const { client, clock } = createReadHarness(t, async (_input, init) => {
+        requests += 1;
+        return requests === 1 ? stalledResponse(init, phase) : Response.json(data);
+      });
+      const first = read(client);
+      const second = read(client);
+      await settleRequests();
+      await clock.advanceBy(29_999);
+      assert.equal(requests, 1);
+      await clock.advanceBy(1);
+      await settleRequests();
+      await clock.advanceBy(500);
+      assert.deepEqual(await Promise.all([first, second]), [data, data]);
+      assert.equal(requests, 2);
+      assert.equal(clock.pendingCount(), 0);
+    });
+
+    test(`[Web/后台只读重试] ${name}挂起 ${phase} 时取消立即退出且不重试`, async (t) => {
+      let requests = 0;
+      let requestSignal: AbortSignal | null | undefined;
+      const { client, clock } = createReadHarness(t, async (_input, init) => {
+        requests += 1;
+        requestSignal = init?.signal;
+        return stalledResponse(init, phase);
+      });
+      const result = read(client).catch((error: unknown) => error);
+      await settleRequests();
+      await client.cancelQueries({ queryKey: options.queryKey });
+      assert.ok(isCancelledError(await result));
+      await settleRequests();
+      assert.equal(requestSignal?.aborted, true);
+      assert.equal(clock.pendingCount(), 0);
+      await clock.advanceBy(125_000);
+      assert.equal(requests, 1);
+    });
+  }
+}
+
+for (const phase of ["headers", "body"] as const) {
+  test(`[Web/后台只读重试] 快照挂起 ${phase} 时外部取消立即结束本轮读取`, async (t) => {
+    let requests = 0;
+    const { clock } = createReadHarness(t, async (_input, init) => {
+      requests += 1;
+      return stalledResponse(init, phase);
+    });
+    const controller = new AbortController();
+    const result = readEditableImageSnapshots([imageId], controller.signal).catch((error: unknown) => error);
+    await settleRequests();
+    controller.abort();
+    assert.equal(await result, controller.signal.reason);
+    assert.equal(clock.pendingCount(), 0);
+    await clock.advanceBy(125_000);
     assert.equal(requests, 1);
   });
 }

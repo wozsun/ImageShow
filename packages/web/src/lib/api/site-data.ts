@@ -45,7 +45,8 @@ export function useSiteConfig() {
 export function useGalleryFacets(enabled = true) {
   return useQuery<GalleryFacets>({
     queryKey: queryKeys.galleryFacets,
-    queryFn: ({ signal }) => api("/api/gallery-facets", { signal }),
+    // 显式刷新必须重新验证 HTTP 缓存，不能再次用旧词表否定新标签。
+    queryFn: ({ signal }) => api("/api/gallery-facets", { signal, cache: "no-cache" }),
     enabled,
     ...sessionGlobalQuery
   });

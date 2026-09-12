@@ -14,7 +14,7 @@ export function ingestionStatusSummary(
   return {
     total: 1,
     unfinished: completed ? 0 : 1,
-    waiting: ["queued", "received"].includes(status) || waiting ? 1 : 0,
+    waiting: status === "queued" ? 1 : 0,
     running: ["downloading", "preparing"].includes(status) && !waiting ? 1 : 0,
     ready: status === "ready" && !duplicate ? 1 : 0,
     duplicate_pending: duplicate ? 1 : 0,

@@ -7,13 +7,34 @@ export const readRequestRetryOptions = {
     if (isApiClientError(error)) {
       return [408, 500, 502, 503, 504].includes(error.status);
     }
-    // 浏览器 fetch 的网络失败以 TypeError 拒绝；取消和其他异常不重试。
-    return error instanceof TypeError;
+    // 内部读取超时可重试；外部取消由查询所有者或 retryReadRequest 立即终止。
+    return error instanceof TypeError
+      || (error instanceof DOMException && error.name === "TimeoutError");
   },
   retryDelay(failureCount: number) {
     return 500 * 2 ** failureCount;
   }
 };
+
+// 包含连接和完整响应体读取；成功、失败及外部取消后均清理本次计时器。
+export async function readRequest<T>(
+  request: (signal: AbortSignal) => Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  signal?.throwIfAborted();
+  const controller = new AbortController();
+  const requestSignal = signal
+    ? AbortSignal.any([signal, controller.signal])
+    : controller.signal;
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException("读取请求超时", "TimeoutError"));
+  }, 30_000);
+  try {
+    return await request(requestSignal);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function waitForRetry(delayMs: number, signal?: AbortSignal) {
   signal?.throwIfAborted();
@@ -33,13 +54,13 @@ function waitForRetry(delayMs: number, signal?: AbortSignal) {
 
 // 无 Query owner 的只读快照复用同一失败判定与退避，取消同时终止请求和等待。
 export async function retryReadRequest<T>(
-  request: () => Promise<T>,
+  request: (signal: AbortSignal) => Promise<T>,
   signal?: AbortSignal
 ): Promise<T> {
   for (let failureCount = 0; ; failureCount += 1) {
     signal?.throwIfAborted();
     try {
-      return await request();
+      return await readRequest(request, signal);
     } catch (error) {
       signal?.throwIfAborted();
       if (!readRequestRetryOptions.retry(failureCount, error)) throw error;
