@@ -1,9 +1,11 @@
 import { ImageSource, Texture } from "pixi.js";
+import { readRequest } from "../../../lib/api/read-request-retry.js";
 import type { ShowPixiTextureStats } from "./show-pixi-types.js";
 
 type TextureListener = (
   texture: Texture | null,
-  retryable: boolean
+  retryable: boolean,
+  availabilityRevision: number
 ) => void;
 
 type TextureEntry = {
@@ -130,15 +132,18 @@ async function bitmapTexture(
       error instanceof Error ? error.message : "缩略图网络请求失败"
     );
   };
-  const response = await fetch(url, {
-    credentials: "omit",
-    mode: "cors",
-    signal
-  }).catch(transportFailure);
-  if (!response.ok) {
-    throw new Error(`缩略图加载失败：${response.status} ${response.statusText}`);
-  }
-  const blob = await response.blob().catch(transportFailure);
+  // Bound transport through the last response byte; decoding owns no network slot timer.
+  const blob = await readRequest(async (requestSignal) => {
+    const response = await fetch(url, {
+      credentials: "omit",
+      mode: "cors",
+      signal: requestSignal
+    }).catch(transportFailure);
+    if (!response.ok) {
+      throw new Error(`缩略图加载失败：${response.status} ${response.statusText}`);
+    }
+    return response.blob().catch(transportFailure);
+  }, signal);
   if (signal.aborted) throw signal.reason;
   if (typeof createImageBitmap === "function") {
     let bitmap: ImageBitmap;
@@ -234,7 +239,7 @@ export class ShowPixiTextureCache {
   readonly #blockedOrigins = new Set<string>();
   readonly #entries = new Map<string, TextureEntry>();
   readonly #failedUrls = new Map<string, boolean>();
-  readonly #availabilityListeners = new Map<() => void, string>();
+  readonly #availabilityListeners = new Map<() => void, { url: string; revision: number }>();
   readonly #originTransportFailures = new Map<string, number>();
   readonly #queue = new Set<TextureEntry>();
   readonly #options: ShowPixiTextureCacheOptions;
@@ -246,6 +251,7 @@ export class ShowPixiTextureCache {
   #failures = 0;
   #evictions = 0;
   #availabilityScheduled = false;
+  #availabilityRevision = 0;
 
   constructor(options: ShowPixiTextureCacheOptions) {
     this.#options = {
@@ -267,8 +273,7 @@ export class ShowPixiTextureCache {
     listener: TextureListener
   ): ShowPixiTextureLease {
     if (this.#destroyed || !url) {
-      queueMicrotask(() => listener(null, false));
-      return { release: () => undefined };
+      return this.#reject(listener, false);
     }
     url = this.#resourceUrl(url);
     const lod = normalizedLod(requestedLod);
@@ -277,8 +282,7 @@ export class ShowPixiTextureCache {
       if (this.#failedUrls.has(url)) this.#touchFailedUrl(url);
       // Every blocked URL can recover on an explicit successful image load;
       // HTTP/decode failures still stay blocked on ordinary online events.
-      queueMicrotask(() => listener(null, true));
-      return { release: () => undefined };
+      return this.#reject(listener, true);
     }
     let entry = this.#entries.get(key);
     if (!entry) {
@@ -297,8 +301,7 @@ export class ShowPixiTextureCache {
         this.#rejected += 1;
         // Capacity pressure can clear as off-screen cards release leases, so
         // this case remains retryable without issuing a network request.
-        queueMicrotask(() => listener(null, true));
-        return { release: () => undefined };
+        return this.#reject(listener, true);
       }
       entry = {
         key,
@@ -323,7 +326,7 @@ export class ShowPixiTextureCache {
     entry.touchedAt = performance.now();
     if (entry.state === "ready") {
       const texture = entry.texture;
-      queueMicrotask(() => listener(texture, false));
+      queueMicrotask(() => listener(texture, false, this.#availabilityRevision));
     } else {
       entry.listeners.add(listener);
     }
@@ -344,9 +347,18 @@ export class ShowPixiTextureCache {
     };
   }
 
-  whenAvailable(url: string, listener: () => void) {
+  #reject(listener: TextureListener, retryable: boolean): ShowPixiTextureLease {
+    const revision = this.#availabilityRevision;
+    queueMicrotask(() => listener(null, retryable, revision));
+    return { release: () => undefined };
+  }
+
+  whenAvailable(url: string, revision: number, listener: () => void) {
     if (this.#destroyed) return () => undefined;
-    this.#availabilityListeners.set(listener, this.#resourceUrl(url));
+    this.#availabilityListeners.set(listener, { url: this.#resourceUrl(url), revision });
+    // Registration can follow a coalesced notification. Replay only a real
+    // change since rejection; scheduling itself must not advance the revision.
+    if (revision !== this.#availabilityRevision) this.#scheduleAvailable();
     return () => { this.#availabilityListeners.delete(listener); };
   }
 
@@ -396,7 +408,7 @@ export class ShowPixiTextureCache {
     const origin = this.#origin(url);
     if (!this.#failedUrls.has(url) && !(
       this.#blockedOrigins.has(origin)
-      && [...this.#availabilityListeners.values()].includes(url)
+      && [...this.#availabilityListeners.values()].some((wait) => wait.url === url)
     )) return;
     this.#failedUrls.delete(url);
     // A real image load proves this origin is reachable again. Keep other
@@ -523,7 +535,7 @@ export class ShowPixiTextureCache {
         entry.state = "ready";
         entry.touchedAt = performance.now();
         this.#originTransportFailures.delete(this.#origin(entry.url));
-        for (const listener of entry.listeners) listener(texture, false);
+        for (const listener of entry.listeners) listener(texture, false, this.#availabilityRevision);
         entry.listeners.clear();
         // A loading entry could lose its last reference before decoding ends.
         // It only becomes evictable now, even when the idle LRU keeps it warm.
@@ -596,7 +608,8 @@ export class ShowPixiTextureCache {
       );
       entry.reservedPixels = 0;
     }
-    for (const listener of entry.listeners) listener(null, true);
+    const revision = this.#availabilityRevision;
+    for (const listener of entry.listeners) listener(null, true, revision);
     entry.listeners.clear();
     this.#notifyAvailable();
   }
@@ -618,6 +631,12 @@ export class ShowPixiTextureCache {
   }
 
   #notifyAvailable() {
+    if (this.#destroyed) return;
+    this.#availabilityRevision += 1;
+    this.#scheduleAvailable();
+  }
+
+  #scheduleAvailable() {
     if (this.#destroyed || this.#availabilityScheduled) return;
     this.#availabilityScheduled = true;
     queueMicrotask(() => {
@@ -625,8 +644,10 @@ export class ShowPixiTextureCache {
       if (this.#destroyed) return;
       // A card owns at most one cancellable wait. Release/online events wake
       // waiters once; unavailable requests never poll the network or ticker.
-      for (const [listener, url] of [...this.#availabilityListeners]) {
-        if (this.#isBlocked(url)) continue;
+      for (const [listener, wait] of [...this.#availabilityListeners]) {
+        if (this.#availabilityListeners.get(listener) !== wait
+          || wait.revision === this.#availabilityRevision
+          || this.#isBlocked(wait.url)) continue;
         this.#availabilityListeners.delete(listener);
         listener();
       }

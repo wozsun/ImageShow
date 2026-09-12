@@ -71,6 +71,7 @@ import {
 import { imageMatchesFilters, shuffledImageBatch } from "../../../packages/web/src/lib/gallery/image-browse.ts";
 import { imageBatchTier } from "../../../packages/web/src/lib/gallery/image-browse.ts";
 import { showInitialBatchLimit } from "../../../packages/web/src/pages/show/show-browse.ts";
+import { installControlledClock } from "../support/controlled-clock.ts";
 
 const unchangedTextureLods: ShowPixiTextureCache["fitResidentLods"] = (requests) => (
   requests.map(({ lod }) => lod)
@@ -1256,6 +1257,89 @@ test("[Web/展映] 下载挂起时纹理等待节点有界，恢复后只加载�
   assert.equal(h.cache.stats().queued, 0);
   assert.equal(h.cache.stats().entries, 0);
 });
+
+test("[Web/展映] 同步释放与拒绝交错时补发错过的容量变化，容量不变时不空转", async (t) => {
+  const h = await createTextureRecoveryHarness(t, {
+    maximumEntries: 3, maximumPixels: 1_000, maximumUnreferenced: 2
+  });
+  const { ShowPixiCard, ShowPixiPerspectiveCoordinator } = await import(
+    "../../../packages/web/src/pages/show/pixi/show-pixi-card.ts"
+  );
+  const first = h.cache.acquire("https://textures.example/a.webp", { pixelWidth: 20, pixelHeight: 20 }, () => {});
+  const second = h.cache.acquire("https://textures.example/b.webp", { pixelWidth: 20, pixelHeight: 20 }, () => {});
+  await h.flush();
+  const card = new ShowPixiCard(h.cache, () => {}, {} as Renderer, new ShowPixiPerspectiveCoordinator());
+  t.after(() => card.destroy());
+  first.release();
+  card.assign("c", { ...showImages(1)[0], thumb_url: "https://textures.example/c.webp" },
+    100, 200, .04, false, 100, 1, { pixelWidth: 20, pixelHeight: 40 });
+  card.root.position.set(143, 257);
+  second.release();
+  await h.flush();
+  assert.equal(card.isTextureReady, true, "通知先于等待注册时也应补图，不依赖缩放或其他释放");
+  assert.deepEqual([card.root.x, card.root.y, card.root.rotation], [143, 257, .04]);
+  assert.equal(h.requests.length, 3);
+  const waiting = h.card("still-full");
+  await h.flush();
+  const rejected = h.cache.stats().rejected;
+  await h.flush();
+  assert.equal(waiting.isTextureReady, false);
+  assert.equal(h.cache.stats().rejected, rejected, "没有新的可用性变化就不重新申请");
+  assert.equal(h.requests.length, 3);
+});
+
+for (const phase of ["headers", "body"] as const) {
+  test(`[Web/展映] 挂起纹理读取超时释放槽位，显式恢复可重试且销毁不记故障 / ${phase}`, async (t) => {
+    const clock = installControlledClock(t, window, { includeGlobalTimers: true, includeDateNow: false });
+    const h = await createTextureRecoveryHarness(t, { maximumEntries: 4, maximumInFlight: 2 });
+    const healthyFetch = globalThis.fetch;
+    const signals: AbortSignal[] = [];
+    let recovered = false;
+    let reads = 0;
+    t.after(installProperties(globalThis, { fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+      reads++;
+      if (!String(input).includes("hung") || recovered) return healthyFetch(input, init);
+      const signal = init?.signal;
+      assert.ok(signal);
+      signals.push(signal);
+      if (phase === "headers") return new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      });
+      return Promise.resolve(new Response(new ReadableStream({ start(controller) {
+        controller.enqueue(new Uint8Array([1, 2]));
+        signal.addEventListener("abort", () => controller.error(signal.reason), { once: true });
+      } })));
+    } }));
+    const first = h.card("hung-first");
+    const second = h.card("hung-second");
+    first.destroy(); second.destroy();
+    const healthy = h.card("healthy");
+    await clock.advanceBy(29_999);
+    assert.equal(reads, 2);
+    assert.equal(h.cache.stats().inFlight, 2);
+    await clock.advanceBy(1);
+    await h.flush();
+    assert.equal(healthy.isTextureReady, true);
+    assert.equal(reads, 3);
+    assert.ok(signals.every(signal => signal.aborted && signal.reason.name === "TimeoutError"));
+    assert.equal(h.cache.stats().failures, 2);
+    assert.equal(clock.pendingCount(), 0);
+    recovered = true;
+    const retry = h.card("hung-first");
+    h.cache.resumeTransportRequests();
+    await h.flush();
+    assert.equal(retry.isTextureReady, true, "读取超时归入可恢复传输失败");
+    assert.equal(reads, 4, "已销毁的第二张卡片不再请求");
+    recovered = false;
+    h.card("hung-destroy");
+    h.cache.destroy();
+    await h.flush();
+    assert.equal(signals.at(-1)?.reason.name, "AbortError");
+    assert.equal(h.cache.stats().failures, 2, "生命周期取消不记录为图片故障");
+    assert.equal(h.cache.stats().inFlight, 0);
+    assert.equal(clock.pendingCount(), 0, "销毁清理读取期限");
+  });
+}
 
 test("[Web/展映] 纹理容量释放唤醒等待卡片且不重置位置，销毁卡片取消等待", async (t) => {
   const h = await createTextureRecoveryHarness(t);

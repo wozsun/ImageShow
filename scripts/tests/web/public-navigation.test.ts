@@ -26,36 +26,37 @@ import {
   createPublicNavigationHarness,
   createConfigStreamHarness
 } from "../support/web-test-context.ts";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter, useLocation } from "react-router";
 import { useImageBrowseRoute } from "../../../packages/web/src/hooks/useImageBrowseRoute.ts";
 import { TagFilterErrorState } from "../../../packages/web/src/components/feedback/TagFilterErrorState.tsx";
-import { api } from "../../../packages/web/src/lib/api/client.ts";
 import { queryKeys } from "../../../packages/web/src/lib/api/query-keys.ts";
+import { installControlledClock } from "../support/controlled-clock.ts";
+import { installProperties } from "../support/property-descriptors.ts";
+import { AuthSessionProvider } from "../../../packages/web/src/hooks/useAuthSession.tsx";
+import { ShowPixiRuntime } from "../../../packages/web/src/pages/show/pixi/show-pixi-runtime.ts";
+import { createPublicRouteModuleLoader, createPublicRoutePreloadIntents, PublicRoutePreloadProvider } from "../../../packages/web/src/lib/public-route-modules.ts";
+import { appConfig } from "../../../packages/shared/src/app-config.ts";
 
-test("[Web/公开导航] 旧词表未知标签可保留 URL 重新验证，恢复图片读取且刷新去重", async (t) => {
-  for (const path of ["/gallery", "/show", "/embed/gallery", "/embed/show"]) {
-    await t.test(path, async (t) => {
+test("[Web/公开导航] 旧词表刷新失败与未知标签分开提示，期限退出后可保留 URL 再试", async (t) => {
+  for (const failure of ["headers", "body", "http"] as const) {
+    await t.test(failure, async (t) => {
       const h = await createConfigStreamHarness(t);
+      const clock = installControlledClock(t, h.window, { includeGlobalTimers: true });
       const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
       t.after(() => client.clear());
       client.setQueryData(queryKeys.galleryFacets, { themes: [], tags: [], authors: [] });
       let route!: ReturnType<typeof useImageBrowseRoute>;
       function Harness() {
         route = useImageBrowseRoute();
-        const images = useQuery({
-          queryKey: ["test-browse-images", route.filters.tag],
-          queryFn: ({ signal }) => api(`/api/images?tag=${route.filters.tag}`, { signal }),
-          enabled: route.ready
-        });
         return route.error ? h.React.createElement(TagFilterErrorState, {
           error: route.error,
           onRetry: route.retryVocabulary,
           onClear: () => route.updateSearchParams(params => { params.delete("tag"); return params; })
-        }) : h.React.createElement("output", null, images.isSuccess ? "图片已读取" : "加载中");
+        }) : h.React.createElement("output", null, route.ready ? "筛选已就绪" : "加载中");
       }
       await h.render(h.React.createElement(QueryClientProvider, { client },
-        h.React.createElement(MemoryRouter, { initialEntries: [`${path}?tag=new-tag&theme=null`] },
+        h.React.createElement(MemoryRouter, { initialEntries: ["/gallery?tag=new-tag&theme=null"] },
           h.React.createElement(Harness))));
       assert.equal(h.pending.length, 0);
       const retry = () => [...h.document.querySelectorAll("button")].find(
@@ -66,20 +67,108 @@ test("[Web/公开导航] 旧词表未知标签可保留 URL 重新验证，恢�
       assert.equal(h.pending.length, 1);
       assert.equal(h.pending[0].path, "/api/gallery-facets");
       assert.equal(h.pending[0].cache, "no-cache", "显式重试重新验证浏览器与中间缓存");
-      await h.respond(0, { themes: [], authors: [], tags: [] });
+      if (failure === "http") await h.respond(0, { error: "busy" }, 503);
+      else {
+        if (failure === "body") await h.React.act(async () => h.pending[0].resolve(new Response(new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('{"tags":'));
+            h.pending[0].signal!.addEventListener("abort", () => controller.error(h.pending[0].signal!.reason), { once: true });
+          }
+        }))));
+        await h.React.act(async () => { await clock.advanceBy(30_000); });
+        await h.flush();
+        assert.equal(h.pending[0].signal?.aborted, true);
+      }
+      assert.match(h.document.body.textContent!, /标签词表读取失败/);
+      assert.doesNotMatch(h.document.body.textContent!, /标签筛选错误/);
+      assert.equal(route.ready, false);
+      assert.equal(clock.pendingCount(), 0);
+      await h.React.act(async () => { retry().click(); });
+      await h.respond(1, { themes: [], authors: [], tags: [] });
       assert.ok(retry(), "服务端仍未知时可再次刷新，原条件保留");
       assert.equal(route.params.toString(), "tag=new-tag&theme=null");
       await h.React.act(async () => { retry().click(); });
-      await h.respond(1, { themes: [], authors: [], tags: [{ slug: "new-tag", display_name: "新标签", count: 1 }] });
+      await h.respond(2, { themes: [], authors: [], tags: [{ slug: "new-tag", display_name: "新标签" }] });
       assert.equal(route.ready, true);
       assert.equal(route.params.toString(), "tag=new-tag&theme=null");
-      assert.equal(h.pending[2].path, "/api/images?tag=new-tag");
-      await h.respond(2, { items: [] });
-      assert.equal(h.document.querySelector("output")?.textContent, "图片已读取");
+      assert.equal(h.document.querySelector("output")?.textContent, "筛选已就绪");
       await h.React.act(async () => route.updateSearchParams(params => { params.set("tag", "all:"); return params; }));
       await h.flush();
       assert.equal(retry(), undefined, "语法错误不通过刷新词表重试");
       assert.equal(h.pending.length, 3);
+    });
+  }
+});
+
+test("[Web/公开导航] 真实画廊与展映页面刷新词表后按完整原条件恢复请求", async (t) => {
+  const { registerHooks } = await import("node:module");
+  const hooks = registerHooks({ load(url, context, next) {
+    if (url.endsWith(".css")) return { format: "module", source: "", shortCircuit: true };
+    const loaded = next(url, context);
+    return url.endsWith("/ShowPixiStage.tsx")
+      ? { ...loaded, source: `import.meta.env = { DEV: false };\n${loaded.source}` }
+      : loaded;
+  } });
+  t.after(() => hooks.deregister());
+  const { GalleryPage } = await import("../../../packages/web/src/pages/gallery/GalleryPage.tsx");
+  const { ShowRoutePage } = await import("../../../packages/web/src/pages/show/ShowRoutePage.tsx");
+  const moduleLoader = createPublicRouteModuleLoader(async () => ({}));
+  const intents = createPublicRoutePreloadIntents(moduleLoader, moduleLoader, moduleLoader);
+  // Only GPU setup is isolated; real pages, route parsing and data owners run.
+  t.mock.method(ShowPixiRuntime, "create", async () => ({
+    setScene() {}, setImages() {}, setWaterfallColumns() {}, setFloatSizeIndex() {},
+    setSpeed() {}, setRunning() {}, setDialogOpen() {}, focusCard() {}, destroy() {}
+  } as unknown as ShowPixiRuntime));
+  for (const path of ["/gallery", "/show", "/embed/gallery", "/embed/show"]) {
+    await t.test(path, async (t) => {
+      const h = await createConfigStreamHarness(t);
+      t.after(installProperties(h.window, {
+        innerWidth: 1024, innerHeight: 768, scrollX: 0, scrollY: 0,
+        location: new URL(`https://img.example${path}`), scrollTo() {},
+        getComputedStyle: () => ({ paddingLeft: "0px", paddingRight: "0px", getPropertyValue: () => "16px" })
+      }));
+      t.after(installProperties(HTMLElement.prototype, { clientWidth: 1024 }));
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+      t.after(() => client.clear());
+      client.setQueryData(queryKeys.galleryFacets, { themes: [], tags: [], authors: [] });
+      client.setQueryData(queryKeys.siteConfig, { site: appConfig.runtimeDefaults.site, embed: { enabled: true } });
+      client.setQueryData(queryKeys.me, { authenticated: false });
+      let search = "";
+      function LocationProbe() { search = useLocation().search; return null; }
+      const initial = "?tag=all:new-tag,other&theme=null&author=alice&device=pc&brightness=dark&order=oldest";
+      const embedded = path.startsWith("/embed/");
+      const show = path.endsWith("/show");
+      const page = show
+        ? h.React.createElement(ShowRoutePage, { embedded, settings: {
+          enabled: true, autoplay: false, mode: "waterfall", density: "balanced", drift_speed: 28, order: "random"
+        } })
+        : h.React.createElement(GalleryPage, { embedded, order: "latest" });
+      await h.render(h.React.createElement(QueryClientProvider, { client },
+        h.React.createElement(MemoryRouter, { initialEntries: [path + initial] },
+          h.React.createElement(AuthSessionProvider, null, h.React.createElement(LocationProbe),
+            h.React.createElement(PublicRoutePreloadProvider, { intents, children: page })))));
+      const imageRequests = () => h.pending.filter(request => request.path.startsWith("/api/images?"));
+      assert.equal(imageRequests().length, 0, "词表未知时真实页面不能放宽条件读取图片");
+      const retry = [...h.document.querySelectorAll("button")].find(button => button.textContent === "刷新标签并重试");
+      assert.ok(retry);
+      await h.React.act(async () => { retry.click(); retry.click(); });
+      const facets = h.pending.filter(request => request.path === "/api/gallery-facets");
+      assert.equal(facets.length, 1);
+      await h.respond(h.pending.indexOf(facets[0]), { themes: [], authors: [], tags: [
+        { slug: "new-tag", display_name: "新标签" }, { slug: "other", display_name: "另一个标签" }
+      ] });
+      await h.flush();
+      assert.equal(search, initial);
+      assert.equal(imageRequests().length, 1);
+      const request = imageRequests()[0];
+      const params = new URL(request.path, "https://img.example").searchParams;
+      for (const [key, value] of Object.entries({
+        tag: "all:new-tag,other", theme: "null", author: "alice", device: "pc", brightness: "dark", order: "oldest",
+        view: show ? "show" : "gallery"
+      })) assert.equal(params.get(key), value, `${path}: ${key}`);
+      assert.ok((show ? [200, 500, 800] : [60, 120, 180]).includes(Number(params.get("limit"))));
+      await h.respond(h.pending.indexOf(request), { items: [], next_cursor: null });
+      assert.doesNotMatch(h.document.body.textContent!, /标签筛选错误|标签词表读取失败/);
     });
   }
 });

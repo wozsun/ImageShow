@@ -305,7 +305,7 @@ export class ShowPixiCard {
     pendingLease = this.#textureCache.acquire(
       url,
       lod,
-      (texture, retryable) => {
+      (texture, retryable, availabilityRevision) => {
         if (
           this.#destroyed
           || generationKey !== `${this.key}:${this.image?.id ?? ""}:${this.#textureKey}`
@@ -319,7 +319,7 @@ export class ShowPixiCard {
           if (retryable) {
             // Resume on capacity release or an explicit resource recovery edge.
             // Retrying the lease must not reassign the card's moving geometry.
-            this.#cancelTextureWait = this.#textureCache.whenAvailable(url, () => {
+            this.#cancelTextureWait = this.#textureCache.whenAvailable(url, availabilityRevision, () => {
               this.#cancelTextureWait = null;
               this.#loadTexture(url, lod, generationKey);
             });

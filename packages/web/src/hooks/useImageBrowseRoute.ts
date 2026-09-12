@@ -22,7 +22,10 @@ export function useImageBrowseRoute() {
     }
   }, [query, facetsQuery.data]);
   const requiresVocabulary = params.has("tag");
-  const error = parsed.error ?? (requiresVocabulary ? facetsQuery.error : null);
+  const vocabularyError = requiresVocabulary ? facetsQuery.error : null;
+  const error = parsed.error?.kind === "unknown"
+    ? vocabularyError ?? parsed.error
+    : parsed.error ?? vocabularyError;
   const ready = !error && (!requiresVocabulary || Boolean(facetsQuery.data));
   const linkParams = new URLSearchParams(params);
   if (ready && linkParams.has("tag")) {

@@ -561,7 +561,7 @@ export function createFloatSceneHarness(
       };
       acquisitions.push(acquisition);
       if (ready.has(key)) queueMicrotask(() => {
-        if (acquisition.active) notify(Texture.EMPTY, false);
+        if (acquisition.active) notify(Texture.EMPTY, false, 0);
       });
       return { release: () => { acquisition.active = false; } };
     }
@@ -618,7 +618,7 @@ export function createFloatSceneHarness(
       for (const entry of acquisitions) {
         if (!entry.active) continue;
         ready.add(entry.key);
-        entry.notify(Texture.EMPTY, false);
+        entry.notify(Texture.EMPTY, false, 0);
       }
     },
     advance(frames: number) {
