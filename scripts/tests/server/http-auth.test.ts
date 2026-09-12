@@ -550,7 +550,7 @@ test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验�
     "device:pc",
     "brightness:dark",
     "axis:pc:dark",
-    "theme:~unset",
+    "theme:null",
     "tag:concert",
     "tag:stage",
     "author:alice"

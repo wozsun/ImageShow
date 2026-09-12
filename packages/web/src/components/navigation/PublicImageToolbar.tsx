@@ -103,6 +103,8 @@ export function PublicImageToolbar({
   filters,
   facets,
   randomUrl,
+  tagInvalid = false,
+  randomLinkError,
   filtersOpen,
   filterPanelHidden,
   filterMenuDismissSignal,
@@ -119,7 +121,9 @@ export function PublicImageToolbar({
   animateEntrance: boolean;
   filters: GalleryFilters;
   facets: GalleryFacetsDto | undefined;
-  randomUrl: string;
+  randomUrl: string | null;
+  tagInvalid?: boolean;
+  randomLinkError?: string | null;
   filtersOpen: boolean;
   filterPanelHidden: boolean | undefined;
   filterMenuDismissSignal: number;
@@ -140,7 +144,7 @@ export function PublicImageToolbar({
     filters.device,
     filters.brightness,
     filters.theme,
-    filters.tag,
+    filters.tag || tagInvalid,
     filters.author
   ].filter(Boolean).length;
   const clearDisabled = activeFilterCount === 0;
@@ -161,7 +165,11 @@ export function PublicImageToolbar({
       </button>
     </div>
   );
-  const randomLink = (
+  const randomLink = randomUrl === null ? (
+    <div className="theme-link"><span className="muted" role={randomLinkError ? "alert" : undefined}>
+      {randomLinkError ?? "标签条件确认后可复制随机链接"}
+    </span></div>
+  ) : (
     <div className="theme-link">
       <div className="generated-link-field">
         <span className="generated-link-label">随机API</span>
@@ -275,6 +283,7 @@ export function PublicImageToolbar({
             </div>
             <div className="gallery-filter-field gallery-tag-filter">
               <FacetSelector
+                selectionMode="any-all"
                 options={facets?.tags ?? []}
                 value={filters.tag}
                 onChange={(value) => onFilterChange("tag", value)}

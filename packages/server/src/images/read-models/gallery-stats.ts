@@ -36,7 +36,7 @@ export type GalleryStatsQuery = {
   device?: Device;
   brightness?: Brightness;
   theme?: string;
-  tag?: string;
+  tag?: string | string[];
   author?: string;
 };
 type CategoryRow = {

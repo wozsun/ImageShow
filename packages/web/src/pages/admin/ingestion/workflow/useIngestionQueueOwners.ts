@@ -53,6 +53,7 @@ export function useImportQueueOwner({
   defaults,
   keepOriginalLinkForUrlImports,
   storageSlug,
+  maxItems,
   onDone
 }: {
   pageSize: number;
@@ -60,6 +61,7 @@ export function useImportQueueOwner({
   defaults: IngestionAttributeDefaults;
   keepOriginalLinkForUrlImports: boolean;
   storageSlug: string;
+  maxItems: number;
   onDone: () => void;
 }) {
   const queue = useIngestionQueue(pageSize, "import", displayed);
@@ -76,7 +78,8 @@ export function useImportQueueOwner({
     queue: queue.producerApi,
     defaults,
     keepOriginalLinkForUrlImports,
-    storageSlug
+    storageSlug,
+    maxItems
   });
   return { queue, commit, ...importFlow };
 }

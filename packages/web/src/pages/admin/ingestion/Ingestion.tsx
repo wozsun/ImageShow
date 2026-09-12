@@ -150,6 +150,7 @@ export function Ingestion({
     defaults,
     keepOriginalLinkForUrlImports,
     storageSlug: activeBackend,
+    maxItems: importMaxItems,
     onDone
   });
   const uploadQueue = uploadOwner.queue;

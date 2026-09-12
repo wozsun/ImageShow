@@ -1,7 +1,11 @@
-import type { Brightness, Device } from "./common.ts";
+import { slugMaxLength, slugPattern, type Brightness, type Device } from "./common.ts";
 
 /** Query-only selector and virtual facet identity; never a stored theme slug. */
-export const unsetThemeFilter = "~unset";
+export const unsetThemeFilter = "null";
+
+export function isThemeSlug(value: string) {
+  return value !== unsetThemeFilter && value.length <= slugMaxLength && slugPattern.test(value);
+}
 
 export const publicImageOrders = ["random", "latest", "oldest"] as const;
 export type PublicImageOrder = (typeof publicImageOrders)[number];

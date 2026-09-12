@@ -1723,7 +1723,7 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
     /inconsistent items/
   );
 });
-test("[Server/缓存与 Redis] ready 随机抽样边界只调用一次 Redis 并保留近期排序", async () => {
+test("[Server/缓存与 Redis] ready 随机抽样只调用一次 Redis 并优先近期未见图片", async () => {
   const samplingIds = [
     imageId,
     "019f8457-063a-7002-a580-7a432dc7fd8e",
@@ -1776,11 +1776,14 @@ test("[Server/缓存与 Redis] ready 随机抽样边界只调用一次 Redis 并
     new Set([samplingIds[0]!, samplingIds[2]!]),
     coreDependencies
   );
-  assert.deepEqual(sampled, [
-    samplingItems[1],
-    samplingItems[3],
-    samplingItems[0]
-  ]);
+  assert.ok(sampled);
+  assert.equal(sampled.length, 3);
+  assert.equal(new Set(sampled.map((item) => item.id)).size, 3);
+  assert.deepEqual(new Set(sampled.slice(0, 2).map((item) => item.id)), new Set([
+    samplingIds[1],
+    samplingIds[3]
+  ]));
+  assert.ok([samplingIds[0], samplingIds[2]].includes(sampled[2]!.id));
   assert.equal(coreCalls.length, 1);
   assert.equal(derivedCalls, 0);
   assert.equal(revisionReads, 2);
@@ -1811,6 +1814,61 @@ test("[Server/缓存与 Redis] ready 随机抽样边界只调用一次 Redis 并
     tokenReplacementDependencies
   ), null);
   assert.equal(tokenReplacementCalls, 1);
+});
+
+test("[Server/缓存与 Redis] 小集合固定候选顺序在近期覆盖后仍能随机选图", async (t) => {
+  const ids = [imageId, "019f8457-063a-7002-a580-7a432dc7fd8e"];
+  const pairs = ids.map((id) => {
+    const item = servingReadyCacheItem({
+      id,
+      object_key: storageObjectKey(id, "jpg")
+    });
+    return { member: readyImageMember(id), value: serializeReadyImageCacheItem(item) };
+  });
+  let draw = 0;
+  t.mock.method(Math, "random", () => draw);
+  const dependencies = {
+    currentRevision: () => "42",
+    coreCount: () => ids.length,
+    sampleCore: async () => ({ status: "ok" as const, pairs }),
+    sampleDerived: async () => ({ status: "ok" as const, pairs })
+  } satisfies ReadyImageSampleDependencies;
+  const indexes = [
+    {
+      kind: "core" as const,
+      key: "core:index",
+      revision: "42",
+      count: ids.length,
+      metaKey: null,
+      instanceToken: null
+    },
+    {
+      kind: "filter" as const,
+      key: "derived:index",
+      revision: "42",
+      count: ids.length,
+      metaKey: "derived:meta",
+      instanceToken: "d".repeat(32)
+    }
+  ];
+  for (const index of indexes) {
+    for (const recent of [new Set<string>(), new Set(ids)]) {
+      const selected = new Set<string>();
+      for (draw of [0, 0.99]) {
+        const items = await sampleResolvedReadyImageIndex(index, 1, recent, dependencies);
+        assert.equal(items?.length, 1);
+        selected.add(items![0]!.id);
+      }
+      assert.deepEqual(selected, new Set(ids));
+    }
+    for (draw of [0, 0.99]) {
+      const unseen = await sampleResolvedReadyImageIndex(index, 1, new Set([ids[0]!]), dependencies);
+      assert.deepEqual(unseen?.map((item) => item.id), [ids[1]]);
+      const batch = await sampleResolvedReadyImageIndex(index, 3, new Set(ids), dependencies);
+      assert.equal(batch?.length, 2);
+      assert.deepEqual(new Set(batch!.map((item) => item.id)), new Set(ids));
+    }
+  }
 });
 test("[Server/缓存与 Redis] Redis 原生条件字符串命令严格解析替换、续期与部分批次结果", async () => {
   const commandCalls: string[][] = [];

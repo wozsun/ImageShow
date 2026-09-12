@@ -34,7 +34,7 @@ export type PublicImageListQuery = {
   device?: Device;
   brightness?: Brightness;
   theme?: string;
-  tag?: string;
+  tag?: string | string[];
   author?: string;
   cursor?: string;
   limit: number;

@@ -31,6 +31,7 @@ export function SlugComboInput({
   ariaLabel,
   className,
   publishTypedChanges = true,
+  parseSlug = parseFacetSlug,
   onFocus,
   onBlur
 }: {
@@ -43,6 +44,7 @@ export function SlugComboInput({
   ariaLabel?: string;
   className?: string;
   publishTypedChanges?: boolean;
+  parseSlug?: (value: string) => string | null;
   onFocus?: () => void;
   onBlur?: () => void;
 }) {
@@ -92,7 +94,7 @@ export function SlugComboInput({
 
   const updateQuery = (nextValue: string) => {
     setEditingValue(nextValue);
-    if (publishTypedChanges) publishSlug(parseFacetSlug(nextValue) ?? "");
+    if (publishTypedChanges) publishSlug(parseSlug(nextValue) ?? "");
     setActiveIndex(-1);
     if (!normalizeFacetSearchQuery(nextValue)) {
       if (open) requestClose();
@@ -107,8 +109,8 @@ export function SlugComboInput({
   const matches = facetSuggestions(options, query);
   const suggestionOpen = open && matches.length > 0;
 
-  const typedSlug = parseFacetSlug(focused ? editingValue : value);
-  const isNew = typedSlug !== null
+  const typedSlug = parseSlug(focused ? editingValue : value);
+  const isNew = Boolean(typedSlug)
     && !options.some((option) => option.slug === typedSlug);
 
   const commitAndBlur = (slug: string) => {
@@ -143,7 +145,7 @@ export function SlugComboInput({
         commitAndBlur(matches[activeIndex].slug);
         return;
       }
-      const slug = parseFacetSlug(editingValue);
+      const slug = parseSlug(editingValue);
       if (slug !== null) {
         commitAndBlur(slug);
       } else if (suggestionOpen) {
@@ -188,7 +190,7 @@ export function SlugComboInput({
         onBlur={(event) => {
           const chosenSlug = pendingChoiceRef.current;
           pendingChoiceRef.current = null;
-          const slug = chosenSlug ?? parseFacetSlug(event.currentTarget.value) ?? "";
+          const slug = chosenSlug ?? parseSlug(event.currentTarget.value) ?? "";
           publishSlug(slug);
           setEditingValue(slug);
           imeSession.settleEditing(facetDisplayName(options, slug));

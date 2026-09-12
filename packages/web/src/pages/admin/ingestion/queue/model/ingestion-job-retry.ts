@@ -7,6 +7,7 @@ export function resetJobForPrepareRetry(job: IngestionJob): IngestionJob {
     attemptKey: webUuidV7(),
     uploadIntentItemInput: undefined,
     importAcceptItemInput: undefined,
+    importAcceptRejected: undefined,
     sessionId: undefined,
     imageId: undefined,
     imageTime: undefined,
@@ -64,6 +65,7 @@ export function resetImportJobForPrepareRetry(job: IngestionJob): IngestionJob {
     ...resetJobForPrepareRetry(job),
     attemptKey: job.attemptKey,
     importAcceptItemInput: job.importAcceptItemInput,
+    importAcceptRejected: job.importAcceptRejected,
     status: "queued",
     message: "重新获取内容接入会话"
   };

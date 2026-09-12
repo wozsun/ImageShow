@@ -289,6 +289,7 @@ export function isUncommittedIngestionJob(job: IngestionJob) {
 
 function patchJobDraft(job: IngestionJob, patch: Partial<ImageDraft>): IngestionJob {
   if (job.commitIntent) return job;
+  if (patch.theme !== undefined) patch = { ...patch, theme: normalizeTheme(patch.theme) };
   if (!imageDraftPatchChanges(job.draft, patch)) return job;
   const next = { ...job, draft: { ...job.draft, ...patch } };
   return {

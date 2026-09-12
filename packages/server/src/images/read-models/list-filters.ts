@@ -11,7 +11,7 @@ export type ImageListFilterQuery = {
   device?: Device;
   brightness?: Brightness;
   theme?: string;
-  tag?: string;
+  tag?: string | string[];
   author?: string;
 };
 

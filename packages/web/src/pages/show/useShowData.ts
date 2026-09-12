@@ -1,7 +1,8 @@
+import { readableFilterSearch } from "@imageshow/shared/browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicImageListResponseDto, ShowOrder } from "@imageshow/shared/browser";
 import { api, ApiClientError, isApiClientError } from "../../lib/api/client.js";
-import { imageBrowseApiSearchParams, type GalleryFilters } from "../../lib/gallery/gallery-query.js";
+import { imageBrowseApiSearchParams, galleryFiltersFromSearchParams, type GalleryFilters } from "../../lib/gallery/gallery-query.js";
 import { imageMatchesFilters, shuffledImageBatch } from "../../lib/gallery/image-browse.js";
 import type { EditableImageSnapshot } from "../../lib/types.js";
 import type { ShowImage } from "./show-layout.js";
@@ -16,7 +17,8 @@ export function useShowData(
   filters: GalleryFilters,
   sourceKey: string,
   order: ShowOrder,
-  initialLimit = 200
+  initialLimit = 200,
+  enabled = true
 ) {
   const [images, setImages] = useState<ShowImage[]>([]);
   const [committed, setCommitted] = useState({ sourceKey, order, dataKey: sourceKey });
@@ -40,9 +42,10 @@ export function useShowData(
   const usageRef = useRef<ShowCandidateUsage | null>(null);
   const initialLimitRef = useRef(initialLimit);
   initialLimitRef.current = initialLimit;
-  const requestFilters = useMemo(() => filters, [
-    filters.author, filters.brightness, filters.device, filters.tag, filters.theme
-  ]);
+  const requestIdentity = readableFilterSearch(imageBrowseApiSearchParams(filters, order, {
+    view: "show", userAgent: window.navigator.userAgent
+  }));
+  const requestFilters = useMemo(() => galleryFiltersFromSearchParams(new URLSearchParams(requestIdentity)), [requestIdentity]);
 
   const publish = useCallback((next: ShowImage[]) => {
     imagesRef.current = next;
@@ -54,7 +57,7 @@ export function useShowData(
   }, []);
 
   const request = useCallback(async (replace: boolean, validate = false) => {
-    if (requestRef.current || pausedRef.current) return;
+    if (!enabled || requestRef.current || pausedRef.current) return;
     if (!replace && endedRef.current && !discardedRef.current) return;
     const limit = replace ? initialLimitRef.current : continuationLimit;
     if (!replace && imagesRef.current.length + limit > maximumRetainedDtos) return;
@@ -75,7 +78,7 @@ export function useShowData(
         const params = imageBrowseApiSearchParams(requestFilters, order, {
           view: "show", limit, cursor, userAgent: window.navigator.userAgent
         });
-        const path = `/api/images?${params}`;
+        const path = `/api/images?${readableFilterSearch(params)}`;
         const response = await api<PublicImageListResponseDto<"show">>(path, {
           signal: controller.signal, ...(validate ? { cache: "no-cache" as const } : {})
         });
@@ -128,7 +131,7 @@ export function useShowData(
       if (requestRef.current?.controller === controller) requestRef.current = null;
       if (generationRef.current === generation) setInitialLoading(false);
     }
-  }, [order, publish, requestFilters, sourceKey]);
+  }, [enabled, order, publish, requestFilters, sourceKey]);
 
   const fence = useCallback((imageId?: string) => {
     const replacing = requestRef.current?.replace === true;
@@ -155,12 +158,15 @@ export function useShowData(
     pathsRef.current.clear();
     confirmedRef.current.clear();
     setFailure(null);
-    setHasMore(true);
+    setHasMore(enabled);
+    setInitialLoading(enabled);
+    if (!enabled) publish([]);
     void request(true);
     return () => { fence(); };
-  }, [fence, request]);
+  }, [enabled, fence, publish, request]);
 
   const loadMore = useCallback((usage?: ShowCandidateUsage) => {
+    if (!enabled) return;
     if (usage) {
       if (usage.dataKey !== committedRef.current.dataKey || committedRef.current.sourceKey !== sourceKey) return;
       usageRef.current = usage;
@@ -179,7 +185,7 @@ export function useShowData(
       if (unconsumed >= continuationLimit) return;
     }
     void request(false);
-  }, [publish, request, sourceKey]);
+  }, [enabled, publish, request, sourceKey]);
 
   const removeImage = useCallback((imageId: string, replenish = false) => {
     removedRef.current.add(imageId);
@@ -239,8 +245,8 @@ export function useShowData(
   return {
     committedKey: committed.dataKey,
     committedOrder: committed.order,
-    error, images, hasMore,
-    initialLoading: initialLoading || (transitioning && error === null),
+    error, images: enabled ? images : [], hasMore: enabled && hasMore,
+    initialLoading: enabled && (initialLoading || (transitioning && error === null)),
     loadMore, removeImage, updateImage, refreshImage,
     retry: () => {
       pausedRef.current = false;

@@ -59,6 +59,7 @@ import {
 } from "./useImageAdminOperations.js";
 import { useImageAdminSelection } from "./useImageAdminSelection.js";
 import { useImageAdminPageNavigation } from "./useImageAdminPageNavigation.js";
+import { imageAdminPaginationScopeKey } from "./image-admin-list-query.js";
 import "../../../styles/admin/images.css";
 
 const imageRangeSelectionHelpId = "admin-image-range-selection-help";
@@ -218,8 +219,11 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
       || (Object.keys(filters) as Array<keyof ImageAdminFilterValues>)
         .every((key) => filters[key] === nextFilters[key])
     ) return;
-    navigation.resetPage();
+    const unchangedQuery = imageAdminPaginationScopeKey(view, filters, pageSize, sort)
+      === imageAdminPaginationScopeKey(view, nextFilters, pageSize, sort);
     setFilters(nextFilters);
+    if (unchangedQuery) return;
+    navigation.resetPage();
     clearImageSelection();
     resetTransientState();
     gridRef.current?.scrollTo({ top: 0, left: 0 });

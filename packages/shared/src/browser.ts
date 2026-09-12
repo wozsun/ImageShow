@@ -7,6 +7,7 @@
 export * from "./browser/common.ts";
 export * from "./browser/settings.ts";
 export * from "./browser/images.ts";
+export * from "./browser/tag-filter.ts";
 export * from "./browser/storage.ts";
 export * from "./browser/ingestion.ts";
 export * from "./browser/admin.ts";

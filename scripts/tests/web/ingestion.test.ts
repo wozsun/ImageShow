@@ -8854,7 +8854,7 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
     }
   }
 });
-test("[Web/内容接入] ready 草稿串行写回并以语义 no-op 收敛响应丢失", async () => {
+test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语义 no-op 收敛响应丢失", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
   );
@@ -8998,6 +8998,9 @@ test("[Web/内容接入] ready 草稿串行写回并以语义 no-op 收敛响应
     let state = {
       page: 1,
       jobs: [ingestionJob({
+        kind: "import",
+        manifestSource: "weibo",
+        draft: { ...ingestionJob().draft, theme: "default-theme" },
         status: "ready",
         serverAccepted: true,
         serverAcceptedOrder: 1,
@@ -9055,11 +9058,13 @@ test("[Web/内容接入] ready 草稿串行写回并以语义 no-op 收敛响应
     });
     assert.ok(sync);
     await React.act(async () => {
-      sync!.updateJobDraft("job-1", { title: "响应丢失仍保留" });
+      sync!.updateJobDraft("job-1", { title: "响应丢失仍保留", theme: "" });
       await sync!.flushPendingUpdates();
     });
     assert.equal(fetchCalls, 2);
     assert.deepEqual(requests[0], requests[1], "响应丢失必须重放同一草稿写入");
+    assert.equal(((requests[0]!.items as Array<{ metadata: { theme: unknown } }>)[0]!).metadata.theme, null);
+    assert.equal(jobsRef.current[0]?.draft.theme, null, "清空自动带入的主题必须以 null 同步并保留在本地草稿");
     assert.equal(jobsRef.current[0]?.serverVersion, 2);
     assert.equal(jobsRef.current[0]?.draft.title, "响应丢失仍保留");
     assert.equal(jobsRef.current[0]?.serverDraftPending, false);
@@ -12863,6 +12868,7 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
     function Probe() {
       owner = useImport({
         queue: queue as never,
+        maxItems: 200,
         defaults: {
           device: "pc",
           brightness: "dark",
@@ -12961,6 +12967,75 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
     }
   }
 });
+test("[Web/内容接入] 解析后 202 张按上限接管，明确拒绝与未知结果均可安全清空", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { useImport } = await import("../../../packages/web/src/pages/admin/ingestion/import/useImport.ts");
+  const jobsRef = { current: [] as IngestionJob[] };
+  const updateJob = (id: string, patch: Partial<IngestionJob>) => {
+    jobsRef.current = jobsRef.current.map(job => job.id === id ? { ...job, ...patch } : job);
+  };
+  const queue = {
+    jobsRef, updateJob, observeCompletedIngestions() {},
+    appendJobs(jobs: IngestionJob[]) { jobsRef.current.push(...jobs); return true; },
+    bindServerJob: updateJob, captureServerConnectionGeneration: () => 1
+  };
+  let owner!: ReturnType<typeof useImport>;
+  function Probe() {
+    owner = useImport({ queue: queue as never, maxItems: 200,
+      defaults: { device: "auto", brightness: "auto", theme: "", author: "", tags: [] },
+      keepOriginalLinkForUrlImports: true, storageSlug: "local" });
+    return null;
+  }
+  await h.render(h.React.createElement(Probe));
+  const batchKey = webUuidV7();
+  const makeJobs = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => ingestionJob({
+    id: `${prefix}-${index}`, attemptKey: webUuidV7(), batchKey, batchPosition: index,
+    downloadUrl: `https://example.com/${prefix}-${index}.jpg`
+  }));
+  const requestBody = (index: number) => JSON.parse(String(h.pending[index].body));
+  const rejection = { ok: false, code: "import_batch_limit_exceeded", error: "单批最多 200 张" };
+  await owner.addParsedImports(makeJobs("split", 202));
+  assert.equal(h.pending.length, 1);
+  assert.equal(requestBody(0).items.length, 200);
+  await h.respond(0, rejection, 400);
+  assert.equal(h.pending.length, 2);
+  assert.deepEqual(requestBody(1).items.map((item: any) => item.batch_position), [200, 201]);
+  assert.ok(requestBody(1).items.every((item: any) => item.batch_key === batchKey));
+  await h.respond(1, rejection, 400);
+  assert.equal(jobsRef.current.filter(job => job.importAcceptRejected).length, 202);
+  const rejectedOutcomes = await owner.cancelMany([...jobsRef.current]);
+  assert.equal([...rejectedOutcomes.values()].filter(outcome => outcome.succeeded).length, 202);
+  assert.equal(h.pending.length, 2, "确定未接管的首次拒绝无需再次发送接管或取消请求");
+
+  jobsRef.current = [];
+  await owner.addParsedImports(makeJobs("pending", 202));
+  const clearing = owner.cancelMany([...jobsRef.current]);
+  assert.equal(jobsRef.current.filter(job => job.status === "cancelled").length, 2);
+  await h.respond(2, rejection, 400);
+  assert.equal([...((await clearing).values())].filter(outcome => outcome.succeeded).length, 202);
+  assert.equal(h.pending.length, 3, "清空等待中的批次时，后续未发送的分片不得再启动");
+
+  jobsRef.current = [];
+  await owner.addParsedImports(makeJobs("unknown", 1));
+  const frozenInput = requestBody(3).items[0];
+  await h.respond(3, { ok: false, error: "response lost" }, 502);
+  assert.equal(jobsRef.current[0].importAcceptRejected, false);
+  // A later definite rejection cannot disprove an earlier unknown acceptance.
+  const retryingUnknown = owner.retry(jobsRef.current[0]);
+  await h.respond(4, rejection, 400);
+  await retryingUnknown;
+  assert.equal(jobsRef.current[0].importAcceptRejected, false);
+  const unknownCancellation = owner.cancelMany([...jobsRef.current]);
+  assert.equal(h.pending.length, 6);
+  assert.deepEqual(requestBody(5), { items: [frozenInput], cancel_if_missing: true });
+  await h.respond(5, { ok: true, items: [{
+    status: "discarded", session_id: "D".repeat(43), image_id: webUuidV7(),
+    resolved_image_time: "2026-09-13T00:00:00.000Z", accepted_order: 1
+  }] });
+  assert.equal([...(await unknownCancellation).values()][0].succeeded, true);
+  assert.equal(jobsRef.current[0].status, "cancelled");
+});
+
 test("[Web/内容接入] Upload 与 Import 接管只使用固定短路由和 1 + N 请求预算", async () => {
   const originalFetch = globalThis.fetch;
   const originalXhr = globalThis.XMLHttpRequest;
@@ -13849,7 +13924,7 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
   });
   for (const key of allKeys) client.setQueryData([...key, "fixture"], {});
   const vocabulary: IngestionVocabularyDto = {
-    themes: [{ slug: "~unset", display_name: "未设置" }],
+    themes: [{ slug: "null", display_name: "未设置" }],
     tags: [{ slug: "existing-tag", display_name: "既有标签" }],
     authors: [{ slug: "existing-author", display_name: "既有作者" }]
   };
@@ -14014,7 +14089,7 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
 test("[Web/内容接入] 元数据保存只在词条超出共享接入词表时刷新一次", async () => {
   const { QueryClient, QueryObserver } = await import("@tanstack/react-query");
   const vocabulary: IngestionVocabularyDto = {
-    themes: [{ slug: "~unset", display_name: "未设置" }],
+    themes: [{ slug: "null", display_name: "未设置" }],
     authors: [{ slug: "known-author", display_name: "已有作者" }],
     tags: [{ slug: "known-tag", display_name: "已有标签" }]
   };
@@ -15875,7 +15950,7 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
 
     rejectLauncherWorkflowLoad = false;
     client.removeQueries({ queryKey: queryKeys.storageOptions });
-    storageResponse = Promise.resolve(Response.json({ error: "存储查询失败" }, { status: 503 }));
+    storageResponse = Promise.resolve(Response.json({ error: "存储查询失败" }, { status: 403 }));
     const errorsBeforeStorageFailure = loadErrors.length;
     await React.act(async () => uploadTrigger.click());
     await waitFor(() => loadErrors.length === errorsBeforeStorageFailure + 1 && !container.inert,

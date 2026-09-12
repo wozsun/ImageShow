@@ -1,3 +1,6 @@
+import { readableFilterSearch } from "@imageshow/shared/browser";
+import { useImageBrowseRoute } from "../../../hooks/useImageBrowseRoute.js";
+import { TagFilterErrorState } from "../../../components/feedback/TagFilterErrorState.js";
 import {
   useCallback,
   useEffect,
@@ -7,7 +10,6 @@ import {
   useState,
   type CSSProperties
 } from "react";
-import { useSearchParams } from "react-router";
 import type {
   ShowDensity,
   SiteShowSettings
@@ -22,17 +24,16 @@ import { useDocumentMotionPause } from "../../../hooks/useDocumentMotionPause.js
 import { useMediaQuery } from "../../../hooks/useMediaQuery.js";
 import { usePublicImageViewportControls } from "../../../hooks/usePublicImageViewportControls.js";
 import { usePublicNavigationEntrance } from "../../../hooks/usePublicNavigationEntrance.js";
-import { useGalleryFacets } from "../../../lib/api/site-data.js";
 import {
   emptyGalleryFilters,
-  galleryFiltersFromSearchParams,
+  imageBrowseApiSearchParams,
   galleryRandomRequestDevice,
   showModeFromSearchParams,
   showOrderFromSearchParams,
   updateImageBrowseSearchParams,
   type GalleryFilters
 } from "../../../lib/gallery/gallery-query.js";
-import { buildRandomUrl } from "../../../lib/gallery/random-url.js";
+import { randomLinkResult } from "../../../lib/gallery/random-url.js";
 import { publicNavigationAutoHideDelayMs } from "../../../lib/ui/public-navigation.js";
 import { ShowControls } from "../ShowControls.js";
 import type { ShowImage } from "../show-layout.js";
@@ -95,12 +96,9 @@ export function ShowPixiPage({
   embedded?: boolean;
   settings: SiteShowSettings;
 }) {
-  const [routeSearchParams, setRouteSearchParams] = useSearchParams();
+  const browseRoute = useImageBrowseRoute();
+  const { params: routeSearchParams, updateSearchParams: setRouteSearchParams, filters, facets, ready: filtersReady, error: filterError } = browseRoute;
   const routeQuery = routeSearchParams.toString();
-  const filters = useMemo(
-    () => galleryFiltersFromSearchParams(new URLSearchParams(routeQuery)),
-    [routeQuery]
-  );
   const order = useMemo(() => showOrderFromSearchParams(
     new URLSearchParams(routeQuery),
     settings.order
@@ -111,8 +109,10 @@ export function ShowPixiPage({
     configuredScene
   ), [configuredScene, routeQuery]);
   const sourceKey = useMemo(
-    () => JSON.stringify({ filters, order }),
-    [filters, order]
+    () => filtersReady
+      ? readableFilterSearch(imageBrowseApiSearchParams(filters, order, { view: "show", userAgent: window.navigator.userAgent }))
+      : routeQuery,
+    [filters, filtersReady, order, routeQuery]
   );
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const initialWaterfallDensity = showWaterfallDensity(window.innerWidth);
@@ -133,11 +133,10 @@ export function ShowPixiPage({
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const decreaseButtonRef = useRef<HTMLButtonElement | null>(null);
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
-  const { data: facets } = useGalleryFacets();
   const data = useShowData(filters, sourceKey, order, showInitialBatchLimit({
     width: window.innerWidth, height: window.innerHeight, mode: scene,
     columns: waterfallColumns, floatSizeIndex, device: filters.device
-  }));
+  }), filtersReady);
   const playbackRunning = running && !data.initialLoading && !data.error
     && data.images.length > 0;
   const {
@@ -274,23 +273,23 @@ export function ShowPixiPage({
 
   const getShowModeHref = (nextScene: ShowPixiSceneKind) => {
     const params = updateImageBrowseSearchParams(routeSearchParams, { mode: nextScene });
-    return `?${params.toString()}`;
+    return `?${readableFilterSearch(params)}`;
   };
   const updateFilter = (key: keyof GalleryFilters, value: string) => {
     setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { [key]: value }));
   };
   const clearFilters = () => {
-    if (!Object.values(filters).some(Boolean)) return;
+    if (!routeSearchParams.has("tag") && !Object.values(filters).some(Boolean)) return;
     setRouteSearchParams((current) => updateImageBrowseSearchParams(current, emptyGalleryFilters));
   };
-  const randomUrl = buildRandomUrl({
+  const randomLink = filtersReady ? randomLinkResult({
     origin: window.location.origin,
     device: galleryRandomRequestDevice(filters.device),
     brightness: filters.brightness || "random",
     theme: filters.theme,
     tag: filters.tag,
     author: filters.author
-  });
+  }) : { url: null, error: null };
   const floatSizeDescription = `当前尺寸档位 ${floatSizeIndex + 1}/${showFloatSizeSteps.length}`;
   const waterfallSizeDescription = `当前约 ${Number.isInteger(waterfallColumns)
     ? waterfallColumns
@@ -320,6 +319,7 @@ export function ShowPixiPage({
             <AppHeader
               animateEntrance={shouldAnimateNavigation}
               onMenuExpandedChange={onHeaderMenuExpandedChange}
+              browseSearch={browseRoute.browseSearch}
               visible={headerVisible}
             />
           )}
@@ -327,7 +327,9 @@ export function ShowPixiPage({
             animateEntrance={shouldAnimateNavigation}
             filters={filters}
             facets={facets}
-            randomUrl={randomUrl}
+            randomUrl={randomLink.url}
+            randomLinkError={randomLink.error}
+            tagInvalid={Boolean(filterError)}
             filtersOpen={filtersOpen}
             filterPanelHidden={filterPanelHidden}
             filterMenuDismissSignal={filterMenuDismissSignal}
@@ -421,15 +423,20 @@ export function ShowPixiPage({
             : floatSizeDescription}
           smallerDisabled={smallerDisabled}
         />
-        {data.initialLoading && (
+        {Boolean(filterError) && (
+          <div className="show-query-state">
+            <TagFilterErrorState error={filterError} onClear={() => updateFilter("tag", "")} onRetry={browseRoute.retryVocabulary} />
+          </div>
+        )}
+        {!filterError && (!filtersReady || data.initialLoading) && (
           <AppLoadingRegion className="show-loading" extraDots={3} />
         )}
-        {Boolean(data.error) && !data.initialLoading && (
+        {filtersReady && Boolean(data.error) && !data.initialLoading && (
           <div className="show-query-state">
             <QueryErrorState error={data.error} onRetry={data.retry} />
           </div>
         )}
-        {!data.error && !data.initialLoading && !data.images.length && (
+        {filtersReady && !data.error && !data.initialLoading && !data.images.length && (
           <p className="show-empty">暂无图片</p>
         )}
       </ShowPixiStage>

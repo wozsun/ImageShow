@@ -83,8 +83,8 @@ PowerShell 中使用 `$env:IMAGESHOW_DATABASE_SCENARIO = "cold-redis"`、
 | 职责 | `IMAGESHOW_STORAGE_INGESTION_SCENARIO` 值 |
 | --- | --- |
 | 配置与身份 | `config-package-consistency`、`auth-author-contracts` |
-| 图片写入与分类 | `image-update-consistency`、`image-classification-consistency` |
-| 查询与缓存 | `image-read-consistency`、`public-image-browse`、`ready-cache-read-model`、`redis-business-commands` |
+| 图片写入与分类 | `image-update-consistency`、`image-classification-consistency`、`vocabulary-order` |
+| 查询与缓存 | `image-read-consistency`、`tag-filter-consistency`、`public-image-browse`、`ready-cache-read-model`、`redis-business-commands` |
 | 存储与回收站 | `local-io-lifecycle`、`storage-registry-lifecycle`、`storage-migration-recovery`、`storage-cleanup-recovery`、`storage-lock-admission`、`trash-purge-recovery` |
 | 存储维护 | `storage-thumbnail-recovery`、`storage-maintenance-cancellation` |
 | 接入服务与队列 | `ingestion-service-contracts`、`ingestion-action-protocol`、`ingestion-upload-lifecycle`、`ingestion-import-queue`、`ingestion-queue-actions`、`redis-canonical` |

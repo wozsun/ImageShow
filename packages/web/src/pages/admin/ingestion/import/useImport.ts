@@ -4,6 +4,7 @@ import {
   type IngestionSessionPairDto
 } from "@imageshow/shared/browser";
 import type { IngestionJob } from "../../../../lib/types.js";
+import { isApiClientError } from "../../../../lib/api/client.js";
 import { normalizeAuthor, normalizeTheme } from "../../../../lib/image-draft.js";
 import type { IngestionAttributeDefaults } from "../queue/model/ingestion-attribute-defaults.js";
 import {
@@ -51,8 +52,9 @@ export function useImport(options: {
   defaults: IngestionAttributeDefaults;
   keepOriginalLinkForUrlImports: boolean;
   storageSlug: string;
+  maxItems: number;
 }) {
-  const { queue, defaults, keepOriginalLinkForUrlImports, storageSlug } = options;
+  const { queue, defaults, keepOriginalLinkForUrlImports, storageSlug, maxItems } = options;
   const controllers = useRef(new Set<AbortController>());
   const pendingAccepts = useRef(new Map<string, Promise<void>>());
   const cancellationAcceptOutcomes = useRef(new Map<string, {
@@ -85,6 +87,7 @@ export function useImport(options: {
     for (const [index, job] of jobs.entries()) {
       queue.updateJob(job.id, {
         importAcceptItemInput: inputs[index],
+        importAcceptRejected: false,
         status: "queued",
         failureStage: undefined,
         message: "正在提交导入任务"
@@ -101,11 +104,17 @@ export function useImport(options: {
         )).items;
       } catch (error) {
         if (mounted.current && (error as Error).name !== "AbortError") {
+          const rejectedBeforeAccept = isApiClientError(error)
+            && ["import_batch_limit_exceeded", "validation_error"].includes(error.code);
           for (const job of jobs) {
             const current = queue.jobsRef.current.find(
               (item) => item.id === job.id && item.attemptKey === job.attemptKey
             );
-            if (!current || current.status === "cancelling") continue;
+            if (!current) continue;
+            if (rejectedBeforeAccept && (!job.importAcceptItemInput || job.importAcceptRejected)) {
+              queue.updateJob(job.id, { importAcceptRejected: true });
+            }
+            if (current.status === "cancelling") continue;
             queue.updateJob(job.id, {
               status: "failed",
               failureStage: "create",
@@ -253,8 +262,19 @@ export function useImport(options: {
       );
       return;
     }
-    if (acceptedJobs.length) void submitImportBatch(acceptedJobs);
-  }, [queue, submitImportBatch]);
+    // A parsed Weibo batch may contain many more images than source links.
+    // Keep batch identities and positions while bounding each owner request.
+    void (async () => {
+      for (let offset = 0; mounted.current && offset < acceptedJobs.length; offset += maxItems) {
+        const chunk = acceptedJobs.slice(offset, offset + maxItems).filter((job) => (
+          queue.jobsRef.current.some((current) => current.id === job.id
+            && current.attemptKey === job.attemptKey && current.status !== "cancelled"
+            && current.status !== "cancelling")
+        ));
+        await submitImportBatch(chunk);
+      }
+    })();
+  }, [maxItems, queue, submitImportBatch]);
 
   const addUrls = useCallback(async (urls: string[]) => {
     await enqueueImportJobs(createUrlImportJobs(
@@ -292,6 +312,10 @@ export function useImport(options: {
         item.id === job.id && item.attemptKey === job.attemptKey
       ));
       if (!current) continue;
+      if (!current.importAcceptItemInput && !current.sessionId && !current.imageId) {
+        queue.updateJob(job.id, { status: "cancelled", failureStage: undefined, message: "已取消" });
+        continue;
+      }
       const accept = pendingAccepts.current.get(job.id);
       if (accept) {
         queue.updateJob(job.id, {
@@ -357,6 +381,9 @@ export function useImport(options: {
         });
       } else if (current.sessionId && current.imageId) {
         cancellable.push(current);
+      } else if (current.importAcceptRejected) {
+        queue.updateJob(id, { status: "cancelled", failureStage: undefined, message: "已取消" });
+        outcomes.set(id, { succeeded: true });
       } else {
         replay.push(current);
       }
@@ -365,15 +392,16 @@ export function useImport(options: {
     for (
       let offset = 0;
       offset < replay.length;
-      offset += ingestionBatchHardLimit
+      offset += maxItems
     ) {
-      const chunk = replay.slice(offset, offset + ingestionBatchHardLimit);
+      const chunk = replay.slice(offset, offset + maxItems);
       const requestConnectionGeneration =
         queue.captureServerConnectionGeneration();
       let results: Awaited<ReturnType<typeof acceptImports>>["items"];
       try {
         results = (await acceptImports({
-          items: chunk.map(buildImportAcceptItemInput)
+          items: chunk.map(buildImportAcceptItemInput),
+          cancel_if_missing: true
         })).items;
       } catch (error) {
         for (const job of chunk) {
@@ -486,7 +514,7 @@ export function useImport(options: {
       }
     }
     return outcomes;
-  }, [queue]);
+  }, [maxItems, queue]);
 
   const cancel = useCallback(async (job: IngestionJob) => (
     (await cancelMany([job])).get(job.id) ?? {

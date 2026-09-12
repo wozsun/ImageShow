@@ -183,6 +183,7 @@ export function ImageAdminFilters({
         className="image-list-filter-field image-list-filter-tag"
       >
         <FacetSelector
+          selectionMode="any-all"
           options={vocabulary?.tags ?? []}
           value={value.tag}
           onChange={(next) => onChange("tag", next)}

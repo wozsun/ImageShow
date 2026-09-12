@@ -72,6 +72,10 @@ import { imageMatchesFilters, shuffledImageBatch } from "../../../packages/web/s
 import { imageBatchTier } from "../../../packages/web/src/lib/gallery/image-browse.ts";
 import { showInitialBatchLimit } from "../../../packages/web/src/pages/show/show-browse.ts";
 
+const unchangedTextureLods: ShowPixiTextureCache["fitResidentLods"] = (requests) => (
+  requests.map(({ lod }) => lod)
+);
+
 function pixiPointerEvent(
   x: number,
   y: number,
@@ -269,6 +273,7 @@ test("[Web/展映] waterfall 在窄屏与宽屏高密度视口执行各自 Sprit
         speed: 28,
         inputElement: target.element,
         textureCache: {
+          fitResidentLods: unchangedTextureLods,
           acquire: () => ({ release() {} })
         } as unknown as ShowPixiTextureCache,
         renderer: {} as Renderer,
@@ -578,7 +583,7 @@ test("[Web/展映] waterfall 超过 3G 前停在边界，允许后继续缩放�
         images: [], dataKey: "density-warning", order: "latest",
         running: false, reducedMotion: false, speed: 28,
         inputElement: target.element,
-        textureCache: {} as ShowPixiTextureCache,
+        textureCache: { fitResidentLods: unchangedTextureLods } as ShowPixiTextureCache,
         renderer: {} as Renderer,
         onNeedImages: () => undefined,
         onOpen: () => undefined,
@@ -1011,7 +1016,7 @@ test("[Web/展映] waterfall 单图循环填屏时焦点只属于当前卡片槽
     images: showImages(1), dataKey: "single-image", order: "latest",
     running: false, reducedMotion: false, speed: 28,
     inputElement: target.element,
-    textureCache: { acquire: () => ({ release() {} }) } as unknown as ShowPixiTextureCache,
+    textureCache: { fitResidentLods: unchangedTextureLods, acquire: () => ({ release() {} }) } as unknown as ShowPixiTextureCache,
     renderer: {} as Renderer,
     onNeedImages() {}, onOpen() {}, onManualVerticalMovement() {},
     onVisibleItems: (items) => { visible = items; },
@@ -1170,6 +1175,59 @@ test("[Web/展映] float 键盘聚焦卡片回收后不向新图片传递焦点"
   h.advance(2);
   assert.ok(focused.y < recycledY, "释放手动输入后新图片继续自动上浮");
 });
+test("[Web/展映] 高密度瀑布在像素预算内原位补齐全部驻留卡片", async (t) => {
+  for (const width of [760, 1440]) {
+    for (const densityOffset of [0, 4]) await t.test(`${width}px / 最大列数减 ${densityOffset}`, async (t) => {
+      const policy = showPixiTextureCacheOptions(width, true);
+      const h = await createTextureRecoveryHarness(t, policy);
+      t.after(installProperties(globalThis, { devicePixelRatio: 3 }));
+      const height = 1800;
+      const target = createCameraTestElement(width, height);
+      const scene = new ShowPixiWaterfallScene({
+        width, height, columns: showWaterfallDensity(width).maximumColumns - densityOffset,
+        images: showImages(800), dataKey: "resident-budget", order: "latest", hasMore: false,
+        running: false, reducedMotion: false, speed: 28,
+        inputElement: target.element, textureCache: h.cache, renderer: {} as Renderer,
+        onNeedImages() {}, onOpen() {}, onVisibleItems() {}, onManualVerticalMovement() {},
+        onColumnsChange: (columns) => columns
+      });
+      t.after(() => scene.destroy());
+      const before = scene.stats();
+      assert.ok(before.activeSprites > 300, "必须覆盖真实高密度驻留集合");
+      await h.flush();
+      const loaded = scene.stats();
+      assert.equal(loaded.textureReadySprites, loaded.activeSprites, "无需缩放、重排或下一次 tick 才补齐");
+      assert.equal(loaded.layoutRevision, before.layoutRevision);
+      assert.equal(loaded.waterfallScale, before.waterfallScale);
+      assert.equal(h.cache.stats().rejected, 0, "完整驻留集合本身必须可被预算容纳");
+      assert.ok(h.cache.stats().reservedPixels <= policy.maximumPixels);
+      const requests = h.requests.length;
+      scene.setImages(showImages(800), "resident-budget", "latest", false);
+      await h.flush();
+      assert.equal(h.requests.length, requests, "同一集合保持已解码纹理复用");
+      scene.destroy();
+      await h.flush();
+      assert.equal(h.cache.stats().referenced, 0);
+    });
+  }
+});
+
+test("[Web/展映] 驻留预算共享同图副本，集合缩小后恢复目标解码尺寸", async (t) => {
+  const h = await createTextureRecoveryHarness(t, { maximumEntries: 20, maximumPixels: 100_000 });
+  const requested = { pixelWidth: 256, pixelHeight: 256, sourceRatio: 1 };
+  const copies = Array.from({ length: 800 }, (_, index) => ({
+    url: index % 2 ? "https://TEXTURES.example:443/shared.webp" : "https://textures.example/shared.webp",
+    lod: requested
+  }));
+  assert.ok(h.cache.fitResidentLods(copies).every((lod) => lod.pixelWidth === 256));
+  const crowded = h.cache.fitResidentLods(Array.from({ length: 8 }, (_, index) => ({
+    url: `https://textures.example/${index}.webp`, lod: requested
+  })));
+  assert.ok(crowded.every((lod) => lod.pixelWidth < 256 && lod.pixelWidth === lod.pixelHeight));
+  assert.deepEqual(h.cache.fitResidentLods(copies), copies.map(() => requested));
+  assert.equal(h.requests.length, 0, "选择解码尺寸本身不发请求或占用纹理");
+});
+
 test("[Web/展映] 纹理容量释放唤醒等待卡片且不重置位置，销毁卡片取消等待", async (t) => {
   const h = await createTextureRecoveryHarness(t);
   const first = h.card("first");
@@ -1346,7 +1404,7 @@ test("[Web/展映] 两种场景和三种排序原位更新元数据并保持卡�
         images, dataKey: "edited-waterfall", order,
         running: false, reducedMotion: false, speed: 28,
         inputElement: target.element,
-        textureCache: { acquire() {
+        textureCache: { fitResidentLods: unchangedTextureLods, acquire() {
           acquired++;
           return { release() { released++; } };
         } } as unknown as ShowPixiTextureCache,
@@ -1681,8 +1739,9 @@ test("[Web/展映] 编辑成员判断遵循包含、排除和自动设备筛选"
   const image = editableImage(showImages(2)[1]!.id, { device: "pc", brightness: "dark", theme: "night", tags: ["blue", "stars"], author: "author" });
   for (const [filter, expected] of [
     [{ theme: "night,day" }, true], [{ theme: "!night" }, false],
-    [{ tag: "red,stars" }, true], [{ tag: "!red,!green" }, true],
-    [{ tag: "!stars" }, false], [{ author: "author" }, true],
+    [{ tag: "red,stars" }, true], [{ tag: "red,green" }, false],
+    [{ tag: "all:blue,stars" }, true], [{ tag: "all:red,stars" }, false],
+    [{ author: "author" }, true],
     [{ author: "!author" }, false], [{ brightness: "light" }, false],
     [{ device: "mb" }, false]
   ] as const) {

@@ -11,7 +11,7 @@
   .home-filter-reset:not(:disabled):hover,
   .home-axis-group button:not(:disabled):not([data-availability-locked="true"]):hover,
   .home-theme-options > .home-selector-options > button:not(:disabled):not([data-availability-locked="true"]):hover,
-  .home-tag-selector button:not(:disabled):not([data-availability-locked="true"]):hover,
+  .home-tag-options button:not(:disabled):not([data-availability-locked="true"]):hover,
   .home-author-selector button:not(:disabled):not([data-availability-locked="true"]):hover {
     border-color: var(--public-color-home-option-border-hover);
   }
@@ -19,6 +19,10 @@
   .home-filter-reset:not(:disabled):hover {
     color: var(--public-color-text-strong);
     background: var(--public-color-home-reset-hover-surface);
+  }
+
+  .home-tag-mode > button:hover {
+    color: var(--public-color-text-strong);
   }
 }
 
@@ -31,8 +35,9 @@
 .home-gallery-entry:not(.is-disabled):active,
 .home-filter-reset:not(:disabled):active,
 .home-axis-group button:not(:disabled):not([data-availability-locked="true"]):active,
+.home-tag-mode > button:not(:disabled):active,
 .home-theme-options > .home-selector-options > button:not(:disabled):not([data-availability-locked="true"]):active,
-.home-tag-selector button:not(:disabled):not([data-availability-locked="true"]):active,
+.home-tag-options button:not(:disabled):not([data-availability-locked="true"]):active,
 .home-author-selector button:not(:disabled):not([data-availability-locked="true"]):active {
   transform: scale(var(--pressable-scale-large, .99));
 }
@@ -63,6 +68,37 @@
   .home-theme-selector,
   .home-selector-side {
     height: var(--home-selector-height);
+  }
+
+  .home-selector-layout .home-section-heading {
+    /* 34px 内容区容纳模式按钮，三类标题与数量保持同一垂直位置。 */
+    min-height: 42px;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    column-gap: 12px;
+  }
+
+  .home-selector-layout .home-section-heading > .home-section-title {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 10px;
+    align-items: baseline;
+  }
+
+  .home-selector-layout .home-section-heading > .home-section-title > span {
+    margin: 0;
+    font-size: 9px;
+  }
+
+  .home-selector-layout .home-section-heading h2 {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: clamp(23px, 3.6vw, 27px);
+  }
+
+  .home-selector-layout .home-section-heading > small {
+    padding: 4px 8px;
+    font-size: 10px;
   }
 
   .home-theme-options > .home-selector-options {
@@ -195,40 +231,6 @@
     padding: 16px 18px 24px;
   }
 
-  .home-theme-selector,
-  .home-tag-selector {
-    padding-top: 14px;
-  }
-
-  .home-theme-selector > .home-section-heading {
-    margin-bottom: 12px;
-    gap: 12px;
-  }
-
-  .home-theme-selector > .home-section-heading > div {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    column-gap: 10px;
-    align-items: baseline;
-  }
-
-  .home-theme-selector > .home-section-heading span {
-    margin: 0;
-    font-size: 9px;
-  }
-
-  .home-theme-selector > .home-section-heading h2 {
-    grid-column: 2;
-    grid-row: 1;
-    font-size: clamp(23px, 3.6vw, 27px);
-  }
-
-  .home-theme-selector > .home-section-heading > small {
-    margin-top: 2px;
-    padding: 4px 8px;
-    font-size: 10px;
-  }
-
   .home-axes-card {
     padding: 18px;
     grid-template-columns: 1fr;
@@ -291,14 +293,6 @@
 
   .home-gallery-entry {
     min-width: 104px;
-  }
-
-  .home-section-heading {
-    margin-bottom: 20px;
-  }
-
-  .home-section-heading h2 {
-    font-size: 28px;
   }
 
   .home-axis-group > div {
@@ -403,8 +397,10 @@
   .home-gallery-entry span,
   .home-scroll-cue,
   .home-axis-group button,
+  .home-tag-mode > button,
+  .home-tag-mode::before,
   .home-theme-options > .home-selector-options > button,
-  .home-tag-selector button,
+  .home-tag-options button,
   .home-author-selector button {
     transition: none;
   }

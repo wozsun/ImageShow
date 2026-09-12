@@ -1,8 +1,9 @@
 import { imageThemeInput } from "../../images/metadata-theme.ts";
-import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
+  parseTagFilter,
+  TagFilterError,
   adminImagePageLimit,
   adminImageSortFields,
   adminImageOrders,
@@ -139,11 +140,28 @@ export const imageStorageMigrationInput = z.strictObject({
   target: storageSlugInput
 });
 
+const tagFilterInput = z.union([z.string(), z.array(z.string())]).transform((value, context) => {
+  const values = typeof value === "string" ? [value] : value;
+  try {
+    parseTagFilter(values);
+    return values;
+  } catch (error) {
+    if (!(error instanceof TagFilterError)) throw error;
+    context.addIssue({ code: "custom", message: error.message });
+    return z.NEVER;
+  }
+});
+
+export function imageListQueryValues(params: URLSearchParams) {
+  const tag = params.getAll("tag");
+  return { ...Object.fromEntries(params), ...(tag.length ? { tag } : {}) };
+}
+
 const imageListFilterFields = {
   device: z.enum(appConfig.devices).optional(),
   brightness: z.enum(appConfig.brightnesses).optional(),
   theme: z.string().trim().toLowerCase().max(1024).optional(),
-  tag: z.string().trim().toLowerCase().max(1024).optional(),
+  tag: tagFilterInput.optional(),
   author: z.string().trim().toLowerCase().max(1024).optional()
 };
 
@@ -157,8 +175,7 @@ function galleryStatsSelector(noun: string) {
         tokens.length === 0
         || tokens.some((token) => {
           const slug = token.replace(/^!/, "");
-          return !(noun === "主题" && slug === unsetThemeFilter)
-            && (slug.length > slugMaxLength || !slugPattern.test(slug));
+          return slug.length > slugMaxLength || !slugPattern.test(slug);
         })
       ) {
         context.addIssue({
@@ -184,7 +201,7 @@ export const galleryStatsQuery = z.strictObject({
   device: z.enum(appConfig.devices).optional(),
   brightness: z.enum(appConfig.brightnesses).optional(),
   theme: galleryStatsSelector("主题").optional(),
-  tag: galleryStatsSelector("标签").optional(),
+  tag: tagFilterInput.optional(),
   author: galleryStatsSelector("作者").optional()
 }) satisfies z.ZodType<GalleryStatsQuery>;
 

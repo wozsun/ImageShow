@@ -230,6 +230,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   const matrixTheme = "pagination-matrix";
   const matrixTag = "pagination-matrix";
   const matrixExtraTag = "pagination-extra";
+  const matrixEmptyTag = "pagination-empty";
   const matrixAuthor = "pagination-matrix";
   const matrixIds = [
     randomUUID(),
@@ -246,8 +247,8 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   );
   await database.pool.query(
     "INSERT INTO tag(slug, display_name) VALUES "
-      + "($1, 'Pagination matrix'), ($2, 'Pagination extra')",
-    [matrixTag, matrixExtraTag]
+      + "($1, 'Pagination matrix'), ($2, 'Pagination extra'), ($3, 'Pagination empty')",
+    [matrixTag, matrixExtraTag, matrixEmptyTag]
   );
   await database.pool.query(
     "INSERT INTO author(slug, display_name) VALUES ($1, 'Pagination matrix')",
@@ -306,7 +307,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     },
     {
       name: "unset",
-      query: { status: "ready", theme: "~unset", page: 1, limit: 3 }
+      query: { status: "ready", theme: "null", page: 1, limit: 3 }
     },
     {
       name: "device",
@@ -357,7 +358,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
       name: "zero",
       query: {
         status: "ready",
-        tag: "pagination-missing",
+        tag: matrixEmptyTag,
         page: 1,
         limit: 2
       }
@@ -576,7 +577,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     await assert.rejects(
       adminImagesReadModel.listAdminImages({
         status: "ready",
-        theme: "~unset",
+        theme: "null",
         page: 1,
         limit: 1
       }),
@@ -621,7 +622,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
           for (let page = 1; page <= Math.ceil(expected.length / 2) + 1; page += 1) {
             const result = await adminImagesReadModel.listAdminImages({
               status, sort_by, order, tag: matrixTag,
-              ...(unset ? { theme: "~unset" } : {}), page, limit: 2
+              ...(unset ? { theme: "null" } : {}), page, limit: 2
             });
             assert.equal(result.total, expected.length);
             assert.deepEqual(result.items.map((item) => item.id),
@@ -632,7 +633,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
           assert.deepEqual(seen, expected.map((row) => row.id));
         }
         assert.deepEqual(await adminImagesReadModel.listAdminImages({
-          status, sort_by, order, tag: "pagination-missing", page: 1, limit: 2
+          status, sort_by, order, tag: matrixEmptyTag, page: 1, limit: 2
         }), { items: [], total: 0 });
       }
     }
@@ -643,7 +644,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   );
   await database.pool.query(
     "DELETE FROM tag WHERE slug = ANY($1::text[])",
-    [[matrixTag, matrixExtraTag]]
+    [[matrixTag, matrixExtraTag, matrixEmptyTag]]
   );
   await database.pool.query("DELETE FROM theme WHERE slug=$1", [matrixTheme]);
   await database.pool.query("DELETE FROM author WHERE slug=$1", [matrixAuthor]);

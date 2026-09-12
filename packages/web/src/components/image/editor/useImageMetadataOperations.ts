@@ -4,10 +4,7 @@ import type {
   ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
-import {
-  api,
-  isApiClientError
-} from "../../../lib/api/client.js";
+import { api } from "../../../lib/api/client.js";
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
@@ -31,24 +28,6 @@ function reportImageUpdateFailures(response: ImageUpdateResponseDto) {
   );
 }
 
-const snapshotRetryDelaysMs = [500, 1_250, 2_500] as const;
-
-function retryableImageSnapshotError(error: unknown) {
-  if (isApiClientError(error)) {
-    return error.code === "redis_unavailable"
-      || error.status === 502
-      || error.status === 503
-      || error.status === 504;
-  }
-  return error instanceof TypeError;
-}
-
-function waitForSnapshotRetry(delayMs: number) {
-  return new Promise<void>((resolve) => {
-    globalThis.setTimeout(resolve, delayMs);
-  });
-}
-
 export function useImageMetadataOperations({
   initialIds,
   onSaved
@@ -63,22 +42,13 @@ export function useImageMetadataOperations({
   const saveStatus = useAsyncActionStatus({ resultDurationMs: null });
 
   const readAuthoritativeSnapshot = async () => {
-    let lastError: unknown;
-    for (let attempt = 0; attempt <= snapshotRetryDelaysMs.length; attempt += 1) {
-      try {
-        const snapshot = await readEditableImageSnapshots(initialIds);
-        return snapshot.items;
-      } catch (error) {
-        lastError = error;
-        const retryDelay = snapshotRetryDelaysMs[attempt];
-        if (retryDelay === undefined || !retryableImageSnapshotError(error)) {
-          break;
-        }
-        await waitForSnapshotRetry(retryDelay);
-      }
+    try {
+      const snapshot = await readEditableImageSnapshots(initialIds);
+      return snapshot.items;
+    } catch (error) {
+      reportAdminUiError("image_metadata.snapshot", error);
+      return null;
     }
-    reportAdminUiError("image_metadata.snapshot", lastError);
-    return null;
   };
 
   const finishAttempt = async (

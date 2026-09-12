@@ -1,5 +1,7 @@
+import { basicTagSelection, basicTagValue, TagFilterError } from "@imageshow/shared/browser";
 import {
   useCallback,
+  useContext,
   useEffect,
   useId,
   useRef,
@@ -10,7 +12,7 @@ import { flushSync } from "react-dom";
 import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
 import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import { MenuItemButton } from "../feedback/MenuItemButton.js";
-import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
+import { AnchoredMenuDismissSignalContext, useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import {
   facetSuggestions,
   normalizeFacetSearchQuery
@@ -19,7 +21,8 @@ import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { FacetOption } from "../../lib/types.js";
 
-type FacetMode = "include" | "exclude";
+type FacetMode = "include" | "exclude" | "any" | "all";
+const modeLabels = { include: "包含", exclude: "排除", any: "任一", all: "全部" };
 
 function parseValue(value: string) {
   const values = value.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
@@ -29,7 +32,8 @@ function parseValue(value: string) {
   };
 }
 
-export function FacetSelector({ options, value, onChange, noun, disabled = false, ariaLabel, controlId, menuClassName }: {
+export function FacetSelector({ options, value, onChange, noun, disabled = false, ariaLabel, controlId, menuClassName, selectionMode = "include-exclude" }: {
+  selectionMode?: "include-exclude" | "any-all";
   options: FacetOption[];
   value: string;
   onChange: (value: string) => void;
@@ -40,9 +44,15 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
   menuClassName?: string;
 }) {
   const resolvedAriaLabel = ariaLabel ?? noun;
-  const parsed = parseValue(value);
+  const isTag = selectionMode === "any-all";
+  const tagSelection = isTag ? basicTagSelection(value) : null;
+  const parsed = tagSelection ?? parseValue(value);
+  const valueMode: FacetMode = tagSelection?.mode ?? ("exclude" in parsed && parsed.exclude ? "exclude" : "include");
+  const modes: FacetMode[] = isTag ? ["any", "all"] : ["include", "exclude"];
+  const dismissSignal = useContext(AnchoredMenuDismissSignalContext);
+  const [selectionError, setSelectionError] = useState("");
   const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<FacetMode>(parsed.exclude ? "exclude" : "include");
+  const [mode, setMode] = useState<FacetMode>(valueMode);
   const controlRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -93,11 +103,22 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     : `输入关键字搜索${noun}，按 Tab 浏览已选${noun}和筛选方式`;
 
   useEffect(() => {
-    if (parsed.selected.length) setMode(parsed.exclude ? "exclude" : "include");
-  }, [parsed.exclude, value]);
+    setMode(valueMode);
+    setSelectionError("");
+  }, [valueMode, value, dismissSignal]);
 
   const emitSelection = (selected: string[], nextMode = mode) => {
-    onChange(selected.map((slug) => nextMode === "exclude" ? `!${slug}` : slug).join(","));
+    try {
+      const next = isTag
+        ? basicTagValue(selected, nextMode === "all" ? "all" : "any")
+        : selected.map((slug) => nextMode === "exclude" ? `!${slug}` : slug).join(",");
+      setSelectionError("");
+      setMode(selected.length ? nextMode : isTag ? "any" : "include");
+      onChange(next);
+    } catch (error) {
+      if (!(error instanceof TagFilterError)) throw error;
+      setSelectionError(error.message);
+    }
   };
 
   const menuButtons = () => Array.from(
@@ -188,16 +209,20 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
           )}
         </div>
       </div>
+      {selectionError && <p className="muted" role="alert">{selectionError}</p>}
       <div className="facet-mode-switch" aria-label={`${noun}筛选方式`}>
-        {(["include", "exclude"] as const).map((nextMode) => (
+        {modes.map((nextMode) => (
           <MenuItemButton
             type="button"
             key={nextMode}
             className={mode === nextMode ? "active" : ""}
             aria-pressed={mode === nextMode}
-            onActivate={() => { setMode(nextMode); if (parsed.selected.length) emitSelection(parsed.selected, nextMode); }}
+            onActivate={() => {
+              if (parsed.selected.length) emitSelection(parsed.selected, nextMode);
+              else setMode(nextMode);
+            }}
           >
-            {mode === nextMode ? "✓ " : ""}{nextMode === "include" ? "包含" : "排除"}
+            {mode === nextMode ? "✓ " : ""}{modeLabels[nextMode]}
           </MenuItemButton>
         ))}
       </div>
@@ -205,7 +230,7 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
   ) : null;
 
   const label = parsed.selected.length
-    ? `${mode === "include" ? "包含" : "排除"} ${parsed.selected.length} 个${noun}`
+    ? `${modeLabels[mode]} ${parsed.selected.length} 个${noun}`
     : `全部${noun}`;
   const showSearch = open && !closing;
   return (

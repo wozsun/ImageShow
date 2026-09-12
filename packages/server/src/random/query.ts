@@ -1,5 +1,9 @@
 import { appConfig } from "@imageshow/shared";
 import {
+  parseTagFilter,
+  resolveTagExpression,
+  TagFilterError,
+  type TagExpression,
   randomMethods as randomMethodValues,
   type RandomDefaultMethod,
   type RandomMethod
@@ -24,7 +28,7 @@ export type ParsedRandomQuery = {
   device: RandomRequestDevice;
   brightness: RandomBrightness | null;
   theme: RandomSelectorGroup;
-  tag: RandomSelectorGroup;
+  tag: TagExpression;
   author: RandomSelectorGroup;
 };
 
@@ -99,7 +103,7 @@ function mixedSelectorsError(noun: string, include: string[], exclude: string[])
 
 function parseSelectorGroup(
   query: URLSearchParams,
-  field: "theme" | "tag" | "author",
+  field: "theme" | "author",
   noun: string
 ) {
   const include: string[] = [];
@@ -293,7 +297,7 @@ export function parseRandomQuery(
       device: "auto",
       brightness: null,
       theme: { include: [], exclude: [] },
-      tag: { include: [], exclude: [] },
+      tag: null,
       author: { include: [], exclude: [] }
     };
   }
@@ -314,8 +318,13 @@ export function parseRandomQuery(
 
   const theme = parseSelectorGroup(query, "theme", "theme");
   if (theme instanceof Response) return theme;
-  const tag = parseSelectorGroup(query, "tag", "tag");
-  if (tag instanceof Response) return tag;
+  let tag: ReturnType<typeof parseTagFilter>;
+  try {
+    tag = parseTagFilter(query.getAll("tag"), "mixed");
+  } catch (error) {
+    if (!(error instanceof TagFilterError)) throw error;
+    return apiErrorResponse({ status: 400, message: error.message }, { field: "tag" });
+  }
   const author = parseSelectorGroup(query, "author", "author");
   if (author instanceof Response) return author;
   const selectorCount =
@@ -334,13 +343,13 @@ export function parseRandomQuery(
     device: device as RandomRequestDevice,
     brightness: brightness as RandomBrightness | null,
     theme: theme.selectors,
-    tag: tag.selectors,
+    tag: tag.expression,
     author: author.selectors
   };
 }
 
 function normalizeSelectorGroup(
-  field: "theme" | "tag" | "author",
+  field: "theme" | "author",
   noun: string,
   selectors: RandomSelectorGroup,
   map: ReadonlyMap<string, string>
@@ -378,8 +387,13 @@ export function normalizeRandomQuery(
     maps.theme
   );
   if (theme instanceof Response) return theme;
-  const tag = normalizeSelectorGroup("tag", "tag", query.tag, maps.tag);
-  if (tag instanceof Response) return tag;
+  let tag: TagExpression;
+  try {
+    tag = resolveTagExpression(query.tag, maps.tag);
+  } catch (error) {
+    if (!(error instanceof TagFilterError)) throw error;
+    return apiErrorResponse({ status: 404, message: error.message }, { field: "tag", value: error.term });
+  }
   const author = normalizeSelectorGroup(
     "author",
     "author",

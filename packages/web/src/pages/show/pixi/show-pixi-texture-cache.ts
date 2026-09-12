@@ -22,7 +22,7 @@ type TextureEntry = {
   touchedAt: number;
 };
 
-type TextureLod = {
+export type ShowPixiTextureLod = {
   pixelWidth: number;
   pixelHeight: number;
   sourceRatio?: number;
@@ -53,7 +53,7 @@ const mipmappedPixels = (basePixels: number, generateMipmaps: boolean) => (
     : safePixels(basePixels)
 );
 
-const normalizedLod = (lod: TextureLod) => {
+const normalizedLod = (lod: ShowPixiTextureLod) => {
   const sourceRatio = lod.sourceRatio;
   return {
     pixelWidth: Math.min(512, Math.max(1, Math.round(lod.pixelWidth))),
@@ -120,7 +120,7 @@ async function resizedBitmap(blob: Blob, lod: ReturnType<typeof normalizedLod>) 
 
 async function bitmapTexture(
   url: string,
-  lod: TextureLod,
+  lod: ShowPixiTextureLod,
   generateMipmaps: boolean,
   signal: AbortSignal
 ) {
@@ -263,7 +263,7 @@ export class ShowPixiTextureCache {
 
   acquire(
     url: string,
-    requestedLod: TextureLod,
+    requestedLod: ShowPixiTextureLod,
     listener: TextureListener
   ): ShowPixiTextureLease {
     if (this.#destroyed || !url) {
@@ -350,6 +350,36 @@ export class ShowPixiTextureCache {
     if (this.#destroyed) return () => undefined;
     this.#availabilityListeners.set(listener, this.#resourceUrl(url));
     return () => { this.#availabilityListeners.delete(listener); };
+  }
+
+  fitResidentLods(requests: readonly { url: string; lod: ShowPixiTextureLod }[]): ShowPixiTextureLod[] {
+    const urls = requests.map(({ url }) => this.#resourceUrl(url));
+    const lods = requests.map(({ lod }) => normalizedLod(lod));
+    // Reserve space for old/new LODs to overlap while cards replace leases.
+    // Waiting for capacity cannot resolve when the resident set itself is too
+    // large: even a successful detail image load cannot free a referenced LOD.
+    const budget = this.#options.maximumPixels * 0.8;
+    for (;;) {
+      const unique = new Map<string, number>();
+      for (let index = 0; index < lods.length; index += 1) {
+        const lod = lods[index]!;
+        unique.set(`${urls[index]}\n${lod.pixelWidth}x${lod.pixelHeight}`, mipmappedPixels(
+          lod.pixelWidth * lod.pixelHeight,
+          this.#options.generateMipmaps
+        ));
+      }
+      if ([...unique.values()].reduce((sum, pixels) => sum + pixels, 0) <= budget) {
+        return lods;
+      }
+      let changed = false;
+      for (const lod of lods) {
+        if (lod.pixelWidth === 1 && lod.pixelHeight === 1) continue;
+        lod.pixelWidth = Math.max(1, Math.round(lod.pixelWidth / 2));
+        lod.pixelHeight = Math.max(1, Math.round(lod.pixelHeight / 2));
+        changed = true;
+      }
+      if (!changed) return lods;
+    }
   }
 
   resumeTransportRequests() {

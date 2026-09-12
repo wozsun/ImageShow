@@ -1,6 +1,7 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { api } from "./client.js";
 import { queryKeys } from "./query-keys.js";
+import { readRequestRetryOptions } from "./read-request-retry.js";
 import {
   ingestionVocabularyPath,
   type IngestionVocabularyDto
@@ -11,6 +12,7 @@ import {
 export const ingestionVocabularyQueryOptions = queryOptions<IngestionVocabularyDto>({
   queryKey: queryKeys.ingestionVocabulary,
   queryFn: ({ signal }) => api(ingestionVocabularyPath, { signal }),
+  ...readRequestRetryOptions,
   staleTime: Number.POSITIVE_INFINITY,
   gcTime: Number.POSITIVE_INFINITY,
   refetchOnWindowFocus: false

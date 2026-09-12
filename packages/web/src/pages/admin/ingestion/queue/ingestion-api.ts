@@ -40,6 +40,13 @@ import {
 } from "@imageshow/shared/browser";
 import { api, getCsrfToken } from "../../../../lib/api/client.js";
 
+// Control requests have no file body; bound unknown responses so cancellation
+// can continue through the original idempotent identity after transport loss.
+function controlRequestSignal(signal?: AbortSignal) {
+  const timeout = AbortSignal.timeout(30_000);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
 export type ImportManifestItem = ImportManifestItemDto;
 export type ImportManifestParseError = ImportManifestParseErrorDto;
 export type JsonlManifestResult = ImportManifestResultDto;
@@ -53,7 +60,7 @@ export function createUploadIntents(
   return api<UploadIntentResultDto>(uploadIntentPath, {
     method: "POST",
     body: JSON.stringify(input),
-    signal
+    signal: controlRequestSignal(signal)
   });
 }
 
@@ -64,7 +71,7 @@ export function acceptImports(
   return api<ImportAcceptResultDto>(importAcceptPath, {
     method: "POST",
     body: JSON.stringify(input),
-    signal
+    signal: controlRequestSignal(signal)
   });
 }
 
@@ -75,7 +82,7 @@ export function getIngestionStatuses(
   return api<IngestionStatusResultDto>(ingestionStatusPath, {
     method: "POST",
     body: JSON.stringify({ items }),
-    signal
+    signal: controlRequestSignal(signal)
   }).then((result) => result.items);
 }
 
@@ -228,7 +235,8 @@ function parseUploadResponse(text: string): Partial<UploadResponse> & {
 export function cancelStoredIngestions(items: IngestionCancelInputDto["items"]) {
   return api<IngestionCancelResultDto>(ingestionCancelPath, {
     method: "POST",
-    body: JSON.stringify({ items } satisfies IngestionCancelInputDto)
+    body: JSON.stringify({ items } satisfies IngestionCancelInputDto),
+    signal: controlRequestSignal()
   });
 }
 

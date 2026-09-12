@@ -138,6 +138,11 @@ export async function sampleResolvedReadyImageIndex(
   if (dependencies.currentRevision() !== index.revision) return null;
   const items = sampledReadyImageItems(result);
   if (!items) return null;
+  // ZRANDMEMBER 的正数 count 不保证返回顺序随机，全量候选尤其可能保持固定顺序。
+  for (let position = items.length - 1; position > 0; position -= 1) {
+    const swap = Math.floor(Math.random() * (position + 1));
+    [items[position], items[swap]] = [items[swap]!, items[position]!];
+  }
   const fresh: ReadyImageCacheItem[] = [];
   const fallback: ReadyImageCacheItem[] = [];
   items.forEach((item) => {

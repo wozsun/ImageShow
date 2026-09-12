@@ -645,12 +645,16 @@ type TextureRecoveryHarnessOptions = {
   maximumEntries?: number;
   maximumPixels?: number;
   maximumUnreferenced?: number;
+  maximumInFlight?: number;
+  generateMipmaps?: boolean;
 };
 
 export async function createTextureRecoveryHarness(t: TestContext, {
   maximumEntries = 1,
   maximumPixels = maximumEntries * 128 * 128,
-  maximumUnreferenced = 0
+  maximumUnreferenced = 0,
+  maximumInFlight = 1,
+  generateMipmaps = false
 }: TextureRecoveryHarnessOptions = {}) {
   installPixiPaletteFixture(t);
   const { ShowPixiTextureCache } = await import("../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts");
@@ -683,8 +687,8 @@ export async function createTextureRecoveryHarness(t: TestContext, {
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
   }
   const cache = new ShowPixiTextureCache({
-    maximumEntries, maximumPixels, maximumInFlight: 1,
-    maximumUnreferenced, generateMipmaps: false
+    maximumEntries, maximumPixels, maximumInFlight,
+    maximumUnreferenced, generateMipmaps
   });
   const cards: InstanceType<typeof ShowPixiCard>[] = [];
   const coordinator = new ShowPixiPerspectiveCoordinator();

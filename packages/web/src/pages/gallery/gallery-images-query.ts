@@ -1,3 +1,4 @@
+import { readableFilterSearch } from "@imageshow/shared/browser";
 import { queryOptions } from "@tanstack/react-query";
 import type { PublicImageListResponseDto } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
@@ -40,7 +41,7 @@ export function galleryImagePageQueryOptions(
       params.set("limit", String(limit));
       params.sort();
       return api<PublicImageListResponseDto>(
-        `/api/images?${params}`,
+        `/api/images?${readableFilterSearch(params)}`,
         { signal, ...(forceValidation ? { cache: "no-cache" as const } : {}) }
       );
     },

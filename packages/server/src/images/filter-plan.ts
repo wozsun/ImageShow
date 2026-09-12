@@ -1,6 +1,11 @@
 import {
   brightnesses,
   devices,
+  normalizeTagExpression,
+  parseTagFilter,
+  resolveTagExpression,
+  TagFilterError,
+  type TagExpression,
   type Brightness,
   type Device
 } from "@imageshow/shared/browser";
@@ -8,7 +13,7 @@ import { resolveAuthorSlugs } from "../authors/query.ts";
 import { ApiError } from "../core/api-error.ts";
 import { splitSelectors } from "../core/selectors.ts";
 import type { VocabularyReadAccess } from "../vocab/vocab-cache.ts";
-import { resolveTagNames } from "../tags/query.ts";
+import { resolveTagTermMap } from "../tags/query.ts";
 import { resolveThemeSlugs } from "../themes/query.ts";
 
 export type ImageSelectorGroup = {
@@ -19,7 +24,7 @@ export type ImageSelectorGroup = {
 export type ImageFilterPlan = {
   axes: Array<{ device: Device; brightness: Brightness }>;
   theme: ImageSelectorGroup;
-  tag: ImageSelectorGroup;
+  tag: TagExpression;
   author: ImageSelectorGroup;
   signature: string;
 };
@@ -35,7 +40,7 @@ type ImageFilterInput = {
   device?: Device;
   brightness?: Brightness;
   theme?: string;
-  tag?: string;
+  tag?: string | string[];
   author?: string;
 };
 
@@ -63,7 +68,7 @@ export function createImageFilterPlan(input: {
   devices?: readonly Device[];
   brightnesses?: readonly Brightness[];
   theme?: Partial<ImageSelectorGroup>;
-  tag?: Partial<ImageSelectorGroup>;
+  tag?: TagExpression;
   author?: Partial<ImageSelectorGroup>;
 }): ImageFilterPlan {
   const selectedDevices = [...new Set(input.devices ?? devices)].sort();
@@ -74,7 +79,7 @@ export function createImageFilterPlan(input: {
     selectedBrightnesses.map((brightness) => ({ device, brightness }))
   ));
   const theme = normalizedGroup(input.theme, "theme");
-  const tag = normalizedGroup(input.tag, "tag");
+  const tag = input.tag ? normalizeTagExpression(input.tag.anyOf) : null;
   const author = normalizedGroup(input.author, "author");
   const signature = JSON.stringify({ axes, theme, tag, author });
   return { axes, theme, tag, author, signature };
@@ -97,13 +102,27 @@ export async function resolveImageFilterPlan(
   input: ImageFilterInput,
   access: VocabularyReadAccess = {}
 ) {
+  let parsedTag: TagExpression;
+  try {
+    parsedTag = parseTagFilter(input.tag === undefined ? [] : typeof input.tag === "string" ? [input.tag] : input.tag).expression;
+  } catch (error) {
+    if (!(error instanceof TagFilterError)) throw error;
+    throw new ApiError(400, "validation_error", error.message, { field: "tag" });
+  }
   const [theme, tag, author] = await Promise.all([
     resolveSelector(input.theme, "theme", (terms) => (
       resolveThemeSlugs(terms, access)
     )),
-    resolveSelector(input.tag, "tag", (terms) => (
-      resolveTagNames(terms, access)
-    )),
+    (async () => {
+      if (!parsedTag) return null;
+      const terms = await resolveTagTermMap(parsedTag.anyOf.flat(), access);
+      try {
+        return resolveTagExpression(parsedTag, terms);
+      } catch (error) {
+        if (!(error instanceof TagFilterError)) throw error;
+        throw new ApiError(404, "unknown_tag", error.message, { field: "tag", value: error.term });
+      }
+    })(),
     resolveSelector(input.author, "author", (terms) => (
       resolveAuthorSlugs(terms, access)
     ))

@@ -1,3 +1,6 @@
+import { readableFilterSearch } from "@imageshow/shared/browser";
+import { useImageBrowseRoute } from "../../hooks/useImageBrowseRoute.js";
+import { TagFilterErrorState } from "../../components/feedback/TagFilterErrorState.js";
 import {
   useCallback,
   useEffect,
@@ -9,7 +12,7 @@ import {
 } from "react";
 import type { GalleryOrder } from "@imageshow/shared/browser";
 import { useQueryClient } from "@tanstack/react-query";
-import { useLocation, useNavigationType, useSearchParams } from "react-router";
+import { useLocation, useNavigationType } from "react-router";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { PublicStarfield } from "../../components/layout/PublicStarfield.js";
@@ -18,12 +21,11 @@ import { PublicStarfield } from "../../components/layout/PublicStarfield.js";
 import { PublicImageDetail } from "../../components/image/PublicImageDetail.js";
 import { PublicImageOrderButton } from "../../components/navigation/PublicImageOrderButton.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
-import { buildRandomUrl } from "../../lib/gallery/random-url.js";
+import { randomLinkResult } from "../../lib/gallery/random-url.js";
 import {
   createGalleryTaxonomyDisplayFormatter
 } from "../../lib/gallery/card-display.js";
 import type { GalleryImageCard } from "../../lib/types.js";
-import { useGalleryFacets } from "../../lib/api/site-data.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import {
   AppLoadingRegion
@@ -44,7 +46,6 @@ import {
 import {
   imageBrowseApiSearchParams,
   emptyGalleryFilters,
-  galleryFiltersFromSearchParams,
   galleryRandomRequestDevice,
   updateImageBrowseSearchParams,
   showOrderFromSearchParams,
@@ -69,13 +70,9 @@ export function GalleryPage({
   const queryClient = useQueryClient();
   const { key: navigationKey } = useLocation();
   const navigationType = useNavigationType();
-  const [routeSearchParams, setRouteSearchParams] = useSearchParams();
-  const routeQuery = routeSearchParams.toString();
+  const browseRoute = useImageBrowseRoute();
+  const { params: routeSearchParams, updateSearchParams: setRouteSearchParams, filters, facets, ready: filtersReady, error: filterError } = browseRoute;
   const order = showOrderFromSearchParams(routeSearchParams, defaultOrder);
-  const filters = useMemo(
-    () => galleryFiltersFromSearchParams(new URLSearchParams(routeQuery)),
-    [routeQuery]
-  );
   const {
     backToTopVisible,
     filterPanelHidden,
@@ -105,7 +102,6 @@ export function GalleryPage({
     markAppeared: markNavigationAppeared,
     shouldAnimate: shouldAnimateNavigation
   } = usePublicNavigationEntrance();
-  const { data: facets } = useGalleryFacets();
   const cardSubtitle = useMemo(
     () => {
       const display = createGalleryTaxonomyDisplayFormatter(facets);
@@ -116,8 +112,10 @@ export function GalleryPage({
 
   const userAgent = window.navigator.userAgent;
   const imageQuery = useMemo(
-    () => imageBrowseApiSearchParams(filters, order, { userAgent, view: "gallery" }).toString(),
-    [filters, order, userAgent]
+    () => filtersReady
+      ? readableFilterSearch(imageBrowseApiSearchParams(filters, order, { userAgent, view: "gallery" }))
+      : readableFilterSearch(routeSearchParams),
+    [filters, filtersReady, routeSearchParams, order, userAgent]
   );
   const revealRegistry = useMemo(
     () => new GalleryCardRevealRegistry({
@@ -152,14 +150,14 @@ export function GalleryPage({
     }
   }, [imageQuery, queryClient]);
 
-  const randomUrl = buildRandomUrl({
+  const randomLink = filtersReady ? randomLinkResult({
     origin: window.location.origin,
     device: galleryRandomRequestDevice(filters.device),
     brightness: filters.brightness || "random",
     theme: filters.theme,
     tag: filters.tag,
     author: filters.author
-  });
+  }) : { url: null, error: null };
 
   const updateFilter = (key: keyof GalleryFilters, value: string) => {
     setRouteSearchParams(
@@ -167,7 +165,7 @@ export function GalleryPage({
     );
   };
   const clearFilters = () => {
-    if (!Object.values(filters).some(Boolean)) return;
+    if (!routeSearchParams.has("tag") && !Object.values(filters).some(Boolean)) return;
     setRouteSearchParams((current) => updateImageBrowseSearchParams(current, emptyGalleryFilters));
   };
 
@@ -175,9 +173,10 @@ export function GalleryPage({
   const geometry = useGalleryGeometry(galleryRef);
   const galleryData = useGalleryDataWindow({
     geometry: { ...geometry, columnCount },
-    geometryReady: geometry.measured,
+    geometryReady: geometry.measured && filtersReady,
     imageQuery,
     navigationKey,
+    preserveEquivalentQuery: browseRoute.isFilterEdit,
     restorePosition: navigationType === "POP",
     pinnedImageId,
     windowRef: galleryWindowRef
@@ -189,8 +188,8 @@ export function GalleryPage({
     )?.item;
     if (refreshed && refreshed !== selected) setSelected(refreshed);
   }, [galleryData.positions, selected]);
-  const initialLoading = galleryData.initialLoading;
-  const nextPageLoading = galleryData.nextPageLoading;
+  const initialLoading = !filterError && (!filtersReady || galleryData.initialLoading);
+  const nextPageLoading = filtersReady && galleryData.nextPageLoading;
   const loading = initialLoading || nextPageLoading;
   const showBackToTop = backToTopVisible && !selected;
 
@@ -281,6 +280,7 @@ export function GalleryPage({
               <AppHeader
                 animateEntrance={shouldAnimateNavigation}
                 onMenuExpandedChange={onHeaderMenuExpandedChange}
+                browseSearch={browseRoute.browseSearch}
                 visible={headerVisible}
               />
             )}
@@ -288,7 +288,9 @@ export function GalleryPage({
               animateEntrance={shouldAnimateNavigation}
               filters={filters}
               facets={facets}
-              randomUrl={randomUrl}
+              randomUrl={randomLink.url}
+              randomLinkError={randomLink.error}
+              tagInvalid={Boolean(filterError)}
               filtersOpen={filtersOpen}
               filterPanelHidden={filterPanelHidden}
               filterMenuDismissSignal={filterMenuDismissSignal}
@@ -311,13 +313,18 @@ export function GalleryPage({
             imageQuery={imageQuery}
             onOpen={openDetail}
             onIntrinsicSize={galleryData.reportIntrinsicSize}
-            positions={galleryData.positions}
+            positions={filtersReady ? galleryData.positions : []}
             revealRegistry={revealRegistry}
-            totalHeight={galleryData.snapshot.totalHeight}
+            totalHeight={filtersReady ? galleryData.snapshot.totalHeight : 0}
             windowRef={galleryWindowRef}
           />
         </section>
-        {galleryData.snapshot.error && (
+        {Boolean(filterError) && (
+          <div className="gallery-query-error">
+            <TagFilterErrorState error={filterError} onClear={() => updateFilter("tag", "")} onRetry={browseRoute.retryVocabulary} />
+          </div>
+        )}
+        {filtersReady && galleryData.snapshot.error && (
           <div className={`gallery-query-error${galleryData.snapshot.errorRequest?.kind === "hydrate"
               ? " gallery-window-error"
               : ""
@@ -328,7 +335,7 @@ export function GalleryPage({
             />
           </div>
         )}
-        {!galleryData.snapshot.error
+        {filtersReady && !galleryData.snapshot.error
           && !loading
           && galleryData.snapshot.compactItems === 0
           && <p className="gallery-empty">暂无图片</p>}

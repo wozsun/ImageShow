@@ -43,7 +43,7 @@ async function facetVocabulary(
     devices: [...devices],
     brightnesses: [...brightnesses],
     themes: themeVocab.filter(({ slug }) => (counts.themes[slug] ?? 0) > 0),
-    tags: tagVocab.filter(({ slug }) => (counts.tags[slug] ?? 0) > 0),
+    tags: tagVocab,
     authors: authorVocab.filter(({ slug }) => (counts.authors[slug] ?? 0) > 0)
   };
 }

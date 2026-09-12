@@ -18,6 +18,7 @@ import {
 } from "../core/http/responses.ts";
 import {
   galleryStatsQuery,
+  imageListQueryValues,
   listQuery
 } from "./validation/images.ts";
 import { parse } from "./validation/parse.ts";
@@ -61,7 +62,7 @@ export function registerPublicRoutes(app: Hono) {
   app.get("/api/images", blockCrossSiteFetch, async (c) => {
     const q = parse(
       listQuery,
-      Object.fromEntries(new URL(c.req.url).searchParams)
+      imageListQueryValues(new URL(c.req.url).searchParams)
     );
     const startedAt = Date.now();
     const response = await listPublicImages(q, c.req.raw.signal, startedAt);
@@ -108,7 +109,7 @@ export function registerPublicRoutes(app: Hono) {
     const rawQuery = Object.fromEntries(
       galleryStatsQueryKeys.flatMap((key) => {
         const values = searchParams.getAll(key);
-        return values.length ? [[key, values.join(",")]] : [];
+        return values.length ? [[key, key === "tag" ? values : values.join(",")]] : [];
       })
     );
     return cacheableApiSuccess(

@@ -595,6 +595,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       : 0;
     return {
       activeSprites: this.#cards.length,
+      textureReadySprites: this.#cards.filter((state) => state.card.isTextureReady).length,
       visibleSprites,
       retainedDtos: this.#images.length,
       recycledSprites: this.#recycledSprites,

@@ -17,9 +17,10 @@ import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 
 async function insertTheme(client: PoolClient, slug: string) {
   if (!slug) return false;
+  assertVocabularySlug("theme", slug);
   const result = await client.query(
     `INSERT INTO theme(slug, sort_order)
-     VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM theme))
+     VALUES($1, (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM theme))
      ON CONFLICT (slug) DO NOTHING
      RETURNING slug`,
     [slug]
@@ -46,7 +47,7 @@ export async function createTheme(slug: string, displayName: string) {
     signal.throwIfAborted();
     const result = await pool.query(
       `INSERT INTO theme(slug, display_name, sort_order)
-       VALUES($1, $2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM theme))
+       VALUES($1, $2, (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM theme))
        ON CONFLICT (slug) DO NOTHING
        RETURNING slug`,
       [slug, displayName]

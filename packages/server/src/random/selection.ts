@@ -64,9 +64,7 @@ export async function selectRandomImages(
     resolveSelectorMap(parsed.theme, (terms) => (
       resolveThemeTermMap(terms, database)
     )),
-    resolveSelectorMap(parsed.tag, (terms) => (
-      resolveTagTermMap(terms, database)
-    )),
+    resolveTagTermMap(parsed.tag?.anyOf.flat() ?? [], database),
     resolveSelectorMap(parsed.author, (terms) => (
       resolveAuthorTermMap(terms, database)
     ))
@@ -113,7 +111,7 @@ export async function selectRandomImages(
       axes.device !== "auto"
       || axes.brightness
       || hasSelectors(query.theme)
-      || hasSelectors(query.tag)
+      || query.tag !== null
       || hasSelectors(query.author)
     );
     return apiErrorResponse({

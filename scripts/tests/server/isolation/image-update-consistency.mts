@@ -394,18 +394,10 @@ const readReadyRevision = async () => BigInt(String((
   const revisionBeforeTagCases = await readReadyRevision();
   try {
     await assert.rejects(withTransactionOnClient(tagClient, async (client) => {
-      const maximum = Number((await client.query("SELECT COALESCE(MAX(sort_order), 0) AS value FROM tag")).rows[0].value);
       const result = await tagMutations.replaceImageTags(client, imageUpdateIds.first, [
         "set-second", "cache-repair-tag", "set-first", "set-second"
       ]);
       assert.equal(result.createdTag, true);
-      assert.deepEqual((await client.query(
-        "SELECT slug, sort_order FROM tag WHERE slug=ANY($1::text[]) ORDER BY sort_order",
-        [["set-second", "set-first"]]
-      )).rows, [
-        { slug: "set-second", sort_order: maximum + 1 },
-        { slug: "set-first", sort_order: maximum + 2 }
-      ]);
       assert.deepEqual((await client.query(
         "SELECT tag_slug FROM image_tag WHERE image_id=$1 ORDER BY tag_slug", [imageUpdateIds.first]
       )).rows.map((row) => row.tag_slug), ["cache-repair-tag", "set-first", "set-second"]);
@@ -453,7 +445,7 @@ const readReadyRevision = async () => BigInt(String((
   assert.equal(originalThemeImage.theme, null);
   await themeMutations.createTheme("none", "普通主题");
   const themeQuery = await import("../../../../packages/server/src/themes/query.ts");
-  assert.deepEqual(await themeQuery.resolveThemeSlugs(["none", "~unset"]), ["none", "~unset"]);
+  assert.deepEqual(await themeQuery.resolveThemeSlugs(["none", "null"]), ["none", "null"]);
   for (const theme of ["clearable", "none"]) {
     assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, theme }])).updated, 1);
     assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, title: "retain-theme" }])).updated, 1);

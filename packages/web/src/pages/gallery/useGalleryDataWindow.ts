@@ -65,6 +65,7 @@ export function useGalleryDataWindow({
   geometryReady,
   imageQuery,
   navigationKey,
+  preserveEquivalentQuery = false,
   restorePosition,
   pinnedImageId,
   windowRef
@@ -73,15 +74,22 @@ export function useGalleryDataWindow({
   geometryReady: boolean;
   imageQuery: string;
   navigationKey: string;
+  preserveEquivalentQuery?: boolean;
   restorePosition: boolean;
   pinnedImageId: string | null;
   windowRef: RefObject<HTMLDivElement | null>;
 }) {
   const queryClient = useQueryClient();
   const ownerId = useId();
-  // A fresh navigation must not join a previous visit's in-flight page read,
-  // even when neither its filters nor its image mutation revision changed.
-  const queryScope = `${ownerId}:${navigationKey}`;
+  // Equivalent URL edits (such as single-tag any/all intent) retain this owner.
+  // A different effective query or a fresh mount starts a separate request scope.
+  const queryNavigationRef = useRef({ imageQuery, navigationKey });
+  if (queryNavigationRef.current.imageQuery !== imageQuery
+    || (!preserveEquivalentQuery && queryNavigationRef.current.navigationKey !== navigationKey)) {
+    queryNavigationRef.current = { imageQuery, navigationKey };
+  }
+  const queryNavigationKey = queryNavigationRef.current.navigationKey;
+  const queryScope = `${ownerId}:${queryNavigationKey}`;
   // Retain the old height during measurement so a classic scrollbar does not
   // disappear and change the measured width. Ownership waits for real geometry.
   const session = useMemo(
@@ -106,7 +114,7 @@ export function useGalleryDataWindow({
         anchor: null
       };
     },
-    [imageQuery, navigationKey, restorePosition, queryClient, geometryReady]
+    [imageQuery, queryNavigationKey, queryClient, geometryReady]
   );
   const controller = session.controller;
   const snapshot = useSyncExternalStore(
@@ -310,6 +318,7 @@ export function useGalleryDataWindow({
   }, [controller, windowRef]);
 
   const fetchPage = useCallback((intent: GalleryPageIntent, forceValidation = false) => {
+    if (!geometryReady) return;
     let active = activeRequestsRef.current.get(controller);
     if (!active) {
       active = new Map();
@@ -350,7 +359,7 @@ export function useGalleryDataWindow({
         setRequestSlotRevision((current) => current + 1);
       });
     active.set(request.cursor, pending);
-  }, [controller, imageQuery, preserveAnchor, queryClient, queryScope]);
+  }, [controller, geometryReady, imageQuery, preserveAnchor, queryClient, queryScope]);
 
   useEffect(() => {
     if (!geometryReady) return;

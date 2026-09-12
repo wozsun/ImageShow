@@ -163,7 +163,8 @@ export class IngestionSessionRepository {
     template: IngestionSessionSnapshot,
     executionToken = "",
     now = Date.now(),
-    displayOrderKey = ""
+    displayOrderKey = "",
+    cancelIfMissing = false
   ) {
     const serializedTemplate = redisJsonValue(template);
     const normalizedTemplate = {
@@ -195,7 +196,8 @@ export class IngestionSessionRepository {
       ttlSeconds * 1000,
       JSON.stringify(normalizedTemplate),
       executionToken,
-      displayOrderKey
+      displayOrderKey,
+      cancelIfMissing ? "1" : "0"
     );
     const result = parseCanonicalReply(raw, "create");
     if (!result.session) {
@@ -228,9 +230,10 @@ export class IngestionSessionRepository {
   acceptImportSession(
     template: IngestionSessionSnapshot,
     displayOrderKey: string,
-    now?: number
+    now?: number,
+    cancelIfMissing = false
   ) {
-    return this.createCanonical("import", template, "", now, displayOrderKey);
+    return this.createCanonical("import", template, "", now, displayOrderKey, cancelIfMissing);
   }
 
   async readSession(owner: string, sessionId: string) {

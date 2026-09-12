@@ -150,14 +150,14 @@ OFFSET 跳过的行水合标签。total、metadata 与 tags 属于同一事务�
 主题词条。readiness 核对该列类型、可空性、无默认值及外键。删除主题时在图片事务内将关联
 置为 NULL，并推进图片投影 revision；其他图片属性及对象键保持不变。
 
-HTTP、JSONL、Redis draft 与图片 DTO 使用 `theme: null` 表示无主题；非空输入沿用通用 slug
-校验。接入请求、队列动作、提交意图与 canonical 语义哈希直接使用当前 metadata 值，
+HTTP、JSONL、Redis draft 与图片 DTO 使用 `theme: null` 表示无主题；非空输入使用主题 slug
+校验，字符串 `"null"` 是保留值，不能存为普通主题。接入请求、队列动作、提交意图与 canonical 语义哈希直接使用当前 metadata 值，
 null 与任意字符串 slug 有不同身份。未完成内容仍只以队列 canonical 为权威，沿现行版本、
 TTL 和恢复链处理；Lua 与 TypeScript draft 校验均接受 JSON null。
 
-筛选统一用查询专用 `~unset` 标记（如 `theme=~unset` 或 `theme=!~unset`），不占用任何合法主题
-slug。虚拟“未设置”项只用于图库筛选与统计，不是数据库词条，不可编辑、删除或参与词条重排；
-主题管理只列出真实主题。排除普通主题时包含无主题图片，排除 `~unset` 才排除空值。
+筛选统一用保留值 `null`（如 `theme=null` 或 `theme=!null`）。虚拟“未设置”项只用于图库筛选
+与统计，不是数据库词条，不可编辑、删除或参与词条重排；
+主题管理只列出真实主题。排除普通主题时包含无主题图片，排除 `null` 才排除空值。
 全量、交叉筛选与随机索引采用同一语义。既有部署的升级顺序见[部署说明](../DEPLOY.md#版本升级)。
 
 ## ready_image_revision —— Redis 投影权威修订号

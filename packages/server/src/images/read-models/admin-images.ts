@@ -35,7 +35,7 @@ export type AdminImageListQuery = {
   device?: Device;
   brightness?: Brightness;
   theme?: string;
-  tag?: string;
+  tag?: string | string[];
   author?: string;
   page: number;
   limit: number;

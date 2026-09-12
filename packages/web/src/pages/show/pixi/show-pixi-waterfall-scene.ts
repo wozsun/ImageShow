@@ -9,7 +9,8 @@ import {
 import { ShowWindowController } from "../show-window-controller.js";
 import {
   ShowPixiCard,
-  ShowPixiPerspectiveCoordinator
+  ShowPixiPerspectiveCoordinator,
+  showPixiTextureLod
 } from "./show-pixi-card.js";
 import { ShowPixiCamera } from "./show-pixi-camera.js";
 import {
@@ -211,6 +212,7 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
     const cameraActive = !this.#destroyed && !this.#camera.destroyed;
     return {
       activeSprites: this.#cards.size,
+      textureReadySprites: [...this.#cards.values()].filter((card) => card.isTextureReady).length,
       visibleSprites: this.#visibleSprites,
       retainedDtos: this.#pool.snapshot().retained,
       recycledSprites: this.#recycledSprites,
@@ -288,7 +290,11 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
     let visibleSprites = 0;
     let visibleArea = 0;
     const visibleItems: ShowPixiVisibleItem[] = [];
-    for (const slot of desired) {
+    const textureLods = this.#textureCache.fitResidentLods(desired.map((slot) => ({
+      url: slot.image.thumb_url,
+      lod: showPixiTextureLod(slot.image, slot.width * scale, slot.height / slot.width)
+    })));
+    for (const [index, slot] of desired.entries()) {
       let card = this.#cards.get(slot.key);
       if (!card) {
         card = new ShowPixiCard(
@@ -309,7 +315,8 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
         slot.angle * Math.PI / 180,
         false,
         slot.width * scale,
-        scale
+        scale,
+        textureLods[index]
       );
       card.root.position.set(
         slot.x + slot.width / 2,

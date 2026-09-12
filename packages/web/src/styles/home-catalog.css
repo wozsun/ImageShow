@@ -40,7 +40,7 @@
   padding-bottom: 13px;
   display: flex;
   gap: 20px;
-  align-items: start;
+  align-items: center;
   justify-content: space-between;
   overflow: hidden;
 }
@@ -87,11 +87,11 @@
   transform: translateX(-60%);
 }
 
-.home-section-heading > div {
+.home-section-heading > .home-section-title {
   min-width: 0;
 }
 
-.home-section-heading span {
+.home-section-heading > .home-section-title > span {
   display: block;
   margin-bottom: 7px;
   color: var(--public-color-accent);
@@ -110,7 +110,6 @@
 
 .home-section-heading > small {
   flex: 0 0 auto;
-  margin-top: 4px;
   padding: 5px 10px;
   color: var(--public-color-home-section-label);
   background: var(--public-color-home-section-label-surface);
@@ -170,7 +169,8 @@
   gap: 8px;
 }
 
-.home-axis-group button {
+.home-axis-group button,
+.home-tag-mode > button {
   container: home-axis-button / inline-size;
   position: relative;
   min-width: 0;
@@ -211,12 +211,17 @@
   transform: translateY(-50%);
 }
 
-.home-axis-group button.is-selected .home-axis-check {
+.home-axis-group button.is-selected .home-axis-check,
+.home-tag-mode > button.is-selected .home-axis-check {
   opacity: 1;
 }
 
-.home-axis-group button.is-selected {
+.home-axis-group button.is-selected,
+.home-tag-mode > button.is-selected {
   color: var(--public-color-text-strong);
+}
+
+.home-axis-group button.is-selected {
   background: var(--public-color-home-option-selected-surface);
   border-color: var(--public-color-home-option-border-selected);
 }
@@ -243,15 +248,10 @@
 .home-tag-selector,
 .home-author-selector {
   min-height: 0;
-  padding: 20px 26px 28px;
+  padding: 16px 26px 28px;
   display: flex;
   overflow: hidden;
   flex-direction: column;
-}
-
-.home-theme-selector,
-.home-tag-selector {
-  padding-top: 16px;
 }
 
 .home-theme-selector > .home-section-heading,
@@ -262,21 +262,22 @@
 
 .home-tag-selector > .home-section-heading,
 .home-author-selector > .home-section-heading {
+  min-height: 42px;
   margin-bottom: 14px;
   padding-bottom: 8px;
   gap: 12px;
 }
 
-.home-tag-selector > .home-section-heading > div,
-.home-author-selector > .home-section-heading > div {
+.home-tag-selector > .home-section-heading > .home-section-title,
+.home-author-selector > .home-section-heading > .home-section-title {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   column-gap: 10px;
   align-items: baseline;
 }
 
-.home-tag-selector > .home-section-heading span,
-.home-author-selector > .home-section-heading span {
+.home-tag-selector > .home-section-heading > .home-section-title > span,
+.home-author-selector > .home-section-heading > .home-section-title > span {
   margin: 0;
   font-size: 9px;
 }
@@ -290,9 +291,84 @@
 
 .home-tag-selector > .home-section-heading > small,
 .home-author-selector > .home-section-heading > small {
-  margin-top: 2px;
   padding: 4px 8px;
   font-size: 10px;
+}
+
+.home-tag-selector {
+  container: home-tag-card / inline-size;
+}
+
+.home-tag-selector > .home-section-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "title mode count";
+  grid-auto-rows: minmax(34px, auto);
+  row-gap: 8px;
+}
+
+.home-tag-selector > .home-section-heading > .home-section-title {
+  grid-area: title;
+}
+
+.home-tag-selector > .home-section-heading > small {
+  grid-area: count;
+  justify-self: end;
+}
+
+.home-tag-mode {
+  --home-tag-mode-gap: 3px;
+  isolation: isolate;
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-area: mode;
+  justify-self: start;
+  gap: var(--home-tag-mode-gap);
+  padding: 2px;
+  background: var(--public-color-home-option-surface);
+  border: 1px solid var(--public-color-border-default);
+  border-radius: 12px;
+}
+
+.home-tag-mode::before {
+  content: "";
+  grid-area: 1 / 1;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--public-color-home-option-selected-surface);
+  border: 1px solid var(--public-color-home-option-border-selected);
+  border-radius: 8px;
+  transform: translateX(0);
+  transition: transform 80ms ease-in-out;
+}
+
+.home-tag-mode[data-mode="all"]::before {
+  transform: translateX(calc(100% + var(--home-tag-mode-gap)));
+}
+
+.home-tag-mode > button {
+  grid-area: 1 / 1;
+  z-index: 1;
+  min-width: 48px;
+  min-height: 28px;
+  padding: 4px 9px;
+  background: transparent;
+  border-color: transparent;
+  border-radius: 8px;
+}
+
+.home-tag-mode > button + button {
+  grid-column: 2;
+}
+
+/* 窄卡片优先保持标题与数量同行，模式控件独占下一行。 */
+@container home-tag-card (max-width: 300px) {
+  .home-tag-selector > .home-section-heading {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title count"
+      "mode mode";
+  }
 }
 
 .home-selector-scroll-shell {
@@ -386,7 +462,7 @@
   gap: 8px;
 }
 
-.home-tag-selector button {
+.home-tag-options button {
   min-width: 0;
   min-height: 58px;
   padding: 9px 11px;
@@ -407,7 +483,7 @@
     transform .1s ease;
 }
 
-.home-tag-selector button > span {
+.home-tag-options button > span {
   grid-row: 1 / 3;
   width: 12px;
   align-self: center;
@@ -416,28 +492,28 @@
   text-align: center;
 }
 
-.home-tag-selector button.is-selected > span {
+.home-tag-options button.is-selected > span {
   transform: translateX(-2px);
 }
 
-.home-tag-selector button > strong,
-.home-tag-selector button > small {
+.home-tag-options button > strong,
+.home-tag-options button > small {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.home-tag-selector button > small {
+.home-tag-options button > small {
   color: var(--public-color-text-secondary);
   font-size: 10px;
 }
 
-.home-tag-selector button.is-empty {
+.home-tag-options button.is-empty {
   opacity: .58;
 }
 
-.home-tag-selector button.is-selected {
+.home-tag-options button.is-selected {
   background: var(--public-color-home-option-selected-surface);
   border-color: var(--public-color-home-option-border-selected);
 }
@@ -493,7 +569,7 @@
 
 .home-axis-group button:disabled,
 .home-theme-selector button:disabled,
-.home-tag-selector button:disabled,
+.home-tag-options button:disabled,
 .home-author-selector button:disabled {
   color: var(--public-color-home-option-disabled-text);
   background: var(--public-color-home-option-disabled-surface);

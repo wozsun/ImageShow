@@ -7,6 +7,7 @@ local ttl_ms = tonumber(ARGV[3])
 local template = cjson.decode(ARGV[4])
 local expected_token = ARGV[5]
 local requested_display_order_key = ARGV[6]
+local cancel_if_missing = ARGV[7] == '1'
 local intent_key = KEYS[1]
 local canonical_key = KEYS[2]
 local owner_key = KEYS[3]
@@ -129,6 +130,18 @@ if not valid_display_order_key(display_order_key, template.session_id) then
   return redis.error_reply('INGESTION_CANONICAL invalid_display_order')
 end
 
+-- Reserve the same canonical identity before any late accept can enqueue it.
+-- Existing attempts returned above retain their real state for normal cancel.
+if acceptance == 'import' and cancel_if_missing then
+  template = {
+    owner = template.owner, queue = template.queue,
+    session_id = template.session_id, image_id = template.image_id,
+    image_time = template.image_time, request_hash = template.request_hash,
+    status = 'discarded', version = 0, last_semantic_revision = 0,
+    accepted_at = 0, accepted_order = 0, discarded_at = now, discard_at = now + ttl_ms
+  }
+end
+
 local metadata_exists = assert_queue_structure(
   owner_key, display_key, metadata_key, template.owner, template.queue
 )
@@ -155,15 +168,17 @@ local revision = redis.call('HINCRBY', metadata_key, 'revision', 1)
 template.accepted_order = accepted_order
 template.accepted_at = now
 template.version = 1
-template.progress_seq = 0
+if template.status ~= 'discarded' then template.progress_seq = 0 end
 template.last_semantic_revision = revision
 template.discard_at = now + ttl_ms
 local serialized = encode_snapshot(template)
 
 apply_projection_delta(metadata_key, projection({ status = 'discarded' }), projection(template))
 store_snapshot(canonical_key, template, serialized, display_order_key)
-redis.call('ZADD', owner_key, accepted_order, template.session_id)
-redis.call('ZADD', display_key, 0, display_order_key)
+if template.status ~= 'discarded' then
+  redis.call('ZADD', owner_key, accepted_order, template.session_id)
+  redis.call('ZADD', display_key, 0, display_order_key)
+end
 if runnable_status(template.status) then
   append_runnable(runnable_key, canonical_key, now)
 end

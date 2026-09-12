@@ -180,7 +180,6 @@ export function ImageMetadataEditorDialog({
     : `${activeItems.length} 张图片`;
 
   const commonChanged = { device: common.device !== "", brightness: common.brightness !== "", theme: common.theme.trim() !== "", author: common.author.trim() !== "", tags: common.tags.length > 0 };
-  const commonHasValue = commonChanged.device || commonChanged.brightness || commonChanged.theme || commonChanged.author || commonChanged.tags;
   const restoreAvailable = changedCount > 0;
   const commonSummary = [
     commonImageDeviceOptions.find((option) => option.value === common.device)?.label ?? "设备不变",
@@ -360,7 +359,6 @@ export function ImageMetadataEditorDialog({
                   }}
                   changed={commonChanged}
                   applyDisabled={busy || !activeItems.length}
-                  applyReady={commonHasValue}
                   clearScope={sessionItemIds.join(",")}
                   clearScopeLabel="本次批量编辑"
                   onPrepareClear={prepareAttributeClear}

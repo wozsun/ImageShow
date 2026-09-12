@@ -1,5 +1,9 @@
-import { unsetThemeFilter } from "@imageshow/shared/browser";
 import {
+  parseTagFilter,
+  basicTagValue,
+  resolveTagExpression,
+  tagExpressionValues,
+  readableFilterSearch,
   detectDeviceFromUserAgent,
   showModes,
   publicImageOrders,
@@ -35,8 +39,7 @@ function selectorValue(params: URLSearchParams, key: string) {
     params.getAll(key)
       .flatMap((value) => value.split(","))
       .map((value) => value.trim().toLowerCase())
-      .filter((value) => selectorPattern.test(value)
-        || (key === "theme" && [unsetThemeFilter, `!${unsetThemeFilter}`].includes(value)))
+      .filter((value) => selectorPattern.test(value))
   )];
   const hasIncludes = tokens.some((value) => !value.startsWith("!"));
   const hasExcludes = tokens.some((value) => value.startsWith("!"));
@@ -44,25 +47,36 @@ function selectorValue(params: URLSearchParams, key: string) {
 }
 
 export function galleryFiltersFromSearchParams(
-  params: URLSearchParams
+  params: URLSearchParams,
+  tags?: readonly { slug: string; display_name: string }[]
 ): GalleryFilters {
   const device = params.get("device")?.trim().toLowerCase() ?? "";
   const brightness = params.get("brightness")?.trim().toLowerCase() ?? "";
+  const parsed = parseTagFilter(params.getAll("tag"));
+  let expression = parsed.expression;
+  if (tags && expression) {
+    const map = new Map(tags.map((tag) => [tag.display_name.trim().toLowerCase(), tag.slug]));
+    for (const tag of tags) map.set(tag.slug, tag.slug);
+    expression = resolveTagExpression(expression, map);
+  }
   return {
     device: device === "all" ? "" : galleryDevices.has(device) ? device : "",
     brightness: galleryBrightnesses.has(brightness) ? brightness : "",
     theme: selectorValue(params, "theme"),
-    tag: selectorValue(params, "tag"),
+    tag: basicTagValue(expression?.anyOf.flat() ?? [], parsed.mode),
     author: selectorValue(params, "author")
   };
 }
 
-export function galleryRouteSearchParams(filters: GalleryFilters) {
+export function galleryRouteSearchParams(filters: GalleryFilters, preserveTagMode = true) {
   const params = new URLSearchParams();
   if (galleryDevices.has(filters.device)) params.set("device", filters.device);
   if (filters.brightness) params.set("brightness", filters.brightness);
   if (filters.theme) params.set("theme", filters.theme);
-  if (filters.tag) params.set("tag", filters.tag);
+  if (filters.tag) {
+    const parsed = parseTagFilter([filters.tag]);
+    for (const value of tagExpressionValues(parsed.expression, preserveTagMode ? parsed.mode : undefined)) params.append("tag", value);
+  }
   if (filters.author) params.set("author", filters.author);
   return params;
 }
@@ -90,6 +104,7 @@ export function updateImageBrowseSearchParams(
 ) {
   const params = new URLSearchParams(current);
   for (const [key, value] of Object.entries(changes)) {
+    if (key === "tag") params.delete(key);
     if (value) params.set(key, value);
     else params.delete(key);
   }
@@ -109,9 +124,12 @@ export function imageBrowseApiSearchParams(
     params.set("device", projectedDevice);
   }
   if (filters.brightness) params.set("brightness", filters.brightness);
-  for (const key of ["theme", "tag", "author"] as const) {
+  for (const key of ["theme", "author"] as const) {
     const value = selectorValue(new URLSearchParams({ [key]: filters[key] }), key);
     if (value) params.set(key, value);
+  }
+  if (filters.tag) {
+    for (const value of tagExpressionValues(parseTagFilter([filters.tag]).expression)) params.append("tag", value);
   }
   if (options.cursor) params.set("cursor", options.cursor);
   params.set("order", order);
@@ -131,6 +149,6 @@ export function galleryHref(
   filters: GalleryFilters,
   pathname: "/show" | "/gallery" | "/embed/show" | "/embed/gallery" = "/gallery"
 ) {
-  const query = galleryRouteSearchParams(filters).toString();
+  const query = readableFilterSearch(galleryRouteSearchParams(filters));
   return query ? `${pathname}?${query}` : pathname;
 }

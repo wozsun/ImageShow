@@ -141,6 +141,51 @@ const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
     message: "second import rejected"
   });
 
+  const cancelOwner = "cancel-before-import-owner";
+  const cancelService = new ingestionSessionService.IngestionSessionService(
+    ingestionRepository, serviceTokens(), serviceDependencies(async () => new Map())
+  );
+  const cancelInput = {
+    ...serviceDraft, storage_slug: "local", batch_key: serviceBatchKey,
+    idempotency_key: "cancel-before-accept", batch_position: 0,
+    source_type: "weibo" as const, download_url: "https://example.com/cancel.jpg"
+  };
+  const cancelledMissing = (await cancelService.acceptImportItems(
+    cancelOwner, [cancelInput], serviceNow, { cancelIfMissing: true }
+  ))[0];
+  assert.equal(cancelledMissing.status, "discarded");
+  assert.ok(cancelledMissing.status === "discarded");
+  assert.equal((await ingestionRepository.readSession(cancelOwner, cancelledMissing.session_id))?.status, "discarded");
+  const cancelledQueue = await ingestionRepository.snapshot(cancelOwner, "import", 0, 100);
+  assert.equal(cancelledQueue.metadata.total, 0);
+  assert.equal(cancelledQueue.items.length, 0);
+  assert.equal(JSON.stringify(await ingestionRepository.discoverRunnable()).includes(cancelledMissing.session_id), false);
+  assert.deepEqual((await cancelService.acceptImportItems(cancelOwner, [cancelInput], serviceNow + 10))[0], cancelledMissing,
+    "取消先到时，迟到的原始 accept 只能返回同一 discarded 回执，不能启动下载");
+  const conflict = (await cancelService.acceptImportItems(cancelOwner, [{ ...cancelInput, title: "changed" }], serviceNow))[0];
+  assert.ok(conflict.status === "failed");
+  assert.equal((await ingestionRepository.readSession(cancelOwner, cancelledMissing.session_id))?.status, "discarded");
+
+  const acceptedInput = { ...cancelInput, idempotency_key: "accept-before-cancel", batch_position: 1 };
+  const acceptedBeforeCancel = (await cancelService.acceptImportItems(cancelOwner, [acceptedInput], serviceNow))[0];
+  assert.equal(acceptedBeforeCancel.status, "accepted");
+  assert.deepEqual((await cancelService.acceptImportItems(cancelOwner, [acceptedInput], serviceNow, { cancelIfMissing: true }))[0], acceptedBeforeCancel,
+    "已经接管的任务保留真实状态，由现有版本化取消流程处理");
+  assert.equal((await ingestionRepository.snapshot(cancelOwner, "import", 0, 100)).metadata.total, 1);
+
+  const blockedStorageService = new ingestionSessionService.IngestionSessionService(ingestionRepository, serviceTokens(), {
+    ...serviceDependencies(async () => new Map()),
+    assertStorageWriteTarget: async () => { throw new Error("storage not writable"); }
+  });
+  assert.equal((await blockedStorageService.acceptImportItems(cancelOwner, [{ ...cancelInput, idempotency_key: "cancel-retired-storage", batch_position: 2 }], serviceNow, { cancelIfMissing: true }))[0].status, "discarded");
+  assert.equal((await blockedStorageService.acceptImportItems(cancelOwner, [{ ...cancelInput, idempotency_key: "normal-retired-storage", batch_position: 3 }], serviceNow))[0].status, "failed");
+  const oversizedItems = Array.from({ length: runtimeConfigStore.getRuntimeConfig().import.max_items + 1 }, (_, index) => ({
+    ...cancelInput, idempotency_key: `oversized-${index}`, batch_position: index
+  }));
+  await assert.rejects(cancelService.acceptImportItems("oversized-import-owner", oversizedItems, serviceNow),
+    (error: any) => error.code === "import_batch_limit_exceeded");
+  assert.equal((await ingestionRepository.snapshot("oversized-import-owner", "import", 0, 100)).metadata.total, 0);
+
   const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfig());
   const policyTemplates: IngestionSessionSnapshot[] = [];
   const policyService = new ingestionSessionService.IngestionSessionService(repositoryWithOverrides(ingestionRepository, {

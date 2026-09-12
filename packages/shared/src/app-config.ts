@@ -8,6 +8,7 @@ import {
   imageTitleMaxLength,
   ingestionBatchHardLimit,
   ingestionQueueSnapshotMaxItems,
+  randomQueryLimits,
   slugMaxLength
 } from "./browser/common.ts";
 import type { ImportSourceTypeDto } from "./browser/ingestion.ts";
@@ -35,13 +36,7 @@ export const appConfig = {
     ttlSeconds: 15 * 60
   },
 
-  randomQuery: {
-    maxRawBytes: 4 * 1024,
-    maxSelectorCount: 64,
-    maxSelectorsPerField: 32,
-    maxSelectorCharacters: 64,
-    maxJsonItems: 200
-  },
+  randomQuery: randomQueryLimits,
 
   trashBatchSize: 100,
 

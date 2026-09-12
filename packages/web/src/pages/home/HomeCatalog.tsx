@@ -1,3 +1,4 @@
+import { basicTagSelection, basicTagValue, TagFilterError, type TagMatchMode } from "@imageshow/shared/browser";
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
 import {
   useEffect,
@@ -160,7 +161,8 @@ function SectionHeading({
   count,
   refreshGlintRun,
   isRefreshing,
-  reduceMotion
+  reduceMotion,
+  action
 }: {
   index: string;
   eyebrow: string;
@@ -169,6 +171,7 @@ function SectionHeading({
   refreshGlintRun: number;
   isRefreshing: boolean;
   reduceMotion: boolean;
+  action?: ReactNode;
 }) {
   const [
     completedRefreshGlintRun,
@@ -187,10 +190,11 @@ function SectionHeading({
 
   return (
     <header className="home-section-heading">
-      <div>
+      <div className="home-section-title">
         <span>{index} / {eyebrow}</span>
         <h2>{title}</h2>
       </div>
+      {action}
       <small>{count} 项</small>
       <i
         className={[
@@ -220,6 +224,8 @@ export function HomeCatalog({
   isError,
   isRefreshing,
   onFiltersChange,
+  tagMode,
+  onTagModeChange,
   onRetry,
   onCatalogIntent
 }: {
@@ -231,6 +237,8 @@ export function HomeCatalog({
   isError: boolean;
   isRefreshing: boolean;
   onFiltersChange: (filters: GalleryFilters) => void;
+  tagMode: TagMatchMode;
+  onTagModeChange: (mode: TagMatchMode) => void;
   onRetry: () => void;
   onCatalogIntent: () => void;
 }) {
@@ -241,7 +249,8 @@ export function HomeCatalog({
   );
   const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const themeSet = new Set(selectedSlugs(filters.theme));
-  const tagSet = new Set(selectedSlugs(filters.tag));
+  const tagSet = new Set(basicTagSelection(filters.tag).selected);
+  const [tagError, setTagError] = useState("");
   const authorSet = new Set(selectedSlugs(filters.author));
   const deviceCounts = new Map(
     stats?.devices.map((item) => [item.device, item.image_count]) ?? []
@@ -287,12 +296,18 @@ export function HomeCatalog({
     key: "theme" | "tag" | "author",
     slug: string
   ) => {
-    const selected = selectedSlugs(filters[key]);
+    const selected = key === "tag" ? [...tagSet] : selectedSlugs(filters[key]);
     if (availabilityUnverified && !selected.includes(slug)) return;
     const next = selected.includes(slug)
       ? selected.filter((item) => item !== slug)
       : [...selected, slug];
-    updateFilter(key, next.join(","));
+    try {
+      updateFilter(key, key === "tag" ? basicTagValue(next, tagMode) : next.join(","));
+      setTagError("");
+    } catch (error) {
+      if (!(error instanceof TagFilterError)) throw error;
+      setTagError(error.message);
+    }
   };
 
   return (
@@ -481,7 +496,31 @@ export function HomeCatalog({
                   refreshGlintRun={refreshGlintRun}
                   isRefreshing={isRefreshing}
                   reduceMotion={reduceMotion}
+                  action={(
+                    <div className="home-tag-mode" data-mode={tagMode} role="group" aria-label="标签筛选方式">
+                      {(["any", "all"] as const).map((mode) => (
+                        <AxisButton
+                          key={mode}
+                          selected={tagMode === mode}
+                          disabled={false}
+                          locked={false}
+                          label={mode === "any" ? "任一" : "全部"}
+                          onClick={() => {
+                            try {
+                              if (tagSet.size) updateFilter("tag", basicTagValue([...tagSet], mode));
+                              onTagModeChange(mode);
+                              setTagError("");
+                            } catch (error) {
+                              if (!(error instanceof TagFilterError)) throw error;
+                              setTagError(error.message);
+                            }
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
                 />
+                {tagError && <p className="muted" role="alert">{tagError}</p>}
                 <SelectorOptions className="home-tag-options">
                   {stats.tags.map((item) => {
                     const selected = tagSet.has(item.slug);

@@ -14,7 +14,8 @@ import type { ShowImage } from "../show-layout.js";
 import { ShowPixiEdgeLight } from "./show-pixi-edge-light.js";
 import {
   type ShowPixiTextureCache,
-  type ShowPixiTextureLease
+  type ShowPixiTextureLease,
+  type ShowPixiTextureLod
 } from "./show-pixi-texture-cache.js";
 
 const pointerDistance = (
@@ -246,11 +247,12 @@ export class ShowPixiCard {
     rotation: number,
     smoothSize = false,
     textureRenderedWidth = width,
-    renderScale = 1
+    renderScale = 1,
+    textureLod?: ShowPixiTextureLod
   ) {
     const identityChanged = this.image?.id !== image.id || this.key !== key;
     const resolvedTextureUrl = image.thumb_url;
-    const lod = showPixiTextureLod(
+    const lod = textureLod ?? showPixiTextureLod(
       image,
       textureRenderedWidth,
       height / Math.max(1, width)
@@ -292,7 +294,7 @@ export class ShowPixiCard {
 
   #loadTexture(
     url: string,
-    lod: ReturnType<typeof showPixiTextureLod>,
+    lod: ShowPixiTextureLod,
     generationKey: string
   ) {
     if (

@@ -74,7 +74,6 @@
 .workflow-attribute-actions { align-self: end; }
 .workflow-attribute-actions .apply-to-all-button { flex: 1; }
 .confirm-dialog[data-interaction-surface] { z-index: 110; }
-.apply-to-all-button.is-ready { background: var(--admin-color-action-primary); border-color: var(--admin-color-action-primary); color: var(--admin-color-text-on-emphasis); }
 .select-control.workflow-default-select {
   width: 120px;
   flex: 0 0 auto;

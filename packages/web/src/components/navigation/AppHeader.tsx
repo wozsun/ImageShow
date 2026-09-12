@@ -21,10 +21,12 @@ import {
 export function AppHeader({
   animateEntrance,
   onMenuExpandedChange,
+  browseSearch = "",
   visible
 }: {
   animateEntrance?: boolean;
   onMenuExpandedChange?: (expanded: boolean) => void;
+  browseSearch?: string;
   visible?: boolean;
 } = {}) {
   const { pathname } = useLocation();
@@ -149,14 +151,14 @@ export function AppHeader({
       </Link>
       <nav className="desktop-nav">
         {homeEnabled && <NavLink to="/home" className={navClassName("/home")} {...homePreloadProps}><Icon name="home-4-line" />首页</NavLink>}
-        {showEnabled && <NavLink to="/show" className={navClassName("/show")} {...showPreloadProps}><Icon name="slideshow-3-line" />展映</NavLink>}
-        {galleryEnabled && <NavLink to="/gallery" className={navClassName("/gallery")} {...galleryPreloadProps}><Icon name="image-line" />画廊</NavLink>}
+        {showEnabled && <NavLink to={browseSearch ? `/show?${browseSearch}` : "/show"} className={navClassName("/show")} {...showPreloadProps}><Icon name="slideshow-3-line" />展映</NavLink>}
+        {galleryEnabled && <NavLink to={browseSearch ? `/gallery?${browseSearch}` : "/gallery"} className={navClassName("/gallery")} {...galleryPreloadProps}><Icon name="image-line" />画廊</NavLink>}
         {showAdminEntry && <NavLink to={adminBasePath}><Icon name="settings-3-line" />管理</NavLink>}
       </nav>
       <MobileNavigation onExpandedChange={onMenuExpandedChange}>
         {homeEnabled && <NavLink to="/home" className={navClassName("/home")} {...homePreloadProps}><Icon name="home-4-line" />首页</NavLink>}
-        {showEnabled && <NavLink to="/show" className={navClassName("/show")} {...showPreloadProps}><Icon name="slideshow-3-line" />展映</NavLink>}
-        {galleryEnabled && <NavLink to="/gallery" className={navClassName("/gallery")} {...galleryPreloadProps}><Icon name="image-line" />画廊</NavLink>}
+        {showEnabled && <NavLink to={browseSearch ? `/show?${browseSearch}` : "/show"} className={navClassName("/show")} {...showPreloadProps}><Icon name="slideshow-3-line" />展映</NavLink>}
+        {galleryEnabled && <NavLink to={browseSearch ? `/gallery?${browseSearch}` : "/gallery"} className={navClassName("/gallery")} {...galleryPreloadProps}><Icon name="image-line" />画廊</NavLink>}
         {showAdminEntry && <NavLink to={adminBasePath}><Icon name="settings-3-line" />管理</NavLink>}
       </MobileNavigation>
     </header>

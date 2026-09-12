@@ -1,3 +1,4 @@
+import { readyImageFilterOperations } from "../derived/filter-operations.ts";
 import { logger } from "../../../core/logger.ts";
 import { getRedisConnectionState, redis } from "../../../core/redis/client.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
@@ -51,28 +52,28 @@ function filterComponents(plan: ImageFilterPlan) {
   const theme = selectorComponents(plan.theme, (value) => (
     readyImageAttributeIndexKey({ kind: "theme", value })
   ));
-  const tag = selectorComponents(plan.tag, (value) => (
+  const tagClauses = plan.tag?.anyOf.map((clause) => clause.map((value) => (
     readyImageAttributeIndexKey({ kind: "tag", value })
-  ));
+  ))) ?? [];
   const author = selectorComponents(plan.author, (value) => (
     readyImageAttributeIndexKey({ kind: "author", value })
   ));
-  for (const keys of [theme.include, tag.include, author.include]) {
+  for (const keys of [theme.include, author.include]) {
     if (keys.length) positive.push(keys);
   }
   return {
     positive,
-    exclusions: [theme.exclude, tag.exclude, author.exclude]
+    tagClauses,
+    exclusions: [theme.exclude, author.exclude]
   };
 }
 
 export function resolveDirectReadyImageFilterKey(plan: ImageFilterPlan) {
-  const { positive, exclusions } = filterComponents(plan);
+  const { positive, tagClauses, exclusions } = filterComponents(plan);
   if (exclusions.some((keys) => keys.length)) return null;
-  if (!positive.length) return READY_IMAGE_ALL_INDEX_KEY;
-  if (positive.length === 1 && positive[0]?.length === 1) {
-    return positive[0][0] ?? null;
-  }
+  const components = [...positive, ...(tagClauses.length ? [tagClauses.flat()] : [])];
+  if (!components.length) return READY_IMAGE_ALL_INDEX_KEY;
+  if (components.length === 1 && components[0]?.length === 1) return components[0][0] ?? null;
   return null;
 }
 
@@ -118,10 +119,11 @@ export async function buildReadyImageFilterIndex(
       temporaryKeys.splice(temporaryKeys.indexOf(key), 1);
     }
   };
-  const { positive, exclusions } = filterComponents(plan);
+  const { positive, tagClauses, exclusions } = filterComponents(plan);
   const shapeAdmission = assessReadyImageFilterWork({
     itemCount: 1,
     positive: positive.map((keys) => keys.map(() => 1)),
+    tagClauses: tagClauses.map((keys) => keys.map(() => 1)),
     exclusions: exclusions.map((keys) => keys.map(() => 1))
   });
   if (!shapeAdmission.admitted) {
@@ -135,8 +137,9 @@ export async function buildReadyImageFilterIndex(
   }
   const sourceKeys = [
     ...positive.flat(),
+    ...tagClauses.flat(),
     ...exclusions.flat(),
-    ...(positive.length ? [] : [READY_IMAGE_ALL_INDEX_KEY])
+    ...(positive.length || tagClauses.length ? [] : [READY_IMAGE_ALL_INDEX_KEY])
   ];
   const attributeKeys = sourceKeys.filter(
     (key) => key !== READY_IMAGE_ALL_INDEX_KEY
@@ -162,6 +165,9 @@ export async function buildReadyImageFilterIndex(
     positive: positive.map((keys) => keys.map(
       (key) => sourceStates.get(key)?.count ?? 0
     )),
+    tagClauses: tagClauses.map((keys) => keys.map(
+      (key) => sourceStates.get(key)?.count ?? 0
+    )),
     exclusions: exclusions.map((keys) => keys.map(
       (key) => sourceStates.get(key)?.count ?? 0
     ))
@@ -178,82 +184,32 @@ export async function buildReadyImageFilterIndex(
     admission.estimate
   );
   if (!releaseBuildSlot) return null;
-  const union = async (keys: string[]) => {
-    const activeKeys = keys.filter(
-      (key) => (sourceStates.get(key)?.count ?? 0) > 0
-    );
-    if (!activeKeys.length) {
-      return {
-        key: keys[0] ?? temporaryKey(),
-        count: 0
-      };
-    }
-    if (activeKeys.length === 1) {
-      const key = activeKeys[0]!;
-      return {
-        key,
-        count: sourceStates.get(key)?.count ?? 0
-      };
-    }
-    const destination = temporaryKey();
-    const expectedMembers = Math.min(
-      startingMeta.itemCount,
-      activeKeys.reduce((total, key) => (
-        total + (sourceStates.get(key)?.count ?? 0)
-      ), 0)
-    );
-    const count = await storeReadyImageFilterSetOperation(
-      "zunionstore",
-      destination,
-      activeKeys.map((key) => ({
-        key,
-        count: sourceStates.get(key)?.count ?? 0
-      })),
-      expectedMembers
-    );
-    return { key: destination, count };
-  };
-
   try {
-    let current: { key: string; count: number } | null = null;
-    for (const keys of positive) {
-      const component = await union(keys);
-      if (!current) {
-        current = component;
-        continue;
-      }
-      const destination = temporaryKey();
-      const expectedMembers = Math.min(current.count, component.count);
-      const count = await storeReadyImageFilterSetOperation(
-        "zinterstore",
-        destination,
-        [current, component],
-        expectedMembers
+    const sources = (groups: string[][]) => groups.map((keys) => keys.map((key) => ({
+      key, count: sourceStates.get(key)!.count
+    })));
+    const execution = readyImageFilterOperations({
+      all: { key: READY_IMAGE_ALL_INDEX_KEY, count: startingMeta.itemCount },
+      positive: sources(positive),
+      tagClauses: sources(tagClauses),
+      exclusions: sources(exclusions)
+    }, temporaryKey);
+    const commands = {
+      union: "zunionstore", intersection: "zinterstore", difference: "zdiffstore"
+    } as const;
+    for (let index = 0; index < execution.operations.length; index += 1) {
+      signal?.throwIfAborted();
+      const operation = execution.operations[index]!;
+      operation.result.count = await storeReadyImageFilterSetOperation(
+        commands[operation.kind], operation.result.key, operation.sources, operation.result.count
       );
-      await releaseTemporaryKeys(current.key, component.key);
-      current = { key: destination, count };
+      // Sources may be shared by later tag branches. Release only after last use.
+      const remaining = new Set(execution.operations.slice(index + 1).flatMap((next) => next.sources.map((source) => source.key)));
+      await releaseTemporaryKeys(...operation.sources
+        .filter((source) => source.key !== execution.result.key && !remaining.has(source.key))
+        .map((source) => source.key));
     }
-    current ??= {
-      key: READY_IMAGE_ALL_INDEX_KEY,
-      count: startingMeta.itemCount
-    };
-
-    for (const keys of exclusions) {
-      const activeKeys = keys.filter(
-        (key) => (sourceStates.get(key)?.count ?? 0) > 0
-      );
-      if (!activeKeys.length) continue;
-      const excluded = await union(activeKeys);
-      const destination = temporaryKey();
-      const count = await storeReadyImageFilterSetOperation(
-        "zdiffstore",
-        destination,
-        [current, excluded],
-        current.count
-      );
-      await releaseTemporaryKeys(current.key, excluded.key);
-      current = { key: destination, count };
-    }
+    const current = execution.result;
 
     if (!temporaryKeys.includes(current.key)) {
       if (current.key === READY_IMAGE_ALL_INDEX_KEY) {

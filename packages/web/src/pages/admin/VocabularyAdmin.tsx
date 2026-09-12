@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   adminPermissions,
+  isThemeSlug,
+  unsetThemeFilter,
   type AuthorDto,
   type AuthorMutationResponseDto,
   type AdminEntityListResponseDto,
@@ -105,7 +107,7 @@ function VocabularyAdminContent({ kind, settings }: {
       );
       const items = [...current.items];
       if (existingIndex >= 0) items[existingIndex] = item;
-      else items.push(item);
+      else items.unshift(item);
       return { ...current, items };
     });
     await invalidateDataAfterAuthorProfileSave(client);
@@ -127,8 +129,12 @@ function VocabularyAdminContent({ kind, settings }: {
     setConfirmDelete(null);
   }, [canDelete]);
 
-  const slugInvalid = slug.length > 0 && !slugPattern.test(slug);
-  const slugError = slugInvalid ? slugFormatHint : createError;
+  const slugInvalid = slug.length > 0 && !(kind === "themes" ? isThemeSlug(slug) : slugPattern.test(slug));
+  const slugError = slugInvalid
+    ? kind === "themes" && slug === unsetThemeFilter
+      ? "null 是未设置主题的保留值，不能用作主题标识"
+      : slugFormatHint
+    : createError;
   const externalBusy = Boolean(mutation) || createAction.pending;
   const pageSize = settings.admin.image_page_size;
   const reorder = usePersistedReorder<VocabularyEntry>({
@@ -201,6 +207,7 @@ function VocabularyAdminContent({ kind, settings }: {
         } else {
           await refresh();
         }
+        setPage(1);
         return true;
       } catch (error) {
         reportAdminUiError(`vocabulary_admin.${kind}.create`, error);

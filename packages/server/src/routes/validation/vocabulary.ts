@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
-  vocabularyDisplayNameMaxLength
+  vocabularyDisplayNameMaxLength,
+  isThemeSlug
 } from "@imageshow/shared/browser";
 import {
   httpsUrlField,
@@ -21,7 +22,7 @@ export const tagDisplayUpdateInput = z.strictObject({
   display_name: displayNameInput
 });
 
-export const themeSlugInput = requestSlugInput;
+export const themeSlugInput = requestSlugInput.refine(isThemeSlug, "null 是未设置主题的保留值，不能用作主题标识");
 export const themeCreateInput = z.strictObject({
   slug: themeSlugInput,
   display_name: displayNameInput.optional().default("")

@@ -24,6 +24,7 @@ import {
 } from "../core/http/request-body-limit.ts";
 import {
   adminImageListQuery,
+  imageListQueryValues,
   imageActionInput,
   imagePurgeInput,
   imageSnapshotInput,
@@ -56,7 +57,7 @@ export function registerAdminImageRoutes(app: Hono) {
 
   app.get(`${adminApiBasePath}/images`, async (c) => {
     c.header(adminImageListReadStartedAtHeader, String(Date.now()));
-    const q = parse(adminImageListQuery, Object.fromEntries(new URL(c.req.url).searchParams));
+    const q = parse(adminImageListQuery, imageListQueryValues(new URL(c.req.url).searchParams));
     return privateCacheableApiSuccess(c, await listAdminImages(q));
   });
 

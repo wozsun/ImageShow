@@ -4,6 +4,7 @@ import { api } from "./client.js";
 import { adminApiBasePath } from "../constants.js";
 import { storageBackendLabel } from "../ui/select-options.js";
 import { queryKeys } from "./query-keys.js";
+import { readRequestRetryOptions } from "./read-request-retry.js";
 import type {
   StorageBackendOptionDto,
   StorageBackendOptionsResponseDto
@@ -29,6 +30,7 @@ export const storageOptionsQueryOptions =
   queryOptions<StorageBackendOptionsResponseDto>({
     queryKey: queryKeys.storageOptions,
     queryFn: ({ signal }) => api(`${adminApiBasePath}/storage/options`, { signal }),
+    ...readRequestRetryOptions,
     staleTime: 5 * 60 * 1000
   });
 

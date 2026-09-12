@@ -28,6 +28,7 @@ export type ShowPixiTextureStats = {
 
 export type ShowPixiSceneStats = {
   activeSprites: number;
+  textureReadySprites: number;
   visibleSprites: number;
   retainedDtos: number;
   recycledSprites: number;
@@ -99,6 +100,7 @@ export interface ShowPixiSceneController {
 
 export const emptyShowPixiSceneStats = (): ShowPixiSceneStats => ({
   activeSprites: 0,
+  textureReadySprites: 0,
   visibleSprites: 0,
   retainedDtos: 0,
   recycledSprites: 0,

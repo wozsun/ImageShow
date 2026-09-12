@@ -1,5 +1,8 @@
 import {
   unsetThemeFilter,
+  parseTagFilter,
+  tagExpressionValues,
+  readableFilterSearch,
   defaultAdminImageSort,
   adminImageListReadStartedAtHeader,
   type AdminImageSort,
@@ -72,7 +75,7 @@ function normalizedScope(
     device: filters.device || "",
     brightness: filters.brightness || "",
     theme: view === "unset" ? unsetThemeFilter : filters.theme || "",
-    tag: filters.tag || "",
+    tag: tagExpressionValues(parseTagFilter(filters.tag ? [filters.tag] : []).expression).join(","),
     author: filters.author || "",
     sort_by: sort.sort_by,
     order: sort.order,
@@ -133,7 +136,7 @@ export function adminImageListQuery(
   else if (filters.theme) params.set("theme", filters.theme);
   if (filters.device) params.set("device", filters.device);
   if (filters.brightness) params.set("brightness", filters.brightness);
-  if (filters.tag) params.set("tag", filters.tag);
+  if (filters.tag) params.set("tag", tagExpressionValues(parseTagFilter([filters.tag]).expression).join(","));
   if (filters.author) params.set("author", filters.author);
 
   const queryKey = [
@@ -154,7 +157,7 @@ export function adminImageListQuery(
       );
       let validationStartedAt: number | undefined;
       const result = await apiWithEtag<AdminImageListResponseDto>(
-        `${adminApiBasePath}/images?${params}`,
+        `${adminApiBasePath}/images?${readableFilterSearch(params)}`,
         { signal: context.signal },
         cached?.etag ? { etag: cached.etag, data: cached } : undefined,
         (response) => {

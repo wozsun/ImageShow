@@ -221,6 +221,9 @@ export type ImportItemInputDto = ImageDraftDto & {
 
 export type ImportAcceptInputDto = {
   items: ImportItemInputDto[];
+  // Resolve the original attempt for cancellation; a missing attempt becomes
+  // a discarded receipt atomically and never enters the download queue.
+  cancel_if_missing?: boolean;
 };
 
 export type ImportAcceptItemDto = (IngestionSessionPairDto & {

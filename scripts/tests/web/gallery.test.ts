@@ -61,12 +61,12 @@ import {
 } from "../../../packages/web/src/pages/gallery/gallery-restoration.ts";
 
 test("[Web/画廊] 首页目录、瀑布流、分页预载与滚动导航组成完整公开浏览流程", () => {
-  const unset = { slug: "~unset", image_count: 7 };
+  const unset = { slug: "null", image_count: 7 };
   const portrait = { slug: "portrait", image_count: 4 };
   const stage = { slug: "stage", image_count: 3 };
   assert.deepEqual(
     homeThemesWithUnsetLast([unset, portrait, stage]).map(({ slug }) => slug),
-    ["portrait", "stage", "~unset"]
+    ["portrait", "stage", "null"]
   );
   const revealItems = Array.from({ length: 40 }, (_, index) => ({
     slug: "item-" + index,

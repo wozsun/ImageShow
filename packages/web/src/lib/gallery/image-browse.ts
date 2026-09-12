@@ -1,4 +1,4 @@
-import { unsetThemeFilter } from "@imageshow/shared/browser";
+import { unsetThemeFilter, parseTagFilter } from "@imageshow/shared/browser";
 import { detectDeviceFromUserAgent, type EditableImageSnapshotDto } from "@imageshow/shared/browser";
 import type { GalleryFilters } from "./gallery-query.js";
 
@@ -19,10 +19,11 @@ export function imageMatchesFilters(
 ) {
   const device = filters.device === "auto"
     ? detectDeviceFromUserAgent(userAgent) : filters.device;
+  const tag = parseTagFilter(filters.tag ? [filters.tag] : []).expression;
   return (!device || image.device === device)
     && (!filters.brightness || image.brightness === filters.brightness)
     && matchesSelector([image.theme ?? unsetThemeFilter], filters.theme)
-    && matchesSelector(image.tags, filters.tag)
+    && (!tag || tag.anyOf.some((clause) => clause.every((slug) => image.tags.includes(slug))))
     && matchesSelector([image.author], filters.author);
 }
 

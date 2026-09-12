@@ -74,7 +74,9 @@ export function showPixiTextureCacheOptions(
 ): ShowPixiTextureCacheOptions {
   const compact = width <= 760;
   return {
-    maximumEntries: compact ? 720 : 1_800,
+    // Up to 800 resident images can overlap their old/new LOD during zoom.
+    // The pixel budget, including mipmaps, remains lower on compact screens.
+    maximumEntries: 1_800,
     maximumPixels: compact ? 24_000_000 : 52_000_000,
     maximumInFlight: compact ? 12 : 16,
     maximumUnreferenced: compact ? 48 : 96,

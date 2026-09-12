@@ -463,9 +463,9 @@ export function useUpload(options: {
     for (
       let offset = 0;
       offset < replay.length;
-      offset += ingestionBatchHardLimit
+      offset += maxItems
     ) {
-      const chunk = replay.slice(offset, offset + ingestionBatchHardLimit);
+      const chunk = replay.slice(offset, offset + maxItems);
       const requestConnectionGeneration =
         queue.captureServerConnectionGeneration();
       let results: Awaited<ReturnType<typeof createUploadIntents>>["items"];
@@ -589,7 +589,7 @@ export function useUpload(options: {
       }
     }
     return outcomes;
-  }, [queue]);
+  }, [maxItems, queue]);
 
   const cancel = useCallback(async (job: IngestionJob) => (
     (await cancelMany([job])).get(job.id) ?? {

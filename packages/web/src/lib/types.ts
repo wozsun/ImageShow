@@ -99,6 +99,8 @@ export type IngestionJob = {
   // 接管请求一旦开始便冻结；响应未知重放必须复用相同幂等键与完全相同的正文。
   uploadIntentItemInput?: UploadIntentItemInputDto;
   importAcceptItemInput?: ImportItemInputDto;
+  // Only a definite rejection before this attempt was ever accepted is local-only.
+  importAcceptRejected?: boolean;
   // 单次入队动作的稳定批次身份；随接管请求发送并用于同批排序。
   batchKey: string;
   // Redis canonical pair；状态读取、提交和取消始终同时携带两部分身份。

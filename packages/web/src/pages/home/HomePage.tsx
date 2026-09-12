@@ -1,3 +1,4 @@
+import { basicTagSelection, readableFilterSearch, type TagMatchMode } from "@imageshow/shared/browser";
 import type {
   GalleryStatsDto,
   PublicSiteSettings
@@ -80,8 +81,14 @@ export function HomePage({
   const [filters, setFilters] = useState<GalleryFilters>({
     ...emptyGalleryFilters
   });
+  const [tagMode, setTagMode] = useState<TagMatchMode>("any");
+  const updateFilters = (next: GalleryFilters) => {
+    setFilters(next);
+    if (next.tag) setTagMode(basicTagSelection(next.tag).mode);
+    else if (filters.tag || !Object.values(next).some(Boolean)) setTagMode("any");
+  };
   const statsSearch = useMemo(
-    () => galleryRouteSearchParams(filters).toString(),
+    () => readableFilterSearch(galleryRouteSearchParams(filters, false)),
     [filters]
   );
   const statsQuery = useGalleryStats(statsSearch);
@@ -149,6 +156,7 @@ export function HomePage({
         <div className="public-navigation-stack">
           {!embedded && (
             <AppHeader
+              browseSearch={readableFilterSearch(galleryRouteSearchParams(filters))}
               animateEntrance={
                 shouldAnimateNavigation && entrance.navigationRevealed
               }
@@ -162,7 +170,7 @@ export function HomePage({
             isPending={statsQuery.isPending}
             isError={statsQuery.isError}
             isPlaceholderData={statsQuery.isPlaceholderData}
-            onFiltersChange={setFilters}
+            onFiltersChange={updateFilters}
           />
         </div>
       </div>
@@ -183,7 +191,9 @@ export function HomePage({
         isPending={statsQuery.isPending}
         isError={statsQuery.isError}
         isRefreshing={statsQuery.isFetching}
-        onFiltersChange={setFilters}
+        onFiltersChange={updateFilters}
+        tagMode={tagMode}
+        onTagModeChange={setTagMode}
         onRetry={() => void statsQuery.refetch()}
         onCatalogIntent={entrance.revealImmediately}
       />

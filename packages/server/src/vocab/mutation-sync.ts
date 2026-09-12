@@ -1,4 +1,4 @@
-import { slugMaxLength, slugPattern } from "@imageshow/shared/browser";
+import { slugMaxLength, slugPattern, unsetThemeFilter } from "@imageshow/shared/browser";
 import {
   withAdvisoryLock
 } from "../core/database/advisory-locks.ts";
@@ -45,6 +45,9 @@ export function assertVocabularySlug(
   entity: VocabularyEntity,
   slug: string
 ) {
+  if (entity === "theme" && slug === unsetThemeFilter) {
+    throw new ApiError(400, "invalid_theme", "null 是未设置主题的保留值，不能用作主题标识", { slug });
+  }
   if (
     slug.length > slugMaxLength
     || !slugPattern.test(slug)

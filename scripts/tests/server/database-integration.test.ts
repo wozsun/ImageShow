@@ -95,6 +95,16 @@ const storageIngestionScenarios = [
     script: join(isolationRoot, "image-read-consistency.mts")
   },
   {
+    id: "vocabulary-order",
+    name: "词表新建前置、批量顺序、重复采用与人工排序保持",
+    script: join(isolationRoot, "vocabulary-order.mts")
+  },
+  {
+    id: "tag-filter-consistency",
+    name: "标签交并集的 PostgreSQL 与 Redis 等价、公开后台查询和写后失效",
+    script: join(isolationRoot, "tag-filter-consistency.mts")
+  },
+  {
     id: "public-image-browse",
     name: "公开两档分页、随机环形边界与条件缓存",
     script: join(isolationRoot, "public-image-browse.mts")

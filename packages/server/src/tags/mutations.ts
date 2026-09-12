@@ -25,7 +25,7 @@ export async function createTag(slug: string, displayName = "") {
     signal.throwIfAborted();
     const created = await pool.query(
       `INSERT INTO tag(slug, display_name, sort_order)
-       VALUES($1, $2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tag))
+       VALUES($1, $2, (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM tag))
        ON CONFLICT (slug) DO NOTHING
        RETURNING slug`,
       [slug, displayName]
@@ -149,8 +149,8 @@ export async function replaceImageTagAssociations(
        )
        INSERT INTO tag(slug, sort_order)
        SELECT slug,
-              (SELECT COALESCE(MAX(sort_order), 0) FROM tag)
-                + row_number() OVER (ORDER BY ord)
+              (SELECT COALESCE(MIN(sort_order), 0) FROM tag)
+                - row_number() OVER (ORDER BY ord DESC)
          FROM missing
         ORDER BY ord
        ON CONFLICT (slug) DO NOTHING

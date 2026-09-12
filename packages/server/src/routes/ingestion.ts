@@ -228,7 +228,9 @@ export function registerIngestionRoutes(app: Hono) {
     const response = {
       items: await ingestionSessionService.acceptImportItems(
         authenticatedUsername(c),
-        input.items
+        input.items,
+        Date.now(),
+        { cancelIfMissing: input.cancel_if_missing }
       )
     } satisfies ImportAcceptResultDto;
     return c.json(apiSuccess(response));

@@ -63,7 +63,7 @@ export async function ensureAuthorWithMutationLockHeld(
   if (!slug) return false;
   const result = await client.query(
     `INSERT INTO author(slug, sort_order)
-     VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM author))
+     VALUES($1, (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM author))
      ON CONFLICT (slug) DO NOTHING
      RETURNING slug`,
     [slug]
@@ -101,7 +101,7 @@ export async function createAuthor(
              $3,
              $4,
              $5,
-             (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM author)
+             (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM author)
            )
            ON CONFLICT (slug) DO NOTHING
            RETURNING slug,

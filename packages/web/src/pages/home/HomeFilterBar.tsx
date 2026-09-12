@@ -1,3 +1,4 @@
+import { basicTagSelection } from "@imageshow/shared/browser";
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
 import { Link } from "react-router";
 import { Icon } from "../../components/icon/Icon.js";
@@ -37,6 +38,7 @@ export function HomeFilterBar({
   onFiltersChange: (filters: GalleryFilters) => void;
 }) {
   const entrance = useOneShotAnimation(entranceReady);
+  const tagSelection = basicTagSelection(filters.tag);
   const selectedLabels = stats
     ? [
         filters.device ? deviceLabels[filters.device] : "",
@@ -44,7 +46,8 @@ export function HomeFilterBar({
           ? brightnessLabels[filters.brightness]
           : "",
         selectedFacetLabels(stats.themes, filters.theme).join("/"),
-        selectedFacetLabels(stats.tags, filters.tag).join("/"),
+        selectedFacetLabels(stats.tags, tagSelection.selected.join(","))
+          .join(tagSelection.mode === "all" ? "&" : "/"),
         selectedFacetLabels(stats.authors, filters.author).join("/")
       ].filter(Boolean)
     : [];

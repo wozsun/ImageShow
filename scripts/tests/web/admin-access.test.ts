@@ -95,7 +95,8 @@ import {
   createConfigStreamHarness
 } from "../support/web-test-context.ts";
 import {
-  inputText
+  inputText,
+  dispatchDomEvent
 } from "../support/dom-events.ts";
 import {
   installControlledClock
@@ -634,6 +635,39 @@ test("[Web/后台访问] 动画关闭捕获最新回调并在请求阶段冻结�
     }
   }
 });
+test("[Web/后台访问] 标签切换超限时保持原模式与条件，减少选择后可恢复", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { React } = h;
+  const { FacetSelector } = await import("../../../packages/web/src/components/data-display/FacetSelector.tsx");
+  const slugs = Array.from({ length: 31 }, (_, index) => `tag-${String(index).padStart(2, "0")}${"x".repeat(26)}`);
+  const values: string[] = [];
+  function Harness() {
+    const [value, setValue] = React.useState(slugs.join(","));
+    return React.createElement(FacetSelector, {
+      options: slugs.map(slug => ({ slug, display_name: slug })), value,
+      noun: "标签", selectionMode: "any-all",
+      onChange: next => { values.push(next); setValue(next); }
+    });
+  }
+  await h.render(React.createElement(Harness));
+  const activate = async (button: HTMLButtonElement) => {
+    assert.ok(button);
+    await React.act(async () => { dispatchDomEvent(h.window, button, "click", { detail: 0 }); });
+  };
+  await activate(h.document.querySelector<HTMLButtonElement>(".select-trigger")!);
+  const modes = h.document.querySelectorAll<HTMLButtonElement>(".facet-mode-switch button");
+  await activate(modes[1]!);
+  assert.match(h.document.querySelector('[role="alert"]')?.textContent ?? "", /限制/);
+  assert.equal(modes[0]!.getAttribute("aria-pressed"), "true");
+  assert.equal(modes[1]!.getAttribute("aria-pressed"), "false");
+  assert.deepEqual(values, []);
+  await activate(h.document.querySelector<HTMLButtonElement>(".facet-selected-list button")!);
+  await activate(modes[1]!);
+  assert.equal(values.at(-1), "all:" + slugs.slice(1).join(","));
+  assert.equal(modes[1]!.getAttribute("aria-pressed"), "true");
+  assert.equal(h.document.querySelector('[role="alert"]'), null);
+});
+
 test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并保持 Portal 筛选流程", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
@@ -863,7 +897,8 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
           options: [
             { slug: "night", display_name: "夜景" },
             { slug: "stage", display_name: "舞台" },
-            { slug: "editorial", display_name: "编辑精选" }
+            { slug: "editorial", display_name: "编辑精选" },
+            { slug: "null", display_name: "未设置" }
           ],
           value,
           noun: "主题",
@@ -932,6 +967,20 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
     );
     assert.match(menu.querySelector(".facet-selected-list")?.textContent ?? "", /legacy/);
     assert.match(menu.querySelector(".facet-selected-list")?.textContent ?? "", /夜景/);
+
+    await React.act(async () => {
+      inputText(window as unknown as Window, search!, "unset");
+    });
+    assert.equal(searchStatus.textContent, "没有可添加的主题");
+    await React.act(async () => {
+      inputText(window as unknown as Window, search!, " NULL ");
+    });
+    const nullOptions = [...menu.querySelectorAll<HTMLButtonElement>(".facet-search-option")];
+    assert.deepEqual(nullOptions.map((option) => option.textContent), ["null未设置"]);
+    await touchActivate(nullOptions[0]!);
+    assert.equal(document.querySelector(".facet-value")?.textContent, "!legacy,!night,!null");
+    assert.equal(menu.querySelector(".facet-search-option"), null);
+    await touchActivate(menu.querySelector<HTMLButtonElement>('[title="移除 未设置"]')!);
 
     await React.act(async () => {
       inputText(window as unknown as Window, search!, "sta");
@@ -1129,6 +1178,8 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
 
     await React.act(async () => root.unmount());
     assert.deepEqual(observedValues, [
+      "!legacy,!night,!null",
+      "!legacy,!night",
       "!legacy,!night,!stage",
       "!legacy,!night,!stage,!editorial",
       "legacy,night,stage,editorial",
@@ -2630,7 +2681,7 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
   }
   const unsetTarget = new URL(unsetUrl, "https://imageshow.test");
   assert.equal(unsetTarget.searchParams.get("status"), "ready");
-  assert.equal(unsetTarget.searchParams.get("theme"), "~unset");
+  assert.equal(unsetTarget.searchParams.get("theme"), "null");
   assert.equal(unsetTarget.searchParams.get("page"), "1");
 
 });
@@ -2719,7 +2770,7 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
         headers: { "Content-Type": "application/json" }
       });
     }
-    if (url.searchParams.get("theme") === "~unset") {
+    if (url.searchParams.get("theme") === "null") {
       return new Promise<Response>((resolve) => {
         resolveUnsetPage = resolve;
       });
@@ -2877,7 +2928,7 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     assert.equal(latest.totalPages, 3);
     assert.equal(requests.some((value) => {
       const url = new URL(value);
-      return url.searchParams.get("theme") === "~unset"
+      return url.searchParams.get("theme") === "null"
         && url.searchParams.get("page") !== "1";
     }), false);
 
@@ -2909,7 +2960,7 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
       .map((value) => new URL(value))
       .filter((url) => (
         url.searchParams.get("status") === "ready"
-        && url.searchParams.get("theme") !== "~unset"
+        && url.searchParams.get("theme") !== "null"
       ))
       .map((url) => url.searchParams.get("page"));
     assert.equal(readyPages.filter((page) => page === "50").length, 2);
@@ -4779,7 +4830,7 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
     }
   }
 });
-test("[Web/后台访问] 作者链接保存直接采用权威 DTO 更新原生提示且不重读作者列表", async () => {
+test("[Web/后台访问] 作者保存原位采用权威 DTO，新建前置且不重读作者列表", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=\"root\"></div></body></html>"
   );
@@ -4819,6 +4870,7 @@ test("[Web/后台访问] 作者链接保存直接采用权威 DTO 更新原生�
     link: "https://weibo.com/u/4444444444",
     derived_identity: { provider: "weibo", id: "4444444444" }
   };
+  const createdAuthor = { ...initialAuthor, slug: "author-new-first", display_name: "New first" };
   const jsonResponse = (value: unknown) => new Response(JSON.stringify(value), {
     status: 200,
     headers: { "content-type": "application/json" }
@@ -4827,6 +4879,9 @@ test("[Web/后台访问] 作者链接保存直接采用权威 DTO 更新原生�
     const path = new URL(String(input), "https://imageshow.test").pathname;
     const method = String(init?.method ?? "GET").toUpperCase();
     requestedAuthorPaths.push(`${method} ${path}`);
+    if (path === "/api/admin/authors" && method === "POST") {
+      return jsonResponse({ ok: true, item: createdAuthor });
+    }
     if (path === "/api/admin/authors" && method === "GET") {
       authorGets += 1;
       if (holdAuthorRead) {
@@ -5047,6 +5102,17 @@ test("[Web/后台访问] 作者链接保存直接采用权威 DTO 更新原生�
       ]) {
         assert.equal(client.getQueryState(key)?.isInvalidated, true, key[0]);
       }
+      const createInput = container.querySelector<HTMLInputElement>(".entity-create-slug");
+      const createForm = container.querySelector(".admin-create-form");
+      assert.ok(createInput);
+      assert.ok(createForm);
+      await React.act(async () => { inputText(window as unknown as Window, createInput, createdAuthor.slug); });
+      await React.act(async () => {
+        createForm.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+      });
+      await settleUntil(() => container.querySelector<HTMLInputElement>(".entity-card input")?.value === createdAuthor.slug);
+      assert.deepEqual(client.getQueryData(queryKeys.authors), { ok: true, items: [createdAuthor, committedAuthor] });
+      assert.equal(authorGets, authorGetsBeforeSave, "新建直接前置权威 DTO，不追加列表 GET");
     } finally {
       await React.act(async () => root.unmount());
       client.clear();

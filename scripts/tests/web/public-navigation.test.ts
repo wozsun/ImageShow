@@ -277,8 +277,24 @@ test("[Web/公开导航] 移动画廊与展映关闭筛选后，触摸残留的�
     }
   }
 });
+test("[Web/公开导航] 显示名解析后的标签条件仍受规范串预算约束", () => {
+  const tags = Array.from({ length: 32 }, (_, index) => ({
+    slug: `tag-${String(index).padStart(2, "0")}${"x".repeat(26)}`,
+    display_name: `n${index}`
+  }));
+  for (const [count, prefix] of [[31, "all:"], [32, ""]] as const) {
+    const params = new URLSearchParams({ tag: prefix + tags.slice(0, count).map(tag => tag.display_name).join(",") });
+    assert.throws(() => galleryFiltersFromSearchParams(params, tags), { name: "TagFilterError" });
+  }
+  const filters = galleryFiltersFromSearchParams(new URLSearchParams({
+    tag: "all:" + tags.slice(0, 30).map(tag => tag.display_name).join(",")
+  }), tags);
+  assert.equal(filters.tag.length, 993);
+  assert.equal(imageBrowseApiSearchParams(filters, "latest", { view: "gallery" }).get("tag"), filters.tag);
+});
+
 test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前参数契约", () => {
-  for (const theme of ["~unset", "!~unset", "none", "!none"]) {
+  for (const theme of ["null", "!null", "none", "!none"]) {
     const selected = galleryFiltersFromSearchParams(new URLSearchParams({ theme }));
     assert.equal(selected.theme, theme);
     assert.equal(imageBrowseApiSearchParams(selected, "latest", { view: "gallery" }).get("theme"), theme);
@@ -295,11 +311,11 @@ test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前�
   });
   assert.equal(
     galleryHref(filters),
-    "/gallery?device=pc&brightness=dark&theme=editorial%2Cstage&tag=concert%2Cred-carpet&author=startrail-photo"
+    "/gallery?device=pc&brightness=dark&theme=editorial,stage&tag=concert,red-carpet&author=startrail-photo"
   );
   assert.equal(
     galleryHref(filters, "/embed/gallery"),
-    "/embed/gallery?device=pc&brightness=dark&theme=editorial%2Cstage&tag=concert%2Cred-carpet&author=startrail-photo"
+    "/embed/gallery?device=pc&brightness=dark&theme=editorial,stage&tag=concert,red-carpet&author=startrail-photo"
   );
   assert.equal(galleryHref(emptyGalleryFilters), "/gallery");
   assert.equal(
@@ -413,7 +429,7 @@ test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前�
     tag: "Live",
     author: "Alice",
     mode: "json"
-  }), "https://img.example.com/random?device=pc&theme=stage,!archive&tag=live&author=alice&mode=json");
+  }), "https://img.example.com/random?device=pc&theme=!archive,stage&author=alice&tag=live&mode=json");
   assert.equal(buildRandomUrl({
     origin: "https://img.example.com",
     device: galleryRandomRequestDevice(""),

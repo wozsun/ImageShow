@@ -1,19 +1,35 @@
+import { parseTagFilter, readableFilterSearch, tagExpressionValues, randomQueryLimits, TagFilterError } from "@imageshow/shared/browser";
 import type { RandomMode } from "../types.js";
 
 export function buildRandomUrl(input: { origin?: string; device: string; brightness: string; theme: string; tag: string; author: string; mode?: RandomMode }) {
-  const params: string[] = [];
-  if (input.device) params.push(`device=${encodeRandomParam(input.device)}`);
-  if (input.brightness !== "random") params.push(`brightness=${encodeRandomParam(input.brightness)}`);
-  const themes = input.theme.split(",").map((theme) => theme.trim().toLowerCase()).filter(Boolean);
-  if (themes.length) params.push(`theme=${encodeRandomParam(themes.join(","))}`);
-  const tags = input.tag.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean);
-  if (tags.length) params.push(`tag=${encodeRandomParam(tags.join(","))}`);
-  const authors = input.author.split(",").map((author) => author.trim().toLowerCase()).filter(Boolean);
-  if (authors.length) params.push(`author=${encodeRandomParam(authors.join(","))}`);
-  if (input.mode) params.push(`mode=${encodeRandomParam(input.mode)}`);
-  return `${input.origin ?? window.location.origin}/random${params.length ? `?${params.join("&")}` : ""}`;
+  const params = new URLSearchParams();
+  const tag = parseTagFilter(input.tag ? [input.tag] : []);
+  let submittedCount = tag.submittedCount;
+  if (input.device) params.set("device", input.device);
+  if (input.brightness !== "random") params.set("brightness", input.brightness);
+  for (const field of ["theme", "author"] as const) {
+    const submitted = input[field].split(",").map((value) => value.trim().toLowerCase()).filter(Boolean);
+    if (submitted.length > randomQueryLimits.maxSelectorsPerField
+      || submitted.some((term) => [...term.replace(/^!/, "")].length > randomQueryLimits.maxSelectorCharacters)) {
+      throw new TagFilterError("随机链接的筛选词项超过数量或长度限制");
+    }
+    submittedCount += submitted.length;
+    const values = [...new Set(submitted)].sort();
+    if (values.length) params.set(field, values.join(","));
+  }
+  if (submittedCount > randomQueryLimits.maxSelectorCount) throw new TagFilterError("随机链接最多包含 64 个筛选词项");
+  for (const value of tagExpressionValues(tag.expression)) params.append("tag", value);
+  if (input.mode) params.set("mode", input.mode);
+  const search = readableFilterSearch(params);
+  if (new TextEncoder().encode(search).length > randomQueryLimits.maxRawBytes) throw new TagFilterError("随机链接超过长度限制");
+  return `${input.origin ?? window.location.origin}/random${search ? `?${search}` : ""}`;
 }
 
-function encodeRandomParam(value: string) {
-  return encodeURIComponent(value).replace(/%21/g, "!").replace(/%2C/gi, ",");
+export function randomLinkResult(input: Parameters<typeof buildRandomUrl>[0]): { url: string | null; error: string | null } {
+  try {
+    return { url: buildRandomUrl(input), error: null };
+  } catch (error) {
+    if (!(error instanceof TagFilterError)) throw error;
+    return { url: null, error: error.message };
+  }
 }

@@ -7,8 +7,29 @@ import { clearCsrfToken, setCsrfToken } from "../../../packages/web/src/lib/api/
 import { imageAttributeClearPatch, mergeCommonImageAttributes, type ClearableImageAttribute, type ImageAttributeClearPlan } from "../../../packages/web/src/lib/image-draft.ts";
 import { reduceIngestionQueue } from "../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
 import { createConfigStreamHarness, ingestionJob } from "../support/web-test-context.ts";
-import { dispatchDomEvent } from "../support/dom-events.ts";
+import { dispatchDomEvent, inputText } from "../support/dom-events.ts";
 import { installProperties, installPropertyDescriptors } from "../support/property-descriptors.ts";
+
+test("[Web/主题] 保留值输入按留空处理且不提示新建主题", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { ThemeInput } = await import("../../../packages/web/src/components/form/ThemeInput.tsx");
+  const values: string[] = [];
+  function Probe() {
+    const [value, setValue] = h.React.useState("portrait");
+    return h.React.createElement(ThemeInput, {
+      themes: [{ slug: "null", display_name: "未设置" }, { slug: "portrait", display_name: "人像" }],
+      value, ariaLabel: "主题", publishTypedChanges: false,
+      onChange(next: string) { values.push(next); setValue(next); }
+    });
+  }
+  await h.render(h.React.createElement(Probe));
+  const input = h.document.querySelector<HTMLInputElement>('input[aria-label="主题"]')!;
+  await h.React.act(async () => { inputText(h.window as unknown as Window, input, " NULL "); });
+  assert.equal(input.hasAttribute("data-new-slug"), false);
+  await h.React.act(async () => { dispatchDomEvent(h.window as unknown as Window, input, "focusout"); });
+  assert.deepEqual(values, [""]);
+  assert.equal(input.value, "");
+});
 
 test("[Web/批量属性] 显式清空只更新指定分类，普通应用保留空输入并追加去重标签", () => {
   const draft = ingestionJob().draft;
@@ -347,7 +368,7 @@ test("[Web/批量属性] 移动浮层拥有菜单与确认框，按层关闭且�
           className: "test-panel", contentClassName: "test-content", title: "批量属性", summary: "2 张图片",
           expanded, onExpandedChange: setExpanded,
           children: React.createElement(WorkflowAttributeActions, {
-            disabled: false, ready: true, scopeLabel: "本次批量编辑",
+            disabled: false, scopeLabel: "本次批量编辑",
             onApply: () => { applied += 1; },
             onPrepareClear: (field): ImageAttributeClearPlan => {
               prepared.push(field);

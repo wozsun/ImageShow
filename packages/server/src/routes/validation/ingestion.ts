@@ -82,6 +82,7 @@ export const uploadIntentInput = z.strictObject({
 });
 
 export const importAcceptInput = z.strictObject({
+  cancel_if_missing: z.boolean().optional(),
   items: z.array(ingestionMetadataInput.extend({
     idempotency_key: uuidV7Input,
     batch_key: uuidV7Input,

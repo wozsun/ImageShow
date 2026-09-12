@@ -30,7 +30,6 @@ export function WorkflowDefaultFields({
   changed = {},
   disabled = false,
   applyDisabled = false,
-  applyReady = false,
   onApply,
   onPrepareClear,
   clearScope,
@@ -58,7 +57,6 @@ export function WorkflowDefaultFields({
   changed?: Partial<Record<WorkflowDefaultField, boolean>>;
   disabled?: boolean;
   applyDisabled?: boolean;
-  applyReady?: boolean;
   onApply: () => void;
   onPrepareClear: PrepareImageAttributeClear;
   clearScope: string;
@@ -118,7 +116,6 @@ export function WorkflowDefaultFields({
       <WorkflowAttributeActions
         key={clearScope}
         disabled={disabled || applyDisabled}
-        ready={applyReady}
         scopeLabel={clearScopeLabel}
         onApply={onApply}
         onPrepareClear={onPrepareClear}

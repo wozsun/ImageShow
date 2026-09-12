@@ -1,5 +1,6 @@
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
+
 import {
   randomUUID
 } from "node:crypto";
@@ -156,6 +157,20 @@ import {
   imageId,
   servingReadyCacheItem
 } from "../support/server-test-context.ts";
+
+test("[Server/主题] null 保留给未设置，写入必须使用 JSON null 且不限制标签作者", async () => {
+  const { imageThemeInput } = await import("../../../packages/server/src/images/metadata-theme.ts");
+  const { themeCreateInput, tagCreateInput, authorSlugInput } = await import("../../../packages/server/src/routes/validation/vocabulary.ts");
+  assert.equal(imageThemeInput.parse(null), null);
+  assert.equal(imageThemeInput.parse(" Portrait "), "portrait");
+  for (const theme of ["null", " NULL "]) {
+    assert.equal(imageThemeInput.safeParse(theme).success, false);
+    assert.equal(themeCreateInput.safeParse({ slug: theme }).success, false);
+  }
+  assert.equal(themeCreateInput.parse({ slug: "none" }).slug, "none");
+  assert.equal(tagCreateInput.parse({ slug: "null" }).slug, "null");
+  assert.equal(authorSlugInput.parse("null"), "null");
+});
 
 test("[Server/图片] 存储输入归一化 slug 并补齐缺省 S3 设置", () => {
   const defaultS3 = {
@@ -1841,10 +1856,10 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
 
   const plan = createImageFilterPlan({
     devices: ["pc"],
-    tag: { include: ["live", "stage", "live"] },
+    tag: { anyOf: [["live"], ["stage"], ["live"]] },
     author: { exclude: ["blocked"] }
   });
-  assert.deepEqual(plan.tag.include, ["live", "stage"]);
+  assert.deepEqual(plan.tag, { anyOf: [["live"], ["stage"]] });
   assert.equal(imageFilterPlanHasAllAxes(plan), false);
   assert.equal(imageFilterPlanHasAllAxes(imageFilterPlanWithout(plan, "device")), true);
   const sql = buildImageFilterSql({ status: "ready", plan }, { alias: "m" });
@@ -1859,7 +1874,7 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
   ]);
   assert.match(sql.where.join(" AND "), /EXISTS/);
   assert.throws(() => createImageFilterPlan({
-    tag: { include: ["live"], exclude: ["blocked"] }
+    author: { include: ["owner"], exclude: ["blocked"] }
   }), /Cannot mix include and exclude/);
 });
 test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读取精确目标页", async () => {
@@ -2068,7 +2083,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   assert.equal(
     normalizedOmitted.signature,
     '{"d":"","b":"","t":{"include":[],"exclude":[]},'
-      + '"tag":{"include":[],"exclude":[]},'
+      + '"tag":null,'
       + '"a":{"include":[],"exclude":[]}}'
   );
   assert.equal(
@@ -2112,7 +2127,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   assert.equal(normalized instanceof Response, false);
   if (normalized instanceof Response) assert.fail("随机图选择器未完成归一化");
   assert.deepEqual(normalized.theme, { include: ["stage"], exclude: [] });
-  assert.deepEqual(normalized.tag, { include: ["live"], exclude: [] });
+  assert.deepEqual(normalized.tag, { anyOf: [["live"]] });
   assert.deepEqual(normalized.author, { include: ["photographer"], exclude: [] });
   assert.equal(normalized.device, "pc");
   assert.equal(normalized.brightness, "dark");

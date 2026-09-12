@@ -11,13 +11,11 @@ const attributeLabels = { theme: "主题", tags: "标签", author: "作者", all
 
 export function WorkflowAttributeActions({
   disabled,
-  ready,
   scopeLabel,
   onApply,
   onPrepareClear
 }: {
   disabled: boolean;
-  ready: boolean;
   scopeLabel: string;
   onApply: () => void;
   onPrepareClear: PrepareImageAttributeClear;
@@ -40,7 +38,7 @@ export function WorkflowAttributeActions({
     <>
       <SplitActionButton
         className="workflow-attribute-actions"
-        mainClassName={`apply-to-all-button${ready ? " is-ready" : ""}`}
+        mainClassName="apply-to-all-button"
         menuLabel="更多批量属性操作"
         menuTriggerRef={triggerRef}
         disabled={disabled}

@@ -6,6 +6,7 @@ import "./server/database-process.test.ts";
 import "./server/cache.test.ts";
 import "./server/storage.test.ts";
 import "./server/images.test.ts";
+import "./server/tag-filter.test.ts";
 import "./server/ingestion.test.ts";
 import "./server/ingestion-events.test.ts";
 import "./server/database-integration.test.ts";

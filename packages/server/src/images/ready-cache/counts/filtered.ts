@@ -117,13 +117,17 @@ function readyImageFilterCountUpperBound(
   }
   for (const [group, prefix] of [
     [plan.theme, "theme:"],
-    [plan.tag, "tag:"],
     [plan.author, "author:"]
   ] as const) {
     if (!group.include.length) continue;
     positiveBounds.push(group.include.reduce((sum, slug) => (
       sum + (stats.get(`${prefix}${slug}`) ?? 0)
     ), 0));
+  }
+  if (plan.tag) {
+    positiveBounds.push(Math.min(total, plan.tag.anyOf.reduce((sum, clause) => (
+      sum + Math.min(...clause.map((slug) => stats.get(`tag:${slug}`) ?? 0))
+    ), 0)));
   }
   return positiveBounds.length
     ? Math.min(total, ...positiveBounds)

@@ -427,7 +427,8 @@ export class IngestionSessionService {
   async acceptImportItems(
     owner: string,
     items: readonly ImportItemInputDto[],
-    now = Date.now()
+    now = Date.now(),
+    options: { cancelIfMissing?: boolean } = {}
   ): Promise<ImportAcceptItemDto[]> {
     const runtime = getRuntimeConfig();
     if (items.length > runtime.import.max_items) {
@@ -445,10 +446,10 @@ export class IngestionSessionService {
       for (const item of items) {
         signal.throwIfAborted();
         try {
-          const storageSlug = await this.#dependencies.resolveStorageSlug(
-            item.storage_slug
-          );
-          await this.#dependencies.assertStorageWriteTarget(storageSlug);
+          const storageSlug = options.cancelIfMissing && item.storage_slug
+            ? item.storage_slug
+            : await this.#dependencies.resolveStorageSlug(item.storage_slug);
+          if (!options.cancelIfMissing) await this.#dependencies.assertStorageWriteTarget(storageSlug);
           const explicitTime = providedImageTime(item.image_time, item.batch_time);
           const resolvedTime = normalizedImageTime(
             item.image_time,
@@ -519,7 +520,8 @@ export class IngestionSessionService {
                 item.batch_position,
                 sessionId
               ),
-              now
+              now,
+              options.cancelIfMissing
             )).session
           });
         } catch (error) {

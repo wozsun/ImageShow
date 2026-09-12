@@ -103,17 +103,29 @@ export function buildImageFilterSql(
         : matches);
   }
 
-  if (!omitted.has("tag")) {
-    const selection = selectedValues(input.plan.tag);
-    if (selection) {
-      const exists = `EXISTS (
+  if (!omitted.has("tag") && input.plan.tag) {
+    const clauses = input.plan.tag.anyOf;
+    const singletons = clauses.filter((clause) => clause.length === 1).flat();
+    const predicates: string[] = [];
+    if (singletons.length) {
+      predicates.push(`EXISTS (
         SELECT 1
           FROM image_tag ${tagAlias}
          WHERE ${tagAlias}.image_id=${prefix}id
-           AND ${tagAlias}.tag_slug=ANY(${bind(selection.values)}::text[])
-      )`;
-      where.push(selection.exclude ? `NOT ${exists}` : exists);
+           AND ${tagAlias}.tag_slug=ANY(${bind(singletons)}::text[])
+      )`);
     }
+    for (const clause of clauses.filter((clause) => clause.length > 1)) {
+      predicates.push(`NOT EXISTS (
+        SELECT 1 FROM unnest(${bind(clause)}::text[]) AS selected_tag(slug)
+        WHERE NOT EXISTS (
+          SELECT 1 FROM image_tag ${tagAlias}
+          WHERE ${tagAlias}.image_id=${prefix}id
+            AND ${tagAlias}.tag_slug=selected_tag.slug
+        )
+      )`);
+    }
+    where.push(`(${predicates.join(" OR ")})`);
   }
 
   return { params, where };

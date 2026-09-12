@@ -1,3 +1,5 @@
+import { readyImageFilterOperations } from "./filter-operations.ts";
+
 export const READY_IMAGE_DERIVED_WORK_POLICY = Object.freeze({
   maxMaterializedSourceMembersPerOperation: 200_000,
   maxCardinalitySourceMembersPerOperation: 200_000,
@@ -96,54 +98,29 @@ function rejected(
 export function assessReadyImageFilterWork(input: {
   itemCount: number;
   positive: number[][];
+  tagClauses?: number[][];
   exclusions: number[][];
 }): ReadyImageDerivedWorkAdmission {
-  const { itemCount, positive, exclusions } = input;
-  const groups = [...positive, ...exclusions];
+  const { itemCount, positive, tagClauses = [], exclusions } = input;
+  const groups = [...positive, ...tagClauses, ...exclusions];
   if (
     !safeMemberCount(itemCount)
     || groups.some((counts) => counts.some((count) => !safeMemberCount(count)))
   ) {
     return rejected(emptyEstimate(), "invalid_member_count");
   }
-  const operations: SetOperationEstimate[] = [];
-  const union = (counts: number[]) => {
-    const active = counts.filter((count) => count > 0);
-    if (!active.length) return 0;
-    if (active.length === 1) return active[0]!;
-    const expectedMembers = Math.min(
-      itemCount,
-      active.reduce((total, count) => total + count, 0)
-    );
-    operations.push({ kind: "union", sourceCounts: active, expectedMembers });
-    return expectedMembers;
-  };
-
-  let current: number | null = null;
-  for (const counts of positive) {
-    const component = union(counts);
-    if (current === null) {
-      current = component;
-      continue;
-    }
-    const expectedMembers = Math.min(current, component);
-    operations.push({
-      kind: "intersection",
-      sourceCounts: [current, component],
-      expectedMembers
-    });
-    current = expectedMembers;
-  }
-  current ??= itemCount;
-  for (const counts of exclusions) {
-    if (!counts.some((count) => count > 0)) continue;
-    const excluded = union(counts);
-    operations.push({
-      kind: "difference",
-      sourceCounts: [current, excluded],
-      expectedMembers: current
-    });
-  }
+  let sequence = 0;
+  const nextKey = () => String(sequence++);
+  const sources = (groups: number[][]) => groups.map((counts) => counts.map((count) => ({ key: nextKey(), count })));
+  const plan = readyImageFilterOperations({
+    all: { key: nextKey(), count: itemCount },
+    positive: sources(positive),
+    tagClauses: sources(tagClauses),
+    exclusions: sources(exclusions)
+  }, nextKey);
+  const operations = plan.operations.map(({ kind, sources, result }) => ({
+    kind, sourceCounts: sources.map((source) => source.count), expectedMembers: result.count
+  }));
 
   const estimate = summarizeOperations(operations);
   const policy = READY_IMAGE_DERIVED_WORK_POLICY;
