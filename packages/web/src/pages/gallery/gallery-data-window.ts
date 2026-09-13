@@ -359,6 +359,9 @@ export class GalleryDataWindow {
   invalidateHydratedPages() {
     this.#pendingCursors.clear();
     this.#failedCursors.clear();
+    // A new data revision supersedes edits and removals from the retained visit.
+    this.#confirmedEdits.clear();
+    this.#removedIds.clear();
     for (const page of this.#pages) {
       page.items = null;
       page.fullBytes = 0;

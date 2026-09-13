@@ -170,6 +170,11 @@ JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`titl
 同时保留。合并后仍遵守每张图片最多 50 个标签的边界。完整数量、并发、文件大小和处理参数以
 [配置说明](../CONFIG.md#runtimeconfig-参数目录)为准。
 
+JSONL 清单先检查 UTF-8 字节上限，再逐行收集非空记录；遇到第一条超出配额的记录即拒绝，
+不为剩余行建立数组或行对象。空行不占配额，非法非空行仍占配额；条数检查完成后才解析 JSON
+和字段，错误保留原始物理行号，`batch_position` 按非空记录从零计数。LF、CRLF 及末尾换行
+使用相同规则。
+
 `import.keep_original_link` 按 `url`、`jsonl`、`weibo` 来源决定是否把实际下载 URL 写入
 正式图片的 `original`；未列出的来源仍完成同一下载、校验和入库流程，只把该公开链接留空。
 微博帖子页面由独立的 `weibo.source_enabled` 控制是否写入 `source`，不改变图片下载地址，

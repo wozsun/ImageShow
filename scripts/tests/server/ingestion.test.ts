@@ -181,6 +181,40 @@ test("[Server/内容接入] 内容接入草稿批量更新在保护层后仍使�
     "request_body_too_large"
   );
 });
+test("[Server/内容接入] JSONL 非空记录配额保留物理行号、批次位置与错误优先级", (t) => {
+  const a = JSON.stringify({ original: "https://img.example.com/a.jpg" });
+  const b = JSON.stringify({ original: "https://img.example.com/b.jpg" });
+  for (const newline of ["\n", "\r\n"]) {
+    for (const trailing of ["", newline]) {
+      const content = ["", ` \t${a} `, " \t", "not-json", b].join(newline) + trailing;
+      const result = parseJsonlManifest(content, { maxItems: 3 });
+      assert.deepEqual(result.items.map(item => [item.line, item.batch_position, item.original]), [
+        [2, 0, "https://img.example.com/a.jpg"],
+        [5, 2, "https://img.example.com/b.jpg"]
+      ]);
+      assert.deepEqual(result.errors, [{ line: 4, raw: "not-json", error: "不是有效的 JSON 对象" }]);
+      assert.throws(() => parseJsonlManifest(content, { maxItems: 2 }), {
+        code: "jsonl_limit_exceeded",
+        message: "JSONL 清单最多允许 2 条图片记录"
+      }, "非法非空行也计入配额，条数检查先于逐行解析");
+    }
+  }
+  for (const content of ["", " \t\r\n\n\uFEFF \n"]) {
+    assert.deepEqual(parseJsonlManifest(content, { maxItems: 1 }), { items: [], errors: [] });
+  }
+  assert.equal(parseJsonlManifest(`\uFEFF${a}\n`, { maxItems: 1 }).items.length, 1);
+  assert.throws(() => parseJsonlManifest("{}\n".repeat(100_000), { maxItems: 100 }), {
+    code: "jsonl_limit_exceeded"
+  });
+  t.after(installProperties(appConfig.ingestion, { jsonlManifestMaxBytes: 8 }));
+  assert.throws(() => parseJsonlManifest("界界界", { maxItems: 1 }), {
+    code: "jsonl_too_large"
+  }, "内容大小按 UTF-8 字节计算");
+  assert.throws(() => parseJsonlManifest("{}\n".repeat(3), { maxItems: 1 }), {
+    code: "jsonl_too_large"
+  }, "字节限制仍先于条数限制");
+});
+
 test("[Server/内容接入] 导入清单、下载进度与微博入口使用同一当前语义", () => {
   const manifest = parseJsonlManifest([
     JSON.stringify({

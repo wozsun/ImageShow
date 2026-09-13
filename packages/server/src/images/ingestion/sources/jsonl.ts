@@ -57,12 +57,21 @@ export function parseJsonlManifest(
   if (Buffer.byteLength(content, "utf8") > appConfig.ingestion.jsonlManifestMaxBytes) {
     throw new JsonlManifestError("jsonl_too_large", "JSONL 清单内容过大");
   }
-  const lines = content.split(/\r?\n/)
-    .map((raw, index) => ({ line: index + 1, raw: raw.trim() }))
-    .filter((entry) => entry.raw.length > 0)
-    .map((entry, batchPosition) => ({ ...entry, batchPosition }));
-  if (lines.length > maxItems) {
-    throw new JsonlManifestError("jsonl_limit_exceeded", `JSONL 清单最多允许 ${maxItems} 条图片记录`);
+  const lines: { line: number; raw: string; batchPosition: number }[] = [];
+  let offset = 0;
+  let line = 1;
+  while (offset < content.length) {
+    const newline = content.indexOf("\n", offset);
+    const end = newline === -1 ? content.length : newline;
+    const raw = content.slice(offset, end).trim();
+    if (raw.length > 0) {
+      if (lines.length >= maxItems) {
+        throw new JsonlManifestError("jsonl_limit_exceeded", `JSONL 清单最多允许 ${maxItems} 条图片记录`);
+      }
+      lines.push({ line, raw, batchPosition: lines.length });
+    }
+    offset = end + 1;
+    line += 1;
   }
 
   const items: ImportManifestItemDto[] = [];

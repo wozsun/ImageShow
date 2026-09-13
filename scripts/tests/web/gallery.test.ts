@@ -54,10 +54,11 @@ import {
   createConfigStreamHarness,
   editableImage
 } from "../support/web-test-context.ts";
-import { installProperties } from "../support/property-descriptors.ts";
+import { installProperties, installPropertyDescriptors } from "../support/property-descriptors.ts";
 import { galleryInitialBatchLimit } from "../../../packages/web/src/pages/gallery/gallery-images-query.ts";
 import {
-  activateGalleryRestorationSession
+  activateGalleryRestorationSession,
+  reusableGalleryRestorationSession
 } from "../../../packages/web/src/pages/gallery/gallery-restoration.ts";
 
 test("[Web/画廊] 首页目录、瀑布流、分页预载与滚动导航组成完整公开浏览流程", () => {
@@ -926,6 +927,123 @@ test("[Web/画廊] Strict Mode 浏览轮次隔离迟到请求，缺确认时按�
   assert.equal(current.snapshot.error, null);
   assert.equal(current.positions.find(item => item.id === id)?.item?.title, "最新");
 });
+
+for (const mutation of ["metadata", "restore"] as const) {
+  test(`[Web/画廊] 历史返回按新数据版本恢复${mutation === "metadata" ? "标题" : "回收站图片"}，保留滚动锚点`, async (t) => {
+    activateGalleryRestorationSession();
+    t.after(activateGalleryRestorationSession);
+    const h = await createConfigStreamHarness(t);
+    let visibleStart = 0;
+    const scrollTargets: number[] = [];
+    t.after(installProperties(h.window, {
+      innerHeight: 400,
+      scrollTo(options: ScrollToOptions) {
+        visibleStart = options.top ?? 0;
+        scrollTargets.push(visibleStart);
+      },
+      scrollBy() {}
+    }));
+    t.after(installPropertyDescriptors(h.window, {
+      scrollY: { configurable: true, get: () => visibleStart }
+    }));
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+    const { MemoryRouter, Routes, Route, useNavigate, useLocation, useNavigationType } = await import("react-router");
+    const { useGalleryDataWindow } = await import("../../../packages/web/src/pages/gallery/useGalleryDataWindow.ts");
+    const { invalidateImageDataAfterMetadataSave, invalidateImageDataAfterAdminListMutation } = await import("../../../packages/web/src/lib/api/query-invalidation.ts");
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    t.after(() => client.clear());
+    const geometry = { contentWidth: 900, columnCount: 3, gap: 0 };
+    const imageQuery = "view=gallery&order=latest";
+    let current!: ReturnType<typeof useGalleryDataWindow>;
+    let navigate!: ReturnType<typeof useNavigate>;
+    let galleryKey = "";
+    function Navigation() {
+      navigate = useNavigate();
+      return null;
+    }
+    function Gallery() {
+      const location = useLocation();
+      const navigationType = useNavigationType();
+      galleryKey = location.key;
+      const ref = h.React.useRef<HTMLDivElement | null>(null);
+      const attach = h.React.useCallback((element: HTMLDivElement | null) => {
+        ref.current = element;
+        if (element) element.getBoundingClientRect = () => ({ top: -visibleStart } as DOMRect);
+      }, []);
+      current = useGalleryDataWindow({
+        geometry, geometryReady: true, imageQuery, navigationKey: location.key,
+        restorePosition: navigationType === "POP", pinnedImageId: null, windowRef: ref
+      });
+      return h.React.createElement("div", { ref: attach }, current.positions.map(position => (
+        h.React.createElement("span", { key: position.id, "data-image-id": position.id }, position.item?.title ?? "loading")
+      )));
+    }
+    await h.render(h.React.createElement(QueryClientProvider, { client },
+      h.React.createElement(h.React.StrictMode, null,
+        h.React.createElement(MemoryRouter, { initialEntries: ["/gallery"] },
+          h.React.createElement(Navigation),
+          h.React.createElement(Routes, null,
+            h.React.createElement(Route, { path: "/gallery", element: h.React.createElement(Gallery) }),
+            h.React.createElement(Route, { path: "/admin", element: h.React.createElement("div", null, "admin") })
+          )
+        )
+      )));
+    const rawPage = syntheticGalleryPage({ count: 9, start: 0, total: 9 });
+    const page = { ...rawPage, items: rawPage.items.map(item => ({ ...item, width: 300, height: 600 })) };
+    const target = page.items[1]!;
+    const title = () => h.document.querySelector(`[data-image-id="${target.id}"]`)?.textContent;
+    await h.respond(h.pending.length - 1, page);
+    if (mutation === "metadata") {
+      await h.React.act(async () => {
+        await invalidateImageDataAfterMetadataSave(client, [{ id: target.id, title: "A" }], [target]);
+        await current.refreshImage(editableImage(target.id, { ...target, title: "A" }));
+      });
+      assert.equal(title(), "A");
+    } else {
+      await h.React.act(async () => {
+        await invalidateImageDataAfterAdminListMutation(client);
+        await current.removeImage(target.id);
+      });
+      assert.equal(title(), undefined);
+    }
+    visibleStart = 150;
+    h.window.dispatchEvent(new Event("scroll"));
+    await h.flush();
+    const key = galleryKey;
+    await h.React.act(async () => { await navigate("/admin"); });
+    const retained = reusableGalleryRestorationSession(imageQuery, key, geometry);
+    assert.ok(retained, "实际路由卸载保留带锚点的控制器");
+    assert.equal(retained.anchor.offset, -150);
+
+    const requestCount = h.pending.length;
+    await h.React.act(async () => { await navigate(-1); });
+    await h.flush();
+    assert.equal(h.pending.length, requestCount, "数据版本不变时直接恢复，不额外请求");
+    assert.equal(title(), mutation === "metadata" ? "A" : undefined);
+    assert.equal(visibleStart, 150);
+    await h.React.act(async () => { await navigate("/admin"); });
+    await h.React.act(async () => {
+      if (mutation === "metadata") {
+        await invalidateImageDataAfterMetadataSave(client, [{ id: target.id, title: "B" }], [target]);
+      } else {
+        await invalidateImageDataAfterAdminListMutation(client);
+      }
+    });
+    scrollTargets.length = 0;
+    await h.React.act(async () => { await navigate(-1); });
+    await h.flush();
+    assert.equal(galleryKey, key);
+    assert.ok(h.pending.length > requestCount, "新数据版本触发分页重新验证");
+    assert.equal(h.pending.at(-1)!.cache, "no-cache");
+    await h.respond(h.pending.length - 1, {
+      ...page, items: page.items.map(item => item.id === target.id ? { ...item, title: "B" } : item)
+    });
+    assert.equal(title(), "B", "新分页的标题或恢复成员不再被旧局部状态覆盖");
+    assert.equal(current.snapshot.compactItems, 9);
+    assert.ok(scrollTargets.includes(150), "复用原锚点与卡内偏移");
+    assert.equal(visibleStart, 150);
+  });
+}
 
 test("[Web/画廊] 画廊调试快照覆盖查询、DTO、紧凑布局、揭示与 JS heap 指标", () => {
   const scheduler = new ImageLoadScheduler(2);
