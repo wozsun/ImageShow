@@ -91,16 +91,12 @@
   会同时授权该后缀下全部现有和未来子域，因此 `site.domain` 及额外通配符都必须处于可信
   DNS 管理边界，不得把公共托管后缀作为安全边界。CSP 原生支持这类 host-source，因此
   响应不根据可能缺失的 `Origin` 或可被父页面关闭的 `Referer` 猜测并反射来源。禁用嵌入、
-  未知 Host 或其他路径继续不可嵌入。SPA 以 report-only 模式同时观测完整资源
-  策略与脚本 Trusted Types；白名单只列出实际出现的 `imageshow-altcha-worker`、
-  `svelte-trusted-html`、`decodeHTMLEntitiesPolicy` 与 `AGPolicy`，不放行任意策略名，也不
-  提供放行任意脚本 URL 或 HTML 的默认策略。候选策略明确覆盖 script、Worker、connect、
-  HTTPS 图片、样式、字体、object、base 与 form；connect 同时允许 HTTPS，以覆盖展映读取
-  当前资源出口或对象存储缩略图并解码为纹理的实际请求，图片服务仍须提供对应 CORS。经浏览器报告验证前不直接收紧为强制
-  策略。同源 `/api/security/csp-report` 只接受 POST，经 Fetch Metadata 拒绝跨站 / 同站
-  跨源，声明体积上限为 64 KiB，并立即取消正文流；它不解析 JSON、不写日志、数据库或
-  Redis。登录页在 ALTCHA 首次挂载前预设隐藏 footer 与 logo，使组件不渲染会被 Trusted
-  Types 拒绝的动态 HTML footer。显式设置域名时，应用只接受 `site.domain`，
+  未知 Host 或其他路径继续不可嵌入。普通与嵌入 SPA 文档均强制执行
+  `script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'`，
+  仅允许同源脚本与 Worker，禁止内联脚本、字符串动态求值及 object 嵌入，并限制 base URL。
+  展映按资源出口读取缩略图并解码为纹理，外部图片服务须提供对应 CORS。登录验证码使用
+  构建产出的同源 Worker，并在 ALTCHA 首次挂载前预设隐藏 footer 与 logo，保持初始显示一致。
+  显式设置域名时，应用只接受 `site.domain`，
   其他未知 Host 返回不可缓存的 404；域名为空或 `example.com` 时接受格式合法的访问 Host，
   图片地址使用同源路径，不把请求 Host 写入共享缓存、队列或持久配置。生产部署强烈建议设置域名，
   并由反向代理限制允许的 Host；基础回退不替代鉴权、CSRF 或代理配置。
@@ -125,14 +121,14 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 
 | 响应类型 | 缓存 / 验证器 | 额外边界 |
 | --- | --- | --- |
-| 普通 SPA HTML | `max-age=0`、内容 ETag、支持 304 | 强制禁止嵌入；完整 CSP 候选与 Trusted Types 先 report-only |
+| 普通 SPA HTML | `max-age=0`、内容 ETag、支持 304 | 强制同源脚本与 Worker、禁止 object、限制 base URL，并禁止嵌入 |
 | `/embed/home`、`/embed/show`、`/embed/gallery` | `no-store`，仍带内容 ETag | 仅移除 `X-Frame-Options`，CSP 精确生成 `frame-ancestors` |
 | 公开列表 | 浏览器 30 秒 / 共享缓存 60 秒；每日随机页收口至当日剩余时间；内容弱 ETag 与 304 | 仅 ready 公开投影；错误、可见性与周期判断先于条件验证；缓存键保留完整查询参数 |
 | 图片详情 `/api/images/<id>` | 原图按钮开启时浏览器 30 秒 / CDN 60 秒，关闭时 `private, no-cache`；`Vary: Cookie`、内容弱 ETag 与 304 | 关闭时校验现有会话，访客原图链接为 null，已登录管理员取得公开链接；共享数据库行后单独投影，私有详情不共享 |
 | 其他确定性公共 JSON API | `max-age=0`、最长 30 秒共享缓存窗口、内容弱 ETag 与 304；按入口决定 `Sec-Fetch-Site`，统一 `Vary: Accept-Encoding` | 不返回后台字段；受保护读取拒绝跨站 / 同站跨源 |
 | 确定性管理只读 JSON | `private, no-cache`、完整 envelope 内容弱 ETag 与 304 | 仅浏览器私有保存且每次重验证；身份鉴权先于内容生成，禁止 CDN 共享 |
 | 登录、其他管理 API、错误、404、健康检查 | `no-store` 或 `private, no-store` | `auth/me`、ALTCHA、检查状态、日志、SSE、后台字节、预览、敏感配置与写接口不缓存；登录限流的 429 使用纯数字 `Retry-After` |
-| CSP report、OPTIONS、204 | `no-store` | 只允许各自方法，先做 Host / Fetch Metadata 检查，取消不需要的正文；不启用 CORS |
+| OPTIONS 204 | `no-store` | 先做 Host / Fetch Metadata 检查，取消不需要的正文；不启用 CORS |
 | hash 资产、稳定图片、HEAD、206、304 | hash 资产 / 稳定图片 `immutable`；非 hash 品牌资源短缓存；ETag、Last-Modified、单 Range | 304 无正文；206 保留完整对象验证器；416 返回 `Content-Range: bytes */总长` |
 | 随机 proxy / redirect / JSON | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
 | 外链原图 proxy / redirect | 单一公开入口；直连 302 公开短缓存，proxy 继承源站策略或使用 CDN fallback；`Vary: User-Agent`、URL 命名空间弱 ETag、Last-Modified 与 304；错误和失败回退不缓存 | 不读取会话或按钮开关；正常图片与回收站均可访问；HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、验证器绑定 URL、`Referrer-Policy: no-referrer` |

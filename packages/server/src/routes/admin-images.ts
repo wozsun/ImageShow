@@ -142,11 +142,11 @@ export function registerAdminImageRoutes(app: Hono) {
       imageUpdateInput,
       await readJsonBody(c)
     ) satisfies ImageUpdateRequestDto;
-    let maxItemDurationMs = 0;
+    let maxGroupDurationMs = 0;
     let entityCountInvalidationTriggered = false;
     const result = await updateImages(input.items, {
       onMetrics(metrics) {
-        maxItemDurationMs = metrics.maxItemDurationMs;
+        maxGroupDurationMs = metrics.maxGroupDurationMs;
         entityCountInvalidationTriggered = metrics.entityCountInvalidationTriggered;
       },
     });
@@ -155,7 +155,7 @@ export function registerAdminImageRoutes(app: Hono) {
       succeeded: result.updated,
       failed: result.failed,
       total_duration_ms: Math.round((performance.now() - startedAt) * 100) / 100,
-      max_item_duration_ms: Math.round(maxItemDurationMs * 100) / 100,
+      max_group_duration_ms: Math.round(maxGroupDurationMs * 100) / 100,
       request_body_bytes: getRequestBodyBytes(c),
       entity_count_invalidation_triggered: entityCountInvalidationTriggered,
     });

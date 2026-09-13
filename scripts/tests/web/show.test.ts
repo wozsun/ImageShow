@@ -1815,33 +1815,33 @@ test("[Web/展映] 定向回读按 ID 收敛连续编辑并保留失败前的已
   const target = initial[1]!;
   await h.React.act(async () => current.refreshImage(target.id));
   const url = new URL(h.pending[1]!.path, "https://img.example");
-  assert.equal(url.pathname, "/api/images");
-  assert.equal(h.pending[1]!.path, h.pending[0]!.path, "回读原始批次 URL 并按目标 ID 更新");
-  assert.equal(h.pending[1]!.cache, "no-cache");
+  assert.equal(url.pathname, "/api/admin/images/snapshot");
+  assert.deepEqual(JSON.parse(String(h.pending[1]!.body)), { ids: [target.id] });
   await h.React.act(async () => current.refreshImage(target.id));
   assert.equal(h.pending[1]!.signal?.aborted, true);
-  await h.respond(2, { count: 1, items: [{ ...target, title: "较新回读" }] });
-  await h.respond(1, { count: 1, items: [{ ...target, title: "过时回读" }] });
+  await h.respond(2, { items: [editableImage(target.id, { ...target, title: "较新回读" })] });
+  await h.respond(1, { items: [editableImage(target.id, { ...target, title: "过时回读" })] });
   assert.equal(current.images[1]!.title, "较新回读");
   await h.React.act(async () => current.refreshImage(target.id));
   await h.React.act(async () => current.updateImage(editableImage(target.id, { ...target, title: "保存快照" })));
   assert.equal(h.pending[3]!.signal?.aborted, true);
-  await h.respond(3, { count: 1, items: [{ ...target, title: "快照前回读" }] });
+  await h.respond(3, { items: [editableImage(target.id, { ...target, title: "快照前回读" })] });
   assert.equal(current.images[1]!.title, "保存快照");
   await h.React.act(async () => current.refreshImage(target.id));
   await h.respond(4, { error: "暂时不可用" }, 503);
   assert.equal(current.images[1]!.title, "保存快照");
   await h.React.act(async () => current.refreshImage(target.id));
-  await h.respond(5, { count: 1, items: [{ ...target, title: "回读恢复" }] });
+  await h.respond(5, { items: [editableImage(target.id, { ...target, title: "回读恢复" })] });
   assert.equal(current.images[1]!.title, "回读恢复");
   assert.strictEqual(current.images[0], preserved[0]);
   assert.strictEqual(current.images[2], preserved[2]);
   await h.React.act(async () => current.refreshImage(target.id));
   await h.render(null);
   assert.equal(h.pending[6]!.signal?.aborted, true);
+  await h.respond(6, { items: [] });
 });
 test("[Web/展映] 退出筛选或删除只移除目标并隔离在途补图后继续同一游标", async (t) => {
-  for (const action of ["edit", "trash", "missing"] as const) {
+  for (const action of ["edit", "trash", "missing", "refreshed-filter-mismatch"] as const) {
     await t.test(action, async (t) => {
       const h = await createConfigStreamHarness(t, { honorAbort: false });
       const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
@@ -1863,7 +1863,9 @@ test("[Web/展映] 退出筛选或删除只移除目标并隔离在途补图后�
         await h.React.act(async () => current.loadMore());
       } else {
         await h.React.act(async () => current.refreshImage(target.id));
-        await h.respond(2, { error: "找不到图片" }, 404);
+        await h.respond(2, { items: action === "missing" ? [] : [
+          editableImage(target.id, { ...target, theme: "excluded" })
+        ] });
       }
       assert.equal(h.pending[1]!.signal?.aborted, true);
       const resumedRequest = h.pending.at(-1)!;
@@ -1882,6 +1884,42 @@ test("[Web/展映] 退出筛选或删除只移除目标并隔离在途补图后�
       assert.equal(current.initialLoading, false);
     });
   }
+});
+test("[Web/展映] 分页前部插入图片后，末项回读仍按当前筛选保留且可再次入场", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
+  let current!: ReturnType<typeof useShowData>;
+  function Probe() {
+    current = useShowData({ ...emptyGalleryFilters, theme: "included" }, "shifted", "latest");
+    return null;
+  }
+  const all = showImages(201);
+  const originalPage = all.slice(0, 200);
+  const target = originalPage[199]!;
+  const shiftedPage = [all[200]!, ...originalPage.slice(0, 199)];
+  await h.render(h.React.createElement(Probe));
+  await h.respond(0, { items: originalPage, next_cursor: null });
+  await h.React.act(async () => current.refreshImage(target.id));
+  // A page reload after insertion no longer contains the target. The ID read
+  // still returns its current record, independent of where it is now sorted.
+  const request = h.pending[1]!;
+  const isSnapshot = request.path === "/api/admin/images/snapshot";
+  await h.respond(1, isSnapshot
+    ? { items: [editableImage(target.id, { ...target, theme: "included", title: "仍然有效" })] }
+    : { items: shiftedPage, next_cursor: "shifted" });
+  assert.equal(current.images.find(image => image.id === target.id)?.title, "仍然有效");
+  assert.deepEqual(current.images.map(image => image.id), originalPage.map(image => image.id));
+  await h.React.act(async () => current.loadMore({
+    dataKey: current.committedKey, capacity: 20, available: 0,
+    activeIds: [], consumedIds: originalPage.map(image => image.id)
+  }));
+  await h.respond(2, { items: [target, ...shiftedPage], next_cursor: null });
+  await h.React.act(async () => current.loadMore({
+    dataKey: current.committedKey, capacity: 20, available: 0,
+    activeIds: [], consumedIds: current.images.map(image => image.id)
+  }));
+  await h.respond(3, { items: [target], next_cursor: null });
+  assert.ok(current.images.some(image => image.id === target.id), "确认有效的图片不能被写入永久移除集合");
 });
 test("[Web/展映] 编辑成员判断遵循包含、排除和自动设备筛选", () => {
   const image = editableImage(showImages(2)[1]!.id, { device: "pc", brightness: "dark", theme: "night", tags: ["blue", "stars"], author: "author" });
@@ -2252,8 +2290,9 @@ test("[Web/展映] 不同图片操作保留各自尚未完成的确认回读", a
       else current.refreshImage(images[1]!.id);
     });
     assert.equal(h.pending[1]!.signal?.aborted, false);
-    await h.respond(1, { items: [{ ...images[0]!, title: "A refreshed" }, ...images.slice(1)], next_cursor: null });
+    await h.respond(1, { items: [editableImage(images[0]!.id, { ...images[0]!, title: "A refreshed" })] });
     assert.equal(current.images.find(x => x.id === images[0]!.id)?.title, "A refreshed");
+    if (operation === "refresh") await h.respond(2, { items: [editableImage(images[1]!.id, images[1]!)] });
   });
 });
 

@@ -298,6 +298,8 @@ Endpoint 重绑定的双向随机挑战与精确探针清理位于 `storage/back
 `checks/database-check.ts`，正常图片请求不探测任务完整性。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
 请求级派生计数失效。每个请求只借一个锁会话，按并发上限分组取得该组词表、分类与必要的
 存储读取锁，再并行执行逐项事务；辅助锁在组结束后释放，图片更新锁保留至整个请求收口。
+`image_update_summary.max_group_duration_ms` 记录最慢分组的准备、等锁与执行总耗时；
+存储迁移摘要中的 `max_item_duration_ms` 继续表示最慢单图耗时。
 `images/image-update-item.ts` 是单图 metadata、author / theme / tag
 创建、完整标签替换与分类 metadata 更新的 PostgreSQL 事务所有者；主题删除的图片重分配由
 `images/theme-reassignment.ts` 拥有，删除主题后将图片关联置为 NULL。`images/metadata-theme.ts`
@@ -694,7 +696,8 @@ hooks ──► lib
   三种排序共用 `GET /api/images?view=show`，首次接收的随机批次只在 Web 洗牌。
   `useShowData.ts` 独占请求代次、游标与最多 800 个唯一 DTO；场景反馈已消费及仍引用的 ID，
   数据流退役无引用旧项并持续续取，有限池可循环，近期 ID 集合有界。删除与编辑隔离旧响应，
-  权威快照更新基础项并判定筛选成员；缺少快照时仅对原批次执行一次条件重验证。
+  权威快照更新基础项并判定筛选成员；保存确认缺少快照时按目标 ID 复用编辑快照读取及有限重试，
+  读取失败保留已提交候选，分页位置变化不作为移除依据。
   普通补图失败等待显式重试，场景逐帧信号不会触发重试循环。
   先无重复领取全部候选，只有有限筛选结果不足以填满活动槽时才循环复用。`mode=waterfall|float`
   是正式 URL 状态，省略或无效时回退 `site.show.mode`，读取默认值不改写 URL。

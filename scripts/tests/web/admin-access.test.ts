@@ -20,6 +20,7 @@ import {
   api,
   apiWithEtag,
   authExpiredEvent,
+  setCsrfToken,
   clearCsrfToken
 } from "../../../packages/web/src/lib/api/client.ts";
 import {
@@ -1865,6 +1866,93 @@ test("[Web/后台访问] 公开图库与后台图片筛选在清空动作临界�
     );
   }
 });
+test("[Web/后台访问] 偏好队列随账号卸载终止，迟到响应不写入新账号且原账号可恢复", async (t) => {
+  const h = await createConfigStreamHarness(t, { honorAbort: false });
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const { AdminPreferencesProvider, useAdminPreference } = await import("../../../packages/web/src/hooks/useAdminPreferences.tsx");
+  const stored = new Map<string, string>();
+  Object.assign(h.window, { localStorage: {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => stored.set(key, value)
+  } });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  t.after(() => { client.clear(); clearCsrfToken(); });
+  let setColor!: (value: "light" | "dark" | "system") => void;
+  let setSort!: (value: "oldest" | "latest") => void;
+  function Probe() {
+    [, setColor] = useAdminPreference("color_scheme");
+    [, setSort] = useAdminPreference("image_sort_order");
+    return null;
+  }
+  const mount = async (username: string, preferences: AdminPreferences) => {
+    setCsrfToken(`csrf-${username}`);
+    client.setQueryData(queryKeys.me, {
+      authenticated: true, username, preferences, preferences_etag: username
+    });
+    await h.render(h.React.createElement(h.React.StrictMode, null,
+      h.React.createElement(QueryClientProvider, { client },
+        h.React.createElement(AdminPreferencesProvider, {
+          key: username, username, serverPreferences: preferences,
+          serverPreferencesEtag: username, serverPreferencesUpdatedAt: Date.now()
+        }, h.React.createElement(Probe))
+      )
+    ));
+  };
+  await mount("A", { color_scheme: "dark", image_sort_order: "latest" });
+  await h.React.act(async () => { setColor("light"); setSort("oldest"); });
+  assert.equal(h.pending.length, 1, "同账号请求串行发送");
+  assert.equal(new Headers(h.pending[0]!.headers).get("x-csrf-token"), "csrf-A");
+  h.window.dispatchEvent(new Event("online"));
+  await mount("B", { color_scheme: "dark", image_sort_order: "latest" });
+  assert.equal(h.pending[0]!.signal?.aborted, true);
+  const cacheA = stored.get("imageshow.admin.preferences.A");
+  const cacheB = stored.get("imageshow.admin.preferences.B");
+  await h.respond(0, { preferences: { color_scheme: "light", image_sort_order: "latest" } });
+  assert.equal(h.pending.length, 1, "旧队列及 online 回调都不能借用 B 的凭据发送");
+  assert.equal(stored.get("imageshow.admin.preferences.A"), cacheA, "迟到响应不清除原账号 pending");
+  assert.equal(stored.get("imageshow.admin.preferences.B"), cacheB);
+  assert.deepEqual(client.getQueryData(queryKeys.me), {
+    authenticated: true, username: "B",
+    preferences: { color_scheme: "dark", image_sort_order: "latest" }, preferences_etag: "B"
+  });
+  // Strict Mode reactivation must retain pending work without reviving the old queue.
+  await mount("A", { color_scheme: "light", image_sort_order: "latest" });
+  assert.equal(h.pending.length, 2);
+  assert.deepEqual(JSON.parse(String(h.pending[1]!.body)), { image_sort_order: "oldest" });
+  assert.equal(new Headers(h.pending[1]!.headers).get("x-csrf-token"), "csrf-A");
+  await h.respond(1, { preferences: { color_scheme: "light", image_sort_order: "oldest" } });
+  assert.deepEqual(JSON.parse(stored.get("imageshow.admin.preferences.A")!).pending, {});
+  await h.React.act(async () => { setColor("dark"); setSort("latest"); });
+  assert.equal(h.pending.length, 3);
+  await h.respond(2, { preferences: { color_scheme: "dark", image_sort_order: "oldest" } });
+  assert.equal(h.pending.length, 4);
+  await h.respond(3, { preferences: { color_scheme: "dark", image_sort_order: "latest" } });
+  assert.deepEqual(JSON.parse(stored.get("imageshow.admin.preferences.A")!).pending, {});
+});
+
+test("[Web/后台访问] 偏好写入在取消读取期间卸载也不发送 PATCH", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const { AdminPreferencesProvider, useAdminPreference } = await import("../../../packages/web/src/hooks/useAdminPreferences.tsx");
+  const client = new QueryClient();
+  t.after(() => client.clear());
+  const cancellation = Promise.withResolvers<void>();
+  t.mock.method(client, "cancelQueries", () => cancellation.promise);
+  let setColor!: (value: "light" | "dark" | "system") => void;
+  function Probe() { [, setColor] = useAdminPreference("color_scheme"); return null; }
+  await h.render(h.React.createElement(QueryClientProvider, { client },
+    h.React.createElement(AdminPreferencesProvider, {
+      username: "fenced", serverPreferences: {}, serverPreferencesEtag: "fenced",
+      serverPreferencesUpdatedAt: Date.now()
+    }, h.React.createElement(Probe))
+  ));
+  await h.React.act(async () => setColor("light"));
+  assert.equal(h.pending.length, 0);
+  await h.render(null);
+  await h.React.act(async () => cancellation.resolve());
+  assert.equal(h.pending.length, 0);
+});
+
 test("[Web/后台访问] 后台偏好五分钟内聚焦零请求且首次过期重验证命中 304", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
@@ -2115,7 +2203,7 @@ test("[Web/后台访问] API 拒绝损坏成功响应且保留已有查询快照
       assert.deepEqual(await api("/api/site-config"), value);
     }
     globalThis.fetch = (async () => new Response(null, { status: 204 })) as typeof fetch;
-    assert.deepEqual(await api("/api/security-reports", { method: "POST" }), {});
+    assert.deepEqual(await api("/api/images", { method: "OPTIONS" }), {});
     globalThis.fetch = (async () => new Response("<html>private proxy error</html>", { status: 502 })) as typeof fetch;
     await assert.rejects(api("/api/site-config"), (error: unknown) => {
       assert.ok(error instanceof ApiClientError);

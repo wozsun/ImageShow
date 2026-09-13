@@ -24,6 +24,7 @@ import {
 
 let timer: NodeJS.Timeout | undefined;
 let tickPromise: Promise<void> | null = null;
+const activeTypeSlices = new Map<BackgroundJobType, Promise<void>>();
 let lastStaleRecovery = 0;
 let lastHistoryCleanup = 0;
 
@@ -175,20 +176,30 @@ async function runWorkerTick() {
 
   if (!executionCoordinator.isAccepting()) return;
   const pending = await listRunnableBackgroundJobCounts();
-  await Promise.all(pending.map(async (row) => {
-    const result = await runBackgroundJobType(
+  for (const row of pending) {
+    if (!executionCoordinator.isAccepting()) return;
+    if (activeTypeSlices.has(row.type)) continue;
+    // Keep each type's concurrency bound while subsequent ticks can discover
+    // other types and run periodic maintenance during a slow handler.
+    const slice = runBackgroundJobType(
       row.type,
       Math.min(jobTypeConcurrency(row.type), row.n)
-    );
-    logger.debug("worker_queue_slice", {
-      type: row.type,
-      backlog: row.n,
-      oldest_wait_ms: row.oldest_wait_ms,
-      processed: result.processed,
-      duration_ms: Math.round(result.durationMs * 100) / 100,
-      budget_exhausted: result.budgetExhausted
+    ).then((result) => {
+      logger.debug("worker_queue_slice", {
+        type: row.type,
+        backlog: row.n,
+        oldest_wait_ms: row.oldest_wait_ms,
+        processed: result.processed,
+        duration_ms: Math.round(result.durationMs * 100) / 100,
+        budget_exhausted: result.budgetExhausted
+      });
+    }).catch((error: unknown) => {
+      logger.error("worker queue slice failed", { type: row.type, error });
+    }).finally(() => {
+      activeTypeSlices.delete(row.type);
     });
-  }));
+    activeTypeSlices.set(row.type, slice);
+  }
 }
 
 function tick() {
@@ -201,6 +212,9 @@ function tick() {
 
 export function startWorker() {
   if (timer) return;
+  if (tickPromise || activeTypeSlices.size) {
+    throw new Error("Cannot restart worker before its prior scheduling drained");
+  }
   executionCoordinator.start();
   const onTickError = (error: unknown) => logger.error("worker tick failed", error);
   timer = setInterval(() => tick().catch(onTickError), appConfig.backgroundJob.tickIntervalMs);
@@ -216,7 +230,8 @@ export function stopWorker() {
 export async function drainWorker(
   timeoutMs = appConfig.backgroundJob.drainTimeoutMs
 ) {
-  const additionalWork = tickPromise ? [tickPromise] : [];
+  const additionalWork = [...activeTypeSlices.values()];
+  if (tickPromise) additionalWork.push(tickPromise);
   const drained = await executionCoordinator.drain(timeoutMs, additionalWork);
   if (!drained) {
     logger.warn("background worker drain deadline exceeded", { timeout_ms: timeoutMs });

@@ -77,6 +77,105 @@ function processIsRunning(pid: number) {
   }
 }
 
+test("[Server/数据库与进程] Worker 慢类型不阻塞后来任务，停止等待调度与结算完成", async (t) => {
+  const { registerHooks } = await import("node:module");
+  type Job = { id: string; type: "move.cleanup" | "cache.rebuild" };
+  const jobs: Job[] = [{ id: "move-1", type: "move.cleanup" }, { id: "move-2", type: "move.cleanup" }];
+  const started: string[] = [];
+  const succeeded: string[] = [];
+  const rescheduled: string[] = [];
+  const moveFinished = Promise.withResolvers<{ status: "succeeded" }>();
+  const settlement = Promise.withResolvers<boolean>();
+  const discovery = Promise.withResolvers<Array<{ type: string; n: number; oldest_wait_ms: number }>>();
+  let holdDiscovery = false;
+  let discoveryStarted = false;
+  let staleRecoveries = 0;
+  let historyCleanups = 0;
+  const errors: unknown[] = [];
+  const dependencies: Record<string, Record<string, unknown>> = {
+    "@imageshow/shared": { appConfig: { backgroundJob: {
+      ...appConfig.backgroundJob, tickIntervalMs: 10, staleRecoveryIntervalMs: 20,
+      historyCleanupIntervalMs: 30, taskTimeoutSeconds: 60, queueSliceMaxMs: 10_000
+    } } },
+    "../core/logger.ts": { logger: { debug() {}, warn() {}, error: (...args: unknown[]) => errors.push(args) } },
+    "../storage/objects/removal-admission.ts": { STORAGE_OBJECT_REMOVAL_CONCURRENCY: 1 },
+    "./handlers.ts": { handleBackgroundJob: async (job: Job, signal: AbortSignal) => {
+      started.push(job.id);
+      if (job.type === "move.cleanup") return raceWithAbortSignal(signal, moveFinished.promise);
+      return { status: "succeeded" };
+    } },
+    "./repository.ts": {
+      claimBackgroundJob: async (type: string) => {
+        const index = jobs.findIndex(job => job.type === type);
+        return index < 0 ? null : jobs.splice(index, 1)[0];
+      },
+      listRunnableBackgroundJobCounts: async () => {
+        if (holdDiscovery) { discoveryStarted = true; return discovery.promise; }
+        return [...new Set(jobs.map(job => job.type))].map(type => ({
+          type, n: jobs.filter(job => job.type === type).length, oldest_wait_ms: 0
+        }));
+      },
+      recoverStaleBackgroundJobs: async () => { staleRecoveries++; },
+      cleanupBackgroundJobHistory: async () => { historyCleanups++; },
+      renewBackgroundJobLease: async () => true,
+      markBackgroundJobSucceeded: async (job: Job) => { succeeded.push(job.id); return true; },
+      markBackgroundJobFailed: async () => { assert.fail("unexpected failure settlement"); },
+      rescheduleBackgroundJob: async (job: Job) => { rescheduled.push(job.id); return settlement.promise; }
+    }
+  };
+  const fixtureKey = "imageshow-worker-scheduling-fixture";
+  Object.defineProperty(globalThis, fixtureKey, { configurable: true, value: dependencies });
+  const workerUrl = new URL("../../../packages/server/src/jobs/worker.ts?scheduling-test", import.meta.url).href;
+  const hooks = registerHooks({ resolve(specifier, context, next) {
+    if (context.parentURL !== workerUrl || !dependencies[specifier]) return next(specifier, context);
+    const source = Object.keys(dependencies[specifier]).map(name =>
+      `export const ${name} = globalThis[${JSON.stringify(fixtureKey)}][${JSON.stringify(specifier)}][${JSON.stringify(name)}];`
+    ).join("\n");
+    return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true };
+  } });
+  t.mock.timers.enable({ apis: ["setInterval", "Date"], now: 100_000 });
+  const worker = await import(workerUrl) as typeof import("../../../packages/server/src/jobs/worker.ts");
+  t.after(async () => {
+    worker.stopWorker();
+    discovery.resolve([]);
+    settlement.resolve(true);
+    moveFinished.resolve({ status: "succeeded" });
+    await worker.drainWorker(1_000);
+    hooks.deregister();
+    Reflect.deleteProperty(globalThis, fixtureKey);
+  });
+  const flush = async () => { await new Promise<void>(resolve => setImmediate(resolve)); };
+  worker.startWorker();
+  await flush();
+  assert.deepEqual(started, ["move-1"]);
+  jobs.push({ id: "cache-1", type: "cache.rebuild" });
+  t.mock.timers.tick(10);
+  await flush();
+  assert.deepEqual(started, ["move-1", "cache-1"], "后到的独立类型必须在慢任务结束前开始");
+  assert.deepEqual(succeeded, ["cache-1"]);
+  t.mock.timers.tick(30);
+  await flush();
+  assert.ok(staleRecoveries > 1 && historyCleanups > 1, "定期维护也不等待慢处理器");
+  assert.deepEqual(started, ["move-1", "cache-1"], "反复 tick 不增加同类型并发");
+  worker.stopWorker();
+  await flush();
+  assert.deepEqual(rescheduled, ["move-1"]);
+  assert.equal(await worker.drainWorker(0), false, "停止后的重新排队回执也属于在途工作");
+  assert.throws(() => worker.startWorker(), /drained/);
+  settlement.resolve(true);
+  assert.equal(await worker.drainWorker(1_000), true);
+  holdDiscovery = true;
+  worker.startWorker();
+  await flush();
+  assert.equal(discoveryStarted, true);
+  worker.stopWorker();
+  assert.equal(await worker.drainWorker(0), false, "等待中的任务发现查询也必须排空");
+  discovery.resolve([{ type: "move.cleanup", n: 1, oldest_wait_ms: 0 }]);
+  assert.equal(await worker.drainWorker(1_000), true);
+  assert.deepEqual(started, ["move-1", "cache-1"], "停止后晚到的发现结果不能领取任务");
+  assert.deepEqual(errors, []);
+});
+
 async function waitForProcessId(path: string, maximumAttempts = 250) {
   let lastContent = "";
   for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {

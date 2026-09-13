@@ -20,7 +20,6 @@ import {
   invalidJsonBodyError,
   isJsonContentType
 } from "./json-body.ts";
-import { cspReportPath } from "./headers.ts";
 
 const standardApiBodyMaxBytes = 128 * 1024;
 const jsonlManifestBodyMaxBytes = appConfig.ingestion.jsonlManifestMaxBytes;
@@ -153,11 +152,6 @@ export const limitAdminPreferencesBody = measuredBodyLimit(adminPreferencesBodyM
 
 export function limitApiRequestBody(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;
-  if (path === cspReportPath) {
-    // 浏览器报告端点默认只用于满足 Reporting API 的投递要求；路由不会
-    // 消费正文，因此这里也跳过分块请求的预读和重建，保持固定开销。
-    return next();
-  }
   if (path.startsWith(`${adminApiBasePath}/`)) {
     // Admin routes select their body tier after same-origin checks or session
     // authentication. This also keeps anonymous large requests off the body.

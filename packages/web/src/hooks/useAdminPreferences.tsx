@@ -50,6 +50,14 @@ type QueuedPreference = {
   version: number;
 };
 
+type PreferenceSyncScope = {
+  username: string;
+  controller: AbortController;
+  queue: Promise<void>;
+  queued: Partial<Record<AdminPreferenceKey, QueuedPreference>>;
+  version: number;
+};
+
 type AdminPreferencesQuerySnapshot = AdminPreferencesResponseDto & Readonly<{
   etag: string;
 }>;
@@ -147,15 +155,20 @@ export function AdminPreferencesProvider({
     )
   );
   const cacheRef = useRef(cache);
-  const queueRef = useRef(Promise.resolve());
-  const queuedPreferencesRef = useRef<Partial<Record<AdminPreferenceKey, QueuedPreference>>>({});
-  const queueVersionRef = useRef(0);
-  const activeUsernameRef = useRef<string | null>(username);
+  const syncScopeRef = useRef<PreferenceSyncScope | null>(null);
 
   useLayoutEffect(() => {
-    activeUsernameRef.current = username;
+    const scope: PreferenceSyncScope = {
+      username,
+      controller: new AbortController(),
+      queue: Promise.resolve(),
+      queued: {},
+      version: 0
+    };
+    syncScopeRef.current = scope;
     return () => {
-      activeUsernameRef.current = null;
+      scope.controller.abort();
+      syncScopeRef.current = null;
     };
   }, [username]);
 
@@ -199,7 +212,7 @@ export function AdminPreferencesProvider({
     preferences: AdminPreferences,
     etag: string
   ) => {
-    if (activeUsernameRef.current !== username) return;
+    if (syncScopeRef.current?.username !== username) return;
     updateAuthPreferenceSnapshot(username, preferences, etag);
   }, [updateAuthPreferenceSnapshot, username]);
 
@@ -215,20 +228,23 @@ export function AdminPreferencesProvider({
   );
 
   const enqueueSync = useCallback((requestedPatch: AdminPreferences) => {
+    const scope = syncScopeRef.current;
+    if (!scope || scope.username !== username) return;
+    const { signal } = scope.controller;
     const patch: AdminPreferences = {};
     const ticketVersions: Partial<Record<AdminPreferenceKey, number>> = {};
 
     for (const key of adminPreferenceKeys) {
       const value = requestedPatch[key];
-      if (value === undefined || queuedPreferencesRef.current[key]?.value === value) continue;
-      const version = ++queueVersionRef.current;
+      if (value === undefined || scope.queued[key]?.value === value) continue;
+      const version = ++scope.version;
       assignAdminPreference(patch, key, value);
       ticketVersions[key] = version;
-      queuedPreferencesRef.current[key] = { value, version };
+      scope.queued[key] = { value, version };
     }
     if (!preferenceCount(patch)) return;
 
-    queueRef.current = queueRef.current.then(async () => {
+    scope.queue = scope.queue.then(async () => {
       try {
         /*
          * A focus/reconnect GET may have captured the previous PostgreSQL value.
@@ -236,15 +252,21 @@ export function AdminPreferencesProvider({
          * stale read can publish after pending is cleared.
          */
         const result = await runAdminPreferenceWriteWithReadFence(
-          cancelPreferenceReads,
-          () => apiWithEtag<AdminPreferencesResponseDto>(
-            `${adminApiBasePath}/preferences`,
-            {
-              method: "PATCH",
-              body: JSON.stringify(patch)
-            }
-          )
+          () => {
+            signal.throwIfAborted();
+            return cancelPreferenceReads();
+          },
+          () => {
+            // The account may have changed while reads were being cancelled.
+            // Each activation owns its queue, including a Strict Mode remount.
+            signal.throwIfAborted();
+            return apiWithEtag<AdminPreferencesResponseDto>(
+              `${adminApiBasePath}/preferences`,
+              { method: "PATCH", body: JSON.stringify(patch), signal }
+            );
+          }
         );
+        signal.throwIfAborted();
         const response = result.data;
         const acknowledged = normalizeAdminPreferences(response.preferences);
         const current = cacheRef.current;
@@ -253,7 +275,7 @@ export function AdminPreferencesProvider({
 
         for (const key of adminPreferenceKeys) {
           const sentValue = patch[key];
-          const isLatestRequest = queuedPreferencesRef.current[key]?.version === ticketVersions[key];
+          const isLatestRequest = scope.queued[key]?.version === ticketVersions[key];
           if (isLatestRequest && sentValue !== undefined && current.pending[key] === sentValue) {
             delete pending[key];
             assignAdminPreference(values, key, acknowledged[key] ?? sentValue);
@@ -262,7 +284,7 @@ export function AdminPreferencesProvider({
 
           // PATCH 返回 PostgreSQL 中当前完整投影。未被本地更新占用的其他键也在此
           // 对齐服务端，但不能覆盖同一页面稍后排队或仍待同步的值。
-          if (current.pending[key] !== undefined || queuedPreferencesRef.current[key]) continue;
+          if (current.pending[key] !== undefined || scope.queued[key]) continue;
           const acknowledgedValue = acknowledged[key];
           if (acknowledgedValue === undefined) delete values[key];
           else assignAdminPreference(values, key, acknowledgedValue);
@@ -278,8 +300,8 @@ export function AdminPreferencesProvider({
         // PostgreSQL 或网络暂时不可用时保留 pending；网络恢复或下次登录会再次补同步。
       } finally {
         for (const key of adminPreferenceKeys) {
-          if (queuedPreferencesRef.current[key]?.version === ticketVersions[key]) {
-            delete queuedPreferencesRef.current[key];
+          if (scope.queued[key]?.version === ticketVersions[key]) {
+            delete scope.queued[key];
           }
         }
       }
@@ -289,7 +311,8 @@ export function AdminPreferencesProvider({
     commitCache,
     queryClient,
     queryKey,
-    syncAuthPreferenceSnapshot
+    syncAuthPreferenceSnapshot,
+    username
   ]);
 
   const preferenceQuery = useQuery<AdminPreferencesQuerySnapshot>({
@@ -365,7 +388,11 @@ export function AdminPreferencesProvider({
     const retryPendingPreferences = () => {
       // 等待可能仍在收尾的失败请求释放队列，再读取最新 pending，避免 online
       // 事件恰好早于请求 finally 时被“同值已排队”判断吞掉。
-      void queueRef.current.then(() => enqueueSync(cacheRef.current.pending));
+      const scope = syncScopeRef.current;
+      if (!scope) return;
+      void scope.queue.then(() => {
+        if (!scope.controller.signal.aborted) enqueueSync(cacheRef.current.pending);
+      });
     };
     window.addEventListener("online", retryPendingPreferences);
     return () => {

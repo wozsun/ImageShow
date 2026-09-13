@@ -737,7 +737,7 @@ export async function createConfigStreamHarness(t: TestContext, {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { window, document } = parseHTML("<html><body><div id=root></div></body></html>");
-  const pending: Array<{ path: string; body?: BodyInit | null; cache?: RequestCache; credentials?: RequestCredentials; signal: AbortSignal | null | undefined; resolve: (response: Response) => void }> = [];
+  const pending: Array<{ path: string; body?: BodyInit | null; headers?: HeadersInit; cache?: RequestCache; credentials?: RequestCredentials; signal: AbortSignal | null | undefined; resolve: (response: Response) => void }> = [];
   const globals = {
     window, document, self: window, navigator: window.navigator,
     innerWidth: 1024, innerHeight: 768,
@@ -752,7 +752,7 @@ export async function createConfigStreamHarness(t: TestContext, {
     React, IS_REACT_ACT_ENVIRONMENT: true,
     fetch: (path: string, init?: RequestInit) => new Promise<Response>((resolve, reject) => {
       if (String(path).endsWith("/logs/client-errors")) { resolve(Response.json({ ok: true })); return; }
-      pending.push({ path: String(path), body: init?.body, cache: init?.cache, credentials: init?.credentials, signal: init?.signal, resolve });
+      pending.push({ path: String(path), body: init?.body, headers: init?.headers, cache: init?.cache, credentials: init?.credentials, signal: init?.signal, resolve });
       if (honorAbort) init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
     })
   };

@@ -2,6 +2,7 @@ import { readableFilterSearch } from "@imageshow/shared/browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicImageListResponseDto, ShowOrder } from "@imageshow/shared/browser";
 import { api, ApiClientError, isApiClientError } from "../../lib/api/client.js";
+import { readEditableImageSnapshots } from "../../lib/api/image-edit.js";
 import { imageBrowseApiSearchParams, galleryFiltersFromSearchParams, type GalleryFilters } from "../../lib/gallery/gallery-query.js";
 import { imageMatchesFilters, shuffledImageBatch } from "../../lib/gallery/image-browse.js";
 import type { EditableImageSnapshot } from "../../lib/types.js";
@@ -37,7 +38,6 @@ export function useShowData(
   const pausedRef = useRef(false);
   const recentRef = useRef(new Set<string>());
   const removedRef = useRef(new Set<string>());
-  const pathsRef = useRef(new Map<string, string>());
   const confirmedRef = useRef(new Map<string, ShowImage>());
   const usageRef = useRef<ShowCandidateUsage | null>(null);
   const initialLimitRef = useRef(initialLimit);
@@ -51,7 +51,6 @@ export function useShowData(
     imagesRef.current = next;
     setImages(next);
     const ids = new Set(next.map((image) => image.id));
-    for (const id of pathsRef.current.keys()) if (!ids.has(id)) pathsRef.current.delete(id);
     // Confirmed base fields only need to outlive their resident card.
     for (const id of confirmedRef.current.keys()) if (!ids.has(id)) confirmedRef.current.delete(id);
   }, []);
@@ -102,7 +101,6 @@ export function useShowData(
         for (const item of accepted) {
           recentRef.current.delete(item.id);
           recentRef.current.add(item.id);
-          pathsRef.current.set(item.id, path);
         }
         while (recentRef.current.size > recentLimit) {
           recentRef.current.delete(recentRef.current.values().next().value!);
@@ -155,7 +153,6 @@ export function useShowData(
     usageRef.current = null;
     recentRef.current.clear();
     removedRef.current.clear();
-    pathsRef.current.clear();
     confirmedRef.current.clear();
     setFailure(null);
     setHasMore(enabled);
@@ -214,31 +211,30 @@ export function useShowData(
   }, [fence, publish, removeImage, request, requestFilters]);
 
   const refreshImage = useCallback((imageId: string) => {
-    const path = pathsRef.current.get(imageId);
-    if (!path) return;
-    confirmedRef.current.delete(imageId);
+    if (!imagesRef.current.some((image) => image.id === imageId)) return;
     if (fence(imageId)) {
       void request(true, true);
       return;
     }
     const controller = new AbortController();
     targetedRequestsRef.current.set(imageId, controller);
-    void api<PublicImageListResponseDto<"show">>(path, { signal: controller.signal, cache: "no-cache" })
+    // This recovery follows an admin edit whose authoritative snapshot failed.
+    // Page membership can change independently of the image's current validity.
+    void readEditableImageSnapshots([imageId], controller.signal)
       .then((response) => {
         if (targetedRequestsRef.current.get(imageId) !== controller) return;
         const image = response.items.find((item) => item.id === imageId);
         if (!image) { removeImage(imageId, true); return; }
-        publish(imagesRef.current.map((item) => item.id === imageId ? image : item));
+        updateImage(image);
       })
-      .catch((error: unknown) => {
-        if (targetedRequestsRef.current.get(imageId) === controller && isApiClientError(error) && error.status === 404) {
-          removeImage(imageId, true);
-        }
+      .catch(() => {
+        // Only a successful ID snapshot can establish absence or filter mismatch.
+        // A failed read keeps the last committed candidate available.
       })
       .finally(() => {
         if (targetedRequestsRef.current.get(imageId) === controller) targetedRequestsRef.current.delete(imageId);
       });
-  }, [fence, publish, removeImage, request]);
+  }, [fence, removeImage, request, updateImage]);
 
   const transitioning = committed.sourceKey !== sourceKey || committed.order !== order;
   const error = failure?.sourceKey === sourceKey ? failure.value : null;

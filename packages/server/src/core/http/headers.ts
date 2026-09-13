@@ -1,14 +1,5 @@
 import type { Context } from "hono";
 
-export const cspReportPath = "/api/security/csp-report";
-const cspReportGroup = "imageshow-csp";
-const trustedTypePolicyNames = [
-  "imageshow-altcha-worker",
-  "svelte-trusted-html",
-  "decodeHTMLEntitiesPolicy",
-  "AGPolicy"
-].join(" ");
-
 const commonSecurityHeaders: Readonly<Record<string, string>> = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -21,29 +12,8 @@ const securityHeaders: Readonly<Record<string, string>> = {
   "Content-Security-Policy": "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 };
 
-const commonSpaDocumentHeaders: Readonly<Record<string, string>> = {
-  ...commonSecurityHeaders,
-  "Content-Security-Policy-Report-Only": [
-    "default-src 'self'",
-    "script-src 'self'",
-    "worker-src 'self'",
-    "connect-src 'self' https:",
-    "img-src 'self' https: data: blob:",
-    "style-src 'self' 'unsafe-inline'",
-    "font-src 'self' data:",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "require-trusted-types-for 'script'",
-    `trusted-types ${trustedTypePolicyNames}`,
-    `report-uri ${cspReportPath}`,
-    `report-to ${cspReportGroup}`
-  ].join("; "),
-  "Reporting-Endpoints": `${cspReportGroup}="${cspReportPath}"`
-};
-
 export const spaDocumentHeaders: Readonly<Record<string, string>> = {
-  ...commonSpaDocumentHeaders,
+  ...commonSecurityHeaders,
   "X-Frame-Options": "DENY",
   "Content-Security-Policy": "script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 };
@@ -57,7 +27,7 @@ export function embedSpaDocumentHeaders(
     ? allowedOrigins.join(" ")
     : "'none'";
   return {
-    ...commonSpaDocumentHeaders,
+    ...commonSecurityHeaders,
     "Content-Security-Policy": `script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors ${frameAncestors}`
   };
 }

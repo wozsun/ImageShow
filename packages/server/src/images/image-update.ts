@@ -17,7 +17,7 @@ import { imageUpdateLockRequests } from "./image-update-lock.ts";
 import { withPlannedImageMutation } from "./mutation-sync.ts";
 
 type ImageUpdateExecutionMetrics = {
-  maxItemDurationMs: number;
+  maxGroupDurationMs: number;
   entityCountInvalidationTriggered: boolean;
 };
 
@@ -45,7 +45,7 @@ export async function updateImages(
   options: ImageUpdateOptions = {}
 ): Promise<ImageUpdateResponseDto> {
   const entityCountInvalidationBatch = createEntityCountCacheInvalidationBatch();
-  let maxItemDurationMs = 0;
+  let maxGroupDurationMs = 0;
   let entityCountInvalidationTriggered = false;
 
   return withAdvisoryLocks(
@@ -99,7 +99,7 @@ export async function updateImages(
                 ...publicItemError(error)
               }));
             } finally {
-              maxItemDurationMs = Math.max(maxItemDurationMs, performance.now() - startedAt);
+              maxGroupDurationMs = Math.max(maxGroupDurationMs, performance.now() - startedAt);
             }
           }
           const updated = results.filter(
@@ -120,7 +120,7 @@ export async function updateImages(
             });
           } finally {
             options.onMetrics?.({
-              maxItemDurationMs,
+              maxGroupDurationMs,
               entityCountInvalidationTriggered
             });
           }

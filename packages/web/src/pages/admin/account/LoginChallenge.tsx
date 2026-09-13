@@ -11,39 +11,8 @@ import pbkdf2WorkerUrl from "altcha/workers/pbkdf2?worker&url";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import "../../../styles/admin/login-challenge.css";
 
-type TrustedScriptUrlPolicy = {
-  createScriptURL(value: string): unknown;
-};
-
-type TrustedTypesFactory = {
-  createPolicy(
-    name: string,
-    rules: { createScriptURL(value: string): string }
-  ): TrustedScriptUrlPolicy;
-};
-
-const trustedTypes = (globalThis as typeof globalThis & {
-  trustedTypes?: TrustedTypesFactory;
-}).trustedTypes;
-
-const altchaWorkerPolicy = trustedTypes?.createPolicy("imageshow-altcha-worker", {
-  createScriptURL(value) {
-    if (value !== pbkdf2WorkerUrl) {
-      throw new TypeError("Unexpected ALTCHA worker URL");
-    }
-    return value;
-  }
-});
-
 function createPbkdf2Worker() {
-  const workerUrl = altchaWorkerPolicy
-    ? altchaWorkerPolicy.createScriptURL(pbkdf2WorkerUrl)
-    : pbkdf2WorkerUrl;
-
-  // TypeScript's DOM declarations do not yet include TrustedScriptURL in the
-  // Worker overload. This assertion changes only the compile-time type; the
-  // browser still receives the TrustedScriptURL object returned by the policy.
-  return new Worker(workerUrl as string);
+  return new Worker(pbkdf2WorkerUrl);
 }
 
 const altchaGlobal = (globalThis as typeof globalThis & { $altcha: AltchaGlobal }).$altcha;
@@ -53,8 +22,8 @@ const altchaInitialDisplayDefaults = {
 } as const;
 
 // ALTCHA applies the per-widget `configuration` attribute in an effect after
-// its first render. Seed the same values globally so that initial render never
-// mounts a dynamic-HTML footer that Trusted Types would reject.
+// its first render. Seed the same display values globally to keep the footer
+// and logo hidden from the initial render.
 altchaGlobal.defaults.set(altchaInitialDisplayDefaults);
 altchaGlobal.algorithms.set("PBKDF2/SHA-256", createPbkdf2Worker);
 

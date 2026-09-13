@@ -1095,7 +1095,6 @@ await updateRuntimeConfig({
 const rootShow = await app.request("http://imageshow.test/");
 assert.equal(rootShow.status, 200);
 assert.equal(rootShow.headers.get("location"), null);
-assert.ok(rootShow.headers.get("content-security-policy-report-only")?.includes("connect-src 'self' https:"));
 assert.ok(rootShow.headers.get("content-security-policy")?.includes("script-src 'self'"));
 for (const path of [
   "/embed/home", "/embed/gallery", "/embed/show",
@@ -1108,7 +1107,6 @@ for (const path of [
   assert.ok(response.headers.get("content-security-policy")?.includes("frame-ancestors"));
   assert.ok(response.headers.get("content-security-policy")?.includes("frame-ancestors 'self'"));
   assert.ok(response.headers.get("content-security-policy")?.includes("https://portal.example.com"));
-  assert.ok(response.headers.get("content-security-policy-report-only")?.includes("connect-src 'self' https:"));
   assert.equal(response.headers.get("x-frame-options"), null);
   const body = await response.text();
   const start = body.indexOf(inlineMarker) + inlineMarker.length;
