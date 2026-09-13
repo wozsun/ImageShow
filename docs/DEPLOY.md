@@ -26,7 +26,8 @@ docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 \
 - `.env.example` 是变量目录；额外变量须显式加入 Compose 的 `environment`。
   已有 `config.json` 时，运行配置继续以文件为准，详见[环境变量](CONFIG.md#环境变量)。
 - 停止宽限至少为 **50 秒**，允许请求和后台任务排空。
-- 默认资源配置面向 `2C / 4 GiB` 单机；并发参数及调整边界见[配置说明](CONFIG.md)。
+- 并发须结合当前主机实测与共享数据库总连接容量评估；公共读取准入和连接池上限见
+  [数据库说明](guide/database.md#运行期连接与公开回源)，图片处理参数见[配置说明](CONFIG.md)。
 
 ## PostgreSQL 与 Redis
 

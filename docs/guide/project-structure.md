@@ -125,7 +125,8 @@ core / config
   自己的事务边界 COUNT、推进 revision 和按决策读取有限 ID。
 - `images/ready-cache/coordinator-machine.ts` 是单进程图片投影状态机的唯一所有者；
   `coordinator.ts` 只装配该进程唯一实例。四态、单一活动校验 / 重建任务、revision 与
-  planned mutation fence 共同位于状态机边界内。
+  planned mutation fence 共同位于状态机边界内；恢复任务入库失败时由同一状态机保留意图和
+  单个重试计时器，停止时清理，不增加恢复所有者。
 
 这些 CLI 都直接依赖所需基础设施，不导入 HTTP 应用，也不会触发主服务启动；
 healthcheck 只读现有配置快照，密码恢复不初始化运行时配置。
@@ -235,6 +236,9 @@ schema 初始化和管理员播种直接使用主查询池，不为不受支持�
 释放 / 淘汰。Redis 缓存读取先行并保留外层并行，首次真实回源才借 client，同一 scope 内的领域模块
 显式接收并复用 reader；查询失败、请求取消或 scope 结束后不再启动排队 SQL。
 底层 `pool.query` 保持显式调用与原始连接语义。
+`core/coalesce.ts` 合并同键活动任务，调用者各自等待；可取消的工作使用共享信号，在最后一个
+调用者离开后中止。`images/read-models/facets.ts` 在建立公共数据库 scope 之前合并整个公共
+词表读取，避免共享某个 HTTP 请求的 reader 或在已有连接内嵌套等待另一个准入名额。
 
 固定窗口限流的单条通用 Lua、命令定义、注册、参数布局和返回解析由
 `core/redis/window-limit.ts` 就近拥有；`core/redis/client.ts` 只构造唯一 client 并维护连接与

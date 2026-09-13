@@ -110,8 +110,10 @@ export function getPublicGalleryFacets(
   signal?: AbortSignal
 ): Promise<GalleryFacetsDto> {
   return signal
-    ? withPublicDatabaseRead(signal, (database, databaseSignal) => (
-        getPublicGalleryFacetsWithAccess(databaseSignal, database)
-      ))
+    ? coalesce("gallery-facets:public", (sharedSignal) => (
+        withPublicDatabaseRead(sharedSignal, (database, databaseSignal) => (
+          getPublicGalleryFacetsWithAccess(databaseSignal, database)
+        ))
+      ), signal)
     : getPublicGalleryFacetsWithAccess(undefined, {});
 }

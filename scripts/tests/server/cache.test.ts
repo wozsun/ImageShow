@@ -4,6 +4,7 @@ import {
   setTimeout as delay
 } from "node:timers/promises";
 import test from "node:test";
+import { coalesce } from "../../../packages/server/src/core/coalesce.ts";
 import {
   appConfig
 } from "../../../packages/shared/src/app-config.ts";
@@ -835,6 +836,122 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
     /Ready-image cache coordinator is stopped/
   );
 });
+test("[Server/缓存与 Redis] 共享读取独立取消、最后离开释放作用域及失败后重试", async () => {
+  const admission = createPublicDatabaseAdmission({
+    totalConcurrency: 1, queueLimit: 1, queueTimeoutMs: 1000, retryAfterSeconds: 1
+  });
+  let queries = 0;
+  const releases: boolean[] = [];
+  let finish = Promise.withResolvers<{ rows: never[] }>();
+  const scope = createPublicDatabaseReadScope({
+    admission, executionTimeoutMs: 1000, retryAfterSeconds: 1,
+    pool: { connect: async () => ({
+      query: () => { queries += 1; return finish.promise; },
+      release: (destroy: boolean) => { releases.push(destroy); }
+    }) as never }
+  });
+  const read = (signal: AbortSignal) => coalesce("shared-read-contract", (sharedSignal) => (
+    scope(sharedSignal, ({ reader }) => reader.query("SELECT 1"))
+  ), signal);
+  const first = new AbortController();
+  const second = new AbortController();
+  const cancelled = read(first.signal);
+  const survivor = read(second.signal);
+  await delay(0);
+  assert.equal(queries, 1);
+  assert.deepEqual(admission.snapshot(), { active: 1, queued: 0 });
+  const rejected = assert.rejects(cancelled, /first left/);
+  first.abort(new Error("first left"));
+  await rejected;
+  assert.deepEqual(releases, []);
+  finish.resolve({ rows: [] });
+  assert.deepEqual((await survivor).rows, []);
+  assert.deepEqual(releases, [false]);
+
+  finish = Promise.withResolvers();
+  const last = new AbortController();
+  const abandoned = read(last.signal);
+  await delay(0);
+  const abandonedRejection = assert.rejects(abandoned, /last left/);
+  last.abort(new Error("last left"));
+  await abandonedRejection;
+  await delay(0);
+  assert.deepEqual(admission.snapshot(), { active: 0, queued: 0 });
+  assert.deepEqual(releases, [false, true]);
+  const oldQuery = finish;
+  finish = Promise.withResolvers();
+  const next = read(new AbortController().signal);
+  await delay(0);
+  oldQuery.reject(new Error("closed connection"));
+  const joined = read(new AbortController().signal);
+  await delay(0);
+  assert.equal(queries, 3);
+  finish.resolve({ rows: [] });
+  await Promise.all([next, joined]);
+  await assert.rejects(coalesce("failed-shared", async () => { throw new Error("failed"); }), /failed/);
+  assert.equal(await coalesce("failed-shared", async () => "retried"), "retried");
+  assert.deepEqual(admission.snapshot(), { active: 0, queued: 0 });
+});
+
+test("[Server/缓存与 Redis] 恢复入库失败保留意图且等待重试不会越过 mutation 或 stop", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const persistedMeta = readyCacheMeta("1");
+  let databaseAvailable = false;
+  let reads = 0;
+  let scheduled = 0;
+  let rebuilds = 0;
+  const coordinator = new ReadyImageCacheCoordinator({
+    getRedisConnectionState: () => ({ ready: true, epoch: 1 }),
+    getRedisOperationalState: () => ({ available: true, connectionEpoch: 1, reason: "ready", capabilities: null }),
+    probeRedisOperationalState: async () => ({ available: true, missing: [], commands: {} }) as never,
+    clearDisposableCaches: async () => true,
+    withWriteFence: async (work) => work(),
+    getRevision: async () => {
+      reads += 1;
+      if (!databaseAvailable) throw new Error("database unavailable");
+      return { revision: "1", updatedAt: "2026-09-14T00:00:00Z" };
+    },
+    validateCache: async () => ({ valid: true, meta: persistedMeta }),
+    rebuildCache: async () => { rebuilds += 1; return persistedMeta; },
+    readMeta: async () => persistedMeta,
+    handleValidationFailure: async () => { scheduled += 1; throw new Error("job insert unavailable"); }
+  });
+  const drain = () => new Promise<void>((resolve) => setImmediate(resolve));
+  try {
+    assert.equal((await coordinator.initialize()).readable, false);
+    assert.equal(reads, 1);
+    context.mock.timers.tick(4999);
+    await drain();
+    assert.equal(reads, 1);
+    context.mock.timers.tick(1);
+    await drain();
+    assert.equal(reads, 2);
+    assert.equal(scheduled, 2);
+    databaseAvailable = true;
+    const releaseMutation = coordinator.beginPlannedMutation(1);
+    context.mock.timers.tick(5000);
+    await drain();
+    assert.equal(reads, 2);
+    releaseMutation(false);
+    await drain();
+    assert.deepEqual(await coordinator.withRead(async () => "cache"), { acquired: true, value: "cache" });
+    assert.equal(rebuilds, 0);
+
+    databaseAvailable = false;
+    await coordinator.initialize();
+    const readsAtStop = reads;
+    await coordinator.stop();
+    databaseAvailable = true;
+    context.mock.timers.tick(60_000);
+    await drain();
+    assert.equal(reads, readsAtStop);
+    assert.equal(coordinator.getStatus().reason, "stopped");
+  } finally {
+    await coordinator.stop();
+    context.mock.timers.reset();
+  }
+});
+
 test("[Server/缓存与 Redis] ready cache 管理状态以固定读取恢复数量、进度与完整重建时间", async () => {
   const meta = readyCacheMeta("8");
   const preservedRebuildSnapshot = rebuildingReadyImageCacheMeta(

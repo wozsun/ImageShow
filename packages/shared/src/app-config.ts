@@ -93,9 +93,9 @@ export const appConfig = {
   // this budget below the 30-connection application pool so administrative
   // transactions and the worker retain independent capacity.
   publicPgFallback: {
-    totalConcurrency: 12,
-    queueLimit: 64,
-    queueTimeoutMs: 1_500,
+    totalConcurrency: 16,
+    queueLimit: 128,
+    queueTimeoutMs: 3_000,
     executionTimeoutMs: 7_500,
     retryAfterSeconds: 1,
     minimumRandomCandidates: 32,

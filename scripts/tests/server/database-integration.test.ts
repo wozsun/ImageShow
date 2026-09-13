@@ -35,6 +35,16 @@ import {
 const isolationRoot = resolve(import.meta.dirname, "isolation");
 const storageIngestionScenarios = [
   {
+    id: "ready-cache-recovery",
+    name: "数据库连接与恢复任务双失败后自动重新开放有效图片缓存",
+    script: join(isolationRoot, "ready-cache-recovery.mts")
+  },
+  {
+    id: "public-facets-concurrency",
+    name: "公共词表突发请求共享受控数据库作用域",
+    script: join(isolationRoot, "public-facets-concurrency.mts")
+  },
+  {
     id: "ingestion-http-boundaries",
     name: "接入 HTTP 精确批量动作、传输限额与认证顺序",
     script: join(isolationRoot, "ingestion-http-boundaries.mts")

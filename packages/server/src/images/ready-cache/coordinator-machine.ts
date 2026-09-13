@@ -29,6 +29,7 @@ import { getReadyImageRevision } from "./revision.ts";
 import { recordReadyImageCacheError } from "./status-observability.ts";
 
 const CACHE_REBUILD_JOB_KEY = "ready-image-cache-rebuild";
+const RECOVERY_RETRY_DELAY_MS = 5_000;
 
 type ReadyImageCachePhase =
   | "unavailable"
@@ -97,9 +98,7 @@ async function scheduleRebuildJob() {
     "ready-images",
     {},
     CACHE_REBUILD_JOB_KEY
-  ).catch((error) => {
-    logger.warn("ready_image_cache_rebuild_schedule_failed", error);
-  });
+  );
 }
 
 async function handleRedisValidationFailure(
@@ -138,6 +137,7 @@ export class ReadyImageCacheCoordinator {
   private activeTask: ReadyImageCacheRefreshTask | null = null;
   private activeAbort: AbortController | null = null;
   private pendingRefresh: ReadyImageCacheRefreshRequest = "none";
+  private recoveryTimer: ReturnType<typeof setTimeout> | null = null;
   private mutationHolds = 0;
   private mutationRebuildRequired = false;
   private mutationAffectedCount = 0;
@@ -231,6 +231,7 @@ export class ReadyImageCacheCoordinator {
   }
 
   async initialize() {
+    this.clearRecoveryTimer();
     this.initialized = true;
     this.phase = "unavailable";
     this.reason = "validating";
@@ -240,7 +241,7 @@ export class ReadyImageCacheCoordinator {
       await this.startRefresh(false);
     } catch {
       // The coordinator remains initialized and unavailable. Redis recovery or
-      // the durable cache.rebuild job will retry through the same state machine.
+      // the durable job (or its retained local intent) retries in this machine.
     }
     return this.getStatus();
   }
@@ -369,7 +370,7 @@ export class ReadyImageCacheCoordinator {
     }
   }
 
-  private async recordRefreshFailure(error: unknown) {
+  private async recordRefreshFailure(error: unknown, rebuildRequired: boolean) {
     if (this.getStatus().reason === "stopped") return;
     if (error instanceof ReadyImageCacheRefreshDeferredError) {
       this.phase = "unavailable";
@@ -388,8 +389,24 @@ export class ReadyImageCacheCoordinator {
       error,
       "ready_image_cache_refresh_failed"
     ).catch((handlingError) => {
-      logger.warn("ready_image_cache_failure_handling_failed", handlingError);
+      if (this.phase === "stopped") return;
+      logger.warn("ready_image_cache_rebuild_schedule_failed", handlingError);
+      // Scheduling uses the same database that validation needs. Preserve the
+      // intent here until a refresh succeeds or the durable job accepts it.
+      if (rebuildRequired || this.pendingRefresh === "none") {
+        this.pendingRefresh = rebuildRequired ? "rebuild" : "validate";
+      }
+      this.recoveryTimer ??= setTimeout(() => {
+        this.recoveryTimer = null;
+        this.startPendingRefresh();
+      }, RECOVERY_RETRY_DELAY_MS);
+      this.recoveryTimer.unref();
     });
+  }
+
+  private clearRecoveryTimer() {
+    if (this.recoveryTimer) clearTimeout(this.recoveryTimer);
+    this.recoveryTimer = null;
   }
 
   private startPendingRefresh() {
@@ -398,6 +415,7 @@ export class ReadyImageCacheCoordinator {
       || !this.initialized
       || this.phase === "stopped"
       || this.activeTask
+      || this.recoveryTimer
       || this.mutationHolds > 0
       || !this.connectionIsUsable()
     ) {
@@ -409,6 +427,7 @@ export class ReadyImageCacheCoordinator {
   }
 
   private queueRefresh(forceRebuild: boolean) {
+    this.clearRecoveryTimer();
     if (forceRebuild || this.pendingRefresh === "none") {
       this.pendingRefresh = forceRebuild ? "rebuild" : "validate";
     }
@@ -425,6 +444,7 @@ export class ReadyImageCacheCoordinator {
     }
     const active = this.activeTask;
     if (active) return active.promise;
+    this.clearRecoveryTimer();
     if (forceRebuild) {
       this.phase = "rebuilding";
       this.reason = "rebuilding";
@@ -437,7 +457,7 @@ export class ReadyImageCacheCoordinator {
     let activeTask!: ReadyImageCacheRefreshTask;
     const task = this.runRefresh(forceRebuild, controller.signal, progress)
       .catch(async (error) => {
-        await this.recordRefreshFailure(error);
+        await this.recordRefreshFailure(error, progress.fulfillsRebuildRequest);
         throw error;
       })
       .finally(() => {
@@ -510,7 +530,11 @@ export class ReadyImageCacheCoordinator {
       }, { waitForFence: true, signal });
       signal?.throwIfAborted();
       if (lease.acquired && lease.value) return lease.value;
-      return this.requestRebuild(options);
+      if (this.mutationHolds > 0) return this.requestRebuild(options);
+      return (await waitForTask(
+        this.startRefresh(this.pendingRefresh === "rebuild"),
+        signal
+      )).meta;
     }
   }
 
@@ -629,6 +653,7 @@ export class ReadyImageCacheCoordinator {
     this.phase = "stopped";
     this.reason = "stopped";
     this.pendingRefresh = "none";
+    this.clearRecoveryTimer();
     this.activeAbort?.abort(stopped);
     await this.activeTask?.promise.catch(() => undefined);
     this.phase = "stopped";
