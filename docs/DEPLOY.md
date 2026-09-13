@@ -45,6 +45,10 @@ PostgreSQL 是图片和业务数据的持久真相源。空库执行当前完整
 非空库只做只读就绪检查，结构新增、修改、删除及数据整理由维护者在升级前人工处理。
 额外表不读取、不要求权限或自动删除，缺失必需结构仍拒绝启动。详见[数据库结构](guide/database.md#启动与结构契约)。
 
+应用连接启用 `client_connection_check_interval=1000`，让取消后关闭的连接在长查询和锁等待中
+也能被数据库发现。默认 Linux 容器支持此能力；外部 PostgreSQL 宿主须支持该参数依赖的
+内核断连事件，支持范围见 [PostgreSQL TCP 设置](https://www.postgresql.org/docs/18/runtime-config-connection.html#RUNTIME-CONFIG-CONNECTION-TCP)。
+
 Redis 8 保存会话、接入临时状态和派生缓存，使用应用专用逻辑库。内置 Compose 通过私有网络
 无密码连接；外部认证使用 `REDIS_PASSWORD`，内存与淘汰策略由部署方管理。
 ACL 须允许当前业务命令以及 `EVAL` / `EVALSHA`，启动会自动核对必需能力，详见[安全说明](guide/security.md)。

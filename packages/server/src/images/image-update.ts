@@ -3,12 +3,16 @@ import type {
   ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
 import { ApiError, errorMessage } from "../core/api-error.ts";
-import { mapWithWorkerPool } from "../core/concurrency.ts";
 import { withAdvisoryLocks } from "../core/database/advisory-locks.ts";
 import { logger } from "../core/logger.ts";
 import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
 import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";
-import { updateImageItem } from "./image-update-item.ts";
+import {
+  prepareImageUpdateItem,
+  updateImageItem,
+  withImageUpdateItemLocks,
+  type PreparedImageUpdateItem
+} from "./image-update-item.ts";
 import { imageUpdateLockRequests } from "./image-update-lock.ts";
 import { withPlannedImageMutation } from "./mutation-sync.ts";
 
@@ -46,38 +50,58 @@ export async function updateImages(
 
   return withAdvisoryLocks(
     imageUpdateLockRequests(items.map((item) => item.id)),
-    async (requestSignal) => {
+    async (requestSignal, lockClient) => {
       const execute = async () => {
         try {
-          // Different IDs may run at low concurrency. The request owns every
-          // selected image until all PostgreSQL and derived-cache work settles,
-          // allowing a recovery snapshot to wait for one authoritative boundary.
-          const results = await mapWithWorkerPool(
-            items,
-            imageUpdateConcurrency,
-            async (item): Promise<ImageUpdateItemResultDto> => {
-              const itemStartedAt = performance.now();
+          // One session owns the whole request. Acquire and release auxiliary
+          // locks per bounded group before running siblings: concurrent lock
+          // scopes on one session could block each other's release queries.
+          const results: ImageUpdateItemResultDto[] = [];
+          for (let offset = 0; offset < items.length; offset += imageUpdateConcurrency) {
+            const group = items.slice(offset, offset + imageUpdateConcurrency);
+            const startedAt = performance.now();
+            const prepared = await Promise.all(group.map(async (item): Promise<
+              { prepared: PreparedImageUpdateItem; failed?: never }
+              | { prepared?: never; failed: ImageUpdateItemResultDto }
+            > => {
               try {
-                await updateImageItem(
-                  item,
-                  { entityCountInvalidationBatch },
-                  requestSignal
-                );
-                return { id: item.id, status: "updated" };
+                requestSignal.throwIfAborted();
+                return { prepared: await prepareImageUpdateItem(item) };
               } catch (error) {
-                return {
+                return { failed: {
                   id: item.id,
                   status: "failed",
                   ...publicItemError(error)
-                };
-              } finally {
-                maxItemDurationMs = Math.max(
-                  maxItemDurationMs,
-                  performance.now() - itemStartedAt
-                );
+                } };
               }
+            }));
+            try {
+              const groupResults = await withImageUpdateItemLocks(
+                prepared.flatMap((entry) => entry.prepared ? [entry.prepared] : []),
+                lockClient,
+                requestSignal,
+                (signal) => Promise.all(prepared.map(async (entry): Promise<ImageUpdateItemResultDto> => {
+                  if (entry.failed) return entry.failed;
+                  const { item } = entry.prepared;
+                  try {
+                    await updateImageItem(entry.prepared, { entityCountInvalidationBatch }, signal);
+                    return { id: item.id, status: "updated" };
+                  } catch (error) {
+                    return { id: item.id, status: "failed", ...publicItemError(error) };
+                  }
+                }))
+              );
+              results.push(...groupResults);
+            } catch (error) {
+              results.push(...prepared.map((entry): ImageUpdateItemResultDto => entry.failed ?? {
+                id: entry.prepared.item.id,
+                status: "failed",
+                ...publicItemError(error)
+              }));
+            } finally {
+              maxItemDurationMs = Math.max(maxItemDurationMs, performance.now() - startedAt);
             }
-          );
+          }
           const updated = results.filter(
             (result) => result.status === "updated"
           ).length;

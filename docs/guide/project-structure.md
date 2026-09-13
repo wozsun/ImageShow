@@ -214,7 +214,8 @@ HTTP `validation_error`，`primitives.ts` 只复用 UUID、slug、HTTPS 和安�
 因此非路由模块无需也不得反向依赖请求校验目录。
 
 `core/database/` 按 PostgreSQL 生命周期边界拆分：`pools.ts` 只接收显式配置并拥有主查询与
-advisory lock 两个连接池；`transactions.ts`、`advisory-locks.ts` 和 `schema.ts` 分别拥有
+advisory lock 两个连接池，均启用 PostgreSQL 每秒断连检查，使已销毁连接的长查询和锁等待
+能够在数据库侧结束；`transactions.ts`、`advisory-locks.ts` 和 `schema.ts` 分别拥有
 事务、锁与数据库启动编排；空库在事务内执行当前完整 `schema.sql` 并核对 readiness，非空库
 只做只读 readiness。既有结构变更由维护者在启动前处理，额外表不参与数据或权限检查。
 advisory lock 调度信号只取消连接取得与锁等待；锁内回调收到独立的
@@ -295,7 +296,9 @@ Endpoint 重绑定的双向随机挑战与精确探针清理位于 `storage/back
 `images/trash-purge-job.ts` 只把领域批次结果映射为通用任务结果，
 `images/trash-purge-maintenance.ts` 集中维护入口触发的全部耗尽任务重试与异常引用修复。深度诊断属于
 `checks/database-check.ts`，正常图片请求不探测任务完整性。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
-请求级派生计数失效；`images/image-update-item.ts` 是单图 metadata、author / theme / tag
+请求级派生计数失效。每个请求只借一个锁会话，按并发上限分组取得该组词表、分类与必要的
+存储读取锁，再并行执行逐项事务；辅助锁在组结束后释放，图片更新锁保留至整个请求收口。
+`images/image-update-item.ts` 是单图 metadata、author / theme / tag
 创建、完整标签替换与分类 metadata 更新的 PostgreSQL 事务所有者；主题删除的图片重分配由
 `images/theme-reassignment.ts` 拥有，删除主题后将图片关联置为 NULL。`images/metadata-theme.ts`
 拥有共享 HTTP / JSONL nullable slug schema；查询专用
@@ -829,6 +832,8 @@ hooks ──► lib
   计时器；其他错误（包括 429）和外部取消直接结束。词表与存储选项在原共享
   Query owner 上显式采用策略，使 `fetchQuery` 与 `useQuery` 共用重试、去重和缓存。
   编辑快照虽用 POST，但只读取数据，冻结 ID 请求体后独立重试，并让取消信号终止请求与退避。
+  Server 将请求取消传入连接取得与图片锁等待，取消后不再继续读取和投影；已开始的图片写入
+  仍遵循自身提交边界。
   编辑保存后的权威回读也只使用这一层策略；耗尽后人工确认只重读快照，不重放保存。
   写响应未知时按尝试字段保守失效；后续首次取得权威快照还要交接当前值，避免父页面停留在提交前的数据。
   `auto` 等指令是否成功仍独立判断，不能因无法确认指令而阻止父页面采用已读取的权威当前值。
@@ -836,7 +841,9 @@ hooks ──► lib
   权威结果立即交接并结束编辑器保存等待；派生查询在原所有者后台刷新，其挂起或失败不阻塞
   编辑器关闭，保存回调的异步错误仍记录到后台日志。
   编辑保存仅复用单次期限，先深度冻结提交意图；写响应挂起或丢失后进入同一权威确认流程，
-  确认结果只收敛本轮字段，不覆盖之后修改的草稿。
+  确认结果只收敛本轮字段，不覆盖之后修改的草稿。丢失写回执时，标题和描述按 trim 后的
+  目标、来源和原图 URL 按共享 URL 规则与权威值比较；后续草稿是否仍属本次提交继续比较
+  原始输入，自动识别指令仍要求写回执。
   公开 `gallery-facets` 同样复用单次读取期限，保留原 Query 重试所有者和手动刷新去重。
   纹理仅复用期限与取消，不采用后台 API 的重试策略。
   各项读取单独恢复，全部耗尽后交给原有失败反馈；模块资源、写操作和队列恢复保留各自策略。

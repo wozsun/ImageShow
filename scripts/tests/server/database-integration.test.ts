@@ -150,6 +150,16 @@ const storageIngestionScenarios = [
     script: join(isolationRoot, "image-update-consistency.mts")
   },
   {
+    id: "image-update-locking",
+    name: "更新满锁池、同图并发与部分失败后的继续处理",
+    script: join(isolationRoot, "image-update-locking.mts")
+  },
+  {
+    id: "image-snapshot-cancellation",
+    name: "真实 HTTP 快照取消释放锁等待与保存文本规范化",
+    script: join(isolationRoot, "image-snapshot-cancellation.mts")
+  },
+  {
     id: "auth-author-contracts",
     name: "作者身份与账号偏好的权限、事务、公开输出和登录会话续期",
     script: join(isolationRoot, "auth-author-contracts.mts")

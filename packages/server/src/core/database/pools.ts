@@ -54,7 +54,8 @@ export function configureDatabasePools(
     user: databaseConfig.user,
     password: databaseConfig.password,
     max: appConfig.pgPool.max,
-    options: "-c search_path=public",
+    // Detect destroyed clients while SQL is waiting, before another socket read.
+    options: "-c search_path=public -c client_connection_check_interval=1000",
     idleTimeoutMillis: appConfig.pgPool.idleTimeoutMillis,
     connectionTimeoutMillis: appConfig.pgPool.connectionTimeoutMillis,
     maxLifetimeSeconds: appConfig.pgPool.maxLifetimeSeconds

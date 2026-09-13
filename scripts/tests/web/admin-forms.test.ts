@@ -582,6 +582,44 @@ test("[Web/后台表单] 可空来源可添加和清空，权威回读收敛草�
     assert.equal(fieldsChangedFor(state.baselineItems[0]!, state.drafts[id]!).source, false);
   }
 });
+for (const { field, raw, saved } of [
+  { field: "title", raw: "  New title  ", saved: "New title" },
+  { field: "title", raw: " \t ", saved: "" },
+  { field: "description", raw: "\n  First line\n  Second line  \n", saved: "First line\n  Second line" },
+  { field: "source", raw: "  example.com/post  ", saved: "https://example.com/post" },
+  { field: "original", raw: "\nhttps://example.com/photo.jpg  ", saved: "https://example.com/photo.jpg" }
+] as const) {
+  test(`[Web/后台表单] 丢失回执按规范值确认文本且保留后续原始草稿 / ${field} / ${JSON.stringify(raw)}`, () => {
+    const id = "normalized-save";
+    const item = editableImage(id, { [field]: "before" });
+    const state = createImageMetadataSession([item]);
+    state.drafts[id]![field] = raw;
+    const update = changedMetadataUpdate(item, state.drafts[id]!, fieldsChangedFor(item, state.drafts[id]!));
+    assert.equal(update[field], raw, "保存意图必须保留原始输入");
+    const attempt: ImageMetadataSaveAttempt = { activeIds: [id], items: [update], response: null };
+    const authority = [editableImage(id, { [field]: saved })];
+    const report = createImageMetadataSaveReport(attempt, authority);
+    assert.equal(imageMetadataCardSaveState(report, id), "saved");
+    const confirmed = reconcileImageMetadataSession(state, attempt, authority);
+    assert.equal(confirmed.drafts[id]![field], saved);
+    assert.equal(fieldsChangedFor(authority[0]!, confirmed.drafts[id]!)[field], false);
+
+    for (const subsequent of [raw + " ", "later input"]) {
+      const edited = { ...state, drafts: { [id]: { ...state.drafts[id]!, [field]: subsequent } } };
+      const preserved = reconcileImageMetadataSession(edited, attempt, authority);
+      assert.equal(preserved.drafts[id]![field], subsequent, "即使规范值相同也不能覆盖后续新输入");
+    }
+    const withAuto: ImageMetadataSaveAttempt = {
+      ...attempt, items: [{ ...update, brightness: "auto" }]
+    };
+    state.drafts[id]!.brightness = "auto";
+    assert.equal(imageMetadataCardSaveState(createImageMetadataSaveReport(withAuto, authority), id), "failed");
+    const autoState = reconcileImageMetadataSession(state, withAuto, authority);
+    assert.equal(autoState.drafts[id]![field], saved);
+    assert.equal(autoState.drafts[id]!.brightness, "auto");
+  });
+}
+
 test("[Web/后台表单] 图片元数据部分失败保留对应卡片草稿", () => {
   let state = createImageMetadataSession([
     editableImage("a"),

@@ -14,6 +14,7 @@
       ],
       "ignoreDependencies": [
         "@aws-sdk/client-s3",
+        "@hono/node-server",
         "@tanstack/react-query",
         "hono",
         "ipaddr.js",

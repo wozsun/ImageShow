@@ -11,7 +11,10 @@ import { pool } from "../../core/database/pools.ts";
 import {
   withReadOnlyRepeatableReadTransaction
 } from "../../core/database/transactions.ts";
-import { withAdvisoryLocks } from "../../core/database/advisory-locks.ts";
+import {
+  runWithAdvisoryLockAcquisitionSignal,
+  withAdvisoryLocks
+} from "../../core/database/advisory-locks.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { imageUpdateLockRequests } from "../image-update-lock.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
@@ -105,12 +108,14 @@ export async function listAdminImages(
 }
 
 export async function getAdminImageSnapshots(
-  ids: string[]
+  ids: string[],
+  signal?: AbortSignal
 ): Promise<ImageSnapshotResponseDto> {
   const canonicalIds = [...new Set(ids.map((id) => id.toLowerCase()))];
-  return withAdvisoryLocks(
+  const read = () => withAdvisoryLocks(
     imageUpdateLockRequests(canonicalIds),
     async () => {
+      signal?.throwIfAborted();
       const result = await pool.query(
         `SELECT ${editableImagePresentationColumnsWithTags}
            FROM metadata
@@ -118,12 +123,14 @@ export async function getAdminImageSnapshots(
             AND status = 'ready'`,
         [canonicalIds]
       );
+      signal?.throwIfAborted();
       // Metadata and tags come from one SQL statement, so this is an
       // authoritative point-in-time projection even if another admin mutates
       // the image immediately before or after the snapshot.
       const projected = await editableImageSnapshotsWithTags(
         result.rows as EditableImageSnapshotRecordWithTags[]
       );
+      signal?.throwIfAborted();
       const itemsById = new Map(projected.map((item) => [item.id, item]));
       return {
         items: canonicalIds.flatMap((id) => {
@@ -133,6 +140,7 @@ export async function getAdminImageSnapshots(
       };
     }
   );
+  return signal ? runWithAdvisoryLockAcquisitionSignal(signal, read) : read();
 }
 
 export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> {

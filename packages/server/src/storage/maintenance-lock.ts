@@ -65,6 +65,24 @@ function additionalLockContext(held: StorageLocationLockContext) {
   };
 }
 
+/** The caller owns this session and serializes additional lock scopes on it. */
+export function withStorageLocationReadAndAdvisoryLocksOnClient<T>(
+  client: PoolClient,
+  signal: AbortSignal,
+  locks: readonly Omit<AdvisoryLockRequest, "acquisition">[],
+  work: StorageLockWork<T>
+): Promise<T> {
+  return withAdvisoryLocksOnClient(
+    client,
+    signal,
+    [{ key: storageLocationLockKey, mode: "shared" }, ...locks],
+    (lockSignal, lockClient) => storageLocationLockContext.run(
+      storageLocationContext("read", lockSignal, lockClient, true),
+      () => work(lockSignal, lockClient)
+    )
+  );
+}
+
 /**
  * Hold a shared lease while code resolves a storage slug and reads or mutates
  * objects at that physical location. Shared leases are re-entrant so nested
@@ -94,7 +112,7 @@ function withStorageLocationReadAndAdvisoryLock<T>(
   return withStorageLocationReadAndAdvisoryLocks([{ key }], work);
 }
 
-export function withStorageLocationReadAndAdvisoryLocks<T>(
+function withStorageLocationReadAndAdvisoryLocks<T>(
   locks: readonly Omit<AdvisoryLockRequest, "acquisition">[],
   work: StorageLockWork<T>
 ): Promise<T> {

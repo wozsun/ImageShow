@@ -2,7 +2,7 @@ import type { Brightness, Device } from "@imageshow/shared/browser";
 import type { PoolClient } from "pg";
 import { ensureAuthorWithMutationLockHeld } from "../authors/mutations.ts";
 import { ApiError, errorMessage } from "../core/api-error.ts";
-import { withAdvisoryLocks } from "../core/database/advisory-locks.ts";
+import { withAdvisoryLocksOnClient } from "../core/database/advisory-locks.ts";
 import { pool } from "../core/database/pools.ts";
 import { logger } from "../core/logger.ts";
 import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
@@ -10,7 +10,7 @@ import { readStorageBuffer, storageObjectExists } from "../storage/objects/acces
 import { thumbnailRef } from "../storage/objects/image-paths.ts";
 import {
   imageStorageMutationLockKey,
-  withStorageLocationReadAndAdvisoryLocks
+  withStorageLocationReadAndAdvisoryLocksOnClient
 } from "../storage/maintenance-lock.ts";
 import {
   replaceImageTagAssociations
@@ -59,6 +59,11 @@ type UpdateImageRecord = {
 
 type ImageUpdateItemOptions = {
   entityCountInvalidationBatch: EntityCountCacheInvalidationBatch;
+};
+
+export type PreparedImageUpdateItem = {
+  item: ImageUpdateItemInputDto;
+  resolvedTags: string[] | null;
 };
 
 type ImageUpdateTransactionOutcome = {
@@ -423,15 +428,23 @@ async function mutateImageItem(
   }
 }
 
-export async function updateImageItem(
-  item: ImageUpdateItemInputDto,
-  options: ImageUpdateItemOptions,
-  parentSignal?: AbortSignal
-) {
+export async function prepareImageUpdateItem(
+  item: ImageUpdateItemInputDto
+): Promise<PreparedImageUpdateItem> {
   const resolvedTags = item.tags === undefined
     ? null
     : [...await resolveTagNames(item.tags)].sort();
-  const vocabularyLocks = vocabularyAssociationLockRequests([
+  return { item, resolvedTags };
+}
+
+/** Acquire one bounded group's locks before any sibling starts database work. */
+export function withImageUpdateItemLocks<T>(
+  items: readonly PreparedImageUpdateItem[],
+  lockClient: PoolClient,
+  signal: AbortSignal,
+  work: (signal: AbortSignal) => Promise<T>
+): Promise<T> {
+  const vocabularyLocks = vocabularyAssociationLockRequests(items.flatMap(({ item, resolvedTags }) => [
     ...(item.author
       ? [{ entity: "author" as const, slug: item.author }]
       : []),
@@ -442,30 +455,27 @@ export async function updateImageItem(
       entity: "tag" as const,
       slug
     }))
-  ]);
-  const classificationRequested = item.device !== undefined
-    || item.brightness !== undefined
-    || item.theme !== undefined;
-  const work = (lockSignal: AbortSignal) => mutateImageItem(
-    item,
-    resolvedTags,
-    options,
-    parentSignal && parentSignal !== lockSignal
-      ? AbortSignal.any([parentSignal, lockSignal])
-      : lockSignal
-  );
+  ]));
+  const classificationLocks = items
+    .filter(({ item }) => item.device !== undefined
+      || item.brightness !== undefined || item.theme !== undefined)
+    .map(({ item }) => imageStorageMutationLockKey(item.id))
+    .sort()
+    .map((key) => ({ key }));
+  const locks = [...vocabularyLocks, ...classificationLocks];
+  if (items.some(({ item }) => item.brightness === "auto")) {
+    return withStorageLocationReadAndAdvisoryLocksOnClient(lockClient, signal, locks, work);
+  }
+  return locks.length
+    ? withAdvisoryLocksOnClient(lockClient, signal, locks, work)
+    : work(signal);
+}
 
-  if (classificationRequested) {
-    const classificationLocks = [
-      ...vocabularyLocks,
-      { key: imageStorageMutationLockKey(item.id) }
-    ];
-    return item.brightness === "auto"
-      ? withStorageLocationReadAndAdvisoryLocks(classificationLocks, work)
-      : withAdvisoryLocks(classificationLocks, work);
-  }
-  if (vocabularyLocks.length) {
-    return withAdvisoryLocks(vocabularyLocks, work);
-  }
-  return work(parentSignal ?? new AbortController().signal);
+/** The request owns the group's image, vocabulary and optional storage locks. */
+export function updateImageItem(
+  { item, resolvedTags }: PreparedImageUpdateItem,
+  options: ImageUpdateItemOptions,
+  signal: AbortSignal
+) {
+  return mutateImageItem(item, resolvedTags, options, signal);
 }

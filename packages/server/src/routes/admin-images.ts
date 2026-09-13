@@ -64,7 +64,7 @@ export function registerAdminImageRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/images/snapshot`, async (c) => {
     const input = parse(imageSnapshotInput, await readJsonBody(c));
     const response: ImageSnapshotResponseDto =
-      await getAdminImageSnapshots(input.ids);
+      await getAdminImageSnapshots(input.ids, c.req.raw.signal);
     return c.json(apiSuccess(response));
   });
 

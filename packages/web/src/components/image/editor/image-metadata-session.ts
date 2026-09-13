@@ -3,6 +3,7 @@ import type {
   ImageUpdateItemResultDto,
   ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
+import { normalizeIngestionDraftUrl } from "@imageshow/shared/browser";
 import type {
   EditableImageSnapshot,
   ImageEditorItem,
@@ -169,6 +170,14 @@ function submittedIntentMatchesSnapshot(
     && submitted === "auto"
   ) {
     return false;
+  }
+  // Persisted text is trimmed by the server. Draft identity above must keep
+  // comparing the original input so confirmation cannot overwrite later edits.
+  if (field === "title" || field === "description") {
+    return (submitted as string).trim() === authoritativeDraft[field];
+  }
+  if (field === "source" || field === "original") {
+    return normalizeIngestionDraftUrl(field, submitted as string) === authoritativeDraft[field];
   }
   return valuesEqual(field, submitted, authoritativeDraft[field]);
 }
