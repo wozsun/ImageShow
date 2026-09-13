@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import type {
-  AdminImageListItemDto,
+  CompletedIngestionImageDto,
   CompletedIngestionDisplayDto,
   IngestionQueueSummaryDto,
   IngestionSessionPairDto,
@@ -19,7 +19,7 @@ export type IngestionQueueApi = {
 
 export type CompletedIngestionObservation = Readonly<{
   pair: IngestionSessionPairDto;
-  item: AdminImageListItemDto;
+  item: CompletedIngestionImageDto;
   display?: CompletedIngestionDisplayDto;
   serverVersion?: number;
   serverSemanticRevision?: number;
@@ -59,7 +59,7 @@ export type IngestionQueueProducerApi = IngestionQueueApi & {
     pair: IngestionSessionPairDto;
     releasedRevision?: number;
     releasedSummary?: IngestionQueueSummaryDto;
-  }>[]) => ReadonlySet<string>;
+  }>[], replacements?: ReadonlyMap<string, IngestionJob>) => ReadonlySet<string>;
   server: Readonly<{
     recoverAuthority: () => Promise<void>;
   }>;

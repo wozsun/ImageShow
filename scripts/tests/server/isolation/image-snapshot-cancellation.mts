@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
 import { getRequestListener } from "@hono/node-server";
+import { listenForFetch } from "../../support/http-listen.ts";
 import { interceptSqlQueries } from "./database-faults.mts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import { createMaintenanceFixture, settleWithin } from "./storage-maintenance-fixture.mts";
@@ -18,9 +19,7 @@ await runIntegrationScenario(async (runtime) => {
   await runtime.runtimeConfigStore.replaceRuntimeConfig(config);
   const app = createHttpApp({ businessGateIsOpen: () => true, requireRedis: () => runtime.redisClient.redis.ping() });
   const server = createServer(getRequestListener(app.fetch));
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  assert.ok(address && typeof address !== "string");
+  const address = await listenForFetch(server);
   const origin = `http://127.0.0.1:${address.port}`;
   const writer = await runtime.databasePools.pool.connect();
   const lockKey = imageUpdateLockRequests([image.id])[0]!.key;

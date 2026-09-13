@@ -1362,7 +1362,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     "DELETE FROM metadata WHERE id = ANY($1::uuid[])",
     [[clearCompletedReady.image_id, deferredCompletedReady.image_id]]
   );
-  const pairOf = (session: IngestionSessionSnapshot) => ({
+  const pairOf = (session: Pick<IngestionSessionSnapshot, "session_id" | "image_id">) => ({
     session_id: session.session_id, image_id: session.image_id
   });
   const readActive = async (session: IngestionSessionSnapshot) => activeSession(
@@ -1451,6 +1451,55 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   assert.equal(foreignResult.items[0].status, "skipped");
   assert.deepEqual(activeSession(await ingestionRepository.readSession(foreignOwner, foreignSessionId)).metadata, foreign.metadata,
     "直接指定其他管理员的任务身份也不能绕过 owner 隔离");
+  const retrySessions: IngestionSessionSnapshot[] = [];
+  for (let index = 0; index < 31; index += 1) {
+    const queued = await createActionReadySession(`retry-restored-${index}`, false);
+    retrySessions.push(activeSession((await ingestionRepository.mutateSemantic(
+      queued, queued.version,
+      ingestionSessionTransitions.failedIngestionSession(queued, new Error("内容接入执行权已转移"))
+    )).session));
+  }
+  const readRetryPage = () => ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
+    repository: ingestionRepository, tokens: actionTokens, session: actionSession,
+    actionScope: actionScope.id, queue: "import", offset: 20, limit: 20
+  });
+  const beforeRetry = await readRetryPage();
+  const retryTarget = retrySessions.find((session) => session.session_id === beforeRetry.items[0].session_id)!;
+  assert.ok(retryTarget, "后页读取的是新建的失败导入任务");
+  const retryInput = { ...pairOf(retryTarget), expected_version: retryTarget.version,
+    metadata: { ...retryTarget.metadata, title: "保留修改后重试" }, retry_prepare: true as const };
+  const [retried] = await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [retryInput]);
+  assert.equal(retried.status, "changed");
+  const retryCurrent = await readActive(retryTarget);
+  assert.equal(retryCurrent.status, "queued");
+  assert.equal(retryCurrent.error, undefined);
+  assert.equal(retryCurrent.prepared, undefined);
+  assert.equal(retryCurrent.raw_generation, "");
+  assert.equal(retryCurrent.metadata.title, "保留修改后重试");
+  for (const key of ["session_id", "image_id", "image_time", "accepted_order", "batch_position", "source_type", "storage_slug"] as const) {
+    assert.equal(retryCurrent[key], retryTarget[key], `重试保留 ${key}`);
+  }
+  const afterRetry = await readRetryPage();
+  assert.deepEqual(afterRetry.items.map(pairOf), beforeRetry.items.map(pairOf), "服务端分页成员和顺序保持不变");
+  assert.equal(afterRetry.total, beforeRetry.total);
+  assert.equal(afterRetry.last_accepted_order, beforeRetry.last_accepted_order);
+  assert.equal(afterRetry.failed, beforeRetry.failed - 1);
+  assert.equal(afterRetry.waiting, beforeRetry.waiting + 1);
+  const [replayedRetry] = await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [retryInput]);
+  assert.equal(replayedRetry.status, "failed", "迟到旧请求不能把已排队或处理中的任务重置");
+  assert.equal((await readActive(retryTarget)).version, retryCurrent.version);
+  const [foreignRetry] = await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, foreignOwner, [retryInput]);
+  assert.equal(foreignRetry.status, "failed", "重试仍独立强制执行 owner 隔离");
+  const staleTarget = retrySessions.find((session) => session.session_id !== retryTarget.session_id)!;
+  const [staleRetry] = await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [{
+    ...pairOf(staleTarget), expected_version: staleTarget.version - 1, retry_prepare: true
+  }]);
+  assert.equal(staleRetry.status, "failed", "旧版本不能启动新重试");
+  assert.equal((await readActive(staleTarget)).status, "failed");
+  const [committedRetry] = await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [{
+    ...pairOf(duplicateCountCurrent), expected_version: duplicateCountCurrent.version, retry_prepare: true
+  }]);
+  assert.equal(committedRetry.status, "failed", "准备完成的图片不能走重新下载");
   actionScope.close();
 
 });

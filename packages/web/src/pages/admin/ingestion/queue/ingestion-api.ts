@@ -87,11 +87,13 @@ export function getIngestionStatuses(
 }
 
 export function updateStoredIngestions(
-  items: IngestionSessionUpdateInputDto["items"]
+  items: IngestionSessionUpdateInputDto["items"],
+  signal?: AbortSignal
 ) {
   return api<IngestionSessionUpdateResultDto>(ingestionUpdatePath, {
     method: "POST",
-    body: JSON.stringify({ items } satisfies IngestionSessionUpdateInputDto)
+    body: JSON.stringify({ items } satisfies IngestionSessionUpdateInputDto),
+    signal: controlRequestSignal(signal)
   });
 }
 

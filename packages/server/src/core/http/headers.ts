@@ -75,14 +75,26 @@ const unsafeHeaderValuePattern =
   /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/u;
 
 export function safeResponseHeaderValue(name: string, value: string) {
+  assertSafeHeaderCharacters(name, value);
+  // Fetch applies the remaining header-name and byte syntax checks.
+  new Headers({ [name]: value });
+  return value;
+}
+
+function assertSafeHeaderCharacters(name: string, value: string) {
   if (unsafeHeaderValuePattern.test(value)) {
     throw new Error(`Unsafe ${name} response header value`);
   }
-  // The Fetch implementation applies the remaining header-name and byte
-  // syntax checks. Constructing a throwaway list keeps every dynamic value on
-  // the same validation path before it reaches a response.
-  new Headers({ [name]: value });
-  return value;
+}
+
+export function safeRedirectLocation(value: string) {
+  // Validate before URL parsing can strip control characters. External URLs
+  // need IDNA / percent encoding for HTTP; application paths are already encoded.
+  assertSafeHeaderCharacters("Location", value);
+  return safeResponseHeaderValue(
+    "Location",
+    value.startsWith("/") ? value : new URL(value).href
+  );
 }
 
 export function responseContentLengthValue(value: unknown) {

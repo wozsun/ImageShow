@@ -1,4 +1,4 @@
-import type { AdminImageListItemDto } from "@imageshow/shared/browser";
+import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
 import { logger } from "../../../core/logger.ts";
 import type {
   IngestionQueueMetadata,
@@ -12,7 +12,7 @@ export type IngestionQueueMutation = Readonly<{
   kind: "semantic" | "progress" | "removed";
   metadata: IngestionQueueMetadata;
   session?: StoredIngestionSession;
-  completedItem?: AdminImageListItemDto;
+  completedItem?: CompletedIngestionImageDto;
 }>;
 
 export type IngestionQueueListener = (

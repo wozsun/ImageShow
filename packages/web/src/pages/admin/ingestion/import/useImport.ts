@@ -20,7 +20,7 @@ import {
 import {
   resetImportJobForPrepareRetry
 } from "../queue/model/ingestion-job-retry.js";
-import { acceptImports } from "../queue/ingestion-api.js";
+import { acceptImports, updateStoredIngestions } from "../queue/ingestion-api.js";
 import type { IngestionQueueProducerApi } from "../queue/ingestion-queue-api.js";
 
 function buildImportAcceptItemInput(job: IngestionJob) {
@@ -57,6 +57,7 @@ export function useImport(options: {
   const { queue, defaults, keepOriginalLinkForUrlImports, storageSlug, maxItems } = options;
   const controllers = useRef(new Set<AbortController>());
   const pendingAccepts = useRef(new Map<string, Promise<void>>());
+  const pendingRetries = useRef(new Set<string>());
   const cancellationAcceptOutcomes = useRef(new Map<string, {
     attemptKey: string;
     status: "accepted" | "completed" | "discarded";
@@ -73,6 +74,7 @@ export function useImport(options: {
       for (const controller of activeControllers) controller.abort();
       activeControllers.clear();
       pendingAccepts.current.clear();
+      pendingRetries.current.clear();
       cancellationAcceptOutcomes.current.clear();
       // Accepted canonical tasks continue on the server after this component
       // closes; unmount is never an implicit queue cancellation.
@@ -526,35 +528,54 @@ export function useImport(options: {
   ), [cancelMany]);
 
   const retry = useCallback(async (job: IngestionJob) => {
-    let current = queue.jobsRef.current.find((item) => item.id === job.id);
+    const current = queue.jobsRef.current.find((item) => item.id === job.id);
     if (!current) return;
-    let releasedServerOwner = false;
     if (current.sessionId && current.imageId) {
-      const outcome = (await cancelServerIngestionJobs(queue, [current])).get(current.id);
-      if (outcome?.succeeded !== true) return;
-      const cancelledCurrent = queue.jobsRef.current.find((item) => (
-        item.id === current!.id && item.attemptKey === current!.attemptKey
-      ));
-      if (!cancelledCurrent) return;
-      if (outcome.pair) {
-        const released = queue.releaseResolvedServerJobs([{
-          id: current.id,
-          attemptKey: current.attemptKey,
-          pair: outcome.pair,
-          ...(outcome.releasedRevision !== undefined
-            ? { releasedRevision: outcome.releasedRevision }
-            : {}),
-          ...(outcome.releasedSummary
-            ? { releasedSummary: outcome.releasedSummary }
-            : {})
-        }]);
-        if (!released.has(current.id)) {
-          void queue.server.recoverAuthority().catch(() => undefined);
+      const retryKey = `${current.id}\0${current.attemptKey}`;
+      if (pendingRetries.current.has(retryKey)) return;
+      pendingRetries.current.add(retryKey);
+      const controller = new AbortController();
+      controllers.current.add(controller);
+      try {
+        if (current.serverVersion === undefined) {
           return;
         }
-        releasedServerOwner = true;
+        const { items } = await updateStoredIngestions([{
+          session_id: current.sessionId,
+          image_id: current.imageId,
+          expected_version: current.serverVersion,
+          metadata: {
+            ...current.draft,
+            theme: normalizeTheme(current.draft.theme),
+            author: normalizeAuthor(current.draft.author)
+          },
+          retry_prepare: true
+        }], controller.signal);
+        const result = items[0];
+        if (!result || result.status === "failed") {
+          throw new Error(result?.message ?? "重试响应缺少当前任务");
+        }
+      } catch (error) {
+        if (mounted.current && !controller.signal.aborted) {
+          const latest = queue.jobsRef.current.find((item) => (
+            item.id === current.id && item.attemptKey === current.attemptKey
+          ));
+          if (latest?.serverVersion === current.serverVersion) {
+            queue.updateJob(current.id, {
+              message: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      } finally {
+        controllers.current.delete(controller);
+        // Redis owns identity, source time and display position. One recovery
+        // covers both early SSE and a write with an uncertain acknowledgement.
+        if (mounted.current && !controller.signal.aborted) {
+          await queue.server.recoverAuthority().catch(() => undefined);
+        }
+        pendingRetries.current.delete(retryKey);
       }
-      current = cancelledCurrent;
+      return;
     }
     const next = {
       ...resetImportJobForPrepareRetry(current),
@@ -567,14 +588,7 @@ export function useImport(options: {
       originalHeight: undefined,
       originalSize: undefined
     };
-    if (releasedServerOwner) {
-      if (queue.appendJobs([next]) === false) {
-        window.alert(
-          `当前窗口待接管任务已达 ${ingestionBatchHardLimit} 项，请稍后再试`
-        );
-        return;
-      }
-    } else queue.updateJob(current.id, next);
+    queue.updateJob(current.id, next);
     await submitImportBatch([next]);
   }, [queue, submitImportBatch]);
 

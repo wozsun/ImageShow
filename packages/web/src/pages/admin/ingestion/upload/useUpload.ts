@@ -604,7 +604,7 @@ export function useUpload(options: {
     await browserBatchSequencer.current!.run(async () => {
       if (!mounted.current) return;
       let current = queue.jobsRef.current.find((item) => item.id === job.id);
-      let releasedServerOwner = false;
+      let releasedTarget: Parameters<typeof queue.releaseResolvedServerJobs>[0][number] | undefined;
       if (!current?.file) return;
       const active = activeUploads.current.get(current.id);
       if (active?.attemptKey === current.attemptKey) {
@@ -626,7 +626,7 @@ export function useUpload(options: {
         );
         if (!cancelledCurrent?.file) return;
         if (cancelled.pair) {
-          const released = queue.releaseResolvedServerJobs([{
+          releasedTarget = {
             id: current.id,
             attemptKey: current.attemptKey,
             pair: cancelled.pair,
@@ -636,12 +636,7 @@ export function useUpload(options: {
             ...(cancelled.releasedSummary
               ? { releasedSummary: cancelled.releasedSummary }
               : {})
-          }]);
-          if (!released.has(current.id)) {
-            void queue.server.recoverAuthority().catch(() => undefined);
-            return;
-          }
-          releasedServerOwner = true;
+          };
         }
         current = cancelledCurrent;
       }
@@ -652,7 +647,7 @@ export function useUpload(options: {
         && (
           current.failureStage === "create" || replayUnconfirmedRaw
         );
-      const objectUrl = !releasedServerOwner
+      const objectUrl = !releasedTarget
         && current.objectUrl?.startsWith("blob:")
         ? current.objectUrl
         : URL.createObjectURL(file);
@@ -675,14 +670,15 @@ export function useUpload(options: {
         originalSize: file.size,
         transferProgress: 0
       };
-      if (releasedServerOwner) {
-        if (queue.appendJobs([next]) === false) {
+      if (releasedTarget) {
+        const released = queue.releaseResolvedServerJobs(
+          [releasedTarget], new Map([[current.id, next]])
+        );
+        if (!released.has(current.id)) {
           if (next.objectUrl?.startsWith("blob:")) {
             URL.revokeObjectURL(next.objectUrl);
           }
-          window.alert(
-            `当前窗口待接管任务已达 ${ingestionBatchHardLimit} 项，请稍后再试`
-          );
+          void queue.server.recoverAuthority().catch(() => undefined);
           return;
         }
       } else queue.updateJob(current.id, next);

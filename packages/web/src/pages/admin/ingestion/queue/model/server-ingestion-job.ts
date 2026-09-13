@@ -1,5 +1,5 @@
 import type {
-  AdminImageListItemDto,
+  CompletedIngestionImageDto,
   ActiveServerIngestionItemDto,
   CompletedIngestionDisplayDto,
   CompletedServerIngestionItemDto,
@@ -314,7 +314,7 @@ function completedIngestionJob(
 }
 
 export function completedIngestionJobPatch(
-  completed: AdminImageListItemDto,
+  completed: CompletedIngestionImageDto,
   display?: CompletedIngestionDisplayDto
 ) {
   const manifestSource = display?.source_type === "weibo"
@@ -376,7 +376,7 @@ export function completedIngestionOwnerPatch(
   existing: IngestionJob,
   completed: Readonly<{
     pair: Pick<ServerIngestionItemDto, "session_id" | "image_id">;
-    item: AdminImageListItemDto;
+    item: CompletedIngestionImageDto;
     display?: CompletedIngestionDisplayDto;
     serverVersion?: number;
     serverSemanticRevision?: number;
@@ -486,7 +486,7 @@ export function ingestionJobFromServerItem(
 
 function ingestionJobFromKnownCompletedResult(
   existing: IngestionJob,
-  completed: AdminImageListItemDto,
+  completed: CompletedIngestionImageDto,
   display?: CompletedIngestionDisplayDto
 ): IngestionJob {
   if (existing.objectUrl?.startsWith("blob:")) {

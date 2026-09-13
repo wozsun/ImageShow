@@ -1,16 +1,16 @@
-import type { AdminImageListItemDto } from "@imageshow/shared/browser";
+import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
 import { pool, type DatabaseReader } from "../../core/database/pools.ts";
 import {
-  adminImageListItemsWithTags,
-  adminImageListPresentationColumnsWithTags,
-  type ImageRecordWithTags
+  ingestionImageItemsWithTags,
+  ingestionImagePresentationColumnsWithTags,
+  type IngestionImageRecordWithTags
 } from "../presenter.ts";
 
 export type CommittedIngestionResult = Readonly<{
   image_id: string;
   image_time: string;
   created_by: string;
-  item: AdminImageListItemDto;
+  item: CompletedIngestionImageDto;
 }>;
 
 export function committedIngestionResultForOwner(
@@ -28,13 +28,13 @@ export async function readCommittedIngestionResultsByImageIds(
 ) {
   const uniqueIds = [...new Set(imageIds.map((imageId) => imageId.toLowerCase()))];
   if (!uniqueIds.length) return new Map<string, CommittedIngestionResult>();
-  const rows = (await reader.query<ImageRecordWithTags & { created_by: string }>(
-    `SELECT ${adminImageListPresentationColumnsWithTags}, created_by
+  const rows = (await reader.query<IngestionImageRecordWithTags & { created_by: string }>(
+    `SELECT ${ingestionImagePresentationColumnsWithTags}, created_by
        FROM metadata
       WHERE id = ANY($1::uuid[])`,
     [uniqueIds]
   )).rows;
-  const items = await adminImageListItemsWithTags(rows);
+  const items = await ingestionImageItemsWithTags(rows);
   const rowsById = new Map(rows.map((row) => [row.id.toLowerCase(), row]));
   return new Map(items.map((item) => [
     item.id.toLowerCase(),

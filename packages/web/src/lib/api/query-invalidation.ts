@@ -187,7 +187,7 @@ async function invalidateIngestionVocabulary(
 
 export function invalidateImageDataAfterIngestion(
   client: QueryClient,
-  items: readonly AdminImageListItemDto[],
+  items: readonly Pick<AdminImageListItemDto, "theme" | "author" | "tags">[],
   options: Readonly<{ completedAt?: number }> = {}
 ) {
   const hasTags = items.some((item) => item.tags.length > 0);

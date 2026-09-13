@@ -1444,6 +1444,32 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   assert.equal(directRedirect.headers.get("Referrer-Policy"), "no-referrer");
 
   assert.equal(directRedirect.headers.get("Vary"), "User-Agent");
+  const redirectUrls = [
+    ["https://img.example.com/照片.webp", "https://img.example.com/%E7%85%A7%E7%89%87.webp"],
+    ["https://例子.中国/p.png?标题=照片", "https://xn--fsqu00a.xn--fiqs8s/p.png?%E6%A0%87%E9%A2%98=%E7%85%A7%E7%89%87"],
+    ["https://img.example.com/café.png?sig=a%2Bb%2Fc+d&x=1&x=2", "https://img.example.com/caf%C3%A9.png?sig=a%2Bb%2Fc+d&x=1&x=2"]
+  ];
+  for (const [original, expected] of redirectUrls) {
+    for (const method of ["GET", "HEAD"] as const) {
+      const response = await servePublicExternalOriginal(item.id, { method }, {
+        ...dependencies,
+        readImageServingRecordById: async () => ({ ...record, original })
+      });
+      assert.equal(response.status, 302);
+      assert.equal(response.headers.get("Location"), expected);
+      assert.equal(response.headers.get("Cache-Control"), publicRedirectCacheControl);
+      assert.equal(response.headers.get("Vary"), "User-Agent");
+      assert.equal(await response.text(), "");
+    }
+  }
+  for (const control of ["\r", "\n", "\t", "\u200b"]) {
+    await assert.rejects(servePublicExternalOriginal(item.id, {}, {
+      ...dependencies,
+      readImageServingRecordById: async () => ({
+        ...record, original: `https://img.example.com/${control}photo.png`
+      })
+    }), /Unsafe Location/);
+  }
   for (const unavailable of [null, { ...record, original: "" }, {
     ...record, original: `https://img.example.com/images/full/${item.object_key}`
   }]) {

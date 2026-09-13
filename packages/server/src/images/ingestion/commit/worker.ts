@@ -2,7 +2,7 @@ import { ingestionPreparedPath } from "../raw/paths.ts";
 import { withActiveIngestionTempPaths } from "../raw/lease-registry.ts";
 import { updateIngestionExecutionProgress } from "../execution/session.ts";
 import { contentType } from "../../../storage/objects/keys.ts";
-import type { AdminImageListItemDto } from "@imageshow/shared/browser";
+import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
 import { ApiError, errorMessage } from "../../../core/api-error.ts";
 import {
   runWithAdvisoryLockAcquisitionSignal
@@ -32,7 +32,7 @@ import {
   writeVerifiedFileToStorage
 } from "../../../storage/objects/transfer.ts";
 import { withImageMutationSync } from "../../mutation-sync.ts";
-import { adminImageListItemsWithTags } from "../../presenter.ts";
+import { ingestionImageItemsWithTags } from "../../presenter.ts";
 import { publishCompletedReceipt } from "./completion.ts";
 import { ingestionContentLockKey } from "./duplicate-confirmation.ts";
 import { persistIngestionImage } from "./persistence.ts";
@@ -237,9 +237,9 @@ export async function commitIngestionSessionSnapshot(
             ]),
             refreshEntityVocabularies(persisted.createdEntityKinds)
           ]);
-          let completedItem: AdminImageListItemDto | undefined;
+          let completedItem: CompletedIngestionImageDto | undefined;
           try {
-            [completedItem] = await adminImageListItemsWithTags([
+            [completedItem] = await ingestionImageItemsWithTags([
               persisted.image
             ]);
           } catch (error) {

@@ -11,7 +11,7 @@ import {
   noStoreCacheControl,
   publicProxyImageCacheControl,
   publicRedirectCacheControl,
-  safeResponseHeaderValue
+  safeRedirectLocation
 } from "../core/http/headers.ts";
 import {
   externalImageProxyTimeoutMs,
@@ -168,7 +168,7 @@ export async function servePublicExternalOriginal(
     return new Response(null, {
       status: 302,
       headers: {
-        Location: safeResponseHeaderValue("Location", original.url),
+        Location: safeRedirectLocation(original.url),
         "Cache-Control": publicRedirectCacheControl,
         Vary: "User-Agent",
         "Referrer-Policy": "no-referrer"

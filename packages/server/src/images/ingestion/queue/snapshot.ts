@@ -46,7 +46,6 @@ function completedItem(
     version: receipt.version,
     progress_seq: 0,
     last_semantic_revision: receipt.last_semantic_revision,
-    accepted_at: receipt.accepted_at,
     accepted_order: receipt.accepted_order,
     completed_at: receipt.completed_at,
     ...(receipt.display ? { display: receipt.display } : {}),

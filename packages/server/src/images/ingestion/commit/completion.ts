@@ -1,4 +1,4 @@
-import type { AdminImageListItemDto } from "@imageshow/shared/browser";
+import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
 import { ApiError } from "../../../core/api-error.ts";
 import {
   completedIngestionDisplay,
@@ -42,7 +42,7 @@ export async function publishCompletedReceipt(
   repository: IngestionSessionRepository,
   session: IngestionSessionSnapshot,
   completedAt: number,
-  completedItem?: AdminImageListItemDto
+  completedItem?: CompletedIngestionImageDto
 ) {
   const current = await repository.readSession(session.owner, session.session_id);
   if (!current || current.image_id !== session.image_id) return;

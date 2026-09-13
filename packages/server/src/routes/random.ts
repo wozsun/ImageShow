@@ -4,7 +4,8 @@ import { withPublicDatabaseRead } from "../core/database/public-fallback.ts";
 import {
   noStoreCacheControl,
   responseContentLengthValue,
-  safeResponseHeaderValue
+  safeResponseHeaderValue,
+  safeRedirectLocation
 } from "../core/http/headers.ts";
 import { requestClientIp } from "../core/http/request-security.ts";
 import { apiErrorResponse, apiSuccess } from "../core/http/responses.ts";
@@ -106,7 +107,7 @@ async function respondRandom(c: Context, url: URL) {
       status: 302,
       headers: {
         ...baseHeaders,
-        Location: safeResponseHeaderValue("Location", location),
+        Location: safeRedirectLocation(location),
         "Referrer-Policy": "no-referrer"
       }
     });

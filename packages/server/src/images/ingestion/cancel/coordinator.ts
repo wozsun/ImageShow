@@ -1,5 +1,5 @@
 import type {
-  AdminImageListItemDto,
+  CompletedIngestionImageDto,
   IngestionCancelItemInputDto,
   IngestionCancelItemResultDto
 } from "@imageshow/shared/browser";
@@ -130,7 +130,7 @@ async function retireCompletedSession(
   repository: IngestionSessionRepository,
   session: StoredIngestionSession | null,
   input: IngestionSessionPair,
-  completedItem?: AdminImageListItemDto
+  completedItem?: CompletedIngestionImageDto
 ) {
   if (
     session

@@ -1,6 +1,6 @@
 import type { Redis } from "ioredis";
 import { appConfig } from "@imageshow/shared";
-import type { AdminImageListItemDto } from "@imageshow/shared/browser";
+import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
 import {
   ingestionCanonicalKeyPrefix,
   ingestionDisplayQueueKey,
@@ -68,7 +68,7 @@ export const ingestionSessionIncarnationMismatch = Symbol(
 
 type MutateSemanticOptions = Readonly<{
   allowStaleSemanticNoOp?: boolean;
-  completedItem?: AdminImageListItemDto;
+  completedItem?: CompletedIngestionImageDto;
 }>;
 
 export class IngestionSessionRepository {

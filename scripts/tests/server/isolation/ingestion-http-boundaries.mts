@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { getRequestListener } from "@hono/node-server";
+import { listenForFetch } from "../../support/http-listen.ts";
 import {
   ingestionActionPath, ingestionActionScopeHeader, ingestionSnapshotPath,
   type IngestionQueueActionResultDto, type IngestionSessionPairDto
@@ -20,9 +21,7 @@ await runIntegrationScenario(async (runtime) => {
   await runtime.runtimeConfigStore.replaceRuntimeConfig(config);
   const app = createHttpApp({ businessGateIsOpen: () => true, requireRedis: () => runtime.redisClient.redis.ping() });
   const server = createServer(getRequestListener(app.fetch));
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  assert.ok(address && typeof address !== "string");
+  const address = await listenForFetch(server);
   const origin = `http://127.0.0.1:${address.port}`;
   let scope: ReturnType<typeof openIngestionActionScope> | undefined;
   try {

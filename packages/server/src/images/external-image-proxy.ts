@@ -5,7 +5,8 @@ import {
   safeFetchExternalImage
 } from "../core/external-image-fetch.ts";
 import {
-  safeResponseHeaderValue
+  safeResponseHeaderValue,
+  safeRedirectLocation
 } from "../core/http/headers.ts";
 import {
   proxyEtagForUpstream,
@@ -52,7 +53,7 @@ export async function proxyExternalImage(
       status: 302,
       headers: {
         ...baseHeaders,
-        Location: safeResponseHeaderValue("Location", externalUrl),
+        Location: safeRedirectLocation(externalUrl),
         "Referrer-Policy": "no-referrer"
       }
     });

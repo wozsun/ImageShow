@@ -56,6 +56,7 @@ type PreferenceSyncScope = {
   queue: Promise<void>;
   queued: Partial<Record<AdminPreferenceKey, QueuedPreference>>;
   version: number;
+  storageRevision: number;
 };
 
 type AdminPreferencesQuerySnapshot = AdminPreferencesResponseDto & Readonly<{
@@ -163,7 +164,8 @@ export function AdminPreferencesProvider({
       controller: new AbortController(),
       queue: Promise.resolve(),
       queued: {},
-      version: 0
+      version: 0,
+      storageRevision: 0
     };
     syncScopeRef.current = scope;
     return () => {
@@ -245,6 +247,8 @@ export function AdminPreferencesProvider({
     if (!preferenceCount(patch)) return;
 
     scope.queue = scope.queue.then(async () => {
+      let storageRevision = scope.storageRevision;
+      const currentPatch: AdminPreferences = {};
       try {
         /*
          * A focus/reconnect GET may have captured the previous PostgreSQL value.
@@ -256,41 +260,61 @@ export function AdminPreferencesProvider({
             signal.throwIfAborted();
             return cancelPreferenceReads();
           },
-          () => {
+          async () => {
             // The account may have changed while reads were being cancelled.
             // Each activation owns its queue, including a Strict Mode remount.
             signal.throwIfAborted();
+            for (const key of adminPreferenceKeys) {
+              const value = patch[key];
+              if (value !== undefined
+                && scope.queued[key]?.version === ticketVersions[key]
+                && cacheRef.current.pending[key] === value) {
+                assignAdminPreference(currentPatch, key, value);
+              }
+            }
+            if (!preferenceCount(currentPatch)) return null;
+            storageRevision = scope.storageRevision;
             return apiWithEtag<AdminPreferencesResponseDto>(
               `${adminApiBasePath}/preferences`,
-              { method: "PATCH", body: JSON.stringify(patch), signal }
+              { method: "PATCH", body: JSON.stringify(currentPatch), signal }
             );
           }
         );
         signal.throwIfAborted();
+        if (!result) return;
         const response = result.data;
         const acknowledged = normalizeAdminPreferences(response.preferences);
+        const changedElsewhere = storageRevision !== scope.storageRevision;
         const current = cacheRef.current;
         const values = { ...current.values };
         const pending = { ...current.pending };
 
         for (const key of adminPreferenceKeys) {
-          const sentValue = patch[key];
+          const sentValue = currentPatch[key];
           const isLatestRequest = scope.queued[key]?.version === ticketVersions[key];
           if (isLatestRequest && sentValue !== undefined && current.pending[key] === sentValue) {
             delete pending[key];
-            assignAdminPreference(values, key, acknowledged[key] ?? sentValue);
+            if (!changedElsewhere) {
+              assignAdminPreference(values, key, acknowledged[key] ?? sentValue);
+            }
             continue;
           }
 
           // PATCH 返回 PostgreSQL 中当前完整投影。未被本地更新占用的其他键也在此
           // 对齐服务端，但不能覆盖同一页面稍后排队或仍待同步的值。
-          if (current.pending[key] !== undefined || scope.queued[key]) continue;
+          if (changedElsewhere || current.pending[key] !== undefined || scope.queued[key]) continue;
           const acknowledgedValue = acknowledged[key];
           if (acknowledgedValue === undefined) delete values[key];
           else assignAdminPreference(values, key, acknowledgedValue);
         }
         commitCache({ values, pending });
 
+        if (changedElsewhere) {
+          // A different document published while this write was in flight.
+          // The acknowledgement proves the write, not the latest database state.
+          await queryClient.invalidateQueries({ queryKey, exact: true });
+          return;
+        }
         queryClient.setQueryData<AdminPreferencesQuerySnapshot>(queryKey, {
           preferences: acknowledged,
           etag: result.etag
@@ -376,13 +400,22 @@ export function AdminPreferencesProvider({
         return;
       }
       const next = readCachedPreferences(username);
+      const scope = syncScopeRef.current;
+      if (scope) {
+        scope.storageRevision += 1;
+        for (const key of adminPreferenceKeys) {
+          if (scope.queued[key]?.value !== next.pending[key]) delete scope.queued[key];
+        }
+      }
+      // Retire reads captured before this cross-document update as well.
+      void cancelPreferenceReads().catch(() => undefined);
       cacheRef.current = next;
       setCache(next);
       enqueueSync(next.pending);
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, [enqueueSync, username]);
+  }, [cancelPreferenceReads, enqueueSync, username]);
 
   useEffect(() => {
     const retryPendingPreferences = () => {

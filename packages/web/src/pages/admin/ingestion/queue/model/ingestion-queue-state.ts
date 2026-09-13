@@ -79,6 +79,7 @@ export type IngestionQueueAction =
       targets: ReadonlyMap<string, Readonly<{
         attemptKey: string;
         pairKey: string;
+        replacement?: IngestionJob;
       }>>;
       pageSize: number;
       projectedTotalItems: number;
@@ -673,21 +674,25 @@ export function reduceIngestionQueue(
       );
     }
     case "release-resolved": {
-      const jobs = state.jobs.filter((job) => {
+      let replaced = 0;
+      const jobs = state.jobs.flatMap((job) => {
         const target = action.targets.get(job.id);
         const remove = target !== undefined
           && job.attemptKey === target.attemptKey
           && serverIngestionJobPairKey(job) === target.pairKey;
-        return !remove;
+        if (!remove) return [job];
+        if (!target.replacement) return [];
+        replaced += 1;
+        return [target.replacement];
       });
       const page = Math.min(
         state.page,
         ingestionQueuePageCount(
-          action.projectedTotalItems,
+          action.projectedTotalItems + replaced,
           action.pageSize
         )
       );
-      if (jobs.length === state.jobs.length && page === state.page) return state;
+      if (!replaced && jobs.length === state.jobs.length && page === state.page) return state;
       return { jobs, page };
     }
     case "clear-attribute":

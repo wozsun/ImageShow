@@ -195,12 +195,14 @@ export const ingestionSessionUpdateInput = z.strictObject({
   items: z.array(ingestionPairInput.extend({
     expected_version: expectedIngestionVersionInput,
     metadata: ingestionDraftMetadataInput.optional(),
-    duplicate_decision: z.enum(ingestionDuplicateDecisions).optional()
+    duplicate_decision: z.enum(ingestionDuplicateDecisions).optional(),
+    retry_prepare: z.literal(true).optional()
   }).refine(
     (item) => (
       item.metadata !== undefined || item.duplicate_decision !== undefined
+      || item.retry_prepare === true
     ),
-    "内容接入更新项必须包含 metadata 或重复项决定"
+    "内容接入更新项必须包含 metadata、重复项决定或准备重试"
   )).min(1).max(ingestionBatchHardLimit)
 }).superRefine((value, context) => {
   addDuplicateIngestionPairIssues(value.items, context);

@@ -1541,7 +1541,8 @@ export function useIngestionQueue(
 
   const projectResolvedServerJobs = useCallback((
     targets: readonly ResolvedServerJobTarget[],
-    authoritativePairKeys: ReadonlySet<string> = new Set()
+    authoritativePairKeys: ReadonlySet<string> = new Set(),
+    replacements: ReadonlyMap<string, IngestionJob> = new Map()
   ) => {
     const resolved = new Set<string>();
     const releasedPairs = new Map<string, ResolvedServerJobTarget>();
@@ -1576,6 +1577,16 @@ export function useIngestionQueue(
     }
     if (!releasedPairs.size) return { resolved, releasedPairs };
 
+    if (replacements.size && browserDisplayPrefixJobs(stateRef.current.jobs.map(
+      (job) => resolved.has(job.id) ? replacements.get(job.id) ?? job : job
+    )).length > ingestionBatchHardLimit) {
+      setStatusNotice({
+        message: `当前窗口待接管任务已达 ${ingestionBatchHardLimit} 项，请稍后重试`,
+        retryable: true
+      });
+      return { resolved: new Set<string>(), releasedPairs: new Map<string, ResolvedServerJobTarget>() };
+    }
+
     const projectedTotalItems = projectedTotalAfterResolvedRelease(
       resolvedReleaseProjectionContextRef.current,
       resolvedReleaseTargetsRef.current,
@@ -1590,6 +1601,7 @@ export function useIngestionQueue(
     const removedStateTargets = new Map<string, {
       attemptKey: string;
       pairKey: string;
+      replacement?: IngestionJob;
     }>();
     for (const job of stateRef.current.jobs) {
       const pairKey = serverIngestionJobPairKey(job);
@@ -1603,7 +1615,8 @@ export function useIngestionQueue(
       ) {
         removedStateTargets.set(job.id, {
           attemptKey: job.attemptKey,
-          pairKey
+          pairKey,
+          replacement: replacements.get(job.id)
         });
         revokeObjectUrl(job);
       }
@@ -1667,9 +1680,12 @@ export function useIngestionQueue(
   }, []);
 
   const releaseResolvedServerJobs = useCallback((
-    targets: readonly ResolvedServerJobTarget[]
+    targets: readonly ResolvedServerJobTarget[],
+    replacements: ReadonlyMap<string, IngestionJob> = new Map()
   ) => {
-    const projected = projectResolvedServerJobs(targets);
+    // A retry replaces its confirmed old pair in the same state transition.
+    // Temporary removal must not clamp the page before the new attempt exists.
+    const projected = projectResolvedServerJobs(targets, new Set(), replacements);
     if (projected.releasedPairs.size) {
       trackResolvedReleaseRecovery(
         new Map(projected.releasedPairs),

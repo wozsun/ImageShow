@@ -1,6 +1,7 @@
 import {
   type AdminImageDetailItemDto,
   type AdminImageListItemDto,
+  type CompletedIngestionImageDto,
   type Brightness,
   type Device,
   type EditableImageSnapshotDto,
@@ -35,14 +36,19 @@ type AdminImageCommonRecord = {
   original: string;
 };
 
-/** Exact row returned by the full admin image-list projection. */
-export type ImageRecord = AdminImageCommonRecord & {
+type IngestionImageRecord = AdminImageCommonRecord & {
   image_size: DatabaseNumber;
   md5: string;
+  image_time: DatabaseTimestamp;
+};
+
+export type IngestionImageRecordWithTags = IngestionImageRecord & { tags: string[] };
+
+/** Exact row returned by the full admin image-list projection. */
+export type ImageRecord = IngestionImageRecord & {
   status: "ready" | "deleted";
   deleted_at: DatabaseTimestamp | null;
   purge_job_id: string | null;
-  image_time: DatabaseTimestamp;
   created_at: DatabaseTimestamp;
   updated_at: DatabaseTimestamp;
 };
@@ -66,10 +72,9 @@ export type EditableImageSnapshotRecordWithTags = AdminImageCommonRecord & {
 };
 
 /**
- * Columns required by the full admin list, duplicate results and Ingestion
- * commit response. Keep this list aligned with ImageRecord.
+ * Shared image fields for formal Ingestion results and admin list rows.
  */
-export const adminImageListPresentationColumns = [
+const ingestionImagePresentationColumns = [
   "id",
   "device",
   "brightness",
@@ -85,10 +90,14 @@ export const adminImageListPresentationColumns = [
   "description",
   "source",
   "original",
+  "image_time"
+].join(", ");
+
+export const adminImageListPresentationColumns = [
+  ingestionImagePresentationColumns,
   "status",
   "deleted_at",
   "purge_job_id",
-  "image_time",
   "created_at",
   "updated_at"
 ].join(", ");
@@ -106,6 +115,11 @@ export const imageTagsPresentationColumn = `ARRAY(
 
 export const adminImageListPresentationColumnsWithTags = [
   adminImageListPresentationColumns,
+  imageTagsPresentationColumn
+].join(", ");
+
+export const ingestionImagePresentationColumnsWithTags = [
+  ingestionImagePresentationColumns,
   imageTagsPresentationColumn
 ].join(", ");
 
@@ -205,7 +219,7 @@ function serializeNullableTimestamp(value: DatabaseTimestamp | null) {
   return value === null ? null : serializeTimestamp(value);
 }
 
-async function presentAdminImageBase(
+async function presentImageBase(
   row: AdminImageCommonRecord,
   tags: string[]
 ) {
@@ -222,15 +236,28 @@ async function presentAdminImageBase(
     tags,
     thumb_url: urls.thumb_url,
     object_url: urls.object_url,
-    original_url: publicOriginalAccessUrl(
-      row.id,
-      row.original,
-      urls.object_url
-    ),
     width: Number(row.width),
     height: Number(row.height),
     storage_slug: storageSlug
   };
+}
+
+async function presentAdminImageBase(row: AdminImageCommonRecord, tags: string[]) {
+  const base = await presentImageBase(row, tags);
+  return {
+    ...base,
+    original_url: publicOriginalAccessUrl(row.id, row.original, base.object_url)
+  };
+}
+
+export async function ingestionImageItemsWithTags(rows: IngestionImageRecordWithTags[]) {
+  return Promise.all(rows.map(async (row): Promise<CompletedIngestionImageDto> => ({
+    ...await presentImageBase(row, row.tags),
+    original: row.original,
+    md5: row.md5,
+    image_size: Number(row.image_size),
+    image_time: serializeTimestamp(row.image_time)
+  })));
 }
 
 async function adminImageListItem(

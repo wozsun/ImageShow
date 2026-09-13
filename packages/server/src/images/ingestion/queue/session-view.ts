@@ -50,7 +50,6 @@ export function presentIngestionSession(
         transcoded: session.prepared.transcoded,
         detected_device: session.prepared.detected_device,
         detected_brightness: session.prepared.detected_brightness,
-        storage_slug: session.storage_slug,
         duplicate_count: session.prepared.duplicate_count
       }
     : undefined;
@@ -76,7 +75,6 @@ export function presentIngestionSession(
     version: session.version,
     progress_seq: session.progress_seq,
     last_semantic_revision: session.last_semantic_revision,
-    accepted_at: session.accepted_at,
     accepted_order: session.accepted_order,
     metadata: session.metadata,
     storage_slug: session.storage_slug,
@@ -88,11 +86,10 @@ export function presentIngestionSession(
       commit: {
         commit_request_id: session.commit.commit_request_id,
         expected_md5: session.commit.expected_md5,
-        duplicate_decision: session.commit.duplicate_decision,
         metadata: session.commit.metadata
       }
     } : {}),
-    ...(session.error ? { error: session.error } : {})
+    ...(session.error ? { error: { message: session.error.message } } : {})
   };
 }
 

@@ -1930,6 +1930,84 @@ test("[Web/后台访问] 偏好队列随账号卸载终止，迟到响应不写�
   assert.deepEqual(JSON.parse(stored.get("imageshow.admin.preferences.A")!).pending, {});
 });
 
+test("[Web/后台访问] 跨标签页更新后旧偏好回执只触发一次重验证，旧队列不重放", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const { AdminPreferencesProvider, useAdminPreference } = await import("../../../packages/web/src/hooks/useAdminPreferences.tsx");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  t.after(() => { client.clear(); clearCsrfToken(); });
+  const key = "imageshow.admin.preferences.shared-owner";
+  const stored = new Map<string, string>();
+  Object.assign(h.window, { localStorage: {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => stored.set(key, value)
+  } });
+  const initial = { color_scheme: "dark", image_sort_order: "latest" } as const;
+  let setColor!: (value: "light" | "dark" | "system") => void;
+  let setSort!: (value: "oldest" | "latest") => void;
+  let color = "";
+  let order = "";
+  function Probe() {
+    [color, setColor] = useAdminPreference("color_scheme");
+    [order, setSort] = useAdminPreference("image_sort_order");
+    return null;
+  }
+  setCsrfToken("shared-owner-csrf");
+  client.setQueryData(queryKeys.me, {
+    authenticated: true, username: "shared-owner", preferences: initial, preferences_etag: "initial"
+  });
+  await h.render(h.React.createElement(QueryClientProvider, { client },
+    h.React.createElement(AdminPreferencesProvider, {
+      username: "shared-owner", serverPreferences: initial,
+      serverPreferencesEtag: "initial", serverPreferencesUpdatedAt: Date.now()
+    }, h.React.createElement(Probe))
+  ));
+  await h.React.act(async () => { setColor("light"); setSort("oldest"); });
+  assert.equal(h.pending.length, 1);
+  const otherDocument = { color_scheme: "system", image_sort_order: "latest" } as const;
+  await h.React.act(async () => {
+    stored.set(key, JSON.stringify({ values: otherDocument, pending: {} }));
+    h.window.dispatchEvent(Object.assign(new Event("storage"), {
+      key, storageArea: h.window.localStorage
+    }));
+  });
+  assert.equal(color, "system");
+  await h.respond(0, { preferences: { color_scheme: "light", image_sort_order: "latest" } });
+  assert.equal(color, "system", "迟到 PATCH 不得在重验证期间回退页面");
+  assert.equal(order, "latest");
+  assert.equal(h.pending.length, 2);
+  assert.equal(h.pending[1].body, undefined, "使用现有偏好 GET owner，不重放旧写入");
+  assert.deepEqual(JSON.parse(stored.get(key)!), { values: otherDocument, pending: {} });
+  await h.respond(1, { preferences: otherDocument });
+  assert.equal(h.pending.length, 2, "另一页已经覆盖的排队排序不能再次写入");
+  assert.deepEqual(client.getQueryData([...queryKeys.adminPreferences, "shared-owner"]), {
+    preferences: otherDocument, etag: ""
+  });
+  assert.deepEqual((client.getQueryData(queryKeys.me) as { preferences: AdminPreferences }).preferences, otherDocument);
+  await h.React.act(async () => setSort("oldest"));
+  await h.respond(2, { preferences: { ...otherDocument, image_sort_order: "oldest" } });
+  assert.equal(h.pending.length, 3, "普通同页确认继续走无额外 GET 的路径");
+  assert.equal(order, "oldest");
+  // Choosing the same value again after another document replaced it is a new
+  // intent, even while an older request for that value is awaiting its receipt.
+  await h.React.act(async () => setColor("light"));
+  await h.React.act(async () => {
+    stored.set(key, JSON.stringify({ values: otherDocument, pending: {} }));
+    h.window.dispatchEvent(Object.assign(new Event("storage"), {
+      key, storageArea: h.window.localStorage
+    }));
+    setColor("light");
+  });
+  await h.respond(3, { preferences: { color_scheme: "light", image_sort_order: "oldest" } });
+  assert.equal(JSON.parse(stored.get(key)!).pending.color_scheme, "light");
+  await h.respond(4, { preferences: otherDocument });
+  assert.equal(color, "light", "用户重新选择的同值仍保留自己的待写入身份");
+  assert.deepEqual(JSON.parse(String(h.pending[5].body)), { color_scheme: "light" });
+  await h.respond(5, { preferences: { ...otherDocument, color_scheme: "light" } });
+  assert.equal(color, "light");
+  assert.deepEqual(JSON.parse(stored.get(key)!).pending, {});
+});
+
 test("[Web/后台访问] 偏好写入在取消读取期间卸载也不发送 PATCH", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");

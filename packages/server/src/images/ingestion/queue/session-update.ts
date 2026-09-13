@@ -11,6 +11,8 @@ import {
 } from "../repository.ts";
 import type { IngestionSessionSnapshot } from "../sessions/model.ts";
 import { semanticIngestionSession } from "../sessions/transitions.ts";
+import { cleanupRetiredSessions } from "../cancel/retired-cleanup.ts";
+import { ingestionCleanupRetryQueue } from "../cleanup/retry-queue.ts";
 
 function failure(
   pair: Pick<IngestionSessionUpdateItemDto, "session_id" | "image_id">,
@@ -74,6 +76,13 @@ export async function updateIngestionSessions(
         if (current.commit) {
           throw new ApiError(409, "invalid_ingestion_state", "当前内容接入任务不可编辑");
         }
+        if (input.retry_prepare && (
+          current.queue !== "import"
+          || current.status !== "failed"
+          || input.duplicate_decision !== undefined
+        )) {
+          throw new ApiError(409, "invalid_ingestion_state", "只有准备失败的导入任务可以重新下载");
+        }
         if (input.duplicate_decision && !current.prepared) {
           throw new ApiError(
             409,
@@ -103,15 +112,32 @@ export async function updateIngestionSessions(
         const next = semanticIngestionSession(current, {
           metadata,
           duplicate_decision: duplicateDecision,
-          ...(prepared ? { prepared } : {})
+          ...(prepared ? { prepared } : {}),
+          ...(input.retry_prepare ? {
+            status: "queued" as const,
+            phase: "queued",
+            message: "等待重新下载",
+            progress: null,
+            execution_token: "",
+            raw_generation: "",
+            raw_size: 0,
+            prepared: undefined,
+            duplicate_decision: undefined,
+            error: undefined
+          } : {})
         });
         const updated = await repository.mutateSemantic(
           current,
           input.expected_version,
           next,
           Date.now(),
-          { allowStaleSemanticNoOp: true }
+          { allowStaleSemanticNoOp: !input.retry_prepare }
         );
+        if (input.retry_prepare && updated.changed) {
+          // The CAS retires only these generations. A new download keeps the
+          // canonical identity/time/order and owns a different raw generation.
+          await ingestionCleanupRetryQueue.enqueue(() => cleanupRetiredSessions([current]));
+        }
         const updatedSession = updated.session as IngestionSessionSnapshot;
         return {
           ...pair,

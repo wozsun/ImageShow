@@ -6,7 +6,7 @@ import {
 import {
   immutableCacheControl,
   publicRedirectCacheControl,
-  safeResponseHeaderValue
+  safeRedirectLocation
 } from "../core/http/headers.ts";
 import {
   isCanonicalImageObjectKey,
@@ -51,7 +51,7 @@ function immutableRedirect(location: string) {
   return new Response(null, {
     status: 302,
     headers: {
-      Location: safeResponseHeaderValue("Location", location),
+      Location: safeRedirectLocation(location),
       "Cache-Control": publicRedirectCacheControl
     }
   });

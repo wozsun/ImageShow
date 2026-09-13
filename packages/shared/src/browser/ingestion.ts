@@ -1,6 +1,7 @@
 import { normalizeHttpsUrlInput, type Brightness, type Device } from "./common.ts";
 import type {
   AdminImageListItemDto,
+  ImageCardBaseDto,
   FacetOptionDto,
   ImageDraftDto
 } from "./images.ts";
@@ -254,7 +255,6 @@ export type ServerIngestionPreparedDto = {
   transcoded: boolean;
   detected_device: Device;
   detected_brightness: Brightness;
-  storage_slug: string;
   duplicate_count: number;
 };
 
@@ -272,7 +272,6 @@ export type ActiveServerIngestionItemDto = IngestionSessionPairDto & {
   version: number;
   progress_seq: number;
   last_semantic_revision: number;
-  accepted_at: number;
   accepted_order: number;
   metadata: ImageDraftDto;
   storage_slug: string;
@@ -281,10 +280,9 @@ export type ActiveServerIngestionItemDto = IngestionSessionPairDto & {
   commit?: {
     commit_request_id: string;
     expected_md5: string;
-    duplicate_decision: IngestionDuplicateDecision;
     metadata: ImageDraftDto;
   };
-  error?: { code: string; message: string };
+  error?: { message: string };
 };
 
 export type CompletedIngestionDisplayDto = {
@@ -298,17 +296,27 @@ export type CompletedIngestionDisplayDto = {
   transcoded: boolean;
 };
 
+/** Formal image fields consumed by Ingestion cards and completion invalidation. */
+export type CompletedIngestionImageDto = ImageCardBaseDto & {
+  description: string;
+  source: string | null;
+  original: string;
+  object_url: string;
+  storage_slug: string;
+  md5: string;
+  image_size: number;
+};
+
 export type CompletedServerIngestionItemDto = IngestionSessionPairDto & {
   queue: IngestionQueueTypeDto;
   status: "completed";
   version: number;
   progress_seq: 0;
   last_semantic_revision: number;
-  accepted_at: number;
   accepted_order: number;
   completed_at: number;
   display?: CompletedIngestionDisplayDto;
-  completed_item: AdminImageListItemDto;
+  completed_item: CompletedIngestionImageDto;
 };
 
 export type ServerIngestionItemDto =
@@ -352,7 +360,6 @@ export type IngestionQueueTerminalEventItemDto = IngestionSessionPairDto & {
   version: number;
   progress_seq: 0;
   last_semantic_revision: number;
-  accepted_at: number;
   accepted_order: number;
 };
 
@@ -383,7 +390,7 @@ export type IngestionStatusItemDto = IngestionSessionPairDto & (
   | { status: "present"; item: ActiveServerIngestionItemDto }
   | {
       status: "completed";
-      completed_item: AdminImageListItemDto;
+      completed_item: CompletedIngestionImageDto;
       display?: CompletedIngestionDisplayDto;
       redis_status: "active" | "completed" | "missing";
       redis_version?: number;
@@ -400,6 +407,7 @@ export type IngestionSessionUpdateItemDto = IngestionSessionPairDto & {
   expected_version: number;
   metadata?: ImageDraftDto;
   duplicate_decision?: IngestionDuplicateDecision;
+  retry_prepare?: true;
 };
 
 export type IngestionSessionUpdateInputDto = {
@@ -446,7 +454,7 @@ export type IngestionCommitItemResultDto = IngestionSessionPairDto & (
   | {
       status: "completed";
       version: number;
-      completed_item: AdminImageListItemDto;
+      completed_item: CompletedIngestionImageDto;
     }
   | {
       status: "failed";
@@ -477,7 +485,7 @@ export type IngestionCancelInputDto = {
 export type IngestionCancelItemResultDto = IngestionSessionPairDto & (
   | { status: "discarded"; queue_revision: number }
   | { status: "resolving" }
-  | { status: "completed"; completed_item: AdminImageListItemDto }
+  | { status: "completed"; completed_item: CompletedIngestionImageDto }
   | { status: "failed"; code?: string; message?: string }
 );
 
@@ -518,6 +526,6 @@ export type IngestionQueueActionResultDto = {
     queue_revision?: number;
     code?: string;
     message?: string;
-    completed_item?: AdminImageListItemDto;
+    completed_item?: CompletedIngestionImageDto;
   }>;
 };

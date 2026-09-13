@@ -371,7 +371,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     version: 3,
     progress_seq: 0,
     last_semantic_revision: 3,
-    accepted_at: 1,
     accepted_order: 1,
     metadata: base.draft,
     storage_slug: "local"
@@ -420,7 +419,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
       version: 2,
       progress_seq: 9,
       last_semantic_revision: 2,
-      accepted_at: 1,
       accepted_order: 1,
       metadata: base.draft,
       storage_slug: "local"
@@ -451,7 +449,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
       version: 3,
       progress_seq: 0,
       last_semantic_revision: 3,
-      accepted_at: 1,
       accepted_order: 1,
       metadata: base.draft,
       storage_slug: "local"
@@ -476,7 +473,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
       version: 2,
       progress_seq: 3,
       last_semantic_revision: 2,
-      accepted_at: 1,
       accepted_order: 1,
       metadata: base.draft,
       storage_slug: "local"
@@ -741,7 +737,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     version: 2,
     progress_seq: 1,
     last_semantic_revision: 8,
-    accepted_at: 1,
     accepted_order: 1,
     metadata: localPlaceholder.draft,
     storage_slug: "local"
@@ -786,7 +781,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     version: 3,
     progress_seq: 2,
     last_semantic_revision: 9,
-    accepted_at: 1,
     accepted_order: 2,
     metadata: {
       ...unboundLocal.draft,
@@ -902,7 +896,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     version: 4,
     progress_seq: 3,
     last_semantic_revision: 10,
-    accepted_at: 1,
     accepted_order: 2,
     metadata: {
       ...unboundLocal.draft,
@@ -963,7 +956,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     version: 5,
     progress_seq: 1,
     last_semantic_revision: 11,
-    accepted_at: 1,
     accepted_order: 1,
     metadata: localPlaceholder.draft,
     storage_slug: "local"
@@ -990,7 +982,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     version: 6,
     progress_seq: 0,
     last_semantic_revision: 12,
-    accepted_at: 1,
     accepted_order: 1,
     completed_at: 2,
     completed_item: adminImageListItem({ id: imageId })
@@ -1018,7 +1009,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     version: 6,
     progress_seq: 0,
     last_semantic_revision: 12,
-    accepted_at: 1,
     accepted_order: 1,
     completed_at: 2,
     display: {
@@ -1067,7 +1057,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     version: 1,
     progress_seq: 0,
     last_semantic_revision: 1,
-    accepted_at: 1,
     accepted_order: 2,
     metadata: localPlaceholder.draft,
     storage_slug: "local",
@@ -1091,7 +1080,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     version: 2,
     progress_seq: 0,
     last_semantic_revision: 2,
-    accepted_at: 1,
     accepted_order: 3,
     completed_at: 2,
     completed_item: adminImageListItem({
@@ -1275,7 +1263,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
       version: 6,
       progress_seq: 0,
       last_semantic_revision: 6,
-      accepted_at: 1,
       accepted_order: 23
     }
   );
@@ -1310,7 +1297,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
       version: 5,
       progress_seq: 0,
       last_semantic_revision: 5,
-      accepted_at: 1,
       accepted_order: 23,
       metadata: compactCompletionOwner.draft,
       storage_slug: "local"
@@ -1389,11 +1375,10 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
       status: "failed",
       phase: "commit-failed",
       message: "逐项提交失败",
-      error: { code: "commit_failed", message: "逐项提交失败" },
+      error: { message: "逐项提交失败" },
       version: 6,
       progress_seq: 0,
       last_semantic_revision: 6,
-      accepted_at: 1,
       accepted_order: 22,
       metadata: failedSecondPageOwner.draft,
       storage_slug: "local"
@@ -1441,7 +1426,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     version: 5,
     progress_seq: 0,
     last_semantic_revision: 5,
-    accepted_at: 1,
     accepted_order: 21,
     metadata: completedOwner.draft,
     storage_slug: "local"
@@ -1521,7 +1505,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     version: 6,
     progress_seq: 0,
     last_semantic_revision: 6,
-    accepted_at: 1,
     accepted_order: 1,
     completed_at: 2,
     completed_item: adminImageListItem({ id: responseRaceOwner.imageId! })
@@ -1712,7 +1695,6 @@ test("[Web/内容接入] 逐项 active 事件在 bounded snapshot 前保留来�
       version: 2,
       progress_seq: 0,
       last_semantic_revision: 25,
-      accepted_at: 1,
       accepted_order: index + 1,
       metadata: job.draft,
       storage_slug: "local"
@@ -1958,7 +1940,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
       version,
       progress_seq: 0,
       last_semantic_revision: version + 6,
-      accepted_at: 1,
       accepted_order: acceptedOrder,
       metadata: ingestionJob().draft,
       storage_slug: "local"
@@ -3032,7 +3013,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
         version: 3,
         progress_seq: 0,
         last_semantic_revision: 8,
-        accepted_at: 1,
         accepted_order: 20,
         completed_at: 2,
         completed_item: adminImageListItem({ id: imageId })
@@ -3130,7 +3110,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             version: 3,
             progress_seq: 0,
             last_semantic_revision: 9,
-            accepted_at: 1,
             accepted_order: 20,
             completed_at: 2,
             completed_item: adminImageListItem({ id: lateCompletedImageId })
@@ -3224,7 +3203,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             version: 2,
             progress_seq: 0,
             last_semantic_revision: 10,
-            accepted_at: 1,
             accepted_order: 1,
             completed_at: 2,
             completed_item: adminImageListItem({
@@ -4268,7 +4246,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             version: 11,
             progress_seq: 0,
             last_semantic_revision: 33,
-            accepted_at: 1,
             accepted_order: 40
           },
           action_watermark: "watermark-hidden-removal"
@@ -4455,7 +4432,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             version: 2,
             progress_seq: 0,
             last_semantic_revision: 31,
-            accepted_at: 1,
             accepted_order: 20
           },
           action_watermark: "watermark-reduced"
@@ -5660,7 +5636,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
         version: 2,
         progress_seq: 0 as const,
         last_semantic_revision: 116,
-        accepted_at: 1,
         accepted_order: 11,
         completed_at: 2,
         completed_item: completedSnapshotItem
@@ -6536,7 +6511,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
         version: 3,
         progress_seq: 0,
         last_semantic_revision: revision,
-        accepted_at: 1,
         accepted_order: acceptedOrder,
         completed_at: 2,
         completed_item: adminImageListItem({ id: imageId })
@@ -6796,7 +6770,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             version: 5,
             progress_seq: 0,
             last_semantic_revision: 42,
-            accepted_at: 1,
             accepted_order: 20 + index,
             metadata: ingestionJob().draft,
             storage_slug: "local"
@@ -6848,7 +6821,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
                   progress_seq: 0,
                   last_semantic_revision:
                     offPageCompletionBaseRevision + index + 1,
-                  accepted_at: 1,
                   accepted_order: 20 + index
                 }
               : {
@@ -6860,7 +6832,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
                   progress_seq: 0,
                   last_semantic_revision:
                     offPageCompletionBaseRevision + index + 1,
-                  accepted_at: 1,
                   accepted_order: 20 + index,
                   completed_at: 2,
                   display: {
@@ -6906,7 +6877,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             version: 6,
             progress_seq: 0,
             last_semantic_revision: offPageCompletionBaseRevision + 23,
-            accepted_at: 1,
             accepted_order: 42
           },
           action_watermark: "watermark-off-page-completed-22"
@@ -7039,7 +7009,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             progress_seq: 0,
             last_semantic_revision:
               offPageCompletionBaseRevision + 21 + offset,
-            accepted_at: 1,
             accepted_order: 40 + offset,
             completed_at: 2,
             display: {
@@ -7098,7 +7067,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
         version: 5,
         progress_seq: 0,
         last_semantic_revision: compactChunkBaselineRevision,
-        accepted_at: 1,
         accepted_order: 43 + index,
         metadata: ingestionJob().draft,
         storage_slug: "local"
@@ -7130,7 +7098,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               progress_seq: 0,
               last_semantic_revision:
                 offPageCompletionBaseRevision + 21 + offset,
-              accepted_at: 1,
               accepted_order: 40 + offset,
               completed_at: 2,
               completed_item: adminImageListItem({ id: completedImageId })
@@ -7195,7 +7162,6 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             progress_seq: 0,
             last_semantic_revision:
               compactChunkBaselineRevision + completedCount,
-            accepted_at: 1,
             accepted_order: 43 + index
           },
           action_watermark: `watermark-compact-chunk-completed-${index}`
@@ -8921,7 +8887,6 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
             version: 2,
             progress_seq: 0,
             last_semantic_revision: 2,
-            accepted_at: 1,
             accepted_order: 1,
             metadata: ingestionJob().draft,
             storage_slug: "local"
@@ -9335,7 +9300,6 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
       version: 2,
       progress_seq: 0,
       last_semantic_revision: 5,
-      accepted_at: 1,
       accepted_order: 1,
       metadata: {
         ...ingestionJob().draft,
@@ -11165,7 +11129,6 @@ test("[Web/内容接入] placeholder 草稿按批写回并自动跨越 worker �
             version: 2,
             progress_seq: 1,
             last_semantic_revision: 2,
-            accepted_at: 1,
             accepted_order: 1,
             metadata: ingestionJob().draft,
             storage_slug: "local"
@@ -12635,10 +12598,10 @@ test("[Web/内容接入] 本地重试按 completed 与 discarded 结果保留或
         });
       },
       captureServerConnectionGeneration: () => 1,
-      releaseResolvedServerJobs: (targets: readonly { id: string }[]) => {
+      releaseResolvedServerJobs: (targets: readonly { id: string }[], replacements = new Map<string, IngestionJob>()) => {
         releaseRequests += 1;
         const released = new Set(targets.map((target) => target.id));
-        jobsRef.current = jobsRef.current.filter((job) => !released.has(job.id));
+        jobsRef.current = jobsRef.current.flatMap((job) => !released.has(job.id) ? [job] : replacements.has(job.id) ? [replacements.get(job.id)!] : []);
         return released;
       },
       server: {
@@ -12950,11 +12913,11 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
       failureStage: "prepare"
     });
     jobsRef.current = [retryJob];
-    await owner!.retry(retryJob);
+    await owner!.cancel(retryJob);
     assert.equal(
       acceptRequests,
       1,
-      "取消返回 completed 时 retry 不得生成新 attempt 或重新 accept"
+      "取消返回 completed 时不得生成新 attempt 或重新 accept"
     );
     assert.equal(jobsRef.current[0]?.attemptKey, retryJob.attemptKey);
     assert.equal(jobsRef.current[0]?.status, "finalized");
@@ -13310,7 +13273,6 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
     version: 2,
     progress_seq: 2,
     last_semantic_revision: 5,
-    accepted_at: 1,
     accepted_order: 1,
     metadata: {
       device: "auto" as const,
@@ -13492,7 +13454,6 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
       version: 4,
       progress_seq: 0,
       last_semantic_revision: 7,
-      accepted_at: 1,
       accepted_order: 1
     }
   });
@@ -13525,7 +13486,6 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
       version: 4,
       progress_seq: 0,
       last_semantic_revision: 7,
-      accepted_at: 1,
       accepted_order: 1,
       completed_at: 2,
       completed_item: completedItem
@@ -13546,7 +13506,7 @@ test("[Web/内容接入] 队列 progress 以当前 revision 同步页内与离�
   const waitingSummary = {
     total: 1,
     unfinished: 1,
-    waiting: 1,
+    waiting: 0,
     running: 0,
     ready: 0,
     duplicate_pending: 0,
@@ -13573,7 +13533,6 @@ test("[Web/内容接入] 队列 progress 以当前 revision 同步页内与离�
     version: 2,
     progress_seq: 0,
     last_semantic_revision: 5,
-    accepted_at: 1,
     accepted_order: 1,
     metadata: {
       device: "auto" as const,
@@ -13669,7 +13628,7 @@ test("[Web/内容接入] 队列 progress 以当前 revision 同步页内与离�
         ...runningSummary,
         total: 2,
         unfinished: 2,
-        waiting: 1,
+        waiting: 0,
         running: 1
       }
     }
@@ -16409,6 +16368,206 @@ test("[Web/内容接入] 浏览器上传 lane 统一约束页面工作并响应�
     assert.equal(lane.limit, 1);
   });
 });
+test("[Web/内容接入] 大队列页外进度和缓冲进度不重复请求当前快照", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  class Events extends EventTarget {
+    static current: Events;
+    constructor(_url: string) { super(); Events.current = this; }
+    close() {}
+    emit(type: string, data: unknown) {
+      this.dispatchEvent(Object.assign(new Event(type), { data: JSON.stringify(data) }));
+    }
+  }
+  t.after(installProperties(globalThis, { EventSource: Events }));
+  const { useServerIngestionQueue } = await import("../../../packages/web/src/pages/admin/ingestion/queue/useServerIngestionQueue.ts");
+  const items = Array.from({ length: 800 }, (_, index) => ({
+    session_id: String(index).padStart(43, "S"),
+    image_id: `019f8457-063a-7${index.toString(16).padStart(3, "0")}-a580-7a432dc7fd8e`,
+    queue: "import" as const, source_type: "url" as const,
+    resolved_image_time: "2026-09-14T00:00:00.000Z", status: "preparing" as const,
+    phase: "prepare-waiting", message: "待处理", version: 2, progress_seq: 0,
+    last_semantic_revision: 800, accepted_order: index + 1,
+    metadata: ingestionJob().draft, storage_slug: "local"
+  }));
+  const pairs = items.map(({ session_id, image_id }) => ({ session_id, image_id }));
+  let view!: ReturnType<typeof useServerIngestionQueue>;
+  function Probe() {
+    view = useServerIngestionQueue({ enabled: true, displayed: true, queue: "import",
+      offset: 0, limit: 20, requiredItems: 20, excludeItems: pairs, includeItems: pairs.slice(0, 20)
+    });
+    return null;
+  }
+  await h.render(h.React.createElement(Probe));
+  await h.React.act(async () => Events.current.emit("ready", {
+    type: "ready", queue: "import", revision: 800, action_scope: "large-queue"
+  }));
+  assert.equal(h.pending.length, 1);
+  let revision = 800;
+  let summary: IngestionQueueSummaryDto = { total: 800, unfinished: 800, waiting: 600,
+    running: 2, ready: 98, duplicate_pending: 0, committing: 0, resolving: 0, completed: 0, failed: 0 };
+  const snapshot = () => ({ ...summary, queue: "import", revision, last_accepted_order: 800,
+    offset: 0, limit: 20, items: items.slice(0, 20), stale_items: [], action_watermark: "watermark" });
+  const initialSnapshot = snapshot();
+  const progress = (index: number) => ({ type: "mutation", queue: "import", kind: "progress",
+    revision, last_accepted_order: 800, summary: { ...summary, running: 3 },
+    session: { ...items[100 + index], phase: "normalizing", message: "处理中", progress_seq: 1 }
+  });
+  // The first progress frame arrives while the initial HTTP snapshot is in flight.
+  await h.React.act(async () => Events.current.emit("mutation", progress(0)));
+  await h.respond(0, initialSnapshot);
+  assert.equal(view.summary?.running, 3);
+  for (let index = 0; index < 20; index += 1) {
+    if (index) await h.React.act(async () => Events.current.emit("mutation", progress(index)));
+    assert.equal(view.summary?.running, 3);
+    // Completing a worker is semantic; the next admitted task can then start.
+    revision += 1;
+    summary = { ...summary, ready: summary.ready + 1 };
+    await h.React.act(async () => Events.current.emit("mutation", {
+      type: "mutation", queue: "import", kind: "semantic", revision,
+      last_accepted_order: 800, summary,
+      session: { ...items[100 + index], status: "ready", version: 3, last_semantic_revision: revision }
+    }));
+  }
+  await h.flush();
+  assert.equal(h.pending.length, 1, "20 次页外进入处理不产生整页回读");
+  assert.equal(view.summary?.ready, 118);
+  assert.deepEqual(view.items, items.slice(0, 20));
+  t.diagnostic(`800 项 / 20 项展示：初始化 1 次，20 次页外处理额外快照 0 次；每次请求正文 ${Buffer.byteLength(String(h.pending[0].body))} B`);
+  // An actual revision gap must still recover through the same owner.
+  await h.React.act(async () => Events.current.emit("mutation", {
+    ...progress(25), revision: revision + 2
+  }));
+  await h.flush();
+  assert.equal(h.pending.length, 2);
+  revision += 2;
+  await h.respond(1, snapshot());
+  assert.equal(view.status, "ready");
+});
+
+test("[Web/内容接入] 组合队列原子替换末页重试任务并清理旧接管身份", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { useIngestionQueue } = await import("../../../packages/web/src/pages/admin/ingestion/queue/useIngestionQueue.ts");
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const client = new QueryClient();
+  t.after(() => client.clear());
+  let queue!: ReturnType<typeof useIngestionQueue>;
+  function Probe() { queue = useIngestionQueue(20, "import", false); return null; }
+  await h.render(h.React.createElement(QueryClientProvider, { client }, h.React.createElement(Probe)));
+  const jobs = Array.from({ length: 21 }, (_, index) => ingestionJob({
+    id: `retry-page-${index}`, kind: "import", batchKey: "retry-page", batchPosition: index,
+    status: "failed", failureStage: "prepare", imageTime: "2020-06-17T02:30:45.000Z",
+    sessionId: undefined, imageId: undefined, serverAccepted: false
+  }));
+  await h.React.act(async () => { queue.appendJobs(jobs); });
+  await h.React.act(async () => {
+    queue.bindServerJob(jobs[20].id, {
+      sessionId: "R".repeat(43), imageId: "019f8457-063a-7fff-a580-7a432dc7fd8e",
+      serverAccepted: true, serverHandoffPending: true, serverHandoffRevision: 1,
+      serverHandoffProvisionalTotal: true, status: "failed", failureStage: "prepare"
+    }, null, 1);
+  });
+  await h.React.act(async () => queue.setPage(2));
+  assert.equal(queue.page, 2);
+  const old = queue.jobsRef.current.find((job) => job.id === jobs[20].id)!;
+  const next = resetJobForPrepareRetry(old);
+  await h.React.act(async () => {
+    const released = queue.releaseResolvedServerJobs([{
+      id: old.id, attemptKey: old.attemptKey,
+      pair: { session_id: old.sessionId!, image_id: old.imageId! }
+    }], new Map([[old.id, next]]));
+    assert.equal(released.has(old.id), true);
+  });
+  await h.flush();
+  assert.equal(queue.page, 2);
+  assert.deepEqual(queue.visibleJobs.map(({ id }) => id), [old.id]);
+  assert.equal(queue.jobsRef.current.find(({ id }) => id === old.id)?.attemptKey, next.attemptKey);
+  assert.equal(queue.totalItems, 21);
+});
+
+test("[Web/内容接入] 各来源及恢复任务原位重试保留身份时间与当前页", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { useImport } = await import("../../../packages/web/src/pages/admin/ingestion/import/useImport.ts");
+  let state = { page: 2, jobs: [] as IngestionJob[] };
+  let recoveries = 0;
+  const jobsRef = { get current() { return state.jobs; } };
+  const queue = {
+    jobsRef,
+    observeCompletedIngestions() {},
+    appendJobs(jobs: IngestionJob[]) { state = reduceIngestionQueue(state, { type: "append", jobs }); return true; },
+    updateJob(id: string, patch: Partial<IngestionJob>) { state = reduceIngestionQueue(state, { type: "patch", id, patch }); },
+    bindServerJob(id: string, binding: Partial<IngestionJob> & { sessionId: string; imageId: string }) { state = reduceIngestionQueue(state, { type: "bind-server", id, binding }); },
+    captureServerConnectionGeneration: () => 1,
+    releaseResolvedServerJobs(targets: readonly { id: string; attemptKey: string; pair: { session_id: string; image_id: string } }[], replacements = new Map<string, IngestionJob>()) {
+      state = reduceIngestionQueue(state, { type: "release-resolved", pageSize: 20,
+        projectedTotalItems: state.jobs.length - targets.length,
+        targets: new Map(targets.map((target) => [target.id, {
+          attemptKey: target.attemptKey,
+          pairKey: `${target.pair.session_id}\0${target.pair.image_id}`,
+          replacement: replacements.get(target.id)
+        }]))
+      });
+      return new Set(targets.map(({ id }) => id));
+    },
+    server: { recoverAuthority: async () => { recoveries += 1; } }
+  };
+  let owner!: ReturnType<typeof useImport>;
+  function Probe() {
+    owner = useImport({ queue: queue as never, maxItems: 1000, storageSlug: "local",
+      keepOriginalLinkForUrlImports: true,
+      defaults: { device: "auto", brightness: "auto", theme: "", author: "", tags: [] }
+    });
+    return null;
+  }
+  await h.render(h.React.createElement(Probe));
+  for (const [count, source] of [[31, "weibo"], [21, "jsonl"], [21, undefined]] as const) {
+    const imageTime = "2020-06-17T02:30:45.000Z";
+    state = { page: 2, jobs: Array.from({ length: count }, (_, index) => ingestionJobFromServerItem({
+      session_id: String(index).padStart(43, "S"),
+      image_id: `019f8457-063a-7${index.toString(16).padStart(3, "0")}-a580-7a432dc7fd8e`,
+      queue: "import", source_type: source ?? "url", batch_position: index,
+      download_url: "https://images.example.com/photo.png", resolved_image_time: imageTime,
+      status: "failed", phase: "failed", message: "内容接入执行权已转移",
+      version: 1, progress_seq: 0, last_semantic_revision: 1, accepted_order: index + 1,
+      storage_slug: "local", metadata: ingestionJob().draft
+    })) };
+    const before = state.jobs[20];
+    const ids = state.jobs.map(({ id }) => id);
+    const start = h.pending.length;
+    const retry = owner.retry(before);
+    await h.flush();
+    await owner.retry(before);
+    assert.equal(h.pending.length, start + 1, "同一重试正在等待时不重复写入");
+    assert.equal(h.pending[start].path, ingestionUpdatePath);
+    const input = JSON.parse(String(h.pending[start].body)).items[0];
+    assert.deepEqual(input, { session_id: before.sessionId, image_id: before.imageId,
+      expected_version: 1, metadata: before.draft, retry_prepare: true });
+    const recoveryBefore = recoveries;
+    await h.respond(start, { items: [{ session_id: before.sessionId, image_id: before.imageId,
+      status: "changed", version: 2, last_semantic_revision: 2, duplicate_count: 0, duplicate_decision: "upload" }] });
+    await retry;
+    assert.equal(recoveries, recoveryBefore + 1);
+    assert.equal(state.page, 2);
+    assert.deepEqual(state.jobs.map(({ id }) => id), ids);
+    assert.equal(state.jobs[20].attemptKey, before.attemptKey);
+    assert.equal(state.jobs[20].imageTime, imageTime);
+    assert.equal(state.jobs[20].browserDisplayReleased, true);
+    assert.deepEqual(browserDisplayPrefixJobs(state.jobs), [], "恢复卡片不能提升到浏览器前缀");
+    assert.equal(state.jobs[20].serverAccepted, true);
+    assert.equal(state.jobs[20].imageTime, imageTime);
+  }
+  const current = state.jobs[20];
+  const failedRequest = h.pending.length;
+  const uncertainRetry = owner.retry(current);
+  await h.respond(failedRequest, { ok: false, error: "response lost" }, 502);
+  await uncertainRetry;
+  assert.equal(h.pending.length, failedRequest + 1, "不自动重发未知写入结果");
+  assert.equal(recoveries, 4, "写回执丢失后仍由原 owner 回读一次");
+  assert.equal(state.page, 2);
+  assert.equal(state.jobs[20].imageTime, current.imageTime);
+  queue.appendJobs([ingestionJob({ id: "new-batch" })]);
+  assert.equal(state.page, 1);
+});
+
 test("[Web/内容接入] 导入菜单键盘与来源标签保持真实 DOM 焦点和读屏关联", async (t) => {
   const h = await createConfigStreamHarness(t);
   const dom = h.document.defaultView!;

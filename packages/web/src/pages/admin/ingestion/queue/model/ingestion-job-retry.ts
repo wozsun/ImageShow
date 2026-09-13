@@ -10,7 +10,6 @@ export function resetJobForPrepareRetry(job: IngestionJob): IngestionJob {
     importAcceptRejected: undefined,
     sessionId: undefined,
     imageId: undefined,
-    imageTime: undefined,
     serverVersion: undefined,
     serverProgressSeq: undefined,
     serverSemanticRevision: undefined,

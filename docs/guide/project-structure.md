@@ -419,6 +419,11 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
   展示页与 summary 占位，来源无关的逐项 active 事件只推进卡片状态，不提前撤销计数或展示租约；
   `useIngestionQueue.ts` 同时用动作逐项结果移除组合投影中同 pair 的已确认清理卡片，包括纯
   Server DTO 与已把显示权交回浏览器的 completed handoff；
+  已接管导入的准备重试通过 `update` 的 `retry_prepare` 在版本校验后重新排队，保留 Redis
+  任务身份、来源时间和显示顺序；仅允许无提交意图的失败导入，旧临时代次按已有清理器释放。
+  浏览器复用原快照 owner 回读当前页，不取消并重建任务；刷新后恢复的卡片沿用同一流程。
+  上传单卡准备重试在释放旧 pair 时原位替换新 attempt，保留当前页与批次位置；公共重置只清理
+  执行状态，保留来源或服务端已确定的图片时间，新接管请求继续使用该时间。
   `useIngestionQueueActions.ts` 在每个 continuation 响应后立即把该批结果交还工作流，逐批投影与
   最终权威恢复分离，后续批延迟或失败不会延迟、撤销此前成功 pair；
   raw owner 保留未受影响的有界基线、只作废动作成功前 snapshot 的证明资格，并复用一次权威
@@ -429,6 +434,8 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
   的 post-action single-flight。
   `model/server-ingestion-queue-state.ts` 负责 revision / version / progress 单调合并，并让当前
   revision 的页内或离页 progress 同步 canonical summary、拒绝旧 revision 回退计数，
+  同一 revision 内进入处理只增加 running，不扣减未计入 waiting 的待处理项；正常进度
+  不触发分页回读，真实版本缺口仍经唯一快照 owner 恢复。
   `useStoredIngestionDraftSync.ts` 按硬上限批量排空草稿写入并在 version 冲突时有界回读，
   `useIngestionAuthorityHandoffs.ts` 持有独立于当前页 DTO 和连接代际的 HTTP 接管围栏，
   `cards/useIngestionJobDraftEditing.ts` 在失焦发布前复用 `@imageshow/shared/browser` 的 Ingestion
@@ -436,6 +443,8 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
   不接入远端图片请求能力；`useIngestionQueue.ts` 是单队列 controller
   的公开组合入口。
 - `useCompletedIngestionInvalidation.ts` 是 completed pair 去重与 PostgreSQL 图片查询失效 owner；
+  Ingestion 完成结果使用独立窄 DTO，`read-models/ingestion-results.ts` 与提交路径共用
+  presenter，只返回卡片、草稿及完成失效所需字段；后台图片列表继续使用完整列表投影。
   `model/server-ingestion-job.ts` 集中完成 active / completed DTO 到卡片的单调映射，并以终态围栏
   阻止迟到 snapshot、SSE、status 或 HTTP 结果回退；
   `useIngestionStatusHydration.ts` 以同一个有界 status 请求 owner 处理未知交接与 compact completed
@@ -624,6 +633,8 @@ hooks ──► lib
   独立更新对应维度并经 `useAdminPreferences` 保存。其他窗口更新偏好不改变当前页的排序快照；
   切换时保留筛选，复用分页 owner 返回首屏并清除选择与瞬时反馈。排序类型、可选值、默认值及
   偏好注册由 `shared/browser/common.ts` 统一提供，HTTP schema 拒绝未知字段及非法枚举值。
+  `useAdminPreferences` 在实际写出前核对当前账号和待同步选择；其他标签页更新后，迟到的
+  PATCH 回执不覆盖浏览器或认证缓存，改由原偏好查询重验证一次，不重放已被替换的旧选择。
   `images/ImageAdminFilters.tsx` 以自身容器宽度同步 CSS 的 `947px` 单双行边界，并实际切换筛选项
   DOM 分组，保证单行、双行与移动布局的视觉顺序和键盘顺序一致；设备 / 亮度与三类 Facet 分别
   以 `120px`、`150px` 为弹性基准和下限，五类筛选与清空按钮均不显示额外上方标题。

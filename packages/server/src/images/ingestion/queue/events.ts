@@ -1,7 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { appConfig } from "@imageshow/shared";
 import type {
-  AdminImageListItemDto,
+  CompletedIngestionImageDto,
   CompletedServerIngestionItemDto,
   IngestionQueueEventDto,
   IngestionQueueTerminalEventItemDto
@@ -62,14 +62,13 @@ function terminalEventItem(
     version: session.version,
     progress_seq: 0,
     last_semantic_revision: session.last_semantic_revision,
-    accepted_at: session.accepted_at,
     accepted_order: session.accepted_order
   };
 }
 
 function completedEventItem(
   session: Extract<StoredIngestionSession, { status: "completed" }>,
-  completedItem: AdminImageListItemDto
+  completedItem: CompletedIngestionImageDto
 ): CompletedServerIngestionItemDto {
   return {
     ...terminalEventItem(session),
@@ -83,7 +82,7 @@ function completedEventItem(
 
 function eventSession(
   session: StoredIngestionSession,
-  completedItem?: AdminImageListItemDto
+  completedItem?: CompletedIngestionImageDto
 ) {
   if (session.status === "completed" && completedItem) {
     return completedEventItem(session, completedItem);

@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { AdminImageListItemDto } from "@imageshow/shared/browser";
+import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
 import { invalidateImageDataAfterIngestion } from "../../../../lib/api/query-invalidation.js";
 import { invalidateIngestionDuplicateDetails } from "./useIngestionDuplicateDetails.js";
 import {
@@ -82,7 +82,7 @@ export function useCompletedIngestionInvalidation() {
   const observe = useCallback((
     entries: readonly CompletedIngestionObservation[]
   ) => {
-    const items: AdminImageListItemDto[] = [];
+    const items: CompletedIngestionImageDto[] = [];
     for (const entry of entries) {
       const pairKey = serverIngestionPairKey(entry.pair);
       if (observedPairsRef.current.has(pairKey)) continue;

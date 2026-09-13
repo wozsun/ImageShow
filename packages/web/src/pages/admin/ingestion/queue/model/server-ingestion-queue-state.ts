@@ -70,6 +70,7 @@ function mergeProgressSummary(
 ) {
   const stableFieldsMatch = current.total === incoming.total
     && current.unfinished === incoming.unfinished
+    && current.waiting === incoming.waiting
     && current.ready === incoming.ready
     && current.duplicate_pending === incoming.duplicate_pending
     && current.committing === incoming.committing
@@ -78,14 +79,10 @@ function mergeProgressSummary(
     && current.failed === incoming.failed;
   if (!stableFieldsMatch) return null;
 
-  // Within one semantic revision, progress can only move an admitted
-  // preparation from waiting to running. Absolute summaries from older
-  // off-page frames may arrive after a newer snapshot, so accept only that
-  // monotonic transfer and retain the newer projection for the inverse.
-  const waitingDecrease = current.waiting - incoming.waiting;
-  const runningIncrease = incoming.running - current.running;
-  if (waitingDecrease !== runningIncrease) return null;
-  return waitingDecrease > 0 ? incoming : current;
+  // prepare-waiting is uncounted; starting normalization only adds to running.
+  // Leaving running changes the semantic revision. Keep the larger count when
+  // an older same-revision frame arrives after a newer snapshot / progress frame.
+  return incoming.running > current.running ? incoming : current;
 }
 
 /**

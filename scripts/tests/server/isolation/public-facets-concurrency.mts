@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import { getRequestListener } from "@hono/node-server";
+import { listenForFetch } from "../../support/http-listen.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -26,9 +27,7 @@ await runIntegrationScenario(async (runtime) => {
     if (++arrived === 200) allArrived.resolve();
     listener(request, response);
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  assert.ok(address && typeof address !== "string");
+  const address = await listenForFetch(server);
   const signals = Array.from({ length: 200 }, () => AbortSignal.timeout(15_000));
   const responses = Promise.all(signals.map((signal) => (
     fetch(`http://127.0.0.1:${address.port}/api/gallery-facets`, { signal }).then(async (response) => ({
