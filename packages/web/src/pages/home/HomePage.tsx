@@ -26,6 +26,7 @@ import {
 } from "../../lib/gallery/gallery-query.js";
 import { HomeCatalog } from "./HomeCatalog.js";
 import { HomeFilterBar } from "./HomeFilterBar.js";
+import { HomeFooter } from "./HomeFooter.js";
 import { HomeBackground, HomeHero } from "./HomeHero.js";
 import { useHomeEntrance } from "./useHomeEntrance.js";
 import "../../styles/public-core.css";
@@ -68,7 +69,7 @@ export function HomePage({
   site
 }: {
   embedded?: boolean;
-  site: Pick<PublicSiteSettings, "home" | "show" | "gallery">;
+  site: Pick<PublicSiteSettings, "home" | "show" | "gallery" | "icp" | "mps" | "footer">;
 }) {
   const catalogRef = useRef<HTMLElement>(null);
   const lastSuccessfulStatsRef = useRef<GalleryStatsDto | undefined>(undefined);
@@ -197,6 +198,7 @@ export function HomePage({
         onRetry={() => void statsQuery.refetch()}
         onCatalogIntent={entrance.revealImmediately}
       />
+      <HomeFooter site={site} />
     </main>
   );
 }

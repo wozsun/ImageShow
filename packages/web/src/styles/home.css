@@ -14,6 +14,49 @@
   background: var(--public-color-home-loading-surface);
 }
 
+.home-footer {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 1180px);
+  margin-inline: auto;
+  padding: 0 16px max(36px, env(safe-area-inset-bottom));
+  display: grid;
+  gap: 4px;
+  color: var(--public-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.8;
+  letter-spacing: .02em;
+  text-align: center;
+  overflow-wrap: anywhere;
+  text-shadow: 0 1px 4px var(--public-shadow-home-copy);
+}
+
+.home-footer-registrations {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 8px;
+}
+
+.home-footer a {
+  min-width: 0;
+  max-width: 100%;
+  color: inherit;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.home-footer a:hover,
+.home-footer a:focus-visible {
+  color: var(--public-color-text-strong);
+  text-decoration: underline;
+}
+
+.home-footer-text {
+  margin: 0;
+  text-wrap: balance;
+}
+
 .home-random-background {
   /*
    * iOS 26.0 会错误处理精确等于视口的 fixed 取色层。外壳故意保持

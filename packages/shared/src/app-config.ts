@@ -171,7 +171,10 @@ export const appConfig = {
         public_original_button: false
       },
       random_method: "redirect",
-      robots_enabled: false
+      robots_enabled: false,
+      icp: "",
+      mps: "",
+      footer: ""
     },
     embed: {
       enabled: false,

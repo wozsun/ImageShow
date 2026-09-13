@@ -35,6 +35,11 @@ import {
 const isolationRoot = resolve(import.meta.dirname, "isolation");
 const storageIngestionScenarios = [
   {
+    id: "background-job-history",
+    name: "历史任务清理与重新入队并发时保留新任务意图",
+    script: join(isolationRoot, "background-job-history.mts")
+  },
+  {
     id: "ingestion-raw-lifecycle",
     name: "Raw 准入、转码租约、退休清理与目录游标",
     script: join(isolationRoot, "ingestion-raw-lifecycle.mts")

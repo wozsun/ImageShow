@@ -381,6 +381,25 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
   );
   assert.deepEqual(runtimeConfigFromEnvironment(completeSeed), defaults);
   assert.equal(runtimeConfigFromEnvironment({}).site.domain, "example.com");
+  const footerSeed = runtimeConfigFromEnvironment({
+    SITE_ICP: "  示例ICP备123号  ",
+    SITE_MPS: "  示例公网安备12345678901234号  ",
+    SITE_FOOTER: '  Powered by <a href="https://example.com/">ImageShow</a><br>站点说明  '
+  });
+  assert.equal(footerSeed.site.icp, "示例ICP备123号");
+  assert.equal(footerSeed.site.mps, "示例公网安备12345678901234号");
+  assert.equal(footerSeed.site.footer, 'Powered by <a href="https://example.com/">ImageShow</a><br>站点说明');
+  for (const [variable, field, limit] of [
+    ["SITE_ICP", "icp", 200],
+    ["SITE_MPS", "mps", 200],
+    ["SITE_FOOTER", "footer", 2000]
+  ] as const) {
+    assert.equal(defaults.site[field], "");
+    assert.equal(runtimeConfigFromEnvironment({ [variable]: "  " }).site[field], "");
+    assert.equal(runtimeConfigFromEnvironment({ [variable]: "文".repeat(limit) }).site[field].length, limit);
+    assert.throws(() => runtimeConfigFromEnvironment({ [variable]: "文".repeat(limit + 1) }));
+    assert.throws(() => parseRuntimeConfig({ ...defaults, site: { ...defaults.site, [field]: "文".repeat(limit + 1) } }));
+  }
   assert.equal(runtimeConfigFromEnvironment({ SITE_DOMAIN: "" }).site.domain, "");
   assert.equal(runtimeConfigFromEnvironment({ SITE_DOMAIN: "  EXAMPLE.COM  " }).site.domain, "example.com");
   assert.equal(runtimeConfigFromEnvironment({ SITE_DOMAIN: "img.example.com" }).site.domain, "img.example.com");
@@ -531,6 +550,12 @@ if (scenario === "seed") {
   const generated = initializeRuntimeConfig();
   assert.equal(generated.site.root, "show");
   assert.equal(generated.site.description, "");
+  assert.equal(generated.site.icp, "测试ICP备123号");
+  assert.equal(generated.site.mps, "测试公网安备123456号");
+  assert.equal(generated.site.footer, 'Powered by <a href="https://example.com/">ImageShow</a>');
+  for (const field of ["icp", "mps", "footer"]) {
+    assert.equal(siteConfigPayload().site[field], generated.site[field]);
+  }
   assert.equal(siteConfigPayload().site.description, generated.site.name, "空描述只在服务端投影为站点名");
   assert.equal(generated.site.home.browse_target, "show");
   assert.deepEqual(generated.site.show, {
@@ -559,6 +584,9 @@ if (scenario === "seed") {
   console.log("config-invalid-current-ok");
 } else {
 const drifted = structuredClone(runtimeConfigDefaults());
+delete drifted.site.icp;
+delete drifted.site.mps;
+delete drifted.site.footer;
 delete drifted.site.description;
 delete drifted.site.root;
 delete drifted.site.show.autoplay;
@@ -571,6 +599,9 @@ drifted.unknown_section = { enabled: false };
 await writeFile(join(root, "config.json"), JSON.stringify(drifted));
 const normalized = initializeRuntimeConfig();
 assert.equal(normalized.site.description, "画廊与随机图片API");
+assert.equal(normalized.site.icp, "");
+assert.equal(normalized.site.mps, "");
+assert.equal(normalized.site.footer, "");
 assert.equal(normalized.site.root, "home");
 assert.equal(normalized.site.gallery.enabled, true);
 assert.equal(normalized.site.gallery.public_original_button, false);
@@ -595,6 +626,10 @@ assert.deepEqual(siteConfigPayload().site.show, {
 assert.equal(siteConfigPayload().site.gallery.enabled, true);
 assert.deepEqual(siteConfigPayload().site.gallery, { enabled: true, order: "latest" });
 assert.equal("description" in getSettingsForAdmin().site, false);
+for (const field of ["icp", "mps", "footer"]) {
+  assert.equal(field in getSettingsForAdmin().site, false);
+  assert.throws(() => parseSettingsInput({ site: { [field]: "footer text" } }));
+}
 assert.equal(getSettingsForAdmin().site.root, "home");
 assert.equal("browse_target" in getSettingsForAdmin().site.home, false);
 assert.equal("show" in getSettingsForAdmin().site, false);
@@ -738,6 +773,9 @@ console.log("config-existing-ok");
         environment: {
           SITE_ROOT: "show",
           SITE_DESCRIPTION: "",
+          SITE_ICP: "测试ICP备123号",
+          SITE_MPS: "测试公网安备123456号",
+          SITE_FOOTER: 'Powered by <a href="https://example.com/">ImageShow</a>',
           SITE_HOME_BROWSE_TARGET: "show",
           SITE_SHOW_ENABLED: "false",
     SITE_SHOW_AUTOPLAY: "false",
@@ -755,6 +793,9 @@ console.log("config-existing-ok");
         name: "existing",
         environment: {
           SITE_ROOT: "invalid",
+          SITE_ICP: "忽略环境备案号",
+          SITE_MPS: "忽略环境公安备案号",
+          SITE_FOOTER: "忽略环境页脚",
           SITE_GALLERY_ENABLED: "invalid",
           SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON: "invalid",
           UPLOAD_MAX_ITEMS: "invalid"
@@ -780,6 +821,9 @@ console.log("config-existing-ok");
           IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: toNamespacedPath(join(helperRoot, scenario.name)),
           SITE_ROOT: undefined,
           SITE_DESCRIPTION: undefined,
+          SITE_ICP: undefined,
+          SITE_MPS: undefined,
+          SITE_FOOTER: undefined,
           SITE_GALLERY_ENABLED: undefined,
           SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON: undefined,
           NORMALIZE_SKIP_WEBP_UNDER_KB: undefined,
@@ -1036,11 +1080,16 @@ test("[Server/配置] 构建后的服务端 SPA 路由注入当前站点描述�
     repositoryRoot,
     "node_modules/hono/dist/index.js"
   )).href;
+  const htmlParserUrl = pathToFileURL(resolve(
+    repositoryRoot,
+    "node_modules/linkedom/esm/index.js"
+  )).href;
   const helperSource = `
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Hono } from ${JSON.stringify(honoUrl)};
+import { parseHTML } from ${JSON.stringify(htmlParserUrl)};
 import { runtimeConfigDefaults } from ${JSON.stringify(runtimeConfigUrl)};
 import {
   getRuntimeConfig,
@@ -1083,6 +1132,38 @@ const inlineText = described.slice(
 assert.equal(inlineText.includes("<"), false);
 const inlineConfig = JSON.parse(inlineText);
 assert.equal(inlineConfig.site.description, '图片 "说明" <安全>');
+
+const originalConfig = structuredClone(getRuntimeConfig());
+for (const sequence of ["$$", "$&", "$" + String.fromCharCode(96), "$'"]) {
+  const name = "Name " + sequence + " <safe>";
+  const description = "Description " + sequence + ' "quoted" & <safe>';
+  const icon = "https://example.com/icon.svg?value=" + sequence;
+  const banner = "Banner " + sequence;
+  const footer = 'Powered by <a href="https://example.com/">' + sequence + "</a>";
+  await updateRuntimeConfig({ site: {
+    name, description, icon, footer,
+    home: { banner_label: banner, banner_title: banner }
+  } });
+  const response = await app.request("http://imageshow.test/home");
+  const document = parseHTML(await response.text()).document;
+  assert.equal(document.title, name);
+  assert.equal(document.querySelector('meta[name="description"]').getAttribute("content"), description);
+  assert.equal(document.querySelector('link[rel="icon"]').getAttribute("href"), icon);
+  const json = document.getElementById("__site_config__").textContent;
+  assert.equal(json.includes("<"), false);
+  const inlined = JSON.parse(json);
+  assert.equal(inlined.site.name, name);
+  assert.equal(inlined.site.description, description);
+  assert.equal(inlined.site.icon, icon);
+  assert.equal(inlined.site.home.banner_label, banner);
+  assert.equal(inlined.site.home.banner_title, banner);
+  assert.equal(inlined.site.footer, footer);
+  const cached = await app.request("http://imageshow.test/home", {
+    headers: { "if-none-match": response.headers.get("etag") }
+  });
+  assert.equal(cached.status, 304);
+}
+await updateRuntimeConfig(originalConfig);
 
 // All embedded public pages share the same enable switch and ancestor policy.
 for (const path of ["/embed/home", "/embed/show", "/embed/gallery"]) {

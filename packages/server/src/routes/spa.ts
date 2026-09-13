@@ -87,10 +87,10 @@ function buildSpaDocument(): string {
   const iconUrl = escapeHtmlAttr(site.icon);
   const head = `<script type="application/json" id="__site_config__">${inlineConfig}</script>`;
   return spaTemplate
-    .replace(/<title>[\s\S]*?<\/title>/i, `<title>${title}</title>`)
-    .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i, `<meta name="description" content="${description}" />`)
-    .replace(/<link\s+rel="icon"[^>]*>/i, `<link rel="icon" type="${iconUrl.endsWith(".svg") ? "image/svg+xml" : ""}" href="${iconUrl}" />`)
-    .replace("</head>", `${head}</head>`);
+    .replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${title}</title>`)
+    .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i, () => `<meta name="description" content="${description}" />`)
+    .replace(/<link\s+rel="icon"[^>]*>/i, () => `<link rel="icon" type="${iconUrl.endsWith(".svg") ? "image/svg+xml" : ""}" href="${iconUrl}" />`)
+    .replace("</head>", () => `${head}</head>`);
 }
 
 function currentSpaRepresentation() {

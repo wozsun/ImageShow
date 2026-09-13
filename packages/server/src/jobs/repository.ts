@@ -335,6 +335,7 @@ export async function cleanupBackgroundJobHistory() {
               WHERE metadata.purge_job_id=background_job.id
            )
          ORDER BY updated_at ASC
+         FOR UPDATE SKIP LOCKED
          LIMIT $3
        )
        RETURNING status

@@ -58,6 +58,9 @@ export type RuntimeSiteSettings = {
   gallery: SiteGallerySettings;
   random_method: RandomDefaultMethod;
   robots_enabled: boolean;
+  icp: string;
+  mps: string;
+  footer: string;
 };
 
 export type PublicPagePath = "/home" | "/show" | "/gallery";
@@ -199,7 +202,7 @@ export type SiteSettings = Pick<
 
 export type PublicSiteSettings = Pick<
   RuntimeSiteSettings,
-  "name" | "description" | "icon" | "root" | "home"
+  "name" | "description" | "icon" | "root" | "home" | "icp" | "mps" | "footer"
 > & {
   gallery: Pick<SiteGallerySettings, "enabled" | "order">;
   show: SiteShowSettings;

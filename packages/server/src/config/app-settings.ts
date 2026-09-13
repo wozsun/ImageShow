@@ -209,7 +209,10 @@ export function siteConfigPayload(): SiteConfigDto {
     root,
     home,
     show,
-    gallery
+    gallery,
+    icp,
+    mps,
+    footer
   } = runtime.site;
   return {
     site: {
@@ -225,7 +228,10 @@ export function siteConfigPayload(): SiteConfigDto {
       gallery: {
         enabled: gallery.enabled,
         order: gallery.order
-      }
+      },
+      icp,
+      mps,
+      footer
     },
     embed: {
       enabled: effectiveEmbedAncestorSources(runtime).length > 0

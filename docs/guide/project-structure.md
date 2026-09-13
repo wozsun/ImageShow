@@ -143,7 +143,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`metadata-tags.ts` 拥有 HTTP 与 JSONL 共用的标签归一化契约，`page-window.ts` 唯一计算安全数字页窗口，`storage-location/` 拥有正式图片后端位置 CAS、revision、mutation fence 和 cache handoff，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型及其领域查询类型。 |
 | `storage/` | 只在根层保留横切 `maintenance-lock.ts`；`backends/`、`drivers/`、`objects/` 与 `cleanup/` 分别拥有注册表及 Endpoint 重绑定证明、驱动、对象原语及跨图片传输准入、持久清理。`storage/` 不修改正式图片位置或相应 revision，也不交接 ready-cache。`backends/config.ts` 保留 S3 配置 schema、归一化和存储领域输入类型，HTTP create / update / test schema 位于路由边界。 |
 | `random/` | 随机查询校验、规范 `auto` / `all` 到候选设备轴的选择、Redis 8 Array 最近历史、定向 id 与有界 pivot 普通随机 PG 降级查询及随机出口编排；纯 User-Agent 设备识别由 `@imageshow/shared/browser` 提供给 Server 与 Web，Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
-| `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。 |
+| `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。历史清理在有界候选阶段锁定行并跳过正在更新的任务，避免删除并发重新入队的新意图。 |
 | `checks/` | PostgreSQL / Redis 独立轻量状态、数据库 / Redis / 存储手动深度检查、“全部”中的回收站一致性结果，以及显式触发的存储维护；状态页自动 Redis 深检与手动 Redis 检查复用同一有界扫描和 pipeline，只返回当前汇总。 |
 | `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存；`authors/identity.ts` 唯一拥有作者链接到平台身份的当前解析和管理投影，微博导入按身份批量查询 PostgreSQL。 |
 | `users/` | 管理员初始化、账号变更、Redis 登录会话、逐请求 PostgreSQL 角色与密码代际核对、操作授权、密码恢复、偏好和会话失效；不维护管理员凭据 Redis 投影。 |
@@ -633,8 +633,13 @@ hooks ──► lib
   公开配置就绪后才挂载路由，后台刷新失败时保留已有快照和路由，并把真实站点名传入后台入口；导航和 `SiteHead` 不复制
   运行时默认值。`siteConfigPayload()` 唯一投影描述为空时的站点名回退，服务端 SPA
   文档与浏览器标题、描述、图标消费同一公开配置；HTML 构建模板只保留待注入占位。
-- `pages/home/HomePage.tsx` 只编排查询、筛选状态和页面生命周期；首屏、筛选摘要栏
-  与候选目录由同目录组件分别维护，首屏控制器只拥有背景与顶层阶段，目录区块单次
+  动态文本在完成 HTML / JSON 转义后由替换回调按字面插入，保留配置中的美元符号序列。
+- `pages/home/HomePage.tsx` 只编排查询、筛选状态和页面生命周期；首屏、筛选摘要栏、
+  候选目录与页脚由同目录组件分别维护。`HomeFooter.tsx` 从现有公开配置消费
+  `site.icp`、`site.mps`、`site.footer`，按非空字段展示备案链接与自定义内容，不单独读取配置。
+  页脚通过脱离文档的 template 解析受限 HTML，只重建 React 文字、HTTPS 链接与换行节点，
+  不附加输入 DOM 或属性；解析结果按内容复用，备案号保持纯文字。
+  首屏控制器只拥有背景与顶层阶段，目录区块单次
   揭示 Hook 就近维护，避免路由组件同时掌握全部首页交互。
   设备与明暗按钮按自身内容区宽度隐藏装饰勾：不超过 `96px` 时仅保留居中文字、
   选中底色和边框；选中语义仍由 `aria-pressed` 提供，不依赖整页的移动端断点。

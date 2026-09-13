@@ -45,6 +45,8 @@ import {
   sessionTtlSeconds,
   siteDomain,
   siteDescription,
+  siteFooter,
+  siteFooterText,
   siteIcon,
   siteName,
   skipWebpUnderKb,
@@ -89,7 +91,10 @@ const runtimeConfigSchema = z.strictObject({
       public_original_button: z.boolean()
     }),
     random_method: randomDefaultMethod,
-    robots_enabled: z.boolean()
+    robots_enabled: z.boolean(),
+    icp: siteFooterText,
+    mps: siteFooterText,
+    footer: siteFooter
   }),
   embed: z.strictObject({
     enabled: z.boolean(),

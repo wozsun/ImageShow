@@ -44,6 +44,8 @@ export const siteDomain = z.string().trim().toLowerCase().max(259).refine((value
 export const siteIcon = z.string().trim().min(1).max(2048)
   .refine(isRootRelativeOrHttpsUrl, "站点图标必须是站内绝对路径或 HTTPS URL");
 export const siteDescription = z.string().trim().max(200);
+export const siteFooterText = z.string().trim().max(200);
+export const siteFooter = z.string().trim().max(2000);
 
 export const loginBackground = z.string().trim().max(2048)
   .refine((value) => !value || isRootRelativeOrHttpsUrl(value), "登录背景必须是站内绝对路径或 HTTPS URL");

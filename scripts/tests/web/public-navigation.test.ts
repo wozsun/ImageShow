@@ -37,6 +37,45 @@ import { AuthSessionProvider } from "../../../packages/web/src/hooks/useAuthSess
 import { ShowPixiRuntime } from "../../../packages/web/src/pages/show/pixi/show-pixi-runtime.ts";
 import { createPublicRouteModuleLoader, createPublicRoutePreloadIntents, PublicRoutePreloadProvider } from "../../../packages/web/src/lib/public-route-modules.ts";
 import { appConfig } from "../../../packages/shared/src/app-config.ts";
+import { HomeFooter } from "../../../packages/web/src/pages/home/HomeFooter.tsx";
+
+test("[Web/公开导航] 首页页脚按配置展示备案和受限 HTML，安全处理链接及空项", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const site = { icp: "", mps: "", footer: "" };
+  const render = async (patch: Partial<typeof site>) => {
+    await h.render(h.React.createElement(HomeFooter, { site: { ...site, ...patch } }));
+  };
+  await render({});
+  assert.equal(h.document.querySelector("footer"), null);
+  await render({ icp: "示例ICP备123号" });
+  assert.equal(h.document.querySelector("footer")?.textContent, "示例ICP备123号");
+  assert.equal(h.document.querySelector("footer a")?.getAttribute("href"), "https://beian.miit.gov.cn/");
+  await render({ icp: "示例ICP备123号", mps: "示例公网安备12345678901234号", footer: "完整页脚文字" });
+  assert.equal(h.document.querySelector("footer")?.textContent, "示例ICP备123号|示例公网安备12345678901234号完整页脚文字");
+  assert.equal(h.document.querySelectorAll("footer a")[1]?.getAttribute("href"), "https://beian.mps.gov.cn/#/query/webSearch?code=12345678901234");
+  assert.equal(h.document.querySelector("footer span")?.getAttribute("aria-hidden"), "true");
+  await render({ footer: 'Powered by <a href="https://example.com/project?q=1&amp;x=2" onclick="alert(1)" style="color:red" target="_self">ImageShow</a><br>更多说明 &amp; 文字' });
+  const link = h.document.querySelector("footer a")!;
+  assert.equal(link.textContent, "ImageShow");
+  assert.deepEqual(Object.fromEntries(Array.from(link.attributes, (attribute) => [attribute.name, attribute.value])), {
+    href: "https://example.com/project?q=1&x=2", target: "_blank", rel: "noopener noreferrer"
+  });
+  assert.equal(h.document.querySelectorAll("footer br").length, 1);
+  assert.equal(h.document.querySelector("footer")?.textContent, "Powered by ImageShow更多说明 & 文字");
+  for (const href of ["javascript:alert(1)", "javascript&#58;alert(1)", "data:text/html,unsafe", "//example.com/", "http://example.com/", "https://user:password@example.com/"]) {
+    await render({ footer: `<a href="${href}">保留文字</a>` });
+    assert.equal(h.document.querySelector("footer")?.textContent, "保留文字");
+    assert.equal(h.document.querySelectorAll("footer a").length, 0);
+  }
+  await render({ footer: '<script>alert(1)</script><style>body{display:none}</style><img src="https://example.com/image" onerror="alert(1)"><iframe src="https://example.com/"></iframe><svg><a href="https://example.com/">SVG</a></svg><template><a href="https://example.com/">隐藏</a></template>安全正文' });
+  assert.equal(h.document.querySelector("footer")?.textContent, "安全正文");
+  assert.deepEqual(Array.from(h.document.querySelector("footer")!.querySelectorAll("*"), (node) => node.localName), ["p"]);
+  await render({ footer: "文".repeat(2000) });
+  assert.equal(h.document.querySelector("footer")?.textContent, "文".repeat(2000));
+  await render({});
+  assert.equal(h.document.querySelector("footer"), null);
+  assert.equal(h.pending.length, 0, "页脚复用输入配置，不额外读取数据");
+});
 
 test("[Web/公开导航] 旧词表刷新失败与未知标签分开提示，期限退出后可保留 URL 再试", async (t) => {
   for (const failure of ["headers", "body", "http"] as const) {
