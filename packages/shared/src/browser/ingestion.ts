@@ -1,4 +1,4 @@
-import type { Brightness, Device } from "./common.ts";
+import { normalizeHttpsUrlInput, type Brightness, type Device } from "./common.ts";
 import type {
   AdminImageListItemDto,
   FacetOptionDto,
@@ -6,7 +6,6 @@ import type {
 } from "./images.ts";
 
 export const ingestionStatusBatchMaxItems = 100;
-export const ingestionDraftUrlMaxLength = 2_048;
 export type IngestionDraftUrlField = "original" | "source";
 
 function isIpHostname(hostname: string) {
@@ -26,25 +25,10 @@ export function normalizeIngestionDraftUrl(
   field: IngestionDraftUrlField,
   value: string
 ): string | null {
-  const trimmed = value.trim();
-  if (trimmed.length > ingestionDraftUrlMaxLength) return null;
-  if (!trimmed) return "";
-  const normalized = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
-    ? trimmed
-    : `https://${trimmed}`;
-  try {
-    const parsed = new URL(normalized);
-    if (
-      parsed.protocol !== "https:"
-      || !parsed.hostname
-      || parsed.username
-      || parsed.password
-    ) return null;
-    if (field === "original" && isIpHostname(parsed.hostname)) return null;
-    return normalized;
-  } catch {
-    return null;
-  }
+  const normalized = normalizeHttpsUrlInput(value);
+  if (!normalized) return normalized;
+  if (field === "original" && isIpHostname(new URL(normalized).hostname)) return null;
+  return normalized;
 }
 
 export const ingestionDuplicateDecisions = ["upload", "confirmed"] as const;

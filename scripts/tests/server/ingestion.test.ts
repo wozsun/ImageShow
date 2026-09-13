@@ -45,7 +45,6 @@ import {
   DynamicWeightedLimiter
 } from "../../../packages/server/src/core/concurrency.ts";
 import {
-  limitIngestionControlBody,
   limitProtectedAdminRequestBody
 } from "../../../packages/server/src/core/http/request-body-limit.ts";
 import {
@@ -152,7 +151,7 @@ import {
 test("[Server/内容接入] 内容接入草稿批量更新在保护层后仍使用内容接入正文预算", async () => {
   const app = new Hono();
   app.use(`${adminApiBasePath}/*`, limitProtectedAdminRequestBody);
-  app.post(ingestionUpdatePath, limitIngestionControlBody, async (context) => {
+  app.post(ingestionUpdatePath, async (context) => {
     const body = await context.req.json<{ marker: string }>();
     return context.json({ ok: true, markerLength: body.marker.length });
   });

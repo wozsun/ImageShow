@@ -428,7 +428,8 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
   `useStoredIngestionDraftSync.ts` 按硬上限批量排空草稿写入并在 version 冲突时有界回读，
   `useIngestionAuthorityHandoffs.ts` 持有独立于当前页 DTO 和连接代际的 HTTP 接管围栏，
   `cards/useIngestionJobDraftEditing.ts` 在失焦发布前复用 `@imageshow/shared/browser` 的 Ingestion
-  草稿 URL 纯格式解析，不接入远端图片请求能力；`useIngestionQueue.ts` 是单队列 controller
+  草稿 URL 纯格式解析，与 HTTP URL schema 共用规范化及补全协议后的长度校验，
+  不接入远端图片请求能力；`useIngestionQueue.ts` 是单队列 controller
   的公开组合入口。
 - `useCompletedIngestionInvalidation.ts` 是 completed pair 去重与 PostgreSQL 图片查询失效 owner；
   `model/server-ingestion-job.ts` 集中完成 active / completed DTO 到卡片的单调映射，并以终态围栏
@@ -871,6 +872,8 @@ hooks ──► lib
   状态或原子写入 discarded 回执，缺失尝试不会因取消被加入下载队列。
   `queue/ingestion-api.ts` 对 intent、accept、状态核对和逐项取消统一设置 30 秒传输上限，
   超时不宣称服务端失败或取消；解析、文件传输和后台队列动作不使用这一控制请求上限。
+  raw XHR 回执先验证 JSON 对象形状，再解释成功或错误字段；异常回执明确结束 Promise，
+  由已有上传 lane 的 `finally` 释放槽位，不自动重放结果不明的上传。
   `import/manifest-jobs.ts` 创建 JSONL / 微博任务时合并来源与默认标签并去重；单值字段仍采用清单
   优先规则。`queue/model/ingestion-attribute-policy.ts` 统一本地 initial / ready 阶段的标签追加，
   与服务端全队列属性动作一致，不让清单字段优先规则阻止多值标签合并。

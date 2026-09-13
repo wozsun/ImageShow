@@ -3,8 +3,10 @@ import {
   adminApiBasePath,
   adminPreferencesMaxBytes,
   configPackageRequestMaxBytes,
+  ingestionActionPath,
   ingestionCancelPath,
   ingestionCommitPath,
+  ingestionDuplicatesPath,
   ingestionSnapshotPath,
   ingestionStatusPath,
   ingestionUpdatePath,
@@ -41,15 +43,6 @@ const ingestionControlBodyMaxBytes = 160 * 1024 * 1024;
 // well below 1 MiB. Keep snapshot selection independent from the much larger
 // metadata-bearing ingestion control tier.
 const ingestionSnapshotBodyMaxBytes = 1024 * 1024;
-const ingestionControlPaths = new Set([
-  uploadIntentPath,
-  importAcceptPath,
-  ingestionStatusPath,
-  ingestionUpdatePath,
-  ingestionCommitPath,
-  ingestionCancelPath,
-  ingestionSnapshotPath
-]);
 const advancedConfigLargeBodyPath = new RegExp(
   `^${adminApiBasePath}/advanced-config/(?:preview|import|runtime(?:/validate)?)$`
 );
@@ -136,17 +129,26 @@ const limitStandardApiBody = measuredBodyLimit(standardApiBodyMaxBytes);
 
 export const limitAdminLoginBody = measuredBodyLimit(standardApiBodyMaxBytes);
 
-export const limitJsonlManifestBody = measuredBodyLimit(jsonlManifestBodyMaxBytes);
-
-export const limitWeiboImportBody = measuredBodyLimit(weiboImportBodyMaxBytes);
-
 export const limitAdvancedConfigBody = measuredBodyLimit(advancedConfigMaxBytes);
 
 export const limitImageUpdateBody = measuredBodyLimit(imageUpdateBodyMaxBytes);
 
-export const limitIngestionControlBody = measuredBodyLimit(ingestionControlBodyMaxBytes);
-
-export const limitIngestionSnapshotBody = measuredBodyLimit(ingestionSnapshotBodyMaxBytes);
+const limitIngestionControlBody = measuredBodyLimit(ingestionControlBodyMaxBytes);
+// Select and enforce each ingestion tier here, after session and CSRF checks.
+// Route handlers need neither a second limit nor a separate exemption list.
+const ingestionBodyLimits = new Map([
+  [uploadIntentPath, limitIngestionControlBody],
+  [importAcceptPath, limitIngestionControlBody],
+  [ingestionStatusPath, limitIngestionControlBody],
+  [ingestionDuplicatesPath, limitIngestionControlBody],
+  [ingestionUpdatePath, limitIngestionControlBody],
+  [ingestionActionPath, limitIngestionControlBody],
+  [ingestionCommitPath, limitIngestionControlBody],
+  [ingestionCancelPath, limitIngestionControlBody],
+  [ingestionSnapshotPath, measuredBodyLimit(ingestionSnapshotBodyMaxBytes)],
+  [importJsonlParsePath, measuredBodyLimit(jsonlManifestBodyMaxBytes)],
+  [importWeiboParsePath, measuredBodyLimit(weiboImportBodyMaxBytes)]
+]);
 
 export const limitAdminPreferencesBody = measuredBodyLimit(adminPreferencesBodyMaxBytes);
 
@@ -162,17 +164,14 @@ export function limitApiRequestBody(c: Context, next: Next) {
 
 export function limitProtectedAdminRequestBody(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;
-  if (
-    path === importJsonlParsePath
-    || path === importWeiboParsePath
-    || (c.req.method === "PUT" && path === uploadRawPath)
-  ) {
+  if (c.req.method === "PUT" && path === uploadRawPath) {
     return next();
+  }
+  if (c.req.method === "POST") {
+    const limit = ingestionBodyLimits.get(path);
+    if (limit) return limit(c, next);
   }
   if (c.req.method === "POST" && path === imageUpdatePath) {
-    return next();
-  }
-  if (c.req.method === "POST" && ingestionControlPaths.has(path)) {
     return next();
   }
   if (c.req.method === "PATCH" && path === adminPreferencesPath) {

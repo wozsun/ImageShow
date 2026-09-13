@@ -33,12 +33,6 @@ import { resolveIngestionSnapshotLimit } from "../config/app-settings.ts";
 import { ApiError } from "../core/api-error.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
 import {
-  limitIngestionControlBody,
-  limitIngestionSnapshotBody,
-  limitJsonlManifestBody,
-  limitWeiboImportBody
-} from "../core/http/request-body-limit.ts";
-import {
   apiSuccess,
   privateCacheableApiSuccess
 } from "../core/http/responses.ts";
@@ -148,7 +142,7 @@ export function registerIngestionRoutes(app: Hono) {
     });
   });
 
-  app.post(ingestionSnapshotPath, limitIngestionSnapshotBody, async (c) => {
+  app.post(ingestionSnapshotPath, async (c) => {
     const input = parse(ingestionSnapshotQuery, c.req.query());
     const limit = resolveIngestionSnapshotLimit(input.limit);
     const selection = parse(
@@ -176,7 +170,7 @@ export function registerIngestionRoutes(app: Hono) {
     })));
   });
 
-  app.post(ingestionDuplicatesPath, limitIngestionControlBody, async (c) => {
+  app.post(ingestionDuplicatesPath, async (c) => {
     const input = parse(ingestionDuplicateDetailsInput, await readJsonBody(c));
     authenticatedSession(c);
     const snapshots = await readDuplicateSnapshotsByMd5(input.md5s);
@@ -193,7 +187,7 @@ export function registerIngestionRoutes(app: Hono) {
     return c.json(apiSuccess(response));
   });
 
-  app.post(uploadIntentPath, limitIngestionControlBody, async (c) => {
+  app.post(uploadIntentPath, async (c) => {
     const input = parse(uploadIntentInput, await readJsonBody(c));
     const response = {
       items: await ingestionSessionService.createUploadIntents(
@@ -223,7 +217,7 @@ export function registerIngestionRoutes(app: Hono) {
     return c.json(apiSuccess(response));
   });
 
-  app.post(importAcceptPath, limitIngestionControlBody, async (c) => {
+  app.post(importAcceptPath, async (c) => {
     const input = parse(importAcceptInput, await readJsonBody(c));
     const response = {
       items: await ingestionSessionService.acceptImportItems(
@@ -236,7 +230,7 @@ export function registerIngestionRoutes(app: Hono) {
     return c.json(apiSuccess(response));
   });
 
-  app.post(importJsonlParsePath, limitJsonlManifestBody, async (c) => {
+  app.post(importJsonlParsePath, async (c) => {
     const input = parse(jsonlManifestInput, await readJsonBody(c));
     try {
       return c.json(apiSuccess(parseJsonlManifest(input.content, {
@@ -251,7 +245,7 @@ export function registerIngestionRoutes(app: Hono) {
     }
   });
 
-  app.post(importWeiboParsePath, limitWeiboImportBody, async (c) => {
+  app.post(importWeiboParsePath, async (c) => {
     const input = parse(weiboImportInput, await readJsonBody(c));
     const runtimeConfig = getRuntimeConfig();
     const maxPosts = Math.min(
@@ -318,7 +312,7 @@ export function registerIngestionRoutes(app: Hono) {
     )
   );
 
-  app.post(ingestionStatusPath, limitIngestionControlBody, async (c) => {
+  app.post(ingestionStatusPath, async (c) => {
     const input = parse(ingestionStatusInput, await readJsonBody(c));
     const response = {
       items: await readIngestionStatuses(
@@ -330,7 +324,7 @@ export function registerIngestionRoutes(app: Hono) {
     return c.json(apiSuccess(response));
   });
 
-  app.post(ingestionUpdatePath, limitIngestionControlBody, async (c) => {
+  app.post(ingestionUpdatePath, async (c) => {
     const input = parse(ingestionSessionUpdateInput, await readJsonBody(c));
     const response = {
       items: await updateIngestionSessions(
@@ -342,7 +336,7 @@ export function registerIngestionRoutes(app: Hono) {
     return c.json(apiSuccess(response));
   });
 
-  app.post(ingestionActionPath, limitIngestionControlBody, async (c) => {
+  app.post(ingestionActionPath, async (c) => {
     const input = parse(ingestionQueueActionInput, await readJsonBody(c));
     const response = await ingestionExecutionControl.runQueueAction({
       session: authenticatedSession(c),
@@ -352,7 +346,7 @@ export function registerIngestionRoutes(app: Hono) {
     return c.json(apiSuccess(response));
   });
 
-  app.post(ingestionCommitPath, limitIngestionControlBody, async (c) => {
+  app.post(ingestionCommitPath, async (c) => {
     const input = parse(ingestionCommitIntentInput, await readJsonBody(c));
     const response = {
       items: await acceptIngestionCommitIntents(
@@ -364,7 +358,7 @@ export function registerIngestionRoutes(app: Hono) {
     return c.json(apiSuccess(response));
   });
 
-  app.post(ingestionCancelPath, limitIngestionControlBody, async (c) => {
+  app.post(ingestionCancelPath, async (c) => {
     const input = parse(ingestionCancelInput, await readJsonBody(c));
     const response = {
       items: await ingestionExecutionControl.cancelSessions(

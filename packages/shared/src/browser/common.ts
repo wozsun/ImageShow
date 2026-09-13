@@ -6,6 +6,26 @@
  */
 export const imageTitleMaxLength = 80;
 export const imageDescriptionMaxLength = 500;
+const httpsUrlInputMaxLength = 2_048;
+
+/** Normalize form input without reserializing paths, queries or signatures. */
+export function normalizeHttpsUrlInput(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed.length > httpsUrlInputMaxLength) return null;
+  if (!trimmed) return "";
+  const normalized = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+  if (normalized.length > httpsUrlInputMaxLength) return null;
+  try {
+    const parsed = new URL(normalized);
+    return parsed.protocol === "https:" && parsed.hostname
+      && !parsed.username && !parsed.password ? normalized : null;
+  } catch {
+    return null;
+  }
+}
+
 export const ingestionBatchHardLimit = 3_600;
 export const ingestionQueueSnapshotMaxItems = 100;
 export const configPackageMaxBytes = 1024 * 1024;

@@ -35,6 +35,11 @@ import {
 const isolationRoot = resolve(import.meta.dirname, "isolation");
 const storageIngestionScenarios = [
   {
+    id: "ingestion-http-boundaries",
+    name: "接入 HTTP 精确批量动作、传输限额与认证顺序",
+    script: join(isolationRoot, "ingestion-http-boundaries.mts")
+  },
+  {
     id: "background-job-history",
     name: "历史任务清理与重新入队并发时保留新任务意图",
     script: join(isolationRoot, "background-job-history.mts")

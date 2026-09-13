@@ -224,9 +224,10 @@ function parseUploadResponse(text: string): Partial<UploadResponse> & {
   error?: unknown;
 } {
   try {
-    return JSON.parse(text || "{}") as Partial<UploadResponse> & {
-      error?: unknown;
-    };
+    const data: unknown = JSON.parse(text);
+    return data !== null && typeof data === "object" && !Array.isArray(data)
+      ? data as Partial<UploadResponse> & { error?: unknown }
+      : {};
   } catch {
     return {};
   }

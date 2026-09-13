@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  normalizeHttpsUrlInput,
   slugMaxLength,
   slugPattern
 } from "@imageshow/shared/browser";
@@ -24,12 +25,12 @@ export const safePositiveIntegerInput = z.coerce.number().int().positive()
   .refine(Number.isSafeInteger, "必须是安全整数");
 
 export function requestUrlInput(message: string) {
-  return z.string().trim().max(2048)
-    .transform((value) => {
-      if (!value || /^[a-z][a-z0-9+.-]*:\/\//i.test(value)) return value;
-      return "https://" + value;
-    })
-    .refine((value) => value === "" || isHttpsUrl(value), message);
+  return z.string().transform((value, context) => {
+    const normalized = normalizeHttpsUrlInput(value);
+    if (normalized !== null) return normalized;
+    context.addIssue({ code: "custom", message });
+    return z.NEVER;
+  });
 }
 
 export function httpsUrlField(message: string) {

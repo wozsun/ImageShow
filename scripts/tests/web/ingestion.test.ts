@@ -1,6 +1,7 @@
 import "../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { installProperties } from "../support/property-descriptors.ts";
 import {
   parseHTML
 } from "linkedom";
@@ -16168,6 +16169,63 @@ test("[Web/内容接入] 导入组合按钮共同预载且来源选择在菜单�
     }
   }
 });
+test("[Web/内容接入] 异常上传回执结束当前请求并释放下一张图片的上传槽", async (t) => {
+  const accepted = {
+    ok: true, session_id: "A".repeat(43), image_id: "01980000-0000-7000-8000-000000000001",
+    status: "accepted", version: 1
+  };
+  for (const [status, responseText, message] of [
+    [200, "null", "上传失败（HTTP 200）"],
+    [502, "null", "上传失败（HTTP 502）"],
+    [200, "[]", "上传失败（HTTP 200）"],
+    [200, '"text"', "上传失败（HTTP 200）"],
+    [200, "1", "上传失败（HTTP 200）"],
+    [200, "false", "上传失败（HTTP 200）"],
+    [200, "{}", "上传失败（HTTP 200）"],
+    [502, "<html>bad gateway</html>", "上传失败（HTTP 502）"],
+    [502, '{"error":"服务暂不可用"}', "服务暂不可用"],
+    [400, '{"error":{"message":"凭据无效"}}', "凭据无效"]
+  ] as const) {
+    await t.test(`${status} ${responseText}`, async (subtest) => {
+      class FakeXhr {
+        static instances: FakeXhr[] = [];
+        upload = {};
+        status = 0;
+        responseText = "";
+        onload?: () => void;
+        onabort?: () => void;
+        open() {}
+        setRequestHeader() {}
+        send() { FakeXhr.instances.push(this); }
+        abort() { this.onabort?.(); }
+        respond(status: number, body: string) {
+          this.status = status;
+          this.responseText = body;
+          this.onload?.();
+        }
+      }
+      subtest.after(installProperties(globalThis, { XMLHttpRequest: FakeXhr }));
+      const lane = new BrowserUploadLane(1);
+      const controller = new AbortController();
+      const file = new File(["raw"], "image.webp", { type: "image/webp" });
+      const run = () => lane.run(controller.signal, () => (
+        uploadRaw("credential", file, { onProgress: () => undefined }).promise
+      ));
+      const firstRejected = assert.rejects(run(), { message });
+      const next = run();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      assert.equal(FakeXhr.instances.length, 1);
+      assert.doesNotThrow(() => FakeXhr.instances[0]!.respond(status, responseText));
+      await firstRejected;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      assert.equal(FakeXhr.instances.length, 2, "异常回执释放槽位，后续上传无需取消或刷新");
+      FakeXhr.instances[1]!.respond(200, JSON.stringify(accepted));
+      assert.deepEqual(await next, accepted);
+      assert.equal(FakeXhr.instances.length, 2, "不自动重放结果不明的 raw 写入");
+    });
+  }
+});
+
 test("[Web/内容接入] 浏览器上传 lane 统一约束页面工作并响应动态容量与取消", async (t) => {
   const gate = () => {
     let resolve!: () => void;

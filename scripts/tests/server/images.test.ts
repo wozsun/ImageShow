@@ -27,6 +27,7 @@ import sharp from "sharp";
 import {
   adminApiBasePath,
   ingestionBatchHardLimit,
+  normalizeIngestionDraftUrl,
   detectDeviceFromUserAgent
 } from "../../../packages/shared/src/browser.ts";
 import {
@@ -44,7 +45,8 @@ import {
   imagePurgeInput,
   imageSnapshotInput,
   imageStorageMigrationInput,
-  imageUpdateInput
+  imageUpdateInput,
+  imageMetadataCreateInput
 } from "../../../packages/server/src/routes/validation/images.ts";
 import {
   ingestionCommitIntentInput,
@@ -57,6 +59,7 @@ import {
 import {
   parse
 } from "../../../packages/server/src/routes/validation/parse.ts";
+
 import {
   storageBackendCreateInput,
   storageBackendMigrationInput,
@@ -2346,4 +2349,33 @@ test("[Server/图片] 公开原图等待共享探测时单个 HTTP 取消不影�
   resolveProbe(true);
   assert.equal((await second).status, 302);
   assert.equal((await servePublicExternalOriginal(item.id, {}, dependencies as never)).status, 302);
+});
+
+test("[Server/图片] URL 补全后的长度边界在草稿与正式输入间保持闭合", () => {
+  const imageId = "01980000-0000-7000-8000-000000000001";
+  for (const field of ["original", "source"] as const) {
+    for (const protocol of ["", "https://"]) {
+      for (const length of [2040, 2041, 2048, 2049]) {
+        const prefix = protocol + "example.com/?sig=%2F+";
+        const input = prefix + "x".repeat(length - prefix.length);
+        const expected = protocol ? input : "https://" + input;
+        const accepted = expected.length <= 2048;
+        const metadata = { device: "auto", brightness: "auto", [field]: ` ${input} ` };
+        const formal = imageMetadataCreateInput.safeParse(metadata);
+        const draft = ingestionSessionUpdateInput.safeParse({ items: [{
+          session_id: "A".repeat(43), image_id: imageId, expected_version: 1, metadata
+        }] });
+        assert.equal(formal.success, accepted, `${field}: ${protocol} ${length}`);
+        assert.equal(draft.success, accepted);
+        assert.equal(normalizeIngestionDraftUrl(field, input), accepted ? expected : null);
+        if (formal.success && draft.success) {
+          assert.equal(formal.data[field], expected, "不重写路径、签名或截断 URL");
+          assert.equal(draft.data.items[0]!.metadata![field], expected);
+          assert.deepEqual(imageMetadataCreateInput.parse(formal.data), formal.data);
+          assert.deepEqual(ingestionSessionUpdateInput.parse(draft.data), draft.data);
+          assert.equal(normalizeIngestionDraftUrl(field, expected), expected);
+        }
+      }
+    }
+  }
 });

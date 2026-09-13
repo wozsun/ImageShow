@@ -88,7 +88,7 @@ PowerShell 中使用 `$env:IMAGESHOW_DATABASE_SCENARIO = "cold-redis"`、
 | 查询与缓存 | `image-read-consistency`、`tag-filter-consistency`、`public-image-browse`、`ready-cache-read-model`、`redis-business-commands` |
 | 存储与回收站 | `local-io-lifecycle`、`storage-registry-lifecycle`、`storage-migration-recovery`、`storage-cleanup-recovery`、`storage-lock-admission`、`trash-purge-recovery` |
 | 存储维护 | `storage-thumbnail-recovery`、`storage-maintenance-cancellation` |
-| 接入服务与队列 | `ingestion-service-contracts`、`ingestion-action-protocol`、`ingestion-upload-lifecycle`、`ingestion-import-queue`、`ingestion-queue-actions`、`redis-canonical` |
+| 接入服务与队列 | `ingestion-service-contracts`、`ingestion-action-protocol`、`ingestion-upload-lifecycle`、`ingestion-import-queue`、`ingestion-queue-actions`、`ingestion-http-boundaries`、`redis-canonical` |
 | 正式提交 | `ingestion-commit-guards`、`commit-success`、`commit-conflict`、`commit-recovery` |
 | 接入文件生命周期 | `ingestion-raw-lifecycle`、`ingestion-orphan-lifecycle` |
 
