@@ -1,5 +1,25 @@
 import type { IngestionJob } from "../../../../../lib/types.js";
 import { webUuidV7 } from "./ingestion-identity.js";
+import { ingestionJobCanStartCommit } from "./ingestion-queue-state.js";
+import { ingestionJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
+
+export function ingestionJobRetryKind(job: IngestionJob) {
+  if (job.failureStage === "cancel" || ingestionJobNeedsDuplicateConfirmation(job)) return null;
+  if (job.failureStage === "commit" || job.status === "finalized") {
+    return ((job.status === "failed" || (job.status === "finalized" && job.resultState === "error"))
+      && ingestionJobCanStartCommit(job, "resume")) ? "commit" as const : null;
+  }
+  if (job.status !== "failed" && job.status !== "cancelled") return null;
+  if (job.serverAccepted && job.sessionId && job.imageId) {
+    return job.status === "failed" && job.serverVersion !== undefined ? "server-prepare" as const : null;
+  }
+  return (job.kind === "upload" ? Boolean(job.file) : Boolean(job.downloadUrl))
+    ? "browser-prepare" as const : null;
+}
+
+export function ingestionJobIsRetryableFailure(job: IngestionJob) {
+  return job.status === "failed" && ingestionJobRetryKind(job) !== null;
+}
 
 export function resetJobForPrepareRetry(job: IngestionJob): IngestionJob {
   return {

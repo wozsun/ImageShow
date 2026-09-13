@@ -297,6 +297,7 @@ export function IngestionWorkflowQueueBody({
     authors: FacetOption[];
   }>;
   jobActions: Readonly<{
+    isRetryPending: (job: IngestionJob) => boolean;
     onPatch: (job: IngestionJob, patch: Partial<ImageDraft>) => void;
     onCancel: (job: IngestionJob) => void;
     onRetry: (job: IngestionJob) => void;
@@ -396,6 +397,7 @@ export function IngestionWorkflowQueueBody({
         onPatch={jobActions.onPatch}
         onCancel={jobActions.onCancel}
         onRetry={jobActions.onRetry}
+        isRetryPending={jobActions.isRetryPending}
         onRemove={jobActions.onRemove}
         onConfirmDuplicate={jobActions.onConfirmDuplicate}
         onOpenDetail={jobActions.onOpenDetail}
@@ -461,6 +463,7 @@ export function IngestionWorkflowFooter({
   }>;
   commit: Readonly<{
     count: number;
+    retryAll: boolean;
     pending: boolean;
     onClick: () => void;
   }>;
@@ -510,10 +513,10 @@ export function IngestionWorkflowFooter({
         <button
           className="button workflow-submit-button"
           type="button"
-          disabled={!commit.count || commit.pending}
+          disabled={(!commit.count && !commit.retryAll) || commit.pending}
           onClick={commit.onClick}
         >
-          {commit.count ? `提交 ${commit.count} 张` : "提交"}
+          {commit.retryAll ? "全部重试" : commit.count ? `提交 ${commit.count} 张` : "提交"}
         </button>
       </div>
     </footer>

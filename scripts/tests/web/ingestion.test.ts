@@ -41,7 +41,6 @@ import {
   recordAdminImageListValidation
 } from "../../../packages/web/src/lib/api/admin-image-list-validation.ts";
 import {
-  webIngestionBatchKey,
   webUuidV7
 } from "../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-identity.ts";
 import {
@@ -12448,272 +12447,6 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
     }
   }
 });
-test("[Web/内容接入] 本地重试按 completed 与 discarded 结果保留或重建 attempt", async () => {
-  const { window, document } = parseHTML(
-    "<!doctype html><html><body><div id=root></div></body></html>"
-  );
-  const React = await import("react");
-  let cancelRequests = 0;
-  let uploadIntentRequests = 0;
-  let releaseRequests = 0;
-  let refreshRequests = 0;
-  let boundDisplayPage: number | undefined;
-  let uploadIntentBatchKey: string | undefined;
-  let uploadIntentBatchTime: string | undefined;
-  let cancelResponseStatus: "completed" | "discarded" = "completed";
-  const fetchStub = async (input: unknown, init: RequestInit = {}) => {
-    const path = new URL(
-      typeof input === "string" ? input : (input as Request).url,
-      "http://localhost"
-    ).pathname;
-    if (path === uploadIntentPath) {
-      uploadIntentRequests += 1;
-      const body = JSON.parse(String(init.body)) as {
-        items: Array<{
-          idempotency_key: string;
-          batch_key: string;
-          batch_time: string;
-          batch_position: number;
-        }>;
-      };
-      uploadIntentBatchKey = body.items[0]!.batch_key;
-      uploadIntentBatchTime = body.items[0]!.batch_time;
-      assert.match(
-        body.items[0]!.batch_key,
-        /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
-      );
-      assert.equal(body.items[0]!.batch_position, 0);
-      return new Response(JSON.stringify({
-        ok: true,
-        items: body.items.map(() => ({
-          session_id: "N".repeat(43),
-          image_id: "019f8457-063a-7026-a580-7a432dc7fd8e",
-          resolved_image_time: "2026-08-23T01:02:03.456Z",
-          request_hash: "a".repeat(64),
-          status: "accepted",
-          accepted_order: 1,
-          version: 1,
-          last_semantic_revision: 1
-        }))
-      }), {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      });
-    }
-    if (path !== ingestionCancelPath) throw new Error(`unexpected fetch ${path}`);
-    cancelRequests += 1;
-    const body = JSON.parse(String(init.body)) as {
-      items: Array<{ session_id: string; image_id: string }>;
-    };
-    return new Response(JSON.stringify({
-      ok: true,
-      items: body.items.map((item) => ({
-        ...item,
-        status: cancelResponseStatus,
-        ...(cancelResponseStatus === "completed" ? {
-          completed_item: adminImageListItem({ id: item.image_id })
-        } : {})
-      }))
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    });
-  };
-  const installedGlobals = {
-    window,
-    self: window,
-    document,
-    navigator: window.navigator,
-    Node: window.Node,
-    Element: window.Element,
-    HTMLElement: window.HTMLElement,
-    Event: window.Event,
-    EventTarget: window.EventTarget,
-    MutationObserver: window.MutationObserver,
-    fetch: fetchStub,
-    React,
-    IS_REACT_ACT_ENVIRONMENT: true
-  };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
-
-  try {
-    setCsrfToken("local-retry-completed-token");
-    const { createRoot } = await import("react-dom/client");
-    const { useUpload } = await import(
-      "../../../packages/web/src/pages/admin/ingestion/upload/useUpload.ts"
-    );
-    const retryJob = ingestionJob({
-      id: "local-retry-completed",
-      attemptKey: "local-retry-completed-attempt",
-      batchKey: webUuidV7(),
-      batchPosition: 0,
-      kind: "upload",
-      file: new File(["completed"], "completed.webp", {
-        type: "image/webp"
-      }),
-      sessionId: "L".repeat(43),
-      imageId: "019f8457-063a-7025-a580-7a432dc7fd8e",
-      serverAccepted: true,
-      serverVersion: 1,
-      status: "failed",
-      failureStage: "prepare"
-    });
-    const jobsRef = { current: [retryJob] };
-    const updateJob = (id: string, patch: Partial<IngestionJob>) => {
-      jobsRef.current = jobsRef.current.map((job) => (
-        job.id === id ? { ...job, ...patch } : job
-      ));
-    };
-    const queue = {
-      jobsRef,
-      observeCompletedIngestions: () => undefined,
-      appendJobs: (jobs: IngestionJob[]) => {
-        jobsRef.current = [...jobsRef.current, ...jobs];
-        return true;
-      },
-      updateJob,
-      bindServerJob: (
-        id: string,
-        binding: Partial<IngestionJob> & { serverHandoffPending?: boolean }
-      ) => {
-        const current = jobsRef.current.find((job) => job.id === id);
-        boundDisplayPage = binding.serverHandoffPending
-          ? current?.serverHandoffDisplayPage ?? 1
-          : undefined;
-        updateJob(id, {
-          ...binding,
-          serverHandoffDisplayPage: boundDisplayPage,
-          serverAccepted: true
-        });
-      },
-      captureServerConnectionGeneration: () => 1,
-      releaseResolvedServerJobs: (targets: readonly { id: string }[], replacements = new Map<string, IngestionJob>()) => {
-        releaseRequests += 1;
-        const released = new Set(targets.map((target) => target.id));
-        jobsRef.current = jobsRef.current.flatMap((job) => !released.has(job.id) ? [job] : replacements.has(job.id) ? [replacements.get(job.id)!] : []);
-        return released;
-      },
-      server: {
-        recoverAuthority: async () => { refreshRequests += 1; },
-        refresh: () => { refreshRequests += 1; }
-      }
-    };
-    let owner: ReturnType<typeof useUpload> | undefined;
-    function Probe() {
-      owner = useUpload({
-        queue: queue as never,
-        defaults: {
-          device: "pc",
-          brightness: "dark",
-          theme: "",
-          author: "",
-          tags: []
-        },
-        storageSlug: "local",
-        maxItems: 100,
-        maxBytes: 1024 * 1024,
-        maxLongEdge: 4096,
-        browserConcurrency: 2
-      });
-      return null;
-    }
-    const container = document.getElementById("root");
-    assert.ok(container);
-    const root = createRoot(container);
-    await React.act(async () => {
-      root.render(React.createElement(Probe));
-      await Promise.resolve();
-    });
-    await owner!.retry(retryJob);
-    assert.equal(cancelRequests, 1);
-    assert.equal(releaseRequests, 0);
-    assert.equal(refreshRequests, 0);
-    assert.equal(jobsRef.current.length, 1);
-    assert.equal(jobsRef.current[0]?.attemptKey, retryJob.attemptKey);
-    assert.equal(jobsRef.current[0]?.status, "finalized");
-
-    cancelResponseStatus = "discarded";
-    const releasedRetryBatchKey = webIngestionBatchKey();
-    const releasedRetryJob = ingestionJob({
-      ...retryJob,
-      id: "local-retry-released",
-      attemptKey: "local-retry-released-attempt",
-      batchKey: releasedRetryBatchKey,
-      batchTime: "2026-08-23T00:00:00.000Z",
-      batchPosition: 37,
-      sessionId: "M".repeat(43),
-      imageId: "019f8457-063a-7027-a580-7a432dc7fd8e",
-      serverHandoffPending: true,
-      serverHandoffRevision: 8,
-      serverHandoffDisplayPage: 3,
-      serverHandoffProvisionalTotal: true,
-      serverStatus: "failed",
-      serverAttemptKey: "local-retry-released-attempt",
-      serverSessionId: "M".repeat(43),
-      serverImageId: "019f8457-063a-7027-a580-7a432dc7fd8e",
-      status: "failed",
-      failureStage: "prepare"
-    });
-    jobsRef.current = [releasedRetryJob];
-    await owner!.retry(releasedRetryJob);
-    assert.equal(cancelRequests, 2);
-    assert.equal(uploadIntentRequests, 1);
-    assert.equal(releaseRequests, 1);
-    assert.equal(refreshRequests, 0);
-    assert.notEqual(
-      jobsRef.current[0]?.attemptKey,
-      releasedRetryJob.attemptKey,
-      "discarded old owner 后必须创建新 attempt"
-    );
-    assert.equal(
-      uploadIntentBatchKey,
-      releasedRetryJob.batchKey,
-      "discarded old owner 的新 attempt 仍须保留原批次展示位置"
-    );
-    assert.equal(
-      jobsRef.current[0]?.batchKey,
-      uploadIntentBatchKey
-    );
-    assert.equal(uploadIntentBatchTime, releasedRetryJob.batchTime);
-    assert.equal(jobsRef.current[0]?.batchTime, uploadIntentBatchTime);
-    assert.equal(jobsRef.current[0]?.batchPosition, 37);
-    assert.equal(
-      boundDisplayPage,
-      undefined,
-      "保留原批次位置的重试无需创建额外 handoff 页锚点"
-    );
-    assert.equal(jobsRef.current[0]?.serverHandoffDisplayPage, undefined);
-    assert.equal(jobsRef.current[0]?.serverHandoffProvisionalTotal, undefined);
-    assert.equal(jobsRef.current[0]?.serverStatus, undefined);
-    assert.equal(jobsRef.current[0]?.serverAttemptKey, undefined);
-    assert.equal(jobsRef.current[0]?.serverSessionId, undefined);
-    assert.equal(jobsRef.current[0]?.serverImageId, undefined);
-    if (jobsRef.current[0]?.objectUrl?.startsWith("blob:")) {
-      URL.revokeObjectURL(jobsRef.current[0]!.objectUrl!);
-    }
-    await React.act(async () => root.unmount());
-  } finally {
-    clearCsrfToken();
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
-  }
-});
 test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+ 取消", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
@@ -12987,7 +12720,7 @@ test("[Web/内容接入] 解析后 202 张按上限接管，明确拒绝与未�
   await h.respond(3, { ok: false, error: "response lost" }, 502);
   assert.equal(jobsRef.current[0].importAcceptRejected, false);
   // A later definite rejection cannot disprove an earlier unknown acceptance.
-  const retryingUnknown = owner.retry(jobsRef.current[0]);
+  const retryingUnknown = owner.retryMany([jobsRef.current[0]]);
   await h.respond(4, rejection, 400);
   await retryingUnknown;
   assert.equal(jobsRef.current[0].importAcceptRejected, false);
@@ -14428,6 +14161,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
         backendOptions: [{ value: "local", label: "本地" }],
         onBackendChange() {},
         async onCommitReady() { commitReadyCount += 1; },
+        canRetryAll: false, retryingAll: false, retryBusy: false, isRetryPending: () => false, async onRetryAll() {},
         sourceDialogPending: false,
         sourceDialogOpen: false,
         sourceDialogComponent: null,
@@ -14745,7 +14479,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
     });
     assert.equal(clearDuplicates.disabled, false);
     assert.equal(clearUncommitted.disabled, false);
-    assert.equal(submitReady.disabled, false);
+    assert.equal(submitReady.disabled, true, "提交受理或队列未确认期间不能再次提交");
     assert.equal(alwaysClickableCancel.disabled, false);
     assert.equal(
       duplicateCancel.disabled,
@@ -14773,7 +14507,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       await Promise.resolve();
     });
     assert.equal(cleanupRunCount, 1);
-    assert.equal(commitReadyCount, 1);
+    assert.equal(commitReadyCount, 0);
     assert.equal(applyDefaultsCount, 0);
     assert.deepEqual(
       sourceSelections,
@@ -16444,49 +16178,9 @@ test("[Web/内容接入] 大队列页外进度和缓冲进度不重复请求当�
   assert.equal(view.status, "ready");
 });
 
-test("[Web/内容接入] 组合队列原子替换末页重试任务并清理旧接管身份", async (t) => {
-  const h = await createConfigStreamHarness(t);
-  const { useIngestionQueue } = await import("../../../packages/web/src/pages/admin/ingestion/queue/useIngestionQueue.ts");
-  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
-  const client = new QueryClient();
-  t.after(() => client.clear());
-  let queue!: ReturnType<typeof useIngestionQueue>;
-  function Probe() { queue = useIngestionQueue(20, "import", false); return null; }
-  await h.render(h.React.createElement(QueryClientProvider, { client }, h.React.createElement(Probe)));
-  const jobs = Array.from({ length: 21 }, (_, index) => ingestionJob({
-    id: `retry-page-${index}`, kind: "import", batchKey: "retry-page", batchPosition: index,
-    status: "failed", failureStage: "prepare", imageTime: "2020-06-17T02:30:45.000Z",
-    sessionId: undefined, imageId: undefined, serverAccepted: false
-  }));
-  await h.React.act(async () => { queue.appendJobs(jobs); });
-  await h.React.act(async () => {
-    queue.bindServerJob(jobs[20].id, {
-      sessionId: "R".repeat(43), imageId: "019f8457-063a-7fff-a580-7a432dc7fd8e",
-      serverAccepted: true, serverHandoffPending: true, serverHandoffRevision: 1,
-      serverHandoffProvisionalTotal: true, status: "failed", failureStage: "prepare"
-    }, null, 1);
-  });
-  await h.React.act(async () => queue.setPage(2));
-  assert.equal(queue.page, 2);
-  const old = queue.jobsRef.current.find((job) => job.id === jobs[20].id)!;
-  const next = resetJobForPrepareRetry(old);
-  await h.React.act(async () => {
-    const released = queue.releaseResolvedServerJobs([{
-      id: old.id, attemptKey: old.attemptKey,
-      pair: { session_id: old.sessionId!, image_id: old.imageId! }
-    }], new Map([[old.id, next]]));
-    assert.equal(released.has(old.id), true);
-  });
-  await h.flush();
-  assert.equal(queue.page, 2);
-  assert.deepEqual(queue.visibleJobs.map(({ id }) => id), [old.id]);
-  assert.equal(queue.jobsRef.current.find(({ id }) => id === old.id)?.attemptKey, next.attemptKey);
-  assert.equal(queue.totalItems, 21);
-});
-
 test("[Web/内容接入] 各来源及恢复任务原位重试保留身份时间与当前页", async (t) => {
   const h = await createConfigStreamHarness(t);
-  const { useImport } = await import("../../../packages/web/src/pages/admin/ingestion/import/useImport.ts");
+  const { useIngestionRetry } = await import("../../../packages/web/src/pages/admin/ingestion/queue/useIngestionRetry.ts");
   let state = { page: 2, jobs: [] as IngestionJob[] };
   let recoveries = 0;
   const jobsRef = { get current() { return state.jobs; } };
@@ -16497,34 +16191,20 @@ test("[Web/内容接入] 各来源及恢复任务原位重试保留身份时间�
     updateJob(id: string, patch: Partial<IngestionJob>) { state = reduceIngestionQueue(state, { type: "patch", id, patch }); },
     bindServerJob(id: string, binding: Partial<IngestionJob> & { sessionId: string; imageId: string }) { state = reduceIngestionQueue(state, { type: "bind-server", id, binding }); },
     captureServerConnectionGeneration: () => 1,
-    releaseResolvedServerJobs(targets: readonly { id: string; attemptKey: string; pair: { session_id: string; image_id: string } }[], replacements = new Map<string, IngestionJob>()) {
-      state = reduceIngestionQueue(state, { type: "release-resolved", pageSize: 20,
-        projectedTotalItems: state.jobs.length - targets.length,
-        targets: new Map(targets.map((target) => [target.id, {
-          attemptKey: target.attemptKey,
-          pairKey: `${target.pair.session_id}\0${target.pair.image_id}`,
-          replacement: replacements.get(target.id)
-        }]))
-      });
-      return new Set(targets.map(({ id }) => id));
-    },
-    server: { recoverAuthority: async () => { recoveries += 1; } }
+    server: { recoverAfterSuccessfulAction: async () => { recoveries += 1; } }
   };
-  let owner!: ReturnType<typeof useImport>;
+  let owner!: ReturnType<typeof useIngestionRetry>;
   function Probe() {
-    owner = useImport({ queue: queue as never, maxItems: 1000, storageSlug: "local",
-      keepOriginalLinkForUrlImports: true,
-      defaults: { device: "auto", brightness: "auto", theme: "", author: "", tags: [] }
-    });
+    owner = useIngestionRetry({ queue: queue as never, retryBrowserJobs: async () => {}, commitJobs: async () => false });
     return null;
   }
   await h.render(h.React.createElement(Probe));
-  for (const [count, source] of [[31, "weibo"], [21, "jsonl"], [21, undefined]] as const) {
+  for (const [count, source] of [[31, "weibo"], [21, "jsonl"], [21, undefined], [21, "upload"]] as const) {
     const imageTime = "2020-06-17T02:30:45.000Z";
     state = { page: 2, jobs: Array.from({ length: count }, (_, index) => ingestionJobFromServerItem({
       session_id: String(index).padStart(43, "S"),
       image_id: `019f8457-063a-7${index.toString(16).padStart(3, "0")}-a580-7a432dc7fd8e`,
-      queue: "import", source_type: source ?? "url", batch_position: index,
+      queue: source === "upload" ? "upload" : "import", source_type: source ?? "url", batch_position: index,
       download_url: "https://images.example.com/photo.png", resolved_image_time: imageTime,
       status: "failed", phase: "failed", message: "内容接入执行权已转移",
       version: 1, progress_seq: 0, last_semantic_revision: 1, accepted_order: index + 1,
@@ -16533,7 +16213,8 @@ test("[Web/内容接入] 各来源及恢复任务原位重试保留身份时间�
     const before = state.jobs[20];
     const ids = state.jobs.map(({ id }) => id);
     const start = h.pending.length;
-    const retry = owner.retry(before);
+    let retry!: Promise<void>;
+    await h.React.act(async () => { retry = owner.retry(before); });
     await h.flush();
     await owner.retry(before);
     assert.equal(h.pending.length, start + 1, "同一重试正在等待时不重复写入");
@@ -16544,7 +16225,7 @@ test("[Web/内容接入] 各来源及恢复任务原位重试保留身份时间�
     const recoveryBefore = recoveries;
     await h.respond(start, { items: [{ session_id: before.sessionId, image_id: before.imageId,
       status: "changed", version: 2, last_semantic_revision: 2, duplicate_count: 0, duplicate_decision: "upload" }] });
-    await retry;
+    await h.React.act(async () => { await retry; });
     assert.equal(recoveries, recoveryBefore + 1);
     assert.equal(state.page, 2);
     assert.deepEqual(state.jobs.map(({ id }) => id), ids);
@@ -16557,11 +16238,12 @@ test("[Web/内容接入] 各来源及恢复任务原位重试保留身份时间�
   }
   const current = state.jobs[20];
   const failedRequest = h.pending.length;
-  const uncertainRetry = owner.retry(current);
+  let uncertainRetry!: Promise<void>;
+  await h.React.act(async () => { uncertainRetry = owner.retry(current); });
   await h.respond(failedRequest, { ok: false, error: "response lost" }, 502);
-  await uncertainRetry;
+  await h.React.act(async () => { await uncertainRetry; });
   assert.equal(h.pending.length, failedRequest + 1, "不自动重发未知写入结果");
-  assert.equal(recoveries, 4, "写回执丢失后仍由原 owner 回读一次");
+  assert.equal(recoveries, 5, "写回执丢失后仍由原 owner 回读一次");
   assert.equal(state.page, 2);
   assert.equal(state.jobs[20].imageTime, current.imageTime);
   queue.appendJobs([ingestionJob({ id: "new-batch" })]);
@@ -16692,5 +16374,185 @@ test("[Web/内容接入] 导入菜单键盘与来源标签保持真实 DOM 焦�
     if(priorFocus) Object.defineProperty(dom.HTMLElement.prototype,"focus",priorFocus);
     if(priorBlur) Object.defineProperty(dom.HTMLElement.prototype,"blur",priorBlur);
     for(const [key,descriptor] of previous){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete(globalThis as any)[key];}
+  }
+});
+
+test("[Web/内容接入] 全部重试依据完整队列并冻结目标直到分批结果收敛", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { useIngestionRetry } = await import("../../../packages/web/src/pages/admin/ingestion/queue/useIngestionRetry.ts");
+  const { useIngestionQueueActions } = await import("../../../packages/web/src/pages/admin/ingestion/queue/useIngestionQueueActions.ts");
+  const failedLocal = ingestionJob({ id: "browser-failed", kind: "upload", status: "failed", failureStage: "create",
+    file: new File(["image"], "image.webp", { type: "image/webp" }) });
+  let local: IngestionJob[] = [];
+  let known = [ingestionJob({ id: "visible-failed", status: "failed", failureStage: "prepare", serverAccepted: true,
+    sessionId: "A".repeat(43), imageId: webUuidV7(), serverVersion: 2 })];
+  const baseline: IngestionQueueSummaryDto = { total: 31, unfinished: 31, waiting: 0, running: 0, ready: 0,
+    duplicate_pending: 0, committing: 0, resolving: 0, completed: 0, failed: 31 };
+  let releaseRecovery!: () => void;
+  let recoveryCount = 0;
+  let localRetries: string[][] = [];
+  const server = { status: "ready", summary: baseline, actionScope: "scope", actionWatermark: "watermark", connectionGeneration: 1,
+    recoverAfterSuccessfulAction: () => { recoveryCount += 1; return new Promise<void>(resolve => { releaseRecovery = resolve; }); },
+    recoverAuthority: async () => {} };
+  const queue = { queueType: "import", get totalItems() { return server.summary.total + local.length; },
+    get localJobs() { return local; }, get jobs() { return [...local, ...known]; },
+    jobsRef: { get current() { return [...local, ...known]; } }, pendingAuthorityHandoff: false,
+    hasPendingDraftUpdates: () => false, flushPendingUpdates: async () => {}, server,
+    captureBrowserActionJobs: (predicate: (job: IngestionJob) => boolean) => local.filter(predicate),
+    actions: undefined as ReturnType<typeof useIngestionQueueActions> | undefined };
+  let owner!: ReturnType<typeof useIngestionRetry>;
+  function Probe() {
+    queue.actions = useIngestionQueueActions("import", server as never, h.React.useRef(false), () => {});
+    owner = useIngestionRetry({ queue: queue as never, retryBrowserJobs: async targets => { localRetries.push(targets.map(job => job.id)); }, commitJobs: async () => false });
+    return null;
+  }
+  const render = () => h.render(h.React.createElement(Probe));
+  await render();
+  assert.equal(owner.canRetryAll, true, "当前只驻留一张，但全局 31 项均失败，可以跨页全部重试");
+  for (const change of [
+    () => { server.summary = { ...baseline, ready: 1, failed: 30 }; },
+    () => { server.status = "loading"; },
+    () => { local = [{ ...failedLocal, file: undefined }]; },
+    () => { local = [{ ...failedLocal, failureStage: "cancel" }]; },
+    () => { known = [{ ...known[0], status: "ready", duplicateDecision: "undecided", duplicateCount: 1 }]; },
+    () => { local = [{ ...failedLocal, status: "cancelled" }]; }
+  ]) {
+    server.summary = baseline; server.status = "ready"; local = [];
+    known = [{ ...known[0], status: "failed", duplicateDecision: "upload", duplicateCount: 0 }];
+    change(); await render(); assert.equal(owner.canRetryAll, false);
+  }
+  server.summary = { ...baseline, total: 0, unfinished: 0, failed: 0 }; local = []; known = [];
+  await render(); assert.equal(owner.canRetryAll, false, "空队列保留提交语义");
+  local = [failedLocal];
+  await render(); assert.equal(owner.canRetryAll, true, "浏览器仍持有文件的失败允许重试");
+  server.summary = baseline; local = [];
+  await render();
+  let work!: Promise<void>;
+  await h.React.act(async () => { work = owner.retryAll(); await Promise.resolve(); });
+  await h.flush();
+  await owner.retryAll();
+  assert.equal(h.pending.length, 1, "连续点击只启动一轮");
+  assert.equal(owner.retryingAll, true);
+  const first = JSON.parse(String(h.pending[0].body));
+  assert.equal(first.action, "retry_failed");
+  assert.equal(first.queue, "import");
+  local = [{ ...failedLocal, id: "added-after-click" }];
+  await render();
+  await h.respond(0, { processed: 20, changed: 20, failed: 0, items: [], continuation: "next-page" });
+  assert.equal(h.pending.length, 2);
+  const second = JSON.parse(String(h.pending[1].body));
+  assert.equal(second.action_request_id, first.action_request_id);
+  assert.equal(second.action_watermark, first.action_watermark);
+  assert.equal(second.continuation, "next-page");
+  await h.respond(1, { processed: 11, changed: 10, failed: 1,
+    items: [{ session_id: "B".repeat(43), image_id: webUuidV7(), status: "failed", message: "存储暂不可用" }] });
+  assert.equal(recoveryCount, 1);
+  assert.equal(owner.retryBusy, true, "分批写响应已完成，权威队列未回读时继续锁定");
+  assert.deepEqual(localRetries, [[]], "执行期间新增任务不进入本轮");
+  await h.React.act(async () => { releaseRecovery(); await work; });
+  assert.equal(owner.retryBusy, false);
+  assert.equal(owner.retryingAll, false);
+  assert.equal(queue.actions?.notice, "存储暂不可用");
+});
+
+test("[Web/内容接入] 提交响应先于队列摘要时等待原读取所有者收敛", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { useIngestionQueueActions } = await import("../../../packages/web/src/pages/admin/ingestion/queue/useIngestionQueueActions.ts");
+  const { useIngestionQueueSubmitActions } = await import("../../../packages/web/src/pages/admin/ingestion/workflow/useIngestionQueueSubmitActions.ts");
+  let releaseRead!: () => void;
+  let reads = 0;
+  const server = { status: "ready", actionScope: "scope", actionWatermark: "watermark", connectionGeneration: 1,
+    summary: { ready: 18 }, recoverAuthority: async () => {},
+    recoverAfterSuccessfulAction: () => { reads++; return new Promise<void>(resolve => { releaseRead = resolve; }); } };
+  const queue = { server, captureBrowserActionJobs: () => [], actions: undefined as ReturnType<typeof useIngestionQueueActions> | undefined };
+  let workflow!: ReturnType<typeof useIngestionQueueSubmitActions>;
+  function Probe() {
+    const actions = useIngestionQueueActions("import", server as never, h.React.useRef(false), () => {});
+    queue.actions = actions;
+    workflow = useIngestionQueueSubmitActions({ queue: queue as never,
+      defaults: { device: "auto", brightness: "auto", theme: "", author: "", tags: [] },
+      commitJobs: async () => false, onDone: () => {},
+      captureServerAction: (action, required) => ({ required, frozen: required ? actions.freeze(action) : null }) as never });
+    return null;
+  }
+  await h.render(h.React.createElement(Probe));
+  let done = false;
+  let work!: Promise<void>;
+  await h.React.act(async () => { work = workflow.commitReadyJobs().then(() => { done = true; }); });
+  await h.flush();
+  assert.equal(queue.actions?.busy, true);
+  await h.respond(0, { processed: 18, changed: 18, failed: 0, items: [] });
+  assert.equal(reads, 1);
+  assert.equal(server.summary.ready, 18, "模拟尚未到达的 SSE 摘要");
+  assert.equal(done, false);
+  assert.equal(queue.actions?.busy, true);
+  await h.React.act(async () => { server.summary.ready = 0; releaseRead(); await work; });
+  assert.equal(done, true);
+  assert.equal(queue.actions?.busy, false);
+});
+
+test("[Web/内容接入] 上传重试等待前批结束后复核原尝试及当前资格", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { useUpload } = await import("../../../packages/web/src/pages/admin/ingestion/upload/useUpload.ts");
+  const { useIngestionRetry } = await import("../../../packages/web/src/pages/admin/ingestion/queue/useIngestionRetry.ts");
+  const { buildUploadIntentItemInput } = await import("../../../packages/web/src/pages/admin/ingestion/upload/upload-jobs.ts");
+  let state = { page: 2, jobs: [] as IngestionJob[] };
+  const queue = {
+    jobsRef: { get current() { return state.jobs; } },
+    updateJob(id: string, patch: Partial<IngestionJob>) { state = reduceIngestionQueue(state, { type: "patch", id, patch }); },
+    bindServerJob(id: string, binding: Partial<IngestionJob> & { sessionId: string; imageId: string }) { state = reduceIngestionQueue(state, { type: "bind-server", id, binding }); },
+    captureServerConnectionGeneration: () => 1,
+    server: { status: "loading", summary: null }
+  };
+  let upload!: ReturnType<typeof useUpload>;
+  let owner!: ReturnType<typeof useIngestionRetry>;
+  function Probe() {
+    upload = useUpload({ queue: queue as never, defaults: { device: "auto", brightness: "auto", theme: "", author: "", tags: [] },
+      storageSlug: "local", maxItems: 200, maxBytes: 1_000_000, maxLongEdge: 560, browserConcurrency: 1 });
+    owner = useIngestionRetry({ queue: queue as never, retryBrowserJobs: upload.retryMany, commitJobs: async () => false });
+    return null;
+  }
+  await h.render(h.React.createElement(Probe));
+  const imageTime = "2020-06-17T02:30:45.000Z";
+  for (const change of ["new-attempt", "same-attempt-received", "cancelled", "valid-unknown-raw"] as const) {
+    const blocker = ingestionJob({ id: `blocker-${change}`, kind: "upload", status: "failed", failureStage: "create",
+      file: new File(["blocker"], "blocker.png"), objectUrl: "blob:blocker", batchPosition: 0 });
+    const target = ingestionJob({ id: `target-${change}`, kind: "upload", status: "failed", failureStage: "prepare",
+      file: new File(["target"], "target.png"), objectUrl: "blob:target", batchPosition: 1,
+      imageTime, sessionId: "T".repeat(43), imageId: webUuidV7() });
+    target.uploadIntentItemInput = buildUploadIntentItemInput(target, 560);
+    state = { page: 2, jobs: [blocker, target] };
+    const first = h.pending.length;
+    let blocking!: Promise<void>; let retry!: Promise<void>;
+    await h.React.act(async () => { blocking = upload.retryMany([blocker]); });
+    await h.flush();
+    assert.equal(h.pending.length, first + 1);
+    await h.React.act(async () => { retry = owner.retry(target); void owner.retry(target); });
+    assert.equal(owner.isRetryPending(target), true);
+    assert.equal(owner.isRetryPending(blocker), false, "单卡排队不锁定其他卡片");
+    if (change !== "valid-unknown-raw") {
+      queue.updateJob(target.id, { status: change === "cancelled" ? "cancelled" : "received",
+        serverAccepted: change !== "cancelled", serverVersion: change === "cancelled" ? undefined : 1,
+        attemptKey: change === "new-attempt" ? "new-attempt" : target.attemptKey });
+    }
+    await h.respond(first, { items: [{ status: "failed", message: "前批传输故障" }] });
+    if (change === "valid-unknown-raw") {
+      await h.flush();
+      assert.equal(h.pending.length, first + 2);
+      assert.equal(h.pending[first + 1].path, uploadIntentPath);
+      const input = JSON.parse(String(h.pending[first + 1].body)).items[0];
+      assert.equal(input.idempotency_key, target.attemptKey, "未知 raw 继续使用原幂等身份");
+      await h.respond(first + 1, { items: [{ status: "accepted", session_id: target.sessionId,
+        image_id: target.imageId, resolved_image_time: imageTime, version: 1,
+        last_semantic_revision: 2, accepted_order: 2 }] });
+    }
+    await h.React.act(async () => { await blocking; await retry; });
+    const current = state.jobs[1];
+    assert.equal(current.status, change === "cancelled" ? "cancelled" : "received");
+    assert.equal(current.imageTime, imageTime);
+    assert.equal(state.page, 2);
+    assert.equal(owner.isRetryPending(target), false);
+    assert.equal(h.pending.length, first + (change === "valid-unknown-raw" ? 2 : 1));
+    assert.ok(h.pending.slice(first).every(request => request.path === uploadIntentPath), "旧重试不会取消已接管任务");
   }
 });

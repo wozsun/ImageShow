@@ -18,9 +18,10 @@ import {
   deduplicateImportJobsByDownloadUrl
 } from "../queue/model/ingestion-job-deduplication.js";
 import {
+  ingestionJobRetryKind,
   resetImportJobForPrepareRetry
 } from "../queue/model/ingestion-job-retry.js";
-import { acceptImports, updateStoredIngestions } from "../queue/ingestion-api.js";
+import { acceptImports } from "../queue/ingestion-api.js";
 import type { IngestionQueueProducerApi } from "../queue/ingestion-queue-api.js";
 
 function buildImportAcceptItemInput(job: IngestionJob) {
@@ -57,7 +58,6 @@ export function useImport(options: {
   const { queue, defaults, keepOriginalLinkForUrlImports, storageSlug, maxItems } = options;
   const controllers = useRef(new Set<AbortController>());
   const pendingAccepts = useRef(new Map<string, Promise<void>>());
-  const pendingRetries = useRef(new Set<string>());
   const cancellationAcceptOutcomes = useRef(new Map<string, {
     attemptKey: string;
     status: "accepted" | "completed" | "discarded";
@@ -74,7 +74,6 @@ export function useImport(options: {
       for (const controller of activeControllers) controller.abort();
       activeControllers.clear();
       pendingAccepts.current.clear();
-      pendingRetries.current.clear();
       cancellationAcceptOutcomes.current.clear();
       // Accepted canonical tasks continue on the server after this component
       // closes; unmount is never an implicit queue cancellation.
@@ -527,70 +526,35 @@ export function useImport(options: {
     }
   ), [cancelMany]);
 
-  const retry = useCallback(async (job: IngestionJob) => {
-    const current = queue.jobsRef.current.find((item) => item.id === job.id);
-    if (!current) return;
-    if (current.sessionId && current.imageId) {
-      const retryKey = `${current.id}\0${current.attemptKey}`;
-      if (pendingRetries.current.has(retryKey)) return;
-      pendingRetries.current.add(retryKey);
-      const controller = new AbortController();
-      controllers.current.add(controller);
-      try {
-        if (current.serverVersion === undefined) {
-          return;
-        }
-        const { items } = await updateStoredIngestions([{
-          session_id: current.sessionId,
-          image_id: current.imageId,
-          expected_version: current.serverVersion,
-          metadata: {
-            ...current.draft,
-            theme: normalizeTheme(current.draft.theme),
-            author: normalizeAuthor(current.draft.author)
-          },
-          retry_prepare: true
-        }], controller.signal);
-        const result = items[0];
-        if (!result || result.status === "failed") {
-          throw new Error(result?.message ?? "重试响应缺少当前任务");
-        }
-      } catch (error) {
-        if (mounted.current && !controller.signal.aborted) {
-          const latest = queue.jobsRef.current.find((item) => (
-            item.id === current.id && item.attemptKey === current.attemptKey
-          ));
-          if (latest?.serverVersion === current.serverVersion) {
-            queue.updateJob(current.id, {
-              message: error instanceof Error ? error.message : String(error)
-            });
-          }
-        }
-      } finally {
-        controllers.current.delete(controller);
-        // Redis owns identity, source time and display position. One recovery
-        // covers both early SSE and a write with an uncertain acknowledgement.
-        if (mounted.current && !controller.signal.aborted) {
-          await queue.server.recoverAuthority().catch(() => undefined);
-        }
-        pendingRetries.current.delete(retryKey);
-      }
-      return;
+  const retryMany = useCallback(async (targets: readonly IngestionJob[]) => {
+    const selected: IngestionJob[] = [];
+    for (const target of targets) {
+      const current = queue.jobsRef.current.find((job) => (
+        job.id === target.id && job.attemptKey === target.attemptKey
+      ));
+      if (!current || current.status !== target.status || ingestionJobRetryKind(current) !== "browser-prepare") continue;
+      const next = {
+        ...resetImportJobForPrepareRetry(current),
+        preview: "",
+        previewFull: undefined,
+        objectUrl: undefined,
+        width: 0,
+        height: 0,
+        originalWidth: undefined,
+        originalHeight: undefined,
+        originalSize: undefined
+      };
+      queue.updateJob(current.id, next);
+      selected.push(next);
     }
-    const next = {
-      ...resetImportJobForPrepareRetry(current),
-      preview: "",
-      previewFull: undefined,
-      objectUrl: undefined,
-      width: 0,
-      height: 0,
-      originalWidth: undefined,
-      originalHeight: undefined,
-      originalSize: undefined
-    };
-    queue.updateJob(current.id, next);
-    await submitImportBatch([next]);
-  }, [queue, submitImportBatch]);
+    for (let offset = 0; mounted.current && offset < selected.length; offset += maxItems) {
+      const jobs = selected.slice(offset, offset + maxItems).filter((target) => (
+        queue.jobsRef.current.some((job) => job.id === target.id
+          && job.attemptKey === target.attemptKey && job.status === "queued")
+      ));
+      await submitImportBatch(jobs);
+    }
+  }, [maxItems, queue, submitImportBatch]);
 
-  return { addUrls, addParsedImports, cancel, cancelMany, retry };
+  return { addUrls, addParsedImports, cancel, cancelMany, retryMany };
 }

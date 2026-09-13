@@ -13,6 +13,7 @@ type IngestionJobListProps = {
   onPatch: (job: IngestionJob, patch: Partial<ImageDraft>) => void;
   onCancel: (job: IngestionJob) => void;
   onRetry: (job: IngestionJob) => void;
+  isRetryPending: (job: IngestionJob) => boolean;
   onRemove: (job: IngestionJob) => void;
   onConfirmDuplicate: (job: IngestionJob) => void;
   onOpenDetail: (
@@ -38,6 +39,7 @@ export const IngestionJobList = memo(function IngestionJobList({
   onPatch,
   onCancel,
   onRetry,
+  isRetryPending,
   onRemove,
   onConfirmDuplicate,
   onOpenDetail,
@@ -48,7 +50,7 @@ export const IngestionJobList = memo(function IngestionJobList({
     <IngestionJobCard
       key={job.id}
       job={job}
-      busy={busy}
+      busy={busy || isRetryPending(job)}
       storageDisplayName={storageName(job.storageSlug)}
       themes={themes}
       allTags={tags}

@@ -496,6 +496,7 @@ export type IngestionCancelResultDto = {
 export const ingestionQueueActionTypes = [
   "apply_metadata",
   "commit_ready",
+  "retry_failed",
   "clear_duplicate_pending",
   "clear_uncommitted",
   "clear_completed",

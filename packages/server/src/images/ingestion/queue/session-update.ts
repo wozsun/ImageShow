@@ -77,11 +77,11 @@ export async function updateIngestionSessions(
           throw new ApiError(409, "invalid_ingestion_state", "当前内容接入任务不可编辑");
         }
         if (input.retry_prepare && (
-          current.queue !== "import"
-          || current.status !== "failed"
+          current.status !== "failed"
+          || (current.queue === "upload" && (!current.raw_generation || !current.raw_size))
           || input.duplicate_decision !== undefined
         )) {
-          throw new ApiError(409, "invalid_ingestion_state", "只有准备失败的导入任务可以重新下载");
+          throw new ApiError(409, "invalid_ingestion_state", "当前任务没有可重新准备的来源，请重新选择文件");
         }
         if (input.duplicate_decision && !current.prepared) {
           throw new ApiError(
@@ -114,13 +114,13 @@ export async function updateIngestionSessions(
           duplicate_decision: duplicateDecision,
           ...(prepared ? { prepared } : {}),
           ...(input.retry_prepare ? {
-            status: "queued" as const,
-            phase: "queued",
-            message: "等待重新下载",
+            status: current.queue === "import" ? "queued" as const : "received" as const,
+            phase: current.queue === "import" ? "queued" : "received",
+            message: current.queue === "import" ? "等待重新下载" : "等待重新处理",
             progress: null,
             execution_token: "",
-            raw_generation: "",
-            raw_size: 0,
+            raw_generation: current.queue === "import" ? "" : current.raw_generation,
+            raw_size: current.queue === "import" ? 0 : current.raw_size,
             prepared: undefined,
             duplicate_decision: undefined,
             error: undefined
@@ -134,9 +134,12 @@ export async function updateIngestionSessions(
           { allowStaleSemanticNoOp: !input.retry_prepare }
         );
         if (input.retry_prepare && updated.changed) {
-          // The CAS retires only these generations. A new download keeps the
-          // canonical identity/time/order and owns a different raw generation.
-          await ingestionCleanupRetryQueue.enqueue(() => cleanupRetiredSessions([current]));
+          // Cleanup only retired generations. Upload retries still own their
+          // raw file; import retries download into a new raw generation.
+          const retired = current.queue === "upload"
+            ? { ...current, raw_generation: "", raw_size: 0 }
+            : current;
+          await ingestionCleanupRetryQueue.enqueue(() => cleanupRetiredSessions([retired]));
         }
         const updatedSession = updated.session as IngestionSessionSnapshot;
         return {

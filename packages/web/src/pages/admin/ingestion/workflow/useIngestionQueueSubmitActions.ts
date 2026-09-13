@@ -90,6 +90,13 @@ export function useIngestionQueueSubmitActions({
     let localCommitted = false;
     const result = await queue.actions.run(serverAction, async () => {
       localCommitted = await commitCapturedLocalJobs();
+    }, {
+      onSettled: async () => {
+        // HTTP acknowledgement can precede the SSE summary. Keep the action
+        // locked until the existing read owner adopts a post-action snapshot.
+        await queue.server.recoverAfterSuccessfulAction().catch(() => undefined);
+        return true;
+      }
     });
     if (localCommitted || (result?.changed ?? 0) > 0) onDone();
   }, [
@@ -99,6 +106,7 @@ export function useIngestionQueueSubmitActions({
     queue.actions,
     queue.captureBrowserActionJobs,
     queue.server.refresh,
+    queue.server.recoverAfterSuccessfulAction,
     queue.server.summary?.ready,
     queue.server.status
   ]);

@@ -3,6 +3,7 @@ import { useImport } from "../import/useImport.js";
 import { useIngestionCommit } from "../queue/useIngestionCommit.js";
 import { useIngestionQueue } from "../queue/useIngestionQueue.js";
 import { useUpload } from "../upload/useUpload.js";
+import { useIngestionRetry } from "../queue/useIngestionRetry.js";
 
 export function useUploadQueueOwner({
   pageSize,
@@ -44,7 +45,8 @@ export function useUploadQueueOwner({
     maxLongEdge,
     browserConcurrency
   });
-  return { queue, commit, ...uploadFlow };
+  const retry = useIngestionRetry({ queue, retryBrowserJobs: uploadFlow.retryMany, commitJobs: commit.commit });
+  return { queue, commit, ...uploadFlow, ...retry };
 }
 
 export function useImportQueueOwner({
@@ -81,5 +83,6 @@ export function useImportQueueOwner({
     storageSlug,
     maxItems
   });
-  return { queue, commit, ...importFlow };
+  const retry = useIngestionRetry({ queue, retryBrowserJobs: importFlow.retryMany, commitJobs: commit.commit });
+  return { queue, commit, ...importFlow, ...retry };
 }

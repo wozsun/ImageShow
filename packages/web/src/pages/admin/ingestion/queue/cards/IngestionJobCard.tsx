@@ -24,6 +24,7 @@ import {
   ingestionJobCanBeRemovedLocally
 } from "../model/ingestion-queue-state.js";
 import { useIngestionJobDraftEditing } from "./useIngestionJobDraftEditing.js";
+import { ingestionJobRetryKind } from "../model/ingestion-job-retry.js";
 
 function formatPixelDimensions(width?: number, height?: number) {
   return width && height ? `${width}×${height}` : "0000×0000";
@@ -90,10 +91,7 @@ export const IngestionJobCard = memo(function IngestionJobCard({
   const cancellationFailed = job.failureStage === "cancel";
   const confirmDuplicate = ingestionJobNeedsDuplicateConfirmation(job)
     && (job.duplicateCount ?? 0) > 0;
-  const retryable = (
-    ["failed", "cancelled"].includes(job.status)
-    || (job.status === "finalized" && job.resultState === "error")
-  ) && !cancellationFailed && !confirmDuplicate;
+  const retryable = ingestionJobRetryKind(job) !== null;
   const statusLabel = ingestionJobStatusLabel(job);
   const hasFinalSize = typeof job.finalSize === "number";
   const originalSize = job.originalSize ?? job.file?.size;

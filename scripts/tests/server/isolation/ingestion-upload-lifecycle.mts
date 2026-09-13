@@ -666,10 +666,41 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     unknownRawBody,
     "convert 结果未知且 canonical 引用当前 generation 时不得删除 raw"
   );
+  const sessionUpdate = await import("../../../../packages/server/src/images/ingestion/queue/session-update.ts");
+  const prepareSession = await import("../../../../packages/server/src/images/ingestion/workers/prepare-session.ts");
+  const preparedFiles = await import("../../../../packages/server/src/images/ingestion/raw/prepared.ts");
+  const failedUpload = activeSession((await ingestionRepository.mutateSemantic(
+    unknownRawCanonical, unknownRawCanonical.version,
+    ingestionSessionTransitions.failedIngestionSession(unknownRawCanonical, new Error("prepare interrupted"))
+  )).session);
+  const [retriedUpload] = await sessionUpdate.updateIngestionSessions(ingestionRepository, unknownRawOwner, [{
+    ...unknownRawPair, expected_version: failedUpload.version, retry_prepare: true
+  }]);
+  assert.equal(retriedUpload.status, "changed");
+  const receivedRetry = activeSession(await ingestionRepository.readSession(unknownRawOwner, unknownRawCanonical.session_id));
+  assert.equal(receivedRetry.status, "received");
+  assert.equal(receivedRetry.raw_generation, unknownRawCanonical.raw_generation);
+  assert.equal(receivedRetry.image_time, unknownRawCanonical.image_time);
+  assert.equal(receivedRetry.image_id, unknownRawCanonical.image_id);
+  assert.equal(receivedRetry.accepted_order, unknownRawCanonical.accepted_order);
+  assert.deepEqual(await readFile(retainedUnknownRawPath), unknownRawBody, "重试不能把继续使用的上传原图作为旧代次清理");
+  const preparingRetry = activeSession((await ingestionRepository.mutateSemantic(receivedRetry, receivedRetry.version,
+    ingestionSessionTransitions.semanticIngestionSession(receivedRetry, {
+      status: "preparing", phase: "prepare-waiting", execution_token: coreUuid.randomUuidV7()
+    })
+  )).session);
+  const preparedRetry = activeSession((await prepareSession.prepareIngestionSessionSnapshot(
+    ingestionRepository, preparingRetry, new AbortController().signal
+  )));
+  assert.equal(preparedRetry.status, "ready", "服务器仅用已接收的原图完成重新处理");
+  assert.ok(preparedRetry.prepared);
+  await preparedFiles.removeIngestionPreparedFiles([
+    preparedRetry.prepared.prepared_image_path, preparedRetry.prepared.prepared_thumbnail_path
+  ]);
   await rm(retainedUnknownRawPath, { force: true });
   const discardedUnknownRaw = discardedResult(await ingestionRepository.mutateSemantic(
-    unknownRawCanonical, unknownRawCanonical.version,
-    ingestionSessionTransitions.discardedIngestionReceipt(unknownRawCanonical, Date.now())
+    preparedRetry, preparedRetry.version,
+    ingestionSessionTransitions.discardedIngestionReceipt(preparedRetry, Date.now())
   ));
   await ingestionRepository.deleteSession(discardedUnknownRaw.session, discardedUnknownRaw.session.version);
   const staleIngestionImageId = imageTime.createImageId(

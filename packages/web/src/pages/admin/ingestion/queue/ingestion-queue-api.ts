@@ -59,7 +59,7 @@ export type IngestionQueueProducerApi = IngestionQueueApi & {
     pair: IngestionSessionPairDto;
     releasedRevision?: number;
     releasedSummary?: IngestionQueueSummaryDto;
-  }>[], replacements?: ReadonlyMap<string, IngestionJob>) => ReadonlySet<string>;
+  }>[]) => ReadonlySet<string>;
   server: Readonly<{
     recoverAuthority: () => Promise<void>;
   }>;

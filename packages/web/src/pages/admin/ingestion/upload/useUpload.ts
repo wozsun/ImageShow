@@ -8,6 +8,7 @@ import {
   type IngestionQueueCancelOutcome
 } from "../queue/ingestion-cancel.js";
 import {
+  ingestionJobRetryKind,
   isUnconfirmedUploadRawAttempt,
   resetJobForPrepareRetry
 } from "../queue/model/ingestion-job-retry.js";
@@ -600,91 +601,47 @@ export function useUpload(options: {
     }
   ), [cancelMany]);
 
-  const retry = useCallback(async (job: IngestionJob) => {
+  const retryMany = useCallback(async (targets: readonly IngestionJob[]) => {
     await browserBatchSequencer.current!.run(async () => {
-      if (!mounted.current) return;
-      let current = queue.jobsRef.current.find((item) => item.id === job.id);
-      let releasedTarget: Parameters<typeof queue.releaseResolvedServerJobs>[0][number] | undefined;
-      if (!current?.file) return;
-      const active = activeUploads.current.get(current.id);
-      if (active?.attemptKey === current.attemptKey) {
-        active.abort();
-        await active.settled;
-        if (activeUploads.current.get(current.id) === active) {
-          activeUploads.current.delete(current.id);
+      const selected: IngestionJob[] = [];
+      for (const target of targets) {
+        if (!mounted.current) return;
+        let current = queue.jobsRef.current.find((job) => (
+          job.id === target.id && job.attemptKey === target.attemptKey
+        ));
+        if (!current?.file || current.status !== target.status || ingestionJobRetryKind(current) !== "browser-prepare") continue;
+        const active = activeUploads.current.get(current.id);
+        if (active?.attemptKey === current.attemptKey) {
+          active.abort();
+          await active.settled;
+          if (activeUploads.current.get(current.id) === active) activeUploads.current.delete(current.id);
         }
+        current = queue.jobsRef.current.find((job) => (
+          job.id === target.id && job.attemptKey === target.attemptKey
+        ));
+        if (!current?.file || current.status !== target.status || ingestionJobRetryKind(current) !== "browser-prepare") continue;
+        const reuseIntentAttempt = !current.serverVersion && Boolean(current.uploadIntentItemInput)
+          && (current.failureStage === "create" || isUnconfirmedUploadRawAttempt(current));
+        const objectUrl = current.objectUrl?.startsWith("blob:")
+          ? current.objectUrl : URL.createObjectURL(current.file);
+        const next = {
+          ...resetJobForPrepareRetry(current),
+          attemptKey: reuseIntentAttempt ? current.attemptKey : webUuidV7(),
+          uploadIntentItemInput: reuseIntentAttempt ? current.uploadIntentItemInput : undefined,
+          preview: objectUrl,
+          previewFull: undefined,
+          objectUrl,
+          width: current.originalWidth ?? current.width,
+          height: current.originalHeight ?? current.height,
+          originalSize: current.file.size,
+          transferProgress: 0
+        };
+        queue.updateJob(current.id, next);
+        selected.push(next);
       }
-      const latest = queue.jobsRef.current.find((item) => item.id === job.id);
-      if (!latest?.file || latest.attemptKey !== current.attemptKey) return;
-      current = latest;
-      const replayUnconfirmedRaw = isUnconfirmedUploadRawAttempt(current);
-      if (current.sessionId && current.imageId && !replayUnconfirmedRaw) {
-        const cancelled = await cancel(current);
-        if (!cancelled.succeeded) return;
-        const cancelledCurrent = queue.jobsRef.current.find(
-          (item) => item.id === current!.id
-        );
-        if (!cancelledCurrent?.file) return;
-        if (cancelled.pair) {
-          releasedTarget = {
-            id: current.id,
-            attemptKey: current.attemptKey,
-            pair: cancelled.pair,
-            ...(cancelled.releasedRevision !== undefined
-              ? { releasedRevision: cancelled.releasedRevision }
-              : {}),
-            ...(cancelled.releasedSummary
-              ? { releasedSummary: cancelled.releasedSummary }
-              : {})
-          };
-        }
-        current = cancelledCurrent;
-      }
-      const file = current.file;
-      if (!file) return;
-      const reuseIntentAttempt = !current.serverVersion
-        && Boolean(current.uploadIntentItemInput)
-        && (
-          current.failureStage === "create" || replayUnconfirmedRaw
-        );
-      const objectUrl = !releasedTarget
-        && current.objectUrl?.startsWith("blob:")
-        ? current.objectUrl
-        : URL.createObjectURL(file);
-      const next = {
-        ...resetJobForPrepareRetry(current),
-        // A raw response can be lost before the canonical exists. Replaying the
-        // same upload intent is the only safe retry: it either returns the
-        // already accepted canonical or reissues a credential for the same pair.
-        attemptKey: reuseIntentAttempt
-          ? current.attemptKey
-          : webUuidV7(),
-        uploadIntentItemInput: reuseIntentAttempt
-          ? current.uploadIntentItemInput
-          : undefined,
-        preview: objectUrl,
-        previewFull: undefined,
-        objectUrl,
-        width: current.originalWidth ?? current.width,
-        height: current.originalHeight ?? current.height,
-        originalSize: file.size,
-        transferProgress: 0
-      };
-      if (releasedTarget) {
-        const released = queue.releaseResolvedServerJobs(
-          [releasedTarget], new Map([[current.id, next]])
-        );
-        if (!released.has(current.id)) {
-          if (next.objectUrl?.startsWith("blob:")) {
-            URL.revokeObjectURL(next.objectUrl);
-          }
-          void queue.server.recoverAuthority().catch(() => undefined);
-          return;
-        }
-      } else queue.updateJob(current.id, next);
-      await transferUploadJobs([next]);
+      await transferUploadJobs(selected);
     });
-  }, [cancel, queue, transferUploadJobs]);
+  }, [queue, transferUploadJobs]);
 
-  return { addFiles, cancel, cancelMany, retry };
+  return { addFiles, cancel, cancelMany, retryMany };
 }

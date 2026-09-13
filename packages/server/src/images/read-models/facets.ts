@@ -22,14 +22,12 @@ import {
 
 type FacetMembershipRow = {
   themes: string[];
-  tags: string[];
   authors: string[];
 };
 
 async function facetVocabulary(
   counts: {
     themes: Record<string, number>;
-    tags: Record<string, number>;
     authors: Record<string, number>;
   },
   database: PublicDatabaseReadAccess = {}
@@ -61,12 +59,6 @@ async function readFacetsFromPostgres(
           LIMIT $1
        ) AS themes,
        ARRAY(
-         SELECT DISTINCT it.tag_slug
-           FROM image_tag it
-           JOIN metadata m ON m.id=it.image_id AND m.status='ready'
-          LIMIT $1
-       ) AS tags,
-       ARRAY(
          SELECT DISTINCT m.author
           FROM metadata m
           WHERE m.status='ready' AND m.author IS NOT NULL
@@ -74,7 +66,7 @@ async function readFacetsFromPostgres(
        ) AS authors`,
     [maximumRows + 1]
   )).rows[0] as FacetMembershipRow;
-  if ([row.themes, row.tags, row.authors].some((values) => (
+  if ([row.themes, row.authors].some((values) => (
     (values?.length ?? 0) > maximumRows
   ))) {
     throw publicPgFallbackWorkLimitExceeded(
@@ -83,7 +75,6 @@ async function readFacetsFromPostgres(
   }
   return facetVocabulary({
     themes: Object.fromEntries((row.themes ?? []).map((slug) => [slug, 1])),
-    tags: Object.fromEntries((row.tags ?? []).map((slug) => [slug, 1])),
     authors: Object.fromEntries((row.authors ?? []).map((slug) => [slug, 1]))
   }, { reader });
 }

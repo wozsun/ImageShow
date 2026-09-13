@@ -28,6 +28,7 @@ import {
   type IngestionSessionRepository
 } from "../repository.ts";
 import { semanticIngestionSession } from "../sessions/transitions.ts";
+import { updateIngestionSessions } from "./session-update.ts";
 
 type ActionItem = IngestionQueueActionResultDto["items"][number];
 
@@ -352,6 +353,43 @@ async function commitReadyAction(input: Readonly<{
     ?? skipped(session, "ingestion_action_predicate_changed", "当前任务未被处理"));
 }
 
+async function retryFailedAction(input: Readonly<{
+  repository: IngestionSessionRepository;
+  owner: string;
+  sessions: readonly StoredIngestionSession[];
+  capturedRevision: number;
+  assertScope: () => unknown;
+}>) {
+  // The watermark freezes both membership and state. Do not recapture a task
+  // that another window retried, edited or completed while this action ran.
+  return mapWithWorkerPool(input.sessions, 10, async (session): Promise<ActionItem> => {
+    if (session.last_semantic_revision > input.capturedRevision || session.status !== "failed") {
+      return skipped(session, "ingestion_action_state_changed", "任务已变化，不属于本轮失败重试");
+    }
+    try {
+      input.assertScope();
+      if (session.commit) {
+        const [result] = await acceptIngestionCommitIntents(input.repository, input.owner, [
+          commitInput(session, session.commit.commit_request_id)
+        ]);
+        if (!result || result.status === "failed") {
+          return { ...pair(session), status: "failed", code: result?.code, message: result?.message ?? "重试响应缺少当前任务" };
+        }
+        return changed(session, result.status === "completed" ? result.completed_item : undefined);
+      }
+      const [result] = await updateIngestionSessions(input.repository, input.owner, [{
+        ...pair(session), expected_version: session.version, retry_prepare: true
+      }]);
+      if (!result || result.status === "failed") {
+        return { ...pair(session), status: "failed", code: result?.code, message: result?.message ?? "重试响应缺少当前任务" };
+      }
+      return changed(session, undefined, result.last_semantic_revision);
+    } catch (error) {
+      return failed(session, error);
+    }
+  });
+}
+
 function cancelPredicate(
   action: IngestionQueueActionTypeDto,
   session: StoredIngestionSession
@@ -610,6 +648,15 @@ export function executeIngestionQueueActionBatch(input: Readonly<{
       owner: input.owner,
       sessions: input.sessions,
       actionRequestId: input.request.action_request_id,
+      capturedRevision: input.capturedRevision,
+      assertScope: input.assertScope
+    });
+  }
+  if (input.request.action === "retry_failed") {
+    return retryFailedAction({
+      repository: input.repository,
+      owner: input.owner,
+      sessions: input.sessions,
       capturedRevision: input.capturedRevision,
       assertScope: input.assertScope
     });

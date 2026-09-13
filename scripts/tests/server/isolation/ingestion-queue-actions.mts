@@ -1500,6 +1500,58 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     ...pairOf(duplicateCountCurrent), expected_version: duplicateCountCurrent.version, retry_prepare: true
   }]);
   assert.equal(committedRetry.status, "failed", "准备完成的图片不能走重新下载");
+
+  const commitFailedReady = await createActionReadySession("retry-frozen-commit");
+  const frozenCommitId = coreUuid.randomUuidV7();
+  const [acceptedCommit] = await ingestionCommitIntent.acceptIngestionCommitIntents(ingestionRepository, actionOwner, [{
+    ...pairOf(commitFailedReady), expected_version: commitFailedReady.version,
+    expected_md5: commitFailedReady.prepared.md5, commit_request_id: frozenCommitId,
+    duplicate_decision: "upload", metadata: commitFailedReady.metadata
+  }]);
+  assert.notEqual(acceptedCommit.status, "failed");
+  const commitBeforeFailure = await readActive(commitFailedReady);
+  const commitFailed = activeSession((await ingestionRepository.mutateSemantic(
+    commitBeforeFailure, commitBeforeFailure.version,
+    ingestionSessionTransitions.failedIngestionSession(commitBeforeFailure, new Error("storage unavailable"))
+  )).session);
+  const allRetryPage = await readRetryPage();
+  const changedAfterCapture = await readActive(staleTarget);
+  await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [{
+    ...pairOf(changedAfterCapture), expected_version: changedAfterCapture.version,
+    metadata: { ...changedAfterCapture.metadata, description: "another window changed this task" }
+  }]);
+  const newAfterRetryCapture = await createActionReadySession("retry-later-failure", false);
+  const newFailed = activeSession((await ingestionRepository.mutateSemantic(
+    newAfterRetryCapture, newAfterRetryCapture.version,
+    ingestionSessionTransitions.failedIngestionSession(newAfterRetryCapture, new Error("later failure"))
+  )).session);
+  const isolatedFailure = retrySessions.find((session) => session.session_id !== staleTarget.session_id
+    && session.session_id !== retryTarget.session_id)!;
+  const retryRepository = repositoryWithOverrides(ingestionRepository, {
+    mutateSemantic: async (...args) => {
+      if (args[0].session_id === isolatedFailure.session_id) throw new Error("one retry failed");
+      return ingestionRepository.mutateSemantic(...args);
+    }
+  });
+  const allRetryRequest = { queue: "import" as const, action: "retry_failed" as const,
+    action_request_id: coreUuid.randomUuidV7(), action_watermark: allRetryPage.action_watermark };
+  const allRetryResult = await runAction(retryRepository, allRetryRequest);
+  for (const original of retrySessions) {
+    const current = await readActive(original);
+    const excluded = original.session_id === staleTarget.session_id || original.session_id === isolatedFailure.session_id;
+    assert.equal(current.status, excluded ? "failed" : "queued");
+    for (const field of ["image_id", "image_time", "accepted_order", "batch_position", "source_type", "storage_slug"] as const) {
+      assert.equal(current[field], original[field], `全队列重试保留 ${field}`);
+    }
+  }
+  assert.equal((await readActive(newFailed)).status, "failed", "新加入的失败任务不属于冻结水位");
+  assert.equal((await readActive(commitFailed)).status, "committing");
+  assert.equal((await readActive(commitFailed)).commit?.commit_request_id, frozenCommitId, "提交失败沿用原意图");
+  assert.ok(allRetryResult.items.some(item => item.session_id === isolatedFailure.session_id && item.status === "failed"));
+  assert.ok(allRetryResult.items.some(item => item.session_id === staleTarget.session_id && item.status === "skipped"));
+  const retryRevision = (await readRetryPage()).revision;
+  assert.deepEqual(await runAction(retryRepository, allRetryRequest), allRetryResult);
+  assert.equal((await readRetryPage()).revision, retryRevision, "重复动作响应不再执行已受理的重试");
   actionScope.close();
 
 });

@@ -18,8 +18,7 @@ import type { IngestionAttributeDefaults } from "./queue/model/ingestion-attribu
 import { ingestionJobNeedsDuplicateConfirmation } from "./queue/model/duplicate-match.js";
 import {
   ingestionJobCanBeCancelled,
-  ingestionJobCanBeRemovedLocally,
-  ingestionJobCanStartCommit
+  ingestionJobCanBeRemovedLocally
 } from "./queue/model/ingestion-queue-state.js";
 import type {
   ImportSourceMode,
@@ -171,9 +170,6 @@ export function Ingestion({
   } = importOwner;
   const uploadCommit = uploadOwner.commit;
   const importCommit = importOwner.commit;
-  const commitJobs = mode === "upload"
-    ? uploadCommit.commit
-    : importCommit.commit;
   const confirmIngestionDuplicate = mode === "upload"
     ? uploadCommit.confirmDuplicate
     : importCommit.confirmDuplicate;
@@ -274,36 +270,6 @@ export function Ingestion({
     setOpen(true);
     return true;
   };
-
-  const retryJob = useCallback(async (jobId: string) => {
-    const current = queue.jobsRef.current.find((job) => job.id === jobId);
-    if (
-      !current
-      || current.failureStage === "cancel"
-      || !(
-        ["failed", "cancelled"].includes(current.status)
-        || (current.status === "finalized" && current.resultState === "error")
-      )
-    ) {
-      return;
-    }
-    if (
-      current.failureStage === "commit"
-      || current.status === "finalized"
-    ) {
-      if (ingestionJobNeedsDuplicateConfirmation(current)) return;
-      if (!ingestionJobCanStartCommit(current, "resume")) return;
-      await commitJobs([current]);
-      return;
-    }
-    if (current.kind === "upload") await retryUpload(current);
-    else await retryImport(current);
-  }, [
-    commitJobs,
-    queue.jobsRef,
-    retryImport,
-    retryUpload
-  ]);
 
   const removeJob = useCallback(async (job: IngestionJob) => {
     if (!ingestionJobCanBeRemovedLocally(job)) return;
@@ -441,8 +407,8 @@ export function Ingestion({
     if (ingestionJobCanBeCancelled(job)) void cancelJob(job);
   }, [cancelJob]);
   const requestRetryJob = useCallback((job: IngestionJob) => {
-    void retryJob(job.id);
-  }, [retryJob]);
+    void (job.kind === "upload" ? retryUpload(job) : retryImport(job));
+  }, [retryUpload, retryImport]);
   const requestRemoveJob = useCallback((job: IngestionJob) => {
     void removeJob(job);
   }, [removeJob]);
@@ -452,7 +418,8 @@ export function Ingestion({
     void confirmIngestionDuplicate(current.id);
   }, [confirmIngestionDuplicate, queue.jobsRef]);
 
-  const busy = commitBusy || queue.actions.busy;
+  const owner = mode === "upload" ? uploadOwner : importOwner;
+  const busy = commitBusy || queue.actions.busy || owner.retryingAll;
 
   return (
     <>
@@ -491,6 +458,11 @@ export function Ingestion({
           backendOptions={backendOptions}
           onBackendChange={setBackendChoice}
           onCommitReady={queueWorkflow.commitReadyJobs}
+          canRetryAll={owner.canRetryAll}
+          retryingAll={owner.retryingAll}
+          retryBusy={owner.retryBusy}
+          isRetryPending={owner.isRetryPending}
+          onRetryAll={owner.retryAll}
           sourceDialogPending={sourceDialogPending}
           sourceDialogOpen={sourceDialogOpen}
           sourceDialogComponent={ImportSourceDialogComponent}

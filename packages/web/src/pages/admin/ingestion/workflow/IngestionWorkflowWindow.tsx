@@ -90,6 +90,11 @@ type IngestionWorkflowWindowProps = {
   backendOptions: readonly SelectOption[];
   onBackendChange: (backend: string) => void;
   onCommitReady: () => Promise<void>;
+  canRetryAll: boolean;
+  retryingAll: boolean;
+  retryBusy: boolean;
+  isRetryPending: (job: IngestionJob) => boolean;
+  onRetryAll: () => Promise<void>;
   sourceDialogPending: boolean;
   sourceDialogOpen: boolean;
   sourceDialogComponent: ImportSourceDialogComponent | null;
@@ -232,6 +237,11 @@ export function IngestionWorkflowWindow({
   backendOptions,
   onBackendChange,
   onCommitReady,
+  canRetryAll,
+  retryingAll,
+  retryBusy,
+  isRetryPending,
+  onRetryAll,
   sourceDialogPending,
   sourceDialogOpen,
   sourceDialogComponent: SourceDialog,
@@ -296,6 +306,7 @@ export function IngestionWorkflowWindow({
     doneJobs
   } = queue.summary;
   const [committingCount, setCommittingCount] = useState<number | null>(null);
+  const committingRef = useRef(false);
   const submitCount = committingCount ?? readyCount;
   const waitingJobs = stageWaitingJobs + commitQueuedJobs + finalizedJobs;
   const clearDangerous = queue.summary.unfinishedCount > 0;
@@ -629,6 +640,7 @@ export function IngestionWorkflowWindow({
               storageName={storageName}
               vocabulary={{ themes, tags, authors }}
               jobActions={{
+                isRetryPending,
                 onPatch: onPatchJob,
                 onCancel: onCancelJob,
                 onRetry: onRetryJob,
@@ -687,11 +699,19 @@ export function IngestionWorkflowWindow({
               }}
               commit={{
                 count: submitCount,
-                pending: committingCount !== null,
+                retryAll: canRetryAll || retryingAll,
+                pending: busy || retryBusy || committingCount !== null || queue.server.status !== "ready",
                 onClick: () => {
-                  if (committingCount !== null || readyCount === 0) return;
+                  if (busy || retryBusy || committingRef.current || queue.server.status !== "ready") return;
+                  if (canRetryAll) {
+                    void onRetryAll();
+                    return;
+                  }
+                  if (readyCount === 0) return;
+                  committingRef.current = true;
                   setCommittingCount(readyCount);
-                  void Promise.resolve(onCommitReady()).finally(() => {
+                  void Promise.resolve().then(onCommitReady).finally(() => {
+                    committingRef.current = false;
                     setCommittingCount(null);
                   });
                 }
