@@ -193,11 +193,28 @@ export async function getStorageBackend(
   ), access);
 }
 
+/** Response-scoped configs selected from one current registry revision. */
+export function getStorageBackendConfigs(
+  slugs: readonly string[],
+  access: PublicDatabaseReadAccess = {}
+): Promise<ReadonlyMap<string, StorageConfig>> {
+  return withCurrentStorageBackends((backends) => {
+    const records = new Map(backends.map((backend) => [backend.slug, backend]));
+    return new Map([...new Set(slugs)].map((slug) => [
+      slug,
+      storageConfigFromRecord(requireStorageRecord(records.get(slug), slug))
+    ]));
+  }, access);
+}
+
 function storageRecordBySlug(
   backends: readonly StorageBackendRecord[],
   slug: string
 ) {
-  const record = backends.find((backend) => backend.slug === slug);
+  return requireStorageRecord(backends.find((backend) => backend.slug === slug), slug);
+}
+
+function requireStorageRecord(record: StorageBackendRecord | undefined, slug: string) {
   if (!record) {
     throw new ApiError(
       404,

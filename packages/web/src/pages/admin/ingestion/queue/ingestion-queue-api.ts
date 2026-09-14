@@ -46,6 +46,7 @@ export function completedIngestionObservations(
 
 export type IngestionQueueProducerApi = IngestionQueueApi & {
   appendJobs: (jobs: IngestionJob[]) => boolean;
+  retryPrepareJob: (previous: IngestionJob, job: IngestionJob) => boolean;
   bindServerJob: (
     id: string,
     binding: IngestionServerBinding,

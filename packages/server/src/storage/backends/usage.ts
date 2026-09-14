@@ -1,4 +1,5 @@
 import type { StorageType } from "@imageshow/shared/browser";
+import type { StorageBackendConfigRow } from "./record.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { pool } from "../../core/database/pools.ts";
 import { countUnresolvedMoveCleanupJobs } from "../cleanup/repository.ts";
@@ -57,8 +58,10 @@ export function assertPhysicalLocationChangeAllowed(
 }
 
 export async function readStorageBackendSnapshot(
-  slug: string
+  slug: string,
+  signal?: AbortSignal
 ): Promise<StorageBackendSnapshot> {
+  signal?.throwIfAborted();
   const row = (await pool.query(
     `SELECT backend.slug,
             backend.type,
@@ -72,6 +75,7 @@ export async function readStorageBackendSnapshot(
       WHERE backend.slug=$1`,
     [slug]
   )).rows[0] as StorageBackendSnapshotRow | undefined;
+  signal?.throwIfAborted();
   if (!row) {
     throw new ApiError(
       404,
@@ -81,11 +85,51 @@ export async function readStorageBackendSnapshot(
   }
   const [cleanupJobCount, activeIngestionCounts] = await Promise.all([
     countUnresolvedMoveCleanupJobs(slug),
-    activeIngestionStorageCounts()
+    activeIngestionStorageCounts({ signal })
   ]);
+  signal?.throwIfAborted();
   return {
     ...row,
     ingestion_session_count: activeIngestionCounts.get(slug) ?? 0,
+    cleanup_job_count: cleanupJobCount
+  };
+}
+
+/** Fresh configuration only; callers decide whether occupancy is relevant. */
+export async function readStorageBackendConfiguration(
+  slug: string,
+  signal?: AbortSignal
+): Promise<StorageBackendConfigRow> {
+  signal?.throwIfAborted();
+  const row = (await pool.query<StorageBackendConfigRow>(
+    `SELECT slug, type, config, namespace_identities
+       FROM storage_backend WHERE slug=$1`,
+    [slug]
+  )).rows[0];
+  signal?.throwIfAborted();
+  if (!row) {
+    throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
+  }
+  return row;
+}
+
+export async function readStorageBackendUsage(
+  slug: string,
+  signal?: AbortSignal
+): Promise<StorageBackendUsage> {
+  signal?.throwIfAborted();
+  const [images, cleanupJobCount, ingestionCounts] = await Promise.all([
+    pool.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM metadata WHERE storage_slug=$1",
+      [slug]
+    ),
+    countUnresolvedMoveCleanupJobs(slug),
+    activeIngestionStorageCounts({ signal })
+  ]);
+  signal?.throwIfAborted();
+  return {
+    image_count: Number(images.rows[0]?.count ?? 0),
+    ingestion_session_count: ingestionCounts.get(slug) ?? 0,
     cleanup_job_count: cleanupJobCount
   };
 }

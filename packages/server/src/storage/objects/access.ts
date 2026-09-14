@@ -38,15 +38,6 @@ export async function storageObjectExists(
   return (await resolveStorageAccess(slug)).driver.exists(prefix, key, options);
 }
 
-export async function readStorageBuffer(
-  prefix: StoragePrefix,
-  key: string,
-  slug?: string,
-  options?: StorageRequestOptions
-) {
-  return (await resolveStorageAccess(slug)).driver.readBuffer(prefix, key, options);
-}
-
 export type StorageRemovalRequest = Readonly<{
   prefix: StoragePrefix;
   key: string;

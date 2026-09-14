@@ -106,6 +106,7 @@ async function maintainStorageUnderLock(
   scheduleSignal.throwIfAborted();
   const pruned = await pruneStorageMaintenanceDirectories(
     plan.capturedGroups,
+    items,
     scheduleSignal,
     lockSignal
   );

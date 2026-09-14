@@ -77,7 +77,7 @@ import {
 import {
   assertCanonicalImageObjectKey,
   isCanonicalImageObjectKey,
-  isCanonicalThumbnailObjectKey,
+  parseImageObjectKey,
   storageObjectKey,
   thumbnailObjectKey
 } from "../../../packages/server/src/storage/objects/image-paths.ts";
@@ -2149,8 +2149,9 @@ test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空
     () => thumbnailObjectKey("nested/" + imageId + ".avif"),
     /Invalid image object key/
   );
-  assert.equal(isCanonicalThumbnailObjectKey(thumbnailObjectKey(canonicalKey)), true);
-  assert.equal(isCanonicalThumbnailObjectKey(canonicalKey), false);
+  assert.deepEqual(parseImageObjectKey(thumbnailObjectKey(canonicalKey)), { id: imageId, ext: "webp" });
+  assert.deepEqual(parseImageObjectKey(canonicalKey), { id: imageId, ext: "avif" });
+  assert.equal(parseImageObjectKey(`ff/${imageId}.avif`), null);
   assert.equal(
     storageS3ObjectName(first, "full", canonicalKey),
     "images/full/" + canonicalKey
@@ -2226,6 +2227,38 @@ for (const populated of [false,true]) {
     assert.equal(iterations,1);assert.equal(closes,1);
   } finally {fsp.opendir=originalOpendir;syncBuiltinESMExports();}
 }
+// The maintenance snapshot reuses unchanged branches and re-reads mutated parents.
+const capturedRoot = join(directory, "thumbs");
+await fsp.mkdir(join(capturedRoot, "removed/nested"), { recursive: true });
+await fsp.mkdir(join(capturedRoot, "kept"), { recursive: true });
+await fsp.writeFile(join(capturedRoot, "removed/nested/old.webp"), "old");
+await fsp.writeFile(join(capturedRoot, "kept/live.webp"), "live");
+const snapshot = { directories: new Map(), entries: 0, complete: true };
+for await (const batch of driver.listKeys("thumbs", { directorySnapshot: snapshot })) assert.ok(batch.length > 0);
+assert.equal(snapshot.complete, true);
+assert.equal(snapshot.entries, 5);
+await fsp.unlink(join(capturedRoot, "removed/nested/old.webp"));
+await fsp.mkdir(join(capturedRoot, "removed/new-empty"));
+const opened = [];
+try {
+  fsp.opendir = async (...args) => { opened.push(args[0]); return originalOpendir(...args); }; syncBuiltinESMExports();
+  assert.equal(await driver.pruneEmptyDirs({ prefix: "thumbs", directorySnapshot: snapshot,
+    changedObjects: [{ prefix: "thumbs", key: "removed/nested/old.webp" }] }), 3);
+  assert.ok(opened.includes(join(capturedRoot, "removed")));
+  assert.ok(!opened.includes(join(capturedRoot, "kept")));
+  assert.equal(await fsp.readFile(join(capturedRoot, "kept/live.webp"), "utf8"), "live");
+  for (const useSnapshot of [true, false]) {
+    await assert.rejects(driver.pruneEmptyDirs({ prefix: "thumbs", maxEntries: 1,
+      ...(useSnapshot ? { directorySnapshot: snapshot } : {}) }), /bounded entry limit/);
+  }
+} finally { fsp.opendir = originalOpendir; syncBuiltinESMExports(); }
+const overflow = { directories: new Map(), entries: 100000, complete: true };
+for await (const batch of driver.listKeys("thumbs", { directorySnapshot: overflow })) assert.ok(batch.length > 0);
+assert.equal(overflow.complete, false);
+assert.equal(overflow.directories.size, 0);
+await fsp.mkdir(join(capturedRoot, "fallback-empty"));
+assert.equal(await driver.pruneEmptyDirs({ prefix: "thumbs", directorySnapshot: overflow }), 1);
+assert.equal(await fsp.readFile(join(capturedRoot, "kept/live.webp"), "utf8"), "live");
 // Real concurrent probes must not touch an existing file or one another.
 await fsp.mkdir(join(directory,"full"),{recursive:true});
 await fsp.writeFile(join(directory,"full/.storage-test"),"existing");

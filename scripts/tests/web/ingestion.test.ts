@@ -109,8 +109,6 @@ import {
   serverIngestionJobsForCombinedPage
 } from "../../../packages/web/src/pages/admin/ingestion/queue/model/server-ingestion-job.ts";
 import {
-  isUnconfirmedUploadRawAttempt,
-  resetImportJobForPrepareRetry,
   resetJobForPrepareRetry
 } from "../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job-retry.ts";
 import {
@@ -512,22 +510,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   assert.equal(missingCard.serverAcceptedOrder, undefined);
   assert.equal(missingCard.objectUrl, "blob:retained-missing-card");
   assert.equal(missingCard.message, "未完成内容接入已过期或被服务器丢弃");
-  assert.equal(isUnconfirmedUploadRawAttempt(ingestionJob({
-    kind: "upload",
-    sessionId,
-    imageId,
-    status: "failed",
-    failureStage: "prepare",
-    serverStatus: "missing"
-  })), true, "canonical 缺失的 raw 失败必须复用原幂等身份重传");
-  assert.equal(isUnconfirmedUploadRawAttempt(ingestionJob({
-    kind: "upload",
-    sessionId,
-    imageId,
-    status: "failed",
-    failureStage: "prepare",
-    serverVersion: 1
-  })), false, "已由 canonical 接管的失败不得走 raw 意图重放");
   const frozenUploadInput = {
     ...base.draft,
     idempotency_key: attemptKey,
@@ -554,9 +536,13 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   );
   assert.equal(
     resetJobForPrepareRetry(frozenUploadJob).uploadIntentItemInput,
-    undefined,
-    "新尝试不得继承旧 upload intent 正文"
+    frozenUploadInput,
+    "raw 结果未知必须复用冻结正文与原幂等身份"
   );
+  assert.equal(resetJobForPrepareRetry(frozenUploadJob).attemptKey, attemptKey);
+  const confirmedUploadRetry = resetJobForPrepareRetry({ ...frozenUploadJob, serverVersion: 1 });
+  assert.equal(confirmedUploadRetry.uploadIntentItemInput, undefined);
+  assert.notEqual(confirmedUploadRetry.attemptKey, attemptKey);
   const retriedServerJob = resetJobForPrepareRetry(ingestionJob({
     ...frozenUploadJob,
     serverAccepted: true,
@@ -576,7 +562,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     storage_slug: "local"
   };
   assert.equal(
-    resetImportJobForPrepareRetry(ingestionJob({
+    resetJobForPrepareRetry(ingestionJob({
       attemptKey,
       status: "failed",
       failureStage: "create",
@@ -12675,6 +12661,12 @@ test("[Web/内容接入] 解析后 202 张按上限接管，明确拒绝与未�
   };
   const queue = {
     jobsRef, updateJob, observeCompletedIngestions() {},
+    retryPrepareJob(previous: IngestionJob, job: IngestionJob) {
+      const state = { page: 1, jobs: jobsRef.current };
+      const next = reduceIngestionQueue(state, { type: "retry-prepare", previous, job });
+      jobsRef.current = next.jobs;
+      return next !== state;
+    },
     appendJobs(jobs: IngestionJob[]) { jobsRef.current.push(...jobs); return true; },
     bindServerJob: updateJob, captureServerConnectionGeneration: () => 1
   };
@@ -16499,6 +16491,12 @@ test("[Web/内容接入] 上传重试等待前批结束后复核原尝试及当�
   let state = { page: 2, jobs: [] as IngestionJob[] };
   const queue = {
     jobsRef: { get current() { return state.jobs; } },
+    retryPrepareJob(previous: IngestionJob, job: IngestionJob) {
+      const next = reduceIngestionQueue(state, { type: "retry-prepare", previous, job });
+      const changed = next !== state;
+      state = next;
+      return changed;
+    },
     updateJob(id: string, patch: Partial<IngestionJob>) { state = reduceIngestionQueue(state, { type: "patch", id, patch }); },
     bindServerJob(id: string, binding: Partial<IngestionJob> & { sessionId: string; imageId: string }) { state = reduceIngestionQueue(state, { type: "bind-server", id, binding }); },
     captureServerConnectionGeneration: () => 1,

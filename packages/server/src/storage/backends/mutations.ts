@@ -177,7 +177,7 @@ export async function deleteStorageBackend(slug: string) {
     `imageshow:storage-backend:${slug}`,
     async (signal, lockClient) => {
       signal.throwIfAborted();
-      const snapshot = await readStorageBackendSnapshot(slug);
+      const snapshot = await readStorageBackendSnapshot(slug, signal);
       signal.throwIfAborted();
       const usage = storageBackendUsage(snapshot);
       if (snapshot.is_default) {
@@ -239,7 +239,7 @@ export async function deleteStorageBackend(slug: string) {
         } catch (error) {
           if (!isForeignKeyViolation(error)) throw error;
           signal.throwIfAborted();
-          const latestSnapshot = await readStorageBackendSnapshot(slug);
+          const latestSnapshot = await readStorageBackendSnapshot(slug, signal);
           signal.throwIfAborted();
           const latestUsage = storageBackendUsage(latestSnapshot);
           const deletion = resolveStorageBackendDeletionState({

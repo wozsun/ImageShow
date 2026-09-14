@@ -106,7 +106,7 @@ PostgreSQL 或执行上限饱和时返回带 `Retry-After` 的 429/503。进程�
 
 图片接入、属性 / 标签 / 分类修改、删除、恢复、主题或作者级联和存储迁移都在同一
 PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写栅栏，以旧 Redis
-投影和 PostgreSQL 新投影计算精确差异，只更新核心 item、反查、`index:all`、全局统计与
+投影和 PostgreSQL 新投影计算精确差异，只更新核心 item、ID 末位索引、`index:all`、全局统计与
 核心完整性字段，最后发布 revision。Redis 同步失败不会回滚已经成功的数据库事务，而是
 关闭读门并重建。
 

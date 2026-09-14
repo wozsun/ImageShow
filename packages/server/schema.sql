@@ -142,9 +142,6 @@ CREATE INDEX idx_metadata_author ON metadata(author);
 CREATE INDEX idx_metadata_md5
 ON metadata(md5);
 
-CREATE INDEX idx_metadata_thumb_key
-ON metadata((regexp_replace(object_key, '\.[^/.]+$', '.webp')));
-
 -- State and gallery cursor reads
 CREATE INDEX idx_metadata_status_deleted
 ON metadata(status, deleted_at, id);

@@ -105,7 +105,6 @@ async function readPublicGalleryStats(
 ): Promise<GalleryStatsDto> {
   const {
     totalResult,
-    matchingRows,
     categoryRows,
     deviceRows,
     brightnessRows,
@@ -118,13 +117,6 @@ async function readPublicGalleryStats(
     try {
       const totalResult = await client.query(
         "SELECT count(*)::int AS image_count FROM metadata WHERE status='ready'"
-      );
-      const matchingRows = await filteredRows<{ image_count: number }>(
-        client,
-        plan,
-        [],
-        (where, rowLimit) => `SELECT count(*)::int AS image_count
-          FROM metadata m WHERE ${where} LIMIT ${rowLimit}`
       );
       const categoryRows = await filteredRows<CategoryRow>(
         client,
@@ -180,7 +172,7 @@ async function readPublicGalleryStats(
         ["tag"],
         (where, rowLimit) => `SELECT t.slug,
                             t.display_name,
-                            count(DISTINCT m.id)::int AS image_count
+                            count(m.id)::int AS image_count
                        FROM tag t
                        LEFT JOIN image_tag facet_it ON facet_it.tag_slug=t.slug
                        LEFT JOIN metadata m
@@ -207,7 +199,7 @@ async function readPublicGalleryStats(
                       LIMIT ${rowLimit}`
       );
 
-      if ([themeRows, tagRows, authorRows].some((rows) => (
+      if ([categoryRows, deviceRows, brightnessRows, themeRows, tagRows, authorRows].some((rows) => (
         rows.length > appConfig.publicPgFallback.maximumVocabularyRows
       ))) {
         throw publicPgFallbackWorkLimitExceeded(
@@ -219,7 +211,6 @@ async function readPublicGalleryStats(
       await client.query("COMMIT");
       return {
         totalResult,
-        matchingRows,
         categoryRows,
         deviceRows,
         brightnessRows,
@@ -233,6 +224,14 @@ async function readPublicGalleryStats(
     }
   })();
 
+  // Sum the complete database grouping before projecting supported UI axes.
+  const matchingImages = categoryRows.reduce((sum, row) => {
+    const count = Number(row.image_count);
+    if (!Number.isSafeInteger(count) || count < 0 || !Number.isSafeInteger(sum + count)) {
+      throw new Error("Invalid gallery category image count");
+    }
+    return sum + count;
+  }, 0);
   const categoryCounts = new Map(
     categoryRows.map((row) => [
       `${row.device}:${row.brightness}`,
@@ -248,7 +247,7 @@ async function readPublicGalleryStats(
 
   return {
     total_images: numericCount(totalResult.rows[0]?.image_count),
-    matching_images: numericCount(matchingRows[0]?.image_count),
+    matching_images: matchingImages,
     devices: devices.map((device) => ({
       device,
       image_count: deviceCounts.get(device) ?? 0

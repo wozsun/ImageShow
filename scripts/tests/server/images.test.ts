@@ -1166,8 +1166,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
     }
   });
   const baseDependencies = {
-    readImageServingRecordByObjectKey: async () => servingRecord,
-    readImageServingRecordByThumbKey: async () => servingRecord,
+    readImageServingRecordById: async () => servingRecord,
     resolveReadableObject: async (
       prefix: "full" | "thumbs",
       key: string,
@@ -1338,7 +1337,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
       request,
       {
         ...baseDependencies,
-        readImageServingRecordByObjectKey: async () => {
+        readImageServingRecordById: async () => {
           invalidKeyRead = true;
           return record;
         }
@@ -1357,7 +1356,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
       request,
       {
         ...baseDependencies,
-        readImageServingRecordByThumbKey: async () => {
+        readImageServingRecordById: async () => {
           invalidThumbnailKeyRead = true;
           return record;
         }
@@ -1958,8 +1957,7 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
   let memberWindow: [number, number] | null = null;
   let hydrationCalls = 0;
   const dependencies: ReadyImageWindowDependencies = {
-    validate: async () => true,
-    count: async () => 5,
+    validate: async () => ({ status: "valid", count: 5 }),
     members: async (_index, start, stop) => {
       memberWindow = [start, stop];
       return members;
@@ -2018,13 +2016,12 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
 
   const oneItemIndex = { ...index, count: 1 };
   const operationalDependencies: ReadyImageWindowDependencies = {
-    validate: async () => true,
-    count: async () => 1,
+    validate: async () => ({ status: "valid", count: 1 }),
     members: async () => [members[0]!],
     items: async () => [serializeReadyImageCacheItem(first)],
     assertDerivedItems: async () => undefined
   };
-  for (const stage of ["count", "members", "items"] as const) {
+  for (const stage of ["validate", "members", "items"] as const) {
     const failure = new Error(`controlled Redis ${stage} failure`);
     await assert.rejects(
       readReadyImageOrderedWindow(

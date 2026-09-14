@@ -2,14 +2,12 @@ import { useCallback, useEffect, useRef } from "react";
 import { ingestionBatchHardLimit } from "@imageshow/shared/browser";
 import type { IngestionJob } from "../../../../lib/types.js";
 import type { IngestionAttributeDefaults } from "../queue/model/ingestion-attribute-defaults.js";
-import { webUuidV7 } from "../queue/model/ingestion-identity.js";
 import {
   cancelServerIngestionJobs,
   type IngestionQueueCancelOutcome
 } from "../queue/ingestion-cancel.js";
 import {
   ingestionJobRetryKind,
-  isUnconfirmedUploadRawAttempt,
   resetJobForPrepareRetry
 } from "../queue/model/ingestion-job-retry.js";
 import {
@@ -620,14 +618,10 @@ export function useUpload(options: {
           job.id === target.id && job.attemptKey === target.attemptKey
         ));
         if (!current?.file || current.status !== target.status || ingestionJobRetryKind(current) !== "browser-prepare") continue;
-        const reuseIntentAttempt = !current.serverVersion && Boolean(current.uploadIntentItemInput)
-          && (current.failureStage === "create" || isUnconfirmedUploadRawAttempt(current));
         const objectUrl = current.objectUrl?.startsWith("blob:")
           ? current.objectUrl : URL.createObjectURL(current.file);
         const next = {
           ...resetJobForPrepareRetry(current),
-          attemptKey: reuseIntentAttempt ? current.attemptKey : webUuidV7(),
-          uploadIntentItemInput: reuseIntentAttempt ? current.uploadIntentItemInput : undefined,
           preview: objectUrl,
           previewFull: undefined,
           objectUrl,
@@ -636,8 +630,7 @@ export function useUpload(options: {
           originalSize: current.file.size,
           transferProgress: 0
         };
-        queue.updateJob(current.id, next);
-        selected.push(next);
+        if (queue.retryPrepareJob(current, next)) selected.push(next);
       }
       await transferUploadJobs(selected);
     });

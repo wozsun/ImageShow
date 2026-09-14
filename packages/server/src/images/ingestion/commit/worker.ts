@@ -229,6 +229,9 @@ export async function commitIngestionSessionSnapshot(
           // vocabulary refreshes and completed-card presentation add latency;
           // list reads started after this instant already cover the commit.
           const databaseVisibleAt = Date.now();
+          // Keep the compound lease through receipt publication: Redis CAS
+          // validates the canonical, not PostgreSQL existence or object location.
+          // The image lease still excludes purge, migration and candidate cleanup.
           await Promise.all([
             invalidateEntityCountCaches([
               "theme",

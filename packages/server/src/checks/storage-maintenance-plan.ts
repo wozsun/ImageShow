@@ -1,6 +1,9 @@
 import { pool } from "../core/database/pools.ts";
 import { thumbnailObjectKey } from "../storage/objects/image-paths.ts";
-import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/objects/key-listing.ts";
+import {
+  STORAGE_ADMIN_LIST_MAX_KEYS,
+  type StorageDirectorySnapshot
+} from "../storage/objects/key-listing.ts";
 import type { StoragePrefix } from "../storage/objects/keys.ts";
 import {
   activeIngestionStorageReferences,
@@ -52,6 +55,7 @@ export type MaintenanceCandidate =
   | { kind: "result"; item: MaintenanceItem };
 
 export type CapturedMaintenanceGroup = {
+  directorySnapshot: StorageDirectorySnapshot;
   group: StorageBackendGroup;
   backend: string;
   snapshot: NonNullable<Awaited<ReturnType<
@@ -98,7 +102,11 @@ async function captureMaintenanceGroups(
   const candidates: MaintenanceCandidate[] = [];
   for (const group of groups) {
     signal.throwIfAborted();
+    const directorySnapshot: StorageDirectorySnapshot = {
+      directories: new Map(), entries: 0, complete: true
+    };
     const result = await collectStorageBackendGroupSnapshot(group, {
+      directorySnapshot,
       signal,
       maxKeys: STORAGE_ADMIN_LIST_MAX_KEYS
     });
@@ -135,6 +143,7 @@ async function captureMaintenanceGroups(
       continue;
     }
     captured.push({
+      directorySnapshot,
       group,
       backend: result.backend,
       snapshot: result.snapshot

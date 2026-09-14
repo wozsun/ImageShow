@@ -34,13 +34,10 @@ import { recordReadyImageCacheError } from "./status-observability.ts";
 import {
   READY_IMAGE_ALL_INDEX_KEY,
   READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
-  READY_IMAGE_ITEMS_KEY,
-  READY_IMAGE_OBJECT_LOOKUP_KEY,
-  READY_IMAGE_THUMB_LOOKUP_KEY
+  READY_IMAGE_ITEMS_KEY
 } from "./keys.ts";
 import {
   parseReadyImageCacheItem,
-  readyImageIdFromMember,
   readyImageMember,
   type ReadyImageCacheResult,
   type ReadyImageCacheItem
@@ -162,35 +159,6 @@ async function assertDerivedMissingItemsAreNotCore(
   throw new Error("Ready-image derived index references a missing item");
 }
 
-async function lookupItem(
-  lookupKey: string,
-  field: string
-): Promise<ReadyImageCacheResult<ReadyImageCacheItem | null>> {
-  return readCache(async () => {
-    const member = await redis.hget(lookupKey, field);
-    if (!member) {
-      const expected = cacheItemCount();
-      const actual = await redis.hlen(lookupKey);
-      if (actual !== expected) {
-        throw new Error(`Ready-image cache lookup ${lookupKey} is incomplete`);
-      }
-      return null;
-    }
-    if (!readyImageIdFromMember(member)) {
-      throw new Error("Ready-image cache lookup contains an invalid member");
-    }
-    return parsedItem(await redis.hget(READY_IMAGE_ITEMS_KEY, member), member);
-  });
-}
-
-export function readReadyImageByObjectKey(objectKey: string) {
-  return lookupItem(READY_IMAGE_OBJECT_LOOKUP_KEY, objectKey);
-}
-
-export function readReadyImageByThumbKey(thumbKey: string) {
-  return lookupItem(READY_IMAGE_THUMB_LOOKUP_KEY, thumbKey);
-}
-
 export async function readReadyImageById(
   id: string
 ): Promise<ReadyImageCacheResult<ReadyImageCacheItem | null>> {
@@ -248,7 +216,6 @@ function readyImageWindowDependencies(
 ): ReadyImageWindowDependencies {
   return {
     validate: validateReadyImageFilterIndex,
-    count: (index) => redis.zcard(index.key),
     members: (index, start, stop) => order === "oldest"
       ? redis.zrange(index.key, String(start), String(stop))
       : redis.zrevrange(index.key, start, stop),
@@ -293,7 +260,7 @@ async function readPageFromIndex<T>(
     if (isRedisUnavailableError(error)) {
       return {
         status: "redis_unavailable",
-        error: error instanceof Error ? error : new Error(String(error))
+        error
       };
     }
     throw error;
@@ -334,7 +301,7 @@ async function resolvedReadyImagePage<T>(
     if (isRedisUnavailableError(error)) {
       return {
         status: "redis_unavailable",
-        error: error instanceof Error ? error : new Error(String(error))
+        error
       };
     }
     if (isReadyImageCoreCacheError(error)) {

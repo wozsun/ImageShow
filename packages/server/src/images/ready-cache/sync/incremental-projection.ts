@@ -5,9 +5,7 @@ import {
   READY_IMAGE_ALL_INDEX_KEY,
   READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
   READY_IMAGE_ITEMS_KEY,
-  READY_IMAGE_OBJECT_LOOKUP_KEY,
-  READY_IMAGE_STATS_KEY,
-  READY_IMAGE_THUMB_LOOKUP_KEY
+  READY_IMAGE_STATS_KEY
 } from "../keys.ts";
 import {
   READY_IMAGE_INCREMENTAL_LIMIT,
@@ -15,7 +13,6 @@ import {
   readyImageIdSuffixScore,
   readyImageMember,
   readyImageStatFields,
-  readyImageThumbKey,
   serializeReadyImageCacheItem,
   type ReadyImageCacheItem
 } from "../model.ts";
@@ -41,7 +38,8 @@ function nonNegativeInteger(value: unknown, context: string) {
 function adjustExpectedReadyImageStats(
   stats: ReadyImageStats,
   items: ReadyImageCacheItem[],
-  difference: -1 | 1
+  difference: -1 | 1,
+  deltas: Map<string, number>
 ) {
   for (const item of items) {
     for (const field of readyImageStatFields(item)) {
@@ -54,6 +52,7 @@ function adjustExpectedReadyImageStats(
       }
       if (next === 0 && field !== "total") stats.delete(field);
       else stats.set(field, next);
+      deltas.set(field, (deltas.get(field) ?? 0) + difference);
     }
   }
 }
@@ -98,16 +97,10 @@ async function queueRemoval(
   writer: RedisPipelineBatcher
 ) {
   const member = readyImageMember(item.id);
-  for (const [key, field] of [
-    [READY_IMAGE_ITEMS_KEY, member],
-    [READY_IMAGE_OBJECT_LOOKUP_KEY, item.object_key],
-    [READY_IMAGE_THUMB_LOOKUP_KEY, readyImageThumbKey(item)]
-  ] as const) {
-    await writer.queue(
-      estimatedRedisBytes(key, field),
-      (pipeline) => { pipeline.hdel(key, field); }
-    );
-  }
+  await writer.queue(
+    estimatedRedisBytes(READY_IMAGE_ITEMS_KEY, member),
+    (pipeline) => { pipeline.hdel(READY_IMAGE_ITEMS_KEY, member); }
+  );
   await writer.queue(
     estimatedRedisBytes(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY, member),
     (pipeline) => { pipeline.zrem(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY, member); }
@@ -116,58 +109,43 @@ async function queueRemoval(
     estimatedRedisBytes(READY_IMAGE_ALL_INDEX_KEY, member),
     (pipeline) => { pipeline.zrem(READY_IMAGE_ALL_INDEX_KEY, member); }
   );
-  for (const field of readyImageStatFields(item)) {
-    await writer.queue(
-      estimatedRedisBytes(READY_IMAGE_STATS_KEY, field, -1),
-      (pipeline) => { pipeline.hincrby(READY_IMAGE_STATS_KEY, field, -1); }
-    );
-  }
 }
 
 async function queueAddition(
   item: ReadyImageCacheItem,
+  previous: ReadyImageCacheItem | undefined,
   writer: RedisPipelineBatcher
 ) {
   const member = readyImageMember(item.id);
   const serialized = serializeReadyImageCacheItem(item);
-  for (const [key, field, value] of [
-    [READY_IMAGE_ITEMS_KEY, member, serialized],
-    [READY_IMAGE_OBJECT_LOOKUP_KEY, item.object_key, member],
-    [READY_IMAGE_THUMB_LOOKUP_KEY, readyImageThumbKey(item), member]
-  ] as const) {
+  if (!previous || serializeReadyImageCacheItem(previous) !== serialized) {
     await writer.queue(
-      estimatedRedisBytes(key, field, value),
-      (pipeline) => { pipeline.hset(key, field, value); }
+      estimatedRedisBytes(READY_IMAGE_ITEMS_KEY, member, serialized),
+      (pipeline) => { pipeline.hset(READY_IMAGE_ITEMS_KEY, member, serialized); }
     );
   }
-  await writer.queue(
-    estimatedRedisBytes(
-      READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
-      readyImageIdSuffixScore(item),
-      member
-    ),
-    (pipeline) => {
-      pipeline.zadd(
+  if (!previous) {
+    await writer.queue(
+      estimatedRedisBytes(
         READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
         readyImageIdSuffixScore(item),
         member
-      );
-    }
-  );
-  await writer.queue(
-    estimatedRedisBytes(
-      READY_IMAGE_ALL_INDEX_KEY,
-      item.sort_score,
-      member
-    ),
-    (pipeline) => {
-      pipeline.zadd(READY_IMAGE_ALL_INDEX_KEY, item.sort_score, member);
-    }
-  );
-  for (const field of readyImageStatFields(item)) {
+      ),
+      (pipeline) => {
+        pipeline.zadd(
+          READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
+          readyImageIdSuffixScore(item),
+          member
+        );
+      }
+    );
+  }
+  if (!previous || previous.sort_score !== item.sort_score) {
     await writer.queue(
-      estimatedRedisBytes(READY_IMAGE_STATS_KEY, field, 1),
-      (pipeline) => { pipeline.hincrby(READY_IMAGE_STATS_KEY, field, 1); }
+      estimatedRedisBytes(READY_IMAGE_ALL_INDEX_KEY, item.sort_score, member),
+      (pipeline) => {
+        pipeline.zadd(READY_IMAGE_ALL_INDEX_KEY, item.sort_score, member);
+      }
     );
   }
 }
@@ -204,8 +182,6 @@ async function validateIncrementalCardinalities(
   for (const key of [
     READY_IMAGE_ITEMS_KEY,
     READY_IMAGE_ALL_INDEX_KEY,
-    READY_IMAGE_OBJECT_LOOKUP_KEY,
-    READY_IMAGE_THUMB_LOOKUP_KEY,
     READY_IMAGE_ID_SUFFIX_LOOKUP_KEY
   ]) {
     if (cardinalities.get(key) !== expectedItemCount) {
@@ -229,22 +205,34 @@ export async function applyReadyImageCacheDelta(
   nextItemCount: number,
   expectedStats: ReadyImageStats
 ) {
-  adjustExpectedReadyImageStats(expectedStats, previousItems, -1);
-  adjustExpectedReadyImageStats(expectedStats, currentItems, 1);
-  const touchedStats = new Set<string>();
-  for (const item of [...previousItems, ...currentItems]) {
-    for (const field of readyImageStatFields(item)) touchedStats.add(field);
-  }
+  const statDeltas = new Map<string, number>();
+  // Decrement the complete previous contribution before applying additions.
+  // A net-zero update must still detect insufficient or corrupt old counts.
+  adjustExpectedReadyImageStats(expectedStats, previousItems, -1, statDeltas);
+  adjustExpectedReadyImageStats(expectedStats, currentItems, 1, statDeltas);
+  const previousById = new Map(previousItems.map((item) => [item.id, item]));
+  const currentIds = new Set(currentItems.map((item) => item.id));
   const writer = new RedisPipelineBatcher(redis);
-  for (const item of previousItems) await queueRemoval(item, writer);
-  for (const item of currentItems) await queueAddition(item, writer);
+  for (const item of previousItems) {
+    if (!currentIds.has(item.id)) await queueRemoval(item, writer);
+  }
+  for (const item of currentItems) {
+    await queueAddition(item, previousById.get(item.id), writer);
+  }
+  const changedStats: string[] = [];
+  for (const [field, difference] of statDeltas) {
+    if (!difference) continue;
+    changedStats.push(field);
+    await writer.queue(
+      estimatedRedisBytes(READY_IMAGE_STATS_KEY, field, difference),
+      (pipeline) => { pipeline.hincrby(READY_IMAGE_STATS_KEY, field, difference); }
+    );
+  }
   await writer.flush();
-  await removeZeroStatistics([...touchedStats]);
+  await removeZeroStatistics(changedStats);
 
   const touchedCardinalityKeys = [
     READY_IMAGE_ITEMS_KEY,
-    READY_IMAGE_OBJECT_LOOKUP_KEY,
-    READY_IMAGE_THUMB_LOOKUP_KEY,
     READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
     READY_IMAGE_STATS_KEY,
     READY_IMAGE_ALL_INDEX_KEY

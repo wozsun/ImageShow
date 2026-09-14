@@ -102,8 +102,8 @@ export function serverIngestionJobsForCombinedPage(
   return result.slice(0, limit);
 }
 
-function activeClientStatus(
-  item: ActiveServerIngestionItemDto
+export function activeIngestionClientStatus(
+  item: Pick<ActiveServerIngestionItemDto, "status" | "phase">
 ): IngestionJob["status"] {
   switch (item.status) {
     case "queued": return "queued";
@@ -176,7 +176,7 @@ function activeIngestionJob(
     attemptKey: existing?.attemptKey ?? pairKey,
     batchKey: existing?.batchKey ?? pairKey,
     kind: item.queue,
-    status: activeClientStatus(item),
+    status: activeIngestionClientStatus(item),
     message: item.status === "ready"
       ? semanticPending && existing
         ? existing.message

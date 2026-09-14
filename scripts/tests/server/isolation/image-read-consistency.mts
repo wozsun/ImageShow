@@ -531,9 +531,9 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   const restoreInterruptedPage = interceptPoolConnections(database.pool, () => {
     interruptedPageConnections += 1;
   });
-  redisClient.redis.sendCommand = async function (command, ...args) {
+  redisClient.redis.sendCommand = function (command, ...args) {
     if (command.name === "zcard" && ++pageZcardCommands === 2) {
-      throw interruptedRedis;
+      command.resolve = () => command.reject(interruptedRedis);
     }
     return paginationRedisSendCommand.call(this, command, ...args);
   };

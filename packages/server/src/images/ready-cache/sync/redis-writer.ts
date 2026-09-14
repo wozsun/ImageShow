@@ -7,8 +7,6 @@ import {
   READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
   READY_IMAGE_ITEMS_KEY,
   READY_IMAGE_META_KEY,
-  READY_IMAGE_OBJECT_LOOKUP_KEY,
-  READY_IMAGE_THUMB_LOOKUP_KEY,
   assertReadyImageCacheKey
 } from "../keys.ts";
 import {
@@ -20,7 +18,6 @@ import {
   readyImageIdSuffixScore,
   readyImageMember,
   readyImageStatFields,
-  readyImageThumbKey,
   serializeReadyImageCacheItem,
   type ReadyImageCacheItem
 } from "../model.ts";
@@ -99,15 +96,11 @@ export async function writeReadyImageCacheBatch(
   if (!items.length) return;
   signal?.throwIfAborted();
   const itemEntries: Array<readonly [string, string]> = [];
-  const objectEntries: Array<readonly [string, string]> = [];
-  const thumbEntries: Array<readonly [string, string]> = [];
   const suffixMembers: Array<string | number> = [];
   const allIndexMembers: Array<string | number> = [];
   for (const item of items) {
     const member = readyImageMember(item.id);
     itemEntries.push([member, serializeReadyImageCacheItem(item)]);
-    objectEntries.push([item.object_key, member]);
-    thumbEntries.push([readyImageThumbKey(item), member]);
     suffixMembers.push(readyImageIdSuffixScore(item), member);
     allIndexMembers.push(item.sort_score, member);
     incrementReadyImageCount(cardinalities, READY_IMAGE_ALL_INDEX_KEY);
@@ -118,8 +111,6 @@ export async function writeReadyImageCacheBatch(
 
   const writer = new RedisPipelineBatcher(client);
   await queueHashEntries(READY_IMAGE_ITEMS_KEY, itemEntries, writer);
-  await queueHashEntries(READY_IMAGE_OBJECT_LOOKUP_KEY, objectEntries, writer);
-  await queueHashEntries(READY_IMAGE_THUMB_LOOKUP_KEY, thumbEntries, writer);
   for (const entries of chunkSortedSetEntries(
     READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
     sortedSetEntries(suffixMembers)

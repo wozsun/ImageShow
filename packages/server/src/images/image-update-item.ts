@@ -6,7 +6,8 @@ import { withAdvisoryLocksOnClient } from "../core/database/advisory-locks.ts";
 import { pool } from "../core/database/pools.ts";
 import { logger } from "../core/logger.ts";
 import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
-import { readStorageBuffer, storageObjectExists } from "../storage/objects/access.ts";
+import { resolveStorageAccess } from "../storage/backends/registry.ts";
+import { isStorageObjectNotFound } from "../storage/objects/not-found.ts";
 import { thumbnailRef } from "../storage/objects/image-paths.ts";
 import {
   imageStorageMutationLockKey,
@@ -30,7 +31,6 @@ import { detectBrightness } from "./brightness.ts";
 import { withNormalizationAdmission } from "./normalization-admission.ts";
 import {
   deviceFromDimensions,
-  resolveOptionalBrightnessWith,
   resolveOptionalDeviceWith
 } from "./classification.ts";
 import { withImageMutationSync } from "./mutation-sync.ts";
@@ -100,20 +100,16 @@ async function detectImageBrightness(
 ) {
   if (image.status !== "ready") return undefined;
   const thumb = thumbnailRef(image);
-  if (!await storageObjectExists(
-    thumb.prefix,
-    thumb.key,
-    thumb.slug,
-    { signal }
-  )) {
-    return undefined;
+  const storage = await resolveStorageAccess(thumb.slug);
+  signal.throwIfAborted();
+  let thumbnail: Buffer;
+  try {
+    thumbnail = await storage.driver.readBuffer(thumb.prefix, thumb.key, { signal });
+  } catch (error) {
+    signal.throwIfAborted();
+    if (isStorageObjectNotFound(error)) return undefined;
+    throw error;
   }
-  const thumbnail = await readStorageBuffer(
-    thumb.prefix,
-    thumb.key,
-    thumb.slug,
-    { signal }
-  );
   return withNormalizationAdmission(
     signal,
     () => detectBrightness(thumbnail)
@@ -159,13 +155,15 @@ async function commitImageUpdate({
   item,
   resolvedTags,
   sourceImage,
-  target,
+  detectedBrightness,
+  classificationRequested,
   signal
 }: {
   item: ImageUpdateItemInputDto;
   resolvedTags: string[] | null;
   sourceImage: UpdateImageRecord | null;
-  target: Pick<UpdateImageRecord, "device" | "brightness" | "theme"> | null;
+  detectedBrightness: Brightness | undefined;
+  classificationRequested: boolean;
   signal: AbortSignal;
 }): Promise<ImageUpdateTransactionOutcome> {
   let client: PoolClient | undefined;
@@ -182,14 +180,14 @@ async function commitImageUpdate({
     signal.throwIfAborted();
     if (!locked) throw new ApiError(404, "not_found", "Image not found");
 
+    if (classificationRequested && locked.status !== "ready") {
+      throw new ApiError(
+        409,
+        "invalid_image_state",
+        "Only ready images can change category"
+      );
+    }
     if (sourceImage) {
-      if (locked.status !== "ready") {
-        throw new ApiError(
-          409,
-          "invalid_image_state",
-          "Only ready images can change category"
-        );
-      }
       if (
         locked.storage_slug !== sourceImage.storage_slug
         || locked.object_key !== sourceImage.object_key
@@ -216,10 +214,12 @@ async function commitImageUpdate({
         )).rows.map((row) => String(row.tag_slug));
     signal.throwIfAborted();
 
-    const nextClassification = target ?? {
-      device: locked.device,
-      brightness: locked.brightness,
-      theme: locked.theme
+    const nextClassification = {
+      device: resolveOptionalDeviceWith(item.device, () => detectImageDevice(locked))
+        ?? locked.device,
+      brightness: (item.brightness === "auto" ? detectedBrightness : item.brightness)
+        ?? locked.brightness,
+      theme: item.theme === undefined ? locked.theme : item.theme
     };
     const nextAuthor = item.author === undefined
       ? locked.author
@@ -289,11 +289,6 @@ async function commitImageUpdate({
                 author=$9,
                 updated_at=now()
           WHERE id=$1
-            AND storage_slug=$10
-            AND object_key=$11
-            AND device=$12
-            AND brightness=$13
-            AND theme IS NOT DISTINCT FROM $14
           RETURNING id`,
         [
           item.id,
@@ -304,12 +299,7 @@ async function commitImageUpdate({
           nextFields.description,
           nextFields.source,
           nextFields.original,
-          nextAuthor,
-          locked.storage_slug,
-          locked.object_key,
-          locked.device,
-          locked.brightness,
-          locked.theme
+          nextAuthor
         ]
       );
       if (!updated.rowCount) {
@@ -359,13 +349,13 @@ async function mutateImageItem(
     || item.brightness !== undefined
     || item.theme !== undefined;
   let sourceImage: UpdateImageRecord | null = null;
-  let target: Pick<UpdateImageRecord, "device" | "brightness" | "theme"> | null = null;
+  let detectedBrightness: Brightness | undefined;
   const commitState: {
     outcome: ImageUpdateTransactionOutcome | null;
   } = { outcome: null };
 
   try {
-    if (classificationRequested) {
+    if (item.brightness === "auto") {
       signal.throwIfAborted();
       sourceImage = (await pool.query(
         `SELECT ${updateImageColumns} FROM metadata WHERE id=$1`,
@@ -380,20 +370,8 @@ async function mutateImageItem(
           "Only ready images can change category"
         );
       }
-      const resolvedDevice = resolveOptionalDeviceWith(
-        item.device,
-        () => detectImageDevice(sourceImage as UpdateImageRecord)
-      );
-      const resolvedBrightness = await resolveOptionalBrightnessWith(
-        item.brightness,
-        () => detectImageBrightness(sourceImage as UpdateImageRecord, signal)
-      );
+      detectedBrightness = await detectImageBrightness(sourceImage, signal);
       signal.throwIfAborted();
-      target = {
-        device: resolvedDevice ?? sourceImage.device,
-        brightness: resolvedBrightness ?? sourceImage.brightness,
-        theme: item.theme === undefined ? sourceImage.theme : item.theme
-      };
     }
 
     const outcome = await withImageMutationSync(async (mutationSyncBatch) => {
@@ -401,7 +379,8 @@ async function mutateImageItem(
         item,
         resolvedTags,
         sourceImage,
-        target,
+        detectedBrightness,
+        classificationRequested,
         signal
       });
       commitState.outcome = transactionOutcome;
@@ -456,13 +435,12 @@ export function withImageUpdateItemLocks<T>(
       slug
     }))
   ]));
-  const classificationLocks = items
-    .filter(({ item }) => item.device !== undefined
-      || item.brightness !== undefined || item.theme !== undefined)
+  const thumbnailLocks = items
+    .filter(({ item }) => item.brightness === "auto")
     .map(({ item }) => imageStorageMutationLockKey(item.id))
     .sort()
     .map((key) => ({ key }));
-  const locks = [...vocabularyLocks, ...classificationLocks];
+  const locks = [...vocabularyLocks, ...thumbnailLocks];
   if (items.some(({ item }) => item.brightness === "auto")) {
     return withStorageLocationReadAndAdvisoryLocksOnClient(lockClient, signal, locks, work);
   }

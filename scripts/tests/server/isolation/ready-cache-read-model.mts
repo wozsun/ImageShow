@@ -109,14 +109,7 @@ await runIntegrationScenario(async (runtime) => {
     coreUuid.randomUuidV7At(imageDate, 3)
   ];
   const expectedOrder = [...imageIds].sort().reverse();
-  const readServingResources = async () => {
-    const objectKey = imagePaths.storageObjectKey(imageIds[0], "webp");
-    return Promise.all([
-      serving.readImageServingRecordById(imageIds[0]),
-      serving.readImageServingRecordByObjectKey(objectKey),
-      serving.readImageServingRecordByThumbKey(objectKey)
-    ]);
-  };
+  const readServingResources = () => serving.readImageServingRecordById(imageIds[0]);
   const errors: unknown[] = [];
   try {
     await runtime.databasePools.pool.query(
@@ -239,8 +232,9 @@ await runIntegrationScenario(async (runtime) => {
       ext: "webp",
       storage_slug: "local"
     };
-    assert.equal(databaseResources[0]?.original, originalUrl);
-    assert.deepEqual(databaseResources.slice(1), [storedResource, storedResource]);
+    assert.equal(databaseResources?.original, originalUrl);
+    assert.ok(databaseResources);
+    assert.deepEqual({ object_key: databaseResources.object_key, ext: databaseResources.ext, storage_slug: databaseResources.storage_slug }, storedResource);
     await coordinator.initializeReadyImageCacheCoordinator();
     await coordinator.requestReadyImageCacheRebuild();
     assert.equal(coordinator.getReadyImageCacheCoordinatorStatus().readable, true);
@@ -263,13 +257,11 @@ await runIntegrationScenario(async (runtime) => {
       publicImages.getPublicImage(id, undefined, true)
     )));
     assert.deepEqual(cachedDetails, databaseDetails);
-    const [cachedOriginal, ...cachedStored] = await readServingResources();
+    const cachedOriginal = await readServingResources();
     assert.ok(cachedOriginal);
-    assert.ok(databaseResources[0]);
-    assert.deepEqual(cachedStored, databaseResources.slice(1));
     assert.deepEqual(
       { ...cachedOriginal, updated_at: new Date(cachedOriginal.updated_at) },
-      { ...databaseResources[0], updated_at: new Date(databaseResources[0].updated_at) }
+      { ...databaseResources, updated_at: new Date(databaseResources.updated_at) }
     );
     await assertDetailVisibility();
     await runtime.redisClient.redis.del(adminSessionKey(sessionId));
@@ -310,8 +302,9 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(publicPage.next_cursor, null);
     await trash.moveImagesToTrash([imageIds[0]]);
     const trashedResources = await readServingResources();
-    assert.equal(trashedResources[0]?.original, originalUrl);
-    assert.deepEqual(trashedResources.slice(1), [storedResource, storedResource]);
+    assert.equal(trashedResources?.original, originalUrl);
+    assert.ok(trashedResources);
+    assert.deepEqual({ object_key: trashedResources.object_key, ext: trashedResources.ext, storage_slug: trashedResources.storage_slug }, storedResource);
     const deletedPage = await adminImages.listAdminImages({
       status: "deleted", theme, page: 1, limit: 10
     });

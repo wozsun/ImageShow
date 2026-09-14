@@ -590,30 +590,7 @@ export function useServerIngestionQueue(input: Readonly<{
           }
           return;
         }
-        const recoverWithBaseline = (
-          recoveryBaseline: ServerIngestionQueueBaseline
-        ) => {
-          const retryDelay = snapshotRecoveryDelays[snapshotRecoveryAttempt];
-          const recoveryView = retainWithoutAuthority(recoveryBaseline);
-          if (retryDelay !== undefined) {
-            deferSuccessor = true;
-            snapshotRecoveryAttempt += 1;
-            snapshotRecoveryTimer = setTimeout(() => {
-              snapshotRecoveryTimer = null;
-              const retryReason = nextSnapshotReason();
-              if (retryReason && actionScope) startSnapshot(retryReason);
-            }, retryDelay);
-            setView(recoveryView);
-          } else {
-            deferSuccessor = true;
-            setView({
-              ...recoveryView,
-              status: "error",
-              error: error instanceof Error ? error.message : String(error)
-            });
-            failAuthorityRecovery(error);
-          }
-        };
+        let recoveryView: ServerIngestionQueueView;
         if (
           refreshInPlace
           && baseline !== null
@@ -622,10 +599,8 @@ export function useServerIngestionQueue(input: Readonly<{
           && requestedGeneration === connectionGeneration
         ) {
           const retained = mergeBufferedMutations(baseline);
-          recoverWithBaseline(retained.merged);
-          return;
-        }
-        if (
+          recoveryView = retainWithoutAuthority(retained.merged);
+        } else if (
           retainDuringLoad
           && retainedBaseline !== null
           && retainedOffset === offset
@@ -633,34 +608,30 @@ export function useServerIngestionQueue(input: Readonly<{
           && requestedGeneration === connectionGeneration
         ) {
           buffered = [];
+          recoveryView = retainWithoutAuthority(retainedBaseline);
+        } else {
+          buffered = [];
           clearBaseline();
-          recoverWithBaseline(retainedBaseline);
-          return;
+          recoveryView = {
+            ...emptyServerIngestionQueueView("loading", connectionGeneration),
+            actionScope
+          };
         }
-        buffered = [];
-        clearBaseline();
         const retryDelay = snapshotRecoveryDelays[snapshotRecoveryAttempt];
+        deferSuccessor = true;
         if (retryDelay !== undefined) {
-          deferSuccessor = true;
           snapshotRecoveryAttempt += 1;
           snapshotRecoveryTimer = setTimeout(() => {
             snapshotRecoveryTimer = null;
             const retryReason = nextSnapshotReason();
             if (retryReason && actionScope) startSnapshot(retryReason);
           }, retryDelay);
-          setView({
-            ...emptyServerIngestionQueueView("loading", connectionGeneration),
-            actionScope
-          });
+          setView(recoveryView);
         } else {
-          deferSuccessor = true;
           setView({
-            ...emptyServerIngestionQueueView(
-              "error",
-              connectionGeneration,
-              error instanceof Error ? error.message : String(error)
-            ),
-            actionScope
+            ...recoveryView,
+            status: "error",
+            error: error instanceof Error ? error.message : String(error)
           });
           failAuthorityRecovery(error);
         }

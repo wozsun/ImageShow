@@ -176,6 +176,87 @@ test("[Server/数据库与进程] Worker 慢类型不阻塞后来任务，停止
   assert.deepEqual(errors, []);
 });
 
+test("[Server/数据库与进程] PostgreSQL 连接故障分类不掩盖取消与业务错误", async () => {
+  const { databaseConnectionFailureReason } = await import("../../../packages/server/src/core/database/connection-error.ts");
+  for (const code of ["08006", "57P01", "ECONNRESET", "ETIMEDOUT"]) {
+    assert.equal(databaseConnectionFailureReason(Object.assign(new Error("private query context"), { code })), code);
+  }
+  assert.equal(databaseConnectionFailureReason(new Error("Connection terminated unexpectedly")), "connection_terminated");
+  for (const error of [new Error("connection to author is invalid"), new Error("Connection terminated"),
+    Object.assign(new Error("Connection terminated unexpectedly"), { code: "23505" }),
+    Object.assign(new Error("cancelled"), { name: "AbortError", code: "ECONNRESET" }), { code: "08006" }]) {
+    assert.equal(databaseConnectionFailureReason(error), undefined);
+  }
+});
+
+test("[Server/数据库与进程] Redis readiness 只复用五秒内同连接完整证明且失败立即失效", async (t) => {
+  const { registerHooks } = await import("node:module");
+  const capabilities = { available: true, missing: [] };
+  let connection = { ready: true, epoch: 1 };
+  let calls = 0;
+  let now = 0;
+  let pending: ReturnType<typeof Promise.withResolvers<void>> | undefined;
+  t.mock.method(performance, "now", () => now);
+  const dependencies: Record<string, Record<string, unknown>> = {
+    "./logger.ts": { logger: { info() {}, warn() {} } },
+    "./redis/client.ts": {
+      getRedisConnectionState: () => connection,
+      isRedisRequiredCommandsError: () => false,
+      onRedisConnectionStateChange: () => () => {},
+      validateRedisRequiredFeaturesAtCurrentEpoch: async () => {
+        calls++;
+        const connectionEpoch = connection.epoch;
+        await pending?.promise;
+        return { capabilities, connectionEpoch };
+      }
+    }
+  };
+  const fixtureKey = "imageshow-readiness-proof-fixture";
+  Object.defineProperty(globalThis, fixtureKey, { configurable: true, value: dependencies });
+  const moduleUrl = new URL("../../../packages/server/src/core/runtime-availability.ts?proof-test", import.meta.url).href;
+  const hooks = registerHooks({ resolve(specifier, context, next) {
+    if (context.parentURL !== moduleUrl || !dependencies[specifier]) return next(specifier, context);
+    const source = Object.keys(dependencies[specifier]).map(name =>
+      `export const ${name} = globalThis[${JSON.stringify(fixtureKey)}][${JSON.stringify(specifier)}][${JSON.stringify(name)}];`
+    ).join("\n");
+    return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true };
+  } });
+  const runtime = await import(moduleUrl) as typeof import("../../../packages/server/src/core/runtime-availability.ts");
+  t.after(() => { pending?.resolve(); runtime.stopRedisOperationalMonitor(); hooks.deregister(); Reflect.deleteProperty(globalThis, fixtureKey); });
+  await Promise.all(Array.from({ length: 30 }, () => runtime.readRedisOperationalReadiness()));
+  assert.equal(calls, 1);
+  now = 4_999;
+  await runtime.readRedisOperationalReadiness();
+  assert.equal(calls, 1);
+  now = 5_000;
+  await runtime.readRedisOperationalReadiness();
+  assert.equal(calls, 2);
+  await runtime.probeRedisOperationalState();
+  assert.equal(calls, 3, "周期探测即使有新证明也执行完整核对");
+  connection = { ready: true, epoch: 2 };
+  await runtime.readRedisOperationalReadiness();
+  assert.equal(calls, 4, "连接换代不复用前一连接证明");
+  pending = Promise.withResolvers<void>();
+  const olderProbe = runtime.probeRedisOperationalState();
+  await assert.rejects(runtime.runRequiredRedisCommand(async () => { throw new Error("ACL changed"); }), { name: "redis_unavailable" });
+  pending.resolve();
+  await assert.rejects(olderProbe, { name: "redis_unavailable" });
+  assert.equal(runtime.getRedisOperationalState().available, false, "较早探测不能覆盖较晚业务失败");
+  pending = undefined;
+  await runtime.readRedisOperationalReadiness();
+  assert.equal(calls, 6);
+  assert.equal(runtime.getRedisOperationalState().available, true);
+  now = 10_000;
+  pending = Promise.withResolvers<void>();
+  const slowProbe = runtime.readRedisOperationalReadiness();
+  now = 15_000;
+  pending.resolve();
+  await slowProbe;
+  pending = undefined;
+  await runtime.readRedisOperationalReadiness();
+  assert.equal(calls, 8, "证明有效期从完整探测开始计算");
+});
+
 async function waitForProcessId(path: string, maximumAttempts = 250) {
   let lastContent = "";
   for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {

@@ -13,8 +13,12 @@ import type {
   PublicDatabaseReadAccess
 } from "../core/database/public-fallback.ts";
 import { storageBackendLabel } from "../storage/backends/label.ts";
-import { listStorageBackends } from "../storage/backends/registry.ts";
-import { publicImageUrls } from "../storage/objects/public-urls.ts";
+import type { StorageConfig } from "../storage/backends/config.ts";
+import { getStorageBackendConfigs } from "../storage/backends/registry.ts";
+import {
+  publicImageUrls,
+  publicImageUrlsForConfig
+} from "../storage/objects/public-urls.ts";
 import { publicOriginalAccessUrl } from "./original-link.ts";
 
 type DatabaseNumber = number | string;
@@ -202,13 +206,11 @@ type PublicImageUrlRecord = Pick<
   "object_key" | "storage_slug"
 >;
 
-async function publicUrlsForRow(
-  row: PublicImageUrlRecord,
+function storageConfigsForRows(
+  rows: readonly PublicImageUrlRecord[],
   access: PublicDatabaseReadAccess = {}
 ) {
-  const storageSlug = row.storage_slug;
-  const urls = await publicImageUrls(row.object_key, storageSlug, access);
-  return { storageSlug, urls };
+  return getStorageBackendConfigs(rows.map((row) => row.storage_slug), access);
 }
 
 function serializeTimestamp(value: DatabaseTimestamp) {
@@ -219,11 +221,12 @@ function serializeNullableTimestamp(value: DatabaseTimestamp | null) {
   return value === null ? null : serializeTimestamp(value);
 }
 
-async function presentImageBase(
+function presentImageBase(
   row: AdminImageCommonRecord,
-  tags: string[]
+  tags: string[],
+  configs: ReadonlyMap<string, StorageConfig>
 ) {
-  const { storageSlug, urls } = await publicUrlsForRow(row);
+  const urls = publicImageUrlsForConfig(row.object_key, configs.get(row.storage_slug)!);
   return {
     id: row.id,
     title: row.title,
@@ -238,12 +241,16 @@ async function presentImageBase(
     object_url: urls.object_url,
     width: Number(row.width),
     height: Number(row.height),
-    storage_slug: storageSlug
+    storage_slug: row.storage_slug
   };
 }
 
-async function presentAdminImageBase(row: AdminImageCommonRecord, tags: string[]) {
-  const base = await presentImageBase(row, tags);
+function presentAdminImageBase(
+  row: AdminImageCommonRecord,
+  tags: string[],
+  configs: ReadonlyMap<string, StorageConfig>
+) {
+  const base = presentImageBase(row, tags, configs);
   return {
     ...base,
     original_url: publicOriginalAccessUrl(row.id, row.original, base.object_url)
@@ -251,20 +258,23 @@ async function presentAdminImageBase(row: AdminImageCommonRecord, tags: string[]
 }
 
 export async function ingestionImageItemsWithTags(rows: IngestionImageRecordWithTags[]) {
-  return Promise.all(rows.map(async (row): Promise<CompletedIngestionImageDto> => ({
-    ...await presentImageBase(row, row.tags),
+  if (!rows.length) return [];
+  const configs = await storageConfigsForRows(rows);
+  return rows.map((row): CompletedIngestionImageDto => ({
+    ...presentImageBase(row, row.tags, configs),
     original: row.original,
     md5: row.md5,
     image_size: Number(row.image_size),
     image_time: serializeTimestamp(row.image_time)
-  })));
+  }));
 }
 
-async function adminImageListItem(
+function adminImageListItem(
   row: ImageRecord,
-  tags: string[]
-): Promise<AdminImageListItemDto> {
-  const base = await presentAdminImageBase(row, tags);
+  tags: string[],
+  configs: ReadonlyMap<string, StorageConfig>
+): AdminImageListItemDto {
+  const base = presentAdminImageBase(row, tags, configs);
   return {
     ...base,
     original: row.original,
@@ -282,21 +292,24 @@ async function adminImageListItem(
 
 export async function adminImageListItemsWithTags(rows: ImageRecordWithTags[]) {
   if (!rows.length) return [];
-  return Promise.all(rows.map((row) => adminImageListItem(
+  const configs = await storageConfigsForRows(rows);
+  return rows.map((row) => adminImageListItem(
     row,
-    row.tags
-  )));
+    row.tags,
+    configs
+  ));
 }
 
 export async function adminImageDetailItemsWithTags(
   rows: AdminImageDetailRecordWithTags[]
 ) {
   if (!rows.length) return [];
-  return Promise.all(rows.map(async (row): Promise<AdminImageDetailItemDto> => {
+  const configs = await storageConfigsForRows(rows);
+  return rows.map((row): AdminImageDetailItemDto => {
     const {
       storage_slug: storageSlug,
       ...base
-    } = await presentAdminImageBase(row, row.tags);
+    } = presentAdminImageBase(row, row.tags, configs);
     return {
       ...base,
       md5: row.md5,
@@ -308,22 +321,23 @@ export async function adminImageDetailItemsWithTags(
       created_at: serializeTimestamp(row.created_at),
       updated_at: serializeTimestamp(row.updated_at)
     };
-  }));
+  });
 }
 
 export async function editableImageSnapshotsWithTags(
   rows: EditableImageSnapshotRecordWithTags[]
 ) {
   if (!rows.length) return [];
-  return Promise.all(rows.map(async (row): Promise<EditableImageSnapshotDto> => {
-    const base = await presentAdminImageBase(row, row.tags);
+  const configs = await storageConfigsForRows(rows);
+  return rows.map((row): EditableImageSnapshotDto => {
+    const base = presentAdminImageBase(row, row.tags, configs);
     return {
       ...base,
       original: row.original,
       image_size: Number(row.image_size),
       object_key: row.object_key
     };
-  }));
+  });
 }
 
 export async function publicImageDetail(
@@ -331,7 +345,7 @@ export async function publicImageDetail(
   access: PublicDatabaseReadAccess = {},
   includeOriginal = false
 ): Promise<PublicImageDetailDto> {
-  const { urls } = await publicUrlsForRow(row, access);
+  const urls = await publicImageUrls(row.object_key, row.storage_slug, access);
   return {
     id: row.id,
     author: row.author ?? "",
@@ -351,11 +365,11 @@ export async function publicImageDetail(
   };
 }
 
-async function publicShowImageCard(
+function publicShowImageCard(
   row: PublicShowImageRecord,
-  access: PublicDatabaseReadAccess
-): Promise<ShowImageCardDto> {
-  const { urls } = await publicUrlsForRow(row, access);
+  configs: ReadonlyMap<string, StorageConfig>
+): ShowImageCardDto {
+  const urls = publicImageUrlsForConfig(row.object_key, configs.get(row.storage_slug)!);
   return {
     id: row.id,
     title: row.title,
@@ -370,17 +384,17 @@ export async function publicShowImageCards(
   access: PublicDatabaseReadAccess = {}
 ) {
   if (!rows.length) return [];
-  await listStorageBackends(access);
-  return Promise.all(rows.map((row) => publicShowImageCard(row, access)));
+  const configs = await storageConfigsForRows(rows, access);
+  return rows.map((row) => publicShowImageCard(row, configs));
 }
 
-async function publicImageCard(
+function publicImageCard(
   row: PublicImageCardRecord,
   tags: string[],
-  access: PublicDatabaseReadAccess
-): Promise<GalleryImageCardDto> {
+  configs: ReadonlyMap<string, StorageConfig>
+): GalleryImageCardDto {
   return {
-    ...await publicShowImageCard(row, access),
+    ...publicShowImageCard(row, configs),
     device: row.device,
     brightness: row.brightness,
     theme: row.theme,
@@ -390,17 +404,11 @@ async function publicImageCard(
   };
 }
 
-export function publicImageCardsWithTags(
+export async function publicImageCardsWithTags(
   rows: Array<PublicImageCardRecord & { tags: string[] }>,
   access: PublicDatabaseReadAccess = {}
 ) {
-  return (async () => {
-    if (!rows.length) return [];
-    await listStorageBackends(access);
-    return Promise.all(rows.map((row) => publicImageCard(
-      row,
-      row.tags,
-      access
-    )));
-  })();
+  if (!rows.length) return [];
+  const configs = await storageConfigsForRows(rows, access);
+  return rows.map((row) => publicImageCard(row, row.tags, configs));
 }

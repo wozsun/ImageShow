@@ -1,5 +1,8 @@
 import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
+import { ApiError } from "../../core/api-error.ts";
+import { databaseConnectionFailureReason } from "../../core/database/connection-error.ts";
 import { pool, type DatabaseReader } from "../../core/database/pools.ts";
+import { logger } from "../../core/logger.ts";
 import {
   ingestionImageItemsWithTags,
   ingestionImagePresentationColumnsWithTags,
@@ -28,12 +31,27 @@ export async function readCommittedIngestionResultsByImageIds(
 ) {
   const uniqueIds = [...new Set(imageIds.map((imageId) => imageId.toLowerCase()))];
   if (!uniqueIds.length) return new Map<string, CommittedIngestionResult>();
-  const rows = (await reader.query<IngestionImageRecordWithTags & { created_by: string }>(
-    `SELECT ${ingestionImagePresentationColumnsWithTags}, created_by
-       FROM metadata
-      WHERE id = ANY($1::uuid[])`,
-    [uniqueIds]
-  )).rows;
+  let rows: Array<IngestionImageRecordWithTags & { created_by: string }>;
+  try {
+    rows = (await reader.query<IngestionImageRecordWithTags & { created_by: string }>(
+      `SELECT ${ingestionImagePresentationColumnsWithTags}, created_by
+         FROM metadata
+        WHERE id = ANY($1::uuid[])`,
+      [uniqueIds]
+    )).rows;
+  } catch (error) {
+    const reason = databaseConnectionFailureReason(error);
+    if (!reason) throw error;
+    logger.warn("ingestion_results_database_unavailable", { reason });
+    const unavailable = new ApiError(
+      503,
+      "database_unavailable",
+      "PostgreSQL unavailable",
+      { dependency: "postgresql" }
+    );
+    unavailable.cause = error;
+    throw unavailable;
+  }
   const items = await ingestionImageItemsWithTags(rows);
   const rowsById = new Map(rows.map((row) => [row.id.toLowerCase(), row]));
   return new Map(items.map((item) => [

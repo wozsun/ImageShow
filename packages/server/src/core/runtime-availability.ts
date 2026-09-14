@@ -41,6 +41,11 @@ let redisState: RedisOperationalState = {
   reason: "not_validated",
   capabilities: null
 };
+// Readiness shares recent complete proofs; the periodic monitor still probes
+// every five seconds so same-connection ACL changes have a bounded discovery time.
+const REDIS_READINESS_PROOF_MAX_AGE_MS = 5_000;
+let lastSuccessfulProbeStartedAt = -Infinity;
+let redisFailureSequence = 0;
 let probePromise: Promise<RedisRequiredCommandCapabilities> | null = null;
 let monitorTimer: ReturnType<typeof setInterval> | null = null;
 let removeConnectionListener: (() => void) | null = null;
@@ -96,6 +101,8 @@ function markRedisUnavailable(
   reason: string,
   capabilities: RedisRequiredCommandCapabilities | null = null
 ) {
+  redisFailureSequence += 1;
+  lastSuccessfulProbeStartedAt = -Infinity;
   const connection = getRedisConnectionState();
   publishRedisState({
     available: false,
@@ -152,6 +159,8 @@ function ensureRedisConnectionListener() {
 export function probeRedisOperationalState() {
   ensureRedisConnectionListener();
   probePromise ??= (async () => {
+    const failureSequence = redisFailureSequence;
+    const startedAt = performance.now();
     try {
       const validation = await validateRedisRequiredFeaturesAtCurrentEpoch();
       const preparedConnection = getRedisConnectionState();
@@ -163,6 +172,10 @@ export function probeRedisOperationalState() {
           "Redis connection changed during operational validation"
         );
       }
+      if (redisFailureSequence !== failureSequence) {
+        throw new RedisUnavailableError();
+      }
+      lastSuccessfulProbeStartedAt = startedAt;
       publishRedisState({
         available: true,
         connectionEpoch: validation.connectionEpoch,
@@ -172,12 +185,14 @@ export function probeRedisOperationalState() {
       openBusinessGateIfReady();
       return validation.capabilities;
     } catch (error) {
-      markRedisUnavailable(
-        isRedisRequiredCommandsError(error)
-          ? "required_commands_missing"
-          : "connection_unavailable",
-        isRedisRequiredCommandsError(error) ? error.capabilities : null
-      );
+      if (redisFailureSequence === failureSequence) {
+        markRedisUnavailable(
+          isRedisRequiredCommandsError(error)
+            ? "required_commands_missing"
+            : "connection_unavailable",
+          isRedisRequiredCommandsError(error) ? error.capabilities : null
+        );
+      }
       throw error;
     }
   })().finally(() => {
@@ -186,7 +201,7 @@ export function probeRedisOperationalState() {
   return probePromise;
 }
 
-export async function requireOperationalRedis() {
+function currentRedisCapabilities() {
   const connection = getRedisConnectionState();
   if (
     redisState.available
@@ -194,6 +209,22 @@ export async function requireOperationalRedis() {
     && redisState.connectionEpoch === connection.epoch
     && redisState.capabilities?.available
   ) return redisState.capabilities;
+  return null;
+}
+
+export function readRedisOperationalReadiness() {
+  const capabilities = currentRedisCapabilities();
+  if (
+    capabilities
+    && performance.now() - lastSuccessfulProbeStartedAt
+      < REDIS_READINESS_PROOF_MAX_AGE_MS
+  ) return Promise.resolve(capabilities);
+  return probeRedisOperationalState();
+}
+
+export async function requireOperationalRedis() {
+  const capabilities = currentRedisCapabilities();
+  if (capabilities) return capabilities;
   try {
     return await probeRedisOperationalState();
   } catch (error) {

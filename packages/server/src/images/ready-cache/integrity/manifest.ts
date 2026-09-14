@@ -6,9 +6,7 @@ import {
   READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
   READY_IMAGE_INTEGRITY_KEY,
   READY_IMAGE_ITEMS_KEY,
-  READY_IMAGE_OBJECT_LOOKUP_KEY,
   READY_IMAGE_STATS_KEY,
-  READY_IMAGE_THUMB_LOOKUP_KEY,
   assertReadyImageCacheKey
 } from "../keys.ts";
 import {
@@ -25,8 +23,6 @@ const SCAN_COUNT = 1_000;
 const coreCardinalityKeys = new Set([
   READY_IMAGE_ITEMS_KEY,
   READY_IMAGE_ALL_INDEX_KEY,
-  READY_IMAGE_OBJECT_LOOKUP_KEY,
-  READY_IMAGE_THUMB_LOOKUP_KEY,
   READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
   READY_IMAGE_STATS_KEY
 ]);
@@ -52,8 +48,6 @@ function persistentDataKey(key: string) {
     key === READY_IMAGE_ITEMS_KEY
     || key === READY_IMAGE_STATS_KEY
     || key === READY_IMAGE_ALL_INDEX_KEY
-    || key === READY_IMAGE_OBJECT_LOOKUP_KEY
-    || key === READY_IMAGE_THUMB_LOOKUP_KEY
     || key === READY_IMAGE_ID_SUFFIX_LOOKUP_KEY
   );
 }
@@ -62,8 +56,6 @@ function cardinalityKind(key: string): "hash" | "zset" {
   if (
     key === READY_IMAGE_ITEMS_KEY
     || key === READY_IMAGE_STATS_KEY
-    || key === READY_IMAGE_OBJECT_LOOKUP_KEY
-    || key === READY_IMAGE_THUMB_LOOKUP_KEY
   ) {
     return "hash";
   }

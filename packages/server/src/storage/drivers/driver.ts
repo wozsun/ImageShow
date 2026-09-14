@@ -3,6 +3,7 @@ import type { StorageType } from "@imageshow/shared/browser";
 import type { S3Capabilities } from "../backends/config.ts";
 import type { StoragePrefix } from "../objects/keys.ts";
 import type {
+  StorageDirectorySnapshot,
   StorageKeyListing,
   StorageKeyListOptions
 } from "../objects/key-listing.ts";
@@ -72,6 +73,8 @@ export type StorageRemoveOptions = StorageRequestOptions & {
 export type StoragePruneOptions = StorageRequestOptions & {
   prefix?: StoragePrefix;
   maxEntries?: number;
+  directorySnapshot?: StorageDirectorySnapshot;
+  changedObjects?: readonly StorageObjectReference[];
 };
 
 export type StorageSelfTest = {

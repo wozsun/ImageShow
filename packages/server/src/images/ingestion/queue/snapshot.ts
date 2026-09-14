@@ -96,21 +96,9 @@ export async function readStableIngestionQueueSnapshot(input: Readonly<{
       }
     );
     const receipts = completedReceipts(snapshot.items);
-    let committed: Awaited<
-      ReturnType<typeof readCommittedIngestionResultsByImageIds>
-    >;
-    try {
-      committed = await readCommittedIngestionResultsByImageIds(
-        receipts.map((receipt) => receipt.image_id)
-      );
-    } catch (error) {
-      throw new ApiError(
-        503,
-        "database_unavailable",
-        "PostgreSQL unavailable",
-        { dependency: "postgresql" }
-      );
-    }
+    const committed = await readCommittedIngestionResultsByImageIds(
+      receipts.map((receipt) => receipt.image_id)
+    );
     const stale = receipts.filter((receipt) => !committedIngestionResultForOwner(
       committed,
       receipt.image_id,

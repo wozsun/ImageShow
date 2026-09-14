@@ -109,16 +109,18 @@ async function readIngestionStoragePass(
   };
 }
 
+type IngestionStorageReferenceOptions = Readonly<{
+  signal?: AbortSignal;
+  maxItems?: number;
+}>;
+
 /**
  * Every Redis command and page is bounded. Two identical complete projections
  * are required so rank shifts cannot make storage maintenance silently miss a
  * canonical while the worker changes the expiry ordering.
  */
-export async function activeIngestionStorageReferences(
-  options: Readonly<{
-    signal?: AbortSignal;
-    maxItems?: number;
-  }> = {}
+async function readStableIngestionStorageRows(
+  options: IngestionStorageReferenceOptions
 ) {
   options.signal?.throwIfAborted();
   await requireOperationalRedis();
@@ -151,7 +153,13 @@ export async function activeIngestionStorageReferences(
       new Error("Redis connection changed while reading Ingestion storage references")
     );
   }
-  const rows = stable.rows;
+  return stable.rows;
+}
+
+export async function activeIngestionStorageReferences(
+  options: IngestionStorageReferenceOptions = {}
+) {
+  const rows = await readStableIngestionStorageRows(options);
   const sessionsByBackend = new Map<
     string,
     Map<string, ActiveIngestionStorageReference>
@@ -180,8 +188,10 @@ export async function activeIngestionStorageReferences(
   };
 }
 
-export async function activeIngestionStorageCounts() {
-  const { rows } = await activeIngestionStorageReferences();
+export async function activeIngestionStorageCounts(
+  options: IngestionStorageReferenceOptions = {}
+) {
+  const rows = await readStableIngestionStorageRows(options);
   const counts = new Map<string, number>();
   for (const row of rows) {
     counts.set(row.storage_slug, (counts.get(row.storage_slug) ?? 0) + 1);

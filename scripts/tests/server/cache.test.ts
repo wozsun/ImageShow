@@ -51,9 +51,7 @@ import {
   createPublicDatabaseReadScope
 } from "../../../packages/server/src/core/database/public-fallback.ts";
 import {
-  readImageServingRecordById,
-  readImageServingRecordByObjectKey,
-  readImageServingRecordByThumbKey
+  readImageServingRecordById
 } from "../../../packages/server/src/images/image-serving-record.ts";
 import {
   readyImageMember,
@@ -270,8 +268,6 @@ test("[Server/缓存与 Redis] serving record 统一 Redis 命中、空命中与
     original: "https://source.example.com/deleted.jpg"
   };
   let idCache: unknown = { cached: true, value: item };
-  let objectCache: unknown = { cached: true, value: item };
-  let thumbCache: unknown = { cached: true, value: item };
   let queryRows: unknown[] = [];
   const queryParameters: unknown[][] = [];
   const reader = {
@@ -281,9 +277,7 @@ test("[Server/缓存与 Redis] serving record 统一 Redis 命中、空命中与
     }
   } as never;
   const dependencies = {
-    readReadyImageById: async () => idCache,
-    readReadyImageByObjectKey: async () => objectCache,
-    readReadyImageByThumbKey: async () => thumbCache
+    readReadyImageById: async () => idCache
   } as never;
 
   const cached = await readImageServingRecordById(
@@ -322,43 +316,7 @@ test("[Server/缓存与 Redis] serving record 统一 Redis 命中、空命中与
   );
   assert.deepEqual(queryParameters.at(-1), [item.id]);
 
-  const queriesBeforeStoredCache = queryParameters.length;
-  assert.deepEqual(
-    await readImageServingRecordByObjectKey(
-      item.object_key,
-      { reader },
-      dependencies
-    ),
-    storedRow
-  );
-  const thumbKey = item.object_key.replace(/\.[^.]+$/, ".webp");
-  assert.deepEqual(
-    await readImageServingRecordByThumbKey(thumbKey, { reader }, dependencies),
-    storedRow
-  );
-  assert.equal(queryParameters.length, queriesBeforeStoredCache);
-  objectCache = { cached: true, value: null };
-  queryRows = [storedRow];
-  assert.deepEqual(
-    await readImageServingRecordByObjectKey(
-      item.object_key,
-      { reader },
-      dependencies
-    ),
-    storedRow
-  );
-  assert.deepEqual(queryParameters.at(-1), [item.object_key]);
 
-  thumbCache = { cached: true, value: null };
-  assert.deepEqual(
-    await readImageServingRecordByThumbKey(
-      thumbKey,
-      { reader },
-      dependencies
-    ),
-    storedRow
-  );
-  assert.deepEqual(queryParameters.at(-1), [thumbKey]);
 });
 test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision、mutation 与 shutdown 行为", async () => {
   type CoordinatorDependencies = NonNullable<

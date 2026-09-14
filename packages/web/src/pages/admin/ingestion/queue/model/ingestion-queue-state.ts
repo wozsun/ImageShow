@@ -62,6 +62,7 @@ export type IngestionQueueAction =
       stalePairKeys?: ReadonlySet<string>;
     }
   | { type: "patch"; id: string; patch: Partial<IngestionJob> }
+  | { type: "retry-prepare"; previous: IngestionJob; job: IngestionJob }
   | { type: "bind-server"; id: string; binding: IngestionServerBinding }
   | {
       type: "patch-many";
@@ -149,11 +150,7 @@ export function combinedIngestionQueuePagePlan(
     const pair = serverPairFor(job);
     return pair ? [pair] : [];
   });
-  const visibleRetainedDisplayJobs = displayPrefixJobs.slice(
-    pageStart,
-    pageStart + pageSize
-  );
-  const includedServerItems = visibleRetainedDisplayJobs.flatMap((job) => {
+  const includedServerItems = visibleDisplayPrefixJobs.flatMap((job) => {
     const pair = serverPairFor(job);
     return pair ? [pair] : [];
   });
@@ -308,11 +305,8 @@ function patchJob(job: IngestionJob, patch: Partial<IngestionJob>) {
   const imageChanged = has("imageId")
     && patch.imageId?.toLowerCase() !== job.imageId?.toLowerCase();
 
-  // Retry helpers deliberately spread the complete previous task so callers
-  // can publish one atomic replacement. Treat a binding change as the owner
-  // transition first: any server snapshot carried by that spread belongs to
-  // the previous attempt/session and must never participate in the monotonic
-  // event guard or survive into the new owner.
+  // A binding change cannot inherit the previous owner's authority or commit
+  // result. Browser prepare retries use a complete replacement separately.
   if (attemptChanged || sessionChanged || imageChanged) {
     const nextPatch = {
       ...patch,
@@ -354,7 +348,6 @@ function patchJob(job: IngestionJob, patch: Partial<IngestionJob>) {
       || !job.imageId
       || !patch.serverImageId
       || patch.serverImageId.toLowerCase() !== job.imageId.toLowerCase()
-      || !ingestionStatusPatchMovesForward(job, patch)
     )
   ) {
     return job;
@@ -655,6 +648,14 @@ export function reduceIngestionQueue(
     }
     case "patch":
       return updateQueueJob(state, action.id, (job) => patchJob(job, action.patch));
+    case "retry-prepare":
+      return updateQueueJob(state, action.previous.id, (job) => (
+        job.attemptKey === action.previous.attemptKey
+        && job.status === action.previous.status
+        && !ingestionJobHasServerAuthority(job)
+          ? action.job
+          : job
+      ));
     case "bind-server":
       return bindQueueJob(state, action.id, action.binding);
     case "patch-many":

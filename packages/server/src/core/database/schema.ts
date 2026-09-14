@@ -67,8 +67,16 @@ export async function pingDatabase() {
   await pool.query("SELECT 1");
 }
 
+let readinessPromise: Promise<void> | null = null;
+
 export async function assertCoreDatabaseReady(
   database: Pick<PoolClient, "query"> = pool
 ) {
-  await assertDatabaseReadiness(database);
+  // Initialization owns a dedicated transaction; only concurrent checks using
+  // the shared pool can share the same in-flight structure and access proof.
+  if (database !== pool) return assertDatabaseReadiness(database);
+  readinessPromise ??= assertDatabaseReadiness(database).finally(() => {
+    readinessPromise = null;
+  });
+  await readinessPromise;
 }

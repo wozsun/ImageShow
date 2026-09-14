@@ -21,71 +21,59 @@ export function ingestionJobIsRetryableFailure(job: IngestionJob) {
   return job.status === "failed" && ingestionJobRetryKind(job) !== null;
 }
 
+// Only browser-owned inputs survive a new prepare attempt. Unknown accept
+// results replay their frozen request with the original idempotency identity.
 export function resetJobForPrepareRetry(job: IngestionJob): IngestionJob {
   return {
-    ...job,
-    attemptKey: webUuidV7(),
-    uploadIntentItemInput: undefined,
-    importAcceptItemInput: undefined,
-    importAcceptRejected: undefined,
-    sessionId: undefined,
-    imageId: undefined,
-    serverVersion: undefined,
-    serverProgressSeq: undefined,
-    serverSemanticRevision: undefined,
-    serverHandoffPending: undefined,
-    serverHandoffRevision: undefined,
-    serverHandoffDisplayPage: undefined,
-    serverHandoffProvisionalTotal: undefined,
-    serverAcceptedOrder: undefined,
-    serverAccepted: undefined,
-    serverDraftPending: undefined,
-    serverStatus: undefined,
-    serverPhase: undefined,
-    serverError: undefined,
-    serverProgress: undefined,
-    serverAttemptKey: undefined,
-    serverSessionId: undefined,
-    serverImageId: undefined,
-    browserDisplayReleased: undefined,
+    id: job.id,
+    kind: job.kind,
+    batchKey: job.batchKey,
+    batchTime: job.batchTime,
+    batchPosition: job.batchPosition,
+    imageTime: job.imageTime,
+    manifestSource: job.manifestSource,
+    manifestProvidedCommonFields: job.manifestProvidedCommonFields,
+    manifestLine: job.manifestLine,
+    draft: job.draft,
+    storageSlug: job.storageSlug,
+    file: job.file,
+    fileFingerprint: job.fileFingerprint,
+    downloadUrl: job.downloadUrl,
+    preview: job.preview,
+    previewFull: job.previewFull,
+    objectUrl: job.objectUrl,
+    width: job.width,
+    height: job.height,
+    originalWidth: job.originalWidth,
+    originalHeight: job.originalHeight,
+    originalSize: job.originalSize,
     status: "queued",
-    failureStage: undefined,
-    commitFailureCheckpoint: undefined,
-    commitIntent: undefined,
-    resultState: undefined,
-    resultError: undefined,
     message: "等待重试",
-    transferProgress: undefined,
-    md5: undefined,
-    preparedOrder: undefined,
-    detectedClassification: undefined,
-    classificationOverride: undefined,
     duplicates: [],
-    duplicateCount: undefined,
     duplicateDecision: "upload",
-    finalSize: undefined,
-    quality: undefined,
-    transcoded: undefined
+    ...prepareRetryIdentity(job)
   };
 }
 
-export function isUnconfirmedUploadRawAttempt(job: IngestionJob) {
+function prepareRetryIdentity(job: IngestionJob) {
+  if (job.kind === "upload" && !job.serverVersion && job.uploadIntentItemInput
+    && (job.failureStage === "create" || isUnconfirmedUploadRawAttempt(job))) {
+    return { attemptKey: job.attemptKey, uploadIntentItemInput: job.uploadIntentItemInput };
+  }
+  if (job.kind === "import" && job.failureStage === "create" && !job.sessionId) {
+    return {
+      attemptKey: job.attemptKey,
+      importAcceptItemInput: job.importAcceptItemInput,
+      importAcceptRejected: job.importAcceptRejected,
+      message: "重新获取内容接入会话"
+    };
+  }
+  return { attemptKey: webUuidV7() };
+}
+
+function isUnconfirmedUploadRawAttempt(job: IngestionJob) {
   return job.kind === "upload"
     && job.failureStage === "prepare"
     && job.serverVersion === undefined
     && Boolean(job.sessionId && job.imageId);
-}
-
-export function resetImportJobForPrepareRetry(job: IngestionJob): IngestionJob {
-  if (job.failureStage !== "create" || job.sessionId) {
-    return resetJobForPrepareRetry(job);
-  }
-  return {
-    ...resetJobForPrepareRetry(job),
-    attemptKey: job.attemptKey,
-    importAcceptItemInput: job.importAcceptItemInput,
-    importAcceptRejected: job.importAcceptRejected,
-    status: "queued",
-    message: "重新获取内容接入会话"
-  };
 }

@@ -33,6 +33,10 @@ export async function publicImageUrls(
   access: PublicDatabaseReadAccess = {}
 ) {
   const config = await getStorageBackend(slug, access);
+  return publicImageUrlsForConfig(objectKey, config);
+}
+
+export function publicImageUrlsForConfig(objectKey: string, config: StorageConfig) {
   const thumbKey = thumbnailObjectKey(objectKey);
   const imageBase = imageResourceBaseUrl();
   const applicationThumbUrl = `${imageBase}${localStorageObjectUrl("thumbs", thumbKey)}`;

@@ -122,8 +122,9 @@ export const appConfig = {
   },
 
   backgroundJob: {
+    // Count failures, including stale recovery; the fifth exhausts scheduling.
     maxRetries: 5,
-    retryBackoffSeconds: [60, 300, 900, 3600, 21600],
+    retryBackoffSeconds: [60, 300, 900, 3600],
     taskTimeoutSeconds: 15 * 60,
     staleRecoveryIntervalMs: 60_000,
     historyCleanupIntervalMs: 60 * 60 * 1000,

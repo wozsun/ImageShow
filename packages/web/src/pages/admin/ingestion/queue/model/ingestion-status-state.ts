@@ -1,6 +1,6 @@
 import type { IngestionStatusItemDto } from "@imageshow/shared/browser";
 import type { IngestionJob } from "../../../../../lib/types.js";
-import { completedIngestionJobPatch } from "./server-ingestion-job.js";
+import { activeIngestionClientStatus, completedIngestionJobPatch } from "./server-ingestion-job.js";
 
 const terminalClientStatuses = new Set<IngestionJob["status"]>([
   "done",
@@ -26,23 +26,6 @@ export function ingestionStatusPatchMovesForward(
     ) return false;
   }
   return true;
-}
-
-function clientStatusFor(
-  item: Extract<IngestionStatusItemDto, { status: "present" }>["item"]
-): IngestionJob["status"] {
-  switch (item.status) {
-    case "queued": return "queued";
-    case "downloading": return "downloading";
-    case "received": return "received";
-    case "preparing": return item.phase === "prepare-waiting"
-      ? "received"
-      : "processing";
-    case "ready": return "ready";
-    case "committing": return "committing";
-    case "resolving": return "finalized";
-    case "failed": return "failed";
-  }
 }
 
 export function ingestionStatusEventPatch(
@@ -97,7 +80,7 @@ export function ingestionStatusEventPatch(
     serverProgress: item.progress,
     serverVersion: item.version,
     serverProgressSeq: item.progress_seq,
-    status: clientStatusFor(item),
+    status: activeIngestionClientStatus(item),
     failureStage: failed
       ? job.commitIntent ? "commit" : "prepare"
       : undefined,

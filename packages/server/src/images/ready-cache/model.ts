@@ -7,7 +7,7 @@ import {
   type Brightness,
   type Device
 } from "@imageshow/shared/browser";
-import { thumbnailObjectKey } from "../../storage/objects/image-paths.ts";
+import { storageObjectKey } from "../../storage/objects/image-paths.ts";
 
 export const READY_IMAGE_REBUILD_BATCH_SIZE = 1_000;
 export const READY_IMAGE_REBUILD_MAX_ATTEMPTS = 2;
@@ -155,7 +155,7 @@ export function readyImageCacheItemFromRow(
   };
   if (
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(item.id)
-    || !item.object_key
+    || item.object_key !== storageObjectKey(item.id, item.ext)
     || !imageExtensions.has(item.ext)
     || !devices.includes(item.device)
     || !brightnesses.includes(item.brightness)
@@ -262,21 +262,6 @@ export function readyImageMember(id: string) {
     throw new Error("Cannot encode an invalid ready-image UUID");
   }
   return member;
-}
-
-export function readyImageIdFromMember(member: string) {
-  if (!/^[0-9a-f]{32}$/.test(member)) return null;
-  return [
-    member.slice(0, 8),
-    member.slice(8, 12),
-    member.slice(12, 16),
-    member.slice(16, 20),
-    member.slice(20)
-  ].join("-");
-}
-
-export function readyImageThumbKey(item: ReadyImageCacheItem) {
-  return thumbnailObjectKey(item.object_key);
 }
 
 function readyImageIdSuffix(item: Pick<ReadyImageCacheItem, "id">) {

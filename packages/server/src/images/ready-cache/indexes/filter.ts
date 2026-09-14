@@ -39,9 +39,8 @@ import { recordReadyImageCacheError } from "../status-observability.ts";
 export type ReadyImageFilterIndex = FilterIndex;
 
 export type ReadyImageFilterIndexValidation =
-  | "valid"
-  | "revision_changed"
-  | "invalid";
+  | { status: "valid"; count: number }
+  | { status: "revision_changed" | "invalid" };
 
 type ReadyImageFilterIndexResolution =
   | {
@@ -186,7 +185,7 @@ export async function resolveReadyImageFilterIndexForRequiredRead(
 export async function validateReadyImageFilterIndex(
   index: ReadyImageFilterIndex
 ): Promise<ReadyImageFilterIndexValidation> {
-  if (currentRevision() !== index.revision) return "revision_changed";
+  if (currentRevision() !== index.revision) return { status: "revision_changed" };
   if (index.kind === "core") {
     const transaction = redis.pipeline();
     transaction.hget(READY_IMAGE_INTEGRITY_KEY, index.key);
@@ -202,12 +201,12 @@ export async function validateReadyImageFilterIndex(
     }
     const expectedRaw = results[0]?.[1];
     const actual = Number(results[1]?.[1] ?? 0);
-    if (!Number.isSafeInteger(actual) || actual < 0) return "invalid";
-    if (expectedRaw === null) return "invalid";
+    if (!Number.isSafeInteger(actual) || actual < 0) return { status: "invalid" };
+    if (expectedRaw === null) return { status: "invalid" };
     const expected = Number(expectedRaw);
     return Number.isSafeInteger(expected) && expected >= 0 && expected === actual
-      ? "valid"
-      : "invalid";
+      ? { status: "valid", count: actual }
+      : { status: "invalid" };
   }
   if (index.kind === "attribute") {
     const current = await readReadyImageAttributeIndex(
@@ -219,10 +218,10 @@ export async function validateReadyImageFilterIndex(
       && current.metaKey === index.metaKey
       && current.count === index.count
       && current.instanceToken === index.instanceToken
-      ? "valid"
-      : "invalid";
+      ? { status: "valid", count: current.count }
+      : { status: "invalid" };
   }
   return await validatePublishedReadyImageFilterIndex(index)
-    ? "valid"
-    : "invalid";
+    ? { status: "valid", count: index.count }
+    : { status: "invalid" };
 }

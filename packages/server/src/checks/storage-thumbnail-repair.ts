@@ -161,6 +161,7 @@ async function persistThumbnailSize(
   );
 }
 
+/** Caller owns the global storage-location write lock until all work settles. */
 export async function repairStorageThumbnail(
   imageId: string,
   scheduleSignal: AbortSignal,
@@ -242,37 +243,27 @@ export async function repairStorageThumbnail(
     );
     operationSignal.throwIfAborted();
 
-    const current = await readThumbnailAuthority(authority.id);
-    operationSignal.throwIfAborted();
-    if (!sameThumbnailAuthority(authority, current)) {
-      return { ...itemBase, outcome: "skipped", reason: "生成后图片位置或状态已变化" };
-    }
-    const currentStorage = await resolveStorageAccess(current!.storage_slug);
-    operationSignal.throwIfAborted();
-    const currentThumbnailExists = await currentStorage.driver.exists(
+    const currentThumbnailExists = await storage.driver.exists(
       "thumbs",
       thumbKey,
       { signal: operationSignal }
     );
-    if (currentThumbnailExists && Number(current!.thumbnail_size) > 0) {
-      return { ...itemBase, outcome: "skipped", reason: "生成期间缩略图已恢复" };
-    }
     if (currentThumbnailExists) {
       const removals = await removeStorageObjectsAndConfirm(
         [{
           prefix: "thumbs",
           key: thumbKey,
-          storageSlug: current!.storage_slug
+          storageSlug: authority.storage_slug
         }],
         { signal: operationSignal }
       );
       assertStorageRemovalResults(removals);
       operationSignal.throwIfAborted();
     }
-    await persistThumbnailSize(current!, 0, operationSignal);
-    const pendingAuthority = { ...current!, thumbnail_size: 0 };
+    await persistThumbnailSize(authority, 0, operationSignal);
+    const pendingAuthority = { ...authority, thumbnail_size: 0 };
     const materialized = await writeVerifiedThumbnail(
-      currentStorage,
+      storage,
       thumbKey,
       thumbnail,
       operationSignal
@@ -287,7 +278,7 @@ export async function repairStorageThumbnail(
     } catch (error) {
       operationSignal.throwIfAborted();
       return await cleanupFailedThumbnailWrite(
-        currentStorage,
+        storage,
         thumbKey,
         operationSignal,
         error

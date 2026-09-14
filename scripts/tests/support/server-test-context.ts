@@ -16,7 +16,7 @@ export type ReadyImageSampleDependencies = NonNullable<
 export function servingReadyCacheItem(overrides: Record<string, unknown> = {}) {
   return readyImageCacheItemFromRow({
     id: imageId,
-    object_key: storageObjectKey(imageId, "jpg"),
+    object_key: storageObjectKey(String(overrides.id ?? imageId), String(overrides.ext ?? "jpg")),
     ext: "jpg",
     device: "pc",
     brightness: "dark",

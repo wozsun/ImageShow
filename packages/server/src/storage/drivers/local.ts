@@ -26,6 +26,8 @@ import { isMissingFileError } from "../objects/not-found.ts";
 import { openedReadToBuffer } from "../objects/stream-buffer.ts";
 import {
   batchStorageKeys,
+  STORAGE_ADMIN_LIST_MAX_KEYS,
+  type StorageDirectorySnapshot,
   type StorageKeyListOptions
 } from "../objects/key-listing.ts";
 import {
@@ -45,7 +47,8 @@ const uuidV7TokenPattern = new RegExp(
 async function* walkLocalKeys(
   root: string,
   directoryPath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  snapshot?: StorageDirectorySnapshot
 ): AsyncGenerator<string> {
   signal?.throwIfAborted();
   let directory;
@@ -57,6 +60,7 @@ async function* walkLocalKeys(
     throw error;
   }
 
+  const entries: Array<string | number> = [];
   try {
     while (true) {
       signal?.throwIfAborted();
@@ -69,10 +73,27 @@ async function* walkLocalKeys(
         throw error;
       }
       signal?.throwIfAborted();
-      if (!entry) return;
+      if (!entry) {
+        if (snapshot?.complete) snapshot.directories.set(directoryPath, entries);
+        return;
+      }
+      if (snapshot?.complete) {
+        snapshot.entries += 1;
+        if (snapshot.entries > STORAGE_ADMIN_LIST_MAX_KEYS) {
+          snapshot.complete = false;
+          snapshot.directories.clear();
+          entries.length = 0;
+        } else if (entry.isDirectory()) {
+          entries.push(entry.name);
+        } else {
+          const last = entries.at(-1);
+          if (typeof last === "number") entries[entries.length - 1] = last + 1;
+          else entries.push(1);
+        }
+      }
       const path = join(directoryPath, entry.name);
       if (entry.isDirectory()) {
-        yield* walkLocalKeys(root, path, signal);
+        yield* walkLocalKeys(root, path, signal, snapshot);
       } else {
         yield relative(root, path).split(sep).join("/");
       }
@@ -318,7 +339,7 @@ export class LocalBackend implements StorageDriver {
   ) {
     const root = join(runtimePaths.storageDirectory, prefix);
     return yield* batchStorageKeys(
-      walkLocalKeys(root, root, options.signal),
+      walkLocalKeys(root, root, options.signal, options.directorySnapshot),
       options
     );
   }
@@ -363,27 +384,51 @@ export class LocalBackend implements StorageDriver {
       throw new RangeError("Storage directory prune limit must be a non-negative safe integer");
     }
     const start = options.prefix ? join(root, options.prefix) : root;
+    const changedDirectories = new Set<string>();
+    for (const object of options.changedObjects ?? []) {
+      let dir = dirname(safeStoragePath(object.prefix, object.key));
+      for (;;) {
+        changedDirectories.add(dir);
+        if (dir === root) break;
+        dir = dirname(dir);
+      }
+    }
+    const snapshot = options.directorySnapshot?.complete
+      ? options.directorySnapshot.directories
+      : undefined;
     let removed = 0;
     let visited = 0;
+    const visit = (count: number) => {
+      visited += count;
+      if (visited > configuredLimit) {
+        throw new Error(
+          `Storage directory prune exceeds bounded entry limit ${configuredLimit}`
+        );
+      }
+    };
     const prune = async (dir: string): Promise<void> => {
       options.signal?.throwIfAborted();
-      let directory;
-      try {
-        directory = await opendir(dir, { bufferSize: 64 });
-      } catch (error) {
-        options.signal?.throwIfAborted();
-        if (isMissingFileError(error)) return;
-        throw error;
-      }
-      for await (const entry of directory) {
-        options.signal?.throwIfAborted();
-        visited += 1;
-        if (visited > configuredLimit) {
-          throw new Error(
-            `Storage directory prune exceeds bounded entry limit ${configuredLimit}`
-          );
+      const captured = changedDirectories.has(dir) ? undefined : snapshot?.get(dir);
+      if (captured) {
+        for (const entry of captured) {
+          options.signal?.throwIfAborted();
+          visit(typeof entry === "number" ? entry : 1);
+          if (typeof entry === "string") await prune(join(dir, entry));
         }
-        if (entry.isDirectory()) await prune(join(dir, entry.name));
+      } else {
+        let directory;
+        try {
+          directory = await opendir(dir, { bufferSize: 64 });
+        } catch (error) {
+          options.signal?.throwIfAborted();
+          if (isMissingFileError(error)) return;
+          throw error;
+        }
+        for await (const entry of directory) {
+          options.signal?.throwIfAborted();
+          visit(1);
+          if (entry.isDirectory()) await prune(join(dir, entry.name));
+        }
       }
       if (dir === root || protectedDirs.has(dir)) return;
       options.signal?.throwIfAborted();

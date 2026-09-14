@@ -50,16 +50,27 @@ export async function removeStorageMaintenanceCandidate(
 
 export async function pruneStorageMaintenanceDirectories(
   groups: readonly CapturedMaintenanceGroup[],
+  items: readonly MaintenanceItem[],
   scheduleSignal: AbortSignal,
   lockSignal: AbortSignal
 ) {
   let prunedDirectories = 0;
   const failures: MaintenanceItem[] = [];
-  for (const { backend } of groups) {
+  for (const { backend, group, directorySnapshot } of groups) {
     scheduleSignal.throwIfAborted();
     try {
+      const changedObjects = items.flatMap((item) => (
+        (item.action === "repair_thumbnail" || item.action === "remove_object")
+        && group.slugs.includes(item.backend)
+        && item.prefix !== "*"
+        && (item.action === "remove_object" || item.key !== "*")
+          ? [{ prefix: item.prefix, key: item.key }]
+          : []
+      ));
       prunedDirectories += await pruneEmptyStorageDirs(backend, {
-        signal: lockSignal
+        signal: lockSignal,
+        directorySnapshot,
+        changedObjects
       });
       lockSignal.throwIfAborted();
     } catch (error) {

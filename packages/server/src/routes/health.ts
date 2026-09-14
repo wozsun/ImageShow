@@ -6,7 +6,7 @@ import {
   isRedisRequiredCommandsError
 } from "../core/redis/client.ts";
 import {
-  probeRedisOperationalState,
+  readRedisOperationalReadiness,
   runtimeInitializationIsComplete
 } from "../core/runtime-availability.ts";
 
@@ -18,7 +18,7 @@ type HealthDependencies = {
 
 const defaultHealthDependencies: HealthDependencies = {
   pingDatabase: assertCoreDatabaseReady,
-  assertRedisFeatures: probeRedisOperationalState,
+  assertRedisFeatures: readRedisOperationalReadiness,
   initializationComplete: runtimeInitializationIsComplete
 };
 

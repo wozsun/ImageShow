@@ -3,15 +3,12 @@ import { execRedisPipeline } from "../../../core/redis/pipeline.ts";
 import {
   READY_IMAGE_ALL_INDEX_KEY,
   READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
-  READY_IMAGE_ITEMS_KEY,
-  READY_IMAGE_OBJECT_LOOKUP_KEY,
-  READY_IMAGE_THUMB_LOOKUP_KEY
+  READY_IMAGE_ITEMS_KEY
 } from "../keys.ts";
 import {
   parseReadyImageCacheItem,
   readyImageIdSuffixScore,
   readyImageMember,
-  readyImageThumbKey,
   serializeReadyImageCacheItem,
   type ReadyImageCacheItem
 } from "../model.ts";
@@ -70,19 +67,6 @@ export async function validateReadyImageSamples(
         }
       }
     );
-    for (const [lookup, field] of [
-      [READY_IMAGE_OBJECT_LOOKUP_KEY, item.object_key],
-      [READY_IMAGE_THUMB_LOOKUP_KEY, readyImageThumbKey(item)]
-    ] as const) {
-      await queue(
-        () => pipeline.hget(lookup, field),
-        (value) => {
-          if (value !== member) {
-            throw new Error("Ready-image cache lookup sample failed validation");
-          }
-        }
-      );
-    }
     await queue(
       () => pipeline.zscore(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY, member),
       (value) => {

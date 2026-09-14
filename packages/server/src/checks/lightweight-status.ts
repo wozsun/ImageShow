@@ -42,14 +42,15 @@ export async function readAdminPostgresqlStatus(): Promise<
     await client.query(`SET LOCAL statement_timeout='${STATUS_QUERY_TIMEOUT_MS}ms'`);
     const row = (await client.query(`
       SELECT current_setting('server_version') AS version,
-             (SELECT count(*) FROM metadata) AS total_images,
-             (SELECT count(*) FROM metadata WHERE status='ready') AS ready_images,
+             count(*) AS total_images,
+             count(*) FILTER (WHERE status='ready') AS ready_images,
              (SELECT revision::text
                 FROM ready_image_revision
                WHERE singleton=1) AS authoritative_revision,
              (SELECT count(*)
                 FROM background_job
                WHERE status='failed') AS abnormal_jobs
+        FROM metadata
     `)).rows[0] as Record<string, unknown> | undefined;
     await client.query("COMMIT");
     if (!row || typeof row.version !== "string") {
@@ -79,15 +80,13 @@ export async function readAdminPostgresqlStatus(): Promise<
 async function readAdminRedisStatus(): Promise<AdminRedisStatusDto> {
   const startedAt = performance.now();
   await pingRedis();
-  const [serverInfo, memoryInfo, imageProjection] = await Promise.all([
-    redis.info("server"),
-    redis.info("memory"),
+  const [info, imageProjection] = await Promise.all([
+    redis.info("server", "memory"),
     readReadyImageCacheAdminStatus(null)
   ]);
-  const memory = parseRedisMemoryState(memoryInfo);
-  const serverFields = parseRedisInfoFields(serverInfo);
-  const memoryFields = parseRedisInfoFields(memoryInfo);
-  const version = serverFields.get("redis_version");
+  const memory = parseRedisMemoryState(info);
+  const fields = parseRedisInfoFields(info);
+  const version = fields.get("redis_version");
   if (!version) throw new Error("Redis server version is unavailable");
   return {
     connection: "connected",
@@ -99,7 +98,7 @@ async function readAdminRedisStatus(): Promise<AdminRedisStatusDto> {
       used_memory_bytes: memory.usedMemory,
       used_memory_rss_bytes: memory.usedMemoryRss,
       fragmentation_ratio: finiteNumber(
-        memoryFields.get("mem_fragmentation_ratio")
+        fields.get("mem_fragmentation_ratio")
       )
     },
     image_projection: imageProjection

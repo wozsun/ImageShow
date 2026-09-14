@@ -19,7 +19,7 @@ import {
 } from "../queue/model/ingestion-job-deduplication.js";
 import {
   ingestionJobRetryKind,
-  resetImportJobForPrepareRetry
+  resetJobForPrepareRetry
 } from "../queue/model/ingestion-job-retry.js";
 import { acceptImports } from "../queue/ingestion-api.js";
 import type { IngestionQueueProducerApi } from "../queue/ingestion-queue-api.js";
@@ -534,7 +534,7 @@ export function useImport(options: {
       ));
       if (!current || current.status !== target.status || ingestionJobRetryKind(current) !== "browser-prepare") continue;
       const next = {
-        ...resetImportJobForPrepareRetry(current),
+        ...resetJobForPrepareRetry(current),
         preview: "",
         previewFull: undefined,
         objectUrl: undefined,
@@ -544,8 +544,7 @@ export function useImport(options: {
         originalHeight: undefined,
         originalSize: undefined
       };
-      queue.updateJob(current.id, next);
-      selected.push(next);
+      if (queue.retryPrepareJob(current, next)) selected.push(next);
     }
     for (let offset = 0; mounted.current && offset < selected.length; offset += maxItems) {
       const jobs = selected.slice(offset, offset + maxItems).filter((target) => (

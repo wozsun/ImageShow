@@ -5,9 +5,7 @@ import {
   READY_IMAGE_ALL_INDEX_KEY,
   READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
   READY_IMAGE_ITEMS_KEY,
-  READY_IMAGE_OBJECT_LOOKUP_KEY,
-  READY_IMAGE_STATS_KEY,
-  READY_IMAGE_THUMB_LOOKUP_KEY
+  READY_IMAGE_STATS_KEY
 } from "../keys.ts";
 import { readReadyImageCacheMeta } from "../meta.ts";
 import {
@@ -53,8 +51,6 @@ function initialReadyImageCardinalities(
   return new Map([
     [READY_IMAGE_ITEMS_KEY, itemCount],
     [READY_IMAGE_ALL_INDEX_KEY, itemCount],
-    [READY_IMAGE_OBJECT_LOOKUP_KEY, itemCount],
-    [READY_IMAGE_THUMB_LOOKUP_KEY, itemCount],
     [READY_IMAGE_ID_SUFFIX_LOOKUP_KEY, itemCount]
   ]);
 }

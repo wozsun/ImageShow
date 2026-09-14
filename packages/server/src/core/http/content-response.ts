@@ -3,6 +3,7 @@ import { conditionalRequestNotModified } from "./validators.ts";
 
 export type ContentRepresentation = Readonly<{
   body: string;
+  byteLength: number;
   etag: string;
 }>;
 
@@ -21,6 +22,7 @@ type ContentResponseOptions = {
 export function createContentRepresentation(body: string): ContentRepresentation {
   return {
     body,
+    byteLength: Buffer.byteLength(body, "utf8"),
     etag: `W/"${createHash("sha256").update(body).digest("base64url")}"`
   };
 }
@@ -33,13 +35,19 @@ export function contentResponse(
     ifNoneMatch: options.ifNoneMatch,
     etag: representation.etag
   });
+  const headers = new Headers({
+    ...(options.headers ?? {}),
+    "Content-Type": options.contentType,
+    "Cache-Control": options.cacheControl,
+    ETag: representation.etag
+  });
+  if (notModified) {
+    headers.delete("Content-Length");
+  } else {
+    headers.set("Content-Length", String(representation.byteLength));
+  }
   return new Response(notModified ? null : representation.body, {
     status: notModified ? 304 : 200,
-    headers: {
-      ...(options.headers ?? {}),
-      "Content-Type": options.contentType,
-      "Cache-Control": options.cacheControl,
-      ETag: representation.etag
-    }
+    headers
   });
 }

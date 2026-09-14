@@ -27,9 +27,8 @@ import {
 } from "./registry.ts";
 import {
   assertPhysicalLocationChangeAllowed,
-  readStorageBackendSnapshot,
-  storageBackendUsage,
-  type StorageBackendSnapshot
+  readStorageBackendConfiguration,
+  readStorageBackendUsage
 } from "./usage.ts";
 import {
   validateStorageBackendCandidate,
@@ -137,7 +136,7 @@ async function hasRegisteredNamespacePeer(
 }
 
 function sameStorageBackendConfig(
-  snapshot: StorageBackendSnapshot,
+  snapshot: StorageBackendConfigRow,
   locked: StorageBackendConfigRow
 ) {
   if (
@@ -164,7 +163,7 @@ async function updateStorageBackendUnderLock(
   receipt: StorageUpdateReceipt
 ) {
   signal.throwIfAborted();
-  const snapshot = await readStorageBackendSnapshot(slug);
+  const snapshot = await readStorageBackendConfiguration(slug, signal);
   signal.throwIfAborted();
   const currentConfig = storageConfigFromRow(snapshot);
   const nextConfig = updatedStorageConfig(currentConfig, input);
@@ -187,9 +186,9 @@ async function updateStorageBackendUnderLock(
   const changedFields = configuredNamespaceChanged
     ? changedPhysicalLocationFields(currentConfig, nextConfig)
     : [];
-  const snapshotUsage = storageBackendUsage(snapshot);
   let verifiedEndpointRebind = false;
   if (configuredNamespaceChanged) {
+    const snapshotUsage = await readStorageBackendUsage(slug, signal);
     if (endpointRebindCandidate) {
       verifiedEndpointRebind = Boolean(
         snapshotUsage.image_count
@@ -212,7 +211,7 @@ async function updateStorageBackendUnderLock(
     }
   }
 
-  const existingObject = driverChanged && snapshotUsage.image_count > 0
+  const existingObject = driverChanged
     ? (await pool.query(
         `SELECT id, object_key, storage_slug
            FROM metadata

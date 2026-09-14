@@ -16,7 +16,7 @@ const vocabularyLabels: Record<VocabularyEntity, string> = {
   theme: "Theme"
 };
 
-export function vocabularyMutationLockKey(
+function vocabularyMutationLockKey(
   entity: VocabularyEntity,
   slug: string
 ) {

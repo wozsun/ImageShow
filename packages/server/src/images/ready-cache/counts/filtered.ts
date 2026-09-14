@@ -309,8 +309,8 @@ export async function buildFilteredReadyImageCountSnapshot(
   const indexesRemainValid = async () => {
     for (const index of uniqueIndexes) {
       const validation = await validateReadyImageFilterIndex(index);
-      if (validation === "revision_changed") return false;
-      if (validation === "invalid") {
+      if (validation.status === "revision_changed") return false;
+      if (validation.status === "invalid") {
         if (index.kind === "core") {
           throw new ReadyImageCoreCacheError(
             "Ready-image core index validation failed"

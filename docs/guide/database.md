@@ -143,7 +143,8 @@ Worker 按 `purge_job_id=job.id` 与 `deleted_at, id` 有界读取，每次只�
 常用 ready 筛选已有部分索引：无筛选、单设备、单亮度、设备+亮度、
 单主题、设备+主题、亮度+主题、设备+亮度+主题、作者。标签查询依赖
 `image_tag(tag_slug, image_id)` 命中标签集合，结合 `metadata` 的 ready、图片时间与主题等
-索引完成筛选；另有 MD5、缩略图反查、主题、作者和存储后端索引。
+索引完成筛选；另有 MD5、主题、作者和存储后端索引。完整图、缩略图和原图资源的记录定位
+共用 UUID 主键读取；完整图及缩略图在返回资源前精确核对请求键。
 
 后台 PostgreSQL 页在同一 `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY` 事务中先
 COUNT，再判断 `PageWindow.start >= total`，最后才执行目标窗口 SELECT。窗口子查询先完成
@@ -187,6 +188,10 @@ namespace、canonical 结构和无版本后缀的签名 purpose 共同构成唯�
 
 ## background_job —— 后台任务队列
 
+Worker 每 5 秒扫描可运行任务。所有任务类型都已有活动时间片时跳过任务发现查询，但仍按期
+执行僵尸恢复和历史清理；有空闲类型时继续读取准确的可运行数量与最早等待时长。
+领取、重试退避、每类并发、时间片预算和停机排空继续由同一个 Worker 管理。
+
 | 字段 | 含义 |
 | --- | --- |
 | `id` (PK) | 任务 id |
@@ -196,7 +201,7 @@ namespace、canonical 结构和无版本后缀的签名 purpose 共同构成唯�
 | `target_id` | 目标图片 id |
 | `idempotency_key` | 幂等键 |
 | `payload` / `error` | 入参与错误；终态结果不在队列表中重复持久化 |
-| `retry_count` / `next_retry_at` | 重试次数与下次重试时间 |
+| `retry_count` / `next_retry_at` | 失败次数（含僵尸恢复）与下次重试时间 |
 | `created_at` / `updated_at` | 时间戳 |
 
 `cache.rebuild` 会从 PostgreSQL 全量重建统一 ready-image Redis 投影。`trash.purge` 的成员范围由
@@ -214,6 +219,9 @@ Worker 会按保留策略裁剪历史记录：`succeeded` 保留 7 天；普通�
 重排和失败写入必须同时匹配任务 id、`running` 状态与该 token。僵尸恢复及所有退出
 `running` 的路径会清空 token，因此租约超时后又被重新领取的旧执行者不能写入迟到
 终态。`retry_count` 只统计失败与僵尸恢复次数，所有权代际不会进入 payload。
+普通执行的前四次失败分别在 60、300、900、3600 秒后自动重排，第五次失败耗尽，
+`next_retry_at` 设为 NULL。僵尸恢复也占用同一五次失败预算，未耗尽时立即重排；人工重试
+继续通过既有管理入口恢复，不增加额外自动重试轮次。
 
 `move.cleanup` 的 payload 只保存原因、保留策略，以及固化后端 slug、对象前缀 / 键和入队时
 物理命名空间 identity 的对象条目，不携带图片或缩略图字节。`pending`、`running` 以及所有

@@ -1,9 +1,20 @@
 const STORAGE_KEY_BATCH_SIZE = 256;
 export const STORAGE_ADMIN_LIST_MAX_KEYS = 100_000;
 
+/**
+ * Local traversal facts for one maintenance operation. Numbers count file runs;
+ * strings name child directories, preserving traversal order without file names.
+ */
+export type StorageDirectorySnapshot = {
+  directories: Map<string, readonly (string | number)[]>;
+  entries: number;
+  complete: boolean;
+};
+
 export type StorageKeyListOptions = {
   signal?: AbortSignal;
   maxKeys?: number;
+  directorySnapshot?: StorageDirectorySnapshot;
 };
 
 export type StorageKeyListResult =

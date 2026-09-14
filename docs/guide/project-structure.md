@@ -164,6 +164,17 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 公开资源不读取管理员会话，S3 已配置公开 URL 的对象使用直链；图片 URL 由服务端生成，
 公开站点配置只投影页面实际消费的字段。
 
+`images/presenter.ts` 的公开卡片、后台列表 / 编辑快照及 Ingestion completed 投影，
+在每个非空批次调用一次 `storage/backends/registry.ts` 的 `getStorageBackendConfigs`。
+注册表在同一有效 revision 中按 slug 选择配置，响应内通过只读 Map 同步生成 URL，不建立
+长期第二缓存。单图和批次共用 `storage/objects/public-urls.ts` 的同步 URL 编码、缩略图与
+S3 直链规则；公开读取继续传入所属请求的有界数据库 reader。
+
+`core/http/content-response.ts` 同时维护字符串正文、内容弱 ETag 与 UTF-8 字节长度。
+200 响应携带准确 `Content-Length`，304 不带正文或长度；API 压缩中间件直接使用已知长度，
+选用压缩后删除原长度。只有符合压缩条件且长度未知的流才经 `compression-threshold.ts`
+按块探测与重放，不将此入口扩展为所有 `c.json` 的响应所有者。
+
 `images/original-link.ts` 统一生成 `/images/original/<id>`，正常图片、后台及回收站均使用此公开
 缓存入口；资源处理器不读会话或按钮开关，直连 302 使用公开短缓存，代理继承源站策略或使用
 CDN fallback，保留 HEAD、条件请求、取消处理与 `Vary: User-Agent`。
@@ -218,7 +229,9 @@ HTTP `validation_error`，`primitives.ts` 只复用 UUID、slug、HTTPS 和安�
 advisory lock 两个连接池，均启用 PostgreSQL 每秒断连检查，使已销毁连接的长查询和锁等待
 能够在数据库侧结束；`transactions.ts`、`advisory-locks.ts` 和 `schema.ts` 分别拥有
 事务、锁与数据库启动编排；空库在事务内执行当前完整 `schema.sql` 并核对 readiness，非空库
-只做只读 readiness。既有结构变更由维护者在启动前处理，额外表不参与数据或权限检查。
+只做只读 readiness。`schema.ts` 合并同时使用默认连接池的 readiness 调用，只共享尚未完成的
+校验，不缓存成功结果；启动事务或调用者显式提供的 reader 独立执行完整校验。
+既有结构变更由维护者在启动前处理，额外表不参与数据或权限检查。
 advisory lock 调度信号只取消连接取得与锁等待；锁内回调收到独立的
 父锁 / 当前连接失效信号，由具体领域决定是否再合并请求、lease 或 deadline。`readiness.ts`
 是唯一总入口，按固定顺序调用
@@ -236,6 +249,11 @@ schema 初始化和管理员播种直接使用主查询池，不为不受支持�
 释放 / 淘汰。Redis 缓存读取先行并保留外层并行，首次真实回源才借 client，同一 scope 内的领域模块
 显式接收并复用 reader；查询失败、请求取消或 scope 结束后不再启动排队 SQL。
 底层 `pool.query` 保持显式调用与原始连接语义。
+`database/connection-error.ts` 只识别明确的 PostgreSQL / 网络连接故障及当前 pg 驱动无编码的
+连接错误，不以模糊错误文本归类权限、SQL 程序错误或取消。Ingestion completed 读模型仅在
+正式记录查询边界将这些故障转换为 `database_unavailable`，保留 cause，并记录不含连接地址、
+凭据和 SQL 的原因码；后续存储配置、URL 与 DTO 生成错误沿原错误路径传播。任何补全失败
+均中断快照，不进入陈旧 completed 回执清理；查询继续包含回收站正式记录。
 `core/coalesce.ts` 合并同键活动任务，调用者各自等待；可取消的工作使用共享信号，在最后一个
 调用者离开后中止。`images/read-models/facets.ts` 在建立公共数据库 scope 之前合并整个公共
 词表读取，避免共享某个 HTTP 请求的 reader 或在已有连接内嵌套等待另一个准入名额。
@@ -277,8 +295,8 @@ storage/
 新增标签按该顺序排在已有词条前，revision 和提交后缓存失效仍由调用方汇总。
 标签、主题与作者的显式创建及自动建立均使用小于当前最小排序值的位置，不改写已有词条排序；
 重复采用已有词条不移动位置，人工排序继续按提交的顺序持久化。
-`images/theme-reassignment.ts` 持有主题删除时的图片 SQL、revision 和 cache handoff，主题领域仍
-拥有词表删除、重试与最终词表同步。`storage/objects/image-transfer-admission.ts` 是所选图片与
+`themes/mutations.ts` 在词表排他锁和图片缓存 fence 内，以单事务集合 SQL 解除图片关联并删除
+主题，汇总一次 revision 与精确同步 / 重建交接。`storage/objects/image-transfer-admission.ts` 是所选图片与
 整后端迁移共用的活动逐图搬迁许可 owner，两个生产者直接复用同一个代码内固定 5 项容量。
 Endpoint 重绑定的双向随机挑战与精确探针清理位于 `storage/backends/endpoint-rebind.ts`；
 `probe.ts` 同时负责候选地址对既有图片的有界读取。
@@ -295,20 +313,24 @@ Endpoint 重绑定的双向随机挑战与精确探针清理位于 `storage/back
 `checks/storage-thumbnail-repair.ts` 负责缩略图写入与校验，`checks/storage-orphan-cleanup.ts`
 负责确认删除和空目录修剪，`checks/storage-maintenance.ts` 保留独占位置锁、执行顺序，并把对象
 维护与持久彻底删除任务维护汇总为单一检查页操作。
-缩略图维修只为数据库已采用的缩略图执行生成前对象探测；未采用状态统一在生成后复核位置与
-对象再发布。这组写维护只从显式维护入口调用，不接入普通请求热路径或通用后台任务。
+缩略图维修只为数据库已采用的缩略图执行生成前对象探测；生成后复用独占锁内的位置及 driver，
+保留发布前对象探测、0 标记、写后摘要及数据库未知写结果回读。
+本地 driver 在完整列举时按需捕获本次有界目录信息，维护编排将维修 / 删除涉及的对象交给修剪，
+由 driver 重读受影响目录及祖先；未变化目录复用捕获事实，原有扫描预算与 rmdir 边界保留。
+这组写维护只从显式维护入口调用，不接入普通请求热路径或通用后台任务。
 回收站的移入 / 恢复集中于
 `images/trash-mutations.ts`；`images/trash-purge.ts` 拥有任务原子绑定与按 job 逐图执行，
 `images/trash-purge-job.ts` 只把领域批次结果映射为通用任务结果，
 `images/trash-purge-maintenance.ts` 集中维护入口触发的全部耗尽任务重试与异常引用修复。深度诊断属于
 `checks/database-check.ts`，正常图片请求不探测任务完整性。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
-请求级派生计数失效。每个请求只借一个锁会话，按并发上限分组取得该组词表、分类与必要的
+请求级派生计数失效。每个请求只借一个锁会话，按并发上限分组取得该组词表及自动亮度所需的单图对象与
 存储读取锁，再并行执行逐项事务；辅助锁在组结束后释放，图片更新锁保留至整个请求收口。
 `image_update_summary.max_group_duration_ms` 记录最慢分组的准备、等锁与执行总耗时；
 存储迁移摘要中的 `max_item_duration_ms` 继续表示最慢单图耗时。
 `images/image-update-item.ts` 是单图 metadata、author / theme / tag
-创建、完整标签替换与分类 metadata 更新的 PostgreSQL 事务所有者；主题删除的图片重分配由
-`images/theme-reassignment.ts` 拥有，删除主题后将图片关联置为 NULL。`images/metadata-theme.ts`
+创建、完整标签替换与分类 metadata 更新的 PostgreSQL 事务所有者；普通分类只采用锁定行，
+自动亮度保留事务外预处理及提交前冲突复核。主题删除由 `themes/mutations.ts` 统一拥有解除
+关联和删除词条的单事务。`images/metadata-theme.ts`
 拥有共享 HTTP / JSONL nullable slug schema；查询专用
 `null` 由 shared browser 契约提供，虚拟统计项由 vocab / read model 构造，不进入主题表。两者都保持 `object_key` 不变，并在同一图片事务中推进
 revision、交接同一 mutation sync。
@@ -457,8 +479,18 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
 - `useCompletedIngestionInvalidation.ts` 是 completed pair 去重与 PostgreSQL 图片查询失效 owner；
   Ingestion 完成结果使用独立窄 DTO，`read-models/ingestion-results.ts` 与提交路径共用
   presenter，只返回卡片、草稿及完成失效所需字段；后台图片列表继续使用完整列表投影。
-  `model/server-ingestion-job.ts` 集中完成 active / completed DTO 到卡片的单调映射，并以终态围栏
-  阻止迟到 snapshot、SSE、status 或 HTTP 结果回退；
+  `model/server-ingestion-job.ts` 集中完成 active / completed DTO 到卡片的单调映射，完整快照和稀疏
+  事件共用 active 状态映射，分别保留草稿合并规则；终态围栏阻止迟到 snapshot、SSE、status 或
+  HTTP 结果回退。`model/ingestion-job-retry.ts` 从浏览器输入构造准备重试，未知接受结果保留
+  attempt 与冻结请求，新的准备尝试只带入本地输入、草稿和批次信息；队列以 `retry-prepare`
+  原子替换浏览器任务，服务端准备重试继续由原 canonical 动作换代。
+  `useIngestionQueue.ts` 按 pair 分组批量 completed 观察，组内按到达顺序执行版本与终态保护，
+  一次扫描留存任务、一次 `patch-many` 并汇总被替换的 Blob；全部观察仍交给查询失效 owner。
+  可见服务端项与临时摘要按队列、快照、页码和交接 epoch 派生；可变交接引用通过对应 epoch
+  或队列更新失效。旧 pair 退休统一释放显示资源并通知草稿 owner；确认离队保留 revision / 摘要
+  证明，权威任务离页和 completed 投影分别保持自己的草稿、交接与展示规则。
+  浏览器字节剥离共用纯投影，卸载汇总当前卡片、handoff 与 detached 引用的 Blob 后释放。
+  `useServerIngestionQueue.ts` 为有基线和无基线的快照失败分别保留展示状态，共用有限退避调度；
   `useIngestionStatusHydration.ts` 以同一个有界 status 请求 owner 处理未知交接与 compact completed
   回执的 PostgreSQL DTO 水合（未知 compact pair 只用于失效而不挂载卡片），每个 effect 只发出一个
   上限内的 status chunk，成功原子落实后才由下一任 owner 消费尾部，保证不发生中止后重发；完成
@@ -478,7 +510,11 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
   `weibo-types.ts`；parser 逐媒体携带实际所属 status 的 UID，不读取 RuntimeConfig 作者映射。
 - 图片读取先由 `image-serving-record.ts` 将 Redis 命中与 PostgreSQL fallback 归一为
   同一 serving record；公开正式媒体的 ready-cache 明确空命中仍会在有界数据库读取中查找
-  ready 或 deleted 行，入口在缓存和数据库读取前统一拒绝非规范或过长对象键。
+  ready 或 deleted 行。完整图 / 缩略图入口从规范对象键提取 UUID，复用同一按 ID 读取；完整图
+  必须精确匹配 `object_key`，缩略图必须匹配该记录派生的 webp 键。非规范、过长、错误分片或
+  缩略图扩展名在缓存和数据库读取前拒绝。ready rich item 同时校验 id、ext 和固定对象键一致。
+  ready-cache 核心保留 items、时间索引、ID 末位索引、统计、完整性和 meta 六个固定键；构建、
+  增量、样本和内存检查共用这些核心职责。
   `stored-image-serving.ts` 只编排存储对象与缩略图，
   `external-original-serving.ts` 只处理外部原图探测、跳转和代理。
   `stored-object-response.ts` 集中流式、HEAD、Range 与缓存响应；缩略图缺失在只读 serving
@@ -507,6 +543,10 @@ mutation hold 与 rebuild requirement；归组没有增加第二个状态机或�
 后台使用安全 offset，按图片 / 入库时间与 UUID 同向排序；图片时间的 ready 页复用 Redis
 正反序窗口，入库时间及回收站由 PostgreSQL 排序分页。公开使用 cursor。标签与选中行在同一
 SQL 快照投影，URL 由共同 presenter 生成。
+`read-models/gallery-stats.ts` 在同一只读 repeatable-read 快照中执行七条统计 SELECT：
+匹配总数由完整数据库设备 / 亮度分组求和，再独立投影展示分类；超限分组或非法计数明确失败。
+标签候选沿 `image_tag` 复合主键连接，以 `count(m.id)` 保留零关联词条，筛选继续使用共同
+SQL 谓词及省略候选自身轴的规则。
 独立详情提供完整元数据和链接；Web 从列表保留基础项并按 ID 组装，显示名复用 facets。
 
 领域模块可以依赖 `core/` 和 `config/`，但基础设施不能反向导入具体路由。跨领域调用直接

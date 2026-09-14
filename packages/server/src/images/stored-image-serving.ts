@@ -9,16 +9,14 @@ import {
   safeRedirectLocation
 } from "../core/http/headers.ts";
 import {
-  isCanonicalImageObjectKey,
-  isCanonicalThumbnailObjectKey,
+  parseImageObjectKey,
   thumbnailObjectKey
 } from "../storage/objects/image-paths.ts";
 import { resolveReadableObject } from "../storage/objects/access.ts";
 import { contentType } from "../storage/objects/keys.ts";
 import { isStorageObjectNotFound } from "../storage/objects/not-found.ts";
 import {
-  readImageServingRecordByObjectKey,
-  readImageServingRecordByThumbKey,
+  readImageServingRecordById,
   type ImageServingRecord
 } from "./image-serving-record.ts";
 import {
@@ -32,17 +30,13 @@ type StoredThumbnailRecord = Pick<
 >;
 
 export type StoredImageServingDependencies = {
-  readImageServingRecordByObjectKey:
-    typeof readImageServingRecordByObjectKey;
-  readImageServingRecordByThumbKey:
-    typeof readImageServingRecordByThumbKey;
+  readImageServingRecordById: typeof readImageServingRecordById;
   resolveReadableObject: typeof resolveReadableObject;
   streamResolvedObject: typeof streamResolvedObject;
 };
 
 const defaultStoredImageServingDependencies: StoredImageServingDependencies = {
-  readImageServingRecordByObjectKey,
-  readImageServingRecordByThumbKey,
+  readImageServingRecordById,
   resolveReadableObject,
   streamResolvedObject
 };
@@ -94,16 +88,19 @@ export async function servePublicStoredObject(
   dependencies: StoredImageServingDependencies =
     defaultStoredImageServingDependencies
 ) {
-  if (!isCanonicalImageObjectKey(key)) {
+  const parsed = parseImageObjectKey(key);
+  if (!parsed) {
     throw new ApiError(404, "not_found", "Object not found");
   }
   const signal = request.signal ?? new AbortController().signal;
   return withPublicDatabaseRead(signal, async (database, databaseSignal) => {
-    const record = await dependencies.readImageServingRecordByObjectKey(
-      key,
+    const record = await dependencies.readImageServingRecordById(
+      parsed.id,
       database
     );
-    if (!record) throw new ApiError(404, "not_found", "Object not found");
+    if (!record || record.object_key !== key) {
+      throw new ApiError(404, "not_found", "Object not found");
+    }
     const object = await dependencies.resolveReadableObject(
       "full",
       key,
@@ -137,16 +134,19 @@ export async function servePublicStoredThumbnail(
   dependencies: StoredImageServingDependencies =
     defaultStoredImageServingDependencies
 ) {
-  if (!isCanonicalThumbnailObjectKey(key)) {
+  const parsed = parseImageObjectKey(key);
+  if (!parsed || parsed.ext !== "webp") {
     throw new ApiError(404, "not_found", "Thumbnail not found");
   }
   const signal = request.signal ?? new AbortController().signal;
   return withPublicDatabaseRead(signal, async (database, databaseSignal) => {
-    const record = await dependencies.readImageServingRecordByThumbKey(
-      key,
+    const record = await dependencies.readImageServingRecordById(
+      parsed.id,
       database
     );
-    if (!record) throw new ApiError(404, "not_found", "Thumbnail not found");
+    if (!record || thumbnailObjectKey(record.object_key) !== key) {
+      throw new ApiError(404, "not_found", "Thumbnail not found");
+    }
     return deliverStoredThumbnail(
       record,
       {

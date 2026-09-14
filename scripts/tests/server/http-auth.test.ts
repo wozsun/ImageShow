@@ -92,10 +92,7 @@ import {
 import {
   parseReadyImageCacheItem,
   readyImageCacheItemFromRow,
-  readyImageIdFromMember,
-  readyImageMember,
   readyImageStatFields,
-  readyImageThumbKey,
   serializeReadyImageCacheItem
 } from "../../../packages/server/src/images/ready-cache/model.ts";
 import {
@@ -542,9 +539,6 @@ test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验�
   });
   assert.deepEqual(item.tags, ["concert", "stage"]);
   assert.deepEqual(parseReadyImageCacheItem(serializeReadyImageCacheItem(item)), item);
-  const member = readyImageMember(imageId);
-  assert.equal(readyImageIdFromMember(member), imageId);
-  assert.equal(readyImageThumbKey(item), storageObjectKey(imageId, "webp"));
   assert.deepEqual(readyImageStatFields(item), [
     "total",
     "device:pc",

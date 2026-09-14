@@ -7,13 +7,12 @@ import {
   synchronizeVocabularyMutation,
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
+import { withTransaction } from "../core/database/transactions.ts";
 import {
-  executeThemeImageReassignmentPlan,
-  readThemeReassignPlan,
-  clearThemeImageAssociations,
-  type ThemeReassignProgress
-} from "../images/theme-reassignment.ts";
-import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
+  withImageMutationSync,
+  type ImageMutationSyncBatch
+} from "../images/mutation-sync.ts";
+import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
 
 async function insertTheme(client: PoolClient, slug: string) {
   if (!slug) return false;
@@ -75,90 +74,67 @@ export async function reorderThemes(slugs: string[]) {
   await synchronizeVocabularyMutation({ entity: "theme" });
 }
 
-async function deleteThemeWhenUnreferencedUnderLock(
+async function deleteThemeUnderLock(
   slug: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  mutationBatch: ImageMutationSyncBatch
 ) {
-  signal.throwIfAborted();
-  const state = (await pool.query(
-    `SELECT EXISTS(SELECT 1 FROM theme WHERE slug=$1) AS theme_exists,
-            EXISTS(SELECT 1 FROM metadata WHERE theme=$1) AS image_exists`,
-    [slug]
-  )).rows[0] as { theme_exists: boolean; image_exists: boolean };
-  signal.throwIfAborted();
-  if (!state.theme_exists) return { deleted: false, retry: false };
-  if (state.image_exists) return { deleted: false, retry: true };
-
-  const deleted = Boolean((await pool.query(
-    "DELETE FROM theme WHERE slug=$1",
-    [slug]
-  )).rowCount);
-  signal.throwIfAborted();
-  return { deleted, retry: false };
-}
-
-async function deleteThemeAndReassign(
-  slug: string,
-  progress: ThemeReassignProgress
-) {
-  while (true) {
-    const plan = await readThemeReassignPlan(slug);
-    const attempt = async (
-      upperBoundImageId: string | null,
-      exactReadyLimit: number | null
-    ) => {
-      const reassigned = await clearThemeImageAssociations(
-        slug,
-        upperBoundImageId,
-        progress,
-        exactReadyLimit
-      );
-      if (reassigned.deferred) {
-        return { deleted: false, retry: true };
-      }
-      return withVocabularyMutationLock(
-        "theme",
-        slug,
-        (signal) => deleteThemeWhenUnreferencedUnderLock(slug, signal)
-      );
-    };
-    const result = await executeThemeImageReassignmentPlan(
-      progress.readyCommitted + plan.affectedCount,
-      (exactReadyLimit) => attempt(
-        plan.upperBoundImageId,
-        exactReadyLimit
-      ),
-      async () => {
-        let upperBoundImageId = plan.upperBoundImageId;
-        for (;;) {
-          const rebuildResult = await attempt(upperBoundImageId, null);
-          if (!rebuildResult.retry) return rebuildResult;
-          upperBoundImageId = (
-            await readThemeReassignPlan(slug)
-          ).upperBoundImageId;
-        }
-      }
+  return withTransaction(async (client) => {
+    signal.throwIfAborted();
+    const theme = await client.query(
+      "SELECT slug FROM theme WHERE slug=$1 FOR UPDATE",
+      [slug]
     );
-    if (!result.retry) {
-      return result.deleted;
-    }
-  }
+    signal.throwIfAborted();
+    if (!theme.rowCount) return { deleted: false, affected: [] as { id: string }[] };
+
+    const affectedCount = Number((await client.query(
+      `SELECT count(*)::int AS count
+         FROM metadata
+        WHERE theme=$1 AND status='ready'`,
+      [slug]
+    )).rows[0]?.count ?? 0);
+    signal.throwIfAborted();
+    const decision = mutationBatch.decide(affectedCount);
+    const affected = decision.mode === "exact"
+      ? (await client.query<{ id: string }>(
+          `SELECT id FROM metadata
+            WHERE theme=$1 AND status='ready'
+            ORDER BY id`,
+          [slug]
+        )).rows
+      : [];
+    signal.throwIfAborted();
+    await client.query(
+      `UPDATE metadata SET theme=NULL, updated_at=now() WHERE theme=$1`,
+      [slug]
+    );
+    signal.throwIfAborted();
+    const deleted = Boolean((await client.query(
+      "DELETE FROM theme WHERE slug=$1",
+      [slug]
+    )).rowCount);
+    if (affectedCount) await bumpReadyImageRevision(client);
+    signal.throwIfAborted();
+    return { deleted, affected };
+  });
 }
 
 export async function deleteTheme(slug: string) {
-  const progress: ThemeReassignProgress = {
-    readyCommitted: 0,
-    readyReserved: 0
-  };
-  let synchronized = false;
-  try {
-    const deleted = await deleteThemeAndReassign(slug, progress);
-    assertVocabularyFound("theme", deleted ? 1 : 0);
-    await synchronizeVocabularyMutation({ entity: "theme" });
-    synchronized = true;
-  } finally {
-    if (!synchronized && progress.readyCommitted > 0) {
-      await invalidateEntityCountCaches(["theme"]);
-    }
-  }
+  const result = await withVocabularyMutationLock(
+    "theme",
+    slug,
+    (signal) => withImageMutationSync(async (mutationBatch) => {
+      try {
+        const deleted = await deleteThemeUnderLock(slug, signal, mutationBatch);
+        for (const image of deleted.affected) mutationBatch.add({ id: image.id });
+        return deleted;
+      } finally {
+        // A lost COMMIT acknowledgement does not prove rollback. Refresh from
+        // database truth while the vocabulary lease and cache fence still hold.
+        await synchronizeVocabularyMutation({ entity: "theme" });
+      }
+    })
+  );
+  assertVocabularyFound("theme", result.deleted ? 1 : 0);
 }

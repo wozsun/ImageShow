@@ -12,20 +12,21 @@ const canonicalImageObjectKeyPattern = new RegExp(
 );
 const canonicalImageObjectKeyMaxLength = 44;
 
-export function isCanonicalImageObjectKey(key: string) {
-  if (key.length > canonicalImageObjectKeyMaxLength) return false;
+export function parseImageObjectKey(key: string) {
+  if (key.length > canonicalImageObjectKeyMaxLength) return null;
   const match = canonicalImageObjectKeyPattern.exec(key);
-  return Boolean(match && match[1] === match[2]?.slice(-2));
+  if (!match || match[1] !== match[2]?.slice(-2)) return null;
+  return { id: match[2]!, ext: match[3]! };
+}
+
+export function isCanonicalImageObjectKey(key: string) {
+  return parseImageObjectKey(key) !== null;
 }
 
 export function assertCanonicalImageObjectKey(key: string) {
   if (!isCanonicalImageObjectKey(key)) {
     throw new TypeError("Invalid image object key");
   }
-}
-
-export function isCanonicalThumbnailObjectKey(key: string) {
-  return key.endsWith(".webp") && isCanonicalImageObjectKey(key);
 }
 
 export function thumbnailObjectKey(objectKey: string) {

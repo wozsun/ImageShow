@@ -64,6 +64,24 @@ function revokeObjectUrl(job: IngestionJob) {
   if (job.objectUrl?.startsWith("blob:")) URL.revokeObjectURL(job.objectUrl);
 }
 
+function browserResourceReleasePatch(job: IngestionJob) {
+  return {
+    file: undefined,
+    objectUrl: undefined,
+    preview: job.preview.startsWith("blob:") ? "" : job.preview,
+    previewFull: job.previewFull?.startsWith("blob:") ? undefined : job.previewFull
+  };
+}
+
+function detachedServerJobPatch(job: IngestionJob) {
+  return {
+    ...browserResourceReleasePatch(job),
+    uploadIntentItemInput: undefined,
+    importAcceptItemInput: undefined,
+    duplicates: []
+  } satisfies Partial<IngestionJob>;
+}
+
 function ingestionPairBelongsToSession(pairKey: string, sessionId: string) {
   return pairKey.startsWith(`${sessionId}\0`);
 }
@@ -299,14 +317,14 @@ export function useIngestionQueue(
   }, []);
   const completedInvalidation = useCompletedIngestionInvalidation();
   const flushCompletedIngestionInvalidations = completedInvalidation.flush;
-  const projectRetainedServerOwner = useCallback((
-    pairKey: string,
-    project: (job: IngestionJob) => IngestionJob
+  const projectRetainedServerOwners = useCallback((
+    projections: ReadonlyMap<string, (job: IngestionJob) => IngestionJob>
   ) => {
     const objectUrls = new Set<string>();
     let retainedRefChanged = false;
     const projectJob = (job: IngestionJob) => {
-      if (serverIngestionJobPairKey(job) !== pairKey) return job;
+      const project = projections.get(serverIngestionJobPairKey(job));
+      if (!project) return job;
       const next = project(job);
       if (
         next !== job
@@ -320,23 +338,25 @@ export function useIngestionQueue(
       const next = projectJob(job);
       if (next !== job) patches.set(job.id, next);
     }
-    const handoff = handoffJobsRef.current.get(pairKey);
-    if (handoff) {
-      const next = projectJob(handoff);
-      if (next !== handoff) {
-        handoffJobsRef.current.set(pairKey, next);
-        retainedRefChanged = true;
+    for (const pairKey of projections.keys()) {
+      const handoff = handoffJobsRef.current.get(pairKey);
+      if (handoff) {
+        const next = projectJob(handoff);
+        if (next !== handoff) {
+          handoffJobsRef.current.set(pairKey, next);
+          retainedRefChanged = true;
+        }
       }
-    }
-    const detached = detachedProvisionalHandoffsRef.current.get(pairKey);
-    if (detached) {
-      const next = projectJob(detached.job);
-      if (next !== detached.job) {
-        detachedProvisionalHandoffsRef.current.set(pairKey, {
-          ...detached,
-          job: next
-        });
-        retainedRefChanged = true;
+      const detached = detachedProvisionalHandoffsRef.current.get(pairKey);
+      if (detached) {
+        const next = projectJob(detached.job);
+        if (next !== detached.job) {
+          detachedProvisionalHandoffsRef.current.set(pairKey, {
+            ...detached,
+            job: next
+          });
+          retainedRefChanged = true;
+        }
       }
     }
     for (const objectUrl of objectUrls) URL.revokeObjectURL(objectUrl);
@@ -347,23 +367,41 @@ export function useIngestionQueue(
       setHandoffEpoch((current) => current + 1);
     }
   }, [dispatch]);
+  const projectRetainedServerOwner = useCallback((
+    pairKey: string,
+    project: (job: IngestionJob) => IngestionJob
+  ) => projectRetainedServerOwners(new Map([[pairKey, project]])), [projectRetainedServerOwners]);
   const observeCompletedIngestions = useCallback((
     entries: readonly CompletedIngestionObservation[]
   ) => {
     let hydrationChanged = false;
+    const entriesByPair = new Map<string, CompletedIngestionObservation[]>();
     for (const entry of entries) {
       const pairKey = serverIngestionPairKey(entry.pair);
       hydrationChanged = completedReceiptHydrationsRef.current.delete(pairKey)
         || hydrationChanged;
-      projectRetainedServerOwner(pairKey, (job) => {
-        const patch = completedIngestionOwnerPatch(job, entry);
-        if (!patch || !ingestionStatusPatchMovesForward(job, patch)) return job;
-        return { ...job, ...patch };
+      const group = entriesByPair.get(pairKey);
+      if (group) group.push(entry);
+      else entriesByPair.set(pairKey, [entry]);
+    }
+    const projections = new Map<string, (job: IngestionJob) => IngestionJob>();
+    for (const [pairKey, group] of entriesByPair) {
+      projections.set(pairKey, (job) => {
+        // Preserve arrival order within the pair, including terminal and clock
+        // guards. A later observation is not necessarily a newer Redis version.
+        for (const entry of group) {
+          const patch = completedIngestionOwnerPatch(job, entry);
+          if (patch && ingestionStatusPatchMovesForward(job, patch)) {
+            job = { ...job, ...patch };
+          }
+        }
+        return job;
       });
     }
+    if (projections.size) projectRetainedServerOwners(projections);
     if (hydrationChanged) setHandoffEpoch((current) => current + 1);
     completedInvalidation.observe(entries);
-  }, [completedInvalidation.observe, projectRetainedServerOwner]);
+  }, [completedInvalidation.observe, projectRetainedServerOwners]);
   const observeCompletedIngestionReceipt = useCallback((
     receipt: IngestionQueueTerminalEventItemDto & { status: "completed" }
   ) => {
@@ -430,9 +468,10 @@ export function useIngestionQueue(
     serverOffset,
     serverLimit
   } = pagePlan;
-  const acceptedDisplayPairsKey = [...acceptedDisplayPairs]
-    .sort()
-    .join("\n");
+  const acceptedDisplayPairsKey = useMemo(
+    () => [...acceptedDisplayPairs].sort().join("\n"),
+    [acceptedDisplayPairs]
+  );
   const server = useServerIngestionQueue({
     enabled: displayed || actionConnectionHoldRef.current,
     displayed,
@@ -518,49 +557,61 @@ export function useIngestionQueue(
         ))
       : []
   ), [hasRetainedServerBaseline, releasedPairKeys, server.items]);
-  const snapshotPairs = new Set(snapshotItems.map(serverIngestionPairKey));
-  const visibleHandoffPairs = new Set(availableServerJobs.flatMap((job) => {
-    const pairKey = serverIngestionJobPairKey(job);
-    return pairKey
-      && !ingestionJobHasBrowserDisplayOrder(job)
-      && !snapshotPairs.has(pairKey)
-      && job.serverHandoffDisplayPage === state.page
+  const { displayedServerJobs, provisionalSummaryJobs } = useMemo(() => {
+    const snapshotPairs = new Set(snapshotItems.map(serverIngestionPairKey));
+    const visibleHandoffPairs = new Set(availableServerJobs.flatMap((job) => {
+      const pairKey = serverIngestionJobPairKey(job);
+      return pairKey
+        && !ingestionJobHasBrowserDisplayOrder(job)
+        && !snapshotPairs.has(pairKey)
+        && job.serverHandoffDisplayPage === state.page
+        && (
+          server.status !== "ready"
+          || job.serverHandoffPending === true
+        )
+        ? [pairKey]
+        : [];
+    }));
+    // Current-document cards retain their browser batch/position order while
+    // authority moves item-by-item. The bounded snapshot supplies only the
+    // remaining slots and keeps its own display-ZSET order.
+    const displayedServerJobs = serverIngestionJobsForCombinedPage(
+      availableServerJobs,
+      snapshotItems,
+      serverDisplayLimit,
+      visibleHandoffPairs
+    ).filter((job) => (
+      !acceptedDisplayPairs.has(serverIngestionJobPairKey(job))
+    )).slice(0, serverDisplayLimit);
+    const detachedProvisionalJobs = [
+      ...detachedProvisionalHandoffsRef.current.values()
+    ].map((entry) => entry.job);
+    const provisionalByPair = new Map([
+      ...availableServerJobs,
+      ...detachedProvisionalJobs,
+      ...handoffJobsRef.current.values()
+    ].map((job) => [serverIngestionJobPairKey(job), job]));
+    const provisionalSummaryJobs = [...provisionalByPair.values()].filter((job) => (
+      job.serverHandoffProvisionalTotal === true
+      && job.serverHandoffPending === true
+      && !snapshotPairs.has(serverIngestionJobPairKey(job))
       && (
-        server.status !== "ready"
-        || job.serverHandoffPending === true
+        provisionalAcceptedOrderBaseline === null
+        || job.serverAcceptedOrder === undefined
+        || job.serverAcceptedOrder > provisionalAcceptedOrderBaseline
       )
-      ? [pairKey]
-      : [];
-  }));
-  // Current-document cards retain their browser batch/position order while
-  // authority moves item-by-item. The bounded snapshot supplies only the
-  // remaining slots and keeps its own display-ZSET order.
-  const displayedServerJobs = serverIngestionJobsForCombinedPage(
+    ));
+    return { displayedServerJobs, provisionalSummaryJobs };
+  }, [
+    acceptedDisplayPairs,
     availableServerJobs,
-    snapshotItems,
+    handoffEpoch,
+    provisionalAcceptedOrderBaseline,
+    server.status,
     serverDisplayLimit,
-    visibleHandoffPairs
-  ).filter((job) => (
-    !acceptedDisplayPairs.has(serverIngestionJobPairKey(job))
-  )).slice(0, serverDisplayLimit);
-  const detachedProvisionalJobs = [
-    ...detachedProvisionalHandoffsRef.current.values()
-  ].map((entry) => entry.job);
-  const provisionalByPair = new Map([
-    ...availableServerJobs,
-    ...detachedProvisionalJobs,
-    ...handoffJobsRef.current.values()
-  ].map((job) => [serverIngestionJobPairKey(job), job]));
-  const provisionalSummaryJobs = [...provisionalByPair.values()].filter((job) => (
-    job.serverHandoffProvisionalTotal === true
-    && job.serverHandoffPending === true
-    && !snapshotPairs.has(serverIngestionJobPairKey(job))
-    && (
-      provisionalAcceptedOrderBaseline === null
-      || job.serverAcceptedOrder === undefined
-      || job.serverAcceptedOrder > provisionalAcceptedOrderBaseline
-    )
-  ));
+    snapshotItems,
+    state.page
+  ]);
   const hasCurrentCoverageGate = [...handoffRetryAfterRevisionRef.current.values()]
     .some((gate) => (
       gate.connectionGeneration === server.connectionGeneration
@@ -584,17 +635,19 @@ export function useIngestionQueue(
     : retainsLastStableServerSummary
       ? lastStableServerSummaryRef.current?.revision ?? null
       : null;
-  const releasedSummaries = releasedServerSummariesForTargets({
-    hasRetainedServerBaseline,
-    serverItems: server.items,
-    retainedServerRevision
-  }, new Map(releasedTargets));
-  const effectiveServerSummary = retainedServerSummary
-    ? withoutReleasedServerSummaries(
-        retainedServerSummary,
-        releasedSummaries
-      )
-    : null;
+  const effectiveServerSummary = useMemo(() => retainedServerSummary
+    ? withoutReleasedServerSummaries(retainedServerSummary, releasedServerSummariesForTargets({
+        hasRetainedServerBaseline,
+        serverItems: server.items,
+        retainedServerRevision
+      }, new Map(releasedTargets)))
+    : null, [
+      hasRetainedServerBaseline,
+      releasedTargets,
+      retainedServerRevision,
+      retainedServerSummary,
+      server.items
+    ]);
   const serverTotal = effectiveServerSummary?.total ?? 0;
   const totalItems = localJobs.length
     + provisionalSummaryJobs.length
@@ -655,17 +708,7 @@ export function useIngestionQueue(
       if (!candidate) continue;
       handoffJobsRef.current.set(pairKey, {
         ...candidate,
-        file: undefined,
-        objectUrl: undefined,
-        preview: candidate.preview?.startsWith("blob:")
-          ? ""
-          : candidate.preview,
-        previewFull: candidate.previewFull?.startsWith("blob:")
-          ? undefined
-          : candidate.previewFull,
-        uploadIntentItemInput: undefined,
-        importAcceptItemInput: undefined,
-        duplicates: []
+        ...detachedServerJobPatch(candidate)
       });
       detachedProvisionalHandoffsRef.current.delete(pairKey);
       handoffRetryAfterRevisionRef.current.delete(pairKey);
@@ -693,12 +736,49 @@ export function useIngestionQueue(
       ? statusNotice
       : activeDraftNotice ?? statusNotice;
 
+  // Retire display resources only after the caller establishes exact pair
+  // ownership. Release proofs and pending drafts belong to separate owners.
+  const releaseRetainedPairResources = useCallback((
+    pairKeys: ReadonlySet<string>,
+    displayJobs: readonly IngestionJob[]
+  ) => {
+    const objectUrls = new Set<string>();
+    const collect = (job: IngestionJob | undefined) => {
+      if (job?.objectUrl?.startsWith("blob:")) objectUrls.add(job.objectUrl);
+    };
+    displayJobs.forEach(collect);
+    for (const pairKey of pairKeys) {
+      collect(handoffJobsRef.current.get(pairKey));
+      collect(detachedProvisionalHandoffsRef.current.get(pairKey)?.job);
+      handoffJobsRef.current.delete(pairKey);
+      detachedProvisionalHandoffsRef.current.delete(pairKey);
+      handoffRetryAfterRevisionRef.current.delete(pairKey);
+      completedHandoffPairsRef.current.delete(pairKey);
+      completedReceiptHydrationsRef.current.delete(pairKey);
+    }
+    for (const objectUrl of objectUrls) URL.revokeObjectURL(objectUrl);
+    handoffs.resolvePairs(pairKeys);
+  }, [handoffs.resolvePairs]);
+  const retireInvalidPairs = useCallback((
+    pairKeys: ReadonlySet<string>,
+    displayJobs: readonly IngestionJob[] = stateRef.current.jobs
+  ) => {
+    if (!pairKeys.size) return;
+    releaseRetainedPairResources(pairKeys, displayJobs.filter((job) => (
+      pairKeys.has(serverIngestionJobPairKey(job))
+    )));
+    draftSync.retirePairOwners(pairKeys);
+    setHandoffEpoch((current) => current + 1);
+  }, [draftSync.retirePairOwners, releaseRetainedPairResources]);
   useEffect(() => () => {
     const jobs = new Set([
       ...jobsRef.current,
-      ...handoffJobsRef.current.values()
+      ...handoffJobsRef.current.values(),
+      ...[...detachedProvisionalHandoffsRef.current.values()].map((entry) => entry.job)
     ]);
-    jobs.forEach(revokeObjectUrl);
+    const objectUrls = new Set([...jobs].map((job) => job.objectUrl)
+      .filter((url): url is string => Boolean(url?.startsWith("blob:"))));
+    objectUrls.forEach((url) => URL.revokeObjectURL(url));
     handoffJobsRef.current.clear();
     detachedProvisionalHandoffsRef.current.clear();
     handoffRetryAfterRevisionRef.current.clear();
@@ -866,33 +946,10 @@ export function useIngestionQueue(
       : new Set<string>();
     if (stalePairKeys.size) {
       handledStaleSnapshotRef.current = staleSignal;
-      const objectUrls = new Set<string>();
-      const collectObjectUrl = (job: IngestionJob | undefined) => {
-        if (job?.objectUrl?.startsWith("blob:")) objectUrls.add(job.objectUrl);
-      };
-      for (const job of stateRef.current.jobs) {
-        if (stalePairKeys.has(serverIngestionJobPairKey(job))) {
-          collectObjectUrl(job);
-        }
-      }
-      for (const pairKey of stalePairKeys) {
-        collectObjectUrl(handoffJobsRef.current.get(pairKey));
-        collectObjectUrl(
-          detachedProvisionalHandoffsRef.current.get(pairKey)?.job
-        );
-        handoffJobsRef.current.delete(pairKey);
-        detachedProvisionalHandoffsRef.current.delete(pairKey);
-        handoffRetryAfterRevisionRef.current.delete(pairKey);
-        completedHandoffPairsRef.current.delete(pairKey);
-        completedReceiptHydrationsRef.current.delete(pairKey);
-      }
-      for (const objectUrl of objectUrls) URL.revokeObjectURL(objectUrl);
-      handoffs.resolvePairs(stalePairKeys);
-      draftSync.retirePairOwners(stalePairKeys);
+      retireInvalidPairs(stalePairKeys);
       existingServerJobs = existingServerJobs.filter((job) => (
         !stalePairKeys.has(serverIngestionJobPairKey(job))
       ));
-      handoffChanged = true;
     }
     for (const [pairKey, entry] of detachedProvisionalHandoffsRef.current) {
       if (
@@ -1037,8 +1094,7 @@ export function useIngestionQueue(
     dispatch,
     acceptedDisplayPairsKey,
     draftSync.ensureJobSnapshot,
-    draftSync.retirePairOwners,
-    handoffs.resolvePairs,
+    retireInvalidPairs,
     handoffs.resolveExternalStatuses,
     handoffs.hasExternalPair,
     handoffEpoch,
@@ -1206,6 +1262,9 @@ export function useIngestionQueue(
   const updateJob = useCallback((id: string, patch: Partial<IngestionJob>) => {
     dispatch({ type: "patch", id, patch });
   }, [dispatch]);
+  const retryPrepareJob = useCallback((previous: IngestionJob, job: IngestionJob) => (
+    dispatch({ type: "retry-prepare", previous, job })
+  ), [dispatch]);
 
   const bindServerJob = useCallback((
     id: string,
@@ -1300,35 +1359,6 @@ export function useIngestionQueue(
       visibleBinding.sessionId
     )) includeStalePair(pairKey);
 
-    if (staleIncarnationPairs.size) {
-      const staleObjectUrls = new Set<string>();
-      const collectObjectUrl = (job: IngestionJob | undefined) => {
-        if (job?.objectUrl?.startsWith("blob:")) {
-          staleObjectUrls.add(job.objectUrl);
-        }
-      };
-      for (const job of stateRef.current.jobs) {
-        if (staleIncarnationPairs.has(serverIngestionJobPairKey(job))) {
-          collectObjectUrl(job);
-        }
-      }
-      for (const pairKey of staleIncarnationPairs) {
-        collectObjectUrl(handoffJobsRef.current.get(pairKey));
-        collectObjectUrl(
-          detachedProvisionalHandoffsRef.current.get(pairKey)?.job
-        );
-        handoffJobsRef.current.delete(pairKey);
-        detachedProvisionalHandoffsRef.current.delete(pairKey);
-        handoffRetryAfterRevisionRef.current.delete(pairKey);
-        completedHandoffPairsRef.current.delete(pairKey);
-        completedReceiptHydrationsRef.current.delete(pairKey);
-      }
-      for (const objectUrl of staleObjectUrls) {
-        URL.revokeObjectURL(objectUrl);
-      }
-      handoffs.resolvePairs(staleIncarnationPairs);
-      setHandoffEpoch((value) => value + 1);
-    }
     const canonical = jobsRef.current.find((job) => (
       job.id !== id
       && ingestionJobHasServerAuthority(job)
@@ -1340,23 +1370,12 @@ export function useIngestionQueue(
       && (canonical.md5 || canonical.preview)
     ) URL.revokeObjectURL(current.objectUrl);
     dispatch({ type: "bind-server", id, binding: visibleBinding });
-    draftSync.retirePairOwners(staleIncarnationPairs);
+    retireInvalidPairs(staleIncarnationPairs, currentState.jobs);
     const bound = jobsRef.current.find((job) => job.id === id);
     if (bound && tracksCanonicalOutsideSnapshot) {
       detachedProvisionalHandoffsRef.current.set(pair, {
         connectionGeneration: serverAtBinding.connectionGeneration,
-        job: {
-          ...bound,
-          file: undefined,
-          objectUrl: undefined,
-          preview: bound.preview?.startsWith("blob:") ? "" : bound.preview,
-          previewFull: bound.previewFull?.startsWith("blob:")
-            ? undefined
-            : bound.previewFull,
-          uploadIntentItemInput: undefined,
-          importAcceptItemInput: undefined,
-          duplicates: []
-        }
+        job: { ...bound, ...detachedServerJobPatch(bound) }
       });
       setHandoffEpoch((value) => value + 1);
     }
@@ -1367,12 +1386,7 @@ export function useIngestionQueue(
       }
       handoffJobsRef.current.set(pair, {
         ...bound,
-        file: undefined,
-        objectUrl: undefined,
-        preview: bound.preview?.startsWith("blob:") ? "" : bound.preview,
-        previewFull: bound.previewFull?.startsWith("blob:")
-          ? undefined
-          : bound.previewFull
+        ...browserResourceReleasePatch(bound)
       });
       setHandoffEpoch((value) => value + 1);
     }
@@ -1399,17 +1413,7 @@ export function useIngestionQueue(
         dispatch({
           type: "patch",
           id: bound.id,
-          patch: {
-            file: undefined,
-            objectUrl: undefined,
-            preview: bound.preview?.startsWith("blob:") ? "" : bound.preview,
-            previewFull: bound.previewFull?.startsWith("blob:")
-              ? undefined
-              : bound.previewFull,
-            uploadIntentItemInput: undefined,
-            importAcceptItemInput: undefined,
-            duplicates: []
-          }
+          patch: detachedServerJobPatch(bound)
         });
         if (bound.serverDraftPending === true) draftSync.scheduleJob(bound.id);
         return;
@@ -1428,11 +1432,10 @@ export function useIngestionQueue(
     dispatch,
     draftSync.ensureJobSnapshot,
     draftSync.pairKeysForSession,
-    draftSync.retirePairOwners,
     draftSync.scheduleJob,
     handoffs.pairKeysForSession,
     handoffs.prepareBinding,
-    handoffs.resolvePairs,
+    retireInvalidPairs,
     pageSize
   ]);
 
@@ -1587,6 +1590,7 @@ export function useIngestionQueue(
       failedResolvedReleaseRecoveriesRef.current.delete(pairKey);
     }
 
+    const removedDisplayJobs: IngestionJob[] = [];
     const removedStateTargets = new Map<string, {
       attemptKey: string;
       pairKey: string;
@@ -1605,21 +1609,10 @@ export function useIngestionQueue(
           attemptKey: job.attemptKey,
           pairKey
         });
-        revokeObjectUrl(job);
+        removedDisplayJobs.push(job);
       }
     }
-    for (const pairKey of releasedPairs.keys()) {
-      const handoff = handoffJobsRef.current.get(pairKey);
-      const detached = detachedProvisionalHandoffsRef.current.get(pairKey)?.job;
-      if (handoff) revokeObjectUrl(handoff);
-      if (detached && detached !== handoff) revokeObjectUrl(detached);
-      handoffJobsRef.current.delete(pairKey);
-      detachedProvisionalHandoffsRef.current.delete(pairKey);
-      handoffRetryAfterRevisionRef.current.delete(pairKey);
-      completedHandoffPairsRef.current.delete(pairKey);
-      completedReceiptHydrationsRef.current.delete(pairKey);
-    }
-    handoffs.resolvePairs(new Set(releasedPairs.keys()));
+    releaseRetainedPairResources(new Set(releasedPairs.keys()), removedDisplayJobs);
     dispatch({
       type: "release-resolved",
       targets: removedStateTargets,
@@ -1632,7 +1625,7 @@ export function useIngestionQueue(
   }, [
     dispatch,
     handoffs.hasPair,
-    handoffs.resolvePairs,
+    releaseRetainedPairResources,
     pageSize
   ]);
 
@@ -1809,6 +1802,7 @@ export function useIngestionQueue(
   const producerApi = useMemo<IngestionQueueProducerApi>(() => ({
     jobsRef,
     appendJobs,
+    retryPrepareJob,
     bindServerJob,
     captureServerConnectionGeneration,
     observeCompletedIngestions,
@@ -1819,6 +1813,7 @@ export function useIngestionQueue(
     updateJob
   }), [
     appendJobs,
+    retryPrepareJob,
     bindServerJob,
     captureServerConnectionGeneration,
     jobsRef,

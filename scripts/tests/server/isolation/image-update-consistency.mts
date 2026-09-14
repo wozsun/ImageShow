@@ -70,6 +70,27 @@ const readReadyRevision = async () => BigInt(String((
   };
 
 
+  const delta = await import("../../../../packages/server/src/images/ready-cache/sync/incremental-projection.ts");
+  const manifest = await import("../../../../packages/server/src/images/ready-cache/integrity/manifest.ts");
+  const keys = await import("../../../../packages/server/src/images/ready-cache/keys.ts");
+  const previousItems = await delta.readPreviousReadyImageCacheItems([imageUpdateIds.first]);
+  const statsBefore = await manifest.validateReadyImageStatsIntegrity(null, redisClient.redis);
+  const itemsBefore = await redisClient.redis.hgetall(keys.READY_IMAGE_ITEMS_KEY);
+  await delta.applyReadyImageCacheDelta(previousItems, previousItems, 3, new Map(statsBefore));
+  await delta.applyReadyImageCacheDelta([], [], 3, new Map(statsBefore));
+  assert.deepEqual(await manifest.validateReadyImageStatsIntegrity(statsBefore, redisClient.redis), statsBefore);
+  assert.deepEqual(await redisClient.redis.hgetall(keys.READY_IMAGE_ITEMS_KEY), itemsBefore);
+  const insufficient = new Map(statsBefore).set("total", 0);
+  await assert.rejects(delta.applyReadyImageCacheDelta(previousItems, previousItems, 3, insufficient), /statistics differ before updating/);
+  assert.deepEqual(await redisClient.redis.hgetall(keys.READY_IMAGE_ITEMS_KEY), itemsBefore, "净变化为零也必须在任何写入前拒绝原统计下溢");
+  const untouchedField = [...statsBefore.keys()].find(field => field !== "total")!;
+  try {
+    await redisClient.redis.hincrby(keys.READY_IMAGE_STATS_KEY, untouchedField, 1);
+    await assert.rejects(manifest.validateReadyImageStatsIntegrity(null, redisClient.redis), /digest differs/);
+  } finally {
+    await redisClient.redis.hset(keys.READY_IMAGE_STATS_KEY, untouchedField, statsBefore.get(untouchedField)!);
+  }
+
   const manyImageUpdate = await imageUpdate.updateImages([
     { id: imageUpdateIds.first, title: "first" },
     { id: imageUpdateIds.missing, title: "missing" },
@@ -92,6 +113,9 @@ const readReadyRevision = async () => BigInt(String((
   const incrementalMeta = await readyCacheMeta.readReadyImageCacheMeta();
   assert.ok(incrementalMeta);
   assert.equal(incrementalMeta.itemCount, 3);
+  assert.equal(incrementalMeta.appliedRevision, String(await readReadyRevision()));
+  assert.deepEqual(await manifest.validateReadyImageStatsIntegrity(statsBefore, redisClient.redis), statsBefore,
+    "仅修改文字字段仍发布新 revision，并保持完整统计一致");
   assert.equal(incrementalMeta.processed, 0);
   assert.equal(incrementalMeta.total, 0);
   assert.deepEqual({
@@ -131,10 +155,6 @@ const readReadyRevision = async () => BigInt(String((
   assert.ok(Number.isFinite(Date.parse(
     redisDeepCheck.deep_inspection.measured_at
   )));
-  assert.equal(
-    redisDeepCheck.deep_inspection.image_projection_usage.core.key_count,
-    8
-  );
   assert.ok(
     redisDeepCheck.deep_inspection.image_projection_usage.core.member_count
       >= incrementalMeta.itemCount

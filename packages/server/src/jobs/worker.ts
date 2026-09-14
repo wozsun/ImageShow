@@ -1,5 +1,6 @@
 import { appConfig } from "@imageshow/shared";
 import { logger } from "../core/logger.ts";
+import { backgroundJobTypes } from "./types.ts";
 import { STORAGE_OBJECT_REMOVAL_CONCURRENCY } from "../storage/objects/removal-admission.ts";
 import {
   handleBackgroundJob,
@@ -175,6 +176,9 @@ async function runWorkerTick() {
   }
 
   if (!executionCoordinator.isAccepting()) return;
+  // Periodic recovery and history cleanup still run while handlers are busy.
+  // Discovery has no consumer until at least one type can start a slice.
+  if (backgroundJobTypes.every((type) => activeTypeSlices.has(type))) return;
   const pending = await listRunnableBackgroundJobCounts();
   for (const row of pending) {
     if (!executionCoordinator.isAccepting()) return;

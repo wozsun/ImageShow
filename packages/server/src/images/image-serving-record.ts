@@ -2,11 +2,7 @@ import { pool, type DatabaseReader } from "../core/database/pools.ts";
 import type {
   PublicDatabaseReadAccess
 } from "../core/database/public-fallback.ts";
-import {
-  readReadyImageById,
-  readReadyImageByObjectKey,
-  readReadyImageByThumbKey
-} from "./ready-cache/query.ts";
+import { readReadyImageById } from "./ready-cache/query.ts";
 import type { ReadyImageCacheItem } from "./ready-cache/model.ts";
 
 type StoredImageServingRecord = {
@@ -22,14 +18,10 @@ export type ImageServingRecord = StoredImageServingRecord & {
 
 export type ImageServingRecordDependencies = {
   readReadyImageById: typeof readReadyImageById;
-  readReadyImageByObjectKey: typeof readReadyImageByObjectKey;
-  readReadyImageByThumbKey: typeof readReadyImageByThumbKey;
 };
 
 const defaultImageServingRecordDependencies: ImageServingRecordDependencies = {
-  readReadyImageById,
-  readReadyImageByObjectKey,
-  readReadyImageByThumbKey
+  readReadyImageById
 };
 
 function readDatabase<T>(
@@ -71,55 +63,6 @@ export async function readImageServingRecordById(
           AND status IN ('ready', 'deleted')
         LIMIT 1`,
       [id]
-    )).rows[0]
-  ));
-  return row ?? null;
-}
-
-export async function readImageServingRecordByObjectKey(
-  objectKey: string,
-  database: PublicDatabaseReadAccess = {},
-  dependencies: ImageServingRecordDependencies =
-    defaultImageServingRecordDependencies
-): Promise<StoredImageServingRecord | null> {
-  const cached = await dependencies.readReadyImageByObjectKey(objectKey);
-  if (cached.cached && cached.value) {
-    return storedImageServingRecord(cached.value);
-  }
-
-  const row = await readDatabase(database, async (reader) => (
-    (await reader.query<StoredImageServingRecord>(
-      `SELECT object_key, ext, storage_slug
-         FROM metadata
-        WHERE object_key=$1
-          AND status IN ('ready', 'deleted')
-        LIMIT 1`,
-      [objectKey]
-    )).rows[0]
-  ));
-  return row ?? null;
-}
-
-export async function readImageServingRecordByThumbKey(
-  thumbKey: string,
-  database: PublicDatabaseReadAccess = {},
-  dependencies: ImageServingRecordDependencies =
-    defaultImageServingRecordDependencies
-): Promise<StoredImageServingRecord | null> {
-  const cached = await dependencies.readReadyImageByThumbKey(thumbKey);
-  if (cached.cached && cached.value) {
-    return storedImageServingRecord(cached.value);
-  }
-
-  const row = await readDatabase(database, async (reader) => (
-    (await reader.query<StoredImageServingRecord>(
-      `SELECT object_key, ext, storage_slug
-         FROM metadata
-        WHERE (object_key=$1
-           OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1)
-          AND status IN ('ready', 'deleted')
-        LIMIT 1`,
-      [thumbKey]
     )).rows[0]
   ));
   return row ?? null;

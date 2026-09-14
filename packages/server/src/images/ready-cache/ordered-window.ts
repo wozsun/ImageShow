@@ -23,9 +23,8 @@ export type ReadyImagePageReadMode = "fallback" | "required";
 
 export type ReadyImageWindowDependencies = {
   validate(index: ReadyImageFilterIndex): Promise<
-    boolean | ReadyImageFilterIndexValidation
+    ReadyImageFilterIndexValidation
   >;
-  count(index: ReadyImageFilterIndex): Promise<number>;
   members(
     index: ReadyImageFilterIndex,
     start: number,
@@ -77,9 +76,9 @@ function parsedItem(raw: string | null, expectedMember: string) {
 
 export function readyImageWindowIndexIsValid(
   index: ReadyImageFilterIndex,
-  raw: boolean | ReadyImageFilterIndexValidation
-) {
-  const validation = raw === true ? "valid" : raw === false ? "invalid" : raw;
+  raw: ReadyImageFilterIndexValidation
+): raw is Extract<ReadyImageFilterIndexValidation, { status: "valid" }> {
+  const validation = raw.status;
   if (validation === "invalid" && index.kind === "core") {
     throw new ReadyImageCoreCacheError("Ready-image core index validation failed");
   }
@@ -100,15 +99,16 @@ export async function readReadyImageOrderedWindow(
     );
     return readyImageWindowIndexIsValid(index, raw);
   };
-  if (!await indexIsValid()) return null;
-  const total = Number(await executeRedisCommand(
+  const validation = await executeRedisCommand(
     mode,
-    () => dependencies.count(index)
-  ));
+    () => dependencies.validate(index)
+  );
+  if (!readyImageWindowIndexIsValid(index, validation)) return null;
+  const total = validation.count;
   if (!Number.isSafeInteger(total) || total < 0) {
     throw new Error("Ready-image cache returned an invalid page count");
   }
-  if (index.count !== null && index.count !== total) {
+  if (index.count !== total) {
     throw new Error("Ready-image cached filter cardinality changed");
   }
   if (start >= total) {

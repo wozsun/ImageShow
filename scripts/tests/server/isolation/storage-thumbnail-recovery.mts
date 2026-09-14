@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import sharp from "sharp";
-import { createMaintenanceFixture } from "./storage-maintenance-fixture.mts";
+import { createMaintenanceFixture, settleWithin, waitForStorageLockWait } from "./storage-maintenance-fixture.mts";
 import { interceptSqlQueries } from "./database-faults.mts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
@@ -30,31 +30,35 @@ await runIntegrationScenario(async (runtime) => {
       if (entry.thumbnail) assert.deepEqual(await access.driver.readBuffer("thumbs", image.thumb), entry.thumbnail);
     }
   }
-  for (const race of ["restored", "moved"] as const) {
-    const image = await createImage();
-    const originalRead = access.driver.readBuffer.bind(access.driver);
-    const winner = Buffer.from("concurrent repair winner");
-    let injected = false;
-    access.driver.readBuffer = async (...args) => {
-      const body = await originalRead(...args);
-      if (args[0] === "full" && args[1] === image.key && !injected) {
-        injected = true;
-        if (race === "restored") {
-          await access.driver.writeBuffer("thumbs", image.thumb, winner, "image/webp");
-          await runtime.databasePools.pool.query("UPDATE metadata SET thumbnail_size=$2 WHERE id=$1", [image.id, winner.length]);
-        } else await runtime.databasePools.pool.query("UPDATE metadata SET object_key=$2 WHERE id=$1", [image.id, image.key + ".moved"]);
-      }
-      return body;
-    };
-    try {
-      assert.equal((await repairStorageThumbnail(image.id, signal)).outcome, "skipped");
-      assert.equal(injected, true);
-      if (race === "restored") assert.deepEqual(await originalRead("thumbs", image.thumb), winner);
-      else assert.equal(await access.driver.exists("thumbs", image.thumb), false);
-    } finally {
-      access.driver.readBuffer = originalRead;
-      await runtime.databasePools.pool.query("UPDATE metadata SET object_key=$2 WHERE id=$1", [image.id, image.key]);
+  const { withStorageLocationWriteLock } = await import("../../../../packages/server/src/storage/maintenance-lock.ts");
+  const concurrent = await createImage();
+  const originalRead = access.driver.readBuffer.bind(access.driver);
+  const sourceRead = Promise.withResolvers<void>();
+  const releaseSource = Promise.withResolvers<void>();
+  access.driver.readBuffer = async (...args) => {
+    const body = await originalRead(...args);
+    if (args[0] === "full" && args[1] === concurrent.key) {
+      sourceRead.resolve();
+      await releaseSource.promise;
     }
+    return body;
+  };
+  const firstRepair = withStorageLocationWriteLock(lockSignal => repairStorageThumbnail(concurrent.id, lockSignal));
+  let secondRepair: typeof firstRepair | undefined;
+  try {
+    await settleWithin(sourceRead.promise);
+    secondRepair = withStorageLocationWriteLock(lockSignal => repairStorageThumbnail(concurrent.id, lockSignal));
+    await waitForStorageLockWait(runtime.databasePools.pool, false);
+    releaseSource.resolve();
+    assert.equal((await settleWithin(firstRepair)).outcome, "repaired");
+    const winner = await originalRead("thumbs", concurrent.thumb);
+    assert.equal((await settleWithin(secondRepair)).outcome, "skipped");
+    assert.deepEqual(await originalRead("thumbs", concurrent.thumb), winner);
+    assert.equal(Number((await concurrent.row()).thumbnail_size), winner.length);
+  } finally {
+    releaseSource.resolve();
+    await Promise.allSettled([firstRepair, secondRepair]);
+    access.driver.readBuffer = originalRead;
   }
   const responseLost = await createImage();
   const originalWrite = access.driver.writeBuffer.bind(access.driver);

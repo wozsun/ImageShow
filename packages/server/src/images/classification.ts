@@ -1,7 +1,7 @@
 import type { Brightness, Device } from "@imageshow/shared/browser";
 
 export type DeviceSelection = Device | "auto";
-export type BrightnessSelection = Brightness | "auto";
+type BrightnessSelection = Brightness | "auto";
 
 export type ClassificationSelection = {
   device: DeviceSelection;
@@ -31,11 +31,6 @@ export function resolveOptionalDeviceWith(input: DeviceSelection | undefined, de
 
 function resolveBrightness(input: BrightnessSelection, detected: Brightness): Brightness {
   return input === "auto" ? detected : input;
-}
-
-export async function resolveOptionalBrightnessWith(input: BrightnessSelection | undefined, detect: () => Promise<Brightness | undefined>): Promise<Brightness | undefined> {
-  if (input === undefined) return undefined;
-  return input === "auto" ? await detect() : input;
 }
 
 export function resolveClassification(
