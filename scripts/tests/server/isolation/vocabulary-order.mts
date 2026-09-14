@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { Hono } from "hono";
+import type { AdminSession } from "../../../../packages/server/src/users/admin-session.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -7,14 +9,39 @@ await runIntegrationScenario(async (runtime) => {
   const themes = await import("../../../../packages/server/src/themes/mutations.ts");
   const authors = await import("../../../../packages/server/src/authors/mutations.ts");
   const vocab = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
+  const { setVocabularySortOrder } = await import("../../../../packages/server/src/vocab/sort-order.ts");
+  const { registerAdminVocabularyRoutes } = await import("../../../../packages/server/src/routes/admin-vocabulary.ts");
+  const { handleApiError } = await import("../../../../packages/server/src/core/http/responses.ts");
+  const { ApiError } = await import("../../../../packages/server/src/core/api-error.ts");
+  const { requireAdminCsrf } = await import("../../../../packages/server/src/users/admin-session.ts");
+  const { getPublicGalleryStats } = await import("../../../../packages/server/src/images/read-models/gallery-stats.ts");
   const { updateImages } = await import("../../../../packages/server/src/images/image-update.ts");
   const { storageObjectKey } = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
   const { pool } = runtime.databasePools;
   const entities = [
-    { kind: "tag", field: "tags", create: (slug: string) => tags.createTag(slug), reorder: tags.reorderTags, list: vocab.getAdminTagList },
-    { kind: "theme", field: "themes", create: (slug: string) => themes.createTheme(slug, ""), reorder: themes.reorderThemes, list: vocab.getAdminThemeList },
-    { kind: "author", field: "authors", create: (slug: string) => authors.createAuthor(slug, "", ""), reorder: authors.reorderAuthors, list: vocab.getAdminAuthorList }
+    { kind: "tag", field: "tags", create: (slug: string) => tags.createTag(slug), list: vocab.getAdminTagList },
+    { kind: "theme", field: "themes", create: (slug: string) => themes.createTheme(slug, ""), list: vocab.getAdminThemeList },
+    { kind: "author", field: "authors", create: (slug: string) => authors.createAuthor(slug, "", ""), list: vocab.getAdminAuthorList }
   ] as const;
+  const app = new Hono<{ Variables: { session: AdminSession } }>();
+  app.onError((error, context) => handleApiError(context, error));
+  app.use("/api/admin/*", async (context, next) => {
+    const role = context.req.header("x-role");
+    if (role !== "image" && role !== "super") throw new ApiError(401, "unauthorized", "Authentication required");
+    context.set("session", { id: "sort-session", username: "integration-admin", role, csrf: "sort-csrf" });
+    await next();
+  });
+  app.use("/api/admin/*", async (context, next) => {
+    if (context.req.method !== "GET") return requireAdminCsrf(context, next);
+    await next();
+  });
+  registerAdminVocabularyRoutes(app as unknown as Hono);
+  const write = (field: string, slug: string, body: unknown, role = "image", csrf = "sort-csrf") => app.request(
+    `/api/admin/${field}/${slug}/sort-order`, {
+      method: "POST", headers: { "content-type": "application/json", "x-role": role, "x-csrf-token": csrf },
+      body: JSON.stringify(body)
+    }
+  );
   const slugs = (items: readonly { slug: string }[]) => items.map(item => item.slug);
   const imageId = randomUUID();
   await pool.query(`INSERT INTO metadata(id,created_by,status,storage_slug,object_key,device,brightness,ext,md5)
@@ -31,7 +58,9 @@ await runIntegrationScenario(async (runtime) => {
       await entity.create("order-first");
       await entity.create("order-second");
       assert.deepEqual(slugs(await entity.list()), ["order-second", "order-first"], entity.kind);
-      await entity.reorder(["order-first", "order-second"]);
+      const secondBefore = (await entity.list()).find((item) => item.slug === "order-second")!;
+      await setVocabularySortOrder(entity.kind, "order-first", 10);
+      assert.deepEqual((await entity.list()).find((item) => item.slug === "order-second"), secondBefore);
       await entity.create("order-third");
       assert.deepEqual(slugs(await entity.list()), ["order-third", "order-first", "order-second"], entity.kind);
       await assert.rejects(entity.create("order-first"), { status: 409 });
@@ -57,7 +86,41 @@ await runIntegrationScenario(async (runtime) => {
       assert.deepEqual(current.slice(0, 2).sort(), ["order-concurrent-a", "order-concurrent-b"]);
       assert.deepEqual(current.slice(2), expected[entity.field]);
     }
-    console.log("vocabulary order: explicit creation, manual reorder, automatic creation, batch order, reuse and concurrency passed");
+    for (const entity of entities) {
+      for (const role of ["image", "super"]) {
+        assert.equal((await write(entity.field, "order-second", { sort_order: -7 }, role)).status, 200);
+      }
+      await setVocabularySortOrder(entity.kind, "order-first", -7);
+      const ordered = await entity.list();
+      assert.deepEqual(ordered.slice(-2).map((item) => [item.slug, item.sort_order]), [["order-first", -7], ["order-second", -7]]);
+      const snapshot = (await pool.query(`SELECT * FROM ${entity.kind} ORDER BY slug`)).rows;
+      for (const body of [{}, { sort_order: "4" }, { sort_order: 1.2 }, { sort_order: 2147483648 },
+        { sort_order: -2147483649 }, { sort_order: 4, extra: true }]) {
+        assert.equal((await write(entity.field, "order-first", body)).status, 400);
+      }
+      assert.equal((await write(entity.field, "order-first", { sort_order: 0 }, "")).status, 401);
+      assert.equal((await write(entity.field, "order-first", { sort_order: 0 }, "image", "wrong")).status, 403);
+      assert.equal((await write(entity.field, "order-missing", { sort_order: 0 })).status, 404);
+      assert.deepEqual((await pool.query(`SELECT * FROM ${entity.kind} ORDER BY slug`)).rows, snapshot);
+      for (const sort_order of [-2147483648, 2147483647]) {
+        assert.equal((await write(entity.field, "order-first", { sort_order })).status, 200);
+        const listResponse = await app.request(`/api/admin/${entity.field}`, { headers: { "x-role": "image" } });
+        assert.equal(listResponse.status, 200);
+        const { items } = await listResponse.json();
+        assert.equal(items.find((item: { slug: string }) => item.slug === "order-first").sort_order, sort_order);
+        assert.equal((await entity.list()).find((item) => item.slug === "order-second")!.sort_order, -7);
+      }
+      await entity.create("order-max-a");
+      await entity.create("order-max-b");
+      assert.deepEqual((await entity.list()).slice(0, 3).map((item) => [item.slug, item.sort_order]),
+        [["order-first", 2147483647], ["order-max-a", 2147483647], ["order-max-b", 2147483647]]);
+      const stats = await getPublicGalleryStats();
+      const expectedOrder = slugs(await entity.list());
+      const visible = (items: readonly { slug: string }[]) => slugs(items).filter((slug) => slug !== "null");
+      assert.deepEqual(visible((await vocab.getIngestionVocabulary())[entity.field]), expectedOrder);
+      assert.deepEqual(visible(stats[entity.field]), expectedOrder);
+    }
+    console.log("vocabulary order: single writes, descending values, ties, bounds, routes, projections and creation passed");
   } finally {
     await pool.query("DELETE FROM metadata WHERE id=$1", [imageId]);
     for (const entity of entities) await pool.query(`DELETE FROM ${entity.kind} WHERE slug LIKE 'order-%'`);

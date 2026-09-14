@@ -92,6 +92,15 @@ export function invalidateDataAfterAuthorProfileSave(client: QueryClient) {
   ]);
 }
 
+export function invalidateDataAfterSortOrderSave(client: QueryClient, listKey: readonly unknown[]) {
+  return Promise.all([
+    client.invalidateQueries({ queryKey: listKey, exact: true }, { throwOnError: true }),
+    invalidate(client, listKey === queryKeys.storageBackends
+      ? [queryKeys.storageOptions]
+      : [queryKeys.galleryFacets, queryKeys.galleryStats, queryKeys.ingestionVocabulary])
+  ]);
+}
+
 function updatesField(
   updates: readonly ImageUpdateItemInputDto[],
   field: keyof ImageUpdateItemInputDto

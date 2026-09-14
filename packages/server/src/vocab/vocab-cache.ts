@@ -115,7 +115,7 @@ async function loadTagVocab(
   const rows = await readVocabularyRows<VocabEntry>(
     `SELECT slug, display_name
        FROM tag
-      ORDER BY sort_order ASC, slug ASC`,
+      ORDER BY sort_order DESC, slug ASC`,
     access
   );
   await cacheEntityVocabulary("tag", TAG_VOCAB_KEY, revision, rows, access);
@@ -129,7 +129,7 @@ async function loadThemeVocab(
   const rows = await readVocabularyRows<VocabEntry>(
     `SELECT slug, display_name
        FROM theme
-      ORDER BY sort_order ASC, slug ASC`,
+      ORDER BY sort_order DESC, slug ASC`,
     access
   );
   rows.unshift({ slug: unsetThemeFilter, display_name: "未设置" });
@@ -144,7 +144,7 @@ async function loadAuthorVocab(
   const rows = await readVocabularyRows<AuthorVocabEntry>(
     `SELECT slug, display_name, link
        FROM author
-      ORDER BY sort_order ASC, slug ASC`,
+      ORDER BY sort_order DESC, slug ASC`,
     access
   );
   await cacheEntityVocabulary("author", AUTHOR_VOCAB_KEY, revision, rows, access);
@@ -153,11 +153,11 @@ async function loadAuthorVocab(
 
 async function loadAdminTagList(revision: number) {
   const rows = await queryVocabularyRows<Tag>(
-    `SELECT t.slug, t.display_name, count(it.image_id)::int AS image_count
+    `SELECT t.slug, t.display_name, t.sort_order, count(it.image_id)::int AS image_count
        FROM tag t
        LEFT JOIN image_tag it ON it.tag_slug = t.slug
       GROUP BY t.slug, t.display_name, t.sort_order
-      ORDER BY t.sort_order ASC, t.slug ASC`
+      ORDER BY t.sort_order DESC, t.slug ASC`
   );
   await cacheAdminEntityList("tag", ADMIN_TAG_LIST_KEY, revision, rows);
   return rows;
@@ -165,11 +165,11 @@ async function loadAdminTagList(revision: number) {
 
 async function loadAdminThemeList(revision: number) {
   const rows = await queryVocabularyRows<Theme>(
-    `SELECT t.slug, t.display_name, count(m.id)::int AS image_count
+    `SELECT t.slug, t.display_name, t.sort_order, count(m.id)::int AS image_count
        FROM theme t
        LEFT JOIN metadata m ON m.theme = t.slug AND m.status = 'ready'
       GROUP BY t.slug, t.display_name, t.sort_order
-      ORDER BY t.sort_order ASC, t.slug ASC`
+      ORDER BY t.sort_order DESC, t.slug ASC`
   );
   await cacheAdminEntityList("theme", ADMIN_THEME_LIST_KEY, revision, rows);
   return rows;
@@ -181,6 +181,7 @@ async function loadAdminAuthorList(revision: number) {
     "derived_identity"
   >>(
     `SELECT a.slug,
+            a.sort_order,
             a.display_name,
             a.link,
             a.identity_provider,
@@ -194,7 +195,7 @@ async function loadAdminAuthorList(revision: number) {
                a.identity_provider,
                a.identity_id,
                a.sort_order
-      ORDER BY a.sort_order ASC, a.slug ASC`
+      ORDER BY a.sort_order DESC, a.slug ASC`
   );
   const projected = rows.map((row): Author => {
     const { identity_provider, identity_id, ...item } = row;

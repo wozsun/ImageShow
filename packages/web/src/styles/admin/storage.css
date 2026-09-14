@@ -22,7 +22,6 @@
 .storage-backend-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--admin-color-storage-border); border-radius: 12px; background: var(--admin-color-surface-primary); }
 .storage-backend-card.is-default { border-color: var(--admin-color-action-primary); box-shadow: 0 0 0 1px var(--admin-shadow-storage-default); }
 .storage-backend-card.is-off { opacity: 0.7; }
-.storage-backend-card.is-dragging { opacity: 0.55; }
 .storage-card-body { display: grid; grid-template: "title toggle" auto "meta checksum" 1fr / minmax(0, 1fr) auto; align-items: start; gap: 4px 12px; flex: 1; min-width: 0; }
 .storage-card-title { grid-area: title; align-self: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; color: var(--admin-color-text-primary); }
 .storage-card-meta, .storage-card-checksum { font-size: 13px; color: var(--admin-color-storage-meta); }

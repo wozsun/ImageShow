@@ -293,8 +293,10 @@ storage/
 分类 metadata 与正式对象位置相互独立：`image-update-item.ts` 直接提交分类 metadata。
 `tags/mutations.ts` 在调用方事务内以集合 SQL 创建缺失标签并替换关联，去重保留首次出现顺序；
 新增标签按该顺序排在已有词条前，revision 和提交后缓存失效仍由调用方汇总。
-标签、主题与作者的显式创建及自动建立均使用小于当前最小排序值的位置，不改写已有词条排序；
-重复采用已有词条不移动位置，人工排序继续按提交的顺序持久化。
+标签、主题与作者的显式创建及自动建立均使用大于当前最大排序值的整数，不改写已有词条排序；
+重复采用已有词条不移动位置。数值达到 PostgreSQL integer 上限后保留上限值，同值按 slug 升序。
+`vocab/sort-order.ts` 持有词表单项排序写入与缓存同步；后台列表返回真实 `sort_order`，
+管理列表、画廊筛选与 Ingestion 词表统一按数值降序、slug 升序排列。
 `themes/mutations.ts` 在词表排他锁和图片缓存 fence 内，以单事务集合 SQL 解除图片关联并删除
 主题，汇总一次 revision 与精确同步 / 重建交接。`storage/objects/image-transfer-admission.ts` 是所选图片与
 整后端迁移共用的活动逐图搬迁许可 owner，两个生产者直接复用同一个代码内固定 5 项容量。
@@ -885,9 +887,12 @@ hooks ──► lib
   与 `advanced-config/`；只有 `LogPage.tsx`、`Overview.tsx`、`SettingsPage.tsx`、
   `UserAdmin.tsx`、`VocabularyAdmin.tsx` 及其单个卡片等没有形成三文件族的页面留在根层。
   每个页面专属查询、操作 Hook、对话框和状态机都留在同一目录，不上移为虚假的跨页面公共层。
-  词表和存储列表共用 `usePersistedReorder` 持有拖动状态、提交锁、权威回读及失败恢复。
-  原生拖动期间不移动源卡片的 DOM，落在有效卡片后才按目标位置重排并提交一次；
-  列表外松手、取消、失焦或页面隐藏只清理拖动状态并采用最新权威顺序，不提交排序。
+  词表和存储列表共用 `SortOrderInput` 持有数字草稿，减一 / 输入 / 加一属于同一编辑区域，
+  区域内切换焦点不保存；Enter 或移出整个区域才调用 `useSortOrderSave` 单项写入并由查询所有者回读。
+  保存状态按条目隔离，只禁用提交中的卡片；不同条目的提交依次完成写入与回读，单项失败不阻塞后续提交。
+  控件显示真实排序值，数值越大越靠前，允许负数和同值；失败保留草稿并就地提示。
+  `invalidateDataAfterSortOrderSave` 仅失效对应列表和受影响选项，列表刷新失败独立报告。
+  本地存储固定首位且不显示排序控件；其余存储项按同一数值及 slug 规则排序。
 - `pages/admin/ingestion/` 管理统一 prepared ingestion 队列，稳定分为 `queue/`、`workflow/`、
   `upload/` 和动态 `import/`。统一内容接入是上位领域，`upload` / `import` 分别表示浏览器
   Upload 与 Server Import，内部 mode 也使用 `upload` / `import`。

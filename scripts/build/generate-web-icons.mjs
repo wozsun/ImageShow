@@ -64,7 +64,6 @@ const iconGroups = [
       "delete-bin-6-line",
       "delete-bin-line",
       "download-cloud-2-line",
-      "drag-move-2-fill",
       "file-list-line",
       "flask-line",
       "group-line",

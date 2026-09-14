@@ -870,6 +870,7 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   const backends = [
     {
       slug: "local",
+      sort_order: 0,
       display_name: "本地",
       type: "local",
       enabled: true,
@@ -877,6 +878,7 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
     },
     {
       slug: "archive",
+      sort_order: -1,
       display_name: "归档",
       type: "s3",
       enabled: true,

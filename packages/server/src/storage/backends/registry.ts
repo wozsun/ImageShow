@@ -103,14 +103,15 @@ async function loadStorageBackends(
 ): Promise<StorageBackendRecord[]> {
   const maximumRows = appConfig.publicPgFallback.maximumStorageBackendRows;
   const rows = (await reader.query<StorageBackendConfigRow & {
+    sort_order: number;
     display_name: string;
     enabled: boolean;
     is_default: boolean;
   }>(
-    `SELECT slug, display_name, type, config, enabled, is_default,
+    `SELECT slug, display_name, type, config, enabled, is_default, sort_order,
             namespace_identities
        FROM storage_backend
-      ORDER BY (slug = 'local') DESC, sort_order ASC, slug ASC
+      ORDER BY (slug = 'local') DESC, sort_order DESC, slug ASC
       ${bounded ? "LIMIT $1" : ""}`,
     bounded ? [maximumRows + 1] : undefined
   )).rows;

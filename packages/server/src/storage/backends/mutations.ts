@@ -57,7 +57,7 @@ export async function createStorageBackend(
        )
        VALUES(
          $1, $2, $3, $4::jsonb, true,
-         (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM storage_backend)
+         (SELECT GREATEST(COALESCE(MIN(sort_order), 0)::bigint - 1, -2147483648) FROM storage_backend)
        )`,
       [input.slug, input.display_name, "s3", storedS3ConfigJson(config)]
     ).catch((error: unknown) => {
@@ -103,8 +103,8 @@ export async function importStorageBackends(
     await withTransaction(
       async (client) => {
         signal?.throwIfAborted();
-        const highestSortOrder = Number((await client.query(
-          "SELECT COALESCE(MAX(sort_order), 0) AS value FROM storage_backend"
+        const lowestSortOrder = Number((await client.query(
+          "SELECT COALESCE(MIN(sort_order), 0) AS value FROM storage_backend"
         )).rows[0]?.value ?? 0);
 
         for (const [index, backend] of backends.entries()) {
@@ -120,7 +120,7 @@ export async function importStorageBackends(
               "s3",
               storedS3ConfigJson(configs[index]!),
               backend.enabled,
-              highestSortOrder + index + 1
+              Math.max(-2147483648, lowestSortOrder - index - 1)
             ]
           );
         }
@@ -299,18 +299,16 @@ export async function setDefaultStorageBackend(slug: string) {
   }
 }
 
-export async function reorderStorageBackends(slugs: string[]) {
-  if (!slugs.length) return;
+export async function setStorageBackendSortOrder(slug: string, sortOrder: number) {
+  if (slug === "local") {
+    throw new ApiError(400, "storage_backend_reserved", "本地存储固定首位，不能修改排序");
+  }
   try {
-    await pool.query(
-      `UPDATE storage_backend AS backend
-          SET sort_order=ordered.ordinality, updated_at=now()
-         FROM unnest($1::text[]) WITH ORDINALITY
-           AS ordered(slug, ordinality)
-        WHERE backend.slug=ordered.slug
-          AND backend.slug <> 'local'`,
-      [slugs]
+    const result = await pool.query(
+      "UPDATE storage_backend SET sort_order=$2, updated_at=now() WHERE slug=$1",
+      [slug, sortOrder]
     );
+    if (!result.rowCount) throw new ApiError(404, "storage_backend_not_found", "存储后端不存在");
   } finally {
     invalidateStorageBackendRegistry();
   }

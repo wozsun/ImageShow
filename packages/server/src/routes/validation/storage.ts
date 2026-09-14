@@ -12,11 +12,6 @@ import { requestSlugInput } from "./primitives.ts";
 
 export const storageSlugInput = requestSlugInput;
 
-export const storageSlugListInput = z.strictObject({
-  slugs: z.array(storageSlugInput).min(1).max(2000)
-    .transform((slugs) => [...new Set(slugs)])
-});
-
 export const storageBackendMigrationInput = z.strictObject({
   source: storageSlugInput,
   target: storageSlugInput

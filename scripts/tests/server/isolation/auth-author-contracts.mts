@@ -104,6 +104,7 @@ assert.equal(
 const createdBySuper = await createdBySuperResponse.json();
 assert.deepEqual(createdBySuper.item, {
   slug: "identity-route-super",
+  sort_order: 1,
   display_name: "Identity Super",
   link: "https://weibo.com/u/4444444444",
   image_count: 0,

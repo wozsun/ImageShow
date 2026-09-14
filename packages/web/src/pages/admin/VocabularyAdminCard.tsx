@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type DragEvent } from "react";
+import { useLayoutEffect, useState } from "react";
 import type {
   AdminEntityDto,
   AuthorDto,
@@ -7,31 +7,20 @@ import type {
 import { api } from "../../lib/api/client.js";
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
-import { ReorderControls } from "../../components/actions/ReorderControls.js";
+import { SortOrderInput } from "../../components/actions/SortOrderInput.js";
 import { SlugChip } from "../../components/data-display/SlugChip.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
-import type { ReorderDirection } from "../../lib/ui/reorder.js";
 
-export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, canDelete = false, reorderBusy, dragging = false, canMovePrevious, canMoveNext, onMove, onReorderControlRef, onDragStart, onDrop, onDragEnd }: {
+export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, canDelete = false, sortBusy, onSortSave }: {
   kind: "themes" | "tags" | "authors";
   item: AdminEntityDto;
   onChanged: (item?: AuthorDto) => void | Promise<void>;
   onDelete: () => void;
   onError: (error: unknown) => void;
   canDelete?: boolean;
-  reorderBusy: boolean;
-  dragging?: boolean;
-  canMovePrevious: boolean;
-  canMoveNext: boolean;
-  onMove: (direction: ReorderDirection) => void;
-  onReorderControlRef: (
-    direction: ReorderDirection,
-    node: HTMLButtonElement | null
-  ) => void;
-  onDragStart?: (slug: string) => void;
-  onDrop?: (slug: string) => void;
-  onDragEnd?: () => void;
+  sortBusy: boolean;
+  onSortSave: (value: number) => Promise<number>;
 }) {
   const noun = kind === "themes" ? "主题" : kind === "tags" ? "标签" : "作者";
 
@@ -58,9 +47,8 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
   }, [item.display_name, item.link, item.slug, kind]);
   const saveStatus = useAsyncActionStatus();
 
-  const cardRef = useRef<HTMLDivElement>(null);
   const dirty = display !== form.savedDisplay || (isAuthor && link !== form.savedLink);
-  const cardBusy = saveStatus.pending || reorderBusy;
+  const cardBusy = saveStatus.pending || sortBusy;
   const savePresentation = {
     idle: { icon: "save-3-line", label: "保存" },
     pending: { icon: "save-3-line", label: "保存中" },
@@ -102,23 +90,8 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
     });
   };
 
-  const begin = (event: DragEvent<HTMLSpanElement>) => {
-    if (cardBusy) {
-      event.preventDefault();
-      return;
-    }
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", item.slug);
-    onDragStart?.(item.slug);
-  };
-
   return (
-    <div
-      ref={cardRef}
-      className={`entity-card${dragging ? " is-dragging" : ""}`}
-      onDragOver={(event) => { event.preventDefault(); }}
-      onDrop={(event) => { event.preventDefault(); onDrop?.(item.slug); }}
-    >
+    <div className="entity-card">
       <div className="entity-card-row">
         <SlugChip value={item.slug} ariaLabel={`${noun} slug`} />
         <input
@@ -158,18 +131,11 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
             onClick={() => void save()}
           />
         )}
-        <ReorderControls
+        <SortOrderInput
           itemLabel={`${noun} ${item.slug}`}
-          busy={cardBusy}
-          canMovePrevious={canMovePrevious}
-          canMoveNext={canMoveNext}
-          onMove={onMove}
-          onControlRef={onReorderControlRef}
-          dragPreviewRef={cardRef}
-          onDragStart={begin}
-          onDragEnd={() => {
-            onDragEnd?.();
-          }}
+          value={item.sort_order}
+          disabled={cardBusy}
+          onSave={onSortSave}
         />
         {canDelete && (
           <button

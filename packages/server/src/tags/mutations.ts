@@ -25,7 +25,7 @@ export async function createTag(slug: string, displayName = "") {
     signal.throwIfAborted();
     const created = await pool.query(
       `INSERT INTO tag(slug, display_name, sort_order)
-       VALUES($1, $2, (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM tag))
+       VALUES($1, $2, (SELECT LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, 2147483647) FROM tag))
        ON CONFLICT (slug) DO NOTHING
        RETURNING slug`,
       [slug, displayName]
@@ -34,17 +34,6 @@ export async function createTag(slug: string, displayName = "") {
     return created;
   });
   assertVocabularyCreated("tag", slug, result.rowCount);
-  await synchronizeVocabularyMutation({ entity: "tag" });
-}
-
-export async function reorderTags(slugs: string[]) {
-  if (!slugs.length) return;
-  await pool.query(
-    `UPDATE tag t SET sort_order = v.ord, updated_at = now()
-     FROM unnest($1::text[]) WITH ORDINALITY AS v(slug, ord)
-     WHERE t.slug = v.slug`,
-    [slugs]
-  );
   await synchronizeVocabularyMutation({ entity: "tag" });
 }
 
@@ -149,8 +138,8 @@ export async function replaceImageTagAssociations(
        )
        INSERT INTO tag(slug, sort_order)
        SELECT slug,
-              (SELECT COALESCE(MIN(sort_order), 0) FROM tag)
-                - row_number() OVER (ORDER BY ord DESC)
+              LEAST((SELECT COALESCE(MAX(sort_order), 0)::bigint FROM tag)
+                + row_number() OVER (ORDER BY ord DESC), 2147483647)
          FROM missing
         ORDER BY ord
        ON CONFLICT (slug) DO NOTHING

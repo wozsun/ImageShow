@@ -64,8 +64,7 @@ import {
   storageBackendCreateInput,
   storageBackendMigrationInput,
   storageBackendTestInput,
-  storageBackendUpdateInput,
-  storageSlugListInput
+  storageBackendUpdateInput
 } from "../../../packages/server/src/routes/validation/storage.ts";
 import {
   isHttpsUrl,
@@ -265,9 +264,6 @@ test("[Server/图片] 存储输入归一化 slug 并补齐缺省 S3 设置", () 
     force_path_style: false
   });
   assert.deepEqual(parse(storageBackendTestInput, { slug: " Archive " }), { slug: "archive" });
-  assert.deepEqual(parse(storageSlugListInput, { slugs: [" Archive ", "LOCAL", "archive"] }), {
-    slugs: ["archive", "local"]
-  });
   assert.deepEqual(parse(storageBackendMigrationInput, { source: " Archive ", target: "LOCAL" }), {
     source: "archive", target: "local"
   });

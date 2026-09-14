@@ -54,6 +54,7 @@ export function storedS3ConfigJson(config: S3StorageConfig) {
 
 export function storageBackendRecordFromRow(
   row: StorageBackendConfigRow & {
+    sort_order: number;
     display_name: string;
     enabled: unknown;
     is_default: unknown;
@@ -61,6 +62,7 @@ export function storageBackendRecordFromRow(
 ): StorageBackendRecord {
   return {
     ...storageConfigFromRow(row),
+    sort_order: row.sort_order,
     display_name: row.display_name,
     enabled: Boolean(row.enabled),
     is_default: Boolean(row.is_default)
@@ -72,6 +74,7 @@ export function storageConfigFromRecord(
 ): StorageConfig {
   const {
     display_name: _displayName,
+    sort_order: _sortOrder,
     enabled: _enabled,
     is_default: _isDefault,
     ...config

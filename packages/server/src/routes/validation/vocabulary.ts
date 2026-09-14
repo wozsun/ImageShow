@@ -44,8 +44,3 @@ export const authorMetaUpdateInput = z.strictObject({
   display_name: displayNameInput,
   link: authorLinkInput
 });
-
-export const vocabularySlugListInput = z.strictObject({
-  slugs: z.array(requestSlugInput).min(1).max(2000)
-    .transform((slugs) => [...new Set(slugs)])
-});

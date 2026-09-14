@@ -11,7 +11,6 @@ import { listAuthorsWithMeta } from "../authors/query.ts";
 import {
   createAuthor,
   deleteAuthor,
-  reorderAuthors,
   updateAuthorProfile
 } from "../authors/mutations.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
@@ -28,14 +27,15 @@ import {
   tagSlugInput,
   themeCreateInput,
   themeDisplayUpdateInput,
-  themeSlugInput,
-  vocabularySlugListInput
+  themeSlugInput
 } from "./validation/vocabulary.ts";
 import { parse } from "./validation/parse.ts";
+import { sortOrderUpdateInput } from "./validation/sort-order.ts";
+import { setVocabularySortOrder } from "../vocab/sort-order.ts";
+import type { EntityCacheKind } from "../vocab/vocab-cache.ts";
 import {
   createTag,
   deleteTag,
-  reorderTags,
   setTagDisplayName
 } from "../tags/mutations.ts";
 import { listTagsWithCounts } from "../tags/query.ts";
@@ -43,20 +43,19 @@ import { listThemesWithMeta } from "../themes/query.ts";
 import {
   createTheme,
   deleteTheme,
-  reorderThemes,
   updateThemeDisplayName
 } from "../themes/mutations.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 
 type EntityRouteOptions<CreateSchema extends z.ZodType, UpdateSchema extends z.ZodType> = {
   path: string;
+  entity: EntityCacheKind;
   slugInput: z.ZodType<string>;
   createInput: CreateSchema;
   updateInput: UpdateSchema;
   deletePermission: AdminPermission;
   list: () => Promise<AdminEntityDto[]>;
   create: (input: z.infer<CreateSchema>) => Promise<AdminEntityDto | void>;
-  reorder: (slugs: string[]) => Promise<void>;
   update: (
     slug: string,
     input: z.infer<UpdateSchema>
@@ -82,9 +81,10 @@ function registerAdminEntityRoutes<
     return c.json(item ? apiSuccess({ item }) : apiSuccess());
   });
 
-  app.post(`${base}/reorder`, async (c) => {
-    const input = parse(vocabularySlugListInput, await readJsonBody(c));
-    await options.reorder(input.slugs);
+  app.post(`${base}/:slug/sort-order`, async (c) => {
+    const slug = parse(options.slugInput, c.req.param("slug"));
+    const input = parse(sortOrderUpdateInput, await readJsonBody(c));
+    await setVocabularySortOrder(options.entity, slug, input.sort_order);
     return c.json(apiSuccess());
   });
 
@@ -109,37 +109,37 @@ function registerAdminEntityRoutes<
 export function registerAdminVocabularyRoutes(app: Hono) {
   registerAdminEntityRoutes(app, {
     path: "tags",
+    entity: "tag",
     slugInput: tagSlugInput,
     createInput: tagCreateInput,
     updateInput: tagDisplayUpdateInput,
     deletePermission: adminPermissions.tagDelete,
     list: listTagsWithCounts,
     create: async (input) => { await createTag(input.slug, input.display_name); },
-    reorder: reorderTags,
     update: async (slug, input) => setTagDisplayName(slug, input.display_name),
     remove: deleteTag
   });
   registerAdminEntityRoutes(app, {
     path: "themes",
+    entity: "theme",
     slugInput: themeSlugInput,
     createInput: themeCreateInput,
     updateInput: themeDisplayUpdateInput,
     deletePermission: adminPermissions.themeDelete,
     list: listThemesWithMeta,
     create: async (input) => { await createTheme(input.slug, input.display_name); },
-    reorder: reorderThemes,
     update: async (slug, input) => updateThemeDisplayName(slug, input.display_name),
     remove: deleteTheme
   });
   registerAdminEntityRoutes(app, {
     path: "authors",
+    entity: "author",
     slugInput: authorSlugInput,
     createInput: authorCreateInput,
     updateInput: authorMetaUpdateInput,
     deletePermission: adminPermissions.authorDelete,
     list: listAuthorsWithMeta,
     create: (input) => createAuthor(input.slug, input.display_name, input.link),
-    reorder: reorderAuthors,
     update: (slug, input) => updateAuthorProfile(
       slug,
       input.display_name,

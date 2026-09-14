@@ -210,6 +210,7 @@ export type ImageUpdateRequestDto = {
 };
 
 export type AdminEntityDto = FacetOptionDto & {
+  sort_order: number;
   image_count: number;
   link?: string;
 };

@@ -718,6 +718,7 @@ test("[Web/后台表单] 图片编辑器 trash 以逐项结果和权威回读收
 test("[Web/后台表单] 存储删除反馈以服务端权威结果收口", () => {
   const backend = {
     slug: "archive",
+    sort_order: -1,
     display_name: "Archive",
     enabled: true,
     is_default: false,
@@ -752,6 +753,7 @@ test("[Web/后台表单] 存储删除反馈以服务端权威结果收口", () =
 test("[Web/后台表单] 存储编辑只提交变化字段并省略空凭据", () => {
   const backend = {
     slug: "archive",
+    sort_order: -1,
     display_name: "Archive",
     enabled: true,
     is_default: false,
@@ -1979,7 +1981,7 @@ test("[Web/后台表单] 存储能力显示三态，连接测试后刷新一次�
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   t.after(() => client.clear());
   const backend = {
-    slug: "archive", display_name: "Archive", type: "s3", enabled: true,
+    slug: "archive", sort_order: -1, display_name: "Archive", type: "s3", enabled: true,
     is_default: false, image_count: 0, ingestion_session_count: 0,
     cleanup_job_count: 0, failed_cleanup_job_count: 0, exhausted_cleanup_job_count: 0,
     deletion: { action: "delete", blockers: [] }, content_md5: null,
@@ -2031,7 +2033,7 @@ for (const kind of ["user", "storage"] as const) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
     t.after(() => client.clear());
     const backend = {
-      slug: "archive", display_name: "Archive", type: "local", enabled: false,
+      slug: "archive", sort_order: -1, display_name: "Archive", type: "local", enabled: false,
       is_default: false, image_count: 0, ingestion_session_count: 0,
       cleanup_job_count: 0, failed_cleanup_job_count: 0, exhausted_cleanup_job_count: 0,
       deletion: { action: "delete", blockers: [] }
@@ -2092,148 +2094,19 @@ for (const kind of ["user", "storage"] as const) {
   });
 }
 
-for (const kind of ["themes", "tags", "authors", "storage"] as const) {
-  test(`[Web/后台排序] ${kind} 拖动保持节点稳定，落下只保存一次，取消与失败恢复权威顺序`, async (t) => {
-    const h = await createConfigStreamHarness(t);
-    const { usePersistedReorder } = await import("../../../packages/web/src/hooks/usePersistedReorder.ts");
-    const { VocabularyAdminCard } = await import("../../../packages/web/src/pages/admin/VocabularyAdminCard.tsx");
-    const { StorageBackendCard } = await import("../../../packages/web/src/pages/admin/storage/StorageBackendCard.tsx");
-    const original: StorageBackendAdmin[] = (kind === "storage" ? ["local", "a", "b", "c"] : ["a", "b", "c"]).map((slug) => ({
-      slug, display_name: slug, type: "local", enabled: true, is_default: slug === "local",
-      image_count: 1, ingestion_session_count: 0, cleanup_job_count: 0,
-      failed_cleanup_job_count: 0, exhausted_cleanup_job_count: 0,
-      deletion: { action: "migrate", blockers: ["images"] }
-    }));
-    let authority = original;
-    const saves: string[][] = [];
-    const errors: string[] = [];
-    let pendingSave = Promise.withResolvers<void>();
-    let failSave = false;
-    let state!: ReturnType<typeof usePersistedReorder<StorageBackendAdmin>>;
-    const noop = () => {};
-    function Probe() {
-      state = usePersistedReorder({
-        items: authority, externalBusy: false, getKey: (item) => item.slug,
-        isFixed: (item) => kind === "storage" && item.slug === "local",
-        itemLabel: (_items, key) => key,
-        readAuthoritative: () => authority,
-        async save(keys) { saves.push(keys); await pendingSave.promise; if (failSave) throw Error("save failed"); },
-        async refresh() { if (!failSave) authority = state.order; },
-        reportError: (stage) => { errors.push(stage); }
-      });
-      return h.React.createElement("div", null, state.order.map((item) => {
-        const shared = {
-          reorderBusy: state.busy, dragging: state.draggingKey === item.slug,
-          canMovePrevious: true, canMoveNext: true,
-          onMove: (direction: "previous" | "next") => state.moveByKeyboard(item.slug, direction),
-          onReorderControlRef: noop, onDragStart: state.beginDrag,
-          onDrop: state.finishDrag, onDragEnd: () => state.finishDrag()
-        };
-        return h.React.createElement("div", { key: item.slug, "data-slug": item.slug },
-          kind === "storage"
-            ? h.React.createElement(StorageBackendCard, {
-              ...shared, backend: item, hasNonLocalBackend: true, busy: "",
-              defaultStatus: "idle", defaultActionPending: false, onEdit: noop,
-              onSetDefault: async () => true, onRemovalAction: noop,
-              onToggleEnabled: async () => true, onRetryCleanup: noop
-            })
-            : h.React.createElement(VocabularyAdminCard, {
-              ...shared, kind, item, onChanged: noop, onDelete: noop, onError: noop
-            }));
-      }));
-    }
-    await h.render(h.React.createElement(Probe));
-    const nodes = () => [...h.document.querySelectorAll<HTMLElement>("[data-slug]")];
-    const keys = () => nodes().map((node) => node.dataset.slug);
-    const card = (key: string) => h.document.querySelector(`[data-slug="${key}"]`)!.firstElementChild!;
-    const handle = (key: string) => card(key).querySelector(".reorder-pointer-handle")!;
-    const emit = async (target: EventTarget, type: string, properties = {}) => {
-      let result!: Event;
-      await h.React.act(async () => { result = dispatchDomEvent(h.window, target, type, properties); });
-      await h.flush();
-      return result;
-    };
-    const start = async () => {
-      const preview = card("a");
-      await emit(handle("a"), "dragstart", { clientX: 10, clientY: 10, dataTransfer: {
-        effectAllowed: "none", setData: noop,
-        setDragImage: (element: Element) => assert.equal(element, preview)
-      } });
-      assert.equal(state.draggingKey, "a");
-      assert.equal(card("a").classList.contains("is-dragging"), true);
-    };
-    const before = nodes();
-    await start();
-    for (let i = 0; i < 8; i++) {
-      await emit(card("c").children[i % card("c").children.length], "dragenter");
-      assert.equal((await emit(card("c"), "dragover")).defaultPrevented, true);
-    }
-    assert.deepEqual(nodes(), before, "跨越卡片及子节点不得移动原生拖动源");
-    assert.equal(saves.length, 0);
-    await emit(card("c"), "drop");
-    assert.deepEqual(saves, [["b", "c", "a"]]);
-    assert.equal(state.draggingKey, null);
-    assert.equal(h.document.querySelector(".is-dragging"), null);
-    assert.equal(state.busy, true);
-    await emit(handle("a"), "dragend");
-    assert.equal(saves.length, 1, "drop 后的 dragend 不得重复提交");
-    pendingSave.resolve(); await h.flush();
-    assert.equal(state.busy, false);
-    assert.deepEqual(keys(), kind === "storage" ? ["local", "b", "c", "a"] : ["b", "c", "a"]);
-    for (const event of ["dragend", "drop", "blur", "keydown", "visibilitychange"]) {
-      await start();
-      authority = [...authority].reverse();
-      if (kind === "storage") authority = [original[0], ...authority.filter((item) => item.slug !== "local")];
-      await h.render(h.React.createElement(Probe));
-      if (event === "visibilitychange") Object.defineProperty(h.document, "hidden", { configurable: true, value: true });
-      await emit(event === "visibilitychange" ? h.document : h.window, event, { key: "Escape" });
-      if (event === "visibilitychange") Reflect.deleteProperty(h.document, "hidden");
-      assert.equal(state.draggingKey, null, event);
-      assert.equal(h.document.querySelector(".is-dragging"), null, event);
-      assert.deepEqual(keys(), authority.map((item) => item.slug), "取消后采用最新权威数据");
-      assert.equal(saves.length, 1);
-    }
-    if (kind === "storage") {
-      assert.equal(card("local").querySelector(".reorder-pointer-handle"), null);
-      await start();
-      await emit(card("local"), "drop");
-      assert.equal(state.draggingKey, null);
-      assert.equal(saves.length, 1);
-    }
-    authority = original;
-    await h.render(h.React.createElement(Probe));
-    failSave = true;
-    pendingSave = Promise.withResolvers<void>();
-    await start();
-    await emit(card("c"), "drop");
-    pendingSave.resolve(); await h.flush();
-    assert.deepEqual(keys(), original.map((item) => item.slug));
-    assert.deepEqual(errors, ["save"]);
-    assert.equal(state.busy, false);
-    failSave = false;
-    await emit(card("a").querySelector(".is-next")!, "click");
-    await h.flush();
-    assert.equal(saves.length, 3, "拖动失败不阻止后续逐步排序");
-    assert.deepEqual(saves[2], ["b", "a", "c"]);
-    await start();
-    await h.render(null);
-    await emit(h.window, "drop");
-    assert.equal(saves.length, 3, "卸载后不得残留提交监听");
-  });
-}
-
 test("[Web/后台表单] 词条卡片同 slug 按字段保护 dirty，clean 跟随权威且成功保存立即归于 clean", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { VocabularyAdminCard } = await import("../../../packages/web/src/pages/admin/VocabularyAdminCard.tsx");
   for (const kind of ["themes", "tags", "authors"] as const) {
-    let item: { slug: string; display_name: string; image_count: number; link: string } = {
+    let item: { slug: string; display_name: string; image_count: number; link: string; sort_order: number } = {
       slug: kind,
+      sort_order: 0,
       display_name: "old",
       image_count: 1,
       link: "https://example.com/old"
     };
     let refreshFails = false;
-    const props = { kind, onChanged: async () => { if (refreshFails) throw Error("refresh failed"); }, onDelete() {}, onError() {}, reorderBusy: false, canMovePrevious: false, canMoveNext: false, onMove() {}, onReorderControlRef() {} } as const;
+    const props = { kind, onChanged: async () => { if (refreshFails) throw Error("refresh failed"); }, onDelete() {}, onError() {}, sortBusy: false, onSortSave: async (value: number) => value } as const;
     const render = async () => h.render(h.React.createElement(VocabularyAdminCard, { ...props, item }));
     await render();
     const display = () => h.document.querySelector<HTMLInputElement>(".entity-display-input")!;

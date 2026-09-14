@@ -97,6 +97,7 @@ export type S3StorageConfig = StorageConfigBase & {
 export type StorageConfig = LocalStorageConfig | S3StorageConfig;
 
 type StorageBackendRecordFields = {
+  sort_order: number;
   display_name: string;
   enabled: boolean;
   is_default: boolean;

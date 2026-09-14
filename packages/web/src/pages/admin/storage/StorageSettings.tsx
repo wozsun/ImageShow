@@ -23,11 +23,11 @@ import {
 import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";
 import { StorageBackendModal } from "./StorageBackendModal.js";
 import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
-import { invalidateStorageData } from "../../../lib/api/query-invalidation.js";
+import { invalidateDataAfterSortOrderSave, invalidateStorageData } from "../../../lib/api/query-invalidation.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
 import { migrateStorageBackendImages } from "../../../lib/api/storage-backend-image-migration.js";
-import { usePersistedReorder } from "../../../hooks/usePersistedReorder.js";
+import { useSortOrderSave } from "../../../hooks/useSortOrderSave.js";
 import { StorageBackendCard } from "./StorageBackendCard.js";
 import { StorageBackendMigrationDialog } from "./StorageBackendMigrationDialog.js";
 import { StorageBackendDeletionBlockedDialog } from "./StorageBackendDeletionBlockedDialog.js";
@@ -41,7 +41,7 @@ type StorageActionDialog =
   | { kind: "migrate"; backend: StorageBackendAdmin }
   | { kind: "blocked"; backend: StorageBackendAdmin };
 
-// 存储管理：命名存储后端的注册表 CRUD（卡片列表 + 精确移动/桌面拖动排序），新建/编辑走 StorageBackendModal。
+// 存储管理：注册表卡片与数字排序，新建/编辑走 StorageBackendModal。
 export function StorageSettings() {
   const client = useQueryClient();
   const query = useQuery<StorageBackendsAdminResponseDto>({
@@ -65,48 +65,18 @@ export function StorageSettings() {
   const defaultBackend = backends.find((backend) => backend.is_default);
   const defaultSlug = defaultBackend?.slug ?? "local";
   const hasNonLocalBackend = backends.some((backend) => backend.slug !== "local");
-  const isFixedBackend = (backend: StorageBackendAdmin) => (
-    backend.slug === "local"
-  );
-  const reorder = usePersistedReorder<StorageBackendAdmin>({
-    items: query.data?.backends,
-    externalBusy: Boolean(busy),
-    getKey: (backend) => backend.slug,
-    isFixed: isFixedBackend,
-    itemLabel: (items, movedSlug) => {
-      const backend = items.find((candidate) => candidate.slug === movedSlug);
-      return `存储后端“${backend ? storageBackendDisplay(backend) : storageBackendLabel(movedSlug)
-        }”`;
-    },
-    save: (slugs) => api(`${adminApiBasePath}/storage/backends/reorder`, {
-      method: "POST",
-      body: JSON.stringify({ slugs })
-    }),
-    refresh: () => invalidateStorageData(client),
-    readAuthoritative: () => {
-      const queryState = client.getQueryState(queryKeys.storageBackends);
-      const cached = client.getQueryData<StorageBackendsAdminResponseDto>(
-        queryKeys.storageBackends
-      );
-      return cached
-        && queryState?.status === "success"
-        && !queryState.isInvalidated
-        ? cached.backends
-        : null;
-    },
+  const sorting = useSortOrderSave({
+    basePath: `${adminApiBasePath}/storage/backends`,
+    externalBusy: Boolean(busy) || defaultAction.pending,
+    refresh: () => invalidateDataAfterSortOrderSave(client, queryKeys.storageBackends),
+    readValue: (slug) => client.getQueryData<StorageBackendsAdminResponseDto>(queryKeys.storageBackends)
+      ?.backends.find((backend) => backend.slug === slug)?.sort_order,
     reportError: (stage, error) => reportAdminUiError(
-      `storage.reorder${stage === "refresh" ? "_refresh" : ""}`,
+      `storage.sort_order.${stage}`,
       error
-    ),
-    minimumPendingMs: 500,
-    focus: {
-      itemKeys: (items) => items
-        .filter((backend) => !isFixedBackend(backend))
-        .map((backend) => backend.slug)
-    }
+    )
   });
-  const { order } = reorder;
-  const operationBusy = reorder.busy;
+  const operationBusy = sorting.busy;
 
   const executeStorageAction = async <Result,>(
     key: string,
@@ -258,54 +228,32 @@ export function StorageSettings() {
     : editing
       ? backends.find((backend) => backend.slug === editing.slug) ?? editing
       : null;
-  const visibleFeedback = actionFeedback ?? reorder.feedback;
-  const reorderFeedbackVisible = !actionFeedback && Boolean(reorder.feedback);
 
   return (
     <section className="workspace">
       <WorkspaceHeader
         title="存储管理"
-        description="命名存储后端：本地与多个对象存储桶可并存，可用前移/后移按钮，桌面端也可拖动排序"
+        description="命名存储后端：本地与多个对象存储桶可并存"
         feedbackTarget={feedbackTarget}
       />
-      <p
-        className="reorder-live-region"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {reorder.announcement}
-      </p>
       <p className="hint">每张图片记录自己所在的存储后端，可定义多个（同类型也可，例如两个对象存储桶）。新上传写入“默认”后端。</p>
       <p className="storage-default-note">当前默认上传后端 <strong>{defaultBackend ? storageBackendDisplay(defaultBackend) : storageBackendLabel(defaultSlug)}</strong></p>
       {query.isLoading && <p className="muted">加载中</p>}
       {query.isError && <QueryErrorState error={query.error} onRetry={() => void query.refetch()} reportContext="storage.load" />}
       <div className="storage-card-grid">
-        {order.map((backend) => {
-          const position = reorder.positionFor(backend.slug);
+        {backends.map((backend) => {
           return (
             <StorageBackendCard
               key={backend.slug}
               backend={backend}
               hasNonLocalBackend={hasNonLocalBackend}
               busy={busy}
-              reorderBusy={operationBusy}
-              dragging={reorder.draggingKey === backend.slug}
-              canMovePrevious={Boolean(position && position.position > 1)}
-              canMoveNext={Boolean(
-                position && position.position < position.total
-              )}
+              sortBusy={sorting.isSaving(backend.slug)}
               defaultStatus={defaultActionSlug === backend.slug
                 ? defaultAction.status
                 : "idle"}
               defaultActionPending={defaultAction.pending}
-              onMove={(direction) => {
-                setActionFeedback(null);
-                reorder.moveByKeyboard(backend.slug, direction);
-              }}
-              onReorderControlRef={(direction, node) => {
-                reorder.registerReorderControl(backend.slug, direction, node);
-              }}
+              onSortSave={(value) => sorting.save(backend.slug, value)}
               onEdit={() => openEditor(backend)}
               onSetDefault={() => setDefault(backend.slug)}
               onToggleEnabled={() => runStorageAction(
@@ -323,12 +271,6 @@ export function StorageSettings() {
                 kind: backend.deletion.action,
                 backend
               })}
-              onDragStart={(slug) => {
-                setActionFeedback(null);
-                reorder.beginDrag(slug);
-              }}
-              onDrop={reorder.finishDrag}
-              onDragEnd={() => reorder.finishDrag()}
             />
           );
         })}
@@ -391,15 +333,11 @@ export function StorageSettings() {
           onClose={() => setActionDialog(null)}
         />
       )}
-      {visibleFeedback && (
+      {actionFeedback && (
         <ActionFeedbackOutlet
-          feedback={visibleFeedback}
+          feedback={actionFeedback}
           target={feedbackTarget}
-          announce={!reorderFeedbackVisible}
-          onClose={() => {
-            if (reorderFeedbackVisible) reorder.clearFeedback();
-            else setActionFeedback(null);
-          }}
+          onClose={() => setActionFeedback(null)}
         />
       )}
     </section>

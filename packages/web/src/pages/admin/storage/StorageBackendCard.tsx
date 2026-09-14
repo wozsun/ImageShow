@@ -1,6 +1,5 @@
-import { useRef, type DragEvent } from "react";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
-import { ReorderControls } from "../../../components/actions/ReorderControls.js";
+import { SortOrderInput } from "../../../components/actions/SortOrderInput.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import {
   useAsyncActionStatus,
@@ -11,59 +10,40 @@ import {
   storageBackendLabel,
   storageTypeLabel
 } from "../../../lib/ui/select-options.js";
-import type { ReorderDirection } from "../../../lib/ui/reorder.js";
 
 export function StorageBackendCard({
   backend,
   hasNonLocalBackend,
   busy,
-  reorderBusy,
-  dragging,
-  canMovePrevious,
-  canMoveNext,
+  sortBusy,
   defaultStatus,
   defaultActionPending,
-  onMove,
-  onReorderControlRef,
+  onSortSave,
   onEdit,
   onSetDefault,
   onRemovalAction,
   onToggleEnabled,
-  onRetryCleanup,
-  onDragStart,
-  onDrop,
-  onDragEnd
+  onRetryCleanup
 }: {
   backend: StorageBackendAdmin;
   hasNonLocalBackend: boolean;
   busy: string;
-  reorderBusy: boolean;
-  dragging: boolean;
-  canMovePrevious: boolean;
-  canMoveNext: boolean;
+  sortBusy: boolean;
   defaultStatus: AsyncActionStatus;
   defaultActionPending: boolean;
-  onMove: (direction: ReorderDirection) => void;
-  onReorderControlRef: (
-    direction: ReorderDirection,
-    node: HTMLButtonElement | null
-  ) => void;
+  onSortSave: (value: number) => Promise<number>;
   onEdit: () => void;
   onSetDefault: () => Promise<boolean>;
   onRemovalAction: () => void;
   onToggleEnabled: () => Promise<boolean>;
   onRetryCleanup: () => void;
-  onDragStart: (slug: string) => void;
-  onDrop: (slug: string) => void;
-  onDragEnd: () => void;
 }) {
   const isLocal = backend.slug === "local";
   const showEnabledToggle = !isLocal || hasNonLocalBackend;
-  const cardRef = useRef<HTMLDivElement>(null);
   const enabledStatus = useAsyncActionStatus({ successDurationMs: null });
   const title = backend.display_name || storageBackendLabel(backend.slug);
   const cardBusy = Boolean(busy)
-    || reorderBusy
+    || sortBusy
     || defaultActionPending
     || enabledStatus.pending;
   const defaultPresentation = {
@@ -87,27 +67,10 @@ export function StorageBackendCard({
     },
     error: { icon: "close-line", label: "操作失败" }
   } as const;
-  const begin = (event: DragEvent<HTMLSpanElement>) => {
-    if (cardBusy) {
-      event.preventDefault();
-      return;
-    }
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", backend.slug);
-    onDragStart(backend.slug);
-  };
 
   return (
     <div
-      ref={cardRef}
-      className={`storage-backend-card${backend.is_default ? " is-default" : ""}${backend.enabled ? "" : " is-off"}${dragging ? " is-dragging" : ""}`}
-      onDragOver={(event) => {
-        if (!isLocal) event.preventDefault();
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        if (!isLocal) onDrop(backend.slug);
-      }}
+      className={`storage-backend-card${backend.is_default ? " is-default" : ""}${backend.enabled ? "" : " is-off"}`}
     >
       <div className="storage-card-body">
         <strong className="storage-card-title" title={title}>{title}</strong>
@@ -172,18 +135,13 @@ export function StorageBackendCard({
             </button>
           )}
         </span>
-        <span className="storage-card-actions-right">
+        <div className="storage-card-actions-right">
           {!isLocal && (
-            <ReorderControls
+            <SortOrderInput
               itemLabel={`存储后端 ${backend.slug}`}
-              busy={cardBusy}
-              canMovePrevious={canMovePrevious}
-              canMoveNext={canMoveNext}
-              onMove={onMove}
-              onControlRef={onReorderControlRef}
-              dragPreviewRef={cardRef}
-              onDragStart={begin}
-              onDragEnd={onDragEnd}
+              value={backend.sort_order}
+              disabled={cardBusy}
+              onSave={onSortSave}
             />
           )}
           <button
@@ -228,7 +186,7 @@ export function StorageBackendCard({
                 ? "arrow-left-right-line"
                 : "information-line"} />
           </button>
-        </span>
+        </div>
       </div>
     </div>
   );

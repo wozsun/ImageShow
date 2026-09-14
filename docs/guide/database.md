@@ -244,7 +244,7 @@ DELETE 发出后失锁时由后继重新采用同一对象。
 | `namespace_identities` | 经验证且合并后的物理命名空间访问身份集合；当前配置身份始终隐式参与 |
 | `enabled` | 是否可作为新图片及存量图片迁移的写入目标 |
 | `is_default` | 是否为新上传默认后端 |
-| `sort_order` | 后台排序 |
+| `sort_order` | 真实排序整数，越大越靠前；同值按 slug 升序，local 固定首位 |
 | `created_at` / `updated_at` | 时间戳 |
 
 `metadata.storage_slug` 以外键引用它；后端需先迁走图片、清理 Redis active canonical、
@@ -282,6 +282,12 @@ HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退�
 ## tag / theme / image_tag —— 标签与主题
 
 `tag` 与 `theme` 都使用小写 slug、显示名、排序和时间戳。主题是一图至多一值，直接存在可空 `metadata.theme`；标签是一图多值，通过 `image_tag(image_id, tag_slug)` 关联。
+
+词表和存储后端的 `sort_order` 接受 -2147483648 至 2147483647 的整数，允许负数及重复值。
+后台通过 `POST /api/admin/{tags|themes|authors}/:slug/sort-order` 或
+`POST /api/admin/storage/backends/:slug/sort-order` 提交 `{ "sort_order": 整数 }`，只更新当前项。
+数值降序、slug 升序是管理列表及对应选项的统一规则；存储 `local` 始终排在首位且禁止修改排序。
+新词条在最大值基础上递增，新存储后端在最小值基础上递减；触及整数边界时使用边界值并按 slug 排序。
 
 图片标签关联与 Ingestion commit 对最终解析、去重后的 tag slug 按排序顺序组合取得
 共享 advisory lock，并在锁内使用同一列表幂等确保缺失标签存在、替换

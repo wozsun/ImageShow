@@ -5,6 +5,7 @@
  * 默认配置只由包根入口导出，浏览器代码不得从根入口导入。
  */
 export * from "./browser/common.ts";
+export * from "./browser/sort-order.ts";
 export * from "./browser/settings.ts";
 export * from "./browser/images.ts";
 export * from "./browser/tag-filter.ts";

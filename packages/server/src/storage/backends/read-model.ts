@@ -46,6 +46,7 @@ export async function getStorageBackendsForAdmin(): Promise<
     const cleanupCounts = cleanupJobCounts.get(backend.slug);
     const summary = {
       slug: backend.slug,
+      sort_order: backend.sort_order,
       display_name: backend.display_name,
       enabled: backend.enabled,
       is_default: backend.is_default,

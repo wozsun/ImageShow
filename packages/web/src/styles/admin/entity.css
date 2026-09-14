@@ -80,7 +80,6 @@
 .user-card .entity-card-foot { justify-content: flex-end; }
 
 .entity-card.is-pinned { background: var(--admin-color-entity-surface-pinned); border-style: dashed; }
-.entity-card.is-dragging { opacity: .55; }
 .role-badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .role-super { background: var(--admin-color-role-super-surface); color: var(--admin-color-role-super-text); }
 .role-image { background: var(--admin-color-role-image-surface); color: var(--admin-color-role-image-text); }

@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/server",
-  "version": "6.4.2",
+  "version": "6.4.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "start": "node --env-file-if-exists=../../.env dist/index.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1131.0",
+    "@aws-sdk/client-s3": "^3.1132.0",
     "@hono/node-server": "^2.1.1",
     "@imageshow/shared": "file:../shared",
     "@smithy/node-http-handler": "^4.12.1",
@@ -23,7 +23,7 @@
     "pg": "^8.23.0",
     "sharp": "^0.35.4",
     "undici": "^8.10.2",
-    "zod": "^4.6.4"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",

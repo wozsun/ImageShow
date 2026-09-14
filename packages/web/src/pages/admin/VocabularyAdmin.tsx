@@ -16,10 +16,7 @@ import { StableButtonLabel } from "../../components/data-display/StableButtonLab
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { AdminPagination } from "../../components/navigation/AdminPagination.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
-import {
-  ActionFeedbackOutlet,
-  useActionFeedbackTarget
-} from "../../components/feedback/ActionFeedbackRegion.js";
+import { useActionFeedbackTarget } from "../../components/feedback/ActionFeedbackRegion.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import { VocabularyAdminCard } from "./VocabularyAdminCard.js";
 import {
@@ -34,11 +31,12 @@ import type { Author, Tag, Theme } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import {
   invalidateDataAfterAuthorProfileSave,
+  invalidateDataAfterSortOrderSave,
   invalidateImageData
 } from "../../lib/api/query-invalidation.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { useAdminPermissions } from "../../hooks/useAuthSession.js";
-import { usePersistedReorder } from "../../hooks/usePersistedReorder.js";
+import { useSortOrderSave } from "../../hooks/useSortOrderSave.js";
 import "../../styles/admin/entity.css";
 
 type VocabularyKind = "tags" | "themes" | "authors";
@@ -99,6 +97,17 @@ function VocabularyAdminContent({ kind, settings }: {
   // 删除还会清除关联图片上的该属性，故一并失效后台图片列表，与 ImageAdmin.refresh 的失效集对齐。
   const refresh = () => invalidateImageData(client);
   const acceptAuthorItem = async (item: AuthorDto) => {
+    const listState = client.getQueryState(queryKey);
+    const current = client.getQueryData<AdminEntityListResponseDto<VocabularyEntry>>(queryKey);
+    const previous = current?.items.find((entry) => entry.slug === item.slug);
+    const orderKnown = previous
+      ? previous.sort_order === item.sort_order
+      : current?.items.every((entry) => item.sort_order > entry.sort_order);
+    if (listState?.fetchStatus !== "idle" || !orderKnown) {
+      // The list owner preserves database collation and includes overlapping edits.
+      await refresh();
+      return;
+    }
     await client.cancelQueries({ queryKey, exact: true });
     client.setQueryData<AdminEntityListResponseDto<VocabularyEntry>>(queryKey, (current) => {
       if (!current) return current;
@@ -137,41 +146,19 @@ function VocabularyAdminContent({ kind, settings }: {
     : createError;
   const externalBusy = Boolean(mutation) || createAction.pending;
   const pageSize = settings.admin.image_page_size;
-  const reorder = usePersistedReorder<VocabularyEntry>({
-    items: data?.items,
+  const sorting = useSortOrderSave({
+    basePath: `${adminApiBasePath}/${kind}`,
     externalBusy,
-    getKey: (item) => item.slug,
-    itemLabel: (items, movedSlug) => {
-      const item = items.find((candidate) => candidate.slug === movedSlug);
-      return `${copy.noun}“${item?.display_name || movedSlug}”`;
-    },
-    save: (slugs) => api(`${adminApiBasePath}/${kind}/reorder`, {
-      method: "POST",
-      body: JSON.stringify({ slugs })
-    }),
-    refresh,
-    readAuthoritative: () => {
-      const queryState = client.getQueryState(queryKey);
-      const cached = client.getQueryData<AdminEntityListResponseDto<VocabularyEntry>>(queryKey);
-      return cached
-        && queryState?.status === "success"
-        && !queryState.isInvalidated
-        ? cached.items
-        : null;
-    },
+    refresh: () => invalidateDataAfterSortOrderSave(client, queryKey),
+    readValue: (slug) => client.getQueryData<AdminEntityListResponseDto<VocabularyEntry>>(queryKey)
+      ?.items.find((item) => item.slug === slug)?.sort_order,
     reportError: (stage, error) => reportAdminUiError(
-      `vocabulary_admin.${kind}.reorder${stage === "refresh" ? "_refresh" : ""}`,
+      `vocabulary_admin.${kind}.sort_order.${stage}`,
       error
-    ),
-    focus: {
-      itemKeys: (items) => items.map((item) => item.slug),
-      page,
-      pageSize,
-      onPageChange: setPage
-    }
+    )
   });
-  const { order } = reorder;
-  const operationBusy = reorder.busy;
+  const order = data?.items ?? [];
+  const operationBusy = sorting.busy;
   const totalPages = Math.max(1, Math.ceil(order.length / pageSize));
   const pageItems = order.slice((page - 1) * pageSize, page * pageSize);
   useEffect(() => { setPage((current) => Math.min(current, totalPages)); }, [totalPages]);
@@ -186,7 +173,6 @@ function VocabularyAdminContent({ kind, settings }: {
     }
 
     setCreateError("");
-    reorder.clearFeedback();
     await createAction.run(async () => {
       try {
         const body = isAuthor
@@ -243,14 +229,6 @@ function VocabularyAdminContent({ kind, settings }: {
         description={`第 ${page} / ${totalPages} 页 · 共 ${order.length} 个${copy.noun}${isFetching ? " · 加载中" : ""}`}
         feedbackTarget={feedbackTarget}
       />
-      <p
-        className="reorder-live-region"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {reorder.announcement}
-      </p>
       <form className="admin-create-form" onSubmit={create}>
         <div className="admin-create-field entity-slug-field">
           <input
@@ -261,7 +239,7 @@ function VocabularyAdminContent({ kind, settings }: {
               setCreateError("");
             }}
             placeholder={copy.slugPlaceholder}
-            disabled={operationBusy}
+            disabled={externalBusy}
             maxLength={32}
             aria-invalid={Boolean(slugError)}
           />
@@ -271,7 +249,7 @@ function VocabularyAdminContent({ kind, settings }: {
           value={display}
           onChange={(event) => setDisplay(event.target.value)}
           placeholder={copy.displayPlaceholder}
-          disabled={operationBusy}
+          disabled={externalBusy}
           maxLength={64}
         />
         {isAuthor && (
@@ -279,7 +257,7 @@ function VocabularyAdminContent({ kind, settings }: {
             value={link}
             onChange={(event) => setLink(event.target.value)}
             placeholder="作者主页链接（HTTPS，可选）"
-            disabled={operationBusy}
+            disabled={externalBusy}
             maxLength={2048}
           />
         )}
@@ -296,43 +274,23 @@ function VocabularyAdminContent({ kind, settings }: {
           />
         </button>
       </form>
-      {reorder.feedback && (
-        <ActionFeedbackOutlet
-          feedback={reorder.feedback}
-          target={feedbackTarget}
-          announce={false}
-          onClose={reorder.clearFeedback}
-        />
-      )}
       <div className="admin-scroll-region" ref={listRef}>
         <div className="entity-admin-grid entity-vocabulary-grid">
           {pageItems.map((item) => {
-            const position = reorder.positionFor(item.slug);
             return (
               <VocabularyAdminCard
-                key={item.slug}
+                key={`${kind}:${item.slug}`}
                 kind={kind}
                 item={item}
                 canDelete={canDelete}
-                reorderBusy={operationBusy}
-                dragging={reorder.draggingKey === item.slug}
-                canMovePrevious={Boolean(position && position.position > 1)}
-                canMoveNext={Boolean(
-                  position && position.position < position.total
-                )}
-                onMove={(direction) => reorder.moveByKeyboard(item.slug, direction)}
-                onReorderControlRef={(direction, node) => {
-                  reorder.registerReorderControl(item.slug, direction, node);
-                }}
+                sortBusy={externalBusy || sorting.isSaving(item.slug)}
+                onSortSave={(value) => sorting.save(item.slug, value)}
                 onChanged={async (item) => {
                   if (item) await acceptAuthorItem(item);
                   else await refresh();
                 }}
                 onDelete={() => setConfirmDelete(item)}
                 onError={(error) => reportAdminUiError(`vocabulary_admin.${kind}.update`, error)}
-                onDragStart={reorder.beginDrag}
-                onDrop={reorder.finishDrag}
-                onDragEnd={() => reorder.finishDrag()}
               />
             );
           })}

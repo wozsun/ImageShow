@@ -86,6 +86,7 @@ export type StorageBackendS3Dto = {
 };
 
 type StorageBackendAdminBaseDto = StorageBackendOptionDto & {
+  sort_order: number;
   image_count: number;
   ingestion_session_count: number;
   cleanup_job_count: number;

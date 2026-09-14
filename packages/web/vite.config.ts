@@ -96,7 +96,7 @@ const chunkResponsibilityAliases: Readonly<Record<string, string>> = {
   "capability-check-maintenance-storage": "storage-migration-api",
   "capability-image-editor-ingestion": "image-fields",
   "capability-settings-storage": "number-input",
-  "capability-storage-vocabulary": "reorder",
+  "capability-storage-vocabulary": "sort-order",
   "capability-user-vocabulary": "slug-chip"
 };
 

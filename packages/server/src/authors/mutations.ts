@@ -1,6 +1,5 @@
 import type { Pool, PoolClient } from "pg";
 import type { AuthorDto } from "@imageshow/shared/browser";
-import { pool } from "../core/database/pools.ts";
 import { withTransaction } from "../core/database/transactions.ts";
 import { ApiError } from "../core/api-error.ts";
 import {
@@ -26,6 +25,7 @@ import {
 } from "./identity.ts";
 
 type AuthorMutationRow = AuthorIdentityColumns & {
+  sort_order: number;
   slug: string;
   display_name: string;
   link: string;
@@ -37,6 +37,7 @@ function authorMutationDto(
 ): AuthorDto {
   return {
     slug: row.slug,
+    sort_order: row.sort_order,
     display_name: row.display_name,
     link: row.link,
     image_count: imageCount,
@@ -63,7 +64,7 @@ export async function ensureAuthorWithMutationLockHeld(
   if (!slug) return false;
   const result = await client.query(
     `INSERT INTO author(slug, sort_order)
-     VALUES($1, (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM author))
+     VALUES($1, (SELECT LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, 2147483647) FROM author))
      ON CONFLICT (slug) DO NOTHING
      RETURNING slug`,
     [slug]
@@ -101,10 +102,11 @@ export async function createAuthor(
              $3,
              $4,
              $5,
-             (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM author)
+             (SELECT LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, 2147483647) FROM author)
            )
            ON CONFLICT (slug) DO NOTHING
            RETURNING slug,
+                     sort_order,
                      display_name,
                      link,
                      identity_provider,
@@ -145,6 +147,7 @@ export async function updateAuthorProfile(
                   updated_at=now()
             WHERE slug=$1
             RETURNING slug,
+                      sort_order,
                       display_name,
                       link,
                       identity_provider,
@@ -171,17 +174,6 @@ export async function updateAuthorProfile(
   assertVocabularyFound("author", updated ? 1 : 0);
   await synchronizeVocabularyMutation({ entity: "author" });
   return updated!;
-}
-
-export async function reorderAuthors(slugs: string[]) {
-  if (!slugs.length) return;
-  await pool.query(
-    `UPDATE author a SET sort_order = v.ord, updated_at = now()
-     FROM unnest($1::text[]) WITH ORDINALITY AS v(slug, ord)
-     WHERE a.slug = v.slug`,
-    [slugs]
-  );
-  await synchronizeVocabularyMutation({ entity: "author" });
 }
 
 type ClearedAuthorImage = { id: string };

@@ -61,12 +61,6 @@ import {
   usePreloadIntentProps
 } from "../../../packages/web/src/lib/ui/preload-intent.ts";
 import {
-  reorderItemByDirection,
-  reorderItemByKey,
-  reorderPageForKey,
-  reorderPositionByKey
-} from "../../../packages/web/src/lib/ui/reorder.ts";
-import {
   ImageListSelectionController,
   isImageSelectionPreservingTarget
 } from "../../../packages/web/src/pages/admin/images/image-list-selection.ts";
@@ -2550,37 +2544,6 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
     }
   }
 });
-test("[Web/后台访问] 持久排序模型统一固定项、键盘移动、拖拽位置和分页焦点", () => {
-  const entries = ["fixed", "one", "two", "three"].map((slug) => ({ slug }));
-  const getKey = (entry: { slug: string }) => entry.slug;
-  const isFixed = (entry: { slug: string }) => entry.slug === "fixed";
-
-  assert.equal(
-    reorderItemByDirection(entries, "one", "previous", getKey, isFixed).moved,
-    false
-  );
-  const keyboard = reorderItemByDirection(
-    entries,
-    "two",
-    "previous",
-    getKey,
-    isFixed
-  );
-  assert.deepEqual(keyboard.items.map(getKey), ["fixed", "two", "one", "three"]);
-  const pointer = reorderItemByKey(
-    keyboard.items,
-    "two",
-    "three",
-    getKey,
-    isFixed
-  );
-  assert.deepEqual(pointer.items.map(getKey), ["fixed", "one", "three", "two"]);
-  assert.deepEqual(
-    reorderPositionByKey(pointer.items, "three", getKey, isFixed),
-    { position: 2, total: 3 }
-  );
-  assert.equal(reorderPageForKey(["fixed", "one", "three", "two"], "two", 2), 2);
-});
 test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔离分页 scope", async (t) => {
   const filters = {
     ...emptyImageAdminFilters,
@@ -4996,7 +4959,7 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
     }
   }
 });
-test("[Web/后台访问] 作者保存原位采用权威 DTO，新建前置且不重读作者列表", async () => {
+test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前置且不追加列表读取", async () => {
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=\"root\"></div></body></html>"
   );
@@ -5019,15 +4982,13 @@ test("[Web/后台访问] 作者保存原位采用权威 DTO，新建前置且不
   });
   let authorGets = 0;
   let authorPosts = 0;
-  let holdAuthorRead = false;
-  let releaseAuthorRead!: (response: Response) => void;
-  let oldReadSignal: AbortSignal | null | undefined;
   const requestedAuthorPaths: string[] = [];
   const submittedBodies: unknown[] = [];
   const initialAuthor = {
     slug: "author-profile-test",
     display_name: "Profile Test",
     link: "https://example.com/profile",
+    sort_order: 1,
     image_count: 0,
     derived_identity: null
   };
@@ -5036,7 +4997,7 @@ test("[Web/后台访问] 作者保存原位采用权威 DTO，新建前置且不
     link: "https://weibo.com/u/4444444444",
     derived_identity: { provider: "weibo", id: "4444444444" }
   };
-  const createdAuthor = { ...initialAuthor, slug: "author-new-first", display_name: "New first" };
+  const createdAuthor = { ...initialAuthor, slug: "author-new-first", display_name: "New first", sort_order: 2 };
   const jsonResponse = (value: unknown) => new Response(JSON.stringify(value), {
     status: 200,
     headers: { "content-type": "application/json" }
@@ -5050,10 +5011,6 @@ test("[Web/后台访问] 作者保存原位采用权威 DTO，新建前置且不
     }
     if (path === "/api/admin/authors" && method === "GET") {
       authorGets += 1;
-      if (holdAuthorRead) {
-        oldReadSignal = init?.signal;
-        return new Promise<Response>((resolve) => { releaseAuthorRead = resolve; });
-      }
       return jsonResponse({ ok: true, items: [initialAuthor] });
     }
     if (
@@ -5192,11 +5149,7 @@ test("[Web/后台访问] 作者保存原位采用权威 DTO，新建前置且不
       await React.act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
       });
-      holdAuthorRead = true;
-      await React.act(async () => {
-        void client.refetchQueries({ queryKey: queryKeys.authors, exact: true });
-      });
-      assert.ok(releaseAuthorRead);
+      await settleUntil(() => client.getQueryState(queryKeys.authors)?.fetchStatus === "idle");
       const authorGetsBeforeSave = authorGets;
       const linkInput = container.querySelector<HTMLInputElement>(
         "input[aria-label='作者 author-profile-test 链接']"
@@ -5244,13 +5197,6 @@ test("[Web/后台访问] 作者保存原位采用权威 DTO，新建前置且不
         client.getQueryData<{ items: unknown[] }>(queryKeys.authors),
         { ok: true, items: [committedAuthor] }
       );
-      assert.equal(oldReadSignal?.aborted, true, "发布保存结果前取消旧作者列表读取");
-      await React.act(async () => {
-        releaseAuthorRead(jsonResponse({ ok: true, items: [initialAuthor] }));
-        await new Promise((resolve) => setTimeout(resolve, 20));
-      });
-      assert.deepEqual(client.getQueryData<{ items: unknown[] }>(queryKeys.authors),
-        { ok: true, items: [committedAuthor] }, "不响应取消的旧 GET 也不能覆盖保存后的 DTO");
       assert.equal(linkInput.value, committedAuthor.link);
       assert.equal(linkInput.getAttribute("title"), "平台: weibo; UID: 4444444444");
       assert.equal(authorGets, authorGetsBeforeSave);

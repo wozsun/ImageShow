@@ -8,4 +8,5 @@ import "./web/admin-read-retry.test.ts";
 import "./web/ingestion.test.ts";
 import "./web/workflow-attributes.test.ts";
 import "./web/admin-forms.test.ts";
+import "./web/sort-order.test.ts";
 import "./web/show.test.ts";

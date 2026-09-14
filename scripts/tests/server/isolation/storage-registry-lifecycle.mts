@@ -251,7 +251,7 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
     const first = await registry.resolveStorageAccess("capability");
     const { secret_access_key: _secret, ...publicSettings } = s3.settings;
     assert.deepEqual(await capDto(), {
-      slug: "capability", display_name: "Capability", type: "s3", enabled: true, is_default: false,
+      slug: "capability", sort_order: -1, display_name: "Capability", type: "s3", enabled: true, is_default: false,
       image_count: 0, ingestion_session_count: 0, cleanup_job_count: 0,
       failed_cleanup_job_count: 0, exhausted_cleanup_job_count: 0,
       deletion: { action: "delete", blockers: [] }, content_md5: true,
@@ -334,6 +334,32 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
       method: "POST", headers: { "content-type": "application/json", "x-role": role }, body: JSON.stringify(body)
     });
     assert.equal((await post("test", { slug: "capability" }, "image")).status, 403);
+    await mutations.createStorageBackend({ slug: "capability-peer", display_name: "Peer", s3: s3.settings });
+    try {
+    const { getStorageBackendsForAdmin, listStorageBackendOptions } = await import("../../../../packages/server/src/storage/backends/read-model.ts");
+    const beforeSorting = (await database.pool.query("SELECT * FROM storage_backend WHERE slug <> 'capability' ORDER BY slug")).rows;
+    const sortPath = "backends/capability/sort-order";
+    assert.equal((await post(sortPath, { sort_order: 5 }, "image")).status, 403);
+    assert.equal((await post("backends/local/sort-order", { sort_order: 5 }, "super")).status, 400);
+    assert.equal((await post("backends/missing-sort/sort-order", { sort_order: 5 }, "super")).status, 404);
+    for (const sort_order of [null, "4", 1.5, 2147483648, -2147483649]) {
+      assert.equal((await post(sortPath, { sort_order }, "super")).status, 400);
+    }
+    for (const [sort_order, expected] of [
+      [-2147483648, ["local", "capability-peer", "capability"]],
+      [2147483647, ["local", "capability", "capability-peer"]],
+      [-2, ["local", "capability", "capability-peer"]]
+    ] as const) {
+      assert.equal((await post(sortPath, { sort_order }, "super")).status, 200);
+      const items = await getStorageBackendsForAdmin();
+      assert.deepEqual(items.map((item) => item.slug), expected);
+      assert.equal(items.find((item) => item.slug === "capability")!.sort_order, sort_order);
+      assert.deepEqual((await listStorageBackendOptions()).map((item) => item.slug), items.map((item) => item.slug));
+    }
+    assert.deepEqual((await database.pool.query("SELECT * FROM storage_backend WHERE slug <> 'capability' ORDER BY slug")).rows, beforeSorting);
+    } finally {
+      await mutations.deleteStorageBackend("capability-peer");
+    }
     assert.equal((await post("backends/capability", { s3: { capabilities: { content_md5: true } } }, "super")).status, 400);
     assert.equal((await post("test", { slug: "capability" }, "super")).status, 200);
     assert.deepEqual((await readConfig()).capabilities, { content_md5: false });

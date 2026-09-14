@@ -163,7 +163,7 @@ async function readPublicGalleryStats(
                       UNION ALL
                        SELECT '${unsetThemeFilter}', '未设置', count(*)::int, 0, true
                          FROM metadata m WHERE m.theme IS NULL AND ${where}
-                      ) facets ORDER BY is_unset DESC, sort_order ASC, slug ASC
+                      ) facets ORDER BY is_unset DESC, sort_order DESC, slug ASC
                       LIMIT ${rowLimit}`
       );
       const tagRows = await filteredRows<FacetCountRow>(
@@ -179,7 +179,7 @@ async function readPublicGalleryStats(
                          ON m.id=facet_it.image_id
                         AND ${where}
                       GROUP BY t.slug, t.display_name, t.sort_order
-                      ORDER BY t.sort_order ASC, t.slug ASC
+                      ORDER BY t.sort_order DESC, t.slug ASC
                       LIMIT ${rowLimit}`
       );
       const authorRows = await filteredRows<AuthorCountRow>(
@@ -195,7 +195,7 @@ async function readPublicGalleryStats(
                          ON m.author=a.slug
                         AND ${where}
                       GROUP BY a.slug, a.display_name, a.link, a.sort_order
-                      ORDER BY a.sort_order ASC, a.slug ASC
+                      ORDER BY a.sort_order DESC, a.slug ASC
                       LIMIT ${rowLimit}`
       );
 

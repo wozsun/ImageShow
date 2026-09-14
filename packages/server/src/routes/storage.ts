@@ -20,14 +20,14 @@ import {
   storageBackendCreateInput,
   storageBackendUpdateInput,
   storageBackendTestInput,
-  storageSlugInput,
-  storageSlugListInput
+  storageSlugInput
 } from "./validation/storage.ts";
 import { parse } from "./validation/parse.ts";
+import { sortOrderUpdateInput } from "./validation/sort-order.ts";
 import {
   createStorageBackend,
   deleteStorageBackend,
-  reorderStorageBackends,
+  setStorageBackendSortOrder,
   setDefaultStorageBackend
 } from "../storage/backends/mutations.ts";
 import {
@@ -80,9 +80,10 @@ export function registerStorageRoutes(app: Hono) {
     return c.json(apiSuccess());
   });
 
-  app.post(`${adminApiBasePath}/storage/backends/reorder`, requireSuperAdmin, async (c) => {
-    const input = parse(storageSlugListInput, await readJsonBody(c));
-    await reorderStorageBackends(input.slugs);
+  app.post(`${adminApiBasePath}/storage/backends/:slug/sort-order`, requireSuperAdmin, async (c) => {
+    const slug = parse(storageSlugInput, c.req.param("slug"));
+    const input = parse(sortOrderUpdateInput, await readJsonBody(c));
+    await setStorageBackendSortOrder(slug, input.sort_order);
     return c.json(apiSuccess());
   });
 

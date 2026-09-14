@@ -19,7 +19,7 @@ async function insertTheme(client: PoolClient, slug: string) {
   assertVocabularySlug("theme", slug);
   const result = await client.query(
     `INSERT INTO theme(slug, sort_order)
-     VALUES($1, (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM theme))
+     VALUES($1, (SELECT LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, 2147483647) FROM theme))
      ON CONFLICT (slug) DO NOTHING
      RETURNING slug`,
     [slug]
@@ -46,7 +46,7 @@ export async function createTheme(slug: string, displayName: string) {
     signal.throwIfAborted();
     const result = await pool.query(
       `INSERT INTO theme(slug, display_name, sort_order)
-       VALUES($1, $2, (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM theme))
+       VALUES($1, $2, (SELECT LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, 2147483647) FROM theme))
        ON CONFLICT (slug) DO NOTHING
        RETURNING slug`,
       [slug, displayName]
@@ -60,17 +60,6 @@ export async function createTheme(slug: string, displayName: string) {
 export async function updateThemeDisplayName(slug: string, displayName: string) {
   const result = await pool.query("UPDATE theme SET display_name = $2, updated_at = now() WHERE slug = $1", [slug, displayName]);
   assertVocabularyFound("theme", result.rowCount);
-  await synchronizeVocabularyMutation({ entity: "theme" });
-}
-
-export async function reorderThemes(slugs: string[]) {
-  if (!slugs.length) return;
-  await pool.query(
-    `UPDATE theme t SET sort_order = v.ord, updated_at = now()
-     FROM unnest($1::text[]) WITH ORDINALITY AS v(slug, ord)
-     WHERE t.slug = v.slug`,
-    [slugs]
-  );
   await synchronizeVocabularyMutation({ entity: "theme" });
 }
 
