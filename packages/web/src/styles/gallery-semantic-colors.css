@@ -40,3 +40,12 @@
   --public-color-show-hint-text: color-mix(in srgb, var(--public-color-text-secondary) 70%, #fff);
   --public-color-show-hint-outline: rgba(24, 28, 35, .7);
 }
+
+/* Browse pages and their portaled controls share a softer text hierarchy. */
+.gallery-page,
+.public-gallery-menu,
+.show-density-dialog {
+  --color-public-text-primary: #e5ecf4;
+  --color-public-text-strong: #edf2f8;
+  --color-public-navigation-text: #e8edf3;
+}

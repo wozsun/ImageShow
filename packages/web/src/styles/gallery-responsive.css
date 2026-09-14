@@ -106,7 +106,7 @@
     border: 0;
     border-radius: 7px 0 0 7px;
     background: var(--public-color-gallery-control-surface);
-    color: var(--public-color-text-primary);
+    color: var(--color-public-text-primary);
     font-weight: 600;
   }
   .gallery-filter-action-divider {
@@ -133,7 +133,7 @@
     padding: 0 6px;
     border-radius: 999px;
     background: var(--public-color-action-strong);
-    color: var(--public-color-text-strong);
+    color: var(--color-public-text-strong);
     font-size: 12px;
   }
   .gallery-filter-chevron { margin-left: auto; display: inline-flex; transition: transform 120ms ease-out; }

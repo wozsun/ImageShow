@@ -483,7 +483,7 @@ button.active, .button {
 .mobile-navigation { display: none; position: relative; }
 .mobile-nav-toggle {
   min-height: 38px;
-  color: var(--public-color-navigation-text);
+  color: var(--color-public-navigation-text);
   background: var(--public-color-navigation-mobile-control-surface);
   border-color: var(--public-color-navigation-control-border);
 }
@@ -496,7 +496,7 @@ button.active, .button {
   padding: 8px;
   display: grid;
   gap: 4px;
-  color: var(--public-color-navigation-text);
+  color: var(--color-public-navigation-text);
   background: var(--public-color-navigation-surface-solid);
   border: 1px solid var(--public-color-border-default);
   border-radius: 8px;
@@ -518,7 +518,7 @@ button.active, .button {
   border-radius: 6px;
 }
 .mobile-nav-dropdown a.active {
-  color: var(--public-color-text-strong);
+  color: var(--color-public-text-strong);
   background: var(--public-color-action-soft);
 }
 .mobile-nav-dropdown.is-closing {

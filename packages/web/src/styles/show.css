@@ -100,7 +100,7 @@
   width: max-content;
   max-width: 100%;
   padding: 24px clamp(12px, 4vw, 24px);
-  color: var(--public-color-text-primary);
+  color: var(--color-public-text-primary);
   background: var(--public-color-gallery-menu-surface);
   border: 1px solid var(--public-color-border-default);
   border-radius: 14px;

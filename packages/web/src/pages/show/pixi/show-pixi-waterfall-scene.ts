@@ -70,6 +70,9 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
   #lastUsageRevision = -1;
   #imageIds = new Set<string>();
   #lastReconcileAt = 0;
+  #lastReconcileX = Number.NaN;
+  #lastReconcileY = Number.NaN;
+  #lastReconcileScale = Number.NaN;
   #lastVisibleSignature: string | null = null;
   #recycledSprites = 0;
   #rejectedSprites = 0;
@@ -246,10 +249,19 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
   }
 
   #reconcile(force: boolean) {
+    const scale = this.#camera.scale;
+    const x = this.#camera.left;
+    const y = this.#camera.top;
+    // Image and viewport updates force reconciliation; texture handoffs and
+    // card animations continue in update() without rebuilding stable slots.
+    if (!force && x === this.#lastReconcileX && y === this.#lastReconcileY
+      && scale === this.#lastReconcileScale) return;
     const now = performance.now();
     if (!force && now - this.#lastReconcileAt < 72) return;
     this.#lastReconcileAt = now;
-    const scale = this.#camera.scale;
+    this.#lastReconcileX = x;
+    this.#lastReconcileY = y;
+    this.#lastReconcileScale = scale;
     const perspectiveEnabled = this.#allowsPerspective(
       this.#width / (scale * showLayoutColumnWidth)
     );

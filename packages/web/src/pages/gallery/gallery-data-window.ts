@@ -71,18 +71,13 @@ export type GalleryViewportAnchor = {
 export type GalleryDataWindowSnapshot = {
   revision: number;
   fetchedPages: number;
-  retainedPages: number;
   compactItems: number;
-  fullItems: number;
   pendingQueryPages: number;
   pendingAppendPages: number;
   failedQueryPages: number;
   totalHeight: number;
   columnWidth: number;
   hasNextPage: boolean;
-  compactLayoutBytes: number;
-  estimatedCompactBytes: number;
-  estimatedFullDtoBytes: number;
   error: Error | null;
   errorRequest: (GalleryPageIntent & {
     top: number | null;
@@ -91,6 +86,11 @@ export type GalleryDataWindowSnapshot = {
 };
 
 export type GalleryDataWindowDebugSnapshot = GalleryDataWindowSnapshot & {
+  retainedPages: number;
+  fullItems: number;
+  compactLayoutBytes: number;
+  estimatedCompactBytes: number;
+  estimatedFullDtoBytes: number;
   materializedPositions: number;
 };
 
@@ -261,10 +261,31 @@ export class GalleryDataWindow {
     return { cursor: "", kind: "initial" as const };
   }
 
-  debugSnapshot = (): GalleryDataWindowDebugSnapshot => ({
-    ...this.#snapshot,
-    materializedPositions: this.#materializedPositions
-  });
+  debugSnapshot = (): GalleryDataWindowDebugSnapshot => {
+    const retainedPages = this.#pages.filter((page) => page.items).length;
+    const fullItems = this.#pages.reduce(
+      (total, page) => total + (page.items?.length ?? 0),
+      0
+    );
+    const cursorCharacters = this.#pages.reduce(
+      (total, page) => total + requestCursorCharacters(page),
+      0
+    );
+    const compactLayoutBytes = this.#layout.itemByteLength;
+    return {
+      ...this.#snapshot,
+      retainedPages,
+      fullItems,
+      compactLayoutBytes,
+      estimatedCompactBytes: compactLayoutBytes
+        + this.#idCharacters * 2
+        + this.#itemCount * 8
+        + cursorCharacters * 2
+        + this.#pages.length * 96,
+      estimatedFullDtoBytes: this.#fullBytes,
+      materializedPositions: this.#materializedPositions
+    };
+  };
 
   compactGeometry() {
     return this.#layout.geometry;
@@ -684,6 +705,7 @@ export class GalleryDataWindow {
       this.#fullBytes -= page.fullBytes;
     }
     page.items = orderedItems;
+    this.#activePageIndexes.add(pageIndex);
     page.needsRefresh = false;
     page.fullBytes = pageFullBytes(orderedItems);
     this.#fullBytes += page.fullBytes;
@@ -730,6 +752,7 @@ export class GalleryDataWindow {
     page.top = bounds.top;
     page.bottom = bounds.bottom;
     this.#pages.push(page);
+    this.#activePageIndexes.add(this.#pages.length - 1);
     this.#fullBytes += page.fullBytes;
   }
 
@@ -816,13 +839,14 @@ export class GalleryDataWindow {
     }
     const centerPage = [...desired].reduce((total, index) => total + index, 0)
       / desired.size;
-    const candidates = this.#pages
-      .map((_, index) => index)
-      .filter((index) => !desired.has(index))
-      .sort((left, right) => (
-        Math.abs(left - centerPage) - Math.abs(right - centerPage)
-    ));
-    for (const index of candidates) {
+    let left = Math.floor(centerPage);
+    let right = left + 1;
+    // Walk outward in distance order; the lower index wins equal distances.
+    while ((left >= 0 || right < this.#pages.length) && desiredItems < this.#fullItemBudget) {
+      const index = left >= 0 && (
+        right >= this.#pages.length || centerPage - left <= right - centerPage
+      ) ? left-- : right++;
+      if (desired.has(index)) continue;
       const count = this.#pages[index]!.ids.length;
       if (count === 0) continue;
       if (desiredItems + count > this.#fullItemBudget) continue;
@@ -848,7 +872,9 @@ export class GalleryDataWindow {
       this.#failedCursors.delete(cursor);
       changed = true;
     }
-    for (const [index, page] of this.#pages.entries()) {
+    // Newly appended or hydrated pages join this set before retention runs.
+    for (const index of this.#activePageIndexes) {
+      const page = this.#pages[index]!;
       if (desired.has(index) || !page.items) continue;
       this.#fullBytes -= page.fullBytes;
       page.items = null;
@@ -894,21 +920,6 @@ export class GalleryDataWindow {
   }
 
   #createSnapshot(): GalleryDataWindowSnapshot {
-    const retainedPages = this.#pages.filter((page) => page.items).length;
-    const fullItems = this.#pages.reduce(
-      (total, page) => total + (page.items?.length ?? 0),
-      0
-    );
-    const cursorCharacters = this.#pages.reduce(
-      (total, page) => total + requestCursorCharacters(page),
-      0
-    );
-    const compactLayoutBytes = this.#layout.itemByteLength;
-    const estimatedCompactBytes = compactLayoutBytes
-      + this.#idCharacters * 2
-      + this.#itemCount * 8
-      + cursorCharacters * 2
-      + this.#pages.length * 96;
     const failures = [...this.#failedCursors.entries()];
     const firstError = (
       failures.find(([, failure]) => failure.kind === "hydrate")
@@ -929,9 +940,7 @@ export class GalleryDataWindow {
     return {
       revision: this.#revision,
       fetchedPages: this.#pages.length,
-      retainedPages,
       compactItems: this.#itemCount,
-      fullItems,
       pendingQueryPages: this.#pendingCursors.size,
       pendingAppendPages: [...this.#pendingCursors.values()].filter(
         ({ kind }) => kind === "append"
@@ -940,9 +949,6 @@ export class GalleryDataWindow {
       totalHeight: this.#layout.totalHeight,
       columnWidth,
       hasNextPage: Boolean(this.#pages.at(-1)?.nextCursor),
-      compactLayoutBytes,
-      estimatedCompactBytes,
-      estimatedFullDtoBytes: this.#fullBytes,
       error: firstError?.[1].error ?? null,
       errorRequest: firstError
         ? {

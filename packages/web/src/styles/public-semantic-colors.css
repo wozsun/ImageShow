@@ -1,6 +1,6 @@
 :root {
   /* Public primary navigation shared by Home and Gallery. */
-  --public-color-navigation-text: #f4f7fb;
+  --color-public-navigation-text: #f4f7fb;
   --public-color-navigation-link: rgba(239, 242, 248, .76);
   --public-color-navigation-mobile-link: rgba(239, 242, 248, .82);
   --public-color-navigation-surface: rgba(7, 11, 21, .95);

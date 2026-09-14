@@ -178,7 +178,7 @@
   padding: 7px 8px;
   display: grid;
   place-items: center;
-  color: var(--public-color-text-primary);
+  color: var(--color-public-text-primary);
   background: var(--public-color-home-option-surface);
   border: 1px solid var(--public-color-border-default);
   border-radius: 14px;
@@ -218,7 +218,7 @@
 
 .home-axis-group button.is-selected,
 .home-tag-mode > button.is-selected {
-  color: var(--public-color-text-strong);
+  color: var(--color-public-text-strong);
 }
 
 .home-axis-group button.is-selected {
@@ -403,7 +403,7 @@
   grid-template-columns: 24px 4px minmax(0, 1fr) auto 24px;
   gap: 10px;
   align-items: center;
-  color: var(--public-color-text-primary);
+  color: var(--color-public-text-primary);
   background: var(--public-color-home-card-option-surface);
   border: 1px solid var(--public-color-home-card-option-border);
   border-radius: 14px;
@@ -470,7 +470,7 @@
   grid-template-columns: 12px minmax(0, 1fr);
   gap: 2px 7px;
   align-content: center;
-  color: var(--public-color-text-primary);
+  color: var(--color-public-text-primary);
   background: var(--public-color-home-option-surface);
   border: 1px solid var(--public-color-border-default);
   border-radius: 13px;
@@ -532,7 +532,7 @@
   grid-template-columns: minmax(0, 1fr) auto 24px;
   gap: 10px;
   align-items: center;
-  color: var(--public-color-text-primary);
+  color: var(--color-public-text-primary);
   background: var(--public-color-home-card-option-surface);
   border: 1px solid var(--public-color-home-card-option-border);
   border-radius: 14px;
@@ -617,7 +617,7 @@
 .home-stats-state > button {
   min-height: 40px;
   padding: 0 18px;
-  color: var(--public-color-text-strong);
+  color: var(--color-public-text-strong);
   background: var(--public-color-action-strong);
   border: 0;
   border-radius: 999px;

@@ -315,7 +315,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                   </dl>
                   <div className="inline-actions image-detail-actions" ref={actionsRef}>
                     <a
-                      className={`button secondary pressable image-detail-source${sourceAvailable ? "" : " is-disabled"}`}
+                      className={`button secondary image-detail-source${sourceAvailable ? " pressable" : " is-disabled"}`}
                       href={item.source || undefined}
                       target="_blank"
                       rel="noreferrer noopener"

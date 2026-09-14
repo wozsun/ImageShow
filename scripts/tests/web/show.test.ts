@@ -1075,6 +1075,43 @@ test("[Web/展映] waterfall 单图循环填屏时焦点只属于当前卡片槽
   scene.focusCard(null);
   assert.equal(focused().length, 0);
 });
+test("[Web/展映] 瀑布稳定暂停后仍响应数据、尺寸、手动移动和恢复播放", (t) => {
+  installPixiPaletteFixture(t);
+  let now = 1000;
+  t.after(installProperties(globalThis, { devicePixelRatio: 1 }));
+  t.after(installProperties(performance, { now: () => now }));
+  const target = createCameraTestElement(1440, 900);
+  let visible: readonly ShowPixiVisibleItem[] = [];
+  const images = showImages(80);
+  const scene = new ShowPixiWaterfallScene({
+    width: 1440, height: 900, columns: 4, images, dataKey: "paused", order: "latest", hasMore: false,
+    running: false, reducedMotion: false, speed: 28, inputElement: target.element,
+    textureCache: { fitResidentLods: unchangedTextureLods, acquire: () => ({ release() {} }) } as unknown as ShowPixiTextureCache,
+    renderer: {} as Renderer, onNeedImages() {}, onOpen() {}, onManualVerticalMovement() {},
+    onVisibleItems: items => { visible = items; }, onColumnsChange: columns => columns
+  });
+  t.after(() => scene.destroy());
+  const advance = () => { for (let i = 0; i < 120; i++) { now += 16; scene.update(16); } };
+  const before = scene.stats();
+  advance();
+  assert.equal(scene.stats().waterfallCameraY, before.waterfallCameraY);
+  assert.equal(scene.stats().layoutRevision, before.layoutRevision);
+  const id = visible[0]!.image.id;
+  scene.setImages(images.map(image => image.id === id ? { ...image, title: "updated while paused" } : image), "paused", "latest", false);
+  assert.equal(visible.find(item => item.image.id === id)?.image.title, "updated while paused");
+  scene.resize(760, 600);
+  assert.ok(visible.length > 0);
+  const top = scene.stats().waterfallCameraY!;
+  target.emit("wheel", { deltaY: 1000 });
+  advance();
+  assert.ok(scene.stats().waterfallCameraY! > top);
+  const moved = scene.stats().waterfallCameraY!;
+  scene.setMotion(true, false);
+  advance();
+  assert.ok(scene.stats().waterfallCameraY! > moved);
+  assert.ok(visible.length > 0);
+});
+
 test("[Web/展映] 展映诊断按需采集，运动回调和销毁不依赖诊断开关", async (t) => {
   for (const enabled of [false, true]) {
     await t.test(enabled ? "开启诊断" : "生产默认关闭", (t) => {
@@ -2223,7 +2260,7 @@ test("[Web/展映] 首批向上选档，驻留容量释放后继续接收新候�
   }
 });
 
-test("[Web/展映] 重复候选补取有界，日界过期后显式重试从首批开始", async (t) => {
+test("[Web/展映] 重复候选扫描有界并按游标续取，真实错误仍等待显式重试", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
   let current!: ReturnType<typeof useShowData>;
@@ -2236,18 +2273,90 @@ test("[Web/展映] 重复候选补取有界，日界过期后显式重试从首�
   assert.deepEqual(new Set(current.images.map(x => x.id)), new Set(images.map(x => x.id)));
   await h.React.act(async () => current.loadMore());
   for (let index = 1; index <= 4; index++) await h.respond(index, { items: images, next_cursor: String(index + 1) });
+  assert.equal(current.error, null, "成功的重复批次不暂停播放");
+  assert.equal(h.pending.length, 5, "一轮最多扫描四批，不自行发起下一轮");
+  await h.React.act(async () => { for (let i = 0; i < 10; i++) current.loadMore(); });
+  assert.equal(h.pending.length, 6, "后续消费信号续扫，同一时刻只保留一个请求");
+  assert.equal(new URL(h.pending[5]!.path, "https://img.example").searchParams.get("cursor"), "5");
+  const fresh = { ...images[0]!, id: "fresh-candidate" };
+  await h.respond(5, { items: [fresh], next_cursor: "6" });
+  assert.equal(current.error, null);
+  assert.ok(current.images.some(item => item.id === fresh.id));
+  await h.React.act(async () => current.loadMore());
+  await h.respond(6, { error: "expired", code: "cursor_expired" }, 409);
   assert.ok(current.error);
   await h.React.act(async () => { for (let i = 0; i < 10; i++) current.loadMore(); });
-  assert.equal(h.pending.length, 5);
-  await h.React.act(async () => current.retry());
-  await h.respond(5, { error: "expired", code: "cursor_expired" }, 409);
+  assert.equal(h.pending.length, 7, "真实错误不会因场景消费信号自动重试");
   const round = current.committedKey;
   await h.React.act(async () => current.retry());
-  assert.equal(new URL(h.pending[6]!.path, "https://img.example").searchParams.get("cursor"), null);
-  await h.respond(6, { items: images, next_cursor: null });
+  assert.equal(new URL(h.pending[7]!.path, "https://img.example").searchParams.get("cursor"), null);
+  await h.respond(7, { items: images, next_cursor: null });
   assert.notEqual(current.committedKey, round);
   await h.React.act(async () => current.loadMore({ dataKey: current.committedKey, activeIds: [], consumedIds: images.map(x => x.id), available: 0, capacity: 800 }));
-  assert.equal(h.pending.length, 7, "有限小池本地复用，无首批网络循环");
+  assert.equal(h.pending.length, 8, "有限小池本地复用，无首批网络循环");
+});
+
+test("[Web/展映] 四批重复后横移清空窗口，末页仅命中近期记录仍继续补图", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  installPixiPaletteFixture(t);
+  t.after(installProperties(globalThis, { devicePixelRatio: 1 }));
+  const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
+  let current!: ReturnType<typeof useShowData>;
+  let connectEmptyScene = false;
+  let scene: ShowPixiWaterfallScene | undefined;
+  const target = createCameraTestElement(1440, 900);
+  function Probe() {
+    current = useShowData(emptyGalleryFilters, "loop", "latest", 500);
+    h.React.useEffect(() => {
+      if (!connectEmptyScene) return;
+      if (scene) scene.setImages(current.images, current.committedKey, "latest", current.hasMore);
+      else scene = new ShowPixiWaterfallScene({
+        width: 1440, height: 900, columns: 20, images: current.images,
+        dataKey: current.committedKey, order: "latest", hasMore: current.hasMore,
+        running: false, reducedMotion: false, speed: 28, inputElement: target.element,
+        textureCache: { fitResidentLods: unchangedTextureLods, acquire: () => ({ release() {} }) } as unknown as ShowPixiTextureCache,
+        renderer: {} as Renderer, onNeedImages: usage => current.loadMore(usage),
+        onOpen() {}, onManualVerticalMovement() {}, onVisibleItems() {}, onColumnsChange: columns => columns
+      });
+    }, [current.images, current.committedKey, current.hasMore]);
+    return null;
+  }
+  t.after(() => scene?.destroy());
+  const images = showImages(600);
+  const consume = (activeIds: string[]) => h.React.act(async () => current.loadMore({
+    dataKey: current.committedKey, activeIds,
+    consumedIds: current.images.map(image => image.id), available: 0, capacity: 800
+  }));
+  const respondPage = async (index: number, from: number, count = 100) => {
+    const params = new URL(h.pending[index]!.path, "https://img.example").searchParams;
+    assert.equal(params.get("cursor"), from ? String(from) : null);
+    await h.respond(index, { items: images.slice(from, from + count), next_cursor: from + count < 600 ? String(from + count) : null });
+  };
+  await h.render(h.React.createElement(Probe));
+  await respondPage(0, 0, 500);
+  await consume(images.slice(100, 500).map(image => image.id));
+  await respondPage(1, 500);
+  await consume(current.images.map(image => image.id));
+  await respondPage(2, 0);
+  assert.equal(current.images.length, 600);
+  await consume(current.images.map(image => image.id));
+  for (let index = 3; index <= 6; index++) await respondPage(index, (index - 2) * 100);
+  assert.equal(h.pending.length, 7, "重复扫描有界让出");
+  assert.equal(current.error, null);
+
+  // A horizontal jump can release every old column. The empty scene's
+  // demand arrives while the final page is still in flight.
+  connectEmptyScene = true;
+  await consume([]);
+  assert.equal(current.images.length, 0);
+  assert.equal(scene!.stats().activeSprites, 0);
+  await respondPage(7, 500);
+  assert.equal(h.pending.length, 9, "成功的末页扫描完成后接续在途期间到达的空窗口需求");
+  await respondPage(8, 0);
+  await respondPage(9, 100);
+  assert.equal(current.error, null);
+  assert.ok(current.images.length > 0);
+  assert.ok(scene!.stats().visibleSprites > 0, "无需移动相机或显式重试即可重新填屏");
 });
 
 test("[Web/展映] 编辑与删除在途替换仍能提交当前排序", async (t) => {

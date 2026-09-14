@@ -26,7 +26,7 @@ export function useShowData(
   const [hasMore, setHasMore] = useState(true);
   const [failure, setFailure] = useState<{ sourceKey: string; value: unknown; replace: boolean } | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
-  const requestRef = useRef<{ controller: AbortController; replace: boolean } | null>(null);
+  const requestRef = useRef<{ controller: AbortController; replace: boolean; resume?: () => void } | null>(null);
   const targetedRequestsRef = useRef(new Map<string, AbortController>());
   const generationRef = useRef(0);
   const roundRef = useRef(0);
@@ -71,8 +71,9 @@ export function useShowData(
         cursor = "";
         recentRef.current = new Set([...recentRef.current].slice(-continuationLimit));
       }
-      // Entirely repeated batches still advance their scan boundary. Limit
-      // consecutive empty admissions so changing small sets cannot busy-loop.
+      // Repeated batches still advance their scan boundary. Yield after four
+      // empty admissions; later candidate usage resumes from the committed
+      // cursor without treating a successful scan as a playback failure.
       for (let attempt = 0; attempt < 4; attempt += 1) {
         const params = imageBrowseApiSearchParams(requestFilters, order, {
           view: "show", limit, cursor, userAgent: window.navigator.userAgent
@@ -119,15 +120,16 @@ export function useShowData(
         if (replace || accepted.length || endedRef.current) return;
         cursor = cursorRef.current;
       }
-      throw new ApiClientError("暂未取得新的图片候选，请重试", 503, "browse_refill_exhausted");
     } catch (error) {
       if (!controller.signal.aborted && generationRef.current === generation) {
         pausedRef.current = true;
         setFailure({ sourceKey, value: error, replace });
       }
     } finally {
-      if (requestRef.current?.controller === controller) requestRef.current = null;
+      const completed = requestRef.current?.controller === controller ? requestRef.current : null;
+      if (completed) requestRef.current = null;
       if (generationRef.current === generation) setInitialLoading(false);
+      if (completed && generationRef.current === generation && !pausedRef.current) completed.resume?.();
     }
   }, [enabled, order, publish, requestFilters, sourceKey]);
 
@@ -181,7 +183,10 @@ export function useShowData(
       const unconsumed = imagesRef.current.filter((image) => !consumed.has(image.id)).length;
       if (unconsumed >= continuationLimit) return;
     }
-    void request(false);
+    // Coalesce demand that arrives during a scan. An empty window may have
+    // no further consumption revision after that scan reaches EOF.
+    if (requestRef.current) requestRef.current.resume = () => loadMore(usage);
+    else void request(false);
   }, [enabled, publish, request, sourceKey]);
 
   const removeImage = useCallback((imageId: string, replenish = false) => {

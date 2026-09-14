@@ -106,18 +106,15 @@ const semanticChunkNameAssignments = new Map<
 >();
 
 function rootSetChunkName(prefix: string, roots: string[]) {
-  const normalizedRoots = [...new Set(
-    roots.map((root) => root.replaceAll("\\", "/"))
-  )].sort();
   const exactLabels = [...new Set(
-    normalizedRoots.map(semanticOwnerLabel)
+    roots.map(semanticOwnerLabel)
   )].sort();
   const ownerLabels = exactLabels.length <= 3
     ? exactLabels
-    : [...new Set(normalizedRoots.map(semanticOwnerCategory))].sort();
+    : [...new Set(roots.map(semanticOwnerCategory))].sort();
   const generatedName = `${prefix}-${ownerLabels.join("-") || "shared"}`;
   const baseName = chunkResponsibilityAliases[generatedName] ?? generatedName;
-  const rootKey = normalizedRoots.join("\n");
+  const rootKey = roots.join("\n");
   let assignments = semanticChunkNameAssignments.get(baseName);
   if (!assignments) {
     assignments = new Map();
@@ -125,9 +122,8 @@ function rootSetChunkName(prefix: string, roots: string[]) {
   }
   const existing = assignments.get(rootKey);
   if (existing) return existing;
-  const assignedNames = new Set(assignments.values());
   let name = baseName;
-  if (assignedNames.has(name)) {
+  if (assignments.size > 0) {
     name = `${baseName}-${hash("sha256", rootKey, "hex").slice(0, 6)}`;
   }
   assignments.set(rootKey, name);
@@ -217,6 +213,17 @@ function webBuildReport(): Plugin {
   return {
     name: "imageshow-web-build-report",
     generateBundle(_options, bundle) {
+      // Reuse module information only within this complete, synchronous graph.
+      const moduleInfo = new Map<string, ReturnType<ChunkingContext["getModuleInfo"]>>();
+      const reportContext: ChunkingContext = {
+        getModuleInfo: (id) => {
+          const cached = moduleInfo.get(id);
+          if (cached !== undefined) return cached;
+          const info = this.getModuleInfo(id);
+          moduleInfo.set(id, info);
+          return info;
+        }
+      };
       const collectedChunks = Object.values(bundle).flatMap((output) => {
         if (output.type !== "chunk") return [];
         const metadata = output as typeof output & {
@@ -229,7 +236,7 @@ function webBuildReport(): Plugin {
         const moduleRoots = Object.fromEntries(moduleIds.flatMap((id) => {
           const path = webSourcePath(id);
           if (!path) return [];
-          const roots = entryRootIds(id, this)
+          const roots = entryRootIds(id, reportContext)
             .map(webSourcePath)
             .filter((root): root is string => root !== null);
           return [[path, roots]];

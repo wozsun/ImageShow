@@ -275,7 +275,7 @@ test("[Web/画廊] 画廊数据窗口在 1 千、1 万和 5 万张长会话中�
       }, null);
     }
 
-    const snapshot = dataWindow.snapshot();
+    const snapshot = dataWindow.debugSnapshot();
     assert.equal(snapshot.compactItems, total);
     assert.ok(snapshot.fullItems <= 480, `${total}: full DTO budget`);
     assert.ok(snapshot.retainedPages <= 8, `${total}: retained page budget`);
@@ -306,7 +306,7 @@ test("[Web/画廊] 画廊数据窗口在 1 千、1 万和 5 万张长会话中�
       gap: 12,
       columnCount: 2
     }), true);
-    const mobileSnapshot = dataWindow.snapshot();
+    const mobileSnapshot = dataWindow.debugSnapshot();
     assert.equal(mobileSnapshot.compactItems, total);
     assert.ok(mobileSnapshot.fullItems <= 480);
     assert.ok(
@@ -347,7 +347,7 @@ test("[Web/画廊] 画廊数据窗口在 1 千、1 万和 5 万张长会话中�
       start: 0,
       total
     }));
-    assert.ok(dataWindow.snapshot().fullItems <= 480 + pageSize);
+    assert.ok(dataWindow.debugSnapshot().fullItems <= 480 + pageSize);
 
     dataWindow.updateViewport({
       start: Math.max(0, snapshot.totalHeight - 4_000),
@@ -904,9 +904,9 @@ test("[Web/画廊] Strict Mode 浏览轮次隔离迟到请求，缺确认时按�
   assert.equal(h.pending[first]!.signal?.aborted, true);
   const page = syntheticGalleryPage({ count: 60, start: 0, total: 60 });
   await h.respond(first, page);
-  assert.equal(current.snapshot.fullItems, 0);
+  assert.equal(current.snapshot.compactItems, 0);
   await h.respond(replacement, page);
-  assert.equal(current.snapshot.fullItems, 60);
+  assert.equal(current.snapshot.compactItems, 60);
   const count = h.pending.length;
   await h.flush();
   assert.equal(h.pending.length, count, "候选足够时停止补充");
@@ -1077,6 +1077,44 @@ test("[Web/画廊] 画廊调试快照覆盖查询、DTO、紧凑布局、揭示�
   assert.equal(debug.snapshot().revealHighWater, -1);
   assert.equal(debug.snapshot().compactItems, 0);
   debug.dispose();
+});
+
+test("[Web/画廊] 驻留选页保持同距顺序，跳过装不下的页并额外保留详情页", () => {
+  for (const scenario of [
+    { counts: [2, 2, 1, 2, 2], center: 2, budget: 3, expected: [1, 2], pin: null },
+    { counts: [3, 5, 2, 1, 6, 2, 4], center: 3, budget: 6, expected: [2, 3, 5], pin: null },
+    { counts: [3, 5, 2, 1, 6, 2, 4], center: 3, budget: 6, expected: [0, 2, 3, 5], pin: 0 }
+  ]) {
+    const window = new GalleryDataWindow({
+      geometry: { contentWidth: 100, columnCount: 1, gap: 0 }, fullItemBudget: scenario.budget
+    });
+    let start = 0;
+    const total = scenario.counts.reduce((sum, count) => sum + count, 0);
+    const pages = scenario.counts.map((count) => {
+      const page = syntheticGalleryPage({ count, start, total });
+      start += count;
+      page.items = page.items.map(item => ({ ...item, width: 100, height: 100 }));
+      return page;
+    });
+    const cursors = pages.map((_, index) => index ? pages[index - 1]!.next_cursor! : "");
+    for (const [index, page] of pages.entries()) {
+      resolveGalleryIntent(window, { cursor: cursors[index]!, kind: index ? "append" : "initial" }, page);
+    }
+    const center = window.positionForId(pages[scenario.center]!.items[0]!.id)!;
+    const pinnedId = scenario.pin === null ? null : pages[scenario.pin]!.items[0]!.id;
+    const requests = window.updateViewport({
+      start: center.y + 1, end: center.y + center.height - 1,
+      visibleStart: center.y + 1, visibleEnd: center.y + center.height - 1,
+      preloadEnd: center.y + center.height - 1
+    }, pinnedId);
+    for (const request of requests) {
+      assert.equal(request.kind, "hydrate");
+      resolveGalleryIntent(window, request, pages[cursors.indexOf(request.cursor)]!);
+    }
+    const retained = pages.flatMap((page, index) => window.hasHydratedItem(page.items[0]!.id) ? [index] : []);
+    assert.deepEqual(retained, scenario.expected);
+    assert.equal(window.debugSnapshot().fullItems, retained.reduce((sum, index) => sum + scenario.counts[index]!, 0));
+  }
 });
 
 test("[Web/画廊] 连续保存保留同页独立验证意图，确认卡片优先于迟到批次", () => {

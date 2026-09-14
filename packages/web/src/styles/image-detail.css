@@ -23,7 +23,7 @@
   overflow: hidden;
   animation: image-detail-surface-in .18s cubic-bezier(.2, .8, .2, 1);
 }
-.image-detail-image {
+.image-detail-modal .image-detail-image {
   width: 100%;
   height: 90vh;
   max-height: 90vh;
@@ -226,6 +226,19 @@
   color: var(--color-detail-text-primary);
   background: var(--color-detail-action-surface);
   border-color: var(--color-detail-border);
+}
+
+.image-detail-modal .image-detail-actions .button.image-detail-source {
+  background: transparent;
+}
+
+.image-detail-modal .image-detail-actions .image-detail-source:not(.is-disabled) {
+  background: var(--color-detail-secondary-action-surface);
+}
+
+.image-detail-modal .image-detail-actions .image-detail-source:not(.is-disabled):is(:hover, :focus-visible) {
+  background: var(--color-detail-secondary-action-hover-surface);
+  border-color: var(--color-detail-secondary-action-hover-border);
 }
 
 @media (max-width: 760px) {

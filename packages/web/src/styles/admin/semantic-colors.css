@@ -196,6 +196,12 @@
   --color-detail-action-border: var(--admin-color-action-primary);
   --color-detail-action-surface: var(--admin-color-surface-primary);
   --color-detail-action-hover: var(--admin-color-control-surface-subtle-hover);
+  --color-detail-secondary-action-surface: light-dark(transparent, rgba(255, 255, 255, .01));
+  --color-detail-secondary-action-hover-surface: light-dark(
+    var(--admin-color-control-surface-subtle-hover),
+    color-mix(in srgb, var(--color-detail-surface-raised) 92%, var(--admin-color-text-primary))
+  );
+  --color-detail-secondary-action-hover-border: var(--admin-color-control-border-hover);
   --color-detail-danger-border: var(--admin-color-danger-border-subtle);
   --color-detail-danger-action-text: var(--admin-color-danger-text);
   --color-detail-danger-action-surface: var(--admin-color-danger-surface);

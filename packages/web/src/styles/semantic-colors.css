@@ -45,10 +45,10 @@
   --public-color-canvas: #070b15;
   --public-color-surface-default: #142036;
   --public-color-surface-raised: #1c2a42;
-  --public-color-text-primary: #f2f7ff;
+  --color-public-text-primary: #f2f7ff;
   --public-color-text-secondary: #afbdd0;
   --public-color-loading-text: rgba(175, 189, 208, .64);
-  --public-color-text-strong: #fff;
+  --color-public-text-strong: #fff;
   --public-color-border-default: rgba(155, 190, 239, .28);
   --public-color-action-primary: #91c7ff;
   --public-color-action-strong: #2f6fc9;
@@ -105,7 +105,7 @@
   --color-control-text-primary: var(--public-color-control-text-primary);
   --color-control-text-secondary: var(--public-color-control-text-secondary);
   --color-control-text-tertiary: var(--public-color-control-text-tertiary);
-  --color-control-text-on-action: var(--public-color-text-strong);
+  --color-control-text-on-action: var(--color-public-text-strong);
   --color-control-surface: var(--public-color-control-surface);
   --color-control-surface-muted: var(--public-color-control-surface-muted);
   --color-control-surface-hover: var(--public-color-control-surface-hover);
