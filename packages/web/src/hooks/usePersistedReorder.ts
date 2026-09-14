@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useRef,
   useState
 } from "react";
@@ -31,7 +32,7 @@ const noFixedItems = () => false;
 /**
  * Owns optimistic keyboard/pointer sorting through the authoritative reread.
  * Consumers provide persistence and cache access, but do not duplicate the
- * drag snapshot, save lock, rollback, feedback, or focus lifecycle.
+ * drag state, save lock, rollback, feedback, or focus lifecycle.
  */
 export function usePersistedReorder<Item>({
   items,
@@ -60,11 +61,11 @@ export function usePersistedReorder<Item>({
 }) {
   const [order, setOrder] = useState<Item[]>(() => [...(items ?? [])]);
   const [reordering, setReordering] = useState(false);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const orderRef = useRef(order);
   const dragKeyRef = useRef<string | null>(null);
-  const dragStartOrderRef = useRef<Item[]>([]);
   const runningRef = useRef(false);
   const mountedRef = useRef(false);
 
@@ -206,7 +207,7 @@ export function usePersistedReorder<Item>({
     movedKey: string,
     direction: ReorderDirection
   ) => {
-    if (externalBusy || runningRef.current) return;
+    if (externalBusy || runningRef.current || dragKeyRef.current) return;
     const previousOrder = orderRef.current;
     const result = reorderItemByDirection(
       previousOrder,
@@ -231,52 +232,62 @@ export function usePersistedReorder<Item>({
     ));
     if (!item || isFixed(item)) return;
     dragKeyRef.current = movedKey;
-    dragStartOrderRef.current = orderRef.current;
+    setDraggingKey(movedKey);
   }, [externalBusy, getKey, isFixed]);
 
-  const moveOver = useCallback((targetKey: string) => {
+  // Keep the native drag source in place until a drop chooses the target.
+  // Moving its ancestor during dragenter can interrupt the browser's drag
+  // lifecycle; child dragenter events also cause repeated order reversals.
+  const finishDrag = useCallback((targetKey?: string) => {
     const movedKey = dragKeyRef.current;
-    if (!movedKey || externalBusy || runningRef.current) return;
+    dragKeyRef.current = null;
+    if (!movedKey) return;
+    setDraggingKey(null);
+    const previousOrder = [...(readAuthoritative() ?? orderRef.current)];
+    if (!targetKey || externalBusy || runningRef.current) {
+      if (!runningRef.current) replaceOrder(previousOrder);
+      return;
+    }
     const result = reorderItemByKey(
-      orderRef.current,
+      previousOrder,
       movedKey,
       targetKey,
       getKey,
       isFixed
     );
-    if (result.moved) replaceOrder(result.items);
-  }, [externalBusy, getKey, isFixed, replaceOrder]);
-
-  const finishDrag = useCallback(() => {
-    const movedKey = dragKeyRef.current;
-    dragKeyRef.current = null;
-    if (!movedKey) return;
-
-    const previousOrder = dragStartOrderRef.current;
-    dragStartOrderRef.current = [];
-    const nextOrder = orderRef.current;
-    const fallback = () => replaceOrder(
-      readAuthoritative() ?? previousOrder
-    );
-    if (externalBusy || runningRef.current) {
-      fallback();
-      return;
-    }
-    const changed = previousOrder.length !== nextOrder.length
-      || previousOrder.some((item, index) => (
-        getKey(item) !== getKey(nextOrder[index]!)
-      ));
-    if (!changed) {
-      fallback();
+    if (!result.moved) {
+      replaceOrder(previousOrder);
       return;
     }
     void persistOrder({
-      nextOrder,
+      nextOrder: result.items,
       previousOrder,
       movedKey,
       focusDirection: null
     });
-  }, [externalBusy, getKey, persistOrder, readAuthoritative, replaceOrder]);
+  }, [externalBusy, getKey, isFixed, persistOrder, readAuthoritative, replaceOrder]);
+
+  const cancelDrag = useEffectEvent(() => finishDrag());
+  useEffect(() => {
+    if (!draggingKey) return;
+    const cancel = () => cancelDrag();
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") cancel(); };
+    const onVisibility = () => { if (document.hidden) cancel(); };
+    // A valid card drop commits in React before this window bubble listener.
+    // Outside drops, Escape and lost focus only release the shared drag state.
+    window.addEventListener("drop", cancel);
+    window.addEventListener("dragend", cancel);
+    window.addEventListener("blur", cancel);
+    window.addEventListener("keydown", onKeyDown);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("drop", cancel);
+      window.removeEventListener("dragend", cancel);
+      window.removeEventListener("blur", cancel);
+      window.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [draggingKey]);
 
   const positionFor = useCallback((key: string) => reorderPositionByKey(
     order,
@@ -287,6 +298,7 @@ export function usePersistedReorder<Item>({
 
   return {
     order,
+    draggingKey,
     busy: externalBusy || reordering,
     reordering,
     announcement,
@@ -296,7 +308,6 @@ export function usePersistedReorder<Item>({
     moveByKeyboard,
     registerReorderControl,
     beginDrag,
-    moveOver,
     finishDrag
   };
 }

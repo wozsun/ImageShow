@@ -290,6 +290,7 @@ export function StorageSettings() {
               hasNonLocalBackend={hasNonLocalBackend}
               busy={busy}
               reorderBusy={operationBusy}
+              dragging={reorder.draggingKey === backend.slug}
               canMovePrevious={Boolean(position && position.position > 1)}
               canMoveNext={Boolean(
                 position && position.position < position.total
@@ -326,8 +327,8 @@ export function StorageSettings() {
                 setActionFeedback(null);
                 reorder.beginDrag(slug);
               }}
-              onDragEnter={reorder.moveOver}
-              onDragEnd={reorder.finishDrag}
+              onDrop={reorder.finishDrag}
+              onDragEnd={() => reorder.finishDrag()}
             />
           );
         })}

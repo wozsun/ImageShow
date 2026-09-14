@@ -321,6 +321,35 @@ async function resolvedReadyImagePage<T>(
   }
 }
 
+async function readRandomWindowFromIndex(
+  index: ReadyImageFilterIndex,
+  context: Pick<ImageBrowseContext, "start">,
+  position: ImageBrowsePosition | undefined,
+  limit: number,
+  signal?: AbortSignal
+) {
+  return readCache(async () => {
+    if (!readyImageWindowIndexIsValid(index, await validateReadyImageFilterIndex(index))) return null;
+    const members = await readReadyImageRandomMembers(
+      index, context, position, limit, cacheItemCount(), signal
+    );
+    if (!members) return null;
+    const visible = members.slice(0, limit);
+    const raws = visible.length ? await readCoreItems(visible) : [];
+    if (raws.length !== visible.length) {
+      throw new ReadyImageCoreCacheError("Ready-image cache returned incomplete core items");
+    }
+    if (index.kind !== "core" && visible.length) {
+      await assertDerivedMissingItemsAreNotCore(visible, raws);
+    }
+    const items = raws.map((raw, offset) => parsedItem(raw, visible[offset]));
+    if (!readyImageWindowIndexIsValid(index, await validateReadyImageFilterIndex(index))) return null;
+    return { items, total: index.count ?? items.length, hasMore: members.length > limit };
+  }, index.kind === "core" ? "core" : "derived", async () => {
+    await discardReadyImageQueryIndex(index);
+  }, signal);
+}
+
 export function readReadyImageCursorPage(
   plan: ImageFilterPlan,
   limit: number,
@@ -356,36 +385,20 @@ export function readReadyImageCursorPage(
     background,
     "fallback",
     context.order === "random" ? async (index) => {
-      const result = await readCache(async () => {
-        if (!readyImageWindowIndexIsValid(index, await validateReadyImageFilterIndex(index))) return null;
-        const members = await readReadyImageRandomMembers(
-          index, context, position, limit, cacheItemCount(), signal
-        );
-        if (!members) return null;
-        const visible = members.slice(0, limit);
-        const raws = visible.length ? await readCoreItems(visible) : [];
-        if (raws.length !== visible.length) {
-          throw new ReadyImageCoreCacheError("Ready-image cache returned incomplete core items");
-        }
-        if (index.kind !== "core" && visible.length) {
-          await assertDerivedMissingItemsAreNotCore(visible, raws);
-        }
-        const items = raws.map((raw, offset) => parsedItem(raw, visible[offset]));
-        if (!readyImageWindowIndexIsValid(index, await validateReadyImageFilterIndex(index))) return null;
-        const last = items.at(-1);
-        return {
+      const result = await readRandomWindowFromIndex(index, context, position, limit, signal);
+      if (!result.cached || result.value === null) return { status: "fallback" };
+      const { items, total, hasMore } = result.value;
+      const last = items.at(-1);
+      return {
+        status: "hit",
+        value: {
           items,
-          total: index.count ?? items.length,
-          nextCursor: members.length > limit && last
+          total,
+          nextCursor: hasMore && last
             ? encodeImageCursor({ id: last.id, cursor_image_time: last.image_time }, context)
             : null
-        };
-      }, index.kind === "core" ? "core" : "derived", async () => {
-        await discardReadyImageQueryIndex(index);
-      }, signal);
-      return result.cached && result.value !== null
-        ? { status: "hit", value: result.value }
-        : { status: "fallback" };
+        }
+      };
     } : undefined
   );
 }
@@ -414,11 +427,20 @@ export async function sampleReadyImages(
   limit: number,
   recent: ReadonlySet<string> = new Set(),
   signal?: AbortSignal,
-  background = false
+  background = false,
+  seededStart?: number
 ): Promise<ReadyImageCacheResult<ReadyImageCacheItem[]>> {
   try {
     const index = await resolveReadyImageFilterIndex(plan, signal, background);
     if (!index) return { cached: false };
+    if (seededStart !== undefined) {
+      const result = await readRandomWindowFromIndex(
+        index, { start: seededStart }, undefined, 1, signal
+      );
+      return result.cached && result.value !== null
+        ? { cached: true, value: result.value.items }
+        : { cached: false };
+    }
     const result = await readCache(
       () => sampleResolvedReadyImageIndex(
         index,

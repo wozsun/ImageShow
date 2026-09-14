@@ -89,7 +89,7 @@ type AuthenticatedAdminShellProps = {
   serverPreferences: AdminPreferences;
   serverPreferencesEtag: string;
   serverPreferencesUpdatedAt: number;
-  siteName: string;
+  siteHeaderName: string;
   applicationVersion: string;
   versionEnabled: boolean;
   versionLinkEnabled: boolean;
@@ -98,7 +98,7 @@ type AuthenticatedAdminShellProps = {
 
 function AuthenticatedAdminLayout({
   role,
-  siteName,
+  siteHeaderName,
   applicationVersion,
   versionEnabled,
   versionLinkEnabled,
@@ -143,7 +143,7 @@ function AuthenticatedAdminLayout({
     <main className="admin">
       <aside>
         <AdminBrand
-          siteName={siteName}
+          siteHeaderName={siteHeaderName}
           applicationVersion={applicationVersion}
           versionEnabled={versionEnabled}
           versionLinkEnabled={versionLinkEnabled}
@@ -169,7 +169,7 @@ function AuthenticatedAdminLayout({
       </aside>
       <header className="admin-mobile-header">
         <AdminBrand
-          siteName={siteName}
+          siteHeaderName={siteHeaderName}
           applicationVersion={applicationVersion}
           versionEnabled={versionEnabled}
           versionLinkEnabled={versionLinkEnabled}

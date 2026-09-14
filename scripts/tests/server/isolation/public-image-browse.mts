@@ -6,6 +6,11 @@ import { interceptPoolConnections } from "./database-faults.mts";
 await runIntegrationScenario(async (runtime) => {
   const { Hono } = await import("hono");
   const { registerPublicRoutes } = await import("../../../../packages/server/src/routes/public.ts");
+  const { registerRandomRoutes } = await import("../../../../packages/server/src/routes/random.ts");
+  const { selectRandomImages } = await import("../../../../packages/server/src/random/selection.ts");
+  const { sampleReadyImagesFromPostgres } = await import("../../../../packages/server/src/random/postgres-selection.ts");
+  const { sampleReadyImages } = await import("../../../../packages/server/src/images/ready-cache/query.ts");
+  const { createImageFilterPlan } = await import("../../../../packages/server/src/images/filter-plan.ts");
   const { handleApiError } = await import("../../../../packages/server/src/core/http/responses.ts");
   const reads = await import("../../../../packages/server/src/images/read-models/public-images.ts");
   const coordinator = await import("../../../../packages/server/src/images/ready-cache/coordinator.ts");
@@ -17,6 +22,7 @@ await runIntegrationScenario(async (runtime) => {
   const app = new Hono();
   app.onError((error, context) => handleApiError(context, error));
   registerPublicRoutes(app);
+  registerRandomRoutes(app);
   const ids = [
     "00000000-0000-7000-8000-000000000001",
     "00000000-0000-7001-8000-000000000001",
@@ -56,7 +62,25 @@ await runIntegrationScenario(async (runtime) => {
   };
   type Query = Parameters<typeof reads.listPublicImages>[0];
   const pages: Array<{ query: Query; value: Awaited<ReturnType<typeof reads.listPublicImages>> }> = [];
+  const seedCases = ["wallpaper", "Wallpaper", " 图😀 ", "2026-09-15"];
+  const seeded = async (seed: string, filter = "device=all", client = "seed-client", mode = "json") => {
+    const result = await selectRandomImages(new URL(
+      `http://imageshow.test/random?seed=${encodeURIComponent(seed)}&${filter}&mode=${mode}`
+    ), "Mozilla/5.0 (Windows NT 10.0)", client);
+    assert.ok(!(result instanceof Response));
+    assert.equal(result.items.length, 1);
+    return result.items[0]!.id;
+  };
+  const coldSeeds = new Map<string, string>();
+  const allPlan = createImageFilterPlan({});
   try {
+    for (const seed of seedCases) coldSeeds.set(seed, await seeded(seed));
+    // Explicit pivots exercise inclusive edges and UUID tie-breaking without
+    // deriving the expected result from the seed hash implementation.
+    for (const [start, expectedId] of [[0, ids[0]], [1, ids[0]], [0xdddddddddddd, ids[3]], [0xffffffffffff, ids[5]]] as const) {
+      const result = await sampleReadyImagesFromPostgres(allPlan, 1, new Set(ids), pool, undefined, start);
+      assert.deepEqual(result.map(item => item.id), [expectedId]);
+    }
     // Cold coordinator forces PostgreSQL; each cursor can cross view and size.
     for (const order of ["latest", "oldest", "random"] as const) {
       let cursor: string | undefined;
@@ -127,7 +151,47 @@ await runIntegrationScenario(async (runtime) => {
         assert.deepEqual(await reads.listPublicImages(query, new AbortController().signal, now), value);
       }
       assert.equal(connections, 0, "所有两档页与尾段碰撞均在热 Redis 命中");
+      for (const seed of seedCases) {
+        for (const mode of ["json", "redirect", "proxy"]) {
+          assert.equal(await seeded(seed, "device=all", "another-client", mode), coldSeeds.get(seed));
+        }
+      }
+      for (const [start, expectedId] of [[0, ids[0]], [1, ids[0]], [0xdddddddddddd, ids[3]], [0xffffffffffff, ids[5]]] as const) {
+        const result = await sampleReadyImages(allPlan, 1, new Set(ids), undefined, false, start);
+        assert.ok(result.cached);
+        assert.deepEqual(result.value.map(item => item.id), [expectedId]);
+      }
+      assert.equal(connections, 0, "固定 seed 热路径与 PostgreSQL 冷路径选图相同且不查询数据库");
     } finally { restoreConnections(); }
+
+    const desktop = await seeded("wallpaper", "device=pc&brightness=dark&theme=null");
+    assert.equal(await seeded("wallpaper", "theme=null,null&brightness=DARK&device=auto"), desktop);
+    const emptySeed = await selectRandomImages(new URL("http://imageshow.test/random?seed=empty&device=mb"));
+    assert.ok(emptySeed instanceof Response);
+    assert.equal(emptySeed.status, 404);
+    const recentBefore = await redis.keys("imageshow:random_recent:*");
+    for (let i = 0; i < 4; i++) assert.equal(await seeded("wallpaper"), coldSeeds.get("wallpaper"));
+    assert.deepEqual(await redis.keys("imageshow:random_recent:*"), recentBefore, "seed 不创建客户端近期历史");
+    const jsonSeed = await get("/random?device=all&seed=wallpaper&mode=json");
+    assert.equal(jsonSeed.status, 200);
+    assert.match(jsonSeed.headers.get("cache-control")!, /no-store/);
+    const seedBody = await jsonSeed.json();
+    assert.deepEqual(seedBody.items.map((item: { id: string }) => item.id), [coldSeeds.get("wallpaper")]);
+    const redirected = await get("/random?seed=wallpaper&mode=redirect&device=all");
+    assert.equal(redirected.status, 302);
+    assert.ok(redirected.headers.get("location")?.includes(coldSeeds.get("wallpaper")!));
+    // Removing the tail forces wraparound; both stores must keep the same
+    // membership and tie order after a rebuild and a candidate deletion.
+    await pool.query("UPDATE metadata SET status='deleted' WHERE id=$1", [ids[5]]);
+    await coordinator.requestReadyImageCacheRebuild();
+    const wrappedPg = await sampleReadyImagesFromPostgres(allPlan, 1, new Set(ids), pool, undefined, 0xffffffffffff);
+    const wrappedRedis = await sampleReadyImages(allPlan, 1, new Set(ids), undefined, false, 0xffffffffffff);
+    assert.deepEqual(wrappedPg.map(item => item.id), [ids[0]]);
+    assert.ok(wrappedRedis.cached);
+    assert.deepEqual(wrappedRedis.value.map(item => item.id), [ids[0]]);
+    await pool.query("UPDATE metadata SET status='ready' WHERE id=$1", [ids[5]]);
+    await coordinator.requestReadyImageCacheRebuild();
+    for (const seed of seedCases) assert.equal(await seeded(seed), coldSeeds.get(seed));
 
     // Each order preserves its value boundary after the anchor is removed.
     for (const order of ["latest", "oldest", "random"] as const) {

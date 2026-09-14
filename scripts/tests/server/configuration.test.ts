@@ -118,6 +118,9 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   (driftSite.home as Record<string, unknown>).unknown_option = true;
 
   const normalized = normalizeRuntimeConfig(drift);
+  assert.deepEqual(Object.keys(normalized.site).slice(0, 5), [
+    "domain", "icon", "title", "description", "header_name"
+  ]);
   assert.deepEqual(normalized.embed, { enabled: false, allowed_origins: [] });
   assert.equal(normalized.import.auto_import, true);
   assert.deepEqual(normalized.import.keep_original_link, ["url", "jsonl", "weibo"]);
@@ -411,6 +414,8 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
   );
 
   const environmentConfig = runtimeConfigFromEnvironment({
+    SITE_TITLE: "  浏览器标题  ",
+    SITE_HEADER_NAME: "  页头名称  ",
     SITE_DESCRIPTION: "",
     SITE_ROOT: "show",
     SITE_HOME_BROWSE_TARGET: "show",
@@ -430,6 +435,8 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
       '["https://portal.example.com","https://*.trusted.example.net"]'
   });
   assert.equal(environmentConfig.site.description, "");
+  assert.equal(environmentConfig.site.title, "浏览器标题");
+  assert.equal(environmentConfig.site.header_name, "页头名称");
   assert.equal(environmentConfig.site.root, "show");
   assert.equal(environmentConfig.site.home.browse_target, "show");
   assert.equal(environmentConfig.site.home.background, "");
@@ -495,7 +502,8 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
     [{ EMBED_ALLOWED_ORIGINS: "https:\/\/portal.example.com" }, /EMBED_ALLOWED_ORIGINS.*embed\.allowed_origins/],
     [{ EMBED_ALLOWED_ORIGINS: "{}" }, /EMBED_ALLOWED_ORIGINS.*embed\.allowed_origins/],
     [{ EMBED_ALLOWED_ORIGINS: '["http:\/\/portal.example.com"]' }, /EMBED_ALLOWED_ORIGINS.*embed\.allowed_origins/],
-    [{ SITE_NAME: "" }, /SITE_NAME.*site\.name/],
+    [{ SITE_HEADER_NAME: "" }, /SITE_HEADER_NAME.*site\.header_name/],
+    [{ SITE_TITLE: "  " }, /SITE_TITLE.*site\.title/],
     [{ NORMALIZE_QUALITY: "10", NORMALIZE_MIN_QUALITY: "20" }, /NORMALIZE_QUALITY.*normalize\.min_quality/],
     [{ WEIBO_REQUEST_DELAY_SECONDS: "[6,5]" }, /WEIBO_REQUEST_DELAY_SECONDS.*weibo\.request_delay_seconds/],
     [{ WEIBO_REQUEST_DELAY_SECONDS: "[2]" }, /WEIBO_REQUEST_DELAY_SECONDS.*weibo\.request_delay_seconds/],
@@ -556,7 +564,9 @@ if (scenario === "seed") {
   for (const field of ["icp", "mps", "footer"]) {
     assert.equal(siteConfigPayload().site[field], generated.site[field]);
   }
-  assert.equal(siteConfigPayload().site.description, generated.site.name, "空描述只在服务端投影为站点名");
+  assert.equal(generated.site.title, "环境网页标题");
+  assert.equal(generated.site.header_name, "环境页头名称");
+  assert.equal(siteConfigPayload().site.description, generated.site.title, "空描述只在服务端投影为网页标题");
   assert.equal(generated.site.home.browse_target, "show");
   assert.deepEqual(generated.site.show, {
     enabled: false,
@@ -571,6 +581,7 @@ if (scenario === "seed") {
   assert.equal(generated.normalize.skip_webp_under_kb, 0);
   const persisted = JSON.parse(await readFile(join(root, "config.json"), "utf8"));
   assert.deepEqual(persisted, generated);
+  assert.deepEqual(Object.keys(persisted.site).slice(0, 5), ["domain", "icon", "title", "description", "header_name"]);
   console.log("config-seed-ok");
 } else if (scenario === "invalid-current") {
   const invalid = structuredClone(runtimeConfigDefaults());
@@ -587,6 +598,8 @@ const drifted = structuredClone(runtimeConfigDefaults());
 delete drifted.site.icp;
 delete drifted.site.mps;
 delete drifted.site.footer;
+delete drifted.site.title;
+drifted.site.header_name = "文件页头";
 delete drifted.site.description;
 delete drifted.site.root;
 delete drifted.site.show.autoplay;
@@ -598,6 +611,8 @@ drifted.site.home.unknown = "remove-me";
 drifted.unknown_section = { enabled: false };
 await writeFile(join(root, "config.json"), JSON.stringify(drifted));
 const normalized = initializeRuntimeConfig();
+assert.equal(normalized.site.title, "ImageShow");
+assert.equal(normalized.site.header_name, "文件页头");
 assert.equal(normalized.site.description, "画廊与随机图片API");
 assert.equal(normalized.site.icp, "");
 assert.equal(normalized.site.mps, "");
@@ -675,6 +690,9 @@ assert.deepEqual(new Set(Object.keys(getSettingsForAdmin())), new Set([
 assert.equal("unknown_section" in getSettingsForAdmin(), false);
 assert.equal("unknown_section" in siteConfigPayload(), false);
 assert.equal(parseSettingsInput({ site: { root: "gallery" } }).site?.root, "gallery");
+assert.deepEqual(parseSettingsInput({ site: { title: "  网页标题  ", header_name: "  页头文字  " } }).site, {
+  title: "网页标题", header_name: "页头文字"
+});
 assert.equal(parseSettingsInput({ site: { root: "show" } }).site.root, "show");
 for (const site of [
   { home: { browse_target: "show" } },
@@ -771,6 +789,8 @@ console.log("config-existing-ok");
       {
         name: "seed",
         environment: {
+          SITE_TITLE: "环境网页标题",
+          SITE_HEADER_NAME: "环境页头名称",
           SITE_ROOT: "show",
           SITE_DESCRIPTION: "",
           SITE_ICP: "测试ICP备123号",
@@ -792,6 +812,8 @@ console.log("config-existing-ok");
       {
         name: "existing",
         environment: {
+          SITE_TITLE: "忽略环境标题",
+          SITE_HEADER_NAME: "忽略环境页头",
           SITE_ROOT: "invalid",
           SITE_ICP: "忽略环境备案号",
           SITE_MPS: "忽略环境公安备案号",
@@ -863,7 +885,8 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
     }
   ] satisfies StorageBackendRecord[];
   const packageRuntime = runtimeConfigDefaults();
-  packageRuntime.site.name = "来源站点";
+  packageRuntime.site.header_name = "来源站点";
+  packageRuntime.site.title = "来源网页标题";
   packageRuntime.site.description = "来源说明";
   packageRuntime.site.gallery.public_original_button = true;
   const pkg = buildConfigPackage(
@@ -896,7 +919,7 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   source.unused_package_field = true;
   const sourceConfig = source.config as Record<string, Record<string, unknown>>;
   const sourceSite = sourceConfig.site!;
-  sourceSite.name = "  已采用站点  ";
+  sourceSite.header_name = "  已采用站点  ";
   delete sourceSite.description;
   sourceSite.root = "future-root";
   sourceSite.domain = "must-not-cross.example.com";
@@ -943,7 +966,7 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   const defaults = runtimeConfigDefaults();
   assert.equal(parsed.format, "future-config");
   assert.equal(parsed.application_version, null);
-  assert.equal(parsed.config.site.name, "已采用站点");
+  assert.equal(parsed.config.site.header_name, "已采用站点");
   assert.equal(parsed.config.site.description, defaults.site.description);
   assert.equal(parsed.config.site.root, defaults.site.root);
   assert.equal(parsed.config.site.gallery.public_original_button, false);
@@ -1101,7 +1124,8 @@ import { registerSpaRoutes } from ${JSON.stringify(spaRoutesUrl)};
 const root = process.env.IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY;
 assert.ok(root);
 const config = runtimeConfigDefaults();
-config.site.name = "示例 <画廊>";
+config.site.title = "示例 <画廊>";
+config.site.header_name = "独立页头";
 config.site.description = '图片 "说明" <安全>';
 await writeFile(join(root, "config.json"), JSON.stringify(config));
 initializeRuntimeConfig();
@@ -1141,7 +1165,7 @@ for (const sequence of ["$$", "$&", "$" + String.fromCharCode(96), "$'"]) {
   const banner = "Banner " + sequence;
   const footer = 'Powered by <a href="https://example.com/">' + sequence + "</a>";
   await updateRuntimeConfig({ site: {
-    name, description, icon, footer,
+    title: name, header_name: "Header " + name, description, icon, footer,
     home: { banner_label: banner, banner_title: banner }
   } });
   const response = await app.request("http://imageshow.test/home");
@@ -1152,7 +1176,8 @@ for (const sequence of ["$$", "$&", "$" + String.fromCharCode(96), "$'"]) {
   const json = document.getElementById("__site_config__").textContent;
   assert.equal(json.includes("<"), false);
   const inlined = JSON.parse(json);
-  assert.equal(inlined.site.name, name);
+  assert.equal(inlined.site.title, name);
+  assert.equal(inlined.site.header_name, "Header " + name);
   assert.equal(inlined.site.description, description);
   assert.equal(inlined.site.icon, icon);
   assert.equal(inlined.site.home.banner_label, banner);

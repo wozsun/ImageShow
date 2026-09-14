@@ -16,7 +16,7 @@ const scanBatch = 256;
  */
 export async function readReadyImageRandomMembers(
   index: ReadyImageFilterIndex,
-  context: ImageBrowseContext,
+  context: Pick<ImageBrowseContext, "start">,
   position: ImageBrowsePosition | undefined,
   limit: number,
   expectedCoreCount: number,

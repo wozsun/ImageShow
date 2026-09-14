@@ -315,6 +315,7 @@ function VocabularyAdminContent({ kind, settings }: {
                 item={item}
                 canDelete={canDelete}
                 reorderBusy={operationBusy}
+                dragging={reorder.draggingKey === item.slug}
                 canMovePrevious={Boolean(position && position.position > 1)}
                 canMoveNext={Boolean(
                   position && position.position < position.total
@@ -330,8 +331,8 @@ function VocabularyAdminContent({ kind, settings }: {
                 onDelete={() => setConfirmDelete(item)}
                 onError={(error) => reportAdminUiError(`vocabulary_admin.${kind}.update`, error)}
                 onDragStart={reorder.beginDrag}
-                onDragEnter={reorder.moveOver}
-                onDragEnd={reorder.finishDrag}
+                onDrop={reorder.finishDrag}
+                onDragEnd={() => reorder.finishDrag()}
               />
             );
           })}

@@ -82,7 +82,7 @@ function buildSpaDocument(): string {
   const config = siteConfigPayload();
   const { site } = config;
   const inlineConfig = JSON.stringify(config).replace(/</g, "\\u003c");
-  const title = escapeHtmlText(site.name);
+  const title = escapeHtmlText(site.title);
   const description = escapeHtmlAttr(site.description);
   const iconUrl = escapeHtmlAttr(site.icon);
   const head = `<script type="application/json" id="__site_config__">${inlineConfig}</script>`;

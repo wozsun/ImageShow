@@ -40,7 +40,7 @@ export function SiteHead() {
 
   useEffect(() => {
     if (!site) return;
-    document.title = site.name;
+    document.title = site.title;
     const description = ensureMeta("description");
     description.content = site.description;
 
@@ -52,6 +52,6 @@ export function SiteHead() {
     }
     link.type = site.icon.endsWith(".svg") ? "image/svg+xml" : "";
     link.href = site.icon;
-  }, [site?.name, site?.description, site?.icon]);
+  }, [site?.title, site?.description, site?.icon]);
   return null;
 }

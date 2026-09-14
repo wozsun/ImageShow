@@ -183,11 +183,19 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
             <h2><AdminIcon name="information-line" />站点信息</h2>
             <p className="hint">这些非敏感配置只保存到容器配置目录；环境变量仅在配置文件首次生成时读取。</p>
             <label>
-              站点名
+              网页标题
               <input
-                value={settings.site.name}
-                onChange={(event) => updateSite({ name: event.target.value })}
-                placeholder="站点名称"
+                value={settings.site.title}
+                onChange={(event) => updateSite({ title: event.target.value })}
+                placeholder="浏览器标签页标题"
+              />
+            </label>
+            <label>
+              页头名称
+              <input
+                value={settings.site.header_name}
+                onChange={(event) => updateSite({ header_name: event.target.value })}
+                placeholder="导航和后台显示名称"
               />
             </label>
             <label>

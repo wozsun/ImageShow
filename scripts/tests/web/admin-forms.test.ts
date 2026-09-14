@@ -204,7 +204,8 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
   const requestedPaths: string[] = [];
   const siteConfig = {
     site: {
-      name: "ImageShow",
+      header_name: "ImageShow",
+      title: "独立网页标题",
       icon: "/assets/brand/favicon.svg",
       description: "自定义站点描述",
       root: "home",
@@ -353,7 +354,7 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
       "/admin",
       React.createElement(React.Fragment, null,
         React.createElement(SiteHead),
-        React.createElement(AdminShell, { siteName: siteConfig.site.name })
+        React.createElement(AdminShell, { siteHeaderName: siteConfig.site.header_name })
       )
     );
     assert.deepEqual(
@@ -364,15 +365,17 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
       document.querySelector<HTMLMetaElement>('meta[name="description"]')?.content,
       "自定义站点描述"
     );
+    assert.equal(document.title, "独立网页标题");
 
     requestedPaths.length = 0;
-    siteConfig.site.name = "站点名称回退";
+    siteConfig.site.header_name = "站点名称回退";
+    siteConfig.site.title = "更新后的网页标题";
     siteConfig.site.description = "服务端投影后的描述";
     await renderFailure(
       "/admin",
       React.createElement(React.Fragment, null,
         React.createElement(SiteHead),
-        React.createElement(AdminShell, { siteName: siteConfig.site.name })
+        React.createElement(AdminShell, { siteHeaderName: siteConfig.site.header_name })
       )
     );
     assert.deepEqual(
@@ -383,15 +386,16 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
       document.querySelector<HTMLMetaElement>('meta[name="description"]')?.content,
       "服务端投影后的描述"
     );
+    assert.equal(document.title, "更新后的网页标题");
 
     requestedPaths.length = 0;
-    siteConfig.site.name = "另一站点";
+    siteConfig.site.header_name = "另一站点";
     siteConfig.site.description = "服务端权威描述";
     await renderFailure(
       "/admin",
       React.createElement(React.Fragment, null,
         React.createElement(SiteHead),
-        React.createElement(AdminShell, { siteName: siteConfig.site.name })
+        React.createElement(AdminShell, { siteHeaderName: siteConfig.site.header_name })
       )
     );
     assert.deepEqual(
@@ -2088,6 +2092,136 @@ for (const kind of ["user", "storage"] as const) {
   });
 }
 
+for (const kind of ["themes", "tags", "authors", "storage"] as const) {
+  test(`[Web/后台排序] ${kind} 拖动保持节点稳定，落下只保存一次，取消与失败恢复权威顺序`, async (t) => {
+    const h = await createConfigStreamHarness(t);
+    const { usePersistedReorder } = await import("../../../packages/web/src/hooks/usePersistedReorder.ts");
+    const { VocabularyAdminCard } = await import("../../../packages/web/src/pages/admin/VocabularyAdminCard.tsx");
+    const { StorageBackendCard } = await import("../../../packages/web/src/pages/admin/storage/StorageBackendCard.tsx");
+    const original: StorageBackendAdmin[] = (kind === "storage" ? ["local", "a", "b", "c"] : ["a", "b", "c"]).map((slug) => ({
+      slug, display_name: slug, type: "local", enabled: true, is_default: slug === "local",
+      image_count: 1, ingestion_session_count: 0, cleanup_job_count: 0,
+      failed_cleanup_job_count: 0, exhausted_cleanup_job_count: 0,
+      deletion: { action: "migrate", blockers: ["images"] }
+    }));
+    let authority = original;
+    const saves: string[][] = [];
+    const errors: string[] = [];
+    let pendingSave = Promise.withResolvers<void>();
+    let failSave = false;
+    let state!: ReturnType<typeof usePersistedReorder<StorageBackendAdmin>>;
+    const noop = () => {};
+    function Probe() {
+      state = usePersistedReorder({
+        items: authority, externalBusy: false, getKey: (item) => item.slug,
+        isFixed: (item) => kind === "storage" && item.slug === "local",
+        itemLabel: (_items, key) => key,
+        readAuthoritative: () => authority,
+        async save(keys) { saves.push(keys); await pendingSave.promise; if (failSave) throw Error("save failed"); },
+        async refresh() { if (!failSave) authority = state.order; },
+        reportError: (stage) => { errors.push(stage); }
+      });
+      return h.React.createElement("div", null, state.order.map((item) => {
+        const shared = {
+          reorderBusy: state.busy, dragging: state.draggingKey === item.slug,
+          canMovePrevious: true, canMoveNext: true,
+          onMove: (direction: "previous" | "next") => state.moveByKeyboard(item.slug, direction),
+          onReorderControlRef: noop, onDragStart: state.beginDrag,
+          onDrop: state.finishDrag, onDragEnd: () => state.finishDrag()
+        };
+        return h.React.createElement("div", { key: item.slug, "data-slug": item.slug },
+          kind === "storage"
+            ? h.React.createElement(StorageBackendCard, {
+              ...shared, backend: item, hasNonLocalBackend: true, busy: "",
+              defaultStatus: "idle", defaultActionPending: false, onEdit: noop,
+              onSetDefault: async () => true, onRemovalAction: noop,
+              onToggleEnabled: async () => true, onRetryCleanup: noop
+            })
+            : h.React.createElement(VocabularyAdminCard, {
+              ...shared, kind, item, onChanged: noop, onDelete: noop, onError: noop
+            }));
+      }));
+    }
+    await h.render(h.React.createElement(Probe));
+    const nodes = () => [...h.document.querySelectorAll<HTMLElement>("[data-slug]")];
+    const keys = () => nodes().map((node) => node.dataset.slug);
+    const card = (key: string) => h.document.querySelector(`[data-slug="${key}"]`)!.firstElementChild!;
+    const handle = (key: string) => card(key).querySelector(".reorder-pointer-handle")!;
+    const emit = async (target: EventTarget, type: string, properties = {}) => {
+      let result!: Event;
+      await h.React.act(async () => { result = dispatchDomEvent(h.window, target, type, properties); });
+      await h.flush();
+      return result;
+    };
+    const start = async () => {
+      const preview = card("a");
+      await emit(handle("a"), "dragstart", { clientX: 10, clientY: 10, dataTransfer: {
+        effectAllowed: "none", setData: noop,
+        setDragImage: (element: Element) => assert.equal(element, preview)
+      } });
+      assert.equal(state.draggingKey, "a");
+      assert.equal(card("a").classList.contains("is-dragging"), true);
+    };
+    const before = nodes();
+    await start();
+    for (let i = 0; i < 8; i++) {
+      await emit(card("c").children[i % card("c").children.length], "dragenter");
+      assert.equal((await emit(card("c"), "dragover")).defaultPrevented, true);
+    }
+    assert.deepEqual(nodes(), before, "跨越卡片及子节点不得移动原生拖动源");
+    assert.equal(saves.length, 0);
+    await emit(card("c"), "drop");
+    assert.deepEqual(saves, [["b", "c", "a"]]);
+    assert.equal(state.draggingKey, null);
+    assert.equal(h.document.querySelector(".is-dragging"), null);
+    assert.equal(state.busy, true);
+    await emit(handle("a"), "dragend");
+    assert.equal(saves.length, 1, "drop 后的 dragend 不得重复提交");
+    pendingSave.resolve(); await h.flush();
+    assert.equal(state.busy, false);
+    assert.deepEqual(keys(), kind === "storage" ? ["local", "b", "c", "a"] : ["b", "c", "a"]);
+    for (const event of ["dragend", "drop", "blur", "keydown", "visibilitychange"]) {
+      await start();
+      authority = [...authority].reverse();
+      if (kind === "storage") authority = [original[0], ...authority.filter((item) => item.slug !== "local")];
+      await h.render(h.React.createElement(Probe));
+      if (event === "visibilitychange") Object.defineProperty(h.document, "hidden", { configurable: true, value: true });
+      await emit(event === "visibilitychange" ? h.document : h.window, event, { key: "Escape" });
+      if (event === "visibilitychange") Reflect.deleteProperty(h.document, "hidden");
+      assert.equal(state.draggingKey, null, event);
+      assert.equal(h.document.querySelector(".is-dragging"), null, event);
+      assert.deepEqual(keys(), authority.map((item) => item.slug), "取消后采用最新权威数据");
+      assert.equal(saves.length, 1);
+    }
+    if (kind === "storage") {
+      assert.equal(card("local").querySelector(".reorder-pointer-handle"), null);
+      await start();
+      await emit(card("local"), "drop");
+      assert.equal(state.draggingKey, null);
+      assert.equal(saves.length, 1);
+    }
+    authority = original;
+    await h.render(h.React.createElement(Probe));
+    failSave = true;
+    pendingSave = Promise.withResolvers<void>();
+    await start();
+    await emit(card("c"), "drop");
+    pendingSave.resolve(); await h.flush();
+    assert.deepEqual(keys(), original.map((item) => item.slug));
+    assert.deepEqual(errors, ["save"]);
+    assert.equal(state.busy, false);
+    failSave = false;
+    await emit(card("a").querySelector(".is-next")!, "click");
+    await h.flush();
+    assert.equal(saves.length, 3, "拖动失败不阻止后续逐步排序");
+    assert.deepEqual(saves[2], ["b", "a", "c"]);
+    await start();
+    await h.render(null);
+    await emit(h.window, "drop");
+    assert.equal(saves.length, 3, "卸载后不得残留提交监听");
+  });
+}
+
 test("[Web/后台表单] 词条卡片同 slug 按字段保护 dirty，clean 跟随权威且成功保存立即归于 clean", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { VocabularyAdminCard } = await import("../../../packages/web/src/pages/admin/VocabularyAdminCard.tsx");
@@ -2145,16 +2279,18 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
   let settings = structuredClone(appConfig.runtimeDefaults) as RuntimeConfig;
   client.setQueryData(queryKeys.settings, { settings });
   await h.render(h.React.createElement(QueryClientProvider, { client }, h.React.createElement(SettingsPage)));
-  const input = () => h.document.querySelector<HTMLInputElement>('input[placeholder="站点名称"]')!;
+  const input = () => h.document.querySelector<HTMLInputElement>('input[placeholder="导航和后台显示名称"]')!;
+  const titleInput = () => h.document.querySelector<HTMLInputElement>('input[placeholder="浏览器标签页标题"]')!;
   const edit = async (value: string) => h.React.act(async () => {
     inputText(h.window, input(), value);
     await Promise.resolve();
   });
-  const publish = async (name: string) => { settings = { ...settings, site: { ...settings.site, name } }; await h.React.act(async () => client.setQueryData(queryKeys.settings, { settings })); await h.flush(); };
+  const publish = async (name: string) => { settings = { ...settings, site: { ...settings.site, header_name: name } }; await h.React.act(async () => client.setQueryData(queryKeys.settings, { settings })); await h.flush(); };
   const save = () => [...h.document.querySelectorAll<HTMLButtonElement>(".settings-head-actions button")].at(-1)!;
   const locked = () => h.document.querySelector("fieldset")!.hasAttribute("disabled");
   await publish("fresh"); assert.equal(input().value, "fresh");
   await edit("unsaved"); await publish("background"); assert.equal(input().value, "unsaved");
+  await h.React.act(async () => { inputText(h.window, titleInput(), "独立标题草稿"); await Promise.resolve(); });
   const number = h.document.querySelector<HTMLInputElement>('input[type="number"]')!;
   await h.React.act(async () => {
     inputText(h.window, number, "47");
@@ -2166,6 +2302,8 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
   };
   await h.React.act(async () => { save().click(); save().click(); });
   assert.equal(JSON.parse(String(h.pending[0].body)).admin.recent_uploads,47,"锁定前同步结算数字输入，提交当前可见值");
+  assert.equal(JSON.parse(String(h.pending[0].body)).site.title, "独立标题草稿");
+  assert.equal(JSON.parse(String(h.pending[0].body)).site.header_name, "unsaved");
   delete (h.document as any).activeElement;
   assert.equal(h.pending.length, 1); assert.equal(locked(), true);
   assert.ok([...h.document.querySelectorAll('.select-trigger')].every((element) => element.hasAttribute("disabled")));
@@ -2181,7 +2319,7 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
   assert.match(h.document.querySelector('[role="alert"]')!.textContent!, /超时/);
   await edit("normalized input ");
   await h.React.act(async () => save().click());
-  const successfulSave = h.respond(1, { settings: { ...settings, site: { ...settings.site, name: "normalized input" } } });
+  const successfulSave = h.respond(1, { settings: { ...settings, site: { ...settings.site, header_name: "normalized input" } } });
   await Promise.resolve();
   await clock.advanceBy(499);
   assert.equal(locked(), true, "成功反馈期限前保持保存锁定");

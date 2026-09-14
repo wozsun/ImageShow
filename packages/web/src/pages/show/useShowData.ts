@@ -27,6 +27,7 @@ export function useShowData(
   const [failure, setFailure] = useState<{ sourceKey: string; value: unknown; replace: boolean } | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const requestRef = useRef<{ controller: AbortController; replace: boolean; resume?: () => void } | null>(null);
+  const continuationTimerRef = useRef<number | null>(null);
   const targetedRequestsRef = useRef(new Map<string, AbortController>());
   const generationRef = useRef(0);
   const roundRef = useRef(0);
@@ -60,6 +61,10 @@ export function useShowData(
     if (!replace && endedRef.current && !discardedRef.current) return;
     const limit = replace ? initialLimitRef.current : continuationLimit;
     if (!replace && imagesRef.current.length + limit > maximumRetainedDtos) return;
+    if (continuationTimerRef.current !== null) {
+      window.clearTimeout(continuationTimerRef.current);
+      continuationTimerRef.current = null;
+    }
     const generation = generationRef.current;
     const controller = new AbortController();
     requestRef.current = { controller, replace };
@@ -72,8 +77,8 @@ export function useShowData(
         recentRef.current = new Set([...recentRef.current].slice(-continuationLimit));
       }
       // Repeated batches still advance their scan boundary. Yield after four
-      // empty admissions; later candidate usage resumes from the committed
-      // cursor without treating a successful scan as a playback failure.
+      // empty admissions; candidate usage (or remaining empty-scene demand)
+      // resumes from the cursor without making success a playback failure.
       for (let attempt = 0; attempt < 4; attempt += 1) {
         const params = imageBrowseApiSearchParams(requestFilters, order, {
           view: "show", limit, cursor, userAgent: window.navigator.userAgent
@@ -129,13 +134,29 @@ export function useShowData(
       const completed = requestRef.current?.controller === controller ? requestRef.current : null;
       if (completed) requestRef.current = null;
       if (generationRef.current === generation) setInitialLoading(false);
-      if (completed && generationRef.current === generation && !pausedRef.current) completed.resume?.();
+      if (completed && generationRef.current === generation && !pausedRef.current) {
+        completed.resume?.();
+        // An empty scene has no more leases to release, so it cannot emit
+        // another consumption revision. Keep that demand across scan rounds,
+        // yielding between them; EOF and real failures still stop this scan.
+        if (!requestRef.current && !imagesRef.current.length && !endedRef.current
+          && usageRef.current?.dataKey === committedRef.current.dataKey) {
+          continuationTimerRef.current = window.setTimeout(() => {
+            continuationTimerRef.current = null;
+            if (generationRef.current === generation && !imagesRef.current.length) void request(false);
+          }, 0);
+        }
+      }
     }
   }, [enabled, order, publish, requestFilters, sourceKey]);
 
   const fence = useCallback((imageId?: string) => {
     const replacing = requestRef.current?.replace === true;
     generationRef.current += 1;
+    if (continuationTimerRef.current !== null) {
+      window.clearTimeout(continuationTimerRef.current);
+      continuationTimerRef.current = null;
+    }
     requestRef.current?.controller.abort();
     requestRef.current = null;
     for (const [id, controller] of targetedRequestsRef.current) {

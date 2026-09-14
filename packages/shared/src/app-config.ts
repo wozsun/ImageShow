@@ -142,10 +142,11 @@ export const appConfig = {
 
   runtimeDefaults: {
     site: {
-      name: "ImageShow",
       domain: "example.com",
-      description: "画廊与随机图片API",
       icon: "/assets/brand/favicon.svg",
+      title: "ImageShow",
+      description: "画廊与随机图片API",
+      header_name: "ImageShow",
       version: {
         enabled: true,
         link_enabled: true

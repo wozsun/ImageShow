@@ -48,7 +48,8 @@ import {
   siteFooter,
   siteFooterText,
   siteIcon,
-  siteName,
+  siteHeaderName,
+  siteTitle,
   skipWebpUnderKb,
   thumbnailLongEdge,
   thumbnailQuality,
@@ -61,10 +62,11 @@ import {
 
 const runtimeConfigSchema = z.strictObject({
   site: z.strictObject({
-    name: siteName,
     domain: siteDomain,
-    description: siteDescription,
     icon: siteIcon,
+    title: siteTitle,
+    description: siteDescription,
+    header_name: siteHeaderName,
     version: z.strictObject({
       enabled: z.boolean(),
       link_enabled: z.boolean()

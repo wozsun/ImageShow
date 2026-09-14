@@ -42,7 +42,7 @@ await runIntegrationScenario(async (runtime) => {
   const input = (slug: string, name: string) => ({
     format: "future-format-is-only-a-hint",
     application_version: "99.0.0",
-    config: { site: { name } },
+    config: { site: { header_name: name } },
     storage_backends: [{
       slug, display_name: slug, enabled: true, is_default: false,
       s3: {
@@ -75,15 +75,15 @@ await runIntegrationScenario(async (runtime) => {
   for (const mode of ["success", "rolled_back", "committed", "unknown"] as const) {
     const slug = `package-${mode.replaceAll("_", "-")}`;
     const names: string[] = [];
-    const remove = store.onRuntimeConfigChange(() => names.push(store.getRuntimeConfig().site.name));
+    const remove = store.onRuntimeConfigChange(() => names.push(store.getRuntimeConfig().site.header_name));
     try {
       await store.updateRuntimeConfig({ site: { description: "replace with defaults" } });
       names.length = 0;
       const operation = withCommitFault(runtime.databasePools.pool, mode,
         () => importConfigPackage(input(slug, mode), {}), async () => {
-          assert.equal(store.getRuntimeConfig().site.name, baseline.site.name);
+          assert.equal(store.getRuntimeConfig().site.header_name, baseline.site.header_name);
           assert.deepEqual(names, []);
-          assert.equal((await persisted()).site.name, mode);
+          assert.equal((await persisted()).site.header_name, mode);
         });
       if (mode === "rolled_back") {
         await assert.rejects(operation, /controlled commit rollback/);
@@ -96,12 +96,12 @@ await runIntegrationScenario(async (runtime) => {
       } else await operation;
       if (mode === "rolled_back") {
         assert.deepEqual(names, []);
-        assert.equal(store.getRuntimeConfig().site.name, baseline.site.name);
+        assert.equal(store.getRuntimeConfig().site.header_name, baseline.site.header_name);
         assert.deepEqual(await persisted(), store.getRuntimeConfig());
         assert.equal(await backend(slug), null);
       } else {
         assert.deepEqual(names, [mode]);
-        assert.equal(store.getRuntimeConfig().site.name, mode);
+        assert.equal(store.getRuntimeConfig().site.header_name, mode);
         assert.deepEqual(await persisted(), store.getRuntimeConfig());
         assert.equal(store.getRuntimeConfig().site.domain, baseline.site.domain);
         assert.equal(store.getRuntimeConfig().site.description, baseline.site.description);
@@ -114,7 +114,7 @@ await runIntegrationScenario(async (runtime) => {
   for (const phase of ["write", "after-rename", "restore"] as const) {
     const slug = `package-${phase}`;
     const names: string[] = [];
-    const remove = store.onRuntimeConfigChange(() => names.push(store.getRuntimeConfig().site.name));
+    const remove = store.onRuntimeConfigChange(() => names.push(store.getRuntimeConfig().site.header_name));
     let injected = false;
     let restoring = false;
     const open = fs.openSync;
@@ -153,7 +153,7 @@ await runIntegrationScenario(async (runtime) => {
       assert.deepEqual(store.getRuntimeConfig(), baseline);
       assert.equal(await backend(slug), null);
       if (phase !== "restore") assert.deepEqual(await persisted(), baseline);
-      else assert.equal((await persisted()).site.name, phase);
+      else assert.equal((await persisted()).site.header_name, phase);
     } finally { restore(); syncBuiltinESMExports(); remove(); await reset(slug); }
   }
 
@@ -170,11 +170,11 @@ await runIntegrationScenario(async (runtime) => {
     reload = store.reloadRuntimeConfigFromDisk().then(() => { settled = true; });
     await setImmediate();
     assert.equal(settled, false);
-    assert.equal(store.getRuntimeConfig().site.name, baseline.site.name);
+    assert.equal(store.getRuntimeConfig().site.header_name, baseline.site.header_name);
     gate.resolve();
     await Promise.all([importing, reload]);
     assert.equal(settled, true);
-    assert.equal(store.getRuntimeConfig().site.name, "Lease Candidate");
+    assert.equal(store.getRuntimeConfig().site.header_name, "Lease Candidate");
   } finally {
     gate.resolve();
     await Promise.allSettled([importing, reload]);
@@ -189,9 +189,9 @@ await runIntegrationScenario(async (runtime) => {
   const removeFailing = store.onRuntimeConfigChange(() => { throw new Error("listener failed"); });
   const removeFollowing = store.onRuntimeConfigChange(() => { followingCalls++; });
   try {
-    await store.updateRuntimeConfig({ site: { name: "Listener Isolation" } });
+    await store.updateRuntimeConfig({ site: { header_name: "Listener Isolation" } });
     assert.equal(followingCalls, 1);
-    assert.equal(store.getRuntimeConfig().site.name, "Listener Isolation");
+    assert.equal(store.getRuntimeConfig().site.header_name, "Listener Isolation");
     assert.deepEqual(await persisted(), store.getRuntimeConfig());
     assert.ok(logs.includes("runtime_config_listener_failed"));
   } finally { removeFailing(); removeFollowing(); restoreLogger(); await store.replaceRuntimeConfig(baseline); }
@@ -246,9 +246,9 @@ await runIntegrationScenario(async (runtime) => {
       "导入须按本次探測结果保存能力");
   } finally { await reset("route-existing"); }
   const imported = await request("import", {
-    package: { config: { site: { name: "Imported Through Route" } } }, slug_mappings: {}
+    package: { config: { site: { header_name: "Imported Through Route" } } }, slug_mappings: {}
   });
   assert.equal(imported.status, 200);
-  assert.equal(store.getRuntimeConfig().site.name, "Imported Through Route");
+  assert.equal(store.getRuntimeConfig().site.header_name, "Imported Through Route");
   } finally { await s3.close(); }
 });

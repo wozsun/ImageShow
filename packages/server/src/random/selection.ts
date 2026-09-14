@@ -1,3 +1,4 @@
+import { hash } from "node:crypto";
 import type { RandomMethod } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
@@ -88,14 +89,21 @@ export async function selectRandomImages(
     tag: query.tag,
     author: query.author
   });
-  const recent = await recentlyServedIds(clientId, query.signature);
+  const seededStart = query.seed === null ? undefined : Number.parseInt(
+    hash("sha256", JSON.stringify(["random", query.seed, plan.signature]), "hex").slice(0, 12),
+    16
+  );
+  const recent = query.seed === null
+    ? await recentlyServedIds(clientId, query.signature)
+    : new Set<string>();
   signal?.throwIfAborted();
   const cached = await sampleReadyImages(
     plan,
     query.limit,
     recent,
     signal,
-    Boolean(database.reader)
+    Boolean(database.reader),
+    seededStart
   );
   const items = cached.cached
     ? cached.value
@@ -104,7 +112,8 @@ export async function selectRandomImages(
         query.limit,
         recent,
         database.reader ?? pool,
-        signal
+        signal,
+        seededStart
       );
   if (!items.length) {
     const hasFilters = Boolean(
@@ -121,11 +130,13 @@ export async function selectRandomImages(
         : "Not Found: No available images"
     });
   }
-  await rememberServedIds(
-    clientId,
-    query.signature,
-    items.map((item) => item.id)
-  );
+  if (query.seed === null) {
+    await rememberServedIds(
+      clientId,
+      query.signature,
+      items.map((item) => item.id)
+    );
+  }
   return { mode: query.mode, items };
 }
 

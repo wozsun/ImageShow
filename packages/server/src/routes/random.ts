@@ -82,7 +82,7 @@ async function respondRandom(c: Context, url: URL) {
       )).open(undefined, {
         signal: AbortSignal.any([signal, databaseSignal])
       });
-      // 每次请求都会重新抽图，后续 Range 请求不保证命中同一对象，因此不声明字节范围能力。
+      // 候选集合变化时固定 seed 也可能换图，后续 Range 请求不保证命中同一对象。
       const headers = new Headers({
         ...baseHeaders,
         "Content-Type": contentType(picked.ext)

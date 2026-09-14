@@ -143,7 +143,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；`validation/` 按图片、Ingestion、存储、用户和词表职责拥有请求 schema，并集中保留通用 HTTP 原语与 `validation_error` 映射；业务工作委托给领域模块。 |
 | `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`metadata-tags.ts` 拥有 HTTP 与 JSONL 共用的标签归一化契约，`page-window.ts` 唯一计算安全数字页窗口，`storage-location/` 拥有正式图片后端位置 CAS、revision、mutation fence 和 cache handoff，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型及其领域查询类型。 |
 | `storage/` | 只在根层保留横切 `maintenance-lock.ts`；`backends/`、`drivers/`、`objects/` 与 `cleanup/` 分别拥有注册表及 Endpoint 重绑定证明、驱动、对象原语及跨图片传输准入、持久清理。`storage/` 不修改正式图片位置或相应 revision，也不交接 ready-cache。`backends/config.ts` 保留 S3 配置 schema、归一化和存储领域输入类型，HTTP create / update / test schema 位于路由边界。 |
-| `random/` | 随机查询校验、规范 `auto` / `all` 到候选设备轴的选择、Redis 8 Array 最近历史、定向 id 与有界 pivot 普通随机 PG 降级查询及随机出口编排；纯 User-Agent 设备识别由 `@imageshow/shared/browser` 提供给 Server 与 Web，Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
+| `random/` | 随机查询校验、规范 `auto` / `all` 到候选设备轴的选择、Redis 8 Array 最近历史、定向 id、有界 pivot 普通随机 PG 降级查询、固定 seed 的确定性起点与同序 PG 选图及随机出口编排；纯 User-Agent 设备识别由 `@imageshow/shared/browser` 提供给 Server 与 Web，Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
 | `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。历史清理在有界候选阶段锁定行并跳过正在更新的任务，避免删除并发重新入队的新意图。 |
 | `checks/` | PostgreSQL / Redis 独立轻量状态、数据库 / Redis / 存储手动深度检查、“全部”中的回收站一致性结果，以及显式触发的存储维护；状态页自动 Redis 深检与手动 Redis 检查复用同一有界扫描和 pipeline，只返回当前汇总。 |
 | `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存；`authors/identity.ts` 唯一拥有作者链接到平台身份的当前解析和管理投影，微博导入按身份批量查询 PostgreSQL。 |
@@ -479,6 +479,8 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
 - `useCompletedIngestionInvalidation.ts` 是 completed pair 去重与 PostgreSQL 图片查询失效 owner；
   Ingestion 完成结果使用独立窄 DTO，`read-models/ingestion-results.ts` 与提交路径共用
   presenter，只返回卡片、草稿及完成失效所需字段；后台图片列表继续使用完整列表投影。
+  完成结果读取统一将图片查询及 presenter 冷缓存存储配置查询的 PostgreSQL 断连转换为
+  `503 database_unavailable`；缺失配置、字段格式化及其他非连接错误保留原分类。
   `model/server-ingestion-job.ts` 集中完成 active / completed DTO 到卡片的单调映射，完整快照和稀疏
   事件共用 active 状态映射，分别保留草稿合并规则；终态围栏阻止迟到 snapshot、SSE、status 或
   HTTP 结果回退。`model/ingestion-job-retry.ts` 从浏览器输入构造准备重试，未知接受结果保留
@@ -539,6 +541,9 @@ mutation hold 与 rebuild requirement；归组没有增加第二个状态机或�
 `images/ready-cache/query.ts` 在同一 coordinator 读取租约中编排过滤索引与分页；
 `ordered-window.ts` 承载 ZSET 时间窗口、HMGET 与有效性校验，`random-window.ts` 在既有
 尾段索引按 `suffix,id` 读取两段环形窗口并验证筛选成员，达到扫描预算时回源 PG。
+随机分页与 `/random?seed=...` 共用同一窗口读取及投影校验，后者只消费一张，不产生分页
+cursor 或 seed 专属缓存；固定起点由 `random/selection.ts` 根据 seed 与实际筛选签名生成，
+`random/postgres-selection.ts` 保持相同尾段与 UUID 顺序，且跳过普通随机的 pivot 和洗牌。
 `images/read-models/pagination.ts` 分别选择 show 五字段、gallery 卡片及后台编辑投影；
 后台使用安全 offset，按图片 / 入库时间与 UUID 同向排序；图片时间的 ready 页复用 Redis
 正反序窗口，入库时间及回收站由 PostgreSQL 排序分页。公开使用 cursor。标签与选中行在同一
@@ -698,8 +703,9 @@ hooks ──► lib
   和已加载 SPA 都收敛到 404，随机 API 与后台不参与公开页回退。页面参数只决定是否挂载主导航，
   不能复制公开页实现或以 CSS 隐藏导航。服务端仍独立决定嵌入
   文档是否存在并输出父页面白名单，前端开关只负责已加载 SPA 内的路由收敛。
-  公开配置就绪后才挂载路由，后台刷新失败时保留已有快照和路由，并把真实站点名传入后台入口；导航和 `SiteHead` 不复制
-  运行时默认值。`siteConfigPayload()` 唯一投影描述为空时的站点名回退，服务端 SPA
+  公开配置就绪后才挂载路由，后台刷新失败时保留已有快照和路由，并把 `site.header_name` 传入后台入口；导航和 `SiteHead` 不复制
+  运行时默认值。网页标题由 `site.title` 提供，导航和后台品牌使用独立的 `site.header_name`。
+  `siteConfigPayload()` 唯一投影描述为空时的网页标题回退，服务端 SPA
   文档与浏览器标题、描述、图标消费同一公开配置；HTML 构建模板只保留待注入占位。
   动态文本在完成 HTML / JSON 转义后由替换回调按字面插入，保留配置中的美元符号序列。
 - `pages/home/HomePage.tsx` 只编排查询、筛选状态和页面生命周期；首屏、筛选摘要栏、
@@ -777,7 +783,8 @@ hooks ──► lib
   权威快照更新基础项并判定筛选成员；保存确认缺少快照时按目标 ID 复用编辑快照读取及有限重试，
   读取失败保留已提交候选，分页位置变化不作为移除依据。
   补图连续四批无新候选时保留已推进的游标并结束本轮扫描；在途期间的补图需求合并为一次，
-  成功结束后重新核对并处理，后续候选使用量变化也可续扫，避免空窗口丢失继续补图的通知，
+  成功结束后重新核对并处理，后续候选使用量变化也可续扫。空窗口仍有补图需求且尚未到末页时，
+  在任务队列让出后继续下一轮，接收新候选、到达末页、切换来源、停用或卸载时结束该续扫，
   不把驻留 / 近期去重导致的正常重复批次视为加载失败。真实补图错误仍等待显式重试，
   场景逐帧信号不会触发错误重试循环。
   先无重复领取全部候选，只有有限筛选结果不足以填满活动槽时才循环复用。`mode=waterfall|float`
@@ -878,6 +885,9 @@ hooks ──► lib
   与 `advanced-config/`；只有 `LogPage.tsx`、`Overview.tsx`、`SettingsPage.tsx`、
   `UserAdmin.tsx`、`VocabularyAdmin.tsx` 及其单个卡片等没有形成三文件族的页面留在根层。
   每个页面专属查询、操作 Hook、对话框和状态机都留在同一目录，不上移为虚假的跨页面公共层。
+  词表和存储列表共用 `usePersistedReorder` 持有拖动状态、提交锁、权威回读及失败恢复。
+  原生拖动期间不移动源卡片的 DOM，落在有效卡片后才按目标位置重排并提交一次；
+  列表外松手、取消、失焦或页面隐藏只清理拖动状态并采用最新权威顺序，不提交排序。
 - `pages/admin/ingestion/` 管理统一 prepared ingestion 队列，稳定分为 `queue/`、`workflow/`、
   `upload/` 和动态 `import/`。统一内容接入是上位领域，`upload` / `import` 分别表示浏览器
   Upload 与 Server Import，内部 mode 也使用 `upload` / `import`。

@@ -21,7 +21,8 @@ import {
   randomDefaultMethod,
   recentUploads,
   siteRoot,
-  siteName,
+  siteHeaderName,
+  siteTitle,
   skipWebpUnderKb,
   thumbnailLongEdge,
   thumbnailQuality,
@@ -48,7 +49,8 @@ function hasDefinedSetting(value: unknown): boolean {
 
 const appSettingsSchema = z.strictObject({
   site: z.strictObject({
-    name: siteName.optional(),
+    title: siteTitle.optional(),
+    header_name: siteHeaderName.optional(),
     root: siteRoot.optional(),
     home: siteHomeConfigSchema.optional(),
     gallery: z.strictObject({
@@ -110,7 +112,8 @@ export function getThumbnailSettings() {
 export function getSettingsForAdmin(): AdminSettings {
   const settings = getRuntimeConfig();
   const {
-    name,
+    title,
+    header_name,
     root,
     home,
     gallery,
@@ -143,7 +146,8 @@ export function getSettingsForAdmin(): AdminSettings {
   const { login_background, image_page_size, recent_uploads } = settings.admin;
   return {
     site: {
-      name,
+      title,
+      header_name,
       root,
       home: {
         background: home.background,
@@ -203,9 +207,10 @@ export function resolveIngestionSnapshotLimit(requestedLimit?: number) {
 export function siteConfigPayload(): SiteConfigDto {
   const runtime = getRuntimeConfig();
   const {
-    name,
-    description,
     icon,
+    title,
+    description,
+    header_name,
     root,
     home,
     show,
@@ -216,9 +221,10 @@ export function siteConfigPayload(): SiteConfigDto {
   } = runtime.site;
   return {
     site: {
-      name,
-      description: description || name,
       icon,
+      title,
+      description: description || title,
+      header_name,
       root,
       home: {
         ...home,

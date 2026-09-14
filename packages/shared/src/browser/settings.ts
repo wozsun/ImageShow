@@ -47,10 +47,11 @@ export type SiteGallerySettings = {
 };
 
 export type RuntimeSiteSettings = {
-  name: string;
   domain: string;
-  description: string;
   icon: string;
+  title: string;
+  description: string;
+  header_name: string;
   version: SiteVersionSettings;
   root: SiteRoot;
   home: SiteHomeSettings;
@@ -189,9 +190,10 @@ export type RuntimeConfig = {
 
 export type SiteSettings = Pick<
   RuntimeSiteSettings,
-  | "name"
   | "domain"
   | "icon"
+  | "title"
+  | "header_name"
   | "root"
   | "home"
   | "random_method"
@@ -202,7 +204,7 @@ export type SiteSettings = Pick<
 
 export type PublicSiteSettings = Pick<
   RuntimeSiteSettings,
-  "name" | "description" | "icon" | "root" | "home" | "icp" | "mps" | "footer"
+  "icon" | "title" | "description" | "header_name" | "root" | "home" | "icp" | "mps" | "footer"
 > & {
   gallery: Pick<SiteGallerySettings, "enabled" | "order">;
   show: SiteShowSettings;

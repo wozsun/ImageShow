@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent } from "react";
+import { useRef, type DragEvent } from "react";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
 import { ReorderControls } from "../../../components/actions/ReorderControls.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
@@ -18,6 +18,7 @@ export function StorageBackendCard({
   hasNonLocalBackend,
   busy,
   reorderBusy,
+  dragging,
   canMovePrevious,
   canMoveNext,
   defaultStatus,
@@ -30,13 +31,14 @@ export function StorageBackendCard({
   onToggleEnabled,
   onRetryCleanup,
   onDragStart,
-  onDragEnter,
+  onDrop,
   onDragEnd
 }: {
   backend: StorageBackendAdmin;
   hasNonLocalBackend: boolean;
   busy: string;
   reorderBusy: boolean;
+  dragging: boolean;
   canMovePrevious: boolean;
   canMoveNext: boolean;
   defaultStatus: AsyncActionStatus;
@@ -52,13 +54,12 @@ export function StorageBackendCard({
   onToggleEnabled: () => Promise<boolean>;
   onRetryCleanup: () => void;
   onDragStart: (slug: string) => void;
-  onDragEnter: (slug: string) => void;
+  onDrop: (slug: string) => void;
   onDragEnd: () => void;
 }) {
   const isLocal = backend.slug === "local";
   const showEnabledToggle = !isLocal || hasNonLocalBackend;
   const cardRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
   const enabledStatus = useAsyncActionStatus({ successDurationMs: null });
   const title = backend.display_name || storageBackendLabel(backend.slug);
   const cardBusy = Boolean(busy)
@@ -91,7 +92,6 @@ export function StorageBackendCard({
       event.preventDefault();
       return;
     }
-    setDragging(true);
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", backend.slug);
     onDragStart(backend.slug);
@@ -101,11 +101,12 @@ export function StorageBackendCard({
     <div
       ref={cardRef}
       className={`storage-backend-card${backend.is_default ? " is-default" : ""}${backend.enabled ? "" : " is-off"}${dragging ? " is-dragging" : ""}`}
-      onDragEnter={() => {
-        if (!isLocal) onDragEnter(backend.slug);
-      }}
       onDragOver={(event) => {
         if (!isLocal) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        if (!isLocal) onDrop(backend.slug);
       }}
     >
       <div className="storage-card-body">
@@ -182,10 +183,7 @@ export function StorageBackendCard({
               onControlRef={onReorderControlRef}
               dragPreviewRef={cardRef}
               onDragStart={begin}
-              onDragEnd={() => {
-                setDragging(false);
-                onDragEnd();
-              }}
+              onDragEnd={onDragEnd}
             />
           )}
           <button

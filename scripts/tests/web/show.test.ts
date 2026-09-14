@@ -2359,6 +2359,115 @@ test("[Web/展映] 四批重复后横移清空窗口，末页仅命中近期记�
   assert.ok(scene!.stats().visibleSprites > 0, "无需移动相机或显式重试即可重新填屏");
 });
 
+test("[Web/展映] 空窗口连续多轮重复候选仍续扫，接收后停止并隔离取消和真实错误", async (t) => {
+  const h = await createConfigStreamHarness(t, { honorAbort: false });
+  installPixiPaletteFixture(t);
+  t.after(installProperties(globalThis, { devicePixelRatio: 1 }));
+  const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
+  let current!: ReturnType<typeof useShowData>;
+  let connectEmptyScene = false;
+  let scene: ShowPixiWaterfallScene | undefined;
+  const target = createCameraTestElement(1440, 900);
+  function Probe({ source = "empty-scan" }: { source?: string }) {
+    current = useShowData(emptyGalleryFilters, source, "latest", 800);
+    h.React.useEffect(() => {
+      if (!connectEmptyScene) return;
+      if (scene) scene.setImages(current.images, current.committedKey, "latest", current.hasMore);
+      else scene = new ShowPixiWaterfallScene({
+        width: 1440, height: 900, columns: 40, images: current.images,
+        dataKey: current.committedKey, order: "latest", hasMore: current.hasMore,
+        running: false, reducedMotion: false, speed: 28, inputElement: target.element,
+        textureCache: { fitResidentLods: unchangedTextureLods, acquire: () => ({ release() {} }) } as unknown as ShowPixiTextureCache,
+        renderer: {} as Renderer, onNeedImages: usage => current.loadMore(usage),
+        onOpen() {}, onManualVerticalMovement() {}, onVisibleItems() {}, onColumnsChange: columns => columns
+      });
+    }, [current.images, current.committedKey, current.hasMore]);
+    return null;
+  }
+  t.after(() => scene?.destroy());
+  const images = showImages(900);
+  await h.render(h.React.createElement(Probe, {}));
+  await h.respond(0, { items: images.slice(0, 800), next_cursor: "800" });
+  connectEmptyScene = true;
+  await h.React.act(async () => current.loadMore({
+    dataKey: current.committedKey, activeIds: [],
+    consumedIds: current.images.map(image => image.id), available: 0, capacity: 800
+  }));
+  assert.equal(scene!.stats().visibleSprites, 0);
+  for (let index = 1; index <= 12; index++) {
+    assert.equal(h.pending.length, index + 1, "空窗口在四批预算之后仍有唯一后续请求");
+    await h.respond(index, {
+      items: images.slice(((index - 1) % 8) * 100, ((index - 1) % 8 + 1) * 100),
+      next_cursor: String(800 + index * 100)
+    });
+    assert.equal(current.error, null);
+  }
+  await h.respond(13, { items: images.slice(800), next_cursor: "fresh" });
+  assert.ok(scene!.stats().visibleSprites > 0, "无需再次移动或人工重试即可填屏");
+  const inFlight = h.pending.length - 1;
+  await h.respond(inFlight, { error: "unavailable" }, 503);
+  assert.ok(current.error);
+  const stopped = h.pending.length;
+  await h.React.act(async () => { for (let frame = 0; frame < 100; frame++) scene!.update(16); });
+  await h.flush();
+  assert.equal(h.pending.length, stopped, "真实失败后不自动续扫");
+  await h.React.act(async () => current.retry());
+  const retryIndex = h.pending.length - 1;
+  await h.render(h.React.createElement(Probe, { source: "replacement" }));
+  assert.equal(h.pending[retryIndex]!.signal?.aborted, true);
+  await h.respond(retryIndex, { items: images, next_cursor: "late" });
+  assert.notEqual(current.committedKey.split("#")[0], "replacement");
+  await h.respond(h.pending.length - 1, { items: images.slice(0, 3), next_cursor: null });
+  assert.equal(current.committedKey.split("#")[0], "replacement");
+});
+
+for (const action of ["source", "disable", "unmount", "eof"] as const) {
+  test(`[Web/展映] 空窗口分轮续扫在 ${action} 时取消且不遗留请求`, async (t) => {
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const h = await createConfigStreamHarness(t);
+    // Linkedom's window forwards property definitions to Node globals. Shadow
+    // only the browser clock so React's real zero-delay flush remains runnable.
+    const clockWindow = Object.create(h.window) as Window;
+    Object.defineProperty(globalThis, "window", { configurable: true, writable: true, value: clockWindow });
+    t.after(() => {
+      if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+      else Reflect.deleteProperty(globalThis, "window");
+    });
+    const clock = installControlledClock(t, clockWindow, { minimumControlledDelayMs: 0 });
+    const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
+    let current!: ReturnType<typeof useShowData>;
+    function Probe({ source = "scan", enabled = true }: { source?: string; enabled?: boolean }) {
+      current = useShowData(emptyGalleryFilters, source, "latest", 200, enabled);
+      return null;
+    }
+    const images = showImages(3);
+    await h.render(h.React.createElement(Probe));
+    await h.respond(0, { items: images, next_cursor: "1" });
+    await h.React.act(async () => current.loadMore({
+      dataKey: current.committedKey, activeIds: [], consumedIds: images.map(image => image.id),
+      available: 0, capacity: 800
+    }));
+    for (let i = 1; i <= 4; i++) await h.respond(i, { items: images, next_cursor: String(i + 1) });
+    assert.equal(h.pending.length, 5, "四批后先让出任务队列");
+    assert.equal(clock.pendingCount(), 1, "只保留一个空窗口续扫任务");
+    if (action === "source") await h.render(h.React.createElement(Probe, { source: "new" }));
+    else if (action === "disable") await h.render(h.React.createElement(Probe, { enabled: false }));
+    else if (action === "unmount") await h.render(null);
+    else {
+      await h.React.act(async () => clock.advanceBy(0));
+      assert.equal(h.pending.length, 6);
+      assert.equal(new URL(h.pending[5]!.path, "https://img.example").searchParams.get("cursor"), "5");
+      await h.respond(5, { items: [], next_cursor: null });
+    }
+    assert.equal(clock.pendingCount(), 0);
+    const stopped = h.pending.length;
+    await h.React.act(async () => clock.advanceBy(10_000));
+    await h.flush();
+    assert.equal(h.pending.length, stopped);
+    assert.equal(current.error, null);
+  });
+}
+
 test("[Web/展映] 编辑与删除在途替换仍能提交当前排序", async (t) => {
   for (const operation of ["update", "remove"] as const) await t.test(operation, async (t) => {
     const h = await createConfigStreamHarness(t, { honorAbort: false });

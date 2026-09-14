@@ -13,7 +13,7 @@ import { adminApiBasePath } from "../../lib/constants.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import type { ReorderDirection } from "../../lib/ui/reorder.js";
 
-export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, canDelete = false, reorderBusy, canMovePrevious, canMoveNext, onMove, onReorderControlRef, onDragStart, onDragEnter, onDragEnd }: {
+export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, canDelete = false, reorderBusy, dragging = false, canMovePrevious, canMoveNext, onMove, onReorderControlRef, onDragStart, onDrop, onDragEnd }: {
   kind: "themes" | "tags" | "authors";
   item: AdminEntityDto;
   onChanged: (item?: AuthorDto) => void | Promise<void>;
@@ -21,6 +21,7 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
   onError: (error: unknown) => void;
   canDelete?: boolean;
   reorderBusy: boolean;
+  dragging?: boolean;
   canMovePrevious: boolean;
   canMoveNext: boolean;
   onMove: (direction: ReorderDirection) => void;
@@ -29,7 +30,7 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
     node: HTMLButtonElement | null
   ) => void;
   onDragStart?: (slug: string) => void;
-  onDragEnter?: (slug: string) => void;
+  onDrop?: (slug: string) => void;
   onDragEnd?: () => void;
 }) {
   const noun = kind === "themes" ? "主题" : kind === "tags" ? "标签" : "作者";
@@ -58,7 +59,6 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
   const saveStatus = useAsyncActionStatus();
 
   const cardRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
   const dirty = display !== form.savedDisplay || (isAuthor && link !== form.savedLink);
   const cardBusy = saveStatus.pending || reorderBusy;
   const savePresentation = {
@@ -107,7 +107,6 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
       event.preventDefault();
       return;
     }
-    setDragging(true);
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", item.slug);
     onDragStart?.(item.slug);
@@ -117,8 +116,8 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
     <div
       ref={cardRef}
       className={`entity-card${dragging ? " is-dragging" : ""}`}
-      onDragEnter={() => { onDragEnter?.(item.slug); }}
       onDragOver={(event) => { event.preventDefault(); }}
+      onDrop={(event) => { event.preventDefault(); onDrop?.(item.slug); }}
     >
       <div className="entity-card-row">
         <SlugChip value={item.slug} ariaLabel={`${noun} slug`} />
@@ -169,7 +168,6 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
           dragPreviewRef={cardRef}
           onDragStart={begin}
           onDragEnd={() => {
-            setDragging(false);
             onDragEnd?.();
           }}
         />

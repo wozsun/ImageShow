@@ -38,7 +38,7 @@ const AuthenticatedAdminShell = lazy(() => (
   }))
 ));
 
-export function AdminShell({ siteName }: { siteName: string }) {
+export function AdminShell({ siteHeaderName }: { siteHeaderName: string }) {
   const navigate = useNavigate();
   const client = useQueryClient();
 
@@ -71,7 +71,7 @@ export function AdminShell({ siteName }: { siteName: string }) {
   if (!data.authenticated) {
     return (
       <AdminLogin
-        siteName={siteName}
+        siteHeaderName={siteHeaderName}
         onLogin={async () => {
           // 先同步移除可能跨登录复用的后台缓存，再重新读取认证状态。移除操作
           // 不主动取数；认证完成后由真正挂载的后台路由按需读取，避免显示旧会话数据。
@@ -103,7 +103,7 @@ export function AdminShell({ siteName }: { siteName: string }) {
       serverPreferences={data.preferences}
       serverPreferencesEtag={data.preferences_etag}
       serverPreferencesUpdatedAt={dataUpdatedAt}
-      siteName={siteName}
+      siteHeaderName={siteHeaderName}
       applicationVersion={data.application_version}
       versionEnabled={data.version_settings.enabled}
       versionLinkEnabled={data.version_settings.link_enabled}

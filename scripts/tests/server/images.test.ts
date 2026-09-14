@@ -161,6 +161,68 @@ import {
   servingReadyCacheItem
 } from "../support/server-test-context.ts";
 
+test("[Server/图片] 完成结果统一分类图片与存储配置断连并保留格式化错误", async (t) => {
+  const database = await import("../../../packages/server/src/core/database/pools.ts");
+  const registry = await import("../../../packages/server/src/storage/backends/registry.ts");
+  const { readCommittedIngestionResultsByImageIds } = await import("../../../packages/server/src/images/read-models/ingestion-results.ts");
+  initializeRuntimeConfig();
+  database.configureDatabasePools({
+    host: "database.invalid", port: 5432, name: "imageshow_test",
+    user: "imageshow_test", password: process.env.DATABASE_PASSWORD!
+  });
+  const id = "00000000-0000-7000-8000-000000000001";
+  const connectionError = Object.assign(new Error("connection refused"), { code: "ECONNREFUSED" });
+  let fault: "metadata" | "storage" | "format" | "missing" | "none" = "metadata";
+  const reads: string[] = [];
+  t.mock.method(database.pool, "query", async (sql: string) => {
+    if (sql.includes("FROM metadata")) {
+      reads.push("metadata");
+      if (fault === "metadata") throw connectionError;
+      return { rows: [{
+        id, created_by: "owner", storage_slug: "local", object_key: fault === "format" ? "invalid" : `01/${id}.webp`,
+        device: "pc", brightness: "dark", theme: null, author: null, tags: [],
+        title: "fixture", description: "", source: "", original: "", width: 100, height: 100,
+        image_size: 10, md5: "a".repeat(32), image_time: "2026-09-15T00:00:00.000Z"
+      }] };
+    }
+    assert.match(sql, /FROM storage_backend/u);
+    reads.push("storage");
+    if (fault === "storage") throw connectionError;
+    return { rows: fault === "missing" ? [] : [{
+      slug: "local", type: "local", config: {}, display_name: "Local", enabled: true,
+      is_default: true, namespace_identities: []
+    }] };
+  });
+  t.after(() => registry.invalidateStorageBackendRegistry());
+  for (const phase of ["metadata", "storage"] as const) {
+    fault = phase;
+    reads.length = 0;
+    registry.invalidateStorageBackendRegistry();
+    await assert.rejects(readCommittedIngestionResultsByImageIds([id]), (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.status, 503);
+      assert.equal(error.code, "database_unavailable");
+      assert.equal(error.cause, connectionError);
+      return true;
+    });
+    assert.deepEqual(reads, phase === "metadata" ? ["metadata"] : ["metadata", "storage"]);
+  }
+  fault = "format";
+  registry.invalidateStorageBackendRegistry();
+  await assert.rejects(readCommittedIngestionResultsByImageIds([id]), TypeError);
+  fault = "missing";
+  registry.invalidateStorageBackendRegistry();
+  await assert.rejects(readCommittedIngestionResultsByImageIds([id]), (error: unknown) => (
+    error instanceof ApiError && error.code === "storage_backend_not_found" && error.status === 404
+  ));
+  fault = "none";
+  registry.invalidateStorageBackendRegistry();
+  const results = await readCommittedIngestionResultsByImageIds([id, id.toUpperCase()]);
+  assert.equal(results.size, 1);
+  assert.equal(results.get(id)?.created_by, "owner");
+  assert.equal(results.get(id)?.item.id, id);
+});
+
 test("[Server/主题] null 保留给未设置，写入必须使用 JSON null 且不限制标签作者", async () => {
   const { imageThemeInput } = await import("../../../packages/server/src/images/metadata-theme.ts");
   const { themeCreateInput, tagCreateInput, authorSlugInput } = await import("../../../packages/server/src/routes/validation/vocabulary.ts");
@@ -2184,6 +2246,35 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
     assert.equal((result as Response).status, 400, search);
   }
 });
+test("[Server/图片] 固定 seed 保留 Unicode 原值并限制单张和互斥参数", () => {
+  const parse = (search: string) => parseRandomQuery(new URL(`https://img.example.com/random?${search}`), "redirect");
+  for (const seed of ["wallpaper", "Wallpaper", "  wallpaper  ", "2026-09-15", "图😀".repeat(64)]) {
+    for (const mode of ["proxy", "redirect", "json"]) {
+      const result = parse(new URLSearchParams({ seed, mode }).toString());
+      assert.ok(!(result instanceof Response));
+      assert.equal(result.seed, seed);
+      assert.equal(result.limit, 1);
+      assert.equal(result.mode, mode);
+    }
+  }
+  const ordinary = parse("");
+  assert.ok(!(ordinary instanceof Response));
+  assert.equal(ordinary.seed, null);
+  const explicit = parse("seed=fixed&mode=json&limit=1");
+  assert.ok(!(explicit instanceof Response));
+  assert.equal(explicit.limit, 1);
+  for (const search of [
+    "seed=", "seed=+%20", "seed=%00", "seed=%0A", "seed=%7F",
+    `seed=${encodeURIComponent("😀".repeat(129))}`,
+    "seed=a&seed=a", "seed=fixed&mode=json&limit=2", "seed=fixed&limit=1",
+    `seed=fixed&id=${imageId}`
+  ]) {
+    const result = parse(search);
+    assert.ok(result instanceof Response, search);
+    assert.equal(result.status, 400, search);
+  }
+});
+
 test("[Server/图片] 图片处理共享许可并同时限制 commit 数量和字节", async () => {
   const cancellationError = (signal: AbortSignal) => (
     signal.reason ?? new Error("cancelled")

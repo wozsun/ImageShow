@@ -18,13 +18,13 @@ function fitName(name: HTMLElement) {
 }
 
 export function AdminBrand({
-  siteName,
+  siteHeaderName,
   applicationVersion,
   versionEnabled,
   versionLinkEnabled,
   to
 }: {
-  siteName: string;
+  siteHeaderName: string;
   applicationVersion: string;
   versionEnabled: boolean;
   versionLinkEnabled: boolean;
@@ -59,15 +59,15 @@ export function AdminBrand({
       active = false;
       observer?.disconnect();
     };
-  }, [siteName, visibleVersion]);
+  }, [siteHeaderName, visibleVersion]);
 
   return (
     <div
       ref={rootRef}
       className={`admin-brand${visibleVersion ? " has-version" : ""}`}
     >
-      <Link ref={nameRef} className="admin-brand-name" to={to} title={siteName}>
-        {siteName}
+      <Link ref={nameRef} className="admin-brand-name" to={to} title={siteHeaderName}>
+        {siteHeaderName}
       </Link>
       {visibleVersion && versionLinkEnabled && (
         <a

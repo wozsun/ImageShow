@@ -18,14 +18,6 @@
 
 ### site
 
-#### site.name
-
-- 环境变量：`SITE_NAME`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `"ImageShow"`；去空白后非空
-
-站点显示名称，用于浏览器标题、导航和后台。可在普通设置页修改。
-
 #### site.domain
 
 - 环境变量：`SITE_DOMAIN`
@@ -34,14 +26,6 @@
 
 站点对外访问的域名，例如 `img.example.com`，不要填写协议或路径；需要指定端口时可写成 `img.example.com:8443`。设置实际域名后，其他域名的访问会返回 404，因此修改前应先准备好对应域名和反向代理。空值或 `example.com` 表示使用当前访问域名，不限定一个固定域名。
 
-#### site.description
-
-- 环境变量：`SITE_DESCRIPTION`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `"画廊与随机图片API"`；去空白后 0–200 字符
-
-站点的网页描述，供浏览器页面信息和搜索引擎使用，不是首页横幅正文。设为空字符串时使用站点名称。
-
 #### site.icon
 
 - 环境变量：`SITE_ICON`
@@ -49,6 +33,30 @@
 - 类型、默认值与范围：字符串；默认 `"/assets/brand/favicon.svg"`；1–2048 字符的站内绝对路径或 HTTPS URL
 
 浏览器标签页等位置使用的站点图标。可以填写站内绝对路径，例如 `/assets/brand/favicon.svg`，或外部 HTTPS 图片地址。
+
+#### site.title
+
+- 环境变量：`SITE_TITLE`
+- Compose：显式映射
+- 类型、默认值与范围：字符串；默认 `"ImageShow"`；去空白后非空
+
+网页标题，用于浏览器标签页及服务端生成的 HTML 标题。可在普通设置页修改。
+
+#### site.description
+
+- 环境变量：`SITE_DESCRIPTION`
+- Compose：显式映射
+- 类型、默认值与范围：字符串；默认 `"画廊与随机图片API"`；去空白后 0–200 字符
+
+站点的网页描述，供浏览器页面信息和搜索引擎使用，不是首页横幅正文。设为空字符串时使用网页标题（`site.title`）。
+
+#### site.header_name
+
+- 环境变量：`SITE_HEADER_NAME`
+- Compose：显式映射
+- 类型、默认值与范围：字符串；默认 `"ImageShow"`；去空白后非空
+
+页头显示名称，用于公开页面导航和后台品牌文字，与网页标题独立。可在普通设置页修改。
 
 #### site.version.enabled
 

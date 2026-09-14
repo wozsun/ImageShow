@@ -22,7 +22,8 @@ export const showMode = z.enum(showModes);
 export const showOrder = z.enum(publicImageOrders);
 export const showDriftSpeed = z.coerce.number().int().min(10).max(60);
 
-export const siteName = z.string().trim().min(1);
+export const siteHeaderName = z.string().trim().min(1);
+export const siteTitle = z.string().trim().min(1);
 export const siteDomain = z.string().trim().toLowerCase().max(259).refine((value) => {
   if (!value) return true;
   if (!/^[a-z0-9.-]+(?::\d{1,5})?$/.test(value)) return false;

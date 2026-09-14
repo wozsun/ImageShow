@@ -147,7 +147,7 @@ export function AppHeader({
         className="brand"
         to="/"
       >
-        {data.site.name}
+        {data.site.header_name}
       </Link>
       <nav className="desktop-nav">
         {homeEnabled && <NavLink to="/home" className={navClassName("/home")} {...homePreloadProps}><Icon name="home-4-line" />首页</NavLink>}

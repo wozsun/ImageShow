@@ -32,10 +32,11 @@ type RuntimeConfigEnvironmentBinding = {
 };
 
 export const runtimeConfigEnvironmentBindings = [
-  { path: "site.name", environmentVariable: "SITE_NAME", valueKind: "string" },
   { path: "site.domain", environmentVariable: "SITE_DOMAIN", valueKind: "string" },
-  { path: "site.description", environmentVariable: "SITE_DESCRIPTION", valueKind: "string" },
   { path: "site.icon", environmentVariable: "SITE_ICON", valueKind: "string" },
+  { path: "site.title", environmentVariable: "SITE_TITLE", valueKind: "string" },
+  { path: "site.description", environmentVariable: "SITE_DESCRIPTION", valueKind: "string" },
+  { path: "site.header_name", environmentVariable: "SITE_HEADER_NAME", valueKind: "string" },
   { path: "site.version.enabled", environmentVariable: "SITE_VERSION_ENABLED", valueKind: "boolean" },
   { path: "site.version.link_enabled", environmentVariable: "SITE_VERSION_LINK_ENABLED", valueKind: "boolean" },
   { path: "site.root", environmentVariable: "SITE_ROOT", valueKind: "string" },

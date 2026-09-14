@@ -25,6 +25,7 @@ export type ParsedRandomQuery = {
   mode: RandomMethod;
   limit: number;
   ids: string[];
+  seed: string | null;
   device: RandomRequestDevice;
   brightness: RandomBrightness | null;
   theme: RandomSelectorGroup;
@@ -51,6 +52,7 @@ const randomAllowedQueryValues = [
   "tag",
   "author",
   "id",
+  "seed",
   "mode",
   "limit"
 ] as const;
@@ -58,6 +60,7 @@ const randomAllowedQuery = new Set<string>(randomAllowedQueryValues);
 const randomSingleValueQuery = new Set([
   "device",
   "brightness",
+  "seed",
   "mode",
   "limit"
 ]);
@@ -259,6 +262,32 @@ function parseTargetedIds(query: URLSearchParams): string[] | Response {
   return [...new Set(ids)].sort();
 }
 
+function parseSeed(query: URLSearchParams, limit: number): string | null | Response {
+  const seed = query.get("seed");
+  if (seed === null) return null;
+  if (
+    !seed.trim()
+    || disallowedSelectorCharacters.test(seed)
+    || [...seed].length > appConfig.randomQuery.maxSeedCharacters
+  ) {
+    return apiErrorResponse(
+      { status: 400, message: "Bad Request: Invalid seed" },
+      {
+        field: "seed",
+        maxCharacters: appConfig.randomQuery.maxSeedCharacters,
+        hint: "Use a non-blank string without control characters"
+      }
+    );
+  }
+  if (limit !== 1) {
+    return apiErrorResponse(
+      { status: 400, message: "Bad Request: seed only supports one image" },
+      { field: "limit", hint: "Omit limit or use limit=1 with mode=json" }
+    );
+  }
+  return seed;
+}
+
 export function parseRandomQuery(
   url: URL,
   defaultMode: RandomDefaultMethod
@@ -285,6 +314,8 @@ export function parseRandomQuery(
   }
   const limit = parseJsonLimit(query, explicitMode);
   if (limit instanceof Response) return limit;
+  const seed = parseSeed(query, limit);
+  if (seed instanceof Response) return seed;
   const targetedCombinationError = targetedIdCombinationError(query);
   if (targetedCombinationError) return targetedCombinationError;
   if (query.has("id")) {
@@ -294,6 +325,7 @@ export function parseRandomQuery(
       mode: (explicitMode ?? defaultMode) as RandomMethod,
       limit,
       ids,
+      seed,
       device: "auto",
       brightness: null,
       theme: { include: [], exclude: [] },
@@ -340,6 +372,7 @@ export function parseRandomQuery(
     mode: (explicitMode ?? defaultMode) as RandomMethod,
     limit,
     ids: [],
+    seed,
     device: device as RandomRequestDevice,
     brightness: brightness as RandomBrightness | null,
     theme: theme.selectors,

@@ -40,12 +40,12 @@ class LoginChallengeModuleBoundary extends Component<{
 }
 
 export function AdminLogin({
-  siteName,
+  siteHeaderName,
   onLogin,
   altchaEnabled,
   loginBackground
 }: {
-  siteName: string;
+  siteHeaderName: string;
   onLogin: () => Promise<boolean>;
   altchaEnabled: boolean;
   loginBackground: string;
@@ -182,7 +182,7 @@ export function AdminLogin({
           setLoggingIn(false);
         }
       }}>
-        <a className="login-site-title" href="/"><h1>{siteName}</h1></a>
+        <a className="login-site-title" href="/"><h1>{siteHeaderName}</h1></a>
         <input
           name="username"
           value={username}

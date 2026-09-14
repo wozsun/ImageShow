@@ -32,6 +32,7 @@ export async function readCommittedIngestionResultsByImageIds(
   const uniqueIds = [...new Set(imageIds.map((imageId) => imageId.toLowerCase()))];
   if (!uniqueIds.length) return new Map<string, CommittedIngestionResult>();
   let rows: Array<IngestionImageRecordWithTags & { created_by: string }>;
+  let items: CompletedIngestionImageDto[];
   try {
     rows = (await reader.query<IngestionImageRecordWithTags & { created_by: string }>(
       `SELECT ${ingestionImagePresentationColumnsWithTags}, created_by
@@ -39,6 +40,9 @@ export async function readCommittedIngestionResultsByImageIds(
         WHERE id = ANY($1::uuid[])`,
       [uniqueIds]
     )).rows;
+    // URL projection can read PostgreSQL again when the storage registry is
+    // cold. Its connection failures belong to the same completed-result read.
+    items = await ingestionImageItemsWithTags(rows);
   } catch (error) {
     const reason = databaseConnectionFailureReason(error);
     if (!reason) throw error;
@@ -52,7 +56,6 @@ export async function readCommittedIngestionResultsByImageIds(
     unavailable.cause = error;
     throw unavailable;
   }
-  const items = await ingestionImageItemsWithTags(rows);
   const rowsById = new Map(rows.map((row) => [row.id.toLowerCase(), row]));
   return new Map(items.map((item) => [
     item.id.toLowerCase(),

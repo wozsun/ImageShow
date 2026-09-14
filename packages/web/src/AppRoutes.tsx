@@ -116,7 +116,7 @@ export function AppRoutes() {
                 ? <GalleryPage embedded order={data.site.gallery.order} />
                 : publicFallback(rootPath)}
             />
-            <Route path={`${adminBasePath}/*`} element={<AdminShell siteName={data.site.name} />} />
+            <Route path={`${adminBasePath}/*`} element={<AdminShell siteHeaderName={data.site.header_name} />} />
             <Route path="*" element={publicFallback(rootPath)} />
           </Routes>
         </Suspense>
