@@ -84,8 +84,9 @@ export function invalidateImageDataAfterAdminListMutation(
   ]);
 }
 
-export function invalidateDataAfterAuthorProfileSave(client: QueryClient) {
+export function invalidateVocabularyData(client: QueryClient, listKey?: readonly unknown[]) {
   return invalidate(client, [
+    ...(listKey ? [listKey] : []),
     queryKeys.galleryFacets,
     queryKeys.galleryStats,
     queryKeys.ingestionVocabulary

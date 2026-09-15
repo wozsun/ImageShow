@@ -131,7 +131,7 @@ test("[Web/后台排序] 单项失败保留草稿并继续队列，刷新失败�
   await h.respond(3, { ok: true });
   await h.respond(4, { code: "read_failed", error: "read failed" }, 500);
   assert.equal(h.input("a").value, "-5");
-  assert.match(h.document.querySelector('.sort-order-field [role="alert"]')!.textContent!, /已保存.*列表刷新失败/);
+  assert.match(h.document.querySelector('.action-feedback-fallback-region .action-feedback-error[role="alert"]')!.textContent!, /已保存.*列表刷新失败/);
   await h.enter("a");
   await h.respond(5, { ok: true });
   await h.respond(6, h.response({ a: -5, b: 10 }));
@@ -163,6 +163,8 @@ test("[Web/后台排序] 作者资料保存与排序回读重叠时采用同时�
   assert.equal(h.input("a").getAttribute("aria-invalid"), "false");
   assert.equal(name.value, "updated");
   assert.equal(h.pending.length, 4);
+  assert.equal(h.client.getQueryState(queryKeys.adminImages)?.isInvalidated, false,
+    "作者资料与排序更新只刷新词表投影");
 });
 
 test("[Web/后台排序] 作者同值顺序保持服务器排列，无法确定的新位置由列表回读", async (t) => {
@@ -212,10 +214,12 @@ test("[Web/后台排序] 作者同值顺序保持服务器排列，无法确定�
 test("[Web/后台排序] 整数输入边界、权威更新与卸载遵循草稿和单次提交契约", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { SortOrderInput } = await import("../../../packages/web/src/components/actions/SortOrderInput.tsx");
+  const { ActionFeedbackProvider } = await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
   const saved: number[] = [];
   let pending = Promise.withResolvers<number>();
   const onSave = (value: number) => { saved.push(value); return pending.promise; };
-  const render = (value: number) => h.render(h.React.createElement(SortOrderInput, { value, itemLabel: "标签 x", disabled: false, onSave }));
+  const render = (value: number) => h.render(h.React.createElement(ActionFeedbackProvider, null,
+    h.React.createElement(SortOrderInput, { value, itemLabel: "标签 x", disabled: false, onSave })));
   const input = () => h.document.querySelector<HTMLInputElement>("input")!;
   const edit = async (value: string) => h.React.act(async () => { inputText(h.window, input(), value); });
   const key = async (key: string, isComposing = false) => h.React.act(async () => {
@@ -234,6 +238,9 @@ test("[Web/后台排序] 整数输入边界、权威更新与卸载遵循草稿�
     await key("Enter");
     assert.equal(input().getAttribute("aria-invalid"), "true");
     assert.equal(saved.length, 0, "非法整数留在输入框供修正");
+    const message = h.document.querySelector('.action-feedback-fallback-region .action-feedback-error[role="alert"]');
+    assert.ok(message);
+    assert.match(message.textContent!, /请输入 -5,000,000 至 5,000,000 之间的整数/);
   }
   await edit(String(sortOrderMax));
   await key("ArrowUp");

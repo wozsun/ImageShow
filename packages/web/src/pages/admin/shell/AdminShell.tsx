@@ -6,7 +6,7 @@ import { adminApiBasePath, adminBasePath } from "../../../lib/constants.js";
 import {
   clearSessionProbeHint
 } from "../../../lib/api/auth-session.js";
-import { useAuthMe } from "../../../hooks/useAuthSession.js";
+import { useAuthSessionQuery } from "../../../hooks/useAuthSession.js";
 import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
 import { AppLoadingScreen } from "../../../components/feedback/AppLoadingScreen.js";
 import { applyUiColorContext } from "../../../lib/ui/apply-ui-color-context.js";
@@ -48,7 +48,7 @@ export function AdminShell({ siteHeaderName }: { siteHeaderName: string }) {
     error: authError,
     isError: authFailed,
     refetch
-  } = useAuthMe();
+  } = useAuthSessionQuery();
   const unauthenticatedAppearanceReady = Boolean(
     data && !data.authenticated
   );

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { normalizeAuthor, normalizeTheme } from "../../../../lib/image-draft.js";
 import type { IngestionJob } from "../../../../lib/types.js";
-import { updateStoredIngestions } from "./ingestion-api.js";
+import { updateStoredIngestions } from "./ingestion-http-client.js";
 import { ingestionJobIsRetryableFailure, ingestionJobRetryKind } from "./model/ingestion-job-retry.js";
 import type { IngestionQueueController } from "./useIngestionQueue.js";
 

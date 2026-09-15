@@ -25,7 +25,7 @@ import type {
   ImportSourceSubmission
 } from "./import/ImportSourceDialog.js";
 import { createManifestImportJobs } from "./import/manifest-jobs.js";
-import type { ImportManifestParseError } from "./queue/ingestion-api.js";
+import type { ImportManifestParseError } from "./queue/ingestion-http-client.js";
 import {
   useImportQueueOwner,
   useUploadQueueOwner

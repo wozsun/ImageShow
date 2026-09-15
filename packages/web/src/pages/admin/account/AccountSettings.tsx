@@ -5,7 +5,7 @@ import { PasswordInput } from "../../../components/form/PasswordInput.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { isValidAdminPassword, passwordPolicyHint } from "../../../lib/auth/password.js";
-import { useAuthMe } from "../../../hooks/useAuthSession.js";
+import { useAuthSessionQuery } from "../../../hooks/useAuthSession.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 
 const updatePasswordPresentation = {
@@ -16,7 +16,7 @@ const updatePasswordPresentation = {
 } as const;
 
 export function AccountSettings() {
-  const { data: auth } = useAuthMe();
+  const { data: auth } = useAuthSessionQuery();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");

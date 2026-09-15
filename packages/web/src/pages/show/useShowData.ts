@@ -29,18 +29,18 @@ export function useShowData(
   const requestRef = useRef<{ controller: AbortController; replace: boolean; resume?: () => void } | null>(null);
   const continuationTimerRef = useRef<number | null>(null);
   const targetedRequestsRef = useRef(new Map<string, AbortController>());
-  const generationRef = useRef(0);
-  const roundRef = useRef(0);
+  const requestGenerationRef = useRef(0);
+  const consumptionRoundRef = useRef(0);
   const imagesRef = useRef<ShowImage[]>([]);
   const committedRef = useRef(committed);
   const cursorRef = useRef("");
-  const endedRef = useRef(false);
-  const discardedRef = useRef(false);
-  const pausedRef = useRef(false);
-  const recentRef = useRef(new Set<string>());
-  const removedRef = useRef(new Set<string>());
-  const confirmedRef = useRef(new Map<string, ShowImage>());
-  const usageRef = useRef<ShowCandidateUsage | null>(null);
+  const cursorExhaustedRef = useRef(false);
+  const hasRetiredCandidatesRef = useRef(false);
+  const requestPausedAfterErrorRef = useRef(false);
+  const recentImageIdsRef = useRef(new Set<string>());
+  const removedImageIdsRef = useRef(new Set<string>());
+  const confirmedImageEditsRef = useRef(new Map<string, ShowImage>());
+  const latestUsageRef = useRef<ShowCandidateUsage | null>(null);
   const initialLimitRef = useRef(initialLimit);
   initialLimitRef.current = initialLimit;
   const requestIdentity = readableFilterSearch(imageBrowseApiSearchParams(filters, order, {
@@ -48,33 +48,33 @@ export function useShowData(
   }));
   const requestFilters = useMemo(() => galleryFiltersFromSearchParams(new URLSearchParams(requestIdentity)), [requestIdentity]);
 
-  const publish = useCallback((next: ShowImage[]) => {
+  const publishImages = useCallback((next: ShowImage[]) => {
     imagesRef.current = next;
     setImages(next);
     const ids = new Set(next.map((image) => image.id));
     // Confirmed base fields only need to outlive their resident card.
-    for (const id of confirmedRef.current.keys()) if (!ids.has(id)) confirmedRef.current.delete(id);
+    for (const id of confirmedImageEditsRef.current.keys()) if (!ids.has(id)) confirmedImageEditsRef.current.delete(id);
   }, []);
 
   const request = useCallback(async (replace: boolean, validate = false) => {
-    if (!enabled || requestRef.current || pausedRef.current) return;
-    if (!replace && endedRef.current && !discardedRef.current) return;
+    if (!enabled || requestRef.current || requestPausedAfterErrorRef.current) return;
+    if (!replace && cursorExhaustedRef.current && !hasRetiredCandidatesRef.current) return;
     const limit = replace ? initialLimitRef.current : continuationLimit;
     if (!replace && imagesRef.current.length + limit > maximumRetainedDtos) return;
     if (continuationTimerRef.current !== null) {
       window.clearTimeout(continuationTimerRef.current);
       continuationTimerRef.current = null;
     }
-    const generation = generationRef.current;
+    const generation = requestGenerationRef.current;
     const controller = new AbortController();
     requestRef.current = { controller, replace };
     setFailure(null);
     if (replace) setInitialLoading(true);
     try {
       let cursor = replace ? "" : cursorRef.current;
-      if (!replace && endedRef.current) {
+      if (!replace && cursorExhaustedRef.current) {
         cursor = "";
-        recentRef.current = new Set([...recentRef.current].slice(-continuationLimit));
+        recentImageIdsRef.current = new Set([...recentImageIdsRef.current].slice(-continuationLimit));
       }
       // Repeated batches still advance their scan boundary. Yield after four
       // empty admissions; candidate usage (or remaining empty-scene demand)
@@ -87,7 +87,7 @@ export function useShowData(
         const response = await api<PublicImageListResponseDto<"show">>(path, {
           signal: controller.signal, ...(validate ? { cache: "no-cache" as const } : {})
         });
-        if (generationRef.current !== generation || controller.signal.aborted) return;
+        if (requestGenerationRef.current !== generation || controller.signal.aborted) return;
         if (response.next_cursor && response.next_cursor === cursor) {
           throw new ApiClientError("图片分页未能继续，请重试", 503, "browse_cursor_stalled");
         }
@@ -95,11 +95,11 @@ export function useShowData(
         const ids = new Set(previous.map((image) => image.id));
         const eligible: ShowImage[] = [];
         for (const item of response.items) {
-          if (!item.id || ids.has(item.id) || removedRef.current.has(item.id)) continue;
+          if (!item.id || ids.has(item.id) || removedImageIdsRef.current.has(item.id)) continue;
           ids.add(item.id);
-          eligible.push(confirmedRef.current.get(item.id) ?? item);
+          eligible.push(confirmedImageEditsRef.current.get(item.id) ?? item);
         }
-        const incoming = eligible.filter((item) => replace || !recentRef.current.has(item.id));
+        const incoming = eligible.filter((item) => replace || !recentImageIdsRef.current.has(item.id));
         // At EOF an empty scene cannot emit another consumption revision.
         // Reuse this valid page only when recent history rejected every item;
         // empty or locally removed pages still end the scan without polling.
@@ -111,54 +111,57 @@ export function useShowData(
         }
         const accepted = order === "random" ? shuffledImageBatch(incoming) : incoming;
         for (const item of accepted) {
-          recentRef.current.delete(item.id);
-          recentRef.current.add(item.id);
+          recentImageIdsRef.current.delete(item.id);
+          recentImageIdsRef.current.add(item.id);
         }
-        while (recentRef.current.size > recentLimit) {
-          recentRef.current.delete(recentRef.current.values().next().value!);
+        while (recentImageIdsRef.current.size > recentLimit) {
+          recentImageIdsRef.current.delete(recentImageIdsRef.current.values().next().value!);
         }
         // Admission and scan advancement are one synchronous commit. No
         // candidate is truncated to make an already-advanced cursor fit.
         cursorRef.current = response.next_cursor ?? "";
-        endedRef.current = response.next_cursor === null;
-        setHasMore(!endedRef.current || discardedRef.current);
-        if (replace || accepted.length) publish([...previous, ...accepted]);
-        if (replace) {
-          const value = { sourceKey, order, dataKey: `${sourceKey}#${++roundRef.current}` };
+        cursorExhaustedRef.current = response.next_cursor === null;
+        setHasMore(!cursorExhaustedRef.current || hasRetiredCandidatesRef.current);
+        if (replace || accepted.length) publishImages([...previous, ...accepted]);
+        // An empty pool starts a new consumption round when refilled. React
+        // can batch retirement and admission into one render, so neither a
+        // queued usage snapshot nor the scene may reuse the old consumed IDs.
+        if (replace || (!previous.length && accepted.length > 0)) {
+          const value = { sourceKey, order, dataKey: `${sourceKey}#${++consumptionRoundRef.current}` };
           committedRef.current = value;
           setCommitted(value);
         }
-        if (replace || accepted.length || endedRef.current) return;
+        if (replace || accepted.length || cursorExhaustedRef.current) return;
         cursor = cursorRef.current;
       }
     } catch (error) {
-      if (!controller.signal.aborted && generationRef.current === generation) {
-        pausedRef.current = true;
+      if (!controller.signal.aborted && requestGenerationRef.current === generation) {
+        requestPausedAfterErrorRef.current = true;
         setFailure({ sourceKey, value: error, replace });
       }
     } finally {
       const completed = requestRef.current?.controller === controller ? requestRef.current : null;
       if (completed) requestRef.current = null;
-      if (generationRef.current === generation) setInitialLoading(false);
-      if (completed && generationRef.current === generation && !pausedRef.current) {
+      if (requestGenerationRef.current === generation) setInitialLoading(false);
+      if (completed && requestGenerationRef.current === generation && !requestPausedAfterErrorRef.current) {
         completed.resume?.();
         // An empty scene has no more leases to release, so it cannot emit
         // another consumption revision. Keep that demand across scan rounds,
         // yielding between them; EOF and real failures still stop this scan.
-        if (!requestRef.current && !imagesRef.current.length && !endedRef.current
-          && usageRef.current?.dataKey === committedRef.current.dataKey) {
+        if (!requestRef.current && !imagesRef.current.length && !cursorExhaustedRef.current
+          && latestUsageRef.current?.dataKey === committedRef.current.dataKey) {
           continuationTimerRef.current = window.setTimeout(() => {
             continuationTimerRef.current = null;
-            if (generationRef.current === generation && !imagesRef.current.length) void request(false);
+            if (requestGenerationRef.current === generation && !imagesRef.current.length) void request(false);
           }, 0);
         }
       }
     }
-  }, [enabled, order, publish, requestFilters, sourceKey]);
+  }, [enabled, order, publishImages, requestFilters, sourceKey]);
 
-  const fence = useCallback((imageId?: string) => {
+  const invalidateImageRequests = useCallback((imageId?: string) => {
     const replacing = requestRef.current?.replace === true;
-    generationRef.current += 1;
+    requestGenerationRef.current += 1;
     if (continuationTimerRef.current !== null) {
       window.clearTimeout(continuationTimerRef.current);
       continuationTimerRef.current = null;
@@ -174,58 +177,64 @@ export function useShowData(
   }, []);
 
   useEffect(() => {
-    fence();
+    invalidateImageRequests();
     cursorRef.current = "";
-    endedRef.current = false;
-    discardedRef.current = false;
-    pausedRef.current = false;
-    usageRef.current = null;
-    recentRef.current.clear();
-    removedRef.current.clear();
-    confirmedRef.current.clear();
+    cursorExhaustedRef.current = false;
+    hasRetiredCandidatesRef.current = false;
+    requestPausedAfterErrorRef.current = false;
+    latestUsageRef.current = null;
+    recentImageIdsRef.current.clear();
+    removedImageIdsRef.current.clear();
+    confirmedImageEditsRef.current.clear();
     setFailure(null);
     setHasMore(enabled);
     setInitialLoading(enabled);
-    if (!enabled) publish([]);
+    if (!enabled) publishImages([]);
     void request(true);
-    return () => { fence(); };
-  }, [enabled, fence, publish, request]);
+    return () => { invalidateImageRequests(); };
+  }, [enabled, invalidateImageRequests, publishImages, request]);
 
   const loadMore = useCallback((usage?: ShowCandidateUsage) => {
     if (!enabled) return;
     if (usage) {
       if (usage.dataKey !== committedRef.current.dataKey || committedRef.current.sourceKey !== sourceKey) return;
-      usageRef.current = usage;
+      latestUsageRef.current = usage;
       if (usage.available >= continuationLimit) return;
-      const needsRotation = !endedRef.current || discardedRef.current || imagesRef.current.length > usage.capacity;
+      const needsRotation = !cursorExhaustedRef.current || hasRetiredCandidatesRef.current || imagesRef.current.length > usage.capacity;
       if (!needsRotation) return;
       const active = new Set(usage.activeIds);
       const consumed = new Set(usage.consumedIds);
-      const next = imagesRef.current.filter((image) => active.has(image.id) || !consumed.has(image.id));
+      let unconsumed = 0;
+      const next = imagesRef.current.filter((image) => {
+        if (!consumed.has(image.id)) {
+          unconsumed += 1;
+          return true;
+        }
+        return active.has(image.id);
+      });
       if (next.length !== imagesRef.current.length) {
-        discardedRef.current = true;
-        publish(next);
+        hasRetiredCandidatesRef.current = true;
+        publishImages(next);
         setHasMore(true);
       }
-      const unconsumed = imagesRef.current.filter((image) => !consumed.has(image.id)).length;
       if (unconsumed >= continuationLimit) return;
     }
     // Coalesce demand that arrives during a scan. An empty window may have
     // no further consumption revision after that scan reaches EOF.
     if (requestRef.current) requestRef.current.resume = () => loadMore(usage);
     else void request(false);
-  }, [enabled, publish, request, sourceKey]);
+  }, [enabled, publishImages, request, sourceKey]);
 
   const removeImage = useCallback((imageId: string, replenish = false) => {
-    removedRef.current.add(imageId);
+    removedImageIdsRef.current.add(imageId);
     const next = imagesRef.current.filter((image) => image.id !== imageId);
     if (next.length === imagesRef.current.length) return false;
-    const replacing = fence(imageId);
-    publish(next);
+    const replacing = invalidateImageRequests(imageId);
+    publishImages(next);
     if (replacing) void request(true);
-    else if (replenish) loadMore(usageRef.current ?? undefined);
+    else if (replenish) loadMore(latestUsageRef.current ?? undefined);
     return true;
-  }, [fence, loadMore, publish, request]);
+  }, [invalidateImageRequests, loadMore, publishImages, request]);
 
   const updateImage = useCallback((snapshot: EditableImageSnapshot) => {
     const current = imagesRef.current.find((image) => image.id === snapshot.id);
@@ -234,17 +243,17 @@ export function useShowData(
       removeImage(snapshot.id, true);
       return "removed" as const;
     }
-    const replacing = fence(snapshot.id);
+    const replacing = invalidateImageRequests(snapshot.id);
     const updated = updatedShowImage(current, snapshot);
-    confirmedRef.current.set(snapshot.id, updated);
-    publish(imagesRef.current.map((image) => image.id === snapshot.id ? updated : image));
+    confirmedImageEditsRef.current.set(snapshot.id, updated);
+    publishImages(imagesRef.current.map((image) => image.id === snapshot.id ? updated : image));
     if (replacing) void request(true);
     return "updated" as const;
-  }, [fence, publish, removeImage, request, requestFilters]);
+  }, [invalidateImageRequests, publishImages, removeImage, request, requestFilters]);
 
   const refreshImage = useCallback((imageId: string) => {
     if (!imagesRef.current.some((image) => image.id === imageId)) return;
-    if (fence(imageId)) {
+    if (invalidateImageRequests(imageId)) {
       void request(true, true);
       return;
     }
@@ -266,7 +275,7 @@ export function useShowData(
       .finally(() => {
         if (targetedRequestsRef.current.get(imageId) === controller) targetedRequestsRef.current.delete(imageId);
       });
-  }, [fence, removeImage, request, updateImage]);
+  }, [invalidateImageRequests, removeImage, request, updateImage]);
 
   const transitioning = committed.sourceKey !== sourceKey || committed.order !== order;
   const error = failure?.sourceKey === sourceKey ? failure.value : null;
@@ -277,12 +286,12 @@ export function useShowData(
     initialLoading: enabled && (initialLoading || (transitioning && error === null)),
     loadMore, removeImage, updateImage, refreshImage,
     retry: () => {
-      pausedRef.current = false;
+      requestPausedAfterErrorRef.current = false;
       const expired = isApiClientError(error) && error.code === "cursor_expired";
       if (expired) {
-        fence();
-        recentRef.current.clear();
-        discardedRef.current = false;
+        invalidateImageRequests();
+        recentImageIdsRef.current.clear();
+        hasRetiredCandidatesRef.current = false;
       }
       void request(expired || Boolean(failure?.replace) || imagesRef.current.length === 0 || transitioning);
     }

@@ -30,7 +30,7 @@ import {
   setCsrfToken
 } from "../../../packages/web/src/lib/api/client.ts";
 import {
-  invalidateDataAfterAuthorProfileSave,
+  invalidateVocabularyData,
   invalidateImageDataAfterIngestion,
   invalidateImageDataAfterMetadataSave
 } from "../../../packages/web/src/lib/api/query-invalidation.ts";
@@ -54,7 +54,8 @@ import {
 } from "../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-attribute-policy.ts";
 import {
   browserDisplayPrefixJobs,
-  combinedIngestionQueuePagePlan,
+  planIngestionQueuePage,
+  prepareIngestionQueueDisplay,
   createIngestionCommitIntent,
   ingestionJobCanBeCancelled,
   ingestionJobCanBeRemovedLocally,
@@ -80,7 +81,7 @@ import {
   getIngestionQueueSnapshot,
   getIngestionStatuses,
   uploadRaw
-} from "../../../packages/web/src/pages/admin/ingestion/queue/ingestion-api.ts";
+} from "../../../packages/web/src/pages/admin/ingestion/queue/ingestion-http-client.ts";
 import {
   ingestionJobStatusDetail,
   ingestionJobStatusLabel
@@ -1159,8 +1160,8 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     [0, 1, 2, 3, 4],
     "后续页未覆盖 pair 时也不得丢失当前文档的已接管展示项"
   );
-  const partialPagePlan = combinedIngestionQueuePagePlan(
-    partiallyAccepted.jobs,
+  const partialPagePlan = planIngestionQueuePage(
+    prepareIngestionQueueDisplay(partiallyAccepted.jobs),
     1,
     20,
     100
@@ -1185,8 +1186,8 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     serverHandoffPending: false,
     status: "received" as const
   }));
-  const fullyAcceptedPlan = combinedIngestionQueuePagePlan(
-    fullyAcceptedBatch,
+  const fullyAcceptedPlan = planIngestionQueuePage(
+    prepareIngestionQueueDisplay(fullyAcceptedBatch),
     1,
     20,
     100
@@ -1327,8 +1328,8 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     pageSize: 20,
     totalItems: 23
   });
-  const completedSecondPageFirstRender = combinedIngestionQueuePagePlan(
-    completedPaginationState.jobs,
+  const completedSecondPageFirstRender = planIngestionQueuePage(
+    prepareIngestionQueueDisplay(completedPaginationState.jobs),
     completedPaginationState.page,
     20,
     100
@@ -1388,8 +1389,8 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     totalItems: 23
   });
   assert.deepEqual(
-    combinedIngestionQueuePagePlan(
-      partialPaginationState.jobs,
+    planIngestionQueuePage(
+      prepareIngestionQueueDisplay(partialPaginationState.jobs),
       partialPaginationState.page,
       20,
       100
@@ -1549,8 +1550,8 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     serverAccepted: fullPageAcceptedPositions.has(position),
     status: fullPageAcceptedPositions.has(position) ? "received" : "uploading"
   }));
-  const firstFullPagePlan = combinedIngestionQueuePagePlan(
-    fullPageBatch,
+  const firstFullPagePlan = planIngestionQueuePage(
+    prepareIngestionQueueDisplay(fullPageBatch),
     1,
     20,
     100
@@ -1575,8 +1576,8 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
       image_id: "full-page-image-19"
     }
   ]);
-  const secondFullPagePlan = combinedIngestionQueuePagePlan(
-    fullPageBatch,
+  const secondFullPagePlan = planIngestionQueuePage(
+    prepareIngestionQueueDisplay(fullPageBatch),
     2,
     20,
     100
@@ -1589,8 +1590,8 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   assert.equal(secondFullPagePlan.serverLimit, 20);
   assert.equal(secondFullPagePlan.includedServerItems.length, 3);
 
-  const partialSecondPagePlan = combinedIngestionQueuePagePlan(
-    fullPageBatch.slice(0, 25),
+  const partialSecondPagePlan = planIngestionQueuePage(
+    prepareIngestionQueueDisplay(fullPageBatch.slice(0, 25)),
     2,
     20,
     100
@@ -1715,8 +1716,8 @@ test("[Web/内容接入] 逐项 active 事件在 bounded snapshot 前保留来�
     failedJobs: 0
   }, "处理阶段只应在等待与处理中之间逐项迁移，总数必须保持 25");
   assert.deepEqual(
-    combinedIngestionQueuePagePlan(
-      projectedOwners,
+    planIngestionQueuePage(
+      prepareIngestionQueueDisplay(projectedOwners),
       1,
       20,
       100
@@ -13749,7 +13750,7 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
     defaultOptions: { queries: { retry: false } }
   });
   for (const key of allKeys) authorProfileClient.setQueryData(key, {});
-  await invalidateDataAfterAuthorProfileSave(authorProfileClient);
+  await invalidateVocabularyData(authorProfileClient);
   for (const key of [
     queryKeys.galleryFacets,
     queryKeys.galleryStats,
@@ -13772,6 +13773,20 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
   coveredClient.clear();
   inFlightClient.clear();
   authorProfileClient.clear();
+  const { imageDataRevision } = await import("../../../packages/web/src/lib/api/image-data-revision.ts");
+  for (const listKey of [queryKeys.tags, queryKeys.themes, queryKeys.authors]) {
+    const vocabularyClient = new QueryClient();
+    for (const key of allKeys) vocabularyClient.setQueryData(key, {});
+    const revision = imageDataRevision(vocabularyClient);
+    await invalidateVocabularyData(vocabularyClient, listKey);
+    const affected: readonly (readonly unknown[])[] = [listKey, queryKeys.galleryFacets,
+      queryKeys.galleryStats, queryKeys.ingestionVocabulary];
+    for (const key of allKeys) {
+      assert.equal(invalidated(vocabularyClient, key), affected.includes(key), key[0]);
+    }
+    assert.equal(imageDataRevision(vocabularyClient), revision, "词表编辑保留图片窗口的读取水位");
+    vocabularyClient.clear();
+  }
 });
 test("[Web/内容接入] 元数据保存只在词条超出共享接入词表时刷新一次", async () => {
   const { QueryClient, QueryObserver } = await import("@tanstack/react-query");

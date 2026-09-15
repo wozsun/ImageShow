@@ -17,7 +17,7 @@ import { queryKeys } from "../../lib/api/query-keys.js";
 import {
   clearSessionProbeHint
 } from "../../lib/api/auth-session.js";
-import { useAuthMe } from "../../hooks/useAuthSession.js";
+import { useAuthSessionQuery } from "../../hooks/useAuthSession.js";
 import {
   isImageNotEditableError,
   type ImageEditorTarget,
@@ -100,7 +100,7 @@ export function ImageAdminDetails({
   // 后台详情已有 Shell 确认过会话；公共详情只有在外层根据 /auth/me 的
   // 权威结果加载本模块后才可能渲染管理入口。本地 session hint 仅负责触发
   // AuthSessionProvider 探测，不能成为本模块的访问依据。
-  const authQuery = useAuthMe();
+  const authQuery = useAuthSessionQuery();
   const [accessAvailable, setAccessAvailable] = useState(
     () => admin || authQuery.data?.authenticated === true
   );

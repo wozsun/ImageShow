@@ -5521,7 +5521,7 @@ test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个�
       "@tanstack/react-query"
     );
     const { MemoryRouter } = await import("react-router");
-    const { AuthSessionProvider, useAuthMe } = await import(
+    const { AuthSessionProvider, useAuthSessionQuery } = await import(
       "../../../packages/web/src/hooks/useAuthSession.tsx"
     );
     const client = new QueryClient({
@@ -5533,7 +5533,7 @@ test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个�
 
     let authIsFetching = true;
     function AuthProbe() {
-      const query = useAuthMe();
+      const query = useAuthSessionQuery();
       authIsFetching = query.isFetching;
       return React.createElement(
         "span",

@@ -1,11 +1,13 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { isSortOrder, sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
 import { Icon } from "../icon/Icon.js";
+import { ActionFeedbackOutlet, useActionFeedbackTarget } from "../feedback/ActionFeedbackRegion.js";
+import { createActionFeedback, type ActionFeedbackState } from "../../lib/ui/action-feedback.js";
 
 function parseDraft(draft: string) {
   const text = draft.trim();
   const value = Number(text);
-  return /^[+-]?\d+$/.test(text) && isSortOrder(value) ? value : null;
+  return /^[+-]?\d+$/.test(text) && Number.isSafeInteger(value) ? value : null;
 }
 
 export function SortOrderInput({ value, itemLabel, disabled, onSave }: {
@@ -15,11 +17,11 @@ export function SortOrderInput({ value, itemLabel, disabled, onSave }: {
   onSave: (value: number) => Promise<number>;
 }) {
   const [form, setForm] = useState({ draft: String(value), savedValue: value });
-  const [error, setError] = useState("");
+  const [error, setError] = useState<ActionFeedbackState | null>(null);
   const [pending, setPending] = useState(false);
   const runningRef = useRef(false);
   const mountedRef = useRef(false);
-  const errorId = useId();
+  const feedbackTarget = useActionFeedbackTarget("sort-order");
   const parsed = parseDraft(form.draft);
   const busy = disabled || pending;
 
@@ -36,23 +38,30 @@ export function SortOrderInput({ value, itemLabel, disabled, onSave }: {
 
   const commit = async () => {
     if (busy || runningRef.current) return;
-    if (parsed === null) {
-      setError(`请输入 ${sortOrderMin} 至 ${sortOrderMax} 之间的整数`);
+    if (form.draft === String(value)) return;
+    if (parsed === null || !isSortOrder(parsed)) {
+      setError(createActionFeedback(
+        `请输入 ${sortOrderMin.toLocaleString("en-US")} 至 ${sortOrderMax.toLocaleString("en-US")} 之间的整数`,
+        "error"
+      ));
       return;
     }
     if (parsed === value) {
       setForm({ draft: String(value), savedValue: value });
-      setError("");
+      setError(null);
       return;
     }
     runningRef.current = true;
     setPending(true);
-    setError("");
+    setError(null);
     try {
       const saved = await onSave(parsed);
       if (mountedRef.current) setForm({ draft: String(saved), savedValue: saved });
     } catch (failure) {
-      if (mountedRef.current) setError(failure instanceof Error ? failure.message : "排序保存失败，请重试");
+      if (mountedRef.current) setError(createActionFeedback(
+        failure instanceof Error ? failure.message : "排序保存失败，请重试",
+        "error"
+      ));
     } finally {
       runningRef.current = false;
       if (mountedRef.current) setPending(false);
@@ -61,7 +70,7 @@ export function SortOrderInput({ value, itemLabel, disabled, onSave }: {
   const step = (delta: number) => {
     if (busy || parsed === null || !isSortOrder(parsed + delta)) return;
     setForm({ ...form, draft: String(parsed + delta) });
-    setError("");
+    setError(null);
   };
 
   return (
@@ -99,13 +108,13 @@ export function SortOrderInput({ value, itemLabel, disabled, onSave }: {
           aria-valuemax={sortOrderMax}
           aria-valuenow={parsed ?? undefined}
           aria-invalid={Boolean(error)}
-          aria-describedby={error ? errorId : undefined}
           value={form.draft}
           style={{ width: `calc(${Math.max(3, form.draft.length)}ch + 1px)` }}
           disabled={busy}
+          onFocus={(event) => event.currentTarget.select()}
           onChange={(event) => {
             setForm({ ...form, draft: event.target.value });
-            setError("");
+            setError(null);
           }}
           onKeyDown={(event) => {
             if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
@@ -122,7 +131,7 @@ export function SortOrderInput({ value, itemLabel, disabled, onSave }: {
           <Icon name="add-line" />
         </button>
       </div>
-      {error && <p id={errorId} className="admin-field-error" role="alert">{error}</p>}
+      {error && <ActionFeedbackOutlet target={feedbackTarget} feedback={error} />}
     </div>
   );
 }

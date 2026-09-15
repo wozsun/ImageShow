@@ -256,7 +256,13 @@ function webBuildReport(): Plugin {
         }];
       });
       const dynamicImporters = new Map<string, string[]>();
+      const cssOwners = new Map<string, Array<{ file: string; facade: string | null }>>();
       for (const chunk of collectedChunks) {
+        for (const file of chunk.css) {
+          const owners = cssOwners.get(file) ?? [];
+          owners.push({ file: chunk.file, facade: chunk.facade });
+          cssOwners.set(file, owners);
+        }
         for (const target of chunk.dynamicImports) {
           const importers = dynamicImporters.get(target) ?? [];
           importers.push(chunk.file);
@@ -269,13 +275,11 @@ function webBuildReport(): Plugin {
           dynamicImporters.get(chunk.file) ?? []
         )].sort()
       }));
-      const styles = [...new Set(chunks.flatMap((chunk) => chunk.css))]
+      const styles = [...cssOwners.keys()]
         .sort()
         .map((file) => ({
           file,
-          owners: chunks
-            .filter((chunk) => chunk.css.includes(file))
-            .map((chunk) => ({ file: chunk.file, facade: chunk.facade }))
+          owners: cssOwners.get(file)!
         }));
       this.emitFile({
         type: "asset",

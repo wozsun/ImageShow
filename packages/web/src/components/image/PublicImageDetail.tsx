@@ -11,7 +11,7 @@ import type {
   PublicImageItem
 } from "../../lib/types.js";
 import { ImageDetailModal } from "./ImageDetailModal.js";
-import { useAuthMe } from "../../hooks/useAuthSession.js";
+import { useAuthSessionQuery } from "../../hooks/useAuthSession.js";
 
 function imagePlaceholder(card: ShowImageCardDto | GalleryImageCard): PublicImageItem {
   return {
@@ -48,7 +48,7 @@ export function PublicImageDetail({
 }) {
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
   const [trashCommitted, setTrashCommitted] = useState(false);
-  const authQuery = useAuthMe();
+  const authQuery = useAuthSessionQuery();
   const authIdentity = authQuery.data?.authenticated
     ? authQuery.data.username
     : null;

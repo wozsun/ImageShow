@@ -214,7 +214,7 @@ function tick() {
   return tickPromise;
 }
 
-export function startWorker() {
+export function startBackgroundJobWorker() {
   if (timer) return;
   if (tickPromise || activeTypeSlices.size) {
     throw new Error("Cannot restart worker before its prior scheduling drained");
@@ -225,13 +225,13 @@ export function startWorker() {
   void tick().catch(onTickError);
 }
 
-export function stopWorker() {
+export function stopBackgroundJobWorker() {
   if (timer) clearInterval(timer);
   timer = undefined;
   executionCoordinator.stop();
 }
 
-export async function drainWorker(
+export async function drainBackgroundJobWorker(
   timeoutMs = appConfig.backgroundJob.drainTimeoutMs
 ) {
   const additionalWork = [...activeTypeSlices.values()];

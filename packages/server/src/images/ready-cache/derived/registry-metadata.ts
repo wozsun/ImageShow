@@ -32,7 +32,7 @@ export const derivedRegistryKeys = [
   READY_IMAGE_DERIVED_REGISTRY_SIGNATURES_KEY
 ];
 
-export function nonNegativeInteger(raw: unknown) {
+export function parseNonNegativeInteger(raw: unknown) {
   const value = String(raw ?? "");
   if (!/^\d+$/u.test(value)) return null;
   const count = Number(value);

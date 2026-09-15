@@ -21,8 +21,8 @@ import {
   ingestionJobRetryKind,
   resetJobForPrepareRetry
 } from "../queue/model/ingestion-job-retry.js";
-import { acceptImports } from "../queue/ingestion-api.js";
-import type { IngestionQueueProducerApi } from "../queue/ingestion-queue-api.js";
+import { acceptImports } from "../queue/ingestion-http-client.js";
+import type { IngestionQueueProducerApi } from "../queue/ingestion-queue-contract.js";
 
 function buildImportAcceptItemInput(job: IngestionJob) {
   if (!job.downloadUrl) throw new Error("导入任务缺少下载 URL");

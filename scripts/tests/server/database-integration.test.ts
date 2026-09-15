@@ -40,9 +40,9 @@ const storageIngestionScenarios = [
     script: join(isolationRoot, "ready-cache-recovery.mts")
   },
   {
-    id: "public-facets-concurrency",
-    name: "公共词表突发请求共享受控数据库作用域",
-    script: join(isolationRoot, "public-facets-concurrency.mts")
+    id: "public-gallery-concurrency",
+    name: "公共词表与统计突发请求共享受控数据库作用域",
+    script: join(isolationRoot, "public-gallery-concurrency.mts")
   },
   {
     id: "ingestion-http-boundaries",

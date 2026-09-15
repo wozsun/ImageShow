@@ -10,11 +10,11 @@ import type { IngestionJob } from "../../../../lib/types.js";
 import {
   completedIngestionObservations,
   type IngestionQueueApi
-} from "./ingestion-queue-api.js";
+} from "./ingestion-queue-contract.js";
 import {
   cancelStoredIngestions,
   getIngestionStatuses
-} from "./ingestion-api.js";
+} from "./ingestion-http-client.js";
 import { ingestionStatusSummary } from "./model/ingestion-status-summary.js";
 
 type CancelTarget = Readonly<{

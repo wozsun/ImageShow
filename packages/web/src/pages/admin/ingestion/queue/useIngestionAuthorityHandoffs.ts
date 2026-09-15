@@ -8,11 +8,11 @@ import type {
   IngestionQueueAction,
   IngestionServerBinding
 } from "./model/ingestion-queue-state.js";
-import { getIngestionStatuses } from "./ingestion-api.js";
+import { getIngestionStatuses } from "./ingestion-http-client.js";
 import {
   completedIngestionObservations,
   type CompletedIngestionObservation
-} from "./ingestion-queue-api.js";
+} from "./ingestion-queue-contract.js";
 import {
   ingestionJobAwaitsActionCoverage,
   ingestionJobHasServerAuthority,

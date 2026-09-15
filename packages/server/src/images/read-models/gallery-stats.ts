@@ -363,8 +363,11 @@ export function getPublicGalleryStats(
   signal?: AbortSignal
 ): Promise<GalleryStatsDto> {
   return signal
-    ? withPublicDatabaseRead(signal, (database, databaseSignal) => (
-        getPublicGalleryStatsWithAccess(query, databaseSignal, database)
-      ))
+    ? coalesce(`gallery-stats:public:${JSON.stringify([
+        query.device, query.brightness, query.theme, query.tag, query.author
+      ])}`, (sharedSignal) => withPublicDatabaseRead(
+        sharedSignal,
+        (database, databaseSignal) => getPublicGalleryStatsWithAccess(query, databaseSignal, database)
+      ), signal)
     : getPublicGalleryStatsWithAccess(query, undefined, {});
 }

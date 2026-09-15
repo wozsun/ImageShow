@@ -17,7 +17,7 @@ import {
 import { AppHeader } from "../../components/navigation/AppHeader.js";
 import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
-import { useGalleryStats } from "../../lib/api/site-data.js";
+import { useGalleryStats } from "../../lib/api/site-queries.js";
 import { publicHomeBrowsePath } from "../../lib/constants.js";
 import {
   emptyGalleryFilters,

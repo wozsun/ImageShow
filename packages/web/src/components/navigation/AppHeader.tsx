@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router";
 import { adminBasePath, publicRootPath } from "../../lib/constants.js";
-import { useSiteConfig } from "../../lib/api/site-data.js";
-import { useAuthMe } from "../../hooks/useAuthSession.js";
+import { useSiteConfig } from "../../lib/api/site-queries.js";
+import { useAuthSessionQuery } from "../../hooks/useAuthSession.js";
 import {
   isPublicNavigationInteracting,
   publicNavigationHeaderHideThreshold,
@@ -31,7 +31,7 @@ export function AppHeader({
 } = {}) {
   const { pathname } = useLocation();
   const { data } = useSiteConfig();
-  const { data: auth } = useAuthMe();
+  const { data: auth } = useAuthSessionQuery();
   const headerRef = useRef<HTMLElement | null>(null);
   const upwardDistanceRef = useRef(0);
   const downwardDistanceRef = useRef(0);

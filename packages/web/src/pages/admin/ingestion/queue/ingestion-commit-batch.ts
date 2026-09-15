@@ -3,12 +3,12 @@ import type { IngestionJob } from "../../../../lib/types.js";
 import {
   commitStoredIngestions,
   getIngestionStatuses
-} from "./ingestion-api.js";
+} from "./ingestion-http-client.js";
 import { ingestionStatusEventPatch } from "./model/ingestion-status-state.js";
 import {
   completedIngestionObservations,
   type CompletedIngestionObservation
-} from "./ingestion-queue-api.js";
+} from "./ingestion-queue-contract.js";
 import { serverIngestionPairKey } from "./model/server-ingestion-job.js";
 
 type CommitSelectedIngestionsOptions = {

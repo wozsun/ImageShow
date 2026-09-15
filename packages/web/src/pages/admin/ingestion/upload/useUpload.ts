@@ -12,11 +12,11 @@ import {
 } from "../queue/model/ingestion-job-retry.js";
 import {
   createUploadIntents
-} from "../queue/ingestion-api.js";
+} from "../queue/ingestion-http-client.js";
 import {
   isCurrentIngestionAttempt,
   type IngestionQueueProducerApi
-} from "../queue/ingestion-queue-api.js";
+} from "../queue/ingestion-queue-contract.js";
 import {
   createUploadJobs,
   uploadFileFingerprints,

@@ -8,7 +8,7 @@ import {
   parseWeiboImport,
   type JsonlManifestResult,
   type WeiboImportResult
-} from "../queue/ingestion-api.js";
+} from "../queue/ingestion-http-client.js";
 import {
   formatUrlImportSummary,
   parseWeiboImportLines,

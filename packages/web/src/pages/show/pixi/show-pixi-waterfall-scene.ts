@@ -113,7 +113,6 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
     this.root.sortableChildren = true;
     this.#camera.moveCorner(-showLayoutColumnWidth / 2, 0);
     this.setImages(options.images, options.dataKey, options.order, options.hasMore);
-    this.#reconcile(true);
   }
 
   setColumns(columns: number) {

@@ -3,7 +3,7 @@ import { copyTextToClipboard } from "../../../../lib/ui/clipboard.js";
 import type {
   ImportManifestParseError,
   WeiboImportParseError
-} from "../queue/ingestion-api.js";
+} from "../queue/ingestion-http-client.js";
 import type { ParsedImportSourceResult } from "./import-source-adapters.js";
 import {
   urlImportIssuePreviewMessage,

@@ -27,7 +27,7 @@ import {
   thumbnailLongEdge,
   thumbnailQuality,
   uploadBrowserConcurrency
-} from "./fields.ts";
+} from "./field-schemas.ts";
 import {
   getRuntimeConfig,
   updateRuntimeConfig

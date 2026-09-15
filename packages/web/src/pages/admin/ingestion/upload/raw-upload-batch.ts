@@ -1,11 +1,11 @@
 import type { RefObject } from "react";
 import type { IngestionSessionPairDto } from "@imageshow/shared/browser";
 import type { IngestionJob } from "../../../../lib/types.js";
-import { uploadRaw } from "../queue/ingestion-api.js";
+import { uploadRaw } from "../queue/ingestion-http-client.js";
 import {
   isCurrentIngestionAttempt,
   type IngestionQueueProducerApi
-} from "../queue/ingestion-queue-api.js";
+} from "../queue/ingestion-queue-contract.js";
 import { BrowserUploadLane } from "./browser-upload-lane.js";
 
 export type ActiveRawUpload = {

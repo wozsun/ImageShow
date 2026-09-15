@@ -160,17 +160,17 @@ export async function activeIngestionStorageReferences(
   options: IngestionStorageReferenceOptions = {}
 ) {
   const rows = await readStableIngestionStorageRows(options);
-  const sessionsByBackend = new Map<
+  const referencesByBackend = new Map<
     string,
     Map<string, ActiveIngestionStorageReference>
   >();
   const tempPaths = new Set<string>();
   for (const row of rows) {
-    const sessions = sessionsByBackend.getOrInsertComputed(
+    const references = referencesByBackend.getOrInsertComputed(
       row.storage_slug,
       () => new Map()
     );
-    sessions.set(row.id, row);
+    references.set(row.id, row);
     for (const file of [row.prepared_image_path, row.prepared_thumbnail_path]) {
       if (file) tempPaths.add(ingestionPreparedPath(file));
     }
@@ -183,7 +183,7 @@ export async function activeIngestionStorageReferences(
   }
   return {
     rows,
-    sessionsByBackend,
+    referencesByBackend,
     tempPaths
   };
 }

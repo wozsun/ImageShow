@@ -17,7 +17,8 @@ import type { StorageConfig } from "../storage/backends/config.ts";
 import { getStorageBackendConfigs } from "../storage/backends/registry.ts";
 import {
   publicImageUrls,
-  publicImageUrlsForConfig
+  publicImageUrlsForConfig,
+  publicThumbnailUrlForConfig
 } from "../storage/objects/public-urls.ts";
 import { imageHasTrashPurgeJobSql } from "./trash-purge-state.ts";
 import { publicOriginalAccessUrl } from "./original-link.ts";
@@ -370,11 +371,10 @@ function publicShowImageCard(
   row: PublicShowImageRecord,
   configs: ReadonlyMap<string, StorageConfig>
 ): ShowImageCardDto {
-  const urls = publicImageUrlsForConfig(row.object_key, configs.get(row.storage_slug)!);
   return {
     id: row.id,
     title: row.title,
-    thumb_url: urls.thumb_url,
+    thumb_url: publicThumbnailUrlForConfig(row.object_key, configs.get(row.storage_slug)!),
     width: Number(row.width),
     height: Number(row.height)
   };

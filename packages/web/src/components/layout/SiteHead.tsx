@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect } from "react";
 import { useLocation } from "react-router";
 import { adminBasePath } from "../../lib/constants.js";
-import { useSiteConfig } from "../../lib/api/site-data.js";
+import { useSiteConfig } from "../../lib/api/site-queries.js";
 import { applyUiColorContext } from "../../lib/ui/apply-ui-color-context.js";
 
 function ensureMeta(name: string) {

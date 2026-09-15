@@ -13,7 +13,8 @@ import type { IngestionJob } from "../../../../lib/types.js";
 import type { IngestionAttributeDefaults } from "./model/ingestion-attribute-defaults.js";
 import {
   browserDisplayPrefixJobs,
-  combinedIngestionQueuePagePlan,
+  planIngestionQueuePage,
+  prepareIngestionQueueDisplay,
   ingestionJobHasBrowserDisplayOrder,
   ingestionQueuePageCount,
   ingestionJobCanLeaveQueue,
@@ -27,7 +28,7 @@ import {
 import {
   type CompletedIngestionObservation,
   type IngestionQueueProducerApi
-} from "./ingestion-queue-api.js";
+} from "./ingestion-queue-contract.js";
 import {
   completedIngestionOwnerPatch,
   completedIngestionReceiptOwnerPatch,
@@ -453,12 +454,13 @@ export function useIngestionQueue(
     () => state.jobs.filter((job) => !ingestionJobHasServerAuthority(job)),
     [state.jobs]
   );
-  const pagePlan = useMemo(() => combinedIngestionQueuePagePlan(
-    state.jobs,
+  const queueDisplay = useMemo(() => prepareIngestionQueueDisplay(state.jobs), [state.jobs]);
+  const pagePlan = useMemo(() => planIngestionQueuePage(
+    queueDisplay,
     state.page,
     pageSize,
     ingestionQueueSnapshotMaxItems
-  ), [pageSize, state.jobs, state.page]);
+  ), [pageSize, queueDisplay, state.page]);
   const {
     visibleDisplayPrefixJobs,
     acceptedDisplayPairs,

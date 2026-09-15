@@ -5,10 +5,10 @@ import {
   derivedRegistryKeys,
   describeReadyImageDerivedResult,
   nextDerivedAccessScore,
-  nonNegativeInteger,
+  parseNonNegativeInteger,
   readyImageDerivedMembershipLimit,
   type DerivedResultDescriptor
-} from "./common.ts";
+} from "./registry-metadata.ts";
 import {
   READY_IMAGE_DERIVED_CACHE_POLICY,
   type ReadyImageDerivedResultKind
@@ -82,7 +82,7 @@ async function assertDerivedRegistryStructure() {
   sizePipeline.hlen(READY_IMAGE_DERIVED_REGISTRY_KINDS_KEY);
   sizePipeline.hlen(READY_IMAGE_DERIVED_REGISTRY_SIGNATURES_KEY);
   const sizeResults = await execRedisPipeline(sizePipeline);
-  const sizes = sizeResults.map((result) => nonNegativeInteger(result?.[1]));
+  const sizes = sizeResults.map((result) => parseNonNegativeInteger(result?.[1]));
   if (
     sizes.some((size) => size === null)
     || sizes.some((size) => size !== sizes[0])
@@ -168,7 +168,7 @@ async function readDerivedRegistry() {
     resultIndex += 1;
     let cardinality: number | null = null;
     if (descriptor && descriptor.kind !== "stats-result") {
-      cardinality = nonNegativeInteger(results[resultIndex]?.[1]);
+      cardinality = parseNonNegativeInteger(results[resultIndex]?.[1]);
       resultIndex += 1;
     }
     let metaExists = false;
@@ -179,7 +179,7 @@ async function readDerivedRegistry() {
       metaTtl = Number(results[resultIndex]?.[1] ?? -2);
       resultIndex += 1;
     }
-    const count = nonNegativeInteger(counts[index]);
+    const count = parseNonNegativeInteger(counts[index]);
     const signature = signatures[index] || null;
     const validPrimary = descriptor?.kind === "stats-result"
       ? primaryExists && primaryTtl > 0
@@ -211,8 +211,8 @@ export async function registerReadyImageDerivedResultUnchecked(options: {
   const { key, kind, count, itemCount } = options;
   const descriptor = assertReadyImageDerivedResult(key, kind);
   if (
-    nonNegativeInteger(count) === null
-    || nonNegativeInteger(itemCount) === null
+    parseNonNegativeInteger(count) === null
+    || parseNonNegativeInteger(itemCount) === null
     || (kind === "stats-result" && count !== 0)
   ) {
     throw new Error("Ready-image derived result has an invalid cardinality");

@@ -5,7 +5,7 @@ import { invalidateImageDataAfterIngestion } from "../../../../lib/api/query-inv
 import { invalidateIngestionDuplicateDetails } from "./useIngestionDuplicateDetails.js";
 import {
   type CompletedIngestionObservation
-} from "./ingestion-queue-api.js";
+} from "./ingestion-queue-contract.js";
 import { serverIngestionPairKey } from "./model/server-ingestion-job.js";
 
 /**

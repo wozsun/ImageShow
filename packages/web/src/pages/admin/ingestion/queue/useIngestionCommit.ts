@@ -10,7 +10,7 @@ import { commitSelectedIngestions } from "./ingestion-commit-batch.js";
 import { ingestionJobNeedsDuplicateConfirmation } from "./model/duplicate-match.js";
 import type {
   CompletedIngestionObservation
-} from "./ingestion-queue-api.js";
+} from "./ingestion-queue-contract.js";
 import { serverIngestionJobPairKey } from "./model/server-ingestion-job.js";
 
 export function useIngestionCommit(options: {

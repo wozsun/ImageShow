@@ -9,13 +9,13 @@ import {
   activeIngestionStorageReferences,
   collectStorageBackendGroupSnapshot,
   ingestionFinalStorageReferences,
-  mergeActiveIngestionSessions,
+  mergeActiveIngestionStorageReferences,
   storageBackendGroups,
   type StorageBackendGroup,
-  type StorageRow
-} from "./storage-common.ts";
+  type ImageStorageReferenceRow
+} from "./storage-inventory.ts";
 
-export type MaintenanceImage = StorageRow & {
+export type MaintenanceImage = ImageStorageReferenceRow & {
   md5: string;
   thumbnail_size: string | number;
 };
@@ -154,7 +154,7 @@ async function captureMaintenanceGroups(
 
 function buildMaintenanceCandidates(
   rows: readonly MaintenanceImage[],
-  sessionsByBackend: ReadonlyMap<
+  referencesByBackend: ReadonlyMap<
     string,
     ReadonlyMap<string, Awaited<ReturnType<
       typeof activeIngestionStorageReferences
@@ -186,11 +186,11 @@ function buildMaintenanceCandidates(
     const referencedThumbs = new Set(
       retainedRows.map((row) => thumbnailObjectKey(row.object_key))
     );
-    const activeSessions = mergeActiveIngestionSessions(
-      ...group.slugs.map((slug) => sessionsByBackend.get(slug) ?? new Map())
+    const activeReferences = mergeActiveIngestionStorageReferences(
+      ...group.slugs.map((slug) => referencesByBackend.get(slug) ?? new Map())
     );
-    for (const session of activeSessions.values()) {
-      for (const reference of ingestionFinalStorageReferences(session)) {
+    for (const ingestionReference of activeReferences.values()) {
+      for (const reference of ingestionFinalStorageReferences(ingestionReference)) {
         if (reference.prefix === "full") referencedFull.add(reference.key);
         if (reference.prefix === "thumbs") referencedThumbs.add(reference.key);
       }
@@ -225,7 +225,7 @@ export async function buildStorageMaintenancePlan(
   signal.throwIfAborted();
   const built = buildMaintenanceCandidates(
     rowsResult.rows,
-    ingestionReferences.sessionsByBackend,
+    ingestionReferences.referencesByBackend,
     capture.captured,
     capture.candidates
   );

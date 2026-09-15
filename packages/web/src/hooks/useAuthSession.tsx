@@ -104,12 +104,12 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useAuthMe() {
-  const query = useContext(AuthSessionContext);
-  if (!query) {
-    throw new Error("useAuthMe must be used inside AuthSessionProvider");
+export function useAuthSessionQuery() {
+  const session = useContext(AuthSessionContext);
+  if (!session) {
+    throw new Error("useAuthSessionQuery must be used inside AuthSessionProvider");
   }
-  return query.query;
+  return session.query;
 }
 
 export function useOptionalAuthSessionRecovery() {
@@ -155,6 +155,6 @@ export function useAuthPreferenceCacheBridge() {
 const noAdminPermissions: readonly AdminPermission[] = [];
 
 export function useAdminPermissions(): readonly AdminPermission[] {
-  const { data } = useAuthMe();
+  const { data } = useAuthSessionQuery();
   return data?.authenticated ? data.permissions : noAdminPermissions;
 }

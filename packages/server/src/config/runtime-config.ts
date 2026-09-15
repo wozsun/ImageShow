@@ -58,7 +58,7 @@ import {
   uploadRawConcurrency,
   weiboImportMaxItems,
   weiboRequestDelaySeconds
-} from "./fields.ts";
+} from "./field-schemas.ts";
 
 const runtimeConfigSchema = z.strictObject({
   site: z.strictObject({

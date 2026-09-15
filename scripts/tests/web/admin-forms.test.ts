@@ -294,7 +294,7 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
     const { AdminShell } = await import(
       "../../../packages/web/src/pages/admin/shell/AdminShell.tsx"
     );
-    const { AuthSessionProvider, useAuthMe } = await import(
+    const { AuthSessionProvider, useAuthSessionQuery } = await import(
       "../../../packages/web/src/hooks/useAuthSession.tsx"
     );
     const container = document.getElementById("root");
@@ -415,7 +415,7 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
     });
     const authRoot = createRoot(container);
     function PublicAuthProbe() {
-      const query = useAuthMe();
+      const query = useAuthSessionQuery();
       return React.createElement(
         "span",
         { "data-auth-probe": true },

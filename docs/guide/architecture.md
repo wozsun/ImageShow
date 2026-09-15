@@ -64,16 +64,13 @@ packages/web ─────► packages/shared
 ### PostgreSQL
 
 PostgreSQL 是图片、词表、后台任务、存储注册表和管理员账号的唯一持久业务真相源。
-当前 schema 共 9 张表，其中 `ready_image_revision` 是图片投影 revision 单行表。schema
-不保存迁移账本或应用版本号。
+schema 共 9 张表，其中 `ready_image_revision` 是图片投影 revision 单行表。
 
-`schema.sql` 完整定义当前版本的干净安装结构；空库在同一事务中执行它与只读 readiness，
+`schema.sql` 完整定义安装结构；空库在同一事务中执行它与只读 readiness，
 非空库只进行当前最小结构的只读 readiness。任一步失败回滚本次事务。
-空主题直接由基线中的可空、无默认值主题外键表示，主题表只保存真实词条。
-作者身份两列、长期 CHECK、
-非空身份复合唯一索引、`metadata.created_by TEXT NOT NULL` 和后台任务的三种当前类型约束
-都属于完整结构。既有数据库的结构新增、修改、删除和
-数据整理由维护者在升级前显式处理，先停机、备份并明确恢复路径。额外表不参与 readiness，
+空主题由可空、无默认值的主题外键表示，主题表只保存真实词条。
+既有数据库的结构新增、修改、删除和数据整理由维护者显式处理，先停机、备份并明确恢复路径。
+额外表不参与 readiness，
 不读取其数据、不要求读写权限；必需结构、约束、种子或权限不满足仍明确失败。
 干净初始化和 readiness 契约以
 [数据库结构](./database.md)为唯一说明。

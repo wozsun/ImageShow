@@ -60,6 +60,13 @@ export function inputText(
       selectionEnd: { configurable: true, writable: true, value: 0 }
     });
   }
+  const missingSelect = typeof control.select !== "function";
+  if (missingSelect) {
+    control.select = () => {
+      control.selectionStart = 0;
+      control.selectionEnd = control.value.length;
+    };
+  }
   const missingInputType = control.tagName === "INPUT" && !(
     control as HTMLInputElement
   ).type;
@@ -82,6 +89,7 @@ export function inputText(
     dispatchDomEvent(window, control, "keyup", { key: "Unidentified" });
     return event;
   } finally {
+    if (missingSelect) Reflect.deleteProperty(control, "select");
     if (missingInputType) Reflect.deleteProperty(control, "type");
     if (missingSelectionRange) {
       Reflect.deleteProperty(control, "selectionStart");

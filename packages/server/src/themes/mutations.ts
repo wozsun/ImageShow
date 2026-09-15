@@ -1,3 +1,4 @@
+import { sortOrderMax } from "@imageshow/shared/browser";
 import type { PoolClient } from "pg";
 import { pool } from "../core/database/pools.ts";
 import {
@@ -19,7 +20,7 @@ async function insertTheme(client: PoolClient, slug: string) {
   assertVocabularySlug("theme", slug);
   const result = await client.query(
     `INSERT INTO theme(slug, sort_order)
-     VALUES($1, (SELECT LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, 2147483647) FROM theme))
+     VALUES($1, (SELECT LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, ${sortOrderMax}) FROM theme))
      ON CONFLICT (slug) DO NOTHING
      RETURNING slug`,
     [slug]
@@ -46,7 +47,7 @@ export async function createTheme(slug: string, displayName: string) {
     signal.throwIfAborted();
     const result = await pool.query(
       `INSERT INTO theme(slug, display_name, sort_order)
-       VALUES($1, $2, (SELECT LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, 2147483647) FROM theme))
+       VALUES($1, $2, (SELECT LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, ${sortOrderMax}) FROM theme))
        ON CONFLICT (slug) DO NOTHING
        RETURNING slug`,
       [slug, displayName]

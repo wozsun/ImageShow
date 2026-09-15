@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
 import { adminBasePath, publicHomeBrowsePath, publicRootPath } from "./lib/constants.js";
-import { useSiteConfig } from "./lib/api/site-data.js";
+import { useSiteConfig } from "./lib/api/site-queries.js";
 import { QueryErrorState } from "./components/feedback/QueryErrorState.js";
 import { RouteLoadBoundary } from "./components/feedback/RouteLoadBoundary.js";
 import { AppLoadingScreen } from "./components/feedback/AppLoadingScreen.js";

@@ -13,11 +13,11 @@ import type { ImageDraft, IngestionJob } from "../../../../lib/types.js";
 import { isApiClientError } from "../../../../lib/api/client.js";
 import type { IngestionQueueAction } from "./model/ingestion-queue-state.js";
 import { ingestionDuplicateMessage } from "./model/duplicate-match.js";
-import { getIngestionStatuses, updateStoredIngestions } from "./ingestion-api.js";
+import { getIngestionStatuses, updateStoredIngestions } from "./ingestion-http-client.js";
 import {
   completedIngestionObservations,
   type CompletedIngestionObservation
-} from "./ingestion-queue-api.js";
+} from "./ingestion-queue-contract.js";
 import {
   ingestionJobFromServerItem,
   serverIngestionPairKey

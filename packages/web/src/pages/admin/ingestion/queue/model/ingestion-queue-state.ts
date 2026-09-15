@@ -129,35 +129,37 @@ export function browserDisplayPrefixJobs(jobs: readonly IngestionJob[]) {
   return [...ordered, ...fallback].map(({ job }) => job);
 }
 
-export function combinedIngestionQueuePagePlan(
-  jobs: readonly IngestionJob[],
+function displayJobServerPair(job: IngestionJob) {
+  return ingestionJobHasServerAuthority(job) && job.sessionId && job.imageId
+    ? { session_id: job.sessionId, image_id: job.imageId }
+    : null;
+}
+
+export function prepareIngestionQueueDisplay(jobs: readonly IngestionJob[]) {
+  const displayPrefixJobs = browserDisplayPrefixJobs(jobs);
+  const excludedServerItems = displayPrefixJobs.flatMap((job) => {
+    const pair = displayJobServerPair(job);
+    return pair ? [pair] : [];
+  });
+  const acceptedDisplayPairs = new Set(excludedServerItems.map((pair) => (
+    `${pair.session_id}\0${pair.image_id.toLowerCase()}`
+  )));
+  return { displayPrefixJobs, excludedServerItems, acceptedDisplayPairs };
+}
+
+export function planIngestionQueuePage(
+  display: ReturnType<typeof prepareIngestionQueueDisplay>,
   page: number,
   pageSize: number,
   snapshotMaxItems: number
 ) {
-  const displayPrefixJobs = browserDisplayPrefixJobs(jobs);
+  const { displayPrefixJobs, excludedServerItems, acceptedDisplayPairs } = display;
   const pageStart = (page - 1) * pageSize;
-  const visibleDisplayPrefixJobs = displayPrefixJobs.slice(
-    pageStart,
-    pageStart + pageSize
-  );
-  const serverPairFor = (job: IngestionJob) => (
-    ingestionJobHasServerAuthority(job) && job.sessionId && job.imageId
-      ? { session_id: job.sessionId, image_id: job.imageId }
-      : null
-  );
-  const excludedServerItems = displayPrefixJobs.flatMap((job) => {
-    const pair = serverPairFor(job);
-    return pair ? [pair] : [];
-  });
+  const visibleDisplayPrefixJobs = displayPrefixJobs.slice(pageStart, pageStart + pageSize);
   const includedServerItems = visibleDisplayPrefixJobs.flatMap((job) => {
-    const pair = serverPairFor(job);
+    const pair = displayJobServerPair(job);
     return pair ? [pair] : [];
   });
-  const acceptedDisplayPairs = new Set(displayPrefixJobs.flatMap((job) => {
-    const pair = serverPairFor(job);
-    return pair ? [`${pair.session_id}\0${pair.image_id.toLowerCase()}`] : [];
-  }));
   const serverDisplayLimit = Math.max(
     0,
     pageSize - visibleDisplayPrefixJobs.length
@@ -612,7 +614,6 @@ export function reduceIngestionQueue(
       return { jobs, page: 1 };
     }
     case "replace-server-page": {
-      const browserOwners = new Set(browserDisplayPrefixJobs(state.jobs));
       const canonicalJobs = action.jobs;
       const serverById = new Map(canonicalJobs.map((job) => [job.id, job]));
       const serverByPair = new Map(canonicalJobs.map((job) => (
@@ -620,7 +621,7 @@ export function reduceIngestionQueue(
       )).filter(([pair]) => Boolean(pair)));
       const consumedServerJobs = new Set<IngestionJob>();
       const displayOwners = state.jobs.flatMap((job) => {
-        if (!browserOwners.has(job)) return [];
+        if (ingestionJobHasServerAuthority(job) && !ingestionJobHasBrowserDisplayOrder(job)) return [];
         const pair = serverIngestionJobPairKey(job);
         if (pair && action.stalePairKeys?.has(pair)) return [];
         const canonical = pair

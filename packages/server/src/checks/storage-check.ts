@@ -13,12 +13,12 @@ import {
   activeIngestionStorageReferences,
   collectStorageBackendGroupSnapshot,
   ingestionFinalStorageReferences,
-  mergeActiveIngestionSessions,
+  mergeActiveIngestionStorageReferences,
   mergeStorageReferenceRows,
   storageBackendGroupName,
   storageBackendGroups,
-  type StorageRow
-} from "./storage-common.ts";
+  type ImageStorageReferenceRow
+} from "./storage-inventory.ts";
 
 const storageRowsQuery = `
   SELECT id, object_key, status, storage_slug, thumbnail_size
@@ -26,7 +26,7 @@ const storageRowsQuery = `
 
 export async function checkStorage(signal?: AbortSignal) {
   signal?.throwIfAborted();
-  const rowsBeforeEnumeration = (await pool.query(storageRowsQuery)).rows as StorageRow[];
+  const rowsBeforeEnumeration = (await pool.query(storageRowsQuery)).rows as ImageStorageReferenceRow[];
   const groups = await storageBackendGroups();
   const missingObjects: Array<Record<string, unknown>> = [];
   const missingThumbs: Array<Record<string, unknown>> = [];
@@ -35,7 +35,7 @@ export async function checkStorage(signal?: AbortSignal) {
   const orphanThumbs: Array<Record<string, unknown>> = [];
   const unavailableBackends: Array<Record<string, unknown>> = [];
   const activeBeforeEnumeration = await activeIngestionStorageReferences({ signal });
-  const { sessionsByBackend: sessionsBeforeEnumeration } = activeBeforeEnumeration;
+  const { referencesByBackend: referencesBeforeEnumeration } = activeBeforeEnumeration;
   const checkedAt = Date.now();
   const cutoffs = ingestionOrphanCutoffs(checkedAt);
   const incompleteListings: Array<{
@@ -69,20 +69,20 @@ export async function checkStorage(signal?: AbortSignal) {
   // 保护枚举期间新增的正式候选和本地临时文件引用，避免快照时差造成误报。
   const [
     rowsAfterEnumerationResult,
-    activeSessionsAfterEnumeration
+    activeReferencesAfterEnumeration
   ] = await Promise.all([
     pool.query(storageRowsQuery),
     activeIngestionStorageReferences({ signal })
   ]);
-  const rowsAfterEnumeration = rowsAfterEnumerationResult.rows as StorageRow[];
+  const rowsAfterEnumeration = rowsAfterEnumerationResult.rows as ImageStorageReferenceRow[];
   const rowsReferencedDuringEnumeration = mergeStorageReferenceRows(
     rowsBeforeEnumeration,
     rowsAfterEnumeration
   );
-  const { sessionsByBackend: sessionsAfterEnumeration } = activeSessionsAfterEnumeration;
+  const { referencesByBackend: referencesAfterEnumeration } = activeReferencesAfterEnumeration;
   const tempReferencePaths = new Set([
     ...activeBeforeEnumeration.tempPaths,
-    ...activeSessionsAfterEnumeration.tempPaths
+    ...activeReferencesAfterEnumeration.tempPaths
   ]);
 
   for (const captured of storageSnapshots) {
@@ -167,14 +167,14 @@ export async function checkStorage(signal?: AbortSignal) {
     const referencedThumbKeys = new Set(
       retainedDuringEnumeration.map((row) => thumbnailRef(row).key)
     );
-    const activeSessions = mergeActiveIngestionSessions(
+    const activeReferences = mergeActiveIngestionStorageReferences(
       ...group.slugs.flatMap((slug) => [
-        sessionsBeforeEnumeration.get(slug) ?? new Map(),
-        sessionsAfterEnumeration.get(slug) ?? new Map()
+        referencesBeforeEnumeration.get(slug) ?? new Map(),
+        referencesAfterEnumeration.get(slug) ?? new Map()
       ])
     );
-    for (const session of activeSessions.values()) {
-      for (const reference of ingestionFinalStorageReferences(session)) {
+    for (const ingestionReference of activeReferences.values()) {
+      for (const reference of ingestionFinalStorageReferences(ingestionReference)) {
         if (reference.prefix === "full") referencedFullKeys.add(reference.key);
         if (reference.prefix === "thumbs") referencedThumbKeys.add(reference.key);
       }

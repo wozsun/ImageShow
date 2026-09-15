@@ -36,14 +36,16 @@ export async function publicImageUrls(
   return publicImageUrlsForConfig(objectKey, config);
 }
 
-export function publicImageUrlsForConfig(objectKey: string, config: StorageConfig) {
+export function publicThumbnailUrlForConfig(objectKey: string, config: StorageConfig) {
   const thumbKey = thumbnailObjectKey(objectKey);
-  const imageBase = imageResourceBaseUrl();
-  const applicationThumbUrl = `${imageBase}${localStorageObjectUrl("thumbs", thumbKey)}`;
-  const directThumbUrl = directStorageObjectUrl(config, "thumbs", thumbKey);
+  return directStorageObjectUrl(config, "thumbs", thumbKey)
+    || `${imageResourceBaseUrl()}${localStorageObjectUrl("thumbs", thumbKey)}`;
+}
+
+export function publicImageUrlsForConfig(objectKey: string, config: StorageConfig) {
   return {
     object_url: directStorageObjectUrl(config, "full", objectKey)
-      || `${imageBase}${localStorageObjectUrl("full", objectKey)}`,
-    thumb_url: directThumbUrl || applicationThumbUrl
+      || `${imageResourceBaseUrl()}${localStorageObjectUrl("full", objectKey)}`,
+    thumb_url: publicThumbnailUrlForConfig(objectKey, config)
   };
 }

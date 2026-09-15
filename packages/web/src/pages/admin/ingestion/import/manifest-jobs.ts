@@ -8,7 +8,7 @@ import {
   webIngestionBatchKey,
   webUuidV7
 } from "../queue/model/ingestion-identity.js";
-import type { ImportManifestItem } from "../queue/ingestion-api.js";
+import type { ImportManifestItem } from "../queue/ingestion-http-client.js";
 
 function valueOrDefault<T>(value: T | undefined, fallback: T) {
   return value === undefined ? fallback : value;

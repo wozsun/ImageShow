@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { readableFilterSearch, TagFilterError } from "@imageshow/shared/browser";
-import { useGalleryFacets } from "../lib/api/site-data.js";
+import { useGalleryFacets } from "../lib/api/site-queries.js";
 import { galleryFiltersFromSearchParams } from "../lib/gallery/gallery-query.js";
 
 /** The route owns choices; the existing vocabulary query resolves tag references. */

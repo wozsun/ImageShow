@@ -7,10 +7,10 @@ import type {
 } from "@imageshow/shared/browser";
 import { webUuidV7 } from "./model/ingestion-identity.js";
 import { isApiClientError } from "../../../../lib/api/client.js";
-import { executeIngestionQueueAction } from "./ingestion-api.js";
+import { executeIngestionQueueAction } from "./ingestion-http-client.js";
 import type {
   CompletedIngestionObservation
-} from "./ingestion-queue-api.js";
+} from "./ingestion-queue-contract.js";
 import type { ServerIngestionQueueController } from "./useServerIngestionQueue.js";
 
 export type FrozenIngestionQueueAction = Readonly<{

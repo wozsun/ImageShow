@@ -1,11 +1,7 @@
 # 数据库结构
 
-PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
-`packages/server/schema.sql` 完整定义当前版本的干净安装结构；`author` 可空身份两列、
-三项长期 CHECK、非空身份复合唯一索引，以及可空、无默认值的主题外键都属于该结构；主题表只保存真实词条。
-随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一 Redis 图片投影的权威 revision
-单行表均属于基线。PostgreSQL
-是最终图片、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
+PostgreSQL 共 9 张业务表，`packages/server/schema.sql` 完整定义安装结构、约束、索引与系统种子。
+PostgreSQL 是正式图片、词表、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
 会话均不替代数据库真值；未完成 Ingestion canonical 是允许在受控冷启动时整体丢弃的运行态。
 
 `schema.sql` 按依赖和运行职责排列：存储注册表 →
@@ -26,10 +22,10 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 readiness 对额外表不读取数据、不要求读写权限、不报错或自动删除；应用未消费的额外列、
 索引和约束也继续容忍。
 
-维护者在升级前按实际变更处理既有数据库的结构新增、修改、删除和必要数据整理，并明确停机、
+维护者按实际需要处理既有数据库的结构新增、修改、删除和必要数据整理，并明确停机、
 备份与恢复方案。应用不自动补表、回填、修改既有结构或对齐完整 schema。
-当前完整结构包括 `metadata.created_by TEXT NOT NULL`、后台任务类型约束与作者身份；既有数据库必须
-在启动前满足当前运行时所需的最小契约。历史数据的升级前置见[版本升级](../DEPLOY.md#版本升级)。
+既有数据库必须在启动前满足当前运行时所需的最小契约，操作边界见
+[数据维护与恢复](../DEPLOY.md#数据维护与恢复)。
 
 readiness 只读核对当前运行时所需业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
 并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的 SELECT / INSERT /
@@ -49,9 +45,6 @@ readiness 不复制 `schema.sql` 的可空性、默认值、无消费者 CHECK�
 应用未消费的表、列、索引和约束位于启动契约之外。破坏性清理由维护者在停机、备份和恢复验证后
 单独执行，不属于应用启动职责。
 
-旧删除任务结构必须先经 6.4.4 转换为当前逐图任务；升级前置、停机与回退要求见
-[部署说明](../DEPLOY.md#删除任务结构升级前置)。
-
 ## 运行期连接与公开回源
 
 单实例使用上限 30 的主查询池和上限 30 的 advisory lock 池。Redis 图片投影不可读时，
@@ -61,9 +54,10 @@ readiness 不复制 `schema.sql` 的可空性、默认值、无消费者 CHECK�
 真正执行 SQL 时才借 client，同一请求后续多条查询都复用它并在 reader 边界按调用顺序执行，
 读阶段结束时统一释放。外层词表与缓存读取仍可并行；查询失败、请求取消或 scope 结束后，
 尚未开始的 SQL 不再执行，失败连接按既有规则淘汰。
-同时到达的公共筛选词表请求共享完整读取作用域（含冷词表加载）；共享任务持有自己的取消
-信号，单个访客只取消自身等待，全部访客离开时才中止查询并释放连接。结束后不保留响应副本，
-其他公共查询继续使用各自作用域，不共享某个访客绑定的 reader。
+同时到达的公共筛选词表请求，以及筛选条件相同的画廊统计请求，分别共享完整读取作用域
+（含冷词表加载）。共享任务持有自己的取消信号，单个访客只取消自身等待，全部访客离开时才
+中止查询并释放连接。结束后不保留响应副本，其余公共读取使用各自作用域；共享任务不使用
+某个访客绑定的 reader。
 不存在 AsyncLocalStorage 查询上下文、按查询类别调度或额外的数据库后端取消连接。请求取消、
 执行超时和连接错误都会正常释放或直接淘汰 client；Redis 恢复并重新通过能力与投影校验后，
 公开读取自动回到 Redis-first。
@@ -162,13 +156,13 @@ OFFSET 跳过的行水合标签。total、metadata 与 tags 属于同一事务�
 
 HTTP、JSONL、Redis draft 与图片 DTO 使用 `theme: null` 表示无主题；非空输入使用主题 slug
 校验，字符串 `"null"` 是保留值，不能存为普通主题。接入请求、队列动作、提交意图与 canonical 语义哈希直接使用当前 metadata 值，
-null 与任意字符串 slug 有不同身份。未完成内容仍只以队列 canonical 为权威，沿现行版本、
-TTL 和恢复链处理；Lua 与 TypeScript draft 校验均接受 JSON null。
+null 与任意字符串 slug 有不同身份。未完成内容只以队列 canonical 为权威，按 canonical version、
+TTL 和恢复流程处理；Lua 与 TypeScript draft 校验均接受 JSON null。
 
 筛选统一用保留值 `null`（如 `theme=null` 或 `theme=!null`）。虚拟“未设置”项只用于图库筛选
 与统计，不是数据库词条，不可编辑、删除或参与词条重排；
 主题管理只列出真实主题。排除普通主题时包含无主题图片，排除 `null` 才排除空值。
-全量、交叉筛选与随机索引采用同一语义。既有部署的升级顺序见[部署说明](../DEPLOY.md#版本升级)。
+全量、交叉筛选与随机索引采用同一语义。
 
 ## ready_image_revision —— Redis 投影权威修订号
 
@@ -186,7 +180,7 @@ owner、queue、pair、独立 `image_time`、metadata、storage、version、prog
 execution token、raw / prepared generation 及可选 commit intent。Import canonical 额外以
 `import_download` 保存下载 URL，Upload canonical 不含该字段；queue 只允许 `upload` / `import`。领域命令用
 Lua 原子维护 canonical 与全部派生索引；Redis 不可用或结构不一致时 fail closed。上述
-namespace、canonical 结构和无版本后缀的签名 purpose 共同构成唯一现行运行时协议。
+namespace、canonical 结构和 `imageshow/ingestion/...` 签名 purpose 共同定义运行时协议。
 
 ## background_job —— 后台任务队列
 
@@ -286,11 +280,12 @@ HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退�
 
 `tag` 与 `theme` 都使用小写 slug、显示名、排序和时间戳。主题是一图至多一值，直接存在可空 `metadata.theme`；标签是一图多值，通过 `image_tag(image_id, tag_slug)` 关联。
 
-词表和存储后端的 `sort_order` 接受 -2147483648 至 2147483647 的整数，允许负数及重复值。
+词表和存储后端的 `sort_order` 使用 PostgreSQL `integer` 保存，允许负数及重复值。
+后台与 API 的业务输入范围为 -5,000,000 至 5,000,000。
 后台通过 `POST /api/admin/{tags|themes|authors}/:slug/sort-order` 或
 `POST /api/admin/storage/backends/:slug/sort-order` 提交 `{ "sort_order": 整数 }`，只更新当前项。
 数值降序、slug 升序是管理列表及对应选项的统一规则；存储 `local` 始终排在首位且禁止修改排序。
-新词条在最大值基础上递增，新存储后端在最小值基础上递减；触及整数边界时使用边界值并按 slug 排序。
+新词条在最大值基础上递增，新存储后端在最小值基础上递减；新值限定在业务范围内，触及边界时使用边界值并按 slug 排序。
 
 图片标签关联与 Ingestion commit 对最终解析、去重后的 tag slug 按排序顺序组合取得
 共享 advisory lock，并在锁内使用同一列表幂等确保缺失标签存在、替换

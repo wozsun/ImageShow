@@ -7,7 +7,7 @@ import {
   type IngestionQueueTypeDto,
   type ServerIngestionItemDto
 } from "@imageshow/shared/browser";
-import { getIngestionQueueSnapshot } from "./ingestion-api.js";
+import { getIngestionQueueSnapshot } from "./ingestion-http-client.js";
 import {
   baselineFromIngestionSnapshot,
   ingestionQueueBaselineCoversSelection,
@@ -17,7 +17,7 @@ import {
 } from "./model/server-ingestion-queue-state.js";
 import type {
   CompletedIngestionObservation
-} from "./ingestion-queue-api.js";
+} from "./ingestion-queue-contract.js";
 import {
   emptyServerIngestionQueueView,
   parseServerIngestionQueueEvent,

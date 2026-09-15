@@ -87,7 +87,7 @@
   `https://*.example.com` 形式的子域 host-source 写入 CSP `frame-ancestors`；隐式来源
   随站点配置变化，不写回或经 DTO 暴露。域名为空或 `example.com` 时只隐式允许 `'self'`，
   不从访问 Host 推导通配来源。通配符不包含根域名，IP literal、裸 `*` 与
-  中间通配符不进入额外白名单，也不使用已废弃且不能表达多来源的 `ALLOW-FROM`。通配符
+  中间通配符不进入额外白名单。通配符
   会同时授权该后缀下全部现有和未来子域，因此 `site.domain` 及额外通配符都必须处于可信
   DNS 管理边界，不得把公共托管后缀作为安全边界。CSP 原生支持这类 host-source，因此
   响应不根据可能缺失的 `Origin` 或可被父页面关闭的 `Referer` 猜测并反射来源。禁用嵌入、

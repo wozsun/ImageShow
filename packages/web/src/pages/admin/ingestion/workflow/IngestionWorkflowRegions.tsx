@@ -22,7 +22,7 @@ import type {
 import type { IngestionAttributeDefaults } from "../queue/model/ingestion-attribute-defaults.js";
 import type { IngestionPreviewTarget } from "../queue/cards/DuplicateMatchPanel.js";
 import { IngestionJobList } from "../queue/cards/IngestionJobList.js";
-import type { ImportManifestParseError } from "../queue/ingestion-api.js";
+import type { ImportManifestParseError } from "../queue/ingestion-http-client.js";
 import type { IngestionQueueController } from "../queue/useIngestionQueue.js";
 import type { useIngestionDuplicateDetails } from "../queue/useIngestionDuplicateDetails.js";
 import type { ImportSourceMode } from "../import/ImportSourceDialog.js";

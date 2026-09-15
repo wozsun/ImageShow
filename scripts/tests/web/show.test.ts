@@ -2359,6 +2359,79 @@ test("[Web/展映] 四批重复后横移清空窗口，末页仅命中近期记�
   assert.ok(scene!.stats().visibleSprites > 0, "无需移动相机或显式重试即可重新填屏");
 });
 
+for (const [timing, following] of [
+  ["before scene sync", "success"], ["before scene sync", "failure"],
+  ["after scene sync", "success"], ["after scene sync", "failure"]
+] as const) {
+  test(`[Web/展映] 末页在 ${timing} 保留复用候选，后续 ${following} 不清空展示`, async (t) => {
+    const h = await createConfigStreamHarness(t);
+    installPixiPaletteFixture(t);
+    t.after(installProperties(globalThis, { devicePixelRatio: 1 }));
+    const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
+    let current!: ReturnType<typeof useShowData>;
+    let scene: ShowPixiWaterfallScene | undefined;
+    const target = createCameraTestElement(1440, 900);
+    const usages: ReturnType<ShowDataPool["usage"]>[] = [];
+    const synchronizedCounts: number[] = [];
+    let now = 0;
+    t.after(installProperties(performance, { now: () => now }));
+    function Probe() {
+      current = useShowData(emptyGalleryFilters, "fast-eof", "latest", 200);
+      h.React.useEffect(() => {
+        synchronizedCounts.push(current.images.length);
+        if (scene) scene.setImages(current.images, current.committedKey, "latest", current.hasMore);
+        else scene = new ShowPixiWaterfallScene({
+          width: 1440, height: 900, columns: 40, images: current.images,
+          dataKey: current.committedKey, order: "latest", hasMore: current.hasMore,
+          running: false, reducedMotion: false, speed: 28, inputElement: target.element,
+          textureCache: { fitResidentLods: unchangedTextureLods, acquire: () => ({ release() {} }) } as unknown as ShowPixiTextureCache,
+          renderer: {} as Renderer, onNeedImages: usage => { usages.push(usage); current.loadMore(usage); },
+          onOpen() {}, onManualVerticalMovement() {}, onVisibleItems() {}, onColumnsChange: columns => columns
+        });
+      }, [current.images, current.committedKey, current.hasMore]);
+      return null;
+    }
+    t.after(() => scene?.destroy());
+    const images = showImages(200);
+    await h.render(h.React.createElement(Probe));
+    await h.respond(0, { items: images, next_cursor: "200" });
+    assert.equal(h.pending.length, 2, "场景消费首批后发出唯一续批请求");
+    assert.ok(scene!.stats().visibleSprites > 0);
+    synchronizedCounts.length = 0;
+    await h.React.act(async () => {
+      target.emit("pointerdown", { clientX: 100, clientY: 100, timeStamp: 0 });
+      target.emit("pointermove", { clientX: 10_100, clientY: 100, timeStamp: 16 });
+      now += 100;
+      scene!.update(16);
+      assert.equal(usages.at(-1)!.activeIds.length, 0, "横移释放所有活动卡位");
+      assert.equal(usages.at(-1)!.consumedIds.length, 200, "消费快照来自真实场景");
+      if (timing === "before scene sync") {
+        // Keep the response and retirement in the same React batch: the scene
+        // never observes the intermediate empty images array.
+        h.pending[1]!.resolve(Response.json({ items: images.slice(0, 100), next_cursor: null }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    });
+    if (timing === "after scene sync") {
+      await h.respond(1, { items: images.slice(0, 100), next_cursor: null });
+    }
+    await h.flush();
+    assert.equal(current.images.length, 100, "刚复用的末页不被旧消费快照再次退役");
+    assert.equal(synchronizedCounts.includes(0), timing === "after scene sync", "固定场景是否收到中间空池");
+    assert.ok(scene!.stats().visibleSprites > 0, "不依赖额外环回响应即可恢复填屏");
+    assert.equal(h.pending.length, 3, "后续补图仍只保留一个请求");
+    await h.respond(2, following === "success"
+      ? { items: showImages(100).map(image => ({ ...image, id: `next-${image.id}` })), next_cursor: null }
+      : { error: "unavailable" }, following === "success" ? 200 : 503);
+    assert.ok(scene!.stats().visibleSprites > 0, "后续请求结果不移除已恢复的活动候选");
+    assert.ok(current.images.length >= 100);
+    assert.equal(Boolean(current.error), following === "failure");
+    const count = h.pending.length;
+    await h.React.act(async () => { for (let frame = 0; frame < 10; frame++) scene!.update(16); });
+    assert.equal(h.pending.length, count);
+  });
+}
+
 for (const ending of ["fresh page", "recent EOF"] as const) {
   test(`[Web/展映] 空窗口多轮续扫在 ${ending} 恢复填屏并隔离取消和真实错误`, async (t) => {
     const h = await createConfigStreamHarness(t, { honorAbort: false });

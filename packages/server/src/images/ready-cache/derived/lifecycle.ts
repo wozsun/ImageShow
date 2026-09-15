@@ -1,5 +1,5 @@
 import { redis } from "../../../core/redis/client.ts";
-import { assertReadyImageDerivedResult } from "./common.ts";
+import { assertReadyImageDerivedResult } from "./registry-metadata.ts";
 import {
   clearReadyImageDisposableCachesUnchecked
 } from "./cleanup.ts";

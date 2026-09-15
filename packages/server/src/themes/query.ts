@@ -3,21 +3,21 @@ import {
   getThemeVocab,
   type VocabularyReadAccess
 } from "../vocab/vocab-cache.ts";
-import { resolveSlugs, resolveTermMap } from "../core/term-resolve.ts";
+import { resolveVocabularySlugs, resolveTermSlugMap } from "../core/vocabulary-terms.ts";
 import type { ThemeDto } from "@imageshow/shared/browser";
 
 export async function resolveThemeTermMap(
   terms: string[],
   access: VocabularyReadAccess = {}
 ): Promise<Map<string, string>> {
-  return resolveTermMap(() => getThemeVocab(access), terms);
+  return resolveTermSlugMap(() => getThemeVocab(access), terms);
 }
 
 export async function resolveThemeSlugs(
   terms: string[],
   access: VocabularyReadAccess = {}
 ): Promise<string[]> {
-  return resolveSlugs(() => getThemeVocab(access), terms);
+  return resolveVocabularySlugs(() => getThemeVocab(access), terms);
 }
 
 export async function listThemesWithMeta(): Promise<ThemeDto[]> {

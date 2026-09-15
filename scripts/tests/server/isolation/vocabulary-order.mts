@@ -1,3 +1,4 @@
+import { sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
@@ -94,15 +95,15 @@ await runIntegrationScenario(async (runtime) => {
       const ordered = await entity.list();
       assert.deepEqual(ordered.slice(-2).map((item) => [item.slug, item.sort_order]), [["order-first", -7], ["order-second", -7]]);
       const snapshot = (await pool.query(`SELECT * FROM ${entity.kind} ORDER BY slug`)).rows;
-      for (const body of [{}, { sort_order: "4" }, { sort_order: 1.2 }, { sort_order: 2147483648 },
-        { sort_order: -2147483649 }, { sort_order: 4, extra: true }]) {
+      for (const body of [{}, { sort_order: "4" }, { sort_order: 1.2 }, { sort_order: sortOrderMax + 1 },
+        { sort_order: sortOrderMin - 1 }, { sort_order: 4, extra: true }]) {
         assert.equal((await write(entity.field, "order-first", body)).status, 400);
       }
       assert.equal((await write(entity.field, "order-first", { sort_order: 0 }, "")).status, 401);
       assert.equal((await write(entity.field, "order-first", { sort_order: 0 }, "image", "wrong")).status, 403);
       assert.equal((await write(entity.field, "order-missing", { sort_order: 0 })).status, 404);
       assert.deepEqual((await pool.query(`SELECT * FROM ${entity.kind} ORDER BY slug`)).rows, snapshot);
-      for (const sort_order of [-2147483648, 2147483647]) {
+      for (const sort_order of [sortOrderMin, sortOrderMax]) {
         assert.equal((await write(entity.field, "order-first", { sort_order })).status, 200);
         const listResponse = await app.request(`/api/admin/${entity.field}`, { headers: { "x-role": "image" } });
         assert.equal(listResponse.status, 200);
@@ -113,7 +114,7 @@ await runIntegrationScenario(async (runtime) => {
       await entity.create("order-max-a");
       await entity.create("order-max-b");
       assert.deepEqual((await entity.list()).slice(0, 3).map((item) => [item.slug, item.sort_order]),
-        [["order-first", 2147483647], ["order-max-a", 2147483647], ["order-max-b", 2147483647]]);
+        [["order-first", sortOrderMax], ["order-max-a", sortOrderMax], ["order-max-b", sortOrderMax]]);
       const stats = await getPublicGalleryStats();
       const expectedOrder = slugs(await entity.list());
       const visible = (items: readonly { slug: string }[]) => slugs(items).filter((slug) => slug !== "null");

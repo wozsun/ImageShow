@@ -31,7 +31,11 @@ import {
 } from "./core/runtime-availability.ts";
 import { configureRuntimeLogger, logger } from "./core/logger.ts";
 import { ensureRuntimeDirectories } from "./storage/objects/runtime-directories.ts";
-import { drainWorker, startWorker, stopWorker } from "./jobs/worker.ts";
+import {
+  drainBackgroundJobWorker,
+  startBackgroundJobWorker,
+  stopBackgroundJobWorker
+} from "./jobs/worker.ts";
 import {
   closeStorageBackendRegistry
 } from "./storage/backends/registry.ts";
@@ -75,7 +79,7 @@ try {
       })
       .finally(() => {
         if (!shuttingDown) {
-          startWorker();
+          startBackgroundJobWorker();
           startIngestionSessionWorker();
         }
       });
@@ -112,9 +116,9 @@ function shutdown(signal: string, exitCode = 0) {
         ? new Promise<void>((resolve) => currentServer.close(() => resolve()))
         : Promise.resolve();
       stopRedisOperationalMonitor();
-      stopWorker();
+      stopBackgroundJobWorker();
       stopIngestionSessionWorker();
-      const workerDrain = drainWorker();
+      const backgroundJobWorkerDrain = drainBackgroundJobWorker();
       const ingestionWorkerDrain = drainIngestionSessionWorker();
       // Mark every cached driver as retiring before waiting for HTTP bodies.
       // Existing leases may drain; shutdown-time work cannot create a new
@@ -124,7 +128,7 @@ function shutdown(signal: string, exitCode = 0) {
       const readyImageCacheStop = stopReadyImageCacheCoordinator();
       await Promise.all([
         serverClose,
-        workerDrain,
+        backgroundJobWorkerDrain,
         ingestionWorkerDrain,
         readyImageCacheStop,
         storageRegistryClose

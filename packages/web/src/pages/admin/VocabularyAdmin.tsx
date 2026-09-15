@@ -30,7 +30,7 @@ import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import type { Author, Tag, Theme } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import {
-  invalidateDataAfterAuthorProfileSave,
+  invalidateVocabularyData,
   invalidateDataAfterSortOrderSave,
   invalidateImageData
 } from "../../lib/api/query-invalidation.js";
@@ -93,9 +93,9 @@ function VocabularyAdminContent({ kind, settings }: {
   const canDelete = permissions.includes(DELETE_PERMISSIONS[kind]);
   const client = useQueryClient();
   const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<AdminEntityListResponseDto<VocabularyEntry>>({ queryKey, queryFn: ({ signal }) => api(`${adminApiBasePath}/${kind}`, { signal }) });
-  // 新建/删除词条会改动公共画廊的筛选词表（gallery-facets，staleTime:Infinity 不会自动刷新），
-  // 删除还会清除关联图片上的该属性，故一并失效后台图片列表，与 ImageAdmin.refresh 的失效集对齐。
-  const refresh = () => invalidateImageData(client);
+  // Vocabulary edits change labels and choices; deleting a term also changes
+  // image membership and therefore uses the full image invalidation below.
+  const refreshVocabulary = () => invalidateVocabularyData(client, queryKey);
   const acceptAuthorItem = async (item: AuthorDto) => {
     const listState = client.getQueryState(queryKey);
     const current = client.getQueryData<AdminEntityListResponseDto<VocabularyEntry>>(queryKey);
@@ -105,7 +105,7 @@ function VocabularyAdminContent({ kind, settings }: {
       : current?.items.every((entry) => item.sort_order > entry.sort_order);
     if (listState?.fetchStatus !== "idle" || !orderKnown) {
       // The list owner preserves database collation and includes overlapping edits.
-      await refresh();
+      await refreshVocabulary();
       return;
     }
     await client.cancelQueries({ queryKey, exact: true });
@@ -119,7 +119,7 @@ function VocabularyAdminContent({ kind, settings }: {
       else items.unshift(item);
       return { ...current, items };
     });
-    await invalidateDataAfterAuthorProfileSave(client);
+    await invalidateVocabularyData(client);
   };
   const [slug, setSlug] = useState("");
   const [display, setDisplay] = useState("");
@@ -191,7 +191,7 @@ function VocabularyAdminContent({ kind, settings }: {
         if (isAuthor && "item" in response) {
           await acceptAuthorItem(response.item);
         } else {
-          await refresh();
+          await refreshVocabulary();
         }
         setPage(1);
         return true;
@@ -212,7 +212,7 @@ function VocabularyAdminContent({ kind, settings }: {
     setMutation("delete");
     try {
       await api(`${adminApiBasePath}/${kind}/${confirmDelete.slug}/delete`, { method: "POST" });
-      await refresh();
+      await invalidateImageData(client);
       return true;
     } catch (err) {
       reportAdminUiError(`vocabulary_admin.${kind}.delete`, err);
@@ -287,7 +287,7 @@ function VocabularyAdminContent({ kind, settings }: {
                 onSortSave={(value) => sorting.save(item.slug, value)}
                 onChanged={async (item) => {
                   if (item) await acceptAuthorItem(item);
-                  else await refresh();
+                  else await refreshVocabulary();
                 }}
                 onDelete={() => setConfirmDelete(item)}
                 onError={(error) => reportAdminUiError(`vocabulary_admin.${kind}.update`, error)}

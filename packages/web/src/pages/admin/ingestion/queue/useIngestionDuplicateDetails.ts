@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IngestionDuplicateDetailsResultDto } from "@imageshow/shared/browser";
 import type { IngestionJob } from "../../../../lib/types.js";
 import { ingestionDuplicateMessage } from "./model/duplicate-match.js";
-import { getIngestionDuplicateDetails } from "./ingestion-api.js";
+import { getIngestionDuplicateDetails } from "./ingestion-http-client.js";
 
 const invalidationListeners = new Set<(md5: string) => void>();
 

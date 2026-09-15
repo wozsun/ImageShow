@@ -1,3 +1,4 @@
+import { sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
 import type { StorageDriver } from "../../../../packages/server/src/storage/drivers/driver.ts";
 import { interceptSqlQueries } from "./database-faults.mts";
@@ -53,6 +54,12 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
     projectedRegistryUrls.object_url,
     "https://cdn.example.com/images/full/" + registryExampleKey
   );
+  const { publicShowImageCards } = await import("../../../../packages/server/src/images/presenter.ts");
+  const card = { id: "00000000-0000-7000-8000-0000000000aa", title: "Card", width: 800, height: 600,
+    object_key: registryExampleKey, storage_slug: registryBackend };
+  const cards = await publicShowImageCards([card, { ...card, storage_slug: "local" }]);
+  assert.equal(cards[0]!.thumb_url, "https://cdn.example.com/images/thumbs/" + registryExampleKey);
+  assert.equal(cards[1]!.thumb_url, "/images/thumbs/" + registryExampleKey);
   const firstRegistryAccess = await registry.resolveStorageAccess(
     registryBackend
   );
@@ -342,12 +349,12 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
     assert.equal((await post(sortPath, { sort_order: 5 }, "image")).status, 403);
     assert.equal((await post("backends/local/sort-order", { sort_order: 5 }, "super")).status, 400);
     assert.equal((await post("backends/missing-sort/sort-order", { sort_order: 5 }, "super")).status, 404);
-    for (const sort_order of [null, "4", 1.5, 2147483648, -2147483649]) {
+    for (const sort_order of [null, "4", 1.5, sortOrderMax + 1, sortOrderMin - 1]) {
       assert.equal((await post(sortPath, { sort_order }, "super")).status, 400);
     }
     for (const [sort_order, expected] of [
-      [-2147483648, ["local", "capability-peer", "capability"]],
-      [2147483647, ["local", "capability", "capability-peer"]],
+      [sortOrderMin, ["local", "capability-peer", "capability"]],
+      [sortOrderMax, ["local", "capability", "capability-peer"]],
       [-2, ["local", "capability", "capability-peer"]]
     ] as const) {
       assert.equal((await post(sortPath, { sort_order }, "super")).status, 200);

@@ -9,7 +9,7 @@ import {
   TagFilterError,
   type TagExpression
 } from "../../../packages/shared/src/browser/tag-filter.ts";
-import { resolveTermMap } from "../../../packages/server/src/core/term-resolve.ts";
+import { resolveTermSlugMap } from "../../../packages/server/src/core/vocabulary-terms.ts";
 import {
   createImageFilterPlan,
   imageFilterPlanWithout
@@ -84,7 +84,7 @@ test("[Server/标签] 输入预算在去重前生效并拒绝空词项与非法�
 });
 
 test("[Server/标签] slug 优先于显示名且未知分支使完整条件失败", async () => {
-  const terms = await resolveTermMap(async () => [
+  const terms = await resolveTermSlugMap(async () => [
     { slug: "live", display_name: "现场" },
     { slug: "other", display_name: "live" },
     { slug: "empty", display_name: "空标签" }

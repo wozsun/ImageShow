@@ -139,7 +139,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `core/database/` | PostgreSQL pool、事务、advisory lock、公开 fallback 准入、schema 装配和 readiness；`readiness/` 只承载数据库基线断言的内部职责。 |
 | `core/redis/` | 唯一 Redis client、连接与能力探测、JSON、pipeline、条件字符串、窗口限流命令及其通用 Lua；不持有 ready-cache 等业务命令，也不导入其他业务领域。 |
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
-| `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；普通保存与磁盘重载共用 FIFO 写租约内“持久化后发布”入口，配置包在同一租约内把候选文件持久化与数据库结果核对及收敛决定后的单次内存发布分离。配置包由目标版本以当前默认配置为基线逐项投影，存储后端逐条识别，不维护来源版本迁移链；`runtime-config-environment.ts` 是全部 RuntimeConfig 叶子到首次 seed 变量的唯一映射。启动、热加载和配置包都只读取当前结构，未知字段统一投影删除。 |
+| `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；普通保存与磁盘重载共用 FIFO 写租约内“持久化后发布”入口，配置包在同一租约内把候选文件持久化与数据库结果核对及收敛决定后的单次内存发布分离。配置包按当前默认配置逐项投影，存储后端按支持的结构与能力逐条识别；`runtime-config-environment.ts` 是全部 RuntimeConfig 叶子到首次 seed 变量的唯一映射。启动、热加载和配置包都只读取当前结构，未知字段统一投影删除。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；`validation/` 按图片、Ingestion、存储、用户和词表职责拥有请求 schema，并集中保留通用 HTTP 原语与 `validation_error` 映射；业务工作委托给领域模块。 |
 | `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`metadata-tags.ts` 拥有 HTTP 与 JSONL 共用的标签归一化契约，`page-window.ts` 唯一计算安全数字页窗口，`storage-location/` 拥有正式图片后端位置 CAS、revision、mutation fence 和 cache handoff，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型及其领域查询类型。 |
 | `storage/` | 只在根层保留横切 `maintenance-lock.ts`；`backends/`、`drivers/`、`objects/` 与 `cleanup/` 分别拥有注册表及 Endpoint 重绑定证明、驱动、对象原语及跨图片传输准入、持久清理。`storage/` 不修改正式图片位置或相应 revision，也不交接 ready-cache。`backends/config.ts` 保留 S3 配置 schema、归一化和存储领域输入类型，HTTP create / update / test schema 位于路由边界。 |
@@ -294,8 +294,8 @@ storage/
 分类 metadata 与正式对象位置相互独立：`image-update-item.ts` 直接提交分类 metadata。
 `tags/mutations.ts` 在调用方事务内以集合 SQL 创建缺失标签并替换关联，去重保留首次出现顺序；
 新增标签按该顺序排在已有词条前，revision 和提交后缓存失效仍由调用方汇总。
-标签、主题与作者的显式创建及自动建立均使用大于当前最大排序值的整数，不改写已有词条排序；
-重复采用已有词条不移动位置。数值达到 PostgreSQL integer 上限后保留上限值，同值按 slug 升序。
+标签、主题与作者的显式创建及自动建立均在当前最大排序值上递增，并限定在业务范围内，不改写已有词条排序；
+重复采用已有词条不移动位置。数值达到 5,000,000 后保留该上限值，同值按 slug 升序。
 `vocab/sort-order.ts` 持有词表单项排序写入与缓存同步；后台列表返回真实 `sort_order`，
 管理列表、画廊筛选与 Ingestion 词表统一按数值降序、slug 升序排列。
 `themes/mutations.ts` 在词表排他锁和图片缓存 fence 内，以单事务集合 SQL 解除图片关联并删除
@@ -392,10 +392,10 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
   均以 Ingestion 为父领域：key 固定使用 `imageshow:ingestion:*`，queue 只允许 `upload` /
   `import`；Import canonical 以 `import_download` 保存下载 URL，Upload canonical 不含该字段。共享
   marker 使用 `INGESTION_CANONICAL` / `INGESTION_QUEUE_STRUCTURE`，Upload intent 使用
-  `UPLOAD_INTENT`；签名 purpose 固定使用无版本后缀的 `imageshow/ingestion/...` 名称。
+  `UPLOAD_INTENT`；签名 purpose 使用 `imageshow/ingestion/...` 名称。
   canonical 的 `version`、revision、generation 与 execution token 只承担当前 CAS、顺序、
   对象所有权和执行 fencing。snapshot 在 `sessions/scripts/queue.ts` 内收集有界的缺失 canonical
-  排除 session，并以一次 display 扫描区分正常 stale 与孤儿投影；不新增反向索引或迁移职责。
+  排除 session，并以一次 display 扫描区分正常 stale 与孤儿投影。
 - `queue/events.ts`、`snapshot.ts`、`action-scope.ts` 与 `store.ts` 共同负责 owner + queue 单
   SSE、稳定分页、动作作用域和最近动作批次的有界重放；`action.ts` 编排有界全队列动作，
   `action-protocol.ts` 校验 watermark / continuation，并让冻结最大 accepted order 后的扫描游标
@@ -555,6 +555,8 @@ SQL 快照投影，URL 由共同 presenter 生成。
 匹配总数由完整数据库设备 / 亮度分组求和，再独立投影展示分类；超限分组或非法计数明确失败。
 标签候选沿 `image_tag` 复合主键连接，以 `count(m.id)` 保留零关联词条，筛选继续使用共同
 SQL 谓词及省略候选自身轴的规则。
+统计 HTTP 请求按完整筛选条件在建立数据库作用域之前合并；共享工作独占 reader 与取消信号，
+单个访客取消只结束自身等待，全部访客离开后才取消共享读取。
 独立详情提供完整元数据和链接；Web 从列表保留基础项并按 ID 组装，显示名复用 facets。
 
 领域模块可以依赖 `core/` 和 `config/`，但基础设施不能反向导入具体路由。跨领域调用直接
@@ -789,6 +791,8 @@ hooks ──► lib
   成功结束后重新核对并处理，后续候选使用量变化也可续扫。空窗口仍有补图需求且尚未到末页时，
   在任务队列让出后继续下一轮，接收新候选、到达末页、切换来源、停用或卸载时结束该续扫，
   末页若仅有近期已见图片且窗口为空，则复用该页未被本地移除的候选填屏；空页或全部被移除的末页仍停止。
+  空候选池重新接纳图片时推进消费轮次，旧使用快照失效；两个场景按新轮次重置消费记录，
+  即使 React 合并了退役与补入、没有渲染中间空池，同 ID 的新候选也不会被旧记录再次退役。
   不把驻留 / 近期去重导致的正常重复批次视为加载失败。真实补图错误仍等待显式重试，
   场景逐帧信号不会触发错误重试循环。
   先无重复领取全部候选，只有有限筛选结果不足以填满活动槽时才循环复用。`mode=waterfall|float`
@@ -889,11 +893,13 @@ hooks ──► lib
   与 `advanced-config/`；只有 `LogPage.tsx`、`Overview.tsx`、`SettingsPage.tsx`、
   `UserAdmin.tsx`、`VocabularyAdmin.tsx` 及其单个卡片等没有形成三文件族的页面留在根层。
   每个页面专属查询、操作 Hook、对话框和状态机都留在同一目录，不上移为虚假的跨页面公共层。
-  词表和存储列表共用 `SortOrderInput` 持有数字草稿，减一 / 输入 / 加一属于同一编辑区域，
+  词表和存储列表共用 `SortOrderInput` 持有数字草稿，聚焦数字框自动全选，减一 / 输入 / 加一属于同一编辑区域，
   区域内切换焦点不保存；Enter 或移出整个区域才调用 `useSortOrderSave` 单项写入并由查询所有者回读。
   保存状态按条目隔离，只禁用提交中的卡片；不同条目的提交依次完成写入与回读，单项失败不阻塞后续提交。
-  控件显示真实排序值，数值越大越靠前，允许负数和同值；失败保留草稿并就地提示。
+  控件显示真实排序值，业务输入范围为 -5,000,000 至 5,000,000，允许负数和同值；失败保留草稿并通过右上角红色消息反馈。
   `invalidateDataAfterSortOrderSave` 仅失效对应列表和受影响选项，列表刷新失败独立报告。
+  `invalidateVocabularyData` 用于词条新建、显示名和作者资料变更，只刷新所属词表、画廊筛选与统计、
+  接入词表；已由响应更新的作者列表不再回读。删除词条会改变图片关联，仍失效完整图片查询。
   本地存储固定首位且不显示排序控件；其余存储项按同一数值及 slug 规则排序。
 - `pages/admin/ingestion/` 管理统一 prepared ingestion 队列，稳定分为 `queue/`、`workflow/`、
   `upload/` 和动态 `import/`。统一内容接入是上位领域，`upload` / `import` 分别表示浏览器
@@ -902,6 +908,9 @@ hooks ──► lib
   来源弹窗加载与工作流窗口；`queue/` 保存 queue controller、API、状态回读、SSE、草稿同步及 `model/`、
   `cards/`；`upload/` 保存本地文件模型、raw XHR lane 和上传 owner；`import/` 保存 URL、JSONL、
   微博来源模型、弹窗与 Import 接收 owner；`workflow/` 保存窗口、稳定 DOM 区域、清理和动作状态机。
+  `queue/ingestion-http-client.ts` 负责 HTTP 传输，`queue/ingestion-queue-contract.ts` 定义队列协作接口与完成结果投影。
+  `model/ingestion-queue-state.ts` 从任务数组准备展示前缀、排除项和接管集合；分页只切取当前页，
+  不重复准备整个队列，派生数据仍由同一任务数组决定。
   来源弹窗由 `import/` 独立动态加载。配置段使用同一领域词汇：Import 来源使用
   `import.*`，Upload 专属入口使用 `upload.*`，共用原图准入、队列分页与提交使用
   `ingestion.*`。`data/config.json` 只按当前默认结构投影、校验并原子
@@ -964,7 +973,7 @@ hooks ──► lib
   取消先退休未发送占位，明确的首次整体拒绝可直接清除，其余未知尝试以冻结输入请求
   `cancel_if_missing`。`session-service.ts` 与 canonical 创建 Lua 在同一幂等身份下返回已接管
   状态或原子写入 discarded 回执，缺失尝试不会因取消被加入下载队列。
-  `queue/ingestion-api.ts` 对 intent、accept、状态核对和逐项取消统一设置 30 秒传输上限，
+  `queue/ingestion-http-client.ts` 对 intent、accept、状态核对和逐项取消统一设置 30 秒传输上限，
   超时不宣称服务端失败或取消；解析、文件传输和后台队列动作不使用这一控制请求上限。
   raw XHR 回执先验证 JSON 对象形状，再解释成功或错误字段；异常回执明确结束 Promise，
   由已有上传 lane 的 `finally` 释放槽位，不自动重放结果不明的上传。

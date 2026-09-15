@@ -7,8 +7,8 @@ import {
 import {
   assertReadyImageDerivedResult,
   nextDerivedAccessScore,
-  nonNegativeInteger
-} from "./common.ts";
+  parseNonNegativeInteger
+} from "./registry-metadata.ts";
 import { READY_IMAGE_DERIVED_CACHE_POLICY } from "./policy.ts";
 import {
   READY_IMAGE_ATTRIBUTE_AXIS_SUFFIXES,
@@ -61,8 +61,8 @@ export async function touchReadyImageIndexedResultUnchecked(options: {
     );
   }
   if (
-    nonNegativeInteger(options.count) === null
-    || nonNegativeInteger(options.itemCount) === null
+    parseNonNegativeInteger(options.count) === null
+    || parseNonNegativeInteger(options.itemCount) === null
     || !/^[0-9a-f]{32}$/u.test(options.instanceToken)
   ) {
     return 0;
@@ -88,7 +88,7 @@ export async function touchReadyImageStatsResultUnchecked(
   itemCount: number
 ) {
   const descriptor = assertReadyImageDerivedResult(key, "stats-result");
-  if (nonNegativeInteger(itemCount) === null) return 0;
+  if (parseNonNegativeInteger(itemCount) === null) return 0;
   return touchReadyImageStatsResultCommand(redis, {
     descriptor,
     registry: derivedRegistryCommandConfig,

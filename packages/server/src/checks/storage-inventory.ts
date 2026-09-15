@@ -12,7 +12,7 @@ import { groupStorageNamespaces } from "../storage/objects/namespace.ts";
 import { collectStorageNamespaceSnapshot } from "../storage/objects/access.ts";
 import type { StorageKeyListOptions } from "../storage/objects/key-listing.ts";
 
-export type StorageRow = {
+export type ImageStorageReferenceRow = {
   id: string;
   object_key: string;
   status: string;
@@ -26,9 +26,9 @@ type IngestionFinalStorageReference = {
 };
 
 export function ingestionFinalStorageReferences(
-  session: Pick<ActiveIngestionStorageReference, "final_object_key">
+  reference: Pick<ActiveIngestionStorageReference, "final_object_key">
 ): IngestionFinalStorageReference[] {
-  const key = session.final_object_key;
+  const key = reference.final_object_key;
   if (!key) return [];
   return [
     { prefix: "full", key },
@@ -36,20 +36,20 @@ export function ingestionFinalStorageReferences(
   ];
 }
 
-export function mergeActiveIngestionSessions(
-  ...sessionMaps: ReadonlyArray<ReadonlyMap<string, ActiveIngestionStorageReference>>
+export function mergeActiveIngestionStorageReferences(
+  ...referenceMaps: ReadonlyArray<ReadonlyMap<string, ActiveIngestionStorageReference>>
 ) {
   const merged = new Map<string, ActiveIngestionStorageReference>();
-  for (const sessions of sessionMaps) {
-    for (const [id, session] of sessions) merged.set(id, session);
+  for (const references of referenceMaps) {
+    for (const [id, reference] of references) merged.set(id, reference);
   }
   return merged;
 }
 
 export function mergeStorageReferenceRows(
-  ...snapshots: ReadonlyArray<readonly StorageRow[]>
+  ...snapshots: ReadonlyArray<readonly ImageStorageReferenceRow[]>
 ) {
-  const rowsByObjectLocation = new Map<string, StorageRow>();
+  const rowsByObjectLocation = new Map<string, ImageStorageReferenceRow>();
   for (const rows of snapshots) {
     for (const row of rows) {
       rowsByObjectLocation.set(`${row.storage_slug}\0${row.object_key}`, row);
