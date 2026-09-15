@@ -1,4 +1,4 @@
-import { sortOrderMax } from "@imageshow/shared/browser";
+import { sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
 import type { PoolClient } from "pg";
 import { pool } from "../core/database/pools.ts";
 import { withTransaction } from "../core/database/transactions.ts";
@@ -26,7 +26,10 @@ export async function createTag(slug: string, displayName = "") {
     signal.throwIfAborted();
     const created = await pool.query(
       `INSERT INTO tag(slug, display_name, sort_order)
-       VALUES($1, $2, (SELECT LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, ${sortOrderMax}) FROM tag))
+       VALUES($1, $2, (
+         SELECT GREATEST(${sortOrderMin}, LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, ${sortOrderMax}))
+         FROM tag
+       ))
        ON CONFLICT (slug) DO NOTHING
        RETURNING slug`,
       [slug, displayName]
@@ -139,8 +142,9 @@ export async function replaceImageTagAssociations(
        )
        INSERT INTO tag(slug, sort_order)
        SELECT slug,
-              LEAST((SELECT COALESCE(MAX(sort_order), 0)::bigint FROM tag)
-                + row_number() OVER (ORDER BY ord DESC), ${sortOrderMax})
+              GREATEST(${sortOrderMin}, LEAST(
+                (SELECT COALESCE(MAX(sort_order), 0)::bigint FROM tag)
+                  + row_number() OVER (ORDER BY ord DESC), ${sortOrderMax}))
          FROM missing
         ORDER BY ord
        ON CONFLICT (slug) DO NOTHING

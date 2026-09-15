@@ -9,12 +9,9 @@ import {
   type ShowImageCardDto,
   type PublicImageDetailDto
 } from "@imageshow/shared/browser";
-import type {
-  PublicDatabaseReadAccess
-} from "../core/database/public-fallback.ts";
 import { storageBackendLabel } from "../storage/backends/label.ts";
 import type { StorageConfig } from "../storage/backends/config.ts";
-import { getStorageBackendConfigs } from "../storage/backends/registry.ts";
+import { getStorageBackendConfigs, type StorageRegistryAccess } from "../storage/backends/registry.ts";
 import {
   publicImageUrls,
   publicImageUrlsForConfig,
@@ -210,7 +207,7 @@ type PublicImageUrlRecord = Pick<
 
 function storageConfigsForRows(
   rows: readonly PublicImageUrlRecord[],
-  access: PublicDatabaseReadAccess = {}
+  access: StorageRegistryAccess = {}
 ) {
   return getStorageBackendConfigs(rows.map((row) => row.storage_slug), access);
 }
@@ -344,7 +341,7 @@ export async function editableImageSnapshotsWithTags(
 
 export async function publicImageDetail(
   row: PublicImageDetailRecord,
-  access: PublicDatabaseReadAccess = {},
+  access: StorageRegistryAccess = {},
   includeOriginal = false
 ): Promise<PublicImageDetailDto> {
   const urls = await publicImageUrls(row.object_key, row.storage_slug, access);
@@ -382,7 +379,7 @@ function publicShowImageCard(
 
 export async function publicShowImageCards(
   rows: PublicShowImageRecord[],
-  access: PublicDatabaseReadAccess = {}
+  access: StorageRegistryAccess = {}
 ) {
   if (!rows.length) return [];
   const configs = await storageConfigsForRows(rows, access);
@@ -407,7 +404,7 @@ function publicImageCard(
 
 export async function publicImageCardsWithTags(
   rows: Array<PublicImageCardRecord & { tags: string[] }>,
-  access: PublicDatabaseReadAccess = {}
+  access: StorageRegistryAccess = {}
 ) {
   if (!rows.length) return [];
   const configs = await storageConfigsForRows(rows, access);

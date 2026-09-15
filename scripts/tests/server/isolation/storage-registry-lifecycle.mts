@@ -371,6 +371,23 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
     assert.equal((await post("test", { slug: "capability" }, "super")).status, 200);
     assert.deepEqual((await readConfig()).capabilities, { content_md5: false });
     assert.equal(s3.objects.size, 0);
+    for (const baseline of [-2_147_483_648, sortOrderMin, sortOrderMax, sortOrderMax + 1_000_000, 2_147_483_647]) {
+      await database.pool.query("UPDATE storage_backend SET sort_order=$1", [baseline]);
+      const before = (await database.pool.query("SELECT slug, sort_order FROM storage_backend ORDER BY slug")).rows;
+      const slug = "sort-created";
+      await mutations.createStorageBackend({ slug, display_name: "Created", s3: s3.settings });
+      assert.equal((await database.pool.query("SELECT sort_order FROM storage_backend WHERE slug=$1", [slug])).rows[0].sort_order,
+        Math.max(sortOrderMin, Math.min(sortOrderMax, baseline - 1)));
+      assert.deepEqual((await database.pool.query("SELECT slug, sort_order FROM storage_backend WHERE slug<>$1 ORDER BY slug", [slug])).rows, before);
+      await mutations.deleteStorageBackend(slug);
+      const imported = ["sort-import-a", "sort-import-b"];
+      await mutations.importStorageBackends(imported.map(slug => ({ slug, display_name: slug, config: s3.settings, enabled: true, is_default: false })),
+        () => undefined, () => undefined);
+      assert.deepEqual((await database.pool.query("SELECT sort_order FROM storage_backend WHERE slug=ANY($1::text[]) ORDER BY slug", [imported])).rows.map(row => row.sort_order),
+        [1, 2].map(step => Math.max(sortOrderMin, Math.min(sortOrderMax, baseline - step))));
+      assert.deepEqual((await database.pool.query("SELECT slug, sort_order FROM storage_backend WHERE NOT slug=ANY($1::text[]) ORDER BY slug", [imported])).rows, before);
+      for (const slug of imported) await mutations.deleteStorageBackend(slug);
+    }
   } finally {
     await mutations.deleteStorageBackend("capability");
     await s3.close();

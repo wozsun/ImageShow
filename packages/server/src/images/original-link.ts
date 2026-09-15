@@ -1,8 +1,6 @@
 import { publicImageUrls } from "../storage/objects/public-urls.ts";
 import { imageResourceBaseUrl } from "../config/site-host.ts";
-import type {
-  PublicDatabaseReadAccess
-} from "../core/database/public-fallback.ts";
+import type { StorageRegistryAccess } from "../storage/backends/registry.ts";
 
 type OriginalComparableImage = {
   object_key: string;
@@ -24,12 +22,12 @@ function equivalentUrl(left: string, right: string) {
 
 export async function displayUrlForOriginalComparison(
   image: OriginalComparableImage,
-  database: PublicDatabaseReadAccess = {}
+  access: StorageRegistryAccess = {}
 ) {
   const urls = await publicImageUrls(
     image.object_key,
     image.storage_slug,
-    database
+    access
   );
   return urls.object_url;
 }

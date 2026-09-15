@@ -1,4 +1,4 @@
-import { sortOrderMin } from "@imageshow/shared/browser";
+import { sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
 import { ApiError } from "../../core/api-error.ts";
 import { pool } from "../../core/database/pools.ts";
 import {
@@ -58,7 +58,8 @@ export async function createStorageBackend(
        )
        VALUES(
          $1, $2, $3, $4::jsonb, true,
-         (SELECT GREATEST(COALESCE(MIN(sort_order), 0)::bigint - 1, ${sortOrderMin}) FROM storage_backend)
+         (SELECT GREATEST(${sortOrderMin}, LEAST(COALESCE(MIN(sort_order), 0)::bigint - 1, ${sortOrderMax}))
+          FROM storage_backend)
        )`,
       [input.slug, input.display_name, "s3", storedS3ConfigJson(config)]
     ).catch((error: unknown) => {
@@ -121,7 +122,7 @@ export async function importStorageBackends(
               "s3",
               storedS3ConfigJson(configs[index]!),
               backend.enabled,
-              Math.max(sortOrderMin, lowestSortOrder - index - 1)
+              Math.max(sortOrderMin, Math.min(sortOrderMax, lowestSortOrder - index - 1))
             ]
           );
         }

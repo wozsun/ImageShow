@@ -1,6 +1,5 @@
 import { imageResourceBaseUrl } from "../../config/site-host.ts";
-import { getStorageBackend } from "../backends/registry.ts";
-import type { PublicDatabaseReadAccess } from "../../core/database/public-fallback.ts";
+import { getStorageBackend, type StorageRegistryAccess } from "../backends/registry.ts";
 import type { StorageConfig } from "../backends/config.ts";
 import { thumbnailObjectKey } from "./image-paths.ts";
 import {
@@ -30,7 +29,7 @@ export function directStorageObjectUrl(
 export async function publicImageUrls(
   objectKey: string,
   slug: string,
-  access: PublicDatabaseReadAccess = {}
+  access: StorageRegistryAccess = {}
 ) {
   const config = await getStorageBackend(slug, access);
   return publicImageUrlsForConfig(objectKey, config);

@@ -119,7 +119,30 @@ await runIntegrationScenario(async (runtime) => {
       const expectedOrder = slugs(await entity.list());
       const visible = (items: readonly { slug: string }[]) => slugs(items).filter((slug) => slug !== "null");
       assert.deepEqual(visible((await vocab.getIngestionVocabulary())[entity.field]), expectedOrder);
-      assert.deepEqual(visible(stats[entity.field]), expectedOrder);
+      const populated = entity.kind === "tag" ? update.tags : ["order-auto"];
+      assert.deepEqual(visible(stats[entity.field]), expectedOrder.filter(slug => populated.includes(slug)));
+    }
+    for (const baseline of [-2_147_483_648, sortOrderMin - 1_000_000, sortOrderMin, sortOrderMax, 2_147_483_647]) {
+      for (const entity of entities) {
+        await pool.query(`UPDATE ${entity.kind} SET sort_order=$1`, [baseline]);
+        const before = (await pool.query(`SELECT slug, sort_order FROM ${entity.kind} ORDER BY slug`)).rows;
+        const slug = `order-bound-${baseline}`;
+        await entity.create(slug);
+        assert.equal((await pool.query(`SELECT sort_order FROM ${entity.kind} WHERE slug=$1`, [slug])).rows[0].sort_order,
+          Math.max(sortOrderMin, Math.min(sortOrderMax, baseline + 1)));
+        assert.deepEqual((await pool.query(`SELECT slug, sort_order FROM ${entity.kind} WHERE slug<>$1 ORDER BY slug`, [slug])).rows,
+          before, "creation preserves existing out-of-range records");
+        await pool.query(`DELETE FROM ${entity.kind} WHERE slug=$1`, [slug]);
+      }
+      const auto = `order-bound-auto-${baseline}`;
+      assert.equal((await updateImages([{ id: imageId, theme: auto, author: auto, tags: [`${auto}-a`, `${auto}-b`, `${auto}-a`] }])).updated, 1);
+      for (const entity of entities) {
+        const added = (await pool.query(`SELECT slug, sort_order FROM ${entity.kind} WHERE slug LIKE $1 ORDER BY slug`, [`${auto}%`])).rows;
+        const clamp = (increment: number) => Math.max(sortOrderMin, Math.min(sortOrderMax, baseline + increment));
+        assert.deepEqual(added.map(row => row.sort_order), entity.kind === "tag" ? [clamp(2), clamp(1)] : [clamp(1)]);
+        assert.ok((await pool.query(`SELECT sort_order FROM ${entity.kind} WHERE slug NOT LIKE $1`, [`${auto}%`])).rows
+          .every(row => row.sort_order === baseline), "association creation preserves existing values");
+      }
     }
     console.log("vocabulary order: single writes, descending values, ties, bounds, routes, projections and creation passed");
   } finally {

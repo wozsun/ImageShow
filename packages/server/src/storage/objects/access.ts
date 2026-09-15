@@ -1,11 +1,9 @@
 import { ApiError } from "../../core/api-error.ts";
 import {
   getStorageBackend,
-  resolveStorageAccess
+  resolveStorageAccess,
+  type StorageRegistryAccess
 } from "../backends/registry.ts";
-import type {
-  PublicDatabaseReadAccess
-} from "../../core/database/public-fallback.ts";
 import type {
   OpenedRead,
   StoragePruneOptions,
@@ -201,19 +199,19 @@ export async function resolveReadableObject(
   prefix: ReadablePrefix,
   key: string,
   slug: string,
-  database: PublicDatabaseReadAccess = {}
+  access: StorageRegistryAccess = {}
 ): Promise<ResolvedReadableObject> {
-  const config = await getStorageBackend(slug, database);
+  const config = await getStorageBackend(slug, access);
   return {
     prefix,
     key,
     storageSlug: config.slug,
     publicUrl: directStorageObjectUrl(config, prefix, key),
     exists: async (options) => (
-      (await resolveStorageAccess(slug, database)).driver.exists(prefix, key, options)
+      (await resolveStorageAccess(slug, access)).driver.exists(prefix, key, options)
     ),
     open: async (range, options) => (
-      (await resolveStorageAccess(slug, database)).driver.openRead(
+      (await resolveStorageAccess(slug, access)).driver.openRead(
         prefix,
         key,
         range,

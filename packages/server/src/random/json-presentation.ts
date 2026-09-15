@@ -1,28 +1,21 @@
 import type {
   RandomImageJsonItemDto
 } from "@imageshow/shared/browser";
-import { publicImageUrls } from "../storage/objects/public-urls.ts";
-import { listStorageBackends } from "../storage/backends/registry.ts";
-import type {
-  PublicDatabaseReadAccess
-} from "../core/database/public-fallback.ts";
+import { publicImageUrlsForConfig } from "../storage/objects/public-urls.ts";
+import { getStorageBackendConfigs } from "../storage/backends/registry.ts";
 import type { SelectedReadyImage } from "./selection-model.ts";
 import { hasDistinctOriginalUrl } from "../images/original-link.ts";
 
 export async function presentRandomJsonItems(
   picked: SelectedReadyImage[],
-  signal?: AbortSignal,
-  database: PublicDatabaseReadAccess = {}
+  signal?: AbortSignal
 ): Promise<RandomImageJsonItemDto[]> {
   signal?.throwIfAborted();
-  if (picked.length) await listStorageBackends(database);
-  return Promise.all(picked.map(async (item) => {
+  if (!picked.length) return [];
+  const configs = await getStorageBackendConfigs(picked.map((item) => item.storage_slug), { signal });
+  return picked.map((item) => {
     signal?.throwIfAborted();
-    const urls = await publicImageUrls(
-      item.object_key,
-      item.storage_slug,
-      database
-    );
+    const urls = publicImageUrlsForConfig(item.object_key, configs.get(item.storage_slug)!);
     return {
       id: item.id,
       title: item.title,
@@ -37,5 +30,5 @@ export async function presentRandomJsonItems(
       height: item.height,
       image_time: item.image_time
     };
-  }));
+  });
 }

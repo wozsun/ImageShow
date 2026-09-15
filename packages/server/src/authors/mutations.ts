@@ -1,4 +1,4 @@
-import { sortOrderMax } from "@imageshow/shared/browser";
+import { sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
 import type { Pool, PoolClient } from "pg";
 import type { AuthorDto } from "@imageshow/shared/browser";
 import { withTransaction } from "../core/database/transactions.ts";
@@ -65,7 +65,10 @@ export async function ensureAuthorWithMutationLockHeld(
   if (!slug) return false;
   const result = await client.query(
     `INSERT INTO author(slug, sort_order)
-     VALUES($1, (SELECT LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, ${sortOrderMax}) FROM author))
+     VALUES($1, (
+       SELECT GREATEST(${sortOrderMin}, LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, ${sortOrderMax}))
+       FROM author
+     ))
      ON CONFLICT (slug) DO NOTHING
      RETURNING slug`,
     [slug]
@@ -103,7 +106,8 @@ export async function createAuthor(
              $3,
              $4,
              $5,
-             (SELECT LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, ${sortOrderMax}) FROM author)
+             (SELECT GREATEST(${sortOrderMin}, LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, ${sortOrderMax}))
+              FROM author)
            )
            ON CONFLICT (slug) DO NOTHING
            RETURNING slug,

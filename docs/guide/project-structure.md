@@ -168,7 +168,9 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 在每个非空批次调用一次 `storage/backends/registry.ts` 的 `getStorageBackendConfigs`。
 注册表在同一有效 revision 中按 slug 选择配置，响应内通过只读 Map 同步生成 URL，不建立
 长期第二缓存。单图和批次共用 `storage/objects/public-urls.ts` 的同步 URL 编码、缩略图与
-S3 直链规则；公开读取继续传入所属请求的有界数据库 reader。
+S3 直链规则，随机 JSON 也按批次投影。公开列表、详情、资源和随机出口先结束图片读取作用域，
+再以请求取消信号读取注册表；注册表冷加载按 revision 合并，并拥有独立的有界数据库作用域。
+配置快照缓存 24 小时，应用内配置写入主动失效，具体规则见[存储说明](storage.md#注册表缓存)。
 
 `core/http/content-response.ts` 同时维护字符串正文、内容弱 ETag 与 UTF-8 字节长度。
 200 响应携带准确 `Content-Length`，304 不带正文或长度；API 压缩中间件直接使用已知长度，
@@ -246,7 +248,7 @@ advisory lock 调度信号只取消连接取得与锁等待；锁内回调收到
 schema 初始化和管理员播种直接使用主查询池，不为不受支持的第二应用进程取得启动锁；图片、
 词表、内容接入、存储位置等运行期领域锁仍使用独立 advisory lock 池。
 公开降级读取由 `database/public-admission.ts` 统一管理一个 FIFO 容量与等待队列，
-`database/public-fallback.ts` 负责请求级惰性 reader scope、单连接 SQL 顺序、执行期限和 client
+`database/public-fallback.ts` 负责读取阶段的惰性 reader scope、单连接 SQL 顺序、执行期限和 client
 释放 / 淘汰。Redis 缓存读取先行并保留外层并行，首次真实回源才借 client，同一 scope 内的领域模块
 显式接收并复用 reader；查询失败、请求取消或 scope 结束后不再启动排队 SQL。
 底层 `pool.query` 保持显式调用与原始连接语义。
@@ -258,8 +260,16 @@ schema 初始化和管理员播种直接使用主查询池，不为不受支持�
 `core/coalesce.ts` 合并同键活动任务，调用者各自等待；可取消的工作使用共享信号，在最后一个
 调用者离开后中止。`images/read-models/facets.ts` 在建立公共数据库 scope 之前合并整个公共
 词表读取，避免共享某个 HTTP 请求的 reader 或在已有连接内嵌套等待另一个准入名额。
+`storage/backends/registry.ts` 同样在取得公开数据库作用域前合并同 revision 的配置加载；
+调用方先释放图片读取连接，注册表只接收取消信号。公开与内部加载分别合并活动任务，
+共同使用唯一配置快照；公开读取在冷、热缓存下均执行后端数量上限。
 公开 facets 只计算主题与作者的图片成员关系；标签返回含零图片词条的完整词表，
 由词表 reader 对实际返回集合执行数量限制。
+`images/read-models/gallery-stats.ts` 的主题、标签和作者目录只返回全局有正常图片的词条，
+包括按同一规则处理的“未设置”主题。Redis 投影按统计快照中的全局词条键筛选词表，
+PostgreSQL 回源先关联全局正常图片，再以筛选聚合计算候选数量；筛选后的零数量仍保留。
+首页沿用唯一统计查询及现有目录数量、排序和禁用规则，不额外请求未筛选统计或保留成员副本。
+设备与明暗继续投影完整固定选项，不应用词条隐藏规则。
 
 固定窗口限流的单条通用 Lua、命令定义、注册、参数布局和返回解析由
 `core/redis/window-limit.ts` 就近拥有；`core/redis/client.ts` 只构造唯一 client 并维护连接与

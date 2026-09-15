@@ -77,6 +77,9 @@ export const appConfig = {
     sseAuthenticationHeartbeatSeconds: 30
   },
   derivedCacheTtlSeconds: 60 * 60,
+  storageRegistry: {
+    ttlSeconds: 24 * 60 * 60
+  },
   imageLookup: {
     ttlSeconds: 6 * 60 * 60
   },

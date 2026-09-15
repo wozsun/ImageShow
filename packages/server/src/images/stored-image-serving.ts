@@ -1,8 +1,6 @@
 import { ApiError } from "../core/api-error.ts";
-import {
-  withPublicDatabaseRead,
-  type PublicDatabaseReadAccess
-} from "../core/database/public-fallback.ts";
+import { withPublicDatabaseRead } from "../core/database/public-fallback.ts";
+import type { StorageRegistryAccess } from "../storage/backends/registry.ts";
 import {
   immutableCacheControl,
   publicRedirectCacheControl,
@@ -55,14 +53,14 @@ async function deliverStoredThumbnail(
   record: StoredThumbnailRecord,
   request: StoredResponseRequest,
   dependencies: StoredImageServingDependencies,
-  database: PublicDatabaseReadAccess = {}
+  access: StorageRegistryAccess = {}
 ): Promise<Response> {
   const thumbKey = thumbnailObjectKey(record.object_key);
   const resolvedThumb = await dependencies.resolveReadableObject(
     "thumbs",
     thumbKey,
     record.storage_slug,
-    database
+    access
   );
   if (resolvedThumb?.publicUrl) {
     return immutableRedirect(resolvedThumb.publicUrl);
@@ -93,38 +91,23 @@ export async function servePublicStoredObject(
     throw new ApiError(404, "not_found", "Object not found");
   }
   const signal = request.signal ?? new AbortController().signal;
-  return withPublicDatabaseRead(signal, async (database, databaseSignal) => {
-    const record = await dependencies.readImageServingRecordById(
-      parsed.id,
-      database
-    );
-    if (!record || record.object_key !== key) {
+  const record = await withPublicDatabaseRead(signal, (database) => (
+    dependencies.readImageServingRecordById(parsed.id, database)
+  ));
+  if (!record || record.object_key !== key) {
+    throw new ApiError(404, "not_found", "Object not found");
+  }
+  const object = await dependencies.resolveReadableObject(
+    "full", key, record.storage_slug, { signal }
+  );
+  if (object.publicUrl) return immutableRedirect(object.publicUrl);
+  return dependencies.streamResolvedObject(
+    object, contentType(record.ext), immutableCacheControl, { ...request, signal }
+  ).catch((error: unknown) => {
+    if (isStorageObjectNotFound(error)) {
       throw new ApiError(404, "not_found", "Object not found");
     }
-    const object = await dependencies.resolveReadableObject(
-      "full",
-      key,
-      record.storage_slug,
-      database
-    );
-    if (object.publicUrl) return immutableRedirect(object.publicUrl);
-    const boundedRequest = {
-      ...request,
-      signal: request.signal
-        ? AbortSignal.any([request.signal, databaseSignal])
-        : databaseSignal
-    };
-    return dependencies.streamResolvedObject(
-      object,
-      contentType(record.ext),
-      immutableCacheControl,
-      boundedRequest
-    ).catch((error: unknown) => {
-      if (isStorageObjectNotFound(error)) {
-        throw new ApiError(404, "not_found", "Object not found");
-      }
-      throw error;
-    });
+    throw error;
   });
 }
 
@@ -139,24 +122,11 @@ export async function servePublicStoredThumbnail(
     throw new ApiError(404, "not_found", "Thumbnail not found");
   }
   const signal = request.signal ?? new AbortController().signal;
-  return withPublicDatabaseRead(signal, async (database, databaseSignal) => {
-    const record = await dependencies.readImageServingRecordById(
-      parsed.id,
-      database
-    );
-    if (!record || thumbnailObjectKey(record.object_key) !== key) {
-      throw new ApiError(404, "not_found", "Thumbnail not found");
-    }
-    return deliverStoredThumbnail(
-      record,
-      {
-        ...request,
-        signal: request.signal
-          ? AbortSignal.any([request.signal, databaseSignal])
-          : databaseSignal
-      },
-      dependencies,
-      database
-    );
-  });
+  const record = await withPublicDatabaseRead(signal, (database) => (
+    dependencies.readImageServingRecordById(parsed.id, database)
+  ));
+  if (!record || thumbnailObjectKey(record.object_key) !== key) {
+    throw new ApiError(404, "not_found", "Thumbnail not found");
+  }
+  return deliverStoredThumbnail(record, { ...request, signal }, dependencies, { signal });
 }

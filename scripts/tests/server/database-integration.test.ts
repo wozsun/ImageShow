@@ -165,6 +165,11 @@ const storageIngestionScenarios = [
     script: join(isolationRoot, "storage-registry-lifecycle.mts")
   },
   {
+    id: "storage-registry-cache",
+    name: "公开存储配置共享加载、独立取消、失效与到期重读",
+    script: join(isolationRoot, "storage-registry-cache.mts")
+  },
+  {
     id: "image-update-consistency",
     name: "图片批量更新的事务、词表和缓存一致性",
     script: join(isolationRoot, "image-update-consistency.mts")

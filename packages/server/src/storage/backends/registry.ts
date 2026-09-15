@@ -1,8 +1,9 @@
 import { appConfig } from "@imageshow/shared";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
+import { coalesce } from "../../core/coalesce.ts";
 import {
   publicPgFallbackWorkLimitExceeded,
-  type PublicDatabaseReadAccess
+  withPublicDatabaseRead
 } from "../../core/database/public-fallback.ts";
 import {
   pool,
@@ -24,15 +25,13 @@ import { createStorageDriver } from "../drivers/factory.ts";
 import type { StorageDriver } from "../drivers/driver.ts";
 import { manageStorageDriver } from "../drivers/lifecycle.ts";
 
-const storageCacheTtlMs = appConfig.derivedCacheTtlSeconds * 1000;
+export type StorageRegistryAccess = { signal?: AbortSignal };
+
+const storageCacheTtlMs = appConfig.storageRegistry.ttlSeconds * 1000;
 let storageCache: StorageBackendRecord[] | null = null;
 let storageCacheExpiresAt = 0;
 let registryRevision = 0;
 let registryClosed = false;
-let storageLoad: {
-  revision: number;
-  promise: Promise<StorageBackendRecord[]>;
-} | null = null;
 const storageDriverCache = new Map<string, StorageDriver>();
 const closingStorageDrivers = new Set<Promise<void>>();
 
@@ -125,29 +124,33 @@ async function loadStorageBackends(
 
 function loadStorageBackendsForRevision(
   revision: number,
-  access: PublicDatabaseReadAccess
+  access: StorageRegistryAccess
 ) {
-  if (access.reader) return loadStorageBackends(access.reader, true);
-  if (!storageLoad || storageLoad.revision !== revision) {
-    storageLoad = { revision, promise: loadStorageBackends() };
-  }
-  const currentLoad = storageLoad;
-  return currentLoad.promise.finally(() => {
-    if (storageLoad === currentLoad) storageLoad = null;
-  });
+  return access.signal
+    ? coalesce(`storage-registry:public:${revision}`, (sharedSignal) => (
+        withPublicDatabaseRead(sharedSignal, ({ reader }) => loadStorageBackends(reader, true))
+      ), access.signal)
+    : coalesce(`storage-registry:internal:${revision}`, () => loadStorageBackends());
 }
 
 async function withCurrentStorageBackends<Result>(
   select: (backends: StorageBackendRecord[]) => Result,
-  access: PublicDatabaseReadAccess = {}
+  access: StorageRegistryAccess = {}
 ): Promise<Result> {
   while (true) {
+    access.signal?.throwIfAborted();
     assertRegistryOpen();
     if (storageCache && Date.now() < storageCacheExpiresAt) {
+      if (access.signal && storageCache.length > appConfig.publicPgFallback.maximumStorageBackendRows) {
+        throw publicPgFallbackWorkLimitExceeded(
+          "Storage backend registry exceeds the public result limit"
+        );
+      }
       return select(storageCache);
     }
     const revision = registryRevision;
     const loaded = await loadStorageBackendsForRevision(revision, access);
+    access.signal?.throwIfAborted();
     assertRegistryOpen();
     if (revision !== registryRevision) continue;
     publishStorageBackends(loaded);
@@ -161,7 +164,6 @@ export function invalidateStorageBackendRegistry() {
   registryRevision += 1;
   storageCache = null;
   storageCacheExpiresAt = 0;
-  storageLoad = null;
 }
 
 export async function closeStorageBackendRegistry() {
@@ -170,7 +172,6 @@ export async function closeStorageBackendRegistry() {
     registryRevision += 1;
     storageCache = null;
     storageCacheExpiresAt = 0;
-    storageLoad = null;
     for (const driver of storageDriverCache.values()) {
       trackRetiredDriver(driver);
     }
@@ -180,14 +181,14 @@ export async function closeStorageBackendRegistry() {
 }
 
 export async function listStorageBackends(
-  access: PublicDatabaseReadAccess = {}
+  access: StorageRegistryAccess = {}
 ): Promise<StorageBackendRecord[]> {
   return withCurrentStorageBackends((backends) => backends, access);
 }
 
 export async function getStorageBackend(
   slug: string,
-  access: PublicDatabaseReadAccess = {}
+  access: StorageRegistryAccess = {}
 ): Promise<StorageConfig> {
   return withCurrentStorageBackends((backends) => storageConfigFromRecord(
     storageRecordBySlug(backends, slug)
@@ -197,7 +198,7 @@ export async function getStorageBackend(
 /** Response-scoped configs selected from one current registry revision. */
 export function getStorageBackendConfigs(
   slugs: readonly string[],
-  access: PublicDatabaseReadAccess = {}
+  access: StorageRegistryAccess = {}
 ): Promise<ReadonlyMap<string, StorageConfig>> {
   return withCurrentStorageBackends((backends) => {
     const records = new Map(backends.map((backend) => [backend.slug, backend]));
@@ -273,7 +274,7 @@ function defaultStorageRecord(
 
 export async function resolveStorageAccess(
   slug?: string,
-  access: PublicDatabaseReadAccess = {}
+  access: StorageRegistryAccess = {}
 ) {
   return withCurrentStorageBackends((backends) => {
     const record = slug

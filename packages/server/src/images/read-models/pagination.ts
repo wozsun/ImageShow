@@ -13,8 +13,6 @@ import {
   adminImageListPresentationColumns,
   adminImageListPresentationColumnsWithTags,
   imageTagsPresentationColumn,
-  publicImageCardsWithTags,
-  publicShowImageCards,
   type ImageRecordWithTags,
   type PublicImageCardRecord,
   type PublicShowImageRecord
@@ -46,6 +44,13 @@ export async function fetchAdminImageOffsetRows(
   return result.rows as ImageRecordWithTags[];
 }
 
+export type PublicImagePageRows = {
+  nextCursor: string | null;
+} & (
+  | { view: "show"; rows: PublicShowImageRecord[] }
+  | { view: "gallery"; rows: Array<PublicImageCardRecord & { tags: string[] }> }
+);
+
 /** Selection and tag hydration share one PostgreSQL statement snapshot. */
 export async function fetchPublicImageCardPage(
   where: string[],
@@ -55,7 +60,7 @@ export async function fetchPublicImageCardPage(
   view: PublicImageView,
   position: ImageBrowsePosition | undefined,
   reader: DatabaseReader = pool
-) {
+): Promise<PublicImagePageRows> {
   const params = [...filterParams];
   const parameter = (value: unknown) => {
     params.push(value);
@@ -106,22 +111,13 @@ export async function fetchPublicImageCardPage(
                  FROM (${selection}) metadata
                 ORDER BY ${ordering} LIMIT ${count}`;
   type PositionRow = { id: string; cursor_image_time: string };
-  const present = async <Row extends PublicShowImageRecord & PositionRow, Item>(
-    format: (rows: Row[]) => Promise<Item[]>
-  ) => {
-    const result = await reader.query(sql, params);
-    const rows = result.rows.slice(0, limit) as Row[];
-    const last = rows.at(-1);
-    const nextCursor = result.rows.length > limit && last
-      ? encodeImageCursor(last, context)
-      : null;
-    return { rows, nextCursor, items: await format(rows) };
-  };
+  const result = await reader.query(sql, params);
+  const rows = result.rows.slice(0, limit);
+  const last = rows.at(-1) as PositionRow | undefined;
+  const nextCursor = result.rows.length > limit && last
+    ? encodeImageCursor(last, context)
+    : null;
   return view === "show"
-    ? present((rows: Array<PublicShowImageRecord & PositionRow>) => (
-        publicShowImageCards(rows, { reader })
-      ))
-    : present((rows: Array<PublicImageCardRecord & PositionRow & { tags: string[] }>) => (
-        publicImageCardsWithTags(rows, { reader })
-      ));
+    ? { view, nextCursor, rows: rows as PublicShowImageRecord[] }
+    : { view, nextCursor, rows: rows as Array<PublicImageCardRecord & { tags: string[] }> };
 }

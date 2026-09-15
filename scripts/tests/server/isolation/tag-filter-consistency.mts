@@ -33,12 +33,21 @@ await runIntegrationScenario(async (runtime) => {
     theme: ["matrix-city", "matrix-nature", null][Math.floor(index / 3) % 3]!,
     author: ["matrix-alice", "matrix-bob", null][Math.floor(index / 5) % 3]!
   }));
-  await pool.query("INSERT INTO theme(slug, display_name) VALUES ('matrix-city','城市'),('matrix-nature','自然')");
-  await pool.query("INSERT INTO author(slug, display_name) VALUES ('matrix-alice','作者甲'),('matrix-bob','作者乙')");
+  await pool.query("INSERT INTO theme(slug, display_name) VALUES ('matrix-city','城市'),('matrix-nature','自然'),('matrix-empty','空主题')");
+  await pool.query("INSERT INTO author(slug, display_name) VALUES ('matrix-alice','作者甲'),('matrix-bob','作者乙'),('matrix-empty','空作者')");
   for (const [index, slug] of allTags.entries()) {
     await pool.query("INSERT INTO tag(slug, display_name) VALUES ($1,$2)",
       [slug, ["城市", "夜景", "雨景", "森林", "空标签", "matrix-a", "A&B+C#%"][index] ?? slug]);
   }
+  const { getPublicGalleryStats } = await import("../../../../packages/server/src/images/read-models/gallery-stats.ts");
+  const assertEmpty = (stats: Awaited<ReturnType<typeof getPublicGalleryStats>>) => {
+    assert.deepEqual([stats.themes, stats.tags, stats.authors], [[], [], []]);
+    assert.equal(stats.total_images, 0);
+    assert.deepEqual(stats.devices, [{ device: "pc", image_count: 0 }, { device: "mb", image_count: 0 }]);
+    assert.deepEqual(stats.brightnesses, [{ brightness: "dark", image_count: 0 }, { brightness: "light", image_count: 0 }]);
+  };
+  await vocab.refreshEntityVocabularies(["tag", "theme", "author"]);
+  assertEmpty(await getPublicGalleryStats());
   for (const [index, row] of rows.entries()) {
     await pool.query(`INSERT INTO metadata(id, created_by, status, storage_slug, object_key,
       device, brightness, theme, author, ext, md5, width, height, title)
@@ -132,7 +141,15 @@ await runIntegrationScenario(async (runtime) => {
         const stats = await get(`/api/gallery-stats?${query}`);
         assert.equal(stats.status, entry.mixed ? 400 : 200, label);
         if (!entry.mixed) {
-          assert.equal((await stats.json()).matching_images, expected.length, label);
+          const body = await stats.json();
+          assert.equal(body.matching_images, expected.length, label);
+          for (const field of ["themes", "tags", "authors"]) {
+            const expectedSlugs = field === "themes" ? ["null", "matrix-city", "matrix-nature"]
+              : field === "authors" ? ["matrix-alice", "matrix-bob"] : allTags.filter(slug => slug !== "matrix-empty");
+            assert.deepEqual(body[field].map((item: { slug: string }) => item.slug).sort(), expectedSlugs.sort(), `${label}: ${field} global membership`);
+          }
+          assert.equal(body.devices.length, 2);
+          assert.equal(body.brightnesses.length, 2);
           const admin = await listAdminImages({ status: "ready", page: 1, limit: 100, tag: entry.tags, ...entry.axis });
           assert.equal(admin.total, expected.length, label);
           assert.deepEqual(ids(admin.items), expected, label);
@@ -146,6 +163,9 @@ await runIntegrationScenario(async (runtime) => {
       }
       const facets = await (await get("/api/gallery-facets")).json();
       assert.ok(facets.tags.some((tag: { slug: string }) => tag.slug === "matrix-empty"));
+      const desktopStats = await getPublicGalleryStats({ device: "pc" });
+      assert.equal(desktopStats.tags.find(tag => tag.slug === "matrix-symbols")?.image_count, 0,
+        `${backend}: globally populated terms remain visible with zero filtered matches`);
     }
     // All sources are real, warm Redis indexes. Legal expressions that exceed
     // the set-operation budget must preserve every branch through PostgreSQL.
@@ -190,11 +210,29 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal((await (await get(path)).json()).items.length, 17);
     assert.equal((await updateImages([{ id: changed.id, tags: [] }])).updated, 1);
     assert.equal((await (await get(path)).json()).items.length, 16);
-    console.log(JSON.stringify({ backends: 2, cases: cases.length, mutationTransitions: 4 }));
+    const assertMembership = async (present: boolean) => {
+      const stats = await getPublicGalleryStats();
+      for (const field of ["themes", "tags", "authors"] as const) {
+        assert.equal(stats[field].some(item => item.slug === "matrix-empty"), present, field);
+      }
+    };
+    assert.equal((await updateImages([{ id: changed.id, tags: ["matrix-empty"], theme: "matrix-empty", author: "matrix-empty" }])).updated, 1);
+    await assertMembership(true);
+    assert.equal((await moveImagesToTrash([changed.id])).trashed, 1);
+    await assertMembership(false);
+    assert.equal((await restoreImages([changed.id])).restored, 1);
+    await assertMembership(true);
+    const { updateThemeDisplayName } = await import("../../../../packages/server/src/themes/mutations.ts");
+    await updateThemeDisplayName("matrix-empty", "已重命名");
+    assert.equal((await getPublicGalleryStats()).themes.find(item => item.slug === "matrix-empty")?.display_name, "已重命名");
+    await pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [rows.map(row => row.id)]);
+    await coordinator.requestReadyImageCacheRebuild();
+    assertEmpty(await getPublicGalleryStats());
+    console.log(JSON.stringify({ backends: 2, cases: cases.length, mutationTransitions: 7 }));
   } finally {
     await pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [rows.map(row => row.id)]);
     await pool.query("DELETE FROM tag WHERE slug=ANY($1::text[])", [allTags]);
-    await pool.query("DELETE FROM theme WHERE slug=ANY($1::text[])", [["matrix-city", "matrix-nature"]]);
-    await pool.query("DELETE FROM author WHERE slug=ANY($1::text[])", [["matrix-alice", "matrix-bob"]]);
+    await pool.query("DELETE FROM theme WHERE slug=ANY($1::text[])", [["matrix-city", "matrix-nature", "matrix-empty"]]);
+    await pool.query("DELETE FROM author WHERE slug=ANY($1::text[])", [["matrix-alice", "matrix-bob", "matrix-empty"]]);
   }
 });

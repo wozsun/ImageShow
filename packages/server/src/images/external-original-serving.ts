@@ -1,9 +1,6 @@
 import { createHash } from "node:crypto";
 import { ApiError } from "../core/api-error.ts";
-import {
-  withPublicDatabaseRead,
-  type PublicDatabaseReadAccess
-} from "../core/database/public-fallback.ts";
+import { withPublicDatabaseRead } from "../core/database/public-fallback.ts";
 import { coalesce } from "../core/coalesce.ts";
 import { raceWithAbortSignal } from "../core/abort.ts";
 import { safeFetchExternalImage } from "../core/external-image-fetch.ts";
@@ -119,10 +116,12 @@ const defaultExternalOriginalServingDependencies:
 
 async function resolveExternalOriginal(
   id: string,
-  database: PublicDatabaseReadAccess,
+  signal: AbortSignal,
   dependencies: ExternalOriginalServingDependencies
 ) {
-  const record = await dependencies.readImageServingRecordById(id, database);
+  const record = await withPublicDatabaseRead(signal, (database) => (
+    dependencies.readImageServingRecordById(id, database)
+  ));
   const original = record?.original ?? "";
   if (
     !record
@@ -132,7 +131,7 @@ async function resolveExternalOriginal(
   }
   const displayUrl = await dependencies.displayUrlForOriginalComparison(
     record,
-    database
+    { signal }
   );
   if (!hasDistinctOriginalUrl(original, displayUrl)) {
     throw new ApiError(404, "not_found", "Original link not found");
@@ -155,10 +154,7 @@ export async function servePublicExternalOriginal(
     defaultExternalOriginalServingDependencies
 ) {
   const signal = request.signal ?? new AbortController().signal;
-  const original = await withPublicDatabaseRead(
-    signal,
-    (database) => resolveExternalOriginal(id, database, dependencies)
-  );
+  const original = await resolveExternalOriginal(id, signal, dependencies);
   signal.throwIfAborted();
   const direct = await raceWithAbortSignal(signal, dependencies.supportsDirectAccess(
     original.url, request.userAgent ?? ""

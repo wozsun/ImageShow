@@ -153,16 +153,17 @@ async function readPublicGalleryStats(
         plan,
         ["theme"],
         (where, rowLimit) => `SELECT slug, display_name, image_count FROM (
-                       SELECT t.slug, t.display_name, count(m.id)::int AS image_count,
+                       SELECT t.slug, t.display_name,
+                              (count(m.id) FILTER (WHERE ${where}))::int AS image_count,
                               t.sort_order, false AS is_unset
                        FROM theme t
-                       LEFT JOIN metadata m
-                         ON m.theme=t.slug
-                        AND ${where}
+                       JOIN metadata m ON m.theme=t.slug AND m.status='ready'
                       GROUP BY t.slug, t.display_name, t.sort_order
                       UNION ALL
-                       SELECT '${unsetThemeFilter}', '未设置', count(*)::int, 0, true
-                         FROM metadata m WHERE m.theme IS NULL AND ${where}
+                       SELECT '${unsetThemeFilter}', '未设置',
+                              (count(*) FILTER (WHERE ${where}))::int, 0, true
+                         FROM metadata m WHERE m.theme IS NULL AND m.status='ready'
+                       HAVING count(*) > 0
                       ) facets ORDER BY is_unset DESC, sort_order DESC, slug ASC
                       LIMIT ${rowLimit}`
       );
@@ -172,12 +173,10 @@ async function readPublicGalleryStats(
         ["tag"],
         (where, rowLimit) => `SELECT t.slug,
                             t.display_name,
-                            count(m.id)::int AS image_count
+                            (count(m.id) FILTER (WHERE ${where}))::int AS image_count
                        FROM tag t
-                       LEFT JOIN image_tag facet_it ON facet_it.tag_slug=t.slug
-                       LEFT JOIN metadata m
-                         ON m.id=facet_it.image_id
-                        AND ${where}
+                       JOIN image_tag facet_it ON facet_it.tag_slug=t.slug
+                       JOIN metadata m ON m.id=facet_it.image_id AND m.status='ready'
                       GROUP BY t.slug, t.display_name, t.sort_order
                       ORDER BY t.sort_order DESC, t.slug ASC
                       LIMIT ${rowLimit}`
@@ -189,11 +188,9 @@ async function readPublicGalleryStats(
         (where, rowLimit) => `SELECT a.slug,
                             a.display_name,
                             a.link,
-                            count(m.id)::int AS image_count
+                            (count(m.id) FILTER (WHERE ${where}))::int AS image_count
                        FROM author a
-                       LEFT JOIN metadata m
-                         ON m.author=a.slug
-                        AND ${where}
+                       JOIN metadata m ON m.author=a.slug AND m.status='ready'
                       GROUP BY a.slug, a.display_name, a.link, a.sort_order
                       ORDER BY a.sort_order DESC, a.slug ASC
                       LIMIT ${rowLimit}`
@@ -309,18 +306,25 @@ async function presentCachedGalleryStats(
         image_count: snapshot.axes[`${device}:${brightness}`] ?? 0
       }))
     )),
-    themes: themeVocab.map((entry) => ({
-      ...entry,
-      image_count: snapshot.themes[entry.slug] ?? 0
-    })),
-    tags: tagVocab.map((entry) => ({
-      ...entry,
-      image_count: snapshot.tags[entry.slug] ?? 0
-    })),
-    authors: authorVocab.map((entry) => ({
-      ...entry,
-      image_count: snapshot.authors[entry.slug] ?? 0
-    }))
+    // Snapshot keys retain globally populated facets even when filtered counts are zero.
+    themes: themeVocab
+      .filter((entry) => Object.hasOwn(snapshot.themes, entry.slug))
+      .map((entry) => ({
+        ...entry,
+        image_count: snapshot.themes[entry.slug] ?? 0
+      })),
+    tags: tagVocab
+      .filter((entry) => Object.hasOwn(snapshot.tags, entry.slug))
+      .map((entry) => ({
+        ...entry,
+        image_count: snapshot.tags[entry.slug] ?? 0
+      })),
+    authors: authorVocab
+      .filter((entry) => Object.hasOwn(snapshot.authors, entry.slug))
+      .map((entry) => ({
+        ...entry,
+        image_count: snapshot.authors[entry.slug] ?? 0
+      }))
   };
 }
 

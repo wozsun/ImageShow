@@ -15,7 +15,8 @@ import {
 import {
   pathToFileURL
 } from "node:url";
-import test from "node:test";
+import test, { after } from "node:test";
+import { pool, configureDatabasePools, closeDatabasePools } from "../../../packages/server/src/core/database/pools.ts";
 import {
   createTestDirectory
 } from "../support/test-directory.ts";
@@ -472,35 +473,38 @@ test("[Server/HTTP 与鉴权] 写路由集中拒绝无效 JSON、未知字段和
     logger.warn = originalWarn;
   }
 });
-test("[Server/HTTP 与鉴权] 随机 JSON 卡片复用 canonical 字段且不额外读取详情", async () => {
+after(closeDatabasePools);
+
+test("[Server/HTTP 与鉴权] 随机 JSON 卡片复用 canonical 字段且不额外读取详情", async (context) => {
   initializeRuntimeConfig();
+  configureDatabasePools({
+    host: "database.invalid", port: 5432, name: "imageshow_test",
+    user: "imageshow_test", password: process.env.DATABASE_PASSWORD!
+  });
   const item = servingReadyCacheItem({
     author: "photographer",
     title: "Random card"
   });
   let storageQueries = 0;
-  const reader = {
-    query: async () => {
-      storageQueries += 1;
-      return {
-        rows: [{
-          slug: "local",
-          display_name: "Local",
-          type: "local",
-          config: {},
-          enabled: true,
-          is_default: true,
-          namespace_identities: []
-        }]
-      };
-    }
-  } as never;
+  context.mock.method(pool, "query", async (sql: string) => {
+    assert.match(sql, /FROM storage_backend/);
+    storageQueries += 1;
+    return {
+      rows: [{
+        slug: "local",
+        display_name: "Local",
+        type: "local",
+        config: {},
+        enabled: true,
+        is_default: true,
+        namespace_identities: []
+      }]
+    };
+  });
   invalidateStorageBackendRegistry();
   try {
     const [presented] = await presentRandomJsonItems(
-      [item],
-      undefined,
-      { reader }
+      [item]
     );
     assert.equal(storageQueries, 1);
     assert.equal(presented.id, item.id);
