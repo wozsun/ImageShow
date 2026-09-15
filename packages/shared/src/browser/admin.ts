@@ -173,7 +173,7 @@ export type TrashPurgeJobStateDto =
 export type AdminTrashPurgeJobDto = {
   id: string;
   state: TrashPurgeJobStateDto;
-  image_count: number;
+  target_id: string;
   retry_count: number;
   next_retry_at: string | null;
   updated_at: string;
@@ -182,9 +182,8 @@ export type AdminTrashPurgeJobDto = {
 
 export type AdminTrashCheckIssueDto = {
   kind:
-    | "missing_job_reference"
-    | "wrong_job_type"
-    | "succeeded_job_reference"
+    | "succeeded_target_remaining"
+    | "target_not_deleted"
     | "stalled_job";
   count: number;
   sample_ids: string[];

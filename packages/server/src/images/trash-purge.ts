@@ -1,17 +1,14 @@
-import { appConfig } from "@imageshow/shared";
 import type {
   ImagePurgeRequestDto,
   ImagePurgeResponseDto
 } from "@imageshow/shared/browser";
 import { setTimeout as delay } from "node:timers/promises";
 import type { PoolClient } from "pg";
-import { errorMessage } from "../core/api-error.ts";
 import {
   runWithAdvisoryLockAcquisitionSignal
 } from "../core/database/advisory-locks.ts";
 import { pool } from "../core/database/pools.ts";
 import { withTransactionOnClient } from "../core/database/transactions.ts";
-import { logger } from "../core/logger.ts";
 import { randomUuidV7 } from "../core/uuid.ts";
 import { thumbnailRef } from "../storage/objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
@@ -21,13 +18,15 @@ import {
 } from "../storage/objects/access.ts";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 import { withTrashMembershipLock } from "./trash-membership-lock.ts";
+import { imageHasTrashPurgeJobSql } from "./trash-purge-state.ts";
+import type { BackgroundJob } from "../jobs/types.ts";
 
 type PurgeRow = {
   id: string;
   object_key: string;
   md5: string;
   storage_slug: string;
-  purge_job_id: string;
+  status: string;
 };
 
 type QueuePlan = Pick<
@@ -47,14 +46,12 @@ type PurgeWaitState = {
   deferred: number;
 };
 
-type PurgeItemOutcome = "deleted" | "failed" | "ignored";
-
 const purgeReturnColumns = [
   "metadata.id",
   "metadata.object_key",
   "metadata.md5",
   "metadata.storage_slug",
-  "metadata.purge_job_id"
+  "metadata.status"
 ].join(", ");
 
 const purgeRequestWaitMs = 30_000;
@@ -83,11 +80,11 @@ async function selectedQueueCounts(
     `SELECT count(*)::int AS requested,
             count(*) FILTER (
               WHERE metadata.status='deleted'
-                AND metadata.purge_job_id IS NOT NULL
+                AND ${imageHasTrashPurgeJobSql}
             )::int AS already_queued,
             count(*) FILTER (
               WHERE metadata.status='deleted'
-                AND metadata.purge_job_id IS NULL
+                AND NOT ${imageHasTrashPurgeJobSql}
             )::int AS queueable,
             COALESCE(
               array_agg(metadata.id ORDER BY requested.ordinality) FILTER (
@@ -98,7 +95,7 @@ async function selectedQueueCounts(
             COALESCE(
               array_agg(metadata.id ORDER BY requested.ordinality) FILTER (
                 WHERE metadata.status='deleted'
-                  AND metadata.purge_job_id IS NULL
+                  AND NOT ${imageHasTrashPurgeJobSql}
               ),
               '{}'::uuid[]
             ) AS queueable_ids
@@ -135,10 +132,10 @@ async function allQueueCounts(client: PoolClient): Promise<QueuePlan> {
   const row = (await client.query(
     `SELECT count(*)::int AS requested,
             count(*) FILTER (
-              WHERE purge_job_id IS NOT NULL
+              WHERE ${imageHasTrashPurgeJobSql}
             )::int AS already_queued,
             count(*) FILTER (
-              WHERE purge_job_id IS NULL
+              WHERE NOT ${imageHasTrashPurgeJobSql}
             )::int AS queueable,
             COALESCE(
               array_agg(id ORDER BY deleted_at, id),
@@ -146,7 +143,7 @@ async function allQueueCounts(client: PoolClient): Promise<QueuePlan> {
             ) AS target_ids,
             COALESCE(
               array_agg(id ORDER BY deleted_at, id) FILTER (
-                WHERE purge_job_id IS NULL
+                WHERE NOT ${imageHasTrashPurgeJobSql}
               ),
               '{}'::uuid[]
             ) AS queueable_ids
@@ -178,30 +175,6 @@ async function allQueueCounts(client: PoolClient): Promise<QueuePlan> {
   };
 }
 
-async function insertTrashPurgeJob(client: PoolClient, jobId: string) {
-  await client.query(
-    `INSERT INTO background_job(id, type, target_id, payload)
-     VALUES($1, 'trash.purge', '', $2::jsonb)`,
-    [jobId, JSON.stringify({ retain_exhausted: true })]
-  );
-}
-
-async function bindPurgeJob(
-  client: PoolClient,
-  ids: string[],
-  jobId: string
-) {
-  return client.query(
-    `UPDATE metadata
-        SET purge_job_id=$1, updated_at=now()
-      WHERE id=ANY($2::uuid[])
-        AND status='deleted'
-        AND purge_job_id IS NULL
-      RETURNING id`,
-    [jobId, ids]
-  );
-}
-
 async function queueTrashPurge(
   client: PoolClient,
   request: ImagePurgeRequestDto
@@ -211,18 +184,23 @@ async function queueTrashPurge(
     : await selectedQueueCounts(client, request.ids);
   if (!plan.queueableIds.length) return plan;
 
-  const jobId = randomUuidV7();
-  await insertTrashPurgeJob(client, jobId);
-  const bound = await bindPurgeJob(client, plan.queueableIds, jobId);
-  if (bound.rowCount !== plan.queueableIds.length) {
-    throw new Error(
-      "Trash membership changed while binding a persistent purge job"
-    );
+  const jobs = plan.queueableIds.map((imageId) => ({
+    id: randomUuidV7(),
+    target_id: imageId,
+    idempotency_key: `trash.purge:${imageId}`
+  }));
+  const inserted = await client.query(
+    `INSERT INTO background_job(id, type, target_id, idempotency_key)
+     SELECT id, 'trash.purge', target_id, idempotency_key
+       FROM jsonb_to_recordset($1::jsonb)
+         AS input(id uuid, target_id text, idempotency_key text)
+     RETURNING id`,
+    [JSON.stringify(jobs)]
+  );
+  if (inserted.rowCount !== plan.queueableIds.length) {
+    throw new Error("Trash purge intent was not fully persisted");
   }
-  return {
-    ...plan,
-    queued: bound.rowCount,
-  };
+  return { ...plan, queued: inserted.rowCount };
 }
 
 async function readPurgeWaitState(ids: string[]): Promise<PurgeWaitState> {
@@ -230,17 +208,15 @@ async function readPurgeWaitState(ids: string[]): Promise<PurgeWaitState> {
   const row = (await pool.query(
     `SELECT count(*)::int AS remaining,
             count(*) FILTER (
-              WHERE background_job.id IS NULL
-                 OR background_job.type <> 'trash.purge'
-                 OR background_job.status IN ('failed', 'succeeded')
+              WHERE NOT EXISTS (
+                SELECT 1 FROM background_job
+                 WHERE type='trash.purge'
+                   AND target_id=metadata.id::text
+                   AND status IN ('pending', 'running')
+              )
             )::int AS deferred
-       FROM unnest($1::uuid[]) AS target(id)
-       JOIN metadata
-         ON metadata.id=target.id
-        AND metadata.status='deleted'
-        AND metadata.purge_job_id IS NOT NULL
-       LEFT JOIN background_job
-         ON background_job.id=metadata.purge_job_id`,
+       FROM metadata
+      WHERE id=ANY($1::uuid[])`,
     [ids]
   )).rows[0] as Record<string, unknown> | undefined;
   return {
@@ -301,184 +277,67 @@ export async function purgeImages(
   return waitForPurgeTargets(plan, options.signal);
 }
 
-async function readPurgeJobBatch(jobId: string) {
-  return (await pool.query(
-    `SELECT id
-       FROM metadata
-      WHERE status='deleted'
-        AND purge_job_id=$1
-      ORDER BY deleted_at ASC, id ASC
-      LIMIT $2`,
-    [jobId, appConfig.trashBatchSize]
-  )).rows as Array<{ id: string }>;
-}
-
-async function readCurrentPurgeOwner(id: string) {
-  return (await pool.query(
-    `SELECT status, purge_job_id
-       FROM metadata
-      WHERE id=$1`,
-    [id]
-  )).rows[0] as {
-    status: string;
-    purge_job_id: string | null;
-  } | undefined;
-}
-
 async function purgeJobImage(
-  imageId: string,
-  jobId: string,
+  job: BackgroundJob,
   scheduleSignal: AbortSignal
-): Promise<PurgeRow | null> {
+) {
   const purgeWhileLocked = () => withImageStorageMutationLock(
-    imageId,
+    job.target_id,
     async (lockSignal) => {
       const admissionSignal = AbortSignal.any([scheduleSignal, lockSignal]);
       admissionSignal.throwIfAborted();
       const row = (await pool.query(
         `SELECT ${purgeReturnColumns}
-           FROM metadata
-          WHERE id=$1
-            AND status='deleted'
-            AND purge_job_id=$2`,
-        [imageId, jobId]
-      )).rows[0] as PurgeRow | undefined;
+           FROM background_job
+           LEFT JOIN metadata ON metadata.id=$2::uuid
+          WHERE background_job.id=$1
+            AND background_job.type='trash.purge'
+            AND background_job.target_id=$2::text
+            AND background_job.status='running'
+            AND background_job.execution_token=$3`,
+        [job.id, job.target_id, job.execution_token]
+      )).rows[0] as (Omit<PurgeRow, "id"> & { id: string | null }) | undefined;
       admissionSignal.throwIfAborted();
-      if (!row) return null;
+      if (!row) throw new Error("Trash purge job execution ownership was lost");
+      // A previous attempt may have removed the row before cache settlement.
+      if (!row.id) return;
+      if (row.status !== "deleted") {
+        throw new Error("Trash purge target is not in the trash");
+      }
 
       const thumb = thumbnailRef(row);
       const removals = await removeStorageObjectsAndConfirm([
-        {
-          prefix: thumb.prefix,
-          key: thumb.key,
-          storageSlug: row.storage_slug
-        },
-        {
-          prefix: "full",
-          key: row.object_key,
-          storageSlug: row.storage_slug
-        }
+        { prefix: thumb.prefix, key: thumb.key, storageSlug: row.storage_slug },
+        { prefix: "full", key: row.object_key, storageSlug: row.storage_slug }
       ], { signal: lockSignal }, admissionSignal);
-      // Physical deletion is irreversible. Once the driver starts, finish the
-      // PostgreSQL side under the image lock even if the job deadline fires.
+      // Once physical deletion starts, finish the database side under the
+      // image lock even if this execution's deadline or lease expires.
       lockSignal.throwIfAborted();
       assertStorageRemovalResults(
         removals,
         "无法确认回收站图片的全部存储对象已删除"
       );
-      lockSignal.throwIfAborted();
-
       const deleted = await pool.query(
         `DELETE FROM metadata
-          WHERE id=$1
-            AND status='deleted'
-            AND purge_job_id=$2
-            AND storage_slug=$3
-            AND object_key=$4
+          WHERE id=$1 AND status='deleted'
+            AND storage_slug=$2 AND object_key=$3
           RETURNING id`,
-        [row.id, jobId, row.storage_slug, row.object_key]
+        [row.id, row.storage_slug, row.object_key]
       );
       lockSignal.throwIfAborted();
-      return deleted.rowCount ? row : null;
+      if (deleted.rowCount !== 1) {
+        throw new Error("Trash purge target changed during physical deletion");
+      }
     }
   );
-  return runWithAdvisoryLockAcquisitionSignal(
-    scheduleSignal,
-    purgeWhileLocked
-  );
+  return runWithAdvisoryLockAcquisitionSignal(scheduleSignal, purgeWhileLocked);
 }
 
-async function processPurgeJobImage(
-  imageId: string,
-  jobId: string,
-  signal: AbortSignal
-): Promise<PurgeItemOutcome> {
-  try {
-    signal.throwIfAborted();
-    const deleted = await purgeJobImage(imageId, jobId, signal);
-    if (deleted) return "deleted";
-  } catch (error) {
-    if (signal.aborted) throw signal.reason;
-    const current = await readCurrentPurgeOwner(imageId);
-    if (!current) return "deleted";
-    logger.error("trash_purge_image_failed", {
-      image_id: imageId,
-      job_id: jobId,
-      error: errorMessage(error)
-    });
-    return current.status === "deleted" && current.purge_job_id === jobId
-      ? "failed"
-      : "ignored";
-  }
-
-  const current = await readCurrentPurgeOwner(imageId);
-  if (!current) return "deleted";
-  if (current.status === "deleted" && current.purge_job_id === jobId) {
-    logger.error("trash_purge_image_ownership_unchanged", {
-      image_id: imageId,
-      job_id: jobId
-    });
-    return "failed";
-  }
-  return "ignored";
-}
-
-async function countPurgeJobImages(jobId: string) {
-  const row = (await pool.query(
-    `SELECT count(*)::int AS count
-       FROM metadata
-      WHERE status='deleted' AND purge_job_id=$1`,
-    [jobId]
-  )).rows[0] as { count?: unknown } | undefined;
-  return numberField(row?.count, "remaining purge job image count");
-}
-
-export async function processTrashPurgeJobBatch(
-  jobId: string,
+export async function processTrashPurgeJob(
+  job: BackgroundJob,
   signal: AbortSignal
 ) {
-  const batch = await readPurgeJobBatch(jobId);
-  let deleted = 0;
-  let failed = 0;
-  let processingError: unknown;
-  let processingFailed = false;
-  try {
-    for (const row of batch) {
-      signal.throwIfAborted();
-      const outcome = await processPurgeJobImage(row.id, jobId, signal);
-      if (outcome === "deleted") deleted += 1;
-      else if (outcome === "failed") failed += 1;
-    }
-  } catch (error) {
-    processingError = error;
-    processingFailed = true;
-  }
-
-  let invalidationError: unknown;
-  let invalidationFailed = false;
-  try {
-    // An empty retry may be the recovery pass after every metadata row was
-    // deleted but the previous cache invalidation failed. Repeat the idempotent
-    // invalidation before allowing that durable task to settle successfully.
-    if (deleted || batch.length === 0) {
-      await invalidateEntityCountCaches(["tag"]);
-    }
-  } catch (error) {
-    invalidationError = error;
-    invalidationFailed = true;
-  }
-  if (processingFailed && invalidationFailed) {
-    throw new AggregateError(
-      [processingError, invalidationError],
-      "Trash purge batch failed during processing and cache invalidation"
-    );
-  }
-  if (processingFailed) throw processingError;
-  if (invalidationFailed) throw invalidationError;
-  return {
-    processed: batch.length,
-    deleted,
-    failed,
-    remaining: await countPurgeJobImages(jobId)
-  };
+  await purgeJobImage(job, signal);
+  // Repeat on an empty retry so a failed invalidation cannot lose its owner.
+  await invalidateEntityCountCaches(["tag"]);
 }

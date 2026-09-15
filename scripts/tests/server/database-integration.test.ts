@@ -35,6 +35,11 @@ import {
 const isolationRoot = resolve(import.meta.dirname, "isolation");
 const storageIngestionScenarios = [
   {
+    id: "trash-purge-upgrade-644",
+    name: "6.4.4 删除任务升级保留数据并在失败时整体回滚",
+    script: join(isolationRoot, "trash-purge-upgrade-6.4.4.mts")
+  },
+  {
     id: "ready-cache-recovery",
     name: "数据库连接与恢复任务双失败后自动重新开放有效图片缓存",
     script: join(isolationRoot, "ready-cache-recovery.mts")
@@ -827,41 +832,6 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         { column_name: "identity_id", data_type: "text" },
         { column_name: "identity_provider", data_type: "text" }
       ]);
-      const purgeColumns = await client.query<{
-        column_name: string;
-        data_type: string;
-        is_nullable: string;
-      }>(
-        `SELECT column_name, data_type, is_nullable
-           FROM information_schema.columns
-          WHERE table_schema='public'
-            AND table_name='metadata'
-            AND column_name='purge_job_id'`
-      );
-      assert.deepEqual(purgeColumns.rows, [{
-        column_name: "purge_job_id",
-        data_type: "uuid",
-        is_nullable: "YES"
-      }]);
-      const purgeChecks = await client.query<{
-        definition: string;
-        validated: boolean;
-      }>(
-        `SELECT pg_get_constraintdef(constraint_record.oid, true) AS definition,
-                constraint_record.convalidated AS validated
-           FROM pg_constraint constraint_record
-           JOIN pg_class relation ON relation.oid=constraint_record.conrelid
-           JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
-          WHERE namespace.nspname='public'
-            AND relation.relname='metadata'
-            AND constraint_record.conname='metadata_purge_job_deleted_check'`
-      );
-      assert.equal(purgeChecks.rows.length, 1);
-      assert.equal(purgeChecks.rows[0]?.validated, true);
-      assert.match(
-        purgeChecks.rows[0]?.definition ?? "",
-        /purge_job_id IS NULL OR status = 'deleted'/i
-      );
       const authorChecks = await client.query<{ constraint_name: string }>(
         `SELECT constraint_record.conname AS constraint_name
            FROM pg_constraint constraint_record
@@ -1083,34 +1053,6 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
       await Promise.all([schemaDump(normalized), dataDump(normalized)]),
       normalizedBefore,
       "已归一化非空库 readiness 不得写入结构或数据"
-    );
-
-    const missingPurgeOwner = databaseName("missingpurgeowner");
-    await createCurrentDatabase(missingPurgeOwner);
-    await withClient(missingPurgeOwner, async (client) => {
-      await client.query(`
-        ALTER TABLE metadata DROP COLUMN purge_job_id;
-        INSERT INTO tag(slug, display_name)
-        VALUES('missing-purge-owner-data', 'Must remain unchanged');
-      `);
-    });
-    const missingPurgeOwnerBefore = await Promise.all([
-      schemaDump(missingPurgeOwner),
-      dataDump(missingPurgeOwner)
-    ]);
-    const missingPurgeOwnerResult = await initialize(missingPurgeOwner, true);
-    assert.notEqual(missingPurgeOwnerResult.code, 0);
-    assert.match(
-      processResultText(missingPurgeOwnerResult),
-      /required columns.*metadata\.purge_job_id/i
-    );
-    assert.deepEqual(
-      await Promise.all([
-        schemaDump(missingPurgeOwner),
-        dataDump(missingPurgeOwner)
-      ]),
-      missingPurgeOwnerBefore,
-      "缺少当前 purge 归属列时不得自动迁移或改写现有数据"
     );
 
     const missingAuthorIdentity = databaseName("missingauthoridentity");
@@ -1380,27 +1322,6 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
     assert.match(
       processResultText(missingColumnResult),
       /required columns.*admin_account\.password_hash/i
-    );
-
-    const incompatiblePurgeCheck = databaseName("purgecheck");
-    await createCurrentDatabase(incompatiblePurgeCheck);
-    await withClient(incompatiblePurgeCheck, async (client) => {
-      await client.query(`
-        ALTER TABLE metadata
-          DROP CONSTRAINT metadata_purge_job_deleted_check;
-        ALTER TABLE metadata
-          ADD CONSTRAINT metadata_purge_job_deleted_check
-          CHECK (purge_job_id IS NULL OR status IN ('ready', 'deleted'));
-      `);
-    });
-    const incompatiblePurgeCheckResult = await initialize(
-      incompatiblePurgeCheck,
-      true
-    );
-    assert.notEqual(incompatiblePurgeCheckResult.code, 0);
-    assert.match(
-      processResultText(incompatiblePurgeCheckResult),
-      /required CHECK constraints.*metadata purge job requires deleted status/i
     );
 
     const incompatibleType = databaseName("columntype");

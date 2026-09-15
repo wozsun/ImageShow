@@ -104,7 +104,6 @@ CREATE TABLE metadata (
   original TEXT NOT NULL DEFAULT '',
   image_time TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at TIMESTAMPTZ,
-  purge_job_id UUID,
   created_by TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -127,8 +126,6 @@ CREATE TABLE metadata (
   CHECK (source = '' OR source ~* '^https://'),
   CHECK (length(original) <= 2048),
   CHECK (original = '' OR original ~* '^https://'),
-  CONSTRAINT metadata_purge_job_deleted_check
-    CHECK (purge_job_id IS NULL OR status='deleted'),
   CONSTRAINT fk_metadata_storage  FOREIGN KEY (storage_slug) REFERENCES storage_backend(slug)  ON DELETE RESTRICT,
   CONSTRAINT fk_metadata_theme    FOREIGN KEY (theme)        REFERENCES theme(slug)            ON DELETE RESTRICT,
   CONSTRAINT fk_metadata_author   FOREIGN KEY (author)       REFERENCES author(slug)           ON DELETE SET NULL

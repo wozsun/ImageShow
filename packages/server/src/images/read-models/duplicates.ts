@@ -28,7 +28,7 @@ export async function readDuplicateSnapshotsByMd5(md5s: readonly string[]) {
         WHERE md5 = ANY($1::text[])
           AND status = 'ready'
      )
-     SELECT ${adminImageListPresentationColumns}, tags, duplicate_match_count
+     SELECT ${adminImageListPresentationColumns}, purge_pending, tags, duplicate_match_count
        FROM ranked
       WHERE duplicate_rank <= 20
       ORDER BY md5 ASC, duplicate_rank ASC`,

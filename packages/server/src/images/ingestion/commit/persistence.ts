@@ -64,7 +64,7 @@ export async function persistIngestionImage(
        VALUES(
          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19
        )
-       RETURNING ${adminImageListPresentationColumns}`,
+       RETURNING ${adminImageListPresentationColumns}, false AS purge_pending`,
       [
         session.image_id,
         session.image_time,

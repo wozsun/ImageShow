@@ -2,8 +2,7 @@
 
 PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 `packages/server/schema.sql` 完整定义当前版本的干净安装结构；`author` 可空身份两列、
-三项长期 CHECK、非空身份复合唯一索引、`metadata.purge_job_id` 与“非空时必须为 deleted”的
-长期 CHECK，以及可空、无默认值的主题外键都属于该结构；主题表只保存真实词条。
+三项长期 CHECK、非空身份复合唯一索引，以及可空、无默认值的主题外键都属于该结构；主题表只保存真实词条。
 随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一 Redis 图片投影的权威 revision
 单行表均属于基线。PostgreSQL
 是最终图片、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
@@ -17,10 +16,10 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 ## 启动与结构契约
 
 数据库启动由干净初始化与轻量 readiness 组成。空数据库在一个事务中执行完整 `schema.sql`，
-然后进行只读 readiness；非空数据库只进行只读 readiness，不执行结构或数据变更。
+然后进行只读 readiness；非空数据库执行下述 6.4.4 定向升级（存在旧列时），随后进行只读 readiness。
 干净初始化或 readiness 失败都会回滚本次事务。全部连接固定使用
 `search_path=public`；单实例部署按顺序完成 schema 和管理员播种。readiness 在启动事务的
-同一连接上顺序执行 SQL，包括作者与图片 CHECK 约束读取，不并发调用该 client 的 query。
+同一连接上顺序执行 SQL，包括作者 CHECK 约束读取，不并发调用该 client 的 query。
 
 空库判定只查询系统目录中的用户关系，不读取业务数据。存在用户表、视图、物化视图、序列或
 外部表的数据库均走非空分支；只有额外表而缺少应用必需表时仍会明确失败。
@@ -28,9 +27,8 @@ readiness 对额外表不读取数据、不要求读写权限、不报错或自�
 索引和约束也继续容忍。
 
 维护者在升级前按实际变更处理既有数据库的结构新增、修改、删除和必要数据整理，并明确停机、
-备份与恢复方案。应用不自动补表、回填、修改既有结构或对齐完整 schema。
-当前完整结构包括 `metadata.created_by TEXT NOT NULL`、后台任务类型约束、作者身份与 purge
-任务归属；既有数据库必须在启动前满足当前运行时所需的最小契约。历史数据的结构前置与
+备份与恢复方案。除 6.4.4 定向转换外，应用不自动补表、回填、修改既有结构或对齐完整 schema。
+当前完整结构包括 `metadata.created_by TEXT NOT NULL`、后台任务类型约束与作者身份；既有数据库必须在启动前满足当前运行时所需的最小契约。历史数据的结构前置与
 固定迁移入口见[版本升级](../DEPLOY.md#版本升级)。
 
 readiness 只读核对当前运行时所需业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
@@ -41,15 +39,31 @@ UPDATE / DELETE 权限，不使用回滚写探针。它还按列和谓词语义�
 metadata / image_tag 删除路径依赖的 RESTRICT、CASCADE 和 SET NULL 外键。`created_by` 的
 `text` 类型进入最小列集合。readiness 还核对作者身份两列的 `text` 类型与读写权限、两列成对空值、
 provider token 和非空 ID 三项 CHECK、两列非空时生效的复合唯一索引，以及现存 provider 都属于
-当前作者领域支持集合；同时核对 `purge_job_id` UUID 列及其只允许引用 deleted 行的长期 CHECK。
+当前作者领域支持集合。
 readiness 的结论只由这套运行时最小契约决定；应用未消费的数据库
 对象不进入启动判断，也不会触发自动结构对齐。
 
 readiness 不复制 `schema.sql` 的可空性、默认值、无消费者 CHECK、触发器或普通查询索引；作者
-身份 CHECK 与复合唯一索引、purge 任务归属 CHECK，以及主题的可空性与无默认值要求，
+身份 CHECK 与复合唯一索引，以及主题的可空性与无默认值要求，
 因当前读写直接依赖而属于明确例外。
 应用未消费的表、列、索引和约束位于启动契约之外。破坏性清理由维护者在停机、备份和恢复验证后
 单独执行，不属于应用启动职责。
+
+### 6.4.4 临时升级兼容
+
+启动事务对旧 `metadata.purge_job_id` UUID 列执行一次定向转换，入口为
+[`upgrade-6.4.4.ts`](../../packages/server/src/core/database/upgrade-6.4.4.ts)，由
+[`schema.ts`](../../packages/server/src/core/database/schema.ts) 在非空库初始化时调用。
+每个批次的第一张剩余图片沿用原任务 ID，其余图片生成 UUIDv7 任务；pending / failed 的错误、
+失败次数及退避时间保持不变。旧 running 任务按一次僵尸恢复计入失败预算，清空执行 token，
+未耗尽时立即重排。无剩余成员的旧非成功任务收敛为 succeeded；启动时词表缓存 epoch 换代，
+旧计数缓存不再有效。已完成历史任务无法还原目标时保留其历史字段，按历史期限裁剪。
+转换仅临时使用事务内成员快照表，提交后即删除，不新增持久业务表或迁移账本。
+逐项核对新目标、幂等键、状态、失败次数、错误及退避，再删除旧列和其所属 CHECK；图片记录
+不执行 UPDATE / DELETE，图片数量在转换前后核对。随后执行当前 readiness，全部成功才提交。
+旧引用缺失、类型错误、异常成功引用、键冲突、权限不足或 readiness 失败均回滚并拒绝启动。
+该兼容入口计划在 **6.4.5 删除**；尚未转换的旧库须先经过 6.4.4。停机、备份和回退见
+[部署说明](../DEPLOY.md#644-自动升级)。
 
 ## 运行期连接与公开回源
 
@@ -102,7 +116,6 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 | `title` / `description` / `source` / `original` | 标题 / 描述 / 来源页面 / 外部原图链接；`site.gallery.public_original_button` 只决定访客详情是否返回原图链接，原图 URL 始终公开；标题和描述在去除首尾空白后分别最多 80 / 500 个普通汉字，外部链接仅允许 HTTPS |
 | `image_time` | 图片展示 / 图库排序时间；JSONL 可指定，同一前端批次未指定时共享 `batch_time`，省略时使用会话创建时间 |
 | `deleted_at` | 移入回收站时间 |
-| `purge_job_id` | 可空的持久彻底删除任务归属；非空时图片不可恢复，执行状态由对应 `background_job` 持有；不建立外键 |
 | `created_by` | 首次提交该图片时冻结的规范化管理员 username；无外键、无默认值，不随编辑、删除、恢复或存储迁移改写 |
 | `created_at` | 图片首次正式入库时间 |
 | `updated_at` | 图片元数据最后更新时间 |
@@ -124,17 +137,19 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 最终更新和候选清理同时无法确认，后续显式维护仍会重新进入该记录，而不需要新表、任务或
 修复 payload。它是当前唯一会生成缩略图的维修入口。
 
-选中删除和清空回收站都先在回收站成员 advisory lock 内开启短事务：插入一个 retained
-`trash.purge` 任务，并把当时仍为 deleted、尚未绑定的精确成员写入同一个
-`purge_job_id`；任一步失败都会整体回滚。单图、批量与全部范围随后都以同一精确 `1..N` 集合
-等待唯一 Worker 完成，不由 HTTP 请求执行对象删除。响应返回 `requested / queued /
-already_queued / deleted / remaining / ignored`；正常完成时 `remaining=0`，连接断开、有限等待
-结束或任务异常也不撤销删除意图。恢复独立要求 `purge_job_id IS NULL`。
+选中删除和清空回收站都在回收站成员 advisory lock 内开启短事务，解析当时仍为 deleted 的
+精确 ID 集合，为每张尚无删除任务的图片创建一条 `trash.purge`。`background_job.target_id`
+保存图片 ID，`idempotency_key` 为 `trash.purge:<image-id>`；metadata 不保存任务字段。
+重复请求只计入 `already_queued`，不改动已有任务的退避、错误或耗尽状态。
+单图、批量与全部范围继续以同一精确 `1..N` 集合等待 Worker 完成；后续移入回收站的图片
+不进入已经确认的范围。响应保留 `requested / queued / already_queued / deleted / remaining / ignored`。
+请求断开或等待结束不撤销已提交的删除任务。恢复要求目标图片不存在任何 `trash.purge` 任务，
+包括耗尽失败或异常成功的任务；`purge_pending` 从任务存在性查询得出，不持久化到 metadata。
 
-Worker 按 `purge_job_id=job.id` 与 `deleted_at, id` 有界读取，每次只把一张图片交给共享对象清理
-准入。取得单图存储 mutation lock 后重新核对任务归属与对象位置；对象删除成功或已不存在后，
-以 `id + purge_job_id + storage_slug + object_key` 条件删除 metadata。失败行继续引用同一个任务，
-重试、退避、耗尽错误和执行 token 全部只写 `background_job`。
+Worker 每次领取一张图片的任务，在单图存储 mutation lock 内核对当前 execution token、目标状态
+与对象位置，再交给共享对象清理准入。原图、缩略图删除成功或已不存在后，以图片 ID、deleted
+状态与对象位置为条件删除 metadata。不可逆对象删除开始后，在锁保护下收口，不因执行期限
+到达而丢弃数据库收尾。每张图片独立失败与重试；失败缓存失效的任务在目标行已消失时仍可重试完成。
 
 关键索引：`ready` 状态下的随机轴 `(device, brightness, theme, id)`，以及随机图定向
 候选使用的 `right(id::text, 12)` ready 部分表达式索引；公开图库按
@@ -198,23 +213,22 @@ Worker 每 5 秒扫描可运行任务。所有任务类型都已有活动时间�
 | `type` | 只允许 `move.cleanup` / `trash.purge` / `cache.rebuild` |
 | `status` | `pending` / `running` / `succeeded` / `failed` |
 | `execution_token` | 每次领取生成的 UUID 所有权栅栏；仅当前 `running` 执行者持有，退出运行态时清空 |
-| `target_id` | 目标图片 id |
-| `idempotency_key` | 幂等键 |
+| `target_id` | 目标图片 id；每条 `trash.purge` 对应一张图片 |
+| `idempotency_key` | 幂等键；purge 使用 `trash.purge:<image-id>` |
 | `payload` / `error` | 入参与错误；终态结果不在队列表中重复持久化 |
 | `retry_count` / `next_retry_at` | 失败次数（含僵尸恢复）与下次重试时间 |
 | `created_at` / `updated_at` | 时间戳 |
 
-`cache.rebuild` 会从 PostgreSQL 全量重建统一 ready-image Redis 投影。`trash.purge` 的成员范围由
-`metadata.purge_job_id` 持有；payload 只标记耗尽结果须保留，不复制图片集合、进度或逐图错误。
-每次执行一个有界批次，并在仍有关联图片时重排同一任务。确定性幂等键只阻止 `pending`、`running` 和仍可重试
-的 `failed` 重复入队；`succeeded` 与耗尽重试的 `failed` 会在同一记录上重置
-为 `pending`，因此同一对象以后再次需要 `move.cleanup` 时不会被历史任务静默拦截。
-Worker 会按保留策略裁剪历史记录：`succeeded` 保留 7 天；普通任务耗尽
-重试且 `next_retry_at IS NULL` 的 `failed` 同样保留 7 天。耗尽的 `move.cleanup` 不按历史
-保留期删除，因为它仍是后端对象的未解决保护引用，必须通过管理端重试并实际核验成功。
-任何仍被 `metadata.purge_job_id` 引用的任务也不得裁剪；耗尽 purge 任务由检查页恢复同一记录，
-引用异常时才在回收站锁内创建替代任务并重绑。已无 metadata 引用的耗尽 `trash.purge` 才按普通
-失败任务保留期裁剪；`move.cleanup` 等以 payload 持有物理清理回执的任务仍保持原有长期保留语义。
+`cache.rebuild` 会从 PostgreSQL 全量重建统一 ready-image Redis 投影。`trash.purge` 一行对应
+一张图片，目标、幂等键、失败、重试及执行所有权全部由 `background_job` 持有，payload 默认为空对象。
+`move.cleanup` 的重新入队继续使用通用 rerunnable 语义；purge 的重复请求只复用已有意图，
+不会重置重试预算，也不设置额外 rerun 标记。
+Worker 按保留策略裁剪历史记录：`succeeded` 保留 7 天；普通耗尽失败同样保留 7 天。
+耗尽的 `move.cleanup` 保留未解决对象引用，不能按历史期限裁剪。目标 metadata 仍存在的任何
+`trash.purge` 也不得裁剪；目标行消失后，成功与耗尽失败都按对应历史期限处理。
+检查页显示逐图任务目标，诊断成功任务仍有 deleted 目标、目标不在回收站及运行迟滞。
+显式存储维护重试全部耗尽任务，并将仍有 deleted 目标的异常成功任务恢复为 pending；不会
+为普通回收站图片创建任务，也不自动删除异常 ready 目标。没有任务即没有删除意图，不从图片表重建意图。
 每次 `FOR UPDATE SKIP LOCKED` 领取都会生成新的 `execution_token`；续租、成功、
 重排和失败写入必须同时匹配任务 id、`running` 状态与该 token。僵尸恢复及所有退出
 `running` 的路径会清空 token，因此租约超时后又被重新领取的旧执行者不能写入迟到

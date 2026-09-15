@@ -1,7 +1,7 @@
 .image-detail-admin-details {
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px solid var(--color-detail-border);
+  border-top: 1px solid var(--color-detail-panel-border);
 }
 
 :root[data-color-scheme="dark"] .image-detail-admin-details {
@@ -69,7 +69,7 @@
 .image-detail-admin-panel {
   margin-top: 6px;
   padding: 12px;
-  border: 1px solid var(--color-detail-border);
+  border: 1px solid var(--color-detail-panel-border);
   border-radius: 8px;
   background: var(--color-detail-surface-raised);
 }

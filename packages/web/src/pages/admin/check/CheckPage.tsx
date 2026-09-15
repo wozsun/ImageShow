@@ -446,7 +446,7 @@ function storageMaintenanceSummary(result: Record<string, unknown>) {
     ? result.trash_purge as Record<string, unknown>
     : {};
   const retriedJobs = numericResult(trashPurge.retried_jobs);
-  const repairedReferences = numericResult(trashPurge.repaired_images);
+  const repairedJobs = numericResult(trashPurge.repaired_jobs);
   return {
     warning: failed > 0,
     title: failed
@@ -454,7 +454,7 @@ function storageMaintenanceSummary(result: Record<string, unknown>) {
       : `存储维护完成：修复 ${repaired} 项，删除 ${removed} 项`,
     detail: failed
       ? `本次共请求 ${requested} 个存储对象项；失败项未被视为成功，请根据逐项明细处理后安全重试。`
-      : `本次共请求 ${requested} 个存储对象项，安全跳过 ${skipped} 项，回收 ${prunedDirs} 个空目录；另重试 ${retriedJobs} 个耗尽任务、修复 ${repairedReferences} 条彻底删除引用。`
+      : `本次共请求 ${requested} 个存储对象项，安全跳过 ${skipped} 项，回收 ${prunedDirs} 个空目录；另重试 ${retriedJobs} 个耗尽任务、恢复 ${repairedJobs} 个异常成功任务。`
   };
 }
 

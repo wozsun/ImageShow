@@ -19,6 +19,7 @@ import {
   publicImageUrls,
   publicImageUrlsForConfig
 } from "../storage/objects/public-urls.ts";
+import { imageHasTrashPurgeJobSql } from "./trash-purge-state.ts";
 import { publicOriginalAccessUrl } from "./original-link.ts";
 
 type DatabaseNumber = number | string;
@@ -52,7 +53,7 @@ export type IngestionImageRecordWithTags = IngestionImageRecord & { tags: string
 export type ImageRecord = IngestionImageRecord & {
   status: "ready" | "deleted";
   deleted_at: DatabaseTimestamp | null;
-  purge_job_id: string | null;
+  purge_pending: boolean;
   created_at: DatabaseTimestamp;
   updated_at: DatabaseTimestamp;
 };
@@ -101,7 +102,6 @@ export const adminImageListPresentationColumns = [
   ingestionImagePresentationColumns,
   "status",
   "deleted_at",
-  "purge_job_id",
   "created_at",
   "updated_at"
 ].join(", ");
@@ -119,6 +119,7 @@ export const imageTagsPresentationColumn = `ARRAY(
 
 export const adminImageListPresentationColumnsWithTags = [
   adminImageListPresentationColumns,
+  `(status='deleted' AND ${imageHasTrashPurgeJobSql}) AS purge_pending`,
   imageTagsPresentationColumn
 ].join(", ");
 
@@ -279,7 +280,7 @@ function adminImageListItem(
     ...base,
     original: row.original,
     status: row.status,
-    purge_pending: row.purge_job_id !== null,
+    purge_pending: row.purge_pending,
     object_key: row.object_key,
     md5: row.md5,
     image_size: Number(row.image_size),

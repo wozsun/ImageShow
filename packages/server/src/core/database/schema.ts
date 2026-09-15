@@ -4,6 +4,8 @@ import { join } from "node:path";
 import type { PoolClient } from "pg";
 import { assertDatabaseReadiness } from "./readiness.ts";
 import { pool } from "./pools.ts";
+import { upgradeTrashPurgeFor644 } from "./upgrade-6.4.4.ts";
+import { logger } from "../logger.ts";
 
 export async function initializeDatabaseSchema() {
   const client = await pool.connect();
@@ -51,9 +53,11 @@ async function initializeDatabaseSchemaOnClient(client: PoolClient) {
   const schema = empty
     ? await readFile(databaseSchemaPath(), "utf8")
     : null;
+  let upgrade: Awaited<ReturnType<typeof upgradeTrashPurgeFor644>> = null;
   await client.query("BEGIN");
   try {
     if (schema) await client.query(schema);
+    upgrade = schema ? null : await upgradeTrashPurgeFor644(client);
     await assertCoreDatabaseReady(client);
     await client.query("COMMIT");
   } catch (error) {
@@ -61,6 +65,7 @@ async function initializeDatabaseSchemaOnClient(client: PoolClient) {
     if (!empty) throw databaseReadinessError(error);
     throw error;
   }
+  if (upgrade) logger.info("database_upgrade_6_4_4_completed", upgrade);
 }
 
 export async function pingDatabase() {

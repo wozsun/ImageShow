@@ -68,11 +68,11 @@ PostgreSQL 是图片、词表、后台任务、存储注册表和管理员账号
 不保存迁移账本或应用版本号。
 
 `schema.sql` 完整定义当前版本的干净安装结构；空库在同一事务中执行它与只读 readiness，
-非空库只进行只读 readiness。任一步失败回滚本次事务。
+非空库在存在旧列时先执行 6.4.4 定向删除任务转换，再进行只读 readiness。任一步失败回滚本次事务。
 空主题直接由基线中的可空、无默认值主题外键表示，主题表只保存真实词条。
 作者身份两列、长期 CHECK、
-非空身份复合唯一索引、`metadata.created_by TEXT NOT NULL`、`metadata.purge_job_id` 及其长期
-CHECK 和后台任务的三种当前类型约束都属于完整结构。既有数据库的结构新增、修改、删除和
+非空身份复合唯一索引、`metadata.created_by TEXT NOT NULL` 和后台任务的三种当前类型约束
+都属于完整结构。除 6.4.4 定向转换外，既有数据库的结构新增、修改、删除和
 数据整理由维护者在升级前显式处理，先停机、备份并明确恢复路径。额外表不参与 readiness，
 不读取其数据、不要求读写权限；必需结构、约束、种子或权限不满足仍明确失败。
 干净初始化和 readiness 契约以
@@ -303,7 +303,7 @@ active 时继续等待同代后续 revision；批量 status 返回的 active DTO
 | 类型 | 所属领域 | 作用 |
 | --- | --- | --- |
 | `move.cleanup` | storage | 删除确认未引用的捕获候选或旧位置对象 |
-| `trash.purge` | images | 独占执行由 `metadata.purge_job_id` 绑定的回收站彻底删除 |
+| `trash.purge` | images | 按 `target_id` 独立执行一张回收站图片的彻底删除 |
 | `cache.rebuild` | images/ready-cache | 重建 ready 图片核心投影 |
 
 通用 `jobs` 层只负责 `FOR UPDATE SKIP LOCKED` 领取、`execution_token` 所有权、续租、
@@ -315,12 +315,13 @@ active 时继续等待同代后续 revision；批量 status 返回的 active DTO
 不可逆清理不再继承执行信号。停机时不再领取新任务，并在总停机期限内等待已经登记的 handler
 真正结算，同时等待在途任务发现与各类型时间片收尾，再允许重新启动。
 
-永久删除的 HTTP 请求只在回收站成员锁内原子插入任务并绑定精确 deleted 行，不执行对象 I/O；
-提交后通常保持确认响应，等待同一 `1..N` 成员集合完成。`trash.purge` handler 是唯一执行 owner，
-按任务归属有界分页并逐图取得存储 mutation lock 与共享清理准入；任务状态、执行 token、重试、
-退避和错误全部复用通用任务行。连接中断、有限等待结束或任务异常不会撤销已提交意图，未完成行
-继续由后台处理。历史裁剪在删除任务前核对 `metadata` 引用，检查页集中诊断耗尽、失联与迟滞并
-提供显式维护。启动路径只核对当前最小结构，不解释旧逐行状态或旧任务 payload。
+永久删除的 HTTP 请求在回收站成员锁内解析精确 deleted 图片集合，在一个事务中为每张
+尚未排队的图片插入 `trash.purge`，不执行对象 I/O。提交后等待同一 `1..N` 集合；任务的
+`target_id` 与确定性幂等键共同表达唯一逐图意图，metadata 不保存任务引用。handler 取得
+单图存储 mutation lock 与共享清理准入，核对当前 token 和目标后删除对象与图片记录。
+每图独立记录失败、退避和执行状态，请求断开不会撤销任务。历史裁剪保护目标仍存在的任务，
+检查页诊断耗尽、异常成功、目标状态不符及迟滞；维护恢复原任务。6.4.4 的旧成员归属转换
+集中在启动事务中的临时兼容模块，计划在 6.4.5 移除，见[数据库结构](./database.md)。
 
 Ingestion 另有一个单实例 Redis worker。Upload / Import 共用最多 `N` 个 preparation 许可，覆盖
 等待 Normalize、图片重工作、两个本地处理结果与 ready canonical 发布；完整 raw 在等待

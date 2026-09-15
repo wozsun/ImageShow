@@ -6238,7 +6238,7 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
     jobs: [],
     issues: [
       {
-        kind: "missing_job_reference",
+        kind: "succeeded_target_remaining",
         count: 2,
         sample_ids: []
       },
@@ -6389,7 +6389,7 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
     assert.ok(maintenanceDialog);
     assert.match(document.body.textContent ?? "", /持久彻底删除任务/);
     assert.match(document.body.textContent ?? "", /将重试耗尽任务2/);
-    assert.match(document.body.textContent ?? "", /将修复异常引用2/);
+    assert.match(document.body.textContent ?? "", /将重试异常成功任务2/);
     assert.match(document.body.textContent ?? "", /停滞任务只报告/);
 
     const cancelButton = [...document.querySelectorAll<HTMLButtonElement>(

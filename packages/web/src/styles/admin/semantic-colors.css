@@ -182,6 +182,7 @@
   --color-detail-surface: var(--admin-color-surface-primary);
   --color-detail-surface-raised: light-dark(#fafbfd, #151a21);
   --color-detail-border: var(--admin-color-border-default);
+  --color-detail-panel-border: light-dark(#dfe5ed, #3b424b);
   --color-detail-shadow: var(--admin-shadow-control-resting);
   --color-detail-text-primary: var(--admin-color-text-primary);
   --color-detail-text-secondary: var(--admin-color-text-secondary);

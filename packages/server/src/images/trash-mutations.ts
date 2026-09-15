@@ -9,12 +9,12 @@ import { imageUpdateLockRequests } from "./image-update-lock.ts";
 import { withImageMutationSync } from "./mutation-sync.ts";
 import { decideImageMutationSync } from "./mutation-sync-policy.ts";
 import { bumpReadyImageRevision } from "./ready-cache/revision.ts";
+import { imageHasTrashPurgeJobSql } from "./trash-purge-state.ts";
 import { lockTrashMembershipForTransaction } from "./trash-membership-lock.ts";
 
 const moveImagesToTrashSql = `UPDATE metadata
   SET status='deleted',
       deleted_at=clock_timestamp(),
-      purge_job_id=NULL,
       updated_at=now()
   WHERE id = ANY($1::uuid[]) AND status='ready'
   RETURNING id`;
@@ -23,7 +23,7 @@ const restoreImagesSql = `UPDATE metadata
   SET status='ready', deleted_at=NULL, updated_at=now()
   WHERE id = ANY($1::uuid[])
     AND status='deleted'
-    AND purge_job_id IS NULL
+    AND NOT ${imageHasTrashPurgeJobSql}
   RETURNING id`;
 
 async function mutateImageTrashState(ids: string[], sql: string) {

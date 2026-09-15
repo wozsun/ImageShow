@@ -322,18 +322,14 @@ export async function cleanupBackgroundJobHistory() {
              OR (
                status = 'failed'
                AND next_retry_at IS NULL
-               AND (
-                 payload->>'retain_exhausted' IS DISTINCT FROM 'true'
-                 OR type='trash.purge'
-               )
+               AND payload->>'retain_exhausted' IS DISTINCT FROM 'true'
                AND updated_at < now() - ($2 || ' seconds')::interval
              )
            )
-           AND NOT EXISTS (
-             SELECT 1
-               FROM metadata
-              WHERE metadata.purge_job_id=background_job.id
-           )
+           AND (type <> 'trash.purge' OR NOT EXISTS (
+             SELECT 1 FROM metadata
+              WHERE metadata.id::text=background_job.target_id
+           ))
          ORDER BY updated_at ASC
          FOR UPDATE SKIP LOCKED
          LIMIT $3

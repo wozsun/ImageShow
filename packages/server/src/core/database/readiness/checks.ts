@@ -77,15 +77,6 @@ function isIdentityIdNonemptyCheck(row: CheckConstraintRow) {
   ].includes(expression);
 }
 
-function isPurgeJobDeletedCheck(row: CheckConstraintRow) {
-  if (!sameColumns(row.columns, ["purge_job_id", "status"])) return false;
-  const expression = normalizedExpression(row.definition);
-  return [
-    "purge_job_idisnullorstatus='deleted'",
-    "status='deleted'orpurge_job_idisnull"
-  ].includes(expression);
-}
-
 async function validatedChecksFor(
   database: DatabaseReader,
   table: string
@@ -118,7 +109,6 @@ async function validatedChecksFor(
 
 export async function assertRequiredCheckConstraints(database: DatabaseReader) {
   const authorRows = await validatedChecksFor(database, "author");
-  const metadataRows = await validatedChecksFor(database, "metadata");
 
   const missing = [
     ["author identity null pairing", isIdentityPairCheck],
@@ -129,9 +119,6 @@ export async function assertRequiredCheckConstraints(database: DatabaseReader) {
       ? []
       : [label as string]
   ));
-  if (!metadataRows.some(isPurgeJobDeletedCheck)) {
-    missing.push("metadata purge job requires deleted status");
-  }
   if (missing.length) {
     throw new Error(
       `required CHECK constraints are missing or invalid: ${missing.join(", ")}`

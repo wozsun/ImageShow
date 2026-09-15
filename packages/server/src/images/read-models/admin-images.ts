@@ -66,7 +66,7 @@ export async function listAdminImages(
           ...item,
           status: "ready",
           deleted_at: null,
-          purge_job_id: null
+          purge_pending: false
         })));
         return {
           items: images,

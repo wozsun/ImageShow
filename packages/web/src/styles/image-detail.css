@@ -113,7 +113,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--color-detail-border);
+  border: 1px solid var(--color-detail-panel-border);
   border-radius: 8px;
   background: var(--color-detail-surface-raised);
   transition: box-shadow .14s ease;
@@ -192,7 +192,7 @@
   gap: 10px;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--color-detail-border);
+  border-top: 1px solid var(--color-detail-panel-border);
   color: var(--color-detail-error);
 }
 .image-detail-admin-module-error button {
@@ -229,6 +229,7 @@
 }
 
 .image-detail-modal .image-detail-actions .button.image-detail-source {
+  border-color: var(--color-detail-panel-border);
   background: transparent;
 }
 

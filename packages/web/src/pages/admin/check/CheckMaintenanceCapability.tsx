@@ -52,9 +52,8 @@ const trashPurgeJobStates = [
   "exhausted"
 ] as const;
 const trashCheckIssueKinds = [
-  "missing_job_reference",
-  "wrong_job_type",
-  "succeeded_job_reference",
+  "succeeded_target_remaining",
+  "target_not_deleted",
   "stalled_job"
 ] as const;
 
@@ -234,12 +233,8 @@ function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
   const [errorMessage, setErrorMessage] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const summary = storageMaintenancePreview(preview.storage);
-  const repairableReferences = preview.trash.issues
-    .filter((issue) => [
-      "missing_job_reference",
-      "wrong_job_type",
-      "succeeded_job_reference"
-    ].includes(issue.kind))
+  const repairableJobs = preview.trash.issues
+    .filter((issue) => issue.kind === "succeeded_target_remaining")
     .reduce((total, issue) => total + issue.count, 0);
   const stalledJobs = preview.trash.issues
     .filter((issue) => issue.kind === "stalled_job")
@@ -304,7 +299,7 @@ function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
               <dl className="trash-purge-maintenance-preview">
                 <div><dt>待彻底删除</dt><dd>{preview.trash.purge_pending_count.toLocaleString()}</dd></div>
                 <div><dt>将重试耗尽任务</dt><dd>{preview.trash.job_counts.exhausted.toLocaleString()}</dd></div>
-                <div><dt>将修复异常引用</dt><dd>{repairableReferences.toLocaleString()}</dd></div>
+                <div><dt>将重试异常成功任务</dt><dd>{repairableJobs.toLocaleString()}</dd></div>
                 <div><dt>保留普通回收站</dt><dd>{preview.trash.unqueued_count.toLocaleString()}</dd></div>
               </dl>
             </section>
@@ -323,7 +318,7 @@ function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
                     : ""
                 ].filter(Boolean).join("、")}，${summary.blocked_items} 个相关项目只报告、不计入可执行数量。`
                 : "预览之后发生的上传或迁移不会直接沿用旧结果。"}
-              持久任务维护也会按执行时真值修复异常引用并重试全部仍有成员的耗尽任务；
+              持久任务维护也会按执行时真值重试目标仍在回收站的异常成功任务及全部耗尽任务；
               {stalledJobs
                 ? `${stalledJobs} 个仍标记为运行中的停滞任务只报告，不会被强行接管。`
                 : "当前没有需要人工接管的停滞任务。"}
