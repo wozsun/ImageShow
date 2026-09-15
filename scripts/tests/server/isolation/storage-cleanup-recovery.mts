@@ -66,7 +66,7 @@ const localAccess = await registry.resolveStorageAccess("local");
   )).rows[0];
   assert.deepEqual(
     Object.keys(foregroundCleanupReceipt.payload).sort(),
-    ["objects", "reason", "retain_exhausted"]
+    ["objects", "reason"]
   );
   assert.ok(foregroundCleanupReceipt.payload.objects.every((object: Record<string, unknown>) => (
     Object.keys(object).sort().join(",")

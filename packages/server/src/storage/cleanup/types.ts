@@ -18,6 +18,4 @@ export type MoveCleanupJobPayload = {
   confirm_absent_after?: string;
   /** Unique ownership of a pre-copy Ingestion commit guard attempt. */
   guard_token?: string;
-  /** Exhausted deletion work remains a physical ownership record. */
-  retain_exhausted: true;
 };

@@ -93,12 +93,18 @@ export function useShowData(
         }
         const previous = replace ? [] : imagesRef.current;
         const ids = new Set(previous.map((image) => image.id));
-        const incoming: ShowImage[] = [];
+        const eligible: ShowImage[] = [];
         for (const item of response.items) {
           if (!item.id || ids.has(item.id) || removedRef.current.has(item.id)) continue;
-          if (!replace && recentRef.current.has(item.id)) continue;
           ids.add(item.id);
-          incoming.push(confirmedRef.current.get(item.id) ?? item);
+          eligible.push(confirmedRef.current.get(item.id) ?? item);
+        }
+        const incoming = eligible.filter((item) => replace || !recentRef.current.has(item.id));
+        // At EOF an empty scene cannot emit another consumption revision.
+        // Reuse this valid page only when recent history rejected every item;
+        // empty or locally removed pages still end the scan without polling.
+        if (!previous.length && !incoming.length && response.next_cursor === null) {
+          incoming.push(...eligible);
         }
         if (previous.length + incoming.length > maximumRetainedDtos) {
           throw new ApiClientError("图片候选容量不足，请重试", 503, "browse_capacity_exceeded");

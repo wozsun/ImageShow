@@ -131,8 +131,7 @@ async function enqueueMoveCleanupJobs(
       ...(job.guardToken ? { guard_token: job.guardToken } : {}),
       ...(job.confirmAbsentAfter
         ? { confirm_absent_after: job.confirmAbsentAfter.toISOString() }
-        : {}),
-      retain_exhausted: true
+        : {})
     };
     return [{
       type: "move.cleanup" as const,

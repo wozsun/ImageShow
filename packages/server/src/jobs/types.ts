@@ -22,5 +22,4 @@ export type BackgroundJob = {
   payload: Record<string, unknown>;
   execution_token: string;
   retry_count: number;
-  created_at: Date | string;
 };

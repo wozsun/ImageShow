@@ -204,13 +204,13 @@ Worker 每 5 秒扫描可运行任务。所有任务类型都已有活动时间�
 | `idempotency_key` | 幂等键；purge 使用 `trash.purge:<image-id>` |
 | `payload` / `error` | 入参与错误；终态结果不在队列表中重复持久化 |
 | `retry_count` / `next_retry_at` | 失败次数（含僵尸恢复）与下次重试时间 |
-| `created_at` / `updated_at` | 时间戳 |
+| `created_at` / `updated_at` | 排队时间 / 最近状态或租约更新时间 |
 
 `cache.rebuild` 会从 PostgreSQL 全量重建统一 ready-image Redis 投影。`trash.purge` 一行对应
 一张图片，目标、幂等键、失败、重试及执行所有权全部由 `background_job` 持有，payload 默认为空对象。
 `move.cleanup` 的重新入队继续使用通用 rerunnable 语义；purge 的重复请求只复用已有意图，
 不会重置重试预算，也不设置额外 rerun 标记。
-Worker 按保留策略裁剪历史记录：`succeeded` 保留 7 天；普通耗尽失败同样保留 7 天。
+Worker 在任务仓库按类型集中裁剪历史记录：`succeeded` 保留 7 天；普通耗尽失败同样保留 7 天。
 耗尽的 `move.cleanup` 保留未解决对象引用，不能按历史期限裁剪。目标 metadata 仍存在的任何
 `trash.purge` 也不得裁剪；目标行消失后，成功与耗尽失败都按对应历史期限处理。
 检查页显示逐图任务目标，诊断成功任务仍有 deleted 目标、目标不在回收站及运行迟滞。
@@ -224,7 +224,9 @@ Worker 按保留策略裁剪历史记录：`succeeded` 保留 7 天；普通耗�
 `next_retry_at` 设为 NULL。僵尸恢复也占用同一五次失败预算，未耗尽时立即重排；人工重试
 继续通过既有管理入口恢复，不增加额外自动重试轮次。
 
-`move.cleanup` 的 payload 只保存原因、保留策略，以及固化后端 slug、对象前缀 / 键和入队时
+领取结果只携带执行所需字段；`created_at` 留在数据库中用于领取顺序、等待统计和重新入队计时。
+
+`move.cleanup` 的 payload 保存原因、必要的延迟确认时间和 guard token，以及固化后端 slug、对象前缀 / 键和入队时
 物理命名空间 identity 的对象条目，不携带图片或缩略图字节。`pending`、`running` 以及所有
 `failed`（包括耗尽重试）都属于未解决引用；
 对应后端不能删除或修改物理位置，管理接口会返回总数、失败数和耗尽重试数。超级管理员

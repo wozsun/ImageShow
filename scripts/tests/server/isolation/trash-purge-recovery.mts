@@ -619,7 +619,7 @@ await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_sl
       unreferencedHistoryJob,
       retainedMoveHistoryJob,
       sharedAppConfig.appConfig.backgroundJob.failedRetentionSeconds + 1,
-      JSON.stringify({ retain_exhausted: true }),
+      JSON.stringify({}),
       referencedHistoryItem.id,
       randomUUID()
     ]

@@ -165,7 +165,7 @@ export async function claimBackgroundJob(type: BackgroundJobType) {
        LIMIT 1
      )
      RETURNING id, type, target_id, payload, execution_token,
-               retry_count, created_at`,
+               retry_count`,
     [type, executionToken]
   );
   const row = result.rows[0] as BackgroundJobRow | undefined;
@@ -322,7 +322,7 @@ export async function cleanupBackgroundJobHistory() {
              OR (
                status = 'failed'
                AND next_retry_at IS NULL
-               AND payload->>'retain_exhausted' IS DISTINCT FROM 'true'
+               AND type <> 'move.cleanup'
                AND updated_at < now() - ($2 || ' seconds')::interval
              )
            )
