@@ -84,7 +84,6 @@ PowerShell 中使用 `$env:IMAGESHOW_DATABASE_SCENARIO = "cold-redis"`、
 | --- | --- |
 | 配置与身份 | `config-package-consistency`、`auth-author-contracts` |
 | 后台任务 | `background-job-history` |
-| 6.4.4 临时升级 | `trash-purge-upgrade-644`（随 6.4.5 兼容代码清理） |
 | 图片写入与分类 | `image-update-consistency`、`image-update-locking`、`image-snapshot-cancellation`、`image-classification-consistency`、`vocabulary-order` |
 | 查询与缓存 | `image-read-consistency`、`tag-filter-consistency`、`public-image-browse`、`public-facets-concurrency`、`ready-cache-read-model`、`ready-cache-recovery`、`redis-business-commands` |
 | 存储与回收站 | `local-io-lifecycle`、`storage-registry-lifecycle`、`storage-migration-recovery`、`storage-cleanup-recovery`、`storage-lock-admission`、`trash-purge-recovery` |

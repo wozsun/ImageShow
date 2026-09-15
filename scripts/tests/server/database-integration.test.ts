@@ -35,11 +35,6 @@ import {
 const isolationRoot = resolve(import.meta.dirname, "isolation");
 const storageIngestionScenarios = [
   {
-    id: "trash-purge-upgrade-644",
-    name: "6.4.4 删除任务升级保留数据并在失败时整体回滚",
-    script: join(isolationRoot, "trash-purge-upgrade-6.4.4.mts")
-  },
-  {
     id: "ready-cache-recovery",
     name: "数据库连接与恢复任务双失败后自动重新开放有效图片缓存",
     script: join(isolationRoot, "ready-cache-recovery.mts")

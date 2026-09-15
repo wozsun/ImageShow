@@ -38,8 +38,6 @@ export const appConfig = {
 
   randomQuery: randomQueryLimits,
 
-  trashBatchSize: 100,
-
   configPackage: {
     maxBytes: configPackageMaxBytes,
     maxStorageBackends: 100

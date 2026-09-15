@@ -16,6 +16,8 @@ import {
 import { imageHasTrashPurgeJobSql } from "../images/trash-purge-state.ts";
 import { readAdminPostgresqlStatus } from "./lightweight-status.ts";
 
+const trashInspectionSampleLimit = 100;
+
 export async function checkDatabase() {
   const status = await readAdminPostgresqlStatus();
   const operations = (await pool.query(
@@ -102,7 +104,7 @@ export async function checkTrash() {
               ${imageHasTrashPurgeJobSql} AS purge_pending
          FROM metadata WHERE status='deleted'
         ORDER BY deleted_at, id LIMIT $1`,
-      [appConfig.trashBatchSize]
+      [trashInspectionSampleLimit]
     )).rows as AdminTrashCheckDto["candidates"];
     const normalizedJobCounts: AdminTrashCheckDto["job_counts"] = {
       pending: 0, running: 0, retrying: 0, exhausted: 0

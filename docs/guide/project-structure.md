@@ -136,7 +136,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | 目录 | 职责与允许依赖 |
 | --- | --- |
 | `core/` | 领域无关的运行可用性、安全抓取、日志、密码、UUID、并发和精确基础原语；不持有图片、词表、存储或 Ingestion 请求 schema，也不依赖业务领域或路由。未形成独立稳定职责边界的横切模块留在根层。 |
-| `core/database/` | PostgreSQL pool、事务、advisory lock、公开 fallback 准入、schema 装配和 readiness；`readiness/` 只承载数据库基线断言的内部职责；`upgrade-6.4.4.ts` 仅保存 6.4.4 启动转换，计划于 6.4.5 删除。 |
+| `core/database/` | PostgreSQL pool、事务、advisory lock、公开 fallback 准入、schema 装配和 readiness；`readiness/` 只承载数据库基线断言的内部职责。 |
 | `core/redis/` | 唯一 Redis client、连接与能力探测、JSON、pipeline、条件字符串、窗口限流命令及其通用 Lua；不持有 ready-cache 等业务命令，也不导入其他业务领域。 |
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
 | `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；普通保存与磁盘重载共用 FIFO 写租约内“持久化后发布”入口，配置包在同一租约内把候选文件持久化与数据库结果核对及收敛决定后的单次内存发布分离。配置包由目标版本以当前默认配置为基线逐项投影，存储后端逐条识别，不维护来源版本迁移链；`runtime-config-environment.ts` 是全部 RuntimeConfig 叶子到首次 seed 变量的唯一映射。启动、热加载和配置包都只读取当前结构，未知字段统一投影删除。 |
@@ -229,10 +229,10 @@ HTTP `validation_error`，`primitives.ts` 只复用 UUID、slug、HTTPS 和安�
 advisory lock 两个连接池，均启用 PostgreSQL 每秒断连检查，使已销毁连接的长查询和锁等待
 能够在数据库侧结束；`transactions.ts`、`advisory-locks.ts` 和 `schema.ts` 分别拥有
 事务、锁与数据库启动编排；空库在事务内执行当前完整 `schema.sql` 并核对 readiness，非空库
-在存在旧 purge 列时执行 6.4.4 定向转换，再做只读 readiness；临时转换模块计划在 6.4.5 删除。
+只进行当前最小结构的只读 readiness。
 `schema.ts` 合并同时使用默认连接池的 readiness 调用，只共享尚未完成的
 校验，不缓存成功结果；启动事务或调用者显式提供的 reader 独立执行完整校验。
-除 6.4.4 临时转换外，既有结构变更由维护者在启动前处理，额外表不参与数据或权限检查。
+既有结构变更由维护者在启动前处理，额外表不参与数据或权限检查。
 advisory lock 调度信号只取消连接取得与锁等待；锁内回调收到独立的
 父锁 / 当前连接失效信号，由具体领域决定是否再合并请求、lease 或 deadline。`readiness.ts`
 是唯一总入口，按固定顺序调用

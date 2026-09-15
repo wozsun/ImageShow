@@ -24,7 +24,6 @@ import type { BackgroundJob } from "../jobs/types.ts";
 type PurgeRow = {
   id: string;
   object_key: string;
-  md5: string;
   storage_slug: string;
   status: string;
 };
@@ -49,7 +48,6 @@ type PurgeWaitState = {
 const purgeReturnColumns = [
   "metadata.id",
   "metadata.object_key",
-  "metadata.md5",
   "metadata.storage_slug",
   "metadata.status"
 ].join(", ");

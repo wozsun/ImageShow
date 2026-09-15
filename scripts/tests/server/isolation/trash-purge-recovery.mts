@@ -362,301 +362,293 @@ await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_sl
   await database.pool.query(
     "DELETE FROM metadata WHERE status='deleted'"
   );
-  const previousTrashBatchSize = sharedAppConfig.appConfig.trashBatchSize;
-  sharedAppConfig.appConfig.trashBatchSize = 1;
-  try {
-    const createTrashImage = async (ageSeconds: number) => {
-      const id = randomUUID();
-      const objectKey = imagePaths.storageObjectKey(id, "webp");
-      const thumbKey = imagePaths.thumbnailObjectKey(objectKey);
-      const full = Buffer.from("watermark-full-" + id);
-      const thumbnail = Buffer.from("watermark-thumb-" + id);
-      await database.pool.query(
-        "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
-          + "brightness, theme, ext, md5, thumbnail_size, deleted_at) VALUES "
-          + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, "
-          + "$4, clock_timestamp() - ($5 || ' seconds')::interval)",
-        [
-          id,
-          objectKey,
-          createHash("md5").update(full).digest("hex"),
-          thumbnail.byteLength,
-          ageSeconds
-        ]
-      );
-      await localAccess.driver.writeBuffer(
-        "full",
-        objectKey,
-        full,
-        "image/webp"
-      );
-      await localAccess.driver.writeBuffer(
-        "thumbs",
-        thumbKey,
-        thumbnail,
-        "image/webp"
-      );
-      return { id, objectKey, thumbKey };
-    };
-
-    const oldest = await createTrashImage(3);
-    const middle = await createTrashImage(2);
-    const newest = await createTrashImage(1);
-    const allPurgePromise = trash.purgeImages({ scope: "all" });
-    const allPurgeJob = await claimTrashPurgeJob();
-    const duplicateRequest = trash.purgeImages(
-      { scope: "selected", ids: [middle.id, newest.id] },
-      { signal: AbortSignal.abort(new Error("duplicate request disconnected")) }
-    );
-    await assert.rejects(duplicateRequest, /duplicate request disconnected/);
-    assert.deepEqual(
-      (await database.pool.query(
-        "SELECT target_id, idempotency_key FROM background_job WHERE type='trash.purge' AND target_id=ANY($1::text[]) ORDER BY target_id",
-        [[oldest.id, middle.id, newest.id]]
-      )).rows,
-      [oldest.id, middle.id, newest.id].sort().map((id) => ({ target_id: id, idempotency_key: `trash.purge:${id}` }))
-    );
-    assert.deepEqual(await trashMutations.restoreImages([middle.id]), {
-      requested: 1,
-      restored: 0,
-      ignored: 1,
-      results: [{ id: middle.id, status: "ignored" }]
-    });
-
-    const addedAfterCapture = await createTrashImage(0);
-    await finishTrashPurgeJob(allPurgeJob);
-    await finishTrashPurgeJob(await claimTrashPurgeJob());
-    await finishTrashPurgeJob(await claimTrashPurgeJob());
-    const allPurge = await allPurgePromise;
-    assert.deepEqual(allPurge, {
-      requested: 3,
-      queued: 3,
-      already_queued: 0,
-      deleted: 3,
-      remaining: 0,
-      ignored: 0
-    });
-    assert.deepEqual(
-      (await database.pool.query(
-        "SELECT id FROM metadata WHERE id=$1",
-        [addedAfterCapture.id]
-      )).rows,
-      [{ id: addedAfterCapture.id }],
-      "scope all 只处理事务快照，不包含之后进入回收站的图片"
-    );
-
-    const selectedPurgePromise = trash.purgeImages({
-      scope: "selected",
-      ids: [addedAfterCapture.id]
-    });
-    await finishTrashPurgeJob(await claimTrashPurgeJob());
-    const selectedPurge = await selectedPurgePromise;
-    assert.deepEqual(selectedPurge, {
-      requested: 1,
-      queued: 1,
-      already_queued: 0,
-      deleted: 1,
-      remaining: 0,
-      ignored: 0
-    });
-    const ignoredPurge = await trash.purgeImages({
-      scope: "selected",
-      ids: [foregroundImage]
-    });
-    assert.deepEqual(ignoredPurge, {
-      requested: 1,
-      queued: 0,
-      already_queued: 0,
-      deleted: 0,
-      remaining: 0,
-      ignored: 1
-    });
-
-    const failedItem = await createTrashImage(0);
-    const independentItem = await createTrashImage(0);
-    const failedPurgePromise = trash.purgeImages({
-      scope: "selected",
-      ids: [failedItem.id, independentItem.id]
-    });
-    const batchJobs = [await claimTrashPurgeJob(), await claimTrashPurgeJob()];
-    const failedJob = batchJobs.find((job) => job.target_id === failedItem.id);
-    const independentJob = batchJobs.find((job) => job.target_id === independentItem.id);
-    assert.ok(failedJob);
-    assert.ok(independentJob);
-    const originalFailedRemove = localAccess.driver.removeObjects.bind(
-      localAccess.driver
-    );
-    let failedRemoveObserved = false;
-    localAccess.driver.removeObjects = async (objects, options) => {
-      if (objects.some((object) => object.key === failedItem.objectKey)) {
-        failedRemoveObserved = true;
-        throw new Error("injected trash purge driver failure");
-      }
-      return originalFailedRemove(objects, options);
-    };
-    let failedJobError: Error | undefined;
-    try {
-      await assert.rejects(
-        trashPurgeJob.handleTrashPurgeJob(failedJob, new AbortController().signal),
-        (error: unknown) => {
-          assert.ok(error instanceof Error);
-          failedJobError = error;
-          return true;
-        }
-      );
-      assert.equal(failedRemoveObserved, true);
-    } finally {
-      localAccess.driver.removeObjects = originalFailedRemove;
-    }
-    await finishTrashPurgeJob(independentJob);
-    assert.equal(
-      await jobs.markBackgroundJobFailed(failedJob, failedJobError),
-      true
-    );
-    assert.deepEqual(await failedPurgePromise, {
-      requested: 2,
-      queued: 2,
-      already_queued: 0,
-      deleted: 1,
-      remaining: 1,
-      ignored: 0
-    });
-    const retryingTrashCheck = await databaseCheck.checkTrash();
-    assert.equal(retryingTrashCheck.purge_pending_count, 1);
-    assert.equal(retryingTrashCheck.job_counts.retrying, 1);
-    assert.equal(retryingTrashCheck.jobs.find((job) => job.id === failedJob.id)?.target_id, failedItem.id);
-    const adminRead = await import("../../../../packages/server/src/images/read-models/admin-images.ts");
-    const detail = (await adminRead.listAdminImages({ status: "deleted", page: 1, limit: 20 })).items.find((item) => item.id === failedItem.id);
-    assert.equal(detail?.purge_pending, true);
-    assert.equal(
-      retryingTrashCheck.jobs.find((job) => job.id === failedJob.id)?.state,
-      "retrying"
-    );
-    assert.deepEqual(await trash.purgeImages({
-      scope: "selected",
-      ids: [failedItem.id]
-    }), {
-      requested: 1,
-      queued: 0,
-      already_queued: 1,
-      deleted: 0,
-      remaining: 1,
-      ignored: 0
-    });
-    assert.deepEqual(await trashMutations.restoreImages([failedItem.id]), {
-      requested: 1,
-      restored: 0,
-      ignored: 1,
-      results: [{ id: failedItem.id, status: "ignored" }]
-    });
+  const createTrashImage = async (ageSeconds: number) => {
+    const id = randomUUID();
+    const objectKey = imagePaths.storageObjectKey(id, "webp");
+    const thumbKey = imagePaths.thumbnailObjectKey(objectKey);
+    const full = Buffer.from("watermark-full-" + id);
+    const thumbnail = Buffer.from("watermark-thumb-" + id);
     await database.pool.query(
-      "UPDATE background_job SET next_retry_at=NULL "
-        + "WHERE id=$1",
-      [failedJob.id]
-    );
-    const exhaustedTrashCheck = await databaseCheck.checkTrash();
-    assert.equal(exhaustedTrashCheck.job_counts.exhausted, 1);
-    assert.deepEqual(
-      await trashPurgeMaintenance.maintainTrashPurgeTasks(),
-      {
-        retried_jobs: 1,
-        repaired_jobs: 0
-      }
-    );
-    const renewedJob = await claimTrashPurgeJob();
-    assert.equal(renewedJob.id, failedJob.id);
-    assert.notEqual(renewedJob.execution_token, failedJob.execution_token);
-    await assert.rejects(trashPurgeJob.handleTrashPurgeJob(failedJob, new AbortController().signal), /ownership was lost/);
-    assert.equal(await jobs.markBackgroundJobSucceeded(failedJob), false);
-    assert.equal(await localAccess.driver.exists("full", failedItem.objectKey), true);
-    await finishTrashPurgeJob(renewedJob);
-
-    const succeededItem = await createTrashImage(0);
-    const succeededJob = randomUUID();
-    await database.pool.query(
-      "INSERT INTO background_job(id,type,status,target_id,idempotency_key,updated_at) VALUES($1,'trash.purge','succeeded',$2,$3,now()-interval '30 days')",
-      [succeededJob, succeededItem.id, `trash.purge:${succeededItem.id}`]
-    );
-    assert.deepEqual(await jobs.cleanupBackgroundJobHistory(), []);
-    const succeededCheck = await databaseCheck.checkTrash();
-    assert.equal(succeededCheck.issues.find((issue) => issue.kind === "succeeded_target_remaining")?.count, 1);
-    assert.deepEqual(await trashMutations.restoreImages([succeededItem.id]), {
-      requested: 1, restored: 0, ignored: 1,
-      results: [{ id: succeededItem.id, status: "ignored" }]
-    });
-    assert.deepEqual(await trashPurgeMaintenance.maintainTrashPurgeTasks(), {
-      retried_jobs: 0, repaired_jobs: 1
-    });
-    await finishTrashPurgeJob(await claimTrashPurgeJob());
-
-    // A task pointing at a ready image must not authorize physical deletion.
-    const readyJobId = randomUUID();
-    await database.pool.query(
-      "INSERT INTO background_job(id,type,target_id,idempotency_key) VALUES($1,'trash.purge',$2,$3)",
-      [readyJobId, foregroundImage, `trash.purge:${foregroundImage}`]
-    );
-    const readyJob = await claimTrashPurgeJob();
-    await assert.rejects(trashPurgeJob.handleTrashPurgeJob(readyJob, new AbortController().signal), /not in the trash/);
-    const readyCheck = await databaseCheck.checkTrash();
-    assert.equal(readyCheck.issues.find((issue) => issue.kind === "target_not_deleted")?.count, 1);
-    assert.equal((await database.pool.query("SELECT status FROM metadata WHERE id=$1", [foregroundImage])).rows[0]?.status, "ready");
-    await database.pool.query("DELETE FROM background_job WHERE id=$1", [readyJobId]);
-
-    const referencedHistoryItem = await createTrashImage(0);
-    const referencedHistoryJob = randomUUID();
-    const unreferencedHistoryJob = randomUUID();
-    const retainedMoveHistoryJob = randomUUID();
-    await database.pool.query(
-      "INSERT INTO background_job("
-        + "id, type, status, target_id, payload, error, next_retry_at, updated_at"
-        + ") VALUES "
-        + "($1, 'trash.purge', 'failed', $6, '{}'::jsonb, 'exhausted', NULL, "
-        + "now() - ($4 || ' seconds')::interval), "
-        + "($2, 'trash.purge', 'failed', $7, '{}'::jsonb, 'orphaned', NULL, "
-        + "now() - ($4 || ' seconds')::interval), "
-        + "($3, 'move.cleanup', 'failed', 'retained-history', $5::jsonb, "
-        + "'protected cleanup receipt', NULL, "
-        + "now() - ($4 || ' seconds')::interval)",
+      "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
+        + "brightness, theme, ext, md5, thumbnail_size, deleted_at) VALUES "
+        + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, "
+        + "$4, clock_timestamp() - ($5 || ' seconds')::interval)",
       [
-        referencedHistoryJob,
-        unreferencedHistoryJob,
-        retainedMoveHistoryJob,
-        sharedAppConfig.appConfig.backgroundJob.failedRetentionSeconds + 1,
-        JSON.stringify({ retain_exhausted: true }),
-        referencedHistoryItem.id,
-        randomUUID()
+        id,
+        objectKey,
+        createHash("md5").update(full).digest("hex"),
+        thumbnail.byteLength,
+        ageSeconds
       ]
     );
-    assert.deepEqual(await jobs.cleanupBackgroundJobHistory(), [
-      { status: "failed", count: 1 }
-    ]);
-    assert.deepEqual(
-      (await database.pool.query(
-        "SELECT id FROM background_job WHERE id=ANY($1::uuid[]) ORDER BY id",
-        [[
-          referencedHistoryJob,
-          unreferencedHistoryJob,
-          retainedMoveHistoryJob
-        ]]
-      )).rows.map((row) => row.id),
-      [referencedHistoryJob, retainedMoveHistoryJob].sort(),
-      "无引用 purge 耗尽任务应按保留期裁剪，有引用 purge 与 move.cleanup 回执必须继续保留"
+    await localAccess.driver.writeBuffer(
+      "full",
+      objectKey,
+      full,
+      "image/webp"
     );
-    assert.deepEqual(
-      await trashPurgeMaintenance.maintainTrashPurgeTasks(),
-      {
-        retried_jobs: 1,
-        repaired_jobs: 0
+    await localAccess.driver.writeBuffer(
+      "thumbs",
+      thumbKey,
+      thumbnail,
+      "image/webp"
+    );
+    return { id, objectKey, thumbKey };
+  };
+
+  const oldest = await createTrashImage(3);
+  const middle = await createTrashImage(2);
+  const newest = await createTrashImage(1);
+  const allPurgePromise = trash.purgeImages({ scope: "all" });
+  const allPurgeJob = await claimTrashPurgeJob();
+  const duplicateRequest = trash.purgeImages(
+    { scope: "selected", ids: [middle.id, newest.id] },
+    { signal: AbortSignal.abort(new Error("duplicate request disconnected")) }
+  );
+  await assert.rejects(duplicateRequest, /duplicate request disconnected/);
+  assert.deepEqual(
+    (await database.pool.query(
+      "SELECT target_id, idempotency_key FROM background_job WHERE type='trash.purge' AND target_id=ANY($1::text[]) ORDER BY target_id",
+      [[oldest.id, middle.id, newest.id]]
+    )).rows,
+    [oldest.id, middle.id, newest.id].sort().map((id) => ({ target_id: id, idempotency_key: `trash.purge:${id}` }))
+  );
+  assert.deepEqual(await trashMutations.restoreImages([middle.id]), {
+    requested: 1,
+    restored: 0,
+    ignored: 1,
+    results: [{ id: middle.id, status: "ignored" }]
+  });
+
+  const addedAfterCapture = await createTrashImage(0);
+  await finishTrashPurgeJob(allPurgeJob);
+  await finishTrashPurgeJob(await claimTrashPurgeJob());
+  await finishTrashPurgeJob(await claimTrashPurgeJob());
+  const allPurge = await allPurgePromise;
+  assert.deepEqual(allPurge, {
+    requested: 3,
+    queued: 3,
+    already_queued: 0,
+    deleted: 3,
+    remaining: 0,
+    ignored: 0
+  });
+  assert.deepEqual(
+    (await database.pool.query(
+      "SELECT id FROM metadata WHERE id=$1",
+      [addedAfterCapture.id]
+    )).rows,
+    [{ id: addedAfterCapture.id }],
+    "scope all 只处理事务快照，不包含之后进入回收站的图片"
+  );
+
+  const selectedPurgePromise = trash.purgeImages({
+    scope: "selected",
+    ids: [addedAfterCapture.id]
+  });
+  await finishTrashPurgeJob(await claimTrashPurgeJob());
+  const selectedPurge = await selectedPurgePromise;
+  assert.deepEqual(selectedPurge, {
+    requested: 1,
+    queued: 1,
+    already_queued: 0,
+    deleted: 1,
+    remaining: 0,
+    ignored: 0
+  });
+  const ignoredPurge = await trash.purgeImages({
+    scope: "selected",
+    ids: [foregroundImage]
+  });
+  assert.deepEqual(ignoredPurge, {
+    requested: 1,
+    queued: 0,
+    already_queued: 0,
+    deleted: 0,
+    remaining: 0,
+    ignored: 1
+  });
+
+  const failedItem = await createTrashImage(0);
+  const independentItem = await createTrashImage(0);
+  const failedPurgePromise = trash.purgeImages({
+    scope: "selected",
+    ids: [failedItem.id, independentItem.id]
+  });
+  const batchJobs = [await claimTrashPurgeJob(), await claimTrashPurgeJob()];
+  const failedJob = batchJobs.find((job) => job.target_id === failedItem.id);
+  const independentJob = batchJobs.find((job) => job.target_id === independentItem.id);
+  assert.ok(failedJob);
+  assert.ok(independentJob);
+  const originalFailedRemove = localAccess.driver.removeObjects.bind(
+    localAccess.driver
+  );
+  let failedRemoveObserved = false;
+  localAccess.driver.removeObjects = async (objects, options) => {
+    if (objects.some((object) => object.key === failedItem.objectKey)) {
+      failedRemoveObserved = true;
+      throw new Error("injected trash purge driver failure");
+    }
+    return originalFailedRemove(objects, options);
+  };
+  let failedJobError: Error | undefined;
+  try {
+    await assert.rejects(
+      trashPurgeJob.handleTrashPurgeJob(failedJob, new AbortController().signal),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        failedJobError = error;
+        return true;
       }
     );
-    await finishTrashPurgeJob(await claimTrashPurgeJob());
-    await database.pool.query(
-      "DELETE FROM background_job WHERE id=$1",
-      [retainedMoveHistoryJob]
-    );
-
+    assert.equal(failedRemoveObserved, true);
   } finally {
-    sharedAppConfig.appConfig.trashBatchSize = previousTrashBatchSize;
+    localAccess.driver.removeObjects = originalFailedRemove;
   }
+  await finishTrashPurgeJob(independentJob);
+  assert.equal(
+    await jobs.markBackgroundJobFailed(failedJob, failedJobError),
+    true
+  );
+  assert.deepEqual(await failedPurgePromise, {
+    requested: 2,
+    queued: 2,
+    already_queued: 0,
+    deleted: 1,
+    remaining: 1,
+    ignored: 0
+  });
+  const retryingTrashCheck = await databaseCheck.checkTrash();
+  assert.equal(retryingTrashCheck.purge_pending_count, 1);
+  assert.equal(retryingTrashCheck.job_counts.retrying, 1);
+  assert.equal(retryingTrashCheck.jobs.find((job) => job.id === failedJob.id)?.target_id, failedItem.id);
+  const adminRead = await import("../../../../packages/server/src/images/read-models/admin-images.ts");
+  const detail = (await adminRead.listAdminImages({ status: "deleted", page: 1, limit: 20 })).items.find((item) => item.id === failedItem.id);
+  assert.equal(detail?.purge_pending, true);
+  assert.equal(
+    retryingTrashCheck.jobs.find((job) => job.id === failedJob.id)?.state,
+    "retrying"
+  );
+  assert.deepEqual(await trash.purgeImages({
+    scope: "selected",
+    ids: [failedItem.id]
+  }), {
+    requested: 1,
+    queued: 0,
+    already_queued: 1,
+    deleted: 0,
+    remaining: 1,
+    ignored: 0
+  });
+  assert.deepEqual(await trashMutations.restoreImages([failedItem.id]), {
+    requested: 1,
+    restored: 0,
+    ignored: 1,
+    results: [{ id: failedItem.id, status: "ignored" }]
+  });
+  await database.pool.query(
+    "UPDATE background_job SET next_retry_at=NULL "
+      + "WHERE id=$1",
+    [failedJob.id]
+  );
+  const exhaustedTrashCheck = await databaseCheck.checkTrash();
+  assert.equal(exhaustedTrashCheck.job_counts.exhausted, 1);
+  assert.deepEqual(
+    await trashPurgeMaintenance.maintainTrashPurgeTasks(),
+    {
+      retried_jobs: 1,
+      repaired_jobs: 0
+    }
+  );
+  const renewedJob = await claimTrashPurgeJob();
+  assert.equal(renewedJob.id, failedJob.id);
+  assert.notEqual(renewedJob.execution_token, failedJob.execution_token);
+  await assert.rejects(trashPurgeJob.handleTrashPurgeJob(failedJob, new AbortController().signal), /ownership was lost/);
+  assert.equal(await jobs.markBackgroundJobSucceeded(failedJob), false);
+  assert.equal(await localAccess.driver.exists("full", failedItem.objectKey), true);
+  await finishTrashPurgeJob(renewedJob);
 
+  const succeededItem = await createTrashImage(0);
+  const succeededJob = randomUUID();
+  await database.pool.query(
+    "INSERT INTO background_job(id,type,status,target_id,idempotency_key,updated_at) VALUES($1,'trash.purge','succeeded',$2,$3,now()-interval '30 days')",
+    [succeededJob, succeededItem.id, `trash.purge:${succeededItem.id}`]
+  );
+  assert.deepEqual(await jobs.cleanupBackgroundJobHistory(), []);
+  const succeededCheck = await databaseCheck.checkTrash();
+  assert.equal(succeededCheck.issues.find((issue) => issue.kind === "succeeded_target_remaining")?.count, 1);
+  assert.deepEqual(await trashMutations.restoreImages([succeededItem.id]), {
+    requested: 1, restored: 0, ignored: 1,
+    results: [{ id: succeededItem.id, status: "ignored" }]
+  });
+  assert.deepEqual(await trashPurgeMaintenance.maintainTrashPurgeTasks(), {
+    retried_jobs: 0, repaired_jobs: 1
+  });
+  await finishTrashPurgeJob(await claimTrashPurgeJob());
+
+  // A task pointing at a ready image must not authorize physical deletion.
+  const readyJobId = randomUUID();
+  await database.pool.query(
+    "INSERT INTO background_job(id,type,target_id,idempotency_key) VALUES($1,'trash.purge',$2,$3)",
+    [readyJobId, foregroundImage, `trash.purge:${foregroundImage}`]
+  );
+  const readyJob = await claimTrashPurgeJob();
+  await assert.rejects(trashPurgeJob.handleTrashPurgeJob(readyJob, new AbortController().signal), /not in the trash/);
+  const readyCheck = await databaseCheck.checkTrash();
+  assert.equal(readyCheck.issues.find((issue) => issue.kind === "target_not_deleted")?.count, 1);
+  assert.equal((await database.pool.query("SELECT status FROM metadata WHERE id=$1", [foregroundImage])).rows[0]?.status, "ready");
+  await database.pool.query("DELETE FROM background_job WHERE id=$1", [readyJobId]);
+
+  const referencedHistoryItem = await createTrashImage(0);
+  const referencedHistoryJob = randomUUID();
+  const unreferencedHistoryJob = randomUUID();
+  const retainedMoveHistoryJob = randomUUID();
+  await database.pool.query(
+    "INSERT INTO background_job("
+      + "id, type, status, target_id, payload, error, next_retry_at, updated_at"
+      + ") VALUES "
+      + "($1, 'trash.purge', 'failed', $6, '{}'::jsonb, 'exhausted', NULL, "
+      + "now() - ($4 || ' seconds')::interval), "
+      + "($2, 'trash.purge', 'failed', $7, '{}'::jsonb, 'orphaned', NULL, "
+      + "now() - ($4 || ' seconds')::interval), "
+      + "($3, 'move.cleanup', 'failed', 'retained-history', $5::jsonb, "
+      + "'protected cleanup receipt', NULL, "
+      + "now() - ($4 || ' seconds')::interval)",
+    [
+      referencedHistoryJob,
+      unreferencedHistoryJob,
+      retainedMoveHistoryJob,
+      sharedAppConfig.appConfig.backgroundJob.failedRetentionSeconds + 1,
+      JSON.stringify({ retain_exhausted: true }),
+      referencedHistoryItem.id,
+      randomUUID()
+    ]
+  );
+  assert.deepEqual(await jobs.cleanupBackgroundJobHistory(), [
+    { status: "failed", count: 1 }
+  ]);
+  assert.deepEqual(
+    (await database.pool.query(
+      "SELECT id FROM background_job WHERE id=ANY($1::uuid[]) ORDER BY id",
+      [[
+        referencedHistoryJob,
+        unreferencedHistoryJob,
+        retainedMoveHistoryJob
+      ]]
+    )).rows.map((row) => row.id),
+    [referencedHistoryJob, retainedMoveHistoryJob].sort(),
+    "无引用 purge 耗尽任务应按保留期裁剪，有引用 purge 与 move.cleanup 回执必须继续保留"
+  );
+  assert.deepEqual(
+    await trashPurgeMaintenance.maintainTrashPurgeTasks(),
+    {
+      retried_jobs: 1,
+      repaired_jobs: 0
+    }
+  );
+  await finishTrashPurgeJob(await claimTrashPurgeJob());
+  await database.pool.query(
+    "DELETE FROM background_job WHERE id=$1",
+    [retainedMoveHistoryJob]
+  );
 });
