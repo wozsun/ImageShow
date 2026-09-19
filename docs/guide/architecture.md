@@ -109,6 +109,8 @@ accepted-order 水位选成员；属性动作在最新 canonical 上 CAS 合并�
 - 设备、明暗、主题、标签、作者索引以及组合筛选和动态统计是带生命周期的派生结果；
 - 派生结果按需构建，受数量、成员数、工作量、并发和 TTL 上限约束；缺失、过期、损坏
   或超限只让当前读取回源 PostgreSQL，不会把派生结果当成真相；
+- 完整设备筛选直接复用设备属性索引，设备加亮度使用轴索引；分类组合复用相应属性输入。
+  属性构建按核心计数及源读取限制成员规模，不发布截断结果，详见[随机图缓存说明](random-api.md)；
 - 核心投影损坏、revision 不一致或当前 Redis 连接更换会立即关闭 Redis 读门。协调器只
   保留 `unavailable` / `rebuilding` / `ready` / `stopped` 四态和一个活动任务：先在同一
   写栅栏内核对 PostgreSQL revision 与 Redis 已应用 revision，只有失配或完整性失败才

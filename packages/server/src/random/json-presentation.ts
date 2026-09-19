@@ -1,6 +1,7 @@
 import { microsecondsTimestamp } from "../core/microseconds.ts";
 import type {
-  RandomImageJsonItemDto
+  RandomImageJsonItemDto,
+  RandomImageSize
 } from "@imageshow/shared/browser";
 import { publicImageUrlsForConfig } from "../storage/objects/public-urls.ts";
 import { getStorageBackendConfigs } from "../storage/backends/registry.ts";
@@ -8,7 +9,7 @@ import type { SelectedReadyImage } from "./selection-model.ts";
 
 export async function presentRandomJsonItems(
   picked: SelectedReadyImage[],
-  signal?: AbortSignal
+  { signal, size }: { signal?: AbortSignal; size?: RandomImageSize | null } = {}
 ): Promise<RandomImageJsonItemDto[]> {
   signal?.throwIfAborted();
   if (!picked.length) return [];
@@ -16,11 +17,16 @@ export async function presentRandomJsonItems(
   return picked.map((item) => {
     signal?.throwIfAborted();
     const urls = publicImageUrlsForConfig(item, configs.get(item.storage_slug)!);
+    const selectedUrls = size === "full"
+      ? { object_url: urls.object_url }
+      : size === "thumb"
+        ? { thumb_url: urls.thumb_url }
+        : urls;
     return {
       id: item.id,
       title: item.title,
       author: item.author,
-      ...urls,
+      ...selectedUrls,
       device: item.device,
       brightness: item.brightness,
       theme: item.theme,

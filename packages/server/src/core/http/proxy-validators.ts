@@ -1,12 +1,6 @@
-import { hash } from "node:crypto";
-import { ifNoneMatchCandidates } from "./validators.ts";
+import { entityTagDigest, ifNoneMatchCandidates } from "./validators.ts";
 
-const proxyEtagPrefix = "imageshow-proxy";
 const maxUpstreamEtagBytes = 512;
-
-function originalUrlHash(originalUrl: string) {
-  return hash("sha256", originalUrl, "base64url");
-}
 
 function safeUpstreamEtag(value: string | null | undefined) {
   const candidate = value?.trim() ?? "";
@@ -35,13 +29,13 @@ export function proxyEtagForUpstream(
   const safeEtag = safeUpstreamEtag(upstreamEtag);
   if (!safeEtag) return undefined;
   const encoded = Buffer.from(safeEtag).toString("base64url");
-  return `W/"${proxyEtagPrefix}.${originalUrlHash(originalUrl)}.${encoded}"`;
+  return `W/"p.${entityTagDigest(originalUrl)}.${encoded}"`;
 }
 
 function upstreamEtagFromProxy(originalUrl: string, proxyEtag: string) {
-  const match = /^(?:W\/)?"imageshow-proxy\.([A-Za-z0-9_-]{43})\.([A-Za-z0-9_-]+)"$/u
+  const match = /^(?:W\/)?"p\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]+)"$/u
     .exec(proxyEtag);
-  if (!match || match[1] !== originalUrlHash(originalUrl)) return undefined;
+  if (!match || match[1] !== entityTagDigest(originalUrl)) return undefined;
   try {
     const decoded = Buffer.from(match[2]!, "base64url").toString("utf8");
     if (Buffer.from(decoded).toString("base64url") !== match[2]) return undefined;

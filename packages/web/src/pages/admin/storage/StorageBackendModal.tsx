@@ -138,7 +138,7 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
   };
   return (
     <DialogFrame
-      className="modal edit-modal"
+      className="modal edit-modal storage-edit-overlay"
       titleId={titleId}
       descriptionId={isCreateForm ? undefined : descriptionId}
       busy={formBusy}

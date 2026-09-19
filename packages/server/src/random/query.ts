@@ -5,6 +5,8 @@ import {
   TagFilterError,
   type TagExpression,
   randomMethods as randomMethodValues,
+  randomImageSizes,
+  type RandomImageSize,
   type RandomDefaultMethod,
   type RandomMethod
 } from "@imageshow/shared/browser";
@@ -23,6 +25,7 @@ export type RandomSelectorGroup = {
 
 export type ParsedRandomQuery = {
   mode: RandomMethod;
+  size: RandomImageSize | null;
   limit: number;
   ids: string[];
   seed: string | null;
@@ -45,6 +48,7 @@ export type RandomSelectorMaps = {
 
 const randomRequestDevices: ReadonlySet<string> = new Set(randomRequestDeviceValues);
 const randomMethods: ReadonlySet<string> = new Set(randomMethodValues);
+const randomSizes: ReadonlySet<string> = new Set(randomImageSizes);
 const randomAllowedQueryValues = [
   "device",
   "brightness",
@@ -54,6 +58,7 @@ const randomAllowedQueryValues = [
   "id",
   "seed",
   "mode",
+  "size",
   "limit"
 ] as const;
 const randomAllowedQuery = new Set<string>(randomAllowedQueryValues);
@@ -62,6 +67,7 @@ const randomSingleValueQuery = new Set([
   "brightness",
   "seed",
   "mode",
+  "size",
   "limit"
 ]);
 const randomBrightnessSet = new Set(randomBrightnesses);
@@ -165,6 +171,7 @@ function targetedIdCombinationError(query: URLSearchParams) {
     [...query.keys()].filter((key) => (
       key !== "id"
       && key !== "mode"
+      && key !== "size"
       && key !== "limit"
       && !(key === "device" && query.get(key)?.toLowerCase() === "auto")
     ))
@@ -175,7 +182,7 @@ function targetedIdCombinationError(query: URLSearchParams) {
     {
       field: "id",
       incompatible,
-      hint: "id can only be combined with device=auto, mode, and limit"
+      hint: "id can only be combined with device=auto, mode, size, and limit"
     }
   );
 }
@@ -312,6 +319,13 @@ export function parseRandomQuery(
       { field: "mode" }
     );
   }
+  const size = query.get("size")?.toLowerCase() ?? null;
+  if (size !== null && !randomSizes.has(size)) {
+    return apiErrorResponse(
+      { status: 400, message: "Bad Request: Invalid size" },
+      { field: "size", allowedValues: randomImageSizes }
+    );
+  }
   const limit = parseJsonLimit(query, explicitMode);
   if (limit instanceof Response) return limit;
   const seed = parseSeed(query, limit);
@@ -323,6 +337,7 @@ export function parseRandomQuery(
     if (ids instanceof Response) return ids;
     return {
       mode: (explicitMode ?? defaultMode) as RandomMethod,
+      size: size as RandomImageSize | null,
       limit,
       ids,
       seed,
@@ -370,6 +385,7 @@ export function parseRandomQuery(
 
   return {
     mode: (explicitMode ?? defaultMode) as RandomMethod,
+    size: size as RandomImageSize | null,
     limit,
     ids: [],
     seed,

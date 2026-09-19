@@ -2162,6 +2162,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   const omittedDevice = parseQuery("");
   const explicitAuto = parseQuery("device=auto");
   assert.equal(omittedDevice.device, "auto");
+  assert.equal(omittedDevice.size, null);
   assert.equal(explicitAuto.device, "auto");
   const normalizedOmitted = normalizeRandomQuery(omittedDevice, maps);
   const normalizedAuto = normalizeRandomQuery(explicitAuto, maps);
@@ -2174,6 +2175,14 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
     assert.fail("auto 随机查询未完成归一化");
   }
   assert.equal(normalizedOmitted.signature, normalizedAuto.signature);
+  for (const size of ["thumb", "full"] as const) {
+    const sized = normalizeRandomQuery(parseQuery(`size=${size.toUpperCase()}`), maps);
+    assert.ok(!(sized instanceof Response));
+    assert.equal(sized.size, size);
+    assert.equal(sized.signature, normalizedOmitted.signature, "size does not partition selection or dedupe");
+    assert.equal(parseQuery(`id=${imageId}&size=${size}`).size, size);
+    assert.equal(parseQuery(`seed=synthetic-seed&size=${size}`).size, size);
+  }
   assert.equal(
     normalizedOmitted.signature,
     '{"d":"","b":"","t":{"include":[],"exclude":[]},'
@@ -2242,7 +2251,9 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
     "id=00000000008d&brightness=dark",
     "limit=2",
     "unknown=value",
-    "device=invalid"
+    "device=invalid",
+    "size=", "size=%20", "size=small", "size=%20full", "size=thumb&size=thumb",
+    "size=full&size=thumb", "size=thumb&limit=2", `size=full&id=${imageId}&seed=synthetic-seed`
   ]) {
     const result = parseRandomQuery(
       new URL("https://img.example.com/random?" + search),

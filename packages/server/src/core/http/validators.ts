@@ -1,7 +1,14 @@
+import { createHash } from "node:crypto";
+
 type HttpResponseValidators = {
   etag?: string;
   lastModified?: string;
 };
+
+/** Compact opaque cache identity: 128 bits of SHA-256, encoded in 22 characters. */
+export function entityTagDigest(value: string) {
+  return createHash("sha256").update(value).digest().subarray(0, 16).toString("base64url");
+}
 
 export function staticResponseEtag(headers: Headers) {
   const modified = headers.get("Last-Modified");

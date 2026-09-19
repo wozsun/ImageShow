@@ -172,10 +172,27 @@ S3 直链规则，随机 JSON 也按批次投影。公开列表、详情、资�
 再以请求取消信号读取注册表；注册表冷加载按 revision 合并，并拥有独立的有界数据库作用域。
 配置快照缓存 24 小时，应用内配置写入主动失效，具体规则见[存储说明](storage.md#注册表缓存)。
 
+`random/query.ts` 校验 `size=thumb|full` 并保留未指定状态，`selection.ts` 仅传递此输出选项，
+不把它加入筛选、固定 seed 或近期去重签名。`routes/random.ts` 按尺寸选用现有对象读取与 URL
+生成能力；`random/json-presentation.ts` 在同一批次投影中按需提供全图、缩略图或两种 URL。
+shared 随机 JSON DTO 保证至少包含一种 URL；Web 的 `lib/gallery/random-url.ts` 可按显式输入追加
+尺寸参数，未指定时保留 API 的缺省行为。
+
 `core/http/content-response.ts` 同时维护字符串正文、内容弱 ETag 与 UTF-8 字节长度。
+应用自生成摘要由 `validators.ts` 集中截取 SHA-256 的前 128 位并编码为 22 位 Base64URL；
+HTML / JSON 的弱 ETag 连同标记与引号共 26 个字符。本地对象的强 ETag 对设备、inode、大小及
+纳秒级修改 / 状态时间共同取摘要，使用 `l.` 前缀；外链代理使用 `p.`、来源 URL 摘要与可还原的
+上游 ETag，保留来源隔离和上游条件请求。S3 原始 ETag 与静态文件的编码维度仍由各自入口处理。
 200 响应携带准确 `Content-Length`，304 不带正文或长度；API 压缩中间件直接使用已知长度，
 选用压缩后删除原长度。只有符合压缩条件且长度未知的流才经 `compression-threshold.ts`
 按块探测与重放，不将此入口扩展为所有 `c.json` 的响应所有者。
+
+`routes/spa.ts` 用已发布 RuntimeConfig 的对象身份复用最近一份最终 HTML 表示；相同快照的
+后续请求直接复用正文、弱 ETag 与字节长度。保存、导入或重载发布新快照后，下一次文档请求
+重新投影公开配置并生成 HTML；若正文未变，继续复用原表示。模板只读取一次，缓存只保留
+一个快照引用及其表示，不保存配置历史。`If-None-Match` 在取得当前表示后判断；匹配时返回
+无正文的 304，相同配置快照下的条件请求也跳过 HTML 生成。路由可用性、嵌入父页面策略、CSP、Cache-Control
+和条件响应仍在各请求中处理，完整内联公开配置与浏览器启动回退沿用现有契约。
 
 `images/original-link.ts` 统一生成 `/images/original/<id>`，正常图片、后台及回收站均使用此公开
 缓存入口；资源处理器不读会话或按钮开关，直连 302 使用公开短缓存，代理继承源站策略或使用
@@ -209,6 +226,10 @@ Content-MD5 校验上传，其余 S3 与 local 使用写后回读。跨后端流
 `backends/read-model.ts` 将结果投影为管理员 DTO 的 `content_md5: boolean | null`，
 `StorageBackendCard.tsx` 通过同一网格列将默认按钮与其下方的能力文字居中对齐；`StorageSettings.tsx` 通过已有列表查询
 刷新状态，连接测试结束只失效该查询。
+`StorageBackendModal.tsx` 的新建与编辑表单在 760px 及以下填满共享弹窗层，复用其动态视口高度；
+标题和操作区不收缩，字段区独立滚动，边缘留出安全区，触控按钮保持至少 44px 高。
+对应几何由按需加载的 `styles/admin/storage.css` 拥有，桌面端继续使用原有居中表单。
+宽屏居中表单也按动态视口和弹窗层可用高度共同限高，避免矮横屏超出外层裁切边界。
 
 `routes/` 当前保留 18 个直属文件。`admin-vocabulary.ts` 在一个 HTTP 能力边界中声明 tags、
 themes 与 authors 三组同构 CRUD，通用 registrar 为文件内私有实现；每组仍分别注入自己的
@@ -542,6 +563,12 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
 `ordered-window.ts`、`random-sampler.ts`、`rebuild.ts`、状态观测和 coordinator 等横切模块
 继续留在根层。`coordinator-machine.ts` 仍独占 phase、pending refresh、active task / abort、
 mutation hold 与 rebuild requirement；归组没有增加第二个状态机或装配实例。
+
+`indexes/` 将完整设备筛选解析为 `device:pc / device:mb` 属性索引，设备加亮度继续使用轴索引；
+设备与其他分类组合时复用同一个设备输入。设备索引共用属性的按需 SQL 分批构建、单飞、
+revision / 实例校验、TTL 与派生注册表，不进入核心重建或增量投影。属性构建以核心计数
+提前拒绝超过单集合容量的任务，并在源读取中再次限制实际成员数；超限不发布截断索引。
+`keys.ts` 为设备与轴提供固定后缀集合，`derived/touch.ts` 将同一集合传入领域 Lua 的注册表校验。
 
 `shared/browser/images.ts` 统一派生稳定对象键与成品宽高设备分类，后台编辑 DTO 传递 ext，
 编辑器仅在副标题 / tooltip 展示边界派生相同文本；公共卡片不增加字段。prepared 保留亮度检测值，

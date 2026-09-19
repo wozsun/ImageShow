@@ -1471,7 +1471,7 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
     ttlSeconds: 300,
     maxResults: 50,
     attributeIndexPrefix: "derived:index:",
-    attributeAxisSuffixes: ["axis:pc:dark", "axis:mb:light"],
+    fixedAttributeSuffixes: ["axis:pc:dark", "axis:mb:light"],
     namedAttributeKinds: ["theme", "tag", "author"],
     attributeSlugMaxLength: 63,
     filterKeyPrefix: "derived:filter:",

@@ -102,12 +102,13 @@ export type PublicImageDetailResponseDto = {
   item: PublicImageDetailDto;
 };
 
+export const randomImageSizes = ["thumb", "full"] as const;
+export type RandomImageSize = (typeof randomImageSizes)[number];
+
 export type RandomImageJsonItemDto = {
   id: string;
   title: string;
   author: string;
-  object_url: string;
-  thumb_url: string;
   device: Device;
   brightness: Brightness;
   theme: string | null;
@@ -115,7 +116,10 @@ export type RandomImageJsonItemDto = {
   width: number;
   height: number;
   image_time: string;
-};
+} & (
+  | { object_url: string; thumb_url?: string }
+  | { object_url?: never; thumb_url: string }
+);
 
 export type RandomImageJsonResponseDto = {
   count: number;

@@ -1,20 +1,20 @@
 import { readyImageFilterOperations } from "./filter-operations.ts";
 
 export const READY_IMAGE_DERIVED_WORK_POLICY = Object.freeze({
-  maxMaterializedSourceMembersPerOperation: 200_000,
-  maxCardinalitySourceMembersPerOperation: 200_000,
-  maxSourceMembersPerFilterBuild: 300_000,
-  maxExpectedResultMembers: 100_000,
+  maxMaterializedSourceMembersPerOperation: 400_000,
+  maxCardinalitySourceMembersPerOperation: 400_000,
+  maxSourceMembersPerFilterBuild: 600_000,
+  maxExpectedResultMembers: 200_000,
   maxSetOperationOperands: 8,
   maxSetOperationsPerFilterBuild: 12,
   maxIntersectionDifferenceOperations: 8,
-  maxDynamicStatsDimensions: 64,
-  maxStatsSourceMembers: 2_000_000,
-  maxStatsExpectedMembers: 500_000,
-  maxConcurrentFilterBuilds: 4,
+  maxDynamicStatsDimensions: 512,
+  maxStatsSourceMembers: 4_000_000,
+  maxStatsExpectedMembers: 1_000_000,
+  maxConcurrentFilterBuilds: 6,
   maxConcurrentLargeFilterBuilds: 1,
   largeFilterSourceMembers: 100_000,
-  maxConcurrentStatsBuilds: 2,
+  maxConcurrentStatsBuilds: 3,
   maxConcurrentLargeStatsBuilds: 1,
   largeStatsExpectedMembers: 250_000
 });

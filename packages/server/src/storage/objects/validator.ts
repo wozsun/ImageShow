@@ -1,3 +1,5 @@
+import { entityTagDigest } from "../../core/http/validators.ts";
+
 export function normalizeObjectEtag(value: string | null | undefined) {
   const etag = value?.trim() ?? "";
   return /^(?:W\/)?"[^"\r\n]*"$/.test(etag) ? etag : undefined;
@@ -10,5 +12,6 @@ export function localObjectEtag(stats: {
   mtimeNs: bigint;
   ctimeNs: bigint;
 }) {
-  return `"local-${stats.dev.toString(16)}-${stats.ino.toString(16)}-${stats.size.toString(16)}-${stats.mtimeNs.toString(16)}-${stats.ctimeNs.toString(16)}"`;
+  const identity = [stats.dev, stats.ino, stats.size, stats.mtimeNs, stats.ctimeNs].join(":");
+  return `"l.${entityTagDigest(identity)}"`;
 }

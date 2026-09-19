@@ -1,3 +1,4 @@
+import { brightnesses } from "@imageshow/shared/browser";
 import { readyImageFilterOperations } from "../derived/filter-operations.ts";
 import { logger } from "../../../core/logger.ts";
 import { getRedisConnectionState, redis } from "../../../core/redis/client.ts";
@@ -45,9 +46,17 @@ function selectorComponents(
 function filterComponents(plan: ImageFilterPlan) {
   const positive: string[][] = [];
   if (!imageFilterPlanHasAllAxes(plan)) {
-    positive.push(plan.axes.map((axis) => (
-      readyImageAttributeIndexKey({ kind: "axis", ...axis })
-    )));
+    const device = plan.axes[0]?.device;
+    const wholeDevice = device
+      && plan.axes.length === brightnesses.length
+      && brightnesses.every((brightness) => plan.axes.some((axis) => (
+        axis.device === device && axis.brightness === brightness
+      )));
+    positive.push(wholeDevice
+      ? [readyImageAttributeIndexKey({ kind: "device", value: device })]
+      : plan.axes.map((axis) => (
+          readyImageAttributeIndexKey({ kind: "axis", ...axis })
+        )));
   }
   const theme = selectorComponents(plan.theme, (value) => (
     readyImageAttributeIndexKey({ kind: "theme", value })

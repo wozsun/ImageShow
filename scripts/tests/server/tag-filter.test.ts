@@ -20,8 +20,17 @@ import {
 } from "../../../packages/server/src/images/ready-cache/derived/filter-operations.ts";
 import {
   assessReadyImageFilterWork,
+  assessReadyImageStatsWork,
+  tryAcquireReadyImageFilterBuildSlot,
+  tryAcquireReadyImageStatsBuildSlot,
   READY_IMAGE_DERIVED_WORK_POLICY
 } from "../../../packages/server/src/images/ready-cache/derived/work-policy.ts";
+import { resolveDirectReadyImageFilterKey } from "../../../packages/server/src/images/ready-cache/indexes/filter-builder.ts";
+import {
+  READY_IMAGE_ALL_INDEX_KEY,
+  readyImageAttributeIndexKey,
+  readyImageAttributeIndexSpec
+} from "../../../packages/server/src/images/ready-cache/keys.ts";
 import {
   normalizeRandomQuery,
   parseRandomQuery
@@ -193,4 +202,67 @@ test("[Server/标签] 有限集合运算与图片资格一致且重叠分支只�
     tagClauses: [Array(READY_IMAGE_DERIVED_WORK_POLICY.maxSetOperationOperands + 1).fill(8)],
     exclusions: []
   }).admitted, false);
+});
+
+test("[Server/筛选] 完整设备候选复用属性索引，亮度和组合条件保留独立语义", () => {
+  for (const device of ["pc", "mb"] as const) {
+    const spec = { kind: "device", value: device } as const;
+    const key = readyImageAttributeIndexKey(spec);
+    assert.deepEqual(readyImageAttributeIndexSpec(key), spec);
+    assert.equal(resolveDirectReadyImageFilterKey(createImageFilterPlan({ devices: [device] })), key);
+    for (const brightness of ["dark", "light"] as const) {
+      assert.equal(resolveDirectReadyImageFilterKey(createImageFilterPlan({ devices: [device], brightnesses: [brightness] })),
+        readyImageAttributeIndexKey({ kind: "axis", device, brightness }));
+    }
+    assert.equal(resolveDirectReadyImageFilterKey(createImageFilterPlan({ devices: [device], tag: { anyOf: [["tag-a"]] } })), null);
+  }
+  assert.equal(resolveDirectReadyImageFilterKey(createImageFilterPlan({})), READY_IMAGE_ALL_INDEX_KEY);
+  assert.equal(resolveDirectReadyImageFilterKey(createImageFilterPlan({ brightnesses: ["light"] })), null);
+  for (const value of ["auto", "all", "other", "pc:light", ""]) {
+    assert.equal(readyImageAttributeIndexSpec(`imageshow:cache:images:derived:index:device:${value}`), null);
+  }
+});
+
+test("[Server/筛选] 统计维度与成员工作量在预算内准入，超限拒绝", () => {
+  const policy = READY_IMAGE_DERIVED_WORK_POLICY;
+  assert.equal(assessReadyImageStatsWork({ dynamicDimensions: policy.maxDynamicStatsDimensions, intersections: [] }).admitted, true);
+  assert.equal(assessReadyImageStatsWork({ dynamicDimensions: policy.maxDynamicStatsDimensions + 1, intersections: [] }).admitted, false);
+  assert.equal(assessReadyImageStatsWork({ dynamicDimensions: 1, intersections: [{ baseCount: policy.maxCardinalitySourceMembersPerOperation, candidateCount: 1 }] }).admitted, false);
+  const count = Math.floor(policy.maxExpectedResultMembers / 2);
+  assert.equal(assessReadyImageFilterWork({ itemCount: count * 4, positive: [[count, count]], exclusions: [] }).admitted, true);
+  assert.equal(assessReadyImageFilterWork({ itemCount: count * 4, positive: [[count, count], [count, count]], exclusions: [] }).admitted, false);
+  assert.equal(assessReadyImageStatsWork({ dynamicDimensions: 1, intersections: [{ baseCount: -1, candidateCount: 1 }] }).admitted, false);
+});
+
+test("[Server/筛选] 构建槽位有界，大任务独占且重复释放不扩大并发", () => {
+  const policy = READY_IMAGE_DERIVED_WORK_POLICY;
+  const small = { operationCount: 1, intersectionDifferenceOperations: 0, totalSourceMembers: 2,
+    peakSourceMembers: 2, totalExpectedMembers: 1, peakExpectedMembers: 1, peakOperands: 2 };
+  for (const [acquire, limit, large] of [
+    [tryAcquireReadyImageFilterBuildSlot, policy.maxConcurrentFilterBuilds, { ...small, totalSourceMembers: policy.largeFilterSourceMembers }],
+    [tryAcquireReadyImageStatsBuildSlot, policy.maxConcurrentStatsBuilds, { ...small, totalExpectedMembers: policy.largeStatsExpectedMembers }]
+  ] as const) {
+    const releases: Array<() => void> = [];
+    try {
+      for (let index = 0; index < limit; index += 1) {
+        const release = acquire(small);
+        assert.ok(release);
+        releases.push(release);
+      }
+      assert.equal(acquire(small), null);
+      releases[0]!();
+      releases[0]!();
+      const replacement = acquire(large);
+      assert.ok(replacement);
+      releases.push(replacement);
+      assert.equal(acquire(small), null);
+      releases[1]!();
+      assert.equal(acquire(large), null, "one large task may remain active alongside smaller tasks");
+    } finally {
+      releases.forEach((release) => release());
+    }
+    const restored = acquire(small);
+    assert.ok(restored);
+    restored();
+  }
 });

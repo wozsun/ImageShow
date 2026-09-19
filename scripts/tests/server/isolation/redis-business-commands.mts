@@ -84,7 +84,7 @@ const readyCacheRedisClient = await import(
   const statsPrefix = businessPrefix + "derived:stats:";
   const validationArguments = [
     attributePrefix,
-    "axis:pc:dark,axis:pc:light,axis:mb:dark,axis:mb:light",
+    "device:pc,device:mb,axis:pc:dark,axis:pc:light,axis:mb:dark,axis:mb:light",
     "theme,tag,author",
     "63",
     filterPrefix,
@@ -115,8 +115,8 @@ const readyCacheRedisClient = await import(
   };
 
   const indexedRegistry = registryKeys("indexed");
-  const indexedKey = attributePrefix + "theme:night";
-  const indexedMetaKey = businessPrefix + "derived:index-meta:theme:night";
+  const indexedKey = attributePrefix + "device:pc";
+  const indexedMetaKey = businessPrefix + "derived:index-meta:device:pc";
   const indexedToken = "a".repeat(32);
   const indexedNow = "2026-08-21T00:00:00.000Z";
   await installRegistryMember(

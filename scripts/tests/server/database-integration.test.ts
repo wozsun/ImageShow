@@ -35,6 +35,21 @@ import {
 const isolationRoot = resolve(import.meta.dirname, "isolation");
 const storageIngestionScenarios = [
   {
+    id: "derived-cache-budgets",
+    name: "派生缓存的字节上限、活跃组合淘汰、成员预算和滑动续期",
+    script: join(isolationRoot, "derived-cache-budgets.mts")
+  },
+  {
+    id: "random-size",
+    name: "随机尺寸的 GET、HEAD、跳转、JSON 与 Local/S3 对象选择",
+    script: join(isolationRoot, "random-size.mts")
+  },
+  {
+    id: "device-index",
+    name: "设备派生索引复用、续期、变更失效与有界回源",
+    script: join(isolationRoot, "device-index.mts")
+  },
+  {
     id: "ready-cache-recovery",
     name: "数据库连接与恢复任务双失败后自动重新开放有效图片缓存",
     script: join(isolationRoot, "ready-cache-recovery.mts")

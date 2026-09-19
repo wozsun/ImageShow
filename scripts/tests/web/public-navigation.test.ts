@@ -616,6 +616,14 @@ test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前�
     author: "Alice",
     mode: "json"
   }), "https://img.example.com/random?device=pc&theme=!archive,stage&author=alice&tag=live&mode=json");
+  for (const size of ["thumb", "full"] as const) {
+    const url = new URL(buildRandomUrl({
+      origin: "https://img.example.com", device: "all", brightness: "random",
+      theme: "", tag: "", author: "", mode: "proxy", size
+    }));
+    assert.equal(url.searchParams.get("size"), size);
+    assert.equal(url.searchParams.get("mode"), "proxy");
+  }
   assert.equal(buildRandomUrl({
     origin: "https://img.example.com",
     device: galleryRandomRequestDevice(""),

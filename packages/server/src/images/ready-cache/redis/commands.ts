@@ -38,7 +38,7 @@ export type RedisDerivedRegistryCommandConfig = {
   ttlSeconds: number;
   maxResults: number;
   attributeIndexPrefix: string;
-  attributeAxisSuffixes: readonly string[];
+  fixedAttributeSuffixes: readonly string[];
   namedAttributeKinds: readonly string[];
   attributeSlugMaxLength: number;
   filterKeyPrefix: string;
@@ -66,7 +66,7 @@ function derivedRegistryValidationArguments(
 ) {
   return [
     config.attributeIndexPrefix,
-    config.attributeAxisSuffixes.join(","),
+    config.fixedAttributeSuffixes.join(","),
     config.namedAttributeKinds.join(","),
     String(config.attributeSlugMaxLength),
     config.filterKeyPrefix,

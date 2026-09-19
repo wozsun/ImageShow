@@ -1,5 +1,5 @@
 import { hash } from "node:crypto";
-import type { RandomMethod } from "@imageshow/shared/browser";
+import type { RandomImageSize, RandomMethod } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { resolveAuthorTermMap } from "../authors/query.ts";
@@ -29,6 +29,7 @@ import { pool } from "../core/database/pools.ts";
 
 export type RandomImageSelection = {
   mode: RandomMethod;
+  size: RandomImageSize | null;
   items: SelectedReadyImage[];
 };
 
@@ -58,7 +59,7 @@ export async function selectRandomImages(
     );
     return items instanceof Response
       ? items
-      : { mode: parsed.mode, items };
+      : { mode: parsed.mode, size: parsed.size, items };
   }
 
   const [themeMap, tagMap, authorMap] = await Promise.all([
@@ -137,7 +138,7 @@ export async function selectRandomImages(
       items.map((item) => item.id)
     );
   }
-  return { mode: query.mode, items };
+  return { mode: query.mode, size: query.size, items };
 }
 
 async function resolveSelectorMap(

@@ -896,7 +896,7 @@ pointerup 直接提交关闭；桌面标题栏、键盘、Escape 和背景路径
 滚动和焦点契约。它不具备物理 iPhone 的 Safari 浏览器栏与合成器环境，不能替代发布后的
 工具栏展开 / 收起、地址栏位置、0–200ms 立即手势、横竖屏和减少动态效果真机验收。
 
-随机图的查询、去重、`proxy` / `redirect` / `json` 返回方式和 PostgreSQL 降级见
+随机图的查询、去重、`size` 尺寸选择、`proxy` / `redirect` / `json` 返回方式和 PostgreSQL 降级见
 [随机图 API](./random-api.md)。
 
 ## 后台管理

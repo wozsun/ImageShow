@@ -64,7 +64,13 @@
   .storage-add-card { transition: none; }
   .storage-add-card:not(:disabled):hover { transform: none; }
 }
-.edit-modal form.storage-edit-modal { display: flex; flex-direction: column; overflow: hidden; }
+.edit-modal form.storage-edit-modal {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: min(92dvh, 100%);
+  overflow: hidden;
+}
 .storage-edit-modal .operation-body { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow: auto; }
 .storage-modal-left { display: flex; gap: 8px; margin-right: auto; }
 .storage-edit-modal footer { flex-wrap: wrap; row-gap: 10px; }
@@ -79,11 +85,33 @@
   line-height: 1.5;
 }
 @media (max-width: 760px) {
-  /* Preserve the storage editor's asymmetric action layout while the shared
-     operation-modal rule remains free of super-admin page selectors. */
-  .operation-modal.storage-edit-modal footer { column-gap: 16px; }
+  .modal.edit-modal.storage-edit-overlay { padding: 0; place-items: stretch; }
+  .edit-modal.storage-edit-overlay form.storage-edit-modal {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+  .storage-edit-modal > header,
+  .storage-edit-modal > footer { flex-shrink: 0; }
+  .storage-edit-modal > header {
+    padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
+  }
+  .storage-edit-modal > header h2 { font-size: 21px; }
+  .storage-edit-modal > header .close {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+  }
+  .storage-edit-modal > .operation-body {
+    padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
+  }
+  .operation-modal.storage-edit-modal > footer {
+    column-gap: 16px;
+    padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  }
   .operation-modal.storage-edit-modal footer button {
     flex: 0 1 auto;
-    min-height: 36px;
+    min-height: 44px;
   }
 }

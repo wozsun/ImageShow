@@ -7,7 +7,11 @@ import { execRedisPipeline } from "../../../core/redis/pipeline.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
 import { getReadyImageCacheCoordinatorStatus } from "../coordinator.ts";
 import { READY_IMAGE_DERIVED_CACHE_POLICY } from "../derived/policy.ts";
+import { parseNonNegativeInteger } from "../derived/registry-metadata.ts";
 import {
+  READY_IMAGE_DERIVED_INDEX_PREFIX,
+  READY_IMAGE_STATS_KEY,
+  readyImageAttributeIndexKey,
   readyImageAttributeIndexTemporaryKey,
   type ReadyImageAttributeIndexSpec
 } from "../keys.ts";
@@ -138,6 +142,10 @@ async function buildAttributeIndexSource(
       signal?.throwIfAborted();
       const rows = await readAttributeIndexBatch(client, spec, cursor, signal);
       if (!rows.length) break;
+      if (count + rows.length > READY_IMAGE_DERIVED_CACHE_POLICY.maxResultMembers) {
+        await client.query("ROLLBACK");
+        return null;
+      }
       await writeAttributeIndexBatch(temporaryKey, rows, signal);
       count += rows.length;
       if (!Number.isSafeInteger(count)) {
@@ -187,6 +195,17 @@ export async function buildReadyImageAttributeIndex(
     || startingMeta.appliedRevision !== revision
     || !connection.ready
   ) {
+    return null;
+  }
+  const statField = readyImageAttributeIndexKey(spec)
+    .slice(READY_IMAGE_DERIVED_INDEX_PREFIX.length);
+  const expectedCount = parseNonNegativeInteger(
+    await redis.hget(READY_IMAGE_STATS_KEY, statField)
+  );
+  signal?.throwIfAborted();
+  // Avoid reading and materializing an index that registration cannot retain.
+  // The keyset loop independently enforces the cap on the source snapshot.
+  if (expectedCount !== null && expectedCount > READY_IMAGE_DERIVED_CACHE_POLICY.maxResultMembers) {
     return null;
   }
   const temporaryKey = readyImageAttributeIndexTemporaryKey(

@@ -1,7 +1,16 @@
-import { parseTagFilter, readableFilterSearch, tagExpressionValues, randomQueryLimits, TagFilterError } from "@imageshow/shared/browser";
+import { parseTagFilter, readableFilterSearch, tagExpressionValues, randomQueryLimits, TagFilterError, type RandomImageSize } from "@imageshow/shared/browser";
 import type { RandomMode } from "../types.js";
 
-export function buildRandomUrl(input: { origin?: string; device: string; brightness: string; theme: string; tag: string; author: string; mode?: RandomMode }) {
+export function buildRandomUrl(input: {
+  origin?: string;
+  device: string;
+  brightness: string;
+  theme: string;
+  tag: string;
+  author: string;
+  mode?: RandomMode;
+  size?: RandomImageSize;
+}) {
   const params = new URLSearchParams();
   const tag = parseTagFilter(input.tag ? [input.tag] : []);
   let submittedCount = tag.submittedCount;
@@ -20,6 +29,7 @@ export function buildRandomUrl(input: { origin?: string; device: string; brightn
   if (submittedCount > randomQueryLimits.maxSelectorCount) throw new TagFilterError("随机链接最多包含 64 个筛选词项");
   for (const value of tagExpressionValues(tag.expression)) params.append("tag", value);
   if (input.mode) params.set("mode", input.mode);
+  if (input.size) params.set("size", input.size);
   const search = readableFilterSearch(params);
   if (new TextEncoder().encode(search).length > randomQueryLimits.maxRawBytes) throw new TagFilterError("随机链接超过长度限制");
   return `${input.origin ?? window.location.origin}/random${search ? `?${search}` : ""}`;

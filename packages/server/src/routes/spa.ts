@@ -2,7 +2,8 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import type { Context, Hono } from "hono";
 import {
   adminBasePath,
-  publicRootPath
+  publicRootPath,
+  type RuntimeConfig
 } from "@imageshow/shared/browser";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -63,7 +64,10 @@ export function registerSpaRoutes(app: Hono) {
 }
 
 let spaTemplate: string | null = null;
-let cachedSpaRepresentation: ContentRepresentation | null = null;
+let cachedSpaDocument: {
+  config: RuntimeConfig;
+  representation: ContentRepresentation;
+} | null = null;
 
 function escapeHtmlText(value: string) {
   return value
@@ -95,10 +99,16 @@ function buildSpaDocument(): string {
 }
 
 function currentSpaRepresentation() {
+  const config = getRuntimeConfig();
+  const cached = cachedSpaDocument;
+  // The config store replaces the published snapshot after save, import or reload.
+  if (cached?.config === config) return cached.representation;
   const body = buildSpaDocument();
-  if (cachedSpaRepresentation?.body === body) return cachedSpaRepresentation;
-  cachedSpaRepresentation = createContentRepresentation(body);
-  return cachedSpaRepresentation;
+  const representation = cached?.representation.body === body
+    ? cached.representation
+    : createContentRepresentation(body);
+  cachedSpaDocument = { config, representation };
+  return representation;
 }
 
 function spaDocumentResponse(

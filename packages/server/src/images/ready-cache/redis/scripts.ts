@@ -5,9 +5,9 @@ function validateDerivedRegistryScript(
 ) {
   return `
 local attribute_index_prefix = ARGV[${validationArgument}]
-local attribute_axis_suffixes = {}
+local fixed_attribute_suffixes = {}
 for suffix in string.gmatch(ARGV[${validationArgument + 1}], '[^,]+') do
-  attribute_axis_suffixes[suffix] = true
+  fixed_attribute_suffixes[suffix] = true
 end
 local named_attribute_prefixes = {}
 for kind in string.gmatch(ARGV[${validationArgument + 2}], '[^,]+') do
@@ -49,7 +49,7 @@ local function valid_attribute_key(value)
   local suffix = string.sub(
     value, string.len(attribute_index_prefix) + 1
   )
-  if attribute_axis_suffixes[suffix] then return true end
+  if fixed_attribute_suffixes[suffix] then return true end
   for _, kind_prefix in ipairs(named_attribute_prefixes) do
     if has_prefix(suffix, kind_prefix) then
       return valid_slug(string.sub(suffix, string.len(kind_prefix) + 1))

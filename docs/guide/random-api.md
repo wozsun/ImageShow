@@ -14,33 +14,50 @@
 | `id` | 完整 UUID 或末 12 位 | 只从匹配到的可用图片中随机选择，可用逗号或重复参数给出多个值 |
 | `seed` | 非空字符串 | 在相同筛选条件和候选集合下固定选取一张图片；区分大小写，不解释日期 |
 | `mode` | `proxy` / `redirect` / `json` | 返回方式；缺省时取设置页的 `proxy` / `redirect` 默认值，`json` 只能显式指定 |
+| `size` | `thumb` / `full` | 图片资源尺寸；缺省时 `proxy` / `redirect` 使用全图，`json` 提供两种 URL；显式指定时只输出对应尺寸 |
 | `limit` | 大于 0 的整数 | 仅显式指定 `mode=json` 时有效；缺省为 1，最多返回 200 张 |
 
 `theme` / `tag` / `author` 可填 slug 或显示名，服务端会先解析成 slug，再按字段排序去重并生成
 稳定筛选签名。`theme=null` 只选无主题，`theme=!null` 只选已设主题；排除普通主题仍
 包含空主题。`null` 是保留选择器，不能用作主题标识；JSON 图片响应的无主题为 `null`。
 基础随机、主题、标签和作者筛选都复用
-`imageshow:cache:images:*` 就绪图片投影：无筛选直接使用根层核心 `index:all`，轴 / 主题 /
+`imageshow:cache:images:*` 就绪图片投影：无筛选直接使用根层核心 `index:all`，设备 / 轴 / 主题 /
 标签 / 作者 ZSET 与组合结果统一位于 `imageshow:cache:images:derived:*`。核心重建只建立
 根层投影；公开请求首次使用某个属性时立即进入 PostgreSQL fallback，并触发独立的
 后台 keyset 分批构建；一次请求所需的全部缺失属性进入有界进程内串行队列。当前回源与
 后台构建都经过统一公开 PG 准入，属性构建全局最多并发 1、同一属性进程内单飞。索引及其
-独立 meta 使用 6 小时滑动 TTL，并同时校验
+独立 meta 使用 12 小时滑动 TTL，并同时校验
 applied revision、count 与每次发布唯一的实例 token；组合结果只使用已经验证的属性索引，
 且在消费后复核来源实例没有被清理或替换。派生结果缺失、过期、
 revision 变化或基数不符不会关闭核心读门：首次未命中请求不等待构建，构建成功后的后续
 随机请求自动使用 Redis；未取得槽位、失败或工作量超限也不改变当前有界 PostgreSQL fallback。
+仅限制设备时直接复用 `derived:index:device:pc` 或 `device:mb`，与主题、标签、作者组合时
+也使用该设备索引作为输入；设备加亮度使用对应轴索引。设备索引沿用 PostgreSQL 按时间 / ID
+分批读取的属性构建流程，不参与核心重建或常驻增量维护。属性构建先用核心计数判断单集合
+容量，已知超限立即回源；读取源数据时再次限制成员数，超限放弃整份结果并清理临时集合，
+不截断候选。纯设备查询只保留设备属性集合，不再另存等价的设备组合集合。
 缺省 `device` 与显式 `device=auto` 在解析后是同一个规范状态，并共享相同的候选、近期
-去重签名与 key；它们不会建立额外缓存分支。属性索引、组合结果和统计结果共用 6 小时滑动 TTL 与 LRU registry，最多 256 个结果、
-128 个活跃筛选签名；单结果、总成员数和序列化统计大小均有集中上限。超限、损坏或
+去重签名与 key；它们不会建立额外缓存分支。属性索引、组合结果和统计结果共用 12 小时滑动
+TTL 与 LRU registry，最多 1024 个结果、512 个活跃筛选签名；单个派生集合最多 100 万成员，
+总成员额度为就绪图片数的 32 倍且至少 1 万，单个序列化统计结果最多 1 MiB。统计结果不计
+集合成员数，但仍占用结果与签名额度。超限、损坏或
 registry 不一致只使本次随机请求放弃派生结果，不触发核心投影重建。组合集合命令还限制
 单命令源成员、预期结果、操作数和整次构建累计工作量；超限时不创建共享临时集合，随机
 请求不物化 Redis 临时集合，直接进入同一 PostgreSQL fallback。
+筛选构建最多并发 6，统计构建最多并发 3，其中大任务各最多并发 1；属性索引构建仍按前述
+串行准入执行。Redis 筛选统计允许主题、标签、作者合计最多 512 个动态维度，同时仍受
+单命令与累计工作量预算约束：集合物化与交集计数的单次输入各最多 40 万成员，单次操作
+预计结果最多 20 万成员；一次筛选构建累计输入最多 60 万成员，一次统计累计输入最多
+400 万成员、累计预计结果最多 100 万成员。同一成员参与不同运算会重复计入工作量。
+筛选累计输入达到 10 万或统计累计预计结果达到 25 万时，分别按大任务准入。
+缓存容量和工作量策略分别由
+`images/ready-cache/derived/policy.ts` 与 `work-policy.ts` 集中定义。
 
 查询使用有界、规范化的公开契约：
 
-- 只接受表中九个精确小写键；`device`、`brightness`、`seed`、`mode`、`limit` 各最多出现一次。原始查询串最多
+- 只接受表中十个精确小写键；`device`、`brightness`、`seed`、`mode`、`size`、`limit` 各最多出现一次。原始查询串最多
   4096 字节。
+- `size` 值不区分大小写；空值、未知值、包含额外空白或重复参数返回 400。未指定状态保留到输出阶段。
 - `theme`、`tag`、`author` 每项最多 64 个字符，每类最多 32 项，三类合计最多 64 项；数量按
   去重前提交项计算；标签的 `all:` 不计入词项长度，标签段数及解析后条件条数均最多 32。
   标签空值、空词项与非法表达式返回 400；主题 / 作者仍忽略空白片段，单独的 `!`、控制字符及
@@ -52,7 +69,7 @@ registry 不一致只使本次随机请求放弃派生结果，不触发核心�
 - `seed` 最多 128 个 Unicode 字符，保留大小写及首尾空白；空字符串、纯空白、控制字符或重复
   参数返回 400。指定 `seed` 时只支持单张结果，`mode=json` 可省略 `limit` 或指定 `limit=1`，
   大于 1 时返回 400。`seed` 不能与 `id` 同时使用。
-- 指定 `id` 后只允许同时指定无筛选作用的 `device=auto`、`mode` 和 `limit`。所有格式、数量和互斥校验都先于词表、
+- 指定 `id` 后只允许同时指定无筛选作用的 `device=auto`、`mode`、`size` 和 `limit`。所有格式、数量和互斥校验都先于词表、
   Redis 与存储访问完成。
 - 任一未知标签使整次请求返回 404，不丢弃条件继续查询。主题 / 作者的未知包含项返回 404，
   未知排除项从有效筛选中删除。合法但没有图片的随机筛选返回 404。
@@ -125,7 +142,7 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
 ```
 
 相同 seed、规范化后的筛选条件和候选图片集合始终选中同一张图片，不受客户端 IP、
-访问次数、近期历史、响应模式或服务重启影响。参数顺序、重复的筛选词和对应 slug / 显示名
+访问次数、近期历史、响应模式、输出尺寸或服务重启影响。参数顺序、重复的筛选词和对应 slug / 显示名
 会经过既有筛选归一化。缺省设备仍为 `auto`，会按 User-Agent 改变实际筛选范围；
 需要跨设备固定时显式使用 `device=all`、`pc` 或 `mb`。
 
@@ -152,22 +169,42 @@ seed 不进入筛选索引 key，也不读取或更新客户端近期历史。
 到回收站图片或候选已不可用时返回 404。
 
 ```text
-/random?id=019f8457-063a-7002-a580-7a432dc7fd8d
-/random?id=7a432dc7fd8d,25a377d90f7f&mode=proxy
-/random?id=019f8457-063a-7002-a580-7a432dc7fd8d&id=25a377d90f7f&mode=redirect
-/random?id=7a432dc7fd8d,25a377d90f7f&mode=json&limit=2
+/random?id=00000000-0000-7000-8000-000000000001
+/random?id=000000000001,000000000002&mode=proxy
+/random?id=00000000-0000-7000-8000-000000000001&id=000000000002&mode=redirect
+/random?id=000000000001,000000000002&mode=json&limit=2
 ```
 
 ## 返回方式
 
-`mode=proxy` 从图片所属 local 或 S3 后端读取已入库图片字节，并附带
+`size` 选择已有的全图或 WebP 缩略图资源，不做按请求动态缩放，也不改变筛选候选、固定 seed
+或客户端近期去重。它可以与三种 `mode`、定向 `id` 或固定 `seed` 分别组合，`id` 与 `seed`
+仍互斥。尺寸选择的缺省行为与显式指定不同：
+
+| `size` | `proxy` / `redirect` | JSON 每项的 URL 字段 |
+| --- | --- | --- |
+| 未指定 | 全图字节 / 全图地址 | `object_url` 和 `thumb_url` |
+| `full` | 全图字节 / 全图地址 | 仅 `object_url` |
+| `thumb` | WebP 缩略图字节 / 缩略图地址 | 仅 `thumb_url` |
+
+显式指定尺寸时，JSON 中另一 URL 字段被省略，不返回空字符串或 `null`。单图和多图应用同一规则。
+
+```text
+/random?device=pc&mode=proxy&size=thumb
+/random?device=all&mode=redirect&size=full
+/random?device=all&mode=json&size=thumb&limit=5
+/random?device=pc&seed=wallpaper&mode=json&size=full
+```
+
+`mode=proxy` 从图片所属 local 或 S3 后端读取对应尺寸的已入库图片字节，缩略图使用
+`image/webp`，全图使用实际文件类型；并附带
 `X-Image-Info`（设备-明暗-主题-ID，无主题时主题段为空）；它不声明 `Accept-Ranges`。`mode=redirect` 返回 302 跳转到公开 URL。
 域名未设置、为空或为 `example.com` 时，应用提供的图片 URL 使用 `/images/...` 同源路径：
 浏览器会按访问地址解析，API 客户端应以请求 origin 解析 JSON 图片地址及相对 `Location`。
 已配置公开地址的 S3 对象继续返回存储直链。
 这里的 `proxy` 只是返回传输方式，与图片接入模式无关。
 
-`mode=json` 返回 `application/json`，顶层 `count` 是实际数量，`items` 是图片数组：
+`mode=json` 返回 `application/json`，顶层 `count` 是实际数量，`items` 是图片数组。以下为未指定 `size` 的响应：
 
 ```json
 {
@@ -175,11 +212,11 @@ seed 不进入筛选索引 key，也不读取或更新客户端近期历史。
   "count": 1,
   "items": [
     {
-      "id": "019f8457-063a-7002-a580-7a432dc7fd8d",
+      "id": "00000000-0000-7000-8000-000000000001",
       "title": "示例图片",
       "author": "photographer",
-      "object_url": "https://img.example.com/images/full/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
-      "thumb_url": "https://img.example.com/images/thumbs/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
+      "object_url": "https://img.example.com/images/full/01/00000000-0000-7000-8000-000000000001.webp",
+      "thumb_url": "https://img.example.com/images/thumbs/01/00000000-0000-7000-8000-000000000001.webp",
       "device": "pc",
       "brightness": "dark",
       "theme": "theme",
@@ -192,7 +229,8 @@ seed 不进入筛选索引 key，也不读取或更新客户端近期历史。
 }
 ```
 
-`title` 为图片标题，`author` 为作者 slug。按 ID 定向读取采用同一 JSON 格式。
+`title` 为图片标题，`author` 为作者 slug。`width` / `height` 仍是已入库全图的尺寸，选择缩略图
+不会改写这些元数据。按 ID 定向读取采用同一 JSON 格式及尺寸规则。
 
 站内画廊和展映通过 `/api/images` 获取图片列表，展映使用 `view=show` 并在乱序时打乱返回
 批次。描述、来源和可空的原图访问链接在打开图片详情时读取。列表与随机图共用图片读取和

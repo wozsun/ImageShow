@@ -41,10 +41,11 @@ export const READY_IMAGE_STATS_RESULT_KEY_PREFIX = `${READY_IMAGE_DERIVED_PREFIX
 const READY_IMAGE_FILTER_TEMP_KEY_PREFIX = `${READY_IMAGE_DERIVED_PREFIX}temp:filter:`;
 const READY_IMAGE_INDEX_TEMP_KEY_PREFIX = `${READY_IMAGE_DERIVED_PREFIX}temp:index:`;
 export const READY_IMAGE_ATTRIBUTE_SLUG_MAX_LENGTH = slugMaxLength;
-export const READY_IMAGE_ATTRIBUTE_AXIS_SUFFIXES = Object.freeze(
-  devices.flatMap((device) => (
-    brightnesses.map((brightness) => `axis:${device}:${brightness}`)
-  ))
+export const READY_IMAGE_FIXED_ATTRIBUTE_SUFFIXES = Object.freeze(
+  devices.flatMap((device) => [
+    `device:${device}`,
+    ...brightnesses.map((brightness) => `axis:${device}:${brightness}`)
+  ])
 );
 export const READY_IMAGE_NAMED_ATTRIBUTE_KINDS = [
   "theme",
@@ -54,6 +55,7 @@ export const READY_IMAGE_NAMED_ATTRIBUTE_KINDS = [
 
 export type ReadyImageAttributeIndexSpec =
   | { kind: "axis"; device: Device; brightness: Brightness }
+  | { kind: "device"; value: Device }
   | { kind: "theme" | "tag" | "author"; value: string };
 
 export function readyImageAttributeIndexKey(
@@ -67,6 +69,12 @@ export function readyImageAttributeIndexKey(
       throw new Error("Invalid ready-image attribute axis");
     }
     return `${READY_IMAGE_DERIVED_INDEX_PREFIX}axis:${spec.device}:${spec.brightness}`;
+  }
+  if (spec.kind === "device") {
+    if (!devices.includes(spec.value)) {
+      throw new Error("Invalid ready-image device attribute");
+    }
+    return `${READY_IMAGE_DERIVED_INDEX_PREFIX}device:${spec.value}`;
   }
   if (
     !READY_IMAGE_NAMED_ATTRIBUTE_KINDS.includes(spec.kind)
@@ -85,8 +93,8 @@ export function readyImageAttributeIndexSpec(
   const parts = key.slice(READY_IMAGE_DERIVED_INDEX_PREFIX.length).split(":");
   if (
     parts.length === 3
-    && READY_IMAGE_ATTRIBUTE_AXIS_SUFFIXES.includes(
-      parts.join(":") as typeof READY_IMAGE_ATTRIBUTE_AXIS_SUFFIXES[number]
+    && READY_IMAGE_FIXED_ATTRIBUTE_SUFFIXES.includes(
+      parts.join(":")
     )
   ) {
     return {
@@ -96,6 +104,9 @@ export function readyImageAttributeIndexSpec(
     };
   }
   const [kind, value] = parts;
+  if (parts.length === 2 && kind === "device" && devices.includes(value as Device)) {
+    return { kind, value: value as Device };
+  }
   if (
     parts.length === 2
     && READY_IMAGE_NAMED_ATTRIBUTE_KINDS.includes(

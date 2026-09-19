@@ -508,8 +508,19 @@ test("[Server/HTTP 与鉴权] 随机 JSON 卡片复用 canonical 字段且不额
     assert.equal(presented.id, item.id);
     assert.equal(presented.title, "Random card");
     assert.equal(presented.author, "photographer");
+    assert.ok(presented.object_url);
+    assert.ok(presented.thumb_url);
     assert.match(presented.object_url, /\/full\//);
     assert.match(presented.thumb_url, /\/thumbs\//);
+    for (const size of ["thumb", "full"] as const) {
+      const cards = await presentRandomJsonItems([item, item], { size });
+      assert.equal(storageQueries, 1, "the registry is shared across size variants");
+      for (const card of cards) {
+        assert.deepEqual(card, size === "thumb"
+          ? Object.fromEntries(Object.entries(presented).filter(([key]) => key !== "object_url"))
+          : Object.fromEntries(Object.entries(presented).filter(([key]) => key !== "thumb_url")));
+      }
+    }
   } finally {
     invalidateStorageBackendRegistry();
   }
@@ -933,6 +944,14 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
   ]);
 });
 test("[Server/HTTP 与鉴权] HTTP 范围、缓存验证器和安全响应头遵循当前协议", async () => {
+  const { localObjectEtag } = await import("../../../packages/server/src/storage/objects/validator.ts");
+  const stats = { dev: 1n, ino: 2n, size: 10n, mtimeNs: 1_700_000_000_000_000_000n, ctimeNs: 1_700_000_000_000_000_000n };
+  const localEtag = localObjectEtag(stats);
+  assert.match(localEtag, /^"l\.[A-Za-z0-9_-]{22}"$/);
+  assert.equal(localObjectEtag({ ...stats }), localEtag);
+  for (const field of ["dev", "ino", "size", "mtimeNs", "ctimeNs"] as const) {
+    assert.notEqual(localObjectEtag({ ...stats, [field]: stats[field] + 1n }), localEtag, field);
+  }
   assert.deepEqual(parseSingleByteRange("bytes=0-9", 100), { start: 0, end: 9 });
   assert.deepEqual(parseSingleByteRange("bytes=-10", 100), { start: 90, end: 99 });
   assert.deepEqual(parseSingleByteRange("bytes=95-", 100), { start: 95, end: 99 });
@@ -943,8 +962,22 @@ test("[Server/HTTP 与鉴权] HTTP 范围、缓存验证器和安全响应头遵
   const url = "https://images.example.com/image.jpg";
   const upstreamEtag = '"upstream-v1"';
   const proxyEtag = proxyEtagForUpstream(url, upstreamEtag);
-  assert.match(proxyEtag ?? "", /^W\/"imageshow-proxy\./);
+  assert.match(proxyEtag ?? "", /^W\/"p\.[A-Za-z0-9_-]{22}\./);
   assert.equal(upstreamIfNoneMatchForProxy(url, proxyEtag), upstreamEtag);
+  for (const upstream of ['W/"weak,opaque"', '""', '"' + "a".repeat(510) + '"']) {
+    const encoded = proxyEtagForUpstream(url, upstream);
+    assert.ok(encoded);
+    assert.equal(upstreamIfNoneMatchForProxy(url, encoded), upstream);
+    assert.equal(upstreamIfNoneMatchForProxy(url, encoded.replace(/^W\//, "")), upstream);
+    assert.equal(upstreamIfNoneMatchForProxy(url, `${encoded}, ${encoded}`), upstream);
+  }
+  for (const invalid of ['*', '"a", "b"', '"bad\r\nheader"', '"' + "a".repeat(511) + '"']) {
+    assert.equal(proxyEtagForUpstream(url, invalid), undefined);
+  }
+  const prefix = proxyEtag!.slice(0, proxyEtag!.lastIndexOf(".") + 1);
+  for (const invalid of ["=", "_", Buffer.from('"a", "b"').toString("base64url"), Buffer.from("*").toString("base64url")]) {
+    assert.equal(upstreamIfNoneMatchForProxy(url, prefix + invalid + '"'), undefined);
+  }
   assert.equal(
     upstreamIfNoneMatchForProxy("https://images.example.com/other.jpg", proxyEtag),
     undefined
@@ -985,7 +1018,8 @@ test("[Server/HTTP 与鉴权] HTTP 范围、缓存验证器和安全响应头遵
   assert.equal(preferences.status, 200);
   assert.equal(preferences.headers.get(adminImageListReadStartedAtHeader), "123");
   assert.equal(preferences.headers.get("cache-control"), "private, no-cache");
-  assert.match(preferenceEtag ?? "", /^W\//u);
+  assert.match(preferenceEtag ?? "", /^W\/"[A-Za-z0-9_-]{22}"$/u);
+  assert.notEqual(preferenceEtag, apiSuccessEtag({ preferences: { admin_scheme: "light" } }));
   assert.equal(preferenceEtag, apiSuccessEtag({
     preferences: { admin_scheme: "dark" }
   }), "认证首帧可复用完全相同的偏好表示验证器");

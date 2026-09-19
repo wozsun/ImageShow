@@ -1085,7 +1085,7 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
       && error.code === "config_package_too_large"
   );
 });
-test("[Server/配置] 构建后的服务端 SPA 路由注入当前站点描述并遵循空值回退", async () => {
+test("[Server/配置] SPA 复用已发布快照并同步配置、验证器和嵌入权限", async () => {
   const repositoryRoot = resolve(import.meta.dirname, "../../..");
   const helperRoot = await createTestDirectory("imageshow-spa-description-");
   const helperPath = join(helperRoot, "verify-spa-description.mjs");
@@ -1119,7 +1119,12 @@ import { runtimeConfigDefaults } from ${JSON.stringify(runtimeConfigUrl)};
 import {
   getRuntimeConfig,
   initializeRuntimeConfig,
-  updateRuntimeConfig
+  updateRuntimeConfig,
+  replaceRuntimeConfig,
+  reloadRuntimeConfigFromDisk,
+  withRuntimeConfigWriteLease,
+  persistRuntimeConfigForPackageImport,
+  publishRuntimeConfigForPackageImport
 } from ${JSON.stringify(runtimeConfigStoreUrl)};
 import { registerSpaRoutes } from ${JSON.stringify(spaRoutesUrl)};
 
@@ -1141,7 +1146,30 @@ async function html(path = "/") {
   return response.text();
 }
 
-const described = await html();
+const originalStringify = JSON.stringify;
+let serializations = 0;
+JSON.stringify = function(value, ...args) {
+  if (value?.site?.title === config.site.title) serializations += 1;
+  return originalStringify.call(JSON, value, ...args);
+};
+const first = await app.request("http://imageshow.test/");
+const described = await first.text();
+assert.equal(first.headers.get("content-length"), String(Buffer.byteLength(described)));
+const firstEtag = first.headers.get("etag");
+assert.equal(firstEtag.length, 26);
+for (const path of ["/", "/home", "/show", "/gallery", "/admin", "/admin/storage"]) {
+  for (const method of ["GET", "HEAD"]) {
+    const cached = await app.request("http://imageshow.test" + path, {
+      method, headers: { "if-none-match": '"unrelated", ' + firstEtag.replace(/^W\\//, "") }
+    });
+    assert.equal(cached.status, 304);
+    assert.equal(cached.headers.get("etag"), firstEtag);
+    assert.equal(await cached.text(), "");
+  }
+  assert.equal(await html(path), described);
+}
+assert.equal(serializations, 1, "one published snapshot serializes its inline config once across page and conditional requests");
+JSON.stringify = originalStringify;
 assert.match(await html("/show"), /<title>示例 &lt;画廊&gt;<\\/title>/);
 assert.match(described, /<title>示例 &lt;画廊&gt;<\\/title>/);
 assert.match(
@@ -1192,6 +1220,37 @@ for (const sequence of ["$$", "$&", "$" + String.fromCharCode(96), "$'"]) {
 }
 await updateRuntimeConfig(originalConfig);
 
+// A private configuration change keeps the same public representation.
+await updateRuntimeConfig({ thumbnail: { quality: originalConfig.thumbnail.quality === 75 ? 76 : 75 } });
+assert.equal((await app.request("http://imageshow.test/home", {
+  headers: { "if-none-match": firstEtag }
+})).status, 304);
+
+const replacement = structuredClone(getRuntimeConfig());
+replacement.site.title = "Replacement 😀";
+await replaceRuntimeConfig(replacement);
+assert.match(await html(), /Replacement 😀/);
+const reloaded = structuredClone(replacement);
+reloaded.site.title = "Reloaded snapshot";
+await writeFile(join(root, "config.json"), JSON.stringify(reloaded));
+assert.match(await html(), /Replacement 😀/);
+await reloadRuntimeConfigFromDisk();
+assert.match(await html(), /Reloaded snapshot/);
+
+await withRuntimeConfigWriteLease(async () => {
+  const beforeImport = structuredClone(getRuntimeConfig());
+  const candidate = structuredClone(beforeImport);
+  candidate.site.title = "Imported snapshot";
+  persistRuntimeConfigForPackageImport(candidate);
+  assert.match(await html(), /Reloaded snapshot/);
+  persistRuntimeConfigForPackageImport(beforeImport);
+  assert.match(await html(), /Reloaded snapshot/);
+  persistRuntimeConfigForPackageImport(candidate);
+  publishRuntimeConfigForPackageImport(candidate);
+  assert.match(await html(), /Imported snapshot/);
+});
+await replaceRuntimeConfig(originalConfig);
+
 // All embedded public pages share the same enable switch and ancestor policy.
 for (const path of ["/embed/home", "/embed/show", "/embed/gallery"]) {
   assert.equal((await app.request("http://imageshow.test" + path)).status, 404);
@@ -1221,6 +1280,13 @@ for (const path of [
   const embeddedConfig = JSON.parse(body.slice(start, body.indexOf("</script>", start)));
   assert.equal(embeddedConfig.site.show.mode, "float");
 }
+const oldEmbed = await app.request("http://imageshow.test/embed/show");
+await updateRuntimeConfig({ embed: { allowed_origins: ["https://other.example.com"] } });
+const newEmbed = await app.request("http://imageshow.test/embed/show", {
+  headers: { "if-none-match": oldEmbed.headers.get("etag") }
+});
+assert.ok(newEmbed.headers.get("content-security-policy").includes("https://other.example.com"));
+assert.ok(!newEmbed.headers.get("content-security-policy").includes("https://portal.example.com"));
 await updateRuntimeConfig({ embed: { enabled: false } });
 assert.equal((await app.request("http://imageshow.test/embed/show?mode=float")).status, 404);
 

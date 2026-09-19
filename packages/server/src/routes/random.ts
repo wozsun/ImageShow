@@ -14,8 +14,9 @@ import { presentRandomJsonItems } from "../random/json-presentation.ts";
 import { selectRandomImages } from "../random/selection.ts";
 import { resolveReadableObject } from "../storage/objects/access.ts";
 import { contentType } from "../storage/objects/keys.ts";
-import { assertCanonicalImageObjectKey } from "../storage/objects/image-paths.ts";
-import { publicImageUrl } from "../storage/objects/public-urls.ts";
+import { assertCanonicalImageObjectKey, thumbnailObjectKey } from "../storage/objects/image-paths.ts";
+import { publicImageUrlsForConfig } from "../storage/objects/public-urls.ts";
+import { getStorageBackend } from "../storage/backends/registry.ts";
 import { webReadableFromNode } from "../storage/objects/stream-buffer.ts";
 
 export function registerRandomRoutes(app: Hono) {
@@ -44,7 +45,7 @@ async function respondRandom(c: Context, url: URL) {
   if (selection.mode === "json") {
     const items = await presentRandomJsonItems(
       selection.items,
-      signal
+      { signal, size: selection.size }
     );
     const body = JSON.stringify(apiSuccess({
       count: items.length,
@@ -73,11 +74,15 @@ async function respondRandom(c: Context, url: URL) {
     "Cache-Control": noStoreCacheControl,
     "X-Image-Info": safeResponseHeaderValue("X-Image-Info", imageInfo)
   };
+  const thumbnail = selection.size === "thumb";
   if (selection.mode === "proxy") {
-    assertCanonicalImageObjectKey(storageObjectKey(picked.id, picked.ext));
+    const key = thumbnail
+      ? thumbnailObjectKey(picked.id)
+      : storageObjectKey(picked.id, picked.ext);
+    assertCanonicalImageObjectKey(key);
     const opened = await (await resolveReadableObject(
-      "full",
-      storageObjectKey(picked.id, picked.ext),
+      thumbnail ? "thumbs" : "full",
+      key,
       picked.storage_slug,
       { signal }
     )).open(undefined, {
@@ -86,7 +91,7 @@ async function respondRandom(c: Context, url: URL) {
     // 候选集合变化时固定 seed 也可能换图，后续 Range 请求不保证命中同一对象。
     const headers = new Headers({
       ...baseHeaders,
-      "Content-Type": contentType(picked.ext)
+      "Content-Type": contentType(thumbnail ? "webp" : picked.ext)
     });
     const contentLength = responseContentLengthValue(opened.size);
     if (contentLength !== undefined) {
@@ -99,11 +104,9 @@ async function respondRandom(c: Context, url: URL) {
     );
   }
 
-  const location = await publicImageUrl(
-    picked,
-    picked.storage_slug,
-    { signal }
-  );
+  const config = await getStorageBackend(picked.storage_slug, { signal });
+  const urls = publicImageUrlsForConfig(picked, config);
+  const location = thumbnail ? urls.thumb_url : urls.object_url;
   return new Response(null, {
     status: 302,
     headers: {

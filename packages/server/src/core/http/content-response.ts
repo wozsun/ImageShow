@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto";
-import { conditionalRequestNotModified } from "./validators.ts";
+import { conditionalRequestNotModified, entityTagDigest } from "./validators.ts";
 
 export type ContentRepresentation = Readonly<{
   body: string;
@@ -23,7 +22,7 @@ export function createContentRepresentation(body: string): ContentRepresentation
   return {
     body,
     byteLength: Buffer.byteLength(body, "utf8"),
-    etag: `W/"${createHash("sha256").update(body).digest("base64url")}"`
+    etag: `W/"${entityTagDigest(body)}"`
   };
 }
 
