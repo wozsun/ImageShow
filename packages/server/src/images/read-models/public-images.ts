@@ -124,7 +124,7 @@ async function getPublicImageRecordWithAccess(
   const load = async (reader: DatabaseReader) => {
     const result = await reader.query(
       `SELECT id,
-              object_key,
+              ext,
               storage_slug,
               description,
               source,

@@ -7,7 +7,6 @@ import {
   type Brightness,
   type Device
 } from "@imageshow/shared/browser";
-import { storageObjectKey } from "../../storage/objects/image-paths.ts";
 
 export const READY_IMAGE_REBUILD_BATCH_SIZE = 1_000;
 export const READY_IMAGE_REBUILD_MAX_ATTEMPTS = 2;
@@ -36,7 +35,6 @@ export type ReadyImageCacheMeta = {
 
 export type ReadyImageSourceRow = {
   id: string;
-  object_key: string;
   ext: string;
   device: string;
   brightness: string;
@@ -47,7 +45,6 @@ export type ReadyImageSourceRow = {
   width: number | string;
   height: number | string;
   image_size: number | string;
-  cursor_image_time: string;
   sort_score: number | string;
   title: string;
   description: string;
@@ -60,7 +57,6 @@ export type ReadyImageSourceRow = {
 
 export type ReadyImageCacheItem = {
   id: string;
-  object_key: string;
   ext: string;
   device: Device;
   brightness: Brightness;
@@ -71,7 +67,6 @@ export type ReadyImageCacheItem = {
   width: number;
   height: number;
   image_size: number;
-  image_time: string;
   sort_score: number;
   title: string;
   description: string;
@@ -104,6 +99,10 @@ function timestamp(value: unknown, field: string) {
 }
 
 export function readyImageSortScore(value: unknown) {
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value)) throw new Error("Invalid ready-image sort score");
+    return value;
+  }
   const raw = String(value ?? "");
   if (!/^-?\d+$/.test(raw)) {
     throw new Error("Ready-image cache row contains an invalid sort score");
@@ -132,7 +131,6 @@ export function readyImageCacheItemFromRow(
   }
   const item: ReadyImageCacheItem = {
     id: String(row.id ?? "").toLowerCase(),
-    object_key: String(row.object_key ?? ""),
     ext: String(row.ext ?? ""),
     device: row.device as Device,
     brightness: row.brightness as Brightness,
@@ -143,7 +141,6 @@ export function readyImageCacheItemFromRow(
     width: finiteNonNegative(row.width),
     height: finiteNonNegative(row.height),
     image_size: finiteNonNegative(row.image_size),
-    image_time: timestamp(row.cursor_image_time, "image_time"),
     sort_score: readyImageSortScore(row.sort_score),
     title: String(row.title ?? ""),
     description: String(row.description ?? ""),
@@ -155,7 +152,6 @@ export function readyImageCacheItemFromRow(
   };
   if (
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(item.id)
-    || item.object_key !== storageObjectKey(item.id, item.ext)
     || !imageExtensions.has(item.ext)
     || !devices.includes(item.device)
     || !brightnesses.includes(item.brightness)
@@ -179,42 +175,20 @@ export function parseReadyImageCacheItem(
   try {
     const value = JSON.parse(raw) as unknown;
     if (
-      !Array.isArray(value)
-      || value.length !== 21
-      || value.slice(0, 8).some((field, index) => (
-        index === 5 ? field !== null && typeof field !== "string" : typeof field !== "string"
+      !Array.isArray(value) || value.length !== 19
+      || value.slice(0, 7).some((field, index) => (
+        index === 4 ? field !== null && typeof field !== "string" : typeof field !== "string"
       ))
-      || !Array.isArray(value[8])
-      || value[8].some((tag) => typeof tag !== "string")
-      || value.slice(9, 12).some((field) => typeof field !== "number")
-      || typeof value[12] !== "string"
-      || typeof value[13] !== "number"
-      || value.slice(14).some((field) => typeof field !== "string")
-    ) {
-      return null;
-    }
+      || !Array.isArray(value[7]) || value[7].some((tag) => typeof tag !== "string")
+      || value.slice(8, 12).some((field) => typeof field !== "number")
+      || value.slice(12).some((field) => typeof field !== "string")
+    ) return null;
     const row = {
-      id: value[0],
-      object_key: value[1],
-      ext: value[2],
-      device: value[3],
-      brightness: value[4],
-      theme: value[5],
-      storage_slug: value[6],
-      author: value[7],
-      tags: value[8],
-      width: value[9],
-      height: value[10],
-      image_size: value[11],
-      cursor_image_time: value[12],
-      sort_score: value[13],
-      title: value[14],
-      description: value[15],
-      source: value[16],
-      original: value[17],
-      md5: value[18],
-      cursor_created_at: value[19],
-      cursor_updated_at: value[20]
+      id: value[0], ext: value[1], device: value[2], brightness: value[3],
+      theme: value[4], storage_slug: value[5], author: value[6], tags: value[7],
+      width: value[8], height: value[9], image_size: value[10], sort_score: value[11],
+      title: value[12], description: value[13], source: value[14], original: value[15],
+      md5: value[16], cursor_created_at: value[17], cursor_updated_at: value[18]
     } satisfies ReadyImageSourceRow;
     return readyImageCacheItemFromRow(row);
   } catch {
@@ -226,7 +200,6 @@ export function parseReadyImageCacheItem(
 export function serializeReadyImageCacheItem(item: ReadyImageCacheItem) {
   const serialized = JSON.stringify([
     item.id,
-    item.object_key,
     item.ext,
     item.device,
     item.brightness,
@@ -237,7 +210,6 @@ export function serializeReadyImageCacheItem(item: ReadyImageCacheItem) {
     item.width,
     item.height,
     item.image_size,
-    item.image_time,
     item.sort_score,
     item.title,
     item.description,

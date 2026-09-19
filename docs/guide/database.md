@@ -12,7 +12,8 @@ PostgreSQL 是正式图片、词表、账号、存储注册表和持久任务的
 ## 启动与结构契约
 
 数据库启动由干净初始化与轻量 readiness 组成。空数据库在一个事务中执行完整 `schema.sql`，
-然后进行只读 readiness；非空数据库只进行当前最小结构的只读 readiness。
+然后进行只读 readiness；非空数据库在最终 readiness 前执行 6.4.9 限定删列升级，
+范围、停机备份和恢复步骤见[升级说明](../DEPLOY.md#649-数据表示升级)。已升级库只做只读核对。
 干净初始化或 readiness 失败都会回滚本次事务。全部连接固定使用
 `search_path=public`；单实例部署按顺序完成 schema 和管理员播种。readiness 在启动事务的
 同一连接上顺序执行 SQL，包括作者 CHECK 约束读取，不并发调用该 client 的 query。
@@ -23,14 +24,14 @@ readiness 对额外表不读取数据、不要求读写权限、不报错或自�
 索引和约束也继续容忍。
 
 维护者按实际需要处理既有数据库的结构新增、修改、删除和必要数据整理，并明确停机、
-备份与恢复方案。应用不自动补表、回填、修改既有结构或对齐完整 schema。
+备份与恢复方案。除 6.4.9 限定升级外，应用不自动补表、回填、修改既有结构或对齐完整 schema。
 既有数据库必须在启动前满足当前运行时所需的最小契约，操作边界见
 [数据维护与恢复](../DEPLOY.md#数据维护与恢复)。
 
 readiness 只读核对当前运行时所需业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
 并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的 SELECT / INSERT /
 UPDATE / DELETE 权限，不使用回滚写探针。它还按列和谓词语义核对当前 SQL 依赖的最小行为
-约束，不依赖数据库对象名称：当前运行时表的业务主键；`metadata.object_key`、后台任务
+约束，不依赖数据库对象名称：当前运行时表的业务主键；后台任务
 非空幂等键与唯一活动 `cache.rebuild`、单一默认存储和单一超级管理员的唯一性；以及当前
 metadata / image_tag 删除路径依赖的 RESTRICT、CASCADE 和 SET NULL 外键。`created_by` 的
 `text` 类型进入最小列集合。readiness 还核对作者身份两列的 `text` 类型与读写权限、两列成对空值、
@@ -43,7 +44,7 @@ readiness 不复制 `schema.sql` 的可空性、默认值、无消费者 CHECK�
 身份 CHECK 与复合唯一索引，以及主题的可空性与无默认值要求，
 因当前读写直接依赖而属于明确例外。
 应用未消费的表、列、索引和约束位于启动契约之外。破坏性清理由维护者在停机、备份和恢复验证后
-单独执行，不属于应用启动职责。
+单独执行；本版限定升级遵循上述已备份维护窗口。
 
 ## 运行期连接与公开回源
 
@@ -89,7 +90,6 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 | `id` (UUID, PK) | 图片唯一 id（uuid v7，时间有序）；目录中的文件名也使用它 |
 | `status` | `ready` / `deleted` |
 | `storage_slug` | 图片所在存储后端 slug（外键 → `storage_backend.slug`） |
-| `object_key` (UNIQUE) | 标准化完整展示图在所属后端中的对象键；固定为 `<UUID 尾部两位>/<UUID>.<ext>` |
 | `device` | 设备：`pc`（横屏）/ `mb`（竖屏），由宽高比或用户选择得到 |
 | `brightness` | 亮度：`dark` / `light`，上传默认自动识别 |
 | `theme` | 可空主题外键；SQL `NULL` / API `null` 表示无主题，无默认值 |
@@ -106,11 +106,11 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 | `updated_at` | 图片元数据最后更新时间 |
 
 图片分类直接由 `device`、`brightness` 与 `theme` 表达，不参与对象路径。图片的
-`object_key` 只由 UUID 和扩展名决定，外层 `full` / `thumbs` prefix 由存储层管理。随机候选由
+正式对象键只由 UUID 和扩展名派生，不保存于图片主表，外层 `full` / `thumbs` prefix 由存储层管理。随机候选由
 统一 Redis ready-image ZSET 投影维护，PostgreSQL 不保存分类连续编号。
 
 成功提交的图片以正式完整展示图与正式缩略图同时存在为数据库外对象不变量。正常缩略图 GET
-只按 `storage_slug + object_key` 解析唯一地址并读取正式对象，不查询 repair 状态、不探测
+只按 `storage_slug + id + ext` 解析唯一地址并读取正式对象，不查询 repair 状态、不探测
 存在性、不读取完整图降级，也不在请求中写对象或 `thumbnail_size`。缺图返回 404；分类编辑
 不为路径搬迁读取或搬动对象，只有显式自动亮度检测会读取现有缩略图。存储后端迁移缺少缩略图
 时返回结构化 `storage_thumbnail_missing`，要求先运行检查页“存储维护”。
@@ -303,7 +303,7 @@ HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退�
 派生 registry 的 TTL、LRU、结果数和成员数上限约束，不参与核心完整性判定。
 
 图片编辑把 metadata、必要的 author / theme / tag 创建和完整标签替换放进同一张图片的单个
-事务；分类变化不修改 `object_key`、`thumbnail_size` 或创建清理回执。实际变化只推进一次
+事务；分类变化不改变对象位置、`thumbnail_size` 或创建清理回执。实际变化只推进一次
 `ready_image_revision`；事务任一步失败会
 完整回滚该图片，纯 no-op 不推进。并发编辑采用 last-write-wins，不存储逐图编辑版本，也不
 以 `ready_image_revision` 充当编辑冲突仲裁。

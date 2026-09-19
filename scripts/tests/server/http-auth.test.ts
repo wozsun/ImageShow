@@ -96,9 +96,7 @@ import {
   readyImageStatFields,
   serializeReadyImageCacheItem
 } from "../../../packages/server/src/images/ready-cache/model.ts";
-import {
-  storageObjectKey
-} from "../../../packages/server/src/storage/objects/image-paths.ts";
+
 import {
   adminPermissionsForRole
 } from "../../../packages/server/src/users/admin-authorization.ts";
@@ -510,7 +508,6 @@ test("[Server/HTTP 与鉴权] 随机 JSON 卡片复用 canonical 字段且不额
     assert.equal(presented.id, item.id);
     assert.equal(presented.title, "Random card");
     assert.equal(presented.author, "photographer");
-    assert.equal(presented.diff_original, true);
     assert.match(presented.object_url, /\/full\//);
     assert.match(presented.thumb_url, /\/thumbs\//);
   } finally {
@@ -520,7 +517,6 @@ test("[Server/HTTP 与鉴权] 随机 JSON 卡片复用 canonical 字段且不额
 test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验证保留当前安全边界", async () => {
   const item = readyImageCacheItemFromRow({
     id: imageId,
-    object_key: storageObjectKey(imageId, "avif"),
     ext: "avif",
     device: "pc",
     brightness: "dark",
@@ -531,7 +527,6 @@ test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验�
     width: 1920,
     height: 1080,
     image_size: 2048,
-    cursor_image_time: "2026-08-04T12:00:00.654321Z",
     sort_score: "1785844800654321",
     title: "title",
     description: "description",

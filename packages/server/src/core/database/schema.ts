@@ -4,6 +4,8 @@ import { join } from "node:path";
 import type { PoolClient } from "pg";
 import { assertDatabaseReadiness } from "./readiness.ts";
 import { pool } from "./pools.ts";
+import { upgradeObjectKeyColumn } from "./object-key-upgrade.ts";
+import { logger } from "../logger.ts";
 
 export async function initializeDatabaseSchema() {
   const client = await pool.connect();
@@ -53,9 +55,14 @@ async function initializeDatabaseSchemaOnClient(client: PoolClient) {
     : null;
   await client.query("BEGIN");
   try {
+    let upgraded = false;
     if (schema) await client.query(schema);
+    else upgraded = await upgradeObjectKeyColumn(client);
     await assertCoreDatabaseReady(client);
     await client.query("COMMIT");
+    if (!empty) logger.info(upgraded
+      ? "database_object_key_upgrade_completed"
+      : "database_object_key_upgrade_current");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     if (!empty) throw databaseReadinessError(error);

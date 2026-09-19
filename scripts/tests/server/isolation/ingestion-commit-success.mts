@@ -61,16 +61,16 @@ await runIntegrationScenario(async (runtime) => {
     const row = (await runtime.databasePools.pool.query<{
       created_by: string;
       md5: string;
-      object_key: string;
+      ext: string;
       storage_slug: string;
     }>(
-      "SELECT created_by, md5, object_key, storage_slug FROM metadata WHERE id=$1",
+      "SELECT created_by, md5, ext, storage_slug FROM metadata WHERE id=$1",
       [fixture.imageId]
     )).rows[0];
     assert.deepEqual(row, {
       created_by: fixture.owner,
       md5: fixture.prepared.md5,
-      object_key: fixture.finalObjectKey,
+      ext: fixture.prepared.ext,
       storage_slug: storageSlug
     });
     assert.deepEqual(

@@ -1083,7 +1083,7 @@ WebKit 一定把延迟 click 派发给原触点元素。共享按钮的触控 / 
 图片 ID 锁后，以固定低并发逐图处理并按输入顺序返回结果。每张图片的 metadata、词表创建和
 完整标签替换在一个 PostgreSQL 事务内提交；一张失败只回滚该张，实际变化只
 推进一次 `ready_image_revision` 并交接一次投影，纯 no-op 仍返回 `updated` 但不推进 revision。
-设备、亮度或主题变化的持久化范围是 PostgreSQL 与必要投影，`object_key` 和 `thumbnail_size`
+设备、亮度或主题变化的持久化范围是 PostgreSQL 与必要投影，正式对象位置和 `thumbnail_size`
 保持不变；编辑路径中的存储读取仅用于显式自动亮度检测所需的现有缩略图。
 
 编辑明确采用 last-write-wins，不存在逐图编辑 revision、预期版本、冲突响应或三方合并；

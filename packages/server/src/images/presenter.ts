@@ -13,7 +13,7 @@ import { storageBackendLabel } from "../storage/backends/label.ts";
 import type { StorageConfig } from "../storage/backends/config.ts";
 import { getStorageBackendConfigs, type StorageRegistryAccess } from "../storage/backends/registry.ts";
 import {
-  publicImageUrls,
+  publicImageUrl,
   publicImageUrlsForConfig,
   publicThumbnailUrlForConfig
 } from "../storage/objects/public-urls.ts";
@@ -22,6 +22,7 @@ import { publicOriginalAccessUrl } from "./original-link.ts";
 
 type DatabaseNumber = number | string;
 type DatabaseTimestamp = string | Date;
+type PublicImageTimeRecord = { image_time: DatabaseTimestamp } | { sort_score: number };
 
 type AdminImageCommonRecord = {
   id: string;
@@ -30,7 +31,7 @@ type AdminImageCommonRecord = {
   theme: string | null;
   width: DatabaseNumber;
   height: DatabaseNumber;
-  object_key: string;
+  ext: string;
   storage_slug: string;
   author: string | null;
   title: string;
@@ -86,7 +87,7 @@ const ingestionImagePresentationColumns = [
   "height",
   "image_size",
   "md5",
-  "object_key",
+  "ext",
   "storage_slug",
   "author",
   "title",
@@ -134,7 +135,7 @@ export const adminImageDetailPresentationColumnsWithTags = [
   "width",
   "height",
   "md5",
-  "object_key",
+  "ext",
   "storage_slug",
   "author",
   "title",
@@ -155,7 +156,7 @@ export const editableImagePresentationColumnsWithTags = [
   "width",
   "height",
   "image_size",
-  "object_key",
+  "ext",
   "storage_slug",
   "author",
   "title",
@@ -173,18 +174,15 @@ export type PublicImageCardRecord = Pick<
   | "theme"
   | "width"
   | "height"
-  | "object_key"
   | "storage_slug"
   | "author"
   | "title"
-> & {
-  image_time: DatabaseTimestamp;
-};
+> & PublicImageTimeRecord;
 
 export type PublicImageDetailRecord = Pick<
   AdminImageCommonRecord,
   | "id"
-  | "object_key"
+  | "ext"
   | "storage_slug"
   | "description"
   | "source"
@@ -193,16 +191,16 @@ export type PublicImageDetailRecord = Pick<
   | "device"
   | "brightness"
   | "theme"
-> & { image_time: DatabaseTimestamp; tags: string[] };
+> & PublicImageTimeRecord & { tags: string[] };
 
 export type PublicShowImageRecord = Pick<
   PublicImageCardRecord,
-  "id" | "title" | "width" | "height" | "object_key" | "storage_slug"
+  "id" | "title" | "width" | "height" | "storage_slug"
 >;
 
 type PublicImageUrlRecord = Pick<
   AdminImageCommonRecord,
-  "object_key" | "storage_slug"
+  "storage_slug"
 >;
 
 function storageConfigsForRows(
@@ -216,6 +214,12 @@ function serializeTimestamp(value: DatabaseTimestamp) {
   return (value instanceof Date ? value : new Date(value)).toISOString();
 }
 
+function serializePublicImageTime(row: PublicImageTimeRecord) {
+  return "sort_score" in row
+    ? new Date(Math.floor(row.sort_score / 1_000)).toISOString()
+    : serializeTimestamp(row.image_time);
+}
+
 function serializeNullableTimestamp(value: DatabaseTimestamp | null) {
   return value === null ? null : serializeTimestamp(value);
 }
@@ -225,7 +229,7 @@ function presentImageBase(
   tags: string[],
   configs: ReadonlyMap<string, StorageConfig>
 ) {
-  const urls = publicImageUrlsForConfig(row.object_key, configs.get(row.storage_slug)!);
+  const urls = publicImageUrlsForConfig(row, configs.get(row.storage_slug)!);
   return {
     id: row.id,
     title: row.title,
@@ -279,7 +283,7 @@ function adminImageListItem(
     original: row.original,
     status: row.status,
     purge_pending: row.purge_pending,
-    object_key: row.object_key,
+    ext: row.ext,
     md5: row.md5,
     image_size: Number(row.image_size),
     deleted_at: serializeNullableTimestamp(row.deleted_at),
@@ -334,7 +338,7 @@ export async function editableImageSnapshotsWithTags(
       ...base,
       original: row.original,
       image_size: Number(row.image_size),
-      object_key: row.object_key
+      ext: row.ext
     };
   });
 }
@@ -344,7 +348,7 @@ export async function publicImageDetail(
   access: StorageRegistryAccess = {},
   includeOriginal = false
 ): Promise<PublicImageDetailDto> {
-  const urls = await publicImageUrls(row.object_key, row.storage_slug, access);
+  const objectUrl = await publicImageUrl(row, row.storage_slug, access);
   return {
     id: row.id,
     author: row.author ?? "",
@@ -352,14 +356,14 @@ export async function publicImageDetail(
     brightness: row.brightness,
     theme: row.theme,
     tags: row.tags,
-    image_time: serializeTimestamp(row.image_time),
+    image_time: serializePublicImageTime(row),
     description: row.description,
     source: row.source || null,
-    object_url: urls.object_url,
+    object_url: objectUrl,
     original_url: includeOriginal ? publicOriginalAccessUrl(
       row.id,
       row.original,
-      urls.object_url
+      objectUrl
     ) : null
   };
 }
@@ -371,7 +375,7 @@ function publicShowImageCard(
   return {
     id: row.id,
     title: row.title,
-    thumb_url: publicThumbnailUrlForConfig(row.object_key, configs.get(row.storage_slug)!),
+    thumb_url: publicThumbnailUrlForConfig(row.id, configs.get(row.storage_slug)!),
     width: Number(row.width),
     height: Number(row.height)
   };
@@ -398,7 +402,7 @@ function publicImageCard(
     theme: row.theme,
     author: row.author ?? "",
     tags,
-    image_time: serializeTimestamp(row.image_time),
+    image_time: serializePublicImageTime(row),
   };
 }
 

@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from "react";
 import { adminPermissions } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../icon/AdminIcon.js";
@@ -176,7 +177,7 @@ export function ImageMetadataEditorDialog({
     error: { icon: "close-line", label: "保存失败" }
   } as const;
   const modalSubtitle = singleItem
-    ? (activeItems[0]?.object_key ?? "")
+    ? (activeItems[0] ? storageObjectKey(activeItems[0].id, activeItems[0].ext) : "")
     : `${activeItems.length} 张图片`;
 
   const commonChanged = { device: common.device !== "", brightness: common.brightness !== "", theme: common.theme.trim() !== "", author: common.author.trim() !== "", tags: common.tags.length > 0 };

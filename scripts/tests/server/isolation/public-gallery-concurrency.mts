@@ -68,10 +68,8 @@ await runIntegrationScenario(async (runtime) => {
         assert.deepEqual({ ok: true, ...await survivor }, result[0]!.value);
         assert.equal(checkouts, 3, "one cancelled visitor leaves the shared database read available to others");
         assert.deepEqual(getPublicPgFallbackAdmissionSnapshot(), { active: 0, queued: 0 });
-        await pool.query(`INSERT INTO metadata(id, created_by, status, storage_slug, object_key,
-          device, brightness, ext, md5)
-          VALUES('00000000-0000-7000-8000-0000000000aa', 'integration-admin', 'ready', 'local',
-            'aa/00000000-0000-7000-8000-0000000000aa.webp', 'pc', 'dark', 'webp', $1)`, ["a".repeat(32)]);
+        await pool.query(`INSERT INTO metadata(id, created_by, status, storage_slug, device, brightness, ext, md5)
+       VALUES ('00000000-0000-7000-8000-0000000000aa', 'integration-admin', 'ready', 'local', 'pc', 'dark', 'webp', $1)`, ["a".repeat(32)]);
         const beforeFilteredReads = checkouts;
         const [desktop, mobile] = await Promise.all([
           getPublicGalleryStats({ device: "pc" }, AbortSignal.timeout(15_000)),

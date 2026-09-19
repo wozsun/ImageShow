@@ -8,7 +8,6 @@ import { logger } from "../../../core/logger.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
 import { removeIngestionPreparedFiles, writeIngestionPreparedFile } from "../raw/prepared.ts";
 import { detectBrightness } from "../../brightness.ts";
-import { deviceFromDimensions } from "../../classification.ts";
 import { withNormalizationAdmission } from "../../normalization-admission.ts";
 import {
   sha256Buffer,
@@ -23,7 +22,7 @@ import {
 } from "../execution/session.ts";
 import { removeOwnedIngestionRaw } from "../raw/files.ts";
 import { withActiveIngestionTempPaths } from "../raw/lease-registry.ts";
-import { ingestionRawPath, ingestionPreparedFile, ingestionPreparedPath } from "../raw/paths.ts";
+import { ingestionRawPath, ingestionPreparedFile, ingestionPreparedPath, ingestionPreparedFiles } from "../raw/paths.ts";
 import type {
   IngestionSessionSnapshot,
   StoredIngestionSession
@@ -32,22 +31,21 @@ import { ingestionSessionSemanticHash } from "../sessions/projection.ts";
 import { IngestionSessionRepository } from "../repository.ts";
 import { withIngestionPreparationAdmission } from "./preparation-admission.ts";
 
-function requiredDeviceFromDimensions(width: number, height: number) {
-  return deviceFromDimensions(width, height) ?? "pc";
-}
-
 export function preparedAttemptIsReferenced(
   current: StoredIngestionSession | null,
-  expected: Pick<IngestionSessionSnapshot, "image_id">,
+  expected: Pick<IngestionSessionSnapshot, "session_id" | "image_id">,
   imageFile: string,
   thumbnailFile: string
 ) {
   return Boolean(
     current
+    && current.session_id === expected.session_id
     && current.image_id === expected.image_id
     && "prepared" in current
-    && current.prepared?.prepared_image_path === imageFile
-    && current.prepared.prepared_thumbnail_path === thumbnailFile
+    && current.prepared
+    && ingestionPreparedFiles(current, current.prepared).every(
+      (file, index) => file === [imageFile, thumbnailFile][index]
+    )
   );
 }
 
@@ -152,16 +150,12 @@ export async function prepareIngestionSessionSnapshot(
           progress: null
         }
       );
-      const detectedDevice = requiredDeviceFromDimensions(
-        normalized.width,
-        normalized.height
-      );
       const detectedBrightness = await detectBrightness(normalized.thumbnail);
       signal.throwIfAborted();
       current = await refreshIngestionExecutionSession(repository, current);
-      return { normalized, detectedDevice, detectedBrightness };
+      return { normalized, detectedBrightness };
     });
-    const { normalized, detectedDevice, detectedBrightness } = normalizedState;
+    const { normalized, detectedBrightness } = normalizedState;
     current = await updateIngestionExecutionProgress(
       repository,
       current,
@@ -200,8 +194,7 @@ export async function prepareIngestionSessionSnapshot(
           raw_generation: "",
           raw_size: 0,
           prepared: {
-            prepared_image_path: preparedImageFile,
-            prepared_thumbnail_path: preparedThumbnailFile,
+            producer_execution_token: attemptIdentity.execution_token,
             original_size: normalized.sourceSize,
             original_width: normalized.sourceWidth,
             original_height: normalized.sourceHeight,
@@ -215,7 +208,6 @@ export async function prepareIngestionSessionSnapshot(
             thumbnail_size: normalized.thumbnail.byteLength,
             quality: normalized.quality,
             transcoded: normalized.transcoded,
-            detected_device: detectedDevice,
             detected_brightness: detectedBrightness,
             duplicate_count: duplicates.check.match_count,
             generation: preparedGeneration

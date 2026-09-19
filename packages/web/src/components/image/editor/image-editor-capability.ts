@@ -39,7 +39,7 @@ function editableSnapshotFromSource(
   if (source.status && source.status !== "ready") return null;
   if (
     typeof source.original !== "string"
-    || typeof source.object_key !== "string"
+    || typeof source.ext !== "string"
   ) {
     return null;
   }

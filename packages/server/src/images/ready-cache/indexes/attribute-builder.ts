@@ -1,3 +1,4 @@
+import { microsecondsTimestamp } from "../../../core/microseconds.ts";
 import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { pool, type DatabaseReader } from "../../../core/database/pools.ts";
 import { withPublicDatabaseRead } from "../../../core/database/public-fallback.ts";
@@ -26,7 +27,6 @@ const ATTRIBUTE_INDEX_BATCH_SIZE = 1_000;
 type ReadyImageAttributeIndexRow = {
   id: string;
   sort_score: string;
-  cursor_image_time?: string;
 };
 
 type ReadyImageAttributeIndexCursor = {
@@ -71,11 +71,7 @@ function attributeSourceQuery(
   const id = bind(cursor?.id ?? null);
   values.push(ATTRIBUTE_INDEX_BATCH_SIZE);
   return {
-    text: `SELECT ${commonColumns},
-                  to_char(
-                    m.image_time AT TIME ZONE 'UTC',
-                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
-                  ) AS cursor_image_time
+    text: `SELECT ${commonColumns}
              FROM metadata m
             WHERE ${conditions.join(" AND ")}
               AND (${time}::timestamptz IS NULL
@@ -148,15 +144,9 @@ async function buildAttributeIndexSource(
         throw new Error("Ready-image attribute index is too large");
       }
       const last = rows.at(-1)!;
-      if (
-        spec.kind !== "tag"
-        && !Number.isFinite(Date.parse(last.cursor_image_time ?? ""))
-      ) {
-        throw new Error("Ready-image attribute index cursor is invalid");
-      }
       const nextCursor = spec.kind === "tag"
         ? { id: last.id }
-        : { id: last.id, imageTime: last.cursor_image_time };
+        : { id: last.id, imageTime: microsecondsTimestamp(BigInt(readyImageSortScore(last.sort_score)))! };
       if (
         nextCursor.id === cursor?.id
         && nextCursor.imageTime === cursor?.imageTime

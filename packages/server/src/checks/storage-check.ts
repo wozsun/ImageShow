@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import { appConfig } from "@imageshow/shared";
 import { pool } from "../core/database/pools.ts";
 import { errorMessage } from "../core/api-error.ts";
@@ -21,7 +22,7 @@ import {
 } from "./storage-inventory.ts";
 
 const storageRowsQuery = `
-  SELECT id, object_key, status, storage_slug, thumbnail_size
+  SELECT id, ext, status, storage_slug, thumbnail_size
     FROM metadata`;
 
 export async function checkStorage(signal?: AbortSignal) {
@@ -121,14 +122,14 @@ export async function checkStorage(signal?: AbortSignal) {
     const fullSet = new Set(full.keys);
     const thumbSet = new Set(thumbs.keys);
     for (const row of retainedDuringEnumeration) {
-      assertCanonicalImageObjectKey(row.object_key);
+      assertCanonicalImageObjectKey(storageObjectKey(row.id, row.ext));
     }
     for (const slug of group.slugs) {
       const rowsForSlug = retainedDuringEnumeration.filter((row) => (
         row.storage_slug === slug
       ));
       const sample = rowsForSlug.find((row) => (
-        fullSet.has(row.object_key)
+        fullSet.has(storageObjectKey(row.id, row.ext))
       ))
         ?? rowsForSlug[0];
       if (!sample) continue;
@@ -136,12 +137,12 @@ export async function checkStorage(signal?: AbortSignal) {
         const access = await resolveStorageAccess(slug);
         const readable = await access.driver.exists(
           "full",
-          sample.object_key,
+          storageObjectKey(sample.id, sample.ext),
           { signal }
         );
         if (
           full.complete
-          && fullSet.has(sample.object_key)
+          && fullSet.has(storageObjectKey(sample.id, sample.ext))
           && !readable
         ) {
           unavailableBackends.push({
@@ -162,7 +163,7 @@ export async function checkStorage(signal?: AbortSignal) {
       }
     }
     const referencedFullKeys = new Set(
-      retainedDuringEnumeration.map((row) => row.object_key)
+      retainedDuringEnumeration.map((row) => storageObjectKey(row.id, row.ext))
     );
     const referencedThumbKeys = new Set(
       retainedDuringEnumeration.map((row) => thumbnailRef(row).key)
@@ -181,10 +182,10 @@ export async function checkStorage(signal?: AbortSignal) {
     }
 
     for (const image of retainedBeforeEnumeration) {
-      if (full.complete && !fullSet.has(image.object_key)) {
+      if (full.complete && !fullSet.has(storageObjectKey(image.id, image.ext))) {
         missingObjects.push({
           id: image.id,
-          object_key: image.object_key,
+          object_key: storageObjectKey(image.id, image.ext),
           prefix: "full",
           backend: image.storage_slug,
           namespace
@@ -194,7 +195,7 @@ export async function checkStorage(signal?: AbortSignal) {
       if (thumbs.complete && !thumbSet.has(thumbKey)) {
         missingThumbs.push({
           id: image.id,
-          object_key: image.object_key,
+          object_key: storageObjectKey(image.id, image.ext),
           thumb_key: thumbKey,
           backend: image.storage_slug,
           namespace
@@ -202,7 +203,7 @@ export async function checkStorage(signal?: AbortSignal) {
       } else if (thumbSet.has(thumbKey) && Number(image.thumbnail_size) <= 0) {
         pendingThumbnailRepairs.push({
           id: image.id,
-          object_key: image.object_key,
+          object_key: storageObjectKey(image.id, image.ext),
           thumb_key: thumbKey,
           backend: image.storage_slug,
           namespace,

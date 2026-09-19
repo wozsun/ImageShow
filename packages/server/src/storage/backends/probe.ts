@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
 import {
@@ -18,7 +19,7 @@ import {
 
 export type ExistingStorageProbe = {
   id: string;
-  object_key: string;
+  ext: string;
   storage_slug: string;
 };
 
@@ -28,10 +29,10 @@ async function assertExistingObjectReadable(
   signal?: AbortSignal
 ) {
   try {
-    assertCanonicalImageObjectKey(existingObject.object_key);
+    assertCanonicalImageObjectKey(storageObjectKey(existingObject.id, existingObject.ext));
     const opened = await driver.openRead(
       "full",
-      existingObject.object_key,
+      storageObjectKey(existingObject.id, existingObject.ext),
       "bytes=0-0",
       { signal }
     );

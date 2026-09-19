@@ -68,7 +68,7 @@ export async function fetchPublicImageCardPage(
   };
   const count = parameter(limit + 1);
   const columns = [
-    "id", "title", "width", "height", "object_key", "storage_slug",
+    "id", "title", "width", "height", "storage_slug",
     "image_time::text AS cursor_image_time",
     ...(view === "gallery" ? [
       "device", "brightness", "theme", "author", "image_time"

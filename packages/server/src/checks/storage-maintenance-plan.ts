@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import { pool } from "../core/database/pools.ts";
 import { thumbnailObjectKey } from "../storage/objects/image-paths.ts";
 import {
@@ -64,7 +65,7 @@ export type CapturedMaintenanceGroup = {
 };
 
 const maintenanceRowsQuery = `
-  SELECT id, object_key, status, storage_slug, md5, thumbnail_size
+  SELECT id, ext, status, storage_slug, md5, thumbnail_size
     FROM metadata
    ORDER BY id ASC`;
 
@@ -170,9 +171,9 @@ function buildMaintenanceCandidates(
     const fullKeys = new Set(snapshot.full.keys);
     const thumbKeys = new Set(snapshot.thumbs.keys);
     for (const row of retainedRows) {
-      const thumbKey = thumbnailObjectKey(row.object_key);
+      const thumbKey = thumbnailObjectKey(row.id);
       if (
-        !fullKeys.has(row.object_key)
+        !fullKeys.has(storageObjectKey(row.id, row.ext))
         || !thumbKeys.has(thumbKey)
         || Number(row.thumbnail_size) <= 0
       ) {
@@ -181,10 +182,10 @@ function buildMaintenanceCandidates(
     }
 
     const referencedFull = new Set(retainedRows.flatMap((row) => (
-      [row.object_key]
+      [storageObjectKey(row.id, row.ext)]
     )));
     const referencedThumbs = new Set(
-      retainedRows.map((row) => thumbnailObjectKey(row.object_key))
+      retainedRows.map((row) => thumbnailObjectKey(row.id))
     );
     const activeReferences = mergeActiveIngestionStorageReferences(
       ...group.slugs.map((slug) => referencesByBackend.get(slug) ?? new Map())

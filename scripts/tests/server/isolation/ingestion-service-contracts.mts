@@ -14,12 +14,18 @@ const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
   const serviceNow = Date.parse("2026-08-23T01:02:03.456Z");
   const { ingestionRepository } = await createIngestionScenarioFixture(runtime);
   const { readCommittedIngestionResultsByImageIds } = await import("../../../../packages/server/src/images/read-models/ingestion-results.ts");
-  const { storageObjectKey } = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+
   const committedFixtures = async (ids: readonly string[], owners: string[], imageTime: string) => {
     for (const [index, id] of ids.entries()) {
       await runtime.databasePools.pool.query(
-        "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, theme, ext, md5, image_time) VALUES ($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,$5)",
-        [id, owners[index], storageObjectKey(id, "webp"), "a".repeat(32), imageTime]
+        `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_time)
+       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, $4)`,
+        [
+        id,
+        owners[index],
+        "a".repeat(32),
+        imageTime
+      ]
       );
     }
     return readCommittedIngestionResultsByImageIds(ids);

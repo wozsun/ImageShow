@@ -64,6 +64,7 @@ export async function listAdminImages(
       if (cached.status === "hit") {
         const images = await adminImageListItemsWithTags(cached.value.items.map((item) => ({
           ...item,
+          image_time: new Date(Math.floor(item.sort_score / 1_000)),
           status: "ready",
           deleted_at: null,
           purge_pending: false

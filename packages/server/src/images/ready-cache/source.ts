@@ -15,7 +15,6 @@ export type ReadyImageSourceSnapshot = {
 };
 
 export const readyImageSourceColumns = `m.id::text AS id,
-  m.object_key,
   m.ext,
   m.device,
   m.brightness,
@@ -30,10 +29,6 @@ export const readyImageSourceColumns = `m.id::text AS id,
   m.width,
   m.height,
   m.image_size,
-  to_char(
-    m.image_time AT TIME ZONE 'UTC',
-    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
-  ) AS cursor_image_time,
   (extract(epoch FROM m.image_time) * 1000000)::bigint::text AS sort_score,
   m.title,
   m.description,

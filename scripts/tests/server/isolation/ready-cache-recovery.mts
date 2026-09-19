@@ -39,12 +39,15 @@ try {
     const { rebuildReadyImageCache } = await import("../../../../packages/server/src/images/ready-cache/rebuild.ts");
     const { readReadyImageCacheMeta } = await import("../../../../packages/server/src/images/ready-cache/meta.ts");
     const { randomUuidV7 } = await import("../../../../packages/server/src/core/uuid.ts");
-    const { storageObjectKey } = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+
     const coordinator = new ReadyImageCacheCoordinator();
     const imageId = randomUuidV7();
-    await pool.query("INSERT INTO metadata(id, created_by, status, storage_slug, object_key, device, brightness, ext, md5, image_time, title) "
-      + "VALUES($1, 'integration-admin', 'ready', 'local', $2, 'pc', 'dark', 'webp', $3, now(), 'Preserved image')",
-    [imageId, storageObjectKey(imageId, "webp"), "a".repeat(32)]);
+    await pool.query(`INSERT INTO metadata(id, created_by, status, storage_slug, device, brightness, ext, md5, image_time, title)
+       VALUES ($1, 'integration-admin', 'ready', 'local', 'pc', 'dark', 'webp', $2, now(), 'Preserved image')`,
+    [
+        imageId,
+        "a".repeat(32)
+      ]);
     await probeRedisOperationalState();
     const originalMeta = await rebuildReadyImageCache();
     assert.equal(originalMeta.itemCount, 1);

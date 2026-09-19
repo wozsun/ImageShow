@@ -253,7 +253,6 @@ export type ServerIngestionPreparedDto = {
   size: number;
   quality: number | null;
   transcoded: boolean;
-  detected_device: Device;
   detected_brightness: Brightness;
   duplicate_count: number;
 };

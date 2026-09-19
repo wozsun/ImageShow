@@ -1,3 +1,4 @@
+
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import {
@@ -12,9 +13,6 @@ type CoreUuidModule = typeof import(
 );
 type ImageFilterPlanModule = typeof import(
   "../../../../packages/server/src/images/filter-plan.ts"
-);
-type ImagePathsModule = typeof import(
-  "../../../../packages/server/src/storage/objects/image-paths.ts"
 );
 type PublicImagesReadModelModule = typeof import(
   "../../../../packages/server/src/images/read-models/public-images.ts"
@@ -42,9 +40,7 @@ await runIntegrationScenario(async (runtime) => {
   const publicImages = await import(
     runtime.moduleUrl("packages/server/src/images/read-models/public-images.ts")
   ) as PublicImagesReadModelModule;
-  const imagePaths = await import(
-    runtime.moduleUrl("packages/server/src/storage/objects/image-paths.ts")
-  ) as ImagePathsModule;
+
   const publicUrls = await import(
     runtime.moduleUrl("packages/server/src/storage/objects/public-urls.ts")
   ) as PublicUrlsModule;
@@ -126,21 +122,18 @@ await runIntegrationScenario(async (runtime) => {
     );
     for (const [position, imageId] of imageIds.entries()) {
       await runtime.databasePools.pool.query(
-        "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, "
-          + "device, brightness, theme, ext, md5, author, image_time, title) "
-          + "VALUES($1,'integration-admin','ready','local',$2,$3,$4,$5,'webp',"
-          + "$6,$7,$8,$9)",
+        `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, author, image_time, title)
+       VALUES ($1, 'integration-admin', 'ready', 'local', $2, $3, $4, 'webp', $5, $6, $7, $8)`,
         [
-          imageId,
-          imagePaths.storageObjectKey(imageId, "webp"),
-          position === 1 ? "mb" : "pc",
-          position === 2 ? "light" : "dark",
-          theme,
-          createHash("md5").update(imageId).digest("hex"),
-          author,
-          imageDate,
-          `cache item ${position}`
-        ]
+        imageId,
+        position === 1 ? "mb" : "pc",
+        position === 2 ? "light" : "dark",
+        theme,
+        createHash("md5").update(imageId).digest("hex"),
+        author,
+        imageDate,
+        `cache item ${position}`
+      ]
       );
       await runtime.databasePools.pool.query(
         "INSERT INTO image_tag(image_id, tag_slug) VALUES($1,$2)",
@@ -153,8 +146,8 @@ await runIntegrationScenario(async (runtime) => {
       site: { domain: "images.example", gallery: { public_original_button: false } },
       altcha: { enabled: false }
     });
-    const displayed = await publicUrls.publicImageUrls(
-      imagePaths.storageObjectKey(imageIds[2], "webp"), "local"
+    const displayed = await publicUrls.publicImageUrl(
+      { id: imageIds[2], ext: "webp" }, "local"
     );
     await runtime.databasePools.pool.query(
       "UPDATE metadata SET original=$2, source=$3 WHERE id=$1",
@@ -162,7 +155,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     await runtime.databasePools.pool.query(
       "UPDATE metadata SET original=$2 WHERE id=$1",
-      [imageIds[2], `${displayed.object_url}#original`]
+      [imageIds[2], `${displayed}#original`]
     );
     // Before the ready projection is initialized, detail reads use PostgreSQL.
     const databaseDetails = await Promise.all(imageIds.map((id) => (
@@ -228,13 +221,13 @@ await runIntegrationScenario(async (runtime) => {
     await assertDetailVisibility();
     const databaseResources = await readServingResources();
     const storedResource = {
-      object_key: imagePaths.storageObjectKey(imageIds[0], "webp"),
+      id: imageIds[0],
       ext: "webp",
       storage_slug: "local"
     };
     assert.equal(databaseResources?.original, originalUrl);
     assert.ok(databaseResources);
-    assert.deepEqual({ object_key: databaseResources.object_key, ext: databaseResources.ext, storage_slug: databaseResources.storage_slug }, storedResource);
+    assert.deepEqual({ id: databaseResources.id, ext: databaseResources.ext, storage_slug: databaseResources.storage_slug }, storedResource);
     await coordinator.initializeReadyImageCacheCoordinator();
     await coordinator.requestReadyImageCacheRebuild();
     assert.equal(coordinator.getReadyImageCacheCoordinatorStatus().readable, true);
@@ -304,7 +297,7 @@ await runIntegrationScenario(async (runtime) => {
     const trashedResources = await readServingResources();
     assert.equal(trashedResources?.original, originalUrl);
     assert.ok(trashedResources);
-    assert.deepEqual({ object_key: trashedResources.object_key, ext: trashedResources.ext, storage_slug: trashedResources.storage_slug }, storedResource);
+    assert.deepEqual({ id: trashedResources.id, ext: trashedResources.ext, storage_slug: trashedResources.storage_slug }, storedResource);
     const deletedPage = await adminImages.listAdminImages({
       status: "deleted", theme, page: 1, limit: 10
     });

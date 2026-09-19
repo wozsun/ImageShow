@@ -87,7 +87,6 @@ CREATE TABLE metadata (
   id UUID PRIMARY KEY,
   status TEXT NOT NULL DEFAULT 'ready',
   storage_slug TEXT NOT NULL,
-  object_key TEXT NOT NULL UNIQUE,
   device TEXT NOT NULL,
   brightness TEXT NOT NULL,
   theme TEXT,

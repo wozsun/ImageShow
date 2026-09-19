@@ -1,7 +1,8 @@
 import { imageResourceBaseUrl } from "../../config/site-host.ts";
 import { getStorageBackend, type StorageRegistryAccess } from "../backends/registry.ts";
 import type { StorageConfig } from "../backends/config.ts";
-import { thumbnailObjectKey } from "./image-paths.ts";
+import { storageObjectKey } from "@imageshow/shared/browser";
+import { assertCanonicalImageObjectKey, thumbnailObjectKey } from "./image-paths.ts";
 import {
   storageS3ObjectName,
   type ReadablePrefix
@@ -26,25 +27,31 @@ export function directStorageObjectUrl(
   return `${base}/${encodeKeyPath(objectName)}`;
 }
 
-export async function publicImageUrls(
-  objectKey: string,
+export async function publicImageUrl(
+  image: { id: string; ext: string },
   slug: string,
   access: StorageRegistryAccess = {}
 ) {
   const config = await getStorageBackend(slug, access);
-  return publicImageUrlsForConfig(objectKey, config);
+  return publicImageUrlForConfig(image, config);
 }
 
-export function publicThumbnailUrlForConfig(objectKey: string, config: StorageConfig) {
-  const thumbKey = thumbnailObjectKey(objectKey);
+export function publicThumbnailUrlForConfig(id: string, config: StorageConfig) {
+  const thumbKey = thumbnailObjectKey(id);
   return directStorageObjectUrl(config, "thumbs", thumbKey)
     || `${imageResourceBaseUrl()}${localStorageObjectUrl("thumbs", thumbKey)}`;
 }
 
-export function publicImageUrlsForConfig(objectKey: string, config: StorageConfig) {
+function publicImageUrlForConfig(image: { id: string; ext: string }, config: StorageConfig) {
+  const objectKey = storageObjectKey(image.id, image.ext);
+  assertCanonicalImageObjectKey(objectKey);
+  return directStorageObjectUrl(config, "full", objectKey)
+    || `${imageResourceBaseUrl()}${localStorageObjectUrl("full", objectKey)}`;
+}
+
+export function publicImageUrlsForConfig(image: { id: string; ext: string }, config: StorageConfig) {
   return {
-    object_url: directStorageObjectUrl(config, "full", objectKey)
-      || `${imageResourceBaseUrl()}${localStorageObjectUrl("full", objectKey)}`,
-    thumb_url: publicThumbnailUrlForConfig(objectKey, config)
+    object_url: publicImageUrlForConfig(image, config),
+    thumb_url: publicThumbnailUrlForConfig(image.id, config)
   };
 }

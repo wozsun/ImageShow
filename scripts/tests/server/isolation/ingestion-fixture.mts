@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import type {
@@ -235,16 +236,15 @@ export async function createReadyIngestionFixture(
   const preparedThumbnailFile = paths.ingestionPreparedFile(preparedInput, "thumb");
   const imageBody = Buffer.from(`integration-image:${label}:${imageId}`);
   const thumbnailBody = Buffer.from(`integration-thumbnail:${label}:${imageId}`);
-  const finalObjectKey = imagePaths.storageObjectKey(imageId, "webp");
-  const finalThumbnailKey = imagePaths.thumbnailObjectKey(finalObjectKey);
+  const finalObjectKey = storageObjectKey(imageId, "webp");
+  const finalThumbnailKey = imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(finalObjectKey)!.id);
   const repositoryKeys = sessionKeys.ingestionSessionKeys(owner, "import", sessionId);
   const storage = await runtime.storageRegistry.resolveStorageAccess(storageSlug);
   const repository = new repositoryModule.IngestionSessionRepository(
     runtime.redisClient.redis
   );
   const prepared: IngestionPreparedManifest = {
-    prepared_image_path: preparedImageFile,
-    prepared_thumbnail_path: preparedThumbnailFile,
+    producer_execution_token: executionToken,
     prepared_image_sha256: createHash("sha256").update(imageBody).digest("hex"),
     prepared_thumbnail_sha256: createHash("sha256").update(thumbnailBody).digest("hex"),
     original_size: imageBody.length,
@@ -258,7 +258,6 @@ export async function createReadyIngestionFixture(
     thumbnail_size: thumbnailBody.length,
     quality: 90,
     transcoded: true,
-    detected_device: "pc",
     detected_brightness: "dark",
     duplicate_count: 0,
     generation

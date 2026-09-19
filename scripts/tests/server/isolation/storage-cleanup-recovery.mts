@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -23,35 +24,30 @@ const imagePaths = await import("../../../../packages/server/src/storage/objects
 const objectTransfer = await import("../../../../packages/server/src/storage/objects/transfer.ts");
 const localAccess = await registry.resolveStorageAccess("local");
   const foregroundImage = randomUUID();
-  const foregroundObjectKey = imagePaths.storageObjectKey(randomUUID(), "webp");
-  const foregroundNextKey = imagePaths.storageObjectKey(foregroundImage, "webp");
+  const foregroundObjectKey = storageObjectKey(foregroundImage, "jpg");
+  const foregroundNextKey = storageObjectKey(foregroundImage, "webp");
   const foregroundFull = Buffer.from("move-cleanup-owned-full");
   const foregroundThumb = Buffer.from("move-cleanup-owned-thumbnail");
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
-      + "theme, ext, md5, thumbnail_size) VALUES ($1, 'integration-admin', 'local', $2, 'pc', "
-      + "'light', NULL, 'webp', $3, $4)",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size)
+       VALUES ($1, 'integration-admin', 'local', 'pc', 'light', NULL, 'webp', $2, $3)`,
     [
-      foregroundImage,
-      foregroundNextKey,
-      createHash("md5").update(foregroundFull).digest("hex"),
-      foregroundThumb.byteLength
-    ]
+        foregroundImage,
+        createHash("md5").update(foregroundFull).digest("hex"),
+        foregroundThumb.byteLength
+      ]
   );
   for (const key of [foregroundObjectKey, foregroundNextKey]) {
     await localAccess.driver.writeBuffer("full", key, foregroundFull, "image/webp");
-    await localAccess.driver.writeBuffer(
-      "thumbs",
-      imagePaths.thumbnailObjectKey(key),
-      foregroundThumb,
-      "image/webp"
-    );
   }
+  await localAccess.driver.writeBuffer(
+    "thumbs", imagePaths.thumbnailObjectKey(foregroundImage), foregroundThumb, "image/webp"
+  );
   const foregroundCleanupObjects = await cleanup.captureMoveCleanupObjects([
     { prefix: "full", key: foregroundObjectKey, backend: "local" },
     {
       prefix: "thumbs",
-      key: imagePaths.thumbnailObjectKey(foregroundObjectKey),
+      key: imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(foregroundObjectKey)!.id),
       backend: "local"
     }
   ]);
@@ -73,8 +69,8 @@ const localAccess = await registry.resolveStorageAccess("local");
       === "backend,key,namespace_identity,prefix"
   )));
   await database.pool.query(
-    "UPDATE metadata SET object_key=$2, brightness='dark' WHERE id=$1",
-    [foregroundImage, foregroundObjectKey]
+    "UPDATE metadata SET ext=$2, brightness='dark' WHERE id=$1",
+    [foregroundImage, "jpg"]
   );
   const adoptedToken = randomUUID();
   const adoptedCleanupJob = (await database.pool.query(
@@ -95,15 +91,15 @@ const localAccess = await registry.resolveStorageAccess("local");
   assert.equal(
     await localAccess.driver.exists(
       "thumbs",
-      imagePaths.thumbnailObjectKey(foregroundObjectKey)
+      imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(foregroundObjectKey)!.id)
     ),
     true,
     "删除边界重新采用的缩略图必须保留"
   );
 
   await database.pool.query(
-    "UPDATE metadata SET object_key=$2, brightness='light' WHERE id=$1",
-    [foregroundImage, foregroundNextKey]
+    "UPDATE metadata SET ext=$2, brightness='light' WHERE id=$1",
+    [foregroundImage, "webp"]
   );
   await cleanup.enqueueCapturedObjectsForCleanupWithoutLocationLock(
     foregroundImage,
@@ -128,14 +124,14 @@ const localAccess = await registry.resolveStorageAccess("local");
   assert.equal(
     await localAccess.driver.exists(
       "thumbs",
-      imagePaths.thumbnailObjectKey(foregroundObjectKey)
+      imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(foregroundObjectKey)!.id)
     ),
-    false
+    true
   );
   assert.equal(await localAccess.driver.exists("full", foregroundNextKey), true);
 
   const uncertainCleanupImage = randomUUID();
-  const uncertainCleanupKey = imagePaths.storageObjectKey(
+  const uncertainCleanupKey = storageObjectKey(
     uncertainCleanupImage,
     "webp"
   );
@@ -207,7 +203,7 @@ const localAccess = await registry.resolveStorageAccess("local");
   assert.equal(await jobs.markBackgroundJobSucceeded(retryJob), true);
 
   const latePublishImage = randomUUID();
-  const latePublishKey = imagePaths.storageObjectKey(latePublishImage, "webp");
+  const latePublishKey = storageObjectKey(latePublishImage, "webp");
   const latePublishBody = Buffer.from("late-published-after-client-rejection");
   const latePublishObjects = await cleanup.captureMoveCleanupObjects([{
     prefix: "full",
@@ -275,7 +271,7 @@ const localAccess = await registry.resolveStorageAccess("local");
   );
 
   const guardedLatePublishImage = randomUUID();
-  const guardedLatePublishKey = imagePaths.storageObjectKey(
+  const guardedLatePublishKey = storageObjectKey(
     guardedLatePublishImage,
     "webp"
   );
@@ -414,7 +410,7 @@ const localAccess = await registry.resolveStorageAccess("local");
 
   for (const contentMd5 of [false, true]) {
   const settledGuardImage = randomUUID();
-  const settledGuardKey = imagePaths.storageObjectKey(
+  const settledGuardKey = storageObjectKey(
     settledGuardImage,
     "webp"
   );
@@ -508,7 +504,7 @@ const localAccess = await registry.resolveStorageAccess("local");
   }
 
   const admittedCleanupImage = randomUUID();
-  const admittedCleanupKey = imagePaths.storageObjectKey(
+  const admittedCleanupKey = storageObjectKey(
     admittedCleanupImage,
     "webp"
   );
@@ -571,7 +567,7 @@ const localAccess = await registry.resolveStorageAccess("local");
   assert.equal(await jobs.markBackgroundJobSucceeded(admittedCleanupJob), true);
 
   const abortedImage = randomUUID();
-  const abortedObjectKey = imagePaths.storageObjectKey(abortedImage, "webp");
+  const abortedObjectKey = storageObjectKey(abortedImage, "webp");
   const abortedBody = Buffer.from("cancelled-move-cleanup");
   await localAccess.driver.writeBuffer(
     "thumbs",
@@ -599,7 +595,7 @@ const localAccess = await registry.resolveStorageAccess("local");
     const result = await query();
     if (
       typeof text === "string"
-      && text.includes("SELECT object_key, storage_slug")
+      && text.includes("SELECT id, ext, storage_slug")
       && Array.isArray(values) && values[0] === abortedImage
     ) {
       cleanupAbort.abort(new Error("injected lock loss before cleanup delete"));

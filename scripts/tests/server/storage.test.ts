@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 import {
@@ -74,13 +75,7 @@ import {
   s3ListPrefix,
   storageS3ObjectName
 } from "../../../packages/server/src/storage/objects/keys.ts";
-import {
-  assertCanonicalImageObjectKey,
-  isCanonicalImageObjectKey,
-  parseImageObjectKey,
-  storageObjectKey,
-  thumbnailObjectKey
-} from "../../../packages/server/src/storage/objects/image-paths.ts";
+import { assertCanonicalImageObjectKey, isCanonicalImageObjectKey, parseImageObjectKey, thumbnailObjectKey } from "../../../packages/server/src/storage/objects/image-paths.ts";
 import {
   storageConfigFromRow
 } from "../../../packages/server/src/storage/backends/record.ts";
@@ -2133,7 +2128,7 @@ test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空
 
   const canonicalKey = storageObjectKey(imageId, "avif");
   assert.equal(canonicalKey, "8d/" + imageId + ".avif");
-  assert.equal(thumbnailObjectKey(canonicalKey), "8d/" + imageId + ".webp");
+  assert.equal(thumbnailObjectKey(imageId), "8d/" + imageId + ".webp");
   assert.equal(isCanonicalImageObjectKey(canonicalKey), true);
   assert.equal(isCanonicalImageObjectKey("00/" + imageId + ".avif"), false);
   assert.equal(isCanonicalImageObjectKey(imageId + ".avif"), false);
@@ -2147,9 +2142,9 @@ test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空
   );
   assert.throws(
     () => thumbnailObjectKey("nested/" + imageId + ".avif"),
-    /Invalid image object key/
+    /Invalid image UUID/
   );
-  assert.deepEqual(parseImageObjectKey(thumbnailObjectKey(canonicalKey)), { id: imageId, ext: "webp" });
+  assert.deepEqual(parseImageObjectKey(thumbnailObjectKey(imageId)), { id: imageId, ext: "webp" });
   assert.deepEqual(parseImageObjectKey(canonicalKey), { id: imageId, ext: "avif" });
   assert.equal(parseImageObjectKey(`ff/${imageId}.avif`), null);
   assert.equal(

@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/database/pools.ts";
 import { withNormalizationAdmission } from "../images/normalization-admission.ts";
@@ -20,7 +21,7 @@ import type {
 
 async function readThumbnailAuthority(imageId: string) {
   return (await pool.query<MaintenanceImage>(
-    `SELECT id, object_key, status, storage_slug, md5, thumbnail_size
+    `SELECT id, ext, status, storage_slug, md5, thumbnail_size
        FROM metadata
       WHERE id=$1`,
     [imageId]
@@ -34,7 +35,7 @@ function sameThumbnailAuthority(
   return Boolean(
     after
     && (after.status === "ready" || after.status === "deleted")
-    && after.object_key === before.object_key
+    && after.ext === before.ext
     && after.storage_slug === before.storage_slug
   );
 }
@@ -128,13 +129,13 @@ async function persistThumbnailSize(
           SET thumbnail_size=$2
         WHERE id=$1
           AND storage_slug=$3
-          AND object_key=$4
+          AND ext=$4
           AND status IN ('ready','deleted')`,
       [
         authority.id,
         thumbnailSize,
         authority.storage_slug,
-        authority.object_key
+        authority.ext
       ]
     );
     signal.throwIfAborted();
@@ -184,7 +185,7 @@ export async function repairStorageThumbnail(
         reason: "图片记录已不存在"
       };
     }
-    const thumbKey = thumbnailObjectKey(authority.object_key);
+    const thumbKey = thumbnailObjectKey(authority.id);
     const itemBase = {
       action: "repair_thumbnail" as const,
       backend: authority.storage_slug,
@@ -202,7 +203,7 @@ export async function repairStorageThumbnail(
     operationSignal.throwIfAborted();
     if (!await storage.driver.exists(
       "full",
-      authority.object_key,
+      storageObjectKey(authority.id, authority.ext),
       { signal: operationSignal }
     )) {
       return { ...itemBase, outcome: "skipped", reason: "当前位置的原图不存在" };
@@ -223,7 +224,7 @@ export async function repairStorageThumbnail(
       async () => {
         const source = await storage.driver.readBuffer(
           "full",
-          sourceAuthority.object_key,
+          storageObjectKey(sourceAuthority.id, sourceAuthority.ext),
           { signal: operationSignal }
         );
         operationSignal.throwIfAborted();
@@ -234,7 +235,7 @@ export async function repairStorageThumbnail(
             "源存储对象与数据库记录的 MD5 不一致",
             {
               image_id: sourceAuthority.id,
-              object_key: sourceAuthority.object_key
+              object_key: storageObjectKey(sourceAuthority.id, sourceAuthority.ext)
             }
           );
         }
@@ -301,7 +302,7 @@ export async function repairStorageThumbnail(
       outcome: "failed",
       backend: authority?.storage_slug ?? "unknown",
       prefix: "thumbs",
-      key: authority ? thumbnailObjectKey(authority.object_key) : "*",
+      key: authority ? thumbnailObjectKey(authority.id) : "*",
       image_id: imageId,
       error: errorMessage(error)
     };

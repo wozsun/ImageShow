@@ -5,9 +5,7 @@ import {
 import {
   sampleResolvedReadyImageIndex
 } from "../../../packages/server/src/images/ready-cache/random-sampler.ts";
-import {
-  storageObjectKey
-} from "../../../packages/server/src/storage/objects/image-paths.ts";
+
 
 export const imageId = "019f8457-063a-7002-a580-7a432dc7fd8d";
 export type ReadyImageSampleDependencies = NonNullable<
@@ -16,7 +14,6 @@ export type ReadyImageSampleDependencies = NonNullable<
 export function servingReadyCacheItem(overrides: Record<string, unknown> = {}) {
   return readyImageCacheItemFromRow({
     id: imageId,
-    object_key: storageObjectKey(String(overrides.id ?? imageId), String(overrides.ext ?? "jpg")),
     ext: "jpg",
     device: "pc",
     brightness: "dark",
@@ -27,8 +24,7 @@ export function servingReadyCacheItem(overrides: Record<string, unknown> = {}) {
     width: 1920,
     height: 1080,
     image_size: 123456,
-    cursor_image_time: "2026-08-10T00:00:00.000000Z",
-    sort_score: "1",
+    sort_score: "1786320000000000",
     title: "Serving fixture",
     description: "Serving behavior fixture",
     source: "https://example.com/post",

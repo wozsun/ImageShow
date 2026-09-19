@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../icon/AdminIcon.js";
 import { ImageDraftFields } from "../../form/ImageDraftFields.js";
 import { ImageThumbnail } from "../ImageThumbnail.js";
@@ -93,7 +94,7 @@ export function ImageMetadataEditorCard({
         <div className="image-editor-head">
           <div>
             <div className="image-editor-head-name">
-              <strong className="image-editor-title-desktop" title={item.object_key}>{item.id}</strong>
+              <strong className="image-editor-title-desktop" title={storageObjectKey(item.id, item.ext)}>{item.id}</strong>
               <strong className="image-editor-title-mobile" title={item.id}>{shortImageId(item.id)}</strong>
               {saveStatePresentation ? (
                 <span className={`image-editor-save-badge ${saveStatePresentation.badgeClassName}`}>

@@ -1,3 +1,4 @@
+import { imageDevice } from "@imageshow/shared/browser";
 import type {
   CompletedIngestionImageDto,
   ActiveServerIngestionItemDto,
@@ -127,7 +128,7 @@ function activeIngestionJob(
   const pairKey = serverIngestionPairKey(item);
   const prepared = item.prepared;
   const detected = prepared ? {
-    device: prepared.detected_device,
+    device: imageDevice(prepared.width, prepared.height),
     brightness: prepared.detected_brightness
   } : undefined;
   const canonicalDraft = detected

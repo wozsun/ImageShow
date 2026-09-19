@@ -43,8 +43,7 @@ const importDownloadSchema = z.strictObject({ url: nonEmptyString });
 export type ImportDownload = Readonly<z.infer<typeof importDownloadSchema>>;
 
 const preparedSchema = z.strictObject({
-  prepared_image_path: nonEmptyString,
-  prepared_thumbnail_path: nonEmptyString,
+  producer_execution_token: nonEmptyString,
   original_size: positiveInteger,
   original_width: positiveInteger,
   original_height: positiveInteger,
@@ -58,7 +57,6 @@ const preparedSchema = z.strictObject({
   thumbnail_size: positiveInteger,
   quality: nonNegativeInteger.nullable(),
   transcoded: z.boolean(),
-  detected_device: z.enum(["pc", "mb"]),
   detected_brightness: z.enum(["dark", "light"]),
   duplicate_count: nonNegativeInteger,
   generation: nonEmptyString
@@ -71,8 +69,7 @@ const commitSchema = z.strictObject({
   created_by: nonEmptyString,
   expected_md5: digest(16),
   duplicate_decision: duplicateDecision,
-  metadata: draftSchema,
-  final_object_key: nonEmptyString
+  metadata: draftSchema
 });
 const sessionErrorSchema = z.strictObject({ code: nonEmptyString, message: z.string() });
 export type IngestionSessionError = Readonly<z.infer<typeof sessionErrorSchema>>;

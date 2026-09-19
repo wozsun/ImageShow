@@ -1,9 +1,10 @@
-import { publicImageUrls } from "../storage/objects/public-urls.ts";
+import { publicImageUrl } from "../storage/objects/public-urls.ts";
 import { imageResourceBaseUrl } from "../config/site-host.ts";
 import type { StorageRegistryAccess } from "../storage/backends/registry.ts";
 
 type OriginalComparableImage = {
-  object_key: string;
+  id: string;
+  ext: string;
   storage_slug: string;
 };
 
@@ -24,12 +25,11 @@ export async function displayUrlForOriginalComparison(
   image: OriginalComparableImage,
   access: StorageRegistryAccess = {}
 ) {
-  const urls = await publicImageUrls(
-    image.object_key,
+  return publicImageUrl(
+    image,
     image.storage_slug,
     access
   );
-  return urls.object_url;
 }
 
 export function hasDistinctOriginalUrl(original: string, displayUrl: string) {

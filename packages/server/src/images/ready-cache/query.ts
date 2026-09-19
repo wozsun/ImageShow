@@ -371,7 +371,7 @@ export function readReadyImageCursorPage(
             ...window,
             nextCursor: start + window.items.length < window.total && last
               ? encodeImageCursor({
-                  cursor_image_time: last.image_time,
+                  sort_score: last.sort_score,
                   id: last.id
                 }, context)
               : null
@@ -395,7 +395,7 @@ export function readReadyImageCursorPage(
           items,
           total,
           nextCursor: hasMore && last
-            ? encodeImageCursor({ id: last.id, cursor_image_time: last.image_time }, context)
+            ? encodeImageCursor({ id: last.id, sort_score: last.sort_score }, context)
             : null
         }
       };

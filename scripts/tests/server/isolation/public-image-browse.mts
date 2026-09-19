@@ -14,7 +14,7 @@ await runIntegrationScenario(async (runtime) => {
   const { handleApiError } = await import("../../../../packages/server/src/core/http/responses.ts");
   const reads = await import("../../../../packages/server/src/images/read-models/public-images.ts");
   const coordinator = await import("../../../../packages/server/src/images/ready-cache/coordinator.ts");
-  const { storageObjectKey } = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+
   const { READY_IMAGE_ID_SUFFIX_LOOKUP_KEY } = await import("../../../../packages/server/src/images/ready-cache/keys.ts");
   const { readyImageMember } = await import("../../../../packages/server/src/images/ready-cache/model.ts");
   const { pool } = runtime.databasePools;
@@ -33,12 +33,14 @@ await runIntegrationScenario(async (runtime) => {
   ];
   for (const [index, id] of ids.entries()) {
     await pool.query(
-      `INSERT INTO metadata (id, created_by, status, storage_slug, object_key,
-        device, brightness, theme, ext, md5, image_time, title, width, height)
-       VALUES ($1, 'integration-admin', 'ready', 'local', $2, 'pc', 'dark', NULL,
-         'webp', $3, $4, $5, 1600, 900)`,
-      [id, storageObjectKey(id, "webp"), createHash("md5").update(id).digest("hex"),
-        `2026-09-01T00:00:00.00000${Math.floor(index / 2)}Z`, `Image ${index}`]
+      `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, image_time, title, width, height)
+       VALUES ($1, 'integration-admin', 'ready', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, $4, 1600, 900)`,
+      [
+        id,
+        createHash("md5").update(id).digest("hex"),
+        `2026-09-01T00:00:00.00000${Math.floor(index / 2)}Z`,
+        `Image ${index}`
+      ]
     );
   }
   const time = Date.parse("2026-09-08T12:00:00Z");

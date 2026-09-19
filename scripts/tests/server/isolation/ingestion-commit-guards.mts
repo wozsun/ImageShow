@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import { activeSession, preparedSession, committingSession, completedSession } from "./ingestion-scenario-fixture.mts";
 import { repositoryWithOverrides } from "./ingestion-scenario-fixture.mts";
 import assert from "node:assert/strict";
@@ -104,8 +105,7 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
   await preparedFiles.writeIngestionPreparedFile(commitImageKey, commitImageBody, new AbortController().signal);
   await preparedFiles.writeIngestionPreparedFile(commitThumbnailKey, commitThumbnailBody, new AbortController().signal);
   const realPrepared = {
-    prepared_image_path: commitImageKey,
-    prepared_thumbnail_path: commitThumbnailKey,
+    producer_execution_token: commitPreparationToken,
     prepared_image_sha256: createHash("sha256")
       .update(commitImageBody)
       .digest("hex"),
@@ -123,7 +123,6 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
     thumbnail_size: commitThumbnailBody.length,
     quality: 90,
     transcoded: true,
-    detected_device: "pc" as const,
     detected_brightness: "dark" as const,
     duplicate_count: 0,
     generation: commitGeneration
@@ -364,11 +363,9 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
   const realCommitCoordinator = new (
     ingestionIrreversibleCoordinator.IngestionIrreversibleCoordinator
   )();
-  const committedObjectKey = frozenCommitSession.commit.final_object_key;
+  const committedObjectKey = storageObjectKey(frozenCommitSession.image_id, frozenCommitSession.prepared.ext);
   const committedObjectPrefix = "full";
-  const committedThumbnailKey = imagePaths.thumbnailObjectKey(
-    committedObjectKey
-  );
+  const committedThumbnailKey = imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(committedObjectKey)!.id);
   const commitStorageAccess = await registry.resolveStorageAccess("local");
   const originalCommitWrite = commitStorageAccess.driver.writeStream.bind(
     commitStorageAccess.driver
@@ -513,20 +510,17 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
   assert.equal(commitWriteCalls, 0, "候选 guard 未落库前不得开始正式写入");
   const conflictingCommitActor = "current-conflicting-actor-" + randomUUID();
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
-      + "brightness, theme, ext, md5, width, height, image_size, "
-      + "thumbnail_size, image_time, title) VALUES "
-      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,1200,800,$5,$6,$7,$8)",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, width, height, image_size, thumbnail_size, image_time, title)
+       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 1200, 800, $4, $5, $6, $7)`,
     [
-      commitImageId,
-      conflictingCommitActor,
-      committedObjectKey,
-      realPrepared.md5,
-      commitImageBody.length,
-      commitThumbnailBody.length,
-      commitImageTime.iso,
-      "conflicting owner"
-    ]
+        commitImageId,
+        conflictingCommitActor,
+        realPrepared.md5,
+        commitImageBody.length,
+        commitThumbnailBody.length,
+        commitImageTime.iso,
+        "conflicting owner"
+      ]
   );
   let commitGuardJob;
   try {

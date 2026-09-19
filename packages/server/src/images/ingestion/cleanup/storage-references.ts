@@ -5,8 +5,9 @@ import {
   requireOperationalRedis
 } from "../../../core/runtime-availability.ts";
 import { ingestionSessionRepository } from "../runtime-repository.ts";
-import { ingestionRawPath, ingestionPreparedPath } from "../raw/paths.ts";
+import { ingestionRawPath, ingestionPreparedPath, ingestionPreparedFiles } from "../raw/paths.ts";
 import type {
+  IngestionPreparedManifest,
   IngestionSessionSnapshot,
   StoredIngestionSession
 } from "../sessions/model.ts";
@@ -17,10 +18,9 @@ export type ActiveIngestionStorageReference = {
   queue: "upload" | "import";
   status: string;
   storage_slug: string;
-  final_object_key: string | null;
+  commit_ext: string | null;
   raw_generation: string;
-  prepared_image_path: string | null;
-  prepared_thumbnail_path: string | null;
+  prepared: Pick<IngestionPreparedManifest, "generation" | "producer_execution_token"> | null;
   discard_at: number;
 };
 
@@ -38,10 +38,9 @@ function activeStorageReference(
     queue: active.queue,
     status: active.status,
     storage_slug: active.storage_slug,
-    final_object_key: active.commit?.final_object_key ?? null,
+    commit_ext: active.commit ? prepared!.ext : null,
     raw_generation: active.raw_generation,
-    prepared_image_path: prepared?.prepared_image_path ?? null,
-    prepared_thumbnail_path: prepared?.prepared_thumbnail_path ?? null,
+    prepared: prepared ? { generation: prepared.generation, producer_execution_token: prepared.producer_execution_token } : null,
     discard_at: active.discard_at
   };
 }
@@ -54,10 +53,10 @@ function storageProjection(session: StoredIngestionSession) {
     active.image_id,
     active.queue,
     active.storage_slug,
-    active.final_object_key ?? "",
+    active.commit_ext ?? "",
     active.raw_generation,
-    active.prepared_image_path ?? "",
-    active.prepared_thumbnail_path ?? ""
+    active.prepared?.generation ?? "",
+    active.prepared?.producer_execution_token ?? ""
   ].join("\0");
 }
 
@@ -171,7 +170,7 @@ export async function activeIngestionStorageReferences(
       () => new Map()
     );
     references.set(row.id, row);
-    for (const file of [row.prepared_image_path, row.prepared_thumbnail_path]) {
+    for (const file of row.prepared ? ingestionPreparedFiles({ session_id: row.id, image_id: row.image_id }, row.prepared) : []) {
       if (file) tempPaths.add(ingestionPreparedPath(file));
     }
     if (row.raw_generation) {

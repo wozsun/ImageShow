@@ -24,7 +24,7 @@ import {
 
 type StoredThumbnailRecord = Pick<
   ImageServingRecord,
-  "object_key" | "storage_slug"
+  "id" | "storage_slug"
 >;
 
 export type StoredImageServingDependencies = {
@@ -55,7 +55,7 @@ async function deliverStoredThumbnail(
   dependencies: StoredImageServingDependencies,
   access: StorageRegistryAccess = {}
 ): Promise<Response> {
-  const thumbKey = thumbnailObjectKey(record.object_key);
+  const thumbKey = thumbnailObjectKey(record.id);
   const resolvedThumb = await dependencies.resolveReadableObject(
     "thumbs",
     thumbKey,
@@ -94,7 +94,7 @@ export async function servePublicStoredObject(
   const record = await withPublicDatabaseRead(signal, (database) => (
     dependencies.readImageServingRecordById(parsed.id, database)
   ));
-  if (!record || record.object_key !== key) {
+  if (!record || record.id !== parsed.id || record.ext !== parsed.ext) {
     throw new ApiError(404, "not_found", "Object not found");
   }
   const object = await dependencies.resolveReadableObject(
@@ -125,7 +125,7 @@ export async function servePublicStoredThumbnail(
   const record = await withPublicDatabaseRead(signal, (database) => (
     dependencies.readImageServingRecordById(parsed.id, database)
   ));
-  if (!record || thumbnailObjectKey(record.object_key) !== key) {
+  if (!record || thumbnailObjectKey(record.id) !== key) {
     throw new ApiError(404, "not_found", "Thumbnail not found");
   }
   return deliverStoredThumbnail(record, { ...request, signal }, dependencies, { signal });

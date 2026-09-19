@@ -33,7 +33,7 @@ export async function migrateSelectedImagesToStorageBackend(
   const execute = async () => {
     options.signal?.throwIfAborted();
     const rows = (await pool.query(
-      `SELECT id, object_key, ext, storage_slug, md5,
+      `SELECT id, ext, storage_slug, md5,
               image_size, thumbnail_size
          FROM metadata
         WHERE id = ANY($1::uuid[])`,

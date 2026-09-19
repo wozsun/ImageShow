@@ -1,3 +1,4 @@
+
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
@@ -9,7 +10,7 @@ const database = {
   ...databasePools,
   ...await import("../../../../packages/server/src/core/database/advisory-locks.ts")
 };
-const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+
 const imageUpdate = await import("../../../../packages/server/src/images/image-update.ts");
 const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
 const readyCacheCoordinator = await import("../../../../packages/server/src/images/ready-cache/coordinator.ts");
@@ -36,12 +37,10 @@ const readReadyRevision = async () => BigInt(String((
     imageUpdateIds.fourth
   ].entries()) {
     await database.pool.query(
-      "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
-        + "theme, ext, md5) VALUES ($1, 'integration-admin', 'local', $2, 'pc', 'dark', "
-        + "NULL, 'webp', $3)",
+      `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5)
+       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2)`,
       [
         id,
-        imagePaths.storageObjectKey(id, "webp"),
         String(index + 1).repeat(32)
       ]
     );
@@ -458,7 +457,7 @@ const readReadyRevision = async () => BigInt(String((
   assert.deepEqual((await readAtomicImage(imageUpdateIds.fourth)).tags, ["right-set", "shared-set"]);
   assert.equal((await database.pool.query("SELECT count(*)::int AS count FROM tag WHERE slug='shared-set'")).rows[0].count, 1);
   const readThemeImage = async () => (await database.pool.query(
-    "SELECT theme, object_key, md5, image_time, author FROM metadata WHERE id=$1",
+    "SELECT theme, ext, md5, image_time, author FROM metadata WHERE id=$1",
     [imageUpdateIds.first]
   )).rows[0];
   const originalThemeImage = await readThemeImage();

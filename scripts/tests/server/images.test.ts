@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 
@@ -178,7 +179,7 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
       reads.push("metadata");
       if (fault === "metadata") throw connectionError;
       return { rows: [{
-        id, created_by: "owner", storage_slug: "local", object_key: fault === "format" ? "invalid" : `01/${id}.webp`,
+        id: fault === "format" ? "invalid" : id, ext: "webp", created_by: "owner", storage_slug: "local",
         device: "pc", brightness: "dark", theme: null, author: null, tags: [],
         title: "fixture", description: "", source: "", original: "", width: 100, height: 100,
         image_size: 10, md5: "a".repeat(32), image_time: "2026-09-15T00:00:00.000Z"
@@ -1177,7 +1178,7 @@ test("[Server/图片] 外部图片 DNS 地址策略保持严格解析、最长�
 test("[Server/图片] stored serving 的缩略图读取严格只读并保留真实错误语义", async () => {
   const item = servingReadyCacheItem();
   const record = {
-    object_key: item.object_key,
+    id: item.id,
     ext: item.ext,
     storage_slug: item.storage_slug
   };
@@ -1247,7 +1248,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   };
 
   const objectResponse = await servePublicStoredObject(
-    item.object_key,
+    storageObjectKey(item.id, item.ext),
     request,
     baseDependencies as never
   );
@@ -1261,7 +1262,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   for (const storageSlug of ["local", "s3-private"]) {
     servingRecord = { ...record, storage_slug: storageSlug };
     const stableResponse = await servePublicStoredObject(
-      item.object_key,
+      storageObjectKey(item.id, item.ext),
       getRequest,
       baseDependencies as never
     );
@@ -1275,7 +1276,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   servingRecord = { ...record, storage_slug: "s3-public" };
 
   const redirectResponse = await servePublicStoredObject(
-    item.object_key,
+    storageObjectKey(item.id, item.ext),
     request,
     {
       ...baseDependencies,
@@ -1304,7 +1305,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
 
   streamCalls.length = 0;
   const thumbnailResponse = await servePublicStoredThumbnail(
-    item.object_key.replace(/\.[^.]+$/, ".webp"),
+    storageObjectKey(item.id, item.ext).replace(/\.[^.]+$/, ".webp"),
     request,
     baseDependencies as never
   );
@@ -1317,7 +1318,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   for (const storageSlug of ["local", "s3-private"]) {
     servingRecord = { ...record, storage_slug: storageSlug };
     const stableThumbnail = await servePublicStoredThumbnail(
-      item.object_key.replace(/\.[^.]+$/, ".webp"),
+      storageObjectKey(item.id, item.ext).replace(/\.[^.]+$/, ".webp"),
       getRequest,
       baseDependencies as never
     );
@@ -1332,7 +1333,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   streamCalls.length = 0;
   servingRecord = { ...record, storage_slug: "s3-public" };
   const thumbnailRedirect = await servePublicStoredThumbnail(
-    item.object_key.replace(/\.[^.]+$/, ".webp"),
+    storageObjectKey(item.id, item.ext).replace(/\.[^.]+$/, ".webp"),
     request,
     {
       ...baseDependencies,
@@ -1358,7 +1359,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
 
   await assert.rejects(
     servePublicStoredThumbnail(
-      item.object_key.replace(/\.[^.]+$/, ".webp"),
+      storageObjectKey(item.id, item.ext).replace(/\.[^.]+$/, ".webp"),
       request,
       {
         ...baseDependencies,
@@ -1374,7 +1375,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
 
   await assert.rejects(
     servePublicStoredThumbnail(
-      item.object_key.replace(/\.[^.]+$/, ".webp"),
+      storageObjectKey(item.id, item.ext).replace(/\.[^.]+$/, ".webp"),
       request,
       {
         ...baseDependencies,
@@ -1410,7 +1411,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   let invalidThumbnailKeyRead = false;
   await assert.rejects(
     servePublicStoredThumbnail(
-      item.object_key,
+      storageObjectKey(item.id, item.ext),
       request,
       {
         ...baseDependencies,
@@ -1429,7 +1430,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
 test("[Server/图片] external original serving 保持 direct/proxy、validator 与 deleted 边界", async () => {
   const item = servingReadyCacheItem();
   const record = {
-    object_key: item.object_key,
+    id: item.id,
     original: item.original,
     ext: item.ext,
     storage_slug: item.storage_slug,
@@ -1444,7 +1445,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
       return record;
     },
     displayUrlForOriginalComparison: async () =>
-      `https://img.example.com/images/full/${item.object_key}`,
+      `https://img.example.com/images/full/${storageObjectKey(item.id, item.ext)}`,
     supportsDirectAccess: async () => direct,
     proxyExternalImage: async (...args: unknown[]) => {
       proxyCalls.push(args);
@@ -1528,7 +1529,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
     }), /Unsafe Location/);
   }
   for (const unavailable of [null, { ...record, original: "" }, {
-    ...record, original: `https://img.example.com/images/full/${item.object_key}`
+    ...record, original: `https://img.example.com/images/full/${storageObjectKey(item.id, item.ext)}`
   }]) {
     await assert.rejects(
       servePublicExternalOriginal(item.id, {}, {
@@ -1897,11 +1898,20 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
     const row = { cursor_image_time: time, id: cursorId };
     const encoded = encodeImageCursor(row, context);
     assert.equal(encoded.length, 31);
+    assert.equal(encodeImageCursor({ id: cursorId, sort_score: score }, context), encoded);
     for (const order of ["latest", "oldest"] as const) {
       assert.deepEqual(decodeImageCursor(encoded, createImageBrowseContext(order)), {
         imageTime: time, id: cursorId, sortScore: score, phase: 0
       });
     }
+  }
+  const adjacent = [1_588_262_400_123_456, 1_588_262_400_123_457].map((sort_score) => (
+    encodeImageCursor({ id: cursorId, sort_score }, context)
+  ));
+  assert.notEqual(adjacent[0], adjacent[1]);
+  assert.equal(decodeImageCursor(adjacent[1]!, context).imageTime, "2020-04-30T16:00:00.123457Z");
+  for (const sort_score of [NaN, Infinity, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => encodeImageCursor({ id: cursorId, sort_score }, context), /Invalid image list cursor row/);
   }
   const fixedCursorRow = { cursor_image_time: positions[0]!.time, id: cursorId };
   const encoded = encodeImageCursor(fixedCursorRow, context);

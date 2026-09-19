@@ -88,7 +88,7 @@ await runIntegrationScenario(async (runtime) => {
     let migrationPending: Promise<unknown> | undefined;
     try {
       await settleWithin(Promise.race([Promise.all([repairStarted.promise, removalStarted.promise]), pending.then(() => assert.fail("both resource pools must start"))]));
-      const source = (await pool.query<ImageStorageMigrationRecord>("SELECT id, object_key, ext, storage_slug, md5, image_size, thumbnail_size FROM metadata WHERE id=$1", [image.id])).rows[0]!;
+      const source = (await pool.query<ImageStorageMigrationRecord>("SELECT id, ext, storage_slug, md5, image_size, thumbnail_size FROM metadata WHERE id=$1", [image.id])).rows[0]!;
       migrationPending = migration.migrateImageToStorageBackend(source, "local-maintenance");
       void migrationPending.catch(() => undefined);
       await waitForStorageLockWait(pool, true);

@@ -1,3 +1,4 @@
+import { ingestionPreparedFiles } from "../raw/paths.ts";
 import type {
   CompletedIngestionDisplayDto,
   ActiveServerIngestionItemDto,
@@ -48,7 +49,6 @@ export function presentIngestionSession(
         size: session.prepared.size,
         quality: session.prepared.quality,
         transcoded: session.prepared.transcoded,
-        detected_device: session.prepared.detected_device,
         detected_brightness: session.prepared.detected_brightness,
         duplicate_count: session.prepared.duplicate_count
       }
@@ -204,9 +204,8 @@ export async function readIngestionPreview(
   ) {
     throw new ApiError(409, "ingestion_version_conflict", "内容接入任务版本已变化");
   }
-  const key = variant === "full"
-    ? current.prepared!.prepared_image_path
-    : current.prepared!.prepared_thumbnail_path;
+  const files = ingestionPreparedFiles(current, current.prepared!);
+  const key = files[variant === "full" ? 0 : 1];
   const buffer = await readIngestionPreparedFile(key, requestSignal);
   return new Response(buffer as unknown as BodyInit, {
     headers: {

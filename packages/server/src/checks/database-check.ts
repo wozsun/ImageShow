@@ -1,4 +1,5 @@
 import { appConfig } from "@imageshow/shared";
+import { storageObjectKey } from "@imageshow/shared/browser";
 import type {
   AdminTrashCheckDto,
   AdminTrashCheckIssueDto,
@@ -99,13 +100,17 @@ export async function checkTrash() {
          FROM ranked GROUP BY kind ORDER BY kind`,
       [appConfig.backgroundJob.sampleLimit, appConfig.backgroundJob.taskTimeoutSeconds]
     )).rows as AdminTrashCheckIssueDto[];
-    const candidates = (await client.query(
-      `SELECT id, object_key, deleted_at::text AS deleted_at,
+    const candidates = (await client.query<{
+      id: string; ext: string; deleted_at: string; purge_pending: boolean;
+    }>(
+      `SELECT id, ext, deleted_at::text AS deleted_at,
               ${imageHasTrashPurgeJobSql} AS purge_pending
          FROM metadata WHERE status='deleted'
         ORDER BY deleted_at, id LIMIT $1`,
       [trashInspectionSampleLimit]
-    )).rows as AdminTrashCheckDto["candidates"];
+    )).rows.map(({ ext, ...candidate }) => ({
+      ...candidate, object_key: storageObjectKey(candidate.id, ext)
+    }));
     const normalizedJobCounts: AdminTrashCheckDto["job_counts"] = {
       pending: 0, running: 0, retrying: 0, exhausted: 0
     };

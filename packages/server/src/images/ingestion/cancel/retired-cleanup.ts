@@ -1,3 +1,4 @@
+import { ingestionPreparedFiles } from "../raw/paths.ts";
 import { mapWithWorkerPool } from "../../../core/concurrency.ts";
 import { removeIngestionPreparedFiles } from "../raw/prepared.ts";
 import { removeIngestionRaw } from "../raw/files.ts";
@@ -14,8 +15,7 @@ async function cleanupRetiredSession(session: IngestionSessionSnapshot) {
     : [];
   if (session.prepared) {
     cleanups.push(removeIngestionPreparedFiles([
-      session.prepared.prepared_image_path,
-      session.prepared.prepared_thumbnail_path
+      ...ingestionPreparedFiles(session, session.prepared)
     ]));
   }
   const results = await Promise.allSettled(cleanups);

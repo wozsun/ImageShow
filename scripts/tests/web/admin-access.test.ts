@@ -3294,7 +3294,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
       thumb_url: "",
       status: "deleted",
       purge_pending: false,
-      object_key: `${serial.slice(-2)}/00000000-0000-7000-8000-${serial}.webp`,
+      ext: "webp",
       storage_slug: "local",
       md5: serial.padStart(32, "0").slice(-32),
       original: "",

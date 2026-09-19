@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { pool } from "../../core/database/pools.ts";
 import { logger } from "../../core/logger.ts";
@@ -67,12 +68,12 @@ function cleanupConfirmationDelay(job: BackgroundJob) {
 
 function metadataReferencesObject(
   object: CapturedMoveCleanupObject,
-  row: { object_key: string; storage_slug: string }
+  row: { id: string; ext: string; storage_slug: string }
 ) {
-  assertCanonicalImageObjectKey(row.object_key);
+  assertCanonicalImageObjectKey(storageObjectKey(row.id, row.ext));
   return object.prefix === "full"
-    ? row.object_key === object.key
-    : thumbnailObjectKey(row.object_key) === object.key;
+    ? storageObjectKey(row.id, row.ext) === object.key
+    : thumbnailObjectKey(row.id) === object.key;
 }
 
 export async function handleMoveCleanupJob(
@@ -148,12 +149,13 @@ export async function handleMoveCleanupJob(
     // This locked read is the deletion boundary: every payload object is
     // compared with the same latest metadata snapshot before one batch starts.
     const latest = (await pool.query(
-      `SELECT object_key, storage_slug
+      `SELECT id, ext, storage_slug
          FROM metadata
         WHERE id=$1`,
       [job.target_id]
     )).rows[0] as {
-      object_key: string;
+      id: string;
+      ext: string;
       storage_slug: string;
     } | undefined;
     admissionSignal.throwIfAborted();

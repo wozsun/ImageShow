@@ -1,3 +1,4 @@
+import { imageDevice } from "@imageshow/shared/browser";
 import type {
   ImageDraftDto,
   IngestionCancelItemResultDto,
@@ -103,7 +104,7 @@ function metadataForAction(
   }
   if (patch.device !== undefined) {
     metadata.device = patch.device === "auto" && prepared
-      ? prepared.detected_device
+      ? imageDevice(prepared.width, prepared.height)
       : patch.device;
   }
   if (patch.brightness !== undefined) {

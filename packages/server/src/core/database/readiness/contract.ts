@@ -72,7 +72,6 @@ export const databaseReadiness = {
       id: "uuid",
       status: "text",
       storage_slug: "text",
-      object_key: "text",
       device: "text",
       brightness: "text",
       theme: "text",
@@ -177,11 +176,6 @@ export const requiredPrimaryKeys = [
 ] as const satisfies readonly RequiredPrimaryKey[];
 
 export const requiredUniqueIndexes = [
-  {
-    table: "metadata",
-    columns: ["object_key"],
-    predicate: "none"
-  },
   {
     table: "author",
     columns: ["identity_provider", "identity_id"],

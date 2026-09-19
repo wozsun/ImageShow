@@ -1,5 +1,14 @@
 import { slugMaxLength, slugPattern, type Brightness, type Device } from "./common.ts";
 
+/** Stable physical identity, independent of editable image classification. */
+export function storageObjectKey(id: string, ext: string) {
+  return `${id.slice(-2)}/${id}.${ext}`;
+}
+
+export function imageDevice(width: number, height: number): Device {
+  return width >= height ? "pc" : "mb";
+}
+
 /** Query-only selector and virtual facet identity; never a stored theme slug. */
 export const unsetThemeFilter = "null";
 
@@ -103,7 +112,6 @@ export type RandomImageJsonItemDto = {
   brightness: Brightness;
   theme: string | null;
   tags: string[];
-  diff_original: boolean;
   width: number;
   height: number;
   image_time: string;
@@ -117,7 +125,7 @@ export type RandomImageJsonResponseDto = {
 export type AdminImageListItemDto = ImageDetailItemDto & {
   status: "ready" | "deleted";
   purge_pending: boolean;
-  object_key: string;
+  ext: string;
   storage_slug: string;
   md5: string;
   original: string;
@@ -130,7 +138,7 @@ export type AdminImageListItemDto = ImageDetailItemDto & {
 /**
  * Fields consumed by the shared admin detail dialog.
  *
- * This deliberately excludes list/edit-only fields such as object_key,
+ * This deliberately excludes list/edit-only fields such as ext,
  * original, image_size and status so compact callers do not over-fetch.
  */
 export type AdminImageDetailItemDto = ImageDetailItemDto & {
@@ -158,7 +166,7 @@ export type EditableImageSnapshotDto = {
   width: number;
   height: number;
   image_size: number;
-  object_key: string;
+  ext: string;
   storage_slug: string;
 };
 

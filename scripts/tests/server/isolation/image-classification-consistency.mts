@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { removeDriverObject } from "./storage-fixture.mts";
@@ -19,7 +20,7 @@ const readReadyRevision = async () => BigInt(String((
   )
 ).rows[0].revision));
   const classificationRollbackId = randomUUID();
-  const classificationRollbackSource = imagePaths.storageObjectKey(classificationRollbackId, "webp");
+  const classificationRollbackSource = storageObjectKey(classificationRollbackId, "webp");
   const classificationRollbackBody = Buffer.from(
     "atomic-classification-rollback"
   );
@@ -27,15 +28,13 @@ const readReadyRevision = async () => BigInt(String((
     .update(classificationRollbackBody)
     .digest("hex");
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
-      + "theme, ext, md5, thumbnail_size, title) VALUES "
-      + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, $4, 'before')",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, title)
+       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, 'before')`,
     [
-      classificationRollbackId,
-      classificationRollbackSource,
-      classificationRollbackMd5,
-      classificationRollbackBody.byteLength
-    ]
+        classificationRollbackId,
+        classificationRollbackMd5,
+        classificationRollbackBody.byteLength
+      ]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -45,7 +44,7 @@ const readReadyRevision = async () => BigInt(String((
   );
   await localAccess.driver.writeBuffer(
     "thumbs",
-    imagePaths.thumbnailObjectKey(classificationRollbackSource),
+    imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(classificationRollbackSource)!.id),
     classificationRollbackBody,
     "image/webp"
   );
@@ -81,10 +80,10 @@ const readReadyRevision = async () => BigInt(String((
   assert.equal(failedClassificationUpdate.failed, 1);
   assert.equal(await readReadyRevision(), revisionBeforeClassificationRollback);
   assert.deepEqual((await database.pool.query(
-    "SELECT object_key, brightness, title FROM metadata WHERE id=$1",
+    "SELECT ext, brightness, title FROM metadata WHERE id=$1",
     [classificationRollbackId]
   )).rows[0], {
-    object_key: classificationRollbackSource,
+    ext: "webp",
     brightness: "dark",
     title: "before"
   });
@@ -113,26 +112,23 @@ const readReadyRevision = async () => BigInt(String((
   await removeDriverObject(
     localAccess.driver,
     "thumbs",
-    imagePaths.thumbnailObjectKey(classificationRollbackSource)
+    imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(classificationRollbackSource)!.id)
   );
 
   const classificationId = randomUUID();
-  const classificationSourceKey = imagePaths.storageObjectKey(classificationId, "webp");
+  const classificationSourceKey = storageObjectKey(classificationId, "webp");
   const classificationBody = Buffer.from("classification-metadata-only");
   const classificationMd5 = createHash("md5")
     .update(classificationBody)
     .digest("hex");
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
-      + "theme, ext, md5, image_size, thumbnail_size, status) VALUES "
-      + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, $4, $4, "
-      + "'ready')",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size, status)
+       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, $3, 'ready')`,
     [
-      classificationId,
-      classificationSourceKey,
-      classificationMd5,
-      classificationBody.byteLength
-    ]
+        classificationId,
+        classificationMd5,
+        classificationBody.byteLength
+      ]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -142,7 +138,7 @@ const readReadyRevision = async () => BigInt(String((
   );
   await localAccess.driver.writeBuffer(
     "thumbs",
-    imagePaths.thumbnailObjectKey(classificationSourceKey),
+    imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(classificationSourceKey)!.id),
     classificationBody,
     "image/webp"
   );
@@ -155,10 +151,10 @@ const readReadyRevision = async () => BigInt(String((
     results: [{ id: classificationId, status: "updated" }]
   });
   assert.deepEqual((await database.pool.query(
-    "SELECT object_key, brightness FROM metadata WHERE id=$1",
+    "SELECT ext, brightness FROM metadata WHERE id=$1",
     [classificationId]
   )).rows[0], {
-    object_key: classificationSourceKey,
+    ext: "webp",
     brightness: "light"
   });
   assert.equal(
@@ -169,7 +165,7 @@ const readReadyRevision = async () => BigInt(String((
   assert.equal(
     await localAccess.driver.exists(
       "thumbs",
-      imagePaths.thumbnailObjectKey(classificationSourceKey)
+      imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(classificationSourceKey)!.id)
     ),
     true
   );
@@ -186,11 +182,11 @@ const readReadyRevision = async () => BigInt(String((
   await removeDriverObject(
     localAccess.driver,
     "thumbs",
-    imagePaths.thumbnailObjectKey(classificationSourceKey)
+    imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(classificationSourceKey)!.id)
   );
 
   const classificationMissingThumbId = randomUUID();
-  const classificationMissingThumbSource = imagePaths.storageObjectKey(classificationMissingThumbId, "webp");
+  const classificationMissingThumbSource = storageObjectKey(classificationMissingThumbId, "webp");
   const classificationMissingThumbBody = Buffer.from(
     "classification-without-thumbnail"
   );
@@ -198,14 +194,12 @@ const readReadyRevision = async () => BigInt(String((
     .update(classificationMissingThumbBody)
     .digest("hex");
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
-      + "theme, ext, md5, thumbnail_size) VALUES "
-      + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, 0)",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size)
+       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, 0)`,
     [
-      classificationMissingThumbId,
-      classificationMissingThumbSource,
-      classificationMissingThumbMd5
-    ]
+        classificationMissingThumbId,
+        classificationMissingThumbMd5
+      ]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -218,10 +212,10 @@ const readReadyRevision = async () => BigInt(String((
     brightness: "light"
   }])).failed, 0);
   assert.deepEqual((await database.pool.query(
-    "SELECT object_key, brightness FROM metadata WHERE id=$1",
+    "SELECT ext, brightness FROM metadata WHERE id=$1",
     [classificationMissingThumbId]
   )).rows[0], {
-    object_key: classificationMissingThumbSource,
+    ext: "webp",
     brightness: "light"
   });
   assert.equal(

@@ -47,7 +47,7 @@ type UpdateImageRecord = {
   theme: string | null;
   width: number | string | null;
   height: number | string | null;
-  object_key: string;
+  ext: string;
   storage_slug: string;
   author: string | null;
   title: string;
@@ -79,7 +79,7 @@ const updateImageColumns = [
   "theme",
   "width",
   "height",
-  "object_key",
+  "ext",
   "storage_slug",
   "author",
   "title",
@@ -190,7 +190,7 @@ async function commitImageUpdate({
     if (sourceImage) {
       if (
         locked.storage_slug !== sourceImage.storage_slug
-        || locked.object_key !== sourceImage.object_key
+        || locked.ext !== sourceImage.ext
         || locked.device !== sourceImage.device
         || locked.brightness !== sourceImage.brightness
         || locked.theme !== sourceImage.theme

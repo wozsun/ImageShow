@@ -451,10 +451,10 @@ end
 
 local function assert_prepared(value)
   assert_exact_fields(value, {
-    'prepared_image_path', 'prepared_thumbnail_path', 'original_size',
+    'producer_execution_token', 'original_size',
     'original_width', 'original_height', 'width', 'height', 'ext', 'md5',
     'prepared_image_sha256', 'prepared_thumbnail_sha256',
-    'size', 'thumbnail_size', 'quality', 'transcoded', 'detected_device',
+    'size', 'thumbnail_size', 'quality', 'transcoded',
     'detected_brightness', 'duplicate_count', 'generation'
   }, 'prepared')
   local positive_fields = {
@@ -466,16 +466,13 @@ local function assert_prepared(value)
       error('INGESTION_QUEUE_STRUCTURE prepared_shape')
     end
   end
-  if type(value.prepared_image_path) ~= 'string'
-    or value.prepared_image_path == ''
-    or type(value.prepared_thumbnail_path) ~= 'string'
-    or value.prepared_thumbnail_path == ''
+  if type(value.producer_execution_token) ~= 'string'
+    or value.producer_execution_token == ''
     or (value.ext ~= 'jpg' and value.ext ~= 'png'
       and value.ext ~= 'webp' and value.ext ~= 'gif' and value.ext ~= 'avif')
     or not valid_hash(value.md5, 16)
     or (value.quality ~= cjson.null and not valid_integer(value.quality, 0))
     or type(value.transcoded) ~= 'boolean'
-    or (value.detected_device ~= 'pc' and value.detected_device ~= 'mb')
     or (value.detected_brightness ~= 'dark'
       and value.detected_brightness ~= 'light')
     or not valid_integer(value.duplicate_count, 0)
@@ -514,7 +511,7 @@ end
 local function assert_commit(value)
   assert_exact_fields(value, {
     'commit_request_id', 'commit_intent_hash', 'created_by', 'expected_md5',
-    'duplicate_decision', 'metadata', 'final_object_key'
+    'duplicate_decision', 'metadata'
   }, 'commit')
   if type(value.commit_request_id) ~= 'string'
     or value.commit_request_id == ''
@@ -524,8 +521,7 @@ local function assert_commit(value)
     or not valid_hash(value.expected_md5, 16)
     or (value.duplicate_decision ~= 'upload'
       and value.duplicate_decision ~= 'confirmed')
-    or type(value.final_object_key) ~= 'string'
-    or value.final_object_key == '' then
+    then
     error('INGESTION_QUEUE_STRUCTURE commit_shape')
   end
   assert_draft(value.metadata)

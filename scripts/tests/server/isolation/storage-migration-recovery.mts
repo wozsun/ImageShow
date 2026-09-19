@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { removeDriverObject } from "./storage-fixture.mts";
@@ -39,16 +40,14 @@ const localAccess = await registry.resolveStorageAccess("local");
     failed: randomUUID()
   };
   const addMigrationImage = async (id: string, storageSlug: string, body: Buffer | null, md5?: string) => {
-    const key = imagePaths.storageObjectKey(id, "webp");
+    const key = storageObjectKey(id, "webp");
+
     await database.pool.query(
-      "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
-        + "theme, ext, md5, image_size, thumbnail_size, status, deleted_at) VALUES "
-        + "($1, 'integration-admin', $2, $3, 'pc', 'dark', NULL, 'webp', $4, $5, $5, "
-        + "'deleted', now())",
+      `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size, status, deleted_at)
+       VALUES ($1, 'integration-admin', $2, 'pc', 'dark', NULL, 'webp', $3, $4, $4, 'deleted', now())`,
       [
         id,
         storageSlug,
-        key,
         md5 ?? createHash("md5").update(body ?? Buffer.alloc(0)).digest("hex"),
         body?.byteLength ?? 0
       ]
@@ -57,7 +56,7 @@ const localAccess = await registry.resolveStorageAccess("local");
       await localAccess.driver.writeBuffer("full", key, body, "image/webp");
       await localAccess.driver.writeBuffer(
         "thumbs",
-        imagePaths.thumbnailObjectKey(key),
+        imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(key)!.id),
         body,
         "image/webp"
       );
@@ -127,20 +126,18 @@ const localAccess = await registry.resolveStorageAccess("local");
   assert.equal(await localAccess.driver.exists("full", migratedKey), true);
 
   const thumbnailMissingMigrationId = randomUUID();
-  const thumbnailMissingMigrationKey = imagePaths.storageObjectKey(thumbnailMissingMigrationId, "webp");
+  const thumbnailMissingMigrationKey = storageObjectKey(thumbnailMissingMigrationId, "webp");
   const thumbnailMissingMigrationBody = Buffer.from(
     "migration-without-thumbnail"
   );
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
-      + "theme, ext, md5, image_size, thumbnail_size) VALUES "
-      + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, $4, 0)",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size)
+       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, 0)`,
     [
-      thumbnailMissingMigrationId,
-      thumbnailMissingMigrationKey,
-      createHash("md5").update(thumbnailMissingMigrationBody).digest("hex"),
-      thumbnailMissingMigrationBody.byteLength
-    ]
+        thumbnailMissingMigrationId,
+        createHash("md5").update(thumbnailMissingMigrationBody).digest("hex"),
+        thumbnailMissingMigrationBody.byteLength
+      ]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -190,7 +187,7 @@ const localAccess = await registry.resolveStorageAccess("local");
   await removeDriverObject(
     localAccess.driver,
     "thumbs",
-    imagePaths.thumbnailObjectKey(backendKnownErrorKey)
+    imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(backendKnownErrorKey)!.id)
   );
   const backendUnknownErrorKey = await addMigrationImage(
     backendErrorIds.unknown,
@@ -251,7 +248,7 @@ const localAccess = await registry.resolveStorageAccess("local");
     await removeDriverObject(
       localAccess.driver,
       "thumbs",
-      imagePaths.thumbnailObjectKey(key)
+      imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(key)!.id)
     );
   }
 
@@ -288,7 +285,7 @@ const localAccess = await registry.resolveStorageAccess("local");
   const originalExistingTargetOpenRead = existingTargetAccess.driver.openRead;
   const existingTargetIds = [randomUUID(), randomUUID()];
   const existingTargetKeys = new Set(existingTargetIds.map(
-    (id) => imagePaths.storageObjectKey(id, "webp")
+    (id) => storageObjectKey(id, "webp")
   ));
   let existingTargetDigestReads = 0;
   missingSourceAccess.driver.openRead = async function (prefix, key, ...rest) {
@@ -314,25 +311,22 @@ const localAccess = await registry.resolveStorageAccess("local");
   };
   try {
     for (const [index, id] of existingTargetIds.entries()) {
-      const key = imagePaths.storageObjectKey(id, "webp");
+
       const expectedBody = "existing-target-" + index;
       await database.pool.query(
-        "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
-          + "brightness, theme, ext, md5, image_size, thumbnail_size, status, "
-          + "deleted_at) VALUES ($1, 'integration-admin', $2, $3, 'pc', 'dark', "
-          + "NULL, 'webp', $4, $5, $5, 'deleted', now())",
+        `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size, status, deleted_at)
+       VALUES ($1, 'integration-admin', $2, 'pc', 'dark', NULL, 'webp', $3, $4, $4, 'deleted', now())`,
         [
-          id,
-          existingTargetSource,
-          key,
-          createHash("md5").update(expectedBody).digest("hex"),
-          Buffer.byteLength(expectedBody)
-        ]
+        id,
+        existingTargetSource,
+        createHash("md5").update(expectedBody).digest("hex"),
+        Buffer.byteLength(expectedBody)
+      ]
       );
     }
 
     const existingTargetSourceRecord = (await database.pool.query(
-      "SELECT id, object_key, ext, storage_slug, md5, image_size, thumbnail_size "
+      "SELECT id, ext, storage_slug, md5, image_size, thumbnail_size "
         + "FROM metadata WHERE id=$1",
       [existingTargetIds[0]]
     )).rows[0];
@@ -446,17 +440,15 @@ const localAccess = await registry.resolveStorageAccess("local");
     }
   };
   const addAbortMigrationImage = async (id: string, storageSlug: string) => {
-    const key = imagePaths.storageObjectKey(id, "webp");
+    const key = storageObjectKey(id, "webp");
+
     const body = Buffer.from("migration-abort-" + storageSlug + "-" + id);
     await database.pool.query(
-      "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
-        + "brightness, theme, ext, md5, image_size, thumbnail_size, status, deleted_at) "
-        + "VALUES ($1, 'integration-admin', $2, $3, 'pc', 'dark', NULL, 'webp', $4, $5, $5, "
-        + "'deleted', now())",
+      `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size, status, deleted_at)
+       VALUES ($1, 'integration-admin', $2, 'pc', 'dark', NULL, 'webp', $3, $4, $4, 'deleted', now())`,
       [
         id,
         storageSlug,
-        key,
         createHash("md5").update(body).digest("hex"),
         body.byteLength
       ]
@@ -464,7 +456,7 @@ const localAccess = await registry.resolveStorageAccess("local");
     await localAccess.driver.writeBuffer("full", key, body, "image/webp");
     await localAccess.driver.writeBuffer(
       "thumbs",
-      imagePaths.thumbnailObjectKey(key),
+      imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(key)!.id),
       body,
       "image/webp"
     );
@@ -476,7 +468,7 @@ const localAccess = await registry.resolveStorageAccess("local");
       await removeDriverObject(
         localAccess.driver,
         "thumbs",
-        imagePaths.thumbnailObjectKey(fixture.key)
+        imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(fixture.key)!.id)
       );
     }
     await database.pool.query(
@@ -640,11 +632,8 @@ const localAccess = await registry.resolveStorageAccess("local");
 
   const responseLossId = randomUUID();
   const responseLossBody = Buffer.from("migration-response-loss");
-  const responseLossKey = await addMigrationImage(
-    responseLossId,
-    "local",
-    responseLossBody
-  );
+  await addMigrationImage(responseLossId, "local", responseLossBody);
+
   const verifyStorageMigrationResponseLoss = async () => {
   let armed = false;
   let responseLost = false;
@@ -658,7 +647,6 @@ const localAccess = await registry.resolveStorageAccess("local");
       await withCommitFault(database.pool, "committed", () => storageMigration.migrateImageToStorageBackend(
         {
           id: responseLossId,
-          object_key: responseLossKey,
           ext: "webp",
           storage_slug: "local",
           md5: createHash("md5").update(responseLossBody).digest("hex"),

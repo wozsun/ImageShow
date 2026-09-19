@@ -1,3 +1,4 @@
+
 import type { IngestionSessionSnapshot, StoredIngestionSession, UploadIntentSnapshot } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
 import type { IngestionTokenEnvelope } from "../../../../packages/server/src/images/ingestion/sessions/token-service.ts";
 import { requiredValue } from "./ingestion-scenario-fixture.mts";
@@ -17,7 +18,7 @@ const database = {
   ...databasePools,
   ...await import("../../../../packages/server/src/core/database/advisory-locks.ts")
 };
-const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+
 const sharedAppConfig = await import("@imageshow/shared");
 const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
 const runtimeAvailability = await import("../../../../packages/server/src/core/runtime-availability.ts");
@@ -695,7 +696,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   assert.equal(preparedRetry.status, "ready", "服务器仅用已接收的原图完成重新处理");
   assert.ok(preparedRetry.prepared);
   await preparedFiles.removeIngestionPreparedFiles([
-    preparedRetry.prepared.prepared_image_path, preparedRetry.prepared.prepared_thumbnail_path
+    ...ingestionRawFiles.ingestionPreparedFiles(preparedRetry, preparedRetry.prepared)
   ]);
   await rm(retainedUnknownRawPath, { force: true });
   const discardedUnknownRaw = discardedResult(await ingestionRepository.mutateSemantic(
@@ -1968,8 +1969,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   );
 
   const preparedManifest = {
-    prepared_image_path: "current/prepared-image.webp",
-    prepared_thumbnail_path: "current/prepared-thumbnail.webp",
+    producer_execution_token: coreUuid.randomUuidV7(),
     original_size: 10,
     original_width: 100,
     original_height: 100,
@@ -1983,7 +1983,6 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     thumbnail_size: 4,
     quality: 90,
     transcoded: true,
-    detected_device: "pc" as const,
     detected_brightness: "dark" as const,
     duplicate_count: 2,
     generation: coreUuid.randomUuidV7()
@@ -2072,8 +2071,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
         created_by: ingestionOwner,
         expected_md5: preparedManifest.md5,
         duplicate_decision: "upload" as const,
-        metadata: { ...ingestionMetadata, tags: [] },
-        final_object_key: imagePaths.storageObjectKey(readyDecided.session.image_id, "webp")
+        metadata: { ...ingestionMetadata, tags: [] }
       },
       semantic_hash: ""
     },
@@ -2271,15 +2269,13 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "终态收据不得再走 semantic mutation"
   );
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
-      + "theme, ext, md5) VALUES ($1, $2, 'local', $3, 'pc', 'dark', "
-      + "NULL, 'webp', $4)",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5)
+       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3)`,
     [
-      completedUpload.session.image_id,
-      ingestionOwner,
-      imagePaths.storageObjectKey(completedUpload.session.image_id, "webp"),
-      "9".repeat(32)
-    ]
+        completedUpload.session.image_id,
+        ingestionOwner,
+        "9".repeat(32)
+      ]
   );
   const completedStatus = await ingestionSessionView.readIngestionStatuses(
     ingestionRepository,
@@ -2311,15 +2307,13 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   const statusBarrierRepository = repositoryWithOverrides(ingestionRepository, {
     async readSessions() {
       await database.pool.query(
-        "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
-          + "theme, ext, md5) VALUES ($1, $2, 'local', $3, 'pc', 'dark', "
-          + "NULL, 'webp', $4)",
+        `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5)
+       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3)`,
         [
-          statusBarrierImageId,
-          ingestionOwner,
-          imagePaths.storageObjectKey(statusBarrierImageId, "webp"),
-          "7".repeat(32)
-        ]
+        statusBarrierImageId,
+        ingestionOwner,
+        "7".repeat(32)
+      ]
       );
       statusBarrierPublished = true;
       return [statusBarrierReceipt];
@@ -2364,15 +2358,13 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   }
   const pgOnlyImageId = coreUuid.randomUuidV7();
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
-      + "theme, ext, md5) VALUES ($1, $2, 'local', $3, 'pc', 'dark', "
-      + "NULL, 'webp', $4)",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5)
+       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3)`,
     [
-      pgOnlyImageId,
-      ingestionOwner,
-      imagePaths.storageObjectKey(pgOnlyImageId, "webp"),
-      "8".repeat(32)
-    ]
+        pgOnlyImageId,
+        ingestionOwner,
+        "8".repeat(32)
+      ]
   );
   const pgOnlyStatus = await ingestionSessionView.readIngestionStatuses(
     ingestionRepository,

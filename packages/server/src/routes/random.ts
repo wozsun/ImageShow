@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import type { Context, Hono } from "hono";
 import type { RandomImageJsonResponseDto } from "@imageshow/shared/browser";
 import { withPublicDatabaseRead } from "../core/database/public-fallback.ts";
@@ -14,7 +15,7 @@ import { selectRandomImages } from "../random/selection.ts";
 import { resolveReadableObject } from "../storage/objects/access.ts";
 import { contentType } from "../storage/objects/keys.ts";
 import { assertCanonicalImageObjectKey } from "../storage/objects/image-paths.ts";
-import { publicImageUrls } from "../storage/objects/public-urls.ts";
+import { publicImageUrl } from "../storage/objects/public-urls.ts";
 import { webReadableFromNode } from "../storage/objects/stream-buffer.ts";
 
 export function registerRandomRoutes(app: Hono) {
@@ -73,10 +74,10 @@ async function respondRandom(c: Context, url: URL) {
     "X-Image-Info": safeResponseHeaderValue("X-Image-Info", imageInfo)
   };
   if (selection.mode === "proxy") {
-    assertCanonicalImageObjectKey(picked.object_key);
+    assertCanonicalImageObjectKey(storageObjectKey(picked.id, picked.ext));
     const opened = await (await resolveReadableObject(
       "full",
-      picked.object_key,
+      storageObjectKey(picked.id, picked.ext),
       picked.storage_slug,
       { signal }
     )).open(undefined, {
@@ -98,8 +99,8 @@ async function respondRandom(c: Context, url: URL) {
     );
   }
 
-  const { object_url: location } = await publicImageUrls(
-    picked.object_key,
+  const location = await publicImageUrl(
+    picked,
     picked.storage_slug,
     { signal }
   );

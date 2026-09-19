@@ -8,7 +8,6 @@ import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { mapWithWorkerPool } from "../../../core/concurrency.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
-import { storageObjectKey } from "../../../storage/objects/image-paths.ts";
 import {
   committedIngestionResultForOwner,
   readCommittedIngestionResultsByImageIds
@@ -420,10 +419,6 @@ export async function acceptIngestionCommitIntents(
           duplicateSnapshots.get(stored.prepared.md5)!,
           input.duplicate_decision
         );
-        const finalObjectKey = storageObjectKey(
-          stored.image_id,
-          stored.prepared.ext
-        );
         const executionToken = randomUuidV7();
         const nextWithoutHash = {
           ...stored,
@@ -440,8 +435,7 @@ export async function acceptIngestionCommitIntents(
             created_by: owner,
             expected_md5: input.expected_md5,
             duplicate_decision: input.duplicate_decision,
-            metadata,
-            final_object_key: finalObjectKey
+            metadata
           },
           error: undefined,
           semantic_hash: ""

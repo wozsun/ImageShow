@@ -60,7 +60,7 @@ metadata 条件删除，不能因请求或任务调度取消把对象已缺失�
 另行登记的外部原图由 `metadata.original` 与 `/images/original/<id>` 表示。
 
 公开资源入口校验键形、长度和分片后取出 UUID，共用按 ID 的 Redis item / PostgreSQL 读取。
-完整图请求键必须与记录 `object_key` 完全相等，缩略图必须等于该记录派生的 webp 键；同 UUID
+完整图请求的 UUID 和扩展名必须与记录相等，缩略图直接由该 UUID 派生 webp 键；同 UUID
 的其他扩展名或路径不能读取该资源。正常与回收站记录均可定位，原有 HEAD、Range、缓存和流释放
 仍由统一资源响应处理。
 
@@ -69,7 +69,9 @@ metadata 条件删除，不能因请求或任务调度取消把对象已缺失�
 `<generation>.<execution>.part`；处理结果为 `<generation>.<execution>.image.webp` 和
 `<generation>.<execution>.thumb.webp`，写入中的结果追加 `.part`。
 原子发布两个完整文件后登记 ready canonical，再删除本次原始文件。待提交预览通过鉴权入口读取
-本地结果；canonical 中的 `prepared_image_path` 与 `prepared_thumbnail_path` 是相对临时根的引用。
+本地结果；canonical 只保存 prepared `generation` 与冻结的 `producer_execution_token`，
+与 session / image 身份一起恢复两个文件名。后续执行 token 不替代生产者 token，文件不重命名。
+提交目标从同一冻结会话的 image ID 和 prepared 扩展名派生，历史清理任务仍保存精确物理键。
 
 Upload / Import 共用由 `normalize.concurrency=N` 派生的 preparation owner，从等待 Normalize
 到本地文件与 ready 发布合计最多 `N` 项。图片重工作结束后释放 Normalize 许可；既有接收、预取、

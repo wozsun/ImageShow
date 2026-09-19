@@ -231,10 +231,11 @@ HTTP `validation_error`，`primitives.ts` 只复用 UUID、slug、HTTPS 和安�
 advisory lock 两个连接池，均启用 PostgreSQL 每秒断连检查，使已销毁连接的长查询和锁等待
 能够在数据库侧结束；`transactions.ts`、`advisory-locks.ts` 和 `schema.ts` 分别拥有
 事务、锁与数据库启动编排；空库在事务内执行当前完整 `schema.sql` 并核对 readiness，非空库
-只进行当前最小结构的只读 readiness。
+先执行 6.4.9 的 `object-key-upgrade.ts` 限定升级，再进行最终只读 readiness；
+已升级库不再扫描旧数据或执行 DDL。停机备份与恢复边界见 `docs/DEPLOY.md`。
 `schema.ts` 合并同时使用默认连接池的 readiness 调用，只共享尚未完成的
 校验，不缓存成功结果；启动事务或调用者显式提供的 reader 独立执行完整校验。
-既有结构变更由维护者在启动前处理，额外表不参与数据或权限检查。
+其他既有结构变更由维护者在启动前处理，额外表不参与数据或权限检查。
 advisory lock 调度信号只取消连接取得与锁等待；锁内回调收到独立的
 父锁 / 当前连接失效信号，由具体领域决定是否再合并请求、lease 或 deadline。`readiness.ts`
 是唯一总入口，按固定顺序调用
@@ -345,7 +346,7 @@ Endpoint 重绑定的双向随机挑战与精确探针清理位于 `storage/back
 自动亮度保留事务外预处理及提交前冲突复核。主题删除由 `themes/mutations.ts` 统一拥有解除
 关联和删除词条的单事务。`images/metadata-theme.ts`
 拥有共享 HTTP / JSONL nullable slug schema；查询专用
-`null` 由 shared browser 契约提供，虚拟统计项由 vocab / read model 构造，不进入主题表。两者都保持 `object_key` 不变，并在同一图片事务中推进
+`null` 由 shared browser 契约提供，虚拟统计项由 vocab / read model 构造，不进入主题表。两者都保持正式对象位置不变，并在同一图片事务中推进
 revision、交接同一 mutation sync。
 
 `images/ingestion/` 是 Upload 与 Import 共用的统一内容接入领域，稳定子目录表达允许依赖方向：
@@ -526,8 +527,8 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
 - 图片读取先由 `image-serving-record.ts` 将 Redis 命中与 PostgreSQL fallback 归一为
   同一 serving record；公开正式媒体的 ready-cache 明确空命中仍会在有界数据库读取中查找
   ready 或 deleted 行。完整图 / 缩略图入口从规范对象键提取 UUID，复用同一按 ID 读取；完整图
-  必须精确匹配 `object_key`，缩略图必须匹配该记录派生的 webp 键。非规范、过长、错误分片或
-  缩略图扩展名在缓存和数据库读取前拒绝。ready rich item 同时校验 id、ext 和固定对象键一致。
+  必须精确匹配记录的 UUID 和扩展名，缩略图必须匹配该记录派生的 webp 键。非规范、过长、错误分片或
+  缩略图扩展名在缓存和数据库读取前拒绝。ready rich item 校验 id 与 ext 的规范身份，不保存对象键。
   ready-cache 核心保留 items、时间索引、ID 末位索引、统计、完整性和 meta 六个固定键；构建、
   增量、样本和内存检查共用这些核心职责。
   `stored-image-serving.ts` 只编排存储对象与缩略图，
@@ -543,6 +544,11 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
 继续留在根层。`coordinator-machine.ts` 仍独占 phase、pending refresh、active task / abort、
 mutation hold 与 rebuild requirement；归组没有增加第二个状态机或装配实例。
 
+`shared/browser/images.ts` 统一派生稳定对象键与成品宽高设备分类，后台编辑 DTO 传递 ext，
+编辑器仅在副标题 / tooltip 展示边界派生相同文本；公共卡片不增加字段。prepared 保留亮度检测值，
+自动设备由成品宽高派生，手动选择保持独立。`raw/paths.ts` 从冻结的 producer token 和 generation
+恢复 prepared 文件引用，预览、提交、取消和孤儿扫描共用该规则。
+
 `shared/browser/tag-filter.ts` 提供公共正向标签表达式、语法、预算、归一化与可读序列化。
 `images/filter-plan.ts` 解析词表并拥有各读取入口的共同执行计划，HTTP 层完整提取重复标签并校验
 基础 / 混合能力；SQL 标签谓词由 `read-models/image-filter-sql.ts` 唯一生成。
@@ -550,7 +556,8 @@ mutation hold 与 rebuild requirement；归组没有增加第二个状态机或�
 先求标签分支交集、再求并集，最后组合其他属性；缓存与近期去重身份包含完整表达式。
 
 `images/cursor.ts` 独占公开浏览的紧凑二进制边界与每日随机周期；有序 31 字符、随机 26 字符，
-保留完整 UUID 和精确时间，筛选与方向由请求决定。
+保留完整 UUID 和精确时间，筛选与方向由请求决定。精确时间纯转换由 `core/microseconds.ts`
+提供；Redis rich item 只编码安全整数微秒 `sort_score`，游标直接编码该值，时间仅在响应边界转换。
 `images/ready-cache/query.ts` 在同一 coordinator 读取租约中编排过滤索引与分页；
 `ordered-window.ts` 承载 ZSET 时间窗口、HMGET 与有效性校验，`random-window.ts` 在既有
 尾段索引按 `suffix,id` 读取两段环形窗口并验证筛选成员，达到扫描预算时回源 PG。

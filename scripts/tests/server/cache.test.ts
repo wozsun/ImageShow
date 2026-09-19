@@ -86,9 +86,7 @@ import {
 import type {
   RedisOperationalState
 } from "../../../packages/server/src/core/runtime-availability.ts";
-import {
-  storageObjectKey
-} from "../../../packages/server/src/storage/objects/image-paths.ts";
+
 import {
   imageId,
   servingReadyCacheItem,
@@ -254,7 +252,7 @@ test("[Server/缓存与 Redis] 公开 PostgreSQL 回源在缓存命中时零准�
 test("[Server/缓存与 Redis] serving record 统一 Redis 命中、空命中与 PostgreSQL fallback", async () => {
   const item = servingReadyCacheItem();
   const storedRow = {
-    object_key: item.object_key,
+    id: item.id,
     ext: item.ext,
     storage_slug: item.storage_slug
   };
@@ -1808,7 +1806,6 @@ test("[Server/缓存与 Redis] ready 随机抽样只调用一次 Redis 并优先
   const samplingItems = samplingIds.map((id, position) => (
     servingReadyCacheItem({
       id,
-      object_key: storageObjectKey(id, "jpg"),
       sort_score: String(position + 1)
     })
   ));
@@ -1896,7 +1893,6 @@ test("[Server/缓存与 Redis] 小集合固定候选顺序在近期覆盖后仍�
   const pairs = ids.map((id) => {
     const item = servingReadyCacheItem({
       id,
-      object_key: storageObjectKey(id, "jpg")
     });
     return { member: readyImageMember(id), value: serializeReadyImageCacheItem(item) };
   });

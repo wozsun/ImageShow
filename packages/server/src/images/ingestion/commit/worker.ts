@@ -1,4 +1,5 @@
-import { ingestionPreparedPath } from "../raw/paths.ts";
+import { storageObjectKey } from "@imageshow/shared/browser";
+import { ingestionPreparedPath, ingestionPreparedFiles } from "../raw/paths.ts";
 import { withActiveIngestionTempPaths } from "../raw/lease-registry.ts";
 import { updateIngestionExecutionProgress } from "../execution/session.ts";
 import { contentType } from "../../../storage/objects/keys.ts";
@@ -64,10 +65,8 @@ export async function commitIngestionSessionSnapshot(
 
   const prepared = session.prepared;
   const commit = session.commit;
-  const preparedFiles = [
-    prepared.prepared_image_path,
-    prepared.prepared_thumbnail_path
-  ];
+  const preparedFiles = ingestionPreparedFiles(session, prepared);
+  const finalObjectKey = storageObjectKey(session.image_id, prepared.ext);
   let databaseCommitted = false;
   const candidateGuardToken = randomUuidV7();
   try {
@@ -98,7 +97,7 @@ export async function commitIngestionSessionSnapshot(
           const storage = resolveStorageAccessForConfig(
             await assertStorageWriteTarget(session.storage_slug)
           );
-          const thumbnailKey = thumbnailObjectKey(commit.final_object_key);
+          const thumbnailKey = thumbnailObjectKey(session.image_id);
           // A guard may own only an absent target or content this frozen
           // commit can adopt. Reject unrelated pre-existing bytes before the
           // guard exists, otherwise its handler could delete those bytes when
@@ -107,7 +106,7 @@ export async function commitIngestionSessionSnapshot(
             {
               storage,
               prefix: "full",
-              key: commit.final_object_key,
+              key: finalObjectKey,
               expected: {
                 size: prepared.size,
                 sha256: prepared.prepared_image_sha256,
@@ -169,7 +168,7 @@ export async function commitIngestionSessionSnapshot(
               );
               await writeVerifiedFileToStorage({
                 target: imageTarget,
-                sourcePath: ingestionPreparedPath(prepared.prepared_image_path),
+                sourcePath: ingestionPreparedPath(preparedFiles[0]),
                 contentType: contentType(prepared.ext),
                 onProgress: (bytes) => reportUpload(bytes),
                 sourceMismatch: {
@@ -185,7 +184,7 @@ export async function commitIngestionSessionSnapshot(
               });
               await writeVerifiedFileToStorage({
                 target: thumbnailTarget,
-                sourcePath: ingestionPreparedPath(prepared.prepared_thumbnail_path),
+                sourcePath: ingestionPreparedPath(preparedFiles[1]),
                 contentType: "image/webp",
                 onProgress: (bytes) => reportUpload(prepared.size + bytes),
                 sourceMismatch: {

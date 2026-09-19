@@ -2224,8 +2224,7 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
           source: "",
           original: "",
           tags: []
-        },
-        final_object_key: `2026/08/cancel-${index}.webp`
+        }
       },
       error: {
         code: "ingestion_stage_failed",
@@ -2697,8 +2696,7 @@ test("[Server/内容接入] PG 完成会清退保留 commit 的 failed canonical
         source: "",
         original: "",
         tags: []
-      },
-      final_object_key: "2026/08/failed-commit.webp"
+      }
     },
     error: {
       code: "ingestion_stage_failed",
@@ -2721,9 +2719,8 @@ test("[Server/内容接入] PG 完成会清退保留 commit 的 failed canonical
     discarded_at: 2,
     discard_at: failed.discard_at
   } as const;
-  for (const committedObjectKey of [
-    failed.commit.final_object_key,
-    "2026/08/another-published-object.webp"
+  for (const committedExt of [
+    "webp", "jpg"
   ] as const) {
     const writes: string[] = [];
     const results = await cancelIngestionSessions(
@@ -2755,7 +2752,7 @@ test("[Server/内容接入] PG 完成会清退保留 commit 的 failed canonical
           created_by: owner,
           item: {
             storage_slug: failed.storage_slug,
-            object_key: committedObjectKey
+            ext: committedExt
           } as never
         }]]),
         scheduleCleanup: async (work) => work()
@@ -2798,31 +2795,18 @@ test("[Server/内容接入] 迟到失败接力同 execution 草稿版本且 prep
     committing as never
   ), true);
 
-  const current = {
-    image_id: "image",
-    prepared: {
-      prepared_image_path: "attempt/image",
-      prepared_thumbnail_path: "attempt/thumb"
-    }
-  };
-  assert.equal(preparedAttemptIsReferenced(
-    current as never,
-    { image_id: "image" },
-    "attempt/image",
-    "attempt/thumb"
-  ), true);
-  assert.equal(preparedAttemptIsReferenced(
-    current as never,
-    { image_id: "image" },
-    "older/image",
-    "older/thumb"
-  ), false);
-  assert.equal(preparedAttemptIsReferenced(
-    null,
-    { image_id: "image" },
-    "attempt/image",
-    "attempt/thumb"
-  ), false);
+  const pair = { session_id: "a".repeat(43), image_id: "019f8457-063a-7002-a580-7a432dc7fd8d" };
+  const prepared = { generation: pair.image_id, producer_execution_token: pair.image_id };
+  const current = { ...pair, prepared };
+  const files = ingestionPreparedFiles(pair, prepared);
+  assert.equal(preparedAttemptIsReferenced(current as never, pair, ...files), true);
+  for (const changed of [
+    { ...current, session_id: "b".repeat(43) },
+    { ...current, image_id: "019f8457-063a-7002-a580-7a432dc7fd8e" },
+    { ...current, prepared: { ...prepared, generation: "019f8457-063a-7002-a580-7a432dc7fd8e" } },
+    { ...current, prepared: { ...prepared, producer_execution_token: "019f8457-063a-7002-a580-7a432dc7fd8e" } }
+  ]) assert.equal(preparedAttemptIsReferenced(changed as never, pair, ...files), false);
+  assert.equal(preparedAttemptIsReferenced(null, pair, ...files), false);
 });
 type RecoveryTestSession = Omit<
   IngestionSessionSnapshot,
@@ -3446,3 +3430,4 @@ test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权�
   assert.equal(closeAdminSessionConnections([session.id]), 0);
   resolveValidation(session);
 });
+import { ingestionPreparedFiles } from "../../../packages/server/src/images/ingestion/raw/paths.ts";

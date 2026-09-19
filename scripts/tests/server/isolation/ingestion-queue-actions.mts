@@ -1,3 +1,4 @@
+
 import { activeSession, activeResult, discardedResult, discardedSession, committingSession, preparedSession, completedSession } from "./ingestion-scenario-fixture.mts";
 import { repositoryWithOverrides } from "./ingestion-scenario-fixture.mts";
 import assert from "node:assert/strict";
@@ -14,7 +15,7 @@ const database = {
   ...databasePools,
   ...await import("../../../../packages/server/src/core/database/advisory-locks.ts")
 };
-const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+
 const ingestionSessionRepository = await import(
   "../../../../packages/server/src/images/ingestion/repository.ts"
 );
@@ -43,7 +44,7 @@ const ingestionSessionIdentity = await import("../../../../packages/server/src/i
 const ingestionSessionProjection = await import(
   "../../../../packages/server/src/images/ingestion/sessions/projection.ts"
 );
-const ingestionPaths = await import("../../../../packages/server/src/images/ingestion/raw/paths.ts");
+
 const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
 const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
 const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate: importCanonicalWithoutHash,
@@ -91,18 +92,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     const executionToken = coreUuid.randomUuidV7();
     const prepared = {
       ...realPrepared,
-      prepared_image_path: ingestionPaths.ingestionPreparedFile({
-        session_id: sessionId,
-        image_id: imageId,
-        generation,
-        execution_token: executionToken
-      }, "image"),
-      prepared_thumbnail_path: ingestionPaths.ingestionPreparedFile({
-        session_id: sessionId,
-        image_id: imageId,
-        generation,
-        execution_token: executionToken
-      }, "thumb"),
+      producer_execution_token: executionToken,
       md5: createHash("md5").update(label).digest("hex"),
       generation
     };
@@ -130,15 +120,13 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   const actionFirst = await createActionReadySession("first");
   const actionSecond = await createActionReadySession("second");
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
-      + "brightness, theme, ext, md5, status) VALUES "
-      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,'ready')",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
+       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
     [
-      actionFirst.image_id,
-      actionOwner,
-      imagePaths.storageObjectKey(actionFirst.image_id, "webp"),
-      actionFirst.prepared.md5
-    ]
+        actionFirst.image_id,
+        actionOwner,
+        actionFirst.prepared.md5
+      ]
   );
   const activePgStatus = await ingestionSessionView.readIngestionStatuses(
     ingestionRepository,
@@ -754,15 +742,13 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   ));
   const duplicateRecoveryImageId = coreUuid.randomUuidV7();
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
-      + "brightness, theme, ext, md5, status) VALUES "
-      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,'ready')",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
+       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
     [
-      duplicateRecoveryImageId,
-      actionOwner,
-      imagePaths.storageObjectKey(duplicateRecoveryImageId, "webp"),
-      duplicateRecoveryReady.prepared.md5
-    ]
+        duplicateRecoveryImageId,
+        actionOwner,
+        duplicateRecoveryReady.prepared.md5
+      ]
   );
   const duplicateRecoverySummaryBefore = (
     await ingestionRepository.snapshot(actionOwner, "import", 0, 0)
@@ -812,15 +798,13 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   );
   const duplicateIntentImageId = coreUuid.randomUuidV7();
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
-      + "brightness, theme, ext, md5, status) VALUES "
-      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,'ready')",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
+       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
     [
-      duplicateIntentImageId,
-      actionOwner,
-      imagePaths.storageObjectKey(duplicateIntentImageId, "webp"),
-      duplicateIntentReady.prepared.md5
-    ]
+        duplicateIntentImageId,
+        actionOwner,
+        duplicateIntentReady.prepared.md5
+      ]
   );
   const [duplicateIntentResult] = await ingestionCommitIntent
     .acceptIngestionCommitIntents(ingestionRepository, actionOwner, [{
@@ -1035,15 +1019,13 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   assert.ok(completedCommitActionCurrent);
   assert.equal(completedCommitActionCurrent.status, "committing");
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
-      + "brightness, theme, ext, md5, status) VALUES "
-      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,'ready')",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
+       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
     [
-      completedCommitActionReady.image_id,
-      actionOwner,
-      imagePaths.storageObjectKey(completedCommitActionReady.image_id, "webp"),
-      completedCommitActionReady.prepared.md5
-    ]
+        completedCommitActionReady.image_id,
+        actionOwner,
+        completedCommitActionReady.prepared.md5
+      ]
   );
   const completedCommitActionPage = await ingestionQueueSnapshot
     .readStableIngestionQueueSnapshot({
@@ -1238,15 +1220,13 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     clearCompletedReady.session_id
   ));
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
-      + "brightness, theme, ext, md5, status) VALUES "
-      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,'ready')",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
+       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
     [
-      clearCompletedReady.image_id,
-      actionOwner,
-      imagePaths.storageObjectKey(clearCompletedReady.image_id, "webp"),
-      clearCompletedReady.prepared.md5
-    ]
+        clearCompletedReady.image_id,
+        actionOwner,
+        clearCompletedReady.prepared.md5
+      ]
   );
   await ingestionCommitCompletion.publishCompletedReceipt(
     ingestionRepository,
@@ -1285,15 +1265,13 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     deferredCompletedReady.session_id
   ));
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
-      + "brightness, theme, ext, md5, status) VALUES "
-      + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,'ready')",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
+       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
     [
-      deferredCompletedReady.image_id,
-      actionOwner,
-      imagePaths.storageObjectKey(deferredCompletedReady.image_id, "webp"),
-      deferredCompletedReady.prepared.md5
-    ]
+        deferredCompletedReady.image_id,
+        actionOwner,
+        deferredCompletedReady.prepared.md5
+      ]
   );
   await ingestionCommitCompletion.publishCompletedReceipt(
     ingestionRepository,

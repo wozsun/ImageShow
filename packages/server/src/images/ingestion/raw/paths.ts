@@ -1,7 +1,7 @@
 import { join, normalize, sep } from "node:path";
 import { runtimePaths } from "../../../config/bootstrap-env.ts";
 import { ApiError } from "../../../core/api-error.ts";
-import type { IngestionSessionPair } from "../sessions/model.ts";
+import type { IngestionPreparedManifest, IngestionSessionPair } from "../sessions/model.ts";
 
 const sessionIdPattern = /^[A-Za-z0-9_-]{43}$/u;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -115,4 +115,17 @@ export function ingestionPreparedPath(file: string) {
     throw new ApiError(400, "unsafe_path", "Invalid prepared ingestion identity");
   }
   return join(rawDirectory({ session_id: session, image_id: image }), name);
+}
+
+/** Reconstruct both file references from the frozen producer, never the current execution. */
+export function ingestionPreparedFiles(
+  pair: IngestionSessionPair,
+  prepared: Pick<IngestionPreparedManifest, "generation" | "producer_execution_token">
+): [string, string] {
+  const identity = {
+    ...pair,
+    generation: prepared.generation,
+    execution_token: prepared.producer_execution_token
+  };
+  return [ingestionPreparedFile(identity, "image"), ingestionPreparedFile(identity, "thumb")];
 }

@@ -17,7 +17,7 @@ await runIntegrationScenario(async (runtime) => {
   const { requireAdminCsrf } = await import("../../../../packages/server/src/users/admin-session.ts");
   const { getPublicGalleryStats } = await import("../../../../packages/server/src/images/read-models/gallery-stats.ts");
   const { updateImages } = await import("../../../../packages/server/src/images/image-update.ts");
-  const { storageObjectKey } = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+
   const { pool } = runtime.databasePools;
   const entities = [
     { kind: "tag", field: "tags", create: (slug: string) => tags.createTag(slug), list: vocab.getAdminTagList },
@@ -45,9 +45,12 @@ await runIntegrationScenario(async (runtime) => {
   );
   const slugs = (items: readonly { slug: string }[]) => items.map(item => item.slug);
   const imageId = randomUUID();
-  await pool.query(`INSERT INTO metadata(id,created_by,status,storage_slug,object_key,device,brightness,ext,md5)
-    VALUES($1,'integration-admin','ready','local',$2,'pc','dark','webp',$3)`,
-  [imageId, storageObjectKey(imageId, "webp"), "1".repeat(32)]);
+  await pool.query(`INSERT INTO metadata(id, created_by, status, storage_slug, device, brightness, ext, md5)
+       VALUES ($1, 'integration-admin', 'ready', 'local', 'pc', 'dark', 'webp', $2)`,
+  [
+        imageId,
+        "1".repeat(32)
+      ]);
   try {
     await assert.rejects(themes.createTheme("null", ""), { status: 400, code: "invalid_theme" });
     const invalidThemeUpdate = await updateImages([{ id: imageId, theme: "null" }]);

@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import { sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
 import type { StorageDriver } from "../../../../packages/server/src/storage/drivers/driver.ts";
@@ -19,7 +20,7 @@ const database = {
 const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
 const backendUpdate = await import("../../../../packages/server/src/storage/backends/update.ts");
 const publicUrls = await import("../../../../packages/server/src/storage/objects/public-urls.ts");
-const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+
 const storageCheck = await import("../../../../packages/server/src/checks/storage-check.ts");
 const objectAccess = await import("../../../../packages/server/src/storage/objects/access.ts");
   const registryBackend = "registry-contract";
@@ -42,21 +43,21 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
     [registryBackend, JSON.stringify(registryConfig)]
   );
   registry.invalidateStorageBackendRegistry();
-  const registryExampleKey = imagePaths.storageObjectKey(
+  const registryExampleKey = storageObjectKey(
     "00000000-0000-7000-8000-0000000000aa",
     "webp"
   );
-  const projectedRegistryUrls = await publicUrls.publicImageUrls(
-    registryExampleKey,
+  const projectedRegistryUrls = await publicUrls.publicImageUrl(
+    { id: "00000000-0000-7000-8000-0000000000aa", ext: "webp" },
     registryBackend
   );
   assert.equal(
-    projectedRegistryUrls.object_url,
+    projectedRegistryUrls,
     "https://cdn.example.com/images/full/" + registryExampleKey
   );
   const { publicShowImageCards } = await import("../../../../packages/server/src/images/presenter.ts");
   const card = { id: "00000000-0000-7000-8000-0000000000aa", title: "Card", width: 800, height: 600,
-    object_key: registryExampleKey, storage_slug: registryBackend };
+    storage_slug: registryBackend };
   const cards = await publicShowImageCards([card, { ...card, storage_slug: "local" }]);
   assert.equal(cards[0]!.thumb_url, "https://cdn.example.com/images/thumbs/" + registryExampleKey);
   assert.equal(cards[1]!.thumb_url, "/images/thumbs/" + registryExampleKey);
@@ -149,7 +150,7 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
 
   const inaccessibleAlias = "registry-inaccessible-alias";
   const inaccessibleAliasImage = randomUUID();
-  const inaccessibleAliasKey = imagePaths.storageObjectKey(inaccessibleAliasImage, "webp");
+  const inaccessibleAliasKey = storageObjectKey(inaccessibleAliasImage, "webp");
   await database.pool.query(
     "INSERT INTO storage_backend (slug, display_name, type, config) "
       + "VALUES ($1, 'Registry inaccessible alias', 's3', $2::jsonb)",
@@ -163,10 +164,13 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
     ]
   );
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
-      + "theme, ext, md5, thumbnail_size) VALUES "
-      + "($1, 'integration-admin', $2, $3, 'pc', 'dark', NULL, 'webp', $4, 1)",
-    [inaccessibleAliasImage, inaccessibleAlias, inaccessibleAliasKey, "0".repeat(32)]
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size)
+       VALUES ($1, 'integration-admin', $2, 'pc', 'dark', NULL, 'webp', $3, 1)`,
+    [
+        inaccessibleAliasImage,
+        inaccessibleAlias,
+        "0".repeat(32)
+      ]
   );
   registry.invalidateStorageBackendRegistry();
   const listingAliasAccess = await registry.resolveStorageAccess(registryBackend);

@@ -213,7 +213,7 @@ async function updateStorageBackendUnderLock(
 
   const existingObject = driverChanged
     ? (await pool.query(
-        `SELECT id, object_key, storage_slug
+        `SELECT id, ext, storage_slug
            FROM metadata
           WHERE storage_slug=$1
           ORDER BY id

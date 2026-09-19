@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import { errorMessage } from "../core/api-error.ts";
 import type {
   ActiveIngestionStorageReference
@@ -14,7 +15,7 @@ import type { StorageKeyListOptions } from "../storage/objects/key-listing.ts";
 
 export type ImageStorageReferenceRow = {
   id: string;
-  object_key: string;
+  ext: string;
   status: string;
   storage_slug: string;
   thumbnail_size?: string | number;
@@ -26,13 +27,13 @@ type IngestionFinalStorageReference = {
 };
 
 export function ingestionFinalStorageReferences(
-  reference: Pick<ActiveIngestionStorageReference, "final_object_key">
+  reference: Pick<ActiveIngestionStorageReference, "image_id" | "commit_ext">
 ): IngestionFinalStorageReference[] {
-  const key = reference.final_object_key;
-  if (!key) return [];
+  if (!reference.commit_ext) return [];
+  const key = storageObjectKey(reference.image_id, reference.commit_ext);
   return [
     { prefix: "full", key },
-    { prefix: "thumbs", key: thumbnailObjectKey(key) }
+    { prefix: "thumbs", key: thumbnailObjectKey(reference.image_id) }
   ];
 }
 
@@ -52,7 +53,7 @@ export function mergeStorageReferenceRows(
   const rowsByObjectLocation = new Map<string, ImageStorageReferenceRow>();
   for (const rows of snapshots) {
     for (const row of rows) {
-      rowsByObjectLocation.set(`${row.storage_slug}\0${row.object_key}`, row);
+      rowsByObjectLocation.set(`${row.storage_slug}\0${storageObjectKey(row.id, row.ext)}`, row);
     }
   }
   return [...rowsByObjectLocation.values()];

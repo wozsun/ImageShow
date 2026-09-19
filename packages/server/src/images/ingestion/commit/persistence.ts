@@ -1,3 +1,4 @@
+import { imageDevice } from "@imageshow/shared/browser";
 import { ApiError } from "../../../core/api-error.ts";
 import { withTransaction } from "../../../core/database/transactions.ts";
 import { ensureAuthorWithMutationLockHeld } from "../../../authors/mutations.ts";
@@ -52,17 +53,17 @@ export async function persistIngestionImage(
       createdEntityKinds.add("author");
     }
     const classification = resolveClassification(commit.metadata, {
-      device: prepared.detected_device,
+      device: imageDevice(prepared.width, prepared.height),
       brightness: prepared.detected_brightness
     });
     const inserted = await client.query<ImageRecord>(
       `INSERT INTO metadata(
          id, image_time, device, brightness, theme, width, height, image_size,
-         ext, object_key, storage_slug, title, description, source, original,
+         ext, storage_slug, title, description, source, original,
          md5, thumbnail_size, author, created_by
        )
        VALUES(
-         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19
+         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18
        )
        RETURNING ${adminImageListPresentationColumns}, false AS purge_pending`,
       [
@@ -75,7 +76,6 @@ export async function persistIngestionImage(
         prepared.height,
         prepared.size,
         prepared.ext,
-        commit.final_object_key,
         session.storage_slug,
         commit.metadata.title,
         commit.metadata.description,

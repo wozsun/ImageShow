@@ -1,3 +1,4 @@
+
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -50,7 +51,7 @@ const ingestionSessionProjection = await import(
   moduleUrl("packages/server/src/images/ingestion/sessions/projection.ts")
 );
 const imageTime = await import(moduleUrl("packages/server/src/images/image-time.ts"));
-const imagePaths = await import(moduleUrl("packages/server/src/storage/objects/image-paths.ts"));
+
 
 const owner = "current-cold-start-owner";
 const beforeTime = imageTime.parseImageTime("2026-08-23T06:00:00.000Z");
@@ -71,13 +72,11 @@ try {
   await redisClient.pingRedis();
   if (mode === "seed") {
     await databasePools.pool.query(
-      "INSERT INTO metadata (id, created_by, storage_slug, object_key, "
-        + "device, brightness, theme, ext, md5, image_time, title) VALUES "
-        + "($1,$2,'local',$3,'pc','dark',NULL,'webp',$4,$5,$6)",
+      `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_time, title)
+       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, $4, $5)`,
       [
         persistedImageId,
         owner,
-        imagePaths.storageObjectKey(persistedImageId, "webp"),
         "8".repeat(32),
         "2026-08-23T05:59:59.000Z",
         "cold start persisted truth"

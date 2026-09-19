@@ -1,3 +1,4 @@
+
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 
@@ -10,7 +11,7 @@ const database = {
   ...databasePools,
   ...await import("../../../../packages/server/src/core/database/advisory-locks.ts")
 };
-const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+
 const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
 const runtimeAvailability = await import("../../../../packages/server/src/core/runtime-availability.ts");
 const readyCacheCoordinator = await import("../../../../packages/server/src/images/ready-cache/coordinator.ts");
@@ -27,10 +28,13 @@ const duplicateMd5 = createHash("md5").update("duplicate-authority").digest("hex
 try {
   for (const [index, id] of duplicateIds.entries()) {
     await database.pool.query(
-      "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
-        + "brightness, theme, ext, md5, status) VALUES "
-        + "($1, 'integration-admin', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, $4)",
-      [id, imagePaths.storageObjectKey(id, "webp"), duplicateMd5, index === 0 ? "ready" : "deleted"]
+      `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
+       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3)`,
+      [
+        id,
+        duplicateMd5,
+        index === 0 ? "ready" : "deleted"
+      ]
     );
   }
   const snapshots = await duplicates.readDuplicateSnapshotsByMd5([duplicateMd5, "f".repeat(32)]);
@@ -63,13 +67,10 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   );
   for (const [position, id] of paginationIds.entries()) {
     await database.pool.query(
-      "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
-        + "brightness, theme, ext, md5, author, image_time, deleted_at, title) "
-        + "VALUES ($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, "
-        + "'webp', $3, $4, $5, now(), $6)",
+      `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, author, image_time, deleted_at, title)
+       VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, $4, now(), $5)`,
       [
         id,
-        imagePaths.storageObjectKey(id, "webp"),
         String(position + 4).repeat(32),
         position === 2 ? "bob" : "alice",
         position === 2 ? paginationOlder : paginationNewest,
@@ -154,16 +155,12 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   try {
   await Promise.race([countReached, snapshotRead.then(() => assert.fail("snapshot count must be intercepted"))]);
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
-      + "brightness, theme, ext, md5, author, image_time, deleted_at, title) "
-      + "VALUES ($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, "
-      + "'webp', $3, 'alice', '2026-08-16T00:00:00.000Z', now(), "
-      + "'pagination-concurrent')",
+    `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, author, image_time, deleted_at, title)
+       VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, 'alice', '2026-08-16T00:00:00.000Z', now(), 'pagination-concurrent')`,
     [
-      concurrentPaginationId,
-      imagePaths.storageObjectKey(concurrentPaginationId, "webp"),
-      "8".repeat(32)
-    ]
+        concurrentPaginationId,
+        "8".repeat(32)
+      ]
   );
   await database.pool.query(
     "DELETE FROM metadata WHERE id=$1",
@@ -265,12 +262,10 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   for (const [position, id] of matrixIds.entries()) {
     const [device, brightness] = matrixAxes[position];
     await database.pool.query(
-      "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
-        + "brightness, theme, ext, md5, author, image_time, title) "
-        + "VALUES ($1, 'integration-admin', 'ready', 'local', $2, $3, $4, $5, 'webp', $6, $7, $8, $9)",
+      `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, author, image_time, title)
+       VALUES ($1, 'integration-admin', 'ready', 'local', $2, $3, $4, 'webp', $5, $6, $7, $8)`,
       [
         id,
-        imagePaths.storageObjectKey(id, "webp"),
         device,
         brightness,
         matrixTheme,

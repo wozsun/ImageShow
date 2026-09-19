@@ -25,8 +25,8 @@ await runIntegrationScenario(async (runtime) => {
   const makePrepared = (kind: "image" | "thumb" = "image") => paths.ingestionPreparedFile({
     ...pair, generation, execution_token: randomUuidV7()
   }, kind);
-  const activeImage = makePrepared();
-  const activeThumb = makePrepared("thumb");
+  const producerToken = randomUuidV7();
+  const [activeImage, activeThumb] = paths.ingestionPreparedFiles(pair, { generation, producer_execution_token: producerToken });
   const orphanPrepared = paths.ingestionPreparedPath(makePrepared());
   const orphanPreparedPart = paths.ingestionPreparedPath(makePrepared()) + ".part";
   const recentPrepared = paths.ingestionPreparedPath(makePrepared());
@@ -35,7 +35,7 @@ await runIntegrationScenario(async (runtime) => {
     semantic_hash: ingestionSessionSemanticHash(template) }, fixture.displayOrderKey(pair.session_id, 0, now), now)).session);
   await fixture.ingestionRepository.mutateSemantic(queued, queued.version, semanticIngestionSession(queued, {
     status: "ready", phase: "ready", raw_generation: generation, raw_size: 8,
-    prepared: { ...fixture.preparedTemplate, generation, prepared_image_path: activeImage, prepared_thumbnail_path: activeThumb }
+    prepared: { ...fixture.preparedTemplate, generation, producer_execution_token: producerToken }
   }));
   const activeRaw = paths.ingestionRawPath(pair, generation);
   const orphanRaw = paths.ingestionRawPath(pair, randomUuidV7());

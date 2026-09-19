@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import type {
   StorageBackendMigrationErrorSampleDto
 } from "@imageshow/shared/browser";
@@ -59,7 +60,7 @@ async function readStorageBackendImageMigrationRows(
   upperBoundImageId: string
 ) {
   return (await pool.query(
-    `SELECT id, object_key, ext, storage_slug, md5,
+    `SELECT id, ext, storage_slug, md5,
             image_size, thumbnail_size
        FROM metadata
       WHERE storage_slug=$1
@@ -79,7 +80,7 @@ async function* streamStorageBackendImageMigrationRows(
   for (;;) {
     signal?.throwIfAborted();
     const rows = (await pool.query(
-      `SELECT id, object_key, ext, storage_slug, md5,
+      `SELECT id, ext, storage_slug, md5,
               image_size, thumbnail_size
          FROM metadata
         WHERE storage_slug=$1
@@ -140,7 +141,7 @@ async function migrateBackendImages(
         status: "missing",
         error: {
           id: image.id,
-          object_key: image.object_key,
+          object_key: storageObjectKey(image.id, image.ext),
           code: "source_object_missing",
           message: "源存储对象不存在"
         }
@@ -151,7 +152,7 @@ async function migrateBackendImages(
         status: "failed",
         error: {
           id: image.id,
-          object_key: image.object_key,
+          object_key: storageObjectKey(image.id, image.ext),
           code: error instanceof ApiError
             ? error.code
             : "storage_migration_failed",

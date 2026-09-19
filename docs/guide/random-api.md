@@ -184,7 +184,6 @@ seed 不进入筛选索引 key，也不读取或更新客户端近期历史。
       "brightness": "dark",
       "theme": "theme",
       "tags": ["sample"],
-      "diff_original": true,
       "width": 2560,
       "height": 1440,
       "image_time": "2026-08-03T12:00:00.000Z"
@@ -193,8 +192,7 @@ seed 不进入筛选索引 key，也不读取或更新客户端近期历史。
 }
 ```
 
-`title` 为图片标题，`author` 为作者 slug；`diff_original` 表示图片登记了另一条合法 HTTPS
-原图。按 ID 定向读取采用同一 JSON 格式。
+`title` 为图片标题，`author` 为作者 slug。按 ID 定向读取采用同一 JSON 格式。
 
 站内画廊和展映通过 `/api/images` 获取图片列表，展映使用 `view=show` 并在乱序时打乱返回
 批次。描述、来源和可空的原图访问链接在打开图片详情时读取。列表与随机图共用图片读取和

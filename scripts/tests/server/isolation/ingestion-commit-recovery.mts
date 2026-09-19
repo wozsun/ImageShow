@@ -39,14 +39,10 @@ await runIntegrationScenario(async (runtime) => {
     );
     const committing = await freezeFixtureCommit(fixture);
     await runtime.databasePools.pool.query(
-      "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, "
-        + "brightness, theme, ext, md5, width, height, image_size, "
-        + "thumbnail_size, image_time, title) VALUES "
-        + "($1,'integration-conflict','local',$2,'pc','dark',NULL,'webp',"
-        + "$3,1200,800,$4,$5,$6,'conflicting owner')",
+      `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, width, height, image_size, thumbnail_size, image_time, title)
+       VALUES ($1, 'integration-conflict', 'local', 'pc', 'dark', NULL, 'webp', $2, 1200, 800, $3, $4, $5, 'conflicting owner')`,
       [
         fixture.imageId,
-        fixture.finalObjectKey,
         fixture.prepared.md5,
         fixture.imageBody.length,
         fixture.thumbnailBody.length,

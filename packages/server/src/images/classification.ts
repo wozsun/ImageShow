@@ -1,4 +1,4 @@
-import type { Brightness, Device } from "@imageshow/shared/browser";
+import { imageDevice, type Brightness, type Device } from "@imageshow/shared/browser";
 
 export type DeviceSelection = Device | "auto";
 type BrightnessSelection = Brightness | "auto";
@@ -17,7 +17,7 @@ export function deviceFromDimensions(width: string | number | null | undefined, 
   const actualWidth = Number(width ?? 0);
   const actualHeight = Number(height ?? 0);
   if (actualWidth <= 0 || actualHeight <= 0) return undefined;
-  return actualWidth >= actualHeight ? "pc" : "mb";
+  return imageDevice(actualWidth, actualHeight);
 }
 
 function resolveDevice(input: DeviceSelection, detected: Device): Device {

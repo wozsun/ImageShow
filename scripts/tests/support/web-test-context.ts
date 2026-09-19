@@ -151,7 +151,7 @@ export function adminImageListItem(
     image_time: timestamp,
     status: "ready",
     purge_pending: false,
-    object_key: "01/00000000-0000-7000-8000-000000000001.jpg",
+    ext: "jpg",
     storage_slug: "local",
     md5: "00000000000000000000000000000000",
     image_size: 1,
@@ -182,7 +182,7 @@ export function editableImage(
     width: 1920,
     height: 1080,
     image_size: 1024,
-    object_key: id + ".webp",
+    ext: "jpg",
     storage_slug: "local",
     ...overrides
   };

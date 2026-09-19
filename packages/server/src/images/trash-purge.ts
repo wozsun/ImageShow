@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import type {
   ImagePurgeRequestDto,
   ImagePurgeResponseDto
@@ -23,7 +24,7 @@ import type { BackgroundJob } from "../jobs/types.ts";
 
 type PurgeRow = {
   id: string;
-  object_key: string;
+  ext: string;
   storage_slug: string;
   status: string;
 };
@@ -47,7 +48,7 @@ type PurgeWaitState = {
 
 const purgeReturnColumns = [
   "metadata.id",
-  "metadata.object_key",
+  "metadata.ext",
   "metadata.storage_slug",
   "metadata.status"
 ].join(", ");
@@ -303,10 +304,10 @@ async function purgeJobImage(
         throw new Error("Trash purge target is not in the trash");
       }
 
-      const thumb = thumbnailRef(row);
+      const thumb = thumbnailRef({ id: row.id, storage_slug: row.storage_slug });
       const removals = await removeStorageObjectsAndConfirm([
         { prefix: thumb.prefix, key: thumb.key, storageSlug: row.storage_slug },
-        { prefix: "full", key: row.object_key, storageSlug: row.storage_slug }
+        { prefix: "full", key: storageObjectKey(row.id, row.ext), storageSlug: row.storage_slug }
       ], { signal: lockSignal }, admissionSignal);
       // Once physical deletion starts, finish the database side under the
       // image lock even if this execution's deadline or lease expires.
@@ -318,9 +319,9 @@ async function purgeJobImage(
       const deleted = await pool.query(
         `DELETE FROM metadata
           WHERE id=$1 AND status='deleted'
-            AND storage_slug=$2 AND object_key=$3
+            AND storage_slug=$2 AND ext=$3
           RETURNING id`,
-        [row.id, row.storage_slug, row.object_key]
+        [row.id, row.storage_slug, row.ext]
       );
       lockSignal.throwIfAborted();
       if (deleted.rowCount !== 1) {

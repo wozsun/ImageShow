@@ -9,7 +9,7 @@ await runIntegrationScenario(async (runtime) => {
   const { registerPublicRoutes } = await import("../../../../packages/server/src/routes/public.ts");
   const { registerRandomRoutes } = await import("../../../../packages/server/src/routes/random.ts");
   const { handleApiError } = await import("../../../../packages/server/src/core/http/responses.ts");
-  const { storageObjectKey } = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+
   const coordinator = await import("../../../../packages/server/src/images/ready-cache/coordinator.ts");
   const { resolveImageFilterPlan, createImageFilterPlan } = await import("../../../../packages/server/src/images/filter-plan.ts");
   const { sampleReadyImages, readReadyImageCursorPage } = await import("../../../../packages/server/src/images/ready-cache/query.ts");
@@ -49,11 +49,17 @@ await runIntegrationScenario(async (runtime) => {
   await vocab.refreshEntityVocabularies(["tag", "theme", "author"]);
   assertEmpty(await getPublicGalleryStats());
   for (const [index, row] of rows.entries()) {
-    await pool.query(`INSERT INTO metadata(id, created_by, status, storage_slug, object_key,
-      device, brightness, theme, author, ext, md5, width, height, title)
-      VALUES ($1,'integration-admin','ready','local',$2,$3,$4,$5,$6,'webp',$7,800,600,$8)`,
-    [row.id, storageObjectKey(row.id, "webp"), row.device, row.brightness, row.theme,
-      row.author, createHash("md5").update(row.id).digest("hex"), `Matrix ${index}`]);
+    await pool.query(`INSERT INTO metadata(id, created_by, status, storage_slug, device, brightness, theme, author, ext, md5, width, height, title)
+       VALUES ($1, 'integration-admin', 'ready', 'local', $2, $3, $4, $5, 'webp', $6, 800, 600, $7)`,
+    [
+        row.id,
+        row.device,
+        row.brightness,
+        row.theme,
+        row.author,
+        createHash("md5").update(row.id).digest("hex"),
+        `Matrix ${index}`
+      ]);
     const members = tags.filter((_tag, bit) => row.mask & (1 << bit));
     if (index === 0) members.push(...budgetTags);
     else if (index < budgetTags.length) members.push(budgetTags[index]!);

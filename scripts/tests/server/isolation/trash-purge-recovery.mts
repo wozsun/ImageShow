@@ -1,3 +1,4 @@
+import { storageObjectKey } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import type { BackgroundJob } from "../../../../packages/server/src/jobs/types.ts";
@@ -23,7 +24,11 @@ const databaseCheck = await import("../../../../packages/server/src/checks/datab
 const sharedAppConfig = await import("@imageshow/shared");
 const localAccess = await registry.resolveStorageAccess("local");
 const foregroundImage = randomUUID();
-await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_slug,object_key,device,brightness,theme,ext,md5) VALUES ($1,'integration-admin','ready','local',$2,'pc','dark',NULL,'webp',$3)",[foregroundImage,imagePaths.storageObjectKey(foregroundImage,"webp"),"0".repeat(32)]);
+await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5)
+       VALUES ($1, 'integration-admin', 'ready', 'local', 'pc', 'dark', NULL, 'webp', $2)`,[
+        foregroundImage,
+        "0".repeat(32)
+      ]);
   const claimTrashPurgeJob = async () => {
     for (let attempt = 0; attempt < 200; attempt += 1) {
       const job = await jobs.claimBackgroundJob("trash.purge");
@@ -39,20 +44,18 @@ await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_sl
   };
 
   const uncertainImage = randomUUID();
-  const uncertainObjectKey = imagePaths.storageObjectKey(uncertainImage, "webp");
-  const uncertainThumbKey = imagePaths.thumbnailObjectKey(uncertainObjectKey);
+  const uncertainObjectKey = storageObjectKey(uncertainImage, "webp");
+  const uncertainThumbKey = imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(uncertainObjectKey)!.id);
   const uncertainFull = Buffer.from("uncertain-purge-full");
   const uncertainThumbnail = Buffer.from("uncertain-purge-thumbnail");
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
-      + "brightness, theme, ext, md5, thumbnail_size, deleted_at) VALUES "
-      + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, $4, now())",
+    `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, deleted_at)
+       VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, now())`,
     [
-      uncertainImage,
-      uncertainObjectKey,
-      createHash("md5").update(uncertainFull).digest("hex"),
-      uncertainThumbnail.byteLength
-    ]
+        uncertainImage,
+        createHash("md5").update(uncertainFull).digest("hex"),
+        uncertainThumbnail.byteLength
+      ]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -116,23 +119,18 @@ await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_sl
   );
 
   const admittedCancelImage = randomUUID();
-  const admittedCancelObjectKey = imagePaths.storageObjectKey(admittedCancelImage, "webp");
-  const admittedCancelThumbKey = imagePaths.thumbnailObjectKey(
-    admittedCancelObjectKey
-  );
+  const admittedCancelObjectKey = storageObjectKey(admittedCancelImage, "webp");
+  const admittedCancelThumbKey = imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(admittedCancelObjectKey)!.id);
   const admittedCancelFull = Buffer.from("admitted-cancel-purge-full");
   const admittedCancelThumbnail = Buffer.from("admitted-cancel-purge-thumbnail");
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
-      + "brightness, theme, ext, md5, thumbnail_size, deleted_at) VALUES "
-      + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, "
-      + "'webp', $3, $4, now())",
+    `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, deleted_at)
+       VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, now())`,
     [
-      admittedCancelImage,
-      admittedCancelObjectKey,
-      createHash("md5").update(admittedCancelFull).digest("hex"),
-      admittedCancelThumbnail.byteLength
-    ]
+        admittedCancelImage,
+        createHash("md5").update(admittedCancelFull).digest("hex"),
+        admittedCancelThumbnail.byteLength
+      ]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -207,22 +205,18 @@ await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_sl
     false
   );
   const interruptedImage = randomUUID();
-  const interruptedObjectKey = imagePaths.storageObjectKey(interruptedImage, "webp");
-  const interruptedThumbKey = imagePaths.thumbnailObjectKey(
-    interruptedObjectKey
-  );
+  const interruptedObjectKey = storageObjectKey(interruptedImage, "webp");
+  const interruptedThumbKey = imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(interruptedObjectKey)!.id);
   const interruptedFull = Buffer.from("interrupted-purge-full");
   const interruptedThumbnail = Buffer.from("interrupted-purge-thumbnail");
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
-      + "brightness, theme, ext, md5, thumbnail_size, deleted_at) VALUES "
-      + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, $4, now())",
+    `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, deleted_at)
+       VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, now())`,
     [
-      interruptedImage,
-      interruptedObjectKey,
-      createHash("md5").update(interruptedFull).digest("hex"),
-      interruptedThumbnail.byteLength
-    ]
+        interruptedImage,
+        createHash("md5").update(interruptedFull).digest("hex"),
+        interruptedThumbnail.byteLength
+      ]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -263,20 +257,18 @@ await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_sl
   );
 
   const concurrentImage = randomUUID();
-  const concurrentObjectKey = imagePaths.storageObjectKey(concurrentImage, "webp");
-  const concurrentThumbKey = imagePaths.thumbnailObjectKey(concurrentObjectKey);
+  const concurrentObjectKey = storageObjectKey(concurrentImage, "webp");
+  const concurrentThumbKey = imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(concurrentObjectKey)!.id);
   const concurrentFull = Buffer.from("concurrent-trash-full");
   const concurrentThumbnail = Buffer.from("concurrent-trash-thumbnail");
   await database.pool.query(
-    "INSERT INTO metadata (id, created_by, storage_slug, object_key, device, brightness, "
-      + "theme, ext, md5, thumbnail_size) VALUES ($1, 'integration-admin', 'local', $2, 'pc', "
-      + "'dark', NULL, 'webp', $3, $4)",
+    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size)
+       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3)`,
     [
-      concurrentImage,
-      concurrentObjectKey,
-      createHash("md5").update(concurrentFull).digest("hex"),
-      concurrentThumbnail.byteLength
-    ]
+        concurrentImage,
+        createHash("md5").update(concurrentFull).digest("hex"),
+        concurrentThumbnail.byteLength
+      ]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -364,18 +356,15 @@ await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_sl
   );
   const createTrashImage = async (ageSeconds: number) => {
     const id = randomUUID();
-    const objectKey = imagePaths.storageObjectKey(id, "webp");
-    const thumbKey = imagePaths.thumbnailObjectKey(objectKey);
+    const objectKey = storageObjectKey(id, "webp");
+    const thumbKey = imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(objectKey)!.id);
     const full = Buffer.from("watermark-full-" + id);
     const thumbnail = Buffer.from("watermark-thumb-" + id);
     await database.pool.query(
-      "INSERT INTO metadata (id, created_by, status, storage_slug, object_key, device, "
-        + "brightness, theme, ext, md5, thumbnail_size, deleted_at) VALUES "
-        + "($1, 'integration-admin', 'deleted', 'local', $2, 'pc', 'dark', NULL, 'webp', $3, "
-        + "$4, clock_timestamp() - ($5 || ' seconds')::interval)",
+      `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, deleted_at)
+       VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, clock_timestamp() - ($4 || ' seconds')::interval)`,
       [
         id,
-        objectKey,
         createHash("md5").update(full).digest("hex"),
         thumbnail.byteLength,
         ageSeconds
@@ -519,6 +508,10 @@ await database.pool.query("INSERT INTO metadata (id,created_by,status,storage_sl
     ignored: 0
   });
   const retryingTrashCheck = await databaseCheck.checkTrash();
+  assert.equal(
+    retryingTrashCheck.candidates.find((item) => item.id === failedItem.id)?.object_key,
+    storageObjectKey(failedItem.id, "webp")
+  );
   assert.equal(retryingTrashCheck.purge_pending_count, 1);
   assert.equal(retryingTrashCheck.job_counts.retrying, 1);
   assert.equal(retryingTrashCheck.jobs.find((job) => job.id === failedJob.id)?.target_id, failedItem.id);
