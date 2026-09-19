@@ -25,9 +25,10 @@ import { serveStaticWithValidators } from "../core/http/static-conditional.ts";
 import { serveNegotiatedStatic } from "../core/http/static-encoding.ts";
 import {
   contentResponse,
-  createContentRepresentation,
+  createContentSnapshot,
   type ContentRepresentation
 } from "../core/http/content-response.ts";
+import { createEncodedContentCache } from "../core/http/encoded-content.ts";
 
 const publicDir = join(import.meta.dirname, "../public");
 
@@ -64,10 +65,8 @@ export function registerSpaRoutes(app: Hono) {
 }
 
 let spaTemplate: string | null = null;
-let cachedSpaDocument: {
-  config: RuntimeConfig;
-  representation: ContentRepresentation;
-} | null = null;
+const spaRepresentation = createContentSnapshot(buildSpaDocument);
+const encodedSpaRepresentation = createEncodedContentCache();
 
 function escapeHtmlText(value: string) {
   return value
@@ -82,9 +81,9 @@ function escapeHtmlAttr(value: string) {
     .replace(/'/g, "&#39;");
 }
 
-function buildSpaDocument(): string {
+function buildSpaDocument(runtime: RuntimeConfig): string {
   spaTemplate ??= readFileSync(join(publicDir, "index.html"), "utf8");
-  const config = siteConfigPayload();
+  const config = siteConfigPayload(runtime);
   const { site } = config;
   const inlineConfig = JSON.stringify(config).replace(/</g, "\\u003c");
   const title = escapeHtmlText(site.title);
@@ -98,39 +97,41 @@ function buildSpaDocument(): string {
     .replace("</head>", () => `${head}</head>`);
 }
 
-function currentSpaRepresentation() {
-  const config = getRuntimeConfig();
-  const cached = cachedSpaDocument;
-  // The config store replaces the published snapshot after save, import or reload.
-  if (cached?.config === config) return cached.representation;
-  const body = buildSpaDocument();
-  const representation = cached?.representation.body === body
-    ? cached.representation
-    : createContentRepresentation(body);
-  cachedSpaDocument = { config, representation };
-  return representation;
-}
-
 function spaDocumentResponse(
   representation: ContentRepresentation,
   options: {
     cacheControl?: string;
     headers?: Readonly<Record<string, string>>;
     ifNoneMatch?: string | null;
+    acceptEncoding?: string;
   } = {}
 ) {
-  return contentResponse(representation, {
+  const selected = encodedSpaRepresentation(representation, options.acceptEncoding);
+  if (!selected) {
+    return new Response(null, {
+      status: 406,
+      headers: {
+        ...(options.headers ?? spaDocumentHeaders),
+        Vary: "Accept-Encoding",
+        "Cache-Control": noStoreCacheControl
+      }
+    });
+  }
+  return contentResponse(selected, {
     cacheControl: options.cacheControl ?? publicDocumentCacheControl,
     contentType: "text/html; charset=utf-8",
-    headers: options.headers ?? spaDocumentHeaders,
+    headers: { ...(options.headers ?? spaDocumentHeaders), Vary: "Accept-Encoding" },
     ifNoneMatch: options.ifNoneMatch
   });
 }
 
 async function spaHandler(c: Context) {
   return spaDocumentResponse(
-    currentSpaRepresentation(),
-    { ifNoneMatch: c.req.header("if-none-match") }
+    spaRepresentation(getRuntimeConfig()),
+    {
+      ifNoneMatch: c.req.header("if-none-match"),
+      acceptEncoding: c.req.header("accept-encoding")
+    }
   );
 }
 
@@ -148,10 +149,11 @@ async function embedSpaHandler(c: Context) {
   }
   return markEmbedDocumentResponse(
     c,
-    spaDocumentResponse(currentSpaRepresentation(), {
+    spaDocumentResponse(spaRepresentation(getRuntimeConfig()), {
       cacheControl: noStoreCacheControl,
       headers: embedSpaDocumentHeaders(allowedAncestors),
-      ifNoneMatch: c.req.header("if-none-match")
+      ifNoneMatch: c.req.header("if-none-match"),
+      acceptEncoding: c.req.header("accept-encoding")
     })
   );
 }

@@ -189,8 +189,12 @@ shared 随机 JSON DTO 保证至少包含一种 URL；Web 的 `lib/gallery/rando
 该边界，不先字符串化；需要返回 API 的既有错误详情与日志参数分别处理。`request-security.ts`
 惰性生成日志请求 ID，记录最终注册路由模板；`admin-logs.ts` 独立验证结构化错误上报。
 
-`core/http/content-response.ts` 同时维护字符串正文、内容弱 ETag 与 UTF-8 字节长度。
-应用自生成摘要由 `validators.ts` 集中截取 SHA-256 的前 96 位并编码为 16 位 Base64URL；
+`core/http/content-response.ts` 同时维护正文、内容弱 ETag 与 UTF-8 / 已编码字节长度，
+`createContentSnapshot` 按调用方发布的对象身份复用最近一份表示，正文相同也复用原表示。
+公开站点配置和后台设置 JSON 分别使用独立快照，省去命中请求的投影、序列化与摘要；
+鉴权和缓存策略仍在路由中执行，不跨用户或响应类型共用权限相关内容。
+应用自生成摘要由 `validators.ts` 使用稳定的原生 `crypto.hash` 单次计算，
+截取 SHA-256 的前 96 位并编码为 16 位 Base64URL；
 HTML / JSON 的弱 ETag 连同标记与引号共 20 个字符。本地对象的强 ETag 对设备、inode、大小及
 纳秒级修改 / 状态时间共同取摘要，连同引号共 18 个字符；静态资源对修改时间、表示长度及编码取摘要，
 保留弱标记和不同编码的独立验证器，不在标签内直接携带元数据。外链代理使用 `p.`、来源 URL 摘要与可还原的
@@ -199,10 +203,15 @@ HTML / JSON 的弱 ETag 连同标记与引号共 20 个字符。本地对象的�
 选用压缩后删除原长度。只有符合压缩条件且长度未知的流才经 `compression-threshold.ts`
 按块探测与重放，不将此入口扩展为所有 `c.json` 的响应所有者。
 
-`routes/spa.ts` 用已发布 RuntimeConfig 的对象身份复用最近一份最终 HTML 表示；相同快照的
+`routes/spa.ts` 用共同快照工具及已发布 RuntimeConfig 的对象身份复用最近一份最终 HTML 表示；相同快照的
 后续请求直接复用正文、弱 ETag 与字节长度。保存、导入或重载发布新快照后，下一次文档请求
 重新投影公开配置并生成 HTML；若正文未变，继续复用原表示。模板只读取一次，缓存只保留
-一个快照引用及其表示，不保存配置历史。`If-None-Match` 在取得当前表示后判断；匹配时返回
+一个快照引用及其表示，不保存配置历史。`core/http/encoded-content.ts` 拥有最终 HTML 的 Brotli / gzip
+缓存，使用原生异步 zlib，一次仅允许一代编码工作，配置快速变化时只保留最新待处理内容；旧工作不得
+发布到新代际。输入最多 1 MiB，严格变小才保存，identity 保持可用；构建未完成或失败时选用当前
+可接受表示，否则返回 406。失败只记录一次，不在热请求中循环重试，后续正文变化重新构建。
+`accept-encoding.ts` 集中维护 HTML 与静态资源共用的权重、排除、通配符及 identity 回退规则。
+HTML / API 动态编码由应用负责，反向代理不是压缩依赖。`If-None-Match` 在取得当前表示后判断；匹配时返回
 无正文的 304，相同配置快照下的条件请求也跳过 HTML 生成。路由可用性、嵌入父页面策略、CSP、Cache-Control
 和条件响应仍在各请求中处理，完整内联公开配置与浏览器启动回退沿用现有契约。
 

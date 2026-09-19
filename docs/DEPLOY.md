@@ -183,19 +183,16 @@ CDN 保留完整查询参数并遵守应用的 `Cache-Control`、`Vary` 和条�
 原图资源始终公开，访客原图按钮仅控制详情链接显示；缓存边界见[图片资源](guide/image-resources.md)。
 启用嵌入页或配置 HSTS 前，按[安全说明](guide/security.md)核对代理策略。
 
-### 静态资源压缩
+### 应用压缩与代理透传
 
-镜像在构建时为可压缩资源生成 Brotli、Zstd 和 gzip 副本，每种副本只有小于原文件时才保留。
-应用按 `/assets/*` 请求的 `Accept-Encoding` 权重与实际存在的副本协商，同权优先级为
-br → zstd → gzip；没有可接受的压缩副本时，允许 identity 才返回原文件，否则返回 406。
-编码名大小写、`q=0` 和 `*` 都参与协商。客户端缺省或发送空编码列表时返回原文件。
-Zstd 解码窗口不超过 8 MiB，参数与产物报告见[构建资源边界](guide/project-structure.md#web-构建资源边界)。
+ImageShow 自行负责静态资源预压缩、最终 HTML 编码缓存和 API 动态压缩，不依赖前置 Nginx。
+反向代理无需再配置压缩，只需保留 `Accept-Encoding`，并正确透传 `Content-Encoding`、
+`Content-Length`、`Vary`、ETag 和缓存策略；不要清空协商头或重复编码。
 
-反向代理应保留客户端可接受的编码，并将 `Content-Encoding`、`Vary: Accept-Encoding`、
-`Content-Length` 和验证器随对应表示一起传递；CDN 若自行转换编码，须同步调整这些响应信息。
-同时接受 Brotli 且存在 `.br` 的普通请求仍优先使用 Brotli，新增 Zstd 不代表所有请求自动变小。
-根 `index.html` 是动态页面模板，不提供预压缩副本；页面仍经应用注入当前站点配置，
-不要把运行镜像中的根模板交给代理直接静态托管。
+根 `index.html` 是需要应用注入站点配置的模板，不要交给代理直接静态托管。
+CDN 绕过缓存不会关闭脚本注入等正文改写；不需要这些功能时应关闭，也不要覆盖应用的 CSP。
+应用配置更新不会自动刷新 CDN，仍需按边缘缓存规则等待过期或主动刷新。
+编码与缓存实现细节见[项目结构说明](guide/project-structure.md)。
 
 ## 本地发布门禁与镜像清理
 

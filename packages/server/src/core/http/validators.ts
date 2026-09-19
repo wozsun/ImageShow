@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { hash } from "node:crypto";
 
 type HttpResponseValidators = {
   etag?: string;
@@ -7,7 +7,7 @@ type HttpResponseValidators = {
 
 /** Opaque cache identity: 96 bits of SHA-256, encoded in 16 characters. */
 export function entityTagDigest(value: string) {
-  return createHash("sha256").update(value).digest().subarray(0, 12).toString("base64url");
+  return hash("sha256", value, "base64url").slice(0, 16);
 }
 
 export function staticResponseEtag(headers: Headers) {

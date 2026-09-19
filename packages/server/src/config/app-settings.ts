@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type {
   AdminSettings,
+  RuntimeConfig,
   SiteConfigDto
 } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
@@ -109,8 +110,7 @@ export function getThumbnailSettings() {
   return getRuntimeConfig().thumbnail;
 }
 
-export function getSettingsForAdmin(): AdminSettings {
-  const settings = getRuntimeConfig();
+export function getSettingsForAdmin(settings: RuntimeConfig = getRuntimeConfig()): AdminSettings {
   const {
     title,
     header_name,
@@ -204,8 +204,7 @@ export function resolveIngestionSnapshotLimit(requestedLimit?: number) {
   return requestedLimit ?? getRuntimeConfig().ingestion.list_page_size;
 }
 
-export function siteConfigPayload(): SiteConfigDto {
-  const runtime = getRuntimeConfig();
+export function siteConfigPayload(runtime: RuntimeConfig = getRuntimeConfig()): SiteConfigDto {
   const {
     icon,
     title,

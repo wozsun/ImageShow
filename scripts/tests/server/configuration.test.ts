@@ -1101,6 +1101,8 @@ test("[Server/配置] SPA 复用已发布快照并同步配置、验证器和嵌
     repositoryRoot,
     "packages/server/dist/routes/spa.js"
   )).href;
+  const publicRoutesUrl = pathToFileURL(resolve(repositoryRoot, "packages/server/dist/routes/public.js")).href;
+  const settingsRoutesUrl = pathToFileURL(resolve(repositoryRoot, "packages/server/dist/routes/settings.js")).href;
   const honoUrl = pathToFileURL(resolve(
     repositoryRoot,
     "node_modules/hono/dist/index.js"
@@ -1113,6 +1115,8 @@ test("[Server/配置] SPA 复用已发布快照并同步配置、验证器和嵌
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { brotliDecompressSync, gunzipSync } from "node:zlib";
+import { setTimeout as delay } from "node:timers/promises";
 import { Hono } from ${JSON.stringify(honoUrl)};
 import { parseHTML } from ${JSON.stringify(htmlParserUrl)};
 import { runtimeConfigDefaults } from ${JSON.stringify(runtimeConfigUrl)};
@@ -1127,6 +1131,8 @@ import {
   publishRuntimeConfigForPackageImport
 } from ${JSON.stringify(runtimeConfigStoreUrl)};
 import { registerSpaRoutes } from ${JSON.stringify(spaRoutesUrl)};
+import { registerPublicRoutes } from ${JSON.stringify(publicRoutesUrl)};
+import { registerSettingsRoutes } from ${JSON.stringify(settingsRoutesUrl)};
 
 const root = process.env.IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY;
 assert.ok(root);
@@ -1138,6 +1144,8 @@ await writeFile(join(root, "config.json"), JSON.stringify(config));
 initializeRuntimeConfig();
 const app = new Hono();
 app.get("/random", (c) => c.text("random-ok"));
+registerPublicRoutes(app);
+registerSettingsRoutes(app);
 registerSpaRoutes(app);
 
 async function html(path = "/") {
@@ -1170,6 +1178,56 @@ for (const path of ["/", "/home", "/show", "/gallery", "/admin", "/admin/storage
 }
 assert.equal(serializations, 1, "one published snapshot serializes its inline config once across page and conditional requests");
 JSON.stringify = originalStringify;
+async function verifyJsonSnapshots() {
+  const etags = [];
+  for (const path of ["/api/site-config", "/api/admin/settings"]) {
+    const response = await app.request("http://imageshow.test" + path);
+    assert.equal(response.status, 200);
+    const body = await response.text();
+    const result = JSON.parse(body);
+    assert.equal(result.ok, true);
+    const settings = path.endsWith("/settings") ? result.settings : result;
+    assert.equal(settings.site.title, getRuntimeConfig().site.title);
+    if (result.settings) assert.equal(settings.thumbnail.quality, getRuntimeConfig().thumbnail.quality);
+    assert.match(response.headers.get("cache-control"), result.settings ? /private/ : /public/);
+    assert.equal(response.headers.get("content-length"), String(Buffer.byteLength(body)));
+    const etag = response.headers.get("etag");
+    etags.push(etag);
+    for (const method of ["GET", "HEAD"]) {
+      const cached = await app.request("http://imageshow.test" + path, {
+        method, headers: { "if-none-match": etag }
+      });
+      assert.equal(cached.status, 304);
+      assert.equal(await cached.text(), "");
+    }
+  }
+  return etags;
+}
+async function verifyEncodedHtml(path = "/home") {
+  const identity = await app.request("http://imageshow.test" + path);
+  const body = await identity.text();
+  for (const [encoding, decode] of [["br", brotliDecompressSync], ["gzip", gunzipSync]]) {
+    const deadline = Date.now() + 5000;
+    let response;
+    do {
+      response = await app.request("http://imageshow.test" + path, { headers: { "accept-encoding": encoding } });
+      if (response.headers.get("content-encoding") === encoding) break;
+      await response.arrayBuffer();
+      assert.ok(Date.now() < deadline, "HTML encoding becomes available");
+      await delay(1);
+    } while (true);
+    assert.equal(response.status, 200);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    assert.equal(decode(bytes).toString(), body);
+    assert.equal(response.headers.get("content-length"), String(bytes.length));
+    assert.equal(response.headers.get("etag"), identity.headers.get("etag"));
+    assert.equal(response.headers.get("content-security-policy"), identity.headers.get("content-security-policy"));
+    assert.equal(response.headers.get("cache-control"), identity.headers.get("cache-control"));
+    assert.match(response.headers.get("vary"), /Accept-Encoding/i);
+  }
+}
+const initialJsonEtags = await verifyJsonSnapshots();
+await verifyEncodedHtml();
 assert.match(await html("/show"), /<title>示例 &lt;画廊&gt;<\\/title>/);
 assert.match(described, /<title>示例 &lt;画廊&gt;<\\/title>/);
 assert.match(
@@ -1222,6 +1280,9 @@ await updateRuntimeConfig(originalConfig);
 
 // A private configuration change keeps the same public representation.
 await updateRuntimeConfig({ thumbnail: { quality: originalConfig.thumbnail.quality === 75 ? 76 : 75 } });
+const privateChangeEtags = await verifyJsonSnapshots();
+assert.equal(privateChangeEtags[0], initialJsonEtags[0]);
+assert.notEqual(privateChangeEtags[1], initialJsonEtags[1]);
 assert.equal((await app.request("http://imageshow.test/home", {
   headers: { "if-none-match": firstEtag }
 })).status, 304);
@@ -1229,12 +1290,16 @@ assert.equal((await app.request("http://imageshow.test/home", {
 const replacement = structuredClone(getRuntimeConfig());
 replacement.site.title = "Replacement 😀";
 await replaceRuntimeConfig(replacement);
+assert.notEqual((await verifyJsonSnapshots())[0], initialJsonEtags[0]);
+await verifyEncodedHtml();
 assert.match(await html(), /Replacement 😀/);
 const reloaded = structuredClone(replacement);
 reloaded.site.title = "Reloaded snapshot";
 await writeFile(join(root, "config.json"), JSON.stringify(reloaded));
+await verifyJsonSnapshots();
 assert.match(await html(), /Replacement 😀/);
 await reloadRuntimeConfigFromDisk();
+await verifyJsonSnapshots();
 assert.match(await html(), /Reloaded snapshot/);
 
 await withRuntimeConfigWriteLease(async () => {
@@ -1242,11 +1307,13 @@ await withRuntimeConfigWriteLease(async () => {
   const candidate = structuredClone(beforeImport);
   candidate.site.title = "Imported snapshot";
   persistRuntimeConfigForPackageImport(candidate);
+  await verifyJsonSnapshots();
   assert.match(await html(), /Reloaded snapshot/);
   persistRuntimeConfigForPackageImport(beforeImport);
   assert.match(await html(), /Reloaded snapshot/);
   persistRuntimeConfigForPackageImport(candidate);
   publishRuntimeConfigForPackageImport(candidate);
+  await verifyJsonSnapshots();
   assert.match(await html(), /Imported snapshot/);
 });
 await replaceRuntimeConfig(originalConfig);
@@ -1281,10 +1348,13 @@ for (const path of [
   assert.equal(embeddedConfig.site.show.mode, "float");
 }
 const oldEmbed = await app.request("http://imageshow.test/embed/show");
+await verifyEncodedHtml("/embed/show");
 await updateRuntimeConfig({ embed: { allowed_origins: ["https://other.example.com"] } });
 const newEmbed = await app.request("http://imageshow.test/embed/show", {
-  headers: { "if-none-match": oldEmbed.headers.get("etag") }
+  headers: { "if-none-match": oldEmbed.headers.get("etag"), "accept-encoding": "br" }
 });
+assert.equal(newEmbed.status, 304);
+assert.equal(newEmbed.headers.get("content-encoding"), null);
 assert.ok(newEmbed.headers.get("content-security-policy").includes("https://other.example.com"));
 assert.ok(!newEmbed.headers.get("content-security-policy").includes("https://portal.example.com"));
 await updateRuntimeConfig({ embed: { enabled: false } });

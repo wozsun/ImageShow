@@ -13,7 +13,9 @@ import {
 } from "./headers.ts";
 import {
   contentResponse,
-  createContentRepresentation
+  createContentRepresentation,
+  createContentSnapshot,
+  type ContentRepresentation
 } from "./content-response.ts";
 
 export function apiSuccess(): { ok: true };
@@ -28,6 +30,12 @@ export function apiSuccessEtag<T extends Record<string, unknown>>(fields: T) {
   return createContentRepresentation(
     JSON.stringify(apiSuccess(fields))
   ).etag;
+}
+
+export function createApiSuccessSnapshot<T extends object>(
+  render: (snapshot: T) => Record<string, unknown>
+) {
+  return createContentSnapshot((snapshot: T) => JSON.stringify(apiSuccess(render(snapshot))));
 }
 
 export function cacheableApiSuccess<T extends Record<string, unknown>>(
@@ -58,7 +66,7 @@ export function privateCacheableApiSuccess<T extends Record<string, unknown>>(
 
 export function cacheableContentResponse(
   context: Context,
-  body: string,
+  body: string | ContentRepresentation,
   options: {
     cacheControl: string;
     contentType: string;
@@ -66,7 +74,7 @@ export function cacheableContentResponse(
   }
 ) {
   const response = contentResponse(
-    createContentRepresentation(body),
+    typeof body === "string" ? createContentRepresentation(body) : body,
     {
       ...options,
       ifNoneMatch: context.req.header("if-none-match")

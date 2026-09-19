@@ -1,5 +1,5 @@
 import type { Context, Hono } from "hono";
-import type { PublicImageDetailResponseDto } from "@imageshow/shared/browser";
+import type { PublicImageDetailResponseDto, RuntimeConfig } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
@@ -14,7 +14,9 @@ import {
 import { blockCrossSiteFetch } from "../core/http/request-security.ts";
 import {
   apiErrorResponse,
-  cacheableApiSuccess
+  cacheableApiSuccess,
+  cacheableContentResponse,
+  createApiSuccessSnapshot
 } from "../core/http/responses.ts";
 import {
   galleryStatsQuery,
@@ -46,6 +48,7 @@ const galleryStatsQueryKeys = [
   "author"
 ] as const;
 const galleryStatsQueryKeySet = new Set<string>(galleryStatsQueryKeys);
+const siteConfigRepresentation = createApiSuccessSnapshot((config: RuntimeConfig) => siteConfigPayload(config));
 
 function storedResponseRequest(context: Context): StoredResponseRequest {
   return {
@@ -76,10 +79,10 @@ export function registerPublicRoutes(app: Hono) {
     return cacheableApiSuccess(c, response, cacheControl);
   });
 
-  app.get("/api/site-config", async (c) => cacheableApiSuccess(
+  app.get("/api/site-config", (c) => cacheableContentResponse(
     c,
-    siteConfigPayload(),
-    publicConfigCacheControl
+    siteConfigRepresentation(getRuntimeConfig()),
+    { cacheControl: publicConfigCacheControl, contentType: "application/json; charset=UTF-8" }
   ));
 
   app.get("/api/gallery-facets", blockCrossSiteFetch, async (c) => (

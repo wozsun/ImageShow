@@ -325,6 +325,23 @@ await authorMutations.deleteAuthor("identity-route-image");
   logger.warn = (message) => { auditEntries.push(message); };
   const snapshotId = "00000000-0000-7000-8000-000000000633";
   const host = runtimeConfigStore.getRuntimeConfig().site.domain || "imageshow.test";
+  const settingsResponse = await fullApp.request(`http://${host}/api/admin/settings`, {
+    headers: { host, cookie: "imageshow_session=" + sessionId }
+  });
+  assert.equal(settingsResponse.status, 200);
+  assert.match(settingsResponse.headers.get("cache-control") ?? "", /private/);
+  const settingsEtag = settingsResponse.headers.get("etag");
+  assert.ok(settingsEtag);
+  for (const authenticated of [true, false]) {
+    const response = await fullApp.request(`http://${host}/api/admin/settings`, {
+      headers: {
+        host, "if-none-match": settingsEtag,
+        ...(authenticated ? { cookie: "imageshow_session=" + sessionId } : {})
+      }
+    });
+    assert.equal(response.status, authenticated ? 304 : 401,
+      "settings cache validation remains behind session authorization");
+  }
   const imageRequest = (path: string, body: unknown, token = csrf) => fullApp.request(`http://${host}/api/admin/images/${path}`, {
     method: "POST",
     headers: {
