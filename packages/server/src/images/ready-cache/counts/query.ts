@@ -28,7 +28,6 @@ import {
   READY_IMAGE_STATS_KEY,
   readyImageStatsResultKey
 } from "../keys.ts";
-import type { ReadyImageCacheResult } from "../model.ts";
 import {
   isUnfilteredReadyImagePlan,
   parseCachedReadyImageCountSnapshot,
@@ -45,6 +44,15 @@ import {
 import { recordReadyImageCacheError } from "../status-observability.ts";
 
 export type { ReadyImageCountSnapshot } from "./model.ts";
+
+export type ReadyImageCountContext = {
+  revision: string;
+  globalStats: Map<string, number>;
+};
+
+type ReadyImageCountResult =
+  | { cached: true; value: ReadyImageCountSnapshot }
+  | { cached: false; context?: ReadyImageCountContext };
 
 async function readCachedCountSnapshot(
   key: string,
@@ -146,7 +154,7 @@ export async function readReadyImageCountSnapshot(
   plan: ImageFilterPlan,
   signal?: AbortSignal,
   background = false
-): Promise<ReadyImageCacheResult<ReadyImageCountSnapshot>> {
+): Promise<ReadyImageCountResult> {
   try {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       signal?.throwIfAborted();
@@ -172,6 +180,13 @@ export async function readReadyImageCountSnapshot(
         return { cached: true, value };
       }
 
+      // This validated snapshot is request-local. PostgreSQL must prove the
+      // same revision in its own read transaction before reusing the members.
+      const fallback: ReadyImageCountResult = {
+        cached: false,
+        context: { revision, globalStats: initialStats }
+      };
+
       const preflight = preflightReadyImageCountSnapshotWork(
         plan,
         initialStats
@@ -183,7 +198,7 @@ export async function readReadyImageCountSnapshot(
           reason: preflight.admission.reason,
           ...preflight.admission.estimate
         });
-        return { cached: false };
+        return fallback;
       }
       const candidateKeys = preflight.candidates.all;
       if (!await ensureReadyImageAttributeIndexes(
@@ -192,7 +207,7 @@ export async function readReadyImageCountSnapshot(
         signal,
         background
       )) {
-        return { cached: false };
+        return fallback;
       }
 
       const plans = Object.values(preflight.plans);
@@ -201,7 +216,7 @@ export async function readReadyImageCountSnapshot(
         signal,
         background
       );
-      if (!indexes) return { cached: false };
+      if (!indexes) return fallback;
       const lease = await withReadyImageCacheRead(async () => {
         const current = getReadyImageCacheCoordinatorStatus();
         if (current.meta?.appliedRevision !== revision) return null;
@@ -236,7 +251,7 @@ export async function readReadyImageCountSnapshot(
         }
         return value;
       });
-      if (!lease.acquired || !lease.value) return { cached: false };
+      if (!lease.acquired || !lease.value) return fallback;
       const value = lease.value;
       await storeCountSnapshot(key, revision, value);
       return { cached: true, value };

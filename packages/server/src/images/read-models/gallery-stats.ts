@@ -1,36 +1,18 @@
-import { unsetThemeFilter } from "@imageshow/shared/browser";
-import { appConfig } from "@imageshow/shared";
 import {
-  brightnesses,
-  devices,
-  type Brightness,
-  type Device,
-  type GalleryStatsDto
+  brightnesses, devices, type Brightness, type Device, type GalleryStatsDto
 } from "@imageshow/shared/browser";
 import { coalesce } from "../../core/coalesce.ts";
 import {
-  withPublicDatabaseRead,
-  publicPgFallbackWorkLimitExceeded,
-  type PublicDatabaseReadAccess
+  withPublicDatabaseRead, type PublicDatabaseReadAccess
 } from "../../core/database/public-fallback.ts";
-import { pool, type DatabaseReader } from "../../core/database/pools.ts";
+import { pool } from "../../core/database/pools.ts";
 import {
-  readReadyImageCountSnapshot,
-  type ReadyImageCountSnapshot
+  readReadyImageCountSnapshot, type ReadyImageCountSnapshot
 } from "../ready-cache/counts/query.ts";
+import { resolveImageFilterPlan } from "../filter-plan.ts";
 import {
-  resolveImageFilterPlan,
-  type ImageFilterPlan
-} from "../filter-plan.ts";
-import {
-  buildImageFilterSql,
-  type ImageFilterAxis
-} from "./image-filter-sql.ts";
-import {
-  getAuthorVocab,
-  getTagVocab,
-  getThemeVocab
-} from "../../vocab/vocab-cache.ts";
+  readGalleryStatsVocabulary, readPublicGalleryCountSnapshot, type GalleryStatsVocabulary
+} from "./gallery-stats-sql.ts";
 
 export type GalleryStatsQuery = {
   device?: Device;
@@ -39,255 +21,11 @@ export type GalleryStatsQuery = {
   tag?: string | string[];
   author?: string;
 };
-type CategoryRow = {
-  device: Device;
-  brightness: Brightness;
-  image_count: number;
-};
 
-type DeviceRow = {
-  device: Device;
-  image_count: number;
-};
-
-type BrightnessRow = {
-  brightness: Brightness;
-  image_count: number;
-};
-
-type FacetCountRow = {
-  slug: string;
-  display_name: string;
-  image_count: number;
-};
-
-type AuthorCountRow = FacetCountRow & {
-  link: string;
-};
-
-function numericCount(value: unknown) {
-  const count = Number(value);
-  return Number.isFinite(count) && count > 0 ? count : 0;
-}
-
-// Candidate counts intentionally omit their own axis: selections on one axis
-// remain an OR union, while every other active axis stays an AND constraint.
-function buildFilterClause(
-  plan: ImageFilterPlan,
-  omittedAxes: readonly ImageFilterAxis[] = []
-) {
-  const clause = buildImageFilterSql({
-    status: "ready",
-    plan
-  }, { alias: "m", omittedAxes });
-  return { params: clause.params, where: clause.where.join(" AND ") };
-}
-
-async function filteredRows<T>(
-  client: DatabaseReader,
-  plan: ImageFilterPlan,
-  omittedAxes: readonly ImageFilterAxis[],
-  sql: (where: string, rowLimit: string) => string
-) {
-  const clause = buildFilterClause(plan, omittedAxes);
-  clause.params.push(appConfig.publicPgFallback.maximumVocabularyRows + 1);
-  const result = await client.query(
-    sql(clause.where, `$${clause.params.length}`),
-    clause.params
-  );
-  return result.rows as T[];
-}
-
-async function readPublicGalleryStats(
-  plan: ImageFilterPlan,
-  client: DatabaseReader,
-  signal: AbortSignal
-): Promise<GalleryStatsDto> {
-  const {
-    totalResult,
-    categoryRows,
-    deviceRows,
-    brightnessRows,
-    themeRows,
-    tagRows,
-    authorRows
-  } = await (async () => {
-    signal.throwIfAborted();
-    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
-    try {
-      const totalResult = await client.query(
-        "SELECT count(*)::int AS image_count FROM metadata WHERE status='ready'"
-      );
-      const categoryRows = await filteredRows<CategoryRow>(
-        client,
-        plan,
-        [],
-        (where, rowLimit) => `SELECT m.device, m.brightness, count(*)::int AS image_count
-                      FROM metadata m
-                     WHERE ${where}
-                     GROUP BY m.device, m.brightness
-                     LIMIT ${rowLimit}`
-      );
-      const deviceRows = await filteredRows<DeviceRow>(
-        client,
-        plan,
-        ["device"],
-        (where, rowLimit) => `SELECT m.device, count(*)::int AS image_count
-                      FROM metadata m
-                     WHERE ${where}
-                     GROUP BY m.device
-                     LIMIT ${rowLimit}`
-      );
-      const brightnessRows = await filteredRows<BrightnessRow>(
-        client,
-        plan,
-        ["brightness"],
-        (where, rowLimit) => `SELECT m.brightness, count(*)::int AS image_count
-                      FROM metadata m
-                     WHERE ${where}
-                     GROUP BY m.brightness
-                     LIMIT ${rowLimit}`
-      );
-      const themeRows = await filteredRows<FacetCountRow>(
-        client,
-        plan,
-        ["theme"],
-        (where, rowLimit) => `SELECT slug, display_name, image_count FROM (
-                       SELECT t.slug, t.display_name,
-                              (count(m.id) FILTER (WHERE ${where}))::int AS image_count,
-                              t.sort_order, false AS is_unset
-                       FROM theme t
-                       JOIN metadata m ON m.theme=t.slug AND m.status='ready'
-                      GROUP BY t.slug, t.display_name, t.sort_order
-                      UNION ALL
-                       SELECT '${unsetThemeFilter}', '未设置',
-                              (count(*) FILTER (WHERE ${where}))::int, 0, true
-                         FROM metadata m WHERE m.theme IS NULL AND m.status='ready'
-                       HAVING count(*) > 0
-                      ) facets ORDER BY is_unset DESC, sort_order DESC, slug ASC
-                      LIMIT ${rowLimit}`
-      );
-      const tagRows = await filteredRows<FacetCountRow>(
-        client,
-        plan,
-        ["tag"],
-        (where, rowLimit) => `SELECT t.slug,
-                            t.display_name,
-                            (count(m.id) FILTER (WHERE ${where}))::int AS image_count
-                       FROM tag t
-                       JOIN image_tag facet_it ON facet_it.tag_slug=t.slug
-                       JOIN metadata m ON m.id=facet_it.image_id AND m.status='ready'
-                      GROUP BY t.slug, t.display_name, t.sort_order
-                      ORDER BY t.sort_order DESC, t.slug ASC
-                      LIMIT ${rowLimit}`
-      );
-      const authorRows = await filteredRows<AuthorCountRow>(
-        client,
-        plan,
-        ["author"],
-        (where, rowLimit) => `SELECT a.slug,
-                            a.display_name,
-                            a.link,
-                            (count(m.id) FILTER (WHERE ${where}))::int AS image_count
-                       FROM author a
-                       JOIN metadata m ON m.author=a.slug AND m.status='ready'
-                      GROUP BY a.slug, a.display_name, a.link, a.sort_order
-                      ORDER BY a.sort_order DESC, a.slug ASC
-                      LIMIT ${rowLimit}`
-      );
-
-      if ([categoryRows, deviceRows, brightnessRows, themeRows, tagRows, authorRows].some((rows) => (
-        rows.length > appConfig.publicPgFallback.maximumVocabularyRows
-      ))) {
-        throw publicPgFallbackWorkLimitExceeded(
-          "Gallery statistics exceed the public result limit"
-        );
-      }
-
-      signal.throwIfAborted();
-      await client.query("COMMIT");
-      return {
-        totalResult,
-        categoryRows,
-        deviceRows,
-        brightnessRows,
-        themeRows,
-        tagRows,
-        authorRows
-      };
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      throw error;
-    }
-  })();
-
-  // Sum the complete database grouping before projecting supported UI axes.
-  const matchingImages = categoryRows.reduce((sum, row) => {
-    const count = Number(row.image_count);
-    if (!Number.isSafeInteger(count) || count < 0 || !Number.isSafeInteger(sum + count)) {
-      throw new Error("Invalid gallery category image count");
-    }
-    return sum + count;
-  }, 0);
-  const categoryCounts = new Map(
-    categoryRows.map((row) => [
-      `${row.device}:${row.brightness}`,
-      numericCount(row.image_count)
-    ])
-  );
-  const deviceCounts = new Map(
-    deviceRows.map((row) => [row.device, numericCount(row.image_count)])
-  );
-  const brightnessCounts = new Map(
-    brightnessRows.map((row) => [row.brightness, numericCount(row.image_count)])
-  );
-
-  return {
-    total_images: numericCount(totalResult.rows[0]?.image_count),
-    matching_images: matchingImages,
-    devices: devices.map((device) => ({
-      device,
-      image_count: deviceCounts.get(device) ?? 0
-    })),
-    brightnesses: brightnesses.map((brightness) => ({
-      brightness,
-      image_count: brightnessCounts.get(brightness) ?? 0
-    })),
-    categories: devices.flatMap((device) =>
-      brightnesses.map((brightness) => ({
-        device,
-        brightness,
-        image_count: categoryCounts.get(`${device}:${brightness}`) ?? 0
-      }))
-    ),
-    themes: themeRows.map((row) => ({
-      slug: row.slug,
-      display_name: row.display_name,
-      image_count: numericCount(row.image_count)
-    })),
-    tags: tagRows.map((row) => ({
-      slug: row.slug,
-      display_name: row.display_name,
-      image_count: numericCount(row.image_count)
-    })),
-    authors: authorRows.map((row) => ({
-      slug: row.slug,
-      display_name: row.display_name,
-      link: row.link,
-      image_count: numericCount(row.image_count)
-    }))
-  };
-}
-
-async function presentCachedGalleryStats(
+function presentGalleryStats(
   snapshot: ReadyImageCountSnapshot,
-  database: PublicDatabaseReadAccess = {}
-): Promise<GalleryStatsDto> {
-  const [themeVocab, tagVocab, authorVocab] = await Promise.all([
-    getThemeVocab(database),
-    getTagVocab(database),
-    getAuthorVocab(database)
-  ]);
+  vocabulary: GalleryStatsVocabulary
+): GalleryStatsDto {
   return {
     total_images: snapshot.total,
     matching_images: snapshot.matching,
@@ -306,25 +44,16 @@ async function presentCachedGalleryStats(
         image_count: snapshot.axes[`${device}:${brightness}`] ?? 0
       }))
     )),
-    // Snapshot keys retain globally populated facets even when filtered counts are zero.
-    themes: themeVocab
+    // Membership comes from the count snapshot, even when filtered counts are zero.
+    themes: vocabulary.themes
       .filter((entry) => Object.hasOwn(snapshot.themes, entry.slug))
-      .map((entry) => ({
-        ...entry,
-        image_count: snapshot.themes[entry.slug] ?? 0
-      })),
-    tags: tagVocab
+      .map((entry) => ({ ...entry, image_count: snapshot.themes[entry.slug] ?? 0 })),
+    tags: vocabulary.tags
       .filter((entry) => Object.hasOwn(snapshot.tags, entry.slug))
-      .map((entry) => ({
-        ...entry,
-        image_count: snapshot.tags[entry.slug] ?? 0
-      })),
-    authors: authorVocab
+      .map((entry) => ({ ...entry, image_count: snapshot.tags[entry.slug] ?? 0 })),
+    authors: vocabulary.authors
       .filter((entry) => Object.hasOwn(snapshot.authors, entry.slug))
-      .map((entry) => ({
-        ...entry,
-        image_count: snapshot.authors[entry.slug] ?? 0
-      }))
+      .map((entry) => ({ ...entry, image_count: snapshot.authors[entry.slug] ?? 0 }))
   };
 }
 
@@ -334,27 +63,23 @@ async function getPublicGalleryStatsWithAccess(
   database: PublicDatabaseReadAccess
 ): Promise<GalleryStatsDto> {
   const plan = await resolveImageFilterPlan(query, database);
-  const cached = await readReadyImageCountSnapshot(
-    plan,
-    signal,
-    Boolean(database.reader)
-  );
-  if (cached.cached) return presentCachedGalleryStats(cached.value, database);
+  const cached = await readReadyImageCountSnapshot(plan, signal, Boolean(database.reader));
+  if (cached.cached) {
+    return presentGalleryStats(cached.value, await readGalleryStatsVocabulary(database));
+  }
   if (database.reader) {
-    return readPublicGalleryStats(
-      plan,
-      database.reader,
-      signal ?? new AbortController().signal
+    const result = await readPublicGalleryCountSnapshot(
+      plan, database.reader, signal ?? new AbortController().signal, cached.context
     );
+    return presentGalleryStats(result.snapshot, result.vocabulary);
   }
   const load = async () => {
     const client = await pool.connect();
     try {
-      return await readPublicGalleryStats(
-        plan,
-        client,
-        new AbortController().signal
+      const result = await readPublicGalleryCountSnapshot(
+        plan, client, new AbortController().signal, cached.context
       );
+      return presentGalleryStats(result.snapshot, result.vocabulary);
     } finally {
       client.release();
     }

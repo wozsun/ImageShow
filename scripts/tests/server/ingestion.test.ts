@@ -2795,16 +2795,16 @@ test("[Server/内容接入] 迟到失败接力同 execution 草稿版本且 prep
     committing as never
   ), true);
 
-  const pair = { session_id: "a".repeat(43), image_id: "019f8457-063a-7002-a580-7a432dc7fd8d" };
+  const pair = { session_id: "a".repeat(43), image_id: "00000000-0000-7002-8000-00000000008d" };
   const prepared = { generation: pair.image_id, producer_execution_token: pair.image_id };
   const current = { ...pair, prepared };
   const files = ingestionPreparedFiles(pair, prepared);
   assert.equal(preparedAttemptIsReferenced(current as never, pair, ...files), true);
   for (const changed of [
     { ...current, session_id: "b".repeat(43) },
-    { ...current, image_id: "019f8457-063a-7002-a580-7a432dc7fd8e" },
-    { ...current, prepared: { ...prepared, generation: "019f8457-063a-7002-a580-7a432dc7fd8e" } },
-    { ...current, prepared: { ...prepared, producer_execution_token: "019f8457-063a-7002-a580-7a432dc7fd8e" } }
+    { ...current, image_id: "00000000-0000-7002-8000-00000000008e" },
+    { ...current, prepared: { ...prepared, generation: "00000000-0000-7002-8000-00000000008e" } },
+    { ...current, prepared: { ...prepared, producer_execution_token: "00000000-0000-7002-8000-00000000008e" } }
   ]) assert.equal(preparedAttemptIsReferenced(changed as never, pair, ...files), false);
   assert.equal(preparedAttemptIsReferenced(null, pair, ...files), false);
 });
@@ -3197,9 +3197,9 @@ test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权�
     owner: session.username,
     queue: "upload" as const,
     session_id: "sse-terminal-session",
-    image_id: "019f8457-063a-7005-a580-7a432dc7fd8e",
+    image_id: "00000000-0000-7005-8000-00000000008e",
     request_hash: "1".repeat(64),
-    commit_request_id: "019f8457-063a-7006-a580-7a432dc7fd8e",
+    commit_request_id: "00000000-0000-7006-8000-00000000008e",
     commit_intent_hash: "2".repeat(64),
     status: "completed" as const,
     version: 3,

@@ -439,7 +439,7 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
   if (!invalidUpdateId.success) {
     assert.deepEqual(invalidUpdateId.error.issues[0]?.path, ["items", 0, "id"]);
   }
-  const secondImageId = "019f8457-063a-7002-a580-7a432dc7fd8e";
+  const secondImageId = "00000000-0000-7002-8000-00000000008e";
   assert.equal(imageSnapshotInput.safeParse({ ids: [imageId] }).success, true);
   assert.equal(imageSnapshotInput.safeParse({
     ids: [imageId, secondImageId]
@@ -757,7 +757,7 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
       {
         ...commitBinding,
         image_id: imageId.toUpperCase(),
-        commit_request_id: "019f8457-063a-7003-a580-7a432dc7fd8e",
+        commit_request_id: "00000000-0000-7003-8000-00000000008e",
         metadata: { device: "auto", brightness: "auto" }
       }
     ]
@@ -1886,7 +1886,7 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
   assert.equal(Number.parseInt(id.replaceAll("-", "").slice(0, 12), 16), Date.parse(parsedTime.iso));
 
   const context = createImageBrowseContext("latest");
-  const cursorId = "018f3e1b-5d80-7abc-8def-0123456789ab";
+  const cursorId = "00000000-0000-7000-8000-0000000000ab";
   const positions = [
     { time: "2020-04-30T16:00:00.123456Z", score: 1_588_262_400_123_456 },
     { time: "1684-07-28T00:12:25.259009Z", score: Number.MIN_SAFE_INTEGER },
@@ -1998,7 +1998,7 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
   );
   assert.deepEqual(sqlParams, ["deleted", 60, 5_940]);
 
-  const publicCursorId = "019f8457-063a-7002-a580-7a432dc7fd8d";
+  const publicCursorId = "00000000-0000-7002-8000-00000000008d";
   const publicCursorTime = "2026-08-03T12:00:00.000000Z";
   await fetchPublicImageCardPage(
     ["status=$1"],
@@ -2229,9 +2229,9 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
 
   const targeted = parseQuery(
     "id=" + imageId
-    + "&id=7a432dc7fd8d&device=auto&mode=json&limit=2"
+    + "&id=00000000008d&device=auto&mode=json&limit=2"
   );
-  assert.deepEqual(targeted.ids, [imageId, "7a432dc7fd8d"].sort());
+  assert.deepEqual(targeted.ids, [imageId, "00000000008d"].sort());
   assert.equal(targeted.mode, "json");
   assert.equal(targeted.limit, 2);
   assert.equal(targeted.device, "auto");
@@ -2239,7 +2239,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   for (const search of [
     "tag=live&tag=!blocked",
     "device=pc&device=mb",
-    "id=7a432dc7fd8d&brightness=dark",
+    "id=00000000008d&brightness=dark",
     "limit=2",
     "unknown=value",
     "device=invalid"

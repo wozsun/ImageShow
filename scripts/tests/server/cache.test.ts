@@ -1799,9 +1799,9 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
 test("[Server/缓存与 Redis] ready 随机抽样只调用一次 Redis 并优先近期未见图片", async () => {
   const samplingIds = [
     imageId,
-    "019f8457-063a-7002-a580-7a432dc7fd8e",
-    "019f8457-063a-7002-a580-7a432dc7fd8f",
-    "019f8457-063a-7002-a580-7a432dc7fd90"
+    "00000000-0000-7002-8000-00000000008e",
+    "00000000-0000-7002-8000-00000000008f",
+    "00000000-0000-7002-8000-000000000090"
   ];
   const samplingItems = samplingIds.map((id, position) => (
     servingReadyCacheItem({
@@ -1889,7 +1889,7 @@ test("[Server/缓存与 Redis] ready 随机抽样只调用一次 Redis 并优先
 });
 
 test("[Server/缓存与 Redis] 小集合固定候选顺序在近期覆盖后仍能随机选图", async (t) => {
-  const ids = [imageId, "019f8457-063a-7002-a580-7a432dc7fd8e"];
+  const ids = [imageId, "00000000-0000-7002-8000-00000000008e"];
   const pairs = ids.map((id) => {
     const item = servingReadyCacheItem({
       id,

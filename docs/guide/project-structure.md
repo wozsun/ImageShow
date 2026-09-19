@@ -231,8 +231,7 @@ HTTP `validation_error`，`primitives.ts` 只复用 UUID、slug、HTTPS 和安�
 advisory lock 两个连接池，均启用 PostgreSQL 每秒断连检查，使已销毁连接的长查询和锁等待
 能够在数据库侧结束；`transactions.ts`、`advisory-locks.ts` 和 `schema.ts` 分别拥有
 事务、锁与数据库启动编排；空库在事务内执行当前完整 `schema.sql` 并核对 readiness，非空库
-先执行 6.4.9 的 `object-key-upgrade.ts` 限定升级，再进行最终只读 readiness；
-已升级库不再扫描旧数据或执行 DDL。停机备份与恢复边界见 `docs/DEPLOY.md`。
+只执行最小只读 readiness，不扫描历史数据或执行 DDL。历史升级前置、停机备份与恢复边界见 `docs/DEPLOY.md`。
 `schema.ts` 合并同时使用默认连接池的 readiness 调用，只共享尚未完成的
 校验，不缓存成功结果；启动事务或调用者显式提供的 reader 独立执行完整校验。
 其他既有结构变更由维护者在启动前处理，额外表不参与数据或权限检查。
@@ -568,10 +567,15 @@ cursor 或 seed 专属缓存；固定起点由 `random/selection.ts` 根据 seed
 后台使用安全 offset，按图片 / 入库时间与 UUID 同向排序；图片时间的 ready 页复用 Redis
 正反序窗口，入库时间及回收站由 PostgreSQL 排序分页。公开使用 cursor。标签与选中行在同一
 SQL 快照投影，URL 由共同 presenter 生成。
-`read-models/gallery-stats.ts` 在同一只读 repeatable-read 快照中执行七条统计 SELECT：
-匹配总数由完整数据库设备 / 亮度分组求和，再独立投影展示分类；超限分组或非法计数明确失败。
-标签候选沿 `image_tag` 复合主键连接，以 `count(m.id)` 保留零关联词条，筛选继续使用共同
-SQL 谓词及省略候选自身轴的规则。
+`read-models/gallery-stats.ts` 编排统计读取，并以共同投影构造缓存与 SQL 路径的 DTO。
+`gallery-stats-sql.ts` 在同一只读 repeatable-read 快照中计算纯计数：无筛选执行分类、主题、
+标签、作者四条业务 SELECT，由完整分类分组派生总数、设备和亮度；超限分组或非法计数明确失败。
+带筛选且已有有效全局统计上下文时，在事务内核对一次 revision；一致则复用全局总数与成员，
+执行六条筛选分组，零匹配成员补零。版本不一致时在同一快照完成七条全量统计 SELECT；
+无上下文时直接执行这七条查询，不补查 revision。缓存命中不增加 SQL。
+全量 SQL 同时携带词条名称、链接和排序；缓存与混合路径复用词表 owner。标签候选沿
+`image_tag` 复合主键连接，筛选继续使用共同 SQL 谓词及省略候选自身轴的规则。
+SQL 回源结果随请求返回，不另行发布到 Redis；既有 Redis 统计结果生命周期保持不变。
 统计 HTTP 请求按完整筛选条件在建立数据库作用域之前合并；共享工作独占 reader 与取消信号，
 单个访客取消只结束自身等待，全部访客离开后才取消共享读取。
 独立详情提供完整元数据和链接；Web 从列表保留基础项并按 ID 组装，显示名复用 facets。

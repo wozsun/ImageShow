@@ -40,6 +40,32 @@ await runIntegrationScenario(async (runtime) => {
       [slug, ["城市", "夜景", "雨景", "森林", "空标签", "matrix-a", "A&B+C#%"][index] ?? slug]);
   }
   const { getPublicGalleryStats } = await import("../../../../packages/server/src/images/read-models/gallery-stats.ts");
+  const { readPublicGalleryCountSnapshot } = await import("../../../../packages/server/src/images/read-models/gallery-stats-sql.ts");
+  const { parseReadyImageGlobalStats } = await import("../../../../packages/server/src/images/ready-cache/counts/model.ts");
+  const { readReadyImageCountSnapshot } = await import("../../../../packages/server/src/images/ready-cache/counts/query.ts");
+  const { READY_IMAGE_STATS_KEY } = await import("../../../../packages/server/src/images/ready-cache/keys.ts");
+  type CountContext = Parameters<typeof readPublicGalleryCountSnapshot>[3];
+  const readCounts = async (
+    plan: Parameters<typeof readPublicGalleryCountSnapshot>[0],
+    context?: CountContext,
+    afterRevision?: () => Promise<void>
+  ) => {
+    const client = await pool.connect();
+    const statements: string[] = [];
+    try {
+      const result = await readPublicGalleryCountSnapshot(plan, {
+        query: (async (text: string, values?: unknown[]) => {
+          statements.push(text);
+          const result = await client.query(text, values);
+          if (text.includes("FROM ready_image_revision") && afterRevision) await afterRevision();
+          return result;
+        }) as typeof client.query
+      }, AbortSignal.timeout(15_000), context);
+      return { ...result, selects: statements.filter(sql => /^SELECT\b/i.test(sql.trim())).length };
+    } finally {
+      client.release();
+    }
+  };
   const assertEmpty = (stats: Awaited<ReturnType<typeof getPublicGalleryStats>>) => {
     assert.deepEqual([stats.themes, stats.tags, stats.authors], [[], [], []]);
     assert.equal(stats.total_images, 0);
@@ -48,6 +74,9 @@ await runIntegrationScenario(async (runtime) => {
   };
   await vocab.refreshEntityVocabularies(["tag", "theme", "author"]);
   assertEmpty(await getPublicGalleryStats());
+  const emptyCounts = await readCounts(createImageFilterPlan({}));
+  assert.equal(emptyCounts.selects, 4, "empty unfiltered fallback needs only four business reads");
+  assert.equal(emptyCounts.snapshot.total, 0);
   for (const [index, row] of rows.entries()) {
     await pool.query(`INSERT INTO metadata(id, created_by, status, storage_slug, device, brightness, theme, author, ext, md5, width, height, title)
        VALUES ($1, 'integration-admin', 'ready', 'local', $2, $3, $4, $5, 'webp', $6, 800, 600, $7)`,
@@ -96,9 +125,64 @@ await runIntegrationScenario(async (runtime) => {
   cases.push({ tags: ["matrix-a,matrix-b"], axis: { theme: "null", author: "!matrix-bob" },
     match: row => Boolean(row.mask & 3) && row.theme === null && row.author !== "matrix-bob" });
   try {
+    const postgresStats = new Map<string, unknown>();
     for (const backend of ["PostgreSQL", "Redis"]) {
       if (backend === "Redis") {
         assert.equal((await coordinator.initializeReadyImageCacheCoordinator()).readable, true);
+        const status = coordinator.getReadyImageCacheCoordinatorStatus();
+        const context = {
+          revision: status.meta!.appliedRevision,
+          globalStats: parseReadyImageGlobalStats(
+            await runtime.redisClient.redis.hgetall(READY_IMAGE_STATS_KEY), rows.length
+          )
+        };
+        // Compare the real SQL paths under the same data, including cold vocabulary.
+        await runtime.redisClient.redis.del("imageshow:theme_vocab", "imageshow:tag_vocab", "imageshow:author_vocab");
+        for (const query of [{}, { device: "pc" as const }, { tag: "all:matrix-a,matrix-b" },
+          { theme: "null", author: "!matrix-bob" }, { tag: "matrix-empty" }]) {
+          const plan = await resolveImageFilterPlan(query);
+          const full = await readCounts(plan);
+          const mixed = await readCounts(plan, context);
+          assert.deepEqual(mixed.snapshot, full.snapshot, `global member reuse: ${JSON.stringify(query)}`);
+          assert.equal(full.selects, Object.keys(query).length ? 7 : 4);
+          // Warm vocabulary keeps the filtered path at six groups plus one revision read.
+          const warm = await readCounts(plan, context);
+          assert.equal(warm.selects, Object.keys(query).length ? 7 : 4);
+          const mismatch = await readCounts(plan, { revision: "999999999", globalStats: new Map([["total", 9999]]) });
+          assert.deepEqual(mismatch.snapshot, full.snapshot, "revision mismatch discards all carried membership");
+          assert.equal(mismatch.selects, Object.keys(query).length ? 8 : 4);
+        }
+        const rejectedPlan = await resolveImageFilterPlan({ tag: budgetTags.join(",") });
+        const rejected = await readReadyImageCountSnapshot(rejectedPlan);
+        assert.equal(rejected.cached, false, "over-budget statistics use the database");
+        if (!rejected.cached) assert.deepEqual(rejected.context, context, "fallback carries validated global members");
+        const desktopPlan = await resolveImageFilterPlan({ device: "pc" });
+        const beforeMutation = await readCounts(desktopPlan);
+        const writer = await pool.connect();
+        const setStatus = async (status: "ready" | "deleted") => {
+          await writer.query("BEGIN");
+          try {
+            await writer.query("UPDATE metadata SET status=$1 WHERE id=$2", [status, rows[0]!.id]);
+            await writer.query("UPDATE ready_image_revision SET revision=revision+1, updated_at=clock_timestamp() WHERE singleton=1");
+            await writer.query("COMMIT");
+          } catch (error) {
+            await writer.query("ROLLBACK");
+            throw error;
+          }
+        };
+        try {
+          const duringMutation = await readCounts(desktopPlan, context, () => setStatus("deleted"));
+          assert.deepEqual(duringMutation.snapshot, beforeMutation.snapshot,
+            "a commit after the revision read cannot mix membership with a newer count snapshot");
+          const nextRead = await readCounts(desktopPlan, context);
+          assert.equal(nextRead.snapshot.total, rows.length - 1);
+          assert.equal(nextRead.snapshot.matching, beforeMutation.snapshot.matching - 1);
+          assert.equal(nextRead.selects, 8, "the next transaction falls back under its newer revision");
+        } finally {
+          await setStatus("ready");
+          writer.release();
+          await coordinator.requestReadyImageCacheRebuild();
+        }
       }
       for (const entry of cases) {
         const query = new URLSearchParams(entry.axis);
@@ -148,6 +232,8 @@ await runIntegrationScenario(async (runtime) => {
         assert.equal(stats.status, entry.mixed ? 400 : 200, label);
         if (!entry.mixed) {
           const body = await stats.json();
+          if (backend === "PostgreSQL") postgresStats.set(query.toString(), body);
+          else assert.deepEqual(body, postgresStats.get(query.toString()), `${label}: complete statistics DTO`);
           assert.equal(body.matching_images, expected.length, label);
           for (const field of ["themes", "tags", "authors"]) {
             const expectedSlugs = field === "themes" ? ["null", "matrix-city", "matrix-nature"]

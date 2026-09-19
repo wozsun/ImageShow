@@ -184,7 +184,7 @@ test("[Web/内容接入] 内容接入模块保持 view、草稿、上传与清�
     /内容接入队列事件格式无效/u
   );
 
-  const imageId = "019f8457-063a-7001-a580-7a432dc7fd8e";
+  const imageId = "00000000-0000-7001-8000-00000000008e";
   const authoritative = ingestionJob({
     serverAccepted: true,
     sessionId: "session-one",
@@ -346,8 +346,8 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   }, "等待 worker 准入的任务不得计入处理中");
 
   const sessionId = "A".repeat(43);
-  const imageId = "019f8457-063a-7002-a580-7a432dc7fd8e";
-  const attemptKey = "019f8457-063a-7003-a580-7a432dc7fd8e";
+  const imageId = "00000000-0000-7002-8000-00000000008e";
+  const attemptKey = "00000000-0000-7003-8000-00000000008e";
   const base = ingestionJob({
     attemptKey,
     sessionId,
@@ -636,7 +636,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   assert.equal(ingestionQueuePageCount(51, 20), 3);
   const intent = createIngestionCommitIntent(
     ready,
-    "019f8457-063a-7004-a580-7a432dc7fd8e"
+    "00000000-0000-7004-8000-00000000008e"
   );
   assert.equal(intent.attemptId[14], "7");
   assert.deepEqual(intent.metadata.tags, ["existing-tag"]);
@@ -815,7 +815,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   assert.equal(ingestionJobAwaitsActionCoverage(lateBinding.jobs[0]!, 10), false);
 
   const oldIncarnationImageId =
-    "019f8457-063a-7008-a580-7a432dc7fd8e";
+    "00000000-0000-7008-8000-00000000008e";
   const newIncarnationPlaceholder = ingestionJob({
     id: "new-incarnation-placeholder",
     attemptKey: "new-incarnation-attempt",
@@ -1033,7 +1033,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   );
   const restoredActive = ingestionJobFromServerItem({
     session_id: "A".repeat(43),
-    image_id: "019f8457-063a-7091-a580-7a432dc7fd8e",
+    image_id: "00000000-0000-7091-8000-00000000008e",
     queue: "import",
     source_type: "weibo",
     resolved_image_time: "2026-08-23T01:02:03.456Z",
@@ -1060,7 +1060,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   );
   const restoredCompletedWithoutOwner = ingestionJobFromServerItem({
     session_id: "B".repeat(43),
-    image_id: "019f8457-063a-7092-a580-7a432dc7fd8e",
+    image_id: "00000000-0000-7092-8000-00000000008e",
     queue: "import",
     status: "completed",
     version: 2,
@@ -1069,7 +1069,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     accepted_order: 3,
     completed_at: 2,
     completed_item: adminImageListItem({
-      id: "019f8457-063a-7092-a580-7a432dc7fd8e"
+      id: "00000000-0000-7092-8000-00000000008e"
     })
   });
   assert.equal(
@@ -1119,7 +1119,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
       id: `source-order-${position}`,
       binding: {
         sessionId: String(position).padStart(43, "S"),
-        imageId: `019f8457-063a-7${String(position).padStart(3, "0")}-a580-7a432dc7fd8e`,
+        imageId: `019f8457-063a-7${String(position).padStart(3, "0")}-a580-00000000008e`,
         serverAccepted: true,
         serverHandoffPending: true,
         serverHandoffRevision: position + 1,
@@ -1181,7 +1181,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   const fullyAcceptedBatch = sourceOrderedBatch.map((job, position) => ({
     ...job,
     sessionId: String(position).padStart(43, "F"),
-    imageId: `019f8457-063a-71${String(position).padStart(2, "0")}-a580-7a432dc7fd8e`,
+    imageId: `019f8457-063a-71${String(position).padStart(2, "0")}-a580-00000000008e`,
     serverAccepted: true,
     serverHandoffPending: false,
     status: "received" as const
@@ -1225,7 +1225,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
       batchKey: paginationBatchKey,
       batchPosition: position,
       sessionId: `pagination-session-${position}`,
-      imageId: `019f8457-063a-7${positionHex}-a580-7a432dc7fd8e`,
+      imageId: `019f8457-063a-7${positionHex}-a580-00000000008e`,
       serverAccepted: true,
       status: "committing",
       serverStatus: "committing",
@@ -1516,7 +1516,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   const replacementIncarnation = ingestionJob({
     ...displayOldIncarnation,
     id: displayOldIncarnation.id,
-    imageId: "019f8457-063a-7200-a580-7a432dc7fd8e",
+    imageId: "00000000-0000-7200-8000-00000000008e",
     batchPosition: undefined,
     browserDisplayReleased: true
   });
@@ -1653,7 +1653,7 @@ test("[Web/内容接入] 逐项 active 事件在 bounded snapshot 前保留来�
       kind: source.queue,
       sessionId: String(index).padStart(43, "P"),
       imageId: `019f8457-063a-7${index.toString(16).padStart(3, "0")}`
-        + "-a580-7a432dc7fd8e",
+        + "-a580-00000000008e",
       status: "queued",
       serverAccepted: true,
       serverVersion: 1,
@@ -1895,7 +1895,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
       "../../../packages/web/src/pages/admin/ingestion/queue/useIngestionQueue.ts"
     );
     const sessionId = "S".repeat(43);
-    const imageId = "019f8457-063a-7009-a580-7a432dc7fd8e";
+    const imageId = "00000000-0000-7009-8000-00000000008e";
     const summary = {
       total: 60,
       unfinished: 59,
@@ -2034,44 +2034,44 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
     let prepareOffPageCompletionBatch: (() => void) | undefined;
     let releaseRaceReleased = false;
     const handoffSessionId = "H".repeat(43);
-    const handoffImageId = "019f8457-063a-7011-a580-7a432dc7fd8e";
+    const handoffImageId = "00000000-0000-7011-8000-00000000008e";
     const unknownSessionId = "U".repeat(43);
-    const unknownImageId = "019f8457-063a-7013-a580-7a432dc7fd8e";
+    const unknownImageId = "00000000-0000-7013-8000-00000000008e";
     const unknownPlaceholderId = "owner-unknown-completed-placeholder-0";
     const coveredSessionId = "V".repeat(43);
-    const coveredImageId = "019f8457-063a-7014-a580-7a432dc7fd8e";
+    const coveredImageId = "00000000-0000-7014-8000-00000000008e";
     const crossGenerationCompletedSessionId = "Q".repeat(43);
     const crossGenerationCompletedImageId =
-      "019f8457-063a-7019-a580-7a432dc7fd8e";
+      "00000000-0000-7019-8000-00000000008e";
     const crossGenerationPresentSessionId = "P".repeat(43);
     const crossGenerationPresentImageId =
-      "019f8457-063a-7018-a580-7a432dc7fd8e";
+      "00000000-0000-7018-8000-00000000008e";
     const crossGenerationSessionId = "W".repeat(43);
-    const crossGenerationImageId = "019f8457-063a-7015-a580-7a432dc7fd8e";
+    const crossGenerationImageId = "00000000-0000-7015-8000-00000000008e";
     const releaseRaceSessionId = "X".repeat(43);
-    const releaseRaceImageId = "019f8457-063a-7016-a580-7a432dc7fd8e";
+    const releaseRaceImageId = "00000000-0000-7016-8000-00000000008e";
     const releaseRacePlaceholderId = "owner-release-race-placeholder";
     const releaseRaceAttemptKey = "owner-release-race-attempt";
     const mountedReleaseSessionId = "Y".repeat(43);
-    const mountedReleaseImageId = "019f8457-063a-7017-a580-7a432dc7fd8e";
+    const mountedReleaseImageId = "00000000-0000-7017-8000-00000000008e";
     const incarnationSessionId = "I".repeat(43);
-    const oldIncarnationImageId = "019f8457-063a-7028-a580-7a432dc7fd8e";
-    const nextIncarnationImageId = "019f8457-063a-7029-a580-7a432dc7fd8e";
+    const oldIncarnationImageId = "00000000-0000-7028-8000-00000000008e";
+    const nextIncarnationImageId = "00000000-0000-7029-8000-00000000008e";
     const nextIncarnationPlaceholderId = "owner-next-incarnation-placeholder";
     const nextIncarnationAttemptKey = "owner-next-incarnation-attempt";
     const reconnectVisibleSessionId = "J".repeat(43);
-    const reconnectVisibleImageId = "019f8457-063a-7038-a580-7a432dc7fd8e";
+    const reconnectVisibleImageId = "00000000-0000-7038-8000-00000000008e";
     const reconnectOffPageSessionId = "K".repeat(43);
-    const reconnectOffPageImageId = "019f8457-063a-7039-a580-7a432dc7fd8e";
+    const reconnectOffPageImageId = "00000000-0000-7039-8000-00000000008e";
     const loadingAcceptedSessionId = "L".repeat(43);
     const visibleReadyReleaseImageIds = [
-      "019f8457-063a-703f-a580-7a432dc7fd8e",
-      "019f8457-063a-7040-a580-7a432dc7fd8e",
-      "019f8457-063a-7041-a580-7a432dc7fd8e",
-      "019f8457-063a-7042-a580-7a432dc7fd8e",
-      "019f8457-063a-7043-a580-7a432dc7fd8e",
-      "019f8457-063a-7044-a580-7a432dc7fd8e",
-      "019f8457-063a-7045-a580-7a432dc7fd8e"
+      "00000000-0000-703f-8000-00000000008e",
+      "00000000-0000-7040-8000-00000000008e",
+      "00000000-0000-7041-8000-00000000008e",
+      "00000000-0000-7042-8000-00000000008e",
+      "00000000-0000-7043-8000-00000000008e",
+      "00000000-0000-7044-8000-00000000008e",
+      "00000000-0000-7045-8000-00000000008e"
     ] as const;
     const loadingAcceptedImageId = visibleReadyReleaseImageIds[0];
     const visibleReadyReleaseTargetImageId = visibleReadyReleaseImageIds[4];
@@ -2100,7 +2100,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
       { length: 23 },
       (_, index) => (
         `019f8457-063a-7${index.toString(16).padStart(3, "0")}`
-          + "-b580-7a432dc7fd8e"
+          + "-b580-00000000008e"
       )
     );
     const compactChunkFailureSessionIds = Array.from(
@@ -2111,7 +2111,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
       { length: 102 },
       (_, index) => (
         `019f8457-063a-7${index.toString(16).padStart(3, "0")}`
-          + "-c580-7a432dc7fd8e"
+          + "-c580-00000000008e"
       )
     );
     function OwnerProbe(props: Readonly<{ displayed: boolean }>) {
@@ -3075,7 +3075,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
       await settleUntil(() => requests.length === cleanupRecoveryStart + 2);
       const lateCompletedSessionId = "T".repeat(43);
       const lateCompletedImageId =
-        "019f8457-063a-7092-a580-7a432dc7fd8e";
+        "00000000-0000-7092-8000-00000000008e";
       const latePreparingItem = {
         ...serverItem("preparing", 2, 20, lateCompletedImageId),
         session_id: lateCompletedSessionId
@@ -3172,7 +3172,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
       requests.splice(postCleanupRefreshStart, 1);
 
       const offPageCompletedImageId =
-        "019f8457-063a-7093-a580-7a432dc7fd8e";
+        "00000000-0000-7093-8000-00000000008e";
       await React.act(async () => {
         source.emit("mutation", {
           type: "mutation",
@@ -3495,7 +3495,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
 
       const capturedMutationStart = requests.length;
       const capturedSessionId = "N".repeat(43);
-      const capturedImageId = "019f8457-063a-7042-a580-7a432dc7fd8e";
+      const capturedImageId = "00000000-0000-7042-8000-00000000008e";
       const capturedItem = {
         ...serverItem("queued", 1, 61, capturedImageId),
         session_id: capturedSessionId,
@@ -3657,7 +3657,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
 
       const selectionPair = {
         session_id: "F".repeat(43),
-        image_id: "019f8457-063a-7044-a580-7a432dc7fd8e"
+        image_id: "00000000-0000-7044-8000-00000000008e"
       };
       const filterChangeStart = requests.length;
       await React.act(async () => {
@@ -4445,7 +4445,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           .searchParams.get("offset"),
         "0"
       );
-      const remainingImageId = "019f8457-063a-7010-a580-7a432dc7fd8e";
+      const remainingImageId = "00000000-0000-7010-8000-00000000008e";
       await React.act(async () => {
         respond(requests[ownerRequestStart + 3]!, {
           queue: "upload",
@@ -4498,7 +4498,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               "preparing",
               2,
               6,
-              "019f8457-063a-7012-a580-7a432dc7fd8e"
+              "00000000-0000-7012-8000-00000000008e"
             ),
             session_id: "O".repeat(43),
             last_semantic_revision: 32
@@ -5604,14 +5604,14 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
 
       const completedSnapshotSessionId = "M".repeat(43);
       const completedSnapshotImageId =
-        "019f8457-063a-7044-a580-7a432dc7fd8e";
+        "00000000-0000-7044-8000-00000000008e";
       const completedSnapshotItem = adminImageListItem({
         id: completedSnapshotImageId,
         author: "snapshot-author",
         tags: ["snapshot-tag"]
       });
       const adjacentCompletedItem = adminImageListItem({
-        id: "019f8457-063a-7045-a580-7a432dc7fd8e",
+        id: "00000000-0000-7045-8000-00000000008e",
         author: "snapshot-author"
       });
       const completedSnapshotServerItem = {
@@ -6051,7 +6051,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
         _value,
         index
       ) => (
-        `019f8457-063a-${(0x7050 + index).toString(16)}-a580-7a432dc7fd8e`
+        `019f8457-063a-${(0x7050 + index).toString(16)}-a580-00000000008e`
       ));
       const boundaryImageIds = [
         ...remainingReadyReleaseImageIds,
@@ -6477,13 +6477,13 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
 
       const clearedCompletedSessionId = "N".repeat(43);
       const clearedCompletedImageId =
-        "019f8457-063a-7046-a580-7a432dc7fd8e";
+        "00000000-0000-7046-8000-00000000008e";
       const retainedCompletedSessionId = "O".repeat(43);
       const retainedCompletedImageId =
-        "019f8457-063a-7047-a580-7a432dc7fd8e";
+        "00000000-0000-7047-8000-00000000008e";
       const browserCompletedSessionId = "R".repeat(43);
       const browserCompletedImageId =
-        "019f8457-063a-7048-a580-7a432dc7fd8e";
+        "00000000-0000-7048-8000-00000000008e";
       const ownerCompletedItem = (
         sessionId: string,
         imageId: string,
@@ -7353,7 +7353,7 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
     let refreshes = 0;
     const observedActionCompleted: string[] = [];
     const actionCompletedItem = adminImageListItem({
-      id: "019f8457-063a-7001-a580-7a432dc7fd8e"
+      id: "00000000-0000-7001-8000-00000000008e"
     });
     const connectionHold = { current: false };
     const fetchStub = async (_path: string, init?: RequestInit) => {
@@ -7390,8 +7390,8 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
       items: [{
         session_id: continuation ? "B".repeat(43) : "A".repeat(43),
         image_id: continuation
-          ? "019f8457-063a-7002-a580-7a432dc7fd8e"
-          : "019f8457-063a-7001-a580-7a432dc7fd8e",
+          ? "00000000-0000-7002-8000-00000000008e"
+          : "00000000-0000-7001-8000-00000000008e",
         status: skipped ? "skipped" : "changed",
         ...(continuation ? {} : { completed_item: actionCompletedItem })
       }],
@@ -8167,7 +8167,7 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       failed: 0,
       items: [{
         session_id: "D".repeat(43),
-        image_id: "019f8457-063a-70a1-a580-7a432dc7fd8e",
+        image_id: "00000000-0000-70a1-8000-00000000008e",
         status: "changed"
       }]
     }), {
@@ -8375,7 +8375,7 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       failed: 0,
       items: [{
         session_id: "E".repeat(43),
-        image_id: "019f8457-063a-70a2-a580-7a432dc7fd8e",
+        image_id: "00000000-0000-70a2-8000-00000000008e",
         status: "changed"
       }]
     }), {
@@ -8470,9 +8470,9 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
     completedActionResponseHandler = null;
 
     const pagedSuccessFirstImageId =
-      "019f8457-063a-70b1-a580-7a432dc7fd8e";
+      "00000000-0000-70b1-8000-00000000008e";
     const pagedSuccessSecondImageId =
-      "019f8457-063a-70b2-a580-7a432dc7fd8e";
+      "00000000-0000-70b2-8000-00000000008e";
     let releasePagedSuccessSecond!: () => void;
     const pagedSuccessSecondGate = new Promise<void>((resolve) => {
       releasePagedSuccessSecond = resolve;
@@ -8578,7 +8578,7 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
     assert.equal(connectionHold.current, false);
 
     const pagedFailureFirstImageId =
-      "019f8457-063a-70b3-a580-7a432dc7fd8e";
+      "00000000-0000-70b3-8000-00000000008e";
     let releasePagedFailureSecond!: () => void;
     const pagedFailureSecondGate = new Promise<void>((resolve) => {
       releasePagedFailureSecond = resolve;
@@ -8676,7 +8676,7 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
     assert.equal(connectionHold.current, false);
 
     const pagedAuthFirstImageId =
-      "019f8457-063a-70b4-a580-7a432dc7fd8e";
+      "00000000-0000-70b4-8000-00000000008e";
     let pagedAuthContinuationCalls = 0;
     completedActionResponseHandler = (body) => {
       if (!body.continuation) {
@@ -8948,7 +8948,7 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
       "../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts"
     );
     const sessionId = "D".repeat(43);
-    const imageId = "019f8457-063a-7004-a580-7a432dc7fd8e";
+    const imageId = "00000000-0000-7004-8000-00000000008e";
     let state = {
       page: 1,
       jobs: [ingestionJob({
@@ -9462,7 +9462,7 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
       serverAccepted: true,
       serverVersion: 1,
       sessionId: "T".repeat(43),
-      imageId: "019f8457-063a-7004-a580-7a432dc7fd8e"
+      imageId: "00000000-0000-7004-8000-00000000008e"
     });
     const publications: Array<{
       baseline: IngestionJob;
@@ -9656,7 +9656,7 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
       setHarnessJob?.((current) => ({
         ...current,
         attemptKey: "replacement-attempt",
-        imageId: "019f8457-063a-7004-a580-7a432dc7fd99",
+        imageId: "00000000-0000-7004-8000-000000000099",
         draft: {
           ...current.draft,
           original: "https://canonical.example/replacement.jpg"
@@ -9773,7 +9773,7 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
       serverAcceptedOrder: 1,
       serverVersion: 1,
       sessionId: "R".repeat(43),
-      imageId: "019f8457-063a-7004-a580-7a432dc7fd8e"
+      imageId: "00000000-0000-7004-8000-00000000008e"
     });
     let state = { page: 1, jobs: [job] };
     const reportedErrors: string[] = [];
@@ -10059,7 +10059,7 @@ test("[Web/内容接入] 离页草稿 owner 可按 session incarnation 静默退
       "../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts"
     );
     const sessionId = "O".repeat(43);
-    const imageId = "019f8457-063a-7040-a580-7a432dc7fd8e";
+    const imageId = "00000000-0000-7040-8000-00000000008e";
     const jobsRef = { current: [ingestionJob({
       id: "off-page-draft-owner",
       attemptKey: "off-page-draft-attempt",
@@ -10609,7 +10609,7 @@ test("[Web/内容接入] 重复决定合并同一在途请求且拒绝跨 incarn
   );
   const React = await import("react");
   const oldSessionId = "R".repeat(43);
-  const oldImageId = "019f8457-063a-7036-a580-7a432dc7fd8e";
+  const oldImageId = "00000000-0000-7036-8000-00000000008e";
   let resolveUpdate: ((response: Response) => void) | undefined;
   let updateCalls = 0;
   const requiredRevisions: number[] = [];
@@ -10724,7 +10724,7 @@ test("[Web/内容接入] 重复决定合并同一在途请求且拒绝跨 incarn
       ...oldJob,
       attemptKey: "duplicate-incarnation-new-attempt",
       sessionId: "N".repeat(43),
-      imageId: "019f8457-063a-7037-a580-7a432dc7fd8e",
+      imageId: "00000000-0000-7037-8000-00000000008e",
       serverVersion: 1,
       duplicateDecision: "undecided",
       duplicateCount: 4
@@ -10812,7 +10812,7 @@ test("[Web/内容接入] 双队列重复确认各自单飞且 busy 互不阻塞"
     const uploadJob = ingestionJob({
       id: "upload-duplicate-single-flight",
       sessionId: "G".repeat(43),
-      imageId: "019f8457-063a-7041-a580-7a432dc7fd8e",
+      imageId: "00000000-0000-7041-8000-00000000008e",
       serverAccepted: true,
       serverVersion: 1,
       status: "ready",
@@ -10822,7 +10822,7 @@ test("[Web/内容接入] 双队列重复确认各自单飞且 busy 互不阻塞"
     const importOwnerJob = ingestionJob({
       id: "import-duplicate-independent",
       sessionId: "I".repeat(43),
-      imageId: "019f8457-063a-7042-a580-7a432dc7fd8e",
+      imageId: "00000000-0000-7042-8000-00000000008e",
       serverAccepted: true,
       serverVersion: 1,
       status: "ready",
@@ -10974,13 +10974,13 @@ test("[Web/内容接入] 旧提交点击不会命中同 ID 的新任务尝试", 
       serverAccepted: true,
       serverVersion: 1,
       sessionId: "O".repeat(43),
-      imageId: "019f8457-063a-7043-a580-7a432dc7fd8e"
+      imageId: "00000000-0000-7043-8000-00000000008e"
     });
     const newAttempt = ingestionJob({
       ...oldAttempt,
       attemptKey: "new-attempt",
       sessionId: "N".repeat(43),
-      imageId: "019f8457-063a-7044-a580-7a432dc7fd8e"
+      imageId: "00000000-0000-7044-8000-00000000008e"
     });
     const jobsRef = { current: [newAttempt] };
     let commit: ReturnType<typeof useIngestionCommit>["commit"] | undefined;
@@ -11037,9 +11037,9 @@ test("[Web/内容接入] placeholder 草稿按批写回并自动跨越 worker �
   let updateCalls = 0;
   const sessionIds = ["K".repeat(43), "L".repeat(43), "M".repeat(43)];
   const imageIds = [
-    "019f8457-063a-7004-a580-7a432dc7fd92",
-    "019f8457-063a-7004-a580-7a432dc7fd93",
-    "019f8457-063a-7004-a580-7a432dc7fd94"
+    "00000000-0000-7004-8000-000000000092",
+    "00000000-0000-7004-8000-000000000093",
+    "00000000-0000-7004-8000-000000000094"
   ];
   const json = (value: unknown) => new Response(JSON.stringify({
     ok: true,
@@ -11271,10 +11271,10 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
         ok: true,
         items: [{
           session_id: "J".repeat(43),
-          image_id: "019f8457-063a-7004-a580-7a432dc7fd90",
+          image_id: "00000000-0000-7004-8000-000000000090",
           status: "completed",
           completed_item: adminImageListItem({
-            id: "019f8457-063a-7004-a580-7a432dc7fd90"
+            id: "00000000-0000-7004-8000-000000000090"
           }),
           redis_status: active ? "active" : "completed",
           redis_version: active ? 2 : 3,
@@ -11289,7 +11289,7 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
       ok: true,
       items: [{
         session_id: "H".repeat(43),
-        image_id: "019f8457-063a-7004-a580-7a432dc7fd8f",
+        image_id: "00000000-0000-7004-8000-00000000008f",
         status: "missing"
       }]
     }), {
@@ -11384,14 +11384,14 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
     await React.act(async () => {
       handoffs!.prepareBinding({
         sessionId: "H".repeat(43),
-        imageId: "019f8457-063a-7004-a580-7a432dc7fd8f",
+        imageId: "00000000-0000-7004-8000-00000000008f",
         serverAccepted: true,
         serverHandoffPending: true,
         serverHandoffRevision: undefined
       });
       handoffs!.prepareBinding({
         sessionId: "H".repeat(43),
-        imageId: "019f8457-063a-7004-a580-7a432dc7fd8f",
+        imageId: "00000000-0000-7004-8000-00000000008f",
         serverAccepted: true,
         serverHandoffPending: true,
         serverHandoffRevision: 8
@@ -11428,7 +11428,7 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
     await React.act(async () => {
       handoffs!.prepareBinding({
         sessionId: "H".repeat(43),
-        imageId: "019f8457-063a-7004-a580-7a432dc7fd8f",
+        imageId: "00000000-0000-7004-8000-00000000008f",
         serverAccepted: true,
         serverHandoffPending: true,
         serverHandoffRevision: 44
@@ -11457,14 +11457,14 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
     await React.act(async () => {
       handoffs!.prepareBinding({
         sessionId: "I".repeat(43),
-        imageId: "019f8457-063a-7004-a580-7a432dc7fd91",
+        imageId: "00000000-0000-7004-8000-000000000091",
         serverAccepted: true,
         serverHandoffPending: true,
         serverHandoffRevision: 99
       }, 2);
       handoffs!.prepareBinding({
         sessionId: "I".repeat(43),
-        imageId: "019f8457-063a-7004-a580-7a432dc7fd91",
+        imageId: "00000000-0000-7004-8000-000000000091",
         serverAccepted: true,
         serverHandoffPending: true,
         serverHandoffRevision: 2
@@ -11489,7 +11489,7 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
         ok: true,
         items: [{
           session_id: "I".repeat(43),
-          image_id: "019f8457-063a-7004-a580-7a432dc7fd91",
+          image_id: "00000000-0000-7004-8000-000000000091",
           status: "missing"
         }]
       }), {
@@ -11508,7 +11508,7 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
     await React.act(async () => {
       handoffs!.prepareBinding({
         sessionId: "J".repeat(43),
-        imageId: "019f8457-063a-7004-a580-7a432dc7fd90",
+        imageId: "00000000-0000-7004-8000-000000000090",
         serverAccepted: true,
         serverHandoffPending: true,
         serverHandoffRevision: undefined
@@ -11538,8 +11538,8 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
       "跨代围栏必须改用当前连接 status 返回的 revision 证明"
     );
     assert.deepEqual(observedHandoffCompleted, [
-      "019f8457-063a-7004-a580-7a432dc7fd90",
-      "019f8457-063a-7004-a580-7a432dc7fd90"
+      "00000000-0000-7004-8000-000000000090",
+      "00000000-0000-7004-8000-000000000090"
     ], "权威交接每次完成态 status 都必须交给 owner 统一去重");
 
     server.connectionGeneration = 4;
@@ -11549,12 +11549,12 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
       await Promise.resolve();
     });
     const externalPairKey = `${"K".repeat(43)}\0${
-      "019f8457-063a-7004-a580-7a432dc7fd92"
+      "00000000-0000-7004-8000-000000000092"
     }`;
     await React.act(async () => {
       handoffs!.prepareBinding({
         sessionId: "K".repeat(43),
-        imageId: "019f8457-063a-7004-a580-7a432dc7fd92",
+        imageId: "00000000-0000-7004-8000-000000000092",
         serverAccepted: true,
         serverHandoffPending: true,
         serverHandoffRevision: undefined
@@ -11609,7 +11609,7 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
 test("[Web/内容接入] 取消只在服务端明确丢弃后报告成功", async () => {
   const originalFetch = globalThis.fetch;
   const sessionId = "C".repeat(43);
-  const imageId = "019f8457-063a-7003-a580-7a432dc7fd8e";
+  const imageId = "00000000-0000-7003-8000-00000000008e";
   let jobs = [ingestionJob({
     kind: "upload",
     sessionId,
@@ -11768,7 +11768,7 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
     );
     const pair = {
       session_id: "C".repeat(43),
-      image_id: "019f8457-063a-7021-a580-7a432dc7fd8e"
+      image_id: "00000000-0000-7021-8000-00000000008e"
     };
     const placeholder = ingestionJob({
       id: "overlap-placeholder",
@@ -11803,7 +11803,7 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
           freezeCalls += 1;
           return {
             queue: "import",
-            actionRequestId: "019f8457-063a-7022-a580-7a432dc7fd8e",
+            actionRequestId: "00000000-0000-7022-8000-00000000008e",
             action,
             actionScope: "scope",
             actionWatermark: "watermark",
@@ -11988,7 +11988,7 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
     queue.localJobs = jobsRef.current;
     serverPair = {
       ...pair,
-      image_id: "019f8457-063a-7023-a580-7a432dc7fd8e"
+      image_id: "00000000-0000-7023-8000-00000000008e"
     };
     serverItems = [{ ...serverPair, status: "changed" }];
     outcomeAcceptedOrder = 2;
@@ -12233,11 +12233,11 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
 
     const partialResolvedPair = {
       session_id: "P".repeat(43),
-      image_id: "019f8457-063a-7024-a580-7a432dc7fd8e"
+      image_id: "00000000-0000-7024-8000-00000000008e"
     };
     const partialUnknownPair = {
       session_id: "Q".repeat(43),
-      image_id: "019f8457-063a-7025-a580-7a432dc7fd8e"
+      image_id: "00000000-0000-7025-8000-00000000008e"
     };
     const partialResolvedJob = ingestionJob({
       id: "cleanup-partial-resolved",
@@ -12599,7 +12599,7 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
       ok: true,
       items: jobs.map((job, index) => ({
         session_id: String(index).padStart(43, "S"),
-        image_id: `019f8457-063a-7${String(index).padStart(3, "0")}-a580-7a432dc7fd8e`,
+        image_id: `019f8457-063a-7${String(index).padStart(3, "0")}-a580-00000000008e`,
         resolved_image_time: "2026-08-23T01:02:03.456Z",
         request_hash: job.attemptKey,
         status: "accepted",
@@ -12626,7 +12626,7 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
       kind: "import",
       downloadUrl: "https://example.com/completed.jpg",
       sessionId: "R".repeat(43),
-      imageId: "019f8457-063a-7024-a580-7a432dc7fd8e",
+      imageId: "00000000-0000-7024-8000-00000000008e",
       serverAccepted: true,
       serverVersion: 1,
       status: "failed",
@@ -12734,8 +12734,8 @@ test("[Web/内容接入] Upload 与 Import 接管只使用固定短路由和 1 +
   const fetchCalls: Array<{ path: string; init: RequestInit }> = [];
   const sessionIds = ["A".repeat(43), "B".repeat(43)];
   const imageIds = [
-    "019f8457-063a-7001-a580-7a432dc7fd8e",
-    "019f8457-063a-7002-a580-7a432dc7fd8e"
+    "00000000-0000-7001-8000-00000000008e",
+    "00000000-0000-7002-8000-00000000008e"
   ];
   const metadata = {
     device: "auto" as const,
@@ -12988,7 +12988,7 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
   };
   const active = {
     session_id: "S".repeat(43),
-    image_id: "019f8457-063a-7005-a580-7a432dc7fd8e",
+    image_id: "00000000-0000-7005-8000-00000000008e",
     queue: "upload" as const,
     source_type: "upload" as const,
     resolved_image_time: "2026-08-23T01:02:03.456Z",
@@ -13068,7 +13068,7 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
       : String(index).padStart(43, "R"),
     image_id: index === 0
       ? active.image_id
-      : `019f8457-063a-72${String(index).padStart(2, "0")}-a580-7a432dc7fd8e`,
+      : `019f8457-063a-72${String(index).padStart(2, "0")}-a580-00000000008e`,
     accepted_order: index + 1
   }));
   const reservoirBaseline = {
@@ -13248,7 +13248,7 @@ test("[Web/内容接入] 队列 progress 以当前 revision 同步页内与离�
   };
   const waiting = {
     session_id: "W".repeat(43),
-    image_id: "019f8457-063a-7005-a580-7a432dc7fd8e",
+    image_id: "00000000-0000-7005-8000-00000000008e",
     queue: "upload" as const,
     source_type: "upload" as const,
     resolved_image_time: "2026-08-23T01:02:03.456Z",
@@ -13379,16 +13379,16 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
   const calls: Array<{ path: string; init: RequestInit }> = [];
   const sessionIds = ["A".repeat(43), "B".repeat(43)];
   const imageIds = [
-    "019f8457-063a-7005-a580-7a432dc7fd8e",
-    "019f8457-063a-7006-a580-7a432dc7fd8e"
+    "00000000-0000-7005-8000-00000000008e",
+    "00000000-0000-7006-8000-00000000008e"
   ];
   const attemptIds = [
-    "019f8457-063a-7007-a580-7a432dc7fd8e",
-    "019f8457-063a-7008-a580-7a432dc7fd8e"
+    "00000000-0000-7007-8000-00000000008e",
+    "00000000-0000-7008-8000-00000000008e"
   ];
   const commitRequestIds = [
-    "019f8457-063a-7009-a580-7a432dc7fd8e",
-    "019f8457-063a-700a-a580-7a432dc7fd8e"
+    "00000000-0000-7009-8000-00000000008e",
+    "00000000-0000-700a-8000-00000000008e"
   ];
   const jobs = imageIds.map((imageId, index) => {
     const ready = ingestionJob({
@@ -13485,9 +13485,9 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
 
     const lostResponseReady = ingestionJob({
       id: "commit-response-lost",
-      attemptKey: "019f8457-063a-7014-a580-7a432dc7fd8e",
+      attemptKey: "00000000-0000-7014-8000-00000000008e",
       sessionId: "R".repeat(43),
-      imageId: "019f8457-063a-7015-a580-7a432dc7fd8e",
+      imageId: "00000000-0000-7015-8000-00000000008e",
       status: "ready",
       serverVersion: 7,
       duplicateDecision: "upload"
@@ -13496,7 +13496,7 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
       ...lostResponseReady,
       commitIntent: createIngestionCommitIntent(
         lostResponseReady,
-        "019f8457-063a-7016-a580-7a432dc7fd8e"
+        "00000000-0000-7016-8000-00000000008e"
       )
     };
     const lostResponseCurrent = new Map([
@@ -13542,9 +13542,9 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
 
     const duplicateReady = ingestionJob({
       id: "commit-duplicate",
-      attemptKey: "019f8457-063a-700b-a580-7a432dc7fd8e",
+      attemptKey: "00000000-0000-700b-8000-00000000008e",
       sessionId: "C".repeat(43),
-      imageId: "019f8457-063a-700c-a580-7a432dc7fd8e",
+      imageId: "00000000-0000-700c-8000-00000000008e",
       status: "ready",
       serverVersion: 5,
       duplicateDecision: "upload"
@@ -13553,12 +13553,12 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
       ...duplicateReady,
       commitIntent: createIngestionCommitIntent(
         duplicateReady,
-        "019f8457-063a-700d-a580-7a432dc7fd8e"
+        "00000000-0000-700d-8000-00000000008e"
       )
     };
     const duplicateCurrent = new Map([[duplicateJob.id, duplicateJob]]);
     const duplicateItem = adminImageListItem({
-      id: "019f8457-063a-700e-a580-7a432dc7fd8e"
+      id: "00000000-0000-700e-8000-00000000008e"
     });
     globalThis.fetch = (async () => new Response(JSON.stringify({
       ok: true,
@@ -13886,7 +13886,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
   let fetchCount = 0;
   const windowDuplicateMd5 = "e".repeat(32);
   const windowDuplicateItem = adminImageListItem({
-    id: "019f8457-063a-7034-a580-7a432dc7fd8e",
+    id: "00000000-0000-7034-8000-00000000008e",
     md5: windowDuplicateMd5
   });
   const fetchStub = async (input: RequestInfo | URL) => {
@@ -14297,7 +14297,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       id: "window-pending-snapshot",
       attemptKey: "window-pending-snapshot-attempt",
       sessionId: "S".repeat(43),
-      imageId: "019f8457-063a-7037-a580-7a432dc7fd8e",
+      imageId: "00000000-0000-7037-8000-00000000008e",
       serverAccepted: true,
       kind: "upload",
       status: "processing"
@@ -14370,7 +14370,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
         status: "commit-queued",
         commitIntent: createIngestionCommitIntent(
           applyTransitionJob,
-          "019f8457-063a-702f-a580-7a432dc7fd8e"
+          "00000000-0000-702f-8000-00000000008e"
         )
       }]);
       await Promise.resolve();
@@ -14447,7 +14447,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       id: "window-phase-duplicate",
       attemptKey: "window-phase-duplicate-attempt",
       sessionId: "Q".repeat(43),
-      imageId: "019f8457-063a-7036-a580-7a432dc7fd8e",
+      imageId: "00000000-0000-7036-8000-00000000008e",
       serverAccepted: true,
       status: "ready",
       md5: windowDuplicateMd5,
@@ -14683,7 +14683,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
         attemptKey: "window-old-incarnation-attempt",
         batchKey: "window-incarnation-batch",
         sessionId: incarnationSessionId,
-        imageId: "019f8457-063a-7030-a580-7a432dc7fd8e",
+        imageId: "00000000-0000-7030-8000-00000000008e",
         serverAccepted: true,
         status: "received",
         preview: "blob:window-old-incarnation",
@@ -14710,7 +14710,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
         attemptKey: "window-next-incarnation-attempt",
         batchKey: "window-incarnation-batch",
         sessionId: incarnationSessionId,
-        imageId: "019f8457-063a-7031-a580-7a432dc7fd8e",
+        imageId: "00000000-0000-7031-8000-00000000008e",
         serverAccepted: true,
         status: "received",
         preview: "https://img.example/images/thumbs/new-incarnation.webp",
@@ -14748,7 +14748,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
     );
 
     const focusSessionId = "F".repeat(43);
-    const focusImageId = "019f8457-063a-7032-a580-7a432dc7fd8e";
+    const focusImageId = "00000000-0000-7032-8000-00000000008e";
     const focusPlaceholder = ingestionJob({
       id: "local:continuous-focus",
       attemptKey: "continuous-focus-attempt",
@@ -14787,7 +14787,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
         ...firstBoundFocus,
         id: "server:next-incarnation-focus",
         attemptKey: "next-incarnation-focus-attempt",
-        imageId: "019f8457-063a-7035-a580-7a432dc7fd8e"
+        imageId: "00000000-0000-7035-8000-00000000008e"
       })]);
       await Promise.resolve();
     });
@@ -14845,7 +14845,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
     );
 
     const detailSessionId = "D".repeat(43);
-    const detailImageId = "019f8457-063a-7033-a580-7a432dc7fd8e";
+    const detailImageId = "00000000-0000-7033-8000-00000000008e";
     const detailCanonical = ingestionJob({
       id: "server:event-first-detail",
       attemptKey: "event-first-detail-attempt",
@@ -16123,7 +16123,7 @@ test("[Web/内容接入] 大队列页外进度和缓冲进度不重复请求当�
   const { useServerIngestionQueue } = await import("../../../packages/web/src/pages/admin/ingestion/queue/useServerIngestionQueue.ts");
   const items = Array.from({ length: 800 }, (_, index) => ({
     session_id: String(index).padStart(43, "S"),
-    image_id: `019f8457-063a-7${index.toString(16).padStart(3, "0")}-a580-7a432dc7fd8e`,
+    image_id: `019f8457-063a-7${index.toString(16).padStart(3, "0")}-a580-00000000008e`,
     queue: "import" as const, source_type: "url" as const,
     resolved_image_time: "2026-09-14T00:00:00.000Z", status: "preparing" as const,
     phase: "prepare-waiting", message: "待处理", version: 2, progress_seq: 0,
@@ -16210,7 +16210,7 @@ test("[Web/内容接入] 各来源及恢复任务原位重试保留身份时间�
     const imageTime = "2020-06-17T02:30:45.000Z";
     state = { page: 2, jobs: Array.from({ length: count }, (_, index) => ingestionJobFromServerItem({
       session_id: String(index).padStart(43, "S"),
-      image_id: `019f8457-063a-7${index.toString(16).padStart(3, "0")}-a580-7a432dc7fd8e`,
+      image_id: `019f8457-063a-7${index.toString(16).padStart(3, "0")}-a580-00000000008e`,
       queue: source === "upload" ? "upload" : "import", source_type: source ?? "url", batch_position: index,
       download_url: "https://images.example.com/photo.png", resolved_image_time: imageTime,
       status: "failed", phase: "failed", message: "内容接入执行权已转移",

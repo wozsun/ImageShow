@@ -208,16 +208,16 @@ test("[Web/画廊] 常规滚动画廊渲染窗口按半屏重定位并覆盖图�
   );
 });
 test("[Web/画廊] 画廊标题只使用标题或 UUID 后十二位", () => {
-  const card = galleryCard("019ffefe-24d8-7d83-9ae1-12e720b651c9");
+  const card = galleryCard("00000000-0000-7000-8000-0000000000c9");
   assert.equal(imageDisplayTitle({ ...card, title: "  已命名图片  " }), "已命名图片");
-  assert.equal(imageDisplayTitle({ ...card, title: "" }), "#12e720b651c9");
+  assert.equal(imageDisplayTitle({ ...card, title: "" }), "#0000000000c9");
   const decoratedCard = {
     ...card,
     title: "",
     theme: "night",
     tags: ["blue", "stars"]
   };
-  assert.equal(imageDisplayTitle(decoratedCard), "#12e720b651c9");
+  assert.equal(imageDisplayTitle(decoratedCard), "#0000000000c9");
 });
 test("[Web/画廊] 公开列表 slug 复用 facets 生成卡片与详情显示值", () => {
   const item = {

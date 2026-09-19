@@ -60,8 +60,8 @@ const beforeSessionId = ingestionSessionIdentity.createIngestionSessionId(
   "import",
   "before-flush"
 );
-const beforeImageId = "019f8457-063a-7021-a580-7a432dc7fd8e";
-const persistedImageId = "019f8457-063a-7020-a580-7a432dc7fd8e";
+const beforeImageId = "00000000-0000-7021-8000-00000000008e";
+const persistedImageId = "00000000-0000-7020-8000-00000000008e";
 const repository = new ingestionSessionRepository.IngestionSessionRepository(
   redisClient.redis,
   (work: () => Promise<unknown>) => work()

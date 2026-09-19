@@ -7,7 +7,7 @@ import {
 } from "../../../packages/server/src/images/ready-cache/random-sampler.ts";
 
 
-export const imageId = "019f8457-063a-7002-a580-7a432dc7fd8d";
+export const imageId = "00000000-0000-7002-8000-00000000008d";
 export type ReadyImageSampleDependencies = NonNullable<
   Parameters<typeof sampleResolvedReadyImageIndex>[3]
 >;

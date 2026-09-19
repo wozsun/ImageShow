@@ -331,7 +331,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   ).metadata.revision;
   const noOpActionRequest = {
     ...applyActionRequest,
-    action_request_id: "019f8457-063a-7004-a580-7a432dc7fd90",
+    action_request_id: "00000000-0000-7004-8000-000000000090",
     action_watermark: noOpActionPage.action_watermark,
     metadata: { title: noOpActionCurrent.metadata.title }
   };
@@ -353,7 +353,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
 
   const sameRevisionNewAction = {
     ...noOpActionRequest,
-    action_request_id: "019f8457-063a-7004-a580-7a432dc7fd91",
+    action_request_id: "00000000-0000-7004-8000-000000000091",
     metadata: { title: "new defaults at the same revision" }
   };
   const sameRevisionNewResult = await runAction(
@@ -466,7 +466,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   });
   const atomicNewerRequest = {
     queue: "import" as const,
-    action_request_id: "019f8457-063a-7004-a580-7a432dc7fd95",
+    action_request_id: "00000000-0000-7004-8000-000000000095",
     action: "apply_metadata" as const,
     action_watermark: atomicActionPage.action_watermark,
     metadata: { title: atomicStaleSnapshot.metadata.title }
@@ -479,7 +479,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
 
   const atomicOlderResult = await runAction(staleActionRepository, {
     ...atomicNewerRequest,
-    action_request_id: "019f8457-063a-7004-a580-7a432dc7fd94",
+    action_request_id: "00000000-0000-7004-8000-000000000094",
     metadata: { title: "later smaller-id action must apply" }
   });
   assert.equal(atomicOlderResult.items[0].status, "changed");
@@ -568,7 +568,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   });
   const orderedSmallerRequest = {
     queue: "import" as const,
-    action_request_id: "019f8457-063a-7004-a580-7a432dc7fd96",
+    action_request_id: "00000000-0000-7004-8000-000000000096",
     action: "apply_metadata" as const,
     action_watermark: orderedActionPage.action_watermark,
     metadata: { title: "smaller action landed first" }
@@ -595,7 +595,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   assert.equal(editBetweenOrderedActions.changed, true);
   const orderedLargerResult = await runAction(orderedStaleRepository, {
     ...orderedSmallerRequest,
-    action_request_id: "019f8457-063a-7004-a580-7a432dc7fd97",
+    action_request_id: "00000000-0000-7004-8000-000000000097",
     metadata: { title: "larger action must win" }
   });
   assert.equal(orderedLargerResult.items[0].status, "changed");
