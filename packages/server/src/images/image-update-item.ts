@@ -1,7 +1,7 @@
 import type { Brightness, Device } from "@imageshow/shared/browser";
 import type { PoolClient } from "pg";
 import { ensureAuthorWithMutationLockHeld } from "../authors/mutations.ts";
-import { ApiError, errorMessage } from "../core/api-error.ts";
+import { ApiError } from "../core/api-error.ts";
 import { withAdvisoryLocksOnClient } from "../core/database/advisory-locks.ts";
 import { pool } from "../core/database/pools.ts";
 import { logger } from "../core/logger.ts";
@@ -146,7 +146,7 @@ async function repairDerivedCaches(
     if (result.status === "fulfilled") return;
     logger.warn("image_update_derived_cache_repair_failed", {
       repair: tasks[index].label,
-      error: errorMessage(result.reason)
+      error: result.reason
     });
   });
 }
@@ -395,7 +395,7 @@ async function mutateImageItem(
       reportReadyImageCacheFailure(error);
       logger.warn("image_update_cache_handoff_failed_after_commit", {
         image_id: item.id,
-        error: errorMessage(error)
+        error: error
       });
       if (committedOutcome.changed) {
         requestReadyImageCacheRebuildAfterMutation(1);

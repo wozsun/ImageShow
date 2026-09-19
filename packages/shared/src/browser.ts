@@ -12,3 +12,4 @@ export * from "./browser/tag-filter.ts";
 export * from "./browser/storage.ts";
 export * from "./browser/ingestion.ts";
 export * from "./browser/admin.ts";
+export * from "./browser/log-safety.ts";

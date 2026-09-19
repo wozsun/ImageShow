@@ -29,6 +29,67 @@ import {
   installProperties
 } from "../support/property-descriptors.ts";
 
+test("[Web/共享交互] 词条搜索按相关性保留顺序并加粗原文匹配字符", async (t) => {
+  const { facetSuggestions } = await import("../../../packages/web/src/lib/ui/facet-input.ts");
+  const { FacetSuggestionLabel } = await import("../../../packages/web/src/components/data-display/FacetSuggestionLabel.tsx");
+  const React = await import("react");
+  const restoreReact = installProperties(globalThis, { React });
+  t.after(restoreReact);
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const option = (slug: string, display_name = "") => ({ slug, display_name });
+  const options = [option("hangzhou", "风景夜色"), option("hz-view"), option("hz"), option("hz-other")];
+  const slugs = (query: string, excluded = new Set<string>()) => facetSuggestions(options, query, excluded).map((item) => item.slug);
+  assert.deepEqual(slugs(" HZ "), ["hz", "hz-view", "hz-other", "hangzhou"]);
+  assert.deepEqual(slugs("hg"), ["hangzhou"]);
+  assert.deepEqual(slugs("han"), ["hangzhou"]);
+  assert.deepEqual(slugs("hangzhou"), ["hangzhou"]);
+  assert.deepEqual(slugs("风夜"), ["hangzhou"]);
+  assert.deepEqual(slugs("夜风"), []);
+  assert.deepEqual(slugs("gg"), []);
+  assert.deepEqual(slugs("hh"), ["hangzhou", "hz-other"]);
+  assert.deepEqual(slugs(" "), []);
+  assert.deepEqual(slugs("hz", new Set(["hangzhou", "hz"])), ["hz-view", "hz-other"]);
+  const many = [...Array.from({ length: 60 }, (_, index) => option(`hangzhou-${index}`)), option("hz")];
+  assert.deepEqual(facetSuggestions(many, "hz").map((item) => item.slug), ["hz", ...many.slice(0, 49).map((item) => item.slug)]);
+  for (const [item, query, expected] of [
+    [option("hangzhou"), "hz", ["h", "z"]],
+    [option("mixed", "风景Night夜色"), "风n夜", ["风", "N", "夜"]],
+    [option("unicode", "İstanbul夜色"), "i夜", ["İ", "夜"]],
+    [option("unicode", "𠮷野风景"), "𠮷风", ["𠮷", "风"]],
+    [option("literal", "<script>风夜</script>"), "风夜", ["风夜"]]
+  ] as const) {
+    const match = facetSuggestions([item], query)[0]!;
+    const { document } = parseHTML(`<html><body>${renderToStaticMarkup(React.createElement(FacetSuggestionLabel, { option: match }))}</body></html>`);
+    assert.deepEqual([...document.querySelectorAll("b")].map((node) => node.textContent), expected);
+    assert.equal(document.body.textContent, item.slug + item.display_name);
+    assert.equal(document.querySelector("script"), null);
+  }
+});
+
+test("[Web/共享交互] 浏览器错误上报和控制台只发送清洗后的结构化摘要", async (t) => {
+  const { reportAdminUiError } = await import("../../../packages/web/src/lib/ui/error-reporting.ts");
+  const reports: unknown[] = [];
+  const consoleEntries: unknown[] = [];
+  const restoreGlobals = installProperties(globalThis, {
+    window: {},
+    fetch: async (_url: unknown, init: RequestInit) => {
+      reports.push(JSON.parse(String(init.body)));
+      return Response.json({ ok: true });
+    }
+  });
+  const restoreConsole = installProperties(console, { error: (...args: unknown[]) => consoleEntries.push(args) });
+  t.after(() => { restoreGlobals(); restoreConsole(); });
+  reportAdminUiError("advanced_config.json_parse", new SyntaxError("synthetic-private-value"), {
+    secret_access_key: "synthetic-private-value", image_id: "synthetic-image"
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reports.length, 1);
+  assert.equal(JSON.stringify(reports).includes("synthetic-private-value"), false);
+  assert.equal(JSON.stringify(consoleEntries).includes("synthetic-private-value"), false);
+  assert.ok(JSON.stringify(reports).includes("synthetic-image"));
+  assert.equal(JSON.stringify((consoleEntries[0] as unknown[])[1]), JSON.stringify(reports[0]));
+});
+
 test("[Web/共享交互] 媒体查询保持当前快照、独立订阅及卸载清理", async (t) => {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");

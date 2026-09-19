@@ -1,4 +1,5 @@
 import { emitKeypressEvents } from "node:readline";
+import { formatLogContext } from "@imageshow/shared/browser";
 import { deploymentConfig } from "./config/deployment-config.ts";
 import {
   closeDatabasePools,
@@ -89,7 +90,7 @@ async function main() {
     return;
   }
 
-  const reason = result.error instanceof Error ? result.error.message : String(result.error);
+  const reason = formatLogContext(result.error);
   process.stdout.write(`管理员 ${result.username} 的密码已重置。\n`);
   process.stderr.write(
     `警告：Redis 会话清理失败（${reason}）。目标账号的旧会话已因密码绑定失效，\n` +
@@ -100,7 +101,7 @@ async function main() {
 try {
   await main();
 } catch (error) {
-  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(`${formatLogContext(error)}\n`);
   process.exitCode = 1;
 } finally {
   redis.disconnect();

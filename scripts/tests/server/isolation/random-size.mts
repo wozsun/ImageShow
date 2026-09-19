@@ -61,7 +61,7 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(original.status, 200);
     assert.deepEqual(Buffer.from(await original.arrayBuffer()), full);
     const etag = original.headers.get("etag")!;
-    assert.equal(etag.length, 26);
+    assert.equal(etag.length, 18);
     for (const method of ["GET", "HEAD"]) {
       const unchanged = await app.request(localPath, { method, headers: { "If-None-Match": `"unrelated", W/${etag}` } });
       assert.equal(unchanged.status, 304);

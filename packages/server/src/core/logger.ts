@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { appConfig } from "@imageshow/shared";
-import type { RuntimeConfig } from "@imageshow/shared/browser";
+import { formatLogContext, safeLogText, type RuntimeConfig } from "@imageshow/shared/browser";
 import { runtimePaths } from "../config/bootstrap-env.ts";
 
 const LEVELS = { DEBUG: 10, INFO: 20, WARN: 30, ERROR: 40, OFF: 100 } as const;
@@ -47,17 +47,6 @@ function rotateIfNeeded(maxBytes: number, maxFiles: number) {
   }
 }
 
-function formatContext(context: unknown): string {
-  if (context === undefined || context === null) return "";
-  if (context instanceof Error) return ` ${context.stack ?? `${context.name}: ${context.message}`}`;
-  if (typeof context === "string") return ` ${context}`;
-  try {
-    return ` ${JSON.stringify(context)}`;
-  } catch {
-    return ` ${String(context)}`;
-  }
-}
-
 function localTimestamp() {
   const date = new Date();
   const pad = (value: number, size = 2) => String(value).padStart(size, "0");
@@ -70,7 +59,8 @@ function write(level: LevelName, message: string, context?: unknown) {
   if (LEVELS[level] < threshold) return;
 
   const timestamp = localTimestamp();
-  const line = `[${timestamp}] ${`[${level}]`.padEnd(7)} ${message}${formatContext(context)}\n`;
+  const details = context == null ? "" : ` ${formatLogContext(context)}`;
+  const line = `[${timestamp}] ${`[${level}]`.padEnd(7)} ${safeLogText(message, 1_000)}${details}\n`;
   (level === "ERROR" || level === "WARN" ? process.stderr : process.stdout).write(line);
   try {
     ensureLogDir();

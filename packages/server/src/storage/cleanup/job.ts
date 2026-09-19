@@ -1,5 +1,5 @@
 import { storageObjectKey } from "@imageshow/shared/browser";
-import { ApiError, errorMessage } from "../../core/api-error.ts";
+import { ApiError } from "../../core/api-error.ts";
 import { pool } from "../../core/database/pools.ts";
 import { logger } from "../../core/logger.ts";
 import {
@@ -221,7 +221,7 @@ export async function handleMoveCleanupJob(
           cleanup_reason: typeof lockedJob.payload.reason === "string"
             ? lockedJob.payload.reason
             : "",
-          error: errorMessage(error)
+          error: error
         });
         throw error;
       }

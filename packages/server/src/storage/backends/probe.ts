@@ -101,7 +101,7 @@ export async function validateStorageBackendCandidate(
     await Promise.resolve().then(() => driver.close?.()).catch((error) => {
       logger.warn("storage_probe_driver_close_failed", {
         backend: config.slug,
-        error: errorMessage(error)
+        error: error
       });
     });
   }

@@ -4,7 +4,7 @@ import type {
   IngestionCancelItemResultDto
 } from "@imageshow/shared/browser";
 import { appConfig } from "@imageshow/shared";
-import { ApiError, errorMessage } from "../../../core/api-error.ts";
+import { ApiError } from "../../../core/api-error.ts";
 import { DynamicConcurrencyLimiter } from "../../../core/concurrency.ts";
 import { logger } from "../../../core/logger.ts";
 import {
@@ -100,14 +100,14 @@ function abortActiveBestEffort(
       logger.warn("ingestion_discarded_abort_deferred", {
         session_id: pair.session_id,
         image_id: pair.image_id,
-        error: errorMessage(error)
+        error: error
       });
     });
   } catch (error) {
     logger.warn("ingestion_discarded_abort_deferred", {
       session_id: pair.session_id,
       image_id: pair.image_id,
-      error: errorMessage(error)
+      error: error
     });
   }
 }
@@ -154,7 +154,7 @@ async function retireCompletedSession(
           logger.warn("ingestion_completed_receipt_publish_deferred", {
             session_id: input.session_id,
             image_id: input.image_id,
-            error: errorMessage(error)
+            error: error
           });
         }
         const current = await repository.readSession(
@@ -186,7 +186,7 @@ async function retireCompletedSession(
       logger.warn("ingestion_completed_receipt_cleanup_deferred", {
         session_id: input.session_id,
         image_id: input.image_id,
-        error: errorMessage(error)
+        error: error
       });
     }
   }

@@ -1,4 +1,5 @@
 import { Readable } from "node:stream";
+import { finished } from "node:stream/promises";
 import { ApiError } from "../../core/api-error.ts";
 import type { OpenedRead } from "../drivers/driver.ts";
 
@@ -69,8 +70,11 @@ export function webReadableFromNode(stream: Readable): ReadableStream<Uint8Array
     async cancel(reason) {
       if (!active) return;
       active = false;
+      // Observe teardown errors even before the iterator's first read.
+      const closed = finished(stream, { cleanup: true, writable: false }).catch(() => undefined);
       stream.destroy(reason instanceof Error ? reason : undefined);
       await iterator.return?.().catch(() => undefined);
+      await closed;
     }
   });
 }

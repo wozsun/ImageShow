@@ -1,7 +1,24 @@
 import type { Context, Next } from "hono";
+import { routePath } from "hono/route";
+import { randomUUID } from "node:crypto";
 import { isIP } from "node:net";
 import { ApiError } from "../api-error.ts";
 import { appendVaryHeader } from "./headers.ts";
+
+export function requestLogContext(context: Context) {
+  let requestId = context.get("logRequestId") as string | undefined;
+  if (!requestId) {
+    requestId = randomUUID();
+    context.set("logRequestId", requestId);
+    context.header("X-Request-ID", requestId);
+  }
+  return {
+    request_id: requestId,
+    method: context.req.method,
+    route: routePath(context, -1) || "unknown",
+    ip: requestClientIp(context)
+  };
+}
 
 function requestProtocol(context: Context) {
   const forwarded = context.req.header("x-forwarded-proto")

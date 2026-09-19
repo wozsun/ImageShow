@@ -206,7 +206,7 @@ export async function invalidateCommittedAdminSessionsByUsername(
     logger.warn("committed_admin_session_invalidation_failed", {
       operation: options.operation,
       username,
-      error: error instanceof Error ? error.message : String(error)
+      error: error
     });
     return null;
   }

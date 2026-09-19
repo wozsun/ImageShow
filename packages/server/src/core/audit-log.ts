@@ -1,6 +1,6 @@
 import type { Context, Next } from "hono";
-import { ApiError, errorMessage } from "./api-error.ts";
-import { requestClientIp } from "./http/request-security.ts";
+import { ApiError } from "./api-error.ts";
+import { requestLogContext } from "./http/request-security.ts";
 import { logger } from "./logger.ts";
 
 function adminSession(c: Context) {
@@ -54,20 +54,16 @@ export async function auditAdminMutation(c: Context, next: Next) {
   }
 
   const started = Date.now();
-  const path = new URL(c.req.url).pathname;
   const session = adminSession(c);
   const base = {
     actor: session?.username ?? "unknown",
-    role: session?.role ?? "unknown",
-    method,
-    path,
-    ip: requestClientIp(c)
+    role: session?.role ?? "unknown"
   };
 
   try {
     await next();
     const status = c.res.status || 200;
-    const entry = { ...base, status, duration_ms: Date.now() - started };
+    const entry = { ...base, ...requestLogContext(c), status, duration_ms: Date.now() - started };
     if (status >= 400) {
       const errorDetails = await responseErrorDetails(c);
       // Hono may convert a downstream exception through the application-level
@@ -84,10 +80,11 @@ export async function auditAdminMutation(c: Context, next: Next) {
     if (requestBodyRejected(error)) throw error;
     logger.warn("admin action failed", {
       ...base,
+      ...requestLogContext(c),
       status: error && typeof error === "object" && "status" in error ? (error as { status?: unknown }).status : undefined,
       duration_ms: Date.now() - started,
       ...(error instanceof ApiError ? { code: error.code } : {}),
-      error: errorMessage(error)
+      error
     });
     throw error;
   }

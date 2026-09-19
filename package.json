@@ -1,7 +1,7 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "6.4.12",
+  "version": "6.4.13",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -28,10 +28,10 @@
     "start": "npm run start -w @imageshow/server"
   },
   "engines": {
-    "node": ">=26.3.0 <27"
+    "node": ">=26.8.0 <27"
   },
   "devDependencies": {
-    "knip": "^6.35.1",
+    "knip": "^6.37.0",
     "linkedom": "^0.18.13",
     "tsx": "^4.23.13",
     "yaml": "^2.9.1"

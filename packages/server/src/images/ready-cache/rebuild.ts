@@ -49,7 +49,7 @@ async function observeReadyImageCacheMemory(
   } catch (error) {
     signal?.throwIfAborted();
     logger.warn("ready_image_cache_memory_observation_failed", {
-      error: errorMessage(error)
+      error: error
     });
     return { bytes: null, measuredAt: "" };
   }
@@ -253,8 +253,8 @@ async function discardFailedBuild(error: unknown, client: Redis) {
     });
   } catch (cleanupError) {
     logger.error("ready_image_cache_failed_build_cleanup_failed", {
-      rebuild_error: errorMessage(error),
-      cleanup_error: errorMessage(cleanupError)
+      rebuild_error: error,
+      cleanup_error: cleanupError
     });
   }
 }

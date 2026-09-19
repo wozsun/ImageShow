@@ -27,7 +27,8 @@ export function readRuntimeConfigFile(): RuntimeConfigFileSnapshot | null {
     value = JSON.parse(readFileSync(runtimePaths.configFile, "utf8"));
   } catch (error) {
     throw new Error(
-      `Cannot parse runtime config ${runtimePaths.configFile}: ${error instanceof Error ? error.message : String(error)}`
+      "Cannot parse runtime config",
+      { cause: error }
     );
   }
 
@@ -36,7 +37,8 @@ export function readRuntimeConfigFile(): RuntimeConfigFileSnapshot | null {
     normalized = normalizeRuntimeConfig(value);
   } catch (error) {
     throw new Error(
-      `Invalid runtime config ${runtimePaths.configFile}: ${error instanceof Error ? error.message : String(error)}`
+      "Invalid runtime config",
+      { cause: error }
     );
   }
   return {

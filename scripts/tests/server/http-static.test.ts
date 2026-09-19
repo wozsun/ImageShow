@@ -134,6 +134,7 @@ test("[Server/静态HTTP] 各编码验证器与 304、单范围和 If-Range 一�
     const headers = { "Accept-Encoding": encoding };
     const full = await app.request("/assets/all.js", { headers });
     const etag = full.headers.get("ETag")!;
+    assert.match(etag, /^W\/"[A-Za-z0-9_-]{16}"$/);
     const modified = full.headers.get("Last-Modified")!;
     etags.add(etag);
     const expected = Buffer.from(await full.arrayBuffer());

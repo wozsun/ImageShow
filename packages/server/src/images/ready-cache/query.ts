@@ -100,7 +100,7 @@ async function readCache<T>(
       recordReadyImageCacheError("derived", "derived_read_failed", error);
       await discardDerived?.().catch(() => undefined);
       logger.warn("ready_image_derived_cache_read_failed", {
-        error: error instanceof Error ? error.message : String(error)
+        error: error
       });
     }
     return { cached: false };
@@ -314,7 +314,7 @@ async function resolvedReadyImagePage<T>(
       );
       logger.warn("ready_image_derived_filter_resolution_failed", {
         signature: plan.signature,
-        error: error instanceof Error ? error.message : String(error)
+        error: error
       });
     }
     return { status: "fallback" };
@@ -467,7 +467,7 @@ export async function sampleReadyImages(
       );
       logger.warn("ready_image_derived_random_resolution_failed", {
         signature: plan.signature,
-        error: error instanceof Error ? error.message : String(error)
+        error: error
       });
     }
     return { cached: false };

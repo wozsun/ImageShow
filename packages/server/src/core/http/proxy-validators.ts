@@ -33,7 +33,7 @@ export function proxyEtagForUpstream(
 }
 
 function upstreamEtagFromProxy(originalUrl: string, proxyEtag: string) {
-  const match = /^(?:W\/)?"p\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]+)"$/u
+  const match = /^(?:W\/)?"p\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-]+)"$/u
     .exec(proxyEtag);
   if (!match || match[1] !== entityTagDigest(originalUrl)) return undefined;
   try {

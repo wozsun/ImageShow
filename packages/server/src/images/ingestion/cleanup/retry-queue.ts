@@ -1,6 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { appConfig } from "@imageshow/shared";
-import { errorMessage } from "../../../core/api-error.ts";
 import { DynamicConcurrencyLimiter } from "../../../core/concurrency.ts";
 import { logger } from "../../../core/logger.ts";
 
@@ -17,12 +16,12 @@ async function retryCleanup(work: () => Promise<void>) {
     } catch (error) {
       if (attempt === attempts) {
         logger.warn("ingestion_cleanup_retry_exhausted", {
-          attempts: attempt, error: errorMessage(error)
+          attempts: attempt, error: error
         });
         return;
       }
       logger.warn("ingestion_cleanup_retry_deferred", {
-        attempts: attempt, error: errorMessage(error)
+        attempts: attempt, error: error
       });
       await delay(1_000 * Math.min(32, 2 ** (attempt - 1)), undefined, { ref: false });
     }

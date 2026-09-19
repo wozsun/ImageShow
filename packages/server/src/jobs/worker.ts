@@ -115,7 +115,7 @@ const executionCoordinator = new WorkerExecutionCoordinator<
     logger.error("background job lease renewal failed", {
       job_id: job.id,
       type: job.type,
-      error: error instanceof Error ? error.message : String(error)
+      error: error
     });
   }
 });

@@ -3,7 +3,7 @@ import {
   getRuntimeConfig,
   onRuntimeConfigChange
 } from "../../../config/runtime-config-store.ts";
-import { ApiError, errorMessage } from "../../../core/api-error.ts";
+import { ApiError } from "../../../core/api-error.ts";
 import { logger } from "../../../core/logger.ts";
 import {
   getRedisOperationalState,
@@ -766,8 +766,8 @@ export class IngestionSessionWorker {
       logger.error("ingestion_worker_failure_publish_failed", {
         session_id: execution.session_id,
         image_id: execution.image_id,
-        stage_error: errorMessage(error),
-        settle_error: errorMessage(settleError)
+        stage_error: error,
+        settle_error: settleError
       });
     }
   }

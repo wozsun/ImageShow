@@ -2,7 +2,7 @@ import { createReadStream } from "node:fs";
 import { createHash, type Hash } from "node:crypto";
 import { Readable } from "node:stream";
 import { finished } from "node:stream/promises";
-import { ApiError, errorMessage } from "../../core/api-error.ts";
+import { ApiError } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
 import type { StorageConfig } from "../backends/config.ts";
 import type {
@@ -250,8 +250,8 @@ async function cleanupCandidate(
         backend: object.backend,
         prefix: object.prefix,
         key: object.key,
-        transfer_error: errorMessage(transferError),
-        cleanup_error: errorMessage(cleanupError)
+        transfer_error: transferError,
+        cleanup_error: cleanupError
       });
       throw new AggregateError(
         [transferError, cleanupError],
@@ -267,7 +267,7 @@ async function cleanupCandidate(
     backend: object.backend,
     prefix: object.prefix,
     key: object.key,
-    transfer_error: errorMessage(transferError)
+    transfer_error: transferError
   });
 }
 
@@ -427,8 +427,8 @@ export async function writeVerifiedFileToStorage(input: {
           backend: candidate.backend,
           prefix: candidate.prefix,
           key: candidate.key,
-          transfer_error: errorMessage(error),
-          guard_error: errorMessage(guardError)
+          transfer_error: error,
+          guard_error: guardError
         });
         transferError = new AggregateError(
           [error, guardError],

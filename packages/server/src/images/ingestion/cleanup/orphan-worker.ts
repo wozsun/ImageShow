@@ -1,5 +1,4 @@
 import { appConfig } from "@imageshow/shared";
-import { errorMessage } from "../../../core/api-error.ts";
 import { logger } from "../../../core/logger.ts";
 import { cleanupIngestionOrphans } from "./orphans.ts";
 import { ingestionOrphanCleanupIntervalMs } from "./retention.ts";
@@ -36,7 +35,7 @@ export class IngestionOrphanCleanupWorker {
       .catch((error) => {
         if (!controller.signal.aborted) {
           logger.warn("ingestion_orphan_cleanup_failed", {
-            error: errorMessage(error)
+            error: error
           });
         }
       })

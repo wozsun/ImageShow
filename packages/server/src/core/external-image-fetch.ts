@@ -9,6 +9,7 @@ import {
 } from "./external-image-lookup.ts";
 import { logger } from "./logger.ts";
 import { responseWithCleanup } from "./http/response-lifecycle.ts";
+import { parseHttpMimeType } from "./http/media-type.ts";
 
 const maxExternalRedirects = 5;
 const imageSniffBytes = 4100;
@@ -130,8 +131,8 @@ function isRedirect(status: number) {
 }
 
 export function isAllowedExternalImageContentType(value: string | null) {
-  const mime = value?.split(";")[0]?.trim().toLowerCase() ?? "";
-  return allowedImageMimeTypes.has(mime);
+  const mime = parseHttpMimeType(value);
+  return mime !== null && allowedImageMimeTypes.has(mime.essence);
 }
 
 function imageMimeFromExt(ext?: string) {

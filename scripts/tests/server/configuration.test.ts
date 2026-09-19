@@ -1156,7 +1156,7 @@ const first = await app.request("http://imageshow.test/");
 const described = await first.text();
 assert.equal(first.headers.get("content-length"), String(Buffer.byteLength(described)));
 const firstEtag = first.headers.get("etag");
-assert.equal(firstEtag.length, 26);
+assert.equal(firstEtag.length, 20);
 for (const path of ["/", "/home", "/show", "/gallery", "/admin", "/admin/storage"]) {
   for (const method of ["GET", "HEAD"]) {
     const cached = await app.request("http://imageshow.test" + path, {

@@ -9,7 +9,6 @@ import {
   mergeRuntimeConfig,
   type RuntimeConfigPatch
 } from "./runtime-config.ts";
-import { errorMessage } from "../core/api-error.ts";
 import { logger } from "../core/logger.ts";
 
 let runtimeConfig: RuntimeConfig | undefined;
@@ -55,7 +54,7 @@ function notifyRuntimeConfigChange() {
     } catch (error) {
       logger.error("runtime_config_listener_failed", {
         listener_index: listenerIndex,
-        error: errorMessage(error)
+        error: error
       });
     }
     listenerIndex += 1;

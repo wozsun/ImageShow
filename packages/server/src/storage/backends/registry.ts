@@ -1,5 +1,5 @@
 import { appConfig } from "@imageshow/shared";
-import { ApiError, errorMessage } from "../../core/api-error.ts";
+import { ApiError } from "../../core/api-error.ts";
 import { coalesce } from "../../core/coalesce.ts";
 import {
   publicPgFallbackWorkLimitExceeded,
@@ -56,7 +56,7 @@ function trackRetiredDriver(driver: StorageDriver) {
   }
   const tracked = close.catch((error) => {
     logger.warn("storage_driver_close_failed", {
-      error: errorMessage(error)
+      error: error
     });
   }).finally(() => {
     closingStorageDrivers.delete(tracked);

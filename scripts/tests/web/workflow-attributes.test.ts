@@ -10,6 +10,32 @@ import { createConfigStreamHarness, ingestionJob } from "../support/web-test-con
 import { dispatchDomEvent, inputText } from "../support/dom-events.ts";
 import { installProperties, installPropertyDescriptors } from "../support/property-descriptors.ts";
 
+test("[Web/主题] 模糊候选键盘选择提交真实 slug，直接输入仍可新建", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { ThemeInput } = await import("../../../packages/web/src/components/form/ThemeInput.tsx");
+  const values: string[] = [];
+  function Probe() {
+    const [value, setValue] = h.React.useState("");
+    return h.React.createElement(ThemeInput, {
+      themes: [{ slug: "hangzhou", display_name: "杭州" }],
+      value, ariaLabel: "主题", publishTypedChanges: false,
+      onChange(next: string) { values.push(next); setValue(next); }
+    });
+  }
+  await h.render(h.React.createElement(Probe));
+  const input = h.document.querySelector<HTMLInputElement>('input[aria-label="主题"]')!;
+  const window = h.window as unknown as Window;
+  await h.React.act(async () => { inputText(window, input, "hz"); });
+  assert.deepEqual([...h.document.querySelectorAll('[role="option"] b')].map((node) => node.textContent), ["h", "z"]);
+  assert.deepEqual(values, []);
+  await h.React.act(async () => { dispatchDomEvent(window, input, "keydown", { key: "ArrowDown" }); });
+  await h.React.act(async () => { dispatchDomEvent(window, input, "keydown", { key: "Enter" }); });
+  assert.deepEqual(values, ["hangzhou"]);
+  await h.React.act(async () => { inputText(window, input, "new-place"); });
+  await h.React.act(async () => { dispatchDomEvent(window, input, "keydown", { key: "Enter" }); });
+  assert.deepEqual(values, ["hangzhou", "new-place"]);
+});
+
 test("[Web/主题] 保留值输入按留空处理且不提示新建主题", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { ThemeInput } = await import("../../../packages/web/src/components/form/ThemeInput.tsx");

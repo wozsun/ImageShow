@@ -262,7 +262,7 @@ export function streamIngestionQueueEvents(
         logger.warn("ingestion_queue_sse_closed", {
           owner: input.session.username,
           queue: input.queue,
-          error: error instanceof Error ? error.message : String(error)
+          error: error
         });
       }
     } finally {

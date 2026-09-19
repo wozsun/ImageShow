@@ -2,7 +2,7 @@ import type {
   ImageUpdateItemResultDto,
   ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
-import { ApiError, errorMessage } from "../core/api-error.ts";
+import { ApiError } from "../core/api-error.ts";
 import { withAdvisoryLocks } from "../core/database/advisory-locks.ts";
 import { logger } from "../core/logger.ts";
 import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
@@ -116,7 +116,7 @@ export async function updateImages(
             await entityCountInvalidationBatch.flush();
           } catch (error) {
             logger.warn("image_update_entity_count_invalidation_failed", {
-              error: errorMessage(error)
+              error: error
             });
           } finally {
             options.onMetrics?.({

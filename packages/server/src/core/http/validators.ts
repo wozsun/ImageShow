@@ -5,9 +5,9 @@ type HttpResponseValidators = {
   lastModified?: string;
 };
 
-/** Compact opaque cache identity: 128 bits of SHA-256, encoded in 22 characters. */
+/** Opaque cache identity: 96 bits of SHA-256, encoded in 16 characters. */
 export function entityTagDigest(value: string) {
-  return createHash("sha256").update(value).digest().subarray(0, 16).toString("base64url");
+  return createHash("sha256").update(value).digest().subarray(0, 12).toString("base64url");
 }
 
 export function staticResponseEtag(headers: Headers) {
@@ -23,7 +23,7 @@ export function staticResponseEtag(headers: Headers) {
     || resourceLength < 0
   ) return "";
   const encoding = headers.get("Content-Encoding") ?? "identity";
-  return `W/"${modifiedTime.toString(16)}-${resourceLength.toString(16)}-${encoding}"`;
+  return `W/"${entityTagDigest(`${modifiedTime}:${resourceLength}:${encoding}`)}"`;
 }
 
 function stripWeakPrefix(etag: string) {

@@ -4,7 +4,7 @@ import { withActiveIngestionTempPaths } from "../raw/lease-registry.ts";
 import { updateIngestionExecutionProgress } from "../execution/session.ts";
 import { contentType } from "../../../storage/objects/keys.ts";
 import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
-import { ApiError, errorMessage } from "../../../core/api-error.ts";
+import { ApiError } from "../../../core/api-error.ts";
 import {
   runWithAdvisoryLockAcquisitionSignal
 } from "../../../core/database/advisory-locks.ts";
@@ -250,7 +250,7 @@ export async function commitIngestionSessionSnapshot(
             logger.warn("ingestion_completed_event_projection_deferred", {
               session_id: session.session_id,
               image_id: session.image_id,
-              error: errorMessage(error)
+              error: error
             });
           }
           await publishCompletedReceipt(
@@ -263,7 +263,7 @@ export async function commitIngestionSessionSnapshot(
               logger.warn("ingestion_completed_receipt_deferred", {
                 session_id: session.session_id,
                 image_id: session.image_id,
-                error: errorMessage(error)
+                error: error
               });
             });
           return persisted.image;
@@ -280,7 +280,7 @@ export async function commitIngestionSessionSnapshot(
         logger.warn("ingestion_prepared_cleanup_deferred", {
           session_id: session.session_id,
           image_id: session.image_id,
-          error: errorMessage(error)
+          error: error
         });
         await ingestionCleanupRetryQueue.enqueue(() => removeIngestionPreparedFiles(preparedFiles));
       }

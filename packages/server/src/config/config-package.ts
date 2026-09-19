@@ -75,7 +75,9 @@ export async function importConfigPackage(
           original_error: errorMessage(originalError),
           restore_error: errorMessage(restoreError)
         };
-        logger.error("config_package_file_restore_failed", details);
+        logger.error("config_package_file_restore_failed", {
+          ...details, original_error: originalError, restore_error: restoreError
+        });
         throw new ApiError(
           503,
           "config_package_file_restore_failed",
@@ -130,7 +132,7 @@ export async function importConfigPackage(
         transaction_id: importTransactionId,
         original_error: errorMessage(error)
       };
-      logger.error("config_package_outcome_unknown", details);
+      logger.error("config_package_outcome_unknown", { ...details, original_error: error });
       throw new ApiError(
         503,
         "config_package_outcome_unknown",

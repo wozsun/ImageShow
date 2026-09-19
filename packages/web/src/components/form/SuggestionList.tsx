@@ -7,8 +7,9 @@ import type {
 } from "react";
 import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
 import { MenuItemButton } from "../feedback/MenuItemButton.js";
+import { FacetSuggestionLabel } from "../data-display/FacetSuggestionLabel.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
-import type { FacetOption } from "../../lib/types.js";
+import type { FacetSuggestion } from "../../lib/ui/facet-input.js";
 
 export const suggestionMenuSize: AnchoredMenuSize = {
   minWidth: 0,
@@ -69,7 +70,7 @@ export function SuggestionList({
   onChoose
 }: {
   open: boolean;
-  matches: readonly FacetOption[];
+  matches: readonly FacetSuggestion[];
   activeIndex: number;
   selectedSlug?: string;
   ariaLabel?: string;
@@ -113,12 +114,7 @@ export function SuggestionList({
             pointerFocus="preserve"
             onActivate={() => onChoose(option.slug)}
           >
-            <span>{option.slug}</span>
-            {option.display_name && option.display_name !== option.slug && (
-              <span className="option-display-name">
-                {option.display_name}
-              </span>
-            )}
+            <FacetSuggestionLabel option={option} />
           </MenuItemButton>
         );
       })}

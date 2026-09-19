@@ -27,7 +27,7 @@ redis.on("error", (error) => {
   // client event observed so ioredis does not print an unstructured warning
   // for every reconnect attempt while Redis is down.
   logger.debug("redis client error", {
-    error: error instanceof Error ? error.message : String(error)
+    error: error
   });
 });
 

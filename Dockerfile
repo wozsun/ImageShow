@@ -1,4 +1,10 @@
-FROM node:26.8.2 AS deps
+ARG NPM_VERSION=12.0.2
+
+FROM node:26.9.0 AS node-base
+ARG NPM_VERSION
+RUN npm install --global npm@${NPM_VERSION}
+
+FROM node-base AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/package.json
@@ -11,20 +17,22 @@ WORKDIR /app
 COPY . .
 RUN npm run build
 
-FROM node:26.8.2 AS prod-deps
+FROM node-base AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/server/package.json packages/server/package.json
 RUN npm ci --omit=dev --workspace @imageshow/shared --workspace @imageshow/server --include-workspace-root=false
 
-FROM node:26.8.2-slim AS runtime
+FROM node:26.9.0-slim AS runtime
+ARG NPM_VERSION
 WORKDIR /app
 ENV NODE_ENV=production \
     MALLOC_ARENA_MAX=2
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gosu \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install --global npm@${NPM_VERSION}
 COPY --chown=node:node --from=build /app/package.json ./
 COPY --chown=node:node --from=prod-deps /app/node_modules ./node_modules
 COPY --chown=node:node --from=build /app/packages/shared/package.json ./packages/shared/package.json

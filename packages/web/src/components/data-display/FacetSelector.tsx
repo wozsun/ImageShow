@@ -1,4 +1,5 @@
 import { basicTagSelection, basicTagValue, TagFilterError } from "@imageshow/shared/browser";
+import { FacetSuggestionLabel } from "./FacetSuggestionLabel.js";
 import {
   useCallback,
   useContext,
@@ -115,9 +116,11 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
       setSelectionError("");
       setMode(selected.length ? nextMode : isTag ? "any" : "include");
       onChange(next);
+      return true;
     } catch (error) {
       if (!(error instanceof TagFilterError)) throw error;
       setSelectionError(error.message);
+      return false;
     }
   };
 
@@ -178,12 +181,14 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
             className="facet-search-option"
             type="button"
             key={option.slug}
-            onActivate={() => emitSelection([...parsed.selected, option.slug])}
+            pointerFocus="preserve"
+            onActivate={() => {
+              if (!emitSelection([...parsed.selected, option.slug])) return;
+              setQuery("");
+              searchRef.current?.focus({ preventScroll: true });
+            }}
           >
-            <span>{option.slug}</span>
-            {option.display_name && option.display_name !== option.slug && (
-              <span className="option-display-name">{option.display_name}</span>
-            )}
+            <FacetSuggestionLabel option={option} />
           </MenuItemButton>
         ))}
         {normalizedQuery && !results.length && <span className="muted">没有可添加的{noun}</span>}

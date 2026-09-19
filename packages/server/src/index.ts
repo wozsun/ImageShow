@@ -44,11 +44,6 @@ import {
   closeAllAdminSessionConnections
 } from "./users/admin-session-connections.ts";
 
-configureDatabasePools(deploymentConfig.database);
-initializeRuntimeConfig();
-configureRuntimeLogger(() => getRuntimeConfig().log);
-const app = createHttpApp();
-
 let coordinatorInitialization: Promise<unknown> | null = null;
 let unsubscribeBusinessAvailabilityGate: (() => void) | null = null;
 let server: ReturnType<typeof serve> | null = null;
@@ -62,6 +57,10 @@ async function settleCoordinatorInitialization() {
 }
 
 try {
+  configureDatabasePools(deploymentConfig.database);
+  initializeRuntimeConfig();
+  configureRuntimeLogger(() => getRuntimeConfig().log);
+  const app = createHttpApp();
   await ensureRuntimeDirectories();
   await initializeDatabaseSchema();
   await ensureSuperAdmin({
@@ -92,7 +91,6 @@ try {
 } catch (error) {
   logger.error("application startup failed", error);
   await shutdown("startup failure", 1);
-  throw error;
 }
 
 function shutdown(signal: string, exitCode = 0) {

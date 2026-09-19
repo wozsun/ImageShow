@@ -77,9 +77,9 @@ async function enqueueMigrationCandidateCleanup(
       object_key: storageObjectKey(image.id, image.ext),
       cleanup_reason: reason,
       ...(originalError
-        ? { original_error: errorMessage(originalError) }
+        ? { original_error: originalError }
         : {}),
-      cleanup_error: errorMessage(cleanupError),
+      cleanup_error: cleanupError,
       candidates: created
     });
     if (originalError) {
@@ -125,7 +125,7 @@ function migrationOutcomeUnknown(
     original_error: errorMessage(originalError),
     ...details
   };
-  logger.error("storage_migration_outcome_unknown", context);
+  logger.error("storage_migration_outcome_unknown", { ...context, original_error: originalError });
   return new ApiError(
     503,
     "storage_migration_outcome_unknown",
@@ -167,8 +167,8 @@ async function settleSwitchError(
         source_backend: image.storage_slug,
         target_backend: target,
         object_key: storageObjectKey(image.id, image.ext),
-        original_error: errorMessage(originalError),
-        cleanup_error: errorMessage(cleanupError),
+        original_error: originalError,
+        cleanup_error: cleanupError,
         retained_source_objects: sourceCleanup
       });
       throw new ApiError(
@@ -188,7 +188,7 @@ async function settleSwitchError(
       source_backend: image.storage_slug,
       target_backend: target,
       object_key: storageObjectKey(image.id, image.ext),
-      original_error: errorMessage(originalError)
+      original_error: originalError
     });
     return state;
   }

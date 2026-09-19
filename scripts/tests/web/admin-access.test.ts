@@ -639,7 +639,7 @@ test("[Web/后台访问] 标签切换超限时保持原模式与条件，减少�
   function Harness() {
     const [value, setValue] = React.useState(slugs.join(","));
     return React.createElement(FacetSelector, {
-      options: slugs.map(slug => ({ slug, display_name: slug })), value,
+      options: [...slugs, "tag-extra"].map(slug => ({ slug, display_name: slug })), value,
       noun: "标签", selectionMode: "any-all",
       onChange: next => { values.push(next); setValue(next); }
     });
@@ -650,6 +650,12 @@ test("[Web/后台访问] 标签切换超限时保持原模式与条件，减少�
     await React.act(async () => { dispatchDomEvent(h.window, button, "click", { detail: 0 }); });
   };
   await activate(h.document.querySelector<HTMLButtonElement>(".select-trigger")!);
+  const search = h.document.querySelector<HTMLInputElement>(".facet-search-input")!;
+  await React.act(async () => inputText(h.window as unknown as Window, search, "tag-extra"));
+  await activate(h.document.querySelector<HTMLButtonElement>(".facet-search-option")!);
+  assert.equal(search.value, "tag-extra", "添加超限时保留搜索词");
+  assert.match(h.document.querySelector('[role="alert"]')?.textContent ?? "", /限制/);
+  assert.deepEqual(values, []);
   const modes = h.document.querySelectorAll<HTMLButtonElement>(".facet-mode-switch button");
   await activate(modes[1]!);
   assert.match(h.document.querySelector('[role="alert"]')?.textContent ?? "", /限制/);
@@ -657,7 +663,9 @@ test("[Web/后台访问] 标签切换超限时保持原模式与条件，减少�
   assert.equal(modes[1]!.getAttribute("aria-pressed"), "false");
   assert.deepEqual(values, []);
   await activate(h.document.querySelector<HTMLButtonElement>(".facet-selected-list button")!);
+  assert.equal(search.value, "tag-extra", "移除已选项不清空搜索词");
   await activate(modes[1]!);
+  assert.equal(search.value, "tag-extra", "切换模式不清空搜索词");
   assert.equal(values.at(-1), "all:" + slugs.slice(1).join(","));
   assert.equal(modes[1]!.getAttribute("aria-pressed"), "true");
   assert.equal(h.document.querySelector('[role="alert"]'), null);
@@ -1006,7 +1014,9 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
       document.querySelector(".facet-value")?.textContent,
       "!legacy,!night,!stage"
     );
-    assert.equal(search.value, "sta", "连续选择期间必须保留搜索词");
+    assert.equal(search.value, "", "成功添加后清空搜索词，方便搜索下一项");
+    assert.equal(document.activeElement, search, "触摸选择后焦点回到搜索框");
+    assert.ok(document.querySelector(".facet-select-menu"), "成功添加后菜单保持打开");
     assert.equal(menu.querySelector(".facet-search-option"), null);
 
     await React.act(async () => {
@@ -1023,6 +1033,9 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
       document.querySelector(".facet-value")?.textContent,
       "!legacy,!night,!stage,!editorial"
     );
+    assert.equal(search.value, "", "键盘选择后同样清空搜索词");
+    assert.equal(document.activeElement, search);
+    await React.act(async () => inputText(window as unknown as Window, search!, "edi"));
 
     const modeButtons = menu.querySelectorAll<HTMLButtonElement>(
       ".facet-mode-switch button"
@@ -3234,11 +3247,12 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
   const expectedListErrors: unknown[][] = [];
   const expectedMutationErrors: unknown[][] = [];
   console.error = (...args: unknown[]) => {
-    if (args[0] === "[ImageShow] image_admin.list_load") {
+    const report = args[0] === "[ImageShow]" ? args[1] as { context?: string } | undefined : undefined;
+    if (report?.context === "image_admin.list_load") {
       expectedListErrors.push(args);
       return;
     }
-    if (args[0] === "[ImageShow] image_admin.trash_or_purge") {
+    if (report?.context === "image_admin.trash_or_purge") {
       expectedMutationErrors.push(args);
       return;
     }
@@ -4163,8 +4177,8 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
     await runTrashScenario();
     assert.deepEqual(
       expectedListErrors.map((args) => (
-        args[1] as { code?: string } | undefined
-      )?.code).filter((code) => code === "controlled_failure"),
+        args[1] as { error?: { code?: string } } | undefined
+      )?.error?.code).filter((code) => code === "controlled_failure"),
       ["controlled_failure", "controlled_failure", "controlled_failure"],
       "三轮受控列表失败必须各报告一次且不得污染测试输出"
     );

@@ -1,6 +1,6 @@
 import { getIngestionMaxLongEdge } from "../../../config/app-settings.ts";
 import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
-import { ApiError, errorMessage } from "../../../core/api-error.ts";
+import { ApiError } from "../../../core/api-error.ts";
 import {
   runWithAdvisoryLockAcquisitionSignal
 } from "../../../core/database/advisory-locks.ts";
@@ -74,7 +74,7 @@ async function cleanupPreparedAttempt(
     logger.warn("ingestion_prepared_attempt_cleanup_deferred", {
       session_id: session.session_id,
       image_id: session.image_id,
-      error: errorMessage(error)
+      error: error
     });
   }
   // The retry re-reads Redis before every delete attempt. Unknown ownership
@@ -236,7 +236,7 @@ export async function prepareIngestionSessionSnapshot(
       logger.warn("ingestion_raw_cleanup_deferred", {
         session_id: session.session_id,
         image_id: session.image_id,
-        error: errorMessage(error)
+        error: error
       });
     });
     return preparedSession;

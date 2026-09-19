@@ -160,7 +160,7 @@ export async function resolveReadyImageFilterIndex(
     ).catch(() => undefined);
     logger.warn("ready_image_derived_filter_failed", {
       signature: plan.signature,
-      error: error instanceof Error ? error.message : String(error)
+      error: error
     });
     return null;
   }

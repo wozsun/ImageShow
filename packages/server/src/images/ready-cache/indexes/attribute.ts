@@ -171,7 +171,7 @@ function attributeIndexBuildTask(
       logger.warn("ready_image_attribute_index_build_failed", {
         key: readyImageAttributeIndexKey(spec),
         revision,
-        error: error instanceof Error ? error.message : String(error)
+        error: error
       });
     }
     return null;

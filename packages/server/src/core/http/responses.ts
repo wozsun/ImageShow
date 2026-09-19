@@ -5,6 +5,7 @@ import type {
 } from "@imageshow/shared/browser";
 import { ApiError } from "../api-error.ts";
 import { logger } from "../logger.ts";
+import { requestLogContext } from "./request-security.ts";
 import {
   noStoreCacheControl,
   privateRevalidationCacheControl,
@@ -111,10 +112,7 @@ export function handleApiError(context: Context, error: unknown) {
     return context.json(payload, 503);
   }
 
-  logger.error(
-    `unhandled ${context.req.method} ${new URL(context.req.url).pathname}`,
-    error
-  );
+  logger.error("unhandled request", { ...requestLogContext(context), error });
   const payload = {
     ok: false,
     code: "internal_error",

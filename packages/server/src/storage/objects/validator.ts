@@ -13,5 +13,5 @@ export function localObjectEtag(stats: {
   ctimeNs: bigint;
 }) {
   const identity = [stats.dev, stats.ino, stats.size, stats.mtimeNs, stats.ctimeNs].join(":");
-  return `"l.${entityTagDigest(identity)}"`;
+  return `"${entityTagDigest(identity)}"`;
 }

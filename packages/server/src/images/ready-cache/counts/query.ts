@@ -109,7 +109,7 @@ async function readCachedCountSnapshot(
       .catch(() => undefined);
     logger.warn("ready_image_derived_stats_result_discarded", {
       key,
-      error: error instanceof Error ? error.message : String(error)
+      error: error
     });
     return null;
   }
@@ -269,7 +269,7 @@ export async function readReadyImageCountSnapshot(
       );
       logger.warn("ready_image_derived_stats_failed", {
         signature: plan.signature,
-        error: error instanceof Error ? error.message : String(error)
+        error: error
       });
     }
     return { cached: false };

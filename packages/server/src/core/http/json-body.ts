@@ -1,7 +1,6 @@
 import type { Context } from "hono";
 import { ApiError } from "../api-error.ts";
-
-const jsonMediaTypePattern = /^application\/(?:[!#$%&'*+.^_`|~0-9a-z-]+\+)?json$/i;
+import { parseHttpMimeType } from "./media-type.ts";
 
 export function invalidJsonBodyError() {
   return new ApiError(
@@ -12,8 +11,10 @@ export function invalidJsonBodyError() {
 }
 
 export function isJsonContentType(value: string | undefined) {
-  const mediaType = value?.split(";", 1)[0]?.trim() ?? "";
-  return jsonMediaTypePattern.test(mediaType);
+  const mediaType = parseHttpMimeType(value);
+  return mediaType?.type === "application"
+    && (mediaType.subtype === "json"
+      || (mediaType.subtype.length > 5 && mediaType.subtype.endsWith("+json")));
 }
 
 /**

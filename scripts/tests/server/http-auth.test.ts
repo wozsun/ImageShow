@@ -947,7 +947,7 @@ test("[Server/HTTP 与鉴权] HTTP 范围、缓存验证器和安全响应头遵
   const { localObjectEtag } = await import("../../../packages/server/src/storage/objects/validator.ts");
   const stats = { dev: 1n, ino: 2n, size: 10n, mtimeNs: 1_700_000_000_000_000_000n, ctimeNs: 1_700_000_000_000_000_000n };
   const localEtag = localObjectEtag(stats);
-  assert.match(localEtag, /^"l\.[A-Za-z0-9_-]{22}"$/);
+  assert.match(localEtag, /^"[A-Za-z0-9_-]{16}"$/);
   assert.equal(localObjectEtag({ ...stats }), localEtag);
   for (const field of ["dev", "ino", "size", "mtimeNs", "ctimeNs"] as const) {
     assert.notEqual(localObjectEtag({ ...stats, [field]: stats[field] + 1n }), localEtag, field);
@@ -962,7 +962,7 @@ test("[Server/HTTP 与鉴权] HTTP 范围、缓存验证器和安全响应头遵
   const url = "https://images.example.com/image.jpg";
   const upstreamEtag = '"upstream-v1"';
   const proxyEtag = proxyEtagForUpstream(url, upstreamEtag);
-  assert.match(proxyEtag ?? "", /^W\/"p\.[A-Za-z0-9_-]{22}\./);
+  assert.match(proxyEtag ?? "", /^W\/"p\.[A-Za-z0-9_-]{16}\./);
   assert.equal(upstreamIfNoneMatchForProxy(url, proxyEtag), upstreamEtag);
   for (const upstream of ['W/"weak,opaque"', '""', '"' + "a".repeat(510) + '"']) {
     const encoded = proxyEtagForUpstream(url, upstream);
@@ -1018,7 +1018,7 @@ test("[Server/HTTP 与鉴权] HTTP 范围、缓存验证器和安全响应头遵
   assert.equal(preferences.status, 200);
   assert.equal(preferences.headers.get(adminImageListReadStartedAtHeader), "123");
   assert.equal(preferences.headers.get("cache-control"), "private, no-cache");
-  assert.match(preferenceEtag ?? "", /^W\/"[A-Za-z0-9_-]{22}"$/u);
+  assert.match(preferenceEtag ?? "", /^W\/"[A-Za-z0-9_-]{16}"$/u);
   assert.notEqual(preferenceEtag, apiSuccessEtag({ preferences: { admin_scheme: "light" } }));
   assert.equal(preferenceEtag, apiSuccessEtag({
     preferences: { admin_scheme: "dark" }
