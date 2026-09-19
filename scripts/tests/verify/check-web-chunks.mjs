@@ -2,30 +2,36 @@ import assert from "node:assert/strict";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
-import {
-  compressStaticAsset,
-  staticAssetCompression
-} from "../../build/static-asset-compression.mjs";
+import { promisify } from "node:util";
+import { brotliDecompress, gunzip, zstdDecompress } from "node:zlib";
+import { staticAssetCompression } from "../../build/static-asset-compression.mjs";
+import { verifyStaticCompression } from "./static-compression-contract.mjs";
 
-// Small bodies follow the same actual-savings rule as built assets.
-{
-  const compressible = Buffer.from("const value='same';".repeat(8));
-  assert.ok(compressible.length < 256);
-  const compressed = await compressStaticAsset("tiny.js", compressible);
-  assert.ok(compressed.brotli);
-  assert.ok(compressed.gzip);
-  assert.ok(compressed.brotliBytes < compressed.rawBytes);
-  assert.ok(compressed.gzipBytes < compressed.rawBytes);
-
-  const tiny = Buffer.from("x");
-  const unchanged = await compressStaticAsset("tiny.js", tiny);
-  assert.equal(unchanged.brotli, null);
-  assert.equal(unchanged.gzip, null);
-  assert.equal(unchanged.effectiveBytes, tiny.length);
-}
+await verifyStaticCompression();
 
 const workspaceRoot = resolve(import.meta.dirname, "../../..");
 const webDist = resolve(workspaceRoot, "packages/web/dist");
+const serverPublic = resolve(workspaceRoot, "packages/server/dist/public");
+const compressionReport = JSON.parse(await readFile(
+  resolve(webDist, ".vite/static-compression-report.json"), "utf8"
+));
+assert.equal(compressionReport.schemaVersion, 1);
+assert.deepEqual(compressionReport.policy, {
+  brotliQuality: staticAssetCompression.brotliQuality,
+  zstdLevel: staticAssetCompression.zstdLevel,
+  zstdWindowLog: staticAssetCompression.zstdWindowLog,
+  gzipLevel: staticAssetCompression.gzipLevel,
+  fileConcurrency: 1,
+  selection: "smaller-body-only",
+  defaultEncodingOrder: ["br", "zstd", "gzip", "identity"]
+});
+const compressedAssetRows = new Map(compressionReport.assets.map((row) => [row.file, row]));
+assert.equal(compressedAssetRows.size, compressionReport.assets.length);
+const decoders = [
+  ["br", ".br", "brotliBytes", promisify(brotliDecompress)],
+  ["zstd", ".zst", "zstdBytes", promisify(zstdDecompress)],
+  ["gzip", ".gz", "gzipBytes", promisify(gunzip)]
+];
 const report = JSON.parse(await readFile(
   resolve(webDist, ".vite/web-build-report.json"),
   "utf8"
@@ -159,12 +165,39 @@ async function assetSource(file) {
 async function assetCompression(file) {
   let pending = compressionByFile.get(file);
   if (!pending) {
-    pending = assetSource(file)
-      .then((source) => compressStaticAsset(file, source));
+    pending = (async () => {
+      const row = compressedAssetRows.get(file);
+      assert.ok(row, `missing final compression metadata: ${file}`);
+      const source = await assetSource(file);
+      assert.deepEqual(await readFile(resolve(serverPublic, file)), source, `assembled body: ${file}`);
+      const sizes = { rawBytes: source.length };
+      let defaultEncoding = "identity";
+      let defaultBytes = source.length;
+      for (const [encoding, suffix, field, decode] of decoders) {
+        let body = null;
+        try { body = await readFile(resolve(serverPublic, file + suffix)); }
+        catch (error) { if (error.code !== "ENOENT") throw error; }
+        sizes[field] = body?.length ?? source.length;
+        if (!body) continue;
+        assert.ok(body.length < source.length, `sidecar must save bytes: ${file}${suffix}`);
+        assert.deepEqual(await decode(body), source, `roundtrip: ${file}${suffix}`);
+        if (defaultEncoding === "identity") {
+          defaultEncoding = encoding;
+          defaultBytes = body.length;
+        }
+      }
+      sizes.effectiveBytes = Math.min(...Object.values(sizes));
+      Object.assign(sizes, { defaultEncoding, defaultBytes });
+      assert.deepEqual(row, { file, ...sizes }, `final compression metadata: ${file}`);
+      return sizes;
+    })();
     compressionByFile.set(file, pending);
   }
   return pending;
 }
+
+// Inspect every final sidecar, including compressible resources outside the JS/CSS graph.
+for (const file of compressedAssetRows.keys()) await assetCompression(file);
 
 function assertModulesExcluded(files, label, forbidden) {
   const violations = [...modulesIn(files)].filter((module) => (
@@ -372,10 +405,10 @@ const mergeArrivalScenarios = {
 };
 
 const mergeCandidateMaxRawBytes = 8 * 1024;
-const mergeCandidateMaxEffectiveBytes = 4 * 1024;
+const mergeCandidateMaxDefaultBytes = 4 * 1024;
 function isMergeCandidate(compressed) {
   return compressed.rawBytes < mergeCandidateMaxRawBytes
-    || compressed.effectiveBytes < mergeCandidateMaxEffectiveBytes;
+    || compressed.defaultBytes < mergeCandidateMaxDefaultBytes;
 }
 
 function chunkRoots(chunk) {
@@ -412,6 +445,9 @@ for (const chunk of chunks) {
     dynamicImporters: chunk.dynamicImporters,
     rawBytes: compressed.rawBytes,
     gzipBytes: compressed.gzipBytes,
+    zstdBytes: compressed.zstdBytes,
+    defaultBytes: compressed.defaultBytes,
+    defaultEncoding: compressed.defaultEncoding,
     brotliBytes: compressed.brotliBytes,
     effectiveBytes: compressed.effectiveBytes
   });
@@ -423,6 +459,9 @@ for (const file of auxiliaryJavascriptFiles) {
     kind: "auxiliary",
     rawBytes: compressed.rawBytes,
     gzipBytes: compressed.gzipBytes,
+    zstdBytes: compressed.zstdBytes,
+    defaultBytes: compressed.defaultBytes,
+    defaultEncoding: compressed.defaultEncoding,
     brotliBytes: compressed.brotliBytes,
     effectiveBytes: compressed.effectiveBytes
   });
@@ -444,8 +483,8 @@ const mergeCandidateChunkCounts = {
   under8KiB: mergeCandidateChunks.filter((chunk) => (
     chunk.rawBytes < 8 * 1024
   )).length,
-  effectiveUnder4KiB: mergeCandidateChunks.filter((chunk) => (
-    chunk.effectiveBytes < 4 * 1024
+  defaultUnder4KiB: mergeCandidateChunks.filter((chunk) => (
+    chunk.defaultBytes < 4 * 1024
   )).length,
   candidates: mergeCandidateChunks.length
 };
@@ -461,6 +500,9 @@ for (const style of report.styles) {
     })),
     rawBytes: compressed.rawBytes,
     gzipBytes: compressed.gzipBytes,
+    zstdBytes: compressed.zstdBytes,
+    defaultBytes: compressed.defaultBytes,
+    defaultEncoding: compressed.defaultEncoding,
     brotliBytes: compressed.brotliBytes,
     effectiveBytes: compressed.effectiveBytes
   });
@@ -482,8 +524,8 @@ const smallStyleCounts = {
   under8KiB: smallStyleChunks.filter((style) => (
     style.rawBytes < 8 * 1024
   )).length,
-  effectiveUnder4KiB: smallStyleChunks.filter((style) => (
-    style.effectiveBytes < 4 * 1024
+  defaultUnder4KiB: smallStyleChunks.filter((style) => (
+    style.defaultBytes < 4 * 1024
   )).length,
   candidates: smallStyleChunks.length
 };
@@ -760,15 +802,26 @@ assertDeferredReachable(gallery, imageEditor, "public image editor");
 assertDeferredReachable(show, imageDetails, "Show public image details");
 assertDeferredReachable(show, imageEditor, "Show public image editor");
 
+function totalBytes(assets) {
+  return Object.fromEntries([
+    "rawBytes", "gzipBytes", "brotliBytes", "zstdBytes", "effectiveBytes", "defaultBytes"
+  ].map((field) => [field, assets.reduce((sum, asset) => sum + asset[field], 0)]));
+}
+
 const analysis = {
   compression: {
-    brotliQuality: staticAssetCompression.brotliQuality,
-    gzipLevel: staticAssetCompression.gzipLevel,
-    selection: "compressed-body-smaller-than-raw",
+    ...compressionReport.policy,
+    effectiveBytesMeaning: "smallest-available-representation",
+    defaultBytesMeaning: "equal-weight-br-zstd-gzip-negotiation",
     mergeCandidateDiscovery: {
       rawBytesUnder: mergeCandidateMaxRawBytes,
-      effectiveBytesUnder: mergeCandidateMaxEffectiveBytes
+      defaultBytesUnder: mergeCandidateMaxDefaultBytes
     }
+  },
+  totals: {
+    javascript: totalBytes(javascriptAssets.filter((asset) => asset.kind !== "auxiliary")),
+    auxiliaryJavascript: totalBytes(javascriptAssets.filter((asset) => asset.kind === "auxiliary")),
+    styles: totalBytes(styleAssets)
   },
   output: {
     javascript: emittedJavascriptFiles.length,
@@ -788,12 +841,12 @@ const analysis = {
   identicalStyleOwnerGroups,
   mergeCandidateChunkCounts,
   mergeCandidateChunks: mergeCandidateChunks.sort((left, right) => (
-    left.effectiveBytes - right.effectiveBytes
+    left.defaultBytes - right.defaultBytes
     || left.file.localeCompare(right.file)
   )),
   smallStyleCounts,
   smallStyleChunks: smallStyleChunks.sort((left, right) => (
-    left.effectiveBytes - right.effectiveBytes
+    left.defaultBytes - right.defaultBytes
     || left.file.localeCompare(right.file)
   ))
 };
@@ -806,14 +859,19 @@ if (process.argv.includes("--json")) {
     + `merge-candidate JS raw <512/1KiB/2KiB/4KiB/8KiB = `
     + `${mergeCandidateChunkCounts.under512}/${mergeCandidateChunkCounts.under1KiB}/`
     + `${mergeCandidateChunkCounts.under2KiB}/${mergeCandidateChunkCounts.under4KiB}/`
-    + `${mergeCandidateChunkCounts.under8KiB}, effective <4KiB / union = `
-    + `${mergeCandidateChunkCounts.effectiveUnder4KiB}/${mergeCandidateChunkCounts.candidates}; CSS = `
+    + `${mergeCandidateChunkCounts.under8KiB}, default <4KiB / union = `
+    + `${mergeCandidateChunkCounts.defaultUnder4KiB}/${mergeCandidateChunkCounts.candidates}; CSS = `
     + `${smallStyleCounts.under512}/${smallStyleCounts.under1KiB}/`
     + `${smallStyleCounts.under2KiB}/${smallStyleCounts.under4KiB}/`
-    + `${smallStyleCounts.under8KiB}, effective <4KiB / union = `
-    + `${smallStyleCounts.effectiveUnder4KiB}/${smallStyleCounts.candidates}; compression br `
-    + `${staticAssetCompression.brotliQuality}, gzip `
+    + `${smallStyleCounts.under8KiB}, default <4KiB / union = `
+    + `${smallStyleCounts.defaultUnder4KiB}/${smallStyleCounts.candidates}; compression br `
+    + `${staticAssetCompression.brotliQuality}, zstd ${staticAssetCompression.zstdLevel}, gzip `
     + `${staticAssetCompression.gzipLevel}, smaller body only; auxiliary JavaScript `
     + `${auxiliaryJavascriptFiles.length}`
   );
+  for (const [kind, sizes] of Object.entries(analysis.totals)) {
+    console.log(`check-web-chunks: ${kind} bytes raw/br/zstd/gzip = `
+      + `${sizes.rawBytes}/${sizes.brotliBytes}/${sizes.zstdBytes}/${sizes.gzipBytes}; `
+      + `default negotiation ${sizes.defaultBytes}, theoretical minimum ${sizes.effectiveBytes}`);
+  }
 }

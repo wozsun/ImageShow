@@ -21,6 +21,7 @@ import {
 } from "../core/http/headers.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { serveStaticWithValidators } from "../core/http/static-conditional.ts";
+import { serveNegotiatedStatic } from "../core/http/static-encoding.ts";
 import {
   contentResponse,
   createContentRepresentation,
@@ -30,7 +31,7 @@ import {
 const publicDir = join(import.meta.dirname, "../public");
 
 export function registerSpaRoutes(app: Hono) {
-  const assetStatic = serveStatic({ root: publicDir, precompressed: true });
+  const assetStatic = serveNegotiatedStatic(publicDir);
   const faviconStatic = serveStatic({ path: join(publicDir, "favicon.ico") });
   app.use("/assets/*", async (c, next) => {
     await next();

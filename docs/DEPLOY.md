@@ -183,6 +183,20 @@ CDN 保留完整查询参数并遵守应用的 `Cache-Control`、`Vary` 和条�
 原图资源始终公开，访客原图按钮仅控制详情链接显示；缓存边界见[图片资源](guide/image-resources.md)。
 启用嵌入页或配置 HSTS 前，按[安全说明](guide/security.md)核对代理策略。
 
+### 静态资源压缩
+
+镜像在构建时为可压缩资源生成 Brotli、Zstd 和 gzip 副本，每种副本只有小于原文件时才保留。
+应用按 `/assets/*` 请求的 `Accept-Encoding` 权重与实际存在的副本协商，同权优先级为
+br → zstd → gzip；没有可接受的压缩副本时，允许 identity 才返回原文件，否则返回 406。
+编码名大小写、`q=0` 和 `*` 都参与协商。客户端缺省或发送空编码列表时返回原文件。
+Zstd 解码窗口不超过 8 MiB，参数与产物报告见[构建资源边界](guide/project-structure.md#web-构建资源边界)。
+
+反向代理应保留客户端可接受的编码，并将 `Content-Encoding`、`Vary: Accept-Encoding`、
+`Content-Length` 和验证器随对应表示一起传递；CDN 若自行转换编码，须同步调整这些响应信息。
+同时接受 Brotli 且存在 `.br` 的普通请求仍优先使用 Brotli，新增 Zstd 不代表所有请求自动变小。
+根 `index.html` 是动态页面模板，不提供预压缩副本；页面仍经应用注入当前站点配置，
+不要把运行镜像中的根模板交给代理直接静态托管。
+
 ## 本地发布门禁与镜像清理
 
 源码发布前运行 `npm run verify:release`，前提见[测试说明](../scripts/tests/README.md)。

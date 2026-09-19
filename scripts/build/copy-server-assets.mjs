@@ -22,9 +22,10 @@ for (const [label, input] of [
   }
 }
 
-// 构建时预压缩：为可压缩资源就地生成 .gz 与 .br（Node 内置 zlib，无新依赖），运行时由
-// serveStatic({ precompressed }) 按 Accept-Encoding 协商发送（br > gzip）。br 取最高质量 11、
-// gzip 取 9——一次性构建成本换运行时零开销与最优体积。
+const compressedAssets = [];
+
+// One source file at a time bounds high-quality compressors' concurrent memory.
+// Only final public assets are compressed; the root SPA template is rendered dynamically.
 async function precompressDir(dir) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const full = resolve(dir, entry.name);
@@ -32,15 +33,23 @@ async function precompressDir(dir) {
       await precompressDir(full);
       continue;
     }
-    if (!staticAssetIsCompressible(entry.name)) continue;
+    const file = relative(serverPublic, full).replaceAll("\\", "/");
+    if (file === "index.html" || !staticAssetIsCompressible(entry.name)) continue;
     const buffer = await readFile(full);
     const compressed = await compressStaticAsset(entry.name, buffer);
     await Promise.all([
       compressed.brotli
         ? writeFile(`${full}.br`, compressed.brotli)
-        : null,
-      compressed.gzip ? writeFile(`${full}.gz`, compressed.gzip) : null
+        : rm(`${full}.br`, { force: true }),
+      compressed.zstd
+        ? writeFile(`${full}.zst`, compressed.zstd)
+        : rm(`${full}.zst`, { force: true }),
+      compressed.gzip
+        ? writeFile(`${full}.gz`, compressed.gzip)
+        : rm(`${full}.gz`, { force: true })
     ]);
+    const { brotli, zstd, gzip, ...sizes } = compressed;
+    compressedAssets.push({ file, ...sizes });
   }
 }
 
@@ -51,7 +60,8 @@ await cp(webDist, serverPublic, {
   recursive: true,
   filter(source) {
     const path = relative(webDist, source).replaceAll("\\", "/");
-    return path !== ".vite" && !path.startsWith(".vite/");
+    return path !== ".vite" && !path.startsWith(".vite/")
+      && !/^index\.html\.(?:br|zst|gz)$/.test(path);
   }
 });
 if (existsSync(resolve(serverPublic, ".vite"))) {
@@ -61,8 +71,26 @@ if (existsSync(resolve(serverPublic, ".vite"))) {
 // 最后一步：对最终汇集的 SPA 静态目录做预压缩。图标以内联 JS 资源交付。
 await precompressDir(serverPublic);
 
+// Build-only metadata describes the buffers actually written above. Consumers
+// can join it with the Vite graph without recompressing every JS/Worker/CSS file.
+await mkdir(resolve(webDist, ".vite"), { recursive: true });
+await writeFile(resolve(webDist, ".vite/static-compression-report.json"), JSON.stringify({
+  schemaVersion: 1,
+  policy: {
+    brotliQuality: staticAssetCompression.brotliQuality,
+    zstdLevel: staticAssetCompression.zstdLevel,
+    zstdWindowLog: staticAssetCompression.zstdWindowLog,
+    gzipLevel: staticAssetCompression.gzipLevel,
+    fileConcurrency: 1,
+    selection: "smaller-body-only",
+    defaultEncodingOrder: ["br", "zstd", "gzip", "identity"]
+  },
+  assets: compressedAssets.sort((left, right) => left.file.localeCompare(right.file))
+}, null, 2) + "\n");
+
 console.log(
   "assemble-server: schema.sql -> dist, web -> dist/public; "
   + `precompressed br${staticAssetCompression.brotliQuality}/`
-  + `gzip${staticAssetCompression.gzipLevel}; smaller-body-only`
+  + `zstd${staticAssetCompression.zstdLevel}/gzip${staticAssetCompression.gzipLevel}; `
+  + "smaller-body-only; root SPA template rendered dynamically"
 );

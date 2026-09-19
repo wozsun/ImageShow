@@ -138,7 +138,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `core/` | 领域无关的运行可用性、安全抓取、日志、密码、UUID、并发和精确基础原语；不持有图片、词表、存储或 Ingestion 请求 schema，也不依赖业务领域或路由。未形成独立稳定职责边界的横切模块留在根层。 |
 | `core/database/` | PostgreSQL pool、事务、advisory lock、公开 fallback 准入、schema 装配和 readiness；`readiness/` 只承载数据库基线断言的内部职责。 |
 | `core/redis/` | 唯一 Redis client、连接与能力探测、JSON、pipeline、条件字符串、窗口限流命令及其通用 Lua；不持有 ready-cache 等业务命令，也不导入其他业务领域。 |
-| `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
+| `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、静态编码协商、条件请求与 Range 解析。 |
 | `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；普通保存与磁盘重载共用 FIFO 写租约内“持久化后发布”入口，配置包在同一租约内把候选文件持久化与数据库结果核对及收敛决定后的单次内存发布分离。配置包按当前默认配置逐项投影，存储后端按支持的结构与能力逐条识别；`runtime-config-environment.ts` 是全部 RuntimeConfig 叶子到首次 seed 变量的唯一映射。启动、热加载和配置包都只读取当前结构，未知字段统一投影删除。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；`validation/` 按图片、Ingestion、存储、用户和词表职责拥有请求 schema，并集中保留通用 HTTP 原语与 `validation_error` 映射；业务工作委托给领域模块。 |
 | `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`metadata-tags.ts` 拥有 HTTP 与 JSONL 共用的标签归一化契约，`page-window.ts` 唯一计算安全数字页窗口，`storage-location/` 拥有正式图片后端位置 CAS、revision、mutation fence 和 cache handoff，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型及其领域查询类型。 |
@@ -1109,15 +1109,38 @@ facade 使用 PascalCase 职责名，例如 `Home`、`Gallery`、`Show`、`Image
 `import-job-source-[hash].js`。`upload` 与 `import` 分别作为浏览器文件和 Import 来源子模式，
 父领域独立 facade 统一使用 `Ingestion` 命名。
 
-本地 `check-web-chunks` 从真实输出计算原始、gzip 9、Brotli 11 和实际有效响应体字节；
-gzip 与 Brotli 各自只要结果严格小于原始响应体就采用，不设置最低原始体积或最低节省量。
-这组参数由 `scripts/build/` 中的生产装配 helper 与本地 checker 共用，不在 Vite 阶段额外落盘
-整套 `.gz` / `.br`。门禁验证匿名公开入口、后台登录、图片管理员和超级管理员路由的权限及
+`scripts/build/static-asset-compression.mjs` 统一生产压缩参数：Brotli 11、Zstd 22、gzip 9，
+使用 Node 内置 `zlib`；Zstd 的 `windowLog=23` 将 HTTP 解码窗口限制为 8 MiB。
+每种编码各自只在结果严格小于原始正文时采用，不设置最低原始体积、节省量或跨编码比例门槛。
+`copy-server-assets.mjs` 在最终资源装配时生成 `.br` / `.zst` / `.gz`，逐文件串行，单个文件的
+三种压缩并行。重复装配替换已有结果，并移除本轮没有节省的对应侧车文件。
+根 `public/index.html` 由页面路由读取并动态注入配置，只复制原始模板，跳过预压缩和源目录中的
+同名压缩副本；通用压缩器继续支持 HTML，静态资源目录中的 HTML 与子目录 `index.html` 正常压缩。
+
+装配同时在 Web 构建目录生成 `.vite/static-compression-report.json`，记录实际写入产物的
+`rawBytes`、`brotliBytes`、`zstdBytes`、`gzipBytes`、策略参数，以及所有可压缩资源的相对路径。
+缺少某种压缩副本时，其字节字段记原始长度；`effectiveBytes` 是各表示的理论最小字节，
+`defaultEncoding` / `defaultBytes` 则表示客户端等权接受 br、zstd、gzip 时，按 br → zstd → gzip
+优先级实际选中的表示及长度。具体请求仍由客户端权重和可用副本决定；理论最小值不等于实际传输量。
+这份元数据可与 `.vite/web-build-report.json` 的 JS / Worker / CSS 构建图连接使用，避免分析再次
+全量高等级压缩；两份报告均不装配进运行镜像。
+
+`core/http/static-encoding.ts` 负责 `/assets/*` 的编码偏好：解析权重、排除 `q=0`、识别通配符和
+编码名大小写，同权时沿用 br → zstd → gzip，允许 identity 时可回原文件，无可接受表示返回 406。
+缺省或空 `Accept-Encoding` 选择原文件；显式 identity 权重参与排序，隐式 identity 只作为回退。
+文件路径、目录索引、MIME 和流发送继续由 Hono 处理；不同权重组需要时调用其 HEAD 分支查询元数据，
+不发出网络 HEAD 或读取正文；普通等权请求只调用一次文件发送。`static-conditional.ts` 仍唯一处理
+ETag、304 和单范围请求；协商不改写原请求或另建文件缓存。`/assets/*` 响应保留 `Vary: Accept-Encoding`。
+
+本地 `check-web-chunks` 读取最终装配元数据和实际侧车文件，核对长度与解压往返，
+不为分析重新全量压缩。JS、Worker 与 CSS 统计分别列出 raw / Brotli / Zstd / gzip 字节，
+并区分默认协商的 `defaultBytes` 与理论最小的 `effectiveBytes`。
+门禁验证匿名公开入口、后台登录、图片管理员和超级管理员路由的权限及
 懒加载闭包；公开闭包出现后台专有资源、图片管理员闭包出现超级管理员专有资源、哈希失效或
 重复内容都会直接失败。
 
-本地报告列出未压缩小于 8 KiB，或生产有效响应体小于 4 KiB 的 emitted JS 与 CSS，并统计
-512 B、1 KiB、2 KiB、4 KiB、8 KiB 原始体积档位及有效体积档位；这只用于发现可合并资源，
+本地报告列出未压缩小于 8 KiB，或默认协商响应体小于 4 KiB 的 emitted JS 与 CSS，并统计
+512 B、1 KiB、2 KiB、4 KiB、8 KiB 原始体积档位及默认协商体积档位；这只用于发现可合并资源，
 不是页面请求数或响应体积预算。只有与目标页面必然同行且不扩大权限、路由或能力懒加载边界的
 资产才合并；资源门禁以真实构建图、权限闭包、同行关系和重复内容为准，总文件数本身不是目标。
 报告保留全部入口必达的 Rolldown runtime，该虚拟 runtime 不进入模块 ownership 分组，也不在

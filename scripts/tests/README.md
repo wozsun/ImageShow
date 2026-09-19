@@ -35,7 +35,9 @@ npm run verify:release
 | `tsconfig.json` | 测试源码专用的无产物类型检查，不进入生产构建 |
 
 颜色识别用例随 `verify/check-semantic-colors.mjs` 执行，再扫描项目源码；静态压缩的实际
-收益用例随 `verify/check-web-chunks.mjs` 执行，再检查构建产物。两者各归所属门禁。
+收益、Zstd 解码窗口和重复装配用例随 `verify/check-web-chunks.mjs` 执行，再检查最终产物的
+长度、解压往返和分析元数据。`server/http-static.test.ts` 覆盖编码协商、条件请求与单范围，
+并由 Server 统一入口装配。两类测试各归所属门禁，不依赖现有运行数据。
 
 | 命令 | 范围与前提 |
 | --- | --- |

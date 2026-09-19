@@ -2,6 +2,7 @@ import "./support/server-environment.ts";
 import "./server/configuration.test.ts";
 import "./server/release-version.test.ts";
 import "./server/http-auth.test.ts";
+import "./server/http-static.test.ts";
 import "./server/database-process.test.ts";
 import "./server/cache.test.ts";
 import "./server/storage.test.ts";
