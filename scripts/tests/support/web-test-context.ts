@@ -213,9 +213,7 @@ export async function createPublicNavigationHarness(
     mobileLayout?: boolean;
   } = {}
 ) {
-  const { window: domWindow, document } = parseHTML('<html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body><div id=root></div></body></html>');
-  const viewport = document.querySelector<HTMLMetaElement>('meta[name="viewport"]')!;
-  const originalViewport = viewport.content;
+  const { window: domWindow, document } = parseHTML('<html><body><div id=root></div></body></html>');
   const React = await import("react");
   let now = 0;
   let serial = 0;
@@ -285,7 +283,6 @@ export async function createPublicNavigationHarness(
     try {
       await unmount?.();
       assert.equal(timers.size, 0, "卸载清理导航计时与滚动帧");
-      assert.equal(viewport.content, originalViewport, "离开图片页后恢复视口，不影响首页和后台");
     } finally {
       timers.clear();
       for (const [key, descriptor] of previous) {
@@ -375,7 +372,6 @@ export async function createPublicNavigationHarness(
   const root = createRoot(document.getElementById("root")!);
   unmount = async () => { await React.act(async () => root.unmount()); };
   await React.act(async () => root.render(React.createElement(Harness)));
-  assert.equal(viewport.content, `${originalViewport}, viewport-fit=cover`, "普通及嵌入图片页统一启用安全区布局");
   const navigation = document.querySelector<HTMLElement>(".public-navigation-stack")!;
   const dispatch = async (target: EventTarget, type: string, values: Record<string, unknown> = {}) => {
     await React.act(async () => {

@@ -66,11 +66,6 @@
 @media (max-width: 760px) {
   .gallery-page { --gallery-toolbar-height: 65px; }
 
-  .gallery-page .topbar {
-    padding-left: max(16px, calc(var(--public-safe-area-left, env(safe-area-inset-left)) + 12px));
-    padding-right: max(16px, calc(var(--public-safe-area-right, env(safe-area-inset-right)) + 12px));
-  }
-
   .gallery-toolbar {
     max-height: calc(100dvh - var(--public-page-header-height) - var(--public-navigation-safe-top));
     padding: 12px 16px;
@@ -146,7 +141,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
-    max-height: min(70dvh, calc(100dvh - 100% - var(--public-page-header-height) - var(--public-navigation-safe-top) - var(--public-safe-area-bottom, env(safe-area-inset-bottom))));
+    max-height: min(70dvh, calc(100dvh - 100% - var(--public-page-header-height) - var(--public-navigation-safe-top) - max(16px, var(--public-safe-area-bottom, env(safe-area-inset-bottom)))));
     padding: 12px 16px 10px;
     padding-left: max(16px, calc(var(--public-safe-area-left, env(safe-area-inset-left)) + 12px));
     padding-right: max(16px, calc(var(--public-safe-area-right, env(safe-area-inset-right)) + 12px));

@@ -615,11 +615,11 @@ hooks ──► lib
   `usePublicNavigationTopEdgeReveal.ts` 统一识别鼠标移入视口顶部 36 CSS px；首页由独立
   `AppHeader` 接收，画廊与展映由导航阶段 owner 接收，每次移入只唤出一次，区内移动不重置计时。
   只处理可信鼠标事件，`pointerover` 仅接收从文档外进入的情况，Pixi 合成移动和内部悬停目标切换不唤出导航。
-  `usePublicImageViewportControls.ts` 统一拥有画廊与展映的导航阶段，并在页面挂载期间拥有
-  `viewport-fit=cover`，卸载时恢复原有 viewport meta，根路径别名与嵌入页
-  复用同一生命周期。`gallery.css` 为导航、内容与回顶按钮提供安全区布局，导航整体收起包含顶部
-  安全区；回顶按钮的固定外层与 `show.css` 的展映外壳使用 `100dvh`，底部操作继续在各自外层内
-  按安全区定位。展映尺寸变化由既有 ResizeObserver 传递给画布，不另建 JS 视口状态。
+  `usePublicImageViewportControls.ts` 统一拥有画廊与展映的导航阶段，根路径别名与嵌入页
+  复用同一生命周期。`public-layout.css` 将公共导航外壳固定在顶部安全区下方，并由外壳裁剪
+  收起中的导航；`gallery.css` 为内容与回顶按钮提供安全区布局，底部按钮使用原生 fixed 定位。
+  `show.css` 的展映外壳使用 `100dvh`，底部操作在外壳内按安全区定位。展映尺寸变化由既有
+  ResizeObserver 传递给画布，不另建 JS 视口状态。
   展映只在自动播放期间启用三秒无点击隐藏，计时器、`click` 监听、整组导航的鼠标进出与焦点转移、
   选区变化监听和菜单展开观察均由该 owner 管理。
   `lib/ui/public-navigation.ts` 统一判定导航内的悬停或焦点；精细悬停设备保护导航内的悬停与焦点，
@@ -712,7 +712,8 @@ hooks ──► lib
   `hooks/useEmbeddedCursorBridge.ts` 独占父窗口握手、鼠标转发、动画帧合并及光标接管生命周期；
   `styles/embed-cursor.css` 只在已接管时隐藏原生光标。普通页面不加载该模块，嵌入页间导航
   复用同一实例，退出时恢复光标并释放监听器；具体视觉效果属于宿主，协议见[嵌入光标](embed-cursor.md)。
-  同一布局的 `hooks/useEmbeddedSafeArea.ts` 独立管理可选宿主安全区握手与生命周期；
+  同一布局的 `hooks/useEmbeddedSafeArea.ts` 独立管理可选宿主安全区握手与生命周期，
+  按订阅向宿主上报原生安全区、子视口尺寸和全屏状态；原生测量不读取宿主覆盖变量，避免回传循环。
   `SiteHead` 按公开 / 后台路由维护 viewport，`styles/public-viewport.css` 将四向安全区
   提供给公开页面、body 弹窗与菜单，后台保持原有视口。协议见[嵌入安全区](embed-safe-area.md)。
   公开配置就绪后才挂载路由，后台刷新失败时保留已有快照和路由，并把 `site.header_name` 传入后台入口；导航和 `SiteHead` 不复制
@@ -1022,8 +1023,13 @@ hooks ──► lib
 - `styles/` 按 base、home、gallery、admin 和 responsive 组织全局样式；首页进一步
   将页面 / 首屏基础、候选目录基础及共享响应式交互分文件，并按该顺序引入。公开页
   不参与动画的 fixed 导航外壳与主次导航共用的位移栈由 `public-layout.css` 维护，根滚动回弹边界位于
-  `base.css`；展映和画廊共用 `public-layout.css` 中按整组导航高度计算的位移，主导航、筛选栏和背景同步滑出，
+  `base.css`。导航外壳从顶部安全边界延伸到底部安全区之前，以普通溢出裁剪保留背景采样；
+  外壳不接管指针，导航内容单独启用交互。展映和画廊共用按整组导航高度计算的位移，
+  主导航、筛选栏和背景同步滑出，
   不叠加筛选栏独立位移或背景裁切动画。首页保留自身第二导航栏的显隐方式。
+  首页使用层级为 0 的实色 fixed 外壳，以 `inset: 0` 覆盖完整视口，图片及遮罩使用大视口高度；
+  展映页面、画布和操作区统一使用动态视口，不叠加浏览器工具栏高度补偿。
+  触屏画廊底部操作使用至少 36px 的原生 fixed 间距，继续避让更大的原生或宿主安全区。
   `public-core.css` 统一画廊与展映底部控件透明度：精细悬停设备的区域悬停或控件组包含
   `:focus-visible` 焦点时为 95%，导航存在时为 80%；指针点击后残留的普通焦点不阻止淡出。
   导航隐藏且无交互保护时控件为 30%、展映提示文字为 20%，保持 5 秒后淡至 10%。

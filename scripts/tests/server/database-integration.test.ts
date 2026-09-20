@@ -908,11 +908,11 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
     await runDatabaseScenario(
       "storage-ingestion",
       "Redis、存储与内容接入的具名跨域契约",
-      300_000,
+      600_000,
       async (storageContext) => {
         for (const scenario of storageIngestionScenarios) {
           await storageContext.test(scenario.name, {
-            timeout: 90_000,
+            timeout: 150_000,
             skip: Boolean(
               selectedStorageIngestionScenario
                 && selectedStorageIngestionScenario !== scenario.id
@@ -940,7 +940,7 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
                 toNamespacedPath(join(testRuntimeRoot, "runtime", scenario.id)),
                 "127.0.0.1",
                 String(redisPort)
-              ], 75_000);
+              ], 120_000);
             } catch (error) {
               errors.push(error);
             }

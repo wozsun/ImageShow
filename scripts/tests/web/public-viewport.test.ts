@@ -1,11 +1,12 @@
 import "../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MemoryRouter, useNavigate, type NavigateFunction } from "react-router";
+import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SiteHead } from "../../../packages/web/src/components/layout/SiteHead.tsx";
 import { useEmbeddedSafeArea } from "../../../packages/web/src/hooks/useEmbeddedSafeArea.ts";
 import { useAnchoredMenu } from "../../../packages/web/src/hooks/useAnchoredMenu.ts";
+import { usePublicImageViewportControls } from "../../../packages/web/src/hooks/usePublicImageViewportControls.ts";
 import { computeAnchoredPosition } from "../../../packages/web/src/lib/ui/menu-position.ts";
 import { createConfigStreamHarness } from "../support/web-test-context.ts";
 import { installProperties } from "../support/property-descriptors.ts";
@@ -19,7 +20,15 @@ test("[Web/公开视口] 直达、站内往返和后退保持唯一 viewport，�
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   t.after(() => client.clear());
   let navigate: NavigateFunction = () => {};
-  function Navigation() { navigate = useNavigate(); return h.React.createElement(SiteHead); }
+  function ImageControls() { usePublicImageViewportControls(); return null; }
+  function Navigation() {
+    navigate = useNavigate();
+    const { pathname } = useLocation();
+    return h.React.createElement(h.React.Fragment, null,
+      h.React.createElement(SiteHead),
+      /^\/(?:embed\/)?(?:gallery|show)\/?$/i.test(pathname)
+        ? h.React.createElement(ImageControls) : null);
+  }
   const mount = (path: string) => h.render(h.React.createElement(QueryClientProvider, { client },
     h.React.createElement(MemoryRouter, { key: path, initialEntries: [path] },
       h.React.createElement(Navigation))));
@@ -101,6 +110,136 @@ test("[Web/公开视口] 嵌入安全区校验父窗口、实例、来源和尺�
   await render(true);
   assert.equal(messages.length, count);
   restoreStandalone();
+});
+
+test("[Web/公开视口] 原生安全区按订阅上报、合并变化，断开和重挂释放旧实例", async t => {
+  const frames = new Map<number, FrameRequestCallback>();
+  let frameId = 0;
+  const h = await createConfigStreamHarness(t, { animationFrame: {
+    requestAnimationFrame: callback => { frames.set(++frameId, callback); return frameId; },
+    cancelAnimationFrame: id => { frames.delete(id); }
+  } });
+  const flushFrames = () => {
+    const pending = [...frames.values()];
+    frames.clear();
+    pending.forEach(callback => callback(0));
+  };
+  const messages: Array<{ data: Record<string, unknown>; origin: string }> = [];
+  const parent = { postMessage: (data: Record<string, unknown>, origin: string) => messages.push({ data, origin }) };
+  const native = { top: 23, right: 17, bottom: 31, left: 11 };
+  const observers = new Set<{ notify: () => void; targets: Set<HTMLElement> }>();
+  const restoreObserver = installProperties(globalThis, { ResizeObserver: class {
+    targets = new Set<HTMLElement>();
+    constructor(public notify: () => void) { observers.add(this); }
+    observe(target: HTMLElement) {
+      this.targets.add(target);
+      // Model the environment's CSS dimensions; host custom properties do not affect env().
+      const measure = (css: string) => native[css.match(/safe-area-inset-(top|right|bottom|left)/)?.[1] as keyof typeof native] ?? 0;
+      target.getBoundingClientRect = () => ({
+        width: measure(target.style.width), height: measure(target.style.height)
+      }) as DOMRect;
+    }
+    disconnect() { observers.delete(this); }
+  } });
+  const visualViewport = new EventTarget();
+  const restoreWindow = installProperties(h.window, { parent, innerWidth: 800, innerHeight: 600, visualViewport });
+  const restoreDocument = installProperties(h.document, { fullscreenElement: null });
+  t.after(() => { restoreObserver(); restoreWindow(); restoreDocument(); });
+  function Bridge({ enabled }: { enabled: boolean }) { useEmbeddedSafeArea(enabled); return null; }
+  const render = (enabled: boolean) => h.render(h.React.createElement(h.React.StrictMode, null,
+    h.React.createElement(Bridge, { enabled })));
+  await render(true);
+  let ready = messages.at(-1)!.data;
+  const send = (type: string, extra: Record<string, unknown> = {}, source: unknown = parent, origin = "https://host.example") => {
+    h.window.dispatchEvent(Object.assign(new Event("message"), { source, origin,
+      data: { ...ready, type, ...extra } }));
+  };
+  const reports = () => messages.filter(message => message.data.type === "native-insets");
+  const bottom = () => h.document.documentElement.style.getPropertyValue("--embed-safe-area-bottom");
+  assert.equal(observers.size, 0, "未订阅时没有测量资源");
+  for (const extra of [{ version: 2 }, { channel: "other" }, { bridgeId: "stale" }]) send("connect", extra);
+  send("connect", {}, {});
+  send("connect", {}, parent, "null");
+  assert.equal(observers.size, 0);
+  send("connect");
+  send("connect");
+  assert.equal(observers.size, 1);
+  assert.equal(frames.size, 1);
+  assert.ok(!bottom(), "订阅本身不覆盖布局");
+  flushFrames();
+  assert.deepEqual(reports(), [{ origin: "https://host.example", data: {
+    ...ready, type: "native-insets", insets: { ...native }, viewportWidth: 800, viewportHeight: 600, fullscreen: false
+  } }]);
+
+  send("insets", { insets: { top: 0, right: 48, bottom: 80, left: 48 } });
+  assert.equal(bottom(), "80px");
+  send("connect", {}, parent, "https://other.example");
+  h.window.dispatchEvent(new Event("resize"));
+  visualViewport.dispatchEvent(new Event("resize"));
+  observers.forEach(observer => observer.notify());
+  assert.equal(frames.size, 1);
+  flushFrames();
+  assert.equal(reports().length, 1, "宿主覆盖及重复几何事件不产生原生回传循环");
+  native.bottom = 35;
+  observers.forEach(observer => observer.notify());
+  flushFrames();
+  assert.deepEqual(reports().at(-1)!.data.insets, native);
+  assert.equal(bottom(), "80px");
+
+  const restoreSize = installProperties(h.window, { innerWidth: 600, innerHeight: 800 });
+  h.window.dispatchEvent(new Event("resize"));
+  flushFrames();
+  assert.equal(reports().at(-1)!.data.viewportWidth, 600);
+  assert.equal(reports().at(-1)!.data.viewportHeight, 800);
+  const restoreFullscreen = installProperties(h.document, { fullscreenElement: h.document.body });
+  h.document.dispatchEvent(new Event("fullscreenchange"));
+  flushFrames();
+  assert.equal(reports().at(-1)!.data.fullscreen, true);
+  assert.ok(!bottom());
+  restoreFullscreen();
+  h.document.dispatchEvent(new Event("fullscreenchange"));
+  flushFrames();
+  assert.equal(reports().at(-1)!.data.fullscreen, false);
+  assert.equal(bottom(), "80px");
+  restoreSize();
+  const count = reports().length;
+  h.window.dispatchEvent(new Event("pageshow"));
+  flushFrames();
+  assert.equal(reports().length, count + 1);
+  assert.equal(messages.at(-2)!.data.type, "ready");
+
+  const probes = [...observers].flatMap(observer => [...observer.targets]);
+  send("connect");
+  send("disconnect");
+  assert.equal(observers.size, 0);
+  assert.equal(frames.size, 0);
+  assert.ok(probes.every(probe => !probe.isConnected));
+  assert.ok(!bottom());
+  send("connect");
+  flushFrames();
+  assert.equal(reports().length, count + 2, "断开后可以重新订阅");
+  const oldBridgeId = ready.bridgeId;
+  h.window.dispatchEvent(new Event("resize"));
+  await render(false);
+  assert.equal(messages.at(-1)!.data.type, "disconnect");
+  assert.equal(messages.at(-1)!.origin, "https://host.example");
+  assert.equal(observers.size, 0);
+  assert.equal(frames.size, 0);
+  const detachedCount = messages.length;
+  send("connect");
+  h.window.dispatchEvent(new Event("pageshow"));
+  visualViewport.dispatchEvent(new Event("resize"));
+  assert.equal(messages.length, detachedCount);
+  assert.equal(frames.size, 0);
+  await render(true);
+  ready = messages.at(-1)!.data;
+  assert.notEqual(ready.bridgeId, oldBridgeId);
+  send("connect", { bridgeId: oldBridgeId });
+  assert.equal(observers.size, 0);
+  send("connect");
+  await render(false);
+  assert.equal(observers.size, 0);
+  assert.equal(frames.size, 0);
 });
 
 test("[Web/公开视口] 菜单在公开页安全边界内定位，后台保留现有可视视口边界", async t => {

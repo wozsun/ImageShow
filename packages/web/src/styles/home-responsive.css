@@ -112,7 +112,6 @@
   }
 
   .home-filter-bar {
-    min-height: var(--home-filter-bar-height);
     padding: 7px 14px;
     padding-left: max(14px, calc(var(--public-safe-area-left) + 12px));
     padding-right: max(14px, calc(var(--public-safe-area-right) + 12px));
@@ -154,9 +153,6 @@
   }
 
   .home-banner {
-    min-height: calc(
-      100svh - var(--public-page-header-height) - var(--public-navigation-safe-top) - var(--home-filter-bar-height)
-    );
     padding: 58px 20px 54px;
     padding-left: max(20px, calc(var(--public-safe-area-left) + 12px));
     padding-right: max(20px, calc(var(--public-safe-area-right) + 12px));

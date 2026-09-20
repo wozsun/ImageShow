@@ -15,21 +15,21 @@
 
 .public-navigation-frame {
   position: fixed;
-  top: 0;
+  top: var(--public-navigation-safe-top);
   right: 0;
+  bottom: max(16px, var(--public-safe-area-bottom));
   left: 0;
   z-index: 7;
   width: 100%;
   pointer-events: none;
-  /* The background fills the edge; navigation content never slides over it. */
-  clip-path: inset(var(--public-navigation-safe-top) 0 -100dvh);
+  /* Keep sliding content inside the safe edge without isolating backdrop sampling. */
+  overflow: clip;
 }
 
 .public-navigation-stack {
   --public-navigation-stack-shift: 0px;
   position: relative;
   width: 100%;
-  padding-top: var(--public-navigation-safe-top);
   pointer-events: none;
   isolation: isolate;
   /* 主、次导航共享这一位移，切换时保持边界连续。 */
@@ -83,7 +83,6 @@
   /* Both bars and their backdrop leave in one transition. */
   --public-navigation-stack-shift: calc(
     0px - var(--public-page-header-height) - var(--public-navigation-secondary-height, 0px)
-    - var(--public-navigation-safe-top, 0px)
   );
 }
 

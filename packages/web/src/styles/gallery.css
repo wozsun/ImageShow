@@ -475,6 +475,12 @@ body:has(.gallery-page) { min-height: 100dvh; }
   gap: 8px;
 }
 
+@media (hover: none) and (pointer: coarse) {
+  .gallery-floating-controls {
+    bottom: max(36px, var(--public-safe-area-bottom, env(safe-area-inset-bottom)));
+  }
+}
+
 .gallery-back-to-top {
   position: absolute;
   left: 0;

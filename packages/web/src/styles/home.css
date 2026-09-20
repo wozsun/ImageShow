@@ -59,17 +59,9 @@
 }
 
 .home-random-background {
-  /*
-   * iOS 26.0 会错误处理精确等于视口的 fixed 取色层。外壳故意保持
-   * 99%，完整的大视口图片与遮罩由允许溢出的下方绘制层承担。
-   */
   position: fixed;
-  top: 0;
-  right: 0;
-  left: 0;
+  inset: 0;
   z-index: 0;
-  width: 100%;
-  height: 99%;
   overflow: visible;
   pointer-events: none;
   isolation: isolate;
@@ -114,7 +106,7 @@
 
 /* 非嵌入页让图片从次导航顶边开始，避免桌面端 64px 主导航与 72px
    次导航高度差在淡入中透出 8px 画布。这里有意少保留 8px 构图安全区；
-   嵌入页仍完整避让次导航。不要改动上方为 iOS 视口取色保留的外壳结构。 */
+   嵌入页仍完整避让次导航。 */
 .home-page:not(.is-embedded) .home-background-image-frame {
   top: calc(var(--public-page-header-height) + var(--public-navigation-safe-top));
   height: calc(100vh - var(--public-page-header-height) - var(--public-navigation-safe-top));
@@ -156,7 +148,7 @@
 
 .home-navigation-frame .public-navigation-stack::before {
   bottom: auto;
-  height: calc(var(--public-page-header-height) + var(--public-navigation-safe-top));
+  height: var(--public-page-header-height);
 }
 
 .home-navigation-frame.is-entrance-pending

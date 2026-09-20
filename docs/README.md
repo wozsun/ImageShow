@@ -1,6 +1,6 @@
 # ImageShow 文档
 
-本手册以 **6.4.19** 为基线，直接描述当前安装、配置与运行契约。角色页说明日常任务，
+本手册以 **6.4.21** 为基线，直接描述当前安装、配置与运行契约。角色页说明日常任务，
 配置手册解释参数，技术参考说明架构与接口；版本变更记录见 [GitHub Releases](https://github.com/wozsun/ImageShow/releases)。
 
 部署与配置可直接阅读 [DEPLOY](DEPLOY.md) 和 [CONFIG](CONFIG.md)；CONFIG 按配置路径逐项说明。
@@ -23,6 +23,6 @@
 - 开发验证：[长期测试与本地门禁](../scripts/tests/README.md)
 - 运行契约：[配置说明](CONFIG.md)、[数据库结构](guide/database.md)、[存储](guide/storage.md)、[安全](guide/security.md)
 - 功能出口：[功能与流程](guide/flows.md)、[图片接入](guide/ingestion.md)、[随机图 API](guide/random-api.md)、[主机与图片资源](guide/image-resources.md)
-- 嵌入接入：[宿主光标协作协议](guide/embed-cursor.md)
+- 嵌入接入：[宿主光标协作协议](guide/embed-cursor.md)、[公开页面与嵌入安全区](guide/embed-safe-area.md)
 
 本地结论、比较决策和验收说明统一放在被 Git 忽略的 `.agents/report/`，不替代上述现行指南。
