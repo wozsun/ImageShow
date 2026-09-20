@@ -51,8 +51,21 @@ import { purgeImages } from "../images/trash/purge.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 import { listStorageBackends } from "../storage/backends/registry.ts";
 import { storageBackendLabel } from "../storage/backends/label.ts";
+import { requireAdminSession } from "../users/admin-session.ts";
+import { serveAdminExternalOriginal } from "../images/serving/external-original.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
+  app.get("/images/original/:id", requireAdminSession, async (c) => serveAdminExternalOriginal(
+    parse(uuidInput, c.req.param("id")),
+    {
+      userAgent: c.req.header("user-agent") ?? "",
+      method: c.req.method === "HEAD" ? "HEAD" : "GET",
+      ifNoneMatch: c.req.header("if-none-match"),
+      ifModifiedSince: c.req.header("if-modified-since"),
+      signal: c.req.raw.signal
+    }
+  ));
+
   app.get(`${adminApiBasePath}/overview`, async (c) => c.json(apiSuccess(await getOverviewStats())));
 
   app.get(`${adminApiBasePath}/images`, async (c) => {

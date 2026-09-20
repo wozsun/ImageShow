@@ -18,7 +18,7 @@ import {
   publicThumbnailUrlForConfig
 } from "../storage/objects/public-urls.ts";
 import { imageHasTrashPurgeJobSql } from "./trash/purge-state.ts";
-import { publicOriginalAccessUrl } from "./serving/original-link.ts";
+import { adminOriginalAccessUrl } from "./serving/original-link.ts";
 
 type DatabaseNumber = number | string;
 type DatabaseTimestamp = string | Date;
@@ -256,7 +256,7 @@ function presentAdminImageBase(
   const base = presentImageBase(row, tags, configs);
   return {
     ...base,
-    original_url: publicOriginalAccessUrl(row.id, row.original, base.object_url)
+    original_url: adminOriginalAccessUrl(row.id, row.original, base.object_url)
   };
 }
 
@@ -360,7 +360,7 @@ export async function publicImageDetail(
     description: row.description,
     source: row.source || null,
     object_url: objectUrl,
-    original_url: includeOriginal ? publicOriginalAccessUrl(
+    original_url: includeOriginal ? adminOriginalAccessUrl(
       row.id,
       row.original,
       objectUrl

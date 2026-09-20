@@ -5,9 +5,7 @@ import { coalesce } from "../../core/coalesce.ts";
 import { raceWithAbortSignal } from "../../core/abort.ts";
 import { safeFetchExternalImage } from "../../core/external-image-fetch.ts";
 import {
-  noStoreCacheControl,
-  publicProxyImageCacheControl,
-  publicRedirectCacheControl,
+  privateRevalidationCacheControl,
   safeRedirectLocation
 } from "../../core/http/headers.ts";
 import {
@@ -147,7 +145,7 @@ type ExternalOriginalRequest = {
   signal?: AbortSignal;
 };
 
-export async function servePublicExternalOriginal(
+export async function serveAdminExternalOriginal(
   id: string,
   request: ExternalOriginalRequest = {},
   dependencies: ExternalOriginalServingDependencies =
@@ -165,8 +163,8 @@ export async function servePublicExternalOriginal(
       status: 302,
       headers: {
         Location: safeRedirectLocation(original.url),
-        "Cache-Control": publicRedirectCacheControl,
-        Vary: "User-Agent",
+        "Cache-Control": privateRevalidationCacheControl,
+        Vary: "Cookie, User-Agent",
         "Referrer-Policy": "no-referrer"
       }
     });
@@ -184,10 +182,9 @@ export async function servePublicExternalOriginal(
       }
     },
     {
-      "Cache-Control": noStoreCacheControl,
-      Vary: "User-Agent",
+      "Cache-Control": privateRevalidationCacheControl,
+      Vary: "Cookie, User-Agent",
       "Referrer-Policy": "no-referrer"
-    },
-    publicProxyImageCacheControl
+    }
   );
 }

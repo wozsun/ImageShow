@@ -183,8 +183,9 @@ CORS 头由 `core/http/headers.ts` 统一设置。
 `config/site-host.ts` 是图片资源根 URL 和 Host 判断的共同入口：域名为空或 `example.com`
 时接受格式合法的访问 Host，使用 `/images` 同源路径，不向配置、共享缓存或队列写入请求域名；
 显式域名生成 `https://<site.domain>/images` 地址。`routes/resource-host.ts` 在公共资源、OPTIONS 与 SPA 之前
-区分主站、本地图片与静态资源公开 Host；主站原有路由继续由 `routes/public.ts` 注册
-`/images/full/*`、`/images/thumbs/*` 与 `/images/original/:id`，未匹配请求使用通用路由处理。
+区分主站、本地图片与静态资源公开 Host；`routes/public.ts` 注册主站公开资源
+`/images/full/*` 与 `/images/thumbs/*`；`routes/admin-images.ts` 注册 `/images/original/:id`，
+显式复用管理员会话中间件。未匹配请求使用通用路由处理。
 公开资源不读取管理员会话，local / S3 已配置公开 URL 的对象使用直链；图片 URL 由服务端生成，
 公开站点配置只投影页面实际消费的字段。
 
@@ -248,14 +249,13 @@ HTML / API 动态编码由应用负责，反向代理不是压缩依赖。`If-No
 无正文的 304，相同配置快照下的条件请求也跳过 HTML 生成。路由可用性、嵌入父页面策略、CSP、Cache-Control
 和条件响应仍在各请求中处理，完整内联公开配置与浏览器启动回退沿用现有契约。
 
-`images/serving/original-link.ts` 统一生成 `/images/original/<id>`，正常图片、后台及回收站均使用此公开
-缓存入口；资源处理器不读会话或按钮开关，直连 302 使用公开短缓存，代理继承源站策略或使用
-CDN fallback，保留 HEAD、条件请求、取消处理与 `Vary: User-Agent`。
-`site.gallery.public_original_button` 默认关闭，只决定详情是否向访客返回链接。
-`/api/images/:id` 在关闭时复用现有会话校验并使用私有重验证缓存，访客返回空链接、已登录
-管理员返回公开链接；开启时不读会话并使用浏览器 30 秒 / CDN 60 秒缓存，始终带 `Vary: Cookie`。
-详情只合并数据库行读取，链接显示投影在每个请求内独立生成；Web 按图片 ID 与认证身份隔离
-详情查询，由服务端链接决定按钮显示，不额外读取按钮开关或发起会话探针。
+`images/serving/original-link.ts` 为后台图片及回收站统一生成 `/images/original/<id>`；路由先验证
+管理员会话，再进入图片读取、直连探测或代理。直连 302 与代理成功响应使用 `private, no-cache`，
+不继承源站公开缓存策略；保留 HEAD、条件请求、取消处理与 `Vary: Cookie, User-Agent`，错误及失败回退不缓存。
+`/api/images/:id` 按有效管理员会话投影 `original_url`：访客为空，管理员可取得独立原图链接；
+详情使用 `private, no-cache` 与 `Vary: Cookie`，共享数据库行后按各请求身份独立投影。
+Web 按图片 ID 与认证身份隔离查询，等待已有认证探针完成后读取，管理员携带同源凭据，访客省略凭据。
+公开页面与后台详情均向已认证管理员显示非空原图链接，访客不显示原图按钮。
 `images/serving/record.ts` 统一资源读取的 Redis 命中与 PostgreSQL 回源：完整图和缩略图
 只投影对象键、扩展名与存储后端，原图入口再读取外部原图地址和更新时间。图片状态仅用于
 查询可服务的正式 / 回收站记录；分类与展示文字由图片详情和列表的读模型负责。
@@ -657,7 +657,7 @@ hooks ──► lib
   导航意图，`AppRoutes` 的 `React.lazy`、主导航和首页次级入口复用同一 Promise；它不绑定
   pointerdown，因而不会改变触摸或直接导航路径。`lib/gallery/card-display.ts` 是画廊卡片与
   详情首帧共用的 slug 显示投影，各消费者按会话级 facets 快照复用映射并保留缺失时的 slug
-  fallback。原图可访问性由 Server 详情投影统一判定并返回可空访问链接，Web 不从原始地址、
+  fallback。原图可访问性由 Server 按管理员身份统一判定并返回可空访问链接，Web 不从原始地址、
   展示地址或图片 ID 重复推导。公开与管理图片读取、编辑快照统一输出可空 `source`；数据库
   和编辑 / 接入草稿保留字符串，presenter 与草稿 owner 分别负责两侧空值转换。
   `lib/ui/movement-intent.ts` 是触控与指针共用的 5px 移动意图和主轴分类唯一来源；
@@ -700,6 +700,10 @@ hooks ──► lib
   和已加载 SPA 都收敛到 404，随机 API 与后台不参与公开页回退。页面参数只决定是否挂载主导航，
   不能复制公开页实现或以 CSS 隐藏导航。服务端仍独立决定嵌入
   文档是否存在并输出父页面白名单，前端开关只负责已加载 SPA 内的路由收敛。
+  三个嵌入路由共用懒加载的 `components/layout/EmbeddedPageLayout.tsx`，
+  `hooks/useEmbeddedCursorBridge.ts` 独占父窗口握手、鼠标转发、动画帧合并及光标接管生命周期；
+  `styles/embed-cursor.css` 只在已接管时隐藏原生光标。普通页面不加载该模块，嵌入页间导航
+  复用同一实例，退出时恢复光标并释放监听器；具体视觉效果属于宿主，协议见[嵌入光标](embed-cursor.md)。
   公开配置就绪后才挂载路由，后台刷新失败时保留已有快照和路由，并把 `site.header_name` 传入后台入口；导航和 `SiteHead` 不复制
   运行时默认值。网页标题由 `site.title` 提供，导航和后台品牌使用独立的 `site.header_name`。
   `siteConfigPayload()` 唯一投影描述为空时的网页标题回退，服务端 SPA

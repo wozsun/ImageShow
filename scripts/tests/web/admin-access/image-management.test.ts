@@ -617,37 +617,37 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
 
     for (const auth of ["pending", "expired", "guest"] as const) {
       assert.equal((await renderScenario({
-        auth,
-        originalUrl: null
-      })).present, false, `${auth} 的详情未提供链接时隐藏原图按钮`);
+        auth
+      })).present, false, `${auth} 即使残留原图链接也不显示按钮`);
     }
-    const publicEnabled = await renderScenario({
+    const guestDetail = await renderScenario({
       auth: "guest",
     });
-    assert.equal(publicEnabled.present, true);
+    assert.equal(guestDetail.present, false);
     assert.equal(
-      publicEnabled.href,
-      "https://img.example.com/images/original/00000000-0000-7000-8000-000000000544"
+      guestDetail.href,
+      null
     );
     assert.equal(
-      publicEnabled.sourceHref,
+      guestDetail.sourceHref,
       null,
       "公开卡片不应把任意长度来源地址预载进列表响应"
     );
-    assert.equal(publicEnabled.sourceAriaDisabled, "true");
-    assert.match(publicEnabled.publicProperties, /主题夜景/);
-    assert.match(publicEnabled.publicProperties, /标签蓝色星空/);
+    assert.equal(guestDetail.sourceAriaDisabled, "true");
+    assert.match(guestDetail.publicProperties, /主题夜景/);
+    assert.match(guestDetail.publicProperties, /标签蓝色星空/);
     assert.deepEqual(
-      publicEnabled.actionClasses.map((className) => (
+      guestDetail.actionClasses.map((className) => (
         className.includes("image-detail-source") ? "source" : "original"
       )),
-      ["source", "original"],
-      "来源必须位于原图左侧"
+      ["source"],
+      "访客仅显示来源入口"
     );
     for (const auth of ["image", "super"] as const) {
-      assert.equal((await renderScenario({
-        auth
-      })).present, true, `${auth} 管理员使用详情提供的原图链接`);
+      const detail = await renderScenario({ auth });
+      assert.equal(detail.present, true, `${auth} 管理员使用详情提供的原图链接`);
+      assert.match(detail.href!, /\/images\/original\//);
+      assert.deepEqual(detail.actionClasses.map(name => name.includes("image-detail-source") ? "source" : "original"), ["source", "original"]);
     }
     assert.equal((await renderScenario({
       auth: "pending",

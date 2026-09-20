@@ -170,8 +170,7 @@ export const appConfig = {
       },
       gallery: {
         enabled: true,
-        order: "latest",
-        public_original_button: false
+        order: "latest"
       },
       random_method: "redirect",
       random_size: "full",

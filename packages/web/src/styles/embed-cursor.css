@@ -1,0 +1,4 @@
+html[data-embed-cursor="host"],
+html[data-embed-cursor="host"] * {
+  cursor: none !important;
+}

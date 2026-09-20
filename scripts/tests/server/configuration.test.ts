@@ -81,7 +81,6 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   });
   assert.equal(defaults.site.gallery.enabled, true);
   assert.equal(defaults.site.gallery.order, "latest");
-  assert.equal(defaults.site.gallery.public_original_button, false);
   assert.deepEqual(defaults.ingestion, {
     max_file_size_mb: 100,
     max_long_edge: 32_000,
@@ -120,8 +119,6 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   delete driftSite.root;
   delete driftSite.random_size;
   delete driftSite.assets_base_url;
-  const driftGallery = driftSite.gallery as Record<string, unknown>;
-  delete driftGallery.public_original_button;
   driftSite.unknown_site_key = "gallery";
   driftSite.unknown_option = true;
   (driftSite.home as Record<string, unknown>).unknown_option = true;
@@ -144,7 +141,6 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   assert.equal(normalized.site.random_size, "full");
   assert.equal(normalized.site.assets_base_url, "");
 assert.equal(normalized.site.show.autoplay, true, "已有配置缺失字段使用唯一默认值，不重新播种环境值");
-  assert.equal(normalized.site.gallery.public_original_button, false);
   assert.equal("unknown_site_key" in normalized.site, false);
   assert.equal("unknown_option" in normalized.site, false);
   assert.equal("unknown_option" in normalized.site.home, false);
@@ -201,11 +197,6 @@ assert.equal(normalized.site.show.autoplay, true, "已有配置缺失字段使�
   invalidCurrentSiteRoot.site.root = "invalid" as RuntimeConfig["site"]["root"];
   invalidCurrentSiteRoot.site.unknown_site_key = "gallery";
   assert.throws(() => normalizeRuntimeConfig(invalidCurrentSiteRoot));
-
-  const invalidOriginalButton = structuredClone(defaults) as RuntimeConfig;
-  invalidOriginalButton.site.gallery.public_original_button = "false" as never;
-  assert.throws(() => parseRuntimeConfig(invalidOriginalButton));
-  assert.throws(() => normalizeRuntimeConfig(invalidOriginalButton));
 
   for (const root of ["home", "gallery"] as const) {
     const current = structuredClone(defaults);
@@ -355,13 +346,11 @@ assert.equal(normalized.site.show.autoplay, true, "已有配置缺失字段使�
   validCurrentValues.normalize.concurrency = 6;
   validCurrentValues.normalize.max_long_edge = 4_500;
   validCurrentValues.admin.recent_uploads = 12;
-  validCurrentValues.site.gallery.public_original_button = true;
   const preservedCurrentValues = normalizeRuntimeConfig(validCurrentValues);
   assert.deepEqual(preservedCurrentValues.ingestion, validCurrentValues.ingestion);
   assert.equal(preservedCurrentValues.normalize.concurrency, 6);
   assert.equal(preservedCurrentValues.normalize.max_long_edge, 4_500);
   assert.equal(preservedCurrentValues.admin.recent_uploads, 12);
-  assert.equal(preservedCurrentValues.site.gallery.public_original_button, true);
 
   for (const method of ["proxy", "redirect"] as const) {
     const current = structuredClone(defaults);
@@ -417,12 +406,6 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
   assert.equal(runtimeConfigFromEnvironment({ SITE_DOMAIN: "" }).site.domain, "");
   assert.equal(runtimeConfigFromEnvironment({ SITE_DOMAIN: "  EXAMPLE.COM  " }).site.domain, "example.com");
   assert.equal(runtimeConfigFromEnvironment({ SITE_DOMAIN: "img.example.com" }).site.domain, "img.example.com");
-  assert.equal(
-    runtimeConfigFromEnvironment({
-      SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON: "true"
-    }).site.gallery.public_original_button,
-    true
-  );
 
   const environmentConfig = runtimeConfigFromEnvironment({
     SITE_TITLE: "  浏览器标题  ",
@@ -503,7 +486,6 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
     [{ SITE_ROBOTS_ENABLED: "yes" }, /SITE_ROBOTS_ENABLED.*site\.robots_enabled/],
     [{ SITE_ROBOTS_ENABLED: "1" }, /SITE_ROBOTS_ENABLED.*site\.robots_enabled/],
     [{ SITE_ROBOTS_ENABLED: "0" }, /SITE_ROBOTS_ENABLED.*site\.robots_enabled/],
-    [{ SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON: "1" }, /SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON.*site\.gallery\.public_original_button/],
     [{ SITE_GALLERY_ENABLED: "1" }, /SITE_GALLERY_ENABLED.*site\.gallery\.enabled/],
     [{ SITE_ROOT: "landing" }, /SITE_ROOT.*site\.root/],
     [{ SITE_HOME_BROWSE_TARGET: "home" }, /SITE_HOME_BROWSE_TARGET.*site\.home\.browse_target/],
@@ -594,7 +576,6 @@ if (scenario === "seed") {
     order: "oldest"
   });
   assert.equal(generated.site.gallery.enabled, false);
-  assert.equal(generated.site.gallery.public_original_button, true);
   assert.equal(generated.normalize.skip_webp_under_kb, 0);
   const persisted = JSON.parse(await readFile(join(root, "config.json"), "utf8"));
   assert.deepEqual(persisted, generated);
@@ -621,7 +602,6 @@ delete drifted.site.description;
 delete drifted.site.root;
 delete drifted.site.show.autoplay;
 delete drifted.site.gallery.enabled;
-delete drifted.site.gallery.public_original_button;
 drifted.site[unknownSiteKey] = "gallery";
 drifted.site.unknown = "remove-me";
 drifted.site.home.unknown = "remove-me";
@@ -636,7 +616,6 @@ assert.equal(normalized.site.mps, "");
 assert.equal(normalized.site.footer, "");
 assert.equal(normalized.site.root, "home");
 assert.equal(normalized.site.gallery.enabled, true);
-assert.equal(normalized.site.gallery.public_original_button, false);
 assert.equal(unknownSiteKey in normalized.site, false);
 assert.equal("unknown" in normalized.site, false);
 assert.equal("unknown" in normalized.site.home, false);
@@ -666,7 +645,6 @@ assert.equal(getSettingsForAdmin().site.root, "home");
 assert.equal("browse_target" in getSettingsForAdmin().site.home, false);
 assert.equal("show" in getSettingsForAdmin().site, false);
 assert.equal("enabled" in getSettingsForAdmin().site.gallery, false);
-assert.equal("public_original_button" in getSettingsForAdmin().site.gallery, false);
 assert.deepEqual(getSettingsForAdmin().ingestion, {
   max_file_size_mb: 100,
   max_long_edge: 32000,
@@ -736,16 +714,12 @@ assert.throws(() => parseSettingsInput({ weibo: { source_enabled: false } }));
 assert.throws(() => parseSettingsInput({ normalize: { quality_step: 10 } }));
 assert.throws(() => parseSettingsInput({ site: { [unknownSiteKey]: "gallery" } }));
 assert.throws(() => parseSettingsInput({ site: { description: "越权普通设置" } }));
-assert.throws(() => parseSettingsInput({
-  site: { gallery: { public_original_button: true } }
-}));
 assert.throws(() => parseSettingsInput({ unknown_section: { enabled: false } }));
 const persisted = JSON.parse(await readFile(join(root, "config.json"), "utf8"));
 assert.deepEqual(persisted, normalized);
 assert.equal(unknownSiteKey in persisted.site, false);
 assert.equal("unknown" in persisted.site, false);
 assert.equal("unknown" in persisted.site.home, false);
-assert.equal(persisted.site.gallery.public_original_button, false);
 assert.equal("unknown_section" in persisted, false);
 
 await saveAppSettings(parseSettingsInput({
@@ -763,7 +737,6 @@ assert.equal(saved.ingestion.list_page_size, 37);
 assert.equal(saved.ingestion.commit_concurrency, 12);
 
 await updateRuntimeConfig({
-  site: { gallery: { public_original_button: true } },
   import: { keep_original_link: ["jsonl"], auto_import: false },
   weibo: { source_enabled: false },
   normalize: { quality_step: 11 }
@@ -777,9 +750,7 @@ assert.equal(getRuntimeConfig().import.auto_import, false);
 assert.equal(getRuntimeConfig().weibo.source_enabled, false);
 assert.equal(getRuntimeConfig().normalize.quality_step, 11);
 assert.equal(getRuntimeConfig().normalize.quality, 79);
-assert.equal(getRuntimeConfig().site.gallery.public_original_button, true);
 assert.deepEqual(siteConfigPayload().site.gallery, { enabled: true, order: "latest" });
-assert.equal("public_original_button" in getSettingsForAdmin().site.gallery, false);
 assert.deepEqual(getSettingsForAdmin().import.keep_original_link, ["jsonl"]);
 assert.equal(getSettingsForAdmin().import.auto_import, false);
 assert.equal("source_enabled" in getSettingsForAdmin().weibo, false);
@@ -787,12 +758,10 @@ assert.equal("quality_step" in getSettingsForAdmin().normalize, false);
 
 const mixed = structuredClone(getRuntimeConfig());
 mixed.site.root = "gallery";
-mixed.site.gallery.public_original_button = false;
 mixed.site[unknownSiteKey] = "home";
 await writeFile(join(root, "config.json"), JSON.stringify(mixed));
 const reloaded = await reloadRuntimeConfigFromDisk();
 assert.equal(reloaded.site.root, "gallery");
-assert.equal(reloaded.site.gallery.public_original_button, false);
 assert.deepEqual(siteConfigPayload().site.gallery, { enabled: true, order: "latest" });
 assert.equal(unknownSiteKey in reloaded.site, false);
 const reloadedPersisted = JSON.parse(await readFile(join(root, "config.json"), "utf8"));
@@ -821,7 +790,6 @@ console.log("config-existing-ok");
           SITE_SHOW_DRIFT_SPEED: "42",
           SITE_SHOW_ORDER: "oldest",
           SITE_GALLERY_ENABLED: "false",
-          SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON: "true",
           NORMALIZE_SKIP_WEBP_UNDER_KB: "0"
         },
         output: /config-seed-ok/
@@ -836,7 +804,6 @@ console.log("config-existing-ok");
           SITE_MPS: "忽略环境公安备案号",
           SITE_FOOTER: "忽略环境页脚",
           SITE_GALLERY_ENABLED: "invalid",
-          SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON: "invalid",
           UPLOAD_MAX_ITEMS: "invalid"
         },
         output: /config-existing-ok/
@@ -864,7 +831,6 @@ console.log("config-existing-ok");
           SITE_MPS: undefined,
           SITE_FOOTER: undefined,
           SITE_GALLERY_ENABLED: undefined,
-          SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON: undefined,
           NORMALIZE_SKIP_WEBP_UNDER_KB: undefined,
           UPLOAD_MAX_ITEMS: undefined,
           ...scenario.environment
@@ -909,7 +875,6 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   packageRuntime.site.assets_base_url = "https://source-assets.example.com/static";
   packageRuntime.site.random_size = "thumb";
   packageRuntime.site.description = "来源说明";
-  packageRuntime.site.gallery.public_original_button = true;
   const pkg = buildConfigPackage(
     packageRuntime,
     backends,
@@ -921,7 +886,6 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   assert.equal(pkg.config.site.root, "home");
   assert.equal("assets_base_url" in pkg.config.site, false);
   assert.equal(pkg.config.site.random_size, "thumb");
-  assert.equal(pkg.config.site.gallery.public_original_button, true);
   assert.deepEqual(pkg.storage_backends, [{
     slug: "archive",
     display_name: "归档",
@@ -947,8 +911,6 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   sourceSite.root = "future-root";
   sourceSite.domain = "must-not-cross.example.com";
   sourceSite.unknown_site_field = true;
-  const sourceGallery = sourceSite.gallery as Record<string, unknown>;
-  delete sourceGallery.public_original_button;
   sourceConfig.future_group = { enabled: true };
   sourceConfig.normalize!.quality = 50;
   sourceConfig.normalize!.min_quality = 40;
@@ -992,7 +954,6 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   assert.equal(parsed.config.site.header_name, "已采用站点");
   assert.equal(parsed.config.site.description, defaults.site.description);
   assert.equal(parsed.config.site.root, defaults.site.root);
-  assert.equal(parsed.config.site.gallery.public_original_button, false);
   assert.equal("domain" in parsed.config.site, false);
   assert.equal(parsed.config.normalize.quality, 50);
   assert.equal(parsed.config.normalize.min_quality, 40);

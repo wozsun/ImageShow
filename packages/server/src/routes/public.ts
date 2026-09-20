@@ -25,9 +25,6 @@ import {
 } from "./validation/images.ts";
 import { parse } from "./validation/parse.ts";
 import { uuidInput } from "./validation/primitives.ts";
-import {
-  servePublicExternalOriginal
-} from "../images/serving/external-original.ts";
 import { getPublicGalleryFacets } from "../images/read-models/facets.ts";
 import { getPublicGalleryStats } from "../images/read-models/gallery-stats.ts";
 import {
@@ -127,20 +124,12 @@ export function registerPublicRoutes(app: Hono) {
 
   app.get("/api/images/:id", blockCrossSiteFetch, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
-    const publicOriginalButton = getRuntimeConfig().site.gallery.public_original_button;
-    // Link visibility can depend on the session; the resource URL stays public.
     appendVaryHeader(c, "Cookie");
-    const includeOriginal = publicOriginalButton || Boolean(await readAdminSession(c));
+    const includeOriginal = Boolean(await readAdminSession(c));
     const response = {
-      item: await getPublicImage(
-        id,
-        c.req.raw.signal,
-        includeOriginal
-      )
+      item: await getPublicImage(id, c.req.raw.signal, includeOriginal)
     } satisfies PublicImageDetailResponseDto;
-    return cacheableApiSuccess(c, response, publicOriginalButton
-      ? publicImageCacheControl
-      : privateRevalidationCacheControl);
+    return cacheableApiSuccess(c, response, privateRevalidationCacheControl);
   });
 
   app.get("/images/full/*", async (c) => servePublicStoredObject(
@@ -150,15 +139,5 @@ export function registerPublicRoutes(app: Hono) {
   app.get("/images/thumbs/*", async (c) => servePublicStoredThumbnail(
     c.req.path.slice("/images/thumbs/".length),
     storedResponseRequest(c)
-  ));
-  app.get("/images/original/:id", async (c) => servePublicExternalOriginal(
-    parse(uuidInput, c.req.param("id")),
-    {
-      userAgent: c.req.header("user-agent") ?? "",
-      method: c.req.method === "HEAD" ? "HEAD" : "GET",
-      ifNoneMatch: c.req.header("if-none-match"),
-      ifModifiedSince: c.req.header("if-modified-since"),
-      signal: c.req.raw.signal
-    }
   ));
 }

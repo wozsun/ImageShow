@@ -81,8 +81,7 @@ import {
 } from "../../../packages/server/src/core/concurrency.ts";
 import {
   immutableCacheControl,
-  noStoreCacheControl,
-  publicProxyImageCacheControl,
+  privateRevalidationCacheControl,
   publicRedirectCacheControl
 } from "../../../packages/server/src/core/http/headers.ts";
 import {
@@ -115,7 +114,7 @@ import {
   servePublicStoredThumbnail
 } from "../../../packages/server/src/images/serving/stored-image.ts";
 import {
-  servePublicExternalOriginal
+  serveAdminExternalOriginal
 } from "../../../packages/server/src/images/serving/external-original.ts";
 import {
   configureSharpRuntime,
@@ -1454,7 +1453,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   };
 
   const proxySignal = new AbortController().signal;
-  const proxyResponse = await servePublicExternalOriginal(
+  const proxyResponse = await serveAdminExternalOriginal(
     item.id,
     {
       userAgent: "fixture-agent",
@@ -1479,14 +1478,13 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
     }
   });
   assert.deepEqual(proxyCalls[0]?.[3], {
-    "Cache-Control": noStoreCacheControl,
-    Vary: "User-Agent",
+    "Cache-Control": privateRevalidationCacheControl,
+    Vary: "Cookie, User-Agent",
     "Referrer-Policy": "no-referrer"
   });
-  assert.equal(proxyCalls[0]?.[4], publicProxyImageCacheControl);
 
   direct = true;
-  const directRedirect = await servePublicExternalOriginal(
+  const directRedirect = await serveAdminExternalOriginal(
     item.id,
     { userAgent: "fixture-agent" },
     dependencies as never
@@ -1497,11 +1495,11 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   assert.equal(directRedirect.headers.get("Location"), item.original);
   assert.equal(
     directRedirect.headers.get("Cache-Control"),
-    publicRedirectCacheControl
+    privateRevalidationCacheControl
   );
   assert.equal(directRedirect.headers.get("Referrer-Policy"), "no-referrer");
 
-  assert.equal(directRedirect.headers.get("Vary"), "User-Agent");
+  assert.equal(directRedirect.headers.get("Vary"), "Cookie, User-Agent");
   const redirectUrls = [
     ["https://img.example.com/照片.webp", "https://img.example.com/%E7%85%A7%E7%89%87.webp"],
     ["https://例子.中国/p.png?标题=照片", "https://xn--fsqu00a.xn--fiqs8s/p.png?%E6%A0%87%E9%A2%98=%E7%85%A7%E7%89%87"],
@@ -1509,19 +1507,19 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   ];
   for (const [original, expected] of redirectUrls) {
     for (const method of ["GET", "HEAD"] as const) {
-      const response = await servePublicExternalOriginal(item.id, { method }, {
+      const response = await serveAdminExternalOriginal(item.id, { method }, {
         ...dependencies,
         readImageServingRecordById: async () => ({ ...record, original })
       });
       assert.equal(response.status, 302);
       assert.equal(response.headers.get("Location"), expected);
-      assert.equal(response.headers.get("Cache-Control"), publicRedirectCacheControl);
-      assert.equal(response.headers.get("Vary"), "User-Agent");
+      assert.equal(response.headers.get("Cache-Control"), privateRevalidationCacheControl);
+      assert.equal(response.headers.get("Vary"), "Cookie, User-Agent");
       assert.equal(await response.text(), "");
     }
   }
   for (const control of ["\r", "\n", "\t", "\u200b"]) {
-    await assert.rejects(servePublicExternalOriginal(item.id, {}, {
+    await assert.rejects(serveAdminExternalOriginal(item.id, {}, {
       ...dependencies,
       readImageServingRecordById: async () => ({
         ...record, original: `https://img.example.com/${control}photo.png`
@@ -1532,7 +1530,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
     ...record, original: `https://img.example.com/images/full/${storageObjectKey(item.id, item.ext)}`
   }]) {
     await assert.rejects(
-      servePublicExternalOriginal(item.id, {}, {
+      serveAdminExternalOriginal(item.id, {}, {
         ...dependencies,
         readImageServingRecordById: async () => unavailable
       }),
@@ -1541,7 +1539,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
     );
   }
 });
-test("[Server/图片] 原图代理继承缓存策略，条件请求及 HEAD 释放上游正文", async (t) => {
+test("[Server/图片] 原图代理使用私有重验证缓存，条件请求及 HEAD 释放上游正文", async (t) => {
   const { proxyExternalImage } = await import("../../../packages/server/src/images/external-image-proxy.ts");
   const { proxyEtagForUpstream } = await import("../../../packages/server/src/core/http/proxy-validators.ts");
   const originalFetch = globalThis.fetch;
@@ -1549,13 +1547,13 @@ test("[Server/图片] 原图代理继承缓存策略，条件请求及 HEAD 释�
   const url = "https://original.example.test/image.png";
   const image = await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } }).png().toBuffer();
   const updatedAt = "2026-09-01T00:00:00.000Z";
-  const baseHeaders = { "Cache-Control": noStoreCacheControl, Vary: "User-Agent" };
+  const baseHeaders = { "Cache-Control": privateRevalidationCacheControl, Vary: "Cookie, User-Agent" };
   const expires = "Wed, 09 Sep 2037 00:00:00 GMT";
-  const policies: Array<{ headers: Record<string, string>; cache: string | null; expires: string | null }> = [
-      { headers: {}, cache: publicProxyImageCacheControl, expires: null },
-      { headers: { "Cache-Control": "public, max-age=120" }, cache: "public, max-age=120", expires: null },
-      { headers: { "Cache-Control": "no-store" }, cache: "no-store", expires: null },
-      { headers: { Expires: expires }, cache: null, expires }
+  const policies: Array<Record<string, string>> = [
+    {},
+    { "Cache-Control": "public, max-age=120" },
+    { "Cache-Control": "no-store" },
+    { Expires: expires }
   ];
   for (const method of ["GET", "HEAD"] as const) {
     for (const policy of policies) {
@@ -1568,15 +1566,15 @@ test("[Server/图片] 原图代理继承缓存策略，条件请求及 HEAD 释�
         return new Response(new ReadableStream({
           start(controller) { controller.enqueue(image); if (method === "GET") controller.close(); },
           cancel() { cancelled++; }
-        }), { headers: { "content-type": "image/png", etag: '"origin"', ...policy.headers } });
+        }), { headers: { "content-type": "image/png", etag: '"origin"', ...policy } });
       };
       const response = await proxyExternalImage(url, "png", {
         method, validators: { resourceUpdatedAt: updatedAt }
-      }, baseHeaders, publicProxyImageCacheControl);
+      }, baseHeaders);
       assert.equal(response.status, 200);
-      assert.equal(response.headers.get("Cache-Control"), policy.cache);
-      assert.equal(response.headers.get("Expires"), policy.expires);
-      assert.equal(response.headers.get("Vary"), "User-Agent");
+      assert.equal(response.headers.get("Cache-Control"), privateRevalidationCacheControl);
+      assert.equal(response.headers.get("Expires"), null);
+      assert.equal(response.headers.get("Vary"), "Cookie, User-Agent");
       assert.equal(response.headers.get("ETag"), proxyEtagForUpstream(url, '"origin"'));
       if (method === "HEAD") {
         assert.equal(await response.text(), "");
@@ -1592,19 +1590,19 @@ test("[Server/图片] 原图代理继承缓存策略，条件请求及 HEAD 释�
   };
   const revalidated = await proxyExternalImage(url, "png", {
     method: "GET", validators: { resourceUpdatedAt: updatedAt, ifNoneMatch: proxyEtagForUpstream(url, '"origin"')! }
-  }, baseHeaders, publicProxyImageCacheControl);
+  }, baseHeaders);
   assert.equal(revalidated.status, 304);
   assert.equal(await revalidated.text(), "");
-  assert.equal(revalidated.headers.get("Cache-Control"), null, "304 未提供新策略时保留已有缓存策略");
-  assert.equal(revalidated.headers.get("Vary"), "User-Agent");
+  assert.equal(revalidated.headers.get("Cache-Control"), privateRevalidationCacheControl);
+  assert.equal(revalidated.headers.get("Vary"), "Cookie, User-Agent");
   let failedBodyCancelled = 0;
   globalThis.fetch = async () => new Response(new ReadableStream({ cancel() { failedBodyCancelled++; } }), { status: 503 });
-  const fallback = await proxyExternalImage(url, "png", { method: "GET" }, baseHeaders, publicProxyImageCacheControl);
+  const fallback = await proxyExternalImage(url, "png", { method: "GET" }, baseHeaders);
   assert.equal(fallback.status, 302);
   assert.equal(fallback.headers.get("Location"), url);
   assert.equal(fallback.headers.get("Cache-Control"), "no-store");
   assert.equal(failedBodyCancelled, 1);
-  await assert.rejects(proxyExternalImage("https://127.0.0.1/private.png", "png", { method: "GET" }, baseHeaders, publicProxyImageCacheControl),
+  await assert.rejects(proxyExternalImage("https://127.0.0.1/private.png", "png", { method: "GET" }, baseHeaders),
     (error: { code?: string }) => error.code === "external_image_rejected");
 });
 
@@ -2465,7 +2463,7 @@ test("[Server/图片] 安全抓取在预取消时不联网，原图代理头部�
   await assert.rejects(safeFetchExternalImage("https://example.com/start", { timeoutMs: 1000, signal: redirected.signal }), (e: any) => e.code === "external_image_cancelled");
   assert.equal(fetches - beforeRedirect, 1);
 });
-test("[Server/图片] 公开原图等待共享探测时单个 HTTP 取消不影响另一消费者", async () => {
+test("[Server/图片] 管理员原图等待共享探测时单个 HTTP 取消不影响另一消费者", async () => {
   const item = servingReadyCacheItem();
   let resolveProbe!: (value: boolean) => void;
   let started!: () => void;
@@ -2479,8 +2477,8 @@ test("[Server/图片] 公开原图等待共享探测时单个 HTTP 取消不影�
     proxyExternalImage: async () => { throw Error("direct probe should succeed"); }
   };
   const cancelled = new AbortController(); const other = new AbortController();
-  const first = servePublicExternalOriginal(item.id, { signal: cancelled.signal }, dependencies as never);
-  const second = servePublicExternalOriginal(item.id, { signal: other.signal }, dependencies as never);
+  const first = serveAdminExternalOriginal(item.id, { signal: cancelled.signal }, dependencies as never);
+  const second = serveAdminExternalOriginal(item.id, { signal: other.signal }, dependencies as never);
   await ready;
   const reason = new Error("caller left");
   const rejected = assert.rejects(first, (error) => error === reason);
@@ -2488,7 +2486,7 @@ test("[Server/图片] 公开原图等待共享探测时单个 HTTP 取消不影�
   assert.equal(other.signal.aborted, false);
   resolveProbe(true);
   assert.equal((await second).status, 302);
-  assert.equal((await servePublicExternalOriginal(item.id, {}, dependencies as never)).status, 302);
+  assert.equal((await serveAdminExternalOriginal(item.id, {}, dependencies as never)).status, 302);
 });
 
 test("[Server/图片] URL 补全后的长度边界在草稿与正式输入间保持闭合", () => {

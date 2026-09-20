@@ -73,10 +73,14 @@ await runIntegrationScenario(async (runtime) => {
   app.onError((error, context) => handleApiError(context, error));
   registerPublicRoutes(app);
   registerPublicAuthRoutes(app);
+  const { registerAdminImageRoutes } = await import("../../../../packages/server/src/routes/admin-images.ts");
+  registerAdminImageRoutes(app);
   const baselineConfig = structuredClone(runtime.runtimeConfigStore.getRuntimeConfig());
   const originalFetch = globalThis.fetch;
   const originalUrl = "https://original.example.test/image.jpg";
+  let sourceRequests = 0;
   globalThis.fetch = async (url) => {
+    sourceRequests++;
     assert.equal(String(url), originalUrl, "原图探测仅使用合成响应，不访问外网");
     return new Response(new Uint8Array([1]), { headers: { "content-type": "image/jpeg" } });
   };
@@ -143,7 +147,7 @@ await runIntegrationScenario(async (runtime) => {
     await vocabCache.refreshEntityVocabularies(["theme", "tag", "author"]);
     await runtimeAvailability.requireOperationalRedis();
     await runtime.runtimeConfigStore.updateRuntimeConfig({
-      site: { domain: "images.example", gallery: { public_original_button: false } },
+      site: { domain: "images.example" },
       altcha: { enabled: false }
     });
     const displayed = await publicUrls.publicImageUrl(
@@ -173,6 +177,22 @@ await runIntegrationScenario(async (runtime) => {
       { headers: { cookie, ...(etag ? { "If-None-Match": etag } : {}) } }
     );
     const sessionCookie = `imageshow_session=${sessionId}`;
+    const resourceRequest = (cookie = "", method = "GET", id = imageIds[0]) => app.request(
+      `http://images.example/images/original/${id}`,
+      { method, headers: { cookie, "If-None-Match": '"cached-original"', "If-Modified-Since": "Sun, 20 Sep 2026 00:00:00 GMT" } }
+    );
+    const assertOriginalDenied = async (cookie = "") => {
+      const before = sourceRequests;
+      for (const method of ["GET", "HEAD"]) {
+        for (const id of [imageIds[0], "invalid-id"]) {
+          const response = await resourceRequest(cookie, method, id);
+          assert.equal(response.status, 401, "原图必须在解析 ID 和条件请求前鉴权");
+          assert.equal(response.headers.get("Location"), null);
+          assert.equal(response.headers.get("Cache-Control"), "no-store");
+        }
+      }
+      assert.equal(sourceRequests, before, "未认证请求不得探测或获取外部原图");
+    };
     const assertDetailVisibility = async () => {
       // Concurrent consumers may share a PostgreSQL row, never its identity-dependent DTO.
       const projections = await Promise.all([false, true, false, true].map(include => (
@@ -181,42 +201,35 @@ await runIntegrationScenario(async (runtime) => {
       assert.deepEqual(projections.map(item => item.original_url), [
         null, databaseDetails[0].original_url, null, databaseDetails[0].original_url
       ]);
-      for (const enabled of [false, true]) {
-        await runtime.runtimeConfigStore.updateRuntimeConfig({
-          site: { gallery: { public_original_button: enabled } }
-        });
-        const responses = await Promise.all(["", sessionCookie, "imageshow_session=expired"].map(cookie => detailRequest(cookie)));
-        const bodies = await Promise.all(responses.map(response => response.clone().json()));
-        assert.deepEqual(bodies.map(body => body.item.original_url), [
-          enabled ? databaseDetails[0].original_url : null,
-          databaseDetails[0].original_url,
-          enabled ? databaseDetails[0].original_url : null
-        ]);
-        for (const response of responses) {
-          assert.equal(response.status, 200);
-          assert.equal(response.headers.get("Cache-Control"), enabled ? "public, max-age=30, s-maxage=60" : "private, no-cache");
-          assert.ok(response.headers.get("Vary")?.split(/,\s*/).includes("Cookie"));
-          assert.equal(response.headers.get("Set-Cookie"), null, "详情读取不续期登录会话");
-        }
-        const anonymousEtag = responses[0].headers.get("ETag")!;
-        const adminEtag = responses[1].headers.get("ETag")!;
-        const revalidated = await detailRequest("", anonymousEtag);
-        assert.equal(revalidated.status, 304);
-        assert.ok(revalidated.headers.get("Vary")?.split(/,\s*/).includes("Cookie"));
-        assert.equal((await detailRequest("", adminEtag)).status, enabled ? 304 : 200);
-        assert.equal((await detailRequest(sessionCookie, anonymousEtag)).status, enabled ? 304 : 200);
-        for (const method of ["GET", "HEAD"]) {
-          const resource = await app.request(`http://images.example/images/original/${imageIds[0]}`, { method });
-          assert.equal(resource.status, 302);
-          assert.equal(resource.headers.get("Location"), originalUrl);
-          assert.match(resource.headers.get("Cache-Control")!, /^public,/);
-          assert.equal(resource.headers.get("Vary"), "User-Agent");
-          assert.equal(await resource.text(), "");
-        }
+      const responses = await Promise.all(["", sessionCookie, "imageshow_session=expired"].map(cookie => detailRequest(cookie)));
+      const bodies = await Promise.all(responses.map(response => response.clone().json()));
+      assert.deepEqual(bodies.map(body => body.item.original_url), [null, databaseDetails[0].original_url, null]);
+      for (const response of responses) {
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("Cache-Control"), "private, no-cache");
+        assert.ok(response.headers.get("Vary")?.split(/,\s*/).includes("Cookie"));
+        assert.equal(response.headers.get("Set-Cookie"), null, "详情读取不续期登录会话");
       }
-      await runtime.runtimeConfigStore.updateRuntimeConfig({
-        site: { gallery: { public_original_button: false } }
-      });
+      const anonymousEtag = responses[0].headers.get("ETag")!;
+      const adminEtag = responses[1].headers.get("ETag")!;
+      for (const [cookie, etag] of [["", anonymousEtag], [sessionCookie, adminEtag]]) {
+        const revalidated = await detailRequest(cookie, etag);
+        assert.equal(revalidated.status, 304);
+        assert.equal(revalidated.headers.get("Cache-Control"), "private, no-cache");
+        assert.ok(revalidated.headers.get("Vary")?.split(/,\s*/).includes("Cookie"));
+      }
+      assert.equal((await detailRequest("", adminEtag)).status, 200);
+      assert.equal((await detailRequest(sessionCookie, anonymousEtag)).status, 200);
+      await assertOriginalDenied();
+      await assertOriginalDenied("imageshow_session=expired");
+      for (const method of ["GET", "HEAD"]) {
+        const resource = await resourceRequest(sessionCookie, method);
+        assert.equal(resource.status, 302);
+        assert.equal(resource.headers.get("Location"), originalUrl);
+        assert.equal(resource.headers.get("Cache-Control"), "private, no-cache");
+        assert.equal(resource.headers.get("Vary"), "Cookie, User-Agent");
+        assert.equal(await resource.text(), "");
+      }
     };
     await assertDetailVisibility();
     const databaseResources = await readServingResources();
@@ -259,12 +272,16 @@ await runIntegrationScenario(async (runtime) => {
     await assertDetailVisibility();
     await runtime.redisClient.redis.del(adminSessionKey(sessionId));
     assert.equal((await (await detailRequest(sessionCookie)).json()).item.original_url, null);
+    await assertOriginalDenied(sessionCookie);
     const revokedId = await login();
     await runtime.databasePools.pool.query("UPDATE admin_account SET role='image' WHERE username='integration-admin'");
     assert.equal((await (await detailRequest(`imageshow_session=${revokedId}`)).json()).item.original_url, null);
+    await assertOriginalDenied(`imageshow_session=${revokedId}`);
     const imageAdminId = await login();
     assert.equal((await (await detailRequest(`imageshow_session=${imageAdminId}`)).json()).item.original_url, databaseDetails[0].original_url);
+    for (const method of ["GET", "HEAD"]) assert.equal((await resourceRequest(`imageshow_session=${imageAdminId}`, method)).status, 302);
     await runtime.databasePools.pool.query("UPDATE admin_account SET role='super' WHERE username='integration-admin'");
+    const trashAdminId = await login();
     const snapshots = await adminImages.getAdminImageSnapshots(imageIds);
     assert.deepEqual(
       snapshots.items.map((item) => item.original_url),
@@ -308,10 +325,11 @@ await runIntegrationScenario(async (runtime) => {
     );
     assert.equal(deletedPage.items[0].object_url, databaseDetails[0].object_url);
     assert.equal((await detailRequest()).status, 404);
-    const trashedOriginal = await app.request(`http://images.example/images/original/${imageIds[0]}`);
+    await assertOriginalDenied();
+    const trashedOriginal = await resourceRequest(`imageshow_session=${trashAdminId}`);
     assert.equal(trashedOriginal.status, 302);
     assert.equal(trashedOriginal.headers.get("Location"), originalUrl);
-    assert.match(trashedOriginal.headers.get("Cache-Control")!, /^public,/);
+    assert.equal(trashedOriginal.headers.get("Cache-Control"), "private, no-cache");
     await trash.restoreImages([imageIds[0]]);
     assert.equal((await publicImages.getPublicImage(imageIds[0], undefined, true)).original_url, databaseDetails[0].original_url);
   } catch (error) {

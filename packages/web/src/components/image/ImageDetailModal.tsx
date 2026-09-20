@@ -191,7 +191,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const imageTime = adminItem?.image_time ?? item.image_time;
   const sourceAvailable = Boolean(item.source);
   const sourceStateLabel = detailError ? "详情加载失败" : detailLoading ? "来源加载中" : sourceAvailable ? "打开来源页面" : "暂无来源";
-  const originalHref = item.original_url?.trim() ?? "";
+  const originalHref = showAdminDetails ? item.original_url?.trim() ?? "" : "";
   const imageAspectRatio = item.width > 0 && item.height > 0
     ? `${item.width} / ${item.height}`
     : "16 / 9";

@@ -5,6 +5,7 @@ import {
   safeFetchExternalImage
 } from "../core/external-image-fetch.ts";
 import {
+  noStoreCacheControl,
   safeResponseHeaderValue,
   safeRedirectLocation
 } from "../core/http/headers.ts";
@@ -43,8 +44,7 @@ export async function proxyExternalImage(
   externalUrl: string,
   ext: string,
   request: ExternalProxyRequest,
-  baseHeaders: Record<string, string> = {},
-  fallbackCacheControl?: string
+  baseHeaders: Record<string, string> = {}
 ): Promise<Response> {
   request.signal?.throwIfAborted();
   const redirectFallback = async () => {
@@ -53,6 +53,7 @@ export async function proxyExternalImage(
       status: 302,
       headers: {
         ...baseHeaders,
+        "Cache-Control": noStoreCacheControl,
         Location: safeRedirectLocation(externalUrl),
         "Referrer-Policy": "no-referrer"
       }
@@ -131,7 +132,6 @@ export async function proxyExternalImage(
         externalUrl,
         upstream,
         baseHeaders,
-        fallbackCacheControl,
         request.validators.resourceUpdatedAt,
         forwardedIfNoneMatch
       );
@@ -146,7 +146,6 @@ export async function proxyExternalImage(
       externalUrl,
       upstream,
       baseHeaders,
-      fallbackCacheControl,
       request.validators?.resourceUpdatedAt
     );
     headers.set(
@@ -174,33 +173,10 @@ function proxyExternalResponseHeaders(
   externalUrl: string,
   upstream: Response,
   baseHeaders: Record<string, string>,
-  fallbackCacheControl?: string,
   resourceUpdatedAt?: string,
   fallbackUpstreamEtag?: string
 ) {
   const headers = new Headers(baseHeaders);
-  if (fallbackCacheControl) {
-    const originCacheControl = safeUpstreamResponseHeader(
-      "Cache-Control", upstream.headers.get("cache-control")
-    );
-    const originExpires = safeUpstreamResponseHeader(
-      "Expires", upstream.headers.get("expires")
-    );
-    if (originCacheControl) {
-      headers.set("Cache-Control", originCacheControl);
-      headers.delete("Expires");
-    } else if (originExpires) {
-      headers.delete("Cache-Control");
-      headers.set("Expires", originExpires);
-    } else if (upstream.status === 304) {
-      // An upstream 304 without a new policy retains the stored policy.
-      headers.delete("Cache-Control");
-      headers.delete("Expires");
-    } else {
-      headers.set("Cache-Control", fallbackCacheControl);
-      headers.delete("Expires");
-    }
-  }
   if (resourceUpdatedAt !== undefined) {
     const etag = proxyEtagForUpstream(
       externalUrl,

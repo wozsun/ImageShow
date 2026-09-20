@@ -43,7 +43,6 @@ export type SiteShowSettings = {
 export type SiteGallerySettings = {
   enabled: boolean;
   order: GalleryOrder;
-  public_original_button: boolean;
 };
 
 export type RuntimeSiteSettings = {

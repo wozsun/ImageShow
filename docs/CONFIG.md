@@ -187,16 +187,6 @@
 
 画廊默认排序：`random` 乱序，`latest` 按图片时间从新到旧，`oldest` 从旧到新。访客可在页面切换并保留筛选条件。可在普通设置页修改。
 
-#### site.gallery.public_original_button
-
-- 环境变量：`SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON`
-- Compose：显式映射
-- 类型、默认值与范围：布尔；默认 `false`
-
-是否向未登录访客显示图片详情中的原图按钮，适用于画廊和展映。`false` 隐藏访客按钮，`true` 允许显示；已登录管理员不受此开关影响。只有图片具有与展示图不同的合法 HTTPS 原图时才显示按钮。
-
-此项只控制详情中的入口。`/images/original/<id>` 原图地址始终公开，知道地址的用户仍可直接访问。已有安装需在配置文件或高级配置中修改，重设环境变量不会覆盖文件。
-
 #### site.random_method
 
 - 环境变量：`SITE_RANDOM_METHOD`
@@ -289,6 +279,9 @@
 
 是否开放 `/embed/home`、`/embed/show` 和 `/embed/gallery`，供其他网页通过 iframe 嵌入；对应的首页、展映或画廊也必须启用。默认允许本站同源页面嵌入；配置实际站点域名后，还允许该域名的 HTTPS 来源及同端口子域。其他来源通过 `embed.allowed_origins` 添加。
 
+嵌入页随此开关默认提供[鼠标事件桥接](guide/embed-cursor.md)，宿主连接后自动接管并绘制
+自定义光标。不新增配置项或额外启用参数；未接入协议时保持默认光标与交互。
+
 #### embed.allowed_origins
 
 - 环境变量：`EMBED_ALLOWED_ORIGINS`
@@ -367,7 +360,7 @@
 
 哪些导入来源保留原始图片链接：`url` 为 URL 导入，`jsonl` 为 JSONL 导入，`weibo` 为微博导入。未列出的来源仍正常下载和入库，只是不自动保留原图链接；`[]` 表示全部不保留。
 
-修改影响后续导入及尚未确认提交的任务，已经确认提交的内容和正式入库图片不会因此改写。是否向访客显示原图按钮由 `site.gallery.public_original_button` 单独控制。
+修改影响后续导入及尚未确认提交的任务，已经确认提交的内容和正式入库图片不会因此改写。登记的独立原图仅供管理员访问；管理员在公开页面及后台图片详情均可使用原图按钮，访客不显示该按钮。
 
 #### import.auto_import
 

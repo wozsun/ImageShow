@@ -91,8 +91,7 @@ export const runtimeConfigSchema = z.strictObject({
     }),
     gallery: z.strictObject({
       enabled: z.boolean(),
-      order: galleryOrder,
-      public_original_button: z.boolean()
+      order: galleryOrder
     }),
     random_method: randomDefaultMethod,
     random_size: randomImageSize,

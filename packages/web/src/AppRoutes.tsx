@@ -31,6 +31,7 @@ const ShowPage = lazy(() => showRouteModule.load().then((module) => ({
   default: module.ShowPage
 })));
 const AdminShell = lazy(() => import("./pages/admin/shell/AdminShell.js").then((module) => ({ default: module.AdminShell })));
+const EmbeddedPageLayout = lazy(() => import("./components/layout/EmbeddedPageLayout.js").then((module) => ({ default: module.EmbeddedPageLayout })));
 
 function PublicPageNotFound() {
   return (
@@ -92,30 +93,32 @@ export function AppRoutes() {
                 ? <ShowPage settings={data.site.show} />
                 : publicFallback(rootPath)}
             />
-            <Route
-              path="/embed/home"
-              element={
-                !data.embed.enabled
-                  ? publicFallback(rootPath)
-                  : data.site.home.enabled === false
-                    ? embeddedBrowsePath
-                      ? <Navigate to={embeddedBrowsePath} replace />
-                      : publicFallback(rootPath)
-                    : <HomePage embedded site={data.site} />
-              }
-            />
-            <Route
-              path="/embed/show"
-              element={data.embed.enabled && data.site.show.enabled
-                ? <ShowPage embedded settings={data.site.show} />
-                : publicFallback(rootPath)}
-            />
-            <Route
-              path="/embed/gallery"
-              element={data.embed.enabled && data.site.gallery.enabled
-                ? <GalleryPage embedded order={data.site.gallery.order} />
-                : publicFallback(rootPath)}
-            />
+            <Route element={<EmbeddedPageLayout enabled={data.embed.enabled} />}>
+              <Route
+                path="/embed/home"
+                element={
+                  !data.embed.enabled
+                    ? publicFallback(rootPath)
+                    : data.site.home.enabled === false
+                      ? embeddedBrowsePath
+                        ? <Navigate to={embeddedBrowsePath} replace />
+                        : publicFallback(rootPath)
+                      : <HomePage embedded site={data.site} />
+                }
+              />
+              <Route
+                path="/embed/show"
+                element={data.embed.enabled && data.site.show.enabled
+                  ? <ShowPage embedded settings={data.site.show} />
+                  : publicFallback(rootPath)}
+              />
+              <Route
+                path="/embed/gallery"
+                element={data.embed.enabled && data.site.gallery.enabled
+                  ? <GalleryPage embedded order={data.site.gallery.order} />
+                  : publicFallback(rootPath)}
+              />
+            </Route>
             <Route path={`${adminBasePath}/*`} element={<AdminShell siteHeaderName={data.site.header_name} />} />
             <Route path="*" element={publicFallback(rootPath)} />
           </Routes>

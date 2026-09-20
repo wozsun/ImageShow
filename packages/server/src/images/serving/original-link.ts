@@ -36,7 +36,7 @@ export function hasDistinctOriginalUrl(original: string, displayUrl: string) {
   return /^https:\/\//i.test(original.trim()) && !equivalentUrl(original, displayUrl);
 }
 
-export function publicOriginalAccessUrl(
+export function adminOriginalAccessUrl(
   id: string,
   original: string,
   displayUrl: string
