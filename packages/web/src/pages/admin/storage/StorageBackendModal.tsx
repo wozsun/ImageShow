@@ -66,6 +66,7 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
     : "";
   const [slug, setSlug] = useState(backend?.slug ?? "");
   const [displayName, setDisplayName] = useState(backend?.display_name ?? "");
+  const [localPublicUrl, setLocalPublicUrl] = useState(backend?.type === "local" ? backend.public_base_url : "");
   const [s3, setS3] = useState<S3Settings>(() => (
     storageBackendS3FormSettings(
       backend?.type === "s3" ? backend : undefined
@@ -122,7 +123,7 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
     const targetSlug = creatingNow ? slug : createdSlug ?? backend!.slug;
     const payload = creatingNow
       ? { slug, display_name: displayName, s3 }
-      : { display_name: displayName, ...(isLocal ? {} : configPayload()) };
+      : { display_name: displayName, ...(isLocal ? { public_base_url: localPublicUrl } : configPayload()) };
     const succeeded = await saveStatus.run(() => onSave(targetSlug, payload, creatingNow));
     if (succeeded) {
       setS3(storageBackendS3AfterSuccessfulSave);
@@ -187,7 +188,14 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
               />
             </label>
             {isLocal ? (
-              <p className="hint">本地存储无需额外配置，图片保存在容器的存储目录。</p>
+              <>
+                <label>
+                  公开 URL
+                  <input value={localPublicUrl} onChange={(event) => setLocalPublicUrl(event.target.value)}
+                    placeholder="https://images.example.com" />
+                </label>
+                <p className="hint">完整图与缩略图共用，可包含路径前缀；留空使用主站地址。独立 Host 的图片请求由本机读取本地存储。</p>
+              </>
             ) : (
               <>
                 {locationLocked && (

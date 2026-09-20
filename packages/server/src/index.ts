@@ -37,7 +37,8 @@ import {
   stopBackgroundJobWorker
 } from "./jobs/worker.ts";
 import {
-  closeStorageBackendRegistry
+  closeStorageBackendRegistry,
+  assertLocalImageHostForSite
 } from "./storage/backends/registry.ts";
 import { createHttpApp } from "./http-app.ts";
 import {
@@ -63,6 +64,7 @@ try {
   const app = createHttpApp();
   await ensureRuntimeDirectories();
   await initializeDatabaseSchema();
+  await assertLocalImageHostForSite(getRuntimeConfig().site.domain);
   await ensureSuperAdmin({
     username: bootstrapEnvironment.adminUsername,
     password: bootstrapEnvironment.adminPassword

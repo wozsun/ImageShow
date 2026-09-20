@@ -1,5 +1,6 @@
 import {
   storedS3ConfigSchema,
+  storedLocalConfigSchema,
   type S3StorageConfig,
   type StorageBackendRecord,
   type StorageConfig
@@ -38,6 +39,7 @@ export function storageConfigFromRow(
       return {
         slug: row.slug,
         type: "local",
+        ...storedLocalConfigSchema.parse(raw),
         namespace_identities: namespaceIdentities
       };
     default:

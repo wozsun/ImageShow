@@ -123,13 +123,14 @@ export function publishRuntimeConfigForPackageImport(next: RuntimeConfig) {
   return publishRuntimeConfig(next);
 }
 
-export function reloadRuntimeConfigFromDisk() {
-  return withRuntimeConfigWriteLease(() => {
+export function reloadRuntimeConfigFromDisk(validate?: (config: RuntimeConfig) => Promise<void>) {
+  return withRuntimeConfigWriteLease(async () => {
     getRuntimeConfig();
     const snapshot = readRuntimeConfigFile();
     if (!snapshot) {
       throw new Error(`Runtime config ${runtimePaths.configFile} does not exist`);
     }
+    await validate?.(snapshot.config);
     return persistAndPublishRuntimeConfig(
       snapshot.config,
       snapshot.needsWriteBack

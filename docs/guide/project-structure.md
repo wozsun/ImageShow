@@ -158,11 +158,19 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 
 `config/site-host.ts` 是图片资源根 URL 和 Host 判断的共同入口：域名为空或 `example.com`
 时接受格式合法的访问 Host，使用 `/images` 同源路径，不向配置、共享缓存或队列写入请求域名；
-显式域名下只接受主站 Host，并生成 `https://<site.domain>/images` 地址。
-`http-app.ts` 在公共资源、OPTIONS 与 SPA 之前执行统一 Host 校验；`routes/public.ts` 直接注册
+显式域名生成 `https://<site.domain>/images` 地址。`routes/image-host.ts` 在公共资源、OPTIONS 与 SPA 之前
+区分主站和本地图片公开 Host；主站原有路由继续由 `routes/public.ts` 注册
 `/images/full/*`、`/images/thumbs/*` 与 `/images/original/:id`，未匹配请求使用通用路由处理。
-公开资源不读取管理员会话，S3 已配置公开 URL 的对象使用直链；图片 URL 由服务端生成，
+公开资源不读取管理员会话，local / S3 已配置公开 URL 的对象使用直链；图片 URL 由服务端生成，
 公开站点配置只投影页面实际消费的字段。
+
+本地公开 URL 存在 `storage_backend.config`，由存储注册表唯一持有配置缓存。启动加载注册表后开始监听，
+Host 准入同步读取注册表最后发布的本地公开地址，不触发数据库查询；失效保留已发布快照供准入使用，
+存储读取仍按 TTL / revision 重新加载，local 地址保存完成前加载并发布新快照。普通主站请求不增加存储读取。
+`images/stored-image-serving.ts` 的本地公开入口固定 local，跳过图片记录查询，与主站入口共用 driver 和
+`stored-object-response.ts` 的条件请求 / 范围 / 取消与资源释放逻辑，不建立 ETag 或正文缓存。
+高级配置验证、保存及设置重载复用注册表的主站 Host 冲突校验；保存和重载在 RuntimeConfig 写租约内执行，
+访问配置变更不退休 driver。
 
 `images/presenter.ts` 的公开卡片、后台列表 / 编辑快照及 Ingestion completed 投影，
 在每个非空批次调用一次 `storage/backends/registry.ts` 的 `getStorageBackendConfigs`。

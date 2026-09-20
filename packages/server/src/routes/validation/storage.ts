@@ -6,7 +6,8 @@ import type {
 } from "../../storage/backends/config.ts";
 import {
   s3SettingsPatchSchema,
-  s3SettingsSchema
+  s3SettingsSchema,
+  localPublicUrlSchema
 } from "../../storage/backends/config.ts";
 import { requestSlugInput } from "./primitives.ts";
 
@@ -41,6 +42,7 @@ export const storageBackendCreateInput = z.strictObject({
 export const storageBackendUpdateInput = z.strictObject({
   display_name: storageDisplayInput.optional(),
   enabled: z.boolean().optional(),
+  public_base_url: localPublicUrlSchema.optional(),
   s3: s3SettingsUpdateSchema.optional()
 }).refine(
   (value) => Object.values(value).some((field) => field !== undefined),

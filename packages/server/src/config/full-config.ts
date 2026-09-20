@@ -2,6 +2,7 @@ import type {
   RuntimeConfig,
   RuntimeConfigChangeSummaryDto
 } from "@imageshow/shared/browser";
+import { assertLocalImageHostForSite } from "../storage/backends/registry.ts";
 import { parseRuntimeConfig } from "./runtime-config.ts";
 import {
   getRuntimeConfig,
@@ -24,8 +25,9 @@ export function getFullRuntimeConfig() {
   return structuredClone(getRuntimeConfig());
 }
 
-export function validateFullRuntimeConfig(value: unknown) {
+export async function validateFullRuntimeConfig(value: unknown) {
   const config = parseRuntimeConfig(value);
+  await assertLocalImageHostForSite(config.site.domain);
   return {
     config,
     changes: summarizeRuntimeConfigChanges(getRuntimeConfig(), config)
@@ -34,7 +36,7 @@ export function validateFullRuntimeConfig(value: unknown) {
 
 export function saveFullRuntimeConfig(value: unknown) {
   return withRuntimeConfigWriteLease(async () => {
-    const config = parseRuntimeConfig(value);
+    const { config } = await validateFullRuntimeConfig(value);
     return {
       config: structuredClone(await replaceRuntimeConfig(config))
     };

@@ -1,6 +1,6 @@
 import type { RuntimeConfig } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "./runtime-config-store.ts";
-import { hasExplicitSiteDomain } from "./site-host.ts";
+import { hasExplicitSiteDomain } from "../core/url-validation.ts";
 
 type EmbedAncestorConfig = Pick<RuntimeConfig, "site" | "embed">;
 

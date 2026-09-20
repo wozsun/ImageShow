@@ -63,6 +63,7 @@ import {
   handleApiError
 } from "../../../packages/server/src/core/http/responses.ts";
 import {
+  assertLocalPublicUrlDomain,
   missingS3Fields,
   mergeS3Settings,
   s3SettingsSchema,
@@ -300,6 +301,18 @@ test("[Server/存储] 存储键列举保持固定批大小、显式完整性和�
 
 });
 test("[Server/存储] local / S3 配置只按实际连接参数复用 driver", () => {
+  const local = storageBackendUpdateInput.parse({ public_base_url: " https://IMAGES.example.com:443/pictures/ " });
+  assert.equal(local.public_base_url, "https://images.example.com/pictures");
+  for (const domain of ["images.example.com", "images.example.com:443"]) {
+    assert.throws(() => assertLocalPublicUrlDomain(local.public_base_url!, domain),
+      { code: "storage_public_url_host_conflict" });
+  }
+  assert.doesNotThrow(() => assertLocalPublicUrlDomain(local.public_base_url!, "main.example.com"));
+  assert.deepEqual(storageBackendUpdateInput.parse({ public_base_url: "" }), { public_base_url: "" });
+  for (const public_base_url of ["http://images.example.com", "https://user:pass@images.example.com",
+    "https://images.example.com/?token=x", "https://images.example.com/#x", "https://images.example.com/%2fsecret"]) {
+    assert.equal(storageBackendUpdateInput.safeParse({ public_base_url }).success, false);
+  }
   const current = s3SettingsSchema.parse({
     endpoint: "objects.example.com",
     region: "ap-southeast-1",
@@ -2100,6 +2113,7 @@ test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空
   }), {
     slug: "local",
     type: "local",
+    public_base_url: "",
     namespace_identities: []
   });
   assert.deepEqual(storageConfigFromRow({

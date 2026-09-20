@@ -17,6 +17,7 @@ import {
   saveAppSettings
 } from "../config/app-settings.ts";
 import { getRuntimeConfig, reloadRuntimeConfigFromDisk } from "../config/runtime-config-store.ts";
+import { assertLocalImageHostForSite } from "../storage/backends/registry.ts";
 import { privateRevalidationCacheControl } from "../core/http/headers.ts";
 
 const settingsRepresentation = createApiSuccessSnapshot((config: RuntimeConfig) => ({
@@ -38,7 +39,7 @@ export function registerSettingsRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/settings/reload`, requireSuperAdmin, async (c) => {
-    await reloadRuntimeConfigFromDisk();
+    await reloadRuntimeConfigFromDisk((config) => assertLocalImageHostForSite(config.site.domain));
     return c.json(apiSuccess({ settings: getSettingsForAdmin() } satisfies AdminSettingsResponseDto));
   });
 

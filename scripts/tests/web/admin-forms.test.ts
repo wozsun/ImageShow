@@ -723,6 +723,7 @@ test("[Web/后台表单] 存储删除反馈以服务端权威结果收口", () =
     enabled: true,
     is_default: false,
     type: "local",
+    public_base_url: "",
     image_count: 3,
     ingestion_session_count: 0,
     cleanup_job_count: 0,
@@ -2012,6 +2013,38 @@ test("[Web/后台表单] 存储能力显示三态，连接测试后刷新一次�
   assert.equal(h.pending.length, 2);
 });
 
+test("[Web/后台表单] 本地存储公开 URL 回显、修改保存与清空回退", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  h.window.scrollTo = () => {};
+  const clock = installControlledClock(t, h.window);
+  const { StorageBackendModal } = await import("../../../packages/web/src/pages/admin/storage/StorageBackendModal.tsx");
+  const { ActionFeedbackProvider } = await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
+  const backend: StorageBackendAdmin = {
+    slug: "local", type: "local", public_base_url: "https://images.example.test/pictures",
+    display_name: "Local", enabled: true, is_default: true, sort_order: 0, image_count: 1,
+    ingestion_session_count: 0, cleanup_job_count: 0, failed_cleanup_job_count: 0,
+    exhausted_cleanup_job_count: 0, deletion: { action: "blocked", blockers: ["built_in"] }
+  };
+  const saved: Record<string, unknown>[] = [];
+  await h.render(h.React.createElement(ActionFeedbackProvider, null, h.React.createElement(StorageBackendModal, {
+    target: backend, busy: "", onClose() {}, onTest: async () => true,
+    onSave: async (slug, payload, creating) => {
+      assert.equal(slug, "local"); assert.equal(creating, false); saved.push(payload); return true;
+    }
+  })));
+  const input = h.document.querySelector<HTMLInputElement>('input[placeholder="https://images.example.com"]')!;
+  assert.equal(input.value, backend.public_base_url);
+  for (const publicBaseUrl of ["https://new-images.example.test", ""]) {
+    await h.React.act(async () => inputText(h.window, input, publicBaseUrl));
+    await h.React.act(async () => dispatchDomEvent(h.window, h.document.querySelector("form")!, "submit"));
+    await clock.advanceBy(500);
+    await h.flush();
+    assert.deepEqual(saved.at(-1), { display_name: "Local", public_base_url: publicBaseUrl });
+    assert.equal(input.value, publicBaseUrl);
+  }
+  assert.equal(saved.length, 2);
+});
+
 for (const kind of ["user", "storage"] as const) {
   test(`[Web/后台表单] ${kind} 删除经过最终确认，取消重置且失败后重新确认`, async (t) => {
     const h = await createConfigStreamHarness(t);
@@ -2034,6 +2067,7 @@ for (const kind of ["user", "storage"] as const) {
     t.after(() => client.clear());
     const backend = {
       slug: "archive", sort_order: -1, display_name: "Archive", type: "local", enabled: false,
+      public_base_url: "",
       is_default: false, image_count: 0, ingestion_session_count: 0,
       cleanup_job_count: 0, failed_cleanup_job_count: 0, exhausted_cleanup_job_count: 0,
       deletion: { action: "delete", blockers: [] }

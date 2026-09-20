@@ -49,7 +49,7 @@ export function registerAdvancedConfigRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/advanced-config/runtime/validate`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {
     const input = parse(runtimeInput, await readJsonBody(c));
-    const result = validateFullRuntimeConfig(input.config);
+    const result = await validateFullRuntimeConfig(input.config);
     c.header("Cache-Control", privateNoStoreCacheControl);
     const response = {
       changes: result.changes

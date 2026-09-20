@@ -23,6 +23,151 @@ const publicUrls = await import("../../../../packages/server/src/storage/objects
 
 const storageCheck = await import("../../../../packages/server/src/checks/storage-check.ts");
 const objectAccess = await import("../../../../packages/server/src/storage/objects/access.ts");
+{
+  const { createHttpApp } = await import("../../../../packages/server/src/http-app.ts");
+  const { createConfigPackage } = await import("../../../../packages/server/src/config/config-package.ts");
+  const originalDomain = runtime.runtimeConfigStore.getRuntimeConfig().site.domain;
+  await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { domain: "main.example.test" } });
+  const local = (await registry.resolveStorageAccess("local")).driver;
+  const key = storageObjectKey("00000000-0000-7000-8000-0000000000a5", "webp");
+  const bytes = Buffer.from("synthetic-local-public-image");
+  await local.writeBuffer("full", key, bytes, "image/webp");
+  await local.writeBuffer("thumbs", key, bytes, "image/webp");
+  const app = createHttpApp({ businessGateIsOpen: () => true, requireRedis: async () => undefined });
+  const request = (host: string, path = `/pictures/full/${key}`, method = "GET", headers: Record<string, string> = {}) => (
+    app.request(`http://internal.example.test${path}`, { method, headers: { Host: host, ...headers } })
+  );
+  try {
+    await backendUpdate.updateStorageBackend("local", { public_base_url: "https://IMAGES.example.test/pictures/" });
+    assert.equal(registry.publishedLocalPublicUrl(), "https://images.example.test/pictures");
+    assert.equal((await registry.resolveStorageAccess("local")).driver, local);
+    assert.equal(publicUrls.directStorageObjectUrl(await registry.getStorageBackend("local"), "full", key),
+      `https://images.example.test/pictures/full/${key}`);
+    const pkg = await createConfigPackage();
+    assert.ok(pkg.storage_backends.every((backend) => backend.slug !== "local"));
+    await assert.rejects(backendUpdate.updateStorageBackend("local", { public_base_url: "https://main.example.test/pictures" }),
+      { code: "storage_public_url_host_conflict" });
+    assert.equal(registry.publishedLocalPublicUrl(), "https://images.example.test/pictures");
+
+    const { readFile, writeFile } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const { registerSettingsRoutes } = await import("../../../../packages/server/src/routes/settings.ts");
+    const { handleApiError } = await import("../../../../packages/server/src/core/http/responses.ts");
+    const settingsApp = new Hono<{ Variables: { session: AdminSession } }>();
+    settingsApp.onError((error, context) => handleApiError(context, error));
+    settingsApp.use("*", async (context, next) => {
+      context.set("session", { id: "settings-test", username: "integration-admin", role: "super", csrf: "settings-csrf" });
+      await next();
+    });
+    registerSettingsRoutes(settingsApp as unknown as Hono);
+    const { registerAdvancedConfigRoutes } = await import("../../../../packages/server/src/routes/advanced-config.ts");
+    registerAdvancedConfigRoutes(settingsApp as unknown as Hono);
+    const configFile = join(runtime.dataDirectory, "config.json");
+    const previousFile = await readFile(configFile, "utf8");
+    try {
+      const conflict = JSON.parse(previousFile);
+      conflict.site.domain = "images.example.test";
+      await writeFile(configFile, JSON.stringify(conflict));
+      const reload = await settingsApp.request("http://main.example.test/api/admin/settings/reload", { method: "POST" });
+      assert.equal(reload.status, 400);
+      assert.equal((await reload.json()).code, "storage_public_url_host_conflict");
+      assert.equal(runtime.runtimeConfigStore.getRuntimeConfig().site.domain, "main.example.test");
+      assert.equal(registry.publishedLocalPublicUrl(), "https://images.example.test/pictures");
+    } finally { await writeFile(configFile, previousFile); }
+
+    const fullConfigRequest = (config: unknown, validate = false) => settingsApp.request(
+      `http://main.example.test/api/admin/advanced-config/runtime${validate ? "/validate" : ""}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config })
+      });
+    const savedConfig = structuredClone(runtime.runtimeConfigStore.getRuntimeConfig());
+    const conflictConfig = { ...savedConfig, site: { ...savedConfig.site, domain: "images.example.test" } };
+    for (const validate of [true, false]) {
+      const result = await fullConfigRequest(conflictConfig, validate);
+      assert.equal(result.status, 400);
+      assert.equal((await result.json()).code, "storage_public_url_host_conflict");
+      assert.deepEqual(runtime.runtimeConfigStore.getRuntimeConfig(), savedConfig);
+      assert.equal(await readFile(configFile, "utf8"), previousFile);
+    }
+    const renamedConfig = { ...savedConfig, site: { ...savedConfig.site, domain: "new-main.example.test" } };
+    assert.equal((await fullConfigRequest(renamedConfig, true)).status, 200);
+    assert.equal((await fullConfigRequest(renamedConfig)).status, 200);
+    assert.equal(runtime.runtimeConfigStore.getRuntimeConfig().site.domain, "new-main.example.test");
+    assert.equal((await fullConfigRequest(savedConfig)).status, 200);
+
+    // No metadata record exists: this origin reads only the object, including during a move's cleanup window.
+    const response = await request("images.example.test");
+    assert.equal(response.status, 200);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
+    const etag = response.headers.get("ETag")!;
+    assert.ok(etag);
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
+    assert.match(response.headers.get("Cache-Control")!, /immutable/);
+    for (const [method, headers, expected] of [
+      ["HEAD", {}, 200], ["GET", { "If-None-Match": etag }, 304],
+      ["GET", { Range: "bytes=0-2" }, 206],
+      ["GET", { Range: "bytes=0-2", "If-None-Match": etag }, 304],
+      ["GET", { Range: "bytes=0-2", "If-Range": '"different"' }, 200],
+      ["GET", { Range: "bytes=99999-" }, 416]
+    ] as const) {
+      const result = await request("IMAGES.EXAMPLE.TEST:443", undefined, method, headers as Record<string, string>);
+      assert.equal(result.status, expected);
+      const body = Buffer.from(await result.arrayBuffer());
+      if (expected === 304 || method === "HEAD") assert.equal(body.length, 0);
+      if (expected === 206) assert.deepEqual(body, bytes.subarray(0, 3));
+      if (expected !== 416) assert.equal(result.headers.get("Access-Control-Allow-Origin"), "*");
+    }
+    const preflight = await request("images.example.test", undefined, "OPTIONS", {
+      Origin: "https://main.example.test", "Access-Control-Request-Method": "GET",
+      "Access-Control-Request-Headers": "Range, If-None-Match"
+    });
+    assert.equal(preflight.status, 204);
+    for (const path of ["/", "/api/site-config", "/api/admin/storage/backends", "/random", "/livez",
+      `/images/full/${key}`, `/pictures/full/not-a-key`, `/pictures/original/${key}`, `/pictures/full/${key}.candidate-x`]) {
+      for (const method of ["GET", "HEAD", "OPTIONS"]) assert.equal((await request("images.example.test", path, method)).status, 404);
+    }
+    assert.equal((await request("images.example.test", undefined, "POST")).status, 404);
+    const thumb = await request("images.example.test", `/pictures/thumbs/${key}`);
+    assert.deepEqual(Buffer.from(await thumb.arrayBuffer()), bytes);
+    await database.pool.query("INSERT INTO metadata (id, storage_slug, device, brightness, ext, md5, created_by) VALUES ($1, 'local', 'pc', 'light', 'webp', $2, 'integration-admin')",
+      ["00000000-0000-7000-8000-0000000000a5", "0".repeat(32)]);
+    const main = await request("main.example.test", `/images/full/${key}`);
+    assert.equal(main.status, 302);
+    assert.equal(main.headers.get("Location"), `https://images.example.test/pictures/full/${key}`);
+    await database.pool.query("DELETE FROM metadata WHERE id=$1", ["00000000-0000-7000-8000-0000000000a5"]);
+    const originalHget = runtime.redisClient.redis.hget;
+    const restoreSql = interceptSqlQueries(database.pool, async () => { throw new Error("hot local read must not query SQL"); });
+    runtime.redisClient.redis.hget = (() => { throw new Error("local origin must not query image projection"); }) as typeof originalHget;
+    try {
+      const hot = await request("images.example.test", undefined, "GET", { "If-None-Match": etag });
+      assert.equal(hot.status, 304);
+    } finally { restoreSql(); runtime.redisClient.redis.hget = originalHget; }
+    await backendUpdate.updateStorageBackend("local", { public_base_url: "https://new-images.example.test" });
+    assert.equal((await request("images.example.test")).status, 404);
+    const newResponse = await request("new-images.example.test", `/full/${key}`);
+    assert.equal(newResponse.headers.get("ETag"), etag);
+    await newResponse.body?.cancel();
+    await backendUpdate.updateStorageBackend("local", { public_base_url: "https://new-images.example.test/图片" });
+    const encodedUrl = publicUrls.directStorageObjectUrl(await registry.getStorageBackend("local"), "thumbs", key);
+    const encodedResponse = await request("new-images.example.test", new URL(encodedUrl).pathname);
+    assert.equal(encodedResponse.status, 200);
+    assert.deepEqual(Buffer.from(await encodedResponse.arrayBuffer()), bytes);
+    await backendUpdate.updateStorageBackend("local", { public_base_url: "https://new-images.example.test" });
+    await removeDriverObject(local, "full", key);
+    const missing = await request("new-images.example.test", `/full/${key}`);
+    assert.equal(missing.status, 404);
+    assert.equal(missing.headers.get("Cache-Control"), "no-store");
+    registry.invalidateStorageBackendRegistry();
+    assert.equal((await registry.getStorageBackend("local")).type, "local");
+    assert.equal(registry.publishedLocalPublicUrl(), "https://new-images.example.test");
+    await backendUpdate.updateStorageBackend("local", { public_base_url: "" });
+    assert.equal((await request("new-images.example.test", `/thumbs/${key}`)).status, 404);
+  } finally {
+    await backendUpdate.updateStorageBackend("local", { public_base_url: "" });
+    await removeDriverObject(local, "full", key);
+    await removeDriverObject(local, "thumbs", key);
+    await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { domain: originalDomain } });
+  }
+}
   const registryBackend = "registry-contract";
   const registryConfig = {
     endpoint: "https://objects.example.com",
@@ -345,6 +490,10 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
       method: "POST", headers: { "content-type": "application/json", "x-role": role }, body: JSON.stringify(body)
     });
     assert.equal((await post("test", { slug: "capability" }, "image")).status, 403);
+    assert.equal((await post("backends/local", { public_base_url: "https://images.example.test" }, "image")).status, 403);
+    assert.equal((await post("backends/local", { public_base_url: "http://images.example.test" }, "super")).status, 400);
+    assert.equal((await post("backends/local", { public_base_url: "https://images.example.test" }, "super")).status, 200);
+    assert.equal((await post("backends/local", { public_base_url: "" }, "super")).status, 200);
     await mutations.createStorageBackend({ slug: "capability-peer", display_name: "Peer", s3: s3.settings });
     try {
     const { getStorageBackendsForAdmin, listStorageBackendOptions } = await import("../../../../packages/server/src/storage/backends/read-model.ts");

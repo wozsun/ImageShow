@@ -41,7 +41,7 @@ import { registerSettingsRoutes } from "./routes/settings.ts";
 import { registerStorageRoutes } from "./routes/storage.ts";
 import { registerSpaRoutes } from "./routes/spa.ts";
 import { registerIngestionRoutes } from "./routes/ingestion.ts";
-import { isAllowedSiteHost } from "./config/site-host.ts";
+import { imageHostBoundary } from "./routes/image-host.ts";
 import {
   auditAdminMutation,
   markAdminReadRequest
@@ -82,31 +82,7 @@ export function createHttpApp(
     await next();
     finalizeSecurityHeaders(c);
   });
-  app.use("*", async (c, next) => {
-    if (!isAllowedSiteHost(c.req.header("host") ?? "")) {
-      return apiErrorResponse({ status: 404, message: "Not Found" });
-    }
-    await next();
-  });
-  app.use("*", async (c, next) => {
-    const path = new URL(c.req.url).pathname;
-    if (
-      path === "/livez"
-      || path === "/readyz"
-      || availability.businessGateIsOpen()
-    ) {
-      await next();
-      return;
-    }
-    return apiErrorResponse(
-      {
-        status: 503,
-        code: "redis_unavailable",
-        message: "Redis cold-start validation has not completed"
-      },
-      { phase: "cold_start" }
-    );
-  });
+  app.use("*", imageHostBoundary(() => availability.businessGateIsOpen()));
   app.options(
     "*",
     async (c, next) => {

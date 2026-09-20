@@ -1,4 +1,6 @@
 import { imageResourceBaseUrl } from "../../config/site-host.ts";
+import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
+import { assertLocalPublicUrlDomain } from "../backends/config.ts";
 import { getStorageBackend, type StorageRegistryAccess } from "../backends/registry.ts";
 import type { StorageConfig } from "../backends/config.ts";
 import { storageObjectKey } from "@imageshow/shared/browser";
@@ -21,7 +23,13 @@ export function directStorageObjectUrl(
   prefix: ReadablePrefix,
   key: string
 ) {
-  if (config.type !== "s3" || !config.s3.public_base_url) return "";
+  if (config.type === "local") {
+    if (config.public_base_url) assertLocalPublicUrlDomain(config.public_base_url, getRuntimeConfig().site.domain);
+    return config.public_base_url
+      ? `${config.public_base_url}${localStorageObjectUrl(prefix, key)}`
+      : "";
+  }
+  if (!config.s3.public_base_url) return "";
   const base = config.s3.public_base_url.replace(/\/+$/, "");
   const objectName = storageS3ObjectName(config, prefix, key);
   return `${base}/${encodeKeyPath(objectName)}`;

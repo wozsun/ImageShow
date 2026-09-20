@@ -96,7 +96,7 @@ type StorageBackendAdminBaseDto = StorageBackendOptionDto & {
 };
 
 export type StorageBackendAdminDto = StorageBackendAdminBaseDto & (
-  | { type: "local" }
+  | { type: "local"; public_base_url: string }
   | { type: "s3"; s3: StorageBackendS3Dto; content_md5: boolean | null }
 );
 

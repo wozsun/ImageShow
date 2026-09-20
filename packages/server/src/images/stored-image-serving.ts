@@ -27,6 +27,20 @@ type StoredThumbnailRecord = Pick<
   "id" | "storage_slug"
 >;
 
+export async function serveLocalStoredObject(
+  prefix: "full" | "thumbs",
+  key: string,
+  request: StoredResponseRequest = {}
+) {
+  const parsed = parseImageObjectKey(key);
+  if (!parsed || (prefix === "thumbs" && thumbnailObjectKey(parsed.id) !== key)) {
+    throw new ApiError(404, "not_found", "Object not found");
+  }
+  const object = await resolveReadableObject(prefix, key, "local", { signal: request.signal });
+  // This is the local object's origin, regardless of its current database location.
+  return streamResolvedObject(object, contentType(parsed.ext), immutableCacheControl, request);
+}
+
 export type StoredImageServingDependencies = {
   readImageServingRecordById: typeof readImageServingRecordById;
   resolveReadableObject: typeof resolveReadableObject;

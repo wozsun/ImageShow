@@ -11,6 +11,7 @@ import {
 } from "../../core/database/pools.ts";
 import { logger } from "../../core/logger.ts";
 import {
+  assertLocalPublicUrlDomain,
   missingS3Fields,
   storageDriverSignature,
   type StorageBackendRecord,
@@ -162,8 +163,18 @@ async function withCurrentStorageBackends<Result>(
 
 export function invalidateStorageBackendRegistry() {
   registryRevision += 1;
-  storageCache = null;
   storageCacheExpiresAt = 0;
+}
+
+/** Host admission uses the last published configuration without starting database work. */
+export function publishedLocalPublicUrl() {
+  const local = storageCache?.find((backend) => backend.slug === "local");
+  return local?.type === "local" ? local.public_base_url ?? "" : "";
+}
+
+export async function assertLocalImageHostForSite(domain: string) {
+  const local = await getStorageBackend("local");
+  if (local.type === "local") assertLocalPublicUrlDomain(local.public_base_url ?? "", domain);
 }
 
 export async function closeStorageBackendRegistry() {

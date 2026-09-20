@@ -13,9 +13,12 @@ import {
   mergeS3Settings,
   sameStorageBackendSettings,
   storageDriverSignature,
+  assertLocalPublicUrlDomain,
+  localPublicUrlSchema,
   type StorageBackendUpdateInput,
   type StorageConfig
 } from "./config.ts";
+import { getRuntimeConfig, withRuntimeConfigWriteLease } from "../../config/runtime-config-store.ts";
 import {
   normalizedNamespaceIdentities,
   storageConfigFromRow,
@@ -23,7 +26,8 @@ import {
   type StorageBackendConfigRow
 } from "./record.ts";
 import {
-  invalidateStorageBackendRegistry
+  invalidateStorageBackendRegistry,
+  getStorageBackend
 } from "./registry.ts";
 import {
   assertPhysicalLocationChangeAllowed,
@@ -49,6 +53,9 @@ function updatedStorageConfig(
   input: StorageBackendUpdateInput
 ): StorageConfig {
   if (current.type === "s3") {
+    if (input.public_base_url !== undefined) {
+      throw new ApiError(400, "validation_error", "S3 公开地址须通过 s3.public_base_url 设置");
+    }
     return input.s3
       ? {
           ...current,
@@ -63,7 +70,10 @@ function updatedStorageConfig(
       "内置本地后端没有可编辑的远程存储配置"
     );
   }
-  return current;
+  if (input.public_base_url === undefined) return current;
+  const publicBaseUrl = localPublicUrlSchema.parse(input.public_base_url);
+  assertLocalPublicUrlDomain(publicBaseUrl, getRuntimeConfig().site.domain);
+  return { ...current, public_base_url: publicBaseUrl };
 }
 
 function changedPhysicalLocationFields(
@@ -324,7 +334,7 @@ async function updateStorageBackendUnderLock(
           ? null
           : nextConfig.type === "s3"
             ? storedS3ConfigJson(nextConfig)
-            : null;
+            : JSON.stringify({ public_base_url: nextConfig.public_base_url ?? "" });
         await client.query(
           `UPDATE storage_backend
               SET display_name=COALESCE($2, display_name),
@@ -402,5 +412,13 @@ export async function updateStorageBackend(
       ? withStorageLocationWriteAndAdvisoryLock(backendLockKey, work)
       : withAdvisoryLock(backendLockKey, work);
   });
-  await (signal ? runWithAdvisoryLockAcquisitionSignal(signal, update) : update());
+  const run = () => signal ? runWithAdvisoryLockAcquisitionSignal(signal, update) : update();
+  if (slug === "local" && input.public_base_url !== undefined) {
+    await withRuntimeConfigWriteLease(async () => {
+      await run();
+      await getStorageBackend("local");
+    });
+  } else {
+    await run();
+  }
 }

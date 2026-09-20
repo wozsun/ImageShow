@@ -1,6 +1,6 @@
 # 主机与图片资源
 
-应用图片统一由主站 `/images` 提供，只需主站的 DNS 与 TLS 证书。
+应用图片默认由主站 `/images` 提供。本地存储可配置独立公开 URL，由 ImageShow 识别其 Host 并直接读取本地对象。
 `/api/images` 提供图片元数据，`/images` 提供图片内容，`/assets` 提供前端 JS、CSS 等构建资源。
 
 | 图片路径 | 职责 |
@@ -10,7 +10,7 @@
 | `/images/original/<id>` | 始终公开、可缓存的外部 HTTPS 原图直连决策或安全代理 |
 
 强烈建议显式设置 `site.domain`，例如 `img.example.com`；应用生成的图片根地址为
-`https://img.example.com/images`，只接受该站点 Host，其他 Host 返回不可缓存的 404。
+`https://img.example.com/images`。主站 Host 提供完整站点，已配置的本地公开 Host 只提供图片，其余 Host 返回不可缓存的 404。
 `site.domain` 可带端口，例如 `img.example.com:5518`；生成的图片地址保留该端口，使用 HTTPS。
 显式域名需要使用合法 DNS 域名，不接受 IP 或单标签 `localhost`。
 
@@ -22,7 +22,8 @@
 主站还承担 SPA、公共与管理 API、健康检查，以及唯一随机图入口 `/random`。
 图片路由仅注册表中的路径；未匹配请求由通用 HTTP 路由处理。
 
-`full` 与 `thumbs` 提供 local 或没有公开 URL 的存储对象；S3 配置 `public_base_url` 时使用存储直链。
+主站 `full` 与 `thumbs` 按图片当前所属存储寻址；后端未配置公开 URL 时直接返回对象，配置后 302 到公开 URL。
+生成给页面和随机 JSON / 跳转的图片链接直接使用后端公开 URL；随机 proxy 继续由主站读取后端对象。
 正常图片、后台及回收站的外部原图统一通过 `/images/original/<id>` 读取，不区分访问者身份。
 此出口不读取会话或按钮开关；知道有效图片 ID 时可以直接拼接访问。ready cache 未命中时查询
 PostgreSQL 的正常图片及回收站记录；没有记录或独立原图时返回 404。
@@ -31,6 +32,25 @@ PostgreSQL 的正常图片及回收站记录；没有记录或独立原图时返
 继续支持 URL 绑定的条件验证器，响应带 `Vary: User-Agent` 以区分直连决策。错误和失败回退不缓存。
 `original` 指另行登记的外部原图，不代表站内保存了上传时的原始文件。
 详细随机协议见[随机图 API](./random-api.md)，媒体生命周期见[安全说明](./security.md)。
+
+## 本地存储公开 URL
+
+超级管理员在本地存储编辑弹窗设置 `public_base_url`，完整图与缩略图共用一个 HTTPS 根地址，
+可包含路径前缀；留空使用主站图片地址。公开 Host 必须与主站 Host 区分，地址不能包含凭据、查询参数或片段。
+例如配置 `https://images.example.com/pictures` 后，生成 `/pictures/full/<对象键>` 与 `/pictures/thumbs/<对象键>`。
+请求保留该 Host 和路径到达 ImageShow 即可，无需把回源 Host 改成主站；内部连接可使用 HTTP。
+
+此入口只读取本地正式图片对象，不查询图片当前存储位置，不转读其他后端，也不跳转回公开 URL。
+本地对象缺失返回 404；数据库位置已迁出但旧本地对象尚未清理时仍可读取，清理后返回 404。
+图片正式入库仍以 PostgreSQL 提交为准。专属 Host 不开放 SPA、业务 API、外部原图、临时文件或目录枚举。
+
+直接读取复用现有图片响应：GET / HEAD、Range / If-Range、ETag / Last-Modified 与 304；成功图片使用
+`public, max-age=31536000, immutable`，错误不缓存。ETag 从文件元信息生成，不包含 Host，也不读取整张图片计算哈希；
+304 仍打开文件并读取元信息。公开入口提供无凭据 CORS，允许展映读取完整图与缩略图。
+
+保存后应用生成地址和 Host 识别采用新配置，清空后回退主站，不保留旧 Host 别名；已有浏览器 / CDN 缓存不自动清除。
+设置持久化在本地存储记录，配置包仍不导出或覆盖 local。修改公开地址不搬文件、不重建 driver；停用 local 只限制写入。
+图片入口省略每图 Redis / PostgreSQL 位置查询，仍受现有应用可用性边界约束。
 
 浏览器按主站 Cookie 规则向同源图片请求发送 Cookie；公开资源处理器不读取管理员会话、
 不写 Cookie，也不按 Cookie 改变响应或缓存。同源图片无需额外 CORS；外部对象存储或 CDN

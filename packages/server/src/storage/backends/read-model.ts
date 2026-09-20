@@ -72,6 +72,6 @@ export async function getStorageBackendsForAdmin(): Promise<
         }
       };
     }
-    return { ...summary, type: "local" as const, deletion };
+    return { ...summary, type: "local" as const, public_base_url: backend.public_base_url ?? "", deletion };
   });
 }
