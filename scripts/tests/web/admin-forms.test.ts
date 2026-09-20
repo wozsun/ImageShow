@@ -2198,6 +2198,14 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
   await publish("fresh"); assert.equal(input().value, "fresh");
   await edit("unsaved"); await publish("background"); assert.equal(input().value, "unsaved");
   await h.React.act(async () => { inputText(h.window, titleInput(), "独立标题草稿"); await Promise.resolve(); });
+  const assetsInput = h.document.querySelector<HTMLInputElement>('input[placeholder*="asset.example.com"]')!;
+  const sizeTrigger = h.document.querySelector<HTMLButtonElement>('[aria-label="随机图默认尺寸"]')!;
+  assert.equal(assetsInput.value, "");
+  await h.React.act(async () => sizeTrigger.click());
+  const thumbOption = [...h.document.querySelectorAll<HTMLElement>('[role="option"]')].find((element) => element.textContent?.includes("缩略"))!;
+  assert.ok(thumbOption);
+  await h.React.act(async () => thumbOption.click());
+  await h.React.act(async () => { inputText(h.window, assetsInput, "https://asset.example.com///static///"); await Promise.resolve(); });
   const number = h.document.querySelector<HTMLInputElement>('input[type="number"]')!;
   await h.React.act(async () => {
     inputText(h.window, number, "47");
@@ -2211,6 +2219,8 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
   assert.equal(JSON.parse(String(h.pending[0].body)).admin.recent_uploads,47,"锁定前同步结算数字输入，提交当前可见值");
   assert.equal(JSON.parse(String(h.pending[0].body)).site.title, "独立标题草稿");
   assert.equal(JSON.parse(String(h.pending[0].body)).site.header_name, "unsaved");
+  assert.equal(JSON.parse(String(h.pending[0].body)).site.random_size, "thumb");
+  assert.equal(JSON.parse(String(h.pending[0].body)).site.assets_base_url, "https://asset.example.com///static///");
   delete (h.document as any).activeElement;
   assert.equal(h.pending.length, 1); assert.equal(locked(), true);
   assert.ok([...h.document.querySelectorAll('.select-trigger')].every((element) => element.hasAttribute("disabled")));

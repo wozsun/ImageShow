@@ -301,7 +301,7 @@ test("[Server/存储] 存储键列举保持固定批大小、显式完整性和�
 
 });
 test("[Server/存储] local / S3 配置只按实际连接参数复用 driver", () => {
-  const local = storageBackendUpdateInput.parse({ public_base_url: " https://IMAGES.example.com:443/pictures/ " });
+  const local = storageBackendUpdateInput.parse({ public_base_url: " https://IMAGES.example.com:443///pictures/// " });
   assert.equal(local.public_base_url, "https://images.example.com/pictures");
   for (const domain of ["images.example.com", "images.example.com:443"]) {
     assert.throws(() => assertLocalPublicUrlDomain(local.public_base_url!, domain),

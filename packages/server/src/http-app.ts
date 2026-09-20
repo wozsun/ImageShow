@@ -39,9 +39,9 @@ import { serveRobotsTxt } from "./routes/robots.ts";
 import { registerRandomRoutes } from "./routes/random.ts";
 import { registerSettingsRoutes } from "./routes/settings.ts";
 import { registerStorageRoutes } from "./routes/storage.ts";
-import { registerSpaRoutes } from "./routes/spa.ts";
+import { createAssetHandler, registerSpaRoutes } from "./routes/spa.ts";
 import { registerIngestionRoutes } from "./routes/ingestion.ts";
-import { imageHostBoundary } from "./routes/image-host.ts";
+import { resourceHostBoundary } from "./routes/resource-host.ts";
 import {
   auditAdminMutation,
   markAdminReadRequest
@@ -82,7 +82,8 @@ export function createHttpApp(
     await next();
     finalizeSecurityHeaders(c);
   });
-  app.use("*", imageHostBoundary(() => availability.businessGateIsOpen()));
+  const serveAssets = createAssetHandler();
+  app.use("*", resourceHostBoundary(() => availability.businessGateIsOpen(), serveAssets));
   app.options(
     "*",
     async (c, next) => {
@@ -166,7 +167,7 @@ export function createHttpApp(
   registerSettingsRoutes(app);
   registerStorageRoutes(app);
   registerCheckRoutes(app);
-  registerSpaRoutes(app);
+  registerSpaRoutes(app, serveAssets);
   app.notFound(() => apiErrorResponse({ status: 404, message: "Not Found" }));
 
   return app;

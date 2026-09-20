@@ -63,6 +63,13 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   assert.deepEqual(defaults.import.keep_original_link, ["url", "jsonl", "weibo"]);
   assert.equal(defaults.weibo.source_enabled, true);
   assert.equal(defaults.site.root, "home");
+  assert.equal(defaults.site.random_size, "full");
+  assert.equal(defaults.site.assets_base_url, "");
+  for (const assets_base_url of ["http://asset.example.com", "https://user:pass@asset.example.com",
+    "https://asset.example.com/?q=x", "https://asset.example.com/#x", "https://asset.example.com/%2fsecret",
+    "https://main.example.com/static"]) {
+    assert.throws(() => parseRuntimeConfig({ ...defaults, site: { ...defaults.site, domain: "main.example.com", assets_base_url } }));
+  }
   assert.equal(defaults.site.home.browse_target, "show");
   assert.deepEqual(defaults.site.show, {
     enabled: true,
@@ -111,6 +118,8 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   const driftSite = drift.site as Record<string, unknown>;
   delete driftSite.description;
   delete driftSite.root;
+  delete driftSite.random_size;
+  delete driftSite.assets_base_url;
   const driftGallery = driftSite.gallery as Record<string, unknown>;
   delete driftGallery.public_original_button;
   driftSite.unknown_site_key = "gallery";
@@ -132,6 +141,8 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   assert.equal(normalized.weibo.source_enabled, true);
   assert.equal(normalized.site.description, "画廊与随机图片API");
   assert.equal(normalized.site.root, "home");
+  assert.equal(normalized.site.random_size, "full");
+  assert.equal(normalized.site.assets_base_url, "");
 assert.equal(normalized.site.show.autoplay, true, "已有配置缺失字段使用唯一默认值，不重新播种环境值");
   assert.equal(normalized.site.gallery.public_original_button, false);
   assert.equal("unknown_site_key" in normalized.site, false);
@@ -428,6 +439,8 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
     SITE_SHOW_ORDER: "oldest",
     SITE_GALLERY_ENABLED: "false",
     SITE_ROBOTS_ENABLED: "false",
+    SITE_RANDOM_SIZE: "thumb",
+    SITE_ASSETS_BASE_URL: " https://ASSET.example.com:443///static//nested/// ",
     NORMALIZE_SKIP_WEBP_UNDER_KB: "0",
     IMPORT_KEEP_ORIGINAL_LINK: '["weibo","url"]',
     WEIBO_SOURCE_ENABLED: "false",
@@ -450,6 +463,8 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
   });
   assert.equal(environmentConfig.site.gallery.enabled, false);
   assert.equal(environmentConfig.site.robots_enabled, false);
+  assert.equal(environmentConfig.site.random_size, "thumb");
+  assert.equal(environmentConfig.site.assets_base_url, "https://asset.example.com/static/nested");
   assert.equal(environmentConfig.normalize.skip_webp_under_kb, 0);
   assert.deepEqual(environmentConfig.import.keep_original_link, ["weibo", "url"]);
   assert.equal(environmentConfig.weibo.source_enabled, false);
@@ -479,6 +494,8 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
   }).site.root, "home");
 
   for (const [environment, expected] of [
+    [{ SITE_RANDOM_SIZE: "small" }, /SITE_RANDOM_SIZE.*site\.random_size/],
+    [{ SITE_ASSETS_BASE_URL: "http://asset.example.com" }, /SITE_ASSETS_BASE_URL.*site\.assets_base_url/],
     [{ UPLOAD_MAX_ITEMS: " 1" }, /UPLOAD_MAX_ITEMS.*upload\.max_items/],
     [{ UPLOAD_MAX_ITEMS: "01" }, /UPLOAD_MAX_ITEMS.*upload\.max_items/],
     [{ UPLOAD_MAX_ITEMS: "NaN" }, /UPLOAD_MAX_ITEMS.*upload\.max_items/],
@@ -889,6 +906,8 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   const packageRuntime = runtimeConfigDefaults();
   packageRuntime.site.header_name = "来源站点";
   packageRuntime.site.title = "来源网页标题";
+  packageRuntime.site.assets_base_url = "https://source-assets.example.com/static";
+  packageRuntime.site.random_size = "thumb";
   packageRuntime.site.description = "来源说明";
   packageRuntime.site.gallery.public_original_button = true;
   const pkg = buildConfigPackage(
@@ -900,6 +919,8 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   assert.equal(pkg.format, "imageshow-config");
   assert.equal(pkg.application_version, "current-build");
   assert.equal(pkg.config.site.root, "home");
+  assert.equal("assets_base_url" in pkg.config.site, false);
+  assert.equal(pkg.config.site.random_size, "thumb");
   assert.equal(pkg.config.site.gallery.public_original_button, true);
   assert.deepEqual(pkg.storage_backends, [{
     slug: "archive",
@@ -987,9 +1008,12 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   assert.equal(parsed.skipped_storage_backends, 4);
   const materialized = materializeImportedRuntimeConfig(
     parsed.config,
-    "target.example.com"
+    "target.example.com",
+    "https://target-assets.example.com/static"
   );
   assert.equal(materialized.site.domain, "target.example.com");
+  assert.equal(materialized.site.assets_base_url, "https://target-assets.example.com/static");
+  assert.equal(materialized.site.random_size, "thumb");
 
   const preview = projectConfigPackagePreview(parsed, new Set(["local", "archive"]));
   assert.deepEqual(preview.config_values, parsed.config_values);
@@ -1024,7 +1048,7 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   );
 
   const empty = parseConfigPackage({});
-  const { domain: _domain, ...portableSiteDefaults } = defaults.site;
+  const { domain: _domain, assets_base_url: _assets, ...portableSiteDefaults } = defaults.site;
   assert.equal(empty.format, null);
   assert.equal(empty.application_version, null);
   assert.equal(empty.exported_at, null);
@@ -1130,7 +1154,8 @@ import {
   persistRuntimeConfigForPackageImport,
   publishRuntimeConfigForPackageImport
 } from ${JSON.stringify(runtimeConfigStoreUrl)};
-import { registerSpaRoutes } from ${JSON.stringify(spaRoutesUrl)};
+import { registerSpaRoutes, createAssetHandler } from ${JSON.stringify(spaRoutesUrl)};
+import { resourceHostBoundary } from ${JSON.stringify(new URL("./resource-host.js", spaRoutesUrl).href)};
 import { registerPublicRoutes } from ${JSON.stringify(publicRoutesUrl)};
 import { registerSettingsRoutes } from ${JSON.stringify(settingsRoutesUrl)};
 
@@ -1381,6 +1406,89 @@ assert.deepEqual(await unavailableRoot.json(), {
 });
 assert.equal((await app.request("http://imageshow.test/random")).status, 200);
 assert.equal((await app.request("http://imageshow.test/admin")).status, 200);
+
+const serveAssets = createAssetHandler();
+let gateOpen = true;
+const resources = new Hono();
+resources.use("*", resourceHostBoundary(() => gateOpen, serveAssets));
+registerSpaRoutes(resources, serveAssets);
+const request = (host, path, method = "GET", headers = {}) => resources.request("http://internal.test" + path, {
+  method, headers: { Host: host, ...headers }
+});
+await updateRuntimeConfig({ site: { domain: "main.example.test", icon: "/assets/brand/favicon.svg" } });
+const oldPage = await request("main.example.test", "/admin");
+const oldPageEtag = oldPage.headers.get("etag");
+const mainPath = parseHTML(await oldPage.text()).document.querySelector('script[type="module"][src]').getAttribute("src");
+assert.ok(mainPath.startsWith("/assets/"));
+for (const base of ["https://asset.example.test///", "https://asset.example.test:8443///static//nested///", "https://asset.example.test/资源///"]) {
+  await updateRuntimeConfig({ site: { assets_base_url: base } });
+  const canonical = getRuntimeConfig().site.assets_base_url;
+  const parsed = new URL(canonical);
+  const page = await request("main.example.test", "/admin/images", "GET", { "If-None-Match": oldPageEtag });
+  assert.equal(page.status, 200);
+  assert.notEqual(page.headers.get("etag"), oldPageEtag);
+  assert.ok(page.headers.get("content-security-policy").includes(parsed.origin));
+  const { document } = parseHTML(await page.text());
+  const script = document.querySelector('script[type="module"][src]').getAttribute("src");
+  assert.equal(script, canonical + mainPath.slice("/assets".length));
+  assert.equal(document.querySelector('link[rel="icon"]').getAttribute("href"), canonical + "/brand/favicon.svg");
+  const icon = await request(parsed.host, new URL(canonical + "/brand/favicon.svg").pathname);
+  assert.equal(icon.status, 200);
+  assert.match(icon.headers.get("content-type"), /image\\/svg/);
+  await icon.text();
+  const path = new URL(script).pathname;
+  for (const encoding of ["identity", "br", "zstd", "gzip"]) {
+    const headers = { "Accept-Encoding": encoding };
+    const response = await request(parsed.host, path, "GET", headers);
+    const mainResponse = await request("main.example.test", mainPath, "GET", headers);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
+    assert.match(response.headers.get("Cache-Control"), /immutable/);
+    assert.equal(response.headers.get("Content-Encoding"), encoding === "identity" ? null : encoding);
+    assert.equal(response.headers.get("ETag"), mainResponse.headers.get("ETag"));
+    const bytes = Buffer.from(await response.arrayBuffer());
+    assert.deepEqual(bytes, Buffer.from(await mainResponse.arrayBuffer()));
+    for (const method of ["GET", "HEAD"]) {
+      const unchanged = await request(parsed.host, path, method, { ...headers, "If-None-Match": response.headers.get("ETag") });
+      assert.equal(unchanged.status, 304);
+      assert.equal(unchanged.headers.get("Access-Control-Allow-Origin"), "*");
+      assert.equal(await unchanged.text(), "");
+    }
+    const head = await request(parsed.host, path, "HEAD", headers);
+    assert.equal(head.status, 200);
+    assert.equal(head.headers.get("Content-Length"), String(bytes.length));
+    assert.equal(await head.text(), "");
+    const range = await request(parsed.host, path, "GET", { ...headers, Range: "bytes=0-7" });
+    assert.equal(range.status, 206);
+    assert.deepEqual(Buffer.from(await range.arrayBuffer()), bytes.subarray(0, 8));
+  }
+  const preflight = await request(parsed.host, path, "OPTIONS", {
+    Origin: "https://main.example.test", "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "Range, If-None-Match"
+  });
+  assert.equal(preflight.status, 204);
+  assert.equal((await request(parsed.host, path, "OPTIONS", { "Access-Control-Request-Method": "DELETE" })).status, 403);
+  const root = parsed.pathname === "/" ? "" : parsed.pathname;
+  for (const forbidden of ["/", "/api/site-config", "/random", "/livez", "/admin", root + "/missing.js",
+    root + "/index.html", root + "/%5c..%5cindex.html", root + "/%2e%2e%2findex.html", root + "/../index.html",
+    (root || "/") + "-other/" + mainPath.split("/").at(-1)]) {
+    const result = await request(parsed.host, forbidden);
+    assert.equal(result.status, 404, canonical + " " + forbidden);
+    assert.equal(result.headers.get("Cache-Control"), "no-store");
+  }
+  assert.equal((await request(parsed.host, path, "POST")).status, 404);
+  gateOpen = false;
+  assert.equal((await request(parsed.host, path)).status, 503);
+  gateOpen = true;
+  await updateRuntimeConfig({ embed: { enabled: true }, site: { home: { enabled: true } } });
+  const embed = await request("main.example.test", "/embed/home");
+  assert.ok(embed.headers.get("content-security-policy").includes(parsed.origin));
+  await embed.text();
+}
+await updateRuntimeConfig({ site: { assets_base_url: "" } });
+assert.equal((await request("asset.example.test", "/assets/missing.js")).status, 404);
+const restoredPage = await request("main.example.test", "/admin");
+const restoredDoc = parseHTML(await restoredPage.text()).document;
+assert.ok(restoredDoc.querySelector('script[type="module"][src]').getAttribute("src").startsWith("/assets/"));
 console.log("spa-description-ok");
 `;
   try {

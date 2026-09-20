@@ -14,7 +14,7 @@
 | `id` | 完整 UUID 或末 12 位 | 只从匹配到的可用图片中随机选择，可用逗号或重复参数给出多个值 |
 | `seed` | 非空字符串 | 在相同筛选条件和候选集合下固定选取一张图片；区分大小写，不解释日期 |
 | `mode` | `proxy` / `redirect` / `json` | 返回方式；缺省时取设置页的 `proxy` / `redirect` 默认值，`json` 只能显式指定 |
-| `size` | `thumb` / `full` | 图片资源尺寸；缺省时 `proxy` / `redirect` 使用全图，`json` 提供两种 URL；显式指定时只输出对应尺寸 |
+| `size` | `thumb` / `full` | 图片资源尺寸；缺省时 `proxy` / `redirect` 使用 `site.random_size`（默认 `full`），`json` 提供两种 URL；显式指定时只输出对应尺寸 |
 | `limit` | 大于 0 的整数 | 仅显式指定 `mode=json` 时有效；缺省为 1，最多返回 200 张 |
 
 `theme` / `tag` / `author` 可填 slug 或显示名，服务端会先解析成 slug，再按字段排序去重并生成

@@ -309,6 +309,8 @@ function resolveProxyTarget() {
 const target = resolveProxyTarget();
 
 export default defineConfig({
+  // Relative imports let one immutable build run behind any configured asset URL.
+  base: "./",
   plugins: [react(), webBuildReport()],
   build: {
     outDir: "dist",

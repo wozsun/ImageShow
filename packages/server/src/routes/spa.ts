@@ -1,5 +1,5 @@
 import { serveStatic } from "@hono/node-server/serve-static";
-import type { Context, Hono } from "hono";
+import { Context as HonoContext, type Context, type Hono } from "hono";
 import {
   adminBasePath,
   publicRootPath,
@@ -9,9 +9,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
+import { staticResourceBaseUrl } from "../config/site-host.ts";
 import { effectiveEmbedAncestorSources } from "../config/embed-ancestors.ts";
 import {
-  appendVaryHeader,
+  assetSpaDocumentHeaders,
   embedSpaDocumentHeaders,
   immutableCacheControl,
   markEmbedDocumentResponse,
@@ -32,19 +33,37 @@ import { createEncodedContentCache } from "../core/http/encoded-content.ts";
 
 const publicDir = join(import.meta.dirname, "../public");
 
-export function registerSpaRoutes(app: Hono) {
+export function createAssetHandler() {
   const assetStatic = serveNegotiatedStatic(publicDir);
-  const faviconStatic = serveStatic({ path: join(publicDir, "favicon.ico") });
-  app.use("/assets/*", async (c, next) => {
-    await next();
-    appendVaryHeader(c, "Accept-Encoding");
-    c.header("Cache-Control", c.res.status < 400
-      ? c.req.path.startsWith("/assets/brand/") ? publicStaticCacheControl : immutableCacheControl
+  return async (c: Context, path = c.req.path): Promise<Response> => {
+    if (!path.startsWith("/assets/") || !["GET", "HEAD"].includes(c.req.method)) {
+      return apiErrorResponse({ status: 404, message: "Not Found" });
+    }
+    let context = c;
+    if (path !== c.req.path) {
+      const url = new URL(c.req.url);
+      url.pathname = path;
+      context = new HonoContext(new Request(url, {
+        method: c.req.method, headers: c.req.raw.headers, signal: c.req.raw.signal
+      }), { env: c.env, path });
+    }
+    const response = await serveStaticWithValidators(context, assetStatic)
+      ?? apiErrorResponse({ status: 404, message: "Not Found" });
+    response.headers.set("Vary", "Accept-Encoding");
+    response.headers.set("Cache-Control", response.status < 400
+      ? path.startsWith("/assets/brand/") ? publicStaticCacheControl : immutableCacheControl
       : noStoreCacheControl);
-  });
-  app.use("/assets/*", async (c, next) => {
-    return await serveStaticWithValidators(c, assetStatic) ?? next();
-  });
+    response.headers.set("Access-Control-Allow-Origin", "*");
+    response.headers.set("Access-Control-Expose-Headers", "ETag, Content-Range, Accept-Ranges");
+    return response;
+  };
+}
+
+export type AssetHandler = ReturnType<typeof createAssetHandler>;
+
+export function registerSpaRoutes(app: Hono, serveAssets: AssetHandler = createAssetHandler()) {
+  const faviconStatic = serveStatic({ path: join(publicDir, "favicon.ico") });
+  app.use("/assets/*", (c) => serveAssets(c));
   app.use("/favicon.ico", async (c, next) => {
     await next();
     c.header("Cache-Control", c.res.status < 400 ? publicStaticCacheControl : noStoreCacheControl);
@@ -91,6 +110,9 @@ function buildSpaDocument(runtime: RuntimeConfig): string {
   const iconUrl = escapeHtmlAttr(site.icon);
   const head = `<script type="application/json" id="__site_config__">${inlineConfig}</script>`;
   return spaTemplate
+    .replace(/\b(src|href)="\.\/assets\//g, (_match, attribute: string) => (
+      `${attribute}="${escapeHtmlAttr(staticResourceBaseUrl(runtime))}/`
+    ))
     .replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${title}</title>`)
     .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i, () => `<meta name="description" content="${description}" />`)
     .replace(/<link\s+rel="icon"[^>]*>/i, () => `<link rel="icon" type="${iconUrl.endsWith(".svg") ? "image/svg+xml" : ""}" href="${iconUrl}" />`)
@@ -126,9 +148,11 @@ function spaDocumentResponse(
 }
 
 async function spaHandler(c: Context) {
+  const runtime = getRuntimeConfig();
   return spaDocumentResponse(
-    spaRepresentation(getRuntimeConfig()),
+    spaRepresentation(runtime),
     {
+      headers: assetSpaDocumentHeaders(runtime.site.assets_base_url),
       ifNoneMatch: c.req.header("if-none-match"),
       acceptEncoding: c.req.header("accept-encoding")
     }
@@ -143,15 +167,16 @@ async function rootSpaHandler(c: Context) {
 }
 
 async function embedSpaHandler(c: Context) {
-  const allowedAncestors = effectiveEmbedAncestorSources();
+  const runtime = getRuntimeConfig();
+  const allowedAncestors = effectiveEmbedAncestorSources(runtime);
   if (allowedAncestors.length === 0) {
     return apiErrorResponse({ status: 404, message: "Not Found" });
   }
   return markEmbedDocumentResponse(
     c,
-    spaDocumentResponse(spaRepresentation(getRuntimeConfig()), {
+    spaDocumentResponse(spaRepresentation(runtime), {
       cacheControl: noStoreCacheControl,
-      headers: embedSpaDocumentHeaders(allowedAncestors),
+      headers: embedSpaDocumentHeaders(allowedAncestors, runtime.site.assets_base_url),
       ifNoneMatch: c.req.header("if-none-match"),
       acceptEncoding: c.req.header("accept-encoding")
     })

@@ -93,10 +93,12 @@
   响应不根据可能缺失的 `Origin` 或可被父页面关闭的 `Referer` 猜测并反射来源。禁用嵌入、
   未知 Host 或其他路径继续不可嵌入。普通与嵌入 SPA 文档均强制执行
   `script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'`，
-  仅允许同源脚本与 Worker，禁止内联脚本、字符串动态求值及 object 嵌入，并限制 base URL。
+  默认仅允许同源脚本与 Worker；配置静态资源公开 URL 时，额外允许该地址 origin 的脚本，
+  Worker 保持同源。禁止内联脚本、字符串动态求值及 object 嵌入，并限制 base URL。
   展映按资源出口读取缩略图并解码为纹理，外部图片服务须提供对应 CORS。登录验证码使用
   构建产出的同源 Worker，并在 ALTCHA 首次挂载前预设隐藏 footer 与 logo，保持初始显示一致。
-  显式设置域名时，应用只接受 `site.domain`，
+  显式设置域名时，页面和 API 只接受 `site.domain`；配置的独立图片 / 静态资源 Host 仅开放对应资源，
+  公开资源支持无凭据跨域读取，允许 GET / HEAD 与必要条件请求的预检，
   其他未知 Host 返回不可缓存的 404；域名为空或 `example.com` 时接受格式合法的访问 Host，
   图片地址使用同源路径，不把请求 Host 写入共享缓存、队列或持久配置。生产部署强烈建议设置域名，
   并由反向代理限制允许的 Host；基础回退不替代鉴权、CSRF 或代理配置。

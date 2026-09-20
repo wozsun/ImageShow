@@ -158,8 +158,8 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 
 `config/site-host.ts` 是图片资源根 URL 和 Host 判断的共同入口：域名为空或 `example.com`
 时接受格式合法的访问 Host，使用 `/images` 同源路径，不向配置、共享缓存或队列写入请求域名；
-显式域名生成 `https://<site.domain>/images` 地址。`routes/image-host.ts` 在公共资源、OPTIONS 与 SPA 之前
-区分主站和本地图片公开 Host；主站原有路由继续由 `routes/public.ts` 注册
+显式域名生成 `https://<site.domain>/images` 地址。`routes/resource-host.ts` 在公共资源、OPTIONS 与 SPA 之前
+区分主站、本地图片与静态资源公开 Host；主站原有路由继续由 `routes/public.ts` 注册
 `/images/full/*`、`/images/thumbs/*` 与 `/images/original/:id`，未匹配请求使用通用路由处理。
 公开资源不读取管理员会话，local / S3 已配置公开 URL 的对象使用直链；图片 URL 由服务端生成，
 公开站点配置只投影页面实际消费的字段。
@@ -180,8 +180,9 @@ S3 直链规则，随机 JSON 也按批次投影。公开列表、详情、资�
 再以请求取消信号读取注册表；注册表冷加载按 revision 合并，并拥有独立的有界数据库作用域。
 配置快照缓存 24 小时，应用内配置写入主动失效，具体规则见[存储说明](storage.md#注册表缓存)。
 
-`random/query.ts` 校验 `size=thumb|full` 并保留未指定状态，`selection.ts` 仅传递此输出选项，
-不把它加入筛选、固定 seed 或近期去重签名。`routes/random.ts` 按尺寸选用现有对象读取与 URL
+`selection.ts` 将运行时默认尺寸交给 `random/query.ts`，后者校验 `size=thumb|full`，为 proxy /
+redirect 补齐默认值，仅 JSON 保留未指定状态；尺寸不加入筛选、固定 seed 或近期去重签名。
+`routes/random.ts` 按尺寸选用现有对象读取与 URL
 生成能力；`random/json-presentation.ts` 在同一批次投影中按需提供全图、缩略图或两种 URL。
 shared 随机 JSON DTO 保证至少包含一种 URL；Web 的 `lib/gallery/random-url.ts` 可按显式输入追加
 尺寸参数，未指定时保留 API 的缺省行为。
@@ -1149,6 +1150,17 @@ hooks ──► lib
 ### Web 构建资源边界
 
 主构建和 Worker 均使用 Vite 的 `rolldownOptions` 配置输出，命名与分块规则由各自构建器执行。
+构建使用稳定的相对 `base: "./"`，模块、动态预加载及 CSS 内部资源由构建器生成相对引用。
+`routes/spa.ts` 在现有 RuntimeConfig 文档快照生成阶段将 HTML 的入口地址定为主站 `/assets/`
+或 `site.assets_base_url` 指定的根目录；入口与站点图标共用 `config/site-host.ts` 的静态资源根地址。
+配置变化使 HTML / ETag / 编码缓存按原有机制更新。
+JS、CSS 和压缩副本保持构建字节，不随 Host 改写，也不需要按部署重建镜像。
+SPA 与嵌入页的脚本 CSP 允许所配置资源 origin；ALTCHA Worker 从构建 URL 提取文件名后，
+固定使用主站 `/assets/`，保持浏览器同源与独立按需加载要求。
+
+主站与独立 Host 共用 `createAssetHandler()`；资源 Host 边界将公开根目录下的相对路径映射到内部 `/assets/`，
+不查询数据库、不跳转主站，也不开放 API 或 SPA。两者共享静态压缩协商、条件请求、缓存头与无凭据 CORS。
+资源 URL 是 RuntimeConfig 部署字段，配置包与站点域名一样排除此值，并保留目标实例当前配置。
 
 Web 继续使用 entries-aware 的入口根集合分块，`minShareCount: 2` 表示模块至少被两个真实
 动态根共同引用才形成共享块。资源边界的判断顺序固定为权限、路由 / 能力意图、请求经济性：

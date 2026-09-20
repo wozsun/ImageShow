@@ -3,9 +3,11 @@ import { flushSync } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   randomDefaultMethods,
+  randomImageSizes,
   siteRoots,
   type AdminSettingsResponseDto,
   type RandomDefaultMethod,
+  type RandomImageSize,
   type SiteRoot
 } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
@@ -56,6 +58,10 @@ const randomMethodLabels: Record<RandomDefaultMethod, string> = {
 const randomMethodOptions = randomDefaultMethods.map((value) => ({
   value,
   label: randomMethodLabels[value]
+}));
+const randomSizeOptions = randomImageSizes.map((value) => ({
+  value,
+  label: value === "full" ? "全图 full" : "缩略图 thumb"
 }));
 
 export function SettingsPage() {
@@ -275,6 +281,27 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
                 options={randomMethodOptions}
                 ariaLabel="随机图默认模式"
               />
+            </label>
+            <label>
+              随机图默认尺寸
+              <SelectMenu
+                value={settings.site.random_size}
+                disabled={busy}
+                onChange={(value) => updateSite({ random_size: value as RandomImageSize })}
+                options={randomSizeOptions}
+                ariaLabel="随机图默认尺寸"
+              />
+            </label>
+            <label>
+              静态资源公开 URL
+              <input
+                value={settings.site.assets_base_url}
+                disabled={busy}
+                maxLength={2048}
+                onChange={(event) => updateSite({ assets_base_url: event.target.value })}
+                placeholder="留空使用主站；例如 https://asset.example.com"
+              />
+              <span className="hint">此地址直接作为静态资源根目录，支持路径前缀。请先接入域名并配置回源，保存后刷新页面生效。</span>
             </label>
           </section>
           <section className="settings-card-wide">

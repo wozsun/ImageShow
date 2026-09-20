@@ -145,6 +145,8 @@ docker exec -it imageshow imageshow reset-password <username>
 证书覆盖主站域名，将页面、API 和 `/images` 原样转发到应用。代理覆盖以下请求头，不追加访客提供的转发链。
 本地存储配置独立公开 URL 时，该地址也回源同一应用并保留 Host 与路径，仅提供图片资源；
 配置入口与行为见[本地存储公开 URL](guide/image-resources.md#本地存储公开-url)。
+静态资源也可设置独立[公开 URL](CONFIG.md#siteassets_base_url)；该 Host 同样须保留 Host 与完整路径回源，
+包括配置中的路径前缀。每个资源域名的代理块都须设置 `proxy_set_header Host $host`，不能仅在主站配置。
 最小 Nginx 示例：
 
 ```nginx

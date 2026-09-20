@@ -38,7 +38,7 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
     app.request(`http://internal.example.test${path}`, { method, headers: { Host: host, ...headers } })
   );
   try {
-    await backendUpdate.updateStorageBackend("local", { public_base_url: "https://IMAGES.example.test/pictures/" });
+    await backendUpdate.updateStorageBackend("local", { public_base_url: "https://IMAGES.example.test///pictures///" });
     assert.equal(registry.publishedLocalPublicUrl(), "https://images.example.test/pictures");
     assert.equal((await registry.resolveStorageAccess("local")).driver, local);
     assert.equal(publicUrls.directStorageObjectUrl(await registry.getStorageBackend("local"), "full", key),
@@ -80,6 +80,17 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config })
       });
     const savedConfig = structuredClone(runtime.runtimeConfigStore.getRuntimeConfig());
+    const badAssets = { ...savedConfig, site: { ...savedConfig.site, assets_base_url: "https://main.example.test/static" } };
+    for (const validate of [true, false]) {
+      const result = await fullConfigRequest(badAssets, validate);
+      assert.equal(result.status, 400);
+      assert.equal((await result.json()).code, "validation_error");
+    }
+    const badSettings = await settingsApp.request("http://main.example.test/api/admin/settings", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ site: { assets_base_url: badAssets.site.assets_base_url } })
+    });
+    assert.equal(badSettings.status, 400);
+    assert.deepEqual(runtime.runtimeConfigStore.getRuntimeConfig(), savedConfig);
     const conflictConfig = { ...savedConfig, site: { ...savedConfig.site, domain: "images.example.test" } };
     for (const validate of [true, false]) {
       const result = await fullConfigRequest(conflictConfig, validate);
@@ -128,6 +139,28 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
     assert.equal((await request("images.example.test", undefined, "POST")).status, 404);
     const thumb = await request("images.example.test", `/pictures/thumbs/${key}`);
     assert.deepEqual(Buffer.from(await thumb.arrayBuffer()), bytes);
+    await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { assets_base_url: "https://images.example.test/static" } });
+    const sharedHostImage = await request("images.example.test");
+    assert.deepEqual(Buffer.from(await sharedHostImage.arrayBuffer()), bytes);
+    assert.equal((await request("images.example.test", "/static/test.js", "OPTIONS", {
+      "Access-Control-Request-Method": "GET"
+    })).status, 204);
+    await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { assets_base_url: "" } });
+    const { resourceHostBoundary } = await import("../../../../packages/server/src/routes/resource-host.ts");
+    const sharedResources = new Hono();
+    sharedResources.use("*", resourceHostBoundary(() => true, async (context, path) => context.text(path ?? "")));
+    for (const [localRoot, assetRoot] of [["", "/full"], ["", "/thumbs"], ["/assets", ""]]) {
+      await backendUpdate.updateStorageBackend("local", { public_base_url: `https://images.example.test${localRoot}` });
+      await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { assets_base_url: `https://images.example.test${assetRoot}` } });
+      const asset = await sharedResources.request(`http://internal.test${assetRoot}/entry.js`, { headers: { Host: "images.example.test" } });
+      assert.equal(asset.status, 200);
+      assert.equal(await asset.text(), "/assets/entry.js", "overlapping prefixes dispatch valid asset paths to the shared file handler");
+      const image = await sharedResources.request(`http://internal.test${localRoot}/full/${key}`, { headers: { Host: "images.example.test" } });
+      assert.equal(image.status, 200);
+      assert.deepEqual(Buffer.from(await image.arrayBuffer()), bytes, "actual image object keys keep local serving priority");
+    }
+    await backendUpdate.updateStorageBackend("local", { public_base_url: "https://images.example.test/pictures" });
+    await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { assets_base_url: "" } });
     await database.pool.query("INSERT INTO metadata (id, storage_slug, device, brightness, ext, md5, created_by) VALUES ($1, 'local', 'pc', 'light', 'webp', $2, 'integration-admin')",
       ["00000000-0000-7000-8000-0000000000a5", "0".repeat(32)]);
     const main = await request("main.example.test", `/images/full/${key}`);
@@ -162,6 +195,7 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
     await backendUpdate.updateStorageBackend("local", { public_base_url: "" });
     assert.equal((await request("new-images.example.test", `/thumbs/${key}`)).status, 404);
   } finally {
+    await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { assets_base_url: "" } });
     await backendUpdate.updateStorageBackend("local", { public_base_url: "" });
     await removeDriverObject(local, "full", key);
     await removeDriverObject(local, "thumbs", key);

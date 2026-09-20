@@ -18,17 +18,31 @@ export const spaDocumentHeaders: Readonly<Record<string, string>> = {
   "Content-Security-Policy": "script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 };
 
+function documentScriptPolicy(assetsBaseUrl: string) {
+  const assetSource = assetsBaseUrl ? ` ${new URL(assetsBaseUrl).origin}` : "";
+  return `script-src 'self'${assetSource}; worker-src 'self'; object-src 'none'; base-uri 'self'`;
+}
+
+export function assetSpaDocumentHeaders(assetsBaseUrl: string): Readonly<Record<string, string>> {
+  if (!assetsBaseUrl) return spaDocumentHeaders;
+  return {
+    ...spaDocumentHeaders,
+    "Content-Security-Policy": `${documentScriptPolicy(assetsBaseUrl)}; frame-ancestors 'none'`
+  };
+}
+
 const embedDocumentContextKey = "embedDocumentResponse";
 
 export function embedSpaDocumentHeaders(
-  allowedOrigins: readonly string[]
+  allowedOrigins: readonly string[],
+  assetsBaseUrl = ""
 ): Readonly<Record<string, string>> {
   const frameAncestors = allowedOrigins.length
     ? allowedOrigins.join(" ")
     : "'none'";
   return {
     ...commonSecurityHeaders,
-    "Content-Security-Policy": `script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors ${frameAncestors}`
+    "Content-Security-Policy": `${documentScriptPolicy(assetsBaseUrl)}; frame-ancestors ${frameAncestors}`
   };
 }
 

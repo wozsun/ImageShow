@@ -20,6 +20,7 @@ import {
   normalizeMinQuality,
   normalizeQuality,
   randomDefaultMethod,
+  randomImageSize,
   recentUploads,
   siteRoot,
   siteHeaderName,
@@ -35,6 +36,8 @@ import {
 } from "./runtime-config-store.ts";
 import { effectiveEmbedAncestorSources } from "./embed-ancestors.ts";
 import type { RuntimeConfigPatch } from "./runtime-config.ts";
+import { publicBaseUrlSchema } from "../core/url-validation.ts";
+import { staticResourceBaseUrl } from "./site-host.ts";
 
 const siteHomeConfigSchema = z.strictObject({
   background: homeBackground.optional(),
@@ -57,7 +60,9 @@ const appSettingsSchema = z.strictObject({
     gallery: z.strictObject({
       order: galleryOrder.optional()
     }).optional(),
-    random_method: randomDefaultMethod.optional()
+    random_method: randomDefaultMethod.optional(),
+    random_size: randomImageSize.optional(),
+    assets_base_url: publicBaseUrlSchema.optional()
   }).optional(),
   ingestion: z.strictObject({
     list_page_size: ingestionListPageSize.optional(),
@@ -117,7 +122,9 @@ export function getSettingsForAdmin(settings: RuntimeConfig = getRuntimeConfig()
     root,
     home,
     gallery,
-    random_method
+    random_method,
+    random_size,
+    assets_base_url
   } = settings.site;
   const {
     max_file_size_mb,
@@ -157,7 +164,9 @@ export function getSettingsForAdmin(settings: RuntimeConfig = getRuntimeConfig()
       gallery: {
         order: gallery.order
       },
-      random_method
+      random_method,
+      random_size,
+      assets_base_url
     },
     ingestion: {
       max_file_size_mb,
@@ -220,7 +229,8 @@ export function siteConfigPayload(runtime: RuntimeConfig = getRuntimeConfig()): 
   } = runtime.site;
   return {
     site: {
-      icon,
+      icon: icon.startsWith("/assets/")
+        ? `${staticResourceBaseUrl(runtime)}${icon.slice("/assets".length)}` : icon,
       title,
       description: description || title,
       header_name,
@@ -252,5 +262,14 @@ export async function saveAppSettings(input: AppSettingsInput) {
   if (input.normalize) runtimePatch.normalize = input.normalize;
   if (input.thumbnail) runtimePatch.thumbnail = input.thumbnail;
   if (input.admin) runtimePatch.admin = input.admin;
-  if (Object.keys(runtimePatch).length) await updateRuntimeConfig(runtimePatch);
+  if (Object.keys(runtimePatch).length) {
+    try {
+      await updateRuntimeConfig(runtimePatch);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ApiError(400, "validation_error", error.issues[0]?.message ?? "Validation failed", error.flatten());
+      }
+      throw error;
+    }
+  }
 }

@@ -55,6 +55,8 @@ export const runtimeConfigEnvironmentBindings = [
   { path: "site.gallery.order", environmentVariable: "SITE_GALLERY_ORDER", valueKind: "string" },
   { path: "site.gallery.public_original_button", environmentVariable: "SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON", valueKind: "boolean" },
   { path: "site.random_method", environmentVariable: "SITE_RANDOM_METHOD", valueKind: "string" },
+  { path: "site.random_size", environmentVariable: "SITE_RANDOM_SIZE", valueKind: "string" },
+  { path: "site.assets_base_url", environmentVariable: "SITE_ASSETS_BASE_URL", valueKind: "string" },
   { path: "site.robots_enabled", environmentVariable: "SITE_ROBOTS_ENABLED", valueKind: "boolean" },
   { path: "site.icp", environmentVariable: "SITE_ICP", valueKind: "string" },
   { path: "site.mps", environmentVariable: "SITE_MPS", valueKind: "string" },

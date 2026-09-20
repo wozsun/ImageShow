@@ -2162,7 +2162,16 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   const omittedDevice = parseQuery("");
   const explicitAuto = parseQuery("device=auto");
   assert.equal(omittedDevice.device, "auto");
-  assert.equal(omittedDevice.size, null);
+  assert.equal(omittedDevice.size, "full");
+  for (const defaultSize of ["full", "thumb"] as const) {
+    for (const mode of ["proxy", "redirect", "json"]) {
+      for (const explicitSize of ["", "full", "thumb"]) {
+        const query = parseRandomQuery(new URL(`https://img.example.com/random?mode=${mode}${explicitSize ? `&size=${explicitSize}` : ""}`), "redirect", defaultSize);
+        assert.ok(!(query instanceof Response));
+        assert.equal(query.size, explicitSize || (mode === "json" ? null : defaultSize));
+      }
+    }
+  }
   assert.equal(explicitAuto.device, "auto");
   const normalizedOmitted = normalizeRandomQuery(omittedDevice, maps);
   const normalizedAuto = normalizeRandomQuery(explicitAuto, maps);

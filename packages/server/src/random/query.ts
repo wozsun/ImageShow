@@ -297,7 +297,8 @@ function parseSeed(query: URLSearchParams, limit: number): string | null | Respo
 
 export function parseRandomQuery(
   url: URL,
-  defaultMode: RandomDefaultMethod
+  defaultMode: RandomDefaultMethod,
+  defaultSize: RandomImageSize = "full"
 ): ParsedRandomQuery | Response {
   const rawQuery = url.search.startsWith("?") ? url.search.slice(1) : url.search;
   const rawBytes = Buffer.byteLength(rawQuery, "utf8");
@@ -319,7 +320,8 @@ export function parseRandomQuery(
       { field: "mode" }
     );
   }
-  const size = query.get("size")?.toLowerCase() ?? null;
+  const size = query.get("size")?.toLowerCase()
+    ?? (explicitMode === "json" ? null : defaultSize);
   if (size !== null && !randomSizes.has(size)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid size" },

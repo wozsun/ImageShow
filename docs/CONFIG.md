@@ -25,7 +25,7 @@
 - Compose：默认注入
 - 类型、默认值与范围：字符串；默认 `"example.com"`；0–259 字符，空值或 DNS 域名，可带 1–65535 端口
 
-站点对外访问的域名，例如 `img.example.com`，不要填写协议或路径；需要指定端口时可写成 `img.example.com:8443`。设置实际域名后，其他域名的访问会返回 404，因此修改前应先准备好对应域名和反向代理。空值或 `example.com` 表示使用当前访问域名，不限定一个固定域名。
+站点对外访问的域名，例如 `img.example.com`，不要填写协议或路径；需要指定端口时可写成 `img.example.com:8443`。设置实际域名后，未配置的其他域名访问返回 404；独立图片和静态资源 Host 仅开放各自资源。修改前应先准备好对应域名和反向代理。空值或 `example.com` 表示使用当前访问域名，不限定一个固定域名。
 
 #### site.icon
 
@@ -204,6 +204,35 @@
 - 类型、默认值与范围：枚举；默认 `"redirect"`；`proxy`、`redirect`
 
 随机图入口 `/random` 未指定返回方式时采用的行为。`redirect` 跳转到图片地址，`proxy` 由站点直接返回图片内容；后者会占用站点传输带宽。调用方可以用 `mode` 参数覆盖默认值，也可以显式请求 `mode=json` 获取图片信息。可在普通设置页修改。
+
+#### site.random_size
+
+- 环境变量：`SITE_RANDOM_SIZE`
+- Compose：显式映射
+- 类型、默认值与范围：枚举；默认 `"full"`；`full`、`thumb`
+
+随机图 `proxy` / `redirect` 未指定 `size` 时返回全图或缩略图，显式 `size` 优先。
+`mode=json` 未指定 `size` 时仍提供两种 URL，不使用此默认值。可在普通设置页修改。
+
+#### site.assets_base_url
+
+- 环境变量：`SITE_ASSETS_BASE_URL`
+- Compose：显式映射
+- 类型、默认值与范围：字符串；默认 `""`；0–2048 字符的 HTTPS 根地址，可带路径前缀
+
+前端静态资源的公开根地址，留空使用主站 `/assets/`。例如 `https://asset.example.com` 对应
+`https://asset.example.com/资源名`；`https://asset.example.com/static` 对应
+`https://asset.example.com/static/资源名`。该地址直接代表静态资源目录，不自动追加 `/assets`。
+须使用独立于主站的 Host，不能包含凭据、查询参数或片段；
+路径中连续的斜杠会合并，末尾斜杠会自动去除。可与本地图片共用资源 Host，按各自路径提供资源。
+
+可在普通设置页或高级配置中修改。先接入域名并保留 Host、路径回源到同一 ImageShow，
+再保存设置并刷新页面；不需要重建镜像。新 HTML 中的 JS、CSS、预加载以及其依赖随此地址加载，
+`/assets/` 下的站点图标也随配置切换。登录验证 Worker 始终从主站加载。
+主站 `/assets/` 继续直接返回资源，独立 Host 不开放 SPA、API 或管理功能。
+
+静态资源继续使用现有预压缩、ETag、304 和缓存策略。配置包不包含此部署地址，导入保留目标站的值。
+已经打开的页面继续沿其加载时的资源地址运行；切换时应先保留旧地址，并按部署缓存策略刷新 HTML。
 
 #### site.robots_enabled
 

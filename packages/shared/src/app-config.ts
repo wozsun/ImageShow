@@ -174,6 +174,8 @@ export const appConfig = {
         public_original_button: false
       },
       random_method: "redirect",
+      random_size: "full",
+      assets_base_url: "",
       robots_enabled: false,
       icp: "",
       mps: "",

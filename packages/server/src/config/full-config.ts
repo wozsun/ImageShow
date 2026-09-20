@@ -2,6 +2,8 @@ import type {
   RuntimeConfig,
   RuntimeConfigChangeSummaryDto
 } from "@imageshow/shared/browser";
+import { z } from "zod";
+import { ApiError } from "../core/api-error.ts";
 import { assertLocalImageHostForSite } from "../storage/backends/registry.ts";
 import { parseRuntimeConfig } from "./runtime-config.ts";
 import {
@@ -26,7 +28,15 @@ export function getFullRuntimeConfig() {
 }
 
 export async function validateFullRuntimeConfig(value: unknown) {
-  const config = parseRuntimeConfig(value);
+  let config: RuntimeConfig;
+  try {
+    config = parseRuntimeConfig(value);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new ApiError(400, "validation_error", error.issues[0]?.message ?? "Validation failed", error.flatten());
+    }
+    throw error;
+  }
   await assertLocalImageHostForSite(config.site.domain);
   return {
     config,

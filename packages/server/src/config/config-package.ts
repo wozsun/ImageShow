@@ -54,7 +54,8 @@ export async function importConfigPackage(
     const previousRuntimeConfig = structuredClone(getRuntimeConfig());
     const importedRuntimeConfig = materializeImportedRuntimeConfig(
       pkg.config,
-      previousRuntimeConfig.site.domain
+      previousRuntimeConfig.site.domain,
+      previousRuntimeConfig.site.assets_base_url
     );
     const importedBackends = resolved.map((backend) => ({
       slug: backend.slug,

@@ -72,22 +72,25 @@ await runIntegrationScenario(async (runtime) => {
         assert.deepEqual(Buffer.from(await ranged.arrayBuffer()), method === "HEAD" ? Buffer.alloc(0) : status === 206 ? full.subarray(2, 7) : full);
       }
     }
+    for (const defaultSize of ["full", "thumb"] as const) {
+    await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { random_size: defaultSize } });
     for (const id of ids) {
       for (const size of [null, "full", "thumb"] as const) {
         const query = `id=${id}${size ? `&size=${size}` : ""}`;
-        const expected = size === "thumb" ? thumb : full;
+        const selectedSize = size ?? defaultSize;
+        const expected = selectedSize === "thumb" ? thumb : full;
         for (const method of ["GET", "HEAD"]) {
           const proxied = await request(`${query}&mode=proxy`, method);
           assert.equal(proxied.status, 200);
-          assert.equal(proxied.headers.get("content-type"), size === "thumb" ? "image/webp" : "image/jpeg");
+          assert.equal(proxied.headers.get("content-type"), selectedSize === "thumb" ? "image/webp" : "image/jpeg");
           assert.equal(proxied.headers.get("content-length"), String(expected.length));
           assert.match(proxied.headers.get("cache-control")!, /no-store/);
           assert.deepEqual(Buffer.from(await proxied.arrayBuffer()), method === "HEAD" ? Buffer.alloc(0) : expected);
           if (method === "HEAD") assert.equal(streams.at(-1)!.destroyed, true, "HEAD releases its opened object");
-          if (id === ids[1]) assert.equal(s3Keys.at(-1), `gallery/${size === "thumb" ? "thumbs" : "full"}/${storageObjectKey(id, size === "thumb" ? "webp" : "jpg")}`);
+          if (id === ids[1]) assert.equal(s3Keys.at(-1), `gallery/${selectedSize === "thumb" ? "thumbs" : "full"}/${storageObjectKey(id, selectedSize === "thumb" ? "webp" : "jpg")}`);
           const redirected = await request(`${query}&mode=redirect`, method);
           assert.equal(redirected.status, 302);
-          assert.equal(redirected.headers.get("location"), `/images/${size === "thumb" ? "thumbs" : "full"}/${storageObjectKey(id, size === "thumb" ? "webp" : "jpg")}`);
+          assert.equal(redirected.headers.get("location"), `/images/${selectedSize === "thumb" ? "thumbs" : "full"}/${storageObjectKey(id, selectedSize === "thumb" ? "webp" : "jpg")}`);
           const json = await request(`${query}&mode=json`, method);
           assert.equal(json.status, 200);
           if (method === "HEAD") assert.equal(await json.text(), "");
@@ -101,6 +104,7 @@ await runIntegrationScenario(async (runtime) => {
           }
         }
       }
+    }
     }
     for (const size of ["full", "thumb"]) {
       const response = await request(`id=${ids.join(",")}&mode=json&limit=2&size=${size}`);

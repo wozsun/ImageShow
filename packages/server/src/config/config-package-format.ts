@@ -121,7 +121,7 @@ function serializedConfigPackage(value: unknown) {
 }
 
 function portableConfig(runtime: RuntimeConfig): PortableRuntimeConfig {
-  const { domain: _domain, ...portableSite } = runtime.site;
+  const { domain: _domain, assets_base_url: _assetsBaseUrl, ...portableSite } = runtime.site;
   return portableRuntimeConfigSchema.parse({ ...runtime, site: portableSite });
 }
 
@@ -237,13 +237,15 @@ export function parseConfigPackage(value: unknown): ConfigPackage {
 
 export function materializeImportedRuntimeConfig(
   portable: PortableRuntimeConfig,
-  targetDomain: string
+  targetDomain: string,
+  targetAssetsBaseUrl = ""
 ): RuntimeConfig {
   return parseRuntimeConfig({
     ...portable,
     site: {
       ...portable.site,
-      domain: targetDomain
+      domain: targetDomain,
+      assets_base_url: targetAssetsBaseUrl
     }
   });
 }

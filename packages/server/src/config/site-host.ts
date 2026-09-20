@@ -11,3 +11,7 @@ export function imageResourceBaseUrl() {
   if (!hasExplicitSiteDomain(site.domain)) return "/images";
   return `https://${site.domain}/images`;
 }
+
+export function staticResourceBaseUrl(config = getRuntimeConfig()) {
+  return config.site.assets_base_url || "/assets";
+}

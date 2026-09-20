@@ -1,38 +1,15 @@
 import { z } from "zod";
-import { isHttpsEndpoint, isHttpsUrl, hasExplicitSiteDomain, matchesSiteHost } from "../../core/url-validation.ts";
+import { isHttpsEndpoint, isHttpsUrl, publicBaseUrlSchema, publicUrlUsesSiteHost } from "../../core/url-validation.ts";
 import { ApiError } from "../../core/api-error.ts";
 
-function normalizeLocalPublicUrl(value: string) {
-  if (!value) return "";
-  const url = new URL(value);
-  if (url.protocol !== "https:" || url.username || url.password || /[\\\\?#]/.test(value)
-    || !matchesSiteHost(url.host, "")) throw new Error("Invalid public URL");
-  const segments = url.pathname.split("/").filter(Boolean).map((part) => {
-    const decoded = decodeURIComponent(part);
-    if (decoded === "." || decoded === ".." || /[/\\\\\u0000-\u0020\u007f]/.test(decoded)) {
-      throw new Error("Invalid public URL path");
-    }
-    return encodeURIComponent(decoded);
-  });
-  return `${url.origin}${segments.length ? `/${segments.join("/")}` : ""}`;
-}
-
-export const localPublicUrlSchema = z.string().trim().max(2048).transform((value, ctx) => {
-  try { return normalizeLocalPublicUrl(value); } catch {
-    ctx.addIssue({ code: "custom", message: "公开地址须为合法 HTTPS 根地址，可包含路径前缀，不能包含凭据、查询参数或片段" });
-    return z.NEVER;
-  }
-});
+export const localPublicUrlSchema = publicBaseUrlSchema;
 
 export const storedLocalConfigSchema = z.object({
   public_base_url: localPublicUrlSchema.optional().default("")
 });
 
 export function assertLocalPublicUrlDomain(publicBaseUrl: string, siteDomain: string) {
-  if (!publicBaseUrl || !hasExplicitSiteDomain(siteDomain)) return;
-  const url = new URL(publicBaseUrl);
-  if (matchesSiteHost(url.host, siteDomain)
-    || (!url.port && matchesSiteHost(`${url.hostname}:443`, siteDomain))) {
+  if (publicUrlUsesSiteHost(publicBaseUrl, siteDomain)) {
     throw new ApiError(400, "storage_public_url_host_conflict", "本地图片公开地址须使用独立 Host；使用主站地址请将公开 URL 留空");
   }
 }

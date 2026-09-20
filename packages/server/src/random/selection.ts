@@ -45,9 +45,11 @@ export async function selectRandomImages(
   database: PublicDatabaseReadAccess = {}
 ): Promise<RandomImageSelection | Response> {
   signal?.throwIfAborted();
+  const { random_method, random_size } = getRuntimeConfig().site;
   const parsed = parseRandomQuery(
     url,
-    getRuntimeConfig().site.random_method
+    random_method,
+    random_size
   );
   if (parsed instanceof Response) return parsed;
   if (parsed.ids.length) {

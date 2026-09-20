@@ -12,7 +12,10 @@ import { adminApiBasePath } from "../../../lib/constants.js";
 import "../../../styles/admin/login-challenge.css";
 
 function createPbkdf2Worker() {
-  return new Worker(pbkdf2WorkerUrl);
+  const url = new URL(pbkdf2WorkerUrl, import.meta.url);
+  // Workers must originate from the document, even when the caller came from a CDN.
+  // Production Worker entries share the build's flat /assets output directory.
+  return new Worker(import.meta.env.PROD ? `/assets/${url.pathname.split("/").at(-1)}` : url);
 }
 
 const altchaGlobal = (globalThis as typeof globalThis & { $altcha: AltchaGlobal }).$altcha;

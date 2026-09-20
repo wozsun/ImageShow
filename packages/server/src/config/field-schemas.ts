@@ -7,6 +7,7 @@ import {
   importSourceTypes,
   logLevels,
   randomDefaultMethods,
+  randomImageSizes,
   showDensities,
   showModes,
   siteRoots
@@ -16,6 +17,7 @@ import { isRootRelativeOrHttpsUrl } from "../core/url-validation.ts";
 export const siteRoot = z.enum(siteRoots);
 export const homeBrowseTarget = z.enum(homeBrowseTargets);
 export const randomDefaultMethod = z.enum(randomDefaultMethods);
+export const randomImageSize = z.enum(randomImageSizes);
 export const galleryOrder = z.enum(publicImageOrders);
 export const showDensity = z.enum(showDensities);
 export const showMode = z.enum(showModes);

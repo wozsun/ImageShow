@@ -36,6 +36,7 @@ import {
   normalizeQuality,
   normalizeQualityStep,
   randomDefaultMethod,
+  randomImageSize,
   recentUploads,
   showDensity,
   showDriftSpeed,
@@ -59,6 +60,7 @@ import {
   weiboImportMaxItems,
   weiboRequestDelaySeconds
 } from "./field-schemas.ts";
+import { publicBaseUrlSchema, publicUrlUsesSiteHost } from "../core/url-validation.ts";
 
 const runtimeConfigSchema = z.strictObject({
   site: z.strictObject({
@@ -93,6 +95,8 @@ const runtimeConfigSchema = z.strictObject({
       public_original_button: z.boolean()
     }),
     random_method: randomDefaultMethod,
+    random_size: randomImageSize,
+    assets_base_url: publicBaseUrlSchema,
     robots_enabled: z.boolean(),
     icp: siteFooterText,
     mps: siteFooterText,
@@ -186,7 +190,7 @@ const runtimeConfigSchema = z.strictObject({
   log: z.strictObject({ level: logLevel, max_size_mb: logMaxSizeMb, max_files: logMaxFiles })
 });
 
-const portableSiteConfigSchema = runtimeConfigSchema.shape.site.omit({ domain: true });
+const portableSiteConfigSchema = runtimeConfigSchema.shape.site.omit({ domain: true, assets_base_url: true });
 
 export const portableRuntimeConfigSchema = runtimeConfigSchema.extend({
   site: portableSiteConfigSchema
@@ -225,7 +229,7 @@ function samePortableConfigValueType(defaultValue: unknown, input: unknown) {
 
 function portableRuntimeConfigDefaults(): PortableRuntimeConfig {
   const runtimeDefaults = runtimeConfigDefaults();
-  const { domain: _domain, ...site } = runtimeDefaults.site;
+  const { domain: _domain, assets_base_url: _assetsBaseUrl, ...site } = runtimeDefaults.site;
   return portableRuntimeConfigSchema.parse({
     ...runtimeDefaults,
     site
@@ -472,11 +476,18 @@ function mergeDefined(base: Record<string, unknown>, patch: Record<string, unkno
 }
 
 export function parseRuntimeConfig(value: unknown): RuntimeConfig {
-  return runtimeConfigSchema.parse(value);
+  const config = runtimeConfigSchema.parse(value);
+  if (publicUrlUsesSiteHost(config.site.assets_base_url, config.site.domain)) {
+    throw new z.ZodError([{
+      code: "custom", path: ["site", "assets_base_url"],
+      message: "静态资源公开地址须使用独立 Host；使用主站地址请将公开 URL 留空"
+    }]);
+  }
+  return config;
 }
 
 export function normalizeRuntimeConfig(value: unknown): RuntimeConfig {
-  return runtimeConfigSchema.parse(projectKnownConfig(
+  return parseRuntimeConfig(projectKnownConfig(
     appConfig.runtimeDefaults,
     value
   ));

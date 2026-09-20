@@ -1,6 +1,6 @@
 import type { LogLevel, SiteVersionSettings } from "./common.ts";
 import type { ImportSourceTypeDto } from "./ingestion.ts";
-import type { PublicImageOrder } from "./images.ts";
+import type { PublicImageOrder, RandomImageSize } from "./images.ts";
 
 export const siteRoots = ["home", "show", "gallery"] as const;
 export type SiteRoot = (typeof siteRoots)[number];
@@ -58,6 +58,8 @@ export type RuntimeSiteSettings = {
   show: SiteShowSettings;
   gallery: SiteGallerySettings;
   random_method: RandomDefaultMethod;
+  random_size: RandomImageSize;
+  assets_base_url: string;
   robots_enabled: boolean;
   icp: string;
   mps: string;
@@ -197,6 +199,8 @@ export type SiteSettings = Pick<
   | "root"
   | "home"
   | "random_method"
+  | "random_size"
+  | "assets_base_url"
 > & {
   gallery: Pick<SiteGallerySettings, "enabled" | "order">;
   show: SiteShowSettings;
