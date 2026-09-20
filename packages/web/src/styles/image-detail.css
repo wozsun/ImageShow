@@ -29,6 +29,23 @@
   max-height: 90vh;
   background: var(--color-detail-image-surface);
 }
+
+@media (min-width: 761px) {
+  :root[data-public-viewport] .image-detail-modal {
+    padding: max(24px, var(--public-safe-area-top)) max(24px, var(--public-safe-area-right))
+      max(24px, var(--public-safe-area-bottom)) max(24px, var(--public-safe-area-left));
+  }
+  :root[data-public-viewport] .image-detail-modal > article {
+    min-width: 0;
+    max-width: 100%;
+    height: min(90vh, calc(100dvh - max(24px, var(--public-safe-area-top)) - max(24px, var(--public-safe-area-bottom))));
+    max-height: 100%;
+  }
+  :root[data-public-viewport] .image-detail-modal .image-detail-image {
+    height: 100%;
+    max-height: 100%;
+  }
+}
 .image-detail-modal
   > article
   > .image-detail-image
@@ -271,8 +288,8 @@
     min-height: min(30%, 15rem);
     max-height: calc(
       100%
-      - env(safe-area-inset-top)
-      - env(safe-area-inset-bottom)
+      - var(--public-safe-area-top, env(safe-area-inset-top))
+      - var(--public-safe-area-bottom, env(safe-area-inset-bottom))
       - var(--image-detail-mobile-controls-space)
     );
     contain: none;
@@ -295,14 +312,19 @@
     position: static;
     padding: 18px 20px;
   }
+  :root[data-public-viewport] .image-detail-modal .image-detail-head,
+  :root[data-public-viewport] .image-detail-modal .image-detail-scroll-body {
+    padding-left: max(20px, calc(var(--public-safe-area-left) + 12px));
+    padding-right: max(20px, calc(var(--public-safe-area-right) + 12px));
+  }
   .image-detail-modal .image-detail-title-row {
     display: block;
     padding-right: 56px;
   }
   .image-detail-modal > .image-detail-mobile-close {
     position: absolute;
-    top: max(12px, calc(env(safe-area-inset-top) + 8px));
-    right: max(12px, calc(env(safe-area-inset-right) + 8px));
+    top: max(12px, calc(var(--public-safe-area-top, env(safe-area-inset-top)) + 8px));
+    right: max(12px, calc(var(--public-safe-area-right, env(safe-area-inset-right)) + 8px));
     z-index: 7;
     width: 44px;
     min-height: 44px;
@@ -347,7 +369,7 @@
     touch-action: auto;
   }
   .image-detail-modal .image-detail-scroll-body {
-    padding-bottom: max(20px, env(safe-area-inset-bottom));
+    padding-bottom: max(20px, var(--public-safe-area-bottom, env(safe-area-inset-bottom)));
   }
 }
 

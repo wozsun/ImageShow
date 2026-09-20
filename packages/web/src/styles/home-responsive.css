@@ -114,6 +114,8 @@
   .home-filter-bar {
     min-height: var(--home-filter-bar-height);
     padding: 7px 14px;
+    padding-left: max(14px, calc(var(--public-safe-area-left) + 12px));
+    padding-right: max(14px, calc(var(--public-safe-area-right) + 12px));
     gap: 8px;
   }
 
@@ -153,9 +155,11 @@
 
   .home-banner {
     min-height: calc(
-      100svh - var(--public-page-header-height) - var(--home-filter-bar-height)
+      100svh - var(--public-page-header-height) - var(--public-navigation-safe-top) - var(--home-filter-bar-height)
     );
     padding: 58px 20px 54px;
+    padding-left: max(20px, calc(var(--public-safe-area-left) + 12px));
+    padding-right: max(20px, calc(var(--public-safe-area-right) + 12px));
   }
 
   .home-banner-copy > span {
@@ -179,13 +183,15 @@
   }
 
   .home-scroll-cue {
-    right: 20px;
-    bottom: 20px;
+    right: max(20px, calc(var(--public-safe-area-right) + 12px));
+    bottom: max(20px, calc(var(--public-safe-area-bottom) + 12px));
     font-size: 11px;
   }
 
   .home-catalog {
     padding: 44px 16px 68px;
+    padding-left: max(16px, calc(var(--public-safe-area-left) + 12px));
+    padding-right: max(16px, calc(var(--public-safe-area-right) + 12px));
   }
 
   .home-selector-layout {
@@ -321,6 +327,8 @@
 @media (max-width: 380px) {
   .home-filter-bar {
     padding-inline: 10px;
+    padding-left: max(10px, calc(var(--public-safe-area-left) + 8px));
+    padding-right: max(10px, calc(var(--public-safe-area-right) + 8px));
   }
 
   .home-filter-bar > div > strong {

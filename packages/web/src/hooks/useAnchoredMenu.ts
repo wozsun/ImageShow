@@ -227,6 +227,18 @@ export function useAnchoredMenu(options: {
     resizeObserver = new ResizeObserver(update);
     syncObservedAnchor();
     if (menuNode) resizeObserver.observe(menuNode);
+    // Insets can change without a viewport resize (browser chrome or an embed
+    // host). Observe each edge pair only while a public menu is open.
+    const safeAreaProbes = document.documentElement.hasAttribute("data-public-viewport")
+      ? [["left", "top"], ["right", "bottom"]].map(([x, y]) => {
+        const probe = document.createElement("span");
+        probe.setAttribute("aria-hidden", "true");
+        probe.style.cssText = `position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;`
+          + `width:var(--public-safe-area-${x}, 0px);height:var(--public-safe-area-${y}, 0px)`;
+        document.body.appendChild(probe);
+        resizeObserver.observe(probe);
+        return probe;
+      }) : [];
 
     if (closeOnEscape) {
       const onKeyDown = (event: KeyboardEvent) => {
@@ -260,6 +272,7 @@ export function useAnchoredMenu(options: {
       if (positionFrame !== undefined) window.cancelAnimationFrame(positionFrame);
       listeners.abort();
       resizeObserver.disconnect();
+      safeAreaProbes.forEach(probe => probe.remove());
     };
   }, [open, closing, menuNode, updatePosition, requestClose, requestCloseAndRestoreFocus, triggerRef, closeOnEscape, closeOnFocusOutside]);
 

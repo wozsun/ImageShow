@@ -4,6 +4,8 @@
   scroll-margin-top: var(--home-filter-bar-height);
   min-height: 100svh;
   padding: 72px max(28px, calc((100% - 1180px) / 2)) 96px;
+  padding-left: max(28px, calc((100% - 1180px) / 2), calc(var(--public-safe-area-left) + 12px));
+  padding-right: max(28px, calc((100% - 1180px) / 2), calc(var(--public-safe-area-right) + 12px));
   opacity: 1;
   visibility: visible;
   transition:

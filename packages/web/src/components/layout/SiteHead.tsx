@@ -25,6 +25,18 @@ export function SiteHead() {
   const site = data?.site;
 
   useLayoutEffect(() => {
+    const immersive = /^\/(?:home|gallery|show|embed\/(?:home|gallery|show))?\/?$/i.test(pathname);
+    const viewport = ensureMeta("viewport");
+    viewport.content = "width=device-width, initial-scale=1.0"
+      + (immersive ? ", viewport-fit=cover" : "");
+    document.documentElement.toggleAttribute("data-public-viewport", immersive);
+    return () => {
+      viewport.content = "width=device-width, initial-scale=1.0";
+      document.documentElement.removeAttribute("data-public-viewport");
+    };
+  }, [pathname]);
+
+  useLayoutEffect(() => {
     const root = document.documentElement;
     if (isAdminRoute(pathname)) {
       if (root.dataset.uiContext !== "admin") {

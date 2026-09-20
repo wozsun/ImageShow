@@ -113,12 +113,22 @@ export function computeAnchoredPosition(
   // visualViewport 的 offset 使用 fixed/layout 坐标，而锚点 DOMRect 使用
   // 浏览器实际绘制坐标。加上实测 fixed 原点后，可见边界、锚点和最终菜单
   // 都在同一坐标系中参与翻转、高度与左右夹取。
-  const viewportTop = (visualViewport?.offsetTop ?? 0) + fixedOrigin.top;
-  const viewportLeft = (visualViewport?.offsetLeft ?? 0) + fixedOrigin.left;
+  const root = document.documentElement;
+  const publicStyle = root.hasAttribute("data-public-viewport") ? getComputedStyle(root) : null;
+  const safe = (edge: string) => Number.parseFloat(publicStyle?.getPropertyValue(`--public-safe-area-${edge}`) ?? "") || 0;
+  const visibleTop = (visualViewport?.offsetTop ?? 0) + fixedOrigin.top;
+  const visibleLeft = (visualViewport?.offsetLeft ?? 0) + fixedOrigin.left;
   const viewportHeight = visualViewport?.height ?? window.innerHeight;
-  const viewportWidth = visualViewport?.width ?? window.innerWidth;
-  const viewportBottom = viewportTop + viewportHeight;
-  const viewportRight = viewportLeft + viewportWidth;
+  const visibleWidth = visualViewport?.width ?? window.innerWidth;
+  const viewportTop = publicStyle ? Math.max(visibleTop, fixedOrigin.top + safe("top")) : visibleTop;
+  const viewportLeft = publicStyle ? Math.max(visibleLeft, fixedOrigin.left + safe("left")) : visibleLeft;
+  const viewportBottom = publicStyle
+    ? Math.min(visibleTop + viewportHeight, fixedOrigin.top + window.innerHeight - safe("bottom"))
+    : visibleTop + viewportHeight;
+  const viewportRight = publicStyle
+    ? Math.min(visibleLeft + visibleWidth, fixedOrigin.left + window.innerWidth - safe("right"))
+    : visibleLeft + visibleWidth;
+  const viewportWidth = viewportRight - viewportLeft;
   const availableBelow = Math.max(0, viewportBottom - rect.bottom - gap - 8);
   const availableAbove = Math.max(0, rect.top - viewportTop - gap - 8);
   const openAbove = availableBelow < Math.max(size.flipThreshold, size.minAvailable)

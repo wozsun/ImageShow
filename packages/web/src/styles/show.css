@@ -48,7 +48,7 @@
   --public-floating-idle-opacity: .2;
   position: absolute;
   left: 50%;
-  bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px));
+  bottom: max(18px, calc(var(--public-safe-area-bottom, env(safe-area-inset-bottom)) + 12px));
   z-index: 4;
   margin: 0;
   color: var(--public-color-show-hint-text);
@@ -64,19 +64,19 @@
 .show-density-actions,
 .show-corner-actions {
   position: absolute;
-  bottom: max(16px, calc(env(safe-area-inset-bottom) + 12px));
+  bottom: max(16px, calc(var(--public-safe-area-bottom, env(safe-area-inset-bottom)) + 12px));
   z-index: 7;
 }
 
 .show-density-actions {
-  left: max(16px, calc(env(safe-area-inset-left) + 12px));
+  left: max(16px, calc(var(--public-safe-area-left, env(safe-area-inset-left)) + 12px));
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .show-corner-actions {
-  right: max(16px, calc(env(safe-area-inset-right) + 12px));
+  right: max(16px, calc(var(--public-safe-area-right, env(safe-area-inset-right)) + 12px));
   display: flex;
   align-items: center;
   gap: 8px;
@@ -171,7 +171,7 @@
 
   .show-interaction-hint {
     width: max-content;
-    max-width: calc(100% - 152px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    max-width: calc(100% - 152px - var(--public-safe-area-left, env(safe-area-inset-left)) - var(--public-safe-area-right, env(safe-area-inset-right)));
     line-height: 1.5;
     text-align: center;
   }

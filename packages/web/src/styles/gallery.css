@@ -9,7 +9,6 @@
 .gallery-page {
   --gallery-toolbar-height: 61px;
   --public-navigation-secondary-height: var(--gallery-toolbar-height);
-  --public-navigation-safe-top: env(safe-area-inset-top);
   min-height: 100dvh;
   position: relative;
   isolation: isolate;
@@ -18,25 +17,6 @@
 }
 
 body:has(.gallery-page) { min-height: 100dvh; }
-
-.gallery-page:not(.show-page) {
-  padding-top: calc(var(--public-page-header-height) + var(--public-navigation-safe-top));
-}
-
-.gallery-page .public-navigation-stack {
-  padding-top: var(--public-navigation-safe-top);
-}
-
-.gallery-page .public-navigation-frame {
-  /* Clip both navigation stages at the safe edge while leaving room below for
-     dropdowns and their shadows. The page background still fills the inset. */
-  clip-path: inset(var(--public-navigation-safe-top) 0 -100dvh);
-}
-
-.gallery-page .topbar {
-  padding-left: max(28px, calc(env(safe-area-inset-left) + 12px));
-  padding-right: max(28px, calc(env(safe-area-inset-right) + 12px));
-}
 
 .gallery-atmosphere,
 .gallery-starfield {
@@ -93,8 +73,8 @@ body:has(.gallery-page) { min-height: 100dvh; }
   gap: 12px;
   align-items: end;
   padding: 10px 28px;
-  padding-left: max(28px, calc(env(safe-area-inset-left) + 12px));
-  padding-right: max(28px, calc(env(safe-area-inset-right) + 12px));
+  padding-left: max(28px, calc(var(--public-safe-area-left, env(safe-area-inset-left)) + 12px));
+  padding-right: max(28px, calc(var(--public-safe-area-right, env(safe-area-inset-right)) + 12px));
   color: var(--color-public-text-primary);
   background: transparent;
   border-bottom: 1px solid var(--public-color-toolbar-border);
@@ -282,9 +262,9 @@ body:has(.gallery-page) { min-height: 100dvh; }
 .gallery {
   --gallery-gap: 16px;
   padding: 28px;
-  padding-left: max(28px, calc(env(safe-area-inset-left) + 12px));
-  padding-right: max(28px, calc(env(safe-area-inset-right) + 12px));
-  padding-bottom: max(28px, calc(env(safe-area-inset-bottom) + 12px));
+  padding-left: max(28px, calc(var(--public-safe-area-left, env(safe-area-inset-left)) + 12px));
+  padding-right: max(28px, calc(var(--public-safe-area-right, env(safe-area-inset-right)) + 12px));
+  padding-bottom: max(28px, calc(var(--public-safe-area-bottom, env(safe-area-inset-bottom)) + 12px));
 }
 .gallery-window {
   position: relative;
@@ -470,7 +450,7 @@ body:has(.gallery-page) { min-height: 100dvh; }
 .gallery-window-error {
   position: fixed;
   left: 50%;
-  bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px));
+  bottom: max(24px, calc(var(--public-safe-area-bottom, env(safe-area-inset-bottom)) + 16px));
   z-index: 5;
   width: min(440px, calc(100vw - 32px));
   pointer-events: none;
@@ -487,8 +467,8 @@ body:has(.gallery-page) { min-height: 100dvh; }
 
 .gallery-floating-controls {
   position: fixed;
-  right: max(16px, calc(env(safe-area-inset-right) + 12px));
-  bottom: max(16px, calc(env(safe-area-inset-bottom) + 12px));
+  right: max(16px, calc(var(--public-safe-area-right, env(safe-area-inset-right)) + 12px));
+  bottom: max(16px, calc(var(--public-safe-area-bottom, env(safe-area-inset-bottom)) + 12px));
   z-index: 3;
   display: flex;
   flex-direction: column;

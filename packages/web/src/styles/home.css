@@ -19,7 +19,8 @@
   z-index: 1;
   width: min(100%, 1180px);
   margin-inline: auto;
-  padding: 0 16px max(36px, env(safe-area-inset-bottom));
+  padding: 0 max(16px, calc(var(--public-safe-area-right) + 12px))
+    max(36px, var(--public-safe-area-bottom)) max(16px, calc(var(--public-safe-area-left) + 12px));
   display: grid;
   gap: 4px;
   color: var(--public-color-text-secondary);
@@ -105,9 +106,9 @@
 
 .home-background-image-frame {
   z-index: 0;
-  top: var(--home-filter-bar-height);
-  height: calc(100vh - var(--home-filter-bar-height));
-  height: calc(100lvh - var(--home-filter-bar-height));
+  top: calc(var(--home-filter-bar-height) + var(--public-navigation-safe-top));
+  height: calc(100vh - var(--home-filter-bar-height) - var(--public-navigation-safe-top));
+  height: calc(100lvh - var(--home-filter-bar-height) - var(--public-navigation-safe-top));
   overflow: hidden;
 }
 
@@ -115,9 +116,9 @@
    次导航高度差在淡入中透出 8px 画布。这里有意少保留 8px 构图安全区；
    嵌入页仍完整避让次导航。不要改动上方为 iOS 视口取色保留的外壳结构。 */
 .home-page:not(.is-embedded) .home-background-image-frame {
-  top: var(--public-page-header-height);
-  height: calc(100vh - var(--public-page-header-height));
-  height: calc(100lvh - var(--public-page-header-height));
+  top: calc(var(--public-page-header-height) + var(--public-navigation-safe-top));
+  height: calc(100vh - var(--public-page-header-height) - var(--public-navigation-safe-top));
+  height: calc(100lvh - var(--public-page-header-height) - var(--public-navigation-safe-top));
 }
 
 .home-background-image-frame img {
@@ -155,7 +156,7 @@
 
 .home-navigation-frame .public-navigation-stack::before {
   bottom: auto;
-  height: var(--public-page-header-height);
+  height: calc(var(--public-page-header-height) + var(--public-navigation-safe-top));
 }
 
 .home-navigation-frame.is-entrance-pending
@@ -227,6 +228,8 @@
   width: 100%;
   min-height: var(--home-filter-bar-height);
   padding: 8px max(28px, calc((100% - 1180px) / 2));
+  padding-left: max(28px, calc((100% - 1180px) / 2), calc(var(--public-safe-area-left) + 12px));
+  padding-right: max(28px, calc((100% - 1180px) / 2), calc(var(--public-safe-area-right) + 12px));
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 12px;
@@ -364,9 +367,11 @@
   position: relative;
   z-index: 1;
   min-height: calc(
-    100svh - var(--public-page-header-height) - var(--home-filter-bar-height)
+    100svh - var(--public-page-header-height) - var(--public-navigation-safe-top) - var(--home-filter-bar-height)
   );
   padding: clamp(64px, 10vw, 148px) max(28px, calc((100% - 1180px) / 2)) 56px;
+  padding-left: max(28px, calc((100% - 1180px) / 2), calc(var(--public-safe-area-left) + 12px));
+  padding-right: max(28px, calc((100% - 1180px) / 2), calc(var(--public-safe-area-right) + 12px));
   display: grid;
   grid-template-columns: minmax(0, 720px) minmax(260px, 320px);
   gap: clamp(32px, 5vw, 72px);
@@ -497,8 +502,8 @@
 
 .home-scroll-cue {
   position: absolute;
-  right: max(28px, calc((100% - 1180px) / 2));
-  bottom: 38px;
+  right: max(28px, calc((100% - 1180px) / 2), calc(var(--public-safe-area-right) + 12px));
+  bottom: max(38px, calc(var(--public-safe-area-bottom) + 12px));
   min-height: 0;
   padding: 0 0 6px;
   color: var(--public-color-home-scroll-text);

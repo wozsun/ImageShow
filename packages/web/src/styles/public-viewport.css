@@ -1,0 +1,26 @@
+/* Root scope also reaches public dialogs portaled directly into body. */
+:root[data-public-viewport] {
+  --public-safe-area-top: var(--embed-safe-area-top, env(safe-area-inset-top, 0px));
+  --public-safe-area-right: var(--embed-safe-area-right, env(safe-area-inset-right, 0px));
+  --public-safe-area-bottom: var(--embed-safe-area-bottom, env(safe-area-inset-bottom, 0px));
+  --public-safe-area-left: var(--embed-safe-area-left, env(safe-area-inset-left, 0px));
+}
+
+:root[data-public-viewport] .modal {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+:root[data-public-viewport] .modal:not(.image-detail-modal) {
+  padding: max(24px, calc(var(--public-safe-area-top) + 12px))
+    max(24px, calc(var(--public-safe-area-right) + 12px))
+    max(24px, calc(var(--public-safe-area-bottom) + 12px))
+    max(24px, calc(var(--public-safe-area-left) + 12px));
+}
+
+@media (max-width: 760px) {
+  :root[data-public-viewport] .modal:not(.image-detail-modal) {
+    padding: max(10px, var(--public-safe-area-top)) max(10px, var(--public-safe-area-right))
+      max(10px, var(--public-safe-area-bottom)) max(10px, var(--public-safe-area-left));
+  }
+}

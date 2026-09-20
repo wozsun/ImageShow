@@ -712,6 +712,9 @@ hooks ──► lib
   `hooks/useEmbeddedCursorBridge.ts` 独占父窗口握手、鼠标转发、动画帧合并及光标接管生命周期；
   `styles/embed-cursor.css` 只在已接管时隐藏原生光标。普通页面不加载该模块，嵌入页间导航
   复用同一实例，退出时恢复光标并释放监听器；具体视觉效果属于宿主，协议见[嵌入光标](embed-cursor.md)。
+  同一布局的 `hooks/useEmbeddedSafeArea.ts` 独立管理可选宿主安全区握手与生命周期；
+  `SiteHead` 按公开 / 后台路由维护 viewport，`styles/public-viewport.css` 将四向安全区
+  提供给公开页面、body 弹窗与菜单，后台保持原有视口。协议见[嵌入安全区](embed-safe-area.md)。
   公开配置就绪后才挂载路由，后台刷新失败时保留已有快照和路由，并把 `site.header_name` 传入后台入口；导航和 `SiteHead` 不复制
   运行时默认值。网页标题由 `site.title` 提供，导航和后台品牌使用独立的 `site.header_name`。
   `siteConfigPayload()` 唯一投影描述为空时的网页标题回退，服务端 SPA

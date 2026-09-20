@@ -4,7 +4,8 @@
 .home-page,
 .gallery-page {
   --public-page-header-height: var(--app-header-height);
-  padding-top: var(--public-page-header-height);
+  --public-navigation-safe-top: var(--public-safe-area-top);
+  padding-top: calc(var(--public-page-header-height) + var(--public-navigation-safe-top));
   color-scheme: dark;
 }
 .home-page.is-embedded,
@@ -20,12 +21,15 @@
   z-index: 7;
   width: 100%;
   pointer-events: none;
+  /* The background fills the edge; navigation content never slides over it. */
+  clip-path: inset(var(--public-navigation-safe-top) 0 -100dvh);
 }
 
 .public-navigation-stack {
   --public-navigation-stack-shift: 0px;
   position: relative;
   width: 100%;
+  padding-top: var(--public-navigation-safe-top);
   pointer-events: none;
   isolation: isolate;
   /* 主、次导航共享这一位移，切换时保持边界连续。 */
@@ -93,7 +97,8 @@
   z-index: 7;
   width: 100%;
   height: var(--app-header-height);
-  padding: 0 28px;
+  padding: 0 max(28px, calc(var(--public-safe-area-right) + 12px))
+    0 max(28px, calc(var(--public-safe-area-left) + 12px));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -188,7 +193,7 @@
 }
 
 @media (max-width: 760px) {
-  .topbar { padding: 0 16px; }
+  .topbar { padding: 0 max(16px, calc(var(--public-safe-area-right) + 12px)) 0 max(16px, calc(var(--public-safe-area-left) + 12px)); }
   .desktop-nav { display: none !important; }
 }
 
