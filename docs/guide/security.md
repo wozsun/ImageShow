@@ -62,6 +62,17 @@
 - Compose 内置 Redis 使用不固定次版本的 `redis:8` 镜像，在项目私有网络内通过容器端口提供无密码连接；直接使用镜像默认启动命令，将宿主 `./redis` 挂载到 `/data`。该目录提供尽力而为的重启保留；Redis 数据丢失时会话、限流、派生状态和未完全入库内容允许消失，PostgreSQL 中已正式提交的图片不受影响。Redis 内存上限、淘汰策略和容器硬限制由部署方管理，ImageShow 通过 `INFO MEMORY` 提供运维观测；启动、重连、每 5 秒运行监测及显式能力探测检查连接，并在自有 5 秒 TTL 隔离探针键上实际执行 `INCREX`、`ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与 `DELEX ... IFEQ` 五项必需能力，同时验证条件失败、缺失和 TTL 保留；命令存在但 ACL 拒绝执行仍视为不可用。`/readyz` 在同一连接且没有后续命令失败时，可复用从探测开始计时不足 5 秒的完整成功证明，超过时限重新探测；断连或命令失败立即废止证明，较早开始的探测不能覆盖较新的失败。首次校验成功前后台与公开业务都由冷启动门拒绝；运行期 Redis 故障时后台在会话读取前统一返回 `503 redis_unavailable`，不能伪装成 401 或触发浏览器清除登录状态，公开只读业务才允许有界 PostgreSQL 回源。连接启用了认证的外部 Redis 时，可通过 `REDIS_PASSWORD` 向应用提供密码。
 - 管理端界面偏好接口只使用鉴权会话中的用户名定位 `admin_account.preferences`，不接受客户端传入目标账号。接口只接受 shared 注册的键与值域，PATCH 在 PostgreSQL 行内原子合并并返回完整投影；JSONB 顶层必须是对象且最大 4 KiB。GET 使用 `private, no-cache` 与内容 ETag，`/api/admin/auth/me` 的认证首帧同时携带完全相同偏好表示的 ETag，五分钟内由前端查询缓存直接复用，更久后的窗口聚焦 / 重连显式带该验证器条件读取，设置未变化时即使此前没有访问过偏好 URL 也返回 304。浏览器缓存键按用户名隔离，`localStorage` 仅承担首帧显示、断网 pending 和多标签同步，不参与鉴权，也不保存会话或 CSRF token。PostgreSQL 尚无某键时，已校验的本地值可补写一次；删除账号时偏好随该行自然删除。
 - 登录失败限流：每 IP + 用户名 60 秒内 5 次失败即拦截，叠加 180 秒内 10 次尝试的全局兜底（阈值与窗口均可在 `config.json` 的 `security.*` 调整）。两个固定窗口在一次 Redis 服务端原子操作中按来源到全局的顺序使用 `INCREX ... UBOUND ... EX ... ENX` 预留；前一窗口已拒绝时不再消耗后续共享额度。达到上限后计数不再增长，后续请求也不会延长首次建立的 TTL。
+- `/random` 按 IP 复用 Redis 固定窗口限流：带 `limit` 参数默认 60 秒 10 次，不带默认 60 秒
+  60 次，两档独立计数，GET / HEAD 与所有响应模式共用对应额度；参数校验前计数，失败不退还额度。
+  超限返回 `429 random_rate_limited` 与整数秒 `Retry-After`。Referer 匹配本站 HTTPS 来源、
+  同端口子域或 `embed.allowed_origins` 时豁免；空、无效或其他来源正常计数，白名单不受
+  `embed.enabled` 控制。非白名单请求在 Redis 计数失败时返回 `503 redis_unavailable`，
+  白名单保留有界 PostgreSQL 回源。代理须覆盖真实 IP 头，缺失时共用 `unknown` 额度。
+- 应用完整图与缩略图使用[轻量 Referer 校验](image-resources.md#轻量-referer-防盗链)：
+  空值或上述白名单放行，其他来源返回不可缓存的 `403 image_referer_forbidden`；GET / HEAD、
+  条件与范围请求均先校验，响应带 `Vary: Referer`。覆盖主站与本地图片公开 Host，外部
+  原图继续按管理员会话授权；S3 / COS 直链和不遵守 Vary 的 CDN 缓存不由应用控制。
+  Referer 可省略或伪造，此白名单仅提供轻量约束，不作为身份认证。
 - 登录前置安全验证使用完全自托管的 ALTCHA：服务端签发带 HMAC 的
   PBKDF2/SHA-256 确定性工作量挑战，登录页显示紧凑验证条并在组件加载后自动由
   浏览器求解；自动验证失败时可点击验证条手动重试。挑战签名主密钥在首次签发时
@@ -137,10 +148,10 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | 登录、其他管理 API、错误、404、健康检查 | `no-store` 或 `private, no-store` | `auth/me`、ALTCHA、检查状态、日志、SSE、后台字节、预览、敏感配置与写接口不缓存；登录限流的 429 使用纯数字 `Retry-After` |
 | OPTIONS 204 | `no-store` | 先做 Host / Fetch Metadata 检查，取消不需要的正文；不启用 CORS |
 | hash 资产、稳定图片、HEAD、206、304 | hash 资产 / 稳定图片 `immutable`；非 hash 品牌资源短缓存；ETag、Last-Modified、单 Range | 304 无正文；206 保留完整对象验证器；416 返回 `Content-Range: bytes */总长` |
-| 随机 proxy / redirect / JSON | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
+| 随机 proxy / redirect / JSON | 永远 `no-store` | 按 IP 及是否带 `limit` 分档限流，白名单 Referer 豁免；429 带 `Retry-After`；proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
 | 外链原图 proxy / redirect | 成功响应统一 `private, no-cache`，不继承源站缓存头；`Vary: Cookie, User-Agent`、URL 命名空间弱 ETag、Last-Modified 与 304；错误和失败回退不缓存 | 图片管理员与超级管理员均可访问正常图片及回收站原图；GET / HEAD 及条件请求先鉴权，无会话返回 401；HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、验证器绑定 URL、`Referrer-Policy: no-referrer` |
 | Ingestion SSE | `no-store, no-transform` | 每个已显示的 owner + queue 使用一个固定 GET 路径；不压缩、不缓冲，30 秒串行鉴权 heartbeat，断开即清理 listener / scope |
-| 图片出口与未知 Host | 主站 `/images/full/*`、`/images/thumbs/*` 公开，原图单独鉴权；失败 `no-store` | 显式域名区分主站、本地图片与静态资源 Host，独立 Host 仅开放对应资源；基础回退使用访问 Host 与同源路径；公开对象出口不读取管理员会话 |
+| 图片出口与未知 Host | 完整图 / 缩略图响应带 `Vary: Referer`，原图单独鉴权；失败 `no-store` | 主站与本地图片公开 Host 校验 Referer，放行空值和白名单；显式域名区分主站、本地图片与静态资源 Host；公开对象出口不读取管理员会话 |
 
 确定性管理只读 JSON 包括偏好、管理员列表、存储选项 / 后端，以及已有的设置、
 词表、图片列表与管理详情；写后仍由各领域精确失效查询，内容未变化的再次读取返回 304。

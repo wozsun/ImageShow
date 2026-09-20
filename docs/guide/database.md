@@ -71,6 +71,9 @@ readiness 不复制 `schema.sql` 的可空性、默认值、无消费者 CHECK�
 执行超时和连接错误都会正常释放或直接淘汰 client；Redis 恢复并重新通过能力与投影校验后，
 公开读取自动回到 Redis-first。
 
+上述回源不绕过 HTTP 准入：`/random` 的非白名单来源须先成功完成 Redis 频次计数；
+计数不可用返回 503，白名单来源才可在 Redis 完全不可用时继续选图，见[随机 API](random-api.md#请求频次与白名单)。
+
 图片投影协调器只在当前进程内保留四态、一个活动校验或重建任务，以及 PostgreSQL / Redis
 revision；图片事务与投影发布共用一个短写栅栏。Redis 重连、revision 不一致或重建失败时
 读门保持关闭并继续走上述 PostgreSQL 回源，不维护独立 publication、release task 或跨实例

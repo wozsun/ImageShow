@@ -22,6 +22,28 @@
 主站还承担 SPA、公共与管理 API、健康检查，以及唯一随机图入口 `/random`。
 图片路由仅注册表中的路径；未匹配请求由通用 HTTP 路由处理。
 
+## 轻量 Referer 防盗链
+
+主站 `/images/full/*`、`/images/thumbs/*` 与本地存储独立公开 URL 的 GET / HEAD
+在对象读取、跳转、Range 和条件请求处理前检查 Referer：
+
+- 空 Referer 放行，兼容直接访问和页面现有的 `no-referrer` 图片加载。
+- 放行本站 HTTPS origin 及同端口子域，以及 `embed.allowed_origins` 中的精确或通配来源；
+  此策略不受 `embed.enabled` 控制。未设置实际站点域名时只隐式允许当前请求同源。
+- 其他或格式非法的非空 Referer 返回 `403 image_referer_forbidden`，错误不缓存。
+
+域名由 URL 解析后匹配，通配符要求点分隔的子域边界且不包含根域，不向上推导父域。
+响应增加 `Vary: Referer`，成功响应继续使用原有缓存和验证器；本地图片 CORS 预检保持可用，
+实际 GET / HEAD 仍执行校验。外部原图继续由管理员会话保护，静态资产不执行此校验。
+`/random` 的 proxy 使用独立的[频次规则](random-api.md#请求频次与白名单)。
+
+这里只约束到达 ImageShow 的请求，不配置 S3 / COS 或外部 CDN；对象存储直链不经过应用。
+共享缓存须遵守 `Vary: Referer`，忽略此头的 CDN 命中不会执行源站校验，需部署方在边缘
+执行对应规则或正确区分缓存。启用规则及收紧白名单后须清理相应既存共享缓存；已下载或
+浏览器已缓存的内容不能撤回。允许空 Referer 意味着调用方可以主动省略来源绕过防盗链。
+
+## 图片寻址与外部原图
+
 主站 `full` 与 `thumbs` 按图片当前所属存储寻址；后端未配置公开 URL 时直接返回对象，配置后 302 到公开 URL。
 生成给页面和随机 JSON / 跳转的图片链接直接使用后端公开 URL；随机 proxy 继续由主站读取后端对象。
 正常图片及回收站的外部原图统一通过 `/images/original/<id>` 读取。GET / HEAD 均先校验

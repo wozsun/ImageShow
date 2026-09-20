@@ -37,6 +37,8 @@ import {
   normalizeQualityStep,
   randomDefaultMethod,
   randomImageSize,
+  randomWindowSeconds,
+  randomMaxRequests,
   recentUploads,
   showDensity,
   showDriftSpeed,
@@ -159,7 +161,10 @@ export const runtimeConfigSchema = z.strictObject({
     login_failure_window_seconds: loginFailureWindowSeconds,
     login_max_failures: loginMaxFailures,
     login_global_window_seconds: loginGlobalWindowSeconds,
-    login_global_max_attempts: loginGlobalMaxAttempts
+    login_global_max_attempts: loginGlobalMaxAttempts,
+    random_window_seconds: randomWindowSeconds,
+    random_max_requests: randomMaxRequests,
+    random_limit_max_requests: randomMaxRequests
   }),
   altcha: z.strictObject({
     enabled: z.boolean(),

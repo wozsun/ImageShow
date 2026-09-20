@@ -8,7 +8,9 @@ import {
   safeResponseHeaderValue,
   safeRedirectLocation
 } from "../core/http/headers.ts";
-import { requestClientIp } from "../core/http/request-security.ts";
+import { requestClientIp, requestHasTrustedReferer } from "../core/http/request-security.ts";
+import { ApiError } from "../core/api-error.ts";
+import { reserveRandomRequest } from "../random/rate-limit.ts";
 import { apiErrorResponse, apiSuccess } from "../core/http/responses.ts";
 import { presentRandomJsonItems } from "../random/json-presentation.ts";
 import { selectRandomImages } from "../random/selection.ts";
@@ -27,7 +29,16 @@ async function handleRandomImage(c: Context) {
   if (c.req.method !== "GET" && c.req.method !== "HEAD") {
     return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
   }
-  return respondRandom(c, new URL(c.req.url));
+  const url = new URL(c.req.url);
+  c.req.raw.signal.throwIfAborted();
+  if (!requestHasTrustedReferer(c)) {
+    const reservation = await reserveRandomRequest(requestClientIp(c), url.searchParams.has("limit"));
+    if (!reservation.allowed) {
+      c.header("Retry-After", String(reservation.retryAfterSeconds));
+      throw new ApiError(429, "random_rate_limited", "随机图请求过于频繁，请稍后再试");
+    }
+  }
+  return respondRandom(c, url);
 }
 
 async function respondRandom(c: Context, url: URL) {

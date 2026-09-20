@@ -36,6 +36,7 @@ import {
   servePublicStoredThumbnail
 } from "../images/serving/stored-image.ts";
 import type { StoredResponseRequest } from "../images/serving/stored-object-response.ts";
+import { requireImageReferer } from "./image-referer.ts";
 
 const galleryStatsQueryKeys = [
   "device",
@@ -132,11 +133,11 @@ export function registerPublicRoutes(app: Hono) {
     return cacheableApiSuccess(c, response, privateRevalidationCacheControl);
   });
 
-  app.get("/images/full/*", async (c) => servePublicStoredObject(
+  app.get("/images/full/*", requireImageReferer, async (c) => servePublicStoredObject(
     c.req.path.slice("/images/full/".length),
     storedResponseRequest(c)
   ));
-  app.get("/images/thumbs/*", async (c) => servePublicStoredThumbnail(
+  app.get("/images/thumbs/*", requireImageReferer, async (c) => servePublicStoredThumbnail(
     c.req.path.slice("/images/thumbs/".length),
     storedResponseRequest(c)
   ));

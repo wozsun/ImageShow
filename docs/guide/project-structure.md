@@ -189,6 +189,14 @@ CORS 头由 `core/http/headers.ts` 统一设置。
 公开资源不读取管理员会话，local / S3 已配置公开 URL 的对象使用直链；图片 URL 由服务端生成，
 公开站点配置只投影页面实际消费的字段。
 
+`config/trusted-origins.ts` 统一生成本站及子域与额外嵌入来源列表，并匹配 Referer 的协议、
+主机和端口；`embed-ancestors.ts` 仅在此列表外应用嵌入开关，`core/http/request-security.ts`
+提供请求来源适配。`routes/image-referer.ts` 在主站及本地公开图片入口读取对象前执行相同
+规则，允许空 Referer，并设置 `Vary: Referer`；不影响外部原图会话权限和静态资产。
+`random/rate-limit.ts` 复用 Redis 固定窗口原语，按 IP 及查询串是否带 `limit` 持有两个独立
+额度；随机路由先识别白名单豁免，再限流，最后进入查询解析与选图。Redis 计数失败时
+非白名单请求返回 503，白名单不访问计数器。配置归一化补齐阈值，不另建本地计数状态。
+
 本地公开 URL 存在 `storage_backend.config`，由存储注册表唯一持有配置缓存。启动加载注册表后开始监听，
 Host 准入同步读取注册表最后发布的本地公开地址，不触发数据库查询；失效保留已发布快照供准入使用，
 存储读取仍按 TTL / revision 重新加载，local 地址保存完成前加载并发布新快照。普通主站请求不增加存储读取。

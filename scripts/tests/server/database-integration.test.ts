@@ -35,6 +35,11 @@ import {
 const isolationRoot = resolve(import.meta.dirname, "isolation");
 const storageIngestionScenarios = [
   {
+    id: "public-request-access",
+    name: "随机请求分档额度、来源豁免与图片 Referer 访问边界",
+    script: join(isolationRoot, "public-request-access.mts")
+  },
+  {
     id: "derived-cache-budgets",
     name: "派生缓存的字节上限、活跃组合淘汰、成员预算和滑动续期",
     script: join(isolationRoot, "derived-cache-budgets.mts")

@@ -292,6 +292,11 @@
 
 只填写自己信任的站点，不要将公共托管平台的整个域名设为通配来源。空数组表示不额外放行来源，不会取消本站的默认嵌入范围。
 
+此列表同时用于 `/random` 的 Referer 限流豁免和应用图片的轻量防盗链；这两项策略不受
+`embed.enabled` 控制。显式站点域名的 HTTPS 来源及同端口子域也在白名单内；未设置实际
+域名时仅隐式允许当前请求同源，不推导父域或通配子域。精确来源不会自动允许其子域，
+`*.example.com` 不包含 `example.com` 本身。Referer 可省略或伪造，白名单不承担身份认证。
+
 ### ingestion
 
 #### ingestion.max_file_size_mb
@@ -553,6 +558,37 @@
 - 类型、默认值与范围：整数；默认 `10`；5–1000 次
 
 全站在上述窗口内允许的登录尝试总次数。达到限制后，其他来源的登录也需等待；多人使用的实例应为正常登录保留足够余量。该项与单个 IP、用户名组合的限制同时生效。
+
+#### security.random_window_seconds
+
+- 环境变量：`SECURITY_RANDOM_WINDOW_SECONDS`
+- Compose：显式映射
+- 类型、默认值与范围：整数；默认 `60`；1–3600 秒
+
+`/random` 每 IP 两档独立计数的固定窗口时长。每档窗口从该 IP 首次计数时开始，后续请求
+不延长有效期。修改时长后，新窗口使用新值，已存在的窗口保留原到期时间。
+
+#### security.random_max_requests
+
+- 环境变量：`SECURITY_RANDOM_MAX_REQUESTS`
+- Compose：显式映射
+- 类型、默认值与范围：整数；默认 `60`；1–10000 次
+
+每 IP 在窗口内不带 `limit` 参数的 `/random` 请求上限。GET / HEAD 及所有返回模式共用
+该档额度；请求在参数校验前计数，后续失败不退还额度。超限返回 `429 random_rate_limited`
+及整数秒 `Retry-After`。空、无效或非白名单 Referer 均正常计数，白名单 Referer 不计数。
+IP 由可信代理覆盖的 `X-Real-IP` 或单值 `X-Forwarded-For` 提供；无法取得时共用 `unknown` 额度。
+
+#### security.random_limit_max_requests
+
+- 环境变量：`SECURITY_RANDOM_LIMIT_MAX_REQUESTS`
+- Compose：显式映射
+- 类型、默认值与范围：整数；默认 `10`；1–10000 次
+
+每 IP 在窗口内带 `limit` 参数的 `/random` 请求上限，和不带参数的档位互不消耗额度。
+按精确小写参数是否出现分档；`limit=1`、空值和重复参数都进入本档，参数合法性仍由随机
+API 校验。白名单豁免规则与上一档一致。计数依赖 Redis；非白名单请求遇到 Redis 命令失败
+返回 `503 redis_unavailable`，白名单请求仍可使用原有 PostgreSQL 有界回源。
 
 #### altcha.enabled
 

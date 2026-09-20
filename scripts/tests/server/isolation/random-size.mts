@@ -54,7 +54,9 @@ await runIntegrationScenario(async (runtime) => {
     streams.push(body);
     return { Body: body, ContentLength: bytes.length, ETag: '"synthetic-s3-etag"' };
   });
-  const request = (query: string, method = "GET") => app.request(`http://images.example/random?${query}`, { method });
+  const request = (query: string, method = "GET") => app.request(`http://images.example/random?${query}`, {
+    method, headers: { Referer: "http://images.example/gallery" }
+  });
   try {
     const localPath = `/images/full/${storageObjectKey(ids[0]!, "jpg")}`;
     const original = await app.request(localPath);

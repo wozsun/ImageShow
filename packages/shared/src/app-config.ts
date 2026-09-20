@@ -226,7 +226,10 @@ export const appConfig = {
       login_failure_window_seconds: 60,
       login_max_failures: 5,
       login_global_window_seconds: 180,
-      login_global_max_attempts: 10
+      login_global_max_attempts: 10,
+      random_window_seconds: 60,
+      random_max_requests: 60,
+      random_limit_max_requests: 10
     },
     altcha: {
       enabled: true,

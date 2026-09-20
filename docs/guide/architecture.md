@@ -63,7 +63,9 @@ packages/web ─────► packages/shared
 所有 ready 图片使用同一核心投影与 revision。设备、明暗、主题、标签、作者及组合筛选是有界
 派生结果；缺失或过期不被当作空图库。核心投影损坏、revision 不一致或 Redis 连接变化时，
 协调器关闭读取门并以同一活动任务校验 / 重建。公共读取通过受限 PostgreSQL reader scope 回源，
-后台在 Redis 不可用时明确返回 `503 redis_unavailable`。
+后台在 Redis 不可用时明确返回 `503 redis_unavailable`。`/random` 在选图前按 IP 与是否带
+`limit` 分档计数；白名单 Referer 豁免，非白名单计数失败也返回 503。应用图片入口的轻量
+Referer 校验允许空值与同一白名单，具体规则见[安全说明](security.md)。
 
 协调器只有 `unavailable`、`rebuilding`、`ready`、`stopped` 四态。图片事务推进 PostgreSQL
 revision，在写栅栏内完成精确同步；超过精确同步预算时只安排一次完整重建。Redis 同步失败

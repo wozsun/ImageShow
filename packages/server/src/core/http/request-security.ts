@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { isIP } from "node:net";
 import { ApiError } from "../api-error.ts";
 import { appendVaryHeader } from "./headers.ts";
+import { isTrustedReferer } from "../../config/trusted-origins.ts";
 
 export function requestLogContext(context: Context) {
   let requestId = context.get("logRequestId") as string | undefined;
@@ -43,6 +44,12 @@ function sameOrigin(context: Context) {
 
 export function requestIsSecure(context: Context) {
   return requestProtocol(context) === "https";
+}
+
+export function requestHasTrustedReferer(context: Context) {
+  const host = context.req.header("host") ?? new URL(context.req.url).host;
+  const origin = new URL(`${requestProtocol(context)}://${host}`).origin;
+  return isTrustedReferer(context.req.header("referer"), origin);
 }
 
 export function assertSameOrigin(context: Context) {

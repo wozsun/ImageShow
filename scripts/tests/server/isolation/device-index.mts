@@ -36,7 +36,7 @@ await runIntegrationScenario(async (runtime) => {
   const lruTags = Array.from({ length: policy.maxResults }, (_, i) => `device-lru-${i}`);
   const read = async (query: string, expected: readonly { id: string }[], userAgent = "synthetic-unknown-agent") => {
     const response = await app.request(`http://images.example/random?mode=json&limit=200&${query}`, {
-      headers: { "user-agent": userAgent }
+      headers: { "user-agent": userAgent, Referer: "http://images.example/gallery" }
     });
     assert.equal(response.status, expected.length ? 200 : 404, query);
     if (expected.length) {

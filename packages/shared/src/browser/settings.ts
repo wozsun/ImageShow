@@ -175,6 +175,9 @@ export type RuntimeConfig = {
     login_max_failures: number;
     login_global_window_seconds: number;
     login_global_max_attempts: number;
+    random_window_seconds: number;
+    random_max_requests: number;
+    random_limit_max_requests: number;
   };
   altcha: {
     enabled: boolean;

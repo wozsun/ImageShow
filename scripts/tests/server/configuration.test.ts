@@ -46,6 +46,7 @@ import {
 import {
   effectiveEmbedAncestorSources
 } from "../../../packages/server/src/config/embed-ancestors.ts";
+import { isTrustedReferer } from "../../../packages/server/src/config/trusted-origins.ts";
 import {
   ApiError
 } from "../../../packages/server/src/core/api-error.ts";
@@ -56,6 +57,69 @@ import {
 import {
   storageBackendLabel
 } from "../../../packages/server/src/storage/backends/label.ts";
+
+test("[Server/配置] 来源白名单匹配完整 Referer 并保留协议、端口与子域边界", () => {
+  const config = runtimeConfigDefaults();
+  config.site.domain = "images.example.test:8443";
+  config.embed.allowed_origins = ["https://portal.example.test", "https://*.trusted.example.test"];
+  for (const [referer, expected] of [
+    ["https://images.example.test:8443/page?q=1", true],
+    ["https://child.images.example.test:8443/", true],
+    ["https://images.example.test/", false],
+    ["https://PORTAL.example.test:443/article?q=1", true],
+    ["https://portal.example.test", true],
+    ["https://portal.example.test:8443/", false],
+    ["https://child.portal.example.test/", false],
+    ["https://a.b.trusted.example.test/page", true],
+    ["https://trusted.example.test/", false],
+    ["https://nottrusted.example.test/", false],
+    ["https://portal.example.test.attacker.test/", false],
+    ["http://portal.example.test/", false],
+    ["https://portal.example.test@attacker.test/", false],
+    ["https://user@portal.example.test/", false],
+    ["https://portal.example.test/#fragment", false],
+    ["https://portal.example.test/\\path", false],
+    ["/relative/path", false],
+    ["not a URL", false],
+    ["", false]
+  ] as const) {
+    assert.equal(isTrustedReferer(referer, "https://images.example.test:8443", config), expected, referer);
+  }
+  assert.deepEqual(effectiveEmbedAncestorSources(config), [], "嵌入开关仍单独控制 CSP");
+  config.site.domain = "";
+  assert.equal(isTrustedReferer("http://localhost:5518/gallery?q=1", "http://localhost:5518", config), true);
+  assert.equal(isTrustedReferer("http://child.localhost:5518/", "http://localhost:5518", config), false);
+  assert.equal(isTrustedReferer("https://localhost:5518/", "http://localhost:5518", config), false);
+});
+
+test("[Server/配置] 随机请求频次默认补齐并校验可配置的两档额度", () => {
+  const defaults = runtimeConfigDefaults();
+  assert.equal(defaults.security.random_window_seconds, 60);
+  assert.equal(defaults.security.random_max_requests, 60);
+  assert.equal(defaults.security.random_limit_max_requests, 10);
+  const missing = structuredClone(defaults);
+  const security = missing.security as Partial<typeof missing.security>;
+  delete security.random_window_seconds;
+  delete security.random_max_requests;
+  delete security.random_limit_max_requests;
+  assert.deepEqual(normalizeRuntimeConfig(missing).security, defaults.security);
+  for (const [field, maximum] of [
+    ["random_window_seconds", 3600], ["random_max_requests", 10000], ["random_limit_max_requests", 10000]
+  ] as const) {
+    for (const value of [1, maximum]) {
+      assert.equal(parseRuntimeConfig({ ...defaults, security: { ...defaults.security, [field]: value } }).security[field], value);
+    }
+    for (const value of [0, -1, 1.5, maximum + 1]) {
+      assert.throws(() => parseRuntimeConfig({ ...defaults, security: { ...defaults.security, [field]: value } }));
+    }
+  }
+  const seeded = runtimeConfigFromEnvironment({
+    SECURITY_RANDOM_WINDOW_SECONDS: "120", SECURITY_RANDOM_MAX_REQUESTS: "90", SECURITY_RANDOM_LIMIT_MAX_REQUESTS: "12"
+  });
+  assert.equal(seeded.security.random_window_seconds, 120);
+  assert.equal(seeded.security.random_max_requests, 90);
+  assert.equal(seeded.security.random_limit_max_requests, 12);
+});
 
 test("[Server/配置] 运行时配置同时支持严格保存与启动归一化", () => {
   const defaults = runtimeConfigDefaults();

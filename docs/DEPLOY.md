@@ -1,6 +1,6 @@
 # 生产单实例部署与反向代理
 
-本文以 6.4.18 的运行要求为基线。首次安装见[快速开始](guide/getting-started.md)，
+本文以 6.4.19 的运行要求为基线。首次安装见[快速开始](guide/getting-started.md)，
 配置参数见[配置说明](CONFIG.md)，内部契约见[技术参考](README.md#技术参考)。
 
 ## 支持的生产拓扑
@@ -81,7 +81,8 @@ docker compose logs --tail 100 imageshow
 
 `/livez` 表示进程存活，`/readyz` 核对数据库与 Redis 就绪状态。恢复访问以镜像自带的健康检查为准，
 随后核查图片数量、图片访问和后台操作。Redis 故障时后台返回 `503 redis_unavailable`，公开只读
-请求可有界回源 PostgreSQL；重连后自动重新校验。
+请求可有界回源 PostgreSQL；`/random` 的非白名单请求必须完成 Redis 频次计数，计数失败
+同样返回 503，白名单请求仍可回源。重连后自动重新校验。
 
 ## 管理员密码恢复
 
@@ -145,3 +146,9 @@ CDN 保留完整查询参数并遵守应用缓存头，不额外强制缓存或�
 `/api/images/*` 的既存表示。应用响应头不能撤回浏览器已缓存或已下载的内容，也不能限制
 外部源站自身公开的原图地址；部署时需纳入此边界。
 详细缓存规则见[图片资源](guide/image-resources.md)。嵌入与 HSTS 见[安全说明](guide/security.md)。
+
+完整图与缩略图的应用入口校验 Referer，允许空值、本站及子域和 `embed.allowed_origins`。
+代理须透传 Referer，图片共享缓存须遵守 `Vary: Referer`；启用策略或收紧白名单后清理对应
+既存共享缓存。不支持此 Vary 维度的 CDN 应在边缘执行相同规则或正确区分缓存，应用校验
+不能约束直接命中 CDN 或 S3 / COS 的请求。`/random` 保持 `no-store`，不可强制共享缓存，
+并依赖代理覆盖的真实 IP 头执行两档限流；不要把所有访客映射到代理 IP 或透传访客伪造的 IP 头。

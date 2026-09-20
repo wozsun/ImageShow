@@ -8,6 +8,7 @@ import { noStoreCacheControl, setPublicResourceCors } from "../core/http/headers
 import { serveLocalStoredObject } from "../images/serving/stored-image.ts";
 import { parseImageObjectKey, thumbnailObjectKey } from "../storage/objects/image-paths.ts";
 import type { AssetHandler } from "./assets.ts";
+import { assertAllowedImageReferer } from "./image-referer.ts";
 
 const corsRequestHeaders = new Set(["range", "if-none-match", "if-modified-since", "if-range"]);
 
@@ -44,6 +45,7 @@ async function serveLocalImageHost(c: Context, object: NonNullable<ReturnType<ty
   if (method === "OPTIONS") {
     response = resourcePreflight(c);
   } else if (method === "GET" || method === "HEAD") {
+    assertAllowedImageReferer(c);
     response = await serveLocalStoredObject(prefix, key, {
       range: c.req.header("range"),
       ifNoneMatch: c.req.header("if-none-match"),

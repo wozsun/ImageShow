@@ -96,7 +96,9 @@ await runIntegrationScenario(async (runtime) => {
     for (const tag of members) await pool.query("INSERT INTO image_tag(image_id,tag_slug) VALUES ($1,$2)", [row.id, tag]);
   }
   await vocab.refreshEntityVocabularies(["tag", "theme", "author"]);
-  const get = (path: string) => app.request(`http://imageshow.test${path}`, { headers: { "cache-control": "no-cache" } });
+  const get = (path: string) => app.request(`http://imageshow.test${path}`, {
+    headers: { "cache-control": "no-cache", Referer: "http://imageshow.test/gallery" }
+  });
   const ids = (items: Array<{ id: string }>) => items.map(item => item.id).sort();
   type Row = typeof rows[number];
   type Case = { tags: string[]; match: (row: Row) => boolean; mixed?: boolean; axis?: Record<string, string> };

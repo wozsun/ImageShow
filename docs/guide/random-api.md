@@ -4,6 +4,31 @@
 `proxy` 或 `redirect`。显式 `mode=json` 可一次
 请求多张互不重复的图片元数据，也可用 `id` 限定本次请求的候选图片。
 
+## 请求频次与白名单
+
+GET / HEAD 按 IP 使用两个独立固定窗口，默认均为 60 秒：
+
+| 请求 | 每 IP 上限 |
+| --- | --- |
+| 查询串带 `limit`，包括 `limit=1` | 10 次 |
+| 查询串不带 `limit` | 60 次 |
+
+三种返回模式、尺寸及筛选条件共用各自档位；请求在参数校验和选图前计数，后续失败不退还额度。
+额度耗尽返回 `429`、错误码 `random_rate_limited` 及整数秒 `Retry-After`，所有响应继续 `no-store`。
+窗口从该 IP 在该档的首次计数时开始，拒绝请求不会延长窗口。阈值通过
+[`security.random_*`](../CONFIG.md#securityrandom_window_seconds) 配置。
+
+Referer 的来源匹配本站 HTTPS origin、同端口子域或 `embed.allowed_origins` 时，两档均不计数；
+精确来源只匹配自身，通配来源只匹配子域、不包含根域。未设置实际站点域名时仅隐式信任
+当前请求同源。豁免不受 `embed.enabled` 控制，不增加第二份白名单；空、无效或其他 Referer
+正常计数。Referer 可伪造，此机制只做轻量使用约束，不替代鉴权。
+
+非白名单请求依赖 Redis 计数，Redis 命令失败返回 `503 redis_unavailable`；白名单请求仍可
+沿用下述 PostgreSQL 有界回源。IP 读取依赖可信代理覆盖 `X-Real-IP` 或单值
+`X-Forwarded-For`，缺失或非法时共用 `unknown` 额度，部署要求见[反向代理](../DEPLOY.md#反向代理与-https)。
+
+## 查询参数
+
 | 参数 | 取值 | 说明 |
 | --- | --- | --- |
 | `device` | `pc` / `mb` / `all` / `auto` | 设备；缺省在请求边界归一为 `auto`，按 User-Agent 推断，无法识别时使用全部设备；`all` 显式使用全部设备 |
@@ -70,7 +95,7 @@ registry 不一致只使本次随机请求放弃派生结果，不触发核心�
   参数返回 400。指定 `seed` 时只支持单张结果，`mode=json` 可省略 `limit` 或指定 `limit=1`，
   大于 1 时返回 400。`seed` 不能与 `id` 同时使用。
 - 指定 `id` 后只允许同时指定无筛选作用的 `device=auto`、`mode`、`size` 和 `limit`。所有格式、数量和互斥校验都先于词表、
-  Redis 与存储访问完成。
+  图片查询缓存与存储访问完成；请求频次计数先于这些参数校验。
 - 任一未知标签使整次请求返回 404，不丢弃条件继续查询。主题 / 作者的未知包含项返回 404，
   未知排除项从有效筛选中删除。合法但没有图片的随机筛选返回 404。
 
@@ -118,8 +143,8 @@ rich item hash 批量取得返回、跳转或代理所需的完整投影。应�
 UUIDv7 时间范围，再生成随机 pivot，向后按 `id` 读取并在不足时从头 wrap；候选最多
 512 个，应用层打乱、去重并优先避开仍可读取的 Redis 最近历史，不使用
 `ORDER BY random()`、count + OFFSET 或临时随机池。Redis 完全断线时不建立替代历史，
-故障窗口允许跨请求重复。空图库或合法的零匹配筛选返回 404；只有 fallback 队列、等待、
-PostgreSQL 或执行上限饱和时返回带 `Retry-After` 的 429/503。进程首次 Redis 校验尚未
+故障窗口允许跨请求重复；Redis 计数不可用时只有白名单请求能继续进入此路径。空图库或合法的零匹配筛选返回 404；fallback 队列、等待、
+PostgreSQL 或执行上限饱和时返回带 `Retry-After` 的 429/503，频次超限按前述规则返回 429。进程首次 Redis 校验尚未
 成功时则由冷启动总门直接 503，不允许随机路由绕过硬前置。
 
 全量重建使用 PostgreSQL repeatable-read 快照分批读取，完成完整性校验且确认 revision

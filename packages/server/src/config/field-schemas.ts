@@ -148,6 +148,8 @@ export const loginFailureWindowSeconds = z.coerce.number().int().min(30).max(300
 export const loginMaxFailures = z.coerce.number().int().min(3).max(500);
 export const loginGlobalWindowSeconds = z.coerce.number().int().min(60).max(600);
 export const loginGlobalMaxAttempts = z.coerce.number().int().min(5).max(1_000);
+export const randomWindowSeconds = z.coerce.number().int().min(1).max(3_600);
+export const randomMaxRequests = z.coerce.number().int().min(1).max(10_000);
 
 export const thumbnailLongEdge = z.coerce.number().int().min(64).max(4096);
 export const thumbnailQuality = z.coerce.number().int().min(1).max(100);
