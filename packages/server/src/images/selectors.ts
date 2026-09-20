@@ -1,5 +1,5 @@
 import { appConfig } from "@imageshow/shared";
-import { ApiError } from "./api-error.ts";
+import { ApiError } from "../core/api-error.ts";
 
 const disallowedSelectorCharacters = /[\u0000-\u001f\u007f]/u;
 

@@ -31,8 +31,6 @@ export type FacetOptionDto = {
 };
 
 export type GalleryFacetsDto = {
-  devices: string[];
-  brightnesses: string[];
   themes: FacetOptionDto[];
   tags: FacetOptionDto[];
   authors: Array<FacetOptionDto & { link: string }>;

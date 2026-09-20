@@ -21,10 +21,10 @@ import { useIngestionDuplicateDetails } from "../queue/useIngestionDuplicateDeta
 import type {
   FacetOption,
   ImageDraft,
-  AdminImageListItem,
-  IngestionJob
+  AdminImageListItem
 } from "../../../../lib/types.js";
-import type { IngestionAttributeDefaults } from "../queue/model/ingestion-attribute-defaults.js";
+import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
+
 import type { IngestionPreviewTarget } from "../queue/cards/DuplicateMatchPanel.js";
 import { ingestionJobPreviewAvailable } from "../queue/model/duplicate-match.js";
 import type { ImportManifestParseError } from "../queue/ingestion-http-client.js";

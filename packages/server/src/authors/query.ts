@@ -4,7 +4,7 @@ import {
   type VocabularyReadAccess
 } from "../vocab/vocab-cache.ts";
 import { pool } from "../core/database/pools.ts";
-import { resolveVocabularySlugs, resolveTermSlugMap } from "../core/vocabulary-terms.ts";
+import { resolveVocabularySlugs, resolveTermSlugMap } from "../vocab/terms.ts";
 import type { AuthorDto } from "@imageshow/shared/browser";
 import { isWeiboUserId } from "./identity.ts";
 

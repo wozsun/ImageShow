@@ -1,6 +1,6 @@
-import { publicImageUrl } from "../storage/objects/public-urls.ts";
-import { imageResourceBaseUrl } from "../config/site-host.ts";
-import type { StorageRegistryAccess } from "../storage/backends/registry.ts";
+import { publicImageUrl } from "../../storage/objects/public-urls.ts";
+import { imageResourceBaseUrl } from "../../config/site-host.ts";
+import type { StorageRegistryAccess } from "../../storage/backends/registry.ts";
 
 type OriginalComparableImage = {
   id: string;

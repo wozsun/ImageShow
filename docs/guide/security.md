@@ -135,7 +135,7 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | 随机 proxy / redirect / JSON | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
 | 外链原图 proxy / redirect | 单一公开入口；直连 302 公开短缓存，proxy 继承源站策略或使用 CDN fallback；`Vary: User-Agent`、URL 命名空间弱 ETag、Last-Modified 与 304；错误和失败回退不缓存 | 不读取会话或按钮开关；正常图片与回收站均可访问；HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、验证器绑定 URL、`Referrer-Policy: no-referrer` |
 | Ingestion SSE | `no-store, no-transform` | 每个已显示的 owner + queue 使用一个固定 GET 路径；不压缩、不缓冲，30 秒串行鉴权 heartbeat，断开即清理 listener / scope |
-| 图片出口与未知 Host | 主站 `/images/full/*`、`/images/thumbs/*`、`/images/original/<id>` 统一公开；失败 `no-store` | 显式域名只接受主站 Host，基础回退使用访问 Host 与同源路径；图片出口不读会话、不写 Cookie，原图按钮开关只控制详情链接显示 |
+| 图片出口与未知 Host | 主站 `/images/full/*`、`/images/thumbs/*`、`/images/original/<id>` 统一公开；失败 `no-store` | 显式域名区分主站、本地图片与静态资源 Host，独立 Host 仅开放对应资源；基础回退使用访问 Host 与同源路径；图片出口不读会话、不写 Cookie，原图按钮开关只控制详情链接显示 |
 
 确定性管理只读 JSON 包括偏好、管理员列表、存储选项 / 后端，以及已有的设置、
 词表、图片列表与管理详情；写后仍由各领域精确失效查询，内容未变化的再次读取返回 304。

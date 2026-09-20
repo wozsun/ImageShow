@@ -102,7 +102,6 @@ export async function settleConfirmedImageAdminMutation({
   } else if (!presentBeforeRefresh) {
     present(text, status);
   }
-  return refreshFailed;
 }
 
 function unknownOutcomeFeedback(
@@ -363,7 +362,6 @@ export function useImageAdminOperations({
     actionBusy,
     busyIds,
     operationBusy,
-    refresh,
     resetTransientState,
     runConfirmedAction,
     trash,

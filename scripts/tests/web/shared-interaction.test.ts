@@ -1028,7 +1028,7 @@ test("[Web/共享交互] 图片成员已知结果必须先呈现再刷新移出�
     calls.push(`present:${status}:${text}`);
   };
 
-  const refreshFailed = await settleConfirmedImageAdminMutation({
+  await settleConfirmedImageAdminMutation({
     startedAt: Date.now() - 1_000,
     text: "已恢复 199 张，1 张未处理",
     status: "error",
@@ -1038,14 +1038,13 @@ test("[Web/共享交互] 图片成员已知结果必须先呈现再刷新移出�
     },
     present
   });
-  assert.equal(refreshFailed, false);
   assert.deepEqual(calls, [
     "present:error:已恢复 199 张，1 张未处理",
     "refresh"
   ]);
 
   calls.length = 0;
-  const failed = await settleConfirmedImageAdminMutation({
+  await settleConfirmedImageAdminMutation({
     startedAt: Date.now() - 1_000,
     text: "已永久删除 200 张",
     status: "success",
@@ -1056,7 +1055,6 @@ test("[Web/共享交互] 图片成员已知结果必须先呈现再刷新移出�
     },
     present
   });
-  assert.equal(failed, true);
   assert.deepEqual(calls, [
     "refresh",
     "present:error:已永久删除 200 张；图片列表刷新失败，请重新加载页面"

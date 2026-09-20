@@ -88,13 +88,18 @@ export function assertVocabularyFound(
   );
 }
 
-export async function synchronizeVocabularyMutation({
-  entity
-}: {
-  entity: VocabularyEntity;
-}) {
-  await Promise.all([
-    refreshEntityVocabularies([entity]),
-    invalidateEntityCountCaches([entity])
-  ]);
+export async function withVocabularyMutationSync<T>(
+  entity: VocabularyEntity,
+  work: () => Promise<T>
+): Promise<T> {
+  try {
+    return await work();
+  } finally {
+    // A lost write acknowledgement does not prove rollback. Invalidate while
+    // the caller still owns its vocabulary lease and any image cache fence.
+    await Promise.all([
+      refreshEntityVocabularies([entity]),
+      invalidateEntityCountCaches([entity])
+    ]);
+  }
 }

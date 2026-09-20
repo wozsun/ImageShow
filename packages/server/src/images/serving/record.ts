@@ -1,9 +1,9 @@
-import { pool, type DatabaseReader } from "../core/database/pools.ts";
+import { pool, type DatabaseReader } from "../../core/database/pools.ts";
 import type {
   PublicDatabaseReadAccess
-} from "../core/database/public-fallback.ts";
-import { readReadyImageById } from "./ready-cache/query.ts";
-import type { ReadyImageCacheItem } from "./ready-cache/model.ts";
+} from "../../core/database/public-fallback.ts";
+import { readReadyImageById } from "../ready-cache/query.ts";
+import type { ReadyImageCacheItem } from "../ready-cache/model.ts";
 
 type StoredImageServingRecord = {
   id: string;

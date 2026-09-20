@@ -17,8 +17,8 @@ import {
   publicImageUrlsForConfig,
   publicThumbnailUrlForConfig
 } from "../storage/objects/public-urls.ts";
-import { imageHasTrashPurgeJobSql } from "./trash-purge-state.ts";
-import { publicOriginalAccessUrl } from "./original-link.ts";
+import { imageHasTrashPurgeJobSql } from "./trash/purge-state.ts";
+import { publicOriginalAccessUrl } from "./serving/original-link.ts";
 
 type DatabaseNumber = number | string;
 type DatabaseTimestamp = string | Date;

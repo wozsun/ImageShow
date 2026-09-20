@@ -1,4 +1,4 @@
-import type { IngestionJob } from "../../../../../lib/types.js";
+import type { IngestionJob } from "./ingestion-job.js";
 import { webUuidV7 } from "./ingestion-identity.js";
 import { ingestionJobCanStartCommit } from "./ingestion-queue-state.js";
 import { ingestionJobNeedsDuplicateConfirmation } from "./duplicate-match.js";

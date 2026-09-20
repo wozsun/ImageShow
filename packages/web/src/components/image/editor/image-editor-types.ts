@@ -4,11 +4,10 @@ import type {
 import type {
   EditableImageSnapshot,
   AdminImageListItem,
-  ImageEditorItem
 } from "../../../lib/types.js";
 
 export type ImageEditorSource = Pick<AdminImageListItem, "id"> &
-  Partial<ImageEditorItem> &
+  Partial<EditableImageSnapshot> &
   Partial<Pick<AdminImageListItem, "deleted_at" | "status">>;
 
 export type ImageEditorTarget = {

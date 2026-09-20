@@ -2,15 +2,14 @@ import type {
   ImageTrashResponseDto,
   ImageRestoreResponseDto
 } from "@imageshow/shared/browser";
-import { withAdvisoryLocks } from "../core/database/advisory-locks.ts";
-import { withTransaction } from "../core/database/transactions.ts";
-import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
-import { imageUpdateLockRequests } from "./image-update-lock.ts";
-import { withImageMutationSync } from "./mutation-sync.ts";
-import { decideImageMutationSync } from "./mutation-sync-policy.ts";
-import { bumpReadyImageRevision } from "./ready-cache/revision.ts";
-import { imageHasTrashPurgeJobSql } from "./trash-purge-state.ts";
-import { lockTrashMembershipForTransaction } from "./trash-membership-lock.ts";
+import { withAdvisoryLocks } from "../../core/database/advisory-locks.ts";
+import { withTransaction } from "../../core/database/transactions.ts";
+import { imageUpdateLockRequests } from "../image-update-lock.ts";
+import { withImageMutationSync } from "../mutation-sync.ts";
+import { decideImageMutationSync } from "../mutation-sync-policy.ts";
+import { bumpReadyImageRevision } from "../ready-cache/revision.ts";
+import { imageHasTrashPurgeJobSql } from "./purge-state.ts";
+import { lockTrashMembershipForTransaction } from "./membership-lock.ts";
 
 const moveImagesToTrashSql = `UPDATE metadata
   SET status='deleted',
@@ -42,9 +41,6 @@ async function mutateImageTrashState(ids: string[], sql: string) {
       });
       if (decision.mode !== "rebuild") {
         for (const row of rows) mutationBatch.add({ id: row.id });
-      }
-      if (rows.length) {
-        await invalidateEntityCountCaches(["theme", "author"]);
       }
       return new Set(rows.map((row) => row.id.toLowerCase()));
     })

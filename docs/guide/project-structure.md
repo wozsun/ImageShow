@@ -13,6 +13,9 @@ packages/web ─────► packages/shared
 本文面向项目开发与运维，详细描述现行源码、构建产物、状态所有者和依赖边界，是当前实现
 结构的权威说明。
 
+入口：[根目录](#根目录职责)、[Shared](#packagesshared)、[Server](#packagesserver)、
+[Web](#packagesweb)、[构建资源](#web-构建资源边界)。用户操作见各角色指南，交互与请求时序见[功能与流程](flows.md)。
+
 ## 根目录职责
 
 - `package.json` 编排 workspace 构建、类型检查、长期契约测试、门禁和运维入口。
@@ -59,6 +62,12 @@ Redis、存储 driver 和 raw 目录游标。子进程统一由测试进程树�
 `verify:*` 总入口不继承定向选择器。
 
 ## 本地门禁与发布职责
+
+源码开发使用根包 `engines` 要求的 Node.js 26.8 或更高 26.x 版本；HTTP 媒体类型解析使用
+稳定的 `MIMEType.parse()`。Dockerfile 固定 Node 26.9.0 / npm 12.0.2，并通过同一
+`NPM_VERSION` 控制构建与容器维护环境；本机可用 `npm install --global npm@12.0.2` 对齐。
+安装使用提交的 lockfile 与根包 `allowScripts`，新增依赖安装脚本时须审查并更新该清单。
+生产应用直接由 Node 启动，npm 依赖安装只发生在构建期。
 
 四个门禁可以单独重跑，总入口按 source → build → runtime 顺序失败即停，不通过子命令
 互相嵌套：
@@ -141,7 +150,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、静态编码协商、条件请求与 Range 解析。 |
 | `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；普通保存与磁盘重载共用 FIFO 写租约内“持久化后发布”入口，配置包在同一租约内把候选文件持久化与数据库结果核对及收敛决定后的单次内存发布分离。配置包按当前默认配置逐项投影，存储后端按支持的结构与能力逐条识别；`runtime-config-environment.ts` 是全部 RuntimeConfig 叶子到首次 seed 变量的唯一映射。启动、热加载和配置包都只读取当前结构，未知字段统一投影删除。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；`validation/` 按图片、Ingestion、存储、用户和词表职责拥有请求 schema，并集中保留通用 HTTP 原语与 `validation_error` 映射；业务工作委托给领域模块。 |
-| `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`metadata-tags.ts` 拥有 HTTP 与 JSONL 共用的标签归一化契约，`page-window.ts` 唯一计算安全数字页窗口，`storage-location/` 拥有正式图片后端位置 CAS、revision、mutation fence 和 cache handoff，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型及其领域查询类型。 |
+| `images/` | 图片读写、展示投影、分类与元数据变更；`trash/` 拥有回收站和永久删除，`serving/` 拥有寻址与图片响应；`metadata-tags.ts` 拥有 HTTP 与 JSONL 共用的标签归一化契约，`page-window.ts` 唯一计算安全数字页窗口，`storage-location/` 拥有正式图片后端位置 CAS、revision、mutation fence 和 cache handoff，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型及其领域查询类型。 |
 | `storage/` | 只在根层保留横切 `maintenance-lock.ts`；`backends/`、`drivers/`、`objects/` 与 `cleanup/` 分别拥有注册表及 Endpoint 重绑定证明、驱动、对象原语及跨图片传输准入、持久清理。`storage/` 不修改正式图片位置或相应 revision，也不交接 ready-cache。`backends/config.ts` 保留 S3 配置 schema、归一化和存储领域输入类型，HTTP create / update / test schema 位于路由边界。 |
 | `random/` | 随机查询校验、规范 `auto` / `all` 到候选设备轴的选择、Redis 8 Array 最近历史、定向 id、有界 pivot 普通随机 PG 降级查询、固定 seed 的确定性起点与同序 PG 选图及随机出口编排；纯 User-Agent 设备识别由 `@imageshow/shared/browser` 提供给 Server 与 Web，Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
 | `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。历史清理在有界候选阶段锁定行并跳过正在更新的任务，避免删除并发重新入队的新意图。 |
@@ -150,9 +159,24 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `users/` | 管理员初始化、账号变更、Redis 登录会话、逐请求 PostgreSQL 角色与密码代际核对、操作授权、密码恢复、偏好和会话失效；不维护管理员凭据 Redis 投影。 |
 | `types/` | 仅放缺失的编译期声明，不承载运行时代码。 |
 
+图片选择器规则由 `images/selectors.ts` 持有，词条查询归一化由 `vocab/terms.ts` 持有；
+管理员凭据规则与登录限流分别位于 `users/credentials.ts`、`users/login-rate-limit.ts`。
+`core/password.ts` 只负责固定 Argon2id 策略的哈希与校验，不持有账号业务规则。
+
+### 配置与资源入口
+
+`config/runtime-config.ts` 持有当前 schema、默认值、严格保存校验与启动归一化。
+`config/package/` 组合可移植配置与存储注册表：`format.ts` 负责包结构和预览，
+`runtime-projection.ts` 负责宽松导入与目标站点字段保留，`service.ts` 负责写入编排。
+配置包依赖运行配置 schema；日常运行配置不反向依赖包导入算法。
+
+`routes/assets.ts` 统一主站与资源 Host 的静态文件、编码协商和条件响应；`routes/spa.ts`
+只负责最终 HTML 快照、内联站点配置与嵌入页策略。二者复用 HTTP 层能力，资源响应的公开
+CORS 头由 `core/http/headers.ts` 统一设置。
+
 `config/runtime-config-store.ts` 唯一拥有进程内 RuntimeConfig、listener 与 FIFO 写租约。普通设置、
 高级配置和磁盘重载都先完成所需原子文件写入，再替换内存并逐个通知 listener；同步 listener
-异常只记录结构化错误，不中断后续 listener 或反转已持久化结果。`config/config-package.ts` 在同一
+异常只记录结构化错误，不中断后续 listener 或反转已持久化结果。`config/package/service.ts` 在同一
 租约内先完成导入后端的存储探测，再通过 store 的专用阶段持久化候选文件并等待 PostgreSQL 事务结果；只有正常提交、确认
 已提交或结果 unknown 时才发布候选，确认回滚只恢复旧文件且不发布中间快照。
 
@@ -167,7 +191,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 本地公开 URL 存在 `storage_backend.config`，由存储注册表唯一持有配置缓存。启动加载注册表后开始监听，
 Host 准入同步读取注册表最后发布的本地公开地址，不触发数据库查询；失效保留已发布快照供准入使用，
 存储读取仍按 TTL / revision 重新加载，local 地址保存完成前加载并发布新快照。普通主站请求不增加存储读取。
-`images/stored-image-serving.ts` 的本地公开入口固定 local，跳过图片记录查询，与主站入口共用 driver 和
+`images/serving/stored-image.ts` 的本地公开入口固定 local，跳过图片记录查询，与主站入口共用 driver 和
 `stored-object-response.ts` 的条件请求 / 范围 / 取消与资源释放逻辑，不建立 ETag 或正文缓存。
 高级配置验证、保存及设置重载复用注册表的主站 Host 冲突校验；保存和重载在 RuntimeConfig 写租约内执行，
 访问配置变更不退休 driver。
@@ -224,7 +248,7 @@ HTML / API 动态编码由应用负责，反向代理不是压缩依赖。`If-No
 无正文的 304，相同配置快照下的条件请求也跳过 HTML 生成。路由可用性、嵌入父页面策略、CSP、Cache-Control
 和条件响应仍在各请求中处理，完整内联公开配置与浏览器启动回退沿用现有契约。
 
-`images/original-link.ts` 统一生成 `/images/original/<id>`，正常图片、后台及回收站均使用此公开
+`images/serving/original-link.ts` 统一生成 `/images/original/<id>`，正常图片、后台及回收站均使用此公开
 缓存入口；资源处理器不读会话或按钮开关，直连 302 使用公开短缓存，代理继承源站策略或使用
 CDN fallback，保留 HEAD、条件请求、取消处理与 `Vary: User-Agent`。
 `site.gallery.public_original_button` 默认关闭，只决定详情是否向访客返回链接。
@@ -232,7 +256,7 @@ CDN fallback，保留 HEAD、条件请求、取消处理与 `Vary: User-Agent`�
 管理员返回公开链接；开启时不读会话并使用浏览器 30 秒 / CDN 60 秒缓存，始终带 `Vary: Cookie`。
 详情只合并数据库行读取，链接显示投影在每个请求内独立生成；Web 按图片 ID 与认证身份隔离
 详情查询，由服务端链接决定按钮显示，不额外读取按钮开关或发起会话探针。
-`images/image-serving-record.ts` 统一资源读取的 Redis 命中与 PostgreSQL 回源：完整图和缩略图
+`images/serving/record.ts` 统一资源读取的 Redis 命中与 PostgreSQL 回源：完整图和缩略图
 只投影对象键、扩展名与存储后端，原图入口再读取外部原图地址和更新时间。图片状态仅用于
 查询可服务的正式 / 回收站记录；分类与展示文字由图片详情和列表的读模型负责。
 
@@ -278,11 +302,13 @@ HTTP `validation_error`，`primitives.ts` 只复用 UUID、slug、HTTPS 和安�
 `images/metadata-tags.ts` 的标签归一化 schema，cursor 复用 `core/uuid.ts` 的规范 UUID 原语，
 因此非路由模块无需也不得反向依赖请求校验目录。
 
+### 数据库与查询协调
+
 `core/database/` 按 PostgreSQL 生命周期边界拆分：`pools.ts` 只接收显式配置并拥有主查询与
 advisory lock 两个连接池，均启用 PostgreSQL 每秒断连检查，使已销毁连接的长查询和锁等待
 能够在数据库侧结束；`transactions.ts`、`advisory-locks.ts` 和 `schema.ts` 分别拥有
 事务、锁与数据库启动编排；空库在事务内执行当前完整 `schema.sql` 并核对 readiness，非空库
-只执行最小只读 readiness，不扫描历史数据或执行 DDL。历史升级前置、停机备份与恢复边界见 `docs/DEPLOY.md`。
+只执行最小只读 readiness，不扫描历史数据或执行 DDL。现行安装契约见[数据库结构](database.md)，停机备份与恢复见[部署说明](../DEPLOY.md)。
 `schema.ts` 合并同时使用默认连接池的 readiness 调用，只共享尚未完成的
 校验，不缓存成功结果；启动事务或调用者显式提供的 reader 独立执行完整校验。
 其他既有结构变更由维护者在启动前处理，额外表不参与数据或权限检查。
@@ -336,6 +362,8 @@ ioredis 负责按物理连接在首次调用发送 `EVAL`、后续
 发送 `EVALSHA`，并在 `NOSCRIPT` 后重发脚本；应用不维护 SHA、启动时预加载清单或 Redis
 Functions。检查页按键动态测量的低频 Lua 仍留在 `checks/`，不并入业务注册表。
 
+### 存储、词表与图片变更
+
 `storage/` 的稳定目录为：
 
 ```text
@@ -359,6 +387,11 @@ storage/
 重复采用已有词条不移动位置。数值达到 5,000,000 后保留该上限值，同值按 slug 升序。
 `vocab/sort-order.ts` 持有词表单项排序写入与缓存同步；后台列表返回真实 `sort_order`，
 管理列表、画廊筛选与 Ingestion 词表统一按数值降序、slug 升序排列。
+显式创建、编辑、排序和删除通过 `vocab/mutation-sync.ts` 的统一包装器收口：
+无论写入成功、失败还是回执丢失，退出前均刷新词条并失效后台计数。集合删除保留外层词表锁、
+图片 revision 与 mutation fence；自动建词条仍由所属图片事务汇总同步。
+后台计数包含回收站，移入 / 恢复只更新图片投影；永久删除在执行退出时失效三类计数，
+即使 DELETE 回执不明或空记录重试也按当前数据库真值重新读取。
 `themes/mutations.ts` 在词表排他锁和图片缓存 fence 内，以单事务集合 SQL 解除图片关联并删除
 主题，汇总一次 revision 与精确同步 / 重建交接。`storage/objects/image-transfer-admission.ts` 是所选图片与
 整后端迁移共用的活动逐图搬迁许可 owner，两个生产者直接复用同一个代码内固定 5 项容量。
@@ -383,9 +416,9 @@ Endpoint 重绑定的双向随机挑战与精确探针清理位于 `storage/back
 由 driver 重读受影响目录及祖先；未变化目录复用捕获事实，原有扫描预算与 rmdir 边界保留。
 这组写维护只从显式维护入口调用，不接入普通请求热路径或通用后台任务。
 回收站的移入 / 恢复集中于
-`images/trash-mutations.ts`；`images/trash-purge.ts` 拥有逐图任务原子入队与执行，`trash-purge-state.ts` 统一表达图片的任务存在性，
-`images/trash-purge-job.ts` 将逐图处理完成映射为通用任务结果，
-`images/trash-purge-maintenance.ts` 集中维护入口触发的全部耗尽任务重试与异常成功任务恢复。深度诊断属于
+`images/trash/mutations.ts`；`images/trash/purge.ts` 拥有逐图任务原子入队与执行，`images/trash/purge-state.ts` 统一表达图片的任务存在性，
+`images/trash/purge-job.ts` 将逐图处理完成映射为通用任务结果，
+`images/trash/purge-maintenance.ts` 集中维护入口触发的全部耗尽任务重试与异常成功任务恢复。深度诊断属于
 `checks/database-check.ts`，正常图片请求不探测任务完整性。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
 请求级派生计数失效。每个请求只借一个锁会话，按并发上限分组取得该组词表及自动亮度所需的单图对象与
 存储读取锁，再并行执行逐项事务；辅助锁在组结束后释放，图片更新锁保留至整个请求收口。
@@ -398,6 +431,8 @@ Endpoint 重绑定的双向随机挑战与精确探针清理位于 `storage/back
 拥有共享 HTTP / JSONL nullable slug schema；查询专用
 `null` 由 shared browser 契约提供，虚拟统计项由 vocab / read model 构造，不进入主题表。两者都保持正式对象位置不变，并在同一图片事务中推进
 revision、交接同一 mutation sync。
+
+### 内容接入
 
 `images/ingestion/` 是 Upload 与 Import 共用的统一内容接入领域，稳定子目录表达允许依赖方向：
 
@@ -429,163 +464,28 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
 反向依赖 `workers/` 或 `runtime.ts`。Routes 只依赖 runtime 公开的 service、repository facade、
 窄执行控制接口与 DTO，不能导入 Lua、执行协调器或私有 Worker。
 
-- `runtime-repository.ts` 构造进程唯一 repository；`runtime.ts` 是唯一生产装配入口，导入该
-  实例后创建 token service、service、`IngestionSessionWorker` 与 orphan cleanup Worker，并只向
-  HTTP 层公开 queue action / cancel 所需的窄执行控制接口。Routes 不接触 Worker 实例、stage
-  pool、tick、drain 或不可取消边界协调器；HTTP、Worker 和恢复流程仍复用核心 Redis client 上
-  的同一 command runner 与 listener hub。
-- `sessions/projection.ts` 只拥有稳定哈希与实际使用的 metadata 汇总展示；单项汇总变化的 Server
-  权威位于 Redis Lua，TypeScript 负责命令调用与结果解析。
-- `images/processing.ts` 在编码轮次前后检查执行取消；已启动的转换与并行缩略图全部收口后才归还，
-  Worker 继续持有现有 Normalize、buffer 和 raw 租约，取消不启动下一轮降质或质量回补。
-- `repository.ts` 保留命令调用边界、错误翻译与事件发布 facade；实际职责分别由
-  `sessions/command-runner.ts`、`replies.ts`、`intent-store.ts`、`listener-hub.ts` 和
-  `queue/store.ts` 承接。facade 与内部模块不复制 key 推导、严格解析或业务校验。
-- `sessions/model.ts` 以 Zod 严格 schema 定义 active canonical、终态回执、Upload intent 和
-  queue metadata，并推导服务端类型；`codec.ts` 负责 JSON / hash reply 解码与解析错误边界。
-  存储 schema 不引入 HTTP 补齐、转换或额外业务约束，不进入浏览器 DTO。
-- `sessions/import-metadata.ts` 统一投影 Import 接管与首次提交冻结时受 RuntimeConfig 控制的
-  `original` 和微博 `source`，只接收配置快照与纯 DTO；session service 与 commit intent 复用
-  同一规则，提交意图冻结后的重试继续使用已冻结值。
-- `sessions/scripts/` 的五个文件生成十段完整 Lua。`projection.ts` 只保存共享 Lua
-  片段，不执行命令；每个业务操作由一段完整脚本和一次 `EVAL` / `EVALSHA` 原子完成，明确声明
-  `numberOfKeys`、KEYS / ARGV、返回数组和错误 marker。TypeScript 与 Redis 持久运行时协议
-  均以 Ingestion 为父领域：key 固定使用 `imageshow:ingestion:*`，queue 只允许 `upload` /
-  `import`；Import canonical 以 `import_download` 保存下载 URL，Upload canonical 不含该字段。共享
-  marker 使用 `INGESTION_CANONICAL` / `INGESTION_QUEUE_STRUCTURE`，Upload intent 使用
-  `UPLOAD_INTENT`；签名 purpose 使用 `imageshow/ingestion/...` 名称。
-  canonical 的 `version`、revision、generation 与 execution token 只承担当前 CAS、顺序、
-  对象所有权和执行 fencing。snapshot 在 `sessions/scripts/queue.ts` 内收集有界的缺失 canonical
-  排除 session，并以一次 display 扫描区分正常 stale 与孤儿投影。
-- `queue/events.ts`、`snapshot.ts`、`action-scope.ts` 与 `store.ts` 共同负责 owner + queue 单
-  SSE、稳定分页、动作作用域和最近动作批次的有界重放；`action.ts` 编排有界全队列动作，
-  `action-protocol.ts` 校验 watermark / continuation，并让冻结最大 accepted order 后的扫描游标
-  从 1 单调向上推进；`action-handlers.ts` 执行逐项动作，
-  `session-update.ts` 负责 active canonical 草稿和 ready duplicate decision 的 CAS。
-  每条 SSE 连接的初始缓冲、待发队列和在途写入共用 1,000 条 / 1 MiB 序列化事件预算；
-  超限关闭当前连接，由既有重连与 snapshot 恢复。周期验权串行执行，独立于快照与流写入，
-  慢读不延后验权；关闭后统一释放订阅、作用域、队列与等待。
-- `raw/lease-registry.ts` 是 `active`、`deleting`、`scanning`、`pruning` 可变状态的唯一 owner；
-  `paths.ts` 只处理身份与路径，`files.ts` 处理 generation 精确对象操作，`orphan-scanner.ts`
-  处理游标扫描和目录修剪，`prepared.ts` 处理本地结果原子发布、受限预览读取及精确清理，
-  `upload.ts` 收口 credential claim、流式写入与 canonical 转换。磁盘路径统一为 `data/temp`，
-  按 session / image 分层，来源继续由 canonical 保存。
-- `commit/worker.ts` 继续唯一拥有 execution fencing、storage / advisory lock 顺序、prepared
-  对象采用、事务开始后的不可取消边界和完成发布时机；`target-validation.ts`、
-  `persistence.ts`、`completion.ts` 分别承接目标与执行权校验、数据库写入和完成发布；目标
-  校验在任一任务失败时取消并排空其余任务，成功后把结果交给同次提交的写入阶段。提交后的本地文件清理
-  由 worker 的 `finally` 交接，不单设暂存清理类。
-- `cancel/coordinator.ts` 保留 resolving / irreversible boundary、abort 顺序、mutation limiter
-  单例和响应丢失后的真相核对；`items.ts` 与 `retired-cleanup.ts` 不建立第二状态 owner。
-- `workers/ingestion-worker.ts` 只编排 download、prepare、commit 与恢复扫描；
-  `workers/import-prefetch.ts` 按 Normalize 容量维护 FIFO 后继窗口，许可覆盖 Import 远程素材化到
-  实际取得图片处理许可。`workers/preparation-admission.ts` 是 Upload / Import 共用的唯一进程级
-  准备与本地结果发布 owner，容量同样由 Normalize 配置派生，覆盖等待图片处理到两个
-  本地处理结果及 ready canonical 发布。`raw/upload-admission.ts`、`images/normalization-admission.ts` 和
-  `commit/admission.ts` 分别是 raw PUT、全部 Sharp 重工作与最终入库的进程级唯一资源 owner；
-  Worker 从 `normalize.concurrency=N` 派生 Import 与 Upload 各自的 pre-commit dispatch slot；Import 在取得
-  Normalize 许可时交还，Upload 在本项 prepare 完成时交还，两类补位各使用独立 frozen-tail 游标。
-  Import queued 与恢复后的 received 共用一个跨扫描页 FIFO。commit 由
-  `ingestion.commit_concurrency=N` 派生大小为 `N + ceil(N / 2)` 的 dispatch window，等待数量或字节许可的
-  任务继续占用候补，并以独立 frozen-tail 游标完成事件补位。Sharp 每图线程固定为 1，
-  最终入库同时使用代码内 256 MiB prepared 字节预算；
-  `workers/session-recovery.ts` 复用同一 repository 做启动、Redis 重连和 expiry 收敛；
-  `execution/session.ts` 只拥有同一执行 token 下 heartbeat、progress、阶段发布和失败落盘。
-- `cleanup/storage-references.ts` 有界读取 active canonical 的对象引用；`retention.ts`、
-  `orphans.ts` 与 `orphan-worker.ts` 负责 60 秒保守周期、稳定 Redis 引用与本地扫描，以及
-  停机排空；`retry-queue.ts` 有界重试本地临时文件清理，耗尽后由年龄扫描重新发现。
-  正式 full / thumbs 在写入前由持久 `move.cleanup` guard 接管。
+具体接管、提交、分页、取消与恢复时序统一见[图片接入](ingestion.md)。本节只列状态所有者与依赖边界：
 
-Server 队列模块与 Web 队列 owner 的连接关系保持不变：
+| 模块 | 所有权与依赖 |
+| --- | --- |
+| `runtime-repository.ts`、`runtime.ts` | 前者构造唯一 repository；后者装配 token service、session service 和 Worker，对路由公开窄接口。 |
+| `repository.ts` | Redis 命令调用、错误翻译与事件发布 facade；命令、回复、intent、listener 与队列存储由所属模块承接。 |
+| `sessions/model.ts`、`codec.ts` | canonical、终态回执、Upload intent 和队列 metadata 的严格存储 schema 与解码；不承担 HTTP 补齐。 |
+| `sessions/import-metadata.ts` | 以配置快照和 DTO 投影 Import 原图 / 来源；接管与首次提交冻结复用同一规则。 |
+| `sessions/scripts/` | Lua 原子操作和协议；共享 projection 片段不执行命令，TypeScript 不复制 Redis 权威状态。 |
+| `queue/` | snapshot、SSE、watermark、action scope 与展示投影；action handlers 协调取消、提交和执行，草稿更新使用 canonical CAS。 |
+| `raw/lease-registry.ts` | 本地 active、deleting、scanning、pruning 状态的唯一 owner；路径、文件、扫描、prepared 与 upload 各自承接 I/O。 |
+| `commit/worker.ts` | execution fencing、锁顺序、prepared 对象采用、事务不可取消边界和完成发布；校验、持久化与完成发布分模块执行。 |
+| `cancel/coordinator.ts` | resolving、abort 顺序、mutation limiter 和响应丢失后的核对；items 和 retired-cleanup 不建立第二状态 owner。 |
+| `workers/` | download、prepare、commit 调度与恢复；资源准入各有唯一进程 owner，不把并发控制散入路由。 |
+| `execution/session.ts` | 同一 execution token 的 heartbeat、progress、阶段发布及失败落盘。 |
+| `cleanup/` | 活跃对象引用、保守孤儿扫描、本地重试队列与停机排空；正式对象在写入前交由持久 cleanup guard 接管。 |
 
-- Web 的 `useUploadQueueOwner` / `useImportQueueOwner` 分别组合浏览器来源与 Redis canonical，
-  并各自持有重复确认与单卡提交的 single-flight controller；
-  `useServerIngestionQueue.ts` 只拥有当前显示队列的连接生命周期与唯一 retained display
-  baseline；`useIngestionQueue.ts` 以 `session_id + image_id` 把 SSE、status 和动作中的逐项事实
-  投影到所有已保留的当前文档卡片 owner（包括离页项），但不挂载未知 pair 或保存全队列 DTO；
-  `model/server-ingestion-job.ts` 在 bounded snapshot 覆盖 handoff revision 前同时保留卡片的临时
-  展示页与 summary 占位，来源无关的逐项 active 事件只推进卡片状态，不提前撤销计数或展示租约；
-  `useIngestionQueue.ts` 同时用动作逐项结果移除组合投影中同 pair 的已确认清理卡片，包括纯
-  Server DTO 与已把显示权交回浏览器的 completed handoff；
-  已接管任务的准备重试通过 `update` 的 `retry_prepare` 在版本校验后重新排队，保留 Redis
-  任务身份、来源时间和显示顺序；无提交意图的失败导入重新下载，失败上传复用已接收的原图。
-  旧处理产物与导入的旧 raw 代次按已有清理器释放，上传仍被引用的 raw 不参与清理。
-  浏览器复用原快照 owner 回读当前页，不取消并重建任务；刷新后恢复的卡片沿用同一流程。
-  尚未接管的浏览器任务通过原来源 owner 分批重试；上传沿用同一文件与并发 lane，未知 raw
-  回执复用原幂等身份。公共重置只清理执行状态，保留图片时间、当前页与批次位置。
-  `useIngestionRetry.ts` 统一拥有单卡及全部重试的资格与运行锁。单卡等待只锁定对应尝试，
-  上传串行器开始执行后再次核对原 attempt 和准备重试资格。当前模式的完整队列非空、
-  全部失败且浏览器任务具备所需文件或 URL 时，底部提交按钮切换为“全部重试”；
-  队列尚未确认、取消失败、重复待确认、已完成结果回读及混合状态保留提交语义。
-  全部重试冻结浏览器成员与 Server watermark，`retry_failed` 复用分页动作、版本校验、
-  准备重排和原提交意图；后来新增或改变的任务跳过，某项失败不阻止其余任务。
-  新准备成功的任务等待用户提交，只有已冻结的提交失败沿原意图恢复写入。
-  提交与全部重试的动作锁保持到唯一快照 owner 取得动作后的当前队列；HTTP 响应先于 SSE
-  摘要时不能提前解锁提交按钮，关闭再打开窗口也沿用队列 owner 的运行状态。
-  `useIngestionQueueActions.ts` 在每个 continuation 响应后立即把该批结果交还工作流，逐批投影与
-  最终权威恢复分离，后续批延迟或失败不会延迟、撤销此前成功 pair；
-  raw owner 保留未受影响的有界基线、只作废动作成功前 snapshot 的证明资格，并复用一次权威
-  snapshot，失败项和关闭后才完成的任务仍由组合 owner 保留；
-  `useIngestionQueueWorkflowActions.ts` 冻结关闭时的 completed 清理边界，并把动作连接保留到上述
-  收敛完成，弹窗关闭本身不等待该流程；
-  pre-action snapshot 不能证明清理结果，快速重开、普通 refresh 和并发 recovery 复用该 owner
-  的 post-action single-flight。
-  `model/server-ingestion-queue-state.ts` 负责 revision / version / progress 单调合并，并让当前
-  revision 的页内或离页 progress 同步 canonical summary、拒绝旧 revision 回退计数，
-  同一 revision 内进入处理只增加 running，不扣减未计入 waiting 的待处理项；正常进度
-  不触发分页回读，真实版本缺口仍经唯一快照 owner 恢复。
-  `useStoredIngestionDraftSync.ts` 按硬上限批量排空草稿写入并在 version 冲突时有界回读，
-  `useIngestionAuthorityHandoffs.ts` 持有独立于当前页 DTO 和连接代际的 HTTP 接管围栏，
-  `cards/useIngestionJobDraftEditing.ts` 在失焦发布前复用 `@imageshow/shared/browser` 的 Ingestion
-  草稿 URL 纯格式解析，与 HTTP URL schema 共用规范化及补全协议后的长度校验，
-  不接入远端图片请求能力；`useIngestionQueue.ts` 是单队列 controller
-  的公开组合入口。
-- `useCompletedIngestionInvalidation.ts` 是 completed pair 去重与 PostgreSQL 图片查询失效 owner；
-  Ingestion 完成结果使用独立窄 DTO，`read-models/ingestion-results.ts` 与提交路径共用
-  presenter，只返回卡片、草稿及完成失效所需字段；后台图片列表继续使用完整列表投影。
-  完成结果读取统一将图片查询及 presenter 冷缓存存储配置查询的 PostgreSQL 断连转换为
-  `503 database_unavailable`；缺失配置、字段格式化及其他非连接错误保留原分类。
-  `model/server-ingestion-job.ts` 集中完成 active / completed DTO 到卡片的单调映射，完整快照和稀疏
-  事件共用 active 状态映射，分别保留草稿合并规则；终态围栏阻止迟到 snapshot、SSE、status 或
-  HTTP 结果回退。`model/ingestion-job-retry.ts` 从浏览器输入构造准备重试，未知接受结果保留
-  attempt 与冻结请求，新的准备尝试只带入本地输入、草稿和批次信息；队列以 `retry-prepare`
-  原子替换浏览器任务，服务端准备重试继续由原 canonical 动作换代。
-  `useIngestionQueue.ts` 按 pair 分组批量 completed 观察，组内按到达顺序执行版本与终态保护，
-  一次扫描留存任务、一次 `patch-many` 并汇总被替换的 Blob；全部观察仍交给查询失效 owner。
-  可见服务端项与临时摘要按队列、快照、页码和交接 epoch 派生；可变交接引用通过对应 epoch
-  或队列更新失效。旧 pair 退休统一释放显示资源并通知草稿 owner；确认离队保留 revision / 摘要
-  证明，权威任务离页和 completed 投影分别保持自己的草稿、交接与展示规则。
-  浏览器字节剥离共用纯投影，卸载汇总当前卡片、handoff 与 detached 引用的 Blob 后释放。
-  `useServerIngestionQueue.ts` 为有基线和无基线的快照失败分别保留展示状态，共用有限退避调度；
-  `useIngestionStatusHydration.ts` 以同一个有界 status 请求 owner 处理未知交接与 compact completed
-  回执的 PostgreSQL DTO 水合（未知 compact pair 只用于失效而不挂载卡片），每个 effect 只发出一个
-  上限内的 status chunk，成功原子落实后才由下一任 owner 消费尾部，保证不发生中止后重发；完成
-  去重 owner 同时过滤未知 pair 的 SSE 重放，且后续失败只留下可重试尾部。该 Hook 拥有唯一
-  AbortController；SSE view / protocol 纯投影位于
-  `model/server-ingestion-queue-view.ts`，不创建第二条连接。
-- `model/stored-ingestion-draft-model.ts` 保存 target / authoritative projection 与 CAS 纯决策；
-  pending / dirty map、250 ms timer、batch tail、flush 和 revision 等待仍只由
-  `useStoredIngestionDraftSync.ts` 持有。
-- 两套 owner 不共享页码、SSE、
-  busy、清空范围或 action connection hold。内容接入队列不做固定 pair 轮询，只有响应未知的
-  已知 pair 才使用一次有界 status 查询。
-- `sources/weibo.ts` 只编排批次、去重 UID 的单次作者身份查询和 JSONL 清单；
-  `weibo-request-scheduler.ts` 唯一拥有全进程固定
-  串行、批次轮转、随机间隔和单一访客身份。链接 / 时间 / 响应提取、受限上游协议、未知响应值
-  归一化及公开类型分别位于同目录 `weibo-parser.ts`、`weibo-client.ts`、`weibo-values.ts`、
-  `weibo-types.ts`；parser 逐媒体携带实际所属 status 的 UID，不读取 RuntimeConfig 作者映射。
-- 图片读取先由 `image-serving-record.ts` 将 Redis 命中与 PostgreSQL fallback 归一为
-  同一 serving record；公开正式媒体的 ready-cache 明确空命中仍会在有界数据库读取中查找
-  ready 或 deleted 行。完整图 / 缩略图入口从规范对象键提取 UUID，复用同一按 ID 读取；完整图
-  必须精确匹配记录的 UUID 和扩展名，缩略图必须匹配该记录派生的 webp 键。非规范、过长、错误分片或
-  缩略图扩展名在缓存和数据库读取前拒绝。ready rich item 校验 id 与 ext 的规范身份，不保存对象键。
-  ready-cache 核心保留 items、时间索引、ID 末位索引、统计、完整性和 meta 六个固定键；构建、
-  增量、样本和内存检查共用这些核心职责。
-  `stored-image-serving.ts` 只编排存储对象与缩略图，
-  `external-original-serving.ts` 只处理外部原图探测、跳转和代理。
-  `stored-object-response.ts` 集中流式、HEAD、Range 与缓存响应；缩略图缺失在只读 serving
-  边界直接映射为 404，显式维修只属于 `checks/storage-thumbnail-repair.ts`，并由
-  `checks/storage-maintenance.ts` 在独占维护编排中调用。
+Web 的连接、卡片投影、草稿与动作 owner 见下文 Web 章节；它们通过公开队列协议交接，
+不导入 Server 内部实现。completed 结果由独立窄 DTO 与 presenter 返回，失效 owner 以 pair 去重；
+正式图片始终以 PostgreSQL 为准。并发容量与限制见[配置说明](../CONFIG.md)，存储补偿见[存储](storage.md)。
+
+### 图片投影与分页
 
 `images/ready-cache/` 以真实变化原因分为 `indexes/`、`derived/`、`counts/`、`sync/`、
 `integrity/` 与 `redis/`；其中 `redis/` 就近拥有 ready-cache 的 Lua、显式命令注册、窄 client
@@ -652,6 +552,13 @@ components ──► hooks / lib
 hooks ──► lib
 ```
 
+### 共享组件与交互
+
+`hooks/useImageBrowseRoute.ts` 是公开浏览 URL 筛选的动作所有者，统一词表解析、修改、清空与
+随机链接投影；`components/navigation/PublicImageNavigation.tsx` 只装配共用 Header / Toolbar。
+画廊和展映分别持有视口控制与数据生命周期，共享导航不新增查询或运动状态。
+设备与亮度选项直接消费 shared 常量，facets 只返回动态主题、标签和作者词表。
+
 - `components/` 按稳定 UI 职责保存跨页面组件；`components/image/editor/` 的数量中性
   `1..N` 编辑器把重复图片卡片与 shell 编排分开，trash 模型和 Hook 集中拥有逐项响应
   对账、权威回读、会话成员修剪及查询失效，不把 mutation 收口重新分散到入口页面。
@@ -715,7 +622,7 @@ hooks ──► lib
   且展映仍在自动播放时重新计满三秒，隐藏仍写入同一导航阶段。计时 Effect 在布局阶段清理，过期回调核对释放状态、
   当前导航阶段、文档可见性和交互保护；页面隐藏时取消等待，返回后重新计时。展映手动位移携带指针类型；共享 owner 在桌面禁止鼠标拖动及其惯性
   唤出导航，但保留上拖收起、滚轮显隐与移动端拖动显隐，手动位置采样仍连续更新。
-  `ShowPixiPage` 将该 owner 的导航可见性映射到页面属性；`show.css` 据此统一控制两种展映模式的
+  `ShowPage` 将该 owner 的导航可见性映射到页面属性；`show.css` 据此统一控制两种展映模式的
   底部按钮 30% 不透明度与操作提示 20% 不透明度；提示在次级文字色中混入 30% 白色，
   配以 70% 不透明度的深灰描边，导航收起时文字与描边整体淡化并保持可见。
   按钮组外扩 24px 的 hover 区域或键盘可见焦点可同步恢复
@@ -768,6 +675,8 @@ hooks ──► lib
   不推断 `touchstart`、多点或页面入口。各层共享纯判定但不共享滚动与激活的可变手势状态，也不
   互相承担入口后置补救；它们只认识坐标、当前顶层 dialog frame 与 DOM 滚动能力，不依赖页面、
   角色或路由。
+### 页面与查询所有者
+
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
 - `pages/admin/images/useImageAdminPageNavigation.ts` 是后台图库、无主题与回收站数字页的唯一查询
   owner，只保存包含排序依据和方向的规范化 scope、目标 page 与最近成功的 scope total 快照，并让 React Query
@@ -786,7 +695,7 @@ hooks ──► lib
   图片成员 mutation 通过显式的后台列表失效入口等待该 owner 的刷新错误，其余相关投影仍尽力
   失效，通用图片失效函数不接收页面专用的 query-key 特判参数。
 - `AppRoutes.tsx` 将普通与嵌入路径映射到同一 `HomePage` / `GalleryPage`，并把 `/show` 与 `/embed/show` 懒加载到
-  同一 `ShowRoutePage`，由它挂载 `ShowPixiPage`。shared 纯目标解析器统一处理三页启停、根路径与首页入口回退，
+  同一懒加载入口 `ShowPage`，页面编排与 `pixi/` 渲染实现分离。shared 纯目标解析器统一处理三页启停、根路径与首页入口回退，
   普通与嵌入首页共用目标配置，嵌入入口保留 `/embed` 前缀。三页全关时服务端根路径
   和已加载 SPA 都收敛到 404，随机 API 与后台不参与公开页回退。页面参数只决定是否挂载主导航，
   不能复制公开页实现或以 CSS 隐藏导航。服务端仍独立决定嵌入
@@ -880,10 +789,10 @@ hooks ──► lib
   场景逐帧信号不会触发错误重试循环。
   先无重复领取全部候选，只有有限筛选结果不足以填满活动槽时才循环复用。`mode=waterfall|float`
   是正式 URL 状态，省略或无效时回退 `site.show.mode`，读取默认值不改写 URL。
-  `ShowPixiPage` 从同一公开配置中的 `site.show.autoplay` 初始化播放状态，访客启停只属于当前挂载。
+  `ShowPage` 从同一公开配置中的 `site.show.autoplay` 初始化播放状态，访客启停只属于当前挂载。
   该字段默认值由 Shared 唯一提供，首次播种通过 `SITE_SHOW_AUTOPLAY`；普通设置 DTO 不包含
   `site.show`、`site.home.browse_target` 或 `site.gallery.enabled`，这些新增项由配置文件或高级配置维护。
-  `ShowPixiPage` 根据当前查询构造明确目标模式的链接，`ShowControls` 以 React Router `Link` 渲染；
+  `ShowPage` 根据当前查询构造明确目标模式的链接，`ShowControls` 以 React Router `Link` 渲染；
   模式提示及读屏状态通过同一显示映射呈现“瀑布 / 漂浮”，URL 和配置枚举保留 `waterfall / float`。
   手动切换始终保留显式 `mode`，筛选与顺序更新保留模式参数的显式或缺省状态，模式切换不重建图片查询。
   `pixi/show-pixi-runtime.ts` 唯一持有 Pixi Application、ticker、ResizeObserver、页面可见性、
@@ -914,7 +823,7 @@ hooks ──► lib
   瀑布场景在相机位置和缩放未变化时跳过重复的窗口整理、卡片排序与 LOD 分配；
   图片数据更新及视口 resize 仍强制整理。相机、卡片动画和纹理交接继续沿用原有帧循环，
   不以暂停播放或打开详情直接停掉未结束动画，也不新增按需渲染唤醒状态机。
-  运行时在有效自动播放状态变化时上报 `onMotionActiveChange`，同一状态供调试快照使用；`ShowPixiPage`
+  运行时在有效自动播放状态变化时上报 `onMotionActiveChange`，同一状态供调试快照使用；`ShowPage`
   结合播放开关与数据就绪状态启停导航计时，初始化完成前、无图、加载、错误、减少动态效果、详情、后台或 WebGL 中断期间均不启用。
   生产默认不创建统计 output、帧样本或长任务 observer；开发模式自动开启，生产排查时可在进入展映前
   设置 `window.__imageShowPixiDiagnostics = true`，再通过 SPA 导航进入展映。此挂载期间会暴露
@@ -928,7 +837,7 @@ hooks ──► lib
   `waterfall` 通过 ImageShow 自有窄相机处理坐标换算、drag、wheel、pinch、惯性、中心锚定缩放与
   可视区域，独立竖列只保留视口缓冲内 Sprite。相机只从拖动、普通滚轮和惯性平移分支上报导航纵向位移；
   窗口边缘先判断下一槽位是否进入驻留区域，再领取图片；停在卡片间隙不会消费候选或触发补图。
-  `show-pixi-layout.ts` 定义 `3G` 提示阈值与 `8G` 上限；`ShowPixiPage` 唯一持有本次挂载的确认状态及待应用密度比例。
+  `show-pixi-layout.ts` 定义 `3G` 提示阈值与 `8G` 上限；`ShowPage` 唯一持有本次挂载的确认状态及待应用密度比例。
   瀑布 Sprite 驻留上限按当前画布宽度划分：不超过 760px 为 960 张，超过为 2800 张，包含屏内及屏外缓冲。
   按钮与相机共用列数请求入口，wheel / pinch 在跨过 `3G` 前同步取得允许的缩放值，普通缩放帧仍留在相机内。
   未确认时停在 `3G`，确认后应用请求；比例按当前视口换算。提示复用 `DialogFrame` 的焦点、页面锁和退场回调，
@@ -992,8 +901,14 @@ hooks ──► lib
   `cards/`；`upload/` 保存本地文件模型、raw XHR lane 和上传 owner；`import/` 保存 URL、JSONL、
   微博来源模型、弹窗与 Import 接收 owner；`workflow/` 保存窗口、稳定 DOM 区域、清理和动作状态机。
   `queue/ingestion-http-client.ts` 负责 HTTP 传输，`queue/ingestion-queue-contract.ts` 定义队列协作接口与完成结果投影。
+  `queue/model/ingestion-job.ts` 持有页面任务、冻结提交意图和默认属性类型；全站 `lib/types.ts`
+  只保留跨页面类型，不依赖接入领域。Upload 与 Import 共用 Shared 的接管结果联合，HTTP 只投影
+  当前客户端消费的身份、状态与凭据；请求指纹和凭据有效期由 Server 内部协议持有。
   `model/ingestion-queue-state.ts` 从任务数组准备展示前缀、排除项和接管集合；分页只切取当前页，
   不重复准备整个队列，派生数据仍由同一任务数组决定。
+  `model/ingestion-release-projection.ts` 根据冻结的 pair / attempt、服务端水位和已释放摘要计算
+  剩余总数；它只消费输入，不持有请求、React 状态或资源。`useIngestionQueue.ts` 继续拥有释放
+  目标、恢复 promise 和 Blob 生命周期。
   来源弹窗由 `import/` 独立动态加载。配置段使用同一领域词汇：Import 来源使用
   `import.*`，Upload 专属入口使用 `upload.*`，共用原图准入、队列分页与提交使用
   `ingestion.*`。`data/config.json` 只按当前默认结构投影、校验并原子
@@ -1224,7 +1139,7 @@ ALTCHA PBKDF2 Worker 必须由浏览器通过独立 URL 创建，且只在实际
 不单独导致失败；内容完全重复的资产会使门禁失败。
 
 运行时传输、浏览器缓存与接入负载测量使用根目录 `tests/` 下的隔离资源，原始数据保留在
-各自测量目录，结论写入 `tests/report/`。测量范围与工作负载按当次授权确定，不作为受跟踪
+各自测量目录，结论写入 `.agents/report/`。测量范围与工作负载按当次授权确定，不作为受跟踪
 测试的前置依赖，也不进入 Actions 或生产镜像。
 
 ## docs
@@ -1233,7 +1148,7 @@ ALTCHA PBKDF2 Worker 必须由浏览器通过独立 URL 创建，且只在实际
 `docs/guide/` 保存其他现行指南；其中 `roles/` 按普通用户、图片管理员、超级管理员和实例维护者
 提供任务入口，主题文档维护架构、数据库、流程和 API 等完整契约。角色页只链接技术参考，
 不复制容易漂移的底层细节。
-`tests/report/` 保存本地结论、比较决策和验收说明，由 Git 忽略；按报告中的时间与基线解释，
+`.agents/report/` 保存本地结论、比较决策和验收说明，由 Git 忽略；按报告中的时间与基线解释，
 不替代现行指南。
 原始日志、截图、浏览器快照和性能采样属于可清理的测试产物，不是报告或现行测试的必需依赖。
 这些文档不生成或提供在线站点。

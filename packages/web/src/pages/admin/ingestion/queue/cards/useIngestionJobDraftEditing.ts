@@ -7,7 +7,10 @@ import type {
   ImageDraftDeferredEditing,
   ImageDraftDeferredField
 } from "../../../../../components/form/ImageDraftFields.js";
-import type { ImageDraft, IngestionJob } from "../../../../../lib/types.js";
+import type {
+  ImageDraft
+} from "../../../../../lib/types.js";
+import type { IngestionJob } from "../model/ingestion-job.js";
 import { ingestionJobAttributesEditable } from "../model/ingestion-attribute-policy.js";
 
 type DeferredPlainField = keyof ImageDraftDeferredEditing["values"];

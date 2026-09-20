@@ -13,8 +13,11 @@ import {
   storageNameResolver,
   useStorageOptions
 } from "../../../lib/api/storage-options.js";
-import type { FacetOption, IngestionJob } from "../../../lib/types.js";
-import type { IngestionAttributeDefaults } from "./queue/model/ingestion-attribute-defaults.js";
+import type {
+  FacetOption
+} from "../../../lib/types.js";
+import type { IngestionJob, IngestionAttributeDefaults } from "./queue/model/ingestion-job.js";
+
 import { ingestionJobNeedsDuplicateConfirmation } from "./queue/model/duplicate-match.js";
 import {
   ingestionJobCanBeCancelled,

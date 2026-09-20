@@ -1,5 +1,5 @@
 import type { IngestionStatusItemDto } from "@imageshow/shared/browser";
-import type { IngestionJob } from "../../../../../lib/types.js";
+import type { IngestionJob } from "./ingestion-job.js";
 import { activeIngestionClientStatus, completedIngestionJobPatch } from "./server-ingestion-job.js";
 
 const terminalClientStatuses = new Set<IngestionJob["status"]>([

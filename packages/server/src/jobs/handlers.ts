@@ -3,7 +3,7 @@ import {
   type BackgroundJobOutcome
 } from "./handler-outcome.ts";
 import type { BackgroundJob, BackgroundJobType } from "./types.ts";
-import { handleTrashPurgeJob } from "../images/trash-purge-job.ts";
+import { handleTrashPurgeJob } from "../images/trash/purge-job.ts";
 import { ensureReadyImageCacheCurrent } from "../images/ready-cache/coordinator.ts";
 import { handleMoveCleanupJob } from "../storage/cleanup/job.ts";
 import {

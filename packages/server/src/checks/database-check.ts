@@ -14,7 +14,7 @@ import { getReadyImageCacheCoordinatorStatus } from "../images/ready-cache/coord
 import {
   getPublicPgFallbackAdmissionSnapshot
 } from "../core/database/public-admission.ts";
-import { imageHasTrashPurgeJobSql } from "../images/trash-purge-state.ts";
+import { imageHasTrashPurgeJobSql } from "../images/trash/purge-state.ts";
 import { readAdminPostgresqlStatus } from "./lightweight-status.ts";
 
 const trashInspectionSampleLimit = 100;

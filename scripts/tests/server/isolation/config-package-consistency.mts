@@ -15,7 +15,7 @@ await runIntegrationScenario(async (runtime) => {
   const s3 = await createS3HttpFixture();
   try {
   const { importConfigPackage } = await import(
-    "../../../../packages/server/src/config/config-package.ts"
+    "../../../../packages/server/src/config/package/service.ts"
   );
   const { ApiError } = await import("../../../../packages/server/src/core/api-error.ts");
   const { logger } = await import("../../../../packages/server/src/core/logger.ts");

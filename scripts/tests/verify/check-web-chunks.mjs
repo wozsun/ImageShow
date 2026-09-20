@@ -290,7 +290,7 @@ function assertDeferredReachable(source, target, label) {
 
 const entry = chunkForFacade("index.html");
 const home = chunkForFacade("src/pages/home/HomePage.tsx");
-const show = chunkForFacade("src/pages/show/ShowRoutePage.tsx");
+const show = chunkForFacade("src/pages/show/ShowPage.tsx");
 const gallery = chunkForFacade("src/pages/gallery/GalleryPage.tsx");
 const adminShell = chunkForFacade("src/pages/admin/shell/AdminShell.tsx");
 const adminLogin = chunkForFacade("src/pages/admin/account/AdminLogin.tsx");

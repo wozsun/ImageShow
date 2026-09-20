@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IngestionDuplicateDetailsResultDto } from "@imageshow/shared/browser";
-import type { IngestionJob } from "../../../../lib/types.js";
+import type { IngestionJob } from "./model/ingestion-job.js";
 import { ingestionDuplicateMessage } from "./model/duplicate-match.js";
 import { getIngestionDuplicateDetails } from "./ingestion-http-client.js";
 

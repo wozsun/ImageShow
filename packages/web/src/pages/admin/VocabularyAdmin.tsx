@@ -49,21 +49,21 @@ const COPY = {
     slugPlaceholder: "标签 slug",
     displayPlaceholder: "显示名（可选）",
     empty: "还没有标签",
-    deleteDescription: (item: VocabularyEntry) => `删除标签「${item.display_name || item.slug}」，会从 ${item.image_count} 张图片上移除该标签，此操作无法撤销。`
+    deleteDescription: (item: VocabularyEntry) => `删除标签「${item.display_name || item.slug}」，会从 ${item.image_count} 张关联图片（包含回收站）上移除该标签，此操作无法撤销。`
   },
   themes: {
     noun: "主题",
     slugPlaceholder: "主题 slug",
     displayPlaceholder: "显示名（可选）",
     empty: "还没有主题（上传图片或在上方新建）",
-    deleteDescription: (item: VocabularyEntry) => `删除主题「${item.display_name || item.slug}」，其 ${item.image_count} 张图片将归为「未设置」，此操作无法撤销。`
+    deleteDescription: (item: VocabularyEntry) => `删除主题「${item.display_name || item.slug}」，其 ${item.image_count} 张关联图片（包含回收站）将归为「未设置」，此操作无法撤销。`
   },
   authors: {
     noun: "作者",
     slugPlaceholder: "作者 slug",
     displayPlaceholder: "显示名（可选）",
     empty: "还没有作者（上传图片或在上方新建）",
-    deleteDescription: (item: VocabularyEntry) => `删除作者「${item.display_name || item.slug}」，其 ${item.image_count} 张图片的作者属性将被清除，此操作无法撤销。`
+    deleteDescription: (item: VocabularyEntry) => `删除作者「${item.display_name || item.slug}」，其 ${item.image_count} 张关联图片（包含回收站）的作者属性将被清除，此操作无法撤销。`
   }
 } as const;
 

@@ -6,7 +6,7 @@ import {
   configureDatabasePools
 } from "./core/database/pools.ts";
 import { pingDatabase } from "./core/database/schema.ts";
-import { adminUsernameInput } from "./core/credentials.ts";
+import { adminUsernameInput } from "./users/credentials.ts";
 import { pingRedis, redis } from "./core/redis/client.ts";
 import {
   resetAdministratorPasswordHash,

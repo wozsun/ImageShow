@@ -4,10 +4,10 @@ import { isAllowedSiteHost } from "../config/site-host.ts";
 import { hasExplicitSiteDomain, matchesSiteHost, publicUrlMatchesHost } from "../core/url-validation.ts";
 import { publishedLocalPublicUrl } from "../storage/backends/registry.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
-import { noStoreCacheControl } from "../core/http/headers.ts";
-import { serveLocalStoredObject } from "../images/stored-image-serving.ts";
+import { noStoreCacheControl, setPublicResourceCors } from "../core/http/headers.ts";
+import { serveLocalStoredObject } from "../images/serving/stored-image.ts";
 import { parseImageObjectKey, thumbnailObjectKey } from "../storage/objects/image-paths.ts";
-import type { AssetHandler } from "./spa.ts";
+import type { AssetHandler } from "./assets.ts";
 
 const corsRequestHeaders = new Set(["range", "if-none-match", "if-modified-since", "if-range"]);
 
@@ -55,8 +55,7 @@ async function serveLocalImageHost(c: Context, object: NonNullable<ReturnType<ty
   } else {
     return apiErrorResponse({ status: 404, message: "Not Found" });
   }
-  response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set("Access-Control-Expose-Headers", "ETag, Content-Range, Accept-Ranges");
+  setPublicResourceCors(response);
   return response;
 }
 

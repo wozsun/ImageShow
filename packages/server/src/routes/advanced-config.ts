@@ -19,7 +19,7 @@ import {
   createConfigPackage,
   importConfigPackage,
   previewConfigPackage
-} from "../config/config-package.ts";
+} from "../config/package/service.ts";
 import {
   getFullRuntimeConfig,
   saveFullRuntimeConfig,

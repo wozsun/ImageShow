@@ -1,6 +1,6 @@
 import { readableFilterSearch } from "@imageshow/shared/browser";
-import { useImageBrowseRoute } from "../../../hooks/useImageBrowseRoute.js";
-import { TagFilterErrorState } from "../../../components/feedback/TagFilterErrorState.js";
+import { useImageBrowseRoute } from "../../hooks/useImageBrowseRoute.js";
+import { TagFilterErrorState } from "../../components/feedback/TagFilterErrorState.js";
 import {
   useCallback,
   useEffect,
@@ -14,31 +14,26 @@ import type {
   ShowDensity,
   SiteShowSettings
 } from "@imageshow/shared/browser";
-import { AppLoadingRegion } from "../../../components/feedback/AppLoadingScreen.js";
-import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
-import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
-import { PublicImageDetail } from "../../../components/image/PublicImageDetail.js";
-import { AppHeader } from "../../../components/navigation/AppHeader.js";
-import { PublicImageToolbar } from "../../../components/navigation/PublicImageToolbar.js";
-import { useDocumentMotionPause } from "../../../hooks/useDocumentMotionPause.js";
-import { useMediaQuery } from "../../../hooks/useMediaQuery.js";
-import { usePublicImageViewportControls } from "../../../hooks/usePublicImageViewportControls.js";
-import { usePublicNavigationEntrance } from "../../../hooks/usePublicNavigationEntrance.js";
+import { AppLoadingRegion } from "../../components/feedback/AppLoadingScreen.js";
+import { DialogFrame } from "../../components/feedback/DialogFrame.js";
+import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import { PublicImageDetail } from "../../components/image/PublicImageDetail.js";
+import { PublicImageNavigation } from "../../components/navigation/PublicImageNavigation.js";
+import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
+import { useMediaQuery } from "../../hooks/useMediaQuery.js";
+import { usePublicImageViewportControls } from "../../hooks/usePublicImageViewportControls.js";
+import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
 import {
-  emptyGalleryFilters,
   imageBrowseApiSearchParams,
-  galleryRandomRequestDevice,
   showModeFromSearchParams,
   showOrderFromSearchParams,
-  updateImageBrowseSearchParams,
-  type GalleryFilters
-} from "../../../lib/gallery/gallery-query.js";
-import { randomLinkResult } from "../../../lib/gallery/random-url.js";
-import { publicNavigationAutoHideDelayMs } from "../../../lib/ui/public-navigation.js";
-import { ShowControls } from "../ShowControls.js";
-import type { ShowImage } from "../show-layout.js";
-import { useShowData } from "../useShowData.js";
-import { showInitialBatchLimit } from "../show-browse.js";
+  updateImageBrowseSearchParams
+} from "../../lib/gallery/gallery-query.js";
+import { publicNavigationAutoHideDelayMs } from "../../lib/ui/public-navigation.js";
+import { ShowControls } from "./ShowControls.js";
+import type { ShowImage } from "./show-layout.js";
+import { useShowData } from "./useShowData.js";
+import { showInitialBatchLimit } from "./show-browse.js";
 import {
   clampShowFloatSizeIndex,
   clampShowWaterfallColumns,
@@ -48,14 +43,14 @@ import {
   showWaterfallDensity,
   smallerShowWaterfallImages,
   type ShowWaterfallDensity
-} from "./show-pixi-layout.js";
-import { ShowPixiStage } from "./ShowPixiStage.js";
-import type { ShowPixiSceneKind } from "./show-pixi-types.js";
-import "../../../styles/public-core.css";
-import "../../../styles/gallery.css";
-import "../../../styles/gallery-responsive.css";
-import "../../../styles/show.css";
-import "../../../styles/show-pixi.css";
+} from "./pixi/show-pixi-layout.js";
+import { ShowPixiStage } from "./pixi/ShowPixiStage.js";
+import type { ShowPixiSceneKind } from "./pixi/show-pixi-types.js";
+import "../../styles/public-core.css";
+import "../../styles/gallery.css";
+import "../../styles/gallery-responsive.css";
+import "../../styles/show.css";
+import "../../styles/show-pixi.css";
 
 function configuredWaterfallColumns(
   density: ShowWaterfallDensity,
@@ -89,7 +84,7 @@ function remapWaterfallColumns(
   );
 }
 
-export function ShowPixiPage({
+export function ShowPage({
   embedded = false,
   settings
 }: {
@@ -97,7 +92,7 @@ export function ShowPixiPage({
   settings: SiteShowSettings;
 }) {
   const browseRoute = useImageBrowseRoute();
-  const { params: routeSearchParams, updateSearchParams: setRouteSearchParams, filters, facets, ready: filtersReady, error: filterError } = browseRoute;
+  const { params: routeSearchParams, updateSearchParams: setRouteSearchParams, filters, updateFilter, ready: filtersReady, error: filterError } = browseRoute;
   const routeQuery = routeSearchParams.toString();
   const order = useMemo(() => showOrderFromSearchParams(
     new URLSearchParams(routeQuery),
@@ -139,23 +134,7 @@ export function ShowPixiPage({
   }), filtersReady);
   const playbackRunning = running && !data.initialLoading && !data.error
     && data.images.length > 0;
-  const {
-    advanceManualNavigation,
-    filterPanelHidden,
-    filterPanelRef,
-    filterMenuDismissSignal,
-    filterToggleRef,
-    clearFiltersRef,
-    dismissFilterMenus,
-    filtersOpen,
-    headerVisible,
-    onHeaderMenuExpandedChange,
-    resetManualNavigation,
-    toggleFilters,
-    toolbarHeight,
-    toolbarRef,
-    toolbarVisible
-  } = usePublicImageViewportControls({
+  const navigationControls = usePublicImageViewportControls({
     autoHideAfterMs: playbackRunning && !reducedMotion && motionActive
       ? publicNavigationAutoHideDelayMs
       : undefined,
@@ -163,6 +142,7 @@ export function ShowPixiPage({
     paused: dialogOpen,
     movement: "manual"
   });
+  const { advanceManualNavigation, headerVisible, resetManualNavigation, toolbarHeight, toolbarVisible } = navigationControls;
   const {
     markAppeared: markNavigationAppeared,
     shouldAnimate: shouldAnimateNavigation
@@ -275,21 +255,6 @@ export function ShowPixiPage({
     const params = updateImageBrowseSearchParams(routeSearchParams, { mode: nextScene });
     return `?${readableFilterSearch(params)}`;
   };
-  const updateFilter = (key: keyof GalleryFilters, value: string) => {
-    setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { [key]: value }));
-  };
-  const clearFilters = () => {
-    if (!routeSearchParams.has("tag") && !Object.values(filters).some(Boolean)) return;
-    setRouteSearchParams((current) => updateImageBrowseSearchParams(current, emptyGalleryFilters));
-  };
-  const randomLink = filtersReady ? randomLinkResult({
-    origin: window.location.origin,
-    device: galleryRandomRequestDevice(filters.device),
-    brightness: filters.brightness || "random",
-    theme: filters.theme,
-    tag: filters.tag,
-    author: filters.author
-  }) : { url: null, error: null };
   const floatSizeDescription = `当前尺寸档位 ${floatSizeIndex + 1}/${showFloatSizeSteps.length}`;
   const waterfallSizeDescription = `当前约 ${Number.isInteger(waterfallColumns)
     ? waterfallColumns
@@ -313,38 +278,12 @@ export function ShowPixiPage({
           : undefined
       } as CSSProperties}
     >
-      <div className="public-navigation-frame">
-        <div className="public-navigation-stack">
-          {!embedded && (
-            <AppHeader
-              animateEntrance={shouldAnimateNavigation}
-              onMenuExpandedChange={onHeaderMenuExpandedChange}
-              browseSearch={browseRoute.browseSearch}
-              visible={headerVisible}
-            />
-          )}
-          <PublicImageToolbar
-            animateEntrance={shouldAnimateNavigation}
-            filters={filters}
-            facets={facets}
-            randomUrl={randomLink.url}
-            randomLinkError={randomLink.error}
-            tagInvalid={Boolean(filterError)}
-            filtersOpen={filtersOpen}
-            filterPanelHidden={filterPanelHidden}
-            filterMenuDismissSignal={filterMenuDismissSignal}
-            toolbarVisible={toolbarVisible}
-            toolbarRef={toolbarRef}
-            filterToggleRef={filterToggleRef}
-            clearFiltersRef={clearFiltersRef}
-            filterPanelRef={filterPanelRef}
-            toggleFilters={toggleFilters}
-            dismissFilterMenus={dismissFilterMenus}
-            onFilterChange={updateFilter}
-            onClearFilters={clearFilters}
-          />
-        </div>
-      </div>
+      <PublicImageNavigation
+        embedded={embedded}
+        animateEntrance={shouldAnimateNavigation}
+        route={browseRoute}
+        controls={navigationControls}
+      />
       <ShowPixiStage
         dataKey={data.committedKey}
         dialogOpen={dialogOpen}

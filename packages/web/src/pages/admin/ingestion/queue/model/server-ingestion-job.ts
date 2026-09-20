@@ -8,7 +8,7 @@ import type {
   IngestionStatusItemDto,
   ServerIngestionItemDto
 } from "@imageshow/shared/browser";
-import type { IngestionJob } from "../../../../../lib/types.js";
+import type { IngestionJob } from "./ingestion-job.js";
 import {
   classificationOverrideFor,
   draftWithDetectedClassification

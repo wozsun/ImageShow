@@ -1,5 +1,5 @@
 import { ingestionBatchHardLimit } from "@imageshow/shared/browser";
-import type { IngestionJob } from "../../../../lib/types.js";
+import type { IngestionJob } from "./model/ingestion-job.js";
 import {
   commitStoredIngestions,
   getIngestionStatuses

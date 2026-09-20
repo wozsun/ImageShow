@@ -27,7 +27,7 @@ import { parse } from "./validation/parse.ts";
 import { uuidInput } from "./validation/primitives.ts";
 import {
   servePublicExternalOriginal
-} from "../images/external-original-serving.ts";
+} from "../images/serving/external-original.ts";
 import { getPublicGalleryFacets } from "../images/read-models/facets.ts";
 import { getPublicGalleryStats } from "../images/read-models/gallery-stats.ts";
 import {
@@ -37,8 +37,8 @@ import {
 import {
   servePublicStoredObject,
   servePublicStoredThumbnail
-} from "../images/stored-image-serving.ts";
-import type { StoredResponseRequest } from "../images/stored-object-response.ts";
+} from "../images/serving/stored-image.ts";
+import type { StoredResponseRequest } from "../images/serving/stored-object-response.ts";
 
 const galleryStatsQueryKeys = [
   "device",

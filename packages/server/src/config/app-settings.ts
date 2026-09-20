@@ -35,7 +35,6 @@ import {
   updateRuntimeConfig
 } from "./runtime-config-store.ts";
 import { effectiveEmbedAncestorSources } from "./embed-ancestors.ts";
-import type { RuntimeConfigPatch } from "./runtime-config.ts";
 import { publicBaseUrlSchema } from "../core/url-validation.ts";
 import { staticResourceBaseUrl } from "./site-host.ts";
 
@@ -93,7 +92,7 @@ const appSettingsSchema = z.strictObject({
   "至少需要提供一项设置"
 );
 
-export type AppSettingsInput = z.infer<typeof appSettingsSchema>;
+type AppSettingsInput = z.infer<typeof appSettingsSchema>;
 
 export function parseSettingsInput(value: unknown) {
   const result = appSettingsSchema.safeParse(value);
@@ -197,16 +196,12 @@ export function getSettingsForAdmin(settings: RuntimeConfig = getRuntimeConfig()
   };
 }
 
-function effectiveLoginBackground(loginBackgroundValue?: string) {
-  return loginBackgroundValue?.trim() || "/random?mode=redirect";
-}
-
-function effectiveHomeBackground(homeBackgroundValue?: string) {
-  return homeBackgroundValue?.trim() || "/random?mode=redirect";
+function effectiveBackground(value: string) {
+  return value.trim() || "/random?mode=redirect";
 }
 
 export function getEffectiveLoginBackground() {
-  return effectiveLoginBackground(getRuntimeConfig().admin.login_background);
+  return effectiveBackground(getRuntimeConfig().admin.login_background);
 }
 
 export function resolveIngestionSnapshotLimit(requestedLimit?: number) {
@@ -237,7 +232,7 @@ export function siteConfigPayload(runtime: RuntimeConfig = getRuntimeConfig()): 
       root,
       home: {
         ...home,
-        background: effectiveHomeBackground(home.background)
+        background: effectiveBackground(home.background)
       },
       show,
       gallery: {
@@ -255,21 +250,12 @@ export function siteConfigPayload(runtime: RuntimeConfig = getRuntimeConfig()): 
 }
 
 export async function saveAppSettings(input: AppSettingsInput) {
-  const runtimePatch: RuntimeConfigPatch = {};
-  if (input.site) runtimePatch.site = input.site;
-  if (input.ingestion) runtimePatch.ingestion = input.ingestion;
-  if (input.upload) runtimePatch.upload = input.upload;
-  if (input.normalize) runtimePatch.normalize = input.normalize;
-  if (input.thumbnail) runtimePatch.thumbnail = input.thumbnail;
-  if (input.admin) runtimePatch.admin = input.admin;
-  if (Object.keys(runtimePatch).length) {
-    try {
-      await updateRuntimeConfig(runtimePatch);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        throw new ApiError(400, "validation_error", error.issues[0]?.message ?? "Validation failed", error.flatten());
-      }
-      throw error;
+  try {
+    await updateRuntimeConfig(input);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new ApiError(400, "validation_error", error.issues[0]?.message ?? "Validation failed", error.flatten());
     }
+    throw error;
   }
 }

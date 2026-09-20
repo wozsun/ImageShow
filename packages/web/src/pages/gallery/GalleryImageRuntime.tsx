@@ -37,7 +37,7 @@ function currentViewportHeight() {
   return Math.max(1, window.innerHeight);
 }
 
-function createRuntime(): GalleryImageRuntimeValue {
+function createRuntime(): Omit<GalleryImageRuntimeValue, "galleryPaused"> {
   const concurrency = window.matchMedia
     ? preferredImageLoadConcurrency(window.matchMedia.bind(window))
     : 6;
@@ -47,8 +47,7 @@ function createRuntime(): GalleryImageRuntimeValue {
     visibility: new GalleryImageVisibilityController(currentViewportHeight()),
     debug: import.meta.env?.DEV === true
       ? new GalleryDebugStats(scheduler)
-      : null,
-    galleryPaused: false
+      : null
   };
 }
 

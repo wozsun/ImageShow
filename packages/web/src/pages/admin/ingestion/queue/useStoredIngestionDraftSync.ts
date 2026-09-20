@@ -9,7 +9,10 @@ import {
   ingestionBatchHardLimit,
   ingestionStatusBatchMaxItems
 } from "@imageshow/shared/browser";
-import type { ImageDraft, IngestionJob } from "../../../../lib/types.js";
+import type {
+  ImageDraft
+} from "../../../../lib/types.js";
+import type { IngestionJob } from "./model/ingestion-job.js";
 import { isApiClientError } from "../../../../lib/api/client.js";
 import type { IngestionQueueAction } from "./model/ingestion-queue-state.js";
 import { ingestionDuplicateMessage } from "./model/duplicate-match.js";

@@ -13,7 +13,7 @@ import {
   sha256Buffer,
   transcodeStoredImage
 } from "../../processing.ts";
-import { captureIngestionDuplicateCheck } from "../commit/duplicate-confirmation.ts";
+import { getDuplicateMatchCountByMd5 } from "../../read-models/duplicates.ts";
 import { ingestionCleanupRetryQueue } from "../cleanup/retry-queue.ts";
 import {
   mutateIngestionExecution,
@@ -177,7 +177,7 @@ export async function prepareIngestionSessionSnapshot(
     if (failure) throw failure.reason;
     signal.throwIfAborted();
     current = await refreshIngestionExecutionSession(repository, current);
-    const duplicates = await captureIngestionDuplicateCheck(normalized.md5);
+    const duplicateCount = await getDuplicateMatchCountByMd5(normalized.md5);
     return mutateIngestionExecution(
       repository,
       current,
@@ -186,7 +186,7 @@ export async function prepareIngestionSessionSnapshot(
           ...latest,
           status: "ready" as const,
           phase: "ready",
-          message: duplicates.check.match_count
+          message: duplicateCount
             ? "处理完成，请确认重复图片"
             : "处理完成，可以提交",
           progress: 100,
@@ -209,7 +209,7 @@ export async function prepareIngestionSessionSnapshot(
             quality: normalized.quality,
             transcoded: normalized.transcoded,
             detected_brightness: detectedBrightness,
-            duplicate_count: duplicates.check.match_count,
+            duplicate_count: duplicateCount,
             generation: preparedGeneration
           },
           error: undefined,

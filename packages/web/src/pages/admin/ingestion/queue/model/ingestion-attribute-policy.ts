@@ -1,10 +1,8 @@
 import type {
-  ImageDraft,
-  IngestionCommonAttributeField,
-  IngestionDetectedClassification,
-  IngestionJob
+  ImageDraft
 } from "../../../../../lib/types.js";
-import type { IngestionAttributeDefaults } from "./ingestion-attribute-defaults.js";
+import type { IngestionCommonAttributeField, IngestionDetectedClassification, IngestionJob, IngestionAttributeDefaults } from "./ingestion-job.js";
+
 
 type IngestionAttributePhase = "initial" | "ready" | "locked";
 export type IngestionAutomaticClassificationLabel =

@@ -2,7 +2,14 @@ import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { readableFilterSearch, TagFilterError } from "@imageshow/shared/browser";
 import { useGalleryFacets } from "../lib/api/site-queries.js";
-import { galleryFiltersFromSearchParams } from "../lib/gallery/gallery-query.js";
+import {
+  emptyGalleryFilters,
+  galleryFiltersFromSearchParams,
+  galleryRandomRequestDevice,
+  updateImageBrowseSearchParams,
+  type GalleryFilters
+} from "../lib/gallery/gallery-query.js";
+import { randomLinkResult } from "../lib/gallery/random-url.js";
 
 /** The route owns choices; the existing vocabulary query resolves tag references. */
 export function useImageBrowseRoute() {
@@ -45,8 +52,24 @@ export function useImageBrowseRoute() {
     }
     void navigate({ search: readableFilterSearch(next) }, { state: { imageBrowseFilterEdit: true } });
   }, [navigate, query, facetsQuery.data]);
+  const updateFilter = (key: keyof GalleryFilters, value: string) => {
+    updateSearchParams((current) => updateImageBrowseSearchParams(current, { [key]: value }));
+  };
+  const clearFilters = () => {
+    if (!params.has("tag") && !Object.values(parsed.filters).some(Boolean)) return;
+    updateSearchParams((current) => updateImageBrowseSearchParams(current, emptyGalleryFilters));
+  };
+  const randomLink = ready ? randomLinkResult({
+    origin: window.location.origin,
+    device: galleryRandomRequestDevice(parsed.filters.device),
+    brightness: parsed.filters.brightness || "random",
+    theme: parsed.filters.theme,
+    tag: parsed.filters.tag,
+    author: parsed.filters.author
+  }) : { url: null, error: null };
   return {
     params, filters: parsed.filters, error, ready,
+    updateFilter, clearFilters, randomLink,
     facets: facetsQuery.data, updateSearchParams, browseSearch: readableFilterSearch(linkParams),
     isFilterEdit: location.state?.imageBrowseFilterEdit === true,
     retryVocabulary: () => { void facetsQuery.refetch({ cancelRefetch: false }); }

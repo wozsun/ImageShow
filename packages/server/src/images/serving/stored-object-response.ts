@@ -1,16 +1,16 @@
 import {
   conditionalRequestNotModified,
   ifRangeMatches
-} from "../core/http/validators.ts";
-import type { OpenedRead } from "../storage/drivers/driver.ts";
-import type { ResolvedReadableObject } from "../storage/objects/access.ts";
-import { webReadableFromNode } from "../storage/objects/stream-buffer.ts";
+} from "../../core/http/validators.ts";
+import type { OpenedRead } from "../../storage/drivers/driver.ts";
+import type { ResolvedReadableObject } from "../../storage/objects/access.ts";
+import { webReadableFromNode } from "../../storage/objects/stream-buffer.ts";
 import {
   responseContentLengthValue,
   safeResponseHeaderValue
-} from "../core/http/headers.ts";
-import { normalizePartialContentRange } from "../core/http/byte-range.ts";
-import { ApiError } from "../core/api-error.ts";
+} from "../../core/http/headers.ts";
+import { normalizePartialContentRange } from "../../core/http/byte-range.ts";
+import { ApiError } from "../../core/api-error.ts";
 
 export type StoredResponseRequest = {
   range?: string;

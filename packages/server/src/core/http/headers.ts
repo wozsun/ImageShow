@@ -1,5 +1,10 @@
 import type { Context } from "hono";
 
+export function setPublicResourceCors(response: Response) {
+  response.headers.set("Access-Control-Allow-Origin", "*");
+  response.headers.set("Access-Control-Expose-Headers", "ETag, Content-Range, Accept-Ranges");
+}
+
 const commonSecurityHeaders: Readonly<Record<string, string>> = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",

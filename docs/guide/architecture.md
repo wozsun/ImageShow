@@ -1,48 +1,29 @@
 # 架构总览
 
-ImageShow 是一个 npm workspaces 单仓项目：服务端使用 Hono 与 Node.js 26，前端使用
-React 与 Vite，共享 HTTP 契约和稳定常量位于 `packages/shared`。生产镜像只运行编译后的
-JavaScript，并由同一个 Hono 应用在主站提供 SPA、公共 API、管理 API 和图片出口。
+ImageShow 使用 npm workspaces 管理 Server、Web 和 Shared。生产镜像由一个 Hono 应用提供
+React SPA、API 和图片资源，只支持单应用实例。本文说明组件职责和数据所有权；具体源码入口见
+[项目结构](project-structure.md)，端到端行为见[功能与流程](flows.md)。
 
 ## 整体结构
 
-![ImageShow 架构图：客户端经反向代理访问 Hono 应用，应用校验 Host 并读写 PostgreSQL、Redis 与存储后端，后台 Worker 分别消费 PostgreSQL jobs 与 Redis 内容接入状态](./assets/architecture.svg)
+![ImageShow 架构图：客户端经反向代理访问 Hono，应用连接 PostgreSQL、Redis 和 local / S3，Worker 消费持久任务与接入状态](assets/architecture.svg)
 
-```text
-浏览器 / API 客户端
-        │ HTTPS
-        ▼
-可信反向代理 ──► Host 校验与安全响应头
-        │
-        ▼
-Hono HTTP 应用 ──► PostgreSQL（业务真相）
-        │        ├─► Redis（派生投影与运行时状态）
-        │        └─► StorageDriver（local / S3）
-        │
-        └─► Worker ──► background_job
-```
-
-生产部署只支持一个应用进程，不检测或协调第二个实例。PostgreSQL 与 Redis 可以由独立
-基础设施 Compose 提供，但都必须是该应用实例明确配置的单一连接目标。部署与停机边界见
-[生产部署](../DEPLOY.md)。
+PostgreSQL、Redis 可以独立部署，但应用只使用明确配置的单一连接目标。
+部署、反向代理与停止宽限见[生产部署](../DEPLOY.md)。
 
 ## 请求与主机边界
 
-应用在 `http-app.ts` 中统一校验规范化后的 `Host`，各入口按路径注册：
-
-| 入口 | 职责 |
+| 入口 | 提供的能力 |
 | --- | --- |
-| `<站点域名>` | SPA、公共 API、管理 API、健康检查与 `/random` |
-| 主站 `/images` | `/images/full/*`、`/images/thumbs/*` 对象字节，以及始终公开且可缓存的 `/images/original/<id>` 外部原图直连决策 / 代理 |
+| 主站 Host | SPA、公开 / 管理 API、健康检查、`/random` 和 `/images` |
+| 本地图片公开 Host | 固定读取 local 的完整图和缩略图，保留配置的路径前缀 |
+| 静态资源公开 Host | 只提供前端 assets，保留配置的路径前缀 |
 
-显式域名下只接受主站 Host，其他 Host 返回 404；域名为空或 `example.com`
-时接受格式合法的访问 Host，使用同源 `/images` 路径，不持久化或缓存请求域名。
-嵌入页只在配置开启时提供，
-并由文档响应的 CSP
-`frame-ancestors` 限定父页面；它不会扩大 API 的跨源权限。完整路由见
-[主机与图片资源](./image-resources.md)，请求来源、鉴权与响应头见[安全](./security.md)。
-应用只接受最外层可信代理覆盖后的 `Host`、单值协议和单值客户端 IP，不解析
-`X-Forwarded-Host` 或多级 `X-Forwarded-For`；应用端口必须只对该代理可达。
+配置显式域名时，其余 Host 返回 404；域名为空或为 `example.com` 时使用合法访问 Host，
+图片地址使用同源路径。资源 Host 不开放后台或 SPA。
+代理覆盖 Host、单值协议和单值客户端 IP，应用端口只对可信代理可达。
+嵌入页由配置与 CSP 限定父页面，不扩大 API 跨源权限。
+详见[主机与图片资源](image-resources.md)和[安全](security.md)。
 
 ## 代码分层
 
@@ -51,303 +32,98 @@ packages/server ──► packages/shared
 packages/web ─────► packages/shared
 ```
 
-- `shared` 只保存稳定 DTO、配置默认值、枚举和纯函数，不依赖其他 workspace。
-- `server` 是唯一业务入口。路由只处理 HTTP、权限和输入输出，领域模块拥有事务、锁、
-  存储与缓存语义，`core` 不反向依赖路由或具体业务。
-- `web` 由页面编排跨页面组件、Hook 和无界面库；`components`、`hooks`、`lib` 不反向
-  导入页面。
+- Shared 保存共同 DTO、常量、配置默认值和纯规则；浏览器入口不包含 Node.js 或运行时秘密。
+- Server 由 HTTP 边界调用领域，领域调用基础设施。事务、锁、缓存与资源的所有权留在领域内。
+  `core` 不持有图片筛选、词表或管理员业务规则。
+- Web 由页面编排组件、Hook 和无界面库。页面专属的接入队列、上传和导入模型就近维护，
+  跨页面模块不反向依赖页面。
 
-具体目录、依赖方向和本地门禁见[项目结构](./project-structure.md)。
+目录、状态所有者和按需加载边界见[项目结构](project-structure.md)。
 
 ## 数据所有权
 
+| 数据 | 唯一权威 | 生命周期 |
+| --- | --- | --- |
+| 正式图片、词表、账号、存储注册表、后台任务 | PostgreSQL | 持久化；图片在事务提交后才正式入库 |
+| 图片读模型、查询缓存、随机历史 | Redis | 派生或临时；图片投影由协调器重建 |
+| 登录会话与限流 | Redis | 有期限；账号角色与密码仍逐请求核对 PostgreSQL |
+| Upload / Import 未完成状态与紧凑完成回执 | Redis Ingestion canonical | 在队列期限内恢复，Redis 丢失后允许消失 |
+| 原始接入文件、处理结果与缩略图候选 | `data/temp` | 临时字节，不构成第二套任务恢复来源 |
+| 正式完整图与缩略图 | local / S3 | 位置由 PostgreSQL 记录，物理键独立于可编辑分类 |
+| 当前文档的占位、草稿与 Blob | 对应 Web 队列 owner | 随页面生命周期释放，不覆盖服务端完成事实 |
+
 ### PostgreSQL
 
-PostgreSQL 是图片、词表、后台任务、存储注册表和管理员账号的唯一持久业务真相源。
-schema 共 9 张表，其中 `ready_image_revision` 是图片投影 revision 单行表。
-
-`schema.sql` 完整定义安装结构；空库在同一事务中执行它与只读 readiness，
-非空库只进行当前最小结构的只读 readiness。任一步失败回滚本次事务。
-空主题由可空、无默认值的主题外键表示，主题表只保存真实词条。
-既有数据库的结构新增、修改、删除和数据整理由维护者显式处理，先停机、备份并明确恢复路径。
-额外表不参与 readiness，
-不读取其数据、不要求读写权限；必需结构、约束、种子或权限不满足仍明确失败。
-干净初始化和 readiness 契约以
-[数据库结构](./database.md)为唯一说明。
+空数据库在同一事务中执行完整 `schema.sql` 与只读 readiness；非空数据库只做当前最小结构的
+只读检查。既有结构由维护者明确维护，应用不会自动补表、回填或对齐完整 schema。
+额外表、未消费列和索引不进入业务检查。表、约束与连接预算见[数据库结构](database.md)。
 
 ### Redis
 
-Redis 8 承载可以从 PostgreSQL 重建的图片读模型，以及管理员会话、限流、近期随机历史、
-词表缓存、短期探测结果和可丢弃的未完成内容接入队列。它不替代账号、权限或最终图片状态；
-Ingestion canonical 是当前单实例 worker 的运行时真相，专用 logical database 冷启动时允许整体
-丢弃，不能把它回退到 PostgreSQL 或进程内队列。
+所有 ready 图片使用同一核心投影与 revision。设备、明暗、主题、标签、作者及组合筛选是有界
+派生结果；缺失或过期不被当作空图库。核心投影损坏、revision 不一致或 Redis 连接变化时，
+协调器关闭读取门并以同一活动任务校验 / 重建。公共读取通过受限 PostgreSQL reader scope 回源，
+后台在 Redis 不可用时明确返回 `503 redis_unavailable`。
 
-upload 与 import 分别维护 accepted-order owner 动作 ZSET、batch / position display 展示 ZSET、
-metadata 计数 / revision 和一个显示时 SSE。display 的倒序 rank 保持新批次在上、同批来源顺序
-1→N；owner 的单调 accepted order 只服务动作水位与有界扫描。稳定 snapshot 从 metadata 直接
-签发绑定当前 Redis connection epoch 与进程内
-action scope 的 watermark；全队列写入口冻结最大 order 后从 1 向上有界扫描，并用绑定完整
-请求、单调递增 next cursor 与同一最大 order 的签名 continuation 续传。水位后新增成员不会进入
-本轮；逐项执行继续并发且不承诺严格 FIFO。scope 只在进程内存中存在，Redis unavailable 或
-重新连接会立即废止，
-不构成 Redis 数据代际、key namespace 或 session identity。每个 scope 还只保留当前动作最近
-一个请求批次的 Promise / 逐项结果，并以固定上限的小型 ID→请求指纹表拒绝近期 action ID 被
-换动作、水位或 payload 复用；相同请求并发或响应丢失时原样重放，只有携带上批已签发
-continuation 的下一批才能替换结果槽。它让删除 Redis completed 回执的动作仍可重放 PG 水合
-DTO，同时不会形成随队列长度增长的内存结果表或新的 Redis 回执。
-全局属性动作不向 canonical 写 action marker 或持久结果。“应用到全部”和整队列清空只按
-accepted-order 水位选成员；属性动作在最新 canonical 上 CAS 合并稀疏 patch，整队列清空继续
-经过取消协调器和 PostgreSQL 复核。提交和三类状态清理才以点击时 semantic revision 与执行时
-谓词过滤；关闭瞬间恰逢重连时，完成态清理还可携带更小的旧权威 revision 上限，新的签名水位
-只恢复执行权而不能扩大关闭时集合。progress / TTL 等非语义推进不影响选择。跨客户端 UUIDv7
-大小不承担因果顺序。
+协调器只有 `unavailable`、`rebuilding`、`ready`、`stopped` 四态。图片事务推进 PostgreSQL
+revision，在写栅栏内完成精确同步；超过精确同步预算时只安排一次完整重建。Redis 同步失败
+不回滚已经提交的图片。词表修改无论正常返回还是写回执丢失，都在所属写入边界内使词表和列表
+缓存失效，后续读取以数据库为准。
 
-全部 `ready` 图片共享一个固定命名空间：
+Ingestion 的 pair、version 与 execution token 隔离执行、重试和取消；队列 snapshot、SSE 与
+批量动作使用同一 canonical。completed 回执需由 PostgreSQL 水合。浏览器只保留当前文档
+拥有的卡片与有界 Server 页，不建立全队列 DTO 副本。协议见[队列分页与状态同步](ingestion.md#队列分页与状态同步)。
 
-- 核心投影无 TTL，包含 rich item、时间索引、ID 末位索引、全局统计、完整性和已应用
-  revision；
-- 设备、明暗、主题、标签、作者索引以及组合筛选和动态统计是带生命周期的派生结果；
-- 派生结果按需构建，受数量、成员数、工作量、并发和 TTL 上限约束；缺失、过期、损坏
-  或超限只让当前读取回源 PostgreSQL，不会把派生结果当成真相；
-- 完整设备筛选直接复用设备属性索引，设备加亮度使用轴索引；分类组合复用相应属性输入。
-  属性构建按核心计数及源读取限制成员规模，不发布截断结果，详见[随机图缓存说明](random-api.md)；
-- 核心投影损坏、revision 不一致或当前 Redis 连接更换会立即关闭 Redis 读门。协调器只
-  保留 `unavailable` / `rebuilding` / `ready` / `stopped` 四态和一个活动任务：先在同一
-  写栅栏内核对 PostgreSQL revision 与 Redis 已应用 revision，只有失配或完整性失败才
-  single-flight 重建；重连期间变化的连接由同一任务重新校验，不维护第二套 epoch 状态。
-
-窗口限流的通用 Lua 与命令留在 `core/redis/window-limit.ts`；派生结果 touch、统计结果 touch、
-筛选集合生成和属性索引发布四类 ready-cache 原子写操作，以及 core / derived ready index
-两类只读随机抽样，由 `images/ready-cache/redis/` 拥有各自 Lua、命令定义、参数和返回解析。
-两处都在首次调用前显式、幂等地向 ioredis 注册，唯一 Redis client 不反向导入图片领域，也
-不依赖全局类型扩充或模块导入副作用。已解析索引的
-随机读取在一次原子调用内核对 core meta / integrity、revision、派生 token / TTL 和 cardinality，
-完成有界 `ZRANDMEMBER` 与 rich item 读取；显式状态让核心损坏进入重建、派生失效进入丢弃与
-PostgreSQL fallback。近期图片集合、fresh / fallback 排序和最终 limit 仍由 TypeScript 负责。
-调用方不保存 Lua 或 `EVAL` 参数布局；同一物理连接首次执行可发送完整脚本，后续使用 SHA，
-Redis 重启或脚本缓存清空后的 `NOSCRIPT` 由客户端透明恢复。应用不在启动时 `SCRIPT LOAD`，
-也不把这些脚本部署为 Redis Functions。深度检查中按当前批次键动态测量的低频脚本仍直接
-执行，不属于高频业务命令。
-
-图片事务先在 PostgreSQL 推进 `ready_image_revision`；同一张图片的一次原子编辑即使同时
-改变 metadata 与标签也至多推进一次，纯 no-op 不推进。影响不超过 500 张时，提交后在
-进程内写栅栏中精确更新核心投影；更大操作不加载完整 ID 列表，而是保持读门关闭并只
-安排一次全量重建。Redis 失败不回滚已经提交的 PostgreSQL 结果。
-精确增量按图片 id 对齐旧、新记录：仅写变化的 rich item，保留未变化的时间与 ID 末位索引，
-统计按字段合并净增减。旧记录的完整统计贡献先逐项扣减核验，净变化为零也不能掩盖原计数不足；
-仍核对 cardinality、样本和统计摘要。没有实际投影差异时，已提交的 revision 仍完成发布，
-继续受同一写栅栏、PostgreSQL revision 和当前 Redis 连接检查约束。
-
-核心 meta 的 `item_count` 随完整重建批次和精确增量发布保持真实；`processed / total`
-只表示活动完整重建进度，非重建期归零且管理 DTO 返回空。`last_updated_at` 只在完整重建
-批次或精确增量发布时推进，不受派生缓存命中、注册、淘汰或 TTL 影响。完整重建起止时间
-只描述当前或最近一次完整重建；成功重建另保存
-`last_full_rebuild_core_memory_bytes` 与测量时间，后续精确增量不会把该历史快照冒充为
-当前占用。新一轮重建或失败会保留上一份可靠的成功快照，新的成功重建才替换它；测量失败
-则明确回到未知。
-
-后台概览在 `/overview` 查询中与 PostgreSQL 统计并行，对固定
-`READY_IMAGE_CORE_KEYS` 发出一个 pipeline 的准确 `MEMORY USAGE ... SAMPLES 0`，得到
-`current_core_memory_bytes` 与独立测量时间。它不执行 `SCAN`、不读取派生缓存，也不把当前值
-写入核心 meta。并发概览请求复用同一个进程内测量 Promise；测量失败只让当前值未知，完整
-重建字段继续表示最近一次成功重建。准确测量的成本会随这些核心容器的成员数增长，因此只在概览读取
-和重建完成后的既有概览 refetch 中执行，不随重建进度轮询重复测量。
-
-Redis 运行期不可用时，后台在会话读取前统一返回 `503 redis_unavailable`；公共图片、
-列表、统计、资源记录和随机图进入统一的有界 PostgreSQL 回源。单实例只使用一个 FIFO
-准入门，统一限制总并发、排队长度、等待时间、执行期限和 SQL 工作量；队列满返回 429，
-等待或执行超时返回 503。每个公开请求持有一个显式的惰性 reader scope：Redis 全命中时
-不占准入名额，首次真实 PostgreSQL 查询才借用一个 client，后续词表、筛选和主体查询复用
-它并在请求读阶段结束时统一释放。超时或连接故障直接淘汰该 client，为管理事务和 Worker
-保留主连接池余量。
-
-随机筛选和返回契约见[随机图 API](./random-api.md)。检查页的管理轻量状态只执行固定数量的
-PostgreSQL / Redis 命令，不扫描键空间或逐键读取内存；Redis 图片投影的核心卡先显示当前
-图片数和最近完整重建内存快照，键数保持未知。检查页同时由唯一查询 owner 在后台自动启动
-一次有界 Redis 深检，轻量状态不等待它；完整结果原地更新核心投影的键数与
-`MEMORY USAGE`，以及派生投影的键数、结果成员数与 `MEMORY USAGE`。核心卡的“图片成员”
-数始终使用轻量状态中的 `item_count`，不展示各核心键基数之和。自动检测进行中不会再启动
-Redis 或“全部”检查的第二次扫描，之后手动运行 Redis 检查仍复用同一查询。未完成的部分
-汇总不会替换已有快照。Redis `INFO MEMORY` 始终只表示整个实例，不会与 ImageShow 投影
-汇总相加或替代。
-
-图片筛选共享有限的标签模型：外层任一、每条内部全部，主题 / 作者独立保留包含 / 排除。
-列表、动态统计与随机 PostgreSQL 回源使用同一 SQL 谓词；Redis 构建和估算共用有限集合运算
-步骤，完整表达式进入签名，重叠图片只计一次。入口分别校验基础或随机混合能力，不建立
-随机专用查询引擎或通用递归表达式树。
+Redis 命令、投影和查询限制见[项目结构](project-structure.md)、[随机图 API](random-api.md)
+与[数据库运行边界](database.md#运行期连接与公开回源)。检查页的深检和概览的即时内存测量
+各有独立查询 owner，不把最近一次重建快照冒充当前占用。
 
 ### 图片字节
 
-图片字节通过命名 `StorageDriver` 实例访问。每张图片记录自己的 `storage_slug`，同一
-类型可以注册多个后端；领域代码不按类型拼接第二套对象路径。驱动、对象完整性、位置
-迁移、远端请求期限、流 lease 与退役规则以[存储](./storage.md)为唯一说明。
-
-Upload 与 Import 的原始文件、处理结果和缩略图统一保存在 `data/temp`。两类来源共用由
-Normalize 容量派生的 preparation owner，从等待处理到本地原子发布与 ready 登记，合计最多
-持有 `N` 份处理中的缓冲。ready 后清理原始文件，预览读取本地结果，提交时才流式写入
-所选后端的正式对象并校验完整性。
+完整图键为 `full/<UUID 尾两位>/<UUID>.<ext>`，缩略图使用对应的 `thumbs` 键。
+分类编辑只改 metadata 和必要投影；接入、迁移、删除与显式维护负责对象写入。
+外部原图代理和随机图代理只返回字节，不创建图片记录。对象与临时素材协议见[存储](storage.md)。
 
 ## 一致性边界
 
-会改变图片对象位置的 Ingestion commit、单图或整后端迁移和彻底删除，
-共用存储位置维护锁与单图 advisory lock。锁内重新读取 PostgreSQL 真相，候选对象必须
-按所属领域的冻结摘要或数据库完整性信息完成传输验证，数据库位置以旧值做 CAS。数据库提交后
-才处理旧对象；不可逆删除交给
-带物理命名空间 identity 的持久 `move.cleanup` 任务。Worker 取得同一单图锁并在删除边界
-重读当前引用，已经重新采用的对象会保留，DELETE 结果则必须再次确认。
+- 图片位置操作先取得存储位置维护锁和单图锁，锁内重新读取 PostgreSQL。
+  候选按冻结摘要验证，位置通过 CAS 提交，数据库确认后才清理源对象。
+- Ingestion 写入正式候选前登记持久清理 guard。清理任务在同一单图锁内重新核对引用，
+  结果未知时保留可核查的候选；不能根据页面报错判断事务回滚。
+- 检查页显式维护取得独占位置锁并重新扫描。只读预览不作为删除依据；取消时先收口已经
+  开始的工作，再释放锁。成功图片读取只读，缺失缩略图由维护入口补建。
+- 已开始的 PostgreSQL 提交不因 Redis 断线或停机主动撤销。请求取消、worker 执行取消与
+  不可逆事务结算由各自所有者处理，不借用超时或前端卡片推断完成。
 
-检查页的显式存储维护取得同一位置锁的独占模式，因此会等待上传、迁移和对象清理的共享
-持有者完成，也阻止新持有者越过执行快照。它在锁内直接修复缺失缩略图和删除确认孤儿；两类
-工作按主要资源分别调度，但取消或失败必须等待已经启动的资源池全部收口后才释放独占锁。
-正常完成时逐项返回结果，不把修复字节或执行结果复制到 `background_job`。只读存储检查不持锁，结果
-仅用于预览；写入口始终重新扫描 PostgreSQL 和完整物理命名空间。缩略图记录已经采用
-有效字节时，维修在生成前确认对象是否仍存在；记录为 0 时不执行结果无消费者的提前探测，
-而是在源完整性校验与生成后复用锁内已确认的位置和 driver，再检查并替换未采用的缩略图。
-数据库大小写入的结果未知时仍回读真值；维修不能脱离独占锁或提前释放已开始的工作。
-
-内容接入临时素材由单实例周期 worker 按本地目录的有界游标扫描回收，原始文件、处理结果和
-写入中文件统一使用 canonical 精确引用、活跃路径租约及年龄门槛。检查页展示本地暂存数量与空间，
-独立于正式对象的存储维护。临时文件只承载内容，恢复仍以 Redis canonical 为权威。
-正式提交则在写入两个确定候选前创建一条持久 `move.cleanup` guard，使进程崩溃后仍能按
-PostgreSQL 最终引用决定删除或保留；S3 写入的不确定窗口在请求前写入该 guard，handler 取得
-单图锁后重读窗口，避免把尚未可见的迟到发布误判为清理完成。
-
-成功提交后，正常缩略图读取严格只读；缺失由 GET 返回 404 并在 Web 显示统一损坏图标，
-只有检查页维护可以补建。分类编辑直接基于事务锁定行更新 metadata；自动亮度保留事务外
-缩略图读取、位置保护及准备快照复核，其他分类不取得单图对象锁。主题删除在词表排他锁和
-图片缓存 fence 内以一个事务解除关联并删除词条。存储迁移不会在业务路径隐式修复。
-
-Redis Ingestion canonical 以 pair、version 和 execution token 隔离下载、prepare、commit、取消
-与恢复。commit 按 prepared 最终 MD5、pair、图片和词表取得 PostgreSQL advisory lock，只
-串行真正冲突的内容；正式对象写入到 PostgreSQL 事务 settle 全程持有 storage location shared
-lock。进程内不可逆协调器只保存 `cancellable -> database_started -> settled`，并让 worker
-的最后一次 token 复验、事务启动与取消判断共享一个临界区；它不构成持久队列或多实例协议。
-下载或 prepare 持有同一 execution token 时，草稿更新可以合法推进 semantic version；worker
-在 heartbeat、progress、成功阶段发布和失败落盘处重读并接力该新版 canonical，以最新草稿
-继续执行。只有 downloading / preparing 允许这种 version 接力，状态、pair 或 token 变化仍是
-严格围栏，commit 不放宽冻结边界。
-任何连接丢失或调用方取消都通过 `AbortSignal` 传播，但已经启动的 PostgreSQL 事务不会因
-Redis 断线或停机主动撤销。端到端状态见[功能与流程](./flows.md)。
-
-浏览器状态通道同样只面向单实例：当前管理员的 upload / import 队列各自建立一个 SSE，
-listener 建立后才向客户端交付本进程 action scope。分页快照把固定范围放在短 query，并用
-有界 POST JSON 声明当前文档保序批次中的 Server pair 与当前页可见子集；单个
-Redis Lua 先完整校验这些精确 incarnation，再按其全局 display rank 把过滤后的 offset 换算成
-原始起始 rank，只读取 `limit + 有界排除数`，并原子补入可见子集的 canonical、捕获 metadata
-与 revision。它不从 rank 0 扫描，也不假定当前文档任务位于全局 ZSET 头部，因此巨大 offset
-和其他会话新增的更靠前批次都不会改变组合分页语义。排除 pair 已被删除、discard 或由同
-session 新 incarnation 替换时，快照在同一响应返回精确 stale pair；Web 在一次 reducer 更新中
-清除旧卡、Blob、状态围栏、detached owner 与草稿 owner，不能让失效排除项永久占位。canonical
-已经缺失且 owner 不再包含该 session 时，Lua 先收集最多 3600 个缺失 session，再只遍历一次
-display ZSET 检查是否仍有孤儿成员；命中继续按结构损坏 fail closed，否则精确返回 stale。
-该校验不建立持久反向索引、迁移状态或第二套恢复真相。
-completed 回执只保留身份、提交摘要、期限与卡片所需的紧凑来源 / 原始处理信息，随后用一次
-PostgreSQL `WHERE id = ANY(...)` 水合。重连、Redis operational 周期变化或服务端停机都会
-废止 scope 与旧动作权威，但当前页只读展示保留到新快照原位替换；不保存事件历史，也不以
-轮询补偿。SSE 与 status 的逐项结果按 `session_id + image_id` 直接投影到当前文档已经保留的
-卡片 owner，即使该卡片暂时离页；它不挂载未知 pair，也不缓存全队列 DTO。completed 的完整
-PostgreSQL 投影先把精确卡片推进终态，再由分页 snapshot 验证有界页面；version、progress
-sequence 与终态围栏阻止 snapshot 或迟到 HTTP 响应回退，summary 只计数而不推断逐卡结果。
-合法 compact completed 回执同样先把精确 retained owner 推进“已完成”，再由既有有界 status
-owner 分批补齐 PostgreSQL DTO，不追加当前分页读取；没有 retained owner 的 pair 也只进入该
-status owner 以完成图库失效，不会挂载卡片。每任 effect 只拥有一个有界 status chunk；成功时
-原子落实卡片、引用和待失效事实并消费对应 compact pair 后，下一任 owner 才处理尾部，因此不会
-中止并重复发出同一尾部请求；已水合未知 pair 的重连回执由完成去重 owner 直接过滤。后续 chunk
-失败时只保留未处理尾部，等待明确重试或后续状态
-事件，所有 pending 失效仍在队列收敛后合并一次。完整 DTO 到达后才替换 Blob 预览并进入同一失效
-去重入口。同一 semantic revision 内从 `prepare-waiting` 取得 Normalize 许可的 progress 会同步
-更新全局 summary，即使对应 DTO 不在当前页；同 revision 只接受 waiting 等量转入 running 的
-单调方向，较早帧或旧 revision 不得覆盖新快照的计数。
-HTTP 接管结果携带精确
-accepted order，并以 snapshot 的 `last_accepted_order` 判断是否需要临时增加一次 total；这使
-首次响应和响应丢失重放都能精确计数。当前文档创建的批次在窗口生命周期内始终由浏览器按
-batch / position 保留整批展示顺序；业务权威逐项立即转交 Server，整批 handoff 保持
-展示前缀、offset 或 limit，也就不会为展示所有者切换追加扩张快照。窗口重新进入后从一开始
-完全使用 Server display，协议恢复只体现为任务仍在。浏览器保序任务最多 3600 项；新入队会
-在创建 Server 任务前拒绝越过该界限，关闭窗口后该预算随文档释放。同筛选、同 offset 的
-较小 Server 展示窗口直接复用已有稳定页，不因浏览器前缀占用更多槽位而重读。读取 owner 在
-当前 offset 额外保留最多一页普通 Server DTO 作为有界替补；页面状态只接收实际展示槽位和
-当前文档已接管 pair，替补不会生成卡片、Blob 或草稿 owner。新加入的精确 pair 已在稳定页时，
-或排除变化仍可由该替补填满 Server 槽位时，同样复用该 revision。离页 handoff
-只向队列 owner 声明所需 semantic revision；当前或在途快照覆盖该水位时继续作为唯一刷新 owner。
-离页 handoff 的业务计数仍只用
-无素材 provisional 投影。跨代 HTTP 结果把该投影重新归属当前 owner generation，并在
-accepted-order 基线覆盖后退出。status 返回更高 revision 而触发 coverage 快照时，最近稳定
-Server summary 会保留到新快照落地，组合总数不会因 canonical 先退出本地计数而短暂减少。
-取消边界返回 `discarded` 时同时返回该次 Redis 语义变更的精确 queue revision；Web 立即按 pair
-过滤旧基线并扣除单项投影。目标不在当前有界 DTO 页时，只有 retained summary 的 revision 仍
-早于该 revision 才使用取消前冻结的单项投影，权威快照追平后不再重复扣减。该成功路径只发起
-一次证明快照；投影使当前页越界时，页码与投影在同一状态提交内先行夹紧，证明快照只使用
-夹紧后的 offset。同代页参数切换期间继续复用最近稳定 summary 承载扣减投影，但不跨 connection
-generation 复用。失败或终态未定的任务继续保留。
-请求发出时的 connection generation 与结果一起进入围栏判断，跨连接响应必须先经批量 status
-核对，不能用旧 revision 快速越过新连接；active DTO 会合并回当前 owner，PG completed 且
-Redis missing 时直接水合完成卡片。该结果另持有独立于页内 DTO 的 semantic revision
-围栏；旧 DTO 即使已有 accepted order 也不能解除该围栏。未知完成围栏跨 SSE connection
-generation 保留；新连接仍观察到 active 时只等待下一次 semantic revision 后补查，不能把重连
-本身当成完成证明。待状态通道确认的草稿写入同样保留
-已知最大 version / semantic revision，较旧 snapshot 不会令下一次 pair/version CAS 回退。
-PG 已完成但 Redis 完成迁移尚不能给出精确 revision 时，Web fail closed 并触发一次有界快照，
-同时用现有批量 status 读取区分 canonical 仍为 active、已经 completed 或已经 missing。围栏按
-pair 保存在 queue owner 而不是页内卡片；重试门槛绑定 connection generation，换代后重新核对。
-active 时继续等待同代后续 revision；批量 status 返回的 active DTO 与 Redis completed 回执都把
-精确 semantic revision 登记为 coverage gate。若该 revision 高于当前基线，owner 主动重取一次
-有界快照，只有同代稳定 snapshot 覆盖或 missing 被权威确认后才重新开放全队列动作，因此翻页、
-状态查询后没有后续 SSE、稳定无事件或冷代低 revision 都不会形成动作缺口或永久门禁。
+具体交接见[图片接入](ingestion.md)、[存储](storage.md)和[后台任务](database.md)。
 
 ## 后台 Worker
 
-通用 Worker 只消费三类持久任务：
-
-| 类型 | 所属领域 | 作用 |
+| 持久任务 | 所属领域 | 工作 |
 | --- | --- | --- |
-| `move.cleanup` | storage | 删除确认未引用的捕获候选或旧位置对象 |
-| `trash.purge` | images | 按 `target_id` 独立执行一张回收站图片的彻底删除 |
-| `cache.rebuild` | images/ready-cache | 重建 ready 图片核心投影 |
+| `move.cleanup` | storage | 删除确认未引用的候选或旧位置对象 |
+| `trash.purge` | images | 按 `target_id` 处理单张回收站图片的彻底删除 |
+| `cache.rebuild` | images/ready-cache | 重建图片核心投影 |
 
-通用 `jobs` 层只负责 `FOR UPDATE SKIP LOCKED` 领取、`execution_token` 所有权、续租、
-重试、僵尸恢复、公平时间片和历史裁剪；payload 与处理语义仍由所属领域拥有。每种任务类型
-独立执行一个有界时间片，后续 tick 只为闲置类型分配工作；慢处理器不阻塞其他类型的发现、
-僵尸恢复和历史裁剪，同类型的并发上限仍覆盖领取到结算的全过程。Worker 的任务
-期限、租约丢失和进程停机合并为执行信号，handler 用它停止仍可安全中止的调度；advisory 层只将
-它用于连接 checkout 与锁获取。取得锁后，连接丢失由独立的锁信号约束，已经开始且必须收口的
-不可逆清理不再继承执行信号。停机时不再领取新任务，并在总停机期限内等待已经登记的 handler
-真正结算，同时等待在途任务发现与各类型时间片收尾，再允许重新启动。
+通用 jobs 层只拥有领取、execution token、续租、重试、公平调度与历史裁剪，各领域拥有 handler
+和结果语义。不同类型分别取得有界时间片，慢任务不阻塞其他类型。handler 的不可逆工作在取得
+所需锁后必须完成结算，停机等待实际工作与发现任务收尾。
 
-永久删除的 HTTP 请求在回收站成员锁内解析精确 deleted 图片集合，在一个事务中为每张
-尚未排队的图片插入 `trash.purge`，不执行对象 I/O。提交后等待同一 `1..N` 集合；任务的
-`target_id` 与确定性幂等键共同表达唯一逐图意图，metadata 不保存任务引用。handler 取得
-单图存储 mutation lock 与共享清理准入，核对当前 token 和目标后删除对象与图片记录。
-每图独立记录失败、退避和执行状态，请求断开不会撤销任务。历史裁剪保护目标仍存在的任务，
-检查页诊断耗尽、异常成功、目标状态不符及迟滞；维护恢复原任务，见[数据库结构](./database.md)。
+永久删除在事务内为精确图片集合建立逐图意图；请求断开不撤销任务。目标仍存在的任务不能被
+历史裁剪，检查页按数据库真值诊断并恢复异常任务。状态与保留规则见[数据库结构](database.md)。
 
-Ingestion 另有一个单实例 Redis worker。Upload / Import 共用最多 `N` 个 preparation 许可，覆盖
-等待 Normalize、图片重工作、两个本地处理结果与 ready canonical 发布；完整 raw 在等待
-Normalize 时保持内部 `preparing + prepare-waiting`，对 Web 投影为“待处理”，只计入总数和未完成数；实际取得
-Normalize 许可并发布 `normalizing` phase 后才进入 processing / running。Normalize 完成后释放 CPU
-许可但继续持有 preparation 许可，因此本地发布等待不会产生无界 Prepared Buffer，也不会占住维护入口。
-Import 与 Upload 各自持有最多 `N` 个 pre-commit
-dispatch slot，其中 `N` 是图片标准化容量：Import 的 queued 与恢复后的 received 共用跨扫描页
-FIFO，slot 覆盖远程素材化直至实际取得 Normalize 许可；Upload 的 slot 覆盖整项 prepare，中央
-Normalize 许可是唯一图片处理准入。两类 slot 交还后分别通过独立 frozen-tail 游标补入最早 runnable 项，
-不重置或阻塞共享扫描。
-commit 从其数量许可 `N` 派生 `N + ceil(N / 2)` 个 dispatch slot，等待数量或字节许可的项也计入候补，
-并使用自己的 frozen-tail 游标事件补位。内容接入 preparation、图片标准化和最终提交各自由全进程中央准入拥有，commit
-还受代码内固定字节预算限制。
-Redis operational gate 关闭时停止领取并中止仍可安全中止的阶段，
-恢复后先运行有界 expiry / canonical 恢复入口。同一生命周期还启动独立的
-60 秒孤儿素材清理周期，并在停机时中止、排空；Redis unavailable 时该周期不删除任何素材。
-Ingestion 执行与临时素材周期不进入持久任务表；只有 commit 的两个确定正式候选在写入前登记
-既有 `move.cleanup` guard，raw 与 prepared generation 不逐项持久化。
-
-任务表与状态字段见[数据库结构](./database.md)，对象清理协议见[存储](./storage.md)。
+Ingestion 另有一个单实例 Redis worker，不把会话复制进通用任务表。preparation、Normalize
+和 commit 分别使用全进程中央准入，commit 同时受数量与固定字节预算限制。Import / Upload
+保留各自有界 dispatch slot，通过 frozen-tail 游标补位。Redis 恢复后先恢复 canonical，
+再领取新工作；独立孤儿清理周期在 Redis 不可用时停止删除素材。
+执行时序与并发边界见[接管、prepare 与 commit](ingestion.md#接管prepare-与-commit)。
 
 ## 进程生命周期
 
-启动顺序固定为：读取部署配置与运行配置、初始化空库或核对非空库、重建启动期投影、执行
-必要清理与管理员初始化、启动 HTTP 和 Redis 监测；Redis 通过能力校验后再开放业务门并启动
-缓存协调器与 Worker。CLI 入口不会因导入 HTTP 应用而触发这些副作用。
+启动依次装配部署与运行配置、初始化空库或核对非空库、初始化管理员与必要投影、启动 HTTP
+和 Redis 监测。Redis 通过能力校验后才开放业务门并启动协调器及 Worker；CLI 不会因导入
+HTTP 应用而启动主服务。
 
-正常停机先停止接收新请求，同时中止 Worker、缓存协调器和存储注册表，再在统一硬期限内
-排空 HTTP、driver lease、Redis 与 PostgreSQL；重复退出信号复用同一次收口。多应用实例不受
-支持，Compose 或部署平台负责只运行一个 ImageShow 应用容器。
+停机先停止接收请求和领取任务，再在统一期限内排空 HTTP、Worker、存储 driver、Redis 和
+PostgreSQL；重复信号复用同一次收口。RuntimeConfig 的文件持久化和内存发布有唯一写入
+所有者，详见[配置、缓存与 Worker 的交接](flows.md#配置缓存与-worker-的交接)。

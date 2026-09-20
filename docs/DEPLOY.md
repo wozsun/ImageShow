@@ -1,12 +1,14 @@
 # 生产单实例部署与反向代理
 
-首次安装见[快速开始](guide/getting-started.md)，配置参数见[配置说明](CONFIG.md)。本文说明当前部署、更新、数据维护和恢复步骤。
+本文以 6.4.17 的运行要求为基线。首次安装见[快速开始](guide/getting-started.md)，
+配置参数见[配置说明](CONFIG.md)，内部契约见[技术参考](README.md#技术参考)。
 
 ## 支持的生产拓扑
 
-运行一个 ImageShow 应用容器，连接唯一的 PostgreSQL 和 Redis；数据库可独立部署。
-Server 与 Web 使用同一镜像，升级时停止旧容器后原位启动新容器，不并行运行两个应用实例。
-应用端口只向回环或私有网络开放，由可信反向代理提供 HTTPS。
+运行一个 ImageShow 应用容器，连接 PostgreSQL 18 与 Redis 8；数据库可以独立部署。
+应用端口只向回环或私有网络开放，由可信反向代理提供 HTTPS。同一数据库只运行一个应用实例。
+
+使用外部数据库时，可参考：
 
 ```bash
 docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 \
@@ -20,134 +22,81 @@ docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 \
   wozsun/imageshow:latest
 ```
 
-- 挂载 `/app/data` 保存配置、本地图片和日志；使用外部 PostgreSQL 与 Redis 时另行持久化。
-- 使用 Compose 时在 `.env` 中设置 `DATABASE_PASSWORD`、`ADMIN_PASSWORD` 和实际 `SITE_DOMAIN`。
-  首次管理员变量只用于创建账号，已有账号不会被覆盖。
-- `.env.example` 是变量目录；额外变量须显式加入 Compose 的 `environment`。
-  已有 `config.json` 时，运行配置继续以文件为准，详见[环境变量](CONFIG.md#环境变量)。
-- 停止宽限至少为 **50 秒**，允许请求和后台任务排空。
-- 并发须结合当前主机实测与共享数据库总连接容量评估；公共读取准入和连接池上限见
-  [数据库说明](guide/database.md#运行期连接与公开回源)，图片处理参数见[配置说明](CONFIG.md)。
+- Compose 部署须在 `.env` 中填写 `DATABASE_PASSWORD`、`ADMIN_PASSWORD` 和实际 `SITE_DOMAIN`。
+  初始管理员变量只用于创建账号，不覆盖已有账号。
+- `.env.example` 列出可用变量；额外变量须显式加入 Compose 的 `environment`。
+  已有 `config.json` 时，运行配置以文件为准，见[环境变量](CONFIG.md#环境变量)。
+- 应用停止宽限至少为 **50 秒**，允许请求和后台任务排空。
+- 外部 PostgreSQL 的权限与连接要求见[数据库说明](guide/database.md#运行期连接与公开回源)；
+  Redis 使用应用专用逻辑库，认证与命令权限见[安全说明](guide/security.md)。
 
-## PostgreSQL 与 Redis
+## 持久化目录
 
-默认 Compose 的持久化目录均相对部署目录：
+默认 Compose 的目录均相对部署目录：
 
 | 宿主目录 | 容器目录 | 内容 |
 | --- | --- | --- |
-| `./data` | `/app/data` | 应用配置、本地图片、临时文件和日志 |
+| `./data` | `/app/data` | 配置、本地图片、临时文件和日志 |
 | `./postgres` | `/var/lib/postgresql` | PostgreSQL 数据 |
 | `./redis` | `/data` | Redis 持久化文件 |
 
-调整挂载位置前，先停止应用和数据库服务，把原有数据完整复制到对应目录，保留原存储用于
-回退；不要将空目录直接挂到已有实例。数据库目录只能在数据库停机时进行文件级复制。
+调整挂载位置前，先停止应用和数据库服务，完整复制原有数据并保留恢复副本；不要把空目录
+直接挂到已有实例。数据库目录只能在数据库停机时进行文件级复制。
 
-PostgreSQL 是图片和业务数据的持久真相源。空库执行当前完整 `schema.sql` 并检查就绪；
-非空库只做只读就绪检查；结构与数据维护由维护者在停机维护窗口人工处理。
-额外表不读取、不要求权限或自动删除，缺失必需结构仍拒绝启动。详见[数据库结构](guide/database.md#启动与结构契约)。
+## 日常启停
 
-应用连接启用 `client_connection_check_interval=1000`，让取消后关闭的连接在长查询和锁等待中
-也能被数据库发现。默认 Linux 容器支持此能力；外部 PostgreSQL 宿主须支持该参数依赖的
-内核断连事件，支持范围见 [PostgreSQL TCP 设置](https://www.postgresql.org/docs/18/runtime-config-connection.html#RUNTIME-CONFIG-CONNECTION-TCP)。
+```bash
+docker compose stop imageshow
+docker compose up -d imageshow
+docker compose logs --tail 100 imageshow
+```
 
-Redis 8 保存会话、接入临时状态和派生缓存，使用应用专用逻辑库。内置 Compose 通过私有网络
-无密码连接；外部认证使用 `REDIS_PASSWORD`，内存与淘汰策略由部署方管理。
-ACL 须允许当前业务命令以及 `EVAL` / `EVALSHA`，启动会自动核对必需能力，详见[安全说明](guide/security.md)。
-Redis 数据丢失会使未完成接入和登录状态失效，已提交的 PostgreSQL 数据与正式图片不受影响。
-
-## 更新部署
-
-1. 拉取或构建待部署的应用镜像，核对部署配置与[当前数据库契约](guide/database.md#启动与结构契约)，
-   完成需要保留的上传 / 导入，保存未提交草稿，关闭旧后台窗口。
-2. 停止应用并等待排空，备份 PostgreSQL、Redis、`data/` 与正式存储对象，保留当前镜像用于恢复。
-3. 数据库必须满足当前运行时所需的最小结构；6.4.8 及更早部署须先完成下述 6.4.9 升级，再更新到本版。
-4. 使用准备好的镜像原位启动应用，确认容器 `healthy`、图片数量和访问正常，重新打开后台并核查新接入。
-
-公开页面或 API 变化时清理受影响的 CDN 缓存。更新失败时停止应用，按一致的备份与镜像恢复。
-变更记录见 [GitHub Releases](https://github.com/wozsun/ImageShow/releases)。
-
-### 6.4.9 数据表示升级
-
-以下为 6.4.9 的历史升级步骤。本版已移除该一次性入口，全新安装可直接使用本版；
-6.4.8 及更早部署须先使用 6.4.9 完成升级并核查数量和对象读取，再更新到本版。
-升级在停写、无残留上传 / 导入及后台任务的维护窗口执行；不支持新旧实例混跑。
-停止旧实例并取得可恢复的 PostgreSQL、Redis、配置及对象备份后，启动 6.4.9 镜像即可自动
-删除冗余的 `metadata.object_key` 列及其专属唯一约束，无需开关或人工删列 SQL。
-应用账号须有该表的结构修改权限；已升级的数据库只进行最终 readiness。
-
-启动事务最多等待表锁 5 秒，锁内核对全部记录的 UUID、扩展名、旧路径和依赖，只删除已知
-旧结构的列与专属约束 / 索引，包括历史部署保留且完整定义匹配的 `idx_metadata_thumb_key`。
-异常路径、其他额外依赖、权限不足、锁超时或最终 readiness
-失败均回滚并拒绝启动；不搬对象、不改业务值、不使用 CASCADE 或重写表。
-升级不保证数据库文件立即变小。其他表、关联和持久清理中的历史物理目标保持原义。
-
-数据库提交后由 ready-cache 现有样本校验和协调器重建切换图片投影，保留登录及其他业务键，
-不要求手工清 Redis。即使在数据库提交后、重建前退出，下次启动也从最终数据库恢复；
-缓存未就绪时继续使用现有有界回源。旧管理窗口必须重新打开以载入同步更新的 DTO。
-升级日志只有事务提交后才报告完成；失败时按启动错误定位，不据缓存状态推断结构升级结果。
-
-回退必须恢复一致备份或先完成另行核验的逆向维护，不能直接启动
-仍写旧列的镜像。正式发布不代替部署方的停机、备份和数量 / 对象读取核查。
+配置文件修改后可在后台重新读取；部署环境变量变更需重新创建容器。
+启停不会替代数据库结构维护。数据库须满足[当前安装契约](guide/database.md#启动与结构契约)，
+非空数据库不自动补表、改列或回填。
 
 ## 数据维护与恢复
 
-### PostgreSQL 与正式对象
+维护前完成需要保留的上传 / 导入并保存草稿，停止应用，备份 PostgreSQL、Redis、`data/`
+和外部正式存储对象。明确操作范围，保留可恢复的镜像与配置。
 
-维护者按实际需要处理数据库结构新增、修改、删除和必要数据整理，事先确定停机范围、备份与
-隔离恢复方案。应用启动只读核对非空数据库的最小契约，不会自动补表、回填或对齐完整 schema；
-应用未消费的额外表、列、索引和约束可以保留。
+恢复时确认数据库、配置和对象属于同一备份状态，先在隔离环境核对正常 / 回收站图片数量及
+对象内容，再恢复服务。永久删除后的文件不能仅靠恢复数据库找回。存储结构和对象维护见
+[存储指南](guide/storage.md)。手工修改存储注册表后应重启应用，浏览器 / CDN 缓存按实际变更处理。
 
-存储注册表的进程缓存为 24 小时；后台保存、导入、删除和其他存储配置写入会主动失效。
-直接手工修改 `storage_backend` 后应重启应用，使新配置立即用于后续源站读取；否则旧快照
-可能保留到缓存期限结束后的下一次读取。浏览器和 CDN 缓存仍需按实际变更单独处理，
-详见[注册表缓存](guide/storage.md#注册表缓存)。
+Redis 数据丢失会使登录会话和未完成接入失效，已提交的 PostgreSQL 数据与正式图片不受影响。
+确需重置 Redis 时，先停应用并备份，确认可以丢弃这些临时状态，再核对主机与 `REDIS_DB`，
+只对应用专用逻辑库执行 `FLUSHDB`；运行中清空或局部删除 key 不受支持。
+`data/temp` 由应用管理，不作为任务恢复来源。
 
-恢复时核对 PostgreSQL、`data/` 和正式存储对象是否属于同一备份状态。永久删除会移除对象，
-仅恢复数据库不能恢复已删除的文件；应在隔离环境确认图片记录和对象可读后再恢复服务。
+不使用 `docker compose down -v` 代替普通停机，也不使用全量 prune 清理部署资源。
 
-资源定位使用 UUID 与扩展名，完整图为 `full/<UUID 尾两位>/<UUID>.<ext>`，
-缩略图为对应的 `thumbs/<UUID 尾两位>/<UUID>.webp`。恢复时核对正常 / 回收站图片数量、
-其他 metadata、标签关联与实际对象内容；发现不一致时保留原数据并按备份制定人工修复方案。
-
-### Redis 冷启动恢复
-
-Redis 使用应用专用逻辑库。需要重置时，先停止应用并备份；确认可以丢弃登录会话、未完成接入
-和 completed 临时回执后，再核对 Redis 主机和 `REDIS_DB`，只对该逻辑库执行 `FLUSHDB`。
-正式图片和 PostgreSQL 数据保持不变，启动后由协调器重建图片投影。运行中清空或局部删 key
-不受支持，清理 Redis 也不能替代数据库结构维护。
-
-`data/temp` 只保存接入临时文件，不是任务恢复来源。孤儿清理 worker 按引用、租约和年龄边界
-清理陈旧文件，检查页展示扫描结果，详见[存储说明](guide/storage.md)。
-
-## 健康检查与停机
-
-`/livez` 只表示进程存活，`/readyz` 核对数据库与 Redis 就绪状态。恢复访问以镜像自带的健康检查为准：
+## 健康检查与故障定位
 
 ```bash
+docker compose ps
 docker inspect --format '{{.State.Health.Status}} {{.Image}}' imageshow
+docker compose logs --tail 100 imageshow
 ```
 
-Redis 故障时后台返回 `503 redis_unavailable`，公开只读请求可有界回源 PostgreSQL；重连后自动重新校验。
-不要用 `docker compose down -v` 代替普通停机或升级。
+`/livez` 表示进程存活，`/readyz` 核对数据库与 Redis 就绪状态。恢复访问以镜像自带的健康检查为准，
+随后核查图片数量、图片访问和后台操作。Redis 故障时后台返回 `503 redis_unavailable`，公开只读
+请求可有界回源 PostgreSQL；重连后自动重新校验。
 
 ## 管理员密码恢复
 
-优先在后台账号页修改密码。无法登录时，在交互式终端执行以下命令，按提示隐藏输入并确认新密码：
+优先在后台账号页修改密码。无法登录时，在交互式终端执行，按提示隐藏输入并确认新密码：
 
 ```bash
 docker exec -it imageshow imageshow reset-password <username>
 ```
 
-源码环境使用 `npm run admin:reset-password -- <username>`。密码以 PostgreSQL 为准，改密后其他旧密码会话失效。
+源码环境使用 `npm run admin:reset-password -- <username>`。改密后其他旧密码会话失效。
 
 ## 反向代理与 HTTPS
 
-证书覆盖主站域名，将页面、API 和 `/images` 原样转发到应用。代理覆盖以下请求头，不追加访客提供的转发链。
-本地存储配置独立公开 URL 时，该地址也回源同一应用并保留 Host 与路径，仅提供图片资源；
-配置入口与行为见[本地存储公开 URL](guide/image-resources.md#本地存储公开-url)。
-静态资源也可设置独立[公开 URL](CONFIG.md#siteassets_base_url)；该 Host 同样须保留 Host 与完整路径回源，
-包括配置中的路径前缀。每个资源域名的代理块都须设置 `proxy_set_header Host $host`，不能仅在主站配置。
-最小 Nginx 示例：
+证书覆盖主站域名，将页面、API 和 `/images` 原样转发到应用。代理覆盖请求来源头，
+不要追加访客提供的转发链。最小 Nginx 示例：
 
 ```nginx
 server {
@@ -178,42 +127,17 @@ server {
 }
 ```
 
-Compose 网络内可把上游换成 `http://imageshow:5518`。请求体上限须覆盖应用配置；示例支持最高
-200 MiB 单图与 128 MiB JSONL。需要流式上传时，为 `/api/admin/ingestion/` 单独设置
-`proxy_request_buffering off`，保留相同上游和超时。
+Compose 网络内可将上游改为 `http://imageshow:5518`。请求体上限须覆盖应用设置；示例支持最高
+200 MiB 单图与 128 MiB JSONL。流式上传可为 `/api/admin/ingestion/` 单独设置
+`proxy_request_buffering off`，保留同一上游与超时。
 
-CDN 保留完整查询参数并遵守应用的 `Cache-Control`、`Vary` 和条件请求；代理不额外强制缓存，
-也不覆盖 CSP 等安全响应头。外部图片存储应允许无凭据跨域读取，供展映加载纹理。
-原图资源始终公开，访客原图按钮仅控制详情链接显示；缓存边界见[图片资源](guide/image-resources.md)。
-启用嵌入页或配置 HSTS 前，按[安全说明](guide/security.md)核对代理策略。
+配置[本地图片公开 URL](guide/image-resources.md#本地存储公开-url)或
+[静态资源公开 URL](CONFIG.md#siteassets_base_url)时，为对应域名配置证书和代理，
+同样保留 Host、完整路径及配置的路径前缀；每个代理块都须设置 `proxy_set_header Host $host`。
 
-### 应用压缩与代理透传
+CDN 保留完整查询参数并遵守应用缓存头，不额外强制缓存或改写正文、安全头。应用负责压缩，
+代理保留 `Accept-Encoding` 并透传编码、长度、验证器与缓存响应头，不重复编码。
+`index.html` 由应用注入站点配置，不能交给代理直接静态托管。配置变更不会自动刷新 CDN。
 
-ImageShow 自行负责静态资源预压缩、最终 HTML 编码缓存和 API 动态压缩，不依赖前置 Nginx。
-反向代理无需再配置压缩，只需保留 `Accept-Encoding`，并正确透传 `Content-Encoding`、
-`Content-Length`、`Vary`、ETag 和缓存策略；不要清空协商头或重复编码。
-
-根 `index.html` 是需要应用注入站点配置的模板，不要交给代理直接静态托管。
-CDN 绕过缓存不会关闭脚本注入等正文改写；不需要这些功能时应关闭，也不要覆盖应用的 CSP。
-应用配置更新不会自动刷新 CDN，仍需按边缘缓存规则等待过期或主动刷新。
-编码与缓存实现细节见[项目结构说明](guide/project-structure.md)。
-
-## 本地发布门禁与镜像清理
-
-源码发布前运行 `npm run verify:release`，前提见[测试说明](../scripts/tests/README.md)。
-通过后推送 `dev`，等待三仓镜像分发成功，再同步 `main` 和版本标签；Release 复用同提交镜像，
-不重新构建。流程和产物边界见[项目结构](guide/project-structure.md)。
-
-Dev 与 Release 在登录镜像仓库前共同运行 `scripts/tests/verify/version-contract.mjs`，
-核对根包、三个 workspace 与 lockfile 全部版本；Dev 同时要求 `dev` 分支，Release 要求
-标签与包版本一致。版本不一致时不会进入镜像仓库登录和发布步骤。
-
-只删除已核对、无容器引用且不再用于回滚的精确镜像 ID：
-
-```bash
-docker image ls --digests --no-trunc wozsun/imageshow
-docker ps -a --no-trunc --filter ancestor=<sha256:image-id>
-docker image rm <sha256:image-id>
-```
-
-保留当前版本、`latest` 与回滚镜像，不使用全量 prune 或通配清理。
+外部图片存储需允许无凭据跨域读取，供展映加载图片。原图资源始终公开，访客按钮只控制详情
+是否显示链接；详细缓存规则见[图片资源](guide/image-resources.md)。嵌入与 HSTS 见[安全说明](guide/security.md)。

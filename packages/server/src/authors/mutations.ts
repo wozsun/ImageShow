@@ -7,7 +7,7 @@ import {
   assertVocabularyCreated,
   assertVocabularyFound,
   assertVocabularySlug,
-  synchronizeVocabularyMutation,
+  withVocabularyMutationSync,
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
 import {
@@ -15,10 +15,6 @@ import {
   type ImageMutationSyncBatch
 } from "../images/mutation-sync.ts";
 import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
-import {
-  invalidateEntityCountCaches,
-  refreshEntityVocabularies
-} from "../vocab/vocab-cache.ts";
 import {
   deriveAuthorIdentityFromLink,
   projectAuthorDerivedIdentity,
@@ -89,7 +85,7 @@ export async function createAuthor(
     created = await withVocabularyMutationLock(
       "author",
       slug,
-      (signal) => withTransaction(async (client) => {
+      (signal) => withVocabularyMutationSync("author", () => withTransaction(async (client) => {
         signal.throwIfAborted();
         const result = await client.query<AuthorMutationRow>(
           `INSERT INTO author(
@@ -120,13 +116,12 @@ export async function createAuthor(
         );
         signal.throwIfAborted();
         return result.rows[0] ?? null;
-      })
+      }))
     );
   } catch (error) {
     authorIdentityConflict(error);
   }
   assertVocabularyCreated("author", slug, created ? 1 : 0);
-  await synchronizeVocabularyMutation({ entity: "author" });
   return authorMutationDto(created!, 0);
 }
 
@@ -141,7 +136,7 @@ export async function updateAuthorProfile(
     updated = await withVocabularyMutationLock(
       "author",
       slug,
-      (signal) => withTransaction(async (client) => {
+      (signal) => withVocabularyMutationSync("author", () => withTransaction(async (client) => {
         signal.throwIfAborted();
         const result = await client.query<AuthorMutationRow>(
           `UPDATE author
@@ -165,19 +160,17 @@ export async function updateAuthorProfile(
         const imageCount = Number((await client.query<{ image_count: number }>(
           `SELECT count(*)::int AS image_count
              FROM metadata
-            WHERE author=$1
-              AND status='ready'`,
+            WHERE author=$1`,
           [slug]
         )).rows[0]?.image_count ?? 0);
         signal.throwIfAborted();
         return authorMutationDto(row, imageCount);
-      })
+      }))
     );
   } catch (error) {
     authorIdentityConflict(error);
   }
   assertVocabularyFound("author", updated ? 1 : 0);
-  await synchronizeVocabularyMutation({ entity: "author" });
   return updated!;
 }
 
@@ -239,7 +232,7 @@ export async function deleteAuthor(slug: string) {
   const result = await withVocabularyMutationLock(
     "author",
     slug,
-    (signal) => withImageMutationSync(async (mutationBatch) => {
+    (signal) => withImageMutationSync((mutationBatch) => withVocabularyMutationSync("author", async () => {
       const deleted = await deleteAuthorUnderLock(
         slug,
         signal,
@@ -248,12 +241,8 @@ export async function deleteAuthor(slug: string) {
       for (const image of deleted.affected) {
         mutationBatch.add({ id: image.id });
       }
-      await Promise.all([
-        refreshEntityVocabularies(["author"]),
-        invalidateEntityCountCaches(["author"])
-      ]);
       return deleted;
-    })
+    }))
   );
   assertVocabularyFound("author", result.deleted ? 1 : 0);
 }

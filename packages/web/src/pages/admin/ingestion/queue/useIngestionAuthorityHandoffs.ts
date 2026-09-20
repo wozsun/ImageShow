@@ -3,7 +3,7 @@ import {
   ingestionStatusBatchMaxItems,
   type IngestionSessionPairDto
 } from "@imageshow/shared/browser";
-import type { IngestionJob } from "../../../../lib/types.js";
+import type { IngestionJob } from "./model/ingestion-job.js";
 import type {
   IngestionQueueAction,
   IngestionServerBinding
@@ -496,9 +496,7 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
     resolveExternalStatuses,
     verifyExternalStatusRevisions,
     retry,
-    // This internal diagnostic is consumed by the queue integration tests to
-    // assert that HTTP-to-snapshot fences settle. It no longer drives visible
-    // button state.
+    // Bulk retry requires these HTTP-to-snapshot fences to have settled.
     pending: fencesRef.current.size > 0 || input.jobs.some((job) => (
       ingestionJobHasServerAuthority(job)
       && ingestionJobAwaitsActionCoverage(job, input.server.revision)

@@ -67,8 +67,8 @@ await runIntegrationScenario(async (runtime) => {
   const { registerPublicAuthRoutes } = await import("../../../../packages/server/src/routes/auth.ts");
   const { handleApiError } = await import("../../../../packages/server/src/core/http/responses.ts");
   const { adminSessionKey } = await import("../../../../packages/server/src/users/admin-session-key.ts");
-  const trash = await import("../../../../packages/server/src/images/trash-mutations.ts");
-  const serving = await import("../../../../packages/server/src/images/image-serving-record.ts");
+  const trash = await import("../../../../packages/server/src/images/trash/mutations.ts");
+  const serving = await import("../../../../packages/server/src/images/serving/record.ts");
   const app = new Hono();
   app.onError((error, context) => handleApiError(context, error));
   registerPublicRoutes(app);

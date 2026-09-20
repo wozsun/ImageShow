@@ -13,7 +13,6 @@ import {
 import type { GalleryOrder } from "@imageshow/shared/browser";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigationType } from "react-router";
-import { AppHeader } from "../../components/navigation/AppHeader.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { PublicStarfield } from "../../components/layout/PublicStarfield.js";
 // 当前详情共享 JS + CSS 实测压缩后不足 6 KiB；画廊首击直接使用，继续随路由
@@ -21,7 +20,6 @@ import { PublicStarfield } from "../../components/layout/PublicStarfield.js";
 import { PublicImageDetail } from "../../components/image/PublicImageDetail.js";
 import { PublicImageOrderButton } from "../../components/navigation/PublicImageOrderButton.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
-import { randomLinkResult } from "../../lib/gallery/random-url.js";
 import {
   createGalleryTaxonomyDisplayFormatter
 } from "../../lib/gallery/card-display.js";
@@ -45,14 +43,11 @@ import {
 } from "../../hooks/usePublicImageViewportControls.js";
 import {
   imageBrowseApiSearchParams,
-  emptyGalleryFilters,
-  galleryRandomRequestDevice,
   updateImageBrowseSearchParams,
-  showOrderFromSearchParams,
-  type GalleryFilters
+  showOrderFromSearchParams
 } from "../../lib/gallery/gallery-query.js";
 import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
-import { PublicImageToolbar } from "../../components/navigation/PublicImageToolbar.js";
+import { PublicImageNavigation } from "../../components/navigation/PublicImageNavigation.js";
 import { useGalleryDataWindow } from "./useGalleryDataWindow.js";
 import "../../styles/public-core.css";
 import "../../styles/gallery.css";
@@ -71,27 +66,21 @@ export function GalleryPage({
   const { key: navigationKey } = useLocation();
   const navigationType = useNavigationType();
   const browseRoute = useImageBrowseRoute();
-  const { params: routeSearchParams, updateSearchParams: setRouteSearchParams, filters, facets, ready: filtersReady, error: filterError } = browseRoute;
-  const order = showOrderFromSearchParams(routeSearchParams, defaultOrder);
   const {
-    backToTopVisible,
-    filterPanelHidden,
-    filterPanelRef,
-    filterMenuDismissSignal,
-    filterToggleRef,
-    clearFiltersRef,
-    dismissFilterMenus,
-    filtersOpen,
-    headerVisible,
-    onHeaderMenuExpandedChange,
-    toggleFilters,
-    toolbarHeight,
-    toolbarRef,
-    toolbarVisible,
-  } = usePublicImageViewportControls({
+    params: routeSearchParams,
+    updateSearchParams: setRouteSearchParams,
+    facets,
+    filters,
+    updateFilter,
+    ready: filtersReady,
+    error: filterError
+  } = browseRoute;
+  const order = showOrderFromSearchParams(routeSearchParams, defaultOrder);
+  const navigationControls = usePublicImageViewportControls({
     headerPresent: !embedded,
     paused: Boolean(selected)
   });
+  const { backToTopVisible, headerVisible, toolbarHeight, toolbarVisible } = navigationControls;
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const trashedFocusIdRef = useRef<string | null>(null);
   const galleryRef = useRef<HTMLElement | null>(null);
@@ -149,25 +138,6 @@ export function GalleryPage({
       window.scrollTo({ top: 0 });
     }
   }, [imageQuery, queryClient]);
-
-  const randomLink = filtersReady ? randomLinkResult({
-    origin: window.location.origin,
-    device: galleryRandomRequestDevice(filters.device),
-    brightness: filters.brightness || "random",
-    theme: filters.theme,
-    tag: filters.tag,
-    author: filters.author
-  }) : { url: null, error: null };
-
-  const updateFilter = (key: keyof GalleryFilters, value: string) => {
-    setRouteSearchParams(
-      (current) => updateImageBrowseSearchParams(current, { [key]: value })
-    );
-  };
-  const clearFilters = () => {
-    if (!routeSearchParams.has("tag") && !Object.values(filters).some(Boolean)) return;
-    setRouteSearchParams((current) => updateImageBrowseSearchParams(current, emptyGalleryFilters));
-  };
 
   const columnCount = useGalleryColumnCount();
   const geometry = useGalleryGeometry(galleryRef);
@@ -274,38 +244,12 @@ export function GalleryPage({
         <div className="gallery-starfield" aria-hidden="true">
           <PublicStarfield />
         </div>
-        <div className="public-navigation-frame">
-          <div className="public-navigation-stack">
-            {!embedded && (
-              <AppHeader
-                animateEntrance={shouldAnimateNavigation}
-                onMenuExpandedChange={onHeaderMenuExpandedChange}
-                browseSearch={browseRoute.browseSearch}
-                visible={headerVisible}
-              />
-            )}
-            <PublicImageToolbar
-              animateEntrance={shouldAnimateNavigation}
-              filters={filters}
-              facets={facets}
-              randomUrl={randomLink.url}
-              randomLinkError={randomLink.error}
-              tagInvalid={Boolean(filterError)}
-              filtersOpen={filtersOpen}
-              filterPanelHidden={filterPanelHidden}
-              filterMenuDismissSignal={filterMenuDismissSignal}
-              toolbarVisible={toolbarVisible}
-              toolbarRef={toolbarRef}
-              filterToggleRef={filterToggleRef}
-              clearFiltersRef={clearFiltersRef}
-              filterPanelRef={filterPanelRef}
-              toggleFilters={toggleFilters}
-              dismissFilterMenus={dismissFilterMenus}
-              onFilterChange={updateFilter}
-              onClearFilters={clearFilters}
-            />
-          </div>
-        </div>
+        <PublicImageNavigation
+          embedded={embedded}
+          animateEntrance={shouldAnimateNavigation}
+          route={browseRoute}
+          controls={navigationControls}
+        />
         <div className="gallery-toolbar-spacer" aria-hidden="true" />
         <section ref={galleryRef} className="gallery">
           <GalleryVirtualWindow

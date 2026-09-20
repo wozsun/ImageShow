@@ -75,6 +75,8 @@ export async function readDuplicateSnapshotByMd5(md5: string) {
   return (await readDuplicateSnapshotsByMd5([md5])).get(md5)!;
 }
 
-export function getDuplicateSnapshotByMd5(md5: string) {
-  return coalesce(`md5:${md5}`, () => readDuplicateSnapshotByMd5(md5));
+export function getDuplicateMatchCountByMd5(md5: string) {
+  return coalesce(`md5-count:${md5}`, async () => (
+    (await readDuplicateMatchCountsByMd5([md5])).get(md5)!
+  ));
 }

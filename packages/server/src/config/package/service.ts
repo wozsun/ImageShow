@@ -1,24 +1,24 @@
-import { ApiError, errorMessage } from "../core/api-error.ts";
-import { inspectTransactionOutcome } from "../core/database/transactions.ts";
-import { logger } from "../core/logger.ts";
-import { applicationVersion } from "../core/application-version.ts";
+import { materializeImportedRuntimeConfig } from "./runtime-projection.ts";
+import { ApiError, errorMessage } from "../../core/api-error.ts";
+import { inspectTransactionOutcome } from "../../core/database/transactions.ts";
+import { logger } from "../../core/logger.ts";
+import { applicationVersion } from "../../core/application-version.ts";
 import {
   listStorageBackends
-} from "../storage/backends/registry.ts";
-import { importStorageBackends } from "../storage/backends/mutations.ts";
+} from "../../storage/backends/registry.ts";
+import { importStorageBackends } from "../../storage/backends/mutations.ts";
 import {
   buildConfigPackage,
-  materializeImportedRuntimeConfig,
   parseConfigPackage,
   projectConfigPackagePreview,
   resolveImportedStorageBackends
-} from "./config-package-format.ts";
+} from "./format.ts";
 import {
   getRuntimeConfig,
   persistRuntimeConfigForPackageImport,
   publishRuntimeConfigForPackageImport,
   withRuntimeConfigWriteLease
-} from "./runtime-config-store.ts";
+} from "../runtime-config-store.ts";
 
 export async function createConfigPackage() {
   return buildConfigPackage(

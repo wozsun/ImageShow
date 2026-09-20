@@ -13,22 +13,17 @@ import {
 } from "./image-editor-capability-loader.js";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import type {
-  ImageEditorItem
+  EditableImageSnapshot
 } from "../../../lib/types.js";
 import type { IngestionVocabularyDto } from "@imageshow/shared/browser";
 
 type PreparedImageEditor = {
-  key: string;
-  itemIds: string[];
   module: ImageEditorCapabilityModule;
-  items: ImageEditorItem[];
+  items: EditableImageSnapshot[];
   vocabulary: IngestionVocabularyDto;
 };
 
-type PendingImageEditor = Pick<
-  PreparedImageEditor,
-  "key" | "itemIds"
->;
+type PendingImageEditor = { itemIds: string[] };
 
 type Preparation = {
   createdAt: number;
@@ -76,11 +71,8 @@ export function useImageEditorCapability({
       return preparationRef.current.promise;
     }
 
-    const itemIds = target.sources.map((item) => item.id);
     const promise = loadImageEditorCapabilityModule()
       .then(async (module) => ({
-        key,
-        itemIds,
         module,
         ...await module.prepareImageEditor(queryClient, target.sources)
       }));
@@ -117,7 +109,6 @@ export function useImageEditorCapability({
     const requestFence = requestFenceRef.current;
     const requestSequence = requestFence.begin();
     const nextPending = {
-      key: imageEditorTargetKey(target),
       itemIds: target.sources.map((item) => item.id)
     };
     setPending(nextPending);
@@ -155,7 +146,7 @@ export function useImageEditorCapability({
     setSession(null);
   }, []);
 
-  const updateItems = useCallback((items: ImageEditorItem[]) => {
+  const updateItems = useCallback((items: EditableImageSnapshot[]) => {
     preparationRef.current = null;
     setSession((current) => current ? { ...current, items } : current);
   }, []);

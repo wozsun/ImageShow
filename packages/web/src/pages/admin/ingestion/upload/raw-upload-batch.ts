@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import type { IngestionSessionPairDto } from "@imageshow/shared/browser";
-import type { IngestionJob } from "../../../../lib/types.js";
+import type { IngestionJob } from "../queue/model/ingestion-job.js";
 import { uploadRaw } from "../queue/ingestion-http-client.js";
 import {
   isCurrentIngestionAttempt,

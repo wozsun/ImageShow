@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import type { AdminSession } from "../../../../packages/server/src/users/admin-session.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
+import { interceptSqlQueries, withCommitFault } from "./database-faults.mts";
 
 await runIntegrationScenario(async (runtime) => {
   const tags = await import("../../../../packages/server/src/tags/mutations.ts");
@@ -17,6 +18,7 @@ await runIntegrationScenario(async (runtime) => {
   const { requireAdminCsrf } = await import("../../../../packages/server/src/users/admin-session.ts");
   const { getPublicGalleryStats } = await import("../../../../packages/server/src/images/read-models/gallery-stats.ts");
   const { updateImages } = await import("../../../../packages/server/src/images/image-update.ts");
+  const { moveImagesToTrash, restoreImages } = await import("../../../../packages/server/src/images/trash/mutations.ts");
 
   const { pool } = runtime.databasePools;
   const entities = [
@@ -147,7 +149,71 @@ await runIntegrationScenario(async (runtime) => {
           .every(row => row.sort_order === baseline), "association creation preserves existing values");
       }
     }
-    console.log("vocabulary order: single writes, descending values, ties, bounds, routes, projections and creation passed");
+    const countSlug = "order-count";
+    assert.equal((await updateImages([{
+      id: imageId, theme: countSlug, author: countSlug, tags: [countSlug]
+    }])).updated, 1);
+    const assertAssociationCounts = async () => {
+      for (const entity of entities) {
+        assert.equal((await entity.list()).find((item) => item.slug === countSlug)?.image_count, 1, entity.kind);
+      }
+    };
+    await assertAssociationCounts();
+    assert.equal((await moveImagesToTrash([imageId])).trashed, 1);
+    await assertAssociationCounts();
+    await vocab.invalidateEntityCountCaches(["theme", "tag", "author"]);
+    await assertAssociationCounts();
+    assert.equal((await authors.updateAuthorProfile(countSlug, "Includes trash", "")).image_count, 1);
+    assert.equal((await getPublicGalleryStats()).total_images, 0, "public counts only include ready images");
+    assert.equal((await restoreImages([imageId])).restored, 1);
+    await assertAssociationCounts();
+    assert.equal((await getPublicGalleryStats()).total_images, 1);
+    assert.equal((await moveImagesToTrash([imageId])).trashed, 1);
+    await themes.deleteTheme(countSlug);
+    await authors.deleteAuthor(countSlug);
+    await tags.deleteTag(countSlug);
+    const unlinked = (await pool.query("SELECT status, theme, author FROM metadata WHERE id=$1", [imageId])).rows[0];
+    assert.deepEqual(unlinked, { status: "deleted", theme: null, author: null });
+    assert.equal((await pool.query("SELECT count(*)::int AS count FROM image_tag WHERE image_id=$1", [imageId])).rows[0].count, 0);
+
+    for (const entity of entities) {
+      await entity.list();
+      await vocab.getIngestionVocabulary();
+      let responseLost = false;
+      const restoreQuery = interceptSqlQueries(pool, async (sql, values, query) => {
+        const result = await query();
+        if (!responseLost && sql.startsWith(`UPDATE ${entity.kind} SET sort_order=`)
+          && Array.isArray(values) && values[0] === "order-first") {
+          responseLost = true;
+          throw new Error("controlled vocabulary write acknowledgement loss");
+        }
+        return result;
+      });
+      try {
+        await assert.rejects(setVocabularySortOrder(entity.kind, "order-first", 123), /controlled vocabulary write acknowledgement loss/);
+      } finally {
+        restoreQuery();
+      }
+      assert.equal(responseLost, true);
+      assert.equal((await entity.list()).find((item) => item.slug === "order-first")?.sort_order, 123);
+      assert.deepEqual(
+        slugs((await vocab.getIngestionVocabulary())[entity.field]).filter((slug) => slug !== "null"),
+        slugs(await entity.list()),
+        "the public vocabulary must reflect the committed order"
+      );
+    }
+    let injectCommitLoss = true;
+    await assert.rejects(withCommitFault(pool, "committed", async () => {
+      await authors.createAuthor("order-uncertain", "", "");
+    }, undefined, () => {
+      if (!injectCommitLoss) return false;
+      injectCommitLoss = false;
+      return true;
+    }), /controlled commit acknowledgement loss/);
+    assert.equal(injectCommitLoss, false);
+    assert.ok((await vocab.getAdminAuthorList()).some((item) => item.slug === "order-uncertain"));
+    assert.ok((await vocab.getIngestionVocabulary()).authors.some((item) => item.slug === "order-uncertain"));
+    console.log("vocabulary order: ordering, routes, all-image association counts and lost commit acknowledgements passed");
   } finally {
     await pool.query("DELETE FROM metadata WHERE id=$1", [imageId]);
     for (const entity of entities) await pool.query(`DELETE FROM ${entity.kind} WHERE slug LIKE 'order-%'`);

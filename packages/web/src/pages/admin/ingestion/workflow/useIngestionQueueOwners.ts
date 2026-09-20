@@ -1,4 +1,4 @@
-import type { IngestionAttributeDefaults } from "../queue/model/ingestion-attribute-defaults.js";
+import type { IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 import { useImport } from "../import/useImport.js";
 import { useIngestionCommit } from "../queue/useIngestionCommit.js";
 import { useIngestionQueue } from "../queue/useIngestionQueue.js";

@@ -120,7 +120,7 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
         </div>
       )}
       <div className="entity-card-foot">
-        <span className="muted entity-count">{item.image_count} 张</span>
+        <span className="muted entity-count" title="全部关联图片（包含回收站）">{item.image_count} 张</span>
         {(dirty || saveStatus.status !== "idle") && (
           <AsyncActionButton
             type="button"

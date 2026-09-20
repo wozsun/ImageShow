@@ -11,7 +11,7 @@ import {
   READY_IMAGE_FILTER_META_KEY_PREFIX,
   READY_IMAGE_STATS_RESULT_KEY_PREFIX
 } from "../images/ready-cache/keys.ts";
-import { ORIGINAL_DIRECT_CACHE_PREFIX } from "../images/original-direct-cache.ts";
+import { ORIGINAL_DIRECT_CACHE_PREFIX } from "../images/serving/original-direct-cache.ts";
 import { adminSessionKeyFamilyPrefix } from "../users/admin-session-key.ts";
 
 const REDIS_DEEP_CHECK_DEADLINE_MS = 10_000;

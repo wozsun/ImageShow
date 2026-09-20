@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
-import type { IngestionJob } from "../../../../lib/types.js";
+import type { IngestionJob } from "./model/ingestion-job.js";
 import {
   createIngestionCommitIntent,
   ingestionJobCanStartCommit,

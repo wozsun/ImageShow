@@ -6,7 +6,7 @@ import type {
   IngestionSessionPairDto,
   IngestionStatusItemDto
 } from "@imageshow/shared/browser";
-import type { IngestionJob } from "../../../../lib/types.js";
+import type { IngestionJob } from "./model/ingestion-job.js";
 import type { IngestionServerBinding } from "./model/ingestion-queue-state.js";
 
 export type IngestionQueueApi = {

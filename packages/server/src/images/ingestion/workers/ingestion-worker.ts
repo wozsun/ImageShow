@@ -17,10 +17,7 @@ import {
 import { cancelIngestionSessions } from "../cancel/coordinator.ts";
 import { recoverIngestionCommitDuplicateConflict } from "../commit/conflict-recovery.ts";
 import { publishCompletedReceipt } from "../commit/completion.ts";
-import {
-  ingestionCommitAdmissionSnapshot,
-  withIngestionCommitAdmission
-} from "../commit/admission.ts";
+import { withIngestionCommitAdmission } from "../commit/admission.ts";
 import { commitIngestionSessionSnapshot } from "../commit/worker.ts";
 import { downloadIngestionSessionSnapshot } from "../sources/download-session.ts";
 import { withIngestionExecutionHeartbeat } from "../execution/heartbeat.ts";
@@ -40,9 +37,6 @@ import {
   semanticIngestionSession
 } from "../sessions/transitions.ts";
 import { withImportPrefetchAdmission } from "./import-prefetch.ts";
-import {
-  ingestionPreparationAdmissionSnapshot
-} from "./preparation-admission.ts";
 
 export function isSameFailedIngestionExecution(
   current: StoredIngestionSession,
@@ -354,34 +348,6 @@ export class IngestionSessionWorker {
   tick() {
     this.#generalTickRequested = true;
     return this.#ensureTick();
-  }
-
-  diagnostics() {
-    const active = {
-      import: 0,
-      upload: 0,
-      commit: 0
-    } satisfies Record<IngestionWorkerLane, number>;
-    const heldDispatchSlots = { ...active };
-    for (const item of this.#active.values()) {
-      active[item.lane] += 1;
-      if (item.dispatchSlotHeld) heldDispatchSlots[item.lane] += 1;
-    }
-    return {
-      accepting: this.#accepting,
-      recoveryComplete: this.#recovery.complete,
-      tickActive: this.#tickPromise !== null,
-      active,
-      heldDispatchSlots,
-      activePromises: this.#active.size,
-      activeAbortControllers: this.#active.size,
-      dispatchWindows: ingestionWorkerDispatchWindows(
-        this.#normalizeConcurrency,
-        this.#commitConcurrency
-      ),
-      preparationAdmission: ingestionPreparationAdmissionSnapshot(),
-      commitAdmission: ingestionCommitAdmissionSnapshot()
-    } as const;
   }
 
   #activeCommitCount() {

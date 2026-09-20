@@ -16,7 +16,7 @@ import {
   type MaintenanceOutcome
 } from "./storage-maintenance-plan.ts";
 import { repairStorageThumbnail } from "./storage-thumbnail-repair.ts";
-import { maintainTrashPurgeTasks } from "../images/trash-purge-maintenance.ts";
+import { maintainTrashPurgeTasks } from "../images/trash/purge-maintenance.ts";
 
 function summarizeMaintenance(
   items: readonly MaintenanceItem[],

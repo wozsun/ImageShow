@@ -1,9 +1,8 @@
 import type {
-  ImageDraft,
-  IngestionCommonAttributeField,
-  IngestionJob
+  ImageDraft
 } from "../../../../lib/types.js";
-import type { IngestionAttributeDefaults } from "../queue/model/ingestion-attribute-defaults.js";
+import type { IngestionCommonAttributeField, IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
+
 import {
   webIngestionBatchKey,
   webUuidV7

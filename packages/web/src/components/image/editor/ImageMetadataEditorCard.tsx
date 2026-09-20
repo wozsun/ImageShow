@@ -14,7 +14,7 @@ import {
 } from "../../../lib/ui/select-options.js";
 import type {
   FacetOption,
-  ImageEditorItem,
+  EditableImageSnapshot,
   ImageDraft
 } from "../../../lib/types.js";
 import {
@@ -38,7 +38,7 @@ export function ImageMetadataEditorCard({
   onRemove,
   onPreview
 }: {
-  item: ImageEditorItem;
+  item: EditableImageSnapshot;
   draft: ImageDraft;
   changed: ImageMetadataChanges;
   lastSaveReport: ImageMetadataSaveReport | null;

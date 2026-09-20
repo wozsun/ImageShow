@@ -7,20 +7,20 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { PoolClient } from "pg";
 import {
   runWithAdvisoryLockAcquisitionSignal
-} from "../core/database/advisory-locks.ts";
-import { pool } from "../core/database/pools.ts";
-import { withTransactionOnClient } from "../core/database/transactions.ts";
-import { randomUuidV7 } from "../core/uuid.ts";
-import { thumbnailRef } from "../storage/objects/image-paths.ts";
-import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
+} from "../../core/database/advisory-locks.ts";
+import { pool } from "../../core/database/pools.ts";
+import { withTransactionOnClient } from "../../core/database/transactions.ts";
+import { randomUuidV7 } from "../../core/uuid.ts";
+import { thumbnailRef } from "../../storage/objects/image-paths.ts";
+import { withImageStorageMutationLock } from "../../storage/maintenance-lock.ts";
 import {
   assertStorageRemovalResults,
   removeStorageObjectsAndConfirm
-} from "../storage/objects/access.ts";
-import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
-import { withTrashMembershipLock } from "./trash-membership-lock.ts";
-import { imageHasTrashPurgeJobSql } from "./trash-purge-state.ts";
-import type { BackgroundJob } from "../jobs/types.ts";
+} from "../../storage/objects/access.ts";
+import { invalidateEntityCountCaches } from "../../vocab/vocab-cache.ts";
+import { withTrashMembershipLock } from "./membership-lock.ts";
+import { imageHasTrashPurgeJobSql } from "./purge-state.ts";
+import type { BackgroundJob } from "../../jobs/types.ts";
 
 type PurgeRow = {
   id: string;
@@ -336,7 +336,11 @@ export async function processTrashPurgeJob(
   job: BackgroundJob,
   signal: AbortSignal
 ) {
-  await purgeJobImage(job, signal);
-  // Repeat on an empty retry so a failed invalidation cannot lose its owner.
-  await invalidateEntityCountCaches(["tag"]);
+  try {
+    await purgeJobImage(job, signal);
+  } finally {
+    // A lost DELETE acknowledgement may still remove every association.
+    // Empty retries also retire any list retained by a failed invalidation.
+    await invalidateEntityCountCaches(["theme", "tag", "author"]);
+  }
 }

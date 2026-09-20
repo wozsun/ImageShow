@@ -1,5 +1,10 @@
 import { memo } from "react";
-import type { FacetOption, ImageDraft, AdminImageListItem, IngestionJob } from "../../../../../lib/types.js";
+import type {
+  FacetOption,
+  ImageDraft,
+  AdminImageListItem
+} from "../../../../../lib/types.js";
+import type { IngestionJob } from "../model/ingestion-job.js";
 import { IngestionJobCard } from "./IngestionJobCard.js";
 import type { IngestionPreviewTarget } from "./DuplicateMatchPanel.js";
 

@@ -3,7 +3,7 @@ import {
   getTagVocab,
   type VocabularyReadAccess
 } from "../vocab/vocab-cache.ts";
-import { resolveVocabularySlugs, resolveTermSlugMap } from "../core/vocabulary-terms.ts";
+import { resolveVocabularySlugs, resolveTermSlugMap } from "../vocab/terms.ts";
 import type { TagDto } from "@imageshow/shared/browser";
 
 export async function listTagsWithCounts(): Promise<TagDto[]> {

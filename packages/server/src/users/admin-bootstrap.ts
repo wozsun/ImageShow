@@ -1,5 +1,5 @@
 import { hashPassword } from "../core/password.ts";
-import { adminPasswordInput, adminUsernameInput } from "../core/credentials.ts";
+import { adminPasswordInput, adminUsernameInput } from "./credentials.ts";
 import { pool } from "../core/database/pools.ts";
 
 export type AdminBootstrapCredentials = {

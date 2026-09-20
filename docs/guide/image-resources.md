@@ -10,7 +10,7 @@
 | `/images/original/<id>` | 始终公开、可缓存的外部 HTTPS 原图直连决策或安全代理 |
 
 强烈建议显式设置 `site.domain`，例如 `img.example.com`；应用生成的图片根地址为
-`https://img.example.com/images`。主站 Host 提供完整站点，已配置的本地公开 Host 只提供图片，其余 Host 返回不可缓存的 404。
+`https://img.example.com/images`。主站 Host 提供完整站点，本地图片与静态资源公开 Host 只开放各自的资源，其余 Host 返回不可缓存的 404。
 `site.domain` 可带端口，例如 `img.example.com:5518`；生成的图片地址保留该端口，使用 HTTPS。
 显式域名需要使用合法 DNS 域名，不接受 IP 或单标签 `localhost`。
 
@@ -57,9 +57,18 @@ PostgreSQL 的正常图片及回收站记录；没有记录或独立原图时返
 的 `thumb_url` 须提供允许主站读取的 CORS 响应头，供 Show 纹理使用，公开无凭据媒体可使用
 `Access-Control-Allow-Origin: *`。
 
+## 原图按钮与详情
+
 `site.gallery.public_original_button` 只控制详情链接显示。关闭时，`/api/images/<id>` 校验
 随请求携带的管理员会话：访客的 `original_url` 为 `null`，已登录管理员取得公开原图链接，
 详情使用 `private, no-cache`。开启时不读取会话，访客同样取得链接，详情使用
 `public, max-age=30, s-maxage=60`。缺少独立原图时始终返回 `null`。
 详情始终带 `Vary: Cookie` 与内容 ETag，共享数据库行查询后再独立投影链接显示状态。
 前端按当前认证身份隔离详情查询，只根据服务端非空链接显示按钮；资源缓存不随按钮开关失效。
+
+## 静态资源公开 URL
+
+`site.assets_base_url` 可为前端 JS、CSS、字体与图标指定独立 HTTPS 根地址，支持路径前缀。
+该 Host 只开放对应构建资源，不提供页面、API 或图片；登录验证 Worker 仍由主站同源加载。
+配置改变资源地址与 Host 准入，资源字节、编码协商与条件请求规则沿用主站 `/assets`。
+详细字段与约束见[配置说明](../CONFIG.md)，构建装配见[Web 构建资源边界](project-structure.md#web-构建资源边界)。

@@ -5,7 +5,7 @@ import {
   assertVocabularyCreated,
   assertVocabularyFound,
   assertVocabularySlug,
-  synchronizeVocabularyMutation,
+  withVocabularyMutationSync,
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
 import { withTransaction } from "../core/database/transactions.ts";
@@ -46,7 +46,7 @@ export function ensureThemeWithMutationLockHeld(
 export async function createTheme(slug: string, displayName: string) {
   assertVocabularySlug("theme", slug);
 
-  await withVocabularyMutationLock("theme", slug, async (signal) => {
+  await withVocabularyMutationLock("theme", slug, (signal) => withVocabularyMutationSync("theme", async () => {
     signal.throwIfAborted();
     const result = await pool.query(
       `INSERT INTO theme(slug, display_name, sort_order)
@@ -60,14 +60,14 @@ export async function createTheme(slug: string, displayName: string) {
     );
     signal.throwIfAborted();
     assertVocabularyCreated("theme", slug, result.rowCount);
-  });
-  await synchronizeVocabularyMutation({ entity: "theme" });
+  }));
 }
 
 export async function updateThemeDisplayName(slug: string, displayName: string) {
-  const result = await pool.query("UPDATE theme SET display_name = $2, updated_at = now() WHERE slug = $1", [slug, displayName]);
-  assertVocabularyFound("theme", result.rowCount);
-  await synchronizeVocabularyMutation({ entity: "theme" });
+  await withVocabularyMutationSync("theme", async () => {
+    const result = await pool.query("UPDATE theme SET display_name = $2, updated_at = now() WHERE slug = $1", [slug, displayName]);
+    assertVocabularyFound("theme", result.rowCount);
+  });
 }
 
 async function deleteThemeUnderLock(
@@ -120,17 +120,13 @@ export async function deleteTheme(slug: string) {
   const result = await withVocabularyMutationLock(
     "theme",
     slug,
-    (signal) => withImageMutationSync(async (mutationBatch) => {
-      try {
+    (signal) => withImageMutationSync((mutationBatch) => (
+      withVocabularyMutationSync("theme", async () => {
         const deleted = await deleteThemeUnderLock(slug, signal, mutationBatch);
         for (const image of deleted.affected) mutationBatch.add({ id: image.id });
         return deleted;
-      } finally {
-        // A lost COMMIT acknowledgement does not prove rollback. Refresh from
-        // database truth while the vocabulary lease and cache fence still hold.
-        await synchronizeVocabularyMutation({ entity: "theme" });
-      }
-    })
+      })
+    ))
   );
   assertVocabularyFound("theme", result.deleted ? 1 : 0);
 }

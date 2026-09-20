@@ -39,7 +39,8 @@ import { serveRobotsTxt } from "./routes/robots.ts";
 import { registerRandomRoutes } from "./routes/random.ts";
 import { registerSettingsRoutes } from "./routes/settings.ts";
 import { registerStorageRoutes } from "./routes/storage.ts";
-import { createAssetHandler, registerSpaRoutes } from "./routes/spa.ts";
+import { createAssetHandler, registerAssetRoutes } from "./routes/assets.ts";
+import { registerSpaRoutes } from "./routes/spa.ts";
 import { registerIngestionRoutes } from "./routes/ingestion.ts";
 import { resourceHostBoundary } from "./routes/resource-host.ts";
 import {
@@ -167,7 +168,8 @@ export function createHttpApp(
   registerSettingsRoutes(app);
   registerStorageRoutes(app);
   registerCheckRoutes(app);
-  registerSpaRoutes(app, serveAssets);
+  registerAssetRoutes(app, serveAssets);
+  registerSpaRoutes(app);
   app.notFound(() => apiErrorResponse({ status: 404, message: "Not Found" }));
 
   return app;

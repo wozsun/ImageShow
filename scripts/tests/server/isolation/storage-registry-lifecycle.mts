@@ -25,7 +25,7 @@ const storageCheck = await import("../../../../packages/server/src/checks/storag
 const objectAccess = await import("../../../../packages/server/src/storage/objects/access.ts");
 {
   const { createHttpApp } = await import("../../../../packages/server/src/http-app.ts");
-  const { createConfigPackage } = await import("../../../../packages/server/src/config/config-package.ts");
+  const { createConfigPackage } = await import("../../../../packages/server/src/config/package/service.ts");
   const originalDomain = runtime.runtimeConfigStore.getRuntimeConfig().site.domain;
   await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { domain: "main.example.test" } });
   const local = (await registry.resolveStorageAccess("local")).driver;

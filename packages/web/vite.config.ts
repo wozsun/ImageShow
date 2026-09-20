@@ -164,7 +164,7 @@ const assetResponsibilityAliases: Readonly<Record<string, string>> = {
   CheckPage: "Check",
   GalleryPage: "Gallery",
   HomePage: "Home",
-  ShowRoutePage: "Show",
+  ShowPage: "Show",
   ImageAdminDetails: "ImageDetails",
   ImageStorageMigrationDialog: "ImageMigration",
   ImportSourceDialog: "ImportSource",

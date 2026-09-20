@@ -122,9 +122,9 @@ test("[Web/批量属性] 确认期间的本地接管按原身份清空，已覆�
     queue.updateJob("signing", {
       status: "uploading", sessionId: "J".repeat(43), imageId: "01900000-0000-7000-8000-000000000012"
     });
-    queue.bindServerJob("handoff", { sessionId: "H".repeat(43), imageId: "01900000-0000-7000-8000-000000000001", serverAccepted: true }, undefined, 11);
-    queue.bindServerJob("covered", { sessionId: "C".repeat(43), imageId: "01900000-0000-7000-8000-000000000002", serverAccepted: true }, undefined, 10);
-    queue.bindServerJob("signed-handoff", { sessionId: "I".repeat(43), imageId: "01900000-0000-7000-8000-000000000099", serverAccepted: true }, undefined, 12);
+    queue.producerApi.bindServerJob("handoff", { sessionId: "H".repeat(43), imageId: "01900000-0000-7000-8000-000000000001", serverAccepted: true }, undefined, 11);
+    queue.producerApi.bindServerJob("covered", { sessionId: "C".repeat(43), imageId: "01900000-0000-7000-8000-000000000002", serverAccepted: true }, undefined, 10);
+    queue.producerApi.bindServerJob("signed-handoff", { sessionId: "I".repeat(43), imageId: "01900000-0000-7000-8000-000000000099", serverAccepted: true }, undefined, 12);
   });
   let pairs!: IngestionSessionPairDto[];
   await React.act(async () => { pairs = capture.apply(); });

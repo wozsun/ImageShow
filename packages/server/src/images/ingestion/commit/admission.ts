@@ -23,13 +23,6 @@ const ingestionCommitByteAdmission = new DynamicWeightedLimiter(
 
 onRuntimeConfigChange(() => ingestionCommitAdmission.refresh());
 
-export function ingestionCommitAdmissionSnapshot() {
-  return {
-    items: ingestionCommitAdmission.snapshot(),
-    bytes: ingestionCommitByteAdmission.snapshot()
-  } as const;
-}
-
 export function withIngestionCommitAdmission<Result>(
   bytes: number,
   signal: AbortSignal,

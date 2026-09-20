@@ -1,10 +1,9 @@
 import type {
-  ImageDraft,
-  IngestionCommitIntent,
-  IngestionJob
+  ImageDraft
 } from "../../../../../lib/types.js";
+import type { IngestionCommitIntent, IngestionJob, IngestionAttributeDefaults } from "./ingestion-job.js";
 import { imageAttributeClearPatch, normalizeAuthor, normalizeTheme, type ClearableImageAttribute } from "../../../../../lib/image-draft.js";
-import type { IngestionAttributeDefaults } from "./ingestion-attribute-defaults.js";
+
 import { webUuidV7 } from "./ingestion-identity.js";
 import { ingestionJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
 import {

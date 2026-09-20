@@ -1,6 +1,9 @@
-import type { ImageDraft, IngestionJob } from "../../../../lib/types.js";
+import type {
+  ImageDraft
+} from "../../../../lib/types.js";
+import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 import { normalizeAuthor, normalizeTheme } from "../../../../lib/image-draft.js";
-import type { IngestionAttributeDefaults } from "../queue/model/ingestion-attribute-defaults.js";
+
 import {
   webIngestionBatchKey,
   webUuidV7

@@ -1,5 +1,5 @@
-import { withTransactionOnClient } from "../core/database/transactions.ts";
-import { withTrashMembershipLock } from "./trash-membership-lock.ts";
+import { withTransactionOnClient } from "../../core/database/transactions.ts";
+import { withTrashMembershipLock } from "./membership-lock.ts";
 
 export async function maintainTrashPurgeTasks() {
   return withTrashMembershipLock((client) => withTransactionOnClient(

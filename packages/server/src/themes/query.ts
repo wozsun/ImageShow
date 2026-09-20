@@ -3,7 +3,7 @@ import {
   getThemeVocab,
   type VocabularyReadAccess
 } from "../vocab/vocab-cache.ts";
-import { resolveVocabularySlugs, resolveTermSlugMap } from "../core/vocabulary-terms.ts";
+import { resolveVocabularySlugs, resolveTermSlugMap } from "../vocab/terms.ts";
 import type { ThemeDto } from "@imageshow/shared/browser";
 
 export async function resolveThemeTermMap(

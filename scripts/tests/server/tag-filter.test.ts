@@ -9,7 +9,7 @@ import {
   TagFilterError,
   type TagExpression
 } from "../../../packages/shared/src/browser/tag-filter.ts";
-import { resolveTermSlugMap } from "../../../packages/server/src/core/vocabulary-terms.ts";
+import { resolveTermSlugMap } from "../../../packages/server/src/vocab/terms.ts";
 import {
   createImageFilterPlan,
   imageFilterPlanWithout

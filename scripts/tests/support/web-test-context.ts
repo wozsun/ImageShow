@@ -22,9 +22,9 @@ import {
 } from "../../../packages/shared/src/browser.ts";
 import type {
   EditableImageSnapshot,
-  GalleryImageCard,
-  IngestionJob
+  GalleryImageCard
 } from "../../../packages/web/src/lib/types.ts";
+import type { IngestionJob } from "../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
 import {
   defaultShowFloatSizeIndex
 } from "../../../packages/web/src/pages/show/pixi/show-pixi-layout.ts";

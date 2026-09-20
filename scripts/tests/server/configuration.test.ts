@@ -1,3 +1,4 @@
+import { materializeImportedRuntimeConfig } from "../../../packages/server/src/config/package/runtime-projection.ts";
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 import {
@@ -38,11 +39,10 @@ import {
 } from "../../../packages/server/src/config/runtime-config-environment.ts";
 import {
   buildConfigPackage,
-  materializeImportedRuntimeConfig,
   parseConfigPackage,
   projectConfigPackagePreview,
   resolveImportedStorageBackends
-} from "../../../packages/server/src/config/config-package-format.ts";
+} from "../../../packages/server/src/config/package/format.ts";
 import {
   effectiveEmbedAncestorSources
 } from "../../../packages/server/src/config/embed-ancestors.ts";
@@ -1154,7 +1154,8 @@ import {
   persistRuntimeConfigForPackageImport,
   publishRuntimeConfigForPackageImport
 } from ${JSON.stringify(runtimeConfigStoreUrl)};
-import { registerSpaRoutes, createAssetHandler } from ${JSON.stringify(spaRoutesUrl)};
+import { registerSpaRoutes } from ${JSON.stringify(spaRoutesUrl)};
+import { registerAssetRoutes, createAssetHandler } from ${JSON.stringify(new URL("./assets.js", spaRoutesUrl).href)};
 import { resourceHostBoundary } from ${JSON.stringify(new URL("./resource-host.js", spaRoutesUrl).href)};
 import { registerPublicRoutes } from ${JSON.stringify(publicRoutesUrl)};
 import { registerSettingsRoutes } from ${JSON.stringify(settingsRoutesUrl)};
@@ -1171,6 +1172,7 @@ const app = new Hono();
 app.get("/random", (c) => c.text("random-ok"));
 registerPublicRoutes(app);
 registerSettingsRoutes(app);
+registerAssetRoutes(app);
 registerSpaRoutes(app);
 
 async function html(path = "/") {
@@ -1411,7 +1413,8 @@ const serveAssets = createAssetHandler();
 let gateOpen = true;
 const resources = new Hono();
 resources.use("*", resourceHostBoundary(() => gateOpen, serveAssets));
-registerSpaRoutes(resources, serveAssets);
+registerAssetRoutes(resources, serveAssets);
+registerSpaRoutes(resources);
 const request = (host, path, method = "GET", headers = {}) => resources.request("http://internal.test" + path, {
   method, headers: { Host: host, ...headers }
 });

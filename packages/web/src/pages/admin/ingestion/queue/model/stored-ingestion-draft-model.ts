@@ -1,5 +1,8 @@
 import type { IngestionStatusItemDto } from "@imageshow/shared/browser";
-import type { ImageDraft, IngestionJob } from "../../../../../lib/types.js";
+import type {
+  ImageDraft
+} from "../../../../../lib/types.js";
+import type { IngestionJob } from "./ingestion-job.js";
 import {
   ingestionJobFromServerItem,
   ingestionJobHasServerAuthority

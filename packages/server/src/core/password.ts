@@ -13,12 +13,7 @@ const MAX_ENCODED_PASSWORD_HASH_LENGTH = 256;
 
 const encodedHashPattern = /^\$argon2id\$v=(\d+)\$m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)$/;
 
-type PasswordHashParameters = {
-  algorithm: "argon2id";
-  version: number;
-  memory: number;
-  passes: number;
-  parallelism: number;
+type PasswordHashValues = {
   salt: Buffer;
   expected: Buffer;
 };
@@ -40,7 +35,7 @@ function parsePositiveInteger(value: string) {
   return parsed;
 }
 
-function parsePasswordHash(encoded: string): PasswordHashParameters | null {
+function parsePasswordHash(encoded: string): PasswordHashValues | null {
   try {
     if (encoded.length > MAX_ENCODED_PASSWORD_HASH_LENGTH) return null;
     const match = encoded.match(encodedHashPattern);
@@ -63,15 +58,7 @@ function parsePasswordHash(encoded: string): PasswordHashParameters | null {
       || expected.length !== policy.tagLength
     ) return null;
 
-    return {
-      algorithm: "argon2id",
-      version,
-      memory,
-      passes,
-      parallelism,
-      salt,
-      expected
-    };
+    return { salt, expected };
   } catch {
     return null;
   }
@@ -81,21 +68,16 @@ export function isCurrentPasswordHash(encoded: string) {
   return parsePasswordHash(encoded) !== null;
 }
 
-function derivePassword(password: string, parameters: {
-  memory: number;
-  passes: number;
-  parallelism: number;
-  tagLength: number;
-  salt: Buffer;
-}) {
+function derivePassword(password: string, salt: Buffer) {
+  const policy = CURRENT_PASSWORD_HASH_POLICY;
   return new Promise<Buffer>((resolve, reject) => {
-    argon2(CURRENT_PASSWORD_HASH_POLICY.algorithm, {
+    argon2(policy.algorithm, {
       message: Buffer.from(password, "utf8"),
-      nonce: parameters.salt,
-      parallelism: parameters.parallelism,
-      tagLength: parameters.tagLength,
-      memory: parameters.memory,
-      passes: parameters.passes
+      nonce: salt,
+      parallelism: policy.parallelism,
+      tagLength: policy.tagLength,
+      memory: policy.memory,
+      passes: policy.passes
     }, (error, derivedKey) => {
       if (error) reject(error);
       else resolve(derivedKey);
@@ -106,7 +88,7 @@ function derivePassword(password: string, parameters: {
 export async function hashPassword(password: string) {
   const policy = CURRENT_PASSWORD_HASH_POLICY;
   const salt = randomBytes(policy.saltLength);
-  const hash = await derivePassword(password, { ...policy, salt });
+  const hash = await derivePassword(password, salt);
   return `$${policy.algorithm}$v=${policy.version}$m=${policy.memory},t=${policy.passes},p=${policy.parallelism}$${encodeBase64(salt)}$${encodeBase64(hash)}`;
 }
 
@@ -114,13 +96,7 @@ export async function verifyPassword(encoded: string, password: string) {
   const parameters = parsePasswordHash(encoded);
   if (!parameters) return false;
   try {
-    const actual = await derivePassword(password, {
-      memory: parameters.memory,
-      passes: parameters.passes,
-      parallelism: parameters.parallelism,
-      tagLength: parameters.expected.length,
-      salt: parameters.salt
-    });
+    const actual = await derivePassword(password, parameters.salt);
     return actual.length === parameters.expected.length && timingSafeEqual(actual, parameters.expected);
   } catch {
     return false;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { ingestionBatchHardLimit } from "@imageshow/shared/browser";
-import type { IngestionJob } from "../../../../lib/types.js";
-import type { IngestionAttributeDefaults } from "../queue/model/ingestion-attribute-defaults.js";
+import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
+
 import {
   cancelServerIngestionJobs,
   type IngestionQueueCancelOutcome

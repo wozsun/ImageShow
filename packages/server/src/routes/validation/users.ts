@@ -6,7 +6,7 @@ import {
 import {
   adminPasswordInput,
   adminUsernameInput
-} from "../../core/credentials.ts";
+} from "../../users/credentials.ts";
 
 export const userCreateInput = z.strictObject({
   username: adminUsernameInput,

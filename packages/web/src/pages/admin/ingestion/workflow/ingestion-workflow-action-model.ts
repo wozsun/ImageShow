@@ -1,4 +1,4 @@
-import type { IngestionJob } from "../../../../lib/types.js";
+import type { IngestionJob } from "../queue/model/ingestion-job.js";
 import type { IngestionQueueCancelOutcome } from "../queue/ingestion-cancel.js";
 import { ingestionJobNeedsDuplicateConfirmation } from "../queue/model/duplicate-match.js";
 import { isUncommittedIngestionJob } from "../queue/model/ingestion-queue-state.js";

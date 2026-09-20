@@ -11,7 +11,7 @@ import {
 } from "@imageshow/shared/browser";
 import { resolveAuthorSlugs } from "../authors/query.ts";
 import { ApiError } from "../core/api-error.ts";
-import { splitSelectors } from "../core/selectors.ts";
+import { splitSelectors } from "./selectors.ts";
 import type { VocabularyReadAccess } from "../vocab/vocab-cache.ts";
 import { resolveTagTermMap } from "../tags/query.ts";
 import { resolveThemeSlugs } from "../themes/query.ts";

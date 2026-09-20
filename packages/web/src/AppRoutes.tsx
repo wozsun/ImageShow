@@ -18,7 +18,7 @@ const galleryRouteModule = createPublicRouteModuleLoader(
   () => import("./pages/gallery/GalleryPage.js")
 );
 const showRouteModule = createPublicRouteModuleLoader(
-  () => import("./pages/show/ShowRoutePage.js")
+  () => import("./pages/show/ShowPage.js")
 );
 const publicRoutePreloadIntents = createPublicRoutePreloadIntents(
   homeRouteModule,
@@ -28,7 +28,7 @@ const publicRoutePreloadIntents = createPublicRoutePreloadIntents(
 const HomePage = lazy(() => homeRouteModule.load().then((module) => ({ default: module.HomePage })));
 const GalleryPage = lazy(() => galleryRouteModule.load().then((module) => ({ default: module.GalleryPage })));
 const ShowPage = lazy(() => showRouteModule.load().then((module) => ({
-  default: module.ShowRoutePage
+  default: module.ShowPage
 })));
 const AdminShell = lazy(() => import("./pages/admin/shell/AdminShell.js").then((module) => ({ default: module.AdminShell })));
 

@@ -12,8 +12,8 @@ PostgreSQL 是正式图片、词表、账号、存储注册表和持久任务的
 ## 启动与结构契约
 
 数据库启动由干净初始化与轻量 readiness 组成。空数据库在一个事务中执行完整 `schema.sql`，
-然后进行只读 readiness；非空数据库只做只读核对。旧版的历史升级前置、停机备份和
-恢复步骤见[升级说明](../DEPLOY.md#649-数据表示升级)。
+然后进行只读 readiness；非空数据库只做只读核对。停机备份与恢复步骤见
+[数据维护与恢复](../DEPLOY.md#数据维护与恢复)。
 干净初始化或 readiness 失败都会回滚本次事务。全部连接固定使用
 `search_path=public`；单实例部署按顺序完成 schema 和管理员播种。readiness 在启动事务的
 同一连接上顺序执行 SQL，包括作者 CHECK 约束读取，不并发调用该 client 的 query。
@@ -44,9 +44,13 @@ readiness 不复制 `schema.sql` 的可空性、默认值、无消费者 CHECK�
 身份 CHECK 与复合唯一索引，以及主题的可空性与无默认值要求，
 因当前读写直接依赖而属于明确例外。
 应用未消费的表、列、索引和约束位于启动契约之外。破坏性清理由维护者在停机、备份和恢复验证后
-单独执行；本版限定升级遵循上述已备份维护窗口。
+单独执行。
 
 ## 运行期连接与公开回源
+
+应用连接设置 `client_connection_check_interval=1000`，使数据库在长查询与锁等待中也能
+发现客户端断连。默认 Linux 容器支持此能力；外部 PostgreSQL 主机须支持该参数依赖的
+内核事件，见 [PostgreSQL TCP 设置](https://www.postgresql.org/docs/18/runtime-config-connection.html#RUNTIME-CONFIG-CONNECTION-TCP)。
 
 单实例使用上限 30 的主查询池和上限 30 的 advisory lock 池。Redis 图片投影不可读时，
 公开只读路径通过主池内一个 FIFO 回源门访问 PostgreSQL：最多 16 个活动 client、128 个
@@ -219,7 +223,8 @@ Worker 在任务仓库按类型集中裁剪历史记录：`succeeded` 保留 7 �
 `running` 的路径会清空 token，因此租约超时后又被重新领取的旧执行者不能写入迟到
 终态。`retry_count` 只统计失败与僵尸恢复次数，所有权代际不会进入 payload。
 普通执行的前四次失败分别在 60、300、900、3600 秒后自动重排，第五次失败耗尽，
-`next_retry_at` 设为 NULL。僵尸恢复也占用同一五次失败预算，未耗尽时立即重排；人工重试
+`next_retry_at` 设为 NULL。重排、失败退避与领取统一使用 PostgreSQL 时钟计算和判断期限。
+僵尸恢复也占用同一五次失败预算，未耗尽时立即重排；人工重试
 继续通过既有管理入口恢复，不增加额外自动重试轮次。
 
 领取结果只携带执行所需字段；`created_at` 留在数据库中用于领取顺序、等待统计和重新入队计时。

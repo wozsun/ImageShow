@@ -1,4 +1,4 @@
-import type { IngestionJob } from "../../../../../lib/types.js";
+import type { IngestionJob } from "./ingestion-job.js";
 import { normalizeImportDownloadUrl } from "./import-job-source.js";
 
 export function uploadFileFingerprint(file: File) {

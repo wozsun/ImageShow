@@ -167,7 +167,7 @@ async function loadAdminThemeList(revision: number) {
   const rows = await queryVocabularyRows<Theme>(
     `SELECT t.slug, t.display_name, t.sort_order, count(m.id)::int AS image_count
        FROM theme t
-       LEFT JOIN metadata m ON m.theme = t.slug AND m.status = 'ready'
+       LEFT JOIN metadata m ON m.theme = t.slug
       GROUP BY t.slug, t.display_name, t.sort_order
       ORDER BY t.sort_order DESC, t.slug ASC`
   );
@@ -188,7 +188,7 @@ async function loadAdminAuthorList(revision: number) {
             a.identity_id,
             count(m.id)::int AS image_count
        FROM author a
-       LEFT JOIN metadata m ON m.author = a.slug AND m.status = 'ready'
+       LEFT JOIN metadata m ON m.author = a.slug
       GROUP BY a.slug,
                a.display_name,
                a.link,

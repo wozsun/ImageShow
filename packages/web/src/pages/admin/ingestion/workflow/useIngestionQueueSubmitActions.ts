@@ -2,8 +2,8 @@ import { useCallback } from "react";
 import { ingestionBatchHardLimit, type IngestionSessionPairDto } from "@imageshow/shared/browser";
 import { imageAttributeClearPatch, type PrepareImageAttributeClear } from "../../../../lib/image-draft.js";
 import type { FrozenIngestionQueueAction } from "../queue/useIngestionQueueActions.js";
-import type { IngestionJob } from "../../../../lib/types.js";
-import type { IngestionAttributeDefaults } from "../queue/model/ingestion-attribute-defaults.js";
+import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
+
 import { ingestionAttributeDefaultsActionMetadata } from "../queue/model/ingestion-attribute-policy.js";
 import { ingestionJobCanStartCommit } from "../queue/model/ingestion-queue-state.js";
 import type { IngestionQueueController } from "../queue/useIngestionQueue.js";

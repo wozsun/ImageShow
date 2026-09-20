@@ -1,6 +1,7 @@
 # ImageShow 文档
 
-本手册直接描述当前安装结构、配置与运行契约。先按自己的身份选择入口：角色页说明如何完成日常任务，配置手册解释每个配置项，技术参考说明架构与接口。
+本手册以 **6.4.17** 为基线，直接描述当前安装、配置与运行契约。角色页说明日常任务，
+配置手册解释参数，技术参考说明架构与接口；版本变更记录见 [GitHub Releases](https://github.com/wozsun/ImageShow/releases)。
 
 部署与配置可直接阅读 [DEPLOY](DEPLOY.md) 和 [CONFIG](CONFIG.md)；CONFIG 按配置路径逐项说明。
 
@@ -11,7 +12,7 @@
 | 普通用户 | 浏览、筛选、图片详情、嵌入页与随机图 API | [普通用户指南](guide/roles/ordinary-user.md) |
 | 图片管理员 | 日常上传 / 导入、编辑、分类、移入回收站、恢复与只读检查 | [图片管理员指南](guide/roles/image-admin.md) |
 | 超级管理员 | 应用内账号、配置、存储与高风险维护 | [超级管理员指南](guide/roles/super-admin.md) |
-| 实例维护者 | Compose、反向代理、数据卷、升级、健康与恢复 | [实例维护者指南](guide/roles/instance-maintainer.md) |
+| 实例维护者 | Compose、反向代理、数据卷、启停、健康与恢复 | [实例维护者指南](guide/roles/instance-maintainer.md) |
 
 超级管理员是应用角色；实例维护者是部署职责，两者不会互相替代。
 
@@ -21,6 +22,6 @@
 - 系统设计：[架构总览](guide/architecture.md)、[项目结构](guide/project-structure.md)
 - 开发验证：[长期测试与本地门禁](../scripts/tests/README.md)
 - 运行契约：[配置说明](CONFIG.md)、[数据库结构](guide/database.md)、[存储](guide/storage.md)、[安全](guide/security.md)
-- 功能出口：[功能与流程](guide/flows.md)、[随机图 API](guide/random-api.md)、[主机与图片资源](guide/image-resources.md)
+- 功能出口：[功能与流程](guide/flows.md)、[图片接入](guide/ingestion.md)、[随机图 API](guide/random-api.md)、[主机与图片资源](guide/image-resources.md)
 
-本地结论、比较决策和验收说明统一放在被 Git 忽略的 `tests/report/`，不替代上述现行指南。
+本地结论、比较决策和验收说明统一放在被 Git 忽略的 `.agents/report/`，不替代上述现行指南。

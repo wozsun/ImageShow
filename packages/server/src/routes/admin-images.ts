@@ -46,8 +46,8 @@ import { getOverviewStats } from "../images/read-models/overview.ts";
 import {
   moveImagesToTrash,
   restoreImages
-} from "../images/trash-mutations.ts";
-import { purgeImages } from "../images/trash-purge.ts";
+} from "../images/trash/mutations.ts";
+import { purgeImages } from "../images/trash/purge.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 import { listStorageBackends } from "../storage/backends/registry.ts";
 import { storageBackendLabel } from "../storage/backends/label.ts";

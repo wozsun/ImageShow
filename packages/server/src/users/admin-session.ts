@@ -8,7 +8,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { ApiError } from "../core/api-error.ts";
 import { pool } from "../core/database/pools.ts";
-import { loginRateLimiter } from "../core/login-rate-limit.ts";
+import { loginRateLimiter } from "./login-rate-limit.ts";
 import { isCurrentPasswordHash, verifyPassword } from "../core/password.ts";
 import { redis } from "../core/redis/client.ts";
 import {

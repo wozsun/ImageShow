@@ -8,7 +8,6 @@ import { imageMatchesFilters, shuffledImageBatch } from "../../lib/gallery/image
 import type { EditableImageSnapshot } from "../../lib/types.js";
 import type { ShowImage } from "./show-layout.js";
 import { showContinuationLimit as continuationLimit, type ShowCandidateUsage } from "./show-data-pool.js";
-import { updatedShowImage } from "./show-image-update.js";
 
 const maximumRetainedDtos = 800;
 const recentLimit = 2_000;
@@ -228,27 +227,31 @@ export function useShowData(
   const removeImage = useCallback((imageId: string, replenish = false) => {
     removedImageIdsRef.current.add(imageId);
     const next = imagesRef.current.filter((image) => image.id !== imageId);
-    if (next.length === imagesRef.current.length) return false;
+    if (next.length === imagesRef.current.length) return;
     const replacing = invalidateImageRequests(imageId);
     publishImages(next);
     if (replacing) void request(true);
     else if (replenish) loadMore(latestUsageRef.current ?? undefined);
-    return true;
   }, [invalidateImageRequests, loadMore, publishImages, request]);
 
   const updateImage = useCallback((snapshot: EditableImageSnapshot) => {
     const current = imagesRef.current.find((image) => image.id === snapshot.id);
-    if (!current) return "missing" as const;
+    if (!current) return;
     if (!imageMatchesFilters(snapshot, requestFilters, window.navigator.userAgent)) {
       removeImage(snapshot.id, true);
-      return "removed" as const;
+      return;
     }
     const replacing = invalidateImageRequests(snapshot.id);
-    const updated = updatedShowImage(current, snapshot);
+    const updated: ShowImage = {
+      id: current.id,
+      title: snapshot.title,
+      thumb_url: snapshot.thumb_url,
+      width: snapshot.width,
+      height: snapshot.height
+    };
     confirmedImageEditsRef.current.set(snapshot.id, updated);
     publishImages(imagesRef.current.map((image) => image.id === snapshot.id ? updated : image));
     if (replacing) void request(true);
-    return "updated" as const;
   }, [invalidateImageRequests, publishImages, removeImage, request, requestFilters]);
 
   const refreshImage = useCallback((imageId: string) => {

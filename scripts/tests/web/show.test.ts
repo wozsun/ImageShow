@@ -1907,7 +1907,7 @@ test("[Web/展映] 退出筛选或删除只移除目标并隔离在途补图后�
       assert.equal(h.pending[1]!.signal?.aborted, true);
       const resumedRequest = h.pending.at(-1)!;
       await h.React.act(async () => {
-        assert.equal(current.removeImage(target.id), false);
+        current.removeImage(target.id);
       });
       assert.equal(resumedRequest.signal?.aborted, false, "重复删除回执不打断已恢复的补图流");
       await h.respond(1, { items: initial, next_cursor: "stale" });

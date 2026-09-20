@@ -216,14 +216,14 @@ export async function rescheduleBackgroundJob(
     `UPDATE background_job
      SET status='pending',
          error='',
-         next_retry_at=$3,
+         next_retry_at=now() + ($3 * interval '1 millisecond'),
          execution_token=NULL,
          updated_at=now()
      WHERE id=$1 AND status='running' AND execution_token=$2`,
     [
       job.id,
       job.execution_token,
-      new Date(Date.now() + Math.max(0, delayMs))
+      Math.max(0, delayMs)
     ]
   );
   return updated.rowCount === 1;
@@ -244,7 +244,7 @@ export async function markBackgroundJobFailed(
      SET status='failed',
          payload=payload - 'rerun_requested',
          retry_count=$2,
-         next_retry_at=$3,
+         next_retry_at=now() + ($3 * interval '1 second'),
          error=$4,
          execution_token=NULL,
          updated_at=now()
@@ -252,7 +252,7 @@ export async function markBackgroundJobFailed(
     [
       job.id,
       retry,
-      exhausted ? null : new Date(Date.now() + seconds * 1000),
+      exhausted ? null : seconds,
       errorMessage(error),
       job.execution_token
     ]

@@ -150,7 +150,7 @@ test("[Web/公开导航] 真实画廊与展映页面刷新词表后按完整原�
   } });
   t.after(() => hooks.deregister());
   const { GalleryPage } = await import("../../../packages/web/src/pages/gallery/GalleryPage.tsx");
-  const { ShowRoutePage } = await import("../../../packages/web/src/pages/show/ShowRoutePage.tsx");
+  const { ShowPage } = await import("../../../packages/web/src/pages/show/ShowPage.tsx");
   const moduleLoader = createPublicRouteModuleLoader(async () => ({}));
   const intents = createPublicRoutePreloadIntents(moduleLoader, moduleLoader, moduleLoader);
   // Only GPU setup is isolated; real pages, route parsing and data owners run.
@@ -178,7 +178,7 @@ test("[Web/公开导航] 真实画廊与展映页面刷新词表后按完整原�
       const embedded = path.startsWith("/embed/");
       const show = path.endsWith("/show");
       const page = show
-        ? h.React.createElement(ShowRoutePage, { embedded, settings: {
+        ? h.React.createElement(ShowPage, { embedded, settings: {
           enabled: true, autoplay: false, mode: "waterfall", density: "balanced", drift_speed: 28, order: "random"
         } })
         : h.React.createElement(GalleryPage, { embedded, order: "latest" });

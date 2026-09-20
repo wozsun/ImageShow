@@ -113,10 +113,10 @@ import {
 import {
   servePublicStoredObject,
   servePublicStoredThumbnail
-} from "../../../packages/server/src/images/stored-image-serving.ts";
+} from "../../../packages/server/src/images/serving/stored-image.ts";
 import {
   servePublicExternalOriginal
-} from "../../../packages/server/src/images/external-original-serving.ts";
+} from "../../../packages/server/src/images/serving/external-original.ts";
 import {
   configureSharpRuntime,
   md5Buffer,

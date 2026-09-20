@@ -1,4 +1,4 @@
-import type { IngestionJob } from "../../../../../lib/types.js";
+import type { IngestionJob } from "./ingestion-job.js";
 import { ingestionJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
 
 const statusLabels: Record<IngestionJob["status"], string> = {

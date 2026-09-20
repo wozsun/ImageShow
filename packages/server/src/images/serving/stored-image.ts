@@ -1,22 +1,22 @@
-import { ApiError } from "../core/api-error.ts";
-import { withPublicDatabaseRead } from "../core/database/public-fallback.ts";
-import type { StorageRegistryAccess } from "../storage/backends/registry.ts";
+import { ApiError } from "../../core/api-error.ts";
+import { withPublicDatabaseRead } from "../../core/database/public-fallback.ts";
+import type { StorageRegistryAccess } from "../../storage/backends/registry.ts";
 import {
   immutableCacheControl,
   publicRedirectCacheControl,
   safeRedirectLocation
-} from "../core/http/headers.ts";
+} from "../../core/http/headers.ts";
 import {
   parseImageObjectKey,
   thumbnailObjectKey
-} from "../storage/objects/image-paths.ts";
-import { resolveReadableObject } from "../storage/objects/access.ts";
-import { contentType } from "../storage/objects/keys.ts";
-import { isStorageObjectNotFound } from "../storage/objects/not-found.ts";
+} from "../../storage/objects/image-paths.ts";
+import { resolveReadableObject } from "../../storage/objects/access.ts";
+import { contentType } from "../../storage/objects/keys.ts";
+import { isStorageObjectNotFound } from "../../storage/objects/not-found.ts";
 import {
   readImageServingRecordById,
   type ImageServingRecord
-} from "./image-serving-record.ts";
+} from "./record.ts";
 import {
   streamResolvedObject,
   type StoredResponseRequest

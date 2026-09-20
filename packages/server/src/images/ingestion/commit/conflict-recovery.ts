@@ -1,5 +1,5 @@
 import { ApiError } from "../../../core/api-error.ts";
-import { readDuplicateSnapshotByMd5 } from "../../read-models/duplicates.ts";
+import { readDuplicateMatchCountsByMd5 } from "../../read-models/duplicates.ts";
 import type {
   IngestionSessionSnapshot,
   StoredIngestionSession
@@ -50,11 +50,11 @@ export async function recoverIngestionCommitDuplicateConflict(
     || !current.prepared
     || !current.commit
   ) return false;
-  const duplicates = await readDuplicateSnapshotByMd5(current.prepared.md5);
+  const counts = await readDuplicateMatchCountsByMd5([current.prepared.md5]);
   await repository.mutateSemantic(
     current,
     current.version,
-    ingestionSessionWithDuplicateConflict(current, duplicates.matchCount)
+    ingestionSessionWithDuplicateConflict(current, counts.get(current.prepared.md5)!)
   );
   return true;
 }

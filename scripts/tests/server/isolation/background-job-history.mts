@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { mock } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { appConfig } from "@imageshow/shared";
 import { runIntegrationScenario } from "./integration-runtime.mts";
@@ -40,20 +41,40 @@ await runIntegrationScenario(async ({ databasePools: { pool } }) => {
     assert.equal(claimed.retry_count, 0);
     assert.deepEqual(claimed.payload, retained.payload);
     assert.equal(await jobs.renewBackgroundJobLease(claimed), true);
-    assert.equal(await jobs.rescheduleBackgroundJob(claimed, 0), true);
-    const resumed = await jobs.claimBackgroundJob("move.cleanup");
-    assert.ok(resumed);
-    assert.equal(resumed.id, claimed.id);
-    assert.notEqual(resumed.execution_token, claimed.execution_token);
-    assert.equal(await jobs.renewBackgroundJobLease(claimed), false);
-    assert.equal(await jobs.markBackgroundJobSucceeded(claimed), false);
-    assert.equal(await jobs.markBackgroundJobFailed(resumed, new Error("cleanup retry")), true);
-    assert.equal(await jobs.claimBackgroundJob("move.cleanup"), undefined, "退避期间不可领取");
-    await pool.query("UPDATE background_job SET next_retry_at=now() WHERE id=$1", [resumed.id]);
-    const retried = await jobs.claimBackgroundJob("move.cleanup");
-    assert.ok(retried);
-    assert.equal(retried.retry_count, 1);
-    assert.equal(await jobs.markBackgroundJobSucceeded(retried), true);
+    const realNow = Date.now;
+    const clockSkew = "retain_exhausted" in extraPayload ? -300_000 : 300_000;
+    const applicationClock = mock.method(Date, "now", () => realNow() + clockSkew);
+    try {
+      assert.equal(await jobs.rescheduleBackgroundJob(claimed, 60_000), true);
+      assert.equal(Number((await pool.query(
+        "SELECT extract(epoch FROM (next_retry_at-updated_at)) AS seconds FROM background_job WHERE id=$1",
+        [claimed.id]
+      )).rows[0].seconds), 60, "延后期限与领取使用同一数据库时钟，不受应用时钟偏移影响");
+      assert.equal(await jobs.claimBackgroundJob("move.cleanup"), undefined, "延后期限到达前不可领取");
+      await pool.query("UPDATE background_job SET next_retry_at=now() WHERE id=$1", [claimed.id]);
+      const delayed = await jobs.claimBackgroundJob("move.cleanup");
+      assert.ok(delayed);
+      assert.equal(await jobs.rescheduleBackgroundJob(delayed, 0), true);
+      const resumed = await jobs.claimBackgroundJob("move.cleanup");
+      assert.ok(resumed);
+      assert.equal(resumed.id, claimed.id);
+      assert.notEqual(resumed.execution_token, claimed.execution_token);
+      assert.equal(await jobs.renewBackgroundJobLease(claimed), false);
+      assert.equal(await jobs.markBackgroundJobSucceeded(claimed), false);
+      assert.equal(await jobs.markBackgroundJobFailed(resumed, new Error("cleanup retry")), true);
+      assert.equal(Number((await pool.query(
+        "SELECT extract(epoch FROM (next_retry_at-updated_at)) AS seconds FROM background_job WHERE id=$1",
+        [resumed.id]
+      )).rows[0].seconds), appConfig.backgroundJob.retryBackoffSeconds[0], "失败退避同样由数据库时钟计算");
+      assert.equal(await jobs.claimBackgroundJob("move.cleanup"), undefined, "退避期间不可领取");
+      await pool.query("UPDATE background_job SET next_retry_at=now() WHERE id=$1", [resumed.id]);
+      const retried = await jobs.claimBackgroundJob("move.cleanup");
+      assert.ok(retried);
+      assert.equal(retried.retry_count, 1);
+      assert.equal(await jobs.markBackgroundJobSucceeded(retried), true);
+    } finally {
+      applicationClock.mock.restore();
+    }
     assert.deepEqual(await jobs.cleanupBackgroundJobHistory(), [], "刚完成的任务保留到期前的历史");
     await pool.query("DELETE FROM background_job WHERE id=$1", [retained.id]);
   }

@@ -1,21 +1,21 @@
 import { createHash } from "node:crypto";
-import { ApiError } from "../core/api-error.ts";
-import { withPublicDatabaseRead } from "../core/database/public-fallback.ts";
-import { coalesce } from "../core/coalesce.ts";
-import { raceWithAbortSignal } from "../core/abort.ts";
-import { safeFetchExternalImage } from "../core/external-image-fetch.ts";
+import { ApiError } from "../../core/api-error.ts";
+import { withPublicDatabaseRead } from "../../core/database/public-fallback.ts";
+import { coalesce } from "../../core/coalesce.ts";
+import { raceWithAbortSignal } from "../../core/abort.ts";
+import { safeFetchExternalImage } from "../../core/external-image-fetch.ts";
 import {
   noStoreCacheControl,
   publicProxyImageCacheControl,
   publicRedirectCacheControl,
   safeRedirectLocation
-} from "../core/http/headers.ts";
+} from "../../core/http/headers.ts";
 import {
   externalImageProxyTimeoutMs,
   externalImageProxyUserAgent,
   proxyExternalImage
-} from "./external-image-proxy.ts";
-import { readImageServingRecordById } from "./image-serving-record.ts";
+} from "../external-image-proxy.ts";
+import { readImageServingRecordById } from "./record.ts";
 import {
   displayUrlForOriginalComparison,
   hasDistinctOriginalUrl

@@ -1,4 +1,4 @@
-import type { IngestionJob } from "../../../../../lib/types.js";
+import type { IngestionJob } from "./ingestion-job.js";
 
 export type DetachedProvisionalHandoff = Readonly<{
   connectionGeneration: number;

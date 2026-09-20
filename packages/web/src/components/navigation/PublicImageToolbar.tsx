@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
-import type { GalleryFacetsDto } from "@imageshow/shared/browser";
+import { brightnesses, devices, type GalleryFacetsDto } from "@imageshow/shared/browser";
 import { CopyButton } from "../actions/CopyButton.js";
 import { FacetSelector } from "../data-display/FacetSelector.js";
 import { SelectMenu } from "../form/SelectMenu.js";
@@ -16,7 +16,7 @@ import {
   deviceOptionLabel
 } from "../../lib/ui/select-options.js";
 
-export function randomLinkNeedsTruncation(
+function randomLinkNeedsTruncation(
   contentWidth: number,
   availableWidth: number
 ) {
@@ -246,7 +246,7 @@ export function PublicImageToolbar({
                 options={[
                   { value: "", label: "全部设备" },
                   { value: "auto", label: "自动设备" },
-                  ...(facets?.devices ?? ["pc", "mb"]).map((value) => ({
+                  ...devices.map((value) => ({
                     value,
                     label: deviceOptionLabel(value)
                   }))
@@ -261,7 +261,7 @@ export function PublicImageToolbar({
                 onChange={(value) => onFilterChange("brightness", value)}
                 options={[
                   { value: "", label: "全部亮度" },
-                  ...(facets?.brightnesses ?? ["light", "dark"]).map((value) => ({
+                  ...brightnesses.map((value) => ({
                     value,
                     label: brightnessOptionLabel(value)
                   }))

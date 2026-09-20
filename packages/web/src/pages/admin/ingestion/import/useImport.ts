@@ -3,10 +3,10 @@ import {
   ingestionBatchHardLimit,
   type IngestionSessionPairDto
 } from "@imageshow/shared/browser";
-import type { IngestionJob } from "../../../../lib/types.js";
+import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 import { isApiClientError } from "../../../../lib/api/client.js";
 import { normalizeAuthor, normalizeTheme } from "../../../../lib/image-draft.js";
-import type { IngestionAttributeDefaults } from "../queue/model/ingestion-attribute-defaults.js";
+
 import {
   cancelServerIngestionJobs,
   type IngestionQueueCancelOutcome

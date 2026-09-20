@@ -6,64 +6,52 @@ ImageShow 是面向个人服务器的自托管图片画廊，集图片展示、�
 
 ## 功能
 
-- **图片浏览**：提供首页、瀑布流画廊、图片详情，以及瀑布流和漂浮两种自动展映模式，适配桌面与移动端。
-- **首页页脚**：通过配置文件设置 ICP、公安备案号与自定义内容，页脚支持 HTTPS 链接和换行，可在首次安装时用环境变量播种，详见[配置说明](docs/CONFIG.md#siteicp)。
-- **分类筛选**：按设备、亮度、主题、标签和作者筛选图片；标签支持任一 / 全部，随机 API 支持标签条件混合；主题可留空，支持无主题筛选。
-- **随机图 API**：通过 `/random` 获取随机图片，支持筛选范围、固定 `seed` 选图，以及 `size=thumb|full` 选择缩略图或全图；默认返回模式与尺寸均可配置。
-- **上传与导入**：支持本地上传，以及 URL、JSONL 和微博链接批量导入。
-- **图片管理**：支持按图片或入库时间正反序浏览、图片属性编辑、批量应用和清空分类属性、分类管理、回收站和恢复。
-- **灵活存储**：支持本地存储和 S3 兼容对象存储，可在存储之间迁移图片；本地图片可设置独立公开 URL，保留缓存与 304 能力。
-- **站点管理**：提供管理员权限分工、站点设置、配置导入导出、日志和运行状态检查，并可开启页面嵌入。
-- **独立静态资源地址**：可为前端 JS、CSS 等设置专用 HTTPS 公开 URL，支持路径前缀，保留预压缩、缓存和 304，无需按域名重新构建镜像。
+- **浏览与展映**：首页、瀑布流画廊、图片详情，以及瀑布流和漂浮两种自动展映模式，适配桌面与移动端。
+- **分类筛选**：按设备、亮度、主题、标签和作者查找图片，支持无主题筛选和标签组合。
+- **随机图 API**：按条件获取图片、跳转链接或 JSON，支持固定种子选图和完整图 / 缩略图。
+- **上传与导入**：支持本地文件、URL、JSONL 和微博链接。
+- **图片管理**：属性编辑、批量操作、分类维护、回收站和恢复。
+- **存储管理**：本地存储与 S3 兼容对象存储，可迁移图片并设置图片公开地址。
+- **站点管理**：管理员权限、站点配置、页脚备案信息、配置包、日志、检查与页面嵌入，可设置独立静态资源地址。
 
 ## 快速部署
 
-以下以 Linux 服务器首次安装为例。请先安装 Docker 和 Docker Compose；公网访问需准备域名。
+需要 Docker 和 Docker Compose；公网访问还需域名和 HTTPS 反向代理。
 
-### 1. 准备配置
+1. 新建部署目录，将 [compose.yaml](compose.yaml) 和 [.env.example](.env.example) 放入其中，执行：
 
-在服务器上新建一个 `imageshow` 目录，将 [compose.yaml](compose.yaml) 和 [.env.example](.env.example) 下载到该目录。在这个目录中执行：
+   ```bash
+   cp .env.example .env
+   ```
 
-```bash
-cp .env.example .env
-```
+2. 编辑 `.env`，填写两个不同的随机强密码，并设置实际域名（不带协议或路径）：
 
-打开 `.env`，为以下两项填写不同的随机强密码：
+   ```ini
+   DATABASE_PASSWORD=
+   ADMIN_USERNAME=admin
+   ADMIN_PASSWORD=
+   SITE_DOMAIN=img.example.com
+   ```
 
-```ini
-DATABASE_PASSWORD=
-ADMIN_PASSWORD=
-```
+   管理员密码须为 8–128 位，且同时包含字母和数字。
 
-`ADMIN_PASSWORD` 是后台登录密码，须为 8–128 位且同时包含字母和数字。
+3. 在部署目录启动服务：
 
-强烈建议同时将 `.env` 中的 `SITE_DOMAIN` 改为实际域名，不带 `https://` 或路径。未填写或保留 `example.com` 时，项目会自动使用访问 Host。
+   ```bash
+   docker compose pull
+   docker compose up -d
+   ```
 
-### 2. 启动服务
+4. 将域名解析到服务器，开放 `80`、`443` 端口，并配置 HTTPS 反向代理至
+   `http://127.0.0.1:5518`。配置见[反向代理示例](docs/DEPLOY.md#反向代理与-https)。
 
-在同一目录中启动服务：
+打开 `https://img.example.com/admin`，使用初始账号上传图片；打开站点根地址即可浏览。
+临时本机体验可将 `SITE_DOMAIN` 留空，访问 `http://127.0.0.1:5518/admin`。
+数据保存在部署目录的 `data/`、`postgres/`、`redis/`，请妥善备份。
 
-```bash
-docker compose pull
-docker compose up -d
-```
+## 使用说明
 
-应用数据、PostgreSQL 和 Redis 分别保存在部署目录下的 `data/`、`postgres/`、`redis/`。
-
-### 3. 配置域名并访问
-
-未设置域名时，在服务器本机可访问 `http://127.0.0.1:5518/admin`。如需公网访问：
-
-- 在域名管理页面添加 DNS 解析，将该域名指向服务器公网 IP。
-- 在服务器防火墙和云平台安全组中放行 `80`、`443` 端口。
-- 在服务器上配置反向代理：使用该域名，转发目标填写 `http://127.0.0.1:5518`，申请证书并启用 HTTPS。具体配置见[反向代理示例](docs/DEPLOY.md#反向代理与-https)。
-
-完成后，将以下地址中的域名替换为自己的域名：
-
-- 打开 `https://img.example.com/admin`，使用用户名 `admin` 和 `.env` 中的 `ADMIN_PASSWORD` 登录，上传图片。
-- 打开 `https://img.example.com`，查看自己的图片站点。
-
-更多说明见[部署指南](docs/DEPLOY.md)、[配置说明](docs/CONFIG.md)和[随机图 API 指南](docs/guide/random-api.md)。
+[文档入口](docs/README.md) · [部署与恢复](docs/DEPLOY.md) · [配置说明](docs/CONFIG.md) · [随机图 API](docs/guide/random-api.md)
 
 ## 许可
 

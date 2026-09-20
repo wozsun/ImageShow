@@ -141,45 +141,35 @@ export type UploadIntentInputDto = {
   items: UploadIntentItemInputDto[];
 };
 
-export type UploadIntentItemDto = {
-  session_id: string;
-  candidate_image_id: string;
+type AcceptedIngestionItemDto = IngestionSessionPairDto & {
   resolved_image_time: string;
-  request_hash: string;
-  credential: string;
-  expires_at: number;
-  status: "intent";
-} | {
-  session_id: string;
-  image_id: string;
-  resolved_image_time: string;
-  request_hash: string;
-  status: "accepted";
   accepted_order: number;
+} & ({
+  status: "accepted";
   version: number;
   last_semantic_revision: number;
 } | {
-  session_id: string;
-  image_id: string;
-  resolved_image_time: string;
-  request_hash: string;
   status: "completed";
-  accepted_order: number;
   version?: number;
   last_semantic_revision?: number;
 } | {
-  session_id: string;
-  image_id: string;
-  resolved_image_time: string;
-  request_hash: string;
   status: "discarded";
-  accepted_order: number;
-} | {
+});
+
+type IngestionItemFailureDto = {
   idempotency_key: string;
   status: "failed";
   code: string;
   message: string;
 };
+
+export type UploadIntentItemDto = {
+  session_id: string;
+  candidate_image_id: string;
+  resolved_image_time: string;
+  credential: string;
+  status: "intent";
+} | AcceptedIngestionItemDto | IngestionItemFailureDto;
 
 export type UploadIntentResultDto = {
   items: UploadIntentItemDto[];
@@ -211,31 +201,7 @@ export type ImportAcceptInputDto = {
   cancel_if_missing?: boolean;
 };
 
-export type ImportAcceptItemDto = (IngestionSessionPairDto & {
-  resolved_image_time: string;
-  request_hash: string;
-  status: "accepted";
-  accepted_order: number;
-  version: number;
-  last_semantic_revision: number;
-}) | (IngestionSessionPairDto & {
-  resolved_image_time: string;
-  request_hash: string;
-  status: "completed";
-  accepted_order: number;
-  version?: number;
-  last_semantic_revision?: number;
-}) | (IngestionSessionPairDto & {
-  resolved_image_time: string;
-  request_hash: string;
-  status: "discarded";
-  accepted_order: number;
-}) | {
-  idempotency_key: string;
-  status: "failed";
-  code: string;
-  message: string;
-};
+export type ImportAcceptItemDto = AcceptedIngestionItemDto | IngestionItemFailureDto;
 
 export type ImportAcceptResultDto = {
   items: ImportAcceptItemDto[];

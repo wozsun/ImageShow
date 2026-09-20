@@ -6,18 +6,18 @@ import {
   slugPattern,
   type RuntimeConfig
 } from "@imageshow/shared/browser";
-import { ApiError } from "../core/api-error.ts";
+import { ApiError } from "../../core/api-error.ts";
 import {
   looseS3SettingsSchema,
   s3SettingsSchema,
   type StorageBackendRecord
-} from "../storage/backends/config.ts";
+} from "../../storage/backends/config.ts";
 import {
-  parseRuntimeConfig,
+  portableConfig,
   portableRuntimeConfigSchema,
   projectPortableRuntimeConfig,
   type PortableRuntimeConfig
-} from "./runtime-config.ts";
+} from "./runtime-projection.ts";
 
 const configPackageFormat = "imageshow-config" as const;
 const configPackageMaxBackends = appConfig.configPackage.maxStorageBackends;
@@ -118,11 +118,6 @@ function serializedConfigPackage(value: unknown) {
     );
   }
   return serialized;
-}
-
-function portableConfig(runtime: RuntimeConfig): PortableRuntimeConfig {
-  const { domain: _domain, assets_base_url: _assetsBaseUrl, ...portableSite } = runtime.site;
-  return portableRuntimeConfigSchema.parse({ ...runtime, site: portableSite });
 }
 
 function portableBackends(
@@ -233,21 +228,6 @@ export function parseConfigPackage(value: unknown): ConfigPackage {
     storage_backends: storage.storageBackends,
     skipped_storage_backends: storage.skipped
   };
-}
-
-export function materializeImportedRuntimeConfig(
-  portable: PortableRuntimeConfig,
-  targetDomain: string,
-  targetAssetsBaseUrl = ""
-): RuntimeConfig {
-  return parseRuntimeConfig({
-    ...portable,
-    site: {
-      ...portable.site,
-      domain: targetDomain,
-      assets_base_url: targetAssetsBaseUrl
-    }
-  });
 }
 
 export function projectConfigPackagePreview(

@@ -52,7 +52,7 @@ import {
 } from "../../../packages/server/src/core/database/public-fallback.ts";
 import {
   readImageServingRecordById
-} from "../../../packages/server/src/images/image-serving-record.ts";
+} from "../../../packages/server/src/images/serving/record.ts";
 import {
   readyImageMember,
   serializeReadyImageCacheItem

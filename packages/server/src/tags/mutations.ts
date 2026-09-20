@@ -8,21 +8,17 @@ import {
 } from "../images/mutation-sync.ts";
 import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
 import {
-  invalidateOrCollectEntityCountCaches,
-  refreshEntityVocabularies,
-} from "../vocab/vocab-cache.ts";
-import {
   assertVocabularyCreated,
   assertVocabularyFound,
   assertVocabularySlug,
-  synchronizeVocabularyMutation,
+  withVocabularyMutationSync,
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
 
 export async function createTag(slug: string, displayName = "") {
   assertVocabularySlug("tag", slug);
 
-  const result = await withVocabularyMutationLock("tag", slug, async (signal) => {
+  const result = await withVocabularyMutationLock("tag", slug, (signal) => withVocabularyMutationSync("tag", async () => {
     signal.throwIfAborted();
     const created = await pool.query(
       `INSERT INTO tag(slug, display_name, sort_order)
@@ -36,22 +32,22 @@ export async function createTag(slug: string, displayName = "") {
     );
     signal.throwIfAborted();
     return created;
-  });
+  }));
   assertVocabularyCreated("tag", slug, result.rowCount);
-  await synchronizeVocabularyMutation({ entity: "tag" });
 }
 
 export async function setTagDisplayName(slug: string, displayName: string) {
-  const result = await pool.query("UPDATE tag SET display_name = $2, updated_at = now() WHERE slug = $1", [slug, displayName]);
-  assertVocabularyFound("tag", result.rowCount);
-  await synchronizeVocabularyMutation({ entity: "tag" });
+  await withVocabularyMutationSync("tag", async () => {
+    const result = await pool.query("UPDATE tag SET display_name = $2, updated_at = now() WHERE slug = $1", [slug, displayName]);
+    assertVocabularyFound("tag", result.rowCount);
+  });
 }
 
 export async function deleteTag(slug: string) {
   const result = await withVocabularyMutationLock(
     "tag",
     slug,
-    (signal) => withImageMutationSync(async (mutationBatch) => {
+    (signal) => withImageMutationSync((mutationBatch) => withVocabularyMutationSync("tag", async () => {
       const mutation = await withTransaction(async (client) => {
         signal.throwIfAborted();
         const affectedCount = Number((await client.query(
@@ -87,12 +83,8 @@ export async function deleteTag(slug: string) {
       for (const image of mutation.affected) {
         mutationBatch.add({ id: image.id });
       }
-      await Promise.all([
-        refreshEntityVocabularies(["tag"]),
-        invalidateOrCollectEntityCountCaches(["tag"])
-      ]);
       return mutation.deleted;
-    })
+    }))
   );
   assertVocabularyFound("tag", result.rowCount);
 }

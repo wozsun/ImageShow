@@ -4,7 +4,12 @@ import { ImageThumbnail } from "../../../../../components/image/ImageThumbnail.j
 import { ImageDraftFields } from "../../../../../components/form/ImageDraftFields.js";
 import { ingestionCardBrightnessSelectOptions, ingestionCardDeviceSelectOptions } from "../../../../../lib/ui/select-options.js";
 import { formatBytes } from "../../../../../lib/ui/formatters.js";
-import type { FacetOption, ImageDraft, AdminImageListItem, IngestionJob } from "../../../../../lib/types.js";
+import type {
+  FacetOption,
+  ImageDraft,
+  AdminImageListItem
+} from "../../../../../lib/types.js";
+import type { IngestionJob } from "../model/ingestion-job.js";
 import { DuplicateMatchPanel, type IngestionPreviewTarget } from "./DuplicateMatchPanel.js";
 import {
   ingestionJobNeedsDuplicateConfirmation,

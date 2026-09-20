@@ -1,11 +1,8 @@
 import type {
-  ImageDraft,
-  IngestionJob,
-  ManifestImportSource
+  ImageDraft
 } from "../../../../../lib/types.js";
-import type {
-  IngestionAttributeDefaults
-} from "./ingestion-attribute-defaults.js";
+import type { IngestionJob, ManifestImportSource, IngestionAttributeDefaults } from "./ingestion-job.js";
+
 import {
   webIngestionBatchKey,
   webUuidV7

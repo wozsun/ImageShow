@@ -1,9 +1,4 @@
-import { unsetThemeFilter } from "@imageshow/shared/browser";
-import {
-  brightnesses,
-  devices,
-  type GalleryFacetsDto
-} from "@imageshow/shared/browser";
+import { unsetThemeFilter, type GalleryFacetsDto } from "@imageshow/shared/browser";
 import { appConfig } from "@imageshow/shared";
 import { coalesce } from "../../core/coalesce.ts";
 import {
@@ -38,8 +33,6 @@ async function facetVocabulary(
     getAuthorVocab(database)
   ]);
   return {
-    devices: [...devices],
-    brightnesses: [...brightnesses],
     themes: themeVocab.filter(({ slug }) => (counts.themes[slug] ?? 0) > 0),
     tags: tagVocab,
     authors: authorVocab.filter(({ slug }) => (counts.authors[slug] ?? 0) > 0)

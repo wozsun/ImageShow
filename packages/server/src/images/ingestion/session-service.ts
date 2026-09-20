@@ -231,7 +231,6 @@ export class IngestionSessionService {
         session_id: session.session_id,
         image_id: session.image_id,
         resolved_image_time: databaseResult.image_time,
-        request_hash: session.request_hash,
         status: "completed",
         accepted_order: session.accepted_order,
         ...(session.status === "completed" ? {
@@ -267,7 +266,6 @@ export class IngestionSessionService {
       session_id: session.session_id,
       image_id: session.image_id,
       resolved_image_time: session.image_time,
-      request_hash: session.request_hash,
       accepted_order: session.accepted_order,
       ...(session.status === "discarded"
         ? { status: "discarded" as const }
@@ -403,9 +401,7 @@ export class IngestionSessionService {
             session_id: entry.result.intent.session_id,
             candidate_image_id: entry.result.intent.candidate_image_id,
             resolved_image_time: entry.result.intent.resolved_image_time,
-            request_hash: entry.result.intent.request_hash,
             credential: this.#credential(entry.result.intent, now),
-            expires_at: entry.result.intent.expires_at,
             status: "intent"
           });
         } catch (error) {

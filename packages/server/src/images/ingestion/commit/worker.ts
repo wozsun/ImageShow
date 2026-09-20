@@ -35,7 +35,6 @@ import {
 import { withImageMutationSync } from "../../mutation-sync.ts";
 import { ingestionImageItemsWithTags } from "../../presenter.ts";
 import { publishCompletedReceipt } from "./completion.ts";
-import { ingestionContentLockKey } from "./duplicate-confirmation.ts";
 import { persistIngestionImage } from "./persistence.ts";
 import { removeIngestionPreparedFiles } from "../raw/prepared.ts";
 import { ingestionCleanupRetryQueue } from "../cleanup/retry-queue.ts";
@@ -85,7 +84,7 @@ export async function commitIngestionSessionSnapshot(
       () => tryWithStorageLocationReadAndAdvisoryLocks(
         [
           ...vocabularyLocks,
-          { key: ingestionContentLockKey(prepared.md5) },
+          { key: `imageshow:ingestion:content:${prepared.md5}` },
           {
             key: `imageshow:ingestion:session:${session.session_id}`,
             acquisition: "try"

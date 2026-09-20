@@ -23,7 +23,7 @@ import type {
   Brightness,
   Device,
   FacetOption,
-  ImageEditorItem,
+  EditableImageSnapshot,
   ImageDraft
 } from "../../../lib/types.js";
 import { imageAttributeClearPatch, mergeCommonImageAttributes, type PrepareImageAttributeClear } from "../../../lib/image-draft.js";
@@ -80,7 +80,7 @@ export function ImageMetadataEditorDialog({
   onStorageMigrationSucceeded,
   returnFocusRef
 }: {
-  items: ImageEditorItem[];
+  items: EditableImageSnapshot[];
   pageSize: number;
   themes: FacetOption[];
   allTags: FacetOption[];

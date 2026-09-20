@@ -15,13 +15,17 @@ const database = {
 const jobs = await import("../../../../packages/server/src/jobs/repository.ts");
 const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
 const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
-const trash = await import("../../../../packages/server/src/images/trash-purge.ts");
-const trashMutations = await import("../../../../packages/server/src/images/trash-mutations.ts");
-const trashMembershipLock = await import("../../../../packages/server/src/images/trash-membership-lock.ts");
-const trashPurgeJob = await import("../../../../packages/server/src/images/trash-purge-job.ts");
-const trashPurgeMaintenance = await import("../../../../packages/server/src/images/trash-purge-maintenance.ts");
+const trash = await import("../../../../packages/server/src/images/trash/purge.ts");
+const trashMutations = await import("../../../../packages/server/src/images/trash/mutations.ts");
+const trashMembershipLock = await import("../../../../packages/server/src/images/trash/membership-lock.ts");
+const trashPurgeJob = await import("../../../../packages/server/src/images/trash/purge-job.ts");
+const trashPurgeMaintenance = await import("../../../../packages/server/src/images/trash/purge-maintenance.ts");
 const databaseCheck = await import("../../../../packages/server/src/checks/database-check.ts");
 const sharedAppConfig = await import("@imageshow/shared");
+const vocab = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
+const { createTheme } = await import("../../../../packages/server/src/themes/mutations.ts");
+const { createTag } = await import("../../../../packages/server/src/tags/mutations.ts");
+const { createAuthor } = await import("../../../../packages/server/src/authors/mutations.ts");
 const localAccess = await registry.resolveStorageAccess("local");
 const foregroundImage = randomUUID();
 await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5)
@@ -69,6 +73,16 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
     uncertainThumbnail,
     "image/webp"
   );
+  const countSlug = "purge-count";
+  await createTheme(countSlug, "");
+  await createTag(countSlug);
+  await createAuthor(countSlug, "", "");
+  await database.pool.query("UPDATE metadata SET theme=$2, author=$2 WHERE id=$1", [uncertainImage, countSlug]);
+  await database.pool.query("INSERT INTO image_tag(image_id, tag_slug) VALUES ($1, $2)", [uncertainImage, countSlug]);
+  const countLists = [vocab.getAdminThemeList, vocab.getAdminTagList, vocab.getAdminAuthorList];
+  for (const list of countLists) {
+    assert.equal((await list()).find((item) => item.slug === countSlug)?.image_count, 1);
+  }
   let metadataDeleteResponseLost = false;
   const restoreDeleteResponse = interceptSqlQueries(database.pool, async (statement, values, query) => {
     if (
@@ -94,6 +108,10 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
       trashPurgeJob.handleTrashPurgeJob(uncertainPurgeJob, new AbortController().signal),
       /injected metadata delete response loss/
     );
+    for (const list of countLists) {
+      assert.equal((await list()).find((item) => item.slug === countSlug)?.image_count, 0,
+        "a lost DELETE acknowledgement must invalidate cached association counts");
+    }
     await jobs.markBackgroundJobFailed(uncertainPurgeJob, new Error("lost response"));
     await database.pool.query("UPDATE background_job SET next_retry_at=now() WHERE id=$1", [uncertainPurgeJob.id]);
     await finishTrashPurgeJob(await claimTrashPurgeJob());
