@@ -27,7 +27,8 @@ import {
   createConfigStreamHarness
 } from "../support/web-test-context.ts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, useLocation } from "react-router";
+import { MemoryRouter, useLocation, useNavigate } from "react-router";
+import { authExpiredEvent, clearCsrfToken } from "../../../packages/web/src/lib/api/client.ts";
 import { useImageBrowseRoute } from "../../../packages/web/src/hooks/useImageBrowseRoute.ts";
 import { TagFilterErrorState } from "../../../packages/web/src/components/feedback/TagFilterErrorState.tsx";
 import { queryKeys } from "../../../packages/web/src/lib/api/query-keys.ts";
@@ -39,11 +40,67 @@ import { createPublicRouteModuleLoader, createPublicRoutePreloadIntents, PublicR
 import { appConfig } from "../../../packages/shared/src/app-config.ts";
 import { HomeFooter } from "../../../packages/web/src/pages/home/HomeFooter.tsx";
 
+test("[Web/公开导航] 嵌入路由保持访客并在普通页往返时交接认证请求", async (t) => {
+  const { registerHooks } = await import("node:module");
+  const hooks = registerHooks({ load(url, context, next) {
+    return url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : next(url, context);
+  } });
+  t.after(() => hooks.deregister());
+  const h = await createConfigStreamHarness(t);
+  Object.assign(h.window, { parent: h.window, scrollY: 0, scrollTo() {} });
+  const storage = new Map([["site_session_hint", "1"]]);
+  t.after(installProperties(globalThis, { localStorage: {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => { storage.set(key, value); },
+    removeItem: (key: string) => { storage.delete(key); }
+  } }));
+  const { AppRoutes } = await import("../../../packages/web/src/AppRoutes.tsx");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  t.after(() => { client.clear(); clearCsrfToken(); });
+  client.setQueryData(queryKeys.siteConfig, {
+    site: { ...appConfig.runtimeDefaults.site, icp: "示例备案", footer: "嵌入页脚" },
+    embed: { enabled: true }
+  });
+  client.setQueryData(queryKeys.me, {
+    authenticated: true, username: "route-test-admin", role: "super", permissions: [],
+    csrf_token: "route-test-csrf"
+  }, { updatedAt: 1 });
+  let navigate!: ReturnType<typeof useNavigate>;
+  function NavigationProbe() { navigate = useNavigate(); return null; }
+  const settle = async (predicate: () => boolean) => {
+    for (let attempt = 0; attempt < 100 && !predicate(); attempt++) await h.flush();
+    assert.ok(predicate(), h.document.body.textContent ?? "route did not settle");
+  };
+  const authRequests = () => h.pending.filter(request => request.path === "/api/admin/auth/me");
+  await h.render(h.React.createElement(h.React.StrictMode, null,
+    h.React.createElement(QueryClientProvider, { client },
+      h.React.createElement(MemoryRouter, { initialEntries: ["/embed/home"] },
+        h.React.createElement(NavigationProbe), h.React.createElement(AppRoutes)))));
+  await settle(() => Boolean(h.document.querySelector(".home-page.is-embedded")));
+  assert.equal(h.document.querySelector("footer")?.textContent, "嵌入页脚");
+  await h.React.act(async () => { h.window.dispatchEvent(new Event(authExpiredEvent)); });
+  await h.flush();
+  assert.equal(authRequests().length, 0);
+  await h.React.act(async () => { await navigate("/home"); });
+  await settle(() => authRequests().some(request => !request.signal?.aborted));
+  assert.equal(h.document.querySelector("footer")?.textContent, "示例备案嵌入页脚");
+  const pendingAuth = authRequests().findLast(request => !request.signal?.aborted)!;
+  await h.React.act(async () => { await navigate("/embed/home"); });
+  await settle(() => Boolean(h.document.querySelector(".home-page.is-embedded")));
+  assert.equal(pendingAuth.signal?.aborted, true, "进入嵌入页释放普通页在途认证读取");
+  const count = authRequests().length;
+  await h.React.act(async () => { h.window.dispatchEvent(new Event(authExpiredEvent)); });
+  await h.flush();
+  assert.equal(authRequests().length, count);
+  assert.equal(storage.get("site_session_hint"), "1");
+  await h.render(null);
+});
+
 test("[Web/公开导航] 首页页脚按配置展示备案和受限 HTML，安全处理链接及空项", async (t) => {
   const h = await createConfigStreamHarness(t);
   const site = { icp: "", mps: "", footer: "" };
-  const render = async (patch: Partial<typeof site>) => {
-    await h.render(h.React.createElement(HomeFooter, { site: { ...site, ...patch } }));
+  const render = async (patch: Partial<typeof site>, embedded = false) => {
+    await h.render(h.React.createElement(HomeFooter, { site: { ...site, ...patch }, embedded }));
   };
   await render({});
   assert.equal(h.document.querySelector("footer"), null);
@@ -74,6 +131,16 @@ test("[Web/公开导航] 首页页脚按配置展示备案和受限 HTML，安�
   assert.equal(h.document.querySelector("footer")?.textContent, "文".repeat(2000));
   await render({});
   assert.equal(h.document.querySelector("footer"), null);
+  const registrations = { icp: "示例ICP备123号", mps: "示例公网安备12345678901234号" };
+  await render(registrations, true);
+  assert.equal(h.document.querySelector("footer"), null, "嵌入首页未配置 footer 时不保留备案或页脚空间");
+  await render({ ...registrations, footer: '自定义 <a href="https://example.com/">链接</a><br>第二行' }, true);
+  assert.equal(h.document.querySelector("footer")?.textContent, "自定义 链接第二行");
+  assert.equal(h.document.querySelectorAll("footer a").length, 1);
+  assert.equal(h.document.querySelector("footer a")?.getAttribute("href"), "https://example.com/");
+  assert.equal(h.document.querySelectorAll("footer br").length, 1);
+  await render({ ...registrations, footer: "普通页内容" });
+  assert.equal(h.document.querySelector("footer")?.textContent, "示例ICP备123号|示例公网安备12345678901234号普通页内容");
   assert.equal(h.pending.length, 0, "页脚复用输入配置，不额外读取数据");
 });
 

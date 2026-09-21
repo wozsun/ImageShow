@@ -9,6 +9,7 @@ import {
 } from "../../../../packages/shared/src/browser.ts";
 
 import {
+  authExpiredEvent,
   clearCsrfToken
 } from "../../../../packages/web/src/lib/api/client.ts";
 
@@ -51,6 +52,56 @@ import {
   inputText,
   dispatchDomEvent
 } from "../../support/dom-events.ts";
+import { installProperties } from "../../support/property-descriptors.ts";
+
+test("[Web/后台访问] 无会话上下文的公开详情保持访客身份并隔离管理员缓存", async (t) => {
+  const { registerHooks } = await import("node:module");
+  const hooks = registerHooks({ load(url, context, next) {
+    return url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : next(url, context);
+  } });
+  t.after(() => hooks.deregister());
+  const { PublicImageDetail } = await import("../../../../packages/web/src/components/image/PublicImageDetail.tsx");
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const h = await createConfigStreamHarness(t);
+  Object.assign(h.window, { scrollTo() {}, scrollY: 0 });
+  const storage = new Map([["site_session_hint", "1"]]);
+  t.after(installProperties(globalThis, { localStorage: {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => { storage.set(key, value); },
+    removeItem: (key: string) => { storage.delete(key); }
+  } }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  t.after(() => { client.clear(); clearCsrfToken(); });
+  const id = "00000000-0000-7000-8000-000000000545";
+  const item = { ...adminImageListItem({ id }), original_url: `/images/original/${id}` };
+  const auth = {
+    authenticated: true, username: "embedded-test-admin", role: "super", permissions: [],
+    csrf_token: "embedded-test-csrf", preferences: {}, preferences_etag: 'W/"embedded-test"'
+  };
+  client.setQueryData(queryKeys.me, auth);
+  client.setQueryData(queryKeys.galleryFacets, { themes: [], tags: [], authors: [] });
+  client.setQueryData([...queryKeys.adminImageInfo, id], { item });
+  client.setQueryData([...queryKeys.publicImageDetail, id, auth.username], { item });
+  await h.render(h.React.createElement(h.React.StrictMode, null,
+    h.React.createElement(QueryClientProvider, { client },
+      h.React.createElement(PublicImageDetail, {
+        card: galleryCard(id), onClose() {}, returnFocusRef: { current: null }
+      }))));
+  assert.deepEqual(h.pending.map(request => request.path), [`/api/images/${id}`]);
+  assert.equal(h.pending[0]!.credentials, "omit");
+  await h.respond(0, { ok: true, item: { ...item, original_url: null } });
+  assert.ok(h.document.querySelector('[role="dialog"]'));
+  assert.equal(h.document.querySelector(".image-detail-original"), null);
+  await h.React.act(async () => {
+    client.setQueryData(queryKeys.me, { ...auth, username: "another-embedded-test-admin" });
+    h.window.dispatchEvent(new Event(authExpiredEvent));
+  });
+  await h.flush();
+  assert.equal(h.document.querySelector(".image-detail-original"), null);
+  assert.deepEqual(h.pending.map(request => request.path), [`/api/images/${id}`]);
+  assert.equal(storage.get("site_session_hint"), "1", "访客详情不修改普通页面的登录提示");
+  await h.render(null);
+});
 
 test("[Web/后台访问] 公开详情等待首次认证，按身份读取并隔离迟到结果", async (t) => {
   const { registerHooks } = await import("node:module");

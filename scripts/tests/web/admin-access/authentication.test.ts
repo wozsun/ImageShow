@@ -156,7 +156,7 @@ test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个�
       "@tanstack/react-query"
     );
     const { MemoryRouter } = await import("react-router");
-    const { AuthSessionProvider, useAuthSessionQuery } = await import(
+    const { AuthSessionProvider, useAuthSessionQuery, useOptionalAuthSessionRecovery } = await import(
       "../../../../packages/web/src/hooks/useAuthSession.tsx"
     );
     const client = new QueryClient({
@@ -167,8 +167,12 @@ test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个�
     const root = createRoot(container);
 
     let authIsFetching = true;
+    let recoverSession: (() => Promise<void>) | undefined;
+    let refetchSession: ReturnType<typeof useAuthSessionQuery>["refetch"] | undefined;
     function AuthProbe() {
       const query = useAuthSessionQuery();
+      recoverSession = useOptionalAuthSessionRecovery();
+      refetchSession = query.refetch;
       authIsFetching = query.isFetching;
       return React.createElement(
         "span",
@@ -247,13 +251,24 @@ test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个�
       removes: authListenerRemoves
     }, listenerCountsAfterMount);
 
-    await React.act(async () => root.unmount());
+    assert.ok(recoverSession);
+    let queuedRecoveryCheck: Promise<void> | undefined;
+    await React.act(async () => {
+      queuedRecoveryCheck = assert.rejects(recoverSession!(), { name: "AbortError" });
+      root.unmount();
+    });
+    await queuedRecoveryCheck;
     assert.equal(activeAuthListeners.size, 0);
     assert.equal(authListenerRemoves, authListenerAdds);
     window.dispatchEvent(new window.Event(authExpiredEvent));
     await Promise.resolve();
     await Promise.resolve();
     assert.equal(fetchCount, initialFetchCount + 1, "卸载后不得保留认证刷新入口");
+    await assert.rejects(recoverSession(), { name: "AbortError" });
+    assert.equal(fetchCount, initialFetchCount + 1, "卸载后旧异步调用方也不得重新发起认证请求");
+    assert.ok(refetchSession);
+    await assert.rejects(refetchSession({ throwOnError: true }), { name: "AbortError" });
+    assert.equal(fetchCount, initialFetchCount + 1, "卸载后的登录确认不得通过查询刷新绕过会话边界");
     client.clear();
   } finally {
     clearCsrfToken();

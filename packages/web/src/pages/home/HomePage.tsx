@@ -198,7 +198,7 @@ export function HomePage({
         onRetry={() => void statsQuery.refetch()}
         onCatalogIntent={entrance.revealImmediately}
       />
-      <HomeFooter site={site} />
+      <HomeFooter site={site} embedded={embedded} />
     </main>
   );
 }

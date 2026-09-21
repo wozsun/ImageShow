@@ -41,16 +41,19 @@ function parseFooter(source: string) {
 }
 
 export function HomeFooter({
-  site: { icp, mps, footer }
+  site: { icp, mps, footer },
+  embedded = false
 }: {
   site: Pick<PublicSiteSettings, "icp" | "mps" | "footer">;
+  embedded?: boolean;
 }) {
   const footerContent = useMemo(() => parseFooter(footer), [footer]);
-  if (!icp && !mps && !footer) return null;
+  const showRegistrations = !embedded && Boolean(icp || mps);
+  if (!showRegistrations && !footer) return null;
 
   return (
     <footer className="home-footer" aria-label="站点信息">
-      {(icp || mps) && (
+      {showRegistrations && (
         <div className="home-footer-registrations">
           {icp && (
             <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">

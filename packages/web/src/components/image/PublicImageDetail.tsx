@@ -11,7 +11,7 @@ import type {
   PublicImageItem
 } from "../../lib/types.js";
 import { ImageDetailModal } from "./ImageDetailModal.js";
-import { useAuthSessionQuery } from "../../hooks/useAuthSession.js";
+import { useOptionalAuthSessionQuery } from "../../hooks/useAuthSession.js";
 
 function imagePlaceholder(card: ShowImageCardDto | GalleryImageCard): PublicImageItem {
   return {
@@ -48,8 +48,8 @@ export function PublicImageDetail({
 }) {
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
   const [trashCommitted, setTrashCommitted] = useState(false);
-  const authQuery = useAuthSessionQuery();
-  const authIdentity = authQuery.data?.authenticated
+  const authQuery = useOptionalAuthSessionQuery();
+  const authIdentity = authQuery?.data?.authenticated
     ? authQuery.data.username
     : null;
   const { data, isPending, isFetching, isError, error, refetch } =
@@ -67,7 +67,7 @@ export function PublicImageDetail({
         return response;
       },
       gcTime: 0,
-      enabled: !trashCommitted && !(authQuery.isPending && authQuery.isFetching)
+      enabled: !trashCommitted && !(authQuery?.isPending && authQuery.isFetching)
     });
   const detail = data?.item.id === card.id ? data.item : null;
   const item = useMemo(

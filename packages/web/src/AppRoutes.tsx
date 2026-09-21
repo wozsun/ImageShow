@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
+import { AuthSessionProvider } from "./hooks/useAuthSession.js";
 import { adminBasePath, publicHomeBrowsePath, publicRootPath } from "./lib/constants.js";
 import { useSiteConfig } from "./lib/api/site-queries.js";
 import { QueryErrorState } from "./components/feedback/QueryErrorState.js";
@@ -65,34 +66,37 @@ export function AppRoutes() {
       <RouteLoadBoundary resetKey={routeLocation.pathname} fullPage>
         <Suspense fallback={<AppLoadingScreen />}>
           <Routes>
-            <Route
-              path="/"
-              element={rootPath === "/home"
-                ? <HomePage site={data.site} />
-                : rootPath === "/show"
+            <Route element={<AuthSessionProvider><Outlet /></AuthSessionProvider>}>
+              <Route
+                path="/"
+                element={rootPath === "/home"
+                  ? <HomePage site={data.site} />
+                  : rootPath === "/show"
+                    ? <ShowPage settings={data.site.show} />
+                    : rootPath === "/gallery"
+                      ? <GalleryPage order={data.site.gallery.order} />
+                      : <PublicPageNotFound />}
+              />
+              <Route
+                path="/home"
+                element={data.site.home.enabled === false
+                  ? publicFallback(rootPath)
+                  : <HomePage site={data.site} />}
+              />
+              <Route
+                path="/gallery"
+                element={data.site.gallery.enabled
+                  ? <GalleryPage order={data.site.gallery.order} />
+                  : publicFallback(rootPath)}
+              />
+              <Route
+                path="/show"
+                element={data.site.show.enabled
                   ? <ShowPage settings={data.site.show} />
-                  : rootPath === "/gallery"
-                    ? <GalleryPage order={data.site.gallery.order} />
-                    : <PublicPageNotFound />}
-            />
-            <Route
-              path="/home"
-              element={data.site.home.enabled === false
-                ? publicFallback(rootPath)
-                : <HomePage site={data.site} />}
-            />
-            <Route
-              path="/gallery"
-              element={data.site.gallery.enabled
-                ? <GalleryPage order={data.site.gallery.order} />
-                : publicFallback(rootPath)}
-            />
-            <Route
-              path="/show"
-              element={data.site.show.enabled
-                ? <ShowPage settings={data.site.show} />
-                : publicFallback(rootPath)}
-            />
+                  : publicFallback(rootPath)}
+              />
+              <Route path={`${adminBasePath}/*`} element={<AdminShell siteHeaderName={data.site.header_name} />} />
+            </Route>
             <Route element={<EmbeddedPageLayout enabled={data.embed.enabled} />}>
               <Route
                 path="/embed/home"
@@ -119,7 +123,6 @@ export function AppRoutes() {
                   : publicFallback(rootPath)}
               />
             </Route>
-            <Route path={`${adminBasePath}/*`} element={<AdminShell siteHeaderName={data.site.header_name} />} />
             <Route path="*" element={publicFallback(rootPath)} />
           </Routes>
         </Suspense>

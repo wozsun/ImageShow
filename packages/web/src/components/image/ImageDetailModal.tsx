@@ -23,7 +23,7 @@ import { useGalleryFacets } from "../../lib/api/site-queries.js";
 import {
   createGalleryTaxonomyDisplayFormatter
 } from "../../lib/gallery/card-display.js";
-import { useAuthSessionQuery } from "../../hooks/useAuthSession.js";
+import { useOptionalAuthSessionQuery } from "../../hooks/useAuthSession.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
 import { useDialogFocus } from "../../hooks/useDialogFocus.js";
@@ -126,9 +126,9 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const [editedSnapshot, setEditedSnapshot] =
     useState<EditableImageSnapshot | null>(null);
   const admin = props.admin === true;
-  const authQuery = useAuthSessionQuery();
+  const authQuery = useOptionalAuthSessionQuery();
   const showAdminDetails = admin
-    || authQuery.data?.authenticated === true;
+    || authQuery?.data?.authenticated === true;
   const currentSnapshot = showAdminDetails ? editedSnapshot : null;
   const item = applyEditedSnapshot(props.item, currentSnapshot);
   const adminItem = props.admin === true

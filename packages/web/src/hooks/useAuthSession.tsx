@@ -3,6 +3,8 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
+  useRef,
   useState,
   type ReactNode
 } from "react";
@@ -43,11 +45,16 @@ function isAdminPath(pathname: string) {
 }
 
 /**
- * Owns the SPA's only /auth/me observer and expired-session listener. Public
- * routes render immediately; they probe only when a persisted session hint is
- * present, while every admin route always confirms the authoritative session.
+ * Owns the only /auth/me observer and expired-session listener for normal public
+ * and admin routes. Public routes probe only with a persisted session hint;
+ * admin routes always confirm the session. Embedded routes omit this provider.
  */
 export function AuthSessionProvider({ children }: { children: ReactNode }) {
+  const active = useRef(true);
+  useLayoutEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
   const { pathname } = useLocation();
   const adminRoute = isAdminPath(pathname);
   const [publicProbeRequested, setPublicProbeRequested] = useState(
@@ -64,10 +71,16 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const [refreshCoordinator] = useState(
     () => new AuthSessionRefreshCoordinator()
   );
-  const { refetch } = query;
+  const { refetch: refetchQuery } = query;
+  const refetch = useCallback<typeof refetchQuery>(async (options) => {
+    // Login confirmation and recovery can outlive the route owning this session.
+    if (!active.current) throw new DOMException("会话刷新已取消", "AbortError");
+    return refetchQuery(options);
+  }, [refetchQuery]);
   const recoverAuthSession = useCallback(() => refreshCoordinator.run(
     async () => {
       const result = await refetch({ cancelRefetch: false });
+      if (!active.current) throw new DOMException("会话恢复已取消", "AbortError");
       if (result.error) throw result.error;
       if (!result.data?.authenticated) {
         throw new Error("管理员登录已失效");
@@ -88,6 +101,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const refreshAuth = () => {
+      if (!active.current) return;
       clearCsrfToken();
       clearSessionProbeHint();
       setPublicProbeRequested(true);
@@ -98,18 +112,23 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   }, [recoverAuthSession]);
 
   return (
-    <AuthSessionContext.Provider value={{ query, recoverAuthSession }}>
+    <AuthSessionContext.Provider value={{ query: { ...query, refetch }, recoverAuthSession }}>
       {children}
     </AuthSessionContext.Provider>
   );
 }
 
 export function useAuthSessionQuery() {
-  const session = useContext(AuthSessionContext);
-  if (!session) {
+  const query = useOptionalAuthSessionQuery();
+  if (!query) {
     throw new Error("useAuthSessionQuery must be used inside AuthSessionProvider");
   }
-  return session.query;
+  return query;
+}
+
+/** Public image details remain guest-only outside a session-owning route. */
+export function useOptionalAuthSessionQuery() {
+  return useContext(AuthSessionContext)?.query;
 }
 
 export function useOptionalAuthSessionRecovery() {
