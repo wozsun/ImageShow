@@ -1,8 +1,6 @@
 import { basicTagSelection, basicTagValue, TagFilterError, type TagMatchMode } from "@imageshow/shared/browser";
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
 import {
-  useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ComponentPropsWithoutRef,
@@ -14,6 +12,8 @@ import { OverflowMarqueeText } from "../../components/data-display/OverflowMarqu
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { useMediaQuery } from "../../hooks/useMediaQuery.js";
 import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
+import { useRefreshGlint, useRefreshGlintRun } from "../../hooks/useRefreshGlint.js";
+import { publicFilterOptionState } from "../../lib/gallery/public-filter-options.js";
 import type { GalleryFilters } from "../../lib/gallery/gallery-query.js";
 import {
   boundedHomeRevealIndexes,
@@ -173,20 +173,7 @@ function SectionHeading({
   reduceMotion: boolean;
   action?: ReactNode;
 }) {
-  const [
-    completedRefreshGlintRun,
-    setCompletedRefreshGlintRun
-  ] = useState(
-    () => reduceMotion && !isRefreshing ? refreshGlintRun : 0
-  );
-  const refreshGlintActive = !reduceMotion
-    && refreshGlintRun > completedRefreshGlintRun;
-
-  useEffect(() => {
-    if (reduceMotion && !isRefreshing) {
-      setCompletedRefreshGlintRun(refreshGlintRun);
-    }
-  }, [isRefreshing, reduceMotion, refreshGlintRun]);
+  const glint = useRefreshGlint(refreshGlintRun, isRefreshing, reduceMotion);
 
   return (
     <header className="home-section-heading">
@@ -199,15 +186,14 @@ function SectionHeading({
       <i
         className={[
           "home-section-track-glint",
-          refreshGlintActive ? "is-refresh-glint-active" : ""
+          glint.active && !reduceMotion ? "is-refresh-glint-active" : ""
         ].filter(Boolean).join(" ")}
         aria-hidden="true"
         onAnimationIteration={(event) => {
           if (
             event.animationName === "home-section-track-glint"
-            && !isRefreshing
           ) {
-            setCompletedRefreshGlintRun(refreshGlintRun);
+            glint.finishCycle();
           }
         }}
       />
@@ -223,6 +209,7 @@ export function HomeCatalog({
   isPending,
   isError,
   isRefreshing,
+  availabilityUnverified,
   onFiltersChange,
   tagMode,
   onTagModeChange,
@@ -236,17 +223,14 @@ export function HomeCatalog({
   isPending: boolean;
   isError: boolean;
   isRefreshing: boolean;
+  availabilityUnverified: boolean;
   onFiltersChange: (filters: GalleryFilters) => void;
   tagMode: TagMatchMode;
   onTagModeChange: (mode: TagMatchMode) => void;
   onRetry: () => void;
   onCatalogIntent: () => void;
 }) {
-  const availabilityUnverified = isRefreshing || isError;
-  const wasRefreshingRef = useRef(isRefreshing);
-  const [refreshGlintRun, setRefreshGlintRun] = useState(
-    () => isRefreshing ? 1 : 0
-  );
+  const refreshGlintRun = useRefreshGlintRun(isRefreshing);
   const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const themeSet = new Set(selectedSlugs(filters.theme));
   const tagSet = new Set(basicTagSelection(filters.tag).selected);
@@ -259,8 +243,6 @@ export function HomeCatalog({
     stats?.brightnesses.map((item) => [item.brightness, item.image_count]) ?? []
   );
   const themes = homeThemesWithUnsetLast(stats?.themes ?? []);
-  const isUnavailable = (selected: boolean, count: number) =>
-    !selected && count === 0;
   const themeRevealIndexes = boundedHomeRevealIndexes(
     themes,
     themeSet,
@@ -279,14 +261,6 @@ export function HomeCatalog({
     availabilityUnverified,
     homeRevealItemLimits.authors
   );
-
-  useLayoutEffect(() => {
-    const wasRefreshing = wasRefreshingRef.current;
-    wasRefreshingRef.current = isRefreshing;
-    if (!wasRefreshing && isRefreshing) {
-      setRefreshGlintRun((current) => current + 1);
-    }
-  }, [isRefreshing]);
 
   const updateFilter = (key: keyof GalleryFilters, value: string) => {
     onFiltersChange({ ...filters, [key]: value });
@@ -376,15 +350,9 @@ export function HomeCatalog({
                     <AxisButton
                       key={value || "all"}
                       selected={filters.device === value}
-                      locked={
-                        availabilityUnverified
-                        && value !== ""
-                        && filters.device !== value
-                      }
-                      disabled={value !== "" && isUnavailable(
-                        filters.device === value,
-                        deviceCounts.get(value) ?? 0
-                      )}
+                      {...publicFilterOptionState({ selected: filters.device === value,
+                        count: value ? deviceCounts.get(value) : undefined,
+                        unverified: availabilityUnverified, unrestricted: value === "" })}
                       label={deviceLabels[value]}
                       onClick={() => updateFilter("device", value)}
                     />
@@ -398,15 +366,9 @@ export function HomeCatalog({
                     <AxisButton
                       key={value || "all"}
                       selected={filters.brightness === value}
-                      locked={
-                        availabilityUnverified
-                        && value !== ""
-                        && filters.brightness !== value
-                      }
-                      disabled={value !== "" && isUnavailable(
-                        filters.brightness === value,
-                        brightnessCounts.get(value) ?? 0
-                      )}
+                      {...publicFilterOptionState({ selected: filters.brightness === value,
+                        count: value ? brightnessCounts.get(value) : undefined,
+                        unverified: availabilityUnverified, unrestricted: value === "" })}
                       label={brightnessLabels[value]}
                       onClick={() => updateFilter("brightness", value)}
                     />
@@ -434,8 +396,9 @@ export function HomeCatalog({
               <SelectorOptions className="home-theme-options">
                 {themes.map((item, index) => {
                   const selected = themeSet.has(item.slug);
-                  const disabled = isUnavailable(selected, item.image_count);
-                  const locked = availabilityUnverified && !selected;
+                  const { disabled, locked } = publicFilterOptionState({
+                    selected, count: item.image_count, unverified: availabilityUnverified
+                  });
                   const label = facetLabel(item);
                   const revealIndex = themeRevealIndexes.get(item.slug);
                   return (
@@ -524,8 +487,9 @@ export function HomeCatalog({
                 <SelectorOptions className="home-tag-options">
                   {stats.tags.map((item) => {
                     const selected = tagSet.has(item.slug);
-                    const disabled = isUnavailable(selected, item.image_count);
-                    const locked = availabilityUnverified && !selected;
+                    const { disabled, locked } = publicFilterOptionState({
+                      selected, count: item.image_count, unverified: availabilityUnverified
+                    });
                     const label = facetLabel(item);
                     const revealIndex = tagRevealIndexes.get(item.slug);
                     return (
@@ -584,8 +548,9 @@ export function HomeCatalog({
                 <SelectorOptions className="home-author-options">
                   {stats.authors.map((item) => {
                     const selected = authorSet.has(item.slug);
-                    const disabled = isUnavailable(selected, item.image_count);
-                    const locked = availabilityUnverified && !selected;
+                    const { disabled, locked } = publicFilterOptionState({
+                      selected, count: item.image_count, unverified: availabilityUnverified
+                    });
                     const label = facetLabel(item);
                     const revealIndex = authorRevealIndexes.get(item.slug);
                     return (

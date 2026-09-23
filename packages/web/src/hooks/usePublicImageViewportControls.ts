@@ -13,7 +13,6 @@ import {
   mobileViewportMediaQuery,
   useMediaQuery
 } from "./useMediaQuery.js";
-import { useDismissiblePanel } from "./useDismissiblePanel.js";
 import {
   isPublicNavigationInteracting,
   publicNavigationTopRevealThreshold
@@ -125,9 +124,6 @@ function usePublicImageNavigationVisibility(
       // 等同一次焦点转移完成，避免读取到仍在导航内的旧焦点。
       queueMicrotask(restartAutoHide);
     };
-    const onSelectionChange = () => {
-      if (navigationStack.contains(document.activeElement)) restartAutoHide();
-    };
     const observer = new MutationObserver(restartAutoHide);
     observer.observe(navigationStack, {
       attributes: true,
@@ -140,7 +136,6 @@ function usePublicImageNavigationVisibility(
     navigationStack.addEventListener("focusout", onFocusOut);
     document.addEventListener("click", restartAutoHide, { capture: true, passive: true });
     document.addEventListener("visibilitychange", restartAutoHide);
-    document.addEventListener("selectionchange", onSelectionChange);
     restartAutoHide();
     return () => {
       disposed = true;
@@ -152,7 +147,6 @@ function usePublicImageNavigationVisibility(
       navigationStack.removeEventListener("focusout", onFocusOut);
       document.removeEventListener("click", restartAutoHide, true);
       document.removeEventListener("visibilitychange", restartAutoHide);
-      document.removeEventListener("selectionchange", onSelectionChange);
     };
   }, [autoHideAfterMs, lockedOpen, paused, stage, toolbarRef]);
 
@@ -160,7 +154,7 @@ function usePublicImageNavigationVisibility(
     if (paused) return;
     const toolbar = toolbarRef.current;
     if (!toolbar) return;
-    // 属性栏的 Select / Facet 菜单通过 Portal 渲染在 body；主导航菜单
+    // 工具栏的下拉菜单通过 Portal 渲染在 body；主导航菜单
     // 由 lockedOpen 暂停采样，二者都保持触发器与浮层处于同一可见状态。
     const menuOpen = Boolean(
       toolbar.querySelector('[aria-expanded="true"]')
@@ -281,32 +275,15 @@ export function usePublicImageViewportControls({
   paused?: boolean;
   movement?: "page" | "manual";
 } = {}) {
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [headerMenuExpanded, setHeaderMenuExpanded] = useState(false);
   const toolbarRef = useRef<HTMLElement | null>(null);
-  const clearFiltersRef = useRef<HTMLButtonElement | null>(null);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
 
   useLayoutEffect(() => {
     if (!headerPresent) setHeaderMenuExpanded(false);
   }, [headerPresent]);
 
-  const disclosure = useDismissiblePanel({
-    open: filtersOpen,
-    onOpenChange: setFiltersOpen,
-    enabled: mobileLayout,
-    resetKey: mobileLayout,
-    auxiliarySurfaceRef: clearFiltersRef
-  });
-  const toggleFilters = useCallback(() => {
-    disclosure.setOpen(!filtersOpen, filtersOpen
-      ? { restoreFocus: true }
-      : undefined);
-  }, [disclosure.setOpen, filtersOpen]);
-
-  const mobileFiltersOpen = mobileLayout && filtersOpen;
-  const navigationLockedOpen = mobileFiltersOpen
-    || (headerPresent && headerMenuExpanded);
+  const navigationLockedOpen = headerPresent && headerMenuExpanded;
   const {
     advanceManual: advanceManualNavigation,
     headerVisible,
@@ -327,17 +304,9 @@ export function usePublicImageViewportControls({
   return {
     advanceManualNavigation,
     backToTopVisible,
-    filterPanelHidden: disclosure.panelHidden,
-    filterPanelRef: disclosure.panelRef,
-    filterMenuDismissSignal: disclosure.menuDismissSignal,
-    filterToggleRef: disclosure.triggerRef,
-    clearFiltersRef,
-    dismissFilterMenus: disclosure.dismissMenus,
-    filtersOpen,
     headerVisible,
     onHeaderMenuExpandedChange: setHeaderMenuExpanded,
     resetManualNavigation,
-    toggleFilters,
     toolbarHeight,
     toolbarRef,
     toolbarVisible,

@@ -4,7 +4,8 @@
  * The bootstrap canvas is intentionally independent from either application
  * domain: before React owns the route, every entry point stays dark.
  *
- * Public pages and admin pages have separate source tokens. Shared controls
+ * Browse controls and dark admin controls share a fixed dark palette. Other
+ * public and admin roles have separate source tokens. Shared controls
  * consume the context aliases at the end of this file; the lazy admin color
  * sheet remaps those aliases only after SiteHead selects the admin domain.
  *
@@ -12,6 +13,25 @@
  * boundary; page styles only consume the tokens.
  */
 :root {
+  /* Shared by public browse buttons and the admin dark branch. */
+  --color-dark-canvas: #090d13;
+  --color-dark-surface-muted: #1a1f26;
+  --color-dark-border-default: #282e36;
+  --color-dark-warning-text: #f2cc60;
+  --color-dark-scrollbar: rgba(201, 209, 217, .32);
+  --color-dark-scrollbar-active: rgba(201, 209, 217, .56);
+  --color-dark-control-text-primary: #d8dfe7;
+  --color-dark-control-text-secondary: #a5aeb9;
+  --color-dark-control-text-on-action: #fff;
+  --color-dark-control-surface: #10151c;
+  --color-dark-control-surface-hover: #162638;
+  --color-dark-control-surface-subtle-hover: #191e25;
+  --color-dark-control-border: #636c76;
+  --color-dark-control-border-hover: #6e7681;
+  --color-dark-control-border-selected: #619de7;
+  --color-dark-control-action: #1f6feb;
+  --color-dark-control-action-text: #79b8ff;
+
   /* Bootstrap */
   --bootstrap-color-canvas: #070b15;
   --bootstrap-color-text: #f2f7ff;
@@ -44,7 +64,6 @@
   /* Public foundations */
   --public-color-canvas: #070b15;
   --public-color-surface-default: #142036;
-  --public-color-surface-raised: #1c2a42;
   --color-public-text-primary: #f2f7ff;
   --public-color-text-secondary: #afbdd0;
   --public-color-loading-text: rgba(175, 189, 208, .64);

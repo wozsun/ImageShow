@@ -25,7 +25,7 @@ export function parseFacetSlug(value: string) {
     : null;
 }
 
-function matchFacetText(value: string, query: string): FacetTextMatch | null {
+export function matchFacetText(value: string, query: string): FacetTextMatch | null {
   const normalizedValue = value.toLowerCase();
   const start = normalizedValue.indexOf(query);
   if (start >= 0) {
@@ -51,20 +51,22 @@ function matchFacetText(value: string, query: string): FacetTextMatch | null {
 export function facetSuggestions(
   options: readonly FacetOption[],
   query: string,
-  excludedSlugs: ReadonlySet<string> = new Set()
+  excludedSlugs: ReadonlySet<string> = new Set(),
+  matchName: typeof matchFacetText = matchFacetText,
+  limit = 50
 ) {
   const normalizedQuery = normalizeFacetSearchQuery(query);
   if (!normalizedQuery) return [];
 
-  // Exact, contiguous and subsequence matches retain vocabulary order within each tier.
-  const matches: FacetSuggestion[][] = [[], [], []];
+  // Literal tiers precede phonetic matches; vocabulary order is stable within each tier.
+  const matches: FacetSuggestion[][] = [[], [], [], []];
   for (const option of options) {
     if (excludedSlugs.has(option.slug)) continue;
     const slugMatch = matchFacetText(option.slug, normalizedQuery);
-    const displayNameMatch = matchFacetText(option.display_name, normalizedQuery);
-    const rank = Math.min(slugMatch?.rank ?? 3, displayNameMatch?.rank ?? 3);
+    const displayNameMatch = matchName(option.display_name, normalizedQuery);
+    const rank = Math.min(slugMatch?.rank ?? Infinity, displayNameMatch?.rank ?? Infinity);
     const tier = matches[rank];
-    if (tier && tier.length < 50) tier.push({ ...option, slugMatch, displayNameMatch });
+    if (tier && tier.length < limit) tier.push({ ...option, slugMatch, displayNameMatch });
   }
-  return matches.flat().slice(0, 50);
+  return matches.flat().slice(0, limit);
 }

@@ -221,8 +221,6 @@ export async function createPublicNavigationHarness(
   let focused = false;
   let keyboardFocus = false;
   let activeElement: HTMLElement | null = null;
-  let readOnlyLink: HTMLElement | null = null;
-  let readOnlyLinkSelection = false;
   let toolbarVisible = false;
   let filtersOpen = false;
   let setPlaying: (playing: boolean) => void;
@@ -259,14 +257,6 @@ export async function createPublicNavigationHarness(
   }
   Object.defineProperty(document, "activeElement", { configurable: true, get: () => activeElement });
   Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
-  Object.defineProperty(document, "getSelection", {
-    configurable: true,
-    value: () => ({
-      anchorNode: readOnlyLink?.firstChild ?? readOnlyLink,
-      focusNode: readOnlyLink?.firstChild ?? readOnlyLink,
-      isCollapsed: !readOnlyLinkSelection
-    })
-  });
   const globals = {
     window, self: window, document, navigator: domWindow.navigator,
     Node: domWindow.Node, Element: domWindow.Element, HTMLElement: domWindow.HTMLElement,
@@ -299,12 +289,13 @@ export async function createPublicNavigationHarness(
     setPlaying = updatePlaying;
     const [paused, updatePaused] = React.useState(false);
     setPaused = updatePaused;
+    const [filterActive, setFilterActive] = React.useState(false);
     const controls = usePublicImageViewportControls({
-      movement, headerPresent, paused,
+      movement, headerPresent, paused: paused || filterActive,
       autoHideAfterMs: movement === "manual" && playing ? publicNavigationAutoHideDelayMs : undefined
     });
     toolbarVisible = controls.toolbarVisible;
-    filtersOpen = controls.filtersOpen;
+    filtersOpen = filterActive;
     advanceManualNavigation = controls.advanceManualNavigation;
     return React.createElement("div", {
       className: "public-navigation-stack",
@@ -334,40 +325,15 @@ export async function createPublicNavigationHarness(
         if (element) element.getBoundingClientRect = () => ({ height: 36 } as DOMRect);
       }
     }, React.createElement("button", {
-      "aria-expanded": controls.filtersOpen,
-      onClick: controls.toggleFilters,
+      "aria-expanded": filterActive,
+      onClick: () => setFilterActive((current) => !current),
       ref: (element: HTMLButtonElement | null) => {
-        controls.filterToggleRef.current = element;
         if (!element) return;
         element.getBoundingClientRect = () => ({ bottom: 96, height: 36 } as DOMRect);
         element.focus = () => { focused = true; activeElement = element; };
         element.blur = () => { focused = false; activeElement = null; };
       }
-    }, "筛选"), React.createElement("div", {
-      ref: controls.filterPanelRef,
-      "aria-hidden": controls.filterPanelHidden,
-      inert: controls.filterPanelHidden
-    }), React.createElement("span", {
-      ref: (element: HTMLElement | null) => {
-        readOnlyLink = element;
-        if (!element) return;
-        const nativeMatches = element.matches.bind(element);
-        Object.defineProperty(element, "matches", {
-          configurable: true,
-          value: (selector: string) => selector === ":focus-visible"
-            ? activeElement === element && keyboardFocus
-            : nativeMatches(selector)
-        });
-        element.blur = () => {
-          focused = false;
-          activeElement = null;
-          readOnlyLinkSelection = false;
-        };
-      },
-      role: "textbox",
-      tabIndex: 0,
-      "aria-readonly": "true"
-    }, "https://example.com/random")));
+    }, "筛选")));
   }
   const root = createRoot(document.getElementById("root")!);
   unmount = async () => { await React.act(async () => root.unmount()); };
@@ -409,17 +375,6 @@ export async function createPublicNavigationHarness(
     hidden: async (value: boolean) => { hidden = value; await dispatch(document, "visibilitychange"); },
     click: () => dispatch(document.body, "click"),
     toggleFilters: () => dispatch(navigation.querySelector("button")!, "click"),
-    readOnlySelection: async (selected: boolean) => {
-      assert.ok(readOnlyLink);
-      readOnlyLinkSelection = selected;
-      if (activeElement !== readOnlyLink) {
-        focused = true;
-        keyboardFocus = false;
-        activeElement = readOnlyLink;
-        await dispatch(readOnlyLink, "focusin");
-      }
-      await dispatch(document, "selectionchange");
-    },
     manual: async (delta: number, pointerType?: string) => {
       await React.act(async () => advanceManualNavigation(delta, pointerType));
     },

@@ -18,7 +18,8 @@ import { PublicStarfield } from "../../components/layout/PublicStarfield.js";
 // 当前详情共享 JS + CSS 实测压缩后不足 6 KiB；画廊首击直接使用，继续随路由
 // 加载可避免新增请求和 Suspense 边界。
 import { PublicImageDetail } from "../../components/image/PublicImageDetail.js";
-import { PublicImageOrderButton } from "../../components/navigation/PublicImageOrderButton.js";
+import { PublicFilterDialog } from "../../components/image/filter/PublicFilterDialog.js";
+import { usePublicFilterDialog } from "../../hooks/usePublicFilterDialog.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import {
   createGalleryTaxonomyDisplayFormatter
@@ -48,6 +49,8 @@ import {
 } from "../../lib/gallery/gallery-query.js";
 import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
 import { PublicImageNavigation } from "../../components/navigation/PublicImageNavigation.js";
+import { PublicImageOrderControl } from "../../components/navigation/PublicImageToolbar.js";
+import { mobileViewportMediaQuery, useMediaQuery } from "../../hooks/useMediaQuery.js";
 import { useGalleryDataWindow } from "./useGalleryDataWindow.js";
 import "../../styles/public-core.css";
 import "../../styles/gallery.css";
@@ -60,12 +63,15 @@ export function GalleryPage({
   embedded?: boolean;
   order: GalleryOrder;
 }) {
+  const mobile = useMediaQuery(mobileViewportMediaQuery);
   const [selected, setSelected] = useState<GalleryImageCard | null>(null);
   const [pinnedImageId, setPinnedImageId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { key: navigationKey } = useLocation();
   const navigationType = useNavigationType();
   const browseRoute = useImageBrowseRoute();
+  const filterDialog = usePublicFilterDialog(browseRoute);
+  const dialogOpen = Boolean(selected) || filterDialog.active;
   const {
     params: routeSearchParams,
     updateSearchParams: setRouteSearchParams,
@@ -78,7 +84,7 @@ export function GalleryPage({
   const order = showOrderFromSearchParams(routeSearchParams, defaultOrder);
   const navigationControls = usePublicImageViewportControls({
     headerPresent: !embedded,
-    paused: Boolean(selected)
+    paused: dialogOpen
   });
   const { backToTopVisible, headerVisible, toolbarHeight, toolbarVisible } = navigationControls;
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -161,7 +167,7 @@ export function GalleryPage({
   const initialLoading = !filterError && (!filtersReady || galleryData.initialLoading);
   const nextPageLoading = filtersReady && galleryData.nextPageLoading;
   const loading = initialLoading || nextPageLoading;
-  const showBackToTop = backToTopVisible && !selected;
+  const showBackToTop = backToTopVisible && !dialogOpen;
 
   const openDetail = useCallback((
     card: GalleryImageCard,
@@ -229,7 +235,7 @@ export function GalleryPage({
   return (
     <GalleryImageRuntime
       dataWindowMetrics={galleryData.debugMetrics}
-      detailOpen={Boolean(selected)}
+      detailOpen={dialogOpen}
       resetKey={imageQuery}
     >
       <main
@@ -245,10 +251,14 @@ export function GalleryPage({
           <PublicStarfield />
         </div>
         <PublicImageNavigation
+          floatingControlsHidden={dialogOpen}
           embedded={embedded}
           animateEntrance={shouldAnimateNavigation}
           route={browseRoute}
           controls={navigationControls}
+          filterDialog={filterDialog}
+          order={order}
+          onOrderChange={(next) => setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { order: next }))}
         />
         <div className="gallery-toolbar-spacer" aria-hidden="true" />
         <section ref={galleryRef} className="gallery">
@@ -292,7 +302,7 @@ export function GalleryPage({
         {nextPageLoading && <p className="gallery-loading">加载中</p>}
         <div className="gallery-floating-controls public-floating-controls"
           data-public-navigation-visible={headerVisible || toolbarVisible}
-          hidden={Boolean(selected)}>
+          hidden={dialogOpen}>
           <button
             type="button"
             className={`public-round-control pressable gallery-back-to-top${showBackToTop ? " is-visible" : ""}`}
@@ -307,9 +317,14 @@ export function GalleryPage({
           >
             <span className="public-round-surface"><Icon name="arrow-up-line" /></span>
           </button>
-          <PublicImageOrderButton order={order}
-            onChange={(next) => setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { order: next }))} />
+          {mobile && <PublicImageOrderControl order={order} compact
+            onChange={(next) => setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { order: next }))} />}
         </div>
+        {filterDialog.session && <PublicFilterDialog
+          filters={filterDialog.session.filters} unresolvedTags={filterDialog.session.unresolvedTags}
+          facets={facets} facetsLoading={browseRoute.facetsLoading} facetsError={browseRoute.facetsError}
+          retryVocabulary={browseRoute.retryVocabulary} returnFocusRef={filterDialog.triggerRef}
+          onClose={filterDialog.close} onApply={filterDialog.applyAfterClose} view="gallery" />}
         {selected && (
           <PublicImageDetail
             card={selected}

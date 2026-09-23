@@ -1,5 +1,7 @@
 import { readableFilterSearch } from "@imageshow/shared/browser";
 import { useImageBrowseRoute } from "../../hooks/useImageBrowseRoute.js";
+import { usePublicFilterDialog } from "../../hooks/usePublicFilterDialog.js";
+import { PublicFilterDialog } from "../../components/image/filter/PublicFilterDialog.js";
 import { TagFilterErrorState } from "../../components/feedback/TagFilterErrorState.js";
 import {
   useCallback,
@@ -30,7 +32,7 @@ import {
   updateImageBrowseSearchParams
 } from "../../lib/gallery/gallery-query.js";
 import { publicNavigationAutoHideDelayMs } from "../../lib/ui/public-navigation.js";
-import { ShowControls } from "./ShowControls.js";
+import { ShowPlaybackButton, ShowMobileControls, ShowSizeControls, ShowToolbarControls } from "./ShowControls.js";
 import type { ShowImage } from "./show-layout.js";
 import { useShowData } from "./useShowData.js";
 import { showInitialBatchLimit } from "./show-browse.js";
@@ -92,6 +94,7 @@ export function ShowPage({
   settings: SiteShowSettings;
 }) {
   const browseRoute = useImageBrowseRoute();
+  const filterDialog = usePublicFilterDialog(browseRoute);
   const { params: routeSearchParams, updateSearchParams: setRouteSearchParams, filters, updateFilter, ready: filtersReady, error: filterError } = browseRoute;
   const routeQuery = routeSearchParams.toString();
   const order = useMemo(() => showOrderFromSearchParams(
@@ -124,9 +127,9 @@ export function ShowPage({
   const densityCancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const [selected, setSelected] = useState<ShowImage | null>(null);
   const densityWarningOpen = pendingWaterfallDensity !== null;
-  const dialogOpen = Boolean(selected) || densityWarningOpen;
+  const dialogOpen = Boolean(selected) || densityWarningOpen || filterDialog.active;
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
-  const decreaseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const sizeControlRef = useRef<HTMLButtonElement | null>(null);
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const data = useShowData(filters, sourceKey, order, showInitialBatchLimit({
     width: window.innerWidth, height: window.innerHeight, mode: scene,
@@ -279,10 +282,38 @@ export function ShowPage({
       } as CSSProperties}
     >
       <PublicImageNavigation
+        floatingControlsHidden={dialogOpen}
+        mobileTrailingControls={<ShowMobileControls scene={scene} getSceneHref={getShowModeHref}
+          onRunningChange={setRunning} reducedMotion={reducedMotion} running={running && !reducedMotion} />}
         embedded={embedded}
         animateEntrance={shouldAnimateNavigation}
         route={browseRoute}
         controls={navigationControls}
+        filterDialog={filterDialog}
+        order={order}
+        mode={scene}
+        onOrderChange={(nextOrder) => setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { order: nextOrder }))}
+        viewControls={<><ShowToolbarControls scene={scene} getSceneHref={getShowModeHref} />
+          <ShowPlaybackButton onRunningChange={setRunning} reducedMotion={reducedMotion} running={running && !reducedMotion} />
+        </>}
+        leadingControls={<ShowSizeControls
+          sizeControlRef={sizeControlRef}
+          largerDisabled={largerDisabled}
+          smallerDisabled={smallerDisabled}
+          sizeDescription={scene === "waterfall" ? waterfallSizeDescription : floatSizeDescription}
+          onDecreaseSize={() => {
+            if (scene === "float") setFloatSizeIndex((current) => clampShowFloatSizeIndex(current - 1));
+            else requestWaterfallColumns(smallerShowWaterfallImages(waterfallColumns, waterfallDensity));
+          }}
+          onIncreaseSize={() => {
+            if (scene === "float") setFloatSizeIndex((current) => clampShowFloatSizeIndex(current + 1));
+            else requestWaterfallColumns(largerShowWaterfallImages(waterfallColumns, waterfallDensity));
+          }}
+          onReset={() => {
+            if (scene === "waterfall") setWaterfallColumns(waterfallDensity.defaultColumns);
+            else setFloatSizeIndex(defaultShowFloatSizeIndex);
+          }}
+        />}
       />
       <ShowPixiStage
         dataKey={data.committedKey}
@@ -319,49 +350,6 @@ export function ShowPage({
               : "上下拖动；点按 ± 调整尺寸"}
           </span>
         </p>
-        <ShowControls
-          decreaseButtonRef={decreaseButtonRef}
-          largerDisabled={largerDisabled}
-          onDecreaseSize={() => {
-            if (scene === "float") {
-              setFloatSizeIndex((current) => clampShowFloatSizeIndex(current - 1));
-              return;
-            }
-            const next = smallerShowWaterfallImages(
-              waterfallColumns,
-              waterfallDensity
-            );
-            requestWaterfallColumns(next);
-          }}
-          onIncreaseSize={() => {
-            if (scene === "float") {
-              setFloatSizeIndex((current) => clampShowFloatSizeIndex(current + 1));
-              return;
-            }
-            requestWaterfallColumns(largerShowWaterfallImages(
-              waterfallColumns,
-              waterfallDensity
-            ));
-          }}
-          onOrderChange={(nextOrder) => setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { order: nextOrder }))}
-          onReset={() => {
-            if (scene === "waterfall") {
-              setWaterfallColumns(waterfallDensity.defaultColumns);
-            } else {
-              setFloatSizeIndex(defaultShowFloatSizeIndex);
-            }
-          }}
-          onRunningChange={setRunning}
-          getSceneHref={getShowModeHref}
-          order={order}
-          reducedMotion={reducedMotion}
-          running={running && !reducedMotion}
-          scene={scene}
-          sizeDescription={scene === "waterfall"
-            ? waterfallSizeDescription
-            : floatSizeDescription}
-          smallerDisabled={smallerDisabled}
-        />
         {Boolean(filterError) && (
           <div className="show-query-state">
             <TagFilterErrorState error={filterError} onClear={() => updateFilter("tag", "")} onRetry={browseRoute.retryVocabulary} />
@@ -379,13 +367,18 @@ export function ShowPage({
           <p className="show-empty">暂无图片</p>
         )}
       </ShowPixiStage>
+      {filterDialog.session && <PublicFilterDialog
+        filters={filterDialog.session.filters} unresolvedTags={filterDialog.session.unresolvedTags}
+        facets={browseRoute.facets} facetsLoading={browseRoute.facetsLoading} facetsError={browseRoute.facetsError}
+        retryVocabulary={browseRoute.retryVocabulary} returnFocusRef={filterDialog.triggerRef}
+        onClose={filterDialog.close} onApply={filterDialog.applyAfterClose} view="show" />}
       {pendingWaterfallDensity !== null && (
         <DialogFrame
           className="modal show-density-dialog"
           titleId="show-density-warning-title"
           descriptionId="show-density-warning-description"
           initialFocusRef={densityCancelButtonRef}
-          returnFocusRef={decreaseButtonRef}
+          returnFocusRef={sizeControlRef}
           onClose={() => setPendingWaterfallDensity(null)}
         >
           {({ requestClose }) => (

@@ -1,4 +1,4 @@
-import { parseTagFilter, readableFilterSearch, tagExpressionValues, randomQueryLimits, TagFilterError, type RandomImageSize } from "@imageshow/shared/browser";
+import { parseTagFilter, tagFilterValues, readableFilterSearch, tagExpressionValues, randomQueryLimits, TagFilterError, type RandomImageSize, type TagFilterValue } from "@imageshow/shared/browser";
 import type { RandomMode } from "../types.js";
 
 export function buildRandomUrl(input: {
@@ -6,13 +6,13 @@ export function buildRandomUrl(input: {
   device: string;
   brightness: string;
   theme: string;
-  tag: string;
+  tag: TagFilterValue;
   author: string;
   mode?: RandomMode;
   size?: RandomImageSize;
 }) {
   const params = new URLSearchParams();
-  const tag = parseTagFilter(input.tag ? [input.tag] : []);
+  const tag = parseTagFilter(tagFilterValues(input.tag), "mixed");
   let submittedCount = tag.submittedCount;
   if (input.device) params.set("device", input.device);
   if (input.brightness !== "random") params.set("brightness", input.brightness);

@@ -403,81 +403,6 @@ textarea.is-changed,
 .tag-input-control.is-changed {
   --tag-input-nav-surface: var(--admin-color-control-changed-surface);
 }
-.tag-input-scroll-window {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 6px;
-  padding: 0 4px;
-
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  scroll-behavior: smooth;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-.tag-input-scroll-window::-webkit-scrollbar { display: none; }
-.tag-input-nav {
-  position: absolute;
-  z-index: 2;
-  top: 1px;
-  bottom: 1px;
-  width: 22px;
-  min-width: 22px;
-  min-height: 0;
-  height: auto;
-  padding: 0;
-  border: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--admin-color-text-secondary);
-  cursor: pointer;
-}
-.tag-input-nav.is-backward {
-  left: 1px;
-  border-radius: 5px 0 0 5px;
-  background: linear-gradient(
-    90deg,
-    var(--tag-input-nav-surface) 58%,
-    transparent
-  );
-}
-.tag-input-nav.is-forward {
-  right: 1px;
-  border-radius: 0 5px 5px 0;
-  background: linear-gradient(
-    270deg,
-    var(--tag-input-nav-surface) 58%,
-    transparent
-  );
-}
-.tag-input-nav:hover {
-  color: var(--admin-color-text-primary);
-}
-.tag-input-nav:disabled {
-  visibility: hidden;
-  pointer-events: none;
-}
-.tag-input-nav:focus-visible {
-  outline: 1px solid var(--color-native-focus-outline);
-  outline-offset: -2px;
-}
-.tag-input-nav > .app-icon {
-  width: 12px;
-  height: 12px;
-  flex-basis: 12px;
-}
-.tag-input-nav.is-backward > .app-icon {
-  transform: translateX(-4px) rotate(90deg);
-}
-.tag-input-nav.is-forward > .app-icon {
-  transform: translateX(4px) rotate(-90deg);
-}
 .tag-input-field {
   flex: 1 1 80px;
   min-width: 80px;
@@ -630,7 +555,6 @@ button.danger-button.is-subtle.is-armed {
 
 @media (prefers-reduced-motion: reduce) {
   .edit-modal form { animation: none; }
-  .tag-input-scroll-window { scroll-behavior: auto; }
 }
 .account-form {
   max-width: 420px;

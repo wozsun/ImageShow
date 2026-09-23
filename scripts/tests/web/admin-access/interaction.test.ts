@@ -1154,7 +1154,7 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
     assert.equal(search.value, "", "重新展开必须使用已清空的搜索词");
     assert.match(
       document.querySelector(".facet-search-results")?.textContent ?? "",
-      /输入关键字搜索主题/
+      /输入名称、slug 或拼音搜索主题/
     );
     await React.act(async () => {
       search!.focus();
@@ -1255,12 +1255,9 @@ test("[Web/后台访问] 后台筛选布局按容器宽度选择字段分组", (
   assert.equal(isImageAdminDoubleRowWidth(947.01), false);
   assert.equal(isImageAdminDoubleRowWidth(948), false);
 });
-test("[Web/后台访问] 公开图库与后台图片筛选在清空动作临界视口真实挂载并保持无障碍名称与搜索交互边界", async () => {
+test("[Web/后台访问] 后台图片筛选在临界视口保持清空、无障碍名称与搜索交互", async () => {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
-  const { PublicImageToolbar } = await import(
-    "../../../../packages/web/src/components/navigation/PublicImageToolbar.tsx"
-  );
   const { ImageAdminFilters } = await import(
     "../../../../packages/web/src/pages/admin/images/ImageAdminFilters.tsx"
   );
@@ -1271,7 +1268,6 @@ test("[Web/后台访问] 公开图库与后台图片筛选在清空动作临界�
     tag: "",
     author: ""
   };
-  const randomUrl = "https://img.example/random";
   const facets = {
     themes: [{ slug: "night", display_name: "夜景" }],
     tags: [{ slug: "blue", display_name: "蓝色" }],
@@ -1283,9 +1279,6 @@ test("[Web/后台访问] 公开图库与后台图片筛选在清空动作临界�
     authors: facets.authors
   };
   const fieldIds = [
-    "gallery-theme-facet",
-    "gallery-tag-facet",
-    "gallery-author-facet",
     "admin-image-theme-facet",
     "admin-image-tag-facet",
     "admin-image-author-facet"
@@ -1452,57 +1445,21 @@ test("[Web/后台访问] 公开图库与后台图片筛选在清空动作临界�
     const container = document.getElementById("root");
     assert.ok(container);
     const root = createRoot(container);
-    let galleryClearCalls = 0;
     let adminClearCalls = 0;
-    const galleryFilterChanges: string[] = [];
     const adminFilterChanges: string[] = [];
-    let setGalleryHarnessFilters: ((next: typeof filters) => void) | undefined;
     let setAdminHarnessFilters: ((next: typeof filters) => void) | undefined;
     let setAdminHarnessDisabled: ((next: boolean) => void) | undefined;
     try {
       const mobileLayout = window.matchMedia("(max-width: 760px)").matches;
       assert.equal(mobileLayout, width === 760);
       function Harness() {
-        const [galleryFilters, setGalleryFilters] = React.useState(filters);
         const [adminFilters, setAdminFilters] = React.useState(filters);
         const [adminDisabled, setAdminDisabled] = React.useState(false);
-        const [galleryDismissSignal, setGalleryDismissSignal] = React.useState(0);
-        const toolbarRef = React.useRef<HTMLElement | null>(null);
-        const galleryToggleRef = React.useRef<HTMLButtonElement | null>(null);
-        const galleryClearRef = React.useRef<HTMLButtonElement | null>(null);
-        const galleryPanelRef = React.useRef<HTMLDivElement | null>(null);
-        setGalleryHarnessFilters = setGalleryFilters;
         setAdminHarnessFilters = setAdminFilters;
         setAdminHarnessDisabled = setAdminDisabled;
         return React.createElement(
           "main",
           null,
-          React.createElement(PublicImageToolbar, {
-            animateEntrance: false,
-            filters: galleryFilters,
-            facets,
-            randomUrl,
-            filtersOpen: mobileLayout,
-            filterPanelHidden: mobileLayout ? false : undefined,
-            filterMenuDismissSignal: galleryDismissSignal,
-            toolbarVisible: true,
-            toolbarRef,
-            filterToggleRef: galleryToggleRef,
-            clearFiltersRef: galleryClearRef,
-            filterPanelRef: galleryPanelRef,
-            toggleFilters() {},
-            dismissFilterMenus() {
-              setGalleryDismissSignal((current) => current + 1);
-            },
-            onFilterChange(key, value) {
-              galleryFilterChanges.push(`${key}:${value}`);
-              setGalleryFilters((current) => ({ ...current, [key]: value }));
-            },
-            onClearFilters() {
-              galleryClearCalls += 1;
-              setGalleryFilters({ ...filters });
-            }
-          }),
           React.createElement(ImageAdminFilters, {
             value: adminFilters,
             vocabulary,
@@ -1535,146 +1492,22 @@ test("[Web/后台访问] 公开图库与后台图片筛选在清空动作临界�
         });
       }
 
-      const galleryClear = container.querySelector<HTMLButtonElement>(
-        ".gallery-filter-clear"
-      );
       const adminClear = container.querySelector<HTMLButtonElement>(
         ".image-list-filter-clear"
       );
-      assert.ok(galleryClear && adminClear);
-      assert.equal(galleryClear.disabled, true);
+      assert.ok(adminClear);
       assert.equal(adminClear.disabled, true);
-      assert.equal(galleryClear.textContent?.trim(), mobileLayout ? "清空" : "清空筛选");
-      assert.equal(adminClear.textContent?.trim(), "清空");
-      assert.equal(
-        container.querySelector(".generated-link-field code > span")?.textContent,
-        randomUrl
-      );
-      const randomLinkViewport = container.querySelector<HTMLElement>(
-        ".generated-link-value"
-      );
-      const randomLinkText = container.querySelector<HTMLElement>(
-        ".generated-link-text"
-      );
-      assert.ok(randomLinkViewport && randomLinkText);
-      let randomLinkAvailableWidth = 120;
-      let randomLinkContentWidth = 240;
-      Object.defineProperty(randomLinkViewport, "clientWidth", {
-        configurable: true,
-        get: () => randomLinkAvailableWidth
-      });
-      Object.defineProperty(randomLinkText, "scrollWidth", {
-        configurable: true,
-        get: () => randomLinkContentWidth
-      });
-      await React.act(async () => TestResizeObserver.notify());
-      assert.equal(randomLinkViewport.classList.contains("is-truncated"), true);
-      assert.equal(randomLinkViewport.title, randomUrl);
-      assert.equal(
-        randomLinkViewport.querySelector(".generated-link-truncation")?.textContent,
-        "..."
-      );
-
-      const selections: Node[] = [];
-      Object.defineProperty(document, "getSelection", { configurable: true, value: () => ({
-        selectAllChildren: (node: Node) => selections.push(node)
-      }) });
-      assert.equal(randomLinkViewport.getAttribute("role"), "textbox");
-      assert.equal(randomLinkViewport.getAttribute("aria-readonly"), "true");
-      assert.equal(container.querySelector(".generated-link-label")?.textContent, "随机API");
-      await React.act(async () => {
-        dispatch(randomLinkViewport, "pointerdown", { button: 0 });
-        randomLinkViewport.focus();
-        dispatch(randomLinkViewport, "focusin");
-        dispatch(randomLinkViewport, "click");
-      });
-      assert.ok(selections.length > 0);
-      assert.ok(selections.every((node) => node === randomLinkText), "选区只包含完整 URL，不含标签或截断标记");
-      const firstSelectionCount = selections.length;
-      await React.act(async () => {
-        dispatch(randomLinkViewport, "pointerdown", { button: 0 });
-        dispatch(randomLinkViewport, "click");
-      });
-      assert.equal(selections.length, firstSelectionCount, "再次点击不覆盖浏览器局部选区");
-      await React.act(async () => {
-        randomLinkViewport.blur();
-        dispatch(randomLinkViewport, "focusout");
-      });
-
-      randomLinkContentWidth = randomLinkAvailableWidth;
-      await React.act(async () => TestResizeObserver.notify());
-      assert.equal(randomLinkViewport.classList.contains("is-truncated"), false);
-      assert.equal(randomLinkViewport.hasAttribute("title"), false);
-      assert.equal(
-        randomLinkViewport.querySelector(".generated-link-truncation"),
-        null
-      );
-
-      const galleryPanel = container.querySelector<HTMLElement>(
-        ".gallery-filter-panel"
-      );
       if (mobileLayout && !container.querySelector(".image-list-filter-bar.filters-open")) {
         await React.act(async () => dispatch(container.querySelector(".image-list-filter-toggle")!, "click"));
       }
       const adminPanel = container.querySelector<HTMLElement>(
         ".image-list-filter-panel"
       );
-      assert.ok(galleryPanel && adminPanel);
-      const galleryPanelOrder = [...galleryPanel.children].map((child) => (
-        child.className
-      ));
-      if (mobileLayout) {
-        const galleryActions = container.querySelector<HTMLElement>(
-          ".gallery-filter-actions"
-        );
-        const adminActions = container.querySelector<HTMLElement>(
-          ".image-list-filter-actions"
-        );
-        assert.ok(galleryActions && adminActions);
-        assert.deepEqual(
-          [...galleryActions.children].map((child) => child.tagName),
-          ["BUTTON", "SPAN", "BUTTON"]
-        );
-        assert.deepEqual(
-          [...adminActions.children].map((child) => child.tagName),
-          ["BUTTON", "SPAN", "BUTTON"]
-        );
-        for (const divider of container.querySelectorAll(
-          ".gallery-filter-action-divider, .image-list-filter-action-divider"
-        )) {
-          assert.equal(divider.getAttribute("aria-hidden"), "true");
-          assert.equal(divider.hasAttribute("role"), false);
-        }
-        assert.deepEqual(galleryPanelOrder, ["gallery-filter-fields", "theme-link"]);
-        assert.equal(
-          container.querySelector(".image-list-filter-bar")?.classList.contains(
-            "filters-open"
-          ),
-          true
-        );
-      } else {
-        assert.equal(
-          container.querySelectorAll(
-            ".gallery-filter-action-divider, .image-list-filter-action-divider"
-          ).length,
-          0
-        );
-        assert.deepEqual(
-          galleryPanelOrder,
-          width < 1000
-            ? ["gallery-filter-fields", "theme-link", "gallery-filter-action"]
-            : ["gallery-filter-fields", "gallery-filter-action", "theme-link"]
-        );
-        assert.equal(
-          adminPanel.lastElementChild?.classList.contains("image-list-filter-action"),
-          true
-        );
-      }
-
+      assert.ok(adminPanel);
       const controls = [...container.querySelectorAll<HTMLElement>(
         ".facet-select-control"
       )];
-      assert.equal(controls.length, 6);
+      assert.equal(controls.length, 3);
       assert.equal(document.querySelector(".facet-search-input"), null);
       for (const id of fieldIds) {
         const target = document.getElementById(id);
@@ -1692,7 +1525,7 @@ test("[Web/后台访问] 公开图库与后台图片筛选在清空动作临界�
           .join(">")
       )));
 
-      for (const id of ["gallery-theme-facet", "admin-image-theme-facet"]) {
+      for (const id of ["admin-image-theme-facet"]) {
         const trigger = document.getElementById(id) as HTMLButtonElement | null;
         assert.ok(trigger);
         const accessibleName = trigger.getAttribute("aria-label");
@@ -1740,13 +1573,11 @@ test("[Web/后台访问] 公开图库与后台图片筛选在清空动作临界�
         tag: "blue",
         author: "camera"
       };
-      assert.ok(setGalleryHarnessFilters && setAdminHarnessFilters);
+      assert.ok(setAdminHarnessFilters);
       await React.act(async () => {
-        setGalleryHarnessFilters?.(populatedFilters);
         setAdminHarnessFilters?.(populatedFilters);
         await Promise.resolve();
       });
-      assert.equal(galleryClear.disabled, false);
       assert.equal(adminClear.disabled, false);
 
       if (
@@ -1803,23 +1634,6 @@ test("[Web/后台访问] 公开图库与后台图片筛选在清空动作临界�
           ),
           true,
           "移动后台清空不得关闭外层筛选面板"
-        );
-      }
-
-      await React.act(async () => {
-        dispatch(galleryClear, "click", { detail: 1 });
-        await Promise.resolve();
-      });
-      assert.equal(galleryClearCalls, 1);
-      assert.deepEqual(galleryFilterChanges, []);
-      assert.equal(galleryClear.disabled, true);
-      if (mobileLayout) {
-        assert.equal(
-          container.querySelector(".gallery-toolbar")?.classList.contains(
-            "filters-open"
-          ),
-          true,
-          "移动画廊清空不得关闭外层筛选面板"
         );
       }
 

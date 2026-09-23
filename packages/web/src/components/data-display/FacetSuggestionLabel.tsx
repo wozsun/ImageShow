@@ -1,6 +1,6 @@
 import type { FacetSuggestion, FacetTextMatch } from "../../lib/ui/facet-input.js";
 
-function MatchedText({ text, match }: { text: string; match: FacetTextMatch | null }) {
+export function MatchedText({ text, match }: { text: string; match: FacetTextMatch | null }) {
   if (!match) return text;
 
   const parts: { text: string; matched: boolean }[] = [];

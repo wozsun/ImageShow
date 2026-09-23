@@ -19,6 +19,7 @@ export function DialogFrame({
   titleId,
   descriptionId,
   ariaLabel,
+  colorContext = "admin",
   busy = false,
   paused = false,
   animateClose = true,
@@ -33,6 +34,7 @@ export function DialogFrame({
   titleId?: string;
   descriptionId?: string;
   ariaLabel?: string;
+  colorContext?: "admin" | "public";
   busy?: boolean;
   paused?: boolean;
   animateClose?: boolean;
@@ -71,7 +73,7 @@ export function DialogFrame({
       ref={containerRef}
       className={`${className} ${closing ? "is-closing" : ""}`}
       data-dialog-frame=""
-      data-admin-dialog=""
+      data-admin-dialog={colorContext === "admin" ? "" : undefined}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}

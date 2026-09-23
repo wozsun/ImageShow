@@ -2,7 +2,7 @@ import { imageThemeInput } from "../../images/metadata-theme.ts";
 import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
-  parseTagFilter,
+  parseGalleryTagFilter,
   TagFilterError,
   adminImagePageLimit,
   adminImageSortFields,
@@ -143,7 +143,7 @@ export const imageStorageMigrationInput = z.strictObject({
 const tagFilterInput = z.union([z.string(), z.array(z.string())]).transform((value, context) => {
   const values = typeof value === "string" ? [value] : value;
   try {
-    parseTagFilter(values);
+    parseGalleryTagFilter(values);
     return values;
   } catch (error) {
     if (!(error instanceof TagFilterError)) throw error;

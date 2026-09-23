@@ -2,7 +2,7 @@ import {
   brightnesses,
   devices,
   normalizeTagExpression,
-  parseTagFilter,
+  parseGalleryTagFilter,
   resolveTagExpression,
   TagFilterError,
   type TagExpression,
@@ -104,7 +104,7 @@ export async function resolveImageFilterPlan(
 ) {
   let parsedTag: TagExpression;
   try {
-    parsedTag = parseTagFilter(input.tag === undefined ? [] : typeof input.tag === "string" ? [input.tag] : input.tag).expression;
+    parsedTag = parseGalleryTagFilter(input.tag === undefined ? [] : typeof input.tag === "string" ? [input.tag] : input.tag).expression;
   } catch (error) {
     if (!(error instanceof TagFilterError)) throw error;
     throw new ApiError(400, "validation_error", error.message, { field: "tag" });

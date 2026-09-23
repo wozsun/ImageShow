@@ -1,4 +1,5 @@
-.show-page {
+/* 展映视口不受公共 page / gallery 样式的加载顺序影响。 */
+.gallery-page.show-page {
   position: fixed;
   inset: 0 0 auto;
   height: 100dvh;
@@ -61,36 +62,33 @@
 
 .show-interaction-hint-touch { display: none; }
 
-.show-density-actions,
-.show-corner-actions {
-  position: absolute;
-  bottom: max(16px, calc(var(--public-safe-area-bottom, env(safe-area-inset-bottom)) + 12px));
-  z-index: 7;
+.show-toolbar-settings,
+.show-toolbar-size,
+.show-toolbar-mode { display: flex; align-items: center; gap: 6px; }
+.show-toolbar-settings { gap: 12px; }
+.show-toolbar-mode {
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--color-dark-control-border);
+  border-radius: 8px;
+  background: var(--color-dark-control-surface);
 }
-
-.show-density-actions {
-  left: max(16px, calc(var(--public-safe-area-left, env(safe-area-inset-left)) + 12px));
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.show-toolbar-mode a {
+  min-height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 6px 12px;
+  color: var(--color-dark-control-text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+  border-radius: 5px;
 }
-
-.show-corner-actions {
-  right: max(16px, calc(var(--public-safe-area-right, env(safe-area-inset-right)) + 12px));
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .show-density-actions::before,
-  .show-corner-actions::before {
-    content: "";
-    position: absolute;
-    inset: -24px;
-    z-index: -1;
-  }
-}
+.show-toolbar-mode a:hover { background: var(--color-dark-control-surface-subtle-hover); }
+.show-toolbar-mode a.is-active { background: var(--color-dark-control-surface-hover); color: var(--color-dark-control-action-text); }
+.show-toolbar-mode a:focus-visible { outline: 2px solid var(--color-dark-control-action-text); outline-offset: 2px; }
+.public-toolbar-popover .show-toolbar-settings { align-items: flex-start; flex-direction: column; margin-block: 14px; }
+.public-toolbar-popover .show-toolbar-mode { width: 100%; }
+.public-toolbar-popover .show-toolbar-mode a { flex: 1; }
 
 .show-density-dialog {
   touch-action: pan-x pan-y;
@@ -163,15 +161,9 @@
 }
 
 @media (max-width: 760px) {
-  .show-density-actions { flex-direction: column-reverse; }
-
-  .show-corner-actions {
-    flex-direction: column;
-  }
-
   .show-interaction-hint {
     width: max-content;
-    max-width: calc(100% - 152px - var(--public-safe-area-left, env(safe-area-inset-left)) - var(--public-safe-area-right, env(safe-area-inset-right)));
+    max-width: calc(100% - 152px - var(--public-safe-area-left) - var(--public-safe-area-right));
     line-height: 1.5;
     text-align: center;
   }

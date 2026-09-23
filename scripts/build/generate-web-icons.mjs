@@ -22,9 +22,11 @@ const iconGroups = [
     names: [
       "add-line",
       "arrow-down-s-line",
+      "arrow-right-line",
       "arrow-up-line",
       "check-line",
       "close-line",
+      "contrast-2-line",
       "external-link-line",
       "eye-line",
       "eye-off-line",
@@ -32,6 +34,7 @@ const iconGroups = [
       "file-damage-line",
       "filter-3-line",
       "home-4-line",
+      "hashtag",
       "image-line",
       "menu-line",
       "pause-fill",
@@ -39,12 +42,15 @@ const iconGroups = [
       "play-fill",
       "refresh-line",
       "reset-left-line",
+      "search-line",
+      "share-line",
       "shuffle-line",
       "slideshow-3-line",
       "sort-asc",
       "sort-desc",
       "subtract-line",
-      "settings-3-line"
+      "settings-3-line",
+      "user-3-line"
     ]
   },
   {

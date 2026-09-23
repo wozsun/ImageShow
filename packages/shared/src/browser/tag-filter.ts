@@ -3,6 +3,12 @@ import { randomQueryLimits } from "./common.ts";
 export type TagClause = readonly [string, ...string[]];
 export type TagExpression = { anyOf: readonly [TagClause, ...TagClause[]] } | null;
 export type TagMatchMode = "any" | "all";
+export type TagFilterValue = string | string[];
+export const publicTagGroupLimit = 9;
+
+export function tagFilterValues(value: TagFilterValue): string[] {
+  return typeof value === "string" ? value ? [value] : [] : value;
+}
 
 export const tagFilterLimits = Object.freeze({
   terms: randomQueryLimits.maxSelectorsPerField,
@@ -71,7 +77,7 @@ export function parseTagFilter(
   const expression = normalizeTagExpression(clauses)!;
   const singletons = expression.anyOf.every((clause) => clause.length === 1);
   if (capability === "basic" && !singletons && expression.anyOf.length !== 1) {
-    throw new TagFilterError("此页面仅支持标签任一或全部，混合条件请使用随机 API", "mixed");
+    throw new TagFilterError("此选择方式仅支持标签任一或全部", "mixed");
   }
   const explicitAll = values.length === 1 && /^all:/iu.test(values[0]!.trim());
   const mode: TagMatchMode = expression.anyOf.length === 1 && (!singletons || explicitAll) ? "all" : "any";
@@ -100,8 +106,16 @@ export function tagExpressionValues(expression: TagExpression, mode?: TagMatchMo
   ];
 }
 
-export function basicTagSelection(value: string) {
-  const parsed = parseTagFilter(value ? [value] : []);
+export function parseGalleryTagFilter(values: readonly string[]) {
+  if (values.length > publicTagGroupLimit) throw new TagFilterError("标签最多可分为 9 组");
+  if (values.reduce((sum, value) => sum + value.length, 0) > tagFilterLimits.basicCharacters) {
+    throw new TagFilterError("标签条件超过长度限制");
+  }
+  return parseTagFilter(values, "mixed");
+}
+
+export function basicTagSelection(value: TagFilterValue) {
+  const parsed = parseTagFilter(tagFilterValues(value));
   return { mode: parsed.mode, selected: [...new Set(parsed.expression?.anyOf.flat() ?? [])] };
 }
 

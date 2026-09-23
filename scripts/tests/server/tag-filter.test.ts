@@ -57,7 +57,7 @@ test("[Server/标签] 基础任一与全部归一并保留单标签编辑方式"
   assert.equal(parseTagFilter([]).expression, null);
 });
 
-test("[Server/标签] 基础接口保留重复段并拒绝真正的混合条件", () => {
+test("[Server/标签] 列表与统计接受标签分组并统一段数与词项预算", () => {
   const inputs = [
     (tag: string[]) => listQuery.safeParse({ view: "gallery", limit: 60, tag }),
     (tag: string[]) => adminImageListQuery.safeParse({ tag }),
@@ -69,7 +69,10 @@ test("[Server/标签] 基础接口保留重复段并拒绝真正的混合条件"
     for (const tag of [["a", "b"], ["all:a,b"], ["all:a,b", "all:b,a"]]) {
       assert.equal(input(tag).success, true, String(tag));
     }
-    assert.equal(input(["all:a,b", "c"]).success, false);
+    assert.equal(input(["all:a,b", "c"]).success, true);
+    assert.equal(input(Array(9).fill("all:a,b")).success, true);
+    assert.equal(input(Array(10).fill("a")).success, false);
+    assert.equal(input([Array(33).fill("a").join(",")]).success, false);
     assert.equal(input([""]).success, false);
   }
   assert.throws(() => parseTagFilter(["a", "all:a,b"]), { kind: "mixed" });

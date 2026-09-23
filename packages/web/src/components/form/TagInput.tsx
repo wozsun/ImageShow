@@ -28,20 +28,8 @@ import {
   SuggestionList,
   suggestionMenuSize
 } from "./SuggestionList.js";
-import {
-  tagScrollAvailability,
-  tagScrollContentMetrics,
-  tagScrollItemMetrics,
-  tagScrollNavigationTarget,
-  tagVerticalWheelPixels,
-  tagWheelScrollTarget,
-  type TagScrollAvailability
-} from "./tag-input-scroll.js";
-
-const noTagScroll: TagScrollAvailability = {
-  backward: false,
-  forward: false
-};
+import { useTagScroll } from "./useTagScroll.js";
+import "../../styles/tag-scroll.css";
 
 type TouchEditorFocusCandidate = {
   identifier: number;
@@ -74,15 +62,10 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
 }) {
   const [text, setText] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
-  const [scrollAvailability, setScrollAvailability] = useState(noTagScroll);
-  const scrollAvailabilityRef = useRef(noTagScroll);
   const imeSession = useImeInputSession(text);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const wheelTargetRef = useRef<{ left: number; direction: number } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const backwardNavigationRef = useRef<HTMLButtonElement | null>(null);
-  const forwardNavigationRef = useRef<HTMLButtonElement | null>(null);
+  const { wrapRef, scrollRef, backwardNavigationRef, forwardNavigationRef,
+    scrollAvailability, refreshScrollAvailability, cancelPendingScroll, scrollTags } = useTagScroll(inputRef);
   const touchEditorFocusCandidateRef = useRef<
     TouchEditorFocusCandidate | null
   >(null);
@@ -112,54 +95,9 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
     onClose: () => setActiveIndex(-1)
   });
 
-  const refreshScrollAvailability = useCallback(() => {
-    const box = scrollRef.current;
-    if (!box) return;
-    const next = tagScrollAvailability(box);
-    const current = scrollAvailabilityRef.current;
-    const unchanged = (
-      current.backward === next.backward
-      && current.forward === next.forward
-    );
-    const activeElement = box.ownerDocument.activeElement;
-    const focusedNavigation = activeElement === backwardNavigationRef.current
-      ? backwardNavigationRef.current
-      : activeElement === forwardNavigationRef.current
-        ? forwardNavigationRef.current
-        : null;
-    const disablingFocusedNavigation = (
-      focusedNavigation !== null
-      && (
-        (
-          focusedNavigation === backwardNavigationRef.current
-          && !next.backward
-        )
-        || (
-          focusedNavigation === forwardNavigationRef.current
-          && !next.forward
-        )
-      )
-    );
-    if (disablingFocusedNavigation) {
-      // The editor uses readOnly + aria-disabled for the composite disabled
-      // state, so it remains a stable programmatic focus target without
-      // accepting edits or participating in sequential keyboard navigation.
-      inputRef.current?.focus({ preventScroll: true });
-    }
-    if (unchanged) return;
-    if (backwardNavigationRef.current) {
-      backwardNavigationRef.current.disabled = !next.backward;
-    }
-    if (forwardNavigationRef.current) {
-      forwardNavigationRef.current.disabled = !next.forward;
-    }
-    scrollAvailabilityRef.current = next;
-    setScrollAvailability(next);
-  }, []);
-
   const revealEditor = useCallback(() => {
     if (disabled) return;
-    wheelTargetRef.current = null;
+    cancelPendingScroll();
     const input = inputRef.current;
     const box = scrollRef.current;
     input?.focus({ preventScroll: true });
@@ -168,7 +106,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
     if (Math.abs(target - box.scrollLeft) < 1) return;
     box.scrollLeft = target;
     refreshScrollAvailability();
-  }, [disabled, refreshScrollAvailability]);
+  }, [disabled, cancelPendingScroll, refreshScrollAvailability]);
 
   // This local lifecycle owns only tap-to-editor promotion on non-interactive
   // chip and viewport surfaces. It never selects an axis or moves the viewport;
@@ -275,7 +213,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
     if (!box) return;
     // Controlled values and vocabulary labels can change content geometry,
     // including updates from suggestion portals outside the native control.
-    wheelTargetRef.current = null;
+    cancelPendingScroll();
     const previous = previousEditingStateRef.current;
     if (
       value.length > previous.valueLength
@@ -291,77 +229,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
       valueLength: value.length
     };
     refreshScrollAvailability();
-  }, [disabled, refreshScrollAvailability, suggestions, text, value]);
-
-  useEffect(() => {
-    const control = wrapRef.current;
-    const box = scrollRef.current;
-    if (!control || !box) return;
-    const ownerWindow = box.ownerDocument.defaultView;
-    const releaseWheelTarget = () => {
-      wheelTargetRef.current = null;
-    };
-    const onScrollEnd = () => {
-      const target = wheelTargetRef.current;
-      if (target !== null && Math.abs(box.scrollLeft - target.left) < 1) {
-        releaseWheelTarget();
-      }
-    };
-    const onWheel = (event: WheelEvent) => {
-      const finePointer = ownerWindow?.matchMedia?.("(any-pointer: fine)")
-        .matches ?? true;
-      if (!finePointer) return;
-      const delta = tagVerticalWheelPixels({
-        clientWidth: box.clientWidth,
-        deltaMode: event.deltaMode,
-        deltaX: event.deltaX,
-        deltaY: event.deltaY
-      });
-      if (delta === null) {
-        releaseWheelTarget();
-        return;
-      }
-      if (event.cancelable) event.preventDefault();
-      // Native smooth scrolling has not reached scrollLeft's destination yet.
-      // Accumulate same-direction samples against that destination, while a
-      // reversal starts at the visible position for an immediate response.
-      const pending = wheelTargetRef.current;
-      const target = tagWheelScrollTarget({
-        clientWidth: box.clientWidth,
-        scrollWidth: box.scrollWidth,
-        scrollLeft: pending?.direction === Math.sign(delta)
-          ? pending.left
-          : box.scrollLeft
-      }, delta);
-      if (target === pending?.left) return;
-      wheelTargetRef.current = { left: target, direction: Math.sign(delta) };
-      box.scrollLeft = target;
-      refreshScrollAvailability();
-    };
-    control.addEventListener("wheel", onWheel, { passive: false });
-    box.addEventListener("scrollend", onScrollEnd);
-    const directInputEvents = ["pointerdown", "touchstart", "keydown", "input"];
-    for (const type of directInputEvents) {
-      control.addEventListener(type, releaseWheelTarget, { passive: true });
-    }
-    const resizeObserver = typeof ownerWindow?.ResizeObserver === "function"
-      ? new ownerWindow.ResizeObserver(() => {
-          releaseWheelTarget();
-          refreshScrollAvailability();
-        })
-      : null;
-    resizeObserver?.observe(box);
-    refreshScrollAvailability();
-    return () => {
-      control.removeEventListener("wheel", onWheel);
-      releaseWheelTarget();
-      box.removeEventListener("scrollend", onScrollEnd);
-      for (const type of directInputEvents) {
-        control.removeEventListener(type, releaseWheelTarget);
-      }
-      resizeObserver?.disconnect();
-    };
-  }, [refreshScrollAvailability]);
+  }, [disabled, cancelPendingScroll, refreshScrollAvailability, suggestions, text, value]);
 
   const query = normalizeFacetSearchQuery(text);
   const selected = new Set(value);
@@ -410,56 +278,6 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
     inputRef.current?.focus({ preventScroll: true });
     onChange(value.filter((item) => item !== tag));
   };
-  const scrollTags = (direction: -1 | 1) => {
-    wheelTargetRef.current = null;
-    const box = scrollRef.current;
-    if (!box) return false;
-    const boxRect = box.getBoundingClientRect();
-    const style = box.ownerDocument.defaultView?.getComputedStyle(box);
-    const paddingLeft = Number.parseFloat(style?.paddingLeft ?? "0") || 0;
-    const paddingRight = Number.parseFloat(style?.paddingRight ?? "0") || 0;
-    const navigationMetrics = tagScrollContentMetrics(
-      box,
-      paddingLeft,
-      paddingRight
-    );
-    const contentLeft = boxRect.left + paddingLeft;
-    const contentRight = boxRect.right - paddingRight;
-    const backwardRect = backwardNavigationRef.current
-      ?.getBoundingClientRect();
-    const forwardRect = forwardNavigationRef.current
-      ?.getBoundingClientRect();
-    const nextScrollLeft = tagScrollNavigationTarget(
-      navigationMetrics,
-      [...box.querySelectorAll<HTMLElement>("[data-tag-scroll-item]")]
-        .map((item) => {
-          const itemRect = item.getBoundingClientRect();
-          return tagScrollItemMetrics(
-            boxRect.left,
-            box.scrollLeft,
-            itemRect,
-            paddingLeft
-          );
-        }),
-      direction,
-      {
-        // The whole overlaid button counts as covered, including its
-        // translucent gradient edge. Reading the real overlap keeps scroll
-        // behavior aligned with the control if its CSS geometry changes.
-        leading: backwardRect
-          ? Math.max(0, backwardRect.right - contentLeft)
-          : 0,
-        trailing: forwardRect
-          ? Math.max(0, contentRight - forwardRect.left)
-          : 0
-      }
-    );
-    if (Math.abs(nextScrollLeft - box.scrollLeft) < 1) return false;
-    box.scrollLeft = nextScrollLeft;
-    refreshScrollAvailability();
-    return true;
-  };
-
   const handleKey = (event: KeyboardEvent<HTMLInputElement>) => {
     if (
       imeSession.isComposing(event.nativeEvent.isComposing)

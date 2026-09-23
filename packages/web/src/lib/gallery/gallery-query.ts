@@ -1,5 +1,7 @@
 import {
   parseTagFilter,
+  parseGalleryTagFilter,
+  tagFilterValues,
   basicTagValue,
   resolveTagExpression,
   tagExpressionValues,
@@ -9,14 +11,15 @@ import {
   publicImageOrders,
   type ShowMode,
   type ShowOrder,
-  type PublicImageView
+  type PublicImageView,
+  type TagFilterValue
 } from "@imageshow/shared/browser";
 
 export type GalleryFilters = {
   device: string;
   brightness: string;
   theme: string;
-  tag: string;
+  tag: TagFilterValue;
   author: string;
 };
 
@@ -52,18 +55,21 @@ export function galleryFiltersFromSearchParams(
 ): GalleryFilters {
   const device = params.get("device")?.trim().toLowerCase() ?? "";
   const brightness = params.get("brightness")?.trim().toLowerCase() ?? "";
-  const parsed = parseTagFilter(params.getAll("tag"));
-  let expression = parsed.expression;
-  if (tags && expression) {
-    const map = new Map(tags.map((tag) => [tag.display_name.trim().toLowerCase(), tag.slug]));
-    for (const tag of tags) map.set(tag.slug, tag.slug);
-    expression = resolveTagExpression(expression, map);
-  }
+  const values = params.getAll("tag");
+  parseGalleryTagFilter(values);
+  const map = tags ? new Map(tags.map((tag) => [tag.display_name.trim().toLowerCase(), tag.slug])) : null;
+  for (const tag of tags ?? []) map!.set(tag.slug, tag.slug);
+  const normalizedTags = values.map((value) => {
+    const parsed = parseTagFilter([value]);
+    const expression = map ? resolveTagExpression(parsed.expression, map) : parsed.expression;
+    return basicTagValue(expression?.anyOf.flat() ?? [], parsed.mode);
+  });
+  parseGalleryTagFilter(normalizedTags);
   return {
     device: device === "all" ? "" : galleryDevices.has(device) ? device : "",
     brightness: galleryBrightnesses.has(brightness) ? brightness : "",
     theme: selectorValue(params, "theme"),
-    tag: basicTagValue(expression?.anyOf.flat() ?? [], parsed.mode),
+    tag: normalizedTags.length > 1 ? normalizedTags : normalizedTags[0] ?? "",
     author: selectorValue(params, "author")
   };
 }
@@ -74,11 +80,31 @@ export function galleryRouteSearchParams(filters: GalleryFilters, preserveTagMod
   if (filters.brightness) params.set("brightness", filters.brightness);
   if (filters.theme) params.set("theme", filters.theme);
   if (filters.tag) {
-    const parsed = parseTagFilter([filters.tag]);
-    for (const value of tagExpressionValues(parsed.expression, preserveTagMode ? parsed.mode : undefined)) params.append("tag", value);
+    const values = tagFilterValues(filters.tag);
+    const parsed = parseGalleryTagFilter(values);
+    for (const value of preserveTagMode ? values : tagExpressionValues(parsed.expression)) params.append("tag", value);
   }
   if (filters.author) params.set("author", filters.author);
   return params;
+}
+
+/** List and statistics share the same resolved devices and canonical filter sets. */
+function galleryApiFilters(filters: GalleryFilters, userAgent: string) {
+  const params = galleryRouteSearchParams({
+    ...filters,
+    device: filters.device === "auto" ? detectDeviceFromUserAgent(userAgent) ?? "" : filters.device
+  }, false);
+  for (const field of ["theme", "author"] as const) {
+    const value = selectorValue(params, field);
+    if (value) params.set(field, value);
+    else params.delete(field);
+  }
+  return params;
+}
+
+/** Page URLs retain authored tag groups and their order. */
+export function galleryStatsSearch(filters: GalleryFilters, userAgent = "") {
+  return readableFilterSearch(galleryApiFilters(filters, userAgent));
 }
 
 export function showOrderFromSearchParams(
@@ -104,8 +130,10 @@ export function updateImageBrowseSearchParams(
 ) {
   const params = new URLSearchParams(current);
   for (const [key, value] of Object.entries(changes)) {
-    if (key === "tag") params.delete(key);
-    if (value) params.set(key, value);
+    if (key === "tag") {
+      params.delete(key);
+      for (const tag of tagFilterValues(value)) params.append("tag", tag);
+    } else if (typeof value === "string" && value) params.set(key, value);
     else params.delete(key);
   }
   return params;
@@ -116,21 +144,7 @@ export function imageBrowseApiSearchParams(
   order: ShowOrder,
   options: { view: PublicImageView; limit?: number; cursor?: string; userAgent?: string }
 ) {
-  const params = new URLSearchParams();
-  const projectedDevice = filters.device === "auto"
-    ? detectDeviceFromUserAgent(options.userAgent ?? "")
-    : filters.device;
-  if (projectedDevice === "pc" || projectedDevice === "mb") {
-    params.set("device", projectedDevice);
-  }
-  if (filters.brightness) params.set("brightness", filters.brightness);
-  for (const key of ["theme", "author"] as const) {
-    const value = selectorValue(new URLSearchParams({ [key]: filters[key] }), key);
-    if (value) params.set(key, value);
-  }
-  if (filters.tag) {
-    for (const value of tagExpressionValues(parseTagFilter([filters.tag]).expression)) params.append("tag", value);
-  }
+  const params = galleryApiFilters(filters, options.userAgent ?? "");
   if (options.cursor) params.set("cursor", options.cursor);
   params.set("order", order);
   params.set("view", options.view);

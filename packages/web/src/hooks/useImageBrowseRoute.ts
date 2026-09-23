@@ -1,9 +1,10 @@
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
-import { readableFilterSearch, TagFilterError } from "@imageshow/shared/browser";
+import { readableFilterSearch, tagFilterValues, TagFilterError, type ShowOrder, type ShowMode } from "@imageshow/shared/browser";
 import { useGalleryFacets } from "../lib/api/site-queries.js";
 import {
   emptyGalleryFilters,
+  galleryRouteSearchParams,
   galleryFiltersFromSearchParams,
   galleryRandomRequestDevice,
   updateImageBrowseSearchParams,
@@ -37,7 +38,7 @@ export function useImageBrowseRoute() {
   const linkParams = new URLSearchParams(params);
   if (ready && linkParams.has("tag")) {
     linkParams.delete("tag");
-    if (parsed.filters.tag) linkParams.append("tag", parsed.filters.tag);
+    for (const value of tagFilterValues(parsed.filters.tag)) linkParams.append("tag", value);
   }
   const updateSearchParams = useCallback((update: (current: URLSearchParams) => URLSearchParams) => {
     const next = update(new URLSearchParams(query));
@@ -45,7 +46,7 @@ export function useImageBrowseRoute() {
       try {
         const normalized = galleryFiltersFromSearchParams(next, facetsQuery.data.tags);
         next.delete("tag");
-        if (normalized.tag) next.append("tag", normalized.tag);
+        for (const value of tagFilterValues(normalized.tag)) next.append("tag", value);
       } catch (error) {
         if (!(error instanceof TagFilterError)) throw error;
       }
@@ -59,6 +60,11 @@ export function useImageBrowseRoute() {
     if (!params.has("tag") && !Object.values(parsed.filters).some(Boolean)) return;
     updateSearchParams((current) => updateImageBrowseSearchParams(current, emptyGalleryFilters));
   };
+  const applyFilters = (next: GalleryFilters) => {
+    const signature = (filters: GalleryFilters) => readableFilterSearch(galleryRouteSearchParams(filters));
+    if (ready && signature(next) === signature(parsed.filters)) return;
+    updateSearchParams((current) => updateImageBrowseSearchParams(current, next));
+  };
   const randomLink = ready ? randomLinkResult({
     origin: window.location.origin,
     device: galleryRandomRequestDevice(parsed.filters.device),
@@ -67,9 +73,19 @@ export function useImageBrowseRoute() {
     tag: parsed.filters.tag,
     author: parsed.filters.author
   }) : { url: null, error: null };
+  const getPageUrl = (order: ShowOrder, mode?: ShowMode) => {
+    if (!ready) return null;
+    const pageParams = galleryRouteSearchParams(parsed.filters);
+    pageParams.set("order", order);
+    if (mode) pageParams.set("mode", mode);
+    const pathname = location.pathname === "/embed/gallery" ? "/gallery"
+      : location.pathname === "/embed/show" ? "/show" : location.pathname;
+    return `${window.location.origin}${pathname}?${readableFilterSearch(pageParams)}`;
+  };
   return {
     params, filters: parsed.filters, error, ready,
-    updateFilter, clearFilters, randomLink,
+    updateFilter, clearFilters, applyFilters, randomLink, getPageUrl,
+    facetsError: facetsQuery.error, facetsLoading: facetsQuery.isPending,
     facets: facetsQuery.data, updateSearchParams, browseSearch: readableFilterSearch(linkParams),
     isFilterEdit: location.state?.imageBrowseFilterEdit === true,
     retryVocabulary: () => { void facetsQuery.refetch({ cancelRefetch: false }); }

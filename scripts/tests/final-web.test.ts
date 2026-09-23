@@ -1,6 +1,7 @@
 import "./support/web-environment.ts";
 import "./web/shared-interaction.test.ts";
 import "./web/public-navigation.test.ts";
+import "./web/public-filter.test.ts";
 import "./web/embed-cursor.test.ts";
 import "./web/public-viewport.test.ts";
 import "./web/gallery.test.ts";

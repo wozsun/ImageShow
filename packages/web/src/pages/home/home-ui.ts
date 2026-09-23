@@ -1,6 +1,7 @@
 import { unsetThemeFilter } from "@imageshow/shared/browser";
 import type { GalleryStatsFacetDto } from "@imageshow/shared/browser";
 import { displayNameOrSlug } from "../../lib/ui/formatters.js";
+import { publicFilterOptionState } from "../../lib/gallery/public-filter-options.js";
 
 export const deviceLabels: Record<string, string> = {
   "": "全部设备",
@@ -48,8 +49,9 @@ export function boundedHomeRevealIndexes(
   const indexes = new Map<string, number>();
   for (const item of items) {
     const isSelected = selected.has(item.slug);
-    const disabled = !isSelected && item.image_count === 0;
-    const locked = availabilityUnverified && !isSelected;
+    const { disabled, locked } = publicFilterOptionState({
+      selected: isSelected, count: item.image_count, unverified: availabilityUnverified
+    });
     if (disabled || locked || indexes.size >= limit) continue;
     indexes.set(item.slug, indexes.size);
   }

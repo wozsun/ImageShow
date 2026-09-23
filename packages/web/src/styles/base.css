@@ -36,8 +36,8 @@ html.public-page-document { overscroll-behavior-y: none; }
 }
 html.modal-open, body.modal-open { overflow: hidden; }
 @media (hover: none) and (pointer: coarse) {
-  html.modal-open [data-dialog-frame],
-  html.modal-open [data-dialog-frame] * {
+  /* 边界约束留在弹窗与实际滚动区；裁切文字等子元素须能把手势交给父滚动区。 */
+  html.modal-open [data-dialog-frame] {
     overscroll-behavior-y: contain;
   }
 }
@@ -589,6 +589,7 @@ button.active, .button {
   color: var(--color-control-text-tertiary);
   font-size: 12px;
 }
+.facet-search-results button b { color: var(--color-control-action-text); font-weight: inherit; }
 .facet-menu-divider { margin: 10px 0; border-top: 1px solid var(--color-control-border-subtle); }
 .facet-selected-list { display: grid; gap: 2px; }
 .facet-selected-list strong { font-size: 13px; color: var(--color-control-text-secondary); }

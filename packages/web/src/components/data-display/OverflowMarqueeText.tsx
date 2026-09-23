@@ -1,9 +1,10 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 type OverflowMarqueeTextProps = {
   text: string;
-  as?: "span" | "strong";
+  as?: "span" | "strong" | "small";
   className?: string;
+  children?: ReactNode;
 };
 
 type VisibilityListener = (visible: boolean) => void;
@@ -43,7 +44,8 @@ function observeVisibility(
 export function OverflowMarqueeText({
   text,
   as: Element = "span",
-  className = ""
+  className = "",
+  children
 }: OverflowMarqueeTextProps) {
   const viewportRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLSpanElement>(null);
@@ -178,8 +180,8 @@ export function OverflowMarqueeText({
       title={overflowing ? text : undefined}
     >
       <span ref={trackRef} className="overflow-marquee-track">
-        <span ref={contentRef}>{text}</span>
-        <span className="overflow-marquee-copy" aria-hidden="true">{text}</span>
+        <span ref={contentRef}>{children ?? text}</span>
+        <span className="overflow-marquee-copy" aria-hidden="true">{children ?? text}</span>
       </span>
     </Element>
   );

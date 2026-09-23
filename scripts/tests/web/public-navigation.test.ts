@@ -385,30 +385,6 @@ test("[Web/公开导航] 桌面与嵌入展映三秒无点击收起，顶部 36p
     });
   }
 });
-test("[Web/公开导航] 随机图链接取消全选后恢复滚动与三秒计时收起", async (t) => {
-  await t.test("滚动收起", async (t) => {
-    const h = await createPublicNavigationHarness(t);
-    await h.readOnlySelection(true);
-    await h.manual(300, "mouse");
-    assert.equal(h.visible(), true, "链接仍有选区时保留导航");
-    await h.readOnlySelection(false);
-    await h.manual(300, "mouse");
-    assert.equal(h.visible(), false, "选区折叠后恢复手动滚动收起");
-  });
-
-  await t.test("计时收起", async (t) => {
-    const h = await createPublicNavigationHarness(t);
-    await h.readOnlySelection(true);
-    await h.advance(6000);
-    assert.equal(h.visible(), true, "链接仍有选区时不执行计时收起");
-    assert.equal(h.timerCount(), 0);
-    await h.readOnlySelection(false);
-    await h.advance(2999);
-    assert.equal(h.visible(), true);
-    await h.advance(1);
-    assert.equal(h.visible(), false, "选区折叠后重新计满三秒并收起");
-  });
-});
 test("[Web/公开导航] 画廊只随滚动显隐，任何页面位置均不启用无操作计时器", async (t) => {
   const h = await createPublicNavigationHarness(t, { movement: "page" });
   await h.advance(6000);
@@ -494,7 +470,7 @@ test("[Web/公开导航] 移动画廊与展映关闭筛选后，触摸残留的�
       await t.test(`${movement} / ${headerPresent ? "普通页" : "嵌入页"}`, async (t) => {
         const h = await createPublicNavigationHarness(t, { movement, headerPresent, mobileLayout: true });
         if (movement === "page") {
-          await h.scroll(97);
+          await h.scroll(30);
           await h.advance(16);
         }
         await h.hover(true);
@@ -512,7 +488,7 @@ test("[Web/公开导航] 移动画廊与展映关闭筛选后，触摸残留的�
         if (movement === "page") {
           await h.scroll(0);
           await h.advance(16);
-          await h.scroll(97);
+          await h.scroll(30);
           await h.advance(16);
         } else {
           await h.manual(-1, "touch");

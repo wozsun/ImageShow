@@ -101,7 +101,7 @@ await runIntegrationScenario(async (runtime) => {
   });
   const ids = (items: Array<{ id: string }>) => items.map(item => item.id).sort();
   type Row = typeof rows[number];
-  type Case = { tags: string[]; match: (row: Row) => boolean; mixed?: boolean; axis?: Record<string, string> };
+  type Case = { tags: string[]; match: (row: Row) => boolean; axis?: Record<string, string> };
   const cases: Case[] = [];
   for (let mask = 1; mask < 16; mask += 1) {
     const terms = tags.filter((_tag, bit) => mask & (1 << bit));
@@ -111,8 +111,8 @@ await runIntegrationScenario(async (runtime) => {
   cases.push(
     { tags: ["matrix-a", "matrix-b"], match: row => Boolean(row.mask & 3) },
     { tags: ["all:matrix-a,matrix-b", "all:matrix-b,matrix-a"], match: row => (row.mask & 3) === 3 },
-    { tags: ["all:matrix-a,matrix-b", "matrix-c"], match: row => (row.mask & 3) === 3 || Boolean(row.mask & 4), mixed: true },
-    { tags: ["all:matrix-a,matrix-b", "all:matrix-c,matrix-d"], match: row => (row.mask & 3) === 3 || (row.mask & 12) === 12, mixed: true },
+    { tags: ["all:matrix-a,matrix-b", "matrix-c"], match: row => (row.mask & 3) === 3 || Boolean(row.mask & 4) },
+    { tags: ["all:matrix-a,matrix-b", "all:matrix-c,matrix-d"], match: row => (row.mask & 3) === 3 || (row.mask & 12) === 12 },
     { tags: ["matrix-empty"], match: () => false },
     { tags: ["all:matrix-a,matrix-empty"], match: () => false },
     { tags: ["matrix-a,matrix-empty"], match: row => Boolean(row.mask & 1) },
@@ -192,13 +192,7 @@ await runIntegrationScenario(async (runtime) => {
         const expected = ids(rows.filter(entry.match));
         const label = `${backend}: ${query}`;
         if (backend === "Redis") {
-          const base = await resolveImageFilterPlan({ ...entry.axis, tag: entry.mixed ? undefined : entry.tags });
-          const plan = entry.mixed ? createImageFilterPlan({
-            devices: base.axes.map(axis => axis.device),
-            brightnesses: base.axes.map(axis => axis.brightness),
-            theme: base.theme, author: base.author,
-            tag: parseTagFilter(entry.tags, "mixed").expression
-          }) : base;
+          const plan = await resolveImageFilterPlan({ ...entry.axis, tag: entry.tags });
           let sampled = await sampleReadyImages(plan, 200);
           const deadline = Date.now() + 5_000;
           // Prior stats reads may still be publishing attribute indexes; require
@@ -227,27 +221,25 @@ await runIntegrationScenario(async (runtime) => {
         }
         for (const view of ["show", "gallery"]) {
           const response = await get(`/api/images?view=${view}&limit=800&${query}`);
-          assert.equal(response.status, entry.mixed ? 400 : 200, label);
-          if (!entry.mixed) assert.deepEqual(ids((await response.json()).items), expected, label);
+          assert.equal(response.status, 200, label);
+          assert.deepEqual(ids((await response.json()).items), expected, label);
         }
         const stats = await get(`/api/gallery-stats?${query}`);
-        assert.equal(stats.status, entry.mixed ? 400 : 200, label);
-        if (!entry.mixed) {
-          const body = await stats.json();
-          if (backend === "PostgreSQL") postgresStats.set(query.toString(), body);
-          else assert.deepEqual(body, postgresStats.get(query.toString()), `${label}: complete statistics DTO`);
-          assert.equal(body.matching_images, expected.length, label);
-          for (const field of ["themes", "tags", "authors"]) {
-            const expectedSlugs = field === "themes" ? ["null", "matrix-city", "matrix-nature"]
-              : field === "authors" ? ["matrix-alice", "matrix-bob"] : allTags.filter(slug => slug !== "matrix-empty");
-            assert.deepEqual(body[field].map((item: { slug: string }) => item.slug).sort(), expectedSlugs.sort(), `${label}: ${field} global membership`);
-          }
-          assert.equal(body.devices.length, 2);
-          assert.equal(body.brightnesses.length, 2);
-          const admin = await listAdminImages({ status: "ready", page: 1, limit: 100, tag: entry.tags, ...entry.axis });
-          assert.equal(admin.total, expected.length, label);
-          assert.deepEqual(ids(admin.items), expected, label);
+        assert.equal(stats.status, 200, label);
+        const body = await stats.json();
+        if (backend === "PostgreSQL") postgresStats.set(query.toString(), body);
+        else assert.deepEqual(body, postgresStats.get(query.toString()), `${label}: complete statistics DTO`);
+        assert.equal(body.matching_images, expected.length, label);
+        for (const field of ["themes", "tags", "authors"]) {
+          const expectedSlugs = field === "themes" ? ["null", "matrix-city", "matrix-nature"]
+            : field === "authors" ? ["matrix-alice", "matrix-bob"] : allTags.filter(slug => slug !== "matrix-empty");
+          assert.deepEqual(body[field].map((item: { slug: string }) => item.slug).sort(), expectedSlugs.sort(), `${label}: ${field} global membership`);
         }
+        assert.equal(body.devices.length, 2);
+        assert.equal(body.brightnesses.length, 2);
+        const admin = await listAdminImages({ status: "ready", page: 1, limit: 100, tag: entry.tags, ...entry.axis });
+        assert.equal(admin.total, expected.length, label);
+        assert.deepEqual(ids(admin.items), expected, label);
       }
       for (const tag of ["matrix-missing", "matrix-a,matrix-missing", "all:matrix-a,matrix-missing"]) {
         for (const prefix of ["/api/images?view=show&limit=60", "/api/gallery-stats?", "/random?device=all&mode=json"]) {

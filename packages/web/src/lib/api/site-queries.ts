@@ -55,7 +55,7 @@ export function useGalleryFacets(enabled = true) {
   });
 }
 
-export function useGalleryStats(search = "") {
+export function useGalleryStats(search = "", enabled = true) {
   return useQuery<GalleryStats>({
     queryKey: [...queryKeys.galleryStats, search],
     queryFn: ({ signal }) => api(
@@ -63,6 +63,7 @@ export function useGalleryStats(search = "") {
       { signal }
     ),
     placeholderData: keepPreviousData,
+    enabled,
     staleTime: 30_000,
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false

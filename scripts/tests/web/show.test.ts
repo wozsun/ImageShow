@@ -423,28 +423,19 @@ test("[Web/展映] 模式切换提示和状态播报使用瀑布与漂浮显示�
   t.after(installProperties(globalThis, { React }));
   const { renderToStaticMarkup } = await import("react-dom/server");
   const { MemoryRouter } = await import("react-router");
-  const { ShowControls } = await import(
+  const { ShowMobileControls } = await import(
     "../../../packages/web/src/pages/show/ShowControls.tsx"
   );
   const render = (scene: "waterfall" | "float") => renderToStaticMarkup(
     React.createElement(
       MemoryRouter,
       null,
-      React.createElement(ShowControls, {
-        decreaseButtonRef: { current: null },
-        largerDisabled: false,
-        onDecreaseSize() {},
-        onIncreaseSize() {},
-        onOrderChange() {},
-        onReset() {},
+      React.createElement(ShowMobileControls, {
         onRunningChange() {},
         getSceneHref: (nextScene) => `/show?mode=${nextScene}`,
-        order: "random",
         reducedMotion: false,
         running: true,
         scene,
-        sizeDescription: "当前约 4 列",
-        smallerDisabled: false
       })
     )
   );
@@ -456,14 +447,10 @@ test("[Web/展映] 模式切换提示和状态播报使用瀑布与漂浮显示�
   ) => {
     const { document } = parseHTML(`<html><body>${render(scene)}</body></html>`);
     const sceneControl = document.querySelector(".show-scene-control");
-    const expectedControlLabel = `当前模式：${currentLabel}；点击切换为${nextLabel}`;
+    const expectedControlLabel = `当前画面：${currentLabel}；点击切换为${nextLabel}`;
     assert.equal(sceneControl?.getAttribute("aria-label"), expectedControlLabel);
     assert.equal(sceneControl?.getAttribute("title"), expectedControlLabel);
-    const liveRegion = document.querySelector('.sr-only[aria-live="polite"]');
-    assert.equal(
-      liveRegion?.textContent?.replaceAll(/\s/gu, ""),
-      `当前排列顺序：乱序；当前模式：${currentLabel}`
-    );
+    assert.equal(sceneControl?.getAttribute("href"), `/show?mode=${scene === "waterfall" ? "float" : "waterfall"}`);
   };
 
   assertModeLabels("waterfall", "瀑布", "漂浮");

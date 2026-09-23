@@ -13,18 +13,10 @@
   --public-color-gallery-mask-strong: rgba(0, 0, 0, .84);
   --public-color-gallery-mask-soft: rgba(0, 0, 0, .52);
   --public-color-gallery-mask-edge: rgba(0, 0, 0, .9);
-  --public-color-gallery-toolbar-label: rgba(222, 232, 246, .8);
-  --public-color-gallery-control-surface: rgba(86, 128, 185, .16);
+  --public-color-gallery-control-surface: var(--color-dark-surface-muted);
   --public-color-gallery-menu-surface: rgba(12, 19, 34, .98);
   --public-shadow-gallery-menu: rgba(0, 2, 8, .5);
-  --public-color-gallery-menu-hover: rgba(77, 143, 232, .28);
-  --public-color-gallery-menu-option: rgba(28, 42, 66, .88);
-  --public-color-gallery-menu-option-hover: rgba(77, 143, 232, .24);
-  --public-color-gallery-menu-option-border-hover: rgba(145, 199, 255, .58);
-  --public-color-gallery-menu-selection-text: #e6f2ff;
-  --public-color-gallery-menu-selection-surface: rgba(47, 111, 201, .38);
-  --public-color-gallery-menu-selection-border: rgba(145, 199, 255, .48);
-  --public-color-gallery-code-text: rgba(224, 235, 249, .9);
+  --public-color-gallery-menu-selection-border: var(--color-dark-control-border-selected);
   --public-color-gallery-code-surface: rgba(86, 128, 185, .14);
   --public-shadow-gallery-tile: rgba(0, 3, 10, .28);
   --public-color-gallery-tile-border-hover: rgba(145, 199, 255, .5);
@@ -36,16 +28,34 @@
   --public-color-gallery-tile-overlay: rgba(14, 18, 28, .78);
   --public-color-gallery-back-to-top: rgba(10, 16, 28, .94);
   --public-shadow-gallery-back-to-top: rgba(0, 3, 10, .38);
-  --public-shadow-gallery-mobile-filter: rgba(0, 2, 8, .4);
   --public-color-show-hint-text: color-mix(in srgb, var(--public-color-text-secondary) 70%, #fff);
   --public-color-show-hint-outline: rgba(24, 28, 35, .7);
+  --public-color-filter-surface: var(--color-dark-canvas);
+  --public-color-filter-header: color-mix(in srgb, var(--color-dark-control-surface) 65%, var(--color-dark-canvas));
+  --public-color-filter-search: var(--color-dark-canvas);
+  --public-color-filter-option: var(--color-dark-control-surface);
+  --public-color-filter-border: var(--color-dark-border-default);
+  --public-color-filter-muted: color-mix(in srgb, var(--color-dark-control-text-secondary) 80%, var(--color-dark-control-text-primary));
+  --public-color-filter-directory-text: var(--color-dark-control-text-secondary);
+  --public-color-filter-chip-mask: #000;
+  --public-color-filter-selected: var(--color-dark-control-surface-hover);
+  --public-color-filter-action: var(--color-dark-control-action-text);
+  --public-color-filter-action-fill: color-mix(in srgb, var(--color-dark-control-action) 80%, var(--color-dark-control-surface));
+  --public-color-filter-action-text: var(--color-dark-control-text-on-action);
+  --public-color-filter-warning: var(--color-dark-warning-text);
 }
 
 /* Browse pages and their portaled controls share a softer text hierarchy. */
 .gallery-page,
 .public-gallery-menu,
+.public-filter-dialog,
 .show-density-dialog {
   --color-public-text-primary: #e5ecf4;
   --color-public-text-strong: #edf2f8;
   --color-public-navigation-text: #e8edf3;
+}
+
+.public-filter-dialog {
+  --color-overlay-scrollbar-dark: var(--color-dark-scrollbar);
+  --color-overlay-scrollbar-dark-active: var(--color-dark-scrollbar-active);
 }

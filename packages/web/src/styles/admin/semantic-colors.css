@@ -7,30 +7,30 @@
  */
 :root {
   /* Foundations */
-  --admin-color-canvas: light-dark(#f4f7fb, #090d13);
-  --admin-color-surface-primary: light-dark(#fff, #10151c);
-  --admin-color-text-primary: light-dark(#172033, #d8dfe7);
-  --admin-color-text-secondary: light-dark(#5f6c7d, #a5aeb9);
+  --admin-color-canvas: light-dark(#f4f7fb, var(--color-dark-canvas));
+  --admin-color-surface-primary: light-dark(#fff, var(--color-dark-control-surface));
+  --admin-color-text-primary: light-dark(#172033, var(--color-dark-control-text-primary));
+  --admin-color-text-secondary: light-dark(#5f6c7d, var(--color-dark-control-text-secondary));
   --admin-color-text-label: light-dark(#3e4a5c, #bfc8d2);
   --admin-color-text-subtle: light-dark(#8b97a7, #8b949e);
-  --admin-color-text-on-emphasis: #fff;
-  --admin-color-border-control: light-dark(#c8d3e1, #636c76);
-  --admin-color-border-default: light-dark(#d8e1ec, #282e36);
+  --admin-color-text-on-emphasis: var(--color-dark-control-text-on-action);
+  --admin-color-border-control: light-dark(#c8d3e1, var(--color-dark-control-border));
+  --admin-color-border-default: light-dark(#d8e1ec, var(--color-dark-border-default));
   --admin-color-border-muted: light-dark(#e0e7ef, #252b33);
   --admin-color-border-card: light-dark(#dbe4ee, #282e36);
-  --admin-color-action-primary: #1f6feb;
+  --admin-color-action-primary: var(--color-dark-control-action);
   --admin-color-action-primary-dark: light-dark(#1559b7, #79c0ff);
-  --admin-color-action-text: light-dark(#1559b7, #79b8ff);
+  --admin-color-action-text: light-dark(#1559b7, var(--color-dark-control-action-text));
   --admin-color-thumbnail-surface: light-dark(#e8eef5, #1a1f26);
 
   /* Controls and shared states */
   --admin-color-control-text-tertiary: light-dark(#97a1b0, #8b949e);
   --admin-color-control-placeholder: light-dark(#9ba5b1, #555d67);
-  --admin-color-control-surface-muted: light-dark(#eef2f7, #1a1f26);
-  --admin-color-control-surface-hover: light-dark(#eef5ff, #162638);
-  --admin-color-control-surface-subtle-hover: light-dark(#f1f3f6, #191e25);
-  --admin-color-control-border-hover: light-dark(#aeb8c5, #6e7681);
-  --admin-color-control-border-selected: light-dark(#9fc2f5, #619de7);
+  --admin-color-control-surface-muted: light-dark(#eef2f7, var(--color-dark-surface-muted));
+  --admin-color-control-surface-hover: light-dark(#eef5ff, var(--color-dark-control-surface-hover));
+  --admin-color-control-surface-subtle-hover: light-dark(#f1f3f6, var(--color-dark-control-surface-subtle-hover));
+  --admin-color-control-border-hover: light-dark(#aeb8c5, var(--color-dark-control-border-hover));
+  --admin-color-control-border-selected: light-dark(#9fc2f5, var(--color-dark-control-border-selected));
   --admin-color-control-switch-thumb: light-dark(#d8dee7, #484f58);
   --admin-color-control-changed: light-dark(#d99a00, #e3b341);
   --admin-color-control-changed-surface: light-dark(#fff8e8, #262012);
@@ -52,8 +52,8 @@
   --admin-color-scrollbar-track-thumb: light-dark(rgba(20, 30, 44, .3), rgba(201, 209, 217, .28));
   --admin-color-scrollbar-thumb: light-dark(rgba(20, 30, 44, .26), rgba(201, 209, 217, .24));
   --admin-color-scrollbar-thumb-hover: light-dark(rgba(20, 30, 44, .42), rgba(201, 209, 217, .44));
-  --admin-color-overlay-scrollbar: light-dark(rgba(20, 30, 44, .34), rgba(201, 209, 217, .32));
-  --admin-color-overlay-scrollbar-active: light-dark(rgba(20, 30, 44, .54), rgba(201, 209, 217, .56));
+  --admin-color-overlay-scrollbar: light-dark(rgba(20, 30, 44, .34), var(--color-dark-scrollbar));
+  --admin-color-overlay-scrollbar-active: light-dark(rgba(20, 30, 44, .54), var(--color-dark-scrollbar-active));
 
   /*
    * Status palettes stay deliberately compact. Page and lifecycle states map
@@ -77,7 +77,7 @@
   --admin-color-success-action-hover: light-dark(#11522d, #8fd8a3);
 
   /* Status: warning */
-  --admin-color-warning-text: light-dark(#795d1d, #f2cc60);
+  --admin-color-warning-text: light-dark(#795d1d, var(--color-dark-warning-text));
   --admin-color-warning-text-strong: light-dark(#765314, #e3b341);
   --admin-color-warning-text-soft: light-dark(#795a0a, #d0ae7d);
   --admin-color-duplicate-text: light-dark(#906400, #d0ae7d);

@@ -1,315 +1,157 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from "react";
-import { brightnesses, devices, type GalleryFacetsDto } from "@imageshow/shared/browser";
+import { useCallback, useId, useRef, type ReactNode, type RefObject } from "react";
+import { publicImageOrders, type GalleryFacetsDto, type ShowOrder } from "@imageshow/shared/browser";
 import { CopyButton } from "../actions/CopyButton.js";
-import { FacetSelector } from "../data-display/FacetSelector.js";
 import { SelectMenu } from "../form/SelectMenu.js";
-import { Icon } from "../icon/Icon.js";
-import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
-import {
-  mobileViewportMediaQuery,
-  useMediaQuery
-} from "../../hooks/useMediaQuery.js";
+import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
+import { Icon, type IconName } from "../icon/Icon.js";
+import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
 import type { GalleryFilters } from "../../lib/gallery/gallery-query.js";
-import {
-  brightnessOptionLabel,
-  deviceOptionLabel
-} from "../../lib/ui/select-options.js";
+import { createPublicFilterDraft, createTagSelection, publicFilterChips, publicFilterLabels, publicFilterSections } from "../../lib/gallery/public-filter-draft.js";
 
-function randomLinkNeedsTruncation(
-  contentWidth: number,
-  availableWidth: number
-) {
-  return availableWidth > 0 && contentWidth - availableWidth > 0.5;
+const orderLabels: Record<ShowOrder, string> = { random: "随机模式", latest: "最新优先", oldest: "最旧优先" };
+const orderIcons: Record<ShowOrder, IconName> = { random: "shuffle-line", latest: "sort-desc", oldest: "sort-asc" };
+
+export function PublicImageOrderControl({ order, onChange, compact = false }: {
+  order: ShowOrder; onChange: (order: ShowOrder) => void; compact?: boolean;
+}) {
+  if (compact) {
+    const next = publicImageOrders[(publicImageOrders.indexOf(order) + 1) % publicImageOrders.length]!;
+    const label = `排列顺序：${orderLabels[order]}；点击切换为${orderLabels[next]}`;
+    return <button type="button" className="public-round-control pressable" aria-label={label} title={label}
+      onClick={() => onChange(next)}><span className="public-round-surface"><Icon name={orderIcons[order]} /></span></button>;
+  }
+  return <SelectMenu value={order} onChange={(value) => onChange(value as ShowOrder)} ariaLabel="排列顺序"
+    className="public-toolbar-order" menuClassName="public-gallery-menu"
+    options={publicImageOrders.map((value) => ({ value, label: orderLabels[value] }))} />;
 }
 
-function RandomLinkText({ value }: { value: string }) {
-  const viewportRef = useRef<HTMLSpanElement>(null);
-  const contentRef = useRef<HTMLSpanElement>(null);
-  const selectOnClickRef = useRef(false);
-  const [truncated, setTruncated] = useState(false);
-  const selectLink = () => {
-    const content = contentRef.current;
-    if (content) content.ownerDocument.getSelection()?.selectAllChildren(content);
-  };
-
-  useLayoutEffect(() => {
-    const viewport = viewportRef.current;
-    const content = contentRef.current;
-    if (!viewport || !content) return;
-
-    const measure = () => {
-      const next = randomLinkNeedsTruncation(
-        content.scrollWidth,
-        viewport.clientWidth
-      );
-      setTruncated((current) => current === next ? current : next);
-    };
-    measure();
-
-    const ownerWindow = viewport.ownerDocument.defaultView;
-    const observer = typeof ownerWindow?.ResizeObserver === "function"
-      ? new ownerWindow.ResizeObserver(measure)
-      : undefined;
-    observer?.observe(viewport);
-    observer?.observe(content);
-    ownerWindow?.addEventListener("resize", measure);
-
-    let active = true;
-    void viewport.ownerDocument.fonts?.ready.then(() => {
-      if (active) measure();
-    });
-    return () => {
-      active = false;
-      observer?.disconnect();
-      ownerWindow?.removeEventListener("resize", measure);
-    };
-  }, [value]);
-
-  return (
-    <span
-      ref={viewportRef}
-      className={`generated-link-value${truncated ? " is-truncated" : ""}`}
-      title={truncated ? value : undefined}
-      tabIndex={0}
-      role="textbox"
-      aria-label="随机图片链接"
-      aria-readonly="true"
-      onFocus={selectLink}
-      onPointerDown={(event) => {
-        selectOnClickRef.current = event.button === 0
-          && event.currentTarget.ownerDocument.activeElement !== event.currentTarget;
-      }}
-      onClick={() => {
-        if (!selectOnClickRef.current) return;
-        selectOnClickRef.current = false;
-        // Reapply after the browser's first-click caret placement. Further
-        // clicks while focused keep native partial text selection.
-        selectLink();
-      }}
-      onBlur={() => { selectOnClickRef.current = false; }}
-      onPointerCancel={() => { selectOnClickRef.current = false; }}
-    >
-      <span ref={contentRef} className="generated-link-text">{value}</span>
-      {truncated && (
-        <span className="generated-link-truncation" aria-hidden="true">...</span>
-      )}
-    </span>
-  );
+export function PublicToolbarPopover({ label, icon, iconOnly = false, minWidth = 280, autoFocus = true, openerRef, children }: {
+  label: string;
+  icon: IconName;
+  iconOnly?: boolean;
+  minWidth?: number;
+  autoFocus?: boolean;
+  openerRef?: RefObject<HTMLButtonElement | null>;
+  children: (close: () => void) => ReactNode;
+}) {
+  const ownTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const triggerRef = openerRef ?? ownTriggerRef;
+  const contentRef = useRef<HTMLElement | null>(null);
+  const id = useId();
+  const menu = useAnchoredMenu({
+    triggerRef,
+    getSize: () => ({ minWidth, maxWidth: window.innerWidth - 24,
+      align: "end", flipThreshold: 180, minAvailable: 120, maxHeight: 420 }),
+    initialMaxHeight: 420, closeOnEscape: true, closeOnFocusOutside: true,
+    focusOnOpen: () => autoFocus ? contentRef.current?.querySelector<HTMLElement>("button, a, input") : null,
+    focusAfterClose: () => triggerRef.current
+  });
+  const bindMenuRef = useCallback((element: HTMLElement | null) => {
+    contentRef.current = element;
+    menu.menuRef(element);
+  }, [menu.menuRef]);
+  return <>
+    <button ref={triggerRef} type="button" className={`public-toolbar-button${iconOnly ? " is-icon" : ""}`}
+      aria-label={label} title={iconOnly ? label : undefined}
+      aria-expanded={menu.open} aria-controls={id}
+      onClick={() => menu.open ? menu.requestCloseAndRestoreFocus() : menu.openMenu()}>
+      <Icon name={icon} />{!iconOnly && label}
+    </button>
+    {menu.open && <AnchoredPopup id={id}
+      popupRef={bindMenuRef}
+      className={`public-toolbar-popover public-gallery-menu${menu.closing ? " is-closing" : ""}`}
+      role="region" aria-label={label} style={menu.position}
+      aria-hidden={menu.closing} inert={menu.closing} onAnimationEnd={menu.onAnimationEnd}>
+      {children(menu.requestCloseAndRestoreFocus)}
+    </AnchoredPopup>}
+  </>;
 }
 
 export function PublicImageToolbar({
-  animateEntrance,
-  filters,
-  facets,
-  randomUrl,
-  tagInvalid = false,
-  randomLinkError,
-  filtersOpen,
-  filterPanelHidden,
-  filterMenuDismissSignal,
-  toolbarVisible,
-  toolbarRef,
-  filterToggleRef,
-  clearFiltersRef,
-  filterPanelRef,
-  toggleFilters,
-  dismissFilterMenus,
-  onFilterChange,
-  onClearFilters
+  embedded, animateEntrance, filters, facets, pageUrl, randomUrl, randomLinkError, tagInvalid = false,
+  toolbarVisible, toolbarRef, filterToggleRef, filtersOpen, onOpenFilters,
+  onClearFilters, order, onOrderChange, leadingControls, viewControls, compact = false
 }: {
+  embedded: boolean;
   animateEntrance: boolean;
   filters: GalleryFilters;
   facets: GalleryFacetsDto | undefined;
+  pageUrl: string | null;
   randomUrl: string | null;
-  tagInvalid?: boolean;
   randomLinkError?: string | null;
-  filtersOpen: boolean;
-  filterPanelHidden: boolean | undefined;
-  filterMenuDismissSignal: number;
+  tagInvalid?: boolean;
   toolbarVisible: boolean;
   toolbarRef: RefObject<HTMLElement | null>;
   filterToggleRef: RefObject<HTMLButtonElement | null>;
-  clearFiltersRef: RefObject<HTMLButtonElement | null>;
-  filterPanelRef: RefObject<HTMLDivElement | null>;
-  toggleFilters: () => void;
-  dismissFilterMenus: () => void;
-  onFilterChange: (key: keyof GalleryFilters, value: string) => void;
+  filtersOpen: boolean;
+  onOpenFilters: () => void;
   onClearFilters: () => void;
+  order: ShowOrder;
+  onOrderChange: (order: ShowOrder) => void;
+  leadingControls?: ReactNode;
+  viewControls?: ReactNode;
+  compact?: boolean;
 }) {
   const entrance = useOneShotAnimation(animateEntrance);
-  const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
-  const actionFollowsFilters = useMediaQuery("(min-width: 1000px)");
-  const activeFilterCount = [
-    filters.device,
-    filters.brightness,
-    filters.theme,
-    filters.tag || tagInvalid,
-    filters.author
-  ].filter(Boolean).length;
-  const clearDisabled = activeFilterCount === 0;
-  const clearFilters = () => {
-    dismissFilterMenus();
-    onClearFilters();
-  };
-  const desktopClearAction = (
-    <div className="gallery-filter-action">
-      <button
-        ref={!mobileLayout ? clearFiltersRef : undefined}
-        type="button"
-        className="gallery-filter-clear pressable"
-        disabled={clearDisabled}
-        onClick={clearFilters}
-      >
-        清空筛选
-      </button>
-    </div>
-  );
-  const randomLink = randomUrl === null ? (
-    <div className="theme-link"><span className="muted" role={randomLinkError ? "alert" : undefined}>
-      {randomLinkError ?? "标签条件确认后可复制随机链接"}
-    </span></div>
-  ) : (
-    <div className="theme-link">
-      <div className="generated-link-field">
-        <span className="generated-link-label">随机API</span>
-        <code>
-          <RandomLinkText value={randomUrl} />
-        </code>
-        <CopyButton value={randomUrl} ariaLabel="复制随机图片链接" />
-      </div>
-    </div>
-  );
+  const draft = createPublicFilterDraft(filters);
+  const tag = draft.tag.kind === "selection" ? draft.tag.selection : createTagSelection();
+  const chips = publicFilterChips(draft, tag, facets);
+  const count = chips.length;
+  const hasFilters = count > 0 || tagInvalid;
+  const summary = tagInvalid ? "标签条件待处理" : count ? publicFilterSections.flatMap((section) => {
+    const group = chips.filter((chip) => chip.section === section);
+    if (!group.length) return [];
+    if (section === "device" || section === "brightness") return [group[0].label];
+    return [`${group[0].exclude ? "排除" : ""}${publicFilterLabels[section]} ${group.length} 项`];
+  }).join(" · ") : "全部图片";
 
   return (
-    <section
-      ref={toolbarRef}
-      className={`gallery-toolbar public-navigation-secondary${entrance.active ? " is-gallery-toolbar-entrance" : ""}${filtersOpen ? " filters-open" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}
-      inert={!toolbarVisible}
+    <section ref={toolbarRef}
+      className={`gallery-toolbar public-navigation-secondary${entrance.active ? " is-gallery-toolbar-entrance" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}
+      aria-label="图片浏览工具栏" inert={!toolbarVisible}
       onAnimationEnd={(event) => {
-        if (
-          event.currentTarget === event.target
-          && event.animationName === "gallery-toolbar-entrance"
-        ) {
-          entrance.finish();
-        }
-      }}
-    >
-      <div className="gallery-filter-actions">
-        <button
-          ref={filterToggleRef}
-          type="button"
-          className="gallery-filter-toggle pressable"
-          aria-expanded={filtersOpen}
-          aria-controls="gallery-filter-panel"
-          onClick={toggleFilters}
-        >
-          <Icon name="filter-3-line" />
-          筛选
-          {activeFilterCount > 0 && (
-            <span className="gallery-filter-count">{activeFilterCount}</span>
-          )}
-          <span className="gallery-filter-chevron">
-            <Icon name="arrow-down-s-line" />
-          </span>
-        </button>
-        {mobileLayout && (
-          <>
-            <span className="gallery-filter-action-divider" aria-hidden="true" />
-            <button
-              ref={clearFiltersRef}
-              type="button"
-              className="gallery-filter-clear gallery-filter-clear-mobile pressable"
-              disabled={clearDisabled}
-              onClick={clearFilters}
-            >
-              清空
-            </button>
-          </>
-        )}
-      </div>
-      <AnchoredMenuDismissSignalContext.Provider value={filterMenuDismissSignal}>
-        <div
-          ref={filterPanelRef}
-          id="gallery-filter-panel"
-          className="gallery-filter-panel"
-          role="group"
-          aria-label="图片筛选条件"
-          aria-hidden={filterPanelHidden}
-          inert={filterPanelHidden}
-        >
-          <div className="gallery-filter-fields">
-            <div className="gallery-axis">
-              <SelectMenu
-                value={filters.device}
-                onChange={(value) => onFilterChange("device", value)}
-                options={[
-                  { value: "", label: "全部设备" },
-                  { value: "auto", label: "自动设备" },
-                  ...devices.map((value) => ({
-                    value,
-                    label: deviceOptionLabel(value)
-                  }))
-                ]}
-                ariaLabel="设备"
-                menuClassName="public-gallery-menu"
-              />
-            </div>
-            <div className="gallery-axis">
-              <SelectMenu
-                value={filters.brightness}
-                onChange={(value) => onFilterChange("brightness", value)}
-                options={[
-                  { value: "", label: "全部亮度" },
-                  ...brightnesses.map((value) => ({
-                    value,
-                    label: brightnessOptionLabel(value)
-                  }))
-                ]}
-                ariaLabel="亮度"
-                menuClassName="public-gallery-menu"
-              />
-            </div>
-            <div className="gallery-filter-field gallery-theme-filter">
-              <FacetSelector
-                options={facets?.themes ?? []}
-                value={filters.theme}
-                onChange={(value) => onFilterChange("theme", value)}
-                noun="主题"
-                ariaLabel="主题"
-                controlId="gallery-theme-facet"
-                menuClassName="public-gallery-menu"
-              />
-            </div>
-            <div className="gallery-filter-field gallery-tag-filter">
-              <FacetSelector
-                selectionMode="any-all"
-                options={facets?.tags ?? []}
-                value={filters.tag}
-                onChange={(value) => onFilterChange("tag", value)}
-                noun="标签"
-                ariaLabel="标签"
-                controlId="gallery-tag-facet"
-                menuClassName="public-gallery-menu"
-              />
-            </div>
-            <div className="gallery-filter-field gallery-author-filter">
-              <FacetSelector
-                options={facets?.authors ?? []}
-                value={filters.author}
-                onChange={(value) => onFilterChange("author", value)}
-                noun="作者"
-                ariaLabel="作者"
-                controlId="gallery-author-facet"
-                menuClassName="public-gallery-menu"
-              />
-            </div>
-          </div>
-          {!mobileLayout && actionFollowsFilters && desktopClearAction}
-          {randomLink}
-          {!mobileLayout && !actionFollowsFilters && desktopClearAction}
+        if (event.currentTarget === event.target && event.animationName === "gallery-toolbar-entrance") entrance.finish();
+      }}>
+      <div className="public-toolbar-leading">
+        {!compact && leadingControls}
+        <div className={`public-filter-buttons${hasFilters ? " has-filters" : ""}`} role="group" aria-label="筛选操作">
+          <button ref={filterToggleRef} type="button" className="public-toolbar-button public-filter-trigger"
+            aria-haspopup="dialog" aria-expanded={filtersOpen} onClick={onOpenFilters}>
+            {!hasFilters && <Icon name="filter-3-line" />}{hasFilters ? "重新筛选" : "筛选"}
+          </button>
+          {hasFilters && <button type="button" className="public-toolbar-button public-filter-clear"
+            onClick={() => { filterToggleRef.current?.focus({ preventScroll: true }); onClearFilters(); }}>清空</button>}
         </div>
-      </AnchoredMenuDismissSignalContext.Provider>
+      </div>
+      {!compact && <span className="public-toolbar-summary" title={summary}>{summary}</span>}
+      <div className="public-toolbar-actions">
+        {!compact && <><PublicImageOrderControl order={order} onChange={onOrderChange} />{viewControls}</>}
+        <PublicToolbarPopover label="分享" icon="share-line" iconOnly minWidth={480} autoFocus={false}>
+          {() => <>
+            <section className="public-toolbar-share-item" aria-label="页面链接">
+              <header className="public-toolbar-share-heading">
+                <strong>页面链接</strong>
+                <p>{embedded ? "链接将打开图库主站，保留当前筛选、排序与浏览模式" : "保留当前筛选、排列顺序与浏览模式"}</p>
+              </header>
+              {pageUrl ? <div className="public-toolbar-share-link">
+                <input readOnly value={pageUrl} aria-label="页面链接" onClick={(event) => event.currentTarget.select()} />
+                <CopyButton value={pageUrl} ariaLabel="复制页面链接" />
+              </div> : <p>请先确认标签条件</p>}
+            </section>
+            <section className="public-toolbar-share-item" aria-label="随机 API 链接">
+              <header className="public-toolbar-share-heading">
+                <strong>随机 API 链接</strong>
+                <p>按当前筛选条件随机获取图片</p>
+              </header>
+              {randomUrl ? <div className="public-toolbar-share-link">
+                <input readOnly value={randomUrl} aria-label="随机 API 链接" onClick={(event) => event.currentTarget.select()} />
+                <CopyButton value={randomUrl} ariaLabel="复制随机 API 链接" />
+              </div> : <p role={randomLinkError ? "alert" : undefined}>{randomLinkError ?? "请先确认标签条件"}</p>}
+            </section>
+          </>}
+        </PublicToolbarPopover>
+      </div>
     </section>
   );
 }

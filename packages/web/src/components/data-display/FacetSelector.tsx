@@ -14,6 +14,8 @@ import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
 import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import { MenuItemButton } from "../feedback/MenuItemButton.js";
 import { AnchoredMenuDismissSignalContext, useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
+import { useFacetSearchMatcher } from "../../hooks/useFacetSearchMatcher.js";
+import { useImeSearchInput } from "../../hooks/useImeSearchInput.js";
 import {
   facetSuggestions,
   normalizeFacetSearchQuery
@@ -53,6 +55,7 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
   const dismissSignal = useContext(AnchoredMenuDismissSignalContext);
   const [selectionError, setSelectionError] = useState("");
   const [query, setQuery] = useState("");
+  const searchInput = useImeSearchInput(query, setQuery);
   const [mode, setMode] = useState<FacetMode>(valueMode);
   const controlRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -78,7 +81,7 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     getSize: (): AnchoredMenuSize => ({ minWidth: 300, maxWidth: window.innerWidth - 16, flipThreshold: 260, minAvailable: 180, maxHeight: 420 }),
     initialMaxHeight: 420,
     disabled,
-    onClose: () => setQuery(""),
+    onClose: () => searchInput.reset(),
     closeOnEscape: true,
     closeOnFocusOutside: true,
     focusAfterClose: () => triggerRef.current
@@ -96,8 +99,10 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
   }, [menuRef]);
   const selectedSet = new Set(parsed.selected);
   const normalizedQuery = normalizeFacetSearchQuery(query);
-  const results = facetSuggestions(options, query, selectedSet);
-  const searchStatus = normalizedQuery
+  const { matchName, status: pinyinStatus } = useFacetSearchMatcher(open);
+  const pinyinPending = /[a-zü]/i.test(normalizedQuery) && pinyinStatus === "loading";
+  const results = facetSuggestions(options, query, selectedSet, matchName);
+  const searchStatus = pinyinPending ? "正在加载拼音搜索" : normalizedQuery
     ? results.length
       ? `${results.length} 个可添加的${noun}`
       : `没有可添加的${noun}`
@@ -136,6 +141,7 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     return Boolean(target);
   };
   const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key !== "Tab" || event.shiftKey) return;
     if (focusMenuEdge("first")) event.preventDefault();
   };
@@ -175,7 +181,9 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
       onKeyDown={onMenuKeyDown}
     >
       <div className="facet-search-results" aria-label={`待选${noun}`}>
-        {!normalizedQuery && <span className="muted">输入关键字搜索{noun}</span>}
+        {!normalizedQuery && <span className="muted">输入名称、slug 或拼音搜索{noun}</span>}
+        {pinyinPending && <span className="muted" role="status">正在加载拼音搜索…</span>}
+        {pinyinStatus === "error" && <span className="muted" role="status" title="仍可按名称或 slug 搜索">拼音加载失败，请刷新重试</span>}
         {normalizedQuery && results.map((option) => (
           <MenuItemButton
             className="facet-search-option"
@@ -184,14 +192,14 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
             pointerFocus="preserve"
             onActivate={() => {
               if (!emitSelection([...parsed.selected, option.slug])) return;
-              setQuery("");
+              searchInput.reset();
               searchRef.current?.focus({ preventScroll: true });
             }}
           >
             <FacetSuggestionLabel option={option} />
           </MenuItemButton>
         ))}
-        {normalizedQuery && !results.length && <span className="muted">没有可添加的{noun}</span>}
+        {normalizedQuery && !pinyinPending && !results.length && <span className="muted">没有可添加的{noun}</span>}
       </div>
       <div className="facet-menu-divider" role="separator" />
       <div className="facet-selected-list" aria-label={`已选${noun}`}>
@@ -248,8 +256,7 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
             className="facet-search-input"
             type="search"
             size={1}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            {...searchInput.inputProps}
             onKeyDown={onSearchKeyDown}
             placeholder={`搜索${noun}`}
             aria-label={`搜索${resolvedAriaLabel}`}

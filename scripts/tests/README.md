@@ -60,7 +60,7 @@ npm run test:final:web
 
 ```bash
 npx tsx --test --test-name-pattern="^\[Server/内容接入\]" scripts/tests/final-server.test.ts
-npx tsx --test --test-name-pattern="^\[Web/展映\]" scripts/tests/final-web.test.ts
+npx tsx --import ./scripts/tests/support/web-assets.mjs --test --test-name-pattern="^\[Web/展映\]" scripts/tests/final-web.test.ts
 ```
 
 数据库集成、其中的存储 / 接入跨域合同与 Web 队列 Hook 还提供进程环境变量选择内部具名场景。
@@ -73,7 +73,7 @@ IMAGESHOW_DATABASE_SCENARIO=cold-redis npx tsx --test \
 IMAGESHOW_DATABASE_SCENARIO=storage-ingestion \
 IMAGESHOW_STORAGE_INGESTION_SCENARIO=commit-success npx tsx --test \
   --test-name-pattern="数据库以单一基线" scripts/tests/server/database-integration.test.ts
-IMAGESHOW_WEB_QUEUE_SCENARIO=handoff-completion npx tsx --test \
+IMAGESHOW_WEB_QUEUE_SCENARIO=handoff-completion npx tsx --import ./scripts/tests/support/web-assets.mjs --test \
   --test-name-pattern="Server 内容接入队列 Hook" scripts/tests/web/ingestion.test.ts
 ```
 
@@ -97,6 +97,9 @@ PowerShell 中使用 `$env:IMAGESHOW_DATABASE_SCENARIO = "cold-redis"`、
 | 接入服务与队列 | `ingestion-service-contracts`、`ingestion-action-protocol`、`ingestion-upload-lifecycle`、`ingestion-import-queue`、`ingestion-queue-actions`、`ingestion-http-boundaries`、`redis-canonical` |
 | 正式提交 | `ingestion-commit-guards`、`commit-success`、`commit-conflict`、`commit-recovery` |
 | 接入文件生命周期 | `ingestion-raw-lifecycle`、`ingestion-orphan-lifecycle` |
+
+Web 定向命令使用 `--import ./scripts/tests/support/web-assets.mjs` 加载组件样式桩；
+真实 CSS 排版由浏览器验收覆盖，`test:final:web` 已包含此选项。
 
 Web 队列场景值为 `strict-mode`、
 `empty-reconnect`、`reconnect-pagination`、`handoff-completion`。

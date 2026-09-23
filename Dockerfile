@@ -1,6 +1,6 @@
-ARG NPM_VERSION=12.0.2
+ARG NPM_VERSION=12.1.0
 
-FROM node:26.9.0 AS node-base
+FROM node:26.10.0 AS node-base
 ARG NPM_VERSION
 RUN npm install --global npm@${NPM_VERSION}
 
@@ -24,7 +24,7 @@ COPY packages/shared/package.json packages/shared/package.json
 COPY packages/server/package.json packages/server/package.json
 RUN npm ci --omit=dev --workspace @imageshow/shared --workspace @imageshow/server --include-workspace-root=false
 
-FROM node:26.9.0-slim AS runtime
+FROM node:26.10.0-slim AS runtime
 ARG NPM_VERSION
 WORKDIR /app
 ENV NODE_ENV=production \

@@ -1,6 +1,5 @@
 import { basicTagSelection, readableFilterSearch, type TagMatchMode } from "@imageshow/shared/browser";
 import type {
-  GalleryStatsDto,
   PublicSiteSettings
 } from "@imageshow/shared/browser";
 import {
@@ -17,11 +16,12 @@ import {
 import { AppHeader } from "../../components/navigation/AppHeader.js";
 import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
-import { useGalleryStats } from "../../lib/api/site-queries.js";
+import { usePublicFilterStats } from "../../hooks/usePublicFilterStats.js";
 import { publicHomeBrowsePath } from "../../lib/constants.js";
 import {
   emptyGalleryFilters,
   galleryRouteSearchParams,
+  galleryStatsSearch,
   type GalleryFilters
 } from "../../lib/gallery/gallery-query.js";
 import { HomeCatalog } from "./HomeCatalog.js";
@@ -72,7 +72,6 @@ export function HomePage({
   site: Pick<PublicSiteSettings, "home" | "show" | "gallery" | "icp" | "mps" | "footer">;
 }) {
   const catalogRef = useRef<HTMLElement>(null);
-  const lastSuccessfulStatsRef = useRef<GalleryStatsDto | undefined>(undefined);
   const {
     hadAppearedBeforeMount: navigationHadAppearedBeforeMount,
     markAppeared: markNavigationAppeared,
@@ -89,19 +88,11 @@ export function HomePage({
     else if (filters.tag || !Object.values(next).some(Boolean)) setTagMode("any");
   };
   const statsSearch = useMemo(
-    () => readableFilterSearch(galleryRouteSearchParams(filters, false)),
+    () => galleryStatsSearch(filters),
     [filters]
   );
-  const statsQuery = useGalleryStats(statsSearch);
-  const currentStats = statsQuery.data;
-
-  useLayoutEffect(() => {
-    if (currentStats && !statsQuery.isPlaceholderData) {
-      lastSuccessfulStatsRef.current = currentStats;
-    }
-  }, [currentStats, statsQuery.isPlaceholderData]);
-
-  const stats = currentStats ?? lastSuccessfulStatsRef.current;
+  const statsQuery = usePublicFilterStats(statsSearch);
+  const stats = statsQuery.displayData;
   const background = site.home.background;
   const bannerLabel = site.home.banner_label;
   const bannerTitle = site.home.banner_title;
@@ -192,6 +183,7 @@ export function HomePage({
         isPending={statsQuery.isPending}
         isError={statsQuery.isError}
         isRefreshing={statsQuery.isFetching}
+        availabilityUnverified={statsQuery.availabilityUnverified}
         onFiltersChange={updateFilters}
         tagMode={tagMode}
         onTagModeChange={setTagMode}
