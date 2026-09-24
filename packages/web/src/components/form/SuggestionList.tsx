@@ -57,6 +57,7 @@ export function handleSuggestionNavigationKey(
 export function SuggestionList({
   open,
   matches,
+  statusMessage,
   activeIndex,
   selectedSlug,
   ariaLabel,
@@ -71,6 +72,7 @@ export function SuggestionList({
 }: {
   open: boolean;
   matches: readonly FacetSuggestion[];
+  statusMessage?: string;
   activeIndex: number;
   selectedSlug?: string;
   ariaLabel?: string;
@@ -83,7 +85,7 @@ export function SuggestionList({
   onActiveIndexChange: (index: number) => void;
   onChoose: (slug: string) => void;
 }) {
-  if (!open || !matches.length) return null;
+  if (!open) return null;
 
   return (
     <AnchoredPopup
@@ -98,6 +100,11 @@ export function SuggestionList({
       style={position}
       onAnimationEnd={onAnimationEnd}
     >
+      {statusMessage && (
+        <div className="suggestion-status muted" role="status">
+          {statusMessage}
+        </div>
+      )}
       {matches.map((option, index) => {
         const active = index === activeIndex;
         const selected = selectedSlug !== undefined

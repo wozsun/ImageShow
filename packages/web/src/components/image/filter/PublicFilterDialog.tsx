@@ -98,7 +98,12 @@ export function PublicFilterDialog({
     createPublicFilterDraft(filters, unresolvedTags, unresolvedSelectors)
   );
   const [query, setQuery] = useState("");
-  const { matchName, status: pinyinStatus } = useFacetSearchMatcher(true);
+  const {
+    matchName,
+    status: pinyinStatus,
+    pending: pinyinPending,
+    statusMessage
+  } = useFacetSearchMatcher(true, query);
   const [selectionError, setSelectionError] = useState("");
   const [revealChip, setRevealChip] = useState<Pick<
     PublicFilterChip,
@@ -128,7 +133,6 @@ export function PublicFilterDialog({
       author: filterOptions(facets?.authors ?? [], normalizedQuery, "author", matchName)
     };
   }, [facets, normalizedQuery, totals.data, matchName]);
-  const pinyinPending = /[a-zü]/i.test(normalizedQuery) && pinyinStatus === "loading";
   const directorySections = publicFilterSections.filter(
     (section) => !normalizedQuery || (section !== "device" && section !== "brightness")
   );
@@ -446,21 +450,18 @@ export function PublicFilterDialog({
                 tabIndex={0}
                 aria-label="筛选选项目录"
               >
-                {pinyinPending && (
+                {statusMessage && (
                   <div className="public-filter-notice" role="status">
-                    正在加载拼音搜索…
-                  </div>
-                )}
-                {pinyinStatus === "error" && (
-                  <div className="public-filter-notice" role="status">
-                    拼音搜索加载失败，仍可按名称或 slug 搜索。
-                    <button
-                      type="button"
-                      title="刷新会清除尚未应用的筛选条件"
-                      onClick={() => window.location.reload()}
-                    >
-                      刷新页面重试
-                    </button>
+                    {statusMessage}
+                    {pinyinStatus === "error" && (
+                      <button
+                        type="button"
+                        title="刷新会清除尚未应用的筛选条件"
+                        onClick={() => window.location.reload()}
+                      >
+                        刷新页面重试
+                      </button>
+                    )}
                   </div>
                 )}
                 {Boolean(facetsError) && (

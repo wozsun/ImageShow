@@ -43,6 +43,12 @@ if (!environmentState[environmentKey]) {
     writable: true,
     value: null
   });
+  // Advertise native composition events so React handles the dispatched IME
+  // events instead of its legacy key-code based composition fallback.
+  Object.defineProperty(window, "CompositionEvent", {
+    configurable: true,
+    value: window.Event
+  });
   Object.defineProperty(window, "getSelection", {
     configurable: true,
     value: () => ({

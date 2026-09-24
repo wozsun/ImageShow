@@ -7,6 +7,7 @@ import {
 } from "react";
 import { vocabularyDisplayNameMaxLength } from "@imageshow/shared/browser";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
+import { useFacetSearchMatcher } from "../../hooks/useFacetSearchMatcher.js";
 import { useImeInputSession } from "../../hooks/useImeInputSession.js";
 import {
   facetSuggestions,
@@ -52,6 +53,8 @@ export function SlugComboInput({
 
   const [focused, setFocused] = useState(false);
   const [editingValue, setEditingValue] = useState(value);
+  // Keep IME preedit visible without changing the confirmed suggestion query.
+  const [query, setQuery] = useState(value);
   const publishedValueRef = useRef(value);
   const pendingChoiceRef = useRef<string | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -82,7 +85,10 @@ export function SlugComboInput({
 
   useEffect(() => {
     publishedValueRef.current = value;
-    if (!focused && !imeSession.isComposing()) setEditingValue(value);
+    if (!focused && !imeSession.isComposing()) {
+      setEditingValue(value);
+      setQuery(value);
+    }
   }, [focused, value]);
 
   const publishSlug = (slug: string) => {
@@ -94,6 +100,7 @@ export function SlugComboInput({
 
   const updateQuery = (nextValue: string) => {
     setEditingValue(nextValue);
+    setQuery(normalizeFacetSearchQuery(nextValue));
     if (publishTypedChanges) publishSlug(parseSlug(nextValue) ?? "");
     setActiveIndex(-1);
     if (!normalizeFacetSearchQuery(nextValue)) {
@@ -104,10 +111,10 @@ export function SlugComboInput({
     if (!open) openMenu();
   };
 
-  const query = normalizeFacetSearchQuery(focused ? editingValue : value);
-
-  const matches = facetSuggestions(options, query);
-  const suggestionOpen = open && matches.length > 0;
+  const { matchName, statusMessage } = useFacetSearchMatcher(open, query);
+  const matches = facetSuggestions(options, query, undefined, matchName);
+  const searchMessage = query ? statusMessage : undefined;
+  const suggestionOpen = open && (matches.length > 0 || Boolean(searchMessage));
 
   const typedSlug = parseSlug(focused ? editingValue : value);
   const isNew = Boolean(typedSlug)
@@ -116,6 +123,7 @@ export function SlugComboInput({
   const commitAndBlur = (slug: string) => {
     pendingChoiceRef.current = slug;
     setEditingValue(slug);
+    setQuery(slug);
     publishSlug(slug);
     imeSession.settleEditing(facetDisplayName(options, slug));
 
@@ -159,6 +167,7 @@ export function SlugComboInput({
     <SuggestionList
       open={suggestionOpen}
       matches={matches}
+      statusMessage={searchMessage}
       activeIndex={activeIndex}
       selectedSlug={value}
       ariaLabel={ariaLabel}
@@ -183,6 +192,7 @@ export function SlugComboInput({
         onFocus={() => {
           pendingChoiceRef.current = null;
           setEditingValue(value);
+          setQuery(value);
           publishedValueRef.current = value;
           imeSession.beginEditing();
           setFocused(true);
@@ -194,6 +204,7 @@ export function SlugComboInput({
           const slug = chosenSlug ?? parseSlug(event.currentTarget.value) ?? "";
           publishSlug(slug);
           setEditingValue(slug);
+          setQuery(slug);
           imeSession.settleEditing(facetDisplayName(options, slug));
           setFocused(false);
           if (open) requestClose();

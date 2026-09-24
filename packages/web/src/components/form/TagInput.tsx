@@ -9,6 +9,7 @@ import {
 } from "react";
 import { vocabularyDisplayNameMaxLength } from "@imageshow/shared/browser";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
+import { useFacetSearchMatcher } from "../../hooks/useFacetSearchMatcher.js";
 import { useImeInputSession } from "../../hooks/useImeInputSession.js";
 import { Icon } from "../icon/Icon.js";
 import {
@@ -67,6 +68,8 @@ export function TagInput({
   placeholder?: string;
 }) {
   const [text, setText] = useState("");
+  // Keep IME preedit visible without changing the confirmed suggestion query.
+  const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
   const imeSession = useImeInputSession(text);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -235,15 +238,17 @@ export function TagInput({
     refreshScrollAvailability();
   }, [disabled, cancelPendingScroll, refreshScrollAvailability, suggestions, text, value]);
 
-  const query = normalizeFacetSearchQuery(text);
+  const { matchName, statusMessage } = useFacetSearchMatcher(open, query);
   const selected = new Set(value);
 
   const knownSlugs = new Set(suggestions.map((option) => option.slug));
-  const matches = facetSuggestions(suggestions, query, selected);
-  const suggestionOpen = open && matches.length > 0;
+  const matches = facetSuggestions(suggestions, query, selected, matchName);
+  const searchMessage = query ? statusMessage : undefined;
+  const suggestionOpen = open && (matches.length > 0 || Boolean(searchMessage));
 
   const updateQuery = (nextText: string) => {
     setText(nextText);
+    setQuery(normalizeFacetSearchQuery(nextText));
     setActiveIndex(-1);
     if (!normalizeFacetSearchQuery(nextText)) {
       if (open) requestClose();
@@ -259,6 +264,7 @@ export function TagInput({
       || selected.has(tag)) return false;
     onChange([...value, tag]);
     setText("");
+    setQuery("");
     setActiveIndex(-1);
     if (open) requestClose();
     return true;
@@ -324,6 +330,7 @@ export function TagInput({
     <SuggestionList
       open={suggestionOpen}
       matches={matches}
+      statusMessage={searchMessage}
       activeIndex={activeIndex}
       ariaLabel={ariaLabel}
       listId={listId}
@@ -343,6 +350,7 @@ export function TagInput({
     }
     choiceSettledCompositionRef.current = false;
     setText("");
+    setQuery("");
     setActiveIndex(-1);
     imeSession.settleEditing("");
     if (open) requestClose();

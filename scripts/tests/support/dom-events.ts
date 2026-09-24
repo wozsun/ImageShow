@@ -41,7 +41,8 @@ export function dispatchDomEvent(
 export function inputText(
   window: Window,
   control: HTMLInputElement | HTMLTextAreaElement,
-  value: string
+  value: string,
+  { focus = true, isComposing = false }: { focus?: boolean; isComposing?: boolean } = {}
 ) {
   const selectionView = control.ownerDocument.defaultView ?? window;
   const missingSelection = typeof selectionView.getSelection !== "function";
@@ -79,10 +80,10 @@ export function inputText(
       value: "text"
     });
   }
-  dispatchDomEvent(window, control, "focusin");
+  if (focus) dispatchDomEvent(window, control, "focusin");
   try {
     setNativeControlValue(control, value);
-    const event = dispatchDomEvent(window, control, "input");
+    const event = dispatchDomEvent(window, control, "input", { isComposing });
     dispatchDomEvent(window, control, "keyup", { key: "Unidentified" });
     return event;
   } finally {

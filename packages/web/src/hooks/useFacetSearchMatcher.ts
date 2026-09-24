@@ -7,7 +7,7 @@ const loadPinyinSearch = createPageLifetimeModuleLoader(
 );
 
 /** Load the shared phonetic search capability only while a search surface is open. */
-export function useFacetSearchMatcher(enabled: boolean) {
+export function useFacetSearchMatcher(enabled: boolean, query: string) {
   const [matchName, setMatchName] = useState(() => matchFacetText);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   useEffect(() => {
@@ -27,5 +27,11 @@ export function useFacetSearchMatcher(enabled: boolean) {
       active = false;
     };
   }, [enabled]);
-  return { matchName, status };
+  const pending = /[a-zü]/i.test(query) && status === "loading";
+  const statusMessage = pending
+    ? "正在加载拼音搜索…"
+    : status === "error"
+      ? "拼音搜索加载失败，仍可按名称或 slug 搜索。"
+      : undefined;
+  return { matchName, status, pending, statusMessage };
 }

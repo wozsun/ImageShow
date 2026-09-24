@@ -122,8 +122,11 @@ export function FacetSelector({
   );
   const selectedSet = new Set(parsed.selected);
   const normalizedQuery = normalizeFacetSearchQuery(query);
-  const { matchName, status: pinyinStatus } = useFacetSearchMatcher(open);
-  const pinyinPending = /[a-zü]/i.test(normalizedQuery) && pinyinStatus === "loading";
+  const {
+    matchName,
+    pending: pinyinPending,
+    statusMessage
+  } = useFacetSearchMatcher(open, normalizedQuery);
   const results = facetSuggestions(options, query, selectedSet, matchName);
   const searchStatus = pinyinPending
     ? "正在加载拼音搜索"
@@ -210,14 +213,9 @@ export function FacetSelector({
     >
       <div className="facet-search-results" aria-label={`待选${noun}`}>
         {!normalizedQuery && <span className="muted">输入名称、slug 或拼音搜索{noun}</span>}
-        {pinyinPending && (
+        {statusMessage && (
           <span className="muted" role="status">
-            正在加载拼音搜索…
-          </span>
-        )}
-        {pinyinStatus === "error" && (
-          <span className="muted" role="status" title="仍可按名称或 slug 搜索">
-            拼音加载失败，请刷新重试
+            {statusMessage}
           </span>
         )}
         {normalizedQuery &&

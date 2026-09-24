@@ -416,6 +416,10 @@ input[aria-invalid="true"] {
 .suggestion-menu > button {
   padding-inline: 10px;
 }
+.suggestion-status {
+  padding: 8px 10px;
+  font-size: 12px;
+}
 
 .suggestion-menu > button .option-display-name {
   min-width: 0;
@@ -805,7 +809,8 @@ button.active,
   color: var(--color-control-text-tertiary);
   font-size: 12px;
 }
-.facet-search-results button b {
+.facet-search-results button b,
+.suggestion-menu > button b {
   color: var(--color-control-action-text);
   font-weight: inherit;
 }

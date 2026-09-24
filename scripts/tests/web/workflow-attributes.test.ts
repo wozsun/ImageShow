@@ -7,6 +7,7 @@ import type {
 } from "../../../packages/shared/src/browser.ts";
 import { ingestionActionPath } from "../../../packages/shared/src/browser.ts";
 import { clearCsrfToken, setCsrfToken } from "../../../packages/web/src/lib/api/client.ts";
+import type { ImageDraft } from "../../../packages/web/src/lib/types.ts";
 import {
   imageAttributeClearPatch,
   mergeCommonImageAttributes,
@@ -41,9 +42,12 @@ test("[Web/主题] 模糊候选键盘选择提交真实 slug，直接输入仍�
   await h.React.act(async () => {
     inputText(window, input, "hz");
   });
+  for (let attempt = 0; attempt < 100 && h.document.querySelector('[role="status"]'); attempt++) {
+    await h.flush();
+  }
   assert.deepEqual(
     [...h.document.querySelectorAll('[role="option"] b')].map((node) => node.textContent),
-    ["h", "z"]
+    ["h", "z", "杭州"]
   );
   assert.deepEqual(values, []);
   await h.React.act(async () => {
@@ -61,6 +65,157 @@ test("[Web/主题] 模糊候选键盘选择提交真实 slug，直接输入仍�
   });
   assert.deepEqual(values, ["hangzhou", "new-place"]);
 });
+
+for (const surface of ["默认属性", "图片编辑"] as const) {
+  test(`[Web/词条搜索] ${surface}的主题、作者与标签共用拼音高亮并提交原 slug`, async (t) => {
+    const h = await createConfigStreamHarness(t);
+    const { WorkflowDefaultFields } = await import(
+      "../../../packages/web/src/components/form/WorkflowDefaultFields.tsx"
+    );
+    const { ImageDraftFields } = await import(
+      "../../../packages/web/src/components/form/ImageDraftFields.tsx"
+    );
+    let current: ImageDraft = {
+      ...ingestionJob().draft,
+      theme: "",
+      author: "",
+      tags: ["selected"]
+    };
+    const themes = [{ slug: "scene", display_name: "测试主题" }];
+    const authors = [{ slug: "artist", display_name: "测试作者" }];
+    const tags = [
+      { slug: "selected", display_name: "测试已选" },
+      { slug: "forest", display_name: "测试森林" }
+    ];
+    function Probe() {
+      const [draft, setDraft] = h.React.useState(current);
+      current = draft;
+      const patch = (next: Partial<typeof draft>) => setDraft((previous) => ({ ...previous, ...next }));
+      const vocabulary = { themes, authors, deviceOptions: [], brightnessOptions: [] };
+      return surface === "默认属性"
+        ? h.React.createElement(WorkflowDefaultFields, {
+            ...vocabulary,
+            values: { ...draft, theme: draft.theme ?? "" },
+            tags,
+            onChange: {
+              device() {},
+              brightness() {},
+              theme: (theme) => patch({ theme }),
+              author: (author) => patch({ author }),
+              tags: (selected) => patch({ tags: selected })
+            },
+            placeholders: { theme: "主题", author: "作者", tags: "标签" },
+            ariaLabels: { device: "设备", brightness: "明暗", theme: "主题", author: "作者", tags: "标签" },
+            onApply() {},
+            onPrepareClear: () => null,
+            clearScope: "synthetic-workflow",
+            clearScopeLabel: "全部图片"
+          })
+        : h.React.createElement(ImageDraftFields, {
+            ...vocabulary,
+            draft,
+            onPatch: patch,
+            allTags: tags,
+            ariaPrefix: "编辑"
+          });
+    }
+    await h.render(h.React.createElement(Probe));
+    for (const [noun, query, slug] of [
+      ["主题", "ceshi", "scene"],
+      ["作者", "cs", "artist"],
+      ["标签", "ce试", "forest"]
+    ]) {
+      const input = h.document.querySelector<HTMLInputElement>(`input[aria-label$="${noun}"]`)!;
+      await h.React.act(async () => inputText(h.window, input, query));
+      const menu = () => h.document.getElementById(input.getAttribute("aria-controls") ?? "");
+      for (let attempt = 0; attempt < 100 && !menu()?.querySelector('[role="option"]'); attempt++) {
+        await h.flush();
+      }
+      const options = [...menu()!.querySelectorAll('[role="option"]')];
+      assert.equal(options.length, 1, `${noun}按中文名称匹配，标签排除已选项`);
+      assert.equal(options[0].querySelector("span")?.textContent, slug);
+      assert.equal(options[0].querySelector(".option-display-name b")?.textContent, "测试");
+      await h.React.act(async () => {
+        dispatchDomEvent(h.window, input, "keydown", { key: "ArrowDown" });
+      });
+      await h.React.act(async () => {
+        dispatchDomEvent(h.window, input, "keydown", { key: "Enter" });
+        dispatchDomEvent(h.window, input, "focusout");
+      });
+    }
+    assert.equal(current.theme, "scene");
+    assert.equal(current.author, "artist");
+    assert.deepEqual(current.tags, ["selected", "forest"]);
+  });
+}
+
+for (const kind of ["主题", "标签"] as const) {
+  test(`[Web/词条搜索] ${kind}组词沿用已确认结果，选择后忽略迟到输入法事件`, async (t) => {
+    const h = await createConfigStreamHarness(t);
+    const { ThemeInput } = await import("../../../packages/web/src/components/form/ThemeInput.tsx");
+    const { TagInput } = await import("../../../packages/web/src/components/form/TagInput.tsx");
+    const options = [
+      { slug: "forest", display_name: "测试森林" },
+      { slug: "city", display_name: "城市夜景" }
+    ];
+    const commits: Array<string | string[]> = [];
+    function Probe() {
+      const [theme, setTheme] = h.React.useState("");
+      const [tags, setTags] = h.React.useState<string[]>([]);
+      return kind === "主题"
+        ? h.React.createElement(ThemeInput, {
+            themes: options,
+            value: theme,
+            publishTypedChanges: false,
+            onChange(value) {
+              commits.push(value);
+              setTheme(value);
+            }
+          })
+        : h.React.createElement(TagInput, {
+            suggestions: options,
+            value: tags,
+            onChange(value) {
+              commits.push(value);
+              setTags(value);
+            }
+          });
+    }
+    await h.render(h.React.createElement(Probe));
+    const input = h.document.querySelector("input")!;
+    await h.React.act(async () => inputText(h.window, input, "cs"));
+    const names = () => [...h.document.querySelectorAll('[role="option"] .option-display-name')]
+      .map((node) => node.textContent);
+    for (let attempt = 0; attempt < 100 && names().length !== 2; attempt++) await h.flush();
+    assert.deepEqual(names(), ["测试森林", "城市夜景"]);
+    await h.React.act(async () => {
+      dispatchDomEvent(h.window, input, "compositionstart");
+      inputText(h.window, input, "sen'lin", { focus: false, isComposing: true });
+    });
+    assert.equal(input.value, "sen'lin");
+    assert.deepEqual(names(), ["测试森林", "城市夜景"]);
+    assert.deepEqual(commits, []);
+    await h.React.act(async () => {
+      inputText(h.window, input, "森林", { focus: false, isComposing: true });
+      dispatchDomEvent(h.window, input, "compositionend", { data: "森林" });
+    });
+    assert.deepEqual(names(), ["测试森林"]);
+    assert.equal(h.document.querySelector('[role="option"] .option-display-name b')?.textContent, "森林");
+    await h.React.act(async () => {
+      dispatchDomEvent(h.window, input, "compositionstart");
+      inputText(h.window, input, "cheng'shi", { focus: false, isComposing: true });
+    });
+    await h.React.act(async () => {
+      dispatchDomEvent(h.window, h.document.querySelector('[role="option"]')!, "click");
+    });
+    await h.React.act(async () => {
+      inputText(h.window, input, "城市", { focus: false, isComposing: true });
+      dispatchDomEvent(h.window, input, "compositionend", { data: "城市" });
+    });
+    assert.deepEqual(commits, kind === "主题" ? ["forest"] : [["forest"]]);
+    assert.equal(input.value, kind === "主题" ? "测试森林" : "");
+  });
+}
 
 test("[Web/主题] 保留值输入按留空处理且不提示新建主题", async (t) => {
   const h = await createConfigStreamHarness(t);
