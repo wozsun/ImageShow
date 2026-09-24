@@ -377,7 +377,7 @@ export function parseRandomQuery(
   const author = parseSelectorGroup(query, "author", "author");
   if (author instanceof Response) return author;
   const selectorCount =
-    theme.submittedCount + tag.submittedCount + author.submittedCount;
+    theme.submittedCount + tag.termCount + author.submittedCount;
   if (selectorCount > appConfig.randomQuery.maxSelectorCount) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Too many selectors" },

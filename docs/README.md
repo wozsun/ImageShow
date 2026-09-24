@@ -1,6 +1,6 @@
 # ImageShow 文档
 
-本手册以 **6.4.21** 为基线，直接描述当前安装、配置与运行契约。角色页说明日常任务，
+本手册描述当前安装、配置与运行契约。角色页说明日常任务，
 配置手册解释参数，技术参考说明架构与接口；版本变更记录见 [GitHub Releases](https://github.com/wozsun/ImageShow/releases)。
 
 部署与配置可直接阅读 [DEPLOY](DEPLOY.md) 和 [CONFIG](CONFIG.md)；CONFIG 按配置路径逐项说明。

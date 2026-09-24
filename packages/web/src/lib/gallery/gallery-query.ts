@@ -9,11 +9,13 @@ import {
   detectDeviceFromUserAgent,
   showModes,
   publicImageOrders,
+  TagFilterError,
   type ShowMode,
   type ShowOrder,
   type PublicImageView,
   type TagFilterValue
 } from "@imageshow/shared/browser";
+import { GallerySelectorError, gallerySelectorValue, type GallerySelectorField } from "./gallery-selectors.js";
 
 export type GalleryFilters = {
   device: string;
@@ -27,7 +29,6 @@ const galleryDevices = new Set(["pc", "mb", "auto"]);
 const galleryBrightnesses = new Set(["dark", "light"]);
 const showOrderSet = new Set<ShowOrder>(publicImageOrders);
 const showModeSet = new Set<ShowMode>(showModes);
-const selectorPattern = /^!?[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 
 export const emptyGalleryFilters: GalleryFilters = {
   device: "",
@@ -37,25 +38,10 @@ export const emptyGalleryFilters: GalleryFilters = {
   author: ""
 };
 
-function selectorValue(params: URLSearchParams, key: string) {
-  const tokens = [...new Set(
-    params.getAll(key)
-      .flatMap((value) => value.split(","))
-      .map((value) => value.trim().toLowerCase())
-      .filter((value) => selectorPattern.test(value))
-  )];
-  const hasIncludes = tokens.some((value) => !value.startsWith("!"));
-  const hasExcludes = tokens.some((value) => value.startsWith("!"));
-  return hasIncludes && hasExcludes ? "" : tokens.sort().join(",");
-}
-
-export function galleryFiltersFromSearchParams(
-  params: URLSearchParams,
+function galleryTagValue(
+  values: string[],
   tags?: readonly { slug: string; display_name: string }[]
-): GalleryFilters {
-  const device = params.get("device")?.trim().toLowerCase() ?? "";
-  const brightness = params.get("brightness")?.trim().toLowerCase() ?? "";
-  const values = params.getAll("tag");
+) {
   parseGalleryTagFilter(values);
   const map = tags ? new Map(tags.map((tag) => [tag.display_name.trim().toLowerCase(), tag.slug])) : null;
   for (const tag of tags ?? []) map!.set(tag.slug, tag.slug);
@@ -65,13 +51,46 @@ export function galleryFiltersFromSearchParams(
     return basicTagValue(expression?.anyOf.flat() ?? [], parsed.mode);
   });
   parseGalleryTagFilter(normalizedTags);
-  return {
+  return normalizedTags.length > 1 ? normalizedTags : normalizedTags[0] ?? "";
+}
+
+/** Keep field errors separate so repairing one cannot silently remove another. */
+export function readGalleryFilters(
+  params: URLSearchParams,
+  tags?: readonly { slug: string; display_name: string }[]
+) {
+  const device = params.get("device")?.trim().toLowerCase() ?? "";
+  const brightness = params.get("brightness")?.trim().toLowerCase() ?? "";
+  const filters: GalleryFilters = {
     device: device === "all" ? "" : galleryDevices.has(device) ? device : "",
     brightness: galleryBrightnesses.has(brightness) ? brightness : "",
-    theme: selectorValue(params, "theme"),
-    tag: normalizedTags.length > 1 ? normalizedTags : normalizedTags[0] ?? "",
-    author: selectorValue(params, "author")
+    theme: "", tag: "", author: ""
   };
+  const errors: (GallerySelectorError | TagFilterError)[] = [];
+  const unresolvedSelectors: Partial<Record<GallerySelectorField, string[]>> = {};
+  for (const field of ["theme", "author"] as const) {
+    try { filters[field] = gallerySelectorValue(field, params.getAll(field)); }
+    catch (error) {
+      if (!(error instanceof GallerySelectorError)) throw error;
+      errors.push(error);
+      unresolvedSelectors[field] = params.getAll(field);
+    }
+  }
+  try { filters.tag = galleryTagValue(params.getAll("tag"), tags); }
+  catch (error) {
+    if (!(error instanceof TagFilterError)) throw error;
+    errors.push(error);
+  }
+  return { filters, error: errors[0] ?? null, unresolvedSelectors };
+}
+
+export function galleryFiltersFromSearchParams(
+  params: URLSearchParams,
+  tags?: readonly { slug: string; display_name: string }[]
+): GalleryFilters {
+  const result = readGalleryFilters(params, tags);
+  if (result.error) throw result.error;
+  return result.filters;
 }
 
 export function galleryRouteSearchParams(filters: GalleryFilters, preserveTagMode = true) {
@@ -89,22 +108,27 @@ export function galleryRouteSearchParams(filters: GalleryFilters, preserveTagMod
 }
 
 /** List and statistics share the same resolved devices and canonical filter sets. */
-function galleryApiFilters(filters: GalleryFilters, userAgent: string) {
+function galleryApiFilters(filters: GalleryFilters, userAgent: string, preserveTagMode = false) {
   const params = galleryRouteSearchParams({
     ...filters,
     device: filters.device === "auto" ? detectDeviceFromUserAgent(userAgent) ?? "" : filters.device
-  }, false);
+  }, preserveTagMode);
   for (const field of ["theme", "author"] as const) {
-    const value = selectorValue(params, field);
+    const value = gallerySelectorValue(field, params.getAll(field));
     if (value) params.set(field, value);
     else params.delete(field);
   }
   return params;
 }
 
-/** Page URLs retain authored tag groups and their order. */
-export function galleryStatsSearch(filters: GalleryFilters, userAgent = "") {
-  return readableFilterSearch(galleryApiFilters(filters, userAgent));
+/** Statistics retain group boundaries; a selected AND group narrows tag candidates. */
+export function galleryStatsSearch(filters: GalleryFilters, userAgent = "", tagScope?: number | null) {
+  const params = galleryApiFilters(filters, userAgent, true);
+  const groups = params.getAll("tag");
+  const scope = tagScope === undefined && groups.length === 1 && parseTagFilter(groups).mode === "all"
+    ? 1 : tagScope;
+  if (scope != null) params.set("tag_scope", String(scope));
+  return readableFilterSearch(params);
 }
 
 export function showOrderFromSearchParams(

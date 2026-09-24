@@ -69,6 +69,7 @@ type CapturedAttributeTarget = Pick<IngestionJob, "id" | "attemptKey" | "session
 };
 
 function revokeObjectUrl(job: IngestionJob) {
+  // 本地预览 URL 由前端创建并释放，服务端 preview_url 不需要 revoke。
   if (job.objectUrl?.startsWith("blob:")) URL.revokeObjectURL(job.objectUrl);
 }
 
@@ -417,7 +418,6 @@ export function useIngestionQueue(
     () => state.jobs.filter(ingestionJobHasServerAuthority),
     [state.jobs]
   );
-  const availableServerJobs = currentServerJobs;
   const snapshotItems = useMemo(() => (
     hasRetainedServerBaseline
       ? server.items.filter((item) => (
@@ -427,7 +427,7 @@ export function useIngestionQueue(
   ), [hasRetainedServerBaseline, releasedPairKeys, server.items]);
   const { displayedServerJobs, provisionalSummaryJobs } = useMemo(() => {
     const snapshotPairs = new Set(snapshotItems.map(serverIngestionPairKey));
-    const visibleHandoffPairs = new Set(availableServerJobs.flatMap((job) => {
+    const visibleHandoffPairs = new Set(currentServerJobs.flatMap((job) => {
       const pairKey = serverIngestionJobPairKey(job);
       return pairKey
         && !ingestionJobHasBrowserDisplayOrder(job)
@@ -444,7 +444,7 @@ export function useIngestionQueue(
     // authority moves item-by-item. The bounded snapshot supplies only the
     // remaining slots and keeps its own display-ZSET order.
     const displayedServerJobs = serverIngestionJobsForCombinedPage(
-      availableServerJobs,
+      currentServerJobs,
       snapshotItems,
       serverDisplayLimit,
       visibleHandoffPairs
@@ -455,7 +455,7 @@ export function useIngestionQueue(
       ...detachedProvisionalHandoffsRef.current.values()
     ].map((entry) => entry.job);
     const provisionalByPair = new Map([
-      ...availableServerJobs,
+      ...currentServerJobs,
       ...detachedProvisionalJobs,
       ...handoffJobsRef.current.values()
     ].map((job) => [serverIngestionJobPairKey(job), job]));
@@ -472,7 +472,7 @@ export function useIngestionQueue(
     return { displayedServerJobs, provisionalSummaryJobs };
   }, [
     acceptedDisplayPairs,
-    availableServerJobs,
+    currentServerJobs,
     handoffEpoch,
     provisionalAcceptedOrderBaseline,
     server.status,
@@ -1313,15 +1313,10 @@ export function useIngestionQueue(
     if (patches.size) dispatch({ type: "patch-many", patches });
   }, [dispatch]);
 
-  const releaseJob = useCallback((job: IngestionJob) => {
-    // 本地预览 URL 由前端创建，任务离队时必须释放；服务端 preview_url 不需要 revoke。
-    revokeObjectUrl(job);
-  }, []);
-
   const removeJob = useCallback((id: string) => {
     const job = jobsRef.current.find((item) => item.id === id);
     if (!job || !ingestionJobCanLeaveQueue(job)) return false;
-    releaseJob(job);
+    revokeObjectUrl(job);
     dispatch({
       type: "remove",
       ids: new Set([id]),
@@ -1329,20 +1324,20 @@ export function useIngestionQueue(
       totalItems: totalItemsRef.current
     });
     return true;
-  }, [dispatch, pageSize, releaseJob]);
+  }, [dispatch, pageSize]);
 
   const clearJobIds = useCallback((ids: ReadonlySet<string>) => {
     const removed = jobsRef.current.filter((job) => (
       ids.has(job.id) && ingestionJobCanLeaveQueue(job)
     ));
-    removed.forEach(releaseJob);
+    removed.forEach(revokeObjectUrl);
     dispatch({
       type: "remove",
       ids: new Set(removed.map((job) => job.id)),
       pageSize,
       totalItems: totalItemsRef.current
     });
-  }, [dispatch, pageSize, releaseJob]);
+  }, [dispatch, pageSize]);
 
   const removeLibraryDuplicate = useCallback((imageId: string) => {
     const md5 = jobsRef.current

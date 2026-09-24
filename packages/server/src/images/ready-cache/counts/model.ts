@@ -3,6 +3,7 @@ import {
   devices,
   slugMaxLength,
   slugPattern,
+  publicTagGroupLimit,
   type Brightness,
   type Device
 } from "@imageshow/shared/browser";
@@ -13,6 +14,7 @@ type CountRecord = Record<string, number>;
 export type ReadyImageCountSnapshot = {
   total: number;
   matching: number;
+  tagGroups?: number[];
   axes: CountRecord;
   devices: CountRecord;
   brightnesses: CountRecord;
@@ -109,7 +111,8 @@ function validSnapshot(value: unknown): value is ReadyImageCountSnapshot {
     "brightnesses",
     "themes",
     "tags",
-    "authors"
+    "authors",
+    ...(Object.hasOwn(snapshot, "tagGroups") ? ["tagGroups"] : [])
   ].sort();
   const actualFields = Object.keys(snapshot).sort();
   if (
@@ -118,6 +121,12 @@ function validSnapshot(value: unknown): value is ReadyImageCountSnapshot {
     || total === null
     || matching === null
     || matching > total
+    || (Object.hasOwn(snapshot, "tagGroups") && (
+      !Array.isArray(snapshot.tagGroups)
+      || snapshot.tagGroups.length < 1
+      || snapshot.tagGroups.length > publicTagGroupLimit
+      || snapshot.tagGroups.some((value) => jsonReadyImageCount(value) === null || value > matching)
+    ))
     || !exactCountRecord(snapshot.axes, axisKeys, total)
     || !exactCountRecord(snapshot.devices, devices, total)
     || !exactCountRecord(snapshot.brightnesses, brightnesses, total)

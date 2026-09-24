@@ -1,5 +1,5 @@
 import {
-  basicTagSelection, basicTagValue,
+  basicTagSelection, basicTagValue, TagFilterError,
   tagFilterValues, parseGalleryTagFilter, publicTagGroupLimit,
   type GalleryFacetsDto, type TagMatchMode
 } from "@imageshow/shared/browser";
@@ -8,6 +8,7 @@ import {
   type GalleryFilters
 } from "./gallery-query.js";
 import { brightnessOptionLabel } from "../ui/select-options.js";
+import { gallerySelectorValue, type GallerySelectorField } from "./gallery-selectors.js";
 
 export const publicFilterSections = ["device", "brightness", "theme", "tag", "author"] as const;
 export type PublicFilterSection = typeof publicFilterSections[number];
@@ -17,7 +18,7 @@ export const publicFilterLabels: Record<PublicFilterSection, string> = {
 export const publicFilterDeviceLabels: Record<string, string> = {
   auto: "自动判断", pc: "横版图片", mb: "竖版图片"
 };
-type SelectorDraft = { mode: "include" | "exclude"; selected: string[] };
+type SelectorDraft = { mode: "include" | "exclude"; selected: string[]; unresolved?: string[] };
 type PublicTagGroup = { id: number; mode: TagMatchMode; selected: string[] };
 export type TagSelection = { groups: PublicTagGroup[]; activeId: number; grouped: boolean };
 
@@ -57,10 +58,12 @@ function selectorDraft(value: string): SelectorDraft {
   };
 }
 
-export function createPublicFilterDraft(filters: GalleryFilters = emptyGalleryFilters, unresolvedTags: string[] = []): PublicFilterDraft {
+export function createPublicFilterDraft(filters: GalleryFilters = emptyGalleryFilters, unresolvedTags: string[] = [],
+  unresolvedSelectors: Partial<Record<GallerySelectorField, string[]>> = {}): PublicFilterDraft {
   return {
     device: filters.device, brightness: filters.brightness,
-    theme: selectorDraft(filters.theme), author: selectorDraft(filters.author),
+    theme: { ...selectorDraft(filters.theme), unresolved: unresolvedSelectors.theme },
+    author: { ...selectorDraft(filters.author), unresolved: unresolvedSelectors.author },
     tag: unresolvedTags.length
       ? { kind: "unresolved", values: [...unresolvedTags] }
       : { kind: "selection", selection: createTagSelection(filters.tag) }
@@ -91,20 +94,38 @@ export function resolvePublicFilterTag(draft: PublicFilterDraft, facets: Gallery
 }
 
 export function publicDraftFilters(draft: PublicFilterDraft, tag: TagSelection): GalleryFilters {
-  const selectorValue = (selector: SelectorDraft) => {
-    const value = [...new Set(selector.selected)].sort()
-      .map((slug) => selector.mode === "exclude" ? `!${slug}` : slug).join(",");
-    if (value.length > 1024) throw new Error("所选条件过多，请减少一些选项");
-    return value;
+  const selectorValue = (field: GallerySelectorField, selector: SelectorDraft) => {
+    return gallerySelectorValue(field, selector.unresolved ?? selector.selected
+      .map((slug) => selector.mode === "exclude" ? `!${slug}` : slug));
   };
   return {
     device: draft.device, brightness: draft.brightness,
-    theme: selectorValue(draft.theme), author: selectorValue(draft.author),
+    theme: selectorValue("theme", draft.theme), author: selectorValue("author", draft.author),
     tag: publicTagValue(tag)
   };
 }
 
-export type PublicFilterChip = { section: PublicFilterSection; value: string; label: string; exclude: boolean };
+/** Validate edited choices without blocking removal or unresolved URL recovery. */
+export function validatePublicFilterEdit(next: PublicFilterDraft, previousTags: TagSelection): void {
+  const selection = next.tag.kind === "selection" ? next.tag.selection : previousTags;
+  try {
+    publicDraftFilters({ ...next,
+      theme: { ...next.theme, unresolved: undefined }, author: { ...next.author, unresolved: undefined }
+    }, selection);
+  } catch (error) {
+    // Removing a term can split identical groups and increase the normalized budget.
+    // Accept removals; the complete draft remains invalid for statistics and applying.
+    const onlyRemovesTags = selection.groups.every((group) => {
+      const previous = previousTags.groups.find((item) => item.id === group.id);
+      return previous && previous.mode === group.mode && group.selected.every((slug) => previous.selected.includes(slug));
+    });
+    if (!(error instanceof TagFilterError) || !onlyRemovesTags) throw error;
+  }
+}
+
+export type PublicFilterChip = {
+  section: PublicFilterSection; value: string; label: string; exclude: boolean; groupId?: number
+};
 export function publicFilterChips(draft: PublicFilterDraft, tag: TagSelection, facets?: GalleryFacetsDto): PublicFilterChip[] {
   const chips: PublicFilterChip[] = [];
   if (draft.device) chips.push({ section: "device", value: draft.device,
@@ -120,4 +141,16 @@ export function publicFilterChips(draft: PublicFilterDraft, tag: TagSelection, f
     for (const value of selected) chips.push({ section, value, label: names.get(value) ?? value, exclude });
   }
   return chips;
+}
+
+/** Group the selected-bar presentation without changing the distinct selection counts. */
+export function groupPublicFilterChips(chips: PublicFilterChip[], tag: TagSelection): PublicFilterChip[] {
+  if (!tag.grouped) return chips;
+  const names = new Map(chips.filter((chip) => chip.section === "tag").map((chip) => [chip.value, chip.label]));
+  return publicFilterSections.flatMap((section): PublicFilterChip[] => section === "tag"
+    ? tag.groups.filter((group) => group.selected.length).map((group) => ({
+      section, groupId: group.id, value: basicTagValue(group.selected, group.mode), exclude: false,
+      label: group.selected.map((slug) => names.get(slug) ?? slug).join(group.mode === "all" ? " & " : " / ")
+    }))
+    : chips.filter((chip) => chip.section === section));
 }

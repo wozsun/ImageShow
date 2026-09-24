@@ -98,6 +98,21 @@ async function resolveSelector(
   }, noun);
 }
 
+export async function resolveImageTagExpressions(
+  expressions: readonly TagExpression[],
+  access: VocabularyReadAccess = {}
+) {
+  const selected = expressions.flatMap((expression) => expression?.anyOf.flat() ?? []);
+  if (!selected.length) return expressions.map(() => null);
+  const terms = await resolveTagTermMap(selected, access);
+  try {
+    return expressions.map((expression) => resolveTagExpression(expression, terms));
+  } catch (error) {
+    if (!(error instanceof TagFilterError)) throw error;
+    throw new ApiError(404, "unknown_tag", error.message, { field: "tag", value: error.term });
+  }
+}
+
 export async function resolveImageFilterPlan(
   input: ImageFilterInput,
   access: VocabularyReadAccess = {}
@@ -113,16 +128,7 @@ export async function resolveImageFilterPlan(
     resolveSelector(input.theme, "theme", (terms) => (
       resolveThemeSlugs(terms, access)
     )),
-    (async () => {
-      if (!parsedTag) return null;
-      const terms = await resolveTagTermMap(parsedTag.anyOf.flat(), access);
-      try {
-        return resolveTagExpression(parsedTag, terms);
-      } catch (error) {
-        if (!(error instanceof TagFilterError)) throw error;
-        throw new ApiError(404, "unknown_tag", error.message, { field: "tag", value: error.term });
-      }
-    })(),
+    resolveImageTagExpressions([parsedTag], access).then(([expression]) => expression ?? null),
     resolveSelector(input.author, "author", (terms) => (
       resolveAuthorSlugs(terms, access)
     ))

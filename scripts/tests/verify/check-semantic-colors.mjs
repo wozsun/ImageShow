@@ -233,7 +233,7 @@ if (bootstrapMatch) {
   }
 }
 const definitions = new Map();
-const referenceCounts = new Map();
+const references = new Set();
 for (const [file, source] of sources) {
   for (const { line, match } of collectMatches(
     file,
@@ -256,7 +256,7 @@ for (const [file, source] of sources) {
     semanticReferencePattern
   )) {
     const token = match[1];
-    referenceCounts.set(token, (referenceCounts.get(token) ?? 0) + 1);
+    references.add(token);
     if (
       file.startsWith(path.join(sourceRoot, "styles/admin"))
       && token.startsWith("--public-")
@@ -277,13 +277,13 @@ for (const [file, source] of sources) {
   }
 }
 
-for (const [token, count] of referenceCounts) {
-  if (count > 0 && !definitions.has(token)) {
+for (const token of references) {
+  if (!definitions.has(token)) {
     errors.push(`Semantic token ${token} is referenced but not defined`);
   }
 }
 for (const [token, tokenDefinitions] of definitions) {
-  if (!referenceCounts.has(token)) {
+  if (!references.has(token)) {
     for (const definition of tokenDefinitions) {
       errors.push(
         `${displayPath(definition.file)}:${definition.line} defines unused `

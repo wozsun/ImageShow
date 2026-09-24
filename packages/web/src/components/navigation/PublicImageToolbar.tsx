@@ -69,7 +69,7 @@ export function PublicToolbarPopover({ label, icon, iconOnly = false, minWidth =
 }
 
 export function PublicImageToolbar({
-  embedded, animateEntrance, filters, facets, pageUrl, randomUrl, randomLinkError, tagInvalid = false,
+  embedded, animateEntrance, filters, facets, pageUrl, randomUrl, randomLinkError, filterInvalid = false,
   toolbarVisible, toolbarRef, filterToggleRef, filtersOpen, onOpenFilters,
   onClearFilters, order, onOrderChange, leadingControls, viewControls, compact = false
 }: {
@@ -80,7 +80,7 @@ export function PublicImageToolbar({
   pageUrl: string | null;
   randomUrl: string | null;
   randomLinkError?: string | null;
-  tagInvalid?: boolean;
+  filterInvalid?: boolean;
   toolbarVisible: boolean;
   toolbarRef: RefObject<HTMLElement | null>;
   filterToggleRef: RefObject<HTMLButtonElement | null>;
@@ -98,8 +98,8 @@ export function PublicImageToolbar({
   const tag = draft.tag.kind === "selection" ? draft.tag.selection : createTagSelection();
   const chips = publicFilterChips(draft, tag, facets);
   const count = chips.length;
-  const hasFilters = count > 0 || tagInvalid;
-  const summary = tagInvalid ? "标签条件待处理" : count ? publicFilterSections.flatMap((section) => {
+  const hasFilters = count > 0 || filterInvalid;
+  const summary = filterInvalid ? "筛选条件待处理" : count ? publicFilterSections.flatMap((section) => {
     const group = chips.filter((chip) => chip.section === section);
     if (!group.length) return [];
     if (section === "device" || section === "brightness") return [group[0].label];
@@ -137,7 +137,7 @@ export function PublicImageToolbar({
               {pageUrl ? <div className="public-toolbar-share-link">
                 <input readOnly value={pageUrl} aria-label="页面链接" onClick={(event) => event.currentTarget.select()} />
                 <CopyButton value={pageUrl} ariaLabel="复制页面链接" />
-              </div> : <p>请先确认标签条件</p>}
+              </div> : <p>请先确认筛选条件</p>}
             </section>
             <section className="public-toolbar-share-item" aria-label="随机 API 链接">
               <header className="public-toolbar-share-heading">
@@ -147,7 +147,7 @@ export function PublicImageToolbar({
               {randomUrl ? <div className="public-toolbar-share-link">
                 <input readOnly value={randomUrl} aria-label="随机 API 链接" onClick={(event) => event.currentTarget.select()} />
                 <CopyButton value={randomUrl} ariaLabel="复制随机 API 链接" />
-              </div> : <p role={randomLinkError ? "alert" : undefined}>{randomLinkError ?? "请先确认标签条件"}</p>}
+              </div> : <p role={randomLinkError ? "alert" : undefined}>{randomLinkError ?? "请先确认筛选条件"}</p>}
             </section>
           </>}
         </PublicToolbarPopover>

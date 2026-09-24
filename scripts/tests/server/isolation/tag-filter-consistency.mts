@@ -43,6 +43,7 @@ await runIntegrationScenario(async (runtime) => {
   const { readPublicGalleryCountSnapshot } = await import("../../../../packages/server/src/images/read-models/gallery-stats-sql.ts");
   const { parseReadyImageGlobalStats } = await import("../../../../packages/server/src/images/ready-cache/counts/model.ts");
   const { readReadyImageCountSnapshot } = await import("../../../../packages/server/src/images/ready-cache/counts/query.ts");
+  const { resolveGalleryStatsPlan } = await import("../../../../packages/server/src/images/read-models/gallery-stats-plan.ts");
   const { READY_IMAGE_STATS_KEY } = await import("../../../../packages/server/src/images/ready-cache/keys.ts");
   type CountContext = Parameters<typeof readPublicGalleryCountSnapshot>[3];
   const readCounts = async (
@@ -111,6 +112,7 @@ await runIntegrationScenario(async (runtime) => {
   cases.push(
     { tags: ["matrix-a", "matrix-b"], match: row => Boolean(row.mask & 3) },
     { tags: ["all:matrix-a,matrix-b", "all:matrix-b,matrix-a"], match: row => (row.mask & 3) === 3 },
+    { tags: Array(9).fill("all:matrix-a,matrix-b,matrix-c,matrix-d"), match: row => (row.mask & 15) === 15 },
     { tags: ["all:matrix-a,matrix-b", "matrix-c"], match: row => (row.mask & 3) === 3 || Boolean(row.mask & 4) },
     { tags: ["all:matrix-a,matrix-b", "all:matrix-c,matrix-d"], match: row => (row.mask & 3) === 3 || (row.mask & 12) === 12 },
     { tags: ["matrix-empty"], match: () => false },
@@ -126,6 +128,31 @@ await runIntegrationScenario(async (runtime) => {
   }
   cases.push({ tags: ["matrix-a,matrix-b"], axis: { theme: "null", author: "!matrix-bob" },
     match: row => Boolean(row.mask & 3) && row.theme === null && row.author !== "matrix-bob" });
+  const statsGroups = [
+    ["matrix-a,matrix-b"], ["all:matrix-a"], ["all:matrix-a,matrix-b"],
+    ["all:matrix-a,matrix-b", "matrix-c"],
+    ["all:matrix-a,matrix-b", "all:matrix-b,matrix-c"],
+    ["all:matrix-a,matrix-empty", "matrix-c"],
+    ["all:matrix-a,matrix-b", "all:matrix-b,matrix-a"],
+    Array(9).fill("all:matrix-a,matrix-b,matrix-c,matrix-d")
+  ];
+  const statsAxes: Array<Record<string, string>> = [
+    {}, { theme: "!matrix-city,!null", author: "!matrix-bob" },
+    { device: "pc", brightness: "dark", theme: "null,matrix-city", author: "matrix-alice,matrix-bob" }
+  ];
+  const groupMatches = (row: Row, value: string) => {
+    const all = value.startsWith("all:");
+    const terms = (all ? value.slice(4) : value).split(",");
+    const hasTag = (slug: string) => tags.includes(slug) && Boolean(row.mask & (1 << tags.indexOf(slug)));
+    return all ? terms.every(hasTag) : terms.some(hasTag);
+  };
+  const axisMatches = (row: Row, axes: Record<string, string>, omitted?: string) => Object.entries(axes).every(([field, value]) => {
+    if (field === omitted) return true;
+    const actual = row[field as "device" | "brightness" | "theme" | "author"] ?? (field === "theme" ? "null" : "");
+    const terms = value.split(",");
+    return terms[0]!.startsWith("!") ? terms.every(term => actual !== term.slice(1)) : terms.includes(actual);
+  });
+  let statsCases = 0;
   try {
     const postgresStats = new Map<string, unknown>();
     for (const backend of ["PostgreSQL", "Redis"]) {
@@ -186,6 +213,67 @@ await runIntegrationScenario(async (runtime) => {
           await coordinator.requestReadyImageCacheRebuild();
         }
       }
+      for (const groups of statsGroups) for (const axes of statsAxes) {
+        const scopes = [undefined, ...groups.flatMap((group, index) => group.startsWith("all:") ? [index + 1] : [])];
+        for (const scope of scopes) {
+          const query = new URLSearchParams(axes);
+          groups.forEach(group => query.append("tag", group));
+          if (scope !== undefined) query.set("tag_scope", String(scope));
+          const label = `${backend}: scoped statistics ${query}`;
+          const response = await get(`/api/gallery-stats?${query}`);
+          assert.equal(response.status, 200, `${label}: ${await response.clone().text()}`);
+          const body = await response.json();
+          const matchesTags = (row: Row) => groups.some(group => groupMatches(row, group));
+          const expectedMatching = rows.filter(row => axisMatches(row, axes) && matchesTags(row)).length;
+          const expectedGroups = groups.map(tag => ({ tag, image_count: rows.filter(row => axisMatches(row, axes) && groupMatches(row, tag)).length }));
+          assert.equal(body.matching_images, expectedMatching, label);
+          assert.deepEqual(body.tag_groups, expectedGroups, label);
+          for (const slug of tags) {
+            const expected = rows.filter(row => axisMatches(row, axes) && groupMatches(row, slug)
+              && (scope === undefined || groupMatches(row, groups[scope - 1]!))).length;
+            assert.equal(body.tags.find((item: { slug: string }) => item.slug === slug)?.image_count, expected, `${label}: ${slug}`);
+          }
+          for (const [field, values] of Object.entries({
+            theme: ["null", "matrix-city", "matrix-nature"], author: ["matrix-alice", "matrix-bob"],
+            device: ["pc", "mb"], brightness: ["dark", "light"]
+          })) for (const value of values) {
+            const actual = body[field === "brightness" ? "brightnesses" : `${field}s`]
+              .find((item: Record<string, unknown>) => item[field === "theme" || field === "author" ? "slug" : field] === value)?.image_count;
+            const expected = rows.filter(row => axisMatches(row, axes, field) && matchesTags(row)
+              && axisMatches(row, { [field]: value })).length;
+            assert.equal(actual, expected, `${label}: ${field} ${value}`);
+          }
+          if (backend === "Redis") {
+            const { plan, tagCounts } = await resolveGalleryStatsPlan({ ...axes, tag: groups, tag_scope: scope }, {});
+            let cached = await readReadyImageCountSnapshot(plan, undefined, false, tagCounts);
+            const deadline = Date.now() + 5_000;
+            while (!cached.cached && Date.now() < deadline) {
+              await delay(20);
+              cached = await readReadyImageCountSnapshot(plan, undefined, false, tagCounts);
+            }
+            assert.equal(cached.cached, true, `${label}: must use Redis`);
+            if (cached.cached) {
+              assert.equal(cached.value.matching, expectedMatching, label);
+              assert.deepEqual(cached.value.tagGroups, expectedGroups.map(group => group.image_count), label);
+              // The earlier HTTP read may have fallen back while indexes warmed.
+              // Compare the actual Redis hit with every independently checked facet.
+              for (const field of ["themes", "tags", "authors"] as const) {
+                assert.deepEqual(cached.value[field], Object.fromEntries(body[field].map((item: { slug: string; image_count: number }) =>
+                  [item.slug, item.image_count])), `${label}: Redis ${field}`);
+              }
+              assert.deepEqual(cached.value.devices, Object.fromEntries(body.devices.map((item: { device: string; image_count: number }) =>
+                [item.device, item.image_count])), `${label}: Redis devices`);
+              assert.deepEqual(cached.value.brightnesses, Object.fromEntries(body.brightnesses.map((item: { brightness: string; image_count: number }) =>
+                [item.brightness, item.image_count])), `${label}: Redis brightnesses`);
+            }
+          }
+          statsCases += 1;
+        }
+      }
+      for (const query of ["tag=matrix-a&tag_scope=1", "tag=all:matrix-a&tag_scope=2", "tag_scope=1", "tag=all:matrix-a&tag_scope=0"]) {
+        assert.equal((await get(`/api/gallery-stats?${query}`)).status, 400, `${backend}: invalid scope ${query}`);
+      }
+      assert.equal((await get("/api/gallery-stats?tag=all:matrix-a&unexpected=1")).status, 403);
       for (const entry of cases) {
         const query = new URLSearchParams(entry.axis);
         entry.tags.forEach(tag => query.append("tag", tag));
@@ -314,7 +402,7 @@ await runIntegrationScenario(async (runtime) => {
     await pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [rows.map(row => row.id)]);
     await coordinator.requestReadyImageCacheRebuild();
     assertEmpty(await getPublicGalleryStats());
-    console.log(JSON.stringify({ backends: 2, cases: cases.length, mutationTransitions: 7 }));
+    console.log(JSON.stringify({ backends: 2, cases: cases.length, statsCases, mutationTransitions: 7 }));
   } finally {
     await pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [rows.map(row => row.id)]);
     await pool.query("DELETE FROM tag WHERE slug=ANY($1::text[])", [allTags]);

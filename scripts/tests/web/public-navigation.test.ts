@@ -30,7 +30,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation, useNavigate } from "react-router";
 import { authExpiredEvent, clearCsrfToken } from "../../../packages/web/src/lib/api/client.ts";
 import { useImageBrowseRoute } from "../../../packages/web/src/hooks/useImageBrowseRoute.ts";
-import { TagFilterErrorState } from "../../../packages/web/src/components/feedback/TagFilterErrorState.tsx";
+import { PublicFilterErrorState } from "../../../packages/web/src/components/feedback/PublicFilterErrorState.tsx";
 import { queryKeys } from "../../../packages/web/src/lib/api/query-keys.ts";
 import { installControlledClock } from "../support/controlled-clock.ts";
 import { installProperties } from "../support/property-descriptors.ts";
@@ -155,7 +155,7 @@ test("[Web/公开导航] 旧词表刷新失败与未知标签分开提示，期�
       let route!: ReturnType<typeof useImageBrowseRoute>;
       function Harness() {
         route = useImageBrowseRoute();
-        return route.error ? h.React.createElement(TagFilterErrorState, {
+        return route.error ? h.React.createElement(PublicFilterErrorState, {
           error: route.error,
           onRetry: route.retryVocabulary,
           onClear: () => route.updateSearchParams(params => { params.delete("tag"); return params; })
@@ -240,7 +240,8 @@ test("[Web/公开导航] 真实画廊与展映页面刷新词表后按完整原�
       client.setQueryData(queryKeys.siteConfig, { site: appConfig.runtimeDefaults.site, embed: { enabled: true } });
       client.setQueryData(queryKeys.me, { authenticated: false });
       let search = "";
-      function LocationProbe() { search = useLocation().search; return null; }
+      let navigate!: ReturnType<typeof useNavigate>;
+      function LocationProbe() { search = useLocation().search; navigate = useNavigate(); return null; }
       const initial = "?tag=all:new-tag,other&theme=null&author=alice&device=pc&brightness=dark&order=oldest";
       const embedded = path.startsWith("/embed/");
       const show = path.endsWith("/show");
@@ -275,6 +276,22 @@ test("[Web/公开导航] 真实画廊与展映页面刷新词表后按完整原�
       assert.ok((show ? [200, 500, 800] : [60, 120, 180]).includes(Number(params.get("limit"))));
       await h.respond(h.pending.indexOf(request), { items: [], next_cursor: null });
       assert.doesNotMatch(h.document.body.textContent!, /标签筛选错误|标签词表读取失败/);
+      await h.React.act(async () => { void navigate(path + "?theme=city,!forest&author=alice,!other&device=pc&brightness=light&order=oldest"); });
+      await h.flush();
+      assert.equal(imageRequests().length, 1, "混合条件不能触发放宽后的图片请求");
+      for (const label of ["主题", "作者"]) {
+        const clear = [...h.document.querySelectorAll("button")].find(button => button.textContent === `清空${label}条件`)!;
+        assert.ok(clear); await h.React.act(async () => clear.click()); await h.flush();
+        if (label === "主题") {
+          assert.equal(imageRequests().length, 1, "仍有另一字段无效时继续阻止查询");
+          assert.equal(new URLSearchParams(search).get("author"), "alice,!other");
+        }
+      }
+      assert.equal(imageRequests().length, 2);
+      const recovered = new URL(imageRequests()[1].path, "https://img.example").searchParams;
+      assert.equal(recovered.get("device"), "pc"); assert.equal(recovered.get("brightness"), "light");
+      assert.equal(recovered.get("theme"), null); assert.equal(recovered.get("author"), null);
+      await h.respond(h.pending.indexOf(imageRequests()[1]), { items: [], next_cursor: null });
     });
   }
 });
@@ -641,13 +658,13 @@ test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前�
       author: ""
     }
   );
-  assert.equal(
-    galleryFiltersFromSearchParams(
+  assert.throws(
+    () => galleryFiltersFromSearchParams(
       new URLSearchParams(
         "theme=stage,!editorial&tag=valid,INVALID_VALUE"
       )
-    ).theme,
-    ""
+    ),
+    { name: "GallerySelectorError", field: "theme" }
   );
 
   assert.equal(buildRandomUrl({

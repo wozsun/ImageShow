@@ -12,7 +12,7 @@ export function tagFilterValues(value: TagFilterValue): string[] {
 
 export const tagFilterLimits = Object.freeze({
   terms: randomQueryLimits.maxSelectorsPerField,
-  clauses: randomQueryLimits.maxSelectorsPerField,
+  segments: randomQueryLimits.maxSelectorsPerField,
   termCharacters: randomQueryLimits.maxSelectorCharacters,
   basicCharacters: 1024
 });
@@ -34,7 +34,7 @@ export class TagFilterError extends Error {
 }
 
 /** Only ordering and exact duplicates are normalized; branches are never absorbed. */
-export function normalizeTagExpression(clauses: readonly (readonly string[])[]): TagExpression {
+export function normalizeTagExpression(clauses: readonly (readonly string[])[]): NonNullable<TagExpression> {
   if (!clauses.length || clauses.some((clause) => !clause.length || clause.some((term) => !term))) {
     throw new TagFilterError("标签条件不能为空");
   }
@@ -51,12 +51,11 @@ export function parseTagFilter(
   values: readonly string[],
   capability: "basic" | "mixed" = "basic"
 ) {
-  if (!values.length) return { expression: null, mode: "any" as TagMatchMode, submittedCount: 0 };
-  if (values.length > tagFilterLimits.clauses
+  if (!values.length) return { expression: null, mode: "any" as TagMatchMode, termCount: 0 };
+  if (values.length > tagFilterLimits.segments
     || (capability === "basic" && values.reduce((sum, value) => sum + value.length, 0) > tagFilterLimits.basicCharacters)) {
     throw new TagFilterError("标签条件超过长度或段数限制");
   }
-  let submittedCount = 0;
   const clauses: string[][] = [];
   for (const value of values) {
     const raw = value.trim();
@@ -68,20 +67,20 @@ export function parseTagFilter(
         throw new TagFilterError("标签条件格式无效");
       }
       if ([...term].length > tagFilterLimits.termCharacters) throw new TagFilterError("标签词项过长");
-      if (++submittedCount > tagFilterLimits.terms) throw new TagFilterError("标签词项最多 32 个");
       return term.toLowerCase();
     });
     clauses.push(...(all ? [terms] : terms.map((term) => [term])));
-    if (clauses.length > tagFilterLimits.clauses) throw new TagFilterError("标签条件最多 32 条");
   }
-  const expression = normalizeTagExpression(clauses)!;
+  const expression = normalizeTagExpression(clauses);
+  const termCount = expression.anyOf.reduce((sum, clause) => sum + clause.length, 0);
+  if (termCount > tagFilterLimits.terms) throw new TagFilterError("标签词项去重后最多 32 个");
   const singletons = expression.anyOf.every((clause) => clause.length === 1);
   if (capability === "basic" && !singletons && expression.anyOf.length !== 1) {
     throw new TagFilterError("此选择方式仅支持标签任一或全部", "mixed");
   }
   const explicitAll = values.length === 1 && /^all:/iu.test(values[0]!.trim());
   const mode: TagMatchMode = expression.anyOf.length === 1 && (!singletons || explicitAll) ? "all" : "any";
-  return { expression, mode, submittedCount };
+  return { expression, mode, termCount };
 }
 
 export function resolveTagExpression(expression: TagExpression, terms: ReadonlyMap<string, string>): TagExpression {
@@ -95,7 +94,7 @@ export function resolveTagExpression(expression: TagExpression, terms: ReadonlyM
 
 export function tagExpressionValues(expression: TagExpression, mode?: TagMatchMode): string[] {
   if (!expression) return [];
-  const normalized = normalizeTagExpression(expression.anyOf)!;
+  const normalized = normalizeTagExpression(expression.anyOf);
   if (mode === "all" && normalized.anyOf.length === 1) {
     return [`all:${normalized.anyOf[0].join(",")}`];
   }

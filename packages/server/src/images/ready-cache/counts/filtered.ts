@@ -15,6 +15,7 @@ import {
   type ReadyImageDerivedWorkAdmission
 } from "../derived/work-policy.ts";
 import type { ReadyImageSourceIndexState } from "../indexes/attribute.ts";
+import type { GalleryTagCountPlans } from "../../read-models/gallery-stats-plan.ts";
 import {
   imageFilterPlanWithout,
   type ImageFilterPlan
@@ -93,13 +94,13 @@ function readyImageDynamicStatsDimensionCount(stats: Map<string, number>) {
   return count;
 }
 
-export function readyImageCountFilterPlans(plan: ImageFilterPlan) {
+export function readyImageCountFilterPlans(plan: ImageFilterPlan, tagCounts?: GalleryTagCountPlans) {
   return {
     full: plan,
     device: imageFilterPlanWithout(plan, "device"),
     brightness: imageFilterPlanWithout(plan, "brightness"),
     theme: imageFilterPlanWithout(plan, "theme"),
-    tag: imageFilterPlanWithout(plan, "tag"),
+    tag: tagCounts?.candidates ?? imageFilterPlanWithout(plan, "tag"),
     author: imageFilterPlanWithout(plan, "author")
   };
 }
@@ -178,7 +179,8 @@ function readyImageStatsWorkIntersections(
 
 export function preflightReadyImageCountSnapshotWork(
   plan: ImageFilterPlan,
-  stats: Map<string, number>
+  stats: Map<string, number>,
+  tagCounts?: GalleryTagCountPlans
 ):
   | {
     admission: Extract<ReadyImageDerivedWorkAdmission, { admitted: false }>;
@@ -196,7 +198,7 @@ export function preflightReadyImageCountSnapshotWork(
   if (!dimensionAdmission.admitted) {
     return { admission: dimensionAdmission };
   }
-  const plans = readyImageCountFilterPlans(plan);
+  const plans = readyImageCountFilterPlans(plan, tagCounts);
   const candidates = readyImageCountAttributeIndexes(stats);
   const candidateCounts = readyImageCandidateCounts(stats, candidates);
   const admission = assessReadyImageStatsWork({
@@ -255,16 +257,17 @@ export async function buildFilteredReadyImageCountSnapshot(
   plan: ImageFilterPlan,
   indexes: Map<string, ReadyImageFilterIndex>,
   stats: Map<string, number>,
-  sourceStates: Map<string, ReadyImageSourceIndexState>
+  sourceStates: Map<string, ReadyImageSourceIndexState>,
+  tagCounts?: GalleryTagCountPlans
 ) {
   const bySignature = (selected: ImageFilterPlan) => {
     const index = indexes.get(selected.signature);
     if (!index) throw new Error("Ready-image count index was not resolved");
     return index;
   };
-  const plans = readyImageCountFilterPlans(plan);
+  const plans = readyImageCountFilterPlans(plan, tagCounts);
   const uniqueIndexes = [...new Map(
-    Object.values(plans).map((selected) => [
+    [...Object.values(plans), ...(tagCounts?.groups ?? [])].map((selected) => [
       selected.signature,
       bySignature(selected)
     ])
@@ -345,6 +348,19 @@ export async function buildFilteredReadyImageCountSnapshot(
     if (matching === null) {
       throw new Error("Redis returned an invalid matching image count");
     }
+    const groupCounts = new Map([[plan.signature, matching]]);
+    if (tagCounts) {
+      const pending = [...new Map(tagCounts.groups.filter((group) => !groupCounts.has(group.signature))
+        .map((group) => [group.signature, group])).values()];
+      const pipeline = redis.pipeline();
+      for (const group of pending) pipeline.zcard(bySignature(group).key);
+      const results = pending.length ? await execRedisPipeline(pipeline) : [];
+      pending.forEach((group, offset) => {
+        const value = nonNegativeReadyImageCount(results[offset]?.[1]);
+        if (value === null || value > matching) throw new Error("Invalid tag group image count");
+        groupCounts.set(group.signature, value);
+      });
+    }
     if (!await indexesRemainValid()) return null;
 
     const axes = readyImageCountRecord(
@@ -370,6 +386,7 @@ export async function buildFilteredReadyImageCountSnapshot(
     return {
       total: stats.get("total") ?? 0,
       matching,
+      ...(tagCounts ? { tagGroups: tagCounts.groups.map((group) => groupCounts.get(group.signature)!) } : {}),
       axes,
       devices: deviceCounts,
       brightnesses: brightnessCounts,

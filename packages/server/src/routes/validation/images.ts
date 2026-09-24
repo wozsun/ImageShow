@@ -11,6 +11,7 @@ import {
   publicImageOrders,
   publicImageViews,
   publicImageBrowseLimit,
+  publicTagGroupLimit,
   type ImageUpdateItemInputDto,
   type ImageUpdateRequestDto,
   slugMaxLength,
@@ -19,7 +20,7 @@ import {
 import { isHttpsUrl } from "../../core/url-validation.ts";
 import { normalizedImageTagSlugsSchema } from "../../images/metadata-tags.ts";
 import type { AdminImageListQuery } from "../../images/read-models/admin-images.ts";
-import type { GalleryStatsQuery } from "../../images/read-models/gallery-stats.ts";
+import type { GalleryStatsQuery } from "../../images/read-models/gallery-stats-plan.ts";
 import type { PublicImageListQuery } from "../../images/read-models/public-images.ts";
 import {
   addDuplicateValueIssues,
@@ -202,6 +203,7 @@ export const galleryStatsQuery = z.strictObject({
   brightness: z.enum(appConfig.brightnesses).optional(),
   theme: galleryStatsSelector("主题").optional(),
   tag: tagFilterInput.optional(),
+  tag_scope: safePositiveIntegerInput.max(publicTagGroupLimit).optional(),
   author: galleryStatsSelector("作者").optional()
 }) satisfies z.ZodType<GalleryStatsQuery>;
 

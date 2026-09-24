@@ -1,3 +1,4 @@
+import { gallerySelectorValue, GallerySelectorError } from "../../lib/gallery/gallery-selectors.js";
 import { basicTagSelection, basicTagValue, TagFilterError, type TagMatchMode } from "@imageshow/shared/browser";
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
 import {
@@ -234,7 +235,7 @@ export function HomeCatalog({
   const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const themeSet = new Set(selectedSlugs(filters.theme));
   const tagSet = new Set(basicTagSelection(filters.tag).selected);
-  const [tagError, setTagError] = useState("");
+  const [selectionError, setSelectionError] = useState<{ field: "theme" | "tag" | "author"; message: string } | null>(null);
   const authorSet = new Set(selectedSlugs(filters.author));
   const deviceCounts = new Map(
     stats?.devices.map((item) => [item.device, item.image_count]) ?? []
@@ -276,11 +277,11 @@ export function HomeCatalog({
       ? selected.filter((item) => item !== slug)
       : [...selected, slug];
     try {
-      updateFilter(key, key === "tag" ? basicTagValue(next, tagMode) : next.join(","));
-      setTagError("");
+      updateFilter(key, key === "tag" ? basicTagValue(next, tagMode) : gallerySelectorValue(key, next));
+      setSelectionError(null);
     } catch (error) {
-      if (!(error instanceof TagFilterError)) throw error;
-      setTagError(error.message);
+      if (!(error instanceof TagFilterError) && !(error instanceof GallerySelectorError)) throw error;
+      setSelectionError({ field: key, message: error.message });
     }
   };
 
@@ -393,6 +394,7 @@ export function HomeCatalog({
                 isRefreshing={isRefreshing}
                 reduceMotion={reduceMotion}
               />
+              {selectionError?.field === "theme" && <p className="muted" role="alert">{selectionError.message}</p>}
               <SelectorOptions className="home-theme-options">
                 {themes.map((item, index) => {
                   const selected = themeSet.has(item.slug);
@@ -472,10 +474,10 @@ export function HomeCatalog({
                             try {
                               if (tagSet.size) updateFilter("tag", basicTagValue([...tagSet], mode));
                               onTagModeChange(mode);
-                              setTagError("");
+                              setSelectionError(null);
                             } catch (error) {
                               if (!(error instanceof TagFilterError)) throw error;
-                              setTagError(error.message);
+                              setSelectionError({ field: "tag", message: error.message });
                             }
                           }}
                         />
@@ -483,7 +485,7 @@ export function HomeCatalog({
                     </div>
                   )}
                 />
-                {tagError && <p className="muted" role="alert">{tagError}</p>}
+                {selectionError?.field === "tag" && <p className="muted" role="alert">{selectionError.message}</p>}
                 <SelectorOptions className="home-tag-options">
                   {stats.tags.map((item) => {
                     const selected = tagSet.has(item.slug);
@@ -545,6 +547,7 @@ export function HomeCatalog({
                   isRefreshing={isRefreshing}
                   reduceMotion={reduceMotion}
                 />
+                {selectionError?.field === "author" && <p className="muted" role="alert">{selectionError.message}</p>}
                 <SelectorOptions className="home-author-options">
                   {stats.authors.map((item) => {
                     const selected = authorSet.has(item.slug);

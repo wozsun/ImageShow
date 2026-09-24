@@ -1,6 +1,6 @@
 import { readableFilterSearch } from "@imageshow/shared/browser";
 import { useImageBrowseRoute } from "../../hooks/useImageBrowseRoute.js";
-import { TagFilterErrorState } from "../../components/feedback/TagFilterErrorState.js";
+import { PublicFilterErrorState } from "../../components/feedback/PublicFilterErrorState.js";
 import {
   useCallback,
   useEffect,
@@ -275,7 +275,7 @@ export function GalleryPage({
         </section>
         {Boolean(filterError) && (
           <div className="gallery-query-error">
-            <TagFilterErrorState error={filterError} onClear={() => updateFilter("tag", "")} onRetry={browseRoute.retryVocabulary} />
+            <PublicFilterErrorState error={filterError} onClear={(field) => updateFilter(field, "")} onRetry={browseRoute.retryVocabulary} />
           </div>
         )}
         {filtersReady && galleryData.snapshot.error && (
@@ -322,6 +322,7 @@ export function GalleryPage({
         </div>
         {filterDialog.session && <PublicFilterDialog
           filters={filterDialog.session.filters} unresolvedTags={filterDialog.session.unresolvedTags}
+        unresolvedSelectors={filterDialog.session.unresolvedSelectors}
           facets={facets} facetsLoading={browseRoute.facetsLoading} facetsError={browseRoute.facetsError}
           retryVocabulary={browseRoute.retryVocabulary} returnFocusRef={filterDialog.triggerRef}
           onClose={filterDialog.close} onApply={filterDialog.applyAfterClose} view="gallery" />}

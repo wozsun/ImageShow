@@ -56,7 +56,7 @@ export function PublicImageNavigation({
           randomUrl={route.randomLink.url}
           pageUrl={route.getPageUrl(order, mode)}
           randomLinkError={route.randomLink.error}
-          tagInvalid={Boolean(route.error)}
+          filterInvalid={Boolean(route.error)}
           filtersOpen={filterDialog.active}
           toolbarVisible={controls.toolbarVisible}
           toolbarRef={controls.toolbarRef}

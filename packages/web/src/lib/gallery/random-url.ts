@@ -13,7 +13,7 @@ export function buildRandomUrl(input: {
 }) {
   const params = new URLSearchParams();
   const tag = parseTagFilter(tagFilterValues(input.tag), "mixed");
-  let submittedCount = tag.submittedCount;
+  let submittedCount = tag.termCount;
   if (input.device) params.set("device", input.device);
   if (input.brightness !== "random") params.set("brightness", input.brightness);
   for (const field of ["theme", "author"] as const) {

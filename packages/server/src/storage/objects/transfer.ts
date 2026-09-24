@@ -243,6 +243,9 @@ async function cleanupCandidate(
   options?: CandidateCleanupOptions
 ) {
   if (cleanup) {
+    // A write/copy acknowledgement can be lost after the object materializes.
+    // Queue the candidate unconditionally; ownership-aware cleanup treats a
+    // truly missing object as an idempotent success.
     try {
       await cleanup(object, options);
     } catch (cleanupError) {
@@ -269,18 +272,6 @@ async function cleanupCandidate(
     key: object.key,
     transfer_error: transferError
   });
-}
-
-async function cleanupAttemptedCandidate(
-  object: CandidateObject,
-  cleanup: CandidateCleanup | undefined,
-  transferError: unknown,
-  options?: CandidateCleanupOptions
-) {
-  // A write/copy acknowledgement can be lost after the object materializes.
-  // Queue the deterministic candidate unconditionally; the ownership-aware
-  // cleanup handler treats a truly missing object as an idempotent success.
-  await cleanupCandidate(object, cleanup, transferError, options);
 }
 
 /** Publish a verified source using confirmed upload checksums or readback. */
@@ -437,7 +428,7 @@ export async function writeVerifiedFileToStorage(input: {
       }
     }
     if (candidateCleanup || !ownedIngestionCandidateGuard) {
-      await cleanupAttemptedCandidate(
+      await cleanupCandidate(
         candidate,
         candidateCleanup,
         transferError,
@@ -596,7 +587,6 @@ async function validateOpenedTransferSource(
   ) {
     throw storageSourceIntegrityFailure(source, prefix, key);
   }
-  return { serverCopyValidator: opened.serverCopyValidator };
 }
 
 function verifiedTransferReadable(input: {
@@ -751,7 +741,7 @@ export async function ensureVerifiedObjectAtDestination(input: {
       && serverCopySource
       && opened.serverCopyValidator
     ) {
-      const sourceValidation = await validateOpenedTransferSource(
+      await validateOpenedTransferSource(
         source,
         prefix,
         key,
@@ -767,8 +757,7 @@ export async function ensureVerifiedObjectAtDestination(input: {
         key,
         {
           signal,
-          sourceValidator: sourceValidation.serverCopyValidator
-            ?? opened.serverCopyValidator
+          sourceValidator: opened.serverCopyValidator
         }
       );
     } else {
@@ -818,7 +807,7 @@ export async function ensureVerifiedObjectAtDestination(input: {
   } catch (error) {
     await releaseOpenedTransferSource(opened, streamedBody);
     if (attempted) {
-      await cleanupAttemptedCandidate(
+      await cleanupCandidate(
         candidate,
         input.cleanupCandidate,
         error,

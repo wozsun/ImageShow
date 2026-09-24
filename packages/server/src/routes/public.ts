@@ -38,13 +38,7 @@ import {
 import type { StoredResponseRequest } from "../images/serving/stored-object-response.ts";
 import { requireImageReferer } from "./image-referer.ts";
 
-const galleryStatsQueryKeys = [
-  "device",
-  "brightness",
-  "theme",
-  "tag",
-  "author"
-] as const;
+const galleryStatsQueryKeys = Object.keys(galleryStatsQuery.shape);
 const galleryStatsQueryKeySet = new Set<string>(galleryStatsQueryKeys);
 const siteConfigRepresentation = createApiSuccessSnapshot((config: RuntimeConfig) => siteConfigPayload(config));
 

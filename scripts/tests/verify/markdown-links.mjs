@@ -30,7 +30,6 @@ function localTarget(rawTarget) {
     || target.startsWith("#")
     || target.startsWith("/")
     || /^[a-z][a-z\d+.-]*:/i.test(target)
-    || target.startsWith("//")
   ) return null;
   const withoutFragment = target.split("#", 1)[0].split("?", 1)[0];
   if (!withoutFragment) return null;

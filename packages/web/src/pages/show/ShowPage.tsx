@@ -2,7 +2,7 @@ import { readableFilterSearch } from "@imageshow/shared/browser";
 import { useImageBrowseRoute } from "../../hooks/useImageBrowseRoute.js";
 import { usePublicFilterDialog } from "../../hooks/usePublicFilterDialog.js";
 import { PublicFilterDialog } from "../../components/image/filter/PublicFilterDialog.js";
-import { TagFilterErrorState } from "../../components/feedback/TagFilterErrorState.js";
+import { PublicFilterErrorState } from "../../components/feedback/PublicFilterErrorState.js";
 import {
   useCallback,
   useEffect,
@@ -352,7 +352,7 @@ export function ShowPage({
         </p>
         {Boolean(filterError) && (
           <div className="show-query-state">
-            <TagFilterErrorState error={filterError} onClear={() => updateFilter("tag", "")} onRetry={browseRoute.retryVocabulary} />
+            <PublicFilterErrorState error={filterError} onClear={(field) => updateFilter(field, "")} onRetry={browseRoute.retryVocabulary} />
           </div>
         )}
         {!filterError && (!filtersReady || data.initialLoading) && (
@@ -369,6 +369,7 @@ export function ShowPage({
       </ShowPixiStage>
       {filterDialog.session && <PublicFilterDialog
         filters={filterDialog.session.filters} unresolvedTags={filterDialog.session.unresolvedTags}
+        unresolvedSelectors={filterDialog.session.unresolvedSelectors}
         facets={browseRoute.facets} facetsLoading={browseRoute.facetsLoading} facetsError={browseRoute.facetsError}
         retryVocabulary={browseRoute.retryVocabulary} returnFocusRef={filterDialog.triggerRef}
         onClose={filterDialog.close} onApply={filterDialog.applyAfterClose} view="show" />}

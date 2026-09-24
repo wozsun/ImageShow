@@ -76,12 +76,6 @@ export function inputText(
       value: "text"
     });
   }
-  const legacyControl = control as typeof control & {
-    attachEvent?: () => void;
-    detachEvent?: () => void;
-  };
-  if (!legacyControl.attachEvent) legacyControl.attachEvent = () => {};
-  if (!legacyControl.detachEvent) legacyControl.detachEvent = () => {};
   dispatchDomEvent(window, control, "focusin");
   try {
     setNativeControlValue(control, value);

@@ -634,11 +634,6 @@ for (const path of runtimeDefaultPathOrder) {
     );
   }
   const binding = runtimeBindingByPath.get(path);
-  if (!binding) {
-    throw new Error(
-      `source-contract: ${path} is missing a RuntimeConfig environment binding`
-    );
-  }
   if (documented.environmentVariable !== binding.environmentVariable) {
     throw new Error(
       `source-contract: documented environment variable for ${path} is `

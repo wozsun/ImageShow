@@ -4,10 +4,11 @@ import type { useImageBrowseRoute } from "./useImageBrowseRoute.js";
 import { isPageScrollLocked, pageScrollRestoredEvent } from "./usePageScrollLock.js";
 import type { GalleryFilters } from "../lib/gallery/gallery-query.js";
 
-type Session = { identity: string; filters: GalleryFilters; unresolvedTags: string[] };
+type Session = { identity: string; filters: GalleryFilters; unresolvedTags: string[];
+  unresolvedSelectors: ReturnType<typeof useImageBrowseRoute>["unresolvedSelectors"] };
 
 /** The page holds the close-to-navigation handoff after the dialog has unmounted. */
-export function usePublicFilterDialog(route: Pick<ReturnType<typeof useImageBrowseRoute>, "filters" | "ready" | "params" | "applyFilters">) {
+export function usePublicFilterDialog(route: Pick<ReturnType<typeof useImageBrowseRoute>, "filters" | "ready" | "params" | "unresolvedSelectors" | "applyFilters">) {
   const location = useLocation();
   const identity = JSON.stringify([location.pathname, location.key, location.search]);
   const [session, setSession] = useState<Session | null>(null);
@@ -47,6 +48,7 @@ export function usePublicFilterDialog(route: Pick<ReturnType<typeof useImageBrow
       pendingRef.current = null;
       setHandoff(false);
       setSession({ identity, filters: { ...route.filters },
+        unresolvedSelectors: route.unresolvedSelectors,
         unresolvedTags: route.ready ? [] : route.params.getAll("tag") });
     },
     close: () => setSession(null),

@@ -5,7 +5,7 @@ import { useGalleryFacets } from "../lib/api/site-queries.js";
 import {
   emptyGalleryFilters,
   galleryRouteSearchParams,
-  galleryFiltersFromSearchParams,
+  readGalleryFilters,
   galleryRandomRequestDevice,
   updateImageBrowseSearchParams,
   type GalleryFilters
@@ -19,19 +19,10 @@ export function useImageBrowseRoute() {
   const location = useLocation();
   const query = params.toString();
   const facetsQuery = useGalleryFacets();
-  const parsed = useMemo(() => {
-    const current = new URLSearchParams(query);
-    try {
-      return { filters: galleryFiltersFromSearchParams(current, facetsQuery.data?.tags), error: null };
-    } catch (error) {
-      if (!(error instanceof TagFilterError)) throw error;
-      current.delete("tag");
-      return { filters: galleryFiltersFromSearchParams(current), error };
-    }
-  }, [query, facetsQuery.data]);
+  const parsed = useMemo(() => readGalleryFilters(new URLSearchParams(query), facetsQuery.data?.tags), [query, facetsQuery.data]);
   const requiresVocabulary = params.has("tag");
   const vocabularyError = requiresVocabulary ? facetsQuery.error : null;
-  const error = parsed.error?.kind === "unknown"
+  const error = parsed.error instanceof TagFilterError && parsed.error.kind === "unknown"
     ? vocabularyError ?? parsed.error
     : parsed.error ?? vocabularyError;
   const ready = !error && (!requiresVocabulary || Boolean(facetsQuery.data));
@@ -43,12 +34,10 @@ export function useImageBrowseRoute() {
   const updateSearchParams = useCallback((update: (current: URLSearchParams) => URLSearchParams) => {
     const next = update(new URLSearchParams(query));
     if (facetsQuery.data && next.has("tag")) {
-      try {
-        const normalized = galleryFiltersFromSearchParams(next, facetsQuery.data.tags);
+      const normalized = readGalleryFilters(next, facetsQuery.data.tags);
+      if (!normalized.error) {
         next.delete("tag");
-        for (const value of tagFilterValues(normalized.tag)) next.append("tag", value);
-      } catch (error) {
-        if (!(error instanceof TagFilterError)) throw error;
+        for (const value of tagFilterValues(normalized.filters.tag)) next.append("tag", value);
       }
     }
     void navigate({ search: readableFilterSearch(next) }, { state: { imageBrowseFilterEdit: true } });
@@ -57,7 +46,7 @@ export function useImageBrowseRoute() {
     updateSearchParams((current) => updateImageBrowseSearchParams(current, { [key]: value }));
   };
   const clearFilters = () => {
-    if (!params.has("tag") && !Object.values(parsed.filters).some(Boolean)) return;
+    if (!error && !params.has("tag") && !Object.values(parsed.filters).some(Boolean)) return;
     updateSearchParams((current) => updateImageBrowseSearchParams(current, emptyGalleryFilters));
   };
   const applyFilters = (next: GalleryFilters) => {
@@ -83,7 +72,7 @@ export function useImageBrowseRoute() {
     return `${window.location.origin}${pathname}?${readableFilterSearch(pageParams)}`;
   };
   return {
-    params, filters: parsed.filters, error, ready,
+    params, filters: parsed.filters, unresolvedSelectors: parsed.unresolvedSelectors, error, ready,
     updateFilter, clearFilters, applyFilters, randomLink, getPageUrl,
     facetsError: facetsQuery.error, facetsLoading: facetsQuery.isPending,
     facets: facetsQuery.data, updateSearchParams, browseSearch: readableFilterSearch(linkParams),

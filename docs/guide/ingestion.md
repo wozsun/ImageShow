@@ -1,6 +1,6 @@
 # 图片接入
 
-本文以 6.4.17 为基线，集中说明 Upload / Import 的接管、队列、提交和资源释放契约。
+本文说明 Upload / Import 的接管、队列、提交和资源释放契约。
 用户入口见[图片管理员指南](roles/image-admin.md)，目录职责见[项目结构](project-structure.md#内容接入)。
 
 后台提供本地文件、URL 列表、JSONL 清单和公开微博四种入口。浏览器维护当前窗口的本地

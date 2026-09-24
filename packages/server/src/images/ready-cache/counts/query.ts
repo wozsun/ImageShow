@@ -24,6 +24,7 @@ import {
   readReadyImageSourceIndexStates
 } from "../indexes/attribute.ts";
 import type { ImageFilterPlan } from "../../filter-plan.ts";
+import type { GalleryTagCountPlans } from "../../read-models/gallery-stats-plan.ts";
 import {
   READY_IMAGE_STATS_KEY,
   readyImageStatsResultKey
@@ -87,7 +88,6 @@ async function readCachedCountSnapshot(
         || ttl <= 0
         || cached.revision !== revision
         || cached.value.total !== expectedTotal
-        || cached.value.matching > expectedTotal
       ) {
         await discardReadyImageDerivedResult(key, "stats-result");
         return null;
@@ -153,7 +153,8 @@ async function readGlobalStats(revision: string, expectedTotal: number) {
 export async function readReadyImageCountSnapshot(
   plan: ImageFilterPlan,
   signal?: AbortSignal,
-  background = false
+  background = false,
+  tagCounts?: GalleryTagCountPlans
 ): Promise<ReadyImageCountResult> {
   try {
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -164,13 +165,15 @@ export async function readReadyImageCountSnapshot(
         : null;
       if (!meta) return { cached: false };
       const revision = meta.appliedRevision;
-      const key = readyImageStatsResultKey(plan.signature);
+      const key = readyImageStatsResultKey(tagCounts?.signature ?? plan.signature);
       const cached = await readCachedCountSnapshot(
         key,
         revision,
         meta.itemCount
       );
-      if (cached) return { cached: true, value: cached };
+      if (cached && (cached.tagGroups?.length ?? 0) === (tagCounts?.groups.length ?? 0)) {
+        return { cached: true, value: cached };
+      }
 
       const initialStats = await readGlobalStats(revision, meta.itemCount);
       if (!initialStats) continue;
@@ -189,7 +192,8 @@ export async function readReadyImageCountSnapshot(
 
       const preflight = preflightReadyImageCountSnapshotWork(
         plan,
-        initialStats
+        initialStats,
+        tagCounts
       );
       if (!("candidates" in preflight)) {
         logger.debug("ready_image_stats_work_rejected", {
@@ -210,7 +214,7 @@ export async function readReadyImageCountSnapshot(
         return fallback;
       }
 
-      const plans = Object.values(preflight.plans);
+      const plans = [...Object.values(preflight.plans), ...(tagCounts?.groups ?? [])];
       const indexes = await resolveReadyImageCountIndexes(
         plans,
         signal,
@@ -232,7 +236,8 @@ export async function readReadyImageCountSnapshot(
           plan,
           indexes,
           stats,
-          sourceStates
+          sourceStates,
+          tagCounts
         );
         if (!value) return null;
         const currentStates = await readReadyImageSourceIndexStates(

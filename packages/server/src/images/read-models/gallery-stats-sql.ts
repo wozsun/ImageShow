@@ -9,7 +9,8 @@ import {
   getAuthorVocab, getTagVocab, getThemeVocab,
   type AuthorVocabEntry, type VocabEntry
 } from "../../vocab/vocab-cache.ts";
-import type { ImageFilterPlan } from "../filter-plan.ts";
+import { imageFilterPlanWithout, type ImageFilterPlan } from "../filter-plan.ts";
+import type { GalleryTagCountPlans } from "./gallery-stats-plan.ts";
 import {
   activeReadyImageCounts, isUnfilteredReadyImagePlan,
   nonNegativeReadyImageCount, type ReadyImageCountSnapshot
@@ -99,14 +100,15 @@ function countsForGlobalMembers(
 async function readFacetCounts(
   client: DatabaseReader,
   plan: ImageFilterPlan,
-  globalStats: Map<string, number> | null
+  globalStats: Map<string, number> | null,
+  tagCandidates: ImageFilterPlan
 ) {
   if (globalStats) {
     const themeRows = await filteredRows<MemberCountRow>(client, plan, ["theme"], (where, limit) => (
       `SELECT coalesce(m.theme, '${unsetThemeFilter}') AS slug, count(*)::int AS image_count
          FROM metadata m WHERE ${where} GROUP BY m.theme LIMIT ${limit}`
     ));
-    const tagRows = await filteredRows<MemberCountRow>(client, plan, ["tag"], (where, limit) => (
+    const tagRows = await filteredRows<MemberCountRow>(client, tagCandidates, [], (where, limit) => (
       `SELECT facet_it.tag_slug AS slug, count(*)::int AS image_count
          FROM metadata m JOIN image_tag facet_it ON facet_it.image_id=m.id
         WHERE ${where} GROUP BY facet_it.tag_slug LIMIT ${limit}`
@@ -138,7 +140,7 @@ async function readFacetCounts(
        HAVING count(*) > 0
      ) facets ORDER BY is_unset DESC, sort_order DESC, slug ASC LIMIT ${limit}`
   ));
-  const tagRows = await filteredRows<FacetCountRow>(client, plan, ["tag"], (where, limit) => (
+  const tagRows = await filteredRows<FacetCountRow>(client, tagCandidates, [], (where, limit) => (
     `SELECT t.slug, t.display_name,
             (count(m.id) FILTER (WHERE ${where}))::int AS image_count
        FROM tag t JOIN image_tag facet_it ON facet_it.tag_slug=t.slug
@@ -165,11 +167,40 @@ async function readFacetCounts(
   };
 }
 
+async function readTagGroupCounts(
+  client: DatabaseReader,
+  plan: ImageFilterPlan,
+  matching: number,
+  groups: ImageFilterPlan[]
+) {
+  const counts = new Map([[plan.signature, matching]]);
+  const pending = [...new Map(groups.filter((group) => !counts.has(group.signature))
+    .map((group) => [group.signature, group])).values()];
+  if (pending.length) {
+    const params: unknown[] = [];
+    const columns = pending.map((group, index) => {
+      const clause = buildImageFilterSql({ status: "ready", plan: group }, { alias: "m" });
+      const offset = params.length;
+      const where = clause.where.join(" AND ").replace(/\$(\d+)/g, (_, position: string) => `$${offset + Number(position)}`);
+      params.push(...clause.params);
+      return `(count(*) FILTER (WHERE ${where}))::int AS group_${index}`;
+    });
+    const result = await client.query(`SELECT ${columns.join(", ")} FROM metadata m WHERE m.status='ready'`, params);
+    pending.forEach((group, index) => {
+      const value = count(result.rows[0]?.[`group_${index}`]);
+      if (value > matching) throw new Error("Tag group count exceeds the combined result");
+      counts.set(group.signature, value);
+    });
+  }
+  return groups.map((group) => counts.get(group.signature)!);
+}
+
 export async function readPublicGalleryCountSnapshot(
   plan: ImageFilterPlan,
   client: DatabaseReader,
   signal: AbortSignal,
-  context?: ReadyImageCountContext
+  context?: ReadyImageCountContext,
+  tagCounts?: GalleryTagCountPlans
 ) {
   signal.throwIfAborted();
   await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
@@ -203,12 +234,15 @@ export async function readPublicGalleryCountSnapshot(
           WHERE ${where} GROUP BY m.brightness LIMIT ${limit}`
       )), (row) => row.brightness
     );
-    const facets = await readFacetCounts(client, plan, globalStats);
+    const facets = await readFacetCounts(client, plan, globalStats,
+      tagCounts?.candidates ?? imageFilterPlanWithout(plan, "tag"));
+    const tagGroups = tagCounts ? await readTagGroupCounts(client, plan, categories.matching, tagCounts.groups) : undefined;
     signal.throwIfAborted();
     await client.query("COMMIT");
     result = {
       snapshot: {
         total, matching: categories.matching, axes: categories.axes, devices, brightnesses,
+        ...(tagGroups ? { tagGroups } : {}),
         themes: facets.themes, tags: facets.tags, authors: facets.authors
       } satisfies ReadyImageCountSnapshot,
       vocabulary: facets.vocabulary

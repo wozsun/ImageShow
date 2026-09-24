@@ -43,6 +43,7 @@ export type GalleryStatsFacetDto = FacetOptionDto & {
 export type GalleryStatsDto = {
   total_images: number;
   matching_images: number;
+  tag_groups?: Array<{ tag: string; image_count: number }>;
   devices: Array<{ device: Device; image_count: number }>;
   brightnesses: Array<{ brightness: Brightness; image_count: number }>;
   categories: Array<{

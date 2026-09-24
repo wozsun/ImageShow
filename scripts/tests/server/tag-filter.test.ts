@@ -45,7 +45,7 @@ import {
 test("[Server/标签] 基础任一与全部归一并保留单标签编辑方式", () => {
   const any = parseTagFilter([" B, a,a "]);
   assert.deepEqual(any.expression, { anyOf: [["a"], ["b"]] });
-  assert.equal(any.submittedCount, 3);
+  assert.equal(any.termCount, 2);
   assert.deepEqual(parseTagFilter(["a", "b"]).expression, any.expression);
   assert.deepEqual(parseTagFilter(["all:b,a,a"]).expression, { anyOf: [["a", "b"]] });
   assert.deepEqual(parseTagFilter(["all:b,a", "all:a,b"]).expression, { anyOf: [["a", "b"]] });
@@ -72,7 +72,7 @@ test("[Server/标签] 列表与统计接受标签分组并统一段数与词项�
     assert.equal(input(["all:a,b", "c"]).success, true);
     assert.equal(input(Array(9).fill("all:a,b")).success, true);
     assert.equal(input(Array(10).fill("a")).success, false);
-    assert.equal(input([Array(33).fill("a").join(",")]).success, false);
+    assert.equal(input([Array(33).fill("a").join(",")]).success, true);
     assert.equal(input([""]).success, false);
   }
   assert.throws(() => parseTagFilter(["a", "all:a,b"]), { kind: "mixed" });
@@ -80,15 +80,19 @@ test("[Server/标签] 列表与统计接受标签分组并统一段数与词项�
   assert.equal(mixed?.anyOf.length, 2);
 });
 
-test("[Server/标签] 输入预算在去重前生效并拒绝空词项与非法格式", () => {
-  assert.equal(parseTagFilter(Array(32).fill("a")).submittedCount, 32);
+test("[Server/标签] 词项预算按规范表达式计数并独立约束原始输入", () => {
+  assert.equal(parseTagFilter(Array(32).fill("a")).termCount, 1);
   assert.throws(() => parseTagFilter(Array(33).fill("a")), TagFilterError);
-  assert.throws(() => parseTagFilter([Array(33).fill("a").join(",")]), TagFilterError);
-  assert.equal(parseTagFilter(["😀".repeat(64)]).submittedCount, 1);
+  assert.equal(parseTagFilter([Array(33).fill("a").join(",")]).termCount, 1);
+  assert.throws(() => parseTagFilter([Array.from({ length: 33 }, (_, i) => `t${i}`).join(",")]), /32/);
+  assert.equal(parseTagFilter(["all:a,b", "all:b,a"], "mixed").termCount, 2);
+  assert.equal(parseTagFilter(["all:a,b", "all:a,c"], "mixed").termCount, 4);
+  assert.equal(parseTagFilter(["a,b", "b,c"], "mixed").termCount, 3);
+  assert.equal(parseTagFilter(["😀".repeat(64)]).termCount, 1);
   assert.throws(() => parseTagFilter(["😀".repeat(65)]), TagFilterError);
   const fullLength = [...Array(15).fill("a".repeat(64)), "b".repeat(49)].join(",");
   assert.equal(fullLength.length, 1024);
-  assert.equal(parseTagFilter([fullLength]).submittedCount, 16);
+  assert.equal(parseTagFilter([fullLength]).termCount, 2);
   assert.throws(() => parseTagFilter([fullLength + "b"]), TagFilterError);
   for (const value of ["", " ", "a,", ",a", "all:", "all:a,,b", "!a", ":a", "a,all:b", "a\u0000b"]) {
     assert.throws(() => parseTagFilter([value]), TagFilterError, value);
@@ -137,7 +141,7 @@ test("[Server/标签] 随机查询接受混合条件并统一未知标签与总�
   const unknown = normalizeRandomQuery(parsed, { ...maps, tag: new Map([["c", "c"]]) });
   assert.ok(unknown instanceof Response);
   assert.equal(unknown.status, 404);
-  const repeated = Array(32).fill("a").join(",");
+  const repeated = Array.from({ length: 32 }, (_, i) => `t${i}`).join(",");
   assert.ok(!(parse(`tag=${repeated}&theme=${repeated}`) instanceof Response));
   const excessive = parse(`tag=${repeated}&theme=${repeated}&author=a`);
   assert.ok(excessive instanceof Response);
