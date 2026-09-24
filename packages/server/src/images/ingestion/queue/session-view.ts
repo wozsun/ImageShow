@@ -19,10 +19,7 @@ import {
   type CompletedIngestionReceipt,
   type IngestionSessionSnapshot
 } from "../sessions/model.ts";
-import {
-  ingestionSessionIncarnationMismatch,
-  IngestionSessionRepository
-} from "../repository.ts";
+import { ingestionSessionIncarnationMismatch, IngestionSessionRepository } from "../repository.ts";
 
 function previewPath(
   session: Pick<IngestionSessionSnapshot, "session_id" | "image_id">,
@@ -58,15 +55,9 @@ export function presentIngestionSession(
     image_id: session.image_id,
     queue: session.queue,
     source_type: session.source_type,
-    ...(session.import_download
-      ? { download_url: session.import_download.url }
-      : {}),
-    ...(session.batch_position === undefined
-      ? {}
-      : { batch_position: session.batch_position }),
-    ...(session.manifest_line === undefined
-      ? {}
-      : { manifest_line: session.manifest_line }),
+    ...(session.import_download ? { download_url: session.import_download.url } : {}),
+    ...(session.batch_position === undefined ? {} : { batch_position: session.batch_position }),
+    ...(session.manifest_line === undefined ? {} : { manifest_line: session.manifest_line }),
     resolved_image_time: session.image_time,
     status: session.status,
     phase: session.phase,
@@ -79,16 +70,16 @@ export function presentIngestionSession(
     metadata: session.metadata,
     storage_slug: session.storage_slug,
     ...(prepared ? { prepared } : {}),
-    ...(session.duplicate_decision
-      ? { duplicate_decision: session.duplicate_decision }
+    ...(session.duplicate_decision ? { duplicate_decision: session.duplicate_decision } : {}),
+    ...(session.commit
+      ? {
+          commit: {
+            commit_request_id: session.commit.commit_request_id,
+            expected_md5: session.commit.expected_md5,
+            metadata: session.commit.metadata
+          }
+        }
       : {}),
-    ...(session.commit ? {
-      commit: {
-        commit_request_id: session.commit.commit_request_id,
-        expected_md5: session.commit.expected_md5,
-        metadata: session.commit.metadata
-      }
-    } : {}),
     ...(session.error ? { error: { message: session.error.message } } : {})
   };
 }
@@ -97,9 +88,7 @@ function completedDisplayForStoredSession(
   session: IngestionSessionSnapshot | CompletedIngestionReceipt | null
 ): CompletedIngestionDisplayDto | undefined {
   if (!session) return undefined;
-  return session.status === "completed"
-    ? session.display
-    : completedIngestionDisplay(session);
+  return session.status === "completed" ? session.display : completedIngestionDisplay(session);
 }
 
 export async function readIngestionStatuses(
@@ -119,39 +108,36 @@ export async function readIngestionStatuses(
   const results: IngestionStatusItemDto[] = [];
   for (const [index, pair] of pairs.entries()) {
     const stored = sessions[index];
-    const databaseResult = committedIngestionResultForOwner(
-      committed,
-      pair.image_id,
-      owner
-    );
+    const databaseResult = committedIngestionResultForOwner(committed, pair.image_id, owner);
     if (databaseResult) {
-      const redisSession = stored
-        && stored !== ingestionSessionIncarnationMismatch
-        && stored.image_id.toLowerCase() === pair.image_id.toLowerCase()
-        && stored.status !== "discarded"
-        ? stored
-        : null;
+      const redisSession =
+        stored &&
+        stored !== ingestionSessionIncarnationMismatch &&
+        stored.image_id.toLowerCase() === pair.image_id.toLowerCase() &&
+        stored.status !== "discarded"
+          ? stored
+          : null;
       const display = completedDisplayForStoredSession(redisSession);
       results.push({
         ...pair,
         status: "completed",
         completed_item: databaseResult.item,
         ...(display ? { display } : {}),
-        redis_status: redisSession?.status === "completed"
-          ? "completed"
-          : redisSession ? "active" : "missing",
-        ...(redisSession ? {
-          redis_version: redisSession.version,
-          redis_last_semantic_revision:
-            redisSession.last_semantic_revision
-        } : {})
+        redis_status:
+          redisSession?.status === "completed" ? "completed" : redisSession ? "active" : "missing",
+        ...(redisSession
+          ? {
+              redis_version: redisSession.version,
+              redis_last_semantic_revision: redisSession.last_semantic_revision
+            }
+          : {})
       });
       continue;
     }
     if (
-      !stored
-      || stored === ingestionSessionIncarnationMismatch
-      || stored.status === "discarded"
+      !stored ||
+      stored === ingestionSessionIncarnationMismatch ||
+      stored.status === "discarded"
     ) {
       results.push({ ...pair, status: "missing" });
       continue;
@@ -177,11 +163,11 @@ async function preparedSession(
 ) {
   const stored = await repository.readSession(owner, pair.session_id);
   if (
-    !stored
-    || stored.image_id !== pair.image_id
-    || stored.status === "completed"
-    || stored.status === "discarded"
-    || !stored.prepared
+    !stored ||
+    stored.image_id !== pair.image_id ||
+    stored.status === "completed" ||
+    stored.status === "discarded" ||
+    !stored.prepared
   ) {
     throw new ApiError(404, "not_found", "准备好的图片不存在");
   }
@@ -199,8 +185,8 @@ export async function readIngestionPreview(
   requestSignal?.throwIfAborted();
   const current = await preparedSession(repository, owner, pair);
   if (
-    current.version !== session.version
-    || current.prepared?.generation !== session.prepared?.generation
+    current.version !== session.version ||
+    current.prepared?.generation !== session.prepared?.generation
   ) {
     throw new ApiError(409, "ingestion_version_conflict", "内容接入任务版本已变化");
   }
@@ -209,9 +195,7 @@ export async function readIngestionPreview(
   const buffer = await readIngestionPreparedFile(key, requestSignal);
   return new Response(buffer as unknown as BodyInit, {
     headers: {
-      "Content-Type": variant === "full"
-        ? contentType(current.prepared!.ext)
-        : "image/webp",
+      "Content-Type": variant === "full" ? contentType(current.prepared!.ext) : "image/webp",
       "Cache-Control": privateNoStoreCacheControl
     }
   });

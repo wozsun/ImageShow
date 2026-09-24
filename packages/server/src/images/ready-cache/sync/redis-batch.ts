@@ -25,16 +25,11 @@ export class RedisPipelineBatcher {
     this.#pipeline = client.pipeline();
   }
 
-  async queue(
-    estimatedBytes: number,
-    enqueue: (pipeline: RedisPipeline) => void
-  ) {
+  async queue(estimatedBytes: number, enqueue: (pipeline: RedisPipeline) => void) {
     if (
-      this.#commands > 0
-      && (
-        this.#commands >= REDIS_BATCH_MAX_COMMANDS
-        || this.#bytes + estimatedBytes > REDIS_BATCH_MAX_BYTES
-      )
+      this.#commands > 0 &&
+      (this.#commands >= REDIS_BATCH_MAX_COMMANDS ||
+        this.#bytes + estimatedBytes > REDIS_BATCH_MAX_BYTES)
     ) {
       await this.flush();
     }
@@ -53,9 +48,7 @@ export class RedisPipelineBatcher {
   }
 }
 
-export function* chunkHashEntries(
-  entries: Iterable<readonly [string, string]>
-) {
+export function* chunkHashEntries(entries: Iterable<readonly [string, string]>) {
   let chunk: Array<[string, string]> = [];
   let bytes = 0;
   for (const [field, value] of entries) {

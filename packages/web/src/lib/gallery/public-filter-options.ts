@@ -1,6 +1,9 @@
 /** Keep zero-count styling stable while a new result is being verified. */
 export function publicFilterOptionState({
-  selected, count, unverified, unrestricted = false
+  selected,
+  count,
+  unverified,
+  unrestricted = false
 }: {
   selected: boolean;
   count: number | undefined;

@@ -1,10 +1,5 @@
 import type { AuthStateDto } from "@imageshow/shared/browser";
-import {
-  api,
-  clearCsrfToken,
-  isApiClientError,
-  setCsrfToken
-} from "./client.js";
+import { api, clearCsrfToken, isApiClientError, setCsrfToken } from "./client.js";
 import { adminApiBasePath } from "../constants.js";
 
 export type AuthState = AuthStateDto;

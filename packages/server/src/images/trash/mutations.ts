@@ -1,7 +1,4 @@
-import type {
-  ImageTrashResponseDto,
-  ImageRestoreResponseDto
-} from "@imageshow/shared/browser";
+import type { ImageTrashResponseDto, ImageRestoreResponseDto } from "@imageshow/shared/browser";
 import { withAdvisoryLocks } from "../../core/database/advisory-locks.ts";
 import { withTransaction } from "../../core/database/transactions.ts";
 import { imageUpdateLockRequests } from "../image-update-lock.ts";
@@ -28,7 +25,7 @@ const restoreImagesSql = `UPDATE metadata
 async function mutateImageTrashState(ids: string[], sql: string) {
   const requestedCount = new Set(ids.map((id) => id.toLowerCase())).size;
   const decision = decideImageMutationSync(requestedCount);
-  return withAdvisoryLocks(imageUpdateLockRequests(ids), () => (
+  return withAdvisoryLocks(imageUpdateLockRequests(ids), () =>
     withImageMutationSync(async (mutationBatch) => {
       if (decision.mode === "rebuild") {
         mutationBatch.decide(decision.affectedCount);
@@ -44,12 +41,10 @@ async function mutateImageTrashState(ids: string[], sql: string) {
       }
       return new Set(rows.map((row) => row.id.toLowerCase()));
     })
-  ));
+  );
 }
 
-export async function moveImagesToTrash(
-  ids: string[]
-): Promise<ImageTrashResponseDto> {
+export async function moveImagesToTrash(ids: string[]): Promise<ImageTrashResponseDto> {
   const trashedIds = await mutateImageTrashState(ids, moveImagesToTrashSql);
   return {
     requested: ids.length,
@@ -62,9 +57,7 @@ export async function moveImagesToTrash(
   };
 }
 
-export async function restoreImages(
-  ids: string[]
-): Promise<ImageRestoreResponseDto> {
+export async function restoreImages(ids: string[]): Promise<ImageRestoreResponseDto> {
   const restoredIds = await mutateImageTrashState(ids, restoreImagesSql);
   return {
     requested: ids.length,

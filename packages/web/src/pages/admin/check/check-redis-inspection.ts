@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api/client.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
@@ -16,10 +11,9 @@ type ReadyImageProjectionUsageAggregate = {
   memory_bytes: number;
 };
 
-type ReadyImageDerivedProjectionUsageAggregate =
-  ReadyImageProjectionUsageAggregate & {
-    member_count: number;
-  };
+type ReadyImageDerivedProjectionUsageAggregate = ReadyImageProjectionUsageAggregate & {
+  member_count: number;
+};
 
 export type ReadyImageProjectionUsageSnapshot = {
   measured_at: string;
@@ -28,9 +22,7 @@ export type ReadyImageProjectionUsageSnapshot = {
 };
 
 function recordValue(value: unknown) {
-  return value !== null && typeof value === "object"
-    ? value as Record<string, unknown>
-    : null;
+  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
 
 function projectionUsageAggregate(value: unknown) {
@@ -39,10 +31,10 @@ function projectionUsageAggregate(value: unknown) {
   const keyCount = record.key_count;
   const memoryBytes = record.memory_bytes;
   if (
-    !Number.isSafeInteger(keyCount)
-    || Number(keyCount) < 0
-    || !Number.isSafeInteger(memoryBytes)
-    || Number(memoryBytes) < 0
+    !Number.isSafeInteger(keyCount) ||
+    Number(keyCount) < 0 ||
+    !Number.isSafeInteger(memoryBytes) ||
+    Number(memoryBytes) < 0
   ) {
     return null;
   }
@@ -56,11 +48,7 @@ function derivedProjectionUsageAggregate(value: unknown) {
   const record = recordValue(value);
   const aggregate = projectionUsageAggregate(record);
   const memberCount = record?.member_count;
-  if (
-    !aggregate
-    || !Number.isSafeInteger(memberCount)
-    || Number(memberCount) < 0
-  ) {
+  if (!aggregate || !Number.isSafeInteger(memberCount) || Number(memberCount) < 0) {
     return null;
   }
   return {
@@ -80,25 +68,21 @@ export function readyImageProjectionUsage(
   } else {
     const redisResult = recordValue(root?.redis);
     if (redisResult?.status === "ok") {
-      deepInspection = recordValue(
-        recordValue(redisResult.data)?.deep_inspection
-      );
+      deepInspection = recordValue(recordValue(redisResult.data)?.deep_inspection);
     }
   }
   if (
-    deepInspection?.complete !== true
-    || deepInspection.source !== "deep"
-    || typeof deepInspection.measured_at !== "string"
-    || !Number.isFinite(Date.parse(deepInspection.measured_at))
+    deepInspection?.complete !== true ||
+    deepInspection.source !== "deep" ||
+    typeof deepInspection.measured_at !== "string" ||
+    !Number.isFinite(Date.parse(deepInspection.measured_at))
   ) {
     return null;
   }
   const usage = recordValue(deepInspection.image_projection_usage);
   const core = projectionUsageAggregate(usage?.core);
   const derived = derivedProjectionUsageAggregate(usage?.derived);
-  return core && derived
-    ? { measured_at: deepInspection.measured_at, core, derived }
-    : null;
+  return core && derived ? { measured_at: deepInspection.measured_at, core, derived } : null;
 }
 
 function latestReadyImageProjectionUsage(
@@ -107,9 +91,7 @@ function latestReadyImageProjectionUsage(
 ) {
   if (!first) return second;
   if (!second) return first;
-  return Date.parse(first.measured_at) >= Date.parse(second.measured_at)
-    ? first
-    : second;
+  return Date.parse(first.measured_at) >= Date.parse(second.measured_at) ? first : second;
 }
 
 export function useRetainedReadyImageProjectionUsage(result: unknown) {
@@ -117,27 +99,27 @@ export function useRetainedReadyImageProjectionUsage(result: unknown) {
     () => readyImageProjectionUsage(result, "redis"),
     [result]
   );
-  const [retainedProjectionUsage, setRetainedProjectionUsage] = useState<
-    ReadyImageProjectionUsageSnapshot | null
-  >(null);
+  const [retainedProjectionUsage, setRetainedProjectionUsage] =
+    useState<ReadyImageProjectionUsageSnapshot | null>(null);
 
   useEffect(() => {
     if (!currentProjectionUsage) return;
-    setRetainedProjectionUsage((current) => (
+    setRetainedProjectionUsage((current) =>
       latestReadyImageProjectionUsage(currentProjectionUsage, current)
-    ));
+    );
   }, [currentProjectionUsage]);
 
-  const retainProjectionUsage = useCallback((
-    completeUsage: ReadyImageProjectionUsageSnapshot | null
-  ) => {
-    if (completeUsage) {
-      setRetainedProjectionUsage((current) => (
-        latestReadyImageProjectionUsage(completeUsage, current)
-      ));
-    }
-    return completeUsage;
-  }, []);
+  const retainProjectionUsage = useCallback(
+    (completeUsage: ReadyImageProjectionUsageSnapshot | null) => {
+      if (completeUsage) {
+        setRetainedProjectionUsage((current) =>
+          latestReadyImageProjectionUsage(completeUsage, current)
+        );
+      }
+      return completeUsage;
+    },
+    []
+  );
 
   return {
     currentProjectionUsage,
@@ -149,9 +131,7 @@ export function useRetainedReadyImageProjectionUsage(result: unknown) {
   };
 }
 
-export function useAdminRedisInspection(
-  options: { enabled?: boolean } = {}
-) {
+export function useAdminRedisInspection(options: { enabled?: boolean } = {}) {
   return useQuery<unknown>({
     queryKey: queryKeys.adminRedisInspection,
     // The server enforces the ten-second inspection deadline. Keep this first

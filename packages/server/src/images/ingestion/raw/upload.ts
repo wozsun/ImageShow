@@ -1,16 +1,10 @@
 import { getIngestionMaxFileBytes } from "../../../config/app-settings.ts";
 import { ApiError } from "../../../core/api-error.ts";
-import {
-  runWithAdvisoryLockAcquisitionSignal
-} from "../../../core/database/advisory-locks.ts";
+import { runWithAdvisoryLockAcquisitionSignal } from "../../../core/database/advisory-locks.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
 import { assertStorageWriteTarget } from "../../../storage/backends/registry.ts";
 import { withStorageLocationReadLock } from "../../../storage/maintenance-lock.ts";
-import {
-  receiveUploadRaw,
-  removeOwnedIngestionRaw,
-  removeIngestionRawPart
-} from "./files.ts";
+import { receiveUploadRaw, removeOwnedIngestionRaw, removeIngestionRawPart } from "./files.ts";
 import { withActiveIngestionTempPaths } from "./lease-registry.ts";
 import { ingestionRawPartPath, ingestionRawPath } from "./paths.ts";
 import { withRawUploadAdmission } from "./upload-admission.ts";
@@ -27,15 +21,9 @@ export async function receiveUploadIntentBody(
   if (!body) throw new ApiError(400, "empty_body", "Empty upload body");
   const claims = service.verifyUploadCredential(credential, owner);
   const admissionSignal = signal ?? new AbortController().signal;
-  return withRawUploadAdmission(admissionSignal, () => (
-    receiveUploadIntentBodyUnderAdmission(
-      service,
-      owner,
-      claims,
-      body,
-      admissionSignal
-    )
-  ));
+  return withRawUploadAdmission(admissionSignal, () =>
+    receiveUploadIntentBodyUnderAdmission(service, owner, claims, body, admissionSignal)
+  );
 }
 
 async function receiveUploadIntentBodyUnderAdmission(
@@ -51,22 +39,14 @@ async function receiveUploadIntentBodyUnderAdmission(
     candidate_image_id: claims.candidate_image_id,
     request_hash: claims.request_hash
   };
-  const claimed = await service.repository.claimUploadIntent(
-    owner,
-    intentPair,
-    executionToken
-  );
+  const claimed = await service.repository.claimUploadIntent(owner, intentPair, executionToken);
   const rawGeneration = randomUuidV7();
   const pair = {
     session_id: claimed.session_id,
     image_id: claimed.candidate_image_id
   };
   const rawPath = ingestionRawPath(pair, rawGeneration);
-  const partPath = ingestionRawPartPath(
-    pair,
-    rawGeneration,
-    executionToken
-  );
+  const partPath = ingestionRawPartPath(pair, rawGeneration, executionToken);
   return withActiveIngestionTempPaths([rawPath, partPath], async () => {
     let published = false;
     try {
@@ -80,15 +60,14 @@ async function receiveUploadIntentBodyUnderAdmission(
         maximum_size: getIngestionMaxFileBytes(),
         max_long_edge: claimed.max_long_edge,
         signal,
-        heartbeat: () => service.repository.heartbeatUploadIntent(
-          owner,
-          intentPair,
-          executionToken
-        ).then(() => undefined)
+        heartbeat: () =>
+          service.repository
+            .heartbeatUploadIntent(owner, intentPair, executionToken)
+            .then(() => undefined)
       });
       published = true;
       signal.throwIfAborted();
-      return await runWithAdvisoryLockAcquisitionSignal(signal, () => (
+      return await runWithAdvisoryLockAcquisitionSignal(signal, () =>
         withStorageLocationReadLock(async (lockSignal) => {
           const combinedSignal = AbortSignal.any([signal, lockSignal]);
           combinedSignal.throwIfAborted();
@@ -98,31 +77,21 @@ async function receiveUploadIntentBodyUnderAdmission(
             claimed.resolved_image_time,
             claimed.batch_position
           );
-          const template = service.uploadReceivedTemplate(
-            claimed,
-            rawGeneration,
-            received.rawSize
-          );
-          const converted = await service.repository.convertUploadIntent(
-            template,
-            executionToken
-          );
+          const template = service.uploadReceivedTemplate(claimed, rawGeneration, received.rawSize);
+          const converted = await service.repository.convertUploadIntent(template, executionToken);
           return converted.session;
         })
-      ));
+      );
     } catch (error) {
       if (published) {
         let retainPublishedRaw = true;
         try {
-          const current = await service.repository.readSession(
-            owner,
-            pair.session_id
-          );
+          const current = await service.repository.readSession(owner, pair.session_id);
           retainPublishedRaw = Boolean(
-            current
-            && current.image_id === pair.image_id
-            && "raw_generation" in current
-            && current.raw_generation === rawGeneration
+            current &&
+            current.image_id === pair.image_id &&
+            "raw_generation" in current &&
+            current.raw_generation === rawGeneration
           );
         } catch {
           // A Redis/Lua response can be lost after the conversion committed.
@@ -131,21 +100,14 @@ async function receiveUploadIntentBodyUnderAdmission(
           retainPublishedRaw = true;
         }
         if (!retainPublishedRaw) {
-          await removeOwnedIngestionRaw(pair, rawGeneration)
-            .catch(() => undefined);
+          await removeOwnedIngestionRaw(pair, rawGeneration).catch(() => undefined);
         }
       } else {
-        await removeIngestionRawPart(
-          pair,
-          rawGeneration,
-          executionToken
-        ).catch(() => undefined);
+        await removeIngestionRawPart(pair, rawGeneration, executionToken).catch(() => undefined);
       }
-      await service.repository.releaseUploadIntent(
-        owner,
-        intentPair,
-        executionToken
-      ).catch(() => undefined);
+      await service.repository
+        .releaseUploadIntent(owner, intentPair, executionToken)
+        .catch(() => undefined);
       throw error;
     }
   });

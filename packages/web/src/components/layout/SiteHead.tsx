@@ -15,8 +15,7 @@ function ensureMeta(name: string) {
 }
 
 function isAdminRoute(pathname: string) {
-  return pathname === adminBasePath
-    || pathname.startsWith(`${adminBasePath}/`);
+  return pathname === adminBasePath || pathname.startsWith(`${adminBasePath}/`);
 }
 
 export function SiteHead() {
@@ -27,8 +26,8 @@ export function SiteHead() {
   useLayoutEffect(() => {
     const immersive = /^\/(?:home|gallery|show|embed\/(?:home|gallery|show))?\/?$/i.test(pathname);
     const viewport = ensureMeta("viewport");
-    viewport.content = "width=device-width, initial-scale=1.0"
-      + (immersive ? ", viewport-fit=cover" : "");
+    viewport.content =
+      "width=device-width, initial-scale=1.0" + (immersive ? ", viewport-fit=cover" : "");
     document.documentElement.toggleAttribute("data-public-viewport", immersive);
     return () => {
       viewport.content = "width=device-width, initial-scale=1.0";

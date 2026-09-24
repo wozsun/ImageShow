@@ -70,9 +70,7 @@ function currentJsHeapBytes() {
     memory?: { usedJSHeapSize?: number };
   };
   const used = memory?.memory?.usedJSHeapSize;
-  return typeof used === "number" && Number.isFinite(used)
-    ? Math.max(0, used)
-    : null;
+  return typeof used === "number" && Number.isFinite(used) ? Math.max(0, used) : null;
 }
 
 export class GalleryDebugStats implements GalleryDebugController {
@@ -142,19 +140,14 @@ export class GalleryDebugStats implements GalleryDebugController {
 
   updateDataWindow(metrics: GalleryDataWindowMetrics) {
     const fields = Object.keys(metrics) as Array<keyof GalleryDataWindowMetrics>;
-    const changed = fields.some(
-      (field) => this.#snapshot[field] !== metrics[field]
-    );
+    const changed = fields.some((field) => this.#snapshot[field] !== metrics[field]);
     if (!changed) return;
     this.#snapshot = { ...this.#snapshot, ...metrics };
     this.#emit();
   }
 
   recordReveal(imageIndex: number) {
-    const next = Math.max(
-      this.#snapshot.revealHighWater,
-      Math.floor(imageIndex)
-    );
+    const next = Math.max(this.#snapshot.revealHighWater, Math.floor(imageIndex));
     if (next === this.#snapshot.revealHighWater) return;
     this.#snapshot = { ...this.#snapshot, revealHighWater: next };
     this.#emit();

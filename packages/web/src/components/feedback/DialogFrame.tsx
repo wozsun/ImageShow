@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useRef,
-  type ReactNode,
-  type RefObject
-} from "react";
+import { useCallback, useRef, type ReactNode, type RefObject } from "react";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
 import { useDialogFocus } from "../../hooks/useDialogFocus.js";
@@ -47,17 +42,17 @@ export function DialogFrame({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const { closing, requestClose: requestAnimatedClose, onAnimationEnd } = useAnimatedClose(onClose);
-  const requestClose = useCallback((afterClose?: () => void) => {
-    if (busy) return;
-    if (animateClose) {
-      requestAnimatedClose(
-        afterClose,
-        afterClose === undefined ? prepareClose : undefined
-      );
-      return;
-    }
-    (afterClose ?? prepareClose?.() ?? onClose)();
-  }, [animateClose, busy, onClose, prepareClose, requestAnimatedClose]);
+  const requestClose = useCallback(
+    (afterClose?: () => void) => {
+      if (busy) return;
+      if (animateClose) {
+        requestAnimatedClose(afterClose, afterClose === undefined ? prepareClose : undefined);
+        return;
+      }
+      (afterClose ?? prepareClose?.() ?? onClose)();
+    },
+    [animateClose, busy, onClose, prepareClose, requestAnimatedClose]
+  );
 
   usePageScrollLock();
   useDialogFocus({
@@ -80,11 +75,13 @@ export function DialogFrame({
       aria-describedby={descriptionId}
       aria-label={titleId ? undefined : ariaLabel}
       tabIndex={-1}
-      onPointerDown={closeOnBackdrop
-        ? (event) => {
-            if (event.target === event.currentTarget) requestClose();
-          }
-        : undefined}
+      onPointerDown={
+        closeOnBackdrop
+          ? (event) => {
+              if (event.target === event.currentTarget) requestClose();
+            }
+          : undefined
+      }
       onAnimationEnd={onAnimationEnd}
     >
       <DialogPortalTargetContext.Provider value={containerRef}>

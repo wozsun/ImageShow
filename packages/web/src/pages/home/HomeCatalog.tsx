@@ -1,5 +1,10 @@
 import { gallerySelectorValue, GallerySelectorError } from "../../lib/gallery/gallery-selectors.js";
-import { basicTagSelection, basicTagValue, TagFilterError, type TagMatchMode } from "@imageshow/shared/browser";
+import {
+  basicTagSelection,
+  basicTagValue,
+  TagFilterError,
+  type TagMatchMode
+} from "@imageshow/shared/browser";
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
 import {
   useRef,
@@ -43,16 +48,10 @@ function HomeRevealSection({
   armed: boolean;
   revealVariant: "state" | "axes" | "theme" | "tags" | "authors";
 }) {
-  const {
-    revealImmediately,
-    revealed,
-    revealedImmediately,
-    sectionRef
-  } = useOneShotSectionReveal(armed);
+  const { revealImmediately, revealed, revealedImmediately, sectionRef } =
+    useOneShotSectionReveal(armed);
   const entrance = useOneShotAnimation(
-    revealed
-    && !revealedImmediately
-    && revealVariant !== "state"
+    revealed && !revealedImmediately && revealVariant !== "state"
   );
   return (
     <section
@@ -65,16 +64,16 @@ function HomeRevealSection({
         revealedImmediately ? "is-reveal-immediate" : "",
         entrance.active ? "is-reveal-animation-active" : "",
         `is-reveal-${revealed ? "settled" : "pending"}`
-      ].filter(Boolean).join(" ")}
+      ]
+        .filter(Boolean)
+        .join(" ")}
       onAnimationEndCapture={(event) => {
-        const finalAxesAnimation = revealVariant === "axes"
-          && event.animationName === "home-axis-group-reveal"
-          && event.target instanceof Element
-          && event.target.matches(".home-axis-group:last-child");
-        if (
-          event.animationName === "home-section-track-glint"
-          || finalAxesAnimation
-        ) {
+        const finalAxesAnimation =
+          revealVariant === "axes" &&
+          event.animationName === "home-axis-group-reveal" &&
+          event.target instanceof Element &&
+          event.target.matches(".home-axis-group:last-child");
+        if (event.animationName === "home-section-track-glint" || finalAxesAnimation) {
           entrance.finish();
         }
         onAnimationEndCapture?.(event);
@@ -95,13 +94,7 @@ function HomeRevealSection({
   );
 }
 
-function SelectorOptions({
-  className,
-  children
-}: {
-  className: string;
-  children: ReactNode;
-}) {
+function SelectorOptions({ className, children }: { className: string; children: ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -110,11 +103,7 @@ function SelectorOptions({
       <div ref={scrollRef} className="home-selector-options">
         {children}
       </div>
-      <OverlayScrollbar
-        targetRef={scrollRef}
-        containerRef={containerRef}
-        enableOnTouch
-      />
+      <OverlayScrollbar targetRef={scrollRef} containerRef={containerRef} enableOnTouch />
     </div>
   );
 }
@@ -140,16 +129,12 @@ function AxisButton({
       aria-disabled={locked || undefined}
       data-availability-locked={locked || undefined}
       disabled={disabled}
-      title={
-        disabled
-          ? "当前组合下没有图片"
-          : locked
-            ? "当前候选数量尚未验证"
-            : undefined
-      }
+      title={disabled ? "当前组合下没有图片" : locked ? "当前候选数量尚未验证" : undefined}
       onClick={locked ? undefined : onClick}
     >
-      <span className="home-axis-check" aria-hidden="true">✓</span>
+      <span className="home-axis-check" aria-hidden="true">
+        ✓
+      </span>
       <span className="home-axis-label">{label}</span>
     </button>
   );
@@ -179,7 +164,9 @@ function SectionHeading({
   return (
     <header className="home-section-heading">
       <div className="home-section-title">
-        <span>{index} / {eyebrow}</span>
+        <span>
+          {index} / {eyebrow}
+        </span>
         <h2>{title}</h2>
       </div>
       {action}
@@ -188,12 +175,12 @@ function SectionHeading({
         className={[
           "home-section-track-glint",
           glint.active && !reduceMotion ? "is-refresh-glint-active" : ""
-        ].filter(Boolean).join(" ")}
+        ]
+          .filter(Boolean)
+          .join(" ")}
         aria-hidden="true"
         onAnimationIteration={(event) => {
-          if (
-            event.animationName === "home-section-track-glint"
-          ) {
+          if (event.animationName === "home-section-track-glint") {
             glint.finishCycle();
           }
         }}
@@ -235,11 +222,12 @@ export function HomeCatalog({
   const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const themeSet = new Set(selectedSlugs(filters.theme));
   const tagSet = new Set(basicTagSelection(filters.tag).selected);
-  const [selectionError, setSelectionError] = useState<{ field: "theme" | "tag" | "author"; message: string } | null>(null);
+  const [selectionError, setSelectionError] = useState<{
+    field: "theme" | "tag" | "author";
+    message: string;
+  } | null>(null);
   const authorSet = new Set(selectedSlugs(filters.author));
-  const deviceCounts = new Map(
-    stats?.devices.map((item) => [item.device, item.image_count]) ?? []
-  );
+  const deviceCounts = new Map(stats?.devices.map((item) => [item.device, item.image_count]) ?? []);
   const brightnessCounts = new Map(
     stats?.brightnesses.map((item) => [item.brightness, item.image_count]) ?? []
   );
@@ -267,20 +255,21 @@ export function HomeCatalog({
     onFiltersChange({ ...filters, [key]: value });
   };
 
-  const toggleMultiFacet = (
-    key: "theme" | "tag" | "author",
-    slug: string
-  ) => {
+  const toggleMultiFacet = (key: "theme" | "tag" | "author", slug: string) => {
     const selected = key === "tag" ? [...tagSet] : selectedSlugs(filters[key]);
     if (availabilityUnverified && !selected.includes(slug)) return;
     const next = selected.includes(slug)
       ? selected.filter((item) => item !== slug)
       : [...selected, slug];
     try {
-      updateFilter(key, key === "tag" ? basicTagValue(next, tagMode) : gallerySelectorValue(key, next));
+      updateFilter(
+        key,
+        key === "tag" ? basicTagValue(next, tagMode) : gallerySelectorValue(key, next)
+      );
       setSelectionError(null);
     } catch (error) {
-      if (!(error instanceof TagFilterError) && !(error instanceof GallerySelectorError)) throw error;
+      if (!(error instanceof TagFilterError) && !(error instanceof GallerySelectorError))
+        throw error;
       setSelectionError({ field: key, message: error.message });
     }
   };
@@ -292,7 +281,9 @@ export function HomeCatalog({
         "home-catalog",
         isRefreshing ? "is-refreshing" : "",
         `is-entrance-${armed ? "armed" : "pending"}`
-      ].filter(Boolean).join(" ")}
+      ]
+        .filter(Boolean)
+        .join(" ")}
       aria-label="图库分类目录"
       aria-busy={isRefreshing}
       aria-hidden={armed ? undefined : true}
@@ -351,9 +342,12 @@ export function HomeCatalog({
                     <AxisButton
                       key={value || "all"}
                       selected={filters.device === value}
-                      {...publicFilterOptionState({ selected: filters.device === value,
+                      {...publicFilterOptionState({
+                        selected: filters.device === value,
                         count: value ? deviceCounts.get(value) : undefined,
-                        unverified: availabilityUnverified, unrestricted: value === "" })}
+                        unverified: availabilityUnverified,
+                        unrestricted: value === ""
+                      })}
                       label={deviceLabels[value]}
                       onClick={() => updateFilter("device", value)}
                     />
@@ -367,9 +361,12 @@ export function HomeCatalog({
                     <AxisButton
                       key={value || "all"}
                       selected={filters.brightness === value}
-                      {...publicFilterOptionState({ selected: filters.brightness === value,
+                      {...publicFilterOptionState({
+                        selected: filters.brightness === value,
                         count: value ? brightnessCounts.get(value) : undefined,
-                        unverified: availabilityUnverified, unrestricted: value === "" })}
+                        unverified: availabilityUnverified,
+                        unrestricted: value === ""
+                      })}
                       label={brightnessLabels[value]}
                       onClick={() => updateFilter("brightness", value)}
                     />
@@ -394,12 +391,18 @@ export function HomeCatalog({
                 isRefreshing={isRefreshing}
                 reduceMotion={reduceMotion}
               />
-              {selectionError?.field === "theme" && <p className="muted" role="alert">{selectionError.message}</p>}
+              {selectionError?.field === "theme" && (
+                <p className="muted" role="alert">
+                  {selectionError.message}
+                </p>
+              )}
               <SelectorOptions className="home-theme-options">
                 {themes.map((item, index) => {
                   const selected = themeSet.has(item.slug);
                   const { disabled, locked } = publicFilterOptionState({
-                    selected, count: item.image_count, unverified: availabilityUnverified
+                    selected,
+                    count: item.image_count,
+                    unverified: availabilityUnverified
                   });
                   const label = facetLabel(item);
                   const revealIndex = themeRevealIndexes.get(item.slug);
@@ -408,14 +411,14 @@ export function HomeCatalog({
                       type="button"
                       className={selected ? "is-selected" : undefined}
                       key={item.slug}
-                      data-reveal-item={revealIndex === undefined
-                        ? undefined
-                        : true}
-                      style={revealIndex === undefined
-                        ? undefined
-                        : {
-                            "--home-reveal-index": revealIndex
-                          } as CSSProperties}
+                      data-reveal-item={revealIndex === undefined ? undefined : true}
+                      style={
+                        revealIndex === undefined
+                          ? undefined
+                          : ({
+                              "--home-reveal-index": revealIndex
+                            } as CSSProperties)
+                      }
                       aria-pressed={selected}
                       aria-disabled={locked || undefined}
                       data-availability-locked={locked || undefined}
@@ -427,11 +430,7 @@ export function HomeCatalog({
                             ? "当前候选数量尚未验证"
                             : undefined
                       }
-                      onClick={
-                        locked
-                          ? undefined
-                          : () => toggleMultiFacet("theme", item.slug)
-                      }
+                      onClick={locked ? undefined : () => toggleMultiFacet("theme", item.slug)}
                     >
                       <small>{String(index + 1).padStart(2, "0")}</small>
                       <span
@@ -461,8 +460,13 @@ export function HomeCatalog({
                   refreshGlintRun={refreshGlintRun}
                   isRefreshing={isRefreshing}
                   reduceMotion={reduceMotion}
-                  action={(
-                    <div className="home-tag-mode" data-mode={tagMode} role="group" aria-label="标签筛选方式">
+                  action={
+                    <div
+                      className="home-tag-mode"
+                      data-mode={tagMode}
+                      role="group"
+                      aria-label="标签筛选方式"
+                    >
                       {(["any", "all"] as const).map((mode) => (
                         <AxisButton
                           key={mode}
@@ -472,7 +476,8 @@ export function HomeCatalog({
                           label={mode === "any" ? "任一" : "全部"}
                           onClick={() => {
                             try {
-                              if (tagSet.size) updateFilter("tag", basicTagValue([...tagSet], mode));
+                              if (tagSet.size)
+                                updateFilter("tag", basicTagValue([...tagSet], mode));
                               onTagModeChange(mode);
                               setSelectionError(null);
                             } catch (error) {
@@ -483,14 +488,20 @@ export function HomeCatalog({
                         />
                       ))}
                     </div>
-                  )}
+                  }
                 />
-                {selectionError?.field === "tag" && <p className="muted" role="alert">{selectionError.message}</p>}
+                {selectionError?.field === "tag" && (
+                  <p className="muted" role="alert">
+                    {selectionError.message}
+                  </p>
+                )}
                 <SelectorOptions className="home-tag-options">
                   {stats.tags.map((item) => {
                     const selected = tagSet.has(item.slug);
                     const { disabled, locked } = publicFilterOptionState({
-                      selected, count: item.image_count, unverified: availabilityUnverified
+                      selected,
+                      count: item.image_count,
+                      unverified: availabilityUnverified
                     });
                     const label = facetLabel(item);
                     const revealIndex = tagRevealIndexes.get(item.slug);
@@ -499,14 +510,14 @@ export function HomeCatalog({
                         type="button"
                         className={`${selected ? "is-selected" : ""}${item.image_count === 0 ? " is-empty" : ""}`.trim()}
                         key={item.slug}
-                        data-reveal-item={revealIndex === undefined
-                          ? undefined
-                          : true}
-                        style={revealIndex === undefined
-                          ? undefined
-                          : {
-                              "--home-reveal-index": revealIndex
-                            } as CSSProperties}
+                        data-reveal-item={revealIndex === undefined ? undefined : true}
+                        style={
+                          revealIndex === undefined
+                            ? undefined
+                            : ({
+                                "--home-reveal-index": revealIndex
+                              } as CSSProperties)
+                        }
                         aria-pressed={selected}
                         aria-disabled={locked || undefined}
                         data-availability-locked={locked || undefined}
@@ -518,11 +529,7 @@ export function HomeCatalog({
                               ? "当前候选数量尚未验证"
                               : undefined
                         }
-                        onClick={
-                          locked
-                            ? undefined
-                            : () => toggleMultiFacet("tag", item.slug)
-                        }
+                        onClick={locked ? undefined : () => toggleMultiFacet("tag", item.slug)}
                       >
                         <span aria-hidden="true">{selected ? "✓" : "#"}</span>
                         <OverflowMarqueeText as="strong" text={label} />
@@ -547,12 +554,18 @@ export function HomeCatalog({
                   isRefreshing={isRefreshing}
                   reduceMotion={reduceMotion}
                 />
-                {selectionError?.field === "author" && <p className="muted" role="alert">{selectionError.message}</p>}
+                {selectionError?.field === "author" && (
+                  <p className="muted" role="alert">
+                    {selectionError.message}
+                  </p>
+                )}
                 <SelectorOptions className="home-author-options">
                   {stats.authors.map((item) => {
                     const selected = authorSet.has(item.slug);
                     const { disabled, locked } = publicFilterOptionState({
-                      selected, count: item.image_count, unverified: availabilityUnverified
+                      selected,
+                      count: item.image_count,
+                      unverified: availabilityUnverified
                     });
                     const label = facetLabel(item);
                     const revealIndex = authorRevealIndexes.get(item.slug);
@@ -561,14 +574,14 @@ export function HomeCatalog({
                         type="button"
                         className={selected ? "is-selected" : undefined}
                         key={item.slug}
-                        data-reveal-item={revealIndex === undefined
-                          ? undefined
-                          : true}
-                        style={revealIndex === undefined
-                          ? undefined
-                          : {
-                              "--home-reveal-index": revealIndex
-                            } as CSSProperties}
+                        data-reveal-item={revealIndex === undefined ? undefined : true}
+                        style={
+                          revealIndex === undefined
+                            ? undefined
+                            : ({
+                                "--home-reveal-index": revealIndex
+                              } as CSSProperties)
+                        }
                         aria-pressed={selected}
                         aria-disabled={locked || undefined}
                         data-availability-locked={locked || undefined}
@@ -580,11 +593,7 @@ export function HomeCatalog({
                               ? "当前候选数量尚未验证"
                               : undefined
                         }
-                        onClick={
-                          locked
-                            ? undefined
-                            : () => toggleMultiFacet("author", item.slug)
-                        }
+                        onClick={locked ? undefined : () => toggleMultiFacet("author", item.slug)}
                       >
                         <OverflowMarqueeText as="strong" text={label} />
                         <small>{countLabel(item.image_count)}</small>

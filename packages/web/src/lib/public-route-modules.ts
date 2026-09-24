@@ -1,22 +1,11 @@
-import type {
-  FocusEvent,
-  MouseEvent,
-  PointerEvent
-} from "react";
-import {
-  createElement,
-  createContext,
-  useContext,
-  type ReactNode
-} from "react";
+import type { FocusEvent, MouseEvent, PointerEvent } from "react";
+import { createElement, createContext, useContext, type ReactNode } from "react";
 
 /**
  * Reuses a public route request while it is pending or fulfilled, and records
  * failed passive imports so normal navigation can obtain a fresh module map.
  */
-export function createPublicRouteModuleLoader<T>(
-  importModule: () => Promise<T>
-) {
+export function createPublicRouteModuleLoader<T>(importModule: () => Promise<T>) {
   let loadedModule: T | undefined;
   let pending: { passive: boolean; promise: Promise<T> } | undefined;
   let passivePreloadFailed = false;
@@ -70,9 +59,7 @@ export function createPublicRouteModuleLoader<T>(
   };
 }
 
-function routePreloadIntentProps(
-  loader: ReturnType<typeof createPublicRouteModuleLoader>
-) {
+function routePreloadIntentProps(loader: ReturnType<typeof createPublicRouteModuleLoader>) {
   return {
     onPointerEnter: (event: PointerEvent<HTMLAnchorElement>) => {
       if (event.pointerType === "mouse") loader.preload();
@@ -83,22 +70,21 @@ function routePreloadIntentProps(
     onClick: (event: MouseEvent<HTMLAnchorElement>) => {
       if (!loader.passivePreloadFailed()) return;
       if (
-        event.defaultPrevented
-        || event.button !== 0
-        || event.metaKey
-        || event.ctrlKey
-        || event.shiftKey
-        || event.altKey
-      ) return;
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
       event.preventDefault();
       window.location.assign(event.currentTarget.href);
     }
   };
 }
 
-type PublicRoutePreloadIntentProps = ReturnType<
-  typeof routePreloadIntentProps
->;
+type PublicRoutePreloadIntentProps = ReturnType<typeof routePreloadIntentProps>;
 
 type PublicRoutePreloadIntents = {
   home: PublicRoutePreloadIntentProps;
@@ -106,9 +92,7 @@ type PublicRoutePreloadIntents = {
   gallery: PublicRoutePreloadIntentProps;
 };
 
-const PublicRoutePreloadContext = createContext<
-  PublicRoutePreloadIntents | null
->(null);
+const PublicRoutePreloadContext = createContext<PublicRoutePreloadIntents | null>(null);
 
 export function createPublicRoutePreloadIntents(
   homeRouteModule: ReturnType<typeof createPublicRouteModuleLoader>,
@@ -129,11 +113,7 @@ export function PublicRoutePreloadProvider({
   children: ReactNode;
   intents: PublicRoutePreloadIntents;
 }) {
-  return createElement(
-    PublicRoutePreloadContext.Provider,
-    { value: intents },
-    children
-  );
+  return createElement(PublicRoutePreloadContext.Provider, { value: intents }, children);
 }
 
 export function usePublicRoutePreloadIntents() {

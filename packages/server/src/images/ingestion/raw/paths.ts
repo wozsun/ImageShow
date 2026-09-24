@@ -9,11 +9,7 @@ const rawNamePattern = /^([0-9a-f-]{36})\.raw$/iu;
 const partNamePattern = /^([0-9a-f-]{36})\.([0-9a-f-]{36})\.part$/iu;
 const preparedNamePattern = /^([0-9a-f-]{36})\.([0-9a-f-]{36})\.(image|thumb)\.webp(\.part)?$/iu;
 
-function assertPathSegment(
-  value: string,
-  pattern: RegExp,
-  lowercase = true
-) {
+function assertPathSegment(value: string, pattern: RegExp, lowercase = true) {
   if (!pattern.test(value)) {
     throw new ApiError(400, "unsafe_path", "Unsafe temporary ingestion identity");
   }
@@ -35,38 +31,34 @@ export function parseIngestionTempFileName(name: string) {
   const generation = rawMatch?.[1] ?? partMatch?.[1] ?? preparedMatch?.[1];
   const executionToken = partMatch?.[2] ?? preparedMatch?.[2] ?? null;
   if (
-    !generation
-    || !uuidPattern.test(generation)
-    || (executionToken && !uuidPattern.test(executionToken))
-  ) return null;
+    !generation ||
+    !uuidPattern.test(generation) ||
+    (executionToken && !uuidPattern.test(executionToken))
+  )
+    return null;
   return {
-    kind: (partMatch || preparedMatch?.[4] ? "part" : preparedMatch ? "prepared" : "raw") as "part" | "prepared" | "raw"
+    kind: (partMatch || preparedMatch?.[4] ? "part" : preparedMatch ? "prepared" : "raw") as
+      "part" | "prepared" | "raw"
   };
 }
 
-function rawDirectory(
-  pair: IngestionSessionPair
-) {
+function rawDirectory(pair: IngestionSessionPair) {
   const root = normalize(runtimePaths.tempDirectory);
-  const path = normalize(join(
-    root,
-    assertPathSegment(pair.session_id, sessionIdPattern, false),
-    assertPathSegment(pair.image_id, uuidPattern)
-  ));
+  const path = normalize(
+    join(
+      root,
+      assertPathSegment(pair.session_id, sessionIdPattern, false),
+      assertPathSegment(pair.image_id, uuidPattern)
+    )
+  );
   if (!path.startsWith(`${root}${sep}`)) {
     throw new ApiError(400, "unsafe_path", "Unsafe temporary ingestion path");
   }
   return path;
 }
 
-export function ingestionRawPath(
-  pair: IngestionSessionPair,
-  rawGeneration: string
-) {
-  return join(
-    rawDirectory(pair),
-    `${assertPathSegment(rawGeneration, uuidPattern)}.raw`
-  );
+export function ingestionRawPath(pair: IngestionSessionPair, rawGeneration: string) {
+  return join(rawDirectory(pair), `${assertPathSegment(rawGeneration, uuidPattern)}.raw`);
 }
 
 export function ingestionRawPartPath(
@@ -87,16 +79,17 @@ export function ingestionTempRoot() {
   return runtimePaths.tempDirectory;
 }
 
-export function ingestionTempSessionDirectory(
-  sessionName: string
-) {
+export function ingestionTempSessionDirectory(sessionName: string) {
   return join(runtimePaths.tempDirectory, assertPathSegment(sessionName, sessionIdPattern, false));
 }
 
-export function ingestionPreparedFile(input: IngestionSessionPair & {
-  generation: string;
-  execution_token: string;
-}, kind: "image" | "thumb") {
+export function ingestionPreparedFile(
+  input: IngestionSessionPair & {
+    generation: string;
+    execution_token: string;
+  },
+  kind: "image" | "thumb"
+) {
   return [
     assertPathSegment(input.session_id, sessionIdPattern, false),
     assertPathSegment(input.image_id, uuidPattern),

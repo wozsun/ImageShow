@@ -80,10 +80,7 @@ async function* directoryEntries(
   }
 }
 
-async function* listIngestionTempFiles(
-  budget: IngestionTempScanBudget,
-  signal?: AbortSignal
-) {
+async function* listIngestionTempFiles(budget: IngestionTempScanBudget, signal?: AbortSignal) {
   const root = ingestionTempRoot();
   for await (const session of directoryEntries(root, budget, signal)) {
     if (!session.isDirectory() || !isIngestionTempSessionName(session.name)) {
@@ -94,11 +91,7 @@ async function* listIngestionTempFiles(
       if (!image.isDirectory() || !isIngestionTempImageName(image.name)) continue;
       const imagePath = join(sessionPath, image.name);
       for await (const file of directoryEntries(imagePath, budget, signal)) {
-        const entry = await ingestionTempFileEntry(
-          imagePath,
-          file,
-          signal
-        );
+        const entry = await ingestionTempFileEntry(imagePath, file, signal);
         if (entry) yield entry;
       }
     }
@@ -180,8 +173,7 @@ async function nextTempCleanupFile(
 
     const currentSession = tempCleanupCursor.session;
     if (!currentSession) {
-      const entry = tempCleanupCursor.pendingSession
-        ?? await tempCleanupCursor.root.read();
+      const entry = tempCleanupCursor.pendingSession ?? (await tempCleanupCursor.root.read());
       tempCleanupCursor.pendingSession = entry;
       signal?.throwIfAborted();
       if (!entry) {
@@ -210,8 +202,7 @@ async function nextTempCleanupFile(
 
     const currentImage = currentSession.image;
     if (!currentImage) {
-      const entry = currentSession.pendingImage
-        ?? await currentSession.directory.read();
+      const entry = currentSession.pendingImage ?? (await currentSession.directory.read());
       currentSession.pendingImage = entry;
       signal?.throwIfAborted();
       if (!entry) {
@@ -237,8 +228,7 @@ async function nextTempCleanupFile(
       continue;
     }
 
-    const file = currentImage.pendingFile
-      ?? await currentImage.directory.read();
+    const file = currentImage.pendingFile ?? (await currentImage.directory.read());
     currentImage.pendingFile = file;
     signal?.throwIfAborted();
     if (!file) {
@@ -248,11 +238,7 @@ async function nextTempCleanupFile(
       continue;
     }
     budget.remaining -= 1;
-    const entry = await ingestionTempFileEntry(
-      currentImage.path,
-      file,
-      signal
-    );
+    const entry = await ingestionTempFileEntry(currentImage.path, file, signal);
     if (entry) return { kind: "file", entry };
     currentImage.pendingFile = null;
   }
@@ -273,31 +259,30 @@ async function removeInactiveIngestionTempEntry(
   }
   const cutoff = entry.kind === "part" ? input.partCutoff : input.fileCutoff;
   if (entry.modifiedAt >= cutoff) return false;
-  const removed = await tryWithInactiveIngestionTempPath(
-    entry.path,
-    async () => {
-      input.signal?.throwIfAborted();
-      if (input.keep.has(identity) || ingestionTempPathIsActive(entry.path)) {
-        return false;
-      }
-      const current = await statIngestionTempIfExists(entry.path);
-      input.signal?.throwIfAborted();
-      if (!current?.isFile() || current.mtimeMs >= cutoff) return false;
-      if (ingestionTempPathIsActive(entry.path)) return false;
-      await rm(entry.path, { force: true });
-      return true;
+  const removed = await tryWithInactiveIngestionTempPath(entry.path, async () => {
+    input.signal?.throwIfAborted();
+    if (input.keep.has(identity) || ingestionTempPathIsActive(entry.path)) {
+      return false;
     }
-  );
+    const current = await statIngestionTempIfExists(entry.path);
+    input.signal?.throwIfAborted();
+    if (!current?.isFile() || current.mtimeMs >= cutoff) return false;
+    if (ingestionTempPathIsActive(entry.path)) return false;
+    await rm(entry.path, { force: true });
+    return true;
+  });
   return removed === true;
 }
 
-export async function cleanupIngestionTempOrphans(input: Readonly<{
-  keep: ReadonlySet<string>;
-  fileCutoff: number;
-  partCutoff: number;
-  signal?: AbortSignal;
-  stopSignal?: AbortSignal;
-}>) {
+export async function cleanupIngestionTempOrphans(
+  input: Readonly<{
+    keep: ReadonlySet<string>;
+    fileCutoff: number;
+    partCutoff: number;
+    signal?: AbortSignal;
+    stopSignal?: AbortSignal;
+  }>
+) {
   const budget: IngestionTempScanBudget = {
     remaining: appConfig.ingestionRuntime.orphanCleanupMaxTempEntriesPerCycle,
     complete: true
@@ -334,12 +319,14 @@ export async function cleanupIngestionTempOrphans(input: Readonly<{
   return { removed, complete: false };
 }
 
-export async function inspectIngestionTempOrphans(input: Readonly<{
-  keep: ReadonlySet<string>;
-  fileCutoff: number;
-  partCutoff: number;
-  signal?: AbortSignal;
-}>) {
+export async function inspectIngestionTempOrphans(
+  input: Readonly<{
+    keep: ReadonlySet<string>;
+    fileCutoff: number;
+    partCutoff: number;
+    signal?: AbortSignal;
+  }>
+) {
   const budget: IngestionTempScanBudget = {
     remaining: appConfig.ingestionRuntime.orphanCleanupMaxTempEntriesPerCycle,
     complete: true
@@ -355,7 +342,8 @@ export async function inspectIngestionTempOrphans(input: Readonly<{
   for await (const entry of listIngestionTempFiles(budget, input.signal)) {
     totalBytes += entry.size;
     input.signal?.throwIfAborted();
-    const retained = keep.has(tempPathIdentity(entry.path)) || ingestionTempPathIsActive(entry.path);
+    const retained =
+      keep.has(tempPathIdentity(entry.path)) || ingestionTempPathIsActive(entry.path);
     if (retained) {
       retainedBytes += entry.size;
       continue;
@@ -364,9 +352,10 @@ export async function inspectIngestionTempOrphans(input: Readonly<{
     if (entry.modifiedAt >= cutoff) continue;
     const summary = summaries[entry.kind];
     summary.count += 1;
-    summary.oldest_modified_at = summary.oldest_modified_at === null
-      ? entry.modifiedAt
-      : Math.min(summary.oldest_modified_at, entry.modifiedAt);
+    summary.oldest_modified_at =
+      summary.oldest_modified_at === null
+        ? entry.modifiedAt
+        : Math.min(summary.oldest_modified_at, entry.modifiedAt);
   }
   return {
     ...summaries,

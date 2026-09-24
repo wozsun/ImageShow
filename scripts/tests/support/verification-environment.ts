@@ -4,9 +4,7 @@ export const scenarioSelectorEnvironmentVariables = [
   "IMAGESHOW_WEB_QUEUE_SCENARIO"
 ] as const;
 
-export function completeVerificationEnvironment(
-  environment: NodeJS.ProcessEnv
-): NodeJS.ProcessEnv {
+export function completeVerificationEnvironment(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const completeEnvironment = { ...environment };
   for (const variable of scenarioSelectorEnvironmentVariables) {
     delete completeEnvironment[variable];

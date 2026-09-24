@@ -12,15 +12,11 @@ export function initializeReadyImageCacheCoordinator() {
   return coordinator.initialize();
 }
 
-export function requestReadyImageCacheRebuild(
-  options: { signal?: AbortSignal } = {}
-) {
+export function requestReadyImageCacheRebuild(options: { signal?: AbortSignal } = {}) {
   return coordinator.requestRebuild(options);
 }
 
-export function ensureReadyImageCacheCurrent(
-  options: { signal?: AbortSignal } = {}
-) {
+export function ensureReadyImageCacheCurrent(options: { signal?: AbortSignal } = {}) {
   return coordinator.ensureCurrent(options);
 }
 
@@ -51,9 +47,7 @@ export function readyImageCachePlannedMutationIsActive() {
   return coordinator.plannedMutationIsActive();
 }
 
-export function requestReadyImageCacheRebuildAfterMutation(
-  affectedCount: number
-) {
+export function requestReadyImageCacheRebuildAfterMutation(affectedCount: number) {
   return coordinator.requestRebuildAfterMutation(affectedCount);
 }
 

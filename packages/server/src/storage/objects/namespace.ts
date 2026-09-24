@@ -8,9 +8,7 @@ function normalizedRootPath(value: string) {
 
 function canonicalHttpsEndpoint(value: string) {
   if (!value.trim()) return "";
-  const withProtocol = /^https:\/\//i.test(value.trim())
-    ? value.trim()
-    : `https://${value.trim()}`;
+  const withProtocol = /^https:\/\//i.test(value.trim()) ? value.trim() : `https://${value.trim()}`;
   const endpoint = new URL(withProtocol);
   endpoint.hash = "";
   endpoint.pathname = endpoint.pathname.replace(/\/+$/g, "") || "/";
@@ -43,11 +41,7 @@ export function configuredStorageNamespaceIdentity(config: StorageConfig) {
  */
 export function storageNamespaceLayoutIdentity(config: StorageConfig) {
   if (config.type === "s3") {
-    return JSON.stringify([
-      "s3",
-      config.s3.bucket.trim(),
-      normalizedRootPath(config.s3.root_path)
-    ]);
+    return JSON.stringify(["s3", config.s3.bucket.trim(), normalizedRootPath(config.s3.root_path)]);
   }
   return configuredStorageNamespaceIdentity(config);
 }
@@ -55,9 +49,7 @@ export function storageNamespaceLayoutIdentity(config: StorageConfig) {
 export function storageNamespaceIdentities(config: StorageConfig) {
   return new Set([
     configuredStorageNamespaceIdentity(config),
-    ...(config.namespace_identities ?? [])
-      .map((identity) => identity.trim())
-      .filter(Boolean)
+    ...(config.namespace_identities ?? []).map((identity) => identity.trim()).filter(Boolean)
   ]);
 }
 
@@ -66,17 +58,13 @@ export function storageNamespaceIdentity(config: StorageConfig) {
   return configuredStorageNamespaceIdentity(config);
 }
 
-export function storageNamespaceIncludesIdentity(
-  config: StorageConfig,
-  identity: string
-) {
+export function storageNamespaceIncludesIdentity(config: StorageConfig, identity: string) {
   return storageNamespaceIdentities(config).has(identity);
 }
 
 export function shareStorageNamespace(source: StorageConfig, target: StorageConfig) {
   const sourceIdentities = storageNamespaceIdentities(source);
-  return [...storageNamespaceIdentities(target)]
-    .some((identity) => sourceIdentities.has(identity));
+  return [...storageNamespaceIdentities(target)].some((identity) => sourceIdentities.has(identity));
 }
 
 /**
@@ -84,16 +72,12 @@ export function shareStorageNamespace(source: StorageConfig, target: StorageConf
  * backends whose current access endpoints differ, so direct current-identity
  * grouping is not sufficient for whole-namespace maintenance.
  */
-export function groupStorageNamespaces<T extends StorageConfig>(
-  configs: readonly T[]
-) {
+export function groupStorageNamespaces<T extends StorageConfig>(configs: readonly T[]) {
   const groups: T[][] = [];
   for (const config of configs) {
-    const matches = groups.flatMap((group, index) => (
-      group.some((candidate) => shareStorageNamespace(candidate, config))
-        ? [index]
-        : []
-    ));
+    const matches = groups.flatMap((group, index) =>
+      group.some((candidate) => shareStorageNamespace(candidate, config)) ? [index] : []
+    );
     if (!matches.length) {
       groups.push([config]);
       continue;
@@ -107,12 +91,8 @@ export function groupStorageNamespaces<T extends StorageConfig>(
 }
 
 /** Stable only while every current and historical identity in a group agrees. */
-export function storageNamespaceGroupIdentity(
-  configs: readonly StorageConfig[]
-) {
-  return JSON.stringify([
-    ...new Set(configs.flatMap((config) => [
-      ...storageNamespaceIdentities(config)
-    ]))
-  ].toSorted());
+export function storageNamespaceGroupIdentity(configs: readonly StorageConfig[]) {
+  return JSON.stringify(
+    [...new Set(configs.flatMap((config) => [...storageNamespaceIdentities(config)]))].toSorted()
+  );
 }

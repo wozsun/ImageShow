@@ -7,32 +7,34 @@ import { interceptSqlQueries } from "./database-faults.mts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
-const databasePools = runtime.databasePools;
-const database = {
-  ...databasePools,
-  ...await import("../../../../packages/server/src/core/database/advisory-locks.ts")
-};
-const jobs = await import("../../../../packages/server/src/jobs/repository.ts");
-const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
-const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
-const trash = await import("../../../../packages/server/src/images/trash/purge.ts");
-const trashMutations = await import("../../../../packages/server/src/images/trash/mutations.ts");
-const trashMembershipLock = await import("../../../../packages/server/src/images/trash/membership-lock.ts");
-const trashPurgeJob = await import("../../../../packages/server/src/images/trash/purge-job.ts");
-const trashPurgeMaintenance = await import("../../../../packages/server/src/images/trash/purge-maintenance.ts");
-const databaseCheck = await import("../../../../packages/server/src/checks/database-check.ts");
-const sharedAppConfig = await import("@imageshow/shared");
-const vocab = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
-const { createTheme } = await import("../../../../packages/server/src/themes/mutations.ts");
-const { createTag } = await import("../../../../packages/server/src/tags/mutations.ts");
-const { createAuthor } = await import("../../../../packages/server/src/authors/mutations.ts");
-const localAccess = await registry.resolveStorageAccess("local");
-const foregroundImage = randomUUID();
-await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5)
-       VALUES ($1, 'integration-admin', 'ready', 'local', 'pc', 'dark', NULL, 'webp', $2)`,[
-        foregroundImage,
-        "0".repeat(32)
-      ]);
+  const databasePools = runtime.databasePools;
+  const database = {
+    ...databasePools,
+    ...(await import("../../../../packages/server/src/core/database/advisory-locks.ts"))
+  };
+  const jobs = await import("../../../../packages/server/src/jobs/repository.ts");
+  const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
+  const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+  const trash = await import("../../../../packages/server/src/images/trash/purge.ts");
+  const trashMutations = await import("../../../../packages/server/src/images/trash/mutations.ts");
+  const trashMembershipLock =
+    await import("../../../../packages/server/src/images/trash/membership-lock.ts");
+  const trashPurgeJob = await import("../../../../packages/server/src/images/trash/purge-job.ts");
+  const trashPurgeMaintenance =
+    await import("../../../../packages/server/src/images/trash/purge-maintenance.ts");
+  const databaseCheck = await import("../../../../packages/server/src/checks/database-check.ts");
+  const sharedAppConfig = await import("@imageshow/shared");
+  const vocab = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
+  const { createTheme } = await import("../../../../packages/server/src/themes/mutations.ts");
+  const { createTag } = await import("../../../../packages/server/src/tags/mutations.ts");
+  const { createAuthor } = await import("../../../../packages/server/src/authors/mutations.ts");
+  const localAccess = await registry.resolveStorageAccess("local");
+  const foregroundImage = randomUUID();
+  await database.pool.query(
+    `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5)
+       VALUES ($1, 'integration-admin', 'ready', 'local', 'pc', 'dark', NULL, 'webp', $2)`,
+    [foregroundImage, "0".repeat(32)]
+  );
   const claimTrashPurgeJob = async () => {
     for (let attempt = 0; attempt < 200; attempt += 1) {
       const job = await jobs.claimBackgroundJob("trash.purge");
@@ -49,24 +51,21 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
 
   const uncertainImage = randomUUID();
   const uncertainObjectKey = storageObjectKey(uncertainImage, "webp");
-  const uncertainThumbKey = imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(uncertainObjectKey)!.id);
+  const uncertainThumbKey = imagePaths.thumbnailObjectKey(
+    imagePaths.parseImageObjectKey(uncertainObjectKey)!.id
+  );
   const uncertainFull = Buffer.from("uncertain-purge-full");
   const uncertainThumbnail = Buffer.from("uncertain-purge-thumbnail");
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, deleted_at)
        VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, now())`,
     [
-        uncertainImage,
-        createHash("md5").update(uncertainFull).digest("hex"),
-        uncertainThumbnail.byteLength
-      ]
+      uncertainImage,
+      createHash("md5").update(uncertainFull).digest("hex"),
+      uncertainThumbnail.byteLength
+    ]
   );
-  await localAccess.driver.writeBuffer(
-    "full",
-    uncertainObjectKey,
-    uncertainFull,
-    "image/webp"
-  );
+  await localAccess.driver.writeBuffer("full", uncertainObjectKey, uncertainFull, "image/webp");
   await localAccess.driver.writeBuffer(
     "thumbs",
     uncertainThumbKey,
@@ -77,27 +76,36 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
   await createTheme(countSlug, "");
   await createTag(countSlug);
   await createAuthor(countSlug, "", "");
-  await database.pool.query("UPDATE metadata SET theme=$2, author=$2 WHERE id=$1", [uncertainImage, countSlug]);
-  await database.pool.query("INSERT INTO image_tag(image_id, tag_slug) VALUES ($1, $2)", [uncertainImage, countSlug]);
+  await database.pool.query("UPDATE metadata SET theme=$2, author=$2 WHERE id=$1", [
+    uncertainImage,
+    countSlug
+  ]);
+  await database.pool.query("INSERT INTO image_tag(image_id, tag_slug) VALUES ($1, $2)", [
+    uncertainImage,
+    countSlug
+  ]);
   const countLists = [vocab.getAdminThemeList, vocab.getAdminTagList, vocab.getAdminAuthorList];
   for (const list of countLists) {
     assert.equal((await list()).find((item) => item.slug === countSlug)?.image_count, 1);
   }
   let metadataDeleteResponseLost = false;
-  const restoreDeleteResponse = interceptSqlQueries(database.pool, async (statement, values, query) => {
-    if (
-      !metadataDeleteResponseLost
-      && typeof statement === "string"
-      && statement.includes("DELETE FROM metadata")
-      && Array.isArray(values)
-      && values[0] === uncertainImage
-    ) {
-      metadataDeleteResponseLost = true;
-      await query();
-      throw new Error("injected metadata delete response loss");
+  const restoreDeleteResponse = interceptSqlQueries(
+    database.pool,
+    async (statement, values, query) => {
+      if (
+        !metadataDeleteResponseLost &&
+        typeof statement === "string" &&
+        statement.includes("DELETE FROM metadata") &&
+        Array.isArray(values) &&
+        values[0] === uncertainImage
+      ) {
+        metadataDeleteResponseLost = true;
+        await query();
+        throw new Error("injected metadata delete response loss");
+      }
+      return query();
     }
-    return query();
-  });
+  );
   const uncertainPurgePromise = trash.purgeImages({
     scope: "selected",
     ids: [uncertainImage]
@@ -109,11 +117,16 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
       /injected metadata delete response loss/
     );
     for (const list of countLists) {
-      assert.equal((await list()).find((item) => item.slug === countSlug)?.image_count, 0,
-        "a lost DELETE acknowledgement must invalidate cached association counts");
+      assert.equal(
+        (await list()).find((item) => item.slug === countSlug)?.image_count,
+        0,
+        "a lost DELETE acknowledgement must invalidate cached association counts"
+      );
     }
     await jobs.markBackgroundJobFailed(uncertainPurgeJob, new Error("lost response"));
-    await database.pool.query("UPDATE background_job SET next_retry_at=now() WHERE id=$1", [uncertainPurgeJob.id]);
+    await database.pool.query("UPDATE background_job SET next_retry_at=now() WHERE id=$1", [
+      uncertainPurgeJob.id
+    ]);
     await finishTrashPurgeJob(await claimTrashPurgeJob());
   } finally {
     restoreDeleteResponse();
@@ -129,26 +142,28 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
     ignored: 0
   });
   assert.equal(
-    Number((await database.pool.query(
-      "SELECT count(*) FROM metadata WHERE id=$1",
-      [uncertainImage]
-    )).rows[0]?.count),
+    Number(
+      (await database.pool.query("SELECT count(*) FROM metadata WHERE id=$1", [uncertainImage]))
+        .rows[0]?.count
+    ),
     0
   );
 
   const admittedCancelImage = randomUUID();
   const admittedCancelObjectKey = storageObjectKey(admittedCancelImage, "webp");
-  const admittedCancelThumbKey = imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(admittedCancelObjectKey)!.id);
+  const admittedCancelThumbKey = imagePaths.thumbnailObjectKey(
+    imagePaths.parseImageObjectKey(admittedCancelObjectKey)!.id
+  );
   const admittedCancelFull = Buffer.from("admitted-cancel-purge-full");
   const admittedCancelThumbnail = Buffer.from("admitted-cancel-purge-thumbnail");
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, deleted_at)
        VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, now())`,
     [
-        admittedCancelImage,
-        createHash("md5").update(admittedCancelFull).digest("hex"),
-        admittedCancelThumbnail.byteLength
-      ]
+      admittedCancelImage,
+      createHash("md5").update(admittedCancelFull).digest("hex"),
+      admittedCancelThumbnail.byteLength
+    ]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -163,12 +178,8 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
     "image/webp"
   );
   const admittedCancelController = new AbortController();
-  const admittedCancelReason = new Error(
-    "injected purge cancellation after delete"
-  );
-  const originalAdmittedPurgeRemove = localAccess.driver.removeObjects.bind(
-    localAccess.driver
-  );
+  const admittedCancelReason = new Error("injected purge cancellation after delete");
+  const originalAdmittedPurgeRemove = localAccess.driver.removeObjects.bind(localAccess.driver);
   let admittedPurgeDeleteStarted = false;
   localAccess.driver.removeObjects = async (objects, options) => {
     const results = await originalAdmittedPurgeRemove(objects, options);
@@ -178,19 +189,20 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
     }
     return results;
   };
-  const admittedCancelPurge = trash.purgeImages({
-    scope: "selected",
-    ids: [admittedCancelImage]
-  }, { signal: admittedCancelController.signal }).then(
-    (value) => ({ value, error: null }),
-    (error) => ({ value: null, error })
-  );
+  const admittedCancelPurge = trash
+    .purgeImages(
+      {
+        scope: "selected",
+        ids: [admittedCancelImage]
+      },
+      { signal: admittedCancelController.signal }
+    )
+    .then(
+      (value) => ({ value, error: null }),
+      (error) => ({ value: null, error })
+    );
   const admittedCancelPurgeJob = await claimTrashPurgeJob();
-  assert.equal(
-    admittedPurgeDeleteStarted,
-    false,
-    "HTTP 请求等待期间不得执行对象删除"
-  );
+  assert.equal(admittedPurgeDeleteStarted, false, "HTTP 请求等待期间不得执行对象删除");
   assert.deepEqual(await trashMutations.restoreImages([admittedCancelImage]), {
     requested: 1,
     restored: 0,
@@ -207,41 +219,35 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
   assert.equal(admittedCancelOutcome.value, null);
   assert.equal(admittedCancelOutcome.error, admittedCancelReason);
   assert.equal(
-    Number((await database.pool.query(
-      "SELECT count(*) FROM metadata WHERE id=$1",
-      [admittedCancelImage]
-    )).rows[0]?.count),
+    Number(
+      (
+        await database.pool.query("SELECT count(*) FROM metadata WHERE id=$1", [
+          admittedCancelImage
+        ])
+      ).rows[0]?.count
+    ),
     0,
     "物理删除开始后的调度取消必须继续完成 metadata 删除"
   );
-  assert.equal(
-    await localAccess.driver.exists("full", admittedCancelObjectKey),
-    false
-  );
-  assert.equal(
-    await localAccess.driver.exists("thumbs", admittedCancelThumbKey),
-    false
-  );
+  assert.equal(await localAccess.driver.exists("full", admittedCancelObjectKey), false);
+  assert.equal(await localAccess.driver.exists("thumbs", admittedCancelThumbKey), false);
   const interruptedImage = randomUUID();
   const interruptedObjectKey = storageObjectKey(interruptedImage, "webp");
-  const interruptedThumbKey = imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(interruptedObjectKey)!.id);
+  const interruptedThumbKey = imagePaths.thumbnailObjectKey(
+    imagePaths.parseImageObjectKey(interruptedObjectKey)!.id
+  );
   const interruptedFull = Buffer.from("interrupted-purge-full");
   const interruptedThumbnail = Buffer.from("interrupted-purge-thumbnail");
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, deleted_at)
        VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, now())`,
     [
-        interruptedImage,
-        createHash("md5").update(interruptedFull).digest("hex"),
-        interruptedThumbnail.byteLength
-      ]
+      interruptedImage,
+      createHash("md5").update(interruptedFull).digest("hex"),
+      interruptedThumbnail.byteLength
+    ]
   );
-  await localAccess.driver.writeBuffer(
-    "full",
-    interruptedObjectKey,
-    interruptedFull,
-    "image/webp"
-  );
+  await localAccess.driver.writeBuffer("full", interruptedObjectKey, interruptedFull, "image/webp");
   await localAccess.driver.writeBuffer(
     "thumbs",
     interruptedThumbKey,
@@ -257,43 +263,42 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
   const interruptedContinuation = await claimTrashPurgeJob();
   assert.deepEqual(interruptedContinuation.payload, {});
   assert.equal(interruptedContinuation.target_id, interruptedImage);
-  assert.equal((await database.pool.query(
-    "SELECT idempotency_key FROM background_job WHERE id=$1", [interruptedContinuation.id]
-  )).rows[0]?.idempotency_key, `trash.purge:${interruptedImage}`);
-  interruptedController.abort(interruptedReason);
-  await assert.rejects(
-    interruptedRequest,
-    (error) => error === interruptedReason
+  assert.equal(
+    (
+      await database.pool.query("SELECT idempotency_key FROM background_job WHERE id=$1", [
+        interruptedContinuation.id
+      ])
+    ).rows[0]?.idempotency_key,
+    `trash.purge:${interruptedImage}`
   );
+  interruptedController.abort(interruptedReason);
+  await assert.rejects(interruptedRequest, (error) => error === interruptedReason);
   await finishTrashPurgeJob(interruptedContinuation);
   assert.equal(
-    Number((await database.pool.query(
-      "SELECT count(*) FROM metadata WHERE id=$1",
-      [interruptedImage]
-    )).rows[0]?.count),
+    Number(
+      (await database.pool.query("SELECT count(*) FROM metadata WHERE id=$1", [interruptedImage]))
+        .rows[0]?.count
+    ),
     0
   );
 
   const concurrentImage = randomUUID();
   const concurrentObjectKey = storageObjectKey(concurrentImage, "webp");
-  const concurrentThumbKey = imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(concurrentObjectKey)!.id);
+  const concurrentThumbKey = imagePaths.thumbnailObjectKey(
+    imagePaths.parseImageObjectKey(concurrentObjectKey)!.id
+  );
   const concurrentFull = Buffer.from("concurrent-trash-full");
   const concurrentThumbnail = Buffer.from("concurrent-trash-thumbnail");
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size)
        VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3)`,
     [
-        concurrentImage,
-        createHash("md5").update(concurrentFull).digest("hex"),
-        concurrentThumbnail.byteLength
-      ]
+      concurrentImage,
+      createHash("md5").update(concurrentFull).digest("hex"),
+      concurrentThumbnail.byteLength
+    ]
   );
-  await localAccess.driver.writeBuffer(
-    "full",
-    concurrentObjectKey,
-    concurrentFull,
-    "image/webp"
-  );
+  await localAccess.driver.writeBuffer("full", concurrentObjectKey, concurrentFull, "image/webp");
   await localAccess.driver.writeBuffer(
     "thumbs",
     concurrentThumbKey,
@@ -305,12 +310,9 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
   let concurrentPurgePromise = null;
   try {
     await concurrentMutation.query("BEGIN");
-    await trashMembershipLock.lockTrashMembershipForTransaction(
-      concurrentMutation
-    );
+    await trashMembershipLock.lockTrashMembershipForTransaction(concurrentMutation);
     await concurrentMutation.query(
-      "UPDATE metadata SET status='deleted', deleted_at=clock_timestamp() "
-        + "WHERE id=$1",
+      "UPDATE metadata SET status='deleted', deleted_at=clock_timestamp() " + "WHERE id=$1",
       [concurrentImage]
     );
     concurrentPurgePromise = trash.purgeImages({
@@ -320,9 +322,9 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
     let captureIsWaiting = false;
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const waiting = await database.pool.query(
-        "SELECT count(*)::int AS count FROM pg_stat_activity "
-          + "WHERE datname=current_database() AND pid<>pg_backend_pid() "
-          + "AND wait_event_type='Lock' AND wait_event='advisory'"
+        "SELECT count(*)::int AS count FROM pg_stat_activity " +
+          "WHERE datname=current_database() AND pid<>pg_backend_pid() " +
+          "AND wait_event_type='Lock' AND wait_event='advisory'"
       );
       if (Number(waiting.rows[0]?.count) > 0) {
         captureIsWaiting = true;
@@ -345,20 +347,14 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
       ignored: 0
     });
     assert.equal(
-      Number((await database.pool.query(
-        "SELECT count(*) FROM metadata WHERE id=$1",
-        [concurrentImage]
-      )).rows[0]?.count),
+      Number(
+        (await database.pool.query("SELECT count(*) FROM metadata WHERE id=$1", [concurrentImage]))
+          .rows[0]?.count
+      ),
       0
     );
-    assert.equal(
-      await localAccess.driver.exists("full", concurrentObjectKey),
-      false
-    );
-    assert.equal(
-      await localAccess.driver.exists("thumbs", concurrentThumbKey),
-      false
-    );
+    assert.equal(await localAccess.driver.exists("full", concurrentObjectKey), false);
+    assert.equal(await localAccess.driver.exists("thumbs", concurrentThumbKey), false);
   } finally {
     if (!concurrentMutationFinished) {
       await concurrentMutation.query("ROLLBACK").catch(() => undefined);
@@ -369,9 +365,7 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
     }
   }
 
-  await database.pool.query(
-    "DELETE FROM metadata WHERE status='deleted'"
-  );
+  await database.pool.query("DELETE FROM metadata WHERE status='deleted'");
   const createTrashImage = async (ageSeconds: number) => {
     const id = randomUUID();
     const objectKey = storageObjectKey(id, "webp");
@@ -381,25 +375,10 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
     await database.pool.query(
       `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, deleted_at)
        VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, clock_timestamp() - ($4 || ' seconds')::interval)`,
-      [
-        id,
-        createHash("md5").update(full).digest("hex"),
-        thumbnail.byteLength,
-        ageSeconds
-      ]
+      [id, createHash("md5").update(full).digest("hex"), thumbnail.byteLength, ageSeconds]
     );
-    await localAccess.driver.writeBuffer(
-      "full",
-      objectKey,
-      full,
-      "image/webp"
-    );
-    await localAccess.driver.writeBuffer(
-      "thumbs",
-      thumbKey,
-      thumbnail,
-      "image/webp"
-    );
+    await localAccess.driver.writeBuffer("full", objectKey, full, "image/webp");
+    await localAccess.driver.writeBuffer("thumbs", thumbKey, thumbnail, "image/webp");
     return { id, objectKey, thumbKey };
   };
 
@@ -414,11 +393,15 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
   );
   await assert.rejects(duplicateRequest, /duplicate request disconnected/);
   assert.deepEqual(
-    (await database.pool.query(
-      "SELECT target_id, idempotency_key FROM background_job WHERE type='trash.purge' AND target_id=ANY($1::text[]) ORDER BY target_id",
-      [[oldest.id, middle.id, newest.id]]
-    )).rows,
-    [oldest.id, middle.id, newest.id].sort().map((id) => ({ target_id: id, idempotency_key: `trash.purge:${id}` }))
+    (
+      await database.pool.query(
+        "SELECT target_id, idempotency_key FROM background_job WHERE type='trash.purge' AND target_id=ANY($1::text[]) ORDER BY target_id",
+        [[oldest.id, middle.id, newest.id]]
+      )
+    ).rows,
+    [oldest.id, middle.id, newest.id]
+      .sort()
+      .map((id) => ({ target_id: id, idempotency_key: `trash.purge:${id}` }))
   );
   assert.deepEqual(await trashMutations.restoreImages([middle.id]), {
     requested: 1,
@@ -441,10 +424,7 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
     ignored: 0
   });
   assert.deepEqual(
-    (await database.pool.query(
-      "SELECT id FROM metadata WHERE id=$1",
-      [addedAfterCapture.id]
-    )).rows,
+    (await database.pool.query("SELECT id FROM metadata WHERE id=$1", [addedAfterCapture.id])).rows,
     [{ id: addedAfterCapture.id }],
     "scope all 只处理事务快照，不包含之后进入回收站的图片"
   );
@@ -487,9 +467,7 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
   const independentJob = batchJobs.find((job) => job.target_id === independentItem.id);
   assert.ok(failedJob);
   assert.ok(independentJob);
-  const originalFailedRemove = localAccess.driver.removeObjects.bind(
-    localAccess.driver
-  );
+  const originalFailedRemove = localAccess.driver.removeObjects.bind(localAccess.driver);
   let failedRemoveObserved = false;
   localAccess.driver.removeObjects = async (objects, options) => {
     if (objects.some((object) => object.key === failedItem.objectKey)) {
@@ -513,10 +491,7 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
     localAccess.driver.removeObjects = originalFailedRemove;
   }
   await finishTrashPurgeJob(independentJob);
-  assert.equal(
-    await jobs.markBackgroundJobFailed(failedJob, failedJobError),
-    true
-  );
+  assert.equal(await jobs.markBackgroundJobFailed(failedJob, failedJobError), true);
   assert.deepEqual(await failedPurgePromise, {
     requested: 2,
     queued: 2,
@@ -532,49 +507,53 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
   );
   assert.equal(retryingTrashCheck.purge_pending_count, 1);
   assert.equal(retryingTrashCheck.job_counts.retrying, 1);
-  assert.equal(retryingTrashCheck.jobs.find((job) => job.id === failedJob.id)?.target_id, failedItem.id);
-  const adminRead = await import("../../../../packages/server/src/images/read-models/admin-images.ts");
-  const detail = (await adminRead.listAdminImages({ status: "deleted", page: 1, limit: 20 })).items.find((item) => item.id === failedItem.id);
-  assert.equal(detail?.purge_pending, true);
   assert.equal(
-    retryingTrashCheck.jobs.find((job) => job.id === failedJob.id)?.state,
-    "retrying"
+    retryingTrashCheck.jobs.find((job) => job.id === failedJob.id)?.target_id,
+    failedItem.id
   );
-  assert.deepEqual(await trash.purgeImages({
-    scope: "selected",
-    ids: [failedItem.id]
-  }), {
-    requested: 1,
-    queued: 0,
-    already_queued: 1,
-    deleted: 0,
-    remaining: 1,
-    ignored: 0
-  });
+  const adminRead =
+    await import("../../../../packages/server/src/images/read-models/admin-images.ts");
+  const detail = (
+    await adminRead.listAdminImages({ status: "deleted", page: 1, limit: 20 })
+  ).items.find((item) => item.id === failedItem.id);
+  assert.equal(detail?.purge_pending, true);
+  assert.equal(retryingTrashCheck.jobs.find((job) => job.id === failedJob.id)?.state, "retrying");
+  assert.deepEqual(
+    await trash.purgeImages({
+      scope: "selected",
+      ids: [failedItem.id]
+    }),
+    {
+      requested: 1,
+      queued: 0,
+      already_queued: 1,
+      deleted: 0,
+      remaining: 1,
+      ignored: 0
+    }
+  );
   assert.deepEqual(await trashMutations.restoreImages([failedItem.id]), {
     requested: 1,
     restored: 0,
     ignored: 1,
     results: [{ id: failedItem.id, status: "ignored" }]
   });
-  await database.pool.query(
-    "UPDATE background_job SET next_retry_at=NULL "
-      + "WHERE id=$1",
-    [failedJob.id]
-  );
+  await database.pool.query("UPDATE background_job SET next_retry_at=NULL " + "WHERE id=$1", [
+    failedJob.id
+  ]);
   const exhaustedTrashCheck = await databaseCheck.checkTrash();
   assert.equal(exhaustedTrashCheck.job_counts.exhausted, 1);
-  assert.deepEqual(
-    await trashPurgeMaintenance.maintainTrashPurgeTasks(),
-    {
-      retried_jobs: 1,
-      repaired_jobs: 0
-    }
-  );
+  assert.deepEqual(await trashPurgeMaintenance.maintainTrashPurgeTasks(), {
+    retried_jobs: 1,
+    repaired_jobs: 0
+  });
   const renewedJob = await claimTrashPurgeJob();
   assert.equal(renewedJob.id, failedJob.id);
   assert.notEqual(renewedJob.execution_token, failedJob.execution_token);
-  await assert.rejects(trashPurgeJob.handleTrashPurgeJob(failedJob, new AbortController().signal), /ownership was lost/);
+  await assert.rejects(
+    trashPurgeJob.handleTrashPurgeJob(failedJob, new AbortController().signal),
+    /ownership was lost/
+  );
   assert.equal(await jobs.markBackgroundJobSucceeded(failedJob), false);
   assert.equal(await localAccess.driver.exists("full", failedItem.objectKey), true);
   await finishTrashPurgeJob(renewedJob);
@@ -587,13 +566,19 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
   );
   assert.deepEqual(await jobs.cleanupBackgroundJobHistory(), []);
   const succeededCheck = await databaseCheck.checkTrash();
-  assert.equal(succeededCheck.issues.find((issue) => issue.kind === "succeeded_target_remaining")?.count, 1);
+  assert.equal(
+    succeededCheck.issues.find((issue) => issue.kind === "succeeded_target_remaining")?.count,
+    1
+  );
   assert.deepEqual(await trashMutations.restoreImages([succeededItem.id]), {
-    requested: 1, restored: 0, ignored: 1,
+    requested: 1,
+    restored: 0,
+    ignored: 1,
     results: [{ id: succeededItem.id, status: "ignored" }]
   });
   assert.deepEqual(await trashPurgeMaintenance.maintainTrashPurgeTasks(), {
-    retried_jobs: 0, repaired_jobs: 1
+    retried_jobs: 0,
+    repaired_jobs: 1
   });
   await finishTrashPurgeJob(await claimTrashPurgeJob());
 
@@ -604,10 +589,17 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
     [readyJobId, foregroundImage, `trash.purge:${foregroundImage}`]
   );
   const readyJob = await claimTrashPurgeJob();
-  await assert.rejects(trashPurgeJob.handleTrashPurgeJob(readyJob, new AbortController().signal), /not in the trash/);
+  await assert.rejects(
+    trashPurgeJob.handleTrashPurgeJob(readyJob, new AbortController().signal),
+    /not in the trash/
+  );
   const readyCheck = await databaseCheck.checkTrash();
   assert.equal(readyCheck.issues.find((issue) => issue.kind === "target_not_deleted")?.count, 1);
-  assert.equal((await database.pool.query("SELECT status FROM metadata WHERE id=$1", [foregroundImage])).rows[0]?.status, "ready");
+  assert.equal(
+    (await database.pool.query("SELECT status FROM metadata WHERE id=$1", [foregroundImage]))
+      .rows[0]?.status,
+    "ready"
+  );
   await database.pool.query("DELETE FROM background_job WHERE id=$1", [readyJobId]);
 
   const referencedHistoryItem = await createTrashImage(0);
@@ -615,16 +607,16 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
   const unreferencedHistoryJob = randomUUID();
   const retainedMoveHistoryJob = randomUUID();
   await database.pool.query(
-    "INSERT INTO background_job("
-      + "id, type, status, target_id, payload, error, next_retry_at, updated_at"
-      + ") VALUES "
-      + "($1, 'trash.purge', 'failed', $6, '{}'::jsonb, 'exhausted', NULL, "
-      + "now() - ($4 || ' seconds')::interval), "
-      + "($2, 'trash.purge', 'failed', $7, '{}'::jsonb, 'orphaned', NULL, "
-      + "now() - ($4 || ' seconds')::interval), "
-      + "($3, 'move.cleanup', 'failed', 'retained-history', $5::jsonb, "
-      + "'protected cleanup receipt', NULL, "
-      + "now() - ($4 || ' seconds')::interval)",
+    "INSERT INTO background_job(" +
+      "id, type, status, target_id, payload, error, next_retry_at, updated_at" +
+      ") VALUES " +
+      "($1, 'trash.purge', 'failed', $6, '{}'::jsonb, 'exhausted', NULL, " +
+      "now() - ($4 || ' seconds')::interval), " +
+      "($2, 'trash.purge', 'failed', $7, '{}'::jsonb, 'orphaned', NULL, " +
+      "now() - ($4 || ' seconds')::interval), " +
+      "($3, 'move.cleanup', 'failed', 'retained-history', $5::jsonb, " +
+      "'protected cleanup receipt', NULL, " +
+      "now() - ($4 || ' seconds')::interval)",
     [
       referencedHistoryJob,
       unreferencedHistoryJob,
@@ -635,31 +627,21 @@ await database.pool.query(`INSERT INTO metadata (id, created_by, status, storage
       randomUUID()
     ]
   );
-  assert.deepEqual(await jobs.cleanupBackgroundJobHistory(), [
-    { status: "failed", count: 1 }
-  ]);
+  assert.deepEqual(await jobs.cleanupBackgroundJobHistory(), [{ status: "failed", count: 1 }]);
   assert.deepEqual(
-    (await database.pool.query(
-      "SELECT id FROM background_job WHERE id=ANY($1::uuid[]) ORDER BY id",
-      [[
-        referencedHistoryJob,
-        unreferencedHistoryJob,
-        retainedMoveHistoryJob
-      ]]
-    )).rows.map((row) => row.id),
+    (
+      await database.pool.query(
+        "SELECT id FROM background_job WHERE id=ANY($1::uuid[]) ORDER BY id",
+        [[referencedHistoryJob, unreferencedHistoryJob, retainedMoveHistoryJob]]
+      )
+    ).rows.map((row) => row.id),
     [referencedHistoryJob, retainedMoveHistoryJob].sort(),
     "无引用 purge 耗尽任务应按保留期裁剪，有引用 purge 与 move.cleanup 回执必须继续保留"
   );
-  assert.deepEqual(
-    await trashPurgeMaintenance.maintainTrashPurgeTasks(),
-    {
-      retried_jobs: 1,
-      repaired_jobs: 0
-    }
-  );
+  assert.deepEqual(await trashPurgeMaintenance.maintainTrashPurgeTasks(), {
+    retried_jobs: 1,
+    repaired_jobs: 0
+  });
   await finishTrashPurgeJob(await claimTrashPurgeJob());
-  await database.pool.query(
-    "DELETE FROM background_job WHERE id=$1",
-    [retainedMoveHistoryJob]
-  );
+  await database.pool.query("DELETE FROM background_job WHERE id=$1", [retainedMoveHistoryJob]);
 });

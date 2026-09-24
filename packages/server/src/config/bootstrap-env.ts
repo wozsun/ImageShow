@@ -25,11 +25,12 @@ function parseBootstrapAdminEnvironment(environment: NodeJS.ProcessEnv) {
 }
 
 export const bootstrapEnvironment = Object.freeze(parseBootstrapAdminEnvironment(process.env));
-const dataDirectory = bootstrapEnvironment.nodeEnvironment === "production"
-  ? "/app/data"
-  : bootstrapEnvironment.developmentDataDirectory
-    ? resolve(bootstrapEnvironment.developmentDataDirectory)
-    : join(process.cwd(), "data");
+const dataDirectory =
+  bootstrapEnvironment.nodeEnvironment === "production"
+    ? "/app/data"
+    : bootstrapEnvironment.developmentDataDirectory
+      ? resolve(bootstrapEnvironment.developmentDataDirectory)
+      : join(process.cwd(), "data");
 
 export const runtimePaths = Object.freeze({
   configDirectory: dataDirectory,

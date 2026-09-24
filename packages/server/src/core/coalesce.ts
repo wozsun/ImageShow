@@ -23,13 +23,15 @@ export async function coalesce<T>(
       controller,
       waiters: 0,
       settled: false,
-      promise: Promise.resolve().then(() => {
-        controller.signal.throwIfAborted();
-        return work(controller.signal);
-      }).finally(() => {
-        entry.settled = true;
-        if (inFlight.get(key) === entry) inFlight.delete(key);
-      })
+      promise: Promise.resolve()
+        .then(() => {
+          controller.signal.throwIfAborted();
+          return work(controller.signal);
+        })
+        .finally(() => {
+          entry.settled = true;
+          if (inFlight.get(key) === entry) inFlight.delete(key);
+        })
     };
     inFlight.set(key, entry);
     shared = entry;
@@ -37,9 +39,7 @@ export async function coalesce<T>(
 
   shared.waiters += 1;
   try {
-    return await (signal
-      ? raceWithAbortSignal(signal, shared.promise)
-      : shared.promise) as T;
+    return (await (signal ? raceWithAbortSignal(signal, shared.promise) : shared.promise)) as T;
   } finally {
     shared.waiters -= 1;
     if (shared.waiters === 0 && !shared.settled) {

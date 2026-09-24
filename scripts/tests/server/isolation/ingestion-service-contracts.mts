@@ -1,31 +1,36 @@
 import assert from "node:assert/strict";
-import { createIngestionScenarioFixture, repositoryWithOverrides } from "./ingestion-scenario-fixture.mts";
-import type { IngestionSessionSnapshot, StoredIngestionSession } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
+import {
+  createIngestionScenarioFixture,
+  repositoryWithOverrides
+} from "./ingestion-scenario-fixture.mts";
+import type {
+  IngestionSessionSnapshot,
+  StoredIngestionSession
+} from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
 import type { IngestionSessionService } from "../../../../packages/server/src/images/ingestion/session-service.ts";
 type Dependencies = Required<NonNullable<ConstructorParameters<typeof IngestionSessionService>[2]>>;
 
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
-const runtimeConfigStore = await import("../../../../packages/server/src/config/runtime-config-store.ts");
-const ingestionSessionService = await import("../../../../packages/server/src/images/ingestion/session-service.ts");
-const ingestionTokenService = await import("../../../../packages/server/src/images/ingestion/sessions/token-service.ts");
-const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
+  const runtimeConfigStore =
+    await import("../../../../packages/server/src/config/runtime-config-store.ts");
+  const ingestionSessionService =
+    await import("../../../../packages/server/src/images/ingestion/session-service.ts");
+  const ingestionTokenService =
+    await import("../../../../packages/server/src/images/ingestion/sessions/token-service.ts");
+  const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
   const serviceNow = Date.parse("2026-08-23T01:02:03.456Z");
   const { ingestionRepository } = await createIngestionScenarioFixture(runtime);
-  const { readCommittedIngestionResultsByImageIds } = await import("../../../../packages/server/src/images/read-models/ingestion-results.ts");
+  const { readCommittedIngestionResultsByImageIds } =
+    await import("../../../../packages/server/src/images/read-models/ingestion-results.ts");
 
   const committedFixtures = async (ids: readonly string[], owners: string[], imageTime: string) => {
     for (const [index, id] of ids.entries()) {
       await runtime.databasePools.pool.query(
         `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_time)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, $4)`,
-        [
-        id,
-        owners[index],
-        "a".repeat(32),
-        imageTime
-      ]
+        [id, owners[index], "a".repeat(32), imageTime]
       );
     }
     return readCommittedIngestionResultsByImageIds(ids);
@@ -41,13 +46,16 @@ const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
     original: "",
     tags: []
   };
-  const serviceDependencies = (readCommitted: Dependencies["readCommitted"]): Partial<Dependencies> => ({
+  const serviceDependencies = (
+    readCommitted: Dependencies["readCommitted"]
+  ): Partial<Dependencies> => ({
     readCommitted
   });
-  const serviceTokens = () => new ingestionTokenService.IngestionTokenService({
-    rootKey: new Uint8Array(32).fill(19),
-    now: () => serviceNow
-  });
+  const serviceTokens = () =>
+    new ingestionTokenService.IngestionTokenService({
+      rootKey: new Uint8Array(32).fill(19),
+      now: () => serviceNow
+    });
   const serviceBatchKey = coreUuid.randomUuidV7At(new Date(serviceNow));
   const uploadBatchItems = [
     {
@@ -70,13 +78,17 @@ const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
     }
   ];
   let uploadBatchCall = 0;
-  const uploadBatchService = new ingestionSessionService.IngestionSessionService(repositoryWithOverrides(ingestionRepository, {
-    createUploadIntent: async (intent) => {
-      uploadBatchCall += 1;
-      if (uploadBatchCall === 2) throw new Error("second upload rejected");
-      return { kind: "intent" as const, created: true, intent };
-    }
-  }), serviceTokens(), serviceDependencies(async () => new Map()));
+  const uploadBatchService = new ingestionSessionService.IngestionSessionService(
+    repositoryWithOverrides(ingestionRepository, {
+      createUploadIntent: async (intent) => {
+        uploadBatchCall += 1;
+        if (uploadBatchCall === 2) throw new Error("second upload rejected");
+        return { kind: "intent" as const, created: true, intent };
+      }
+    }),
+    serviceTokens(),
+    serviceDependencies(async () => new Map())
+  );
   const uploadBatchResult = await uploadBatchService.createUploadIntents(
     "service-owner",
     uploadBatchItems,
@@ -107,7 +119,10 @@ const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
     serviceNow
   );
   assert.deepEqual(
-    uploadBoundaryResult.map((item) => { assert.ok(item.status === "failed"); return { status: item.status, code: item.code }; }),
+    uploadBoundaryResult.map((item) => {
+      assert.ok(item.status === "failed");
+      return { status: item.status, code: item.code };
+    }),
     [
       { status: "failed" as const, code: "upload_too_large" },
       { status: "failed" as const, code: "upload_dimensions_exceeded" }
@@ -116,13 +131,17 @@ const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
   assert.equal(uploadBatchCall, 2, "越界 intent 不得进入存储或 Redis 接管");
 
   let importBatchCall = 0;
-  const importBatchService = new ingestionSessionService.IngestionSessionService(repositoryWithOverrides(ingestionRepository, {
-    acceptImportSession: async (template, displayOrderKey, now) => {
-      importBatchCall += 1;
-      if (importBatchCall === 2) throw new Error("second import rejected");
-      return ingestionRepository.acceptImportSession(template, displayOrderKey, now);
-    }
-  }), serviceTokens(), serviceDependencies(async () => new Map()));
+  const importBatchService = new ingestionSessionService.IngestionSessionService(
+    repositoryWithOverrides(ingestionRepository, {
+      acceptImportSession: async (template, displayOrderKey, now) => {
+        importBatchCall += 1;
+        if (importBatchCall === 2) throw new Error("second import rejected");
+        return ingestionRepository.acceptImportSession(template, displayOrderKey, now);
+      }
+    }),
+    serviceTokens(),
+    serviceDependencies(async () => new Map())
+  );
   const importBatchResult = await importBatchService.acceptImportItems(
     "service-owner",
     uploadBatchItems.map((item, index) => ({
@@ -149,57 +168,140 @@ const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
 
   const cancelOwner = "cancel-before-import-owner";
   const cancelService = new ingestionSessionService.IngestionSessionService(
-    ingestionRepository, serviceTokens(), serviceDependencies(async () => new Map())
+    ingestionRepository,
+    serviceTokens(),
+    serviceDependencies(async () => new Map())
   );
   const cancelInput = {
-    ...serviceDraft, storage_slug: "local", batch_key: serviceBatchKey,
-    idempotency_key: "cancel-before-accept", batch_position: 0,
-    source_type: "weibo" as const, download_url: "https://example.com/cancel.jpg"
+    ...serviceDraft,
+    storage_slug: "local",
+    batch_key: serviceBatchKey,
+    idempotency_key: "cancel-before-accept",
+    batch_position: 0,
+    source_type: "weibo" as const,
+    download_url: "https://example.com/cancel.jpg"
   };
-  const cancelledMissing = (await cancelService.acceptImportItems(
-    cancelOwner, [cancelInput], serviceNow, { cancelIfMissing: true }
-  ))[0];
+  const cancelledMissing = (
+    await cancelService.acceptImportItems(cancelOwner, [cancelInput], serviceNow, {
+      cancelIfMissing: true
+    })
+  )[0];
   assert.equal(cancelledMissing.status, "discarded");
   assert.ok(cancelledMissing.status === "discarded");
-  assert.equal((await ingestionRepository.readSession(cancelOwner, cancelledMissing.session_id))?.status, "discarded");
+  assert.equal(
+    (await ingestionRepository.readSession(cancelOwner, cancelledMissing.session_id))?.status,
+    "discarded"
+  );
   const cancelledQueue = await ingestionRepository.snapshot(cancelOwner, "import", 0, 100);
   assert.equal(cancelledQueue.metadata.total, 0);
   assert.equal(cancelledQueue.items.length, 0);
-  assert.equal(JSON.stringify(await ingestionRepository.discoverRunnable()).includes(cancelledMissing.session_id), false);
-  assert.deepEqual((await cancelService.acceptImportItems(cancelOwner, [cancelInput], serviceNow + 10))[0], cancelledMissing,
-    "取消先到时，迟到的原始 accept 只能返回同一 discarded 回执，不能启动下载");
-  const conflict = (await cancelService.acceptImportItems(cancelOwner, [{ ...cancelInput, title: "changed" }], serviceNow))[0];
+  assert.equal(
+    JSON.stringify(await ingestionRepository.discoverRunnable()).includes(
+      cancelledMissing.session_id
+    ),
+    false
+  );
+  assert.deepEqual(
+    (await cancelService.acceptImportItems(cancelOwner, [cancelInput], serviceNow + 10))[0],
+    cancelledMissing,
+    "取消先到时，迟到的原始 accept 只能返回同一 discarded 回执，不能启动下载"
+  );
+  const conflict = (
+    await cancelService.acceptImportItems(
+      cancelOwner,
+      [{ ...cancelInput, title: "changed" }],
+      serviceNow
+    )
+  )[0];
   assert.ok(conflict.status === "failed");
-  assert.equal((await ingestionRepository.readSession(cancelOwner, cancelledMissing.session_id))?.status, "discarded");
+  assert.equal(
+    (await ingestionRepository.readSession(cancelOwner, cancelledMissing.session_id))?.status,
+    "discarded"
+  );
 
-  const acceptedInput = { ...cancelInput, idempotency_key: "accept-before-cancel", batch_position: 1 };
-  const acceptedBeforeCancel = (await cancelService.acceptImportItems(cancelOwner, [acceptedInput], serviceNow))[0];
+  const acceptedInput = {
+    ...cancelInput,
+    idempotency_key: "accept-before-cancel",
+    batch_position: 1
+  };
+  const acceptedBeforeCancel = (
+    await cancelService.acceptImportItems(cancelOwner, [acceptedInput], serviceNow)
+  )[0];
   assert.equal(acceptedBeforeCancel.status, "accepted");
-  assert.deepEqual((await cancelService.acceptImportItems(cancelOwner, [acceptedInput], serviceNow, { cancelIfMissing: true }))[0], acceptedBeforeCancel,
-    "已经接管的任务保留真实状态，由现有版本化取消流程处理");
-  assert.equal((await ingestionRepository.snapshot(cancelOwner, "import", 0, 100)).metadata.total, 1);
+  assert.deepEqual(
+    (
+      await cancelService.acceptImportItems(cancelOwner, [acceptedInput], serviceNow, {
+        cancelIfMissing: true
+      })
+    )[0],
+    acceptedBeforeCancel,
+    "已经接管的任务保留真实状态，由现有版本化取消流程处理"
+  );
+  assert.equal(
+    (await ingestionRepository.snapshot(cancelOwner, "import", 0, 100)).metadata.total,
+    1
+  );
 
-  const blockedStorageService = new ingestionSessionService.IngestionSessionService(ingestionRepository, serviceTokens(), {
-    ...serviceDependencies(async () => new Map()),
-    assertStorageWriteTarget: async () => { throw new Error("storage not writable"); }
-  });
-  assert.equal((await blockedStorageService.acceptImportItems(cancelOwner, [{ ...cancelInput, idempotency_key: "cancel-retired-storage", batch_position: 2 }], serviceNow, { cancelIfMissing: true }))[0].status, "discarded");
-  assert.equal((await blockedStorageService.acceptImportItems(cancelOwner, [{ ...cancelInput, idempotency_key: "normal-retired-storage", batch_position: 3 }], serviceNow))[0].status, "failed");
-  const oversizedItems = Array.from({ length: runtimeConfigStore.getRuntimeConfig().import.max_items + 1 }, (_, index) => ({
-    ...cancelInput, idempotency_key: `oversized-${index}`, batch_position: index
-  }));
-  await assert.rejects(cancelService.acceptImportItems("oversized-import-owner", oversizedItems, serviceNow),
-    (error: any) => error.code === "import_batch_limit_exceeded");
-  assert.equal((await ingestionRepository.snapshot("oversized-import-owner", "import", 0, 100)).metadata.total, 0);
+  const blockedStorageService = new ingestionSessionService.IngestionSessionService(
+    ingestionRepository,
+    serviceTokens(),
+    {
+      ...serviceDependencies(async () => new Map()),
+      assertStorageWriteTarget: async () => {
+        throw new Error("storage not writable");
+      }
+    }
+  );
+  assert.equal(
+    (
+      await blockedStorageService.acceptImportItems(
+        cancelOwner,
+        [{ ...cancelInput, idempotency_key: "cancel-retired-storage", batch_position: 2 }],
+        serviceNow,
+        { cancelIfMissing: true }
+      )
+    )[0].status,
+    "discarded"
+  );
+  assert.equal(
+    (
+      await blockedStorageService.acceptImportItems(
+        cancelOwner,
+        [{ ...cancelInput, idempotency_key: "normal-retired-storage", batch_position: 3 }],
+        serviceNow
+      )
+    )[0].status,
+    "failed"
+  );
+  const oversizedItems = Array.from(
+    { length: runtimeConfigStore.getRuntimeConfig().import.max_items + 1 },
+    (_, index) => ({
+      ...cancelInput,
+      idempotency_key: `oversized-${index}`,
+      batch_position: index
+    })
+  );
+  await assert.rejects(
+    cancelService.acceptImportItems("oversized-import-owner", oversizedItems, serviceNow),
+    (error: any) => error.code === "import_batch_limit_exceeded"
+  );
+  assert.equal(
+    (await ingestionRepository.snapshot("oversized-import-owner", "import", 0, 100)).metadata.total,
+    0
+  );
 
   const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfig());
   const policyTemplates: IngestionSessionSnapshot[] = [];
-  const policyService = new ingestionSessionService.IngestionSessionService(repositoryWithOverrides(ingestionRepository, {
-    acceptImportSession: async (template, displayOrderKey, now) => {
-      policyTemplates.push(template);
-      return ingestionRepository.acceptImportSession(template, displayOrderKey, now);
-    }
-  }), serviceTokens(), serviceDependencies(async () => new Map()));
+  const policyService = new ingestionSessionService.IngestionSessionService(
+    repositoryWithOverrides(ingestionRepository, {
+      acceptImportSession: async (template, displayOrderKey, now) => {
+        policyTemplates.push(template);
+        return ingestionRepository.acceptImportSession(template, displayOrderKey, now);
+      }
+    }),
+    serviceTokens(),
+    serviceDependencies(async () => new Map())
+  );
   await runtimeConfigStore.updateRuntimeConfig({
     import: { keep_original_link: ["url", "weibo"] },
     weibo: { source_enabled: false }
@@ -324,7 +426,11 @@ const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
     serviceTokens(),
     serviceDependencies(async (ids) => {
       queriedCanonicalIds = [...ids];
-      return committedFixtures(ids, ["service-owner", "different-owner"], "2026-08-20T00:00:00.000Z");
+      return committedFixtures(
+        ids,
+        ["service-owner", "different-owner"],
+        "2026-08-20T00:00:00.000Z"
+      );
     })
   );
   const canonicalBatchResult = await canonicalBatchService.createUploadIntents(
@@ -353,32 +459,40 @@ const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
   });
   assert.equal(staleReceiptDeleted[0]?.status, "completed");
 
-  const exactCompletedService = new ingestionSessionService.IngestionSessionService(repositoryWithOverrides(ingestionRepository, {
-    createUploadIntent: async (intent) => ({
-      kind: "canonical" as const,
-      session: {
-        owner: intent.owner,
-        queue: "upload" as const,
-        session_id: intent.session_id,
-        image_id: intent.candidate_image_id,
-        request_hash: intent.request_hash,
-        commit_request_id: "completed-commit",
-        commit_intent_hash: "c".repeat(64),
-        status: "completed" as const,
-        version: 9,
-        last_semantic_revision: 12,
-        accepted_at: serviceNow - 10,
-        accepted_order: 3,
-        completed_at: serviceNow - 1,
-        discard_at: serviceNow + 10_000
-      }
-    })
-  }), serviceTokens(), serviceDependencies(async (ids) => committedFixtures(ids, ["service-owner"], "2026-08-20T00:00:02.000Z")));
-  const [exactCompletedResult] = await exactCompletedService
-    .createUploadIntents("service-owner", [uploadBatchItems[0]], serviceNow);
+  const exactCompletedService = new ingestionSessionService.IngestionSessionService(
+    repositoryWithOverrides(ingestionRepository, {
+      createUploadIntent: async (intent) => ({
+        kind: "canonical" as const,
+        session: {
+          owner: intent.owner,
+          queue: "upload" as const,
+          session_id: intent.session_id,
+          image_id: intent.candidate_image_id,
+          request_hash: intent.request_hash,
+          commit_request_id: "completed-commit",
+          commit_intent_hash: "c".repeat(64),
+          status: "completed" as const,
+          version: 9,
+          last_semantic_revision: 12,
+          accepted_at: serviceNow - 10,
+          accepted_order: 3,
+          completed_at: serviceNow - 1,
+          discard_at: serviceNow + 10_000
+        }
+      })
+    }),
+    serviceTokens(),
+    serviceDependencies(async (ids) =>
+      committedFixtures(ids, ["service-owner"], "2026-08-20T00:00:02.000Z")
+    )
+  );
+  const [exactCompletedResult] = await exactCompletedService.createUploadIntents(
+    "service-owner",
+    [uploadBatchItems[0]],
+    serviceNow
+  );
   assert.equal(exactCompletedResult.status, "completed");
   assert.equal(exactCompletedResult.accepted_order, 3);
   assert.equal(exactCompletedResult.version, 9);
   assert.equal(exactCompletedResult.last_semantic_revision, 12);
-
 });

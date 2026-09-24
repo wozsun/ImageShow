@@ -17,16 +17,20 @@ export function MatchedText({ text, match }: { text: string; match: FacetTextMat
     else parts.push({ text: character, matched });
     offset = end;
   }
-  return parts.map((part, index) => part.matched ? <b key={index}>{part.text}</b> : part.text);
+  return parts.map((part, index) => (part.matched ? <b key={index}>{part.text}</b> : part.text));
 }
 
 export function FacetSuggestionLabel({ option }: { option: FacetSuggestion }) {
-  return <>
-    <span><MatchedText text={option.slug} match={option.slugMatch} /></span>
-    {option.display_name && option.display_name !== option.slug && (
-      <span className="option-display-name">
-        <MatchedText text={option.display_name} match={option.displayNameMatch} />
+  return (
+    <>
+      <span>
+        <MatchedText text={option.slug} match={option.slugMatch} />
       </span>
-    )}
-  </>;
+      {option.display_name && option.display_name !== option.slug && (
+        <span className="option-display-name">
+          <MatchedText text={option.display_name} match={option.displayNameMatch} />
+        </span>
+      )}
+    </>
+  );
 }

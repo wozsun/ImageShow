@@ -15,20 +15,15 @@ import {
  * intent are required, so scrolling never selects even when implicit pointer
  * capture keeps the moving finger over the item.
  */
-export const MenuItemButton = forwardRef<
-  HTMLButtonElement,
-  DirectActivationButtonProps
->(function MenuItemButton({
-  className = "",
-  onActivate,
-  ...buttonProps
-}, ref) {
-  return (
-    <DirectActivationButton
-      {...buttonProps}
-      ref={ref}
-      className={`anchored-menu-item ${className}`.trim()}
-      onActivate={onActivate}
-    />
-  );
-});
+export const MenuItemButton = forwardRef<HTMLButtonElement, DirectActivationButtonProps>(
+  function MenuItemButton({ className = "", onActivate, ...buttonProps }, ref) {
+    return (
+      <DirectActivationButton
+        {...buttonProps}
+        ref={ref}
+        className={`anchored-menu-item ${className}`.trim()}
+        onActivate={onActivate}
+      />
+    );
+  }
+);

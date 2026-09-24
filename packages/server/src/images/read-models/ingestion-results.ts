@@ -34,12 +34,14 @@ export async function readCommittedIngestionResultsByImageIds(
   let rows: Array<IngestionImageRecordWithTags & { created_by: string }>;
   let items: CompletedIngestionImageDto[];
   try {
-    rows = (await reader.query<IngestionImageRecordWithTags & { created_by: string }>(
-      `SELECT ${ingestionImagePresentationColumnsWithTags}, created_by
+    rows = (
+      await reader.query<IngestionImageRecordWithTags & { created_by: string }>(
+        `SELECT ${ingestionImagePresentationColumnsWithTags}, created_by
          FROM metadata
         WHERE id = ANY($1::uuid[])`,
-      [uniqueIds]
-    )).rows;
+        [uniqueIds]
+      )
+    ).rows;
     // URL projection can read PostgreSQL again when the storage registry is
     // cold. Its connection failures belong to the same completed-result read.
     items = await ingestionImageItemsWithTags(rows);
@@ -47,24 +49,22 @@ export async function readCommittedIngestionResultsByImageIds(
     const reason = databaseConnectionFailureReason(error);
     if (!reason) throw error;
     logger.warn("ingestion_results_database_unavailable", { reason });
-    const unavailable = new ApiError(
-      503,
-      "database_unavailable",
-      "PostgreSQL unavailable",
-      { dependency: "postgresql" }
-    );
+    const unavailable = new ApiError(503, "database_unavailable", "PostgreSQL unavailable", {
+      dependency: "postgresql"
+    });
     unavailable.cause = error;
     throw unavailable;
   }
   const rowsById = new Map(rows.map((row) => [row.id.toLowerCase(), row]));
-  return new Map(items.map((item) => [
-    item.id.toLowerCase(),
-    {
-      image_id: item.id.toLowerCase(),
-      image_time: new Date(rowsById.get(item.id.toLowerCase())!.image_time)
-        .toISOString(),
-      created_by: rowsById.get(item.id.toLowerCase())!.created_by,
-      item
-    }
-  ]));
+  return new Map(
+    items.map((item) => [
+      item.id.toLowerCase(),
+      {
+        image_id: item.id.toLowerCase(),
+        image_time: new Date(rowsById.get(item.id.toLowerCase())!.image_time).toISOString(),
+        created_by: rowsById.get(item.id.toLowerCase())!.created_by,
+        item
+      }
+    ])
+  );
 }

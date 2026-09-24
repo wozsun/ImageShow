@@ -18,8 +18,8 @@
   --color-dark-surface-muted: #1a1f26;
   --color-dark-border-default: #282e36;
   --color-dark-warning-text: #f2cc60;
-  --color-dark-scrollbar: rgba(201, 209, 217, .32);
-  --color-dark-scrollbar-active: rgba(201, 209, 217, .56);
+  --color-dark-scrollbar: rgba(201, 209, 217, 0.32);
+  --color-dark-scrollbar-active: rgba(201, 209, 217, 0.56);
   --color-dark-control-text-primary: #d8dfe7;
   --color-dark-control-text-secondary: #a5aeb9;
   --color-dark-control-text-on-action: #fff;
@@ -66,13 +66,13 @@
   --public-color-surface-default: #142036;
   --color-public-text-primary: #f2f7ff;
   --public-color-text-secondary: #afbdd0;
-  --public-color-loading-text: rgba(175, 189, 208, .64);
+  --public-color-loading-text: rgba(175, 189, 208, 0.64);
   --color-public-text-strong: #fff;
-  --public-color-border-default: rgba(155, 190, 239, .28);
+  --public-color-border-default: rgba(155, 190, 239, 0.28);
   --public-color-action-primary: #91c7ff;
   --public-color-action-strong: #2f6fc9;
   --public-color-selection-strong: #2056e0;
-  --public-color-action-soft: rgba(85, 150, 235, .34);
+  --public-color-action-soft: rgba(85, 150, 235, 0.34);
   --public-color-accent: #df8caf;
 
   /* Shared control roles in the public domain */
@@ -93,7 +93,7 @@
   --public-color-thumbnail-surface: #e8edf3;
   --public-color-thumbnail-placeholder: #9aa6b4;
   --public-color-image-placeholder-dark: #111820;
-  --public-shadow-control-floating: rgba(20, 30, 44, .18);
+  --public-shadow-control-floating: rgba(20, 30, 44, 0.18);
 
   /* Shared feedback roles in the public domain */
   --public-color-feedback-success-text: #245236;
@@ -107,16 +107,16 @@
   --public-color-close-hover: #c25b5b;
 
   /* Scrollbars */
-  --color-scrollbar-light-track-thumb: rgba(20, 30, 44, .3);
-  --color-scrollbar-light-thumb: rgba(20, 30, 44, .26);
-  --color-scrollbar-light-thumb-hover: rgba(20, 30, 44, .42);
-  --color-overlay-scrollbar-light: rgba(20, 30, 44, .34);
-  --color-overlay-scrollbar-light-active: rgba(20, 30, 44, .54);
-  --color-overlay-scrollbar-dark: rgba(230, 237, 243, .34);
-  --color-overlay-scrollbar-dark-active: rgba(230, 237, 243, .62);
+  --color-scrollbar-light-track-thumb: rgba(20, 30, 44, 0.3);
+  --color-scrollbar-light-thumb: rgba(20, 30, 44, 0.26);
+  --color-scrollbar-light-thumb-hover: rgba(20, 30, 44, 0.42);
+  --color-overlay-scrollbar-light: rgba(20, 30, 44, 0.34);
+  --color-overlay-scrollbar-light-active: rgba(20, 30, 44, 0.54);
+  --color-overlay-scrollbar-dark: rgba(230, 237, 243, 0.34);
+  --color-overlay-scrollbar-dark-active: rgba(230, 237, 243, 0.62);
 
   /* Shared backdrop for the generic cross-domain dialog skeleton. */
-  --color-modal-overlay: rgba(13, 18, 28, .76);
+  --color-modal-overlay: rgba(13, 18, 28, 0.76);
 
   /* Context aliases consumed by shared base components. */
   --color-native-focus-outline: CanvasText;

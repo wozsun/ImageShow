@@ -1,16 +1,9 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
 
 function reducedMotionPreferred() {
-  return typeof window !== "undefined"
-    && window.matchMedia?.(reducedMotionQuery).matches === true;
+  return typeof window !== "undefined" && window.matchMedia?.(reducedMotionQuery).matches === true;
 }
 
 /**
@@ -19,9 +12,7 @@ function reducedMotionPreferred() {
  */
 export function useOneShotAnimation(enabled: boolean) {
   const startedRef = useRef(enabled);
-  const [active, setActive] = useState(
-    () => enabled && !reducedMotionPreferred()
-  );
+  const [active, setActive] = useState(() => enabled && !reducedMotionPreferred());
 
   useLayoutEffect(() => {
     if (!enabled) {

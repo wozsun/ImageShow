@@ -11,10 +11,16 @@ const noTransformPattern = /(?:^|,)\s*no-transform\s*(?:,|$)/i;
  */
 export async function prepareCompressionThreshold(c: Context, threshold: number) {
   if (!c.res.body || c.req.method === "HEAD" || c.res.status === 206) return false;
-  if (c.res.headers.has("Content-Length") || c.res.headers.has("Content-Encoding") || c.res.headers.has("Transfer-Encoding")) return false;
+  if (
+    c.res.headers.has("Content-Length") ||
+    c.res.headers.has("Content-Encoding") ||
+    c.res.headers.has("Transfer-Encoding")
+  )
+    return false;
   if (noTransformPattern.test(c.res.headers.get("Cache-Control") ?? "")) return false;
   if (!COMPRESSIBLE_CONTENT_TYPE_REGEX.test(c.res.headers.get("Content-Type") ?? "")) return false;
-  if (!/(?:^|,)\s*(?:gzip|deflate|\*)\s*(?:;|,|$)/i.test(c.req.header("Accept-Encoding") ?? "")) return false;
+  if (!/(?:^|,)\s*(?:gzip|deflate|\*)\s*(?:;|,|$)/i.test(c.req.header("Accept-Encoding") ?? ""))
+    return false;
 
   const reader = c.res.body.getReader();
   const chunks: Uint8Array[] = [];

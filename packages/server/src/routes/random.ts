@@ -16,7 +16,10 @@ import { presentRandomJsonItems } from "../random/json-presentation.ts";
 import { selectRandomImages } from "../random/selection.ts";
 import { resolveReadableObject } from "../storage/objects/access.ts";
 import { contentType } from "../storage/objects/keys.ts";
-import { assertCanonicalImageObjectKey, thumbnailObjectKey } from "../storage/objects/image-paths.ts";
+import {
+  assertCanonicalImageObjectKey,
+  thumbnailObjectKey
+} from "../storage/objects/image-paths.ts";
 import { publicImageUrlsForConfig } from "../storage/objects/public-urls.ts";
 import { getStorageBackend } from "../storage/backends/registry.ts";
 import { webReadableFromNode } from "../storage/objects/stream-buffer.ts";
@@ -32,7 +35,10 @@ async function handleRandomImage(c: Context) {
   const url = new URL(c.req.url);
   c.req.raw.signal.throwIfAborted();
   if (!requestHasTrustedReferer(c)) {
-    const reservation = await reserveRandomRequest(requestClientIp(c), url.searchParams.has("limit"));
+    const reservation = await reserveRandomRequest(
+      requestClientIp(c),
+      url.searchParams.has("limit")
+    );
     if (!reservation.allowed) {
       c.header("Retry-After", String(reservation.retryAfterSeconds));
       throw new ApiError(429, "random_rate_limited", "随机图请求过于频繁，请稍后再试");
@@ -43,7 +49,7 @@ async function handleRandomImage(c: Context) {
 
 async function respondRandom(c: Context, url: URL) {
   const signal = c.req.raw.signal;
-  const selection = await withPublicDatabaseRead(signal, (database, databaseSignal) => (
+  const selection = await withPublicDatabaseRead(signal, (database, databaseSignal) =>
     selectRandomImages(
       url,
       c.req.header("user-agent") ?? "",
@@ -51,17 +57,16 @@ async function respondRandom(c: Context, url: URL) {
       databaseSignal,
       database
     )
-  ));
+  );
   if (selection instanceof Response) return selection;
   if (selection.mode === "json") {
-    const items = await presentRandomJsonItems(
-      selection.items,
-      { signal, size: selection.size }
+    const items = await presentRandomJsonItems(selection.items, { signal, size: selection.size });
+    const body = JSON.stringify(
+      apiSuccess({
+        count: items.length,
+        items
+      } satisfies RandomImageJsonResponseDto)
     );
-    const body = JSON.stringify(apiSuccess({
-      count: items.length,
-      items
-    } satisfies RandomImageJsonResponseDto));
     const headers = new Headers({
       "Cache-Control": noStoreCacheControl,
       "Content-Type": "application/json; charset=utf-8"
@@ -87,16 +92,13 @@ async function respondRandom(c: Context, url: URL) {
   };
   const thumbnail = selection.size === "thumb";
   if (selection.mode === "proxy") {
-    const key = thumbnail
-      ? thumbnailObjectKey(picked.id)
-      : storageObjectKey(picked.id, picked.ext);
+    const key = thumbnail ? thumbnailObjectKey(picked.id) : storageObjectKey(picked.id, picked.ext);
     assertCanonicalImageObjectKey(key);
-    const opened = await (await resolveReadableObject(
-      thumbnail ? "thumbs" : "full",
-      key,
-      picked.storage_slug,
-      { signal }
-    )).open(undefined, {
+    const opened = await (
+      await resolveReadableObject(thumbnail ? "thumbs" : "full", key, picked.storage_slug, {
+        signal
+      })
+    ).open(undefined, {
       signal
     });
     // 候选集合变化时固定 seed 也可能换图，后续 Range 请求不保证命中同一对象。
@@ -109,10 +111,9 @@ async function respondRandom(c: Context, url: URL) {
       headers.set("Content-Length", contentLength);
     }
     if (c.req.method === "HEAD") opened.body.destroy();
-    return new Response(
-      c.req.method === "HEAD" ? null : webReadableFromNode(opened.body),
-      { headers }
-    );
+    return new Response(c.req.method === "HEAD" ? null : webReadableFromNode(opened.body), {
+      headers
+    });
   }
 
   const config = await getStorageBackend(picked.storage_slug, { signal });

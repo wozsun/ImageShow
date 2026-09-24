@@ -1,21 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
-import type {
-  AdminCheckStatusDto
-} from "@imageshow/shared/browser";
+import type { AdminCheckStatusDto } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
-import {
-  readyImageProjection
-} from "../../../lib/api/ready-image-cache.js";
+import { readyImageProjection } from "../../../lib/api/ready-image-cache.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
-import {
-  formatBytes,
-  revisionFingerprint
-} from "../../../lib/ui/formatters.js";
-import type {
-  ReadyImageProjectionUsageSnapshot
-} from "./check-redis-inspection.js";
+import { formatBytes, revisionFingerprint } from "../../../lib/ui/formatters.js";
+import type { ReadyImageProjectionUsageSnapshot } from "./check-redis-inspection.js";
 
 function formatTime(value: string | null) {
   if (!value) return "—";
@@ -69,9 +60,7 @@ export function ReadyImageCachePanel({
     }
   };
 
-  const redisFailure = query.data?.redis.status === "error"
-    ? query.data.redis.error
-    : null;
+  const redisFailure = query.data?.redis.status === "error" ? query.data.redis.error : null;
   const healthy = Boolean(status?.synchronized === true && !status.rebuilding);
   const statusError = query.isError
     ? "无法读取检查状态，请稍后重试。"
@@ -82,29 +71,24 @@ export function ReadyImageCachePanel({
   const coreOccupancy = {
     key_count: projectionUsage?.core.key_count ?? null,
     count: status?.item_count ?? null,
-    memory_bytes: projectionUsage?.core.memory_bytes
-      ?? status?.last_full_rebuild_core_memory_bytes
-      ?? null
+    memory_bytes:
+      projectionUsage?.core.memory_bytes ?? status?.last_full_rebuild_core_memory_bytes ?? null
   };
   const derivedOccupancy = projectionUsage
     ? {
-      key_count: projectionUsage.derived.key_count,
-      count: projectionUsage.derived.member_count,
-      memory_bytes: projectionUsage.derived.memory_bytes
-    }
+        key_count: projectionUsage.derived.key_count,
+        count: projectionUsage.derived.member_count,
+        memory_bytes: projectionUsage.derived.memory_bytes
+      }
     : null;
-  const deepMeasuredAt = projectionUsage
-    ? formatTime(projectionUsage.measured_at)
-    : null;
-  const projectionUsageNoticePrefix = projectionUsageNotice
-    ? `${projectionUsageNotice} `
-    : "";
+  const deepMeasuredAt = projectionUsage ? formatTime(projectionUsage.measured_at) : null;
+  const projectionUsageNoticePrefix = projectionUsageNotice ? `${projectionUsageNotice} ` : "";
   const coreDetails = projectionUsage
     ? `${projectionUsageNoticePrefix}图片成员来自当前轻量状态；键数和内存来自最近一次完整 Redis 深检快照，测量于 ${deepMeasuredAt}。`
     : status?.last_full_rebuild_measured_at
       ? `${projectionUsageNoticePrefix}图片成员来自当前轻量状态；内存为最近完整重建快照，测量于 ${formatTime(
-        status.last_full_rebuild_measured_at
-      )}；当前键数需完成 Redis 检测后显示。`
+          status.last_full_rebuild_measured_at
+        )}；当前键数需完成 Redis 检测后显示。`
       : `${projectionUsageNoticePrefix}图片成员来自当前轻量状态；键数和内存需完成 Redis 检测后显示。`;
   const derivedDetails = projectionUsage
     ? `${projectionUsageNoticePrefix}最近一次完整 Redis 深检快照，测量于 ${deepMeasuredAt}。`
@@ -117,53 +101,80 @@ export function ReadyImageCachePanel({
           <p>核心投影持久化图片读取；派生结果按需生成并带生命周期。</p>
         </div>
         <div className="actions">
-          <button
-            type="button"
-            disabled={busy || query.isFetching}
-            onClick={() => void refresh()}
-          >
+          <button type="button" disabled={busy || query.isFetching} onClick={() => void refresh()}>
             <AdminIcon name="refresh-line" />
             <StableButtonLabel idle="刷新状态" busyText="刷新中" busy={manualRefreshing} />
           </button>
           {renderMaintenanceAction?.({
-            disabled: busy
-              || query.isFetching
-              || Boolean(status?.rebuilding)
+            disabled: busy || query.isFetching || Boolean(status?.rebuilding)
           })}
         </div>
       </div>
       {(maintenanceError || statusError) && (
-        <p className="admin-error" role="alert">{maintenanceError || statusError}</p>
+        <p className="admin-error" role="alert">
+          {maintenanceError || statusError}
+        </p>
       )}
       <dl className="ready-cache-status-grid">
-        <div><dt>状态</dt><dd>{status?.rebuilding ? "重建中" : healthy ? "已同步" : status?.reason ?? "读取中"}</dd></div>
+        <div>
+          <dt>状态</dt>
+          <dd>
+            {status?.rebuilding ? "重建中" : healthy ? "已同步" : (status?.reason ?? "读取中")}
+          </dd>
+        </div>
         <div>
           <dt>图片数量</dt>
-          <dd>{status?.item_count === null || status?.item_count === undefined
-            ? "—"
-            : status.item_count.toLocaleString()}</dd>
+          <dd>
+            {status?.item_count === null || status?.item_count === undefined
+              ? "—"
+              : status.item_count.toLocaleString()}
+          </dd>
         </div>
         {status?.rebuilding && (
           <div>
             <dt>完整重建进度</dt>
-            <dd>{status.processed === null || status.total === null
-              ? "—"
-              : `${status.processed.toLocaleString()} / ${status.total.toLocaleString()}`}</dd>
+            <dd>
+              {status.processed === null || status.total === null
+                ? "—"
+                : `${status.processed.toLocaleString()} / ${status.total.toLocaleString()}`}
+            </dd>
           </div>
         )}
-        <div><dt>最后更新时间</dt><dd>{formatTime(status?.last_updated_at ?? null)}</dd></div>
-        <div><dt>完整重建开始时间</dt><dd>{formatTime(status?.full_rebuild_started_at ?? null)}</dd></div>
-        <div><dt>完整重建完成时间</dt><dd>{formatTime(status?.full_rebuild_completed_at ?? null)}</dd></div>
-        <div><dt>完整重建耗时</dt><dd>{formatDuration(status?.full_rebuild_duration_ms ?? null)}</dd></div>
+        <div>
+          <dt>最后更新时间</dt>
+          <dd>{formatTime(status?.last_updated_at ?? null)}</dd>
+        </div>
+        <div>
+          <dt>完整重建开始时间</dt>
+          <dd>{formatTime(status?.full_rebuild_started_at ?? null)}</dd>
+        </div>
+        <div>
+          <dt>完整重建完成时间</dt>
+          <dd>{formatTime(status?.full_rebuild_completed_at ?? null)}</dd>
+        </div>
+        <div>
+          <dt>完整重建耗时</dt>
+          <dd>{formatDuration(status?.full_rebuild_duration_ms ?? null)}</dd>
+        </div>
         <div>
           <dt>数据库 revision 指纹</dt>
-          <dd title={status?.authoritative_revision ? `完整 revision：${status.authoritative_revision}` : undefined}>
+          <dd
+            title={
+              status?.authoritative_revision
+                ? `完整 revision：${status.authoritative_revision}`
+                : undefined
+            }
+          >
             {revisionFingerprint(status?.authoritative_revision)}
           </dd>
         </div>
         <div>
           <dt>Redis revision 指纹</dt>
-          <dd title={status?.applied_revision ? `完整 revision：${status.applied_revision}` : undefined}>
+          <dd
+            title={
+              status?.applied_revision ? `完整 revision：${status.applied_revision}` : undefined
+            }
+          >
             {revisionFingerprint(status?.applied_revision)}
           </dd>
         </div>
@@ -190,10 +201,18 @@ export function ReadyImageCachePanel({
       {(status?.recent_errors.core || status?.recent_errors.derived) && (
         <div className="ready-cache-errors">
           {status.recent_errors.core && (
-            <p>最近核心错误（{status.recent_errors.core.code} · {formatTime(status.recent_errors.core.occurred_at)}）：{status.recent_errors.core.message}</p>
+            <p>
+              最近核心错误（{status.recent_errors.core.code} ·{" "}
+              {formatTime(status.recent_errors.core.occurred_at)}）：
+              {status.recent_errors.core.message}
+            </p>
           )}
           {status.recent_errors.derived && (
-            <p>最近派生错误（{status.recent_errors.derived.code} · {formatTime(status.recent_errors.derived.occurred_at)}）：{status.recent_errors.derived.message}</p>
+            <p>
+              最近派生错误（{status.recent_errors.derived.code} ·{" "}
+              {formatTime(status.recent_errors.derived.occurred_at)}）：
+              {status.recent_errors.derived.message}
+            </p>
           )}
         </div>
       )}
@@ -222,10 +241,15 @@ function CacheOccupancy({
     <section title={details}>
       <h3>{title}</h3>
       <span>{value?.key_count?.toLocaleString() ?? "—"} 个键</span>
-      <span>{value?.count?.toLocaleString() ?? "—"} {countUnit}{countLabel}</span>
-      <span>{value?.memory_bytes === null || value?.memory_bytes === undefined
-        ? "—"
-        : formatBytes(value.memory_bytes)}</span>
+      <span>
+        {value?.count?.toLocaleString() ?? "—"} {countUnit}
+        {countLabel}
+      </span>
+      <span>
+        {value?.memory_bytes === null || value?.memory_bytes === undefined
+          ? "—"
+          : formatBytes(value.memory_bytes)}
+      </span>
     </section>
   );
 }

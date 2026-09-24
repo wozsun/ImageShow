@@ -12,19 +12,19 @@ export function adminCredentialTransitionVersions(
   currentPasswordHash: string,
   nextCredentialVersion: string
 ): AdminCredentialTransitionVersions {
-  return [
-    adminCredentialVersion(currentPasswordHash),
-    nextCredentialVersion
-  ];
+  return [adminCredentialVersion(currentPasswordHash), nextCredentialVersion];
 }
 
 export function parseAdminCredentialVersions(value: unknown) {
   if (!Array.isArray(value) || value.length < 1 || value.length > 2) {
     return null;
   }
-  if (!value.every((item): item is string => (
-    typeof item === "string" && credentialVersionPattern.test(item)
-  ))) return null;
+  if (
+    !value.every(
+      (item): item is string => typeof item === "string" && credentialVersionPattern.test(item)
+    )
+  )
+    return null;
   if (new Set(value).size !== value.length) return null;
   return [...value];
 }

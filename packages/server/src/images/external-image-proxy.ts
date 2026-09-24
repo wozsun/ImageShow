@@ -19,7 +19,8 @@ import {
 import { contentType } from "../storage/objects/keys.ts";
 
 export const externalImageProxyTimeoutMs = 12_000;
-export const externalImageProxyUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+export const externalImageProxyUserAgent =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
 export type ExternalProxyRequest = {
   method: "GET" | "HEAD";
@@ -97,35 +98,24 @@ export async function proxyExternalImage(
 
     // 外链代理带源站同源 Referer 绕过简单防盗链；HEAD 不读取字节，上游明确不支持
     // HEAD 或未提供可信图片类型时才以 GET 嗅探，并立即取消正文。
-    const fetchUpstream = (method: "GET" | "HEAD") => safeFetchExternalImage(
-      externalUrl,
-      {
+    const fetchUpstream = (method: "GET" | "HEAD") =>
+      safeFetchExternalImage(externalUrl, {
         method,
         signal: request.signal,
         timeoutMs: externalImageProxyTimeoutMs,
         headers: requestHeaders,
         imageValidation: method === "HEAD" ? "none" : "sniff"
-      }
-    );
+      });
     let upstream = await fetchUpstream(request.method);
     if (
-      request.method === "HEAD"
-      && (
-        [405, 501].includes(upstream.status)
-        || (
-          upstream.ok
-          && !isAllowedExternalImageContentType(
-            upstream.headers.get("content-type")
-          )
-        )
-      )
+      request.method === "HEAD" &&
+      ([405, 501].includes(upstream.status) ||
+        (upstream.ok && !isAllowedExternalImageContentType(upstream.headers.get("content-type"))))
     ) {
       await upstream.body?.cancel().catch(() => undefined);
       upstream = await fetchUpstream("GET");
     }
-    const conditionalForwarded = Boolean(
-      forwardedIfNoneMatch || forwardedIfModifiedSince
-    );
+    const conditionalForwarded = Boolean(forwardedIfNoneMatch || forwardedIfModifiedSince);
     if (upstream.status === 304 && request.validators && conditionalForwarded) {
       await upstream.body?.cancel().catch(() => undefined);
       const headers = proxyExternalResponseHeaders(
@@ -150,10 +140,8 @@ export async function proxyExternalImage(
     );
     headers.set(
       "Content-Type",
-      safeUpstreamResponseHeader(
-        "Content-Type",
-        upstream.headers.get("content-type")
-      ) || contentType(ext)
+      safeUpstreamResponseHeader("Content-Type", upstream.headers.get("content-type")) ||
+        contentType(ext)
     );
     if (request.method === "HEAD") {
       await upstream.body?.cancel().catch(() => undefined);
@@ -184,12 +172,10 @@ function proxyExternalResponseHeaders(
     );
     if (etag) headers.set("ETag", etag);
     const upstreamLastModified = upstream.headers.get("last-modified");
-    const lastModified = upstream.status === 304
-      ? proxyLastModifiedForUpstream304(
-        upstreamLastModified,
-        resourceUpdatedAt
-      )
-      : proxyLastModified(upstreamLastModified, resourceUpdatedAt);
+    const lastModified =
+      upstream.status === 304
+        ? proxyLastModifiedForUpstream304(upstreamLastModified, resourceUpdatedAt)
+        : proxyLastModified(upstreamLastModified, resourceUpdatedAt);
     if (lastModified) headers.set("Last-Modified", lastModified);
   }
   return headers;

@@ -1,5 +1,12 @@
-
-import { activeSession, activeResult, discardedResult, discardedSession, committingSession, preparedSession, completedSession } from "./ingestion-scenario-fixture.mts";
+import {
+  activeSession,
+  activeResult,
+  discardedResult,
+  discardedSession,
+  committingSession,
+  preparedSession,
+  completedSession
+} from "./ingestion-scenario-fixture.mts";
 import { repositoryWithOverrides } from "./ingestion-scenario-fixture.mts";
 import assert from "node:assert/strict";
 import type { IngestionSessionSnapshot } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
@@ -10,50 +17,65 @@ import { createIngestionScenarioFixture } from "./ingestion-scenario-fixture.mts
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
-const databasePools = runtime.databasePools;
-const database = {
-  ...databasePools,
-  ...await import("../../../../packages/server/src/core/database/advisory-locks.ts")
-};
+  const databasePools = runtime.databasePools;
+  const database = {
+    ...databasePools,
+    ...(await import("../../../../packages/server/src/core/database/advisory-locks.ts"))
+  };
 
-const ingestionSessionRepository = await import(
-  "../../../../packages/server/src/images/ingestion/repository.ts"
-);
-const ingestionSessionView = await import("../../../../packages/server/src/images/ingestion/queue/session-view.ts");
-const ingestionSessionTransitions = await import(
-  "../../../../packages/server/src/images/ingestion/sessions/transitions.ts"
-);
-const ingestionCommitIntent = await import("../../../../packages/server/src/images/ingestion/commit/intent.ts");
-const ingestionCommitCompletion = await import(
-  "../../../../packages/server/src/images/ingestion/commit/completion.ts"
-);
-const ingestionCommitConflictRecovery = await import(
-  "../../../../packages/server/src/images/ingestion/commit/conflict-recovery.ts"
-);
-const apiError = await import("../../../../packages/server/src/core/api-error.ts");
-const ingestionIrreversibleCoordinator = await import(
-  "../../../../packages/server/src/images/ingestion/execution/irreversible-coordinator.ts"
-);
-const ingestionTokenService = await import("../../../../packages/server/src/images/ingestion/sessions/token-service.ts");
-const ingestionActionScope = await import("../../../../packages/server/src/images/ingestion/queue/action-scope.ts");
-const ingestionActionProtocol = await import("../../../../packages/server/src/images/ingestion/queue/action-protocol.ts");
-const ingestionQueueSnapshot = await import("../../../../packages/server/src/images/ingestion/queue/snapshot.ts");
-const ingestionQueueAction = await import("../../../../packages/server/src/images/ingestion/queue/action.ts");
-const ingestionSessionUpdate = await import("../../../../packages/server/src/images/ingestion/queue/session-update.ts");
-const ingestionSessionIdentity = await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
-const ingestionSessionProjection = await import(
-  "../../../../packages/server/src/images/ingestion/sessions/projection.ts"
-);
+  const ingestionSessionRepository =
+    await import("../../../../packages/server/src/images/ingestion/repository.ts");
+  const ingestionSessionView =
+    await import("../../../../packages/server/src/images/ingestion/queue/session-view.ts");
+  const ingestionSessionTransitions =
+    await import("../../../../packages/server/src/images/ingestion/sessions/transitions.ts");
+  const ingestionCommitIntent =
+    await import("../../../../packages/server/src/images/ingestion/commit/intent.ts");
+  const ingestionCommitCompletion =
+    await import("../../../../packages/server/src/images/ingestion/commit/completion.ts");
+  const ingestionCommitConflictRecovery =
+    await import("../../../../packages/server/src/images/ingestion/commit/conflict-recovery.ts");
+  const apiError = await import("../../../../packages/server/src/core/api-error.ts");
+  const ingestionIrreversibleCoordinator =
+    await import("../../../../packages/server/src/images/ingestion/execution/irreversible-coordinator.ts");
+  const ingestionTokenService =
+    await import("../../../../packages/server/src/images/ingestion/sessions/token-service.ts");
+  const ingestionActionScope =
+    await import("../../../../packages/server/src/images/ingestion/queue/action-scope.ts");
+  const ingestionActionProtocol =
+    await import("../../../../packages/server/src/images/ingestion/queue/action-protocol.ts");
+  const ingestionQueueSnapshot =
+    await import("../../../../packages/server/src/images/ingestion/queue/snapshot.ts");
+  const ingestionQueueAction =
+    await import("../../../../packages/server/src/images/ingestion/queue/action.ts");
+  const ingestionSessionUpdate =
+    await import("../../../../packages/server/src/images/ingestion/queue/session-update.ts");
+  const ingestionSessionIdentity =
+    await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
+  const ingestionSessionProjection =
+    await import("../../../../packages/server/src/images/ingestion/sessions/projection.ts");
 
-const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
-const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
-const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate: importCanonicalWithoutHash,
-  preparedTemplate: realPrepared, discardOrderProbe } = await createIngestionScenarioFixture(runtime);
+  const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
+  const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
+  const {
+    ingestionRepository,
+    displayOrderKey,
+    ingestionMetadata,
+    importTemplate: importCanonicalWithoutHash,
+    preparedTemplate: realPrepared,
+    discardOrderProbe
+  } = await createIngestionScenarioFixture(runtime);
   const actionOwner = "current-queue-action-" + randomUUID();
   const actionSession = { id: "queue-action-session", username: actionOwner };
   let actionPosition = 200;
-  function createActionReadySession(label: string, makeReady?: true): Promise<ReturnType<typeof preparedSession>>;
-  function createActionReadySession(label: string, makeReady: false): Promise<IngestionSessionSnapshot>;
+  function createActionReadySession(
+    label: string,
+    makeReady?: true
+  ): Promise<ReturnType<typeof preparedSession>>;
+  function createActionReadySession(
+    label: string,
+    makeReady: false
+  ): Promise<IngestionSessionSnapshot>;
   async function createActionReadySession(label: string, makeReady = true) {
     const sessionId = ingestionSessionIdentity.createIngestionSessionId(
       actionOwner,
@@ -77,16 +99,18 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
       metadata: { ...ingestionMetadata, title: label }
     };
     const acceptedAt = Date.now();
-    const queued = activeSession((await ingestionRepository.acceptImportSession({
-      ...withoutHash,
-      semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-        withoutHash
-      )
-    }, displayOrderKey(
-      sessionId,
-      batchPosition,
-      acceptedAt
-    ), acceptedAt)).session);
+    const queued = activeSession(
+      (
+        await ingestionRepository.acceptImportSession(
+          {
+            ...withoutHash,
+            semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(withoutHash)
+          },
+          displayOrderKey(sessionId, batchPosition, acceptedAt),
+          acceptedAt
+        )
+      ).session
+    );
     if (!makeReady) return queued;
     const generation = coreUuid.randomUuidV7();
     const executionToken = coreUuid.randomUuidV7();
@@ -96,18 +120,22 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
       md5: createHash("md5").update(label).digest("hex"),
       generation
     };
-    return preparedSession((await ingestionRepository.mutateSemantic(
-      queued,
-      queued.version,
-      ingestionSessionTransitions.semanticIngestionSession(queued, {
-        status: "ready" as const,
-        phase: "ready" as const,
-        message: "ready",
-        progress: 100,
-        execution_token: "",
-        prepared
-      })
-    )).session);
+    return preparedSession(
+      (
+        await ingestionRepository.mutateSemantic(
+          queued,
+          queued.version,
+          ingestionSessionTransitions.semanticIngestionSession(queued, {
+            status: "ready" as const,
+            phase: "ready" as const,
+            message: "ready",
+            progress: 100,
+            execution_token: "",
+            prepared
+          })
+        )
+      ).session
+    );
   }
   const actionTokens = new ingestionTokenService.IngestionTokenService({
     rootKey: new Uint8Array(32).fill(83)
@@ -122,30 +150,22 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
-    [
-        actionFirst.image_id,
-        actionOwner,
-        actionFirst.prepared.md5
-      ]
+    [actionFirst.image_id, actionOwner, actionFirst.prepared.md5]
   );
   const activePgStatus = await ingestionSessionView.readIngestionStatuses(
     ingestionRepository,
     actionOwner,
-    [{
-      session_id: actionFirst.session_id,
-      image_id: actionFirst.image_id
-    }]
+    [
+      {
+        session_id: actionFirst.session_id,
+        image_id: actionFirst.image_id
+      }
+    ]
   );
   assert.equal(activePgStatus[0].status, "completed");
   assert.equal(activePgStatus[0].redis_status, "active");
-  assert.equal(
-    activePgStatus[0].redis_last_semantic_revision,
-    actionFirst.last_semantic_revision
-  );
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id=$1",
-    [actionFirst.image_id]
-  );
+  assert.equal(activePgStatus[0].redis_last_semantic_revision, actionFirst.last_semantic_revision);
+  await database.pool.query("DELETE FROM metadata WHERE id=$1", [actionFirst.image_id]);
   const actionPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
     repository: ingestionRepository,
     tokens: actionTokens,
@@ -155,18 +175,15 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     offset: 0,
     limit: 10
   });
-  const ascendingActionAfterFrozenWatermark = await createActionReadySession(
-    "after-frozen-watermark"
-  );
+  const ascendingActionAfterFrozenWatermark =
+    await createActionReadySession("after-frozen-watermark");
   assert.ok(
-    ascendingActionAfterFrozenWatermark.accepted_order
-      > actionPage.last_accepted_order,
+    ascendingActionAfterFrozenWatermark.accepted_order > actionPage.last_accepted_order,
     "冻结水位后新增任务必须取得更大的 accepted_order"
   );
   const limitedActionRepository = repositoryWithOverrides(ingestionRepository, {
-    scanAction: (owner, queue, maximumOrder, cursor) => (
-      ingestionRepository.scanAction(owner, queue, maximumOrder, cursor, 1)
-    ),
+    scanAction: (owner, queue, maximumOrder, cursor) =>
+      ingestionRepository.scanAction(owner, queue, maximumOrder, cursor, 1),
     readSession: (...args) => ingestionRepository.readSession(...args),
     mutateSemantic: (...args) => ingestionRepository.mutateSemantic(...args)
   });
@@ -177,87 +194,80 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     action_watermark: actionPage.action_watermark,
     metadata: { title: "bounded action" }
   };
-  const runAction = (repository: Partial<IngestionSessionRepository>, request: Parameters<typeof runIngestionQueueAction>[0]["request"]) => ingestionQueueAction
-    .runIngestionQueueAction({
+  const runAction = (
+    repository: Partial<IngestionSessionRepository>,
+    request: Parameters<typeof runIngestionQueueAction>[0]["request"]
+  ) =>
+    ingestionQueueAction.runIngestionQueueAction({
       repository: repositoryWithOverrides(ingestionRepository, repository),
-      coordinator: new (
-        ingestionIrreversibleCoordinator.IngestionIrreversibleCoordinator
-      )(),
+      coordinator: new ingestionIrreversibleCoordinator.IngestionIrreversibleCoordinator(),
       tokens: actionTokens,
       session: actionSession,
       actionScope: actionScope.id,
       request,
       abortActive: () => undefined
     });
-  const firstActionBatch = await runAction(
-    limitedActionRepository,
-    applyActionRequest
-  );
+  const firstActionBatch = await runAction(limitedActionRepository, applyActionRequest);
   assert.equal(firstActionBatch.processed, 1);
-  assert.equal(
-    firstActionBatch.changed,
-    1,
-    JSON.stringify(firstActionBatch)
-  );
+  assert.equal(firstActionBatch.changed, 1, JSON.stringify(firstActionBatch));
   assert.ok(firstActionBatch.continuation);
   assert.equal(firstActionBatch.items[0].session_id, actionFirst.session_id);
-  const initialActionCursor = ingestionActionProtocol
-    .resolveIngestionQueueActionCursor({
-      request: applyActionRequest,
-      actionScope: actionScope.id,
-      session: actionSession,
-      tokens: actionTokens
-    });
-  const continuedActionCursor = ingestionActionProtocol
-    .resolveIngestionQueueActionCursor({
-      request: {
-        ...applyActionRequest,
-        continuation: firstActionBatch.continuation
-      },
-      actionScope: actionScope.id,
-      session: actionSession,
-      tokens: actionTokens
-    });
+  const initialActionCursor = ingestionActionProtocol.resolveIngestionQueueActionCursor({
+    request: applyActionRequest,
+    actionScope: actionScope.id,
+    session: actionSession,
+    tokens: actionTokens
+  });
+  const continuedActionCursor = ingestionActionProtocol.resolveIngestionQueueActionCursor({
+    request: {
+      ...applyActionRequest,
+      continuation: firstActionBatch.continuation
+    },
+    actionScope: actionScope.id,
+    session: actionSession,
+    tokens: actionTokens
+  });
   assert.ok(continuedActionCursor.cursor > initialActionCursor.cursor);
   assert.ok(
-    continuedActionCursor.cursor
-      <= continuedActionCursor.watermark.max_accepted_order,
+    continuedActionCursor.cursor <= continuedActionCursor.watermark.max_accepted_order,
     "continuation 必须在冻结水位内单调向上推进"
   );
-  const actionFirstAfterFirst = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    actionFirst.session_id
-  ));
-  await assert.rejects(runAction(limitedActionRepository, {
-    ...applyActionRequest,
-    continuation: firstActionBatch.continuation,
-    metadata: { title: "tampered action" }
-  }), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_action_continuation_invalid");
+  const actionFirstAfterFirst = activeSession(
+    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
+  );
+  await assert.rejects(
+    runAction(limitedActionRepository, {
+      ...applyActionRequest,
+      continuation: firstActionBatch.continuation,
+      metadata: { title: "tampered action" }
+    }),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_action_continuation_invalid"
+  );
   const editAfterLostResponse = await ingestionSessionUpdate.updateIngestionSessions(
     ingestionRepository,
     actionOwner,
-    [{
-      session_id: actionFirstAfterFirst.session_id,
-      image_id: actionFirstAfterFirst.image_id,
-      expected_version: actionFirstAfterFirst.version,
-      metadata: {
-        ...actionFirstAfterFirst.metadata,
-        title: "newer edit after lost action response"
+    [
+      {
+        session_id: actionFirstAfterFirst.session_id,
+        image_id: actionFirstAfterFirst.image_id,
+        expected_version: actionFirstAfterFirst.version,
+        metadata: {
+          ...actionFirstAfterFirst.metadata,
+          title: "newer edit after lost action response"
+        }
       }
-    }]
+    ]
   );
   assert.equal(editAfterLostResponse[0].status, "changed");
-  const actionFirstAfterEdit = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    actionFirst.session_id
-  ));
-  const actionRevisionAfterEdit = (
-    await ingestionRepository.snapshot(actionOwner, "import", 0, 0)
-  ).metadata.revision;
-  const retriedFirstActionBatch = await runAction(
-    limitedActionRepository,
-    applyActionRequest
+  const actionFirstAfterEdit = activeSession(
+    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
   );
+  const actionRevisionAfterEdit = (await ingestionRepository.snapshot(actionOwner, "import", 0, 0))
+    .metadata.revision;
+  const retriedFirstActionBatch = await runAction(limitedActionRepository, applyActionRequest);
   assert.deepEqual(
     retriedFirstActionBatch,
     firstActionBatch,
@@ -265,23 +275,18 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   );
   assert.ok(retriedFirstActionBatch.continuation);
   assert.equal(
-    (activeSession(await ingestionRepository.readSession(
-      actionOwner,
-      actionFirst.session_id
-    ))).version,
+    activeSession(await ingestionRepository.readSession(actionOwner, actionFirst.session_id))
+      .version,
     actionFirstAfterEdit.version,
     "首批响应丢失重试不得覆盖其后编辑或推进 version"
   );
   assert.equal(
-    (activeSession(await ingestionRepository.readSession(
-      actionOwner,
-      actionFirst.session_id
-    ))).metadata.title,
+    activeSession(await ingestionRepository.readSession(actionOwner, actionFirst.session_id))
+      .metadata.title,
     "newer edit after lost action response"
   );
   assert.equal(
-    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0))
-      .metadata.revision,
+    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0)).metadata.revision,
     actionRevisionAfterEdit,
     "首批响应丢失重试不得在后续编辑后推进 queue revision"
   );
@@ -293,11 +298,12 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   assert.equal(secondActionBatch.changed, 1);
   assert.equal(secondActionBatch.items[0].session_id, actionSecond.session_id);
   assert.equal(secondActionBatch.continuation, undefined);
-  const ascendingActionAfterFrozenWatermarkResult =
-    activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    ascendingActionAfterFrozenWatermark.session_id
-  ));
+  const ascendingActionAfterFrozenWatermarkResult = activeSession(
+    await ingestionRepository.readSession(
+      actionOwner,
+      ascendingActionAfterFrozenWatermark.session_id
+    )
+  );
   assert.equal(
     ascendingActionAfterFrozenWatermarkResult.metadata.title,
     ascendingActionAfterFrozenWatermark.metadata.title,
@@ -307,10 +313,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     ascendingActionAfterFrozenWatermarkResult.version,
     ascendingActionAfterFrozenWatermark.version
   );
-  await discardOrderProbe(
-    ascendingActionAfterFrozenWatermarkResult,
-    Date.now()
-  );
+  await discardOrderProbe(ascendingActionAfterFrozenWatermarkResult, Date.now());
 
   const noOpActionPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
     repository: ingestionRepository,
@@ -321,141 +324,113 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     offset: 0,
     limit: 10
   });
-  const noOpActionCurrent = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    actionFirst.session_id
-  ));
+  const noOpActionCurrent = activeSession(
+    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
+  );
   const noOpVersionBefore = noOpActionCurrent.version;
-  const noOpRevisionBefore = (
-    await ingestionRepository.snapshot(actionOwner, "import", 0, 0)
-  ).metadata.revision;
+  const noOpRevisionBefore = (await ingestionRepository.snapshot(actionOwner, "import", 0, 0))
+    .metadata.revision;
   const noOpActionRequest = {
     ...applyActionRequest,
     action_request_id: "00000000-0000-7004-8000-000000000090",
     action_watermark: noOpActionPage.action_watermark,
     metadata: { title: noOpActionCurrent.metadata.title }
   };
-  const noOpActionResult = await runAction(
-    limitedActionRepository,
-    noOpActionRequest
-  );
+  const noOpActionResult = await runAction(limitedActionRepository, noOpActionRequest);
   assert.equal(noOpActionResult.items[0].status, "unchanged");
-  assert.equal((activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    actionFirst.session_id
-  ))).version, noOpVersionBefore);
-  assert.equal((await ingestionRepository.snapshot(
-    actionOwner,
-    "import",
-    0,
-    0
-  )).metadata.revision, noOpRevisionBefore);
+  assert.equal(
+    activeSession(await ingestionRepository.readSession(actionOwner, actionFirst.session_id))
+      .version,
+    noOpVersionBefore
+  );
+  assert.equal(
+    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0)).metadata.revision,
+    noOpRevisionBefore
+  );
 
   const sameRevisionNewAction = {
     ...noOpActionRequest,
     action_request_id: "00000000-0000-7004-8000-000000000091",
     metadata: { title: "new defaults at the same revision" }
   };
-  const sameRevisionNewResult = await runAction(
-    limitedActionRepository,
-    sameRevisionNewAction
-  );
+  const sameRevisionNewResult = await runAction(limitedActionRepository, sameRevisionNewAction);
   assert.equal(sameRevisionNewResult.items[0].status, "changed");
-  const afterSameRevisionNewAction = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    actionFirst.session_id
-  ));
+  const afterSameRevisionNewAction = activeSession(
+    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
+  );
   assert.equal(
     afterSameRevisionNewAction.metadata.title,
     "new defaults at the same revision",
     "纯 no-op 不推进 revision，因此同水位后执行操作仍可生效"
   );
-  const revisionAfterSameRevisionNewAction = (await ingestionRepository.snapshot(
-    actionOwner,
-    "import",
-    0,
-    0
-  )).metadata.revision;
-  const retriedOlderNoOpAction = await runAction(
-    limitedActionRepository,
-    noOpActionRequest
-  );
+  const revisionAfterSameRevisionNewAction = (
+    await ingestionRepository.snapshot(actionOwner, "import", 0, 0)
+  ).metadata.revision;
+  const retriedOlderNoOpAction = await runAction(limitedActionRepository, noOpActionRequest);
   assert.equal(retriedOlderNoOpAction.items[0].status, "changed");
-  const afterRetriedOlderAction = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    actionFirst.session_id
-  ));
+  const afterRetriedOlderAction = activeSession(
+    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
+  );
   assert.equal(
     afterRetriedOlderAction.metadata.title,
     noOpActionCurrent.metadata.title,
     "应用到全部只按执行顺序 CAS，不按旧点击水位后的语义修订筛选"
   );
-  assert.ok((await ingestionRepository.snapshot(
-    actionOwner,
-    "import",
-    0,
-    0
-  )).metadata.revision > revisionAfterSameRevisionNewAction);
+  assert.ok(
+    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0)).metadata.revision >
+      revisionAfterSameRevisionNewAction
+  );
 
   const editAfterNoOpAction = await ingestionSessionUpdate.updateIngestionSessions(
     ingestionRepository,
     actionOwner,
-    [{
-      session_id: afterRetriedOlderAction.session_id,
-      image_id: afterRetriedOlderAction.image_id,
-      expected_version: afterRetriedOlderAction.version,
-      metadata: {
-        ...afterRetriedOlderAction.metadata,
-        title: "edit after newer action response loss"
+    [
+      {
+        session_id: afterRetriedOlderAction.session_id,
+        image_id: afterRetriedOlderAction.image_id,
+        expected_version: afterRetriedOlderAction.version,
+        metadata: {
+          ...afterRetriedOlderAction.metadata,
+          title: "edit after newer action response loss"
+        }
       }
-    }]
+    ]
   );
   assert.equal(editAfterNoOpAction[0].status, "changed");
-  const noOpAfterEdit = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    actionFirst.session_id
-  ));
-  const noOpRevisionAfterEdit = (await ingestionRepository.snapshot(
-    actionOwner,
-    "import",
-    0,
-    0
-  )).metadata.revision;
-  const retriedNoOpAction = await runAction(
-    limitedActionRepository,
-    sameRevisionNewAction
+  const noOpAfterEdit = activeSession(
+    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
   );
+  const noOpRevisionAfterEdit = (await ingestionRepository.snapshot(actionOwner, "import", 0, 0))
+    .metadata.revision;
+  const retriedNoOpAction = await runAction(limitedActionRepository, sameRevisionNewAction);
   assert.equal(retriedNoOpAction.items[0].status, "changed");
-  assert.equal((activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    actionFirst.session_id
-  ))).metadata.title, "new defaults at the same revision");
-  assert.ok((activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    actionFirst.session_id
-  ))).version > noOpAfterEdit.version);
-  assert.ok((await ingestionRepository.snapshot(
-    actionOwner,
-    "import",
-    0,
-    0
-  )).metadata.revision > noOpRevisionAfterEdit);
+  assert.equal(
+    activeSession(await ingestionRepository.readSession(actionOwner, actionFirst.session_id))
+      .metadata.title,
+    "new defaults at the same revision"
+  );
+  assert.ok(
+    activeSession(await ingestionRepository.readSession(actionOwner, actionFirst.session_id))
+      .version > noOpAfterEdit.version
+  );
+  assert.ok(
+    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0)).metadata.revision >
+      noOpRevisionAfterEdit
+  );
 
   const atomicActionSession = await createActionReadySession("action-order");
-  const atomicActionPage = await ingestionQueueSnapshot
-    .readStableIngestionQueueSnapshot({
-      repository: ingestionRepository,
-      tokens: actionTokens,
-      session: actionSession,
-      actionScope: actionScope.id,
-      queue: "import" as const,
-      offset: 0,
-      limit: 10
-    });
-  const atomicStaleSnapshot = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    atomicActionSession.session_id
-  ));
+  const atomicActionPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
+    repository: ingestionRepository,
+    tokens: actionTokens,
+    session: actionSession,
+    actionScope: actionScope.id,
+    queue: "import" as const,
+    offset: 0,
+    limit: 10
+  });
+  const atomicStaleSnapshot = activeSession(
+    await ingestionRepository.readSession(actionOwner, atomicActionSession.session_id)
+  );
   const staleActionRepository = repositoryWithOverrides(ingestionRepository, {
     scanAction: async () => ({
       items: [atomicStaleSnapshot],
@@ -471,10 +446,7 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     action_watermark: atomicActionPage.action_watermark,
     metadata: { title: atomicStaleSnapshot.metadata.title }
   };
-  const atomicNewerResult = await runAction(
-    staleActionRepository,
-    atomicNewerRequest
-  );
+  const atomicNewerResult = await runAction(staleActionRepository, atomicNewerRequest);
   assert.equal(atomicNewerResult.items[0].status, "unchanged");
 
   const atomicOlderResult = await runAction(staleActionRepository, {
@@ -483,81 +455,85 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     metadata: { title: "later smaller-id action must apply" }
   });
   assert.equal(atomicOlderResult.items[0].status, "changed");
-  let atomicCurrent = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    atomicActionSession.session_id
-  ));
+  let atomicCurrent = activeSession(
+    await ingestionRepository.readSession(actionOwner, atomicActionSession.session_id)
+  );
   assert.equal(
     atomicCurrent.metadata.title,
     "later smaller-id action must apply",
     "同水位内没有语义变化时，后执行操作不得按跨客户端 UUID 大小丢弃"
   );
 
-  await assert.rejects(runAction(staleActionRepository, {
-    ...atomicNewerRequest,
-    metadata: { title: "same id with different payload must lose" }
-  }), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_action_request_conflict");
-  atomicCurrent = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    atomicActionSession.session_id
-  ));
-  assert.equal(
-    atomicCurrent.metadata.title,
-    "later smaller-id action must apply"
+  await assert.rejects(
+    runAction(staleActionRepository, {
+      ...atomicNewerRequest,
+      metadata: { title: "same id with different payload must lose" }
+    }),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_action_request_conflict"
   );
+  atomicCurrent = activeSession(
+    await ingestionRepository.readSession(actionOwner, atomicActionSession.session_id)
+  );
+  assert.equal(atomicCurrent.metadata.title, "later smaller-id action must apply");
 
-  const businessEditAfterAction = activeResult(await ingestionRepository.mutateSemantic(
-    atomicCurrent,
-    atomicCurrent.version,
-    ingestionSessionTransitions.semanticIngestionSession(atomicCurrent, {
-      metadata: {
-        ...atomicCurrent.metadata,
-        description: "ordinary edit after concurrent action"
-      }
-    })
-  ));
+  const businessEditAfterAction = activeResult(
+    await ingestionRepository.mutateSemantic(
+      atomicCurrent,
+      atomicCurrent.version,
+      ingestionSessionTransitions.semanticIngestionSession(atomicCurrent, {
+        metadata: {
+          ...atomicCurrent.metadata,
+          description: "ordinary edit after concurrent action"
+        }
+      })
+    )
+  );
   assert.equal(businessEditAfterAction.changed, true);
   assert.equal(
     businessEditAfterAction.session.metadata.description,
     "ordinary edit after concurrent action"
   );
-  await assert.rejects(runAction(
-    staleActionRepository,
-    {
+  await assert.rejects(
+    runAction(staleActionRepository, {
       ...atomicNewerRequest,
       metadata: { title: "same id after version advance must lose" }
-    }
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_action_request_conflict");
-  const retiredAtomicAction = discardedResult(await ingestionRepository.mutateSemantic(
-    businessEditAfterAction.session,
-    businessEditAfterAction.session.version,
-    ingestionSessionTransitions.discardedIngestionReceipt(
+    }),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_action_request_conflict"
+  );
+  const retiredAtomicAction = discardedResult(
+    await ingestionRepository.mutateSemantic(
       businessEditAfterAction.session,
-      Date.now()
+      businessEditAfterAction.session.version,
+      ingestionSessionTransitions.discardedIngestionReceipt(
+        businessEditAfterAction.session,
+        Date.now()
+      )
     )
-  ));
+  );
   await ingestionRepository.deleteSession(
     retiredAtomicAction.session,
     retiredAtomicAction.session.version
   );
 
-  const orderedActionSession = await createActionReadySession(
-    "ordered-action-cas"
+  const orderedActionSession = await createActionReadySession("ordered-action-cas");
+  const orderedActionPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
+    repository: ingestionRepository,
+    tokens: actionTokens,
+    session: actionSession,
+    actionScope: actionScope.id,
+    queue: "import" as const,
+    offset: 0,
+    limit: 10
+  });
+  const orderedStaleSnapshot = activeSession(
+    await ingestionRepository.readSession(actionOwner, orderedActionSession.session_id)
   );
-  const orderedActionPage = await ingestionQueueSnapshot
-    .readStableIngestionQueueSnapshot({
-      repository: ingestionRepository,
-      tokens: actionTokens,
-      session: actionSession,
-      actionScope: actionScope.id,
-      queue: "import" as const,
-      offset: 0,
-      limit: 10
-    });
-  const orderedStaleSnapshot = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    orderedActionSession.session_id
-  ));
   const orderedStaleRepository = repositoryWithOverrides(ingestionRepository, {
     scanAction: async () => ({
       items: [orderedStaleSnapshot],
@@ -573,25 +549,23 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     action_watermark: orderedActionPage.action_watermark,
     metadata: { title: "smaller action landed first" }
   };
-  const orderedSmallerResult = await runAction(
-    orderedStaleRepository,
-    orderedSmallerRequest
-  );
+  const orderedSmallerResult = await runAction(orderedStaleRepository, orderedSmallerRequest);
   assert.equal(orderedSmallerResult.items[0].status, "changed");
-  const orderedAfterSmaller = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    orderedActionSession.session_id
-  ));
-  const editBetweenOrderedActions = activeResult(await ingestionRepository.mutateSemantic(
-    orderedAfterSmaller,
-    orderedAfterSmaller.version,
-    ingestionSessionTransitions.semanticIngestionSession(orderedAfterSmaller, {
-      metadata: {
-        ...orderedAfterSmaller.metadata,
-        description: "ordinary edit between ordered actions"
-      }
-    })
-  ));
+  const orderedAfterSmaller = activeSession(
+    await ingestionRepository.readSession(actionOwner, orderedActionSession.session_id)
+  );
+  const editBetweenOrderedActions = activeResult(
+    await ingestionRepository.mutateSemantic(
+      orderedAfterSmaller,
+      orderedAfterSmaller.version,
+      ingestionSessionTransitions.semanticIngestionSession(orderedAfterSmaller, {
+        metadata: {
+          ...orderedAfterSmaller.metadata,
+          description: "ordinary edit between ordered actions"
+        }
+      })
+    )
+  );
   assert.equal(editBetweenOrderedActions.changed, true);
   const orderedLargerResult = await runAction(orderedStaleRepository, {
     ...orderedSmallerRequest,
@@ -599,75 +573,72 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     metadata: { title: "larger action must win" }
   });
   assert.equal(orderedLargerResult.items[0].status, "changed");
-  const orderedCurrent = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    orderedActionSession.session_id
-  ));
+  const orderedCurrent = activeSession(
+    await ingestionRepository.readSession(actionOwner, orderedActionSession.session_id)
+  );
   assert.equal(orderedCurrent.metadata.title, "larger action must win");
   assert.equal(
     orderedCurrent.metadata.description,
     "ordinary edit between ordered actions",
     "后执行全局操作应在最新 canonical 上合并，保留未被 patch 覆盖的字段"
   );
-  const retiredOrderedAction = discardedResult(await ingestionRepository.mutateSemantic(
-    orderedCurrent,
-    orderedCurrent.version,
-    ingestionSessionTransitions.discardedIngestionReceipt(
+  const retiredOrderedAction = discardedResult(
+    await ingestionRepository.mutateSemantic(
       orderedCurrent,
-      Date.now()
+      orderedCurrent.version,
+      ingestionSessionTransitions.discardedIngestionReceipt(orderedCurrent, Date.now())
     )
-  ));
+  );
   await ingestionRepository.deleteSession(
     retiredOrderedAction.session,
     retiredOrderedAction.session.version
   );
 
-  const actionFirstCurrent = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    actionFirst.session_id
-  ));
+  const actionFirstCurrent = activeSession(
+    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
+  );
   const noOpUpdate = await ingestionSessionUpdate.updateIngestionSessions(
     ingestionRepository,
     actionOwner,
-    [{
-      session_id: actionFirstCurrent.session_id,
-      image_id: actionFirstCurrent.image_id,
-      expected_version: 1,
-      metadata: actionFirstCurrent.metadata
-    }]
+    [
+      {
+        session_id: actionFirstCurrent.session_id,
+        image_id: actionFirstCurrent.image_id,
+        expected_version: 1,
+        metadata: actionFirstCurrent.metadata
+      }
+    ]
   );
   assert.equal(noOpUpdate[0].status, "unchanged");
   assert.equal(noOpUpdate[0].version, actionFirstCurrent.version);
   const changedUpdate = await ingestionSessionUpdate.updateIngestionSessions(
     ingestionRepository,
     actionOwner,
-    [{
-      session_id: actionFirstCurrent.session_id,
-      image_id: actionFirstCurrent.image_id,
-      expected_version: actionFirstCurrent.version,
-      metadata: { ...actionFirstCurrent.metadata, description: "saved draft" }
-    }]
+    [
+      {
+        session_id: actionFirstCurrent.session_id,
+        image_id: actionFirstCurrent.image_id,
+        expected_version: actionFirstCurrent.version,
+        metadata: { ...actionFirstCurrent.metadata, description: "saved draft" }
+      }
+    ]
   );
   assert.equal(changedUpdate[0].status, "changed");
 
-  const commitActionPage = await ingestionQueueSnapshot
-    .readStableIngestionQueueSnapshot({
-      repository: ingestionRepository,
-      tokens: actionTokens,
-      session: actionSession,
-      actionScope: actionScope.id,
-      queue: "import" as const,
-      offset: 0,
-      limit: 10
-    });
-  const actionSecondBeforeStale = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    actionSecond.session_id
-  ));
-  await ingestionSessionUpdate.updateIngestionSessions(
-    ingestionRepository,
-    actionOwner,
-    [{
+  const commitActionPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
+    repository: ingestionRepository,
+    tokens: actionTokens,
+    session: actionSession,
+    actionScope: actionScope.id,
+    queue: "import" as const,
+    offset: 0,
+    limit: 10
+  });
+  const actionSecondBeforeStale = activeSession(
+    await ingestionRepository.readSession(actionOwner, actionSecond.session_id)
+  );
+  await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [
+    {
       session_id: actionSecondBeforeStale.session_id,
       image_id: actionSecondBeforeStale.image_id,
       expected_version: actionSecondBeforeStale.version,
@@ -675,8 +646,8 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
         ...actionSecondBeforeStale.metadata,
         description: "changed after watermark"
       }
-    }]
-  );
+    }
+  ]);
   const actionAfterWatermark = await createActionReadySession("after-watermark");
   const commitActionRequest = {
     queue: "import" as const,
@@ -684,44 +655,33 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     action: "commit_ready" as const,
     action_watermark: commitActionPage.action_watermark
   };
-  const commitActionResult = await runAction(
-    ingestionRepository,
-    commitActionRequest
-  );
+  const commitActionResult = await runAction(ingestionRepository, commitActionRequest);
   assert.equal(commitActionResult.changed, 1);
   assert.equal(
-    commitActionResult.items.filter((item) => (
-      item.code === "ingestion_action_state_changed"
-    )).length,
+    commitActionResult.items.filter((item) => item.code === "ingestion_action_state_changed")
+      .length,
     1,
     "watermark 后发生语义变化的 ready 项必须跳过"
   );
   assert.equal(
-    (activeSession(await ingestionRepository.readSession(
-      actionOwner,
-      actionAfterWatermark.session_id
-    ))).status,
+    activeSession(
+      await ingestionRepository.readSession(actionOwner, actionAfterWatermark.session_id)
+    ).status,
     "ready",
     "watermark 后新建的 canonical 不得进入旧全队列动作"
   );
   const actionRevisionAfterCommit = (
     await ingestionRepository.snapshot(actionOwner, "import", 0, 0)
   ).metadata.revision;
-  const retriedCommitAction = await runAction(
-    ingestionRepository,
-    commitActionRequest
-  );
+  const retriedCommitAction = await runAction(ingestionRepository, commitActionRequest);
   assert.equal(retriedCommitAction.failed, 0);
   assert.equal(
-    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0))
-      .metadata.revision,
+    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0)).metadata.revision,
     actionRevisionAfterCommit,
     "相同全队列提交 action ID 重试必须语义 no-op"
   );
 
-  const duplicateRecoveryReady = await createActionReadySession(
-    "duplicate-recovery"
-  );
+  const duplicateRecoveryReady = await createActionReadySession("duplicate-recovery");
   const duplicateRecoveryRequest = {
     session_id: duplicateRecoveryReady.session_id,
     image_id: duplicateRecoveryReady.image_id,
@@ -731,30 +691,28 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     duplicate_decision: "upload" as const,
     metadata: duplicateRecoveryReady.metadata
   };
-  assert.equal((await ingestionCommitIntent.acceptIngestionCommitIntents(
-    ingestionRepository,
-    actionOwner,
-    [duplicateRecoveryRequest]
-  ))[0].status, "accepted");
-  const duplicateRecoveryCommitting = committingSession(await ingestionRepository.readSession(
-    actionOwner,
-    duplicateRecoveryReady.session_id
-  ));
+  assert.equal(
+    (
+      await ingestionCommitIntent.acceptIngestionCommitIntents(ingestionRepository, actionOwner, [
+        duplicateRecoveryRequest
+      ])
+    )[0].status,
+    "accepted"
+  );
+  const duplicateRecoveryCommitting = committingSession(
+    await ingestionRepository.readSession(actionOwner, duplicateRecoveryReady.session_id)
+  );
   const duplicateRecoveryImageId = coreUuid.randomUuidV7();
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
-    [
-        duplicateRecoveryImageId,
-        actionOwner,
-        duplicateRecoveryReady.prepared.md5
-      ]
+    [duplicateRecoveryImageId, actionOwner, duplicateRecoveryReady.prepared.md5]
   );
   const duplicateRecoverySummaryBefore = (
     await ingestionRepository.snapshot(actionOwner, "import", 0, 0)
   ).metadata;
-  assert.equal(await ingestionCommitConflictRecovery
-    .recoverIngestionCommitDuplicateConflict(
+  assert.equal(
+    await ingestionCommitConflictRecovery.recoverIngestionCommitDuplicateConflict(
       ingestionRepository,
       duplicateRecoveryCommitting,
       new apiError.ApiError(
@@ -762,20 +720,18 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
         "ingestion_duplicate_conflict",
         "duplicate appeared under the content lock"
       )
-    ), true);
-  const duplicateRecoveryCurrent = preparedSession(await ingestionRepository.readSession(
-    actionOwner,
-    duplicateRecoveryReady.session_id
-  ));
+    ),
+    true
+  );
+  const duplicateRecoveryCurrent = preparedSession(
+    await ingestionRepository.readSession(actionOwner, duplicateRecoveryReady.session_id)
+  );
   assert.equal(duplicateRecoveryCurrent.status, "ready");
   assert.equal(duplicateRecoveryCurrent.prepared.duplicate_count, 1);
   assert.equal(duplicateRecoveryCurrent.duplicate_decision, undefined);
   assert.equal(duplicateRecoveryCurrent.commit, undefined);
   assert.equal(duplicateRecoveryCurrent.error, undefined);
-  assert.equal(
-    duplicateRecoveryCurrent.version,
-    duplicateRecoveryCommitting.version + 1
-  );
+  assert.equal(duplicateRecoveryCurrent.version, duplicateRecoveryCommitting.version + 1);
   const duplicateRecoverySummaryAfter = (
     await ingestionRepository.snapshot(actionOwner, "import", 0, 0)
   ).metadata;
@@ -788,93 +744,83 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     duplicateRecoverySummaryBefore.duplicate_pending + 1,
     "内容锁后出现的重复项必须回到可确认状态而不是冻结为提交失败"
   );
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id=$1",
-    [duplicateRecoveryImageId]
-  );
+  await database.pool.query("DELETE FROM metadata WHERE id=$1", [duplicateRecoveryImageId]);
 
-  const duplicateIntentReady = await createActionReadySession(
-    "duplicate-before-intent"
-  );
+  const duplicateIntentReady = await createActionReadySession("duplicate-before-intent");
   const duplicateIntentImageId = coreUuid.randomUuidV7();
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
-    [
-        duplicateIntentImageId,
-        actionOwner,
-        duplicateIntentReady.prepared.md5
-      ]
+    [duplicateIntentImageId, actionOwner, duplicateIntentReady.prepared.md5]
   );
-  const [duplicateIntentResult] = await ingestionCommitIntent
-    .acceptIngestionCommitIntents(ingestionRepository, actionOwner, [{
-      session_id: duplicateIntentReady.session_id,
-      image_id: duplicateIntentReady.image_id,
-      expected_version: duplicateIntentReady.version,
-      expected_md5: duplicateIntentReady.prepared.md5,
-      commit_request_id: coreUuid.randomUuidV7(),
-      duplicate_decision: "upload" as const,
-      metadata: duplicateIntentReady.metadata
-    }]);
+  const [duplicateIntentResult] = await ingestionCommitIntent.acceptIngestionCommitIntents(
+    ingestionRepository,
+    actionOwner,
+    [
+      {
+        session_id: duplicateIntentReady.session_id,
+        image_id: duplicateIntentReady.image_id,
+        expected_version: duplicateIntentReady.version,
+        expected_md5: duplicateIntentReady.prepared.md5,
+        commit_request_id: coreUuid.randomUuidV7(),
+        duplicate_decision: "upload" as const,
+        metadata: duplicateIntentReady.metadata
+      }
+    ]
+  );
   assert.equal(duplicateIntentResult.status, "failed");
   assert.equal(duplicateIntentResult.code, "ingestion_duplicate_conflict");
   assert.equal(duplicateIntentResult.duplicate_count, 1);
   assert.equal(duplicateIntentResult.version, duplicateIntentReady.version + 1);
-  const duplicateIntentCurrent = preparedSession(await ingestionRepository.readSession(
-    actionOwner,
-    duplicateIntentReady.session_id
-  ));
+  const duplicateIntentCurrent = preparedSession(
+    await ingestionRepository.readSession(actionOwner, duplicateIntentReady.session_id)
+  );
   assert.equal(duplicateIntentCurrent.status, "ready");
   assert.equal(duplicateIntentCurrent.prepared.duplicate_count, 1);
   assert.equal(duplicateIntentCurrent.duplicate_decision, undefined);
   assert.equal(duplicateIntentCurrent.commit, undefined);
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id=$1",
-    [duplicateIntentImageId]
-  );
+  await database.pool.query("DELETE FROM metadata WHERE id=$1", [duplicateIntentImageId]);
   const duplicateCountRefresh = await ingestionSessionUpdate.updateIngestionSessions(
     ingestionRepository,
     actionOwner,
-    [{
-      session_id: duplicateIntentCurrent.session_id,
-      image_id: duplicateIntentCurrent.image_id,
-      expected_version: duplicateIntentCurrent.version,
-      duplicate_decision: "upload" as const
-    }]
+    [
+      {
+        session_id: duplicateIntentCurrent.session_id,
+        image_id: duplicateIntentCurrent.image_id,
+        expected_version: duplicateIntentCurrent.version,
+        duplicate_decision: "upload" as const
+      }
+    ]
   );
   assert.equal(duplicateCountRefresh[0].status, "changed");
   assert.equal(duplicateCountRefresh[0].duplicate_count, 0);
   assert.equal(duplicateCountRefresh[0].duplicate_decision, "upload");
-  const duplicateCountCurrent = preparedSession(await ingestionRepository.readSession(
-    actionOwner,
-    duplicateIntentCurrent.session_id
-  ));
+  const duplicateCountCurrent = preparedSession(
+    await ingestionRepository.readSession(actionOwner, duplicateIntentCurrent.session_id)
+  );
   assert.equal(duplicateCountCurrent.prepared.duplicate_count, 0);
   assert.equal(duplicateCountCurrent.duplicate_decision, "upload");
-  const actionQueued = await createActionReadySession(
-    "apply-defaults-while-queued",
-    false
-  );
+  const actionQueued = await createActionReadySession("apply-defaults-while-queued", false);
   const queuedDraftUpdate = await ingestionSessionUpdate.updateIngestionSessions(
     ingestionRepository,
     actionOwner,
-    [{
-      session_id: actionQueued.session_id,
-      image_id: actionQueued.image_id,
-      expected_version: actionQueued.version,
-      metadata: {
-        ...actionQueued.metadata,
-        title: "accepted 后补写的本地草稿"
+    [
+      {
+        session_id: actionQueued.session_id,
+        image_id: actionQueued.image_id,
+        expected_version: actionQueued.version,
+        metadata: {
+          ...actionQueued.metadata,
+          title: "accepted 后补写的本地草稿"
+        }
       }
-    }]
+    ]
   );
   assert.equal(queuedDraftUpdate[0].status, "changed");
   assert.equal(queuedDraftUpdate[0].duplicate_count, 0);
   assert.equal(
-    (activeSession(await ingestionRepository.readSession(
-      actionOwner,
-      actionQueued.session_id
-    ))).metadata.title,
+    activeSession(await ingestionRepository.readSession(actionOwner, actionQueued.session_id))
+      .metadata.title,
     "accepted 后补写的本地草稿",
     "页外 intent fence 必须能在 prepare 前写回 queued canonical"
   );
@@ -895,17 +841,13 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     metadata: { author: "queued-default-author" }
   });
   assert.equal(
-    queuedActionResult.items.find((item) => (
-      item.image_id === actionQueued.image_id
-    ))?.status,
+    queuedActionResult.items.find((item) => item.image_id === actionQueued.image_id)?.status,
     "changed",
     "应用到全部必须覆盖点击水位内仍在 queued 的 canonical"
   );
   assert.equal(
-    (activeSession(await ingestionRepository.readSession(
-      actionOwner,
-      actionQueued.session_id
-    ))).metadata.author,
+    activeSession(await ingestionRepository.readSession(actionOwner, actionQueued.session_id))
+      .metadata.author,
     "queued-default-author"
   );
 
@@ -916,7 +858,9 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
       const stale = await ingestionRepository.readSessions(owner, pairs);
       if (!injectedConcurrentUpdate) {
         injectedConcurrentUpdate = true;
-        assert.ok(stale[0] && stale[0] !== ingestionSessionRepository.ingestionSessionIncarnationMismatch);
+        assert.ok(
+          stale[0] && stale[0] !== ingestionSessionRepository.ingestionSessionIncarnationMismatch
+        );
         const current = activeSession(stale[0]);
         await ingestionRepository.mutateSemantic(
           current,
@@ -936,19 +880,20 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   const staleNoOpResult = await ingestionSessionUpdate.updateIngestionSessions(
     racingUpdateRepository,
     actionOwner,
-    [{
-      session_id: updateRaceSession.session_id,
-      image_id: updateRaceSession.image_id,
-      expected_version: updateRaceSession.version,
-      metadata: updateRaceSession.metadata
-    }]
+    [
+      {
+        session_id: updateRaceSession.session_id,
+        image_id: updateRaceSession.image_id,
+        expected_version: updateRaceSession.version,
+        metadata: updateRaceSession.metadata
+      }
+    ]
   );
   assert.equal(staleNoOpResult[0].status, "failed");
   assert.equal(staleNoOpResult[0].code, "ingestion_version_conflict");
-  const updateRaceCurrent = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    updateRaceSession.session_id
-  ));
+  const updateRaceCurrent = activeSession(
+    await ingestionRepository.readSession(actionOwner, updateRaceSession.session_id)
+  );
   assert.equal(
     updateRaceCurrent.metadata.title,
     "concurrent authoritative draft",
@@ -961,36 +906,38 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   const lostResponseReplay = await ingestionSessionUpdate.updateIngestionSessions(
     ingestionRepository,
     actionOwner,
-    [{
-      session_id: updateRaceCurrent.session_id,
-      image_id: updateRaceCurrent.image_id,
-      expected_version: updateRaceSession.version,
-      metadata: updateRaceCurrent.metadata
-    }]
+    [
+      {
+        session_id: updateRaceCurrent.session_id,
+        image_id: updateRaceCurrent.image_id,
+        expected_version: updateRaceSession.version,
+        metadata: updateRaceCurrent.metadata
+      }
+    ]
   );
   assert.equal(lostResponseReplay[0].status, "unchanged");
   assert.equal(lostResponseReplay[0].version, updateRaceCurrent.version);
-  const updateRaceAfterReplay = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    updateRaceSession.session_id
-  ));
+  const updateRaceAfterReplay = activeSession(
+    await ingestionRepository.readSession(actionOwner, updateRaceSession.session_id)
+  );
   assert.equal(updateRaceAfterReplay.version, updateRaceCurrent.version);
   assert.equal(updateRaceAfterReplay.discard_at, updateRaceDiscardAt);
   const futureVersionNoOp = await ingestionSessionUpdate.updateIngestionSessions(
     ingestionRepository,
     actionOwner,
-    [{
-      session_id: updateRaceCurrent.session_id,
-      image_id: updateRaceCurrent.image_id,
-      expected_version: updateRaceCurrent.version + 1,
-      metadata: updateRaceCurrent.metadata
-    }]
+    [
+      {
+        session_id: updateRaceCurrent.session_id,
+        image_id: updateRaceCurrent.image_id,
+        expected_version: updateRaceCurrent.version + 1,
+        metadata: updateRaceCurrent.metadata
+      }
+    ]
   );
   assert.equal(futureVersionNoOp[0].status, "failed");
   assert.equal(futureVersionNoOp[0].code, "ingestion_version_conflict");
   assert.equal(
-    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0))
-      .metadata.revision,
+    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0)).metadata.revision,
     updateRaceSummaryBeforeReplay.revision,
     "响应丢失后的同语义重试不得推进 version、TTL 或 queue revision"
   );
@@ -999,85 +946,79 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     "commit-action-completed-retry"
   );
   const completedCommitActionId = coreUuid.randomUuidV7();
-  assert.equal((await ingestionCommitIntent.acceptIngestionCommitIntents(
-    ingestionRepository,
-    actionOwner,
-    [{
-      session_id: completedCommitActionReady.session_id,
-      image_id: completedCommitActionReady.image_id,
-      expected_version: completedCommitActionReady.version,
-      expected_md5: completedCommitActionReady.prepared.md5,
-      commit_request_id: completedCommitActionId,
-      duplicate_decision: "upload" as const,
-      metadata: completedCommitActionReady.metadata
-    }]
-  ))[0].status, "accepted");
-  const completedCommitActionCurrent = committingSession(await ingestionRepository.readSession(
-    actionOwner,
-    completedCommitActionReady.session_id
-  ));
+  assert.equal(
+    (
+      await ingestionCommitIntent.acceptIngestionCommitIntents(ingestionRepository, actionOwner, [
+        {
+          session_id: completedCommitActionReady.session_id,
+          image_id: completedCommitActionReady.image_id,
+          expected_version: completedCommitActionReady.version,
+          expected_md5: completedCommitActionReady.prepared.md5,
+          commit_request_id: completedCommitActionId,
+          duplicate_decision: "upload" as const,
+          metadata: completedCommitActionReady.metadata
+        }
+      ])
+    )[0].status,
+    "accepted"
+  );
+  const completedCommitActionCurrent = committingSession(
+    await ingestionRepository.readSession(actionOwner, completedCommitActionReady.session_id)
+  );
   assert.ok(completedCommitActionCurrent);
   assert.equal(completedCommitActionCurrent.status, "committing");
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
-    [
-        completedCommitActionReady.image_id,
-        actionOwner,
-        completedCommitActionReady.prepared.md5
-      ]
+    [completedCommitActionReady.image_id, actionOwner, completedCommitActionReady.prepared.md5]
   );
-  const completedCommitActionPage = await ingestionQueueSnapshot
-    .readStableIngestionQueueSnapshot({
-      repository: ingestionRepository,
-      tokens: actionTokens,
-      session: actionSession,
-      actionScope: actionScope.id,
-      queue: "import" as const,
-      offset: 0,
-      limit: 10
-    });
-  const completedCommitActionResult = await runAction({
-    scanAction: async () => ({
-      items: [completedCommitActionCurrent],
-      nextCursor: null
-    }),
-    readSessions: (...args) => ingestionRepository.readSessions(...args)
-  }, {
+  const completedCommitActionPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
+    repository: ingestionRepository,
+    tokens: actionTokens,
+    session: actionSession,
+    actionScope: actionScope.id,
     queue: "import" as const,
-    action_request_id: completedCommitActionId,
-    action: "commit_ready" as const,
-    action_watermark: completedCommitActionPage.action_watermark
+    offset: 0,
+    limit: 10
   });
+  const completedCommitActionResult = await runAction(
+    {
+      scanAction: async () => ({
+        items: [completedCommitActionCurrent],
+        nextCursor: null
+      }),
+      readSessions: (...args) => ingestionRepository.readSessions(...args)
+    },
+    {
+      queue: "import" as const,
+      action_request_id: completedCommitActionId,
+      action: "commit_ready" as const,
+      action_watermark: completedCommitActionPage.action_watermark
+    }
+  );
   assert.equal(completedCommitActionResult.items[0]?.status, "unchanged");
   assert.equal(
     completedCommitActionResult.items[0]?.completed_item?.id,
     completedCommitActionReady.image_id,
     "PG 已提交而 Redis 仍 committing 时必须把完成 DTO 带回整队提交重试"
   );
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id=$1",
-    [completedCommitActionReady.image_id]
-  );
+  await database.pool.query("DELETE FROM metadata WHERE id=$1", [
+    completedCommitActionReady.image_id
+  ]);
 
-  const clearQueueVersionRace = await createActionReadySession(
-    "clear-queue-version-race",
-    false
+  const clearQueueVersionRace = await createActionReadySession("clear-queue-version-race", false);
+  const clearQueueVersionRacePage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
+    repository: ingestionRepository,
+    tokens: actionTokens,
+    session: actionSession,
+    actionScope: actionScope.id,
+    queue: "import" as const,
+    offset: 0,
+    limit: 10
+  });
+  const clearQueueVersionRaceStale = activeSession(
+    await ingestionRepository.readSession(actionOwner, clearQueueVersionRace.session_id)
   );
-  const clearQueueVersionRacePage = await ingestionQueueSnapshot
-    .readStableIngestionQueueSnapshot({
-      repository: ingestionRepository,
-      tokens: actionTokens,
-      session: actionSession,
-      actionScope: actionScope.id,
-      queue: "import" as const,
-      offset: 0,
-      limit: 10
-    });
-  const clearQueueVersionRaceStale = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    clearQueueVersionRace.session_id
-  ));
   let clearQueueVersionAdvanced = false;
   const clearQueueVersionRaceRepository = repositoryWithOverrides(ingestionRepository, {
     scanAction: async () => {
@@ -1086,15 +1027,12 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
         await ingestionRepository.mutateSemantic(
           clearQueueVersionRaceStale,
           clearQueueVersionRaceStale.version,
-          ingestionSessionTransitions.semanticIngestionSession(
-            clearQueueVersionRaceStale,
-            {
-              metadata: {
-                ...clearQueueVersionRaceStale.metadata,
-                description: "worker advanced after action scan"
-              }
+          ingestionSessionTransitions.semanticIngestionSession(clearQueueVersionRaceStale, {
+            metadata: {
+              ...clearQueueVersionRaceStale.metadata,
+              description: "worker advanced after action scan"
             }
-          )
+          })
         );
       }
       return { items: [clearQueueVersionRaceStale], nextCursor: null };
@@ -1104,28 +1042,27 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     mutateSemantic: (...args) => ingestionRepository.mutateSemantic(...args),
     deleteSession: (...args) => ingestionRepository.deleteSession(...args)
   });
-  const clearQueueVersionRaceResult = await runAction(
-    clearQueueVersionRaceRepository,
-    {
-      queue: "import" as const,
-      action_request_id: coreUuid.randomUuidV7(),
-      action: "clear_queue" as const,
-      action_watermark: clearQueueVersionRacePage.action_watermark
-    }
-  );
+  const clearQueueVersionRaceResult = await runAction(clearQueueVersionRaceRepository, {
+    queue: "import" as const,
+    action_request_id: coreUuid.randomUuidV7(),
+    action: "clear_queue" as const,
+    action_watermark: clearQueueVersionRacePage.action_watermark
+  });
   assert.equal(clearQueueVersionRaceResult.failed, 0);
   assert.equal(clearQueueVersionRaceResult.items[0]?.status, "changed");
-  assert.equal((discardedSession(await ingestionRepository.readSession(
-    actionOwner,
-    clearQueueVersionRace.session_id
-  )))?.status, "discarded");
+  assert.equal(
+    discardedSession(
+      await ingestionRepository.readSession(actionOwner, clearQueueVersionRace.session_id)
+    )?.status,
+    "discarded"
+  );
 
   const filteredClearVersionRace = await createActionReadySession(
     "filtered-clear-version-race",
     false
   );
-  const filteredClearVersionRacePage = await ingestionQueueSnapshot
-    .readStableIngestionQueueSnapshot({
+  const filteredClearVersionRacePage =
+    await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
       repository: ingestionRepository,
       tokens: actionTokens,
       session: actionSession,
@@ -1134,10 +1071,9 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
       offset: 0,
       limit: 10
     });
-  const filteredClearVersionRaceStale = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    filteredClearVersionRace.session_id
-  ));
+  const filteredClearVersionRaceStale = activeSession(
+    await ingestionRepository.readSession(actionOwner, filteredClearVersionRace.session_id)
+  );
   let filteredClearVersionAdvanced = false;
   const filteredClearVersionRaceRepository = repositoryWithOverrides(ingestionRepository, {
     scanAction: async () => {
@@ -1146,15 +1082,12 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
         await ingestionRepository.mutateSemantic(
           filteredClearVersionRaceStale,
           filteredClearVersionRaceStale.version,
-          ingestionSessionTransitions.semanticIngestionSession(
-            filteredClearVersionRaceStale,
-            {
-              metadata: {
-                ...filteredClearVersionRaceStale.metadata,
-                description: "semantic edit after filtered action scan"
-              }
+          ingestionSessionTransitions.semanticIngestionSession(filteredClearVersionRaceStale, {
+            metadata: {
+              ...filteredClearVersionRaceStale.metadata,
+              description: "semantic edit after filtered action scan"
             }
-          )
+          })
         );
       }
       return { items: [filteredClearVersionRaceStale], nextCursor: null };
@@ -1164,43 +1097,38 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     mutateSemantic: (...args) => ingestionRepository.mutateSemantic(...args),
     deleteSession: (...args) => ingestionRepository.deleteSession(...args)
   });
-  const filteredClearVersionRaceResult = await runAction(
-    filteredClearVersionRaceRepository,
-    {
-      queue: "import" as const,
-      action_request_id: coreUuid.randomUuidV7(),
-      action: "clear_uncommitted" as const,
-      action_watermark: filteredClearVersionRacePage.action_watermark
-    }
-  );
+  const filteredClearVersionRaceResult = await runAction(filteredClearVersionRaceRepository, {
+    queue: "import" as const,
+    action_request_id: coreUuid.randomUuidV7(),
+    action: "clear_uncommitted" as const,
+    action_watermark: filteredClearVersionRacePage.action_watermark
+  });
   assert.equal(filteredClearVersionRaceResult.failed, 0);
   assert.equal(
     filteredClearVersionRaceResult.items[0]?.code,
     "ingestion_action_state_changed",
     "筛选清理应在 scan/cancel 竞态后重读并按冻结 revision 跳过"
   );
-  const filteredClearVersionRaceCurrent = activeSession(await ingestionRepository.readSession(
-    actionOwner,
-    filteredClearVersionRace.session_id
-  ));
+  const filteredClearVersionRaceCurrent = activeSession(
+    await ingestionRepository.readSession(actionOwner, filteredClearVersionRace.session_id)
+  );
   assert.notEqual(filteredClearVersionRaceCurrent?.status, "discarded");
-  const filteredClearVersionRaceDiscarded = discardedResult(await ingestionRepository
-    .mutateSemantic(
+  const filteredClearVersionRaceDiscarded = discardedResult(
+    await ingestionRepository.mutateSemantic(
       filteredClearVersionRaceCurrent,
       filteredClearVersionRaceCurrent.version,
       ingestionSessionTransitions.discardedIngestionReceipt(
         filteredClearVersionRaceCurrent,
         Date.now()
       )
-    ));
+    )
+  );
   await ingestionRepository.deleteSession(
     filteredClearVersionRaceDiscarded.session,
     filteredClearVersionRaceDiscarded.session.version
   );
 
-  const clearCompletedReady = await createActionReadySession(
-    "clear-completed-hydration"
-  );
+  const clearCompletedReady = await createActionReadySession("clear-completed-hydration");
   const clearCompletedRequest = {
     session_id: clearCompletedReady.session_id,
     image_id: clearCompletedReady.image_id,
@@ -1210,39 +1138,36 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     duplicate_decision: "upload" as const,
     metadata: clearCompletedReady.metadata
   };
-  assert.equal((await ingestionCommitIntent.acceptIngestionCommitIntents(
-    ingestionRepository,
-    actionOwner,
-    [clearCompletedRequest]
-  ))[0].status, "accepted");
-  const clearCompletedCommitting = committingSession(await ingestionRepository.readSession(
-    actionOwner,
-    clearCompletedReady.session_id
-  ));
+  assert.equal(
+    (
+      await ingestionCommitIntent.acceptIngestionCommitIntents(ingestionRepository, actionOwner, [
+        clearCompletedRequest
+      ])
+    )[0].status,
+    "accepted"
+  );
+  const clearCompletedCommitting = committingSession(
+    await ingestionRepository.readSession(actionOwner, clearCompletedReady.session_id)
+  );
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
-    [
-        clearCompletedReady.image_id,
-        actionOwner,
-        clearCompletedReady.prepared.md5
-      ]
+    [clearCompletedReady.image_id, actionOwner, clearCompletedReady.prepared.md5]
   );
   await ingestionCommitCompletion.publishCompletedReceipt(
     ingestionRepository,
     clearCompletedCommitting,
     Date.now()
   );
-  const clearCompletedPage = await ingestionQueueSnapshot
-    .readStableIngestionQueueSnapshot({
-      repository: ingestionRepository,
-      tokens: actionTokens,
-      session: actionSession,
-      actionScope: actionScope.id,
-      queue: "import" as const,
-      offset: 0,
-      limit: 10
-    });
+  const clearCompletedPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
+    repository: ingestionRepository,
+    tokens: actionTokens,
+    session: actionSession,
+    actionScope: actionScope.id,
+    queue: "import" as const,
+    offset: 0,
+    limit: 10
+  });
   const deferredCompletedReady = await createActionReadySession(
     "deferred-clear-completed-boundary"
   );
@@ -1255,31 +1180,29 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     duplicate_decision: "upload" as const,
     metadata: deferredCompletedReady.metadata
   };
-  assert.equal((await ingestionCommitIntent.acceptIngestionCommitIntents(
-    ingestionRepository,
-    actionOwner,
-    [deferredCompletedRequest]
-  ))[0].status, "accepted");
-  const deferredCompletedCommitting = committingSession(await ingestionRepository.readSession(
-    actionOwner,
-    deferredCompletedReady.session_id
-  ));
+  assert.equal(
+    (
+      await ingestionCommitIntent.acceptIngestionCommitIntents(ingestionRepository, actionOwner, [
+        deferredCompletedRequest
+      ])
+    )[0].status,
+    "accepted"
+  );
+  const deferredCompletedCommitting = committingSession(
+    await ingestionRepository.readSession(actionOwner, deferredCompletedReady.session_id)
+  );
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
-    [
-        deferredCompletedReady.image_id,
-        actionOwner,
-        deferredCompletedReady.prepared.md5
-      ]
+    [deferredCompletedReady.image_id, actionOwner, deferredCompletedReady.prepared.md5]
   );
   await ingestionCommitCompletion.publishCompletedReceipt(
     ingestionRepository,
     deferredCompletedCommitting,
     Date.now()
   );
-  const deferredCompletedExecutionPage = await ingestionQueueSnapshot
-    .readStableIngestionQueueSnapshot({
+  const deferredCompletedExecutionPage =
+    await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
       repository: ingestionRepository,
       tokens: actionTokens,
       session: actionSession,
@@ -1295,13 +1218,10 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     action_watermark: deferredCompletedExecutionPage.action_watermark,
     max_semantic_revision: clearCompletedPage.revision
   };
-  const clearCompletedResult = await runAction(
-    ingestionRepository,
-    clearCompletedActionRequest
+  const clearCompletedResult = await runAction(ingestionRepository, clearCompletedActionRequest);
+  const clearedCompletedItem = clearCompletedResult.items.find(
+    (item) => item.session_id === clearCompletedReady.session_id
   );
-  const clearedCompletedItem = clearCompletedResult.items.find((item) => (
-    item.session_id === clearCompletedReady.session_id
-  ));
   assert.equal(clearedCompletedItem?.status, "changed");
   assert.equal(
     clearedCompletedItem?.completed_item?.id,
@@ -1313,58 +1233,78 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
     clearCompletedResult,
     "completed 回执删除后的同批响应丢失重试必须重放原完成 DTO"
   );
-  assert.equal(await ingestionRepository.readSession(
-    actionOwner,
-    clearCompletedReady.session_id
-  ), null);
-  const deferredCompletedResult = clearCompletedResult.items.find((item) => (
-    item.session_id === deferredCompletedReady.session_id
-  ));
+  assert.equal(
+    await ingestionRepository.readSession(actionOwner, clearCompletedReady.session_id),
+    null
+  );
+  const deferredCompletedResult = clearCompletedResult.items.find(
+    (item) => item.session_id === deferredCompletedReady.session_id
+  );
   assert.equal(deferredCompletedResult?.status, "skipped");
   assert.equal(
     deferredCompletedResult?.code,
     "ingestion_action_state_changed",
     "重连后执行的关闭清理不得纳入旧 semantic revision 之后才完成的任务"
   );
-  const retainedDeferredCompleted = completedSession(await ingestionRepository.readSession(
-    actionOwner,
-    deferredCompletedReady.session_id
-  ));
+  const retainedDeferredCompleted = completedSession(
+    await ingestionRepository.readSession(actionOwner, deferredCompletedReady.session_id)
+  );
   assert.ok(retainedDeferredCompleted);
   assert.equal(retainedDeferredCompleted?.status, "completed");
   await ingestionRepository.deleteSession(
     retainedDeferredCompleted,
     retainedDeferredCompleted.version
   );
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id = ANY($1::uuid[])",
-    [[clearCompletedReady.image_id, deferredCompletedReady.image_id]]
-  );
+  await database.pool.query("DELETE FROM metadata WHERE id = ANY($1::uuid[])", [
+    [clearCompletedReady.image_id, deferredCompletedReady.image_id]
+  ]);
   const pairOf = (session: Pick<IngestionSessionSnapshot, "session_id" | "image_id">) => ({
-    session_id: session.session_id, image_id: session.image_id
+    session_id: session.session_id,
+    image_id: session.image_id
   });
-  const readActive = async (session: IngestionSessionSnapshot) => activeSession(
-    await ingestionRepository.readSession(actionOwner, session.session_id)
-  );
+  const readActive = async (session: IngestionSessionSnapshot) =>
+    activeSession(await ingestionRepository.readSession(actionOwner, session.session_id));
   const seedAttributes = async (label: string) => {
     const session = await createActionReadySession(label);
-    const updated = await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [{
-      ...pairOf(session), expected_version: session.version,
-      metadata: {
-        ...session.metadata, theme: "theme-a", author: "author-a", tags: ["tag-a", "tag-b"],
-        device: "pc", brightness: "dark", description: "保留说明", source: "https://example.com/source",
-        original: "https://example.com/original.webp"
-      }
-    }]);
+    const updated = await ingestionSessionUpdate.updateIngestionSessions(
+      ingestionRepository,
+      actionOwner,
+      [
+        {
+          ...pairOf(session),
+          expected_version: session.version,
+          metadata: {
+            ...session.metadata,
+            theme: "theme-a",
+            author: "author-a",
+            tags: ["tag-a", "tag-b"],
+            device: "pc",
+            brightness: "dark",
+            description: "保留说明",
+            source: "https://example.com/source",
+            original: "https://example.com/original.webp"
+          }
+        }
+      ]
+    );
     assert.equal(updated[0].status, "changed");
     return readActive(session);
   };
-  const clearMetadataCases = [{ theme: null }, { tags: [] }, { author: "" }, { theme: null, tags: [], author: "" }];
+  const clearMetadataCases = [
+    { theme: null },
+    { tags: [] },
+    { author: "" },
+    { theme: null, tags: [], author: "" }
+  ];
   for (const [index, metadata] of clearMetadataCases.entries()) {
     const session = await seedAttributes(`clear-field-${index}`);
     const result = await runAction(ingestionRepository, {
-      queue: "import", action: "apply_metadata", action_request_id: coreUuid.randomUuidV7(),
-      action_watermark: actionPage.action_watermark, items: [pairOf(session)], metadata
+      queue: "import",
+      action: "apply_metadata",
+      action_request_id: coreUuid.randomUuidV7(),
+      action_watermark: actionPage.action_watermark,
+      items: [pairOf(session)],
+      metadata
     });
     assert.equal(result.changed, 1);
     assert.equal(result.continuation, undefined);
@@ -1376,77 +1316,161 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   }
   const frozenTarget = await seedAttributes("clear-before-watermark");
   const clearPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
-    repository: ingestionRepository, tokens: actionTokens, session: actionSession,
-    actionScope: actionScope.id, queue: "import", offset: 0, limit: 10
+    repository: ingestionRepository,
+    tokens: actionTokens,
+    session: actionSession,
+    actionScope: actionScope.id,
+    queue: "import",
+    offset: 0,
+    limit: 10
   });
   const handoffTarget = await seedAttributes("clear-captured-handoff");
   const laterTarget = await seedAttributes("clear-later-bystander");
   await runAction(ingestionRepository, {
-    queue: "import", action: "apply_metadata", action_request_id: coreUuid.randomUuidV7(),
-    action_watermark: clearPage.action_watermark, metadata: { author: "" }
+    queue: "import",
+    action: "apply_metadata",
+    action_request_id: coreUuid.randomUuidV7(),
+    action_watermark: clearPage.action_watermark,
+    metadata: { author: "" }
   });
   assert.equal((await readActive(frozenTarget)).metadata.author, "");
   assert.deepEqual((await readActive(handoffTarget)).metadata, handoffTarget.metadata);
   assert.deepEqual((await readActive(laterTarget)).metadata, laterTarget.metadata);
   const exactClear = {
-    queue: "import" as const, action: "apply_metadata" as const, action_request_id: coreUuid.randomUuidV7(),
-    action_watermark: clearPage.action_watermark, items: [pairOf(handoffTarget)],
+    queue: "import" as const,
+    action: "apply_metadata" as const,
+    action_request_id: coreUuid.randomUuidV7(),
+    action_watermark: clearPage.action_watermark,
+    items: [pairOf(handoffTarget)],
     metadata: { theme: null, tags: [], author: "" }
   };
   const exactResult = await runAction(ingestionRepository, exactClear);
   assert.equal(exactResult.changed, 1, "原确认成员接管到旧水位之后仍可按精确身份处理");
-  assert.deepEqual((await readActive(handoffTarget)).metadata, { ...handoffTarget.metadata, ...exactClear.metadata });
-  assert.deepEqual((await readActive(laterTarget)).metadata, laterTarget.metadata, "精确补批不扫描后来任务");
+  assert.deepEqual((await readActive(handoffTarget)).metadata, {
+    ...handoffTarget.metadata,
+    ...exactClear.metadata
+  });
+  assert.deepEqual(
+    (await readActive(laterTarget)).metadata,
+    laterTarget.metadata,
+    "精确补批不扫描后来任务"
+  );
   const afterClear = await readActive(handoffTarget);
-  assert.equal((await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [{
-    ...pairOf(afterClear), expected_version: afterClear.version,
-    metadata: { ...afterClear.metadata, author: "edited-after-clear" }
-  }]))[0].status, "changed");
+  assert.equal(
+    (
+      await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [
+        {
+          ...pairOf(afterClear),
+          expected_version: afterClear.version,
+          metadata: { ...afterClear.metadata, author: "edited-after-clear" }
+        }
+      ])
+    )[0].status,
+    "changed"
+  );
   assert.deepEqual(await runAction(ingestionRepository, exactClear), exactResult);
-  assert.equal((await readActive(handoffTarget)).metadata.author, "edited-after-clear", "丢失响应重放不覆盖后续编辑");
-  await assert.rejects(runAction(ingestionRepository, {
-    ...exactClear, items: [pairOf(laterTarget)]
-  }), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_action_request_conflict");
+  assert.equal(
+    (await readActive(handoffTarget)).metadata.author,
+    "edited-after-clear",
+    "丢失响应重放不覆盖后续编辑"
+  );
+  await assert.rejects(
+    runAction(ingestionRepository, {
+      ...exactClear,
+      items: [pairOf(laterTarget)]
+    }),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_action_request_conflict"
+  );
   const incarnationResult = await runAction(ingestionRepository, {
-    ...exactClear, action_request_id: coreUuid.randomUuidV7(),
+    ...exactClear,
+    action_request_id: coreUuid.randomUuidV7(),
     items: [{ ...pairOf(laterTarget), image_id: coreUuid.randomUuidV7() }]
   });
   assert.equal(incarnationResult.items[0].status, "skipped");
   assert.deepEqual((await readActive(laterTarget)).metadata, laterTarget.metadata);
   const foreignOwner = `foreign-clear-${randomUUID()}`;
-  const foreignSessionId = ingestionSessionIdentity.createIngestionSessionId(foreignOwner, "import", "foreign-clear");
+  const foreignSessionId = ingestionSessionIdentity.createIngestionSessionId(
+    foreignOwner,
+    "import",
+    "foreign-clear"
+  );
   const foreignDraft = {
-    ...importCanonicalWithoutHash, owner: foreignOwner, session_id: foreignSessionId,
-    image_id: coreUuid.randomUuidV7(), metadata: laterTarget.metadata
+    ...importCanonicalWithoutHash,
+    owner: foreignOwner,
+    session_id: foreignSessionId,
+    image_id: coreUuid.randomUuidV7(),
+    metadata: laterTarget.metadata
   };
-  const foreign = activeSession((await ingestionRepository.acceptImportSession({
-    ...foreignDraft,
-    semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(foreignDraft)
-  }, displayOrderKey(foreignSessionId, 1, Date.now()), Date.now())).session);
+  const foreign = activeSession(
+    (
+      await ingestionRepository.acceptImportSession(
+        {
+          ...foreignDraft,
+          semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(foreignDraft)
+        },
+        displayOrderKey(foreignSessionId, 1, Date.now()),
+        Date.now()
+      )
+    ).session
+  );
   const foreignResult = await runAction(ingestionRepository, {
-    ...exactClear, action_request_id: coreUuid.randomUuidV7(), items: [pairOf(foreign)]
+    ...exactClear,
+    action_request_id: coreUuid.randomUuidV7(),
+    items: [pairOf(foreign)]
   });
   assert.equal(foreignResult.items[0].status, "skipped");
-  assert.deepEqual(activeSession(await ingestionRepository.readSession(foreignOwner, foreignSessionId)).metadata, foreign.metadata,
-    "直接指定其他管理员的任务身份也不能绕过 owner 隔离");
+  assert.deepEqual(
+    activeSession(await ingestionRepository.readSession(foreignOwner, foreignSessionId)).metadata,
+    foreign.metadata,
+    "直接指定其他管理员的任务身份也不能绕过 owner 隔离"
+  );
   const retrySessions: IngestionSessionSnapshot[] = [];
   for (let index = 0; index < 31; index += 1) {
     const queued = await createActionReadySession(`retry-restored-${index}`, false);
-    retrySessions.push(activeSession((await ingestionRepository.mutateSemantic(
-      queued, queued.version,
-      ingestionSessionTransitions.failedIngestionSession(queued, new Error("内容接入执行权已转移"))
-    )).session));
+    retrySessions.push(
+      activeSession(
+        (
+          await ingestionRepository.mutateSemantic(
+            queued,
+            queued.version,
+            ingestionSessionTransitions.failedIngestionSession(
+              queued,
+              new Error("内容接入执行权已转移")
+            )
+          )
+        ).session
+      )
+    );
   }
-  const readRetryPage = () => ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
-    repository: ingestionRepository, tokens: actionTokens, session: actionSession,
-    actionScope: actionScope.id, queue: "import", offset: 20, limit: 20
-  });
+  const readRetryPage = () =>
+    ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
+      repository: ingestionRepository,
+      tokens: actionTokens,
+      session: actionSession,
+      actionScope: actionScope.id,
+      queue: "import",
+      offset: 20,
+      limit: 20
+    });
   const beforeRetry = await readRetryPage();
-  const retryTarget = retrySessions.find((session) => session.session_id === beforeRetry.items[0].session_id)!;
+  const retryTarget = retrySessions.find(
+    (session) => session.session_id === beforeRetry.items[0].session_id
+  )!;
   assert.ok(retryTarget, "后页读取的是新建的失败导入任务");
-  const retryInput = { ...pairOf(retryTarget), expected_version: retryTarget.version,
-    metadata: { ...retryTarget.metadata, title: "保留修改后重试" }, retry_prepare: true as const };
-  const [retried] = await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [retryInput]);
+  const retryInput = {
+    ...pairOf(retryTarget),
+    expected_version: retryTarget.version,
+    metadata: { ...retryTarget.metadata, title: "保留修改后重试" },
+    retry_prepare: true as const
+  };
+  const [retried] = await ingestionSessionUpdate.updateIngestionSessions(
+    ingestionRepository,
+    actionOwner,
+    [retryInput]
+  );
   assert.equal(retried.status, "changed");
   const retryCurrent = await readActive(retryTarget);
   assert.equal(retryCurrent.status, "queued");
@@ -1454,82 +1478,174 @@ const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate:
   assert.equal(retryCurrent.prepared, undefined);
   assert.equal(retryCurrent.raw_generation, "");
   assert.equal(retryCurrent.metadata.title, "保留修改后重试");
-  for (const key of ["session_id", "image_id", "image_time", "accepted_order", "batch_position", "source_type", "storage_slug"] as const) {
+  for (const key of [
+    "session_id",
+    "image_id",
+    "image_time",
+    "accepted_order",
+    "batch_position",
+    "source_type",
+    "storage_slug"
+  ] as const) {
     assert.equal(retryCurrent[key], retryTarget[key], `重试保留 ${key}`);
   }
   const afterRetry = await readRetryPage();
-  assert.deepEqual(afterRetry.items.map(pairOf), beforeRetry.items.map(pairOf), "服务端分页成员和顺序保持不变");
+  assert.deepEqual(
+    afterRetry.items.map(pairOf),
+    beforeRetry.items.map(pairOf),
+    "服务端分页成员和顺序保持不变"
+  );
   assert.equal(afterRetry.total, beforeRetry.total);
   assert.equal(afterRetry.last_accepted_order, beforeRetry.last_accepted_order);
   assert.equal(afterRetry.failed, beforeRetry.failed - 1);
   assert.equal(afterRetry.waiting, beforeRetry.waiting + 1);
-  const [replayedRetry] = await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [retryInput]);
+  const [replayedRetry] = await ingestionSessionUpdate.updateIngestionSessions(
+    ingestionRepository,
+    actionOwner,
+    [retryInput]
+  );
   assert.equal(replayedRetry.status, "failed", "迟到旧请求不能把已排队或处理中的任务重置");
   assert.equal((await readActive(retryTarget)).version, retryCurrent.version);
-  const [foreignRetry] = await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, foreignOwner, [retryInput]);
+  const [foreignRetry] = await ingestionSessionUpdate.updateIngestionSessions(
+    ingestionRepository,
+    foreignOwner,
+    [retryInput]
+  );
   assert.equal(foreignRetry.status, "failed", "重试仍独立强制执行 owner 隔离");
-  const staleTarget = retrySessions.find((session) => session.session_id !== retryTarget.session_id)!;
-  const [staleRetry] = await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [{
-    ...pairOf(staleTarget), expected_version: staleTarget.version - 1, retry_prepare: true
-  }]);
+  const staleTarget = retrySessions.find(
+    (session) => session.session_id !== retryTarget.session_id
+  )!;
+  const [staleRetry] = await ingestionSessionUpdate.updateIngestionSessions(
+    ingestionRepository,
+    actionOwner,
+    [
+      {
+        ...pairOf(staleTarget),
+        expected_version: staleTarget.version - 1,
+        retry_prepare: true
+      }
+    ]
+  );
   assert.equal(staleRetry.status, "failed", "旧版本不能启动新重试");
   assert.equal((await readActive(staleTarget)).status, "failed");
-  const [committedRetry] = await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [{
-    ...pairOf(duplicateCountCurrent), expected_version: duplicateCountCurrent.version, retry_prepare: true
-  }]);
+  const [committedRetry] = await ingestionSessionUpdate.updateIngestionSessions(
+    ingestionRepository,
+    actionOwner,
+    [
+      {
+        ...pairOf(duplicateCountCurrent),
+        expected_version: duplicateCountCurrent.version,
+        retry_prepare: true
+      }
+    ]
+  );
   assert.equal(committedRetry.status, "failed", "准备完成的图片不能走重新下载");
 
   const commitFailedReady = await createActionReadySession("retry-frozen-commit");
   const frozenCommitId = coreUuid.randomUuidV7();
-  const [acceptedCommit] = await ingestionCommitIntent.acceptIngestionCommitIntents(ingestionRepository, actionOwner, [{
-    ...pairOf(commitFailedReady), expected_version: commitFailedReady.version,
-    expected_md5: commitFailedReady.prepared.md5, commit_request_id: frozenCommitId,
-    duplicate_decision: "upload", metadata: commitFailedReady.metadata
-  }]);
+  const [acceptedCommit] = await ingestionCommitIntent.acceptIngestionCommitIntents(
+    ingestionRepository,
+    actionOwner,
+    [
+      {
+        ...pairOf(commitFailedReady),
+        expected_version: commitFailedReady.version,
+        expected_md5: commitFailedReady.prepared.md5,
+        commit_request_id: frozenCommitId,
+        duplicate_decision: "upload",
+        metadata: commitFailedReady.metadata
+      }
+    ]
+  );
   assert.notEqual(acceptedCommit.status, "failed");
   const commitBeforeFailure = await readActive(commitFailedReady);
-  const commitFailed = activeSession((await ingestionRepository.mutateSemantic(
-    commitBeforeFailure, commitBeforeFailure.version,
-    ingestionSessionTransitions.failedIngestionSession(commitBeforeFailure, new Error("storage unavailable"))
-  )).session);
+  const commitFailed = activeSession(
+    (
+      await ingestionRepository.mutateSemantic(
+        commitBeforeFailure,
+        commitBeforeFailure.version,
+        ingestionSessionTransitions.failedIngestionSession(
+          commitBeforeFailure,
+          new Error("storage unavailable")
+        )
+      )
+    ).session
+  );
   const allRetryPage = await readRetryPage();
   const changedAfterCapture = await readActive(staleTarget);
-  await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [{
-    ...pairOf(changedAfterCapture), expected_version: changedAfterCapture.version,
-    metadata: { ...changedAfterCapture.metadata, description: "another window changed this task" }
-  }]);
+  await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [
+    {
+      ...pairOf(changedAfterCapture),
+      expected_version: changedAfterCapture.version,
+      metadata: { ...changedAfterCapture.metadata, description: "another window changed this task" }
+    }
+  ]);
   const newAfterRetryCapture = await createActionReadySession("retry-later-failure", false);
-  const newFailed = activeSession((await ingestionRepository.mutateSemantic(
-    newAfterRetryCapture, newAfterRetryCapture.version,
-    ingestionSessionTransitions.failedIngestionSession(newAfterRetryCapture, new Error("later failure"))
-  )).session);
-  const isolatedFailure = retrySessions.find((session) => session.session_id !== staleTarget.session_id
-    && session.session_id !== retryTarget.session_id)!;
+  const newFailed = activeSession(
+    (
+      await ingestionRepository.mutateSemantic(
+        newAfterRetryCapture,
+        newAfterRetryCapture.version,
+        ingestionSessionTransitions.failedIngestionSession(
+          newAfterRetryCapture,
+          new Error("later failure")
+        )
+      )
+    ).session
+  );
+  const isolatedFailure = retrySessions.find(
+    (session) =>
+      session.session_id !== staleTarget.session_id && session.session_id !== retryTarget.session_id
+  )!;
   const retryRepository = repositoryWithOverrides(ingestionRepository, {
     mutateSemantic: async (...args) => {
       if (args[0].session_id === isolatedFailure.session_id) throw new Error("one retry failed");
       return ingestionRepository.mutateSemantic(...args);
     }
   });
-  const allRetryRequest = { queue: "import" as const, action: "retry_failed" as const,
-    action_request_id: coreUuid.randomUuidV7(), action_watermark: allRetryPage.action_watermark };
+  const allRetryRequest = {
+    queue: "import" as const,
+    action: "retry_failed" as const,
+    action_request_id: coreUuid.randomUuidV7(),
+    action_watermark: allRetryPage.action_watermark
+  };
   const allRetryResult = await runAction(retryRepository, allRetryRequest);
   for (const original of retrySessions) {
     const current = await readActive(original);
-    const excluded = original.session_id === staleTarget.session_id || original.session_id === isolatedFailure.session_id;
+    const excluded =
+      original.session_id === staleTarget.session_id ||
+      original.session_id === isolatedFailure.session_id;
     assert.equal(current.status, excluded ? "failed" : "queued");
-    for (const field of ["image_id", "image_time", "accepted_order", "batch_position", "source_type", "storage_slug"] as const) {
+    for (const field of [
+      "image_id",
+      "image_time",
+      "accepted_order",
+      "batch_position",
+      "source_type",
+      "storage_slug"
+    ] as const) {
       assert.equal(current[field], original[field], `全队列重试保留 ${field}`);
     }
   }
   assert.equal((await readActive(newFailed)).status, "failed", "新加入的失败任务不属于冻结水位");
   assert.equal((await readActive(commitFailed)).status, "committing");
-  assert.equal((await readActive(commitFailed)).commit?.commit_request_id, frozenCommitId, "提交失败沿用原意图");
-  assert.ok(allRetryResult.items.some(item => item.session_id === isolatedFailure.session_id && item.status === "failed"));
-  assert.ok(allRetryResult.items.some(item => item.session_id === staleTarget.session_id && item.status === "skipped"));
+  assert.equal(
+    (await readActive(commitFailed)).commit?.commit_request_id,
+    frozenCommitId,
+    "提交失败沿用原意图"
+  );
+  assert.ok(
+    allRetryResult.items.some(
+      (item) => item.session_id === isolatedFailure.session_id && item.status === "failed"
+    )
+  );
+  assert.ok(
+    allRetryResult.items.some(
+      (item) => item.session_id === staleTarget.session_id && item.status === "skipped"
+    )
+  );
   const retryRevision = (await readRetryPage()).revision;
   assert.deepEqual(await runAction(retryRepository, allRetryRequest), allRetryResult);
   assert.equal((await readRetryPage()).revision, retryRevision, "重复动作响应不再执行已受理的重试");
   actionScope.close();
-
 });

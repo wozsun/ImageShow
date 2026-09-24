@@ -44,35 +44,25 @@ export type ShowPixiTextureCacheOptions = {
   generateMipmaps: boolean;
 };
 
-const safePixels = (value: number) => (
-  Number.isFinite(value) ? Math.max(1, Math.round(value)) : 1
-);
+const safePixels = (value: number) => (Number.isFinite(value) ? Math.max(1, Math.round(value)) : 1);
 
 // The full mip chain costs at most 1 + 1/4 + 1/16 + ... = 4/3 texels.
-const mipmappedPixels = (basePixels: number, generateMipmaps: boolean) => (
-  generateMipmaps
-    ? Math.ceil(safePixels(basePixels) * 4 / 3)
-    : safePixels(basePixels)
-);
+const mipmappedPixels = (basePixels: number, generateMipmaps: boolean) =>
+  generateMipmaps ? Math.ceil((safePixels(basePixels) * 4) / 3) : safePixels(basePixels);
 
 const normalizedLod = (lod: ShowPixiTextureLod) => {
   const sourceRatio = lod.sourceRatio;
   return {
     pixelWidth: Math.min(512, Math.max(1, Math.round(lod.pixelWidth))),
     pixelHeight: Math.min(1_024, Math.max(1, Math.round(lod.pixelHeight))),
-    sourceRatio: sourceRatio !== undefined
-      && Number.isFinite(sourceRatio)
-      && sourceRatio > 0
-      ? sourceRatio
-      : lod.pixelHeight / Math.max(1, lod.pixelWidth)
+    sourceRatio:
+      sourceRatio !== undefined && Number.isFinite(sourceRatio) && sourceRatio > 0
+        ? sourceRatio
+        : lod.pixelHeight / Math.max(1, lod.pixelWidth)
   };
 };
 
-function coverSourceRectangle(
-  width: number,
-  height: number,
-  targetRatio: number
-) {
+function coverSourceRectangle(width: number, height: number, targetRatio: number) {
   const sourceRatio = height / Math.max(1, width);
   let x = 0;
   let y = 0;
@@ -103,18 +93,11 @@ async function resizedBitmap(blob: Blob, lod: ReturnType<typeof normalizedLod>) 
   const source = await createImageBitmap(blob);
   try {
     const crop = coverSourceRectangle(source.width, source.height, targetRatio);
-    return await createImageBitmap(
-      source,
-      crop.x,
-      crop.y,
-      crop.width,
-      crop.height,
-      {
-        resizeWidth: lod.pixelWidth,
-        resizeHeight: lod.pixelHeight,
-        resizeQuality: "high"
-      }
-    );
+    return await createImageBitmap(source, crop.x, crop.y, crop.width, crop.height, {
+      resizeWidth: lod.pixelWidth,
+      resizeHeight: lod.pixelHeight,
+      resizeQuality: "high"
+    });
   } finally {
     source.close();
   }
@@ -128,9 +111,7 @@ async function bitmapTexture(
 ) {
   const transportFailure = (error: unknown): never => {
     if (signal.aborted) throw error;
-    throw new TextureTransportError(
-      error instanceof Error ? error.message : "缩略图网络请求失败"
-    );
+    throw new TextureTransportError(error instanceof Error ? error.message : "缩略图网络请求失败");
   };
   // Bound transport through the last response byte; decoding owns no network slot timer.
   const blob = await requestWithDeadline(async (requestSignal) => {
@@ -288,15 +269,12 @@ export class ShowPixiTextureCache {
     if (!entry) {
       const reservation = Math.min(
         this.#options.maximumPixels,
-        mipmappedPixels(
-          lod.pixelWidth * lod.pixelHeight,
-          this.#options.generateMipmaps
-        )
+        mipmappedPixels(lod.pixelWidth * lod.pixelHeight, this.#options.generateMipmaps)
       );
       this.#evictFor(reservation);
       if (
-        this.#entries.size >= this.#options.maximumEntries
-        || this.#reservedPixels + reservation > this.#options.maximumPixels
+        this.#entries.size >= this.#options.maximumEntries ||
+        this.#reservedPixels + reservation > this.#options.maximumPixels
       ) {
         this.#rejected += 1;
         // Capacity pressure can clear as off-screen cards release leases, so
@@ -359,10 +337,14 @@ export class ShowPixiTextureCache {
     // Registration can follow a coalesced notification. Replay only a real
     // change since rejection; scheduling itself must not advance the revision.
     if (revision !== this.#availabilityRevision) this.#scheduleAvailable();
-    return () => { this.#availabilityListeners.delete(listener); };
+    return () => {
+      this.#availabilityListeners.delete(listener);
+    };
   }
 
-  fitResidentLods(requests: readonly { url: string; lod: ShowPixiTextureLod }[]): ShowPixiTextureLod[] {
+  fitResidentLods(
+    requests: readonly { url: string; lod: ShowPixiTextureLod }[]
+  ): ShowPixiTextureLod[] {
     const urls = requests.map(({ url }) => this.#resourceUrl(url));
     const lods = requests.map(({ lod }) => normalizedLod(lod));
     // Reserve space for old/new LODs to overlap while cards replace leases.
@@ -373,10 +355,10 @@ export class ShowPixiTextureCache {
       const unique = new Map<string, number>();
       for (let index = 0; index < lods.length; index += 1) {
         const lod = lods[index]!;
-        unique.set(`${urls[index]}\n${lod.pixelWidth}x${lod.pixelHeight}`, mipmappedPixels(
-          lod.pixelWidth * lod.pixelHeight,
-          this.#options.generateMipmaps
-        ));
+        unique.set(
+          `${urls[index]}\n${lod.pixelWidth}x${lod.pixelHeight}`,
+          mipmappedPixels(lod.pixelWidth * lod.pixelHeight, this.#options.generateMipmaps)
+        );
       }
       if ([...unique.values()].reduce((sum, pixels) => sum + pixels, 0) <= budget) {
         return lods;
@@ -406,10 +388,14 @@ export class ShowPixiTextureCache {
     if (this.#destroyed || !url) return;
     url = this.#resourceUrl(url);
     const origin = this.#origin(url);
-    if (!this.#failedUrls.has(url) && !(
-      this.#blockedOrigins.has(origin)
-      && [...this.#availabilityListeners.values()].some((wait) => wait.url === url)
-    )) return;
+    if (
+      !this.#failedUrls.has(url) &&
+      !(
+        this.#blockedOrigins.has(origin) &&
+        [...this.#availabilityListeners.values()].some((wait) => wait.url === url)
+      )
+    )
+      return;
     this.#failedUrls.delete(url);
     // A real image load proves this origin is reachable again. Keep other
     // failed URL records, but allow requests held only by the origin pause.
@@ -470,14 +456,11 @@ export class ShowPixiTextureCache {
   #evictFor(requiredPixels: number) {
     const requiresEntry = requiredPixels > 0 ? 1 : 0;
     while (
-      this.#entries.size + requiresEntry > this.#options.maximumEntries
-      || this.#reservedPixels + requiredPixels > this.#options.maximumPixels
+      this.#entries.size + requiresEntry > this.#options.maximumEntries ||
+      this.#reservedPixels + requiredPixels > this.#options.maximumPixels
     ) {
       const candidate = [...this.#entries.values()]
-        .filter((entry) => (
-          entry.references === 0
-          && entry.state !== "loading"
-        ))
+        .filter((entry) => entry.references === 0 && entry.state !== "loading")
         .sort((left, right) => left.touchedAt - right.touchedAt)[0];
       if (!candidate) return;
       this.#evict(candidate);
@@ -485,11 +468,7 @@ export class ShowPixiTextureCache {
   }
 
   #pump() {
-    while (
-      !this.#destroyed
-      && this.#inFlight < this.#options.maximumInFlight
-      && this.#queue.size
-    ) {
+    while (!this.#destroyed && this.#inFlight < this.#options.maximumInFlight && this.#queue.size) {
       const entry = this.#queue.values().next().value!;
       this.#queue.delete(entry);
       if (this.#isBlocked(entry.url)) {
@@ -504,56 +483,53 @@ export class ShowPixiTextureCache {
       entry.state = "loading";
       entry.controller = new AbortController();
       this.#inFlight += 1;
-      void bitmapTexture(
-        entry.url,
-        entry,
-        this.#options.generateMipmaps,
-        entry.controller.signal
-      ).then(({ bitmap, texture }) => {
-        if (this.#destroyed || this.#entries.get(entry.key) !== entry) {
-          bitmap?.close();
-          texture.destroy(true);
-          return;
-        }
-        const actualPixels = mipmappedPixels(
-          texture.width * texture.height,
-          this.#options.generateMipmaps
-        );
-        const projected = this.#reservedPixels
-          - entry.reservedPixels
-          + actualPixels;
-        if (projected > this.#options.maximumPixels) {
-          bitmap?.close();
-          texture.destroy(true);
-          this.#discardFailedEntry(entry);
-          return;
-        }
-        this.#reservedPixels = projected;
-        entry.reservedPixels = actualPixels;
-        entry.bitmap = bitmap;
-        entry.texture = texture;
-        entry.state = "ready";
-        entry.touchedAt = performance.now();
-        this.#originTransportFailures.delete(this.#origin(entry.url));
-        for (const listener of entry.listeners) listener(texture, false, this.#availabilityRevision);
-        entry.listeners.clear();
-        // A loading entry could lose its last reference before decoding ends.
-        // It only becomes evictable now, even when the idle LRU keeps it warm.
-        if (entry.references === 0) this.#notifyAvailable();
-      }).catch((error: unknown) => {
-        if (this.#destroyed || this.#entries.get(entry.key) !== entry) return;
-        if (error instanceof TextureTransportError) {
-          this.#recordTransportFailure(entry.url);
-        }
-        const transportFailure = error instanceof TextureTransportError;
-        this.#discardFailedEntry(entry, { blockUrl: true, transportFailure });
-      }).finally(() => {
-        entry.controller = null;
-        this.#inFlight = Math.max(0, this.#inFlight - 1);
-        this.#evictFor(0);
-        this.#trimUnreferenced();
-        this.#pump();
-      });
+      void bitmapTexture(entry.url, entry, this.#options.generateMipmaps, entry.controller.signal)
+        .then(({ bitmap, texture }) => {
+          if (this.#destroyed || this.#entries.get(entry.key) !== entry) {
+            bitmap?.close();
+            texture.destroy(true);
+            return;
+          }
+          const actualPixels = mipmappedPixels(
+            texture.width * texture.height,
+            this.#options.generateMipmaps
+          );
+          const projected = this.#reservedPixels - entry.reservedPixels + actualPixels;
+          if (projected > this.#options.maximumPixels) {
+            bitmap?.close();
+            texture.destroy(true);
+            this.#discardFailedEntry(entry);
+            return;
+          }
+          this.#reservedPixels = projected;
+          entry.reservedPixels = actualPixels;
+          entry.bitmap = bitmap;
+          entry.texture = texture;
+          entry.state = "ready";
+          entry.touchedAt = performance.now();
+          this.#originTransportFailures.delete(this.#origin(entry.url));
+          for (const listener of entry.listeners)
+            listener(texture, false, this.#availabilityRevision);
+          entry.listeners.clear();
+          // A loading entry could lose its last reference before decoding ends.
+          // It only becomes evictable now, even when the idle LRU keeps it warm.
+          if (entry.references === 0) this.#notifyAvailable();
+        })
+        .catch((error: unknown) => {
+          if (this.#destroyed || this.#entries.get(entry.key) !== entry) return;
+          if (error instanceof TextureTransportError) {
+            this.#recordTransportFailure(entry.url);
+          }
+          const transportFailure = error instanceof TextureTransportError;
+          this.#discardFailedEntry(entry, { blockUrl: true, transportFailure });
+        })
+        .finally(() => {
+          entry.controller = null;
+          this.#inFlight = Math.max(0, this.#inFlight - 1);
+          this.#evictFor(0);
+          this.#trimUnreferenced();
+          this.#pump();
+        });
     }
   }
 
@@ -563,9 +539,10 @@ export class ShowPixiTextureCache {
         .filter((entry) => entry.references === 0 && entry.state !== "loading")
         .sort((left, right) => left.touchedAt - right.touchedAt);
       if (
-        candidates.length <= this.#options.maximumUnreferenced
-        && this.#reservedPixels <= this.#options.maximumPixels * 0.8
-      ) return;
+        candidates.length <= this.#options.maximumUnreferenced &&
+        this.#reservedPixels <= this.#options.maximumPixels * 0.8
+      )
+        return;
       const candidate = candidates[0];
       if (!candidate) return;
       this.#evict(candidate);
@@ -592,7 +569,11 @@ export class ShowPixiTextureCache {
 
   #discardFailedEntry(
     entry: TextureEntry,
-    { blockUrl = false, countFailure = true, transportFailure = false }: {
+    {
+      blockUrl = false,
+      countFailure = true,
+      transportFailure = false
+    }: {
       blockUrl?: boolean;
       countFailure?: boolean;
       transportFailure?: boolean;
@@ -602,10 +583,7 @@ export class ShowPixiTextureCache {
     if (blockUrl) this.#rememberFailedUrl(entry.url, transportFailure);
     if (this.#entries.get(entry.key) === entry) {
       this.#entries.delete(entry.key);
-      this.#reservedPixels = Math.max(
-        0,
-        this.#reservedPixels - entry.reservedPixels
-      );
+      this.#reservedPixels = Math.max(0, this.#reservedPixels - entry.reservedPixels);
       entry.reservedPixels = 0;
     }
     const revision = this.#availabilityRevision;
@@ -645,9 +623,12 @@ export class ShowPixiTextureCache {
       // A card owns at most one cancellable wait. Release/online events wake
       // waiters once; unavailable requests never poll the network or ticker.
       for (const [listener, wait] of [...this.#availabilityListeners]) {
-        if (this.#availabilityListeners.get(listener) !== wait
-          || wait.revision === this.#availabilityRevision
-          || this.#isBlocked(wait.url)) continue;
+        if (
+          this.#availabilityListeners.get(listener) !== wait ||
+          wait.revision === this.#availabilityRevision ||
+          this.#isBlocked(wait.url)
+        )
+          continue;
         this.#availabilityListeners.delete(listener);
         listener();
       }
@@ -655,8 +636,7 @@ export class ShowPixiTextureCache {
   }
 
   #isBlocked(url: string) {
-    return this.#failedUrls.has(url)
-      || this.#blockedOrigins.has(this.#origin(url));
+    return this.#failedUrls.has(url) || this.#blockedOrigins.has(this.#origin(url));
   }
 
   #recordTransportFailure(url: string) {

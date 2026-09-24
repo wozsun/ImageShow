@@ -1,7 +1,5 @@
 import { storageObjectKey } from "@imageshow/shared/browser";
-import type {
-  StorageBackendMigrationErrorSampleDto
-} from "@imageshow/shared/browser";
+import type { StorageBackendMigrationErrorSampleDto } from "@imageshow/shared/browser";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { mapWithWorkerPool } from "../../core/concurrency.ts";
 import { pool } from "../../core/database/pools.ts";
@@ -9,18 +7,13 @@ import {
   migrateImageToStorageBackend,
   type ImageStorageMigrationRecord
 } from "./image-migration.ts";
-import {
-  assertStorageWriteTarget,
-  getStorageBackend
-} from "../../storage/backends/registry.ts";
+import { assertStorageWriteTarget, getStorageBackend } from "../../storage/backends/registry.ts";
 import { withPlannedImageMutationRebuild } from "../mutation-sync.ts";
 import {
   READY_IMAGE_EXACT_SYNC_MAX_ITEMS,
   decideImageMutationSync
 } from "../mutation-sync-policy.ts";
-import {
-  IMAGE_TRANSFER_CONCURRENCY
-} from "../../storage/objects/image-transfer-admission.ts";
+import { IMAGE_TRANSFER_CONCURRENCY } from "../../storage/objects/image-transfer-admission.ts";
 
 const storageBackendImageMigrationPageSize = 100;
 
@@ -39,36 +32,39 @@ type StorageBackendImageMigrationOutcome =
 async function readStorageBackendImageMigrationPlan(
   source: string
 ): Promise<StorageBackendImageMigrationPlan> {
-  const row = (await pool.query(
-    `SELECT count(*)::int AS affected_count,
+  const row = (
+    await pool.query(
+      `SELECT count(*)::int AS affected_count,
             max(id::text) AS upper_bound_image_id
        FROM metadata
       WHERE storage_slug=$1`,
-    [source]
-  )).rows[0] as {
-    affected_count?: number;
-    upper_bound_image_id?: string | null;
-  } | undefined;
+      [source]
+    )
+  ).rows[0] as
+    | {
+        affected_count?: number;
+        upper_bound_image_id?: string | null;
+      }
+    | undefined;
   return {
     affectedCount: Number(row?.affected_count ?? 0),
     upperBoundImageId: row?.upper_bound_image_id ?? null
   };
 }
 
-async function readStorageBackendImageMigrationRows(
-  source: string,
-  upperBoundImageId: string
-) {
-  return (await pool.query(
-    `SELECT id, ext, storage_slug, md5,
+async function readStorageBackendImageMigrationRows(source: string, upperBoundImageId: string) {
+  return (
+    await pool.query(
+      `SELECT id, ext, storage_slug, md5,
             image_size, thumbnail_size
        FROM metadata
       WHERE storage_slug=$1
         AND id <= $2::uuid
       ORDER BY id ASC
       LIMIT $3`,
-    [source, upperBoundImageId, READY_IMAGE_EXACT_SYNC_MAX_ITEMS + 1]
-  )).rows as ImageStorageMigrationRecord[];
+      [source, upperBoundImageId, READY_IMAGE_EXACT_SYNC_MAX_ITEMS + 1]
+    )
+  ).rows as ImageStorageMigrationRecord[];
 }
 
 async function* streamStorageBackendImageMigrationRows(
@@ -79,8 +75,9 @@ async function* streamStorageBackendImageMigrationRows(
   let afterId: string | null = null;
   for (;;) {
     signal?.throwIfAborted();
-    const rows = (await pool.query(
-      `SELECT id, ext, storage_slug, md5,
+    const rows = (
+      await pool.query(
+        `SELECT id, ext, storage_slug, md5,
               image_size, thumbnail_size
          FROM metadata
         WHERE storage_slug=$1
@@ -88,8 +85,9 @@ async function* streamStorageBackendImageMigrationRows(
           AND id <= $3::uuid
         ORDER BY id ASC
         LIMIT $4`,
-      [source, afterId, upperBoundImageId, storageBackendImageMigrationPageSize]
-    )).rows as ImageStorageMigrationRecord[];
+        [source, afterId, upperBoundImageId, storageBackendImageMigrationPageSize]
+      )
+    ).rows as ImageStorageMigrationRecord[];
     signal?.throwIfAborted();
     if (!rows.length) return;
     const nextAfterId = rows.at(-1)?.id;
@@ -105,9 +103,7 @@ async function* streamStorageBackendImageMigrationRows(
 async function migrateBackendImages(
   source: string,
   target: string,
-  images:
-    | Iterable<ImageStorageMigrationRecord>
-    | AsyncIterable<ImageStorageMigrationRecord>,
+  images: Iterable<ImageStorageMigrationRecord> | AsyncIterable<ImageStorageMigrationRecord>,
   signal?: AbortSignal
 ) {
   let migrated = 0;
@@ -153,9 +149,7 @@ async function migrateBackendImages(
         error: {
           id: image.id,
           object_key: storageObjectKey(image.id, image.ext),
-          code: error instanceof ApiError
-            ? error.code
-            : "storage_migration_failed",
+          code: error instanceof ApiError ? error.code : "storage_migration_failed",
           message: errorMessage(error)
         }
       } satisfies StorageBackendImageMigrationOutcome;
@@ -166,12 +160,9 @@ async function migrateBackendImages(
     if (!page.length) return;
     const current = page;
     page = [];
-    const results = await mapWithWorkerPool(
-      current,
-      IMAGE_TRANSFER_CONCURRENCY,
-      migrateImage,
-      { signal }
-    );
+    const results = await mapWithWorkerPool(current, IMAGE_TRANSFER_CONCURRENCY, migrateImage, {
+      signal
+    });
     for (const result of results) {
       if (result.status === "migrated") migrated += 1;
       else if (result.status === "unchanged") unchanged += 1;
@@ -211,12 +202,7 @@ export async function migrateStorageBackendImages(
   options.signal?.throwIfAborted();
   if (!plan.affectedCount || !plan.upperBoundImageId) {
     return {
-      migration: await migrateBackendImages(
-        source,
-        target,
-        [],
-        options.signal
-      )
+      migration: await migrateBackendImages(source, target, [], options.signal)
     };
   }
   await assertStorageWriteTarget(target);
@@ -229,32 +215,19 @@ export async function migrateStorageBackendImages(
       plan.upperBoundImageId!,
       options.signal
     );
-    const migration = await migrateBackendImages(
-      source,
-      target,
-      images,
-      options.signal
-    );
+    const migration = await migrateBackendImages(source, target, images, options.signal);
     return { migration };
   };
   if (decision.mode === "rebuild") {
     return withPlannedImageMutationRebuild(decision, executeRebuild);
   }
 
-  const rows = await readStorageBackendImageMigrationRows(
-    source,
-    plan.upperBoundImageId
-  );
+  const rows = await readStorageBackendImageMigrationRows(source, plan.upperBoundImageId);
   options.signal?.throwIfAborted();
   const refreshedDecision = decideImageMutationSync(rows.length);
   return refreshedDecision.mode === "rebuild"
     ? withPlannedImageMutationRebuild(refreshedDecision, executeRebuild)
     : {
-        migration: await migrateBackendImages(
-          source,
-          target,
-          rows,
-          options.signal
-        )
+        migration: await migrateBackendImages(source, target, rows, options.signal)
       };
 }

@@ -45,13 +45,9 @@ export async function rememberServedIds(
   if (!clientId || !uniqueIds.length || publicRedisIsUnavailable()) return;
   try {
     const key = recentKey(clientId, signature);
-    const pipeline = redis.multi()
-      .call(
-        "ARRING",
-        key,
-        String(appConfig.randomDedupe.historySize),
-        ...uniqueIds
-      )
+    const pipeline = redis
+      .multi()
+      .call("ARRING", key, String(appConfig.randomDedupe.historySize), ...uniqueIds)
       .expire(key, appConfig.randomDedupe.ttlSeconds);
     await execRedisPipeline(pipeline);
   } catch {

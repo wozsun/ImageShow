@@ -2,10 +2,7 @@ import type { PoolClient } from "pg";
 import { pool } from "../../core/database/pools.ts";
 
 type ReadyImageRevisionReader = {
-  query(
-    text: string,
-    values?: unknown[]
-  ): Promise<{ rows: Record<string, unknown>[] }>;
+  query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
 };
 
 export type ReadyImageRevision = string;
@@ -25,9 +22,8 @@ function parseRevision(value: unknown): ReadyImageRevision {
 
 function revisionSnapshot(row: Record<string, unknown> | undefined) {
   if (!row) throw new Error("ready_image_revision singleton is missing");
-  const updatedAt = row.updated_at instanceof Date
-    ? row.updated_at.toISOString()
-    : String(row.updated_at ?? "");
+  const updatedAt =
+    row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at ?? "");
   if (!Number.isFinite(Date.parse(updatedAt))) {
     throw new Error("PostgreSQL returned an invalid ready-image revision timestamp");
   }
@@ -40,11 +36,13 @@ function revisionSnapshot(row: Record<string, unknown> | undefined) {
 export async function getReadyImageRevision(
   client: ReadyImageRevisionReader = pool
 ): Promise<ReadyImageRevisionSnapshot> {
-  const row = (await client.query(
-    `SELECT revision, updated_at
+  const row = (
+    await client.query(
+      `SELECT revision, updated_at
        FROM ready_image_revision
       WHERE singleton=1`
-  )).rows[0] as Record<string, unknown> | undefined;
+    )
+  ).rows[0] as Record<string, unknown> | undefined;
   return revisionSnapshot(row);
 }
 
@@ -56,8 +54,9 @@ export async function getReadyImageRevision(
 export async function bumpReadyImageRevision(
   client: PoolClient
 ): Promise<ReadyImageRevisionSnapshot> {
-  const row = (await client.query(
-    `WITH marker AS (
+  const row = (
+    await client.query(
+      `WITH marker AS (
        SELECT set_config(
          'imageshow.ready_image_revision_bumped',
          '1',
@@ -82,14 +81,12 @@ export async function bumpReadyImageRevision(
       WHERE singleton=1
         AND NOT EXISTS (SELECT 1 FROM updated)
      LIMIT 1`
-  )).rows[0] as Record<string, unknown> | undefined;
+    )
+  ).rows[0] as Record<string, unknown> | undefined;
   return revisionSnapshot(row);
 }
 
-export function compareReadyImageRevisions(
-  left: ReadyImageRevision,
-  right: ReadyImageRevision
-) {
+export function compareReadyImageRevisions(left: ReadyImageRevision, right: ReadyImageRevision) {
   const leftValue = BigInt(parseRevision(left));
   const rightValue = BigInt(parseRevision(right));
   return leftValue < rightValue ? -1 : leftValue > rightValue ? 1 : 0;

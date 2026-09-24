@@ -2,28 +2,20 @@ import type { IngestionStatusItemDto } from "@imageshow/shared/browser";
 import type { IngestionJob } from "./ingestion-job.js";
 import { activeIngestionClientStatus, completedIngestionJobPatch } from "./server-ingestion-job.js";
 
-const terminalClientStatuses = new Set<IngestionJob["status"]>([
-  "done",
-  "cancelled"
-]);
+const terminalClientStatuses = new Set<IngestionJob["status"]>(["done", "cancelled"]);
 
-export function ingestionStatusPatchMovesForward(
-  job: IngestionJob,
-  patch: Partial<IngestionJob>
-) {
-  if (
-    terminalClientStatuses.has(job.status)
-    && patch.status
-    && patch.status !== job.status
-  ) return false;
+export function ingestionStatusPatchMovesForward(job: IngestionJob, patch: Partial<IngestionJob>) {
+  if (terminalClientStatuses.has(job.status) && patch.status && patch.status !== job.status)
+    return false;
   if (patch.serverVersion !== undefined) {
     const currentVersion = job.serverVersion ?? 0;
     if (patch.serverVersion < currentVersion) return false;
     if (
-      patch.serverVersion === currentVersion
-      && patch.serverProgressSeq !== undefined
-      && patch.serverProgressSeq < (job.serverProgressSeq ?? 0)
-    ) return false;
+      patch.serverVersion === currentVersion &&
+      patch.serverProgressSeq !== undefined &&
+      patch.serverProgressSeq < (job.serverProgressSeq ?? 0)
+    )
+      return false;
   }
   return true;
 }
@@ -33,11 +25,12 @@ export function ingestionStatusEventPatch(
   state: IngestionStatusItemDto
 ): Partial<IngestionJob> | null {
   if (
-    !job.sessionId
-    || !job.imageId
-    || state.session_id !== job.sessionId
-    || state.image_id.toLowerCase() !== job.imageId.toLowerCase()
-  ) return null;
+    !job.sessionId ||
+    !job.imageId ||
+    state.session_id !== job.sessionId ||
+    state.image_id.toLowerCase() !== job.imageId.toLowerCase()
+  )
+    return null;
   const authority = {
     serverAttemptKey: job.attemptKey,
     serverSessionId: job.sessionId,
@@ -81,15 +74,15 @@ export function ingestionStatusEventPatch(
     serverVersion: item.version,
     serverProgressSeq: item.progress_seq,
     status: activeIngestionClientStatus(item),
-    failureStage: failed
-      ? job.commitIntent ? "commit" : "prepare"
-      : undefined,
-    commitFailureCheckpoint: failed && job.commitIntent
-      ? item.status === "failed" && item.prepared ? "committing" : "unknown"
-      : undefined,
-    resultState: item.status === "committing" || item.status === "resolving"
-      ? "pending"
-      : undefined,
+    failureStage: failed ? (job.commitIntent ? "commit" : "prepare") : undefined,
+    commitFailureCheckpoint:
+      failed && job.commitIntent
+        ? item.status === "failed" && item.prepared
+          ? "committing"
+          : "unknown"
+        : undefined,
+    resultState:
+      item.status === "committing" || item.status === "resolving" ? "pending" : undefined,
     message: item.error?.message || item.message,
     transferProgress: item.progress
   };

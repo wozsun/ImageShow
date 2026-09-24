@@ -6,30 +6,39 @@ import { interceptSqlQueries, withCommitFault } from "./database-faults.mts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
-const registryConfig = {
-  endpoint: "https://objects.example.com", region: "ap-southeast-1",
-  bucket: "gallery", access_key_id: "key", secret_access_key: "secret",
-  force_path_style: false, root_path: "/images", public_base_url: "https://cdn.example.com",
-  connect_timeout_seconds: 15, idle_timeout_seconds: 15, task_timeout_seconds: 300
-};
-const databasePools = runtime.databasePools;
-const database = {
-  ...databasePools,
-  ...await import("../../../../packages/server/src/core/database/advisory-locks.ts")
-};
-const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
-const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
-const storageMigration = await import("../../../../packages/server/src/images/storage-location/image-migration.ts");
-const storageMigrationAdmission = await import(
-  "../../../../packages/server/src/storage/objects/image-transfer-admission.ts"
-);
-const imageStorageMigration = await import("../../../../packages/server/src/images/storage-location/selected-images-migration.ts");
-const backendMigration = await import("../../../../packages/server/src/images/storage-location/storage-backend-migration.ts");
-const apiError = await import("../../../../packages/server/src/core/api-error.ts");
-const localAccess = await registry.resolveStorageAccess("local");
+  const registryConfig = {
+    endpoint: "https://objects.example.com",
+    region: "ap-southeast-1",
+    bucket: "gallery",
+    access_key_id: "key",
+    secret_access_key: "secret",
+    force_path_style: false,
+    root_path: "/images",
+    public_base_url: "https://cdn.example.com",
+    connect_timeout_seconds: 15,
+    idle_timeout_seconds: 15,
+    task_timeout_seconds: 300
+  };
+  const databasePools = runtime.databasePools;
+  const database = {
+    ...databasePools,
+    ...(await import("../../../../packages/server/src/core/database/advisory-locks.ts"))
+  };
+  const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
+  const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+  const storageMigration =
+    await import("../../../../packages/server/src/images/storage-location/image-migration.ts");
+  const storageMigrationAdmission =
+    await import("../../../../packages/server/src/storage/objects/image-transfer-admission.ts");
+  const imageStorageMigration =
+    await import("../../../../packages/server/src/images/storage-location/selected-images-migration.ts");
+  const backendMigration =
+    await import("../../../../packages/server/src/images/storage-location/storage-backend-migration.ts");
+  const apiError = await import("../../../../packages/server/src/core/api-error.ts");
+  const localAccess = await registry.resolveStorageAccess("local");
   await database.pool.query(
-    "INSERT INTO storage_backend (slug, display_name, type, enabled) "
-      + "VALUES ('local-migration', 'Local migration', 'local', true)"
+    "INSERT INTO storage_backend (slug, display_name, type, enabled) " +
+      "VALUES ('local-migration', 'Local migration', 'local', true)"
   );
   registry.invalidateStorageBackendRegistry();
   const migrationIds = {
@@ -39,7 +48,12 @@ const localAccess = await registry.resolveStorageAccess("local");
     unchanged: randomUUID(),
     failed: randomUUID()
   };
-  const addMigrationImage = async (id: string, storageSlug: string, body: Buffer | null, md5?: string) => {
+  const addMigrationImage = async (
+    id: string,
+    storageSlug: string,
+    body: Buffer | null,
+    md5?: string
+  ) => {
     const key = storageObjectKey(id, "webp");
 
     await database.pool.query(
@@ -48,7 +62,10 @@ const localAccess = await registry.resolveStorageAccess("local");
       [
         id,
         storageSlug,
-        md5 ?? createHash("md5").update(body ?? Buffer.alloc(0)).digest("hex"),
+        md5 ??
+          createHash("md5")
+            .update(body ?? Buffer.alloc(0))
+            .digest("hex"),
         body?.byteLength ?? 0
       ]
     );
@@ -110,34 +127,35 @@ const localAccess = await registry.resolveStorageAccess("local");
     ]
   );
   assert.deepEqual(
-    (await imageStorageMigration.migrateSelectedImagesToStorageBackend(
-      [migrationIds.unchanged],
-      "local-migration"
-    )).results,
+    (
+      await imageStorageMigration.migrateSelectedImagesToStorageBackend(
+        [migrationIds.unchanged],
+        "local-migration"
+      )
+    ).results,
     [{ id: migrationIds.unchanged, status: "unchanged" }]
   );
   assert.equal(
-    (await database.pool.query(
-      "SELECT storage_slug FROM metadata WHERE id=$1",
-      [migrationIds.migrated]
-    )).rows[0]?.storage_slug,
+    (
+      await database.pool.query("SELECT storage_slug FROM metadata WHERE id=$1", [
+        migrationIds.migrated
+      ])
+    ).rows[0]?.storage_slug,
     "local-migration"
   );
   assert.equal(await localAccess.driver.exists("full", migratedKey), true);
 
   const thumbnailMissingMigrationId = randomUUID();
   const thumbnailMissingMigrationKey = storageObjectKey(thumbnailMissingMigrationId, "webp");
-  const thumbnailMissingMigrationBody = Buffer.from(
-    "migration-without-thumbnail"
-  );
+  const thumbnailMissingMigrationBody = Buffer.from("migration-without-thumbnail");
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size)
        VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, 0)`,
     [
-        thumbnailMissingMigrationId,
-        createHash("md5").update(thumbnailMissingMigrationBody).digest("hex"),
-        thumbnailMissingMigrationBody.byteLength
-      ]
+      thumbnailMissingMigrationId,
+      createHash("md5").update(thumbnailMissingMigrationBody).digest("hex"),
+      thumbnailMissingMigrationBody.byteLength
+    ]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -145,28 +163,28 @@ const localAccess = await registry.resolveStorageAccess("local");
     thumbnailMissingMigrationBody,
     "image/webp"
   );
-  const thumbnailMissingMigration = await imageStorageMigration
-    .migrateSelectedImagesToStorageBackend(
+  const thumbnailMissingMigration =
+    await imageStorageMigration.migrateSelectedImagesToStorageBackend(
       [thumbnailMissingMigrationId],
       "local-migration"
     );
-  assert.deepEqual(thumbnailMissingMigration.results, [{
-    id: thumbnailMissingMigrationId,
-    status: "failed",
-    code: "storage_thumbnail_missing",
-    message: "图片当前位置的缩略图不存在，请先在检查页运行“存储维护”"
-  }]);
+  assert.deepEqual(thumbnailMissingMigration.results, [
+    {
+      id: thumbnailMissingMigrationId,
+      status: "failed",
+      code: "storage_thumbnail_missing",
+      message: "图片当前位置的缩略图不存在，请先在检查页运行“存储维护”"
+    }
+  ]);
   assert.equal(
-    (await database.pool.query(
-      "SELECT storage_slug FROM metadata WHERE id=$1",
-      [thumbnailMissingMigrationId]
-    )).rows[0]?.storage_slug,
+    (
+      await database.pool.query("SELECT storage_slug FROM metadata WHERE id=$1", [
+        thumbnailMissingMigrationId
+      ])
+    ).rows[0]?.storage_slug,
     "local"
   );
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id=$1",
-    [thumbnailMissingMigrationId]
-  );
+  await database.pool.query("DELETE FROM metadata WHERE id=$1", [thumbnailMissingMigrationId]);
   await removeDriverObject(localAccess.driver, "full", thumbnailMissingMigrationKey);
 
   const backendErrorIds = {
@@ -174,11 +192,7 @@ const localAccess = await registry.resolveStorageAccess("local");
     known: randomUUID(),
     unknown: randomUUID()
   };
-  await addMigrationImage(
-    backendErrorIds.missing,
-    "local-migration",
-    null
-  );
+  await addMigrationImage(backendErrorIds.missing, "local-migration", null);
   const backendKnownErrorKey = await addMigrationImage(
     backendErrorIds.known,
     "local-migration",
@@ -216,15 +230,18 @@ const localAccess = await registry.resolveStorageAccess("local");
   assert.equal(backendMigrationReport.migration.missing, 1);
   assert.equal(backendMigrationReport.migration.error_count, 3);
   assert.equal(backendMigrationReport.migration.error_samples.length, 3);
-  assert.ok(backendMigrationReport.migration.error_samples.every((sample) => (
-    Object.keys(sample).sort().join(",") === "code,id,message,object_key"
-      && typeof sample.message === "string"
-      && sample.message.length > 0
-  )));
+  assert.ok(
+    backendMigrationReport.migration.error_samples.every(
+      (sample) =>
+        Object.keys(sample).sort().join(",") === "code,id,message,object_key" &&
+        typeof sample.message === "string" &&
+        sample.message.length > 0
+    )
+  );
   assert.deepEqual(
-    Object.fromEntries(backendMigrationReport.migration.error_samples.map(
-      ({ id, code }) => [id, code]
-    )),
+    Object.fromEntries(
+      backendMigrationReport.migration.error_samples.map(({ id, code }) => [id, code])
+    ),
     {
       [backendErrorIds.missing]: "source_object_missing",
       [backendErrorIds.known]: "storage_thumbnail_missing",
@@ -232,17 +249,17 @@ const localAccess = await registry.resolveStorageAccess("local");
     }
   );
   assert.equal(
-    (await database.pool.query(
-      "SELECT storage_slug FROM metadata WHERE id=$1",
-      [migrationIds.migrated]
-    )).rows[0]?.storage_slug,
+    (
+      await database.pool.query("SELECT storage_slug FROM metadata WHERE id=$1", [
+        migrationIds.migrated
+      ])
+    ).rows[0]?.storage_slug,
     "local"
   );
   const backendErrorFixtureIds = Object.values(backendErrorIds);
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id=ANY($1::uuid[])",
-    [backendErrorFixtureIds]
-  );
+  await database.pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [
+    backendErrorFixtureIds
+  ]);
   for (const key of [backendKnownErrorKey, backendUnknownErrorKey]) {
     await removeDriverObject(localAccess.driver, "full", key);
     await removeDriverObject(
@@ -255,9 +272,9 @@ const localAccess = await registry.resolveStorageAccess("local");
   const existingTargetSource = "migration-missing-source";
   const existingTargetDestination = "migration-existing-target";
   await database.pool.query(
-    "INSERT INTO storage_backend (slug, display_name, type, config, enabled) VALUES "
-      + "($1, 'Migration missing source', 's3', $3::jsonb, true), "
-      + "($2, 'Migration existing target', 's3', $4::jsonb, true)",
+    "INSERT INTO storage_backend (slug, display_name, type, config, enabled) VALUES " +
+      "($1, 'Migration missing source', 's3', $3::jsonb, true), " +
+      "($2, 'Migration existing target', 's3', $4::jsonb, true)",
     [
       existingTargetSource,
       existingTargetDestination,
@@ -274,27 +291,17 @@ const localAccess = await registry.resolveStorageAccess("local");
     ]
   );
   registry.invalidateStorageBackendRegistry();
-  const missingSourceAccess = await registry.resolveStorageAccess(
-    existingTargetSource
-  );
-  const existingTargetAccess = await registry.resolveStorageAccess(
-    existingTargetDestination
-  );
+  const missingSourceAccess = await registry.resolveStorageAccess(existingTargetSource);
+  const existingTargetAccess = await registry.resolveStorageAccess(existingTargetDestination);
   const originalMissingSourceOpenRead = missingSourceAccess.driver.openRead;
   const originalExistingTargetExists = existingTargetAccess.driver.exists;
   const originalExistingTargetOpenRead = existingTargetAccess.driver.openRead;
   const existingTargetIds = [randomUUID(), randomUUID()];
-  const existingTargetKeys = new Set(existingTargetIds.map(
-    (id) => storageObjectKey(id, "webp")
-  ));
+  const existingTargetKeys = new Set(existingTargetIds.map((id) => storageObjectKey(id, "webp")));
   let existingTargetDigestReads = 0;
   missingSourceAccess.driver.openRead = async function (prefix, key, ...rest) {
     if (prefix === "full" && existingTargetKeys.has(key)) {
-      throw new apiError.ApiError(
-        404,
-        "storage_object_not_found",
-        "Storage object not found"
-      );
+      throw new apiError.ApiError(404, "storage_object_not_found", "Storage object not found");
     }
     return originalMissingSourceOpenRead.call(this, prefix, key, ...rest);
   };
@@ -311,25 +318,26 @@ const localAccess = await registry.resolveStorageAccess("local");
   };
   try {
     for (const [index, id] of existingTargetIds.entries()) {
-
       const expectedBody = "existing-target-" + index;
       await database.pool.query(
         `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size, status, deleted_at)
        VALUES ($1, 'integration-admin', $2, 'pc', 'dark', NULL, 'webp', $3, $4, $4, 'deleted', now())`,
         [
-        id,
-        existingTargetSource,
-        createHash("md5").update(expectedBody).digest("hex"),
-        Buffer.byteLength(expectedBody)
-      ]
+          id,
+          existingTargetSource,
+          createHash("md5").update(expectedBody).digest("hex"),
+          Buffer.byteLength(expectedBody)
+        ]
       );
     }
 
-    const existingTargetSourceRecord = (await database.pool.query(
-      "SELECT id, ext, storage_slug, md5, image_size, thumbnail_size "
-        + "FROM metadata WHERE id=$1",
-      [existingTargetIds[0]]
-    )).rows[0];
+    const existingTargetSourceRecord = (
+      await database.pool.query(
+        "SELECT id, ext, storage_slug, md5, image_size, thumbnail_size " +
+          "FROM metadata WHERE id=$1",
+        [existingTargetIds[0]]
+      )
+    ).rows[0];
     assert.equal(
       await storageMigration.migrateImageToStorageBackend(
         existingTargetSourceRecord,
@@ -342,28 +350,27 @@ const localAccess = await registry.resolveStorageAccess("local");
       [existingTargetIds[0]],
       existingTargetDestination
     );
-    assert.deepEqual(selectedMissing.results, [{
-      id: existingTargetIds[0],
-      status: "failed",
-      code: "source_missing",
-      message: "Image storage source is missing"
-    }]);
+    assert.deepEqual(selectedMissing.results, [
+      {
+        id: existingTargetIds[0],
+        status: "failed",
+        code: "source_missing",
+        message: "Image storage source is missing"
+      }
+    ]);
 
-    const backendExistingTargetMissing = await backendMigration
-      .migrateStorageBackendImages(existingTargetSource, existingTargetDestination);
+    const backendExistingTargetMissing = await backendMigration.migrateStorageBackendImages(
+      existingTargetSource,
+      existingTargetDestination
+    );
     assert.equal(backendExistingTargetMissing.migration.migrated, 0);
     assert.equal(backendExistingTargetMissing.migration.missing, 2);
     assert.equal(backendExistingTargetMissing.migration.error_count, 2);
     assert.deepEqual(
       Object.fromEntries(
-        backendExistingTargetMissing.migration.error_samples.map(
-          ({ id, code }) => [id, code]
-        )
+        backendExistingTargetMissing.migration.error_samples.map(({ id, code }) => [id, code])
       ),
-      Object.fromEntries(existingTargetIds.map((id) => [
-        id,
-        "source_object_missing"
-      ]))
+      Object.fromEntries(existingTargetIds.map((id) => [id, "source_object_missing"]))
     );
     assert.equal(
       existingTargetDigestReads,
@@ -374,21 +381,17 @@ const localAccess = await registry.resolveStorageAccess("local");
     missingSourceAccess.driver.openRead = originalMissingSourceOpenRead;
     existingTargetAccess.driver.exists = originalExistingTargetExists;
     existingTargetAccess.driver.openRead = originalExistingTargetOpenRead;
-    await database.pool.query(
-      "DELETE FROM metadata WHERE id=ANY($1::uuid[])",
-      [existingTargetIds]
-    );
-    await database.pool.query(
-      "DELETE FROM storage_backend WHERE slug=ANY($1::text[])",
-      [[existingTargetSource, existingTargetDestination]]
-    );
+    await database.pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [existingTargetIds]);
+    await database.pool.query("DELETE FROM storage_backend WHERE slug=ANY($1::text[])", [
+      [existingTargetSource, existingTargetDestination]
+    ]);
     registry.invalidateStorageBackendRegistry();
   }
 
   const backendOverflowSource = "local-migration-overflow";
   await database.pool.query(
-    "INSERT INTO storage_backend (slug, display_name, type, enabled) "
-      + "VALUES ($1, 'Local migration overflow', 'local', true)",
+    "INSERT INTO storage_backend (slug, display_name, type, enabled) " +
+      "VALUES ($1, 'Local migration overflow', 'local', true)",
     [backendOverflowSource]
   );
   registry.invalidateStorageBackendRegistry();
@@ -410,17 +413,13 @@ const localAccess = await registry.resolveStorageAccess("local");
     [...backendOverflowIds].sort().slice(0, 100),
     "错误总数保持权威，样本只保留稳定顺序的前 100 项"
   );
-  assert.ok(backendOverflowReport.migration.error_samples.every(
-    ({ code }) => code === "source_object_missing"
-  ));
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id=ANY($1::uuid[])",
-    [backendOverflowIds]
+  assert.ok(
+    backendOverflowReport.migration.error_samples.every(
+      ({ code }) => code === "source_object_missing"
+    )
   );
-  await database.pool.query(
-    "DELETE FROM storage_backend WHERE slug=$1",
-    [backendOverflowSource]
-  );
+  await database.pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [backendOverflowIds]);
+  await database.pool.query("DELETE FROM storage_backend WHERE slug=$1", [backendOverflowSource]);
   registry.invalidateStorageBackendRegistry();
 
   const waitForAbortReads = async (startedPromise: Promise<void>, label: string) => {
@@ -446,12 +445,7 @@ const localAccess = await registry.resolveStorageAccess("local");
     await database.pool.query(
       `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size, status, deleted_at)
        VALUES ($1, 'integration-admin', $2, 'pc', 'dark', NULL, 'webp', $3, $4, $4, 'deleted', now())`,
-      [
-        id,
-        storageSlug,
-        createHash("md5").update(body).digest("hex"),
-        body.byteLength
-      ]
+      [id, storageSlug, createHash("md5").update(body).digest("hex"), body.byteLength]
     );
     await localAccess.driver.writeBuffer("full", key, body, "image/webp");
     await localAccess.driver.writeBuffer(
@@ -471,25 +465,20 @@ const localAccess = await registry.resolveStorageAccess("local");
         imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(fixture.key)!.id)
       );
     }
-    await database.pool.query(
-      "DELETE FROM background_job WHERE target_id=ANY($1::text[])",
-      [fixtures.map((fixture) => fixture.id)]
-    );
-    await database.pool.query(
-      "DELETE FROM metadata WHERE id=ANY($1::uuid[])",
-      [fixtures.map((fixture) => fixture.id)]
-    );
+    await database.pool.query("DELETE FROM background_job WHERE target_id=ANY($1::text[])", [
+      fixtures.map((fixture) => fixture.id)
+    ]);
+    await database.pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [
+      fixtures.map((fixture) => fixture.id)
+    ]);
   };
 
-  const migrationConcurrency = storageMigrationAdmission
-    .IMAGE_TRANSFER_CONCURRENCY;
+  const migrationConcurrency = storageMigrationAdmission.IMAGE_TRANSFER_CONCURRENCY;
   const listAbortFixtures = [];
   for (let index = 0; index < migrationConcurrency + 2; index += 1) {
     listAbortFixtures.push(await addAbortMigrationImage(randomUUID(), "local"));
   }
-  const listAbortKeys = new Set(
-    listAbortFixtures.map((fixture) => fixture.key)
-  );
+  const listAbortKeys = new Set(listAbortFixtures.map((fixture) => fixture.key));
   const originalListAbortOpenRead = localAccess.driver.openRead;
   let listAbortReadCount = 0;
   let releaseListAbortReads!: () => void;
@@ -500,10 +489,7 @@ const localAccess = await registry.resolveStorageAccess("local");
   const listAbortReadsStarted = new Promise<void>((resolve) => {
     markListAbortReadsStarted = resolve;
   });
-  const expectedListAbortReads = Math.min(
-    migrationConcurrency,
-    listAbortFixtures.length
-  );
+  const expectedListAbortReads = Math.min(migrationConcurrency, listAbortFixtures.length);
   localAccess.driver.openRead = async function (...args) {
     if (args[0] === "full" && listAbortKeys.has(args[1])) {
       listAbortReadCount += 1;
@@ -522,16 +508,10 @@ const localAccess = await registry.resolveStorageAccess("local");
     { signal: listAbortController.signal }
   );
   try {
-    await waitForAbortReads(
-      listAbortReadsStarted,
-      "image migration list"
-    );
+    await waitForAbortReads(listAbortReadsStarted, "image migration list");
     listAbortController.abort(listAbortReason);
     releaseListAbortReads();
-    await assert.rejects(
-      interruptedListMigration,
-      (error) => error === listAbortReason
-    );
+    await assert.rejects(interruptedListMigration, (error) => error === listAbortReason);
   } finally {
     releaseListAbortReads();
     await interruptedListMigration.catch(() => undefined);
@@ -539,11 +519,14 @@ const localAccess = await registry.resolveStorageAccess("local");
   }
   assert.equal(listAbortReadCount, expectedListAbortReads);
   assert.equal(
-    Number((await database.pool.query(
-      "SELECT count(*) FROM metadata WHERE id=ANY($1::uuid[]) "
-        + "AND storage_slug='local'",
-      [listAbortFixtures.map((fixture) => fixture.id)]
-    )).rows[0]?.count),
+    Number(
+      (
+        await database.pool.query(
+          "SELECT count(*) FROM metadata WHERE id=ANY($1::uuid[]) " + "AND storage_slug='local'",
+          [listAbortFixtures.map((fixture) => fixture.id)]
+        )
+      ).rows[0]?.count
+    ),
     listAbortFixtures.length,
     "请求中止时当前并发片收口，后续图片不得启动或提交迁移"
   );
@@ -551,21 +534,16 @@ const localAccess = await registry.resolveStorageAccess("local");
 
   const backendAbortSource = "local-abort-source";
   await database.pool.query(
-    "INSERT INTO storage_backend (slug, display_name, type, enabled) "
-      + "VALUES ($1, 'Local abort source', 'local', true)",
+    "INSERT INTO storage_backend (slug, display_name, type, enabled) " +
+      "VALUES ($1, 'Local abort source', 'local', true)",
     [backendAbortSource]
   );
   registry.invalidateStorageBackendRegistry();
   const backendAbortFixtures = [];
   for (let index = 0; index < 3; index += 1) {
-    backendAbortFixtures.push(await addAbortMigrationImage(
-      randomUUID(),
-      backendAbortSource
-    ));
+    backendAbortFixtures.push(await addAbortMigrationImage(randomUUID(), backendAbortSource));
   }
-  const backendAbortKeys = new Set(
-    backendAbortFixtures.map((fixture) => fixture.key)
-  );
+  const backendAbortKeys = new Set(backendAbortFixtures.map((fixture) => fixture.key));
   const originalBackendAbortOpenRead = localAccess.driver.openRead;
   let backendAbortReadCount = 0;
   let releaseBackendAbortRead!: () => void;
@@ -592,42 +570,30 @@ const localAccess = await registry.resolveStorageAccess("local");
     { signal: backendAbortController.signal }
   );
   try {
-    await waitForAbortReads(
-      backendAbortReadStarted,
-      "backend migration"
-    );
+    await waitForAbortReads(backendAbortReadStarted, "backend migration");
     backendAbortController.abort(backendAbortReason);
     releaseBackendAbortRead();
-    await assert.rejects(
-      interruptedBackendMigration,
-      (error) => error === backendAbortReason
-    );
+    await assert.rejects(interruptedBackendMigration, (error) => error === backendAbortReason);
   } finally {
     releaseBackendAbortRead();
     await interruptedBackendMigration.catch(() => undefined);
     localAccess.driver.openRead = originalBackendAbortOpenRead;
   }
+  assert.equal(backendAbortReadCount, Math.min(migrationConcurrency, backendAbortFixtures.length));
   assert.equal(
-    backendAbortReadCount,
-    Math.min(migrationConcurrency, backendAbortFixtures.length)
-  );
-  assert.equal(
-    Number((await database.pool.query(
-      "SELECT count(*) FROM metadata WHERE id=ANY($1::uuid[]) "
-        + "AND storage_slug=$2",
-      [
-        backendAbortFixtures.map((fixture) => fixture.id),
-        backendAbortSource
-      ]
-    )).rows[0]?.count),
+    Number(
+      (
+        await database.pool.query(
+          "SELECT count(*) FROM metadata WHERE id=ANY($1::uuid[]) " + "AND storage_slug=$2",
+          [backendAbortFixtures.map((fixture) => fixture.id), backendAbortSource]
+        )
+      ).rows[0]?.count
+    ),
     backendAbortFixtures.length,
     "整后端请求中止后只收口已进入固定准入片的项目，且不得提交当前位置"
   );
   await removeAbortMigrationImages(backendAbortFixtures);
-  await database.pool.query(
-    "DELETE FROM storage_backend WHERE slug=$1",
-    [backendAbortSource]
-  );
+  await database.pool.query("DELETE FROM storage_backend WHERE slug=$1", [backendAbortSource]);
   registry.invalidateStorageBackendRegistry();
 
   const responseLossId = randomUUID();
@@ -635,48 +601,53 @@ const localAccess = await registry.resolveStorageAccess("local");
   await addMigrationImage(responseLossId, "local", responseLossBody);
 
   const verifyStorageMigrationResponseLoss = async () => {
-  let armed = false;
-  let responseLost = false;
-  const restore = interceptSqlQueries(database.pool, async (sql, _values, query) => {
-    const result = await query();
-    if (sql.includes("FROM ready_image_revision")) armed = true;
-    return result;
-  });
-  try {
+    let armed = false;
+    let responseLost = false;
+    const restore = interceptSqlQueries(database.pool, async (sql, _values, query) => {
+      const result = await query();
+      if (sql.includes("FROM ready_image_revision")) armed = true;
+      return result;
+    });
+    try {
+      assert.equal(
+        await withCommitFault(
+          database.pool,
+          "committed",
+          () =>
+            storageMigration.migrateImageToStorageBackend(
+              {
+                id: responseLossId,
+                ext: "webp",
+                storage_slug: "local",
+                md5: createHash("md5").update(responseLossBody).digest("hex"),
+                image_size: responseLossBody.byteLength,
+                thumbnail_size: responseLossBody.byteLength
+              },
+              "local-migration"
+            ),
+          async () => undefined,
+          () => {
+            if (!armed || responseLost) return false;
+            responseLost = true;
+            return true;
+          }
+        ),
+        "migrated"
+      );
+    } finally {
+      restore();
+    }
+    assert.equal(responseLost, true);
     assert.equal(
-      await withCommitFault(database.pool, "committed", () => storageMigration.migrateImageToStorageBackend(
-        {
-          id: responseLossId,
-          ext: "webp",
-          storage_slug: "local",
-          md5: createHash("md5").update(responseLossBody).digest("hex"),
-          image_size: responseLossBody.byteLength,
-          thumbnail_size: responseLossBody.byteLength
-        },
-        "local-migration"
-      ), async () => undefined, () => {
-        if (!armed || responseLost) return false;
-        responseLost = true;
-        return true;
-      }),
-      "migrated"
+      (await database.pool.query("SELECT storage_slug FROM metadata WHERE id=$1", [responseLossId]))
+        .rows[0]?.storage_slug,
+      "local-migration"
     );
-  } finally {
-    restore();
-  }
-  assert.equal(responseLost, true);
-  assert.equal(
-    (await database.pool.query(
-      "SELECT storage_slug FROM metadata WHERE id=$1",
-      [responseLossId]
-    )).rows[0]?.storage_slug,
-    "local-migration"
-  );
   };
 
   await database.pool.query(
-    "INSERT INTO storage_backend (slug, display_name, type, enabled) "
-      + "VALUES ('local-copy', 'Local copy', 'local', true)"
+    "INSERT INTO storage_backend (slug, display_name, type, enabled) " +
+      "VALUES ('local-copy', 'Local copy', 'local', true)"
   );
   registry.invalidateStorageBackendRegistry();
   await verifyStorageMigrationResponseLoss();

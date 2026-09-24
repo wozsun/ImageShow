@@ -8,13 +8,14 @@ const brotliAsync = promisify(brotliCompress);
 const gzipAsync = promisify(gzip);
 const maxEncodingInputBytes = 1024 * 1024;
 const contentEncoders = {
-  br: (identity: ContentRepresentation) => brotliAsync(identity.body, {
-    params: {
-      [constants.BROTLI_PARAM_QUALITY]: 11,
-      [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT,
-      [constants.BROTLI_PARAM_SIZE_HINT]: identity.byteLength
-    }
-  }),
+  br: (identity: ContentRepresentation) =>
+    brotliAsync(identity.body, {
+      params: {
+        [constants.BROTLI_PARAM_QUALITY]: 11,
+        [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT,
+        [constants.BROTLI_PARAM_SIZE_HINT]: identity.byteLength
+      }
+    }),
   gzip: (identity: ContentRepresentation) => gzipAsync(identity.body, { level: 9 })
 };
 
@@ -41,7 +42,10 @@ export function createEncodedContentCache(encoders = contentEncoders) {
         const body = await encoders[encoding](identity);
         if (current === snapshot && body.byteLength < identity.byteLength) {
           snapshot.variants.set(encoding, {
-            body, byteLength: body.byteLength, etag: identity.etag, encoding
+            body,
+            byteLength: body.byteLength,
+            etag: identity.etag,
+            encoding
           });
         }
       } catch (error) {

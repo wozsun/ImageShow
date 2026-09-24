@@ -1,9 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useState,
-  type RefObject
-} from "react";
+import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
 import type { Device } from "../../lib/types.js";
 import { galleryColumnCount } from "../../lib/gallery/gallery-columns.js";
 
@@ -14,9 +9,7 @@ type GalleryGeometry = {
 };
 
 export function useGalleryColumnCount() {
-  const [columnCount, setColumnCount] = useState(
-    () => galleryColumnCount(window.innerWidth)
-  );
+  const [columnCount, setColumnCount] = useState(() => galleryColumnCount(window.innerWidth));
   useEffect(() => {
     let frame: number | undefined;
     const update = () => {
@@ -41,9 +34,7 @@ function cssPixels(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function useGalleryGeometry(
-  galleryRef: RefObject<HTMLElement | null>
-) {
+export function useGalleryGeometry(galleryRef: RefObject<HTMLElement | null>) {
   const [geometry, setGeometry] = useState<GalleryGeometry>(() => {
     const mobile = window.innerWidth <= 760;
     const padding = mobile ? 16 : 28;
@@ -61,18 +52,16 @@ export function useGalleryGeometry(
       const style = window.getComputedStyle(gallery);
       const contentWidth = Math.max(
         0,
-        gallery.clientWidth
-        - cssPixels(style.paddingLeft)
-        - cssPixels(style.paddingRight)
+        gallery.clientWidth - cssPixels(style.paddingLeft) - cssPixels(style.paddingRight)
       );
-      const gap = cssPixels(
-        style.getPropertyValue("--gallery-gap")
+      const gap = cssPixels(style.getPropertyValue("--gallery-gap"));
+      setGeometry((current) =>
+        current.measured &&
+        Math.abs(current.contentWidth - contentWidth) < 0.5 &&
+        Math.abs(current.gap - gap) < 0.5
+          ? current
+          : { contentWidth, gap, measured: true }
       );
-      setGeometry((current) => (
-        current.measured
-        && Math.abs(current.contentWidth - contentWidth) < 0.5
-        && Math.abs(current.gap - gap) < 0.5
-      ) ? current : { contentWidth, gap, measured: true });
     };
     const observer = new ResizeObserver(update);
     observer.observe(gallery);
@@ -83,11 +72,7 @@ export function useGalleryGeometry(
   return geometry;
 }
 
-export function galleryImageRatio(
-  device: Device,
-  width = 0,
-  height = 0
-) {
+export function galleryImageRatio(device: Device, width = 0, height = 0) {
   if (width > 0 && height > 0) return `${width} / ${height}`;
   if (device === "mb") return "9 / 16";
   if (device === "pc") return "16 / 9";

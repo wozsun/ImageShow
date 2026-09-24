@@ -2,7 +2,9 @@
   --admin-interactive-card-lift: -1px;
 }
 
-footer .admin-pagination { margin-top: 0; }
+footer .admin-pagination {
+  margin-top: 0;
+}
 
 /* These compact layout contracts are cheaper in the cached admin foundation
    than as sub-kilobyte route requests. Page content remains route-owned. */
@@ -53,7 +55,9 @@ body:has(.admin > .workspace-contained) {
   min-height: 100vh;
   padding-left: 220px;
 }
-.admin-mobile-header { display: none; }
+.admin-mobile-header {
+  display: none;
+}
 .admin > aside {
   position: fixed;
   top: 0;
@@ -71,7 +75,8 @@ body:has(.admin > .workspace-contained) {
   flex-direction: column;
   gap: 10px;
 }
-.admin > aside a, .admin > aside button {
+.admin > aside a,
+.admin > aside button {
   width: 100%;
   min-height: 42px;
   padding: 10px 12px;
@@ -86,11 +91,11 @@ body:has(.admin > .workspace-contained) {
   display: flex;
   font-weight: 600;
   transition:
-    color .16s ease,
-    background-color .16s ease,
-    border-color .16s ease,
-    box-shadow .16s ease,
-    transform .1s ease;
+    color 0.16s ease,
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.1s ease;
 }
 .admin > aside a:hover,
 .admin > aside button:hover {
@@ -104,18 +109,19 @@ body:has(.admin > .workspace-contained) {
 }
 :is(.admin, [data-admin-dialog]) button:not(:disabled) {
   transition:
-    color .16s ease,
-    background-color .16s ease,
-    border-color .16s ease,
-    transform var(--pressable-transition-duration, .08s) ease,
-    filter .16s ease;
+    color 0.16s ease,
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    transform var(--pressable-transition-duration, 0.08s) ease,
+    filter 0.16s ease;
 }
 
-:is(.admin, [data-admin-dialog]) button:not(:disabled):not(.select-trigger):not(.password-toggle):not(.anchored-menu-item):active {
-  transform: scale(var(--pressable-active-scale, var(--pressable-scale-medium, .98)));
+:is(.admin, [data-admin-dialog])
+  button:not(:disabled):not(.select-trigger):not(.password-toggle):not(.anchored-menu-item):active {
+  transform: scale(var(--pressable-active-scale, var(--pressable-scale-medium, 0.98)));
 }
 :is(.admin, [data-admin-dialog]) button.icon:not(:disabled) {
-  --pressable-active-scale: var(--pressable-scale-small, .97);
+  --pressable-active-scale: var(--pressable-scale-small, 0.97);
 }
 .admin > aside .app-icon {
   width: 20px;
@@ -243,12 +249,12 @@ body:has(.admin > .workspace-contained) {
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  opacity: .7;
+  opacity: 0.7;
   cursor: pointer;
   transition:
-    color .16s ease,
-    opacity .16s ease,
-    transform var(--pressable-transition-duration, .08s) ease;
+    color 0.16s ease,
+    opacity 0.16s ease,
+    transform var(--pressable-transition-duration, 0.08s) ease;
 }
 .admin .admin-color-scheme-toggle:hover {
   color: var(--admin-color-navigation-text);
@@ -275,8 +281,8 @@ body:has(.admin > .workspace-contained) {
   display: grid;
   place-items: center;
   transition:
-    opacity .16s ease,
-    transform .16s ease;
+    opacity 0.16s ease,
+    transform 0.16s ease;
 }
 .admin-color-scheme-toggle.is-current-icon-held .admin-color-scheme-icon {
   transition: none;
@@ -287,12 +293,12 @@ body:has(.admin > .workspace-contained) {
 }
 .admin-color-scheme-icon.is-target {
   opacity: 0;
-  transform: scale(.78);
+  transform: scale(0.78);
 }
 .admin-color-scheme-toggle:not(.is-current-icon-held):is(:hover, :focus-visible)
   .admin-color-scheme-icon.is-current {
   opacity: 0;
-  transform: scale(.78);
+  transform: scale(0.78);
 }
 .admin-color-scheme-toggle:not(.is-current-icon-held):is(:hover, :focus-visible)
   .admin-color-scheme-icon.is-target {
@@ -319,9 +325,15 @@ body:has(.admin > .workspace-contained) {
 }
 
 @media (hover: hover) and (pointer: fine) and (forced-colors: none) {
-  .admin-scroll-region, .admin-nav-scroll { scrollbar-width: none; }
+  .admin-scroll-region,
+  .admin-nav-scroll {
+    scrollbar-width: none;
+  }
   .admin-scroll-region::-webkit-scrollbar,
-  .admin-nav-scroll::-webkit-scrollbar { width: 0; height: 0; }
+  .admin-nav-scroll::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
 }
 
 .admin > aside .overlay-scrollbar-handle {
@@ -329,12 +341,26 @@ body:has(.admin > .workspace-contained) {
   background: var(--admin-color-navigation-scrollbar);
 }
 .admin > aside .overlay-scrollbar-handle:hover,
-.admin > aside .overlay-scrollbar-handle.is-dragging { background: var(--admin-color-navigation-scrollbar-active); }
-.admin > aside .logout-button { margin-top: 0; }
-.admin > aside .admin-nav-group { display: flex; flex-direction: column; gap: 4px; }
+.admin > aside .overlay-scrollbar-handle.is-dragging {
+  background: var(--admin-color-navigation-scrollbar-active);
+}
+.admin > aside .logout-button {
+  margin-top: 0;
+}
+.admin > aside .admin-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 
-.admin-nav-group-trigger { display: flex; align-items: center; border-radius: 10px; }
-.admin-nav-group-trigger:hover { background: var(--admin-color-navigation-hover); }
+.admin-nav-group-trigger {
+  display: flex;
+  align-items: center;
+  border-radius: 10px;
+}
+.admin-nav-group-trigger:hover {
+  background: var(--admin-color-navigation-hover);
+}
 .admin > aside .admin-nav-group-trigger:hover > :is(.admin-nav-group-main, .admin-nav-caret) {
   color: var(--admin-color-navigation-active-text);
   background: transparent;
@@ -342,32 +368,66 @@ body:has(.admin > .workspace-contained) {
 .admin-nav-group-trigger.active {
   background: var(--admin-color-navigation-active);
 }
-.admin > aside .admin-nav-group-main { flex: 1 1 auto; width: auto; }
-.admin-nav-group-trigger.active > :is(
-  .admin-nav-group-main,
-  .admin-nav-caret
-) {
+.admin > aside .admin-nav-group-main {
+  flex: 1 1 auto;
+  width: auto;
+}
+.admin-nav-group-trigger.active > :is(.admin-nav-group-main, .admin-nav-caret) {
   color: var(--admin-color-navigation-active-text);
   background: transparent;
   font-weight: 700;
 }
-.admin-nav-group-label { flex: 1 1 auto; text-align: left; }
-.admin > aside .admin-nav-caret { width: auto; flex: 0 0 auto; padding: 10px 10px; }
-.admin-nav-caret .app-icon { width: 18px; height: 18px; flex-basis: 18px; transition: transform .2s ease; }
-.admin-nav-group.is-open .admin-nav-caret .app-icon { transform: rotate(180deg); }
+.admin-nav-group-label {
+  flex: 1 1 auto;
+  text-align: left;
+}
+.admin > aside .admin-nav-caret {
+  width: auto;
+  flex: 0 0 auto;
+  padding: 10px 10px;
+}
+.admin-nav-caret .app-icon {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
+  transition: transform 0.2s ease;
+}
+.admin-nav-group.is-open .admin-nav-caret .app-icon {
+  transform: rotate(180deg);
+}
 
-.admin > aside .admin-nav-sub { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .2s ease; }
-.admin > aside .admin-nav-sub.is-open { grid-template-rows: 1fr; }
+.admin > aside .admin-nav-sub {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease;
+}
+.admin > aside .admin-nav-sub.is-open {
+  grid-template-rows: 1fr;
+}
 
-.admin-nav-sub-inner { display: flex; flex-direction: column; gap: 2px; padding-left: 18px; overflow: hidden; opacity: 0; transition: opacity .2s ease; }
-.admin-nav-sub.is-open .admin-nav-sub-inner { opacity: 1; }
-.admin > aside .admin-nav-sub a { min-height: 38px; }
+.admin-nav-sub-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 18px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.admin-nav-sub.is-open .admin-nav-sub-inner {
+  opacity: 1;
+}
+.admin > aside .admin-nav-sub a {
+  min-height: 38px;
+}
 .workspace {
   --workspace-inline-padding: 24px;
   padding: 24px;
   min-width: 0;
 }
-.muted { color: var(--admin-color-text-secondary); }
+.muted {
+  color: var(--admin-color-text-secondary);
+}
 .workspace > .page-edge-scroll-host {
   margin-inline-end: calc(-1 * var(--workspace-inline-padding));
   padding-inline-end: calc(var(--workspace-inline-padding) + 2px);
@@ -381,11 +441,29 @@ body:has(.admin > .workspace-contained) {
   justify-content: space-between;
   align-items: flex-start;
 }
-.workspace-head > .actions { margin-left: auto; justify-content: flex-end; }
-.workspace h1 { margin: 0; font-size: 28px; white-space: nowrap; }
-.workspace-head > div:first-child { min-width: 0; }
-.workspace h2 { margin: 0 0 12px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
-.workspace p { margin: 4px 0 0; color: var(--admin-color-text-secondary); }
+.workspace-head > .actions {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+.workspace h1 {
+  margin: 0;
+  font-size: 28px;
+  white-space: nowrap;
+}
+.workspace-head > div:first-child {
+  min-width: 0;
+}
+.workspace h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.workspace p {
+  margin: 4px 0 0;
+  color: var(--admin-color-text-secondary);
+}
 
 /* 标题和反馈组成一个不可拆散的首行；操作组在外层拥有独立轨道。 */
 .workspace-grid-head {

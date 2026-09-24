@@ -1,11 +1,6 @@
 import "./server-environment.ts";
-import {
-  readyImageCacheItemFromRow
-} from "../../../packages/server/src/images/ready-cache/model.ts";
-import {
-  sampleResolvedReadyImageIndex
-} from "../../../packages/server/src/images/ready-cache/random-sampler.ts";
-
+import { readyImageCacheItemFromRow } from "../../../packages/server/src/images/ready-cache/model.ts";
+import { sampleResolvedReadyImageIndex } from "../../../packages/server/src/images/ready-cache/random-sampler.ts";
 
 export const imageId = "00000000-0000-7002-8000-00000000008d";
 export type ReadyImageSampleDependencies = NonNullable<

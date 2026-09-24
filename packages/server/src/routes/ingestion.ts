@@ -32,10 +32,7 @@ import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { resolveIngestionSnapshotLimit } from "../config/app-settings.ts";
 import { ApiError } from "../core/api-error.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
-import {
-  apiSuccess,
-  privateCacheableApiSuccess
-} from "../core/http/responses.ts";
+import { apiSuccess, privateCacheableApiSuccess } from "../core/http/responses.ts";
 import {
   ingestionCancelInput,
   ingestionCommitIntentInput,
@@ -91,15 +88,10 @@ function authenticatedUsername(c: Context) {
 function ingestionActionScope(c: Context) {
   const value = c.req.header(ingestionActionScopeHeader) ?? "";
   if (
-    !/^[A-Za-z0-9_-]{32}$/u.test(value)
-    || Buffer.byteLength(value, "utf8")
-      > appConfig.ingestionRuntime.tokenMaxBytes
+    !/^[A-Za-z0-9_-]{32}$/u.test(value) ||
+    Buffer.byteLength(value, "utf8") > appConfig.ingestionRuntime.tokenMaxBytes
   ) {
-    throw new ApiError(
-      409,
-      "ingestion_action_scope_stale",
-      "请先连接内容接入队列状态通道"
-    );
+    throw new ApiError(409, "ingestion_action_scope_stale", "请先连接内容接入队列状态通道");
   }
   return value;
 }
@@ -114,15 +106,10 @@ function ingestionPair(c: Context) {
 function uploadCredential(c: Context) {
   const credential = c.req.header(uploadCredentialHeader) ?? "";
   if (
-    !credential
-    || Buffer.byteLength(credential, "utf8")
-      > appConfig.ingestionRuntime.tokenMaxBytes
+    !credential ||
+    Buffer.byteLength(credential, "utf8") > appConfig.ingestionRuntime.tokenMaxBytes
   ) {
-    throw new ApiError(
-      401,
-      "upload_credential_invalid",
-      "上传凭证无效或缺失"
-    );
+    throw new ApiError(401, "upload_credential_invalid", "上传凭证无效或缺失");
   }
   return credential;
 }
@@ -145,29 +132,25 @@ export function registerIngestionRoutes(app: Hono) {
   app.post(ingestionSnapshotPath, async (c) => {
     const input = parse(ingestionSnapshotQuery, c.req.query());
     const limit = resolveIngestionSnapshotLimit(input.limit);
-    const selection = parse(
-      ingestionSnapshotSelectionInput,
-      await readJsonBody(c)
-    );
-    if (limit + selection.include_items.length
-      > appConfig.ingestionRuntime.snapshotMaxItems) {
-      throw new ApiError(
-        400,
-        "invalid_ingestion_snapshot",
-        "队列页与补入任务总数超过快照上限"
-      );
+    const selection = parse(ingestionSnapshotSelectionInput, await readJsonBody(c));
+    if (limit + selection.include_items.length > appConfig.ingestionRuntime.snapshotMaxItems) {
+      throw new ApiError(400, "invalid_ingestion_snapshot", "队列页与补入任务总数超过快照上限");
     }
-    return c.json(apiSuccess(await readStableIngestionQueueSnapshot({
-      repository: ingestionSessionRepository,
-      tokens: ingestionTokenService,
-      session: authenticatedSession(c),
-      actionScope: ingestionActionScope(c),
-      queue: input.queue,
-      offset: input.offset,
-      limit,
-      excludeItems: selection.exclude_items,
-      includeItems: selection.include_items
-    })));
+    return c.json(
+      apiSuccess(
+        await readStableIngestionQueueSnapshot({
+          repository: ingestionSessionRepository,
+          tokens: ingestionTokenService,
+          session: authenticatedSession(c),
+          actionScope: ingestionActionScope(c),
+          queue: input.queue,
+          offset: input.offset,
+          limit,
+          excludeItems: selection.exclude_items,
+          includeItems: selection.include_items
+        })
+      )
+    );
   });
 
   app.post(ingestionDuplicatesPath, async (c) => {
@@ -233,10 +216,14 @@ export function registerIngestionRoutes(app: Hono) {
   app.post(importJsonlParsePath, async (c) => {
     const input = parse(jsonlManifestInput, await readJsonBody(c));
     try {
-      return c.json(apiSuccess(parseJsonlManifest(input.content, {
-        maxItems: getRuntimeConfig().import.max_items,
-        timeZone: process.env.TZ
-      })));
+      return c.json(
+        apiSuccess(
+          parseJsonlManifest(input.content, {
+            maxItems: getRuntimeConfig().import.max_items,
+            timeZone: process.env.TZ
+          })
+        )
+      );
     } catch (error) {
       if (error instanceof JsonlManifestError) {
         throw new ApiError(400, error.code, error.message);
@@ -248,51 +235,43 @@ export function registerIngestionRoutes(app: Hono) {
   app.post(importWeiboParsePath, async (c) => {
     const input = parse(weiboImportInput, await readJsonBody(c));
     const runtimeConfig = getRuntimeConfig();
-    const maxPosts = Math.min(
-      appConfig.ingestion.batchHardLimit,
-      runtimeConfig.weibo.max_items
-    );
+    const maxPosts = Math.min(appConfig.ingestion.batchHardLimit, runtimeConfig.weibo.max_items);
     if (input.urls.length > maxPosts) {
-      throw new ApiError(
-        400,
-        "weibo_batch_limit_exceeded",
-        `单批最多允许 ${maxPosts} 条微博链接`
-      );
+      throw new ApiError(400, "weibo_batch_limit_exceeded", `单批最多允许 ${maxPosts} 条微博链接`);
     }
     try {
-      return c.json(apiSuccess(await createWeiboImportBatchManifest(
-        input.urls,
-        {
-          sourceEnabled: runtimeConfig.weibo.source_enabled,
-          timeZone: process.env.TZ,
-          signal: c.req.raw.signal
-        }
-      )));
+      return c.json(
+        apiSuccess(
+          await createWeiboImportBatchManifest(input.urls, {
+            sourceEnabled: runtimeConfig.weibo.source_enabled,
+            timeZone: process.env.TZ,
+            signal: c.req.raw.signal
+          })
+        )
+      );
     } catch (error) {
       if (error instanceof JsonlManifestError) {
         throw new ApiError(400, error.code, error.message);
       }
       if (error instanceof WeiboImportError) {
         let status: 400 | 422 | 502 = 422;
+        if (error.code === "weibo_invalid_url" || error.code === "weibo_image_limit_exceeded")
+          status = 400;
         if (
-          error.code === "weibo_invalid_url"
-          || error.code === "weibo_image_limit_exceeded"
-        ) status = 400;
-        if (
-          error.code === "weibo_visitor_failed"
-          || error.code === "weibo_visitor_rejected"
-          || error.code === "weibo_request_failed"
-          || error.code === "weibo_response_too_large"
-        ) status = 502;
+          error.code === "weibo_visitor_failed" ||
+          error.code === "weibo_visitor_rejected" ||
+          error.code === "weibo_request_failed" ||
+          error.code === "weibo_response_too_large"
+        )
+          status = 502;
         throw new ApiError(status, error.code, error.message);
       }
       throw error;
     }
   });
 
-  app.get(
-    `${ingestionPreviewPath}/:sessionId/:imageId/full`,
-    (c) => readIngestionPreview(
+  app.get(`${ingestionPreviewPath}/:sessionId/:imageId/full`, (c) =>
+    readIngestionPreview(
       ingestionSessionRepository,
       authenticatedUsername(c),
       ingestionPair(c),
@@ -301,9 +280,8 @@ export function registerIngestionRoutes(app: Hono) {
     )
   );
 
-  app.get(
-    `${ingestionPreviewPath}/:sessionId/:imageId`,
-    (c) => readIngestionPreview(
+  app.get(`${ingestionPreviewPath}/:sessionId/:imageId`, (c) =>
+    readIngestionPreview(
       ingestionSessionRepository,
       authenticatedUsername(c),
       ingestionPair(c),
@@ -338,11 +316,11 @@ export function registerIngestionRoutes(app: Hono) {
 
   app.post(ingestionActionPath, async (c) => {
     const input = parse(ingestionQueueActionInput, await readJsonBody(c));
-    const response = await ingestionExecutionControl.runQueueAction({
+    const response = (await ingestionExecutionControl.runQueueAction({
       session: authenticatedSession(c),
       actionScope: ingestionActionScope(c),
       request: input
-    }) satisfies IngestionQueueActionResultDto;
+    })) satisfies IngestionQueueActionResultDto;
     return c.json(apiSuccess(response));
   });
 
@@ -361,10 +339,7 @@ export function registerIngestionRoutes(app: Hono) {
   app.post(ingestionCancelPath, async (c) => {
     const input = parse(ingestionCancelInput, await readJsonBody(c));
     const response = {
-      items: await ingestionExecutionControl.cancelSessions(
-        authenticatedUsername(c),
-        input.items
-      )
+      items: await ingestionExecutionControl.cancelSessions(authenticatedUsername(c), input.items)
     } satisfies IngestionCancelResultDto;
     return c.json(apiSuccess(response));
   });

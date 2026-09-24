@@ -17,10 +17,7 @@ function shuffled(items: SelectedReadyImage[]) {
   const result = [...items];
   for (let index = result.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(Math.random() * (index + 1));
-    [result[index], result[swapIndex]] = [
-      result[swapIndex]!,
-      result[index]!
-    ];
+    [result[index], result[swapIndex]] = [result[swapIndex]!, result[index]!];
   }
   return result;
 }
@@ -37,12 +34,13 @@ export async function pickTargetedImages(
   if (cached.cached) {
     candidates = cached.value;
   } else {
-    const maximumCandidates =
-      appConfig.publicPgFallback.maximumTargetedCandidates;
+    const maximumCandidates = appConfig.publicPgFallback.maximumTargetedCandidates;
     const fullIds = ids.filter((id) => id.length > 12);
     const suffixes = ids.filter((id) => id.length === 12);
-    const read = async (reader: DatabaseReader) => (await reader.query(
-      `WITH candidate_ids AS MATERIALIZED (
+    const read = async (reader: DatabaseReader) =>
+      (
+        await reader.query(
+          `WITH candidate_ids AS MATERIALIZED (
          SELECT id
            FROM metadata
           WHERE status='ready' AND id=ANY($1::uuid[])
@@ -58,8 +56,9 @@ export async function pickTargetedImages(
          FROM metadata m
          JOIN candidate_ids candidate ON candidate.id=m.id
         ORDER BY m.id`,
-      [fullIds, suffixes, maximumCandidates + 1]
-    )).rows as ReadyImageSourceRow[];
+          [fullIds, suffixes, maximumCandidates + 1]
+        )
+      ).rows as ReadyImageSourceRow[];
     const rows = await read(database.reader ?? pool);
     if (rows.length > maximumCandidates) {
       throw publicPgFallbackWorkLimitExceeded(

@@ -7,10 +7,7 @@ import {
   type RefObject,
   type SyntheticEvent
 } from "react";
-import {
-  HomeEntranceController,
-  type HomeEntranceSnapshot
-} from "./home-entrance-controller.js";
+import { HomeEntranceController, type HomeEntranceSnapshot } from "./home-entrance-controller.js";
 
 type ActiveHomeEntrance = {
   controller: HomeEntranceController;
@@ -24,8 +21,10 @@ type HomeBackgroundDecode = {
 };
 
 function reducedMotionPreferred() {
-  return typeof window !== "undefined"
-    && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+  );
 }
 
 export function useHomeEntrance(
@@ -36,9 +35,7 @@ export function useHomeEntrance(
   const [snapshot, setSnapshot] = useState<HomeEntranceSnapshot>(() => {
     const revealImmediately = reducedMotionPreferred();
     return {
-      navigationRevealed:
-        revealImmediately
-        || navigationInitiallyRevealed,
+      navigationRevealed: revealImmediately || navigationInitiallyRevealed,
       heroRevealed: revealImmediately,
       catalogArmed: revealImmediately,
       backgroundReady: false,
@@ -55,21 +52,18 @@ export function useHomeEntrance(
 
   const settleLoadedImage = useCallback((image: HTMLImageElement) => {
     const active = activeRef.current;
-    if (
-      !active
-      || active.decodeStarted
-      || imageRef.current !== image
-    ) return;
+    if (!active || active.decodeStarted || imageRef.current !== image) return;
     active.decodeStarted = true;
 
     let decode = decodeRef.current;
     if (decode?.image !== image) {
-      const readiness = typeof image.decode !== "function"
-        ? Promise.resolve(true)
-        : image.decode().then(
-            () => true,
-            () => image.complete && image.naturalWidth > 0
-          );
+      const readiness =
+        typeof image.decode !== "function"
+          ? Promise.resolve(true)
+          : image.decode().then(
+              () => true,
+              () => image.complete && image.naturalWidth > 0
+            );
       decode = { image, readiness };
       decodeRef.current = decode;
     }
@@ -80,15 +74,14 @@ export function useHomeEntrance(
     });
   }, []);
 
-  const onBackgroundLoad = useCallback((
-    event: SyntheticEvent<HTMLImageElement>
-  ) => {
-    settleLoadedImage(event.currentTarget);
-  }, [settleLoadedImage]);
+  const onBackgroundLoad = useCallback(
+    (event: SyntheticEvent<HTMLImageElement>) => {
+      settleLoadedImage(event.currentTarget);
+    },
+    [settleLoadedImage]
+  );
 
-  const onBackgroundError = useCallback((
-    event: SyntheticEvent<HTMLImageElement>
-  ) => {
+  const onBackgroundError = useCallback((event: SyntheticEvent<HTMLImageElement>) => {
     const active = activeRef.current;
     if (!active || imageRef.current !== event.currentTarget) return;
     active.controller.backgroundFailed();
@@ -98,12 +91,12 @@ export function useHomeEntrance(
     const generation = generationRef.current + 1;
     generationRef.current = generation;
     const reduceMotion = reducedMotionPreferred();
-    const foregroundAlreadyVisible = reduceMotion
-      || snapshotRef.current.heroRevealed
-      || snapshotRef.current.catalogArmed;
-    const navigationAlreadyVisible = foregroundAlreadyVisible
-      || navigationInitiallyRevealed
-      || snapshotRef.current.navigationRevealed;
+    const foregroundAlreadyVisible =
+      reduceMotion || snapshotRef.current.heroRevealed || snapshotRef.current.catalogArmed;
+    const navigationAlreadyVisible =
+      foregroundAlreadyVisible ||
+      navigationInitiallyRevealed ||
+      snapshotRef.current.navigationRevealed;
     const controller = new HomeEntranceController({
       initiallyRevealed: foregroundAlreadyVisible,
       navigationInitiallyRevealed: navigationAlreadyVisible,
@@ -122,12 +115,9 @@ export function useHomeEntrance(
     activeRef.current = active;
 
     setSnapshot((current) => {
-      const preserveForeground = reduceMotion
-        || current.heroRevealed
-        || current.catalogArmed;
-      const preserveNavigation = preserveForeground
-        || navigationInitiallyRevealed
-        || current.navigationRevealed;
+      const preserveForeground = reduceMotion || current.heroRevealed || current.catalogArmed;
+      const preserveNavigation =
+        preserveForeground || navigationInitiallyRevealed || current.navigationRevealed;
       const nextSnapshot = {
         navigationRevealed: preserveNavigation,
         heroRevealed: preserveForeground,
@@ -141,9 +131,7 @@ export function useHomeEntrance(
     });
     controller.start();
 
-    const motionQuery = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    );
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     const revealForReducedMotion = () => {
       if (motionQuery.matches) controller.revealImmediately();
     };
@@ -171,11 +159,7 @@ export function useHomeEntrance(
       controller.dispose();
       if (activeRef.current === active) activeRef.current = null;
     };
-  }, [
-    navigationInitiallyRevealed,
-    settleLoadedImage,
-    source
-  ]);
+  }, [navigationInitiallyRevealed, settleLoadedImage, source]);
 
   const revealImmediately = useCallback(() => {
     activeRef.current?.controller.revealImmediately();
@@ -188,11 +172,8 @@ export function useHomeEntrance(
       frame = undefined;
       const catalog = catalogRef.current;
       if (
-        catalog
-        && (
-          window.scrollY > 0
-          || catalog.getBoundingClientRect().top < window.innerHeight - 1
-        )
+        catalog &&
+        (window.scrollY > 0 || catalog.getBoundingClientRect().top < window.innerHeight - 1)
       ) {
         revealImmediately();
       }
@@ -211,18 +192,10 @@ export function useHomeEntrance(
     return () => {
       window.removeEventListener("scroll", scheduleCatalogCheck);
       window.removeEventListener("resize", scheduleCatalogCheck);
-      document.removeEventListener(
-        "keydown",
-        revealForKeyboardNavigation,
-        true
-      );
+      document.removeEventListener("keydown", revealForKeyboardNavigation, true);
       if (frame !== undefined) window.cancelAnimationFrame(frame);
     };
-  }, [
-    catalogRef,
-    revealImmediately,
-    snapshot.catalogArmed
-  ]);
+  }, [catalogRef, revealImmediately, snapshot.catalogArmed]);
 
   return {
     backgroundReady: snapshot.backgroundReady,

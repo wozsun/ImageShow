@@ -1,16 +1,10 @@
 import { ApiError } from "../../../core/api-error.ts";
 import { verifyStorageTarget } from "../../../storage/objects/transfer.ts";
 import { readDuplicateSnapshotByMd5 } from "../../read-models/duplicates.ts";
-import type {
-  IngestionPreparedManifest,
-  IngestionSessionSnapshot
-} from "../sessions/model.ts";
+import type { IngestionPreparedManifest, IngestionSessionSnapshot } from "../sessions/model.ts";
 import { IngestionSessionRepository } from "../repository.ts";
 
-type CommitTargetAvailability = Omit<
-  Parameters<typeof verifyStorageTarget>[0],
-  "signal"
->;
+type CommitTargetAvailability = Omit<Parameters<typeof verifyStorageTarget>[0], "signal">;
 
 /** Cancel and drain sibling digests before releasing the storage lock. */
 export async function verifyCommitTargets(
@@ -46,17 +40,14 @@ export async function assertCurrentCommitExecution(
   repository: IngestionSessionRepository,
   expected: IngestionSessionSnapshot
 ) {
-  const current = await repository.readSession(
-    expected.owner,
-    expected.session_id
-  );
+  const current = await repository.readSession(expected.owner, expected.session_id);
   if (
-    !current
-    || !("execution_token" in current)
-    || current.image_id !== expected.image_id
-    || current.status !== "committing"
-    || current.version !== expected.version
-    || current.execution_token !== expected.execution_token
+    !current ||
+    !("execution_token" in current) ||
+    current.image_id !== expected.image_id ||
+    current.status !== "committing" ||
+    current.version !== expected.version ||
+    current.execution_token !== expected.execution_token
   ) {
     throw new ApiError(409, "ingestion_execution_fenced", "内容接入提交执行权已转移");
   }
@@ -67,8 +58,9 @@ export async function assertCurrentDuplicateDecision(
   prepared: IngestionPreparedManifest,
   decision: "upload" | "confirmed"
 ) {
-  const duplicates = (await readDuplicateSnapshotByMd5(prepared.md5)).items
-    .filter((item) => item.id.toLowerCase() !== imageId.toLowerCase());
+  const duplicates = (await readDuplicateSnapshotByMd5(prepared.md5)).items.filter(
+    (item) => item.id.toLowerCase() !== imageId.toLowerCase()
+  );
   if (duplicates.length && decision !== "confirmed") {
     throw new ApiError(
       409,

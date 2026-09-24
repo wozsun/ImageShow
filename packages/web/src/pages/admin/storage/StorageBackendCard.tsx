@@ -6,10 +6,7 @@ import {
   type AsyncActionStatus
 } from "../../../hooks/useAsyncActionStatus.js";
 import type { StorageBackendAdmin } from "../../../lib/types.js";
-import {
-  storageBackendLabel,
-  storageTypeLabel
-} from "../../../lib/ui/select-options.js";
+import { storageBackendLabel, storageTypeLabel } from "../../../lib/ui/select-options.js";
 
 export function StorageBackendCard({
   backend,
@@ -42,10 +39,7 @@ export function StorageBackendCard({
   const showEnabledToggle = !isLocal || hasNonLocalBackend;
   const enabledStatus = useAsyncActionStatus({ successDurationMs: null });
   const title = backend.display_name || storageBackendLabel(backend.slug);
-  const cardBusy = Boolean(busy)
-    || sortBusy
-    || defaultActionPending
-    || enabledStatus.pending;
+  const cardBusy = Boolean(busy) || sortBusy || defaultActionPending || enabledStatus.pending;
   const defaultPresentation = {
     idle: {
       icon: backend.is_default ? "star-fill" : "star-line",
@@ -73,18 +67,22 @@ export function StorageBackendCard({
       className={`storage-backend-card${backend.is_default ? " is-default" : ""}${backend.enabled ? "" : " is-off"}`}
     >
       <div className="storage-card-body">
-        <strong className="storage-card-title" title={title}>{title}</strong>
+        <strong className="storage-card-title" title={title}>
+          {title}
+        </strong>
         <AsyncActionButton
           type="button"
           className={`storage-default-toggle${backend.is_default ? " is-default" : ""}`}
           status={defaultStatus}
           presentation={defaultPresentation}
           disabled={cardBusy || backend.is_default || !backend.enabled}
-          title={backend.is_default
-            ? "当前默认上传后端"
-            : backend.enabled
-              ? "设为默认上传后端"
-              : "启用后才能设为默认"}
+          title={
+            backend.is_default
+              ? "当前默认上传后端"
+              : backend.enabled
+                ? "设为默认上传后端"
+                : "启用后才能设为默认"
+          }
           onClick={() => void onSetDefault()}
         />
         <div className="storage-card-meta">
@@ -92,9 +90,7 @@ export function StorageBackendCard({
           {backend.ingestion_session_count > 0
             ? ` · ${backend.ingestion_session_count} 个未清理内容接入会话`
             : ""}
-          {backend.cleanup_job_count > 0
-            ? ` · 旧对象删除 ${backend.cleanup_job_count} 项`
-            : ""}
+          {backend.cleanup_job_count > 0 ? ` · 旧对象删除 ${backend.cleanup_job_count} 项` : ""}
           {backend.failed_cleanup_job_count > 0
             ? `（${backend.failed_cleanup_job_count} 项失败）`
             : ""}
@@ -114,11 +110,13 @@ export function StorageBackendCard({
               status={enabledStatus.status}
               presentation={enabledPresentation}
               disabled={cardBusy || backend.is_default}
-              title={backend.is_default
-                ? "默认后端不能停用"
-                : backend.enabled
-                  ? "已启用：可写入新图片并迁入已有图片。点击停用（已有图片仍可读取并迁出）"
-                  : "已停用：不能写入新图片或作为迁移目标，已有图片仍可读取并迁出。点击启用"}
+              title={
+                backend.is_default
+                  ? "默认后端不能停用"
+                  : backend.enabled
+                    ? "已启用：可写入新图片并迁入已有图片。点击停用（已有图片仍可读取并迁出）"
+                    : "已停用：不能写入新图片或作为迁移目标，已有图片仍可读取并迁出。点击启用"
+              }
               onClick={() => void enabledStatus.run(onToggleEnabled)}
             />
           )}
@@ -144,13 +142,7 @@ export function StorageBackendCard({
               onSave={onSortSave}
             />
           )}
-          <button
-            type="button"
-            className="icon"
-            title="编辑"
-            disabled={cardBusy}
-            onClick={onEdit}
-          >
+          <button type="button" className="icon" title="编辑" disabled={cardBusy} onClick={onEdit}>
             <AdminIcon name="pencil-line" />
           </button>
           <button
@@ -163,28 +155,36 @@ export function StorageBackendCard({
                   ? "storage-backend-migrate-action"
                   : "storage-blocked-action"
             ].join(" ")}
-            title={backend.deletion.action === "delete"
-              ? "删除"
-              : backend.deletion.action === "migrate"
-                ? "迁移图片"
-                : isLocal
-                  ? "本地存储禁止删除"
-                  : "查看原因"}
-            aria-label={backend.deletion.action === "delete"
-              ? "删除存储后端"
-              : backend.deletion.action === "migrate"
-                ? "迁移存储后端中的图片"
-                : isLocal
-                  ? "本地存储禁止删除"
-                  : "查看存储后端不能删除的原因"}
+            title={
+              backend.deletion.action === "delete"
+                ? "删除"
+                : backend.deletion.action === "migrate"
+                  ? "迁移图片"
+                  : isLocal
+                    ? "本地存储禁止删除"
+                    : "查看原因"
+            }
+            aria-label={
+              backend.deletion.action === "delete"
+                ? "删除存储后端"
+                : backend.deletion.action === "migrate"
+                  ? "迁移存储后端中的图片"
+                  : isLocal
+                    ? "本地存储禁止删除"
+                    : "查看存储后端不能删除的原因"
+            }
             disabled={cardBusy}
             onClick={onRemovalAction}
           >
-            <AdminIcon name={backend.deletion.action === "delete"
-              ? "delete-bin-6-line"
-              : backend.deletion.action === "migrate"
-                ? "arrow-left-right-line"
-                : "information-line"} />
+            <AdminIcon
+              name={
+                backend.deletion.action === "delete"
+                  ? "delete-bin-6-line"
+                  : backend.deletion.action === "migrate"
+                    ? "arrow-left-right-line"
+                    : "information-line"
+              }
+            />
           </button>
         </div>
       </div>

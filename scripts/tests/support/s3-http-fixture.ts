@@ -30,8 +30,11 @@ export async function createS3HttpFixture() {
       for await (const chunk of request) chunks.push(Buffer.from(chunk));
       const url = new URL(request.url!, "http://127.0.0.1");
       const record: RequestRecord = {
-        method: request.method!, key: decodeURIComponent(url.pathname).replace(/^\/[^/]+\//u, ""),
-        headers: request.headers, body: Buffer.concat(chunks), status: 200
+        method: request.method!,
+        key: decodeURIComponent(url.pathname).replace(/^\/[^/]+\//u, ""),
+        headers: request.headers,
+        body: Buffer.concat(chunks),
+        status: 200
       };
       requests.push(record);
       await state.beforeRequest?.(record);
@@ -45,18 +48,29 @@ export async function createS3HttpFixture() {
         if (injected) return fail(injected);
         const md5 = request.headers["content-md5"];
         if (md5 && state.capability === "unsupported") {
-          return fail({ status: 400, code: "InvalidRequest", message: "Content-MD5 is not supported" });
+          return fail({
+            status: 400,
+            code: "InvalidRequest",
+            message: "Content-MD5 is not supported"
+          });
         }
-        if (md5 && state.capability === "enforced"
-          && md5 !== createHash("md5").update(record.body).digest("base64")) {
-          return fail({ status: 400, code: "BadDigest", message: "The Content-MD5 does not match the body" });
+        if (
+          md5 &&
+          state.capability === "enforced" &&
+          md5 !== createHash("md5").update(record.body).digest("base64")
+        ) {
+          return fail({
+            status: 400,
+            code: "BadDigest",
+            message: "The Content-MD5 does not match the body"
+          });
         }
         objects.set(record.key, record.body);
         response.end();
       } else if (record.method === "HEAD" || record.method === "GET") {
         const stored = objects.get(record.key);
         if (!stored) return fail({ status: 404, code: "NoSuchKey", message: "Object not found" });
-        const body = record.method === "GET" ? state.readBody?.(stored) ?? stored : stored;
+        const body = record.method === "GET" ? (state.readBody?.(stored) ?? stored) : stored;
         const range = request.headers.range;
         const bytes = range === "bytes=0-0" ? body.subarray(0, 1) : body;
         record.status = range ? 206 : 200;
@@ -67,10 +81,14 @@ export async function createS3HttpFixture() {
         });
         response.end(record.method === "GET" ? bytes : undefined);
       } else if (record.method === "POST" && url.searchParams.has("delete")) {
-        const keys = [...record.body.toString().matchAll(/<Key>([^<]+)<\/Key>/gu)].map((match) => match[1]!);
+        const keys = [...record.body.toString().matchAll(/<Key>([^<]+)<\/Key>/gu)].map(
+          (match) => match[1]!
+        );
         for (const key of keys) objects.delete(key);
         response.writeHead(200, { "content-type": "application/xml" });
-        response.end(`<DeleteResult>${keys.map((key) => `<Deleted><Key>${key}</Key></Deleted>`).join("")}</DeleteResult>`);
+        response.end(
+          `<DeleteResult>${keys.map((key) => `<Deleted><Key>${key}</Key></Deleted>`).join("")}</DeleteResult>`
+        );
       } else {
         fail({ status: 400, code: "InvalidRequest", message: "Unexpected fixture operation" });
       }
@@ -80,7 +98,10 @@ export async function createS3HttpFixture() {
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => { server.off("error", reject); resolve(); });
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
   });
   const port = (server.address() as AddressInfo).port;
   const originalSend = S3Client.prototype.send;
@@ -88,30 +109,43 @@ export async function createS3HttpFixture() {
   // serialization, body streaming, signing and error decoding remain active.
   const restore = installProperties(S3Client.prototype, {
     send(this: S3Client, ...args: Parameters<S3Client["send"]>) {
-      this.middlewareStack.add((next) => async (input) => {
-        const request = input.request as { hostname: string; protocol: string; port: number };
-        if (!request.hostname.endsWith(".example.test")) {
-          throw new Error("S3 fixture only accepts synthetic endpoints");
-        }
-        request.hostname = "127.0.0.1";
-        request.protocol = "http:";
-        request.port = port;
-        return next(input);
-      }, { step: "build", priority: "high", name: "fixtureTransport", override: true });
+      this.middlewareStack.add(
+        (next) => async (input) => {
+          const request = input.request as { hostname: string; protocol: string; port: number };
+          if (!request.hostname.endsWith(".example.test")) {
+            throw new Error("S3 fixture only accepts synthetic endpoints");
+          }
+          request.hostname = "127.0.0.1";
+          request.protocol = "http:";
+          request.port = port;
+          return next(input);
+        },
+        { step: "build", priority: "high", name: "fixtureTransport", override: true }
+      );
       return Reflect.apply(originalSend, this, args);
     }
   });
   return {
-    objects, requests, state,
+    objects,
+    requests,
+    state,
     settings: mergeS3Settings({
-      endpoint: "https://objects.example.test", region: "test-region", bucket: "images",
-      access_key_id: randomUUID(), secret_access_key: randomUUID(), force_path_style: true,
-      connect_timeout_seconds: 1, idle_timeout_seconds: 1, task_timeout_seconds: 15
+      endpoint: "https://objects.example.test",
+      region: "test-region",
+      bucket: "images",
+      access_key_id: randomUUID(),
+      secret_access_key: randomUUID(),
+      force_path_style: true,
+      connect_timeout_seconds: 1,
+      idle_timeout_seconds: 1,
+      task_timeout_seconds: 15
     }),
     async close() {
       restore();
       server.closeAllConnections();
-      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
+      );
     }
   };
 }

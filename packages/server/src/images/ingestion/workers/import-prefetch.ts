@@ -1,13 +1,9 @@
-import {
-  getRuntimeConfig,
-  onRuntimeConfigChange
-} from "../../../config/runtime-config-store.ts";
+import { getRuntimeConfig, onRuntimeConfigChange } from "../../../config/runtime-config-store.ts";
 import { abortSignalError } from "../../../core/abort.ts";
 import { DynamicConcurrencyLimiter } from "../../../core/concurrency.ts";
 
 type PrefetchWorkOutcome<Result> =
-  | Readonly<{ status: "completed"; value: Result }>
-  | Readonly<{ status: "failed"; error: unknown }>;
+  Readonly<{ status: "completed"; value: Result }> | Readonly<{ status: "failed"; error: unknown }>;
 
 /**
  * Bounds remote materialization to one successor batch. A permit is retained
@@ -30,15 +26,14 @@ export async function withImportPrefetchAdmission<Result>(
   await importPrefetchAdmission.run(signal, async () => {
     let admitted = false;
     const { promise: normalizationAdmitted, resolve: markAdmitted } = Promise.withResolvers<void>();
-    const workPromise = Promise.resolve().then(() => work(() => {
-      if (admitted) return;
-      admitted = true;
-      markAdmitted();
-    }));
-    observed = workPromise.then<
-      PrefetchWorkOutcome<Result>,
-      PrefetchWorkOutcome<Result>
-    >(
+    const workPromise = Promise.resolve().then(() =>
+      work(() => {
+        if (admitted) return;
+        admitted = true;
+        markAdmitted();
+      })
+    );
+    observed = workPromise.then<PrefetchWorkOutcome<Result>, PrefetchWorkOutcome<Result>>(
       (value) => ({ status: "completed", value }),
       (error: unknown) => ({ status: "failed", error })
     );

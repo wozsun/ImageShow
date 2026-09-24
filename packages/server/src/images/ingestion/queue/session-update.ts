@@ -35,12 +35,14 @@ export async function updateIngestionSessions(
   const decisionMd5Set = new Set<string>();
   items.forEach((item, index) => {
     const session = sessions[index];
-    if (item.duplicate_decision
-      && session !== ingestionSessionIncarnationMismatch
-      && session
-      && session.status !== "completed"
-      && session.status !== "discarded"
-      && session.prepared) {
+    if (
+      item.duplicate_decision &&
+      session !== ingestionSessionIncarnationMismatch &&
+      session &&
+      session.status !== "completed" &&
+      session.status !== "discarded" &&
+      session.prepared
+    ) {
       decisionMd5Set.add(session.prepared.md5);
     }
   });
@@ -57,11 +59,7 @@ export async function updateIngestionSessions(
       try {
         const current = sessions[index];
         if (current === ingestionSessionIncarnationMismatch) {
-          throw new ApiError(
-            409,
-            "ingestion_incarnation_conflict",
-            "内容接入任务身份已被替换"
-          );
+          throw new ApiError(409, "ingestion_incarnation_conflict", "内容接入任务身份已被替换");
         }
         if (!current || current.status === "discarded") {
           throw new ApiError(
@@ -76,24 +74,25 @@ export async function updateIngestionSessions(
         if (current.commit) {
           throw new ApiError(409, "invalid_ingestion_state", "当前内容接入任务不可编辑");
         }
-        if (input.retry_prepare && (
-          current.status !== "failed"
-          || (current.queue === "upload" && (!current.raw_generation || !current.raw_size))
-          || input.duplicate_decision !== undefined
-        )) {
-          throw new ApiError(409, "invalid_ingestion_state", "当前任务没有可重新准备的来源，请重新选择文件");
-        }
-        if (input.duplicate_decision && !current.prepared) {
+        if (
+          input.retry_prepare &&
+          (current.status !== "failed" ||
+            (current.queue === "upload" && (!current.raw_generation || !current.raw_size)) ||
+            input.duplicate_decision !== undefined)
+        ) {
           throw new ApiError(
             409,
             "invalid_ingestion_state",
-            "图片尚未准备完成，不能确认重复项"
+            "当前任务没有可重新准备的来源，请重新选择文件"
           );
+        }
+        if (input.duplicate_decision && !current.prepared) {
+          throw new ApiError(409, "invalid_ingestion_state", "图片尚未准备完成，不能确认重复项");
         }
         const metadata = input.metadata ?? current.metadata;
         const refreshedDuplicateCount = current.prepared
           ? input.duplicate_decision
-            ? duplicateCounts.get(current.prepared.md5) ?? 0
+            ? (duplicateCounts.get(current.prepared.md5) ?? 0)
             : current.prepared.duplicate_count
           : 0;
         const prepared = current.prepared
@@ -113,18 +112,20 @@ export async function updateIngestionSessions(
           metadata,
           duplicate_decision: duplicateDecision,
           ...(prepared ? { prepared } : {}),
-          ...(input.retry_prepare ? {
-            status: current.queue === "import" ? "queued" as const : "received" as const,
-            phase: current.queue === "import" ? "queued" : "received",
-            message: current.queue === "import" ? "等待重新下载" : "等待重新处理",
-            progress: null,
-            execution_token: "",
-            raw_generation: current.queue === "import" ? "" : current.raw_generation,
-            raw_size: current.queue === "import" ? 0 : current.raw_size,
-            prepared: undefined,
-            duplicate_decision: undefined,
-            error: undefined
-          } : {})
+          ...(input.retry_prepare
+            ? {
+                status: current.queue === "import" ? ("queued" as const) : ("received" as const),
+                phase: current.queue === "import" ? "queued" : "received",
+                message: current.queue === "import" ? "等待重新下载" : "等待重新处理",
+                progress: null,
+                execution_token: "",
+                raw_generation: current.queue === "import" ? "" : current.raw_generation,
+                raw_size: current.queue === "import" ? 0 : current.raw_size,
+                prepared: undefined,
+                duplicate_decision: undefined,
+                error: undefined
+              }
+            : {})
         });
         const updated = await repository.mutateSemantic(
           current,
@@ -136,9 +137,8 @@ export async function updateIngestionSessions(
         if (input.retry_prepare && updated.changed) {
           // Cleanup only retired generations. Upload retries still own their
           // raw file; import retries download into a new raw generation.
-          const retired = current.queue === "upload"
-            ? { ...current, raw_generation: "", raw_size: 0 }
-            : current;
+          const retired =
+            current.queue === "upload" ? { ...current, raw_generation: "", raw_size: 0 } : current;
           await ingestionCleanupRetryQueue.enqueue(() => cleanupRetiredSessions([retired]));
         }
         const updatedSession = updated.session as IngestionSessionSnapshot;

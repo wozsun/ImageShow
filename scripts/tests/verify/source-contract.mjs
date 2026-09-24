@@ -15,11 +15,9 @@ import { runtimeConfigDefaults } from "../../../packages/server/src/config/runti
 import { runtimeConfigEnvironmentBindings } from "../../../packages/server/src/config/runtime-config-environment.ts";
 
 const workspaceRoot = resolve(import.meta.dirname, "../../..");
-const sourceRoots = [
-  "packages/shared/src",
-  "packages/server/src",
-  "packages/web/src"
-].map((path) => resolve(workspaceRoot, path));
+const sourceRoots = ["packages/shared/src", "packages/server/src", "packages/web/src"].map((path) =>
+  resolve(workspaceRoot, path)
+);
 const codeExtensions = new Set([".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx"]);
 
 function displayPath(path) {
@@ -54,30 +52,25 @@ try {
   });
   const programs = typeScriptSnapshot.getProjects().map((project) => project.program);
   for (const file of files) {
-    const sourceFile = programs
-      .map((program) => program.getSourceFile(file))
-      .find(Boolean);
+    const sourceFile = programs.map((program) => program.getSourceFile(file)).find(Boolean);
     if (!sourceFile) {
       throw new Error(`source-contract: TypeScript did not load ${displayPath(file)}`);
     }
     const specifiers = new Set();
     function visit(node) {
-      if (
-        isImportDeclaration(node)
-        && isStringLiteralLikeNode(node.moduleSpecifier)
+      if (isImportDeclaration(node) && isStringLiteralLikeNode(node.moduleSpecifier)) {
+        specifiers.add(node.moduleSpecifier.text);
+      } else if (
+        isExportDeclaration(node) &&
+        node.moduleSpecifier &&
+        isStringLiteralLikeNode(node.moduleSpecifier)
       ) {
         specifiers.add(node.moduleSpecifier.text);
       } else if (
-        isExportDeclaration(node)
-        && node.moduleSpecifier
-        && isStringLiteralLikeNode(node.moduleSpecifier)
-      ) {
-        specifiers.add(node.moduleSpecifier.text);
-      } else if (
-        isCallExpression(node)
-        && isImportExpression(node.expression)
-        && node.arguments.length > 0
-        && isStringLiteralLikeNode(node.arguments[0])
+        isCallExpression(node) &&
+        isImportExpression(node.expression) &&
+        node.arguments.length > 0 &&
+        isStringLiteralLikeNode(node.arguments[0])
       ) {
         specifiers.add(node.arguments[0].text);
       }
@@ -115,7 +108,9 @@ function resolveImport(importer, specifier) {
       ]
     : [
         ...[".ts", ".tsx", ".mts", ".mjs", ".js"].map((suffix) => requested + suffix),
-        ...[".ts", ".tsx", ".mts", ".mjs", ".js"].map((suffix) => resolve(requested, `index${suffix}`))
+        ...[".ts", ".tsx", ".mts", ".mjs", ".js"].map((suffix) =>
+          resolve(requested, `index${suffix}`)
+        )
       ];
   return candidates.find((candidate) => fileSet.has(candidate)) ?? null;
 }
@@ -139,8 +134,7 @@ const allowedWebLayerDependencies = {
 };
 const allowedCoreDependencies = new Set(["core", "config", "types"]);
 function webLayer(path) {
-  return /^packages\/web\/src\/(pages|components|hooks|lib)(?:\/|$)/.exec(path)?.[1]
-    ?? null;
+  return /^packages\/web\/src\/(pages|components|hooks|lib)(?:\/|$)/.exec(path)?.[1] ?? null;
 }
 
 function serverLayer(path) {
@@ -155,16 +149,14 @@ for (const file of files) {
     const sourceWorkspace = workspaceName(file);
     const targetWorkspace = target
       ? workspaceName(target)
-      : /^@imageshow\/(shared|server|web)(?:\/|$)/.exec(specifier)?.[1] ?? null;
+      : (/^@imageshow\/(shared|server|web)(?:\/|$)/.exec(specifier)?.[1] ?? null);
     if (
-      sourceWorkspace
-      && targetWorkspace
-      && sourceWorkspace !== targetWorkspace
-      && !allowedWorkspaceDependencies[sourceWorkspace].has(targetWorkspace)
+      sourceWorkspace &&
+      targetWorkspace &&
+      sourceWorkspace !== targetWorkspace &&
+      !allowedWorkspaceDependencies[sourceWorkspace].has(targetWorkspace)
     ) {
-      invalidWorkspaceDependencies.push(
-        `${displayPath(file)} -> ${specifier}`
-      );
+      invalidWorkspaceDependencies.push(`${displayPath(file)} -> ${specifier}`);
     }
     if (!target) continue;
     dependencies.add(target);
@@ -172,64 +164,45 @@ for (const file of files) {
     const sourceWebLayer = webLayer(sourcePath);
     const targetWebLayer = webLayer(targetPath);
     if (
-      sourceWebLayer
-      && targetWebLayer
-      && !allowedWebLayerDependencies[sourceWebLayer].has(targetWebLayer)
+      sourceWebLayer &&
+      targetWebLayer &&
+      !allowedWebLayerDependencies[sourceWebLayer].has(targetWebLayer)
     ) {
       reverseInternalWebDependencies.add(`${sourcePath} -> ${targetPath}`);
     }
     const sourceServerLayer = serverLayer(sourcePath);
     const targetServerLayer = serverLayer(targetPath);
     if (
-      sourceServerLayer === "core"
-      && targetServerLayer
-      && !allowedCoreDependencies.has(targetServerLayer)
+      sourceServerLayer === "core" &&
+      targetServerLayer &&
+      !allowedCoreDependencies.has(targetServerLayer)
     ) {
       invalidServerDependencies.add(`${sourcePath} -> ${targetPath}`);
     }
-    if (
-      sourceServerLayer
-      && sourceServerLayer !== "routes"
-      && targetServerLayer === "routes"
-    ) {
+    if (sourceServerLayer && sourceServerLayer !== "routes" && targetServerLayer === "routes") {
       invalidServerDependencies.add(`${sourcePath} -> ${targetPath}`);
     }
     const ingestionDomainRoot = "packages/server/src/images/ingestion/";
     const ingestionCompositionModule =
-      sourcePath === `${ingestionDomainRoot}runtime.ts`
-      || sourcePath.startsWith(`${ingestionDomainRoot}workers/`);
+      sourcePath === `${ingestionDomainRoot}runtime.ts` ||
+      sourcePath.startsWith(`${ingestionDomainRoot}workers/`);
     if (
-      sourcePath.startsWith(ingestionDomainRoot)
-      && !ingestionCompositionModule
-      && (
-        targetPath.startsWith(`${ingestionDomainRoot}workers/`)
-        || targetPath === `${ingestionDomainRoot}runtime.ts`
-      )
+      sourcePath.startsWith(ingestionDomainRoot) &&
+      !ingestionCompositionModule &&
+      (targetPath.startsWith(`${ingestionDomainRoot}workers/`) ||
+        targetPath === `${ingestionDomainRoot}runtime.ts`)
     ) {
       invalidIngestionDomainDependencies.add(`${sourcePath} -> ${targetPath}`);
     }
     if (
-      sourcePath.startsWith("packages/server/src/routes/")
-      && (
-        targetPath.startsWith(
-          "packages/server/src/images/ingestion/sessions/scripts/"
-        )
-        || targetPath.startsWith(
-          "packages/server/src/images/ingestion/workers/"
-        )
-        || targetPath.startsWith(
-          "packages/server/src/images/ingestion/execution/"
-        )
-        || targetPath.startsWith(
-          "packages/server/src/images/ingestion/cleanup/"
-        )
-        || targetPath.startsWith(
-          "packages/server/src/images/ingestion/cancel/"
-        )
-        || targetPath ===
-          "packages/server/src/images/ingestion/queue/action.ts"
-        || targetPath === "packages/server/src/images/ingestion/commit/worker.ts"
-      )
+      sourcePath.startsWith("packages/server/src/routes/") &&
+      (targetPath.startsWith("packages/server/src/images/ingestion/sessions/scripts/") ||
+        targetPath.startsWith("packages/server/src/images/ingestion/workers/") ||
+        targetPath.startsWith("packages/server/src/images/ingestion/execution/") ||
+        targetPath.startsWith("packages/server/src/images/ingestion/cleanup/") ||
+        targetPath.startsWith("packages/server/src/images/ingestion/cancel/") ||
+        targetPath === "packages/server/src/images/ingestion/queue/action.ts" ||
+        targetPath === "packages/server/src/images/ingestion/commit/worker.ts")
     ) {
       privateIngestionRouteDependencies.add(`${sourcePath} -> ${targetPath}`);
     }
@@ -239,23 +212,26 @@ for (const file of files) {
 
 if (invalidWorkspaceDependencies.length > 0) {
   throw new Error(
-    "source-contract: workspace dependency direction changed: "
-    + JSON.stringify(invalidWorkspaceDependencies)
+    "source-contract: workspace dependency direction changed: " +
+      JSON.stringify(invalidWorkspaceDependencies)
   );
 }
 
 if (
-  reverseInternalWebDependencies.size
-  || invalidServerDependencies.size
-  || invalidIngestionDomainDependencies.size
-  || privateIngestionRouteDependencies.size
+  reverseInternalWebDependencies.size ||
+  invalidServerDependencies.size ||
+  invalidIngestionDomainDependencies.size ||
+  privateIngestionRouteDependencies.size
 ) {
-  throw new Error("source-contract: internal dependency direction changed: " + JSON.stringify({
-    web: [...reverseInternalWebDependencies],
-    server: [...invalidServerDependencies],
-    ingestion: [...invalidIngestionDomainDependencies],
-    routeInternals: [...privateIngestionRouteDependencies]
-  }));
+  throw new Error(
+    "source-contract: internal dependency direction changed: " +
+      JSON.stringify({
+        web: [...reverseInternalWebDependencies],
+        server: [...invalidServerDependencies],
+        ingestion: [...invalidIngestionDomainDependencies],
+        routeInternals: [...privateIngestionRouteDependencies]
+      })
+  );
 }
 
 let nextIndex = 0;
@@ -298,10 +274,10 @@ if (components.length) {
 
 function objectLeafEntries(value, prefix = "") {
   if (
-    value === null
-    || typeof value !== "object"
-    || Array.isArray(value)
-    || Object.keys(value).length === 0
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).length === 0
   ) {
     return [[prefix, value]];
   }
@@ -374,10 +350,11 @@ function composeEnvironment(service) {
   const environment = service.environment;
   if (environment === undefined || environment === null) return new Map();
   if (!Array.isArray(environment)) {
-    return new Map(Object.entries(objectRecord(
-      environment,
-      "Compose service environment"
-    )).map(([key, value]) => [key, value === null ? null : String(value)]));
+    return new Map(
+      Object.entries(objectRecord(environment, "Compose service environment")).map(
+        ([key, value]) => [key, value === null ? null : String(value)]
+      )
+    );
   }
   const entries = new Map();
   for (const item of environment) {
@@ -399,18 +376,22 @@ function composePortBinding(service, expected) {
   return (service.ports ?? []).some((binding) => {
     if (typeof binding === "string") {
       const match = /^(.*):(\d+):(\d+)(?:\/tcp)?$/.exec(binding);
-      return match
-        && match[1] === expected.hostIp
-        && Number(match[2]) === expected.published
-        && Number(match[3]) === expected.target;
+      return (
+        match &&
+        match[1] === expected.hostIp &&
+        Number(match[2]) === expected.published &&
+        Number(match[3]) === expected.target
+      );
     }
     if (!binding || typeof binding !== "object" || Array.isArray(binding)) {
       return false;
     }
-    return String(binding.host_ip ?? "") === expected.hostIp
-      && Number(binding.published) === expected.published
-      && Number(binding.target) === expected.target
-      && (binding.protocol ?? "tcp") === "tcp";
+    return (
+      String(binding.host_ip ?? "") === expected.hostIp &&
+      Number(binding.published) === expected.published &&
+      Number(binding.target) === expected.target &&
+      (binding.protocol ?? "tcp") === "tcp"
+    );
   });
 }
 
@@ -421,21 +402,23 @@ function composeVolumeMount(service, expected) {
       if (parts.length < 2 || parts.length > 3) return false;
       const [source, target, rawOptions = ""] = parts;
       const options = new Set(rawOptions.split(",").filter(Boolean));
-      const type = source.startsWith(".") || source.startsWith("/")
-        ? "bind"
-        : "volume";
-      return source === expected.source
-        && target === expected.target
-        && type === expected.type
-        && !options.has("ro");
+      const type = source.startsWith(".") || source.startsWith("/") ? "bind" : "volume";
+      return (
+        source === expected.source &&
+        target === expected.target &&
+        type === expected.type &&
+        !options.has("ro")
+      );
     }
     if (!mount || typeof mount !== "object" || Array.isArray(mount)) {
       return false;
     }
-    return mount.source === expected.source
-      && mount.target === expected.target
-      && mount.type === expected.type
-      && (mount.read_only === undefined || mount.read_only === false);
+    return (
+      mount.source === expected.source &&
+      mount.target === expected.target &&
+      mount.type === expected.type &&
+      (mount.read_only === undefined || mount.read_only === false)
+    );
   });
 }
 
@@ -456,23 +439,43 @@ const composeVolumeContractFixtures = [
     false
   ],
   [
-    { volumes: [{
-      type: "bind", source: "redis_data", target: "/data"
-    }] },
+    {
+      volumes: [
+        {
+          type: "bind",
+          source: "redis_data",
+          target: "/data"
+        }
+      ]
+    },
     { source: "redis_data", target: "/data", type: "volume" },
     false
   ],
   [
-    { volumes: [{
-      type: "volume", source: "redis_data", target: "/data", read_only: true
-    }] },
+    {
+      volumes: [
+        {
+          type: "volume",
+          source: "redis_data",
+          target: "/data",
+          read_only: true
+        }
+      ]
+    },
     { source: "redis_data", target: "/data", type: "volume" },
     false
   ],
   [
-    { volumes: [{
-      type: "volume", source: "redis_data", target: "/data", read_only: false
-    }] },
+    {
+      volumes: [
+        {
+          type: "volume",
+          source: "redis_data",
+          target: "/data",
+          read_only: false
+        }
+      ]
+    },
     { source: "redis_data", target: "/data", type: "volume" },
     true
   ]
@@ -520,10 +523,7 @@ for (const binding of runtimeConfigEnvironmentBindings) {
   }
 }
 
-const environmentExampleSource = await readFile(
-  resolve(workspaceRoot, ".env.example"),
-  "utf8"
-);
+const environmentExampleSource = await readFile(resolve(workspaceRoot, ".env.example"), "utf8");
 const environmentExample = parseDotEnvExample(environmentExampleSource);
 const deploymentEnvironmentVariables = [
   "DATABASE_NAME",
@@ -555,8 +555,8 @@ for (const [variable, expected] of defaultComposeEnvironment) {
   const actual = environmentExample.get(variable);
   if (actual !== expected) {
     throw new Error(
-      `source-contract: .env.example ${variable} default drifted: `
-      + JSON.stringify({ expected, actual })
+      `source-contract: .env.example ${variable} default drifted: ` +
+        JSON.stringify({ expected, actual })
     );
   }
 }
@@ -568,16 +568,13 @@ for (const binding of runtimeConfigEnvironmentBindings) {
   const expected = runtimeDefaultEntries.get(binding.path);
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(
-      `source-contract: .env.example ${binding.environmentVariable} default differs from ${binding.path}: `
-      + JSON.stringify({ expected, actual })
+      `source-contract: .env.example ${binding.environmentVariable} default differs from ${binding.path}: ` +
+        JSON.stringify({ expected, actual })
     );
   }
 }
 
-const configurationGuide = await readFile(
-  resolve(workspaceRoot, "docs/CONFIG.md"),
-  "utf8"
-);
+const configurationGuide = await readFile(resolve(workspaceRoot, "docs/CONFIG.md"), "utf8");
 const documentationEntries = new Map();
 for (const section of configurationGuide.split(/(?=^#{1,4} )/m)) {
   const path = /^#### (\w+(?:\.\w+)+)\r?$/m.exec(section)?.[1];
@@ -588,11 +585,12 @@ for (const section of configurationGuide.split(/(?=^#{1,4} )/m)) {
   const environmentVariable = /^- 环境变量：`([A-Z][A-Z0-9_]*)`\r?$/m.exec(section)?.[1];
   const defaultLiteral = /^- 类型、默认值与范围：.*默认 `([^`]*)`/m.exec(section)?.[1];
   const composeInjection = /^- Compose：(默认注入|显式映射)\r?$/m.exec(section)?.[1];
-  const injection = composeInjection === "默认注入"
-    ? "default"
-    : composeInjection === "显式映射"
-      ? "explicit"
-      : null;
+  const injection =
+    composeInjection === "默认注入"
+      ? "default"
+      : composeInjection === "显式映射"
+        ? "explicit"
+        : null;
   documentationEntries.set(path, { defaultLiteral, environmentVariable, injection });
 }
 assertSameSet(
@@ -629,15 +627,15 @@ for (const path of runtimeDefaultPathOrder) {
   const expectedDefault = runtimeDefaultEntries.get(path);
   if (JSON.stringify(documentedDefault) !== JSON.stringify(expectedDefault)) {
     throw new Error(
-      `source-contract: documented default for ${path} drifted: `
-      + JSON.stringify({ expected: expectedDefault, actual: documentedDefault })
+      `source-contract: documented default for ${path} drifted: ` +
+        JSON.stringify({ expected: expectedDefault, actual: documentedDefault })
     );
   }
   const binding = runtimeBindingByPath.get(path);
   if (documented.environmentVariable !== binding.environmentVariable) {
     throw new Error(
-      `source-contract: documented environment variable for ${path} is `
-      + `${documented.environmentVariable}, expected ${binding.environmentVariable}`
+      `source-contract: documented environment variable for ${path} is ` +
+        `${documented.environmentVariable}, expected ${binding.environmentVariable}`
     );
   }
   const expectedInjection = defaultComposeRuntimeSeeds.has(binding.environmentVariable)
@@ -645,22 +643,22 @@ for (const path of runtimeDefaultPathOrder) {
     : "explicit";
   if (documented.injection !== expectedInjection) {
     throw new Error(
-      `source-contract: documented Compose injection for ${binding.environmentVariable} is `
-      + `${documented.injection}, expected ${expectedInjection}`
+      `source-contract: documented Compose injection for ${binding.environmentVariable} is ` +
+        `${documented.injection}, expected ${expectedInjection}`
     );
   }
 }
 
 const composeInterpolationVariables = new Set(
-  [...composeSource.matchAll(/(?<!\$)\$\{([A-Z][A-Z0-9_]*)[^}]*\}/g)]
-    .map((match) => match[1])
+  [...composeSource.matchAll(/(?<!\$)\$\{([A-Z][A-Z0-9_]*)[^}]*\}/g)].map((match) => match[1])
 );
-const missingInterpolationExamples = [...composeInterpolationVariables]
-  .filter((variable) => !environmentExample.has(variable));
+const missingInterpolationExamples = [...composeInterpolationVariables].filter(
+  (variable) => !environmentExample.has(variable)
+);
 if (missingInterpolationExamples.length) {
   throw new Error(
-    "source-contract: Compose interpolation variables missing from .env.example: "
-    + JSON.stringify(missingInterpolationExamples)
+    "source-contract: Compose interpolation variables missing from .env.example: " +
+      JSON.stringify(missingInterpolationExamples)
   );
 }
 const expectedImageShowEnvironment = [
@@ -697,7 +695,9 @@ for (const [applicationKey, postgresqlKey, variable, defaultValue] of [
 }
 const requiredDatabasePassword = "${DATABASE_PASSWORD:?}";
 if (imageShowEnvironment.get("DATABASE_PASSWORD") !== requiredDatabasePassword) {
-  throw new Error("source-contract: ImageShow database password must be required without a default");
+  throw new Error(
+    "source-contract: ImageShow database password must be required without a default"
+  );
 }
 if (postgresqlEnvironment.get("POSTGRES_PASSWORD") !== requiredDatabasePassword) {
   throw new Error("source-contract: PostgreSQL password must share the required database password");
@@ -716,39 +716,46 @@ const redisService = composeService(compose, "redis");
 if (composeEnvironment(redisService).size !== 0) {
   throw new Error("source-contract: Redis default Compose environment must be empty");
 }
-if (!composeVolumeMount(redisService, {
-  source: "./redis",
-  target: "/data",
-  type: "bind"
-})) {
+if (
+  !composeVolumeMount(redisService, {
+    source: "./redis",
+    target: "/data",
+    type: "bind"
+  })
+) {
   throw new Error("source-contract: default Compose Redis must retain its data bind mount");
 }
-if (!composeVolumeMount(
-  postgresqlService,
-  {
+if (
+  !composeVolumeMount(postgresqlService, {
     source: "./postgres",
     target: "/var/lib/postgresql",
     type: "bind"
-  }
-)) {
+  })
+) {
   throw new Error("source-contract: default Compose PostgreSQL must retain its data bind mount");
 }
-if (!composeVolumeMount(imageShowService, {
-  source: "./data",
-  target: "/app/data",
-  type: "bind"
-})) {
+if (
+  !composeVolumeMount(imageShowService, {
+    source: "./data",
+    target: "/app/data",
+    type: "bind"
+  })
+) {
   throw new Error("source-contract: default Compose ImageShow must retain its data bind mount");
 }
-if (!composePortBinding(imageShowService, {
-  hostIp: "127.0.0.1",
-  published: 5518,
-  target: 5518
-})) {
-  throw new Error("source-contract: default Compose port mapping must stay fixed at 127.0.0.1:5518:5518");
+if (
+  !composePortBinding(imageShowService, {
+    hostIp: "127.0.0.1",
+    published: 5518,
+    target: 5518
+  })
+) {
+  throw new Error(
+    "source-contract: default Compose port mapping must stay fixed at 127.0.0.1:5518:5518"
+  );
 }
 
 console.log(
-  `source-contract: ${files.length} modules, ${components.length} dependency cycles, `
-  + `${runtimeDefaultPaths.size} runtime config leaves`
+  `source-contract: ${files.length} modules, ${components.length} dependency cycles, ` +
+    `${runtimeDefaultPaths.size} runtime config leaves`
 );

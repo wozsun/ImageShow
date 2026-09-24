@@ -15,18 +15,12 @@ export type StorageBackendConfigRow = {
 
 export function normalizedNamespaceIdentities(value: unknown) {
   if (!Array.isArray(value)) return [];
-  return [...new Set(value
-    .map((identity) => String(identity).trim())
-    .filter(Boolean))].sort();
+  return [...new Set(value.map((identity) => String(identity).trim()).filter(Boolean))].sort();
 }
 
-export function storageConfigFromRow(
-  row: StorageBackendConfigRow
-): StorageConfig {
+export function storageConfigFromRow(row: StorageBackendConfigRow): StorageConfig {
   const raw = typeof row.config === "object" && row.config ? row.config : {};
-  const namespaceIdentities = normalizedNamespaceIdentities(
-    row.namespace_identities
-  );
+  const namespaceIdentities = normalizedNamespaceIdentities(row.namespace_identities);
   switch (row.type) {
     case "s3":
       return {
@@ -71,9 +65,7 @@ export function storageBackendRecordFromRow(
   };
 }
 
-export function storageConfigFromRecord(
-  record: StorageBackendRecord
-): StorageConfig {
+export function storageConfigFromRecord(record: StorageBackendRecord): StorageConfig {
   const {
     display_name: _displayName,
     sort_order: _sortOrder,

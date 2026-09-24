@@ -4,24 +4,15 @@ import { withPublicDatabaseRead } from "../../core/database/public-fallback.ts";
 import { coalesce } from "../../core/coalesce.ts";
 import { raceWithAbortSignal } from "../../core/abort.ts";
 import { safeFetchExternalImage } from "../../core/external-image-fetch.ts";
-import {
-  privateRevalidationCacheControl,
-  safeRedirectLocation
-} from "../../core/http/headers.ts";
+import { privateRevalidationCacheControl, safeRedirectLocation } from "../../core/http/headers.ts";
 import {
   externalImageProxyTimeoutMs,
   externalImageProxyUserAgent,
   proxyExternalImage
 } from "../external-image-proxy.ts";
 import { readImageServingRecordById } from "./record.ts";
-import {
-  displayUrlForOriginalComparison,
-  hasDistinctOriginalUrl
-} from "./original-link.ts";
-import {
-  getOriginalDirectCache,
-  setOriginalDirectCache
-} from "./original-direct-cache.ts";
+import { displayUrlForOriginalComparison, hasDistinctOriginalUrl } from "./original-link.ts";
+import { getOriginalDirectCache, setOriginalDirectCache } from "./original-direct-cache.ts";
 
 export type ExternalOriginalServingDependencies = {
   readImageServingRecordById: typeof readImageServingRecordById;
@@ -34,9 +25,7 @@ function externalImageExt(url: string) {
   try {
     const ext = new URL(url).pathname.split(".").pop()?.toLowerCase();
     if (ext === "jpeg") return "jpg";
-    return ext && ["jpg", "png", "webp", "gif", "avif"].includes(ext)
-      ? ext
-      : "jpg";
+    return ext && ["jpg", "png", "webp", "gif", "avif"].includes(ext) ? ext : "jpg";
   } catch {
     return "jpg";
   }
@@ -84,14 +73,8 @@ function originalDirectCacheKey(url: string, userAgent: string) {
     .digest("hex");
 }
 
-async function cachedOriginalSupportsDirectAccess(
-  url: string,
-  userAgent: string
-) {
-  const cacheKey = originalDirectCacheKey(
-    url,
-    userAgent || externalImageProxyUserAgent
-  );
+async function cachedOriginalSupportsDirectAccess(url: string, userAgent: string) {
+  const cacheKey = originalDirectCacheKey(url, userAgent || externalImageProxyUserAgent);
   const cached = await getOriginalDirectCache(cacheKey);
   if (cached) return cached.direct;
 
@@ -104,33 +87,26 @@ async function cachedOriginalSupportsDirectAccess(
   });
 }
 
-const defaultExternalOriginalServingDependencies:
-  ExternalOriginalServingDependencies = {
-    readImageServingRecordById,
-    displayUrlForOriginalComparison,
-    supportsDirectAccess: cachedOriginalSupportsDirectAccess,
-    proxyExternalImage
-  };
+const defaultExternalOriginalServingDependencies: ExternalOriginalServingDependencies = {
+  readImageServingRecordById,
+  displayUrlForOriginalComparison,
+  supportsDirectAccess: cachedOriginalSupportsDirectAccess,
+  proxyExternalImage
+};
 
 async function resolveExternalOriginal(
   id: string,
   signal: AbortSignal,
   dependencies: ExternalOriginalServingDependencies
 ) {
-  const record = await withPublicDatabaseRead(signal, (database) => (
+  const record = await withPublicDatabaseRead(signal, (database) =>
     dependencies.readImageServingRecordById(id, database)
-  ));
+  );
   const original = record?.original ?? "";
-  if (
-    !record
-    || !/^https:\/\//i.test(original)
-  ) {
+  if (!record || !/^https:\/\//i.test(original)) {
     throw new ApiError(404, "not_found", "Original link not found");
   }
-  const displayUrl = await dependencies.displayUrlForOriginalComparison(
-    record,
-    { signal }
-  );
+  const displayUrl = await dependencies.displayUrlForOriginalComparison(record, { signal });
   if (!hasDistinctOriginalUrl(original, displayUrl)) {
     throw new ApiError(404, "not_found", "Original link not found");
   }
@@ -148,15 +124,15 @@ type ExternalOriginalRequest = {
 export async function serveAdminExternalOriginal(
   id: string,
   request: ExternalOriginalRequest = {},
-  dependencies: ExternalOriginalServingDependencies =
-    defaultExternalOriginalServingDependencies
+  dependencies: ExternalOriginalServingDependencies = defaultExternalOriginalServingDependencies
 ) {
   const signal = request.signal ?? new AbortController().signal;
   const original = await resolveExternalOriginal(id, signal, dependencies);
   signal.throwIfAborted();
-  const direct = await raceWithAbortSignal(signal, dependencies.supportsDirectAccess(
-    original.url, request.userAgent ?? ""
-  ));
+  const direct = await raceWithAbortSignal(
+    signal,
+    dependencies.supportsDirectAccess(original.url, request.userAgent ?? "")
+  );
   signal.throwIfAborted();
   if (direct) {
     return new Response(null, {

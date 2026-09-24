@@ -13,7 +13,13 @@ import { parseHttpMimeType } from "./http/media-type.ts";
 
 const maxExternalRedirects = 5;
 const imageSniffBytes = 4100;
-const allowedImageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
+const allowedImageMimeTypes = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif"
+]);
 const metadataHostnames = new Set(["metadata", "metadata.google.internal"]);
 const externalImageRejectedCode = "external_image_rejected";
 const externalImageRejectedMessage = "外部图片请求未通过安全校验";
@@ -62,10 +68,12 @@ function normalizeHostname(hostname: string) {
 
 const externalImageDispatcher = new Agent({
   connect: {
-    lookup: createExternalImageLookup((hostname) => lookup(hostname, {
-      all: true,
-      verbatim: true
-    }))
+    lookup: createExternalImageLookup((hostname) =>
+      lookup(hostname, {
+        all: true,
+        verbatim: true
+      })
+    )
   }
 });
 
@@ -77,7 +85,10 @@ function tlsCertificateErrorCode(error: unknown) {
     const code = (current as { code?: unknown }).code;
     if (typeof code === "string" && tlsCertificateErrorCodes.has(code)) return code;
     const message = (current as { message?: unknown }).message;
-    if (typeof message === "string" && /\b(certificate|cert|self[- ]signed|hostname\/IP does not match|altname)\b/i.test(message)) {
+    if (
+      typeof message === "string" &&
+      /\b(certificate|cert|self[- ]signed|hostname\/IP does not match|altname)\b/i.test(message)
+    ) {
       return "TLS_CERTIFICATE_INVALID";
     }
     current = (current as { cause?: unknown }).cause;
@@ -114,7 +125,12 @@ async function validateExternalImageUrl(input: string): Promise<URL> {
   }
 
   const hostname = normalizeHostname(url.hostname);
-  if (!hostname || hostname === "localhost" || hostname.endsWith(".localhost") || metadataHostnames.has(hostname)) {
+  if (
+    !hostname ||
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    metadataHostnames.has(hostname)
+  ) {
     throw externalImageRejected("blocked_hostname", urlLogContext(url));
   }
 
@@ -137,7 +153,9 @@ export function isAllowedExternalImageContentType(value: string | null) {
 
 function imageMimeFromExt(ext?: string) {
   const normalized = ext === "jpg" ? "jpeg" : ext;
-  return normalized && ["jpeg", "png", "webp", "gif", "avif"].includes(normalized) ? `image/${normalized}` : "";
+  return normalized && ["jpeg", "png", "webp", "gif", "avif"].includes(normalized)
+    ? `image/${normalized}`
+    : "";
 }
 
 async function responseWithSniffedImageBody(response: Response, signal?: AbortSignal) {
@@ -186,7 +204,8 @@ async function responseWithSniffedImageBody(response: Response, signal?: AbortSi
   });
 
   const headers = new Headers(response.headers);
-  if (!isAllowedExternalImageContentType(headers.get("content-type"))) headers.set("Content-Type", detectedMime);
+  if (!isAllowedExternalImageContentType(headers.get("content-type")))
+    headers.set("Content-Type", detectedMime);
   return new Response(body, { status: response.status, statusText: response.statusText, headers });
 }
 
@@ -235,14 +254,18 @@ async function fetchWithTimeout(url: URL, options: SafeExternalImageFetchOptions
     if (hasErrorCode(error, externalImageLookupErrorCode)) {
       throw externalImageRejected("blocked_resolved_address", urlLogContext(url));
     }
-    if (tlsCertificateErrorCode(error)) throw externalImageRejected("tls_certificate_invalid", urlLogContext(url));
+    if (tlsCertificateErrorCode(error))
+      throw externalImageRejected("tls_certificate_invalid", urlLogContext(url));
     throw error;
   } finally {
     if (!handedOff) cleanup();
   }
 }
 
-export async function safeFetchExternalImage(input: string, options: SafeExternalImageFetchOptions): Promise<Response> {
+export async function safeFetchExternalImage(
+  input: string,
+  options: SafeExternalImageFetchOptions
+): Promise<Response> {
   let current = input;
   for (let redirects = 0; redirects <= maxExternalRedirects; redirects += 1) {
     if (options.signal?.aborted) throw abortError(options.signal);
@@ -260,14 +283,19 @@ export async function safeFetchExternalImage(input: string, options: SafeExterna
 
     const validation = options.imageValidation ?? "sniff";
     try {
-      if (validation === "header" && !isAllowedExternalImageContentType(response.headers.get("content-type"))) {
+      if (
+        validation === "header" &&
+        !isAllowedExternalImageContentType(response.headers.get("content-type"))
+      ) {
         await response.body?.cancel().catch(() => undefined);
         throw externalImageRejected("unsupported_image_header", urlLogContext(url));
       }
-      if (validation === "sniff" && options.method !== "HEAD") return await responseWithSniffedImageBody(response, options.signal);
+      if (validation === "sniff" && options.method !== "HEAD")
+        return await responseWithSniffedImageBody(response, options.signal);
       return response;
     } catch (error) {
-      if (options.signal?.aborted || (error as Error).name === "AbortError") throw abortError(options.signal);
+      if (options.signal?.aborted || (error as Error).name === "AbortError")
+        throw abortError(options.signal);
       throw error;
     }
   }

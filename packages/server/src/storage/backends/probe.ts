@@ -7,15 +7,10 @@ import {
   type StorageBackendTestInput,
   type StorageConfig
 } from "./config.ts";
-import {
-  getStorageBackend,
-  resolveStorageAccessForConfig
-} from "./registry.ts";
+import { getStorageBackend, resolveStorageAccessForConfig } from "./registry.ts";
 import type { StorageDriver } from "../drivers/driver.ts";
 import { assertCanonicalImageObjectKey } from "../objects/image-paths.ts";
-import {
-  verifyStorageEndpointRebind
-} from "./endpoint-rebind.ts";
+import { verifyStorageEndpointRebind } from "./endpoint-rebind.ts";
 
 export type ExistingStorageProbe = {
   id: string;
@@ -80,9 +75,7 @@ export async function validateStorageBackendCandidate(
     }
     if (endpointRebind) {
       await verifyStorageEndpointRebind({
-        current: resolveStorageAccessForConfig(
-          endpointRebind.currentConfig
-        ).driver,
+        current: resolveStorageAccessForConfig(endpointRebind.currentConfig).driver,
         candidate: driver,
         signal
       });
@@ -98,21 +91,21 @@ export async function validateStorageBackendCandidate(
     signal?.throwIfAborted();
     return result;
   } finally {
-    await Promise.resolve().then(() => driver.close?.()).catch((error) => {
-      logger.warn("storage_probe_driver_close_failed", {
-        backend: config.slug,
-        error: error
+    await Promise.resolve()
+      .then(() => driver.close?.())
+      .catch((error) => {
+        logger.warn("storage_probe_driver_close_failed", {
+          backend: config.slug,
+          error: error
+        });
       });
-    });
   }
 }
 
 export async function resolveStorageTestConfig(
   input: StorageBackendTestInput
 ): Promise<StorageConfig> {
-  const current = input.slug
-    ? await getStorageBackend(input.slug)
-    : undefined;
+  const current = input.slug ? await getStorageBackend(input.slug) : undefined;
   if (current?.type === "local") return current;
 
   const currentS3 = current?.type === "s3" ? current.s3 : undefined;

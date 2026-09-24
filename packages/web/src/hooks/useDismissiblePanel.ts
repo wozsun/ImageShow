@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type RefObject
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { isDocumentFallbackFocusTarget } from "../lib/ui/focus-target.js";
 import { anchoredPopupBoundarySelector } from "../lib/ui/anchored-popup-boundary.js";
 import { topDialogFrame } from "../lib/ui/dialog-layer.js";
@@ -18,10 +11,8 @@ const outsideInteractionEvents = [
   "wheel"
 ] as const;
 
-const defaultPortalSelector =
-  `.select-menu, .facet-select-menu, [data-dialog-portal-menu], ${anchoredPopupBoundarySelector}`;
-const availableHeightProperty =
-  "--dismissible-panel-available-height";
+const defaultPortalSelector = `.select-menu, .facet-select-menu, [data-dialog-portal-menu], ${anchoredPopupBoundarySelector}`;
+const availableHeightProperty = "--dismissible-panel-available-height";
 
 type TransientPanelCloseOptions = {
   restoreFocus?: boolean;
@@ -33,37 +24,28 @@ type TransientPanelCloseOptions = {
  * Closing callers run prepareForClose before changing state so React can add
  * inert/aria-hidden without leaving focus in the subtree being hidden.
  */
-function useTransientPanelSemantics({
-  open,
-  transient
-}: {
-  open: boolean;
-  transient: boolean;
-}) {
+function useTransientPanelSemantics({ open, transient }: { open: boolean; transient: boolean }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [transientStateReady, setTransientStateReady] = useState(transient);
 
-  const prepareForClose = useCallback(({
-    restoreFocus = false
-  }: TransientPanelCloseOptions = {}) => {
-    if (!transient || typeof document === "undefined") return;
+  const prepareForClose = useCallback(
+    ({ restoreFocus = false }: TransientPanelCloseOptions = {}) => {
+      if (!transient || typeof document === "undefined") return;
 
-    const panel = panelRef.current;
-    const activeElement = document.activeElement;
-    if (restoreFocus) {
-      const trigger = triggerRef.current;
-      trigger?.focus();
-      if (trigger && document.activeElement === trigger) return;
-    }
-    if (
-      panel
-      && activeElement instanceof HTMLElement
-      && panel.contains(activeElement)
-    ) {
-      activeElement.blur();
-    }
-  }, [transient]);
+      const panel = panelRef.current;
+      const activeElement = document.activeElement;
+      if (restoreFocus) {
+        const trigger = triggerRef.current;
+        trigger?.focus();
+        if (trigger && document.activeElement === trigger) return;
+      }
+      if (panel && activeElement instanceof HTMLElement && panel.contains(activeElement)) {
+        activeElement.blur();
+      }
+    },
+    [transient]
+  );
 
   useLayoutEffect(() => {
     if (transientStateReady === transient) return;
@@ -73,8 +55,7 @@ function useTransientPanelSemantics({
     setTransientStateReady(transient);
   }, [open, prepareForClose, transient, transientStateReady]);
 
-  const panelHidden =
-    transient && transientStateReady && !open ? true : undefined;
+  const panelHidden = transient && transientStateReady && !open ? true : undefined;
 
   return {
     panelHidden,
@@ -93,26 +74,17 @@ function isWithinPanelSurface(
 ) {
   const path = event.composedPath?.() ?? (event.target ? [event.target] : []);
   return path.some((entry) => {
+    if (entry === panel || entry === trigger || entry === auxiliarySurface) return true;
     if (
-      entry === panel
-      || entry === trigger
-      || entry === auxiliarySurface
-    ) return true;
-    if (
-      typeof Node !== "undefined"
-      && entry instanceof Node
-      && (
-        panel.contains(entry)
-        || trigger.contains(entry)
-        || auxiliarySurface?.contains(entry)
-      )
+      typeof Node !== "undefined" &&
+      entry instanceof Node &&
+      (panel.contains(entry) || trigger.contains(entry) || auxiliarySurface?.contains(entry))
     ) {
       return true;
     }
 
     const matches = (entry as Partial<Element>).matches;
-    return typeof matches === "function"
-      && matches.call(entry, portalSelector);
+    return typeof matches === "function" && matches.call(entry, portalSelector);
   });
 }
 
@@ -155,25 +127,22 @@ export function useDismissiblePanel({
     setMenuDismissSignal((current) => current + 1);
   }, []);
 
-  const setOpen = useCallback((
-    nextOpen: boolean,
-    closeOptions?: TransientPanelCloseOptions
-  ) => {
-    window.clearTimeout(motionTimerRef.current);
-    if (!nextOpen) {
-      semantics.prepareForClose(closeOptions);
-      dismissMenus();
-    }
-    setMotionEnabled(enabled);
-    onOpenChangeRef.current(nextOpen);
-    if (enabled) {
-      // 动画只覆盖用户触发的本次开合，避免之后跨越响应式断点时误播。
-      motionTimerRef.current = window.setTimeout(
-        () => setMotionEnabled(false),
-        100
-      );
-    }
-  }, [dismissMenus, enabled, semantics.prepareForClose]);
+  const setOpen = useCallback(
+    (nextOpen: boolean, closeOptions?: TransientPanelCloseOptions) => {
+      window.clearTimeout(motionTimerRef.current);
+      if (!nextOpen) {
+        semantics.prepareForClose(closeOptions);
+        dismissMenus();
+      }
+      setMotionEnabled(enabled);
+      onOpenChangeRef.current(nextOpen);
+      if (enabled) {
+        // 动画只覆盖用户触发的本次开合，避免之后跨越响应式断点时误播。
+        motionTimerRef.current = window.setTimeout(() => setMotionEnabled(false), 100);
+      }
+    },
+    [dismissMenus, enabled, semantics.prepareForClose]
+  );
 
   useLayoutEffect(() => {
     window.clearTimeout(motionTimerRef.current);
@@ -185,9 +154,12 @@ export function useDismissiblePanel({
     }
   }, [dismissMenus, resetKey, semantics.prepareForClose]);
 
-  useEffect(() => () => {
-    window.clearTimeout(motionTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      window.clearTimeout(motionTimerRef.current);
+    },
+    []
+  );
 
   useLayoutEffect(() => {
     const panel = semantics.panelRef.current;
@@ -203,14 +175,8 @@ export function useDismissiblePanel({
       const viewportBottom = visualViewport
         ? visualViewport.offsetTop + visualViewport.height
         : window.innerHeight;
-      const availableHeight = Math.max(
-        0,
-        viewportBottom - trigger.getBoundingClientRect().bottom
-      );
-      panel.style.setProperty(
-        availableHeightProperty,
-        `${availableHeight}px`
-      );
+      const availableHeight = Math.max(0, viewportBottom - trigger.getBoundingClientRect().bottom);
+      panel.style.setProperty(availableHeightProperty, `${availableHeight}px`);
     };
     const scheduleUpdate = () => {
       if (frame !== undefined) return;
@@ -238,19 +204,19 @@ export function useDismissiblePanel({
     const listeners = new AbortController();
     const { signal } = listeners;
     const closeOnOutsideInteraction = (event: Event) => {
-      if (isWithinPanelSurface(
-        panel,
-        trigger,
-        auxiliarySurfaceRef?.current ?? null,
-        event,
-        portalSelector
-      )) return;
       if (
-        event.type === "focusin"
-        && isDocumentFallbackFocusTarget(
-          panel.ownerDocument,
-          event.target
+        isWithinPanelSurface(
+          panel,
+          trigger,
+          auxiliarySurfaceRef?.current ?? null,
+          event,
+          portalSelector
         )
+      )
+        return;
+      if (
+        event.type === "focusin" &&
+        isDocumentFallbackFocusTarget(panel.ownerDocument, event.target)
       ) {
         // iOS can move focus to body/html while dismissing the keyboard.
         // A later physical interaction outside is handled independently.
@@ -259,14 +225,24 @@ export function useDismissiblePanel({
       setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!closeOnEscape || event.key !== "Escape" || event.defaultPrevented
-        || event.isComposing || event.keyCode === 229) return;
+      if (
+        !closeOnEscape ||
+        event.key !== "Escape" ||
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.keyCode === 229
+      )
+        return;
       if (topDialogFrame(document) !== panel.closest("[data-dialog-frame]")) return;
       // Owned menus get the first Escape, including their exit animation.
-      if ([...document.querySelectorAll(portalSelector)].some((surface) => (
-        surface.matches(anchoredPopupBoundarySelector)
-        || surface.querySelector(anchoredPopupBoundarySelector)
-      ))) return;
+      if (
+        [...document.querySelectorAll(portalSelector)].some(
+          (surface) =>
+            surface.matches(anchoredPopupBoundarySelector) ||
+            surface.querySelector(anchoredPopupBoundarySelector)
+        )
+      )
+        return;
       event.preventDefault();
       event.stopImmediatePropagation();
       setOpen(false, { restoreFocus: true });
@@ -285,14 +261,7 @@ export function useDismissiblePanel({
       );
     }
     return () => listeners.abort();
-  }, [
-    enabled,
-    open,
-    portalSelector,
-    closeOnEscape,
-    setOpen,
-    auxiliarySurfaceRef
-  ]);
+  }, [enabled, open, portalSelector, closeOnEscape, setOpen, auxiliarySurfaceRef]);
 
   return {
     panelHidden: semantics.panelHidden,

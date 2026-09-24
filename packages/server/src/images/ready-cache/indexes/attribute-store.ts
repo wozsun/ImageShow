@@ -1,7 +1,5 @@
 import type { DatabaseReader } from "../../../core/database/pools.ts";
-import {
-  publishReadyImageAttributeIndexCommand
-} from "../redis/commands.ts";
+import { publishReadyImageAttributeIndexCommand } from "../redis/commands.ts";
 import { getRedisConnectionState, redis } from "../../../core/redis/client.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
 import { getReadyImageCacheCoordinatorStatus } from "../coordinator.ts";
@@ -49,14 +47,17 @@ export async function readReadyImageAttributeIndex(
       await discardReadyImageDerivedResult(key, "attribute");
       return null;
     }
-    if (touch && !await touchReadyImageAttributeResult({
-      key,
-      revision,
-      count: snapshot.count,
-      itemCount: snapshot.itemCount,
-      instanceToken: snapshot.instanceToken,
-      accessedAt: new Date().toISOString()
-    })) {
+    if (
+      touch &&
+      !(await touchReadyImageAttributeResult({
+        key,
+        revision,
+        count: snapshot.count,
+        itemCount: snapshot.itemCount,
+        instanceToken: snapshot.instanceToken,
+        accessedAt: new Date().toISOString()
+      }))
+    ) {
       await discardReadyImageDerivedResult(key, "attribute");
       return null;
     }
@@ -68,8 +69,9 @@ export async function readReadyImageAttributeIndex(
       instanceToken: snapshot.instanceToken
     };
   } catch (error) {
-    await discardReadyImageDerivedResult(key, "attribute")
-      .catch(() => redis.unlink(key, metaKey).catch(() => undefined));
+    await discardReadyImageDerivedResult(key, "attribute").catch(() =>
+      redis.unlink(key, metaKey).catch(() => undefined)
+    );
     throw error;
   }
 }
@@ -93,17 +95,16 @@ export async function publishReadyImageAttributeIndex(options: {
       const status = getReadyImageCacheCoordinatorStatus();
       const connection = getRedisConnectionState();
       if (
-        !status.readable
-        || status.meta?.state !== "ready"
-        || status.meta !== options.startingMeta
-        || status.meta.appliedRevision !== options.revision
-        || !connection.ready
-        || connection.epoch !== options.connectionEpoch
+        !status.readable ||
+        status.meta?.state !== "ready" ||
+        status.meta !== options.startingMeta ||
+        status.meta.appliedRevision !== options.revision ||
+        !connection.ready ||
+        connection.epoch !== options.connectionEpoch
       ) {
         return null;
       }
-      const sourceRevision = (await getReadyImageRevision(options.reader))
-        .revision;
+      const sourceRevision = (await getReadyImageRevision(options.reader)).revision;
       options.signal?.throwIfAborted();
       if (sourceRevision !== options.revision) {
         return null;
@@ -126,19 +127,18 @@ export async function publishReadyImageAttributeIndex(options: {
         return null;
       }
 
-      const publishedRevision = (await getReadyImageRevision(options.reader))
-        .revision;
+      const publishedRevision = (await getReadyImageRevision(options.reader)).revision;
       options.signal?.throwIfAborted();
       const publishedStatus = getReadyImageCacheCoordinatorStatus();
       const publishedConnection = getRedisConnectionState();
       if (
-        !publishedStatus.readable
-        || publishedStatus.meta?.state !== "ready"
-        || publishedStatus.meta !== options.startingMeta
-        || publishedStatus.meta.appliedRevision !== options.revision
-        || !publishedConnection.ready
-        || publishedConnection.epoch !== options.connectionEpoch
-        || publishedRevision !== options.revision
+        !publishedStatus.readable ||
+        publishedStatus.meta?.state !== "ready" ||
+        publishedStatus.meta !== options.startingMeta ||
+        publishedStatus.meta.appliedRevision !== options.revision ||
+        !publishedConnection.ready ||
+        publishedConnection.epoch !== options.connectionEpoch ||
+        publishedRevision !== options.revision
       ) {
         await redis.unlink(key, metaKey);
         return null;
@@ -154,11 +154,11 @@ export async function publishReadyImageAttributeIndex(options: {
       const registeredStatus = getReadyImageCacheCoordinatorStatus();
       const registeredConnection = getRedisConnectionState();
       if (
-        !registered
-        || !registeredStatus.readable
-        || registeredStatus.meta !== options.startingMeta
-        || !registeredConnection.ready
-        || registeredConnection.epoch !== options.connectionEpoch
+        !registered ||
+        !registeredStatus.readable ||
+        registeredStatus.meta !== options.startingMeta ||
+        !registeredConnection.ready ||
+        registeredConnection.epoch !== options.connectionEpoch
       ) {
         await discardReadyImageDerivedResult(key, "attribute");
         return null;
@@ -172,8 +172,9 @@ export async function publishReadyImageAttributeIndex(options: {
       };
     });
   } catch (error) {
-    await discardReadyImageDerivedResult(key, "attribute")
-      .catch(() => redis.unlink(key, metaKey).catch(() => undefined));
+    await discardReadyImageDerivedResult(key, "attribute").catch(() =>
+      redis.unlink(key, metaKey).catch(() => undefined)
+    );
     throw error;
   }
 }

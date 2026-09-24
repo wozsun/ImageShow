@@ -29,18 +29,19 @@ function serializedPreferenceBytes(preferences: AdminPreferences) {
 
 function isPreferenceSizeViolation(error: unknown) {
   const databaseError = error as { code?: string; constraint?: string };
-  return databaseError.code === "23514"
-    && databaseError.constraint === "admin_account_preferences_size_check";
+  return (
+    databaseError.code === "23514" &&
+    databaseError.constraint === "admin_account_preferences_size_check"
+  );
 }
 
 export async function readAdminPreferences(
   username: string,
   query: AdminPreferenceQuery = queryAdminPreferences
 ): Promise<AdminPreferences> {
-  const result = await query(
-    "SELECT preferences FROM admin_account WHERE username = $1",
-    [username]
-  );
+  const result = await query("SELECT preferences FROM admin_account WHERE username = $1", [
+    username
+  ]);
   if (!result.rowCount) throw unauthorizedAdmin();
   return normalizeAdminPreferences(result.rows[0]?.preferences);
 }

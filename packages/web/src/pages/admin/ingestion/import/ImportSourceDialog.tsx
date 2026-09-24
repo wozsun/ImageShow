@@ -15,10 +15,7 @@ import { DialogFrame } from "../../../../components/feedback/DialogFrame.js";
 import { AdminIcon } from "../../../../components/icon/AdminIcon.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
 import { useAsyncActionStatus } from "../../../../hooks/useAsyncActionStatus.js";
-import {
-  mobileViewportMediaQuery,
-  useMediaQuery
-} from "../../../../hooks/useMediaQuery.js";
+import { mobileViewportMediaQuery, useMediaQuery } from "../../../../hooks/useMediaQuery.js";
 import {
   importSourceModeAdapters,
   type ImportSourceSubmission,
@@ -29,10 +26,7 @@ import {
   importSourceTextareaRows,
   type ImportSourceMode
 } from "./import-source-model.js";
-import {
-  ImportSourceResultPanel,
-  ImportSourceResultSummary
-} from "./ImportSourceResultPanel.js";
+import { ImportSourceResultPanel, ImportSourceResultSummary } from "./ImportSourceResultPanel.js";
 import { parseImportUrlInput } from "../queue/model/import-job-source.js";
 
 export type { ImportSourceSubmission } from "./import-source-adapters.js";
@@ -70,8 +64,7 @@ export function ImportSourceDialog({
   }, [onSubmit]);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<ImportSourceMode>(initialMode);
-  const [parsedResult, setParsedResult] =
-    useState<ParsedImportSourceResult | null>(null);
+  const [parsedResult, setParsedResult] = useState<ParsedImportSourceResult | null>(null);
   const [parseError, setParseError] = useState("");
   const parseAction = useAsyncActionStatus({
     minimumPendingMs: 0,
@@ -80,7 +73,7 @@ export function ImportSourceDialog({
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const adapter = importSourceModeAdapters[mode];
   const urlParseResult = useMemo(
-    () => mode === "urls" ? parseImportUrlInput(text) : undefined,
+    () => (mode === "urls" ? parseImportUrlInput(text) : undefined),
     [mode, text]
   );
   const limitState = importSourceLimitState(
@@ -90,9 +83,7 @@ export function ImportSourceDialog({
     urlParseResult
   );
   const readyToImport = parsedResult !== null;
-  const parsedWithoutItems = Boolean(
-    parsedResult && parsedResult.submitCount === 0
-  );
+  const parsedWithoutItems = Boolean(parsedResult && parsedResult.submitCount === 0);
 
   const close = () => {
     requestControllerRef.current?.abort();
@@ -129,11 +120,7 @@ export function ImportSourceDialog({
     requestControllerRef.current = controller;
     setParseError("");
     try {
-      const result = await adapter.parse(
-        text,
-        controller.signal,
-        urlParseResult
-      );
+      const result = await adapter.parse(text, controller.signal, urlParseResult);
       if (controller.signal.aborted) return null;
       setParsedResult(result);
       return result;
@@ -149,10 +136,7 @@ export function ImportSourceDialog({
     }
   };
 
-  const importSubmission = (
-    submission: ImportSourceSubmission,
-    requestClose: () => void
-  ) => {
+  const importSubmission = (submission: ImportSourceSubmission, requestClose: () => void) => {
     if (submittedRef.current) return;
     submittedRef.current = true;
     onSubmitRef.current(submission);
@@ -163,11 +147,7 @@ export function ImportSourceDialog({
     result: ParsedImportSourceResult,
     requestClose: () => void
   ) => {
-    if (
-      !autoImportAfterParse
-      || result.blockingIssueCount > 0
-      || !result.submission
-    ) {
+    if (!autoImportAfterParse || result.blockingIssueCount > 0 || !result.submission) {
       return;
     }
     importSubmission(result.submission, requestClose);
@@ -196,26 +176,23 @@ export function ImportSourceDialog({
     }
   };
 
-  const idleActionPresentation: AsyncActionPresentation["idle"] =
-    parsedWithoutItems
-      ? { label: adapter.emptySubmitText }
-      : parsedResult
-        ? {
-            label: (
-              <span className="import-source-submit-label">
-                <span>导入</span>
-                <span className="import-source-submit-count">
-                  {parsedResult.submitCount}
-                </span>
-                <span>张</span>
-              </span>
-            ),
-            ariaLabel: `导入 ${parsedResult.submitCount} 张`
-          }
-        : {
-            icon: adapter.presentation.icon,
-            label: adapter.parseText
-          };
+  const idleActionPresentation: AsyncActionPresentation["idle"] = parsedWithoutItems
+    ? { label: adapter.emptySubmitText }
+    : parsedResult
+      ? {
+          label: (
+            <span className="import-source-submit-label">
+              <span>导入</span>
+              <span className="import-source-submit-count">{parsedResult.submitCount}</span>
+              <span>张</span>
+            </span>
+          ),
+          ariaLabel: `导入 ${parsedResult.submitCount} 张`
+        }
+      : {
+          icon: adapter.presentation.icon,
+          label: adapter.parseText
+        };
   const actionPresentation: AsyncActionPresentation = {
     idle: idleActionPresentation,
     pending: { icon: adapter.presentation.icon, label: "解析中" },
@@ -254,26 +231,28 @@ export function ImportSourceDialog({
                 <AdminIcon name="close-line" />
               </button>
             </div>
-            <div
-              className="import-source-tabs"
-              role="tablist"
-              aria-label="输入模式"
-            >
+            <div className="import-source-tabs" role="tablist" aria-label="输入模式">
               {importSourceModes.map((value, index) => (
                 <button
                   key={value}
                   type="button"
                   role="tab"
                   id={`${inputId}-tab-${value}`}
-                  ref={(element) => { tabRefs.current[index] = element; }}
+                  ref={(element) => {
+                    tabRefs.current[index] = element;
+                  }}
                   tabIndex={mode === value ? 0 : -1}
                   aria-controls={`${inputId}-panel`}
                   onKeyDown={(event) => {
                     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
                     event.preventDefault();
                     if (parseAction.pending) return;
-                    const next = event.key === "Home" ? 0 : event.key === "End" ? 2
-                      : (index + (event.key === "ArrowRight" ? 1 : 2)) % 3;
+                    const next =
+                      event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? 2
+                          : (index + (event.key === "ArrowRight" ? 1 : 2)) % 3;
                     changeMode(importSourceModes[next], false);
                     tabRefs.current[next]?.focus();
                   }}
@@ -315,19 +294,12 @@ export function ImportSourceDialog({
                 )}
               </div>
               {(parseError || limitState.overLimit) && (
-                <p
-                  className="form-error"
-                  role="alert"
-                  title={parseError || undefined}
-                >
-                  {parseError || (
-                    `已输入 ${limitState.count} 条，最多允许 ${limitState.maxItems} 条，请拆分后再导入`
-                  )}
+                <p className="form-error" role="alert" title={parseError || undefined}>
+                  {parseError ||
+                    `已输入 ${limitState.count} 条，最多允许 ${limitState.maxItems} 条，请拆分后再导入`}
                 </p>
               )}
-              {parsedResult && (
-                <ImportSourceResultPanel result={parsedResult} />
-              )}
+              {parsedResult && <ImportSourceResultPanel result={parsedResult} />}
               <div className="import-source-actions">
                 {!mobileLayout && parsedResult && (
                   <ImportSourceResultSummary result={parsedResult} />
@@ -342,10 +314,10 @@ export function ImportSourceDialog({
                     status={parseAction.status}
                     presentation={actionPresentation}
                     disabled={
-                      parseAction.pending
-                      || limitState.overLimit
-                      || !adapter.hasInput(text)
-                      || parsedWithoutItems
+                      parseAction.pending ||
+                      limitState.overLimit ||
+                      !adapter.hasInput(text) ||
+                      parsedWithoutItems
                     }
                     onClick={() => void submit(requestClose)}
                   />

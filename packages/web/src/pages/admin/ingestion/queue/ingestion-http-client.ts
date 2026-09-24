@@ -53,10 +53,7 @@ export type JsonlManifestResult = ImportManifestResultDto;
 export type WeiboImportParseError = WeiboImportParseErrorDto;
 export type WeiboImportResult = WeiboImportResultDto;
 
-export function createUploadIntents(
-  input: UploadIntentInputDto,
-  signal?: AbortSignal
-) {
+export function createUploadIntents(input: UploadIntentInputDto, signal?: AbortSignal) {
   return api<UploadIntentResultDto>(uploadIntentPath, {
     method: "POST",
     body: JSON.stringify(input),
@@ -64,10 +61,7 @@ export function createUploadIntents(
   });
 }
 
-export function acceptImports(
-  input: ImportAcceptInputDto,
-  signal?: AbortSignal
-) {
+export function acceptImports(input: ImportAcceptInputDto, signal?: AbortSignal) {
   return api<ImportAcceptResultDto>(importAcceptPath, {
     method: "POST",
     body: JSON.stringify(input),
@@ -75,10 +69,7 @@ export function acceptImports(
   });
 }
 
-export function getIngestionStatuses(
-  items: IngestionSessionPairDto[],
-  signal?: AbortSignal
-) {
+export function getIngestionStatuses(items: IngestionSessionPairDto[], signal?: AbortSignal) {
   return api<IngestionStatusResultDto>(ingestionStatusPath, {
     method: "POST",
     body: JSON.stringify({ items }),
@@ -172,18 +163,12 @@ export function uploadRaw(
     const csrf = getCsrfToken();
     if (csrf) request.setRequestHeader("x-csrf-token", csrf);
     request.setRequestHeader(uploadCredentialHeader, credential);
-    request.setRequestHeader(
-      "content-type",
-      file.type || "application/octet-stream"
-    );
+    request.setRequestHeader("content-type", file.type || "application/octet-stream");
     request.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) {
         const rawProgress = (event.loaded / event.total) * 100;
         if (!Number.isFinite(rawProgress)) return;
-        const progress = Math.min(
-          100,
-          Math.max(0, Math.round(rawProgress))
-        );
+        const progress = Math.min(100, Math.max(0, Math.round(rawProgress)));
         if (progress !== lastProgress) {
           lastProgress = progress;
           callbacks.onProgress(progress);
@@ -193,26 +178,27 @@ export function uploadRaw(
     request.onload = () => {
       const data = parseUploadResponse(request.responseText);
       if (
-        request.status >= 200
-        && request.status < 300
-        && data.ok === true
-        && typeof data.session_id === "string"
-        && typeof data.image_id === "string"
-        && data.status === "accepted"
-        && Number.isSafeInteger(data.version)
+        request.status >= 200 &&
+        request.status < 300 &&
+        data.ok === true &&
+        typeof data.session_id === "string" &&
+        typeof data.image_id === "string" &&
+        data.status === "accepted" &&
+        Number.isSafeInteger(data.version)
       ) {
         resolve(data as UploadRawResultDto);
         return;
       }
       const responseError = data.error;
-      const message = typeof responseError === "string"
-        ? responseError
-        : responseError
-          && typeof responseError === "object"
-          && "message" in responseError
-          && typeof responseError.message === "string"
-          ? responseError.message
-          : `上传失败（HTTP ${request.status}）`;
+      const message =
+        typeof responseError === "string"
+          ? responseError
+          : responseError &&
+              typeof responseError === "object" &&
+              "message" in responseError &&
+              typeof responseError.message === "string"
+            ? responseError.message
+            : `上传失败（HTTP ${request.status}）`;
       reject(new Error(message));
     };
     request.onerror = () => reject(new Error("上传网络请求失败"));
@@ -228,7 +214,7 @@ function parseUploadResponse(text: string): Partial<UploadResponse> & {
   try {
     const data: unknown = JSON.parse(text);
     return data !== null && typeof data === "object" && !Array.isArray(data)
-      ? data as Partial<UploadResponse> & { error?: unknown }
+      ? (data as Partial<UploadResponse> & { error?: unknown })
       : {};
   } catch {
     return {};

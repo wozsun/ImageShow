@@ -1,12 +1,6 @@
 import { z } from "zod";
-import {
-  adminPreferenceValueOptions,
-  adminPreferencesMaxBytes
-} from "@imageshow/shared/browser";
-import {
-  adminPasswordInput,
-  adminUsernameInput
-} from "../../users/credentials.ts";
+import { adminPreferenceValueOptions, adminPreferencesMaxBytes } from "@imageshow/shared/browser";
+import { adminPasswordInput, adminUsernameInput } from "../../users/credentials.ts";
 
 export const userCreateInput = z.strictObject({
   username: adminUsernameInput,
@@ -28,15 +22,13 @@ const adminPreferenceInputFields = {
   image_sort_order: z.enum(adminPreferenceValueOptions.image_sort_order).optional()
 } satisfies Record<keyof typeof adminPreferenceValueOptions, z.ZodType>;
 
-export const adminPreferencesInput = z.strictObject(adminPreferenceInputFields)
+export const adminPreferencesInput = z
+  .strictObject(adminPreferenceInputFields)
   .refine(
-    (value) => Object.values(value).some(
-      (preference) => preference !== undefined
-    ),
+    (value) => Object.values(value).some((preference) => preference !== undefined),
     "至少需要提供一项管理端偏好"
   )
   .refine(
-    (value) => Buffer.byteLength(JSON.stringify(value), "utf8")
-      <= adminPreferencesMaxBytes,
+    (value) => Buffer.byteLength(JSON.stringify(value), "utf8") <= adminPreferencesMaxBytes,
     "管理端偏好过大"
   );

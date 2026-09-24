@@ -7,12 +7,8 @@ export type AdminBootstrapCredentials = {
   password?: string;
 };
 
-export async function ensureSuperAdmin(
-  credentials: AdminBootstrapCredentials
-) {
-  const hasSuper = await pool.query(
-    "SELECT 1 FROM admin_account WHERE role = 'super' LIMIT 1"
-  );
+export async function ensureSuperAdmin(credentials: AdminBootstrapCredentials) {
+  const hasSuper = await pool.query("SELECT 1 FROM admin_account WHERE role = 'super' LIMIT 1");
   if (hasSuper.rowCount) return false;
 
   if (!credentials.username || !credentials.password) {

@@ -19,6 +19,8 @@ export function useRefreshGlint(run: number, refreshing: boolean, reduceMotion: 
   }, [run, refreshing, reduceMotion]);
   return {
     active: run > completedRun && (!reduceMotion || refreshing),
-    finishCycle: () => { if (!refreshing) setCompletedRun(run); }
+    finishCycle: () => {
+      if (!refreshing) setCompletedRun(run);
+    }
   };
 }

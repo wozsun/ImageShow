@@ -1,7 +1,4 @@
-import {
-  galleryLoadBufferScreens,
-  galleryVirtualOverscanScreens
-} from "../../lib/constants.js";
+import { galleryLoadBufferScreens, galleryVirtualOverscanScreens } from "../../lib/constants.js";
 import type { GalleryDataWindowViewport } from "./gallery-data-window.js";
 
 export const galleryRenderViewportHysteresisScreens = 0.5;
@@ -29,7 +26,9 @@ export function shouldRefreshGalleryRenderViewport(
 ) {
   const height = Math.max(1, viewportHeight);
   const currentHeight = current.visibleEnd - current.visibleStart;
-  return Math.abs(currentHeight - height) >= 1
-    || Math.abs(Math.max(0, visibleStart) - current.visibleStart)
-      >= height * galleryRenderViewportHysteresisScreens;
+  return (
+    Math.abs(currentHeight - height) >= 1 ||
+    Math.abs(Math.max(0, visibleStart) - current.visibleStart) >=
+      height * galleryRenderViewportHysteresisScreens
+  );
 }

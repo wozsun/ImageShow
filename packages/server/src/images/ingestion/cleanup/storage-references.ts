@@ -40,7 +40,12 @@ function activeStorageReference(
     storage_slug: active.storage_slug,
     commit_ext: active.commit ? prepared!.ext : null,
     raw_generation: active.raw_generation,
-    prepared: prepared ? { generation: prepared.generation, producer_execution_token: prepared.producer_execution_token } : null,
+    prepared: prepared
+      ? {
+          generation: prepared.generation,
+          producer_execution_token: prepared.producer_execution_token
+        }
+      : null,
     discard_at: active.discard_at
   };
 }
@@ -73,10 +78,7 @@ async function readIngestionStoragePass(
   const sessions = new Map<string, StoredIngestionSession>();
   for (;;) {
     signal?.throwIfAborted();
-    const page = await ingestionSessionRepository.discoverExpiryPage(
-      offset,
-      batchSize
-    );
+    const page = await ingestionSessionRepository.discoverExpiryPage(offset, batchSize);
     signal?.throwIfAborted();
     if (page.missing) return null;
     expectedTotal ??= page.total;
@@ -118,23 +120,16 @@ type IngestionStorageReferenceOptions = Readonly<{
  * are required so rank shifts cannot make storage maintenance silently miss a
  * canonical while the worker changes the expiry ordering.
  */
-async function readStableIngestionStorageRows(
-  options: IngestionStorageReferenceOptions
-) {
+async function readStableIngestionStorageRows(options: IngestionStorageReferenceOptions) {
   options.signal?.throwIfAborted();
   await requireOperationalRedis();
   const expectedEpoch = getRedisOperationalState().connectionEpoch;
-  type IngestionStoragePass = NonNullable<Awaited<
-    ReturnType<typeof readIngestionStoragePass>
-  >>;
+  type IngestionStoragePass = NonNullable<Awaited<ReturnType<typeof readIngestionStoragePass>>>;
   let previous: IngestionStoragePass | null = null;
   let stable: IngestionStoragePass | null = null;
   for (let pass = 0; pass < 6; pass += 1) {
     options.signal?.throwIfAborted();
-    const current = await readIngestionStoragePass(
-      options.signal,
-      options.maxItems
-    );
+    const current = await readIngestionStoragePass(options.signal, options.maxItems);
     if (current && previous?.signature === current.signature) {
       stable = current;
       break;
@@ -159,25 +154,26 @@ export async function activeIngestionStorageReferences(
   options: IngestionStorageReferenceOptions = {}
 ) {
   const rows = await readStableIngestionStorageRows(options);
-  const referencesByBackend = new Map<
-    string,
-    Map<string, ActiveIngestionStorageReference>
-  >();
+  const referencesByBackend = new Map<string, Map<string, ActiveIngestionStorageReference>>();
   const tempPaths = new Set<string>();
   for (const row of rows) {
-    const references = referencesByBackend.getOrInsertComputed(
-      row.storage_slug,
-      () => new Map()
-    );
+    const references = referencesByBackend.getOrInsertComputed(row.storage_slug, () => new Map());
     references.set(row.id, row);
-    for (const file of row.prepared ? ingestionPreparedFiles({ session_id: row.id, image_id: row.image_id }, row.prepared) : []) {
+    for (const file of row.prepared
+      ? ingestionPreparedFiles({ session_id: row.id, image_id: row.image_id }, row.prepared)
+      : []) {
       if (file) tempPaths.add(ingestionPreparedPath(file));
     }
     if (row.raw_generation) {
-      tempPaths.add(ingestionRawPath({
-        session_id: row.id,
-        image_id: row.image_id
-      }, row.raw_generation));
+      tempPaths.add(
+        ingestionRawPath(
+          {
+            session_id: row.id,
+            image_id: row.image_id
+          },
+          row.raw_generation
+        )
+      );
     }
   }
   return {
@@ -187,9 +183,7 @@ export async function activeIngestionStorageReferences(
   };
 }
 
-export async function activeIngestionStorageCounts(
-  options: IngestionStorageReferenceOptions = {}
-) {
+export async function activeIngestionStorageCounts(options: IngestionStorageReferenceOptions = {}) {
   const rows = await readStableIngestionStorageRows(options);
   const counts = new Map<string, number>();
   for (const row of rows) {

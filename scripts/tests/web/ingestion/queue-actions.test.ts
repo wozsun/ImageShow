@@ -1,28 +1,16 @@
 import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  parseHTML
-} from "linkedom";
+import { parseHTML } from "linkedom";
 import {
   ingestionActionPath,
   ingestionSnapshotPath,
   type IngestionQueueActionResultDto
 } from "../../../../packages/shared/src/browser.ts";
-import type {
-  IngestionJob
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
-import {
-  clearCsrfToken,
-  setCsrfToken
-} from "../../../../packages/web/src/lib/api/client.ts";
-import {
-  getIngestionQueueSnapshot
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/ingestion-http-client.ts";
-import {
-  ingestionJob,
-  adminImageListItem
-} from "../../support/web-test-context.ts";
+import type { IngestionJob } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
+import { clearCsrfToken, setCsrfToken } from "../../../../packages/web/src/lib/api/client.ts";
+import { getIngestionQueueSnapshot } from "../../../../packages/web/src/pages/admin/ingestion/queue/ingestion-http-client.ts";
+import { ingestionJob, adminImageListItem } from "../../support/web-test-context.ts";
 
 test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有界续传", async () => {
   const { window, document } = parseHTML(
@@ -30,19 +18,15 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
   );
   const React = await import("react");
   const requests: Array<Record<string, unknown>> = [];
-    let fetchCalls = 0;
-    let refreshes = 0;
-    const observedActionCompleted: string[] = [];
-    const actionCompletedItem = adminImageListItem({
-      id: "00000000-0000-7001-8000-00000000008e"
-    });
-    const connectionHold = { current: false };
-    const fetchStub = async (_path: string, init?: RequestInit) => {
-      assert.equal(
-        connectionHold.current,
-        true,
-        "continuation 执行期间必须持有当前 owner 状态通道"
-      );
+  let fetchCalls = 0;
+  let refreshes = 0;
+  const observedActionCompleted: string[] = [];
+  const actionCompletedItem = adminImageListItem({
+    id: "00000000-0000-7001-8000-00000000008e"
+  });
+  const connectionHold = { current: false };
+  const fetchStub = async (_path: string, init?: RequestInit) => {
+    assert.equal(connectionHold.current, true, "continuation 执行期间必须持有当前 owner 状态通道");
     fetchCalls += 1;
     const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
     requests.push(body);
@@ -50,37 +34,45 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
       return new Response("upstream response lost", { status: 502 });
     }
     if (body.action === "clear_completed") {
-      return new Response(JSON.stringify({
-        ok: true,
-        processed: 0,
-        changed: 0,
-        failed: 0,
-        items: []
-      }), {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          processed: 0,
+          changed: 0,
+          failed: 0,
+          items: []
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
     }
     const continuation = body.continuation;
     const skipped = Boolean(continuation);
-    return new Response(JSON.stringify({
-      ok: true,
-      processed: 1,
-      changed: skipped ? 0 : 1,
-      failed: 0,
-      items: [{
-        session_id: continuation ? "B".repeat(43) : "A".repeat(43),
-        image_id: continuation
-          ? "00000000-0000-7002-8000-00000000008e"
-          : "00000000-0000-7001-8000-00000000008e",
-        status: skipped ? "skipped" : "changed",
-        ...(continuation ? {} : { completed_item: actionCompletedItem })
-      }],
-      ...(continuation ? {} : { continuation: "signed-next-cursor" })
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        processed: 1,
+        changed: skipped ? 0 : 1,
+        failed: 0,
+        items: [
+          {
+            session_id: continuation ? "B".repeat(43) : "A".repeat(43),
+            image_id: continuation
+              ? "00000000-0000-7002-8000-00000000008e"
+              : "00000000-0000-7001-8000-00000000008e",
+            status: skipped ? "skipped" : "changed",
+            ...(continuation ? {} : { completed_item: actionCompletedItem })
+          }
+        ],
+        ...(continuation ? {} : { continuation: "signed-next-cursor" })
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
   };
   const installedGlobals = {
     window,
@@ -97,9 +89,9 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -111,29 +103,27 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { useIngestionQueueActions } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionQueueActions.ts"
-    );
+    const { useIngestionQueueActions } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionQueueActions.ts");
     const server = {
       status: "ready",
       actionScope: "S".repeat(32),
       actionWatermark: "frozen-watermark",
       lastAcceptedOrder: 120,
       connectionGeneration: 7,
-      refresh: () => { refreshes += 1; },
-      recoverAuthority: async () => { refreshes += 1; }
+      refresh: () => {
+        refreshes += 1;
+      },
+      recoverAuthority: async () => {
+        refreshes += 1;
+      }
     };
     let actions: ReturnType<typeof useIngestionQueueActions> | undefined;
     function Probe() {
-      actions = useIngestionQueueActions(
-        "upload",
-        server as never,
-        connectionHold,
-        (entries) => {
-          assert.equal(refreshes, 0, "完成 DTO 必须在动作刷新前交给 owner");
-          observedActionCompleted.push(...entries.map(({ pair }) => pair.image_id));
-        }
-      );
+      actions = useIngestionQueueActions("upload", server as never, connectionHold, (entries) => {
+        assert.equal(refreshes, 0, "完成 DTO 必须在动作刷新前交给 owner");
+        observedActionCompleted.push(...entries.map(({ pair }) => pair.image_id));
+      });
       return null;
     }
     const container = document.getElementById("root");
@@ -183,22 +173,24 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
       frozen.actionRequestId,
       "排队动作必须使用独立幂等 ID"
     );
-    assert.deepEqual(queuedResult && {
-      processed: queuedResult.processed,
-      changed: queuedResult.changed,
-      failed: queuedResult.failed
-    }, { processed: 0, changed: 0, failed: 0 });
-    assert.equal(connectionHold.current, false);
-    assert.deepEqual(result && {
-      processed: result.processed,
-      changed: result.changed,
-      failed: result.failed
-    }, { processed: 2, changed: 1, failed: 0 });
-    assert.equal(
-      actions.notice,
-      "",
-      "只有状态变化而无真实失败时不得显示协议动作汇总"
+    assert.deepEqual(
+      queuedResult && {
+        processed: queuedResult.processed,
+        changed: queuedResult.changed,
+        failed: queuedResult.failed
+      },
+      { processed: 0, changed: 0, failed: 0 }
     );
+    assert.equal(connectionHold.current, false);
+    assert.deepEqual(
+      result && {
+        processed: result.processed,
+        changed: result.changed,
+        failed: result.failed
+      },
+      { processed: 2, changed: 1, failed: 0 }
+    );
+    assert.equal(actions.notice, "", "只有状态变化而无真实失败时不得显示协议动作汇总");
     assert.equal(fetchCalls, 4);
     assert.equal(refreshes, 0, "成功动作由 SSE 收敛，不得追加同页快照");
     assert.deepEqual(
@@ -219,10 +211,7 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
     assert.equal(requests[2]?.continuation, "signed-next-cursor");
     assert.deepEqual(requests[0], requests[1], "网络重试必须复用首批完整请求");
 
-    const nonBlockingFrozen = actions.freeze(
-      "apply_metadata",
-      { title: "不阻塞输入框" }
-    );
+    const nonBlockingFrozen = actions.freeze("apply_metadata", { title: "不阻塞输入框" });
     assert.ok(nonBlockingFrozen);
     let releaseNonBlockingPreflight!: () => void;
     const nonBlockingPreflight = new Promise<void>((resolve) => {
@@ -230,19 +219,13 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
     });
     let nonBlockingRun!: ReturnType<typeof actions.run>;
     await React.act(async () => {
-      nonBlockingRun = actions!.run(
-        nonBlockingFrozen,
-        () => nonBlockingPreflight,
-        { blockUi: false }
-      );
+      nonBlockingRun = actions!.run(nonBlockingFrozen, () => nonBlockingPreflight, {
+        blockUi: false
+      });
       await Promise.resolve();
     });
     assert.equal(connectionHold.current, true);
-    assert.equal(
-      actions.busy,
-      false,
-      "应用默认值的后台持久化不得禁用整窗卡片控件"
-    );
+    assert.equal(actions.busy, false, "应用默认值的后台持久化不得禁用整窗卡片控件");
     await React.act(async () => {
       releaseNonBlockingPreflight();
       await nonBlockingRun;
@@ -309,44 +292,50 @@ test("[Web/内容接入] 失效动作凭证先恢复 CSRF 再按 owner 刷新权
     if (url.pathname === ingestionActionPath) {
       actionRequests += 1;
       requestOrder.push(`action:${csrf}`);
-      return new Response(JSON.stringify({
-        ok: false,
-        code: "invalid_ingestion_token",
-        error: "内容接入凭证已过期或时间无效"
-      }), {
-        status: 401,
-        headers: { "content-type": "application/json" }
-      });
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          code: "invalid_ingestion_token",
+          error: "内容接入凭证已过期或时间无效"
+        }),
+        {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        }
+      );
     }
     if (url.pathname === ingestionSnapshotPath) {
       const queue = url.searchParams.get("queue");
       if (queue === "upload") uploadSnapshotRequests += 1;
       else importSnapshotRequests += 1;
       requestOrder.push(`snapshot:${queue}:${csrf}`);
-      return new Response(JSON.stringify({
-        ok: true,
-        queue,
-        revision: 2,
-        last_accepted_order: 0,
-        offset: Number(url.searchParams.get("offset")),
-        limit: Number(url.searchParams.get("limit")),
-        total: 0,
-        unfinished: 0,
-        waiting: 0,
-        running: 0,
-        ready: 0,
-        duplicate_pending: 0,
-        committing: 0,
-        resolving: 0,
-        completed: 0,
-        failed: 0,
-        items: [],
-        stale_items: [],
-        action_watermark: "fresh-upload-watermark"
-      }), {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          queue,
+          revision: 2,
+          last_accepted_order: 0,
+          offset: Number(url.searchParams.get("offset")),
+          limit: Number(url.searchParams.get("limit")),
+          total: 0,
+          unfinished: 0,
+          waiting: 0,
+          running: 0,
+          ready: 0,
+          duplicate_pending: 0,
+          committing: 0,
+          resolving: 0,
+          completed: 0,
+          failed: 0,
+          items: [],
+          stale_items: [],
+          action_watermark: "fresh-upload-watermark"
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
     }
     throw new Error(`unexpected request: ${url.pathname}`);
   };
@@ -365,9 +354,9 @@ test("[Web/内容接入] 失效动作凭证先恢复 CSRF 再按 owner 刷新权
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -380,23 +369,27 @@ test("[Web/内容接入] 失效动作凭证先恢复 CSRF 再按 owner 刷新权
   try {
     setCsrfToken("expired-csrf");
     const { createRoot } = await import("react-dom/client");
-    const { useIngestionQueueActions } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionQueueActions.ts"
-    );
+    const { useIngestionQueueActions } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionQueueActions.ts");
     const uploadServer = {
       status: "ready",
       actionScope: "U".repeat(32),
       actionWatermark: "expired-upload-watermark",
       connectionGeneration: 1,
-      refresh: () => { ordinaryRefreshes += 1; },
+      refresh: () => {
+        ordinaryRefreshes += 1;
+      },
       recoverAuthority: async () => {
-        const snapshot = await getIngestionQueueSnapshot({
-          queue: "upload",
-          offset: 0,
-          limit: 20,
-          exclude_items: [],
-          include_items: []
-        }, uploadServer.actionScope);
+        const snapshot = await getIngestionQueueSnapshot(
+          {
+            queue: "upload",
+            offset: 0,
+            limit: 20,
+            exclude_items: [],
+            include_items: []
+          },
+          uploadServer.actionScope
+        );
         uploadServer.actionWatermark = snapshot.action_watermark;
       }
     };
@@ -450,11 +443,7 @@ test("[Web/内容接入] 失效动作凭证先恢复 CSRF 再按 owner 刷新权
     assert.equal(uploadSnapshotRequests, 1);
     assert.equal(importSnapshotRequests, 0, "upload 恢复不得刷新 import owner");
     assert.equal(ordinaryRefreshes, 0, "凭证恢复不得抢先发出旧 CSRF snapshot");
-    assert.deepEqual(requestOrder, [
-      "action:expired-csrf",
-      "auth",
-      "snapshot:upload:current-csrf"
-    ]);
+    assert.deepEqual(requestOrder, ["action:expired-csrf", "auth", "snapshot:upload:current-csrf"]);
     assert.equal(uploadServer.actionWatermark, "fresh-upload-watermark");
     assert.equal(uploadActions!.notice, "", "新权威 snapshot 后应清除旧凭证提示");
     assert.equal(importActions!.notice, "");
@@ -485,25 +474,22 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
   const postActionConnectionHolds: boolean[] = [];
   const recoveryConnectionHolds: boolean[] = [];
   let pendingDraftUpdates = false;
-    let pendingAuthorityHandoff = false;
-    let draftFlushes = 0;
-    let doneSignals = 0;
-    let actionFailureMode = false;
-    let completedActionResponseHandler: ((
-      body: Record<string, unknown>
-    ) => Response | Promise<Response>) | null = null;
-    const projectedCompletedCleanupImageIds: string[] = [];
-    const locallyCommittedJobs: string[] = [];
-    const clearedJobIds: string[] = [];
+  let pendingAuthorityHandoff = false;
+  let draftFlushes = 0;
+  let doneSignals = 0;
+  let actionFailureMode = false;
+  let completedActionResponseHandler:
+    ((body: Record<string, unknown>) => Response | Promise<Response>) | null = null;
+  const projectedCompletedCleanupImageIds: string[] = [];
+  const locallyCommittedJobs: string[] = [];
+  const clearedJobIds: string[] = [];
   const fetchStub = async (input: unknown, init: RequestInit = {}) => {
     const path = new URL(
       typeof input === "string" ? input : (input as Request).url,
       "http://localhost"
     ).pathname;
     assert.equal(path, ingestionActionPath);
-    const actionBody = JSON.parse(
-      String(init.body)
-    ) as Record<string, unknown>;
+    const actionBody = JSON.parse(String(init.body)) as Record<string, unknown>;
     actionBodies.push(actionBody);
     const responseGate = nextActionResponseGate;
     if (responseGate) {
@@ -511,28 +497,32 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       await responseGate;
     }
     if (actionFailureMode) {
-      return new Response(JSON.stringify({
-        ok: false,
-        error: { code: "temporary_failure", message: "temporary failure" }
-      }), {
-        status: 503,
-        headers: { "content-type": "application/json" }
-      });
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: { code: "temporary_failure", message: "temporary failure" }
+        }),
+        {
+          status: 503,
+          headers: { "content-type": "application/json" }
+        }
+      );
     }
-    if (
-      actionBody.action === "clear_completed"
-      && completedActionResponseHandler
-    ) return completedActionResponseHandler(actionBody);
-    return new Response(JSON.stringify({
-      ok: true,
-      processed: 0,
-      changed: 0,
-      failed: 0,
-      items: []
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    });
+    if (actionBody.action === "clear_completed" && completedActionResponseHandler)
+      return completedActionResponseHandler(actionBody);
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        processed: 0,
+        changed: 0,
+        failed: 0,
+        items: []
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
   };
   const installedGlobals = {
     window,
@@ -550,9 +540,9 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -565,12 +555,10 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
   try {
     setCsrfToken("apply-defaults-token");
     const { createRoot } = await import("react-dom/client");
-    const { useIngestionQueueActions } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionQueueActions.ts"
-    );
-    const { useIngestionQueueWorkflowActions } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/workflow/useIngestionQueueWorkflowActions.ts"
-    );
+    const { useIngestionQueueActions } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionQueueActions.ts");
+    const { useIngestionQueueWorkflowActions } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/workflow/useIngestionQueueWorkflowActions.ts");
     const localJob = ingestionJob({
       id: "apply-defaults-local",
       attemptKey: "apply-defaults-attempt",
@@ -599,7 +587,9 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
         await recoverFakeAuthority();
       },
       recoverAuthority: recoverFakeAuthority,
-      refresh: () => { refreshes += 1; }
+      refresh: () => {
+        refreshes += 1;
+      }
     };
     const recoverAuthSession = async () => {
       authRecoveries += 1;
@@ -623,21 +613,18 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
           actions,
           server,
           appendJobs: () => true,
-          captureBrowserActionJobs: (predicate: (job: IngestionJob) => boolean) => (
-            jobsRef.current.filter(predicate)
-          ),
+          captureBrowserActionJobs: (predicate: (job: IngestionJob) => boolean) =>
+            jobsRef.current.filter(predicate),
           clearJobIds: (ids: ReadonlySet<string>) => {
             clearedJobIds.push(...ids);
             jobsRef.current = jobsRef.current.filter((job) => !ids.has(job.id));
           },
           releaseResolvedServerJobs: () => new Set<string>(),
           projectCompletedCleanupBatch: (result: IngestionQueueActionResultDto) => {
-            const successful = result.items.filter((item) => (
-              item.status === "changed" || item.status === "unchanged"
-            ));
-            projectedCompletedCleanupImageIds.push(...successful.map(
-              (item) => item.image_id
-            ));
+            const successful = result.items.filter(
+              (item) => item.status === "changed" || item.status === "unchanged"
+            );
+            projectedCompletedCleanupImageIds.push(...successful.map((item) => item.image_id));
             return successful.length;
           },
           recoverAfterSuccessfulAction: server.recoverAfterSuccessfulAction,
@@ -664,7 +651,9 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
           locallyCommittedJobs.push(...jobs.map((job) => job.id));
           return jobs.length > 0;
         },
-        onDone: () => { doneSignals += 1; }
+        onDone: () => {
+          doneSignals += 1;
+        }
       });
       return null;
     }
@@ -776,12 +765,14 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
     server.status = "loading";
     server.actionScope = "";
     server.actionWatermark = "";
-    jobsRef.current = [{
-      ...localJob,
-      id: "local-ready-without-watermark",
-      attemptKey: "local-ready-without-watermark-attempt",
-      status: "ready"
-    }];
+    jobsRef.current = [
+      {
+        ...localJob,
+        id: "local-ready-without-watermark",
+        attemptKey: "local-ready-without-watermark-attempt",
+        status: "ready"
+      }
+    ];
     await React.act(async () => {
       root.render(React.createElement(Probe));
       await Promise.resolve();
@@ -813,12 +804,14 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
         failed: 0
       }
     });
-    jobsRef.current = [{
-      ...localJob,
-      id: "local-completed-at-close",
-      attemptKey: "local-completed-at-close-attempt",
-      status: "done"
-    }];
+    jobsRef.current = [
+      {
+        ...localJob,
+        id: "local-completed-at-close",
+        attemptKey: "local-completed-at-close-attempt",
+        status: "done"
+      }
+    ];
     await React.act(async () => {
       root.render(React.createElement(Probe));
       workflow!.runCleanupAction("completed");
@@ -841,20 +834,26 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       false,
       "后台重连进入错误态后必须释放连接占用，同时保留冻结的清理意图"
     );
-    completedActionResponseHandler = () => new Response(JSON.stringify({
-      ok: true,
-      processed: 1,
-      changed: 1,
-      failed: 0,
-      items: [{
-        session_id: "D".repeat(43),
-        image_id: "00000000-0000-70a1-8000-00000000008e",
-        status: "changed"
-      }]
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    });
+    completedActionResponseHandler = () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          processed: 1,
+          changed: 1,
+          failed: 0,
+          items: [
+            {
+              session_id: "D".repeat(43),
+              image_id: "00000000-0000-70a1-8000-00000000008e",
+              status: "changed"
+            }
+          ]
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
     Object.assign(server, {
       status: "ready",
       actionScope: "B".repeat(32),
@@ -909,12 +908,14 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
         failed: 0
       }
     });
-    jobsRef.current = [{
-      ...localJob,
-      id: "local-completed-before-action-failure",
-      attemptKey: "local-completed-before-action-failure-attempt",
-      status: "done"
-    }];
+    jobsRef.current = [
+      {
+        ...localJob,
+        id: "local-completed-before-action-failure",
+        attemptKey: "local-completed-before-action-failure-attempt",
+        status: "done"
+      }
+    ];
     await React.act(async () => {
       root.render(React.createElement(Probe));
       workflow!.runCleanupAction("completed");
@@ -965,11 +966,7 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       failedDeferredRefreshSettled,
       "同一失败 authority 不得形成 snapshot 尾随循环"
     );
-    assert.equal(
-      postActionRecoveries,
-      1,
-      "清理动作没有成功时不得启动成功后的收敛"
-    );
+    assert.equal(postActionRecoveries, 1, "清理动作没有成功时不得启动成功后的收敛");
     Object.assign(server, {
       actionWatermark: "freshly-signed-same-revision-watermark"
     });
@@ -991,10 +988,7 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       root.render(React.createElement(Probe));
       for (
         let attempt = 0;
-        attempt < 20 && (
-          actionBodies.length < failedDeferredActionSettled + 1
-          || doneSignals < 3
-        );
+        attempt < 20 && (actionBodies.length < failedDeferredActionSettled + 1 || doneSignals < 3);
         attempt += 1
       ) {
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1006,11 +1000,7 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       "同一 connection 内 semantic revision 推进后必须恰好恢复一次"
     );
     assert.equal(actionBodies.at(-1)?.max_semantic_revision, 118);
-    assert.equal(
-      doneSignals,
-      2,
-      "失败前已清理的本地卡片与零变更 Server 重试不应重复发送完成通知"
-    );
+    assert.equal(doneSignals, 2, "失败前已清理的本地卡片与零变更 Server 重试不应重复发送完成通知");
 
     const completedAtCloseRequest = ingestionJob({
       ...localJob,
@@ -1049,20 +1039,26 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
     const closeActionStart = actionBodies.length;
     const closeClearStart = clearedJobIds.length;
     const closeRecoveryStart = postActionRecoveries;
-    completedActionResponseHandler = () => new Response(JSON.stringify({
-      ok: true,
-      processed: 1,
-      changed: 1,
-      failed: 0,
-      items: [{
-        session_id: "E".repeat(43),
-        image_id: "00000000-0000-70a2-8000-00000000008e",
-        status: "changed"
-      }]
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    });
+    completedActionResponseHandler = () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          processed: 1,
+          changed: 1,
+          failed: 0,
+          items: [
+            {
+              session_id: "E".repeat(43),
+              image_id: "00000000-0000-70a2-8000-00000000008e",
+              status: "changed"
+            }
+          ]
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
     let releaseActionResponse!: () => void;
     let releaseAuthorityRecovery!: () => void;
     nextActionResponseGate = new Promise<void>((resolve) => {
@@ -1120,11 +1116,7 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       }
     });
     assert.equal(postActionRecoveries, closeRecoveryStart + 1);
-    assert.equal(
-      connectionHold.current,
-      true,
-      "动作成功后必须持有连接直至权威快照收敛"
-    );
+    assert.equal(connectionHold.current, true, "动作成功后必须持有连接直至权威快照收敛");
     assert.equal(postActionConnectionHolds.at(-1), true);
     assert.equal(recoveryConnectionHolds.at(-1), true);
     await React.act(async () => {
@@ -1150,10 +1142,8 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
     );
     completedActionResponseHandler = null;
 
-    const pagedSuccessFirstImageId =
-      "00000000-0000-70b1-8000-00000000008e";
-    const pagedSuccessSecondImageId =
-      "00000000-0000-70b2-8000-00000000008e";
+    const pagedSuccessFirstImageId = "00000000-0000-70b1-8000-00000000008e";
+    const pagedSuccessSecondImageId = "00000000-0000-70b2-8000-00000000008e";
     let releasePagedSuccessSecond!: () => void;
     const pagedSuccessSecondGate = new Promise<void>((resolve) => {
       releasePagedSuccessSecond = resolve;
@@ -1161,38 +1151,48 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
     let pagedSuccessSecondStarted = false;
     completedActionResponseHandler = async (body) => {
       if (!body.continuation) {
-        return new Response(JSON.stringify({
-          ok: true,
-          processed: 100,
-          changed: 1,
-          failed: 0,
-          items: [{
-            session_id: "F".repeat(43),
-            image_id: pagedSuccessFirstImageId,
-            status: "changed"
-          }],
-          continuation: "completed-page-two-success"
-        }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        });
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            processed: 100,
+            changed: 1,
+            failed: 0,
+            items: [
+              {
+                session_id: "F".repeat(43),
+                image_id: pagedSuccessFirstImageId,
+                status: "changed"
+              }
+            ],
+            continuation: "completed-page-two-success"
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
       }
       pagedSuccessSecondStarted = true;
       await pagedSuccessSecondGate;
-      return new Response(JSON.stringify({
-        ok: true,
-        processed: 1,
-        changed: 1,
-        failed: 0,
-        items: [{
-          session_id: "G".repeat(43),
-          image_id: pagedSuccessSecondImageId,
-          status: "changed"
-        }]
-      }), {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          processed: 1,
+          changed: 1,
+          failed: 0,
+          items: [
+            {
+              session_id: "G".repeat(43),
+              image_id: pagedSuccessSecondImageId,
+              status: "changed"
+            }
+          ]
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
     };
     jobsRef.current = [];
     Object.assign(server, {
@@ -1218,8 +1218,7 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       root.render(React.createElement(Probe));
       await Promise.resolve();
     });
-    const pagedSuccessProjectionStart =
-      projectedCompletedCleanupImageIds.length;
+    const pagedSuccessProjectionStart = projectedCompletedCleanupImageIds.length;
     const pagedSuccessRecoveryStart = postActionRecoveries;
     const pagedSuccessDoneStart = doneSignals;
     await React.act(async () => {
@@ -1243,23 +1242,21 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       releasePagedSuccessSecond();
       for (
         let attempt = 0;
-        attempt < 30 && (
-          connectionHold.current
-          || postActionRecoveries === pagedSuccessRecoveryStart
-        );
+        attempt < 30 &&
+        (connectionHold.current || postActionRecoveries === pagedSuccessRecoveryStart);
         attempt += 1
-      ) await new Promise((resolve) => setTimeout(resolve, 0));
+      )
+        await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    assert.deepEqual(
-      projectedCompletedCleanupImageIds.slice(pagedSuccessProjectionStart),
-      [pagedSuccessFirstImageId, pagedSuccessSecondImageId]
-    );
+    assert.deepEqual(projectedCompletedCleanupImageIds.slice(pagedSuccessProjectionStart), [
+      pagedSuccessFirstImageId,
+      pagedSuccessSecondImageId
+    ]);
     assert.equal(postActionRecoveries, pagedSuccessRecoveryStart + 1);
     assert.equal(doneSignals, pagedSuccessDoneStart + 1);
     assert.equal(connectionHold.current, false);
 
-    const pagedFailureFirstImageId =
-      "00000000-0000-70b3-8000-00000000008e";
+    const pagedFailureFirstImageId = "00000000-0000-70b3-8000-00000000008e";
     let releasePagedFailureSecond!: () => void;
     const pagedFailureSecondGate = new Promise<void>((resolve) => {
       releasePagedFailureSecond = resolve;
@@ -1267,34 +1264,42 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
     let pagedFailureContinuationCalls = 0;
     completedActionResponseHandler = async (body) => {
       if (!body.continuation) {
-        return new Response(JSON.stringify({
-          ok: true,
-          processed: 100,
-          changed: 1,
-          failed: 0,
-          items: [{
-            session_id: "H".repeat(43),
-            image_id: pagedFailureFirstImageId,
-            status: "changed"
-          }],
-          continuation: "completed-page-two-failure"
-        }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        });
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            processed: 100,
+            changed: 1,
+            failed: 0,
+            items: [
+              {
+                session_id: "H".repeat(43),
+                image_id: pagedFailureFirstImageId,
+                status: "changed"
+              }
+            ],
+            continuation: "completed-page-two-failure"
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
       }
       pagedFailureContinuationCalls += 1;
       await pagedFailureSecondGate;
-      return new Response(JSON.stringify({
-        ok: false,
-        error: {
-          code: "temporary_failure",
-          message: "controlled second page failure"
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: {
+            code: "temporary_failure",
+            message: "controlled second page failure"
+          }
+        }),
+        {
+          status: 503,
+          headers: { "content-type": "application/json" }
         }
-      }), {
-        status: 503,
-        headers: { "content-type": "application/json" }
-      });
+      );
     };
     Object.assign(server, {
       actionScope: "G".repeat(32),
@@ -1307,18 +1312,14 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       await Promise.resolve();
     });
     const pagedFailureActionStart = actionBodies.length;
-    const pagedFailureProjectionStart =
-      projectedCompletedCleanupImageIds.length;
+    const pagedFailureProjectionStart = projectedCompletedCleanupImageIds.length;
     const pagedFailureRecoveryStart = postActionRecoveries;
     const pagedFailureRefreshStart = refreshes;
     const pagedFailureDoneStart = doneSignals;
     await React.act(async () => {
       workflow!.runCleanupAction("completed");
-      for (
-        let attempt = 0;
-        attempt < 20 && pagedFailureContinuationCalls === 0;
-        attempt += 1
-      ) await new Promise((resolve) => setTimeout(resolve, 0));
+      for (let attempt = 0; attempt < 20 && pagedFailureContinuationCalls === 0; attempt += 1)
+        await new Promise((resolve) => setTimeout(resolve, 0));
     });
     assert.equal(pagedFailureContinuationCalls, 1);
     assert.deepEqual(
@@ -1330,12 +1331,10 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       releasePagedFailureSecond();
       for (
         let attempt = 0;
-        attempt < 30 && (
-          connectionHold.current
-          || pagedFailureContinuationCalls < 2
-        );
+        attempt < 30 && (connectionHold.current || pagedFailureContinuationCalls < 2);
         attempt += 1
-      ) await new Promise((resolve) => setTimeout(resolve, 0));
+      )
+        await new Promise((resolve) => setTimeout(resolve, 0));
     });
     assert.equal(
       actionBodies.length,
@@ -1356,36 +1355,43 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
     assert.equal(doneSignals, pagedFailureDoneStart + 1);
     assert.equal(connectionHold.current, false);
 
-    const pagedAuthFirstImageId =
-      "00000000-0000-70b4-8000-00000000008e";
+    const pagedAuthFirstImageId = "00000000-0000-70b4-8000-00000000008e";
     let pagedAuthContinuationCalls = 0;
     completedActionResponseHandler = (body) => {
       if (!body.continuation) {
-        return new Response(JSON.stringify({
-          ok: true,
-          processed: 100,
-          changed: 1,
-          failed: 0,
-          items: [{
-            session_id: "J".repeat(43),
-            image_id: pagedAuthFirstImageId,
-            status: "changed"
-          }],
-          continuation: "completed-page-two-invalid-token"
-        }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        });
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            processed: 100,
+            changed: 1,
+            failed: 0,
+            items: [
+              {
+                session_id: "J".repeat(43),
+                image_id: pagedAuthFirstImageId,
+                status: "changed"
+              }
+            ],
+            continuation: "completed-page-two-invalid-token"
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
       }
       pagedAuthContinuationCalls += 1;
-      return new Response(JSON.stringify({
-        ok: false,
-        code: "invalid_ingestion_token",
-        error: "内容接入凭证已过期或时间无效"
-      }), {
-        status: 401,
-        headers: { "content-type": "application/json" }
-      });
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          code: "invalid_ingestion_token",
+          error: "内容接入凭证已过期或时间无效"
+        }),
+        {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        }
+      );
     };
     Object.assign(server, {
       actionScope: "H".repeat(32),
@@ -1398,8 +1404,7 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       await Promise.resolve();
     });
     const pagedAuthActionStart = actionBodies.length;
-    const pagedAuthProjectionStart =
-      projectedCompletedCleanupImageIds.length;
+    const pagedAuthProjectionStart = projectedCompletedCleanupImageIds.length;
     const pagedAuthRecoveryStart = postActionRecoveries;
     const pagedAuthRefreshStart = refreshes;
     const pagedAuthSessionStart = authRecoveries;
@@ -1408,12 +1413,10 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       workflow!.runCleanupAction("completed");
       for (
         let attempt = 0;
-        attempt < 30 && (
-          connectionHold.current
-          || authRecoveries === pagedAuthSessionStart
-        );
+        attempt < 30 && (connectionHold.current || authRecoveries === pagedAuthSessionStart);
         attempt += 1
-      ) await new Promise((resolve) => setTimeout(resolve, 0));
+      )
+        await new Promise((resolve) => setTimeout(resolve, 0));
     });
     assert.equal(
       actionBodies.length,

@@ -1,18 +1,11 @@
 import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  parseHTML
-} from "linkedom";
+import { parseHTML } from "linkedom";
 
-import {
-  authExpiredEvent,
-  clearCsrfToken
-} from "../../../../packages/web/src/lib/api/client.ts";
+import { authExpiredEvent, clearCsrfToken } from "../../../../packages/web/src/lib/api/client.ts";
 
-import {
-  AuthSessionRefreshCoordinator
-} from "../../../../packages/web/src/lib/api/auth-session.ts";
+import { AuthSessionRefreshCoordinator } from "../../../../packages/web/src/lib/api/auth-session.ts";
 
 test("[Web/后台访问] 认证过期事件在同一在途窗口只触发一次权威刷新", async () => {
   const coordinator = new AuthSessionRefreshCoordinator();
@@ -105,21 +98,24 @@ test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个�
   const fetchStub = async (input: RequestInfo | URL) => {
     assert.equal(String(input), "/api/admin/auth/me");
     fetchCount += 1;
-    return new Response(JSON.stringify({
-      ok: true,
-      authenticated: true,
-      username: `auth-recovery-${fetchCount}`,
-      role: "super",
-      permissions: [],
-      csrf_token: `csrf-${fetchCount}`,
-      application_version: "current-test",
-      preferences: {},
-      preferences_etag: `W/"auth-recovery-preferences-${fetchCount}"`,
-      version_settings: { enabled: true, link_enabled: true }
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        authenticated: true,
+        username: `auth-recovery-${fetchCount}`,
+        role: "super",
+        permissions: [],
+        csrf_token: `csrf-${fetchCount}`,
+        application_version: "current-test",
+        preferences: {},
+        preferences_etag: `W/"auth-recovery-preferences-${fetchCount}"`,
+        version_settings: { enabled: true, link_enabled: true }
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
   };
   const installedGlobals = {
     window,
@@ -138,9 +134,9 @@ test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -152,13 +148,10 @@ test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个�
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { QueryClient, QueryClientProvider } = await import(
-      "@tanstack/react-query"
-    );
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { MemoryRouter } = await import("react-router");
-    const { AuthSessionProvider, useAuthSessionQuery, useOptionalAuthSessionRecovery } = await import(
-      "../../../../packages/web/src/hooks/useAuthSession.tsx"
-    );
+    const { AuthSessionProvider, useAuthSessionQuery, useOptionalAuthSessionRecovery } =
+      await import("../../../../packages/web/src/hooks/useAuthSession.tsx");
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } }
     });
@@ -180,23 +173,20 @@ test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个�
         query.data?.authenticated ? query.data.username : "pending"
       );
     }
-    const tree = () => React.createElement(
-      React.StrictMode,
-      null,
+    const tree = () =>
       React.createElement(
-        QueryClientProvider,
-        { client },
+        React.StrictMode,
+        null,
         React.createElement(
-          MemoryRouter,
-          { initialEntries: ["/admin"] },
+          QueryClientProvider,
+          { client },
           React.createElement(
-            AuthSessionProvider,
-            null,
-            React.createElement(AuthProbe)
+            MemoryRouter,
+            { initialEntries: ["/admin"] },
+            React.createElement(AuthSessionProvider, null, React.createElement(AuthProbe))
           )
         )
-      )
-    );
+      );
     const settleUntil = async (predicate: () => boolean) => {
       for (let attempt = 0; attempt < 40; attempt += 1) {
         await React.act(async () => {
@@ -205,17 +195,16 @@ test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个�
         if (predicate()) return;
       }
       assert.fail(
-        "auth session recovery did not settle: "
-          + `text=${container.textContent} fetches=${fetchCount} `
-          + `listeners=${activeAuthListeners.size}`
+        "auth session recovery did not settle: " +
+          `text=${container.textContent} fetches=${fetchCount} ` +
+          `listeners=${activeAuthListeners.size}`
       );
     };
 
     await React.act(async () => root.render(tree()));
-    await settleUntil(() => (
-      !authIsFetching
-      && container.textContent === `auth-recovery-${fetchCount}`
-    ));
+    await settleUntil(
+      () => !authIsFetching && container.textContent === `auth-recovery-${fetchCount}`
+    );
     const initialFetchCount = fetchCount;
     assert.ok(initialFetchCount >= 1);
     assert.equal(activeAuthListeners.size, 1);
@@ -225,31 +214,39 @@ test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个�
     };
 
     await React.act(async () => root.render(tree()));
-    assert.deepEqual({
-      adds: authListenerAdds,
-      removes: authListenerRemoves
-    }, listenerCountsAfterMount, "普通重渲染不得重绑认证过期监听器");
+    assert.deepEqual(
+      {
+        adds: authListenerAdds,
+        removes: authListenerRemoves
+      },
+      listenerCountsAfterMount,
+      "普通重渲染不得重绑认证过期监听器"
+    );
 
     await React.act(async () => {
       window.dispatchEvent(new window.Event(authExpiredEvent));
       window.dispatchEvent(new window.Event(authExpiredEvent));
       await Promise.resolve();
     });
-    await settleUntil(() => (
-      !authIsFetching
-      && fetchCount === initialFetchCount + 1
-      && container.textContent === `auth-recovery-${fetchCount}`
-    ));
+    await settleUntil(
+      () =>
+        !authIsFetching &&
+        fetchCount === initialFetchCount + 1 &&
+        container.textContent === `auth-recovery-${fetchCount}`
+    );
     assert.equal(
       fetchCount,
       initialFetchCount + 1,
       "同一在途窗口的过期事件应合并为一次最新 refetch"
     );
     assert.equal(activeAuthListeners.size, 1);
-    assert.deepEqual({
-      adds: authListenerAdds,
-      removes: authListenerRemoves
-    }, listenerCountsAfterMount);
+    assert.deepEqual(
+      {
+        adds: authListenerAdds,
+        removes: authListenerRemoves
+      },
+      listenerCountsAfterMount
+    );
 
     assert.ok(recoverSession);
     let queuedRecoveryCheck: Promise<void> | undefined;

@@ -1,9 +1,5 @@
 import { useId, useRef, useState, type RefObject } from "react";
-import {
-  slugFormatHint,
-  slugMaxLength,
-  slugPattern
-} from "../../../lib/constants.js";
+import { slugFormatHint, slugMaxLength, slugPattern } from "../../../lib/constants.js";
 import type { AdvancedConfigPreview } from "../../../lib/types.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
@@ -24,10 +20,9 @@ function previewDate(value: string | null) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
-export function configPackageRecognitionNotice(preview: Pick<
-  AdvancedConfigPreview,
-  "config_values" | "skipped_storage_backends"
->) {
+export function configPackageRecognitionNotice(
+  preview: Pick<AdvancedConfigPreview, "config_values" | "skipped_storage_backends">
+) {
   const { recognized, defaulted, ignored } = preview.config_values;
   const skipped = [
     ignored > 0 ? `忽略 ${ignored} 个未知或错误的运行时配置字段` : "",
@@ -45,10 +40,7 @@ function suggestedSlug(slug: string) {
 }
 
 export function configPackageSlugMappingError(
-  preview: Pick<
-    AdvancedConfigPreview,
-    "conflicts" | "existing_slugs" | "storage_backends"
-  >,
+  preview: Pick<AdvancedConfigPreview, "conflicts" | "existing_slugs" | "storage_backends">,
   slugMappings: Record<string, string>,
   sourceSlug: string
 ) {
@@ -85,22 +77,22 @@ export function ConfigPackageImportDialog({
   const descriptionId = useId();
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const operationBodyRef = useRef<HTMLDivElement | null>(null);
-  const [slugMappings, setSlugMappings] = useState<Record<string, string>>(() => Object.fromEntries(
-    preview.conflicts.map((slug) => [slug, suggestedSlug(slug)])
-  ));
+  const [slugMappings, setSlugMappings] = useState<Record<string, string>>(() =>
+    Object.fromEntries(preview.conflicts.map((slug) => [slug, suggestedSlug(slug)]))
+  );
   const importStatus = useAsyncActionStatus({ successDurationMs: null });
   const blocked = busy || importStatus.pending;
 
-  const mappingError = (sourceSlug: string) => configPackageSlugMappingError(
-    preview,
-    slugMappings,
-    sourceSlug
-  );
+  const mappingError = (sourceSlug: string) =>
+    configPackageSlugMappingError(preview, slugMappings, sourceSlug);
 
   const mappingErrors = preview.conflicts.map(mappingError).filter(Boolean);
   const submit = async (requestClose: () => void) => {
     const normalized = Object.fromEntries(
-      Object.entries(slugMappings).map(([slug, replacement]) => [slug, replacement.trim().toLowerCase()])
+      Object.entries(slugMappings).map(([slug, replacement]) => [
+        slug,
+        replacement.trim().toLowerCase()
+      ])
     );
     if (await importStatus.run(() => onImport(normalized))) requestClose();
   };
@@ -116,7 +108,12 @@ export function ConfigPackageImportDialog({
       onClose={onClose}
     >
       {({ requestClose }) => (
-        <form onSubmit={(event) => { event.preventDefault(); void submit(requestClose); }}>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit(requestClose);
+          }}
+        >
           <header>
             <div className="config-package-dialog-copy">
               <h2 id={titleId}>导入配置包</h2>
@@ -135,9 +132,18 @@ export function ConfigPackageImportDialog({
           </header>
           <div ref={operationBodyRef} className="operation-body">
             <dl className="advanced-config-summary">
-              <div><dt>来源格式</dt><dd>{preview.format ?? "未提供"}</dd></div>
-              <div><dt>来源版本</dt><dd>{preview.application_version ?? "未提供"}</dd></div>
-              <div><dt>导出时间</dt><dd>{previewDate(preview.exported_at)}</dd></div>
+              <div>
+                <dt>来源格式</dt>
+                <dd>{preview.format ?? "未提供"}</dd>
+              </div>
+              <div>
+                <dt>来源版本</dt>
+                <dd>{preview.application_version ?? "未提供"}</dd>
+              </div>
+              <div>
+                <dt>导出时间</dt>
+                <dd>{previewDate(preview.exported_at)}</dd>
+              </div>
               <div>
                 <dt>采用配置项</dt>
                 <dd>
@@ -150,42 +156,59 @@ export function ConfigPackageImportDialog({
               {configPackageRecognitionNotice(preview)}
             </p>
             <div className="advanced-config-backends">
-              {preview.storage_backends.length ? preview.storage_backends.map((backend) => {
-                const conflict = preview.conflicts.includes(backend.slug);
-                const error = conflict ? mappingError(backend.slug) : "";
-                return (
-                  <article key={backend.slug} className={`advanced-config-backend${conflict ? " has-conflict" : ""}`}>
-                    <div>
-                      <strong>{backend.display_name || backend.slug}</strong>
-                      <span>
-                        {backend.slug} · 对象存储
-                        {backend.is_default ? " · 默认" : ""}{backend.enabled ? "" : " · 已停用"}
-                      </span>
-                    </div>
-                    {conflict ? (
-                      <label>
-                        重命名 slug
-                        <input
-                          value={slugMappings[backend.slug] ?? ""}
-                          onChange={(event) => setSlugMappings((current) => ({
-                            ...current,
-                            [backend.slug]: event.target.value.toLowerCase()
-                          }))}
-                          aria-invalid={Boolean(error)}
-                          disabled={blocked}
-                          maxLength={slugMaxLength}
-                        />
-                        {error && <small className="admin-error">{error}</small>}
-                      </label>
-                    ) : <span className="advanced-config-ready"><AdminIcon name="check-line" />可新增</span>}
-                  </article>
-                );
-              }) : <p className="muted">配置包不包含自定义存储后端。</p>}
+              {preview.storage_backends.length ? (
+                preview.storage_backends.map((backend) => {
+                  const conflict = preview.conflicts.includes(backend.slug);
+                  const error = conflict ? mappingError(backend.slug) : "";
+                  return (
+                    <article
+                      key={backend.slug}
+                      className={`advanced-config-backend${conflict ? " has-conflict" : ""}`}
+                    >
+                      <div>
+                        <strong>{backend.display_name || backend.slug}</strong>
+                        <span>
+                          {backend.slug} · 对象存储
+                          {backend.is_default ? " · 默认" : ""}
+                          {backend.enabled ? "" : " · 已停用"}
+                        </span>
+                      </div>
+                      {conflict ? (
+                        <label>
+                          重命名 slug
+                          <input
+                            value={slugMappings[backend.slug] ?? ""}
+                            onChange={(event) =>
+                              setSlugMappings((current) => ({
+                                ...current,
+                                [backend.slug]: event.target.value.toLowerCase()
+                              }))
+                            }
+                            aria-invalid={Boolean(error)}
+                            disabled={blocked}
+                            maxLength={slugMaxLength}
+                          />
+                          {error && <small className="admin-error">{error}</small>}
+                        </label>
+                      ) : (
+                        <span className="advanced-config-ready">
+                          <AdminIcon name="check-line" />
+                          可新增
+                        </span>
+                      )}
+                    </article>
+                  );
+                })
+              ) : (
+                <p className="muted">配置包不包含自定义存储后端。</p>
+              )}
             </div>
           </div>
           <OverlayScrollbar targetRef={operationBodyRef} />
           <footer>
-            <button type="button" disabled={blocked} onClick={() => requestClose()}>取消</button>
+            <button type="button" disabled={blocked} onClick={() => requestClose()}>
+              取消
+            </button>
             <AsyncActionButton
               className="button"
               type="submit"

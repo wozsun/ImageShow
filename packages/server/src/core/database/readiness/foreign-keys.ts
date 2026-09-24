@@ -1,4 +1,9 @@
-import { requiredForeignKeys, requiredTableNames, type DatabaseReader, type RequiredForeignKey } from "./contract.ts";
+import {
+  requiredForeignKeys,
+  requiredTableNames,
+  type DatabaseReader,
+  type RequiredForeignKey
+} from "./contract.ts";
 import { primaryKeyLabel, sameColumns } from "./constraint-helpers.ts";
 
 type ForeignKeyRow = {
@@ -16,14 +21,17 @@ function foreignKeyLabel(required: RequiredForeignKey) {
     c: "CASCADE",
     n: "SET NULL"
   }[required.onDelete];
-  return `${primaryKeyLabel(required)} -> `
-    + `${required.referencedTable}(${required.referencedColumns.join(", ")}) `
-    + `ON DELETE ${action}`;
+  return (
+    `${primaryKeyLabel(required)} -> ` +
+    `${required.referencedTable}(${required.referencedColumns.join(", ")}) ` +
+    `ON DELETE ${action}`
+  );
 }
 
 export async function assertRequiredForeignKeys(database: DatabaseReader) {
-  const rows = (await database.query<ForeignKeyRow>(
-    `SELECT source.relname AS table_name,
+  const rows = (
+    await database.query<ForeignKeyRow>(
+      `SELECT source.relname AS table_name,
             ARRAY(
               SELECT attribute.attname
                 FROM unnest(constraint_record.conkey)
@@ -55,23 +63,24 @@ export async function assertRequiredForeignKeys(database: DatabaseReader) {
         AND target_namespace.nspname='public'
         AND source.relname=ANY($1::text[])
         AND constraint_record.contype='f'`,
-    [requiredTableNames]
-  )).rows;
-  const missing = requiredForeignKeys.filter((required) => (
-    !rows.some((row) => (
-      row.is_validated
-      && row.table_name === required.table
-      && sameColumns(row.columns, required.columns)
-      && row.referenced_table === required.referencedTable
-      && sameColumns(row.referenced_columns, required.referencedColumns)
-      && row.on_delete === required.onDelete
-    ))
-  ));
+      [requiredTableNames]
+    )
+  ).rows;
+  const missing = requiredForeignKeys.filter(
+    (required) =>
+      !rows.some(
+        (row) =>
+          row.is_validated &&
+          row.table_name === required.table &&
+          sameColumns(row.columns, required.columns) &&
+          row.referenced_table === required.referencedTable &&
+          sameColumns(row.referenced_columns, required.referencedColumns) &&
+          row.on_delete === required.onDelete
+      )
+  );
   if (missing.length) {
     throw new Error(
-      `required foreign keys are missing or invalid: ${missing
-        .map(foreignKeyLabel)
-        .join(", ")}`
+      `required foreign keys are missing or invalid: ${missing.map(foreignKeyLabel).join(", ")}`
     );
   }
 }

@@ -3,18 +3,16 @@ import { ApiError } from "../api-error.ts";
 import { parseHttpMimeType } from "./media-type.ts";
 
 export function invalidJsonBodyError() {
-  return new ApiError(
-    400,
-    "invalid_json",
-    "Request body must contain valid JSON"
-  );
+  return new ApiError(400, "invalid_json", "Request body must contain valid JSON");
 }
 
 export function isJsonContentType(value: string | undefined) {
   const mediaType = parseHttpMimeType(value);
-  return mediaType?.type === "application"
-    && (mediaType.subtype === "json"
-      || (mediaType.subtype.length > 5 && mediaType.subtype.endsWith("+json")));
+  return (
+    mediaType?.type === "application" &&
+    (mediaType.subtype === "json" ||
+      (mediaType.subtype.length > 5 && mediaType.subtype.endsWith("+json")))
+  );
 }
 
 /**

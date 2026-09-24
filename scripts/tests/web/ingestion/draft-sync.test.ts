@@ -1,30 +1,16 @@
 import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  parseHTML
-} from "linkedom";
+import { parseHTML } from "linkedom";
 import {
   ingestionStatusPath,
   ingestionUpdatePath
 } from "../../../../packages/shared/src/browser.ts";
-import type {
-  IngestionJob
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
-import {
-  reduceIngestionQueue
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
-import {
-  ingestionJob,
-  adminImageListItem
-} from "../../support/web-test-context.ts";
-import {
-  dispatchDomEvent,
-  inputText
-} from "../../support/dom-events.ts";
-import {
-  installControlledClock
-} from "../../support/controlled-clock.ts";
+import type { IngestionJob } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
+import { reduceIngestionQueue } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
+import { ingestionJob, adminImageListItem } from "../../support/web-test-context.ts";
+import { dispatchDomEvent, inputText } from "../../support/dom-events.ts";
+import { installControlledClock } from "../../support/controlled-clock.ts";
 
 test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语义 no-op 收敛响应丢失", async () => {
   const { window, document } = parseHTML(
@@ -72,62 +58,77 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
     if (fetchCalls === 11) {
       assert.equal(path, ingestionStatusPath);
       const pair = (body.items as Array<Record<string, unknown>>)[0]!;
-      return new Response(JSON.stringify({
-        ok: true,
-        items: [{
-          session_id: pair.session_id,
-          image_id: pair.image_id,
-          status: "present",
-          item: {
-            session_id: pair.session_id,
-            image_id: pair.image_id,
-            queue: "upload",
-            source_type: "upload",
-            resolved_image_time: "2026-08-23T01:02:03.456Z",
-            status: "ready",
-            phase: "ready",
-            message: "ready",
-            version: 2,
-            progress_seq: 0,
-            last_semantic_revision: 2,
-            accepted_order: 1,
-            metadata: ingestionJob().draft,
-            storage_slug: "local"
-          }
-        }]
-      }), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          items: [
+            {
+              session_id: pair.session_id,
+              image_id: pair.image_id,
+              status: "present",
+              item: {
+                session_id: pair.session_id,
+                image_id: pair.image_id,
+                queue: "upload",
+                source_type: "upload",
+                resolved_image_time: "2026-08-23T01:02:03.456Z",
+                status: "ready",
+                phase: "ready",
+                message: "ready",
+                version: 2,
+                progress_seq: 0,
+                last_semantic_revision: 2,
+                accepted_order: 1,
+                metadata: ingestionJob().draft,
+                storage_slug: "local"
+              }
+            }
+          ]
+        }),
+        { status: 200 }
+      );
     }
     if (fetchCalls === 13) {
       assert.equal(path, ingestionStatusPath);
       const pair = (body.items as Array<Record<string, unknown>>)[0]!;
-      return new Response(JSON.stringify({
-        ok: true,
-        items: [{
-          session_id: pair.session_id,
-          image_id: pair.image_id,
-          status: "completed",
-          completed_item: adminImageListItem({ id: String(pair.image_id) }),
-          redis_status: "missing"
-        }]
-      }), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          items: [
+            {
+              session_id: pair.session_id,
+              image_id: pair.image_id,
+              status: "completed",
+              completed_item: adminImageListItem({ id: String(pair.image_id) }),
+              redis_status: "missing"
+            }
+          ]
+        }),
+        { status: 200 }
+      );
     }
     const item = (body.items as Array<Record<string, unknown>>)[0]!;
     const version = fetchCalls === 2 ? 2 : fetchCalls === 3 ? 3 : 4;
-    return new Response(JSON.stringify({
-      ok: true,
-      items: [{
-        session_id: item.session_id,
-        image_id: item.image_id,
-        status: fetchCalls === 2 ? "unchanged" : "changed",
-        version,
-        last_semantic_revision: version,
-        duplicate_count: 0,
-        duplicate_decision: "upload"
-      }]
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        items: [
+          {
+            session_id: item.session_id,
+            image_id: item.image_id,
+            status: fetchCalls === 2 ? "unchanged" : "changed",
+            version,
+            last_semantic_revision: version,
+            duplicate_count: 0,
+            duplicate_decision: "upload"
+          }
+        ]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
   };
   const installedGlobals = {
     window,
@@ -144,9 +145,9 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -158,27 +159,27 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { reduceIngestionQueue } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts"
-    );
-    const { useStoredIngestionDraftSync } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts"
-    );
+    const { reduceIngestionQueue } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts");
+    const { useStoredIngestionDraftSync } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts");
     const sessionId = "D".repeat(43);
     const imageId = "00000000-0000-7004-8000-00000000008e";
     let state = {
       page: 1,
-      jobs: [ingestionJob({
-        kind: "import",
-        manifestSource: "weibo",
-        draft: { ...ingestionJob().draft, theme: "default-theme" },
-        status: "ready",
-        serverAccepted: true,
-        serverAcceptedOrder: 1,
-        serverVersion: 1,
-        sessionId,
-        imageId
-      })]
+      jobs: [
+        ingestionJob({
+          kind: "import",
+          manifestSource: "weibo",
+          draft: { ...ingestionJob().draft, theme: "default-theme" },
+          status: "ready",
+          serverAccepted: true,
+          serverAcceptedOrder: 1,
+          serverVersion: 1,
+          sessionId,
+          imageId
+        })
+      ]
     };
     const jobsRef = { current: state.jobs };
     const dispatch = (action: Parameters<typeof reduceIngestionQueue>[1]) => {
@@ -204,7 +205,9 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
         ensuredRevisions.push({ revision, connectionGeneration });
         return true;
       },
-      async recoverAuthority() { authorityRecoveries += 1; },
+      async recoverAuthority() {
+        authorityRecoveries += 1;
+      },
       refresh() {}
     };
     let sync: ReturnType<typeof useStoredIngestionDraftSync> | undefined;
@@ -234,8 +237,15 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
     });
     assert.equal(fetchCalls, 2);
     assert.deepEqual(requests[0], requests[1], "响应丢失必须重放同一草稿写入");
-    assert.equal(((requests[0]!.items as Array<{ metadata: { theme: unknown } }>)[0]!).metadata.theme, null);
-    assert.equal(jobsRef.current[0]?.draft.theme, null, "清空自动带入的主题必须以 null 同步并保留在本地草稿");
+    assert.equal(
+      (requests[0]!.items as Array<{ metadata: { theme: unknown } }>)[0]!.metadata.theme,
+      null
+    );
+    assert.equal(
+      jobsRef.current[0]?.draft.theme,
+      null,
+      "清空自动带入的主题必须以 null 同步并保留在本地草稿"
+    );
     assert.equal(jobsRef.current[0]?.serverVersion, 2);
     assert.equal(jobsRef.current[0]?.draft.title, "响应丢失仍保留");
     assert.equal(jobsRef.current[0]?.serverDraftPending, false);
@@ -258,10 +268,7 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
     assert.equal(thirdItem.expected_version, 2);
     assert.equal((thirdItem.metadata as Record<string, unknown>).title, "第一版");
     assert.equal(fourthItem.expected_version, 3);
-    assert.equal(
-      (fourthItem.metadata as Record<string, unknown>).title,
-      "等待期间的新版本"
-    );
+    assert.equal((fourthItem.metadata as Record<string, unknown>).title, "等待期间的新版本");
     assert.equal(jobsRef.current[0]?.serverVersion, 4);
     assert.equal(jobsRef.current[0]?.serverDraftPending, false);
     assert.deepEqual(errors, []);
@@ -294,13 +301,8 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
       await sync!.flushPendingUpdates();
     });
     assert.equal(fetchCalls, 5);
-    const fencedItem = (
-      requests[4]?.items as Array<Record<string, unknown>>
-    )[0]!;
-    assert.equal(
-      (fencedItem.metadata as Record<string, unknown>).title,
-      "接管前冻结的草稿"
-    );
+    const fencedItem = (requests[4]?.items as Array<Record<string, unknown>>)[0]!;
+    assert.equal((fencedItem.metadata as Record<string, unknown>).title, "接管前冻结的草稿");
     assert.equal(
       sync!.hasPendingUpdates(),
       true,
@@ -315,14 +317,16 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
 
     state = {
       page: 1,
-      jobs: [ingestionJob({
-        status: "ready",
-        serverAccepted: true,
-        serverAcceptedOrder: 1,
-        serverVersion: 1,
-        sessionId,
-        imageId
-      })]
+      jobs: [
+        ingestionJob({
+          status: "ready",
+          serverAccepted: true,
+          serverAcceptedOrder: 1,
+          serverVersion: 1,
+          sessionId,
+          imageId
+        })
+      ]
     };
     jobsRef.current = state.jobs;
     await React.act(async () => {
@@ -334,26 +338,23 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
       await sync!.flushPendingUpdates();
     });
     assert.equal(fetchCalls, 6, "pending sync 必须独立持有离页任务快照");
-    const offPageItem = (
-      requests[5]?.items as Array<Record<string, unknown>>
-    )[0]!;
+    const offPageItem = (requests[5]?.items as Array<Record<string, unknown>>)[0]!;
     assert.equal(offPageItem.session_id, sessionId);
     assert.equal(offPageItem.image_id, imageId);
-    assert.equal(
-      (offPageItem.metadata as Record<string, unknown>).title,
-      "翻页后仍须写回"
-    );
+    assert.equal((offPageItem.metadata as Record<string, unknown>).title, "翻页后仍须写回");
 
     state = {
       page: 1,
-      jobs: [ingestionJob({
-        status: "ready",
-        serverAccepted: true,
-        serverAcceptedOrder: 1,
-        serverVersion: 1,
-        sessionId,
-        imageId
-      })]
+      jobs: [
+        ingestionJob({
+          status: "ready",
+          serverAccepted: true,
+          serverAcceptedOrder: 1,
+          serverVersion: 1,
+          sessionId,
+          imageId
+        })
+      ]
     };
     jobsRef.current = state.jobs;
     server.revision = 3;
@@ -378,14 +379,16 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
 
     state = {
       page: 1,
-      jobs: [ingestionJob({
-        status: "ready",
-        serverAccepted: true,
-        serverAcceptedOrder: 1,
-        serverVersion: 1,
-        sessionId,
-        imageId
-      })]
+      jobs: [
+        ingestionJob({
+          status: "ready",
+          serverAccepted: true,
+          serverAcceptedOrder: 1,
+          serverVersion: 1,
+          sessionId,
+          imageId
+        })
+      ]
     };
     jobsRef.current = state.jobs;
     server.connectionGeneration = 2;
@@ -461,9 +464,7 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
       assert.equal(await sync!.retryPendingUpdates(), true);
     });
     assert.equal(fetchCalls, 12);
-    const retriedDetachedItem = (
-      requests[11]?.items as Array<Record<string, unknown>>
-    )[0]!;
+    const retriedDetachedItem = (requests[11]?.items as Array<Record<string, unknown>>)[0]!;
     assert.equal(retriedDetachedItem.expected_version, 2);
     assert.equal(
       (retriedDetachedItem.metadata as Record<string, unknown>).title,
@@ -479,48 +480,54 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
 
     state = {
       page: 1,
-      jobs: [ingestionJob({
-        status: "ready",
-        serverAccepted: true,
-        serverAcceptedOrder: 1,
-        serverVersion: 1,
-        sessionId,
-        imageId
-      })]
+      jobs: [
+        ingestionJob({
+          status: "ready",
+          serverAccepted: true,
+          serverAcceptedOrder: 1,
+          serverVersion: 1,
+          sessionId,
+          imageId
+        })
+      ]
     };
     jobsRef.current = state.jobs;
     server.revision = 5;
-    server.items = [{
-      session_id: sessionId,
-      image_id: imageId,
-      queue: "upload",
-      source_type: "upload",
-      resolved_image_time: "2026-08-23T01:02:03.456Z",
-      status: "committing",
-      phase: "committing",
-      message: "另一设备已冻结提交",
-      progress: 100,
-      version: 2,
-      progress_seq: 0,
-      last_semantic_revision: 5,
-      accepted_order: 1,
-      metadata: {
-        ...ingestionJob().draft,
-        title: "另一设备已冻结的权威草稿"
-      },
-      storage_slug: "local"
-    }];
+    server.items = [
+      {
+        session_id: sessionId,
+        image_id: imageId,
+        queue: "upload",
+        source_type: "upload",
+        resolved_image_time: "2026-08-23T01:02:03.456Z",
+        status: "committing",
+        phase: "committing",
+        message: "另一设备已冻结提交",
+        progress: 100,
+        version: 2,
+        progress_seq: 0,
+        last_semantic_revision: 5,
+        accepted_order: 1,
+        metadata: {
+          ...ingestionJob().draft,
+          title: "另一设备已冻结的权威草稿"
+        },
+        storage_slug: "local"
+      }
+    ];
     let frozenDraftError: unknown;
     const previousErrorCount = errors.length;
     await React.act(async () => {
       sync!.updateJobDraft("job-1", { title: "尚未写入的本地草稿" });
       state = {
         ...state,
-        jobs: [{
-          ...jobsRef.current[0]!,
-          status: "committing",
-          serverStatus: "committing"
-        }]
+        jobs: [
+          {
+            ...jobsRef.current[0]!,
+            status: "committing",
+            serverStatus: "committing"
+          }
+        ]
       };
       jobsRef.current = state.jobs;
       assert.equal(sync!.hasPendingUpdates(), true);
@@ -537,22 +544,21 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
     assert.equal(errors.length, previousErrorCount + 1);
     assert.match(errors.at(-1) ?? "", /本地草稿未写入/u);
     assert.equal(jobsRef.current[0]?.serverDraftPending, false);
-    assert.equal(
-      jobsRef.current[0]?.draft.title,
-      "另一设备已冻结的权威草稿"
-    );
+    assert.equal(jobsRef.current[0]?.draft.title, "另一设备已冻结的权威草稿");
     server.items = [];
 
     state = {
       page: 1,
-      jobs: [ingestionJob({
-        status: "ready",
-        serverAccepted: true,
-        serverAcceptedOrder: 1,
-        serverVersion: 1,
-        sessionId,
-        imageId
-      })]
+      jobs: [
+        ingestionJob({
+          status: "ready",
+          serverAccepted: true,
+          serverAcceptedOrder: 1,
+          serverVersion: 1,
+          sessionId,
+          imageId
+        })
+      ]
     };
     jobsRef.current = state.jobs;
     let completedDraftError: unknown;
@@ -560,11 +566,13 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
       sync!.updateJobDraft("job-1", { title: "完成前尚未写入的草稿" });
       state = {
         ...state,
-        jobs: [{
-          ...jobsRef.current[0]!,
-          status: "committing",
-          serverStatus: "committing"
-        }]
+        jobs: [
+          {
+            ...jobsRef.current[0]!,
+            status: "committing",
+            serverStatus: "committing"
+          }
+        ]
       };
       jobsRef.current = state.jobs;
       try {
@@ -615,9 +623,8 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
     unobserve() {}
     disconnect() {}
   }
-  const requestAnimationFrame = (callback: FrameRequestCallback) => (
-    setTimeout(() => callback(Date.now()), 0) as unknown as number
-  );
+  const requestAnimationFrame = (callback: FrameRequestCallback) =>
+    setTimeout(() => callback(Date.now()), 0) as unknown as number;
   const cancelAnimationFrame = (handle: number) => clearTimeout(handle);
   Object.assign(window, {
     matchMedia,
@@ -635,7 +642,9 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
     right: 240,
     bottom: 32,
     left: 0,
-    toJSON() { return {}; }
+    toJSON() {
+      return {};
+    }
   });
   const installedGlobals = {
     window,
@@ -655,9 +664,9 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -669,9 +678,8 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { IngestionJobCard } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/cards/IngestionJobCard.tsx"
-    );
+    const { IngestionJobCard } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/cards/IngestionJobCard.tsx");
     const initialJob = ingestionJob({
       id: "deferred-card",
       attemptKey: "deferred-attempt",
@@ -726,9 +734,7 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
       await Promise.resolve();
     });
 
-    const title = container.querySelector<HTMLInputElement>(
-      "input[placeholder='标题']"
-    )!;
+    const title = container.querySelector<HTMLInputElement>("input[placeholder='标题']")!;
     for (const value of ["慢", "慢速", "慢速输入"]) {
       await React.act(async () => {
         inputText(window as Window, title, value);
@@ -774,9 +780,7 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
     });
     assert.equal(publications.length, noChangeCount, "无变化失焦不得发布草稿");
 
-    const theme = container.querySelector<HTMLInputElement>(
-      "input[aria-label$='主题']"
-    )!;
+    const theme = container.querySelector<HTMLInputElement>("input[aria-label$='主题']")!;
     for (const value of ["new", "new-theme"]) {
       await React.act(async () => {
         inputText(window as Window, theme, value);
@@ -792,9 +796,7 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
     });
     assert.deepEqual(publications.at(-1)?.patch, { theme: "new-theme" });
 
-    const author = container.querySelector<HTMLInputElement>(
-      "input[aria-label$='作者']"
-    )!;
+    const author = container.querySelector<HTMLInputElement>("input[aria-label$='作者']")!;
     const beforeIme = publications.length;
     await React.act(async () => {
       dispatchDomEvent(window as Window, author, "focusin");
@@ -833,11 +835,7 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
       });
       await Promise.resolve();
     });
-    assert.equal(
-      publications.length,
-      beforeCandidate + 1,
-      "候选选择必须维持即时离散发布语义"
-    );
+    assert.equal(publications.length, beforeCandidate + 1, "候选选择必须维持即时离散发布语义");
     assert.deepEqual(publications.at(-1)?.patch, { theme: "candidate-theme" });
     await React.act(async () => {
       dispatchDomEvent(window as Window, theme, "focusout", {
@@ -865,9 +863,7 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
     assert.equal(publications.length, beforeFrozenBlur, "失去可编辑资格后不得发布临时值");
     await React.act(async () => setHarnessBusy?.(false));
 
-    const original = container.querySelector<HTMLInputElement>(
-      "input[placeholder='原图 URL']"
-    )!;
+    const original = container.querySelector<HTMLInputElement>("input[placeholder='原图 URL']")!;
     await React.act(async () => {
       inputText(window as Window, original, "https://local.example/new.jpg");
       setHarnessJob?.((current) => ({
@@ -890,9 +886,7 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
     });
     assert.equal(publications.length, beforeReplacementBlur, "换代后不得写入旧临时值");
 
-    const source = container.querySelector<HTMLInputElement>(
-      "input[placeholder='来源 URL']"
-    )!;
+    const source = container.querySelector<HTMLInputElement>("input[placeholder='来源 URL']")!;
     await React.act(async () => {
       inputText(window as Window, source, "https://discarded.example/source");
       root.unmount();
@@ -928,18 +922,23 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
     const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
     const item = (body.items as Array<Record<string, unknown>>)[0]!;
     version += 1;
-    return new Response(JSON.stringify({
-      ok: true,
-      items: [{
-        session_id: item.session_id,
-        image_id: item.image_id,
-        status: "changed",
-        version,
-        last_semantic_revision: version,
-        duplicate_count: 0,
-        duplicate_decision: "upload"
-      }]
-    }), { status: 200, headers: { "content-type": "application/json" } });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        items: [
+          {
+            session_id: item.session_id,
+            image_id: item.image_id,
+            status: "changed",
+            version,
+            last_semantic_revision: version,
+            duplicate_count: 0,
+            duplicate_decision: "upload"
+          }
+        ]
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
   };
   const installedGlobals = {
     window,
@@ -956,9 +955,9 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -975,15 +974,12 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { reduceIngestionQueue } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts"
-    );
-    const { useStoredIngestionDraftSync } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts"
-    );
-    const { IngestionJobCard } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/cards/IngestionJobCard.tsx"
-    );
+    const { reduceIngestionQueue } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts");
+    const { useStoredIngestionDraftSync } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts");
+    const { IngestionJobCard } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/cards/IngestionJobCard.tsx");
     const job = ingestionJob({
       status: "ready",
       serverAccepted: true,
@@ -1009,7 +1005,9 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
       revision: 100,
       connectionGeneration: 1,
       items: [],
-      ensureRevision() { return true; },
+      ensureRevision() {
+        return true;
+      },
       async recoverAuthority() {},
       refresh() {}
     };
@@ -1047,9 +1045,7 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
       root.render(React.createElement(Harness));
       await Promise.resolve();
     });
-    const title = container.querySelector<HTMLInputElement>(
-      "input[placeholder='标题']"
-    )!;
+    const title = container.querySelector<HTMLInputElement>("input[placeholder='标题']")!;
     for (const value of ["慢", "慢速", "慢速输入"]) {
       await React.act(async () => {
         inputText(window as Window, title, value);
@@ -1075,15 +1071,9 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
     });
     assert.equal(requestCount, 1, "无变化失焦不得产生第二次请求");
 
-    const original = container.querySelector<HTMLInputElement>(
-      "input[placeholder='原图 URL']"
-    )!;
+    const original = container.querySelector<HTMLInputElement>("input[placeholder='原图 URL']")!;
     await React.act(async () => {
-      inputText(
-        window as Window,
-        original,
-        "http://draft-image.invalid/image.jpg"
-      );
+      inputText(window as Window, original, "http://draft-image.invalid/image.jpg");
       dispatchDomEvent(window as Window, original, "focusout", {
         relatedTarget: document.body
       });
@@ -1092,10 +1082,7 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
     assert.equal(requestCount, 1, "无效原图 URL 不得进入草稿同步请求");
     assert.equal(reportedErrors.length, 0, "无效 URL 不得进入可见草稿错误入口");
     assert.equal(original.classList.contains("is-changed"), false);
-    assert.equal(
-      consoleMessages.at(-1),
-      "[ImageShow] 内容接入草稿原图 URL 格式无效，未保存"
-    );
+    assert.equal(consoleMessages.at(-1), "[ImageShow] 内容接入草稿原图 URL 格式无效，未保存");
 
     await React.act(async () => {
       inputText(window as Window, original, "draft-image.invalid/image.jpg");
@@ -1105,22 +1092,19 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
       await sync!.flushPendingUpdates();
     });
     assert.equal(requestCount, 2, "不可解析的保留域名仍应按纯格式合法草稿保存");
-    assert.equal(requestPaths.every((path) => path === ingestionUpdatePath), true);
+    assert.equal(
+      requestPaths.every((path) => path === ingestionUpdatePath),
+      true
+    );
     assert.equal(
       jobsRef.current[0]?.draft.original,
       "draft-image.invalid/image.jpg",
       "浏览器校验不得以探测结果改写或拒绝格式合法草稿"
     );
 
-    const source = container.querySelector<HTMLInputElement>(
-      "input[placeholder='来源 URL']"
-    )!;
+    const source = container.querySelector<HTMLInputElement>("input[placeholder='来源 URL']")!;
     await React.act(async () => {
-      inputText(
-        window as Window,
-        source,
-        "https://user:password@example.com/post"
-      );
+      inputText(window as Window, source, "https://user:password@example.com/post");
       dispatchDomEvent(window as Window, source, "focusout", {
         relatedTarget: document.body
       });
@@ -1128,10 +1112,7 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
     });
     assert.equal(requestCount, 2, "无效来源 URL 不得进入草稿同步请求");
     assert.equal(reportedErrors.length, 0);
-    assert.equal(
-      consoleMessages.at(-1),
-      "[ImageShow] 内容接入草稿来源 URL 格式无效，未保存"
-    );
+    assert.equal(consoleMessages.at(-1), "[ImageShow] 内容接入草稿来源 URL 格式无效，未保存");
     await React.act(async () => root.unmount());
   } finally {
     console.info = previousConsoleInfo;
@@ -1164,9 +1145,9 @@ test("[Web/内容接入] 未接管 placeholder 的草稿 fence 不阻塞 Server 
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -1178,22 +1159,27 @@ test("[Web/内容接入] 未接管 placeholder 的草稿 fence 不阻塞 Server 
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { useStoredIngestionDraftSync } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts"
-    );
-    const jobsRef = { current: [ingestionJob({
-      id: "unaccepted-draft-fence",
-      serverAccepted: false,
-      serverDraftPending: true,
-      serverVersion: undefined,
-      sessionId: undefined,
-      imageId: undefined
-    })] };
+    const { useStoredIngestionDraftSync } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts");
+    const jobsRef = {
+      current: [
+        ingestionJob({
+          id: "unaccepted-draft-fence",
+          serverAccepted: false,
+          serverDraftPending: true,
+          serverVersion: undefined,
+          sessionId: undefined,
+          imageId: undefined
+        })
+      ]
+    };
     const server = {
       status: "ready",
       revision: 1,
       connectionGeneration: 1,
-      ensureRevision() { return true; },
+      ensureRevision() {
+        return true;
+      },
       async recoverAuthority() {},
       refresh() {}
     };
@@ -1206,9 +1192,7 @@ test("[Web/内容接入] 未接管 placeholder 的草稿 fence 不阻塞 Server 
         reportError: () => undefined,
         observeCompletedIngestions: () => undefined
       });
-      return React.createElement("output", null, String(
-        sync.hasPendingUpdates()
-      ));
+      return React.createElement("output", null, String(sync.hasPendingUpdates()));
     }
     const container = document.getElementById("root");
     assert.ok(container);
@@ -1258,9 +1242,9 @@ test("[Web/内容接入] 离页草稿 owner 可按 session incarnation 静默退
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -1272,20 +1256,23 @@ test("[Web/内容接入] 离页草稿 owner 可按 session incarnation 静默退
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { useStoredIngestionDraftSync } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts"
-    );
+    const { useStoredIngestionDraftSync } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts");
     const sessionId = "O".repeat(43);
     const imageId = "00000000-0000-7040-8000-00000000008e";
-    const jobsRef = { current: [ingestionJob({
-      id: "off-page-draft-owner",
-      attemptKey: "off-page-draft-attempt",
-      sessionId,
-      imageId,
-      serverAccepted: true,
-      serverVersion: 1,
-      status: "ready"
-    })] };
+    const jobsRef = {
+      current: [
+        ingestionJob({
+          id: "off-page-draft-owner",
+          attemptKey: "off-page-draft-attempt",
+          sessionId,
+          imageId,
+          serverAccepted: true,
+          serverVersion: 1,
+          status: "ready"
+        })
+      ]
+    };
     let state = { jobs: jobsRef.current, page: 1 };
     let sync: ReturnType<typeof useStoredIngestionDraftSync> | undefined;
     const dispatch = (action: Parameters<typeof reduceIngestionQueue>[1]) => {
@@ -1304,18 +1291,16 @@ test("[Web/内容接入] 离页草稿 owner 可按 session incarnation 静默退
           revision: 1,
           connectionGeneration: 1,
           items: [],
-          ensureRevision() { return true; },
+          ensureRevision() {
+            return true;
+          },
           async recoverAuthority() {},
           refresh() {}
         } as never,
         reportError: () => undefined,
         observeCompletedIngestions: () => undefined
       });
-      return React.createElement(
-        "output",
-        null,
-        String(sync.hasPendingUpdates())
-      );
+      return React.createElement("output", null, String(sync.hasPendingUpdates()));
     }
     const container = document.getElementById("root");
     assert.ok(container);

@@ -1,10 +1,7 @@
 import { sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
 import { ApiError } from "../../core/api-error.ts";
 import { pool } from "../../core/database/pools.ts";
-import {
-  withTransaction,
-  withTransactionOnClient
-} from "../../core/database/transactions.ts";
+import { withTransaction, withTransactionOnClient } from "../../core/database/transactions.ts";
 import type {
   S3StorageConfig,
   StorageBackendCreateInput,
@@ -12,48 +9,33 @@ import type {
 } from "./config.ts";
 import { storedS3ConfigJson } from "./record.ts";
 import { validateStorageBackendCandidate } from "./probe.ts";
-import {
-  invalidateStorageBackendRegistry
-} from "./registry.ts";
-import {
-  readStorageBackendSnapshot,
-  storageBackendUsage
-} from "./usage.ts";
+import { invalidateStorageBackendRegistry } from "./registry.ts";
+import { readStorageBackendSnapshot, storageBackendUsage } from "./usage.ts";
 import { resolveStorageBackendDeletionState } from "./deletion.ts";
 import { withStorageLocationWriteAndAdvisoryLock } from "../maintenance-lock.ts";
 
 function isForeignKeyViolation(error: unknown) {
   return Boolean(
-    error
-    && typeof error === "object"
-    && (error as { code?: string }).code === "23503"
+    error && typeof error === "object" && (error as { code?: string }).code === "23503"
   );
 }
 
-export async function createStorageBackend(
-  input: StorageBackendCreateInput,
-  signal?: AbortSignal
-) {
+export async function createStorageBackend(input: StorageBackendCreateInput, signal?: AbortSignal) {
   if (input.slug === "local") {
-    throw new ApiError(
-      400,
-      "storage_backend_reserved",
-      "'local' 是内置后端，不能新建"
-    );
+    throw new ApiError(400, "storage_backend_reserved", "'local' 是内置后端，不能新建");
   }
   const config: S3StorageConfig = {
     slug: input.slug,
     type: "s3",
     s3: input.s3
   };
-  const result = await validateStorageBackendCandidate(
-    config, undefined, undefined, signal
-  );
+  const result = await validateStorageBackendCandidate(config, undefined, undefined, signal);
   config.capabilities = result.capabilities;
   signal?.throwIfAborted();
   try {
-    await pool.query(
-      `INSERT INTO storage_backend(
+    await pool
+      .query(
+        `INSERT INTO storage_backend(
          slug, display_name, type, config, enabled, sort_order
        )
        VALUES(
@@ -61,21 +43,14 @@ export async function createStorageBackend(
          (SELECT GREATEST(${sortOrderMin}, LEAST(COALESCE(MIN(sort_order), 0)::bigint - 1, ${sortOrderMax}))
           FROM storage_backend)
        )`,
-      [input.slug, input.display_name, "s3", storedS3ConfigJson(config)]
-    ).catch((error: unknown) => {
-      if (
-        error
-        && typeof error === "object"
-        && (error as { code?: string }).code === "23505"
-      ) {
-        throw new ApiError(
-          409,
-          "storage_backend_exists",
-          `存储后端已存在: ${input.slug}`
-        );
-      }
-      throw error;
-    });
+        [input.slug, input.display_name, "s3", storedS3ConfigJson(config)]
+      )
+      .catch((error: unknown) => {
+        if (error && typeof error === "object" && (error as { code?: string }).code === "23505") {
+          throw new ApiError(409, "storage_backend_exists", `存储后端已存在: ${input.slug}`);
+        }
+        throw error;
+      });
   } finally {
     // An auto-commit may succeed even if the response is lost.
     invalidateStorageBackendRegistry();
@@ -95,9 +70,7 @@ export async function importStorageBackends(
       type: "s3",
       s3: backend.config
     };
-    const result = await validateStorageBackendCandidate(
-      config, undefined, undefined, signal
-    );
+    const result = await validateStorageBackendCandidate(config, undefined, undefined, signal);
     configs.push({ ...config, capabilities: result.capabilities });
   }
   signal?.throwIfAborted();
@@ -105,9 +78,10 @@ export async function importStorageBackends(
     await withTransaction(
       async (client) => {
         signal?.throwIfAborted();
-        const lowestSortOrder = Number((await client.query(
-          "SELECT COALESCE(MIN(sort_order), 0) AS value FROM storage_backend"
-        )).rows[0]?.value ?? 0);
+        const lowestSortOrder = Number(
+          (await client.query("SELECT COALESCE(MIN(sort_order), 0) AS value FROM storage_backend"))
+            .rows[0]?.value ?? 0
+        );
 
         for (const [index, backend] of backends.entries()) {
           await client.query(
@@ -127,9 +101,7 @@ export async function importStorageBackends(
           );
         }
 
-        const importedDefault = backends.find(
-          (backend) => backend.is_default
-        );
+        const importedDefault = backends.find((backend) => backend.is_default);
         if (importedDefault) {
           await client.query(
             `UPDATE storage_backend
@@ -149,16 +121,8 @@ export async function importStorageBackends(
       { onTransactionId }
     );
   } catch (error) {
-    if (
-      error
-      && typeof error === "object"
-      && (error as { code?: string }).code === "23505"
-    ) {
-      throw new ApiError(
-        409,
-        "storage_backend_exists",
-        "导入的存储后端 slug 已存在"
-      );
+    if (error && typeof error === "object" && (error as { code?: string }).code === "23505") {
+      throw new ApiError(409, "storage_backend_exists", "导入的存储后端 slug 已存在");
     }
     throw error;
   } finally {
@@ -169,11 +133,7 @@ export async function importStorageBackends(
 
 export async function deleteStorageBackend(slug: string) {
   if (slug === "local") {
-    throw new ApiError(
-      400,
-      "storage_backend_reserved",
-      "'local' 是内置后端，不能删除"
-    );
+    throw new ApiError(400, "storage_backend_reserved", "'local' 是内置后端，不能删除");
   }
   await withStorageLocationWriteAndAdvisoryLock(
     `imageshow:storage-backend:${slug}`,
@@ -187,19 +147,13 @@ export async function deleteStorageBackend(slug: string) {
           ...snapshot,
           ...usage
         });
-        throw new ApiError(
-          400,
-          "storage_default_delete",
-          "默认后端不能删除，请先切换默认后端",
-          { ...usage, deletion }
-        );
+        throw new ApiError(400, "storage_default_delete", "默认后端不能删除，请先切换默认后端", {
+          ...usage,
+          deletion
+        });
       }
 
-      if (
-        usage.image_count
-        || usage.ingestion_session_count
-        || usage.cleanup_job_count
-      ) {
+      if (usage.image_count || usage.ingestion_session_count || usage.cleanup_job_count) {
         const deletion = resolveStorageBackendDeletionState({
           ...snapshot,
           ...usage
@@ -266,23 +220,14 @@ export async function deleteStorageBackend(slug: string) {
 export async function setDefaultStorageBackend(slug: string) {
   try {
     await withTransaction(async (client) => {
-      const row = (await client.query(
-        "SELECT enabled FROM storage_backend WHERE slug=$1 FOR UPDATE",
-        [slug]
-      )).rows[0];
+      const row = (
+        await client.query("SELECT enabled FROM storage_backend WHERE slug=$1 FOR UPDATE", [slug])
+      ).rows[0];
       if (!row) {
-        throw new ApiError(
-          404,
-          "storage_backend_not_found",
-          `Unknown storage backend: ${slug}`
-        );
+        throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
       }
       if (!row.enabled) {
-        throw new ApiError(
-          400,
-          "storage_default_disabled",
-          "不能将已停用的后端设为默认"
-        );
+        throw new ApiError(400, "storage_default_disabled", "不能将已停用的后端设为默认");
       }
       await client.query(
         `UPDATE storage_backend

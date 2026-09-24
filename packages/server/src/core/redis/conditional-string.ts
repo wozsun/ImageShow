@@ -36,14 +36,7 @@ export async function replaceRedisStringIfEqualKeepingTtl(
   expectedValue: string,
   nextValue: string
 ) {
-  const reply = await client.call(
-    "SET",
-    key,
-    nextValue,
-    "IFEQ",
-    expectedValue,
-    "KEEPTTL"
-  );
+  const reply = await client.call("SET", key, nextValue, "IFEQ", expectedValue, "KEEPTTL");
   return parseRedisSetIfEqualReply(reply);
 }
 
@@ -87,7 +80,7 @@ export async function deleteRedisStringsIfEqual(
   if (results.length !== snapshots.length) {
     throw new Error("Redis DELEX pipeline returned an invalid result count");
   }
-  return results.flatMap(([, reply], index) => (
+  return results.flatMap(([, reply], index) =>
     parseRedisDeleteIfEqualReply(reply) ? [snapshots[index]] : []
-  ));
+  );
 }

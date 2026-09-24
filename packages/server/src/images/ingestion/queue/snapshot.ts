@@ -11,10 +11,7 @@ import {
   committedIngestionResultForOwner,
   readCommittedIngestionResultsByImageIds
 } from "../../read-models/ingestion-results.ts";
-import {
-  requireIngestionActionScope,
-  signIngestionActionWatermark
-} from "./action-scope.ts";
+import { requireIngestionActionScope, signIngestionActionWatermark } from "./action-scope.ts";
 import type {
   CompletedIngestionReceipt,
   IngestionQueueType,
@@ -54,26 +51,26 @@ function completedItem(
 }
 
 function completedReceipts(items: readonly StoredIngestionSession[]) {
-  return items.filter((item): item is CompletedIngestionReceipt => (
-    item.status === "completed"
-  ));
+  return items.filter((item): item is CompletedIngestionReceipt => item.status === "completed");
 }
 
 /**
  * Form one stable Redis page, hydrate completed receipts in one PostgreSQL
  * query, and retry only after atomically deleting confirmed stale receipts.
  */
-export async function readStableIngestionQueueSnapshot(input: Readonly<{
-  repository: IngestionSessionRepository;
-  tokens: IngestionTokenService;
-  session: Pick<AdminSession, "id" | "username">;
-  actionScope: string;
-  queue: IngestionQueueType;
-  offset: number;
-  limit: number;
-  excludeItems?: readonly IngestionSessionPair[];
-  includeItems?: readonly IngestionSessionPair[];
-}>): Promise<IngestionQueueSnapshotDto> {
+export async function readStableIngestionQueueSnapshot(
+  input: Readonly<{
+    repository: IngestionSessionRepository;
+    tokens: IngestionTokenService;
+    session: Pick<AdminSession, "id" | "username">;
+    actionScope: string;
+    queue: IngestionQueueType;
+    offset: number;
+    limit: number;
+    excludeItems?: readonly IngestionSessionPair[];
+    includeItems?: readonly IngestionSessionPair[];
+  }>
+): Promise<IngestionQueueSnapshotDto> {
   const scopeInput = {
     id: input.actionScope,
     sessionId: input.session.id,
@@ -99,16 +96,16 @@ export async function readStableIngestionQueueSnapshot(input: Readonly<{
     const committed = await readCommittedIngestionResultsByImageIds(
       receipts.map((receipt) => receipt.image_id)
     );
-    const stale = receipts.filter((receipt) => !committedIngestionResultForOwner(
-      committed,
-      receipt.image_id,
-      input.session.username
-    ));
+    const stale = receipts.filter(
+      (receipt) =>
+        !committedIngestionResultForOwner(committed, receipt.image_id, input.session.username)
+    );
     if (stale.length) {
       if (
-        staleRemoved + stale.length
-          > appConfig.ingestionRuntime.snapshotStaleReceiptCleanupBudget
-      ) throw snapshotRetryRequired();
+        staleRemoved + stale.length >
+        appConfig.ingestionRuntime.snapshotStaleReceiptCleanupBudget
+      )
+        throw snapshotRetryRequired();
       const cleanup = await input.repository.deleteStaleCompletedReceipts(
         input.session.username,
         input.queue,
@@ -144,11 +141,7 @@ export async function readStableIngestionQueueSnapshot(input: Readonly<{
       limit: snapshot.limit,
       items,
       stale_items: snapshot.staleItems,
-      action_watermark: signIngestionActionWatermark(
-        scope,
-        metadata,
-        input.tokens
-      )
+      action_watermark: signIngestionActionWatermark(scope, metadata, input.tokens)
     };
   }
 }

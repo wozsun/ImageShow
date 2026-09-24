@@ -6,11 +6,7 @@ import {
   requireOperationalRedis,
   runRequiredRedisCommand
 } from "../../core/runtime-availability.ts";
-import {
-  encodeImageCursor,
-  type ImageBrowseContext,
-  type ImageBrowsePosition
-} from "../cursor.ts";
+import { encodeImageCursor, type ImageBrowseContext, type ImageBrowsePosition } from "../cursor.ts";
 import type { AdminImageSort, PublicImageOrder } from "@imageshow/shared/browser";
 import {
   getReadyImageCacheCoordinatorStatus,
@@ -23,10 +19,7 @@ import {
   validateReadyImageFilterIndex,
   type ReadyImageFilterIndex
 } from "./indexes/filter.ts";
-import {
-  ReadyImageCoreCacheError,
-  isReadyImageCoreCacheError
-} from "./cache-errors.ts";
+import { ReadyImageCoreCacheError, isReadyImageCoreCacheError } from "./cache-errors.ts";
 import { discardReadyImageDerivedResult } from "./derived/lifecycle.ts";
 import type { ImageFilterPlan } from "../filter-plan.ts";
 import type { PageWindow } from "../page-window.ts";
@@ -69,13 +62,8 @@ function cacheItemCount() {
 
 function parsedItem(raw: string | null, expectedMember?: string) {
   const item = parseReadyImageCacheItem(raw);
-  if (
-    !item
-    || (expectedMember && readyImageMember(item.id) !== expectedMember)
-  ) {
-    throw new ReadyImageCoreCacheError(
-      "Ready-image cache returned a corrupt core item"
-    );
+  if (!item || (expectedMember && readyImageMember(item.id) !== expectedMember)) {
+    throw new ReadyImageCoreCacheError("Ready-image cache returned a corrupt core item");
   }
   return item;
 }
@@ -88,9 +76,7 @@ async function readCache<T>(
 ): Promise<ReadyImageCacheResult<T>> {
   try {
     const lease = await withReadyImageCacheRead(work);
-    return lease.acquired
-      ? { cached: true, value: lease.value }
-      : { cached: false };
+    return lease.acquired ? { cached: true, value: lease.value } : { cached: false };
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error;
     if (isRedisUnavailableError(error)) throw error;
@@ -116,17 +102,11 @@ async function readCoreItems(members: string[]) {
   try {
     return await redis.hmget(READY_IMAGE_ITEMS_KEY, ...members);
   } catch (cause) {
-    throw new ReadyImageCoreCacheError(
-      "Ready-image core items could not be read",
-      { cause }
-    );
+    throw new ReadyImageCoreCacheError("Ready-image core items could not be read", { cause });
   }
 }
 
-async function assertDerivedMissingItemsAreNotCore(
-  members: string[],
-  raws: Array<string | null>
-) {
+async function assertDerivedMissingItemsAreNotCore(members: string[], raws: Array<string | null>) {
   const missingMembers = members.filter((_, index) => raws[index] === null);
   if (!missingMembers.length) return;
   let results: Awaited<ReturnType<typeof execRedisPipeline>>;
@@ -137,24 +117,21 @@ async function assertDerivedMissingItemsAreNotCore(
     pipeline.zmscore(READY_IMAGE_ALL_INDEX_KEY, ...missingMembers);
     results = await execRedisPipeline(pipeline);
   } catch (cause) {
-    throw new ReadyImageCoreCacheError(
-      "Ready-image core item consistency could not be read",
-      { cause }
-    );
+    throw new ReadyImageCoreCacheError("Ready-image core item consistency could not be read", {
+      cause
+    });
   }
   const expected = cacheItemCount();
   const itemCount = Number(results[0]?.[1] ?? -1);
   const allCount = Number(results[1]?.[1] ?? -1);
-  const allScores = results[2]?.[1] as Array<string | null> ?? [];
+  const allScores = (results[2]?.[1] as Array<string | null>) ?? [];
   if (
-    itemCount !== expected
-    || allCount !== expected
-    || allScores.length !== missingMembers.length
-    || allScores.some((score) => score !== null)
+    itemCount !== expected ||
+    allCount !== expected ||
+    allScores.length !== missingMembers.length ||
+    allScores.some((score) => score !== null)
   ) {
-    throw new ReadyImageCoreCacheError(
-      "Ready-image core items and index are inconsistent"
-    );
+    throw new ReadyImageCoreCacheError("Ready-image core items and index are inconsistent");
   }
   throw new Error("Ready-image derived index references a missing item");
 }
@@ -166,7 +143,7 @@ export async function readReadyImageById(
   return readCache(async () => {
     const raw = await redis.hget(READY_IMAGE_ITEMS_KEY, member);
     if (!raw) {
-      if (await redis.hlen(READY_IMAGE_ITEMS_KEY) !== cacheItemCount()) {
+      if ((await redis.hlen(READY_IMAGE_ITEMS_KEY)) !== cacheItemCount()) {
         throw new Error("Ready-image cache item hash is incomplete");
       }
       return null;
@@ -175,10 +152,7 @@ export async function readReadyImageById(
   });
 }
 
-function executePageRedisCommand<T>(
-  mode: ReadyImagePageReadMode,
-  work: () => Promise<T>
-) {
+function executePageRedisCommand<T>(mode: ReadyImagePageReadMode, work: () => Promise<T>) {
   return mode === "required" ? runRequiredRedisCommand(work) : work();
 }
 
@@ -194,31 +168,27 @@ async function cursorWindowStart(
   cursorState.zscore(index.key, member);
   if (order === "oldest") cursorState.zrank(index.key, member);
   else cursorState.zrevrank(index.key, member);
-  const cursorResults = await executePageRedisCommand(
-    mode,
-    () => execRedisPipeline(cursorState)
-  );
+  const cursorResults = await executePageRedisCommand(mode, () => execRedisPipeline(cursorState));
   const scoreRaw = cursorResults[0]?.[1];
   const rankRaw = cursorResults[1]?.[1];
   if (scoreRaw === null || rankRaw === null) return null;
   const score = Number(scoreRaw);
   const rank = Number(rankRaw);
-  return Number.isSafeInteger(score)
-    && score === decoded.sortScore
-    && Number.isSafeInteger(rank)
-    && rank >= 0
+  return Number.isSafeInteger(score) &&
+    score === decoded.sortScore &&
+    Number.isSafeInteger(rank) &&
+    rank >= 0
     ? rank + 1
     : null;
 }
 
-function readyImageWindowDependencies(
-  order: PublicImageOrder
-): ReadyImageWindowDependencies {
+function readyImageWindowDependencies(order: PublicImageOrder): ReadyImageWindowDependencies {
   return {
     validate: validateReadyImageFilterIndex,
-    members: (index, start, stop) => order === "oldest"
-      ? redis.zrange(index.key, String(start), String(stop))
-      : redis.zrevrange(index.key, start, stop),
+    members: (index, start, stop) =>
+      order === "oldest"
+        ? redis.zrange(index.key, String(start), String(stop))
+        : redis.zrevrange(index.key, start, stop),
     items: readCoreItems,
     assertDerivedItems: assertDerivedMissingItemsAreNotCore
   };
@@ -235,20 +205,24 @@ async function readPageFromIndex<T>(
   mode: ReadyImagePageReadMode
 ): Promise<ReadyImagePageReadResult<T>> {
   try {
-    const result = await readCache(async () => {
-      const location = await locate(mode);
-      if (!location) return null;
-      const window = await readReadyImageOrderedWindow(
-        index,
-        location.start,
-        limit,
-        mode,
-        readyImageWindowDependencies(order)
-      );
-      return window ? location.present(window) : null;
-    }, index.kind === "core" ? "core" : "derived", async () => {
-      await discardReadyImageQueryIndex(index);
-    });
+    const result = await readCache(
+      async () => {
+        const location = await locate(mode);
+        if (!location) return null;
+        const window = await readReadyImageOrderedWindow(
+          index,
+          location.start,
+          limit,
+          mode,
+          readyImageWindowDependencies(order)
+        );
+        return window ? location.present(window) : null;
+      },
+      index.kind === "core" ? "core" : "derived",
+      async () => {
+        await discardReadyImageQueryIndex(index);
+      }
+    );
     if (!result.cached || result.value === null) {
       // A rebuilding/revision transition is a legitimate fallback, but a
       // connection loss that invalidated the read lease remains a hard 503.
@@ -284,18 +258,13 @@ async function resolvedReadyImagePage<T>(
   read?: (index: ReadyImageFilterIndex) => Promise<ReadyImagePageReadResult<T>>
 ): Promise<ReadyImagePageReadResult<T>> {
   try {
-    const index = mode === "required"
-      ? await resolveReadyImageFilterIndexForRequiredRead(plan)
-      : await resolveReadyImageFilterIndex(plan, signal, background);
+    const index =
+      mode === "required"
+        ? await resolveReadyImageFilterIndexForRequiredRead(plan)
+        : await resolveReadyImageFilterIndex(plan, signal, background);
     if (!index) return { status: "fallback" };
     if (read) return await read(index);
-    return readPageFromIndex(
-      index,
-      (readMode) => locate(index, readMode),
-      limit,
-      order,
-      mode
-    );
+    return readPageFromIndex(index, (readMode) => locate(index, readMode), limit, order, mode);
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error;
     if (isRedisUnavailableError(error)) {
@@ -307,11 +276,7 @@ async function resolvedReadyImagePage<T>(
     if (isReadyImageCoreCacheError(error)) {
       reportReadyImageCacheFailure(error);
     } else {
-      recordReadyImageCacheError(
-        "derived",
-        "derived_filter_resolution_failed",
-        error
-      );
+      recordReadyImageCacheError("derived", "derived_filter_resolution_failed", error);
       logger.warn("ready_image_derived_filter_resolution_failed", {
         signature: plan.signature,
         error: error
@@ -328,26 +293,38 @@ async function readRandomWindowFromIndex(
   limit: number,
   signal?: AbortSignal
 ) {
-  return readCache(async () => {
-    if (!readyImageWindowIndexIsValid(index, await validateReadyImageFilterIndex(index))) return null;
-    const members = await readReadyImageRandomMembers(
-      index, context, position, limit, cacheItemCount(), signal
-    );
-    if (!members) return null;
-    const visible = members.slice(0, limit);
-    const raws = visible.length ? await readCoreItems(visible) : [];
-    if (raws.length !== visible.length) {
-      throw new ReadyImageCoreCacheError("Ready-image cache returned incomplete core items");
-    }
-    if (index.kind !== "core" && visible.length) {
-      await assertDerivedMissingItemsAreNotCore(visible, raws);
-    }
-    const items = raws.map((raw, offset) => parsedItem(raw, visible[offset]));
-    if (!readyImageWindowIndexIsValid(index, await validateReadyImageFilterIndex(index))) return null;
-    return { items, total: index.count ?? items.length, hasMore: members.length > limit };
-  }, index.kind === "core" ? "core" : "derived", async () => {
-    await discardReadyImageQueryIndex(index);
-  }, signal);
+  return readCache(
+    async () => {
+      if (!readyImageWindowIndexIsValid(index, await validateReadyImageFilterIndex(index)))
+        return null;
+      const members = await readReadyImageRandomMembers(
+        index,
+        context,
+        position,
+        limit,
+        cacheItemCount(),
+        signal
+      );
+      if (!members) return null;
+      const visible = members.slice(0, limit);
+      const raws = visible.length ? await readCoreItems(visible) : [];
+      if (raws.length !== visible.length) {
+        throw new ReadyImageCoreCacheError("Ready-image cache returned incomplete core items");
+      }
+      if (index.kind !== "core" && visible.length) {
+        await assertDerivedMissingItemsAreNotCore(visible, raws);
+      }
+      const items = raws.map((raw, offset) => parsedItem(raw, visible[offset]));
+      if (!readyImageWindowIndexIsValid(index, await validateReadyImageFilterIndex(index)))
+        return null;
+      return { items, total: index.count ?? items.length, hasMore: members.length > limit };
+    },
+    index.kind === "core" ? "core" : "derived",
+    async () => {
+      await discardReadyImageQueryIndex(index);
+    },
+    signal
+  );
 }
 
 export function readReadyImageCursorPage(
@@ -369,12 +346,16 @@ export function readReadyImageCursorPage(
           const last = window.items.at(-1);
           return {
             ...window,
-            nextCursor: start + window.items.length < window.total && last
-              ? encodeImageCursor({
-                  sort_score: last.sort_score,
-                  id: last.id
-                }, context)
-              : null
+            nextCursor:
+              start + window.items.length < window.total && last
+                ? encodeImageCursor(
+                    {
+                      sort_score: last.sort_score,
+                      id: last.id
+                    },
+                    context
+                  )
+                : null
           };
         }
       };
@@ -384,22 +365,25 @@ export function readReadyImageCursorPage(
     signal,
     background,
     "fallback",
-    context.order === "random" ? async (index) => {
-      const result = await readRandomWindowFromIndex(index, context, position, limit, signal);
-      if (!result.cached || result.value === null) return { status: "fallback" };
-      const { items, total, hasMore } = result.value;
-      const last = items.at(-1);
-      return {
-        status: "hit",
-        value: {
-          items,
-          total,
-          nextCursor: hasMore && last
-            ? encodeImageCursor({ id: last.id, sort_score: last.sort_score }, context)
-            : null
+    context.order === "random"
+      ? async (index) => {
+          const result = await readRandomWindowFromIndex(index, context, position, limit, signal);
+          if (!result.cached || result.value === null) return { status: "fallback" };
+          const { items, total, hasMore } = result.value;
+          const last = items.at(-1);
+          return {
+            status: "hit",
+            value: {
+              items,
+              total,
+              nextCursor:
+                hasMore && last
+                  ? encodeImageCursor({ id: last.id, sort_score: last.sort_score }, context)
+                  : null
+            }
+          };
         }
-      };
-    } : undefined
+      : undefined
   );
 }
 
@@ -435,18 +419,18 @@ export async function sampleReadyImages(
     if (!index) return { cached: false };
     if (seededStart !== undefined) {
       const result = await readRandomWindowFromIndex(
-        index, { start: seededStart }, undefined, 1, signal
+        index,
+        { start: seededStart },
+        undefined,
+        1,
+        signal
       );
       return result.cached && result.value !== null
         ? { cached: true, value: result.value.items }
         : { cached: false };
     }
     const result = await readCache(
-      () => sampleResolvedReadyImageIndex(
-        index,
-        limit,
-        recent
-      ),
+      () => sampleResolvedReadyImageIndex(index, limit, recent),
       index.kind === "core" ? "core" : "derived",
       async () => {
         await discardReadyImageQueryIndex(index);
@@ -460,11 +444,7 @@ export async function sampleReadyImages(
     if (isReadyImageCoreCacheError(error)) {
       reportReadyImageCacheFailure(error);
     } else {
-      recordReadyImageCacheError(
-        "derived",
-        "derived_random_resolution_failed",
-        error
-      );
+      recordReadyImageCacheError("derived", "derived_random_resolution_failed", error);
       logger.warn("ready_image_derived_random_resolution_failed", {
         signature: plan.signature,
         error: error
@@ -486,11 +466,7 @@ export async function readTargetedReadyImages(
       pipeline.zcard(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY);
       for (const suffix of suffixes) {
         const score = Number.parseInt(suffix, 16);
-        pipeline.zrangebyscore(
-          READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
-          score,
-          score
-        );
+        pipeline.zrangebyscore(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY, score, score);
       }
       const results = await execRedisPipeline(pipeline);
       if (Number(results[0]?.[1] ?? 0) !== cacheItemCount()) {
@@ -509,14 +485,11 @@ export async function readTargetedReadyImages(
     pipeline.zmscore(READY_IMAGE_ALL_INDEX_KEY, ...orderedMembers);
     const results = await execRedisPipeline(pipeline);
     const expected = cacheItemCount();
-    if (
-      Number(results[0]?.[1] ?? 0) !== expected
-      || Number(results[1]?.[1] ?? 0) !== expected
-    ) {
+    if (Number(results[0]?.[1] ?? 0) !== expected || Number(results[1]?.[1] ?? 0) !== expected) {
       throw new Error("Ready-image cache core projection is incomplete");
     }
-    const raws = results[2]?.[1] as Array<string | null> ?? [];
-    const scores = results[3]?.[1] as Array<string | null> ?? [];
+    const raws = (results[2]?.[1] as Array<string | null>) ?? [];
+    const scores = (results[3]?.[1] as Array<string | null>) ?? [];
     if (raws.length !== orderedMembers.length || scores.length !== orderedMembers.length) {
       throw new Error("Ready-image targeted lookup returned an incomplete result");
     }

@@ -8,10 +8,7 @@ import {
   READY_IMAGE_STATS_KEY
 } from "../keys.ts";
 import { readReadyImageCacheMeta } from "../meta.ts";
-import {
-  type ReadyImageCacheItem,
-  type ReadyImageCacheMeta
-} from "../model.ts";
+import { type ReadyImageCacheItem, type ReadyImageCacheMeta } from "../model.ts";
 import {
   readReadyImageIntegrity,
   sameReadyImageCardinalities,
@@ -21,10 +18,7 @@ import {
   type ReadyImageCardinalities,
   type ReadyImageStats
 } from "./manifest.ts";
-import {
-  validatePersistedReadyImageSamples,
-  validateReadyImageSamples
-} from "./samples.ts";
+import { validatePersistedReadyImageSamples, validateReadyImageSamples } from "./samples.ts";
 import { compareReadyImageRevisions } from "../revision.ts";
 
 export type ReadyImageCacheStartupValidation =
@@ -38,16 +32,11 @@ export {
   type ReadyImageStats
 };
 
-export function incrementReadyImageCount(
-  map: Map<string, number>,
-  key: string
-) {
+export function incrementReadyImageCount(map: Map<string, number>, key: string) {
   map.set(key, (map.get(key) ?? 0) + 1);
 }
 
-function initialReadyImageCardinalities(
-  itemCount: number
-): ReadyImageCardinalities {
+function initialReadyImageCardinalities(itemCount: number): ReadyImageCardinalities {
   return new Map([
     [READY_IMAGE_ITEMS_KEY, itemCount],
     [READY_IMAGE_ALL_INDEX_KEY, itemCount],
@@ -55,9 +44,7 @@ function initialReadyImageCardinalities(
   ]);
 }
 
-export function buildReadyImageCardinalities(
-  itemCount: number
-): ReadyImageCardinalities {
+export function buildReadyImageCardinalities(itemCount: number): ReadyImageCardinalities {
   const cardinalities = initialReadyImageCardinalities(itemCount);
   cardinalities.set(READY_IMAGE_ALL_INDEX_KEY, 0);
   return cardinalities;
@@ -105,8 +92,8 @@ export async function validateReadyImageCacheAtStartup(
     }
     const stats = await validateReadyImageStatsIntegrity(null, client);
     if (
-      integrity.get(READY_IMAGE_STATS_KEY) !== stats.size
-      || stats.get("total") !== meta.itemCount
+      integrity.get(READY_IMAGE_STATS_KEY) !== stats.size ||
+      stats.get("total") !== meta.itemCount
     ) {
       return { valid: false, reason: "integrity_stats_mismatch", meta };
     }

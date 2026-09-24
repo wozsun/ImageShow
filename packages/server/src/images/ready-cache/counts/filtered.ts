@@ -16,13 +16,8 @@ import {
 } from "../derived/work-policy.ts";
 import type { ReadyImageSourceIndexState } from "../indexes/attribute.ts";
 import type { GalleryTagCountPlans } from "../../read-models/gallery-stats-plan.ts";
-import {
-  imageFilterPlanWithout,
-  type ImageFilterPlan
-} from "../../filter-plan.ts";
-import {
-  readyImageAttributeIndexKey
-} from "../keys.ts";
+import { imageFilterPlanWithout, type ImageFilterPlan } from "../../filter-plan.ts";
+import { readyImageAttributeIndexKey } from "../keys.ts";
 import { REDIS_BATCH_MAX_COMMANDS } from "../sync/redis-batch.ts";
 import {
   activeReadyImageCounts,
@@ -49,21 +44,19 @@ export async function resolveReadyImageCountIndexes(
 }
 
 export function readyImageCountAttributeIndexes(stats: Map<string, number>) {
-  const axisKeys = readyImageAxisPairs.map(({ device, brightness }) => (
+  const axisKeys = readyImageAxisPairs.map(({ device, brightness }) =>
     readyImageAttributeIndexKey({ kind: "axis", device, brightness })
-  ));
+  );
   const themeSlugs = Object.keys(activeReadyImageCounts(stats, "theme:"));
   const tagSlugs = Object.keys(activeReadyImageCounts(stats, "tag:"));
   const authorSlugs = Object.keys(activeReadyImageCounts(stats, "author:"));
-  const themeKeys = themeSlugs.map((value) => (
+  const themeKeys = themeSlugs.map((value) =>
     readyImageAttributeIndexKey({ kind: "theme", value })
-  ));
-  const tagKeys = tagSlugs.map((value) => (
-    readyImageAttributeIndexKey({ kind: "tag", value })
-  ));
-  const authorKeys = authorSlugs.map((value) => (
+  );
+  const tagKeys = tagSlugs.map((value) => readyImageAttributeIndexKey({ kind: "tag", value }));
+  const authorKeys = authorSlugs.map((value) =>
     readyImageAttributeIndexKey({ kind: "author", value })
-  ));
+  );
   return {
     all: [...axisKeys, ...themeKeys, ...tagKeys, ...authorKeys],
     axisKeys,
@@ -79,11 +72,7 @@ export function readyImageCountAttributeIndexes(stats: Map<string, number>) {
 function readyImageDynamicStatsDimensionCount(stats: Map<string, number>) {
   let count = 0;
   for (const field of stats.keys()) {
-    if (
-      !field.startsWith("theme:")
-      && !field.startsWith("tag:")
-      && !field.startsWith("author:")
-    ) {
+    if (!field.startsWith("theme:") && !field.startsWith("tag:") && !field.startsWith("author:")) {
       continue;
     }
     count += 1;
@@ -94,7 +83,10 @@ function readyImageDynamicStatsDimensionCount(stats: Map<string, number>) {
   return count;
 }
 
-export function readyImageCountFilterPlans(plan: ImageFilterPlan, tagCounts?: GalleryTagCountPlans) {
+export function readyImageCountFilterPlans(
+  plan: ImageFilterPlan,
+  tagCounts?: GalleryTagCountPlans
+) {
   return {
     full: plan,
     device: imageFilterPlanWithout(plan, "device"),
@@ -105,34 +97,38 @@ export function readyImageCountFilterPlans(plan: ImageFilterPlan, tagCounts?: Ga
   };
 }
 
-function readyImageFilterCountUpperBound(
-  plan: ImageFilterPlan,
-  stats: Map<string, number>
-) {
+function readyImageFilterCountUpperBound(plan: ImageFilterPlan, stats: Map<string, number>) {
   const total = stats.get("total") ?? 0;
   const positiveBounds: number[] = [];
   if (plan.axes.length < readyImageAxisPairs.length) {
-    positiveBounds.push(plan.axes.reduce((sum, { device, brightness }) => (
-      sum + (stats.get(`axis:${device}:${brightness}`) ?? 0)
-    ), 0));
+    positiveBounds.push(
+      plan.axes.reduce(
+        (sum, { device, brightness }) => sum + (stats.get(`axis:${device}:${brightness}`) ?? 0),
+        0
+      )
+    );
   }
   for (const [group, prefix] of [
     [plan.theme, "theme:"],
     [plan.author, "author:"]
   ] as const) {
     if (!group.include.length) continue;
-    positiveBounds.push(group.include.reduce((sum, slug) => (
-      sum + (stats.get(`${prefix}${slug}`) ?? 0)
-    ), 0));
+    positiveBounds.push(
+      group.include.reduce((sum, slug) => sum + (stats.get(`${prefix}${slug}`) ?? 0), 0)
+    );
   }
   if (plan.tag) {
-    positiveBounds.push(Math.min(total, plan.tag.anyOf.reduce((sum, clause) => (
-      sum + Math.min(...clause.map((slug) => stats.get(`tag:${slug}`) ?? 0))
-    ), 0)));
+    positiveBounds.push(
+      Math.min(
+        total,
+        plan.tag.anyOf.reduce(
+          (sum, clause) => sum + Math.min(...clause.map((slug) => stats.get(`tag:${slug}`) ?? 0)),
+          0
+        )
+      )
+    );
   }
-  return positiveBounds.length
-    ? Math.min(total, ...positiveBounds)
-    : total;
+  return positiveBounds.length ? Math.min(total, ...positiveBounds) : total;
 }
 
 function readyImageCandidateCounts(
@@ -141,10 +137,7 @@ function readyImageCandidateCounts(
 ) {
   const counts = new Map<string, number>();
   readyImageAxisPairs.forEach(({ device, brightness }, index) => {
-    counts.set(
-      candidates.axisKeys[index]!,
-      stats.get(`axis:${device}:${brightness}`) ?? 0
-    );
+    counts.set(candidates.axisKeys[index]!, stats.get(`axis:${device}:${brightness}`) ?? 0);
   });
   for (const [keys, slugs, prefix] of [
     [candidates.themeKeys, candidates.themeSlugs, "theme:"],
@@ -171,10 +164,12 @@ function readyImageStatsWorkIntersections(
     { plan: plans.theme, keys: candidates.themeKeys },
     { plan: plans.tag, keys: candidates.tagKeys },
     { plan: plans.author, keys: candidates.authorKeys }
-  ].flatMap(({ plan: selected, keys }) => keys.map((key) => ({
-    baseCount: baseCount(selected),
-    candidateCount: candidateCount(key)
-  })));
+  ].flatMap(({ plan: selected, keys }) =>
+    keys.map((key) => ({
+      baseCount: baseCount(selected),
+      candidateCount: candidateCount(key)
+    }))
+  );
 }
 
 export function preflightReadyImageCountSnapshotWork(
@@ -183,13 +178,13 @@ export function preflightReadyImageCountSnapshotWork(
   tagCounts?: GalleryTagCountPlans
 ):
   | {
-    admission: Extract<ReadyImageDerivedWorkAdmission, { admitted: false }>;
-  }
+      admission: Extract<ReadyImageDerivedWorkAdmission, { admitted: false }>;
+    }
   | {
-    admission: Extract<ReadyImageDerivedWorkAdmission, { admitted: true }>;
-    candidates: ReturnType<typeof readyImageCountAttributeIndexes>;
-    plans: ReturnType<typeof readyImageCountFilterPlans>;
-  } {
+      admission: Extract<ReadyImageDerivedWorkAdmission, { admitted: true }>;
+      candidates: ReturnType<typeof readyImageCountAttributeIndexes>;
+      plans: ReturnType<typeof readyImageCountFilterPlans>;
+    } {
   const dynamicDimensions = readyImageDynamicStatsDimensionCount(stats);
   const dimensionAdmission = assessReadyImageStatsWork({
     dynamicDimensions,
@@ -210,21 +205,12 @@ export function preflightReadyImageCountSnapshotWork(
       (key) => candidateCounts.get(key) ?? 0
     )
   });
-  return admission.admitted
-    ? { admission, candidates, plans }
-    : { admission };
+  return admission.admitted ? { admission, candidates, plans } : { admission };
 }
 
-async function intersectionCounts(
-  base: ReadyImageFilterIndex,
-  candidateKeys: string[]
-) {
+async function intersectionCounts(base: ReadyImageFilterIndex, candidateKeys: string[]) {
   const counts: number[] = [];
-  for (
-    let offset = 0;
-    offset < candidateKeys.length;
-    offset += REDIS_BATCH_MAX_COMMANDS
-  ) {
+  for (let offset = 0; offset < candidateKeys.length; offset += REDIS_BATCH_MAX_COMMANDS) {
     const keys = candidateKeys.slice(offset, offset + REDIS_BATCH_MAX_COMMANDS);
     const pipeline = redis.pipeline();
     for (const key of keys) {
@@ -242,15 +228,15 @@ async function intersectionCounts(
   return counts;
 }
 
-async function settleReadyImageStatsWork<
-  const T extends readonly unknown[]
->(tasks: { [K in keyof T]: Promise<T[K]> }): Promise<T> {
+async function settleReadyImageStatsWork<const T extends readonly unknown[]>(tasks: {
+  [K in keyof T]: Promise<T[K]>;
+}): Promise<T> {
   const settled = await Promise.allSettled(tasks);
   const rejected = settled.find((result) => result.status === "rejected");
   if (rejected?.status === "rejected") throw rejected.reason;
-  return settled.map((result) => (
+  return settled.map((result) =>
     result.status === "fulfilled" ? result.value : undefined
-  )) as unknown as T;
+  ) as unknown as T;
 }
 
 export async function buildFilteredReadyImageCountSnapshot(
@@ -266,12 +252,14 @@ export async function buildFilteredReadyImageCountSnapshot(
     return index;
   };
   const plans = readyImageCountFilterPlans(plan, tagCounts);
-  const uniqueIndexes = [...new Map(
-    [...Object.values(plans), ...(tagCounts?.groups ?? [])].map((selected) => [
-      selected.signature,
-      bySignature(selected)
-    ])
-  ).values()];
+  const uniqueIndexes = [
+    ...new Map(
+      [...Object.values(plans), ...(tagCounts?.groups ?? [])].map((selected) => [
+        selected.signature,
+        bySignature(selected)
+      ])
+    ).values()
+  ];
   const dynamicDimensions = readyImageDynamicStatsDimensionCount(stats);
   const dimensionAdmission = assessReadyImageStatsWork({
     dynamicDimensions,
@@ -305,9 +293,7 @@ export async function buildFilteredReadyImageCountSnapshot(
     });
     return null;
   }
-  const releaseBuildSlot = tryAcquireReadyImageStatsBuildSlot(
-    admission.estimate
-  );
+  const releaseBuildSlot = tryAcquireReadyImageStatsBuildSlot(admission.estimate);
   if (!releaseBuildSlot) return null;
   const indexesRemainValid = async () => {
     for (const index of uniqueIndexes) {
@@ -315,9 +301,7 @@ export async function buildFilteredReadyImageCountSnapshot(
       if (validation.status === "revision_changed") return false;
       if (validation.status === "invalid") {
         if (index.kind === "core") {
-          throw new ReadyImageCoreCacheError(
-            "Ready-image core index validation failed"
-          );
+          throw new ReadyImageCoreCacheError("Ready-image core index validation failed");
         }
         return false;
       }
@@ -325,33 +309,31 @@ export async function buildFilteredReadyImageCountSnapshot(
     return true;
   };
   try {
-    if (!await indexesRemainValid()) return null;
+    if (!(await indexesRemainValid())) return null;
 
-    const [
-      matchingRaw,
-      categories,
-      deviceAxes,
-      brightnessAxes,
-      themes,
-      tags,
-      authors
-    ] = await settleReadyImageStatsWork([
-      redis.zcard(bySignature(plans.full).key),
-      intersectionCounts(bySignature(plans.full), candidates.axisKeys),
-      intersectionCounts(bySignature(plans.device), candidates.axisKeys),
-      intersectionCounts(bySignature(plans.brightness), candidates.axisKeys),
-      intersectionCounts(bySignature(plans.theme), candidates.themeKeys),
-      intersectionCounts(bySignature(plans.tag), candidates.tagKeys),
-      intersectionCounts(bySignature(plans.author), candidates.authorKeys)
-    ] as const);
+    const [matchingRaw, categories, deviceAxes, brightnessAxes, themes, tags, authors] =
+      await settleReadyImageStatsWork([
+        redis.zcard(bySignature(plans.full).key),
+        intersectionCounts(bySignature(plans.full), candidates.axisKeys),
+        intersectionCounts(bySignature(plans.device), candidates.axisKeys),
+        intersectionCounts(bySignature(plans.brightness), candidates.axisKeys),
+        intersectionCounts(bySignature(plans.theme), candidates.themeKeys),
+        intersectionCounts(bySignature(plans.tag), candidates.tagKeys),
+        intersectionCounts(bySignature(plans.author), candidates.authorKeys)
+      ] as const);
     const matching = nonNegativeReadyImageCount(matchingRaw);
     if (matching === null) {
       throw new Error("Redis returned an invalid matching image count");
     }
     const groupCounts = new Map([[plan.signature, matching]]);
     if (tagCounts) {
-      const pending = [...new Map(tagCounts.groups.filter((group) => !groupCounts.has(group.signature))
-        .map((group) => [group.signature, group])).values()];
+      const pending = [
+        ...new Map(
+          tagCounts.groups
+            .filter((group) => !groupCounts.has(group.signature))
+            .map((group) => [group.signature, group])
+        ).values()
+      ];
       const pipeline = redis.pipeline();
       for (const group of pending) pipeline.zcard(bySignature(group).key);
       const results = pending.length ? await execRedisPipeline(pipeline) : [];
@@ -361,32 +343,37 @@ export async function buildFilteredReadyImageCountSnapshot(
         groupCounts.set(group.signature, value);
       });
     }
-    if (!await indexesRemainValid()) return null;
+    if (!(await indexesRemainValid())) return null;
 
     const axes = readyImageCountRecord(
-      readyImageAxisPairs.map(({ device, brightness }) => (
-        readyImageAxisField(device, brightness)
-      )),
+      readyImageAxisPairs.map(({ device, brightness }) => readyImageAxisField(device, brightness)),
       categories
     );
-    const deviceCounts = Object.fromEntries(devices.map((device) => [
-      device,
-      readyImageAxisPairs.reduce((sum, axis, index) => (
-        axis.device === device ? sum + (deviceAxes[index] ?? 0) : sum
-      ), 0)
-    ]));
-    const brightnessCounts = Object.fromEntries(brightnesses.map((brightness) => [
-      brightness,
-      readyImageAxisPairs.reduce((sum, axis, index) => (
-        axis.brightness === brightness
-          ? sum + (brightnessAxes[index] ?? 0)
-          : sum
-      ), 0)
-    ]));
+    const deviceCounts = Object.fromEntries(
+      devices.map((device) => [
+        device,
+        readyImageAxisPairs.reduce(
+          (sum, axis, index) => (axis.device === device ? sum + (deviceAxes[index] ?? 0) : sum),
+          0
+        )
+      ])
+    );
+    const brightnessCounts = Object.fromEntries(
+      brightnesses.map((brightness) => [
+        brightness,
+        readyImageAxisPairs.reduce(
+          (sum, axis, index) =>
+            axis.brightness === brightness ? sum + (brightnessAxes[index] ?? 0) : sum,
+          0
+        )
+      ])
+    );
     return {
       total: stats.get("total") ?? 0,
       matching,
-      ...(tagCounts ? { tagGroups: tagCounts.groups.map((group) => groupCounts.get(group.signature)!) } : {}),
+      ...(tagCounts
+        ? { tagGroups: tagCounts.groups.map((group) => groupCounts.get(group.signature)!) }
+        : {}),
       axes,
       devices: deviceCounts,
       brightnesses: brightnessCounts,

@@ -7,13 +7,9 @@ import type {
   TrashPurgeJobStateDto
 } from "@imageshow/shared/browser";
 import { pool } from "../core/database/pools.ts";
-import {
-  withReadOnlyRepeatableReadTransaction
-} from "../core/database/transactions.ts";
+import { withReadOnlyRepeatableReadTransaction } from "../core/database/transactions.ts";
 import { getReadyImageCacheCoordinatorStatus } from "../images/ready-cache/coordinator.ts";
-import {
-  getPublicPgFallbackAdmissionSnapshot
-} from "../core/database/public-admission.ts";
+import { getPublicPgFallbackAdmissionSnapshot } from "../core/database/public-admission.ts";
 import { imageHasTrashPurgeJobSql } from "../images/trash/purge-state.ts";
 import { readAdminPostgresqlStatus } from "./lightweight-status.ts";
 
@@ -21,14 +17,16 @@ const trashInspectionSampleLimit = 100;
 
 export async function checkDatabase() {
   const status = await readAdminPostgresqlStatus();
-  const operations = (await pool.query(
-    `SELECT id,type,target_id,status,retry_count,error,updated_at
+  const operations = (
+    await pool.query(
+      `SELECT id,type,target_id,status,retry_count,error,updated_at
        FROM background_job
       WHERE status IN ('pending','running','failed')
       ORDER BY updated_at DESC
       LIMIT $1`,
-    [appConfig.backgroundJob.sampleLimit]
-  )).rows;
+      [appConfig.backgroundJob.sampleLimit]
+    )
+  ).rows;
   const cache = getReadyImageCacheCoordinatorStatus();
   const cacheCount = cache.meta?.itemCount ?? null;
   return {
@@ -45,12 +43,14 @@ export async function checkDatabase() {
 
 export async function checkTrash() {
   return withReadOnlyRepeatableReadTransaction(async (client) => {
-    const counts = (await client.query(
-      `SELECT count(*)::int AS deleted_count,
+    const counts = (
+      await client.query(
+        `SELECT count(*)::int AS deleted_count,
               count(*) FILTER (WHERE NOT ${imageHasTrashPurgeJobSql})::int AS unqueued_count,
               count(*) FILTER (WHERE ${imageHasTrashPurgeJobSql})::int AS purge_pending_count
          FROM metadata WHERE status='deleted'`
-    )).rows[0] as Record<string, unknown>;
+      )
+    ).rows[0] as Record<string, unknown>;
 
     const stateSql = `CASE
       WHEN status='pending' THEN 'pending'
@@ -58,25 +58,30 @@ export async function checkTrash() {
       WHEN next_retry_at IS NOT NULL THEN 'retrying'
       ELSE 'exhausted'
     END`;
-    const jobCounts = (await client.query(
-      `SELECT ${stateSql} AS state, count(*)::int AS count
+    const jobCounts = (
+      await client.query(
+        `SELECT ${stateSql} AS state, count(*)::int AS count
          FROM background_job
         WHERE type='trash.purge' AND status IN ('pending', 'running', 'failed')
         GROUP BY state`
-    )).rows as Array<{ state: TrashPurgeJobStateDto; count: number }>;
-    const jobs = (await client.query(
-      `SELECT id, target_id, ${stateSql} AS state, retry_count,
+      )
+    ).rows as Array<{ state: TrashPurgeJobStateDto; count: number }>;
+    const jobs = (
+      await client.query(
+        `SELECT id, target_id, ${stateSql} AS state, retry_count,
               next_retry_at::text AS next_retry_at,
               updated_at::text AS updated_at, left(error, 2000) AS error
          FROM background_job
         WHERE type='trash.purge' AND status IN ('pending', 'running', 'failed')
         ORDER BY updated_at DESC, id
         LIMIT $1`,
-      [appConfig.backgroundJob.sampleLimit]
-    )).rows as AdminTrashPurgeJobDto[];
+        [appConfig.backgroundJob.sampleLimit]
+      )
+    ).rows as AdminTrashPurgeJobDto[];
 
-    const issues = (await client.query(
-      `WITH anomalies AS (
+    const issues = (
+      await client.query(
+        `WITH anomalies AS (
          SELECT 'succeeded_target_remaining'::text AS kind, job.id
            FROM background_job job
            JOIN metadata ON metadata.id::text=job.target_id
@@ -98,21 +103,31 @@ export async function checkTrash() {
        SELECT kind, count(*)::int AS count,
               array_agg(id::text ORDER BY id) FILTER (WHERE position <= $1) AS sample_ids
          FROM ranked GROUP BY kind ORDER BY kind`,
-      [appConfig.backgroundJob.sampleLimit, appConfig.backgroundJob.taskTimeoutSeconds]
-    )).rows as AdminTrashCheckIssueDto[];
-    const candidates = (await client.query<{
-      id: string; ext: string; deleted_at: string; purge_pending: boolean;
-    }>(
-      `SELECT id, ext, deleted_at::text AS deleted_at,
+        [appConfig.backgroundJob.sampleLimit, appConfig.backgroundJob.taskTimeoutSeconds]
+      )
+    ).rows as AdminTrashCheckIssueDto[];
+    const candidates = (
+      await client.query<{
+        id: string;
+        ext: string;
+        deleted_at: string;
+        purge_pending: boolean;
+      }>(
+        `SELECT id, ext, deleted_at::text AS deleted_at,
               ${imageHasTrashPurgeJobSql} AS purge_pending
          FROM metadata WHERE status='deleted'
         ORDER BY deleted_at, id LIMIT $1`,
-      [trashInspectionSampleLimit]
-    )).rows.map(({ ext, ...candidate }) => ({
-      ...candidate, object_key: storageObjectKey(candidate.id, ext)
+        [trashInspectionSampleLimit]
+      )
+    ).rows.map(({ ext, ...candidate }) => ({
+      ...candidate,
+      object_key: storageObjectKey(candidate.id, ext)
     }));
     const normalizedJobCounts: AdminTrashCheckDto["job_counts"] = {
-      pending: 0, running: 0, retrying: 0, exhausted: 0
+      pending: 0,
+      running: 0,
+      retrying: 0,
+      exhausted: 0
     };
     for (const row of jobCounts) normalizedJobCounts[row.state] = Number(row.count);
     return {

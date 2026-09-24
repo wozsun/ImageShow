@@ -6,15 +6,21 @@ import { ingestionJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
 export function ingestionJobRetryKind(job: IngestionJob) {
   if (job.failureStage === "cancel" || ingestionJobNeedsDuplicateConfirmation(job)) return null;
   if (job.failureStage === "commit" || job.status === "finalized") {
-    return ((job.status === "failed" || (job.status === "finalized" && job.resultState === "error"))
-      && ingestionJobCanStartCommit(job, "resume")) ? "commit" as const : null;
+    return (job.status === "failed" ||
+      (job.status === "finalized" && job.resultState === "error")) &&
+      ingestionJobCanStartCommit(job, "resume")
+      ? ("commit" as const)
+      : null;
   }
   if (job.status !== "failed" && job.status !== "cancelled") return null;
   if (job.serverAccepted && job.sessionId && job.imageId) {
-    return job.status === "failed" && job.serverVersion !== undefined ? "server-prepare" as const : null;
+    return job.status === "failed" && job.serverVersion !== undefined
+      ? ("server-prepare" as const)
+      : null;
   }
   return (job.kind === "upload" ? Boolean(job.file) : Boolean(job.downloadUrl))
-    ? "browser-prepare" as const : null;
+    ? ("browser-prepare" as const)
+    : null;
 }
 
 export function ingestionJobIsRetryableFailure(job: IngestionJob) {
@@ -56,8 +62,12 @@ export function resetJobForPrepareRetry(job: IngestionJob): IngestionJob {
 }
 
 function prepareRetryIdentity(job: IngestionJob) {
-  if (job.kind === "upload" && !job.serverVersion && job.uploadIntentItemInput
-    && (job.failureStage === "create" || isUnconfirmedUploadRawAttempt(job))) {
+  if (
+    job.kind === "upload" &&
+    !job.serverVersion &&
+    job.uploadIntentItemInput &&
+    (job.failureStage === "create" || isUnconfirmedUploadRawAttempt(job))
+  ) {
     return { attemptKey: job.attemptKey, uploadIntentItemInput: job.uploadIntentItemInput };
   }
   if (job.kind === "import" && job.failureStage === "create" && !job.sessionId) {
@@ -72,8 +82,10 @@ function prepareRetryIdentity(job: IngestionJob) {
 }
 
 function isUnconfirmedUploadRawAttempt(job: IngestionJob) {
-  return job.kind === "upload"
-    && job.failureStage === "prepare"
-    && job.serverVersion === undefined
-    && Boolean(job.sessionId && job.imageId);
+  return (
+    job.kind === "upload" &&
+    job.failureStage === "prepare" &&
+    job.serverVersion === undefined &&
+    Boolean(job.sessionId && job.imageId)
+  );
 }

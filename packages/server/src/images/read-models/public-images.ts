@@ -15,10 +15,7 @@ import {
 import { pool, type DatabaseReader } from "../../core/database/pools.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
 import { createImageBrowseContext, decodeImageCursor } from "../cursor.ts";
-import {
-  readReadyImageById,
-  readReadyImageCursorPage
-} from "../ready-cache/query.ts";
+import { readReadyImageById, readReadyImageCursorPage } from "../ready-cache/query.ts";
 import {
   publicImageCardsWithTags,
   publicShowImageCards,
@@ -52,8 +49,8 @@ async function listPublicImageRowsWithAccess(
   const order = query.order ?? "latest";
   const plan = await resolveImageFilterPlan(query, database);
   const context = createImageBrowseContext(order, now);
-  const position = query.cursor === undefined
-    ? undefined : decodeImageCursor(query.cursor, context);
+  const position =
+    query.cursor === undefined ? undefined : decodeImageCursor(query.cursor, context);
   const cached = await readReadyImageCursorPage(
     plan,
     limit,
@@ -73,22 +70,11 @@ async function listPublicImageRowsWithAccess(
   const fallbackKey = JSON.stringify({ ...query, limit, context });
   const load = async (reader: DatabaseReader) => {
     const { params, where } = buildResolvedReadyImageListFilters(plan);
-    return fetchPublicImageCardPage(
-      where,
-      params,
-      limit,
-      context,
-      query.view,
-      position,
-      reader
-    );
+    return fetchPublicImageCardPage(where, params, limit, context, query.view, position, reader);
   };
   const payload = database.reader
     ? await load(database.reader)
-    : await coalesce(
-        `public-images:postgres:${fallbackKey}`,
-        () => load(pool)
-      );
+    : await coalesce(`public-images:postgres:${fallbackKey}`, () => load(pool));
   return payload;
 }
 
@@ -98,15 +84,16 @@ export async function listPublicImages(
   now = Date.now()
 ): Promise<PublicImageListResponseDto<PublicImageView>> {
   const page = await (signal
-    ? withPublicDatabaseRead(signal, (database, databaseSignal) => (
+    ? withPublicDatabaseRead(signal, (database, databaseSignal) =>
         listPublicImageRowsWithAccess(query, databaseSignal, database, now)
-      ))
+      )
     : listPublicImageRowsWithAccess(query, undefined, {}, now));
   // Release the image read scope before the registry acquires its shared scope.
   return {
-    items: page.view === "show"
-      ? await publicShowImageCards(page.rows, { signal })
-      : await publicImageCardsWithTags(page.rows, { signal }),
+    items:
+      page.view === "show"
+        ? await publicShowImageCards(page.rows, { signal })
+        : await publicImageCardsWithTags(page.rows, { signal }),
     next_cursor: page.nextCursor
   };
 }
@@ -150,9 +137,7 @@ export async function getPublicImage(
   includeOriginal = false
 ): Promise<PublicImageDetailDto> {
   const row = await (signal
-    ? withPublicDatabaseRead(signal, (database) => (
-        getPublicImageRecordWithAccess(id, database)
-      ))
+    ? withPublicDatabaseRead(signal, (database) => getPublicImageRecordWithAccess(id, database))
     : getPublicImageRecordWithAccess(id, {}));
   return publicImageDetail(row, { signal }, includeOriginal);
 }

@@ -1,4 +1,3 @@
-
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 
@@ -6,64 +5,77 @@ import { runIntegrationScenario } from "./integration-runtime.mts";
 import { interceptPoolConnections, interceptSqlQueries } from "./database-faults.mts";
 
 await runIntegrationScenario(async (runtime) => {
-const databasePools = runtime.databasePools;
-const database = {
-  ...databasePools,
-  ...await import("../../../../packages/server/src/core/database/advisory-locks.ts")
-};
+  const databasePools = runtime.databasePools;
+  const database = {
+    ...databasePools,
+    ...(await import("../../../../packages/server/src/core/database/advisory-locks.ts"))
+  };
 
-const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
-const runtimeAvailability = await import("../../../../packages/server/src/core/runtime-availability.ts");
-const readyCacheCoordinator = await import("../../../../packages/server/src/images/ready-cache/coordinator.ts");
-const ingestionOrphanCleanup = await import("../../../../packages/server/src/images/ingestion/cleanup/orphans.ts");
-const adminImagesReadModel = await import("../../../../packages/server/src/images/read-models/admin-images.ts");
-const publicImagesReadModel = await import("../../../../packages/server/src/images/read-models/public-images.ts");
-const imageFilterPlan = await import("../../../../packages/server/src/images/filter-plan.ts");
-const readyCacheFilterIndex = await import("../../../../packages/server/src/images/ready-cache/indexes/filter.ts");
-const vocabCache = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
-await runtimeAvailability.requireOperationalRedis();
-const duplicates = await import("../../../../packages/server/src/images/read-models/duplicates.ts");
-const duplicateIds = [randomUUID(), randomUUID()];
-const duplicateMd5 = createHash("md5").update("duplicate-authority").digest("hex");
-try {
-  for (const [index, id] of duplicateIds.entries()) {
-    await database.pool.query(
-      `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
+  const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
+  const runtimeAvailability =
+    await import("../../../../packages/server/src/core/runtime-availability.ts");
+  const readyCacheCoordinator =
+    await import("../../../../packages/server/src/images/ready-cache/coordinator.ts");
+  const ingestionOrphanCleanup =
+    await import("../../../../packages/server/src/images/ingestion/cleanup/orphans.ts");
+  const adminImagesReadModel =
+    await import("../../../../packages/server/src/images/read-models/admin-images.ts");
+  const publicImagesReadModel =
+    await import("../../../../packages/server/src/images/read-models/public-images.ts");
+  const imageFilterPlan = await import("../../../../packages/server/src/images/filter-plan.ts");
+  const readyCacheFilterIndex =
+    await import("../../../../packages/server/src/images/ready-cache/indexes/filter.ts");
+  const vocabCache = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
+  await runtimeAvailability.requireOperationalRedis();
+  const duplicates =
+    await import("../../../../packages/server/src/images/read-models/duplicates.ts");
+  const duplicateIds = [randomUUID(), randomUUID()];
+  const duplicateMd5 = createHash("md5").update("duplicate-authority").digest("hex");
+  try {
+    for (const [index, id] of duplicateIds.entries()) {
+      await database.pool.query(
+        `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3)`,
-      [
-        id,
-        duplicateMd5,
-        index === 0 ? "ready" : "deleted"
-      ]
+        [id, duplicateMd5, index === 0 ? "ready" : "deleted"]
+      );
+    }
+    const snapshots = await duplicates.readDuplicateSnapshotsByMd5([duplicateMd5, "f".repeat(32)]);
+    const snapshot = snapshots.get(duplicateMd5);
+    assert.ok(snapshot);
+    assert.equal(snapshot.matchCount, 1);
+    assert.deepEqual(
+      snapshot.items.map((item) => item.id),
+      [duplicateIds[0]]
     );
+    assert.deepEqual(snapshots.get("f".repeat(32)), { matchCount: 0, items: [] });
+    await database.pool.query("UPDATE metadata SET status='deleted' WHERE id=$1", [
+      duplicateIds[0]
+    ]);
+    assert.deepEqual(
+      await duplicates.readDuplicateSnapshotByMd5(duplicateMd5),
+      {
+        matchCount: 0,
+        items: []
+      },
+      "duplicate results must follow current PostgreSQL ready rows"
+    );
+  } finally {
+    await database.pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [duplicateIds]);
   }
-  const snapshots = await duplicates.readDuplicateSnapshotsByMd5([duplicateMd5, "f".repeat(32)]);
-  const snapshot = snapshots.get(duplicateMd5);
-  assert.ok(snapshot);
-  assert.equal(snapshot.matchCount, 1);
-  assert.deepEqual(snapshot.items.map((item) => item.id), [duplicateIds[0]]);
-  assert.deepEqual(snapshots.get("f".repeat(32)), { matchCount: 0, items: [] });
-  await database.pool.query("UPDATE metadata SET status='deleted' WHERE id=$1", [duplicateIds[0]]);
-  assert.deepEqual(await duplicates.readDuplicateSnapshotByMd5(duplicateMd5), {
-    matchCount: 0, items: []
-  }, "duplicate results must follow current PostgreSQL ready rows");
-} finally {
-  await database.pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [duplicateIds]);
-}
-await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
+  await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   const paginationIds = [randomUUID(), randomUUID(), randomUUID()];
   const paginationNewest = "2026-08-15T00:00:00.000Z";
   const paginationOlder = "2026-08-14T00:00:00.000Z";
   await database.pool.query(
-    "INSERT INTO tag(slug, display_name) VALUES "
-      + "('pagination-old', 'Pagination old'), "
-      + "('pagination-new', 'Pagination new') "
-      + "ON CONFLICT (slug) DO NOTHING"
+    "INSERT INTO tag(slug, display_name) VALUES " +
+      "('pagination-old', 'Pagination old'), " +
+      "('pagination-new', 'Pagination new') " +
+      "ON CONFLICT (slug) DO NOTHING"
   );
   await database.pool.query(
-    "INSERT INTO author(slug, display_name) VALUES "
-      + "('alice', 'Alice'), ('bob', 'Bob') "
-      + "ON CONFLICT (slug) DO NOTHING"
+    "INSERT INTO author(slug, display_name) VALUES " +
+      "('alice', 'Alice'), ('bob', 'Bob') " +
+      "ON CONFLICT (slug) DO NOTHING"
   );
   for (const [position, id] of paginationIds.entries()) {
     await database.pool.query(
@@ -82,10 +94,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     "INSERT INTO image_tag(image_id, tag_slug) VALUES ($1, 'pagination-old')",
     [paginationIds[0]]
   );
-  const initialPaginationOrder = [
-    ...paginationIds.slice(0, 2).sort().reverse(),
-    paginationIds[2]
-  ];
+  const initialPaginationOrder = [...paginationIds.slice(0, 2).sort().reverse(), paginationIds[2]];
   const firstDeletedPage = await adminImagesReadModel.listAdminImages({
     status: "deleted",
     page: 1,
@@ -104,7 +113,8 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
         pageWindowSelects += 1;
       }
       return query();
-    }));
+    })
+  );
   try {
     const outside = await adminImagesReadModel.listAdminImages({
       status: "deleted",
@@ -132,12 +142,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     let gated = false;
     return interceptSqlQueries(client, async (sql, _values, query) => {
       const result = await query();
-      if (
-        !gated
-        && /^SELECT count\(\*\)::text AS count FROM metadata WHERE/.test(
-          sql.trim()
-        )
-      ) {
+      if (!gated && /^SELECT count\(\*\)::text AS count FROM metadata WHERE/.test(sql.trim())) {
         gated = true;
         countObserved();
         await snapshotGate;
@@ -153,28 +158,22 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   const concurrentPaginationId = randomUUID();
   let snapshotPage;
   try {
-  await Promise.race([countReached, snapshotRead.then(() => assert.fail("snapshot count must be intercepted"))]);
-  await database.pool.query(
-    `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, author, image_time, deleted_at, title)
+    await Promise.race([
+      countReached,
+      snapshotRead.then(() => assert.fail("snapshot count must be intercepted"))
+    ]);
+    await database.pool.query(
+      `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, author, image_time, deleted_at, title)
        VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, 'alice', '2026-08-16T00:00:00.000Z', now(), 'pagination-concurrent')`,
-    [
-        concurrentPaginationId,
-        "8".repeat(32)
-      ]
-  );
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id=$1",
-    [paginationIds[2]]
-  );
-  await database.pool.query(
-    "DELETE FROM image_tag WHERE image_id=$1",
-    [paginationIds[0]]
-  );
-  await database.pool.query(
-    "INSERT INTO image_tag(image_id, tag_slug) VALUES ($1, 'pagination-new')",
-    [paginationIds[0]]
-  );
-  releaseSnapshot();
+      [concurrentPaginationId, "8".repeat(32)]
+    );
+    await database.pool.query("DELETE FROM metadata WHERE id=$1", [paginationIds[2]]);
+    await database.pool.query("DELETE FROM image_tag WHERE image_id=$1", [paginationIds[0]]);
+    await database.pool.query(
+      "INSERT INTO image_tag(image_id, tag_slug) VALUES ($1, 'pagination-new')",
+      [paginationIds[0]]
+    );
+    releaseSnapshot();
     snapshotPage = await snapshotRead;
   } finally {
     releaseSnapshot();
@@ -189,10 +188,9 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     snapshotPage.items.map((item) => item.id),
     initialPaginationOrder
   );
-  assert.deepEqual(
-    snapshotPage.items.find((item) => item.id === paginationIds[0])?.tags,
-    ["pagination-old"]
-  );
+  assert.deepEqual(snapshotPage.items.find((item) => item.id === paginationIds[0])?.tags, [
+    "pagination-old"
+  ]);
   const currentDeletedPage = await adminImagesReadModel.listAdminImages({
     status: "deleted",
     page: 1,
@@ -207,22 +205,14 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     currentDeletedPage.items.some((item) => item.id === paginationIds[2]),
     false
   );
-  assert.deepEqual(
-    currentDeletedPage.items.find(
-      (item) => item.id === paginationIds[0]
-    )?.tags,
-    ["pagination-new"]
-  );
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id = ANY($1::uuid[])",
-    [[...paginationIds, concurrentPaginationId]]
-  );
-  await database.pool.query(
-    "DELETE FROM tag WHERE slug IN ('pagination-old', 'pagination-new')"
-  );
-  await database.pool.query(
-    "DELETE FROM author WHERE slug IN ('alice', 'bob')"
-  );
+  assert.deepEqual(currentDeletedPage.items.find((item) => item.id === paginationIds[0])?.tags, [
+    "pagination-new"
+  ]);
+  await database.pool.query("DELETE FROM metadata WHERE id = ANY($1::uuid[])", [
+    [...paginationIds, concurrentPaginationId]
+  ]);
+  await database.pool.query("DELETE FROM tag WHERE slug IN ('pagination-old', 'pagination-new')");
+  await database.pool.query("DELETE FROM author WHERE slug IN ('alice', 'bob')");
 
   const matrixTheme = "pagination-matrix";
   const matrixTag = "pagination-matrix";
@@ -243,8 +233,8 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     [matrixTheme]
   );
   await database.pool.query(
-    "INSERT INTO tag(slug, display_name) VALUES "
-      + "($1, 'Pagination matrix'), ($2, 'Pagination extra'), ($3, 'Pagination empty')",
+    "INSERT INTO tag(slug, display_name) VALUES " +
+      "($1, 'Pagination matrix'), ($2, 'Pagination extra'), ($3, 'Pagination empty')",
     [matrixTag, matrixExtraTag, matrixEmptyTag]
   );
   await database.pool.query(
@@ -275,22 +265,19 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
         "pagination-matrix-" + String(position)
       ]
     );
-    await database.pool.query(
-      "INSERT INTO image_tag(image_id, tag_slug) VALUES ($1, $2)",
-      [id, matrixTag]
-    );
+    await database.pool.query("INSERT INTO image_tag(image_id, tag_slug) VALUES ($1, $2)", [
+      id,
+      matrixTag
+    ]);
   }
-  await database.pool.query(
-    "INSERT INTO image_tag(image_id, tag_slug) VALUES ($1, $2)",
-    [matrixIds[0], matrixExtraTag]
-  );
+  await database.pool.query("INSERT INTO image_tag(image_id, tag_slug) VALUES ($1, $2)", [
+    matrixIds[0],
+    matrixExtraTag
+  ]);
   await vocabCache.refreshEntityVocabularies(["theme", "tag", "author"]);
   await runtimeAvailability.requireOperationalRedis();
   await readyCacheCoordinator.requestReadyImageCacheRebuild();
-  assert.equal(
-    readyCacheCoordinator.getReadyImageCacheCoordinatorStatus().readable,
-    true
-  );
+  assert.equal(readyCacheCoordinator.getReadyImageCacheCoordinatorStatus().readable, true);
 
   const readyPageMatrix: Array<{
     name: string;
@@ -360,17 +347,19 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     }
   ];
   for (const entry of readyPageMatrix) {
-    const plan = await imageFilterPlan.resolveImageFilterPlan(
-      entry.query,
-      { redisMode: "required" }
-    );
+    const plan = await imageFilterPlan.resolveImageFilterPlan(entry.query, {
+      redisMode: "required"
+    });
     assert.ok(
       await readyCacheFilterIndex.resolveReadyImageFilterIndex(plan),
       "matrix index must be warm: " + entry.name
     );
   }
 
-  const redisMatrixPages = new Map<string, Awaited<ReturnType<typeof adminImagesReadModel.listAdminImages>>>();
+  const redisMatrixPages = new Map<
+    string,
+    Awaited<ReturnType<typeof adminImagesReadModel.listAdminImages>>
+  >();
   const publicCursorPages: Array<{
     query: Parameters<typeof publicImagesReadModel.listPublicImages>[0];
     page: Awaited<ReturnType<typeof publicImagesReadModel.listPublicImages>>;
@@ -382,10 +371,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   try {
     for (const entry of readyPageMatrix) {
       const connectionsBefore = redisMatrixConnections;
-      redisMatrixPages.set(
-        entry.name,
-        await adminImagesReadModel.listAdminImages(entry.query)
-      );
+      redisMatrixPages.set(entry.name, await adminImagesReadModel.listAdminImages(entry.query));
       assert.equal(
         redisMatrixConnections,
         connectionsBefore,
@@ -398,10 +384,16 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
       let cursor;
       for (const pageIndex of [0, 1]) {
         const query = {
-          status: "ready", view: "gallery", theme: matrixTheme, limit: 3, order, cursor
+          status: "ready",
+          view: "gallery",
+          theme: matrixTheme,
+          limit: 3,
+          order,
+          cursor
         } as const;
         const page = await publicImagesReadModel.listPublicImages(
-          query, new AbortController().signal
+          query,
+          new AbortController().signal
         );
         assert.deepEqual(
           page.items.map((item) => item.id),
@@ -409,7 +401,8 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
           "public cursor must preserve time/ID order without repeating its anchor: " + order
         );
         assert.equal(
-          redisMatrixConnections, 0,
+          redisMatrixConnections,
+          0,
           "both public cursor directions must stay on warm Redis: " + order
         );
         if (pageIndex === 0) assert.ok(page.next_cursor);
@@ -438,8 +431,10 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   );
   assert.equal(lastThemePage.items.length, 3, "末页恰好填满时不得少读");
   assert.deepEqual(
-    [...redisMatrixPages.get("theme-oldest-first")!.items,
-      ...redisMatrixPages.get("theme-oldest-last")!.items].map((item) => item.id),
+    [
+      ...redisMatrixPages.get("theme-oldest-first")!.items,
+      ...redisMatrixPages.get("theme-oldest-last")!.items
+    ].map((item) => item.id),
     [...matrixOrder].reverse(),
     "oldest admin pages must reverse both time and UUID ordering"
   );
@@ -449,9 +444,7 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     matrixOrder.filter((id) => matrixIds.slice(0, 2).includes(id))
   );
   assert.deepEqual(
-    redisMatrixPages.get("tag")!.items.find(
-      (item) => item.id === matrixIds[0]
-    )?.tags,
+    redisMatrixPages.get("tag")!.items.find((item) => item.id === matrixIds[0])?.tags,
     [matrixExtraTag, matrixTag]
   );
 
@@ -473,23 +466,20 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     }
     return rebuildingRedisSendCommand.call(this, command, ...args);
   };
-  const controlledRebuild =
-    readyCacheCoordinator.requestReadyImageCacheRebuild();
+  const controlledRebuild = readyCacheCoordinator.requestReadyImageCacheRebuild();
   let restoreFallbackConnections = () => {};
   try {
-  await Promise.race([rebuildCommandStarted, controlledRebuild.then(() => assert.fail("rebuild must be intercepted"))]);
-  assert.equal(
-    readyCacheCoordinator.getReadyImageCacheCoordinatorStatus().rebuilding,
-    true
-  );
-  let rebuildingFallbackConnections = 0;
-  restoreFallbackConnections = interceptPoolConnections(database.pool, () => {
-    rebuildingFallbackConnections += 1;
-  });
+    await Promise.race([
+      rebuildCommandStarted,
+      controlledRebuild.then(() => assert.fail("rebuild must be intercepted"))
+    ]);
+    assert.equal(readyCacheCoordinator.getReadyImageCacheCoordinatorStatus().rebuilding, true);
+    let rebuildingFallbackConnections = 0;
+    restoreFallbackConnections = interceptPoolConnections(database.pool, () => {
+      rebuildingFallbackConnections += 1;
+    });
     for (const entry of readyPageMatrix) {
-      const rebuildingFallback = await adminImagesReadModel.listAdminImages(
-        entry.query
-      );
+      const rebuildingFallback = await adminImagesReadModel.listAdminImages(entry.query);
       assert.deepEqual(
         rebuildingFallback,
         redisMatrixPages.get(entry.name),
@@ -498,17 +488,12 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     }
     for (const { query, page } of publicCursorPages) {
       assert.deepEqual(
-        await publicImagesReadModel.listPublicImages(
-          query, new AbortController().signal
-        ),
+        await publicImagesReadModel.listPublicImages(query, new AbortController().signal),
         page,
         "public Redis/PostgreSQL cursor pages must agree: " + query.order
       );
     }
-    assert.equal(
-      rebuildingFallbackConnections,
-      readyPageMatrix.length + publicCursorPages.length
-    );
+    assert.equal(rebuildingFallbackConnections, readyPageMatrix.length + publicCursorPages.length);
   } finally {
     restoreFallbackConnections();
     releaseRebuildCommand();
@@ -609,39 +594,54 @@ await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
     for (const sort_by of ["image_time", "created_at"] as const) {
       for (const order of ["latest", "oldest"] as const) {
         for (const unset of [false, true]) {
-          const expected = sortRows.filter((row) => !unset || row.unset).sort((a, b) => {
-            const comparison = a[sort_by].localeCompare(b[sort_by]) || a.id.localeCompare(b.id);
-            return order === "latest" ? -comparison : comparison;
-          });
+          const expected = sortRows
+            .filter((row) => !unset || row.unset)
+            .sort((a, b) => {
+              const comparison = a[sort_by].localeCompare(b[sort_by]) || a.id.localeCompare(b.id);
+              return order === "latest" ? -comparison : comparison;
+            });
           const seen: string[] = [];
           for (let page = 1; page <= Math.ceil(expected.length / 2) + 1; page += 1) {
             const result = await adminImagesReadModel.listAdminImages({
-              status, sort_by, order, tag: matrixTag,
-              ...(unset ? { theme: "null" } : {}), page, limit: 2
+              status,
+              sort_by,
+              order,
+              tag: matrixTag,
+              ...(unset ? { theme: "null" } : {}),
+              page,
+              limit: 2
             });
             assert.equal(result.total, expected.length);
-            assert.deepEqual(result.items.map((item) => item.id),
+            assert.deepEqual(
+              result.items.map((item) => item.id),
               expected.slice((page - 1) * 2, page * 2).map((row) => row.id),
-              `${status}/${sort_by}/${order}/unset=${unset}/page=${page}`);
+              `${status}/${sort_by}/${order}/unset=${unset}/page=${page}`
+            );
             seen.push(...result.items.map((item) => item.id));
           }
-          assert.deepEqual(seen, expected.map((row) => row.id));
+          assert.deepEqual(
+            seen,
+            expected.map((row) => row.id)
+          );
         }
-        assert.deepEqual(await adminImagesReadModel.listAdminImages({
-          status, sort_by, order, tag: matrixEmptyTag, page: 1, limit: 2
-        }), { items: [], total: 0 });
+        assert.deepEqual(
+          await adminImagesReadModel.listAdminImages({
+            status,
+            sort_by,
+            order,
+            tag: matrixEmptyTag,
+            page: 1,
+            limit: 2
+          }),
+          { items: [], total: 0 }
+        );
       }
     }
   }
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id = ANY($1::uuid[])",
-    [matrixIds]
-  );
-  await database.pool.query(
-    "DELETE FROM tag WHERE slug = ANY($1::text[])",
-    [[matrixTag, matrixExtraTag, matrixEmptyTag]]
-  );
+  await database.pool.query("DELETE FROM metadata WHERE id = ANY($1::uuid[])", [matrixIds]);
+  await database.pool.query("DELETE FROM tag WHERE slug = ANY($1::text[])", [
+    [matrixTag, matrixExtraTag, matrixEmptyTag]
+  ]);
   await database.pool.query("DELETE FROM theme WHERE slug=$1", [matrixTheme]);
   await database.pool.query("DELETE FROM author WHERE slug=$1", [matrixAuthor]);
-
 });

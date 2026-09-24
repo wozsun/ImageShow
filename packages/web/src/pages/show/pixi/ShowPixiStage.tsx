@@ -12,10 +12,7 @@ import { PublicStarfield } from "../../../components/layout/PublicStarfield.js";
 import type { ShowImage } from "../show-layout.js";
 import type { ShowCandidateUsage } from "../show-data-pool.js";
 import { ShowPixiRuntime } from "./show-pixi-runtime.js";
-import type {
-  ShowPixiSceneKind,
-  ShowPixiVisibleItem
-} from "./show-pixi-types.js";
+import type { ShowPixiSceneKind, ShowPixiVisibleItem } from "./show-pixi-types.js";
 
 function imageLabel(image: ShowImage) {
   const title = image.title?.trim();
@@ -75,9 +72,9 @@ export function ShowPixiStage({
   const [runtime, setRuntime] = useState<ShowPixiRuntime | null>(null);
   const [visibleItems, setVisibleItems] = useState<readonly ShowPixiVisibleItem[]>([]);
   const [initializationError, setInitializationError] = useState("");
-  const [diagnosticsEnabled] = useState(() => (
-    import.meta.env.DEV || window.__imageShowPixiDiagnostics === true
-  ));
+  const [diagnosticsEnabled] = useState(
+    () => import.meta.env.DEV || window.__imageShowPixiDiagnostics === true
+  );
 
   const handFocusToPointer = (event: PointerEvent<HTMLDivElement>) => {
     if (!event.isTrusted || dialogOpen || !(event.target instanceof HTMLCanvasElement)) return;
@@ -108,54 +105,55 @@ export function ShowPixiStage({
     // React Strict Mode runs a development-only setup/cleanup/setup cycle.
     // Defer the expensive asynchronous WebGL initialization by one microtask
     // so the discarded setup never creates a second Application or canvas.
-    void Promise.resolve().then(() => {
-      if (disposed) return null;
-      return ShowPixiRuntime.create(host, {
-        scene,
-        images,
-        hasMore,
-        dataKey,
-        order,
-        waterfallColumns,
-        floatSizeIndex,
-        running,
-        reducedMotion,
-        speed,
-        statsElement: statsRef.current,
-        onColumnsChange: handleColumnsChange,
-        onFloatSizeIndexChange: handleFloatSizeIndexChange,
-        onManualVerticalMovement: handleManualVerticalMovement,
-        onMotionActiveChange: (active) => {
-          if (!disposed) handleMotionActiveChange(active);
-        },
-        onNeedImages: (usage) => {
-          if (!disposed) handleNeedImages(usage);
-        },
-        onOpen: (image) => {
-          // Canvas activation comes from a pointer, not the keyboard proxy.
-          // Restoring focus to that proxy would grant a persistent focus/motion
-          // lease to a card that was only clicked. Keyboard activation below
-          // still returns to its actual button for continued navigation.
-          handleOpen(image, host);
-        },
-        onVisibleItems: publishVisible
+    void Promise.resolve()
+      .then(() => {
+        if (disposed) return null;
+        return ShowPixiRuntime.create(host, {
+          scene,
+          images,
+          hasMore,
+          dataKey,
+          order,
+          waterfallColumns,
+          floatSizeIndex,
+          running,
+          reducedMotion,
+          speed,
+          statsElement: statsRef.current,
+          onColumnsChange: handleColumnsChange,
+          onFloatSizeIndexChange: handleFloatSizeIndexChange,
+          onManualVerticalMovement: handleManualVerticalMovement,
+          onMotionActiveChange: (active) => {
+            if (!disposed) handleMotionActiveChange(active);
+          },
+          onNeedImages: (usage) => {
+            if (!disposed) handleNeedImages(usage);
+          },
+          onOpen: (image) => {
+            // Canvas activation comes from a pointer, not the keyboard proxy.
+            // Restoring focus to that proxy would grant a persistent focus/motion
+            // lease to a card that was only clicked. Keyboard activation below
+            // still returns to its actual button for continued navigation.
+            handleOpen(image, host);
+          },
+          onVisibleItems: publishVisible
+        });
+      })
+      .then((created) => {
+        if (!created) return;
+        if (disposed) {
+          created.destroy();
+          return;
+        }
+        if (diagnosticsEnabled) created.exposeDebug();
+        runtimeRef.current = created;
+        setRuntime(created);
+        setInitializationError("");
+      })
+      .catch((error: unknown) => {
+        if (disposed) return;
+        setInitializationError(error instanceof Error ? error.message : "WebGL 初始化失败");
       });
-    }).then((created) => {
-      if (!created) return;
-      if (disposed) {
-        created.destroy();
-        return;
-      }
-      if (diagnosticsEnabled) created.exposeDebug();
-      runtimeRef.current = created;
-      setRuntime(created);
-      setInitializationError("");
-    }).catch((error: unknown) => {
-      if (disposed) return;
-      setInitializationError(
-        error instanceof Error ? error.message : "WebGL 初始化失败"
-      );
-    });
     return () => {
       disposed = true;
       if (visibleTimer !== undefined) window.clearTimeout(visibleTimer);
@@ -186,8 +184,11 @@ export function ShowPixiStage({
     const focused = list?.ownerDocument.activeElement;
     // Removing a focused proxy does not dispatch blur. Reconcile against the
     // committed DOM so recycled/offscreen cards cannot retain its motion lease.
-    runtime?.focusCard(!dialogOpen && focused && list?.contains(focused)
-      ? focused.getAttribute("data-show-pixi-key") : null);
+    runtime?.focusCard(
+      !dialogOpen && focused && list?.contains(focused)
+        ? focused.getAttribute("data-show-pixi-key")
+        : null
+    );
   }, [runtime, visibleItems, dialogOpen]);
 
   const sceneClassName = scene === "waterfall" ? "is-waterfall" : "is-float";
@@ -234,11 +235,7 @@ export function ShowPixiStage({
         </div>
       )}
       {children}
-      {diagnosticsEnabled && <output
-        ref={statsRef}
-        hidden
-        data-show-pixi-debug-stats=""
-      />}
+      {diagnosticsEnabled && <output ref={statsRef} hidden data-show-pixi-debug-stats="" />}
     </div>
   );
 }

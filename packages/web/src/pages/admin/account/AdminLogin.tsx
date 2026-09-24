@@ -5,10 +5,7 @@ import type { AdminLoginResultDto } from "@imageshow/shared/browser";
 import { api, clearCsrfToken, setCsrfToken } from "../../../lib/api/client.js";
 import { PasswordInput } from "../../../components/form/PasswordInput.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
-import {
-  clearSessionProbeHint,
-  rememberSessionProbeHint
-} from "../../../lib/api/auth-session.js";
+import { clearSessionProbeHint, rememberSessionProbeHint } from "../../../lib/api/auth-session.js";
 import { cssUrl } from "../../../lib/ui/formatters.js";
 import { establishAndConfirmAdminSession } from "./admin-login-session.js";
 import { useLoginVisualViewport } from "./useLoginVisualViewport.js";
@@ -16,14 +13,19 @@ import { useLoginVisualViewport } from "./useLoginVisualViewport.js";
 import "../../../styles/admin/semantic-colors.css";
 import "../../../styles/admin/login.css";
 
-const LoginChallenge = lazy(() => import("./LoginChallenge.js").then((module) => ({
-  default: module.LoginChallenge
-})));
+const LoginChallenge = lazy(() =>
+  import("./LoginChallenge.js").then((module) => ({
+    default: module.LoginChallenge
+  }))
+);
 
-class LoginChallengeModuleBoundary extends Component<{
-  children: ReactNode;
-  onError: () => void;
-}, { failed: boolean }> {
+class LoginChallengeModuleBoundary extends Component<
+  {
+    children: ReactNode;
+    onError: () => void;
+  },
+  { failed: boolean }
+> {
   state = { failed: false };
 
   static getDerivedStateFromError() {
@@ -120,69 +122,73 @@ export function AdminLogin({
         backgroundImage: `linear-gradient(var(--admin-color-login-overlay-start), var(--admin-color-login-overlay-end)), ${cssUrl(background)}`
       }}
     >
-      <form onSubmit={async (event) => {
-        event.preventDefault();
-        if (submissionActiveRef.current) return;
-        if (serverSessionRef.current.established) {
-          // 浏览器会缓存同一页面里失败过的模块导入；新页面既会重新请求资源，
-          // 又会创建全新 QueryClient，因此无需重复登录或清理旧用户缓存。
-          location.reload();
-          return;
-        }
-        if (!credentialsComplete) return;
-        let altcha: string | undefined;
-        if (altchaEnabled) {
-          const proof = new FormData(event.currentTarget).get("altcha");
-          if (typeof proof !== "string" || proof.length === 0) return;
-          altcha = proof;
-        }
-
-        submissionActiveRef.current = true;
-        setError("");
-        setLoggingIn(true);
-        try {
-          const authenticated = await establishAndConfirmAdminSession(
-            serverSessionRef.current,
-            async () => {
-              const response = await api<AdminLoginResultDto>(`${adminApiBasePath}/auth/login`, {
-                method: "POST",
-                body: JSON.stringify({ username, password, ...(altcha ? { altcha } : {}) })
-              });
-              setCsrfToken(response.csrf_token);
-              rememberSessionProbeHint();
-              setServerSessionEstablished(true);
-            },
-            onLogin
-          );
-          if (authenticated) return;
-
-          clearCsrfToken();
-          clearSessionProbeHint();
-          setServerSessionEstablished(false);
-          setError("登录状态确认失败，请重新登录");
-          if (altchaEnabled) {
-            setChallengeVerified(false);
-            challengeRef.current?.reset();
-          }
-          submissionActiveRef.current = false;
-          setLoggingIn(false);
-        } catch (caught) {
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (submissionActiveRef.current) return;
           if (serverSessionRef.current.established) {
-            setError("登录已成功，但后台加载失败，请重新加载后台");
-          } else {
+            // 浏览器会缓存同一页面里失败过的模块导入；新页面既会重新请求资源，
+            // 又会创建全新 QueryClient，因此无需重复登录或清理旧用户缓存。
+            location.reload();
+            return;
+          }
+          if (!credentialsComplete) return;
+          let altcha: string | undefined;
+          if (altchaEnabled) {
+            const proof = new FormData(event.currentTarget).get("altcha");
+            if (typeof proof !== "string" || proof.length === 0) return;
+            altcha = proof;
+          }
+
+          submissionActiveRef.current = true;
+          setError("");
+          setLoggingIn(true);
+          try {
+            const authenticated = await establishAndConfirmAdminSession(
+              serverSessionRef.current,
+              async () => {
+                const response = await api<AdminLoginResultDto>(`${adminApiBasePath}/auth/login`, {
+                  method: "POST",
+                  body: JSON.stringify({ username, password, ...(altcha ? { altcha } : {}) })
+                });
+                setCsrfToken(response.csrf_token);
+                rememberSessionProbeHint();
+                setServerSessionEstablished(true);
+              },
+              onLogin
+            );
+            if (authenticated) return;
+
             clearCsrfToken();
             clearSessionProbeHint();
-            setError((caught as Error).message);
+            setServerSessionEstablished(false);
+            setError("登录状态确认失败，请重新登录");
             if (altchaEnabled) {
               setChallengeVerified(false);
               challengeRef.current?.reset();
             }
+            submissionActiveRef.current = false;
+            setLoggingIn(false);
+          } catch (caught) {
+            if (serverSessionRef.current.established) {
+              setError("登录已成功，但后台加载失败，请重新加载后台");
+            } else {
+              clearCsrfToken();
+              clearSessionProbeHint();
+              setError((caught as Error).message);
+              if (altchaEnabled) {
+                setChallengeVerified(false);
+                challengeRef.current?.reset();
+              }
+            }
+            submissionActiveRef.current = false;
+            setLoggingIn(false);
           }
-          submissionActiveRef.current = false;
-          setLoggingIn(false);
-        }
-      }}>
-        <a className="login-site-title" href="/"><h1>{siteHeaderName}</h1></a>
+        }}
+      >
+        <a className="login-site-title" href="/">
+          <h1>{siteHeaderName}</h1>
+        </a>
         <input
           name="username"
           value={username}
@@ -218,16 +224,18 @@ export function AdminLogin({
             )}
           </div>
         )}
-        {error && <p className="login-error" role="alert" title={error}>{error}</p>}
+        {error && (
+          <p className="login-error" role="alert" title={error}>
+            {error}
+          </p>
+        )}
         <button
           id="admin-login-submit"
           className="button"
           disabled={
-            loggingIn
-            || (
-              !serverSessionEstablished
-              && (!credentialsComplete || !challengeLoaded || !challengeVerified)
-            )
+            loggingIn ||
+            (!serverSessionEstablished &&
+              (!credentialsComplete || !challengeLoaded || !challengeVerified))
           }
           type="submit"
         >

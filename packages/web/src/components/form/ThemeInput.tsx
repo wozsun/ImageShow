@@ -8,7 +8,13 @@ function parseThemeInput(value: string) {
   return slug === unsetThemeFilter ? "" : slug;
 }
 
-export function ThemeInput({ themes, value, className, placeholder, ...rest }: {
+export function ThemeInput({
+  themes,
+  value,
+  className,
+  placeholder,
+  ...rest
+}: {
   value: string | null;
   onChange: (value: string) => void;
   themes: FacetOption[];

@@ -1,9 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent
-} from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {
   parseAdminPaginationPage,
   releaseAdminPaginationSubmission,
@@ -20,7 +15,7 @@ export function AdminPagination({
   className,
   disabled = false,
   previousDisabled = false,
-  nextDisabled = false,
+  nextDisabled = false
 }: {
   page: number;
   totalPages: number;
@@ -64,13 +59,13 @@ export function AdminPagination({
     submittedPageRef.current = commit.submittedPage;
     if (commit.targetPage !== null) onPageChange(commit.targetPage);
   };
-  const preservePageInputFocus = (
-    event: ReactPointerEvent<HTMLButtonElement>
-  ) => {
-    if (shouldPreserveAdminPaginationInputFocus(
-      event.button,
-      document.activeElement === pageInputRef.current
-    )) {
+  const preservePageInputFocus = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (
+      shouldPreserveAdminPaginationInputFocus(
+        event.button,
+        document.activeElement === pageInputRef.current
+      )
+    ) {
       event.preventDefault();
     }
   };
@@ -104,16 +99,16 @@ export function AdminPagination({
             const value = event.target.value;
             submittedPageRef.current = null;
             setPageInput(value);
-            setPageInputInvalid(
-              parseAdminPaginationPage(value, totalPages) === null
-            );
+            setPageInputInvalid(parseAdminPaginationPage(value, totalPages) === null);
           }}
           onKeyDown={(event) => {
-            if (!shouldCommitAdminPaginationInput(
-              event.key,
-              event.nativeEvent.isComposing,
-              event.keyCode
-            )) {
+            if (
+              !shouldCommitAdminPaginationInput(
+                event.key,
+                event.nativeEvent.isComposing,
+                event.keyCode
+              )
+            ) {
               return;
             }
             event.preventDefault();

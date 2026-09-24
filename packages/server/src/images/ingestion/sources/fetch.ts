@@ -6,10 +6,7 @@ import { ApiError } from "../../../core/api-error.ts";
 import { safeFetchExternalImage } from "../../../core/external-image-fetch.ts";
 import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
 import { nodeReadableFromWeb } from "../../../storage/objects/stream-buffer.ts";
-import {
-  calculateDownloadProgress,
-  downloadProgressLength
-} from "./download-progress.ts";
+import { calculateDownloadProgress, downloadProgressLength } from "./download-progress.ts";
 import { publishIngestionRawPart } from "../raw/files.ts";
 
 async function fetchImportResponse(url: string, limitBytes: number, externalSignal?: AbortSignal) {
@@ -23,7 +20,9 @@ async function fetchImportResponse(url: string, limitBytes: number, externalSign
     });
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined);
-      throw new ApiError(400, "import_fetch_failed", `下载失败（HTTP ${response.status}）`, { url });
+      throw new ApiError(400, "import_fetch_failed", `下载失败（HTTP ${response.status}）`, {
+        url
+      });
     }
     const declared = downloadProgressLength(response.headers);
     if (declared !== undefined && declared > limitBytes) {
@@ -65,13 +64,18 @@ export async function fetchImportImageToFile(
   const limiter = new TransformStream<Uint8Array, Uint8Array>({
     transform(chunk, controller) {
       total += chunk.byteLength;
-      if (total > limitBytes) throw new ApiError(400, "import_too_large", "图片大小超过限制", { limit: limitBytes });
+      if (total > limitBytes)
+        throw new ApiError(400, "import_too_large", "图片大小超过限制", { limit: limitBytes });
       reportProgress();
       controller.enqueue(chunk);
     }
   });
   try {
-    await pipeline(nodeReadableFromWeb(fetched.response.body.pipeThrough(limiter)), createWriteStream(part), { signal });
+    await pipeline(
+      nodeReadableFromWeb(fetched.response.body.pipeThrough(limiter)),
+      createWriteStream(part),
+      { signal }
+    );
     await publishIngestionRawPart(part, target, signal);
     return total;
   } catch (error) {
@@ -79,7 +83,12 @@ export async function fetchImportImageToFile(
     // this attempt owns only the partial file until atomic publication.
     await rm(part, { force: true });
     if ((error as Error).name === "AbortError") {
-      throw new ApiError(signal?.aborted ? 409 : 400, signal?.aborted ? "ingestion_cancelled" : "import_timeout", signal?.aborted ? "导入已取消" : "下载超时", { url });
+      throw new ApiError(
+        signal?.aborted ? 409 : 400,
+        signal?.aborted ? "ingestion_cancelled" : "import_timeout",
+        signal?.aborted ? "导入已取消" : "下载超时",
+        { url }
+      );
     }
     throw error;
   }

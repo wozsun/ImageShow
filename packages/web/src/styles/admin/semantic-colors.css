@@ -28,32 +28,47 @@
   --admin-color-control-placeholder: light-dark(#9ba5b1, #555d67);
   --admin-color-control-surface-muted: light-dark(#eef2f7, var(--color-dark-surface-muted));
   --admin-color-control-surface-hover: light-dark(#eef5ff, var(--color-dark-control-surface-hover));
-  --admin-color-control-surface-subtle-hover: light-dark(#f1f3f6, var(--color-dark-control-surface-subtle-hover));
+  --admin-color-control-surface-subtle-hover: light-dark(
+    #f1f3f6,
+    var(--color-dark-control-surface-subtle-hover)
+  );
   --admin-color-control-border-hover: light-dark(#aeb8c5, var(--color-dark-control-border-hover));
-  --admin-color-control-border-selected: light-dark(#9fc2f5, var(--color-dark-control-border-selected));
+  --admin-color-control-border-selected: light-dark(
+    #9fc2f5,
+    var(--color-dark-control-border-selected)
+  );
   --admin-color-control-switch-thumb: light-dark(#d8dee7, #484f58);
   --admin-color-control-changed: light-dark(#d99a00, #e3b341);
   --admin-color-control-changed-surface: light-dark(#fff8e8, #262012);
   --admin-color-control-changed-emphasis: light-dark(#e4bd58, #d29922);
-  --admin-color-control-changed-ring: light-dark(rgba(228, 189, 88, .34), rgba(221, 193, 126, .46));
+  --admin-color-control-changed-ring: light-dark(
+    rgba(228, 189, 88, 0.34),
+    rgba(221, 193, 126, 0.46)
+  );
   --admin-color-tag-action: light-dark(#6b7686, #a5aeb9);
   --admin-color-tag-action-hover: light-dark(#384150, #d8dfe7);
   --admin-color-close: light-dark(#d98c8c, #ff7b72);
   --admin-color-close-hover: light-dark(#c25b5b, #ffa198);
   --admin-color-thumbnail-placeholder: light-dark(#9aa6b4, #8b949e);
   --admin-color-image-placeholder-dark: #080b10;
-  --admin-shadow-control-floating: light-dark(rgba(20, 30, 44, .18), rgba(0, 0, 0, .48));
-  --admin-shadow-control-resting: light-dark(rgba(20, 30, 44, .12), rgba(0, 0, 0, .38));
-  --admin-shadow-modal: light-dark(rgba(0, 0, 0, .28), rgba(0, 0, 0, .58));
-  --admin-shadow-menu: light-dark(rgba(13, 18, 28, .16), rgba(0, 0, 0, .46));
-  --admin-shadow-card-hover: light-dark(rgba(13, 18, 28, .08), rgba(0, 0, 0, .4));
+  --admin-shadow-control-floating: light-dark(rgba(20, 30, 44, 0.18), rgba(0, 0, 0, 0.48));
+  --admin-shadow-control-resting: light-dark(rgba(20, 30, 44, 0.12), rgba(0, 0, 0, 0.38));
+  --admin-shadow-modal: light-dark(rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.58));
+  --admin-shadow-menu: light-dark(rgba(13, 18, 28, 0.16), rgba(0, 0, 0, 0.46));
+  --admin-shadow-card-hover: light-dark(rgba(13, 18, 28, 0.08), rgba(0, 0, 0, 0.4));
 
   /* Base scrollbars must follow the admin appearance instead of the public palette. */
-  --admin-color-scrollbar-track-thumb: light-dark(rgba(20, 30, 44, .3), rgba(201, 209, 217, .28));
-  --admin-color-scrollbar-thumb: light-dark(rgba(20, 30, 44, .26), rgba(201, 209, 217, .24));
-  --admin-color-scrollbar-thumb-hover: light-dark(rgba(20, 30, 44, .42), rgba(201, 209, 217, .44));
-  --admin-color-overlay-scrollbar: light-dark(rgba(20, 30, 44, .34), var(--color-dark-scrollbar));
-  --admin-color-overlay-scrollbar-active: light-dark(rgba(20, 30, 44, .54), var(--color-dark-scrollbar-active));
+  --admin-color-scrollbar-track-thumb: light-dark(rgba(20, 30, 44, 0.3), rgba(201, 209, 217, 0.28));
+  --admin-color-scrollbar-thumb: light-dark(rgba(20, 30, 44, 0.26), rgba(201, 209, 217, 0.24));
+  --admin-color-scrollbar-thumb-hover: light-dark(
+    rgba(20, 30, 44, 0.42),
+    rgba(201, 209, 217, 0.44)
+  );
+  --admin-color-overlay-scrollbar: light-dark(rgba(20, 30, 44, 0.34), var(--color-dark-scrollbar));
+  --admin-color-overlay-scrollbar-active: light-dark(
+    rgba(20, 30, 44, 0.54),
+    var(--color-dark-scrollbar-active)
+  );
 
   /*
    * Status palettes stay deliberately compact. Page and lifecycle states map
@@ -197,7 +212,7 @@
   --color-detail-action-border: var(--admin-color-action-primary);
   --color-detail-action-surface: var(--admin-color-surface-primary);
   --color-detail-action-hover: var(--admin-color-control-surface-subtle-hover);
-  --color-detail-secondary-action-surface: light-dark(transparent, rgba(255, 255, 255, .01));
+  --color-detail-secondary-action-surface: light-dark(transparent, rgba(255, 255, 255, 0.01));
   --color-detail-secondary-action-hover-surface: light-dark(
     var(--admin-color-control-surface-subtle-hover),
     color-mix(in srgb, var(--color-detail-surface-raised) 92%, var(--admin-color-text-primary))

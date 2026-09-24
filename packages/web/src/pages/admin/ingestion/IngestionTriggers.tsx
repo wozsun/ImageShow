@@ -40,7 +40,8 @@ export function IngestionTriggers({
         {...preloadIntentProps(onPreloadWorkflow)}
         onClick={(event) => onOpenFiles(event.currentTarget)}
       >
-        <AdminIcon name="upload-cloud-2-line" />上传图片
+        <AdminIcon name="upload-cloud-2-line" />
+        上传图片
       </button>
     </div>
   );

@@ -18,14 +18,9 @@ export type StorageKeyListOptions = {
 };
 
 export type StorageKeyListResult =
-  | { complete: true; count: number }
-  | { complete: false; count: number; reason: "max_keys" };
+  { complete: true; count: number } | { complete: false; count: number; reason: "max_keys" };
 
-export type StorageKeyListing = AsyncGenerator<
-  readonly string[],
-  StorageKeyListResult,
-  void
->;
+export type StorageKeyListing = AsyncGenerator<readonly string[], StorageKeyListResult, void>;
 
 function checkedMaxKeys(value: number | undefined) {
   if (value === undefined) return Number.POSITIVE_INFINITY;

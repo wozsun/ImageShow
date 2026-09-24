@@ -14,22 +14,20 @@ async function cleanupRetiredSession(session: IngestionSessionSnapshot) {
     ? [removeIngestionRaw(session, session.raw_generation)]
     : [];
   if (session.prepared) {
-    cleanups.push(removeIngestionPreparedFiles([
-      ...ingestionPreparedFiles(session, session.prepared)
-    ]));
+    cleanups.push(
+      removeIngestionPreparedFiles([...ingestionPreparedFiles(session, session.prepared)])
+    );
   }
   const results = await Promise.allSettled(cleanups);
-  const failures = results.flatMap((result) => (
+  const failures = results.flatMap((result) =>
     result.status === "rejected" ? [result.reason] : []
-  ));
+  );
   if (failures.length) {
     throw new AggregateError(failures, "Retired Ingestion cleanup failed");
   }
 }
 
-export async function cleanupRetiredSessions(
-  retiredSessions: readonly IngestionSessionSnapshot[]
-) {
+export async function cleanupRetiredSessions(retiredSessions: readonly IngestionSessionSnapshot[]) {
   const failures: unknown[] = [];
   await mapWithWorkerPool(retiredSessions, 1, async (session) => {
     try {

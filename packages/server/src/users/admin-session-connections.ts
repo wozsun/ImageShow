@@ -16,9 +16,7 @@ function closeConnection(connection: AdminSessionConnection) {
 }
 
 /** Register an in-process long-lived connection owned by one login session. */
-export function registerAdminSessionConnection(
-  connection: AdminSessionConnection
-) {
+export function registerAdminSessionConnection(connection: AdminSessionConnection) {
   const connections = connectionsBySession.getOrInsertComputed(
     connection.sessionId,
     () => new Set()
@@ -44,9 +42,7 @@ export function closeAdminSessionConnections(sessionIds: Iterable<string>) {
 }
 
 export function closeAllAdminSessionConnections() {
-  const connections = new Set(
-    [...connectionsBySession.values()].flatMap((items) => [...items])
-  );
+  const connections = new Set([...connectionsBySession.values()].flatMap((items) => [...items]));
   connectionsBySession.clear();
   for (const connection of connections) closeConnection(connection);
   return connections.size;

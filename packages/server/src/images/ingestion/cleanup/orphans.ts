@@ -21,7 +21,11 @@ export async function cleanupIngestionOrphans(now = Date.now(), signal?: AbortSi
       signal: cycleSignal,
       stopSignal: signal
     });
-    return { skipped: false, temp_removed: result.removed, incomplete_temp_scans: result.complete ? 0 : 1 };
+    return {
+      skipped: false,
+      temp_removed: result.removed,
+      incomplete_temp_scans: result.complete ? 0 : 1
+    };
   } catch (error) {
     signal?.throwIfAborted();
     if (!timeout.aborted) throw error;

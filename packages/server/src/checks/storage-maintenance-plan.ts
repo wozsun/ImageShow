@@ -22,16 +22,9 @@ export type MaintenanceImage = ImageStorageReferenceRow & {
 };
 
 type MaintenanceAction =
-  | "repair_thumbnail"
-  | "remove_object"
-  | "inspect_namespace"
-  | "prune_directories";
+  "repair_thumbnail" | "remove_object" | "inspect_namespace" | "prune_directories";
 
-export type MaintenanceOutcome =
-  | "repaired"
-  | "removed"
-  | "skipped"
-  | "failed";
+export type MaintenanceOutcome = "repaired" | "removed" | "skipped" | "failed";
 
 export type MaintenanceItem = {
   action: MaintenanceAction;
@@ -48,20 +41,18 @@ export type MaintenanceItem = {
 export type MaintenanceCandidate =
   | { kind: "repair"; imageId: string }
   | {
-    kind: "remove";
-    backend: string;
-    prefix: StoragePrefix;
-    key: string;
-  }
+      kind: "remove";
+      backend: string;
+      prefix: StoragePrefix;
+      key: string;
+    }
   | { kind: "result"; item: MaintenanceItem };
 
 export type CapturedMaintenanceGroup = {
   directorySnapshot: StorageDirectorySnapshot;
   group: StorageBackendGroup;
   backend: string;
-  snapshot: NonNullable<Awaited<ReturnType<
-    typeof collectStorageBackendGroupSnapshot
-  >>["snapshot"]>;
+  snapshot: NonNullable<Awaited<ReturnType<typeof collectStorageBackendGroupSnapshot>>["snapshot"]>;
 };
 
 const maintenanceRowsQuery = `
@@ -84,15 +75,11 @@ function failedNamespaceItem(
   };
 }
 
-function retainedRowsForGroup(
-  rows: readonly MaintenanceImage[],
-  group: StorageBackendGroup
-) {
+function retainedRowsForGroup(rows: readonly MaintenanceImage[], group: StorageBackendGroup) {
   const slugs = new Set(group.slugs);
-  return rows.filter((row) => (
-    slugs.has(row.storage_slug)
-    && (row.status === "ready" || row.status === "deleted")
-  ));
+  return rows.filter(
+    (row) => slugs.has(row.storage_slug) && (row.status === "ready" || row.status === "deleted")
+  );
 }
 
 async function captureMaintenanceGroups(
@@ -104,7 +91,9 @@ async function captureMaintenanceGroups(
   for (const group of groups) {
     signal.throwIfAborted();
     const directorySnapshot: StorageDirectorySnapshot = {
-      directories: new Map(), entries: 0, complete: true
+      directories: new Map(),
+      entries: 0,
+      complete: true
     };
     const result = await collectStorageBackendGroupSnapshot(group, {
       directorySnapshot,
@@ -118,17 +107,18 @@ async function captureMaintenanceGroups(
         item: failedNamespaceItem(
           group.slugs.join(" / "),
           "*",
-          result.errors.map((entry) => (
-            `${entry.backend}: ${entry.error}`
-          )).join("; ") || "存储后端不可用"
+          result.errors.map((entry) => `${entry.backend}: ${entry.error}`).join("; ") ||
+            "存储后端不可用"
         )
       });
       continue;
     }
-    const incomplete = ([
-      ["full", result.snapshot.full],
-      ["thumbs", result.snapshot.thumbs]
-    ] as const).filter(([, listing]) => !listing.complete);
+    const incomplete = (
+      [
+        ["full", result.snapshot.full],
+        ["thumbs", result.snapshot.thumbs]
+      ] as const
+    ).filter(([, listing]) => !listing.complete);
     if (incomplete.length) {
       for (const [prefix, listing] of incomplete) {
         candidates.push({
@@ -136,8 +126,8 @@ async function captureMaintenanceGroups(
           item: failedNamespaceItem(
             result.backend,
             prefix,
-            `存储键列举达到 ${STORAGE_ADMIN_LIST_MAX_KEYS} 项上限；`
-              + `未使用不完整快照执行维护（已扫描 ${listing.count} 项）`
+            `存储键列举达到 ${STORAGE_ADMIN_LIST_MAX_KEYS} 项上限；` +
+              `未使用不完整快照执行维护（已扫描 ${listing.count} 项）`
           )
         });
       }
@@ -157,9 +147,10 @@ function buildMaintenanceCandidates(
   rows: readonly MaintenanceImage[],
   referencesByBackend: ReadonlyMap<
     string,
-    ReadonlyMap<string, Awaited<ReturnType<
-      typeof activeIngestionStorageReferences
-    >>["rows"][number]>
+    ReadonlyMap<
+      string,
+      Awaited<ReturnType<typeof activeIngestionStorageReferences>>["rows"][number]
+    >
   >,
   groups: readonly CapturedMaintenanceGroup[],
   initial: readonly MaintenanceCandidate[]
@@ -173,20 +164,18 @@ function buildMaintenanceCandidates(
     for (const row of retainedRows) {
       const thumbKey = thumbnailObjectKey(row.id);
       if (
-        !fullKeys.has(storageObjectKey(row.id, row.ext))
-        || !thumbKeys.has(thumbKey)
-        || Number(row.thumbnail_size) <= 0
+        !fullKeys.has(storageObjectKey(row.id, row.ext)) ||
+        !thumbKeys.has(thumbKey) ||
+        Number(row.thumbnail_size) <= 0
       ) {
         candidates.push({ kind: "repair", imageId: row.id });
       }
     }
 
-    const referencedFull = new Set(retainedRows.flatMap((row) => (
-      [storageObjectKey(row.id, row.ext)]
-    )));
-    const referencedThumbs = new Set(
-      retainedRows.map((row) => thumbnailObjectKey(row.id))
+    const referencedFull = new Set(
+      retainedRows.flatMap((row) => [storageObjectKey(row.id, row.ext)])
     );
+    const referencedThumbs = new Set(retainedRows.map((row) => thumbnailObjectKey(row.id)));
     const activeReferences = mergeActiveIngestionStorageReferences(
       ...group.slugs.map((slug) => referencesByBackend.get(slug) ?? new Map())
     );
@@ -207,14 +196,11 @@ function buildMaintenanceCandidates(
         candidates.push({ kind: "remove", backend, prefix: "thumbs", key });
       }
     }
-
   }
   return { candidates };
 }
 
-export async function buildStorageMaintenancePlan(
-  signal: AbortSignal
-) {
+export async function buildStorageMaintenancePlan(signal: AbortSignal) {
   signal.throwIfAborted();
   const [rowsResult, ingestionReferences, groups] = await Promise.all([
     pool.query<MaintenanceImage>(maintenanceRowsQuery),

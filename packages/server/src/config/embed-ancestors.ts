@@ -4,9 +4,7 @@ import { trustedOriginSources } from "./trusted-origins.ts";
 
 type EmbedAncestorConfig = Pick<RuntimeConfig, "site" | "embed">;
 
-export function effectiveEmbedAncestorSources(
-  config: EmbedAncestorConfig = getRuntimeConfig()
-) {
+export function effectiveEmbedAncestorSources(config: EmbedAncestorConfig = getRuntimeConfig()) {
   if (!config.embed.enabled) return [];
   return trustedOriginSources(config);
 }

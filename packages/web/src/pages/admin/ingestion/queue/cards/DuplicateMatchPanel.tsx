@@ -38,9 +38,7 @@ export function DuplicateMatchPanel({
       <div className="duplicate-body">
         <div className="duplicate-list">
           {!libraryItems.length && (
-            <small className="duplicate-loading">
-              正在读取图库中的重复图片…
-            </small>
+            <small className="duplicate-loading">正在读取图库中的重复图片…</small>
           )}
           {libraryItems.map((item) => (
             <button
@@ -49,28 +47,17 @@ export function DuplicateMatchPanel({
               className="duplicate-item"
               onClick={(event) => onOpenDetail(item, event.currentTarget)}
             >
-              <ImageThumbnail
-                src={item.thumb_url}
-                size="small"
-              />
+              <ImageThumbnail src={item.thumb_url} size="small" />
               <span>{imageDisplayTitle(item)}</span>
               <small>{formatImageClassification(item)}</small>
             </button>
           ))}
         </div>
         <div className="inline-actions">
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={disabled || confirmDisabled}
-          >
+          <button type="button" onClick={onConfirm} disabled={disabled || confirmDisabled}>
             仍然提交
           </button>
-          <button
-            className="danger-button"
-            type="button"
-            onClick={onCancel}
-          >
+          <button className="danger-button" type="button" onClick={onCancel}>
             取消
           </button>
         </div>

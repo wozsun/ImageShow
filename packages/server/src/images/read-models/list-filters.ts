@@ -1,8 +1,5 @@
 import type { Brightness, Device } from "@imageshow/shared/browser";
-import {
-  resolveImageFilterPlan,
-  type ImageFilterPlan
-} from "../filter-plan.ts";
+import { resolveImageFilterPlan, type ImageFilterPlan } from "../filter-plan.ts";
 import type { VocabularyReadAccess } from "../../vocab/vocab-cache.ts";
 import { buildImageFilterSql } from "./image-filter-sql.ts";
 
@@ -32,9 +29,7 @@ export async function buildImageListFilters(
 }
 
 /** Reuses the canonical selector plan already resolved for the Redis read. */
-export function buildResolvedReadyImageListFilters(
-  plan: ImageFilterPlan
-) {
+export function buildResolvedReadyImageListFilters(plan: ImageFilterPlan) {
   return buildImageFilterSql({
     status: "ready",
     plan

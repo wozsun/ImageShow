@@ -1,22 +1,14 @@
 import "../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  parseHTML
-} from "linkedom";
+import { parseHTML } from "linkedom";
 import {
   applyPointerMagnet,
   resetPointerMagnet
 } from "../../../packages/web/src/lib/ui/pointer-magnet.ts";
-import {
-  webUuidV7
-} from "../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-identity.ts";
-import {
-  settleConfirmedImageAdminMutation
-} from "../../../packages/web/src/pages/admin/images/useImageAdminOperations.ts";
-import {
-  createDialogTouchBoundary
-} from "../../../packages/web/src/lib/ui/dialog-touch-boundary.ts";
+import { webUuidV7 } from "../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-identity.ts";
+import { settleConfirmedImageAdminMutation } from "../../../packages/web/src/pages/admin/images/useImageAdminOperations.ts";
+import { createDialogTouchBoundary } from "../../../packages/web/src/lib/ui/dialog-touch-boundary.ts";
 import {
   canDialogHorizontalScrollOwnerConsumeTouchMove,
   canDialogScrollOwnerConsumeTouchMove,
@@ -24,21 +16,25 @@ import {
   findDialogHorizontalTouchScrollOwner,
   findDialogTouchScrollOwner
 } from "../../../packages/web/src/lib/ui/dialog-scroll-boundary.ts";
-import {
-  installPropertyDescriptors,
-  installProperties
-} from "../support/property-descriptors.ts";
+import { installPropertyDescriptors, installProperties } from "../support/property-descriptors.ts";
 
 test("[Web/共享交互] 词条搜索按相关性保留顺序并加粗原文匹配字符", async (t) => {
   const { facetSuggestions } = await import("../../../packages/web/src/lib/ui/facet-input.ts");
-  const { FacetSuggestionLabel } = await import("../../../packages/web/src/components/data-display/FacetSuggestionLabel.tsx");
+  const { FacetSuggestionLabel } =
+    await import("../../../packages/web/src/components/data-display/FacetSuggestionLabel.tsx");
   const React = await import("react");
   const restoreReact = installProperties(globalThis, { React });
   t.after(restoreReact);
   const { renderToStaticMarkup } = await import("react-dom/server");
   const option = (slug: string, display_name = "") => ({ slug, display_name });
-  const options = [option("hangzhou", "风景夜色"), option("hz-view"), option("hz"), option("hz-other")];
-  const slugs = (query: string, excluded = new Set<string>()) => facetSuggestions(options, query, excluded).map((item) => item.slug);
+  const options = [
+    option("hangzhou", "风景夜色"),
+    option("hz-view"),
+    option("hz"),
+    option("hz-other")
+  ];
+  const slugs = (query: string, excluded = new Set<string>()) =>
+    facetSuggestions(options, query, excluded).map((item) => item.slug);
   assert.deepEqual(slugs(" HZ "), ["hz", "hz-view", "hz-other", "hangzhou"]);
   assert.deepEqual(slugs("hg"), ["hangzhou"]);
   assert.deepEqual(slugs("han"), ["hangzhou"]);
@@ -49,8 +45,14 @@ test("[Web/共享交互] 词条搜索按相关性保留顺序并加粗原文匹�
   assert.deepEqual(slugs("hh"), ["hangzhou", "hz-other"]);
   assert.deepEqual(slugs(" "), []);
   assert.deepEqual(slugs("hz", new Set(["hangzhou", "hz"])), ["hz-view", "hz-other"]);
-  const many = [...Array.from({ length: 60 }, (_, index) => option(`hangzhou-${index}`)), option("hz")];
-  assert.deepEqual(facetSuggestions(many, "hz").map((item) => item.slug), ["hz", ...many.slice(0, 49).map((item) => item.slug)]);
+  const many = [
+    ...Array.from({ length: 60 }, (_, index) => option(`hangzhou-${index}`)),
+    option("hz")
+  ];
+  assert.deepEqual(
+    facetSuggestions(many, "hz").map((item) => item.slug),
+    ["hz", ...many.slice(0, 49).map((item) => item.slug)]
+  );
   for (const [item, query, expected] of [
     [option("hangzhou"), "hz", ["h", "z"]],
     [option("mixed", "风景Night夜色"), "风n夜", ["风", "N", "夜"]],
@@ -59,15 +61,21 @@ test("[Web/共享交互] 词条搜索按相关性保留顺序并加粗原文匹�
     [option("literal", "<script>风夜</script>"), "风夜", ["风夜"]]
   ] as const) {
     const match = facetSuggestions([item], query)[0]!;
-    const { document } = parseHTML(`<html><body>${renderToStaticMarkup(React.createElement(FacetSuggestionLabel, { option: match }))}</body></html>`);
-    assert.deepEqual([...document.querySelectorAll("b")].map((node) => node.textContent), expected);
+    const { document } = parseHTML(
+      `<html><body>${renderToStaticMarkup(React.createElement(FacetSuggestionLabel, { option: match }))}</body></html>`
+    );
+    assert.deepEqual(
+      [...document.querySelectorAll("b")].map((node) => node.textContent),
+      expected
+    );
     assert.equal(document.body.textContent, item.slug + item.display_name);
     assert.equal(document.querySelector("script"), null);
   }
 });
 
 test("[Web/共享交互] 浏览器错误上报和控制台只发送清洗后的结构化摘要", async (t) => {
-  const { reportAdminUiError } = await import("../../../packages/web/src/lib/ui/error-reporting.ts");
+  const { reportAdminUiError } =
+    await import("../../../packages/web/src/lib/ui/error-reporting.ts");
   const reports: unknown[] = [];
   const consoleEntries: unknown[] = [];
   const restoreGlobals = installProperties(globalThis, {
@@ -77,10 +85,16 @@ test("[Web/共享交互] 浏览器错误上报和控制台只发送清洗后的�
       return Response.json({ ok: true });
     }
   });
-  const restoreConsole = installProperties(console, { error: (...args: unknown[]) => consoleEntries.push(args) });
-  t.after(() => { restoreGlobals(); restoreConsole(); });
+  const restoreConsole = installProperties(console, {
+    error: (...args: unknown[]) => consoleEntries.push(args)
+  });
+  t.after(() => {
+    restoreGlobals();
+    restoreConsole();
+  });
   reportAdminUiError("advanced_config.json_parse", new SyntaxError("synthetic-private-value"), {
-    secret_access_key: "synthetic-private-value", image_id: "synthetic-image"
+    secret_access_key: "synthetic-private-value",
+    image_id: "synthetic-image"
   });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(reports.length, 1);
@@ -94,12 +108,14 @@ test("[Web/共享交互] 媒体查询保持当前快照、独立订阅及卸载�
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { renderToString } = await import("react-dom/server");
-  const { useMediaQuery, mobileViewportMediaQuery } = await import(
-    "../../../packages/web/src/hooks/useMediaQuery.ts"
-  );
+  const { useMediaQuery, mobileViewportMediaQuery } =
+    await import("../../../packages/web/src/hooks/useMediaQuery.ts");
   const { window, document } = parseHTML("<html><body><div id=root></div></body></html>");
   const restore = installProperties(globalThis, { window, document });
-  const queries = new Map<string, { matches: boolean; listeners: Set<() => void>; added: number }>();
+  const queries = new Map<
+    string,
+    { matches: boolean; listeners: Set<() => void>; added: number }
+  >();
   const state = (query: string) => {
     if (!queries.has(query)) queries.set(query, { matches: false, listeners: new Set(), added: 0 });
     return queries.get(query)!;
@@ -108,7 +124,9 @@ test("[Web/共享交互] 媒体查询保持当前快照、独立订阅及卸载�
   state(mobileViewportMediaQuery).matches = true;
   const restoreMedia = installProperties(window, {
     matchMedia: (query: string) => ({
-      get matches() { return state(query).matches; },
+      get matches() {
+        return state(query).matches;
+      },
       addEventListener(type: string, listener: () => void) {
         assert.equal(type, "change");
         state(query).added++;
@@ -130,24 +148,39 @@ test("[Web/共享交互] 媒体查询保持当前快照、独立订阅及卸载�
   const commits: { query: string; matches: boolean }[] = [];
   function Probe({ query }: { query: string }) {
     const matches = useMediaQuery(query);
-    React.useLayoutEffect(() => { commits.push({ query, matches }); });
+    React.useLayoutEffect(() => {
+      commits.push({ query, matches });
+    });
     return React.createElement("output", null, String(matches));
   }
   const pendingRender = Promise.withResolvers<void>();
   let suspended = 0;
   function Block({ active }: { active: boolean }) {
-    if (active) { suspended++; throw pendingRender.promise; }
+    if (active) {
+      suspended++;
+      throw pendingRender.promise;
+    }
     return null;
   }
-  const render = (query: string, second = false, blocked = false) => root.render(
-    React.createElement(React.StrictMode, null,
-      React.createElement(React.Suspense, { fallback: "pending" },
-        React.createElement(Probe, { query }),
-        second ? React.createElement(Probe, { query: motionQuery }) : null,
-        React.createElement(Block, { active: blocked })))
-  );
+  const render = (query: string, second = false, blocked = false) =>
+    root.render(
+      React.createElement(
+        React.StrictMode,
+        null,
+        React.createElement(
+          React.Suspense,
+          { fallback: "pending" },
+          React.createElement(Probe, { query }),
+          second ? React.createElement(Probe, { query: motionQuery }) : null,
+          React.createElement(Block, { active: blocked })
+        )
+      )
+    );
   await React.act(async () => render(mobileViewportMediaQuery));
-  assert.ok(commits.every((commit) => commit.matches), "首帧即使用当前移动视口");
+  assert.ok(
+    commits.every((commit) => commit.matches),
+    "首帧即使用当前移动视口"
+  );
   assert.equal(state(mobileViewportMediaQuery).listeners.size, 1);
   const added = state(mobileViewportMediaQuery).added;
   await React.act(async () => render(mobileViewportMediaQuery));
@@ -170,7 +203,11 @@ test("[Web/共享交互] 媒体查询保持当前快照、独立订阅及卸载�
     state(mobileViewportMediaQuery).matches = false;
     for (const listener of state(mobileViewportMediaQuery).listeners) listener();
   });
-  assert.equal(document.querySelector("output")!.textContent, "false", "等待中的渲染不阻断已提交查询更新");
+  assert.equal(
+    document.querySelector("output")!.textContent,
+    "false",
+    "等待中的渲染不阻断已提交查询更新"
+  );
   await React.act(async () => render(mobileViewportMediaQuery));
   await React.act(async () => {
     state(mobileViewportMediaQuery).matches = true;
@@ -178,14 +215,20 @@ test("[Web/共享交互] 媒体查询保持当前快照、独立订阅及卸载�
   });
   commits.length = 0;
   await React.act(async () => render(motionQuery, true));
-  assert.ok(commits.every((commit) => !commit.matches), "切换 query 的提交不混入前一 query 快照");
+  assert.ok(
+    commits.every((commit) => !commit.matches),
+    "切换 query 的提交不混入前一 query 快照"
+  );
   assert.equal(state(mobileViewportMediaQuery).listeners.size, 0);
   assert.equal(state(motionQuery).listeners.size, 2);
   await React.act(async () => {
     state(motionQuery).matches = true;
     for (const listener of state(motionQuery).listeners) listener();
   });
-  assert.deepEqual([...document.querySelectorAll("output")].map((el) => el.textContent), ["true", "true"]);
+  assert.deepEqual(
+    [...document.querySelectorAll("output")].map((el) => el.textContent),
+    ["true", "true"]
+  );
   await React.act(async () => render(motionQuery));
   assert.equal(state(motionQuery).listeners.size, 1, "一个消费者卸载不撤销另一个订阅");
   await React.act(async () => root.unmount());
@@ -193,7 +236,10 @@ test("[Web/共享交互] 媒体查询保持当前快照、独立订阅及卸载�
   assert.ok([...queries.values()].every((query) => query.listeners.size === 0));
   const restoreNoWindow = installProperties(globalThis, { window: undefined });
   try {
-    assert.equal(renderToString(React.createElement(Probe, { query: motionQuery })), "<output>false</output>");
+    assert.equal(
+      renderToString(React.createElement(Probe, { query: motionQuery })),
+      "<output>false</output>"
+    );
   } finally {
     restoreNoWindow();
   }
@@ -202,10 +248,7 @@ test("[Web/共享交互] 媒体查询保持当前快照、独立订阅及卸载�
 test("[Web/共享交互] Web UUID 只使用安全随机源并设置 UUIDv7 时间、版本与 variant", () => {
   const timestamp = Date.UTC(2026, 7, 23, 1, 2, 3, 456);
   const uuid = webUuidV7(timestamp);
-  assert.match(
-    uuid,
-    /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
-  );
+  assert.match(uuid, /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
   const compact = uuid.replaceAll("-", "");
   assert.equal(Number.parseInt(compact.slice(0, 12), 16), timestamp);
   assert.notEqual(webUuidV7(timestamp), uuid);
@@ -230,12 +273,15 @@ test("[Web/共享交互] 公开图片磁吸按指针全域连续映射并可同�
     }),
     offsetParent: null
   } as unknown as HTMLElement;
-  assert.equal(applyPointerMagnet(
-    element,
-    element,
-    { clientX: 100, clientY: 50, pointerType: "mouse" },
-    { maximumAngleDegrees: 10, maximumShadowOffsetPixels: 9 }
-  ), true);
+  assert.equal(
+    applyPointerMagnet(
+      element,
+      element,
+      { clientX: 100, clientY: 50, pointerType: "mouse" },
+      { maximumAngleDegrees: 10, maximumShadowOffsetPixels: 9 }
+    ),
+    true
+  );
   assert.equal(properties.get("--public-card-magnet-axis-x"), "0");
   assert.equal(properties.get("--public-card-magnet-axis-y"), "-1");
   assert.equal(properties.get("--public-card-magnet-angle"), "10deg");
@@ -243,23 +289,28 @@ test("[Web/共享交互] 公开图片磁吸按指针全域连续映射并可同�
   assert.equal(properties.get("--public-card-magnet-shadow-y"), "0px");
   assert.equal(properties.get("--public-card-magnet-light-x"), "100%");
   assert.equal(properties.get("--public-card-magnet-light-strength"), "1");
-  applyPointerMagnet(element, element,
+  applyPointerMagnet(
+    element,
+    element,
     { clientX: 75, clientY: 50, pointerType: "mouse" },
-    { maximumAngleDegrees: 10, maximumShadowOffsetPixels: 9 });
-  assert.equal(properties.get("--public-card-magnet-light-strength"), "0.25");
-  assert.equal(applyPointerMagnet(
-    element,
-    element,
-    { clientX: 100, clientY: 50, pointerType: "touch" },
     { maximumAngleDegrees: 10, maximumShadowOffsetPixels: 9 }
-  ), false);
+  );
+  assert.equal(properties.get("--public-card-magnet-light-strength"), "0.25");
+  assert.equal(
+    applyPointerMagnet(
+      element,
+      element,
+      { clientX: 100, clientY: 50, pointerType: "touch" },
+      { maximumAngleDegrees: 10, maximumShadowOffsetPixels: 9 }
+    ),
+    false
+  );
   resetPointerMagnet(element);
   assert.equal(properties.get("--public-card-magnet-angle"), "0deg");
   assert.equal(properties.get("--public-card-magnet-shadow-x"), "0px");
   assert.equal(properties.get("--public-card-magnet-light-strength"), "0");
 });
 test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区分保留与释放", async () => {
-
   const { window, document } = parseHTML(
     "<!doctype html><html><body><div id=root></div></body></html>"
   );
@@ -284,10 +335,13 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
   const frameTimers = new Map<number, ReturnType<typeof setTimeout>>();
   const requestAnimationFrame = (callback: FrameRequestCallback) => {
     const id = ++animationFrame;
-    frameTimers.set(id, setTimeout(() => {
-      frameTimers.delete(id);
-      callback(0);
-    }, 0));
+    frameTimers.set(
+      id,
+      setTimeout(() => {
+        frameTimers.delete(id);
+        callback(0);
+      }, 0)
+    );
     return id;
   };
   const cancelAnimationFrame = (id: number) => {
@@ -302,10 +356,7 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
     ResizeObserver: TestResizeObserver
   });
   const eventWindow = window as unknown as Window;
-  const captureListeners = new Map<
-    string,
-    Set<EventListenerOrEventListenerObject>
-  >();
+  const captureListeners = new Map<string, Set<EventListenerOrEventListenerObject>>();
   const nativeAddEventListener = eventWindow.addEventListener.bind(eventWindow);
   const nativeRemoveEventListener = eventWindow.removeEventListener.bind(eventWindow);
   eventWindow.addEventListener = ((
@@ -313,9 +364,7 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
     listener: EventListenerOrEventListenerObject | null,
     options?: boolean | AddEventListenerOptions
   ) => {
-    const capture = options === true || (
-      typeof options === "object" && options.capture === true
-    );
+    const capture = options === true || (typeof options === "object" && options.capture === true);
     if (listener && capture) {
       const listeners = captureListeners.get(type) ?? new Set();
       listeners.add(listener);
@@ -328,9 +377,7 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
     listener: EventListenerOrEventListenerObject | null,
     options?: boolean | EventListenerOptions
   ) => {
-    const capture = options === true || (
-      typeof options === "object" && options.capture === true
-    );
+    const capture = options === true || (typeof options === "object" && options.capture === true);
     if (listener && capture) {
       captureListeners.get(type)?.delete(listener);
     }
@@ -354,9 +401,9 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -371,12 +418,12 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
       bubbles: true,
       cancelable: true
     });
-    Object.defineProperties(event, Object.fromEntries(
-      Object.entries(properties).map(([key, value]) => [
-        key,
-        { configurable: true, value }
-      ])
-    ));
+    Object.defineProperties(
+      event,
+      Object.fromEntries(
+        Object.entries(properties).map(([key, value]) => [key, { configurable: true, value }])
+      )
+    );
     target.dispatchEvent(event);
     return event;
   };
@@ -430,21 +477,15 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { WorkflowCollapsePanel } = await import(
-      "../../../packages/web/src/components/layout/WorkflowCollapsePanel.tsx"
-    );
-    const { DirectActivationButton } = await import(
-      "../../../packages/web/src/components/feedback/DirectActivationButton.tsx"
-    );
-    const { TagInput } = await import(
-      "../../../packages/web/src/components/form/TagInput.tsx"
-    );
+    const { WorkflowCollapsePanel } =
+      await import("../../../packages/web/src/components/layout/WorkflowCollapsePanel.tsx");
+    const { DirectActivationButton } =
+      await import("../../../packages/web/src/components/feedback/DirectActivationButton.tsx");
+    const { TagInput } = await import("../../../packages/web/src/components/form/TagInput.tsx");
 
     function Harness() {
       const [expanded, setExpanded] = React.useState(false);
-      const [drafts, setDrafts] = React.useState(
-        () => Array.from({ length: 200 }, () => false)
-      );
+      const [drafts, setDrafts] = React.useState(() => Array.from({ length: 200 }, () => false));
       const [applyCount, setApplyCount] = React.useState(0);
       const [targetCount, setTargetCount] = React.useState(0);
       const [tags, setTags] = React.useState<string[]>([]);
@@ -471,43 +512,47 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
             suggestions: [],
             ariaLabel: "默认标签"
           }),
-          React.createElement(DirectActivationButton, {
-            type: "button",
-            className: "target-focus-button",
-            onActivate: () => {
-              setTargetCount((current) => current + 1);
-              setTargetTags(tags);
-            }
-          }, "亮暗不变"),
-          React.createElement(DirectActivationButton, {
-            type: "button",
-            className: "apply-to-all-button",
-            onActivate: () => {
-              setDrafts((current) => current.map(() => true));
-              setApplyCount((current) => current + 1);
-              setAppliedTags(tags);
-            }
-          }, "应用到全部"),
+          React.createElement(
+            DirectActivationButton,
+            {
+              type: "button",
+              className: "target-focus-button",
+              onActivate: () => {
+                setTargetCount((current) => current + 1);
+                setTargetTags(tags);
+              }
+            },
+            "亮暗不变"
+          ),
+          React.createElement(
+            DirectActivationButton,
+            {
+              type: "button",
+              className: "apply-to-all-button",
+              onActivate: () => {
+                setDrafts((current) => current.map(() => true));
+                setApplyCount((current) => current + 1);
+                setAppliedTags(tags);
+              }
+            },
+            "应用到全部"
+          ),
           React.createElement(
             "output",
             { className: "activation-output" },
             `${targetCount}:${applyCount}:${drafts.filter(Boolean).length}`
           ),
-          React.createElement(
-            "output",
-            { className: "settled-output" },
-            targetTags.join(",")
-          ),
-          React.createElement(
-            "output",
-            { className: "applied-tags-output" },
-            appliedTags.join(",")
-          )
+          React.createElement("output", { className: "settled-output" }, targetTags.join(",")),
+          React.createElement("output", { className: "applied-tags-output" }, appliedTags.join(","))
         ),
-        React.createElement("button", {
-          type: "button",
-          className: "dialog-close-button"
-        }, "关闭")
+        React.createElement(
+          "button",
+          {
+            type: "button",
+            className: "dialog-close-button"
+          },
+          "关闭"
+        )
       );
     }
 
@@ -519,21 +564,11 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
       await Promise.resolve();
     });
 
-    const toggle = document.querySelector<HTMLButtonElement>(
-      ".workflow-collapse-toggle"
-    );
-    const apply = document.querySelector<HTMLButtonElement>(
-      ".apply-to-all-button"
-    );
-    const targetFocusButton = document.querySelector<HTMLButtonElement>(
-      ".target-focus-button"
-    );
-    const editor = document.querySelector<HTMLInputElement>(
-      ".active-tag-editor input"
-    );
-    const dialogClose = document.querySelector<HTMLButtonElement>(
-      ".dialog-close-button"
-    );
+    const toggle = document.querySelector<HTMLButtonElement>(".workflow-collapse-toggle");
+    const apply = document.querySelector<HTMLButtonElement>(".apply-to-all-button");
+    const targetFocusButton = document.querySelector<HTMLButtonElement>(".target-focus-button");
+    const editor = document.querySelector<HTMLInputElement>(".active-tag-editor input");
+    const dialogClose = document.querySelector<HTMLButtonElement>(".dialog-close-button");
     assert.ok(toggle && apply && targetFocusButton && editor && dialogClose);
     let toggleBlurCount = 0;
     let toggleFocusCount = 0;
@@ -634,7 +669,9 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
           height: 48,
           x: 0,
           y: top,
-          toJSON() { return this; }
+          toJSON() {
+            return this;
+          }
         };
       }
     });
@@ -651,7 +688,9 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
           height: 48,
           x: 0,
           y: top,
-          toJSON() { return this; }
+          toJSON() {
+            return this;
+          }
         };
       }
     });
@@ -668,7 +707,9 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
           height: 48,
           x: 0,
           y: top,
-          toJSON() { return this; }
+          toJSON() {
+            return this;
+          }
         };
       }
     });
@@ -705,11 +746,7 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
       clientY: 72
     };
     await React.act(async () => {
-      dispatchThroughWindowCapture(
-        targetFocusButton,
-        "pointerdown",
-        targetTouchProperties
-      );
+      dispatchThroughWindowCapture(targetFocusButton, "pointerdown", targetTouchProperties);
       await Promise.resolve();
     });
     assert.equal(targetFocusCount, 0, "目标聚焦策略不得在触控按下时收起键盘");
@@ -720,11 +757,7 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
       `pointerdown 后焦点不得改变，实际为 ${document.activeElement?.className}`
     );
     await React.act(async () => {
-      dispatchThroughWindowCapture(
-        targetFocusButton,
-        "pointerup",
-        targetTouchProperties
-      );
+      dispatchThroughWindowCapture(targetFocusButton, "pointerup", targetTouchProperties);
       await Promise.resolve();
     });
     assert.equal(
@@ -772,11 +805,7 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
       "超过 5px 的移动必须取消应用"
     );
     assert.equal(toggle.getAttribute("aria-expanded"), "true");
-    const movedRetarget = dispatchThroughWindowCapture(
-      toggle,
-      "click",
-      { detail: 1 }
-    );
+    const movedRetarget = dispatchThroughWindowCapture(toggle, "click", { detail: 1 });
     assert.deepEqual(movedRetarget, {
       defaultPrevented: true,
       immediatePropagationStopped: true,
@@ -800,11 +829,7 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
       "1:0:0",
       "取消手势不得应用"
     );
-    const cancelledRetarget = dispatchThroughWindowCapture(
-      toggle,
-      "click",
-      { detail: 1 }
-    );
+    const cancelledRetarget = dispatchThroughWindowCapture(toggle, "click", { detail: 1 });
     assert.equal(cancelledRetarget.immediatePropagationStopped, true);
     assert.equal(toggle.getAttribute("aria-expanded"), "true");
 
@@ -825,10 +850,7 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
       });
       await Promise.resolve();
     });
-    assert.equal(
-      document.querySelector(".activation-output")?.textContent,
-      "1:1:200"
-    );
+    assert.equal(document.querySelector(".activation-output")?.textContent, "1:1:200");
     assert.equal(toggle.getAttribute("aria-expanded"), "true");
     assert.equal(applyFocusCount, 1, "应用按钮必须在 pointerup 提交后取得焦点");
     assert.equal(keyboardOpen, false);
@@ -840,16 +862,8 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
     );
 
     for (const type of ["mousedown", "mouseup", "click"]) {
-      const compatibilityEvent = dispatchThroughWindowCapture(
-        toggle,
-        type,
-        { detail: 1 }
-      );
-      assert.equal(
-        compatibilityEvent.defaultPrevented,
-        true,
-        `迟到的 ${type} 必须被兼容守卫取消`
-      );
+      const compatibilityEvent = dispatchThroughWindowCapture(toggle, type, { detail: 1 });
+      assert.equal(compatibilityEvent.defaultPrevented, true, `迟到的 ${type} 必须被兼容守卫取消`);
       assert.equal(compatibilityEvent.immediatePropagationStopped, true);
       assert.equal(compatibilityEvent.targetDispatched, false);
     }
@@ -903,20 +917,12 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
     assert.equal(document.activeElement === toggle, false);
 
     for (const type of ["mousedown", "mouseup", "click"]) {
-      const restoredPositionEvent = dispatchThroughWindowCapture(
-        dialogClose,
-        type,
-        { detail: 1 }
-      );
+      const restoredPositionEvent = dispatchThroughWindowCapture(dialogClose, type, { detail: 1 });
       assert.equal(restoredPositionEvent.defaultPrevented, true);
       assert.equal(restoredPositionEvent.immediatePropagationStopped, true);
       assert.equal(restoredPositionEvent.targetDispatched, false);
     }
-    assert.equal(
-      dialogCloseFocusCount,
-      0,
-      "视口复位后的迟到兼容序列不得聚焦关闭按钮"
-    );
+    assert.equal(dialogCloseFocusCount, 0, "视口复位后的迟到兼容序列不得聚焦关闭按钮");
 
     await React.act(async () => {
       dispatchThroughWindowCapture(toggle, "pointerdown", {
@@ -968,10 +974,7 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
     await React.act(async () => {
       dispatchThroughWindowCapture(apply, "pointerdown", mouseProperties);
       dispatchThroughWindowCapture(apply, "pointerup", mouseProperties);
-      assert.equal(
-        document.querySelector(".activation-output")?.textContent,
-        "1:1:200"
-      );
+      assert.equal(document.querySelector(".activation-output")?.textContent, "1:1:200");
       dispatchThroughWindowCapture(apply, "click", { detail: 1 });
       await Promise.resolve();
     });
@@ -991,11 +994,7 @@ test("[Web/共享交互] 直接激活在键盘视口中延后目标聚焦并区�
         ...applyTouchProperties,
         pointerId: 14
       });
-      const keyboardClick = dispatchThroughWindowCapture(
-        apply,
-        "click",
-        { detail: 0 }
-      );
+      const keyboardClick = dispatchThroughWindowCapture(apply, "click", { detail: 0 });
       assert.equal(keyboardClick.immediatePropagationStopped, false);
       assert.equal(keyboardClick.targetDispatched, true);
       await Promise.resolve();
@@ -1038,10 +1037,7 @@ test("[Web/共享交互] 图片成员已知结果必须先呈现再刷新移出�
     },
     present
   });
-  assert.deepEqual(calls, [
-    "present:error:已恢复 199 张，1 张未处理",
-    "refresh"
-  ]);
+  assert.deepEqual(calls, ["present:error:已恢复 199 张，1 张未处理", "refresh"]);
 
   calls.length = 0;
   await settleConfirmedImageAdminMutation({
@@ -1061,11 +1057,11 @@ test("[Web/共享交互] 图片成员已知结果必须先呈现再刷新移出�
   ]);
 });
 test("[Web/共享交互] 弹窗触摸边界按意图区分纵向与标签横向 owner", () => {
-  const metrics = (
-    scrollTop: number,
-    clientHeight = 100,
-    scrollHeight = 300
-  ) => ({ scrollTop, clientHeight, scrollHeight });
+  const metrics = (scrollTop: number, clientHeight = 100, scrollHeight = 300) => ({
+    scrollTop,
+    clientHeight,
+    scrollHeight
+  });
   assert.equal(
     canDialogScrollOwnerConsumeTouchMove(metrics(0), -20),
     true,
@@ -1076,49 +1072,22 @@ test("[Web/共享交互] 弹窗触摸边界按意图区分纵向与标签横向 
     false,
     "顶部向下拖动不得交给背景页"
   );
-  assert.equal(
-    canDialogScrollOwnerConsumeTouchMove(metrics(100), -20),
-    true
-  );
-  assert.equal(
-    canDialogScrollOwnerConsumeTouchMove(metrics(100), 20),
-    true
-  );
+  assert.equal(canDialogScrollOwnerConsumeTouchMove(metrics(100), -20), true);
+  assert.equal(canDialogScrollOwnerConsumeTouchMove(metrics(100), 20), true);
   assert.equal(
     canDialogScrollOwnerConsumeTouchMove(metrics(200), -20),
     false,
     "底部向上拖动不得交给背景页"
   );
-  assert.equal(
-    canDialogScrollOwnerConsumeTouchMove(metrics(200), 20),
-    true
-  );
-  assert.equal(
-    canDialogScrollOwnerConsumeTouchMove(
-      metrics(0, 100, 100),
-      -20
-    ),
-    false
-  );
-  const horizontalMetrics = (
-    scrollLeft: number,
-    clientWidth = 100,
-    scrollWidth = 300
-  ) => ({ scrollLeft, clientWidth, scrollWidth });
-  assert.equal(
-    canDialogHorizontalScrollOwnerConsumeTouchMove(
-      horizontalMetrics(0),
-      -20
-    ),
-    true
-  );
-  assert.equal(
-    canDialogHorizontalScrollOwnerConsumeTouchMove(
-      horizontalMetrics(0),
-      20
-    ),
-    false
-  );
+  assert.equal(canDialogScrollOwnerConsumeTouchMove(metrics(200), 20), true);
+  assert.equal(canDialogScrollOwnerConsumeTouchMove(metrics(0, 100, 100), -20), false);
+  const horizontalMetrics = (scrollLeft: number, clientWidth = 100, scrollWidth = 300) => ({
+    scrollLeft,
+    clientWidth,
+    scrollWidth
+  });
+  assert.equal(canDialogHorizontalScrollOwnerConsumeTouchMove(horizontalMetrics(0), -20), true);
+  assert.equal(canDialogHorizontalScrollOwnerConsumeTouchMove(horizontalMetrics(0), 20), false);
   const horizontalOwner = {
     ...horizontalMetrics(50),
     scrollTo(options: ScrollToOptions | number = {}, _y?: number) {
@@ -1132,15 +1101,15 @@ test("[Web/共享交互] 弹窗触摸边界按意图区分纵向与标签横向 
   assert.equal(horizontalOwner.scrollLeft, 70);
 
   const { window, document } = parseHTML(
-    "<!doctype html><html><body>"
-      + "<div data-dialog-frame id=frame>"
-      + "<div data-overflow=auto id=article>"
-      + "<div data-overflow=auto id=inner><span id=target>目标</span></div>"
-      + "<div data-overflow-x=auto data-dialog-horizontal-scroll-owner id=tags>"
-      + "<span id=tag-target>标签</span><input id=input>"
-      + "</div>"
-      + "</div></div><span id=outside>外部</span>"
-      + "</body></html>"
+    "<!doctype html><html><body>" +
+      "<div data-dialog-frame id=frame>" +
+      "<div data-overflow=auto id=article>" +
+      "<div data-overflow=auto id=inner><span id=target>目标</span></div>" +
+      "<div data-overflow-x=auto data-dialog-horizontal-scroll-owner id=tags>" +
+      "<span id=tag-target>标签</span><input id=input>" +
+      "</div>" +
+      "</div></div><span id=outside>外部</span>" +
+      "</body></html>"
   );
   Object.assign(window, {
     getComputedStyle(element: Element) {
@@ -1160,9 +1129,9 @@ test("[Web/共享交互] 弹窗触摸边界按意图区分纵向与标签横向 
     HTMLElement: window.HTMLElement
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -1230,26 +1199,30 @@ test("[Web/共享交互] 弹窗触摸边界按意图区分纵向与标签横向 
     );
     setHorizontalMetrics(tags, horizontalMetrics(0));
 
-    const touchList = (...points: Array<{
-      identifier: number;
-      clientX: number;
-      clientY: number;
-    }>) => ({
-      length: points.length,
-      item: (index: number) => points[index] ?? null
-    }) as unknown as TouchList;
+    const touchList = (
+      ...points: Array<{
+        identifier: number;
+        clientX: number;
+        clientY: number;
+      }>
+    ) =>
+      ({
+        length: points.length,
+        item: (index: number) => points[index] ?? null
+      }) as unknown as TouchList;
     let prevented = 0;
     const touchEvent = (
       eventTarget: EventTarget,
       points: Array<{ identifier: number; clientX: number; clientY: number }>
-    ) => ({
-      cancelable: true,
-      target: eventTarget,
-      touches: touchList(...points),
-      preventDefault() {
-        prevented += 1;
-      }
-    }) as unknown as TouchEvent;
+    ) =>
+      ({
+        cancelable: true,
+        target: eventTarget,
+        touches: touchList(...points),
+        preventDefault() {
+          prevented += 1;
+        }
+      }) as unknown as TouchEvent;
     const boundary = createDialogTouchBoundary(document);
     const point = (identifier: number, clientX: number, clientY: number) => ({
       identifier,
@@ -1271,14 +1244,8 @@ test("[Web/共享交互] 弹窗触摸边界按意图区分纵向与标签横向 
     boundary.onTouchMove(touchEvent(input, [point(9, 100, 120)]));
     assert.equal(prevented, 1, "输入控件保留原生文本手势");
 
-    boundary.onTouchStart(touchEvent(target, [
-      point(10, 100, 100),
-      point(11, 120, 100)
-    ]));
-    boundary.onTouchMove(touchEvent(target, [
-      point(10, 100, 120),
-      point(11, 120, 120)
-    ]));
+    boundary.onTouchStart(touchEvent(target, [point(10, 100, 100), point(11, 120, 100)]));
+    boundary.onTouchMove(touchEvent(target, [point(10, 100, 120), point(11, 120, 120)]));
     assert.equal(prevented, 1, "双指缩放不得被滚动边界接管");
 
     boundary.onTouchStart(touchEvent(tagTarget, [point(12, 100, 100)]));
@@ -1307,25 +1274,15 @@ test("[Web/共享交互] 弹窗触摸边界按意图区分纵向与标签横向 
     const beforeSubpixel = prevented;
     boundary.onTouchStart(touchEvent(tagTarget, [point(16, 100, 100)]));
     for (let step = 1; step <= 12; step += 1) {
-      boundary.onTouchMove(touchEvent(tagTarget, [
-        point(16, 100 - step * 0.5, 100)
-      ]));
+      boundary.onTouchMove(touchEvent(tagTarget, [point(16, 100 - step * 0.5, 100)]));
     }
-    assert.equal(
-      tags.scrollLeft,
-      1.5,
-      "越过意图阈值后的连续亚像素样本必须逐帧保留"
-    );
+    assert.equal(tags.scrollLeft, 1.5, "越过意图阈值后的连续亚像素样本必须逐帧保留");
     assert.equal(prevented - beforeSubpixel, 3);
 
     setHorizontalMetrics(tags, horizontalMetrics(0, 100, 100));
     boundary.onTouchStart(touchEvent(input, [point(17, 100, 100)]));
     boundary.onTouchMove(touchEvent(input, [point(17, 78, 100)]));
-    assert.equal(
-      prevented,
-      beforeSubpixel + 3,
-      "无溢出输入框的横向文本手势不得被显式取消"
-    );
+    assert.equal(prevented, beforeSubpixel + 3, "无溢出输入框的横向文本手势不得被显式取消");
   } finally {
     for (const [key, descriptor] of previousGlobals) {
       if (descriptor) {
@@ -1423,9 +1380,9 @@ test("[Web/共享交互] 页面滚动 Effect Event 更新回调时不重绑监�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -1437,9 +1394,8 @@ test("[Web/共享交互] 页面滚动 Effect Event 更新回调时不重绑监�
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { usePageScrollMovement } = await import(
-      "../../../packages/web/src/hooks/usePageScrollMovement.ts"
-    );
+    const { usePageScrollMovement } =
+      await import("../../../packages/web/src/hooks/usePageScrollMovement.ts");
     const movements: Array<{ version: number; delta: number; top: number }> = [];
 
     function ScrollProbe({ version }: { version: number }) {
@@ -1448,11 +1404,8 @@ test("[Web/共享交互] 页面滚动 Effect Event 更新回调时不重绑监�
       });
       return null;
     }
-    const tree = (version: number) => React.createElement(
-      React.StrictMode,
-      null,
-      React.createElement(ScrollProbe, { version })
-    );
+    const tree = (version: number) =>
+      React.createElement(React.StrictMode, null, React.createElement(ScrollProbe, { version }));
     const container = document.getElementById("root");
     assert.ok(container);
     const root = createRoot(container);
@@ -1471,10 +1424,14 @@ test("[Web/共享交互] 页面滚动 Effect Event 更新回调时不重绑监�
     assert.deepEqual(movements, [{ version: 1, delta: 120, top: 120 }]);
 
     await React.act(async () => root.render(tree(2)));
-    assert.deepEqual({
-      adds: scrollListenerAdds,
-      removes: scrollListenerRemoves
-    }, listenerCountsAfterMount, "回调 identity 变化不得重绑 scroll listener");
+    assert.deepEqual(
+      {
+        adds: scrollListenerAdds,
+        removes: scrollListenerRemoves
+      },
+      listenerCountsAfterMount,
+      "回调 identity 变化不得重绑 scroll listener"
+    );
 
     scrollY = 175;
     window.dispatchEvent(new window.Event("scroll"));
@@ -1595,9 +1552,9 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -1609,12 +1566,9 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { usePageScrollLock } = await import(
-      "../../../packages/web/src/hooks/usePageScrollLock.ts"
-    );
-    const { useDialogFocus } = await import(
-      "../../../packages/web/src/hooks/useDialogFocus.ts"
-    );
+    const { usePageScrollLock } =
+      await import("../../../packages/web/src/hooks/usePageScrollLock.ts");
+    const { useDialogFocus } = await import("../../../packages/web/src/hooks/useDialogFocus.ts");
     const pageRoot = document.getElementById("root") as HTMLElement;
     Object.assign(pageRoot.style, {
       position: "relative",
@@ -1629,13 +1583,7 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
 
     const escapeVersions: number[] = [];
 
-    function LockProbe({
-      index,
-      escapeVersion
-    }: {
-      index: number;
-      escapeVersion: number;
-    }) {
+    function LockProbe({ index, escapeVersion }: { index: number; escapeVersion: number }) {
       const frameRef = React.useRef<HTMLDivElement | null>(null);
       const closeRef = React.useRef<HTMLButtonElement | null>(null);
       usePageScrollLock();
@@ -1646,34 +1594,35 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
           escapeVersions.push(escapeVersion);
         }
       });
-      return createPortal(React.createElement(
-        "div",
-        {
-          ref: frameRef,
-          "data-dialog-frame": "",
-          tabIndex: -1
-        },
-        React.createElement("button", {
-          ref: closeRef,
-          id: `dialog-close-${index}`
-        }, "关闭")
-      ), document.body);
+      return createPortal(
+        React.createElement(
+          "div",
+          {
+            ref: frameRef,
+            "data-dialog-frame": "",
+            tabIndex: -1
+          },
+          React.createElement(
+            "button",
+            {
+              ref: closeRef,
+              id: `dialog-close-${index}`
+            },
+            "关闭"
+          )
+        ),
+        document.body
+      );
     }
 
-    function Harness({
-      locks,
-      escapeVersion = 0
-    }: {
-      locks: number;
-      escapeVersion?: number;
-    }) {
+    function Harness({ locks, escapeVersion = 0 }: { locks: number; escapeVersion?: number }) {
       return React.createElement(
         React.Fragment,
         null,
         React.createElement("button", { id: "page-opener" }, "打开"),
-        ...Array.from({ length: locks }, (_, index) => (
+        ...Array.from({ length: locks }, (_, index) =>
           React.createElement(LockProbe, { index, escapeVersion, key: index })
-        ))
+        )
       );
     }
 
@@ -1701,10 +1650,14 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
     await React.act(async () => {
       root.render(React.createElement(Harness, { locks: 1, escapeVersion: 2 }));
     });
-    assert.deepEqual({
-      adds: keydownListenerAdds,
-      removes: keydownListenerRemoves
-    }, keydownCountsBeforeCallbackUpdate, "Escape 回调更新不得重绑 keydown listener");
+    assert.deepEqual(
+      {
+        adds: keydownListenerAdds,
+        removes: keydownListenerRemoves
+      },
+      keydownCountsBeforeCallbackUpdate,
+      "Escape 回调更新不得重绑 keydown listener"
+    );
     const escapeEvent = new window.Event("keydown", {
       bubbles: true,
       cancelable: true
@@ -1740,19 +1693,22 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
     });
     assert.equal(pageRoot.inert, false);
     assert.equal(pageRoot.getAttribute("aria-hidden"), "preexisting");
-    assert.deepEqual({
-      position: pageRoot.style.position,
-      top: pageRoot.style.top,
-      left: pageRoot.style.left,
-      right: pageRoot.style.right,
-      width: pageRoot.style.width
-    }, {
-      position: "relative",
-      top: "3px",
-      left: "4px",
-      right: "5px",
-      width: "91%"
-    });
+    assert.deepEqual(
+      {
+        position: pageRoot.style.position,
+        top: pageRoot.style.top,
+        left: pageRoot.style.left,
+        right: pageRoot.style.right,
+        width: pageRoot.style.width
+      },
+      {
+        position: "relative",
+        top: "3px",
+        left: "4px",
+        right: "5px",
+        width: "91%"
+      }
+    );
     assert.equal(activeElement, opener, "最后释放应在根恢复后归还 opener 焦点");
     assert.deepEqual(scrollCalls, [137]);
     flushFrame();
@@ -1786,31 +1742,38 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
       return React.createElement(
         "div",
         { ref: frameRef, "data-dialog-frame": "", tabIndex: -1 },
-        React.createElement("button", {
-          ref: closeRef,
-          id: "strict-dialog-close"
-        }, "关闭")
+        React.createElement(
+          "button",
+          {
+            ref: closeRef,
+            id: "strict-dialog-close"
+          },
+          "关闭"
+        )
       );
     }
-    const strictDialogTree = (active: boolean, escapeVersion: number) => (
+    const strictDialogTree = (active: boolean, escapeVersion: number) =>
       React.createElement(
         React.StrictMode,
         null,
         React.createElement(StrictDialogProbe, { active, escapeVersion })
-      )
-    );
+      );
     const strictCountsBeforeMount = {
       adds: keydownListenerAdds,
       removes: keydownListenerRemoves
     };
     await React.act(async () => root.render(strictDialogTree(true, 3)));
-    assert.deepEqual({
-      adds: keydownListenerAdds - strictCountsBeforeMount.adds,
-      removes: keydownListenerRemoves - strictCountsBeforeMount.removes
-    }, {
-      adds: 2,
-      removes: 1
-    }, "Strict Mode 应重放一次 keydown listener setup 与 cleanup");
+    assert.deepEqual(
+      {
+        adds: keydownListenerAdds - strictCountsBeforeMount.adds,
+        removes: keydownListenerRemoves - strictCountsBeforeMount.removes
+      },
+      {
+        adds: 2,
+        removes: 1
+      },
+      "Strict Mode 应重放一次 keydown listener setup 与 cleanup"
+    );
     assert.equal(activeKeydownListeners.size, 1);
     assert.equal(activeElement.id, "strict-dialog-close");
     const strictCountsBeforeCallbackUpdate = {
@@ -1819,10 +1782,13 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
     };
 
     await React.act(async () => root.render(strictDialogTree(true, 4)));
-    assert.deepEqual({
-      adds: keydownListenerAdds,
-      removes: keydownListenerRemoves
-    }, strictCountsBeforeCallbackUpdate);
+    assert.deepEqual(
+      {
+        adds: keydownListenerAdds,
+        removes: keydownListenerRemoves
+      },
+      strictCountsBeforeCallbackUpdate
+    );
     const strictEscapeEvent = new window.Event("keydown", {
       bubbles: true,
       cancelable: true

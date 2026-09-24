@@ -13,21 +13,35 @@ function parseJson(raw: string, context: string): unknown {
   }
 }
 
-function parseStoredValue<T extends z.ZodType>(schema: T, value: unknown, context: string): z.output<T> {
+function parseStoredValue<T extends z.ZodType>(
+  schema: T,
+  value: unknown,
+  context: string
+): z.output<T> {
   const result = schema.safeParse(value);
   if (!result.success) {
     const issue = result.error.issues[0];
-    throw new Error(`Redis ingestion ${context} has invalid structure at ${issue?.path.join(".") || "root"}`);
+    throw new Error(
+      `Redis ingestion ${context} has invalid structure at ${issue?.path.join(".") || "root"}`
+    );
   }
   return result.data;
 }
 
 export function parseStoredIngestionSession(raw: string) {
-  return parseStoredValue(storedIngestionSessionSchema, parseJson(raw, "Redis ingestion canonical"), "canonical");
+  return parseStoredValue(
+    storedIngestionSessionSchema,
+    parseJson(raw, "Redis ingestion canonical"),
+    "canonical"
+  );
 }
 
 export function parseUploadIntent(raw: string) {
-  return parseStoredValue(uploadIntentSchema, parseJson(raw, "Redis upload intent"), "upload intent");
+  return parseStoredValue(
+    uploadIntentSchema,
+    parseJson(raw, "Redis upload intent"),
+    "upload intent"
+  );
 }
 
 export function parseIngestionQueueMetadata(value: unknown) {
@@ -35,7 +49,9 @@ export function parseIngestionQueueMetadata(value: unknown) {
 }
 
 const metadataIntegerFields = new Set(
-  Object.keys(ingestionQueueMetadataSchema.shape).filter((key) => key !== "owner" && key !== "queue")
+  Object.keys(ingestionQueueMetadataSchema.shape).filter(
+    (key) => key !== "owner" && key !== "queue"
+  )
 );
 
 export function metadataFromHashReply(values: unknown[]) {

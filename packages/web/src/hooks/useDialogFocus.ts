@@ -11,15 +11,17 @@ const FOCUSABLE_SELECTOR = [
   "textarea:not([disabled])",
   "summary",
   "[contenteditable='true']",
-  "[tabindex]:not([tabindex='-1'])",
+  "[tabindex]:not([tabindex='-1'])"
 ].join(",");
 
 function focusableElements(container: HTMLElement) {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter((element) => {
-    if (element.getAttribute("aria-hidden") === "true") return false;
-    if (element.closest("[inert]")) return false;
-    return element.getClientRects().length > 0;
-  });
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (element) => {
+      if (element.getAttribute("aria-hidden") === "true") return false;
+      if (element.closest("[inert]")) return false;
+      return element.getClientRects().length > 0;
+    }
+  );
 }
 
 export function useDialogFocus({
@@ -28,7 +30,7 @@ export function useDialogFocus({
   returnFocusRef,
   onEscape,
   active = true,
-  paused = false,
+  paused = false
 }: {
   containerRef: RefObject<HTMLElement | null>;
   initialFocusRef?: RefObject<HTMLElement | null>;
@@ -49,8 +51,13 @@ export function useDialogFocus({
       returnFocusRef?.current,
       returnFocusTargetRef.current,
       interactionSurface?.returnFocusRef.current
-    ].find((target) => target?.isConnected && !target.closest("[inert]")
-      && !target.matches(":disabled") && target.getClientRects().length > 0);
+    ].find(
+      (target) =>
+        target?.isConnected &&
+        !target.closest("[inert]") &&
+        !target.matches(":disabled") &&
+        target.getClientRects().length > 0
+    );
     returnFocus?.focus({ preventScroll: true });
   });
 
@@ -58,13 +65,12 @@ export function useDialogFocus({
   // 关闭条件渲染的弹窗时会把 active 置为 false，因此无需卸载整个组件也能正确归还焦点。
   useLayoutEffect(() => {
     if (active && !wasActiveRef.current) {
-      const activeElement = document.activeElement instanceof HTMLElement
-        && document.activeElement !== document.body
-        ? document.activeElement
-        : null;
-      returnFocusTargetRef.current = returnFocusRef?.current
-        ?? activeElement
-        ?? getPageScrollLockFocusTarget();
+      const activeElement =
+        document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+          ? document.activeElement
+          : null;
+      returnFocusTargetRef.current =
+        returnFocusRef?.current ?? activeElement ?? getPageScrollLockFocusTarget();
     } else if (!active && wasActiveRef.current) {
       restoreFocus();
       returnFocusTargetRef.current = null;

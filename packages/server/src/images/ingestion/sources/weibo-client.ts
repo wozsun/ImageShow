@@ -1,7 +1,4 @@
-import {
-  WeiboImportError,
-  type WeiboImportErrorCode
-} from "./weibo-types.ts";
+import { WeiboImportError, type WeiboImportErrorCode } from "./weibo-types.ts";
 import { asRecord, scalarString } from "./weibo-values.ts";
 
 const weiboUserAgent = [
@@ -21,18 +18,12 @@ function parseCallbackJson(text: string) {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end <= start) {
-    throw new WeiboImportError(
-      "weibo_visitor_failed",
-      "微博访客接口返回了无法识别的数据"
-    );
+    throw new WeiboImportError("weibo_visitor_failed", "微博访客接口返回了无法识别的数据");
   }
   try {
     return JSON.parse(text.slice(start, end + 1)) as unknown;
   } catch {
-    throw new WeiboImportError(
-      "weibo_visitor_failed",
-      "微博访客接口返回了无效数据"
-    );
+    throw new WeiboImportError("weibo_visitor_failed", "微博访客接口返回了无效数据");
   }
 }
 
@@ -67,10 +58,11 @@ async function readWeiboResponseText(
   context: string
 ) {
   signal.throwIfAborted();
-  const tooLarge = () => new WeiboImportError(
-    "weibo_response_too_large",
-    `${context}：响应正文超过 ${responseLimitLabel(maxBytes)} 安全上限`
-  );
+  const tooLarge = () =>
+    new WeiboImportError(
+      "weibo_response_too_large",
+      `${context}：响应正文超过 ${responseLimitLabel(maxBytes)} 安全上限`
+    );
   const declaredLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
     await response.body?.cancel().catch(() => undefined);
@@ -102,10 +94,7 @@ async function readWeiboResponseText(
 async function requestAndParseWeiboResponse<Result>(
   input: string | URL,
   init: RequestInit,
-  code: Extract<
-    WeiboImportErrorCode,
-    "weibo_visitor_failed" | "weibo_request_failed"
-  >,
+  code: Extract<WeiboImportErrorCode, "weibo_visitor_failed" | "weibo_request_failed">,
   context: string,
   maxResponseBytes: number,
   parseResponse: (response: Response, text: string) => Result
@@ -120,12 +109,7 @@ async function requestAndParseWeiboResponse<Result>(
       ...init,
       signal: requestSignal
     });
-    const text = await readWeiboResponseText(
-      response,
-      maxResponseBytes,
-      requestSignal,
-      context
-    );
+    const text = await readWeiboResponseText(response, maxResponseBytes, requestSignal, context);
     return parseResponse(response, text);
   } catch (error) {
     if (callerSignal?.aborted) throw callerSignal.reason ?? error;
@@ -167,20 +151,14 @@ export async function createWeiboVisitorCookie(signal?: AbortSignal) {
   );
   const generatedPayload = asRecord(generated.data?.data);
   const tid = scalarString(generatedPayload?.tid);
-  if (
-    !generated.response.ok
-    || Number(generated.data?.retcode) !== 20_000_000
-    || !tid
-  ) {
+  if (!generated.response.ok || Number(generated.data?.retcode) !== 20_000_000 || !tid) {
     throw new WeiboImportError(
       "weibo_visitor_failed",
       `初始化微博访客身份失败：${scalarString(generated.data?.msg) || generated.response.status}`
     );
   }
 
-  const incarnateUrl = new URL(
-    "https://passport.weibo.com/visitor/visitor"
-  );
+  const incarnateUrl = new URL("https://passport.weibo.com/visitor/visitor");
   const incarnateParameters = {
     a: "incarnate",
     t: tid,
@@ -209,12 +187,7 @@ export async function createWeiboVisitorCookie(signal?: AbortSignal) {
   const identityPayload = asRecord(incarnated.data?.data);
   const sub = scalarString(identityPayload?.sub);
   const subp = scalarString(identityPayload?.subp);
-  if (
-    !incarnated.response.ok
-    || Number(incarnated.data?.retcode) !== 20_000_000
-    || !sub
-    || !subp
-  ) {
+  if (!incarnated.response.ok || Number(incarnated.data?.retcode) !== 20_000_000 || !sub || !subp) {
     throw new WeiboImportError(
       "weibo_visitor_failed",
       `获取微博访客身份失败：${scalarString(incarnated.data?.msg) || incarnated.response.status}`
@@ -224,11 +197,7 @@ export async function createWeiboVisitorCookie(signal?: AbortSignal) {
   return `SUB=${sub}; SUBP=${subp}`;
 }
 
-export async function fetchWeiboStatus(
-  identifier: string,
-  cookie: string,
-  signal?: AbortSignal
-) {
+export async function fetchWeiboStatus(identifier: string, cookie: string, signal?: AbortSignal) {
   const endpoint = `https://weibo.com/ajax/statuses/show?id=${encodeURIComponent(identifier)}`;
   return requestAndParseWeiboResponse(
     endpoint,
@@ -267,10 +236,7 @@ export async function fetchWeiboStatus(
         );
       }
       if (!response.ok) {
-        throw new WeiboImportError(
-          "weibo_request_failed",
-          `微博接口返回 HTTP ${response.status}`
-        );
+        throw new WeiboImportError("weibo_request_failed", `微博接口返回 HTTP ${response.status}`);
       }
       try {
         return JSON.parse(text) as unknown;

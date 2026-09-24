@@ -16,10 +16,7 @@ type RouteLoadBoundaryState = {
  * hashed chunk. Keep the surrounding shell usable and offer a full reload so
  * the browser can obtain the current HTML and asset graph.
  */
-export class RouteLoadBoundary extends Component<
-  RouteLoadBoundaryProps,
-  RouteLoadBoundaryState
-> {
+export class RouteLoadBoundary extends Component<RouteLoadBoundaryProps, RouteLoadBoundaryState> {
   state: RouteLoadBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: unknown): RouteLoadBoundaryState {
@@ -27,10 +24,7 @@ export class RouteLoadBoundary extends Component<
   }
 
   componentDidUpdate(previousProps: RouteLoadBoundaryProps) {
-    if (
-      this.state.error
-      && previousProps.resetKey !== this.props.resetKey
-    ) {
+    if (this.state.error && previousProps.resetKey !== this.props.resetKey) {
       this.setState({ error: null });
     }
   }

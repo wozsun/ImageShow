@@ -42,16 +42,14 @@ export function createIngestionDisplayOrderKey(
   sessionId: string
 ) {
   if (
-    !Number.isInteger(batchPosition)
-    || batchPosition < 0
-    || batchPosition > 0xfff
-    || !/^[A-Za-z0-9_-]{43}$/u.test(sessionId)
+    !Number.isInteger(batchPosition) ||
+    batchPosition < 0 ||
+    batchPosition > 0xfff ||
+    !/^[A-Za-z0-9_-]{43}$/u.test(sessionId)
   ) {
     throw new ApiError(400, "invalid_ingestion_order", "内容接入批次位置无效");
   }
-  const inversePosition = (0xfff - batchPosition)
-    .toString(16)
-    .padStart(3, "0");
+  const inversePosition = (0xfff - batchPosition).toString(16).padStart(3, "0");
   return `${compactUuid(batchKey)}:${inversePosition}:${sessionId}`;
 }
 
@@ -72,21 +70,13 @@ export function assertImageIdentity(
   const inspected = inspectImageUuidV7(imageId);
   const timestamp = new Date(imageTime).getTime();
   if (
-    inspected.version !== 7
-    || inspected.variant !== 2
-    || !Number.isSafeInteger(timestamp)
-    || inspected.timestamp !== timestamp
-    || (
-      batchPosition !== undefined
-      && batchPosition !== null
-      && inspected.randA !== batchPosition
-    )
+    inspected.version !== 7 ||
+    inspected.variant !== 2 ||
+    !Number.isSafeInteger(timestamp) ||
+    inspected.timestamp !== timestamp ||
+    (batchPosition !== undefined && batchPosition !== null && inspected.randA !== batchPosition)
   ) {
-    throw new ApiError(
-      409,
-      "invalid_image_identity",
-      "图片身份与已冻结的图片时间或批次位置不一致"
-    );
+    throw new ApiError(409, "invalid_image_identity", "图片身份与已冻结的图片时间或批次位置不一致");
   }
   return inspected;
 }

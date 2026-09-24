@@ -1,13 +1,12 @@
-import {
-  useCallback,
-  useState
-} from "react";
+import { useCallback, useState } from "react";
 
 let publicNavigationHasAppeared = false;
 
 function reducedMotionPreferred() {
-  return typeof window !== "undefined"
-    && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+  );
 }
 
 export function usePublicNavigationEntrance() {

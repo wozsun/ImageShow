@@ -19,11 +19,6 @@ export function classifyMovementIntent(
 ): MovementIntent | null {
   const deltaX = current.clientX - origin.clientX;
   const deltaY = current.clientY - origin.clientY;
-  if (
-    Math.max(Math.abs(deltaX), Math.abs(deltaY))
-      < movementIntentThreshold
-  ) return null;
-  return Math.abs(deltaX) > Math.abs(deltaY)
-    ? "horizontal"
-    : "vertical";
+  if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < movementIntentThreshold) return null;
+  return Math.abs(deltaX) > Math.abs(deltaY) ? "horizontal" : "vertical";
 }

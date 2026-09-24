@@ -1,24 +1,16 @@
-import {
-  jobSucceeded,
-  type BackgroundJobOutcome
-} from "./handler-outcome.ts";
+import { jobSucceeded, type BackgroundJobOutcome } from "./handler-outcome.ts";
 import type { BackgroundJob, BackgroundJobType } from "./types.ts";
 import { handleTrashPurgeJob } from "../images/trash/purge-job.ts";
 import { ensureReadyImageCacheCurrent } from "../images/ready-cache/coordinator.ts";
 import { handleMoveCleanupJob } from "../storage/cleanup/job.ts";
-import {
-  runWithAdvisoryLockAcquisitionSignal
-} from "../core/database/advisory-locks.ts";
+import { runWithAdvisoryLockAcquisitionSignal } from "../core/database/advisory-locks.ts";
 
 type BackgroundJobHandler = (
   job: BackgroundJob,
   signal: AbortSignal
 ) => Promise<BackgroundJobOutcome>;
 
-const backgroundJobHandlers: Record<
-  BackgroundJobType,
-  BackgroundJobHandler
-> = {
+const backgroundJobHandlers: Record<BackgroundJobType, BackgroundJobHandler> = {
   "move.cleanup": handleMoveCleanupJob,
   "trash.purge": handleTrashPurgeJob,
   "cache.rebuild": async (_job, signal) => {
@@ -34,8 +26,5 @@ export async function handleBackgroundJob(
   signal: AbortSignal = new AbortController().signal
 ): Promise<BackgroundJobOutcome> {
   const handler = backgroundJobHandlers[job.type];
-  return runWithAdvisoryLockAcquisitionSignal(
-    signal,
-    () => handler(job, signal)
-  );
+  return runWithAdvisoryLockAcquisitionSignal(signal, () => handler(job, signal));
 }

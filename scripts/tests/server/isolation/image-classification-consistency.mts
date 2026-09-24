@@ -5,36 +5,35 @@ import { removeDriverObject } from "./storage-fixture.mts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
-const databasePools = runtime.databasePools;
-const database = {
-  ...databasePools,
-  ...await import("../../../../packages/server/src/core/database/advisory-locks.ts")
-};
-const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
-const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
-const imageUpdate = await import("../../../../packages/server/src/images/image-update.ts");
-const localAccess = await registry.resolveStorageAccess("local");
-const readReadyRevision = async () => BigInt(String((
-  await database.pool.query(
-    "SELECT revision::text FROM ready_image_revision WHERE singleton=1"
-  )
-).rows[0].revision));
+  const databasePools = runtime.databasePools;
+  const database = {
+    ...databasePools,
+    ...(await import("../../../../packages/server/src/core/database/advisory-locks.ts"))
+  };
+  const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
+  const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+  const imageUpdate = await import("../../../../packages/server/src/images/image-update.ts");
+  const localAccess = await registry.resolveStorageAccess("local");
+  const readReadyRevision = async () =>
+    BigInt(
+      String(
+        (
+          await database.pool.query(
+            "SELECT revision::text FROM ready_image_revision WHERE singleton=1"
+          )
+        ).rows[0].revision
+      )
+    );
   const classificationRollbackId = randomUUID();
   const classificationRollbackSource = storageObjectKey(classificationRollbackId, "webp");
-  const classificationRollbackBody = Buffer.from(
-    "atomic-classification-rollback"
-  );
+  const classificationRollbackBody = Buffer.from("atomic-classification-rollback");
   const classificationRollbackMd5 = createHash("md5")
     .update(classificationRollbackBody)
     .digest("hex");
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, title)
        VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, 'before')`,
-    [
-        classificationRollbackId,
-        classificationRollbackMd5,
-        classificationRollbackBody.byteLength
-      ]
+    [classificationRollbackId, classificationRollbackMd5, classificationRollbackBody.byteLength]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -64,12 +63,14 @@ const readReadyRevision = async () => BigInt(String((
   const revisionBeforeClassificationRollback = await readReadyRevision();
   let failedClassificationUpdate;
   try {
-    failedClassificationUpdate = await imageUpdate.updateImages([{
-      id: classificationRollbackId,
-      brightness: "light",
-      title: "must-roll-back",
-      tags: ["classification-rollback-tag"]
-    }]);
+    failedClassificationUpdate = await imageUpdate.updateImages([
+      {
+        id: classificationRollbackId,
+        brightness: "light",
+        title: "must-roll-back",
+        tags: ["classification-rollback-tag"]
+      }
+    ]);
   } finally {
     await database.pool.query(`
       DROP TRIGGER imageshow_test_reject_classification_update ON metadata;
@@ -79,35 +80,43 @@ const readReadyRevision = async () => BigInt(String((
   assert.equal(failedClassificationUpdate.updated, 0);
   assert.equal(failedClassificationUpdate.failed, 1);
   assert.equal(await readReadyRevision(), revisionBeforeClassificationRollback);
-  assert.deepEqual((await database.pool.query(
-    "SELECT ext, brightness, title FROM metadata WHERE id=$1",
-    [classificationRollbackId]
-  )).rows[0], {
-    ext: "webp",
-    brightness: "dark",
-    title: "before"
-  });
-  assert.equal(Number((await database.pool.query(
-    "SELECT count(*)::int AS count FROM tag "
-      + "WHERE slug='classification-rollback-tag'"
-  )).rows[0].count), 0);
+  assert.deepEqual(
+    (
+      await database.pool.query("SELECT ext, brightness, title FROM metadata WHERE id=$1", [
+        classificationRollbackId
+      ])
+    ).rows[0],
+    {
+      ext: "webp",
+      brightness: "dark",
+      title: "before"
+    }
+  );
   assert.equal(
-    Number((await database.pool.query(
-      "SELECT count(*)::int AS count FROM background_job "
-        + "WHERE target_id=$1 AND type='move.cleanup'",
-      [classificationRollbackId]
-    )).rows[0].count),
+    Number(
+      (
+        await database.pool.query(
+          "SELECT count(*)::int AS count FROM tag " + "WHERE slug='classification-rollback-tag'"
+        )
+      ).rows[0].count
+    ),
+    0
+  );
+  assert.equal(
+    Number(
+      (
+        await database.pool.query(
+          "SELECT count(*)::int AS count FROM background_job " +
+            "WHERE target_id=$1 AND type='move.cleanup'",
+          [classificationRollbackId]
+        )
+      ).rows[0].count
+    ),
     0,
     "元数据事务失败不得生成存储补偿任务"
   );
-  assert.equal(
-    await localAccess.driver.exists("full", classificationRollbackSource),
-    true
-  );
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id=$1",
-    [classificationRollbackId]
-  );
+  assert.equal(await localAccess.driver.exists("full", classificationRollbackSource), true);
+  await database.pool.query("DELETE FROM metadata WHERE id=$1", [classificationRollbackId]);
   await removeDriverObject(localAccess.driver, "full", classificationRollbackSource);
   await removeDriverObject(
     localAccess.driver,
@@ -118,17 +127,11 @@ const readReadyRevision = async () => BigInt(String((
   const classificationId = randomUUID();
   const classificationSourceKey = storageObjectKey(classificationId, "webp");
   const classificationBody = Buffer.from("classification-metadata-only");
-  const classificationMd5 = createHash("md5")
-    .update(classificationBody)
-    .digest("hex");
+  const classificationMd5 = createHash("md5").update(classificationBody).digest("hex");
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size, status)
        VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, $3, 'ready')`,
-    [
-        classificationId,
-        classificationMd5,
-        classificationBody.byteLength
-      ]
+    [classificationId, classificationMd5, classificationBody.byteLength]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -142,21 +145,30 @@ const readReadyRevision = async () => BigInt(String((
     classificationBody,
     "image/webp"
   );
-  assert.deepEqual(await imageUpdate.updateImages([{
-    id: classificationId,
-    brightness: "light"
-  }]), {
-    updated: 1,
-    failed: 0,
-    results: [{ id: classificationId, status: "updated" }]
-  });
-  assert.deepEqual((await database.pool.query(
-    "SELECT ext, brightness FROM metadata WHERE id=$1",
-    [classificationId]
-  )).rows[0], {
-    ext: "webp",
-    brightness: "light"
-  });
+  assert.deepEqual(
+    await imageUpdate.updateImages([
+      {
+        id: classificationId,
+        brightness: "light"
+      }
+    ]),
+    {
+      updated: 1,
+      failed: 0,
+      results: [{ id: classificationId, status: "updated" }]
+    }
+  );
+  assert.deepEqual(
+    (
+      await database.pool.query("SELECT ext, brightness FROM metadata WHERE id=$1", [
+        classificationId
+      ])
+    ).rows[0],
+    {
+      ext: "webp",
+      brightness: "light"
+    }
+  );
   assert.equal(
     await localAccess.driver.exists("full", classificationSourceKey),
     true,
@@ -170,11 +182,15 @@ const readReadyRevision = async () => BigInt(String((
     true
   );
   assert.equal(
-    Number((await database.pool.query(
-      "SELECT count(*)::int AS count FROM background_job "
-        + "WHERE target_id=$1 AND type='move.cleanup'",
-      [classificationId]
-    )).rows[0].count),
+    Number(
+      (
+        await database.pool.query(
+          "SELECT count(*)::int AS count FROM background_job " +
+            "WHERE target_id=$1 AND type='move.cleanup'",
+          [classificationId]
+        )
+      ).rows[0].count
+    ),
     0
   );
   await database.pool.query("DELETE FROM metadata WHERE id=$1", [classificationId]);
@@ -187,19 +203,14 @@ const readReadyRevision = async () => BigInt(String((
 
   const classificationMissingThumbId = randomUUID();
   const classificationMissingThumbSource = storageObjectKey(classificationMissingThumbId, "webp");
-  const classificationMissingThumbBody = Buffer.from(
-    "classification-without-thumbnail"
-  );
+  const classificationMissingThumbBody = Buffer.from("classification-without-thumbnail");
   const classificationMissingThumbMd5 = createHash("md5")
     .update(classificationMissingThumbBody)
     .digest("hex");
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size)
        VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, 0)`,
-    [
-        classificationMissingThumbId,
-        classificationMissingThumbMd5
-      ]
+    [classificationMissingThumbId, classificationMissingThumbMd5]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -207,26 +218,33 @@ const readReadyRevision = async () => BigInt(String((
     classificationMissingThumbBody,
     "image/webp"
   );
-  assert.equal((await imageUpdate.updateImages([{
-    id: classificationMissingThumbId,
-    brightness: "light"
-  }])).failed, 0);
-  assert.deepEqual((await database.pool.query(
-    "SELECT ext, brightness FROM metadata WHERE id=$1",
-    [classificationMissingThumbId]
-  )).rows[0], {
-    ext: "webp",
-    brightness: "light"
-  });
+  assert.equal(
+    (
+      await imageUpdate.updateImages([
+        {
+          id: classificationMissingThumbId,
+          brightness: "light"
+        }
+      ])
+    ).failed,
+    0
+  );
+  assert.deepEqual(
+    (
+      await database.pool.query("SELECT ext, brightness FROM metadata WHERE id=$1", [
+        classificationMissingThumbId
+      ])
+    ).rows[0],
+    {
+      ext: "webp",
+      brightness: "light"
+    }
+  );
   assert.equal(
     await localAccess.driver.exists("full", classificationMissingThumbSource),
     true,
     "明确的分类修改不应依赖缩略图或创建新存储位置"
   );
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id=$1",
-    [classificationMissingThumbId]
-  );
+  await database.pool.query("DELETE FROM metadata WHERE id=$1", [classificationMissingThumbId]);
   await removeDriverObject(localAccess.driver, "full", classificationMissingThumbSource);
-
 });

@@ -1,8 +1,4 @@
-export const backgroundJobTypes = [
-  "move.cleanup",
-  "trash.purge",
-  "cache.rebuild"
-] as const;
+export const backgroundJobTypes = ["move.cleanup", "trash.purge", "cache.rebuild"] as const;
 
 export type BackgroundJobType = (typeof backgroundJobTypes)[number];
 

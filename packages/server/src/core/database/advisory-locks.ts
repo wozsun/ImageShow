@@ -9,9 +9,7 @@ export type AdvisoryLockRequest = {
   acquisition?: "wait" | "try";
 };
 
-export type AdvisoryLockAttempt<T> =
-  | { acquired: true; value: T }
-  | { acquired: false };
+export type AdvisoryLockAttempt<T> = { acquired: true; value: T } | { acquired: false };
 
 class AdvisoryLockLostError extends Error {
   readonly code = "advisory_lock_lost";
@@ -22,19 +20,14 @@ class AdvisoryLockLostError extends Error {
   }
 }
 
-type AdvisoryLockWork<T> = (
-  signal: AbortSignal,
-  lockClient: PoolClient
-) => Promise<T>;
+type AdvisoryLockWork<T> = (signal: AbortSignal, lockClient: PoolClient) => Promise<T>;
 
 type AdvisoryLockSignalContext = Readonly<{
   acquisitionSignal: AbortSignal;
   operationSignal?: AbortSignal;
 }>;
 
-const advisoryLockSignalContext = new AsyncLocalStorage<
-  AdvisoryLockSignalContext
->();
+const advisoryLockSignalContext = new AsyncLocalStorage<AdvisoryLockSignalContext>();
 const poisonedAdvisoryClients = new WeakSet<PoolClient>();
 
 /** Cancel advisory client checkout and lock acquisition, not acquired work. */
@@ -43,14 +36,15 @@ export function runWithAdvisoryLockAcquisitionSignal<T>(
   work: () => Promise<T>
 ): Promise<T> {
   const parent = advisoryLockSignalContext.getStore();
-  const acquisitionSignal = parent
-    ? AbortSignal.any([parent.acquisitionSignal, signal])
-    : signal;
+  const acquisitionSignal = parent ? AbortSignal.any([parent.acquisitionSignal, signal]) : signal;
   acquisitionSignal.throwIfAborted();
-  return advisoryLockSignalContext.run({
-    acquisitionSignal,
-    operationSignal: parent?.operationSignal
-  }, work);
+  return advisoryLockSignalContext.run(
+    {
+      acquisitionSignal,
+      operationSignal: parent?.operationSignal
+    },
+    work
+  );
 }
 
 export async function acquireAdvisoryLockClient(
@@ -68,13 +62,16 @@ export async function acquireAdvisoryLockClient(
     if (signal.aborted) {
       // node-postgres cannot cancel a queued pool checkout. Release a client
       // that arrives after the caller has already left the wait boundary.
-      void pending.then((client) => {
-        try {
-          client.release();
-        } catch {
-          // The pool owns subsequent cleanup if a late release itself fails.
-        }
-      }, () => undefined);
+      void pending.then(
+        (client) => {
+          try {
+            client.release();
+          } catch {
+            // The pool owns subsequent cleanup if a late release itself fails.
+          }
+        },
+        () => undefined
+      );
     }
     throw error;
   }
@@ -89,9 +86,7 @@ function advisoryLockFunction(lock: AdvisoryLockRequest) {
 }
 
 function advisoryUnlockFunction(lock: AdvisoryLockRequest) {
-  return lock.mode === "shared"
-    ? "pg_advisory_unlock_shared"
-    : "pg_advisory_unlock";
+  return lock.mode === "shared" ? "pg_advisory_unlock_shared" : "pg_advisory_unlock";
 }
 
 async function runAdvisoryLockWork<T>(
@@ -99,15 +94,18 @@ async function runAdvisoryLockWork<T>(
   client: PoolClient,
   work: AdvisoryLockWork<T>
 ) {
-  const operation = Promise.resolve().then(() => (
-    advisoryLockSignalContext.run({
-      acquisitionSignal: signal,
-      operationSignal: signal
-    }, () => {
-      signal.throwIfAborted();
-      return work(signal, client);
-    })
-  ));
+  const operation = Promise.resolve().then(() =>
+    advisoryLockSignalContext.run(
+      {
+        acquisitionSignal: signal,
+        operationSignal: signal
+      },
+      () => {
+        signal.throwIfAborted();
+        return work(signal, client);
+      }
+    )
+  );
   try {
     const value = await raceWithAbortSignal(signal, operation);
     signal.throwIfAborted();
@@ -138,10 +136,7 @@ async function runWithAdvisoryLocksOnClient<T>(
         acquisitionSignal.throwIfAborted();
         result = await raceWithAbortSignal(
           acquisitionSignal,
-          client.query(
-            `SELECT ${advisoryLockFunction(lock)}(hashtext($1)) AS acquired`,
-            [lock.key]
-          )
+          client.query(`SELECT ${advisoryLockFunction(lock)}(hashtext($1)) AS acquired`, [lock.key])
         );
       } catch (error) {
         // The server may have acquired the lock before the response was lost.
@@ -227,12 +222,7 @@ export async function withAdvisoryLocksOnClient<T>(
   locks: readonly Omit<AdvisoryLockRequest, "acquisition">[],
   work: AdvisoryLockWork<T>
 ): Promise<T> {
-  const attempt = await runWithAdvisoryLocksOnClient(
-    client,
-    signal,
-    locks,
-    work
-  );
+  const attempt = await runWithAdvisoryLocksOnClient(client, signal, locks, work);
   if (!attempt.acquired) {
     throw new Error("Blocking advisory lock was not acquired");
   }

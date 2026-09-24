@@ -17,11 +17,8 @@ export function staticResponseEtag(headers: Headers) {
   const length = rangeTotal ?? headers.get("Content-Length");
   const modifiedTime = modified ? new Date(modified).getTime() : Number.NaN;
   const resourceLength = length === null ? Number.NaN : Number(length);
-  if (
-    !Number.isFinite(modifiedTime)
-    || !Number.isSafeInteger(resourceLength)
-    || resourceLength < 0
-  ) return "";
+  if (!Number.isFinite(modifiedTime) || !Number.isSafeInteger(resourceLength) || resourceLength < 0)
+    return "";
   const encoding = headers.get("Content-Encoding") ?? "identity";
   return `W/"${entityTagDigest(`${modifiedTime}:${resourceLength}:${encoding}`)}"`;
 }
@@ -41,13 +38,19 @@ function parseHttpDate(value: string | null | undefined) {
 }
 
 function weakEtagMatches(left: string, right: string) {
-  return isEntityTag(left) && isEntityTag(right) && stripWeakPrefix(left) === stripWeakPrefix(right);
+  return (
+    isEntityTag(left) && isEntityTag(right) && stripWeakPrefix(left) === stripWeakPrefix(right)
+  );
 }
 
 function strongEtagMatches(left: string, right: string) {
-  return isEntityTag(left) && isEntityTag(right)
-    && !left.startsWith("W/") && !right.startsWith("W/")
-    && left === right;
+  return (
+    isEntityTag(left) &&
+    isEntityTag(right) &&
+    !left.startsWith("W/") &&
+    !right.startsWith("W/") &&
+    left === right
+  );
 }
 
 function parseEntityTagList(header: string) {
@@ -66,13 +69,11 @@ function parseEntityTagList(header: string) {
   return quoted ? [] : candidates;
 }
 
-export function ifNoneMatchCandidates(
-  header: string | null | undefined
-) {
+export function ifNoneMatchCandidates(header: string | null | undefined) {
   if (!header) return [];
-  return parseEntityTagList(header).filter((candidate) => (
-    candidate === "*" || isEntityTag(candidate)
-  ));
+  return parseEntityTagList(header).filter(
+    (candidate) => candidate === "*" || isEntityTag(candidate)
+  );
 }
 
 /** If-None-Match uses weak comparison for GET and HEAD responses. */

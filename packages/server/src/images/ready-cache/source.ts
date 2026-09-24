@@ -52,51 +52,49 @@ export async function readReadyImageSourceItems(
   const uniqueIds = [...new Set(ids)];
   if (!uniqueIds.length) return [];
   signal?.throwIfAborted();
-  const rows = (await executor.query(
-    `SELECT ${readyImageSourceColumns}
+  const rows = (
+    await executor.query(
+      `SELECT ${readyImageSourceColumns}
        FROM metadata m
       WHERE m.status='ready' AND m.id=ANY($1::uuid[])
       ORDER BY m.id`,
-    [uniqueIds]
-  )).rows as ReadyImageSourceRow[];
+      [uniqueIds]
+    )
+  ).rows as ReadyImageSourceRow[];
   signal?.throwIfAborted();
   return rows.map(readyImageCacheItemFromRow);
 }
 
-async function readBatch(
-  client: PoolClient,
-  afterId: string | null,
-  signal?: AbortSignal
-) {
+async function readBatch(client: PoolClient, afterId: string | null, signal?: AbortSignal) {
   signal?.throwIfAborted();
-  const rows = (await client.query(
-    `SELECT ${readyImageSourceColumns}
+  const rows = (
+    await client.query(
+      `SELECT ${readyImageSourceColumns}
        FROM metadata m
       WHERE m.status='ready'
         AND ($1::uuid IS NULL OR m.id > $1::uuid)
       ORDER BY m.id
       LIMIT $2`,
-    [afterId, READY_IMAGE_REBUILD_BATCH_SIZE]
-  )).rows as ReadyImageSourceRow[];
+      [afterId, READY_IMAGE_REBUILD_BATCH_SIZE]
+    )
+  ).rows as ReadyImageSourceRow[];
   signal?.throwIfAborted();
   return rows.map(readyImageCacheItemFromRow);
 }
 
 export async function readReadyImageSourceSnapshot(
   onStart: (snapshot: Omit<ReadyImageSourceSnapshot, "processed">) => Promise<void>,
-  onBatch: (
-    items: ReadyImageCacheItem[],
-    snapshot: ReadyImageSourceSnapshot
-  ) => Promise<void>,
+  onBatch: (items: ReadyImageCacheItem[], snapshot: ReadyImageSourceSnapshot) => Promise<void>,
   signal?: AbortSignal
 ): Promise<ReadyImageSourceSnapshot> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
     const revision = (await getReadyImageRevision(client)).revision;
-    const total = Number((await client.query(
-      "SELECT count(*)::int AS count FROM metadata WHERE status='ready'"
-    )).rows[0]?.count ?? 0);
+    const total = Number(
+      (await client.query("SELECT count(*)::int AS count FROM metadata WHERE status='ready'"))
+        .rows[0]?.count ?? 0
+    );
     if (!Number.isSafeInteger(total) || total < 0) {
       throw new Error("PostgreSQL returned an invalid ready-image count");
     }

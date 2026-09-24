@@ -11,7 +11,8 @@ const CURRENT_PASSWORD_HASH_POLICY = Object.freeze({
 });
 const MAX_ENCODED_PASSWORD_HASH_LENGTH = 256;
 
-const encodedHashPattern = /^\$argon2id\$v=(\d+)\$m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)$/;
+const encodedHashPattern =
+  /^\$argon2id\$v=(\d+)\$m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)$/;
 
 type PasswordHashValues = {
   salt: Buffer;
@@ -50,13 +51,14 @@ function parsePasswordHash(encoded: string): PasswordHashValues | null {
     const policy = CURRENT_PASSWORD_HASH_POLICY;
 
     if (
-      version !== policy.version
-      || memory !== policy.memory
-      || passes !== policy.passes
-      || parallelism !== policy.parallelism
-      || salt.length !== policy.saltLength
-      || expected.length !== policy.tagLength
-    ) return null;
+      version !== policy.version ||
+      memory !== policy.memory ||
+      passes !== policy.passes ||
+      parallelism !== policy.parallelism ||
+      salt.length !== policy.saltLength ||
+      expected.length !== policy.tagLength
+    )
+      return null;
 
     return { salt, expected };
   } catch {
@@ -71,17 +73,21 @@ export function isCurrentPasswordHash(encoded: string) {
 function derivePassword(password: string, salt: Buffer) {
   const policy = CURRENT_PASSWORD_HASH_POLICY;
   return new Promise<Buffer>((resolve, reject) => {
-    argon2(policy.algorithm, {
-      message: Buffer.from(password, "utf8"),
-      nonce: salt,
-      parallelism: policy.parallelism,
-      tagLength: policy.tagLength,
-      memory: policy.memory,
-      passes: policy.passes
-    }, (error, derivedKey) => {
-      if (error) reject(error);
-      else resolve(derivedKey);
-    });
+    argon2(
+      policy.algorithm,
+      {
+        message: Buffer.from(password, "utf8"),
+        nonce: salt,
+        parallelism: policy.parallelism,
+        tagLength: policy.tagLength,
+        memory: policy.memory,
+        passes: policy.passes
+      },
+      (error, derivedKey) => {
+        if (error) reject(error);
+        else resolve(derivedKey);
+      }
+    );
   });
 }
 
@@ -97,7 +103,9 @@ export async function verifyPassword(encoded: string, password: string) {
   if (!parameters) return false;
   try {
     const actual = await derivePassword(password, parameters.salt);
-    return actual.length === parameters.expected.length && timingSafeEqual(actual, parameters.expected);
+    return (
+      actual.length === parameters.expected.length && timingSafeEqual(actual, parameters.expected)
+    );
   } catch {
     return false;
   }

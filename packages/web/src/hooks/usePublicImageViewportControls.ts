@@ -1,18 +1,8 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type RefObject
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { isPageScrollLocked } from "./usePageScrollLock.js";
 import { usePageScrollMovement } from "./usePageScrollMovement.js";
 import { usePublicNavigationTopEdgeReveal } from "./usePublicNavigationTopEdgeReveal.js";
-import {
-  mobileViewportMediaQuery,
-  useMediaQuery
-} from "./useMediaQuery.js";
+import { mobileViewportMediaQuery, useMediaQuery } from "./useMediaQuery.js";
 import {
   isPublicNavigationInteracting,
   publicNavigationTopRevealThreshold
@@ -53,7 +43,7 @@ function usePublicImageNavigationVisibility(
     const updateNavigationMeasurements = () => {
       const nextHeight = Math.ceil(toolbar.getBoundingClientRect().height);
       toolbarHeightRef.current = nextHeight;
-      setHeight((current) => current === nextHeight ? current : nextHeight);
+      setHeight((current) => (current === nextHeight ? current : nextHeight));
     };
     const observer = new ResizeObserver(updateNavigationMeasurements);
     observer.observe(toolbar);
@@ -97,12 +87,11 @@ function usePublicImageNavigationVisibility(
     if (!navigationStack) return;
     let timer: number | undefined;
     let disposed = false;
-    const canAutoHide = () => (
-      !document.hidden
-      && navigationStateRef.current.stage !== "hidden"
-      && !isPublicNavigationInteracting(navigationStack)
-      && !navigationStack.querySelector('[aria-expanded="true"]')
-    );
+    const canAutoHide = () =>
+      !document.hidden &&
+      navigationStateRef.current.stage !== "hidden" &&
+      !isPublicNavigationInteracting(navigationStack) &&
+      !navigationStack.querySelector('[aria-expanded="true"]');
     const restartAutoHide = () => {
       window.clearTimeout(timer);
       timer = undefined;
@@ -150,67 +139,68 @@ function usePublicImageNavigationVisibility(
     };
   }, [autoHideAfterMs, lockedOpen, paused, stage, toolbarRef]);
 
-  const advance = useCallback((delta: number, scrollTop: number, allowReveal = true) => {
-    if (paused) return;
-    const toolbar = toolbarRef.current;
-    if (!toolbar) return;
-    // 工具栏的下拉菜单通过 Portal 渲染在 body；主导航菜单
-    // 由 lockedOpen 暂停采样，二者都保持触发器与浮层处于同一可见状态。
-    const menuOpen = Boolean(
-      toolbar.querySelector('[aria-expanded="true"]')
-    );
-    const currentState = navigationStateRef.current;
-    const navigationStack = toolbar.closest<HTMLElement>(".public-navigation-stack");
-    if (
-      !lockedOpen
-      && !menuOpen
-      && delta > 0
-      && scrollTop > publicNavigationTopRevealThreshold
-      && currentState.stage !== "hidden"
-      && navigationStack
-      && isPublicNavigationInteracting(navigationStack)
-    ) {
-      navigationStateRef.current = { stage: currentState.stage, direction: null, distance: 0 };
-      return;
-    }
-    const nextState = advancePublicImageNavigation(currentState, {
-      delta,
-      headerPresent,
-      scrollTop,
-      toolbarHeight: toolbarHeightRef.current,
-      lockedOpen: lockedOpen || menuOpen,
-      allowReveal
-    });
-    navigationStateRef.current = nextState;
-    if (nextState.stage === currentState.stage) return;
+  const advance = useCallback(
+    (delta: number, scrollTop: number, allowReveal = true) => {
+      if (paused) return;
+      const toolbar = toolbarRef.current;
+      if (!toolbar) return;
+      // 工具栏的下拉菜单通过 Portal 渲染在 body；主导航菜单
+      // 由 lockedOpen 暂停采样，二者都保持触发器与浮层处于同一可见状态。
+      const menuOpen = Boolean(toolbar.querySelector('[aria-expanded="true"]'));
+      const currentState = navigationStateRef.current;
+      const navigationStack = toolbar.closest<HTMLElement>(".public-navigation-stack");
+      if (
+        !lockedOpen &&
+        !menuOpen &&
+        delta > 0 &&
+        scrollTop > publicNavigationTopRevealThreshold &&
+        currentState.stage !== "hidden" &&
+        navigationStack &&
+        isPublicNavigationInteracting(navigationStack)
+      ) {
+        navigationStateRef.current = { stage: currentState.stage, direction: null, distance: 0 };
+        return;
+      }
+      const nextState = advancePublicImageNavigation(currentState, {
+        delta,
+        headerPresent,
+        scrollTop,
+        toolbarHeight: toolbarHeightRef.current,
+        lockedOpen: lockedOpen || menuOpen,
+        allowReveal
+      });
+      navigationStateRef.current = nextState;
+      if (nextState.stage === currentState.stage) return;
 
-    // inert 会把隐藏工具栏移出交互与无障碍树；先释放内部焦点，避免浏览器
-    // 保留一个已不可见的焦点目标。主导航由 AppHeader 在自身隐藏时清理焦点。
-    if (
-      currentState.stage !== "hidden"
-      && nextState.stage === "hidden"
-    ) {
-      blurFocusedElement(toolbar);
-    }
-    setStage(nextState.stage);
-  }, [headerPresent, lockedOpen, paused, toolbarRef]);
+      // inert 会把隐藏工具栏移出交互与无障碍树；先释放内部焦点，避免浏览器
+      // 保留一个已不可见的焦点目标。主导航由 AppHeader 在自身隐藏时清理焦点。
+      if (currentState.stage !== "hidden" && nextState.stage === "hidden") {
+        blurFocusedElement(toolbar);
+      }
+      setStage(nextState.stage);
+    },
+    [headerPresent, lockedOpen, paused, toolbarRef]
+  );
 
-  usePageScrollMovement(({ delta, position }) => {
-    advance(delta, position.top);
-  }, trackPageScroll && !lockedOpen && !paused);
+  usePageScrollMovement(
+    ({ delta, position }) => {
+      advance(delta, position.top);
+    },
+    trackPageScroll && !lockedOpen && !paused
+  );
 
-  const advanceManual = useCallback((delta: number, pointerType?: string) => {
-    if (paused || !Number.isFinite(delta) || delta === 0) return;
-    manualPositionRef.current = Math.max(
-      0,
-      manualPositionRef.current + delta
-    );
-    advance(
-      delta,
-      manualPositionRef.current,
-      mouseDragRevealsNavigation || pointerType !== "mouse"
-    );
-  }, [advance, mouseDragRevealsNavigation, paused]);
+  const advanceManual = useCallback(
+    (delta: number, pointerType?: string) => {
+      if (paused || !Number.isFinite(delta) || delta === 0) return;
+      manualPositionRef.current = Math.max(0, manualPositionRef.current + delta);
+      advance(
+        delta,
+        manualPositionRef.current,
+        mouseDragRevealsNavigation || pointerType !== "mouse"
+      );
+    },
+    [advance, mouseDragRevealsNavigation, paused]
+  );
 
   const resetManual = useCallback(() => {
     manualPositionRef.current = 0;
@@ -309,6 +299,6 @@ export function usePublicImageViewportControls({
     resetManualNavigation,
     toolbarHeight,
     toolbarRef,
-    toolbarVisible,
+    toolbarVisible
   };
 }

@@ -1,7 +1,4 @@
-import {
-  ADMIN_ICONS,
-  type AdminOnlyIconName
-} from "./admin-icons.generated.js";
+import { ADMIN_ICONS, type AdminOnlyIconName } from "./admin-icons.generated.js";
 import { ICONS, type IconName } from "./icons.generated.js";
 import { IconGlyph } from "./Icon.js";
 

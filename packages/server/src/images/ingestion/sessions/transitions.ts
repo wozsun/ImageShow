@@ -27,12 +27,13 @@ export function failedIngestionSession(
   fallbackCode = "ingestion_stage_failed"
 ) {
   const sessionError: IngestionSessionError = {
-    code: typeof error === "object"
-      && error !== null
-      && "code" in error
-      && typeof error.code === "string"
-      ? error.code
-      : fallbackCode,
+    code:
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string"
+        ? error.code
+        : fallbackCode,
     message: errorMessage(error)
   };
   return semanticIngestionSession(current, {

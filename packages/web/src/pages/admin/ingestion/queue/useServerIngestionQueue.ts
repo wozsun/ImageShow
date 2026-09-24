@@ -15,9 +15,7 @@ import {
   type IngestionQueueSnapshotSelection,
   type ServerIngestionQueueBaseline
 } from "./model/server-ingestion-queue-state.js";
-import type {
-  CompletedIngestionObservation
-} from "./ingestion-queue-contract.js";
+import type { CompletedIngestionObservation } from "./ingestion-queue-contract.js";
 import {
   emptyServerIngestionQueueView,
   parseServerIngestionQueueEvent,
@@ -31,11 +29,7 @@ const clientMutationBufferLimit = 1_000;
 const snapshotRecoveryDelays = [100, 500, 1_500] as const;
 const protocolReconnectDelays = [100, 500] as const;
 
-type SnapshotRequestReason =
-  | "refresh"
-  | "parameters"
-  | "reload"
-  | "ready";
+type SnapshotRequestReason = "refresh" | "parameters" | "reload" | "ready";
 
 type SnapshotCoverageRequirements = {
   actionScope: string;
@@ -60,33 +54,33 @@ type AuthorityRecovery = {
  * starts a fresh action generation, while the last accepted page remains a
  * display-only baseline until the new bounded snapshot succeeds.
  */
-export function useServerIngestionQueue(input: Readonly<{
-  enabled: boolean;
-  displayed: boolean;
-  queue: IngestionQueueTypeDto;
-  offset: number;
-  limit: number;
-  requiredItems: number;
-  excludeItems: readonly IngestionSessionPairDto[];
-  includeItems: readonly IngestionSessionPairDto[];
-  onCompletedIngestions?: (
-    entries: readonly CompletedIngestionObservation[]
-  ) => void;
-  onCompletedIngestionReceipt?: (
-    receipt: IngestionQueueTerminalEventItemDto & { status: "completed" }
-  ) => void;
-  onServerIngestionItem?: (item: ServerIngestionItemDto) => void;
-}>) {
-  const [view, setView] = useState<ServerIngestionQueueView>(() => (
+export function useServerIngestionQueue(
+  input: Readonly<{
+    enabled: boolean;
+    displayed: boolean;
+    queue: IngestionQueueTypeDto;
+    offset: number;
+    limit: number;
+    requiredItems: number;
+    excludeItems: readonly IngestionSessionPairDto[];
+    includeItems: readonly IngestionSessionPairDto[];
+    onCompletedIngestions?: (entries: readonly CompletedIngestionObservation[]) => void;
+    onCompletedIngestionReceipt?: (
+      receipt: IngestionQueueTerminalEventItemDto & { status: "completed" }
+    ) => void;
+    onServerIngestionItem?: (item: ServerIngestionItemDto) => void;
+  }>
+) {
+  const [view, setView] = useState<ServerIngestionQueueView>(() =>
     emptyServerIngestionQueueView("idle", 0)
-  ));
+  );
   const [authorityRecoveryEpoch, setAuthorityRecoveryEpoch] = useState(0);
-  const excludeKey = input.excludeItems.map((item) => (
-    `${item.session_id}\0${item.image_id.toLowerCase()}`
-  )).join("\u0001");
-  const includeKey = input.includeItems.map((item) => (
-    `${item.session_id}\0${item.image_id.toLowerCase()}`
-  )).join("\u0001");
+  const excludeKey = input.excludeItems
+    .map((item) => `${item.session_id}\0${item.image_id.toLowerCase()}`)
+    .join("\u0001");
+  const includeKey = input.includeItems
+    .map((item) => `${item.session_id}\0${item.image_id.toLowerCase()}`)
+    .join("\u0001");
   const filterKey = `${excludeKey}\u0002${includeKey}`;
   const parametersRef = useRef({
     offset: input.offset,
@@ -102,20 +96,16 @@ export function useServerIngestionQueue(input: Readonly<{
     excludeItems: input.excludeItems,
     includeItems: input.includeItems
   };
-  const requestSnapshotRef = useRef<(
-    (reason?: SnapshotRequestReason) => void
-  ) | null>(null);
+  const requestSnapshotRef = useRef<((reason?: SnapshotRequestReason) => void) | null>(null);
   const recoverAuthorityRef = useRef<(() => Promise<void>) | null>(null);
   const invalidateDisplayAuthorityRef = useRef<(() => void) | null>(null);
   const flushAuthorityRecoveryRef = useRef<(() => void) | null>(null);
-  const ensureRevisionRef = useRef<(
-    (revision?: number, connectionGeneration?: number) => boolean
-  ) | null>(null);
+  const ensureRevisionRef = useRef<
+    ((revision?: number, connectionGeneration?: number) => boolean) | null
+  >(null);
   const onCompletedIngestionsRef = useRef(input.onCompletedIngestions);
   onCompletedIngestionsRef.current = input.onCompletedIngestions;
-  const onCompletedIngestionReceiptRef = useRef(
-    input.onCompletedIngestionReceipt
-  );
+  const onCompletedIngestionReceiptRef = useRef(input.onCompletedIngestionReceipt);
   onCompletedIngestionReceiptRef.current = input.onCompletedIngestionReceipt;
   const onServerIngestionItemRef = useRef(input.onServerIngestionItem);
   onServerIngestionItemRef.current = input.onServerIngestionItem;
@@ -169,10 +159,7 @@ export function useServerIngestionQueue(input: Readonly<{
     let authorityRecovery: AuthorityRecovery | null = null;
 
     const completeAuthorityRecovery = (serial: number) => {
-      if (
-        authorityRecovery === null
-        || serial < authorityRecovery.minimumSnapshotSerial
-      ) return;
+      if (authorityRecovery === null || serial < authorityRecovery.minimumSnapshotSerial) return;
       const completed = authorityRecovery;
       authorityRecovery = null;
       completed.resolve();
@@ -205,8 +192,8 @@ export function useServerIngestionQueue(input: Readonly<{
 
     const alignSnapshotRequirements = (currentScope = false) => {
       if (
-        snapshotRequirements.actionScope === actionScope
-        && snapshotRequirements.connectionGeneration === connectionGeneration
+        snapshotRequirements.actionScope === actionScope &&
+        snapshotRequirements.connectionGeneration === connectionGeneration
       ) {
         if (currentScope) snapshotRequirements.currentScope = true;
         return;
@@ -226,27 +213,25 @@ export function useServerIngestionQueue(input: Readonly<{
       };
     };
 
-    const hasSnapshotRequirements = () => (
-      snapshotRequirements.actionScope === actionScope
-      && snapshotRequirements.connectionGeneration === connectionGeneration
-      && (
-        snapshotRequirements.currentScope
-        || snapshotRequirements.ordinarySnapshot
-        || snapshotRequirements.currentSelection
-        || snapshotRequirements.minimumRevision !== null
-        || snapshotRequirements.minimumSnapshotSerial !== null
-      )
-    );
+    const hasSnapshotRequirements = () =>
+      snapshotRequirements.actionScope === actionScope &&
+      snapshotRequirements.connectionGeneration === connectionGeneration &&
+      (snapshotRequirements.currentScope ||
+        snapshotRequirements.ordinarySnapshot ||
+        snapshotRequirements.currentSelection ||
+        snapshotRequirements.minimumRevision !== null ||
+        snapshotRequirements.minimumSnapshotSerial !== null);
 
     const nextSnapshotReason = (): SnapshotRequestReason | null => {
       if (!hasSnapshotRequirements()) return null;
       if (snapshotRequirements.postTriggerReason === "reload") return "reload";
       if (snapshotRequirements.currentScope) return "ready";
       if (
-        snapshotRequirements.minimumSnapshotSerial !== null
-        || snapshotRequirements.minimumRevision !== null
-        || snapshotRequirements.ordinarySnapshot
-      ) return "refresh";
+        snapshotRequirements.minimumSnapshotSerial !== null ||
+        snapshotRequirements.minimumRevision !== null ||
+        snapshotRequirements.ordinarySnapshot
+      )
+        return "refresh";
       return snapshotRequirements.currentSelection ? "parameters" : null;
     };
 
@@ -272,19 +257,21 @@ export function useServerIngestionQueue(input: Readonly<{
       merged: ServerIngestionQueueBaseline
     ) => {
       if (
-        snapshotRequirements.actionScope !== requestedScope
-        || snapshotRequirements.connectionGeneration !== requestedGeneration
-      ) return;
+        snapshotRequirements.actionScope !== requestedScope ||
+        snapshotRequirements.connectionGeneration !== requestedGeneration
+      )
+        return;
       snapshotRequirements.currentScope = false;
       snapshotRequirements.ordinarySnapshot = false;
       snapshotRequirements.currentSelection = false;
       if (
-        snapshotRequirements.minimumRevision !== null
-        && merged.revision >= snapshotRequirements.minimumRevision
-      ) snapshotRequirements.minimumRevision = null;
+        snapshotRequirements.minimumRevision !== null &&
+        merged.revision >= snapshotRequirements.minimumRevision
+      )
+        snapshotRequirements.minimumRevision = null;
       if (
-        snapshotRequirements.minimumSnapshotSerial !== null
-        && serial >= snapshotRequirements.minimumSnapshotSerial
+        snapshotRequirements.minimumSnapshotSerial !== null &&
+        serial >= snapshotRequirements.minimumSnapshotSerial
       ) {
         snapshotRequirements.minimumSnapshotSerial = null;
         snapshotRequirements.postTriggerReason = null;
@@ -294,9 +281,10 @@ export function useServerIngestionQueue(input: Readonly<{
 
     const abortSnapshotRequest = (keepOffset?: number) => {
       if (
-        activeSnapshot === null
-        || keepOffset !== undefined && activeSnapshot.offset === keepOffset
-      ) return;
+        activeSnapshot === null ||
+        (keepOffset !== undefined && activeSnapshot.offset === keepOffset)
+      )
+        return;
       activeSnapshot.controller.abort();
       activeSnapshot = null;
       immediateSnapshotFollowup = false;
@@ -322,22 +310,25 @@ export function useServerIngestionQueue(input: Readonly<{
       clearSnapshotRecovery();
       invalidateSnapshotScope();
       const { offset } = parametersRef.current;
-      const displayBaseline = baseline !== null && baselineOffset === offset
-        ? baseline
-        : retainedBaseline !== null && retainedOffset === offset
-          ? retainedBaseline
-          : null;
-      setView(displayBaseline
-        ? retainedServerIngestionQueueView(
-            "loading",
-            connectionGeneration,
-            actionScope,
-            displayBaseline
-          )
-        : {
-            ...emptyServerIngestionQueueView("loading", connectionGeneration),
-            actionScope
-          });
+      const displayBaseline =
+        baseline !== null && baselineOffset === offset
+          ? baseline
+          : retainedBaseline !== null && retainedOffset === offset
+            ? retainedBaseline
+            : null;
+      setView(
+        displayBaseline
+          ? retainedServerIngestionQueueView(
+              "loading",
+              connectionGeneration,
+              actionScope,
+              displayBaseline
+            )
+          : {
+              ...emptyServerIngestionQueueView("loading", connectionGeneration),
+              actionScope
+            }
+      );
     };
 
     const publishSnapshotState = (offset: number) => {
@@ -348,21 +339,21 @@ export function useServerIngestionQueue(input: Readonly<{
         setView(readyServerIngestionQueueView(connectionGeneration, actionScope, baseline));
         return;
       }
-      const loadingBaseline = retainedBaseline !== null
-        && retainedOffset === offset
-        ? retainedBaseline
-        : null;
-      setView(loadingBaseline
-        ? retainedServerIngestionQueueView(
-          "loading",
-          connectionGeneration,
-          actionScope,
-          loadingBaseline
-        )
-        : {
-          ...emptyServerIngestionQueueView("loading", connectionGeneration),
-          actionScope
-        });
+      const loadingBaseline =
+        retainedBaseline !== null && retainedOffset === offset ? retainedBaseline : null;
+      setView(
+        loadingBaseline
+          ? retainedServerIngestionQueueView(
+              "loading",
+              connectionGeneration,
+              actionScope,
+              loadingBaseline
+            )
+          : {
+              ...emptyServerIngestionQueueView("loading", connectionGeneration),
+              actionScope
+            }
+      );
     };
 
     const mergeBufferedMutations = (current: ServerIngestionQueueBaseline) => {
@@ -383,13 +374,7 @@ export function useServerIngestionQueue(input: Readonly<{
 
     const startSnapshot = (reason: SnapshotRequestReason) => {
       if (disposed) return;
-      const {
-        offset,
-        limit,
-        requiredItems,
-        excludeItems,
-        includeItems
-      } = parametersRef.current;
+      const { offset, limit, requiredItems, excludeItems, includeItems } = parametersRef.current;
       // Offset changes cancel the obsolete page. Same-scope, same-page reloads
       // share the active request. Its response is allowed to prove every
       // compatible requirement that accumulated while it was in flight.
@@ -408,15 +393,17 @@ export function useServerIngestionQueue(input: Readonly<{
       }
       alignSnapshotRequirements();
       if (
-        snapshotRequirements.currentSelection
-        && baseline !== null
-        && baselineOffset === offset
-        && baselineParameters !== null
-        && ingestionQueueBaselineCoversSelection(
-          baseline,
-          baselineParameters,
-          { offset, limit, requiredItems, excludeItems, includeItems }
-        )
+        snapshotRequirements.currentSelection &&
+        baseline !== null &&
+        baselineOffset === offset &&
+        baselineParameters !== null &&
+        ingestionQueueBaselineCoversSelection(baseline, baselineParameters, {
+          offset,
+          limit,
+          requiredItems,
+          excludeItems,
+          includeItems
+        })
       ) {
         // The combined owner slices retained Server items and consumes exact
         // browser-owned pairs locally. A covered selection change therefore
@@ -435,9 +422,8 @@ export function useServerIngestionQueue(input: Readonly<{
       // 同页重读只在成功后原位替换稳定基线。limit 会随本地前缀增减，
       // 但 offset 不变时旧页仍可安全裁切展示，不能把普通收敛伪装成重连。
       const refreshInPlace = baseline !== null && baselineOffset === offset;
-      const retainDuringLoad = !refreshInPlace
-        && retainedBaseline !== null
-        && retainedOffset === offset;
+      const retainDuringLoad =
+        !refreshInPlace && retainedBaseline !== null && retainedOffset === offset;
       const serial = ++snapshotSerial;
       const controller = new AbortController();
       // A mutation or explicit refresh may recover before the bounded retry
@@ -466,192 +452,192 @@ export function useServerIngestionQueue(input: Readonly<{
         },
         requestedScope,
         controller.signal
-      ).then((snapshot) => {
-        if (
-          disposed
-          || controller.signal.aborted
-          || serial !== snapshotSerial
-          || requestedScope !== actionScope
-          || requestedGeneration !== connectionGeneration
-        ) return;
-        if (
-          snapshot.queue !== input.queue
-          || snapshot.offset !== offset
-          || snapshot.limit !== limit
-        ) throw new Error("内容接入队列快照与请求页面不一致");
-        const currentParameters = parametersRef.current;
-        const capturedParameters = {
-          offset,
-          limit,
-          requiredItems,
-          excludeItems,
-          includeItems
-        } satisfies IngestionQueueSnapshotSelection;
-        const snapshotBaseline = baselineFromIngestionSnapshot(snapshot);
-        if (!ingestionQueueBaselineCoversSelection(
-          snapshotBaseline,
-          capturedParameters,
-          currentParameters
-        )) {
-          // The same-page request still completes normally so rapid handoff
-          // changes never create cancelled fetches. Its page selection is no
-          // longer authoritative, however, so keep the previous stable view
-          // until the queued request reads the current exclusion set.
-          buffered = [];
-          bufferedAuthorityBaseline = null;
-          const stableCoversCurrent = baseline !== null
-            && baselineOffset === currentParameters.offset
-            && baselineParameters !== null
-            && ingestionQueueBaselineCoversSelection(
-              baseline,
-              baselineParameters,
+      )
+        .then((snapshot) => {
+          if (
+            disposed ||
+            controller.signal.aborted ||
+            serial !== snapshotSerial ||
+            requestedScope !== actionScope ||
+            requestedGeneration !== connectionGeneration
+          )
+            return;
+          if (
+            snapshot.queue !== input.queue ||
+            snapshot.offset !== offset ||
+            snapshot.limit !== limit
+          )
+            throw new Error("内容接入队列快照与请求页面不一致");
+          const currentParameters = parametersRef.current;
+          const capturedParameters = {
+            offset,
+            limit,
+            requiredItems,
+            excludeItems,
+            includeItems
+          } satisfies IngestionQueueSnapshotSelection;
+          const snapshotBaseline = baselineFromIngestionSnapshot(snapshot);
+          if (
+            !ingestionQueueBaselineCoversSelection(
+              snapshotBaseline,
+              capturedParameters,
               currentParameters
-            );
-          if (stableCoversCurrent) {
-            snapshotRequirements.currentSelection = false;
-          } else {
-            requireSnapshotCoverage("parameters");
-          }
-          return;
-        }
-        const { merged, reload } = mergeBufferedMutations(snapshotBaseline);
-        if (reload) {
-          requireSnapshotCoverage("reload");
-          publishSnapshotState(offset);
-          return;
-        }
-        baseline = merged;
-        baselineOffset = offset;
-        baselineParameters = {
-          offset,
-          limit,
-          requiredItems,
-          excludeItems: [...excludeItems],
-          includeItems: [...includeItems]
-        };
-        retainedBaseline = merged;
-        retainedOffset = offset;
-        satisfySnapshotCoverage(
-          serial,
-          requestedScope,
-          requestedGeneration,
-          merged
-        );
-        clearSnapshotRecovery();
-        const rerun = nextSnapshotReason();
-        if (rerun === "reload" || rerun === "ready") {
-          publishSnapshotState(offset);
-          return;
-        }
-        setView(readyServerIngestionQueueView(connectionGeneration, actionScope, merged));
-        completeAuthorityRecovery(serial);
-      }).catch((error: unknown) => {
-        if (disposed || controller.signal.aborted || serial !== snapshotSerial) {
-          return;
-        }
-        const immediateFollowup = immediateSnapshotFollowup
-          && hasSnapshotRequirements();
-        if (!hasSnapshotRequirements()) {
-          // A parameter request can become unnecessary while it is in flight.
-          // If that obsolete request then fails, retain the documented bounded
-          // authority recovery instead of leaving a display-only baseline with
-          // no remaining requirement capable of starting the retry.
-          requireSnapshotCoverage("reload");
-        }
-        immediateSnapshotFollowup = false;
-        const retainWithoutAuthority = (
-          recoveryBaseline: ServerIngestionQueueBaseline
-        ) => {
-          clearBaseline();
-          retainedBaseline = recoveryBaseline;
-          retainedOffset = offset;
-          return retainedServerIngestionQueueView(
-            "disconnected",
-            requestedGeneration,
-            requestedScope,
-            recoveryBaseline
-          );
-        };
-        if (immediateFollowup) {
-          const recoveryBaseline = baseline !== null && baselineOffset === offset
-            ? mergeBufferedMutations(baseline).merged
-            : retainedBaseline !== null && retainedOffset === offset
-              ? retainedBaseline
-              : null;
-          if (recoveryBaseline) {
-            setView(retainWithoutAuthority(recoveryBaseline));
-          } else {
+            )
+          ) {
+            // The same-page request still completes normally so rapid handoff
+            // changes never create cancelled fetches. Its page selection is no
+            // longer authoritative, however, so keep the previous stable view
+            // until the queued request reads the current exclusion set.
             buffered = [];
             bufferedAuthorityBaseline = null;
-            setView({
-              ...emptyServerIngestionQueueView("loading", requestedGeneration),
-              actionScope: requestedScope
-            });
+            const stableCoversCurrent =
+              baseline !== null &&
+              baselineOffset === currentParameters.offset &&
+              baselineParameters !== null &&
+              ingestionQueueBaselineCoversSelection(
+                baseline,
+                baselineParameters,
+                currentParameters
+              );
+            if (stableCoversCurrent) {
+              snapshotRequirements.currentSelection = false;
+            } else {
+              requireSnapshotCoverage("parameters");
+            }
+            return;
           }
-          return;
-        }
-        let recoveryView: ServerIngestionQueueView;
-        if (
-          refreshInPlace
-          && baseline !== null
-          && baselineOffset === offset
-          && requestedScope === actionScope
-          && requestedGeneration === connectionGeneration
-        ) {
-          const retained = mergeBufferedMutations(baseline);
-          recoveryView = retainWithoutAuthority(retained.merged);
-        } else if (
-          retainDuringLoad
-          && retainedBaseline !== null
-          && retainedOffset === offset
-          && requestedScope === actionScope
-          && requestedGeneration === connectionGeneration
-        ) {
-          buffered = [];
-          recoveryView = retainWithoutAuthority(retainedBaseline);
-        } else {
-          buffered = [];
-          clearBaseline();
-          recoveryView = {
-            ...emptyServerIngestionQueueView("loading", connectionGeneration),
-            actionScope
+          const { merged, reload } = mergeBufferedMutations(snapshotBaseline);
+          if (reload) {
+            requireSnapshotCoverage("reload");
+            publishSnapshotState(offset);
+            return;
+          }
+          baseline = merged;
+          baselineOffset = offset;
+          baselineParameters = {
+            offset,
+            limit,
+            requiredItems,
+            excludeItems: [...excludeItems],
+            includeItems: [...includeItems]
           };
-        }
-        const retryDelay = snapshotRecoveryDelays[snapshotRecoveryAttempt];
-        deferSuccessor = true;
-        if (retryDelay !== undefined) {
-          snapshotRecoveryAttempt += 1;
-          snapshotRecoveryTimer = setTimeout(() => {
-            snapshotRecoveryTimer = null;
-            const retryReason = nextSnapshotReason();
-            if (retryReason && actionScope) startSnapshot(retryReason);
-          }, retryDelay);
-          setView(recoveryView);
-        } else {
-          setView({
-            ...recoveryView,
-            status: "error",
-            error: error instanceof Error ? error.message : String(error)
-          });
-          failAuthorityRecovery(error);
-        }
-      }).finally(() => {
-        if (activeSnapshot?.controller !== controller) return;
-        activeSnapshot = null;
-        const rerun = nextSnapshotReason();
-        immediateSnapshotFollowup = false;
-        if (
-          !disposed
-          && !deferSuccessor
-          && snapshotRecoveryTimer === null
-          && rerun
-          && actionScope
-        ) startSnapshot(rerun);
-      });
+          retainedBaseline = merged;
+          retainedOffset = offset;
+          satisfySnapshotCoverage(serial, requestedScope, requestedGeneration, merged);
+          clearSnapshotRecovery();
+          const rerun = nextSnapshotReason();
+          if (rerun === "reload" || rerun === "ready") {
+            publishSnapshotState(offset);
+            return;
+          }
+          setView(readyServerIngestionQueueView(connectionGeneration, actionScope, merged));
+          completeAuthorityRecovery(serial);
+        })
+        .catch((error: unknown) => {
+          if (disposed || controller.signal.aborted || serial !== snapshotSerial) {
+            return;
+          }
+          const immediateFollowup = immediateSnapshotFollowup && hasSnapshotRequirements();
+          if (!hasSnapshotRequirements()) {
+            // A parameter request can become unnecessary while it is in flight.
+            // If that obsolete request then fails, retain the documented bounded
+            // authority recovery instead of leaving a display-only baseline with
+            // no remaining requirement capable of starting the retry.
+            requireSnapshotCoverage("reload");
+          }
+          immediateSnapshotFollowup = false;
+          const retainWithoutAuthority = (recoveryBaseline: ServerIngestionQueueBaseline) => {
+            clearBaseline();
+            retainedBaseline = recoveryBaseline;
+            retainedOffset = offset;
+            return retainedServerIngestionQueueView(
+              "disconnected",
+              requestedGeneration,
+              requestedScope,
+              recoveryBaseline
+            );
+          };
+          if (immediateFollowup) {
+            const recoveryBaseline =
+              baseline !== null && baselineOffset === offset
+                ? mergeBufferedMutations(baseline).merged
+                : retainedBaseline !== null && retainedOffset === offset
+                  ? retainedBaseline
+                  : null;
+            if (recoveryBaseline) {
+              setView(retainWithoutAuthority(recoveryBaseline));
+            } else {
+              buffered = [];
+              bufferedAuthorityBaseline = null;
+              setView({
+                ...emptyServerIngestionQueueView("loading", requestedGeneration),
+                actionScope: requestedScope
+              });
+            }
+            return;
+          }
+          let recoveryView: ServerIngestionQueueView;
+          if (
+            refreshInPlace &&
+            baseline !== null &&
+            baselineOffset === offset &&
+            requestedScope === actionScope &&
+            requestedGeneration === connectionGeneration
+          ) {
+            const retained = mergeBufferedMutations(baseline);
+            recoveryView = retainWithoutAuthority(retained.merged);
+          } else if (
+            retainDuringLoad &&
+            retainedBaseline !== null &&
+            retainedOffset === offset &&
+            requestedScope === actionScope &&
+            requestedGeneration === connectionGeneration
+          ) {
+            buffered = [];
+            recoveryView = retainWithoutAuthority(retainedBaseline);
+          } else {
+            buffered = [];
+            clearBaseline();
+            recoveryView = {
+              ...emptyServerIngestionQueueView("loading", connectionGeneration),
+              actionScope
+            };
+          }
+          const retryDelay = snapshotRecoveryDelays[snapshotRecoveryAttempt];
+          deferSuccessor = true;
+          if (retryDelay !== undefined) {
+            snapshotRecoveryAttempt += 1;
+            snapshotRecoveryTimer = setTimeout(() => {
+              snapshotRecoveryTimer = null;
+              const retryReason = nextSnapshotReason();
+              if (retryReason && actionScope) startSnapshot(retryReason);
+            }, retryDelay);
+            setView(recoveryView);
+          } else {
+            setView({
+              ...recoveryView,
+              status: "error",
+              error: error instanceof Error ? error.message : String(error)
+            });
+            failAuthorityRecovery(error);
+          }
+        })
+        .finally(() => {
+          if (activeSnapshot?.controller !== controller) return;
+          activeSnapshot = null;
+          const rerun = nextSnapshotReason();
+          immediateSnapshotFollowup = false;
+          if (
+            !disposed &&
+            !deferSuccessor &&
+            snapshotRecoveryTimer === null &&
+            rerun &&
+            actionScope
+          )
+            startSnapshot(rerun);
+        });
     };
-    const requestSnapshot = (
-      reason: SnapshotRequestReason = "refresh"
-    ) => {
+    const requestSnapshot = (reason: SnapshotRequestReason = "refresh") => {
       if (disposed) return;
       if (reason === "refresh" || reason === "parameters") {
         clearSnapshotRecovery();
@@ -710,20 +696,14 @@ export function useServerIngestionQueue(input: Readonly<{
       revision?: number,
       expectedConnectionGeneration = connectionGeneration
     ) => {
-      if (
-        disposed
-        || expectedConnectionGeneration !== connectionGeneration
-      ) return false;
+      if (disposed || expectedConnectionGeneration !== connectionGeneration) return false;
       alignSnapshotRequirements();
-      if (
-        revision !== undefined
-        && baseline !== null
-        && baseline.revision >= revision
-      ) return true;
+      if (revision !== undefined && baseline !== null && baseline.revision >= revision) return true;
       if (revision === undefined) {
         const minimumSnapshotSerial = snapshotSerial + 1;
-        const strengthened = snapshotRequirements.minimumSnapshotSerial === null
-          || snapshotRequirements.minimumSnapshotSerial < minimumSnapshotSerial;
+        const strengthened =
+          snapshotRequirements.minimumSnapshotSerial === null ||
+          snapshotRequirements.minimumSnapshotSerial < minimumSnapshotSerial;
         snapshotRequirements.minimumSnapshotSerial = Math.max(
           snapshotRequirements.minimumSnapshotSerial ?? 0,
           minimumSnapshotSerial
@@ -763,21 +743,22 @@ export function useServerIngestionQueue(input: Readonly<{
       alignSnapshotRequirements();
       clearSnapshotRecovery();
       const { offset } = parametersRef.current;
-      const retained = retainedBaseline !== null && retainedOffset === offset
-        ? retainedBaseline
-        : null;
-      setView(retained
-        ? {
-          ...retainedServerIngestionQueueView(
-            "disconnected",
-            connectionGeneration,
-            "",
-            retained
-          ),
-          status,
-          error
-        }
-        : emptyServerIngestionQueueView(status, connectionGeneration, error));
+      const retained =
+        retainedBaseline !== null && retainedOffset === offset ? retainedBaseline : null;
+      setView(
+        retained
+          ? {
+              ...retainedServerIngestionQueueView(
+                "disconnected",
+                connectionGeneration,
+                "",
+                retained
+              ),
+              status,
+              error
+            }
+          : emptyServerIngestionQueueView(status, connectionGeneration, error)
+      );
     };
 
     const restartEventSource = (error: unknown) => {
@@ -789,10 +770,7 @@ export function useServerIngestionQueue(input: Readonly<{
       }
       const delay = protocolReconnectDelays[protocolReconnectAttempt];
       if (delay === undefined) {
-        disconnect(
-          "error",
-          error instanceof Error ? error.message : String(error)
-        );
+        disconnect("error", error instanceof Error ? error.message : String(error));
         failAuthorityRecovery(error);
         return;
       }
@@ -823,11 +801,10 @@ export function useServerIngestionQueue(input: Readonly<{
 
     const handleReady = (message: MessageEvent<string>) => {
       try {
-        const event = parseServerIngestionQueueEvent(
-          message.data,
-          "ready",
-          input.queue
-        ) as Extract<IngestionQueueEventDto, { type: "ready" }>;
+        const event = parseServerIngestionQueueEvent(message.data, "ready", input.queue) as Extract<
+          IngestionQueueEventDto,
+          { type: "ready" }
+        >;
         if (!event.action_scope) throw new Error("内容接入队列事件缺少作用域");
         protocolReconnectAttempt = 0;
         clearSnapshotRecovery();
@@ -844,15 +821,15 @@ export function useServerIngestionQueue(input: Readonly<{
         setView(
           retainedBaseline !== null && retainedOffset === offset
             ? retainedServerIngestionQueueView(
-              "loading",
-              connectionGeneration,
-              actionScope,
-              retainedBaseline
-            )
+                "loading",
+                connectionGeneration,
+                actionScope,
+                retainedBaseline
+              )
             : {
-              ...emptyServerIngestionQueueView("loading", connectionGeneration),
-              actionScope
-            }
+                ...emptyServerIngestionQueueView("loading", connectionGeneration),
+                actionScope
+              }
         );
         // Browser reconnect bursts can deliver several generations in one
         // turn. Start only the latest snapshot, while a later-turn scope still
@@ -870,23 +847,20 @@ export function useServerIngestionQueue(input: Readonly<{
           input.queue
         ) as Extract<IngestionQueueEventDto, { type: "mutation" }>;
         if (!actionScope) return;
-        if (
-          event.session.status === "completed"
-          && "completed_item" in event.session
-        ) {
+        if (event.session.status === "completed" && "completed_item" in event.session) {
           // Completion invalidation belongs to the queue owner, not to the
           // bounded page. A completed mutation outside this page still changes
           // both its retained browser card and the image-data projections.
-          onCompletedIngestionsRef.current?.([{
-            pair: event.session,
-            item: event.session.completed_item,
-            ...(event.session.display
-              ? { display: event.session.display }
-              : {}),
-            serverVersion: event.session.version,
-            serverSemanticRevision: event.session.last_semantic_revision,
-            completedAt: event.session.completed_at
-          }]);
+          onCompletedIngestionsRef.current?.([
+            {
+              pair: event.session,
+              item: event.session.completed_item,
+              ...(event.session.display ? { display: event.session.display } : {}),
+              serverVersion: event.session.version,
+              serverSemanticRevision: event.session.last_semantic_revision,
+              completedAt: event.session.completed_at
+            }
+          ]);
         } else if (event.session.status === "completed") {
           // A compact receipt still proves PostgreSQL completion for this
           // exact pair. Let the combined owner establish a retained card's
@@ -914,10 +888,7 @@ export function useServerIngestionQueue(input: Readonly<{
             requestSnapshot("reload");
           } else {
             if (bufferedAuthorityBaseline !== null) {
-              const preview = mergeIngestionQueueMutation(
-                bufferedAuthorityBaseline,
-                event
-              );
+              const preview = mergeIngestionQueueMutation(bufferedAuthorityBaseline, event);
               if (preview.kind === "reload") {
                 bufferedAuthorityBaseline = null;
                 // The active snapshot may already contain the mutation that
@@ -974,10 +945,7 @@ export function useServerIngestionQueue(input: Readonly<{
     }
 
     openEventSource();
-    setView((current) => emptyServerIngestionQueueView(
-      "connecting",
-      current.connectionGeneration
-    ));
+    setView((current) => emptyServerIngestionQueueView("connecting", current.connectionGeneration));
 
     return () => {
       disposed = true;
@@ -1016,9 +984,7 @@ export function useServerIngestionQueue(input: Readonly<{
   }, []);
   const recoverAuthority = useCallback(() => {
     const recover = recoverAuthorityRef.current;
-    return recover
-      ? recover()
-      : Promise.reject(new Error("内容接入队列连接尚未就绪"));
+    return recover ? recover() : Promise.reject(new Error("内容接入队列连接尚未就绪"));
   }, []);
   const recoverAfterSuccessfulAction = useCallback(() => {
     const invalidate = invalidateDisplayAuthorityRef.current;
@@ -1029,10 +995,7 @@ export function useServerIngestionQueue(input: Readonly<{
     invalidate();
     return recover();
   }, []);
-  const ensureRevision = useCallback((
-    revision?: number,
-    connectionGeneration?: number
-  ) => {
+  const ensureRevision = useCallback((revision?: number, connectionGeneration?: number) => {
     return ensureRevisionRef.current?.(revision, connectionGeneration) ?? false;
   }, []);
 
@@ -1045,6 +1008,4 @@ export function useServerIngestionQueue(input: Readonly<{
   };
 }
 
-export type ServerIngestionQueueController = ReturnType<
-  typeof useServerIngestionQueue
->;
+export type ServerIngestionQueueController = ReturnType<typeof useServerIngestionQueue>;

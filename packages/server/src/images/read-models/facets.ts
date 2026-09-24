@@ -9,11 +9,7 @@ import {
 import { pool, type DatabaseReader } from "../../core/database/pools.ts";
 import { createImageFilterPlan } from "../filter-plan.ts";
 import { readReadyImageCountSnapshot } from "../ready-cache/counts/query.ts";
-import {
-  getAuthorVocab,
-  getTagVocab,
-  getThemeVocab
-} from "../../vocab/vocab-cache.ts";
+import { getAuthorVocab, getTagVocab, getThemeVocab } from "../../vocab/vocab-cache.ts";
 
 type FacetMembershipRow = {
   themes: string[];
@@ -39,12 +35,11 @@ async function facetVocabulary(
   };
 }
 
-async function readFacetsFromPostgres(
-  reader: DatabaseReader
-) {
+async function readFacetsFromPostgres(reader: DatabaseReader) {
   const maximumRows = appConfig.publicPgFallback.maximumVocabularyRows;
-  const row = (await reader.query(
-    `SELECT
+  const row = (
+    await reader.query(
+      `SELECT
        ARRAY(
          SELECT DISTINCT COALESCE(m.theme, '${unsetThemeFilter}')
            FROM metadata m
@@ -57,19 +52,19 @@ async function readFacetsFromPostgres(
           WHERE m.status='ready' AND m.author IS NOT NULL
           LIMIT $1
        ) AS authors`,
-    [maximumRows + 1]
-  )).rows[0] as FacetMembershipRow;
-  if ([row.themes, row.authors].some((values) => (
-    (values?.length ?? 0) > maximumRows
-  ))) {
-    throw publicPgFallbackWorkLimitExceeded(
-      "Gallery facets exceed the public result limit"
-    );
+      [maximumRows + 1]
+    )
+  ).rows[0] as FacetMembershipRow;
+  if ([row.themes, row.authors].some((values) => (values?.length ?? 0) > maximumRows)) {
+    throw publicPgFallbackWorkLimitExceeded("Gallery facets exceed the public result limit");
   }
-  return facetVocabulary({
-    themes: Object.fromEntries((row.themes ?? []).map((slug) => [slug, 1])),
-    authors: Object.fromEntries((row.authors ?? []).map((slug) => [slug, 1]))
-  }, { reader });
+  return facetVocabulary(
+    {
+      themes: Object.fromEntries((row.themes ?? []).map((slug) => [slug, 1])),
+      authors: Object.fromEntries((row.authors ?? []).map((slug) => [slug, 1]))
+    },
+    { reader }
+  );
 }
 
 async function getPublicGalleryFacetsWithAccess(
@@ -84,20 +79,18 @@ async function getPublicGalleryFacetsWithAccess(
   if (cached.cached) return facetVocabulary(cached.value, database);
   return database.reader
     ? readFacetsFromPostgres(database.reader)
-    : coalesce(
-        "gallery-facets:postgres",
-        () => readFacetsFromPostgres(pool)
-      );
+    : coalesce("gallery-facets:postgres", () => readFacetsFromPostgres(pool));
 }
 
-export function getPublicGalleryFacets(
-  signal?: AbortSignal
-): Promise<GalleryFacetsDto> {
+export function getPublicGalleryFacets(signal?: AbortSignal): Promise<GalleryFacetsDto> {
   return signal
-    ? coalesce("gallery-facets:public", (sharedSignal) => (
-        withPublicDatabaseRead(sharedSignal, (database, databaseSignal) => (
-          getPublicGalleryFacetsWithAccess(databaseSignal, database)
-        ))
-      ), signal)
+    ? coalesce(
+        "gallery-facets:public",
+        (sharedSignal) =>
+          withPublicDatabaseRead(sharedSignal, (database, databaseSignal) =>
+            getPublicGalleryFacetsWithAccess(databaseSignal, database)
+          ),
+        signal
+      )
     : getPublicGalleryFacetsWithAccess(undefined, {});
 }

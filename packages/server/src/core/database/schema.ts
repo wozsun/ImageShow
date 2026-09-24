@@ -48,9 +48,7 @@ function databaseReadinessError(error: unknown) {
 
 async function initializeDatabaseSchemaOnClient(client: PoolClient) {
   const empty = await databaseHasNoUserRelations(client);
-  const schema = empty
-    ? await readFile(databaseSchemaPath(), "utf8")
-    : null;
+  const schema = empty ? await readFile(databaseSchemaPath(), "utf8") : null;
   await client.query("BEGIN");
   try {
     if (schema) await client.query(schema);
@@ -69,9 +67,7 @@ export async function pingDatabase() {
 
 let readinessPromise: Promise<void> | null = null;
 
-export async function assertCoreDatabaseReady(
-  database: Pick<PoolClient, "query"> = pool
-) {
+export async function assertCoreDatabaseReady(database: Pick<PoolClient, "query"> = pool) {
   // Initialization owns a dedicated transaction; only concurrent checks using
   // the shared pool can share the same in-flight structure and access proof.
   if (database !== pool) return assertDatabaseReadiness(database);

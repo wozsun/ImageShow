@@ -18,20 +18,12 @@ const storageBackendDeleteActions = new Set<StorageBackendDeleteAction>([
   "blocked"
 ]);
 
-function countFromDetails(
-  details: Record<string, unknown>,
-  key: string,
-  fallback: number
-) {
+function countFromDetails(details: Record<string, unknown>, key: string, fallback: number) {
   const value = details[key];
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : fallback;
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-export function storageBackendDeletionReasons(
-  backend: StorageBackendAdmin
-) {
+export function storageBackendDeletionReasons(backend: StorageBackendAdmin) {
   return backend.deletion.blockers.map((blocker) => {
     switch (blocker) {
       case "built_in":
@@ -53,35 +45,28 @@ export function storageBackendAfterDeleteRejection(
   error: unknown
 ): StorageBackendAdmin | null {
   if (!isApiClientError(error)) return null;
-  if (
-    error.code !== "storage_default_delete"
-    && error.code !== "storage_backend_in_use"
-  ) return null;
+  if (error.code !== "storage_default_delete" && error.code !== "storage_backend_in_use")
+    return null;
 
-  const details = error.details
-    && typeof error.details === "object"
-    && !Array.isArray(error.details)
-    ? error.details as Record<string, unknown>
-    : {};
-  const deletion = details.deletion
-    && typeof details.deletion === "object"
-    && !Array.isArray(details.deletion)
-    ? details.deletion as Record<string, unknown>
-    : {};
-  const action = typeof deletion.action === "string"
-    && storageBackendDeleteActions.has(
-      deletion.action as StorageBackendDeleteAction
-    )
-    ? deletion.action as StorageBackendDeleteAction
-    : null;
+  const details =
+    error.details && typeof error.details === "object" && !Array.isArray(error.details)
+      ? (error.details as Record<string, unknown>)
+      : {};
+  const deletion =
+    details.deletion && typeof details.deletion === "object" && !Array.isArray(details.deletion)
+      ? (details.deletion as Record<string, unknown>)
+      : {};
+  const action =
+    typeof deletion.action === "string" &&
+    storageBackendDeleteActions.has(deletion.action as StorageBackendDeleteAction)
+      ? (deletion.action as StorageBackendDeleteAction)
+      : null;
   const blockers = Array.isArray(deletion.blockers)
     ? deletion.blockers.filter(
-      (blocker): blocker is StorageBackendDeleteBlocker =>
-        typeof blocker === "string"
-        && storageBackendDeleteBlockers.has(
-          blocker as StorageBackendDeleteBlocker
-        )
-    )
+        (blocker): blocker is StorageBackendDeleteBlocker =>
+          typeof blocker === "string" &&
+          storageBackendDeleteBlockers.has(blocker as StorageBackendDeleteBlocker)
+      )
     : [];
   if (!action || (action !== "delete" && !blockers.length)) return null;
 
@@ -93,11 +78,7 @@ export function storageBackendAfterDeleteRejection(
       "ingestion_session_count",
       backend.ingestion_session_count
     ),
-    cleanup_job_count: countFromDetails(
-      details,
-      "cleanup_job_count",
-      backend.cleanup_job_count
-    ),
+    cleanup_job_count: countFromDetails(details, "cleanup_job_count", backend.cleanup_job_count),
     deletion: {
       action,
       blockers

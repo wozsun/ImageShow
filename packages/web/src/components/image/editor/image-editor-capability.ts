@@ -7,12 +7,8 @@ import {
   invalidateImageDataAfterMetadataSave
 } from "../../../lib/api/query-invalidation.js";
 import { storageOptionsQueryOptions } from "../../../lib/api/storage-options.js";
-import type {
-  ImageEditorSource
-} from "./image-editor-types.js";
-import type {
-  EditableImageSnapshot
-} from "../../../lib/types.js";
+import type { ImageEditorSource } from "./image-editor-types.js";
+import type { EditableImageSnapshot } from "../../../lib/types.js";
 import type { ImageMetadataSaveCommit } from "./image-editor-types.js";
 // 单图与批量编辑共用同一懒加载能力入口。共享样式独占字段内部排布，编辑器专属
 // 样式只负责卡片外框和宿主定位，因此即使浏览器并行预载 CSS，应用顺序也不会改变
@@ -32,27 +28,18 @@ class ImageNotEditableError extends Error {
   }
 }
 
-function editableSnapshotFromSource(
-  source: ImageEditorSource
-): EditableImageSnapshot | null {
+function editableSnapshotFromSource(source: ImageEditorSource): EditableImageSnapshot | null {
   if (source.deleted_at) return null;
   if (source.status && source.status !== "ready") return null;
-  if (
-    typeof source.original !== "string"
-    || typeof source.ext !== "string"
-  ) {
+  if (typeof source.original !== "string" || typeof source.ext !== "string") {
     return null;
   }
   return source as EditableImageSnapshot;
 }
 
-async function loadEditableSnapshots(
-  sources: ImageEditorSource[]
-) {
+async function loadEditableSnapshots(sources: ImageEditorSource[]) {
   if (!sources.length) throw new ImageNotEditableError();
-  if (sources.some((source) => (
-    source.deleted_at || (source.status && source.status !== "ready")
-  ))) {
+  if (sources.some((source) => source.deleted_at || (source.status && source.status !== "ready"))) {
     throw new ImageNotEditableError();
   }
 
@@ -96,11 +83,7 @@ export async function refreshImageEditorAfterSave<TAdjacentData>({
   loadAdjacentData?: () => Promise<TAdjacentData>;
 }) {
   await (commit
-    ? invalidateImageDataAfterMetadataSave(
-      queryClient,
-      commit.updates,
-      commit.authoritativeItems
-    )
+    ? invalidateImageDataAfterMetadataSave(queryClient, commit.updates, commit.authoritativeItems)
     : invalidateImageData(queryClient));
   const snapshotRequest =
     commit === undefined
@@ -108,10 +91,10 @@ export async function refreshImageEditorAfterSave<TAdjacentData>({
       : commit.authoritativeItems === null
         ? Promise.reject(new Error("图片权威快照读取失败"))
         : Promise.resolve({ items: commit.authoritativeItems });
-  const adjacentDataRequest: Promise<TAdjacentData | null> = loadAdjacentData
-    && (commit === undefined || commit.updates.length > 0)
-    ? loadAdjacentData()
-    : Promise.resolve(null);
+  const adjacentDataRequest: Promise<TAdjacentData | null> =
+    loadAdjacentData && (commit === undefined || commit.updates.length > 0)
+      ? loadAdjacentData()
+      : Promise.resolve(null);
   const [snapshotResult, adjacentDataResult] = await Promise.allSettled([
     snapshotRequest,
     adjacentDataRequest

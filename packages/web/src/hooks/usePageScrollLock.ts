@@ -1,7 +1,5 @@
 import { useLayoutEffect } from "react";
-import {
-  createDialogTouchBoundary
-} from "../lib/ui/dialog-touch-boundary.js";
+import { createDialogTouchBoundary } from "../lib/ui/dialog-touch-boundary.js";
 
 let lockCount = 0;
 let lockedScrollY = 0;
@@ -10,10 +8,7 @@ let lockedPageFocusTarget: HTMLElement | null = null;
 let previousPageRootState: {
   ariaHidden: string | null;
   inert: boolean;
-  styles: Pick<
-    CSSStyleDeclaration,
-    "position" | "top" | "left" | "right" | "width"
-  >;
+  styles: Pick<CSSStyleDeclaration, "position" | "top" | "left" | "right" | "width">;
 } | null = null;
 let restoringPageScroll = false;
 let restorationFrame: number | undefined;
@@ -64,9 +59,7 @@ export function getPageScrollY() {
  * dialog focus instead.
  */
 export function getPageScrollLockFocusTarget() {
-  return lockCount === 1 && lockedPageFocusTarget?.isConnected
-    ? lockedPageFocusTarget
-    : null;
+  return lockCount === 1 && lockedPageFocusTarget?.isConnected ? lockedPageFocusTarget : null;
 }
 
 function installDialogTouchBoundary() {
@@ -76,16 +69,8 @@ function installDialogTouchBoundary() {
     capture: true,
     passive: false
   } as const;
-  document.addEventListener(
-    "touchstart",
-    boundary.onTouchStart,
-    captureNonPassive
-  );
-  document.addEventListener(
-    "touchmove",
-    boundary.onTouchMove,
-    captureNonPassive
-  );
+  document.addEventListener("touchstart", boundary.onTouchStart, captureNonPassive);
+  document.addEventListener("touchmove", boundary.onTouchMove, captureNonPassive);
   document.addEventListener("touchend", boundary.onTouchEnd, true);
   document.addEventListener("touchcancel", boundary.onTouchEnd, true);
   removeDialogTouchBoundary = () => {
@@ -111,10 +96,10 @@ export function usePageScrollLock(active = true) {
       lockedPageRoot = document.getElementById("root");
       if (lockedPageRoot) {
         const activeElement = document.activeElement;
-        lockedPageFocusTarget = activeElement instanceof HTMLElement
-          && lockedPageRoot.contains(activeElement)
-          ? activeElement
-          : null;
+        lockedPageFocusTarget =
+          activeElement instanceof HTMLElement && lockedPageRoot.contains(activeElement)
+            ? activeElement
+            : null;
         previousPageRootState = {
           ariaHidden: lockedPageRoot.getAttribute("aria-hidden"),
           inert: lockedPageRoot.inert,
@@ -152,10 +137,7 @@ export function usePageScrollLock(active = true) {
         if (previousPageRootState.ariaHidden === null) {
           lockedPageRoot.removeAttribute("aria-hidden");
         } else {
-          lockedPageRoot.setAttribute(
-            "aria-hidden",
-            previousPageRootState.ariaHidden
-          );
+          lockedPageRoot.setAttribute("aria-hidden", previousPageRootState.ariaHidden);
         }
       }
       lockedPageRoot = null;

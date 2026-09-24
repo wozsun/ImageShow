@@ -15,7 +15,7 @@ export function displayNameOrSlug(item: { slug: string; display_name?: string })
 export function facetDisplayName(
   options: readonly { slug: string; display_name?: string }[],
   slug: string,
-  fallback = slug,
+  fallback = slug
 ) {
   if (!slug) return fallback;
   const option = options.find((item) => item.slug === slug);
@@ -45,14 +45,13 @@ export function errorMessage(err: unknown): string {
     return "请求超时，请稍后重试";
   }
   if (
-    /failed to fetch|network(?:error| request failed)|load failed|internet connection.*offline|err_(?:network|internet|connection|name_not_resolved)/i.test(message)
+    /failed to fetch|network(?:error| request failed)|load failed|internet connection.*offline|err_(?:network|internet|connection|name_not_resolved)/i.test(
+      message
+    )
   ) {
     return "网络请求失败，请检查网络连接后重试";
   }
-  if (
-    err instanceof SyntaxError
-    && /json|unexpected|expected|unterminated|end of/i.test(message)
-  ) {
+  if (err instanceof SyntaxError && /json|unexpected|expected|unterminated|end of/i.test(message)) {
     return "JSON 格式不正确，请检查语法";
   }
 
@@ -91,7 +90,7 @@ export function cssUrl(value: string) {
 
 function escapeCssString(value: string) {
   return value.replace(/["\\\u0000-\u001f\u007f]/g, (char) => {
-    if (char === "\"") return "\\\"";
+    if (char === '"') return '\\"';
     if (char === "\\") return "\\\\";
     if (char === "\n") return "\\a ";
     if (char === "\r") return "\\d ";

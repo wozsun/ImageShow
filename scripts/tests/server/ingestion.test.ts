@@ -1,56 +1,27 @@
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
-import {
-  rm,
-  writeFile
-} from "node:fs/promises";
-import {
-  join,
-  resolve,
-  toNamespacedPath
-} from "node:path";
-import {
-  setTimeout as delay
-} from "node:timers/promises";
-import {
-  pathToFileURL
-} from "node:url";
+import { rm, writeFile } from "node:fs/promises";
+import { join, resolve, toNamespacedPath } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { installProperties } from "../support/property-descriptors.ts";
-import {
-  createTestDirectory
-} from "../support/test-directory.ts";
-import {
-  runProcess
-} from "../support/process-runner.ts";
-import {
-  Hono
-} from "hono";
-import {
-  appConfig
-} from "@imageshow/shared";
-import {
-  adminApiBasePath,
-  ingestionUpdatePath
-} from "../../../packages/shared/src/browser.ts";
+import { createTestDirectory } from "../support/test-directory.ts";
+import { runProcess } from "../support/process-runner.ts";
+import { Hono } from "hono";
+import { appConfig } from "@imageshow/shared";
+import { adminApiBasePath, ingestionUpdatePath } from "../../../packages/shared/src/browser.ts";
 import {
   getRuntimeConfig,
   initializeRuntimeConfig
 } from "../../../packages/server/src/config/runtime-config-store.ts";
-import {
-  ApiError
-} from "../../../packages/server/src/core/api-error.ts";
+import { ApiError } from "../../../packages/server/src/core/api-error.ts";
 import {
   DynamicConcurrencyLimiter,
   DynamicWeightedLimiter
 } from "../../../packages/server/src/core/concurrency.ts";
-import {
-  limitProtectedAdminRequestBody
-} from "../../../packages/server/src/core/http/request-body-limit.ts";
-import {
-  createImageId,
-  parseImageTime
-} from "../../../packages/server/src/images/image-time.ts";
+import { limitProtectedAdminRequestBody } from "../../../packages/server/src/core/http/request-body-limit.ts";
+import { createImageId, parseImageTime } from "../../../packages/server/src/images/image-time.ts";
 import {
   calculateDownloadProgress,
   downloadProgressLength
@@ -59,94 +30,63 @@ import {
   JsonlManifestError,
   parseJsonlManifest
 } from "../../../packages/server/src/images/ingestion/sources/jsonl.ts";
-import {
-  ingestionIntentRequestHash
-} from "../../../packages/server/src/images/ingestion/sessions/request-hash.ts";
+import { ingestionIntentRequestHash } from "../../../packages/server/src/images/ingestion/sessions/request-hash.ts";
 import {
   assertImageIdentity,
   createIngestionSessionId,
   inspectImageUuidV7
 } from "../../../packages/server/src/images/ingestion/sessions/identity.ts";
-import {
-  ingestionSessionSemanticHash
-} from "../../../packages/server/src/images/ingestion/sessions/projection.ts";
+import { ingestionSessionSemanticHash } from "../../../packages/server/src/images/ingestion/sessions/projection.ts";
 import {
   ingestionTokenPurposes,
   IngestionTokenService,
   type IngestionTokenEnvelope
 } from "../../../packages/server/src/images/ingestion/sessions/token-service.ts";
-import {
-  IngestionIrreversibleCoordinator
-} from "../../../packages/server/src/images/ingestion/execution/irreversible-coordinator.ts";
+import { IngestionIrreversibleCoordinator } from "../../../packages/server/src/images/ingestion/execution/irreversible-coordinator.ts";
 import {
   cancelIngestionSessions,
   cancelRecoveredIngestionSessions
 } from "../../../packages/server/src/images/ingestion/cancel/coordinator.ts";
-import {
-  ingestionSessionIncarnationMismatch
-} from "../../../packages/server/src/images/ingestion/repository.ts";
-import type {
-  IngestionSessionSnapshot
-} from "../../../packages/server/src/images/ingestion/sessions/model.ts";
-import {
-  downloadIngestionSessionSnapshot
-} from "../../../packages/server/src/images/ingestion/sources/download-session.ts";
+import { ingestionSessionIncarnationMismatch } from "../../../packages/server/src/images/ingestion/repository.ts";
+import type { IngestionSessionSnapshot } from "../../../packages/server/src/images/ingestion/sessions/model.ts";
+import { downloadIngestionSessionSnapshot } from "../../../packages/server/src/images/ingestion/sources/download-session.ts";
 import {
   heartbeatIngestionExecution,
   mutateIngestionExecution,
   refreshIngestionExecutionSession,
   updateIngestionExecutionProgress
 } from "../../../packages/server/src/images/ingestion/execution/session.ts";
-import {
-  ingestionCleanupRetryQueue
-} from "../../../packages/server/src/images/ingestion/cleanup/retry-queue.ts";
-import {
-  IngestionSessionRecovery
-} from "../../../packages/server/src/images/ingestion/workers/session-recovery.ts";
+import { ingestionCleanupRetryQueue } from "../../../packages/server/src/images/ingestion/cleanup/retry-queue.ts";
+import { IngestionSessionRecovery } from "../../../packages/server/src/images/ingestion/workers/session-recovery.ts";
 import {
   ingestionCommitDispatchWindow,
   ingestionWorkerDispatchWindows,
   isSameFailedIngestionExecution,
   planIngestionWorkerLanes
 } from "../../../packages/server/src/images/ingestion/workers/ingestion-worker.ts";
-import {
-  withImportPrefetchAdmission
-} from "../../../packages/server/src/images/ingestion/workers/import-prefetch.ts";
+import { withImportPrefetchAdmission } from "../../../packages/server/src/images/ingestion/workers/import-prefetch.ts";
 import {
   ingestionPreparationAdmissionSnapshot,
   withIngestionPreparationAdmission
 } from "../../../packages/server/src/images/ingestion/workers/preparation-admission.ts";
+import { preparedAttemptIsReferenced } from "../../../packages/server/src/images/ingestion/workers/prepare-session.ts";
 import {
-  preparedAttemptIsReferenced
-} from "../../../packages/server/src/images/ingestion/workers/prepare-session.ts";
-import {
-  ingestionRawPath, ingestionPreparedFile, ingestionPreparedPath, parseIngestionTempFileName
+  ingestionRawPath,
+  ingestionPreparedFile,
+  ingestionPreparedPath,
+  parseIngestionTempFileName
 } from "../../../packages/server/src/images/ingestion/raw/paths.ts";
 import {
   extractWeiboPost,
   parseWeiboPostUrl
 } from "../../../packages/server/src/images/ingestion/sources/weibo-parser.ts";
-import {
-  weiboPostToJsonl
-} from "../../../packages/server/src/images/ingestion/sources/weibo.ts";
-import {
-  deriveAuthorIdentityFromLink
-} from "../../../packages/server/src/authors/identity.ts";
-import {
-  canonicalImportMetadata
-} from "../../../packages/server/src/images/ingestion/sessions/import-metadata.ts";
-import {
-  createWeiboRequestScheduler
-} from "../../../packages/server/src/images/ingestion/sources/weibo-request-scheduler.ts";
-import {
-  WeiboImportError
-} from "../../../packages/server/src/images/ingestion/sources/weibo-types.ts";
-import {
-  closeAdminSessionConnections
-} from "../../../packages/server/src/users/admin-session-connections.ts";
-import {
-  streamIngestionQueueEvents
-} from "../../../packages/server/src/images/ingestion/queue/events.ts";
+import { weiboPostToJsonl } from "../../../packages/server/src/images/ingestion/sources/weibo.ts";
+import { deriveAuthorIdentityFromLink } from "../../../packages/server/src/authors/identity.ts";
+import { canonicalImportMetadata } from "../../../packages/server/src/images/ingestion/sessions/import-metadata.ts";
+import { createWeiboRequestScheduler } from "../../../packages/server/src/images/ingestion/sources/weibo-request-scheduler.ts";
+import { WeiboImportError } from "../../../packages/server/src/images/ingestion/sources/weibo-types.ts";
+import { closeAdminSessionConnections } from "../../../packages/server/src/users/admin-session-connections.ts";
+import { streamIngestionQueueEvents } from "../../../packages/server/src/images/ingestion/queue/events.ts";
 
 test("[Server/内容接入] 内容接入草稿批量更新在保护层后仍使用内容接入正文预算", async () => {
   const app = new Hono();
@@ -155,30 +95,22 @@ test("[Server/内容接入] 内容接入草稿批量更新在保护层后仍使�
     const body = await context.req.json<{ marker: string }>();
     return context.json({ ok: true, markerLength: body.marker.length });
   });
-  app.post(`${adminApiBasePath}/standard-body`, (context) => (
-    context.json({ ok: true })
-  ));
+  app.post(`${adminApiBasePath}/standard-body`, (context) => context.json({ ok: true }));
   const marker = "x".repeat(160 * 1024);
-  const request = (path: string) => app.request(new Request(
-    `http://imageshow.test${path}`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ marker })
-    }
-  ));
+  const request = (path: string) =>
+    app.request(
+      new Request(`http://imageshow.test${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ marker })
+      })
+    );
   const accepted = await request(ingestionUpdatePath);
   assert.equal(accepted.status, 200);
-  assert.equal(
-    (await accepted.json() as { markerLength: number }).markerLength,
-    marker.length
-  );
+  assert.equal(((await accepted.json()) as { markerLength: number }).markerLength, marker.length);
   const standard = await request(`${adminApiBasePath}/standard-body`);
   assert.equal(standard.status, 413);
-  assert.equal(
-    (await standard.json() as { code?: string }).code,
-    "request_body_too_large"
-  );
+  assert.equal(((await standard.json()) as { code?: string }).code, "request_body_too_large");
 });
 test("[Server/内容接入] JSONL 非空记录配额保留物理行号、批次位置与错误优先级", (t) => {
   const a = JSON.stringify({ original: "https://img.example.com/a.jpg" });
@@ -187,15 +119,24 @@ test("[Server/内容接入] JSONL 非空记录配额保留物理行号、批次�
     for (const trailing of ["", newline]) {
       const content = ["", ` \t${a} `, " \t", "not-json", b].join(newline) + trailing;
       const result = parseJsonlManifest(content, { maxItems: 3 });
-      assert.deepEqual(result.items.map(item => [item.line, item.batch_position, item.original]), [
-        [2, 0, "https://img.example.com/a.jpg"],
-        [5, 2, "https://img.example.com/b.jpg"]
+      assert.deepEqual(
+        result.items.map((item) => [item.line, item.batch_position, item.original]),
+        [
+          [2, 0, "https://img.example.com/a.jpg"],
+          [5, 2, "https://img.example.com/b.jpg"]
+        ]
+      );
+      assert.deepEqual(result.errors, [
+        { line: 4, raw: "not-json", error: "不是有效的 JSON 对象" }
       ]);
-      assert.deepEqual(result.errors, [{ line: 4, raw: "not-json", error: "不是有效的 JSON 对象" }]);
-      assert.throws(() => parseJsonlManifest(content, { maxItems: 2 }), {
-        code: "jsonl_limit_exceeded",
-        message: "JSONL 清单最多允许 2 条图片记录"
-      }, "非法非空行也计入配额，条数检查先于逐行解析");
+      assert.throws(
+        () => parseJsonlManifest(content, { maxItems: 2 }),
+        {
+          code: "jsonl_limit_exceeded",
+          message: "JSONL 清单最多允许 2 条图片记录"
+        },
+        "非法非空行也计入配额，条数检查先于逐行解析"
+      );
     }
   }
   for (const content of ["", " \t\r\n\n\uFEFF \n"]) {
@@ -206,64 +147,85 @@ test("[Server/内容接入] JSONL 非空记录配额保留物理行号、批次�
     code: "jsonl_limit_exceeded"
   });
   t.after(installProperties(appConfig.ingestion, { jsonlManifestMaxBytes: 8 }));
-  assert.throws(() => parseJsonlManifest("界界界", { maxItems: 1 }), {
-    code: "jsonl_too_large"
-  }, "内容大小按 UTF-8 字节计算");
-  assert.throws(() => parseJsonlManifest("{}\n".repeat(3), { maxItems: 1 }), {
-    code: "jsonl_too_large"
-  }, "字节限制仍先于条数限制");
+  assert.throws(
+    () => parseJsonlManifest("界界界", { maxItems: 1 }),
+    {
+      code: "jsonl_too_large"
+    },
+    "内容大小按 UTF-8 字节计算"
+  );
+  assert.throws(
+    () => parseJsonlManifest("{}\n".repeat(3), { maxItems: 1 }),
+    {
+      code: "jsonl_too_large"
+    },
+    "字节限制仍先于条数限制"
+  );
 });
 
 test("[Server/内容接入] 导入清单、下载进度与微博入口使用同一当前语义", () => {
-  const manifest = parseJsonlManifest([
-    JSON.stringify({
-      original: "https://img.example.com/a.jpg",
-      source: "https://weibo.com/detail/1",
-      image_time: "2020-05-01 00:00:00",
-      author: "alice",
-      tags: [" Concert ", "concert"]
-    }),
-    "not-json",
-    JSON.stringify({ original: "http://img.example.com/b.jpg" })
-  ].join("\n"), { maxItems: 100, timeZone: "Asia/Makassar" });
+  const manifest = parseJsonlManifest(
+    [
+      JSON.stringify({
+        original: "https://img.example.com/a.jpg",
+        source: "https://weibo.com/detail/1",
+        image_time: "2020-05-01 00:00:00",
+        author: "alice",
+        tags: [" Concert ", "concert"]
+      }),
+      "not-json",
+      JSON.stringify({ original: "http://img.example.com/b.jpg" })
+    ].join("\n"),
+    { maxItems: 100, timeZone: "Asia/Makassar" }
+  );
   assert.equal(manifest.items.length, 1);
   assert.equal(manifest.items[0]?.image_time, "2020-04-30T16:00:00.000Z");
   assert.deepEqual(manifest.items[0]?.tags, ["concert"]);
-  assert.deepEqual(manifest.errors.map(({ line }) => line), [2, 3]);
+  assert.deepEqual(
+    manifest.errors.map(({ line }) => line),
+    [2, 3]
+  );
   const themes = [null, "none", "night"];
-  const themedManifest = parseJsonlManifest(themes.map((theme, index) => (
-    JSON.stringify({ original: `https://img.example.com/${index}.jpg`, theme })
-  )).join("\n"), { maxItems: 3 });
+  const themedManifest = parseJsonlManifest(
+    themes
+      .map((theme, index) =>
+        JSON.stringify({ original: `https://img.example.com/${index}.jpg`, theme })
+      )
+      .join("\n"),
+    { maxItems: 3 }
+  );
   assert.deepEqual(themedManifest.errors, []);
-  assert.deepEqual(themedManifest.items.map((item) => item.theme), themes);
+  assert.deepEqual(
+    themedManifest.items.map((item) => item.theme),
+    themes
+  );
   const weiboPost = {
     source_url: "https://weibo.com/1234567890/Example",
     weibo_id: "123",
     bid: "Example",
     user_id: "1234567890",
     published_at: "2026-08-29T01:02:03.000Z",
-    images: [{
-      original_url: "https://wx1.sinaimg.cn/large/example.jpg",
-      user_id: "1234567890"
-    }],
+    images: [
+      {
+        original_url: "https://wx1.sinaimg.cn/large/example.jpg",
+        user_id: "1234567890"
+      }
+    ],
     image_count: 1
   };
   const authorSlugs = new Map([["1234567890", "alice"]]);
-  const withWeiboSource = parseJsonlManifest(
-    weiboPostToJsonl(weiboPost, true, authorSlugs),
-    { maxItems: 10, timeZone: "UTC" }
-  );
-  const withoutWeiboSource = parseJsonlManifest(
-    weiboPostToJsonl(weiboPost, false, authorSlugs),
-    { maxItems: 10, timeZone: "UTC" }
-  );
+  const withWeiboSource = parseJsonlManifest(weiboPostToJsonl(weiboPost, true, authorSlugs), {
+    maxItems: 10,
+    timeZone: "UTC"
+  });
+  const withoutWeiboSource = parseJsonlManifest(weiboPostToJsonl(weiboPost, false, authorSlugs), {
+    maxItems: 10,
+    timeZone: "UTC"
+  });
   assert.equal(withWeiboSource.items[0]?.source, weiboPost.source_url);
   assert.equal(withWeiboSource.items[0]?.author, "alice");
   assert.equal(withoutWeiboSource.items[0]?.source, undefined);
-  assert.equal(
-    withoutWeiboSource.items[0]?.original,
-    weiboPost.images[0]!.original_url
-  );
+  assert.equal(withoutWeiboSource.items[0]?.original, weiboPost.images[0]!.original_url);
   const policyMetadata = {
     title: "",
     description: "",
@@ -275,40 +237,71 @@ test("[Server/内容接入] 导入清单、下载进度与微博入口使用同�
     author: "",
     tags: []
   };
-  assert.deepEqual(canonicalImportMetadata({
-    import: { keep_original_link: ["weibo"] },
-    weibo: { source_enabled: true }
-  }, "weibo", weiboPost.images[0]!.original_url, policyMetadata), {
-    ...policyMetadata,
-    original: weiboPost.images[0]!.original_url
-  });
-  assert.deepEqual(canonicalImportMetadata({
-    import: { keep_original_link: [] },
-    weibo: { source_enabled: false }
-  }, "weibo", weiboPost.images[0]!.original_url, policyMetadata), {
-    ...policyMetadata,
-    source: "",
-    original: ""
-  });
-  const tooManyTags = parseJsonlManifest(JSON.stringify({
-    original: "https://img.example.com/c.jpg",
-    tags: Array.from(
-      { length: 51 },
-      (_, index) => `tag-${String(index).padStart(2, "0")}`
-    )
-  }), { maxItems: 1 });
+  assert.deepEqual(
+    canonicalImportMetadata(
+      {
+        import: { keep_original_link: ["weibo"] },
+        weibo: { source_enabled: true }
+      },
+      "weibo",
+      weiboPost.images[0]!.original_url,
+      policyMetadata
+    ),
+    {
+      ...policyMetadata,
+      original: weiboPost.images[0]!.original_url
+    }
+  );
+  assert.deepEqual(
+    canonicalImportMetadata(
+      {
+        import: { keep_original_link: [] },
+        weibo: { source_enabled: false }
+      },
+      "weibo",
+      weiboPost.images[0]!.original_url,
+      policyMetadata
+    ),
+    {
+      ...policyMetadata,
+      source: "",
+      original: ""
+    }
+  );
+  const tooManyTags = parseJsonlManifest(
+    JSON.stringify({
+      original: "https://img.example.com/c.jpg",
+      tags: Array.from({ length: 51 }, (_, index) => `tag-${String(index).padStart(2, "0")}`)
+    }),
+    { maxItems: 1 }
+  );
   assert.equal(tooManyTags.items.length, 0);
-  assert.deepEqual(tooManyTags.errors.map(({ line }) => line), [1]);
-  assert.throws(() => parseJsonlManifest([
-    '{"original":"https://img.example.com/a.jpg"}',
-    '{"original":"https://img.example.com/b.jpg"}'
-  ].join("\n"), { maxItems: 1 }), JsonlManifestError);
+  assert.deepEqual(
+    tooManyTags.errors.map(({ line }) => line),
+    [1]
+  );
+  assert.throws(
+    () =>
+      parseJsonlManifest(
+        [
+          '{"original":"https://img.example.com/a.jpg"}',
+          '{"original":"https://img.example.com/b.jpg"}'
+        ].join("\n"),
+        { maxItems: 1 }
+      ),
+    JsonlManifestError
+  );
 
   assert.equal(downloadProgressLength(new Headers({ "content-length": "200" })), 200);
-  assert.equal(downloadProgressLength(new Headers({
-    "content-encoding": "gzip",
-    "content-length": "200"
-  })), undefined);
+  assert.equal(
+    downloadProgressLength(
+      new Headers({
+        "content-encoding": "gzip",
+        "content-length": "200"
+      })
+    ),
+    undefined
+  );
   assert.equal(calculateDownloadProgress(99, 200), 49);
   assert.equal(calculateDownloadProgress(300, 200), 100);
 
@@ -321,10 +314,10 @@ test("[Server/内容接入] 导入清单、下载进度与微博入口使用同�
     "1234567890123456"
   );
   assert.throws(() => parseWeiboPostUrl("https://example.com/not-weibo"));
-  assert.deepEqual(
-    deriveAuthorIdentityFromLink("https://weibo.com/u/1234567890"),
-    { provider: "weibo", id: "1234567890" }
-  );
+  assert.deepEqual(deriveAuthorIdentityFromLink("https://weibo.com/u/1234567890"), {
+    provider: "weibo",
+    id: "1234567890"
+  });
   assert.deepEqual(
     deriveAuthorIdentityFromLink("https://weibo.com/u/1234567890/?from=profile#top"),
     { provider: "weibo", id: "1234567890" }
@@ -342,30 +335,37 @@ test("[Server/内容接入] 导入清单、下载进度与微博入口使用同�
     assert.equal(deriveAuthorIdentityFromLink(link), null, link);
   }
 
-  const extracted = extractWeiboPost({
-    idstr: "987654321",
-    mblogid: "OuterBid",
-    created_at: "Sat Aug 29 09:02:03 +0800 2026",
-    user: { idstr: "1111111111" },
-    pic_ids: ["outer"],
-    pic_infos: {
-      outer: {
-        largest: { url: "https://wx1.sinaimg.cn/mw2000/outer.jpg" }
+  const extracted = extractWeiboPost(
+    {
+      idstr: "987654321",
+      mblogid: "OuterBid",
+      created_at: "Sat Aug 29 09:02:03 +0800 2026",
+      user: { idstr: "1111111111" },
+      pic_ids: ["outer"],
+      pic_infos: {
+        outer: {
+          largest: { url: "https://wx1.sinaimg.cn/mw2000/outer.jpg" }
+        }
+      },
+      retweeted_status: {
+        user: { idstr: "2222222222" },
+        pics: [
+          {
+            largest: { url: "https://wx2.sinaimg.cn/bmiddle/forwarded.jpg" }
+          }
+        ],
+        retweeted_status: {
+          user: {},
+          pics: [
+            {
+              largest: { url: "https://wx3.sinaimg.cn/thumb180/unknown-owner.jpg" }
+            }
+          ]
+        }
       }
     },
-    retweeted_status: {
-      user: { idstr: "2222222222" },
-      pics: [{
-        largest: { url: "https://wx2.sinaimg.cn/bmiddle/forwarded.jpg" }
-      }],
-      retweeted_status: {
-        user: {},
-        pics: [{
-          largest: { url: "https://wx3.sinaimg.cn/thumb180/unknown-owner.jpg" }
-        }]
-      }
-    }
-  }, parseWeiboPostUrl("https://weibo.com/1111111111/OuterBid"));
+    parseWeiboPostUrl("https://weibo.com/1111111111/OuterBid")
+  );
   assert.deepEqual(extracted.images, [
     {
       original_url: "https://wx1.sinaimg.cn/large/outer.jpg",
@@ -379,27 +379,42 @@ test("[Server/内容接入] 导入清单、下载进度与微博入口使用同�
       original_url: "https://wx3.sinaimg.cn/large/unknown-owner.jpg"
     }
   ]);
-  const extractedManifest = weiboPostToJsonl(extracted, true, new Map([
-    ["1111111111", "outer-author"],
-    ["2222222222", "forwarded-author"]
-  ])).split("\n").map((line) => JSON.parse(line) as Record<string, unknown>);
+  const extractedManifest = weiboPostToJsonl(
+    extracted,
+    true,
+    new Map([
+      ["1111111111", "outer-author"],
+      ["2222222222", "forwarded-author"]
+    ])
+  )
+    .split("\n")
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
   assert.deepEqual(
     extractedManifest.map((item) => item.author),
     ["outer-author", "forwarded-author", undefined]
   );
-  const duplicateAcrossStatuses = extractWeiboPost({
-    idstr: "987654322",
-    created_at: "Sat Aug 29 09:02:03 +0800 2026",
-    user: { idstr: "1111111111" },
-    pics: [{ largest: { url: "https://wx1.sinaimg.cn/large/shared.jpg" } }],
-    retweeted_status: {
-      user: { idstr: "2222222222" },
-      pics: [{ largest: { url: "https://wx1.sinaimg.cn/large/shared.jpg" } }]
-    }
-  }, parseWeiboPostUrl("https://weibo.com/1111111111/DuplicateBid"));
-  assert.deepEqual(duplicateAcrossStatuses.images, [{
-    original_url: "https://wx1.sinaimg.cn/large/shared.jpg"
-  }], "同一 URL 被不同 status 声明时不得猜测媒体作者");
+  const duplicateAcrossStatuses = extractWeiboPost(
+    {
+      idstr: "987654322",
+      created_at: "Sat Aug 29 09:02:03 +0800 2026",
+      user: { idstr: "1111111111" },
+      pics: [{ largest: { url: "https://wx1.sinaimg.cn/large/shared.jpg" } }],
+      retweeted_status: {
+        user: { idstr: "2222222222" },
+        pics: [{ largest: { url: "https://wx1.sinaimg.cn/large/shared.jpg" } }]
+      }
+    },
+    parseWeiboPostUrl("https://weibo.com/1111111111/DuplicateBid")
+  );
+  assert.deepEqual(
+    duplicateAcrossStatuses.images,
+    [
+      {
+        original_url: "https://wx1.sinaimg.cn/large/shared.jpg"
+      }
+    ],
+    "同一 URL 被不同 status 声明时不得猜测媒体作者"
+  );
 });
 test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、TTL 与签名 purpose 契约", () => {
   const imageTime = parseImageTime("2026-08-23T01:02:03.456Z");
@@ -537,13 +552,15 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
   assert.notEqual(
     ingestionSessionSemanticHash(semantic as never),
     ingestionSessionSemanticHash({
-      ...semantic, metadata: { ...draft, theme: "none" }
+      ...semantic,
+      metadata: { ...draft, theme: "none" }
     } as never)
   );
   assert.notEqual(
     ingestionSessionSemanticHash({ ...semantic, commit: { metadata: draft } } as never),
     ingestionSessionSemanticHash({
-      ...semantic, commit: { metadata: { ...draft, theme: "none" } }
+      ...semantic,
+      commit: { metadata: { ...draft, theme: "none" } }
     } as never)
   );
   let now = 1_000;
@@ -553,13 +570,13 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
   });
   const isMarker = (
     value: IngestionTokenEnvelope
-  ): value is IngestionTokenEnvelope & { marker: string } => (
-    value.marker === "bound"
+  ): value is IngestionTokenEnvelope & { marker: string } => value.marker === "bound";
+  const credentials = new Map(
+    ingestionTokenPurposes.map((purpose) => [
+      purpose,
+      tokens.sign(purpose, { marker: "bound" }, 2_000, 1_000)
+    ])
   );
-  const credentials = new Map(ingestionTokenPurposes.map((purpose) => [
-    purpose,
-    tokens.sign(purpose, { marker: "bound" }, 2_000, 1_000)
-  ]));
   for (const purpose of ingestionTokenPurposes) {
     const credential = credentials.get(purpose)!;
     assert.equal(tokens.verify(purpose, credential, isMarker).marker, "bound");
@@ -568,98 +585,62 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
       assert.throws(() => tokens.verify(otherPurpose, credential, isMarker));
     }
   }
-  const credential = credentials.get(
-    "imageshow/ingestion/upload/credential"
-  )!;
+  const credential = credentials.get("imageshow/ingestion/upload/credential")!;
   assert.equal(
-    tokens.sign(
-      "imageshow/ingestion/action/watermark",
-      { z: 1, a: 2 },
-      2_000,
-      1_000
-    ),
-    tokens.sign(
-      "imageshow/ingestion/action/watermark",
-      { a: 2, z: 1 },
-      2_000,
-      1_000
-    ),
+    tokens.sign("imageshow/ingestion/action/watermark", { z: 1, a: 2 }, 2_000, 1_000),
+    tokens.sign("imageshow/ingestion/action/watermark", { a: 2, z: 1 }, 2_000, 1_000),
     "签名 payload 必须使用确定性字段顺序"
   );
   const isStrictMarker = (
     value: IngestionTokenEnvelope
-  ): value is IngestionTokenEnvelope & { marker: string } => (
-    isMarker(value)
-    && Object.keys(value).sort().join(",") === [
-      "expires_at",
-      "issued_at",
-      "marker",
-      "purpose"
-    ].sort().join(",")
-  );
+  ): value is IngestionTokenEnvelope & { marker: string } =>
+    isMarker(value) &&
+    Object.keys(value).sort().join(",") ===
+      ["expires_at", "issued_at", "marker", "purpose"].sort().join(",");
   const extraClaims = tokens.sign(
     "imageshow/ingestion/upload/credential",
     { marker: "bound", unexpected: true },
     2_000,
     1_000
   );
-  assert.throws(() => tokens.verify(
-    "imageshow/ingestion/upload/credential",
-    extraClaims,
-    isStrictMarker
-  ));
+  assert.throws(() =>
+    tokens.verify("imageshow/ingestion/upload/credential", extraClaims, isStrictMarker)
+  );
   const futureIssued = tokens.sign(
     "imageshow/ingestion/upload/credential",
     { marker: "bound" },
     3_000,
     2_001
   );
-  assert.throws(() => tokens.verify(
-    "imageshow/ingestion/upload/credential",
-    futureIssued,
-    isMarker
-  ));
-  assert.throws(() => new IngestionTokenService({
-    rootKey: new Uint8Array(32).fill(7),
-    now: () => now,
-    maximumPayloadBytes: 16
-  }).sign(
-    "imageshow/ingestion/upload/credential",
-    { marker: "bound" },
-    2_000,
-    1_000
-  ));
+  assert.throws(() =>
+    tokens.verify("imageshow/ingestion/upload/credential", futureIssued, isMarker)
+  );
+  assert.throws(() =>
+    new IngestionTokenService({
+      rootKey: new Uint8Array(32).fill(7),
+      now: () => now,
+      maximumPayloadBytes: 16
+    }).sign("imageshow/ingestion/upload/credential", { marker: "bound" }, 2_000, 1_000)
+  );
   const credentialBytes = Buffer.byteLength(credential, "utf8");
-  assert.throws(() => new IngestionTokenService({
-    rootKey: new Uint8Array(32).fill(7),
-    now: () => now,
-    maximumTokenBytes: credentialBytes - 1
-  }).verify(
-    "imageshow/ingestion/upload/credential",
-    credential,
-    isMarker
-  ));
-  assert.throws(() => tokens.verify(
-    "imageshow/ingestion/upload/credential",
-    `!${credential}`,
-    isMarker
-  ));
-  assert.throws(() => tokens.verify(
-    "imageshow/ingestion/upload/credential",
-    credential.slice(0, -1),
-    isMarker
-  ));
-  assert.throws(() => tokens.verify(
-    "imageshow/ingestion/upload/credential",
-    `${credential.slice(0, -1)}x`,
-    isMarker
-  ));
+  assert.throws(() =>
+    new IngestionTokenService({
+      rootKey: new Uint8Array(32).fill(7),
+      now: () => now,
+      maximumTokenBytes: credentialBytes - 1
+    }).verify("imageshow/ingestion/upload/credential", credential, isMarker)
+  );
+  assert.throws(() =>
+    tokens.verify("imageshow/ingestion/upload/credential", `!${credential}`, isMarker)
+  );
+  assert.throws(() =>
+    tokens.verify("imageshow/ingestion/upload/credential", credential.slice(0, -1), isMarker)
+  );
+  assert.throws(() =>
+    tokens.verify("imageshow/ingestion/upload/credential", `${credential.slice(0, -1)}x`, isMarker)
+  );
   now = 2_000;
-  assert.throws(() => tokens.verify(
-    "imageshow/ingestion/upload/credential",
-    credential,
-    isMarker
-  ));
+  assert.throws(() => tokens.verify("imageshow/ingestion/upload/credential", credential, isMarker));
   assert.equal(appConfig.ingestionRuntime.uploadIntentTtlSeconds, 30 * 60);
   assert.equal(appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds, 2 * 60 * 60);
   assert.equal(appConfig.ingestionRuntime.importSessionIdleTtlSeconds, 24 * 60 * 60);
@@ -672,11 +653,16 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
     image_id: createImageId(new Date("2026-08-23T01:02:03.456Z"), 1)
   };
   const generation = createImageId(new Date("2026-08-23T01:02:04.456Z"), 2);
-  assert.equal(ingestionRawPath(pathPair, generation).includes(
-    pathPair.session_id
-  ), true);
-  const file = ingestionPreparedFile({ ...pathPair, generation, execution_token: generation }, "image");
-  assert.ok(ingestionPreparedPath(file).endsWith(file.replaceAll("/", process.platform === "win32" ? "\\" : "/")));
+  assert.equal(ingestionRawPath(pathPair, generation).includes(pathPair.session_id), true);
+  const file = ingestionPreparedFile(
+    { ...pathPair, generation, execution_token: generation },
+    "image"
+  );
+  assert.ok(
+    ingestionPreparedPath(file).endsWith(
+      file.replaceAll("/", process.platform === "win32" ? "\\" : "/")
+    )
+  );
   assert.deepEqual(parseIngestionTempFileName(file.split("/").at(-1)!), { kind: "prepared" });
   assert.deepEqual(parseIngestionTempFileName(file.split("/").at(-1)! + ".part"), { kind: "part" });
   assert.throws(() => ingestionPreparedPath("../escape.webp"), { code: "unsafe_path" });
@@ -700,20 +686,14 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
     }
   );
   while (!transactionStarted) await delay(0);
-  const resolving = await coordinator.cancelBoundary(
-    pair,
-    async () => "must-not-discard"
-  );
+  const resolving = await coordinator.cancelBoundary(pair, async () => "must-not-discard");
   assert.equal(resolving.status, "resolving");
   releaseTransaction();
   assert.equal(await transaction, "committed");
   await coordinator.waitForDatabaseTransactions();
 
   const cancellable = new IngestionIrreversibleCoordinator();
-  assert.deepEqual(await cancellable.cancelBoundary(
-    pair,
-    async () => "discarded"
-  ), {
+  assert.deepEqual(await cancellable.cancelBoundary(pair, async () => "discarded"), {
     status: "discarded",
     value: "discarded"
   });
@@ -751,21 +731,23 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
 
   const synchronousStartFailure = new IngestionIrreversibleCoordinator();
   assert.equal(synchronousStartFailure.registerCancellable(pair), true);
-  await assert.rejects(synchronousStartFailure.beginDatabaseTransaction(
-    pair,
-    async () => undefined,
-    () => {
-      throw new Error("transaction did not start");
-    }
-  ));
+  await assert.rejects(
+    synchronousStartFailure.beginDatabaseTransaction(
+      pair,
+      async () => undefined,
+      () => {
+        throw new Error("transaction did not start");
+      }
+    )
+  );
   assert.equal(synchronousStartFailure.state(pair), "cancellable");
-  assert.deepEqual(await synchronousStartFailure.cancelBoundary(
-    pair,
-    async () => "discarded-after-start-failure"
-  ), {
-    status: "discarded",
-    value: "discarded-after-start-failure"
-  });
+  assert.deepEqual(
+    await synchronousStartFailure.cancelBoundary(pair, async () => "discarded-after-start-failure"),
+    {
+      status: "discarded",
+      value: "discarded-after-start-failure"
+    }
+  );
   assert.equal(synchronousStartFailure.state(pair), null);
 
   const stoppedBeforeStart = new IngestionIrreversibleCoordinator();
@@ -773,16 +755,19 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
   const stopReason = new Error("worker stopped at final verification");
   let stoppedTransactionStarted = false;
   assert.equal(stoppedBeforeStart.registerCancellable(pair), true);
-  await assert.rejects(stoppedBeforeStart.beginDatabaseTransaction(
-    pair,
-    async () => {
-      queueMicrotask(() => stopController.abort(stopReason));
-    },
-    async () => {
-      stoppedTransactionStarted = true;
-    },
-    stopController.signal
-  ), (error) => error === stopReason);
+  await assert.rejects(
+    stoppedBeforeStart.beginDatabaseTransaction(
+      pair,
+      async () => {
+        queueMicrotask(() => stopController.abort(stopReason));
+      },
+      async () => {
+        stoppedTransactionStarted = true;
+      },
+      stopController.signal
+    ),
+    (error) => error === stopReason
+  );
   assert.equal(stoppedTransactionStarted, false);
   assert.equal(stoppedBeforeStart.state(pair), "cancellable");
   stoppedBeforeStart.unregisterCancellable(pair);
@@ -827,11 +812,7 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
   releaseFirst();
   await firstTransaction;
   await delay(0);
-  assert.equal(
-    drainSettled,
-    false,
-    "drain 必须继续等待首次快照之后进入 database_started 的事务"
-  );
+  assert.equal(drainSettled, false, "drain 必须继续等待首次快照之后进入 database_started 的事务");
   releaseSecond();
   await Promise.all([secondTransaction, drain]);
   assert.equal(drainSettled, true);
@@ -840,17 +821,15 @@ test("[Server/内容接入] Ingestion Worker 跨页保持 Import queued 与 rece
   const importSession = (
     position: number,
     status: "queued" | "received"
-  ): IngestionSessionSnapshot => ({
-    session_id: `import-session-${position}`,
-    image_id: `import-image-${position}`,
-    owner: "fifo-owner",
-    queue: "import",
-    status
-  }) as unknown as IngestionSessionSnapshot;
-  const queued = Array.from(
-    { length: 3 },
-    (_, index) => importSession(index, "queued")
-  );
+  ): IngestionSessionSnapshot =>
+    ({
+      session_id: `import-session-${position}`,
+      image_id: `import-image-${position}`,
+      owner: "fifo-owner",
+      queue: "import",
+      status
+    }) as unknown as IngestionSessionSnapshot;
+  const queued = Array.from({ length: 3 }, (_, index) => importSession(index, "queued"));
   const recovered = importSession(3, "received");
   const recoveredUpload = {
     ...importSession(4, "received"),
@@ -881,10 +860,7 @@ test("[Server/内容接入] Ingestion Worker 跨页保持 Import queued 与 rece
     "同一 frozen-tail pass 的后页 received 不得越过先前被窗口挡住的 queued"
   );
 
-  const nextPass = planIngestionWorkerLanes(
-    [queued[2], recovered],
-    activeAfterOneSettled
-  );
+  const nextPass = planIngestionWorkerLanes([queued[2], recovered], activeAfterOneSettled);
   assert.deepEqual(
     nextPass.candidates.map(({ session }) => session.session_id),
     [queued[2].session_id]
@@ -903,12 +879,7 @@ test("[Server/内容接入] Ingestion Commit dispatch window 由公开并发派�
     status: "committing"
   })) as never[];
   const windows = ingestionWorkerDispatchWindows(2, 16);
-  const first = planIngestionWorkerLanes(
-    committing,
-    [],
-    new Set(),
-    windows
-  );
+  const first = planIngestionWorkerLanes(committing, [], new Set(), windows);
   assert.equal(first.candidates.length, 24);
   assert.equal(first.blockedLanes.has("commit"), true);
 
@@ -916,17 +887,8 @@ test("[Server/内容接入] Ingestion Commit dispatch window 由公开并发派�
     pair: item.session,
     lane: item.lane
   }));
-  const refill = planIngestionWorkerLanes(
-    committing.slice(20),
-    active,
-    new Set(),
-    windows
-  );
-  assert.equal(
-    refill.candidates.length,
-    4,
-    "等待数量或字节许可的 coordinator 仍占用候补窗口"
-  );
+  const refill = planIngestionWorkerLanes(committing.slice(20), active, new Set(), windows);
+  assert.equal(refill.candidates.length, 4, "等待数量或字节许可的 coordinator 仍占用候补窗口");
 });
 test("[Server/内容接入] Ingestion pre-commit dispatch slot 由 Normalize 派生且交接后不重复领取活动 pair", () => {
   assert.deepEqual(ingestionWorkerDispatchWindows(1, 8), {
@@ -955,11 +917,13 @@ test("[Server/内容接入] Ingestion pre-commit dispatch slot 由 Normalize 派
   } as IngestionSessionSnapshot;
   const plan = planIngestionWorkerLanes(
     [normalizing, successor],
-    [{
-      pair: normalizing,
-      lane: "import",
-      dispatchSlotHeld: false
-    }],
+    [
+      {
+        pair: normalizing,
+        lane: "import",
+        dispatchSlotHeld: false
+      }
+    ],
     new Set(),
     ingestionWorkerDispatchWindows(1, 8)
   );
@@ -983,17 +947,15 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
   await t.test("两种来源合计最多持有 N 个 准备与本地结果发布", async (subtest) => {
     const itemCount = limit + 2;
     const gates = Array.from({ length: itemCount }, () => Promise.withResolvers<void>());
-    const sources = Array.from(
-      { length: itemCount },
-      (_, index) => index % 2 ? "import" : "upload"
+    const sources = Array.from({ length: itemCount }, (_, index) =>
+      index % 2 ? "import" : "upload"
     );
     const starts: number[] = [];
     let active = 0;
     let maxActive = 0;
     subtest.after(() => gates.forEach((gate) => gate.resolve()));
-    const runs = gates.map((gate, index) => withIngestionPreparationAdmission(
-      new AbortController().signal,
-      async () => {
+    const runs = gates.map((gate, index) =>
+      withIngestionPreparationAdmission(new AbortController().signal, async () => {
         starts.push(index);
         active += 1;
         maxActive = Math.max(maxActive, active);
@@ -1003,8 +965,8 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
         } finally {
           active -= 1;
         }
-      }
-    ));
+      })
+    );
 
     await waitFor(
       () => starts.length === limit,
@@ -1012,7 +974,10 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
     );
     assert.equal(active, limit);
     assert.equal(maxActive, limit);
-    assert.deepEqual(starts, Array.from({ length: limit }, (_, index) => index));
+    assert.deepEqual(
+      starts,
+      Array.from({ length: limit }, (_, index) => index)
+    );
 
     gates[0].resolve();
     await waitFor(
@@ -1043,29 +1008,22 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
     let maxActivePreparations = 0;
     subtest.after(() => gates.forEach((gate) => gate.resolve()));
 
-    const runs = gates.map((gate, index) => withImportPrefetchAdmission(
-      new AbortController().signal,
-      async (onNormalizationAdmitted) => {
+    const runs = gates.map((gate, index) =>
+      withImportPrefetchAdmission(new AbortController().signal, async (onNormalizationAdmitted) => {
         materializationStarts.push(index);
-        return withIngestionPreparationAdmission(
-          new AbortController().signal,
-          async () => {
-            preparationStarts.push(index);
-            activePreparations += 1;
-            maxActivePreparations = Math.max(
-              maxActivePreparations,
-              activePreparations
-            );
-            onNormalizationAdmitted();
-            try {
-              await gate.promise;
-            } finally {
-              activePreparations -= 1;
-            }
+        return withIngestionPreparationAdmission(new AbortController().signal, async () => {
+          preparationStarts.push(index);
+          activePreparations += 1;
+          maxActivePreparations = Math.max(maxActivePreparations, activePreparations);
+          onNormalizationAdmitted();
+          try {
+            await gate.promise;
+          } finally {
+            activePreparations -= 1;
           }
-        );
-      }
-    ));
+        });
+      })
+    );
 
     await waitFor(
       () => materializationStarts.length === limit * 2,
@@ -1103,21 +1061,17 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
   await t.test("取消等待项不会进入图片处理或本地结果发布", async (subtest) => {
     const gates = Array.from({ length: limit }, () => Promise.withResolvers<void>());
     subtest.after(() => gates.forEach((gate) => gate.resolve()));
-    const active = gates.map((gate) => withIngestionPreparationAdmission(
-      new AbortController().signal,
-      () => gate.promise
-    ));
+    const active = gates.map((gate) =>
+      withIngestionPreparationAdmission(new AbortController().signal, () => gate.promise)
+    );
     await nextTurn();
 
     const controller = new AbortController();
     const cancellation = new Error("cancel waiting Ingestion preparation");
     let started = false;
-    const waiting = withIngestionPreparationAdmission(
-      controller.signal,
-      async () => {
-        started = true;
-      }
-    );
+    const waiting = withIngestionPreparationAdmission(controller.signal, async () => {
+      started = true;
+    });
     await nextTurn();
     assert.equal(started, false);
     controller.abort(cancellation);
@@ -1134,14 +1088,15 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
     const repositoryRoot = resolve(import.meta.dirname, "../../..");
     const helperRoot = await createTestDirectory("imageshow-preparation-admission-");
     const helperPath = join(helperRoot, "verify-preparation-admission.mjs");
-    const runtimeConfigStoreUrl = pathToFileURL(resolve(
-      repositoryRoot,
-      "packages/server/src/config/runtime-config-store.ts"
-    )).href;
-    const preparationAdmissionUrl = pathToFileURL(resolve(
-      repositoryRoot,
-      "packages/server/src/images/ingestion/workers/preparation-admission.ts"
-    )).href;
+    const runtimeConfigStoreUrl = pathToFileURL(
+      resolve(repositoryRoot, "packages/server/src/config/runtime-config-store.ts")
+    ).href;
+    const preparationAdmissionUrl = pathToFileURL(
+      resolve(
+        repositoryRoot,
+        "packages/server/src/images/ingestion/workers/preparation-admission.ts"
+      )
+    ).href;
     const helperSource = `
 import assert from "node:assert/strict";
 import {
@@ -1192,19 +1147,20 @@ console.log("preparation-admission-reload-ok");
 `;
     try {
       await writeFile(helperPath, helperSource);
-      const result = await runProcess(process.execPath, [
-        resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"),
-        helperPath
-      ], {
-        cwd: repositoryRoot,
-        env: {
-          ...process.env,
-          NODE_ENV: "development",
-          IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: toNamespacedPath(join(helperRoot, "data")),
-          NORMALIZE_CONCURRENCY: "1"
-        },
-        timeoutMs: 30_000
-      });
+      const result = await runProcess(
+        process.execPath,
+        [resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"), helperPath],
+        {
+          cwd: repositoryRoot,
+          env: {
+            ...process.env,
+            NODE_ENV: "development",
+            IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: toNamespacedPath(join(helperRoot, "data")),
+            NORMALIZE_CONCURRENCY: "1"
+          },
+          timeoutMs: 30_000
+        }
+      );
       assert.match(result.stdout, /preparation-admission-reload-ok/);
     } finally {
       await rm(helperRoot, { recursive: true, force: true });
@@ -1228,20 +1184,19 @@ test("[Server/内容接入] Import 后继窗口在 Normalize 准入时交接并�
     const starts: number[] = [];
     const markNormalizationAdmitted: Array<(() => void) | undefined> = [];
     subtest.after(() => gates.forEach((gate) => gate.resolve()));
-    const runs = gates.map((gate, index) => withImportPrefetchAdmission(
-      new AbortController().signal,
-      async (onNormalizationAdmitted) => {
+    const runs = gates.map((gate, index) =>
+      withImportPrefetchAdmission(new AbortController().signal, async (onNormalizationAdmitted) => {
         starts.push(index);
         markNormalizationAdmitted[index] = onNormalizationAdmitted;
         await gate.promise;
         return index;
-      }
-    ));
-    await waitFor(
-      () => starts.length === limit,
-      "Import successor window did not fill"
+      })
     );
-    assert.deepEqual(starts, Array.from({ length: limit }, (_, index) => index));
+    await waitFor(() => starts.length === limit, "Import successor window did not fill");
+    assert.deepEqual(
+      starts,
+      Array.from({ length: limit }, (_, index) => index)
+    );
 
     let firstSettled = false;
     void runs[0].finally(() => {
@@ -1265,30 +1220,23 @@ test("[Server/内容接入] Import 后继窗口在 Normalize 准入时交接并�
   await t.test("处理许可交接前后的失败都向调用方传播并释放窗口", async () => {
     const beforeAdmission = new Error("download failed before Normalize");
     await assert.rejects(
-      withImportPrefetchAdmission(
-        new AbortController().signal,
-        async () => { throw beforeAdmission; }
-      ),
+      withImportPrefetchAdmission(new AbortController().signal, async () => {
+        throw beforeAdmission;
+      }),
       (error) => error === beforeAdmission
     );
 
     const afterAdmission = new Error("prepare failed after Normalize admission");
     await assert.rejects(
-      withImportPrefetchAdmission(
-        new AbortController().signal,
-        async (onNormalizationAdmitted) => {
-          onNormalizationAdmitted();
-          await nextTurn();
-          throw afterAdmission;
-        }
-      ),
+      withImportPrefetchAdmission(new AbortController().signal, async (onNormalizationAdmitted) => {
+        onNormalizationAdmitted();
+        await nextTurn();
+        throw afterAdmission;
+      }),
       (error) => error === afterAdmission
     );
     assert.equal(
-      await withImportPrefetchAdmission(
-        new AbortController().signal,
-        async () => "released"
-      ),
+      await withImportPrefetchAdmission(new AbortController().signal, async () => "released"),
       "released"
     );
   });
@@ -1297,24 +1245,20 @@ test("[Server/内容接入] Import 后继窗口在 Normalize 准入时交接并�
     const gates = Array.from({ length: limit }, () => Promise.withResolvers<void>());
     const starts: number[] = [];
     subtest.after(() => gates.forEach((gate) => gate.resolve()));
-    const active = gates.map((gate, index) => withImportPrefetchAdmission(
-      new AbortController().signal,
-      async () => {
+    const active = gates.map((gate, index) =>
+      withImportPrefetchAdmission(new AbortController().signal, async () => {
         starts.push(index);
         await gate.promise;
-      }
-    ));
+      })
+    );
     await waitFor(() => starts.length === limit, "Import window did not fill");
 
     const waitingController = new AbortController();
     const cancellation = new Error("cancel waiting Import successor");
     let waitingStarted = false;
-    const waiting = withImportPrefetchAdmission(
-      waitingController.signal,
-      async () => {
-        waitingStarted = true;
-      }
-    );
+    const waiting = withImportPrefetchAdmission(waitingController.signal, async () => {
+      waitingStarted = true;
+    });
     await nextTurn();
     assert.equal(waitingStarted, false);
     waitingController.abort(cancellation);
@@ -1329,14 +1273,12 @@ test("[Server/内容接入] Import 后继窗口在 Normalize 准入时交接并�
     const repositoryRoot = resolve(import.meta.dirname, "../../..");
     const helperRoot = await createTestDirectory("imageshow-import-prefetch-");
     const helperPath = join(helperRoot, "verify-import-prefetch.mjs");
-    const runtimeConfigStoreUrl = pathToFileURL(resolve(
-      repositoryRoot,
-      "packages/server/src/config/runtime-config-store.ts"
-    )).href;
-    const importPrefetchUrl = pathToFileURL(resolve(
-      repositoryRoot,
-      "packages/server/src/images/ingestion/workers/import-prefetch.ts"
-    )).href;
+    const runtimeConfigStoreUrl = pathToFileURL(
+      resolve(repositoryRoot, "packages/server/src/config/runtime-config-store.ts")
+    ).href;
+    const importPrefetchUrl = pathToFileURL(
+      resolve(repositoryRoot, "packages/server/src/images/ingestion/workers/import-prefetch.ts")
+    ).href;
     const helperSource = `
 import assert from "node:assert/strict";
 import {
@@ -1393,19 +1335,20 @@ console.log("import-prefetch-reload-ok");
 `;
     try {
       await writeFile(helperPath, helperSource);
-      const result = await runProcess(process.execPath, [
-        resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"),
-        helperPath
-      ], {
-        cwd: repositoryRoot,
-        env: {
-          ...process.env,
-          NODE_ENV: "development",
-          IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: toNamespacedPath(join(helperRoot, "data")),
-          NORMALIZE_CONCURRENCY: "1"
-        },
-        timeoutMs: 30_000
-      });
+      const result = await runProcess(
+        process.execPath,
+        [resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"), helperPath],
+        {
+          cwd: repositoryRoot,
+          env: {
+            ...process.env,
+            NODE_ENV: "development",
+            IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: toNamespacedPath(join(helperRoot, "data")),
+            NORMALIZE_CONCURRENCY: "1"
+          },
+          timeoutMs: 30_000
+        }
+      );
       assert.match(result.stdout, /import-prefetch-reload-ok/);
     } finally {
       await rm(helperRoot, { recursive: true, force: true });
@@ -1422,9 +1365,7 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
     }
     assert.fail(message);
   };
-  const cancellationError = (signal: AbortSignal) => (
-    signal.reason ?? new Error("cancelled")
-  );
+  const cancellationError = (signal: AbortSignal) => signal.reason ?? new Error("cancelled");
 
   await t.test("数量许可不让新请求越过队列并在提额通知后补位", async (subtest) => {
     let limit = 1;
@@ -1436,13 +1377,11 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
     ];
     const starts: string[] = [];
     subtest.after(() => releases.forEach((release) => release.resolve()));
-    const run = (name: string, release: Gate) => limiter.run(
-      new AbortController().signal,
-      async () => {
+    const run = (name: string, release: Gate) =>
+      limiter.run(new AbortController().signal, async () => {
         starts.push(name);
         await release.promise;
-      }
-    );
+      });
     const first = run("first", releases[0]);
     await waitFor(() => starts.length === 1, "first permit did not start");
     const second = run("second", releases[1]);
@@ -1487,13 +1426,12 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
     ];
     const starts: number[] = [];
     subtest.after(() => releases.forEach((release) => release.resolve()));
-    const runs = releases.map((release, index) => limiter.run(
-      new AbortController().signal,
-      async () => {
+    const runs = releases.map((release, index) =>
+      limiter.run(new AbortController().signal, async () => {
         starts.push(index);
         await release.promise;
-      }
-    ));
+      })
+    );
     await waitFor(() => starts.length === 2, "initial permits were not filled");
     limit = 1;
     limiter.refresh();
@@ -1558,7 +1496,11 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
         async () => {
           hookWorkStarted = true;
         },
-        { onStarted: () => { throw hookError; } }
+        {
+          onStarted: () => {
+            throw hookError;
+          }
+        }
       ),
       (error) => error === hookError
     );
@@ -1577,11 +1519,9 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
     const active = limiter.run(controller.signal, async () => {
       started.resolve();
       await new Promise<void>((_resolve, reject) => {
-        controller.signal.addEventListener(
-          "abort",
-          () => reject(controller.signal.reason),
-          { once: true }
-        );
+        controller.signal.addEventListener("abort", () => reject(controller.signal.reason), {
+          once: true
+        });
       });
     });
     await started.promise;
@@ -1695,12 +1635,12 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
     assert.fail(message);
   };
   const schedulerWithoutDelay = (
-    createVisitorIdentity:
-      (signal: AbortSignal) => Promise<string> = async () => "visitor"
-  ) => createWeiboRequestScheduler({
-    createVisitorIdentity,
-    delayRange: () => ({ minDelaySeconds: 0, maxDelaySeconds: 0 })
-  });
+    createVisitorIdentity: (signal: AbortSignal) => Promise<string> = async () => "visitor"
+  ) =>
+    createWeiboRequestScheduler({
+      createVisitorIdentity,
+      delayRange: () => ({ minDelaySeconds: 0, maxDelaySeconds: 0 })
+    });
 
   await t.test("多个批次固定串行并逐项轮转", async (subtest) => {
     const scheduler = schedulerWithoutDelay();
@@ -1709,19 +1649,17 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
     let active = 0;
     let maximumActive = 0;
     subtest.after(() => firstRelease.resolve());
-    const request = (name: string, hold = false) => async () => {
-      active += 1;
-      maximumActive = Math.max(maximumActive, active);
-      order.push(name);
-      if (hold) await firstRelease.promise;
-      active -= 1;
-      return name;
-    };
-    const first = scheduler.scheduleBatch([
-      request("a1", true),
-      request("a2"),
-      request("a3")
-    ]);
+    const request =
+      (name: string, hold = false) =>
+      async () => {
+        active += 1;
+        maximumActive = Math.max(maximumActive, active);
+        order.push(name);
+        if (hold) await firstRelease.promise;
+        active -= 1;
+        return name;
+      };
+    const first = scheduler.scheduleBatch([request("a1", true), request("a2"), request("a3")]);
     await waitFor(() => order.length === 1, "first Weibo request did not start");
     const second = scheduler.scheduleBatch([request("b1"), request("b2")]);
     firstRelease.resolve();
@@ -1741,19 +1679,18 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
       return "visitor";
     });
     const first = scheduler.scheduleBatch([
-      async () => { order.push("post-a"); }
+      async () => {
+        order.push("post-a");
+      }
     ]);
     const second = scheduler.scheduleBatch([
-      async () => { order.push("post-b"); }
+      async () => {
+        order.push("post-b");
+      }
     ]);
     await Promise.all([first, second]);
     assert.equal(creations, 1);
-    assert.deepEqual(order, [
-      "handshake-1",
-      "handshake-2",
-      "post-a",
-      "post-b"
-    ]);
+    assert.deepEqual(order, ["handshake-1", "handshake-2", "post-a", "post-b"]);
   });
 
   await t.test("每个相邻请求按开始等待时的当前区间采样", async () => {
@@ -1773,7 +1710,9 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
         now += delayMs;
       }
     });
-    const request = async () => { now += 100; };
+    const request = async () => {
+      now += 100;
+    };
     await scheduler.scheduleBatch([request, request, request]);
     assert.deepEqual(waits, [2_500, 5_000]);
   });
@@ -1794,10 +1733,17 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
       }
     });
     subtest.after(() => releaseWait.resolve());
-    const batch = scheduler.scheduleBatch([
-      async () => { starts += 1; },
-      async () => { starts += 1; }
-    ], controller.signal);
+    const batch = scheduler.scheduleBatch(
+      [
+        async () => {
+          starts += 1;
+        },
+        async () => {
+          starts += 1;
+        }
+      ],
+      controller.signal
+    );
     await waitStarted.promise;
     const rejected = assert.rejects(batch, (error) => error === cancellation);
     controller.abort(cancellation);
@@ -1812,23 +1758,27 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
     const activeCancellation = new Error("cancelled while active");
     let activeStarted = false;
     let activeObservedAbort = false;
-    const active = activeScheduler.scheduleBatch([
-      async (_identity, signal) => {
-        activeStarted = true;
-        await new Promise<void>((_resolve, reject) => {
-          signal.addEventListener("abort", () => {
-            activeObservedAbort = true;
-            reject(signal.reason);
-          }, { once: true });
-        });
-      },
-      async () => assert.fail("cancelled batch must not start another request")
-    ], activeController.signal);
-    await waitFor(() => activeStarted, "active Weibo request did not start");
-    const activeRejected = assert.rejects(
-      active,
-      (error) => error === activeCancellation
+    const active = activeScheduler.scheduleBatch(
+      [
+        async (_identity, signal) => {
+          activeStarted = true;
+          await new Promise<void>((_resolve, reject) => {
+            signal.addEventListener(
+              "abort",
+              () => {
+                activeObservedAbort = true;
+                reject(signal.reason);
+              },
+              { once: true }
+            );
+          });
+        },
+        async () => assert.fail("cancelled batch must not start another request")
+      ],
+      activeController.signal
     );
+    await waitFor(() => activeStarted, "active Weibo request did not start");
+    const activeRejected = assert.rejects(active, (error) => error === activeCancellation);
     const next = activeScheduler.scheduleBatch([async () => "next"]);
     activeController.abort(activeCancellation);
     await activeRejected;
@@ -1859,9 +1809,10 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
       }
     });
     subtest.after(() => firstIdentitySettled.resolve());
-    const first = scheduler.scheduleBatch([
-      async () => assert.fail("cancelled batch must not start a post request")
-    ], firstController.signal);
+    const first = scheduler.scheduleBatch(
+      [async () => assert.fail("cancelled batch must not start a post request")],
+      firstController.signal
+    );
     await waitFor(() => creations === 1, "visitor creation did not start");
     const next = scheduler.scheduleBatch([async (identity) => identity]);
     const firstRejected = assert.rejects(first, (error) => error === cancellation);
@@ -1876,9 +1827,7 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
   await t.test("身份拒绝只影响当前帖子并在下一项重建", async () => {
     let creations = 0;
     let attempts = 0;
-    const scheduler = schedulerWithoutDelay(async () => (
-      `visitor-${creations += 1}`
-    ));
+    const scheduler = schedulerWithoutDelay(async () => `visitor-${(creations += 1)}`);
     const results = await scheduler.scheduleBatch([
       async (identity) => {
         attempts += 1;
@@ -1895,15 +1844,16 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
     assert.equal(attempts, 2);
     assert.equal(creations, 2);
 
-    const limitError = new WeiboImportError(
-      "weibo_image_limit_exceeded",
-      "too many images"
-    );
+    const limitError = new WeiboImportError("weibo_image_limit_exceeded", "too many images");
     let afterLimitStarted = false;
     await assert.rejects(
       scheduler.scheduleBatch([
-        async () => { throw limitError; },
-        async () => { afterLimitStarted = true; }
+        async () => {
+          throw limitError;
+        },
+        async () => {
+          afterLimitStarted = true;
+        }
       ]),
       (error) => error === limitError
     );
@@ -1913,8 +1863,12 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
     let afterFatalStarted = false;
     await assert.rejects(
       scheduler.scheduleBatch([
-        async () => { throw fatalError; },
-        async () => { afterFatalStarted = true; }
+        async () => {
+          throw fatalError;
+        },
+        async () => {
+          afterFatalStarted = true;
+        }
       ]),
       (error) => error === fatalError
     );
@@ -1950,14 +1904,7 @@ test("[Server/内容接入] 下载进度写入失败会立即被观察并中止�
       new AbortController().signal,
       {
         now: () => 1_000,
-        fetchImageToFile: async (
-          _url,
-          _target,
-          _part,
-          limit,
-          signal,
-          onProgress
-        ) => {
+        fetchImageToFile: async (_url, _target, _part, limit, signal, onProgress) => {
           assert.equal(limit, 100 * 1024 * 1024);
           onProgress?.(10);
           await delay(0);
@@ -2035,10 +1982,7 @@ test("[Server/内容接入] 同一 execution 可接力草稿版本且身份变�
       };
       return { session: canonical };
     },
-    heartbeat: async (
-      current: { execution_token: string },
-      expectedVersion: number
-    ) => {
+    heartbeat: async (current: { execution_token: string }, expectedVersion: number) => {
       assertCurrentExecution(current, expectedVersion);
       canonical = { ...canonical, discard_at: Date.now() + 120_000 };
       return { session: canonical };
@@ -2061,14 +2005,7 @@ test("[Server/内容接入] 同一 execution 可接力草稿版本且身份变�
     {
       maxFileBytes: () => 1024,
       now: () => 1_000,
-      fetchImageToFile: async (
-        _url,
-        _target,
-        _part,
-        limit,
-        _signal,
-        onProgress
-      ) => {
+      fetchImageToFile: async (_url, _target, _part, limit, _signal, onProgress) => {
         assert.equal(limit, 1024);
         canonical = {
           ...canonical,
@@ -2134,16 +2071,18 @@ test("[Server/内容接入] 同一 execution 可接力草稿版本且身份变�
 
   await assert.rejects(
     refreshIngestionExecutionSession(repository as never, preparingStale as never),
-    (error) => error instanceof ApiError
-      && error.code === "ingestion_execution_fenced"
+    (error) => error instanceof ApiError && error.code === "ingestion_execution_fenced"
   );
 });
 test("[Server/内容接入] 清理重试有界并让后续任务先于退避重试执行", async () => {
   const restore = installProperties(appConfig.ingestionRuntime, {
-    cleanupRetryQueueCapacity: 2, cleanupRetryMaxAttempts: 2
+    cleanupRetryQueueCapacity: 2,
+    cleanupRetryMaxAttempts: 2
   });
   let release!: () => void;
-  const gate = new Promise<void>(resolve => { release = resolve; });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   const order: string[] = [];
   let attempts = 0;
   let overflowRan = false;
@@ -2154,27 +2093,34 @@ test("[Server/内容接入] 清理重试有界并让后续任务先于退避重�
       await gate;
       throw new Error("disposable cleanup failure");
     });
-    await ingestionCleanupRetryQueue.enqueue(async () => { order.push("later-cleanup"); });
-    await ingestionCleanupRetryQueue.enqueue(async () => { overflowRan = true; });
+    await ingestionCleanupRetryQueue.enqueue(async () => {
+      order.push("later-cleanup");
+    });
+    await ingestionCleanupRetryQueue.enqueue(async () => {
+      overflowRan = true;
+    });
     release();
     for (let wait = 0; attempts < 2 && wait < 300; wait += 1) await delay(10);
     await delay(0);
     assert.deepEqual(order, ["retry-1", "later-cleanup", "retry-2"]);
     assert.equal(overflowRan, false);
     let recovered = false;
-    await ingestionCleanupRetryQueue.enqueue(async () => { recovered = true; });
+    await ingestionCleanupRetryQueue.enqueue(async () => {
+      recovered = true;
+    });
     await delay(0);
     assert.equal(recovered, true);
-  } finally { release(); restore(); }
+  } finally {
+    release();
+    restore();
+  }
 });
 
 test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封住全部提交边界", async () => {
   const owner = "cancel-batch-owner";
   const coordinator = new IngestionIrreversibleCoordinator();
   const sessions = Array.from({ length: 100 }, (_, index): IngestionSessionSnapshot => {
-    const resolved = parseImageTime(
-      `2026-08-23T01:02:${String(index % 60).padStart(2, "0")}.456Z`
-    );
+    const resolved = parseImageTime(`2026-08-23T01:02:${String(index % 60).padStart(2, "0")}.456Z`);
     return {
       owner,
       queue: "import",
@@ -2234,10 +2180,7 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
       semantic_hash: String(index + 1).padStart(64, "0")
     };
   });
-  const bySession = new Map(sessions.map((session) => [
-    session.session_id,
-    session
-  ]));
+  const bySession = new Map(sessions.map((session) => [session.session_id, session]));
   for (const session of sessions) {
     assert.equal(coordinator.registerCancellable(session), true);
   }
@@ -2245,9 +2188,8 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
   let discarded = 0;
   let aborted = 0;
   const repository = {
-    readSessions: async (_owner: string, items: readonly { session_id: string }[]) => (
-      items.map((item) => bySession.get(item.session_id) ?? null)
-    ),
+    readSessions: async (_owner: string, items: readonly { session_id: string }[]) =>
+      items.map((item) => bySession.get(item.session_id) ?? null),
     mutateSemantic: async (
       current: { version: number },
       expectedVersion: number,
@@ -2280,21 +2222,22 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
       readCommitted: async (imageIds) => {
         resultReads += 1;
         assert.equal(imageIds.length, sessions.length);
-        competingTransactions = sessions.map((session) => (
-          coordinator.beginDatabaseTransaction(
-            session,
-            async () => undefined,
-            async () => {
-              databaseStarts += 1;
-            }
-          ).then(() => "started" as const, () => "rejected" as const)
-        ));
-        await delay(0);
-        assert.equal(
-          databaseStarts,
-          0,
-          "PG 批量判定期间任何 pair 都不得越过取消临界区"
+        competingTransactions = sessions.map((session) =>
+          coordinator
+            .beginDatabaseTransaction(
+              session,
+              async () => undefined,
+              async () => {
+                databaseStarts += 1;
+              }
+            )
+            .then(
+              () => "started" as const,
+              () => "rejected" as const
+            )
         );
+        await delay(0);
+        assert.equal(databaseStarts, 0, "PG 批量判定期间任何 pair 都不得越过取消临界区");
         return new Map();
       },
       scheduleCleanup: async (work) => {
@@ -2313,9 +2256,7 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
     results.map((result) => result.queue_revision),
     Array.from({ length: sessions.length }, (_, index) => index + 1)
   );
-  assert.ok((await Promise.all(competingTransactions)).every(
-    (result) => result === "rejected"
-  ));
+  assert.ok((await Promise.all(competingTransactions)).every((result) => result === "rejected"));
   assert.equal(databaseStarts, 0);
 
   const crossOwner = sessions.map((session, index) => {
@@ -2323,11 +2264,7 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
     return {
       ...session,
       owner: crossOwnerName,
-      session_id: createIngestionSessionId(
-        crossOwnerName,
-        "import",
-        `item-${index}`
-      )
+      session_id: createIngestionSessionId(crossOwnerName, "import", `item-${index}`)
     };
   });
   const crossOwnerCoordinator = new IngestionIrreversibleCoordinator();
@@ -2371,9 +2308,7 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
   assert.equal(crossOwnerReads, 1);
   assert.equal(crossOwnerDiscards, crossOwner.length);
   assert.equal(crossOwnerCleanupSchedules, 1);
-  assert.ok(crossOwnerResults.every((result) => (
-    result.status === "discarded"
-  )));
+  assert.ok(crossOwnerResults.every((result) => result.status === "discarded"));
   assert.deepEqual(
     crossOwnerResults.map((result) => result.queue_revision),
     Array.from({ length: crossOwner.length }, (_, index) => index + 1)
@@ -2383,18 +2318,12 @@ test("[Server/内容接入] 取消批次把旧 incarnation 保留为逐项冲突
   const owner = "cancel-incarnation-owner";
   const stale = {
     session_id: createIngestionSessionId(owner, "import", "stale"),
-    image_id: createImageId(
-      parseImageTime("2026-08-23T01:02:03.456Z").date,
-      1
-    ),
+    image_id: createImageId(parseImageTime("2026-08-23T01:02:03.456Z").date, 1),
     expected_version: 1
   };
   const completed = {
     session_id: createIngestionSessionId(owner, "import", "completed"),
-    image_id: createImageId(
-      parseImageTime("2026-08-23T01:02:04.456Z").date,
-      2
-    ),
+    image_id: createImageId(parseImageTime("2026-08-23T01:02:04.456Z").date, 2),
     expected_version: 1
   };
   const results = await cancelIngestionSessions(
@@ -2407,22 +2336,28 @@ test("[Server/内容接入] 取消批次把旧 incarnation 保留为逐项冲突
     () => undefined,
     {},
     {
-      readCommitted: async () => new Map([[
-        completed.image_id,
-        {
-          created_by: owner,
-          item: { id: completed.image_id }
-        } as never
-      ]])
+      readCommitted: async () =>
+        new Map([
+          [
+            completed.image_id,
+            {
+              created_by: owner,
+              item: { id: completed.image_id }
+            } as never
+          ]
+        ])
     }
   );
-  assert.deepEqual(results.map((result) => ({
-    status: result.status,
-    code: result.status === "failed" ? result.code : undefined
-  })), [
-    { status: "failed", code: "ingestion_incarnation_conflict" },
-    { status: "completed", code: undefined }
-  ]);
+  assert.deepEqual(
+    results.map((result) => ({
+      status: result.status,
+      code: result.status === "failed" ? result.code : undefined
+    })),
+    [
+      { status: "failed", code: "ingestion_incarnation_conflict" },
+      { status: "completed", code: undefined }
+    ]
+  );
   const completedResult = results[1];
   assert.equal(completedResult?.status, "completed");
   if (completedResult?.status !== "completed") {
@@ -2431,10 +2366,12 @@ test("[Server/内容接入] 取消批次把旧 incarnation 保留为逐项冲突
   assert.equal(completedResult.completed_item.id, completed.image_id);
 });
 test("[Server/内容接入] 已启动事务的 expiry 只通过原子 cutoff 收敛", async () => {
-  const runCase = async (input: Readonly<{
-    committed: boolean;
-    discardAt: number;
-  }>) => {
+  const runCase = async (
+    input: Readonly<{
+      committed: boolean;
+      discardAt: number;
+    }>
+  ) => {
     const pair = {
       session_id: createIngestionSessionId(
         "expiry-owner",
@@ -2508,11 +2445,7 @@ test("[Server/内容接入] 已启动事务的 expiry 只通过原子 cutoff 收
         next: { status: string }
       ) => {
         if (active.discard_at > cutoff) {
-          throw new ApiError(
-            409,
-            "ingestion_session_not_expired",
-            "内容接入任务的有效期已经刷新"
-          );
+          throw new ApiError(409, "ingestion_session_not_expired", "内容接入任务的有效期已经刷新");
         }
         transitions.push(next.status);
         return { session: next, metadata: { revision: transitions.length } };
@@ -2529,12 +2462,20 @@ test("[Server/内容接入] 已启动事务的 expiry 只通过原子 cutoff 收
       () => undefined,
       { expiryCutoff: 10 },
       {
-        readCommitted: async () => new Map(input.committed
-          ? [[pair.image_id, {
-              created_by: current.owner,
-              item: { id: pair.image_id }
-            } as never]]
-          : []),
+        readCommitted: async () =>
+          new Map(
+            input.committed
+              ? [
+                  [
+                    pair.image_id,
+                    {
+                      created_by: current.owner,
+                      item: { id: pair.image_id }
+                    } as never
+                  ]
+                ]
+              : []
+          ),
         scheduleCleanup: () => undefined
       }
     );
@@ -2559,50 +2500,45 @@ test("[Server/内容接入] 已启动事务的 expiry 只通过原子 cutoff 收
 test("[Server/内容接入] PG 完成清理不会越过新的 session incarnation", async () => {
   const owner = "incarnation-owner";
   const sessionId = createIngestionSessionId(owner, "import", "same-intent");
-  const oldImageId = createImageId(
-    new Date("2026-08-23T01:04:01.456Z"),
-    1
-  );
-  const newImageId = createImageId(
-    new Date("2026-08-23T01:04:02.456Z"),
-    2
-  );
-  const active = (imageId: string) => ({
-    owner,
-    queue: "import",
-    source_type: "url",
-    session_id: sessionId,
-    image_id: imageId,
-    image_time: "2026-08-23T01:04:00.456Z",
-    request_hash: "d".repeat(64),
-    import_download: { url: "https://example.com/incarnation.jpg" },
-    metadata: {
-      device: "auto",
-      brightness: "auto",
-      theme: null,
-      author: "",
-      title: "",
-      description: "",
-      source: "",
-      original: "",
-      tags: []
-    },
-    storage_slug: "local",
-    status: "queued",
-    phase: "queued",
-    message: "queued",
-    progress: null,
-    version: 1,
-    progress_seq: 0,
-    last_semantic_revision: 1,
-    accepted_at: 1,
-    accepted_order: 1,
-    execution_token: "",
-    raw_generation: "",
-    raw_size: 0,
-    discard_at: 10_000,
-    semantic_hash: "e".repeat(64)
-  } as const);
+  const oldImageId = createImageId(new Date("2026-08-23T01:04:01.456Z"), 1);
+  const newImageId = createImageId(new Date("2026-08-23T01:04:02.456Z"), 2);
+  const active = (imageId: string) =>
+    ({
+      owner,
+      queue: "import",
+      source_type: "url",
+      session_id: sessionId,
+      image_id: imageId,
+      image_time: "2026-08-23T01:04:00.456Z",
+      request_hash: "d".repeat(64),
+      import_download: { url: "https://example.com/incarnation.jpg" },
+      metadata: {
+        device: "auto",
+        brightness: "auto",
+        theme: null,
+        author: "",
+        title: "",
+        description: "",
+        source: "",
+        original: "",
+        tags: []
+      },
+      storage_slug: "local",
+      status: "queued",
+      phase: "queued",
+      message: "queued",
+      progress: null,
+      version: 1,
+      progress_seq: 0,
+      last_semantic_revision: 1,
+      accepted_at: 1,
+      accepted_order: 1,
+      execution_token: "",
+      raw_generation: "",
+      raw_size: 0,
+      discard_at: 10_000,
+      semantic_hash: "e".repeat(64)
+    }) as const;
   const oldSession = active(oldImageId);
   const replacement = active(newImageId);
   let writes = 0;
@@ -2621,18 +2557,17 @@ test("[Server/内容接入] PG 完成清理不会越过新的 session incarnatio
     } as never,
     new IngestionIrreversibleCoordinator(),
     owner,
-    [{
-      session_id: sessionId,
-      image_id: oldImageId,
-      expected_version: oldSession.version
-    }],
+    [
+      {
+        session_id: sessionId,
+        image_id: oldImageId,
+        expected_version: oldSession.version
+      }
+    ],
     () => undefined,
     {},
     {
-      readCommitted: async () => new Map([[
-        oldImageId,
-        { created_by: owner } as never
-      ]]),
+      readCommitted: async () => new Map([[oldImageId, { created_by: owner } as never]]),
       scheduleCleanup: () => undefined
     }
   );
@@ -2675,10 +2610,7 @@ test("[Server/内容接入] PG 完成会清退保留 commit 的 failed canonical
     accepted_at: 1,
     accepted_order: 1,
     execution_token: "",
-    raw_generation: createImageId(
-      new Date("2026-08-23T01:05:02.456Z"),
-      2
-    ),
+    raw_generation: createImageId(new Date("2026-08-23T01:05:02.456Z"), 2),
     raw_size: 1,
     commit: {
       commit_request_id: "commit-request",
@@ -2719,19 +2651,13 @@ test("[Server/内容接入] PG 完成会清退保留 commit 的 failed canonical
     discarded_at: 2,
     discard_at: failed.discard_at
   } as const;
-  for (const committedExt of [
-    "webp", "jpg"
-  ] as const) {
+  for (const committedExt of ["webp", "jpg"] as const) {
     const writes: string[] = [];
     const results = await cancelIngestionSessions(
       {
         readSessions: async () => [failed],
         readSession: async () => failed,
-        mutateSemantic: async (
-          _current: unknown,
-          _version: number,
-          next: { status: string }
-        ) => {
+        mutateSemantic: async (_current: unknown, _version: number, next: { status: string }) => {
           writes.push(next.status);
           assert.equal(next.status, "discarded");
           return { session: discarded, metadata: { revision: 3 } };
@@ -2746,15 +2672,21 @@ test("[Server/内容接入] PG 完成会清退保留 commit 的 failed canonical
       () => undefined,
       {},
       {
-        readCommitted: async () => new Map([[pair.image_id, {
-          image_id: pair.image_id,
-          image_time: failed.image_time,
-          created_by: owner,
-          item: {
-            storage_slug: failed.storage_slug,
-            ext: committedExt
-          } as never
-        }]]),
+        readCommitted: async () =>
+          new Map([
+            [
+              pair.image_id,
+              {
+                image_id: pair.image_id,
+                image_time: failed.image_time,
+                created_by: owner,
+                item: {
+                  storage_slug: failed.storage_slug,
+                  ext: committedExt
+                } as never
+              }
+            ]
+          ]),
         scheduleCleanup: async (work) => work()
       }
     );
@@ -2769,31 +2701,37 @@ test("[Server/内容接入] 迟到失败接力同 execution 草稿版本且 prep
     version: 2,
     execution_token: "execution-a"
   };
-  assert.equal(isSameFailedIngestionExecution(
-    { ...execution } as never,
-    execution as never
-  ), true);
-  assert.equal(isSameFailedIngestionExecution(
-    { ...execution, execution_token: "execution-b" } as never,
-    execution as never
-  ), false);
-  assert.equal(isSameFailedIngestionExecution(
-    { ...execution, version: 3 } as never,
-    execution as never
-  ), true);
-  assert.equal(isSameFailedIngestionExecution(
-    { ...execution, status: "ready", version: 3 } as never,
-    execution as never
-  ), false);
+  assert.equal(isSameFailedIngestionExecution({ ...execution } as never, execution as never), true);
+  assert.equal(
+    isSameFailedIngestionExecution(
+      { ...execution, execution_token: "execution-b" } as never,
+      execution as never
+    ),
+    false
+  );
+  assert.equal(
+    isSameFailedIngestionExecution({ ...execution, version: 3 } as never, execution as never),
+    true
+  );
+  assert.equal(
+    isSameFailedIngestionExecution(
+      { ...execution, status: "ready", version: 3 } as never,
+      execution as never
+    ),
+    false
+  );
   const committing = {
     ...execution,
     status: "committing",
     execution_token: "commit-a"
   };
-  assert.equal(isSameFailedIngestionExecution(
-    { ...committing, status: "resolving", version: 3 } as never,
-    committing as never
-  ), true);
+  assert.equal(
+    isSameFailedIngestionExecution(
+      { ...committing, status: "resolving", version: 3 } as never,
+      committing as never
+    ),
+    true
+  );
 
   const pair = { session_id: "a".repeat(43), image_id: "00000000-0000-7002-8000-00000000008d" };
   const prepared = { generation: pair.image_id, producer_execution_token: pair.image_id };
@@ -2804,14 +2742,15 @@ test("[Server/内容接入] 迟到失败接力同 execution 草稿版本且 prep
     { ...current, session_id: "b".repeat(43) },
     { ...current, image_id: "00000000-0000-7002-8000-00000000008e" },
     { ...current, prepared: { ...prepared, generation: "00000000-0000-7002-8000-00000000008e" } },
-    { ...current, prepared: { ...prepared, producer_execution_token: "00000000-0000-7002-8000-00000000008e" } }
-  ]) assert.equal(preparedAttemptIsReferenced(changed as never, pair, ...files), false);
+    {
+      ...current,
+      prepared: { ...prepared, producer_execution_token: "00000000-0000-7002-8000-00000000008e" }
+    }
+  ])
+    assert.equal(preparedAttemptIsReferenced(changed as never, pair, ...files), false);
   assert.equal(preparedAttemptIsReferenced(null, pair, ...files), false);
 });
-type RecoveryTestSession = Omit<
-  IngestionSessionSnapshot,
-  "status" | "commit"
-> & {
+type RecoveryTestSession = Omit<IngestionSessionSnapshot, "status" | "commit"> & {
   status: string;
   commit?: Readonly<{ commit_request_id: string }>;
   commit_request_id?: string;
@@ -2820,11 +2759,7 @@ type RecoveryTestSession = Omit<
 };
 test("[Server/内容接入] recovery 严格先收敛 expiry 并只重排一次未过期执行阶段", async () => {
   const now = 10_000;
-  const session = (
-    imageId: string,
-    status: string,
-    discardAt: number
-  ): RecoveryTestSession => ({
+  const session = (imageId: string, status: string, discardAt: number): RecoveryTestSession => ({
     owner: "recovery-owner",
     queue: "import",
     source_type: "url",
@@ -2862,28 +2797,40 @@ test("[Server/内容接入] recovery 严格先收敛 expiry 并只重排一次�
   });
   const sessions = new Map<string, RecoveryTestSession>([
     ["expired", session("expired", "queued", now)],
-    ["expired-completed", {
-      ...session("expired-completed", "completed", now),
-      commit_request_id: "commit-expired",
-      commit_intent_hash: "intent-expired",
-      completed_at: 1
-    }],
+    [
+      "expired-completed",
+      {
+        ...session("expired-completed", "completed", now),
+        commit_request_id: "commit-expired",
+        commit_intent_hash: "intent-expired",
+        completed_at: 1
+      }
+    ],
     ["downloading", session("downloading", "downloading", now + 1_000)],
     ["raw-present", session("raw-present", "preparing", now + 2_000)],
     ["raw-missing", session("raw-missing", "preparing", now + 3_000)],
     ["ready", session("ready", "ready", now + 4_000)],
-    ["commit-retry", {
-      ...session("commit-retry", "committing", now + 5_000),
-      commit: { commit_request_id: "retry" }
-    }],
-    ["committed", {
-      ...session("committed", "committing", now + 6_000),
-      commit: { commit_request_id: "committed" }
-    }],
-    ["resolving", {
-      ...session("resolving", "resolving", now + 7_000),
-      commit: { commit_request_id: "resolving" }
-    }]
+    [
+      "commit-retry",
+      {
+        ...session("commit-retry", "committing", now + 5_000),
+        commit: { commit_request_id: "retry" }
+      }
+    ],
+    [
+      "committed",
+      {
+        ...session("committed", "committing", now + 6_000),
+        commit: { commit_request_id: "committed" }
+      }
+    ],
+    [
+      "resolving",
+      {
+        ...session("resolving", "resolving", now + 7_000),
+        commit: { commit_request_id: "resolving" }
+      }
+    ]
   ]);
   const operations: string[] = [];
   const recoveredCompletedItem = { id: "committed" };
@@ -2937,12 +2884,20 @@ test("[Server/内容接入] recovery 严格先收敛 expiry 并只重排一次�
     () => undefined,
     {
       now: () => now,
-      readCommitted: async (ids) => new Map(ids.includes("committed")
-        ? [["committed", {
-          created_by: "recovery-owner",
-          item: recoveredCompletedItem
-        } as never]]
-        : []),
+      readCommitted: async (ids) =>
+        new Map(
+          ids.includes("committed")
+            ? [
+                [
+                  "committed",
+                  {
+                    created_by: "recovery-owner",
+                    item: recoveredCompletedItem
+                  } as never
+                ]
+              ]
+            : []
+        ),
       cancel: async (_repository, _coordinator, active) => {
         return active.map((item, index) => {
           operations.push(`cancel-${item.image_id}`);
@@ -2979,10 +2934,7 @@ test("[Server/内容接入] recovery 严格先收敛 expiry 并只重排一次�
   assert.equal(sessions.get("raw-missing")?.status, "failed");
   assert.equal(sessions.get("ready")?.status, "ready");
   assert.equal(sessions.get("commit-retry")?.execution_token, "new-token-1");
-  assert.equal(
-    operations.filter((value) => value === "mutate-commit-retry").length,
-    1
-  );
+  assert.equal(operations.filter((value) => value === "mutate-commit-retry").length, 1);
   assert.equal(sessions.get("committed")?.status, "completed");
   assert.equal(
     publishedCompletedItem,
@@ -2992,8 +2944,11 @@ test("[Server/内容接入] recovery 严格先收敛 expiry 并只重排一次�
   assert.equal(sessions.has("resolving"), false);
   sessions.set("late-expired", session("late-expired", "queued", now));
   assert.equal(await recovery.drainExpired(), true);
-  assert.equal(sessions.has("late-expired"), false,
-    "startup recovery 完成后仍必须有界收敛新到期 session");
+  assert.equal(
+    sessions.has("late-expired"),
+    false,
+    "startup recovery 完成后仍必须有界收敛新到期 session"
+  );
 });
 test("[Server/内容接入] 恢复按实际扫描边界越过缺失 canonical 的满页", async () => {
   const now = Date.parse("2026-08-23T01:02:03.456Z");
@@ -3116,30 +3071,28 @@ test("[Server/内容接入] 恢复按实际扫描边界越过缺失 canonical �
     {
       discoverExpired: async () => {
         expiryScan += 1;
-        return expiryScan === 2
-          ? [{ canonicalKey: expired.session_id, session: expired }]
-          : [];
+        return expiryScan === 2 ? [{ canonicalKey: expired.session_id, session: expired }] : [];
       },
       discoverExpiryPage: async (offset: number) => {
         shiftedOffsets.push(offset);
         shiftedPage += 1;
         return shiftedPage === 1
           ? {
-            items: [{ canonicalKey: ready.session_id, session: ready }],
-            total: batchSize,
-            scanned: batchSize,
-            missing: batchSize - 1,
-            frozenTailScore: 0,
-            lastScannedScore: 0
-          }
+              items: [{ canonicalKey: ready.session_id, session: ready }],
+              total: batchSize,
+              scanned: batchSize,
+              missing: batchSize - 1,
+              frozenTailScore: 0,
+              lastScannedScore: 0
+            }
           : {
-            items: [],
-            total: 1,
-            scanned: 0,
-            missing: 0,
-            frozenTailScore: 0,
-            lastScannedScore: 0
-          };
+              items: [],
+              total: 1,
+              scanned: 0,
+              missing: 0,
+              frozenTailScore: 0,
+              lastScannedScore: 0
+            };
       }
     } as never,
     new IngestionIrreversibleCoordinator(),
@@ -3147,12 +3100,13 @@ test("[Server/内容接入] 恢复按实际扫描边界越过缺失 canonical �
     {
       now: () => now,
       readCommitted: async () => new Map(),
-      cancel: async (_repository, _coordinator, active) => active.map((item, index) => ({
-        session_id: item.session_id,
-        image_id: item.image_id,
-        status: "discarded" as const,
-        queue_revision: index + 1
-      })),
+      cancel: async (_repository, _coordinator, active) =>
+        active.map((item, index) => ({
+          session_id: item.session_id,
+          image_id: item.image_id,
+          status: "discarded" as const,
+          queue_revision: index + 1
+        })),
       publishCompleted: async () => undefined,
       rawExists: async () => false,
       newExecutionToken: () => "new-token"
@@ -3161,8 +3115,7 @@ test("[Server/内容接入] 恢复按实际扫描边界越过缺失 canonical �
   assert.equal(await recoveryWithExpiryShift.step(), false);
   assert.equal(await recoveryWithExpiryShift.step(), false);
   assert.equal(await recoveryWithExpiryShift.step(), true);
-  assert.deepEqual(shiftedOffsets, [0, 0],
-    "expiry 收敛改变 ZSET rank 后必须从头开始新的恢复轮次");
+  assert.deepEqual(shiftedOffsets, [0, 0], "expiry 收敛改变 ZSET rank 后必须从头开始新的恢复轮次");
 });
 test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权并响应登录立即失效", async () => {
   const session = {
@@ -3212,11 +3165,7 @@ test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权�
   const order: string[] = [];
   let unsubscribeCount = 0;
   const repository = {
-    subscribe(
-      owner: string,
-      queue: "upload" | "import",
-      listener: (event: unknown) => void
-    ) {
+    subscribe(owner: string, queue: "upload" | "import", listener: (event: unknown) => void) {
       assert.equal(owner, session.username);
       assert.equal(queue, "upload");
       order.push("subscribe");
@@ -3259,10 +3208,7 @@ test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权�
   let maximumActiveValidations = 0;
   const validateSession = async () => {
     activeValidations += 1;
-    maximumActiveValidations = Math.max(
-      maximumActiveValidations,
-      activeValidations
-    );
+    maximumActiveValidations = Math.max(maximumActiveValidations, activeValidations);
     await new Promise((resolve) => setTimeout(resolve, 2));
     validationCalls += 1;
     activeValidations -= 1;
@@ -3291,15 +3237,17 @@ test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权�
     sign: () => "current-sse-watermark"
   };
   const app = new Hono();
-  app.get("/events", (context) => streamIngestionQueueEvents(context, {
-    repository: repository as never,
-    tokens,
-    session,
-    queue: "upload",
-    validateSession,
-    authenticationHeartbeatMs: 1,
-    actionScopes: actionScopes as never
-  }));
+  app.get("/events", (context) =>
+    streamIngestionQueueEvents(context, {
+      repository: repository as never,
+      tokens,
+      session,
+      queue: "upload",
+      validateSession,
+      authenticationHeartbeatMs: 1,
+      actionScopes: actionScopes as never
+    })
+  );
   const response = await app.request("/events");
   assert.equal(response.headers.get("cache-control"), "no-store, no-transform");
   assert.equal(response.headers.get("x-accel-buffering"), "no");
@@ -3307,9 +3255,7 @@ test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权�
   assert.deepEqual(order, ["subscribe", "snapshot"]);
   assert.ok(body.indexOf("event: ready") >= 0);
   assert.ok(body.indexOf("event: mutation") > body.indexOf("event: ready"));
-  const semanticMutationMatch = body.match(
-    /event: mutation\r?\ndata: ([^\r\n]+)/u
-  );
+  const semanticMutationMatch = body.match(/event: mutation\r?\ndata: ([^\r\n]+)/u);
   assert.ok(semanticMutationMatch);
   const semanticMutation = JSON.parse(semanticMutationMatch[1]);
   assert.deepEqual(semanticMutation.summary, {
@@ -3353,15 +3299,17 @@ test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权�
     }
   };
   const immediateApp = new Hono();
-  immediateApp.get("/events", (context) => streamIngestionQueueEvents(context, {
-    repository: immediateRepository as never,
-    tokens,
-    session,
-    queue: "upload",
-    validateSession: async () => session,
-    authenticationHeartbeatMs: 60_000,
-    actionScopes: actionScopes as never
-  }));
+  immediateApp.get("/events", (context) =>
+    streamIngestionQueueEvents(context, {
+      repository: immediateRepository as never,
+      tokens,
+      session,
+      queue: "upload",
+      validateSession: async () => session,
+      authenticationHeartbeatMs: 60_000,
+      actionScopes: actionScopes as never
+    })
+  );
   const immediateResponse = await immediateApp.request("/events");
   const reader = immediateResponse.body!.getReader();
   const first = await reader.read();
@@ -3385,31 +3333,33 @@ test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权�
   });
   let raceSubscribeCount = 0;
   const raceApp = new Hono();
-  raceApp.get("/events", (context) => streamIngestionQueueEvents(context, {
-    repository: {
-      subscribe() {
-        raceSubscribeCount += 1;
-        return () => undefined;
+  raceApp.get("/events", (context) =>
+    streamIngestionQueueEvents(context, {
+      repository: {
+        subscribe() {
+          raceSubscribeCount += 1;
+          return () => undefined;
+        },
+        async snapshot() {
+          return {
+            metadata: initialMetadata,
+            offset: 0,
+            limit: 0,
+            items: []
+          };
+        }
+      } as never,
+      tokens,
+      session,
+      queue: "upload",
+      validateSession: async () => {
+        validationStarted();
+        return validationResult;
       },
-      async snapshot() {
-        return {
-          metadata: initialMetadata,
-          offset: 0,
-          limit: 0,
-          items: []
-        };
-      }
-    } as never,
-    tokens,
-    session,
-    queue: "upload",
-    validateSession: async () => {
-      validationStarted();
-      return validationResult;
-    },
-    authenticationHeartbeatMs: 60_000,
-    actionScopes: actionScopes as never
-  }));
+      authenticationHeartbeatMs: 60_000,
+      actionScopes: actionScopes as never
+    })
+  );
   const raceResponse = await raceApp.request("/events");
   const raceBody = raceResponse.text();
   await validationStart;
@@ -3418,13 +3368,17 @@ test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权�
     1,
     "验权在途期间的登出也必须命中已登记连接"
   );
-  assert.equal(await Promise.race([
-    raceBody.then(() => true),
-    new Promise<boolean>((resolve) => {
-      const timer = setTimeout(() => resolve(false), 100);
-      timer.unref();
-    })
-  ]), true, "在途验权不结束也必须立即关闭 SSE 响应");
+  assert.equal(
+    await Promise.race([
+      raceBody.then(() => true),
+      new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => resolve(false), 100);
+        timer.unref();
+      })
+    ]),
+    true,
+    "在途验权不结束也必须立即关闭 SSE 响应"
+  );
   assert.equal(raceSubscribeCount, 0);
   assert.equal(scopeCloseCount, 2);
   assert.equal(closeAdminSessionConnections([session.id]), 0);

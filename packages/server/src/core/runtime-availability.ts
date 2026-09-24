@@ -26,11 +26,11 @@ export class RedisUnavailableError extends Error {
   }
 }
 
-export function isRedisUnavailableError(
-  error: unknown
-): error is RedisUnavailableError {
-  return error instanceof RedisUnavailableError
-    || (error instanceof Error && error.name === "redis_unavailable");
+export function isRedisUnavailableError(error: unknown): error is RedisUnavailableError {
+  return (
+    error instanceof RedisUnavailableError ||
+    (error instanceof Error && error.name === "redis_unavailable")
+  );
 }
 
 let initializationComplete = false;
@@ -53,19 +53,19 @@ const redisListeners = new Set<RedisOperationalListener>();
 const businessGateListeners = new Set<BusinessGateListener>();
 
 function publishRedisState(next: RedisOperationalState) {
-  const sameCapabilities = next.capabilities === redisState.capabilities || (
-    next.capabilities !== null
-    && redisState.capabilities !== null
-    && next.capabilities.available === redisState.capabilities.available
-    && next.capabilities.missing.join(",")
-      === redisState.capabilities.missing.join(",")
-  );
+  const sameCapabilities =
+    next.capabilities === redisState.capabilities ||
+    (next.capabilities !== null &&
+      redisState.capabilities !== null &&
+      next.capabilities.available === redisState.capabilities.available &&
+      next.capabilities.missing.join(",") === redisState.capabilities.missing.join(","));
   if (
-    next.available === redisState.available
-    && next.connectionEpoch === redisState.connectionEpoch
-    && next.reason === redisState.reason
-    && sameCapabilities
-  ) return;
+    next.available === redisState.available &&
+    next.connectionEpoch === redisState.connectionEpoch &&
+    next.reason === redisState.reason &&
+    sameCapabilities
+  )
+    return;
   const previous = redisState;
   redisState = next;
   if (!next.available) {
@@ -83,11 +83,7 @@ function publishRedisState(next: RedisOperationalState) {
 }
 
 function openBusinessGateIfReady() {
-  if (
-    businessGateOpened
-    || !initializationComplete
-    || !redisState.available
-  ) return false;
+  if (businessGateOpened || !initializationComplete || !redisState.available) return false;
   businessGateOpened = true;
   for (const listener of businessGateListeners) listener();
   businessGateListeners.clear();
@@ -138,9 +134,7 @@ export function getRedisOperationalState() {
   return redisState;
 }
 
-export function onRedisOperationalStateChange(
-  listener: RedisOperationalListener
-) {
+export function onRedisOperationalStateChange(listener: RedisOperationalListener) {
   redisListeners.add(listener);
   return () => redisListeners.delete(listener);
 }
@@ -164,13 +158,8 @@ export function probeRedisOperationalState() {
     try {
       const validation = await validateRedisRequiredFeaturesAtCurrentEpoch();
       const preparedConnection = getRedisConnectionState();
-      if (
-        !preparedConnection.ready
-        || preparedConnection.epoch !== validation.connectionEpoch
-      ) {
-        throw new Error(
-          "Redis connection changed during operational validation"
-        );
+      if (!preparedConnection.ready || preparedConnection.epoch !== validation.connectionEpoch) {
+        throw new Error("Redis connection changed during operational validation");
       }
       if (redisFailureSequence !== failureSequence) {
         throw new RedisUnavailableError();
@@ -204,21 +193,22 @@ export function probeRedisOperationalState() {
 function currentRedisCapabilities() {
   const connection = getRedisConnectionState();
   if (
-    redisState.available
-    && connection.ready
-    && redisState.connectionEpoch === connection.epoch
-    && redisState.capabilities?.available
-  ) return redisState.capabilities;
+    redisState.available &&
+    connection.ready &&
+    redisState.connectionEpoch === connection.epoch &&
+    redisState.capabilities?.available
+  )
+    return redisState.capabilities;
   return null;
 }
 
 export function readRedisOperationalReadiness() {
   const capabilities = currentRedisCapabilities();
   if (
-    capabilities
-    && performance.now() - lastSuccessfulProbeStartedAt
-      < REDIS_READINESS_PROOF_MAX_AGE_MS
-  ) return Promise.resolve(capabilities);
+    capabilities &&
+    performance.now() - lastSuccessfulProbeStartedAt < REDIS_READINESS_PROOF_MAX_AGE_MS
+  )
+    return Promise.resolve(capabilities);
   return probeRedisOperationalState();
 }
 
@@ -237,9 +227,7 @@ export async function runRequiredRedisCommand<T>(work: () => Promise<T>) {
     return await work();
   } catch (error) {
     markRedisUnavailable("command_failed");
-    throw error instanceof RedisUnavailableError
-      ? error
-      : new RedisUnavailableError(error);
+    throw error instanceof RedisUnavailableError ? error : new RedisUnavailableError(error);
   }
 }
 

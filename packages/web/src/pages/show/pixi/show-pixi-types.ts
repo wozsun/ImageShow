@@ -91,7 +91,12 @@ export interface ShowPixiSceneController {
   destroy(): void;
   focusCard(key: string | null): void;
   resize(width: number, height: number): void;
-  setImages(images: readonly ShowImage[], dataKey: string, order: ShowOrder, hasMore: boolean): void;
+  setImages(
+    images: readonly ShowImage[],
+    dataKey: string,
+    order: ShowOrder,
+    hasMore: boolean
+  ): void;
   setInputEnabled(enabled: boolean): void;
   setMotion(running: boolean, reducedMotion: boolean): void;
   stats(): ShowPixiSceneStats;

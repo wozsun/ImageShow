@@ -2,11 +2,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api } from "./client.js";
 import { requestWithDeadline } from "./request-deadline.js";
 import { queryKeys } from "./query-keys.js";
-import type {
-  GalleryFacetsDto,
-  GalleryStatsDto,
-  SiteConfigDto
-} from "@imageshow/shared/browser";
+import type { GalleryFacetsDto, GalleryStatsDto, SiteConfigDto } from "@imageshow/shared/browser";
 
 export type SiteConfig = SiteConfigDto;
 
@@ -47,9 +43,11 @@ export function useGalleryFacets(enabled = true) {
   return useQuery<GalleryFacets>({
     queryKey: queryKeys.galleryFacets,
     // 显式刷新必须重新验证 HTTP 缓存，不能再次用旧词表否定新标签。
-    queryFn: ({ signal }) => requestWithDeadline(
-      (requestSignal) => api("/api/gallery-facets", { signal: requestSignal, cache: "no-cache" }), signal
-    ),
+    queryFn: ({ signal }) =>
+      requestWithDeadline(
+        (requestSignal) => api("/api/gallery-facets", { signal: requestSignal, cache: "no-cache" }),
+        signal
+      ),
     enabled,
     ...sessionGlobalQuery
   });
@@ -58,10 +56,8 @@ export function useGalleryFacets(enabled = true) {
 export function useGalleryStats(search = "", enabled = true) {
   return useQuery<GalleryStats>({
     queryKey: [...queryKeys.galleryStats, search],
-    queryFn: ({ signal }) => api(
-      search ? `/api/gallery-stats?${search}` : "/api/gallery-stats",
-      { signal }
-    ),
+    queryFn: ({ signal }) =>
+      api(search ? `/api/gallery-stats?${search}` : "/api/gallery-stats", { signal }),
     placeholderData: keepPreviousData,
     enabled,
     staleTime: 30_000,

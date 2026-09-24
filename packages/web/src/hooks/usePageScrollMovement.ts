@@ -16,11 +16,7 @@ function currentPageScrollPosition() {
     document.documentElement.scrollHeight,
     document.body?.scrollHeight ?? 0
   );
-  return normalizePageScrollPosition(
-    getPageScrollY(),
-    contentHeight,
-    window.innerHeight
-  );
+  return normalizePageScrollPosition(getPageScrollY(), contentHeight, window.innerHeight);
 }
 
 export function usePageScrollMovement(

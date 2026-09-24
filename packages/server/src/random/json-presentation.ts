@@ -1,8 +1,5 @@
 import { microsecondsTimestamp } from "../core/microseconds.ts";
-import type {
-  RandomImageJsonItemDto,
-  RandomImageSize
-} from "@imageshow/shared/browser";
+import type { RandomImageJsonItemDto, RandomImageSize } from "@imageshow/shared/browser";
 import { publicImageUrlsForConfig } from "../storage/objects/public-urls.ts";
 import { getStorageBackendConfigs } from "../storage/backends/registry.ts";
 import type { SelectedReadyImage } from "./selection-model.ts";
@@ -13,15 +10,19 @@ export async function presentRandomJsonItems(
 ): Promise<RandomImageJsonItemDto[]> {
   signal?.throwIfAborted();
   if (!picked.length) return [];
-  const configs = await getStorageBackendConfigs(picked.map((item) => item.storage_slug), { signal });
+  const configs = await getStorageBackendConfigs(
+    picked.map((item) => item.storage_slug),
+    { signal }
+  );
   return picked.map((item) => {
     signal?.throwIfAborted();
     const urls = publicImageUrlsForConfig(item, configs.get(item.storage_slug)!);
-    const selectedUrls = size === "full"
-      ? { object_url: urls.object_url }
-      : size === "thumb"
-        ? { thumb_url: urls.thumb_url }
-        : urls;
+    const selectedUrls =
+      size === "full"
+        ? { object_url: urls.object_url }
+        : size === "thumb"
+          ? { thumb_url: urls.thumb_url }
+          : urls;
     return {
       id: item.id,
       title: item.title,

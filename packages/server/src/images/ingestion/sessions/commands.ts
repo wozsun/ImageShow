@@ -72,18 +72,13 @@ const ingestionSessionRedisScripts = Object.freeze({
 }) satisfies NonNullable<RedisOptions["scripts"]>;
 
 export type IngestionSessionRedisCommandName = keyof typeof ingestionSessionRedisScripts;
-type IngestionSessionRedisCommand = (
-  ...arguments_: Array<string | number>
-) => Promise<unknown>;
+type IngestionSessionRedisCommand = (...arguments_: Array<string | number>) => Promise<unknown>;
 
-export type IngestionSessionRedisClient = Readonly<Record<
-  IngestionSessionRedisCommandName,
-  IngestionSessionRedisCommand
->>;
+export type IngestionSessionRedisClient = Readonly<
+  Record<IngestionSessionRedisCommandName, IngestionSessionRedisCommand>
+>;
 
-type IngestionSessionRedisSourceClient =
-  | IngestionSessionRedisClient
-  | Pick<Redis, "defineCommand">;
+type IngestionSessionRedisSourceClient = IngestionSessionRedisClient | Pick<Redis, "defineCommand">;
 
 function hasIngestionSessionRedisCommands(
   client: IngestionSessionRedisSourceClient

@@ -7,15 +7,8 @@ export type GalleryTileRenderProps = {
   revealOrder: number;
   revealRegistry: GalleryCardRevealRegistry;
   subtitle: string;
-  onOpen: (
-    card: GalleryImageCard,
-    opener: HTMLButtonElement
-  ) => void;
-  onIntrinsicSize: (
-    imageId: string,
-    width: number,
-    height: number
-  ) => void;
+  onOpen: (card: GalleryImageCard, opener: HTMLButtonElement) => void;
+  onIntrinsicSize: (imageId: string, width: number, height: number) => void;
 };
 
 export function galleryTilePropsEqual(
@@ -25,17 +18,17 @@ export function galleryTilePropsEqual(
   const previousPosition = previous.position;
   const currentPosition = current.position;
   return (
-    previousPosition.item === currentPosition.item
-    && previousPosition.index === currentPosition.index
-    && previousPosition.column === currentPosition.column
-    && previousPosition.x === currentPosition.x
-    && previousPosition.y === currentPosition.y
-    && previousPosition.width === currentPosition.width
-    && previousPosition.height === currentPosition.height
-    && previousPosition.measureIntrinsicSize === currentPosition.measureIntrinsicSize
-    && previous.revealRegistry === current.revealRegistry
-    && previous.subtitle === current.subtitle
-    && previous.onOpen === current.onOpen
-    && previous.onIntrinsicSize === current.onIntrinsicSize
+    previousPosition.item === currentPosition.item &&
+    previousPosition.index === currentPosition.index &&
+    previousPosition.column === currentPosition.column &&
+    previousPosition.x === currentPosition.x &&
+    previousPosition.y === currentPosition.y &&
+    previousPosition.width === currentPosition.width &&
+    previousPosition.height === currentPosition.height &&
+    previousPosition.measureIntrinsicSize === currentPosition.measureIntrinsicSize &&
+    previous.revealRegistry === current.revealRegistry &&
+    previous.subtitle === current.subtitle &&
+    previous.onOpen === current.onOpen &&
+    previous.onIntrinsicSize === current.onIntrinsicSize
   );
 }

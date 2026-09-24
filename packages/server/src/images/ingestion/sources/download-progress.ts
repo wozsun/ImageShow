@@ -14,10 +14,7 @@ export function downloadProgressLength(headers: Headers) {
     : undefined;
 }
 
-export function calculateDownloadProgress(
-  receivedBytes: number,
-  declaredBytes: number
-) {
+export function calculateDownloadProgress(receivedBytes: number, declaredBytes: number) {
   if (!Number.isFinite(receivedBytes) || receivedBytes < 0) return undefined;
   if (!Number.isFinite(declaredBytes) || declaredBytes <= 0) return undefined;
   return Math.min(100, Math.floor((receivedBytes / declaredBytes) * 100));

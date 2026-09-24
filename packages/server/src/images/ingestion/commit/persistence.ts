@@ -21,21 +21,17 @@ export async function persistIngestionImage(
   const prepared = session.prepared!;
   const commit = session.commit!;
   return withTransaction(async (client) => {
-    const existing = (await client.query<
-      ImageRecordWithTags & { created_by: string }
-    >(
-      `SELECT ${adminImageListPresentationColumnsWithTags}, created_by
+    const existing = (
+      await client.query<ImageRecordWithTags & { created_by: string }>(
+        `SELECT ${adminImageListPresentationColumnsWithTags}, created_by
          FROM metadata
         WHERE id=$1`,
-      [session.image_id]
-    )).rows[0];
+        [session.image_id]
+      )
+    ).rows[0];
     if (existing) {
       if (existing.created_by !== commit.created_by) {
-        throw new ApiError(
-          409,
-          "ingestion_image_owner_conflict",
-          "图片 ID 已属于其他管理员"
-        );
+        throw new ApiError(409, "ingestion_image_owner_conflict", "图片 ID 已属于其他管理员");
       }
       return {
         inserted: false,
@@ -45,8 +41,10 @@ export async function persistIngestionImage(
     }
 
     const createdEntityKinds = new Set<EntityCacheKind>();
-    if (commit.metadata.theme !== null
-      && await ensureThemeWithMutationLockHeld(client, commit.metadata.theme)) {
+    if (
+      commit.metadata.theme !== null &&
+      (await ensureThemeWithMutationLockHeld(client, commit.metadata.theme))
+    ) {
       createdEntityKinds.add("theme");
     }
     if (await ensureAuthorWithMutationLockHeld(client, commit.metadata.author)) {
@@ -87,12 +85,10 @@ export async function persistIngestionImage(
         commit.created_by
       ]
     );
-    if ((await replaceImageTags(
-      client,
-      session.image_id,
-      resolvedTags,
-      new AbortController().signal
-    )).createdTag) {
+    if (
+      (await replaceImageTags(client, session.image_id, resolvedTags, new AbortController().signal))
+        .createdTag
+    ) {
       createdEntityKinds.add("tag");
     }
     return {

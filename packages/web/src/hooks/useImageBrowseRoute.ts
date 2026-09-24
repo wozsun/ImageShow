@@ -1,6 +1,12 @@
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
-import { readableFilterSearch, tagFilterValues, TagFilterError, type ShowOrder, type ShowMode } from "@imageshow/shared/browser";
+import {
+  readableFilterSearch,
+  tagFilterValues,
+  TagFilterError,
+  type ShowOrder,
+  type ShowMode
+} from "@imageshow/shared/browser";
 import { useGalleryFacets } from "../lib/api/site-queries.js";
 import {
   emptyGalleryFilters,
@@ -19,29 +25,39 @@ export function useImageBrowseRoute() {
   const location = useLocation();
   const query = params.toString();
   const facetsQuery = useGalleryFacets();
-  const parsed = useMemo(() => readGalleryFilters(new URLSearchParams(query), facetsQuery.data?.tags), [query, facetsQuery.data]);
+  const parsed = useMemo(
+    () => readGalleryFilters(new URLSearchParams(query), facetsQuery.data?.tags),
+    [query, facetsQuery.data]
+  );
   const requiresVocabulary = params.has("tag");
   const vocabularyError = requiresVocabulary ? facetsQuery.error : null;
-  const error = parsed.error instanceof TagFilterError && parsed.error.kind === "unknown"
-    ? vocabularyError ?? parsed.error
-    : parsed.error ?? vocabularyError;
+  const error =
+    parsed.error instanceof TagFilterError && parsed.error.kind === "unknown"
+      ? (vocabularyError ?? parsed.error)
+      : (parsed.error ?? vocabularyError);
   const ready = !error && (!requiresVocabulary || Boolean(facetsQuery.data));
   const linkParams = new URLSearchParams(params);
   if (ready && linkParams.has("tag")) {
     linkParams.delete("tag");
     for (const value of tagFilterValues(parsed.filters.tag)) linkParams.append("tag", value);
   }
-  const updateSearchParams = useCallback((update: (current: URLSearchParams) => URLSearchParams) => {
-    const next = update(new URLSearchParams(query));
-    if (facetsQuery.data && next.has("tag")) {
-      const normalized = readGalleryFilters(next, facetsQuery.data.tags);
-      if (!normalized.error) {
-        next.delete("tag");
-        for (const value of tagFilterValues(normalized.filters.tag)) next.append("tag", value);
+  const updateSearchParams = useCallback(
+    (update: (current: URLSearchParams) => URLSearchParams) => {
+      const next = update(new URLSearchParams(query));
+      if (facetsQuery.data && next.has("tag")) {
+        const normalized = readGalleryFilters(next, facetsQuery.data.tags);
+        if (!normalized.error) {
+          next.delete("tag");
+          for (const value of tagFilterValues(normalized.filters.tag)) next.append("tag", value);
+        }
       }
-    }
-    void navigate({ search: readableFilterSearch(next) }, { state: { imageBrowseFilterEdit: true } });
-  }, [navigate, query, facetsQuery.data]);
+      void navigate(
+        { search: readableFilterSearch(next) },
+        { state: { imageBrowseFilterEdit: true } }
+      );
+    },
+    [navigate, query, facetsQuery.data]
+  );
   const updateFilter = (key: keyof GalleryFilters, value: string) => {
     updateSearchParams((current) => updateImageBrowseSearchParams(current, { [key]: value }));
   };
@@ -50,33 +66,53 @@ export function useImageBrowseRoute() {
     updateSearchParams((current) => updateImageBrowseSearchParams(current, emptyGalleryFilters));
   };
   const applyFilters = (next: GalleryFilters) => {
-    const signature = (filters: GalleryFilters) => readableFilterSearch(galleryRouteSearchParams(filters));
+    const signature = (filters: GalleryFilters) =>
+      readableFilterSearch(galleryRouteSearchParams(filters));
     if (ready && signature(next) === signature(parsed.filters)) return;
     updateSearchParams((current) => updateImageBrowseSearchParams(current, next));
   };
-  const randomLink = ready ? randomLinkResult({
-    origin: window.location.origin,
-    device: galleryRandomRequestDevice(parsed.filters.device),
-    brightness: parsed.filters.brightness || "random",
-    theme: parsed.filters.theme,
-    tag: parsed.filters.tag,
-    author: parsed.filters.author
-  }) : { url: null, error: null };
+  const randomLink = ready
+    ? randomLinkResult({
+        origin: window.location.origin,
+        device: galleryRandomRequestDevice(parsed.filters.device),
+        brightness: parsed.filters.brightness || "random",
+        theme: parsed.filters.theme,
+        tag: parsed.filters.tag,
+        author: parsed.filters.author
+      })
+    : { url: null, error: null };
   const getPageUrl = (order: ShowOrder, mode?: ShowMode) => {
     if (!ready) return null;
     const pageParams = galleryRouteSearchParams(parsed.filters);
     pageParams.set("order", order);
     if (mode) pageParams.set("mode", mode);
-    const pathname = location.pathname === "/embed/gallery" ? "/gallery"
-      : location.pathname === "/embed/show" ? "/show" : location.pathname;
+    const pathname =
+      location.pathname === "/embed/gallery"
+        ? "/gallery"
+        : location.pathname === "/embed/show"
+          ? "/show"
+          : location.pathname;
     return `${window.location.origin}${pathname}?${readableFilterSearch(pageParams)}`;
   };
   return {
-    params, filters: parsed.filters, unresolvedSelectors: parsed.unresolvedSelectors, error, ready,
-    updateFilter, clearFilters, applyFilters, randomLink, getPageUrl,
-    facetsError: facetsQuery.error, facetsLoading: facetsQuery.isPending,
-    facets: facetsQuery.data, updateSearchParams, browseSearch: readableFilterSearch(linkParams),
+    params,
+    filters: parsed.filters,
+    unresolvedSelectors: parsed.unresolvedSelectors,
+    error,
+    ready,
+    updateFilter,
+    clearFilters,
+    applyFilters,
+    randomLink,
+    getPageUrl,
+    facetsError: facetsQuery.error,
+    facetsLoading: facetsQuery.isPending,
+    facets: facetsQuery.data,
+    updateSearchParams,
+    browseSearch: readableFilterSearch(linkParams),
     isFilterEdit: location.state?.imageBrowseFilterEdit === true,
-    retryVocabulary: () => { void facetsQuery.refetch({ cancelRefetch: false }); }
+    retryVocabulary: () => {
+      void facetsQuery.refetch({ cancelRefetch: false });
+    }
   };
 }

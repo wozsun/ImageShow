@@ -6,10 +6,7 @@ import {
   publicPgFallbackWorkLimitExceeded,
   type PublicDatabaseReadAccess
 } from "../core/database/public-fallback.ts";
-import {
-  pool,
-  type DatabaseReader
-} from "../core/database/pools.ts";
+import { pool, type DatabaseReader } from "../core/database/pools.ts";
 import {
   deleteRedisKeys,
   deleteRequiredRedisKeys,
@@ -25,10 +22,7 @@ import type {
   TagDto as Tag,
   ThemeDto as Theme
 } from "@imageshow/shared/browser";
-import {
-  projectAuthorDerivedIdentity,
-  type AuthorIdentityColumns
-} from "../authors/identity.ts";
+import { projectAuthorDerivedIdentity, type AuthorIdentityColumns } from "../authors/identity.ts";
 
 const THEME_VOCAB_KEY = "imageshow:theme_vocab";
 const TAG_VOCAB_KEY = "imageshow:tag_vocab";
@@ -66,12 +60,12 @@ const entityCacheEpoch = randomUUID();
 const entityCountCacheRevisions: Record<EntityCacheKind, number> = {
   theme: 0,
   tag: 0,
-  author: 0,
+  author: 0
 };
 const entityVocabularyRevisions: Record<EntityCacheKind, number> = {
   theme: 0,
   tag: 0,
-  author: 0,
+  author: 0
 };
 const invalidatedEntityCountCaches = new Set<EntityCacheKind>();
 
@@ -79,39 +73,25 @@ function vocabFromRows(rows: Array<{ slug: string; display_name: string }>): Voc
   return rows.map(({ slug, display_name }) => ({ slug, display_name }));
 }
 
-async function queryVocabularyRows<T>(
-  sql: string,
-  reader: DatabaseReader = pool,
-  bounded = false
-) {
+async function queryVocabularyRows<T>(sql: string, reader: DatabaseReader = pool, bounded = false) {
   const maximumRows = appConfig.publicPgFallback.maximumVocabularyRows;
-  const rows = (await reader.query(
-    `${sql}\n${bounded ? "LIMIT $1" : ""}`,
-    bounded ? [maximumRows + 1] : undefined
-  )).rows as T[];
+  const rows = (
+    await reader.query(
+      `${sql}\n${bounded ? "LIMIT $1" : ""}`,
+      bounded ? [maximumRows + 1] : undefined
+    )
+  ).rows as T[];
   if (bounded && rows.length > maximumRows) {
-    throw publicPgFallbackWorkLimitExceeded(
-      "Vocabulary exceeds the supported public result limit"
-    );
+    throw publicPgFallbackWorkLimitExceeded("Vocabulary exceeds the supported public result limit");
   }
   return rows;
 }
 
-async function readVocabularyRows<T>(
-  sql: string,
-  access: VocabularyReadAccess
-) {
-  return queryVocabularyRows<T>(
-    sql,
-    access.reader ?? pool,
-    Boolean(access.reader)
-  );
+async function readVocabularyRows<T>(sql: string, access: VocabularyReadAccess) {
+  return queryVocabularyRows<T>(sql, access.reader ?? pool, Boolean(access.reader));
 }
 
-async function loadTagVocab(
-  revision: number,
-  access: VocabularyReadAccess = {}
-) {
+async function loadTagVocab(revision: number, access: VocabularyReadAccess = {}) {
   const rows = await readVocabularyRows<VocabEntry>(
     `SELECT slug, display_name
        FROM tag
@@ -122,10 +102,7 @@ async function loadTagVocab(
   return rows;
 }
 
-async function loadThemeVocab(
-  revision: number,
-  access: VocabularyReadAccess = {}
-) {
+async function loadThemeVocab(revision: number, access: VocabularyReadAccess = {}) {
   const rows = await readVocabularyRows<VocabEntry>(
     `SELECT slug, display_name
        FROM theme
@@ -137,10 +114,7 @@ async function loadThemeVocab(
   return rows;
 }
 
-async function loadAuthorVocab(
-  revision: number,
-  access: VocabularyReadAccess = {}
-) {
+async function loadAuthorVocab(revision: number, access: VocabularyReadAccess = {}) {
   const rows = await readVocabularyRows<AuthorVocabEntry>(
     `SELECT slug, display_name, link
        FROM author
@@ -176,10 +150,7 @@ async function loadAdminThemeList(revision: number) {
 }
 
 async function loadAdminAuthorList(revision: number) {
-  const rows = await queryVocabularyRows<AuthorIdentityColumns & Omit<
-    Author,
-    "derived_identity"
-  >>(
+  const rows = await queryVocabularyRows<AuthorIdentityColumns & Omit<Author, "derived_identity">>(
     `SELECT a.slug,
             a.sort_order,
             a.display_name,
@@ -207,12 +178,7 @@ async function loadAdminAuthorList(revision: number) {
       })
     };
   });
-  await cacheAdminEntityList(
-    "author",
-    ADMIN_AUTHOR_LIST_KEY,
-    revision,
-    projected
-  );
+  await cacheAdminEntityList("author", ADMIN_AUTHOR_LIST_KEY, revision, projected);
   return projected;
 }
 
@@ -221,7 +187,7 @@ async function cacheEntityVocabulary(
   key: string,
   revision: number,
   rows: unknown[],
-  access: VocabularyReadAccess,
+  access: VocabularyReadAccess
 ) {
   if (revision !== entityVocabularyRevisions[kind]) return;
   const required = access.redisMode === "required";
@@ -238,7 +204,7 @@ async function cacheAdminEntityList(
   kind: EntityCacheKind,
   key: string,
   revision: number,
-  rows: unknown[],
+  rows: unknown[]
 ) {
   if (revision !== entityCountCacheRevisions[kind]) return;
   const written = await setRedisJson(key, entityCacheEnvelope(revision, rows));
@@ -254,7 +220,10 @@ async function cacheAdminEntityList(
   await deleteRedisKeys(key);
 }
 
-function entityCacheEnvelope<T extends unknown[]>(revision: number, value: T): EntityCacheEnvelope<T> {
+function entityCacheEnvelope<T extends unknown[]>(
+  revision: number,
+  value: T
+): EntityCacheEnvelope<T> {
   return { epoch: entityCacheEpoch, revision, value };
 }
 
@@ -263,25 +232,24 @@ async function cachedEntityValue<T extends unknown[]>(
   revision: number,
   coalesceKey: string,
   load: () => Promise<T>,
-  options: EntityCacheReadOptions = {},
+  options: EntityCacheReadOptions = {}
 ): Promise<T> {
   const requiredRedis = options.redisMode === "required";
   const cached = requiredRedis
     ? await getRequiredRedisJson<EntityCacheEnvelope<T>>(key)
     : await getRedisJson<EntityCacheEnvelope<T>>(key);
   if (
-    cached?.epoch === entityCacheEpoch
-    && cached.revision === revision
-    && Array.isArray(cached.value)
-  ) return cached.value;
+    cached?.epoch === entityCacheEpoch &&
+    cached.revision === revision &&
+    Array.isArray(cached.value)
+  )
+    return cached.value;
   return options.publicRead
     ? load()
     : coalesce(`${coalesceKey}:${requiredRedis ? "required" : "optional"}`, load);
 }
 
-export function getThemeVocab(
-  access: VocabularyReadAccess = {}
-): Promise<VocabEntry[]> {
+export function getThemeVocab(access: VocabularyReadAccess = {}): Promise<VocabEntry[]> {
   const revision = entityVocabularyRevisions.theme;
   return cachedEntityValue(
     THEME_VOCAB_KEY,
@@ -295,9 +263,7 @@ export function getThemeVocab(
   );
 }
 
-export function getTagVocab(
-  access: VocabularyReadAccess = {}
-): Promise<VocabEntry[]> {
+export function getTagVocab(access: VocabularyReadAccess = {}): Promise<VocabEntry[]> {
   const revision = entityVocabularyRevisions.tag;
   return cachedEntityValue(
     TAG_VOCAB_KEY,
@@ -311,9 +277,7 @@ export function getTagVocab(
   );
 }
 
-export function getAuthorVocab(
-  access: VocabularyReadAccess = {}
-): Promise<AuthorVocabEntry[]> {
+export function getAuthorVocab(access: VocabularyReadAccess = {}): Promise<AuthorVocabEntry[]> {
   const revision = entityVocabularyRevisions.author;
   return cachedEntityValue(
     AUTHOR_VOCAB_KEY,
@@ -333,17 +297,14 @@ export function getAdminThemeList(): Promise<Theme[]> {
     ADMIN_THEME_LIST_KEY,
     revision,
     `entity-cache:list:theme:${revision}`,
-    () => loadAdminThemeList(revision),
+    () => loadAdminThemeList(revision)
   );
 }
 
 export function getAdminTagList(): Promise<Tag[]> {
   const revision = entityCountCacheRevisions.tag;
-  return cachedEntityValue(
-    ADMIN_TAG_LIST_KEY,
-    revision,
-    `entity-cache:list:tag:${revision}`,
-    () => loadAdminTagList(revision),
+  return cachedEntityValue(ADMIN_TAG_LIST_KEY, revision, `entity-cache:list:tag:${revision}`, () =>
+    loadAdminTagList(revision)
   );
 }
 
@@ -353,7 +314,7 @@ export function getAdminAuthorList(): Promise<Author[]> {
     ADMIN_AUTHOR_LIST_KEY,
     revision,
     `entity-cache:list:author:${revision}`,
-    () => loadAdminAuthorList(revision),
+    () => loadAdminAuthorList(revision)
   );
 }
 
@@ -361,24 +322,27 @@ export async function getIngestionVocabulary(): Promise<IngestionVocabularyDto> 
   const [themes, tags, authors] = await Promise.all([
     getThemeVocab(),
     getTagVocab(),
-    getAuthorVocab(),
+    getAuthorVocab()
   ]);
   return { themes, tags, authors: vocabFromRows(authors) };
 }
 
-const vocabularyLoaders: Record<EntityCacheKind, {
-  key: string;
-  load: (revision: number) => Promise<unknown>;
-}> = {
+const vocabularyLoaders: Record<
+  EntityCacheKind,
+  {
+    key: string;
+    load: (revision: number) => Promise<unknown>;
+  }
+> = {
   theme: { key: THEME_VOCAB_KEY, load: loadThemeVocab },
   tag: { key: TAG_VOCAB_KEY, load: loadTagVocab },
-  author: { key: AUTHOR_VOCAB_KEY, load: loadAuthorVocab },
+  author: { key: AUTHOR_VOCAB_KEY, load: loadAuthorVocab }
 };
 
 const entityCountCacheKeys: Record<EntityCacheKind, string> = {
   theme: ADMIN_THEME_LIST_KEY,
   tag: ADMIN_TAG_LIST_KEY,
-  author: ADMIN_AUTHOR_LIST_KEY,
+  author: ADMIN_AUTHOR_LIST_KEY
 };
 
 function uniqueEntityKinds(kinds: Iterable<EntityCacheKind>) {
@@ -386,15 +350,19 @@ function uniqueEntityKinds(kinds: Iterable<EntityCacheKind>) {
 }
 
 export async function refreshEntityVocabularies(kinds: Iterable<EntityCacheKind>) {
-  await Promise.all(uniqueEntityKinds(kinds).map(async (kind) => {
-    const loader = vocabularyLoaders[kind];
-    const revision = entityVocabularyRevisions[kind] + 1;
-    entityVocabularyRevisions[kind] = revision;
-    await deleteRedisKeys(loader.key);
-    await coalesce(`entity-cache:vocab:${kind}:${revision}`, () => loader.load(revision)).catch(async () => {
+  await Promise.all(
+    uniqueEntityKinds(kinds).map(async (kind) => {
+      const loader = vocabularyLoaders[kind];
+      const revision = entityVocabularyRevisions[kind] + 1;
+      entityVocabularyRevisions[kind] = revision;
       await deleteRedisKeys(loader.key);
-    });
-  }));
+      await coalesce(`entity-cache:vocab:${kind}:${revision}`, () => loader.load(revision)).catch(
+        async () => {
+          await deleteRedisKeys(loader.key);
+        }
+      );
+    })
+  );
 }
 
 export async function invalidateEntityCountCaches(kinds: Iterable<EntityCacheKind>) {
@@ -430,13 +398,13 @@ export function createEntityCountCacheInvalidationBatch(): EntityCountCacheInval
     },
     hasWork() {
       return pending.size > 0;
-    },
+    }
   };
 }
 
 export async function invalidateOrCollectEntityCountCaches(
   kinds: Iterable<EntityCacheKind>,
-  batch?: EntityCountCacheInvalidationBatch,
+  batch?: EntityCountCacheInvalidationBatch
 ) {
   if (batch) {
     batch.add(kinds);

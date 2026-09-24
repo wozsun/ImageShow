@@ -1,6 +1,4 @@
-import {
-  type ShowImageCardDto
-} from "@imageshow/shared/browser";
+import { type ShowImageCardDto } from "@imageshow/shared/browser";
 
 export const showLayoutColumnWidth = 360;
 
@@ -58,11 +56,7 @@ function showImageAspectRatio(image: ShowImage) {
 
 /** Stable noise for geometry only; image ordering remains owned by the pool. */
 export function showLayoutNoise(column: number, ordinal: number, salt: number) {
-  const raw = Math.sin(
-    column * 127.1
-    + ordinal * 311.7
-    + salt * 74.7
-  ) * 43_758.5453;
+  const raw = Math.sin(column * 127.1 + ordinal * 311.7 + salt * 74.7) * 43_758.5453;
   return raw - Math.floor(raw);
 }
 
@@ -77,15 +71,14 @@ export function showCardGeometry(
   columnWidth = showLayoutColumnWidth
 ): ShowCardGeometry {
   const safeColumnWidth = finitePositive(columnWidth, showLayoutColumnWidth);
-  const width = safeColumnWidth * (
-    0.985 + showLayoutNoise(column, ordinal, 1) * 0.007
-  );
+  const width = safeColumnWidth * (0.985 + showLayoutNoise(column, ordinal, 1) * 0.007);
   const horizontalJitter = Math.min(0.2, safeColumnWidth * 0.0015);
   const centeredOffset = (safeColumnWidth - width) / 2;
   return {
-    x: column * safeColumnWidth
-      + centeredOffset
-      + (showLayoutNoise(column, ordinal, 2) - 0.5) * horizontalJitter * 2,
+    x:
+      column * safeColumnWidth +
+      centeredOffset +
+      (showLayoutNoise(column, ordinal, 2) - 0.5) * horizontalJitter * 2,
     width,
     height: width / showImageAspectRatio(image),
     // Keep the world seam compact because the normal plane can exceed 2x at
@@ -99,10 +92,7 @@ export function showCardGeometry(
 }
 
 export function showRectsIntersect(a: ShowRect, b: ShowRect) {
-  return a.right > b.left
-    && a.left < b.right
-    && a.bottom > b.top
-    && a.top < b.bottom;
+  return a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom;
 }
 
 export function showCardRect(card: Pick<ShowCardSlot, "x" | "y" | "width" | "height">): ShowRect {
@@ -136,10 +126,7 @@ export function showViewportWindow(
     right: left + width,
     bottom: top + height
   };
-  const horizontalOverscan = Math.max(
-    0,
-    residence.horizontalOverscanScreens
-  );
+  const horizontalOverscan = Math.max(0, residence.horizontalOverscanScreens);
   const verticalOverscan = Math.max(0, residence.verticalOverscanScreens);
   return {
     visible,

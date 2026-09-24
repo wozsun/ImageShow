@@ -1,30 +1,16 @@
 import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  parseHTML
-} from "linkedom";
+import { parseHTML } from "linkedom";
 import {
   ingestionDuplicatesPath,
   ingestionUpdatePath
 } from "../../../../packages/shared/src/browser.ts";
-import type {
-  IngestionJob
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
-import {
-  clearCsrfToken,
-  setCsrfToken
-} from "../../../../packages/web/src/lib/api/client.ts";
-import {
-  webUuidV7
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-identity.ts";
-import {
-  reduceIngestionQueue
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
-import {
-  ingestionJob,
-  adminImageListItem
-} from "../../support/web-test-context.ts";
+import type { IngestionJob } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
+import { clearCsrfToken, setCsrfToken } from "../../../../packages/web/src/lib/api/client.ts";
+import { webUuidV7 } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-identity.ts";
+import { reduceIngestionQueue } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
+import { ingestionJob, adminImageListItem } from "../../support/web-test-context.ts";
 
 test("[Web/内容接入] 重复详情请求单飞执行并及时合并到最新队列", async () => {
   const { window, document } = parseHTML(
@@ -35,10 +21,7 @@ test("[Web/内容接入] 重复详情请求单飞执行并及时合并到最新�
   const requestMd5s: string[][] = [];
   const requestSignals: Array<AbortSignal | undefined> = [];
   const responses: Array<(response: Response) => void> = [];
-  const fetchStub = async (
-    input: RequestInfo | URL,
-    init: RequestInit = {}
-  ) => {
+  const fetchStub = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const path = new URL(String(input), "http://localhost").pathname;
     assert.equal(path, ingestionDuplicatesPath);
     const body = JSON.parse(String(init.body ?? "{}")) as { md5s: string[] };
@@ -62,9 +45,9 @@ test("[Web/内容接入] 重复详情请求单飞执行并及时合并到最新�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -77,38 +60,41 @@ test("[Web/内容接入] 重复详情请求单飞执行并及时合并到最新�
   try {
     setCsrfToken("duplicate-details-single-flight-token");
     const { createRoot } = await import("react-dom/client");
-    const {
-      invalidateIngestionDuplicateDetails,
-      useIngestionDuplicateDetails
-    } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionDuplicateDetails.ts"
-    );
-    const jobsFor = (count: number) => md5s.slice(0, count).map((md5, index) => (
-      ingestionJob({
-        id: `duplicate-details-single-flight-${index}`,
-        status: "ready",
-        md5,
-        duplicateDecision: "undecided",
-        duplicateCount: 1,
-        serverVersion: index + 1,
-        serverAccepted: true
+    const { invalidateIngestionDuplicateDetails, useIngestionDuplicateDetails } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionDuplicateDetails.ts");
+    const jobsFor = (count: number) =>
+      md5s.slice(0, count).map((md5, index) =>
+        ingestionJob({
+          id: `duplicate-details-single-flight-${index}`,
+          status: "ready",
+          md5,
+          duplicateDecision: "undecided",
+          duplicateCount: 1,
+          serverVersion: index + 1,
+          serverAccepted: true
+        })
+      );
+    const libraryItems = md5s.map((md5) =>
+      adminImageListItem({
+        id: webUuidV7(),
+        md5
       })
-    ));
-    const libraryItems = md5s.map((md5) => adminImageListItem({
-      id: webUuidV7(),
-      md5
-    }));
-    const responseFor = (indexes: readonly number[]) => new Response(JSON.stringify({
-      ok: true,
-      items: indexes.map((index) => ({
-        md5: md5s[index]!,
-        match_count: 1,
-        duplicates: [libraryItems[index]!]
-      }))
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    });
+    );
+    const responseFor = (indexes: readonly number[]) =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          items: indexes.map((index) => ({
+            md5: md5s[index]!,
+            match_count: 1,
+            duplicates: [libraryItems[index]!]
+          }))
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
     const updatedJobIds = new Set<string>();
     let duplicateDetails: ReturnType<typeof useIngestionDuplicateDetails> | undefined;
     function Probe({ jobs }: { jobs: IngestionJob[] }) {
@@ -242,17 +228,22 @@ test("[Web/内容接入] 新完成图片按 MD5 精确刷新仍在展示的重�
     ).pathname;
     assert.equal(path, ingestionDuplicatesPath);
     fetchCalls += 1;
-    return new Response(JSON.stringify({
-      ok: true,
-      items: [{
-        md5,
-        match_count: fetchCalls,
-        duplicates: [completedItem]
-      }]
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        items: [
+          {
+            md5,
+            match_count: fetchCalls,
+            duplicates: [completedItem]
+          }
+        ]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
   };
   const installedGlobals = {
     window,
@@ -270,9 +261,9 @@ test("[Web/内容接入] 新完成图片按 MD5 精确刷新仍在展示的重�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -285,35 +276,36 @@ test("[Web/内容接入] 新完成图片按 MD5 精确刷新仍在展示的重�
   try {
     setCsrfToken("duplicate-completed-invalidation-token");
     const { createRoot } = await import("react-dom/client");
-    const { QueryClient, QueryClientProvider } = await import(
-      "@tanstack/react-query"
-    );
-    const { useIngestionQueue } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionQueue.ts"
-    );
-    const { useIngestionDuplicateDetails } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionDuplicateDetails.ts"
-    );
-    const jobs = [ingestionJob({
-      id: "duplicate-completed-invalidation",
-      status: "ready",
-      md5,
-      duplicateDecision: "undecided",
-      duplicateCount: 1,
-      duplicates: [completedItem],
-      serverVersion: 3,
-      serverAccepted: true
-    })];
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+    const { useIngestionQueue } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionQueue.ts");
+    const { useIngestionDuplicateDetails } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionDuplicateDetails.ts");
+    const jobs = [
+      ingestionJob({
+        id: "duplicate-completed-invalidation",
+        status: "ready",
+        md5,
+        duplicateDecision: "undecided",
+        duplicateCount: 1,
+        duplicates: [completedItem],
+        serverVersion: 3,
+        serverAccepted: true
+      })
+    ];
     let observeCompleted: (() => void) | undefined;
     function Probe() {
       const queue = useIngestionQueue(20, "upload", false);
-      observeCompleted = () => queue.observeCompletedIngestions([{
-        pair: {
-          session_id: "D".repeat(43),
-          image_id: completedItem.id
-        },
-        item: completedItem
-      }]);
+      observeCompleted = () =>
+        queue.observeCompletedIngestions([
+          {
+            pair: {
+              session_id: "D".repeat(43),
+              image_id: completedItem.id
+            },
+            item: completedItem
+          }
+        ]);
       useIngestionDuplicateDetails({
         jobs,
         updateJobs: (patches) => {
@@ -340,11 +332,13 @@ test("[Web/内容接入] 新完成图片按 MD5 精确刷新仍在展示的重�
       assert.fail("completed duplicate invalidation did not settle");
     };
     await React.act(async () => {
-      root.render(React.createElement(
-        QueryClientProvider,
-        { client: queryClient },
-        React.createElement(Probe)
-      ));
+      root.render(
+        React.createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          React.createElement(Probe)
+        )
+      );
       await Promise.resolve();
     });
     await settleUntil(() => observedCounts.includes(1));
@@ -381,13 +375,16 @@ test("[Web/内容接入] 重复归零 CAS 失败保留可操作卡片并允许�
     ).pathname;
     assert.equal(path, ingestionDuplicatesPath);
     fetchCalls += 1;
-    return new Response(JSON.stringify({
-      ok: true,
-      items: [{ md5, match_count: 0, duplicates: [] }]
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        items: [{ md5, match_count: 0, duplicates: [] }]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
   };
   const installedGlobals = {
     window,
@@ -405,9 +402,9 @@ test("[Web/内容接入] 重复归零 CAS 失败保留可操作卡片并允许�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -420,20 +417,21 @@ test("[Web/内容接入] 重复归零 CAS 失败保留可操作卡片并允许�
   try {
     setCsrfToken("duplicate-zero-cas-token");
     const { createRoot } = await import("react-dom/client");
-    const { useIngestionDuplicateDetails } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionDuplicateDetails.ts"
-    );
+    const { useIngestionDuplicateDetails } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionDuplicateDetails.ts");
     const duplicate = adminImageListItem({ id: webUuidV7(), md5 });
-    const jobs = [ingestionJob({
-      id: "duplicate-zero-cas",
-      status: "ready",
-      md5,
-      duplicateDecision: "undecided",
-      duplicateCount: 1,
-      duplicates: [duplicate],
-      serverVersion: 3,
-      serverAccepted: true
-    })];
+    const jobs = [
+      ingestionJob({
+        id: "duplicate-zero-cas",
+        status: "ready",
+        md5,
+        duplicateDecision: "undecided",
+        duplicateCount: 1,
+        duplicates: [duplicate],
+        serverVersion: 3,
+        serverAccepted: true
+      })
+    ];
     const appliedPatches: Array<ReadonlyMap<string, Partial<IngestionJob>>> = [];
     let decisionCalls = 0;
     const updateJobs = (patches: ReadonlyMap<string, Partial<IngestionJob>>) => {
@@ -531,9 +529,9 @@ test("[Web/内容接入] 重复决定合并同一在途请求且拒绝跨 incarn
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -546,9 +544,8 @@ test("[Web/内容接入] 重复决定合并同一在途请求且拒绝跨 incarn
   try {
     setCsrfToken("duplicate-incarnation-token");
     const { createRoot } = await import("react-dom/client");
-    const { useStoredIngestionDraftSync } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts"
-    );
+    const { useStoredIngestionDraftSync } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts");
     const oldJob = ingestionJob({
       id: "duplicate-incarnation-card",
       attemptKey: "duplicate-incarnation-old-attempt",
@@ -590,9 +587,7 @@ test("[Web/内容接入] 重复决定合并同一在途请求且拒绝跨 incarn
         reportError: () => undefined,
         observeCompletedIngestions: () => undefined
       });
-      return React.createElement("output", null, String(
-        sync.hasPendingUpdates()
-      ));
+      return React.createElement("output", null, String(sync.hasPendingUpdates()));
     }
     const container = document.getElementById("root");
     assert.ok(container);
@@ -623,21 +618,28 @@ test("[Web/内容接入] 重复决定合并同一在途请求且拒绝跨 incarn
     jobsRef.current = [newJob];
     state = { jobs: jobsRef.current, page: 1 };
     await React.act(async () => {
-      resolveUpdate!(new Response(JSON.stringify({
-        ok: true,
-        items: [{
-          session_id: oldSessionId,
-          image_id: oldImageId,
-          status: "changed",
-          version: 2,
-          last_semantic_revision: 2,
-          duplicate_count: 0,
-          duplicate_decision: "confirmed"
-        }]
-      }), {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      }));
+      resolveUpdate!(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            items: [
+              {
+                session_id: oldSessionId,
+                image_id: oldImageId,
+                status: "changed",
+                version: 2,
+                last_semantic_revision: 2,
+                duplicate_count: 0,
+                duplicate_decision: "confirmed"
+              }
+            ]
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        )
+      );
       assert.equal(await first, false);
       assert.equal(await repeated, false);
     });
@@ -682,9 +684,9 @@ test("[Web/内容接入] 双队列重复确认各自单飞且 busy 互不阻塞"
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -696,9 +698,8 @@ test("[Web/内容接入] 双队列重复确认各自单飞且 busy 互不阻塞"
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { useIngestionCommit } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionCommit.ts"
-    );
+    const { useIngestionCommit } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionCommit.ts");
 
     const uploadJob = ingestionJob({
       id: "upload-duplicate-single-flight",
@@ -736,10 +737,12 @@ test("[Web/内容接入] 双队列重复确认各自单飞且 busy 互不阻塞"
           uploadDecisionCalls += 1;
           return new Promise<boolean>((resolve) => {
             finishUploadDecision = () => {
-              uploadJobsRef.current = [{
-                ...uploadJobsRef.current[0]!,
-                duplicateDecision: "confirmed"
-              }];
+              uploadJobsRef.current = [
+                {
+                  ...uploadJobsRef.current[0]!,
+                  duplicateDecision: "confirmed"
+                }
+              ];
               resolve(true);
             };
           });
@@ -754,20 +757,26 @@ test("[Web/内容接入] 双队列重复确认各自单飞且 busy 互不阻塞"
         updateJobs: () => undefined,
         updateDuplicateDecision: async () => {
           importDecisionCalls += 1;
-          ingestionJobsRef.current = [{
-            ...ingestionJobsRef.current[0]!,
-            duplicateDecision: "confirmed"
-          }];
+          ingestionJobsRef.current = [
+            {
+              ...ingestionJobsRef.current[0]!,
+              duplicateDecision: "confirmed"
+            }
+          ];
           return true;
         },
         flushPendingUpdates: async () => undefined,
         observeCompletedIngestions: () => undefined,
         onDone: () => undefined
       });
-      return React.createElement("output", null, JSON.stringify({
-        uploadBusy: uploadCommit.busy,
-        importBusy: importCommit.busy
-      }));
+      return React.createElement(
+        "output",
+        null,
+        JSON.stringify({
+          uploadBusy: uploadCommit.busy,
+          importBusy: importCommit.busy
+        })
+      );
     }
     const container = document.getElementById("root");
     assert.ok(container);
@@ -776,10 +785,11 @@ test("[Web/内容接入] 双队列重复确认各自单飞且 busy 互不阻塞"
       root.render(React.createElement(Probe));
       await Promise.resolve();
     });
-    const view = () => JSON.parse(container.textContent || "{}") as {
-      uploadBusy: boolean;
-      importBusy: boolean;
-    };
+    const view = () =>
+      JSON.parse(container.textContent || "{}") as {
+        uploadBusy: boolean;
+        importBusy: boolean;
+      };
     let uploadFirst: Promise<boolean> | undefined;
     let uploadSecond: Promise<boolean> | undefined;
     await React.act(async () => {
@@ -841,9 +851,9 @@ test("[Web/内容接入] 旧提交点击不会命中同 ID 的新任务尝试", 
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -855,9 +865,8 @@ test("[Web/内容接入] 旧提交点击不会命中同 ID 的新任务尝试", 
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { useIngestionCommit } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionCommit.ts"
-    );
+    const { useIngestionCommit } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionCommit.ts");
     const oldAttempt = ingestionJob({
       id: "reused-job-id",
       attemptKey: "old-attempt",

@@ -1,9 +1,5 @@
 import { Context as HonoContext, type Context, type Handler } from "hono";
-import {
-  conditionalRequestNotModified,
-  ifRangeMatches,
-  staticResponseEtag
-} from "./validators.ts";
+import { conditionalRequestNotModified, ifRangeMatches, staticResponseEtag } from "./validators.ts";
 import { parseSingleByteRange } from "./byte-range.ts";
 
 function requestWithRange(request: Request, range?: string) {
@@ -46,7 +42,8 @@ async function cancelResponseBody(response: Response) {
 export async function serveStaticWithValidators(c: Context, handler: Handler) {
   const originalRequest = c.req.raw;
   const method = c.req.method;
-  const requestedRange = method === "GET" ? originalRequest.headers.get("range") ?? undefined : undefined;
+  const requestedRange =
+    method === "GET" ? (originalRequest.headers.get("range") ?? undefined) : undefined;
   try {
     // A separate context keeps the real request unfinalized. The Node static
     // adapter refuses a second invocation once a response has finalized it.
@@ -58,18 +55,24 @@ export async function serveStaticWithValidators(c: Context, handler: Handler) {
       : c;
     const fullResponse = await invokeStaticHandler(fullContext, handler);
     if (!fullResponse) return undefined;
-    if ((method !== "GET" && method !== "HEAD") || fullResponse.status < 200 || fullResponse.status >= 300) {
+    if (
+      (method !== "GET" && method !== "HEAD") ||
+      fullResponse.status < 200 ||
+      fullResponse.status >= 300
+    ) {
       return fullContext !== c ? adoptStaticResponse(c, fullResponse) : fullResponse;
     }
 
     const etag = applyStaticEtag(fullResponse);
     const lastModified = fullResponse.headers.get("Last-Modified");
-    if (conditionalRequestNotModified({
-      ifNoneMatch: originalRequest.headers.get("if-none-match"),
-      ifModifiedSince: originalRequest.headers.get("if-modified-since"),
-      etag,
-      lastModified
-    })) {
+    if (
+      conditionalRequestNotModified({
+        ifNoneMatch: originalRequest.headers.get("if-none-match"),
+        ifModifiedSince: originalRequest.headers.get("if-modified-since"),
+        etag,
+        lastModified
+      })
+    ) {
       await cancelResponseBody(fullResponse);
       const headers = new Headers(fullResponse.headers);
       headers.delete("Content-Length");
@@ -85,10 +88,13 @@ export async function serveStaticWithValidators(c: Context, handler: Handler) {
       return adopted;
     }
 
-    if (!requestedRange || !ifRangeMatches(originalRequest.headers.get("if-range"), {
-      etag,
-      lastModified: lastModified ?? undefined
-    })) {
+    if (
+      !requestedRange ||
+      !ifRangeMatches(originalRequest.headers.get("if-range"), {
+        etag,
+        lastModified: lastModified ?? undefined
+      })
+    ) {
       return fullContext !== c ? adoptStaticResponse(c, fullResponse) : fullResponse;
     }
 

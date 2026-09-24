@@ -54,16 +54,16 @@ export type StorageRemovalFailure = Readonly<{
 }>;
 
 export type StorageRemovalResult =
-  | StorageObjectReference & { status: "removed"; error?: never }
-  | StorageObjectReference & { status: "missing"; error?: never }
-  | StorageObjectReference & {
+  | (StorageObjectReference & { status: "removed"; error?: never })
+  | (StorageObjectReference & { status: "missing"; error?: never })
+  | (StorageObjectReference & {
       status: "failed";
       error: StorageRemovalFailure;
-    }
-  | StorageObjectReference & {
+    })
+  | (StorageObjectReference & {
       status: "unknown";
       error: StorageRemovalFailure;
-    };
+    });
 
 export type StorageRemoveOptions = StorageRequestOptions & {
   /** S3-compatible providers may omit successful keys from the response. */
@@ -88,22 +88,14 @@ export type StorageSelfTest = {
 
 export interface StorageDriver {
   close?(): void | Promise<void>;
-  exists(
-    prefix: StoragePrefix,
-    key: string,
-    options?: StorageRequestOptions
-  ): Promise<boolean>;
+  exists(prefix: StoragePrefix, key: string, options?: StorageRequestOptions): Promise<boolean>;
   openRead(
     prefix: StoragePrefix,
     key: string,
     range?: string,
     options?: StorageRequestOptions
   ): Promise<OpenedRead>;
-  readBuffer(
-    prefix: StoragePrefix,
-    key: string,
-    options?: StorageRequestOptions
-  ): Promise<Buffer>;
+  readBuffer(prefix: StoragePrefix, key: string, options?: StorageRequestOptions): Promise<Buffer>;
   writeBuffer(
     prefix: StoragePrefix,
     key: string,
@@ -135,10 +127,7 @@ export interface StorageDriver {
     toKey: string,
     options: StorageServerCopyOptions
   ): Promise<void>;
-  listKeys(
-    prefix: StoragePrefix,
-    options?: StorageKeyListOptions
-  ): StorageKeyListing;
+  listKeys(prefix: StoragePrefix, options?: StorageKeyListOptions): StorageKeyListing;
   selfTest(options?: StorageRequestOptions): Promise<StorageSelfTest>;
   pruneEmptyDirs(options?: StoragePruneOptions): Promise<number>;
 }

@@ -1,9 +1,6 @@
 import { ApiError } from "../../../core/api-error.ts";
 import { readDuplicateMatchCountsByMd5 } from "../../read-models/duplicates.ts";
-import type {
-  IngestionSessionSnapshot,
-  StoredIngestionSession
-} from "../sessions/model.ts";
+import type { IngestionSessionSnapshot, StoredIngestionSession } from "../sessions/model.ts";
 import type { IngestionSessionRepository } from "../repository.ts";
 import { semanticIngestionSession } from "../sessions/transitions.ts";
 
@@ -44,12 +41,13 @@ export async function recoverIngestionCommitDuplicateConflict(
   error: unknown
 ) {
   if (
-    !(error instanceof ApiError)
-    || error.code !== "ingestion_duplicate_conflict"
-    || current.status !== "committing"
-    || !current.prepared
-    || !current.commit
-  ) return false;
+    !(error instanceof ApiError) ||
+    error.code !== "ingestion_duplicate_conflict" ||
+    current.status !== "committing" ||
+    !current.prepared ||
+    !current.commit
+  )
+    return false;
   const counts = await readDuplicateMatchCountsByMd5([current.prepared.md5]);
   await repository.mutateSemantic(
     current,

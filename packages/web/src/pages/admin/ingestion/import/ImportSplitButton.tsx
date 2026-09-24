@@ -30,12 +30,31 @@ export function ImportSplitButton({
       }}
       onActivate={onOpenWorkflow}
       items={[
-        { id: "urls", label: "链接导入", icon: "link", onSelect: onOpenUrls, onPreload: onPreloadImportSource },
-        { id: "jsonl", label: "清单导入", icon: "file-list-line", onSelect: onOpenJsonl, onPreload: onPreloadImportSource },
-        { id: "weibo", label: "微博导入", icon: "weibo-line", onSelect: onOpenWeibo, onPreload: onPreloadImportSource }
+        {
+          id: "urls",
+          label: "链接导入",
+          icon: "link",
+          onSelect: onOpenUrls,
+          onPreload: onPreloadImportSource
+        },
+        {
+          id: "jsonl",
+          label: "清单导入",
+          icon: "file-list-line",
+          onSelect: onOpenJsonl,
+          onPreload: onPreloadImportSource
+        },
+        {
+          id: "weibo",
+          label: "微博导入",
+          icon: "weibo-line",
+          onSelect: onOpenWeibo,
+          onPreload: onPreloadImportSource
+        }
       ]}
     >
-      <AdminIcon name="download-cloud-2-line" />导入图片
+      <AdminIcon name="download-cloud-2-line" />
+      导入图片
     </SplitActionButton>
   );
 }

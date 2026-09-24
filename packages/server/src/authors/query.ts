@@ -31,15 +31,17 @@ export async function resolveWeiboAuthorSlugs(
 ): Promise<Map<string, string>> {
   const uniqueUserIds = [...new Set(userIds)].filter(isWeiboUserId);
   if (!uniqueUserIds.length) return new Map();
-  const rows = (await pool.query<{
-    identity_id: string;
-    slug: string;
-  }>(
-    `SELECT identity_id, slug
+  const rows = (
+    await pool.query<{
+      identity_id: string;
+      slug: string;
+    }>(
+      `SELECT identity_id, slug
        FROM author
       WHERE identity_provider='weibo'
         AND identity_id=ANY($1::text[])`,
-    [uniqueUserIds]
-  )).rows;
+      [uniqueUserIds]
+    )
+  ).rows;
   return new Map(rows.map((row) => [row.identity_id, row.slug]));
 }

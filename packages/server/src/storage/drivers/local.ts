@@ -39,8 +39,7 @@ import {
 } from "./removal.ts";
 
 const uuidV7TokenPattern = new RegExp(
-  "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}"
-    + "-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+  "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}" + "-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
   "iu"
 );
 
@@ -120,7 +119,10 @@ async function withLocalCandidate(candidate: string, publish: () => Promise<void
     await rm(candidate, { force: true });
   } catch (cleanupError) {
     if (publishFailed) {
-      throw new AggregateError([publishError, cleanupError], "Local publication and candidate cleanup both failed");
+      throw new AggregateError(
+        [publishError, cleanupError],
+        "Local publication and candidate cleanup both failed"
+      );
     }
     throw cleanupError;
   }
@@ -128,11 +130,7 @@ async function withLocalCandidate(candidate: string, publish: () => Promise<void
 }
 
 export class LocalBackend implements StorageDriver {
-  async exists(
-    prefix: StoragePrefix,
-    key: string,
-    options: StorageRequestOptions = {}
-  ) {
+  async exists(prefix: StoragePrefix, key: string, options: StorageRequestOptions = {}) {
     options.signal?.throwIfAborted();
     try {
       await access(safeStoragePath(prefix, key));
@@ -146,14 +144,17 @@ export class LocalBackend implements StorageDriver {
   }
 
   async openRead(
-    prefix: StoragePrefix, key: string, rangeHeader?: string,
+    prefix: StoragePrefix,
+    key: string,
+    rangeHeader?: string,
     options: StorageRequestOptions = {}
   ): Promise<OpenedRead> {
     options.signal?.throwIfAborted();
     const path = safeStoragePath(prefix, key);
     const handle = await open(path, "r").catch((error: unknown) => {
       options.signal?.throwIfAborted();
-      if (isMissingFileError(error)) throw new ApiError(404, "storage_object_not_found", "Object not found");
+      if (isMissingFileError(error))
+        throw new ApiError(404, "storage_object_not_found", "Object not found");
       throw error;
     });
     try {
@@ -174,7 +175,9 @@ export class LocalBackend implements StorageDriver {
       if (!range) {
         return {
           body: handle.createReadStream({
-            autoClose: true, emitClose: true, signal: options.signal
+            autoClose: true,
+            emitClose: true,
+            signal: options.signal
           }),
           size: totalSize,
           ...common
@@ -206,9 +209,7 @@ export class LocalBackend implements StorageDriver {
     }
   }
 
-  async readBuffer(
-    prefix: StoragePrefix, key: string, options: StorageRequestOptions = {}
-  ) {
+  async readBuffer(prefix: StoragePrefix, key: string, options: StorageRequestOptions = {}) {
     return openedReadToBuffer(
       await this.openRead(prefix, key, undefined, options),
       getIngestionMaxFileBytes()
@@ -278,37 +279,34 @@ export class LocalBackend implements StorageDriver {
     return removeDriverObjectsAndConfirm({
       objects,
       options,
-      exists: (object, requestOptions) => this.exists(
-        object.prefix,
-        object.key,
-        requestOptions
-      ),
-      remove: (items, requestOptions) => mapStorageObjectsBounded(
-        items,
-        LOCAL_STORAGE_REMOVAL_CONCURRENCY,
-        async (object): Promise<StorageDeleteAttemptResult> => {
-          if (requestOptions.signal?.aborted) {
-            return {
-              status: "not_started",
-              error: storageRemovalFailure(
-                requestOptions.signal.reason,
-                "storage_delete_cancelled"
-              )
-            };
+      exists: (object, requestOptions) => this.exists(object.prefix, object.key, requestOptions),
+      remove: (items, requestOptions) =>
+        mapStorageObjectsBounded(
+          items,
+          LOCAL_STORAGE_REMOVAL_CONCURRENCY,
+          async (object): Promise<StorageDeleteAttemptResult> => {
+            if (requestOptions.signal?.aborted) {
+              return {
+                status: "not_started",
+                error: storageRemovalFailure(
+                  requestOptions.signal.reason,
+                  "storage_delete_cancelled"
+                )
+              };
+            }
+            try {
+              await rm(safeStoragePath(object.prefix, object.key), {
+                force: true
+              });
+              return { status: "acknowledged" };
+            } catch (error) {
+              return {
+                status: "failed",
+                error: storageRemovalFailure(error)
+              };
+            }
           }
-          try {
-            await rm(safeStoragePath(object.prefix, object.key), {
-              force: true
-            });
-            return { status: "acknowledged" };
-          } catch (error) {
-            return {
-              status: "failed",
-              error: storageRemovalFailure(error)
-            };
-          }
-        }
-      )
+        )
     });
   }
 
@@ -333,10 +331,7 @@ export class LocalBackend implements StorageDriver {
     throw new RangeError("Local storage does not support server-side copy");
   }
 
-  async *listKeys(
-    prefix: StoragePrefix,
-    options: StorageKeyListOptions = {}
-  ) {
+  async *listKeys(prefix: StoragePrefix, options: StorageKeyListOptions = {}) {
     const root = join(runtimePaths.storageDirectory, prefix);
     return yield* batchStorageKeys(
       walkLocalKeys(root, root, options.signal, options.directorySnapshot),
@@ -350,7 +345,7 @@ export class LocalBackend implements StorageDriver {
     let testError: unknown;
     try {
       await this.writeBuffer("full", key, Buffer.from("ok"), "text/plain", options);
-      if (!await this.exists("full", key, options)) {
+      if (!(await this.exists("full", key, options))) {
         throw new Error("Local self-test object could not be read back");
       }
     } catch (error) {
@@ -367,7 +362,10 @@ export class LocalBackend implements StorageDriver {
       }
     } catch (cleanupError) {
       if (testError) {
-        throw new AggregateError([testError, cleanupError], "Local self-test and cleanup both failed");
+        throw new AggregateError(
+          [testError, cleanupError],
+          "Local self-test and cleanup both failed"
+        );
       }
       throw cleanupError;
     }
@@ -401,9 +399,7 @@ export class LocalBackend implements StorageDriver {
     const visit = (count: number) => {
       visited += count;
       if (visited > configuredLimit) {
-        throw new Error(
-          `Storage directory prune exceeds bounded entry limit ${configuredLimit}`
-        );
+        throw new Error(`Storage directory prune exceeds bounded entry limit ${configuredLimit}`);
       }
     };
     const prune = async (dir: string): Promise<void> => {

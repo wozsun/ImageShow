@@ -4,14 +4,8 @@ import type {
 } from "@imageshow/shared/browser";
 import { ApiError } from "../../../core/api-error.ts";
 import type { CommittedIngestionResult } from "../../read-models/ingestion-results.ts";
-import type {
-  IngestionSessionPair,
-  StoredIngestionSession
-} from "../sessions/model.ts";
-import {
-  ingestionSessionIncarnationMismatch,
-  IngestionSessionRepository
-} from "../repository.ts";
+import type { IngestionSessionPair, StoredIngestionSession } from "../sessions/model.ts";
+import { ingestionSessionIncarnationMismatch, IngestionSessionRepository } from "../repository.ts";
 
 export type LoadedCancelItem = Readonly<{
   owner: string;
@@ -52,9 +46,8 @@ export async function loadCancelItems(
   return items.map((input, index) => ({
     owner,
     input,
-    session: sessions[index] === ingestionSessionIncarnationMismatch
-      ? null
-      : sessions[index] ?? null,
+    session:
+      sessions[index] === ingestionSessionIncarnationMismatch ? null : (sessions[index] ?? null),
     incarnationMismatch: sessions[index] === ingestionSessionIncarnationMismatch
   }));
 }

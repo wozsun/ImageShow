@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type RefObject,
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 
 const COLLAPSED_CARD_HEIGHT = 52;
@@ -18,7 +11,7 @@ export function ImageDescriptionSlot({
   error = "",
   onRetry,
   boundaryRef,
-  inlineExpansion = false,
+  inlineExpansion = false
 }: {
   description: string;
   loading: boolean;
@@ -61,11 +54,11 @@ export function ImageDescriptionSlot({
 
     const availableHeight = Math.max(
       COLLAPSED_CARD_HEIGHT,
-      Math.floor(availableBottom - slotBounds.top),
+      Math.floor(availableBottom - slotBounds.top)
     );
     const contentHeight = Math.max(
       COLLAPSED_CARD_HEIGHT,
-      Math.ceil(textElement.scrollHeight + EXPANDED_CARD_CHROME_HEIGHT),
+      Math.ceil(textElement.scrollHeight + EXPANDED_CARD_CHROME_HEIGHT)
     );
     setExpandedHeight(Math.min(availableHeight, contentHeight));
   }, [boundaryRef]);
@@ -84,7 +77,7 @@ export function ImageDescriptionSlot({
 
     document.addEventListener("touchstart", collapseFromOutsideTouch, {
       capture: true,
-      passive: true,
+      passive: true
     });
     return () => {
       document.removeEventListener("touchstart", collapseFromOutsideTouch, true);
@@ -141,9 +134,11 @@ export function ImageDescriptionSlot({
         ref={cardRef}
         className={`image-detail-description-card${expanded ? " is-expanded" : ""}`}
         aria-label="图片描述"
-        style={inlineExpansion && expanded
-          ? undefined
-          : { height: `${expanded ? expandedHeight : COLLAPSED_CARD_HEIGHT}px` }}
+        style={
+          inlineExpansion && expanded
+            ? undefined
+            : { height: `${expanded ? expandedHeight : COLLAPSED_CARD_HEIGHT}px` }
+        }
       >
         <div ref={cardBodyRef} className="image-detail-description-card-body">
           <p
@@ -183,11 +178,7 @@ export function ImageDescriptionSlot({
           </button>
         )}
         {expanded && !inlineExpansion && (
-          <OverlayScrollbar
-            targetRef={cardBodyRef}
-            containerRef={cardRef}
-            enableOnTouch
-          />
+          <OverlayScrollbar targetRef={cardBodyRef} containerRef={cardRef} enableOnTouch />
         )}
       </section>
     </div>

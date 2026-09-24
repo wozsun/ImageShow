@@ -37,10 +37,12 @@ function isTransportTimeout(error: unknown) {
     code?: unknown;
     cause?: { name?: unknown; code?: unknown };
   };
-  return value?.name === "TimeoutError"
-    || value?.code === "ETIMEDOUT"
-    || value?.cause?.name === "TimeoutError"
-    || value?.cause?.code === "ETIMEDOUT";
+  return (
+    value?.name === "TimeoutError" ||
+    value?.code === "ETIMEDOUT" ||
+    value?.cause?.name === "TimeoutError" ||
+    value?.cause?.code === "ETIMEDOUT"
+  );
 }
 
 function abortReason(signal: AbortSignal, fallback: unknown) {
@@ -49,16 +51,18 @@ function abortReason(signal: AbortSignal, fallback: unknown) {
 }
 
 async function disposeErrorResponseBody(error: unknown) {
-  const body = (error as {
-    $response?: {
-      body?: {
-        destroyed?: boolean;
-        readableEnded?: boolean;
-        destroy?: () => unknown;
-        cancel?: () => Promise<unknown>;
+  const body = (
+    error as {
+      $response?: {
+        body?: {
+          destroyed?: boolean;
+          readableEnded?: boolean;
+          destroy?: () => unknown;
+          cancel?: () => Promise<unknown>;
+        };
       };
-    };
-  })?.$response?.body;
+    }
+  )?.$response?.body;
   if (!body || body.destroyed || body.readableEnded) return;
   try {
     if (body.destroy) {
@@ -79,14 +83,8 @@ export class S3RequestRuntime {
   private readonly taskTimeoutMs: number;
 
   constructor(options: S3RequestRuntimeOptions) {
-    this.idleTimeoutMs = checkedTimeout(
-      options.idleTimeoutMs,
-      "S3 idle timeout"
-    );
-    this.taskTimeoutMs = checkedTimeout(
-      options.taskTimeoutMs,
-      "S3 task timeout"
-    );
+    this.idleTimeoutMs = checkedTimeout(options.idleTimeoutMs, "S3 idle timeout");
+    this.taskTimeoutMs = checkedTimeout(options.taskTimeoutMs, "S3 task timeout");
   }
 
   async run<T>(
@@ -168,10 +166,7 @@ export class S3RequestRuntime {
     };
     const resetFallbackIdleTimer = () => {
       if (fallbackIdleTimer) clearTimeout(fallbackIdleTimer);
-      fallbackIdleTimer = setTimeout(
-        () => destroyWithTimeout("idle"),
-        this.idleTimeoutMs
-      );
+      fallbackIdleTimer = setTimeout(() => destroyWithTimeout("idle"), this.idleTimeoutMs);
     };
     const onIdleTimeout = () => destroyWithTimeout("idle");
     const onAbort = () => {

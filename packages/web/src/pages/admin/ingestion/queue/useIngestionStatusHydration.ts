@@ -57,18 +57,14 @@ export function useIngestionStatusHydration({
   retryGatesRef: RefObject<Map<string, HandoffRetryGate>>;
   detachedHandoffsRef: RefObject<Map<string, DetachedProvisionalHandoff>>;
   completedPairsRef: RefObject<Set<string>>;
-  completedReceiptHydrationsRef: RefObject<
-    Map<string, IngestionSessionPairDto>
-  >;
+  completedReceiptHydrationsRef: RefObject<Map<string, IngestionSessionPairDto>>;
   jobsRef: RefObject<IngestionJob[]>;
   dispatch: (action: IngestionQueueAction) => boolean;
   ensureDraftSnapshot: (job: IngestionJob) => void;
   retireDraftPairs: (pairKeys: ReadonlySet<string>) => void;
   resolveExternalStatuses: (pairKeys: ReadonlySet<string>) => void;
   verifyExternalStatusRevisions: (revisions: ReadonlyMap<string, number>) => void;
-  observeCompletedIngestions: (
-    entries: readonly CompletedIngestionObservation[]
-  ) => void;
+  observeCompletedIngestions: (entries: readonly CompletedIngestionObservation[]) => void;
   handoffEpoch: number;
   statusRetryEpoch: number;
   bumpHandoffEpoch: () => void;
@@ -77,26 +73,31 @@ export function useIngestionStatusHydration({
 }) {
   useEffect(() => {
     if (
-      server.status !== "ready"
-      || !handoffJobsRef.current.size
-        && !completedReceiptHydrationsRef.current.size
-    ) return;
+      server.status !== "ready" ||
+      (!handoffJobsRef.current.size && !completedReceiptHydrationsRef.current.size)
+    )
+      return;
     const controller = new AbortController();
     const requestRevision = serverConnectionRef.current.revision;
-    const entriesByPair = new Map<string, {
-      pairKey: string;
-      pair: IngestionSessionPairDto;
-      job?: IngestionJob;
-      completedReceipt?: IngestionSessionPairDto;
-    }>();
+    const entriesByPair = new Map<
+      string,
+      {
+        pairKey: string;
+        pair: IngestionSessionPairDto;
+        job?: IngestionJob;
+        completedReceipt?: IngestionSessionPairDto;
+      }
+    >();
     for (const [pairKey, job] of handoffJobsRef.current) {
       const eligible = (() => {
         const retryAfter = retryGatesRef.current.get(pairKey);
-        return retryAfter === undefined
-          || retryAfter.connectionGeneration !== server.connectionGeneration
-          || retryAfter.mode === "state-change"
-            && requestRevision !== null
-            && requestRevision > retryAfter.revision;
+        return (
+          retryAfter === undefined ||
+          retryAfter.connectionGeneration !== server.connectionGeneration ||
+          (retryAfter.mode === "state-change" &&
+            requestRevision !== null &&
+            requestRevision > retryAfter.revision)
+        );
       })();
       if (!eligible) continue;
       entriesByPair.set(pairKey, {
@@ -108,10 +109,7 @@ export function useIngestionStatusHydration({
         }
       });
     }
-    for (
-      const [pairKey, completedReceipt]
-      of completedReceiptHydrationsRef.current
-    ) {
+    for (const [pairKey, completedReceipt] of completedReceiptHydrationsRef.current) {
       entriesByPair.set(pairKey, {
         ...entriesByPair.get(pairKey),
         pairKey,
@@ -140,10 +138,7 @@ export function useIngestionStatusHydration({
         verifiedExternalRevisions.set(pairKey, revision);
         handoffChanged = true;
         if ((serverConnectionRef.current.revision ?? -1) < revision) {
-          minimumCoverageRevision = Math.max(
-            minimumCoverageRevision ?? 0,
-            revision
-          );
+          minimumCoverageRevision = Math.max(minimumCoverageRevision ?? 0, revision);
         }
       };
       try {
@@ -160,11 +155,11 @@ export function useIngestionStatusHydration({
         for (const [index, entry] of chunk.entries()) {
           const status = statuses[index];
           if (!status) continue;
-          const activeHandoff = entry.job !== undefined
-            && handoffJobsRef.current.get(entry.pairKey) === entry.job;
-          const activeCompletedReceipt = entry.completedReceipt !== undefined
-            && completedReceiptHydrationsRef.current.get(entry.pairKey)
-              === entry.completedReceipt;
+          const activeHandoff =
+            entry.job !== undefined && handoffJobsRef.current.get(entry.pairKey) === entry.job;
+          const activeCompletedReceipt =
+            entry.completedReceipt !== undefined &&
+            completedReceiptHydrationsRef.current.get(entry.pairKey) === entry.completedReceipt;
           if (!activeHandoff && !activeCompletedReceipt) continue;
           completedInvalidations.push(...completedIngestionObservations([status]));
           if (activeCompletedReceipt) {
@@ -180,10 +175,7 @@ export function useIngestionStatusHydration({
           const entryJob = entry.job;
           if (!activeHandoff || !entryJob) continue;
           const awaitsCompleted = completedPairsRef.current.has(entry.pairKey);
-          if (
-            status.status === "present"
-            && entryJob.serverDraftPending === true
-          ) {
+          if (status.status === "present" && entryJob.serverDraftPending === true) {
             ensureDraftSnapshot(entryJob);
           }
           if (status.status === "present" && awaitsCompleted) {
@@ -205,10 +197,9 @@ export function useIngestionStatusHydration({
             continue;
           }
           if (status.status === "present") {
-            const current = jobsRef.current.find((job) => (
-              job.id === entryJob.id
-              && job.attemptKey === entryJob.attemptKey
-            ));
+            const current = jobsRef.current.find(
+              (job) => job.id === entryJob.id && job.attemptKey === entryJob.attemptKey
+            );
             if (current) {
               const next = {
                 ...ingestionJobFromServerItem(
@@ -219,24 +210,20 @@ export function useIngestionStatusHydration({
                 serverHandoffPending: true,
                 serverHandoffRevision: status.item.last_semantic_revision
               };
-              if (
-                current.objectUrl?.startsWith("blob:")
-                && !next.objectUrl?.startsWith("blob:")
-              ) revokeObjectUrl(current);
+              if (current.objectUrl?.startsWith("blob:") && !next.objectUrl?.startsWith("blob:"))
+                revokeObjectUrl(current);
               presentPatches.set(current.id, next);
             }
-            requireSnapshotCoverage(
-              entry.pairKey,
-              status.item.last_semantic_revision
-            );
+            requireSnapshotCoverage(entry.pairKey, status.item.last_semantic_revision);
             continue;
           }
           if (status.status === "missing") {
-            const current = jobsRef.current.find((job) => (
-              job.id === entryJob.id
-              && job.attemptKey === entryJob.attemptKey
-              && serverIngestionJobPairKey(job) === entry.pairKey
-            ));
+            const current = jobsRef.current.find(
+              (job) =>
+                job.id === entryJob.id &&
+                job.attemptKey === entryJob.attemptKey &&
+                serverIngestionJobPairKey(job) === entry.pairKey
+            );
             const retainedJob = current ?? entryJob;
             const patch = ingestionStatusEventPatch(retainedJob, status);
             if (patch) {
@@ -290,15 +277,13 @@ export function useIngestionStatusHydration({
               requireSnapshotCoverage(entry.pairKey, revision);
               continue;
             }
-            const current = jobsRef.current.find((job) => (
-              job.id === entryJob.id
-              && job.attemptKey === entryJob.attemptKey
-              && serverIngestionJobPairKey(job) === entry.pairKey
-            ));
-            const completedJob = ingestionJobFromKnownCompletedStatus(
-              current ?? entryJob,
-              status
+            const current = jobsRef.current.find(
+              (job) =>
+                job.id === entryJob.id &&
+                job.attemptKey === entryJob.attemptKey &&
+                serverIngestionJobPairKey(job) === entry.pairKey
             );
+            const completedJob = ingestionJobFromKnownCompletedStatus(current ?? entryJob, status);
             if (completedJob) {
               if (current) completedPatches.set(current.id, completedJob);
               else completedJobs.push(completedJob);
@@ -331,23 +316,13 @@ export function useIngestionStatusHydration({
         if (verifiedExternalRevisions.size) {
           verifyExternalStatusRevisions(verifiedExternalRevisions);
         }
-        if (
-          handoffChanged
-          || retryImmediately
-          || entries.length > chunk.length
-        ) bumpHandoffEpoch();
+        if (handoffChanged || retryImmediately || entries.length > chunk.length) bumpHandoffEpoch();
         if (minimumCoverageRevision !== null) {
-          server.ensureRevision(
-            minimumCoverageRevision,
-            server.connectionGeneration
-          );
+          server.ensureRevision(minimumCoverageRevision, server.connectionGeneration);
         }
       } catch (error) {
         if (!controller.signal.aborted) {
-          reportError(
-            error instanceof Error ? error.message : String(error),
-            true
-          );
+          reportError(error instanceof Error ? error.message : String(error), true);
         }
       }
     })();

@@ -12,10 +12,7 @@ import {
   useState,
   type CSSProperties
 } from "react";
-import type {
-  ShowDensity,
-  SiteShowSettings
-} from "@imageshow/shared/browser";
+import type { ShowDensity, SiteShowSettings } from "@imageshow/shared/browser";
 import { AppLoadingRegion } from "../../components/feedback/AppLoadingScreen.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
@@ -32,7 +29,12 @@ import {
   updateImageBrowseSearchParams
 } from "../../lib/gallery/gallery-query.js";
 import { publicNavigationAutoHideDelayMs } from "../../lib/ui/public-navigation.js";
-import { ShowPlaybackButton, ShowMobileControls, ShowSizeControls, ShowToolbarControls } from "./ShowControls.js";
+import {
+  ShowPlaybackButton,
+  ShowMobileControls,
+  ShowSizeControls,
+  ShowToolbarControls
+} from "./ShowControls.js";
 import type { ShowImage } from "./show-layout.js";
 import { useShowData } from "./useShowData.js";
 import { showInitialBatchLimit } from "./show-browse.js";
@@ -54,10 +56,7 @@ import "../../styles/gallery-responsive.css";
 import "../../styles/show.css";
 import "../../styles/show-pixi.css";
 
-function configuredWaterfallColumns(
-  density: ShowWaterfallDensity,
-  configured: ShowDensity
-) {
+function configuredWaterfallColumns(density: ShowWaterfallDensity, configured: ShowDensity) {
   if (configured === "relaxed") return density.minimumColumns;
   if (configured === "dense") return density.normalMaximumColumns;
   return density.defaultColumns;
@@ -80,10 +79,7 @@ function remapWaterfallColumns(
     return next.normalMaximumColumns;
   }
   if (Math.abs(columns - previous.maximumColumns) < 0.01) return next.maximumColumns;
-  return clampShowWaterfallColumns(
-    columns / previous.galleryColumns * next.galleryColumns,
-    next
-  );
+  return clampShowWaterfallColumns((columns / previous.galleryColumns) * next.galleryColumns, next);
 }
 
 export function ShowPage({
@@ -95,31 +91,42 @@ export function ShowPage({
 }) {
   const browseRoute = useImageBrowseRoute();
   const filterDialog = usePublicFilterDialog(browseRoute);
-  const { params: routeSearchParams, updateSearchParams: setRouteSearchParams, filters, updateFilter, ready: filtersReady, error: filterError } = browseRoute;
+  const {
+    params: routeSearchParams,
+    updateSearchParams: setRouteSearchParams,
+    filters,
+    updateFilter,
+    ready: filtersReady,
+    error: filterError
+  } = browseRoute;
   const routeQuery = routeSearchParams.toString();
-  const order = useMemo(() => showOrderFromSearchParams(
-    new URLSearchParams(routeQuery),
-    settings.order
-  ), [routeQuery, settings.order]);
+  const order = useMemo(
+    () => showOrderFromSearchParams(new URLSearchParams(routeQuery), settings.order),
+    [routeQuery, settings.order]
+  );
   const configuredScene = settings.mode;
-  const scene = useMemo(() => showModeFromSearchParams(
-    new URLSearchParams(routeQuery),
-    configuredScene
-  ), [configuredScene, routeQuery]);
+  const scene = useMemo(
+    () => showModeFromSearchParams(new URLSearchParams(routeQuery), configuredScene),
+    [configuredScene, routeQuery]
+  );
   const sourceKey = useMemo(
-    () => filtersReady
-      ? readableFilterSearch(imageBrowseApiSearchParams(filters, order, { view: "show", userAgent: window.navigator.userAgent }))
-      : routeQuery,
+    () =>
+      filtersReady
+        ? readableFilterSearch(
+            imageBrowseApiSearchParams(filters, order, {
+              view: "show",
+              userAgent: window.navigator.userAgent
+            })
+          )
+        : routeQuery,
     [filters, filtersReady, order, routeQuery]
   );
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const initialWaterfallDensity = showWaterfallDensity(window.innerWidth);
-  const [waterfallColumns, setWaterfallColumns] = useState(() => (
+  const [waterfallColumns, setWaterfallColumns] = useState(() =>
     configuredWaterfallColumns(initialWaterfallDensity, settings.density)
-  ));
-  const [floatSizeIndex, setFloatSizeIndex] = useState(() => (
-    configuredFloatSize(settings.density)
-  ));
+  );
+  const [floatSizeIndex, setFloatSizeIndex] = useState(() => configuredFloatSize(settings.density));
   const [running, setRunning] = useState(settings.autoplay);
   const [motionActive, setMotionActive] = useState(false);
   const [pendingWaterfallDensity, setPendingWaterfallDensity] = useState<number | null>(null);
@@ -131,25 +138,39 @@ export function ShowPage({
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const sizeControlRef = useRef<HTMLButtonElement | null>(null);
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
-  const data = useShowData(filters, sourceKey, order, showInitialBatchLimit({
-    width: window.innerWidth, height: window.innerHeight, mode: scene,
-    columns: waterfallColumns, floatSizeIndex, device: filters.device
-  }), filtersReady);
-  const playbackRunning = running && !data.initialLoading && !data.error
-    && data.images.length > 0;
+  const data = useShowData(
+    filters,
+    sourceKey,
+    order,
+    showInitialBatchLimit({
+      width: window.innerWidth,
+      height: window.innerHeight,
+      mode: scene,
+      columns: waterfallColumns,
+      floatSizeIndex,
+      device: filters.device
+    }),
+    filtersReady
+  );
+  const playbackRunning = running && !data.initialLoading && !data.error && data.images.length > 0;
   const navigationControls = usePublicImageViewportControls({
-    autoHideAfterMs: playbackRunning && !reducedMotion && motionActive
-      ? publicNavigationAutoHideDelayMs
-      : undefined,
+    autoHideAfterMs:
+      playbackRunning && !reducedMotion && motionActive
+        ? publicNavigationAutoHideDelayMs
+        : undefined,
     headerPresent: !embedded,
     paused: dialogOpen,
     movement: "manual"
   });
-  const { advanceManualNavigation, headerVisible, resetManualNavigation, toolbarHeight, toolbarVisible } = navigationControls;
   const {
-    markAppeared: markNavigationAppeared,
-    shouldAnimate: shouldAnimateNavigation
-  } = usePublicNavigationEntrance();
+    advanceManualNavigation,
+    headerVisible,
+    resetManualNavigation,
+    toolbarHeight,
+    toolbarVisible
+  } = navigationControls;
+  const { markAppeared: markNavigationAppeared, shouldAnimate: shouldAnimateNavigation } =
+    usePublicNavigationEntrance();
   useDocumentMotionPause();
 
   const openImageDetail = useCallback((image: ShowImage, opener: HTMLElement) => {
@@ -200,15 +221,16 @@ export function ShowPage({
       if (updated && updated !== selected) setSelected(updated);
     }
     if (
-      !selected
-      || data.images.some((image) => image.id === selected.id)
-      || !detailReturnFocusRef.current?.matches("[data-show-pixi-proxy]")
-    ) return;
-    const fallback = [...document.querySelectorAll<HTMLElement>(
-      "[data-show-pixi-proxy]"
-    )].find((element) => element.dataset.imageId !== selected.id);
-    detailReturnFocusRef.current = fallback
-      ?? document.querySelector<HTMLElement>(".show-pixi-canvas-host");
+      !selected ||
+      data.images.some((image) => image.id === selected.id) ||
+      !detailReturnFocusRef.current?.matches("[data-show-pixi-proxy]")
+    )
+      return;
+    const fallback = [...document.querySelectorAll<HTMLElement>("[data-show-pixi-proxy]")].find(
+      (element) => element.dataset.imageId !== selected.id
+    );
+    detailReturnFocusRef.current =
+      fallback ?? document.querySelector<HTMLElement>(".show-pixi-canvas-host");
   }, [data.images, selected]);
 
   useEffect(() => {
@@ -228,30 +250,26 @@ export function ShowPage({
     };
   }, []);
 
-  const waterfallDensity = useMemo(
-    () => showWaterfallDensity(viewportWidth),
-    [viewportWidth]
-  );
+  const waterfallDensity = useMemo(() => showWaterfallDensity(viewportWidth), [viewportWidth]);
   const previousWaterfallDensityRef = useRef(waterfallDensity);
-  const requestWaterfallColumns = useCallback((columns: number) => {
-    const next = clampShowWaterfallColumns(columns, waterfallDensity);
-    if (!waterfallDensityConfirmedRef.current && next > waterfallDensity.warningColumns + 0.001) {
-      setPendingWaterfallDensity((pending) => pending ?? next / waterfallDensity.galleryColumns);
-      setWaterfallColumns(waterfallDensity.warningColumns);
-      return waterfallDensity.warningColumns;
-    }
-    setWaterfallColumns(next);
-    return next;
-  }, [waterfallDensity]);
+  const requestWaterfallColumns = useCallback(
+    (columns: number) => {
+      const next = clampShowWaterfallColumns(columns, waterfallDensity);
+      if (!waterfallDensityConfirmedRef.current && next > waterfallDensity.warningColumns + 0.001) {
+        setPendingWaterfallDensity((pending) => pending ?? next / waterfallDensity.galleryColumns);
+        setWaterfallColumns(waterfallDensity.warningColumns);
+        return waterfallDensity.warningColumns;
+      }
+      setWaterfallColumns(next);
+      return next;
+    },
+    [waterfallDensity]
+  );
   useEffect(() => {
     const previous = previousWaterfallDensityRef.current;
     previousWaterfallDensityRef.current = waterfallDensity;
     if (previous.galleryColumns === waterfallDensity.galleryColumns) return;
-    setWaterfallColumns((current) => remapWaterfallColumns(
-      current,
-      previous,
-      waterfallDensity
-    ));
+    setWaterfallColumns((current) => remapWaterfallColumns(current, previous, waterfallDensity));
   }, [waterfallDensity]);
 
   const getShowModeHref = (nextScene: ShowPixiSceneKind) => {
@@ -259,15 +277,17 @@ export function ShowPage({
     return `?${readableFilterSearch(params)}`;
   };
   const floatSizeDescription = `当前尺寸档位 ${floatSizeIndex + 1}/${showFloatSizeSteps.length}`;
-  const waterfallSizeDescription = `当前约 ${Number.isInteger(waterfallColumns)
-    ? waterfallColumns
-    : waterfallColumns.toFixed(1)} 列`;
-  const smallerDisabled = scene === "waterfall"
-    ? waterfallColumns >= waterfallDensity.maximumColumns - 0.001
-    : floatSizeIndex <= 0;
-  const largerDisabled = scene === "waterfall"
-    ? waterfallColumns <= waterfallDensity.minimumColumns + 0.001
-    : floatSizeIndex >= showFloatSizeSteps.length - 1;
+  const waterfallSizeDescription = `当前约 ${
+    Number.isInteger(waterfallColumns) ? waterfallColumns : waterfallColumns.toFixed(1)
+  } 列`;
+  const smallerDisabled =
+    scene === "waterfall"
+      ? waterfallColumns >= waterfallDensity.maximumColumns - 0.001
+      : floatSizeIndex <= 0;
+  const largerDisabled =
+    scene === "waterfall"
+      ? waterfallColumns <= waterfallDensity.minimumColumns + 0.001
+      : floatSizeIndex >= showFloatSizeSteps.length - 1;
 
   return (
     <main
@@ -275,16 +295,23 @@ export function ShowPage({
       data-show-renderer="pixi"
       data-show-navigation-visible={headerVisible || toolbarVisible}
       data-public-navigation-visible={headerVisible || toolbarVisible}
-      style={{
-        "--gallery-toolbar-height": toolbarHeight
-          ? `${toolbarHeight}px`
-          : undefined
-      } as CSSProperties}
+      style={
+        {
+          "--gallery-toolbar-height": toolbarHeight ? `${toolbarHeight}px` : undefined
+        } as CSSProperties
+      }
     >
       <PublicImageNavigation
         floatingControlsHidden={dialogOpen}
-        mobileTrailingControls={<ShowMobileControls scene={scene} getSceneHref={getShowModeHref}
-          onRunningChange={setRunning} reducedMotion={reducedMotion} running={running && !reducedMotion} />}
+        mobileTrailingControls={
+          <ShowMobileControls
+            scene={scene}
+            getSceneHref={getShowModeHref}
+            onRunningChange={setRunning}
+            reducedMotion={reducedMotion}
+            running={running && !reducedMotion}
+          />
+        }
         embedded={embedded}
         animateEntrance={shouldAnimateNavigation}
         route={browseRoute}
@@ -292,28 +319,51 @@ export function ShowPage({
         filterDialog={filterDialog}
         order={order}
         mode={scene}
-        onOrderChange={(nextOrder) => setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { order: nextOrder }))}
-        viewControls={<><ShowToolbarControls scene={scene} getSceneHref={getShowModeHref} />
-          <ShowPlaybackButton onRunningChange={setRunning} reducedMotion={reducedMotion} running={running && !reducedMotion} />
-        </>}
-        leadingControls={<ShowSizeControls
-          sizeControlRef={sizeControlRef}
-          largerDisabled={largerDisabled}
-          smallerDisabled={smallerDisabled}
-          sizeDescription={scene === "waterfall" ? waterfallSizeDescription : floatSizeDescription}
-          onDecreaseSize={() => {
-            if (scene === "float") setFloatSizeIndex((current) => clampShowFloatSizeIndex(current - 1));
-            else requestWaterfallColumns(smallerShowWaterfallImages(waterfallColumns, waterfallDensity));
-          }}
-          onIncreaseSize={() => {
-            if (scene === "float") setFloatSizeIndex((current) => clampShowFloatSizeIndex(current + 1));
-            else requestWaterfallColumns(largerShowWaterfallImages(waterfallColumns, waterfallDensity));
-          }}
-          onReset={() => {
-            if (scene === "waterfall") setWaterfallColumns(waterfallDensity.defaultColumns);
-            else setFloatSizeIndex(defaultShowFloatSizeIndex);
-          }}
-        />}
+        onOrderChange={(nextOrder) =>
+          setRouteSearchParams((current) =>
+            updateImageBrowseSearchParams(current, { order: nextOrder })
+          )
+        }
+        viewControls={
+          <>
+            <ShowToolbarControls scene={scene} getSceneHref={getShowModeHref} />
+            <ShowPlaybackButton
+              onRunningChange={setRunning}
+              reducedMotion={reducedMotion}
+              running={running && !reducedMotion}
+            />
+          </>
+        }
+        leadingControls={
+          <ShowSizeControls
+            sizeControlRef={sizeControlRef}
+            largerDisabled={largerDisabled}
+            smallerDisabled={smallerDisabled}
+            sizeDescription={
+              scene === "waterfall" ? waterfallSizeDescription : floatSizeDescription
+            }
+            onDecreaseSize={() => {
+              if (scene === "float")
+                setFloatSizeIndex((current) => clampShowFloatSizeIndex(current - 1));
+              else
+                requestWaterfallColumns(
+                  smallerShowWaterfallImages(waterfallColumns, waterfallDensity)
+                );
+            }}
+            onIncreaseSize={() => {
+              if (scene === "float")
+                setFloatSizeIndex((current) => clampShowFloatSizeIndex(current + 1));
+              else
+                requestWaterfallColumns(
+                  largerShowWaterfallImages(waterfallColumns, waterfallDensity)
+                );
+            }}
+            onReset={() => {
+              if (scene === "waterfall") setWaterfallColumns(waterfallDensity.defaultColumns);
+              else setFloatSizeIndex(defaultShowFloatSizeIndex);
+            }}
+          />
+        }
       />
       <ShowPixiStage
         dataKey={data.committedKey}
@@ -345,14 +395,16 @@ export function ShowPage({
               : "上下拖动或滚轮纵移；Ctrl + 滚轮调整尺寸"}
           </span>
           <span className="show-interaction-hint-touch">
-            {scene === "waterfall"
-              ? "拖动平移；点按 ± 或双指缩放"
-              : "上下拖动；点按 ± 调整尺寸"}
+            {scene === "waterfall" ? "拖动平移；点按 ± 或双指缩放" : "上下拖动；点按 ± 调整尺寸"}
           </span>
         </p>
         {Boolean(filterError) && (
           <div className="show-query-state">
-            <PublicFilterErrorState error={filterError} onClear={(field) => updateFilter(field, "")} onRetry={browseRoute.retryVocabulary} />
+            <PublicFilterErrorState
+              error={filterError}
+              onClear={(field) => updateFilter(field, "")}
+              onRetry={browseRoute.retryVocabulary}
+            />
           </div>
         )}
         {!filterError && (!filtersReady || data.initialLoading) && (
@@ -367,12 +419,21 @@ export function ShowPage({
           <p className="show-empty">暂无图片</p>
         )}
       </ShowPixiStage>
-      {filterDialog.session && <PublicFilterDialog
-        filters={filterDialog.session.filters} unresolvedTags={filterDialog.session.unresolvedTags}
-        unresolvedSelectors={filterDialog.session.unresolvedSelectors}
-        facets={browseRoute.facets} facetsLoading={browseRoute.facetsLoading} facetsError={browseRoute.facetsError}
-        retryVocabulary={browseRoute.retryVocabulary} returnFocusRef={filterDialog.triggerRef}
-        onClose={filterDialog.close} onApply={filterDialog.applyAfterClose} view="show" />}
+      {filterDialog.session && (
+        <PublicFilterDialog
+          filters={filterDialog.session.filters}
+          unresolvedTags={filterDialog.session.unresolvedTags}
+          unresolvedSelectors={filterDialog.session.unresolvedSelectors}
+          facets={browseRoute.facets}
+          facetsLoading={browseRoute.facetsLoading}
+          facetsError={browseRoute.facetsError}
+          retryVocabulary={browseRoute.retryVocabulary}
+          returnFocusRef={filterDialog.triggerRef}
+          onClose={filterDialog.close}
+          onApply={filterDialog.applyAfterClose}
+          view="show"
+        />
+      )}
       {pendingWaterfallDensity !== null && (
         <DialogFrame
           className="modal show-density-dialog"
@@ -386,20 +447,32 @@ export function ShowPage({
             <article>
               <h2 id="show-density-warning-title">性能提示</h2>
               <p id="show-density-warning-description">
-                增加同屏图片数量对设备性能要求较高，<br />
-                在部分设备上可能会出现<strong>卡顿、掉帧</strong>现象。<br />
-                请<strong>谨慎考虑</strong>后决定是否继续。
+                增加同屏图片数量对设备性能要求较高，
+                <br />
+                在部分设备上可能会出现<strong>卡顿、掉帧</strong>现象。
+                <br />请<strong>谨慎考虑</strong>后决定是否继续。
               </p>
               <footer>
-                <button ref={densityCancelButtonRef} type="button" onClick={() => requestClose()}>取消</button>
-                <button type="button" onClick={() => requestClose(() => {
-                  waterfallDensityConfirmedRef.current = true;
-                  setWaterfallColumns(clampShowWaterfallColumns(
-                    pendingWaterfallDensity * waterfallDensity.galleryColumns,
-                    waterfallDensity
-                  ));
-                  setPendingWaterfallDensity(null);
-                })}>继续</button>
+                <button ref={densityCancelButtonRef} type="button" onClick={() => requestClose()}>
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    requestClose(() => {
+                      waterfallDensityConfirmedRef.current = true;
+                      setWaterfallColumns(
+                        clampShowWaterfallColumns(
+                          pendingWaterfallDensity * waterfallDensity.galleryColumns,
+                          waterfallDensity
+                        )
+                      );
+                      setPendingWaterfallDensity(null);
+                    })
+                  }
+                >
+                  继续
+                </button>
               </footer>
             </article>
           )}

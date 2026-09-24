@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export function useTwoStepConfirmation<T extends HTMLElement = HTMLElement>(input: Readonly<{
-  disabled?: boolean;
-  busy?: boolean;
-  invalidationKey?: string;
-  onDisarm?: () => void;
-}>) {
+export function useTwoStepConfirmation<T extends HTMLElement = HTMLElement>(
+  input: Readonly<{
+    disabled?: boolean;
+    busy?: boolean;
+    invalidationKey?: string;
+    onDisarm?: () => void;
+  }>
+) {
   const targetRef = useRef<T | null>(null);
   const [armed, setArmed] = useState(false);
   const armedRef = useRef(false);

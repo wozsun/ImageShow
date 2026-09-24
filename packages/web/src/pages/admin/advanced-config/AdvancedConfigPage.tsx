@@ -97,13 +97,10 @@ export function AdvancedConfigPage() {
     if (selectedPackage === null || busy) return false;
     setBusy("import");
     try {
-      await api(
-        `${adminApiBasePath}/advanced-config/import`,
-        {
-          method: "POST",
-          body: JSON.stringify({ package: selectedPackage, slug_mappings: slugMappings })
-        }
-      );
+      await api(`${adminApiBasePath}/advanced-config/import`, {
+        method: "POST",
+        body: JSON.stringify({ package: selectedPackage, slug_mappings: slugMappings })
+      });
       await invalidateRuntimeData(client);
       setRuntimeConfigReloadToken((current) => current + 1);
       return true;
@@ -146,7 +143,8 @@ export function AdvancedConfigPage() {
               disabled={Boolean(busy)}
               onClick={() => setExportConfirmation(true)}
             >
-              <AdminIcon name="download-cloud-2-line" />导出配置包
+              <AdminIcon name="download-cloud-2-line" />
+              导出配置包
             </button>
           </>
         }

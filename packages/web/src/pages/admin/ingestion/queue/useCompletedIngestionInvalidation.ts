@@ -3,9 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
 import { invalidateImageDataAfterIngestion } from "../../../../lib/api/query-invalidation.js";
 import { invalidateIngestionDuplicateDetails } from "./useIngestionDuplicateDetails.js";
-import {
-  type CompletedIngestionObservation
-} from "./ingestion-queue-contract.js";
+import { type CompletedIngestionObservation } from "./ingestion-queue-contract.js";
 import { serverIngestionPairKey } from "./model/server-ingestion-job.js";
 
 /**
@@ -16,9 +14,7 @@ import { serverIngestionPairKey } from "./model/server-ingestion-job.js";
 export function useCompletedIngestionInvalidation() {
   const queryClient = useQueryClient();
   const observedPairsRef = useRef(new Set<string>());
-  const pendingItemsRef = useRef(
-    new Map<string, CompletedIngestionObservation>()
-  );
+  const pendingItemsRef = useRef(new Map<string, CompletedIngestionObservation>());
   const activeInvalidationRef = useRef<Promise<void> | null>(null);
   const invalidationRequestedRef = useRef(false);
   const invalidationScheduledRef = useRef(false);
@@ -37,9 +33,7 @@ export function useCompletedIngestionInvalidation() {
         const pending = [...pendingItemsRef.current.entries()];
         if (!pending.length) continue;
         const completedTimes = pending.map(([, entry]) => entry.completedAt);
-        const completedAt = completedTimes.every(
-          (value): value is number => value !== undefined
-        )
+        const completedAt = completedTimes.every((value): value is number => value !== undefined)
           ? Math.max(...completedTimes)
           : undefined;
         await invalidateImageDataAfterIngestion(
@@ -58,10 +52,7 @@ export function useCompletedIngestionInvalidation() {
       if (activeInvalidationRef.current === promise) {
         activeInvalidationRef.current = null;
       }
-      if (
-        invalidationRequestedRef.current
-        && pendingItemsRef.current.size
-      ) {
+      if (invalidationRequestedRef.current && pendingItemsRef.current.size) {
         void flush().catch(() => undefined);
       }
     });
@@ -79,31 +70,34 @@ export function useCompletedIngestionInvalidation() {
     });
   }, [flush]);
 
-  const observe = useCallback((
-    entries: readonly CompletedIngestionObservation[]
-  ) => {
-    const items: CompletedIngestionImageDto[] = [];
-    for (const entry of entries) {
-      const pairKey = serverIngestionPairKey(entry.pair);
-      if (observedPairsRef.current.has(pairKey)) continue;
-      observedPairsRef.current.add(pairKey);
-      pendingItemsRef.current.set(pairKey, entry);
-      items.push(entry.item);
-    }
-    if (!items.length) return;
-    for (const md5 of new Set(items.map((item) => item.md5))) {
-      invalidateIngestionDuplicateDetails(md5);
-    }
-    schedule();
-  }, [schedule]);
+  const observe = useCallback(
+    (entries: readonly CompletedIngestionObservation[]) => {
+      const items: CompletedIngestionImageDto[] = [];
+      for (const entry of entries) {
+        const pairKey = serverIngestionPairKey(entry.pair);
+        if (observedPairsRef.current.has(pairKey)) continue;
+        observedPairsRef.current.add(pairKey);
+        pendingItemsRef.current.set(pairKey, entry);
+        items.push(entry.item);
+      }
+      if (!items.length) return;
+      for (const md5 of new Set(items.map((item) => item.md5))) {
+        invalidateIngestionDuplicateDetails(md5);
+      }
+      schedule();
+    },
+    [schedule]
+  );
 
   const setQueueIdle = useCallback((idle: boolean) => {
     queueIdleRef.current = idle;
   }, []);
   const isQueueIdle = useCallback(() => queueIdleRef.current, []);
-  const hasObserved = useCallback((
-    pair: Parameters<typeof serverIngestionPairKey>[0]
-  ) => observedPairsRef.current.has(serverIngestionPairKey(pair)), []);
+  const hasObserved = useCallback(
+    (pair: Parameters<typeof serverIngestionPairKey>[0]) =>
+      observedPairsRef.current.has(serverIngestionPairKey(pair)),
+    []
+  );
 
   return {
     flush,

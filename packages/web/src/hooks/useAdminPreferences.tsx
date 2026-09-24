@@ -59,9 +59,10 @@ type PreferenceSyncScope = {
   storageRevision: number;
 };
 
-type AdminPreferencesQuerySnapshot = AdminPreferencesResponseDto & Readonly<{
-  etag: string;
-}>;
+type AdminPreferencesQuerySnapshot = AdminPreferencesResponseDto &
+  Readonly<{
+    etag: string;
+  }>;
 
 const AdminPreferenceContext = createContext<AdminPreferenceContextValue | null>(null);
 
@@ -81,8 +82,10 @@ function preferenceCount(preferences: AdminPreferences) {
 }
 
 function sameCache(left: CachedAdminPreferences, right: CachedAdminPreferences) {
-  return sameAdminPreferences(left.values, right.values)
-    && sameAdminPreferences(left.pending, right.pending);
+  return (
+    sameAdminPreferences(left.values, right.values) &&
+    sameAdminPreferences(left.pending, right.pending)
+  );
 }
 
 function emptyCache(): CachedAdminPreferences {
@@ -92,10 +95,7 @@ function emptyCache(): CachedAdminPreferences {
 function writeCachedPreferences(username: string, cache: CachedAdminPreferences) {
   if (typeof window === "undefined") return false;
   try {
-    window.localStorage.setItem(
-      localPreferenceKey(username),
-      JSON.stringify(cache)
-    );
+    window.localStorage.setItem(localPreferenceKey(username), JSON.stringify(cache));
     return true;
   } catch {
     // 浏览器禁用 localStorage 时仍保留内存状态，并继续尝试 PostgreSQL 同步。
@@ -137,23 +137,14 @@ export function AdminPreferencesProvider({
   serverPreferencesUpdatedAt: number;
 }>) {
   const queryClient = useQueryClient();
-  const {
-    cancelPendingAuthRead,
-    updateAuthPreferenceSnapshot
-  } = useAuthPreferenceCacheBridge();
-  const queryKey = useMemo(
-    () => [...queryKeys.adminPreferences, username] as const,
-    [username]
-  );
+  const { cancelPendingAuthRead, updateAuthPreferenceSnapshot } = useAuthPreferenceCacheBridge();
+  const queryKey = useMemo(() => [...queryKeys.adminPreferences, username] as const, [username]);
   const initialServerPreferences = useMemo(
     () => normalizeAdminPreferences(serverPreferences),
     [serverPreferences]
   );
-  const [cache, setCache] = useState<CachedAdminPreferences>(
-    () => reconcileAdminPreferenceCache(
-      readCachedPreferences(username),
-      initialServerPreferences
-    )
+  const [cache, setCache] = useState<CachedAdminPreferences>(() =>
+    reconcileAdminPreferenceCache(readCachedPreferences(username), initialServerPreferences)
   );
   const cacheRef = useRef(cache);
   const syncScopeRef = useRef<PreferenceSyncScope | null>(null);
@@ -183,10 +174,8 @@ export function AdminPreferencesProvider({
 
   useLayoutEffect(() => {
     const cachedUpdatedAt = queryClient.getQueryState(queryKey)?.dataUpdatedAt;
-    if (!shouldReplaceAdminPreferenceQuerySnapshot(
-      cachedUpdatedAt,
-      serverPreferencesUpdatedAt
-    )) return;
+    if (!shouldReplaceAdminPreferenceQuerySnapshot(cachedUpdatedAt, serverPreferencesUpdatedAt))
+      return;
     queryClient.setQueryData<AdminPreferencesQuerySnapshot>(
       queryKey,
       {
@@ -203,148 +192,154 @@ export function AdminPreferencesProvider({
     serverPreferencesUpdatedAt
   ]);
 
-  const commitCache = useCallback((next: CachedAdminPreferences) => {
-    if (sameCache(cacheRef.current, next)) return;
-    cacheRef.current = next;
-    writeCachedPreferences(username, next);
-    setCache(next);
-  }, [username]);
+  const commitCache = useCallback(
+    (next: CachedAdminPreferences) => {
+      if (sameCache(cacheRef.current, next)) return;
+      cacheRef.current = next;
+      writeCachedPreferences(username, next);
+      setCache(next);
+    },
+    [username]
+  );
 
-  const syncAuthPreferenceSnapshot = useCallback((
-    preferences: AdminPreferences,
-    etag: string
-  ) => {
-    if (syncScopeRef.current?.username !== username) return;
-    updateAuthPreferenceSnapshot(username, preferences, etag);
-  }, [updateAuthPreferenceSnapshot, username]);
+  const syncAuthPreferenceSnapshot = useCallback(
+    (preferences: AdminPreferences, etag: string) => {
+      if (syncScopeRef.current?.username !== username) return;
+      updateAuthPreferenceSnapshot(username, preferences, etag);
+    },
+    [updateAuthPreferenceSnapshot, username]
+  );
 
   const cancelPreferenceReads = useCallback(
-    () => Promise.all([
-      queryClient.cancelQueries(
-        { queryKey, exact: true },
-        { silent: true }
-      ),
-      cancelPendingAuthRead()
-    ]).then(() => undefined),
+    () =>
+      Promise.all([
+        queryClient.cancelQueries({ queryKey, exact: true }, { silent: true }),
+        cancelPendingAuthRead()
+      ]).then(() => undefined),
     [cancelPendingAuthRead, queryClient, queryKey]
   );
 
-  const enqueueSync = useCallback((requestedPatch: AdminPreferences) => {
-    const scope = syncScopeRef.current;
-    if (!scope || scope.username !== username) return;
-    const { signal } = scope.controller;
-    const patch: AdminPreferences = {};
-    const ticketVersions: Partial<Record<AdminPreferenceKey, number>> = {};
+  const enqueueSync = useCallback(
+    (requestedPatch: AdminPreferences) => {
+      const scope = syncScopeRef.current;
+      if (!scope || scope.username !== username) return;
+      const { signal } = scope.controller;
+      const patch: AdminPreferences = {};
+      const ticketVersions: Partial<Record<AdminPreferenceKey, number>> = {};
 
-    for (const key of adminPreferenceKeys) {
-      const value = requestedPatch[key];
-      if (value === undefined || scope.queued[key]?.value === value) continue;
-      const version = ++scope.version;
-      assignAdminPreference(patch, key, value);
-      ticketVersions[key] = version;
-      scope.queued[key] = { value, version };
-    }
-    if (!preferenceCount(patch)) return;
-
-    scope.queue = scope.queue.then(async () => {
-      let storageRevision = scope.storageRevision;
-      const currentPatch: AdminPreferences = {};
-      try {
-        /*
-         * A focus/reconnect GET may have captured the previous PostgreSQL value.
-         * Cancel once before the PATCH and once after its acknowledgement so no
-         * stale read can publish after pending is cleared.
-         */
-        const result = await runAdminPreferenceWriteWithReadFence(
-          () => {
-            signal.throwIfAborted();
-            return cancelPreferenceReads();
-          },
-          async () => {
-            // The account may have changed while reads were being cancelled.
-            // Each activation owns its queue, including a Strict Mode remount.
-            signal.throwIfAborted();
-            for (const key of adminPreferenceKeys) {
-              const value = patch[key];
-              if (value !== undefined
-                && scope.queued[key]?.version === ticketVersions[key]
-                && cacheRef.current.pending[key] === value) {
-                assignAdminPreference(currentPatch, key, value);
-              }
-            }
-            if (!preferenceCount(currentPatch)) return null;
-            storageRevision = scope.storageRevision;
-            return apiWithEtag<AdminPreferencesResponseDto>(
-              `${adminApiBasePath}/preferences`,
-              { method: "PATCH", body: JSON.stringify(currentPatch), signal }
-            );
-          }
-        );
-        signal.throwIfAborted();
-        if (!result) return;
-        const response = result.data;
-        const acknowledged = normalizeAdminPreferences(response.preferences);
-        const changedElsewhere = storageRevision !== scope.storageRevision;
-        const current = cacheRef.current;
-        const values = { ...current.values };
-        const pending = { ...current.pending };
-
-        for (const key of adminPreferenceKeys) {
-          const sentValue = currentPatch[key];
-          const isLatestRequest = scope.queued[key]?.version === ticketVersions[key];
-          if (isLatestRequest && sentValue !== undefined && current.pending[key] === sentValue) {
-            delete pending[key];
-            if (!changedElsewhere) {
-              assignAdminPreference(values, key, acknowledged[key] ?? sentValue);
-            }
-            continue;
-          }
-
-          // PATCH 返回 PostgreSQL 中当前完整投影。未被本地更新占用的其他键也在此
-          // 对齐服务端，但不能覆盖同一页面稍后排队或仍待同步的值。
-          if (changedElsewhere || current.pending[key] !== undefined || scope.queued[key]) continue;
-          const acknowledgedValue = acknowledged[key];
-          if (acknowledgedValue === undefined) delete values[key];
-          else assignAdminPreference(values, key, acknowledgedValue);
-        }
-        commitCache({ values, pending });
-
-        if (changedElsewhere) {
-          // A different document published while this write was in flight.
-          // The acknowledgement proves the write, not the latest database state.
-          await queryClient.invalidateQueries({ queryKey, exact: true });
-          return;
-        }
-        queryClient.setQueryData<AdminPreferencesQuerySnapshot>(queryKey, {
-          preferences: acknowledged,
-          etag: result.etag
-        });
-        syncAuthPreferenceSnapshot(acknowledged, result.etag);
-      } catch {
-        // PostgreSQL 或网络暂时不可用时保留 pending；网络恢复或下次登录会再次补同步。
-      } finally {
-        for (const key of adminPreferenceKeys) {
-          if (scope.queued[key]?.version === ticketVersions[key]) {
-            delete scope.queued[key];
-          }
-        }
+      for (const key of adminPreferenceKeys) {
+        const value = requestedPatch[key];
+        if (value === undefined || scope.queued[key]?.value === value) continue;
+        const version = ++scope.version;
+        assignAdminPreference(patch, key, value);
+        ticketVersions[key] = version;
+        scope.queued[key] = { value, version };
       }
-    });
-  }, [
-    cancelPreferenceReads,
-    commitCache,
-    queryClient,
-    queryKey,
-    syncAuthPreferenceSnapshot,
-    username
-  ]);
+      if (!preferenceCount(patch)) return;
+
+      scope.queue = scope.queue.then(async () => {
+        let storageRevision = scope.storageRevision;
+        const currentPatch: AdminPreferences = {};
+        try {
+          /*
+           * A focus/reconnect GET may have captured the previous PostgreSQL value.
+           * Cancel once before the PATCH and once after its acknowledgement so no
+           * stale read can publish after pending is cleared.
+           */
+          const result = await runAdminPreferenceWriteWithReadFence(
+            () => {
+              signal.throwIfAborted();
+              return cancelPreferenceReads();
+            },
+            async () => {
+              // The account may have changed while reads were being cancelled.
+              // Each activation owns its queue, including a Strict Mode remount.
+              signal.throwIfAborted();
+              for (const key of adminPreferenceKeys) {
+                const value = patch[key];
+                if (
+                  value !== undefined &&
+                  scope.queued[key]?.version === ticketVersions[key] &&
+                  cacheRef.current.pending[key] === value
+                ) {
+                  assignAdminPreference(currentPatch, key, value);
+                }
+              }
+              if (!preferenceCount(currentPatch)) return null;
+              storageRevision = scope.storageRevision;
+              return apiWithEtag<AdminPreferencesResponseDto>(`${adminApiBasePath}/preferences`, {
+                method: "PATCH",
+                body: JSON.stringify(currentPatch),
+                signal
+              });
+            }
+          );
+          signal.throwIfAborted();
+          if (!result) return;
+          const response = result.data;
+          const acknowledged = normalizeAdminPreferences(response.preferences);
+          const changedElsewhere = storageRevision !== scope.storageRevision;
+          const current = cacheRef.current;
+          const values = { ...current.values };
+          const pending = { ...current.pending };
+
+          for (const key of adminPreferenceKeys) {
+            const sentValue = currentPatch[key];
+            const isLatestRequest = scope.queued[key]?.version === ticketVersions[key];
+            if (isLatestRequest && sentValue !== undefined && current.pending[key] === sentValue) {
+              delete pending[key];
+              if (!changedElsewhere) {
+                assignAdminPreference(values, key, acknowledged[key] ?? sentValue);
+              }
+              continue;
+            }
+
+            // PATCH 返回 PostgreSQL 中当前完整投影。未被本地更新占用的其他键也在此
+            // 对齐服务端，但不能覆盖同一页面稍后排队或仍待同步的值。
+            if (changedElsewhere || current.pending[key] !== undefined || scope.queued[key])
+              continue;
+            const acknowledgedValue = acknowledged[key];
+            if (acknowledgedValue === undefined) delete values[key];
+            else assignAdminPreference(values, key, acknowledgedValue);
+          }
+          commitCache({ values, pending });
+
+          if (changedElsewhere) {
+            // A different document published while this write was in flight.
+            // The acknowledgement proves the write, not the latest database state.
+            await queryClient.invalidateQueries({ queryKey, exact: true });
+            return;
+          }
+          queryClient.setQueryData<AdminPreferencesQuerySnapshot>(queryKey, {
+            preferences: acknowledged,
+            etag: result.etag
+          });
+          syncAuthPreferenceSnapshot(acknowledged, result.etag);
+        } catch {
+          // PostgreSQL 或网络暂时不可用时保留 pending；网络恢复或下次登录会再次补同步。
+        } finally {
+          for (const key of adminPreferenceKeys) {
+            if (scope.queued[key]?.version === ticketVersions[key]) {
+              delete scope.queued[key];
+            }
+          }
+        }
+      });
+    },
+    [
+      cancelPreferenceReads,
+      commitCache,
+      queryClient,
+      queryKey,
+      syncAuthPreferenceSnapshot,
+      username
+    ]
+  );
 
   const preferenceQuery = useQuery<AdminPreferencesQuerySnapshot>({
     queryKey,
     queryFn: async ({ signal }) => {
-      const current = queryClient.getQueryData<AdminPreferencesQuerySnapshot>(
-        queryKey
-      ) ?? {
+      const current = queryClient.getQueryData<AdminPreferencesQuerySnapshot>(queryKey) ?? {
         preferences: initialServerPreferences,
         etag: serverPreferencesEtag
       };
@@ -433,22 +428,28 @@ export function AdminPreferencesProvider({
     };
   }, [enqueueSync]);
 
-  const setPreference = useCallback<SetAdminPreference>((key, value) => {
-    const current = cacheRef.current;
-    const values = { ...current.values };
-    const pending = { ...current.pending };
-    const patch: AdminPreferences = {};
-    assignAdminPreference(values, key, value);
-    assignAdminPreference(pending, key, value);
-    assignAdminPreference(patch, key, value);
-    commitCache({ values, pending });
-    enqueueSync(patch);
-  }, [commitCache, enqueueSync]);
+  const setPreference = useCallback<SetAdminPreference>(
+    (key, value) => {
+      const current = cacheRef.current;
+      const values = { ...current.values };
+      const pending = { ...current.pending };
+      const patch: AdminPreferences = {};
+      assignAdminPreference(values, key, value);
+      assignAdminPreference(pending, key, value);
+      assignAdminPreference(patch, key, value);
+      commitCache({ values, pending });
+      enqueueSync(patch);
+    },
+    [commitCache, enqueueSync]
+  );
 
-  const contextValue = useMemo<AdminPreferenceContextValue>(() => ({
-    values: cache.values,
-    setPreference
-  }), [cache.values, setPreference]);
+  const contextValue = useMemo<AdminPreferenceContextValue>(
+    () => ({
+      values: cache.values,
+      setPreference
+    }),
+    [cache.values, setPreference]
+  );
 
   return (
     <AdminPreferenceContext.Provider value={contextValue}>

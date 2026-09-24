@@ -4,18 +4,18 @@ import { removeDriverObject } from "./storage-fixture.mts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
-const databasePools = runtime.databasePools;
-const database = {
-  ...databasePools,
-  ...await import("../../../../packages/server/src/core/database/advisory-locks.ts")
-};
-const locks = await import("../../../../packages/server/src/storage/maintenance-lock.ts");
-const cleanup = await import("../../../../packages/server/src/storage/cleanup/service.ts");
-const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
-const objectAccess = await import("../../../../packages/server/src/storage/objects/access.ts");
+  const databasePools = runtime.databasePools;
+  const database = {
+    ...databasePools,
+    ...(await import("../../../../packages/server/src/core/database/advisory-locks.ts"))
+  };
+  const locks = await import("../../../../packages/server/src/storage/maintenance-lock.ts");
+  const cleanup = await import("../../../../packages/server/src/storage/cleanup/service.ts");
+  const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
+  const objectAccess = await import("../../../../packages/server/src/storage/objects/access.ts");
   const detachedImage = randomUUID();
   const controller = new AbortController();
-  await database.runWithAdvisoryLockAcquisitionSignal(controller.signal, () => (
+  await database.runWithAdvisoryLockAcquisitionSignal(controller.signal, () =>
     locks.withStorageLocationReadLock(async (lockSignal) => {
       const captured = await cleanup.captureMoveCleanupObjects([
         {
@@ -25,36 +25,33 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
         }
       ]);
       controller.abort(new Error("injected parent abort"));
-      assert.equal(
-        lockSignal.aborted,
-        false,
-        "调度取消不得污染已取得 advisory lock 的连接信号"
-      );
+      assert.equal(lockSignal.aborted, false, "调度取消不得污染已取得 advisory lock 的连接信号");
       await cleanup.enqueueCapturedObjectsForCleanupWithoutLocationLock(
         detachedImage,
         captured,
         "fault_injected_after_publish"
       );
     })
-  ));
+  );
   const receipt = await database.pool.query(
     "SELECT payload FROM background_job WHERE type='move.cleanup' AND target_id=$1",
     [detachedImage]
   );
   assert.equal(receipt.rowCount, 1);
-  assert.equal(
-    typeof receipt.rows[0]?.payload?.objects?.[0]?.namespace_identity,
-    "string"
-  );
+  assert.equal(typeof receipt.rows[0]?.payload?.objects?.[0]?.namespace_identity, "string");
 
   const lockLossReason = new Error("injected advisory connection loss");
   await assert.rejects(
-    () => locks.withStorageLocationReadLock(async (lockSignal, lockClient) => {
-      lockClient.emit("error", lockLossReason);
-      lockSignal.throwIfAborted();
-    }),
-    (error: unknown) => error instanceof Error && "code" in error
-      && error.code === "advisory_lock_lost" && error.cause === lockLossReason
+    () =>
+      locks.withStorageLocationReadLock(async (lockSignal, lockClient) => {
+        lockClient.emit("error", lockLossReason);
+        lockSignal.throwIfAborted();
+      }),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "advisory_lock_lost" &&
+      error.cause === lockLossReason
   );
 
   const local = await registry.getStorageBackend("local");
@@ -75,9 +72,7 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
     Buffer.from("queued-cleanup-admission"),
     "image/webp"
   );
-  const originalAdmissionRemove = localAccess.driver.removeObjects.bind(
-    localAccess.driver
-  );
+  const originalAdmissionRemove = localAccess.driver.removeObjects.bind(localAccess.driver);
   let releaseAdmittedRemoval!: () => void;
   const admittedRemovalReleased = new Promise<void>((resolve) => {
     releaseAdmittedRemoval = resolve;
@@ -102,27 +97,39 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
   let activeRemovalOutcome;
   let queuedRemovalOutcome;
   try {
-    const activeRemoval = objectAccess.removeStorageObjectsAndConfirm([
-      {
-        prefix: "full",
-        key: admittedRemovalKey,
-        storageSlug: "local"
-      }
-    ], {}, new AbortController().signal).then(
-      (value) => ({ status: "fulfilled" as const, value }),
-      (reason: unknown) => ({ status: "rejected" as const, reason })
-    );
+    const activeRemoval = objectAccess
+      .removeStorageObjectsAndConfirm(
+        [
+          {
+            prefix: "full",
+            key: admittedRemovalKey,
+            storageSlug: "local"
+          }
+        ],
+        {},
+        new AbortController().signal
+      )
+      .then(
+        (value) => ({ status: "fulfilled" as const, value }),
+        (reason: unknown) => ({ status: "rejected" as const, reason })
+      );
     await admittedRemovalStarted;
-    const queuedRemoval = objectAccess.removeStorageObjectsAndConfirm([
-      {
-        prefix: "full",
-        key: queuedRemovalKey,
-        storageSlug: "local"
-      }
-    ], {}, queuedAdmission.signal).then(
-      (value) => ({ status: "fulfilled" as const, value }),
-      (reason: unknown) => ({ status: "rejected" as const, reason })
-    );
+    const queuedRemoval = objectAccess
+      .removeStorageObjectsAndConfirm(
+        [
+          {
+            prefix: "full",
+            key: queuedRemovalKey,
+            storageSlug: "local"
+          }
+        ],
+        {},
+        queuedAdmission.signal
+      )
+      .then(
+        (value) => ({ status: "fulfilled" as const, value }),
+        (reason: unknown) => ({ status: "rejected" as const, reason })
+      );
     await new Promise((resolve) => setTimeout(resolve, 10));
     queuedAdmission.abort(queuedAdmissionReason);
     releaseAdmittedRemoval();
@@ -138,15 +145,11 @@ const objectAccess = await import("../../../../packages/server/src/storage/objec
   assert.equal(queuedRemovalOutcome.status, "rejected");
   assert.equal(queuedRemovalOutcome.reason, queuedAdmissionReason);
   assert.equal(queuedRemovalStarted, false);
-  assert.equal(
-    await localAccess.driver.exists("full", admittedRemovalKey),
-    false
-  );
+  assert.equal(await localAccess.driver.exists("full", admittedRemovalKey), false);
   assert.equal(
     await localAccess.driver.exists("full", queuedRemovalKey),
     true,
     "取消的中央准入等待不得启动后续 driver 删除"
   );
   await removeDriverObject(localAccess.driver, "full", queuedRemovalKey);
-
 });

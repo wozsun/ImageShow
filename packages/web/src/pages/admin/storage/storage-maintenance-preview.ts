@@ -1,14 +1,12 @@
 type StorageIssue = Record<string, unknown>;
 
-function issueList(
-  result: Record<string, unknown>,
-  key: string
-): StorageIssue[] {
+function issueList(result: Record<string, unknown>, key: string): StorageIssue[] {
   const value = result[key];
   return Array.isArray(value)
-    ? value.filter((item): item is StorageIssue => (
-        Boolean(item) && typeof item === "object" && !Array.isArray(item)
-      ))
+    ? value.filter(
+        (item): item is StorageIssue =>
+          Boolean(item) && typeof item === "object" && !Array.isArray(item)
+      )
     : [];
 }
 
@@ -43,15 +41,10 @@ export function storageMaintenancePreview(result: unknown) {
   const missingObjects = issueList(storage, "missing_objects");
   const missingObjectIds = new Set(missingObjects.map(issueId).filter(Boolean));
   const missingThumbs = issueList(storage, "missing_thumbs");
-  const repairCandidates = [
-    ...missingThumbs,
-    ...issueList(storage, "pending_thumbnail_repairs")
-  ];
+  const repairCandidates = [...missingThumbs, ...issueList(storage, "pending_thumbnail_repairs")];
   const incompleteListings = issueList(storage, "incomplete_listings");
   const unavailableBackends = issueList(storage, "unavailable_backends");
-  const blockedNamespaces = new Set(
-    incompleteListings.map(issueNamespace).filter(Boolean)
-  );
+  const blockedNamespaces = new Set(incompleteListings.map(issueNamespace).filter(Boolean));
   for (const issue of unavailableBackends) {
     if (issue.blocks_maintenance === true) {
       const namespace = issueNamespace(issue);
@@ -64,30 +57,26 @@ export function storageMaintenancePreview(result: unknown) {
       .map((issue) => issueText(issue, "backend"))
       .filter(Boolean)
   );
-  const groupBlocked = (issue: StorageIssue) => (
-    blockedNamespaces.has(issueNamespace(issue))
-  );
-  const repairBlocked = (issue: StorageIssue) => (
-    groupBlocked(issue) || unavailableSlugs.has(issueText(issue, "backend"))
-  );
-  const repairableThumbnails = repairCandidates.filter((issue) => (
-    !missingObjectIds.has(issueId(issue))
-    && !repairBlocked(issue)
-  )).length;
+  const groupBlocked = (issue: StorageIssue) => blockedNamespaces.has(issueNamespace(issue));
+  const repairBlocked = (issue: StorageIssue) =>
+    groupBlocked(issue) || unavailableSlugs.has(issueText(issue, "backend"));
+  const repairableThumbnails = repairCandidates.filter(
+    (issue) => !missingObjectIds.has(issueId(issue)) && !repairBlocked(issue)
+  ).length;
   const orphanIssues = [
     ...issueList(storage, "orphan_objects"),
     ...issueList(storage, "orphan_thumbs")
   ];
   const removableObjects = orphanIssues.filter((issue) => !groupBlocked(issue)).length;
-  const blockedItems = [
-    ...missingObjects,
-    ...repairCandidates,
-    ...orphanIssues
-  ].filter((issue) => groupBlocked(issue)).length + repairCandidates.filter((issue) => (
-    !missingObjectIds.has(issueId(issue))
-    && !groupBlocked(issue)
-    && unavailableSlugs.has(issueText(issue, "backend"))
-  )).length;
+  const blockedItems =
+    [...missingObjects, ...repairCandidates, ...orphanIssues].filter((issue) => groupBlocked(issue))
+      .length +
+    repairCandidates.filter(
+      (issue) =>
+        !missingObjectIds.has(issueId(issue)) &&
+        !groupBlocked(issue) &&
+        unavailableSlugs.has(issueText(issue, "backend"))
+    ).length;
 
   return {
     repairable_thumbnails: repairableThumbnails,
@@ -96,9 +85,6 @@ export function storageMaintenancePreview(result: unknown) {
     blocked_namespaces: blockedNamespaces.size,
     unavailable_logical_backends: unavailableSlugs.size,
     blocked_items: blockedItems,
-    preview_items:
-      repairableThumbnails
-      + missingObjects.length
-      + removableObjects
+    preview_items: repairableThumbnails + missingObjects.length + removableObjects
   };
 }

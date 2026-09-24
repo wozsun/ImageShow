@@ -1,49 +1,19 @@
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
-import {
-  spawnSync,
-  type ChildProcess
-} from "node:child_process";
-import {
-  readFile,
-  rm,
-  stat,
-  writeFile
-} from "node:fs/promises";
-import {
-  resolve
-} from "node:path";
-import {
-  setTimeout as delay
-} from "node:timers/promises";
+import { spawnSync, type ChildProcess } from "node:child_process";
+import { readFile, rm, stat, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
-import {
-  pathToFileURL
-} from "node:url";
-import {
-  appConfig
-} from "../../../packages/shared/src/app-config.ts";
-import {
-  withRuntimeConfigWriteLease
-} from "../../../packages/server/src/config/runtime-config-store.ts";
-import {
-  ApiError
-} from "../../../packages/server/src/core/api-error.ts";
-import {
-  raceWithAbortSignal
-} from "../../../packages/server/src/core/abort.ts";
-import {
-  acquireAdvisoryLockClient
-} from "../../../packages/server/src/core/database/advisory-locks.ts";
-import {
-  createPublicDatabaseAdmission
-} from "../../../packages/server/src/core/database/public-admission.ts";
-import {
-  createPublicDatabaseReadScope
-} from "../../../packages/server/src/core/database/public-fallback.ts";
-import {
-  withTransactionOnClient
-} from "../../../packages/server/src/core/database/transactions.ts";
+import { pathToFileURL } from "node:url";
+import { appConfig } from "../../../packages/shared/src/app-config.ts";
+import { withRuntimeConfigWriteLease } from "../../../packages/server/src/config/runtime-config-store.ts";
+import { ApiError } from "../../../packages/server/src/core/api-error.ts";
+import { raceWithAbortSignal } from "../../../packages/server/src/core/abort.ts";
+import { acquireAdvisoryLockClient } from "../../../packages/server/src/core/database/advisory-locks.ts";
+import { createPublicDatabaseAdmission } from "../../../packages/server/src/core/database/public-admission.ts";
+import { createPublicDatabaseReadScope } from "../../../packages/server/src/core/database/public-fallback.ts";
+import { withTransactionOnClient } from "../../../packages/server/src/core/database/transactions.ts";
 import {
   WorkerExecutionCoordinator,
   type WorkerExecutionCompletion
@@ -52,15 +22,9 @@ import {
   backgroundJobTypes,
   parseBackgroundJobType
 } from "../../../packages/server/src/jobs/types.ts";
-import {
-  forceTerminateProcessTree
-} from "../../build/process-tree.mjs";
-import {
-  spawnSharedTestProcess
-} from "../support/process-runner.ts";
-import {
-  createTestDirectory
-} from "../support/test-directory.ts";
+import { forceTerminateProcessTree } from "../../build/process-tree.mjs";
+import { spawnSharedTestProcess } from "../support/process-runner.ts";
+import { createTestDirectory } from "../support/test-directory.ts";
 import {
   completeVerificationEnvironment,
   scenarioSelectorEnvironmentVariables
@@ -80,61 +44,105 @@ function processIsRunning(pid: number) {
 test("[Server/数据库与进程] Worker 慢类型不阻塞后来任务，停止等待调度与结算完成", async (t) => {
   const { registerHooks } = await import("node:module");
   type Job = { id: string; type: "move.cleanup" | "cache.rebuild" };
-  const jobs: Job[] = [{ id: "move-1", type: "move.cleanup" }, { id: "move-2", type: "move.cleanup" }];
+  const jobs: Job[] = [
+    { id: "move-1", type: "move.cleanup" },
+    { id: "move-2", type: "move.cleanup" }
+  ];
   const started: string[] = [];
   const succeeded: string[] = [];
   const rescheduled: string[] = [];
   const moveFinished = Promise.withResolvers<{ status: "succeeded" }>();
   const settlement = Promise.withResolvers<boolean>();
-  const discovery = Promise.withResolvers<Array<{ type: string; n: number; oldest_wait_ms: number }>>();
+  const discovery =
+    Promise.withResolvers<Array<{ type: string; n: number; oldest_wait_ms: number }>>();
   let holdDiscovery = false;
   let discoveryStarted = false;
   let staleRecoveries = 0;
   let historyCleanups = 0;
   const errors: unknown[] = [];
   const dependencies: Record<string, Record<string, unknown>> = {
-    "@imageshow/shared": { appConfig: { backgroundJob: {
-      ...appConfig.backgroundJob, tickIntervalMs: 10, staleRecoveryIntervalMs: 20,
-      historyCleanupIntervalMs: 30, taskTimeoutSeconds: 60, queueSliceMaxMs: 10_000
-    } } },
-    "../core/logger.ts": { logger: { debug() {}, warn() {}, error: (...args: unknown[]) => errors.push(args) } },
+    "@imageshow/shared": {
+      appConfig: {
+        backgroundJob: {
+          ...appConfig.backgroundJob,
+          tickIntervalMs: 10,
+          staleRecoveryIntervalMs: 20,
+          historyCleanupIntervalMs: 30,
+          taskTimeoutSeconds: 60,
+          queueSliceMaxMs: 10_000
+        }
+      }
+    },
+    "../core/logger.ts": {
+      logger: { debug() {}, warn() {}, error: (...args: unknown[]) => errors.push(args) }
+    },
     "../storage/objects/removal-admission.ts": { STORAGE_OBJECT_REMOVAL_CONCURRENCY: 1 },
-    "./handlers.ts": { handleBackgroundJob: async (job: Job, signal: AbortSignal) => {
-      started.push(job.id);
-      if (job.type === "move.cleanup") return raceWithAbortSignal(signal, moveFinished.promise);
-      return { status: "succeeded" };
-    } },
+    "./handlers.ts": {
+      handleBackgroundJob: async (job: Job, signal: AbortSignal) => {
+        started.push(job.id);
+        if (job.type === "move.cleanup") return raceWithAbortSignal(signal, moveFinished.promise);
+        return { status: "succeeded" };
+      }
+    },
     "./repository.ts": {
       claimBackgroundJob: async (type: string) => {
-        const index = jobs.findIndex(job => job.type === type);
+        const index = jobs.findIndex((job) => job.type === type);
         return index < 0 ? null : jobs.splice(index, 1)[0];
       },
       listRunnableBackgroundJobCounts: async () => {
-        if (holdDiscovery) { discoveryStarted = true; return discovery.promise; }
-        return [...new Set(jobs.map(job => job.type))].map(type => ({
-          type, n: jobs.filter(job => job.type === type).length, oldest_wait_ms: 0
+        if (holdDiscovery) {
+          discoveryStarted = true;
+          return discovery.promise;
+        }
+        return [...new Set(jobs.map((job) => job.type))].map((type) => ({
+          type,
+          n: jobs.filter((job) => job.type === type).length,
+          oldest_wait_ms: 0
         }));
       },
-      recoverStaleBackgroundJobs: async () => { staleRecoveries++; },
-      cleanupBackgroundJobHistory: async () => { historyCleanups++; },
+      recoverStaleBackgroundJobs: async () => {
+        staleRecoveries++;
+      },
+      cleanupBackgroundJobHistory: async () => {
+        historyCleanups++;
+      },
       renewBackgroundJobLease: async () => true,
-      markBackgroundJobSucceeded: async (job: Job) => { succeeded.push(job.id); return true; },
-      markBackgroundJobFailed: async () => { assert.fail("unexpected failure settlement"); },
-      rescheduleBackgroundJob: async (job: Job) => { rescheduled.push(job.id); return settlement.promise; }
+      markBackgroundJobSucceeded: async (job: Job) => {
+        succeeded.push(job.id);
+        return true;
+      },
+      markBackgroundJobFailed: async () => {
+        assert.fail("unexpected failure settlement");
+      },
+      rescheduleBackgroundJob: async (job: Job) => {
+        rescheduled.push(job.id);
+        return settlement.promise;
+      }
     }
   };
   const fixtureKey = "imageshow-worker-scheduling-fixture";
   Object.defineProperty(globalThis, fixtureKey, { configurable: true, value: dependencies });
-  const workerUrl = new URL("../../../packages/server/src/jobs/worker.ts?scheduling-test", import.meta.url).href;
-  const hooks = registerHooks({ resolve(specifier, context, next) {
-    if (context.parentURL !== workerUrl || !dependencies[specifier]) return next(specifier, context);
-    const source = Object.keys(dependencies[specifier]).map(name =>
-      `export const ${name} = globalThis[${JSON.stringify(fixtureKey)}][${JSON.stringify(specifier)}][${JSON.stringify(name)}];`
-    ).join("\n");
-    return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true };
-  } });
+  const workerUrl = new URL(
+    "../../../packages/server/src/jobs/worker.ts?scheduling-test",
+    import.meta.url
+  ).href;
+  const hooks = registerHooks({
+    resolve(specifier, context, next) {
+      if (context.parentURL !== workerUrl || !dependencies[specifier])
+        return next(specifier, context);
+      const source = Object.keys(dependencies[specifier])
+        .map(
+          (name) =>
+            `export const ${name} = globalThis[${JSON.stringify(fixtureKey)}][${JSON.stringify(specifier)}][${JSON.stringify(name)}];`
+        )
+        .join("\n");
+      return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true };
+    }
+  });
   t.mock.timers.enable({ apis: ["setInterval", "Date"], now: 100_000 });
-  const worker = await import(workerUrl) as typeof import("../../../packages/server/src/jobs/worker.ts");
+  const worker = (await import(
+    workerUrl
+  )) as typeof import("../../../packages/server/src/jobs/worker.ts");
   t.after(async () => {
     worker.stopBackgroundJobWorker();
     discovery.resolve([]);
@@ -144,7 +152,9 @@ test("[Server/数据库与进程] Worker 慢类型不阻塞后来任务，停止
     hooks.deregister();
     Reflect.deleteProperty(globalThis, fixtureKey);
   });
-  const flush = async () => { await new Promise<void>(resolve => setImmediate(resolve)); };
+  const flush = async () => {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  };
   worker.startBackgroundJobWorker();
   await flush();
   assert.deepEqual(started, ["move-1"]);
@@ -160,7 +170,11 @@ test("[Server/数据库与进程] Worker 慢类型不阻塞后来任务，停止
   worker.stopBackgroundJobWorker();
   await flush();
   assert.deepEqual(rescheduled, ["move-1"]);
-  assert.equal(await worker.drainBackgroundJobWorker(0), false, "停止后的重新排队回执也属于在途工作");
+  assert.equal(
+    await worker.drainBackgroundJobWorker(0),
+    false,
+    "停止后的重新排队回执也属于在途工作"
+  );
   assert.throws(() => worker.startBackgroundJobWorker(), /drained/);
   settlement.resolve(true);
   assert.equal(await worker.drainBackgroundJobWorker(1_000), true);
@@ -177,14 +191,25 @@ test("[Server/数据库与进程] Worker 慢类型不阻塞后来任务，停止
 });
 
 test("[Server/数据库与进程] PostgreSQL 连接故障分类不掩盖取消与业务错误", async () => {
-  const { databaseConnectionFailureReason } = await import("../../../packages/server/src/core/database/connection-error.ts");
+  const { databaseConnectionFailureReason } =
+    await import("../../../packages/server/src/core/database/connection-error.ts");
   for (const code of ["08006", "57P01", "ECONNRESET", "ETIMEDOUT"]) {
-    assert.equal(databaseConnectionFailureReason(Object.assign(new Error("private query context"), { code })), code);
+    assert.equal(
+      databaseConnectionFailureReason(Object.assign(new Error("private query context"), { code })),
+      code
+    );
   }
-  assert.equal(databaseConnectionFailureReason(new Error("Connection terminated unexpectedly")), "connection_terminated");
-  for (const error of [new Error("connection to author is invalid"), new Error("Connection terminated"),
+  assert.equal(
+    databaseConnectionFailureReason(new Error("Connection terminated unexpectedly")),
+    "connection_terminated"
+  );
+  for (const error of [
+    new Error("connection to author is invalid"),
+    new Error("Connection terminated"),
     Object.assign(new Error("Connection terminated unexpectedly"), { code: "23505" }),
-    Object.assign(new Error("cancelled"), { name: "AbortError", code: "ECONNRESET" }), { code: "08006" }]) {
+    Object.assign(new Error("cancelled"), { name: "AbortError", code: "ECONNRESET" }),
+    { code: "08006" }
+  ]) {
     assert.equal(databaseConnectionFailureReason(error), undefined);
   }
 });
@@ -213,16 +238,32 @@ test("[Server/数据库与进程] Redis readiness 只复用五秒内同连接完
   };
   const fixtureKey = "imageshow-readiness-proof-fixture";
   Object.defineProperty(globalThis, fixtureKey, { configurable: true, value: dependencies });
-  const moduleUrl = new URL("../../../packages/server/src/core/runtime-availability.ts?proof-test", import.meta.url).href;
-  const hooks = registerHooks({ resolve(specifier, context, next) {
-    if (context.parentURL !== moduleUrl || !dependencies[specifier]) return next(specifier, context);
-    const source = Object.keys(dependencies[specifier]).map(name =>
-      `export const ${name} = globalThis[${JSON.stringify(fixtureKey)}][${JSON.stringify(specifier)}][${JSON.stringify(name)}];`
-    ).join("\n");
-    return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true };
-  } });
-  const runtime = await import(moduleUrl) as typeof import("../../../packages/server/src/core/runtime-availability.ts");
-  t.after(() => { pending?.resolve(); runtime.stopRedisOperationalMonitor(); hooks.deregister(); Reflect.deleteProperty(globalThis, fixtureKey); });
+  const moduleUrl = new URL(
+    "../../../packages/server/src/core/runtime-availability.ts?proof-test",
+    import.meta.url
+  ).href;
+  const hooks = registerHooks({
+    resolve(specifier, context, next) {
+      if (context.parentURL !== moduleUrl || !dependencies[specifier])
+        return next(specifier, context);
+      const source = Object.keys(dependencies[specifier])
+        .map(
+          (name) =>
+            `export const ${name} = globalThis[${JSON.stringify(fixtureKey)}][${JSON.stringify(specifier)}][${JSON.stringify(name)}];`
+        )
+        .join("\n");
+      return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true };
+    }
+  });
+  const runtime = (await import(
+    moduleUrl
+  )) as typeof import("../../../packages/server/src/core/runtime-availability.ts");
+  t.after(() => {
+    pending?.resolve();
+    runtime.stopRedisOperationalMonitor();
+    hooks.deregister();
+    Reflect.deleteProperty(globalThis, fixtureKey);
+  });
   await Promise.all(Array.from({ length: 30 }, () => runtime.readRedisOperationalReadiness()));
   assert.equal(calls, 1);
   now = 4_999;
@@ -238,7 +279,12 @@ test("[Server/数据库与进程] Redis readiness 只复用五秒内同连接完
   assert.equal(calls, 4, "连接换代不复用前一连接证明");
   pending = Promise.withResolvers<void>();
   const olderProbe = runtime.probeRedisOperationalState();
-  await assert.rejects(runtime.runRequiredRedisCommand(async () => { throw new Error("ACL changed"); }), { name: "redis_unavailable" });
+  await assert.rejects(
+    runtime.runRequiredRedisCommand(async () => {
+      throw new Error("ACL changed");
+    }),
+    { name: "redis_unavailable" }
+  );
   pending.resolve();
   await assert.rejects(olderProbe, { name: "redis_unavailable" });
   assert.equal(runtime.getRedisOperationalState().available, false, "较早探测不能覆盖较晚业务失败");
@@ -303,19 +349,21 @@ async function forceTerminatePidTree(pid: number) {
 }
 
 function waitForChildClose(child: ChildProcess, stderr: () => string) {
-  const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolveClose, rejectClose) => {
-    const timeout = setTimeout(() => {
-      rejectClose(new Error(`中断后测试 owner 未退出：${stderr()}`));
-    }, 5_000);
-    child.once("error", (error) => {
-      clearTimeout(timeout);
-      rejectClose(error);
-    });
-    child.once("close", (code, signal) => {
-      clearTimeout(timeout);
-      resolveClose({ code, signal });
-    });
-  });
+  const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+    (resolveClose, rejectClose) => {
+      const timeout = setTimeout(() => {
+        rejectClose(new Error(`中断后测试 owner 未退出：${stderr()}`));
+      }, 5_000);
+      child.once("error", (error) => {
+        clearTimeout(timeout);
+        rejectClose(error);
+      });
+      child.once("close", (code, signal) => {
+        clearTimeout(timeout);
+        resolveClose({ code, signal });
+      });
+    }
+  );
   // Readiness can fail before the caller reaches its close assertion.
   void closed.catch(() => undefined);
   return closed;
@@ -387,12 +435,7 @@ test("[Server/数据库与进程] 单进程配置写租约覆盖嵌套调用和�
   assert.deepEqual(order, ["first:start"]);
   releaseLongIo();
   await Promise.all([first, second]);
-  assert.deepEqual(order, [
-    "first:start",
-    "first:nested",
-    "first:end",
-    "second"
-  ]);
+  assert.deepEqual(order, ["first:start", "first:nested", "first:end", "second"]);
 });
 test("[Server/数据库与进程] 共享 abort race 保留调用方 reason 并收口迟到 operation", async () => {
   const completed = await raceWithAbortSignal(
@@ -428,84 +471,180 @@ test("[Server/数据库与进程] 完整门禁环境不会继承定向场景选�
   }
 });
 for (const mode of ["runProcess", "IPC owner"] as const) {
-  test(`[Server/数据库与进程] 共享 owner 中断清理 ${mode} 与临时目录`, {
+  test(
+    `[Server/数据库与进程] 共享 owner 中断清理 ${mode} 与临时目录`,
+    {
+      timeout: 15_000
+    },
+    async () => {
+      const root = await createTestDirectory("shared-process-interruption-");
+      const helperPath = resolve(root, "owner.mts");
+      const childPidPath = resolve(root, "child.pid");
+      const ownedDirectory = resolve(root, "owned-directory");
+      const processRunnerUrl = pathToFileURL(
+        resolve(import.meta.dirname, "../support/process-runner.ts")
+      ).href;
+      const testDirectoryUrl = pathToFileURL(
+        resolve(import.meta.dirname, "../support/test-directory.ts")
+      ).href;
+      const childSource = "setInterval(() => undefined, 1_000);";
+      const publishPidSource = [
+        'const temporaryPath = process.argv[2] + ".tmp";',
+        "writeFileSync(temporaryPath, String(pid));",
+        "renameSync(temporaryPath, process.argv[2]);"
+      ].join("\n");
+      const ipcChildPath = resolve(root, "ipc-child.mts");
+      const helperSource = [
+        'import { mkdirSync, renameSync, writeFileSync } from "node:fs";',
+        `import { runProcess, spawnSharedTestProcess } from ${JSON.stringify(processRunnerUrl)};`,
+        `import { registerTestDirectory } from ${JSON.stringify(testDirectoryUrl)};`,
+        ...(mode === "runProcess"
+          ? [
+              "mkdirSync(process.argv[3], { recursive: true });",
+              "registerTestDirectory(process.argv[3]);",
+              "void runProcess(process.execPath, [",
+              `  "-e", ${JSON.stringify(childSource)}`,
+              "], {",
+              "  allowFailure: true,",
+              "  timeoutMs: 60_000,",
+              "  onSpawn(pid) {",
+              publishPidSource,
+              "  }",
+              "}).catch(() => undefined);"
+            ]
+          : [
+              "spawnSharedTestProcess(process.execPath, [",
+              `  ${JSON.stringify(ipcChildPath)}, process.argv[2], process.argv[3]`,
+              '], { stdio: ["ignore", "ignore", "inherit", "ipc"], windowsHide: true });'
+            ]),
+        "await new Promise(() => undefined);"
+      ].join("\n");
+      let helper: ChildProcess | undefined;
+      let childPid: number | undefined;
+      let helperStderr = "";
+      try {
+        if (mode === "IPC owner") {
+          await writeFile(
+            ipcChildPath,
+            [
+              'import { mkdirSync, renameSync, writeFileSync } from "node:fs";',
+              `import ${JSON.stringify(processRunnerUrl)};`,
+              `import { registerTestDirectory } from ${JSON.stringify(testDirectoryUrl)};`,
+              "mkdirSync(process.argv[3], { recursive: true });",
+              "registerTestDirectory(process.argv[3]);",
+              "const pid = process.pid;",
+              publishPidSource,
+              childSource
+            ].join("\n")
+          );
+        }
+        await writeFile(helperPath, helperSource);
+        helper = spawnSharedTestProcess(
+          process.execPath,
+          ["--experimental-strip-types", helperPath, childPidPath, ownedDirectory],
+          {
+            stdio: ["ignore", "ignore", "pipe", "ipc"],
+            windowsHide: true
+          }
+        );
+        helper.stderr?.on("data", (chunk: Buffer | string) => {
+          helperStderr += String(chunk);
+        });
+        const closed = waitForChildClose(helper, () => helperStderr);
+        childPid = await waitForProcessId(childPidPath);
+        await stat(ownedDirectory);
+        assert.equal(processIsRunning(childPid), true);
+        await new Promise<void>((resolveSend, rejectSend) => {
+          helper!.send({ type: "imageshow:shutdown", signal: "SIGTERM" }, (error) => {
+            if (error) rejectSend(error);
+            else resolveSend();
+          });
+        });
+        assert.deepEqual(await closed, { code: 143, signal: null });
+        await waitForProcessExit(childPid);
+        await assert.rejects(
+          stat(ownedDirectory),
+          (error: NodeJS.ErrnoException) => error.code === "ENOENT"
+        );
+      } finally {
+        await cleanupInterruptionFixture({ childPid, childPidPath, helper, root });
+      }
+    }
+  );
+}
+test(
+  "[Server/数据库与进程] 共享 owner 在 helper 空档仍响应中断并清理临时目录",
+  {
     timeout: 15_000
-  }, async () => {
-    const root = await createTestDirectory("shared-process-interruption-");
+  },
+  async () => {
+    const root = await createTestDirectory("idle-process-interruption-");
     const helperPath = resolve(root, "owner.mts");
-    const childPidPath = resolve(root, "child.pid");
     const ownedDirectory = resolve(root, "owned-directory");
-    const processRunnerUrl = pathToFileURL(resolve(
-      import.meta.dirname,
-      "../support/process-runner.ts"
-    )).href;
-    const testDirectoryUrl = pathToFileURL(resolve(
-      import.meta.dirname,
-      "../support/test-directory.ts"
-    )).href;
-    const childSource = "setInterval(() => undefined, 1_000);";
-    const publishPidSource = [
-      'const temporaryPath = process.argv[2] + ".tmp";',
-      'writeFileSync(temporaryPath, String(pid));',
-      "renameSync(temporaryPath, process.argv[2]);"
-    ].join("\n");
-    const ipcChildPath = resolve(root, "ipc-child.mts");
+    const readyPath = resolve(root, "helper.ready");
+    const lateRegistrationResultPath = resolve(root, "late-registration-result.txt");
+    const lateProcessResultPath = resolve(root, "late-process-result.txt");
+    const processRunnerUrl = pathToFileURL(
+      resolve(import.meta.dirname, "../support/process-runner.ts")
+    ).href;
+    const testDirectoryUrl = pathToFileURL(
+      resolve(import.meta.dirname, "../support/test-directory.ts")
+    ).href;
     const helperSource = [
-      'import { mkdirSync, renameSync, writeFileSync } from "node:fs";',
-      `import { runProcess, spawnSharedTestProcess } from ${JSON.stringify(processRunnerUrl)};`,
-      `import { registerTestDirectory } from ${JSON.stringify(testDirectoryUrl)};`,
-      ...(mode === "runProcess" ? [
-        "mkdirSync(process.argv[3], { recursive: true });",
-        "registerTestDirectory(process.argv[3]);",
-        "void runProcess(process.execPath, [",
-        `  "-e", ${JSON.stringify(childSource)}`,
-        "], {",
-        "  allowFailure: true,",
-        "  timeoutMs: 60_000,",
-        "  onSpawn(pid) {",
-        publishPidSource,
-        "  }",
-        "}).catch(() => undefined);"
-      ] : [
-        "spawnSharedTestProcess(process.execPath, [",
-        `  ${JSON.stringify(ipcChildPath)}, process.argv[2], process.argv[3]`,
-        '], { stdio: ["ignore", "ignore", "inherit", "ipc"], windowsHide: true });'
-      ]),
-      "await new Promise(() => undefined);"
+      'import { mkdirSync, writeFileSync } from "node:fs";',
+      `import { spawnSharedTestProcess } from ${JSON.stringify(processRunnerUrl)};`,
+      `import { createTestDirectory, registerTestDirectory } from ${JSON.stringify(testDirectoryUrl)};`,
+      "mkdirSync(process.argv[2], { recursive: true });",
+      "registerTestDirectory(process.argv[2]);",
+      'writeFileSync(process.argv[3], "ready");',
+      'process.on("message", (message) => {',
+      '  if (message?.type !== "imageshow:shutdown") return;',
+      "  try {",
+      '    spawnSharedTestProcess(process.execPath, ["-e", "process.exit(0)"]);',
+      '    writeFileSync(process.argv[5], "created");',
+      "  } catch {",
+      '    writeFileSync(process.argv[5], "rejected");',
+      "  }",
+      '  void createTestDirectory("interrupted-late-owner-").then(',
+      '    (directory) => writeFileSync(process.argv[4], "created:" + directory),',
+      '    () => writeFileSync(process.argv[4], "rejected")',
+      "  );",
+      "});",
+      "setInterval(() => undefined, 1_000);"
     ].join("\n");
     let helper: ChildProcess | undefined;
-    let childPid: number | undefined;
     let helperStderr = "";
     try {
-      if (mode === "IPC owner") {
-        await writeFile(ipcChildPath, [
-          'import { mkdirSync, renameSync, writeFileSync } from "node:fs";',
-          `import ${JSON.stringify(processRunnerUrl)};`,
-          `import { registerTestDirectory } from ${JSON.stringify(testDirectoryUrl)};`,
-          "mkdirSync(process.argv[3], { recursive: true });",
-          "registerTestDirectory(process.argv[3]);",
-          "const pid = process.pid;",
-          publishPidSource,
-          childSource
-        ].join("\n"));
-      }
       await writeFile(helperPath, helperSource);
-      helper = spawnSharedTestProcess(process.execPath, [
-        "--experimental-strip-types",
-        helperPath,
-        childPidPath,
-        ownedDirectory
-      ], {
-        stdio: ["ignore", "ignore", "pipe", "ipc"],
-        windowsHide: true
-      });
+      helper = spawnSharedTestProcess(
+        process.execPath,
+        [
+          "--experimental-strip-types",
+          helperPath,
+          ownedDirectory,
+          readyPath,
+          lateRegistrationResultPath,
+          lateProcessResultPath
+        ],
+        {
+          stdio: ["ignore", "ignore", "pipe", "ipc"],
+          windowsHide: true
+        }
+      );
       helper.stderr?.on("data", (chunk: Buffer | string) => {
         helperStderr += String(chunk);
       });
       const closed = waitForChildClose(helper, () => helperStderr);
-      childPid = await waitForProcessId(childPidPath);
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        try {
+          assert.equal((await readFile(readyPath, "utf8")).trim(), "ready");
+          break;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          await delay(20);
+        }
+      }
       await stat(ownedDirectory);
-      assert.equal(processIsRunning(childPid), true);
       await new Promise<void>((resolveSend, rejectSend) => {
         helper!.send({ type: "imageshow:shutdown", signal: "SIGTERM" }, (error) => {
           if (error) rejectSend(error);
@@ -513,123 +652,32 @@ for (const mode of ["runProcess", "IPC owner"] as const) {
         });
       });
       assert.deepEqual(await closed, { code: 143, signal: null });
-      await waitForProcessExit(childPid);
+      assert.equal(
+        (await readFile(lateProcessResultPath, "utf8")).trim(),
+        "rejected",
+        "中断清理开始后必须拒绝新的辅助进程"
+      );
+      assert.equal(
+        (await readFile(lateRegistrationResultPath, "utf8")).trim(),
+        "rejected",
+        "中断清理开始后必须拒绝新的临时目录"
+      );
       await assert.rejects(
         stat(ownedDirectory),
         (error: NodeJS.ErrnoException) => error.code === "ENOENT"
       );
     } finally {
-      await cleanupInterruptionFixture({ childPid, childPidPath, helper, root });
+      await cleanupInterruptionFixture({ helper, root });
     }
-  });
-}
-test("[Server/数据库与进程] 共享 owner 在 helper 空档仍响应中断并清理临时目录", {
-  timeout: 15_000
-}, async () => {
-  const root = await createTestDirectory("idle-process-interruption-");
-  const helperPath = resolve(root, "owner.mts");
-  const ownedDirectory = resolve(root, "owned-directory");
-  const readyPath = resolve(root, "helper.ready");
-  const lateRegistrationResultPath = resolve(root, "late-registration-result.txt");
-  const lateProcessResultPath = resolve(root, "late-process-result.txt");
-  const processRunnerUrl = pathToFileURL(resolve(
-    import.meta.dirname,
-    "../support/process-runner.ts"
-  )).href;
-  const testDirectoryUrl = pathToFileURL(resolve(
-    import.meta.dirname,
-    "../support/test-directory.ts"
-  )).href;
-  const helperSource = [
-    'import { mkdirSync, writeFileSync } from "node:fs";',
-    `import { spawnSharedTestProcess } from ${JSON.stringify(processRunnerUrl)};`,
-    `import { createTestDirectory, registerTestDirectory } from ${JSON.stringify(testDirectoryUrl)};`,
-    "mkdirSync(process.argv[2], { recursive: true });",
-    "registerTestDirectory(process.argv[2]);",
-    'writeFileSync(process.argv[3], "ready");',
-    'process.on("message", (message) => {',
-    '  if (message?.type !== "imageshow:shutdown") return;',
-    "  try {",
-    '    spawnSharedTestProcess(process.execPath, ["-e", "process.exit(0)"]);',
-    '    writeFileSync(process.argv[5], "created");',
-    "  } catch {",
-    '    writeFileSync(process.argv[5], "rejected");',
-    "  }",
-    '  void createTestDirectory("interrupted-late-owner-").then(',
-    '    (directory) => writeFileSync(process.argv[4], "created:" + directory),',
-    '    () => writeFileSync(process.argv[4], "rejected")',
-    "  );",
-    "});",
-    "setInterval(() => undefined, 1_000);"
-  ].join("\n");
-  let helper: ChildProcess | undefined;
-  let helperStderr = "";
-  try {
-    await writeFile(helperPath, helperSource);
-    helper = spawnSharedTestProcess(process.execPath, [
-      "--experimental-strip-types",
-      helperPath,
-      ownedDirectory,
-      readyPath,
-      lateRegistrationResultPath,
-      lateProcessResultPath
-    ], {
-      stdio: ["ignore", "ignore", "pipe", "ipc"],
-      windowsHide: true
-    });
-    helper.stderr?.on("data", (chunk: Buffer | string) => {
-      helperStderr += String(chunk);
-    });
-    const closed = waitForChildClose(helper, () => helperStderr);
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      try {
-        assert.equal((await readFile(readyPath, "utf8")).trim(), "ready");
-        break;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-        await delay(20);
-      }
-    }
-    await stat(ownedDirectory);
-    await new Promise<void>((resolveSend, rejectSend) => {
-      helper!.send({ type: "imageshow:shutdown", signal: "SIGTERM" }, (error) => {
-        if (error) rejectSend(error);
-        else resolveSend();
-      });
-    });
-    assert.deepEqual(await closed, { code: 143, signal: null });
-    assert.equal(
-      (await readFile(lateProcessResultPath, "utf8")).trim(),
-      "rejected",
-      "中断清理开始后必须拒绝新的辅助进程"
-    );
-    assert.equal(
-      (await readFile(lateRegistrationResultPath, "utf8")).trim(),
-      "rejected",
-      "中断清理开始后必须拒绝新的临时目录"
-    );
-    await assert.rejects(
-      stat(ownedDirectory),
-      (error: NodeJS.ErrnoException) => error.code === "ENOENT"
-    );
-  } finally {
-    await cleanupInterruptionFixture({ helper, root });
   }
-});
+);
 test("[Server/数据库与进程] 后台任务类型只接受当前固定集合", () => {
-  assert.deepEqual(backgroundJobTypes, [
-    "move.cleanup",
-    "trash.purge",
-    "cache.rebuild"
-  ]);
+  assert.deepEqual(backgroundJobTypes, ["move.cleanup", "trash.purge", "cache.rebuild"]);
   for (const type of backgroundJobTypes) {
     assert.equal(parseBackgroundJobType(type), type);
   }
   for (const unsupported of ["unsupported.job", "", null, 1]) {
-    assert.throws(
-      () => parseBackgroundJobType(unsupported),
-      /Unsupported background job type/
-    );
+    assert.throws(() => parseBackgroundJobType(unsupported), /Unsupported background job type/);
   }
 });
 test("[Server/数据库与进程] Worker 重复停止会中止并排空同一个活动执行", async () => {
@@ -679,10 +727,7 @@ test("[Server/数据库与进程] Worker 不丢弃已经发出的迟到续租失
     let leaseLostCalls = 0;
     const renewalErrors: unknown[] = [];
     let completion: WorkerExecutionCompletion<string> | undefined;
-    const coordinator = new WorkerExecutionCoordinator<
-      { id: string },
-      string
-    >({
+    const coordinator = new WorkerExecutionCoordinator<{ id: string }, string>({
       taskTimeoutMs: 10_000,
       leaseRenewalIntervalMs: 1,
       renewLease: async () => {
@@ -714,17 +759,11 @@ test("[Server/数据库与进程] Worker 不丢弃已经发出的迟到续租失
     assert.equal(completion?.status, "rejected");
     if (completion?.status !== "rejected") assert.fail("expected rejection");
     if (scenario === "lost") {
-      assert.equal(
-        (completion.error as { code?: string }).code,
-        "worker_lease_lost"
-      );
+      assert.equal((completion.error as { code?: string }).code, "worker_lease_lost");
       assert.equal(leaseLostCalls, 1);
       assert.deepEqual(renewalErrors, []);
     } else {
-      assert.equal(
-        (completion.error as { code?: string }).code,
-        "worker_lease_renewal_failed"
-      );
+      assert.equal((completion.error as { code?: string }).code, "worker_lease_renewal_failed");
       assert.equal((completion.error as Error).cause, renewalError);
       assert.equal(leaseLostCalls, 0);
       assert.deepEqual(renewalErrors, [renewalError]);
@@ -743,11 +782,12 @@ test("[Server/数据库与进程] Worker 停止原因优先于在途续租的迟
       renewalStarted.resolve();
       return renewalResult.promise;
     },
-    execute: async (_job, signal) => new Promise<string>((_resolve, reject) => {
-      signal.addEventListener("abort", () => reject(signal.reason), {
-        once: true
-      });
-    }),
+    execute: async (_job, signal) =>
+      new Promise<string>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), {
+          once: true
+        });
+      }),
     settle: async (_job, result) => {
       completion = result;
     },
@@ -776,15 +816,11 @@ test("[Server/数据库与进程] 公开数据库准入保持 FIFO、总并发�
   const admission = createPublicDatabaseAdmission(config);
   const holder = await admission.acquire(new AbortController().signal);
   const activationOrder: string[] = [];
-  const firstLeasePromise = admission.acquire(
-    new AbortController().signal
-  ).then((lease) => {
+  const firstLeasePromise = admission.acquire(new AbortController().signal).then((lease) => {
     activationOrder.push("first");
     return lease;
   });
-  const secondLeasePromise = admission.acquire(
-    new AbortController().signal
-  ).then((lease) => {
+  const secondLeasePromise = admission.acquire(new AbortController().signal).then((lease) => {
     activationOrder.push("second");
     return lease;
   });
@@ -801,16 +837,11 @@ test("[Server/数据库与进程] 公开数据库准入保持 FIFO、总并发�
   assert.equal(admission.snapshot().queued, 0);
 
   const cancellationAdmission = createPublicDatabaseAdmission(config);
-  const cancellationHolder = await cancellationAdmission.acquire(
-    new AbortController().signal
-  );
+  const cancellationHolder = await cancellationAdmission.acquire(new AbortController().signal);
   const queuedAbort = new AbortController();
   const abortReason = new Error("queued request disconnected");
   const queued = cancellationAdmission.acquire(queuedAbort.signal);
-  const queuedRejected = assert.rejects(
-    queued,
-    (error) => error === abortReason
-  );
+  const queuedRejected = assert.rejects(queued, (error) => error === abortReason);
   queuedAbort.abort(abortReason);
   await queuedRejected;
   assert.equal(cancellationAdmission.snapshot().queued, 0);
@@ -821,20 +852,17 @@ test("[Server/数据库与进程] 公开数据库准入保持 FIFO、总并发�
     queueLimit: 1,
     queueTimeoutMs: 10
   });
-  const boundedHolder = await boundedAdmission.acquire(
-    new AbortController().signal
-  );
+  const boundedHolder = await boundedAdmission.acquire(new AbortController().signal);
   const timedOut = boundedAdmission.acquire(new AbortController().signal);
   const timedOutRejected = assert.rejects(
     timedOut,
     (error: { code?: string; retryAfterSeconds?: number }) =>
-      error.code === "public_pg_fallback_queue_timeout"
-      && error.retryAfterSeconds === config.retryAfterSeconds
+      error.code === "public_pg_fallback_queue_timeout" &&
+      error.retryAfterSeconds === config.retryAfterSeconds
   );
   await assert.rejects(
     boundedAdmission.acquire(new AbortController().signal),
-    (error: { code?: string }) =>
-      error.code === "public_pg_fallback_queue_full"
+    (error: { code?: string }) => error.code === "public_pg_fallback_queue_full"
   );
   await timedOutRejected;
   boundedHolder.release();
@@ -850,16 +878,24 @@ test("[Server/数据库与进程] 公开 reader 排队 SQL 在失败、取消和
     const controller = new AbortController();
     const failure = new Error(`reader ${outcome}`);
     const scope = createPublicDatabaseReadScope({
-      pool: { connect: async () => ({
-        query(text: string) {
-          calls.push(text);
-          started.resolve();
-          return firstQuery.promise;
-        },
-        release(destroy: boolean) { releases.push(destroy); }
-      }) } as never,
+      pool: {
+        connect: async () => ({
+          query(text: string) {
+            calls.push(text);
+            started.resolve();
+            return firstQuery.promise;
+          },
+          release(destroy: boolean) {
+            releases.push(destroy);
+          }
+        })
+      } as never,
       admission: {
-        acquire: async () => ({ release() { leaseReleases += 1; } }),
+        acquire: async () => ({
+          release() {
+            leaseReleases += 1;
+          }
+        }),
         snapshot: () => ({ active: 0, queued: 0 })
       },
       executionTimeoutMs: 1_000,
@@ -873,11 +909,9 @@ test("[Server/数据库与进程] 公开 reader 排队 SQL 在失败、取消和
       if (outcome === "close") throw failure;
       return Promise.all(queries);
     });
-    const rejected = assert.rejects(operation, (error: { code?: string }) => (
-      outcome === "failure"
-        ? error.code === "public_pg_fallback_query_failed"
-        : error === failure
-    ));
+    const rejected = assert.rejects(operation, (error: { code?: string }) =>
+      outcome === "failure" ? error.code === "public_pg_fallback_query_failed" : error === failure
+    );
     await started.promise;
     if (outcome === "failure") firstQuery.reject(failure);
     if (outcome === "abort") controller.abort(failure);
@@ -896,9 +930,11 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
     readonly releases: boolean[] = [];
     readonly execute: () => Promise<unknown>;
 
-    constructor(execute: () => Promise<unknown> = async () => ({
-      rows: []
-    })) {
+    constructor(
+      execute: () => Promise<unknown> = async () => ({
+        rows: []
+      })
+    ) {
       this.execute = execute;
     }
 
@@ -929,12 +965,8 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
     retryAfterSeconds: 1
   } as never);
   await assert.rejects(
-    queryErrorScope(
-      new AbortController().signal,
-      async ({ reader }) => reader.query("broken")
-    ),
-    (error: { code?: string }) =>
-      error.code === "public_pg_fallback_query_failed"
+    queryErrorScope(new AbortController().signal, async ({ reader }) => reader.query("broken")),
+    (error: { code?: string }) => error.code === "public_pg_fallback_query_failed"
   );
   assert.deepEqual(queryErrorClient.releases, [true]);
   assert.equal(queryErrorLeaseReleases, 1);
@@ -988,17 +1020,17 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
     retryAfterSeconds: 1
   } as never);
   await assert.rejects(
-    recoveringScope(
-      new AbortController().signal,
-      async ({ reader }) => reader.query("unreachable")
+    recoveringScope(new AbortController().signal, async ({ reader }) =>
+      reader.query("unreachable")
     ),
-    (error: { code?: string }) =>
-      error.code === "public_pg_fallback_unavailable"
+    (error: { code?: string }) => error.code === "public_pg_fallback_unavailable"
   );
-  assert.deepEqual(await recoveringScope(
-    new AbortController().signal,
-    async ({ reader }) => reader.query("recovered")
-  ), { rows: [] });
+  assert.deepEqual(
+    await recoveringScope(new AbortController().signal, async ({ reader }) =>
+      reader.query("recovered")
+    ),
+    { rows: [] }
+  );
   assert.deepEqual(recoveredClient.releases, [false]);
   assert.equal(recoveryAdmissionReleases, 2);
 
@@ -1023,16 +1055,10 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
     retryAfterSeconds: 1
   } as never);
   const requestAbort = new AbortController();
-  const operation = activeScope(
-    requestAbort.signal,
-    async ({ reader }) => reader.query("active")
-  );
+  const operation = activeScope(requestAbort.signal, async ({ reader }) => reader.query("active"));
   await activeStarted.promise;
   const abortReason = new Error("public request disconnected");
-  const operationRejected = assert.rejects(
-    operation,
-    (error) => error === abortReason
-  );
+  const operationRejected = assert.rejects(operation, (error) => error === abortReason);
   requestAbort.abort(abortReason);
   await operationRejected;
   assert.deepEqual(activeClient.releases, [true]);
@@ -1058,19 +1084,15 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
       snapshot: () => ({}) as never
     },
     executionTimeoutMs: 1_000,
-    retryAfterSeconds: 1,
+    retryAfterSeconds: 1
   } as never);
   const checkoutAbort = new AbortController();
-  const checkoutOperation = checkoutScope(
-    checkoutAbort.signal,
-    async ({ reader }) => reader.query("unreachable")
+  const checkoutOperation = checkoutScope(checkoutAbort.signal, async ({ reader }) =>
+    reader.query("unreachable")
   );
   await checkoutStarted.promise;
   const checkoutReason = new Error("disconnect during pool checkout");
-  const checkoutRejected = assert.rejects(
-    checkoutOperation,
-    (error) => error === checkoutReason
-  );
+  const checkoutRejected = assert.rejects(checkoutOperation, (error) => error === checkoutReason);
   checkoutAbort.abort(checkoutReason);
   await checkoutRejected;
   assert.equal(checkoutAdmissionReleases, 0);
@@ -1080,9 +1102,7 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
   assert.deepEqual(checkoutClient.releases, [true]);
   assert.equal(checkoutAdmissionReleases, 1);
 
-  const timeoutClient = new FakePublicClient(
-    async () => new Promise<never>(() => undefined)
-  );
+  const timeoutClient = new FakePublicClient(async () => new Promise<never>(() => undefined));
   let timeoutAdmissionReleases = 0;
   const timeoutScope = createPublicDatabaseReadScope({
     pool: { connect: async () => timeoutClient } as never,
@@ -1098,12 +1118,8 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
     retryAfterSeconds: 1
   } as never);
   await assert.rejects(
-    timeoutScope(
-      new AbortController().signal,
-      async ({ reader }) => reader.query("slow")
-    ),
-    (error: { code?: string }) =>
-      error.code === "public_pg_fallback_execution_timeout"
+    timeoutScope(new AbortController().signal, async ({ reader }) => reader.query("slow")),
+    (error: { code?: string }) => error.code === "public_pg_fallback_execution_timeout"
   );
   assert.deepEqual(timeoutClient.releases, [true]);
   assert.equal(timeoutAdmissionReleases, 1);
@@ -1125,20 +1141,20 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
     retryAfterSeconds: 1
   } as never);
   await assert.rejects(
-    storageTimeoutScope(
-      new AbortController().signal,
-      async ({ reader }, signal) => {
-        await reader.query("resolve storage record");
-        return new Promise<never>((_resolve, reject) => {
-          signal.addEventListener("abort", () => {
+    storageTimeoutScope(new AbortController().signal, async ({ reader }, signal) => {
+      await reader.query("resolve storage record");
+      return new Promise<never>((_resolve, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => {
             storageAbortObserved = true;
             reject(signal.reason);
-          }, { once: true });
-        });
-      }
-    ),
-    (error: { code?: string }) =>
-      error.code === "public_pg_fallback_execution_timeout"
+          },
+          { once: true }
+        );
+      });
+    }),
+    (error: { code?: string }) => error.code === "public_pg_fallback_execution_timeout"
   );
   assert.equal(storageAbortObserved, true);
   assert.deepEqual(storageTimeoutClient.releases, [true]);
@@ -1155,13 +1171,11 @@ test("[Server/数据库与进程] 数据库事务边界只在成功提交并在�
     }
   } as never;
   let transactionId = "";
-  const value = await withTransactionOnClient(
-    client,
-    async () => "committed",
-    { onTransactionId: (current) => {
+  const value = await withTransactionOnClient(client, async () => "committed", {
+    onTransactionId: (current) => {
       transactionId = current;
-    } }
-  );
+    }
+  });
   assert.equal(value, "committed");
   assert.equal(transactionId, "81");
   assert.deepEqual(queries, [
@@ -1182,17 +1196,12 @@ test("[Server/数据库与进程] 数据库事务边界只在成功提交并在�
 
   queries.length = 0;
   assert.equal(
-    await withTransactionOnClient(
-      client,
-      async () => "snapshot",
-      { mode: "read_only_repeatable_read" }
-    ),
+    await withTransactionOnClient(client, async () => "snapshot", {
+      mode: "read_only_repeatable_read"
+    }),
     "snapshot"
   );
-  assert.deepEqual(queries, [
-    "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
-    "COMMIT"
-  ]);
+  assert.deepEqual(queries, ["BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY", "COMMIT"]);
 
   queries.length = 0;
   await assert.rejects(
@@ -1205,10 +1214,7 @@ test("[Server/数据库与进程] 数据库事务边界只在成功提交并在�
     ),
     (error) => error === failure
   );
-  assert.deepEqual(queries, [
-    "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
-    "ROLLBACK"
-  ]);
+  assert.deepEqual(queries, ["BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY", "ROLLBACK"]);
 });
 test("[Server/数据库与进程] advisory lock 连接池等待可取消并释放迟到 client", async () => {
   const controller = new AbortController();
@@ -1218,15 +1224,14 @@ test("[Server/数据库与进程] advisory lock 连接池等待可取消并释�
     resolveClient = resolve;
   });
   let releases = 0;
-  const acquiring = acquireAdvisoryLockClient(
-    controller.signal,
-    () => pending as never
-  );
+  const acquiring = acquireAdvisoryLockClient(controller.signal, () => pending as never);
   controller.abort(reason);
   await assert.rejects(acquiring, (error) => error === reason);
-  resolveClient({ release: () => {
-    releases += 1;
-  } });
+  resolveClient({
+    release: () => {
+      releases += 1;
+    }
+  });
   await delay(0);
   assert.equal(releases, 1);
 });

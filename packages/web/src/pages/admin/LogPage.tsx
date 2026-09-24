@@ -15,10 +15,7 @@ import { formatBytes, formatDate } from "../../lib/ui/formatters.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { waitForMinimumPendingDuration } from "../../lib/ui/async-action-timing.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
-import {
-  createActionFeedback,
-  type ActionFeedbackState
-} from "../../lib/ui/action-feedback.js";
+import { createActionFeedback, type ActionFeedbackState } from "../../lib/ui/action-feedback.js";
 import {
   ActionFeedbackOutlet,
   useActionFeedbackTarget
@@ -94,17 +91,24 @@ export function LogPage() {
 
   const fileOptions = useMemo<SelectOption[]>(() => {
     const files = query.data?.files ?? [];
-    if (!files.length) return [{ value: query.data?.selected ?? "app.log", label: query.data?.selected ?? "app.log" }];
+    if (!files.length)
+      return [
+        { value: query.data?.selected ?? "app.log", label: query.data?.selected ?? "app.log" }
+      ];
     return files.map((file) => ({ value: file.name, label: file.name }));
   }, [query.data]);
 
   const effectiveFile = selectedFile || query.data?.selected || fileOptions[0]?.value || "app.log";
   const selectedSummary = query.data?.files.find((file) => file.name === effectiveFile);
-  const visibleFeedback = feedback ?? (query.error && !query.data ? {
-    id: query.errorUpdatedAt,
-    text: "日志读取失败，请稍后重试",
-    status: "error" as const
-  } : null);
+  const visibleFeedback =
+    feedback ??
+    (query.error && !query.data
+      ? {
+          id: query.errorUpdatedAt,
+          text: "日志读取失败，请稍后重试",
+          status: "error" as const
+        }
+      : null);
 
   const refreshLogs = async () => {
     if (query.isFetching || refreshLogsStatus.pending) return;
@@ -127,9 +131,9 @@ export function LogPage() {
         body: JSON.stringify({ level: nextLevel })
       });
       await client.cancelQueries({ queryKey: queryKeys.logs });
-      client.setQueriesData<AdminLogPayloadDto>({ queryKey: queryKeys.logs }, (current) => (
+      client.setQueriesData<AdminLogPayloadDto>({ queryKey: queryKeys.logs }, (current) =>
         current ? { ...current, level: response.level } : current
-      ));
+      );
       setLevel(response.level);
       void client.invalidateQueries({ queryKey: queryKeys.logs });
       await waitForMinimumPendingDuration(startedAt);

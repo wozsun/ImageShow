@@ -11,10 +11,7 @@ import {
   completedIngestionObservations,
   type IngestionQueueApi
 } from "./ingestion-queue-contract.js";
-import {
-  cancelStoredIngestions,
-  getIngestionStatuses
-} from "./ingestion-http-client.js";
+import { cancelStoredIngestions, getIngestionStatuses } from "./ingestion-http-client.js";
 import { ingestionStatusSummary } from "./model/ingestion-status-summary.js";
 
 type CancelTarget = Readonly<{
@@ -37,10 +34,7 @@ function releasedServerStatus(job: IngestionJob): ServerIngestionStatusDto | nul
   if (job.serverStatus && job.serverStatus !== "missing") {
     return job.serverStatus;
   }
-  const statusByClient: Partial<Record<
-    IngestionJob["status"],
-    ServerIngestionStatusDto
-  >> = {
+  const statusByClient: Partial<Record<IngestionJob["status"], ServerIngestionStatusDto>> = {
     queued: "queued",
     uploading: "received",
     downloading: "downloading",
@@ -56,9 +50,7 @@ function releasedServerStatus(job: IngestionJob): ServerIngestionStatusDto | nul
   return statusByClient[job.status] ?? null;
 }
 
-function releasedSummaryForJob(
-  job: IngestionJob
-): IngestionQueueSummaryDto | undefined {
+function releasedSummaryForJob(job: IngestionJob): IngestionQueueSummaryDto | undefined {
   const status = releasedServerStatus(job);
   if (!status) return undefined;
   return ingestionStatusSummary(
@@ -69,18 +61,19 @@ function releasedSummaryForJob(
 }
 
 function pairFor(job: IngestionJob) {
-  return job.sessionId && job.imageId
-    ? { session_id: job.sessionId, image_id: job.imageId }
-    : null;
+  return job.sessionId && job.imageId ? { session_id: job.sessionId, image_id: job.imageId } : null;
 }
 
-function currentAttempt(queue: IngestionQueueApi, target: {
-  id: string;
-  attemptKey: string;
-}) {
-  return queue.jobsRef.current.find((item) => (
-    item.id === target.id && item.attemptKey === target.attemptKey
-  ));
+function currentAttempt(
+  queue: IngestionQueueApi,
+  target: {
+    id: string;
+    attemptKey: string;
+  }
+) {
+  return queue.jobsRef.current.find(
+    (item) => item.id === target.id && item.attemptKey === target.attemptKey
+  );
 }
 
 function markCancelFailure(
@@ -103,14 +96,14 @@ function applyCancelResult(
   result: IngestionCancelItemResultDto | undefined
 ) {
   const current = currentAttempt(queue, target);
-  const releaseContext = target.releasedSummary
-    ? { releasedSummary: target.releasedSummary }
-    : {};
+  const releaseContext = target.releasedSummary ? { releasedSummary: target.releasedSummary } : {};
   if (result?.status === "completed") {
-    queue.observeCompletedIngestions([{
-      pair: target.pair,
-      item: result.completed_item
-    }]);
+    queue.observeCompletedIngestions([
+      {
+        pair: target.pair,
+        item: result.completed_item
+      }
+    ]);
   }
   if (result?.status === "discarded") {
     if (current) {
@@ -128,9 +121,10 @@ function applyCancelResult(
       queue.updateJob(current.id, {
         status: result.status === "completed" ? "finalized" : "committing",
         resultState: "recovering",
-        message: result.status === "completed"
-          ? "图片已写入图库，无法取消"
-          : "数据库提交已经开始，正在确认最终结果"
+        message:
+          result.status === "completed"
+            ? "图片已写入图库，无法取消"
+            : "数据库提交已经开始，正在确认最终结果"
       });
     }
     return {
@@ -140,11 +134,7 @@ function applyCancelResult(
       ...releaseContext
     } satisfies IngestionQueueCancelOutcome;
   }
-  markCancelFailure(
-    queue,
-    target,
-    result?.message || "服务端未确认取消结果"
-  );
+  markCancelFailure(queue, target, result?.message || "服务端未确认取消结果");
   return {
     succeeded: false,
     pair: target.pair,
@@ -181,9 +171,7 @@ export async function cancelServerIngestionJobs(
       ...(releasedSummary ? { releasedSummary } : {})
     });
     const mounted = currentAttempt(queue, job);
-    const current = mounted ?? (
-      options.allowDetached && pairFor(job) ? job : null
-    );
+    const current = mounted ?? (options.allowDetached && pairFor(job) ? job : null);
     if (!current) continue;
     if (current.status === "cancelled") {
       outcomes.set(job.id, {
@@ -208,11 +196,7 @@ export async function cancelServerIngestionJobs(
         queue.updateJob(current.id, { status: "cancelled", message: "已取消" });
         outcomes.set(current.id, { succeeded: true });
       } else {
-        markCancelFailure(
-          queue,
-          current,
-          "服务端是否已接管任务暂时无法确认，请重试取消"
-        );
+        markCancelFailure(queue, current, "服务端是否已接管任务暂时无法确认，请重试取消");
       }
       continue;
     }
@@ -227,11 +211,7 @@ export async function cancelServerIngestionJobs(
 
   const ready = targets.filter((target) => target.expectedVersion !== undefined);
   const unknown = targets.filter((target) => target.expectedVersion === undefined);
-  for (
-    let offset = 0;
-    offset < unknown.length;
-    offset += ingestionStatusBatchMaxItems
-  ) {
+  for (let offset = 0; offset < unknown.length; offset += ingestionStatusBatchMaxItems) {
     const chunk = unknown.slice(offset, offset + ingestionStatusBatchMaxItems);
     try {
       const statuses = await getIngestionStatuses(chunk.map((target) => target.pair));
@@ -240,18 +220,11 @@ export async function cancelServerIngestionJobs(
         const status = statuses[index];
         const current = currentAttempt(queue, target);
         if (!status || status.status === "missing") {
-          markCancelFailure(
-            queue,
-            target,
-            "服务端尚未确认任务已取消，请稍后重试"
-          );
+          markCancelFailure(queue, target, "服务端尚未确认任务已取消，请稍后重试");
           continue;
         }
         if (status.status === "completed") {
-          if (
-            status.redis_status !== "missing"
-            && status.redis_version !== undefined
-          ) {
+          if (status.redis_status !== "missing" && status.redis_version !== undefined) {
             if (current) {
               queue.updateJob(current.id, {
                 serverVersion: status.redis_version
@@ -264,11 +237,7 @@ export async function cancelServerIngestionJobs(
             continue;
           }
           if (status.redis_status !== "missing") {
-            markCancelFailure(
-              queue,
-              target,
-              "服务端完成回执缺少可核对版本，请刷新后重试取消"
-            );
+            markCancelFailure(queue, target, "服务端完成回执缺少可核对版本，请刷新后重试取消");
             continue;
           }
           if (current) {
@@ -296,23 +265,17 @@ export async function cancelServerIngestionJobs(
     }
   }
 
-  for (
-    let offset = 0;
-    offset < ready.length;
-    offset += ingestionBatchHardLimit
-  ) {
+  for (let offset = 0; offset < ready.length; offset += ingestionBatchHardLimit) {
     const chunk = ready.slice(offset, offset + ingestionBatchHardLimit);
     try {
-      const response = await cancelStoredIngestions(chunk.map((target) => ({
-        ...target.pair,
-        expected_version: target.expectedVersion!
-      })));
+      const response = await cancelStoredIngestions(
+        chunk.map((target) => ({
+          ...target.pair,
+          expected_version: target.expectedVersion!
+        }))
+      );
       for (const [index, target] of chunk.entries()) {
-        outcomes.set(target.id, applyCancelResult(
-          queue,
-          target,
-          response.items[index]
-        ));
+        outcomes.set(target.id, applyCancelResult(queue, target, response.items[index]));
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

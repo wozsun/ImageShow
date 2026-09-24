@@ -1,10 +1,6 @@
 import { unsetThemeFilter } from "@imageshow/shared/browser";
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
-import type {
-  CSSProperties,
-  RefObject,
-  SyntheticEvent
-} from "react";
+import type { CSSProperties, RefObject, SyntheticEvent } from "react";
 import { homeNumberFormatter } from "./home-ui.js";
 
 export function HomeBackground({
@@ -28,7 +24,9 @@ export function HomeBackground({
         "home-random-background",
         ready ? "is-ready" : "",
         readyAfterForeground ? "is-ready-after-foreground" : ""
-      ].filter(Boolean).join(" ")}
+      ]
+        .filter(Boolean)
+        .join(" ")}
       aria-hidden="true"
     >
       <div className="home-background-image-frame">
@@ -62,9 +60,7 @@ export function HomeHero({
   onCatalogIntent: () => void;
 }) {
   const totalImages = stats?.total_images ?? 0;
-  const themeCount = stats?.themes.filter(
-    (item) => item.slug !== unsetThemeFilter
-  ).length ?? 0;
+  const themeCount = stats?.themes.filter((item) => item.slug !== unsetThemeFilter).length ?? 0;
   const siteStats = [
     { label: "全站图片", value: totalImages, unit: "张", primary: true },
     { label: "主题", value: themeCount, unit: "个" },
@@ -74,9 +70,7 @@ export function HomeHero({
 
   const scrollToCatalog = () => {
     onCatalogIntent();
-    const reduceMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     catalogRef.current?.scrollIntoView({
       behavior: reduceMotion ? "auto" : "smooth",
       block: "start"
@@ -92,34 +86,33 @@ export function HomeHero({
     >
       <div className="home-banner-copy">
         <span className="home-banner-label">{bannerLabel}</span>
-        <h1 id="home-title" className="home-banner-title">{bannerTitle}</h1>
+        <h1 id="home-title" className="home-banner-title">
+          {bannerTitle}
+        </h1>
       </div>
-      <aside
-        className="home-site-stats"
-        aria-label="全站图库统计"
-        aria-live="polite"
-      >
+      <aside className="home-site-stats" aria-label="全站图库统计" aria-live="polite">
         <span>LIBRARY STATS</span>
         <ul>
           {siteStats.map((item, index) => {
-            const value = stats
-              ? homeNumberFormatter.format(item.value)
-              : "—";
+            const value = stats ? homeNumberFormatter.format(item.value) : "—";
             const longValueLength = item.primary ? 10 : 6;
             const wideValueLength = item.primary ? 7 : 4;
-            const valueWidth = value.length >= longValueLength
-              ? "long"
-              : value.length >= wideValueLength
-                ? "wide"
-                : undefined;
+            const valueWidth =
+              value.length >= longValueLength
+                ? "long"
+                : value.length >= wideValueLength
+                  ? "wide"
+                  : undefined;
             return (
               <li
                 key={item.label}
                 className={item.primary ? "is-primary" : undefined}
                 data-value-width={valueWidth}
-                style={{
-                  "--home-stat-index": index
-                } as CSSProperties}
+                style={
+                  {
+                    "--home-stat-index": index
+                  } as CSSProperties
+                }
               >
                 <div className="home-stat-value">
                   <strong>{value}</strong>
@@ -131,11 +124,7 @@ export function HomeHero({
           })}
         </ul>
       </aside>
-      <button
-        type="button"
-        className="home-scroll-cue"
-        onClick={scrollToCatalog}
-      >
+      <button type="button" className="home-scroll-cue" onClick={scrollToCatalog}>
         向下浏览与筛选 <span aria-hidden="true">↓</span>
       </button>
     </section>

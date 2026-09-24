@@ -4,7 +4,11 @@ import test from "node:test";
 import { setImmediate, setTimeout } from "node:timers/promises";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { Hono } from "hono";
-import { contentResponse, createContentRepresentation, type ContentRepresentation } from "../../../packages/server/src/core/http/content-response.ts";
+import {
+  contentResponse,
+  createContentRepresentation,
+  type ContentRepresentation
+} from "../../../packages/server/src/core/http/content-response.ts";
 import { createApiSuccessSnapshot } from "../../../packages/server/src/core/http/responses.ts";
 import { createEncodedContentCache } from "../../../packages/server/src/core/http/encoded-content.ts";
 import { logger } from "../../../packages/server/src/core/logger.ts";
@@ -25,7 +29,9 @@ test("[Server/内容HTTP] JSON 快照复用正文与验证器，发布变化后�
   const changed = snapshot({ ...first, title: "新配置" });
   assert.notEqual(changed.etag, representation.etag);
   const response = contentResponse(changed, {
-    cacheControl: "private, no-cache", contentType: "application/json", ifNoneMatch: representation.etag
+    cacheControl: "private, no-cache",
+    contentType: "application/json",
+    ifNoneMatch: representation.etag
   });
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true, title: "新配置" });
@@ -37,21 +43,33 @@ test("[Server/内容HTTP] 原生编码正文、长度、条件响应与 HEAD 一
   assert.equal(select(identity, "br, gzip"), identity);
   assert.equal(select(identity, "br, identity;q=0"), null);
   const deadline = Date.now() + 5_000;
-  while (select(identity, "br")?.encoding !== "br" || select(identity, "gzip")?.encoding !== "gzip") {
+  while (
+    select(identity, "br")?.encoding !== "br" ||
+    select(identity, "gzip")?.encoding !== "gzip"
+  ) {
     assert.ok(Date.now() < deadline, "native encoders should complete");
     await setTimeout(1);
   }
   const app = new Hono();
   app.get("/", (c) => {
     const representation = select(identity, c.req.header("Accept-Encoding"));
-    return representation ? contentResponse(representation, {
-      cacheControl: "public, max-age=0", contentType: "text/html",
-      headers: { Vary: "Accept-Encoding" }, ifNoneMatch: c.req.header("If-None-Match")
-    }) : new Response(null, { status: 406, headers: { Vary: "Accept-Encoding", "Cache-Control": "no-store" } });
+    return representation
+      ? contentResponse(representation, {
+          cacheControl: "public, max-age=0",
+          contentType: "text/html",
+          headers: { Vary: "Accept-Encoding" },
+          ifNoneMatch: c.req.header("If-None-Match")
+        })
+      : new Response(null, {
+          status: 406,
+          headers: { Vary: "Accept-Encoding", "Cache-Control": "no-store" }
+        });
   });
   for (const [accept, encoding] of [
-    ["br, gzip", "br"], ["BR;q=0.5, gzip;q=1", "gzip"],
-    ["br;q=0.5, identity;q=1", undefined], ["", undefined]
+    ["br, gzip", "br"],
+    ["BR;q=0.5, gzip;q=1", "gzip"],
+    ["br;q=0.5, identity;q=1", undefined],
+    ["", undefined]
   ] as const) {
     const response = await app.request("/", { headers: { "Accept-Encoding": accept } });
     const body = Buffer.from(await response.arrayBuffer());
@@ -59,12 +77,21 @@ test("[Server/内容HTTP] 原生编码正文、长度、条件响应与 HEAD 一
     assert.equal(response.headers.get("Content-Length"), String(body.length));
     assert.equal(response.headers.get("ETag"), identity.etag);
     assert.equal(response.headers.get("Vary"), "Accept-Encoding");
-    const decoded = encoding === "br" ? brotliDecompressSync(body) : encoding === "gzip" ? gunzipSync(body) : body;
+    const decoded =
+      encoding === "br"
+        ? brotliDecompressSync(body)
+        : encoding === "gzip"
+          ? gunzipSync(body)
+          : body;
     assert.equal(decoded.toString(), identity.body);
     for (const method of ["GET", "HEAD"]) {
-      const cached = await app.request("/", { method, headers: {
-        "Accept-Encoding": accept, "If-None-Match": identity.etag
-      } });
+      const cached = await app.request("/", {
+        method,
+        headers: {
+          "Accept-Encoding": accept,
+          "If-None-Match": identity.etag
+        }
+      });
       assert.equal(cached.status, 304);
       assert.equal((await cached.arrayBuffer()).byteLength, 0);
       assert.equal(cached.headers.get("Content-Length"), null);
@@ -86,11 +113,14 @@ test("[Server/内容HTTP] 编码并发有界、只处理最新等待内容且失
     resolve: (body: Buffer<ArrayBuffer>) => void;
     reject: (error: Error) => void;
   }> = [];
-  const encoder = (encoding: string) => (source: ContentRepresentation) => new Promise<Buffer<ArrayBuffer>>((resolve, reject) => {
-    calls.push({ source, encoding, resolve, reject });
-  });
+  const encoder = (encoding: string) => (source: ContentRepresentation) =>
+    new Promise<Buffer<ArrayBuffer>>((resolve, reject) => {
+      calls.push({ source, encoding, resolve, reject });
+    });
   const warnings: unknown[] = [];
-  t.mock.method(logger, "warn", (...args: unknown[]) => { warnings.push(args); });
+  t.mock.method(logger, "warn", (...args: unknown[]) => {
+    warnings.push(args);
+  });
   const select = createEncodedContentCache({ br: encoder("br"), gzip: encoder("gzip") });
   const a = createContentRepresentation("first source ".repeat(100));
   const b = createContentRepresentation("superseded source ".repeat(100));
@@ -102,8 +132,15 @@ test("[Server/内容HTTP] 编码并发有界、只处理最新等待内容且失
   for (const call of calls.slice()) call.resolve(Buffer.from("old encoding"));
   await setImmediate();
   assert.equal(calls.length, 4);
-  assert.deepEqual(calls.map(call => call.source), [a, a, c, c]);
-  assert.equal(select(c, "br, identity;q=0"), null, "old generation cannot populate current variants");
+  assert.deepEqual(
+    calls.map((call) => call.source),
+    [a, a, c, c]
+  );
+  assert.equal(
+    select(c, "br, identity;q=0"),
+    null,
+    "old generation cannot populate current variants"
+  );
   calls[2]!.reject(new Error("synthetic encoder failure"));
   calls[3]!.resolve(Buffer.from("current gzip"));
   await setImmediate();
@@ -133,7 +170,10 @@ test("[Server/内容HTTP] 不缓存变大的编码，同步编码失败保持原
   const identity = createContentRepresentation("small");
   const select = createEncodedContentCache({
     br: async () => Buffer.from("larger than source"),
-    gzip: () => { calls++; throw new Error("synthetic immediate failure"); }
+    gzip: () => {
+      calls++;
+      throw new Error("synthetic immediate failure");
+    }
   });
   assert.equal(select(identity, "br, gzip"), identity);
   await setImmediate();

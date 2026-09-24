@@ -15,7 +15,11 @@ import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { PasswordInput } from "../../components/form/PasswordInput.js";
 import { SlugChip } from "../../components/data-display/SlugChip.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
-import { generateAdminPassword, isValidAdminPassword, passwordPolicyHint } from "../../lib/auth/password.js";
+import {
+  generateAdminPassword,
+  isValidAdminPassword,
+  passwordPolicyHint
+} from "../../lib/auth/password.js";
 import type { AdminUser } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
@@ -37,7 +41,16 @@ const resetPasswordPresentation = {
 
 export function UserAdmin() {
   const client = useQueryClient();
-  const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<AdminUsersResponseDto>({ queryKey: queryKeys.users, queryFn: ({ signal }) => api(`${adminApiBasePath}/users`, { signal }) });
+  const {
+    data,
+    error: listError,
+    isError: listFailed,
+    isFetching,
+    refetch
+  } = useQuery<AdminUsersResponseDto>({
+    queryKey: queryKeys.users,
+    queryFn: ({ signal }) => api(`${adminApiBasePath}/users`, { signal })
+  });
   const users = data?.items ?? [];
   const refresh = () => client.invalidateQueries({ queryKey: queryKeys.users });
   const [username, setUsername] = useState("");
@@ -55,20 +68,20 @@ export function UserAdmin() {
   const usernameError = usernameInvalid ? slugFormatHint : createError;
   const usernameValid = username.trim().length > 0 && slugPattern.test(username.trim());
   const passwordInvalid = password.length > 0 && !isValidAdminPassword(password);
-  const createFormBusy = Boolean(mutation)
-    || createAction.pending
-    || generatePasswordStatus.pending;
+  const createFormBusy =
+    Boolean(mutation) || createAction.pending || generatePasswordStatus.pending;
 
   const create = async (event: FormEvent) => {
     event.preventDefault();
     const name = username.trim();
     if (
-      !usernameValid
-      || !isValidAdminPassword(password)
-      || Boolean(mutation)
-      || createAction.pending
-      || generatePasswordStatus.pending
-    ) return;
+      !usernameValid ||
+      !isValidAdminPassword(password) ||
+      Boolean(mutation) ||
+      createAction.pending ||
+      generatePasswordStatus.pending
+    )
+      return;
     if (users.some((user) => user.username === name)) {
       setCreateError("用户名已存在");
       return;
@@ -117,7 +130,9 @@ export function UserAdmin() {
     if (!confirmDelete) return false;
     setMutation("delete");
     try {
-      await api(`${adminApiBasePath}/users/${encodeURIComponent(confirmDelete.username)}/delete`, { method: "POST" });
+      await api(`${adminApiBasePath}/users/${encodeURIComponent(confirmDelete.username)}/delete`, {
+        method: "POST"
+      });
       await refresh();
       return true;
     } catch (err) {
@@ -149,7 +164,11 @@ export function UserAdmin() {
             autoComplete="off"
             aria-invalid={Boolean(usernameError)}
           />
-          {usernameError && <p className="admin-field-error" role="alert">{usernameError}</p>}
+          {usernameError && (
+            <p className="admin-field-error" role="alert">
+              {usernameError}
+            </p>
+          )}
         </div>
         <div className="admin-create-field user-password-field">
           <PasswordInput
@@ -177,11 +196,7 @@ export function UserAdmin() {
           disabled={createFormBusy || !usernameValid || !isValidAdminPassword(password)}
         >
           <AdminIcon name="user-add-line" />
-          <StableButtonLabel
-            idle="新建图片管理员"
-            busyText="新建中"
-            busy={createAction.pending}
-          />
+          <StableButtonLabel idle="新建图片管理员" busyText="新建中" busy={createAction.pending} />
         </button>
       </form>
       <div className="entity-admin-grid admin-scroll-list" ref={listRef}>
@@ -196,7 +211,13 @@ export function UserAdmin() {
             onDelete={() => setConfirmDelete(user)}
           />
         ))}
-        {listFailed && <QueryErrorState error={listError} onRetry={() => void refetch()} reportContext="user_admin.load" />}
+        {listFailed && (
+          <QueryErrorState
+            error={listError}
+            onRetry={() => void refetch()}
+            reportContext="user_admin.load"
+          />
+        )}
         {!listFailed && !users.length && !isFetching && <p className="muted">还没有管理员</p>}
       </div>
       <OverlayScrollbar targetRef={listRef} />
@@ -224,7 +245,11 @@ export function UserAdmin() {
   );
 }
 
-function UserCard({ user, onResetPassword, onDelete }: {
+function UserCard({
+  user,
+  onResetPassword,
+  onDelete
+}: {
   user: AdminUser;
   onResetPassword: (trigger: HTMLButtonElement) => void;
   onDelete: () => void;
@@ -234,7 +259,9 @@ function UserCard({ user, onResetPassword, onDelete }: {
     <div className={`entity-card user-card${isSuper ? " is-pinned" : ""}`}>
       <div className="entity-card-row">
         <SlugChip value={user.username} ariaLabel="用户名" />
-        <span className={`role-badge ${isSuper ? "role-super" : "role-image"}`}>{isSuper ? "超级管理员" : "图片管理员"}</span>
+        <span className={`role-badge ${isSuper ? "role-super" : "role-image"}`}>
+          {isSuper ? "超级管理员" : "图片管理员"}
+        </span>
       </div>
       <div className="entity-card-foot">
         {isSuper ? (
@@ -264,7 +291,12 @@ function UserCard({ user, onResetPassword, onDelete }: {
   );
 }
 
-function ResetPasswordModal({ username, returnFocusRef, onClose, onError }: {
+function ResetPasswordModal({
+  username,
+  returnFocusRef,
+  onClose,
+  onError
+}: {
   username: string;
   returnFocusRef: RefObject<HTMLElement | null>;
   onClose: () => void;
@@ -342,7 +374,13 @@ function ResetPasswordModal({ username, returnFocusRef, onClose, onError }: {
             </label>
           </div>
           <footer>
-            <button type="button" disabled={resetPasswordStatus.pending} onClick={() => requestClose()}>取消</button>
+            <button
+              type="button"
+              disabled={resetPasswordStatus.pending}
+              onClick={() => requestClose()}
+            >
+              取消
+            </button>
             <AsyncActionButton
               className="button"
               type="submit"

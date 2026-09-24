@@ -3,17 +3,9 @@ import type { WeiboImportResultDto } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
 import { resolveWeiboAuthorSlugs } from "../../../authors/query.ts";
 import { parseJsonlManifest } from "./jsonl.ts";
-import {
-  createWeiboVisitorCookie,
-  fetchWeiboStatus
-} from "./weibo-client.ts";
-import {
-  extractWeiboPost,
-  parseWeiboPostUrl
-} from "./weibo-parser.ts";
-import {
-  createWeiboRequestScheduler
-} from "./weibo-request-scheduler.ts";
+import { createWeiboVisitorCookie, fetchWeiboStatus } from "./weibo-client.ts";
+import { extractWeiboPost, parseWeiboPostUrl } from "./weibo-parser.ts";
+import { createWeiboRequestScheduler } from "./weibo-request-scheduler.ts";
 import {
   WeiboImportError,
   type ExtractedWeiboPost,
@@ -43,8 +35,7 @@ type WeiboBatchExtraction =
 const weiboRequestScheduler = createWeiboRequestScheduler({
   createVisitorIdentity: (signal) => createWeiboVisitorCookie(signal),
   delayRange: () => {
-    const [minDelaySeconds, maxDelaySeconds] = getRuntimeConfig().weibo
-      .request_delay_seconds;
+    const [minDelaySeconds, maxDelaySeconds] = getRuntimeConfig().weibo.request_delay_seconds;
     return {
       minDelaySeconds,
       maxDelaySeconds
@@ -58,17 +49,21 @@ export function weiboPostToJsonl(
   authorSlugs: ReadonlyMap<string, string> = new Map()
 ) {
   const publicationYear = post.published_at.slice(0, 4);
-  return post.images.map((image) => JSON.stringify({
-    original: image.original_url,
-    ...(sourceEnabled ? { source: post.source_url } : {}),
-    image_time: post.published_at,
-    device: "auto",
-    brightness: "auto",
-    tags: [publicationYear],
-    ...(image.user_id && authorSlugs.has(image.user_id)
-      ? { author: authorSlugs.get(image.user_id) }
-      : {})
-  })).join("\n");
+  return post.images
+    .map((image) =>
+      JSON.stringify({
+        original: image.original_url,
+        ...(sourceEnabled ? { source: post.source_url } : {}),
+        image_time: post.published_at,
+        device: "auto",
+        brightness: "auto",
+        tags: [publicationYear],
+        ...(image.user_id && authorSlugs.has(image.user_id)
+          ? { author: authorSlugs.get(image.user_id) }
+          : {})
+      })
+    )
+    .join("\n");
 }
 
 function assertWeiboImageCountWithinHardLimit(imageCount: number) {
@@ -79,11 +74,7 @@ function assertWeiboImageCountWithinHardLimit(imageCount: number) {
   );
 }
 
-function createWeiboPostParseError(
-  error: unknown,
-  line: number,
-  url: string
-): WeiboPostParseError {
+function createWeiboPostParseError(error: unknown, line: number, url: string): WeiboPostParseError {
   if (!(error instanceof WeiboImportError)) throw error;
   return { line, url, code: error.code, error: error.message };
 }
@@ -114,17 +105,18 @@ export async function createWeiboImportBatchManifest(
   if (validUrls.length) {
     let fetchedImageCount = 0;
     const fetched = await weiboRequestScheduler.scheduleBatch(
-      validUrls.map(({ line, parsedUrl }) => (
-        async (visitorCookie: string, signal: AbortSignal): Promise<WeiboBatchExtraction> => {
-          const post = extractWeiboPost(
-            await fetchWeiboStatus(parsedUrl.identifier, visitorCookie, signal),
-            parsedUrl
-          );
-          fetchedImageCount += post.image_count;
-          assertWeiboImageCountWithinHardLimit(fetchedImageCount);
-          return { line, post };
-        }
-      )),
+      validUrls.map(
+        ({ line, parsedUrl }) =>
+          async (visitorCookie: string, signal: AbortSignal): Promise<WeiboBatchExtraction> => {
+            const post = extractWeiboPost(
+              await fetchWeiboStatus(parsedUrl.identifier, visitorCookie, signal),
+              parsedUrl
+            );
+            fetchedImageCount += post.image_count;
+            assertWeiboImageCountWithinHardLimit(fetchedImageCount);
+            return { line, post };
+          }
+      ),
       options.signal
     );
     for (const [index, result] of fetched.entries()) {
@@ -152,20 +144,12 @@ export async function createWeiboImportBatchManifest(
     if (extraction?.error) errors.push(extraction.error);
   }
 
-  assertWeiboImageCountWithinHardLimit(
-    posts.reduce((total, post) => total + post.image_count, 0)
-  );
+  assertWeiboImageCountWithinHardLimit(posts.reduce((total, post) => total + post.image_count, 0));
   const authorSlugs = await resolveWeiboAuthorSlugs(
-    posts.flatMap((post) => post.images.flatMap((image) => (
-      image.user_id ? [image.user_id] : []
-    )))
+    posts.flatMap((post) => post.images.flatMap((image) => (image.user_id ? [image.user_id] : [])))
   );
   const manifest = parseJsonlManifest(
-    posts.map((post) => weiboPostToJsonl(
-      post,
-      options.sourceEnabled,
-      authorSlugs
-    )).join("\n"),
+    posts.map((post) => weiboPostToJsonl(post, options.sourceEnabled, authorSlugs)).join("\n"),
     {
       maxItems: appConfig.ingestion.weiboImageHardLimit,
       timeZone: options.timeZone

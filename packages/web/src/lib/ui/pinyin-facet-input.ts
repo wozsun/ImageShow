@@ -11,8 +11,12 @@ export function matchPinyinFacetText(value: string, query: string): FacetTextMat
   // code units of supplementary characters. Normalize before matching so that
   // characters whose lowercase form expands retain the same highlight offsets.
   const indices = match(value.toLowerCase(), query, {
-    precision: "first", lastPrecision: "start", continuous: false,
-    space: "ignore", v: true, insensitive: false
+    precision: "first",
+    lastPrecision: "start",
+    continuous: false,
+    space: "ignore",
+    v: true,
+    insensitive: false
   });
   if (!indices?.length) return null;
   const ranges: [number, number][] = [];

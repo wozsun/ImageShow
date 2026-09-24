@@ -1,11 +1,7 @@
 import { storageObjectKey } from "@imageshow/shared/browser";
 import { errorMessage } from "../core/api-error.ts";
-import type {
-  ActiveIngestionStorageReference
-} from "../images/ingestion/cleanup/storage-references.ts";
-export {
-  activeIngestionStorageReferences
-} from "../images/ingestion/cleanup/storage-references.ts";
+import type { ActiveIngestionStorageReference } from "../images/ingestion/cleanup/storage-references.ts";
+export { activeIngestionStorageReferences } from "../images/ingestion/cleanup/storage-references.ts";
 import { thumbnailObjectKey } from "../storage/objects/image-paths.ts";
 import { listStorageBackends } from "../storage/backends/registry.ts";
 import type { StorageBackendRecord } from "../storage/backends/config.ts";
@@ -82,10 +78,7 @@ export async function collectStorageBackendGroupSnapshot(
   const errors: Array<{ backend: string; error: string }> = [];
   for (const backend of group.backends) {
     try {
-      const snapshot = await collectStorageNamespaceSnapshot(
-        backend.slug,
-        options
-      );
+      const snapshot = await collectStorageNamespaceSnapshot(backend.slug, options);
       return { backend: backend.slug, snapshot, errors };
     } catch (error) {
       options.signal?.throwIfAborted();

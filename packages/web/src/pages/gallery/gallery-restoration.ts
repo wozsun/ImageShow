@@ -19,13 +19,12 @@ export type GalleryRestorationSession = {
 
 let retainedSession: GalleryRestorationSession | null = null;
 
-function geometryMatches(
-  left: GalleryCompactGeometry,
-  right: GalleryCompactGeometry
-) {
-  return left.columnCount === right.columnCount
-    && Math.abs(left.contentWidth - right.contentWidth) < 0.5
-    && Math.abs(left.gap - right.gap) < 0.5;
+function geometryMatches(left: GalleryCompactGeometry, right: GalleryCompactGeometry) {
+  return (
+    left.columnCount === right.columnCount &&
+    Math.abs(left.contentWidth - right.contentWidth) < 0.5 &&
+    Math.abs(left.gap - right.gap) < 0.5
+  );
 }
 
 // Read during render without consuming the session so React Strict Mode's
@@ -35,9 +34,9 @@ export function reusableGalleryRestorationSession(
   navigationKey: string,
   geometry?: GalleryCompactGeometry
 ) {
-  return retainedSession?.imageQuery === imageQuery
-    && retainedSession.navigationKey === navigationKey
-    && (!geometry || geometryMatches(retainedSession.geometry, geometry))
+  return retainedSession?.imageQuery === imageQuery &&
+    retainedSession.navigationKey === navigationKey &&
+    (!geometry || geometryMatches(retainedSession.geometry, geometry))
     ? retainedSession
     : null;
 }
@@ -46,8 +45,6 @@ export function activateGalleryRestorationSession() {
   retainedSession = null;
 }
 
-export function retainGalleryRestorationSession(
-  session: GalleryRestorationSession
-) {
+export function retainGalleryRestorationSession(session: GalleryRestorationSession) {
   retainedSession = session;
 }

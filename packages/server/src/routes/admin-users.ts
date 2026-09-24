@@ -1,21 +1,12 @@
 import type { Hono } from "hono";
-import {
-  adminApiBasePath,
-  type AdminUsersResponseDto
-} from "@imageshow/shared/browser";
-import {
-  apiSuccess,
-  privateCacheableApiSuccess
-} from "../core/http/responses.ts";
+import { adminApiBasePath, type AdminUsersResponseDto } from "@imageshow/shared/browser";
+import { apiSuccess, privateCacheableApiSuccess } from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
 import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import { redis } from "../core/redis/client.ts";
 import { adminUsernameInput } from "../users/credentials.ts";
 import { parse } from "./validation/parse.ts";
-import {
-  userCreateInput,
-  userPasswordInput
-} from "./validation/users.ts";
+import { userCreateInput, userPasswordInput } from "./validation/users.ts";
 import {
   createImageAdmin,
   deleteImageAdmin,
@@ -49,10 +40,10 @@ export function registerAdminUserRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/users/:username/password`, async (c) => {
     const username = parse(adminUsernameInput, c.req.param("username"));
     const input = parse(userPasswordInput, await readJsonBody(c));
-    const [
-      staleCredentialVersion,
-      validCredentialVersion
-    ] = await resetImageAdminPassword(username, input.password);
+    const [staleCredentialVersion, validCredentialVersion] = await resetImageAdminPassword(
+      username,
+      input.password
+    );
     await invalidateCommittedAdminSessionsByUsername(sessionRedis, username, {
       operation: "password_reset",
       staleCredentialVersion,

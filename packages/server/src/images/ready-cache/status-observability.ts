@@ -1,14 +1,9 @@
-import type {
-  ReadyImageCacheRecentErrorDto
-} from "@imageshow/shared/browser";
+import type { ReadyImageCacheRecentErrorDto } from "@imageshow/shared/browser";
 import { errorMessage } from "../../core/api-error.ts";
 
 type ReadyImageCacheErrorScope = "core" | "derived";
 
-const recentErrors: Record<
-  ReadyImageCacheErrorScope,
-  ReadyImageCacheRecentErrorDto | null
-> = {
+const recentErrors: Record<ReadyImageCacheErrorScope, ReadyImageCacheRecentErrorDto | null> = {
   core: null,
   derived: null
 };

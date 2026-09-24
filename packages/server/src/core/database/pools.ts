@@ -17,15 +17,14 @@ let configuredConnection: DatabaseConnectionConfig | null = null;
 export let pool: pg.Pool;
 let advisoryLockPool: pg.Pool | null = null;
 
-function sameConnection(
-  left: DatabaseConnectionConfig,
-  right: DatabaseConnectionConfig
-) {
-  return left.host === right.host
-    && left.port === right.port
-    && left.name === right.name
-    && left.user === right.user
-    && left.password === right.password;
+function sameConnection(left: DatabaseConnectionConfig, right: DatabaseConnectionConfig) {
+  return (
+    left.host === right.host &&
+    left.port === right.port &&
+    left.name === right.name &&
+    left.user === right.user &&
+    left.password === right.password
+  );
 }
 
 function requireAdvisoryLockPool() {
@@ -35,14 +34,10 @@ function requireAdvisoryLockPool() {
   return advisoryLockPool;
 }
 
-export function configureDatabasePools(
-  databaseConfig: DatabaseConnectionConfig
-) {
+export function configureDatabasePools(databaseConfig: DatabaseConnectionConfig) {
   if (configuredConnection) {
     if (!sameConnection(configuredConnection, databaseConfig)) {
-      throw new Error(
-        "PostgreSQL pools are already configured for another database"
-      );
+      throw new Error("PostgreSQL pools are already configured for another database");
     }
     return;
   }
@@ -83,8 +78,7 @@ export function connectAdvisoryLockClient(): Promise<PoolClient> {
 
 export async function closeDatabasePools() {
   const pools = [pool, advisoryLockPool].filter(
-    (candidate): candidate is pg.Pool => candidate !== undefined
-      && candidate !== null
+    (candidate): candidate is pg.Pool => candidate !== undefined && candidate !== null
   );
   await Promise.allSettled(pools.map((candidate) => candidate.end()));
 }

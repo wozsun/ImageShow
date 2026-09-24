@@ -5,16 +5,10 @@ import { api, isApiClientError } from "../../../lib/api/client.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
-import {
-  storageBackendDisplay,
-  storageBackendLabel
-} from "../../../lib/ui/select-options.js";
+import { storageBackendDisplay, storageBackendLabel } from "../../../lib/ui/select-options.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import type { StorageBackendAdmin } from "../../../lib/types.js";
-import {
-  createActionFeedback,
-  type ActionFeedbackState
-} from "../../../lib/ui/action-feedback.js";
+import { createActionFeedback, type ActionFeedbackState } from "../../../lib/ui/action-feedback.js";
 import "../../../styles/admin/storage.css";
 import {
   ActionFeedbackOutlet,
@@ -23,7 +17,10 @@ import {
 import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";
 import { StorageBackendModal } from "./StorageBackendModal.js";
 import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
-import { invalidateDataAfterSortOrderSave, invalidateStorageData } from "../../../lib/api/query-invalidation.js";
+import {
+  invalidateDataAfterSortOrderSave,
+  invalidateStorageData
+} from "../../../lib/api/query-invalidation.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
 import { migrateStorageBackendImages } from "../../../lib/api/storage-backend-image-migration.js";
@@ -31,9 +28,7 @@ import { useSortOrderSave } from "../../../hooks/useSortOrderSave.js";
 import { StorageBackendCard } from "./StorageBackendCard.js";
 import { StorageBackendMigrationDialog } from "./StorageBackendMigrationDialog.js";
 import { StorageBackendDeletionBlockedDialog } from "./StorageBackendDeletionBlockedDialog.js";
-import {
-  storageBackendAfterDeleteRejection
-} from "./storage-backend-deletion-policy.js";
+import { storageBackendAfterDeleteRejection } from "./storage-backend-deletion-policy.js";
 
 type StorageActionDialog =
   | { kind: "delete"; backend: StorageBackendAdmin; error?: string }
@@ -47,14 +42,15 @@ export function StorageSettings() {
   const query = useQuery<StorageBackendsAdminResponseDto>({
     queryKey: queryKeys.storageBackends,
     queryFn: ({ signal }) => api(`${adminApiBasePath}/storage/backends`, { signal }),
-    refetchInterval: (currentQuery) => currentQuery.state.data?.backends.some(
-      (backend) => backend.cleanup_job_count > backend.exhausted_cleanup_job_count
-    ) ? 2_000 : false
+    refetchInterval: (currentQuery) =>
+      currentQuery.state.data?.backends.some(
+        (backend) => backend.cleanup_job_count > backend.exhausted_cleanup_job_count
+      )
+        ? 2_000
+        : false
   });
   const [busy, setBusy] = useState("");
-  const [actionFeedback, setActionFeedback] = useState<
-    ActionFeedbackState | null
-  >(null);
+  const [actionFeedback, setActionFeedback] = useState<ActionFeedbackState | null>(null);
   const feedbackTarget = useActionFeedbackTarget("storage-settings");
   const defaultAction = useAsyncActionStatus();
   const defaultActionRunning = useRef(false);
@@ -69,22 +65,18 @@ export function StorageSettings() {
     basePath: `${adminApiBasePath}/storage/backends`,
     externalBusy: Boolean(busy) || defaultAction.pending,
     refresh: () => invalidateDataAfterSortOrderSave(client, queryKeys.storageBackends),
-    readValue: (slug) => client.getQueryData<StorageBackendsAdminResponseDto>(queryKeys.storageBackends)
-      ?.backends.find((backend) => backend.slug === slug)?.sort_order,
-    reportError: (stage, error) => reportAdminUiError(
-      `storage.sort_order.${stage}`,
-      error
-    )
+    readValue: (slug) =>
+      client
+        .getQueryData<StorageBackendsAdminResponseDto>(queryKeys.storageBackends)
+        ?.backends.find((backend) => backend.slug === slug)?.sort_order,
+    reportError: (stage, error) => reportAdminUiError(`storage.sort_order.${stage}`, error)
   });
   const operationBusy = sorting.busy;
 
   const executeStorageAction = async <Result,>(
     key: string,
     action: () => Promise<Result>
-  ): Promise<
-    | { succeeded: true; value: Result }
-    | { succeeded: false; error?: unknown }
-  > => {
+  ): Promise<{ succeeded: true; value: Result } | { succeeded: false; error?: unknown }> => {
     if (busy) return { succeeded: false };
     setBusy(key);
     try {
@@ -101,10 +93,8 @@ export function StorageSettings() {
     }
   };
 
-  const runStorageAction = async (
-    key: string,
-    action: () => Promise<unknown>
-  ) => (await executeStorageAction(key, action)).succeeded;
+  const runStorageAction = async (key: string, action: () => Promise<unknown>) =>
+    (await executeStorageAction(key, action)).succeeded;
 
   const testConfig = async (body: unknown): Promise<boolean> => {
     if (busy) return false;
@@ -116,12 +106,14 @@ export function StorageSettings() {
       reportAdminUiError("storage.connection_test", error);
       return false;
     } finally {
-      await client.invalidateQueries({
-        queryKey: queryKeys.storageBackends,
-        exact: true
-      }).catch((error) => {
-        reportAdminUiError("storage.connection_test.refresh", error);
-      });
+      await client
+        .invalidateQueries({
+          queryKey: queryKeys.storageBackends,
+          exact: true
+        })
+        .catch((error) => {
+          reportAdminUiError("storage.connection_test.refresh", error);
+        });
       setBusy("");
     }
   };
@@ -131,10 +123,11 @@ export function StorageSettings() {
     defaultActionRunning.current = true;
     setDefaultActionSlug(slug);
     try {
-      return await defaultAction.run(() => runStorageAction(
-        `default:${slug}`,
-        () => api(`${adminApiBasePath}/storage/backends/${slug}/default`, { method: "POST" })
-      ));
+      return await defaultAction.run(() =>
+        runStorageAction(`default:${slug}`, () =>
+          api(`${adminApiBasePath}/storage/backends/${slug}/default`, { method: "POST" })
+        )
+      );
     } finally {
       defaultActionRunning.current = false;
     }
@@ -142,14 +135,13 @@ export function StorageSettings() {
 
   const deleteBackend = async (backend: StorageBackendAdmin) => {
     if (busy) return false;
-    const result = await executeStorageAction(
-      `delete:${backend.slug}`,
-      () => api(`${adminApiBasePath}/storage/backends/${backend.slug}/delete`, { method: "POST" })
+    const result = await executeStorageAction(`delete:${backend.slug}`, () =>
+      api(`${adminApiBasePath}/storage/backends/${backend.slug}/delete`, { method: "POST" })
     );
     if (!result.succeeded) {
-      const refreshedBackends = client.getQueryData<
-        StorageBackendsAdminResponseDto
-      >(queryKeys.storageBackends)?.backends;
+      const refreshedBackends = client.getQueryData<StorageBackendsAdminResponseDto>(
+        queryKeys.storageBackends
+      )?.backends;
       const refreshedBackend = refreshedBackends?.find(
         (candidate) => candidate.slug === backend.slug
       );
@@ -177,9 +169,9 @@ export function StorageSettings() {
         const message = isApiClientError(result.error)
           ? result.error.message
           : "存储后端删除失败，请稍后重试";
-        setActionDialog((current) => current?.kind === "delete"
-          ? { ...current, error: message }
-          : current);
+        setActionDialog((current) =>
+          current?.kind === "delete" ? { ...current, error: message } : current
+        );
         setActionFeedback(createActionFeedback(message, "error"));
       }
       return false;
@@ -188,9 +180,8 @@ export function StorageSettings() {
   };
 
   const migrateBackend = async (source: string, target: string) => {
-    const result = await executeStorageAction(
-      `migrate:${source}`,
-      () => migrateStorageBackendImages(source, target)
+    const result = await executeStorageAction(`migrate:${source}`, () =>
+      migrateStorageBackendImages(source, target)
     );
     if (!result.succeeded) {
       setActionFeedback(createActionFeedback("存储后端迁移失败，请检查配置后重试", "error"));
@@ -199,35 +190,38 @@ export function StorageSettings() {
 
     const migration = result.value.migration;
     if (migration.error_count) {
-      setActionFeedback(createActionFeedback(
-        `迁移未全部完成：已迁移 ${migration.migrated} 张，失败 ${migration.error_count} 张`,
-        "error"
-      ));
+      setActionFeedback(
+        createActionFeedback(
+          `迁移未全部完成：已迁移 ${migration.migrated} 张，失败 ${migration.error_count} 张`,
+          "error"
+        )
+      );
     } else {
-      setActionFeedback(createActionFeedback(
-        migration.migrated
-          ? `已迁移 ${migration.migrated} 张图片`
-          : "源后端已没有需要迁移的图片",
-        "success"
-      ));
+      setActionFeedback(
+        createActionFeedback(
+          migration.migrated ? `已迁移 ${migration.migrated} 张图片` : "源后端已没有需要迁移的图片",
+          "success"
+        )
+      );
     }
     return true;
   };
 
-  const retryCleanup = (slug: string) => runStorageAction(
-    `cleanup-retry:${slug}`,
-    () => api(`${adminApiBasePath}/storage/backends/${slug}/cleanup/retry`, {
-      method: "POST"
-    })
-  );
+  const retryCleanup = (slug: string) =>
+    runStorageAction(`cleanup-retry:${slug}`, () =>
+      api(`${adminApiBasePath}/storage/backends/${slug}/cleanup/retry`, {
+        method: "POST"
+      })
+    );
 
   const openEditor = (target: StorageBackendAdmin | "new") => setEditing(target);
   const closeEditor = () => setEditing(null);
-  const editingTarget = editing === "new"
-    ? editing
-    : editing
-      ? backends.find((backend) => backend.slug === editing.slug) ?? editing
-      : null;
+  const editingTarget =
+    editing === "new"
+      ? editing
+      : editing
+        ? (backends.find((backend) => backend.slug === editing.slug) ?? editing)
+        : null;
 
   return (
     <section className="workspace">
@@ -236,10 +230,25 @@ export function StorageSettings() {
         description="命名存储后端：本地与多个对象存储桶可并存"
         feedbackTarget={feedbackTarget}
       />
-      <p className="hint">每张图片记录自己所在的存储后端，可定义多个（同类型也可，例如两个对象存储桶）。新上传写入“默认”后端。</p>
-      <p className="storage-default-note">当前默认上传后端 <strong>{defaultBackend ? storageBackendDisplay(defaultBackend) : storageBackendLabel(defaultSlug)}</strong></p>
+      <p className="hint">
+        每张图片记录自己所在的存储后端，可定义多个（同类型也可，例如两个对象存储桶）。新上传写入“默认”后端。
+      </p>
+      <p className="storage-default-note">
+        当前默认上传后端{" "}
+        <strong>
+          {defaultBackend
+            ? storageBackendDisplay(defaultBackend)
+            : storageBackendLabel(defaultSlug)}
+        </strong>
+      </p>
       {query.isLoading && <p className="muted">加载中</p>}
-      {query.isError && <QueryErrorState error={query.error} onRetry={() => void query.refetch()} reportContext="storage.load" />}
+      {query.isError && (
+        <QueryErrorState
+          error={query.error}
+          onRetry={() => void query.refetch()}
+          reportContext="storage.load"
+        />
+      )}
       <div className="storage-card-grid">
         {backends.map((backend) => {
           return (
@@ -249,33 +258,42 @@ export function StorageSettings() {
               hasNonLocalBackend={hasNonLocalBackend}
               busy={busy}
               sortBusy={sorting.isSaving(backend.slug)}
-              defaultStatus={defaultActionSlug === backend.slug
-                ? defaultAction.status
-                : "idle"}
+              defaultStatus={defaultActionSlug === backend.slug ? defaultAction.status : "idle"}
               defaultActionPending={defaultAction.pending}
               onSortSave={(value) => sorting.save(backend.slug, value)}
               onEdit={() => openEditor(backend)}
               onSetDefault={() => setDefault(backend.slug)}
-              onToggleEnabled={() => runStorageAction(
-                `enable:${backend.slug}`,
-                () => api(`${adminApiBasePath}/storage/backends/${backend.slug}`, {
-                  method: "POST",
-                  body: JSON.stringify({ enabled: !backend.enabled })
+              onToggleEnabled={() =>
+                runStorageAction(`enable:${backend.slug}`, () =>
+                  api(`${adminApiBasePath}/storage/backends/${backend.slug}`, {
+                    method: "POST",
+                    body: JSON.stringify({ enabled: !backend.enabled })
+                  })
+                )
+              }
+              onRetryCleanup={() =>
+                setActionDialog({
+                  kind: "retry-cleanup",
+                  backend
                 })
-              )}
-              onRetryCleanup={() => setActionDialog({
-                kind: "retry-cleanup",
-                backend
-              })}
-              onRemovalAction={() => setActionDialog({
-                kind: backend.deletion.action,
-                backend
-              })}
+              }
+              onRemovalAction={() =>
+                setActionDialog({
+                  kind: backend.deletion.action,
+                  backend
+                })
+              }
             />
           );
         })}
-        <button type="button" className="storage-add-card" disabled={operationBusy} onClick={() => openEditor("new")}>
-          <AdminIcon name="add-line" /><span>新增存储后端</span>
+        <button
+          type="button"
+          className="storage-add-card"
+          disabled={operationBusy}
+          onClick={() => openEditor("new")}
+        >
+          <AdminIcon name="add-line" />
+          <span>新增存储后端</span>
         </button>
       </div>
       {editingTarget && (
@@ -285,12 +303,19 @@ export function StorageSettings() {
           busy={busy}
           onClose={closeEditor}
           onTest={testConfig}
-          onSave={(slug, payload, isCreate) => runStorageAction(
-            isCreate ? "create" : `save:${slug}`,
-            () => isCreate
-              ? api(`${adminApiBasePath}/storage/backends`, { method: "POST", body: JSON.stringify(payload) })
-              : api(`${adminApiBasePath}/storage/backends/${slug}`, { method: "POST", body: JSON.stringify(payload) })
-          )}
+          onSave={(slug, payload, isCreate) =>
+            runStorageAction(isCreate ? "create" : `save:${slug}`, () =>
+              isCreate
+                ? api(`${adminApiBasePath}/storage/backends`, {
+                    method: "POST",
+                    body: JSON.stringify(payload)
+                  })
+                : api(`${adminApiBasePath}/storage/backends/${slug}`, {
+                    method: "POST",
+                    body: JSON.stringify(payload)
+                  })
+            )
+          }
         />
       )}
       {actionDialog?.kind === "delete" && (

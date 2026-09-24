@@ -32,15 +32,14 @@ function finiteNumber(value: unknown) {
   return Number.isFinite(number) ? number : null;
 }
 
-export async function readAdminPostgresqlStatus(): Promise<
-  AdminPostgresqlStatusDto
-> {
+export async function readAdminPostgresqlStatus(): Promise<AdminPostgresqlStatusDto> {
   const startedAt = performance.now();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await client.query(`SET LOCAL statement_timeout='${STATUS_QUERY_TIMEOUT_MS}ms'`);
-    const row = (await client.query(`
+    const row = (
+      await client.query(`
       SELECT current_setting('server_version') AS version,
              count(*) AS total_images,
              count(*) FILTER (WHERE status='ready') AS ready_images,
@@ -51,7 +50,8 @@ export async function readAdminPostgresqlStatus(): Promise<
                 FROM background_job
                WHERE status='failed') AS abnormal_jobs
         FROM metadata
-    `)).rows[0] as Record<string, unknown> | undefined;
+    `)
+    ).rows[0] as Record<string, unknown> | undefined;
     await client.query("COMMIT");
     if (!row || typeof row.version !== "string") {
       throw new Error("PostgreSQL status summary is incomplete");
@@ -97,9 +97,7 @@ async function readAdminRedisStatus(): Promise<AdminRedisStatusDto> {
       scope: "redis_instance",
       used_memory_bytes: memory.usedMemory,
       used_memory_rss_bytes: memory.usedMemoryRss,
-      fragmentation_ratio: finiteNumber(
-        fields.get("mem_fragmentation_ratio")
-      )
+      fragmentation_ratio: finiteNumber(fields.get("mem_fragmentation_ratio"))
     },
     image_projection: imageProjection
   };
@@ -116,27 +114,16 @@ const defaultAdminCheckStatusDependencies: AdminCheckStatusDependencies = {
 };
 
 export async function readAdminCheckStatus(
-  dependencies: AdminCheckStatusDependencies =
-    defaultAdminCheckStatusDependencies
+  dependencies: AdminCheckStatusDependencies = defaultAdminCheckStatusDependencies
 ): Promise<AdminCheckStatusDto> {
   const [postgresql, redisStatus] = await Promise.all([
-    captureAdminCheck(
-      dependencies.readPostgresql,
-      "query",
-      "postgresql_status_failed"
-    ),
-    captureAdminCheck(
-      dependencies.readRedis,
-      "command",
-      "redis_status_failed"
-    )
+    captureAdminCheck(dependencies.readPostgresql, "query", "postgresql_status_failed"),
+    captureAdminCheck(dependencies.readRedis, "command", "redis_status_failed")
   ]);
   if (redisStatus.status === "ok") {
     redisStatus.data.image_projection = applyReadyImageAuthoritativeRevision(
       redisStatus.data.image_projection,
-      postgresql.status === "ok"
-        ? postgresql.data.authoritative_revision
-        : null
+      postgresql.status === "ok" ? postgresql.data.authoritative_revision : null
     );
   }
   return { postgresql, redis: redisStatus };

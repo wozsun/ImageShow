@@ -21,21 +21,14 @@ import { PublicImageDetail } from "../../components/image/PublicImageDetail.js";
 import { PublicFilterDialog } from "../../components/image/filter/PublicFilterDialog.js";
 import { usePublicFilterDialog } from "../../hooks/usePublicFilterDialog.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
-import {
-  createGalleryTaxonomyDisplayFormatter
-} from "../../lib/gallery/card-display.js";
+import { createGalleryTaxonomyDisplayFormatter } from "../../lib/gallery/card-display.js";
 import type { GalleryImageCard } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
-import {
-  AppLoadingRegion
-} from "../../components/feedback/AppLoadingScreen.js";
+import { AppLoadingRegion } from "../../components/feedback/AppLoadingScreen.js";
 import { pageScrollRestoredEvent } from "../../hooks/usePageScrollLock.js";
 import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
-import {
-  useGalleryColumnCount,
-  useGalleryGeometry
-} from "./gallery-layout.js";
+import { useGalleryColumnCount, useGalleryGeometry } from "./gallery-layout.js";
 import { GalleryImageRuntime } from "./GalleryImageRuntime.js";
 import { GalleryVirtualWindow } from "./GalleryVirtualWindow.js";
 import {
@@ -93,29 +86,28 @@ export function GalleryPage({
   const galleryWindowRef = useRef<HTMLDivElement | null>(null);
   const previousImageQueryRef = useRef<string | null>(null);
   const routeEntranceFinishedRef = useRef(false);
-  const {
-    markAppeared: markNavigationAppeared,
-    shouldAnimate: shouldAnimateNavigation
-  } = usePublicNavigationEntrance();
-  const cardSubtitle = useMemo(
-    () => {
-      const display = createGalleryTaxonomyDisplayFormatter(facets);
-      return (card: GalleryImageCard) => display(card).subtitle;
-    },
-    [facets]
-  );
+  const { markAppeared: markNavigationAppeared, shouldAnimate: shouldAnimateNavigation } =
+    usePublicNavigationEntrance();
+  const cardSubtitle = useMemo(() => {
+    const display = createGalleryTaxonomyDisplayFormatter(facets);
+    return (card: GalleryImageCard) => display(card).subtitle;
+  }, [facets]);
 
   const userAgent = window.navigator.userAgent;
   const imageQuery = useMemo(
-    () => filtersReady
-      ? readableFilterSearch(imageBrowseApiSearchParams(filters, order, { userAgent, view: "gallery" }))
-      : readableFilterSearch(routeSearchParams),
+    () =>
+      filtersReady
+        ? readableFilterSearch(
+            imageBrowseApiSearchParams(filters, order, { userAgent, view: "gallery" })
+          )
+        : readableFilterSearch(routeSearchParams),
     [filters, filtersReady, routeSearchParams, order, userAgent]
   );
   const revealRegistry = useMemo(
-    () => new GalleryCardRevealRegistry({
-      routeEntrance: !routeEntranceFinishedRef.current
-    }),
+    () =>
+      new GalleryCardRevealRegistry({
+        routeEntrance: !routeEntranceFinishedRef.current
+      }),
     [imageQuery]
   );
   useDocumentMotionPause();
@@ -159,9 +151,7 @@ export function GalleryPage({
   });
   useEffect(() => {
     if (!selected) return;
-    const refreshed = galleryData.positions.find(
-      (position) => position.id === selected.id
-    )?.item;
+    const refreshed = galleryData.positions.find((position) => position.id === selected.id)?.item;
     if (refreshed && refreshed !== selected) setSelected(refreshed);
   }, [galleryData.positions, selected]);
   const initialLoading = !filterError && (!filtersReady || galleryData.initialLoading);
@@ -169,10 +159,7 @@ export function GalleryPage({
   const loading = initialLoading || nextPageLoading;
   const showBackToTop = backToTopVisible && !dialogOpen;
 
-  const openDetail = useCallback((
-    card: GalleryImageCard,
-    opener: HTMLButtonElement
-  ) => {
+  const openDetail = useCallback((card: GalleryImageCard, opener: HTMLButtonElement) => {
     detailReturnFocusRef.current = opener;
     setPinnedImageId(card.id);
     setSelected(card);
@@ -201,10 +188,7 @@ export function GalleryPage({
         const focusTarget = opener?.isConnected ? opener : fallback;
         if (focusTarget) {
           const targetRect = focusTarget.getBoundingClientRect();
-          if (
-            targetRect.bottom <= 0
-            || targetRect.top >= window.innerHeight
-          ) {
+          if (targetRect.bottom <= 0 || targetRect.top >= window.innerHeight) {
             focusTarget.scrollIntoView({ block: "nearest" });
           }
           focusTarget.focus({ preventScroll: true });
@@ -213,9 +197,7 @@ export function GalleryPage({
           releaseFrame = undefined;
           settleFrame = window.requestAnimationFrame(() => {
             settleFrame = undefined;
-            setPinnedImageId((current) => (
-              current === pinnedImageId ? null : current
-            ));
+            setPinnedImageId((current) => (current === pinnedImageId ? null : current));
             if (detailReturnFocusRef.current === opener) {
               detailReturnFocusRef.current = null;
             }
@@ -240,11 +222,11 @@ export function GalleryPage({
     >
       <main
         className={`page gallery-page${embedded ? " is-embedded" : ""}`}
-        style={{
-          "--gallery-toolbar-height": toolbarHeight
-            ? `${toolbarHeight}px`
-            : undefined
-        } as CSSProperties}
+        style={
+          {
+            "--gallery-toolbar-height": toolbarHeight ? `${toolbarHeight}px` : undefined
+          } as CSSProperties
+        }
       >
         <span className="gallery-atmosphere" aria-hidden="true" />
         <div className="gallery-starfield" aria-hidden="true">
@@ -258,7 +240,11 @@ export function GalleryPage({
           controls={navigationControls}
           filterDialog={filterDialog}
           order={order}
-          onOrderChange={(next) => setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { order: next }))}
+          onOrderChange={(next) =>
+            setRouteSearchParams((current) =>
+              updateImageBrowseSearchParams(current, { order: next })
+            )
+          }
         />
         <div className="gallery-toolbar-spacer" aria-hidden="true" />
         <section ref={galleryRef} className="gallery">
@@ -275,34 +261,33 @@ export function GalleryPage({
         </section>
         {Boolean(filterError) && (
           <div className="gallery-query-error">
-            <PublicFilterErrorState error={filterError} onClear={(field) => updateFilter(field, "")} onRetry={browseRoute.retryVocabulary} />
-          </div>
-        )}
-        {filtersReady && galleryData.snapshot.error && (
-          <div className={`gallery-query-error${galleryData.snapshot.errorRequest?.kind === "hydrate"
-              ? " gallery-window-error"
-              : ""
-            }`}>
-            <QueryErrorState
-              error={galleryData.snapshot.error}
-              onRetry={galleryData.retry}
+            <PublicFilterErrorState
+              error={filterError}
+              onClear={(field) => updateFilter(field, "")}
+              onRetry={browseRoute.retryVocabulary}
             />
           </div>
         )}
-        {filtersReady && !galleryData.snapshot.error
-          && !loading
-          && galleryData.snapshot.compactItems === 0
-          && <p className="gallery-empty">暂无图片</p>}
-        {initialLoading && (
-          <AppLoadingRegion
-            className="gallery-initial-loading"
-            extraDots={3}
-          />
+        {filtersReady && galleryData.snapshot.error && (
+          <div
+            className={`gallery-query-error${
+              galleryData.snapshot.errorRequest?.kind === "hydrate" ? " gallery-window-error" : ""
+            }`}
+          >
+            <QueryErrorState error={galleryData.snapshot.error} onRetry={galleryData.retry} />
+          </div>
         )}
+        {filtersReady &&
+          !galleryData.snapshot.error &&
+          !loading &&
+          galleryData.snapshot.compactItems === 0 && <p className="gallery-empty">暂无图片</p>}
+        {initialLoading && <AppLoadingRegion className="gallery-initial-loading" extraDots={3} />}
         {nextPageLoading && <p className="gallery-loading">加载中</p>}
-        <div className="gallery-floating-controls public-floating-controls"
+        <div
+          className="gallery-floating-controls public-floating-controls"
           data-public-navigation-visible={headerVisible || toolbarVisible}
-          hidden={dialogOpen}>
+          hidden={dialogOpen}
+        >
           <button
             type="button"
             className={`public-round-control pressable gallery-back-to-top${showBackToTop ? " is-visible" : ""}`}
@@ -315,17 +300,37 @@ export function GalleryPage({
               scrollPublicImagePageToTop();
             }}
           >
-            <span className="public-round-surface"><Icon name="arrow-up-line" /></span>
+            <span className="public-round-surface">
+              <Icon name="arrow-up-line" />
+            </span>
           </button>
-          {mobile && <PublicImageOrderControl order={order} compact
-            onChange={(next) => setRouteSearchParams((current) => updateImageBrowseSearchParams(current, { order: next }))} />}
+          {mobile && (
+            <PublicImageOrderControl
+              order={order}
+              compact
+              onChange={(next) =>
+                setRouteSearchParams((current) =>
+                  updateImageBrowseSearchParams(current, { order: next })
+                )
+              }
+            />
+          )}
         </div>
-        {filterDialog.session && <PublicFilterDialog
-          filters={filterDialog.session.filters} unresolvedTags={filterDialog.session.unresolvedTags}
-        unresolvedSelectors={filterDialog.session.unresolvedSelectors}
-          facets={facets} facetsLoading={browseRoute.facetsLoading} facetsError={browseRoute.facetsError}
-          retryVocabulary={browseRoute.retryVocabulary} returnFocusRef={filterDialog.triggerRef}
-          onClose={filterDialog.close} onApply={filterDialog.applyAfterClose} view="gallery" />}
+        {filterDialog.session && (
+          <PublicFilterDialog
+            filters={filterDialog.session.filters}
+            unresolvedTags={filterDialog.session.unresolvedTags}
+            unresolvedSelectors={filterDialog.session.unresolvedSelectors}
+            facets={facets}
+            facetsLoading={browseRoute.facetsLoading}
+            facetsError={browseRoute.facetsError}
+            retryVocabulary={browseRoute.retryVocabulary}
+            returnFocusRef={filterDialog.triggerRef}
+            onClose={filterDialog.close}
+            onApply={filterDialog.applyAfterClose}
+            view="gallery"
+          />
+        )}
         {selected && (
           <PublicImageDetail
             card={selected}

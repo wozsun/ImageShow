@@ -1,18 +1,7 @@
-import {
-  runRequiredRedisCommand
-} from "../../core/runtime-availability.ts";
-import {
-  ReadyImageCoreCacheError
-} from "./cache-errors.ts";
-import type {
-  ReadyImageFilterIndex,
-  ReadyImageFilterIndexValidation
-} from "./indexes/filter.ts";
-import {
-  parseReadyImageCacheItem,
-  readyImageMember,
-  type ReadyImageCacheItem
-} from "./model.ts";
+import { runRequiredRedisCommand } from "../../core/runtime-availability.ts";
+import { ReadyImageCoreCacheError } from "./cache-errors.ts";
+import type { ReadyImageFilterIndex, ReadyImageFilterIndexValidation } from "./indexes/filter.ts";
+import { parseReadyImageCacheItem, readyImageMember, type ReadyImageCacheItem } from "./model.ts";
 
 export type ReadyImageCacheWindow = {
   items: ReadyImageCacheItem[];
@@ -22,41 +11,26 @@ export type ReadyImageCacheWindow = {
 export type ReadyImagePageReadMode = "fallback" | "required";
 
 export type ReadyImageWindowDependencies = {
-  validate(index: ReadyImageFilterIndex): Promise<
-    ReadyImageFilterIndexValidation
-  >;
-  members(
-    index: ReadyImageFilterIndex,
-    start: number,
-    stop: number
-  ): Promise<string[]>;
+  validate(index: ReadyImageFilterIndex): Promise<ReadyImageFilterIndexValidation>;
+  members(index: ReadyImageFilterIndex, start: number, stop: number): Promise<string[]>;
   items(members: string[]): Promise<Array<string | null>>;
-  assertDerivedItems(
-    members: string[],
-    raws: Array<string | null>
-  ): Promise<void>;
+  assertDerivedItems(members: string[], raws: Array<string | null>): Promise<void>;
 };
 
-function executeRedisCommand<T>(
-  mode: ReadyImagePageReadMode,
-  work: () => Promise<T>
-) {
+function executeRedisCommand<T>(mode: ReadyImagePageReadMode, work: () => Promise<T>) {
   return mode === "required" ? runRequiredRedisCommand(work) : work();
 }
 
-async function executeConsistencyCheck<T>(
-  mode: ReadyImagePageReadMode,
-  work: () => Promise<T>
-) {
+async function executeConsistencyCheck<T>(mode: ReadyImagePageReadMode, work: () => Promise<T>) {
   try {
     return await work();
   } catch (error) {
     // Logical projection mismatches remain recoverable cache fallbacks. The
     // default checker attaches a cause only when its Redis pipeline failed.
     if (
-      mode === "required"
-      && error instanceof ReadyImageCoreCacheError
-      && error.cause !== undefined
+      mode === "required" &&
+      error instanceof ReadyImageCoreCacheError &&
+      error.cause !== undefined
     ) {
       return runRequiredRedisCommand(() => Promise.reject(error));
     }
@@ -67,9 +41,7 @@ async function executeConsistencyCheck<T>(
 function parsedItem(raw: string | null, expectedMember: string) {
   const item = parseReadyImageCacheItem(raw);
   if (!item || readyImageMember(item.id) !== expectedMember) {
-    throw new ReadyImageCoreCacheError(
-      "Ready-image cache returned a corrupt core item"
-    );
+    throw new ReadyImageCoreCacheError("Ready-image cache returned a corrupt core item");
   }
   return item;
 }
@@ -93,16 +65,10 @@ export async function readReadyImageOrderedWindow(
   dependencies: ReadyImageWindowDependencies
 ): Promise<ReadyImageCacheWindow | null> {
   const indexIsValid = async () => {
-    const raw = await executeRedisCommand(
-      mode,
-      () => dependencies.validate(index)
-    );
+    const raw = await executeRedisCommand(mode, () => dependencies.validate(index));
     return readyImageWindowIndexIsValid(index, raw);
   };
-  const validation = await executeRedisCommand(
-    mode,
-    () => dependencies.validate(index)
-  );
+  const validation = await executeRedisCommand(mode, () => dependencies.validate(index));
   if (!readyImageWindowIndexIsValid(index, validation)) return null;
   const total = validation.count;
   if (!Number.isSafeInteger(total) || total < 0) {
@@ -112,36 +78,22 @@ export async function readReadyImageOrderedWindow(
     throw new Error("Ready-image cached filter cardinality changed");
   }
   if (start >= total) {
-    return await indexIsValid() ? { items: [], total } : null;
+    return (await indexIsValid()) ? { items: [], total } : null;
   }
-  const members = await executeRedisCommand(
-    mode,
-    () => dependencies.members(index, start, start + limit - 1)
+  const members = await executeRedisCommand(mode, () =>
+    dependencies.members(index, start, start + limit - 1)
   );
   const expectedMembers = Math.min(limit, total - start);
-  if (
-    !Array.isArray(members)
-    || members.length !== expectedMembers
-  ) {
+  if (!Array.isArray(members) || members.length !== expectedMembers) {
     throw new Error("Ready-image cache returned an invalid ordered window");
   }
-  const raws = await executeRedisCommand(
-    mode,
-    () => dependencies.items(members)
-  );
+  const raws = await executeRedisCommand(mode, () => dependencies.items(members));
   if (!Array.isArray(raws) || raws.length !== members.length) {
-    throw new ReadyImageCoreCacheError(
-      "Ready-image cache returned incomplete core items"
-    );
+    throw new ReadyImageCoreCacheError("Ready-image cache returned incomplete core items");
   }
   if (index.kind !== "core") {
-    await executeConsistencyCheck(
-      mode,
-      () => dependencies.assertDerivedItems(members, raws)
-    );
+    await executeConsistencyCheck(mode, () => dependencies.assertDerivedItems(members, raws));
   }
-  const items = raws.map((raw, position) => (
-    parsedItem(raw, members[position]!)
-  ));
-  return await indexIsValid() ? { items, total } : null;
+  const items = raws.map((raw, position) => parsedItem(raw, members[position]!));
+  return (await indexIsValid()) ? { items, total } : null;
 }

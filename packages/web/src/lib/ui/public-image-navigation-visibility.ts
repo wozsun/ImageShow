@@ -46,19 +46,15 @@ export function advancePublicImageNavigation(
   input: PublicImageNavigationInput
 ): PublicImageNavigationState {
   if (
-    input.lockedOpen
-    || (input.allowReveal !== false
-      && input.scrollTop <= publicImageNavigationThresholds.revealAtTop)
+    input.lockedOpen ||
+    (input.allowReveal !== false && input.scrollTop <= publicImageNavigationThresholds.revealAtTop)
   ) {
     return settledState("visible");
   }
   if (input.delta === 0) return state;
 
-  const direction: Exclude<ScrollDirection, null> =
-    input.delta < 0 ? "up" : "down";
-  let carriedDistance = (
-    state.direction === direction ? state.distance : 0
-  );
+  const direction: Exclude<ScrollDirection, null> = input.delta < 0 ? "up" : "down";
+  let carriedDistance = state.direction === direction ? state.distance : 0;
   let stepDistance = Math.abs(input.delta);
 
   if (direction === "up") {
@@ -75,9 +71,10 @@ export function advancePublicImageNavigation(
     let stage: PublicImageNavigationStage = state.stage;
     let distance = carriedDistance + stepDistance;
     while (stage !== "visible") {
-      const threshold = stage === "hidden"
-        ? publicImageNavigationThresholds.revealToolbar
-        : publicImageNavigationThresholds.revealHeader;
+      const threshold =
+        stage === "hidden"
+          ? publicImageNavigationThresholds.revealToolbar
+          : publicImageNavigationThresholds.revealHeader;
       if (distance < threshold) return { stage, direction, distance };
       distance -= threshold;
       stage = stage === "hidden" ? "toolbar-only" : "visible";
@@ -92,10 +89,7 @@ export function advancePublicImageNavigation(
     const previousScrollTop = input.scrollTop - input.delta;
     if (input.scrollTop <= toolbarBoundary) return settledState("visible");
     if (previousScrollTop < toolbarBoundary) carriedDistance = 0;
-    stepDistance = input.scrollTop - Math.max(
-      toolbarBoundary,
-      previousScrollTop
-    );
+    stepDistance = input.scrollTop - Math.max(toolbarBoundary, previousScrollTop);
     if (stepDistance <= 0) return settledState("visible");
   }
 
@@ -110,9 +104,10 @@ export function advancePublicImageNavigation(
   let stage: PublicImageNavigationStage = state.stage;
   let distance = carriedDistance + stepDistance;
   while (stage !== "hidden") {
-    const threshold = stage === "visible"
-      ? publicImageNavigationThresholds.hideHeader
-      : publicImageNavigationThresholds.hideToolbar;
+    const threshold =
+      stage === "visible"
+        ? publicImageNavigationThresholds.hideHeader
+        : publicImageNavigationThresholds.hideToolbar;
     if (distance < threshold) return { stage, direction, distance };
     distance -= threshold;
     stage = stage === "visible" ? "toolbar-only" : "hidden";

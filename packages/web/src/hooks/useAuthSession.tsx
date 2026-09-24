@@ -8,11 +8,7 @@ import {
   useState,
   type ReactNode
 } from "react";
-import {
-  useQuery,
-  useQueryClient,
-  type UseQueryResult
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useLocation } from "react-router";
 import {
   normalizeAdminPreferences,
@@ -53,13 +49,13 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const active = useRef(true);
   useLayoutEffect(() => {
     active.current = true;
-    return () => { active.current = false; };
+    return () => {
+      active.current = false;
+    };
   }, []);
   const { pathname } = useLocation();
   const adminRoute = isAdminPath(pathname);
-  const [publicProbeRequested, setPublicProbeRequested] = useState(
-    hasSessionProbeHint
-  );
+  const [publicProbeRequested, setPublicProbeRequested] = useState(hasSessionProbeHint);
   const query = useQuery<AuthState>({
     queryKey: queryKeys.me,
     queryFn: ({ signal }) => readAuthSession(signal),
@@ -68,25 +64,28 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     gcTime: Number.POSITIVE_INFINITY,
     refetchOnWindowFocus: false
   });
-  const [refreshCoordinator] = useState(
-    () => new AuthSessionRefreshCoordinator()
-  );
+  const [refreshCoordinator] = useState(() => new AuthSessionRefreshCoordinator());
   const { refetch: refetchQuery } = query;
-  const refetch = useCallback<typeof refetchQuery>(async (options) => {
-    // Login confirmation and recovery can outlive the route owning this session.
-    if (!active.current) throw new DOMException("会话刷新已取消", "AbortError");
-    return refetchQuery(options);
-  }, [refetchQuery]);
-  const recoverAuthSession = useCallback(() => refreshCoordinator.run(
-    async () => {
-      const result = await refetch({ cancelRefetch: false });
-      if (!active.current) throw new DOMException("会话恢复已取消", "AbortError");
-      if (result.error) throw result.error;
-      if (!result.data?.authenticated) {
-        throw new Error("管理员登录已失效");
-      }
-    }
-  ), [refetch, refreshCoordinator]);
+  const refetch = useCallback<typeof refetchQuery>(
+    async (options) => {
+      // Login confirmation and recovery can outlive the route owning this session.
+      if (!active.current) throw new DOMException("会话刷新已取消", "AbortError");
+      return refetchQuery(options);
+    },
+    [refetchQuery]
+  );
+  const recoverAuthSession = useCallback(
+    () =>
+      refreshCoordinator.run(async () => {
+        const result = await refetch({ cancelRefetch: false });
+        if (!active.current) throw new DOMException("会话恢复已取消", "AbortError");
+        if (result.error) throw result.error;
+        if (!result.data?.authenticated) {
+          throw new Error("管理员登录已失效");
+        }
+      }),
+    [refetch, refreshCoordinator]
+  );
 
   useEffect(() => {
     if (!query.data) return;
@@ -143,30 +142,27 @@ export function useOptionalAuthSessionRecovery() {
 export function useAuthPreferenceCacheBridge() {
   const queryClient = useQueryClient();
   const cancelPendingAuthRead = useCallback(
-    () => queryClient.cancelQueries(
-      { queryKey: queryKeys.me, exact: true },
-      { silent: true }
-    ),
+    () => queryClient.cancelQueries({ queryKey: queryKeys.me, exact: true }, { silent: true }),
     [queryClient]
   );
-  const updateAuthPreferenceSnapshot = useCallback((
-    username: string,
-    preferences: AdminPreferences,
-    etag: string
-  ) => {
-    const current = queryClient.getQueryData<AuthStateDto>(queryKeys.me);
-    if (!current?.authenticated || current.username !== username) return;
-    if (sameAdminPreferences(
-      normalizeAdminPreferences(current.preferences),
-      preferences
-    ) && current.preferences_etag === etag) return;
-    const next: Extract<AuthStateDto, { authenticated: true }> = {
-      ...current,
-      preferences,
-      preferences_etag: etag
-    };
-    queryClient.setQueryData<AuthStateDto>(queryKeys.me, next);
-  }, [queryClient]);
+  const updateAuthPreferenceSnapshot = useCallback(
+    (username: string, preferences: AdminPreferences, etag: string) => {
+      const current = queryClient.getQueryData<AuthStateDto>(queryKeys.me);
+      if (!current?.authenticated || current.username !== username) return;
+      if (
+        sameAdminPreferences(normalizeAdminPreferences(current.preferences), preferences) &&
+        current.preferences_etag === etag
+      )
+        return;
+      const next: Extract<AuthStateDto, { authenticated: true }> = {
+        ...current,
+        preferences,
+        preferences_etag: etag
+      };
+      queryClient.setQueryData<AuthStateDto>(queryKeys.me, next);
+    },
+    [queryClient]
+  );
 
   return { cancelPendingAuthRead, updateAuthPreferenceSnapshot };
 }

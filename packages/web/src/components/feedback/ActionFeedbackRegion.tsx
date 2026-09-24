@@ -1,15 +1,6 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode
-} from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import {
-  ActionFeedback
-} from "./ActionFeedback.js";
+import { ActionFeedback } from "./ActionFeedback.js";
 import type { ActionFeedbackState } from "../../lib/ui/action-feedback.js";
 
 const actionFeedbackTargetBrand = Symbol("ActionFeedbackTarget");
@@ -29,9 +20,7 @@ type ActionFeedbackRegionRegistry = {
 
 const ActionFeedbackRegionContext = createContext<ActionFeedbackRegionRegistry | null>(null);
 
-function createActionFeedbackTarget(
-  label = "action-feedback"
-): ActionFeedbackTarget {
+function createActionFeedbackTarget(label = "action-feedback"): ActionFeedbackTarget {
   return Object.freeze({
     [actionFeedbackTargetBrand]: true as const,
     label
@@ -69,22 +58,26 @@ export function ActionFeedbackProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const registry = useMemo<ActionFeedbackRegionRegistry>(() => ({
-    fallbackHost,
-    hosts,
-    register
-  }), [fallbackHost, hosts, register]);
+  const registry = useMemo<ActionFeedbackRegionRegistry>(
+    () => ({
+      fallbackHost,
+      hosts,
+      register
+    }),
+    [fallbackHost, hosts, register]
+  );
 
-  const fallback = typeof document === "undefined"
-    ? null
-    : createPortal(
-      <div
-        ref={setFallbackHost}
-        className="action-feedback-region action-feedback-fallback-region"
-        data-feedback-fallback="true"
-      />,
-      document.body
-    );
+  const fallback =
+    typeof document === "undefined"
+      ? null
+      : createPortal(
+          <div
+            ref={setFallbackHost}
+            className="action-feedback-region action-feedback-fallback-region"
+            data-feedback-fallback="true"
+          />,
+          document.body
+        );
 
   return (
     <ActionFeedbackRegionContext.Provider value={registry}>
@@ -112,21 +105,14 @@ export function ActionFeedbackRegion({
   className?: string;
 }) {
   const { register } = useActionFeedbackRegistry();
-  const bindHost = useCallback((host: HTMLDivElement | null) => {
-    register(target, host);
-  }, [register, target]);
-  const classes = [
-    "action-feedback-region",
-    `is-${variant}`,
-    className
-  ].filter(Boolean).join(" ");
-  return (
-    <div
-      ref={bindHost}
-      className={classes}
-      data-feedback-region={target.label}
-    />
+  const bindHost = useCallback(
+    (host: HTMLDivElement | null) => {
+      register(target, host);
+    },
+    [register, target]
   );
+  const classes = ["action-feedback-region", `is-${variant}`, className].filter(Boolean).join(" ");
+  return <div ref={bindHost} className={classes} data-feedback-region={target.label} />;
 }
 
 export function ActionFeedbackOutlet({
@@ -145,11 +131,7 @@ export function ActionFeedbackOutlet({
   if (!host) return null;
 
   return createPortal(
-    <ActionFeedback
-      feedback={feedback}
-      onClose={onClose}
-      announce={announce}
-    />,
+    <ActionFeedback feedback={feedback} onClose={onClose} announce={announce} />,
     host,
     feedback.id
   );

@@ -1,7 +1,7 @@
 :root {
-  --admin-color-login-form-surface: rgba(22, 27, 34, .2);
-  --admin-color-login-overlay-start: rgba(12, 18, 28, .45);
-  --admin-color-login-overlay-end: rgba(12, 18, 28, .72);
+  --admin-color-login-form-surface: rgba(22, 27, 34, 0.2);
+  --admin-color-login-overlay-start: rgba(12, 18, 28, 0.45);
+  --admin-color-login-overlay-end: rgba(12, 18, 28, 0.72);
 }
 
 html:has(.login),
@@ -13,8 +13,13 @@ body:has(.login) {
   overscroll-behavior: none;
 }
 
-.login-site-title { color: inherit; border-radius: 6px; }
-.login-site-title:hover { color: var(--admin-color-action-text); }
+.login-site-title {
+  color: inherit;
+  border-radius: 6px;
+}
+.login-site-title:hover {
+  color: var(--admin-color-action-text);
+}
 
 .login {
   /* 背景层固定占满当前动态视口且不参与滚动；登录卡片作为独立定位层随动态视口
@@ -45,11 +50,16 @@ body:has(.login) {
   padding: 24px;
   border: 1px solid var(--admin-color-border-default);
   border-radius: 8px;
-  animation: login-surface-in .2s ease-out;
+  animation: login-surface-in 0.2s ease-out;
   transition: top 80ms ease-out;
 }
-.login h1 { margin: 0 0 6px; }
-.login-challenge-slot { position: relative; min-height: 40px; }
+.login h1 {
+  margin: 0 0 6px;
+}
+.login-challenge-slot {
+  position: relative;
+  min-height: 40px;
+}
 .login-error {
   margin: 0;
   color: var(--admin-color-danger-text);
@@ -57,8 +67,14 @@ body:has(.login) {
 }
 
 @keyframes login-surface-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {

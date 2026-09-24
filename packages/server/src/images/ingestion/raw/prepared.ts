@@ -13,11 +13,7 @@ import {
 } from "./lease-registry.ts";
 
 /** The caller holds the attempt's path leases through canonical publication. */
-export async function writeIngestionPreparedFile(
-  file: string,
-  body: Buffer,
-  signal: AbortSignal
-) {
+export async function writeIngestionPreparedFile(file: string, body: Buffer, signal: AbortSignal) {
   const path = ingestionPreparedPath(file);
   const part = `${path}.part`;
   await mkdir(dirname(path), { recursive: true });
@@ -36,9 +32,15 @@ export function readIngestionPreparedFile(file: string, signal?: AbortSignal) {
     const body = createReadStream(path, { signal });
     const closed = finished(body, { cleanup: true }).catch(() => undefined);
     try {
-      return await openedReadToBuffer({
-        body, size: undefined, totalSize: undefined, backend: "local"
-      }, getIngestionMaxFileBytes());
+      return await openedReadToBuffer(
+        {
+          body,
+          size: undefined,
+          totalSize: undefined,
+          backend: "local"
+        },
+        getIngestionMaxFileBytes()
+      );
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         throw new ApiError(404, "not_found", "准备好的图片不存在");
@@ -52,15 +54,19 @@ export function readIngestionPreparedFile(file: string, signal?: AbortSignal) {
 }
 
 export async function removeIngestionPreparedFiles(files: readonly string[]) {
-  const results = await Promise.allSettled(files.map(async (file) => {
-    const path = ingestionPreparedPath(file);
-    const removed = await tryWithInactiveIngestionTempPath(path, async () => {
-      await rm(path, { force: true });
-      return true;
-    });
-    if (!removed) throw new Error("Prepared ingestion file is in use");
-    await pruneIngestionTempParents(path);
-  }));
-  const failures = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
+  const results = await Promise.allSettled(
+    files.map(async (file) => {
+      const path = ingestionPreparedPath(file);
+      const removed = await tryWithInactiveIngestionTempPath(path, async () => {
+        await rm(path, { force: true });
+        return true;
+      });
+      if (!removed) throw new Error("Prepared ingestion file is in use");
+      await pruneIngestionTempParents(path);
+    })
+  );
+  const failures = results.flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : []
+  );
   if (failures.length) throw new AggregateError(failures, "Prepared ingestion cleanup failed");
 }

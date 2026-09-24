@@ -45,8 +45,11 @@ export class ShowDataPool {
 
   usage(dataKey: string): ShowCandidateUsage {
     return {
-      dataKey, activeIds: [...this.#activeCounts.keys()], consumedIds: [...this.#consumed],
-      available: this.#availableSet.size, capacity: this.maximumRetained
+      dataKey,
+      activeIds: [...this.#activeCounts.keys()],
+      consumedIds: [...this.#consumed],
+      available: this.#availableSet.size,
+      capacity: this.maximumRetained
     };
   }
 
@@ -151,10 +154,7 @@ export class ShowDataPool {
     this.#consumed.add(imageId);
     this.revision += 1;
     this.#activeBySlot.set(slotKey, imageId);
-    this.#activeCounts.set(
-      imageId,
-      (this.#activeCounts.get(imageId) ?? 0) + 1
-    );
+    this.#activeCounts.set(imageId, (this.#activeCounts.get(imageId) ?? 0) + 1);
     return image;
   }
 
@@ -168,15 +168,20 @@ export class ShowDataPool {
     // Let an oldest cohort drain completely. Reissuing all active IDs would
     // keep every DTO referenced forever when the scene has >800 slots.
     const draining = this.#streaming
-      ? Math.min(showContinuationLimit, Math.floor(this.#reuseOrder.length / 2)) : 0;
+      ? Math.min(showContinuationLimit, Math.floor(this.#reuseOrder.length / 2))
+      : 0;
     for (let offset = 0; offset < this.#reuseOrder.length; offset += 1) {
       const candidate = (index + offset) % this.#reuseOrder.length;
       if (candidate < draining) continue;
       const active = this.#activeCounts.has(this.#reuseOrder[candidate]!);
-      if (active === this.#streaming) { selected = candidate; break; }
+      if (active === this.#streaming) {
+        selected = candidate;
+        break;
+      }
     }
     const imageId = this.#reuseOrder[selected];
-    if (this.#streaming && (selected < draining || (imageId && !this.#activeCounts.has(imageId)))) return null;
+    if (this.#streaming && (selected < draining || (imageId && !this.#activeCounts.has(imageId))))
+      return null;
     this.#reuseCursor = (selected + 1) % this.#reuseOrder.length;
     return imageId;
   }

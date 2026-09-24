@@ -1,21 +1,14 @@
-import type {
-  ImageDraft
-} from "../../../../lib/types.js";
+import type { ImageDraft } from "../../../../lib/types.js";
 import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 import { normalizeAuthor, normalizeTheme } from "../../../../lib/image-draft.js";
 
-import {
-  webIngestionBatchKey,
-  webUuidV7
-} from "../queue/model/ingestion-identity.js";
+import { webIngestionBatchKey, webUuidV7 } from "../queue/model/ingestion-identity.js";
 import {
   filterNewUploadFiles,
   uploadFileFingerprint
 } from "../queue/model/ingestion-job-deduplication.js";
 
-function createUploadDraft(
-  defaults: IngestionAttributeDefaults
-): ImageDraft {
+function createUploadDraft(defaults: IngestionAttributeDefaults): ImageDraft {
   return {
     device: defaults.device,
     brightness: defaults.brightness,
@@ -34,8 +27,10 @@ function fileExt(file: File) {
 }
 
 function isUploadableImage(file: File) {
-  return file.type.startsWith("image/")
-    || ["jpg", "jpeg", "png", "webp", "gif", "avif"].includes(fileExt(file));
+  return (
+    file.type.startsWith("image/") ||
+    ["jpg", "jpeg", "png", "webp", "gif", "avif"].includes(fileExt(file))
+  );
 }
 
 async function loadImageDimensions(previewUrl: string): Promise<{ width: number; height: number }> {
@@ -54,10 +49,7 @@ async function loadImageDimensions(previewUrl: string): Promise<{ width: number;
   });
 }
 
-async function inspectUploadPreview(
-  defaults: IngestionAttributeDefaults,
-  previewUrl: string
-) {
+async function inspectUploadPreview(defaults: IngestionAttributeDefaults, previewUrl: string) {
   const dimensions = await loadImageDimensions(previewUrl);
   return {
     draft: createUploadDraft(defaults),
@@ -66,10 +58,7 @@ async function inspectUploadPreview(
   };
 }
 
-export function buildUploadIntentItemInput(
-  job: IngestionJob,
-  maxLongEdge: number
-) {
+export function buildUploadIntentItemInput(job: IngestionJob, maxLongEdge: number) {
   if (!job.file) throw new Error("上传任务缺少图片文件");
   if (job.batchPosition === undefined) {
     throw new Error("上传任务缺少批次位置");
@@ -124,49 +113,46 @@ export async function createUploadJobs({
 }) {
   const batchTime = new Date().toISOString();
   const batchKey = webIngestionBatchKey();
-  const outcomes = await Promise.allSettled(files.map((
-    file,
-    batchPosition
-  ): Promise<IngestionJob> => runInBrowserLane(async () => {
-    const objectUrl = URL.createObjectURL(file);
-    try {
-      const preview = await inspectUploadPreview(defaults, objectUrl);
-      const tooLarge = file.size > maxBytes;
-      const tooWide = Math.max(preview.width, preview.height) > maxLongEdge;
-      return {
-        id: webUuidV7(),
-        attemptKey: webUuidV7(),
-        batchKey,
-        batchTime,
-        batchPosition,
-        kind: "upload",
-        file,
-        fileFingerprint: uploadFileFingerprint(file),
-        status: tooLarge || tooWide ? "failed" : "queued",
-        failureStage: tooLarge || tooWide ? "create" : undefined,
-        message: tooLarge
-          ? "图片大小超过限制"
-          : tooWide
-            ? "图片长边超过限制"
-            : "等待上传",
-        preview: objectUrl,
-        objectUrl,
-        draft: preview.draft,
-        width: preview.width,
-        height: preview.height,
-        originalWidth: preview.width,
-        originalHeight: preview.height,
-        transferProgress: 0,
-        duplicates: [],
-        duplicateDecision: "upload",
-        storageSlug,
-        originalSize: file.size
-      };
-    } catch (error) {
-      URL.revokeObjectURL(objectUrl);
-      throw error;
-    }
-  })));
+  const outcomes = await Promise.allSettled(
+    files.map((file, batchPosition): Promise<IngestionJob> =>
+      runInBrowserLane(async () => {
+        const objectUrl = URL.createObjectURL(file);
+        try {
+          const preview = await inspectUploadPreview(defaults, objectUrl);
+          const tooLarge = file.size > maxBytes;
+          const tooWide = Math.max(preview.width, preview.height) > maxLongEdge;
+          return {
+            id: webUuidV7(),
+            attemptKey: webUuidV7(),
+            batchKey,
+            batchTime,
+            batchPosition,
+            kind: "upload",
+            file,
+            fileFingerprint: uploadFileFingerprint(file),
+            status: tooLarge || tooWide ? "failed" : "queued",
+            failureStage: tooLarge || tooWide ? "create" : undefined,
+            message: tooLarge ? "图片大小超过限制" : tooWide ? "图片长边超过限制" : "等待上传",
+            preview: objectUrl,
+            objectUrl,
+            draft: preview.draft,
+            width: preview.width,
+            height: preview.height,
+            originalWidth: preview.width,
+            originalHeight: preview.height,
+            transferProgress: 0,
+            duplicates: [],
+            duplicateDecision: "upload",
+            storageSlug,
+            originalSize: file.size
+          };
+        } catch (error) {
+          URL.revokeObjectURL(objectUrl);
+          throw error;
+        }
+      })
+    )
+  );
   const jobs: IngestionJob[] = [];
   let failed = false;
   let firstError: unknown;

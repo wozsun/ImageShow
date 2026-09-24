@@ -32,29 +32,25 @@ import { storageSlugInput } from "./storage.ts";
 
 const externalImageRejectedMessage = "外部图片请求未通过安全校验";
 const classificationDevices = [...appConfig.devices, "auto"] as const;
-const classificationBrightnesses = [
-  ...appConfig.brightnesses,
-  "auto"
-] as const;
+const classificationBrightnesses = [...appConfig.brightnesses, "auto"] as const;
 
 const imageMetadataFieldInputs = {
   device: z.enum(classificationDevices),
   brightness: z.enum(classificationBrightnesses),
   theme: imageThemeInput,
-  author: z.string().trim().toLowerCase().max(slugMaxLength)
-    .refine(
-      (value) => value === "" || slugPattern.test(value),
-      "author must be a lowercase slug"
-    ),
+  author: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(slugMaxLength)
+    .refine((value) => value === "" || slugPattern.test(value), "author must be a lowercase slug"),
   title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength),
-  description: z.string().trim()
-    .max(appConfig.imageMetadata.descriptionMaxLength),
+  description: z.string().trim().max(appConfig.imageMetadata.descriptionMaxLength),
   source: requestUrlInput("来源页面链接需为有效的 HTTPS 链接"),
-  original: requestUrlInput(externalImageRejectedMessage)
-    .refine(
-      (value) => !value || isHttpsUrl(value, { requireDomain: true }),
-      externalImageRejectedMessage
-    )
+  original: requestUrlInput(externalImageRejectedMessage).refine(
+    (value) => !value || isHttpsUrl(value, { requireDomain: true }),
+    externalImageRejectedMessage
+  )
 };
 
 export const imageMetadataCreateInput = z.strictObject({
@@ -79,43 +75,43 @@ export const imageMetadataUpdateFields = {
   original: imageMetadataFieldInputs.original.optional()
 };
 
-const imageUpdateItemInput = z.strictObject({
-  ...imageMetadataUpdateFields,
-  id: uuidInput,
-  tags: normalizedImageTagSlugsSchema.optional()
-}).superRefine((value, context) => {
-  const hasMetadataUpdate = Object.entries(value).some(
-    ([key, fieldValue]) => (
-      key !== "id" && key !== "tags" && fieldValue !== undefined
-    )
-  );
-  if (!hasMetadataUpdate && value.tags === undefined) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "图片更新项必须包含 metadata 或 tags"
-    });
-  }
-}) satisfies z.ZodType<ImageUpdateItemInputDto>;
-
-export const imageUpdateInput = z.strictObject({
-  items: z.array(imageUpdateItemInput).min(1).max(200)
-}).superRefine((value, context) => {
-  addDuplicateValueIssues(
-    value.items.map((item) => item.id),
-    context,
-    (index) => ["items", index, "id"],
-    "图片更新请求不能包含重复 ID"
-  );
-}) satisfies z.ZodType<ImageUpdateRequestDto>;
-
-const uniqueImageIdsInput = z.array(uuidInput).min(1).max(200)
-  .superRefine((ids, context) => {
-    addDuplicateValueIssues(
-      ids,
-      context,
-      (index) => [index],
-      "请求不能包含重复 ID"
+const imageUpdateItemInput = z
+  .strictObject({
+    ...imageMetadataUpdateFields,
+    id: uuidInput,
+    tags: normalizedImageTagSlugsSchema.optional()
+  })
+  .superRefine((value, context) => {
+    const hasMetadataUpdate = Object.entries(value).some(
+      ([key, fieldValue]) => key !== "id" && key !== "tags" && fieldValue !== undefined
     );
+    if (!hasMetadataUpdate && value.tags === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "图片更新项必须包含 metadata 或 tags"
+      });
+    }
+  }) satisfies z.ZodType<ImageUpdateItemInputDto>;
+
+export const imageUpdateInput = z
+  .strictObject({
+    items: z.array(imageUpdateItemInput).min(1).max(200)
+  })
+  .superRefine((value, context) => {
+    addDuplicateValueIssues(
+      value.items.map((item) => item.id),
+      context,
+      (index) => ["items", index, "id"],
+      "图片更新请求不能包含重复 ID"
+    );
+  }) satisfies z.ZodType<ImageUpdateRequestDto>;
+
+const uniqueImageIdsInput = z
+  .array(uuidInput)
+  .min(1)
+  .max(200)
+  .superRefine((ids, context) => {
+    addDuplicateValueIssues(ids, context, (index) => [index], "请求不能包含重复 ID");
   });
 
 export const imageActionInput = z.strictObject({
@@ -167,14 +163,24 @@ const imageListFilterFields = {
 };
 
 function galleryStatsSelector(noun: string) {
-  return z.string().trim().toLowerCase().min(1).max(1024)
+  return z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1)
+    .max(1024)
     .transform((value, context) => {
-      const tokens = [...new Set(
-        value.split(",").map((token) => token.trim()).filter(Boolean)
-      )];
+      const tokens = [
+        ...new Set(
+          value
+            .split(",")
+            .map((token) => token.trim())
+            .filter(Boolean)
+        )
+      ];
       if (
-        tokens.length === 0
-        || tokens.some((token) => {
+        tokens.length === 0 ||
+        tokens.some((token) => {
           const slug = token.replace(/^!/, "");
           return slug.length > slugMaxLength || !slugPattern.test(slug);
         })
@@ -214,7 +220,7 @@ export const listQuery = z.strictObject({
   cursor: z.string().optional(),
   view: z.enum(publicImageViews),
   limit: safePositiveIntegerInput.max(publicImageBrowseLimit),
-  order: z.enum(publicImageOrders).default("latest"),
+  order: z.enum(publicImageOrders).default("latest")
 }) satisfies z.ZodType<PublicImageListQuery>;
 
 export const adminImageListQuery = z.strictObject({
@@ -223,6 +229,5 @@ export const adminImageListQuery = z.strictObject({
   sort_by: z.enum(adminImageSortFields).default(defaultAdminImageSort.sort_by),
   order: z.enum(adminImageOrders).default(defaultAdminImageSort.order),
   page: safePositiveIntegerInput.default(1),
-  limit: safePositiveIntegerInput.max(appConfig.pagination.maxLimit)
-    .default(adminImagePageLimit)
+  limit: safePositiveIntegerInput.max(appConfig.pagination.maxLimit).default(adminImagePageLimit)
 }) satisfies z.ZodType<AdminImageListQuery>;

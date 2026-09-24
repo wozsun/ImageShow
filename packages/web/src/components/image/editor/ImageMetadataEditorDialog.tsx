@@ -12,12 +12,13 @@ import { ImagePreviewModal } from "../ImagePreviewModal.js";
 import { AdminPagination } from "../../navigation/AdminPagination.js";
 import { OverlayScrollbar } from "../../layout/OverlayScrollbar.js";
 import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
-import {
-  createPageLifetimeModuleLoader
-} from "../../../lib/page-lifetime-module-loader.js";
+import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-module-loader.js";
 import { facetDisplayName } from "../../../lib/ui/formatters.js";
 import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
-import { commonImageBrightnessOptions, commonImageDeviceOptions } from "../../../lib/ui/select-options.js";
+import {
+  commonImageBrightnessOptions,
+  commonImageDeviceOptions
+} from "../../../lib/ui/select-options.js";
 import { storageNameResolver, useStorageOptions } from "../../../lib/api/storage-options.js";
 import type {
   Brightness,
@@ -26,10 +27,12 @@ import type {
   EditableImageSnapshot,
   ImageDraft
 } from "../../../lib/types.js";
-import { imageAttributeClearPatch, mergeCommonImageAttributes, type PrepareImageAttributeClear } from "../../../lib/image-draft.js";
 import {
-  useImageMetadataOperations
-} from "./useImageMetadataOperations.js";
+  imageAttributeClearPatch,
+  mergeCommonImageAttributes,
+  type PrepareImageAttributeClear
+} from "../../../lib/image-draft.js";
+import { useImageMetadataOperations } from "./useImageMetadataOperations.js";
 import {
   changedMetadataUpdate,
   createImageMetadataSession,
@@ -38,13 +41,10 @@ import {
   restoreImageMetadataDrafts
 } from "./image-metadata-session.js";
 import { ImageMetadataEditorCard } from "./ImageMetadataEditorCard.js";
-import {
-  useImageEditorTrashAction
-} from "./useImageEditorTrashAction.js";
+import { useImageEditorTrashAction } from "./useImageEditorTrashAction.js";
 import type { ImageEditorSavedHandler } from "./image-editor-types.js";
 
-type ImageStorageMigrationDialogModule =
-  typeof import("./ImageStorageMigrationDialog.js");
+type ImageStorageMigrationDialogModule = typeof import("./ImageStorageMigrationDialog.js");
 
 const loadImageStorageMigrationDialog =
   createPageLifetimeModuleLoader<ImageStorageMigrationDialogModule>(
@@ -53,9 +53,11 @@ const loadImageStorageMigrationDialog =
 const preloadImageStorageMigrationDialog = () => {
   void loadImageStorageMigrationDialog().catch(() => undefined);
 };
-const ImageStorageMigrationDialog = lazy(() => loadImageStorageMigrationDialog().then((module) => ({
-  default: module.ImageStorageMigrationDialog
-})));
+const ImageStorageMigrationDialog = lazy(() =>
+  loadImageStorageMigrationDialog().then((module) => ({
+    default: module.ImageStorageMigrationDialog
+  }))
+);
 
 function emptyCommonAttributes() {
   return {
@@ -89,10 +91,7 @@ export function ImageMetadataEditorDialog({
   onTrashCommitted: (imageIds: string[]) => void | Promise<void>;
   publicImageMembershipHandled?: boolean;
   onSaved: ImageEditorSavedHandler;
-  onStorageMigrationSucceeded?: (
-    message: string,
-    storageLabel: string
-  ) => void;
+  onStorageMigrationSucceeded?: (message: string, storageLabel: string) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const singleItem = items.length === 1;
@@ -116,16 +115,16 @@ export function ImageMetadataEditorDialog({
     initialIds: sessionItemIds,
     onSaved
   });
-  const {
-    pendingReconciliation,
-    reconcilePendingSave,
-    save,
-    saveStatus,
-    lastSaveReport
-  } = operations;
+  const { pendingReconciliation, reconcilePendingSave, save, saveStatus, lastSaveReport } =
+    operations;
   const saving = saveStatus.pending;
   const busy = saving || trashAction.pending;
-  const [preview, setPreview] = useState<{ src: string; thumbSrc: string; width: number; height: number } | null>(null);
+  const [preview, setPreview] = useState<{
+    src: string;
+    thumbSrc: string;
+    width: number;
+    height: number;
+  } | null>(null);
   const [page, setPage] = useState(1);
 
   const [common, setCommon] = useState(emptyCommonAttributes);
@@ -134,9 +133,7 @@ export function ImageMetadataEditorDialog({
   const [restoreError, setRestoreError] = useState("");
   const [migrating, setMigrating] = useState(false);
   const permissions = useAdminPermissions();
-  const canMigrateStorage = permissions.includes(
-    adminPermissions.imageStorageMigrate
-  );
+  const canMigrateStorage = permissions.includes(adminPermissions.imageStorageMigrate);
   const { data: storageOptionsData } = useStorageOptions();
   // 列表行左下角的「所在存储」展示后端显示名。
   const resolveStorageName = storageNameResolver(storageOptionsData?.backends ?? []);
@@ -147,23 +144,26 @@ export function ImageMetadataEditorDialog({
   const paginationAvailable = totalPages > 1;
   const visibleItems = activeItems.slice((page - 1) * pageSize, page * pageSize);
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
-  const patchDraft = (id: string, patch: Partial<ImageDraft>) => setSession((current) => ({
-    ...current,
-    drafts: {
-      ...current.drafts,
-      [id]: { ...current.drafts[id], ...patch }
-    }
-  }));
-  const remove = (id: string) => setSession((current) => ({
-    ...current,
-    activeIds: current.activeIds.filter((candidate) => candidate !== id)
-  }));
+  const patchDraft = (id: string, patch: Partial<ImageDraft>) =>
+    setSession((current) => ({
+      ...current,
+      drafts: {
+        ...current.drafts,
+        [id]: { ...current.drafts[id], ...patch }
+      }
+    }));
+  const remove = (id: string) =>
+    setSession((current) => ({
+      ...current,
+      activeIds: current.activeIds.filter((candidate) => candidate !== id)
+    }));
 
-  const changedByItem = new Map(activeItems.map((item) => [
-    item.id,
-    fieldsChangedFor(item, session.drafts[item.id])
-  ]));
-  const changedCount = activeItems.filter((item) => Object.values(changedByItem.get(item.id)!).some(Boolean)).length;
+  const changedByItem = new Map(
+    activeItems.map((item) => [item.id, fieldsChangedFor(item, session.drafts[item.id])])
+  );
+  const changedCount = activeItems.filter((item) =>
+    Object.values(changedByItem.get(item.id)!).some(Boolean)
+  ).length;
   const savePresentation = {
     idle: pendingReconciliation
       ? { icon: "refresh-line" as const, label: "确认保存结果" }
@@ -177,17 +177,26 @@ export function ImageMetadataEditorDialog({
     error: { icon: "close-line", label: "保存失败" }
   } as const;
   const modalSubtitle = singleItem
-    ? (activeItems[0] ? storageObjectKey(activeItems[0].id, activeItems[0].ext) : "")
+    ? activeItems[0]
+      ? storageObjectKey(activeItems[0].id, activeItems[0].ext)
+      : ""
     : `${activeItems.length} 张图片`;
 
-  const commonChanged = { device: common.device !== "", brightness: common.brightness !== "", theme: common.theme.trim() !== "", author: common.author.trim() !== "", tags: common.tags.length > 0 };
+  const commonChanged = {
+    device: common.device !== "",
+    brightness: common.brightness !== "",
+    theme: common.theme.trim() !== "",
+    author: common.author.trim() !== "",
+    tags: common.tags.length > 0
+  };
   const restoreAvailable = changedCount > 0;
   const commonSummary = [
     commonImageDeviceOptions.find((option) => option.value === common.device)?.label ?? "设备不变",
-    commonImageBrightnessOptions.find((option) => option.value === common.brightness)?.label ?? "亮暗不变",
+    commonImageBrightnessOptions.find((option) => option.value === common.brightness)?.label ??
+      "亮暗不变",
     facetDisplayName(themes, common.theme, "主题不变"),
     facetDisplayName(authors, common.author, "作者不变"),
-    `${common.tags.length} 个标签`,
+    `${common.tags.length} 个标签`
   ].join(" · ");
   const saveAll = async () => {
     const changedItems = activeItems.flatMap((item) => {
@@ -199,21 +208,14 @@ export function ImageMetadataEditorDialog({
     const outcome = await save(changedItems, session.activeIds);
     const authoritativeItems = outcome?.authoritativeItems;
     if (authoritativeItems) {
-      setSession((current) => reconcileImageMetadataSession(
-        current,
-        outcome.attempt,
-        authoritativeItems
-      ));
+      setSession((current) =>
+        reconcileImageMetadataSession(current, outcome.attempt, authoritativeItems)
+      );
     }
     return Boolean(
-      outcome
-      && (
-        outcome.report.snapshotFailed
-        || (
-          outcome.report.failed === 0
-          && outcome.report.unavailableIds.length === 0
-        )
-      )
+      outcome &&
+      (outcome.report.snapshotFailed ||
+        (outcome.report.failed === 0 && outcome.report.unavailableIds.length === 0))
     );
   };
   const restoreAllChanges = async () => {
@@ -225,13 +227,11 @@ export function ImageMetadataEditorDialog({
         setRestoreError("权威数据读取失败，未保存草稿已保留，请稍后重试。");
         return false;
       }
-      setSession((current) => restoreImageMetadataDrafts(
-        reconcileImageMetadataSession(
-          current,
-          outcome.attempt,
-          authoritativeItems
+      setSession((current) =>
+        restoreImageMetadataDrafts(
+          reconcileImageMetadataSession(current, outcome.attempt, authoritativeItems)
         )
-      ));
+      );
       return true;
     }
     setSession((current) => restoreImageMetadataDrafts(current));
@@ -253,10 +253,12 @@ export function ImageMetadataEditorDialog({
         const patch = imageAttributeClearPatch(field);
         setSession((current) => ({
           ...current,
-          drafts: Object.fromEntries(Object.entries(current.drafts).map(([id, draft]) => [
-            id,
-            ids.has(id) && current.activeIds.includes(id) ? { ...draft, ...patch } : draft
-          ]))
+          drafts: Object.fromEntries(
+            Object.entries(current.drafts).map(([id, draft]) => [
+              id,
+              ids.has(id) && current.activeIds.includes(id) ? { ...draft, ...patch } : draft
+            ])
+          )
         }));
       }
     };
@@ -266,11 +268,7 @@ export function ImageMetadataEditorDialog({
       className="modal edit-modal image-editor-overlay"
       ariaLabel={title}
       busy={busy}
-      paused={Boolean(
-        (canMigrateStorage && migrating)
-        || preview
-        || restoreConfirmation
-      )}
+      paused={Boolean((canMigrateStorage && migrating) || preview || restoreConfirmation)}
       initialFocusRef={closeButtonRef}
       returnFocusRef={returnFocusRef}
       onClose={onClose}
@@ -303,7 +301,8 @@ export function ImageMetadataEditorDialog({
                     setRestoreConfirmation(true);
                   }}
                 >
-                  <AdminIcon name="history-line" />复原
+                  <AdminIcon name="history-line" />
+                  复原
                 </button>
                 <button
                   ref={closeButtonRef}
@@ -329,14 +328,16 @@ export function ImageMetadataEditorDialog({
                 <WorkflowDefaultFields
                   values={common}
                   onChange={{
-                    device: (device) => setCommon({
-                      ...common,
-                      device: device as "" | "auto" | Device
-                    }),
-                    brightness: (brightness) => setCommon({
-                      ...common,
-                      brightness: brightness as "" | "auto" | Brightness
-                    }),
+                    device: (device) =>
+                      setCommon({
+                        ...common,
+                        device: device as "" | "auto" | Device
+                      }),
+                    brightness: (brightness) =>
+                      setCommon({
+                        ...common,
+                        brightness: brightness as "" | "auto" | Brightness
+                      }),
                     theme: (theme) => setCommon({ ...common, theme }),
                     author: (author) => setCommon({ ...common, author }),
                     tags: (tags) => setCommon({ ...common, tags })
@@ -363,22 +364,21 @@ export function ImageMetadataEditorDialog({
                   clearScope={sessionItemIds.join(",")}
                   clearScopeLabel="本次批量编辑"
                   onPrepareClear={prepareAttributeClear}
-                  onApply={() => setSession((current) => ({
-                    ...current,
-                    drafts: Object.fromEntries(
-                      Object.entries(current.drafts).map(([id, draft]) => {
-                        if (!current.activeIds.includes(id)) return [id, draft];
-                        return [id, mergeCommonImageAttributes(draft, common)];
-                      })
-                    )
-                  }))}
+                  onApply={() =>
+                    setSession((current) => ({
+                      ...current,
+                      drafts: Object.fromEntries(
+                        Object.entries(current.drafts).map(([id, draft]) => {
+                          if (!current.activeIds.includes(id)) return [id, draft];
+                          return [id, mergeCommonImageAttributes(draft, common)];
+                        })
+                      )
+                    }))
+                  }
                 />
               </WorkflowCollapsePanel>
             )}
-            <div
-              className="modal-scroll-list image-workflow-list image-editor-list"
-              ref={listRef}
-            >
+            <div className="modal-scroll-list image-workflow-list image-editor-list" ref={listRef}>
               {trashAction.errorMessage && (
                 <p className="image-editor-trash-error" role="alert">
                   {trashAction.errorMessage}
@@ -412,7 +412,9 @@ export function ImageMetadataEditorDialog({
               ))}
               {!activeItems.length && <p className="image-editor-empty-state">图片编辑列表为空</p>}
             </div>
-            <footer className={`image-workflow-footer${paginationAvailable ? " has-pagination" : ""}`}>
+            <footer
+              className={`image-workflow-footer${paginationAvailable ? " has-pagination" : ""}`}
+            >
               {(canMigrateStorage || trashAvailable) && (
                 <div className="image-editor-resource-actions image-workflow-leading-actions">
                   {canMigrateStorage && (
@@ -424,7 +426,8 @@ export function ImageMetadataEditorDialog({
                       {...preloadIntentProps(preloadImageStorageMigrationDialog)}
                       onClick={() => setMigrating(true)}
                     >
-                      <AdminIcon name="arrow-left-right-line" />{multipleItems ? "批量迁移存储" : "迁移存储"}
+                      <AdminIcon name="arrow-left-right-line" />
+                      {multipleItems ? "批量迁移存储" : "迁移存储"}
                     </button>
                   )}
                   {trashAvailable && (
@@ -433,15 +436,17 @@ export function ImageMetadataEditorDialog({
                       idleIcon="delete-bin-line"
                       confirmIcon="delete-bin-2-line"
                       busyIcon="delete-bin-5-line"
-                      idleLabel={multipleItems
-                        ? `删除这 ${activeItems.length} 张图片`
-                        : "删除此图片"}
-                      confirmLabel={multipleItems
-                        ? `再次点击确认删除这 ${activeItems.length} 张图片`
-                        : "再次点击确认删除此图片"}
-                      busyLabel={multipleItems
-                        ? `正在删除这 ${activeItems.length} 张图片`
-                        : "删除中"}
+                      idleLabel={
+                        multipleItems ? `删除这 ${activeItems.length} 张图片` : "删除此图片"
+                      }
+                      confirmLabel={
+                        multipleItems
+                          ? `再次点击确认删除这 ${activeItems.length} 张图片`
+                          : "再次点击确认删除此图片"
+                      }
+                      busyLabel={
+                        multipleItems ? `正在删除这 ${activeItems.length} 张图片` : "删除中"
+                      }
                       disabled={busy || !activeItems.length}
                       busy={trashAction.pending}
                       onConfirm={() => {
@@ -463,7 +468,9 @@ export function ImageMetadataEditorDialog({
                 />
               )}
               <div className="modal-footer-actions">
-                <button type="button" disabled={busy} onClick={() => requestClose()}>取消</button>
+                <button type="button" disabled={busy} onClick={() => requestClose()}>
+                  取消
+                </button>
                 <AsyncActionButton
                   className={`button workflow-submit-button${multipleItems ? " image-editor-save-button" : ""}`}
                   type="submit"
@@ -492,7 +499,16 @@ export function ImageMetadataEditorDialog({
               />
             </Suspense>
           )}
-          {preview && <ImagePreviewModal src={preview.src} thumbSrc={preview.thumbSrc} width={preview.width} height={preview.height} onClose={() => setPreview(null)} returnFocusRef={previewReturnFocusRef} />}
+          {preview && (
+            <ImagePreviewModal
+              src={preview.src}
+              thumbSrc={preview.thumbSrc}
+              width={preview.width}
+              height={preview.height}
+              onClose={() => setPreview(null)}
+              returnFocusRef={previewReturnFocusRef}
+            />
+          )}
           {restoreConfirmation && (
             <ConfirmDialog
               title="确认复原全部修改"

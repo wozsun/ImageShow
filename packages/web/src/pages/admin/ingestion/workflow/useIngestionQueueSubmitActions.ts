@@ -1,15 +1,16 @@
 import { useCallback } from "react";
 import { ingestionBatchHardLimit, type IngestionSessionPairDto } from "@imageshow/shared/browser";
-import { imageAttributeClearPatch, type PrepareImageAttributeClear } from "../../../../lib/image-draft.js";
+import {
+  imageAttributeClearPatch,
+  type PrepareImageAttributeClear
+} from "../../../../lib/image-draft.js";
 import type { FrozenIngestionQueueAction } from "../queue/useIngestionQueueActions.js";
 import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 
 import { ingestionAttributeDefaultsActionMetadata } from "../queue/model/ingestion-attribute-policy.js";
 import { ingestionJobCanStartCommit } from "../queue/model/ingestion-queue-state.js";
 import type { IngestionQueueController } from "../queue/useIngestionQueue.js";
-import type {
-  CapturedServerAction
-} from "./ingestion-workflow-action-model.js";
+import type { CapturedServerAction } from "./ingestion-workflow-action-model.js";
 
 export function useIngestionQueueSubmitActions({
   queue,
@@ -32,9 +33,9 @@ export function useIngestionQueueSubmitActions({
     const summary = queue.server.summary;
     const serverAction = captureServerAction(
       "apply_metadata",
-      queue.server.status !== "ready"
-        || !summary
-        || summary.unfinished - summary.committing - summary.resolving > 0,
+      queue.server.status !== "ready" ||
+        !summary ||
+        summary.unfinished - summary.committing - summary.resolving > 0,
       ingestionAttributeDefaultsActionMetadata(defaults)
     );
     if (serverAction.required && !serverAction.frozen) {
@@ -44,11 +45,7 @@ export function useIngestionQueueSubmitActions({
     const localJobs = queue.captureBrowserActionJobs(() => true);
     queue.applyDefaultsToLocalJobs(defaults, localJobs);
     if (serverAction.frozen) {
-      void queue.actions.run(
-        serverAction.frozen,
-        queue.flushPendingUpdates,
-        { blockUi: false }
-      );
+      void queue.actions.run(serverAction.frozen, queue.flushPendingUpdates, { blockUi: false });
     } else {
       void queue.flushPendingUpdates().catch(() => undefined);
     }
@@ -67,37 +64,38 @@ export function useIngestionQueueSubmitActions({
   const commitReadyJobs = useCallback(async () => {
     const capturedServerAction = captureServerAction(
       "commit_ready",
-      queue.server.status !== "ready"
-        || !queue.server.summary
-        || queue.server.summary.ready > 0
+      queue.server.status !== "ready" || !queue.server.summary || queue.server.summary.ready > 0
     );
     if (capturedServerAction.required && !capturedServerAction.frozen) {
       queue.server.refresh();
       return;
     }
     const serverAction = capturedServerAction.frozen;
-    const localJobs = queue.captureBrowserActionJobs((job) => (
+    const localJobs = queue.captureBrowserActionJobs((job) =>
       ingestionJobCanStartCommit(job, job.commitIntent ? "resume" : "new")
-    ));
-    const commitCapturedLocalJobs = () => (
-      localJobs.length ? commitJobs(localJobs) : Promise.resolve(false)
     );
+    const commitCapturedLocalJobs = () =>
+      localJobs.length ? commitJobs(localJobs) : Promise.resolve(false);
     if (!serverAction) {
       const committed = await commitCapturedLocalJobs();
       if (committed) onDone();
       return;
     }
     let localCommitted = false;
-    const result = await queue.actions.run(serverAction, async () => {
-      localCommitted = await commitCapturedLocalJobs();
-    }, {
-      onSettled: async () => {
-        // HTTP acknowledgement can precede the SSE summary. Keep the action
-        // locked until the existing read owner adopts a post-action snapshot.
-        await queue.server.recoverAfterSuccessfulAction().catch(() => undefined);
-        return true;
+    const result = await queue.actions.run(
+      serverAction,
+      async () => {
+        localCommitted = await commitCapturedLocalJobs();
+      },
+      {
+        onSettled: async () => {
+          // HTTP acknowledgement can precede the SSE summary. Keep the action
+          // locked until the existing read owner adopts a post-action snapshot.
+          await queue.server.recoverAfterSuccessfulAction().catch(() => undefined);
+          return true;
+        }
       }
-    });
+    );
     if (localCommitted || (result?.changed ?? 0) > 0) onDone();
   }, [
     onDone,
@@ -123,8 +121,7 @@ export function useIngestionQueueSubmitActions({
     const pending: Array<{
       frozen: FrozenIngestionQueueAction;
       retryItems?: IngestionSessionPairDto[];
-    }> = summary.unfinished - summary.committing - summary.resolving > 0
-      ? [{ frozen }] : [];
+    }> = summary.unfinished - summary.committing - summary.resolving > 0 ? [{ frozen }] : [];
     let prepared = false;
     let disposed = false;
     return {
@@ -141,8 +138,11 @@ export function useIngestionQueueSubmitActions({
           const exactBatches: typeof pending = [];
           for (let offset = 0; offset < pairs.length; offset += ingestionBatchHardLimit) {
             const exact = queue.actions.freeze("apply_metadata", metadata);
-            if (!exact || exact.actionScope !== frozen.actionScope
-              || exact.connectionGeneration !== frozen.connectionGeneration) {
+            if (
+              !exact ||
+              exact.actionScope !== frozen.actionScope ||
+              exact.connectionGeneration !== frozen.connectionGeneration
+            ) {
               throw new Error("队列连接已变化，请重新选择清空范围");
             }
             exactBatches.push({
@@ -158,8 +158,11 @@ export function useIngestionQueueSubmitActions({
           const current = pending[0]!;
           if (current.retryItems) {
             const retry = queue.actions.freeze("apply_metadata", metadata);
-            if (!retry || retry.actionScope !== frozen.actionScope
-              || retry.connectionGeneration !== frozen.connectionGeneration) {
+            if (
+              !retry ||
+              retry.actionScope !== frozen.actionScope ||
+              retry.connectionGeneration !== frozen.connectionGeneration
+            ) {
               throw new Error("队列连接已变化，请重新选择清空范围");
             }
             current.frozen = { ...retry, items: current.retryItems };
@@ -175,13 +178,18 @@ export function useIngestionQueueSubmitActions({
             for (let offset = 0; offset < failures.length; offset += ingestionBatchHardLimit) {
               retryBatches.push({
                 frozen: current.frozen,
-                retryItems: failures.slice(offset, offset + ingestionBatchHardLimit).map((item) => ({
-                  session_id: item.session_id, image_id: item.image_id
-                }))
+                retryItems: failures
+                  .slice(offset, offset + ingestionBatchHardLimit)
+                  .map((item) => ({
+                    session_id: item.session_id,
+                    image_id: item.image_id
+                  }))
               });
             }
             pending.splice(0, 1, ...retryBatches);
-            throw new Error(`${failures.length} 个任务清空失败：${failures[0]?.message ?? "请重试"}`);
+            throw new Error(
+              `${failures.length} 个任务清空失败：${failures[0]?.message ?? "请重试"}`
+            );
           }
           pending.shift();
         }

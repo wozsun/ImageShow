@@ -1,17 +1,6 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type RefObject
-} from "react";
-import {
-  ingestionBatchHardLimit,
-  ingestionStatusBatchMaxItems
-} from "@imageshow/shared/browser";
-import type {
-  ImageDraft
-} from "../../../../lib/types.js";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { ingestionBatchHardLimit, ingestionStatusBatchMaxItems } from "@imageshow/shared/browser";
+import type { ImageDraft } from "../../../../lib/types.js";
 import type { IngestionJob } from "./model/ingestion-job.js";
 import { isApiClientError } from "../../../../lib/api/client.js";
 import type { IngestionQueueAction } from "./model/ingestion-queue-state.js";
@@ -66,32 +55,34 @@ export function useStoredIngestionDraftSync({
   dispatch: (action: IngestionQueueAction) => boolean;
   server: ServerIngestionQueueController;
   reportError: (message: string, retryable?: boolean) => void;
-  observeCompletedIngestions: (
-    entries: readonly CompletedIngestionObservation[]
-  ) => void;
+  observeCompletedIngestions: (entries: readonly CompletedIngestionObservation[]) => void;
 }) {
   const syncsRef = useRef(new Map<string, PendingDraftSync>());
   const flushRef = useRef<(id: string) => Promise<boolean>>(async () => true);
-  const flushBatchRef = useRef<(
-    ids: readonly string[]
-  ) => Promise<ReadonlyMap<string, boolean>>>(async () => new Map());
-  const executeBatchRef = useRef<(
-    ids: readonly string[]
-  ) => Promise<ReadonlyMap<string, boolean>>>(async () => new Map());
+  const flushBatchRef = useRef<(ids: readonly string[]) => Promise<ReadonlyMap<string, boolean>>>(
+    async () => new Map()
+  );
+  const executeBatchRef = useRef<(ids: readonly string[]) => Promise<ReadonlyMap<string, boolean>>>(
+    async () => new Map()
+  );
   const batchTailRef = useRef<Promise<void>>(Promise.resolve());
   const scheduledIdsRef = useRef(new Set<string>());
   const scheduledTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleRef = useRef<(id: string) => void>(() => undefined);
   const ensureSnapshotRef = useRef<(job: IngestionJob) => void>(() => undefined);
-  const duplicateDecisionRef = useRef<(
-    id: string,
-    duplicateDecision: "upload" | "confirmed"
-  ) => Promise<boolean>>(async () => false);
-  const duplicateDecisionRequestsRef = useRef(new Map<string, Readonly<{
-    target: DraftSyncTarget;
-    duplicateDecision: "upload" | "confirmed";
-    promise: Promise<boolean>;
-  }>>());
+  const duplicateDecisionRef = useRef<
+    (id: string, duplicateDecision: "upload" | "confirmed") => Promise<boolean>
+  >(async () => false);
+  const duplicateDecisionRequestsRef = useRef(
+    new Map<
+      string,
+      Readonly<{
+        target: DraftSyncTarget;
+        duplicateDecision: "upload" | "confirmed";
+        promise: Promise<boolean>;
+      }>
+    >()
+  );
   const publishSyncStateRef = useRef<() => void>(() => undefined);
   const mountedRef = useRef(true);
   const [, setSyncEpoch] = useState(0);
@@ -102,53 +93,53 @@ export function useStoredIngestionDraftSync({
   const observeCompletedIngestionsRef = useRef(observeCompletedIngestions);
   observeCompletedIngestionsRef.current = observeCompletedIngestions;
 
-  const requireWriteCoverage = useCallback((
-    revision: number,
-    requestConnectionGeneration: number
-  ) => {
-    const currentServer = serverRef.current;
-    if (currentServer.ensureRevision(revision, requestConnectionGeneration)) return;
-    // Redis revisions are generation-local. A response that crossed a
-    // reconnect (including the short render gap after an SSE generation
-    // change) proves only that the write outcome is known; the replacement
-    // connection must establish its own post-trigger authoritative snapshot.
-    void currentServer.recoverAuthority().catch(() => undefined);
-  }, []);
+  const requireWriteCoverage = useCallback(
+    (revision: number, requestConnectionGeneration: number) => {
+      const currentServer = serverRef.current;
+      if (currentServer.ensureRevision(revision, requestConnectionGeneration)) return;
+      // Redis revisions are generation-local. A response that crossed a
+      // reconnect (including the short render gap after an SSE generation
+      // change) proves only that the write outcome is known; the replacement
+      // connection must establish its own post-trigger authoritative snapshot.
+      void currentServer.recoverAuthority().catch(() => undefined);
+    },
+    []
+  );
 
-  const hasPendingUpdates = useCallback(() => (
-    syncsRef.current.size > 0
-    || jobsRef.current.some((job) => (
-      job.serverDraftPending === true && draftSyncTarget(job) !== null
-    ))
-  ), [jobsRef]);
-  const hasRetryableUpdates = useCallback(() => (
-    [...syncsRef.current.values()].some((sync) => sync.retryable)
-  ), []);
+  const hasPendingUpdates = useCallback(
+    () =>
+      syncsRef.current.size > 0 ||
+      jobsRef.current.some(
+        (job) => job.serverDraftPending === true && draftSyncTarget(job) !== null
+      ),
+    [jobsRef]
+  );
+  const hasRetryableUpdates = useCallback(
+    () => [...syncsRef.current.values()].some((sync) => sync.retryable),
+    []
+  );
   publishSyncStateRef.current = () => {
     if (mountedRef.current) setSyncEpoch((current) => current + 1);
   };
 
-  const retireSync = useCallback((
-    id: string,
-    sync: PendingDraftSync,
-    authoritativeDraft?: ImageDraft
-  ) => {
-    if (syncsRef.current.get(id) !== sync) return;
-    syncsRef.current.delete(id);
-    const latest = jobsRef.current.find((job) => (
-      matchesDraftTarget(job, sync.target)
-    ));
-    if (mountedRef.current && latest) {
-      dispatch({
-        type: "patch",
-        id,
-        patch: {
-          serverDraftPending: false,
-          ...(authoritativeDraft ? { draft: authoritativeDraft } : {})
-        }
-      });
-    }
-  }, [dispatch, jobsRef]);
+  const retireSync = useCallback(
+    (id: string, sync: PendingDraftSync, authoritativeDraft?: ImageDraft) => {
+      if (syncsRef.current.get(id) !== sync) return;
+      syncsRef.current.delete(id);
+      const latest = jobsRef.current.find((job) => matchesDraftTarget(job, sync.target));
+      if (mountedRef.current && latest) {
+        dispatch({
+          type: "patch",
+          id,
+          patch: {
+            serverDraftPending: false,
+            ...(authoritativeDraft ? { draft: authoritativeDraft } : {})
+          }
+        });
+      }
+    },
+    [dispatch, jobsRef]
+  );
 
   executeBatchRef.current = async (requestedIds: readonly string[]) => {
     const ids = [...new Set(requestedIds)];
@@ -156,21 +147,10 @@ export function useStoredIngestionDraftSync({
     const failureMessages = new Set<string>();
     for (const id of ids) scheduledIdsRef.current.delete(id);
 
-    for (
-      let chunkOffset = 0;
-      chunkOffset < ids.length;
-      chunkOffset += ingestionBatchHardLimit
-    ) {
-      const chunkIds = ids.slice(
-        chunkOffset,
-        chunkOffset + ingestionBatchHardLimit
-      );
+    for (let chunkOffset = 0; chunkOffset < ids.length; chunkOffset += ingestionBatchHardLimit) {
+      const chunkIds = ids.slice(chunkOffset, chunkOffset + ingestionBatchHardLimit);
       let exhausted = false;
-      for (
-        let attempt = 0;
-        attempt < draftSyncMutationAttempts;
-        attempt += 1
-      ) {
+      for (let attempt = 0; attempt < draftSyncMutationAttempts; attempt += 1) {
         const entries: Array<{
           id: string;
           sync: PendingDraftSync;
@@ -197,19 +177,13 @@ export function useStoredIngestionDraftSync({
               session_id: sync.target.sessionId,
               image_id: sync.target.imageId
             });
-            const serverItem = serverRef.current.items.find((item) => (
-              serverIngestionPairKey(item) === pair
-            ));
+            const serverItem = serverRef.current.items.find(
+              (item) => serverIngestionPairKey(item) === pair
+            );
             if (serverItem) {
-              retireSync(
-                id,
-                sync,
-                ingestionJobFromServerItem(serverItem).draft
-              );
+              retireSync(id, sync, ingestionJobFromServerItem(serverItem).draft);
               outcomes.set(id, false);
-              failureMessages.add(
-                "内容接入任务已冻结提交或完成，本地草稿未写入"
-              );
+              failureMessages.add("内容接入任务已冻结提交或完成，本地草稿未写入");
               continue;
             }
             frozenEntries.push({ id, sync, target: sync.target });
@@ -218,10 +192,7 @@ export function useStoredIngestionDraftSync({
           if (currentTarget) {
             sync.target = {
               ...currentTarget,
-              expectedVersion: Math.max(
-                currentTarget.expectedVersion,
-                sync.target.expectedVersion
-              )
+              expectedVersion: Math.max(currentTarget.expectedVersion, sync.target.expectedVersion)
             };
           }
           if (sync.retryable) {
@@ -248,13 +219,13 @@ export function useStoredIngestionDraftSync({
                 offset,
                 offset + ingestionStatusBatchMaxItems
               );
-              const response = await getIngestionStatuses(statusChunk.map((entry) => ({
-                session_id: entry.target.sessionId,
-                image_id: entry.target.imageId
-              })));
-              observeCompletedIngestionsRef.current(
-                completedIngestionObservations(response)
+              const response = await getIngestionStatuses(
+                statusChunk.map((entry) => ({
+                  session_id: entry.target.sessionId,
+                  image_id: entry.target.imageId
+                }))
               );
+              observeCompletedIngestionsRef.current(completedIngestionObservations(response));
               statuses.push(...response);
             }
             for (const [index, { id, sync }] of frozenEntries.entries()) {
@@ -269,13 +240,9 @@ export function useStoredIngestionDraftSync({
               }
               outcomes.set(id, false);
             }
-            failureMessages.add(
-              "内容接入任务已完成、丢失或冻结提交，本地草稿未写入"
-            );
+            failureMessages.add("内容接入任务已完成、丢失或冻结提交，本地草稿未写入");
           } catch (error) {
-            failureMessages.add(
-              error instanceof Error ? error.message : String(error)
-            );
+            failureMessages.add(error instanceof Error ? error.message : String(error));
             for (const { id, sync } of frozenEntries) {
               if (syncsRef.current.get(id) !== sync) continue;
               sync.dirty = true;
@@ -295,7 +262,10 @@ export function useStoredIngestionDraftSync({
           })),
           () => serverRef.current.connectionGeneration
         );
-        const running = request.then(() => true, () => false);
+        const running = request.then(
+          () => true,
+          () => false
+        );
         for (const { sync } of entries) sync.running = running;
         let update: Awaited<typeof request>;
         try {
@@ -333,26 +303,18 @@ export function useStoredIngestionDraftSync({
             sync.awaitingRevision = null;
             sync.awaitingConnectionGeneration = null;
             outcomes.set(id, false);
-            failureMessages.add(
-              result?.message ?? "内容接入草稿更新响应缺少当前任务"
-            );
+            failureMessages.add(result?.message ?? "内容接入草稿更新响应缺少当前任务");
             continue;
           }
-          const latest = jobsRef.current.find((job) => (
-            matchesDraftTarget(job, target)
-          ));
+          const latest = jobsRef.current.find((job) => matchesDraftTarget(job, target));
           sync.target = {
             ...target,
             expectedVersion: result.version,
             draft: latest?.draft ?? sync.target.draft
           };
           sync.awaitingRevision = result.last_semantic_revision;
-          sync.awaitingConnectionGeneration =
-            update.requestConnectionGeneration;
-          requireWriteCoverage(
-            result.last_semantic_revision,
-            update.requestConnectionGeneration
-          );
+          sync.awaitingConnectionGeneration = update.requestConnectionGeneration;
+          requireWriteCoverage(result.last_semantic_revision, update.requestConnectionGeneration);
           if (mountedRef.current && latest) {
             dispatch({
               type: "patch",
@@ -384,9 +346,7 @@ export function useStoredIngestionDraftSync({
                   image_id: target.imageId
                 }))
               );
-              observeCompletedIngestionsRef.current(
-                completedIngestionObservations(response)
-              );
+              observeCompletedIngestionsRef.current(completedIngestionObservations(response));
               statuses.push(...response);
             }
             for (const [index, { id, sync }] of versionConflicts.entries()) {
@@ -395,28 +355,17 @@ export function useStoredIngestionDraftSync({
               if (status?.status === "present" && !status.item.commit) {
                 sync.target = {
                   ...sync.target,
-                  expectedVersion: Math.max(
-                    sync.target.expectedVersion,
-                    status.item.version
-                  )
+                  expectedVersion: Math.max(sync.target.expectedVersion, status.item.version)
                 };
                 sync.dirty = true;
                 continue;
               }
-              retireSync(
-                id,
-                sync,
-                authoritativeDraftFromStatus(status)
-              );
+              retireSync(id, sync, authoritativeDraftFromStatus(status));
               outcomes.set(id, false);
-              failureMessages.add(
-                "内容接入任务已完成、丢失或冻结提交，无法再写入保留草稿"
-              );
+              failureMessages.add("内容接入任务已完成、丢失或冻结提交，无法再写入保留草稿");
             }
           } catch (error) {
-            failureMessages.add(
-              error instanceof Error ? error.message : String(error)
-            );
+            failureMessages.add(error instanceof Error ? error.message : String(error));
             for (const { id, sync } of versionConflicts) {
               if (syncsRef.current.get(id) !== sync) continue;
               sync.dirty = true;
@@ -440,9 +389,7 @@ export function useStoredIngestionDraftSync({
           exhaustedDirty = true;
         }
         if (exhaustedDirty) {
-          failureMessages.add(
-            "内容接入草稿在连续版本变化后仍未能写入，请重试"
-          );
+          failureMessages.add("内容接入草稿在连续版本变化后仍未能写入，请重试");
         }
       }
     }
@@ -463,13 +410,14 @@ export function useStoredIngestionDraftSync({
 
   flushBatchRef.current = (ids: readonly string[]) => {
     const run = batchTailRef.current.then(() => executeBatchRef.current(ids));
-    batchTailRef.current = run.then(() => undefined, () => undefined);
+    batchTailRef.current = run.then(
+      () => undefined,
+      () => undefined
+    );
     return run;
   };
 
-  flushRef.current = async (id: string) => (
-    (await flushBatchRef.current([id])).get(id) ?? true
-  );
+  flushRef.current = async (id: string) => (await flushBatchRef.current([id])).get(id) ?? true;
 
   const scheduleBatch = (id: string) => {
     scheduledIdsRef.current.add(id);
@@ -487,25 +435,24 @@ export function useStoredIngestionDraftSync({
     const target = current ? draftSyncTarget(current) : null;
     if (!target) return;
     const existing = syncsRef.current.get(id);
-    const sync = existing?.target.attemptKey === target.attemptKey
-      ? existing
-      : {
-        running: null,
-        dirty: false,
-        retryable: false,
-        target,
-        awaitingRevision: null,
-        awaitingConnectionGeneration: null
-      } satisfies PendingDraftSync;
-    sync.target = existing?.target.attemptKey === target.attemptKey
-      ? {
-        ...target,
-        expectedVersion: Math.max(
-          target.expectedVersion,
-          existing.target.expectedVersion
-        )
-      }
-      : target;
+    const sync =
+      existing?.target.attemptKey === target.attemptKey
+        ? existing
+        : ({
+            running: null,
+            dirty: false,
+            retryable: false,
+            target,
+            awaitingRevision: null,
+            awaitingConnectionGeneration: null
+          } satisfies PendingDraftSync);
+    sync.target =
+      existing?.target.attemptKey === target.attemptKey
+        ? {
+            ...target,
+            expectedVersion: Math.max(target.expectedVersion, existing.target.expectedVersion)
+          }
+        : target;
     sync.dirty = true;
     sync.retryable = false;
     sync.awaitingRevision = null;
@@ -550,21 +497,16 @@ export function useStoredIngestionDraftSync({
     if (server.status === "ready" && server.revision !== null) {
       for (const [id, sync] of syncsRef.current) {
         if (
-          sync.awaitingRevision === null
-          || sync.dirty
-          || sync.running
-          || (
-            (
-              sync.awaitingConnectionGeneration === null
-              || sync.awaitingConnectionGeneration === server.connectionGeneration
-            )
-            && server.revision < sync.awaitingRevision
-          )
-        ) continue;
+          sync.awaitingRevision === null ||
+          sync.dirty ||
+          sync.running ||
+          ((sync.awaitingConnectionGeneration === null ||
+            sync.awaitingConnectionGeneration === server.connectionGeneration) &&
+            server.revision < sync.awaitingRevision)
+        )
+          continue;
         syncsRef.current.delete(id);
-        const latest = jobsRef.current.find((job) => (
-          matchesDraftTarget(job, sync.target)
-        ));
+        const latest = jobsRef.current.find((job) => matchesDraftTarget(job, sync.target));
         if (latest) {
           dispatch({
             type: "patch",
@@ -576,26 +518,23 @@ export function useStoredIngestionDraftSync({
       }
     }
     for (const job of jobsRef.current) {
-      if (
-        job.serverDraftPending
-        && draftSyncTarget(job)
-        && !syncsRef.current.has(job.id)
-      ) scheduleRef.current(job.id);
+      if (job.serverDraftPending && draftSyncTarget(job) && !syncsRef.current.has(job.id))
+        scheduleRef.current(job.id);
     }
     if (changed) publishSyncStateRef.current();
   });
 
-  const updateJobDraft = useCallback((
-    id: string,
-    patch: Partial<ImageDraft>
-  ) => {
-    const current = jobsRef.current.find((job) => job.id === id);
-    dispatch({ type: "patch-draft", id, patch });
-    if (!current) return;
-    dispatch({ type: "patch", id, patch: { serverDraftPending: true } });
-    publishSyncStateRef.current();
-    if (draftSyncTarget(current)) scheduleRef.current(id);
-  }, [dispatch, jobsRef]);
+  const updateJobDraft = useCallback(
+    (id: string, patch: Partial<ImageDraft>) => {
+      const current = jobsRef.current.find((job) => job.id === id);
+      dispatch({ type: "patch-draft", id, patch });
+      if (!current) return;
+      dispatch({ type: "patch", id, patch: { serverDraftPending: true } });
+      publishSyncStateRef.current();
+      if (draftSyncTarget(current)) scheduleRef.current(id);
+    },
+    [dispatch, jobsRef]
+  );
 
   const flushPendingUpdates = useCallback(async () => {
     if (scheduledTimerRef.current) clearTimeout(scheduledTimerRef.current);
@@ -608,25 +547,19 @@ export function useStoredIngestionDraftSync({
   }, []);
 
   const retryPendingUpdates = useCallback(async () => {
-    const entries = [...syncsRef.current].filter(([, sync]) => (
-      sync.retryable && !sync.running
-    ));
+    const entries = [...syncsRef.current].filter(([, sync]) => sync.retryable && !sync.running);
     if (!entries.length) return true;
     try {
       const statuses: Awaited<ReturnType<typeof getIngestionStatuses>> = [];
-      for (
-        let offset = 0;
-        offset < entries.length;
-        offset += ingestionStatusBatchMaxItems
-      ) {
+      for (let offset = 0; offset < entries.length; offset += ingestionStatusBatchMaxItems) {
         const chunk = entries.slice(offset, offset + ingestionStatusBatchMaxItems);
-        const response = await getIngestionStatuses(chunk.map(([, sync]) => ({
-          session_id: sync.target.sessionId,
-          image_id: sync.target.imageId
-        })));
-        observeCompletedIngestionsRef.current(
-          completedIngestionObservations(response)
+        const response = await getIngestionStatuses(
+          chunk.map(([, sync]) => ({
+            session_id: sync.target.sessionId,
+            image_id: sync.target.imageId
+          }))
         );
+        observeCompletedIngestionsRef.current(completedIngestionObservations(response));
         statuses.push(...response);
       }
       const retryIds: string[] = [];
@@ -638,10 +571,7 @@ export function useStoredIngestionDraftSync({
         if (status?.status === "present" && !status.item.commit) {
           sync.target = {
             ...sync.target,
-            expectedVersion: Math.max(
-              sync.target.expectedVersion,
-              status.item.version
-            )
+            expectedVersion: Math.max(sync.target.expectedVersion, status.item.version)
           };
           sync.dirty = true;
           sync.retryable = false;
@@ -661,8 +591,7 @@ export function useStoredIngestionDraftSync({
         );
       }
       const retried = await flushBatchRef.current(retryIds);
-      return terminalFailures === 0
-        && [...retried.values()].every(Boolean);
+      return terminalFailures === 0 && [...retried.values()].every(Boolean);
     } catch (error) {
       for (const [id, sync] of entries) {
         if (syncsRef.current.get(id) === sync) {
@@ -670,153 +599,133 @@ export function useStoredIngestionDraftSync({
           sync.retryable = true;
         }
       }
-      reportErrorRef.current(
-        error instanceof Error ? error.message : String(error),
-        true
-      );
+      reportErrorRef.current(error instanceof Error ? error.message : String(error), true);
       void serverRef.current.recoverAuthority().catch(() => undefined);
       publishSyncStateRef.current();
       return false;
     }
   }, [retireSync]);
 
-  const updateDuplicateDecision = useCallback((
-    id: string,
-    duplicateDecision: "upload" | "confirmed"
-  ) => {
-    const initial = jobsRef.current.find((job) => job.id === id);
-    const initialTarget = initial ? draftSyncTarget(initial) : null;
-    if (!initialTarget) return Promise.resolve(false);
-    const existing = duplicateDecisionRequestsRef.current.get(id);
-    if (existing && initial && matchesDraftTarget(initial, existing.target)) {
-      if (existing.duplicateDecision === duplicateDecision) {
-        return existing.promise;
+  const updateDuplicateDecision = useCallback(
+    (id: string, duplicateDecision: "upload" | "confirmed") => {
+      const initial = jobsRef.current.find((job) => job.id === id);
+      const initialTarget = initial ? draftSyncTarget(initial) : null;
+      if (!initialTarget) return Promise.resolve(false);
+      const existing = duplicateDecisionRequestsRef.current.get(id);
+      if (existing && initial && matchesDraftTarget(initial, existing.target)) {
+        if (existing.duplicateDecision === duplicateDecision) {
+          return existing.promise;
+        }
+        return existing.promise.then(() => duplicateDecisionRef.current(id, duplicateDecision));
       }
-      return existing.promise.then(() => (
-        duplicateDecisionRef.current(id, duplicateDecision)
-      ));
-    }
 
-    const promise = (async () => {
-      if (!await flushRef.current(id)) return false;
-      const current = jobsRef.current.find((job) => job.id === id);
-      const requestTarget = current ? draftSyncTarget(current) : null;
-      if (
-        !current
-        || !requestTarget
-        || !matchesDraftTarget(current, initialTarget)
-      ) return false;
-      let result;
-      let requestConnectionGeneration: number;
-      try {
-        const update = await updateStoredIngestionsWithResponseRetry([{
-          session_id: requestTarget.sessionId,
-          image_id: requestTarget.imageId,
-          expected_version: requestTarget.expectedVersion,
-          duplicate_decision: duplicateDecision
-        }], () => serverRef.current.connectionGeneration);
-        result = update.response.items[0];
-        requestConnectionGeneration = update.requestConnectionGeneration;
-      } catch (error) {
-        const latest = jobsRef.current.find((job) => job.id === id);
-        if (latest && matchesDraftTarget(latest, requestTarget)) {
-          reportErrorRef.current(
-            error instanceof Error ? error.message : String(error),
-            false
+      const promise = (async () => {
+        if (!(await flushRef.current(id))) return false;
+        const current = jobsRef.current.find((job) => job.id === id);
+        const requestTarget = current ? draftSyncTarget(current) : null;
+        if (!current || !requestTarget || !matchesDraftTarget(current, initialTarget)) return false;
+        let result;
+        let requestConnectionGeneration: number;
+        try {
+          const update = await updateStoredIngestionsWithResponseRetry(
+            [
+              {
+                session_id: requestTarget.sessionId,
+                image_id: requestTarget.imageId,
+                expected_version: requestTarget.expectedVersion,
+                duplicate_decision: duplicateDecision
+              }
+            ],
+            () => serverRef.current.connectionGeneration
           );
-        }
-        void serverRef.current.recoverAuthority().catch(() => undefined);
-        return false;
-      }
-      const latest = jobsRef.current.find((job) => job.id === id);
-      if (!latest || !matchesDraftTarget(latest, requestTarget)) {
-        if (result && result.status !== "failed") {
-          requireWriteCoverage(
-            result.last_semantic_revision,
-            requestConnectionGeneration
-          );
-        } else {
+          result = update.response.items[0];
+          requestConnectionGeneration = update.requestConnectionGeneration;
+        } catch (error) {
+          const latest = jobsRef.current.find((job) => job.id === id);
+          if (latest && matchesDraftTarget(latest, requestTarget)) {
+            reportErrorRef.current(error instanceof Error ? error.message : String(error), false);
+          }
           void serverRef.current.recoverAuthority().catch(() => undefined);
+          return false;
         }
-        return false;
-      }
-      if (!result || result.status === "failed") {
-        reportErrorRef.current(
-          result?.message ?? "重复决定更新响应缺少当前任务",
-          false
-        );
-        void serverRef.current.recoverAuthority().catch(() => undefined);
-        return false;
-      }
-      if ((latest.serverVersion ?? 0) > result.version) {
-        requireWriteCoverage(
-          result.last_semantic_revision,
-          requestConnectionGeneration
-        );
-        return latest.duplicateDecision === result.duplicate_decision;
-      }
-      dispatch({
-        type: "patch",
-        id,
-        patch: {
-          duplicateDecision: result.duplicate_decision,
-          duplicateCount: result.duplicate_count,
-          ...(result.duplicate_count === 0 ? { duplicates: [] } : {}),
-          serverVersion: result.version,
-          serverSemanticRevision: result.last_semantic_revision,
-          serverDraftPending: true,
-          message: result.duplicate_decision === "confirmed"
-            ? "已确认提交副本"
-            : ingestionDuplicateMessage(result.duplicate_count)
+        const latest = jobsRef.current.find((job) => job.id === id);
+        if (!latest || !matchesDraftTarget(latest, requestTarget)) {
+          if (result && result.status !== "failed") {
+            requireWriteCoverage(result.last_semantic_revision, requestConnectionGeneration);
+          } else {
+            void serverRef.current.recoverAuthority().catch(() => undefined);
+          }
+          return false;
         }
-      });
-      const patched = jobsRef.current.find((job) => job.id === id);
-      const target = patched && matchesDraftTarget(patched, requestTarget)
-        ? draftSyncTarget(patched)
-        : null;
-      if (target) {
-        const existingSync = syncsRef.current.get(id);
-        const sync = existingSync
-          && patched
-          && matchesDraftTarget(patched, existingSync.target)
-          ? existingSync
-          : {
-            running: null,
-            dirty: false,
-            retryable: false,
-            target,
-            awaitingRevision: null,
-            awaitingConnectionGeneration: null
-          };
-        sync.target = target;
-        sync.retryable = false;
-        sync.awaitingRevision = result.last_semantic_revision;
-        sync.awaitingConnectionGeneration = requestConnectionGeneration;
-        syncsRef.current.set(id, sync);
-        publishSyncStateRef.current();
-      }
-      requireWriteCoverage(
-        result.last_semantic_revision,
-        requestConnectionGeneration
+        if (!result || result.status === "failed") {
+          reportErrorRef.current(result?.message ?? "重复决定更新响应缺少当前任务", false);
+          void serverRef.current.recoverAuthority().catch(() => undefined);
+          return false;
+        }
+        if ((latest.serverVersion ?? 0) > result.version) {
+          requireWriteCoverage(result.last_semantic_revision, requestConnectionGeneration);
+          return latest.duplicateDecision === result.duplicate_decision;
+        }
+        dispatch({
+          type: "patch",
+          id,
+          patch: {
+            duplicateDecision: result.duplicate_decision,
+            duplicateCount: result.duplicate_count,
+            ...(result.duplicate_count === 0 ? { duplicates: [] } : {}),
+            serverVersion: result.version,
+            serverSemanticRevision: result.last_semantic_revision,
+            serverDraftPending: true,
+            message:
+              result.duplicate_decision === "confirmed"
+                ? "已确认提交副本"
+                : ingestionDuplicateMessage(result.duplicate_count)
+          }
+        });
+        const patched = jobsRef.current.find((job) => job.id === id);
+        const target =
+          patched && matchesDraftTarget(patched, requestTarget) ? draftSyncTarget(patched) : null;
+        if (target) {
+          const existingSync = syncsRef.current.get(id);
+          const sync =
+            existingSync && patched && matchesDraftTarget(patched, existingSync.target)
+              ? existingSync
+              : {
+                  running: null,
+                  dirty: false,
+                  retryable: false,
+                  target,
+                  awaitingRevision: null,
+                  awaitingConnectionGeneration: null
+                };
+          sync.target = target;
+          sync.retryable = false;
+          sync.awaitingRevision = result.last_semantic_revision;
+          sync.awaitingConnectionGeneration = requestConnectionGeneration;
+          syncsRef.current.set(id, sync);
+          publishSyncStateRef.current();
+        }
+        requireWriteCoverage(result.last_semantic_revision, requestConnectionGeneration);
+        return true;
+      })();
+      const request = { target: initialTarget, duplicateDecision, promise };
+      duplicateDecisionRequestsRef.current.set(id, request);
+      void promise.then(
+        () => {
+          if (duplicateDecisionRequestsRef.current.get(id) === request) {
+            duplicateDecisionRequestsRef.current.delete(id);
+          }
+        },
+        () => {
+          if (duplicateDecisionRequestsRef.current.get(id) === request) {
+            duplicateDecisionRequestsRef.current.delete(id);
+          }
+        }
       );
-      return true;
-    })();
-    const request = { target: initialTarget, duplicateDecision, promise };
-    duplicateDecisionRequestsRef.current.set(id, request);
-    void promise.then(
-      () => {
-        if (duplicateDecisionRequestsRef.current.get(id) === request) {
-          duplicateDecisionRequestsRef.current.delete(id);
-        }
-      },
-      () => {
-        if (duplicateDecisionRequestsRef.current.get(id) === request) {
-          duplicateDecisionRequestsRef.current.delete(id);
-        }
-      }
-    );
-    return promise;
-  }, [dispatch, jobsRef, requireWriteCoverage]);
+      return promise;
+    },
+    [dispatch, jobsRef, requireWriteCoverage]
+  );
   duplicateDecisionRef.current = updateDuplicateDecision;
   const scheduleJob = useCallback((id: string) => {
     scheduleRef.current(id);
@@ -844,16 +753,22 @@ export function useStoredIngestionDraftSync({
     // after retiring an incarnation pair.
     publishSyncStateRef.current();
   }, []);
-  const pairKeysForSession = useCallback((sessionId: string) => (
-    new Set([...syncsRef.current.values()].flatMap((sync) => (
-      sync.target.sessionId === sessionId
-        ? [serverIngestionPairKey({
-          session_id: sync.target.sessionId,
-          image_id: sync.target.imageId
-        })]
-        : []
-    )))
-  ), []);
+  const pairKeysForSession = useCallback(
+    (sessionId: string) =>
+      new Set(
+        [...syncsRef.current.values()].flatMap((sync) =>
+          sync.target.sessionId === sessionId
+            ? [
+                serverIngestionPairKey({
+                  session_id: sync.target.sessionId,
+                  image_id: sync.target.imageId
+                })
+              ]
+            : []
+        )
+      ),
+    []
+  );
 
   return {
     updateJobDraft,

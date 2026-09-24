@@ -1,5 +1,11 @@
 import "pixi.js/unsafe-eval";
-import { AccessibilitySystem, Application, extensions, loadEnvironmentExtensions, type Ticker } from "pixi.js";
+import {
+  AccessibilitySystem,
+  Application,
+  extensions,
+  loadEnvironmentExtensions,
+  type Ticker
+} from "pixi.js";
 import type { ShowOrder } from "@imageshow/shared/browser";
 import type { ShowImage } from "../show-layout.js";
 import type { ShowCandidateUsage } from "../show-data-pool.js";
@@ -150,11 +156,7 @@ export class ShowPixiRuntime {
     return new ShowPixiRuntime(host, app, options);
   }
 
-  private constructor(
-    host: HTMLElement,
-    app: Application,
-    options: ShowPixiRuntimeOptions
-  ) {
+  private constructor(host: HTMLElement, app: Application, options: ShowPixiRuntimeOptions) {
     const { signal } = this.#listenerController;
     this.#host = host;
     this.app = app;
@@ -174,27 +176,35 @@ export class ShowPixiRuntime {
     const renderer = app.renderer as typeof app.renderer & {
       gl?: WebGLRenderingContext | WebGL2RenderingContext;
     };
-    this.#textureCache = new ShowPixiTextureCache(showPixiTextureCacheOptions(
-      initialWidth,
-      typeof WebGL2RenderingContext !== "undefined"
-        && renderer.gl instanceof WebGL2RenderingContext
-    ));
+    this.#textureCache = new ShowPixiTextureCache(
+      showPixiTextureCacheOptions(
+        initialWidth,
+        typeof WebGL2RenderingContext !== "undefined" &&
+          renderer.gl instanceof WebGL2RenderingContext
+      )
+    );
     app.canvas.className = "show-pixi-canvas";
     app.canvas.dataset.showPixiCanvas = "";
     app.canvas.setAttribute("aria-hidden", "true");
     host.appendChild(app.canvas);
     const onPointerPresence = (event: PointerEvent) => {
       if (
-        !event.isTrusted || event.target !== app.canvas
-        || this.#dialogOpen || this.#hidden || this.#contextLost
-      ) return;
+        !event.isTrusted ||
+        event.target !== app.canvas ||
+        this.#dialogOpen ||
+        this.#hidden ||
+        this.#contextLost
+      )
+        return;
       // A second touch may land on another card. Cancel the whole stage's
       // click intents before Pixi dispatches it; the camera owns pinch state.
       if (event.type === "pointerdown" && !event.isPrimary) this.#scene?.clearPointerHover();
       const bounds = app.canvas.getBoundingClientRect();
       this.#setPointerInside(
-        event.clientX >= bounds.left && event.clientX < bounds.right
-        && event.clientY >= bounds.top && event.clientY < bounds.bottom
+        event.clientX >= bounds.left &&
+          event.clientX < bounds.right &&
+          event.clientY >= bounds.top &&
+          event.clientY < bounds.bottom
       );
     };
     const onPointerLeave = () => this.#setPointerInside(false);
@@ -375,8 +385,7 @@ export class ShowPixiRuntime {
     if (this.#destroyed) return;
     this.#destroyed = true;
     this.#applyMotionState();
-    const publishCleanup = this.#debugExposed
-      && window.__imageShowPixiDebug === this.#debugApi;
+    const publishCleanup = this.#debugExposed && window.__imageShowPixiDebug === this.#debugApi;
     if (publishCleanup) {
       delete window.__imageShowPixiDebug;
     }
@@ -429,27 +438,28 @@ export class ShowPixiRuntime {
       onOpen: this.#options.onOpen,
       onVisibleItems: this.#options.onVisibleItems
     };
-    this.#scene = kind === "waterfall"
-      ? new ShowPixiWaterfallScene({
-        ...common,
-        columns: this.#waterfallColumns,
-        inputElement: this.app.canvas,
-        onColumnsChange: this.#options.onColumnsChange,
-        onManualVerticalMovement: this.#options.onManualVerticalMovement
-      })
-      : new ShowPixiFloatScene({
-        ...common,
-        inputElement: this.app.canvas,
-        onManualVerticalMovement: this.#options.onManualVerticalMovement,
-        onSizeIndexChange: this.#options.onFloatSizeIndexChange,
-        sizeIndex: this.#floatSizeIndex
-      });
+    this.#scene =
+      kind === "waterfall"
+        ? new ShowPixiWaterfallScene({
+            ...common,
+            columns: this.#waterfallColumns,
+            inputElement: this.app.canvas,
+            onColumnsChange: this.#options.onColumnsChange,
+            onManualVerticalMovement: this.#options.onManualVerticalMovement
+          })
+        : new ShowPixiFloatScene({
+            ...common,
+            inputElement: this.app.canvas,
+            onManualVerticalMovement: this.#options.onManualVerticalMovement,
+            onSizeIndexChange: this.#options.onFloatSizeIndexChange,
+            sizeIndex: this.#floatSizeIndex
+          });
     this.app.stage.addChild(this.#scene.root);
   }
 
   #applyMotionState() {
-    const inputEnabled = !this.#destroyed && !this.#dialogOpen
-      && !this.#hidden && !this.#contextLost;
+    const inputEnabled =
+      !this.#destroyed && !this.#dialogOpen && !this.#hidden && !this.#contextLost;
     const running = this.#running && inputEnabled;
     this.#scene?.setInputEnabled(inputEnabled);
     this.#scene?.setMotion(running, this.#reducedMotion);
@@ -468,8 +478,12 @@ export class ShowPixiRuntime {
   }
 
   #applyPointerState() {
-    const enabled = this.#pointerInside && !this.#destroyed
-      && !this.#dialogOpen && !this.#hidden && !this.#contextLost;
+    const enabled =
+      this.#pointerInside &&
+      !this.#destroyed &&
+      !this.#dialogOpen &&
+      !this.#hidden &&
+      !this.#contextLost;
     this.app.stage.eventMode = enabled ? "passive" : "none";
     if (!enabled) {
       this.#scene?.clearPointerHover();
@@ -536,10 +550,11 @@ export class ShowPixiRuntime {
 
   #createLongTaskObserver() {
     if (
-      !this.#statsElement
-      || typeof PerformanceObserver === "undefined"
-      || !PerformanceObserver.supportedEntryTypes.includes("longtask")
-    ) return null;
+      !this.#statsElement ||
+      typeof PerformanceObserver === "undefined" ||
+      !PerformanceObserver.supportedEntryTypes.includes("longtask")
+    )
+      return null;
     const observer = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         this.#longTasks += 1;

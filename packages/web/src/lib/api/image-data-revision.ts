@@ -24,7 +24,11 @@ export function publicDetailValidation(client: QueryClient, id: string) {
   return undefined;
 }
 
-export function completePublicDetailValidation(client: QueryClient, id: string, token: DetailValidation) {
+export function completePublicDetailValidation(
+  client: QueryClient,
+  id: string,
+  token: DetailValidation
+) {
   const entries = detailValidations.get(client);
   if (entries?.get(id) === token) entries.delete(id);
 }

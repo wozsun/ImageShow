@@ -16,7 +16,7 @@ const CLEANUP_MENU_SIZE: AnchoredMenuSize = {
   align: "end",
   flipThreshold: 170,
   minAvailable: 120,
-  maxHeight: 220,
+  maxHeight: 220
 };
 
 function restoreCleanupTriggerFocus(trigger: HTMLButtonElement) {
@@ -36,10 +36,7 @@ export function IngestionCleanupMenu({
   onSelect
 }: {
   actions: IngestionCleanupAction[];
-  onSelect: (
-    actionId: IngestionCleanupActionId,
-    returnFocusTarget: HTMLButtonElement
-  ) => void;
+  onSelect: (actionId: IngestionCleanupActionId, returnFocusTarget: HTMLButtonElement) => void;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -51,7 +48,7 @@ export function IngestionCleanupMenu({
     disabled: allDisabled,
     closeOnEscape: true,
     closeOnFocusOutside: true,
-    focusOnOpen: () => itemRefs.current.find((item) => item && !item.disabled),
+    focusOnOpen: () => itemRefs.current.find((item) => item && !item.disabled)
   });
 
   const choose = (action: IngestionCleanupAction) => {
@@ -66,16 +63,19 @@ export function IngestionCleanupMenu({
   const moveFocus = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
-    const enabledIndexes = actions.flatMap((action, actionIndex) => action.enabled ? [actionIndex] : []);
+    const enabledIndexes = actions.flatMap((action, actionIndex) =>
+      action.enabled ? [actionIndex] : []
+    );
     if (!enabledIndexes.length) return;
     const currentPosition = enabledIndexes.indexOf(index);
-    const nextPosition = event.key === "Home"
-      ? 0
-      : event.key === "End"
-        ? enabledIndexes.length - 1
-        : event.key === "ArrowDown"
-          ? (currentPosition + 1) % enabledIndexes.length
-          : (currentPosition - 1 + enabledIndexes.length) % enabledIndexes.length;
+    const nextPosition =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? enabledIndexes.length - 1
+          : event.key === "ArrowDown"
+            ? (currentPosition + 1) % enabledIndexes.length
+            : (currentPosition - 1 + enabledIndexes.length) % enabledIndexes.length;
     itemRefs.current[enabledIndexes[nextPosition]]?.focus();
   };
 
@@ -93,7 +93,9 @@ export function IngestionCleanupMenu({
       {actions.map((action, index) => (
         <MenuItemButton
           key={action.id}
-          ref={(element) => { itemRefs.current[index] = element; }}
+          ref={(element) => {
+            itemRefs.current[index] = element;
+          }}
           type="button"
           role="menuitem"
           disabled={!action.enabled}
@@ -117,7 +119,7 @@ export function IngestionCleanupMenu({
         aria-haspopup="menu"
         aria-expanded={menu.open && !menu.closing}
         disabled={allDisabled}
-        onActivate={() => menu.open ? menu.requestClose() : menu.openMenu()}
+        onActivate={() => (menu.open ? menu.requestClose() : menu.openMenu())}
       >
         <AdminIcon name="delete-bin-line" />
       </DirectActivationButton>

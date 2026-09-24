@@ -1,6 +1,6 @@
 :root {
   --admin-color-workflow-filter-surface: light-dark(#f3f6fa, #141b25);
-  --admin-shadow-panel: light-dark(rgba(32, 42, 56, .16), rgba(0, 0, 0, .48));
+  --admin-shadow-panel: light-dark(rgba(32, 42, 56, 0.16), rgba(0, 0, 0, 0.48));
 }
 
 .image-list-toolbar {
@@ -19,7 +19,10 @@
   gap: 8px;
 }
 
-.image-list-toolbar-actions button { white-space: nowrap; flex-shrink: 0; }
+.image-list-toolbar-actions button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .image-list-sort-control {
   --image-sort-thumb-width: 12px;
   --image-sort-thumb-height: 22px;
@@ -40,10 +43,7 @@
   position: relative;
   min-width: 0;
   min-height: 0;
-  padding:
-    0
-    var(--image-sort-edge-gap)
-    0
+  padding: 0 var(--image-sort-edge-gap) 0
     calc(var(--image-sort-edge-gap) + var(--image-sort-thumb-width) + var(--image-sort-label-gap));
   border: 0;
   border-radius: 5px;
@@ -53,10 +53,8 @@
   line-height: 1;
 }
 .image-list-sort-control > button[data-shifted="true"] {
-  padding:
-    0
-    calc(var(--image-sort-edge-gap) + var(--image-sort-thumb-width) + var(--image-sort-label-gap))
-    0
+  padding: 0
+    calc(var(--image-sort-edge-gap) + var(--image-sort-thumb-width) + var(--image-sort-label-gap)) 0
     var(--image-sort-edge-gap);
 }
 .image-list-sort-label {
@@ -78,7 +76,7 @@
   background: var(--admin-color-control-switch-thumb);
   box-shadow: 0 1px 2px var(--admin-shadow-control-resting);
   transform: translateY(-50%);
-  transition: left .12s cubic-bezier(.2, .8, .2, 1);
+  transition: left 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .image-list-sort-control > button[data-shifted="true"] .image-list-sort-thumb {
   left: calc(100% - var(--image-sort-edge-gap) - var(--image-sort-thumb-width));
@@ -97,7 +95,11 @@
   gap: 6px;
   color: var(--admin-color-text-label);
 }
-.image-list-check-label input { width: 16px; height: 16px; padding: 0; }
+.image-list-check-label input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
 .image-list-selection-help,
 .image-list-selection-status.is-empty {
   position: absolute;
@@ -110,7 +112,10 @@
   white-space: nowrap;
   border: 0;
 }
-.admin-image-grid { display: grid; gap: var(--admin-card-grid-gap); }
+.admin-image-grid {
+  display: grid;
+  gap: var(--admin-card-grid-gap);
+}
 .admin-image-grid {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   align-items: start;
@@ -123,7 +128,10 @@
   border-radius: 6px;
   overflow: hidden;
 }
-.image-admin-view-switch button { border: 0; border-radius: 0; }
+.image-admin-view-switch button {
+  border: 0;
+  border-radius: 0;
+}
 
 .admin-image-card {
   min-width: 0;
@@ -137,9 +145,9 @@
   border-radius: 8px;
   padding: 8px;
   transition:
-    border-color .16s ease,
-    box-shadow .16s ease,
-    transform .16s ease;
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
 }
 
 .admin-image-card.is-selected {
@@ -165,7 +173,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .admin-image-card { transition: none; }
+  .admin-image-card {
+    transition: none;
+  }
   .admin-image-card:has(> .admin-image-card-detail:not(:disabled):hover) {
     transform: none;
   }
@@ -175,8 +185,8 @@
   min-height: 94px;
 }
 .admin-image-grid .admin-image-card.is-busy {
-  opacity: .58;
-  filter: grayscale(.18);
+  opacity: 0.58;
+  filter: grayscale(0.18);
   cursor: wait;
 }
 .admin-image-card-checkbox-hit-area {
@@ -199,7 +209,7 @@
   cursor: inherit;
 }
 .admin-image-card-detail {
-  --pressable-active-scale: var(--pressable-scale-large, .99);
+  --pressable-active-scale: var(--pressable-scale-large, 0.99);
 
   grid-area: detail;
   min-width: 0;
@@ -214,7 +224,10 @@
   border: 0;
   text-align: left;
 }
-.admin-image-card-detail:disabled { opacity: 1; cursor: wait; }
+.admin-image-card-detail:disabled {
+  opacity: 1;
+  cursor: wait;
+}
 .admin-image-card-thumb {
   position: relative;
   display: block;
@@ -225,7 +238,12 @@
   border-radius: 6px;
   background: var(--admin-color-thumbnail-surface);
 }
-.admin-image-card-thumb img { width: 100%; height: 100%; object-fit: cover; background: var(--admin-color-thumbnail-surface); }
+.admin-image-card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--admin-color-thumbnail-surface);
+}
 .admin-image-card-main {
   min-width: 0;
   display: grid;
@@ -253,7 +271,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.admin-image-card-meta .app-icon { width: 1rem; height: 1rem; flex-basis: 1rem; }
+.admin-image-card-meta .app-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-basis: 1rem;
+}
 .admin-image-card-actions {
   grid-area: actions;
   align-self: stretch;
@@ -274,8 +296,13 @@
   align-items: center;
   gap: 12px;
 }
-.image-admin-head-copy { flex: 1 1 0; min-width: 0; }
-.image-admin-title-row { min-width: 0; }
+.image-admin-head-copy {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.image-admin-title-row {
+  min-width: 0;
+}
 .image-admin-head-copy > p {
   min-height: 20px;
   overflow: hidden;
@@ -291,7 +318,9 @@
   margin-bottom: 10px;
 }
 .image-list-filter-actions,
-.image-list-filter-toggle { display: none; }
+.image-list-filter-toggle {
+  display: none;
+}
 .image-list-filter-panel {
   width: min(100%, calc(1920px - 220px - 48px));
   display: grid;
@@ -309,11 +338,21 @@
   display: grid;
   line-height: 20px;
 }
-.image-list-filter-device { grid-area: device; }
-.image-list-filter-brightness { grid-area: brightness; }
-.image-list-filter-theme { grid-area: theme; }
-.image-list-filter-tag { grid-area: tag; }
-.image-list-filter-author { grid-area: author; }
+.image-list-filter-device {
+  grid-area: device;
+}
+.image-list-filter-brightness {
+  grid-area: brightness;
+}
+.image-list-filter-theme {
+  grid-area: theme;
+}
+.image-list-filter-tag {
+  grid-area: tag;
+}
+.image-list-filter-author {
+  grid-area: author;
+}
 .image-list-filter-device,
 .image-list-filter-brightness {
   --image-list-filter-basis: 120px;
@@ -383,8 +422,12 @@
     min-width: var(--image-list-filter-basis);
     flex: 1 1 var(--image-list-filter-basis);
   }
-  .image-admin-head { align-items: center; }
-  .image-admin-head .image-admin-view-switch { flex: 0 0 auto; }
+  .image-admin-head {
+    align-items: center;
+  }
+  .image-admin-head .image-admin-view-switch {
+    flex: 0 0 auto;
+  }
   .image-admin-head .image-admin-view-switch button {
     flex: 1 1 0;
     min-width: 76px;
@@ -395,18 +438,28 @@
     flex-wrap: wrap;
     justify-content: flex-end;
   }
-  .image-admin-head-tools .ingestion-trigger { flex: 0 0 auto; }
+  .image-admin-head-tools .ingestion-trigger {
+    flex: 0 0 auto;
+  }
 }
 
 @media (min-width: 761px) and (max-width: 1080px) {
-  .image-admin-head { align-items: flex-start; }
+  .image-admin-head {
+    align-items: flex-start;
+  }
   .image-admin-head-tools {
     flex-direction: column;
     align-items: flex-end;
   }
-  .image-admin-head-tools .image-admin-view-switch { order: -1; }
-  .image-admin-head-tools .ingestion-triggers { flex-wrap: nowrap; }
-  .image-admin-head-tools .import-source-split { flex: 0 0 auto; }
+  .image-admin-head-tools .image-admin-view-switch {
+    order: -1;
+  }
+  .image-admin-head-tools .ingestion-triggers {
+    flex-wrap: nowrap;
+  }
+  .image-admin-head-tools .import-source-split {
+    flex: 0 0 auto;
+  }
   .image-admin-head-tools .ingestion-triggers .import-source-main,
   .image-admin-head-tools .ingestion-triggers > .ingestion-trigger {
     min-width: 0;
@@ -468,12 +521,16 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  .image-admin-head .image-admin-view-switch button { width: 100%; }
+  .image-admin-head .image-admin-view-switch button {
+    width: 100%;
+  }
   .image-admin-head-tools {
     flex-direction: column;
     align-items: stretch;
   }
-  .image-admin-head-tools .image-admin-view-switch { order: -1; }
+  .image-admin-head-tools .image-admin-view-switch {
+    order: -1;
+  }
   .image-admin-head-tools .ingestion-triggers {
     width: 100%;
     flex-wrap: nowrap;
@@ -503,7 +560,7 @@
     border-radius: 8px;
   }
   .image-list-filter-toggle {
-    --pressable-active-scale: var(--pressable-scale-large, .99);
+    --pressable-active-scale: var(--pressable-scale-large, 0.99);
 
     display: flex;
     align-items: center;
@@ -534,7 +591,7 @@
     background: var(--admin-color-border-control);
   }
   .image-list-filter-clear-mobile {
-    --pressable-active-scale: var(--pressable-scale-large, .99);
+    --pressable-active-scale: var(--pressable-scale-large, 0.99);
 
     min-width: 72px;
     height: auto;
@@ -586,7 +643,7 @@
     border-top: 0;
     border-radius: 0 0 8px 8px;
     box-shadow: 0 12px 32px var(--admin-shadow-panel);
-    transform: scaleY(.98);
+    transform: scaleY(0.98);
     transform-origin: top center;
     transition: none;
   }
@@ -626,7 +683,9 @@
     align-self: center;
     justify-self: end;
   }
-  .image-list-sort-control > button { font-size: 12px; }
+  .image-list-sort-control > button {
+    font-size: 12px;
+  }
   .image-list-batch-actions {
     grid-column: 3;
     gap: 4px;
@@ -638,7 +697,9 @@
     gap: 4px;
     font-size: 15px;
   }
-  .admin-image-grid { grid-template-columns: 1fr; }
+  .admin-image-grid {
+    grid-template-columns: 1fr;
+  }
   .admin-image-card {
     grid-template-columns: 20px minmax(0, 1fr) 36px;
     gap: 8px;
@@ -648,9 +709,16 @@
     grid-template-columns: 72px minmax(0, 1fr);
     gap: 10px;
   }
-  .admin-image-card-thumb { width: 72px; height: 72px; }
-  .admin-image-card-actions { gap: 4px; }
-  .image-list-toolbar { align-items: stretch; }
+  .admin-image-card-thumb {
+    width: 72px;
+    height: 72px;
+  }
+  .admin-image-card-actions {
+    gap: 4px;
+  }
+  .image-list-toolbar {
+    align-items: stretch;
+  }
 }
 
 @media (max-width: 492px) {
@@ -684,17 +752,16 @@
 
 @media (max-width: 760px) and (max-height: 560px) {
   .image-list-filter-panel {
-    max-height: min(
-      50dvh,
-      var(--dismissible-panel-available-height, 50dvh)
-    );
+    max-height: min(50dvh, var(--dismissible-panel-available-height, 50dvh));
     overflow-y: auto;
     overscroll-behavior: contain;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .image-list-sort-thumb { transition: none; }
+  .image-list-sort-thumb {
+    transition: none;
+  }
   .image-list-filter-chevron,
   .image-list-filter-bar.filters-open .image-list-filter-chevron {
     transform: none;

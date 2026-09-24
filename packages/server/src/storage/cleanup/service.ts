@@ -11,20 +11,14 @@ import {
   setIngestionCandidateGuardConfirmationDeadline as persistIngestionGuardDeadline,
   type UnresolvedMoveCleanupReference
 } from "./repository.ts";
-import type {
-  CapturedMoveCleanupObject,
-  MoveCleanupObjectInput
-} from "./types.ts";
+import type { CapturedMoveCleanupObject, MoveCleanupObjectInput } from "./types.ts";
 import {
   shareStorageNamespace,
   storageNamespaceIdentity,
   storageNamespaceIncludesIdentity
 } from "../objects/namespace.ts";
 
-export type {
-  CapturedMoveCleanupObject,
-  MoveCleanupObjectInput
-} from "./types.ts";
+export type { CapturedMoveCleanupObject, MoveCleanupObjectInput } from "./types.ts";
 
 type StorageBackendConfig = Awaited<ReturnType<typeof getStorageBackend>>;
 
@@ -33,8 +27,9 @@ async function cleanupReferenceMatchesTarget(
   target: StorageBackendConfig,
   backends: Map<string, StorageBackendConfig>
 ) {
-  let matchesTarget = reference.backend === target.slug
-    || storageNamespaceIncludesIdentity(target, reference.namespace_identity);
+  let matchesTarget =
+    reference.backend === target.slug ||
+    storageNamespaceIncludesIdentity(target, reference.namespace_identity);
   if (!matchesTarget && reference.backend !== target.slug) {
     try {
       let backend = backends.get(reference.backend);
@@ -42,10 +37,9 @@ async function cleanupReferenceMatchesTarget(
         backend = await getStorageBackend(reference.backend);
         backends.set(reference.backend, backend);
       }
-      matchesTarget = storageNamespaceIncludesIdentity(
-        backend,
-        reference.namespace_identity
-      ) && shareStorageNamespace(backend, target);
+      matchesTarget =
+        storageNamespaceIncludesIdentity(backend, reference.namespace_identity) &&
+        shareStorageNamespace(backend, target);
     } catch {
       // If the lease owner can no longer be resolved, refusing reuse is
       // safer than racing an already-issued remote DELETE.
@@ -82,13 +76,13 @@ export async function assertObjectNotPendingCleanup(
 
   for (const reference of references) {
     if (
-      options.ownedIngestionCandidateGuard?.imageId === reference.target_id
-      && options.ownedIngestionCandidateGuard.token === reference.guard_token
-      && reference.reason === "ingestion_commit_candidate_guard"
+      options.ownedIngestionCandidateGuard?.imageId === reference.target_id &&
+      options.ownedIngestionCandidateGuard.token === reference.guard_token &&
+      reference.reason === "ingestion_commit_candidate_guard"
     ) {
       continue;
     }
-    if (!await cleanupReferenceMatchesTarget(reference, target, backends)) {
+    if (!(await cleanupReferenceMatchesTarget(reference, target, backends))) {
       continue;
     }
     throw new ApiError(
@@ -124,11 +118,7 @@ export async function setIngestionCandidateGuardConfirmationDeadline(
     await wait(delayMs);
     options.signal?.throwIfAborted();
     try {
-      await persistIngestionGuardDeadline(
-        imageId,
-        guardToken,
-        confirmAbsentAfter
-      );
+      await persistIngestionGuardDeadline(imageId, guardToken, confirmAbsentAfter);
       options.signal?.throwIfAborted();
       return;
     } catch (error) {
@@ -169,12 +159,7 @@ export function enqueueCapturedObjectsForCleanup(
   }
   return withStorageLocationReadLock(async (signal) => {
     signal.throwIfAborted();
-    await enqueueMoveCleanupWithRetry(
-      imageId,
-      objects,
-      reason,
-      signal
-    );
+    await enqueueMoveCleanupWithRetry(imageId, objects, reason, signal);
     signal.throwIfAborted();
   });
 }
@@ -257,26 +242,17 @@ export async function enqueueObjectsForCleanup(
     signal.throwIfAborted();
     const captured = await captureMoveCleanupObjects(objects);
     signal.throwIfAborted();
-    await enqueueMoveCleanupWithRetry(
-      imageId,
-      captured,
-      reason,
-      signal,
-      options.guardToken
-    );
+    await enqueueMoveCleanupWithRetry(imageId, captured, reason, signal, options.guardToken);
     signal.throwIfAborted();
   });
 }
 
 export async function retryStorageBackendCleanup(slug: string) {
-  await withAdvisoryLock(
-    `imageshow:storage-backend:${slug}`,
-    async (signal) => {
-      signal.throwIfAborted();
-      await getStorageBackend(slug);
-      signal.throwIfAborted();
-      await retryExhaustedMoveCleanupJobs(slug);
-      signal.throwIfAborted();
-    }
-  );
+  await withAdvisoryLock(`imageshow:storage-backend:${slug}`, async (signal) => {
+    signal.throwIfAborted();
+    await getStorageBackend(slug);
+    signal.throwIfAborted();
+    await retryExhaustedMoveCleanupJobs(slug);
+    signal.throwIfAborted();
+  });
 }

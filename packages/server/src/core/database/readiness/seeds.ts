@@ -1,12 +1,13 @@
 import type { DatabaseReader } from "./contract.ts";
 
 export async function assertRequiredSeedRows(database: DatabaseReader) {
-  const row = (await database.query<{
-    revision_ready: boolean;
-    local_storage_ready: boolean;
-    unsupported_storage_types: string[];
-  }>(
-    `SELECT (
+  const row = (
+    await database.query<{
+      revision_ready: boolean;
+      local_storage_ready: boolean;
+      unsupported_storage_types: string[];
+    }>(
+      `SELECT (
               SELECT count(*)=1
                  AND bool_and(singleton=1 AND revision >= 0)
                 FROM ready_image_revision
@@ -21,15 +22,14 @@ export async function assertRequiredSeedRows(database: DatabaseReader) {
                WHERE type NOT IN ('local', 's3')
                ORDER BY type
             ) AS unsupported_storage_types`
-  )).rows[0];
+    )
+  ).rows[0];
   const missing = [
     !row?.revision_ready && "ready_image_revision singleton",
     !row?.local_storage_ready && "storage_backend.local"
   ].filter((value): value is string => Boolean(value));
   if (missing.length) {
-    throw new Error(
-      `required seed rows are missing or invalid: ${missing.join(", ")}`
-    );
+    throw new Error(`required seed rows are missing or invalid: ${missing.join(", ")}`);
   }
   if (row.unsupported_storage_types.length) {
     throw new Error(

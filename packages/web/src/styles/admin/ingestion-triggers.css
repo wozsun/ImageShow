@@ -1,2 +1,7 @@
-.ingestion-triggers { display: flex; gap: 10px; }
-.ingestion-trigger { min-width: 120px; }
+.ingestion-triggers {
+  display: flex;
+  gap: 10px;
+}
+.ingestion-trigger {
+  min-width: 120px;
+}

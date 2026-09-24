@@ -18,9 +18,7 @@ import {
 } from "../../components/image/image-load-scheduler.js";
 import type { Device } from "../../lib/types.js";
 import { galleryImageRatio } from "./gallery-layout.js";
-import {
-  type GalleryImageVisibility
-} from "./gallery-image-visibility.js";
+import { type GalleryImageVisibility } from "./gallery-image-visibility.js";
 import { useGalleryImageRuntime } from "./GalleryImageRuntime.js";
 
 const hiddenVisibility: GalleryImageVisibility = {
@@ -63,12 +61,7 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
   measureIntrinsicSize: boolean;
   onIntrinsicSize: (width: number, height: number) => void;
 }) {
-  const {
-    scheduler,
-    visibility: visibilityController,
-    galleryPaused
-  } =
-    useGalleryImageRuntime();
+  const { scheduler, visibility: visibilityController, galleryPaused } = useGalleryImageRuntime();
   const holderRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const taskRef = useRef<ImageLoadTaskHandle | null>(null);
@@ -77,8 +70,7 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
     report: onIntrinsicSize
   });
   const inViewportRef = useRef(false);
-  const [visibility, setVisibility] =
-    useState<GalleryImageVisibility>(hiddenVisibility);
+  const [visibility, setVisibility] = useState<GalleryImageVisibility>(hiddenVisibility);
   const [renderImage, setRenderImage] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -99,9 +91,7 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
 
   useEffect(() => {
     taskRef.current?.reprioritize(
-      visibility.inViewport
-        ? imageLoadPriority.viewport
-        : imageLoadPriority.nearby
+      visibility.inViewport ? imageLoadPriority.viewport : imageLoadPriority.nearby
     );
     if (galleryPaused) {
       if (!loaded) {
@@ -123,11 +113,7 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
       setRenderImage(true);
       return;
     }
-    if (
-      !visibility.inLoadRange
-      && !loaded
-      && taskRef.current?.cancelPending()
-    ) {
+    if (!visibility.inLoadRange && !loaded && taskRef.current?.cancelPending()) {
       setRenderImage(false);
     }
   }, [failed, galleryPaused, loaded, visibility]);
@@ -144,23 +130,15 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
     let current = true;
     const task = scheduler.schedule({
       group: "gallery",
-      priority: inViewportRef.current
-        ? imageLoadPriority.viewport
-        : imageLoadPriority.nearby,
-      run: (signal) => loadImageElement(image, { src }, signal).then(
-        () => undefined
-      )
+      priority: inViewportRef.current ? imageLoadPriority.viewport : imageLoadPriority.nearby,
+      run: (signal) => loadImageElement(image, { src }, signal).then(() => undefined)
     });
     taskRef.current = task;
     void task.result.then((result) => {
       if (!current || taskRef.current !== task) return;
       if (result.status === "completed") {
         const measurement = intrinsicMeasurementRef.current;
-        if (
-          measurement.enabled
-          && image.naturalWidth > 0
-          && image.naturalHeight > 0
-        ) {
+        if (measurement.enabled && image.naturalWidth > 0 && image.naturalHeight > 0) {
           measurement.report(image.naturalWidth, image.naturalHeight);
         }
         setLoaded(true);
@@ -175,27 +153,20 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
       clearImageElement(image);
       if (taskRef.current === task) taskRef.current = null;
     };
-  }, [
-    failed,
-    renderImage,
-    scheduler,
-    src
-  ]);
+  }, [failed, renderImage, scheduler, src]);
 
   return (
     <div
       ref={holderRef}
       className={`tile-image-shell ${loaded ? "loaded" : ""}`}
-      style={{
-        "--tile-ratio": galleryImageRatio(device, width, height)
-      } as CSSProperties}
+      style={
+        {
+          "--tile-ratio": galleryImageRatio(device, width, height)
+        } as CSSProperties
+      }
     >
-      {import.meta.env?.DEV === true && renderImage && !failed && (
-        <GalleryImageDevelopmentStats />
-      )}
-      {import.meta.env?.DEV === true && failed && (
-        <GalleryThumbnailFallbackDevelopmentStats />
-      )}
+      {import.meta.env?.DEV === true && renderImage && !failed && <GalleryImageDevelopmentStats />}
+      {import.meta.env?.DEV === true && failed && <GalleryThumbnailFallbackDevelopmentStats />}
       {renderImage && !failed && (
         <img
           ref={setImageRef}

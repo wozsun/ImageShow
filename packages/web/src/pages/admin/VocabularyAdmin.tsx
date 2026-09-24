@@ -19,11 +19,7 @@ import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { useActionFeedbackTarget } from "../../components/feedback/ActionFeedbackRegion.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import { VocabularyAdminCard } from "./VocabularyAdminCard.js";
-import {
-  adminApiBasePath,
-  slugFormatHint,
-  slugPattern
-} from "../../lib/constants.js";
+import { adminApiBasePath, slugFormatHint, slugPattern } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { AdminSettingsBoundary } from "../../components/feedback/AdminSettingsBoundary.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
@@ -49,25 +45,32 @@ const COPY = {
     slugPlaceholder: "标签 slug",
     displayPlaceholder: "显示名（可选）",
     empty: "还没有标签",
-    deleteDescription: (item: VocabularyEntry) => `删除标签「${item.display_name || item.slug}」，会从 ${item.image_count} 张关联图片（包含回收站）上移除该标签，此操作无法撤销。`
+    deleteDescription: (item: VocabularyEntry) =>
+      `删除标签「${item.display_name || item.slug}」，会从 ${item.image_count} 张关联图片（包含回收站）上移除该标签，此操作无法撤销。`
   },
   themes: {
     noun: "主题",
     slugPlaceholder: "主题 slug",
     displayPlaceholder: "显示名（可选）",
     empty: "还没有主题（上传图片或在上方新建）",
-    deleteDescription: (item: VocabularyEntry) => `删除主题「${item.display_name || item.slug}」，其 ${item.image_count} 张关联图片（包含回收站）将归为「未设置」，此操作无法撤销。`
+    deleteDescription: (item: VocabularyEntry) =>
+      `删除主题「${item.display_name || item.slug}」，其 ${item.image_count} 张关联图片（包含回收站）将归为「未设置」，此操作无法撤销。`
   },
   authors: {
     noun: "作者",
     slugPlaceholder: "作者 slug",
     displayPlaceholder: "显示名（可选）",
     empty: "还没有作者（上传图片或在上方新建）",
-    deleteDescription: (item: VocabularyEntry) => `删除作者「${item.display_name || item.slug}」，其 ${item.image_count} 张关联图片（包含回收站）的作者属性将被清除，此操作无法撤销。`
+    deleteDescription: (item: VocabularyEntry) =>
+      `删除作者「${item.display_name || item.slug}」，其 ${item.image_count} 张关联图片（包含回收站）的作者属性将被清除，此操作无法撤销。`
   }
 } as const;
 
-const QUERY_KEYS = { tags: queryKeys.tags, themes: queryKeys.themes, authors: queryKeys.authors } as const;
+const QUERY_KEYS = {
+  tags: queryKeys.tags,
+  themes: queryKeys.themes,
+  authors: queryKeys.authors
+} as const;
 const DELETE_PERMISSIONS = {
   tags: adminPermissions.tagDelete,
   themes: adminPermissions.themeDelete,
@@ -82,7 +85,10 @@ export function VocabularyAdmin({ kind }: { kind: VocabularyKind }) {
   );
 }
 
-function VocabularyAdminContent({ kind, settings }: {
+function VocabularyAdminContent({
+  kind,
+  settings
+}: {
   kind: VocabularyKind;
   settings: AdminSettings;
 }) {
@@ -92,7 +98,16 @@ function VocabularyAdminContent({ kind, settings }: {
   const permissions = useAdminPermissions();
   const canDelete = permissions.includes(DELETE_PERMISSIONS[kind]);
   const client = useQueryClient();
-  const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<AdminEntityListResponseDto<VocabularyEntry>>({ queryKey, queryFn: ({ signal }) => api(`${adminApiBasePath}/${kind}`, { signal }) });
+  const {
+    data,
+    error: listError,
+    isError: listFailed,
+    isFetching,
+    refetch
+  } = useQuery<AdminEntityListResponseDto<VocabularyEntry>>({
+    queryKey,
+    queryFn: ({ signal }) => api(`${adminApiBasePath}/${kind}`, { signal })
+  });
   // Vocabulary edits change labels and choices; deleting a term also changes
   // image membership and therefore uses the full image invalidation below.
   const refreshVocabulary = () => invalidateVocabularyData(client, queryKey);
@@ -111,9 +126,7 @@ function VocabularyAdminContent({ kind, settings }: {
     await client.cancelQueries({ queryKey, exact: true });
     client.setQueryData<AdminEntityListResponseDto<VocabularyEntry>>(queryKey, (current) => {
       if (!current) return current;
-      const existingIndex = current.items.findIndex(
-        (candidate) => candidate.slug === item.slug
-      );
+      const existingIndex = current.items.findIndex((candidate) => candidate.slug === item.slug);
       const items = [...current.items];
       if (existingIndex >= 0) items[existingIndex] = item;
       else items.unshift(item);
@@ -138,7 +151,8 @@ function VocabularyAdminContent({ kind, settings }: {
     setConfirmDelete(null);
   }, [canDelete]);
 
-  const slugInvalid = slug.length > 0 && !(kind === "themes" ? isThemeSlug(slug) : slugPattern.test(slug));
+  const slugInvalid =
+    slug.length > 0 && !(kind === "themes" ? isThemeSlug(slug) : slugPattern.test(slug));
   const slugError = slugInvalid
     ? kind === "themes" && slug === unsetThemeFilter
       ? "null 是未设置主题的保留值，不能用作主题标识"
@@ -150,18 +164,20 @@ function VocabularyAdminContent({ kind, settings }: {
     basePath: `${adminApiBasePath}/${kind}`,
     externalBusy,
     refresh: () => invalidateDataAfterSortOrderSave(client, queryKey),
-    readValue: (slug) => client.getQueryData<AdminEntityListResponseDto<VocabularyEntry>>(queryKey)
-      ?.items.find((item) => item.slug === slug)?.sort_order,
-    reportError: (stage, error) => reportAdminUiError(
-      `vocabulary_admin.${kind}.sort_order.${stage}`,
-      error
-    )
+    readValue: (slug) =>
+      client
+        .getQueryData<AdminEntityListResponseDto<VocabularyEntry>>(queryKey)
+        ?.items.find((item) => item.slug === slug)?.sort_order,
+    reportError: (stage, error) =>
+      reportAdminUiError(`vocabulary_admin.${kind}.sort_order.${stage}`, error)
   });
   const order = data?.items ?? [];
   const operationBusy = sorting.busy;
   const totalPages = Math.max(1, Math.ceil(order.length / pageSize));
   const pageItems = order.slice((page - 1) * pageSize, page * pageSize);
-  useEffect(() => { setPage((current) => Math.min(current, totalPages)); }, [totalPages]);
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   const create = async (event: FormEvent) => {
     event.preventDefault();
@@ -243,7 +259,11 @@ function VocabularyAdminContent({ kind, settings }: {
             maxLength={32}
             aria-invalid={Boolean(slugError)}
           />
-          {slugError && <p className="admin-field-error" role="alert">{slugError}</p>}
+          {slugError && (
+            <p className="admin-field-error" role="alert">
+              {slugError}
+            </p>
+          )}
         </div>
         <input
           value={display}
@@ -294,7 +314,13 @@ function VocabularyAdminContent({ kind, settings }: {
               />
             );
           })}
-          {listFailed && <QueryErrorState error={listError} onRetry={() => void refetch()} reportContext={`vocabulary_admin.${kind}.load`} />}
+          {listFailed && (
+            <QueryErrorState
+              error={listError}
+              onRetry={() => void refetch()}
+              reportContext={`vocabulary_admin.${kind}.load`}
+            />
+          )}
           {!listFailed && !order.length && !isFetching && <p className="muted">{copy.empty}</p>}
         </div>
       </div>

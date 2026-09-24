@@ -28,9 +28,7 @@ type FlushableImageMutationSyncBatch = ImageMutationSyncBatch & {
   flush(): Promise<ImageMutationSyncResult>;
 };
 
-function createImageMutationSyncBatch(
-  startingRevision: string
-): FlushableImageMutationSyncBatch {
+function createImageMutationSyncBatch(startingRevision: string): FlushableImageMutationSyncBatch {
   const imageIds = new Set<string>();
   let declaredDecision: ImageMutationSyncDecision | null = null;
   let forcedRebuildCount = 0;
@@ -42,12 +40,9 @@ function createImageMutationSyncBatch(
   const flush = async (): Promise<ImageMutationSyncResult> => {
     const actualCount = imageIds.size;
     let decision = forcedRebuildCount
-      ? { mode: "rebuild", affectedCount: forcedRebuildCount } as const
-      : declaredDecision ?? decideImageMutationSync(actualCount);
-    if (
-      decision.mode === "exact"
-      && decision.affectedCount !== actualCount
-    ) {
+      ? ({ mode: "rebuild", affectedCount: forcedRebuildCount } as const)
+      : (declaredDecision ?? decideImageMutationSync(actualCount));
+    if (decision.mode === "exact" && decision.affectedCount !== actualCount) {
       decision = {
         mode: "rebuild",
         affectedCount: Math.max(decision.affectedCount, actualCount)
@@ -88,9 +83,7 @@ function createImageMutationSyncBatch(
       } catch (error) {
         logger.warn("ready_image_derived_cache_cleanup_failed", error);
       }
-      const requested = requestReadyImageCacheRebuildAfterMutation(
-        decision.affectedCount
-      );
+      const requested = requestReadyImageCacheRebuildAfterMutation(decision.affectedCount);
       return {
         ...decision,
         cacheAction: requested ? "rebuild_requested" : "not_initialized"
@@ -99,10 +92,7 @@ function createImageMutationSyncBatch(
     const pendingImageIds = [...imageIds];
     imageIds.clear();
     try {
-      await synchronizeReadyImageCacheMutation(
-        pendingImageIds,
-        committedRevision
-      );
+      await synchronizeReadyImageCacheMutation(pendingImageIds, committedRevision);
       return { ...decision, cacheAction: "synchronized" };
     } catch (error) {
       reportReadyImageCacheFailure(error);
@@ -172,13 +162,13 @@ async function withImageMutationSyncResult<T>(
         const finalRevision = (await getReadyImageRevision()).revision;
         const appliedRevision = coordinator.meta?.appliedRevision;
         if (
-          sync.cacheAction !== "rebuild_requested"
-          && finalRevision !== startingRevision
-          && finalRevision !== appliedRevision
+          sync.cacheAction !== "rebuild_requested" &&
+          finalRevision !== startingRevision &&
+          finalRevision !== appliedRevision
         ) {
-          reportReadyImageCacheFailure(new Error(
-            "PostgreSQL image revision advanced without an exact Redis publish"
-          ));
+          reportReadyImageCacheFailure(
+            new Error("PostgreSQL image revision advanced without an exact Redis publish")
+          );
         }
       }
     } catch (error) {
@@ -229,8 +219,7 @@ export async function withPlannedImageMutationRebuild<T>(
   await withReadyImageCacheWriteFence(async () => {
     let rebuildRequired = true;
     try {
-      rebuildRequired = (await getReadyImageRevision()).revision
-        !== startingRevision;
+      rebuildRequired = (await getReadyImageRevision()).revision !== startingRevision;
     } catch (error) {
       reportReadyImageCacheFailure(error);
       logger.warn("ready_image_planned_mutation_revision_read_failed", error);
@@ -241,12 +230,7 @@ export async function withPlannedImageMutationRebuild<T>(
   return value as T;
 }
 
-export function withPlannedImageMutation<T>(
-  affectedCount: number,
-  work: () => Promise<T>
-) {
+export function withPlannedImageMutation<T>(affectedCount: number, work: () => Promise<T>) {
   const decision = decideImageMutationSync(affectedCount);
-  return decision.mode === "rebuild"
-    ? withPlannedImageMutationRebuild(decision, work)
-    : work();
+  return decision.mode === "rebuild" ? withPlannedImageMutationRebuild(decision, work) : work();
 }

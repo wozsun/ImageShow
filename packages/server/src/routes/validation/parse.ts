@@ -1,10 +1,7 @@
 import type { z } from "zod";
 import { ApiError } from "../../core/api-error.ts";
 
-export function parse<T extends z.ZodTypeAny>(
-  schema: T,
-  value: unknown
-): z.infer<T> {
+export function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
   if (!result.success) {
     const flat = result.error.flatten();

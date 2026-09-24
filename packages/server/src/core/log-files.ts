@@ -43,20 +43,22 @@ async function listLogFiles(): Promise<LogFileSummaryDto[]> {
     if (isMissingLogFile(error)) return [];
     throw error;
   }
-  const files = await Promise.all(names
-    .filter((name) => logFilePattern.test(name))
-    .sort((a, b) => logFileSortKey(a) - logFileSortKey(b))
-    .map(async (name) => {
-      let info: Awaited<ReturnType<typeof stat>>;
-      try {
-        info = await stat(join(runtimePaths.logDirectory, name));
-      } catch (error) {
-        if (isMissingLogFile(error)) return null;
-        throw error;
-      }
-      if (!info?.isFile()) return null;
-      return { name, size: info.size, modified_at: info.mtime.toISOString() };
-    }));
+  const files = await Promise.all(
+    names
+      .filter((name) => logFilePattern.test(name))
+      .sort((a, b) => logFileSortKey(a) - logFileSortKey(b))
+      .map(async (name) => {
+        let info: Awaited<ReturnType<typeof stat>>;
+        try {
+          info = await stat(join(runtimePaths.logDirectory, name));
+        } catch (error) {
+          if (isMissingLogFile(error)) return null;
+          throw error;
+        }
+        if (!info?.isFile()) return null;
+        return { name, size: info.size, modified_at: info.mtime.toISOString() };
+      })
+  );
   return files.filter((file): file is LogFileSummaryDto => file !== null);
 }
 
@@ -93,12 +95,7 @@ async function tailFile(name: string, limitBytes: number) {
     while (bytesRead < size) {
       let result: { bytesRead: number };
       try {
-        result = await handle.read(
-          buffer,
-          bytesRead,
-          size - bytesRead,
-          start + bytesRead
-        );
+        result = await handle.read(buffer, bytesRead, size - bytesRead, start + bytesRead);
       } catch (error) {
         if (isMissingLogFile(error)) break;
         throw error;
@@ -116,11 +113,13 @@ async function tailFile(name: string, limitBytes: number) {
   }
 }
 
-export async function readRecentLogFile(
-  input: { file?: string | null; limit?: string | null }
-): Promise<AdminLogPayloadDto> {
+export async function readRecentLogFile(input: {
+  file?: string | null;
+  limit?: string | null;
+}): Promise<AdminLogPayloadDto> {
   const files = await listLogFiles();
-  const selected = input.file && logFilePattern.test(input.file) ? input.file : files[0]?.name ?? "app.log";
+  const selected =
+    input.file && logFilePattern.test(input.file) ? input.file : (files[0]?.name ?? "app.log");
   const limitBytes = normalizeLimit(input.limit ?? null);
   const tail = await tailFile(selected, limitBytes);
   return {

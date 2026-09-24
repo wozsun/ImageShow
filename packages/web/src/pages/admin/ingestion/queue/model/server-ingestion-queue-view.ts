@@ -8,12 +8,7 @@ import type {
 import type { ServerIngestionQueueBaseline } from "./server-ingestion-queue-state.js";
 
 export type ServerIngestionQueueStatus =
-  | "idle"
-  | "connecting"
-  | "loading"
-  | "ready"
-  | "disconnected"
-  | "error";
+  "idle" | "connecting" | "loading" | "ready" | "disconnected" | "error";
 
 export type ServerIngestionQueueView = Readonly<{
   status: ServerIngestionQueueStatus;

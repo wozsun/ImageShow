@@ -1,27 +1,19 @@
 import "../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  parseHTML
-} from "linkedom";
+import { parseHTML } from "linkedom";
 import {
   type IngestionVocabularyDto,
   type RuntimeConfig
 } from "../../../packages/shared/src/browser.ts";
-import type {
-  StorageBackendAdmin
-} from "../../../packages/web/src/lib/types.ts";
+import type { StorageBackendAdmin } from "../../../packages/web/src/lib/types.ts";
 import {
   ApiClientError,
   authExpiredEvent,
   clearCsrfToken
 } from "../../../packages/web/src/lib/api/client.ts";
-import {
-  invalidateImageDataAfterMetadataSave
-} from "../../../packages/web/src/lib/api/query-invalidation.ts";
-import {
-  queryKeys
-} from "../../../packages/web/src/lib/api/query-keys.ts";
+import { invalidateImageDataAfterMetadataSave } from "../../../packages/web/src/lib/api/query-invalidation.ts";
+import { queryKeys } from "../../../packages/web/src/lib/api/query-keys.ts";
 import {
   configPackageRecognitionNotice,
   configPackageSlugMappingError
@@ -49,9 +41,7 @@ import {
   storageBackendS3AfterSuccessfulSave,
   storageBackendS3FormSettings
 } from "../../../packages/web/src/pages/admin/storage/storage-backend-form.ts";
-import {
-  storageMaintenancePreview
-} from "../../../packages/web/src/pages/admin/storage/storage-maintenance-preview.ts";
+import { storageMaintenancePreview } from "../../../packages/web/src/pages/admin/storage/storage-maintenance-preview.ts";
 import {
   tagScrollAvailability,
   tagScrollContentMetrics,
@@ -60,66 +50,58 @@ import {
   tagVerticalWheelPixels,
   tagWheelScrollTarget
 } from "../../../packages/web/src/components/form/tag-input-scroll.ts";
-import {
-  TagInput
-} from "../../../packages/web/src/components/form/TagInput.tsx";
+import { TagInput } from "../../../packages/web/src/components/form/TagInput.tsx";
 import {
   editableImage,
   imageUpdateResponse,
   createConfigStreamHarness
 } from "../support/web-test-context.ts";
-import {
-  dispatchDomEvent,
-  inputText
-} from "../support/dom-events.ts";
-import {
-  installControlledClock
-} from "../support/controlled-clock.ts";
+import { dispatchDomEvent, inputText } from "../support/dom-events.ts";
+import { installControlledClock } from "../support/controlled-clock.ts";
 
 test("[Web/后台表单] 存储维护预览区分可修复、缺失原图、可清理与受阻项", () => {
-  assert.deepEqual(storageMaintenancePreview({
-    missing_objects: [{ id: "missing-source", backend: "local", namespace: "local" }],
-    missing_thumbs: [
-      { id: "missing-source", backend: "local", namespace: "local" },
-      { id: "repairable", backend: "local", namespace: "local" },
-      { id: "blocked", backend: "archive", namespace: "archive" },
-      { id: "broken-alias", backend: "broken-alias", namespace: "shared" }
-    ],
-    pending_thumbnail_repairs: [
-      { id: "pending", backend: "local", namespace: "local" }
-    ],
-    orphan_objects: [
-      { key: "orphan-full", backend: "local", namespace: "local" },
-      { key: "shared-orphan", backend: "working-alias", namespace: "shared" }
-    ],
-    orphan_thumbs: [
-      { key: "orphan-thumb", backend: "archive", namespace: "archive" }
-    ],
-    incomplete_listings: [
-      { backend: "archive", namespace: "archive", prefix: "full" },
-      { backend: "archive", namespace: "archive", prefix: "thumbs" }
-    ],
-    unavailable_backends: [
-      {
-        backend: "offline",
-        namespace: "offline",
-        blocks_maintenance: true
-      },
-      {
-        backend: "broken-alias",
-        namespace: "shared",
-        blocks_maintenance: false
-      }
-    ]
-  }), {
-    repairable_thumbnails: 2,
-    missing_originals: 1,
-    removable_objects: 2,
-    blocked_namespaces: 2,
-    unavailable_logical_backends: 1,
-    blocked_items: 3,
-    preview_items: 5
-  });
+  assert.deepEqual(
+    storageMaintenancePreview({
+      missing_objects: [{ id: "missing-source", backend: "local", namespace: "local" }],
+      missing_thumbs: [
+        { id: "missing-source", backend: "local", namespace: "local" },
+        { id: "repairable", backend: "local", namespace: "local" },
+        { id: "blocked", backend: "archive", namespace: "archive" },
+        { id: "broken-alias", backend: "broken-alias", namespace: "shared" }
+      ],
+      pending_thumbnail_repairs: [{ id: "pending", backend: "local", namespace: "local" }],
+      orphan_objects: [
+        { key: "orphan-full", backend: "local", namespace: "local" },
+        { key: "shared-orphan", backend: "working-alias", namespace: "shared" }
+      ],
+      orphan_thumbs: [{ key: "orphan-thumb", backend: "archive", namespace: "archive" }],
+      incomplete_listings: [
+        { backend: "archive", namespace: "archive", prefix: "full" },
+        { backend: "archive", namespace: "archive", prefix: "thumbs" }
+      ],
+      unavailable_backends: [
+        {
+          backend: "offline",
+          namespace: "offline",
+          blocks_maintenance: true
+        },
+        {
+          backend: "broken-alias",
+          namespace: "shared",
+          blocks_maintenance: false
+        }
+      ]
+    }),
+    {
+      repairable_thumbnails: 2,
+      missing_originals: 1,
+      removable_objects: 2,
+      blocked_namespaces: 2,
+      unavailable_logical_backends: 1,
+      blocked_items: 3,
+      preview_items: 5
+    }
+  );
   assert.equal(storageMaintenancePreview({ missing_objects: [] }), null);
 });
 test("[Web/后台表单] 配置包预览明确提示目标版本的采用、回退、忽略与跳过结果", () => {
@@ -151,36 +133,27 @@ test("[Web/后台表单] 配置包冲突重命名在提交前执行与服务端�
   const preview = {
     conflicts: ["archive"],
     existing_slugs: ["local", "archive"],
-    storage_backends: [{
-      slug: "archive",
-      display_name: "Archive",
-      enabled: true,
-      is_default: false
-    }]
+    storage_backends: [
+      {
+        slug: "archive",
+        display_name: "Archive",
+        enabled: true,
+        is_default: false
+      }
+    ]
   };
   assert.equal(
-    configPackageSlugMappingError(
-      preview,
-      { archive: "a".repeat(33) },
-      "archive"
-    ),
+    configPackageSlugMappingError(preview, { archive: "a".repeat(33) }, "archive"),
     "slug 不能超过 32 个字符"
   );
-  assert.equal(
-    configPackageSlugMappingError(
-      preview,
-      { archive: "a".repeat(32) },
-      "archive"
-    ),
-    ""
-  );
+  assert.equal(configPackageSlugMappingError(preview, { archive: "a".repeat(32) }, "archive"), "");
 });
 test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保持 bootstrap 反馈语义", async () => {
   const { window, document } = parseHTML(
-    "<!doctype html><html data-ui-context=bootstrap data-color-scheme=dark>"
-      + "<head><meta name=color-scheme content=dark>"
-      + "<meta name=theme-color content=#070b15></head>"
-      + "<body><div id=root></div></body></html>"
+    "<!doctype html><html data-ui-context=bootstrap data-color-scheme=dark>" +
+      "<head><meta name=color-scheme content=dark>" +
+      "<meta name=theme-color content=#070b15></head>" +
+      "<body><div id=root></div></body></html>"
   );
   const React = await import("react");
   const localStorageValues = new Map<string, string>();
@@ -195,12 +168,9 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
   };
   const getComputedStyle = () => ({
     backgroundColor: "rgb(7, 11, 21)",
-    getPropertyValue: (name: string) => (
-      name === "--color-browser-canvas" ? "#070b15" : ""
-    )
+    getPropertyValue: (name: string) => (name === "--color-browser-canvas" ? "#070b15" : "")
   });
-  let scenario: "site-config" | "admin-auth" | "public-auth-401" =
-    "site-config";
+  let scenario: "site-config" | "admin-auth" | "public-auth-401" = "site-config";
   const requestedPaths: string[] = [];
   const siteConfig = {
     site: {
@@ -239,15 +209,16 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
         headers: { "content-type": "application/json" }
       });
     }
-    return new Response(JSON.stringify({
-      ok: false,
-      error: scenario === "site-config"
-        ? "site config unavailable"
-        : "auth unavailable"
-    }), {
-      status: scenario === "public-auth-401" ? 401 : 503,
-      headers: { "content-type": "application/json" }
-    });
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: scenario === "site-config" ? "site config unavailable" : "auth unavailable"
+      }),
+      {
+        status: scenario === "public-auth-401" ? 401 : 503,
+        headers: { "content-type": "application/json" }
+      }
+    );
   };
   const installedGlobals = {
     window,
@@ -267,9 +238,9 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -281,48 +252,35 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { QueryClient, QueryClientProvider } = await import(
-      "@tanstack/react-query"
-    );
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { MemoryRouter } = await import("react-router");
-    const { AppRoutes } = await import(
-      "../../../packages/web/src/AppRoutes.tsx"
-    );
-    const { SiteHead } = await import(
-      "../../../packages/web/src/components/layout/SiteHead.tsx"
-    );
-    const { AdminShell } = await import(
-      "../../../packages/web/src/pages/admin/shell/AdminShell.tsx"
-    );
-    const { AuthSessionProvider, useAuthSessionQuery } = await import(
-      "../../../packages/web/src/hooks/useAuthSession.tsx"
-    );
+    const { AppRoutes } = await import("../../../packages/web/src/AppRoutes.tsx");
+    const { SiteHead } = await import("../../../packages/web/src/components/layout/SiteHead.tsx");
+    const { AdminShell } =
+      await import("../../../packages/web/src/pages/admin/shell/AdminShell.tsx");
+    const { AuthSessionProvider, useAuthSessionQuery } =
+      await import("../../../packages/web/src/hooks/useAuthSession.tsx");
     const container = document.getElementById("root");
     assert.ok(container);
 
-    const renderFailure = async (
-      path: "/" | "/admin",
-      content: React.ReactNode
-    ) => {
+    const renderFailure = async (path: "/" | "/admin", content: React.ReactNode) => {
       document.documentElement.dataset.uiContext = "bootstrap";
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } }
       });
       const root = createRoot(container);
       await React.act(async () => {
-        root.render(React.createElement(
-          QueryClientProvider,
-          { client },
+        root.render(
           React.createElement(
-            MemoryRouter,
-            { initialEntries: [path] },
+            QueryClientProvider,
+            { client },
             React.createElement(
-              AuthSessionProvider,
-              null,
-              content
+              MemoryRouter,
+              { initialEntries: [path] },
+              React.createElement(AuthSessionProvider, null, content)
             )
           )
-        ));
+        );
       });
       for (let attempt = 0; attempt < 20; attempt += 1) {
         await React.act(async () => {
@@ -341,7 +299,9 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
 
     await renderFailure(
       "/",
-      React.createElement(React.Fragment, null,
+      React.createElement(
+        React.Fragment,
+        null,
         React.createElement(SiteHead),
         React.createElement(AppRoutes)
       )
@@ -352,15 +312,14 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
     scenario = "admin-auth";
     await renderFailure(
       "/admin",
-      React.createElement(React.Fragment, null,
+      React.createElement(
+        React.Fragment,
+        null,
         React.createElement(SiteHead),
         React.createElement(AdminShell, { siteHeaderName: siteConfig.site.header_name })
       )
     );
-    assert.deepEqual(
-      requestedPaths.sort(),
-      ["/api/admin/auth/me", "/api/site-config"]
-    );
+    assert.deepEqual(requestedPaths.sort(), ["/api/admin/auth/me", "/api/site-config"]);
     assert.equal(
       document.querySelector<HTMLMetaElement>('meta[name="description"]')?.content,
       "自定义站点描述"
@@ -373,15 +332,14 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
     siteConfig.site.description = "服务端投影后的描述";
     await renderFailure(
       "/admin",
-      React.createElement(React.Fragment, null,
+      React.createElement(
+        React.Fragment,
+        null,
         React.createElement(SiteHead),
         React.createElement(AdminShell, { siteHeaderName: siteConfig.site.header_name })
       )
     );
-    assert.deepEqual(
-      requestedPaths.sort(),
-      ["/api/admin/auth/me", "/api/site-config"]
-    );
+    assert.deepEqual(requestedPaths.sort(), ["/api/admin/auth/me", "/api/site-config"]);
     assert.equal(
       document.querySelector<HTMLMetaElement>('meta[name="description"]')?.content,
       "服务端投影后的描述"
@@ -393,15 +351,14 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
     siteConfig.site.description = "服务端权威描述";
     await renderFailure(
       "/admin",
-      React.createElement(React.Fragment, null,
+      React.createElement(
+        React.Fragment,
+        null,
         React.createElement(SiteHead),
         React.createElement(AdminShell, { siteHeaderName: siteConfig.site.header_name })
       )
     );
-    assert.deepEqual(
-      requestedPaths.sort(),
-      ["/api/admin/auth/me", "/api/site-config"]
-    );
+    assert.deepEqual(requestedPaths.sort(), ["/api/admin/auth/me", "/api/site-config"]);
     assert.equal(
       document.querySelector<HTMLMetaElement>('meta[name="description"]')?.content,
       "服务端权威描述"
@@ -423,19 +380,17 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
       );
     }
     await React.act(async () => {
-      authRoot.render(React.createElement(
-        QueryClientProvider,
-        { client: authClient },
+      authRoot.render(
         React.createElement(
-          MemoryRouter,
-          { initialEntries: ["/"] },
+          QueryClientProvider,
+          { client: authClient },
           React.createElement(
-            AuthSessionProvider,
-            null,
-            React.createElement(PublicAuthProbe)
+            MemoryRouter,
+            { initialEntries: ["/"] },
+            React.createElement(AuthSessionProvider, null, React.createElement(PublicAuthProbe))
           )
         )
-      ));
+      );
     });
     for (let attempt = 0; attempt < 20; attempt += 1) {
       await React.act(async () => {
@@ -464,29 +419,35 @@ for (const itemCount of [1, 3]) {
     let state = createImageMetadataSession(ids.map((id) => editableImage(id)));
     state = {
       ...state,
-      drafts: Object.fromEntries(ids.map((id) => [
-        id,
-        { ...state.drafts[id]!, title: `${id}-saved` }
-      ]))
+      drafts: Object.fromEntries(
+        ids.map((id) => [id, { ...state.drafts[id]!, title: `${id}-saved` }])
+      )
     };
-    const updates = ids.map((id, index) => changedMetadataUpdate(
-      state.baselineItems[index]!,
-      state.drafts[id]!,
-      fieldsChangedFor(state.baselineItems[index]!, state.drafts[id]!)
-    ));
-    assert.deepEqual(updates, ids.map((id) => ({
-      id,
-      title: `${id}-saved`
-    })));
+    const updates = ids.map((id, index) =>
+      changedMetadataUpdate(
+        state.baselineItems[index]!,
+        state.drafts[id]!,
+        fieldsChangedFor(state.baselineItems[index]!, state.drafts[id]!)
+      )
+    );
+    assert.deepEqual(
+      updates,
+      ids.map((id) => ({
+        id,
+        title: `${id}-saved`
+      }))
+    );
 
     const attempt: ImageMetadataSaveAttempt = {
       activeIds: ids,
       items: updates,
       response: imageUpdateResponse(ids)
     };
-    const authority = ids.map((id) => editableImage(id, {
-      title: `${id}-saved`
-    }));
+    const authority = ids.map((id) =>
+      editableImage(id, {
+        title: `${id}-saved`
+      })
+    );
     const report = createImageMetadataSaveReport(attempt, authority);
     const next = reconcileImageMetadataSession(state, attempt, authority);
     assert.deepEqual(
@@ -496,44 +457,32 @@ for (const itemCount of [1, 3]) {
     assert.equal(report.responseReceived, true);
     for (const id of ids) {
       assert.equal(imageMetadataCardSaveState(report, id), "saved");
-      assert.equal(fieldsChangedFor(
-        authority.find((item) => item.id === id)!,
-        next.drafts[id]!
-      ).title, false);
+      assert.equal(
+        fieldsChangedFor(
+          authority.find((item) => item.id === id)!,
+          next.drafts[id]!
+        ).title,
+        false
+      );
     }
 
     const pendingWithResponse = createImageMetadataSaveReport(attempt, null);
     assert.equal(pendingWithResponse.responseReceived, true);
     for (const id of ids) {
-      assert.equal(imageMetadataCardSaveState(
-        pendingWithResponse,
-        id
-      ), "pending");
+      assert.equal(imageMetadataCardSaveState(pendingWithResponse, id), "pending");
     }
 
     const unknownAttempt: ImageMetadataSaveAttempt = {
       ...attempt,
       response: null
     };
-    const pendingWithoutResponse = createImageMetadataSaveReport(
-      unknownAttempt,
-      null
-    );
-    const confirmedWithoutResponse = createImageMetadataSaveReport(
-      unknownAttempt,
-      authority
-    );
+    const pendingWithoutResponse = createImageMetadataSaveReport(unknownAttempt, null);
+    const confirmedWithoutResponse = createImageMetadataSaveReport(unknownAttempt, authority);
     assert.equal(pendingWithoutResponse.responseReceived, false);
     assert.equal(confirmedWithoutResponse.responseReceived, false);
     for (const id of ids) {
-      assert.equal(imageMetadataCardSaveState(
-        pendingWithoutResponse,
-        id
-      ), "pending");
-      assert.equal(imageMetadataCardSaveState(
-        confirmedWithoutResponse,
-        id
-      ), "saved");
+      assert.equal(imageMetadataCardSaveState(pendingWithoutResponse, id), "pending");
+      assert.equal(imageMetadataCardSaveState(confirmedWithoutResponse, id), "saved");
     }
   });
 }
@@ -550,14 +499,23 @@ test("[Web/后台表单] 普通主题和作者 slug 保留原值并可显式清�
   const update = changedMetadataUpdate(item, cleared, fieldsChangedFor(item, cleared));
   assert.deepEqual(update, { id, theme: null, author: "" });
   const attempt: ImageMetadataSaveAttempt = {
-    activeIds: [id], items: [update], response: null
+    activeIds: [id],
+    items: [update],
+    response: null
   };
   const authority = [editableImage(id, { theme: null, author: "" })];
-  state = reconcileImageMetadataSession({ ...state, drafts: { [id]: cleared } }, attempt, authority);
+  state = reconcileImageMetadataSession(
+    { ...state, drafts: { [id]: cleared } },
+    attempt,
+    authority
+  );
   const saved = state.drafts[id]!;
   assert.equal(saved.theme, null);
   assert.equal(saved.author, "");
-  assert.deepEqual(changedMetadataUpdate(authority[0]!, saved, fieldsChangedFor(authority[0]!, saved)), { id });
+  assert.deepEqual(
+    changedMetadataUpdate(authority[0]!, saved, fieldsChangedFor(authority[0]!, saved)),
+    { id }
+  );
 });
 
 test("[Web/后台表单] 可空来源可添加和清空，权威回读收敛草稿及丢失回执", () => {
@@ -576,7 +534,9 @@ test("[Web/后台表单] 可空来源可添加和清空，权威回读收敛草�
     const update = changedMetadataUpdate(state.baselineItems[0]!, state.drafts[id]!, changes);
     assert.deepEqual(update, { id, source });
     const attempt: ImageMetadataSaveAttempt = {
-      activeIds: [id], items: [update], response: null
+      activeIds: [id],
+      items: [update],
+      response: null
     };
     const authority = [editableImage(id, { source: source || null })];
     const report = createImageMetadataSaveReport(attempt, authority);
@@ -589,16 +549,28 @@ test("[Web/后台表单] 可空来源可添加和清空，权威回读收敛草�
 for (const { field, raw, saved } of [
   { field: "title", raw: "  New title  ", saved: "New title" },
   { field: "title", raw: " \t ", saved: "" },
-  { field: "description", raw: "\n  First line\n  Second line  \n", saved: "First line\n  Second line" },
+  {
+    field: "description",
+    raw: "\n  First line\n  Second line  \n",
+    saved: "First line\n  Second line"
+  },
   { field: "source", raw: "  example.com/post  ", saved: "https://example.com/post" },
-  { field: "original", raw: "\nhttps://example.com/photo.jpg  ", saved: "https://example.com/photo.jpg" }
+  {
+    field: "original",
+    raw: "\nhttps://example.com/photo.jpg  ",
+    saved: "https://example.com/photo.jpg"
+  }
 ] as const) {
   test(`[Web/后台表单] 丢失回执按规范值确认文本且保留后续原始草稿 / ${field} / ${JSON.stringify(raw)}`, () => {
     const id = "normalized-save";
     const item = editableImage(id, { [field]: "before" });
     const state = createImageMetadataSession([item]);
     state.drafts[id]![field] = raw;
-    const update = changedMetadataUpdate(item, state.drafts[id]!, fieldsChangedFor(item, state.drafts[id]!));
+    const update = changedMetadataUpdate(
+      item,
+      state.drafts[id]!,
+      fieldsChangedFor(item, state.drafts[id]!)
+    );
     assert.equal(update[field], raw, "保存意图必须保留原始输入");
     const attempt: ImageMetadataSaveAttempt = { activeIds: [id], items: [update], response: null };
     const authority = [editableImage(id, { [field]: saved })];
@@ -614,10 +586,14 @@ for (const { field, raw, saved } of [
       assert.equal(preserved.drafts[id]![field], subsequent, "即使规范值相同也不能覆盖后续新输入");
     }
     const withAuto: ImageMetadataSaveAttempt = {
-      ...attempt, items: [{ ...update, brightness: "auto" }]
+      ...attempt,
+      items: [{ ...update, brightness: "auto" }]
     };
     state.drafts[id]!.brightness = "auto";
-    assert.equal(imageMetadataCardSaveState(createImageMetadataSaveReport(withAuto, authority), id), "failed");
+    assert.equal(
+      imageMetadataCardSaveState(createImageMetadataSaveReport(withAuto, authority), id),
+      "failed"
+    );
     const autoState = reconcileImageMetadataSession(state, withAuto, authority);
     assert.equal(autoState.drafts[id]![field], saved);
     assert.equal(autoState.drafts[id]!.brightness, "auto");
@@ -625,10 +601,7 @@ for (const { field, raw, saved } of [
 }
 
 test("[Web/后台表单] 图片元数据部分失败保留对应卡片草稿", () => {
-  let state = createImageMetadataSession([
-    editableImage("a"),
-    editableImage("b")
-  ]);
+  let state = createImageMetadataSession([editableImage("a"), editableImage("b")]);
   state = {
     ...state,
     drafts: {
@@ -669,51 +642,32 @@ test("[Web/后台表单] 图片编辑器 trash 以逐项结果和权威回读收
       { id: "outside", status: "trashed" as const }
     ]
   };
-  assert.deepEqual(
-    imageTrashIdsNeedingSnapshot(requestedIds, response),
-    ["b", "c"]
-  );
-  const reconciled = reconcileImageEditorTrash(
-    requestedIds,
-    response,
-    [editableImage("B")]
-  );
+  assert.deepEqual(imageTrashIdsNeedingSnapshot(requestedIds, response), ["b", "c"]);
+  const reconciled = reconcileImageEditorTrash(requestedIds, response, [editableImage("B")]);
   assert.deepEqual(reconciled, {
     trashedIds: ["A", "c"],
     editableIds: ["b"],
     unknownIds: []
   });
 
-  const responseLost = reconcileImageEditorTrash(
-    requestedIds,
-    null,
-    [editableImage("A")]
-  );
+  const responseLost = reconcileImageEditorTrash(requestedIds, null, [editableImage("A")]);
   assert.deepEqual(responseLost, {
     trashedIds: ["b", "c"],
     editableIds: ["A"],
     unknownIds: []
   });
-  assert.deepEqual(
-    reconcileImageEditorTrash(requestedIds, null, null),
-    {
-      trashedIds: [],
-      editableIds: [],
-      unknownIds: requestedIds
-    }
-  );
+  assert.deepEqual(reconcileImageEditorTrash(requestedIds, null, null), {
+    trashedIds: [],
+    editableIds: [],
+    unknownIds: requestedIds
+  });
 
-  const session = createImageMetadataSession(
-    requestedIds.map((id) => editableImage(id))
-  );
-  assert.deepEqual(
-    pruneImageMetadataSessionAfterTrash(session, ["a", "C"]),
-    {
-      activeIds: ["b"],
-      baselineItems: [editableImage("b")],
-      drafts: { b: session.drafts.b }
-    }
-  );
+  const session = createImageMetadataSession(requestedIds.map((id) => editableImage(id)));
+  assert.deepEqual(pruneImageMetadataSessionAfterTrash(session, ["a", "C"]), {
+    activeIds: ["b"],
+    baselineItems: [editableImage("b")],
+    drafts: { b: session.drafts.b }
+  });
 });
 test("[Web/后台表单] 存储删除反馈以服务端权威结果收口", () => {
   const backend = {
@@ -734,11 +688,9 @@ test("[Web/后台表单] 存储删除反馈以服务端权威结果收口", () =
   assert.deepEqual(storageBackendDeletionReasons(backend), [
     "仍有 3 张图片使用该后端；请先迁移这些图片。"
   ]);
-  const rejected = storageBackendAfterDeleteRejection(backend, new ApiClientError(
-    "后端仍在使用",
-    409,
-    "storage_backend_in_use",
-    {
+  const rejected = storageBackendAfterDeleteRejection(
+    backend,
+    new ApiClientError("后端仍在使用", 409, "storage_backend_in_use", {
       image_count: 0,
       ingestion_session_count: 2,
       cleanup_job_count: 1,
@@ -746,8 +698,8 @@ test("[Web/后台表单] 存储删除反馈以服务端权威结果收口", () =
         action: "blocked",
         blockers: ["ingestion_sessions", "cleanup_jobs"]
       }
-    }
-  ));
+    })
+  );
   assert.ok(rejected);
   assert.deepEqual(rejected.deletion.blockers, ["ingestion_sessions", "cleanup_jobs"]);
 });
@@ -846,11 +798,15 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
     "弹窗外层坐标与 viewport 内边距必须归一化到标签内容坐标"
   );
   assert.deepEqual(
-    tagScrollContentMetrics({
-      clientWidth: 208,
-      scrollLeft: 300,
-      scrollWidth: 508
-    }, 4, 4),
+    tagScrollContentMetrics(
+      {
+        clientWidth: 208,
+        scrollLeft: 300,
+        scrollWidth: 508
+      },
+      4,
+      4
+    ),
     {
       clientWidth: 200,
       scrollLeft: 300,
@@ -894,33 +850,19 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
     "按钮渐变覆盖了当前末项的一小部分时，应先以最小位移将该项补齐"
   );
   assert.equal(
-    tagScrollNavigationTarget(
-      { ...metrics, scrollLeft: 58 },
-      items,
-      1,
-      navigationInsets
-    ),
+    tagScrollNavigationTarget({ ...metrics, scrollLeft: 58 }, items, 1, navigationInsets),
     73,
     "继续前进时必须把目标标签完整移出按钮包含半透明渐变在内的覆盖区"
   );
   assert.equal(
-    tagScrollNavigationTarget(
-      { ...metrics, scrollLeft: 72 },
-      items,
-      -1,
-      navigationInsets
-    ),
+    tagScrollNavigationTarget({ ...metrics, scrollLeft: 72 }, items, -1, navigationInsets),
     51,
     "后退补齐标签时必须把其左边界移出按钮的完整覆盖区"
   );
   assert.equal(
     tagScrollNavigationTarget(
       { clientWidth: 200, scrollLeft: 526, scrollWidth: 726 },
-      [
-        ...items,
-        { offsetLeft: 500, offsetWidth: 140 },
-        { offsetLeft: 646, offsetWidth: 80 }
-      ],
+      [...items, { offsetLeft: 500, offsetWidth: 140 }, { offsetLeft: 646, offsetWidth: 80 }],
       -1
     ),
     500,
@@ -941,29 +883,17 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
     "超宽首项应先显示连续中段，不能只移动内边距"
   );
   assert.equal(
-    tagScrollNavigationTarget(
-      { ...wideMetrics, scrollLeft: 200 },
-      wideItems,
-      1
-    ),
+    tagScrollNavigationTarget({ ...wideMetrics, scrollLeft: 200 }, wideItems, 1),
     286,
     "超宽首项末端已对齐后应以最小位移补齐尾部输入组"
   );
   assert.equal(
-    tagScrollNavigationTarget(
-      { ...wideMetrics, scrollLeft: 290 },
-      wideItems,
-      -1
-    ),
+    tagScrollNavigationTarget({ ...wideMetrics, scrollLeft: 290 }, wideItems, -1),
     200,
     "从尾部后退应先对齐超宽项末端"
   );
   assert.equal(
-    tagScrollNavigationTarget(
-      { ...wideMetrics, scrollLeft: 200 },
-      wideItems,
-      -1
-    ),
+    tagScrollNavigationTarget({ ...wideMetrics, scrollLeft: 200 }, wideItems, -1),
     0,
     "超宽项第二次后退应回到其起始边界"
   );
@@ -977,70 +907,87 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
     { offsetLeft: 606, offsetWidth: 80 }
   ];
   assert.deepEqual(
-    [0, 200, 400].map((scrollLeft) => tagScrollNavigationTarget(
-      { ...extraWideMetrics, scrollLeft },
-      extraWideItems,
-      1
-    )),
+    [0, 200, 400].map((scrollLeft) =>
+      tagScrollNavigationTarget({ ...extraWideMetrics, scrollLeft }, extraWideItems, 1)
+    ),
     [200, 400, 486],
     "超过两个 viewport 的标签必须逐屏连续前进后才进入尾部输入组"
   );
   assert.deepEqual(
-    [490, 400, 200].map((scrollLeft) => tagScrollNavigationTarget(
-      { ...extraWideMetrics, scrollLeft },
-      extraWideItems,
-      -1
-    )),
+    [490, 400, 200].map((scrollLeft) =>
+      tagScrollNavigationTarget({ ...extraWideMetrics, scrollLeft }, extraWideItems, -1)
+    ),
     [400, 200, 0],
     "超过两个 viewport 的标签必须逐屏连续后退"
   );
   assert.equal(
     tagScrollNavigationTarget(
-      tagScrollContentMetrics({
-        clientWidth: 208,
-        scrollLeft: 300,
-        scrollWidth: 508
-      }, 4, 4),
+      tagScrollContentMetrics(
+        {
+          clientWidth: 208,
+          scrollLeft: 300,
+          scrollWidth: 508
+        },
+        4,
+        4
+      ),
       [{ offsetLeft: 250, offsetWidth: 100 }],
       -1
     ),
     250,
     "普通项后退时应以最小位移让左边界落入物理可视区"
   );
-  assert.deepEqual(
-    tagScrollAvailability({ ...metrics, scrollLeft: 210 }),
-    { backward: true, forward: false }
+  assert.deepEqual(tagScrollAvailability({ ...metrics, scrollLeft: 210 }), {
+    backward: true,
+    forward: false
+  });
+  assert.equal(
+    tagVerticalWheelPixels({
+      clientWidth: 200,
+      deltaMode: 0,
+      deltaX: 0,
+      deltaY: 48
+    }),
+    48
   );
-  assert.equal(tagVerticalWheelPixels({
-    clientWidth: 200,
-    deltaMode: 0,
-    deltaX: 0,
-    deltaY: 48
-  }), 48);
-  assert.equal(tagVerticalWheelPixels({
-    clientWidth: 200,
-    deltaMode: 1,
-    deltaX: 0,
-    deltaY: -3
-  }), -48);
-  assert.equal(tagVerticalWheelPixels({
-    clientWidth: 200,
-    deltaMode: 2,
-    deltaX: 0,
-    deltaY: 1
-  }), 200);
-  assert.equal(tagVerticalWheelPixels({
-    clientWidth: 200,
-    deltaMode: 0,
-    deltaX: 0,
-    deltaY: 0.5
-  }), null, "不足一个像素的纵向噪声不得接管滚轮");
-  assert.equal(tagVerticalWheelPixels({
-    clientWidth: 200,
-    deltaMode: 0,
-    deltaX: 0.25,
-    deltaY: 30
-  }), null, "混合 deltaX/deltaY 应保留触控板原生横向路径");
+  assert.equal(
+    tagVerticalWheelPixels({
+      clientWidth: 200,
+      deltaMode: 1,
+      deltaX: 0,
+      deltaY: -3
+    }),
+    -48
+  );
+  assert.equal(
+    tagVerticalWheelPixels({
+      clientWidth: 200,
+      deltaMode: 2,
+      deltaX: 0,
+      deltaY: 1
+    }),
+    200
+  );
+  assert.equal(
+    tagVerticalWheelPixels({
+      clientWidth: 200,
+      deltaMode: 0,
+      deltaX: 0,
+      deltaY: 0.5
+    }),
+    null,
+    "不足一个像素的纵向噪声不得接管滚轮"
+  );
+  assert.equal(
+    tagVerticalWheelPixels({
+      clientWidth: 200,
+      deltaMode: 0,
+      deltaX: 0.25,
+      deltaY: 30
+    }),
+    null,
+    "混合 deltaX/deltaY 应保留触控板原生横向路径"
+  );
   assert.equal(tagWheelScrollTarget(metrics, 80), 80);
   assert.equal(
     tagWheelScrollTarget({ ...metrics, scrollLeft: 210 }, 80),
@@ -1056,7 +1003,9 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
   const resizeCallbacks = new Map<Element, () => void>();
   class TestResizeObserver {
     callback: ResizeObserverCallback;
-    constructor(callback: ResizeObserverCallback) { this.callback = callback; }
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+    }
     observe(target: Element) {
       resizeCallbacks.set(target, () => this.callback([], this as unknown as ResizeObserver));
     }
@@ -1077,10 +1026,13 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
   const frameTimers = new Map<number, ReturnType<typeof setTimeout>>();
   const requestAnimationFrame = (callback: FrameRequestCallback) => {
     const id = ++animationFrame;
-    frameTimers.set(id, setTimeout(() => {
-      frameTimers.delete(id);
-      callback(0);
-    }, 0));
+    frameTimers.set(
+      id,
+      setTimeout(() => {
+        frameTimers.delete(id);
+        callback(0);
+      }, 0)
+    );
     return id;
   };
   const cancelAnimationFrame = (id: number) => {
@@ -1088,13 +1040,14 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     if (timer) clearTimeout(timer);
     frameTimers.delete(id);
   };
-  const getComputedStyle = () => ({
-    paddingLeft: "4px",
-    paddingRight: "4px",
-    overflow: "visible",
-    overflowX: "auto",
-    overflowY: "visible"
-  }) as CSSStyleDeclaration;
+  const getComputedStyle = () =>
+    ({
+      paddingLeft: "4px",
+      paddingRight: "4px",
+      overflow: "visible",
+      overflowX: "auto",
+      overflowY: "visible"
+    }) as CSSStyleDeclaration;
   Object.assign(window, {
     innerWidth: 1_024,
     innerHeight: 768,
@@ -1132,9 +1085,9 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -1148,31 +1101,34 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
   try {
     const { createRoot } = await import("react-dom/client");
     const changes: string[][] = [];
-    const renderTagInputs = (disabled: boolean, value = ["alpha", "beta"]) => React.createElement(
-      React.Fragment,
-      null,
-      React.createElement(TagInput, {
-        key: "decoy",
-        value: ["decoy"],
-        onChange: () => {},
-        suggestions: [],
-        disabled,
-        ariaLabel: "前置标签",
-        className: "decoy-tag-input"
-      }),
-      React.createElement(TagInput, {
-        key: "target",
-        value,
-        onChange: (next: string[]) => changes.push(next),
-        suggestions: [{
-          slug: "draft-pending",
-          display_name: "Draft pending"
-        }],
-        disabled,
-        ariaLabel: "测试标签",
-        className: "target-tag-input"
-      })
-    );
+    const renderTagInputs = (disabled: boolean, value = ["alpha", "beta"]) =>
+      React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(TagInput, {
+          key: "decoy",
+          value: ["decoy"],
+          onChange: () => {},
+          suggestions: [],
+          disabled,
+          ariaLabel: "前置标签",
+          className: "decoy-tag-input"
+        }),
+        React.createElement(TagInput, {
+          key: "target",
+          value,
+          onChange: (next: string[]) => changes.push(next),
+          suggestions: [
+            {
+              slug: "draft-pending",
+              display_name: "Draft pending"
+            }
+          ],
+          disabled,
+          ariaLabel: "测试标签",
+          className: "target-tag-input"
+        })
+      );
     const container = document.getElementById("root");
     assert.ok(container);
     const root = createRoot(container);
@@ -1184,13 +1140,9 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
       await Promise.resolve();
     });
 
-    const control = container.querySelector<HTMLElement>(
-      ".target-tag-input"
-    );
+    const control = container.querySelector<HTMLElement>(".target-tag-input");
     assert.ok(control);
-    const viewport = control.querySelector<HTMLElement>(
-      ".tag-input-scroll-window"
-    );
+    const viewport = control.querySelector<HTMLElement>(".tag-input-scroll-window");
     assert.ok(viewport);
     let clientWidth = 100;
     let scrollWidth = 300;
@@ -1201,7 +1153,9 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
       scrollLeft: {
         configurable: true,
         get: () => scrollLeft,
-        set: (value: number) => { scrollLeft = value; }
+        set: (value: number) => {
+          scrollLeft = value;
+        }
       }
     });
     await React.act(async () => {
@@ -1213,12 +1167,10 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     const decoyInput = container.querySelector<HTMLInputElement>(
       ".decoy-tag-input .tag-input-field"
     );
-    const navigation = [...control.querySelectorAll<HTMLButtonElement>(
-      "[data-tag-scroll-navigation]"
-    )];
-    const removeButton = control.querySelector<HTMLButtonElement>(
-      ".tag-chip-remove"
-    );
+    const navigation = [
+      ...control.querySelectorAll<HTMLButtonElement>("[data-tag-scroll-navigation]")
+    ];
+    const removeButton = control.querySelector<HTMLButtonElement>(".tag-chip-remove");
     const backward = navigation[0];
     const forward = navigation[1];
     assert.ok(input && decoyInput && removeButton && backward && forward);
@@ -1249,9 +1201,7 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
       configurable: true,
       value: () => testRect(0, 24)
     });
-    for (const item of control.querySelectorAll<HTMLElement>(
-      "[data-tag-scroll-item]"
-    )) {
+    for (const item of control.querySelectorAll<HTMLElement>("[data-tag-scroll-item]")) {
       Object.defineProperty(item, "getBoundingClientRect", {
         configurable: true,
         value: () => testRect(4, 0)
@@ -1259,11 +1209,7 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     }
     assert.equal(forward.disabled, false, "启用态内容溢出后应显示前进键");
 
-    const dispatchWheel = async (
-      target: Element,
-      deltaX: number,
-      deltaY: number
-    ) => {
+    const dispatchWheel = async (target: Element, deltaX: number, deltaY: number) => {
       const event = new window.Event("wheel", {
         bubbles: true,
         cancelable: true
@@ -1287,7 +1233,9 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     Object.defineProperty(viewport, "scrollLeft", {
       configurable: true,
       get: () => scrollLeft,
-      set: (value: number) => { wheelTargets.push(value); }
+      set: (value: number) => {
+        wheelTargets.push(value);
+      }
     });
     await dispatchWheel(viewport, 0, 40);
     scrollLeft = 45;
@@ -1304,7 +1252,9 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     Object.defineProperty(viewport, "scrollLeft", {
       configurable: true,
       get: () => scrollLeft,
-      set: (value: number) => { scrollLeft = value; }
+      set: (value: number) => {
+        scrollLeft = value;
+      }
     });
     scrollLeft = 200;
     const edgeWheel = await dispatchWheel(forward, 0, 40);
@@ -1322,11 +1272,15 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     });
     Object.defineProperty(input, "focus", {
       configurable: true,
-      value: () => { activeElement = input; }
+      value: () => {
+        activeElement = input;
+      }
     });
     Object.defineProperty(decoyInput, "focus", {
       configurable: true,
-      value: () => { activeElement = decoyInput; }
+      value: () => {
+        activeElement = decoyInput;
+      }
     });
     for (const button of navigation) {
       Object.defineProperty(button, "focus", {
@@ -1436,16 +1390,8 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
       true,
       "触控轻点必须在原生 touchend 取消兼容焦点与 click"
     );
-    assert.equal(
-      document.activeElement,
-      input,
-      "未达到手势阈值的 touchend 必须直接聚焦末尾编辑器"
-    );
-    assert.equal(
-      scrollLeft,
-      200,
-      "已有标签占满视区时，聚焦必须同时露出末尾输入位置"
-    );
+    assert.equal(document.activeElement, input, "未达到手势阈值的 touchend 必须直接聚焦末尾编辑器");
+    assert.equal(scrollLeft, 200, "已有标签占满视区时，聚焦必须同时露出末尾输入位置");
     const synthesizedClick = dispatchDomEvent(window as Window, firstChip, "click");
     assert.equal(
       synthesizedClick.defaultPrevented,
@@ -1534,11 +1480,7 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     });
     assert.equal(changes.length, 0, "Tab 到翻页键不得提交草稿");
     assert.equal(input.value, "draft-pending", "Tab 到翻页键不得清空输入");
-    assert.equal(
-      input.getAttribute("aria-expanded"),
-      "true",
-      "翻页键取得键盘焦点时建议菜单应保持"
-    );
+    assert.equal(input.getAttribute("aria-expanded"), "true", "翻页键取得键盘焦点时建议菜单应保持");
 
     await React.act(async () => {
       activeElement = forward;
@@ -1550,11 +1492,7 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     assert.equal(changes.length, 0, "键盘与辅助技术 click 路径不得提交草稿");
     assert.equal(input.value, "draft-pending");
     assert.equal(forward.disabled, true, "到达末端后前进键必须立即失效");
-    assert.equal(
-      document.activeElement,
-      input,
-      "当前键盘导航按钮失效前必须把焦点无结算地归还输入"
-    );
+    assert.equal(document.activeElement, input, "当前键盘导航按钮失效前必须把焦点无结算地归还输入");
     assert.equal(changes.length, 0, "边界禁用导致的焦点转移不得提交草稿");
     assert.equal(input.value, "draft-pending");
     assert.equal(input.getAttribute("aria-expanded"), "true");
@@ -1592,11 +1530,7 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     assert.equal(scrollLeft, 80, "禁用态前进键应移动到右端");
     assert.equal(forward.disabled, true);
     assert.equal(backward.disabled, false);
-    assert.equal(
-      document.activeElement,
-      input,
-      "整体禁用时应由只读编辑器稳定接管键盘焦点"
-    );
+    assert.equal(document.activeElement, input, "整体禁用时应由只读编辑器稳定接管键盘焦点");
     assert.equal(changes.length, 0, "禁用态翻页方向互换不得提交草稿");
     assert.equal(input.value, "draft-pending");
 
@@ -1608,34 +1542,18 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     });
     assert.equal(backward.disabled, true);
     assert.equal(forward.disabled, true);
-    assert.equal(
-      document.activeElement,
-      input,
-      "禁用态无可用方向时焦点仍应留在标签复合控件内"
-    );
+    assert.equal(document.activeElement, input, "禁用态无可用方向时焦点仍应留在标签复合控件内");
     assert.equal(changes.length, 0, "整体禁用时导航键失焦不得提交草稿");
     assert.equal(input.value, "draft-pending", "整体禁用时应保留未结算草稿");
-    assert.equal(
-      forward.disabled,
-      true,
-      "禁用期间可用宽度变化后应立即隐藏失效翻页键"
-    );
+    assert.equal(forward.disabled, true, "禁用期间可用宽度变化后应立即隐藏失效翻页键");
 
     scrollWidth = 300;
     await React.act(async () => {
       root.render(renderTagInputs(false));
       await Promise.resolve();
     });
-    assert.equal(
-      forward.disabled,
-      false,
-      "恢复可编辑并重新溢出后应立即恢复前进键"
-    );
-    assert.equal(
-      document.activeElement,
-      input,
-      "复合控件恢复编辑时应保留输入焦点"
-    );
+    assert.equal(forward.disabled, false, "恢复可编辑并重新溢出后应立即恢复前进键");
+    assert.equal(document.activeElement, input, "复合控件恢复编辑时应保留输入焦点");
     await React.act(async () => {
       const event = dispatchDomEvent(window as Window, input, "keydown", {
         key: "Enter",
@@ -1671,7 +1589,9 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     Object.defineProperty(viewport, "scrollLeft", {
       configurable: true,
       get: () => scrollLeft,
-      set: (value: number) => { wheelTargets.push(value); }
+      set: (value: number) => {
+        wheelTargets.push(value);
+      }
     });
     await dispatchWheel(viewport, 0, -40);
     assert.equal(wheelTargets.at(-1), 60);
@@ -1706,25 +1626,42 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
 test("[Web/后台表单] 后台配置首载失败可重试，配置到达前不挂载，后台刷新失败保留已编辑页面", async (t) => {
   const h = await createConfigStreamHarness(t);
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
-  const { AdminSettingsBoundary } = await import("../../../packages/web/src/components/feedback/AdminSettingsBoundary.tsx");
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const { AdminSettingsBoundary } =
+    await import("../../../packages/web/src/components/feedback/AdminSettingsBoundary.tsx");
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } }
+  });
   t.after(() => client.clear());
   let mounts = 0;
   function Page({ pageSize }: { pageSize: number }) {
-    const [value, setValue] = h.React.useState(() => { mounts += 1; return pageSize; });
-    return h.React.createElement("button", { onClick: () => setValue((current) => current + 1) }, String(value));
+    const [value, setValue] = h.React.useState(() => {
+      mounts += 1;
+      return pageSize;
+    });
+    return h.React.createElement(
+      "button",
+      { onClick: () => setValue((current) => current + 1) },
+      String(value)
+    );
   }
-  await h.render(h.React.createElement(QueryClientProvider, { client },
-    h.React.createElement(AdminSettingsBoundary, {
-      children: (settings) => h.React.createElement(Page, { pageSize: settings.admin.image_page_size })
-    })
-  ));
+  await h.render(
+    h.React.createElement(
+      QueryClientProvider,
+      { client },
+      h.React.createElement(AdminSettingsBoundary, {
+        children: (settings) =>
+          h.React.createElement(Page, { pageSize: settings.admin.image_page_size })
+      })
+    )
+  );
   assert.equal(mounts, 0);
   assert.equal(h.pending.length, 1);
   await h.respond(0, { error: "暂时不可用" }, 503);
   assert.equal(mounts, 0);
   assert.ok(h.document.querySelector('[role="alert"]'));
-  const retry = [...h.document.querySelectorAll("button")].find((button) => button.textContent?.includes("重试"));
+  const retry = [...h.document.querySelectorAll("button")].find((button) =>
+    button.textContent?.includes("重试")
+  );
   assert.ok(retry);
   await h.React.act(async () => retry.click());
   assert.equal(h.pending.length, 2);
@@ -1732,18 +1669,26 @@ test("[Web/后台表单] 后台配置首载失败可重试，配置到达前不�
   assert.equal(mounts, 1);
   assert.equal(h.document.querySelector("button")?.textContent, "73");
   await h.React.act(async () => h.document.querySelector("button")!.click());
-  await h.React.act(async () => { void client.refetchQueries({ queryKey: queryKeys.settings }); });
+  await h.React.act(async () => {
+    void client.refetchQueries({ queryKey: queryKeys.settings });
+  });
   await h.respond(2, { error: "刷新失败" }, 503);
   assert.equal(h.document.querySelector("button")?.textContent, "74");
   assert.equal(mounts, 1, "已有设置的后台失败不能重挂内容接入与编辑状态");
 });
 test("[Web/后台表单] 配置包原始响应复用认证与 CSRF 边界且不探测 auth/me", async (t) => {
-  const { apiResponse, getCsrfToken, setCsrfToken } = await import("../../../packages/web/src/lib/api/client.ts");
+  const { apiResponse, getCsrfToken, setCsrfToken } =
+    await import("../../../packages/web/src/lib/api/client.ts");
   const originalFetch = globalThis.fetch;
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   const events = new EventTarget();
   Object.defineProperty(globalThis, "window", { configurable: true, value: events });
-  t.after(() => { globalThis.fetch = originalFetch; clearCsrfToken(); if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow); else delete (globalThis as any).window; });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    clearCsrfToken();
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else delete (globalThis as any).window;
+  });
   let expired = 0;
   events.addEventListener(authExpiredEvent, () => expired++);
   const calls: string[] = [];
@@ -1751,11 +1696,20 @@ test("[Web/后台表单] 配置包原始响应复用认证与 CSRF 边界且不�
   globalThis.fetch = async (path, init) => {
     calls.push(String(path));
     assert.equal(init?.credentials, "same-origin");
-    assert.equal(new Headers(init?.headers).get("x-csrf-token"), calls.length === 1 ? "export-token" : null);
-    return calls.length === 1 ? new Response("proxy error", { status: 401 })
-      : new Response(new Uint8Array([1, 2, 3]), { headers: { "Content-Disposition": 'attachment; filename="config.zip"' } });
+    assert.equal(
+      new Headers(init?.headers).get("x-csrf-token"),
+      calls.length === 1 ? "export-token" : null
+    );
+    return calls.length === 1
+      ? new Response("proxy error", { status: 401 })
+      : new Response(new Uint8Array([1, 2, 3]), {
+          headers: { "Content-Disposition": 'attachment; filename="config.zip"' }
+        });
   };
-  await assert.rejects(apiResponse("/api/admin/advanced-config/export", { method: "POST" }), (e: any) => e.status === 401 && e.message === "HTTP 401");
+  await assert.rejects(
+    apiResponse("/api/admin/advanced-config/export", { method: "POST" }),
+    (e: any) => e.status === 401 && e.message === "HTTP 401"
+  );
   assert.equal(expired, 1);
   assert.equal(getCsrfToken(), "");
   const response = await apiResponse("/api/admin/advanced-config/export", { method: "POST" });
@@ -1768,28 +1722,57 @@ test("[Web/后台表单] 日志等级保存隔离旧读取，跨文件缓存采�
   const h = await createConfigStreamHarness(t, { honorAbort: false });
   const clock = installControlledClock(t, h.window);
   const { registerHooks } = await import("node:module");
-  const hooks = registerHooks({ load(url, context, next) { return url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : next(url, context); } });
-  const { LogPage } = await import("../../../packages/web/src/pages/admin/LogPage.tsx").finally(() => hooks.deregister());
+  const hooks = registerHooks({
+    load(url, context, next) {
+      return url.endsWith(".css")
+        ? { format: "module", source: "", shortCircuit: true }
+        : next(url, context);
+    }
+  });
+  const { LogPage } = await import("../../../packages/web/src/pages/admin/LogPage.tsx").finally(
+    () => hooks.deregister()
+  );
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
-  const { ActionFeedbackProvider } = await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const { ActionFeedbackProvider } =
+    await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } }
+  });
   t.after(() => client.clear());
   const payload = (level: string, selected = "app.log") => ({
-    level, selected, content: "existing log", bytes_read: 12, limit_bytes: 100, truncated: false,
-    files: ["app.log", "old.log"].map((name) => ({ name, size: 12, modified_at: "2026-09-05T00:00:00Z" }))
+    level,
+    selected,
+    content: "existing log",
+    bytes_read: 12,
+    limit_bytes: 100,
+    truncated: false,
+    files: ["app.log", "old.log"].map((name) => ({
+      name,
+      size: 12,
+      modified_at: "2026-09-05T00:00:00Z"
+    }))
   });
   client.setQueryData([...queryKeys.logs, ""], payload("WARN"));
   client.setQueryData([...queryKeys.logs, "old.log"], payload("WARN", "old.log"));
-  await h.render(h.React.createElement(QueryClientProvider, { client }, h.React.createElement(ActionFeedbackProvider, null, h.React.createElement(LogPage))));
-  const select = (label: string) => h.document.querySelector<HTMLElement>(`[aria-label="${label}"]`)!;
+  await h.render(
+    h.React.createElement(
+      QueryClientProvider,
+      { client },
+      h.React.createElement(ActionFeedbackProvider, null, h.React.createElement(LogPage))
+    )
+  );
+  const select = (label: string) =>
+    h.document.querySelector<HTMLElement>(`[aria-label="${label}"]`)!;
   const choose = async (label: string, value: string) => {
     await h.React.act(async () => {
       dispatchDomEvent(h.window, select(label), "click", { detail: 0 });
       await Promise.resolve();
     });
-    const option = [...h.document.querySelectorAll<HTMLButtonElement>(
-      `[role="listbox"][aria-label="${label}"] [role="option"]`
-    )].find((entry) => entry.textContent === value);
+    const option = [
+      ...h.document.querySelectorAll<HTMLButtonElement>(
+        `[role="listbox"][aria-label="${label}"] [role="option"]`
+      )
+    ].find((entry) => entry.textContent === value);
     assert.ok(option, `${label} 应显示 ${value} 选项`);
     await h.React.act(async () => {
       dispatchDomEvent(h.window, option, "click", { detail: 0 });
@@ -1798,7 +1781,9 @@ test("[Web/后台表单] 日志等级保存隔离旧读取，跨文件缓存采�
     await h.flush();
   };
   const visibleLevel = () => select("日志写入等级").textContent;
-  await h.React.act(async () => { void client.refetchQueries({ queryKey: [...queryKeys.logs, ""], exact: true }); });
+  await h.React.act(async () => {
+    void client.refetchQueries({ queryKey: [...queryKeys.logs, ""], exact: true });
+  });
   await choose("日志写入等级", "INFO");
   assert.equal(h.pending.length, 2);
   await choose("日志文件", "old.log");
@@ -1815,7 +1800,8 @@ test("[Web/后台表单] 日志等级保存隔离旧读取，跨文件缓存采�
   await h.respond(2, { error: "failed" }, 503);
   assert.equal(visibleLevel(), "INFO");
   assert.equal(select("日志写入等级").hasAttribute("disabled"), false);
-  for (const file of ["", "old.log"]) assert.equal(client.getQueryData<any>([...queryKeys.logs, file]).level, "INFO");
+  for (const file of ["", "old.log"])
+    assert.equal(client.getQueryData<any>([...queryKeys.logs, file]).level, "INFO");
   await choose("日志文件", "app.log");
   assert.equal(visibleLevel(), "INFO");
   await h.respond(3, payload("INFO"));
@@ -1836,39 +1822,90 @@ test("[Web/后台表单] 权威保存完成后列表读取挂起不锁住编辑�
   const clock = installControlledClock(t, h.window, { includeGlobalTimers: true });
   const { QueryClient, QueryClientProvider, QueryObserver } = await import("@tanstack/react-query");
   const { MemoryRouter } = await import("react-router");
-  const { AuthSessionProvider } = await import("../../../packages/web/src/hooks/useAuthSession.tsx");
+  const { AuthSessionProvider } =
+    await import("../../../packages/web/src/hooks/useAuthSession.tsx");
   const { registerHooks } = await import("node:module");
-  const hooks = registerHooks({ load(url, context, next) {
-    return url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : next(url, context);
-  } });
-  const { ImageMetadataEditorDialog } = await import("../../../packages/web/src/components/image/editor/ImageMetadataEditorDialog.tsx")
-    .finally(() => hooks.deregister());
-  const { adminImageListQuery } = await import("../../../packages/web/src/pages/admin/images/image-admin-list-query.ts");
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } } });
+  const hooks = registerHooks({
+    load(url, context, next) {
+      return url.endsWith(".css")
+        ? { format: "module", source: "", shortCircuit: true }
+        : next(url, context);
+    }
+  });
+  const { ImageMetadataEditorDialog } =
+    await import("../../../packages/web/src/components/image/editor/ImageMetadataEditorDialog.tsx").finally(
+      () => hooks.deregister()
+    );
+  const { adminImageListQuery } =
+    await import("../../../packages/web/src/pages/admin/images/image-admin-list-query.ts");
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } }
+  });
   t.after(() => client.clear());
-  client.setQueryData(queryKeys.me, { authenticated: true, username: "reviewer", role: "image", permissions: [] });
+  client.setQueryData(queryKeys.me, {
+    authenticated: true,
+    username: "reviewer",
+    role: "image",
+    permissions: []
+  });
   client.setQueryData(queryKeys.storageOptions, { backends: [] });
   const before = editableImage("00000000-0000-7000-8000-000000000633");
   const after = { ...before, title: "saved title" };
-  const listOptions = adminImageListQuery("ready", { device: "", brightness: "", theme: "", tag: "", author: "" }, "all", 1, 20);
+  const listOptions = adminImageListQuery(
+    "ready",
+    { device: "", brightness: "", theme: "", tag: "", author: "" },
+    "all",
+    1,
+    20
+  );
   client.setQueryData(listOptions.queryKey, { items: [before], total: 1, etag: "" });
   const list = new QueryObserver(client, listOptions);
   const unsubscribe = list.subscribe(() => {});
   t.after(unsubscribe);
   let closed = 0;
-  await h.render(h.React.createElement(QueryClientProvider, { client },
-    h.React.createElement(MemoryRouter, { initialEntries: ["/admin/images"] },
-      h.React.createElement(AuthSessionProvider, null,
-        h.React.createElement(ImageMetadataEditorDialog, {
-          items: [before], pageSize: 10, themes: [], allTags: [], authors: [],
-          onClose: () => { closed++; }, onTrashCommitted: async () => {},
-          onSaved: async (commit) => {
-            assert.ok(commit);
-            await invalidateImageDataAfterMetadataSave(client, commit.updates, commit.authoritativeItems);
-          }
-        })))));
-  await h.React.act(async () => inputText(h.window, h.document.querySelector<HTMLInputElement>('input[placeholder="标题"]')!, "saved title"));
-  const save = [...h.document.querySelectorAll("button")].find(button => button.textContent?.includes("保存1项"));
+  await h.render(
+    h.React.createElement(
+      QueryClientProvider,
+      { client },
+      h.React.createElement(
+        MemoryRouter,
+        { initialEntries: ["/admin/images"] },
+        h.React.createElement(
+          AuthSessionProvider,
+          null,
+          h.React.createElement(ImageMetadataEditorDialog, {
+            items: [before],
+            pageSize: 10,
+            themes: [],
+            allTags: [],
+            authors: [],
+            onClose: () => {
+              closed++;
+            },
+            onTrashCommitted: async () => {},
+            onSaved: async (commit) => {
+              assert.ok(commit);
+              await invalidateImageDataAfterMetadataSave(
+                client,
+                commit.updates,
+                commit.authoritativeItems
+              );
+            }
+          })
+        )
+      )
+    )
+  );
+  await h.React.act(async () =>
+    inputText(
+      h.window,
+      h.document.querySelector<HTMLInputElement>('input[placeholder="标题"]')!,
+      "saved title"
+    )
+  );
+  const save = [...h.document.querySelectorAll("button")].find((button) =>
+    button.textContent?.includes("保存1项")
+  );
   assert.ok(save);
   assert.equal(save.disabled, false);
   await h.React.act(async () => dispatchDomEvent(h.window, save.closest("form")!, "submit"));
@@ -1880,16 +1917,23 @@ test("[Web/后台表单] 权威保存完成后列表读取挂起不锁住编辑�
   assert.equal(list.getCurrentResult().isFetching, true);
   await clock.advanceBy(500);
   await h.flush();
-  assert.equal(h.document.querySelector<HTMLButtonElement>('button[title="关闭"]')!.disabled, false);
+  assert.equal(
+    h.document.querySelector<HTMLButtonElement>('button[title="关闭"]')!.disabled,
+    false
+  );
   assert.ok(h.document.querySelector(".image-editor-save-badge.is-saved"));
-  await h.React.act(async () => h.document.querySelector<HTMLButtonElement>('button[title="关闭"]')!.click());
-  await h.React.act(async () => dispatchDomEvent(h.window, h.document.querySelector(".image-editor-overlay")!, "animationend"));
+  await h.React.act(async () =>
+    h.document.querySelector<HTMLButtonElement>('button[title="关闭"]')!.click()
+  );
+  await h.React.act(async () =>
+    dispatchDomEvent(h.window, h.document.querySelector(".image-editor-overlay")!, "animationend")
+  );
   assert.equal(closed, 1, "派生查询未返回时也能正常关闭已保存编辑器");
   await h.render(null);
   await h.respond(2, { error: "list refresh unavailable" }, 503);
   assert.equal(list.getCurrentResult().isError, true);
   assert.equal(list.getCurrentResult().isFetching, false);
-  assert.equal(h.pending.filter(request => request.path.endsWith("/images/update")).length, 1);
+  assert.equal(h.pending.filter((request) => request.path.endsWith("/images/update")).length, 1);
 });
 
 for (const count of [1, 2]) {
@@ -1899,37 +1943,78 @@ for (const count of [1, 2]) {
     const clock = installControlledClock(t, h.window);
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { MemoryRouter } = await import("react-router");
-    const { AuthSessionProvider } = await import("../../../packages/web/src/hooks/useAuthSession.tsx");
+    const { AuthSessionProvider } =
+      await import("../../../packages/web/src/hooks/useAuthSession.tsx");
     // 定向运行也要准备组件的 CSS 导入，不能依赖其他用例已经预载编辑器。
     const { registerHooks } = await import("node:module");
-    const hooks = registerHooks({ load(url, context, next) {
-      return url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : next(url, context);
-    } });
-    const { ImageMetadataEditorDialog } = await import("../../../packages/web/src/components/image/editor/ImageMetadataEditorDialog.tsx")
-      .finally(() => hooks.deregister());
-    const { ADMIN_ICONS } = await import("../../../packages/web/src/components/icon/admin-icons.generated.ts");
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    const hooks = registerHooks({
+      load(url, context, next) {
+        return url.endsWith(".css")
+          ? { format: "module", source: "", shortCircuit: true }
+          : next(url, context);
+      }
+    });
+    const { ImageMetadataEditorDialog } =
+      await import("../../../packages/web/src/components/image/editor/ImageMetadataEditorDialog.tsx").finally(
+        () => hooks.deregister()
+      );
+    const { ADMIN_ICONS } =
+      await import("../../../packages/web/src/components/icon/admin-icons.generated.ts");
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } }
+    });
     t.after(() => client.clear());
-    client.setQueryData(queryKeys.me, { authenticated: true, username: "reviewer", role: "image", permissions: [] });
+    client.setQueryData(queryKeys.me, {
+      authenticated: true,
+      username: "reviewer",
+      role: "image",
+      permissions: []
+    });
     client.setQueryData(queryKeys.storageOptions, { backends: [] });
     const items = Array.from({ length: count }, (_, index) => editableImage(`image-${index}`));
     const committed: string[][] = [];
     let closed = 0;
-    await h.render(h.React.createElement(QueryClientProvider, { client },
-      h.React.createElement(MemoryRouter, { initialEntries: ["/admin/images"] },
-        h.React.createElement(AuthSessionProvider, null,
-          h.React.createElement(ImageMetadataEditorDialog, {
-            items, pageSize: 10, themes: [], allTags: [], authors: [],
-            onClose: () => { closed += 1; },
-            onSaved: async () => {},
-            onTrashCommitted: (ids) => { committed.push(ids); }
-          })))));
-    const button = () => h.document.querySelector<HTMLButtonElement>(".image-editor-trash-trigger")!;
+    await h.render(
+      h.React.createElement(
+        QueryClientProvider,
+        { client },
+        h.React.createElement(
+          MemoryRouter,
+          { initialEntries: ["/admin/images"] },
+          h.React.createElement(
+            AuthSessionProvider,
+            null,
+            h.React.createElement(ImageMetadataEditorDialog, {
+              items,
+              pageSize: 10,
+              themes: [],
+              allTags: [],
+              authors: [],
+              onClose: () => {
+                closed += 1;
+              },
+              onSaved: async () => {},
+              onTrashCommitted: (ids) => {
+                committed.push(ids);
+              }
+            })
+          )
+        )
+      )
+    );
+    const button = () =>
+      h.document.querySelector<HTMLButtonElement>(".image-editor-trash-trigger")!;
     const click = async () => h.React.act(async () => button().click());
-    assert.equal(button().getAttribute("aria-label"), count === 1 ? "删除此图片" : "删除这 2 张图片");
+    assert.equal(
+      button().getAttribute("aria-label"),
+      count === 1 ? "删除此图片" : "删除这 2 张图片"
+    );
     await click();
     assert.equal(button().getAttribute("aria-pressed"), "true");
-    assert.equal(button().querySelector("path")?.getAttribute("d"), ADMIN_ICONS["delete-bin-2-line"]);
+    assert.equal(
+      button().querySelector("path")?.getAttribute("d"),
+      ADMIN_ICONS["delete-bin-2-line"]
+    );
     assert.equal(h.pending.length, 0, "首次点击只进入确认");
     await h.React.act(async () => dispatchDomEvent(h.window, h.document.body, "pointerdown"));
     assert.equal(button().getAttribute("aria-pressed"), "false");
@@ -1939,11 +2024,17 @@ for (const count of [1, 2]) {
     assert.equal(h.pending[0].path, "/api/admin/images/trash");
     assert.deepEqual(JSON.parse(String(h.pending[0].body)), { ids: items.map((item) => item.id) });
     assert.equal(button().hasAttribute("disabled"), true);
-    assert.equal(button().querySelector("path")?.getAttribute("d"), ADMIN_ICONS["delete-bin-5-line"]);
+    assert.equal(
+      button().querySelector("path")?.getAttribute("d"),
+      ADMIN_ICONS["delete-bin-5-line"]
+    );
     // 首次只有前 count - 1 项成功，最后一项由权威快照确认仍可编辑。
     const succeeded = items.slice(0, -1).map((item) => item.id);
     const remaining = items.at(-1)!;
-    await h.respond(0, { trashed: succeeded.length, results: succeeded.map((id) => ({ id, status: "trashed" })) });
+    await h.respond(0, {
+      trashed: succeeded.length,
+      results: succeeded.map((id) => ({ id, status: "trashed" }))
+    });
     assert.equal(h.pending[1].path, "/api/admin/images/snapshot");
     assert.deepEqual(JSON.parse(String(h.pending[1].body)), { ids: [remaining.id] });
     await h.respond(1, { items: [remaining] });
@@ -1953,7 +2044,10 @@ for (const count of [1, 2]) {
     assert.match(h.document.querySelector('[role="alert"]')!.textContent!, /仍可编辑/);
     assert.deepEqual(committed, succeeded.length ? [succeeded] : []);
     assert.equal(button().hasAttribute("disabled"), false);
-    assert.equal(button().getAttribute("aria-label"), count === 1 ? "删除此图片" : "删除这 1 张图片");
+    assert.equal(
+      button().getAttribute("aria-label"),
+      count === 1 ? "删除此图片" : "删除这 1 张图片"
+    );
     await click();
     assert.equal(h.pending.length, 2, "未完成成员再次删除仍需确认");
     await click();
@@ -1961,9 +2055,14 @@ for (const count of [1, 2]) {
     await h.respond(2, { trashed: 1, results: [{ id: remaining.id, status: "trashed" }] });
     await clock.advanceBy(500);
     await h.flush();
-    await h.React.act(async () => dispatchDomEvent(h.window, h.document.querySelector(".image-editor-overlay")!, "animationend"));
+    await h.React.act(async () =>
+      dispatchDomEvent(h.window, h.document.querySelector(".image-editor-overlay")!, "animationend")
+    );
     assert.equal(closed, 1, "所有活动成员删除成功后关闭编辑窗口");
-    assert.deepEqual(committed.flat(), items.map((item) => item.id));
+    assert.deepEqual(
+      committed.flat(),
+      items.map((item) => item.id)
+    );
   });
 }
 
@@ -1972,40 +2071,73 @@ test("[Web/后台表单] 存储能力显示三态，连接测试后刷新一次�
   h.window.scrollTo = () => {};
   const clock = installControlledClock(t, h.window);
   const { registerHooks } = await import("node:module");
-  const hooks = registerHooks({ load(url, context, next) {
-    return url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : next(url, context);
-  } });
-  const { StorageSettings } = await import("../../../packages/web/src/pages/admin/storage/StorageSettings.tsx")
-    .finally(() => hooks.deregister());
+  const hooks = registerHooks({
+    load(url, context, next) {
+      return url.endsWith(".css")
+        ? { format: "module", source: "", shortCircuit: true }
+        : next(url, context);
+    }
+  });
+  const { StorageSettings } =
+    await import("../../../packages/web/src/pages/admin/storage/StorageSettings.tsx").finally(() =>
+      hooks.deregister()
+    );
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
-  const { ActionFeedbackProvider } = await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const { ActionFeedbackProvider } =
+    await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } }
+  });
   t.after(() => client.clear());
   const backend = {
-    slug: "archive", sort_order: -1, display_name: "Archive", type: "s3", enabled: true,
-    is_default: false, image_count: 0, ingestion_session_count: 0,
-    cleanup_job_count: 0, failed_cleanup_job_count: 0, exhausted_cleanup_job_count: 0,
-    deletion: { action: "delete", blockers: [] }, content_md5: null,
+    slug: "archive",
+    sort_order: -1,
+    display_name: "Archive",
+    type: "s3",
+    enabled: true,
+    is_default: false,
+    image_count: 0,
+    ingestion_session_count: 0,
+    cleanup_job_count: 0,
+    failed_cleanup_job_count: 0,
+    exhausted_cleanup_job_count: 0,
+    deletion: { action: "delete", blockers: [] },
+    content_md5: null,
     s3: { ...storageBackendS3FormSettings(), secret_access_key_configured: true }
   } satisfies StorageBackendAdmin;
   client.setQueryData(queryKeys.storageBackends, { backends: [backend] });
-  await h.render(h.React.createElement(QueryClientProvider, { client },
-    h.React.createElement(ActionFeedbackProvider, null, h.React.createElement(StorageSettings))));
+  await h.render(
+    h.React.createElement(
+      QueryClientProvider,
+      { client },
+      h.React.createElement(ActionFeedbackProvider, null, h.React.createElement(StorageSettings))
+    )
+  );
   const checksum = () => h.document.querySelector(".storage-card-checksum")?.textContent ?? "";
   assert.equal(checksum(), "");
   for (const content_md5 of [true, false, null]) {
-    await h.React.act(async () => client.setQueryData(queryKeys.storageBackends, { backends: [{ ...backend, content_md5 }] }));
+    await h.React.act(async () =>
+      client.setQueryData(queryKeys.storageBackends, { backends: [{ ...backend, content_md5 }] })
+    );
     await h.flush();
-    assert.equal(checksum(), content_md5 === null ? "" : content_md5 ? "支持MD5校验" : "不支持MD5校验");
+    assert.equal(
+      checksum(),
+      content_md5 === null ? "" : content_md5 ? "支持MD5校验" : "不支持MD5校验"
+    );
   }
-  await h.React.act(async () => h.document.querySelector<HTMLButtonElement>('button[title="编辑"]')!.click());
-  await h.React.act(async () => h.document.querySelector<HTMLButtonElement>(".storage-test-button")!.click());
+  await h.React.act(async () =>
+    h.document.querySelector<HTMLButtonElement>('button[title="编辑"]')!.click()
+  );
+  await h.React.act(async () =>
+    h.document.querySelector<HTMLButtonElement>(".storage-test-button")!.click()
+  );
   assert.equal(h.pending[0]!.path, "/api/admin/storage/test");
   assert.deepEqual(JSON.parse(String(h.pending[0]!.body)), { slug: "archive" });
   await h.respond(0, { ok: true });
-  assert.deepEqual(h.pending.map((request) => request.path), [
-    "/api/admin/storage/test", "/api/admin/storage/backends"
-  ]);
+  assert.deepEqual(
+    h.pending.map((request) => request.path),
+    ["/api/admin/storage/test", "/api/admin/storage/backends"]
+  );
   await h.respond(1, { backends: [{ ...backend, content_md5: true }] });
   await h.React.act(async () => clock.advanceBy(500));
   await h.flush();
@@ -2017,26 +2149,53 @@ test("[Web/后台表单] 本地存储公开 URL 回显、修改保存与清空�
   const h = await createConfigStreamHarness(t);
   h.window.scrollTo = () => {};
   const clock = installControlledClock(t, h.window);
-  const { StorageBackendModal } = await import("../../../packages/web/src/pages/admin/storage/StorageBackendModal.tsx");
-  const { ActionFeedbackProvider } = await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
+  const { StorageBackendModal } =
+    await import("../../../packages/web/src/pages/admin/storage/StorageBackendModal.tsx");
+  const { ActionFeedbackProvider } =
+    await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
   const backend: StorageBackendAdmin = {
-    slug: "local", type: "local", public_base_url: "https://images.example.test/pictures",
-    display_name: "Local", enabled: true, is_default: true, sort_order: 0, image_count: 1,
-    ingestion_session_count: 0, cleanup_job_count: 0, failed_cleanup_job_count: 0,
-    exhausted_cleanup_job_count: 0, deletion: { action: "blocked", blockers: ["built_in"] }
+    slug: "local",
+    type: "local",
+    public_base_url: "https://images.example.test/pictures",
+    display_name: "Local",
+    enabled: true,
+    is_default: true,
+    sort_order: 0,
+    image_count: 1,
+    ingestion_session_count: 0,
+    cleanup_job_count: 0,
+    failed_cleanup_job_count: 0,
+    exhausted_cleanup_job_count: 0,
+    deletion: { action: "blocked", blockers: ["built_in"] }
   };
   const saved: Record<string, unknown>[] = [];
-  await h.render(h.React.createElement(ActionFeedbackProvider, null, h.React.createElement(StorageBackendModal, {
-    target: backend, busy: "", onClose() {}, onTest: async () => true,
-    onSave: async (slug, payload, creating) => {
-      assert.equal(slug, "local"); assert.equal(creating, false); saved.push(payload); return true;
-    }
-  })));
-  const input = h.document.querySelector<HTMLInputElement>('input[placeholder="https://images.example.com"]')!;
+  await h.render(
+    h.React.createElement(
+      ActionFeedbackProvider,
+      null,
+      h.React.createElement(StorageBackendModal, {
+        target: backend,
+        busy: "",
+        onClose() {},
+        onTest: async () => true,
+        onSave: async (slug, payload, creating) => {
+          assert.equal(slug, "local");
+          assert.equal(creating, false);
+          saved.push(payload);
+          return true;
+        }
+      })
+    )
+  );
+  const input = h.document.querySelector<HTMLInputElement>(
+    'input[placeholder="https://images.example.com"]'
+  )!;
   assert.equal(input.value, backend.public_base_url);
   for (const publicBaseUrl of ["https://new-images.example.test", ""]) {
     await h.React.act(async () => inputText(h.window, input, publicBaseUrl));
-    await h.React.act(async () => dispatchDomEvent(h.window, h.document.querySelector("form")!, "submit"));
+    await h.React.act(async () =>
+      dispatchDomEvent(h.window, h.document.querySelector("form")!, "submit")
+    );
     await clock.advanceBy(500);
     await h.flush();
     assert.deepEqual(saved.at(-1), { display_name: "Local", public_base_url: publicBaseUrl });
@@ -2051,49 +2210,83 @@ for (const kind of ["user", "storage"] as const) {
     h.window.scrollTo = () => {};
     const clock = installControlledClock(t, h.window);
     const { registerHooks } = await import("node:module");
-    const hooks = registerHooks({ load(url, context, next) {
-      return url.endsWith(".css")
-        ? { format: "module", source: "", shortCircuit: true }
-        : next(url, context);
-    } });
-    const Component = await (kind === "user"
-      ? import("../../../packages/web/src/pages/admin/UserAdmin.tsx").then((module) => module.UserAdmin)
-      : import("../../../packages/web/src/pages/admin/storage/StorageSettings.tsx").then((module) => module.StorageSettings)
+    const hooks = registerHooks({
+      load(url, context, next) {
+        return url.endsWith(".css")
+          ? { format: "module", source: "", shortCircuit: true }
+          : next(url, context);
+      }
+    });
+    const Component = await (
+      kind === "user"
+        ? import("../../../packages/web/src/pages/admin/UserAdmin.tsx").then(
+            (module) => module.UserAdmin
+          )
+        : import("../../../packages/web/src/pages/admin/storage/StorageSettings.tsx").then(
+            (module) => module.StorageSettings
+          )
     ).finally(() => hooks.deregister());
     const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
-    const { ADMIN_ICONS } = await import("../../../packages/web/src/components/icon/admin-icons.generated.ts");
-    const { ActionFeedbackProvider } = await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    const { ADMIN_ICONS } =
+      await import("../../../packages/web/src/components/icon/admin-icons.generated.ts");
+    const { ActionFeedbackProvider } =
+      await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } }
+    });
     t.after(() => client.clear());
     const backend = {
-      slug: "archive", sort_order: -1, display_name: "Archive", type: "local", enabled: false,
+      slug: "archive",
+      sort_order: -1,
+      display_name: "Archive",
+      type: "local",
+      enabled: false,
       public_base_url: "",
-      is_default: false, image_count: 0, ingestion_session_count: 0,
-      cleanup_job_count: 0, failed_cleanup_job_count: 0, exhausted_cleanup_job_count: 0,
+      is_default: false,
+      image_count: 0,
+      ingestion_session_count: 0,
+      cleanup_job_count: 0,
+      failed_cleanup_job_count: 0,
+      exhausted_cleanup_job_count: 0,
       deletion: { action: "delete", blockers: [] }
     } satisfies StorageBackendAdmin;
-    const data = kind === "user"
-      ? { items: [{ username: "reviewer", role: "image" }] }
-      : { backends: [backend] };
+    const data =
+      kind === "user"
+        ? { items: [{ username: "reviewer", role: "image" }] }
+        : { backends: [backend] };
     client.setQueryData(kind === "user" ? queryKeys.users : queryKeys.storageBackends, data);
-    await h.render(h.React.createElement(QueryClientProvider, { client },
-      h.React.createElement(ActionFeedbackProvider, null, h.React.createElement(Component))));
-    const entry = () => h.document.querySelector<HTMLButtonElement>(
-      kind === "user" ? 'button[title="删除管理员"]' : ".storage-card-actions .danger-button"
-    )!;
+    await h.render(
+      h.React.createElement(
+        QueryClientProvider,
+        { client },
+        h.React.createElement(ActionFeedbackProvider, null, h.React.createElement(Component))
+      )
+    );
+    const entry = () =>
+      h.document.querySelector<HTMLButtonElement>(
+        kind === "user" ? 'button[title="删除管理员"]' : ".storage-card-actions .danger-button"
+      )!;
     const dialog = () => h.document.querySelector<HTMLFormElement>(".confirm-dialog form")!;
     const confirm = () => dialog().querySelector<HTMLButtonElement>('button[type="submit"]')!;
-    const submit = async () => h.React.act(async () => dispatchDomEvent(h.window, dialog(), "submit"));
+    const submit = async () =>
+      h.React.act(async () => dispatchDomEvent(h.window, dialog(), "submit"));
     const cancel = async () => {
-      await h.React.act(async () => dialog().querySelector<HTMLButtonElement>('button[type="button"]')!.click());
-      await h.React.act(async () => dispatchDomEvent(h.window, h.document.querySelector(".confirm-dialog")!, "animationend"));
+      await h.React.act(async () =>
+        dialog().querySelector<HTMLButtonElement>('button[type="button"]')!.click()
+      );
+      await h.React.act(async () =>
+        dispatchDomEvent(h.window, h.document.querySelector(".confirm-dialog")!, "animationend")
+      );
       await h.flush();
     };
     await h.React.act(async () => entry().click());
     assert.equal(confirm().getAttribute("aria-pressed"), "false");
     await submit();
     assert.equal(confirm().getAttribute("aria-pressed"), "true");
-    assert.equal(confirm().querySelector("path")?.getAttribute("d"), ADMIN_ICONS["delete-bin-2-line"]);
+    assert.equal(
+      confirm().querySelector("path")?.getAttribute("d"),
+      ADMIN_ICONS["delete-bin-2-line"]
+    );
     assert.equal(h.pending.length, 0, "首次确认只进入最终确认，不提交删除");
     await h.React.act(async () => dispatchDomEvent(h.window, confirm(), "focusout"));
     assert.equal(confirm().getAttribute("aria-pressed"), "false");
@@ -2104,10 +2297,16 @@ for (const kind of ["user", "storage"] as const) {
     assert.equal(confirm().getAttribute("aria-pressed"), "false", "重新打开从初始确认开始");
     await submit();
     await submit();
-    const deletePath = kind === "user" ? "/api/admin/users/reviewer/delete" : "/api/admin/storage/backends/archive/delete";
+    const deletePath =
+      kind === "user"
+        ? "/api/admin/users/reviewer/delete"
+        : "/api/admin/storage/backends/archive/delete";
     assert.equal(h.pending[0].path, deletePath);
     assert.equal(confirm().hasAttribute("disabled"), true);
-    assert.equal(confirm().querySelector("path")?.getAttribute("d"), ADMIN_ICONS["delete-bin-5-line"]);
+    assert.equal(
+      confirm().querySelector("path")?.getAttribute("d"),
+      ADMIN_ICONS["delete-bin-5-line"]
+    );
     await h.respond(0, { error: "delete_failed" }, 500);
     if (kind === "storage") await h.respond(1, data);
     await clock.advanceBy(500);
@@ -2123,16 +2322,25 @@ for (const kind of ["user", "storage"] as const) {
     await h.respond(beforeRetry + 1, kind === "user" ? { items: [] } : { backends: [] });
     await clock.advanceBy(500);
     await h.flush();
-    await h.React.act(async () => dispatchDomEvent(h.window, h.document.querySelector(".confirm-dialog")!, "animationend"));
+    await h.React.act(async () =>
+      dispatchDomEvent(h.window, h.document.querySelector(".confirm-dialog")!, "animationend")
+    );
     assert.equal(h.document.querySelector(".confirm-dialog"), null, "成功后关闭确认窗口");
   });
 }
 
 test("[Web/后台表单] 词条卡片同 slug 按字段保护 dirty，clean 跟随权威且成功保存立即归于 clean", async (t) => {
   const h = await createConfigStreamHarness(t);
-  const { VocabularyAdminCard } = await import("../../../packages/web/src/pages/admin/VocabularyAdminCard.tsx");
+  const { VocabularyAdminCard } =
+    await import("../../../packages/web/src/pages/admin/VocabularyAdminCard.tsx");
   for (const kind of ["themes", "tags", "authors"] as const) {
-    let item: { slug: string; display_name: string; image_count: number; link: string; sort_order: number } = {
+    let item: {
+      slug: string;
+      display_name: string;
+      image_count: number;
+      link: string;
+      sort_order: number;
+    } = {
       slug: kind,
       sort_order: 0,
       display_name: "old",
@@ -2140,31 +2348,53 @@ test("[Web/后台表单] 词条卡片同 slug 按字段保护 dirty，clean 跟�
       link: "https://example.com/old"
     };
     let refreshFails = false;
-    const props = { kind, onChanged: async () => { if (refreshFails) throw Error("refresh failed"); }, onDelete() {}, onError() {}, sortBusy: false, onSortSave: async (value: number) => value } as const;
-    const render = async () => h.render(h.React.createElement(VocabularyAdminCard, { ...props, item }));
+    const props = {
+      kind,
+      onChanged: async () => {
+        if (refreshFails) throw Error("refresh failed");
+      },
+      onDelete() {},
+      onError() {},
+      sortBusy: false,
+      onSortSave: async (value: number) => value
+    } as const;
+    const render = async () =>
+      h.render(h.React.createElement(VocabularyAdminCard, { ...props, item }));
     await render();
     const display = () => h.document.querySelector<HTMLInputElement>(".entity-display-input")!;
-    const change = async (value: string) => h.React.act(async () => {
-      inputText(h.window, display(), value);
-      await Promise.resolve();
-    });
-    item = { ...item, display_name: "fresh" }; await render();
+    const change = async (value: string) =>
+      h.React.act(async () => {
+        inputText(h.window, display(), value);
+        await Promise.resolve();
+      });
+    item = { ...item, display_name: "fresh" };
+    await render();
     assert.equal(display().value, "fresh");
     await change(" mine ");
-    item = { ...item, display_name: "remote", link: "https://example.com/fresh" }; await render();
+    item = { ...item, display_name: "remote", link: "https://example.com/fresh" };
+    await render();
     assert.equal(display().value, " mine ");
-    if (kind === "authors") assert.equal(h.document.querySelector<HTMLInputElement>(".entity-link-input")!.value, item.link);
+    if (kind === "authors")
+      assert.equal(
+        h.document.querySelector<HTMLInputElement>(".entity-link-input")!.value,
+        item.link
+      );
     const save = h.document.querySelector<HTMLButtonElement>(".entity-card-foot .button")!;
     refreshFails = true;
     await h.React.act(async () => save.click());
     const requestIndex = h.pending.length - 1;
-    await h.respond(requestIndex, kind === "authors" ? { item: { ...item, display_name: "mine" } } : { ok: true });
+    await h.respond(
+      requestIndex,
+      kind === "authors" ? { item: { ...item, display_name: "mine" } } : { ok: true }
+    );
     assert.equal(display().value, "mine");
     // Props stay stale after failed refresh; the next authority update should still replace clean saved input.
-    item = { ...item, display_name: "new authority" }; await render();
+    item = { ...item, display_name: "new authority" };
+    await render();
     assert.equal(display().value, "new authority");
     await change("unsaved");
-    item = { ...item, slug: kind + "-other", display_name: "replacement" }; await render();
+    item = { ...item, slug: kind + "-other", display_name: "replacement" };
+    await render();
     assert.equal(display().value, "replacement");
     await h.render(null);
   }
@@ -2173,58 +2403,114 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
   const h = await createConfigStreamHarness(t);
   const clock = installControlledClock(t, h.window);
   const { registerHooks } = await import("node:module");
-  const hooks = registerHooks({ load(url, context, next) { return url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : next(url, context); } });
-  const { SettingsPage } = await import("../../../packages/web/src/pages/admin/SettingsPage.tsx").finally(() => hooks.deregister());
+  const hooks = registerHooks({
+    load(url, context, next) {
+      return url.endsWith(".css")
+        ? { format: "module", source: "", shortCircuit: true }
+        : next(url, context);
+    }
+  });
+  const { SettingsPage } =
+    await import("../../../packages/web/src/pages/admin/SettingsPage.tsx").finally(() =>
+      hooks.deregister()
+    );
   const { appConfig } = await import("../../../packages/shared/src/app-config.ts");
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } }
+  });
   t.after(() => client.clear());
   const originalTimeout = AbortSignal.timeout;
   let deadline = new AbortController();
-  AbortSignal.timeout = (ms) => { assert.equal(ms, 15_000); deadline = new AbortController(); return deadline.signal; };
-  t.after(() => { AbortSignal.timeout = originalTimeout; });
+  AbortSignal.timeout = (ms) => {
+    assert.equal(ms, 15_000);
+    deadline = new AbortController();
+    return deadline.signal;
+  };
+  t.after(() => {
+    AbortSignal.timeout = originalTimeout;
+  });
   let settings = structuredClone(appConfig.runtimeDefaults) as RuntimeConfig;
   client.setQueryData(queryKeys.settings, { settings });
-  await h.render(h.React.createElement(QueryClientProvider, { client }, h.React.createElement(SettingsPage)));
-  const input = () => h.document.querySelector<HTMLInputElement>('input[placeholder="导航和后台显示名称"]')!;
-  const titleInput = () => h.document.querySelector<HTMLInputElement>('input[placeholder="浏览器标签页标题"]')!;
-  const edit = async (value: string) => h.React.act(async () => {
-    inputText(h.window, input(), value);
+  await h.render(
+    h.React.createElement(QueryClientProvider, { client }, h.React.createElement(SettingsPage))
+  );
+  const input = () =>
+    h.document.querySelector<HTMLInputElement>('input[placeholder="导航和后台显示名称"]')!;
+  const titleInput = () =>
+    h.document.querySelector<HTMLInputElement>('input[placeholder="浏览器标签页标题"]')!;
+  const edit = async (value: string) =>
+    h.React.act(async () => {
+      inputText(h.window, input(), value);
+      await Promise.resolve();
+    });
+  const publish = async (name: string) => {
+    settings = { ...settings, site: { ...settings.site, header_name: name } };
+    await h.React.act(async () => client.setQueryData(queryKeys.settings, { settings }));
+    await h.flush();
+  };
+  const save = () =>
+    [...h.document.querySelectorAll<HTMLButtonElement>(".settings-head-actions button")].at(-1)!;
+  const locked = () => h.document.querySelector("fieldset")!.hasAttribute("disabled");
+  await publish("fresh");
+  assert.equal(input().value, "fresh");
+  await edit("unsaved");
+  await publish("background");
+  assert.equal(input().value, "unsaved");
+  await h.React.act(async () => {
+    inputText(h.window, titleInput(), "独立标题草稿");
     await Promise.resolve();
   });
-  const publish = async (name: string) => { settings = { ...settings, site: { ...settings.site, header_name: name } }; await h.React.act(async () => client.setQueryData(queryKeys.settings, { settings })); await h.flush(); };
-  const save = () => [...h.document.querySelectorAll<HTMLButtonElement>(".settings-head-actions button")].at(-1)!;
-  const locked = () => h.document.querySelector("fieldset")!.hasAttribute("disabled");
-  await publish("fresh"); assert.equal(input().value, "fresh");
-  await edit("unsaved"); await publish("background"); assert.equal(input().value, "unsaved");
-  await h.React.act(async () => { inputText(h.window, titleInput(), "独立标题草稿"); await Promise.resolve(); });
-  const assetsInput = h.document.querySelector<HTMLInputElement>('input[placeholder*="asset.example.com"]')!;
+  const assetsInput = h.document.querySelector<HTMLInputElement>(
+    'input[placeholder*="asset.example.com"]'
+  )!;
   const sizeTrigger = h.document.querySelector<HTMLButtonElement>('[aria-label="随机图默认尺寸"]')!;
   assert.equal(assetsInput.value, "");
   await h.React.act(async () => sizeTrigger.click());
-  const thumbOption = [...h.document.querySelectorAll<HTMLElement>('[role="option"]')].find((element) => element.textContent?.includes("缩略"))!;
+  const thumbOption = [...h.document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+    (element) => element.textContent?.includes("缩略")
+  )!;
   assert.ok(thumbOption);
   await h.React.act(async () => thumbOption.click());
-  await h.React.act(async () => { inputText(h.window, assetsInput, "https://asset.example.com///static///"); await Promise.resolve(); });
+  await h.React.act(async () => {
+    inputText(h.window, assetsInput, "https://asset.example.com///static///");
+    await Promise.resolve();
+  });
   const number = h.document.querySelector<HTMLInputElement>('input[type="number"]')!;
   await h.React.act(async () => {
     inputText(h.window, number, "47");
     await Promise.resolve();
   });
-  Object.defineProperty(h.document,"activeElement",{configurable:true,get:()=>number});
+  Object.defineProperty(h.document, "activeElement", { configurable: true, get: () => number });
   number.blur = () => {
     dispatchDomEvent(h.window, number, "focusout", { relatedTarget: null });
   };
-  await h.React.act(async () => { save().click(); save().click(); });
-  assert.equal(JSON.parse(String(h.pending[0].body)).admin.recent_uploads,47,"锁定前同步结算数字输入，提交当前可见值");
+  await h.React.act(async () => {
+    save().click();
+    save().click();
+  });
+  assert.equal(
+    JSON.parse(String(h.pending[0].body)).admin.recent_uploads,
+    47,
+    "锁定前同步结算数字输入，提交当前可见值"
+  );
   assert.equal(JSON.parse(String(h.pending[0].body)).site.title, "独立标题草稿");
   assert.equal(JSON.parse(String(h.pending[0].body)).site.header_name, "unsaved");
   assert.equal(JSON.parse(String(h.pending[0].body)).site.random_size, "thumb");
-  assert.equal(JSON.parse(String(h.pending[0].body)).site.assets_base_url, "https://asset.example.com///static///");
+  assert.equal(
+    JSON.parse(String(h.pending[0].body)).site.assets_base_url,
+    "https://asset.example.com///static///"
+  );
   delete (h.document as any).activeElement;
-  assert.equal(h.pending.length, 1); assert.equal(locked(), true);
-  assert.ok([...h.document.querySelectorAll('.select-trigger')].every((element) => element.hasAttribute("disabled")));
-  await edit("blocked"); assert.equal(input().value, "unsaved");
+  assert.equal(h.pending.length, 1);
+  assert.equal(locked(), true);
+  assert.ok(
+    [...h.document.querySelectorAll(".select-trigger")].every((element) =>
+      element.hasAttribute("disabled")
+    )
+  );
+  await edit("blocked");
+  assert.equal(input().value, "unsaved");
   await h.React.act(async () => {
     deadline.abort(new DOMException("timed out", "TimeoutError"));
     await Promise.resolve();
@@ -2232,62 +2518,96 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
     assert.equal(locked(), true, "最短反馈期限前保持保存锁定");
     await clock.advanceBy(1);
   });
-  assert.equal(locked(), false); assert.equal(input().value, "unsaved");
+  assert.equal(locked(), false);
+  assert.equal(input().value, "unsaved");
   assert.match(h.document.querySelector('[role="alert"]')!.textContent!, /超时/);
   await edit("normalized input ");
   await h.React.act(async () => save().click());
-  const successfulSave = h.respond(1, { settings: { ...settings, site: { ...settings.site, header_name: "normalized input" } } });
+  const successfulSave = h.respond(1, {
+    settings: { ...settings, site: { ...settings.site, header_name: "normalized input" } }
+  });
   await Promise.resolve();
   await clock.advanceBy(499);
   assert.equal(locked(), true, "成功反馈期限前保持保存锁定");
   await clock.advanceBy(1);
   await successfulSave;
-  assert.equal(input().value, "normalized input"); assert.equal(locked(), false);
+  assert.equal(input().value, "normalized input");
+  assert.equal(locked(), false);
   assert.equal(h.pending.length, 2, "成功响应直接发布配置，无 GET 回读");
-  await publish("after save"); assert.equal(input().value, "after save");
-  await edit("retain after failure"); await h.React.act(async () => save().click());
+  await publish("after save");
+  assert.equal(input().value, "after save");
+  await edit("retain after failure");
+  await h.React.act(async () => save().click());
   const failedSave = h.respond(2, { error: "save failure" }, 503);
   await Promise.resolve();
   await clock.advanceBy(499);
   assert.equal(locked(), true, "失败反馈期限前保持保存锁定");
   await clock.advanceBy(1);
   await failedSave;
-  assert.equal(locked(), false); assert.equal(input().value, "retain after failure");
+  assert.equal(locked(), false);
+  assert.equal(input().value, "retain after failure");
   await h.React.act(async () => save().click());
   await h.render(null);
   assert.equal(h.pending[3].signal?.aborted, true);
 });
 test("[Web/后台表单] 词表首份请求尚未完成时新词条提交隔离旧响应", async () => {
   const { QueryClient, QueryObserver } = await import("@tanstack/react-query");
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } }
+  });
   let resolveOld!: (value: IngestionVocabularyDto) => void;
   let calls = 0;
   const old = { themes: [], authors: [], tags: [] } as IngestionVocabularyDto;
   const fresh = { ...old, tags: [{ slug: "new", display_name: "new" }] } as IngestionVocabularyDto;
-  const observer = new QueryObserver(client, { queryKey: queryKeys.ingestionVocabulary, queryFn: () => ++calls === 1 ? new Promise<IngestionVocabularyDto>((resolve) => { resolveOld = resolve; }) : Promise.resolve(fresh) });
+  const observer = new QueryObserver(client, {
+    queryKey: queryKeys.ingestionVocabulary,
+    queryFn: () =>
+      ++calls === 1
+        ? new Promise<IngestionVocabularyDto>((resolve) => {
+            resolveOld = resolve;
+          })
+        : Promise.resolve(fresh)
+  });
   const unsubscribe = observer.subscribe(() => {});
   try {
-    const refresh = invalidateImageDataAfterMetadataSave(client, [{ id: "image", tags: ["new"] }], []);
+    const refresh = invalidateImageDataAfterMetadataSave(
+      client,
+      [{ id: "image", tags: ["new"] }],
+      []
+    );
     resolveOld(old);
     await refresh;
     assert.deepEqual(client.getQueryData(queryKeys.ingestionVocabulary), fresh);
     assert.equal(calls, 2);
-  } finally { unsubscribe(); client.clear(); }
+  } finally {
+    unsubscribe();
+    client.clear();
+  }
 });
 test("[Web/后台表单] 单项服务端状态桶覆盖等待、执行、重复待决和全部终态", async () => {
-  const { ingestionStatusSummary } = await import("../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-status-summary.ts");
+  const { ingestionStatusSummary } =
+    await import("../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-status-summary.ts");
   const cases = [
-    ["queued", false, false, "waiting"], ["received", false, false, null],
-    ["downloading", false, false, "running"], ["preparing", false, false, "running"],
-    ["preparing", false, true, null], ["ready", false, false, "ready"],
-    ["ready", true, false, "duplicate_pending"], ["committing", false, false, "committing"],
-    ["resolving", false, false, "resolving"], ["completed", true, true, "completed"],
+    ["queued", false, false, "waiting"],
+    ["received", false, false, null],
+    ["downloading", false, false, "running"],
+    ["preparing", false, false, "running"],
+    ["preparing", false, true, null],
+    ["ready", false, false, "ready"],
+    ["ready", true, false, "duplicate_pending"],
+    ["committing", false, false, "committing"],
+    ["resolving", false, false, "resolving"],
+    ["completed", true, true, "completed"],
     ["failed", true, true, "failed"]
   ] as const;
   for (const [status, duplicate, waiting, bucket] of cases) {
     const summary = ingestionStatusSummary(status, duplicate, waiting);
-    assert.equal(summary.total, 1); assert.equal(summary.unfinished, status === "completed" ? 0 : 1);
+    assert.equal(summary.total, 1);
+    assert.equal(summary.unfinished, status === "completed" ? 0 : 1);
     const { total, unfinished, ...buckets } = summary;
-    assert.deepEqual(Object.entries(buckets).filter(([, value]) => value), bucket ? [[bucket, 1]] : []);
+    assert.deepEqual(
+      Object.entries(buckets).filter(([, value]) => value),
+      bucket ? [[bucket, 1]] : []
+    );
   }
 });

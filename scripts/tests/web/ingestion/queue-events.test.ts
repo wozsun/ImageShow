@@ -11,30 +11,17 @@ import {
   invalidateImageDataAfterIngestion,
   invalidateImageDataAfterMetadataSave
 } from "../../../../packages/web/src/lib/api/query-invalidation.ts";
-import {
-  queryKeys
-} from "../../../../packages/web/src/lib/api/query-keys.ts";
-import {
-  recordAdminImageListValidation
-} from "../../../../packages/web/src/lib/api/admin-image-list-validation.ts";
-import {
-  createIngestionCommitIntent
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
-import {
-  ingestionStatusEventPatch
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-status-state.ts";
-import {
-  commitSelectedIngestions
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/ingestion-commit-batch.ts";
+import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
+import { recordAdminImageListValidation } from "../../../../packages/web/src/lib/api/admin-image-list-validation.ts";
+import { createIngestionCommitIntent } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
+import { ingestionStatusEventPatch } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-status-state.ts";
+import { commitSelectedIngestions } from "../../../../packages/web/src/pages/admin/ingestion/queue/ingestion-commit-batch.ts";
 import {
   baselineFromIngestionSnapshot,
   ingestionQueueBaselineCoversSelection,
   mergeIngestionQueueMutation
 } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/server-ingestion-queue-state.ts";
-import {
-  ingestionJob,
-  adminImageListItem
-} from "../../support/web-test-context.ts";
+import { ingestionJob, adminImageListItem } from "../../support/web-test-context.ts";
 
 test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增 progress", () => {
   const summary = {
@@ -104,11 +91,7 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
     includeItems: [selectedPair]
   };
   assert.equal(
-    ingestionQueueBaselineCoversSelection(
-      baseline,
-      emptySelection,
-      selectedCurrentItem
-    ),
+    ingestionQueueBaselineCoversSelection(baseline, emptySelection, selectedCurrentItem),
     true,
     "已读到队尾且新筛选任务已在基线中时不得重复 snapshot"
   );
@@ -126,12 +109,11 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
   );
   const reservoirItems = Array.from({ length: 20 }, (_, index) => ({
     ...active,
-    session_id: index === 0
-      ? active.session_id
-      : String(index).padStart(43, "R"),
-    image_id: index === 0
-      ? active.image_id
-      : `019f8457-063a-72${String(index).padStart(2, "0")}-a580-00000000008e`,
+    session_id: index === 0 ? active.session_id : String(index).padStart(43, "R"),
+    image_id:
+      index === 0
+        ? active.image_id
+        : `019f8457-063a-72${String(index).padStart(2, "0")}-a580-00000000008e`,
     accepted_order: index + 1
   }));
   const reservoirBaseline = {
@@ -140,32 +122,20 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
     items: reservoirItems
   };
   assert.equal(
-    ingestionQueueBaselineCoversSelection(
-      reservoirBaseline,
-      emptySelection,
-      {
-        ...selectedCurrentItem,
-        requiredItems: 19
-      }
-    ),
+    ingestionQueueBaselineCoversSelection(reservoirBaseline, emptySelection, {
+      ...selectedCurrentItem,
+      requiredItems: 19
+    }),
     true,
     "筛选变化后替补仍覆盖实际展示槽位时不得为补满缓存重复读取"
   );
   assert.equal(
-    ingestionQueueBaselineCoversSelection(
-      reservoirBaseline,
-      emptySelection,
-      selectedCurrentItem
-    ),
+    ingestionQueueBaselineCoversSelection(reservoirBaseline, emptySelection, selectedCurrentItem),
     false,
     "实际展示需要完整 20 行时不能把 19 行替补误判为覆盖"
   );
   assert.equal(
-    ingestionQueueBaselineCoversSelection(
-      baseline,
-      selectedCurrentItem,
-      emptySelection
-    ),
+    ingestionQueueBaselineCoversSelection(baseline, selectedCurrentItem, emptySelection),
     false,
     "移除筛选会改变 Server 页面成员，必须重新读取"
   );
@@ -286,10 +256,7 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
     "携带 PostgreSQL 完成投影的 SSE 不得再请求同页 snapshot"
   );
   assert.equal(hydratedCompleted.baseline.items[0]?.status, "completed");
-  assert.equal(
-    hydratedCompleted.baseline.items[0]?.completed_item.id,
-    completedItem.id
-  );
+  assert.equal(hydratedCompleted.baseline.items[0]?.completed_item.id, completedItem.id);
 });
 test("[Web/内容接入] 队列 progress 以当前 revision 同步页内与离页汇总且不回退", () => {
   const waitingSummary = {
@@ -367,9 +334,7 @@ test("[Web/内容接入] 队列 progress 以当前 revision 同步页内与离�
   assert.equal(pageResult.kind, "accepted");
   const mergedPageItem = pageResult.baseline.items[0];
   assert.equal(
-    mergedPageItem && "phase" in mergedPageItem
-      ? mergedPageItem.phase
-      : undefined,
+    mergedPageItem && "phase" in mergedPageItem ? mergedPageItem.phase : undefined,
     "normalizing"
   );
   assert.deepEqual(pageResult.baseline.summary, runningSummary);
@@ -378,10 +343,7 @@ test("[Web/内容接入] 队列 progress 以当前 revision 同步页内与离�
     ...pageBaseline,
     items: []
   };
-  const offPageResult = mergeIngestionQueueMutation(
-    offPageBaseline,
-    progressEvent
-  );
+  const offPageResult = mergeIngestionQueueMutation(offPageBaseline, progressEvent);
   assert.equal(offPageResult.kind, "accepted");
   assert.deepEqual(offPageResult.baseline.summary, runningSummary);
   assert.deepEqual(offPageResult.baseline.items, []);
@@ -426,14 +388,11 @@ test("[Web/内容接入] 队列 progress 以当前 revision 同步页内与离�
   assert.equal(delayedSameRevisionOffPage.baseline.summary.waiting, 0);
   assert.equal(delayedSameRevisionOffPage.baseline.summary.running, 2);
 
-  const delayedProgress = mergeIngestionQueueMutation(
-    pageResult.baseline,
-    {
-      ...progressEvent,
-      summary: waitingSummary,
-      session: waiting
-    }
-  );
+  const delayedProgress = mergeIngestionQueueMutation(pageResult.baseline, {
+    ...progressEvent,
+    summary: waitingSummary,
+    session: waiting
+  });
   assert.equal(delayedProgress.kind, "ignored");
   assert.deepEqual(delayedProgress.baseline.summary, runningSummary);
 });
@@ -441,10 +400,7 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
   const originalFetch = globalThis.fetch;
   const calls: Array<{ path: string; init: RequestInit }> = [];
   const sessionIds = ["A".repeat(43), "B".repeat(43)];
-  const imageIds = [
-    "00000000-0000-7005-8000-00000000008e",
-    "00000000-0000-7006-8000-00000000008e"
-  ];
+  const imageIds = ["00000000-0000-7005-8000-00000000008e", "00000000-0000-7006-8000-00000000008e"];
   const attemptIds = [
     "00000000-0000-7007-8000-00000000008e",
     "00000000-0000-7008-8000-00000000008e"
@@ -465,10 +421,7 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
     });
     return {
       ...ready,
-      commitIntent: createIngestionCommitIntent(
-        ready,
-        commitRequestIds[index]
-      )
+      commitIntent: createIngestionCommitIntent(ready, commitRequestIds[index])
     };
   });
   const current = new Map(jobs.map((job) => [job.id, job]));
@@ -478,29 +431,35 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
     const path = String(input);
     calls.push({ path, init });
     if (path !== ingestionCommitPath) throw new Error(`unexpected fetch ${path}`);
-    return new Response(JSON.stringify({
-      ok: true,
-      items: jobs.map((job, index) => ({
-        session_id: job.sessionId,
-        image_id: job.imageId,
-        status: index === 0 ? "accepted" : "completed",
-        version: 5,
-        ...(index === 0 ? {} : { completed_item: completedCommitItem })
-      }))
-    }), { status: 200 });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        items: jobs.map((job, index) => ({
+          session_id: job.sessionId,
+          image_id: job.imageId,
+          status: index === 0 ? "accepted" : "completed",
+          version: 5,
+          ...(index === 0 ? {} : { completed_item: completedCommitItem })
+        }))
+      }),
+      { status: 200 }
+    );
   }) as typeof fetch;
   try {
-    assert.equal(await commitSelectedIngestions({
-      selected: jobs,
-      getJob: (id) => current.get(id),
-      observeCompletedIngestions: (entries) => {
-        observedCompleted.push(...entries.map(({ pair }) => pair.image_id));
-      },
-      updateJob: (id, patch) => {
-        const job = current.get(id);
-        if (job) current.set(id, { ...job, ...patch });
-      }
-    }), 2);
+    assert.equal(
+      await commitSelectedIngestions({
+        selected: jobs,
+        getJob: (id) => current.get(id),
+        observeCompletedIngestions: (entries) => {
+          observedCompleted.push(...entries.map(({ pair }) => pair.image_id));
+        },
+        updateJob: (id, patch) => {
+          const job = current.get(id);
+          if (job) current.set(id, { ...job, ...patch });
+        }
+      }),
+      2
+    );
     assert.equal(calls.length, 1);
     assert.equal(calls[0]?.path, ingestionCommitPath);
     const body = JSON.parse(String(calls[0]?.init.body));
@@ -562,9 +521,7 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
         "00000000-0000-7016-8000-00000000008e"
       )
     };
-    const lostResponseCurrent = new Map([
-      [lostResponseJob.id, lostResponseJob]
-    ]);
+    const lostResponseCurrent = new Map([[lostResponseJob.id, lostResponseJob]]);
     const lostResponseCompleted = adminImageListItem({
       id: lostResponseJob.imageId
     });
@@ -574,28 +531,36 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
         return new Response("commit response lost", { status: 502 });
       }
       assert.equal(String(input), ingestionStatusPath);
-      return new Response(JSON.stringify({
-        ok: true,
-        items: [{
-          session_id: lostResponseJob.sessionId,
-          image_id: lostResponseJob.imageId,
-          status: "completed",
-          completed_item: lostResponseCompleted,
-          redis_status: "missing"
-        }]
-      }), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          items: [
+            {
+              session_id: lostResponseJob.sessionId,
+              image_id: lostResponseJob.imageId,
+              status: "completed",
+              completed_item: lostResponseCompleted,
+              redis_status: "missing"
+            }
+          ]
+        }),
+        { status: 200 }
+      );
     }) as typeof fetch;
-    assert.equal(await commitSelectedIngestions({
-      selected: [lostResponseJob],
-      getJob: (id) => lostResponseCurrent.get(id),
-      observeCompletedIngestions: (entries) => {
-        reconciledCompleted.push(...entries.map(({ pair }) => pair.image_id));
-      },
-      updateJob: (id, patch) => {
-        const job = lostResponseCurrent.get(id);
-        if (job) lostResponseCurrent.set(id, { ...job, ...patch });
-      }
-    }), 0);
+    assert.equal(
+      await commitSelectedIngestions({
+        selected: [lostResponseJob],
+        getJob: (id) => lostResponseCurrent.get(id),
+        observeCompletedIngestions: (entries) => {
+          reconciledCompleted.push(...entries.map(({ pair }) => pair.image_id));
+        },
+        updateJob: (id, patch) => {
+          const job = lostResponseCurrent.get(id);
+          if (job) lostResponseCurrent.set(id, { ...job, ...patch });
+        }
+      }),
+      0
+    );
     assert.equal(lostResponseCurrent.get(lostResponseJob.id)?.status, "done");
     assert.deepEqual(
       reconciledCompleted,
@@ -623,28 +588,37 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
     const duplicateItem = adminImageListItem({
       id: "00000000-0000-700e-8000-00000000008e"
     });
-    globalThis.fetch = (async () => new Response(JSON.stringify({
-      ok: true,
-      items: [{
-        session_id: duplicateJob.sessionId,
-        image_id: duplicateJob.imageId,
-        status: "failed",
-        code: "ingestion_duplicate_conflict",
-        message: "提交前发现相同内容图片",
-        version: 6,
-        duplicate_count: 23,
-        duplicates: [duplicateItem]
-      }]
-    }), { status: 200 })) as typeof fetch;
-    assert.equal(await commitSelectedIngestions({
-      selected: [duplicateJob],
-      getJob: (id) => duplicateCurrent.get(id),
-      observeCompletedIngestions: () => undefined,
-      updateJob: (id, patch) => {
-        const job = duplicateCurrent.get(id);
-        if (job) duplicateCurrent.set(id, { ...job, ...patch });
-      }
-    }), 0);
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          items: [
+            {
+              session_id: duplicateJob.sessionId,
+              image_id: duplicateJob.imageId,
+              status: "failed",
+              code: "ingestion_duplicate_conflict",
+              message: "提交前发现相同内容图片",
+              version: 6,
+              duplicate_count: 23,
+              duplicates: [duplicateItem]
+            }
+          ]
+        }),
+        { status: 200 }
+      )) as typeof fetch;
+    assert.equal(
+      await commitSelectedIngestions({
+        selected: [duplicateJob],
+        getJob: (id) => duplicateCurrent.get(id),
+        observeCompletedIngestions: () => undefined,
+        updateJob: (id, patch) => {
+          const job = duplicateCurrent.get(id);
+          if (job) duplicateCurrent.set(id, { ...job, ...patch });
+        }
+      }),
+      0
+    );
     const duplicateConflict = duplicateCurrent.get(duplicateJob.id)!;
     assert.equal(duplicateConflict.status, "ready");
     assert.equal(duplicateConflict.serverVersion, 6);
@@ -682,12 +656,8 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
   client.setQueryData(queryKeys.ingestionVocabulary, vocabulary);
 
   await invalidateImageDataAfterIngestion(client, [adminImageListItem()]);
-  const invalidated = (
-    queryClient: InstanceType<typeof QueryClient>,
-    key: readonly unknown[]
-  ) => (
-    queryClient.getQueryState(key)?.isInvalidated === true
-  );
+  const invalidated = (queryClient: InstanceType<typeof QueryClient>, key: readonly unknown[]) =>
+    queryClient.getQueryState(key)?.isInvalidated === true;
   for (const key of [
     queryKeys.publicImages,
     queryKeys.galleryFacets,
@@ -711,22 +681,18 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
   const changedClient = new QueryClient({
     defaultOptions: { queries: { retry: false } }
   });
-  for (const key of [
-    queryKeys.tags,
-    queryKeys.authors,
-    queryKeys.ingestionVocabulary
-  ]) changedClient.setQueryData(key, key === queryKeys.ingestionVocabulary ? vocabulary : {});
-  await invalidateImageDataAfterIngestion(changedClient, [adminImageListItem({
-    theme: "new-theme",
-    author: "new-author",
-    tags: ["new-tag"]
-  })]);
+  for (const key of [queryKeys.tags, queryKeys.authors, queryKeys.ingestionVocabulary])
+    changedClient.setQueryData(key, key === queryKeys.ingestionVocabulary ? vocabulary : {});
+  await invalidateImageDataAfterIngestion(changedClient, [
+    adminImageListItem({
+      theme: "new-theme",
+      author: "new-author",
+      tags: ["new-tag"]
+    })
+  ]);
   assert.equal(changedClient.getQueryState(queryKeys.tags)?.isInvalidated, true);
   assert.equal(changedClient.getQueryState(queryKeys.authors)?.isInvalidated, true);
-  assert.equal(
-    changedClient.getQueryState(queryKeys.ingestionVocabulary)?.isInvalidated,
-    true
-  );
+  assert.equal(changedClient.getQueryState(queryKeys.ingestionVocabulary)?.isInvalidated, true);
   const coveredClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } }
   });
@@ -745,23 +711,15 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
     staleTime: Infinity
   });
   const unsubscribeCovered = coveredObserver.subscribe(() => undefined);
-  await invalidateImageDataAfterIngestion(
-    coveredClient,
-    [adminImageListItem()],
-    { completedAt: 100 }
-  );
+  await invalidateImageDataAfterIngestion(coveredClient, [adminImageListItem()], {
+    completedAt: 100
+  });
   assert.equal(coveredReads, 0, "已覆盖完成水位的列表不得条件重读");
   recordAdminImageListValidation(coveredClient, coveredKey, 300);
-  await invalidateImageDataAfterIngestion(
-    coveredClient,
-    [adminImageListItem()],
-    { completedAt: 300 }
-  );
-  assert.equal(
-    coveredReads,
-    1,
-    "列表读取与完成事件处于同一毫秒时仍必须恰好重读一次"
-  );
+  await invalidateImageDataAfterIngestion(coveredClient, [adminImageListItem()], {
+    completedAt: 300
+  });
+  assert.equal(coveredReads, 1, "列表读取与完成事件处于同一毫秒时仍必须恰好重读一次");
   unsubscribeCovered();
 
   const inFlightClient = new QueryClient({
@@ -775,16 +733,16 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
     queryKey: inFlightKey,
     queryFn: async ({ signal }) => {
       inFlightReads += 1;
-      signal.addEventListener("abort", () => { inFlightAborted = true; });
+      signal.addEventListener("abort", () => {
+        inFlightAborted = true;
+      });
       const validationStartedAt = inFlightReads === 1 ? 300 : 500;
       if (inFlightReads === 1) {
-        await new Promise<void>((resolve) => { resolveInFlight = resolve; });
+        await new Promise<void>((resolve) => {
+          resolveInFlight = resolve;
+        });
       }
-      recordAdminImageListValidation(
-        inFlightClient,
-        inFlightKey,
-        validationStartedAt
-      );
+      recordAdminImageListValidation(inFlightClient, inFlightKey, validationStartedAt);
       return coveredData;
     }
   });
@@ -801,11 +759,7 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
   assert.ok(resolveInFlight);
   resolveInFlight();
   await invalidatingInFlight;
-  assert.equal(
-    inFlightReads,
-    2,
-    "早于完成水位的在途读取结束后必须顺序补一次读取"
-  );
+  assert.equal(inFlightReads, 2, "早于完成水位的在途读取结束后必须顺序补一次读取");
   assert.equal(inFlightAborted, false, "尾随读取也不得取消原始请求");
   unsubscribeInFlight();
 
@@ -836,14 +790,19 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
   coveredClient.clear();
   inFlightClient.clear();
   authorProfileClient.clear();
-  const { imageDataRevision } = await import("../../../../packages/web/src/lib/api/image-data-revision.ts");
+  const { imageDataRevision } =
+    await import("../../../../packages/web/src/lib/api/image-data-revision.ts");
   for (const listKey of [queryKeys.tags, queryKeys.themes, queryKeys.authors]) {
     const vocabularyClient = new QueryClient();
     for (const key of allKeys) vocabularyClient.setQueryData(key, {});
     const revision = imageDataRevision(vocabularyClient);
     await invalidateVocabularyData(vocabularyClient, listKey);
-    const affected: readonly (readonly unknown[])[] = [listKey, queryKeys.galleryFacets,
-      queryKeys.galleryStats, queryKeys.ingestionVocabulary];
+    const affected: readonly (readonly unknown[])[] = [
+      listKey,
+      queryKeys.galleryFacets,
+      queryKeys.galleryStats,
+      queryKeys.ingestionVocabulary
+    ];
     for (const key of allKeys) {
       assert.equal(invalidated(vocabularyClient, key), affected.includes(key), key[0]);
     }
@@ -860,16 +819,27 @@ test("[Web/内容接入] 元数据保存只在词条超出共享接入词表时�
   };
   for (const scenario of [
     { updates: [{ id: "one", title: "仅标题" }], reads: 0 },
-    { updates: [{ id: "one", theme: null, author: "known-author", tags: ["known-tag"] }], reads: 0 },
+    {
+      updates: [{ id: "one", theme: null, author: "known-author", tags: ["known-tag"] }],
+      reads: 0
+    },
     { updates: [{ id: "one", author: "", tags: [] }], reads: 0 },
     { updates: [{ id: "one", theme: "new-theme" }], reads: 1 },
     { updates: [{ id: "one", author: "new-author" }], reads: 1 },
     { updates: [{ id: "one", tags: ["new-tag"] }], reads: 1 },
-    { updates: [{ id: "one", theme: "new-theme" }, { id: "two", tags: ["new-tag"] }], reads: 1 },
+    {
+      updates: [
+        { id: "one", theme: "new-theme" },
+        { id: "two", tags: ["new-tag"] }
+      ],
+      reads: 1
+    },
     { updates: [{ id: "one", tags: ["unconfirmed-tag"] }], reads: 1, confirmationLost: true },
     { updates: [], reads: 0 }
   ]) {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } }
+    });
     client.setQueryData(queryKeys.ingestionVocabulary, vocabulary);
     let reads = 0;
     const observer = new QueryObserver(client, {
@@ -877,22 +847,41 @@ test("[Web/内容接入] 元数据保存只在词条超出共享接入词表时�
       staleTime: Infinity,
       queryFn: async () => {
         reads += 1;
-        return { ...vocabulary, tags: [...vocabulary.tags, { slug: "new-tag", display_name: "新标签" }] };
+        return {
+          ...vocabulary,
+          tags: [...vocabulary.tags, { slug: "new-tag", display_name: "新标签" }]
+        };
       }
     });
     const unsubscribe = observer.subscribe(() => undefined);
     try {
-      await invalidateImageDataAfterMetadataSave(client, scenario.updates,
-        scenario.confirmationLost ? null : scenario.updates.map(({ id }) => ({ id })));
+      await invalidateImageDataAfterMetadataSave(
+        client,
+        scenario.updates,
+        scenario.confirmationLost ? null : scenario.updates.map(({ id }) => ({ id }))
+      );
       assert.equal(reads, scenario.reads, JSON.stringify(scenario));
-      if (reads) assert.ok(client.getQueryData<IngestionVocabularyDto>(queryKeys.ingestionVocabulary)?.tags.some(({ slug }) => slug === "new-tag"));
+      if (reads)
+        assert.ok(
+          client
+            .getQueryData<IngestionVocabularyDto>(queryKeys.ingestionVocabulary)
+            ?.tags.some(({ slug }) => slug === "new-tag")
+        );
     } finally {
       unsubscribe();
       client.clear();
     }
   }
   const unusedClient = new QueryClient();
-  await invalidateImageDataAfterMetadataSave(unusedClient, [{ id: "one", theme: "new-theme" }], null);
-  assert.equal(unusedClient.getQueryState(queryKeys.ingestionVocabulary), undefined, "未打开过的词表不创建新查询");
+  await invalidateImageDataAfterMetadataSave(
+    unusedClient,
+    [{ id: "one", theme: "new-theme" }],
+    null
+  );
+  assert.equal(
+    unusedClient.getQueryState(queryKeys.ingestionVocabulary),
+    undefined,
+    "未打开过的词表不创建新查询"
+  );
   unusedClient.clear();
 });

@@ -56,14 +56,12 @@ export async function touchReadyImageIndexedResultUnchecked(options: {
 }) {
   const descriptor = assertReadyImageDerivedResult(options.key, options.kind);
   if (!descriptor.metaKey) {
-    throw new Error(
-      `Ready-image derived ${options.kind} result has no metadata key`
-    );
+    throw new Error(`Ready-image derived ${options.kind} result has no metadata key`);
   }
   if (
-    parseNonNegativeInteger(options.count) === null
-    || parseNonNegativeInteger(options.itemCount) === null
-    || !/^[0-9a-f]{32}$/u.test(options.instanceToken)
+    parseNonNegativeInteger(options.count) === null ||
+    parseNonNegativeInteger(options.itemCount) === null ||
+    !/^[0-9a-f]{32}$/u.test(options.instanceToken)
   ) {
     return 0;
   }

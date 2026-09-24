@@ -41,21 +41,17 @@ export const readyImageRedisScripts = Object.freeze({
 }) satisfies NonNullable<RedisOptions["scripts"]>;
 
 export type ReadyImageRedisCommandName = keyof typeof readyImageRedisScripts;
-type ReadyImageRedisCommand = (
-  ...arguments_: Array<string | number>
-) => Promise<unknown>;
+type ReadyImageRedisCommand = (...arguments_: Array<string | number>) => Promise<unknown>;
 
-export type ReadyImageRedisClient = Readonly<Record<
-  ReadyImageRedisCommandName,
-  ReadyImageRedisCommand
->>;
+export type ReadyImageRedisClient = Readonly<
+  Record<ReadyImageRedisCommandName, ReadyImageRedisCommand>
+>;
 
 export type ReadyImageRedisRegistrar = Pick<Redis, "defineCommand"> &
   Partial<Pick<Redis, "options">>;
 
-export type ReadyImageRedisCommandSource<
-  Name extends ReadyImageRedisCommandName
-> = Readonly<Record<Name, ReadyImageRedisCommand>> | ReadyImageRedisRegistrar;
+export type ReadyImageRedisCommandSource<Name extends ReadyImageRedisCommandName> =
+  Readonly<Record<Name, ReadyImageRedisCommand>> | ReadyImageRedisRegistrar;
 
 function readyImageRedisCandidate(client: object) {
   return client as Record<string, unknown>;
@@ -65,9 +61,7 @@ function hasReadyImageRedisCommands(
   client: ReadyImageRedisClient | ReadyImageRedisRegistrar
 ): client is ReadyImageRedisClient {
   const candidate = readyImageRedisCandidate(client);
-  return Object.keys(readyImageRedisScripts).every(
-    (name) => typeof candidate[name] === "function"
-  );
+  return Object.keys(readyImageRedisScripts).every((name) => typeof candidate[name] === "function");
 }
 
 function isReadyImageRedisRegistrar(
@@ -102,18 +96,14 @@ export function registerReadyImageRedisCommands(
   return client as unknown as ReadyImageRedisClient;
 }
 
-export function readyImageRedisCommandClient<
-  Name extends ReadyImageRedisCommandName
->(
+export function readyImageRedisCommandClient<Name extends ReadyImageRedisCommandName>(
   client: ReadyImageRedisCommandSource<Name>,
   name: Name
 ): Readonly<Record<Name, ReadyImageRedisCommand>> {
   if (typeof readyImageRedisCandidate(client)[name] === "function") {
     return client as Readonly<Record<Name, ReadyImageRedisCommand>>;
   }
-  return registerReadyImageRedisCommands(
-    client as ReadyImageRedisRegistrar
-  ) as Readonly<
+  return registerReadyImageRedisCommands(client as ReadyImageRedisRegistrar) as Readonly<
     Record<Name, ReadyImageRedisCommand>
   >;
 }

@@ -18,13 +18,7 @@ async function clearPattern(pattern: string) {
     let cursor = "0";
     removedInPass = 0;
     do {
-      const [next, keys] = await redis.scan(
-        cursor,
-        "MATCH",
-        pattern,
-        "COUNT",
-        SCAN_COUNT
-      );
+      const [next, keys] = await redis.scan(cursor, "MATCH", pattern, "COUNT", SCAN_COUNT);
       cursor = next;
       keys.forEach(assertReadyImageDerivedCacheKey);
       if (keys.length) removedInPass += await redis.unlink(...keys);

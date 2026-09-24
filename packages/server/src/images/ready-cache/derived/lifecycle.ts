@@ -1,12 +1,7 @@
 import { redis } from "../../../core/redis/client.ts";
 import { assertReadyImageDerivedResult } from "./registry-metadata.ts";
-import {
-  clearReadyImageDisposableCachesUnchecked
-} from "./cleanup.ts";
-import {
-  READY_IMAGE_DERIVED_CACHE_POLICY,
-  type ReadyImageDerivedResultKind
-} from "./policy.ts";
+import { clearReadyImageDisposableCachesUnchecked } from "./cleanup.ts";
+import { READY_IMAGE_DERIVED_CACHE_POLICY, type ReadyImageDerivedResultKind } from "./policy.ts";
 import {
   evictReadyImageDerivedResults,
   registerReadyImageDerivedResultUnchecked
@@ -70,9 +65,7 @@ async function touchReadyImageIndexedResult(options: {
 }) {
   return withDerivedCacheLifecycle(async () => {
     try {
-      return await normalizedTouchResult(
-        await touchReadyImageIndexedResultUnchecked(options)
-      );
+      return await normalizedTouchResult(await touchReadyImageIndexedResultUnchecked(options));
     } catch (error) {
       await clearAfterLifecycleFailure();
       throw error;
@@ -155,18 +148,12 @@ export async function storeReadyImageStatsResult(
   return withDerivedCacheLifecycle(async () => {
     try {
       if (
-        Buffer.byteLength(serialized, "utf8")
-          > READY_IMAGE_DERIVED_CACHE_POLICY.maxStatsResultBytes
+        Buffer.byteLength(serialized, "utf8") > READY_IMAGE_DERIVED_CACHE_POLICY.maxStatsResultBytes
       ) {
         await evictReadyImageDerivedResults([key]);
         return false;
       }
-      await redis.set(
-        key,
-        serialized,
-        "EX",
-        READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds
-      );
+      await redis.set(key, serialized, "EX", READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds);
       return await registerReadyImageDerivedResultUnchecked({
         key,
         kind: "stats-result",

@@ -1,9 +1,5 @@
 import type { Context, Hono } from "hono";
-import {
-  adminBasePath,
-  publicRootPath,
-  type RuntimeConfig
-} from "@imageshow/shared/browser";
+import { adminBasePath, publicRootPath, type RuntimeConfig } from "@imageshow/shared/browser";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
@@ -45,16 +41,11 @@ const spaRepresentation = createContentSnapshot(buildSpaDocument);
 const encodedSpaRepresentation = createEncodedContentCache();
 
 function escapeHtmlText(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function escapeHtmlAttr(value: string) {
-  return escapeHtmlText(value)
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+  return escapeHtmlText(value).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function buildSpaDocument(runtime: RuntimeConfig): string {
@@ -67,12 +58,21 @@ function buildSpaDocument(runtime: RuntimeConfig): string {
   const iconUrl = escapeHtmlAttr(site.icon);
   const head = `<script type="application/json" id="__site_config__">${inlineConfig}</script>`;
   return spaTemplate
-    .replace(/\b(src|href)="\.\/assets\//g, (_match, attribute: string) => (
-      `${attribute}="${escapeHtmlAttr(staticResourceBaseUrl(runtime))}/`
-    ))
+    .replace(
+      /\b(src|href)="\.\/assets\//g,
+      (_match, attribute: string) =>
+        `${attribute}="${escapeHtmlAttr(staticResourceBaseUrl(runtime))}/`
+    )
     .replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${title}</title>`)
-    .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i, () => `<meta name="description" content="${description}" />`)
-    .replace(/<link\s+rel="icon"[^>]*>/i, () => `<link rel="icon" type="${iconUrl.endsWith(".svg") ? "image/svg+xml" : ""}" href="${iconUrl}" />`)
+    .replace(
+      /<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i,
+      () => `<meta name="description" content="${description}" />`
+    )
+    .replace(
+      /<link\s+rel="icon"[^>]*>/i,
+      () =>
+        `<link rel="icon" type="${iconUrl.endsWith(".svg") ? "image/svg+xml" : ""}" href="${iconUrl}" />`
+    )
     .replace("</head>", () => `${head}</head>`);
 }
 
@@ -106,14 +106,11 @@ function spaDocumentResponse(
 
 async function spaHandler(c: Context) {
   const runtime = getRuntimeConfig();
-  return spaDocumentResponse(
-    spaRepresentation(runtime),
-    {
-      headers: assetSpaDocumentHeaders(runtime.site.assets_base_url),
-      ifNoneMatch: c.req.header("if-none-match"),
-      acceptEncoding: c.req.header("accept-encoding")
-    }
-  );
+  return spaDocumentResponse(spaRepresentation(runtime), {
+    headers: assetSpaDocumentHeaders(runtime.site.assets_base_url),
+    ifNoneMatch: c.req.header("if-none-match"),
+    acceptEncoding: c.req.header("accept-encoding")
+  });
 }
 
 async function rootSpaHandler(c: Context) {

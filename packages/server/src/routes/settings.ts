@@ -20,9 +20,12 @@ import { getRuntimeConfig, reloadRuntimeConfigFromDisk } from "../config/runtime
 import { assertLocalImageHostForSite } from "../storage/backends/registry.ts";
 import { privateRevalidationCacheControl } from "../core/http/headers.ts";
 
-const settingsRepresentation = createApiSuccessSnapshot((config: RuntimeConfig) => ({
-  settings: getSettingsForAdmin(config)
-} satisfies AdminSettingsResponseDto));
+const settingsRepresentation = createApiSuccessSnapshot(
+  (config: RuntimeConfig) =>
+    ({
+      settings: getSettingsForAdmin(config)
+    }) satisfies AdminSettingsResponseDto
+);
 
 export function registerSettingsRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/settings`, (c) => {
@@ -35,12 +38,15 @@ export function registerSettingsRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/settings`, requireSuperAdmin, async (c) => {
     const input = parseSettingsInput(await readJsonBody(c));
     await saveAppSettings(input);
-    return c.json(apiSuccess({ settings: getSettingsForAdmin() } satisfies AdminSettingsResponseDto));
+    return c.json(
+      apiSuccess({ settings: getSettingsForAdmin() } satisfies AdminSettingsResponseDto)
+    );
   });
 
   app.post(`${adminApiBasePath}/settings/reload`, requireSuperAdmin, async (c) => {
     await reloadRuntimeConfigFromDisk((config) => assertLocalImageHostForSite(config.site.domain));
-    return c.json(apiSuccess({ settings: getSettingsForAdmin() } satisfies AdminSettingsResponseDto));
+    return c.json(
+      apiSuccess({ settings: getSettingsForAdmin() } satisfies AdminSettingsResponseDto)
+    );
   });
-
 }

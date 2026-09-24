@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type AnimationEvent
-} from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type AnimationEvent } from "react";
 import { flushSync } from "react-dom";
 
 export function useAnimatedClose(onClose: () => void, fallbackMs = 170) {
@@ -44,22 +38,20 @@ export function useAnimatedClose(onClose: () => void, fallbackMs = 170) {
   }, []);
 
   // prepareClose 只在首次关闭请求被接受时运行，并返回退场结束后的收尾动作。
-  const requestClose = useCallback((
-    afterClose?: () => void,
-    prepareClose?: () => () => void
-  ) => {
-    if (!mountedRef.current || closingRef.current) return;
-    closeCallbackRef.current = afterClose
-      ?? prepareClose?.()
-      ?? onCloseRef.current;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      closeCallbackRef.current();
-      return;
-    }
-    closingRef.current = true;
-    setClosing(true);
-    fallbackTimer.current = window.setTimeout(finishClose, fallbackMs);
-  }, [fallbackMs, finishClose]);
+  const requestClose = useCallback(
+    (afterClose?: () => void, prepareClose?: () => () => void) => {
+      if (!mountedRef.current || closingRef.current) return;
+      closeCallbackRef.current = afterClose ?? prepareClose?.() ?? onCloseRef.current;
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+        closeCallbackRef.current();
+        return;
+      }
+      closingRef.current = true;
+      setClosing(true);
+      fallbackTimer.current = window.setTimeout(finishClose, fallbackMs);
+    },
+    [fallbackMs, finishClose]
+  );
 
   const cancelClose = useCallback(() => {
     if (!mountedRef.current || !closingRef.current) return;
@@ -68,9 +60,12 @@ export function useAnimatedClose(onClose: () => void, fallbackMs = 170) {
     setClosing(false);
   }, []);
 
-  const onAnimationEnd = useCallback((event: AnimationEvent<HTMLElement>) => {
-    if (event.currentTarget === event.target) finishClose();
-  }, [finishClose]);
+  const onAnimationEnd = useCallback(
+    (event: AnimationEvent<HTMLElement>) => {
+      if (event.currentTarget === event.target) finishClose();
+    },
+    [finishClose]
+  );
 
   return { closing, requestClose, cancelClose, onAnimationEnd };
 }

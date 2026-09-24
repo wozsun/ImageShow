@@ -1,10 +1,5 @@
-import type {
-  ImageUpdateItemInputDto
-} from "@imageshow/shared/browser";
-import type {
-  EditableImageSnapshot,
-  AdminImageListItem,
-} from "../../../lib/types.js";
+import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
+import type { EditableImageSnapshot, AdminImageListItem } from "../../../lib/types.js";
 
 export type ImageEditorSource = Pick<AdminImageListItem, "id"> &
   Partial<EditableImageSnapshot> &
@@ -19,6 +14,4 @@ export type ImageMetadataSaveCommit = {
   updates: ImageUpdateItemInputDto[];
 };
 
-export type ImageEditorSavedHandler = (
-  commit?: ImageMetadataSaveCommit
-) => void | Promise<void>;
+export type ImageEditorSavedHandler = (commit?: ImageMetadataSaveCommit) => void | Promise<void>;

@@ -15,7 +15,11 @@ import {
   type PublicImageView,
   type TagFilterValue
 } from "@imageshow/shared/browser";
-import { GallerySelectorError, gallerySelectorValue, type GallerySelectorField } from "./gallery-selectors.js";
+import {
+  GallerySelectorError,
+  gallerySelectorValue,
+  type GallerySelectorField
+} from "./gallery-selectors.js";
 
 export type GalleryFilters = {
   device: string;
@@ -43,7 +47,9 @@ function galleryTagValue(
   tags?: readonly { slug: string; display_name: string }[]
 ) {
   parseGalleryTagFilter(values);
-  const map = tags ? new Map(tags.map((tag) => [tag.display_name.trim().toLowerCase(), tag.slug])) : null;
+  const map = tags
+    ? new Map(tags.map((tag) => [tag.display_name.trim().toLowerCase(), tag.slug]))
+    : null;
   for (const tag of tags ?? []) map!.set(tag.slug, tag.slug);
   const normalizedTags = values.map((value) => {
     const parsed = parseTagFilter([value]);
@@ -51,7 +57,7 @@ function galleryTagValue(
     return basicTagValue(expression?.anyOf.flat() ?? [], parsed.mode);
   });
   parseGalleryTagFilter(normalizedTags);
-  return normalizedTags.length > 1 ? normalizedTags : normalizedTags[0] ?? "";
+  return normalizedTags.length > 1 ? normalizedTags : (normalizedTags[0] ?? "");
 }
 
 /** Keep field errors separate so repairing one cannot silently remove another. */
@@ -64,20 +70,24 @@ export function readGalleryFilters(
   const filters: GalleryFilters = {
     device: device === "all" ? "" : galleryDevices.has(device) ? device : "",
     brightness: galleryBrightnesses.has(brightness) ? brightness : "",
-    theme: "", tag: "", author: ""
+    theme: "",
+    tag: "",
+    author: ""
   };
   const errors: (GallerySelectorError | TagFilterError)[] = [];
   const unresolvedSelectors: Partial<Record<GallerySelectorField, string[]>> = {};
   for (const field of ["theme", "author"] as const) {
-    try { filters[field] = gallerySelectorValue(field, params.getAll(field)); }
-    catch (error) {
+    try {
+      filters[field] = gallerySelectorValue(field, params.getAll(field));
+    } catch (error) {
       if (!(error instanceof GallerySelectorError)) throw error;
       errors.push(error);
       unresolvedSelectors[field] = params.getAll(field);
     }
   }
-  try { filters.tag = galleryTagValue(params.getAll("tag"), tags); }
-  catch (error) {
+  try {
+    filters.tag = galleryTagValue(params.getAll("tag"), tags);
+  } catch (error) {
     if (!(error instanceof TagFilterError)) throw error;
     errors.push(error);
   }
@@ -101,7 +111,8 @@ export function galleryRouteSearchParams(filters: GalleryFilters, preserveTagMod
   if (filters.tag) {
     const values = tagFilterValues(filters.tag);
     const parsed = parseGalleryTagFilter(values);
-    for (const value of preserveTagMode ? values : tagExpressionValues(parsed.expression)) params.append("tag", value);
+    for (const value of preserveTagMode ? values : tagExpressionValues(parsed.expression))
+      params.append("tag", value);
   }
   if (filters.author) params.set("author", filters.author);
   return params;
@@ -109,10 +120,14 @@ export function galleryRouteSearchParams(filters: GalleryFilters, preserveTagMod
 
 /** List and statistics share the same resolved devices and canonical filter sets. */
 function galleryApiFilters(filters: GalleryFilters, userAgent: string, preserveTagMode = false) {
-  const params = galleryRouteSearchParams({
-    ...filters,
-    device: filters.device === "auto" ? detectDeviceFromUserAgent(userAgent) ?? "" : filters.device
-  }, preserveTagMode);
+  const params = galleryRouteSearchParams(
+    {
+      ...filters,
+      device:
+        filters.device === "auto" ? (detectDeviceFromUserAgent(userAgent) ?? "") : filters.device
+    },
+    preserveTagMode
+  );
   for (const field of ["theme", "author"] as const) {
     const value = gallerySelectorValue(field, params.getAll(field));
     if (value) params.set(field, value);
@@ -122,27 +137,27 @@ function galleryApiFilters(filters: GalleryFilters, userAgent: string, preserveT
 }
 
 /** Statistics retain group boundaries; a selected AND group narrows tag candidates. */
-export function galleryStatsSearch(filters: GalleryFilters, userAgent = "", tagScope?: number | null) {
+export function galleryStatsSearch(
+  filters: GalleryFilters,
+  userAgent = "",
+  tagScope?: number | null
+) {
   const params = galleryApiFilters(filters, userAgent, true);
   const groups = params.getAll("tag");
-  const scope = tagScope === undefined && groups.length === 1 && parseTagFilter(groups).mode === "all"
-    ? 1 : tagScope;
+  const scope =
+    tagScope === undefined && groups.length === 1 && parseTagFilter(groups).mode === "all"
+      ? 1
+      : tagScope;
   if (scope != null) params.set("tag_scope", String(scope));
   return readableFilterSearch(params);
 }
 
-export function showOrderFromSearchParams(
-  params: URLSearchParams,
-  fallback: ShowOrder
-) {
+export function showOrderFromSearchParams(params: URLSearchParams, fallback: ShowOrder) {
   const value = params.get("order")?.trim().toLowerCase() as ShowOrder;
   return showOrderSet.has(value) ? value : fallback;
 }
 
-export function showModeFromSearchParams(
-  params: URLSearchParams,
-  fallback: ShowMode
-) {
+export function showModeFromSearchParams(params: URLSearchParams, fallback: ShowMode) {
   const value = params.get("mode")?.trim().toLowerCase() as ShowMode;
   return showModeSet.has(value) ? value : fallback;
 }

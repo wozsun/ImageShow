@@ -79,9 +79,11 @@ export class IngestionIrreversibleCoordinator {
         throw error;
       }
       record.settled = transaction;
-      void transaction.finally(() => {
-        if (this.#records.get(key) === record) this.#records.delete(key);
-      }).catch(() => undefined);
+      void transaction
+        .finally(() => {
+          if (this.#records.get(key) === record) this.#records.delete(key);
+        })
+        .catch(() => undefined);
       return { transaction };
     }).then(({ transaction }) => transaction);
   }
@@ -90,8 +92,7 @@ export class IngestionIrreversibleCoordinator {
     pair: IngestionSessionPair,
     discard: () => Promise<T>
   ): Promise<
-    | { status: "discarded"; value: T }
-    | { status: "resolving"; settled: Promise<unknown> }
+    { status: "discarded"; value: T } | { status: "resolving"; settled: Promise<unknown> }
   > {
     return this.#critical(pair, async () => {
       const key = pairKey(pair);
@@ -123,11 +124,9 @@ export class IngestionIrreversibleCoordinator {
 
   async waitForDatabaseTransactions() {
     for (;;) {
-      const transactions = [...this.#records.values()].flatMap((record) => (
-        record.state === "database_started" && record.settled
-          ? [record.settled]
-          : []
-      ));
+      const transactions = [...this.#records.values()].flatMap((record) =>
+        record.state === "database_started" && record.settled ? [record.settled] : []
+      );
       if (!transactions.length) return;
       await Promise.allSettled(transactions);
     }

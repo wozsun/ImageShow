@@ -16,10 +16,7 @@ import { MenuItemButton } from "../feedback/MenuItemButton.js";
 import { AnchoredMenuDismissSignalContext, useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { useFacetSearchMatcher } from "../../hooks/useFacetSearchMatcher.js";
 import { useImeSearchInput } from "../../hooks/useImeSearchInput.js";
-import {
-  facetSuggestions,
-  normalizeFacetSearchQuery
-} from "../../lib/ui/facet-input.js";
+import { facetSuggestions, normalizeFacetSearchQuery } from "../../lib/ui/facet-input.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { FacetOption } from "../../lib/types.js";
@@ -28,14 +25,27 @@ type FacetMode = "include" | "exclude" | "any" | "all";
 const modeLabels = { include: "包含", exclude: "排除", any: "任一", all: "全部" };
 
 function parseValue(value: string) {
-  const values = value.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
+  const values = value
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
   return {
     exclude: values.some((item) => item.startsWith("!")),
     selected: [...new Set(values.map((item) => item.replace(/^!/, "")))]
   };
 }
 
-export function FacetSelector({ options, value, onChange, noun, disabled = false, ariaLabel, controlId, menuClassName, selectionMode = "include-exclude" }: {
+export function FacetSelector({
+  options,
+  value,
+  onChange,
+  noun,
+  disabled = false,
+  ariaLabel,
+  controlId,
+  menuClassName,
+  selectionMode = "include-exclude"
+}: {
   selectionMode?: "include-exclude" | "any-all";
   options: FacetOption[];
   value: string;
@@ -50,7 +60,8 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
   const isTag = selectionMode === "any-all";
   const tagSelection = isTag ? basicTagSelection(value) : null;
   const parsed = tagSelection ?? parseValue(value);
-  const valueMode: FacetMode = tagSelection?.mode ?? ("exclude" in parsed && parsed.exclude ? "exclude" : "include");
+  const valueMode: FacetMode =
+    tagSelection?.mode ?? ("exclude" in parsed && parsed.exclude ? "exclude" : "include");
   const modes: FacetMode[] = isTag ? ["any", "all"] : ["include", "exclude"];
   const dismissSignal = useContext(AnchoredMenuDismissSignalContext);
   const [selectionError, setSelectionError] = useState("");
@@ -78,7 +89,13 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     onAnimationEnd
   } = useAnchoredMenu({
     triggerRef: controlRef,
-    getSize: (): AnchoredMenuSize => ({ minWidth: 300, maxWidth: window.innerWidth - 16, flipThreshold: 260, minAvailable: 180, maxHeight: 420 }),
+    getSize: (): AnchoredMenuSize => ({
+      minWidth: 300,
+      maxWidth: window.innerWidth - 16,
+      flipThreshold: 260,
+      minAvailable: 180,
+      maxHeight: 420
+    }),
     initialMaxHeight: 420,
     disabled,
     onClose: () => searchInput.reset(),
@@ -93,20 +110,25 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     flushSync(openMenu);
     searchRef.current?.focus();
   };
-  const bindMenuRef = useCallback((node: HTMLElement | null) => {
-    menuElementRef.current = node;
-    menuRef(node);
-  }, [menuRef]);
+  const bindMenuRef = useCallback(
+    (node: HTMLElement | null) => {
+      menuElementRef.current = node;
+      menuRef(node);
+    },
+    [menuRef]
+  );
   const selectedSet = new Set(parsed.selected);
   const normalizedQuery = normalizeFacetSearchQuery(query);
   const { matchName, status: pinyinStatus } = useFacetSearchMatcher(open);
   const pinyinPending = /[a-zü]/i.test(normalizedQuery) && pinyinStatus === "loading";
   const results = facetSuggestions(options, query, selectedSet, matchName);
-  const searchStatus = pinyinPending ? "正在加载拼音搜索" : normalizedQuery
-    ? results.length
-      ? `${results.length} 个可添加的${noun}`
-      : `没有可添加的${noun}`
-    : `输入关键字搜索${noun}，按 Tab 浏览已选${noun}和筛选方式`;
+  const searchStatus = pinyinPending
+    ? "正在加载拼音搜索"
+    : normalizedQuery
+      ? results.length
+        ? `${results.length} 个可添加的${noun}`
+        : `没有可添加的${noun}`
+      : `输入关键字搜索${noun}，按 Tab 浏览已选${noun}和筛选方式`;
 
   useEffect(() => {
     setMode(valueMode);
@@ -117,7 +139,7 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     try {
       const next = isTag
         ? basicTagValue(selected, nextMode === "all" ? "all" : "any")
-        : selected.map((slug) => nextMode === "exclude" ? `!${slug}` : slug).join(",");
+        : selected.map((slug) => (nextMode === "exclude" ? `!${slug}` : slug)).join(",");
       setSelectionError("");
       setMode(selected.length ? nextMode : isTag ? "any" : "include");
       onChange(next);
@@ -129,11 +151,10 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     }
   };
 
-  const menuButtons = () => Array.from(
-    menuElementRef.current?.querySelectorAll<HTMLButtonElement>(
-      "button:not(:disabled)"
-    ) ?? []
-  );
+  const menuButtons = () =>
+    Array.from(
+      menuElementRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []
+    );
   const focusMenuEdge = (edge: "first" | "last") => {
     const buttons = menuButtons();
     const target = edge === "first" ? buttons[0] : buttons.at(-1);
@@ -171,7 +192,9 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
         menuClassName,
         opensUp ? "opens-up" : "",
         closing ? "is-closing" : ""
-      ].filter(Boolean).join(" ")}
+      ]
+        .filter(Boolean)
+        .join(" ")}
       role="region"
       aria-label={`${resolvedAriaLabel}筛选选项`}
       aria-hidden={closing}
@@ -182,24 +205,35 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     >
       <div className="facet-search-results" aria-label={`待选${noun}`}>
         {!normalizedQuery && <span className="muted">输入名称、slug 或拼音搜索{noun}</span>}
-        {pinyinPending && <span className="muted" role="status">正在加载拼音搜索…</span>}
-        {pinyinStatus === "error" && <span className="muted" role="status" title="仍可按名称或 slug 搜索">拼音加载失败，请刷新重试</span>}
-        {normalizedQuery && results.map((option) => (
-          <MenuItemButton
-            className="facet-search-option"
-            type="button"
-            key={option.slug}
-            pointerFocus="preserve"
-            onActivate={() => {
-              if (!emitSelection([...parsed.selected, option.slug])) return;
-              searchInput.reset();
-              searchRef.current?.focus({ preventScroll: true });
-            }}
-          >
-            <FacetSuggestionLabel option={option} />
-          </MenuItemButton>
-        ))}
-        {normalizedQuery && !pinyinPending && !results.length && <span className="muted">没有可添加的{noun}</span>}
+        {pinyinPending && (
+          <span className="muted" role="status">
+            正在加载拼音搜索…
+          </span>
+        )}
+        {pinyinStatus === "error" && (
+          <span className="muted" role="status" title="仍可按名称或 slug 搜索">
+            拼音加载失败，请刷新重试
+          </span>
+        )}
+        {normalizedQuery &&
+          results.map((option) => (
+            <MenuItemButton
+              className="facet-search-option"
+              type="button"
+              key={option.slug}
+              pointerFocus="preserve"
+              onActivate={() => {
+                if (!emitSelection([...parsed.selected, option.slug])) return;
+                searchInput.reset();
+                searchRef.current?.focus({ preventScroll: true });
+              }}
+            >
+              <FacetSuggestionLabel option={option} />
+            </MenuItemButton>
+          ))}
+        {normalizedQuery && !pinyinPending && !results.length && (
+          <span className="muted">没有可添加的{noun}</span>
+        )}
       </div>
       <div className="facet-menu-divider" role="separator" />
       <div className="facet-selected-list" aria-label={`已选${noun}`}>
@@ -212,17 +246,20 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
               title={`移除 ${facetDisplayName(options, slug)}`}
               onActivate={() => emitSelection(parsed.selected.filter((item) => item !== slug))}
             >
-              {facetDisplayName(options, slug)}<span aria-hidden="true">×</span>
+              {facetDisplayName(options, slug)}
+              <span aria-hidden="true">×</span>
             </MenuItemButton>
           ))}
           {!parsed.selected.length && (
-            <span className="muted facet-selected-empty">
-              尚未选择，默认使用全部{noun}
-            </span>
+            <span className="muted facet-selected-empty">尚未选择，默认使用全部{noun}</span>
           )}
         </div>
       </div>
-      {selectionError && <p className="muted" role="alert">{selectionError}</p>}
+      {selectionError && (
+        <p className="muted" role="alert">
+          {selectionError}
+        </p>
+      )}
       <div className="facet-mode-switch" aria-label={`${noun}筛选方式`}>
         {modes.map((nextMode) => (
           <MenuItemButton
@@ -235,7 +272,8 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
               else setMode(nextMode);
             }}
           >
-            {mode === nextMode ? "✓ " : ""}{modeLabels[nextMode]}
+            {mode === nextMode ? "✓ " : ""}
+            {modeLabels[nextMode]}
           </MenuItemButton>
         ))}
       </div>
@@ -294,7 +332,7 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
           aria-controls={open ? menuId : undefined}
           aria-expanded="false"
           disabled={disabled}
-          onActivate={() => open ? requestClose() : openSearchFromActivation()}
+          onActivate={() => (open ? requestClose() : openSearchFromActivation())}
         >
           <span>{label}</span>
         </DirectActivationButton>

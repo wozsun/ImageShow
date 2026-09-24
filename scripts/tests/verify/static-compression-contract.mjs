@@ -3,10 +3,11 @@ import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Readable } from "node:stream";
 import { promisify } from "node:util";
+import { brotliDecompress, gunzip, constants, createZstdDecompress } from "node:zlib";
 import {
-  brotliDecompress, gunzip, constants, createZstdDecompress
-} from "node:zlib";
-import { compressStaticAsset, staticAssetCompression } from "../../build/static-asset-compression.mjs";
+  compressStaticAsset,
+  staticAssetCompression
+} from "../../build/static-asset-compression.mjs";
 import { createTestDirectory, cleanupTestDirectories } from "../support/test-directory.ts";
 import { runProcess } from "../support/process-runner.ts";
 
@@ -31,7 +32,8 @@ function zstdWindowSize(frame) {
   const sizeFlag = descriptor >> 6;
   const sizeBytes = [1, 2, 4, 8][sizeFlag];
   const offset = 5 + dictionaryBytes;
-  const size = sizeBytes === 8 ? Number(frame.readBigUInt64LE(offset)) : frame.readUIntLE(offset, sizeBytes);
+  const size =
+    sizeBytes === 8 ? Number(frame.readBigUInt64LE(offset)) : frame.readUIntLE(offset, sizeBytes);
   return size + (sizeFlag === 1 ? 256 : 0);
 }
 
@@ -40,33 +42,53 @@ export async function verifyStaticCompression() {
   const noisy = Buffer.alloc(16 * 1024);
   let state = 12345;
   for (let index = 0; index < noisy.length; index += 1) {
-    state ^= state << 13; state ^= state >>> 17; state ^= state << 5;
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
     noisy[index] = state & 255;
   }
   const large = Buffer.alloc(9 * 1024 * 1024, "synthetic large HTTP asset; ");
   const fixtures = [
-    ["empty.txt", Buffer.alloc(0)], ["tiny.js", Buffer.from("x")],
-    ["small.js", repeated], ["noisy.txt", noisy],
+    ["empty.txt", Buffer.alloc(0)],
+    ["tiny.js", Buffer.from("x")],
+    ["small.js", repeated],
+    ["noisy.txt", noisy],
     ["config.json", Buffer.from(JSON.stringify({ values: Array(80).fill("synthetic") }))],
     ["help.html", Buffer.from("<p>synthetic static HTML</p>".repeat(80))],
     ["large.js", large]
   ];
   for (const [name, source] of fixtures) {
     const compressed = await compressStaticAsset(name, source);
-    for (const [field, decoder] of [["brotli", promisify(brotliDecompress)], ["gzip", promisify(gunzip)], ["zstd", decodeZstd]]) {
+    for (const [field, decoder] of [
+      ["brotli", promisify(brotliDecompress)],
+      ["gzip", promisify(gunzip)],
+      ["zstd", decodeZstd]
+    ]) {
       const body = compressed[field];
       if (body) {
         assert.ok(body.length < source.length, `${name}: ${field} must save bytes`);
         assert.deepEqual(await decoder(body), source, `${name}: ${field} roundtrip`);
       }
     }
-    if (compressed.zstd) assert.ok(zstdWindowSize(compressed.zstd) <= 8 * 1024 * 1024, `${name}: HTTP window limit`);
+    if (compressed.zstd)
+      assert.ok(zstdWindowSize(compressed.zstd) <= 8 * 1024 * 1024, `${name}: HTTP window limit`);
     if (source.length <= 1) assert.equal(compressed.defaultEncoding, "identity");
     assert.equal(compressed.rawBytes, source.length);
-    assert.equal(compressed.effectiveBytes, Math.min(compressed.rawBytes, compressed.brotliBytes, compressed.zstdBytes, compressed.gzipBytes));
+    assert.equal(
+      compressed.effectiveBytes,
+      Math.min(
+        compressed.rawBytes,
+        compressed.brotliBytes,
+        compressed.zstdBytes,
+        compressed.gzipBytes
+      )
+    );
   }
   const small = await compressStaticAsset("small.js", repeated);
-  assert.ok(small.brotli && small.zstd && small.gzip, "small compressible bodies retain every beneficial encoding");
+  assert.ok(
+    small.brotli && small.zstd && small.gzip,
+    "small compressible bodies retain every beneficial encoding"
+  );
   assert.equal(small.defaultEncoding, "br");
   assert.equal(small.defaultBytes, small.brotli.length);
   for (const name of ["binary.png", "asset.js.gz", "asset.js.br", "asset.js.zst"]) {
@@ -86,13 +108,20 @@ export async function verifyStaticCompression() {
     await mkdir(resolve(input, "assets/nested"), { recursive: true });
     await mkdir(resolve(input, ".vite"), { recursive: true });
     for (const file of ["copy-server-assets.mjs", "static-asset-compression.mjs"]) {
-      await cp(resolve(import.meta.dirname, "../../build", file), resolve(directory, "scripts/build", file));
+      await cp(
+        resolve(import.meta.dirname, "../../build", file),
+        resolve(directory, "scripts/build", file)
+      );
     }
     await writeFile(resolve(directory, "packages/server/schema.sql"), "SELECT 1;\n");
     const template = "<html><title>dynamic template</title></html>";
     await writeFile(resolve(input, "index.html"), template);
-    for (const file of ["assets/app.js", "assets/help.html", "assets/nested/index.html"]) await writeFile(resolve(input, file), repeated);
-    const assemble = () => runProcess(process.execPath, [resolve(directory, "scripts/build/copy-server-assets.mjs")], { cwd: directory });
+    for (const file of ["assets/app.js", "assets/help.html", "assets/nested/index.html"])
+      await writeFile(resolve(input, file), repeated);
+    const assemble = () =>
+      runProcess(process.execPath, [resolve(directory, "scripts/build/copy-server-assets.mjs")], {
+        cwd: directory
+      });
     await assemble();
     assert.equal(await readFile(resolve(output, "index.html"), "utf8"), template);
     for (const file of ["assets/app.js", "assets/help.html", "assets/nested/index.html"]) {
@@ -100,14 +129,20 @@ export async function verifyStaticCompression() {
     }
     await writeFile(resolve(input, "assets/app.js"), "x");
     await assemble();
-    const report = JSON.parse(await readFile(resolve(input, ".vite/static-compression-report.json"), "utf8"));
+    const report = JSON.parse(
+      await readFile(resolve(input, ".vite/static-compression-report.json"), "utf8")
+    );
     const app = report.assets.find((asset) => asset.file === "assets/app.js");
     assert.equal(app.defaultEncoding, "identity");
     assert.equal(app.defaultBytes, 1);
     assert.equal(report.policy.zstdLevel, staticAssetCompression.zstdLevel);
     assert.equal(await readFile(resolve(output, "assets/app.js"), "utf8"), "x");
     for (const suffix of [".br", ".zst", ".gz"]) {
-      await assert.rejects(readFile(resolve(output, "assets/app.js" + suffix)), { code: "ENOENT" }, "rebuild must not serve an obsolete representation");
+      await assert.rejects(
+        readFile(resolve(output, "assets/app.js" + suffix)),
+        { code: "ENOENT" },
+        "rebuild must not serve an obsolete representation"
+      );
     }
   } finally {
     await cleanupTestDirectories();

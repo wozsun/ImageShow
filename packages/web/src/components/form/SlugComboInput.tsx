@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type KeyboardEvent
-} from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { vocabularyDisplayNameMaxLength } from "@imageshow/shared/browser";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { useImeInputSession } from "../../hooks/useImeInputSession.js";
@@ -56,9 +50,7 @@ export function SlugComboInput({
   const pendingChoiceRef = useRef<string | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const renderedValue = focused
-    ? editingValue
-    : facetDisplayName(options, value);
+  const renderedValue = focused ? editingValue : facetDisplayName(options, value);
   const imeSession = useImeInputSession(renderedValue);
   const listId = useId();
   const inputId = `${listId}-input`;
@@ -110,8 +102,7 @@ export function SlugComboInput({
   const suggestionOpen = open && matches.length > 0;
 
   const typedSlug = parseSlug(focused ? editingValue : value);
-  const isNew = Boolean(typedSlug)
-    && !options.some((option) => option.slug === typedSlug);
+  const isNew = Boolean(typedSlug) && !options.some((option) => option.slug === typedSlug);
 
   const commitAndBlur = (slug: string) => {
     pendingChoiceRef.current = slug;
@@ -124,20 +115,20 @@ export function SlugComboInput({
   };
 
   const handleKey = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (
-      imeSession.isComposing(event.nativeEvent.isComposing)
-      || event.keyCode === 229
-    ) return;
+    if (imeSession.isComposing(event.nativeEvent.isComposing) || event.keyCode === 229) return;
 
-    if (handleSuggestionNavigationKey(event, {
-      open: suggestionOpen,
-      matchCount: matches.length,
-      setActiveIndex,
-      openMenu: () => {
-        if (matches.length) openMenu();
-      },
-      requestClose
-    })) return;
+    if (
+      handleSuggestionNavigationKey(event, {
+        open: suggestionOpen,
+        matchCount: matches.length,
+        setActiveIndex,
+        openMenu: () => {
+          if (matches.length) openMenu();
+        },
+        requestClose
+      })
+    )
+      return;
 
     if (event.key === "Enter") {
       event.preventDefault();
@@ -201,9 +192,7 @@ export function SlugComboInput({
         onChange={(event) => {
           if (!imeSession.acceptInput(event.currentTarget)) return;
           const raw = event.currentTarget.value;
-          if (imeSession.isComposing(
-            (event.nativeEvent as InputEvent).isComposing
-          )) {
+          if (imeSession.isComposing((event.nativeEvent as InputEvent).isComposing)) {
             setEditingValue(raw);
             return;
           }

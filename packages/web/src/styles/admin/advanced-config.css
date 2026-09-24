@@ -4,14 +4,25 @@
   --admin-color-code-border: #30363d;
   --admin-color-code-text: light-dark(#e6edf3, #d8dfe7);
   --admin-color-code-gutter: #6e7681;
-  --admin-color-code-active-line: rgba(110, 118, 129, .12);
-  --admin-color-code-focus-ring: rgba(110, 118, 129, .28);
+  --admin-color-code-active-line: rgba(110, 118, 129, 0.12);
+  --admin-color-code-focus-ring: rgba(110, 118, 129, 0.28);
   --admin-color-config-summary-surface: light-dark(#f5f7fa, #151a21);
 }
 
-.advanced-config-page { display: flex; flex-direction: column; overflow: hidden; }
-.advanced-config-page > .workspace-head { flex: 0 0 auto; }
-.advanced-config-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.advanced-config-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.advanced-config-page > .workspace-head {
+  flex: 0 0 auto;
+}
+.advanced-config-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .advanced-config-editor {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -44,8 +55,18 @@
   justify-content: flex-end;
   gap: 8px;
 }
-.advanced-config-editor-head-status .advanced-config-feedback-region { flex: 1 1 auto; }
-.advanced-config-dirty { flex: 0 0 auto; padding: 3px 9px; border-radius: 999px; background: var(--admin-color-warning-surface-emphasis); color: var(--admin-color-warning-text); font-size: 12px; font-weight: 700; }
+.advanced-config-editor-head-status .advanced-config-feedback-region {
+  flex: 1 1 auto;
+}
+.advanced-config-dirty {
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--admin-color-warning-surface-emphasis);
+  color: var(--admin-color-warning-text);
+  font-size: 12px;
+  font-weight: 700;
+}
 .advanced-config-code-editor {
   position: relative;
   width: 100%;
@@ -72,29 +93,88 @@
   font-size: 13px;
   line-height: 1.55;
 }
-.advanced-config-code-editor .cm-scroller { overflow: auto; font-family: inherit; }
-.advanced-config-code-editor .cm-gutters { border-right-color: var(--admin-color-code-border); background: var(--admin-color-code-surface); color: var(--admin-color-code-gutter); }
+.advanced-config-code-editor .cm-scroller {
+  overflow: auto;
+  font-family: inherit;
+}
+.advanced-config-code-editor .cm-gutters {
+  border-right-color: var(--admin-color-code-border);
+  background: var(--admin-color-code-surface);
+  color: var(--admin-color-code-gutter);
+}
 .advanced-config-code-editor .cm-activeLine,
-.advanced-config-code-editor .cm-activeLineGutter { background: var(--admin-color-code-active-line); }
-.advanced-config-editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.advanced-config-editor-actions { display: flex; align-items: center; gap: 8px; }
-.advanced-config-file-input { display: none; }
-.config-package-dialog form { width: min(900px, 100%); max-height: min(820px, 92vh); display: flex; flex-direction: column; overflow: hidden; }
+.advanced-config-code-editor .cm-activeLineGutter {
+  background: var(--admin-color-code-active-line);
+}
+.advanced-config-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.advanced-config-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.advanced-config-file-input {
+  display: none;
+}
+.config-package-dialog form {
+  width: min(900px, 100%);
+  max-height: min(820px, 92vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 .config-package-dialog header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 36px;
   grid-template-areas: "copy close";
   align-items: center;
 }
-.config-package-dialog-copy { grid-area: copy; }
-.config-package-dialog header > .close { grid-area: close; }
-.config-package-dialog .operation-body { display: grid; gap: 12px; overflow-y: auto; }
-.advanced-config-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--admin-card-grid-gap); margin: 0; }
-.advanced-config-summary div { min-width: 0; padding: 10px 12px; border-radius: 8px; background: var(--admin-color-config-summary-surface); }
-.advanced-config-summary dt { color: var(--admin-color-text-secondary); font-size: 12px; }
-.advanced-config-summary dd { margin: 4px 0 0; overflow: hidden; color: var(--admin-color-text-primary); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.advanced-config-import-notice { margin: 0; }
-.advanced-config-backends { display: grid; gap: var(--admin-card-grid-gap); }
+.config-package-dialog-copy {
+  grid-area: copy;
+}
+.config-package-dialog header > .close {
+  grid-area: close;
+}
+.config-package-dialog .operation-body {
+  display: grid;
+  gap: 12px;
+  overflow-y: auto;
+}
+.advanced-config-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--admin-card-grid-gap);
+  margin: 0;
+}
+.advanced-config-summary div {
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--admin-color-config-summary-surface);
+}
+.advanced-config-summary dt {
+  color: var(--admin-color-text-secondary);
+  font-size: 12px;
+}
+.advanced-config-summary dd {
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: var(--admin-color-text-primary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.advanced-config-import-notice {
+  margin: 0;
+}
+.advanced-config-backends {
+  display: grid;
+  gap: var(--admin-card-grid-gap);
+}
 .advanced-config-backend {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
@@ -105,26 +185,82 @@
   border-radius: 8px;
   background: var(--admin-color-surface-primary);
 }
-.advanced-config-backend.has-conflict { border-color: var(--admin-color-warning-border-strong); background: var(--admin-color-warning-surface-soft); }
-.advanced-config-backend > div { display: grid; gap: 3px; min-width: 0; }
-.advanced-config-backend > div span { overflow: hidden; color: var(--admin-color-text-secondary); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.advanced-config-backend label { display: grid; gap: 6px; margin: 0; color: var(--admin-color-text-label); }
-.advanced-config-backend label small { font-size: 12px; }
-.advanced-config-ready { display: inline-flex; align-items: center; justify-self: end; gap: 5px; color: var(--admin-color-success-text-strong); font-size: 13px; font-weight: 600; }
+.advanced-config-backend.has-conflict {
+  border-color: var(--admin-color-warning-border-strong);
+  background: var(--admin-color-warning-surface-soft);
+}
+.advanced-config-backend > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.advanced-config-backend > div span {
+  overflow: hidden;
+  color: var(--admin-color-text-secondary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.advanced-config-backend label {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  color: var(--admin-color-text-label);
+}
+.advanced-config-backend label small {
+  font-size: 12px;
+}
+.advanced-config-ready {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 5px;
+  color: var(--admin-color-success-text-strong);
+  font-size: 13px;
+  font-weight: 600;
+}
 
 @media (max-width: 760px) {
-  .advanced-config-page { overflow-y: auto; }
-  .advanced-config-summary { grid-template-columns: 1fr 1fr; }
-  .advanced-config-backend { grid-template-columns: 1fr; }
-  .advanced-config-ready { justify-self: start; }
-  .advanced-config-head-actions { display: grid; grid-template-columns: 1fr 1fr; margin-left: 0; }
-  .advanced-config-head-actions button { min-width: 0; }
-  .advanced-config-editor-head { grid-template-columns: max-content minmax(0, 1fr); }
-  .advanced-config-editor-footer { align-items: stretch; flex-direction: column; }
-  .advanced-config-editor-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .advanced-config-editor-actions .button { grid-column: 1 / -1; }
+  .advanced-config-page {
+    overflow-y: auto;
+  }
+  .advanced-config-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+  .advanced-config-backend {
+    grid-template-columns: 1fr;
+  }
+  .advanced-config-ready {
+    justify-self: start;
+  }
+  .advanced-config-head-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-left: 0;
+  }
+  .advanced-config-head-actions button {
+    min-width: 0;
+  }
+  .advanced-config-editor-head {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+  .advanced-config-editor-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .advanced-config-editor-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .advanced-config-editor-actions .button {
+    grid-column: 1 / -1;
+  }
   /* iOS 动态工具栏压缩可见区域或反馈条出现时，由编辑区让出高度并保持内部滚动；
      页脚仍留在卡片边框内，不把 CodeMirror 的完整内容计入卡片固有高度。 */
-  .advanced-config-editor { grid-template-rows: auto minmax(0, 1fr) auto; }
-  .advanced-config-code-editor .cm-editor { font-size: 12px; }
+  .advanced-config-editor {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  .advanced-config-code-editor .cm-editor {
+    font-size: 12px;
+  }
 }

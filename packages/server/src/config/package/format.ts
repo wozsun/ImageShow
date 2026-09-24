@@ -23,7 +23,12 @@ const configPackageFormat = "imageshow-config" as const;
 const configPackageMaxBackends = appConfig.configPackage.maxStorageBackends;
 const configPackageMaxBytes = appConfig.configPackage.maxBytes;
 
-const packageSlug = z.string().trim().toLowerCase().min(1).max(slugMaxLength)
+const packageSlug = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1)
+  .max(slugMaxLength)
   .regex(slugPattern)
   .refine((slug) => slug !== "local", "local is not importable");
 const packageDisplayName = z.string().trim().max(64);
@@ -42,43 +47,44 @@ const recognizableStorageBackendSchema = z.object({
   s3: looseS3SettingsSchema
 });
 
-const exportedConfigPackageSchema = z.strictObject({
-  format: z.literal(configPackageFormat),
-  application_version: z.string().trim().min(1).max(64),
-  exported_at: z.iso.datetime(),
-  config: portableRuntimeConfigSchema,
-  storage_backends: z.array(exportedStorageBackendSchema)
-    .max(configPackageMaxBackends)
-}).superRefine((value, context) => {
-  const slugs = new Set<string>();
-  let defaultCount = 0;
-  value.storage_backends.forEach((backend, index) => {
-    if (slugs.has(backend.slug)) {
+const exportedConfigPackageSchema = z
+  .strictObject({
+    format: z.literal(configPackageFormat),
+    application_version: z.string().trim().min(1).max(64),
+    exported_at: z.iso.datetime(),
+    config: portableRuntimeConfigSchema,
+    storage_backends: z.array(exportedStorageBackendSchema).max(configPackageMaxBackends)
+  })
+  .superRefine((value, context) => {
+    const slugs = new Set<string>();
+    let defaultCount = 0;
+    value.storage_backends.forEach((backend, index) => {
+      if (slugs.has(backend.slug)) {
+        context.addIssue({
+          code: "custom",
+          message: `duplicate storage slug: ${backend.slug}`,
+          path: ["storage_backends", index, "slug"]
+        });
+      }
+      slugs.add(backend.slug);
+      if (backend.is_default) defaultCount += 1;
+    });
+    if (defaultCount > 1) {
       context.addIssue({
         code: "custom",
-        message: `duplicate storage slug: ${backend.slug}`,
-        path: ["storage_backends", index, "slug"]
+        message: "only one imported backend may be default",
+        path: ["storage_backends"]
       });
     }
-    slugs.add(backend.slug);
-    if (backend.is_default) defaultCount += 1;
+    const importedDefault = value.storage_backends.find((backend) => backend.is_default);
+    if (importedDefault && !importedDefault.enabled) {
+      context.addIssue({
+        code: "custom",
+        message: "the imported default backend must be enabled",
+        path: ["storage_backends"]
+      });
+    }
   });
-  if (defaultCount > 1) {
-    context.addIssue({
-      code: "custom",
-      message: "only one imported backend may be default",
-      path: ["storage_backends"]
-    });
-  }
-  const importedDefault = value.storage_backends.find((backend) => backend.is_default);
-  if (importedDefault && !importedDefault.enabled) {
-    context.addIssue({
-      code: "custom",
-      message: "the imported default backend must be enabled",
-      path: ["storage_backends"]
-    });
-  }
-});
 
 type ExportedConfigPackage = z.infer<typeof exportedConfigPackageSchema>;
 type ConfigPackageStorageBackend = z.infer<typeof recognizableStorageBackendSchema>;
@@ -104,18 +110,10 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 function serializedConfigPackage(value: unknown) {
   const serialized = JSON.stringify(value);
   if (serialized === undefined) {
-    throw new ApiError(
-      400,
-      "config_package_invalid",
-      "配置包必须是可解析的 JSON"
-    );
+    throw new ApiError(400, "config_package_invalid", "配置包必须是可解析的 JSON");
   }
   if (Buffer.byteLength(serialized, "utf8") > configPackageMaxBytes) {
-    throw new ApiError(
-      413,
-      "config_package_too_large",
-      "配置包内容不能超过 1 MiB"
-    );
+    throw new ApiError(413, "config_package_too_large", "配置包内容不能超过 1 MiB");
   }
   return serialized;
 }
@@ -150,10 +148,7 @@ function recognizeStorageBackends(values: unknown[]) {
       continue;
     }
     const backend = result.data;
-    if (
-      slugs.has(backend.slug)
-      || (backend.is_default && (!backend.enabled || hasDefault))
-    ) {
+    if (slugs.has(backend.slug) || (backend.is_default && (!backend.enabled || hasDefault))) {
       skipped += 1;
       continue;
     }
@@ -195,16 +190,10 @@ export function buildConfigPackage(
 export function parseConfigPackage(value: unknown): ConfigPackage {
   serializedConfigPackage(value);
   if (!isPlainRecord(value)) {
-    throw new ApiError(
-      400,
-      "config_package_invalid",
-      "配置包根节点必须是 JSON 对象"
-    );
+    throw new ApiError(400, "config_package_invalid", "配置包根节点必须是 JSON 对象");
   }
   const record = value;
-  const rawStorageBackends = Array.isArray(record.storage_backends)
-    ? record.storage_backends
-    : [];
+  const rawStorageBackends = Array.isArray(record.storage_backends) ? record.storage_backends : [];
   if (rawStorageBackends.length > configPackageMaxBackends) {
     throw new ApiError(
       400,
@@ -279,11 +268,7 @@ export function resolveImportedStorageBackends(
 
   for (const sourceSlug of Object.keys(mappings)) {
     if (!importedSlugs.has(sourceSlug) || !conflicts.has(sourceSlug)) {
-      throw new ApiError(
-        400,
-        "config_slug_mapping_unexpected",
-        `无需重命名的 slug: ${sourceSlug}`
-      );
+      throw new ApiError(400, "config_slug_mapping_unexpected", `无需重命名的 slug: ${sourceSlug}`);
     }
   }
 

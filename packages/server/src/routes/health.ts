@@ -2,9 +2,7 @@ import type { Context, Hono } from "hono";
 import { assertCoreDatabaseReady } from "../core/database/schema.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { noStoreCacheControl } from "../core/http/headers.ts";
-import {
-  isRedisRequiredCommandsError
-} from "../core/redis/client.ts";
+import { isRedisRequiredCommandsError } from "../core/redis/client.ts";
 import {
   readRedisOperationalReadiness,
   runtimeInitializationIsComplete
@@ -27,7 +25,8 @@ export function registerHealthRoutes(
   dependencies: HealthDependencies = defaultHealthDependencies
 ) {
   app.all("/livez", async (c) => {
-    if (c.req.method !== "GET") return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
+    if (c.req.method !== "GET")
+      return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
     c.header("Cache-Control", noStoreCacheControl);
     return c.json({ message: "ImageShow process is alive", ok: true, status: "alive" });
   });
@@ -35,12 +34,14 @@ export function registerHealthRoutes(
   app.all("/readyz", (context) => readinessHandler(context, dependencies));
 }
 
-async function readinessHandler(
-  c: Context,
-  dependencies: HealthDependencies
-) {
-  if (c.req.method !== "GET") return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
-  if (new URL(c.req.url).search) return apiErrorResponse({ status: 403, message: "Forbidden: Query parameters are not allowed on this route" });
+async function readinessHandler(c: Context, dependencies: HealthDependencies) {
+  if (c.req.method !== "GET")
+    return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
+  if (new URL(c.req.url).search)
+    return apiErrorResponse({
+      status: 403,
+      message: "Forbidden: Query parameters are not allowed on this route"
+    });
   if (dependencies.initializationComplete?.() === false) {
     return apiErrorResponse({
       status: 503,

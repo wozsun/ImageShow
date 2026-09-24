@@ -29,9 +29,7 @@ export function imageTrashIdsNeedingSnapshot(
   response: ImageTrashResponseDto | null
 ) {
   const trashedIdSet = responseTrashedIdSet(response);
-  return requestedIds.filter(
-    (id) => !trashedIdSet.has(canonicalImageId(id))
-  );
+  return requestedIds.filter((id) => !trashedIdSet.has(canonicalImageId(id)));
 }
 
 export function reconcileImageEditorTrash(
@@ -40,11 +38,10 @@ export function reconcileImageEditorTrash(
   authoritativeItems: EditableImageSnapshot[] | null
 ): ImageEditorTrashOutcome {
   const responseTrashedIds = responseTrashedIdSet(response);
-  const editableIdSet = authoritativeItems === null
-    ? null
-    : new Set(
-        authoritativeItems.map((item) => canonicalImageId(item.id))
-      );
+  const editableIdSet =
+    authoritativeItems === null
+      ? null
+      : new Set(authoritativeItems.map((item) => canonicalImageId(item.id)));
   const trashedIds: string[] = [];
   const editableIds: string[] = [];
   const unknownIds: string[] = [];
@@ -71,16 +68,12 @@ export function pruneImageMetadataSessionAfterTrash(
   const trashedIdSet = new Set(trashedIds.map(canonicalImageId));
   return {
     ...state,
-    activeIds: state.activeIds.filter(
-      (id) => !trashedIdSet.has(canonicalImageId(id))
-    ),
+    activeIds: state.activeIds.filter((id) => !trashedIdSet.has(canonicalImageId(id))),
     baselineItems: state.baselineItems.filter(
       (item) => !trashedIdSet.has(canonicalImageId(item.id))
     ),
     drafts: Object.fromEntries(
-      Object.entries(state.drafts).filter(
-        ([id]) => !trashedIdSet.has(canonicalImageId(id))
-      )
+      Object.entries(state.drafts).filter(([id]) => !trashedIdSet.has(canonicalImageId(id)))
     )
   };
 }

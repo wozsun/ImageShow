@@ -1,14 +1,10 @@
-import { basicTagSelection, readableFilterSearch, type TagMatchMode } from "@imageshow/shared/browser";
-import type {
-  PublicSiteSettings
-} from "@imageshow/shared/browser";
 import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState
-} from "react";
+  basicTagSelection,
+  readableFilterSearch,
+  type TagMatchMode
+} from "@imageshow/shared/browser";
+import type { PublicSiteSettings } from "@imageshow/shared/browser";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AppLoadingText,
   type AppLoadingExtraDots
@@ -38,24 +34,20 @@ const homeLoadingDotSteps: ReadonlyArray<{
   delayMs: number;
   extraDots: AppLoadingExtraDots;
 }> = [
-    { delayMs: 100, extraDots: 1 },
-    { delayMs: 300, extraDots: 2 },
-    { delayMs: 600, extraDots: 3 }
-  ];
+  { delayMs: 100, extraDots: 1 },
+  { delayMs: 300, extraDots: 2 },
+  { delayMs: 600, extraDots: 3 }
+];
 
-function HomeStartupLoadingText({
-  active
-}: {
-  active: boolean;
-}) {
+function HomeStartupLoadingText({ active }: { active: boolean }) {
   const [extraDots, setExtraDots] = useState<AppLoadingExtraDots>(0);
 
   useEffect(() => {
     if (!active) return;
     setExtraDots(0);
-    const timers = homeLoadingDotSteps.map((step) => (
+    const timers = homeLoadingDotSteps.map((step) =>
       window.setTimeout(() => setExtraDots(step.extraDots), step.delayMs)
-    ));
+    );
     return () => {
       for (const timer of timers) window.clearTimeout(timer);
     };
@@ -87,10 +79,7 @@ export function HomePage({
     if (next.tag) setTagMode(basicTagSelection(next.tag).mode);
     else if (filters.tag || !Object.values(next).some(Boolean)) setTagMode("any");
   };
-  const statsSearch = useMemo(
-    () => galleryStatsSearch(filters),
-    [filters]
-  );
+  const statsSearch = useMemo(() => galleryStatsSearch(filters), [filters]);
   const statsQuery = usePublicFilterStats(statsSearch);
   const stats = statsQuery.displayData;
   const background = site.home.background;
@@ -106,14 +95,10 @@ export function HomePage({
 
   useLayoutEffect(() => {
     if (entrance.navigationRevealed) markNavigationAppeared();
-  }, [
-    entrance.navigationRevealed,
-    markNavigationAppeared
-  ]);
+  }, [entrance.navigationRevealed, markNavigationAppeared]);
 
-  const startupFeedbackSettled = entrance.backgroundReady
-    || entrance.deadlineReached
-    || entrance.heroRevealed;
+  const startupFeedbackSettled =
+    entrance.backgroundReady || entrance.deadlineReached || entrance.heroRevealed;
 
   return (
     <main className={`page home-page${embedded ? " is-embedded" : ""}`}>
@@ -126,10 +111,9 @@ export function HomePage({
         onError={entrance.onBackgroundError}
       />
       <div
-        className={[
-          "home-startup-feedback",
-          startupFeedbackSettled ? "is-settled" : ""
-        ].filter(Boolean).join(" ")}
+        className={["home-startup-feedback", startupFeedbackSettled ? "is-settled" : ""]
+          .filter(Boolean)
+          .join(" ")}
         aria-hidden={startupFeedbackSettled ? true : undefined}
       >
         <HomeStartupLoadingText active={!startupFeedbackSettled} />
@@ -138,9 +122,7 @@ export function HomePage({
         className={[
           "public-navigation-frame",
           "home-navigation-frame",
-          `is-entrance-${entrance.navigationRevealed
-            ? "visible"
-            : "pending"}`
+          `is-entrance-${entrance.navigationRevealed ? "visible" : "pending"}`
         ].join(" ")}
         aria-hidden={entrance.navigationRevealed ? undefined : true}
         inert={entrance.navigationRevealed ? undefined : true}
@@ -149,9 +131,7 @@ export function HomePage({
           {!embedded && (
             <AppHeader
               browseSearch={readableFilterSearch(galleryRouteSearchParams(filters))}
-              animateEntrance={
-                shouldAnimateNavigation && entrance.navigationRevealed
-              }
+              animateEntrance={shouldAnimateNavigation && entrance.navigationRevealed}
             />
           )}
           <HomeFilterBar

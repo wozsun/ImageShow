@@ -1,7 +1,10 @@
 import { SlugComboInput } from "./SlugComboInput.js";
 import type { FacetOption } from "../../lib/types.js";
 
-export function AuthorInput({ authors, ...rest }: {
+export function AuthorInput({
+  authors,
+  ...rest
+}: {
   value: string;
   onChange: (value: string) => void;
   authors: FacetOption[];

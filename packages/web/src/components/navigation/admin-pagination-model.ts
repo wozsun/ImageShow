@@ -1,9 +1,7 @@
 export function parseAdminPaginationPage(value: string, totalPages: number) {
   if (!/^\d+$/.test(value)) return null;
   const page = Number(value);
-  return Number.isSafeInteger(page) && page >= 1 && page <= totalPages
-    ? page
-    : null;
+  return Number.isSafeInteger(page) && page >= 1 && page <= totalPages ? page : null;
 }
 
 export function resolveAdminPaginationCommit({

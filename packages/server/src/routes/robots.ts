@@ -1,9 +1,6 @@
 import type { Context } from "hono";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
-import {
-  apiErrorResponse,
-  cacheableContentResponse
-} from "../core/http/responses.ts";
+import { apiErrorResponse, cacheableContentResponse } from "../core/http/responses.ts";
 import { robotsCacheControl } from "../core/http/headers.ts";
 
 export function serveRobotsTxt(context: Context) {

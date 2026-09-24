@@ -51,25 +51,39 @@ before(async () => {
     assert.equal(c.req.header("Accept-Encoding"), originalEncoding);
     assert.equal(c.req.header("Range"), originalRange);
     appendVaryHeader(c, "Accept-Encoding");
-    c.header("Cache-Control", c.res.status < 400 ? "public, max-age=31536000, immutable" : "no-store");
+    c.header(
+      "Cache-Control",
+      c.res.status < 400 ? "public, max-age=31536000, immutable" : "no-store"
+    );
   });
-  app.use("/assets/*", async (c, next) => await serveStaticWithValidators(c, handler) ?? next());
+  app.use("/assets/*", async (c, next) => (await serveStaticWithValidators(c, handler)) ?? next());
 });
 
 const cases: Array<[string | undefined, Encoding | 406]> = [
-  [undefined, "identity"], ["", "identity"], ["identity", "identity"],
-  ["br", "br"], ["zstd", "zstd"], ["gzip", "gzip"],
-  ["gzip, zstd, br", "br"], ["GZIP, ZsTd", "zstd"],
+  [undefined, "identity"],
+  ["", "identity"],
+  ["identity", "identity"],
+  ["br", "br"],
+  ["zstd", "zstd"],
+  ["gzip", "gzip"],
+  ["gzip, zstd, br", "br"],
+  ["GZIP, ZsTd", "zstd"],
   ["br;q=0.2, zstd;q=0.8, gzip;q=1", "gzip"],
   ["br;q=0, zstd;q=0.7, gzip;q=0.7", "zstd"],
-  ["*", "br"], ["*;q=0.8, br;q=0", "zstd"],
-  ["*;q=0, gzip;q=1", "gzip"], ["*;q=0, identity;q=0.5", "identity"],
-  ["br;q=0.5, identity;q=1", "identity"], ["br;q=1, identity;q=0.5", "br"],
-  ["br;q=0.5, identity;q=0.5", "br"], ["unknown", "identity"],
+  ["*", "br"],
+  ["*;q=0.8, br;q=0", "zstd"],
+  ["*;q=0, gzip;q=1", "gzip"],
+  ["*;q=0, identity;q=0.5", "identity"],
+  ["br;q=0.5, identity;q=1", "identity"],
+  ["br;q=1, identity;q=0.5", "br"],
+  ["br;q=0.5, identity;q=0.5", "br"],
+  ["unknown", "identity"],
   ["br;q=0, zstd;q=0, gzip;q=0", "identity"],
-  ["*;q=0", 406], ["unknown, identity;q=0", 406],
+  ["*;q=0", 406],
+  ["unknown, identity;q=0", 406],
   ["br;q=0, BR;q=1, *;q=0", 406],
-  ["br;q=invalid, *;q=0", 406], ["br;q=1.1, *;q=0", 406]
+  ["br;q=invalid, *;q=0", 406],
+  ["br;q=1.1, *;q=0", 406]
 ];
 
 test("[Server/静态HTTP] 编码偏好与 GET / HEAD 选择同一可接受表示", async () => {
@@ -88,8 +102,16 @@ test("[Server/静态HTTP] 编码偏好与 GET / HEAD 选择同一可接受表示
         assert.equal(response.headers.get("ETag"), null, label);
         assert.equal(response.headers.get("Cache-Control"), "no-store", label);
       } else {
-        assert.equal(response.headers.get("Content-Encoding"), expected === "identity" ? null : expected, label);
-        assert.equal(Number(response.headers.get("Content-Length")), bodies[expected].length, label);
+        assert.equal(
+          response.headers.get("Content-Encoding"),
+          expected === "identity" ? null : expected,
+          label
+        );
+        assert.equal(
+          Number(response.headers.get("Content-Length")),
+          bodies[expected].length,
+          label
+        );
         assert.deepEqual(body, method === "HEAD" ? Buffer.alloc(0) : bodies[expected], label);
         assert.ok(response.headers.get("ETag"), label);
       }
@@ -108,11 +130,16 @@ test("[Server/静态HTTP] 缺失高权重副本按剩余偏好回退，缺失文
     ["missing.js", "*;q=0", 404],
     ["%5c..%5coutside.txt", "br", 404]
   ] as const) {
-    const response = await app.request(`/assets/${file}`, { headers: { "Accept-Encoding": accept } });
+    const response = await app.request(`/assets/${file}`, {
+      headers: { "Accept-Encoding": accept }
+    });
     assert.equal(response.status, typeof expected === "number" ? expected : 200, file);
     const body = Buffer.from(await response.arrayBuffer());
     if (typeof expected === "string") {
-      assert.equal(response.headers.get("Content-Encoding"), expected === "identity" ? null : expected);
+      assert.equal(
+        response.headers.get("Content-Encoding"),
+        expected === "identity" ? null : expected
+      );
       assert.deepEqual(body, bodies[expected]);
     } else assert.equal(response.headers.get("Cache-Control"), "no-store");
   }
@@ -138,44 +165,84 @@ test("[Server/静态HTTP] 各编码验证器与 304、单范围和 If-Range 一�
     const modified = full.headers.get("Last-Modified")!;
     etags.add(etag);
     const expected = Buffer.from(await full.arrayBuffer());
-    const conditions: Record<string, string>[] = [{ "If-None-Match": etag }, { "If-Modified-Since": modified }];
+    const conditions: Record<string, string>[] = [
+      { "If-None-Match": etag },
+      { "If-Modified-Since": modified }
+    ];
     for (const condition of conditions) {
       for (const method of ["GET", "HEAD"]) {
-        const response = await app.request("/assets/all.js", { method, headers: { ...headers, ...condition } });
+        const response = await app.request("/assets/all.js", {
+          method,
+          headers: { ...headers, ...condition }
+        });
         assert.equal(response.status, 304);
         assert.equal((await response.arrayBuffer()).byteLength, 0);
-        for (const name of ["Content-Length", "Content-Encoding", "Content-Range"]) assert.equal(response.headers.get(name), null);
+        for (const name of ["Content-Length", "Content-Encoding", "Content-Range"])
+          assert.equal(response.headers.get(name), null);
         assert.equal(response.headers.get("ETag"), etag);
         assert.match(response.headers.get("Vary") ?? "", /Accept-Encoding/i);
       }
     }
-    const precedence = await app.request("/assets/all.js", { headers: {
-      ...headers, "If-None-Match": '"different"', "If-Modified-Since": modified
-    } });
+    const precedence = await app.request("/assets/all.js", {
+      headers: {
+        ...headers,
+        "If-None-Match": '"different"',
+        "If-Modified-Since": modified
+      }
+    });
     assert.equal(precedence.status, 200);
     assert.deepEqual(Buffer.from(await precedence.arrayBuffer()), expected);
-    const headRange = await app.request("/assets/all.js", { method: "HEAD", headers: { ...headers, Range: "bytes=0-7" } });
+    const headRange = await app.request("/assets/all.js", {
+      method: "HEAD",
+      headers: { ...headers, Range: "bytes=0-7" }
+    });
     assert.equal(headRange.status, 200);
     assert.equal(Number(headRange.headers.get("Content-Length")), expected.length);
     assert.equal((await headRange.arrayBuffer()).byteLength, 0);
-    const conditionalRange = await app.request("/assets/all.js", { headers: { ...headers, Range: "bytes=0-7", "If-None-Match": etag } });
+    const conditionalRange = await app.request("/assets/all.js", {
+      headers: { ...headers, Range: "bytes=0-7", "If-None-Match": etag }
+    });
     assert.equal(conditionalRange.status, 304);
     assert.equal((await conditionalRange.arrayBuffer()).byteLength, 0);
-    for (const [range, start, end] of [["bytes=0-7", 0, 7], ["bytes=-5", expected.length - 5, expected.length - 1], [`bytes=${expected.length - 3}-`, expected.length - 3, expected.length - 1]] as const) {
-      const response = await app.request("/assets/all.js", { headers: { ...headers, Range: range } });
+    for (const [range, start, end] of [
+      ["bytes=0-7", 0, 7],
+      ["bytes=-5", expected.length - 5, expected.length - 1],
+      [`bytes=${expected.length - 3}-`, expected.length - 3, expected.length - 1]
+    ] as const) {
+      const response = await app.request("/assets/all.js", {
+        headers: { ...headers, Range: range }
+      });
       assert.equal(response.status, 206);
       assert.equal(response.headers.get("ETag"), etag);
-      assert.equal(response.headers.get("Content-Range"), `bytes ${start}-${end}/${expected.length}`);
+      assert.equal(
+        response.headers.get("Content-Range"),
+        `bytes ${start}-${end}/${expected.length}`
+      );
       assert.equal(Number(response.headers.get("Content-Length")), end - start + 1);
-      assert.deepEqual(Buffer.from(await response.arrayBuffer()), expected.subarray(start, end + 1));
+      assert.deepEqual(
+        Buffer.from(await response.arrayBuffer()),
+        expected.subarray(start, end + 1)
+      );
     }
-    for (const [ifRange, status] of [[modified, 206], [etag, 200], ['"different"', 200], ["Thu, 01 Jan 1970 00:00:00 GMT", 200]] as const) {
-      const response = await app.request("/assets/all.js", { headers: { ...headers, Range: "bytes=0-7", "If-Range": ifRange } });
+    for (const [ifRange, status] of [
+      [modified, 206],
+      [etag, 200],
+      ['"different"', 200],
+      ["Thu, 01 Jan 1970 00:00:00 GMT", 200]
+    ] as const) {
+      const response = await app.request("/assets/all.js", {
+        headers: { ...headers, Range: "bytes=0-7", "If-Range": ifRange }
+      });
       assert.equal(response.status, status);
-      assert.deepEqual(Buffer.from(await response.arrayBuffer()), status === 206 ? expected.subarray(0, 8) : expected);
+      assert.deepEqual(
+        Buffer.from(await response.arrayBuffer()),
+        status === 206 ? expected.subarray(0, 8) : expected
+      );
     }
     for (const range of [`bytes=${expected.length}-`, "bytes=0-1,3-4", "bytes=-0"]) {
-      const response = await app.request("/assets/all.js", { headers: { ...headers, Range: range } });
+      const response = await app.request("/assets/all.js", {
+        headers: { ...headers, Range: range }
+      });
       assert.equal(response.status, 416);
       assert.equal(response.headers.get("Content-Range"), `bytes */${expected.length}`);
       assert.equal(response.headers.get("Content-Encoding"), null);
@@ -184,10 +251,13 @@ test("[Server/静态HTTP] 各编码验证器与 304、单范围和 If-Range 一�
     }
   }
   assert.equal(etags.size, 4, "each encoded representation has a distinct validator");
-  const weightedRange = await app.request("/assets/without-br.js", { headers: {
-    "Accept-Encoding": "br;q=1, gzip;q=0.8, zstd;q=0.2", Range: "bytes=0-7",
-    "If-None-Match": [...etags][0]!
-  } });
+  const weightedRange = await app.request("/assets/without-br.js", {
+    headers: {
+      "Accept-Encoding": "br;q=1, gzip;q=0.8, zstd;q=0.2",
+      Range: "bytes=0-7",
+      "If-None-Match": [...etags][0]!
+    }
+  });
   assert.equal(weightedRange.status, 206);
   assert.equal(weightedRange.headers.get("Content-Encoding"), "gzip");
   assert.deepEqual(Buffer.from(await weightedRange.arrayBuffer()), bodies.gzip.subarray(0, 8));

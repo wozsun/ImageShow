@@ -43,48 +43,49 @@ export function useAsyncActionStatus({
     };
   }, []);
 
-  const run = useCallback(async (operation: () => Promise<boolean>) => {
-    if (runningRef.current) return false;
-    runningRef.current = true;
-    if (resetTimerRef.current !== null) {
-      window.clearTimeout(resetTimerRef.current);
-      resetTimerRef.current = null;
-    }
-    setStatus("pending");
-
-    const startedAt = Date.now();
-    let successful = false;
-    let operationFailed = false;
-    let operationError: unknown;
-    try {
-      successful = await operation();
-    } catch (error) {
-      operationFailed = true;
-      operationError = error;
-    }
-
-    await waitForMinimumPendingDuration(startedAt, minimumPendingMs);
-
-    if (mountedRef.current) {
-      const nextStatus = successful && !operationFailed ? "success" : "error";
-      const nextDurationMs = nextStatus === "success"
-        ? successDurationMs
-        : errorDurationMs;
-      if (nextDurationMs === null || nextDurationMs <= 0) {
-        setStatus("idle");
-      } else {
-        setStatus(nextStatus);
-        resetTimerRef.current = window.setTimeout(() => {
-          resetTimerRef.current = null;
-          if (mountedRef.current) setStatus("idle");
-        }, nextDurationMs);
+  const run = useCallback(
+    async (operation: () => Promise<boolean>) => {
+      if (runningRef.current) return false;
+      runningRef.current = true;
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = null;
       }
-    }
-    runningRef.current = false;
+      setStatus("pending");
 
-    if (operationFailed) throw operationError;
-    return successful;
-  }, [errorDurationMs, minimumPendingMs, successDurationMs]);
+      const startedAt = Date.now();
+      let successful = false;
+      let operationFailed = false;
+      let operationError: unknown;
+      try {
+        successful = await operation();
+      } catch (error) {
+        operationFailed = true;
+        operationError = error;
+      }
+
+      await waitForMinimumPendingDuration(startedAt, minimumPendingMs);
+
+      if (mountedRef.current) {
+        const nextStatus = successful && !operationFailed ? "success" : "error";
+        const nextDurationMs = nextStatus === "success" ? successDurationMs : errorDurationMs;
+        if (nextDurationMs === null || nextDurationMs <= 0) {
+          setStatus("idle");
+        } else {
+          setStatus(nextStatus);
+          resetTimerRef.current = window.setTimeout(() => {
+            resetTimerRef.current = null;
+            if (mountedRef.current) setStatus("idle");
+          }, nextDurationMs);
+        }
+      }
+      runningRef.current = false;
+
+      if (operationFailed) throw operationError;
+      return successful;
+    },
+    [errorDurationMs, minimumPendingMs, successDurationMs]
+  );
 
   return {
     status,

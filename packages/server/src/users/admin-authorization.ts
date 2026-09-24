@@ -1,8 +1,4 @@
-import {
-  adminPermissions,
-  type AdminPermission,
-  type AdminRole
-} from "@imageshow/shared/browser";
+import { adminPermissions, type AdminPermission, type AdminRole } from "@imageshow/shared/browser";
 import type { Context, MiddlewareHandler, Next } from "hono";
 import { ApiError } from "../core/api-error.ts";
 
@@ -15,9 +11,7 @@ type AdminAuthorizationSession = {
   role?: AdminRole;
 };
 
-export function adminPermissionsForRole(
-  role: AdminRole
-): AdminPermission[] {
+export function adminPermissionsForRole(role: AdminRole): AdminPermission[] {
   return [...rolePermissionGrants[role]];
 }
 
@@ -25,34 +19,21 @@ function adminSessionHasPermission(
   session: AdminAuthorizationSession | undefined,
   permission: AdminPermission
 ) {
-  return session?.role
-    ? rolePermissionGrants[session.role].has(permission)
-    : false;
+  return session?.role ? rolePermissionGrants[session.role].has(permission) : false;
 }
 
-export function requireAdminPermission(
-  permission: AdminPermission
-): MiddlewareHandler {
+export function requireAdminPermission(permission: AdminPermission): MiddlewareHandler {
   return async (context, next) => {
-    const session = context.get("session") as
-      | AdminAuthorizationSession
-      | undefined;
+    const session = context.get("session") as AdminAuthorizationSession | undefined;
     if (!adminSessionHasPermission(session, permission)) {
-      throw new ApiError(
-        403,
-        "forbidden",
-        "Permission denied",
-        { permission }
-      );
+      throw new ApiError(403, "forbidden", "Permission denied", { permission });
     }
     await next();
   };
 }
 
 export async function requireSuperAdmin(context: Context, next: Next) {
-  const session = context.get("session") as
-    | AdminAuthorizationSession
-    | undefined;
+  const session = context.get("session") as AdminAuthorizationSession | undefined;
   if (session?.role !== "super") {
     throw new ApiError(403, "forbidden", "Super admin only");
   }

@@ -21,10 +21,7 @@ export function normalizePageScrollPosition(
   };
 }
 
-export function pageScrollDelta(
-  previous: PageScrollPosition,
-  current: PageScrollPosition
-) {
+export function pageScrollDelta(previous: PageScrollPosition, current: PageScrollPosition) {
   // Safari can report scrollY beyond the document maximum during elastic
   // overscroll. Both the overshoot and the rebound normalize to the bottom
   // boundary and must not be interpreted as an upward navigation gesture.

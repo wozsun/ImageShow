@@ -43,19 +43,17 @@ type ScheduledAuthorityCoverage = Readonly<{
  * revision reaches the signed action watermark, so card state cannot own
  * this lifecycle.
  */
-export function useIngestionAuthorityHandoffs(input: Readonly<{
-  jobs: readonly IngestionJob[];
-  jobsRef: Readonly<{ current: readonly IngestionJob[] }>;
-  dispatch: (action: IngestionQueueAction) => boolean;
-  server: ServerIngestionQueueController;
-  reportError: (message: string, retryable?: boolean) => void;
-  promoteReconnectOwners: (
-    pairKeys: ReadonlySet<string>
-  ) => ReadonlySet<string>;
-  observeCompletedIngestions: (
-    entries: readonly CompletedIngestionObservation[]
-  ) => void;
-}>) {
+export function useIngestionAuthorityHandoffs(
+  input: Readonly<{
+    jobs: readonly IngestionJob[];
+    jobsRef: Readonly<{ current: readonly IngestionJob[] }>;
+    dispatch: (action: IngestionQueueAction) => boolean;
+    server: ServerIngestionQueueController;
+    reportError: (message: string, retryable?: boolean) => void;
+    promoteReconnectOwners: (pairKeys: ReadonlySet<string>) => ReadonlySet<string>;
+    observeCompletedIngestions: (entries: readonly CompletedIngestionObservation[]) => void;
+  }>
+) {
   const fencesRef = useRef(new Map<string, AuthorityHandoffFence>());
   const serverRef = useRef(input.server);
   serverRef.current = input.server;
@@ -67,12 +65,7 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
   jobsRefRef.current = input.jobsRef;
   const observeCompletedIngestionsRef = useRef(input.observeCompletedIngestions);
   observeCompletedIngestionsRef.current = input.observeCompletedIngestions;
-  const scheduledCoverageRef = useRef<Map<
-    string,
-    ScheduledAuthorityCoverage
-  > | null>(
-    null
-  );
+  const scheduledCoverageRef = useRef<Map<string, ScheduledAuthorityCoverage> | null>(null);
   const [fenceEpoch, setFenceEpoch] = useState(0);
 
   const clearFences = useCallback((pairKeys: ReadonlySet<string>) => {
@@ -87,10 +80,7 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
     if (!changed) return;
     const patches = new Map<string, Partial<IngestionJob>>();
     for (const job of jobsRefRef.current.current) {
-      if (
-        job.serverHandoffPending === true
-        && pairKeys.has(serverIngestionJobPairKey(job))
-      ) {
+      if (job.serverHandoffPending === true && pairKeys.has(serverIngestionJobPairKey(job))) {
         patches.set(job.id, {
           serverHandoffPending: false,
           serverHandoffRevision: undefined
@@ -101,17 +91,12 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
     setFenceEpoch((current) => current + 1);
   }, []);
 
-  const verifyFenceRevisions = useCallback((
-    revisions: ReadonlyMap<string, number>
-  ) => {
+  const verifyFenceRevisions = useCallback((revisions: ReadonlyMap<string, number>) => {
     let changed = false;
     for (const [pairKey, revision] of revisions) {
       const current = fencesRef.current.get(pairKey);
       if (!current) continue;
-      if (
-        current.revision === revision
-        && !current.statusCheckRequired
-      ) continue;
+      if (current.revision === revision && !current.statusCheckRequired) continue;
       fencesRef.current.set(pairKey, {
         ...current,
         revision,
@@ -123,9 +108,7 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
     if (changed) setFenceEpoch((current) => current + 1);
   }, []);
 
-  const deferFenceStatusChecks = useCallback((
-    revisions: ReadonlyMap<string, number>
-  ) => {
+  const deferFenceStatusChecks = useCallback((revisions: ReadonlyMap<string, number>) => {
     let changed = false;
     for (const [pairKey, revision] of revisions) {
       const current = fencesRef.current.get(pairKey);
@@ -140,130 +123,124 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
     if (changed) setFenceEpoch((current) => current + 1);
   }, []);
 
-  const prepareBinding = useCallback((
-    binding: IngestionServerBinding,
-    requestConnectionGeneration?: number | null,
-    externalStatusOwner = false
-  ) => {
-    const server = serverRef.current;
-    const requestGeneration = requestConnectionGeneration === undefined
-      ? server.connectionGeneration
-      : requestConnectionGeneration;
-    const responseBelongsToCurrentGeneration = requestGeneration !== null
-      && requestGeneration === server.connectionGeneration;
-    if (binding.serverHandoffPending !== true) return binding;
+  const prepareBinding = useCallback(
+    (
+      binding: IngestionServerBinding,
+      requestConnectionGeneration?: number | null,
+      externalStatusOwner = false
+    ) => {
+      const server = serverRef.current;
+      const requestGeneration =
+        requestConnectionGeneration === undefined
+          ? server.connectionGeneration
+          : requestConnectionGeneration;
+      const responseBelongsToCurrentGeneration =
+        requestGeneration !== null && requestGeneration === server.connectionGeneration;
+      if (binding.serverHandoffPending !== true) return binding;
 
-    const pairKey = serverIngestionPairKey({
-      session_id: binding.sessionId,
-      image_id: binding.imageId
-    });
-    const current = fencesRef.current.get(pairKey);
-    const sameGeneration = current?.connectionGeneration
-      === server.connectionGeneration;
-    const existingRevision = sameGeneration ? current?.revision : undefined;
-    const responseRevision = responseBelongsToCurrentGeneration
-      ? binding.serverHandoffRevision
-      : undefined;
-    const revision = existingRevision !== undefined
-      && responseRevision !== undefined
-      ? Math.max(existingRevision, responseRevision)
-      : existingRevision ?? responseRevision;
-    const responseCompletionRequired = binding.serverHandoffRevision === undefined;
-    const completionRequired = sameGeneration
-      ? current?.completionRequired === true || responseCompletionRequired
-      : responseCompletionRequired;
-    const effectiveExternalStatusOwner = sameGeneration
-      ? current.externalStatusOwner || externalStatusOwner
-      : externalStatusOwner;
-    const statusCheckRequired = !effectiveExternalStatusOwner && (
-      sameGeneration
-        ? current.statusCheckRequired
-          || revision === undefined
-          || requestGeneration === null
-          || requestGeneration !== server.connectionGeneration
-        : revision === undefined
-          || requestGeneration === null
-          || requestGeneration !== server.connectionGeneration
-    );
-    fencesRef.current.set(pairKey, {
-      pair: {
+      const pairKey = serverIngestionPairKey({
         session_id: binding.sessionId,
         image_id: binding.imageId
-      },
-      connectionGeneration: server.connectionGeneration,
-      completionRequired,
-      statusCheckRequired,
-      externalStatusOwner: effectiveExternalStatusOwner,
-      statusRetryAfterRevision: statusCheckRequired
-        ? undefined
-        : current?.statusRetryAfterRevision,
-      ...(revision === undefined ? {} : { revision })
-    });
-    setFenceEpoch((value) => value + 1);
-
-    if (responseBelongsToCurrentGeneration) {
-      const coverageAlreadyScheduled = scheduledCoverageRef.current !== null;
-      const scheduledCoverage = scheduledCoverageRef.current
-        ?? new Map<string, ScheduledAuthorityCoverage>();
-      const scheduled = scheduledCoverage.get(pairKey);
-      const scheduledRevision = scheduled?.connectionGeneration
-        === server.connectionGeneration
-        ? scheduled.revision
-        : undefined;
-      const hadScheduledPair = scheduled?.connectionGeneration
-        === server.connectionGeneration;
-      const unknown = (
-        hadScheduledPair && scheduled.unknown
-      ) || revision === undefined;
-      let combinedRevision: number | undefined;
-      if (!hadScheduledPair) {
-        combinedRevision = revision;
-      } else {
-        combinedRevision = scheduledRevision !== undefined
-          && revision !== undefined
-          ? Math.max(scheduledRevision, revision)
-          : scheduledRevision ?? revision;
-      }
-      scheduledCoverage.set(pairKey, {
-        connectionGeneration: server.connectionGeneration,
-        unknown,
-        ...(combinedRevision === undefined ? {} : { revision: combinedRevision })
       });
-      scheduledCoverageRef.current = scheduledCoverage;
-      if (!coverageAlreadyScheduled) {
-        queueMicrotask(() => {
-          const coverage = scheduledCoverageRef.current;
-          scheduledCoverageRef.current = null;
-          if (!coverage?.size) return;
-          const currentGeneration = serverRef.current.connectionGeneration;
-          const currentCoverage = [...coverage.values()].filter((entry) => (
-            entry.connectionGeneration === currentGeneration
-          ));
-          if (!currentCoverage.length) return;
-          const unknown = currentCoverage.some((entry) => entry.unknown);
-          const hasKnownRevision = currentCoverage.some((entry) => (
-            entry.revision !== undefined
-          ));
-          const maximumRevision = currentCoverage.reduce<number>(
-            (maximum, entry) => entry.revision === undefined
-              ? maximum
-              : Math.max(maximum, entry.revision),
-            0
-          );
-          if (unknown) {
-            serverRef.current.ensureRevision(undefined, currentGeneration);
-          }
-          if (hasKnownRevision) {
-            serverRef.current.ensureRevision(
-              maximumRevision,
-              currentGeneration
-            );
-          }
+      const current = fencesRef.current.get(pairKey);
+      const sameGeneration = current?.connectionGeneration === server.connectionGeneration;
+      const existingRevision = sameGeneration ? current?.revision : undefined;
+      const responseRevision = responseBelongsToCurrentGeneration
+        ? binding.serverHandoffRevision
+        : undefined;
+      const revision =
+        existingRevision !== undefined && responseRevision !== undefined
+          ? Math.max(existingRevision, responseRevision)
+          : (existingRevision ?? responseRevision);
+      const responseCompletionRequired = binding.serverHandoffRevision === undefined;
+      const completionRequired = sameGeneration
+        ? current?.completionRequired === true || responseCompletionRequired
+        : responseCompletionRequired;
+      const effectiveExternalStatusOwner = sameGeneration
+        ? current.externalStatusOwner || externalStatusOwner
+        : externalStatusOwner;
+      const statusCheckRequired =
+        !effectiveExternalStatusOwner &&
+        (sameGeneration
+          ? current.statusCheckRequired ||
+            revision === undefined ||
+            requestGeneration === null ||
+            requestGeneration !== server.connectionGeneration
+          : revision === undefined ||
+            requestGeneration === null ||
+            requestGeneration !== server.connectionGeneration);
+      fencesRef.current.set(pairKey, {
+        pair: {
+          session_id: binding.sessionId,
+          image_id: binding.imageId
+        },
+        connectionGeneration: server.connectionGeneration,
+        completionRequired,
+        statusCheckRequired,
+        externalStatusOwner: effectiveExternalStatusOwner,
+        statusRetryAfterRevision: statusCheckRequired
+          ? undefined
+          : current?.statusRetryAfterRevision,
+        ...(revision === undefined ? {} : { revision })
+      });
+      setFenceEpoch((value) => value + 1);
+
+      if (responseBelongsToCurrentGeneration) {
+        const coverageAlreadyScheduled = scheduledCoverageRef.current !== null;
+        const scheduledCoverage =
+          scheduledCoverageRef.current ?? new Map<string, ScheduledAuthorityCoverage>();
+        const scheduled = scheduledCoverage.get(pairKey);
+        const scheduledRevision =
+          scheduled?.connectionGeneration === server.connectionGeneration
+            ? scheduled.revision
+            : undefined;
+        const hadScheduledPair = scheduled?.connectionGeneration === server.connectionGeneration;
+        const unknown = (hadScheduledPair && scheduled.unknown) || revision === undefined;
+        let combinedRevision: number | undefined;
+        if (!hadScheduledPair) {
+          combinedRevision = revision;
+        } else {
+          combinedRevision =
+            scheduledRevision !== undefined && revision !== undefined
+              ? Math.max(scheduledRevision, revision)
+              : (scheduledRevision ?? revision);
+        }
+        scheduledCoverage.set(pairKey, {
+          connectionGeneration: server.connectionGeneration,
+          unknown,
+          ...(combinedRevision === undefined ? {} : { revision: combinedRevision })
         });
+        scheduledCoverageRef.current = scheduledCoverage;
+        if (!coverageAlreadyScheduled) {
+          queueMicrotask(() => {
+            const coverage = scheduledCoverageRef.current;
+            scheduledCoverageRef.current = null;
+            if (!coverage?.size) return;
+            const currentGeneration = serverRef.current.connectionGeneration;
+            const currentCoverage = [...coverage.values()].filter(
+              (entry) => entry.connectionGeneration === currentGeneration
+            );
+            if (!currentCoverage.length) return;
+            const unknown = currentCoverage.some((entry) => entry.unknown);
+            const hasKnownRevision = currentCoverage.some((entry) => entry.revision !== undefined);
+            const maximumRevision = currentCoverage.reduce<number>(
+              (maximum, entry) =>
+                entry.revision === undefined ? maximum : Math.max(maximum, entry.revision),
+              0
+            );
+            if (unknown) {
+              serverRef.current.ensureRevision(undefined, currentGeneration);
+            }
+            if (hasKnownRevision) {
+              serverRef.current.ensureRevision(maximumRevision, currentGeneration);
+            }
+          });
+        }
       }
-    }
-    return binding;
-  }, []);
+      return binding;
+    },
+    []
+  );
 
   const retry = useCallback(() => {
     let changed = false;
@@ -281,56 +258,64 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
     }
   }, []);
 
-  const resolveExternalStatuses = useCallback((
-    pairKeys: ReadonlySet<string>
-  ) => {
-    const owned = new Set([...pairKeys].filter((pairKey) => (
-      fencesRef.current.get(pairKey)?.externalStatusOwner === true
-    )));
-    if (owned.size) clearFences(owned);
-  }, [clearFences]);
+  const resolveExternalStatuses = useCallback(
+    (pairKeys: ReadonlySet<string>) => {
+      const owned = new Set(
+        [...pairKeys].filter(
+          (pairKey) => fencesRef.current.get(pairKey)?.externalStatusOwner === true
+        )
+      );
+      if (owned.size) clearFences(owned);
+    },
+    [clearFences]
+  );
 
-  const hasPair = useCallback((pairKey: string) => (
-    fencesRef.current.has(pairKey)
-  ), []);
-  const hasExternalPair = useCallback((pairKey: string) => (
-    fencesRef.current.get(pairKey)?.externalStatusOwner === true
-  ), []);
-  const pairKeysForSession = useCallback((sessionId: string) => (
-    new Set([...fencesRef.current].flatMap(([pairKey, fence]) => (
-      fence.pair.session_id === sessionId ? [pairKey] : []
-    )))
-  ), []);
+  const hasPair = useCallback((pairKey: string) => fencesRef.current.has(pairKey), []);
+  const hasExternalPair = useCallback(
+    (pairKey: string) => fencesRef.current.get(pairKey)?.externalStatusOwner === true,
+    []
+  );
+  const pairKeysForSession = useCallback(
+    (sessionId: string) =>
+      new Set(
+        [...fencesRef.current].flatMap(([pairKey, fence]) =>
+          fence.pair.session_id === sessionId ? [pairKey] : []
+        )
+      ),
+    []
+  );
 
-  const verifyExternalStatusRevisions = useCallback((
-    revisions: ReadonlyMap<string, number>
-  ) => {
-    const owned = new Map([...revisions].filter(([pairKey]) => (
-      fencesRef.current.get(pairKey)?.externalStatusOwner === true
-    )));
-    if (owned.size) verifyFenceRevisions(owned);
-  }, [verifyFenceRevisions]);
+  const verifyExternalStatusRevisions = useCallback(
+    (revisions: ReadonlyMap<string, number>) => {
+      const owned = new Map(
+        [...revisions].filter(
+          ([pairKey]) => fencesRef.current.get(pairKey)?.externalStatusOwner === true
+        )
+      );
+      if (owned.size) verifyFenceRevisions(owned);
+    },
+    [verifyFenceRevisions]
+  );
 
   useEffect(() => {
     if (input.server.status !== "ready") return;
     const covered = new Set<string>();
     let retryChanged = false;
-    const reconnectPairs = new Set([...fencesRef.current].flatMap(
-      ([pairKey, fence]) => (
-        fence.connectionGeneration !== input.server.connectionGeneration
-        && !fence.completionRequired
-        && !fence.externalStatusOwner
+    const reconnectPairs = new Set(
+      [...fencesRef.current].flatMap(([pairKey, fence]) =>
+        fence.connectionGeneration !== input.server.connectionGeneration &&
+        !fence.completionRequired &&
+        !fence.externalStatusOwner
           ? [pairKey]
           : []
       )
-    ));
+    );
     const promotedPairs = reconnectPairs.size
       ? input.promoteReconnectOwners(reconnectPairs)
       : new Set<string>();
     for (const [pairKey, fence] of fencesRef.current) {
       if (fence.connectionGeneration !== input.server.connectionGeneration) {
-        const externalStatusOwner = fence.externalStatusOwner
-          || promotedPairs.has(pairKey);
+        const externalStatusOwner = fence.externalStatusOwner || promotedPairs.has(pairKey);
         fencesRef.current.set(pairKey, {
           ...fence,
           connectionGeneration: input.server.connectionGeneration,
@@ -341,20 +326,20 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
         });
         retryChanged = true;
       } else if (
-          !fence.externalStatusOwner
-          && !fence.statusCheckRequired
-          && fence.statusRetryAfterRevision === undefined
-          && fence.revision !== undefined
-          && input.server.revision !== null
-          && fence.revision <= input.server.revision
+        !fence.externalStatusOwner &&
+        !fence.statusCheckRequired &&
+        fence.statusRetryAfterRevision === undefined &&
+        fence.revision !== undefined &&
+        input.server.revision !== null &&
+        fence.revision <= input.server.revision
       ) {
         covered.add(pairKey);
       } else if (
-        !fence.externalStatusOwner
-        && !fence.statusCheckRequired
-        && fence.statusRetryAfterRevision !== undefined
-        && input.server.revision !== null
-        && input.server.revision > fence.statusRetryAfterRevision
+        !fence.externalStatusOwner &&
+        !fence.statusCheckRequired &&
+        fence.statusRetryAfterRevision !== undefined &&
+        input.server.revision !== null &&
+        input.server.revision > fence.statusRetryAfterRevision
       ) {
         fencesRef.current.set(pairKey, {
           ...fence,
@@ -378,10 +363,9 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
   useEffect(() => {
     if (input.server.status !== "ready") return;
     const generation = input.server.connectionGeneration;
-    const entries = [...fencesRef.current].filter(([, fence]) => (
-      fence.connectionGeneration === generation
-      && fence.statusCheckRequired
-    ));
+    const entries = [...fencesRef.current].filter(
+      ([, fence]) => fence.connectionGeneration === generation && fence.statusCheckRequired
+    );
     if (!entries.length) return;
     const controller = new AbortController();
     const requestRevision = serverRef.current.revision;
@@ -390,37 +374,29 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
       const revisions = new Map<string, number>();
       const deferred = new Map<string, number>();
       try {
-        for (
-          let offset = 0;
-          offset < entries.length;
-          offset += ingestionStatusBatchMaxItems
-        ) {
+        for (let offset = 0; offset < entries.length; offset += ingestionStatusBatchMaxItems) {
           const chunk = entries.slice(offset, offset + ingestionStatusBatchMaxItems);
           const statuses = await getIngestionStatuses(
             chunk.map(([, fence]) => fence.pair),
             controller.signal
           );
           if (controller.signal.aborted) return;
-          observeCompletedIngestionsRef.current(
-            completedIngestionObservations(statuses)
-          );
+          observeCompletedIngestionsRef.current(completedIngestionObservations(statuses));
           for (const [index, [pairKey]] of chunk.entries()) {
             const current = fencesRef.current.get(pairKey);
             if (
-              !current
-              || current.connectionGeneration !== generation
-              || !current.statusCheckRequired
-            ) continue;
+              !current ||
+              current.connectionGeneration !== generation ||
+              !current.statusCheckRequired
+            )
+              continue;
             const status = statuses[index];
             if (!status) continue;
             if (status.status === "present") {
               if (current.completionRequired) {
                 resolved.add(pairKey);
               } else {
-                revisions.set(
-                  pairKey,
-                  status.item.last_semantic_revision
-                );
+                revisions.set(pairKey, status.item.last_semantic_revision);
               }
               continue;
             }
@@ -431,24 +407,15 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
             if (status.redis_status === "missing") {
               resolved.add(pairKey);
             } else if (
-              (
-                status.redis_status === "completed"
-                || !current.completionRequired
-              )
-              && status.redis_last_semantic_revision !== undefined
+              (status.redis_status === "completed" || !current.completionRequired) &&
+              status.redis_last_semantic_revision !== undefined
             ) {
-              revisions.set(
+              revisions.set(pairKey, status.redis_last_semantic_revision);
+            } else if (current.completionRequired && status.redis_status === "active") {
+              deferred.set(
                 pairKey,
-                status.redis_last_semantic_revision
+                Math.max(requestRevision ?? 0, status.redis_last_semantic_revision ?? 0)
               );
-            } else if (
-              current.completionRequired
-              && status.redis_status === "active"
-            ) {
-              deferred.set(pairKey, Math.max(
-                requestRevision ?? 0,
-                status.redis_last_semantic_revision ?? 0
-              ));
             }
           }
         }
@@ -458,18 +425,13 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
             (maximum, revision) => Math.max(maximum, revision),
             0
           );
-          serverRef.current.ensureRevision(
-            maximumRevision,
-            generation
-          );
+          serverRef.current.ensureRevision(maximumRevision, generation);
         }
         if (deferred.size) deferFenceStatusChecks(deferred);
         if (resolved.size) clearFences(resolved);
       } catch (error) {
         if (!controller.signal.aborted) {
-          reportErrorRef.current(
-            error instanceof Error ? error.message : String(error)
-          );
+          reportErrorRef.current(error instanceof Error ? error.message : String(error));
         }
       }
     })();
@@ -483,9 +445,12 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
     verifyFenceRevisions
   ]);
 
-  useEffect(() => () => {
-    fencesRef.current.clear();
-  }, []);
+  useEffect(
+    () => () => {
+      fencesRef.current.clear();
+    },
+    []
+  );
 
   return {
     prepareBinding,
@@ -497,9 +462,12 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
     verifyExternalStatusRevisions,
     retry,
     // Bulk retry requires these HTTP-to-snapshot fences to have settled.
-    pending: fencesRef.current.size > 0 || input.jobs.some((job) => (
-      ingestionJobHasServerAuthority(job)
-      && ingestionJobAwaitsActionCoverage(job, input.server.revision)
-    ))
+    pending:
+      fencesRef.current.size > 0 ||
+      input.jobs.some(
+        (job) =>
+          ingestionJobHasServerAuthority(job) &&
+          ingestionJobAwaitsActionCoverage(job, input.server.revision)
+      )
   };
 }

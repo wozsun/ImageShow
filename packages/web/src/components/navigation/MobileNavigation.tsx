@@ -1,18 +1,8 @@
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode
-} from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
 import { Icon } from "../icon/Icon.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
-import {
-  mobileViewportMediaQuery,
-  useMediaQuery
-} from "../../hooks/useMediaQuery.js";
+import { mobileViewportMediaQuery, useMediaQuery } from "../../hooks/useMediaQuery.js";
 
 export function MobileNavigation({
   children,
@@ -31,7 +21,9 @@ export function MobileNavigation({
   const exit = useAnimatedClose(() => setOpen(false), 160);
   const expanded = mobileLayout && open && !exit.closing;
 
-  useEffect(() => { if (open) exit.requestClose(); }, [location.pathname]);
+  useEffect(() => {
+    if (open) exit.requestClose();
+  }, [location.pathname]);
   useEffect(() => {
     if (!mobileLayout && open) exit.requestClose();
   }, [exit.requestClose, mobileLayout, open]);
@@ -62,9 +54,10 @@ export function MobileNavigation({
         aria-label={expanded ? "关闭导航菜单" : "打开导航菜单"}
         aria-expanded={expanded}
         aria-controls={menuId}
-        onClick={() => open ? exit.requestClose() : setOpen(true)}
+        onClick={() => (open ? exit.requestClose() : setOpen(true))}
       >
-        <Icon name="menu-line" />导航
+        <Icon name="menu-line" />
+        导航
       </button>
       {open && (
         <nav

@@ -17,11 +17,19 @@
   caret-color: var(--color-control-text-primary);
 }
 
-.slug-combo-control { width: 100%; min-width: 0; }
+.slug-combo-control {
+  width: 100%;
+  min-width: 0;
+}
 
-.slug-combo-control input[aria-invalid="true"] { border-color: var(--admin-color-danger-action); box-shadow: 0 0 0 1px var(--admin-color-danger-action); }
+.slug-combo-control input[aria-invalid="true"] {
+  border-color: var(--admin-color-danger-action);
+  box-shadow: 0 0 0 1px var(--admin-color-danger-action);
+}
 /* 提交/保存的文案会在空闲与处理中切换；预留四个汉字的内容宽度，避免按钮跳动。 */
-.workflow-submit-button { min-width: calc(4em + 26px); }
+.workflow-submit-button {
+  min-width: calc(4em + 26px);
+}
 
 /* 后台图片列表、上传流程与按需单图编辑器共用的缩略图骨架。 */
 .image-thumbnail {
@@ -38,7 +46,9 @@
   height: 44px;
   flex-basis: 44px;
 }
-.image-thumbnail.is-clickable { cursor: zoom-in; }
+.image-thumbnail.is-clickable {
+  cursor: zoom-in;
+}
 .image-thumbnail img {
   display: block;
   width: 100%;
@@ -54,7 +64,10 @@
   color: var(--admin-color-thumbnail-placeholder);
   pointer-events: none;
 }
-.image-thumbnail-loading .app-icon { width: 24px; height: 24px; }
+.image-thumbnail-loading .app-icon {
+  width: 24px;
+  height: 24px;
+}
 .image-thumbnail > :is(.thumb-image.is-ready, .thumb-fallback) ~ .image-thumbnail-loading {
   visibility: hidden;
 }
@@ -65,12 +78,16 @@
   padding: 9px 10px;
   white-space: nowrap;
 }
-:is(.admin, [data-admin-dialog]) button.apply-to-all-button:not(:disabled):not(.select-trigger):active {
-  transform: scale(var(--pressable-active-scale, var(--pressable-scale-medium, .98)));
+:is(.admin, [data-admin-dialog])
+  button.apply-to-all-button:not(:disabled):not(.select-trigger):active {
+  transform: scale(var(--pressable-active-scale, var(--pressable-scale-medium, 0.98)));
 }
 
 .async-action-button {
-  transition: color .16s ease, background-color .16s ease, border-color .16s ease;
+  transition:
+    color 0.16s ease,
+    background-color 0.16s ease,
+    border-color 0.16s ease;
 }
 .async-action-label-slot {
   display: inline-grid;
@@ -89,9 +106,15 @@
   gap: 8px;
 }
 
-.sort-order-field { flex: 0 0 auto; }
+.sort-order-field {
+  flex: 0 0 auto;
+}
 .sort-order-control {
-  --sort-order-highlight-surface: color-mix(in srgb, var(--admin-color-surface-primary) 60%, var(--admin-color-control-surface-subtle-hover));
+  --sort-order-highlight-surface: color-mix(
+    in srgb,
+    var(--admin-color-surface-primary) 60%,
+    var(--admin-color-control-surface-subtle-hover)
+  );
   --color-control-text-primary: var(--admin-color-text-secondary);
   --color-control-surface: var(--admin-color-surface-primary);
   --color-control-border: var(--admin-color-border-muted);
@@ -113,8 +136,15 @@
   border-radius: 5px;
   background: transparent;
 }
-.sort-order-step > .app-icon { width: 16px; height: 16px; flex-basis: 16px; }
-.sort-order-control > .sort-order-step[aria-disabled="true"] { opacity: .34; cursor: default; }
+.sort-order-step > .app-icon {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+}
+.sort-order-control > .sort-order-step[aria-disabled="true"] {
+  opacity: 0.34;
+  cursor: default;
+}
 .sort-order-control > input {
   box-sizing: content-box;
   flex: 0 0 auto;
@@ -144,10 +174,15 @@
   .sort-order-control,
   .sort-order-control > input,
   .sort-order-control > button {
-    transition: color .16s ease, background-color .16s ease, border-color .16s ease;
+    transition:
+      color 0.16s ease,
+      background-color 0.16s ease,
+      border-color 0.16s ease;
   }
 }
-.async-action-state.is-hidden { visibility: hidden; }
+.async-action-state.is-hidden {
+  visibility: hidden;
+}
 .async-action-icon-placeholder {
   width: 1.125rem;
   height: 1.125rem;
@@ -163,8 +198,16 @@
 .async-action-button.is-pending:disabled {
   cursor: wait;
 }
-.async-action-button.is-success { color: var(--admin-color-success-text); background: var(--admin-color-success-surface); border-color: var(--admin-color-success-border); }
-.async-action-button.is-error { color: var(--admin-color-danger-text); background: var(--admin-color-danger-surface); border-color: var(--admin-color-danger-border-strong); }
+.async-action-button.is-success {
+  color: var(--admin-color-success-text);
+  background: var(--admin-color-success-surface);
+  border-color: var(--admin-color-success-border);
+}
+.async-action-button.is-error {
+  color: var(--admin-color-danger-text);
+  background: var(--admin-color-danger-surface);
+  border-color: var(--admin-color-danger-border-strong);
+}
 
 .action-feedback-region {
   min-width: 0;
@@ -174,7 +217,9 @@
 }
 
 /* 空区域不占位；portal 子节点写入后 :empty 自动失效，区域才参与正常布局。 */
-.action-feedback-region:empty { display: none; }
+.action-feedback-region:empty {
+  display: none;
+}
 
 .action-feedback-region.is-page {
   flex: 1 1 300px;
@@ -183,7 +228,9 @@
   align-self: center;
 }
 
-.action-feedback-region.is-card { width: min(460px, 100%); }
+.action-feedback-region.is-card {
+  width: min(460px, 100%);
+}
 
 .action-feedback-fallback-region {
   position: fixed;
@@ -212,15 +259,17 @@
   font-size: 14px;
   line-height: 1.4;
   pointer-events: auto;
-  animation: action-feedback-in .12s cubic-bezier(.2, .8, .2, 1);
+  animation: action-feedback-in 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .action-feedback.is-closing {
   pointer-events: none;
-  animation: action-feedback-out .11s ease-in forwards;
+  animation: action-feedback-out 0.11s ease-in forwards;
 }
 
-.action-feedback.is-closing .action-feedback-progress { animation-play-state: paused; }
+.action-feedback.is-closing .action-feedback-progress {
+  animation-play-state: paused;
+}
 
 /*
  * 页面与卡片内的反馈只占一条 36px 稳定轨道。长文案保留在 DOM 与 title 中，
@@ -229,8 +278,13 @@
 .action-feedback-region:not(.action-feedback-fallback-region) > .action-feedback {
   height: 36px;
 }
-.action-feedback-region:not(.action-feedback-fallback-region) > .action-feedback .action-feedback-content,
-.action-feedback-region:not(.action-feedback-fallback-region) > .action-feedback .action-feedback-content > span {
+.action-feedback-region:not(.action-feedback-fallback-region)
+  > .action-feedback
+  .action-feedback-content,
+.action-feedback-region:not(.action-feedback-fallback-region)
+  > .action-feedback
+  .action-feedback-content
+  > span {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -326,30 +380,49 @@
   border-radius: 6px;
   background: transparent;
   color: inherit;
-  opacity: .65;
+  opacity: 0.65;
   cursor: pointer;
 }
 
-.action-feedback-close:hover { opacity: 1; }
+.action-feedback-close:hover {
+  opacity: 1;
+}
 
 @keyframes action-feedback-countdown {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 
 @keyframes action-feedback-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes action-feedback-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes action-feedback-pending {
-  0% { transform: translateX(-110%); }
-  55%, 100% { transform: translateX(240%); }
+  0% {
+    transform: translateX(-110%);
+  }
+  55%,
+  100% {
+    transform: translateX(240%);
+  }
 }
 
 @media (max-width: 760px) {
@@ -416,9 +489,16 @@ textarea.is-changed,
   outline: 1px auto var(--color-native-focus-outline);
   outline-offset: 0;
 }
-.tag-input-control .tag-input-field:focus-visible { outline: none; }
-.tag-input-control[data-tag-input-disabled] { opacity: .45; cursor: not-allowed; }
-.tag-input-control[data-tag-input-disabled] .tag-input-field { cursor: not-allowed; }
+.tag-input-control .tag-input-field:focus-visible {
+  outline: none;
+}
+.tag-input-control[data-tag-input-disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.tag-input-control[data-tag-input-disabled] .tag-input-field {
+  cursor: not-allowed;
+}
 
 :root[data-ui-context="admin"] .slug-combo-control input[data-new-slug="true"],
 [data-admin-dialog] .slug-combo-control input[data-new-slug="true"] {
@@ -426,22 +506,59 @@ textarea.is-changed,
   box-shadow: none;
 }
 
-.tag-chip.is-new { background: var(--admin-color-success-surface); border-color: var(--admin-color-success-border); color: var(--admin-color-success-text-strong); }
-.tag-chip.is-new .tag-chip-remove { color: var(--admin-color-success-action); }
-.tag-chip.is-new .tag-chip-remove:hover { background: var(--admin-color-success-surface-hover); color: var(--admin-color-success-action-hover); }
-.tag-chip-remove {
-  width: 18px; min-height: 18px; height: 18px; padding: 0;
-  border: 0; border-radius: 999px; background: transparent; color: var(--admin-color-tag-action);
-  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+.tag-chip.is-new {
+  background: var(--admin-color-success-surface);
+  border-color: var(--admin-color-success-border);
+  color: var(--admin-color-success-text-strong);
 }
-.tag-chip-remove:hover { background: var(--admin-color-control-switch-thumb); color: var(--admin-color-tag-action-hover); }
-.tag-chip-remove .app-icon { width: 12px; height: 12px; flex-basis: 12px; }
+.tag-chip.is-new .tag-chip-remove {
+  color: var(--admin-color-success-action);
+}
+.tag-chip.is-new .tag-chip-remove:hover {
+  background: var(--admin-color-success-surface-hover);
+  color: var(--admin-color-success-action-hover);
+}
+.tag-chip-remove {
+  width: 18px;
+  min-height: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--admin-color-tag-action);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tag-chip-remove:hover {
+  background: var(--admin-color-control-switch-thumb);
+  color: var(--admin-color-tag-action-hover);
+}
+.tag-chip-remove .app-icon {
+  width: 12px;
+  height: 12px;
+  flex-basis: 12px;
+}
 
-.select-control.is-storage-select { width: 120px; min-width: 120px; flex: 0 0 auto; }
+.select-control.is-storage-select {
+  width: 120px;
+  min-width: 120px;
+  flex: 0 0 auto;
+}
 
-.btn-label-slot { display: inline-grid; }
-.btn-label-slot > .btn-label-cell { grid-area: 1 / 1; text-align: center; white-space: nowrap; }
-.btn-label-slot > .btn-label-cell.is-hidden { visibility: hidden; }
+.btn-label-slot {
+  display: inline-grid;
+}
+.btn-label-slot > .btn-label-cell {
+  grid-area: 1 / 1;
+  text-align: center;
+  white-space: nowrap;
+}
+.btn-label-slot > .btn-label-cell.is-hidden {
+  visibility: hidden;
+}
 
 .hint {
   margin: 0 0 12px;
@@ -459,7 +576,9 @@ pre {
   max-height: 420px;
 }
 
-.operation-modal { width: min(620px, 96vw); }
+.operation-modal {
+  width: min(620px, 96vw);
+}
 .operation-body {
   padding: 16px;
   display: grid;
@@ -490,10 +609,11 @@ pre {
   background: var(--admin-color-surface-primary);
   border-radius: 8px;
   box-shadow: 0 18px 60px var(--admin-shadow-modal);
-  animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1);
+  animation: modal-pop 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
   overscroll-behavior: contain;
 }
-.edit-modal header, .edit-modal footer {
+.edit-modal header,
+.edit-modal footer {
   padding: 14px 16px;
   display: flex;
   justify-content: space-between;
@@ -501,18 +621,37 @@ pre {
   gap: 16px;
   border-bottom: 1px solid var(--admin-color-border-default);
 }
-.edit-modal footer { border-top: 1px solid var(--admin-color-border-default); border-bottom: 0; justify-content: flex-end; }
-.edit-modal header > div { min-width: 0; }
+.edit-modal footer {
+  border-top: 1px solid var(--admin-color-border-default);
+  border-bottom: 0;
+  justify-content: flex-end;
+}
+.edit-modal header > div {
+  min-width: 0;
+}
 .edit-modal header h2 {
   margin: 0;
   color: var(--admin-color-text-primary);
   font-size: 24px;
 }
-.edit-modal header p { margin: 4px 0 0; color: var(--admin-color-text-secondary); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edit-modal header p {
+  margin: 4px 0 0;
+  color: var(--admin-color-text-secondary);
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-.confirm-dialog form { width: min(520px, 100%); }
-.confirm-dialog form > footer { border-top: 0; }
-.confirm-dialog header h2 { font-size: 19px; }
+.confirm-dialog form {
+  width: min(520px, 100%);
+}
+.confirm-dialog form > footer {
+  border-top: 0;
+}
+.confirm-dialog header h2 {
+  font-size: 19px;
+}
 .confirm-dialog header p {
   overflow: visible;
   white-space: normal;
@@ -526,12 +665,18 @@ pre {
   overflow-wrap: anywhere;
 }
 /*危险动作按钮（删除等）。*/
-.danger-button, button.danger-button {
+.danger-button,
+button.danger-button {
   color: var(--admin-color-danger-text);
   background: var(--admin-color-danger-button-surface);
   border-color: var(--admin-color-danger-border);
 }
-.danger-button:hover, button.danger-button:hover { color: var(--admin-color-danger-text-strong); background: var(--admin-color-danger-surface-hover); border-color: var(--admin-color-danger-border-strong); }
+.danger-button:hover,
+button.danger-button:hover {
+  color: var(--admin-color-danger-text-strong);
+  background: var(--admin-color-danger-surface-hover);
+  border-color: var(--admin-color-danger-border-strong);
+}
 .danger-button.two-step-confirm-icon-button.is-armed,
 button.danger-button.two-step-confirm-icon-button.is-armed,
 .danger-button.two-step-confirm-text-button.is-armed,
@@ -554,7 +699,9 @@ button.danger-button.is-subtle.is-armed {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .edit-modal form { animation: none; }
+  .edit-modal form {
+    animation: none;
+  }
 }
 .account-form {
   max-width: 420px;
@@ -566,4 +713,6 @@ button.danger-button.is-subtle.is-armed {
   gap: 6px;
   color: var(--admin-color-text-label);
 }
-.account-form .button { justify-self: start; }
+.account-form .button {
+  justify-self: start;
+}

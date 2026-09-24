@@ -71,57 +71,31 @@ export function applyPointerMagnet(
 ) {
   if (pointer.pointerType !== "mouse") return false;
   const bounds = boundsElement.getBoundingClientRect();
-  const width = options.useLayoutDimensions
-    ? boundsElement.offsetWidth
-    : bounds.width;
-  const height = options.useLayoutDimensions
-    ? boundsElement.offsetHeight
-    : bounds.height;
+  const width = options.useLayoutDimensions ? boundsElement.offsetWidth : bounds.width;
+  const height = options.useLayoutDimensions ? boundsElement.offsetHeight : bounds.height;
   const offsetParent = boundsElement.offsetParent;
-  const layoutOffsetParent = options.useLayoutDimensions
-    && offsetParent instanceof HTMLElement
-    ? offsetParent
-    : null;
-  const offsetParentBounds = layoutOffsetParent
-    ? layoutOffsetParent.getBoundingClientRect()
-    : null;
+  const layoutOffsetParent =
+    options.useLayoutDimensions && offsetParent instanceof HTMLElement ? offsetParent : null;
+  const offsetParentBounds = layoutOffsetParent ? layoutOffsetParent.getBoundingClientRect() : null;
   const centerX = offsetParentBounds
-    ? offsetParentBounds.left
-      + layoutOffsetParent!.clientLeft
-      + boundsElement.offsetLeft
-      + width / 2
+    ? offsetParentBounds.left +
+      layoutOffsetParent!.clientLeft +
+      boundsElement.offsetLeft +
+      width / 2
     : bounds.left + bounds.width / 2;
   const centerY = offsetParentBounds
-    ? offsetParentBounds.top
-      + layoutOffsetParent!.clientTop
-      + boundsElement.offsetTop
-      + height / 2
+    ? offsetParentBounds.top + layoutOffsetParent!.clientTop + boundsElement.offsetTop + height / 2
     : bounds.top + bounds.height / 2;
   const transform = calculatePointerMagnet(
     (pointer.clientX - centerX) / (width / 2),
     (pointer.clientY - centerY) / (height / 2),
     options
   );
-  element.style.setProperty(
-    magnetProperties.axisX,
-    String(transform.axisX)
-  );
-  element.style.setProperty(
-    magnetProperties.axisY,
-    String(transform.axisY)
-  );
-  element.style.setProperty(
-    magnetProperties.angle,
-    `${transform.angleDegrees}deg`
-  );
-  element.style.setProperty(
-    magnetProperties.shadowX,
-    `${transform.shadowX}px`
-  );
-  element.style.setProperty(
-    magnetProperties.shadowY,
-    `${transform.shadowY}px`
-  );
+  element.style.setProperty(magnetProperties.axisX, String(transform.axisX));
+  element.style.setProperty(magnetProperties.axisY, String(transform.axisY));
+  element.style.setProperty(magnetProperties.angle, `${transform.angleDegrees}deg`);
+  element.style.setProperty(magnetProperties.shadowX, `${transform.shadowX}px`);
+  element.style.setProperty(magnetProperties.shadowY, `${transform.shadowY}px`);
   element.style.setProperty(magnetProperties.lightX, `${(transform.normalizedX + 1) * 50}%`);
   element.style.setProperty(magnetProperties.lightY, `${(transform.normalizedY + 1) * 50}%`);
   element.style.setProperty(magnetProperties.lightStrength, String(transform.edgeStrength));

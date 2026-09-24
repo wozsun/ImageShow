@@ -1,37 +1,46 @@
 import { activeResult, discardedResult } from "./ingestion-scenario-fixture.mts";
 import assert from "node:assert/strict";
-import type { IngestionSessionSnapshot, UploadIntentSnapshot } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
+import type {
+  IngestionSessionSnapshot,
+  UploadIntentSnapshot
+} from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
 import { activeSession, requiredValue } from "./ingestion-scenario-fixture.mts";
 import { createHash, randomUUID } from "node:crypto";
 import { createIngestionScenarioFixture } from "./ingestion-scenario-fixture.mts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
-const sharedAppConfig = await import("@imageshow/shared");
-const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
-const runtimeAvailability = await import("../../../../packages/server/src/core/runtime-availability.ts");
-const ingestionSessionTransitions = await import(
-  "../../../../packages/server/src/images/ingestion/sessions/transitions.ts"
-);
-const ingestionSessionCodec = await import("../../../../packages/server/src/images/ingestion/sessions/codec.ts");
-const ingestionSessionIdentity = await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
-const ingestionSessionProjection = await import(
-  "../../../../packages/server/src/images/ingestion/sessions/projection.ts"
-);
-const ingestionSessionKeys = await import("../../../../packages/server/src/images/ingestion/sessions/keys.ts");
-const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
-const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
-const { ingestionRepository, productionIngestionRepository, serviceNow, displayOrderKey, ingestionMetadata } = await createIngestionScenarioFixture(runtime);
-const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdleTtlSeconds * 1000;
+  const sharedAppConfig = await import("@imageshow/shared");
+  const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
+  const runtimeAvailability =
+    await import("../../../../packages/server/src/core/runtime-availability.ts");
+  const ingestionSessionTransitions =
+    await import("../../../../packages/server/src/images/ingestion/sessions/transitions.ts");
+  const ingestionSessionCodec =
+    await import("../../../../packages/server/src/images/ingestion/sessions/codec.ts");
+  const ingestionSessionIdentity =
+    await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
+  const ingestionSessionProjection =
+    await import("../../../../packages/server/src/images/ingestion/sessions/projection.ts");
+  const ingestionSessionKeys =
+    await import("../../../../packages/server/src/images/ingestion/sessions/keys.ts");
+  const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
+  const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
+  const {
+    ingestionRepository,
+    productionIngestionRepository,
+    serviceNow,
+    displayOrderKey,
+    ingestionMetadata
+  } = await createIngestionScenarioFixture(runtime);
+  const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdleTtlSeconds * 1000;
   const importOwner = "current-import-domain-" + randomUUID();
   const importSessionId = ingestionSessionIdentity.createIngestionSessionId(
     importOwner,
     "import",
     "import-ttl"
   );
-  const importResolvedTime = imageTime.parseImageTime(
-    "2026-08-23T01:02:05.456Z"
-  );
+  const importResolvedTime = imageTime.parseImageTime("2026-08-23T01:02:05.456Z");
   const importImageId = imageTime.createImageId(importResolvedTime.date, 39);
   const importCreatedAt = 5_000;
   const importCanonicalWithoutHash = {
@@ -97,21 +106,30 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     expiresCount: await redisClient.redis.zcard(malformedImportKeys.expires)
   });
   const malformedImportStateBefore = await readMalformedImportState();
-  await assert.rejects(ingestionRepository.acceptImportSession({
-    ...importCanonical,
-    owner: malformedImportOwner,
-    session_id: malformedImportSessionId,
-    request_hash: ""
-  }, malformedImportDisplayOrderKey, importCreatedAt));
-  await assert.rejects(ingestionRepository.acceptImportSession({
-    ...importCanonical,
-    owner: malformedImportOwner,
-    session_id: malformedImportSessionId
-  }, malformedImportDisplayOrderKey, Number.NaN));
-  const {
-    import_download: retainedImportDownload,
-    ...importWithoutDownload
-  } = importCanonical;
+  await assert.rejects(
+    ingestionRepository.acceptImportSession(
+      {
+        ...importCanonical,
+        owner: malformedImportOwner,
+        session_id: malformedImportSessionId,
+        request_hash: ""
+      },
+      malformedImportDisplayOrderKey,
+      importCreatedAt
+    )
+  );
+  await assert.rejects(
+    ingestionRepository.acceptImportSession(
+      {
+        ...importCanonical,
+        owner: malformedImportOwner,
+        session_id: malformedImportSessionId
+      },
+      malformedImportDisplayOrderKey,
+      Number.NaN
+    )
+  );
+  const { import_download: retainedImportDownload, ...importWithoutDownload } = importCanonical;
   const malformedImportSchemas = [
     {
       ...importWithoutDownload,
@@ -151,21 +169,29 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     ...runtimeAvailability.getRedisOperationalState()
   };
   for (const malformed of malformedImportSchemas) {
-    assert.throws(() => ingestionSessionCodec.parseStoredIngestionSession(
-      JSON.stringify({
-        ...malformed,
-        version: 1,
-        last_semantic_revision: 1,
-        accepted_at: importCreatedAt,
-        accepted_order: 1,
-        discard_at: importCreatedAt + importTtlMs
-      })
-    ));
-    await assert.rejects(productionIngestionRepository.acceptImportSession(
-      malformed as unknown as IngestionSessionSnapshot,
-      malformedImportDisplayOrderKey,
-      importCreatedAt
-    ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+    assert.throws(() =>
+      ingestionSessionCodec.parseStoredIngestionSession(
+        JSON.stringify({
+          ...malformed,
+          version: 1,
+          last_semantic_revision: 1,
+          accepted_at: importCreatedAt,
+          accepted_order: 1,
+          discard_at: importCreatedAt + importTtlMs
+        })
+      )
+    );
+    await assert.rejects(
+      productionIngestionRepository.acceptImportSession(
+        malformed as unknown as IngestionSessionSnapshot,
+        malformedImportDisplayOrderKey,
+        importCreatedAt
+      ),
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid"
+    );
   }
   assert.deepEqual(
     runtimeAvailability.getRedisOperationalState(),
@@ -181,27 +207,21 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
   ingestionRepository.subscribe(importOwner, "import", () => {
     importListenerCalls += 1;
   });
-  const acceptedImport = activeResult(await ingestionRepository.acceptImportSession(
-    importCanonical,
-    displayOrderKey(importSessionId, 39, importCreatedAt),
-    importCreatedAt
-  ));
-  assert.equal(
-    acceptedImport.session.discard_at,
-    importCreatedAt + importTtlMs
+  const acceptedImport = activeResult(
+    await ingestionRepository.acceptImportSession(
+      importCanonical,
+      displayOrderKey(importSessionId, 39, importCreatedAt),
+      importCreatedAt
+    )
   );
+  assert.equal(acceptedImport.session.discard_at, importCreatedAt + importTtlMs);
   assert.equal(importListenerCalls, 1);
   const importTestKeys = ingestionSessionKeys.ingestionSessionKeys(
     importOwner,
     "import",
     importSessionId
   );
-  const importSnapshot = await ingestionRepository.snapshot(
-    importOwner,
-    "import",
-    0,
-    10
-  );
+  const importSnapshot = await ingestionRepository.snapshot(importOwner, "import", 0, 10);
   assert.equal(importSnapshot.items.length, 1);
   assert.equal(
     importSnapshot.items[0].discard_at,
@@ -210,27 +230,26 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
   );
 
   const discardOrderProbe = async (session: IngestionSessionSnapshot, now: number) => {
-    const discarded = discardedResult(await ingestionRepository.mutateSemantic(
-      session,
-      session.version,
-      ingestionSessionTransitions.discardedIngestionReceipt(session, now),
-      now
-    ));
-    await ingestionRepository.deleteSession(
-      discarded.session,
-      discarded.session.version,
-      now + 1
+    const discarded = discardedResult(
+      await ingestionRepository.mutateSemantic(
+        session,
+        session.version,
+        ingestionSessionTransitions.discardedIngestionReceipt(session, now),
+        now
+      )
     );
+    await ingestionRepository.deleteSession(discarded.session, discarded.session.version, now + 1);
   };
   const importOrderOwner = "current-display-order-import-" + randomUUID();
-  const olderImportBatchKey = coreUuid.randomUuidV7At(
-    new Date(serviceNow + 1_000)
-  );
-  const newerImportBatchKey = coreUuid.randomUuidV7At(
-    new Date(serviceNow + 2_000)
-  );
+  const olderImportBatchKey = coreUuid.randomUuidV7At(new Date(serviceNow + 1_000));
+  const newerImportBatchKey = coreUuid.randomUuidV7At(new Date(serviceNow + 2_000));
   const importOrderSessions = new Map();
-  const acceptImportOrderProbe = async (batchKey: string, label: string, position: number, now: number) => {
+  const acceptImportOrderProbe = async (
+    batchKey: string,
+    label: string,
+    position: number,
+    now: number
+  ) => {
     const sessionId = ingestionSessionIdentity.createIngestionSessionId(
       importOrderOwner,
       "import",
@@ -249,16 +268,16 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
         .update(label + "-" + String(position))
         .digest("hex")
     };
-    const accepted = activeResult(await ingestionRepository.acceptImportSession({
-      ...withoutHash,
-      semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-        withoutHash
+    const accepted = activeResult(
+      await ingestionRepository.acceptImportSession(
+        {
+          ...withoutHash,
+          semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(withoutHash)
+        },
+        ingestionSessionIdentity.createIngestionDisplayOrderKey(batchKey, position, sessionId),
+        now
       )
-    }, ingestionSessionIdentity.createIngestionDisplayOrderKey(
-      batchKey,
-      position,
-      sessionId
-    ), now));
+    );
     importOrderSessions.set(label + "-" + String(position), accepted.session);
   };
   for (const position of [1, 0]) {
@@ -292,9 +311,10 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
   );
   assert.deepEqual(
     importOrderFirstPage.items.map((item) => item.session_id),
-    Array.from({ length: 10 }, (_, position) => (
-      importOrderSessions.get("newer-" + String(position)).session_id
-    )),
+    Array.from(
+      { length: 10 },
+      (_, position) => importOrderSessions.get("newer-" + String(position)).session_id
+    ),
     "新导入批次必须置顶，且第一页严格保持来源 1→N"
   );
   assert.deepEqual(
@@ -307,15 +327,8 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     ],
     "批内来源顺序必须跨页稳定，旧批次紧随新批次"
   );
-  const externalImportBatchKey = coreUuid.randomUuidV7At(
-    new Date(serviceNow + 3_000)
-  );
-  await acceptImportOrderProbe(
-    externalImportBatchKey,
-    "external",
-    0,
-    serviceNow + 18_000
-  );
+  const externalImportBatchKey = coreUuid.randomUuidV7At(new Date(serviceNow + 3_000));
+  await acceptImportOrderProbe(externalImportBatchKey, "external", 0, serviceNow + 18_000);
   const currentDocumentPairs = Array.from({ length: 12 }, (_, position) => {
     const session = importOrderSessions.get("newer-" + String(position));
     return {
@@ -323,16 +336,10 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
       image_id: session.image_id
     };
   });
-  const filteredImportPage = await ingestionRepository.snapshot(
-    importOrderOwner,
-    "import",
-    0,
-    3,
-    {
-      excludeItems: currentDocumentPairs,
-      includeItems: [currentDocumentPairs[0], currentDocumentPairs[11]]
-    }
-  );
+  const filteredImportPage = await ingestionRepository.snapshot(importOrderOwner, "import", 0, 3, {
+    excludeItems: currentDocumentPairs,
+    includeItems: [currentDocumentPairs[0], currentDocumentPairs[11]]
+  });
   assert.deepEqual(
     filteredImportPage.items.map((item) => item.session_id),
     [
@@ -345,9 +352,7 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     "快照须先排除当前文档 pair，再分页并原子补入当前页 canonical"
   );
   assert.deepEqual(filteredImportPage.staleItems, []);
-  const staleCurrentDocumentTime = imageTime.parseImageTime(
-    "2026-08-23T01:10:59.456Z"
-  );
+  const staleCurrentDocumentTime = imageTime.parseImageTime("2026-08-23T01:10:59.456Z");
   const staleCurrentDocumentPair = {
     session_id: ingestionSessionIdentity.createIngestionSessionId(
       importOrderOwner,
@@ -391,43 +396,31 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     "display_order_key"
   );
   assert.ok(typeof displacedDisplayOrderKey === "string");
-  const orphanDisplayOrderKey = ingestionSessionIdentity
-    .createIngestionDisplayOrderKey(
-      coreUuid.randomUuidV7At(new Date(serviceNow + 18_500)),
-      0,
-      staleCurrentDocumentPair.session_id
-    );
+  const orphanDisplayOrderKey = ingestionSessionIdentity.createIngestionDisplayOrderKey(
+    coreUuid.randomUuidV7At(new Date(serviceNow + 18_500)),
+    0,
+    staleCurrentDocumentPair.session_id
+  );
   const importDisplayQueueKey = ingestionSessionKeys.ingestionDisplayQueueKey(
     importOrderOwner,
     "import"
   );
-  assert.equal(
-    await redisClient.redis.zrem(importDisplayQueueKey, displacedDisplayOrderKey),
-    1
-  );
-  assert.equal(
-    await redisClient.redis.zadd(importDisplayQueueKey, 0, orphanDisplayOrderKey),
-    1
-  );
+  assert.equal(await redisClient.redis.zrem(importDisplayQueueKey, displacedDisplayOrderKey), 1);
+  assert.equal(await redisClient.redis.zadd(importDisplayQueueKey, 0, orphanDisplayOrderKey), 1);
   try {
     await assert.rejects(
-      productionIngestionRepository.snapshot(
-        importOrderOwner,
-        "import",
-        0,
-        0,
-        { excludeItems: [staleCurrentDocumentPair] }
-      ),
-      (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid",
+      productionIngestionRepository.snapshot(importOrderOwner, "import", 0, 0, {
+        excludeItems: [staleCurrentDocumentPair]
+      }),
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid",
       "缺失 canonical 的 session 仍在 display 时必须报告真实孤儿投影"
     );
   } finally {
     await redisClient.redis.zrem(importDisplayQueueKey, orphanDisplayOrderKey);
-    await redisClient.redis.zadd(
-      importDisplayQueueKey,
-      0,
-      displacedDisplayOrderKey
-    );
+    await redisClient.redis.zadd(importDisplayQueueKey, 0, displacedDisplayOrderKey);
   }
   const beyondFilteredImportPage = await ingestionRepository.snapshot(
     importOrderOwner,
@@ -463,32 +456,31 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     ],
     "当前文档已释放的旧 pair 必须跳过，不能把正常状态变化误报为结构损坏"
   );
-  assert.deepEqual(staleIncludedImportPage.staleItems, [
-    currentDocumentPairs[0]
-  ]);
-  const replacementTime = imageTime.parseImageTime(
-    "2026-08-23T01:11:00.456Z"
-  );
+  assert.deepEqual(staleIncludedImportPage.staleItems, [currentDocumentPairs[0]]);
+  const replacementTime = imageTime.parseImageTime("2026-08-23T01:11:00.456Z");
   const replacementWithoutHash = {
     ...importCanonicalWithoutHash,
     owner: importOrderOwner,
     session_id: staleIncludedSession.session_id,
     image_id: imageTime.createImageId(replacementTime.date, 0),
     image_time: replacementTime.iso,
-    request_hash: createHash("sha256")
-      .update("newer-0-replacement")
-      .digest("hex")
+    request_hash: createHash("sha256").update("newer-0-replacement").digest("hex")
   };
-  const replacement = activeResult(await ingestionRepository.acceptImportSession({
-    ...replacementWithoutHash,
-    semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-      replacementWithoutHash
+  const replacement = activeResult(
+    await ingestionRepository.acceptImportSession(
+      {
+        ...replacementWithoutHash,
+        semantic_hash:
+          ingestionSessionProjection.ingestionSessionSemanticHash(replacementWithoutHash)
+      },
+      ingestionSessionIdentity.createIngestionDisplayOrderKey(
+        coreUuid.randomUuidV7At(new Date(serviceNow + 19_500)),
+        0,
+        staleIncludedSession.session_id
+      ),
+      serviceNow + 19_500
     )
-  }, ingestionSessionIdentity.createIngestionDisplayOrderKey(
-    coreUuid.randomUuidV7At(new Date(serviceNow + 19_500)),
-    0,
-    staleIncludedSession.session_id
-  ), serviceNow + 19_500));
+  );
   const replacedIncarnationPage = await ingestionRepository.snapshot(
     importOrderOwner,
     "import",
@@ -499,14 +491,13 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
       includeItems: [currentDocumentPairs[0]]
     }
   );
-  assert.deepEqual(replacedIncarnationPage.staleItems, [
-    currentDocumentPairs[0]
-  ]);
+  assert.deepEqual(replacedIncarnationPage.staleItems, [currentDocumentPairs[0]]);
   assert.equal(
-    replacedIncarnationPage.items.filter((item) => (
-      item.session_id === replacement.session.session_id
-      && item.image_id === replacement.session.image_id
-    )).length,
+    replacedIncarnationPage.items.filter(
+      (item) =>
+        item.session_id === replacement.session.session_id &&
+        item.image_id === replacement.session.image_id
+    ).length,
     1,
     "同 session 新 incarnation 必须进入正常 Server 页且旧 pair 只作为 stale 返回"
   );
@@ -520,7 +511,8 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
   );
   assert.deepEqual(
     importOrderActionPage.items.map((item) => item.accepted_order),
-    importOrderActionPage.items.map((item) => item.accepted_order)
+    importOrderActionPage.items
+      .map((item) => item.accepted_order)
       .toSorted((left, right) => left - right),
     "动作候选必须在冻结水位内按 accepted-order 递增扫描"
   );
@@ -531,17 +523,14 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
 
   const staleScaleOwner = "current-stale-scale-" + randomUUID();
   const staleScaleCount = 3_600;
-  const staleScaleBatchKey = coreUuid.randomUuidV7At(
-    new Date(serviceNow + 21_000)
+  const staleScaleBatchKey = coreUuid.randomUuidV7At(new Date(serviceNow + 21_000));
+  const staleScaleTime = imageTime.parseImageTime("2026-08-23T01:30:00.456Z");
+  const staleScaleMissingTime = imageTime.parseImageTime("2026-08-23T01:31:00.456Z");
+  const staleScaleSeedSessionId = ingestionSessionIdentity.createIngestionSessionId(
+    staleScaleOwner,
+    "import",
+    "active-seed"
   );
-  const staleScaleTime = imageTime.parseImageTime(
-    "2026-08-23T01:30:00.456Z"
-  );
-  const staleScaleMissingTime = imageTime.parseImageTime(
-    "2026-08-23T01:31:00.456Z"
-  );
-  const staleScaleSeedSessionId = ingestionSessionIdentity
-    .createIngestionSessionId(staleScaleOwner, "import", "active-seed");
   const staleScaleKeys = ingestionSessionKeys.ingestionSessionKeys(
     staleScaleOwner,
     "import",
@@ -570,10 +559,7 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
         position,
         sessionId
       );
-      const canonicalKey = ingestionSessionKeys.ingestionCanonicalKey(
-        staleScaleOwner,
-        sessionId
-      );
+      const canonicalKey = ingestionSessionKeys.ingestionCanonicalKey(staleScaleOwner, sessionId);
       const snapshotWithoutHash = {
         ...importCanonicalWithoutHash,
         owner: staleScaleOwner,
@@ -592,9 +578,7 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
       };
       const snapshot = {
         ...snapshotWithoutHash,
-        semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-          snapshotWithoutHash
-        )
+        semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(snapshotWithoutHash)
       };
       staleScaleCanonicalKeys.push(canonicalKey);
       staleScaleActiveSessionIds.push(sessionId);
@@ -612,18 +596,30 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
       });
       staleScaleFixture.hset(
         canonicalKey,
-        "snapshot", JSON.stringify(snapshot),
-        "session_id", sessionId,
-        "image_id", imageId,
-        "owner", staleScaleOwner,
-        "queue", "import",
-        "status", "queued",
-        "version", "1",
-        "request_hash", snapshot.request_hash,
-        "accepted_order", String(acceptedOrder),
-        "display_order_key", displayKey,
-        "discard_at", String(discardAt),
-        "last_semantic_revision", String(acceptedOrder)
+        "snapshot",
+        JSON.stringify(snapshot),
+        "session_id",
+        sessionId,
+        "image_id",
+        imageId,
+        "owner",
+        staleScaleOwner,
+        "queue",
+        "import",
+        "status",
+        "queued",
+        "version",
+        "1",
+        "request_hash",
+        snapshot.request_hash,
+        "accepted_order",
+        String(acceptedOrder),
+        "display_order_key",
+        displayKey,
+        "discard_at",
+        String(discardAt),
+        "last_semantic_revision",
+        String(acceptedOrder)
       );
     }
     staleScaleFixture.zadd(staleScaleKeys.owner, ...staleScaleOwnerMembers);
@@ -632,25 +628,38 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     staleScaleFixture.zadd(staleScaleKeys.expires, ...staleScaleExpiryMembers);
     staleScaleFixture.hset(
       staleScaleKeys.metadata,
-      "owner", staleScaleOwner,
-      "queue", "import",
-      "revision", String(staleScaleCount),
-      "last_accepted_order", String(staleScaleCount),
-      "total", String(staleScaleCount),
-      "unfinished", String(staleScaleCount),
-      "waiting", String(staleScaleCount),
-      "running", "0",
-      "ready", "0",
-      "duplicate_pending", "0",
-      "committing_resolving", "0",
-      "resolving", "0",
-      "completed", "0",
-      "failed", "0"
+      "owner",
+      staleScaleOwner,
+      "queue",
+      "import",
+      "revision",
+      String(staleScaleCount),
+      "last_accepted_order",
+      String(staleScaleCount),
+      "total",
+      String(staleScaleCount),
+      "unfinished",
+      String(staleScaleCount),
+      "waiting",
+      String(staleScaleCount),
+      "running",
+      "0",
+      "ready",
+      "0",
+      "duplicate_pending",
+      "0",
+      "committing_resolving",
+      "0",
+      "resolving",
+      "0",
+      "completed",
+      "0",
+      "failed",
+      "0"
     );
     const staleScaleFixtureResult = await staleScaleFixture.exec();
     assert.ok(
-      staleScaleFixtureResult
-        && staleScaleFixtureResult.every(([error]) => error === null),
+      staleScaleFixtureResult && staleScaleFixtureResult.every(([error]) => error === null),
       "3,600 项合成队列夹具必须完整建立"
     );
 
@@ -666,9 +675,7 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
       await redisClient.redis.info("commandstats")
     );
     const staleScaleZscanCalls = Number(
-      staleScaleCommandStats.get("cmdstat_zscan")
-        ?.split(",", 1)[0]
-        ?.replace("calls=", "") ?? "0"
+      staleScaleCommandStats.get("cmdstat_zscan")?.split(",", 1)[0]?.replace("calls=", "") ?? "0"
     );
     assert.deepEqual(
       staleScaleSnapshot.items.map((item) => item.session_id),
@@ -682,16 +689,11 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     );
     assert.ok(
       staleScaleZscanCalls > 0 && staleScaleZscanCalls <= 64,
-      "display ZSET 必须只扫描一遍，实际 ZSCAN 次数："
-        + String(staleScaleZscanCalls)
+      "display ZSET 必须只扫描一遍，实际 ZSCAN 次数：" + String(staleScaleZscanCalls)
     );
   } finally {
     const staleScaleCleanup = redisClient.redis.pipeline();
-    for (
-      let offset = 0;
-      offset < staleScaleCanonicalKeys.length;
-      offset += 250
-    ) {
+    for (let offset = 0; offset < staleScaleCanonicalKeys.length; offset += 250) {
       const keys = staleScaleCanonicalKeys.slice(offset, offset + 250);
       if (keys.length > 0) {
         staleScaleCleanup.zrem(staleScaleKeys.runnable, ...keys);
@@ -699,26 +701,17 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
         staleScaleCleanup.unlink(...keys);
       }
     }
-    staleScaleCleanup.unlink(
-      staleScaleKeys.owner,
-      staleScaleKeys.display,
-      staleScaleKeys.metadata
-    );
+    staleScaleCleanup.unlink(staleScaleKeys.owner, staleScaleKeys.display, staleScaleKeys.metadata);
     const staleScaleCleanupResult = await staleScaleCleanup.exec();
     assert.ok(
-      staleScaleCleanupResult
-        && staleScaleCleanupResult.every(([error]) => error === null),
+      staleScaleCleanupResult && staleScaleCleanupResult.every(([error]) => error === null),
       "3,600 项合成队列夹具必须完整清理"
     );
   }
 
   const uploadOrderOwner = "current-display-order-upload-" + randomUUID();
-  const uploadOrderBatchKey = coreUuid.randomUuidV7At(
-    new Date(serviceNow + 30_000)
-  );
-  const uploadOrderTime = imageTime.parseImageTime(
-    "2026-08-23T01:20:00.456Z"
-  );
+  const uploadOrderBatchKey = coreUuid.randomUuidV7At(new Date(serviceNow + 30_000));
+  const uploadOrderTime = imageTime.parseImageTime("2026-08-23T01:20:00.456Z");
   const uploadOrderIntents: UploadIntentSnapshot[] = [];
   for (let position = 0; position < 5; position += 1) {
     const sessionId = ingestionSessionIdentity.createIngestionSessionId(
@@ -732,10 +725,7 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     const created = await ingestionRepository.createUploadIntent({
       owner: uploadOrderOwner,
       session_id: sessionId,
-      candidate_image_id: imageTime.createImageId(
-        uploadOrderTime.date,
-        position
-      ),
+      candidate_image_id: imageTime.createImageId(uploadOrderTime.date, position),
       resolved_image_time: uploadOrderTime.iso,
       request_hash: requestHash,
       display_order_key: ingestionSessionIdentity.createIngestionDisplayOrderKey(
@@ -795,21 +785,20 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
       raw_size: intent.expected_size,
       discard_at: 0
     };
-    convertedUploadOrderSessions[position] = activeSession((
-      await ingestionRepository.convertUploadIntent({
-        ...withoutHash,
-        semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-          withoutHash
+    convertedUploadOrderSessions[position] = activeSession(
+      (
+        await ingestionRepository.convertUploadIntent(
+          {
+            ...withoutHash,
+            semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(withoutHash)
+          },
+          token,
+          serviceNow + 33_000 + conversionIndex
         )
-      }, token, serviceNow + 33_000 + conversionIndex)
-    ).session);
+      ).session
+    );
   }
-  const uploadOrderSnapshot = await ingestionRepository.snapshot(
-    uploadOrderOwner,
-    "upload",
-    0,
-    10
-  );
+  const uploadOrderSnapshot = await ingestionRepository.snapshot(uploadOrderOwner, "upload", 0, 10);
   assert.deepEqual(
     uploadOrderSnapshot.items.map((item) => item.session_id),
     convertedUploadOrderSessions.map((item) => item.session_id),
@@ -821,11 +810,7 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
 
   const runnableProbe = async (label: string, position: number, createdAt: number) => {
     const owner = "current-runnable-" + label + "-" + randomUUID();
-    const sessionId = ingestionSessionIdentity.createIngestionSessionId(
-      owner,
-      "import",
-      label
-    );
+    const sessionId = ingestionSessionIdentity.createIngestionSessionId(owner, "import", label);
     const withoutHash = {
       ...importCanonicalWithoutHash,
       owner,
@@ -833,10 +818,16 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
       image_id: imageTime.createImageId(importResolvedTime.date, position),
       request_hash: createHash("sha256").update(label).digest("hex")
     };
-    const accepted = activeResult(await ingestionRepository.acceptImportSession({
-      ...withoutHash,
-      semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(withoutHash)
-    }, displayOrderKey(sessionId, position, createdAt), createdAt));
+    const accepted = activeResult(
+      await ingestionRepository.acceptImportSession(
+        {
+          ...withoutHash,
+          semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(withoutHash)
+        },
+        displayOrderKey(sessionId, position, createdAt),
+        createdAt
+      )
+    );
     return {
       accepted,
       keys: ingestionSessionKeys.ingestionSessionKeys(owner, "import", sessionId)
@@ -844,29 +835,20 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
   };
   const oldRunnableProbes = [];
   for (let index = 0; index < 3; index += 1) {
-    oldRunnableProbes.push(await runnableProbe(
-      "old-" + String(index),
-      100 + index,
-      importCreatedAt + 20 + index
-    ));
+    oldRunnableProbes.push(
+      await runnableProbe("old-" + String(index), 100 + index, importCreatedAt + 20 + index)
+    );
   }
   let runnablePage = await ingestionRepository.discoverRunnablePage(0, 0, 1);
   const frozenRunnableTail = runnablePage.frozenTailScore;
-  const frozenRunnableKeys = new Set(
-    runnablePage.items.map((item) => item.canonicalKey)
-  );
+  const frozenRunnableKeys = new Set(runnablePage.items.map((item) => item.canonicalKey));
   const newRunnableProbes = [];
   for (let index = 0; index < 3; index += 1) {
-    newRunnableProbes.push(await runnableProbe(
-      "new-" + String(index),
-      110 + index,
-      importCreatedAt + 30 + index
-    ));
+    newRunnableProbes.push(
+      await runnableProbe("new-" + String(index), 110 + index, importCreatedAt + 30 + index)
+    );
   }
-  while (
-    runnablePage.scanned
-    && runnablePage.lastScannedScore < frozenRunnableTail
-  ) {
+  while (runnablePage.scanned && runnablePage.lastScannedScore < frozenRunnableTail) {
     runnablePage = await ingestionRepository.discoverRunnablePage(
       runnablePage.lastScannedScore,
       frozenRunnableTail,
@@ -876,52 +858,45 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
       frozenRunnableKeys.add(item.canonicalKey);
     }
   }
-  assert.ok(oldRunnableProbes.every(
-    (probe) => frozenRunnableKeys.has(probe.keys.canonical)
-  ));
-  assert.ok(newRunnableProbes.every(
-    (probe) => !frozenRunnableKeys.has(probe.keys.canonical)
-  ), "冻结尾部后的低 accepted_order 新 owner 不得把旧任务推出本轮扫描");
-  const runnableProbeScores = await Promise.all([
-    ...oldRunnableProbes,
-    ...newRunnableProbes
-  ].map((probe) => redisClient.redis.zscore(
-    probe.keys.runnable,
-    probe.keys.canonical
-  )));
-  assert.ok(runnableProbeScores.every((score) => score !== null));
-  assert.ok(runnableProbeScores.every((score, index, scores) => (
-    index === 0 || Number(score) > Number(scores[index - 1])
-  )), "全局 runnable score 必须与各 owner 的 accepted_order 独立递增");
-  assert.ok([
-    ...oldRunnableProbes,
-    ...newRunnableProbes
-  ].every((probe) => probe.accepted.session.accepted_order === 1));
-  const nextRunnablePassKeys = new Set();
-  const runnableScanBatchSize = sharedAppConfig.appConfig.ingestionRuntime
-    .ingestionSessionScanBatchSize;
-  runnablePage = await ingestionRepository.discoverRunnablePage(
-    0,
-    0,
-    runnableScanBatchSize
+  assert.ok(oldRunnableProbes.every((probe) => frozenRunnableKeys.has(probe.keys.canonical)));
+  assert.ok(
+    newRunnableProbes.every((probe) => !frozenRunnableKeys.has(probe.keys.canonical)),
+    "冻结尾部后的低 accepted_order 新 owner 不得把旧任务推出本轮扫描"
   );
+  const runnableProbeScores = await Promise.all(
+    [...oldRunnableProbes, ...newRunnableProbes].map((probe) =>
+      redisClient.redis.zscore(probe.keys.runnable, probe.keys.canonical)
+    )
+  );
+  assert.ok(runnableProbeScores.every((score) => score !== null));
+  assert.ok(
+    runnableProbeScores.every(
+      (score, index, scores) => index === 0 || Number(score) > Number(scores[index - 1])
+    ),
+    "全局 runnable score 必须与各 owner 的 accepted_order 独立递增"
+  );
+  assert.ok(
+    [...oldRunnableProbes, ...newRunnableProbes].every(
+      (probe) => probe.accepted.session.accepted_order === 1
+    )
+  );
+  const nextRunnablePassKeys = new Set();
+  const runnableScanBatchSize =
+    sharedAppConfig.appConfig.ingestionRuntime.ingestionSessionScanBatchSize;
+  runnablePage = await ingestionRepository.discoverRunnablePage(0, 0, runnableScanBatchSize);
   while (true) {
     for (const item of runnablePage.items) {
       nextRunnablePassKeys.add(item.canonicalKey);
     }
-    if (
-      !runnablePage.scanned
-      || runnablePage.lastScannedScore >= runnablePage.frozenTailScore
-    ) break;
+    if (!runnablePage.scanned || runnablePage.lastScannedScore >= runnablePage.frozenTailScore)
+      break;
     runnablePage = await ingestionRepository.discoverRunnablePage(
       runnablePage.lastScannedScore,
       runnablePage.frozenTailScore,
       runnableScanBatchSize
     );
   }
-  assert.ok(newRunnableProbes.every(
-    (probe) => nextRunnablePassKeys.has(probe.keys.canonical)
-  ));
+  assert.ok(newRunnableProbes.every((probe) => nextRunnablePassKeys.has(probe.keys.canonical)));
   for (const probe of [...oldRunnableProbes, ...newRunnableProbes]) {
     await redisClient.redis
       .multi()
@@ -930,31 +905,15 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
       .del(probe.keys.canonical, probe.keys.owner, probe.keys.metadata)
       .exec();
   }
-  await redisClient.redis.zrem(
-    importTestKeys.runnable,
-    importTestKeys.canonical
-  );
-  await assert.rejects(ingestionRepository.snapshot(
-    importOwner,
-    "import",
-    0,
-    10
-  ));
+  await redisClient.redis.zrem(importTestKeys.runnable, importTestKeys.canonical);
+  await assert.rejects(ingestionRepository.snapshot(importOwner, "import", 0, 10));
   await redisClient.redis.zadd(
     importTestKeys.runnable,
     acceptedImport.session.accepted_order,
     importTestKeys.canonical
   );
-  await redisClient.redis.zrem(
-    importTestKeys.expires,
-    importTestKeys.canonical
-  );
-  await assert.rejects(ingestionRepository.snapshot(
-    importOwner,
-    "import",
-    0,
-    10
-  ));
+  await redisClient.redis.zrem(importTestKeys.expires, importTestKeys.canonical);
+  await assert.rejects(ingestionRepository.snapshot(importOwner, "import", 0, 10));
   await redisClient.redis.zadd(
     importTestKeys.expires,
     acceptedImport.session.discard_at,
@@ -966,114 +925,121 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     error: { code: "expired", message: "expired" },
     semantic_hash: ""
   };
-  await assert.rejects(ingestionRepository.mutateSemantic(
-    acceptedImport.session,
-    acceptedImport.session.version,
-    {
-      ...expiredImportWithoutHash,
-      semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-        expiredImportWithoutHash
-      )
-    },
-    acceptedImport.session.discard_at
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_session_expired");
-  const downloadingImport = activeResult(await ingestionRepository.mutateSemantic(
-    acceptedImport.session,
-    acceptedImport.session.version,
-    {
-      ...acceptedImport.session,
-      status: "downloading" as const,
-      phase: "downloading" as const,
-      message: "downloading",
-      progress: 0,
-      execution_token: coreUuid.randomUuidV7(),
-      semantic_hash: ""
-    },
-    importCreatedAt + 1
-  ));
+  await assert.rejects(
+    ingestionRepository.mutateSemantic(
+      acceptedImport.session,
+      acceptedImport.session.version,
+      {
+        ...expiredImportWithoutHash,
+        semantic_hash:
+          ingestionSessionProjection.ingestionSessionSemanticHash(expiredImportWithoutHash)
+      },
+      acceptedImport.session.discard_at
+    ),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "ingestion_session_expired"
+  );
+  const downloadingImport = activeResult(
+    await ingestionRepository.mutateSemantic(
+      acceptedImport.session,
+      acceptedImport.session.version,
+      {
+        ...acceptedImport.session,
+        status: "downloading" as const,
+        phase: "downloading" as const,
+        message: "downloading",
+        progress: 0,
+        execution_token: coreUuid.randomUuidV7(),
+        semantic_hash: ""
+      },
+      importCreatedAt + 1
+    )
+  );
   assert.equal(downloadingImport.metadata.waiting, 0);
   assert.equal(downloadingImport.metadata.running, 1);
   assert.equal(
-    await redisClient.redis.zscore(
-      importTestKeys.runnable,
-      importTestKeys.canonical
-    ),
+    await redisClient.redis.zscore(importTestKeys.runnable, importTestKeys.canonical),
     null
   );
-  const receivedImport = activeResult(await ingestionRepository.mutateSemantic(
-    downloadingImport.session,
-    downloadingImport.session.version,
-    {
-      ...downloadingImport.session,
-      status: "received" as const,
-      phase: "received" as const,
-      message: "received",
-      progress: 100,
-      execution_token: "",
-      raw_generation: coreUuid.randomUuidV7(),
-      raw_size: 10,
-      semantic_hash: ""
-    },
-    importCreatedAt + 2
-  ));
+  const receivedImport = activeResult(
+    await ingestionRepository.mutateSemantic(
+      downloadingImport.session,
+      downloadingImport.session.version,
+      {
+        ...downloadingImport.session,
+        status: "received" as const,
+        phase: "received" as const,
+        message: "received",
+        progress: 100,
+        execution_token: "",
+        raw_generation: coreUuid.randomUuidV7(),
+        raw_size: 10,
+        semantic_hash: ""
+      },
+      importCreatedAt + 2
+    )
+  );
   assert.equal(receivedImport.metadata.waiting, 0);
   assert.equal(receivedImport.metadata.running, 0);
   assert.equal(receivedImport.metadata.total, acceptedImport.metadata.total);
   assert.equal(receivedImport.metadata.unfinished, acceptedImport.metadata.unfinished);
-  const receivedRunnableScore = Number(await redisClient.redis.zscore(
-    importTestKeys.runnable,
-    importTestKeys.canonical
-  ));
-  assert.ok(
-    Number.isSafeInteger(receivedRunnableScore) && receivedRunnableScore > 0
+  const receivedRunnableScore = Number(
+    await redisClient.redis.zscore(importTestKeys.runnable, importTestKeys.canonical)
   );
-  const failedImport = activeResult(await ingestionRepository.mutateSemantic(
-    receivedImport.session,
-    receivedImport.session.version,
-    {
-      ...receivedImport.session,
-      status: "failed" as const,
-      phase: "failed" as const,
-      message: "failed",
-      progress: null,
-      execution_token: "",
-      error: { code: "download_failed", message: "failed" },
-      semantic_hash: ""
-    },
-    importCreatedAt + 3
-  ));
+  assert.ok(Number.isSafeInteger(receivedRunnableScore) && receivedRunnableScore > 0);
+  const failedImport = activeResult(
+    await ingestionRepository.mutateSemantic(
+      receivedImport.session,
+      receivedImport.session.version,
+      {
+        ...receivedImport.session,
+        status: "failed" as const,
+        phase: "failed" as const,
+        message: "failed",
+        progress: null,
+        execution_token: "",
+        error: { code: "download_failed", message: "failed" },
+        semantic_hash: ""
+      },
+      importCreatedAt + 3
+    )
+  );
   assert.equal(failedImport.metadata.waiting, 0);
   assert.equal(failedImport.metadata.running, 0);
   assert.equal(failedImport.metadata.failed, 1);
-  const retriedImport = activeResult(await ingestionRepository.mutateSemantic(
-    failedImport.session,
-    failedImport.session.version,
-    {
-      ...failedImport.session,
-      status: "queued" as const,
-      phase: "queued" as const,
-      message: "queued again",
-      progress: null,
-      execution_token: "",
-      raw_generation: "",
-      raw_size: 0,
-      error: undefined,
-      semantic_hash: ""
-    },
-    importCreatedAt + 4
-  ));
+  const retriedImport = activeResult(
+    await ingestionRepository.mutateSemantic(
+      failedImport.session,
+      failedImport.session.version,
+      {
+        ...failedImport.session,
+        status: "queued" as const,
+        phase: "queued" as const,
+        message: "queued again",
+        progress: null,
+        execution_token: "",
+        raw_generation: "",
+        raw_size: 0,
+        error: undefined,
+        semantic_hash: ""
+      },
+      importCreatedAt + 4
+    )
+  );
   assert.equal(retriedImport.metadata.waiting, 1);
   assert.equal(retriedImport.metadata.running, 0);
   assert.equal(retriedImport.metadata.failed, 0);
-  const discardedImport = discardedResult(await ingestionRepository.expireSession(
-    retriedImport.session,
-    retriedImport.session.version,
-    retriedImport.session.discard_at,
-    ingestionSessionTransitions.discardedIngestionReceipt(
+  const discardedImport = discardedResult(
+    await ingestionRepository.expireSession(
       retriedImport.session,
-      importCreatedAt + 5
+      retriedImport.session.version,
+      retriedImport.session.discard_at,
+      ingestionSessionTransitions.discardedIngestionReceipt(
+        retriedImport.session,
+        importCreatedAt + 5
+      )
     )
-  ));
+  );
   assert.ok(discardedImport.session);
   assert.equal(discardedImport.session.status, "discarded");
   assert.equal(discardedImport.session.image_time, importResolvedTime.iso);
@@ -1098,28 +1064,27 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     "discarded Redis 收据不得保留 progress_seq、semantic_hash 或活动态字段"
   );
   assert.deepEqual(
-    Object.keys(JSON.parse(requiredValue(await redisClient.redis.hget(
-      importTestKeys.canonical,
-      "snapshot"
-    )))).sort(),
+    Object.keys(
+      JSON.parse(requiredValue(await redisClient.redis.hget(importTestKeys.canonical, "snapshot")))
+    ).sort(),
     discardedReceiptFields
   );
   assert.equal(discardedImport.metadata.total, 0);
   assert.equal(discardedImport.metadata.unfinished, 0);
   assert.equal(await redisClient.redis.zcard(importTestKeys.owner), 0);
   const importEventsBeforeReuse = importListenerCalls;
-  const regeneratedImportTime = imageTime.parseImageTime(
-    "2026-08-23T01:02:07.456Z"
+  const regeneratedImportTime = imageTime.parseImageTime("2026-08-23T01:02:07.456Z");
+  const reusedDiscardedImport = discardedResult(
+    await ingestionRepository.acceptImportSession(
+      {
+        ...importCanonical,
+        image_id: imageTime.createImageId(regeneratedImportTime.date, 44),
+        image_time: regeneratedImportTime.iso
+      },
+      displayOrderKey(importSessionId, 39, importCreatedAt),
+      importCreatedAt + 6
+    )
   );
-  const reusedDiscardedImport = discardedResult(await ingestionRepository.acceptImportSession(
-    {
-      ...importCanonical,
-      image_id: imageTime.createImageId(regeneratedImportTime.date, 44),
-      image_time: regeneratedImportTime.iso
-    },
-    displayOrderKey(importSessionId, 39, importCreatedAt),
-    importCreatedAt + 6
-  ));
   assert.equal(reusedDiscardedImport.created, false);
   assert.equal(reusedDiscardedImport.session.image_time, importResolvedTime.iso);
   assert.equal(importListenerCalls, importEventsBeforeReuse);
@@ -1147,26 +1112,24 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     "import",
     "exhausted-order"
   );
-  const exhaustedOrderImageId = imageTime.createImageId(
-    importResolvedTime.date,
-    45
-  );
+  const exhaustedOrderImageId = imageTime.createImageId(importResolvedTime.date, 45);
   const exhaustedOrderWithoutHash = {
     ...importCanonicalWithoutHash,
     session_id: exhaustedOrderSessionId,
     image_id: exhaustedOrderImageId,
     request_hash: "6".repeat(64)
   };
-  await assert.rejects(ingestionRepository.acceptImportSession({
-    ...exhaustedOrderWithoutHash,
-    semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-      exhaustedOrderWithoutHash
+  await assert.rejects(
+    ingestionRepository.acceptImportSession(
+      {
+        ...exhaustedOrderWithoutHash,
+        semantic_hash:
+          ingestionSessionProjection.ingestionSessionSemanticHash(exhaustedOrderWithoutHash)
+      },
+      displayOrderKey(exhaustedOrderSessionId, 45, importCreatedAt + 8),
+      importCreatedAt + 8
     )
-  }, displayOrderKey(
-    exhaustedOrderSessionId,
-    45,
-    importCreatedAt + 8
-  ), importCreatedAt + 8));
+  );
   const exhaustedOrderKeys = ingestionSessionKeys.ingestionSessionKeys(
     importOwner,
     "import",
@@ -1190,10 +1153,7 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
     "import",
     "wrong-index-type"
   );
-  const blockedCreateImageId = imageTime.createImageId(
-    importResolvedTime.date,
-    40
-  );
+  const blockedCreateImageId = imageTime.createImageId(importResolvedTime.date, 40);
   const blockedCreateWithoutHash = {
     ...importCanonicalWithoutHash,
     owner: blockedCreateOwner,
@@ -1203,16 +1163,16 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
   };
   const blockedCreate = {
     ...blockedCreateWithoutHash,
-    semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-      blockedCreateWithoutHash
-    )
+    semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(blockedCreateWithoutHash)
   };
   await redisClient.redis.set(importTestKeys.expires, "wrong-type");
-  await assert.rejects(ingestionRepository.acceptImportSession(
-    blockedCreate,
-    displayOrderKey(blockedCreateSessionId, 40, importCreatedAt + 8),
-    importCreatedAt + 8
-  ));
+  await assert.rejects(
+    ingestionRepository.acceptImportSession(
+      blockedCreate,
+      displayOrderKey(blockedCreateSessionId, 40, importCreatedAt + 8),
+      importCreatedAt + 8
+    )
+  );
   const blockedCreateKeys = ingestionSessionKeys.ingestionSessionKeys(
     blockedCreateOwner,
     "import",
@@ -1223,5 +1183,4 @@ const importTtlMs = sharedAppConfig.appConfig.ingestionRuntime.importSessionIdle
   assert.equal(await redisClient.redis.zcard(blockedCreateKeys.owner), 0);
   assert.equal(await redisClient.redis.get(importTestKeys.expires), "wrong-type");
   await redisClient.redis.del(importTestKeys.expires);
-
 });

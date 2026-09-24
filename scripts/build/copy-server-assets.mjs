@@ -44,9 +44,7 @@ async function precompressDir(dir) {
       compressed.zstd
         ? writeFile(`${full}.zst`, compressed.zstd)
         : rm(`${full}.zst`, { force: true }),
-      compressed.gzip
-        ? writeFile(`${full}.gz`, compressed.gzip)
-        : rm(`${full}.gz`, { force: true })
+      compressed.gzip ? writeFile(`${full}.gz`, compressed.gzip) : rm(`${full}.gz`, { force: true })
     ]);
     const { brotli, zstd, gzip, ...sizes } = compressed;
     compressedAssets.push({ file, ...sizes });
@@ -60,8 +58,9 @@ await cp(webDist, serverPublic, {
   recursive: true,
   filter(source) {
     const path = relative(webDist, source).replaceAll("\\", "/");
-    return path !== ".vite" && !path.startsWith(".vite/")
-      && !/^index\.html\.(?:br|zst|gz)$/.test(path);
+    return (
+      path !== ".vite" && !path.startsWith(".vite/") && !/^index\.html\.(?:br|zst|gz)$/.test(path)
+    );
   }
 });
 if (existsSync(resolve(serverPublic, ".vite"))) {
@@ -74,23 +73,30 @@ await precompressDir(serverPublic);
 // Build-only metadata describes the buffers actually written above. Consumers
 // can join it with the Vite graph without recompressing every JS/Worker/CSS file.
 await mkdir(resolve(webDist, ".vite"), { recursive: true });
-await writeFile(resolve(webDist, ".vite/static-compression-report.json"), JSON.stringify({
-  schemaVersion: 1,
-  policy: {
-    brotliQuality: staticAssetCompression.brotliQuality,
-    zstdLevel: staticAssetCompression.zstdLevel,
-    zstdWindowLog: staticAssetCompression.zstdWindowLog,
-    gzipLevel: staticAssetCompression.gzipLevel,
-    fileConcurrency: 1,
-    selection: "smaller-body-only",
-    defaultEncodingOrder: ["br", "zstd", "gzip", "identity"]
-  },
-  assets: compressedAssets.sort((left, right) => left.file.localeCompare(right.file))
-}, null, 2) + "\n");
+await writeFile(
+  resolve(webDist, ".vite/static-compression-report.json"),
+  JSON.stringify(
+    {
+      schemaVersion: 1,
+      policy: {
+        brotliQuality: staticAssetCompression.brotliQuality,
+        zstdLevel: staticAssetCompression.zstdLevel,
+        zstdWindowLog: staticAssetCompression.zstdWindowLog,
+        gzipLevel: staticAssetCompression.gzipLevel,
+        fileConcurrency: 1,
+        selection: "smaller-body-only",
+        defaultEncodingOrder: ["br", "zstd", "gzip", "identity"]
+      },
+      assets: compressedAssets.sort((left, right) => left.file.localeCompare(right.file))
+    },
+    null,
+    2
+  ) + "\n"
+);
 
 console.log(
-  "assemble-server: schema.sql -> dist, web -> dist/public; "
-  + `precompressed br${staticAssetCompression.brotliQuality}/`
-  + `zstd${staticAssetCompression.zstdLevel}/gzip${staticAssetCompression.gzipLevel}; `
-  + "smaller-body-only; root SPA template rendered dynamically"
+  "assemble-server: schema.sql -> dist, web -> dist/public; " +
+    `precompressed br${staticAssetCompression.brotliQuality}/` +
+    `zstd${staticAssetCompression.zstdLevel}/gzip${staticAssetCompression.gzipLevel}; ` +
+    "smaller-body-only; root SPA template rendered dynamically"
 );

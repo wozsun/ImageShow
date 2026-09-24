@@ -14,8 +14,10 @@ export function isS3NotFound(error: unknown) {
     Code?: string;
     $metadata?: { httpStatusCode?: number };
   };
-  return candidate?.$metadata?.httpStatusCode === 404
-    || candidate?.name === "NoSuchKey"
-    || candidate?.name === "NotFound"
-    || candidate?.Code === "NoSuchKey";
+  return (
+    candidate?.$metadata?.httpStatusCode === 404 ||
+    candidate?.name === "NoSuchKey" ||
+    candidate?.name === "NotFound" ||
+    candidate?.Code === "NoSuchKey"
+  );
 }

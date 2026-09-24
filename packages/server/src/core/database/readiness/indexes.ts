@@ -1,4 +1,10 @@
-import { requiredPrimaryKeys, requiredTableNames, requiredUniqueIndexes, type DatabaseReader, type RequiredUniqueIndex } from "./contract.ts";
+import {
+  requiredPrimaryKeys,
+  requiredTableNames,
+  requiredUniqueIndexes,
+  type DatabaseReader,
+  type RequiredUniqueIndex
+} from "./contract.ts";
 import { primaryKeyLabel, sameColumns } from "./constraint-helpers.ts";
 
 type UniqueIndexRow = {
@@ -14,23 +20,16 @@ type UniqueIndexRow = {
 };
 
 function normalizedPredicate(predicate: string) {
-  return predicate
-    .toLowerCase()
-    .replaceAll("::text", "")
-    .replace(/\s+/g, "");
+  return predicate.toLowerCase().replaceAll("::text", "").replace(/\s+/g, "");
 }
 
-function predicateMatches(
-  actual: string | null,
-  expected: RequiredUniqueIndex["predicate"]
-) {
+function predicateMatches(actual: string | null, expected: RequiredUniqueIndex["predicate"]) {
   if (expected === "none") return actual === null;
   if (!actual) return false;
   const normalized = normalizedPredicate(actual);
   switch (expected) {
     case "default_storage":
-      return ["is_default", "is_default=true", "true=is_default"]
-        .includes(normalized);
+      return ["is_default", "is_default=true", "true=is_default"].includes(normalized);
     case "non_null_idempotency":
       return normalized === "idempotency_keyisnotnull";
     case "non_null_author_identity":
@@ -54,18 +53,17 @@ function uniqueIndexLabel(required: RequiredUniqueIndex) {
     none: "",
     default_storage: " WHERE is_default",
     non_null_idempotency: " WHERE idempotency_key IS NOT NULL",
-    non_null_author_identity:
-      " WHERE identity_provider IS NOT NULL AND identity_id IS NOT NULL",
-    active_cache_rebuild:
-      " WHERE type = 'cache.rebuild' AND status IN ('pending', 'running')",
+    non_null_author_identity: " WHERE identity_provider IS NOT NULL AND identity_id IS NOT NULL",
+    active_cache_rebuild: " WHERE type = 'cache.rebuild' AND status IN ('pending', 'running')",
     super_admin: " WHERE role = 'super'"
   }[required.predicate];
   return `${primaryKeyLabel(required)}${predicate}`;
 }
 
 export async function assertRequiredUniqueIndexes(database: DatabaseReader) {
-  const rows = (await database.query<UniqueIndexRow>(
-    `SELECT relation.relname AS table_name,
+  const rows = (
+    await database.query<UniqueIndexRow>(
+      `SELECT relation.relname AS table_name,
             ARRAY(
               SELECT attribute.attname
                 FROM unnest(index_record.indkey::smallint[])
@@ -97,24 +95,22 @@ export async function assertRequiredUniqueIndexes(database: DatabaseReader) {
       WHERE namespace.nspname='public'
         AND relation.relname=ANY($1::text[])
         AND index_record.indisunique`,
-    [requiredTableNames]
-  )).rows;
-  const usable = (row: UniqueIndexRow) => (
-    row.is_unique
-    && row.is_valid
-    && row.is_ready
-    && row.is_live
-    && row.expressions === null
+      [requiredTableNames]
+    )
+  ).rows;
+  const usable = (row: UniqueIndexRow) =>
+    row.is_unique && row.is_valid && row.is_ready && row.is_live && row.expressions === null;
+  const missingPrimaryKeys = requiredPrimaryKeys.filter(
+    (required) =>
+      !rows.some(
+        (row) =>
+          usable(row) &&
+          row.is_primary &&
+          row.table_name === required.table &&
+          sameColumns(row.columns, required.columns) &&
+          row.predicate === null
+      )
   );
-  const missingPrimaryKeys = requiredPrimaryKeys.filter((required) => (
-    !rows.some((row) => (
-      usable(row)
-      && row.is_primary
-      && row.table_name === required.table
-      && sameColumns(row.columns, required.columns)
-      && row.predicate === null
-    ))
-  ));
   if (missingPrimaryKeys.length) {
     throw new Error(
       `required primary keys are missing or invalid: ${missingPrimaryKeys
@@ -123,14 +119,16 @@ export async function assertRequiredUniqueIndexes(database: DatabaseReader) {
     );
   }
 
-  const missingUniqueIndexes = requiredUniqueIndexes.filter((required) => (
-    !rows.some((row) => (
-      usable(row)
-      && row.table_name === required.table
-      && sameColumns(row.columns, required.columns)
-      && predicateMatches(row.predicate, required.predicate)
-    ))
-  ));
+  const missingUniqueIndexes = requiredUniqueIndexes.filter(
+    (required) =>
+      !rows.some(
+        (row) =>
+          usable(row) &&
+          row.table_name === required.table &&
+          sameColumns(row.columns, required.columns) &&
+          predicateMatches(row.predicate, required.predicate)
+      )
+  );
   if (missingUniqueIndexes.length) {
     throw new Error(
       `required unique indexes are missing or invalid: ${missingUniqueIndexes

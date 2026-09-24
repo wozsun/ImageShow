@@ -56,8 +56,10 @@ function pairMatches(
   left: Pick<ServerIngestionItemDto, "session_id" | "image_id">,
   right: Pick<ServerIngestionItemDto, "session_id" | "image_id">
 ) {
-  return left.session_id === right.session_id
-    && left.image_id.toLowerCase() === right.image_id.toLowerCase();
+  return (
+    left.session_id === right.session_id &&
+    left.image_id.toLowerCase() === right.image_id.toLowerCase()
+  );
 }
 
 function pairKey(pair: IngestionSessionPairDto) {
@@ -68,15 +70,16 @@ function mergeProgressSummary(
   current: IngestionQueueSummaryDto,
   incoming: IngestionQueueSummaryDto
 ) {
-  const stableFieldsMatch = current.total === incoming.total
-    && current.unfinished === incoming.unfinished
-    && current.waiting === incoming.waiting
-    && current.ready === incoming.ready
-    && current.duplicate_pending === incoming.duplicate_pending
-    && current.committing === incoming.committing
-    && current.resolving === incoming.resolving
-    && current.completed === incoming.completed
-    && current.failed === incoming.failed;
+  const stableFieldsMatch =
+    current.total === incoming.total &&
+    current.unfinished === incoming.unfinished &&
+    current.waiting === incoming.waiting &&
+    current.ready === incoming.ready &&
+    current.duplicate_pending === incoming.duplicate_pending &&
+    current.committing === incoming.committing &&
+    current.resolving === incoming.resolving &&
+    current.completed === incoming.completed &&
+    current.failed === incoming.failed;
   if (!stableFieldsMatch) return null;
 
   // prepare-waiting is uncounted; starting normalization only adds to running.
@@ -99,57 +102,45 @@ export function ingestionQueueBaselineCoversSelection(
   captured: IngestionQueueSnapshotSelection,
   requested: IngestionQueueSnapshotSelection
 ) {
-  if (
-    requested.offset !== captured.offset
-    || requested.limit > captured.limit
-  ) return false;
+  if (requested.offset !== captured.offset || requested.limit > captured.limit) return false;
 
   const capturedExclude = new Set(captured.excludeItems.map(pairKey));
   const capturedInclude = new Set(captured.includeItems.map(pairKey));
   const requestedExclude = new Set(requested.excludeItems.map(pairKey));
   const requestedInclude = new Set(requested.includeItems.map(pairKey));
-  const sameExclude = capturedExclude.size === requestedExclude.size
-    && [...capturedExclude].every((key) => requestedExclude.has(key));
-  const sameInclude = capturedInclude.size === requestedInclude.size
-    && [...capturedInclude].every((key) => requestedInclude.has(key));
-  if (
-    sameExclude
-    && sameInclude
-    && requested.requiredItems <= captured.requiredItems
-  ) return true;
+  const sameExclude =
+    capturedExclude.size === requestedExclude.size &&
+    [...capturedExclude].every((key) => requestedExclude.has(key));
+  const sameInclude =
+    capturedInclude.size === requestedInclude.size &&
+    [...capturedInclude].every((key) => requestedInclude.has(key));
+  if (sameExclude && sameInclude && requested.requiredItems <= captured.requiredItems) return true;
   if (!sameExclude || !sameInclude) {
     if (
-      [...capturedExclude].some((key) => !requestedExclude.has(key))
-      || [...capturedInclude].some((key) => !requestedInclude.has(key))
-    ) return false;
+      [...capturedExclude].some((key) => !requestedExclude.has(key)) ||
+      [...capturedInclude].some((key) => !requestedInclude.has(key))
+    )
+      return false;
 
     const itemKeys = new Set(baseline.items.map(pairKey));
     if (
-      [...requestedExclude].some((key) => (
-        !capturedExclude.has(key) && !itemKeys.has(key)
-      ))
-      || [...requestedInclude].some((key) => (
-        !capturedInclude.has(key) && !itemKeys.has(key)
-      ))
-    ) return false;
+      [...requestedExclude].some((key) => !capturedExclude.has(key) && !itemKeys.has(key)) ||
+      [...requestedInclude].some((key) => !capturedInclude.has(key) && !itemKeys.has(key))
+    )
+      return false;
   }
 
-  const capturedNormalCount = baseline.items.filter((item) => (
-    !capturedExclude.has(pairKey(item))
-  )).length;
-  const requestedNormalCount = baseline.items.filter((item) => (
-    !requestedExclude.has(pairKey(item))
-  )).length;
+  const capturedNormalCount = baseline.items.filter(
+    (item) => !capturedExclude.has(pairKey(item))
+  ).length;
+  const requestedNormalCount = baseline.items.filter(
+    (item) => !requestedExclude.has(pairKey(item))
+  ).length;
   if (requestedNormalCount >= requested.requiredItems) return true;
 
   const staleKeys = new Set(baseline.staleItems.map(pairKey));
-  const activeCapturedExclusions = [...capturedExclude].filter((key) => (
-    !staleKeys.has(key)
-  )).length;
-  const capturedFilteredTotal = Math.max(
-    0,
-    baseline.summary.total - activeCapturedExclusions
-  );
+  const activeCapturedExclusions = [...capturedExclude].filter((key) => !staleKeys.has(key)).length;
+  const capturedFilteredTotal = Math.max(0, baseline.summary.total - activeCapturedExclusions);
   return captured.offset + capturedNormalCount >= capturedFilteredTotal;
 }
 
@@ -180,9 +171,7 @@ export function mergeIngestionQueueMutation(
   baseline: ServerIngestionQueueBaseline,
   event: Extract<IngestionQueueEventDto, { type: "mutation" }>
 ): IngestionQueueMutationMerge {
-  const index = baseline.items.findIndex((item) => (
-    item.session_id === event.session.session_id
-  ));
+  const index = baseline.items.findIndex((item) => item.session_id === event.session.session_id);
   const current = index < 0 ? undefined : baseline.items[index];
 
   if (event.kind === "progress") {
@@ -220,9 +209,10 @@ export function mergeIngestionQueueMutation(
     if (event.session.progress_seq <= current.progress_seq) {
       return { kind: "ignored", baseline };
     }
-    const summary = event.revision === baseline.revision
-      ? mergeProgressSummary(baseline.summary, event.summary)
-      : baseline.summary;
+    const summary =
+      event.revision === baseline.revision
+        ? mergeProgressSummary(baseline.summary, event.summary)
+        : baseline.summary;
     if (!summary) return { kind: "reload", baseline };
     const replacement = replaceItem(baseline, index, event);
     const next = replacement && {
@@ -232,33 +222,23 @@ export function mergeIngestionQueueMutation(
       summary,
       actionWatermark: baseline.actionWatermark
     };
-    return next
-      ? { kind: "accepted", baseline: next }
-      : { kind: "reload", baseline };
+    return next ? { kind: "accepted", baseline: next } : { kind: "reload", baseline };
   }
 
   if (event.revision < baseline.revision) {
     return { kind: "ignored", baseline };
   }
   if (event.revision === baseline.revision) {
-    if (
-      current
-      && pairMatches(current, event.session)
-      && event.session.version > current.version
-    ) return { kind: "reload", baseline };
+    if (current && pairMatches(current, event.session) && event.session.version > current.version)
+      return { kind: "reload", baseline };
     return { kind: "ignored", baseline };
   }
   if (event.revision !== baseline.revision + 1) {
     return { kind: "reload", baseline };
   }
-  if (
-    event.kind === "removed"
-    || event.session.status === "discarded"
-  ) return { kind: "reload", baseline };
-  if (
-    event.session.status === "completed"
-    && !("completed_item" in event.session)
-  ) {
+  if (event.kind === "removed" || event.session.status === "discarded")
+    return { kind: "reload", baseline };
+  if (event.session.status === "completed" && !("completed_item" in event.session)) {
     // The exact-pair owner establishes the terminal fence and schedules the
     // existing bounded status hydration. Advance this page's global metadata
     // without fabricating a full DTO or issuing a duplicate page request.
@@ -297,7 +277,5 @@ export function mergeIngestionQueueMutation(
     return { kind: "reload", baseline };
   }
   const next = replaceItem(baseline, index, event);
-  return next
-    ? { kind: "accepted", baseline: next }
-    : { kind: "reload", baseline };
+  return next ? { kind: "accepted", baseline: next } : { kind: "reload", baseline };
 }

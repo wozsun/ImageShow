@@ -25,10 +25,7 @@ export class IngestionOrphanCleanupWorker {
     this.#controller = controller;
     this.#running = cleanupIngestionOrphans(Date.now(), controller.signal)
       .then((report) => {
-        if (
-          report.temp_removed
-          || report.incomplete_temp_scans
-        ) {
+        if (report.temp_removed || report.incomplete_temp_scans) {
           logger.info("ingestion_orphan_cleanup_completed", report);
         }
       })
@@ -55,8 +52,8 @@ export class IngestionOrphanCleanupWorker {
   }
 
   async drain(timeoutMs = appConfig.backgroundJob.drainTimeoutMs) {
-    const pending = [this.#running, this.#cursorClose].filter(
-      (value): value is Promise<void> => Boolean(value)
+    const pending = [this.#running, this.#cursorClose].filter((value): value is Promise<void> =>
+      Boolean(value)
     );
     if (!pending.length) return true;
     if (timeoutMs <= 0) return false;
@@ -64,10 +61,7 @@ export class IngestionOrphanCleanupWorker {
     const deadline = new Promise<false>((resolve) => {
       timer = setTimeout(() => resolve(false), timeoutMs);
     });
-    const drained = await Promise.race([
-      Promise.all(pending).then(() => true),
-      deadline
-    ]);
+    const drained = await Promise.race([Promise.all(pending).then(() => true), deadline]);
     if (timer) clearTimeout(timer);
     return drained;
   }

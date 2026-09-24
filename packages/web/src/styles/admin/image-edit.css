@@ -26,18 +26,19 @@
   align-items: center;
   gap: 8px;
 }
-.image-editor-modal footer button { min-height: 38px; }
+.image-editor-modal footer button {
+  min-height: 38px;
+}
 .image-editor-trash-trigger.icon {
   width: 38px;
   flex-basis: 38px;
 }
 .image-editor-save-button {
-  min-width: max(
-    calc(3em + 3ch + 26px),
-    calc(4em + 1.125rem + 34px)
-  );
+  min-width: max(calc(3em + 3ch + 26px), calc(4em + 1.125rem + 34px));
 }
-.image-editor-common-panel { flex: 0 0 auto; }
+.image-editor-common-panel {
+  flex: 0 0 auto;
+}
 .image-editor-trash-error {
   margin: 0;
   padding: 9px 10px;
@@ -88,13 +89,39 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.image-editor-content { grid-area: content; min-width: 0; }
-.image-editor-head { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.image-editor-head > div { min-width: 0; display: grid; gap: 4px; }
-.image-editor-head strong, .image-editor-head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.image-editor-head span { color: var(--admin-color-text-secondary); font-size: 14px; }
-.image-editor-title-mobile { display: none; }
-.image-editor-mobile-summary { display: none; }
+.image-editor-content {
+  grid-area: content;
+  min-width: 0;
+}
+.image-editor-head {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.image-editor-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.image-editor-head strong,
+.image-editor-head span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.image-editor-head span {
+  color: var(--admin-color-text-secondary);
+  font-size: 14px;
+}
+.image-editor-title-mobile {
+  display: none;
+}
+.image-editor-mobile-summary {
+  display: none;
+}
 .image-editor-summary-line {
   min-width: 0;
   overflow: hidden;
@@ -103,9 +130,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.image-editor-row > .image-fields { grid-area: fields; margin-top: 6px; }
+.image-editor-row > .image-fields {
+  grid-area: fields;
+  margin-top: 6px;
+}
 
-.image-editor-row.is-changed { background: var(--admin-color-control-changed-surface); }
+.image-editor-row.is-changed {
+  background: var(--admin-color-control-changed-surface);
+}
 .image-editor-row.is-save-saved {
   border-color: var(--admin-color-success-border-strong);
   background: var(--admin-color-success-surface-subtle);
@@ -118,7 +150,12 @@
   border-color: var(--admin-color-danger-border-strong);
   background: var(--admin-color-danger-surface);
 }
-.image-editor-head-name { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.image-editor-head-name {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .image-editor-head .changed-badge,
 .image-editor-head .image-editor-save-badge {
   flex: 0 0 auto;
@@ -149,7 +186,10 @@
 }
 
 @media (max-width: 760px) {
-  .modal.edit-modal.image-editor-overlay { padding: 0; place-items: stretch; }
+  .modal.edit-modal.image-editor-overlay {
+    padding: 0;
+    place-items: stretch;
+  }
   .edit-modal.image-editor-overlay form.image-editor-modal {
     width: 100%;
     height: 100svh;
@@ -165,9 +205,12 @@
     grid-template-rows: auto minmax(0, 1fr) auto;
   }
   .image-editor-modal > header {
-    padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
+    padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px
+      max(12px, env(safe-area-inset-left));
   }
-  .image-editor-modal > header h2 { font-size: 21px; }
+  .image-editor-modal > header h2 {
+    font-size: 21px;
+  }
   .image-editor-modal > header .image-editor-restore-button {
     min-height: 44px;
     padding-inline: 12px;
@@ -179,13 +222,18 @@
     aspect-ratio: 1;
   }
   .image-editor-modal > footer {
-    padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+    padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom))
+      max(10px, env(safe-area-inset-left));
   }
   .image-editor-modal > footer .image-editor-resource-actions {
     gap: 6px;
   }
-  .image-editor-modal > footer button { min-height: 44px; }
-  .image-editor-modal > footer .modal-footer-actions { gap: 6px; }
+  .image-editor-modal > footer button {
+    min-height: 44px;
+  }
+  .image-editor-modal > footer .modal-footer-actions {
+    gap: 6px;
+  }
   .image-editor-modal > footer .image-editor-migrate-trigger {
     width: auto;
     min-width: 0;
@@ -200,7 +248,9 @@
     width: 44px;
     flex: 0 0 44px;
   }
-  .image-editor-modal > footer .modal-footer-actions button { white-space: nowrap; }
+  .image-editor-modal > footer .modal-footer-actions button {
+    white-space: nowrap;
+  }
 
   .image-editor-preview .image-thumbnail {
     width: 56px;
@@ -215,19 +265,41 @@
     gap: 8px;
     padding: 8px;
   }
-  .image-editor-preview { width: 56px; gap: 0; }
+  .image-editor-preview {
+    width: 56px;
+    gap: 0;
+  }
   .image-editor-preview-size,
-  .image-editor-desktop-summary { display: none; }
-  .image-editor-mobile-summary { display: block; }
-  .image-editor-title-desktop { display: none; }
-  .image-editor-title-mobile { display: block; }
-  .image-editor-content { width: 100%; }
-  .image-editor-head { min-height: 0; padding-left: 0; }
-  .image-editor-head > div { gap: 2px; }
-  .image-editor-row > .image-fields { margin-top: 2px; }
+  .image-editor-desktop-summary {
+    display: none;
+  }
+  .image-editor-mobile-summary {
+    display: block;
+  }
+  .image-editor-title-desktop {
+    display: none;
+  }
+  .image-editor-title-mobile {
+    display: block;
+  }
+  .image-editor-content {
+    width: 100%;
+  }
+  .image-editor-head {
+    min-height: 0;
+    padding-left: 0;
+  }
+  .image-editor-head > div {
+    gap: 2px;
+  }
+  .image-editor-row > .image-fields {
+    margin-top: 2px;
+  }
   .image-editor-modal.is-single .image-editor-list {
     display: flex;
     flex-direction: column;
   }
-  .image-editor-modal.is-single .image-editor-row { margin-block: auto; }
+  .image-editor-modal.is-single .image-editor-row {
+    margin-block: auto;
+  }
 }

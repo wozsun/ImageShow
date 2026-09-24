@@ -7,10 +7,7 @@ import {
 import { FacetSelector } from "../../../components/data-display/FacetSelector.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { SelectMenu } from "../../../components/form/SelectMenu.js";
-import {
-  brightnessOptionLabel,
-  deviceOptionLabel
-} from "../../../lib/ui/select-options.js";
+import { brightnessOptionLabel, deviceOptionLabel } from "../../../lib/ui/select-options.js";
 import { AnchoredMenuDismissSignalContext } from "../../../hooks/useAnchoredMenu.js";
 import { useDismissiblePanel } from "../../../hooks/useDismissiblePanel.js";
 import type { ImageAdminView } from "./useImageAdminOperations.js";
@@ -62,7 +59,7 @@ function useImageAdminDoubleRowLayout(enabled: boolean) {
     const update = () => {
       const width = filterBar.getBoundingClientRect().width;
       const next = isImageAdminDoubleRowWidth(width);
-      setMeasuredDoubleRowLayout((current) => current === next ? current : next);
+      setMeasuredDoubleRowLayout((current) => (current === next ? current : next));
     };
     update();
 
@@ -98,9 +95,7 @@ export function ImageAdminFilters({
 }) {
   const [open, setOpen] = useState(false);
   const clearFiltersRef = useRef<HTMLButtonElement | null>(null);
-  const { filterBarRef, doubleRowLayout } = useImageAdminDoubleRowLayout(
-    !mobileLayout
-  );
+  const { filterBarRef, doubleRowLayout } = useImageAdminDoubleRowLayout(!mobileLayout);
   const disclosure = useDismissiblePanel({
     open,
     onOpenChange: setOpen,
@@ -110,17 +105,13 @@ export function ImageAdminFilters({
   });
   const themeDisabled = disabled || view === "unset";
   const activeCount =
-    (value.device ? 1 : 0)
-    + (value.brightness ? 1 : 0)
-    + (view !== "unset" && value.theme ? 1 : 0)
-    + (value.tag ? 1 : 0)
-    + (value.author ? 1 : 0);
+    (value.device ? 1 : 0) +
+    (value.brightness ? 1 : 0) +
+    (view !== "unset" && value.theme ? 1 : 0) +
+    (value.tag ? 1 : 0) +
+    (value.author ? 1 : 0);
   const hasFilters = Boolean(
-    value.device
-    || value.brightness
-    || value.theme
-    || value.tag
-    || value.author
+    value.device || value.brightness || value.theme || value.tag || value.author
   );
   const clearFilters = () => {
     disclosure.dismissMenus();
@@ -162,10 +153,7 @@ export function ImageAdminFilters({
       </div>
     ),
     theme: (
-      <div
-        key="theme"
-        className="image-list-filter-field image-list-filter-theme"
-      >
+      <div key="theme" className="image-list-filter-field image-list-filter-theme">
         <FacetSelector
           options={vocabulary?.themes ?? []}
           value={view === "unset" ? "" : value.theme}
@@ -178,10 +166,7 @@ export function ImageAdminFilters({
       </div>
     ),
     tag: (
-      <div
-        key="tag"
-        className="image-list-filter-field image-list-filter-tag"
-      >
+      <div key="tag" className="image-list-filter-field image-list-filter-tag">
         <FacetSelector
           selectionMode="any-all"
           options={vocabulary?.tags ?? []}
@@ -195,10 +180,7 @@ export function ImageAdminFilters({
       </div>
     ),
     author: (
-      <div
-        key="author"
-        className="image-list-filter-field image-list-filter-author"
-      >
+      <div key="author" className="image-list-filter-field image-list-filter-author">
         <FacetSelector
           options={vocabulary?.authors ?? []}
           value={value.author}
@@ -226,15 +208,13 @@ export function ImageAdminFilters({
           disabled={disabled}
           aria-expanded={open}
           aria-controls="admin-image-filter-panel"
-          onClick={() => open
-            ? disclosure.setOpen(false, { restoreFocus: true })
-            : disclosure.setOpen(true)}
+          onClick={() =>
+            open ? disclosure.setOpen(false, { restoreFocus: true }) : disclosure.setOpen(true)
+          }
         >
           <AdminIcon name="filter-3-line" />
           筛选
-          {activeCount > 0 && (
-            <span className="image-list-filter-count">{activeCount}</span>
-          )}
+          {activeCount > 0 && <span className="image-list-filter-count">{activeCount}</span>}
           <span className="image-list-filter-chevron">
             <AdminIcon name="arrow-down-s-line" />
           </span>

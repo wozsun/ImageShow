@@ -1,22 +1,10 @@
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
-import {
-  randomUUID
-} from "node:crypto";
-import {
-  rm
-} from "node:fs/promises";
-import {
-  join,
-  resolve,
-  toNamespacedPath
-} from "node:path";
-import {
-  setTimeout as delay
-} from "node:timers/promises";
-import test, {
-  type TestContext
-} from "node:test";
+import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
+import { join, resolve, toNamespacedPath } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import test, { type TestContext } from "node:test";
 import {
   cleanupTestDirectories,
   createTestDirectory,
@@ -28,9 +16,7 @@ import {
   type ProcessResult,
   type ProcessRunOptions
 } from "../support/process-runner.ts";
-import {
-  Client
-} from "pg";
+import { Client } from "pg";
 
 const isolationRoot = resolve(import.meta.dirname, "isolation");
 const storageIngestionScenarios = [
@@ -251,13 +237,12 @@ const databaseScenarioIds = new Set([
 ]);
 const storageIngestionScenarioIds = new Set<string>(storageIngestionScenarios.map(({ id }) => id));
 assert.ok(
-  !selectedDatabaseScenario
-    || databaseScenarioIds.has(selectedDatabaseScenario),
+  !selectedDatabaseScenario || databaseScenarioIds.has(selectedDatabaseScenario),
   `未知数据库集成场景：${selectedDatabaseScenario}`
 );
 assert.ok(
-  !selectedStorageIngestionScenario
-    || storageIngestionScenarioIds.has(selectedStorageIngestionScenario),
+  !selectedStorageIngestionScenario ||
+    storageIngestionScenarioIds.has(selectedStorageIngestionScenario),
   `未知存储/接入集成场景：${selectedStorageIngestionScenario}`
 );
 
@@ -273,9 +258,7 @@ const runProcess = (
 ): Promise<ProcessResult> => {
   const { allowDuringInterrupt, ...runOptions } = options;
   if (activeTestInterruption && !allowDuringInterrupt) {
-    return Promise.reject(new Error(
-      `${command} refused after ${activeTestInterruption}`
-    ));
+    return Promise.reject(new Error(`${command} refused after ${activeTestInterruption}`));
   }
   return processRunner.runProcess(command, args, runOptions);
 };
@@ -292,12 +275,9 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
   let cleanupPromise: Promise<void> | null = null;
   let interruptedCleanupPromise: Promise<void> | null = null;
   let handlingSignal = false;
-  const processResultText = (result: ProcessResult) => (
-    `${result.stderr}\n${result.stdout}`.trim()
-  );
-  const processNotFound = (result: ProcessResult) => (
-    /no such container|not found/i.test(processResultText(result))
-  );
+  const processResultText = (result: ProcessResult) => `${result.stderr}\n${result.stdout}`.trim();
+  const processNotFound = (result: ProcessResult) =>
+    /no such container|not found/i.test(processResultText(result));
   const performResourceCleanup = async () => {
     const errors: unknown[] = [];
     if (containerAttempted) {
@@ -312,15 +292,11 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
             `无法删除隔离 PostgreSQL 容器 ${container}: ${processResultText(removed)}`
           );
         }
-        const inspected = await runProcess(
-          "docker",
-          ["container", "inspect", container],
-          {
-            allowDuringInterrupt: true,
-            allowFailure: true,
-            timeoutMs: 15_000
-          }
-        );
+        const inspected = await runProcess("docker", ["container", "inspect", container], {
+          allowDuringInterrupt: true,
+          allowFailure: true,
+          timeoutMs: 15_000
+        });
         if (inspected.code === 0 || !processNotFound(inspected)) {
           throw new Error(
             `无法证明隔离 PostgreSQL 容器 ${container} 已删除: ${processResultText(inspected)}`
@@ -333,29 +309,21 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
     }
     if (redisContainerAttempted) {
       try {
-        const removed = await runProcess(
-          "docker",
-          ["rm", "--force", redisContainer],
-          {
-            allowDuringInterrupt: true,
-            allowFailure: true,
-            timeoutMs: 30_000
-          }
-        );
+        const removed = await runProcess("docker", ["rm", "--force", redisContainer], {
+          allowDuringInterrupt: true,
+          allowFailure: true,
+          timeoutMs: 30_000
+        });
         if (removed.code !== 0 && !processNotFound(removed)) {
           throw new Error(
             `无法删除隔离 Redis 容器 ${redisContainer}: ${processResultText(removed)}`
           );
         }
-        const inspected = await runProcess(
-          "docker",
-          ["container", "inspect", redisContainer],
-          {
-            allowDuringInterrupt: true,
-            allowFailure: true,
-            timeoutMs: 15_000
-          }
-        );
+        const inspected = await runProcess("docker", ["container", "inspect", redisContainer], {
+          allowDuringInterrupt: true,
+          allowFailure: true,
+          timeoutMs: 15_000
+        });
         if (inspected.code === 0 || !processNotFound(inspected)) {
           throw new Error(
             `无法证明隔离 Redis 容器 ${redisContainer} 已删除: ${processResultText(inspected)}`
@@ -395,15 +363,11 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         } catch (error) {
           lastCleanupErrors = [error];
         }
-        const resourcesConverged = !containerAttempted
-          && !redisContainerAttempted
-          && (!helperRootPromise || helperRemoved);
+        const resourcesConverged =
+          !containerAttempted && !redisContainerAttempted && (!helperRootPromise || helperRemoved);
         if (resourcesConverged) {
           if (terminationErrors.length > 0) {
-            throw new AggregateError(
-              terminationErrors,
-              "数据库契约测试进程终止失败"
-            );
+            throw new AggregateError(terminationErrors, "数据库契约测试进程终止失败");
           }
           return;
         }
@@ -452,12 +416,12 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
   const onSigTerm = () => handleTestSignal("SIGTERM");
   const onShutdownMessage = (message: unknown) => {
     if (
-      typeof message === "object"
-      && message !== null
-      && "type" in message
-      && message.type === "imageshow:shutdown"
-      && "signal" in message
-      && (message.signal === "SIGINT" || message.signal === "SIGTERM")
+      typeof message === "object" &&
+      message !== null &&
+      "type" in message &&
+      message.type === "imageshow:shutdown" &&
+      "signal" in message &&
+      (message.signal === "SIGINT" || message.signal === "SIGTERM")
     ) {
       handleTestSignal(message.signal);
     }
@@ -500,10 +464,7 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
       restoreSignalListeners();
     }
     if (cleanupError) {
-      throw new AggregateError(
-        [error, cleanupError],
-        "数据库契约测试 helper 初始化及清理均失败"
-      );
+      throw new AggregateError([error, cleanupError], "数据库契约测试 helper 初始化及清理均失败");
     }
     throw error;
   };
@@ -514,35 +475,29 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
   } catch (error) {
     await failHelperSetup(error);
   }
-  const testRuntimeRoot = helperRoot ?? await failHelperSetup(
-    new Error("数据库契约测试 helper 目录未创建")
-  );
-
+  const testRuntimeRoot =
+    helperRoot ?? (await failHelperSetup(new Error("数据库契约测试 helper 目录未创建")));
 
   const helper = join(isolationRoot, "initialize-schema.mts");
   const coldRedisHelper = join(isolationRoot, "cold-redis.mts");
 
-
   let port = 0;
   let redisPort = 0;
-  const databaseName = (label: string) => (
-    `imageshow_${label}_${randomUUID().replaceAll("-", "").slice(0, 12)}`
-  );
-  const clientFor = (name: string) => new Client({
-    connectionTimeoutMillis: 5_000,
-    host: "127.0.0.1",
-    lock_timeout: 5_000,
-    port,
-    query_timeout: 15_000,
-    database: name,
-    statement_timeout: 15_000,
-    user: "postgres",
-    password
-  });
-  const withClient = async <T>(
-    name: string,
-    work: (client: Client) => Promise<T>
-  ) => {
+  const databaseName = (label: string) =>
+    `imageshow_${label}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+  const clientFor = (name: string) =>
+    new Client({
+      connectionTimeoutMillis: 5_000,
+      host: "127.0.0.1",
+      lock_timeout: 5_000,
+      port,
+      query_timeout: 15_000,
+      database: name,
+      statement_timeout: 15_000,
+      user: "postgres",
+      password
+    });
+  const withClient = async <T>(name: string, work: (client: Client) => Promise<T>) => {
     const client = clientFor(name);
     await client.connect();
     try {
@@ -557,20 +512,16 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
       await client.query(`CREATE DATABASE "${name}"`);
     });
   };
-  const runTsx = (
-    script: string,
-    args: string[],
-    allowFailure = false,
-    timeoutMs = 60_000
-  ) => runProcess(process.execPath, [
-    resolve(workspace, "node_modules/tsx/dist/cli.mjs"),
-    script,
-    ...args
-  ], {
-      cwd: workspace,
-      allowFailure,
-      timeoutMs
-  });
+  const runTsx = (script: string, args: string[], allowFailure = false, timeoutMs = 60_000) =>
+    runProcess(
+      process.execPath,
+      [resolve(workspace, "node_modules/tsx/dist/cli.mjs"), script, ...args],
+      {
+        cwd: workspace,
+        allowFailure,
+        timeoutMs
+      }
+    );
   const runTsxScenario = async (
     label: string,
     script: string,
@@ -588,20 +539,9 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
     user: string,
     userPassword: string,
     allowFailure = false
-  ) => runTsx(
-    helper,
-    [
-      "127.0.0.1",
-      String(port),
-      name,
-      user,
-      userPassword
-    ],
-    allowFailure
-  );
-  const initialize = async (name: string, allowFailure = false) => (
-    initializeAs(name, "postgres", password, allowFailure)
-  );
+  ) => runTsx(helper, ["127.0.0.1", String(port), name, user, userPassword], allowFailure);
+  const initialize = async (name: string, allowFailure = false) =>
+    initializeAs(name, "postgres", password, allowFailure);
   const schemaDump = async (name: string) => {
     const dump = await runProcess("docker", [
       "exec",
@@ -643,17 +583,18 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
       .filter((line) => !/^\\(?:un)?restrict\b/.test(line))
       .join("\n");
   };
-  const relationCount = (client: Client) => client.query<{ count: string }>(
-    `SELECT count(*)::text AS count
+  const relationCount = (client: Client) =>
+    client
+      .query<{ count: string }>(
+        `SELECT count(*)::text AS count
        FROM pg_class relation
        JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
       WHERE namespace.nspname NOT IN ('information_schema')
         AND left(namespace.nspname, 3) <> 'pg_'
         AND relation.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')`
-  ).then((result) => Number(result.rows[0]?.count ?? -1));
-  const quoteIdentifier = (value: string) => (
-    `"${value.replaceAll('"', '""')}"`
-  );
+      )
+      .then((result) => Number(result.rows[0]?.count ?? -1));
+  const quoteIdentifier = (value: string) => `"${value.replaceAll('"', '""')}"`;
   const constraintName = async (
     client: Client,
     table: string,
@@ -682,11 +623,7 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
     assert.equal(result.rowCount, 1, `${table}(${columns.join(",")}) 约束不唯一`);
     return result.rows[0]!.constraint_name;
   };
-  const uniqueIndexName = async (
-    client: Client,
-    table: string,
-    columns: string[]
-  ) => {
+  const uniqueIndexName = async (client: Client, table: string, columns: string[]) => {
     const result = await client.query<{
       index_name: string;
       predicate: string | null;
@@ -721,9 +658,7 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
     return result.rows[0]!;
   };
   const publishedPort = async (name: string, containerPort: number) => {
-    const result = await runProcess("docker", [
-      "port", name, `${containerPort}/tcp`
-    ]);
+    const result = await runProcess("docker", ["port", name, `${containerPort}/tcp`]);
     const match = /^127\.0\.0\.1:(\d+)$/.exec(result.stdout.trim());
     assert.ok(match, "隔离容器必须发布到本机动态端口");
     return Number(match[1]);
@@ -737,123 +672,145 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
     name: string,
     timeout: number,
     work: (context: TestContext) => Promise<void>
-  ) => context.test(name, {
-    timeout,
-    skip: Boolean(
-      selectedDatabaseScenario && selectedDatabaseScenario !== id
-    )
-  }, work);
+  ) =>
+    context.test(
+      name,
+      {
+        timeout,
+        skip: Boolean(selectedDatabaseScenario && selectedDatabaseScenario !== id)
+      },
+      work
+    );
 
   try {
-    await context.test("准备并等待隔离 PostgreSQL 与 Redis", {
-      timeout: 180_000
-    }, async () => {
-      containerAttempted = true;
-      await runProcess("docker", [
-      "run",
-      "-d",
-      "--name",
-      container,
-      "--tmpfs",
-      "/var/lib/postgresql:rw",
-      "-e",
-      `POSTGRES_PASSWORD=${password}`,
-      "-p",
-      "127.0.0.1::5432",
-      "postgres:18"
-    ], { timeoutMs: 120_000 });
-    redisContainerAttempted = true;
-    await runProcess("docker", [
-      "run",
-      "-d",
-      "--name",
-      redisContainer,
-      "--tmpfs",
-      "/data:rw",
-      "-p",
-      "127.0.0.1::6379",
-      "redis:8",
-      "--save",
-      ""
-    ], { timeoutMs: 120_000 });
+    await context.test(
+      "准备并等待隔离 PostgreSQL 与 Redis",
+      {
+        timeout: 180_000
+      },
+      async () => {
+        containerAttempted = true;
+        await runProcess(
+          "docker",
+          [
+            "run",
+            "-d",
+            "--name",
+            container,
+            "--tmpfs",
+            "/var/lib/postgresql:rw",
+            "-e",
+            `POSTGRES_PASSWORD=${password}`,
+            "-p",
+            "127.0.0.1::5432",
+            "postgres:18"
+          ],
+          { timeoutMs: 120_000 }
+        );
+        redisContainerAttempted = true;
+        await runProcess(
+          "docker",
+          [
+            "run",
+            "-d",
+            "--name",
+            redisContainer,
+            "--tmpfs",
+            "/data:rw",
+            "-p",
+            "127.0.0.1::6379",
+            "redis:8",
+            "--save",
+            ""
+          ],
+          { timeoutMs: 120_000 }
+        );
 
-    port = await publishedPort(container, 5432);
-    redisPort = await publishedPort(redisContainer, 6379);
+        port = await publishedPort(container, 5432);
+        redisPort = await publishedPort(redisContainer, 6379);
 
-    let ready = false;
-    for (let attempt = 0; attempt < 120; attempt += 1) {
-      try {
-        await withClient("postgres", async (client) => {
-          await client.query("SELECT 1");
-        });
-        ready = true;
-        break;
-      } catch {
-        await delay(250);
+        let ready = false;
+        for (let attempt = 0; attempt < 120; attempt += 1) {
+          try {
+            await withClient("postgres", async (client) => {
+              await client.query("SELECT 1");
+            });
+            ready = true;
+            break;
+          } catch {
+            await delay(250);
+          }
+        }
+        assert.equal(ready, true, "隔离 PostgreSQL 未按时就绪");
+        let redisReady = false;
+        for (let attempt = 0; attempt < 120; attempt += 1) {
+          const ping = await runProcess("docker", ["exec", redisContainer, "redis-cli", "ping"], {
+            allowFailure: true,
+            timeoutMs: 5_000
+          });
+          if (ping.code === 0 && ping.stdout.trim() === "PONG") {
+            redisReady = true;
+            break;
+          }
+          await delay(250);
+        }
+        assert.equal(redisReady, true, "隔离 Redis 未按时就绪");
       }
-    }
-    assert.equal(ready, true, "隔离 PostgreSQL 未按时就绪");
-    let redisReady = false;
-    for (let attempt = 0; attempt < 120; attempt += 1) {
-      const ping = await runProcess(
-        "docker",
-        ["exec", redisContainer, "redis-cli", "ping"],
-        { allowFailure: true, timeoutMs: 5_000 }
-      );
-      if (ping.code === 0 && ping.stdout.trim() === "PONG") {
-        redisReady = true;
-        break;
-      }
-      await delay(250);
-    }
-      assert.equal(redisReady, true, "隔离 Redis 未按时就绪");
-    });
+    );
 
     await runDatabaseScenario(
       "schema-baseline",
       "空库基线可重复初始化并建立当前结构约束",
       120_000,
       async () => {
-    const clean = databaseName("clean");
-    await createDatabase(clean);
-    await initialize(clean);
-    await initialize(clean);
-    await initialize(clean);
-    await withClient(clean, async (client) => {
-      const backgroundChecks = await client.query<{ definition: string }>(
-        `SELECT pg_get_constraintdef(constraint_record.oid, true) AS definition
+        const clean = databaseName("clean");
+        await createDatabase(clean);
+        await initialize(clean);
+        await initialize(clean);
+        await initialize(clean);
+        await withClient(clean, async (client) => {
+          const backgroundChecks = await client.query<{ definition: string }>(
+            `SELECT pg_get_constraintdef(constraint_record.oid, true) AS definition
            FROM pg_constraint constraint_record
            JOIN pg_class relation ON relation.oid=constraint_record.conrelid
            JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
           WHERE namespace.nspname='public'
             AND relation.relname='background_job'
             AND constraint_record.conname='background_job_current_type_check'`
-      );
-      assert.deepEqual(backgroundChecks.rows, [{
-        definition: "CHECK (type = ANY (ARRAY['move.cleanup'::text, "
-          + "'trash.purge'::text, 'cache.rebuild'::text]))"
-      }]);
-      assert.deepEqual((await client.query(
-        `SELECT is_nullable, column_default FROM information_schema.columns
+          );
+          assert.deepEqual(backgroundChecks.rows, [
+            {
+              definition:
+                "CHECK (type = ANY (ARRAY['move.cleanup'::text, " +
+                "'trash.purge'::text, 'cache.rebuild'::text]))"
+            }
+          ]);
+          assert.deepEqual(
+            (
+              await client.query(
+                `SELECT is_nullable, column_default FROM information_schema.columns
           WHERE table_schema='public' AND table_name='metadata' AND column_name='theme'`
-      )).rows, [{ is_nullable: "YES", column_default: null }]);
-      const authorColumns = await client.query<{
-        column_name: string;
-        data_type: string;
-      }>(
-        `SELECT column_name, data_type
+              )
+            ).rows,
+            [{ is_nullable: "YES", column_default: null }]
+          );
+          const authorColumns = await client.query<{
+            column_name: string;
+            data_type: string;
+          }>(
+            `SELECT column_name, data_type
            FROM information_schema.columns
           WHERE table_schema='public'
             AND table_name='author'
             AND column_name IN ('identity_provider', 'identity_id')
           ORDER BY column_name`
-      );
-      assert.deepEqual(authorColumns.rows, [
-        { column_name: "identity_id", data_type: "text" },
-        { column_name: "identity_provider", data_type: "text" }
-      ]);
-      const authorChecks = await client.query<{ constraint_name: string }>(
-        `SELECT constraint_record.conname AS constraint_name
+          );
+          assert.deepEqual(authorColumns.rows, [
+            { column_name: "identity_id", data_type: "text" },
+            { column_name: "identity_provider", data_type: "text" }
+          ]);
+          const authorChecks = await client.query<{ constraint_name: string }>(
+            `SELECT constraint_record.conname AS constraint_name
            FROM pg_constraint constraint_record
            JOIN pg_class relation ON relation.oid=constraint_record.conrelid
            JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
@@ -863,47 +820,48 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
              AND constraint_record.convalidated
              AND constraint_record.conname LIKE 'author_identity_%'
            ORDER BY constraint_record.conname`
-      );
-      assert.deepEqual(authorChecks.rows.map((row) => row.constraint_name), [
-        "author_identity_id_nonempty_check",
-        "author_identity_pair_check",
-        "author_identity_provider_token_check"
-      ]);
-      const authorIdentityIndex = await uniqueIndexName(
-        client,
-        "author",
-        ["identity_provider", "identity_id"]
-      );
-      assert.match(
-        authorIdentityIndex.predicate ?? "",
-        /identity_provider IS NOT NULL.*identity_id IS NOT NULL/i
-      );
+          );
+          assert.deepEqual(
+            authorChecks.rows.map((row) => row.constraint_name),
+            [
+              "author_identity_id_nonempty_check",
+              "author_identity_pair_check",
+              "author_identity_provider_token_check"
+            ]
+          );
+          const authorIdentityIndex = await uniqueIndexName(client, "author", [
+            "identity_provider",
+            "identity_id"
+          ]);
+          assert.match(
+            authorIdentityIndex.predicate ?? "",
+            /identity_provider IS NOT NULL.*identity_id IS NOT NULL/i
+          );
 
-      await client.query(
-        `INSERT INTO author(slug, identity_provider, identity_id)
+          await client.query(
+            `INSERT INTO author(slug, identity_provider, identity_id)
          VALUES('identity-test-future', 'future-provider', '1234567890'),
                ('identity-test-weibo', 'weibo', '1234567890')`
-      );
-      for (const [slug, provider, identity, expected] of [
-        ["identity-test-half", "weibo", null, "author_identity_pair_check"],
-        ["identity-test-token", "Bad-Provider", "55", "author_identity_provider_token_check"],
-        ["identity-test-empty", "weibo", "", "author_identity_id_nonempty_check"],
-        ["identity-test-duplicate", "weibo", "1234567890", "idx_author_identity"]
-      ] as const) {
-        await assert.rejects(
-          client.query(
-            `INSERT INTO author(slug, identity_provider, identity_id)
+          );
+          for (const [slug, provider, identity, expected] of [
+            ["identity-test-half", "weibo", null, "author_identity_pair_check"],
+            ["identity-test-token", "Bad-Provider", "55", "author_identity_provider_token_check"],
+            ["identity-test-empty", "weibo", "", "author_identity_id_nonempty_check"],
+            ["identity-test-duplicate", "weibo", "1234567890", "idx_author_identity"]
+          ] as const) {
+            await assert.rejects(
+              client.query(
+                `INSERT INTO author(slug, identity_provider, identity_id)
              VALUES($1, $2, $3)`,
-            [slug, provider, identity]
-          ),
-          (error: unknown) => (
-            (error as { constraint?: string }).constraint === expected
-          )
-        );
+                [slug, provider, identity]
+              ),
+              (error: unknown) => (error as { constraint?: string }).constraint === expected
+            );
+          }
+          await client.query("DELETE FROM author WHERE slug LIKE 'identity-test-%'");
+        });
       }
-      await client.query("DELETE FROM author WHERE slug LIKE 'identity-test-%'");
-    });
-    });
+    );
 
     await runDatabaseScenario(
       "storage-ingestion",
@@ -911,57 +869,52 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
       600_000,
       async (storageContext) => {
         for (const scenario of storageIngestionScenarios) {
-          await storageContext.test(scenario.name, {
-            timeout: 150_000,
-            skip: Boolean(
-              selectedStorageIngestionScenario
-                && selectedStorageIngestionScenario !== scenario.id
-            )
-          }, async () => {
-            const integrationDatabase = databaseName(
-              `storage_${scenario.id.replaceAll("-", "_")}`
-            );
-            await createCurrentDatabase(integrationDatabase);
-            await runProcess("docker", [
-              "exec",
-              redisContainer,
-              "redis-cli",
-              "FLUSHDB"
-            ]);
-            const errors: unknown[] = [];
-            try {
-              await runTsxScenario(scenario.name, scenario.script, [
-                "127.0.0.1",
-                String(port),
-                integrationDatabase,
-                "postgres",
-                password,
-                // Native image I/O uses long paths; keep script entry paths in ordinary form for Node.
-                toNamespacedPath(join(testRuntimeRoot, "runtime", scenario.id)),
-                "127.0.0.1",
-                String(redisPort)
-              ], 120_000);
-            } catch (error) {
-              errors.push(error);
-            }
-            try {
-              await runProcess("docker", [
-                "exec",
-                redisContainer,
-                "redis-cli",
-                "FLUSHDB"
-              ]);
-            } catch (error) {
-              errors.push(error);
-            }
-            if (errors.length === 1) throw errors[0];
-            if (errors.length > 1) {
-              throw new AggregateError(
-                errors,
-                `${scenario.name} 与 Redis 清理均失败`
+          await storageContext.test(
+            scenario.name,
+            {
+              timeout: 150_000,
+              skip: Boolean(
+                selectedStorageIngestionScenario && selectedStorageIngestionScenario !== scenario.id
+              )
+            },
+            async () => {
+              const integrationDatabase = databaseName(
+                `storage_${scenario.id.replaceAll("-", "_")}`
               );
+              await createCurrentDatabase(integrationDatabase);
+              await runProcess("docker", ["exec", redisContainer, "redis-cli", "FLUSHDB"]);
+              const errors: unknown[] = [];
+              try {
+                await runTsxScenario(
+                  scenario.name,
+                  scenario.script,
+                  [
+                    "127.0.0.1",
+                    String(port),
+                    integrationDatabase,
+                    "postgres",
+                    password,
+                    // Native image I/O uses long paths; keep script entry paths in ordinary form for Node.
+                    toNamespacedPath(join(testRuntimeRoot, "runtime", scenario.id)),
+                    "127.0.0.1",
+                    String(redisPort)
+                  ],
+                  120_000
+                );
+              } catch (error) {
+                errors.push(error);
+              }
+              try {
+                await runProcess("docker", ["exec", redisContainer, "redis-cli", "FLUSHDB"]);
+              } catch (error) {
+                errors.push(error);
+              }
+              if (errors.length === 1) throw errors[0];
+              if (errors.length > 1) {
+                throw new AggregateError(errors, `${scenario.name} 与 Redis 清理均失败`);
+              }
             }
-          });
+          );
         }
       }
     );
@@ -971,82 +924,78 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
       "Redis 丢失后从 PostgreSQL 正式真相冷启动",
       120_000,
       async () => {
-    const coldRedisDatabase = databaseName("coldredis");
-    await createDatabase(coldRedisDatabase);
-    const coldRedisArgs = [
-      "127.0.0.1",
-      String(port),
-      coldRedisDatabase,
-      "postgres",
-      password,
-      toNamespacedPath(join(testRuntimeRoot, "cold-redis-runtime")),
-      "127.0.0.1",
-      String(redisPort)
-    ];
-    await runTsxScenario(
-      "冷 Redis 准备",
-      coldRedisHelper,
-      ["seed", ...coldRedisArgs],
-      60_000
+        const coldRedisDatabase = databaseName("coldredis");
+        await createDatabase(coldRedisDatabase);
+        const coldRedisArgs = [
+          "127.0.0.1",
+          String(port),
+          coldRedisDatabase,
+          "postgres",
+          password,
+          toNamespacedPath(join(testRuntimeRoot, "cold-redis-runtime")),
+          "127.0.0.1",
+          String(redisPort)
+        ];
+        await runTsxScenario("冷 Redis 准备", coldRedisHelper, ["seed", ...coldRedisArgs], 60_000);
+        const coldRedisPostgresBefore = await dataDump(coldRedisDatabase);
+        const redisSizeBeforeFlush = await runProcess("docker", [
+          "exec",
+          redisContainer,
+          "redis-cli",
+          "-n",
+          "0",
+          "DBSIZE"
+        ]);
+        assert.ok(Number(redisSizeBeforeFlush.stdout.trim()) > 0);
+        const flushed = await runProcess("docker", [
+          "exec",
+          redisContainer,
+          "redis-cli",
+          "-n",
+          "0",
+          "FLUSHDB"
+        ]);
+        assert.equal(flushed.stdout.trim(), "OK");
+        const redisSizeAfterFlush = await runProcess("docker", [
+          "exec",
+          redisContainer,
+          "redis-cli",
+          "-n",
+          "0",
+          "DBSIZE"
+        ]);
+        assert.equal(redisSizeAfterFlush.stdout.trim(), "0");
+        await runTsxScenario(
+          "冷 Redis 恢复验证",
+          coldRedisHelper,
+          ["verify", ...coldRedisArgs],
+          60_000
+        );
+        assert.equal(
+          await dataDump(coldRedisDatabase),
+          coldRedisPostgresBefore,
+          "隔离 Redis FLUSHDB 冷启动不得改写 PostgreSQL 正式图片"
+        );
+      }
     );
-    const coldRedisPostgresBefore = await dataDump(coldRedisDatabase);
-    const redisSizeBeforeFlush = await runProcess("docker", [
-      "exec",
-      redisContainer,
-      "redis-cli",
-      "-n",
-      "0",
-      "DBSIZE"
-    ]);
-    assert.ok(Number(redisSizeBeforeFlush.stdout.trim()) > 0);
-    const flushed = await runProcess("docker", [
-      "exec",
-      redisContainer,
-      "redis-cli",
-      "-n",
-      "0",
-      "FLUSHDB"
-    ]);
-    assert.equal(flushed.stdout.trim(), "OK");
-    const redisSizeAfterFlush = await runProcess("docker", [
-      "exec",
-      redisContainer,
-      "redis-cli",
-      "-n",
-      "0",
-      "DBSIZE"
-    ]);
-    assert.equal(redisSizeAfterFlush.stdout.trim(), "0");
-    await runTsxScenario(
-      "冷 Redis 恢复验证",
-      coldRedisHelper,
-      ["verify", ...coldRedisArgs],
-      60_000
-    );
-    assert.equal(
-      await dataDump(coldRedisDatabase),
-      coldRedisPostgresBefore,
-      "隔离 Redis FLUSHDB 冷启动不得改写 PostgreSQL 正式图片"
-    );
-    });
 
     await runDatabaseScenario(
       "readiness",
       "现有库 readiness 只读校验与失败回滚",
       180_000,
       async () => {
-    const normalized = databaseName("normalized");
-    await createCurrentDatabase(normalized);
-    let currentTableNames: string[] = [];
-    await withClient(normalized, async (client) => {
-      const tables = await client.query<{ table_name: string }>(
-        `SELECT table_name FROM information_schema.tables
+        const normalized = databaseName("normalized");
+        await createCurrentDatabase(normalized);
+        let currentTableNames: string[] = [];
+        await withClient(normalized, async (client) => {
+          const tables = await client.query<{ table_name: string }>(
+            `SELECT table_name FROM information_schema.tables
           WHERE table_schema='public' AND table_type='BASE TABLE'
           ORDER BY table_name`
-      );
-      currentTableNames = tables.rows.map((row) => row.table_name);
-      assert.ok(currentTableNames.length > 0);
-      await client.query(`
+          );
+          currentTableNames = tables.rows.map((row) => row.table_name);
+          assert.ok(currentTableNames.length > 0);
+          await client.query(`
         INSERT INTO tag(slug, display_name)
         VALUES('current', 'Current data');
         INSERT INTO author(
@@ -1063,55 +1012,46 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           '1234567890'
         );
       `);
-    });
-    const normalizedBefore = await Promise.all([
-      schemaDump(normalized),
-      dataDump(normalized)
-    ]);
-    await initialize(normalized);
-    assert.deepEqual(
-      await Promise.all([schemaDump(normalized), dataDump(normalized)]),
-      normalizedBefore,
-      "已归一化非空库 readiness 不得写入结构或数据"
-    );
+        });
+        const normalizedBefore = await Promise.all([schemaDump(normalized), dataDump(normalized)]);
+        await initialize(normalized);
+        assert.deepEqual(
+          await Promise.all([schemaDump(normalized), dataDump(normalized)]),
+          normalizedBefore,
+          "已归一化非空库 readiness 不得写入结构或数据"
+        );
 
-    const missingAuthorIdentity = databaseName("missingauthoridentity");
-    await createCurrentDatabase(missingAuthorIdentity);
-    await withClient(missingAuthorIdentity, async (client) => {
-      await client.query(`
+        const missingAuthorIdentity = databaseName("missingauthoridentity");
+        await createCurrentDatabase(missingAuthorIdentity);
+        await withClient(missingAuthorIdentity, async (client) => {
+          await client.query(`
         ALTER TABLE author
           DROP COLUMN identity_provider,
           DROP COLUMN identity_id;
         INSERT INTO tag(slug, display_name)
         VALUES('readiness-data', 'Must remain unchanged');
       `);
-    });
-    const missingAuthorIdentityBefore = await Promise.all([
-      schemaDump(missingAuthorIdentity),
-      dataDump(missingAuthorIdentity)
-    ]);
-    const missingAuthorIdentityResult = await initialize(
-      missingAuthorIdentity,
-      true
-    );
-    assert.notEqual(missingAuthorIdentityResult.code, 0);
-    assert.match(
-      processResultText(missingAuthorIdentityResult),
-      /required columns.*author\.identity_provider.*author\.identity_id/i
-    );
-    assert.deepEqual(
-      await Promise.all([
-        schemaDump(missingAuthorIdentity),
-        dataDump(missingAuthorIdentity)
-      ]),
-      missingAuthorIdentityBefore,
-      "readiness 失败不得猜测补列或改写现有数据"
-    );
+        });
+        const missingAuthorIdentityBefore = await Promise.all([
+          schemaDump(missingAuthorIdentity),
+          dataDump(missingAuthorIdentity)
+        ]);
+        const missingAuthorIdentityResult = await initialize(missingAuthorIdentity, true);
+        assert.notEqual(missingAuthorIdentityResult.code, 0);
+        assert.match(
+          processResultText(missingAuthorIdentityResult),
+          /required columns.*author\.identity_provider.*author\.identity_id/i
+        );
+        assert.deepEqual(
+          await Promise.all([schemaDump(missingAuthorIdentity), dataDump(missingAuthorIdentity)]),
+          missingAuthorIdentityBefore,
+          "readiness 失败不得猜测补列或改写现有数据"
+        );
 
-    const unsupportedStorage = databaseName("storagetype");
-    await createCurrentDatabase(unsupportedStorage);
-    await withClient(unsupportedStorage, async (client) => {
-      await client.query(`
+        const unsupportedStorage = databaseName("storagetype");
+        await createCurrentDatabase(unsupportedStorage);
+        await withClient(unsupportedStorage, async (client) => {
+          await client.query(`
         ALTER TABLE storage_backend
           DROP CONSTRAINT storage_backend_type_check;
         ALTER TABLE storage_backend
@@ -1120,51 +1060,48 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         INSERT INTO storage_backend(slug, display_name, type)
          VALUES('unsupported', 'Unsupported backend', 'unsupported');
       `);
-    });
-    const unsupportedSchemaBefore = await schemaDump(unsupportedStorage);
-    const unsupportedDataBefore = await dataDump(unsupportedStorage);
-    const unsupportedStorageResult = await initialize(unsupportedStorage, true);
-    assert.notEqual(unsupportedStorageResult.code, 0);
-    assert.match(
-      processResultText(unsupportedStorageResult),
-      /unsupported storage backend types: unsupported/i
-    );
-    assert.equal(await schemaDump(unsupportedStorage), unsupportedSchemaBefore);
-    assert.equal(await dataDump(unsupportedStorage), unsupportedDataBefore);
+        });
+        const unsupportedSchemaBefore = await schemaDump(unsupportedStorage);
+        const unsupportedDataBefore = await dataDump(unsupportedStorage);
+        const unsupportedStorageResult = await initialize(unsupportedStorage, true);
+        assert.notEqual(unsupportedStorageResult.code, 0);
+        assert.match(
+          processResultText(unsupportedStorageResult),
+          /unsupported storage backend types: unsupported/i
+        );
+        assert.equal(await schemaDump(unsupportedStorage), unsupportedSchemaBefore);
+        assert.equal(await dataDump(unsupportedStorage), unsupportedDataBefore);
 
-    const unsupportedAuthorProvider = databaseName("authorprovider");
-    await createCurrentDatabase(unsupportedAuthorProvider);
-    await withClient(unsupportedAuthorProvider, async (client) => {
-      await client.query(
-        `INSERT INTO author(slug, identity_provider, identity_id)
+        const unsupportedAuthorProvider = databaseName("authorprovider");
+        await createCurrentDatabase(unsupportedAuthorProvider);
+        await withClient(unsupportedAuthorProvider, async (client) => {
+          await client.query(
+            `INSERT INTO author(slug, identity_provider, identity_id)
          VALUES('future-author', 'future-provider', '1234567890')`
-      );
-    });
-    const unsupportedAuthorBefore = await Promise.all([
-      schemaDump(unsupportedAuthorProvider),
-      dataDump(unsupportedAuthorProvider)
-    ]);
-    const unsupportedAuthorResult = await initialize(
-      unsupportedAuthorProvider,
-      true
-    );
-    assert.notEqual(unsupportedAuthorResult.code, 0);
-    assert.match(
-      processResultText(unsupportedAuthorResult),
-      /unsupported author identity providers are present/i
-    );
-    assert.deepEqual(
-      await Promise.all([
-        schemaDump(unsupportedAuthorProvider),
-        dataDump(unsupportedAuthorProvider)
-      ]),
-      unsupportedAuthorBefore
-    );
+          );
+        });
+        const unsupportedAuthorBefore = await Promise.all([
+          schemaDump(unsupportedAuthorProvider),
+          dataDump(unsupportedAuthorProvider)
+        ]);
+        const unsupportedAuthorResult = await initialize(unsupportedAuthorProvider, true);
+        assert.notEqual(unsupportedAuthorResult.code, 0);
+        assert.match(
+          processResultText(unsupportedAuthorResult),
+          /unsupported author identity providers are present/i
+        );
+        assert.deepEqual(
+          await Promise.all([
+            schemaDump(unsupportedAuthorProvider),
+            dataDump(unsupportedAuthorProvider)
+          ]),
+          unsupportedAuthorBefore
+        );
 
-    const incompatibleAuthorCheck = databaseName("authorcheck");
-    await createCurrentDatabase(incompatibleAuthorCheck);
-    await withClient(incompatibleAuthorCheck, async (client) => {
-      await client.query(`
+        const incompatibleAuthorCheck = databaseName("authorcheck");
+        await createCurrentDatabase(incompatibleAuthorCheck);
+        await withClient(incompatibleAuthorCheck, async (client) => {
+          await client.query(`
         ALTER TABLE author
           DROP CONSTRAINT author_identity_provider_token_check;
         ALTER TABLE author
@@ -1181,43 +1118,40 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
             OR identity_id IS NOT NULL
           );
       `);
-    });
-    const incompatibleAuthorCheckResult = await initialize(
-      incompatibleAuthorCheck,
-      true
-    );
-    assert.notEqual(incompatibleAuthorCheckResult.code, 0);
-    assert.match(
-      processResultText(incompatibleAuthorCheckResult),
-      /required CHECK constraints.*author identity null pairing.*author identity provider token/i
-    );
+        });
+        const incompatibleAuthorCheckResult = await initialize(incompatibleAuthorCheck, true);
+        assert.notEqual(incompatibleAuthorCheckResult.code, 0);
+        assert.match(
+          processResultText(incompatibleAuthorCheckResult),
+          /required CHECK constraints.*author identity null pairing.*author identity provider token/i
+        );
 
-    const incompatibleAuthorIdentityIndex = databaseName("authorindex");
-    await createCurrentDatabase(incompatibleAuthorIdentityIndex);
-    await withClient(incompatibleAuthorIdentityIndex, async (client) => {
-      await client.query(`
+        const incompatibleAuthorIdentityIndex = databaseName("authorindex");
+        await createCurrentDatabase(incompatibleAuthorIdentityIndex);
+        await withClient(incompatibleAuthorIdentityIndex, async (client) => {
+          await client.query(`
         DROP INDEX public.idx_author_identity;
         CREATE UNIQUE INDEX idx_author_identity
           ON author(identity_provider, identity_id)
           WHERE identity_provider IS NOT NULL;
       `);
-    });
-    const incompatibleAuthorIndexResult = await initialize(
-      incompatibleAuthorIdentityIndex,
-      true
-    );
-    assert.notEqual(incompatibleAuthorIndexResult.code, 0);
-    assert.match(
-      processResultText(incompatibleAuthorIndexResult),
-      /required unique indexes.*author\(identity_provider,\s*identity_id\)/i
-    );
+        });
+        const incompatibleAuthorIndexResult = await initialize(
+          incompatibleAuthorIdentityIndex,
+          true
+        );
+        assert.notEqual(incompatibleAuthorIndexResult.code, 0);
+        assert.match(
+          processResultText(incompatibleAuthorIndexResult),
+          /required unique indexes.*author\(identity_provider,\s*identity_id\)/i
+        );
 
-    const compatibleSuperset = databaseName("superset");
-    const supersetRole = `imageshow_superset_${randomUUID().replaceAll("-", "")}`;
-    const supersetPassword = randomUUID();
-    await createCurrentDatabase(compatibleSuperset);
-    await withClient(compatibleSuperset, async (client) => {
-      await client.query(`
+        const compatibleSuperset = databaseName("superset");
+        const supersetRole = `imageshow_superset_${randomUUID().replaceAll("-", "")}`;
+        const supersetPassword = randomUUID();
+        await createCurrentDatabase(compatibleSuperset);
+        await withClient(compatibleSuperset, async (client) => {
+          await client.query(`
         CREATE ROLE "${supersetRole}" LOGIN PASSWORD '${supersetPassword}';
         GRANT CONNECT ON DATABASE "${compatibleSuperset}" TO "${supersetRole}";
         GRANT USAGE ON SCHEMA public TO "${supersetRole}";
@@ -1230,213 +1164,174 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         INSERT INTO deployment_owned_marker(id, note)
         VALUES(1, 'must remain untouched');
       `);
-    });
-    const supersetBefore = await Promise.all([
-      schemaDump(compatibleSuperset),
-      dataDump(compatibleSuperset)
-    ]);
-    await initialize(compatibleSuperset);
-    await initializeAs(compatibleSuperset, supersetRole, supersetPassword);
-    assert.deepEqual(
-      await Promise.all([
-        schemaDump(compatibleSuperset),
-        dataDump(compatibleSuperset)
-      ]),
-      supersetBefore,
-      "仅有业务表权限的账号可启动，部署方额外对象及其数据保持不变"
-    );
+        });
+        const supersetBefore = await Promise.all([
+          schemaDump(compatibleSuperset),
+          dataDump(compatibleSuperset)
+        ]);
+        await initialize(compatibleSuperset);
+        await initializeAs(compatibleSuperset, supersetRole, supersetPassword);
+        assert.deepEqual(
+          await Promise.all([schemaDump(compatibleSuperset), dataDump(compatibleSuperset)]),
+          supersetBefore,
+          "仅有业务表权限的账号可启动，部署方额外对象及其数据保持不变"
+        );
 
-    const missingPrimaryKey = databaseName("primarykey");
-    await createCurrentDatabase(missingPrimaryKey);
-    await withClient(missingPrimaryKey, async (client) => {
-      const name = await constraintName(
-        client,
-        "background_job",
-        "p",
-        ["id"]
-      );
-      await client.query(
-        `ALTER TABLE background_job DROP CONSTRAINT ${quoteIdentifier(name)}`
-      );
-    });
-    const missingPrimaryKeyResult = await initialize(missingPrimaryKey, true);
-    assert.notEqual(missingPrimaryKeyResult.code, 0);
-    assert.match(
-      processResultText(missingPrimaryKeyResult),
-      /required primary keys.*background_job\(id\)/i
-    );
+        const missingPrimaryKey = databaseName("primarykey");
+        await createCurrentDatabase(missingPrimaryKey);
+        await withClient(missingPrimaryKey, async (client) => {
+          const name = await constraintName(client, "background_job", "p", ["id"]);
+          await client.query(`ALTER TABLE background_job DROP CONSTRAINT ${quoteIdentifier(name)}`);
+        });
+        const missingPrimaryKeyResult = await initialize(missingPrimaryKey, true);
+        assert.notEqual(missingPrimaryKeyResult.code, 0);
+        assert.match(
+          processResultText(missingPrimaryKeyResult),
+          /required primary keys.*background_job\(id\)/i
+        );
 
-    const incompatibleUniqueIndex = databaseName("uniqueindex");
-    await createCurrentDatabase(incompatibleUniqueIndex);
-    await withClient(incompatibleUniqueIndex, async (client) => {
-      const activeCacheRebuild = await uniqueIndexName(
-        client,
-        "background_job",
-        ["type"]
-      );
-      assert.match(activeCacheRebuild.predicate ?? "", /cache\.rebuild/i);
-      await client.query(`
+        const incompatibleUniqueIndex = databaseName("uniqueindex");
+        await createCurrentDatabase(incompatibleUniqueIndex);
+        await withClient(incompatibleUniqueIndex, async (client) => {
+          const activeCacheRebuild = await uniqueIndexName(client, "background_job", ["type"]);
+          assert.match(activeCacheRebuild.predicate ?? "", /cache\.rebuild/i);
+          await client.query(`
         DROP INDEX public.${quoteIdentifier(activeCacheRebuild.index_name)};
         CREATE UNIQUE INDEX incomplete_active_cache_rebuild
           ON background_job(type)
           WHERE type='cache.rebuild' AND status='pending';
       `);
-    });
-    const incompatibleUniqueResult = await initialize(
-      incompatibleUniqueIndex,
-      true
-    );
-    assert.notEqual(incompatibleUniqueResult.code, 0);
-    assert.match(
-      processResultText(incompatibleUniqueResult),
-      /required unique indexes.*background_job\(type\).*cache\.rebuild/i
-    );
+        });
+        const incompatibleUniqueResult = await initialize(incompatibleUniqueIndex, true);
+        assert.notEqual(incompatibleUniqueResult.code, 0);
+        assert.match(
+          processResultText(incompatibleUniqueResult),
+          /required unique indexes.*background_job\(type\).*cache\.rebuild/i
+        );
 
-    const incompatibleForeignKey = databaseName("foreignkey");
-    await createCurrentDatabase(incompatibleForeignKey);
-    await withClient(incompatibleForeignKey, async (client) => {
-      const name = await constraintName(
-        client,
-        "metadata",
-        "f",
-        ["author"]
-      );
-      await client.query(`
+        const incompatibleForeignKey = databaseName("foreignkey");
+        await createCurrentDatabase(incompatibleForeignKey);
+        await withClient(incompatibleForeignKey, async (client) => {
+          const name = await constraintName(client, "metadata", "f", ["author"]);
+          await client.query(`
         ALTER TABLE metadata DROP CONSTRAINT ${quoteIdentifier(name)};
         ALTER TABLE metadata
           ADD CONSTRAINT incompatible_author_delete
           FOREIGN KEY(author) REFERENCES author(slug) ON DELETE RESTRICT;
       `);
-    });
-    const incompatibleForeignResult = await initialize(
-      incompatibleForeignKey,
-      true
-    );
-    assert.notEqual(incompatibleForeignResult.code, 0);
-    assert.match(
-      processResultText(incompatibleForeignResult),
-      /required foreign keys.*metadata\(author\).*SET NULL/i
-    );
+        });
+        const incompatibleForeignResult = await initialize(incompatibleForeignKey, true);
+        assert.notEqual(incompatibleForeignResult.code, 0);
+        assert.match(
+          processResultText(incompatibleForeignResult),
+          /required foreign keys.*metadata\(author\).*SET NULL/i
+        );
 
-    const missingTable = databaseName("missingtable");
-    await createCurrentDatabase(missingTable);
-    await withClient(missingTable, async (client) => {
-      await client.query("DROP TABLE author CASCADE");
-    });
-    const missingTableResult = await initialize(missingTable, true);
-    assert.notEqual(missingTableResult.code, 0);
-    assert.match(
-      processResultText(missingTableResult),
-      /(?:required public tables.*author|relation "author" does not exist)/i
-    );
+        const missingTable = databaseName("missingtable");
+        await createCurrentDatabase(missingTable);
+        await withClient(missingTable, async (client) => {
+          await client.query("DROP TABLE author CASCADE");
+        });
+        const missingTableResult = await initialize(missingTable, true);
+        assert.notEqual(missingTableResult.code, 0);
+        assert.match(
+          processResultText(missingTableResult),
+          /(?:required public tables.*author|relation "author" does not exist)/i
+        );
 
-    const missingColumn = databaseName("missingcolumn");
-    await createCurrentDatabase(missingColumn);
-    await withClient(missingColumn, async (client) => {
-      await client.query(
-        "ALTER TABLE admin_account DROP COLUMN password_hash CASCADE"
-      );
-    });
-    const missingColumnResult = await initialize(missingColumn, true);
-    assert.notEqual(missingColumnResult.code, 0);
-    assert.match(
-      processResultText(missingColumnResult),
-      /required columns.*admin_account\.password_hash/i
-    );
+        const missingColumn = databaseName("missingcolumn");
+        await createCurrentDatabase(missingColumn);
+        await withClient(missingColumn, async (client) => {
+          await client.query("ALTER TABLE admin_account DROP COLUMN password_hash CASCADE");
+        });
+        const missingColumnResult = await initialize(missingColumn, true);
+        assert.notEqual(missingColumnResult.code, 0);
+        assert.match(
+          processResultText(missingColumnResult),
+          /required columns.*admin_account\.password_hash/i
+        );
 
-    const incompatibleType = databaseName("columntype");
-    await createCurrentDatabase(incompatibleType);
-    await withClient(incompatibleType, async (client) => {
-      await client.query(
-        "ALTER TABLE tag ALTER COLUMN sort_order TYPE BIGINT"
-      );
-    });
-    const incompatibleTypeResult = await initialize(incompatibleType, true);
-    assert.notEqual(incompatibleTypeResult.code, 0);
-    assert.match(
-      processResultText(incompatibleTypeResult),
-      /required columns.*tag\.sort_order/i
-    );
+        const incompatibleType = databaseName("columntype");
+        await createCurrentDatabase(incompatibleType);
+        await withClient(incompatibleType, async (client) => {
+          await client.query("ALTER TABLE tag ALTER COLUMN sort_order TYPE BIGINT");
+        });
+        const incompatibleTypeResult = await initialize(incompatibleType, true);
+        assert.notEqual(incompatibleTypeResult.code, 0);
+        assert.match(
+          processResultText(incompatibleTypeResult),
+          /required columns.*tag\.sort_order/i
+        );
 
-    const incompatibleTypeModifier = databaseName("typemod");
-    await createCurrentDatabase(incompatibleTypeModifier);
-    await withClient(incompatibleTypeModifier, async (client) => {
-      await client.query(
-        "ALTER TABLE metadata ALTER COLUMN image_time TYPE timestamptz(0)"
-      );
-    });
-    const incompatibleModifierResult = await initialize(
-      incompatibleTypeModifier,
-      true
-    );
-    assert.notEqual(incompatibleModifierResult.code, 0);
-    assert.match(
-      processResultText(incompatibleModifierResult),
-      /required columns.*metadata\.image_time/i
-    );
+        const incompatibleTypeModifier = databaseName("typemod");
+        await createCurrentDatabase(incompatibleTypeModifier);
+        await withClient(incompatibleTypeModifier, async (client) => {
+          await client.query("ALTER TABLE metadata ALTER COLUMN image_time TYPE timestamptz(0)");
+        });
+        const incompatibleModifierResult = await initialize(incompatibleTypeModifier, true);
+        assert.notEqual(incompatibleModifierResult.code, 0);
+        assert.match(
+          processResultText(incompatibleModifierResult),
+          /required columns.*metadata\.image_time/i
+        );
 
-    const readOnlyDatabase = databaseName("readonly");
-    await createCurrentDatabase(readOnlyDatabase);
-    await withClient("postgres", async (client) => {
-      await client.query(
-        `ALTER DATABASE "${readOnlyDatabase}"
+        const readOnlyDatabase = databaseName("readonly");
+        await createCurrentDatabase(readOnlyDatabase);
+        await withClient("postgres", async (client) => {
+          await client.query(
+            `ALTER DATABASE "${readOnlyDatabase}"
            SET default_transaction_read_only=on`
-      );
-    });
-    const readOnlyResult = await initialize(readOnlyDatabase, true);
-    assert.notEqual(readOnlyResult.code, 0);
-    assert.match(
-      processResultText(readOnlyResult),
-      /transaction_read_only=on|read-only transaction/i
-    );
+          );
+        });
+        const readOnlyResult = await initialize(readOnlyDatabase, true);
+        assert.notEqual(readOnlyResult.code, 0);
+        assert.match(
+          processResultText(readOnlyResult),
+          /transaction_read_only=on|read-only transaction/i
+        );
 
-    const insufficientPrivileges = databaseName("privileges");
-    const limitedRole = `imageshow_limited_${randomUUID().replaceAll("-", "")}`;
-    const limitedPassword = `limited-${randomUUID()}`;
-    await createCurrentDatabase(insufficientPrivileges);
-    await withClient(insufficientPrivileges, async (client) => {
-      await client.query(
-        `CREATE ROLE "${limitedRole}" LOGIN PASSWORD '${limitedPassword}'`
-      );
-      await client.query(
-        `GRANT CONNECT ON DATABASE "${insufficientPrivileges}" TO "${limitedRole}"`
-      );
-      await client.query(`GRANT USAGE ON SCHEMA public TO "${limitedRole}"`);
-      await client.query(
-        `GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO "${limitedRole}"`
-      );
-    });
-    const privilegeResult = await initializeAs(
-      insufficientPrivileges,
-      limitedRole,
-      limitedPassword,
-      true
-    );
-    assert.notEqual(privilegeResult.code, 0);
-    assert.match(
-      processResultText(privilegeResult),
-      /lacks required table privileges/i
-    );
+        const insufficientPrivileges = databaseName("privileges");
+        const limitedRole = `imageshow_limited_${randomUUID().replaceAll("-", "")}`;
+        const limitedPassword = `limited-${randomUUID()}`;
+        await createCurrentDatabase(insufficientPrivileges);
+        await withClient(insufficientPrivileges, async (client) => {
+          await client.query(`CREATE ROLE "${limitedRole}" LOGIN PASSWORD '${limitedPassword}'`);
+          await client.query(
+            `GRANT CONNECT ON DATABASE "${insufficientPrivileges}" TO "${limitedRole}"`
+          );
+          await client.query(`GRANT USAGE ON SCHEMA public TO "${limitedRole}"`);
+          await client.query(
+            `GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO "${limitedRole}"`
+          );
+        });
+        const privilegeResult = await initializeAs(
+          insufficientPrivileges,
+          limitedRole,
+          limitedPassword,
+          true
+        );
+        assert.notEqual(privilegeResult.code, 0);
+        assert.match(processResultText(privilegeResult), /lacks required table privileges/i);
 
-    const invalidSeed = databaseName("seed");
-    await createCurrentDatabase(invalidSeed);
-    await withClient(invalidSeed, async (client) => {
-      await client.query(`
+        const invalidSeed = databaseName("seed");
+        await createCurrentDatabase(invalidSeed);
+        await withClient(invalidSeed, async (client) => {
+          await client.query(`
         DELETE FROM ready_image_revision;
         DELETE FROM storage_backend WHERE slug='local';
       `);
-    });
-    const invalidSeedResult = await initialize(invalidSeed, true);
-    assert.notEqual(invalidSeedResult.code, 0);
-    const invalidSeedText = processResultText(invalidSeedResult);
-    assert.match(invalidSeedText, /required seed rows/i);
-    assert.match(invalidSeedText, /ready_image_revision singleton/i);
-    assert.match(invalidSeedText, /storage_backend\.local/i);
+        });
+        const invalidSeedResult = await initialize(invalidSeed, true);
+        assert.notEqual(invalidSeedResult.code, 0);
+        const invalidSeedText = processResultText(invalidSeedResult);
+        assert.match(invalidSeedText, /required seed rows/i);
+        assert.match(invalidSeedText, /ready_image_revision singleton/i);
+        assert.match(invalidSeedText, /storage_backend\.local/i);
 
-    const rollback = databaseName("rollback");
-    await createDatabase(rollback);
-    await withClient(rollback, async (client) => {
-      await client.query(`
+        const rollback = databaseName("rollback");
+        await createDatabase(rollback);
+        await withClient(rollback, async (client) => {
+          await client.query(`
         CREATE FUNCTION reject_schema_table() RETURNS event_trigger
         LANGUAGE plpgsql AS $$
         BEGIN
@@ -1447,30 +1342,31 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           ON ddl_command_end WHEN TAG IN ('CREATE TABLE')
           EXECUTE FUNCTION reject_schema_table()
       `);
-    });
-    const rollbackResult = await initialize(rollback, true);
-    assert.notEqual(rollbackResult.code, 0);
-    assert.match(processResultText(rollbackResult), /injected schema failure/i);
-    await withClient(rollback, async (client) => {
-      assert.equal(await relationCount(client), 0);
-      await client.query(`
+        });
+        const rollbackResult = await initialize(rollback, true);
+        assert.notEqual(rollbackResult.code, 0);
+        assert.match(processResultText(rollbackResult), /injected schema failure/i);
+        await withClient(rollback, async (client) => {
+          assert.equal(await relationCount(client), 0);
+          await client.query(`
         DROP EVENT TRIGGER reject_schema_table;
         DROP FUNCTION reject_schema_table();
       `);
-    });
-    await initialize(rollback);
-    await withClient(rollback, async (client) => {
-      const recoveredTables = await client.query(
-        `SELECT table_name FROM information_schema.tables
+        });
+        await initialize(rollback);
+        await withClient(rollback, async (client) => {
+          const recoveredTables = await client.query(
+            `SELECT table_name FROM information_schema.tables
           WHERE table_schema='public' AND table_type='BASE TABLE'`
-      );
-      assert.deepEqual(
-        recoveredTables.rows.map((row) => row.table_name).sort(),
-        currentTableNames,
-        "失败启动回滚后必须能由下一次顺序启动恢复"
-      );
-    });
-    });
+          );
+          assert.deepEqual(
+            recoveredTables.rows.map((row) => row.table_name).sort(),
+            currentTableNames,
+            "失败启动回滚后必须能由下一次顺序启动恢复"
+          );
+        });
+      }
+    );
   } finally {
     if (handlingSignal) {
       // The signal handler exits after this same complete Promise settles.

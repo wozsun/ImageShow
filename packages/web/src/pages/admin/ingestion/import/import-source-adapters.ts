@@ -61,9 +61,7 @@ export type ImportSourceModeAdapter = {
 
 function jsonlResultSummary(result: JsonlManifestResult) {
   if (!result.items.length) return "没有可导入的有效清单项";
-  const invalidPart = result.errors.length
-    ? `、无效 ${result.errors.length}`
-    : "";
+  const invalidPart = result.errors.length ? `、无效 ${result.errors.length}` : "";
   return `共解析 ${result.items.length + result.errors.length} 行，其中有效 ${result.items.length}${invalidPart}`;
 }
 
@@ -83,23 +81,17 @@ const urlsAdapter: ImportSourceModeAdapter = {
   },
   emptySubmitText: "无有效链接",
   parseText: "解析链接",
-  hint: (maxItems) => (
-    `每行一个 URL，最多 ${maxItems} 条；图片属性使用当前默认属性。`
-  ),
+  hint: (maxItems) => `每行一个 URL，最多 ${maxItems} 条；图片属性使用当前默认属性。`,
   hasInput: (text) => Boolean(text.trim()),
   parse: async (text, _signal, urlResult) => {
     const result = urlResult ?? parseImportUrlInput(text);
     return {
       mode: "urls",
       result,
-      submission: result.urls.length
-        ? { mode: "urls", urls: result.urls }
-        : null,
+      submission: result.urls.length ? { mode: "urls", urls: result.urls } : null,
       blockingIssueCount: result.invalidCount,
       submitCount: result.urls.length,
-      summary: result.urls.length
-        ? formatUrlImportSummary(result)
-        : "没有可导入的有效链接"
+      summary: result.urls.length ? formatUrlImportSummary(result) : "没有可导入的有效链接"
     };
   }
 };
@@ -109,22 +101,19 @@ const jsonlAdapter: ImportSourceModeAdapter = {
     heading: "清单导入",
     icon: "file-list-line",
     label: "JSONL 清单",
-    placeholder: '{"original":"https://img.example.com/a.jpg","source":"https://example.com/post/1","image_time":"2020-05-01T00:00:00+08:00","tags":["2020"]}'
+    placeholder:
+      '{"original":"https://img.example.com/a.jpg","source":"https://example.com/post/1","image_time":"2020-05-01T00:00:00+08:00","tags":["2020"]}'
   },
   emptySubmitText: "无有效清单",
   parseText: "解析清单",
-  hint: (maxItems) => (
-    `每行一个 JSON，最多 ${maxItems} 条；单值字段优先，标签与默认标签合并。`
-  ),
+  hint: (maxItems) => `每行一个 JSON，最多 ${maxItems} 条；单值字段优先，标签与默认标签合并。`,
   hasInput: (text) => Boolean(text.trim()),
   parse: async (text, signal) => {
     const manifest = await parseImportJsonl(text, signal);
     return {
       mode: "jsonl",
       manifest,
-      submission: manifest.items.length
-        ? { mode: "jsonl", manifest }
-        : null,
+      submission: manifest.items.length ? { mode: "jsonl", manifest } : null,
       blockingIssueCount: manifest.errors.length,
       submitCount: manifest.items.length,
       summary: jsonlResultSummary(manifest)
@@ -141,9 +130,7 @@ const weiboAdapter: ImportSourceModeAdapter = {
   },
   emptySubmitText: "无微博图片",
   parseText: "解析微博",
-  hint: (maxItems) => (
-    `每行一条公开微博链接，最多 ${maxItems} 条；默认使用微博元数据。`
-  ),
+  hint: (maxItems) => `每行一条公开微博链接，最多 ${maxItems} 条；默认使用微博元数据。`,
   hasInput: (text) => parseWeiboImportLines(text).length > 0,
   parse: async (text, signal) => {
     const inputLines = parseWeiboImportLines(text);
@@ -164,19 +151,14 @@ const weiboAdapter: ImportSourceModeAdapter = {
       submission: normalizedResult.manifest.items.length
         ? { mode: "weibo", result: normalizedResult }
         : null,
-      blockingIssueCount:
-        normalizedResult.errors.length
-        + normalizedResult.manifest.errors.length,
+      blockingIssueCount: normalizedResult.errors.length + normalizedResult.manifest.errors.length,
       submitCount: normalizedResult.manifest.items.length,
       summary: weiboResultSummary(normalizedResult)
     };
   }
 };
 
-export const importSourceModeAdapters: Record<
-  ImportSourceMode,
-  ImportSourceModeAdapter
-> = {
+export const importSourceModeAdapters: Record<ImportSourceMode, ImportSourceModeAdapter> = {
   urls: urlsAdapter,
   jsonl: jsonlAdapter,
   weibo: weiboAdapter

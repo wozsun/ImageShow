@@ -1,7 +1,4 @@
-export type ReadyImageDerivedResultKind =
-  | "attribute"
-  | "filter"
-  | "stats-result";
+export type ReadyImageDerivedResultKind = "attribute" | "filter" | "stats-result";
 
 export const READY_IMAGE_DERIVED_CACHE_POLICY = Object.freeze({
   ttlSeconds: 12 * 60 * 60,

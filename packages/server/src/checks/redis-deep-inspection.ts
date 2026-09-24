@@ -77,18 +77,9 @@ export type RedisDeepInspectionOptions = {
   now?: () => Date;
 };
 
-function checkedBound(
-  value: number | undefined,
-  fallback: number,
-  maximum: number,
-  name: string
-) {
+function checkedBound(value: number | undefined, fallback: number, maximum: number, name: string) {
   const resolved = value ?? fallback;
-  if (
-    !Number.isSafeInteger(resolved)
-    || resolved < 1
-    || resolved > maximum
-  ) {
+  if (!Number.isSafeInteger(resolved) || resolved < 1 || resolved > maximum) {
     throw new RangeError(`${name} must be an integer from 1 to ${maximum}`);
   }
   return resolved;
@@ -128,10 +119,7 @@ function countPrefix(key: string, counts: RedisPrefixCounts) {
   counts.imageshow_total += 1;
   if (key.startsWith(READY_IMAGE_CACHE_PREFIX)) {
     counts.ready_image_cache += 1;
-    if (
-      key === READY_IMAGE_ALL_INDEX_KEY
-      || key.startsWith(READY_IMAGE_DERIVED_INDEX_PREFIX)
-    ) {
+    if (key === READY_IMAGE_ALL_INDEX_KEY || key.startsWith(READY_IMAGE_DERIVED_INDEX_PREFIX)) {
       counts.ready_image_indexes += 1;
     } else if (key.startsWith(READY_IMAGE_DERIVED_INDEX_META_PREFIX)) {
       counts.ready_image_index_meta += 1;
@@ -151,10 +139,7 @@ function countPrefix(key: string, counts: RedisPrefixCounts) {
   } else {
     counts.other += 1;
   }
-  if (
-    key.includes(":tmp:")
-    || key.startsWith(`${READY_IMAGE_DERIVED_PREFIX}temp:`)
-  ) {
+  if (key.includes(":tmp:") || key.startsWith(`${READY_IMAGE_DERIVED_PREFIX}temp:`)) {
     counts.temporary += 1;
   }
 }
@@ -167,17 +152,13 @@ function nonNegativeSafeInteger(value: unknown, field: string) {
   return number;
 }
 
-function addUsage(
-  aggregate: RedisUsageAggregate,
-  memory: number,
-  members: number
-) {
+function addUsage(aggregate: RedisUsageAggregate, memory: number, members: number) {
   aggregate.key_count += 1;
   aggregate.memory_bytes += memory;
   aggregate.member_count += members;
   if (
-    !Number.isSafeInteger(aggregate.memory_bytes)
-    || !Number.isSafeInteger(aggregate.member_count)
+    !Number.isSafeInteger(aggregate.memory_bytes) ||
+    !Number.isSafeInteger(aggregate.member_count)
   ) {
     throw new Error("Redis deep inspection aggregate is outside the safe range");
   }
@@ -193,27 +174,31 @@ function measuredResult(
     measured_at: now().toISOString(),
     ...state
   };
-  return reason
-    ? { ...base, complete: false, reason }
-    : { ...base, complete: true };
+  return reason ? { ...base, complete: false, reason } : { ...base, complete: true };
 }
 
 export function redisDeepInspectionDeadlineResult(
   partial: RedisDeepInspectionResult | null = null,
   now: () => Date = () => new Date()
 ): RedisDeepInspectionResult {
-  return measuredResult(partial ? {
-    scanned_keys: partial.scanned_keys,
-    prefix_counts: partial.prefix_counts,
-    image_projection_usage: partial.image_projection_usage
-  } : {
-    scanned_keys: 0,
-    prefix_counts: emptyPrefixCounts(),
-    image_projection_usage: {
-      core: emptyUsage(),
-      derived: emptyUsage()
-    }
-  }, now, "deadline");
+  return measuredResult(
+    partial
+      ? {
+          scanned_keys: partial.scanned_keys,
+          prefix_counts: partial.prefix_counts,
+          image_projection_usage: partial.image_projection_usage
+        }
+      : {
+          scanned_keys: 0,
+          prefix_counts: emptyPrefixCounts(),
+          image_projection_usage: {
+            core: emptyUsage(),
+            derived: emptyUsage()
+          }
+        },
+    now,
+    "deadline"
+  );
 }
 
 /**
@@ -255,26 +240,14 @@ export async function inspectRedisKeyspaceDeep(
   };
   const observedKeys = new Set<string>();
 
-  const run = <T>(operation: Promise<T>) => raceWithAbortSignal(
-    operationSignal,
-    operation,
-    "Redis deep inspection aborted"
-  );
+  const run = <T>(operation: Promise<T>) =>
+    raceWithAbortSignal(operationSignal, operation, "Redis deep inspection aborted");
 
   const measureKeys = async (keys: string[]) => {
-    const projectionKeys = keys.filter((key) => (
-      key.startsWith(READY_IMAGE_CACHE_PREFIX)
-    ));
-    for (
-      let offset = 0;
-      offset < projectionKeys.length;
-      offset += pipelineMaxCommands
-    ) {
+    const projectionKeys = keys.filter((key) => key.startsWith(READY_IMAGE_CACHE_PREFIX));
+    for (let offset = 0; offset < projectionKeys.length; offset += pipelineMaxCommands) {
       operationSignal.throwIfAborted();
-      const batch = projectionKeys.slice(
-        offset,
-        offset + pipelineMaxCommands
-      );
+      const batch = projectionKeys.slice(offset, offset + pipelineMaxCommands);
       const pipeline = options.client.pipeline();
       for (const key of batch) pipeline.eval(measureKeyScript, 1, key);
       const results = await run(execRedisPipeline(pipeline));
@@ -305,18 +278,14 @@ export async function inspectRedisKeyspaceDeep(
     let cursor = "0";
     do {
       operationSignal.throwIfAborted();
-      const reply = await run(options.client.scan(
-        cursor,
-        "MATCH",
-        "imageshow:*",
-        "COUNT",
-        REDIS_SCAN_COUNT
-      ));
+      const reply = await run(
+        options.client.scan(cursor, "MATCH", "imageshow:*", "COUNT", REDIS_SCAN_COUNT)
+      );
       if (
-        !Array.isArray(reply)
-        || reply.length !== 2
-        || typeof reply[0] !== "string"
-        || !Array.isArray(reply[1])
+        !Array.isArray(reply) ||
+        reply.length !== 2 ||
+        typeof reply[0] !== "string" ||
+        !Array.isArray(reply[1])
       ) {
         throw new Error("Redis deep inspection returned an invalid SCAN page");
       }

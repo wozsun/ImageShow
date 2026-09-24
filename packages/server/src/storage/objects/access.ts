@@ -11,19 +11,11 @@ import type {
   StorageRemoveOptions,
   StorageRequestOptions
 } from "../drivers/driver.ts";
-import type {
-  ReadablePrefix,
-  StoragePrefix
-} from "./keys.ts";
+import type { ReadablePrefix, StoragePrefix } from "./keys.ts";
 import { STORAGE_PREFIXES } from "./keys.ts";
 import { directStorageObjectUrl } from "./public-urls.ts";
-import {
-  collectStorageKeyListing,
-  type StorageKeyListOptions
-} from "./key-listing.ts";
-import {
-  withStorageObjectRemovalAdmission
-} from "./removal-admission.ts";
+import { collectStorageKeyListing, type StorageKeyListOptions } from "./key-listing.ts";
+import { withStorageObjectRemovalAdmission } from "./removal-admission.ts";
 
 const neverAbortedStorageRemovalSignal = new AbortController().signal;
 
@@ -55,8 +47,7 @@ export type ResolvedStorageRemovalResult = StorageRemovalResult & {
 export async function removeStorageObjectsAndConfirm(
   objects: readonly StorageRemovalRequest[],
   options: StorageRemoveOptions = {},
-  admissionSignal: AbortSignal = options.signal
-    ?? neverAbortedStorageRemovalSignal
+  admissionSignal: AbortSignal = options.signal ?? neverAbortedStorageRemovalSignal
 ): Promise<ResolvedStorageRemovalResult[]> {
   if (!objects.length) {
     throw new RangeError("Storage cleanup requires at least one object");
@@ -64,11 +55,13 @@ export async function removeStorageObjectsAndConfirm(
   const operationSignal = options.signal ?? neverAbortedStorageRemovalSignal;
   operationSignal.throwIfAborted();
   admissionSignal.throwIfAborted();
-  const resolved = await Promise.all(objects.map(async (object, index) => ({
-    index,
-    object,
-    access: await resolveStorageAccess(object.storageSlug)
-  })));
+  const resolved = await Promise.all(
+    objects.map(async (object, index) => ({
+      index,
+      object,
+      access: await resolveStorageAccess(object.storageSlug)
+    }))
+  );
   operationSignal.throwIfAborted();
   admissionSignal.throwIfAborted();
 
@@ -78,10 +71,10 @@ export async function removeStorageObjectsAndConfirm(
   };
   const groupsByDriver = new Map<RemovalGroup["driver"], RemovalGroup>();
   for (const entry of resolved) {
-    const group = groupsByDriver.getOrInsertComputed(
-      entry.access.driver,
-      (driver) => ({ driver, entries: [] })
-    );
+    const group = groupsByDriver.getOrInsertComputed(entry.access.driver, (driver) => ({
+      driver,
+      entries: []
+    }));
     group.entries.push(entry);
   }
 
@@ -90,19 +83,16 @@ export async function removeStorageObjectsAndConfirm(
   // an arbitrary local window here would let one multi-backend caller reserve
   // several FIFO positions ahead of unrelated cleanup producers.
   for (const group of groupsByDriver.values()) {
-    const results = await withStorageObjectRemovalAdmission(
-      admissionSignal,
-      () => {
-        operationSignal.throwIfAborted();
-        return group.driver.removeObjects(
-          group.entries.map(({ object }) => ({
-            prefix: object.prefix,
-            key: object.key
-          })),
-          options
-        );
-      }
-    );
+    const results = await withStorageObjectRemovalAdmission(admissionSignal, () => {
+      operationSignal.throwIfAborted();
+      return group.driver.removeObjects(
+        group.entries.map(({ object }) => ({
+          prefix: object.prefix,
+          key: object.key
+        })),
+        options
+      );
+    });
     if (results.length !== group.entries.length) {
       throw new ApiError(
         502,
@@ -129,26 +119,21 @@ export function assertStorageRemovalResults(
   results: readonly ResolvedStorageRemovalResult[],
   message = "一个或多个存储对象未能确认删除"
 ) {
-  const incomplete = results.filter((result) => (
-    result.status === "failed" || result.status === "unknown"
-  ));
+  const incomplete = results.filter(
+    (result) => result.status === "failed" || result.status === "unknown"
+  );
   if (incomplete.length) {
-    throw new ApiError(
-      502,
-      "storage_delete_incomplete",
-      message,
-      {
-        failed: incomplete.length,
-        objects: incomplete.map((result) => ({
-          backend: result.storageSlug,
-          prefix: result.prefix,
-          key: result.key,
-          outcome: result.status,
-          code: result.error.code,
-          message: result.error.message
-        }))
-      }
-    );
+    throw new ApiError(502, "storage_delete_incomplete", message, {
+      failed: incomplete.length,
+      objects: incomplete.map((result) => ({
+        backend: result.storageSlug,
+        prefix: result.prefix,
+        key: result.key,
+        outcome: result.status,
+        code: result.error.code,
+        message: result.error.message
+      }))
+    });
   }
 }
 
@@ -162,9 +147,9 @@ export async function collectStorageNamespaceSnapshot(
   const signal = options.signal
     ? AbortSignal.any([options.signal, siblingAbort.signal])
     : siblingAbort.signal;
-  const tasks = STORAGE_PREFIXES.map((prefix) => collectStorageKeyListing(
-    driver.listKeys(prefix, { ...options, signal })
-  ));
+  const tasks = STORAGE_PREFIXES.map((prefix) =>
+    collectStorageKeyListing(driver.listKeys(prefix, { ...options, signal }))
+  );
   try {
     const [full, thumbs] = await Promise.all(tasks);
     return { full, thumbs };
@@ -176,10 +161,7 @@ export async function collectStorageNamespaceSnapshot(
   }
 }
 
-export async function pruneEmptyStorageDirs(
-  slug?: string,
-  options?: StoragePruneOptions
-) {
+export async function pruneEmptyStorageDirs(slug?: string, options?: StoragePruneOptions) {
   return (await resolveStorageAccess(slug)).driver.pruneEmptyDirs(options);
 }
 
@@ -189,10 +171,7 @@ export type ResolvedReadableObject = {
   storageSlug: string;
   publicUrl: string;
   exists: (options?: StorageRequestOptions) => Promise<boolean>;
-  open: (
-    range?: string,
-    options?: StorageRequestOptions
-  ) => Promise<OpenedRead>;
+  open: (range?: string, options?: StorageRequestOptions) => Promise<OpenedRead>;
 };
 
 export async function resolveReadableObject(
@@ -207,16 +186,9 @@ export async function resolveReadableObject(
     key,
     storageSlug: config.slug,
     publicUrl: directStorageObjectUrl(config, prefix, key),
-    exists: async (options) => (
-      (await resolveStorageAccess(slug, access)).driver.exists(prefix, key, options)
-    ),
-    open: async (range, options) => (
-      (await resolveStorageAccess(slug, access)).driver.openRead(
-        prefix,
-        key,
-        range,
-        options
-      )
-    )
+    exists: async (options) =>
+      (await resolveStorageAccess(slug, access)).driver.exists(prefix, key, options),
+    open: async (range, options) =>
+      (await resolveStorageAccess(slug, access)).driver.openRead(prefix, key, range, options)
   };
 }

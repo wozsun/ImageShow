@@ -1,10 +1,6 @@
 import { hash } from "node:crypto";
 import type { ImageDraftDto } from "@imageshow/shared/browser";
-import type {
-  IngestionQueueType,
-  IngestionSourceType,
-  ImportDownload
-} from "./model.ts";
+import type { IngestionQueueType, IngestionSourceType, ImportDownload } from "./model.ts";
 import { stableJson } from "./projection.ts";
 
 export type IngestionIntentHashInput = Readonly<{
@@ -21,28 +17,30 @@ export type IngestionIntentHashInput = Readonly<{
 }>;
 
 export function ingestionIntentRequestHash(input: IngestionIntentHashInput) {
-  return hash("sha256", stableJson({
-    queue: input.queue,
-    source_type: input.source_type,
-    batch_key: input.batch_key,
-    provided_image_time: input.provided_image_time,
-    batch_position: input.batch_position,
-    import_download: input.import_download
-      ? { url: input.import_download.url }
-      : null,
-    metadata: {
-      device: input.metadata.device,
-      brightness: input.metadata.brightness,
-      theme: input.metadata.theme,
-      author: input.metadata.author,
-      title: input.metadata.title,
-      description: input.metadata.description,
-      source: input.metadata.source,
-      original: input.metadata.original,
-      tags: [...input.metadata.tags].sort()
-    },
-    storage_slug: input.storage_slug,
-    expected_size: input.expected_size,
-    max_long_edge: input.max_long_edge
-  }), "hex");
+  return hash(
+    "sha256",
+    stableJson({
+      queue: input.queue,
+      source_type: input.source_type,
+      batch_key: input.batch_key,
+      provided_image_time: input.provided_image_time,
+      batch_position: input.batch_position,
+      import_download: input.import_download ? { url: input.import_download.url } : null,
+      metadata: {
+        device: input.metadata.device,
+        brightness: input.metadata.brightness,
+        theme: input.metadata.theme,
+        author: input.metadata.author,
+        title: input.metadata.title,
+        description: input.metadata.description,
+        source: input.metadata.source,
+        original: input.metadata.original,
+        tags: [...input.metadata.tags].sort()
+      },
+      storage_slug: input.storage_slug,
+      expected_size: input.expected_size,
+      max_long_edge: input.max_long_edge
+    }),
+    "hex"
+  );
 }

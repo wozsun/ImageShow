@@ -12,11 +12,7 @@ import {
   cardBrightnessSelectOptions,
   editCardDeviceSelectOptions
 } from "../../../lib/ui/select-options.js";
-import type {
-  FacetOption,
-  EditableImageSnapshot,
-  ImageDraft
-} from "../../../lib/types.js";
+import type { FacetOption, EditableImageSnapshot, ImageDraft } from "../../../lib/types.js";
 import {
   imageMetadataCardSaveState,
   type ImageMetadataChanges,
@@ -57,9 +53,7 @@ export function ImageMetadataEditorCard({
   // A new edit supersedes an earlier success badge. Failed and pending cards
   // retain their feedback because the draft still needs another save or an
   // authoritative confirmation.
-  const cardSaveState = cardChanged && lastSaveState === "saved"
-    ? null
-    : lastSaveState;
+  const cardSaveState = cardChanged && lastSaveState === "saved" ? null : lastSaveState;
   const saveStatePresentation = cardSaveState
     ? {
         saved: {
@@ -86,16 +80,23 @@ export function ImageMetadataEditorCard({
     >
       <div className="image-editor-preview">
         <ImageThumbnail src={item.thumb_url} onClick={onPreview} />
-        {item.image_size
-          ? <span className="image-editor-preview-size">{formatBytes(item.image_size)}</span>
-          : null}
+        {item.image_size ? (
+          <span className="image-editor-preview-size">{formatBytes(item.image_size)}</span>
+        ) : null}
       </div>
       <div className="image-editor-content">
         <div className="image-editor-head">
           <div>
             <div className="image-editor-head-name">
-              <strong className="image-editor-title-desktop" title={storageObjectKey(item.id, item.ext)}>{item.id}</strong>
-              <strong className="image-editor-title-mobile" title={item.id}>{shortImageId(item.id)}</strong>
+              <strong
+                className="image-editor-title-desktop"
+                title={storageObjectKey(item.id, item.ext)}
+              >
+                {item.id}
+              </strong>
+              <strong className="image-editor-title-mobile" title={item.id}>
+                {shortImageId(item.id)}
+              </strong>
               {saveStatePresentation ? (
                 <span className={`image-editor-save-badge ${saveStatePresentation.badgeClassName}`}>
                   {saveStatePresentation.label}
@@ -105,7 +106,8 @@ export function ImageMetadataEditorCard({
               ) : null}
             </div>
             <span className="image-editor-desktop-summary">
-              {formatDimensions(item.width, item.height)} · {formatImageClassification(item)} · {storageName}
+              {formatDimensions(item.width, item.height)} · {formatImageClassification(item)} ·{" "}
+              {storageName}
             </span>
             <span className="image-editor-summary-line image-editor-mobile-summary">
               {formatDimensions(item.width, item.height)} · {formatImageClassification(item)}

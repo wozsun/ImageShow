@@ -1,9 +1,7 @@
 import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  parseHTML
-} from "linkedom";
+import { parseHTML } from "linkedom";
 import {
   ingestionActionScopeHeader,
   ingestionCancelPath,
@@ -15,19 +13,10 @@ import {
   uploadIntentPath,
   uploadRawPath
 } from "../../../../packages/shared/src/browser.ts";
-import type {
-  IngestionJob
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
-import {
-  clearCsrfToken,
-  setCsrfToken
-} from "../../../../packages/web/src/lib/api/client.ts";
-import {
-  webUuidV7
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-identity.ts";
-import {
-  reduceIngestionQueue
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
+import type { IngestionJob } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
+import { clearCsrfToken, setCsrfToken } from "../../../../packages/web/src/lib/api/client.ts";
+import { webUuidV7 } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-identity.ts";
+import { reduceIngestionQueue } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
 import {
   cancelServerIngestionJob,
   cancelServerIngestionJobs
@@ -59,13 +48,17 @@ test("[Web/内容接入] placeholder 草稿按批写回并自动跨越 worker �
     "00000000-0000-7004-8000-000000000093",
     "00000000-0000-7004-8000-000000000094"
   ];
-  const json = (value: unknown) => new Response(JSON.stringify({
-    ok: true,
-    ...value as object
-  }), {
-    status: 200,
-    headers: { "content-type": "application/json" }
-  });
+  const json = (value: unknown) =>
+    new Response(
+      JSON.stringify({
+        ok: true,
+        ...(value as object)
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
   const fetchStub = async (input: unknown, init: RequestInit = {}) => {
     const path = String(input);
     const body = JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>;
@@ -77,67 +70,72 @@ test("[Web/内容接入] placeholder 草稿按批写回并自动跨越 worker �
       if (updateCalls === 1) {
         assert.equal(items.length, 3, "同一 debounce 窗口必须合并为一个 update 批次");
         return json({
-          items: items.map((item, index) => index === 0 ? {
-            session_id: item.session_id,
-            image_id: item.image_id,
-            status: "failed",
-            code: "ingestion_version_conflict",
-            message: "内容接入任务版本已变化"
-          } : {
-            session_id: item.session_id,
-            image_id: item.image_id,
-            status: index === 1 ? "changed" : "unchanged",
-            version: index === 1 ? 2 : 1,
-            last_semantic_revision: index === 1 ? 2 : 1,
-            duplicate_count: 0,
-            duplicate_decision: "upload"
-          })
+          items: items.map((item, index) =>
+            index === 0
+              ? {
+                  session_id: item.session_id,
+                  image_id: item.image_id,
+                  status: "failed",
+                  code: "ingestion_version_conflict",
+                  message: "内容接入任务版本已变化"
+                }
+              : {
+                  session_id: item.session_id,
+                  image_id: item.image_id,
+                  status: index === 1 ? "changed" : "unchanged",
+                  version: index === 1 ? 2 : 1,
+                  last_semantic_revision: index === 1 ? 2 : 1,
+                  duplicate_count: 0,
+                  duplicate_decision: "upload"
+                }
+          )
         });
       }
       assert.equal(items.length, 1);
       assert.equal(items[0]?.expected_version, 2);
-      assert.equal(
-        (items[0]?.metadata as Record<string, unknown>).title,
-        "clicked-draft-0"
-      );
+      assert.equal((items[0]?.metadata as Record<string, unknown>).title, "clicked-draft-0");
       return json({
-        items: [{
-          session_id: items[0]?.session_id,
-          image_id: items[0]?.image_id,
-          status: "changed",
-          version: 3,
-          last_semantic_revision: 3,
-          duplicate_count: 0,
-          duplicate_decision: "upload"
-        }]
+        items: [
+          {
+            session_id: items[0]?.session_id,
+            image_id: items[0]?.image_id,
+            status: "changed",
+            version: 3,
+            last_semantic_revision: 3,
+            duplicate_count: 0,
+            duplicate_decision: "upload"
+          }
+        ]
       });
     }
     if (path === ingestionStatusPath) {
       const requested = body.items as Array<Record<string, unknown>>;
       assert.equal(requested.length, 1);
       return json({
-        items: [{
-          session_id: sessionIds[0],
-          image_id: imageIds[0],
-          status: "present",
-          item: {
+        items: [
+          {
             session_id: sessionIds[0],
             image_id: imageIds[0],
-            queue: "import",
-            source_type: "url",
-            resolved_image_time: "2026-08-23T01:02:03.456Z",
-            status: "preparing",
-            phase: "prepare",
-            message: "worker advanced",
-            progress: 10,
-            version: 2,
-            progress_seq: 1,
-            last_semantic_revision: 2,
-            accepted_order: 1,
-            metadata: ingestionJob().draft,
-            storage_slug: "local"
+            status: "present",
+            item: {
+              session_id: sessionIds[0],
+              image_id: imageIds[0],
+              queue: "import",
+              source_type: "url",
+              resolved_image_time: "2026-08-23T01:02:03.456Z",
+              status: "preparing",
+              phase: "prepare",
+              message: "worker advanced",
+              progress: 10,
+              version: 2,
+              progress_seq: 1,
+              last_semantic_revision: 2,
+              accepted_order: 1,
+              metadata: ingestionJob().draft,
+              storage_slug: "local"
+            }
           }
-        }]
+        ]
       });
     }
     throw new Error(`unexpected fetch ${path}`);
@@ -157,9 +155,9 @@ test("[Web/内容接入] placeholder 草稿按批写回并自动跨越 worker �
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -170,26 +168,27 @@ test("[Web/内容接入] placeholder 草稿按批写回并自动跨越 worker �
   }
   try {
     const { createRoot } = await import("react-dom/client");
-    const { useStoredIngestionDraftSync } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts"
-    );
+    const { useStoredIngestionDraftSync } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useStoredIngestionDraftSync.ts");
     let state = {
       page: 1,
-      jobs: sessionIds.map((sessionId, index) => ingestionJob({
-        id: `batched-draft-${index}`,
-        attemptKey: `batched-draft-attempt-${index}`,
-        status: "queued",
-        serverAccepted: true,
-        serverAcceptedOrder: index + 1,
-        serverVersion: 1,
-        serverDraftPending: true,
-        sessionId,
-        imageId: imageIds[index],
-        draft: {
-          ...ingestionJob().draft,
-          title: `clicked-draft-${index}`
-        }
-      }))
+      jobs: sessionIds.map((sessionId, index) =>
+        ingestionJob({
+          id: `batched-draft-${index}`,
+          attemptKey: `batched-draft-attempt-${index}`,
+          status: "queued",
+          serverAccepted: true,
+          serverAcceptedOrder: index + 1,
+          serverVersion: 1,
+          serverDraftPending: true,
+          sessionId,
+          imageId: imageIds[index],
+          draft: {
+            ...ingestionJob().draft,
+            title: `clicked-draft-${index}`
+          }
+        })
+      )
     };
     const jobsRef = { current: state.jobs };
     const dispatch = (action: Parameters<typeof reduceIngestionQueue>[1]) => {
@@ -204,7 +203,9 @@ test("[Web/内容接入] placeholder 草稿按批写回并自动跨越 worker �
       status: "ready",
       revision: 0,
       connectionGeneration: 1,
-      ensureRevision() { return true; },
+      ensureRevision() {
+        return true;
+      },
       async recoverAuthority() {},
       refresh() {}
     };
@@ -234,11 +235,7 @@ test("[Web/内容接入] placeholder 草稿按批写回并自动跨越 worker �
         flushError = error;
       }
     });
-    assert.equal(
-      flushError,
-      undefined,
-      JSON.stringify({ paths, bodies, errors })
-    );
+    assert.equal(flushError, undefined, JSON.stringify({ paths, bodies, errors }));
     assert.deepEqual(paths, [ingestionUpdatePath, ingestionStatusPath, ingestionUpdatePath]);
     assert.equal(jobsRef.current[0]?.serverVersion, 3);
     assert.equal(jobsRef.current[1]?.serverVersion, 2);
@@ -266,54 +263,71 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
   const fetchStub = async (_input: unknown, init: RequestInit = {}) => {
     fetchCalls += 1;
     if (fetchCalls === 1) {
-      return new Response(JSON.stringify({
-        ok: false,
-        error: { code: "temporary", message: "temporary status failure" }
-      }), {
-        status: 503,
-        headers: { "content-type": "application/json" }
-      });
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: { code: "temporary", message: "temporary status failure" }
+        }),
+        {
+          status: 503,
+          headers: { "content-type": "application/json" }
+        }
+      );
     }
     if (fetchCalls === 4) {
       return new Promise<Response>((resolve, reject) => {
         releaseHeldStatus = resolve;
-        init.signal?.addEventListener("abort", () => {
-          heldStatusAborted = true;
-          reject(new Error("held status aborted"));
-        }, { once: true });
+        init.signal?.addEventListener(
+          "abort",
+          () => {
+            heldStatusAborted = true;
+            reject(new Error("held status aborted"));
+          },
+          { once: true }
+        );
       });
     }
     if (fetchCalls === 5 || fetchCalls === 6) {
       const active = fetchCalls === 5;
-      return new Response(JSON.stringify({
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          items: [
+            {
+              session_id: "J".repeat(43),
+              image_id: "00000000-0000-7004-8000-000000000090",
+              status: "completed",
+              completed_item: adminImageListItem({
+                id: "00000000-0000-7004-8000-000000000090"
+              }),
+              redis_status: active ? "active" : "completed",
+              redis_version: active ? 2 : 3,
+              redis_last_semantic_revision: active ? 101 : 102
+            }
+          ]
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }
+    return new Response(
+      JSON.stringify({
         ok: true,
-        items: [{
-          session_id: "J".repeat(43),
-          image_id: "00000000-0000-7004-8000-000000000090",
-          status: "completed",
-          completed_item: adminImageListItem({
-            id: "00000000-0000-7004-8000-000000000090"
-          }),
-          redis_status: active ? "active" : "completed",
-          redis_version: active ? 2 : 3,
-          redis_last_semantic_revision: active ? 101 : 102
-        }]
-      }), {
+        items: [
+          {
+            session_id: "H".repeat(43),
+            image_id: "00000000-0000-7004-8000-00000000008f",
+            status: "missing"
+          }
+        ]
+      }),
+      {
         status: 200,
         headers: { "content-type": "application/json" }
-      });
-    }
-    return new Response(JSON.stringify({
-      ok: true,
-      items: [{
-        session_id: "H".repeat(43),
-        image_id: "00000000-0000-7004-8000-00000000008f",
-        status: "missing"
-      }]
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    });
+      }
+    );
   };
   const installedGlobals = {
     window,
@@ -331,9 +345,9 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -345,9 +359,8 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { useIngestionAuthorityHandoffs } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionAuthorityHandoffs.ts"
-    );
+    const { useIngestionAuthorityHandoffs } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionAuthorityHandoffs.ts");
     const errors: Array<{ message: string; retryable: boolean }> = [];
     const observedHandoffCompleted: string[] = [];
     const ensuredHandoffCoverage: Array<{
@@ -407,13 +420,16 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
         serverHandoffPending: true,
         serverHandoffRevision: undefined
       });
-      handoffs!.prepareBinding({
-        sessionId: "H".repeat(43),
-        imageId: "00000000-0000-7004-8000-00000000008f",
-        serverAccepted: true,
-        serverHandoffPending: true,
-        serverHandoffRevision: 8
-      }, 1);
+      handoffs!.prepareBinding(
+        {
+          sessionId: "H".repeat(43),
+          imageId: "00000000-0000-7004-8000-00000000008f",
+          serverAccepted: true,
+          serverHandoffPending: true,
+          serverHandoffRevision: 8
+        },
+        1
+      );
       await Promise.resolve();
     });
     assert.deepEqual(
@@ -431,11 +447,7 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
       await Promise.resolve();
     });
     await settleUntil(() => fetchCalls === 2 && container.textContent === "false");
-    assert.equal(
-      errors.length,
-      1,
-      "missing 只收敛交接围栏，不应再发布队列级提示"
-    );
+    assert.equal(errors.length, 1, "missing 只收敛交接围栏，不应再发布队列级提示");
     server.connectionGeneration = 2;
     server.revision = 100;
     const coverageBeforeCrossGeneration = ensuredHandoffCoverage.length;
@@ -444,21 +456,20 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
       await Promise.resolve();
     });
     await React.act(async () => {
-      handoffs!.prepareBinding({
-        sessionId: "H".repeat(43),
-        imageId: "00000000-0000-7004-8000-00000000008f",
-        serverAccepted: true,
-        serverHandoffPending: true,
-        serverHandoffRevision: 44
-      }, 1);
+      handoffs!.prepareBinding(
+        {
+          sessionId: "H".repeat(43),
+          imageId: "00000000-0000-7004-8000-00000000008f",
+          serverAccepted: true,
+          serverHandoffPending: true,
+          serverHandoffRevision: 44
+        },
+        1
+      );
       await Promise.resolve();
     });
     await settleUntil(() => fetchCalls === 3 && container.textContent === "false");
-    assert.equal(
-      fetchCalls,
-      3,
-      "旧连接的迟到 HTTP revision 即使数值已覆盖也必须先查当前 status"
-    );
+    assert.equal(fetchCalls, 3, "旧连接的迟到 HTTP revision 即使数值已覆盖也必须先查当前 status");
     assert.equal(
       ensuredHandoffCoverage.length,
       coverageBeforeCrossGeneration,
@@ -473,20 +484,26 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
     });
     const coverageBeforeCurrentPairResponse = ensuredHandoffCoverage.length;
     await React.act(async () => {
-      handoffs!.prepareBinding({
-        sessionId: "I".repeat(43),
-        imageId: "00000000-0000-7004-8000-000000000091",
-        serverAccepted: true,
-        serverHandoffPending: true,
-        serverHandoffRevision: 99
-      }, 2);
-      handoffs!.prepareBinding({
-        sessionId: "I".repeat(43),
-        imageId: "00000000-0000-7004-8000-000000000091",
-        serverAccepted: true,
-        serverHandoffPending: true,
-        serverHandoffRevision: 2
-      }, 3);
+      handoffs!.prepareBinding(
+        {
+          sessionId: "I".repeat(43),
+          imageId: "00000000-0000-7004-8000-000000000091",
+          serverAccepted: true,
+          serverHandoffPending: true,
+          serverHandoffRevision: 99
+        },
+        2
+      );
+      handoffs!.prepareBinding(
+        {
+          sessionId: "I".repeat(43),
+          imageId: "00000000-0000-7004-8000-000000000091",
+          serverAccepted: true,
+          serverHandoffPending: true,
+          serverHandoffRevision: 2
+        },
+        3
+      );
       await Promise.resolve();
     });
     await settleUntil(() => fetchCalls === 4 && Boolean(releaseHeldStatus));
@@ -503,34 +520,40 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
     assert.equal(fetchCalls, 4, "无关 revision 推进不得重启在途 status 查询");
     assert.equal(heldStatusAborted, false);
     await React.act(async () => {
-      releaseHeldStatus?.(new Response(JSON.stringify({
-        ok: true,
-        items: [{
-          session_id: "I".repeat(43),
-          image_id: "00000000-0000-7004-8000-000000000091",
-          status: "missing"
-        }]
-      }), {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      }));
+      releaseHeldStatus?.(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            items: [
+              {
+                session_id: "I".repeat(43),
+                image_id: "00000000-0000-7004-8000-000000000091",
+                status: "missing"
+              }
+            ]
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        )
+      );
       await Promise.resolve();
     });
     await settleUntil(() => container.textContent === "false");
-    assert.equal(
-      errors.length,
-      1,
-      "迟到的 missing 结果同样不得覆盖可重试错误或插入新提示"
-    );
+    assert.equal(errors.length, 1, "迟到的 missing 结果同样不得覆盖可重试错误或插入新提示");
 
     await React.act(async () => {
-      handoffs!.prepareBinding({
-        sessionId: "J".repeat(43),
-        imageId: "00000000-0000-7004-8000-000000000090",
-        serverAccepted: true,
-        serverHandoffPending: true,
-        serverHandoffRevision: undefined
-      }, 3);
+      handoffs!.prepareBinding(
+        {
+          sessionId: "J".repeat(43),
+          imageId: "00000000-0000-7004-8000-000000000090",
+          serverAccepted: true,
+          serverHandoffPending: true,
+          serverHandoffRevision: undefined
+        },
+        3
+      );
       await Promise.resolve();
     });
     await settleUntil(() => fetchCalls === 5);
@@ -539,11 +562,7 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
       root.render(React.createElement(Probe));
       await Promise.resolve();
     });
-    assert.equal(
-      fetchCalls,
-      5,
-      "PG completed 但 Redis active 时同一 revision 不得轮询"
-    );
+    assert.equal(fetchCalls, 5, "PG completed 但 Redis active 时同一 revision 不得轮询");
     server.revision = 102;
     await React.act(async () => {
       root.render(React.createElement(Probe));
@@ -555,10 +574,11 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
       { revision: 102, connectionGeneration: 3 },
       "跨代围栏必须改用当前连接 status 返回的 revision 证明"
     );
-    assert.deepEqual(observedHandoffCompleted, [
-      "00000000-0000-7004-8000-000000000090",
-      "00000000-0000-7004-8000-000000000090"
-    ], "权威交接每次完成态 status 都必须交给 owner 统一去重");
+    assert.deepEqual(
+      observedHandoffCompleted,
+      ["00000000-0000-7004-8000-000000000090", "00000000-0000-7004-8000-000000000090"],
+      "权威交接每次完成态 status 都必须交给 owner 统一去重"
+    );
 
     server.connectionGeneration = 4;
     server.revision = 200;
@@ -566,17 +586,19 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
       root.render(React.createElement(Probe));
       await Promise.resolve();
     });
-    const externalPairKey = `${"K".repeat(43)}\0${
-      "00000000-0000-7004-8000-000000000092"
-    }`;
+    const externalPairKey = `${"K".repeat(43)}\0${"00000000-0000-7004-8000-000000000092"}`;
     await React.act(async () => {
-      handoffs!.prepareBinding({
-        sessionId: "K".repeat(43),
-        imageId: "00000000-0000-7004-8000-000000000092",
-        serverAccepted: true,
-        serverHandoffPending: true,
-        serverHandoffRevision: undefined
-      }, 4, true);
+      handoffs!.prepareBinding(
+        {
+          sessionId: "K".repeat(43),
+          imageId: "00000000-0000-7004-8000-000000000092",
+          serverAccepted: true,
+          serverHandoffPending: true,
+          serverHandoffRevision: undefined
+        },
+        4,
+        true
+      );
       await Promise.resolve();
     });
     assert.equal(container.textContent, "true");
@@ -592,9 +614,7 @@ test("[Web/内容接入] 未知 completed 交接在 status 失败后可显式重
     );
     assert.equal(fetchCalls, 6, "external status owner 仍只允许外部查询");
     await React.act(async () => {
-      handoffs!.verifyExternalStatusRevisions(new Map([
-        [externalPairKey, 202]
-      ]));
+      handoffs!.verifyExternalStatusRevisions(new Map([[externalPairKey, 202]]));
       await Promise.resolve();
     });
     assert.equal(container.textContent, "true");
@@ -628,27 +648,29 @@ test("[Web/内容接入] 取消只在服务端明确丢弃后报告成功", asyn
   const originalFetch = globalThis.fetch;
   const sessionId = "C".repeat(43);
   const imageId = "00000000-0000-7003-8000-00000000008e";
-  let jobs = [ingestionJob({
-    kind: "upload",
-    sessionId,
-    imageId,
-    serverVersion: undefined,
-    status: "failed",
-    failureStage: "prepare"
-  })];
+  let jobs = [
+    ingestionJob({
+      kind: "upload",
+      sessionId,
+      imageId,
+      serverVersion: undefined,
+      status: "failed",
+      failureStage: "prepare"
+    })
+  ];
   const jobsRef = { current: jobs };
   const observedCompleted: string[] = [];
   const queue = {
     jobsRef,
-    observeCompletedIngestions(entries: readonly {
-      pair: { session_id: string; image_id: string };
-    }[]) {
-      observedCompleted.push(...entries.map(({ pair }) => (
-        `${pair.session_id}\0${pair.image_id}`
-      )));
+    observeCompletedIngestions(
+      entries: readonly {
+        pair: { session_id: string; image_id: string };
+      }[]
+    ) {
+      observedCompleted.push(...entries.map(({ pair }) => `${pair.session_id}\0${pair.image_id}`));
     },
     updateJob(id: string, patch: Partial<IngestionJob>) {
-      jobs = jobs.map((job) => job.id === id ? { ...job, ...patch } : job);
+      jobs = jobs.map((job) => (job.id === id ? { ...job, ...patch } : job));
       jobsRef.current = jobs;
     }
   };
@@ -664,23 +686,31 @@ test("[Web/内容接入] 取消只在服务端明确丢弃后报告成功", asyn
     const path = String(input);
     paths.push(path);
     if (path === ingestionStatusPath) {
-      return new Response(JSON.stringify({
-        ok: true,
-        items: [statusItem]
-      }), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          items: [statusItem]
+        }),
+        { status: 200 }
+      );
     }
     if (path === ingestionCancelPath) {
-      return new Response(JSON.stringify({
-        ok: true,
-        items: [{
-          session_id: sessionId,
-          image_id: imageId,
-          status: cancelStatus,
-          ...(cancelStatus === "completed"
-            ? { completed_item: completedCancelItem }
-            : { queue_revision: 17 })
-        }]
-      }), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          items: [
+            {
+              session_id: sessionId,
+              image_id: imageId,
+              status: cancelStatus,
+              ...(cancelStatus === "completed"
+                ? { completed_item: completedCancelItem }
+                : { queue_revision: 17 })
+            }
+          ]
+        }),
+        { status: 200 }
+      );
     }
     throw new Error(`unexpected fetch ${path}`);
   }) as typeof fetch;
@@ -691,19 +721,21 @@ test("[Web/内容接入] 取消只在服务端明确丢弃后报告成功", asyn
     assert.match(jobs[0]?.message ?? "", /尚未确认/);
     assert.deepEqual(paths, [ingestionStatusPath]);
 
-    jobs = [ingestionJob({
-      kind: "upload",
-      sessionId,
-      imageId,
-      serverVersion: 3,
-      status: "failed",
-      failureStage: "cancel"
-    })];
+    jobs = [
+      ingestionJob({
+        kind: "upload",
+        sessionId,
+        imageId,
+        serverVersion: 3,
+        status: "failed",
+        failureStage: "cancel"
+      })
+    ];
     jobsRef.current = jobs;
     const discardedJob = jobs[0]!;
-    const discardedOutcome = (
-      await cancelServerIngestionJobs(queue, [discardedJob])
-    ).get(discardedJob.id);
+    const discardedOutcome = (await cancelServerIngestionJobs(queue, [discardedJob])).get(
+      discardedJob.id
+    );
     assert.equal(discardedOutcome?.succeeded, true);
     assert.equal(
       discardedOutcome?.releasedRevision,
@@ -713,14 +745,16 @@ test("[Web/内容接入] 取消只在服务端明确丢弃后报告成功", asyn
     assert.equal(jobs[0]?.status, "cancelled");
     assert.deepEqual(paths, [ingestionStatusPath, ingestionCancelPath]);
 
-    jobs = [ingestionJob({
-      kind: "upload",
-      sessionId,
-      imageId,
-      serverVersion: undefined,
-      status: "failed",
-      failureStage: "cancel"
-    })];
+    jobs = [
+      ingestionJob({
+        kind: "upload",
+        sessionId,
+        imageId,
+        serverVersion: undefined,
+        status: "failed",
+        failureStage: "cancel"
+      })
+    ];
     jobsRef.current = jobs;
     statusItem = {
       session_id: sessionId,
@@ -739,10 +773,11 @@ test("[Web/内容接入] 取消只在服务端明确丢弃后报告成功", asyn
       [ingestionStatusPath, ingestionCancelPath],
       "PG completed 但 Redis receipt 仍存在时必须继续调用 cancel 收口回执"
     );
-    assert.deepEqual(observedCompleted, [
-      `${sessionId}\0${imageId}`,
-      `${sessionId}\0${imageId}`
-    ], "status 与取消终态都必须先交给 owner 的 pair 去重入口");
+    assert.deepEqual(
+      observedCompleted,
+      [`${sessionId}\0${imageId}`, `${sessionId}\0${imageId}`],
+      "status 与取消终态都必须先交给 owner 的 pair 去重入口"
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -767,9 +802,9 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -781,9 +816,8 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { useIngestionQueueWorkflowActions } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/workflow/useIngestionQueueWorkflowActions.ts"
-    );
+    const { useIngestionQueueWorkflowActions } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/workflow/useIngestionQueueWorkflowActions.ts");
     const pair = {
       session_id: "C".repeat(43),
       image_id: "00000000-0000-7021-8000-00000000008e"
@@ -837,12 +871,8 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
           }
           const result = {
             processed: serverItems.length,
-            changed: serverItems.filter(
-              (item) => item.status === "changed"
-            ).length,
-            failed: serverItems.filter(
-              (item) => item.status === "failed"
-            ).length,
+            changed: serverItems.filter((item) => item.status === "changed").length,
+            failed: serverItems.filter((item) => item.status === "failed").length,
             items: serverItems
           };
           refreshes += 1;
@@ -853,15 +883,22 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
         status: "ready" as const,
         connectionGeneration: 1,
         actionScope: "scope",
-        recoverAfterSuccessfulAction: async () => { refreshes += 1; },
-        recoverAuthority: async () => { refreshes += 1; },
-        refresh() { refreshes += 1; }
+        recoverAfterSuccessfulAction: async () => {
+          refreshes += 1;
+        },
+        recoverAuthority: async () => {
+          refreshes += 1;
+        },
+        refresh() {
+          refreshes += 1;
+        }
       },
       projectCompletedCleanupBatch: () => 0,
-      recoverAfterSuccessfulAction: async () => { refreshes += 1; },
-      captureBrowserActionJobs: (predicate: (job: IngestionJob) => boolean) => (
-        jobsRef.current.filter(predicate)
-      ),
+      recoverAfterSuccessfulAction: async () => {
+        refreshes += 1;
+      },
+      captureBrowserActionJobs: (predicate: (job: IngestionJob) => boolean) =>
+        jobsRef.current.filter(predicate),
       appendJobs: (jobs: IngestionJob[]) => {
         jobsRef.current = [...jobsRef.current, ...jobs];
         queue.localJobs = jobsRef.current;
@@ -871,20 +908,23 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
         jobsRef.current = jobsRef.current.filter((job) => !ids.has(job.id));
         queue.localJobs = jobsRef.current;
       },
-      releaseResolvedServerJobs: (targets: readonly {
-        id: string;
-        attemptKey: string;
-        pair: { session_id: string; image_id: string };
-      }[]) => {
+      releaseResolvedServerJobs: (
+        targets: readonly {
+          id: string;
+          attemptKey: string;
+          pair: { session_id: string; image_id: string };
+        }[]
+      ) => {
         const released = new Set<string>();
         for (const target of targets) {
           const current = jobsRef.current.find((job) => job.id === target.id);
           if (
-            current?.attemptKey === target.attemptKey
-            && current.sessionId === target.pair.session_id
-            && current.imageId?.toLowerCase() === target.pair.image_id.toLowerCase()
-            && current.serverAccepted === true
-          ) released.add(target.id);
+            current?.attemptKey === target.attemptKey &&
+            current.sessionId === target.pair.session_id &&
+            current.imageId?.toLowerCase() === target.pair.image_id.toLowerCase() &&
+            current.serverAccepted === true
+          )
+            released.add(target.id);
         }
         jobsRef.current = jobsRef.current.filter((job) => !released.has(job.id));
         queue.localJobs = jobsRef.current;
@@ -895,19 +935,21 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
       hasPendingDraftUpdates: () => false
     };
     const cancelJobs = async (jobs: readonly IngestionJob[]) => {
-      const targetPairs = new Map(jobs.map((target) => [
-        target.id,
-        target.sessionId && target.imageId
-          ? {
-              session_id: target.sessionId,
-              image_id: target.imageId
-            }
-          : pair
-      ]));
+      const targetPairs = new Map(
+        jobs.map((target) => [
+          target.id,
+          target.sessionId && target.imageId
+            ? {
+                session_id: target.sessionId,
+                image_id: target.imageId
+              }
+            : pair
+        ])
+      );
       jobsRef.current = jobsRef.current.map((job) => {
-        const target = jobs.find((candidate) => (
-          candidate.id === job.id && candidate.attemptKey === job.attemptKey
-        ));
+        const target = jobs.find(
+          (candidate) => candidate.id === job.id && candidate.attemptKey === job.attemptKey
+        );
         if (!target) return job;
         const targetPair = targetPairs.get(target.id)!;
         return {
@@ -916,21 +958,25 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
           imageId: targetPair.image_id,
           serverAccepted: true,
           serverAcceptedOrder: outcomeAcceptedOrder,
-          status: cancellationMode === "completed"
-            ? "finalized"
-            : cancellationMode === "discarded"
-              ? "cancelled"
-              : "failed"
+          status:
+            cancellationMode === "completed"
+              ? "finalized"
+              : cancellationMode === "discarded"
+                ? "cancelled"
+                : "failed"
         };
       });
       queue.localJobs = jobsRef.current;
-      return new Map(jobs.map((target) => [target.id, {
-        succeeded: cancellationMode === "discarded",
-        pair: targetPairs.get(target.id)!,
-        ...(cancellationMode === "completed"
-          ? { terminal: "completed" as const }
-          : {})
-      }]));
+      return new Map(
+        jobs.map((target) => [
+          target.id,
+          {
+            succeeded: cancellationMode === "discarded",
+            pair: targetPairs.get(target.id)!,
+            ...(cancellationMode === "completed" ? { terminal: "completed" as const } : {})
+          }
+        ])
+      );
     };
     let workflow: ReturnType<typeof useIngestionQueueWorkflowActions> | undefined;
     function Probe() {
@@ -971,10 +1017,7 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
       await Promise.resolve();
     });
     const abandonedFreezeStart = freezeCalls;
-    assert.deepEqual(
-      workflow!.armCleanupAction("uncommitted", 1),
-      { count: 1 }
-    );
+    assert.deepEqual(workflow!.armCleanupAction("uncommitted", 1), { count: 1 });
     workflow!.discardUnconfirmedIntents();
     jobsRef.current = [replacementCleanupJob];
     queue.localJobs = jobsRef.current;
@@ -982,10 +1025,7 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
       root.render(React.createElement(Probe));
       await Promise.resolve();
     });
-    assert.deepEqual(
-      workflow!.armCleanupAction("uncommitted", 2),
-      { count: 2 }
-    );
+    assert.deepEqual(workflow!.armCleanupAction("uncommitted", 2), { count: 2 });
     assert.equal(
       freezeCalls,
       abandonedFreezeStart + 2,
@@ -1047,11 +1087,7 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
     });
     assert.equal(workflow!.armClearQueue(), true);
     assert.equal(await workflow!.confirmClearQueue(), true);
-    assert.deepEqual(
-      jobsRef.current,
-      [],
-      "明确 discarded 的 Server pair 必须同步释放本地 owner"
-    );
+    assert.deepEqual(jobsRef.current, [], "明确 discarded 的 Server pair 必须同步释放本地 owner");
 
     jobsRef.current = [placeholder];
     queue.localJobs = jobsRef.current;
@@ -1203,10 +1239,7 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
     const cleanupFreezeStart = freezeCalls;
     const cleanupRunStart = actionRuns.length;
     const cleanupRefreshStart = refreshes;
-    assert.deepEqual(
-      workflow!.armCleanupAction("completed", 1),
-      { count: 1 }
-    );
+    assert.deepEqual(workflow!.armCleanupAction("completed", 1), { count: 1 });
     assert.equal(await workflow!.confirmCleanupAction("completed"), false);
     const retryDoneReadsAfterFirstRun = retryDoneStatusReads;
     assert.equal(
@@ -1288,10 +1321,7 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
       root.render(React.createElement(Probe));
       await Promise.resolve();
     });
-    assert.deepEqual(
-      workflow!.armCleanupAction("uncommitted", 2),
-      { count: 2 }
-    );
+    assert.deepEqual(workflow!.armCleanupAction("uncommitted", 2), { count: 2 });
     assert.equal(
       await workflow!.confirmCleanupAction("uncommitted"),
       false,
@@ -1379,10 +1409,7 @@ test("[Web/内容接入] 清空队列按 pair 合并 placeholder 与同一 Serve
     );
     assert.equal(refreshes, clearRefreshStart + 2);
     assert.equal(freezeCalls, clearFreezeStart + 1);
-    assert.strictEqual(
-      actionRuns[clearRunStart],
-      actionRuns[clearRunStart + 1]
-    );
+    assert.strictEqual(actionRuns[clearRunStart], actionRuns[clearRunStart + 1]);
     assert.deepEqual(
       jobsRef.current.map((job) => job.id),
       [retryClearLaterJob.id],
@@ -1490,19 +1517,24 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
         items: Array<{ session_id: string; image_id: string }>;
       };
       cancelBodies.push(body);
-      return new Response(JSON.stringify({
-        ok: true,
-        items: body.items.map((item) => ({
-          ...item,
-          status: cancelResponseStatus,
-          ...(cancelResponseStatus === "completed" ? {
-            completed_item: adminImageListItem({ id: item.image_id })
-          } : {})
-        }))
-      }), {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          items: body.items.map((item) => ({
+            ...item,
+            status: cancelResponseStatus,
+            ...(cancelResponseStatus === "completed"
+              ? {
+                  completed_item: adminImageListItem({ id: item.image_id })
+                }
+              : {})
+          }))
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
     }
     throw new Error(`unexpected fetch ${path}`);
   };
@@ -1522,9 +1554,9 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -1537,14 +1569,11 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
   try {
     setCsrfToken("import-batch-cancel-token");
     const { createRoot } = await import("react-dom/client");
-    const { useImport } = await import(
-      "../../../../packages/web/src/pages/admin/ingestion/import/useImport.ts"
-    );
+    const { useImport } =
+      await import("../../../../packages/web/src/pages/admin/ingestion/import/useImport.ts");
     const jobsRef = { current: [] as IngestionJob[] };
     const updateJob = (id: string, patch: Partial<IngestionJob>) => {
-      jobsRef.current = jobsRef.current.map((job) => (
-        job.id === id ? { ...job, ...patch } : job
-      ));
+      jobsRef.current = jobsRef.current.map((job) => (job.id === id ? { ...job, ...patch } : job));
     };
     const queue = {
       jobsRef,
@@ -1593,49 +1622,50 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
       await Promise.resolve();
     });
     const importBatchKey = webUuidV7();
-    const jobs = Array.from({ length: 60 }, (_, index) => ingestionJob({
-      id: `import-batch-${index}`,
-      attemptKey: webUuidV7(),
-      batchKey: importBatchKey,
-      batchPosition: index,
-      downloadUrl: `https://example.com/image-${index}.jpg`,
-      draft: {
-        ...ingestionJob().draft,
-        original: `https://example.com/image-${index}.jpg`
-      }
-    }));
+    const jobs = Array.from({ length: 60 }, (_, index) =>
+      ingestionJob({
+        id: `import-batch-${index}`,
+        attemptKey: webUuidV7(),
+        batchKey: importBatchKey,
+        batchPosition: index,
+        downloadUrl: `https://example.com/image-${index}.jpg`,
+        draft: {
+          ...ingestionJob().draft,
+          original: `https://example.com/image-${index}.jpg`
+        }
+      })
+    );
     await owner!.addParsedImports(jobs);
     assert.equal(acceptRequests, 1);
     assert.ok(releaseAccept);
     const cancellation = owner!.cancelMany([...jobsRef.current]);
     await Promise.resolve();
-    assert.equal(
-      jobsRef.current.filter((job) => job.status === "cancelling").length,
-      60
+    assert.equal(jobsRef.current.filter((job) => job.status === "cancelling").length, 60);
+    releaseAccept!(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          items: jobs.map((_, index) => ({
+            session_id: String(index).padStart(43, "S"),
+            image_id: `019f8457-063a-7${String(index).padStart(3, "0")}-a580-00000000008e`,
+            resolved_image_time: "2026-08-23T01:02:03.456Z",
+            status: "accepted",
+            accepted_order: index + 1,
+            version: 1,
+            last_semantic_revision: index + 1
+          }))
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      )
     );
-    releaseAccept!(new Response(JSON.stringify({
-      ok: true,
-      items: jobs.map((_, index) => ({
-        session_id: String(index).padStart(43, "S"),
-        image_id: `019f8457-063a-7${String(index).padStart(3, "0")}-a580-00000000008e`,
-        resolved_image_time: "2026-08-23T01:02:03.456Z",
-        status: "accepted",
-        accepted_order: index + 1,
-        version: 1,
-        last_semantic_revision: index + 1
-      }))
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    }));
     const outcomes = await cancellation;
     assert.equal(statusRequests, 0);
     assert.equal(cancelBodies.length, 1);
     assert.equal(cancelBodies[0]?.items.length, 60);
-    assert.equal(
-      [...outcomes.values()].filter((outcome) => outcome.succeeded).length,
-      60
-    );
+    assert.equal([...outcomes.values()].filter((outcome) => outcome.succeeded).length, 60);
     cancelResponseStatus = "completed";
     const retryJob = ingestionJob({
       id: "import-retry-completed",
@@ -1651,11 +1681,7 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
     });
     jobsRef.current = [retryJob];
     await owner!.cancel(retryJob);
-    assert.equal(
-      acceptRequests,
-      1,
-      "取消返回 completed 时不得生成新 attempt 或重新 accept"
-    );
+    assert.equal(acceptRequests, 1, "取消返回 completed 时不得生成新 attempt 或重新 accept");
     assert.equal(jobsRef.current[0]?.attemptKey, retryJob.attemptKey);
     assert.equal(jobsRef.current[0]?.status, "finalized");
     await React.act(async () => root.unmount());
@@ -1672,35 +1698,52 @@ test("[Web/内容接入] Import 批次清空只等待一次 accept 并聚合 50+
 });
 test("[Web/内容接入] 解析后 202 张按上限接管，明确拒绝与未知结果均可安全清空", async (t) => {
   const h = await createConfigStreamHarness(t);
-  const { useImport } = await import("../../../../packages/web/src/pages/admin/ingestion/import/useImport.ts");
+  const { useImport } =
+    await import("../../../../packages/web/src/pages/admin/ingestion/import/useImport.ts");
   const jobsRef = { current: [] as IngestionJob[] };
   const updateJob = (id: string, patch: Partial<IngestionJob>) => {
-    jobsRef.current = jobsRef.current.map(job => job.id === id ? { ...job, ...patch } : job);
+    jobsRef.current = jobsRef.current.map((job) => (job.id === id ? { ...job, ...patch } : job));
   };
   const queue = {
-    jobsRef, updateJob, observeCompletedIngestions() {},
+    jobsRef,
+    updateJob,
+    observeCompletedIngestions() {},
     retryPrepareJob(previous: IngestionJob, job: IngestionJob) {
       const state = { page: 1, jobs: jobsRef.current };
       const next = reduceIngestionQueue(state, { type: "retry-prepare", previous, job });
       jobsRef.current = next.jobs;
       return next !== state;
     },
-    appendJobs(jobs: IngestionJob[]) { jobsRef.current.push(...jobs); return true; },
-    bindServerJob: updateJob, captureServerConnectionGeneration: () => 1
+    appendJobs(jobs: IngestionJob[]) {
+      jobsRef.current.push(...jobs);
+      return true;
+    },
+    bindServerJob: updateJob,
+    captureServerConnectionGeneration: () => 1
   };
   let owner!: ReturnType<typeof useImport>;
   function Probe() {
-    owner = useImport({ queue: queue as never, maxItems: 200,
+    owner = useImport({
+      queue: queue as never,
+      maxItems: 200,
       defaults: { device: "auto", brightness: "auto", theme: "", author: "", tags: [] },
-      keepOriginalLinkForUrlImports: true, storageSlug: "local" });
+      keepOriginalLinkForUrlImports: true,
+      storageSlug: "local"
+    });
     return null;
   }
   await h.render(h.React.createElement(Probe));
   const batchKey = webUuidV7();
-  const makeJobs = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => ingestionJob({
-    id: `${prefix}-${index}`, attemptKey: webUuidV7(), batchKey, batchPosition: index,
-    downloadUrl: `https://example.com/${prefix}-${index}.jpg`
-  }));
+  const makeJobs = (prefix: string, count: number) =>
+    Array.from({ length: count }, (_, index) =>
+      ingestionJob({
+        id: `${prefix}-${index}`,
+        attemptKey: webUuidV7(),
+        batchKey,
+        batchPosition: index,
+        downloadUrl: `https://example.com/${prefix}-${index}.jpg`
+      })
+    );
   const requestBody = (index: number) => JSON.parse(String(h.pending[index].body));
   const rejection = { ok: false, code: "import_batch_limit_exceeded", error: "单批最多 200 张" };
   await owner.addParsedImports(makeJobs("split", 202));
@@ -1708,20 +1751,23 @@ test("[Web/内容接入] 解析后 202 张按上限接管，明确拒绝与未�
   assert.equal(requestBody(0).items.length, 200);
   await h.respond(0, rejection, 400);
   assert.equal(h.pending.length, 2);
-  assert.deepEqual(requestBody(1).items.map((item: any) => item.batch_position), [200, 201]);
+  assert.deepEqual(
+    requestBody(1).items.map((item: any) => item.batch_position),
+    [200, 201]
+  );
   assert.ok(requestBody(1).items.every((item: any) => item.batch_key === batchKey));
   await h.respond(1, rejection, 400);
-  assert.equal(jobsRef.current.filter(job => job.importAcceptRejected).length, 202);
+  assert.equal(jobsRef.current.filter((job) => job.importAcceptRejected).length, 202);
   const rejectedOutcomes = await owner.cancelMany([...jobsRef.current]);
-  assert.equal([...rejectedOutcomes.values()].filter(outcome => outcome.succeeded).length, 202);
+  assert.equal([...rejectedOutcomes.values()].filter((outcome) => outcome.succeeded).length, 202);
   assert.equal(h.pending.length, 2, "确定未接管的首次拒绝无需再次发送接管或取消请求");
 
   jobsRef.current = [];
   await owner.addParsedImports(makeJobs("pending", 202));
   const clearing = owner.cancelMany([...jobsRef.current]);
-  assert.equal(jobsRef.current.filter(job => job.status === "cancelled").length, 2);
+  assert.equal(jobsRef.current.filter((job) => job.status === "cancelled").length, 2);
   await h.respond(2, rejection, 400);
-  assert.equal([...((await clearing).values())].filter(outcome => outcome.succeeded).length, 202);
+  assert.equal([...(await clearing).values()].filter((outcome) => outcome.succeeded).length, 202);
   assert.equal(h.pending.length, 3, "清空等待中的批次时，后续未发送的分片不得再启动");
 
   jobsRef.current = [];
@@ -1737,10 +1783,18 @@ test("[Web/内容接入] 解析后 202 张按上限接管，明确拒绝与未�
   const unknownCancellation = owner.cancelMany([...jobsRef.current]);
   assert.equal(h.pending.length, 6);
   assert.deepEqual(requestBody(5), { items: [frozenInput], cancel_if_missing: true });
-  await h.respond(5, { ok: true, items: [{
-    status: "discarded", session_id: "D".repeat(43), image_id: webUuidV7(),
-    resolved_image_time: "2026-09-13T00:00:00.000Z", accepted_order: 1
-  }] });
+  await h.respond(5, {
+    ok: true,
+    items: [
+      {
+        status: "discarded",
+        session_id: "D".repeat(43),
+        image_id: webUuidV7(),
+        resolved_image_time: "2026-09-13T00:00:00.000Z",
+        accepted_order: 1
+      }
+    ]
+  });
   assert.equal([...(await unknownCancellation).values()][0].succeeded, true);
   assert.equal(jobsRef.current[0].status, "cancelled");
 });
@@ -1750,10 +1804,7 @@ test("[Web/内容接入] Upload 与 Import 接管只使用固定短路由和 1 +
   const originalXhr = globalThis.XMLHttpRequest;
   const fetchCalls: Array<{ path: string; init: RequestInit }> = [];
   const sessionIds = ["A".repeat(43), "B".repeat(43)];
-  const imageIds = [
-    "00000000-0000-7001-8000-00000000008e",
-    "00000000-0000-7002-8000-00000000008e"
-  ];
+  const imageIds = ["00000000-0000-7001-8000-00000000008e", "00000000-0000-7002-8000-00000000008e"];
   const metadata = {
     device: "auto" as const,
     brightness: "auto" as const,
@@ -1823,60 +1874,72 @@ test("[Web/内容接入] Upload 与 Import 接管只使用固定短路由和 1 +
     fetchCalls.push({ path, init });
     if (path === uploadIntentPath) {
       const items = JSON.parse(String(init.body)).items as unknown[];
-      return new Response(JSON.stringify({
-        ok: true,
-        items: items.map((_, index) => ({
-          session_id: sessionIds[index],
-          candidate_image_id: imageIds[index],
-          resolved_image_time: "2026-08-23T01:02:03.456Z",
-          credential: `credential-${index}`,
-          status: "intent"
-        }))
-      }), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          items: items.map((_, index) => ({
+            session_id: sessionIds[index],
+            candidate_image_id: imageIds[index],
+            resolved_image_time: "2026-08-23T01:02:03.456Z",
+            credential: `credential-${index}`,
+            status: "intent"
+          }))
+        }),
+        { status: 200 }
+      );
     }
     if (path === importAcceptPath) {
       const items = JSON.parse(String(init.body)).items as unknown[];
-      return new Response(JSON.stringify({
-        ok: true,
-        items: items.map((_, index) => ({
-          session_id: sessionIds[index],
-          image_id: imageIds[index],
-          resolved_image_time: "2026-08-23T01:02:03.456Z",
-          status: "accepted"
-        }))
-      }), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          items: items.map((_, index) => ({
+            session_id: sessionIds[index],
+            image_id: imageIds[index],
+            resolved_image_time: "2026-08-23T01:02:03.456Z",
+            status: "accepted"
+          }))
+        }),
+        { status: 200 }
+      );
     }
     if (path === ingestionStatusPath) {
       const items = JSON.parse(String(init.body)).items as Array<{
         session_id: string;
         image_id: string;
       }>;
-      return new Response(JSON.stringify({
-        ok: true,
-        items: items.map((item) => ({ ...item, status: "missing" }))
-      }), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          items: items.map((item) => ({ ...item, status: "missing" }))
+        }),
+        { status: 200 }
+      );
     }
     if (path.startsWith(`${ingestionSnapshotPath}?`)) {
       const request = new URL(path, "https://imageshow.test");
-      return new Response(JSON.stringify({
-        ok: true,
-        queue: request.searchParams.get("queue"),
-        revision: 0,
-        total: 0,
-        unfinished: 0,
-        waiting: 0,
-        running: 0,
-        ready: 0,
-        duplicate_pending: 0,
-        committing: 0,
-        resolving: 0,
-        completed: 0,
-        failed: 0,
-        offset: Number(request.searchParams.get("offset")),
-        limit: Number(request.searchParams.get("limit")),
-        items: [],
-        action_watermark: "watermark"
-      }), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          queue: request.searchParams.get("queue"),
+          revision: 0,
+          total: 0,
+          unfinished: 0,
+          waiting: 0,
+          running: 0,
+          ready: 0,
+          duplicate_pending: 0,
+          committing: 0,
+          resolving: 0,
+          completed: 0,
+          failed: 0,
+          offset: Number(request.searchParams.get("offset")),
+          limit: Number(request.searchParams.get("limit")),
+          items: [],
+          action_watermark: "watermark"
+        }),
+        { status: 200 }
+      );
     }
     throw new Error(`unexpected fetch ${path}`);
   }) as typeof fetch;
@@ -1907,21 +1970,26 @@ test("[Web/内容接入] Upload 与 Import 接管只使用固定短路由和 1 +
       new File(["a"], "a.webp", { type: "image/webp" }),
       new File(["b"], "b.webp", { type: "image/webp" })
     ];
-    await Promise.all(intents.items.map((item, index) => {
-      assert.equal(item.status, "intent");
-      if (item.status !== "intent") throw new Error("intent expected");
-      return uploadRaw(item.credential, files[index]!, {
-        onProgress: () => undefined
-      }).promise;
-    }));
+    await Promise.all(
+      intents.items.map((item, index) => {
+        assert.equal(item.status, "intent");
+        if (item.status !== "intent") throw new Error("intent expected");
+        return uploadRaw(item.credential, files[index]!, {
+          onProgress: () => undefined
+        }).promise;
+      })
+    );
     assert.equal(FakeXmlHttpRequest.instances.length, 2);
-    assert.ok(FakeXmlHttpRequest.instances.every((request) => (
-      request.method === "PUT"
-      && request.url === uploadRawPath
-      && new URL(request.url, "https://imageshow.test").search === ""
-      && request.headers.has(uploadCredentialHeader)
-      && request.body instanceof File
-    )));
+    assert.ok(
+      FakeXmlHttpRequest.instances.every(
+        (request) =>
+          request.method === "PUT" &&
+          request.url === uploadRawPath &&
+          new URL(request.url, "https://imageshow.test").search === "" &&
+          request.headers.has(uploadCredentialHeader) &&
+          request.body instanceof File
+      )
+    );
 
     await acceptImports({
       items: imageIds.map((id, index) => ({
@@ -1936,28 +2004,34 @@ test("[Web/内容接入] Upload 与 Import 接管只使用固定短路由和 1 +
     });
     assert.equal(fetchCalls.length, 2);
     assert.equal(fetchCalls[1]?.path, importAcceptPath);
-    assert.equal(
-      (JSON.parse(String(fetchCalls[1]?.init.body)).items as unknown[]).length,
-      2
+    assert.equal((JSON.parse(String(fetchCalls[1]?.init.body)).items as unknown[]).length, 2);
+    await getIngestionStatuses(
+      sessionIds.map((sessionId, index) => ({
+        session_id: sessionId,
+        image_id: imageIds[index]!
+      }))
     );
-    await getIngestionStatuses(sessionIds.map((sessionId, index) => ({
-      session_id: sessionId,
-      image_id: imageIds[index]!
-    })));
     assert.equal(fetchCalls[2]?.path, ingestionStatusPath);
-    await getIngestionQueueSnapshot({
-      queue: "upload",
-      offset: 20,
-      limit: 10,
-      exclude_items: [{
-        session_id: sessionIds[0]!,
-        image_id: imageIds[0]!
-      }],
-      include_items: [{
-        session_id: sessionIds[0]!,
-        image_id: imageIds[0]!
-      }]
-    }, "A".repeat(32));
+    await getIngestionQueueSnapshot(
+      {
+        queue: "upload",
+        offset: 20,
+        limit: 10,
+        exclude_items: [
+          {
+            session_id: sessionIds[0]!,
+            image_id: imageIds[0]!
+          }
+        ],
+        include_items: [
+          {
+            session_id: sessionIds[0]!,
+            image_id: imageIds[0]!
+          }
+        ]
+      },
+      "A".repeat(32)
+    );
     const snapshotCall = fetchCalls[3]!;
     const snapshotUrl = new URL(snapshotCall.path, "https://imageshow.test");
     assert.equal(snapshotUrl.pathname, ingestionSnapshotPath);
@@ -1968,14 +2042,18 @@ test("[Web/内容接入] Upload 与 Import 接管只使用固定短路由和 1 +
       limit: "10"
     });
     assert.deepEqual(JSON.parse(String(snapshotCall.init.body)), {
-      exclude_items: [{
-        session_id: sessionIds[0],
-        image_id: imageIds[0]
-      }],
-      include_items: [{
-        session_id: sessionIds[0],
-        image_id: imageIds[0]
-      }]
+      exclude_items: [
+        {
+          session_id: sessionIds[0],
+          image_id: imageIds[0]
+        }
+      ],
+      include_items: [
+        {
+          session_id: sessionIds[0],
+          image_id: imageIds[0]
+        }
+      ]
     });
     assert.equal(
       new Headers(snapshotCall.init.headers).get(ingestionActionScopeHeader),

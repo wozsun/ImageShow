@@ -1,28 +1,16 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { AdminSettings } from "@imageshow/shared/browser";
 import { storageOptionsQueryOptions } from "../../../lib/api/storage-options.js";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
-import {
-  createPageLifetimeModuleLoader
-} from "../../../lib/page-lifetime-module-loader.js";
+import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-module-loader.js";
 import { usePageScrollLock } from "../../../hooks/usePageScrollLock.js";
 import { IngestionTriggers } from "./IngestionTriggers.js";
-import type {
-  IngestionActivation,
-  IngestionActivationKind
-} from "./ingestion-activation.js";
+import type { IngestionActivation, IngestionActivationKind } from "./ingestion-activation.js";
 import "../../../styles/admin/ingestion-triggers.css";
 
 type IngestionModule = typeof import("./Ingestion.js");
-type ImportSourceDialogModule =
-  typeof import("./import/ImportSourceDialog.js");
+type ImportSourceDialogModule = typeof import("./import/ImportSourceDialog.js");
 
 type IngestionLauncherModuleLoaders = Readonly<{
   ingestion: () => Promise<IngestionModule>;
@@ -32,10 +20,9 @@ type IngestionLauncherModuleLoaders = Readonly<{
 const loadIngestionModule = createPageLifetimeModuleLoader<IngestionModule>(
   () => import("./Ingestion.js")
 );
-const loadImportSourceModule =
-  createPageLifetimeModuleLoader<ImportSourceDialogModule>(
-    () => import("./import/ImportSourceDialog.js")
-  );
+const loadImportSourceModule = createPageLifetimeModuleLoader<ImportSourceDialogModule>(
+  () => import("./import/ImportSourceDialog.js")
+);
 
 export function IngestionLauncher({
   settings,
@@ -54,10 +41,10 @@ export function IngestionLauncher({
 }) {
   const queryClient = useQueryClient();
   const ingestionLoader = moduleLoaders?.ingestion ?? loadIngestionModule;
-  const importSourceLoader = moduleLoaders?.importSource
-    ?? loadImportSourceModule;
-  const [IngestionComponent, setIngestionComponent] =
-    useState<IngestionModule["Ingestion"] | null>(null);
+  const importSourceLoader = moduleLoaders?.importSource ?? loadImportSourceModule;
+  const [IngestionComponent, setIngestionComponent] = useState<IngestionModule["Ingestion"] | null>(
+    null
+  );
   const [activation, setActivation] = useState<IngestionActivation | null>(null);
   const [launchPending, setLaunchPending] = useState(false);
   const activationActiveRef = useRef(false);
@@ -85,11 +72,7 @@ export function IngestionLauncher({
     if (launchPending) return;
     const target = failedLaunchFocusRef.current;
     failedLaunchFocusRef.current = null;
-    if (
-      target?.isConnected
-      && !target.disabled
-      && !target.closest("[inert]")
-    ) target.focus();
+    if (target?.isConnected && !target.disabled && !target.closest("[inert]")) target.focus();
   }, [launchPending]);
 
   useEffect(() => {
@@ -112,10 +95,7 @@ export function IngestionLauncher({
   const preloadImportSource = () => {
     void importSourceLoader().catch(() => undefined);
   };
-  const activate = async (
-    kind: IngestionActivationKind,
-    opener: HTMLButtonElement
-  ) => {
+  const activate = async (kind: IngestionActivationKind, opener: HTMLButtonElement) => {
     if (activationActiveRef.current || disabled) return;
     const launchFence = launchFenceRef.current;
     const launchSequence = launchFence.begin();
@@ -124,18 +104,13 @@ export function IngestionLauncher({
     updateLaunchPending(true);
     let dispatched = false;
     try {
-      const needsImportSource = kind === "urls"
-        || kind === "jsonl"
-        || kind === "weibo";
+      const needsImportSource = kind === "urls" || kind === "jsonl" || kind === "weibo";
       const [ingestionModule] = await Promise.all([
         ingestionLoader(),
         queryClient.fetchQuery(storageOptionsQueryOptions),
         ...(needsImportSource ? [importSourceLoader()] : [])
       ]);
-      if (
-        !launchFence.isCurrent(launchSequence)
-        || !showTriggersRef.current
-      ) {
+      if (!launchFence.isCurrent(launchSequence) || !showTriggersRef.current) {
         return;
       }
       setIngestionComponent(() => ingestionModule.Ingestion);
@@ -148,48 +123,43 @@ export function IngestionLauncher({
       });
       dispatched = true;
     } catch (error) {
-      if (
-        launchFence.isCurrent(launchSequence)
-        && showTriggersRef.current
-      ) {
+      if (launchFence.isCurrent(launchSequence) && showTriggersRef.current) {
         onLoadError(error);
       }
     } finally {
-      if (
-        !dispatched
-        && launchFence.isCurrent(launchSequence)
-      ) {
+      if (!dispatched && launchFence.isCurrent(launchSequence)) {
         activationActiveRef.current = false;
         failedLaunchFocusRef.current = opener;
         updateLaunchPending(false);
       }
     }
   };
-  const markActivationOpened = useCallback((sequence: number) => {
-    if (
-      launchFenceRef.current.isMounted()
-      && activeSequenceRef.current === sequence
-      && activationActiveRef.current
-    ) {
-      // DialogFrame has mounted and made the page root inert. From this point
-      // the modal boundary owns interaction, so release the launcher's counted
-      // root-lock lease without exposing an interactive frame.
-      updateLaunchPending(false);
-    }
-  }, [updateLaunchPending]);
-  const settleActivation = useCallback((sequence: number) => {
-    if (
-      launchFenceRef.current.isMounted()
-      && activeSequenceRef.current === sequence
-    ) {
-      launchFenceRef.current.invalidate();
-      activationActiveRef.current = false;
-      setActivation((current) => (
-        current?.sequence === sequence ? null : current
-      ));
-      updateLaunchPending(false);
-    }
-  }, [updateLaunchPending]);
+  const markActivationOpened = useCallback(
+    (sequence: number) => {
+      if (
+        launchFenceRef.current.isMounted() &&
+        activeSequenceRef.current === sequence &&
+        activationActiveRef.current
+      ) {
+        // DialogFrame has mounted and made the page root inert. From this point
+        // the modal boundary owns interaction, so release the launcher's counted
+        // root-lock lease without exposing an interactive frame.
+        updateLaunchPending(false);
+      }
+    },
+    [updateLaunchPending]
+  );
+  const settleActivation = useCallback(
+    (sequence: number) => {
+      if (launchFenceRef.current.isMounted() && activeSequenceRef.current === sequence) {
+        launchFenceRef.current.invalidate();
+        activationActiveRef.current = false;
+        setActivation((current) => (current?.sequence === sequence ? null : current));
+        updateLaunchPending(false);
+      }
+    },
+    [updateLaunchPending]
+  );
 
   return (
     <>

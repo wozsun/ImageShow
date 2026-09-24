@@ -4,7 +4,10 @@ import { DynamicConcurrencyLimiter } from "../../../core/concurrency.ts";
 import { logger } from "../../../core/logger.ts";
 
 const signal = new AbortController().signal;
-const limiter = new DynamicConcurrencyLimiter(() => 1, (aborted) => aborted.reason);
+const limiter = new DynamicConcurrencyLimiter(
+  () => 1,
+  (aborted) => aborted.reason
+);
 const pending = new Set<Promise<void>>();
 
 async function retryCleanup(work: () => Promise<void>) {
@@ -16,12 +19,14 @@ async function retryCleanup(work: () => Promise<void>) {
     } catch (error) {
       if (attempt === attempts) {
         logger.warn("ingestion_cleanup_retry_exhausted", {
-          attempts: attempt, error: error
+          attempts: attempt,
+          error: error
         });
         return;
       }
       logger.warn("ingestion_cleanup_retry_deferred", {
-        attempts: attempt, error: error
+        attempts: attempt,
+        error: error
       });
       await delay(1_000 * Math.min(32, 2 ** (attempt - 1)), undefined, { ref: false });
     }
@@ -34,7 +39,8 @@ export const ingestionCleanupRetryQueue = {
     const capacity = appConfig.ingestionRuntime.cleanupRetryQueueCapacity;
     if (pending.size >= capacity) {
       logger.warn("ingestion_cleanup_retry_capacity_exhausted", {
-        capacity, pending: pending.size
+        capacity,
+        pending: pending.size
       });
       return;
     }

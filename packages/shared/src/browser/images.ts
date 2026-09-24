@@ -22,8 +22,7 @@ export const publicImageViews = ["show", "gallery"] as const;
 export type PublicImageView = (typeof publicImageViews)[number];
 export const publicImageBrowseLimit = 800;
 
-export const adminImageListReadStartedAtHeader =
-  "X-ImageShow-Read-Started-At";
+export const adminImageListReadStartedAtHeader = "X-ImageShow-Read-Started-At";
 
 export type FacetOptionDto = {
   slug: string;
@@ -115,10 +114,7 @@ export type RandomImageJsonItemDto = {
   width: number;
   height: number;
   image_time: string;
-} & (
-  | { object_url: string; thumb_url?: string }
-  | { object_url?: never; thumb_url: string }
-);
+} & ({ object_url: string; thumb_url?: string } | { object_url?: never; thumb_url: string });
 
 export type RandomImageJsonResponseDto = {
   count: number;
@@ -245,9 +241,7 @@ export type AuthorMutationResponseDto = {
   item: AuthorDto;
 };
 
-export type AdminEntityListResponseDto<
-  Item extends AdminEntityDto = AdminEntityDto
-> = {
+export type AdminEntityListResponseDto<Item extends AdminEntityDto = AdminEntityDto> = {
   items: Item[];
 };
 
@@ -275,9 +269,7 @@ export type ImageRestoreResponseDto = {
   results: ImageRestoreItemResultDto[];
 };
 
-export type ImagePurgeRequestDto =
-  | { scope: "selected"; ids: string[] }
-  | { scope: "all" };
+export type ImagePurgeRequestDto = { scope: "selected"; ids: string[] } | { scope: "all" };
 
 export type ImagePurgeResponseDto = {
   requested: number;

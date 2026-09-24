@@ -30,8 +30,7 @@ type GalleryImageRuntimeValue = {
   galleryPaused: boolean;
 };
 
-const GalleryImageRuntimeContext =
-  createContext<GalleryImageRuntimeValue | null>(null);
+const GalleryImageRuntimeContext = createContext<GalleryImageRuntimeValue | null>(null);
 
 function currentViewportHeight() {
   return Math.max(1, window.innerHeight);
@@ -45,22 +44,12 @@ function createRuntime(): Omit<GalleryImageRuntimeValue, "galleryPaused"> {
   return {
     scheduler,
     visibility: new GalleryImageVisibilityController(currentViewportHeight()),
-    debug: import.meta.env?.DEV === true
-      ? new GalleryDebugStats(scheduler)
-      : null
+    debug: import.meta.env?.DEV === true ? new GalleryDebugStats(scheduler) : null
   };
 }
 
-function GalleryDevelopmentStats({
-  debug
-}: {
-  debug: GalleryDebugController;
-}) {
-  const snapshot = useSyncExternalStore(
-    debug.subscribe,
-    debug.snapshot,
-    debug.snapshot
-  );
+function GalleryDevelopmentStats({ debug }: { debug: GalleryDebugController }) {
+  const snapshot = useSyncExternalStore(debug.subscribe, debug.snapshot, debug.snapshot);
   return (
     <output
       hidden
@@ -159,10 +148,12 @@ export function GalleryImageRuntime({
       frame = undefined;
       const nextWidth = window.innerWidth;
       const nextHeight = currentViewportHeight();
-      if (!shouldRefreshGalleryVisibility(
-        { width: previousWidth, height: previousHeight },
-        { width: nextWidth, height: nextHeight }
-      )) {
+      if (
+        !shouldRefreshGalleryVisibility(
+          { width: previousWidth, height: previousHeight },
+          { width: nextWidth, height: nextHeight }
+        )
+      ) {
         return;
       }
       previousWidth = nextWidth;
@@ -197,26 +188,30 @@ export function GalleryImageRuntime({
     };
   }, [development, runtime]);
 
-  useEffect(() => () => {
-    // Task owners remove their DOM sources first. This group-level fence also
-    // catches a task whose owner is concurrently leaving the tree. The
-    // scheduler itself stays reusable during React StrictMode's effect replay.
-    runtime.scheduler.cancelGroup("gallery");
-    runtime.scheduler.cancelGroup("detail");
-  }, [runtime]);
+  useEffect(
+    () => () => {
+      // Task owners remove their DOM sources first. This group-level fence also
+      // catches a task whose owner is concurrently leaving the tree. The
+      // scheduler itself stays reusable during React StrictMode's effect replay.
+      runtime.scheduler.cancelGroup("gallery");
+      runtime.scheduler.cancelGroup("detail");
+    },
+    [runtime]
+  );
 
-  const contextValue = useMemo(() => ({
-    ...runtime,
-    galleryPaused: detailOpen
-  }), [detailOpen, runtime]);
+  const contextValue = useMemo(
+    () => ({
+      ...runtime,
+      galleryPaused: detailOpen
+    }),
+    [detailOpen, runtime]
+  );
 
   return (
     <GalleryImageRuntimeContext.Provider value={contextValue}>
       <ImageLoadSchedulerProvider scheduler={runtime.scheduler}>
         {children}
-        {development && runtime.debug && (
-          <GalleryDevelopmentStats debug={runtime.debug} />
-        )}
+        {development && runtime.debug && <GalleryDevelopmentStats debug={runtime.debug} />}
       </ImageLoadSchedulerProvider>
     </GalleryImageRuntimeContext.Provider>
   );

@@ -12,7 +12,16 @@ import { SlugChip } from "../../components/data-display/SlugChip.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 
-export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, canDelete = false, sortBusy, onSortSave }: {
+export function VocabularyAdminCard({
+  kind,
+  item,
+  onChanged,
+  onDelete,
+  onError,
+  canDelete = false,
+  sortBusy,
+  onSortSave
+}: {
   kind: "themes" | "tags" | "authors";
   item: AdminEntityDto;
   onChanged: (item?: AuthorDto) => void | Promise<void>;
@@ -25,23 +34,32 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
   const noun = kind === "themes" ? "主题" : kind === "tags" ? "标签" : "作者";
 
   const isAuthor = kind === "authors";
-  const derivedIdentity = isAuthor && "derived_identity" in item
-    ? item.derived_identity as AuthorDto["derived_identity"]
-    : null;
+  const derivedIdentity =
+    isAuthor && "derived_identity" in item
+      ? (item.derived_identity as AuthorDto["derived_identity"])
+      : null;
   const [form, setForm] = useState(() => ({
-    kind, slug: item.slug,
-    display: item.display_name, link: item.link ?? "",
-    savedDisplay: item.display_name, savedLink: item.link ?? ""
+    kind,
+    slug: item.slug,
+    display: item.display_name,
+    link: item.link ?? "",
+    savedDisplay: item.display_name,
+    savedLink: item.link ?? ""
   }));
   const { display, link } = form;
   useLayoutEffect(() => {
     setForm((current) => {
       const replaced = current.kind !== kind || current.slug !== item.slug;
       return {
-        kind, slug: item.slug,
-        display: replaced || current.display === current.savedDisplay ? item.display_name : current.display,
-        link: replaced || current.link === current.savedLink ? item.link ?? "" : current.link,
-        savedDisplay: item.display_name, savedLink: item.link ?? ""
+        kind,
+        slug: item.slug,
+        display:
+          replaced || current.display === current.savedDisplay
+            ? item.display_name
+            : current.display,
+        link: replaced || current.link === current.savedLink ? (item.link ?? "") : current.link,
+        savedDisplay: item.display_name,
+        savedLink: item.link ?? ""
       };
     });
   }, [item.display_name, item.link, item.slug, kind]);
@@ -57,9 +75,11 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
   } as const;
 
   const acceptSaved = (savedDisplay: string, savedLink: string) => {
-    setForm((current) => current.kind === kind && current.slug === item.slug
-      ? { ...current, display: savedDisplay, link: savedLink, savedDisplay, savedLink }
-      : current);
+    setForm((current) =>
+      current.kind === kind && current.slug === item.slug
+        ? { ...current, display: savedDisplay, link: savedLink, savedDisplay, savedLink }
+        : current
+    );
   };
   const save = async () => {
     await saveStatus.run(async () => {
@@ -113,14 +133,18 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
             disabled={cardBusy}
             maxLength={2048}
             aria-label={`作者 ${item.slug} 链接`}
-            title={derivedIdentity
-              ? `平台: ${derivedIdentity.provider}; UID: ${derivedIdentity.id}`
-              : undefined}
+            title={
+              derivedIdentity
+                ? `平台: ${derivedIdentity.provider}; UID: ${derivedIdentity.id}`
+                : undefined
+            }
           />
         </div>
       )}
       <div className="entity-card-foot">
-        <span className="muted entity-count" title="全部关联图片（包含回收站）">{item.image_count} 张</span>
+        <span className="muted entity-count" title="全部关联图片（包含回收站）">
+          {item.image_count} 张
+        </span>
         {(dirty || saveStatus.status !== "idle") && (
           <AsyncActionButton
             type="button"

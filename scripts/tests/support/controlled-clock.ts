@@ -35,22 +35,10 @@ export function installControlledClock(
     includeDateNow?: boolean;
   } = {}
 ) {
-  const setTimeoutDescriptor = Object.getOwnPropertyDescriptor(
-    window,
-    "setTimeout"
-  );
-  const clearTimeoutDescriptor = Object.getOwnPropertyDescriptor(
-    window,
-    "clearTimeout"
-  );
-  const globalSetTimeoutDescriptor = Object.getOwnPropertyDescriptor(
-    globalThis,
-    "setTimeout"
-  );
-  const globalClearTimeoutDescriptor = Object.getOwnPropertyDescriptor(
-    globalThis,
-    "clearTimeout"
-  );
+  const setTimeoutDescriptor = Object.getOwnPropertyDescriptor(window, "setTimeout");
+  const clearTimeoutDescriptor = Object.getOwnPropertyDescriptor(window, "clearTimeout");
+  const globalSetTimeoutDescriptor = Object.getOwnPropertyDescriptor(globalThis, "setTimeout");
+  const globalClearTimeoutDescriptor = Object.getOwnPropertyDescriptor(globalThis, "clearTimeout");
   const dateNowDescriptor = Object.getOwnPropertyDescriptor(Date, "now");
   const nativeSetTimeout = window.setTimeout.bind(window);
   const nativeClearTimeout = window.clearTimeout.bind(window);
@@ -59,11 +47,7 @@ export function installControlledClock(
   let nextId = 0;
   let now = initialNow;
 
-  const schedule = (
-    callback: TimerHandler,
-    delay = 0,
-    ...arguments_: unknown[]
-  ) => {
+  const schedule = (callback: TimerHandler, delay = 0, ...arguments_: unknown[]) => {
     if (typeof callback !== "function") {
       throw new TypeError("受控测试时钟只接受函数回调");
     }
@@ -137,16 +121,8 @@ export function installControlledClock(
     restoreProperty(window, "setTimeout", setTimeoutDescriptor);
     restoreProperty(window, "clearTimeout", clearTimeoutDescriptor);
     if (includeGlobalTimers) {
-      restoreProperty(
-        globalThis,
-        "setTimeout",
-        globalSetTimeoutDescriptor
-      );
-      restoreProperty(
-        globalThis,
-        "clearTimeout",
-        globalClearTimeoutDescriptor
-      );
+      restoreProperty(globalThis, "setTimeout", globalSetTimeoutDescriptor);
+      restoreProperty(globalThis, "clearTimeout", globalClearTimeoutDescriptor);
     }
     if (includeDateNow) restoreProperty(Date, "now", dateNowDescriptor);
   });
@@ -165,9 +141,7 @@ export function installControlledClock(
       for (;;) {
         const next = [...timers.entries()]
           .filter(([, timer]) => timer.dueAt <= target)
-          .sort((left, right) => (
-            left[1].dueAt - right[1].dueAt || left[0] - right[0]
-          ))[0];
+          .sort((left, right) => left[1].dueAt - right[1].dueAt || left[0] - right[0])[0];
         if (!next) break;
         const [id, timer] = next;
         timers.delete(id);

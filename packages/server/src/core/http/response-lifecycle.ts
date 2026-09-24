@@ -3,10 +3,7 @@
  * Cleanup runs exactly once for empty bodies, EOF, read failures or consumer
  * cancellation.
  */
-export function responseWithCleanup(
-  response: Response,
-  cleanup: () => void
-) {
+export function responseWithCleanup(response: Response, cleanup: () => void) {
   if (!response.body) {
     cleanup();
     return response;

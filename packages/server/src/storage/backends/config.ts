@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { isHttpsEndpoint, isHttpsUrl, publicBaseUrlSchema, publicUrlUsesSiteHost } from "../../core/url-validation.ts";
+import {
+  isHttpsEndpoint,
+  isHttpsUrl,
+  publicBaseUrlSchema,
+  publicUrlUsesSiteHost
+} from "../../core/url-validation.ts";
 import { ApiError } from "../../core/api-error.ts";
 
 export const localPublicUrlSchema = publicBaseUrlSchema;
@@ -10,13 +15,23 @@ export const storedLocalConfigSchema = z.object({
 
 export function assertLocalPublicUrlDomain(publicBaseUrl: string, siteDomain: string) {
   if (publicUrlUsesSiteHost(publicBaseUrl, siteDomain)) {
-    throw new ApiError(400, "storage_public_url_host_conflict", "本地图片公开地址须使用独立 Host；使用主站地址请将公开 URL 留空");
+    throw new ApiError(
+      400,
+      "storage_public_url_host_conflict",
+      "本地图片公开地址须使用独立 Host；使用主站地址请将公开 URL 留空"
+    );
   }
 }
 
-const httpsEndpoint = z.string().trim().max(2048)
+const httpsEndpoint = z
+  .string()
+  .trim()
+  .max(2048)
   .refine(isHttpsEndpoint, "endpoint must use HTTPS");
-const optionalHttpsUrl = z.string().trim().max(2048)
+const optionalHttpsUrl = z
+  .string()
+  .trim()
+  .max(2048)
   .refine((value) => !value || isHttpsUrl(value), "URL must use HTTPS");
 
 const s3SettingsPatchShape = {
@@ -26,7 +41,9 @@ const s3SettingsPatchShape = {
   access_key_id: z.string().trim().optional(),
   secret_access_key: z.string().trim().optional(),
   force_path_style: z.boolean().optional(),
-  root_path: z.string().trim()
+  root_path: z
+    .string()
+    .trim()
     .regex(/^\/?(?:[a-zA-Z0-9._-]+\/?)*$/, "root_path must be a simple absolute path")
     .optional(),
   public_base_url: optionalHttpsUrl.optional(),
@@ -59,12 +76,13 @@ export const s3SettingsSchema = s3SettingsPatchSchema.transform(withS3SettingsDe
 
 // Configuration packages retain recognized settings; an invalid current value
 // rejects only that backend entry.
-export const looseS3SettingsSchema = z.object({
-  ...s3SettingsPatchShape,
-  connect_timeout_seconds: z.number().int().min(1).max(120).optional(),
-  idle_timeout_seconds: z.number().int().min(1).max(300).optional(),
-  task_timeout_seconds: z.number().int().min(15).max(3_600).optional()
-})
+export const looseS3SettingsSchema = z
+  .object({
+    ...s3SettingsPatchShape,
+    connect_timeout_seconds: z.number().int().min(1).max(120).optional(),
+    idle_timeout_seconds: z.number().int().min(1).max(300).optional(),
+    task_timeout_seconds: z.number().int().min(15).max(3_600).optional()
+  })
   .transform(withS3SettingsDefaults);
 
 export type S3Settings = z.infer<typeof s3SettingsSchema>;
@@ -77,17 +95,16 @@ const s3CapabilitiesSchema = z.strictObject({
 export type S3Capabilities = z.infer<typeof s3CapabilitiesSchema>;
 
 /** Server-owned probe results share the backend's persisted configuration. */
-export const storedS3ConfigSchema = s3SettingsPatchSchema.extend({
-  capabilities: s3CapabilitiesSchema.optional()
-}).transform(({ capabilities, ...settings }) => ({
-  s3: withS3SettingsDefaults(settings),
-  ...(capabilities ? { capabilities } : {})
-}));
+export const storedS3ConfigSchema = s3SettingsPatchSchema
+  .extend({
+    capabilities: s3CapabilitiesSchema.optional()
+  })
+  .transform(({ capabilities, ...settings }) => ({
+    s3: withS3SettingsDefaults(settings),
+    ...(capabilities ? { capabilities } : {})
+  }));
 
-export function mergeS3Settings(
-  patch: S3SettingsPatch = {},
-  current?: S3Settings
-) {
+export function mergeS3Settings(patch: S3SettingsPatch = {}, current?: S3Settings) {
   return s3SettingsSchema.parse({ ...current, ...patch });
 }
 
@@ -118,8 +135,8 @@ type StorageBackendRecordFields = {
 };
 
 export type StorageBackendRecord =
-  | LocalStorageConfig & StorageBackendRecordFields
-  | S3StorageConfig & StorageBackendRecordFields;
+  | (LocalStorageConfig & StorageBackendRecordFields)
+  | (S3StorageConfig & StorageBackendRecordFields);
 
 export type StorageBackendCreateInput = {
   slug: string;
@@ -153,10 +170,7 @@ export function storageDriverSignature(config: StorageConfig) {
   return JSON.stringify(["s3", driverSettings]);
 }
 
-export function sameStorageBackendSettings(
-  current: StorageConfig,
-  candidate: StorageConfig
-) {
+export function sameStorageBackendSettings(current: StorageConfig, candidate: StorageConfig) {
   if (current.type !== candidate.type) return false;
   if (current.type === "local" && candidate.type === "local") {
     return (current.public_base_url ?? "") === (candidate.public_base_url ?? "");

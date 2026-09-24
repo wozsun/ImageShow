@@ -3,8 +3,11 @@ import type { Pool, PoolClient } from "pg";
 import { ApiError } from "../api-error.ts";
 import { abortSignalError, raceWithAbortSignal } from "../abort.ts";
 import { pool, type DatabaseReader } from "./pools.ts";
-import { createPublicDatabaseFallbackError, publicDatabaseAdmission,
-  type PublicDatabaseAdmission } from "./public-admission.ts";
+import {
+  createPublicDatabaseFallbackError,
+  publicDatabaseAdmission,
+  type PublicDatabaseAdmission
+} from "./public-admission.ts";
 
 export type PublicDatabaseReadAccess = { reader?: DatabaseReader };
 
@@ -16,23 +19,13 @@ type PublicDatabaseReadScopeDependencies = {
 };
 
 export function publicPgFallbackWorkLimitExceeded(message: string) {
-  return createPublicDatabaseFallbackError(
-    503, "public_pg_fallback_work_limit", message
-  );
+  return createPublicDatabaseFallbackError(503, "public_pg_fallback_work_limit", message);
 }
 
 /** @public Dependency-injection seam used by local resource-release tests. */
-export function createPublicDatabaseReadScope(
-  dependencies: PublicDatabaseReadScopeDependencies
-) {
-  const fallbackError = (code: string, message: string) => (
-    createPublicDatabaseFallbackError(
-      503,
-      code,
-      message,
-      dependencies.retryAfterSeconds
-    )
-  );
+export function createPublicDatabaseReadScope(dependencies: PublicDatabaseReadScopeDependencies) {
+  const fallbackError = (code: string, message: string) =>
+    createPublicDatabaseFallbackError(503, code, message, dependencies.retryAfterSeconds);
 
   return async <T>(
     requestSignal: AbortSignal,
@@ -40,9 +33,8 @@ export function createPublicDatabaseReadScope(
   ): Promise<T> => {
     requestSignal.throwIfAborted();
     const operationAbort = new AbortController();
-    const onRequestAbort = () => operationAbort.abort(
-      abortSignalError(requestSignal, "Public PostgreSQL fallback aborted")
-    );
+    const onRequestAbort = () =>
+      operationAbort.abort(abortSignalError(requestSignal, "Public PostgreSQL fallback aborted"));
     requestSignal.addEventListener("abort", onRequestAbort, { once: true });
 
     let lease: Awaited<ReturnType<PublicDatabaseAdmission["acquire"]>> | null = null;
@@ -54,18 +46,21 @@ export function createPublicDatabaseReadScope(
     let scopeClosed = false;
     let activeQueries = 0;
     let queryTail: Promise<unknown> = Promise.resolve();
-    const closedError = () => operationAbort.signal.aborted
-      ? abortSignalError(operationAbort.signal)
-      : new Error("Public PostgreSQL read scope is closed");
+    const closedError = () =>
+      operationAbort.signal.aborted
+        ? abortSignalError(operationAbort.signal)
+        : new Error("Public PostgreSQL read scope is closed");
 
     const retainLeaseForPendingCheckout = () => {
       if (client || !checkoutPromise || !lease) return;
       const heldLease = lease;
       lease = null;
-      void checkoutPromise.then(
-        (lateClient) => lateClient.release(true),
-        () => undefined
-      ).finally(() => heldLease.release());
+      void checkoutPromise
+        .then(
+          (lateClient) => lateClient.release(true),
+          () => undefined
+        )
+        .finally(() => heldLease.release());
     };
 
     const checkoutClient = async () => {
@@ -80,10 +75,16 @@ export function createPublicDatabaseReadScope(
           acquiredLease.release();
           throw abortSignalError(operationAbort.signal);
         }
-        timer = setTimeout(() => operationAbort.abort(fallbackError(
-          "public_pg_fallback_execution_timeout",
-          "Public PostgreSQL fallback execution timed out"
-        )), dependencies.executionTimeoutMs);
+        timer = setTimeout(
+          () =>
+            operationAbort.abort(
+              fallbackError(
+                "public_pg_fallback_execution_timeout",
+                "Public PostgreSQL fallback execution timed out"
+              )
+            ),
+          dependencies.executionTimeoutMs
+        );
         timer.unref();
 
         checkoutPromise = Promise.resolve().then(() => dependencies.pool.connect());
@@ -142,10 +143,7 @@ export function createPublicDatabaseReadScope(
       }) as DatabaseReader["query"]
     };
 
-    const operation = Promise.resolve().then(() => work(
-      { reader },
-      operationAbort.signal
-    ));
+    const operation = Promise.resolve().then(() => work({ reader }, operationAbort.signal));
     try {
       const value = await raceWithAbortSignal(operationAbort.signal, operation);
       operationAbort.signal.throwIfAborted();
@@ -160,18 +158,14 @@ export function createPublicDatabaseReadScope(
     } finally {
       scopeClosed = true;
       if (activeQueries > 0 && !operationAbort.signal.aborted) {
-        operationAbort.abort(new Error(
-          "Public PostgreSQL read scope closed with pending work"
-        ));
+        operationAbort.abort(new Error("Public PostgreSQL read scope closed with pending work"));
       }
       requestSignal.removeEventListener("abort", onRequestAbort);
       if (timer) clearTimeout(timer);
       if (activeQueries > 0) destroyClient = true;
       retainLeaseForPendingCheckout();
       const checkedOutClient = client as PoolClient | null;
-      const heldLease = lease as Awaited<ReturnType<
-        PublicDatabaseAdmission["acquire"]
-      >> | null;
+      const heldLease = lease as Awaited<ReturnType<PublicDatabaseAdmission["acquire"]>> | null;
       try {
         checkedOutClient?.release(destroyClient);
       } finally {

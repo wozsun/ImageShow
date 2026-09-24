@@ -2,12 +2,20 @@ import { z } from "zod";
 import type { CompletedIngestionDisplayDto } from "@imageshow/shared/browser";
 
 const ingestionQueueTypes = ["upload", "import"] as const;
-export type IngestionQueueType = typeof ingestionQueueTypes[number];
+export type IngestionQueueType = (typeof ingestionQueueTypes)[number];
 const ingestionSourceTypes = ["upload", "url", "jsonl", "weibo"] as const;
-export type IngestionSourceType = typeof ingestionSourceTypes[number];
+export type IngestionSourceType = (typeof ingestionSourceTypes)[number];
 const ingestionSessionStatuses = [
-  "queued", "downloading", "received", "preparing", "ready", "committing",
-  "resolving", "completed", "failed", "discarded"
+  "queued",
+  "downloading",
+  "received",
+  "preparing",
+  "ready",
+  "committing",
+  "resolving",
+  "completed",
+  "failed",
+  "discarded"
 ] as const;
 
 const nonEmptyString = z.string().min(1);
@@ -87,36 +95,46 @@ const sessionShape = {
 };
 
 /** The recoverable Redis truth for an accepted but unfinished task. */
-const activeSessionSchema = z.strictObject({
-  ...sessionShape,
-  source_type: z.enum(ingestionSourceTypes),
-  batch_position: batchPosition.optional(),
-  manifest_line: manifestLine.optional(),
-  image_time: nonEmptyString,
-  import_download: importDownloadSchema.optional(),
-  metadata: draftSchema,
-  storage_slug: nonEmptyString,
-  status: z.enum(ingestionSessionStatuses).exclude(["completed", "discarded"]),
-  phase: z.string(),
-  message: z.string(),
-  progress: z.number().min(0).max(100).nullable(),
-  progress_seq: nonNegativeInteger,
-  execution_token: z.string(),
-  raw_generation: z.string(),
-  raw_size: nonNegativeInteger,
-  prepared: preparedSchema.optional(),
-  duplicate_decision: duplicateDecision.optional(),
-  commit: commitSchema.optional(),
-  error: sessionErrorSchema.optional(),
-  semantic_hash: digest(32)
-}).superRefine((session, context) => {
-  if ((session.queue === "upload") !== (session.source_type === "upload")) {
-    context.addIssue({ code: "custom", path: ["source_type"], message: "Mismatched queue and source_type" });
-  }
-  if ((session.queue === "import") !== (session.import_download !== undefined)) {
-    context.addIssue({ code: "custom", path: ["import_download"], message: "Import download must belong to an Import canonical" });
-  }
-});
+const activeSessionSchema = z
+  .strictObject({
+    ...sessionShape,
+    source_type: z.enum(ingestionSourceTypes),
+    batch_position: batchPosition.optional(),
+    manifest_line: manifestLine.optional(),
+    image_time: nonEmptyString,
+    import_download: importDownloadSchema.optional(),
+    metadata: draftSchema,
+    storage_slug: nonEmptyString,
+    status: z.enum(ingestionSessionStatuses).exclude(["completed", "discarded"]),
+    phase: z.string(),
+    message: z.string(),
+    progress: z.number().min(0).max(100).nullable(),
+    progress_seq: nonNegativeInteger,
+    execution_token: z.string(),
+    raw_generation: z.string(),
+    raw_size: nonNegativeInteger,
+    prepared: preparedSchema.optional(),
+    duplicate_decision: duplicateDecision.optional(),
+    commit: commitSchema.optional(),
+    error: sessionErrorSchema.optional(),
+    semantic_hash: digest(32)
+  })
+  .superRefine((session, context) => {
+    if ((session.queue === "upload") !== (session.source_type === "upload")) {
+      context.addIssue({
+        code: "custom",
+        path: ["source_type"],
+        message: "Mismatched queue and source_type"
+      });
+    }
+    if ((session.queue === "import") !== (session.import_download !== undefined)) {
+      context.addIssue({
+        code: "custom",
+        path: ["import_download"],
+        message: "Import download must belong to an Import canonical"
+      });
+    }
+  });
 export type IngestionSessionSnapshot = Readonly<z.infer<typeof activeSessionSchema>>;
 
 const completedDisplaySchema = z.strictObject({
@@ -146,18 +164,27 @@ export function completedIngestionDisplay(
   };
 }
 
-const completedReceiptSchema = z.strictObject({
-  ...sessionShape,
-  commit_request_id: nonEmptyString,
-  commit_intent_hash: digest(32),
-  status: z.literal("completed"),
-  completed_at: nonNegativeInteger,
-  display: completedDisplaySchema.optional()
-}).superRefine((session, context) => {
-  if (session.display && ((session.queue === "upload") !== (session.display.source_type === "upload"))) {
-    context.addIssue({ code: "custom", path: ["display", "source_type"], message: "Mismatched queue and display source_type" });
-  }
-});
+const completedReceiptSchema = z
+  .strictObject({
+    ...sessionShape,
+    commit_request_id: nonEmptyString,
+    commit_intent_hash: digest(32),
+    status: z.literal("completed"),
+    completed_at: nonNegativeInteger,
+    display: completedDisplaySchema.optional()
+  })
+  .superRefine((session, context) => {
+    if (
+      session.display &&
+      (session.queue === "upload") !== (session.display.source_type === "upload")
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["display", "source_type"],
+        message: "Mismatched queue and display source_type"
+      });
+    }
+  });
 export type CompletedIngestionReceipt = Readonly<z.infer<typeof completedReceiptSchema>>;
 
 const discardedReceiptSchema = z.strictObject({
@@ -169,62 +196,85 @@ const discardedReceiptSchema = z.strictObject({
 export type DiscardedIngestionReceipt = Readonly<z.infer<typeof discardedReceiptSchema>>;
 
 export const storedIngestionSessionSchema = z.discriminatedUnion("status", [
-  activeSessionSchema, completedReceiptSchema, discardedReceiptSchema
+  activeSessionSchema,
+  completedReceiptSchema,
+  discardedReceiptSchema
 ]);
 export type StoredIngestionSession = Readonly<z.infer<typeof storedIngestionSessionSchema>>;
 
-export const uploadIntentSchema = z.strictObject({
-  owner: nonEmptyString,
-  session_id: nonEmptyString,
-  candidate_image_id: nonEmptyString,
-  resolved_image_time: nonEmptyString,
-  request_hash: digest(32),
-  display_order_key: z.string().regex(/^[0-9a-f]{32}:[0-9a-f]{3}:[A-Za-z0-9_-]{43}$/u),
-  batch_position: batchPosition,
-  metadata: draftSchema,
-  storage_slug: nonEmptyString,
-  expected_size: positiveInteger,
-  max_long_edge: positiveInteger,
-  created_at: nonNegativeInteger,
-  expires_at: positiveInteger,
-  execution_token: z.string(),
-  claim_heartbeat_at: nonNegativeInteger
-}).refine((intent) => intent.display_order_key.endsWith(`:${intent.session_id}`), {
-  path: ["display_order_key"], message: "Display order must identify the session"
-});
+export const uploadIntentSchema = z
+  .strictObject({
+    owner: nonEmptyString,
+    session_id: nonEmptyString,
+    candidate_image_id: nonEmptyString,
+    resolved_image_time: nonEmptyString,
+    request_hash: digest(32),
+    display_order_key: z.string().regex(/^[0-9a-f]{32}:[0-9a-f]{3}:[A-Za-z0-9_-]{43}$/u),
+    batch_position: batchPosition,
+    metadata: draftSchema,
+    storage_slug: nonEmptyString,
+    expected_size: positiveInteger,
+    max_long_edge: positiveInteger,
+    created_at: nonNegativeInteger,
+    expires_at: positiveInteger,
+    execution_token: z.string(),
+    claim_heartbeat_at: nonNegativeInteger
+  })
+  .refine((intent) => intent.display_order_key.endsWith(`:${intent.session_id}`), {
+    path: ["display_order_key"],
+    message: "Display order must identify the session"
+  });
 export type UploadIntentSnapshot = Readonly<z.infer<typeof uploadIntentSchema>>;
 
-export const ingestionQueueMetadataSchema = z.strictObject({
-  owner: nonEmptyString,
-  queue: z.enum(ingestionQueueTypes),
-  revision: nonNegativeInteger,
-  last_accepted_order: nonNegativeInteger,
-  total: nonNegativeInteger,
-  unfinished: nonNegativeInteger,
-  waiting: nonNegativeInteger,
-  running: nonNegativeInteger,
-  ready: nonNegativeInteger,
-  duplicate_pending: nonNegativeInteger,
-  committing_resolving: nonNegativeInteger,
-  resolving: nonNegativeInteger,
-  completed: nonNegativeInteger,
-  failed: nonNegativeInteger
-}).superRefine((metadata, context) => {
-  if (metadata.revision < metadata.last_accepted_order) {
-    context.addIssue({ code: "custom", path: ["revision"], message: "Regressed queue clock" });
-  }
-  if (metadata.unfinished !== metadata.total - metadata.completed) {
-    context.addIssue({ code: "custom", path: ["unfinished"], message: "Inconsistent unfinished count" });
-  }
-  for (const field of ["waiting", "running", "ready", "duplicate_pending", "committing_resolving", "resolving", "failed"] as const) {
-    if (metadata[field] > metadata.unfinished) {
-      context.addIssue({ code: "custom", path: [field], message: "Count exceeds unfinished" });
+export const ingestionQueueMetadataSchema = z
+  .strictObject({
+    owner: nonEmptyString,
+    queue: z.enum(ingestionQueueTypes),
+    revision: nonNegativeInteger,
+    last_accepted_order: nonNegativeInteger,
+    total: nonNegativeInteger,
+    unfinished: nonNegativeInteger,
+    waiting: nonNegativeInteger,
+    running: nonNegativeInteger,
+    ready: nonNegativeInteger,
+    duplicate_pending: nonNegativeInteger,
+    committing_resolving: nonNegativeInteger,
+    resolving: nonNegativeInteger,
+    completed: nonNegativeInteger,
+    failed: nonNegativeInteger
+  })
+  .superRefine((metadata, context) => {
+    if (metadata.revision < metadata.last_accepted_order) {
+      context.addIssue({ code: "custom", path: ["revision"], message: "Regressed queue clock" });
     }
-  }
-  if (metadata.resolving > metadata.committing_resolving) {
-    context.addIssue({ code: "custom", path: ["resolving"], message: "Inconsistent resolving subset" });
-  }
-});
+    if (metadata.unfinished !== metadata.total - metadata.completed) {
+      context.addIssue({
+        code: "custom",
+        path: ["unfinished"],
+        message: "Inconsistent unfinished count"
+      });
+    }
+    for (const field of [
+      "waiting",
+      "running",
+      "ready",
+      "duplicate_pending",
+      "committing_resolving",
+      "resolving",
+      "failed"
+    ] as const) {
+      if (metadata[field] > metadata.unfinished) {
+        context.addIssue({ code: "custom", path: [field], message: "Count exceeds unfinished" });
+      }
+    }
+    if (metadata.resolving > metadata.committing_resolving) {
+      context.addIssue({
+        code: "custom",
+        path: ["resolving"],
+        message: "Inconsistent resolving subset"
+      });
+    }
+  });
 export type IngestionQueueMetadata = Readonly<z.infer<typeof ingestionQueueMetadataSchema>>;
 
 export type IngestionQueueSnapshot = Readonly<{

@@ -5,8 +5,6 @@ export class ReadyImageCoreCacheError extends Error {
   }
 }
 
-export function isReadyImageCoreCacheError(
-  error: unknown
-): error is ReadyImageCoreCacheError {
+export function isReadyImageCoreCacheError(error: unknown): error is ReadyImageCoreCacheError {
   return error instanceof ReadyImageCoreCacheError;
 }

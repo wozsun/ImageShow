@@ -13,10 +13,7 @@ import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import type { RuntimeConfigChangeSummary } from "../../../lib/types.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
-import {
-  createActionFeedback,
-  type ActionFeedbackState
-} from "../../../lib/ui/action-feedback.js";
+import { createActionFeedback, type ActionFeedbackState } from "../../../lib/ui/action-feedback.js";
 import {
   ActionFeedbackOutlet,
   ActionFeedbackRegion,
@@ -59,9 +56,7 @@ function saveConfirmationDescription(changes: RuntimeConfigChangeSummary) {
   return messages.join(" ").trim();
 }
 
-export function RuntimeConfigEditor({ reloadToken }: {
-  reloadToken: number;
-}) {
+export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
   const client = useQueryClient();
   const editorScrollRef = useRef<HTMLElement | null>(null);
   const [text, setText] = useState("");
@@ -77,10 +72,8 @@ export function RuntimeConfigEditor({ reloadToken }: {
   const reloadStatus = useAsyncActionStatus();
   const validateStatus = useAsyncActionStatus({ successDurationMs: null });
   const isDirty = text !== baseline;
-  const actionPending = Boolean(action)
-    || formatStatus.pending
-    || reloadStatus.pending
-    || validateStatus.pending;
+  const actionPending =
+    Boolean(action) || formatStatus.pending || reloadStatus.pending || validateStatus.pending;
 
   const bindEditorScroll = (view: EditorView) => {
     editorScrollRef.current = view.scrollDOM;
@@ -91,7 +84,9 @@ export function RuntimeConfigEditor({ reloadToken }: {
     setAction("load");
     if (origin === "manual") setLoadFeedback(null);
     try {
-      const response = await api<RuntimeConfigResponseDto>(`${adminApiBasePath}/advanced-config/runtime`);
+      const response = await api<RuntimeConfigResponseDto>(
+        `${adminApiBasePath}/advanced-config/runtime`
+      );
       const formatted = formatConfig(response.config);
       setText(formatted);
       setBaseline(formatted);
@@ -194,7 +189,8 @@ export function RuntimeConfigEditor({ reloadToken }: {
           title="精准编辑当前实例的全部运行时配置，缺少字段或多余字段均会拒绝保存。"
           aria-description="精准编辑当前实例的全部运行时配置，缺少字段或多余字段均会拒绝保存。"
         >
-          <AdminIcon name="settings-3-line" />完整 config.json
+          <AdminIcon name="settings-3-line" />
+          完整 config.json
         </h2>
         <div className="advanced-config-editor-head-status">
           <ActionFeedbackRegion

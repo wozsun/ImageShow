@@ -6,13 +6,10 @@ export const imageLoadPriority = {
   background: 4
 } as const;
 
-export type ImageLoadPriority =
-  (typeof imageLoadPriority)[keyof typeof imageLoadPriority];
+export type ImageLoadPriority = (typeof imageLoadPriority)[keyof typeof imageLoadPriority];
 
 export type ImageLoadTaskResult =
-  | { status: "completed" }
-  | { status: "cancelled" }
-  | { status: "failed"; error: unknown };
+  { status: "completed" } | { status: "cancelled" } | { status: "failed"; error: unknown };
 
 export type ImageLoadTaskHandle = {
   cancel: () => void;
@@ -50,9 +47,7 @@ function abortError() {
 
 function taskResult(task: ImageLoadTask, error?: unknown): ImageLoadTaskResult {
   if (task.controller.signal.aborted) return { status: "cancelled" };
-  return error === undefined
-    ? { status: "completed" }
-    : { status: "failed", error };
+  return error === undefined ? { status: "completed" } : { status: "failed", error };
 }
 
 /**
@@ -89,7 +84,8 @@ export class ImageLoadScheduler {
       };
     }
 
-    const { promise: result, resolve: resolveResult } = Promise.withResolvers<ImageLoadTaskResult>();
+    const { promise: result, resolve: resolveResult } =
+      Promise.withResolvers<ImageLoadTaskResult>();
     const task: ImageLoadTask = {
       id: this.#nextId++,
       sequence: this.#nextSequence++,
@@ -195,12 +191,9 @@ export class ImageLoadScheduler {
     for (const task of this.#pending.values()) {
       if (this.#pausedGroups.has(task.group)) continue;
       if (
-        !candidate
-        || task.priority < candidate.priority
-        || (
-          task.priority === candidate.priority
-          && task.sequence < candidate.sequence
-        )
+        !candidate ||
+        task.priority < candidate.priority ||
+        (task.priority === candidate.priority && task.sequence < candidate.sequence)
       ) {
         candidate = task;
       }
@@ -244,8 +237,7 @@ export class ImageLoadScheduler {
 export function preferredImageLoadConcurrency(
   matchMedia: (query: string) => Pick<MediaQueryList, "matches">
 ) {
-  return (
-    matchMedia("(pointer: fine)").matches
-    && matchMedia("(min-width: 1024px)").matches
-  ) ? 18 : 6;
+  return matchMedia("(pointer: fine)").matches && matchMedia("(min-width: 1024px)").matches
+    ? 18
+    : 6;
 }

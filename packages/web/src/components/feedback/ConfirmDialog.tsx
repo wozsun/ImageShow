@@ -49,15 +49,9 @@ export function ConfirmDialog({
   const [finalConfirmationArmed, setFinalConfirmationArmed] = useState(false);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const blocked = busy || confirmStatus.pending;
-  const finalConfirmationActive = (
-    requireFinalConfirmation
-    && finalConfirmationArmed
-    && !blocked
-    && !confirmDisabled
-  );
-  const displayedStatus = finalConfirmationActive
-    ? "idle"
-    : confirmStatus.status;
+  const finalConfirmationActive =
+    requireFinalConfirmation && finalConfirmationArmed && !blocked && !confirmDisabled;
+  const displayedStatus = finalConfirmationActive ? "idle" : confirmStatus.status;
   const confirmPresentation = {
     idle: {
       icon: finalConfirmationActive ? finalConfirmationIcon : confirmIcon,
@@ -103,29 +97,39 @@ export function ConfirmDialog({
             void submit(requestClose);
           }}
         >
-          <header><div><h2>{title}</h2><p>{description}</p></div></header>
+          <header>
+            <div>
+              <h2>{title}</h2>
+              <p>{description}</p>
+            </div>
+          </header>
           {errorMessage && (
             <p className="confirm-dialog-error admin-error" role="alert">
               {errorMessage}
             </p>
           )}
           <footer>
-            <button ref={cancelButtonRef} type="button" disabled={blocked} onClick={() => requestClose()}>取消</button>
+            <button
+              ref={cancelButtonRef}
+              type="button"
+              disabled={blocked}
+              onClick={() => requestClose()}
+            >
+              取消
+            </button>
             <AsyncActionButton
               className={[
                 danger ? "danger-button" : "button",
-                requireFinalConfirmation
-                  ? "confirm-dialog-final-confirmation"
-                  : "",
+                requireFinalConfirmation ? "confirm-dialog-final-confirmation" : "",
                 finalConfirmationActive ? "is-armed" : ""
-              ].filter(Boolean).join(" ")}
+              ]
+                .filter(Boolean)
+                .join(" ")}
               type="submit"
               status={displayedStatus}
               presentation={confirmPresentation}
               disabled={blocked || confirmDisabled}
-              aria-pressed={requireFinalConfirmation
-                ? finalConfirmationActive
-                : undefined}
+              aria-pressed={requireFinalConfirmation ? finalConfirmationActive : undefined}
               onBlur={() => setFinalConfirmationArmed(false)}
             />
           </footer>

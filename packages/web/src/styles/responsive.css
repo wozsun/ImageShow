@@ -1,4 +1,8 @@
-.center { min-height: 100svh; display: grid; place-items: center; }
+.center {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+}
 .app-loading-region {
   display: grid;
   place-items: center;
@@ -15,7 +19,7 @@
   display: inline-block;
   color: var(--public-color-loading-text);
   font-size: 14px;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
 }
 
 .app-loading-screen .app-loading-text {
@@ -31,12 +35,24 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mobile-nav-dropdown { animation: none; }
-  .copy-button { transition: none; }
-  .copy-button:active { transform: none; }
-  .overlay-scrollbar-handle { transition: none; }
-  .pressable:active { transform: none; }
-  .progressive-image-thumb { transition: none; }
+  .mobile-nav-dropdown {
+    animation: none;
+  }
+  .copy-button {
+    transition: none;
+  }
+  .copy-button:active {
+    transform: none;
+  }
+  .overlay-scrollbar-handle {
+    transition: none;
+  }
+  .pressable:active {
+    transform: none;
+  }
+  .progressive-image-thumb {
+    transition: none;
+  }
   .progressive-image-full-frame.is-ready {
     opacity: 1;
     animation: none;
@@ -44,11 +60,18 @@
   .select-menu,
   .select-menu.is-closing,
   .facet-select-menu,
-  .facet-select-menu.is-closing { animation: none; }
+  .facet-select-menu.is-closing {
+    animation: none;
+  }
 }
 
 @media (max-width: 760px) {
-  .mobile-navigation { display: block; }
+  .mobile-navigation {
+    display: block;
+  }
   /* FacetSelector is shared by the public builders and image administration. */
-  .facet-select-control { width: 100%; min-width: 0; }
+  .facet-select-control {
+    width: 100%;
+    min-width: 0;
+  }
 }

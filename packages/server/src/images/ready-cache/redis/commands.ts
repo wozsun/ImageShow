@@ -1,25 +1,18 @@
-import {
-  readyImageRedisCommandClient,
-  type ReadyImageRedisCommandSource
-} from "./client.ts";
+import { readyImageRedisCommandClient, type ReadyImageRedisCommandSource } from "./client.ts";
 
-export type RedisIndexedTouchCommandClient = ReadyImageRedisCommandSource<
-  "imageshowTouchReadyImageIndexedResult"
->;
+export type RedisIndexedTouchCommandClient =
+  ReadyImageRedisCommandSource<"imageshowTouchReadyImageIndexedResult">;
 
-export type RedisStatsTouchCommandClient = ReadyImageRedisCommandSource<
-  "imageshowTouchReadyImageStatsResult"
->;
+export type RedisStatsTouchCommandClient =
+  ReadyImageRedisCommandSource<"imageshowTouchReadyImageStatsResult">;
 
-export type RedisFilterSetCommandClient = ReadyImageRedisCommandSource<
-  "imageshowStoreReadyImageFilterSet"
-> & {
-  unlink(...keys: string[]): Promise<number>;
-};
+export type RedisFilterSetCommandClient =
+  ReadyImageRedisCommandSource<"imageshowStoreReadyImageFilterSet"> & {
+    unlink(...keys: string[]): Promise<number>;
+  };
 
-export type RedisAttributePublishCommandClient = ReadyImageRedisCommandSource<
-  "imageshowPublishReadyImageAttributeIndex"
->;
+export type RedisAttributePublishCommandClient =
+  ReadyImageRedisCommandSource<"imageshowPublishReadyImageAttributeIndex">;
 
 export type RedisDerivedResultDescriptor = {
   key: string;
@@ -29,12 +22,7 @@ export type RedisDerivedResultDescriptor = {
 };
 
 export type RedisDerivedRegistryCommandConfig = {
-  keys: readonly [
-    lru: string,
-    counts: string,
-    kinds: string,
-    signatures: string
-  ];
+  keys: readonly [lru: string, counts: string, kinds: string, signatures: string];
   ttlSeconds: number;
   maxResults: number;
   attributeIndexPrefix: string;
@@ -61,9 +49,7 @@ export type ReadyImageIndexedTouchCommandInput = {
   accessScore: number;
 };
 
-function derivedRegistryValidationArguments(
-  config: RedisDerivedRegistryCommandConfig
-) {
+function derivedRegistryValidationArguments(config: RedisDerivedRegistryCommandConfig) {
   return [
     config.attributeIndexPrefix,
     config.fixedAttributeSuffixes.join(","),
@@ -130,10 +116,7 @@ export async function touchReadyImageStatsResultCommand(
   }
 ) {
   const [lruKey, countsKey, kindsKey, signaturesKey] = input.registry.keys;
-  const commandClient = readyImageRedisCommandClient(
-    client,
-    "imageshowTouchReadyImageStatsResult"
-  );
+  const commandClient = readyImageRedisCommandClient(client, "imageshowTouchReadyImageStatsResult");
   const raw = await commandClient.imageshowTouchReadyImageStatsResult(
     input.descriptor.key,
     input.descriptor.key,
@@ -153,10 +136,7 @@ export async function touchReadyImageStatsResultCommand(
   return readyImageTouchResult(raw);
 }
 
-export type ReadyImageFilterSetOperation =
-  | "zunionstore"
-  | "zinterstore"
-  | "zdiffstore";
+export type ReadyImageFilterSetOperation = "zunionstore" | "zinterstore" | "zdiffstore";
 
 export async function storeReadyImageFilterSetCommand(
   client: RedisFilterSetCommandClient,
@@ -169,10 +149,7 @@ export async function storeReadyImageFilterSetCommand(
   }
 ) {
   const sourceKeys = input.sources.map(({ key }) => key);
-  const commandClient = readyImageRedisCommandClient(
-    client,
-    "imageshowStoreReadyImageFilterSet"
-  );
+  const commandClient = readyImageRedisCommandClient(client, "imageshowStoreReadyImageFilterSet");
   const raw = await commandClient.imageshowStoreReadyImageFilterSet(
     String(sourceKeys.length + 1),
     ...sourceKeys,
@@ -194,14 +171,14 @@ export async function storeReadyImageFilterSetCommand(
     throw new Error("Ready-image derived set source changed during build");
   }
   if (
-    status !== 1
-    || !Number.isSafeInteger(stored)
-    || stored < 0
-    || !Number.isSafeInteger(cardinality)
-    || cardinality < 0
-    || stored !== cardinality
-    || cardinality > input.expectedMembers
-    || expiry !== (cardinality > 0 ? 1 : 0)
+    status !== 1 ||
+    !Number.isSafeInteger(stored) ||
+    stored < 0 ||
+    !Number.isSafeInteger(cardinality) ||
+    cardinality < 0 ||
+    stored !== cardinality ||
+    cardinality > input.expectedMembers ||
+    expiry !== (cardinality > 0 ? 1 : 0)
   ) {
     await client.unlink(input.destination).catch(() => undefined);
     throw new Error("Ready-image derived set operation exceeded its estimate");
@@ -295,24 +272,10 @@ function nonNegativeSafeInteger(value: number, field: string) {
 
 function readyImageSampleBounds(bounds: RedisReadyImageSampleBounds) {
   const limit = nonNegativeSafeInteger(bounds.limit, "limit");
-  const recentSize = nonNegativeSafeInteger(
-    bounds.recentSize,
-    "recent history size"
-  );
-  const historySize = nonNegativeSafeInteger(
-    bounds.historySize,
-    "history bound"
-  );
-  const maximumLimit = nonNegativeSafeInteger(
-    bounds.maximumLimit,
-    "maximum limit"
-  );
-  if (
-    limit === 0
-    || maximumLimit === 0
-    || limit > maximumLimit
-    || recentSize > historySize
-  ) {
+  const recentSize = nonNegativeSafeInteger(bounds.recentSize, "recent history size");
+  const historySize = nonNegativeSafeInteger(bounds.historySize, "history bound");
+  const maximumLimit = nonNegativeSafeInteger(bounds.maximumLimit, "maximum limit");
+  if (limit === 0 || maximumLimit === 0 || limit > maximumLimit || recentSize > historySize) {
     throw new Error("Ready-image sample bounds are inconsistent");
   }
   return { limit, recentSize, historySize, maximumLimit };
@@ -323,27 +286,25 @@ function expectedReadyImageSampleCount(
   bounds: ReturnType<typeof readyImageSampleBounds>
 ) {
   if (indexCount === 0) return 0;
-  const requested = bounds.limit <= 1
-    ? Math.max(8, Math.min(64, bounds.historySize + 1))
-    : Math.min(indexCount, bounds.limit + bounds.recentSize);
+  const requested =
+    bounds.limit <= 1
+      ? Math.max(8, Math.min(64, bounds.historySize + 1))
+      : Math.min(indexCount, bounds.limit + bounds.recentSize);
   return Math.min(indexCount, requested);
 }
 
-function readyImageSampleReply(
-  raw: unknown,
-  expectedCount: number
-): RedisReadyImageSampleResult {
+function readyImageSampleReply(raw: unknown, expectedCount: number): RedisReadyImageSampleResult {
   if (!Array.isArray(raw) || raw.length < 2) {
     throw new Error("Ready-image sample command returned invalid data");
   }
   const status = readyImageSampleStatuses.get(Number(raw[0]));
   const pairCount = Number(raw[1]);
   if (
-    !status
-    || !Number.isSafeInteger(pairCount)
-    || pairCount < 0
-    || pairCount > expectedCount
-    || raw.length !== 2 + pairCount * 2
+    !status ||
+    !Number.isSafeInteger(pairCount) ||
+    pairCount < 0 ||
+    pairCount > expectedCount ||
+    raw.length !== 2 + pairCount * 2
   ) {
     throw new Error("Ready-image sample command returned an invalid shape");
   }
@@ -353,13 +314,9 @@ function readyImageSampleReply(
     const member = raw[2 + index * 2];
     const rawValue = raw[3 + index * 2];
     if (
-      typeof member !== "string"
-      || !member
-      || !(
-        typeof rawValue === "string"
-        || rawValue === null
-        || rawValue === false
-      )
+      typeof member !== "string" ||
+      !member ||
+      !(typeof rawValue === "string" || rawValue === null || rawValue === false)
     ) {
       throw new Error("Ready-image sample command returned an invalid pair");
     }
@@ -378,10 +335,7 @@ function readyImageSampleReply(
     if (expectedCount !== 0 || pairCount !== 0) {
       throw new Error("Ready-image sample command returned inconsistent emptiness");
     }
-  } else if (
-    status === "core_missing_item"
-    || status === "derived_missing_item"
-  ) {
+  } else if (status === "core_missing_item" || status === "derived_missing_item") {
     if (pairCount !== expectedCount || expectedCount === 0 || !missing) {
       throw new Error("Ready-image sample command lost a missing-item position");
     }
@@ -401,12 +355,7 @@ function readyImageSampleRevision(revision: string) {
 export async function sampleReadyImageCoreIndexCommand(
   client: RedisReadyImageCoreSampleCommandClient,
   input: {
-    keys: readonly [
-      meta: string,
-      integrity: string,
-      index: string,
-      items: string
-    ];
+    keys: readonly [meta: string, integrity: string, index: string, items: string];
     revision: string;
     count: number;
     bounds: RedisReadyImageSampleBounds;
@@ -414,10 +363,7 @@ export async function sampleReadyImageCoreIndexCommand(
 ) {
   const count = nonNegativeSafeInteger(input.count, "core count");
   const bounds = readyImageSampleBounds(input.bounds);
-  const commandClient = readyImageRedisCommandClient(
-    client,
-    "imageshowSampleReadyImageCoreIndex"
-  );
+  const commandClient = readyImageRedisCommandClient(client, "imageshowSampleReadyImageCoreIndex");
   const raw = await commandClient.imageshowSampleReadyImageCoreIndex(
     ...input.keys,
     readyImageSampleRevision(input.revision),
@@ -427,10 +373,7 @@ export async function sampleReadyImageCoreIndexCommand(
     String(bounds.historySize),
     String(bounds.maximumLimit)
   );
-  return readyImageSampleReply(
-    raw,
-    expectedReadyImageSampleCount(count, bounds)
-  );
+  return readyImageSampleReply(raw, expectedReadyImageSampleCount(count, bounds));
 }
 
 export async function sampleReadyImageDerivedIndexCommand(
@@ -460,9 +403,9 @@ export async function sampleReadyImageDerivedIndexCommand(
     "maximum index members"
   );
   if (
-    indexCount > coreCount
-    || indexCount > maximumIndexMembers
-    || !/^[0-9a-f]{32}$/u.test(input.instanceToken)
+    indexCount > coreCount ||
+    indexCount > maximumIndexMembers ||
+    !/^[0-9a-f]{32}$/u.test(input.instanceToken)
   ) {
     throw new Error("Ready-image derived sample input is inconsistent");
   }
@@ -484,8 +427,5 @@ export async function sampleReadyImageDerivedIndexCommand(
     String(bounds.maximumLimit),
     String(maximumIndexMembers)
   );
-  return readyImageSampleReply(
-    raw,
-    expectedReadyImageSampleCount(indexCount, bounds)
-  );
+  return readyImageSampleReply(raw, expectedReadyImageSampleCount(indexCount, bounds));
 }

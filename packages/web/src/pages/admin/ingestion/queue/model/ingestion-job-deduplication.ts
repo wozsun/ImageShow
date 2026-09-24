@@ -4,11 +4,7 @@ import { normalizeImportDownloadUrl } from "./import-job-source.js";
 export function uploadFileFingerprint(file: File) {
   // 浏览器不会暴露普通文件选择器中的绝对路径。目录选择时使用相对路径，
   // 其他入口以名称、大小和修改时间识别同一次选择的文件。
-  return [
-    file.webkitRelativePath || file.name,
-    file.size,
-    file.lastModified
-  ].join("\u0000");
+  return [file.webkitRelativePath || file.name, file.size, file.lastModified].join("\u0000");
 }
 
 export function filterNewUploadFiles(

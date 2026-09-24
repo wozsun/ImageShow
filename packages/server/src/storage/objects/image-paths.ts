@@ -1,5 +1,4 @@
-const imageUuidPattern =
-  "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const imageUuidPattern = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const imageExtensionPattern = "(?:jpg|png|webp|gif|avif)";
 const imageUuidRegex = new RegExp(`^${imageUuidPattern}$`, "u");
 
@@ -33,7 +32,11 @@ export function thumbnailObjectKey(id: string) {
   return storageObjectKey(id, "webp");
 }
 
-export function thumbnailRef(row: { id: string; storage_slug: string }): { prefix: "thumbs"; key: string; slug: string } {
+export function thumbnailRef(row: { id: string; storage_slug: string }): {
+  prefix: "thumbs";
+  key: string;
+  slug: string;
+} {
   return { prefix: "thumbs", key: thumbnailObjectKey(row.id), slug: row.storage_slug };
 }
 import { storageObjectKey } from "@imageshow/shared/browser";

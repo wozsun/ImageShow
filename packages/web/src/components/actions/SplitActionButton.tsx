@@ -1,4 +1,11 @@
-import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject
+} from "react";
 import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
 import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import { MenuItemButton } from "../feedback/MenuItemButton.js";
@@ -49,12 +56,11 @@ export function SplitActionButton({
   const hoverCloseTimerRef = useRef<number | undefined>(undefined);
   const pinnedOpenRef = useRef(false);
   const selectionPendingRef = useRef(false);
-  const enabledIndices = items.flatMap((item, index) => item.disabled ? [] : [index]);
+  const enabledIndices = items.flatMap((item, index) => (item.disabled ? [] : [index]));
   const menu = useAnchoredMenu({
     triggerRef: menuTriggerRef,
-    getAnchor: () => window.matchMedia("(min-width: 761px)").matches
-      ? splitRef.current
-      : menuTriggerRef.current,
+    getAnchor: () =>
+      window.matchMedia("(min-width: 761px)").matches ? splitRef.current : menuTriggerRef.current,
     getSize: () => ({
       minWidth: window.matchMedia("(min-width: 761px)").matches ? 0 : 150,
       align: "end",
@@ -67,9 +73,11 @@ export function SplitActionButton({
     closeOnEscape: true,
     disabled,
     closeOnFocusOutside: true,
-    restoreFocusOnEscape: () => document.activeElement === menuTriggerRef.current
-      || itemRefs.current.some((item) => item === document.activeElement),
-    focusOnOpen: () => focusIndexRef.current === null ? null : itemRefs.current[focusIndexRef.current],
+    restoreFocusOnEscape: () =>
+      document.activeElement === menuTriggerRef.current ||
+      itemRefs.current.some((item) => item === document.activeElement),
+    focusOnOpen: () =>
+      focusIndexRef.current === null ? null : itemRefs.current[focusIndexRef.current],
     animateClose: true,
     onClose: () => {
       pinnedOpenRef.current = false;
@@ -117,9 +125,12 @@ export function SplitActionButton({
     pinnedOpenRef.current = true;
     focusItem(enabledIndices[0]);
   };
-  useEffect(() => () => {
-    if (hoverCloseTimerRef.current !== undefined) window.clearTimeout(hoverCloseTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (hoverCloseTimerRef.current !== undefined) window.clearTimeout(hoverCloseTimerRef.current);
+    },
+    []
+  );
 
   const choose = (item: SplitActionItem) => {
     const opener = menuTriggerRef.current;
@@ -132,8 +143,12 @@ export function SplitActionButton({
     } finally {
       menu.requestClose(() => {
         selectionPendingRef.current = false;
-        if (document.activeElement === document.body
-          && opener.isConnected && !opener.disabled && !opener.closest("[inert]")) {
+        if (
+          document.activeElement === document.body &&
+          opener.isConnected &&
+          !opener.disabled &&
+          !opener.closest("[inert]")
+        ) {
           opener.focus({ preventScroll: true });
         }
       });
@@ -156,9 +171,15 @@ export function SplitActionButton({
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
     const position = enabledIndices.indexOf(index);
-    const next = event.key === "Home" ? enabledIndices[0]
-      : event.key === "End" ? enabledIndices.at(-1)
-      : enabledIndices[(position + (event.key === "ArrowDown" ? 1 : enabledIndices.length - 1)) % enabledIndices.length];
+    const next =
+      event.key === "Home"
+        ? enabledIndices[0]
+        : event.key === "End"
+          ? enabledIndices.at(-1)
+          : enabledIndices[
+              (position + (event.key === "ArrowDown" ? 1 : enabledIndices.length - 1)) %
+                enabledIndices.length
+            ];
     if (next !== undefined) itemRefs.current[next]?.focus();
   };
   const mainProps = {
@@ -168,14 +189,29 @@ export function SplitActionButton({
     disabled
   };
   return (
-    <div ref={splitRef} className={`split-action-button ${className}`.trim()}
-      {...(onPreload ? preloadIntentProps(onPreload) : {})}>
-      {directMain
-        ? <DirectActivationButton {...mainProps} onActivate={() => {
+    <div
+      ref={splitRef}
+      className={`split-action-button ${className}`.trim()}
+      {...(onPreload ? preloadIntentProps(onPreload) : {})}
+    >
+      {directMain ? (
+        <DirectActivationButton
+          {...mainProps}
+          onActivate={() => {
             if (mainRef.current) onActivate(mainRef.current);
-          }}>{children}</DirectActivationButton>
-        : <button {...mainProps} aria-busy={disabled || undefined}
-            onClick={(event) => onActivate(event.currentTarget)}>{children}</button>}
+          }}
+        >
+          {children}
+        </DirectActivationButton>
+      ) : (
+        <button
+          {...mainProps}
+          aria-busy={disabled || undefined}
+          onClick={(event) => onActivate(event.currentTarget)}
+        >
+          {children}
+        </button>
+      )}
       <DirectActivationButton
         ref={menuTriggerRef}
         className="button secondary split-action-menu-trigger"
@@ -187,14 +223,26 @@ export function SplitActionButton({
         aria-controls={menu.open ? menuId : undefined}
         aria-expanded={menu.open && !menu.closing}
         onKeyDown={openForKeyboard}
-        onPointerEnter={(event) => { if (event.pointerType === "mouse") openForHover(); }}
-        onPointerLeave={(event) => { if (event.pointerType === "mouse") closeAfterHover(); }}
+        onPointerEnter={(event) => {
+          if (event.pointerType === "mouse") openForHover();
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === "mouse") closeAfterHover();
+        }}
         onActivate={togglePinnedMenu}
-      ><AdminIcon name="arrow-down-s-line" /></DirectActivationButton>
+      >
+        <AdminIcon name="arrow-down-s-line" />
+      </DirectActivationButton>
       {menu.open && (
         <AnchoredPopup
           popupRef={menu.menuRef}
-          className={["split-action-menu", menu.opensUp ? "opens-up" : "", menu.closing ? "is-closing" : ""].filter(Boolean).join(" ")}
+          className={[
+            "split-action-menu",
+            menu.opensUp ? "opens-up" : "",
+            menu.closing ? "is-closing" : ""
+          ]
+            .filter(Boolean)
+            .join(" ")}
           role="menu"
           id={menuId}
           aria-label={menuLabel}
@@ -202,21 +250,35 @@ export function SplitActionButton({
           inert={menu.closing}
           style={menu.position}
           onAnimationEnd={menu.onAnimationEnd}
-          onPointerEnter={(event) => { if (event.pointerType === "mouse") openForHover(); }}
-          onPointerLeave={(event) => { if (event.pointerType === "mouse") closeAfterHover(); }}
+          onPointerEnter={(event) => {
+            if (event.pointerType === "mouse") openForHover();
+          }}
+          onPointerLeave={(event) => {
+            if (event.pointerType === "mouse") closeAfterHover();
+          }}
         >
-          <div className="split-action-menu-surface" style={{ maxHeight: Math.max(0, menu.position.maxHeight - 6) }}>
+          <div
+            className="split-action-menu-surface"
+            style={{ maxHeight: Math.max(0, menu.position.maxHeight - 6) }}
+          >
             {items.map((item, index) => (
-              <MenuItemButton key={item.id} type="button" role="menuitem"
+              <MenuItemButton
+                key={item.id}
+                type="button"
+                role="menuitem"
                 disabled={disabled || item.disabled}
                 onPointerEnter={item.onPreload}
                 onFocus={item.onPreload}
                 onPointerDownCapture={item.onPreload}
                 onActivate={() => choose(item)}
-                ref={(element) => { itemRefs.current[index] = element; }}
+                ref={(element) => {
+                  itemRefs.current[index] = element;
+                }}
                 tabIndex={-1}
-                onKeyDown={(event) => moveFocus(event, index)}>
-                {item.icon && <AdminIcon name={item.icon} />}{item.label}
+                onKeyDown={(event) => moveFocus(event, index)}
+              >
+                {item.icon && <AdminIcon name={item.icon} />}
+                {item.label}
               </MenuItemButton>
             ))}
           </div>

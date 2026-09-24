@@ -6,7 +6,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type RefObject,
+  type RefObject
 } from "react";
 import { useAnimatedClose } from "./useAnimatedClose.js";
 import {
@@ -28,10 +28,7 @@ function naturalMenuHeight(menu: HTMLElement | null) {
   return menu.scrollHeight + Math.max(0, menu.offsetHeight - menu.clientHeight);
 }
 
-function isWithinTriggerInteractionBoundary(
-  trigger: HTMLElement | null,
-  target: Node
-) {
+function isWithinTriggerInteractionBoundary(trigger: HTMLElement | null, target: Node) {
   if (!trigger) return false;
   if (trigger.contains(target)) return true;
   if (!(target instanceof Element)) return false;
@@ -81,19 +78,25 @@ export function useAnchoredMenu(options: {
     style: { left: 0, top: 0, bottom: "auto", width: 0, maxHeight: options.initialMaxHeight }
   });
 
-  const getSizeRef = useRef(options.getSize); getSizeRef.current = options.getSize;
-  const getAnchorRef = useRef(options.getAnchor); getAnchorRef.current = options.getAnchor;
-  const onCloseRef = useRef(options.onClose); onCloseRef.current = options.onClose;
-  const focusOnOpenRef = useRef(options.focusOnOpen); focusOnOpenRef.current = options.focusOnOpen;
-  const focusAfterCloseRef = useRef(options.focusAfterClose); focusAfterCloseRef.current = options.focusAfterClose;
+  const getSizeRef = useRef(options.getSize);
+  getSizeRef.current = options.getSize;
+  const getAnchorRef = useRef(options.getAnchor);
+  getAnchorRef.current = options.getAnchor;
+  const onCloseRef = useRef(options.onClose);
+  onCloseRef.current = options.onClose;
+  const focusOnOpenRef = useRef(options.focusOnOpen);
+  focusOnOpenRef.current = options.focusOnOpen;
+  const focusAfterCloseRef = useRef(options.focusAfterClose);
+  focusAfterCloseRef.current = options.focusAfterClose;
   const restoreFocusAfterCloseRef = useRef(false);
-  const restoreFocusOnEscapeRef = useRef(options.restoreFocusOnEscape); restoreFocusOnEscapeRef.current = options.restoreFocusOnEscape;
+  const restoreFocusOnEscapeRef = useRef(options.restoreFocusOnEscape);
+  restoreFocusOnEscapeRef.current = options.restoreFocusOnEscape;
 
   // RefObject.current 的变化不会触发 effect。用稳定的 callback ref 同时保存
   // 当前节点并触发一次渲染，让条件渲染的菜单首次挂载时也能进入测量与观察流程。
   const menuRef = useCallback((node: HTMLElement | null) => {
     menuNodeRef.current = node;
-    setMenuNode((current) => current === node ? current : node);
+    setMenuNode((current) => (current === node ? current : node));
   }, []);
 
   const {
@@ -106,24 +109,31 @@ export function useAnchoredMenu(options: {
     onCloseRef.current?.();
   }, 160);
 
-  const requestClose = useCallback((afterClose?: () => void) => {
-    // 关闭动画会把 Portal 标记为 aria-hidden/inert；必须先同步移走其中的焦点，
-    // 否则浏览器会拒绝隐藏仍包含焦点的无障碍子树。
-    const activeElement = document.activeElement;
-    if (
-      activeElement instanceof HTMLElement
-      && isWithinAnchoredPopupBoundary(menuNodeRef.current, activeElement)
-    ) {
-      activeElement.blur();
-    }
-    if (!animateClose) {
-      setOpen(false);
-      onCloseRef.current?.();
-      afterClose?.();
-      return;
-    }
-    animRequestClose(() => { setOpen(false); onCloseRef.current?.(); afterClose?.(); });
-  }, [animateClose, animRequestClose]);
+  const requestClose = useCallback(
+    (afterClose?: () => void) => {
+      // 关闭动画会把 Portal 标记为 aria-hidden/inert；必须先同步移走其中的焦点，
+      // 否则浏览器会拒绝隐藏仍包含焦点的无障碍子树。
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement &&
+        isWithinAnchoredPopupBoundary(menuNodeRef.current, activeElement)
+      ) {
+        activeElement.blur();
+      }
+      if (!animateClose) {
+        setOpen(false);
+        onCloseRef.current?.();
+        afterClose?.();
+        return;
+      }
+      animRequestClose(() => {
+        setOpen(false);
+        onCloseRef.current?.();
+        afterClose?.();
+      });
+    },
+    [animateClose, animRequestClose]
+  );
 
   const requestCloseAndRestoreFocus = useCallback(() => {
     requestClose(() => {
@@ -146,11 +156,9 @@ export function useAnchoredMenu(options: {
     // Portal 内；这里不把焦点退回同样即将隐藏的子级触发器。
     const activeElement = document.activeElement;
     if (
-      activeElement instanceof HTMLElement
-      && (
-        isWithinAnchoredPopupBoundary(menuNodeRef.current, activeElement)
-        || triggerRef.current?.contains(activeElement)
-      )
+      activeElement instanceof HTMLElement &&
+      (isWithinAnchoredPopupBoundary(menuNodeRef.current, activeElement) ||
+        triggerRef.current?.contains(activeElement))
     ) {
       activeElement.blur();
     }
@@ -160,15 +168,20 @@ export function useAnchoredMenu(options: {
   const updatePosition = useCallback(() => {
     const anchor = getAnchorRef.current?.() ?? triggerRef.current;
     if (!anchor) return;
-    setPosition(computeAnchoredPosition(
-      anchor.getBoundingClientRect(),
-      getSizeRef.current(),
-      naturalMenuHeight(menuNodeRef.current),
-      measureFixedPositionOrigin()
-    ));
+    setPosition(
+      computeAnchoredPosition(
+        anchor.getBoundingClientRect(),
+        getSizeRef.current(),
+        naturalMenuHeight(menuNodeRef.current),
+        measureFixedPositionOrigin()
+      )
+    );
   }, [triggerRef]);
 
-  const openMenu = useCallback(() => { updatePosition(); setOpen(true); }, [updatePosition]);
+  const openMenu = useCallback(() => {
+    updatePosition();
+    setOpen(true);
+  }, [updatePosition]);
 
   // Portal 挂载并取得真实菜单高度后，在浏览器绘制前校正向上展开的位置，
   // 避免先按最大高度定位再在下一帧跳动。
@@ -202,8 +215,8 @@ export function useAnchoredMenu(options: {
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (
-        !isWithinTriggerInteractionBoundary(triggerRef.current, target)
-        && !isWithinAnchoredPopupBoundary(menuNodeRef.current, target)
+        !isWithinTriggerInteractionBoundary(triggerRef.current, target) &&
+        !isWithinAnchoredPopupBoundary(menuNodeRef.current, target)
       ) {
         requestClose();
       }
@@ -230,20 +243,30 @@ export function useAnchoredMenu(options: {
     // Insets can change without a viewport resize (browser chrome or an embed
     // host). Observe each edge pair only while a public menu is open.
     const safeAreaProbes = document.documentElement.hasAttribute("data-public-viewport")
-      ? [["left", "top"], ["right", "bottom"]].map(([x, y]) => {
-        const probe = document.createElement("span");
-        probe.setAttribute("aria-hidden", "true");
-        probe.style.cssText = `position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;`
-          + `width:var(--public-safe-area-${x}, 0px);height:var(--public-safe-area-${y}, 0px)`;
-        document.body.appendChild(probe);
-        resizeObserver.observe(probe);
-        return probe;
-      }) : [];
+      ? [
+          ["left", "top"],
+          ["right", "bottom"]
+        ].map(([x, y]) => {
+          const probe = document.createElement("span");
+          probe.setAttribute("aria-hidden", "true");
+          probe.style.cssText =
+            `position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;` +
+            `width:var(--public-safe-area-${x}, 0px);height:var(--public-safe-area-${y}, 0px)`;
+          document.body.appendChild(probe);
+          resizeObserver.observe(probe);
+          return probe;
+        })
+      : [];
 
     if (closeOnEscape) {
       const onKeyDown = (event: KeyboardEvent) => {
-        if (event.key !== "Escape" || event.defaultPrevented
-          || event.isComposing || event.keyCode === 229) return;
+        if (
+          event.key !== "Escape" ||
+          event.defaultPrevented ||
+          event.isComposing ||
+          event.keyCode === 229
+        )
+          return;
         const ownerDialog = triggerRef.current?.closest("[data-dialog-frame]") ?? null;
         if (ownerDialog !== topDialogFrame(document)) return;
         event.preventDefault();
@@ -260,8 +283,8 @@ export function useAnchoredMenu(options: {
         if (isDocumentFallbackFocusTarget(document, target)) return;
         if (!(target instanceof Node)) return;
         if (
-          !isWithinTriggerInteractionBoundary(triggerRef.current, target)
-          && !isWithinAnchoredPopupBoundary(menuNodeRef.current, target)
+          !isWithinTriggerInteractionBoundary(triggerRef.current, target) &&
+          !isWithinAnchoredPopupBoundary(menuNodeRef.current, target)
         ) {
           requestClose();
         }
@@ -272,9 +295,19 @@ export function useAnchoredMenu(options: {
       if (positionFrame !== undefined) window.cancelAnimationFrame(positionFrame);
       listeners.abort();
       resizeObserver.disconnect();
-      safeAreaProbes.forEach(probe => probe.remove());
+      safeAreaProbes.forEach((probe) => probe.remove());
     };
-  }, [open, closing, menuNode, updatePosition, requestClose, requestCloseAndRestoreFocus, triggerRef, closeOnEscape, closeOnFocusOutside]);
+  }, [
+    open,
+    closing,
+    menuNode,
+    updatePosition,
+    requestClose,
+    requestCloseAndRestoreFocus,
+    triggerRef,
+    closeOnEscape,
+    closeOnFocusOutside
+  ]);
 
   useEffect(() => {
     if (!open || closing) return;

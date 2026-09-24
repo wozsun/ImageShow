@@ -33,9 +33,9 @@ const manifests = await Promise.all(manifestPaths.map(readJson));
 const versions = manifests.map((manifest) => manifest.version);
 const version = versions[0];
 if (
-  typeof version !== "string"
-  || !/^\d+\.\d+\.\d+$/.test(version)
-  || versions.some((candidate) => candidate !== version)
+  typeof version !== "string" ||
+  !/^\d+\.\d+\.\d+$/.test(version) ||
+  versions.some((candidate) => candidate !== version)
 ) {
   throw new Error(
     `version-contract: package versions differ: ${JSON.stringify(
@@ -51,25 +51,27 @@ const lockVersions = {
   ...Object.fromEntries(
     manifestPaths.slice(1).map((path) => {
       const workspacePath = path.slice(0, -"/package.json".length);
-      return [`package-lock.json#packages['${workspacePath}']`, lock.packages?.[workspacePath]?.version];
+      return [
+        `package-lock.json#packages['${workspacePath}']`,
+        lock.packages?.[workspacePath]?.version
+      ];
     })
   )
 };
-const invalidLockVersions = Object.entries(lockVersions)
-  .filter(([, candidate]) => candidate !== version);
+const invalidLockVersions = Object.entries(lockVersions).filter(
+  ([, candidate]) => candidate !== version
+);
 if (invalidLockVersions.length > 0) {
   throw new Error(
-    `version-contract: lockfile versions must all equal ${version}: `
-    + JSON.stringify(Object.fromEntries(invalidLockVersions))
+    `version-contract: lockfile versions must all equal ${version}: ` +
+      JSON.stringify(Object.fromEntries(invalidLockVersions))
   );
 }
 
 if (options.tag) {
   const expectedTag = `v${version}`;
   if (options.tag !== expectedTag) {
-    throw new Error(
-      `version-contract: tag ${options.tag} does not match ${expectedTag}`
-    );
+    throw new Error(`version-contract: tag ${options.tag} does not match ${expectedTag}`);
   }
 }
 
@@ -77,17 +79,11 @@ if (options.branch) {
   const currentBranch = process.env.GITHUB_REF_NAME;
   const refType = process.env.GITHUB_REF_TYPE;
   if (!currentBranch || refType !== "branch") {
-    throw new Error(
-      "version-contract: --branch requires a GitHub branch ref environment"
-    );
+    throw new Error("version-contract: --branch requires a GitHub branch ref environment");
   }
   if (currentBranch !== options.branch) {
-    throw new Error(
-      `version-contract: branch ${currentBranch} does not match ${options.branch}`
-    );
+    throw new Error(`version-contract: branch ${currentBranch} does not match ${options.branch}`);
   }
 }
 
-console.log(
-  `version-contract: ${version}; ${manifestPaths.length} manifests and lockfile agree`
-);
+console.log(`version-contract: ${version}; ${manifestPaths.length} manifests and lockfile agree`);

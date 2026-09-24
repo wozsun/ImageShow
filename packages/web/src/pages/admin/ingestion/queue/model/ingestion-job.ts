@@ -29,7 +29,20 @@ type IngestionResultState = "pending" | "recovering" | "error" | "hydrated";
 export type IngestionJob = {
   id: string;
   kind: "upload" | "import";
-  status: "queued" | "uploading" | "downloading" | "received" | "processing" | "ready" | "commit-queued" | "committing" | "finalized" | "cancelling" | "done" | "failed" | "cancelled";
+  status:
+    | "queued"
+    | "uploading"
+    | "downloading"
+    | "received"
+    | "processing"
+    | "ready"
+    | "commit-queued"
+    | "committing"
+    | "finalized"
+    | "cancelling"
+    | "done"
+    | "failed"
+    | "cancelled";
   message: string;
   preview: string;
   previewFull?: string;

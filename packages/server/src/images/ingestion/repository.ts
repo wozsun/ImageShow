@@ -11,9 +11,7 @@ import {
   ingestionSessionKeys,
   ingestionUploadIntentKey
 } from "./sessions/keys.ts";
-import {
-  parseStoredIngestionSession
-} from "./sessions/codec.ts";
+import { parseStoredIngestionSession } from "./sessions/codec.ts";
 import {
   createIngestionSessionCommandRunner,
   type IngestionRepositoryCommand,
@@ -24,10 +22,7 @@ import {
   mutateStoredUploadIntent,
   readStoredUploadIntent
 } from "./sessions/intent-store.ts";
-import {
-  IngestionQueueListenerHub,
-  type IngestionQueueListener
-} from "./sessions/listener-hub.ts";
+import { IngestionQueueListenerHub, type IngestionQueueListener } from "./sessions/listener-hub.ts";
 import type {
   CompletedIngestionReceipt,
   DiscardedIngestionReceipt,
@@ -39,9 +34,7 @@ import type {
   UploadIntentSnapshot
 } from "./sessions/model.ts";
 import { ingestionSessionSemanticHash } from "./sessions/projection.ts";
-import {
-  type IngestionSessionRedisClient
-} from "./sessions/commands.ts";
+import { type IngestionSessionRedisClient } from "./sessions/commands.ts";
 import {
   normalizedSemanticSession,
   parseCanonicalReply,
@@ -62,9 +55,7 @@ import {
 
 export type { IngestionQueueMutation } from "./sessions/listener-hub.ts";
 
-export const ingestionSessionIncarnationMismatch = Symbol(
-  "ingestion-session-incarnation-mismatch"
-);
+export const ingestionSessionIncarnationMismatch = Symbol("ingestion-session-incarnation-mismatch");
 
 type MutateSemanticOptions = Readonly<{
   allowStaleSemanticNoOp?: boolean;
@@ -82,11 +73,7 @@ export class IngestionSessionRepository {
     this.#run = createIngestionSessionCommandRunner(client, command);
   }
 
-  subscribe(
-    owner: string,
-    queue: IngestionQueueType,
-    listener: IngestionQueueListener
-  ) {
+  subscribe(owner: string, queue: IngestionQueueType, listener: IngestionQueueListener) {
     return this.#listeners.subscribe(owner, queue, listener);
   }
 
@@ -109,14 +96,7 @@ export class IngestionSessionRepository {
     token: string,
     now = Date.now()
   ) {
-    return mutateStoredUploadIntent(
-      this.#run,
-      action,
-      owner,
-      pair,
-      token,
-      now
-    );
+    return mutateStoredUploadIntent(this.#run, action, owner, pair, token, now);
   }
 
   claimUploadIntent(
@@ -176,15 +156,13 @@ export class IngestionSessionRepository {
       normalizedTemplate.queue,
       normalizedTemplate.session_id
     );
-    const ttlSeconds = normalizedTemplate.queue === "upload"
-      ? appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds
-      : appConfig.ingestionRuntime.importSessionIdleTtlSeconds;
+    const ttlSeconds =
+      normalizedTemplate.queue === "upload"
+        ? appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds
+        : appConfig.ingestionRuntime.importSessionIdleTtlSeconds;
     const raw = await this.#run(
       "imageshowCreateIngestionCanonical",
-      ingestionUploadIntentKey(
-        normalizedTemplate.owner,
-        normalizedTemplate.session_id
-      ),
+      ingestionUploadIntentKey(normalizedTemplate.owner, normalizedTemplate.session_id),
       keys.canonical,
       keys.owner,
       keys.display,
@@ -219,11 +197,7 @@ export class IngestionSessionRepository {
     };
   }
 
-  convertUploadIntent(
-    template: IngestionSessionSnapshot,
-    executionToken: string,
-    now?: number
-  ) {
+  convertUploadIntent(template: IngestionSessionSnapshot, executionToken: string, now?: number) {
     return this.createCanonical("upload", template, executionToken, now);
   }
 
@@ -237,10 +211,15 @@ export class IngestionSessionRepository {
   }
 
   async readSession(owner: string, sessionId: string) {
-    const result = (await this.#readSessions(owner, [{
-      session_id: sessionId,
-      image_id: ""
-    }]))[0] ?? null;
+    const result =
+      (
+        await this.#readSessions(owner, [
+          {
+            session_id: sessionId,
+            image_id: ""
+          }
+        ])
+      )[0] ?? null;
     if (result === ingestionSessionIncarnationMismatch) {
       throw new Error("Ingestion session read returned an impossible incarnation mismatch");
     }
@@ -294,14 +273,11 @@ export class IngestionSessionRepository {
     options: MutateSemanticOptions = {}
   ) {
     const normalizedNext = normalizedSemanticSession(next);
-    const keys = ingestionSessionKeys(
-      current.owner,
-      current.queue,
-      current.session_id
-    );
-    const ttlSeconds = current.queue === "upload"
-      ? appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds
-      : appConfig.ingestionRuntime.importSessionIdleTtlSeconds;
+    const keys = ingestionSessionKeys(current.owner, current.queue, current.session_id);
+    const ttlSeconds =
+      current.queue === "upload"
+        ? appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds
+        : appConfig.ingestionRuntime.importSessionIdleTtlSeconds;
     const raw = await this.#run(
       "imageshowMutateIngestionCanonical",
       keys.canonical,
@@ -325,20 +301,18 @@ export class IngestionSessionRepository {
       throw new Error("Redis ingestion mutation omitted its canonical snapshot");
     }
     if (result.code !== 0) {
-      const eventCompletedItem = result.session.status === "completed"
-        && options.completedItem?.id.toLowerCase()
-          === result.session.image_id.toLowerCase()
-        ? options.completedItem
-        : undefined;
+      const eventCompletedItem =
+        result.session.status === "completed" &&
+        options.completedItem?.id.toLowerCase() === result.session.image_id.toLowerCase()
+          ? options.completedItem
+          : undefined;
       this.#listeners.publish({
         owner: current.owner,
         queue: current.queue,
         kind: "semantic",
         metadata: result.metadata,
         session: result.session,
-        ...(eventCompletedItem
-          ? { completedItem: eventCompletedItem }
-          : {})
+        ...(eventCompletedItem ? { completedItem: eventCompletedItem } : {})
       });
     }
     return {
@@ -349,8 +323,8 @@ export class IngestionSessionRepository {
   }
 
   async updateProgress(
-    current: Pick<IngestionSessionSnapshot, "owner" | "queue" | "execution_token">
-      & IngestionSessionPair,
+    current: Pick<IngestionSessionSnapshot, "owner" | "queue" | "execution_token"> &
+      IngestionSessionPair,
     expectedVersion: number,
     progress: Readonly<{
       phase: string;
@@ -370,8 +344,8 @@ export class IngestionSessionRepository {
   }
 
   async heartbeat(
-    current: Pick<IngestionSessionSnapshot, "owner" | "queue" | "execution_token">
-      & IngestionSessionPair,
+    current: Pick<IngestionSessionSnapshot, "owner" | "queue" | "execution_token"> &
+      IngestionSessionPair,
     expectedVersion: number,
     now = Date.now()
   ) {
@@ -393,14 +367,11 @@ export class IngestionSessionRepository {
     payload: string,
     now: number
   ) {
-    const keys = ingestionSessionKeys(
-      current.owner,
-      current.queue,
-      current.session_id
-    );
-    const ttlSeconds = current.queue === "upload"
-      ? appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds
-      : appConfig.ingestionRuntime.importSessionIdleTtlSeconds;
+    const keys = ingestionSessionKeys(current.owner, current.queue, current.session_id);
+    const ttlSeconds =
+      current.queue === "upload"
+        ? appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds
+        : appConfig.ingestionRuntime.importSessionIdleTtlSeconds;
     const raw = await this.#run(
       "imageshowMutateIngestionCanonical",
       keys.canonical,
@@ -435,16 +406,11 @@ export class IngestionSessionRepository {
   }
 
   async deleteSession(
-    current: (CompletedIngestionReceipt | DiscardedIngestionReceipt)
-      & IngestionSessionPair,
+    current: (CompletedIngestionReceipt | DiscardedIngestionReceipt) & IngestionSessionPair,
     expectedVersion: number,
     now = Date.now()
   ) {
-    const keys = ingestionSessionKeys(
-      current.owner,
-      current.queue,
-      current.session_id
-    );
+    const keys = ingestionSessionKeys(current.owner, current.queue, current.session_id);
     const raw = await this.#run(
       "imageshowMutateIngestionCanonical",
       keys.canonical,
@@ -484,33 +450,23 @@ export class IngestionSessionRepository {
     if (!Number.isSafeInteger(cutoff) || cutoff < 0) {
       throw new RangeError("Redis ingestion expiry cutoff is invalid");
     }
-    const terminal = current.status === "completed"
-      || current.status === "discarded";
-    const validActiveTransition = next?.status === "completed"
-      || next?.status === "discarded"
-      || next?.status === "resolving";
+    const terminal = current.status === "completed" || current.status === "discarded";
+    const validActiveTransition =
+      next?.status === "completed" || next?.status === "discarded" || next?.status === "resolving";
     if ((terminal && next) || (!terminal && !validActiveTransition)) {
       throw new TypeError(
         terminal
           ? "Terminal ingestion expiry must not include a transition"
-          : "Active ingestion expiry requires a completed, discarded, "
-            + "or resolving transition"
+          : "Active ingestion expiry requires a completed, discarded, " + "or resolving transition"
       );
     }
-    const keys = ingestionSessionKeys(
-      current.owner,
-      current.queue,
-      current.session_id
-    );
-    const ttlSeconds = current.queue === "upload"
-      ? appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds
-      : appConfig.ingestionRuntime.importSessionIdleTtlSeconds;
-    const expectedToken = "execution_token" in current
-      ? current.execution_token
-      : "";
-    const payload = next
-      ? JSON.stringify(normalizedSemanticSession(next))
-      : "{}";
+    const keys = ingestionSessionKeys(current.owner, current.queue, current.session_id);
+    const ttlSeconds =
+      current.queue === "upload"
+        ? appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds
+        : appConfig.ingestionRuntime.importSessionIdleTtlSeconds;
+    const expectedToken = "execution_token" in current ? current.execution_token : "";
+    const payload = next ? JSON.stringify(normalizedSemanticSession(next)) : "{}";
     const raw = await this.#run(
       "imageshowMutateIngestionCanonical",
       keys.canonical,
@@ -532,9 +488,7 @@ export class IngestionSessionRepository {
     if (!terminal && !result.session) {
       throw new Error("Redis ingestion expiry omitted its transition snapshot");
     }
-    if ((!terminal && result.code !== 0) || (
-      terminal && current.status !== "discarded"
-    )) {
+    if ((!terminal && result.code !== 0) || (terminal && current.status !== "discarded")) {
       this.#listeners.publish({
         owner: current.owner,
         queue: current.queue,
@@ -556,14 +510,7 @@ export class IngestionSessionRepository {
       includeItems?: readonly IngestionSessionPair[];
     }> = {}
   ): Promise<IngestionQueueSnapshot> {
-    return readIngestionQueueSnapshot(
-      this.#run,
-      owner,
-      queue,
-      offset,
-      limit,
-      options
-    );
+    return readIngestionQueueSnapshot(this.#run, owner, queue, offset, limit, options);
   }
 
   async scanAction(
@@ -573,14 +520,7 @@ export class IngestionSessionRepository {
     cursor: number,
     limit = appConfig.ingestionRuntime.queueActionBatchSize
   ) {
-    return scanIngestionQueueAction(
-      this.#run,
-      owner,
-      queue,
-      maximumOrder,
-      cursor,
-      limit
-    );
+    return scanIngestionQueueAction(this.#run, owner, queue, maximumOrder, cursor, limit);
   }
 
   async deleteStaleCompletedReceipts(
@@ -588,12 +528,7 @@ export class IngestionSessionRepository {
     queue: IngestionQueueType,
     receipts: readonly CompletedIngestionReceipt[]
   ) {
-    const result = await deleteStoredCompletedReceipts(
-      this.#run,
-      owner,
-      queue,
-      receipts
-    );
+    const result = await deleteStoredCompletedReceipts(this.#run, owner, queue, receipts);
     if (result.metadata) {
       for (const receipt of receipts) {
         this.#listeners.publish({
@@ -617,18 +552,10 @@ export class IngestionSessionRepository {
     frozenTailScore: number,
     limit = appConfig.ingestionRuntime.ingestionSessionScanBatchSize
   ) {
-    return discoverRunnableIngestionSessionPage(
-      this.#run,
-      cursorScore,
-      frozenTailScore,
-      limit
-    );
+    return discoverRunnableIngestionSessionPage(this.#run, cursorScore, frozenTailScore, limit);
   }
 
-  discoverExpired(
-    now = Date.now(),
-    limit = appConfig.ingestionRuntime.expiryScanBatchSize
-  ) {
+  discoverExpired(now = Date.now(), limit = appConfig.ingestionRuntime.expiryScanBatchSize) {
     return discoverExpiredIngestionSessions(this.#run, now, limit);
   }
 
@@ -638,5 +565,4 @@ export class IngestionSessionRepository {
   ) {
     return discoverExpiryIngestionSessionPage(this.#run, offset, limit);
   }
-
 }

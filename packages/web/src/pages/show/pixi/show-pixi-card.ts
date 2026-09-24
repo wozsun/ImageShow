@@ -18,10 +18,8 @@ import {
   type ShowPixiTextureLod
 } from "./show-pixi-texture-cache.js";
 
-const pointerDistance = (
-  event: FederatedPointerEvent,
-  start: { x: number; y: number }
-) => Math.hypot(event.global.x - start.x, event.global.y - start.y);
+const pointerDistance = (event: FederatedPointerEvent, start: { x: number; y: number }) =>
+  Math.hypot(event.global.x - start.x, event.global.y - start.y);
 
 const portraitMagnetOptions = {
   maximumAngleDegrees: 8,
@@ -66,8 +64,7 @@ function cardPalette(renderer: Renderer) {
 // The Gaussian tail ends at 12px (three sigma); no per-frame blur filter or
 // additional full-card render texture is needed.
 const hoverGlowFalloff = [
-  .4503, .3538, .2660, .1908, .1303, .0846,
-  .0521, .0304, .0168, .0088, .0043, .0020
+  0.4503, 0.3538, 0.266, 0.1908, 0.1303, 0.0846, 0.0521, 0.0304, 0.0168, 0.0088, 0.0043, 0.002
 ] as const;
 const cardSurfacePaddingPixels = hoverGlowFalloff.length + 1;
 
@@ -91,26 +88,16 @@ export class ShowPixiPerspectiveCoordinator {
   }
 }
 
-export function showPixiTextureLod(
-  image: ShowImage,
-  renderedWidth: number,
-  targetRatio: number
-) {
-  const sourceRatio = image.width > 0 && image.height > 0
-    ? image.height / image.width
-    : 1;
-  const ratio = Number.isFinite(targetRatio) && targetRatio > 0
-    ? targetRatio
-    : sourceRatio;
+export function showPixiTextureLod(image: ShowImage, renderedWidth: number, targetRatio: number) {
+  const sourceRatio = image.width > 0 && image.height > 0 ? image.height / image.width : 1;
+  const ratio = Number.isFinite(targetRatio) && targetRatio > 0 ? targetRatio : sourceRatio;
   const renderedPixels = renderedWidth * Math.max(1, devicePixelRatio);
   const edge = renderedPixels <= 140 ? 128 : renderedPixels <= 300 ? 256 : 512;
   const pixelHeight = Math.max(1, Math.round(edge * ratio));
   // Keep the target aspect ratio even for uncommon panoramas or tall images.
   // When the height reaches the cache ceiling, reduce width instead of
   // stretching a capped bitmap back over the card geometry.
-  const pixelWidth = pixelHeight > 1_024
-    ? Math.max(1, Math.round(1_024 / ratio))
-    : edge;
+  const pixelWidth = pixelHeight > 1_024 ? Math.max(1, Math.round(1_024 / ratio)) : edge;
   return {
     pixelWidth,
     pixelHeight: Math.min(1_024, pixelHeight),
@@ -189,10 +176,7 @@ export class ShowPixiCard {
       this.#hovered = event.pointerType === "mouse";
       if (this.#hovered && this.#perspectiveEnabled) {
         this.#perspectiveUnavailableSignature = "";
-        this.#perspectiveCoordinator.claim(
-          this,
-          () => this.#cancelPointerPerspective()
-        );
+        this.#perspectiveCoordinator.claim(this, () => this.#cancelPointerPerspective());
         this.#updateTiltTarget(event);
       }
       this.#updateDepth();
@@ -208,11 +192,7 @@ export class ShowPixiCard {
       if (start && event.pointerId === start.pointerId && pointerDistance(event, start) > 6) {
         start.dragged = true;
       }
-      if (
-        event.pointerType !== "mouse"
-        || !this.#hovered
-        || !this.#perspectiveEnabled
-      ) return;
+      if (event.pointerType !== "mouse" || !this.#hovered || !this.#perspectiveEnabled) return;
       this.#updateTiltTarget(event);
     });
     this.root.on("pointerdown", (event) => {
@@ -222,16 +202,23 @@ export class ShowPixiCard {
         return;
       }
       this.#pointerStart = {
-        x: event.global.x, y: event.global.y, pointerId: event.pointerId, dragged: false
+        x: event.global.x,
+        y: event.global.y,
+        pointerId: event.pointerId,
+        dragged: false
       };
     });
     this.root.on("pointerup", (event) => {
       const start = this.#pointerStart;
       this.#pointerStart = null;
       if (
-        !start || start.dragged || event.pointerId !== start.pointerId
-        || pointerDistance(event, start) > 6 || !this.image
-      ) return;
+        !start ||
+        start.dragged ||
+        event.pointerId !== start.pointerId ||
+        pointerDistance(event, start) > 6 ||
+        !this.image
+      )
+        return;
       this.#onOpen(this.image, this.key);
     });
     this.root.on("pointerupoutside", () => {
@@ -252,11 +239,8 @@ export class ShowPixiCard {
   ) {
     const identityChanged = this.image?.id !== image.id || this.key !== key;
     const resolvedTextureUrl = image.thumb_url;
-    const lod = textureLod ?? showPixiTextureLod(
-      image,
-      textureRenderedWidth,
-      height / Math.max(1, width)
-    );
+    const lod =
+      textureLod ?? showPixiTextureLod(image, textureRenderedWidth, height / Math.max(1, width));
     const nextTextureKey = `${resolvedTextureUrl}\n${lod.pixelWidth}x${lod.pixelHeight}`;
     const textureChanged = identityChanged || this.#textureKey !== nextTextureKey;
     this.key = key;
@@ -292,23 +276,20 @@ export class ShowPixiCard {
     this.#loadTexture(resolvedTextureUrl, lod, generationKey);
   }
 
-  #loadTexture(
-    url: string,
-    lod: ShowPixiTextureLod,
-    generationKey: string
-  ) {
+  #loadTexture(url: string, lod: ShowPixiTextureLod, generationKey: string) {
     if (
-      this.#destroyed
-      || generationKey !== `${this.key}:${this.image?.id ?? ""}:${this.#textureKey}`
-    ) return;
+      this.#destroyed ||
+      generationKey !== `${this.key}:${this.image?.id ?? ""}:${this.#textureKey}`
+    )
+      return;
     let pendingLease: ShowPixiTextureLease | null = null;
     pendingLease = this.#textureCache.acquire(
       url,
       lod,
       (texture, retryable, availabilityRevision) => {
         if (
-          this.#destroyed
-          || generationKey !== `${this.key}:${this.image?.id ?? ""}:${this.#textureKey}`
+          this.#destroyed ||
+          generationKey !== `${this.key}:${this.image?.id ?? ""}:${this.#textureKey}`
         ) {
           pendingLease?.release();
           return;
@@ -319,10 +300,14 @@ export class ShowPixiCard {
           if (retryable) {
             // Resume on capacity release or an explicit resource recovery edge.
             // Retrying the lease must not reassign the card's moving geometry.
-            this.#cancelTextureWait = this.#textureCache.whenAvailable(url, availabilityRevision, () => {
-              this.#cancelTextureWait = null;
-              this.#loadTexture(url, lod, generationKey);
-            });
+            this.#cancelTextureWait = this.#textureCache.whenAvailable(
+              url,
+              availabilityRevision,
+              () => {
+                this.#cancelTextureWait = null;
+                this.#loadTexture(url, lod, generationKey);
+              }
+            );
           }
           return;
         }
@@ -367,10 +352,7 @@ export class ShowPixiCard {
     }
     if (!this.#hovered) return;
     this.#perspectiveUnavailableSignature = "";
-    this.#perspectiveCoordinator.claim(
-      this,
-      () => this.#cancelPointerPerspective()
-    );
+    this.#perspectiveCoordinator.claim(this, () => this.#cancelPointerPerspective());
   }
 
   setRenderScale(renderScale: number) {
@@ -412,24 +394,17 @@ export class ShowPixiCard {
       }
     }
     const portrait = (this.image?.height ?? 0) > (this.image?.width ?? 0);
-    const targetScale = this.#focused || this.#hovered
-      ? portrait ? 1.08 : 1.1
-      : 1;
+    const targetScale = this.#focused || this.#hovered ? (portrait ? 1.08 : 1.1) : 1;
     const scaleProgress = 1 - Math.exp(-Math.max(0, elapsedMs) / 95);
-    const nextScale = this.root.scale.x
-      + (targetScale - this.root.scale.x) * scaleProgress;
+    const nextScale = this.root.scale.x + (targetScale - this.root.scale.x) * scaleProgress;
     this.root.scale.set(nextScale);
     this.#applyGeometry();
     const tiltProgress = 1 - Math.exp(-Math.max(0, elapsedMs) / 110);
     this.#tiltX += (this.#tiltTargetX - this.#tiltX) * tiltProgress;
     this.#tiltY += (this.#tiltTargetY - this.#tiltY) * tiltProgress;
     if (
-      this.#perspectiveEnabled
-      && (
-        this.#hovered
-        || Math.abs(this.#tiltX) > 0.001
-        || Math.abs(this.#tiltY) > 0.001
-      )
+      this.#perspectiveEnabled &&
+      (this.#hovered || Math.abs(this.#tiltX) > 0.001 || Math.abs(this.#tiltY) > 0.001)
     ) {
       this.#applyPointerPerspective(portrait);
     } else {
@@ -462,25 +437,14 @@ export class ShowPixiCard {
     const active = this.#focused || this.#hovered;
     const width = Math.max(1, this.width);
     const height = Math.max(1, this.height);
-    if (
-      this.#surfaceSignature
-      && this.#hitArea.width === width
-      && this.#hitArea.height === height
-    ) return;
+    if (this.#surfaceSignature && this.#hitArea.width === width && this.#hitArea.height === height)
+      return;
     this.#hitArea.x = -width / 2;
     this.#hitArea.y = -height / 2;
     this.#hitArea.width = width;
     this.#hitArea.height = height;
-    const borderWidth = Math.min(
-      width / 2,
-      height / 2,
-      1 / this.#renderScale
-    );
-    const radius = Math.min(
-      width / 2,
-      height / 2,
-      6 / this.#renderScale
-    );
+    const borderWidth = Math.min(width / 2, height / 2, 1 / this.#renderScale);
+    const radius = Math.min(width / 2, height / 2, 6 / this.#renderScale);
     const signature = [
       width.toFixed(2),
       height.toFixed(2),
@@ -514,9 +478,13 @@ export class ShowPixiCard {
       }
       this.surface
         .roundRect(-width / 2, -height / 2, width, height, radius)
-        .fill(this.#surfaceBorderVisible
-          ? active ? this.#palette.activeBorder : this.#palette.border
-          : { color: 0, alpha: 0 });
+        .fill(
+          this.#surfaceBorderVisible
+            ? active
+              ? this.#palette.activeBorder
+              : this.#palette.border
+            : { color: 0, alpha: 0 }
+        );
       if (innerWidth > 0 && innerHeight > 0) {
         const inner = this.surface.roundRect(
           -innerWidth / 2,
@@ -551,14 +519,14 @@ export class ShowPixiCard {
     // Remove the current hover scale from the hit coordinate so the tilt uses
     // the same untransformed layout dimensions as the former DOM card.
     const hoverScale = Math.max(0.01, this.root.scale.x);
-    this.#tiltTargetX = Math.max(-1, Math.min(
-      1,
-      local.x * hoverScale / Math.max(0.5, this.width / 2)
-    ));
-    this.#tiltTargetY = Math.max(-1, Math.min(
-      1,
-      local.y * hoverScale / Math.max(0.5, this.height / 2)
-    ));
+    this.#tiltTargetX = Math.max(
+      -1,
+      Math.min(1, (local.x * hoverScale) / Math.max(0.5, this.width / 2))
+    );
+    this.#tiltTargetY = Math.max(
+      -1,
+      Math.min(1, (local.y * hoverScale) / Math.max(0.5, this.height / 2))
+    );
   }
 
   #resetTiltTarget() {
@@ -574,15 +542,14 @@ export class ShowPixiCard {
       this.#tiltY,
       portrait ? portraitMagnetOptions : landscapeMagnetOptions
     );
-    const angle = magnet.angleDegrees * Math.PI / 180;
+    const angle = (magnet.angleDegrees * Math.PI) / 180;
     const cosine = Math.cos(angle);
     const sine = Math.sin(angle);
     const oneMinusCosine = 1 - cosine;
     const axisX = magnet.axisX;
     const axisY = magnet.axisY;
     const hoverScale = Math.max(0.01, this.root.scale.x);
-    const perspective = perspectiveDistancePixels
-      / Math.max(0.01, this.#renderScale * hoverScale);
+    const perspective = perspectiveDistancePixels / Math.max(0.01, this.#renderScale * hoverScale);
     const project = (x: number, y: number, output: Float32Array | number[], offset: number) => {
       const axisDot = axisX * x + axisY * y;
       const rotatedX = x * cosine + axisX * axisDot * oneMinusCosine;
@@ -605,8 +572,14 @@ export class ShowPixiCard {
     project(frame.right * scaleX, frame.bottom * scaleY, corners, 4);
     project(frame.left * scaleX, frame.bottom * scaleY, corners, 6);
     mesh.setCorners(
-      corners[0]!, corners[1]!, corners[2]!, corners[3]!,
-      corners[4]!, corners[5]!, corners[6]!, corners[7]!
+      corners[0]!,
+      corners[1]!,
+      corners[2]!,
+      corners[3]!,
+      corners[4]!,
+      corners[5]!,
+      corners[6]!,
+      corners[7]!
     );
     // Hit the projected card bounds, excluding the snapshot's shadow padding.
     // The root transform already applies camera and hover scaling to both.
@@ -618,7 +591,10 @@ export class ShowPixiCard {
     this.root.hitArea = this.#perspectiveHitArea;
     if (this.#hovered) {
       if (!this.#edgeLight) {
-        this.#edgeLight = new ShowPixiEdgeLight(this.#palette.activeBorder, this.#palette.edgeLight);
+        this.#edgeLight = new ShowPixiEdgeLight(
+          this.#palette.activeBorder,
+          this.#palette.edgeLight
+        );
         this.visual.addChild(this.#edgeLight.mesh);
       }
       this.#edgeLight.update(this.width, this.height, this.#renderScale, magnet, project);
@@ -635,10 +611,8 @@ export class ShowPixiCard {
       aspect.toFixed(4),
       scaleBucket
     ].join(":");
-    if (
-      this.#perspectiveMesh
-      && this.#perspectiveSourceSignature === sourceSignature
-    ) return this.#perspectiveMesh;
+    if (this.#perspectiveMesh && this.#perspectiveSourceSignature === sourceSignature)
+      return this.#perspectiveMesh;
     if (this.#perspectiveUnavailableSignature === sourceSignature) return null;
     this.#releasePerspectiveSurface();
     const padding = cardSurfacePaddingPixels / Math.max(0.01, this.#renderScale);
@@ -657,10 +631,7 @@ export class ShowPixiCard {
       texture = this.#renderer.generateTexture({
         target: this.surface,
         frame,
-        resolution: Math.min(2, Math.max(
-          1,
-          (window.devicePixelRatio || 1) * this.#renderScale
-        )),
+        resolution: Math.min(2, Math.max(1, (window.devicePixelRatio || 1) * this.#renderScale)),
         antialias: true,
         clearColor: [0, 0, 0, 0],
         textureSourceOptions: { scaleMode: "linear" }

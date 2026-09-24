@@ -1,7 +1,4 @@
-import {
-  getRuntimeConfig,
-  onRuntimeConfigChange
-} from "../../../config/runtime-config-store.ts";
+import { getRuntimeConfig, onRuntimeConfigChange } from "../../../config/runtime-config-store.ts";
 import { abortSignalError } from "../../../core/abort.ts";
 import { DynamicConcurrencyLimiter } from "../../../core/concurrency.ts";
 
@@ -12,9 +9,6 @@ const rawUploadAdmission = new DynamicConcurrencyLimiter(
 
 onRuntimeConfigChange(() => rawUploadAdmission.refresh());
 
-export function withRawUploadAdmission<Result>(
-  signal: AbortSignal,
-  work: () => Promise<Result>
-) {
+export function withRawUploadAdmission<Result>(signal: AbortSignal, work: () => Promise<Result>) {
   return rawUploadAdmission.run(signal, work);
 }

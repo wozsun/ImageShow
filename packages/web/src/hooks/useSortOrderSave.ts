@@ -3,7 +3,13 @@ import type { SortOrderUpdateInputDto } from "@imageshow/shared/browser";
 import { api } from "../lib/api/client.js";
 
 /** Saves one numeric value, then lets the query owner publish the server order. */
-export function useSortOrderSave({ basePath, externalBusy, refresh, readValue, reportError }: {
+export function useSortOrderSave({
+  basePath,
+  externalBusy,
+  refresh,
+  readValue,
+  reportError
+}: {
   basePath: string;
   externalBusy: boolean;
   refresh: () => Promise<unknown>;
@@ -16,7 +22,9 @@ export function useSortOrderSave({ basePath, externalBusy, refresh, readValue, r
   const mountedRef = useRef(false);
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const save = async (slug: string, value: number) => {

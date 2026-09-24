@@ -10,10 +10,7 @@ import {
   withVocabularyMutationSync,
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
-import {
-  withImageMutationSync,
-  type ImageMutationSyncBatch
-} from "../images/mutation-sync.ts";
+import { withImageMutationSync, type ImageMutationSyncBatch } from "../images/mutation-sync.ts";
 import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
 import {
   deriveAuthorIdentityFromLink,
@@ -28,10 +25,7 @@ type AuthorMutationRow = AuthorIdentityColumns & {
   link: string;
 };
 
-function authorMutationDto(
-  row: AuthorMutationRow,
-  imageCount: number
-): AuthorDto {
+function authorMutationDto(row: AuthorMutationRow, imageCount: number): AuthorDto {
   return {
     slug: row.slug,
     sort_order: row.sort_order,
@@ -44,20 +38,13 @@ function authorMutationDto(
 
 function authorIdentityConflict(error: unknown): never {
   if ((error as { code?: string }).code === "23505") {
-    throw new ApiError(
-      409,
-      "author_identity_exists",
-      "该作者主页身份已绑定到其他作者"
-    );
+    throw new ApiError(409, "author_identity_exists", "该作者主页身份已绑定到其他作者");
   }
   throw error;
 }
 
 /** Use only while the caller owns a shared association or exclusive mutation lock. */
-export async function ensureAuthorWithMutationLockHeld(
-  client: Pool | PoolClient,
-  slug: string
-) {
+export async function ensureAuthorWithMutationLockHeld(client: Pool | PoolClient, slug: string) {
   if (!slug) return false;
   const result = await client.query(
     `INSERT INTO author(slug, sort_order)
@@ -82,13 +69,12 @@ export async function createAuthor(
 
   let created: AuthorMutationRow | null;
   try {
-    created = await withVocabularyMutationLock(
-      "author",
-      slug,
-      (signal) => withVocabularyMutationSync("author", () => withTransaction(async (client) => {
-        signal.throwIfAborted();
-        const result = await client.query<AuthorMutationRow>(
-          `INSERT INTO author(
+    created = await withVocabularyMutationLock("author", slug, (signal) =>
+      withVocabularyMutationSync("author", () =>
+        withTransaction(async (client) => {
+          signal.throwIfAborted();
+          const result = await client.query<AuthorMutationRow>(
+            `INSERT INTO author(
              slug,
              display_name,
              link,
@@ -112,11 +98,12 @@ export async function createAuthor(
                      link,
                      identity_provider,
                      identity_id`,
-          [slug, displayName, link, identity?.provider ?? null, identity?.id ?? null]
-        );
-        signal.throwIfAborted();
-        return result.rows[0] ?? null;
-      }))
+            [slug, displayName, link, identity?.provider ?? null, identity?.id ?? null]
+          );
+          signal.throwIfAborted();
+          return result.rows[0] ?? null;
+        })
+      )
     );
   } catch (error) {
     authorIdentityConflict(error);
@@ -133,13 +120,12 @@ export async function updateAuthorProfile(
   const identity = deriveAuthorIdentityFromLink(link);
   let updated: AuthorDto | null;
   try {
-    updated = await withVocabularyMutationLock(
-      "author",
-      slug,
-      (signal) => withVocabularyMutationSync("author", () => withTransaction(async (client) => {
-        signal.throwIfAborted();
-        const result = await client.query<AuthorMutationRow>(
-          `UPDATE author
+    updated = await withVocabularyMutationLock("author", slug, (signal) =>
+      withVocabularyMutationSync("author", () =>
+        withTransaction(async (client) => {
+          signal.throwIfAborted();
+          const result = await client.query<AuthorMutationRow>(
+            `UPDATE author
               SET display_name=$2,
                   link=$3,
                   identity_provider=$4,
@@ -152,20 +138,25 @@ export async function updateAuthorProfile(
                       link,
                       identity_provider,
                       identity_id`,
-          [slug, displayName, link, identity?.provider ?? null, identity?.id ?? null]
-        );
-        signal.throwIfAborted();
-        const row = result.rows[0];
-        if (!row) return null;
-        const imageCount = Number((await client.query<{ image_count: number }>(
-          `SELECT count(*)::int AS image_count
+            [slug, displayName, link, identity?.provider ?? null, identity?.id ?? null]
+          );
+          signal.throwIfAborted();
+          const row = result.rows[0];
+          if (!row) return null;
+          const imageCount = Number(
+            (
+              await client.query<{ image_count: number }>(
+                `SELECT count(*)::int AS image_count
              FROM metadata
             WHERE author=$1`,
-          [slug]
-        )).rows[0]?.image_count ?? 0);
-        signal.throwIfAborted();
-        return authorMutationDto(row, imageCount);
-      }))
+                [slug]
+              )
+            ).rows[0]?.image_count ?? 0
+          );
+          signal.throwIfAborted();
+          return authorMutationDto(row, imageCount);
+        })
+      )
     );
   } catch (error) {
     authorIdentityConflict(error);
@@ -183,33 +174,37 @@ async function deleteAuthorUnderLock(
 ) {
   return withTransaction(async (client) => {
     signal.throwIfAborted();
-    const author = await client.query(
-      "SELECT slug FROM author WHERE slug=$1 FOR UPDATE",
-      [slug]
-    );
+    const author = await client.query("SELECT slug FROM author WHERE slug=$1 FOR UPDATE", [slug]);
     signal.throwIfAborted();
     if (!author.rowCount) {
       return { deleted: false, affected: [] as ClearedAuthorImage[] };
     }
-    const affectedCount = Number((await client.query(
-      `SELECT count(*)::int AS count
+    const affectedCount = Number(
+      (
+        await client.query(
+          `SELECT count(*)::int AS count
          FROM metadata
         WHERE author=$1
           AND status='ready'`,
-      [slug]
-    )).rows[0]?.count ?? 0);
+          [slug]
+        )
+      ).rows[0]?.count ?? 0
+    );
     signal.throwIfAborted();
     const decision = mutationBatch.decide(affectedCount);
-    const affected = decision.mode === "exact"
-      ? (await client.query(
-        `SELECT id
+    const affected =
+      decision.mode === "exact"
+        ? ((
+            await client.query(
+              `SELECT id
            FROM metadata
           WHERE author=$1
             AND status='ready'
           ORDER BY id`,
-        [slug]
-      )).rows as ClearedAuthorImage[]
-      : [];
+              [slug]
+            )
+          ).rows as ClearedAuthorImage[])
+        : [];
     signal.throwIfAborted();
     await client.query(
       `UPDATE metadata
@@ -218,10 +213,9 @@ async function deleteAuthorUnderLock(
       [slug]
     );
     signal.throwIfAborted();
-    const deleted = Boolean((await client.query(
-      "DELETE FROM author WHERE slug=$1",
-      [slug]
-    )).rowCount);
+    const deleted = Boolean(
+      (await client.query("DELETE FROM author WHERE slug=$1", [slug])).rowCount
+    );
     signal.throwIfAborted();
     if (affectedCount) await bumpReadyImageRevision(client);
     return { deleted, affected };
@@ -229,20 +223,16 @@ async function deleteAuthorUnderLock(
 }
 
 export async function deleteAuthor(slug: string) {
-  const result = await withVocabularyMutationLock(
-    "author",
-    slug,
-    (signal) => withImageMutationSync((mutationBatch) => withVocabularyMutationSync("author", async () => {
-      const deleted = await deleteAuthorUnderLock(
-        slug,
-        signal,
-        mutationBatch
-      );
-      for (const image of deleted.affected) {
-        mutationBatch.add({ id: image.id });
-      }
-      return deleted;
-    }))
+  const result = await withVocabularyMutationLock("author", slug, (signal) =>
+    withImageMutationSync((mutationBatch) =>
+      withVocabularyMutationSync("author", async () => {
+        const deleted = await deleteAuthorUnderLock(slug, signal, mutationBatch);
+        for (const image of deleted.affected) {
+          mutationBatch.add({ id: image.id });
+        }
+        return deleted;
+      })
+    )
   );
   assertVocabularyFound("author", result.deleted ? 1 : 0);
 }

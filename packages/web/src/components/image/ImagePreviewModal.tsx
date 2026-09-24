@@ -6,7 +6,15 @@ import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
 import { useDialogFocus } from "../../hooks/useDialogFocus.js";
 import { DialogLayerPortal } from "../feedback/DialogLayerPortal.js";
 
-export function ImagePreviewModal({ src, thumbSrc, alt = "图片预览", width, height, onClose, returnFocusRef }: {
+export function ImagePreviewModal({
+  src,
+  thumbSrc,
+  alt = "图片预览",
+  width,
+  height,
+  onClose,
+  returnFocusRef
+}: {
   src: string;
   thumbSrc?: string;
   alt?: string;
@@ -23,7 +31,7 @@ export function ImagePreviewModal({ src, thumbSrc, alt = "图片预览", width, 
     containerRef: dialogRef,
     initialFocusRef: closeButtonRef,
     returnFocusRef,
-    onEscape: () => exit.requestClose(),
+    onEscape: () => exit.requestClose()
   });
   const ratio = width && height ? width / height : 16 / 9;
   const previewStyle = {

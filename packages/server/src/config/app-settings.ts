@@ -1,9 +1,5 @@
 import { z } from "zod";
-import type {
-  AdminSettings,
-  RuntimeConfig,
-  SiteConfigDto
-} from "@imageshow/shared/browser";
+import type { AdminSettings, RuntimeConfig, SiteConfigDto } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import {
   ingestionCommitConcurrency,
@@ -30,10 +26,7 @@ import {
   thumbnailQuality,
   uploadBrowserConcurrency
 } from "./field-schemas.ts";
-import {
-  getRuntimeConfig,
-  updateRuntimeConfig
-} from "./runtime-config-store.ts";
+import { getRuntimeConfig, updateRuntimeConfig } from "./runtime-config-store.ts";
 import { effectiveEmbedAncestorSources } from "./embed-ancestors.ts";
 import { publicBaseUrlSchema } from "../core/url-validation.ts";
 import { staticResourceBaseUrl } from "./site-host.ts";
@@ -50,47 +43,60 @@ function hasDefinedSetting(value: unknown): boolean {
   return Object.values(value).some(hasDefinedSetting);
 }
 
-const appSettingsSchema = z.strictObject({
-  site: z.strictObject({
-    title: siteTitle.optional(),
-    header_name: siteHeaderName.optional(),
-    root: siteRoot.optional(),
-    home: siteHomeConfigSchema.optional(),
-    gallery: z.strictObject({
-      order: galleryOrder.optional()
-    }).optional(),
-    random_method: randomDefaultMethod.optional(),
-    random_size: randomImageSize.optional(),
-    assets_base_url: publicBaseUrlSchema.optional()
-  }).optional(),
-  ingestion: z.strictObject({
-    list_page_size: ingestionListPageSize.optional(),
-    commit_concurrency: ingestionCommitConcurrency.optional()
-  }).optional(),
-  upload: z.strictObject({
-    browser_concurrency: uploadBrowserConcurrency.optional()
-  }).optional(),
-  normalize: z.strictObject({
-    concurrency: normalizeConcurrency.optional(),
-    quality: normalizeQuality.optional(),
-    min_quality: normalizeMinQuality.optional(),
-    max_long_edge: normalizeMaxLongEdge.optional(),
-    max_size_kb: normalizeMaxSizeKb.optional(),
-    skip_webp_under_kb: skipWebpUnderKb.optional()
-  }).optional(),
-  thumbnail: z.strictObject({
-    long_edge: thumbnailLongEdge.optional(),
-    quality: thumbnailQuality.optional()
-  }).optional(),
-  admin: z.strictObject({
-    login_background: loginBackground.optional(),
-    image_page_size: imagePageSize.optional(),
-    recent_uploads: recentUploads.optional()
-  }).optional()
-}).refine(
-  hasDefinedSetting,
-  "至少需要提供一项设置"
-);
+const appSettingsSchema = z
+  .strictObject({
+    site: z
+      .strictObject({
+        title: siteTitle.optional(),
+        header_name: siteHeaderName.optional(),
+        root: siteRoot.optional(),
+        home: siteHomeConfigSchema.optional(),
+        gallery: z
+          .strictObject({
+            order: galleryOrder.optional()
+          })
+          .optional(),
+        random_method: randomDefaultMethod.optional(),
+        random_size: randomImageSize.optional(),
+        assets_base_url: publicBaseUrlSchema.optional()
+      })
+      .optional(),
+    ingestion: z
+      .strictObject({
+        list_page_size: ingestionListPageSize.optional(),
+        commit_concurrency: ingestionCommitConcurrency.optional()
+      })
+      .optional(),
+    upload: z
+      .strictObject({
+        browser_concurrency: uploadBrowserConcurrency.optional()
+      })
+      .optional(),
+    normalize: z
+      .strictObject({
+        concurrency: normalizeConcurrency.optional(),
+        quality: normalizeQuality.optional(),
+        min_quality: normalizeMinQuality.optional(),
+        max_long_edge: normalizeMaxLongEdge.optional(),
+        max_size_kb: normalizeMaxSizeKb.optional(),
+        skip_webp_under_kb: skipWebpUnderKb.optional()
+      })
+      .optional(),
+    thumbnail: z
+      .strictObject({
+        long_edge: thumbnailLongEdge.optional(),
+        quality: thumbnailQuality.optional()
+      })
+      .optional(),
+    admin: z
+      .strictObject({
+        login_background: loginBackground.optional(),
+        image_page_size: imagePageSize.optional(),
+        recent_uploads: recentUploads.optional()
+      })
+      .optional()
+  })
+  .refine(hasDefinedSetting, "至少需要提供一项设置");
 
 type AppSettingsInput = z.infer<typeof appSettingsSchema>;
 
@@ -115,31 +121,12 @@ export function getThumbnailSettings() {
 }
 
 export function getSettingsForAdmin(settings: RuntimeConfig = getRuntimeConfig()): AdminSettings {
-  const {
-    title,
-    header_name,
-    root,
-    home,
-    gallery,
-    random_method,
-    random_size,
-    assets_base_url
-  } = settings.site;
-  const {
-    max_file_size_mb,
-    max_long_edge,
-    list_page_size,
-    commit_concurrency
-  } = settings.ingestion;
-  const {
-    max_items,
-    browser_concurrency
-  } = settings.upload;
-  const {
-    keep_original_link,
-    auto_import,
-    max_items: importMaxItemsValue
-  } = settings.import;
+  const { title, header_name, root, home, gallery, random_method, random_size, assets_base_url } =
+    settings.site;
+  const { max_file_size_mb, max_long_edge, list_page_size, commit_concurrency } =
+    settings.ingestion;
+  const { max_items, browser_concurrency } = settings.upload;
+  const { keep_original_link, auto_import, max_items: importMaxItemsValue } = settings.import;
   const weiboMaxItems = settings.weibo.max_items;
   const {
     concurrency,
@@ -209,23 +196,13 @@ export function resolveIngestionSnapshotLimit(requestedLimit?: number) {
 }
 
 export function siteConfigPayload(runtime: RuntimeConfig = getRuntimeConfig()): SiteConfigDto {
-  const {
-    icon,
-    title,
-    description,
-    header_name,
-    root,
-    home,
-    show,
-    gallery,
-    icp,
-    mps,
-    footer
-  } = runtime.site;
+  const { icon, title, description, header_name, root, home, show, gallery, icp, mps, footer } =
+    runtime.site;
   return {
     site: {
       icon: icon.startsWith("/assets/")
-        ? `${staticResourceBaseUrl(runtime)}${icon.slice("/assets".length)}` : icon,
+        ? `${staticResourceBaseUrl(runtime)}${icon.slice("/assets".length)}`
+        : icon,
       title,
       description: description || title,
       header_name,
@@ -254,7 +231,12 @@ export async function saveAppSettings(input: AppSettingsInput) {
     await updateRuntimeConfig(input);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new ApiError(400, "validation_error", error.issues[0]?.message ?? "Validation failed", error.flatten());
+      throw new ApiError(
+        400,
+        "validation_error",
+        error.issues[0]?.message ?? "Validation failed",
+        error.flatten()
+      );
     }
     throw error;
   }

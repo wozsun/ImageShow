@@ -32,37 +32,46 @@
   display: block;
 }
 
-.public-round-control:disabled { opacity: .62; }
+.public-round-control:disabled {
+  opacity: 0.62;
+}
 
 .public-round-control:not(:disabled):hover .public-round-surface,
 .public-round-control:focus-visible .public-round-surface {
   border-color: var(--public-color-gallery-tile-border-hover);
 }
 
-
 .public-floating-controls,
-.public-floating-label { opacity: .8; transition: opacity 180ms ease; }
+.public-floating-label {
+  opacity: 0.8;
+  transition: opacity 180ms ease;
+}
 :where([data-public-navigation-visible="false"]).public-floating-controls,
-:where([data-public-navigation-visible="false"]) :is(.public-floating-controls, .public-floating-label) {
-  opacity: var(--public-floating-idle-opacity, .3);
+:where([data-public-navigation-visible="false"])
+  :is(.public-floating-controls, .public-floating-label) {
+  opacity: var(--public-floating-idle-opacity, 0.3);
   animation: public-floating-dim 180ms ease 5s forwards;
 }
 /* 指针点击保留的普通焦点不阻止淡出，键盘可见焦点继续保护操作。 */
 .public-floating-controls:has(:focus-visible),
 :where(.show-page):has(.public-floating-controls :focus-visible) .public-floating-label {
-  opacity: .95;
+  opacity: 0.95;
   animation: none;
 }
-.public-floating-controls[hidden] { display: none; }
+.public-floating-controls[hidden] {
+  display: none;
+}
 @media (hover: hover) and (pointer: fine) {
   .public-floating-controls:hover,
   :where(.show-page):has(.public-floating-controls:hover) .public-floating-label {
-    opacity: .95;
+    opacity: 0.95;
     animation: none;
   }
 }
 @keyframes public-floating-dim {
-  to { opacity: .1; }
+  to {
+    opacity: 0.1;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .public-floating-controls,

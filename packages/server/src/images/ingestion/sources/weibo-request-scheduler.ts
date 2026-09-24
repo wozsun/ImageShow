@@ -59,36 +59,30 @@ class WeiboVisitorIdentity {
       if (this.identity) return this.identity;
 
       if (!this.creating) {
-        const creating = this.createIdentity(signal).then((identity) => {
-          this.identity = identity;
-          return identity;
-        }).finally(() => {
-          if (this.creating !== creating) return;
-          this.creating = undefined;
-          this.creatingSignal = undefined;
-        });
+        const creating = this.createIdentity(signal)
+          .then((identity) => {
+            this.identity = identity;
+            return identity;
+          })
+          .finally(() => {
+            if (this.creating !== creating) return;
+            this.creating = undefined;
+            this.creatingSignal = undefined;
+          });
         this.creating = creating;
         this.creatingSignal = signal;
       }
 
       const creating = this.creating;
       if (!this.creatingSignal?.aborted) {
-        return raceWithAbortSignal(
-          signal,
-          creating,
-          "Weibo visitor identity wait aborted"
-        );
+        return raceWithAbortSignal(signal, creating, "Weibo visitor identity wait aborted");
       }
 
       // A cancelled batch may leave its aborting handshake in flight briefly.
       // Let that one request settle before the next batch creates a new identity,
       // so cancellation cannot poison the next batch or create parallel visitors.
       try {
-        await raceWithAbortSignal(
-          signal,
-          creating,
-          "Weibo visitor identity wait aborted"
-        );
+        await raceWithAbortSignal(signal, creating, "Weibo visitor identity wait aborted");
       } catch (error) {
         if (signal.aborted) throw error;
       }
@@ -111,9 +105,7 @@ class WeiboRequestScheduler {
   private lastStatusFinishedAt: number | undefined;
 
   constructor(options: WeiboRequestSchedulerOptions) {
-    this.visitorIdentity = new WeiboVisitorIdentity(
-      options.createVisitorIdentity
-    );
+    this.visitorIdentity = new WeiboVisitorIdentity(options.createVisitorIdentity);
     this.delayRange = options.delayRange;
     this.random = options.random ?? Math.random;
     this.now = options.now ?? Date.now;
@@ -139,10 +131,7 @@ class WeiboRequestScheduler {
         abort: () => {
           if (batch.settled) return;
           this.removeQueuedBatch(batch);
-          this.rejectBatch(batch, abortSignalError(
-            signal,
-            "Weibo request batch aborted"
-          ));
+          this.rejectBatch(batch, abortSignalError(signal, "Weibo request batch aborted"));
         }
       };
       signal.addEventListener("abort", batch.abort, { once: true });
@@ -179,7 +168,7 @@ class WeiboRequestScheduler {
     const minMs = Math.max(0, minDelaySeconds) * 1000;
     const maxMs = Math.max(minMs, maxDelaySeconds * 1000);
     const sample = Math.min(1, Math.max(0, this.random()));
-    return minMs + ((maxMs - minMs) * sample);
+    return minMs + (maxMs - minMs) * sample;
   }
 
   private async waitBeforeNextStatus(signal: AbortSignal) {
@@ -222,16 +211,10 @@ class WeiboRequestScheduler {
             value: await request(visitorIdentity, batch.signal)
           };
         } catch (error) {
-          if (
-            error instanceof WeiboImportError
-            && error.code === "weibo_visitor_rejected"
-          ) {
+          if (error instanceof WeiboImportError && error.code === "weibo_visitor_rejected") {
             this.visitorIdentity.invalidate(visitorIdentity);
           }
-          if (
-            !(error instanceof WeiboImportError)
-            || error.code === "weibo_image_limit_exceeded"
-          ) {
+          if (!(error instanceof WeiboImportError) || error.code === "weibo_image_limit_exceeded") {
             this.rejectBatch(batch, error);
           } else {
             result = { status: "rejected", reason: error };
@@ -255,8 +238,6 @@ class WeiboRequestScheduler {
   }
 }
 
-export function createWeiboRequestScheduler(
-  options: WeiboRequestSchedulerOptions
-) {
+export function createWeiboRequestScheduler(options: WeiboRequestSchedulerOptions) {
   return new WeiboRequestScheduler(options);
 }

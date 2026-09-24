@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { AdminIcon, type AdminIconName } from "../../../components/icon/AdminIcon.js";
-import {
-  type AdminRouteModuleKey
-} from "./admin-route-modules.js";
+import { type AdminRouteModuleKey } from "./admin-route-modules.js";
 import { useAdminRoutePreloadIntent } from "./useAdminRoutePreloadIntent.js";
 
 type AdminNavGroupItem = {
@@ -20,14 +18,19 @@ function AdminNavGroupLink({ item }: { item: AdminNavGroupItem }) {
       to={item.to}
       end={item.end}
       {...preloadIntent}
-      className={({ isActive }) => isActive ? "active" : ""}
+      className={({ isActive }) => (isActive ? "active" : "")}
     >
       {item.label}
     </NavLink>
   );
 }
 
-export function AdminNavGroup({ icon, label, items, defaultOpen = false }: {
+export function AdminNavGroup({
+  icon,
+  label,
+  items,
+  defaultOpen = false
+}: {
   icon: AdminIconName;
   label: string;
   items: readonly AdminNavGroupItem[];
@@ -35,20 +38,22 @@ export function AdminNavGroup({ icon, label, items, defaultOpen = false }: {
 }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const sectionActive = items.some((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`));
+  const sectionActive = items.some(
+    (item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
+  );
   const [open, setOpen] = useState(sectionActive || defaultOpen);
-  useEffect(() => { if (sectionActive) setOpen(true); }, [sectionActive]);
-  const enter = () => { setOpen(true); if (items[0]) navigate(items[0].to); };
+  useEffect(() => {
+    if (sectionActive) setOpen(true);
+  }, [sectionActive]);
+  const enter = () => {
+    setOpen(true);
+    if (items[0]) navigate(items[0].to);
+  };
   const preloadFirst = useAdminRoutePreloadIntent(items[0]?.routeModule);
   return (
     <div className={`admin-nav-group ${open ? "is-open" : ""}`}>
       <div className={`admin-nav-group-trigger ${sectionActive ? "active" : ""}`.trim()}>
-        <button
-          type="button"
-          className="admin-nav-group-main"
-          {...preloadFirst}
-          onClick={enter}
-        >
+        <button type="button" className="admin-nav-group-main" {...preloadFirst} onClick={enter}>
           <AdminIcon name={icon} />
           <span className="admin-nav-group-label">{label}</span>
         </button>

@@ -11,9 +11,7 @@ import type { IngestionServerBinding } from "./model/ingestion-queue-state.js";
 
 export type IngestionQueueApi = {
   jobsRef: RefObject<IngestionJob[]>;
-  observeCompletedIngestions: (
-    entries: readonly CompletedIngestionObservation[]
-  ) => void;
+  observeCompletedIngestions: (entries: readonly CompletedIngestionObservation[]) => void;
   updateJob: (id: string, patch: Partial<IngestionJob>) => void;
 };
 
@@ -29,19 +27,21 @@ export type CompletedIngestionObservation = Readonly<{
 export function completedIngestionObservations(
   statuses: readonly IngestionStatusItemDto[]
 ): CompletedIngestionObservation[] {
-  return statuses.flatMap((status) => status.status === "completed"
-    ? [{
-        pair: status,
-        item: status.completed_item,
-        ...(status.display ? { display: status.display } : {}),
-        ...(status.redis_version === undefined
-          ? {}
-          : { serverVersion: status.redis_version }),
-        ...(status.redis_last_semantic_revision === undefined
-          ? {}
-          : { serverSemanticRevision: status.redis_last_semantic_revision })
-      }]
-    : []);
+  return statuses.flatMap((status) =>
+    status.status === "completed"
+      ? [
+          {
+            pair: status,
+            item: status.completed_item,
+            ...(status.display ? { display: status.display } : {}),
+            ...(status.redis_version === undefined ? {} : { serverVersion: status.redis_version }),
+            ...(status.redis_last_semantic_revision === undefined
+              ? {}
+              : { serverSemanticRevision: status.redis_last_semantic_revision })
+          }
+        ]
+      : []
+  );
 }
 
 export type IngestionQueueProducerApi = IngestionQueueApi & {
@@ -54,13 +54,15 @@ export type IngestionQueueProducerApi = IngestionQueueApi & {
     acceptedOrder?: number
   ) => void;
   captureServerConnectionGeneration: () => number | null;
-  releaseResolvedServerJobs: (targets: readonly Readonly<{
-    id: string;
-    attemptKey: string;
-    pair: IngestionSessionPairDto;
-    releasedRevision?: number;
-    releasedSummary?: IngestionQueueSummaryDto;
-  }>[]) => ReadonlySet<string>;
+  releaseResolvedServerJobs: (
+    targets: readonly Readonly<{
+      id: string;
+      attemptKey: string;
+      pair: IngestionSessionPairDto;
+      releasedRevision?: number;
+      releasedSummary?: IngestionQueueSummaryDto;
+    }>[]
+  ) => ReadonlySet<string>;
   server: Readonly<{
     recoverAuthority: () => Promise<void>;
   }>;
@@ -73,8 +75,8 @@ export function isCurrentIngestionAttempt(
 ) {
   const current = queue.jobsRef.current.find((job) => job.id === jobId);
   return Boolean(
-    current
-      && current.attemptKey === attemptKey
-      && !["cancelling", "cancelled"].includes(current.status)
+    current &&
+    current.attemptKey === attemptKey &&
+    !["cancelling", "cancelled"].includes(current.status)
   );
 }

@@ -14,10 +14,7 @@ export const READY_IMAGE_REBUILD_QUIET_MS = 250;
 export const READY_IMAGE_INCREMENTAL_LIMIT = 200;
 const READY_IMAGE_CACHE_MAX_ITEM_BYTES = 256 * 1024;
 
-export type ReadyImageCacheState =
-  | "ready"
-  | "rebuilding"
-  | "degraded";
+export type ReadyImageCacheState = "ready" | "rebuilding" | "degraded";
 
 export type ReadyImageCacheMeta = {
   state: ReadyImageCacheState;
@@ -77,9 +74,7 @@ export type ReadyImageCacheItem = {
   updated_at: string;
 };
 
-export type ReadyImageCacheResult<T> =
-  | { cached: true; value: T }
-  | { cached: false };
+export type ReadyImageCacheResult<T> = { cached: true; value: T } | { cached: false };
 
 const imageExtensions = new Set(["jpg", "png", "webp", "gif", "avif"]);
 function finiteNonNegative(value: unknown) {
@@ -115,17 +110,11 @@ export function readyImageSortScore(value: unknown) {
   return Number(integer);
 }
 
-export function readyImageCacheItemFromRow(
-  row: ReadyImageSourceRow
-): ReadyImageCacheItem {
-  const tags = Array.isArray(row.tags)
-    ? [...new Set(row.tags.map(String))].sort()
-    : [];
+export function readyImageCacheItemFromRow(row: ReadyImageSourceRow): ReadyImageCacheItem {
+  const tags = Array.isArray(row.tags) ? [...new Set(row.tags.map(String))].sort() : [];
   if (
-    tags.length > 50
-    || tags.some((tag) => (
-      tag.length > slugMaxLength || !slugPattern.test(tag)
-    ))
+    tags.length > 50 ||
+    tags.some((tag) => tag.length > slugMaxLength || !slugPattern.test(tag))
   ) {
     throw new Error("Ready-image cache row contains invalid tags");
   }
@@ -151,44 +140,58 @@ export function readyImageCacheItemFromRow(
     updated_at: timestamp(row.cursor_updated_at, "updated_at")
   };
   if (
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(item.id)
-    || !imageExtensions.has(item.ext)
-    || !devices.includes(item.device)
-    || !brightnesses.includes(item.brightness)
-    || (item.theme !== null && (item.theme.length > slugMaxLength
-      || !slugPattern.test(item.theme)))
-    || item.storage_slug.length > slugMaxLength
-    || !slugPattern.test(item.storage_slug)
-    || (item.author && (
-      item.author.length > slugMaxLength || !slugPattern.test(item.author)
-    ))
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(item.id) ||
+    !imageExtensions.has(item.ext) ||
+    !devices.includes(item.device) ||
+    !brightnesses.includes(item.brightness) ||
+    (item.theme !== null && (item.theme.length > slugMaxLength || !slugPattern.test(item.theme))) ||
+    item.storage_slug.length > slugMaxLength ||
+    !slugPattern.test(item.storage_slug) ||
+    (item.author && (item.author.length > slugMaxLength || !slugPattern.test(item.author)))
   ) {
     throw new Error("Ready-image cache row is outside the supported model");
   }
   return item;
 }
 
-export function parseReadyImageCacheItem(
-  raw: string | null
-): ReadyImageCacheItem | null {
+export function parseReadyImageCacheItem(raw: string | null): ReadyImageCacheItem | null {
   if (!raw) return null;
   try {
     const value = JSON.parse(raw) as unknown;
     if (
-      !Array.isArray(value) || value.length !== 19
-      || value.slice(0, 7).some((field, index) => (
-        index === 4 ? field !== null && typeof field !== "string" : typeof field !== "string"
-      ))
-      || !Array.isArray(value[7]) || value[7].some((tag) => typeof tag !== "string")
-      || value.slice(8, 12).some((field) => typeof field !== "number")
-      || value.slice(12).some((field) => typeof field !== "string")
-    ) return null;
+      !Array.isArray(value) ||
+      value.length !== 19 ||
+      value
+        .slice(0, 7)
+        .some((field, index) =>
+          index === 4 ? field !== null && typeof field !== "string" : typeof field !== "string"
+        ) ||
+      !Array.isArray(value[7]) ||
+      value[7].some((tag) => typeof tag !== "string") ||
+      value.slice(8, 12).some((field) => typeof field !== "number") ||
+      value.slice(12).some((field) => typeof field !== "string")
+    )
+      return null;
     const row = {
-      id: value[0], ext: value[1], device: value[2], brightness: value[3],
-      theme: value[4], storage_slug: value[5], author: value[6], tags: value[7],
-      width: value[8], height: value[9], image_size: value[10], sort_score: value[11],
-      title: value[12], description: value[13], source: value[14], original: value[15],
-      md5: value[16], cursor_created_at: value[17], cursor_updated_at: value[18]
+      id: value[0],
+      ext: value[1],
+      device: value[2],
+      brightness: value[3],
+      theme: value[4],
+      storage_slug: value[5],
+      author: value[6],
+      tags: value[7],
+      width: value[8],
+      height: value[9],
+      image_size: value[10],
+      sort_score: value[11],
+      title: value[12],
+      description: value[13],
+      source: value[14],
+      original: value[15],
+      md5: value[16],
+      cursor_created_at: value[17],
+      cursor_updated_at: value[18]
     } satisfies ReadyImageSourceRow;
     return readyImageCacheItemFromRow(row);
   } catch {
@@ -240,9 +243,7 @@ function readyImageIdSuffix(item: Pick<ReadyImageCacheItem, "id">) {
   return item.id.slice(-12);
 }
 
-export function readyImageIdSuffixScore(
-  item: Pick<ReadyImageCacheItem, "id">
-) {
+export function readyImageIdSuffixScore(item: Pick<ReadyImageCacheItem, "id">) {
   return Number.parseInt(readyImageIdSuffix(item), 16);
 }
 

@@ -1,7 +1,4 @@
-import {
-  publicImageOrders,
-  type GalleryOrder
-} from "@imageshow/shared/browser";
+import { publicImageOrders, type GalleryOrder } from "@imageshow/shared/browser";
 
 export type SelectOption = { value: string; label: string };
 
@@ -86,11 +83,12 @@ const galleryOrderLabels: Record<GalleryOrder, string> = {
   random: "随机打乱"
 };
 
-export const galleryOrderSelectOptions: readonly SelectOption[] =
-  publicImageOrders.map((value) => ({
+export const galleryOrderSelectOptions: readonly SelectOption[] = publicImageOrders.map(
+  (value) => ({
     value,
     label: galleryOrderLabels[value]
-  }));
+  })
+);
 
 const storageBackendLabels: Record<string, string> = { local: "本地存储" };
 

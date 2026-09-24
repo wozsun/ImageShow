@@ -18,10 +18,7 @@ import {
 } from "@imageshow/shared/browser";
 import type { Context, Next } from "hono";
 import { apiErrorResponse } from "./responses.ts";
-import {
-  invalidJsonBodyError,
-  isJsonContentType
-} from "./json-body.ts";
+import { invalidJsonBodyError, isJsonContentType } from "./json-body.ts";
 
 const standardApiBodyMaxBytes = 128 * 1024;
 const jsonlManifestBodyMaxBytes = appConfig.ingestion.jsonlManifestMaxBytes;
@@ -93,10 +90,7 @@ function measuredBodyLimit(maxSize: number) {
         chunks.push(value);
       }
     } catch (error) {
-      if (
-        c.req.raw.signal.aborted
-        || isJsonContentType(c.req.header("content-type"))
-      ) {
+      if (c.req.raw.signal.aborted || isJsonContentType(c.req.header("content-type"))) {
         throw invalidJsonBodyError();
       }
       throw error;
@@ -109,9 +103,9 @@ function measuredBodyLimit(maxSize: number) {
         start(controller) {
           for (const chunk of chunks) controller.enqueue(chunk);
           controller.close();
-        },
+        }
       }),
-      duplex: "half",
+      duplex: "half"
     };
     c.req.raw = new Request(c.req.raw, requestInit);
     return next();

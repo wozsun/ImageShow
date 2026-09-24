@@ -8,9 +8,7 @@ import {
   type IngestionSessionRedisCommandName
 } from "./commands.ts";
 
-export type IngestionRepositoryCommand = <T>(
-  work: () => Promise<T>
-) => Promise<T>;
+export type IngestionRepositoryCommand = <T>(work: () => Promise<T>) => Promise<T>;
 
 export type IngestionSessionCommandRunner = (
   command: IngestionSessionRedisCommandName,
@@ -30,11 +28,7 @@ export function throwIngestionCommandConflict(code: number): never {
     throw new ApiError(410, "upload_intent_expired", "上传意图已过期，请重新签发");
   }
   if (code === -2) {
-    throw new ApiError(
-      409,
-      "idempotency_conflict",
-      "同一幂等身份已用于不同内容接入意图"
-    );
+    throw new ApiError(409, "idempotency_conflict", "同一幂等身份已用于不同内容接入意图");
   }
   if (code === -3) {
     throw new ApiError(410, "upload_intent_expired", "上传意图已过期，请重新签发");
@@ -46,14 +40,15 @@ export function throwIngestionCommandConflict(code: number): never {
 }
 
 function ingestionDomainReplyError(error: unknown) {
-  const message = error instanceof Error
-    ? error.message
-    : typeof error === "object"
-      && error !== null
-      && "message" in error
-      && typeof error.message === "string"
+  const message =
+    error instanceof Error
       ? error.message
-      : null;
+      : typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
+        ? error.message
+        : null;
   if (!message) return null;
   if (/\b(?:INGESTION_QUEUE_STRUCTURE|WRONGTYPE)\b/u.test(message)) {
     return ingestionQueueStructureError();
@@ -66,11 +61,7 @@ function ingestionDomainReplyError(error: unknown) {
     );
   }
   if (/\bUPLOAD_INTENT\b/u.test(message)) {
-    return new ApiError(
-      409,
-      "upload_intent_state_conflict",
-      "上传意图状态与当前操作不一致"
-    );
+    return new ApiError(409, "upload_intent_state_conflict", "上传意图状态与当前操作不一致");
   }
   return null;
 }
@@ -90,7 +81,5 @@ export function createIngestionSessionCommandRunner(
   command: IngestionRepositoryCommand = runIngestionRedisCommand
 ): IngestionSessionCommandRunner {
   const registeredClient = registerIngestionSessionRedisCommands(client);
-  return (name, ...arguments_) => command(
-    () => registeredClient[name](...arguments_)
-  );
+  return (name, ...arguments_) => command(() => registeredClient[name](...arguments_));
 }

@@ -1,19 +1,17 @@
+import type { ImageDraft } from "../../../../../lib/types.js";
 import type {
-  ImageDraft
-} from "../../../../../lib/types.js";
-import type { IngestionJob, ManifestImportSource, IngestionAttributeDefaults } from "./ingestion-job.js";
+  IngestionJob,
+  ManifestImportSource,
+  IngestionAttributeDefaults
+} from "./ingestion-job.js";
 
-import {
-  webIngestionBatchKey,
-  webUuidV7
-} from "./ingestion-identity.js";
+import { webIngestionBatchKey, webUuidV7 } from "./ingestion-identity.js";
 
 const externalImageUrlMaxLength = 2048;
 
 function hasDirectIpHostname(hostname: string) {
   const unwrappedHostname = hostname.replace(/^\[|\]$/g, "");
-  return unwrappedHostname.includes(":")
-    || /^(?:\d{1,3}\.){3}\d{1,3}$/.test(unwrappedHostname);
+  return unwrappedHostname.includes(":") || /^(?:\d{1,3}\.){3}\d{1,3}$/.test(unwrappedHostname);
 }
 
 export function normalizeImportDownloadUrl(value: string) {
@@ -21,15 +19,16 @@ export function normalizeImportDownloadUrl(value: string) {
   try {
     const parsed = new URL(value);
     const hostname = parsed.hostname.toLowerCase().replace(/\.$/, "");
-    const allowed = parsed.protocol === "https:"
-      && Boolean(hostname)
-      && !parsed.username
-      && !parsed.password
-      && hostname !== "localhost"
-      && !hostname.endsWith(".localhost")
-      && hostname !== "metadata"
-      && hostname !== "metadata.google.internal"
-      && !hasDirectIpHostname(hostname);
+    const allowed =
+      parsed.protocol === "https:" &&
+      Boolean(hostname) &&
+      !parsed.username &&
+      !parsed.password &&
+      hostname !== "localhost" &&
+      !hostname.endsWith(".localhost") &&
+      hostname !== "metadata" &&
+      hostname !== "metadata.google.internal" &&
+      !hasDirectIpHostname(hostname);
     if (!allowed) return null;
     parsed.hostname = hostname;
     parsed.hash = "";
@@ -42,11 +41,11 @@ export function normalizeImportDownloadUrl(value: string) {
 export type ImportUrlParseIssue =
   | { type: "invalid"; line: number; raw: string }
   | {
-    type: "duplicate";
-    line: number;
-    raw: string;
-    firstLine: number;
-  };
+      type: "duplicate";
+      line: number;
+      raw: string;
+      firstLine: number;
+    };
 
 export type ImportUrlParseResult = {
   urls: string[];
@@ -62,8 +61,7 @@ export function importPositionText(item: {
   batchPosition?: number;
 }) {
   if (item.manifestSource === "weibo") {
-    const position = item.batchPosition
-      ?? (item.manifestLine ? item.manifestLine - 1 : undefined);
+    const position = item.batchPosition ?? (item.manifestLine ? item.manifestLine - 1 : undefined);
     return position === undefined ? "" : `微博第 ${position + 1} 张`;
   }
   return item.manifestLine ? `JSONL 第 ${item.manifestLine} 行` : "";

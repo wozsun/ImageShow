@@ -1,25 +1,41 @@
 import { isIP } from "node:net";
 import { z } from "zod";
 
-export const publicBaseUrlSchema = z.string().trim().max(2048).transform((value, ctx) => {
-  if (!value) return "";
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:" || url.username || url.password || /[\\?#\s]/u.test(value)
-      || !matchesSiteHost(url.host, "")) throw new Error("Invalid public URL");
-    const segments = url.pathname.split("/").filter(Boolean).map((part) => {
-      const decoded = decodeURIComponent(part);
-      if (decoded === "." || decoded === ".." || /[/\\\u0000-\u0020\u007f]/u.test(decoded)) {
-        throw new Error("Invalid public URL path");
-      }
-      return encodeURIComponent(decoded);
-    });
-    return `${url.origin}${segments.length ? `/${segments.join("/")}` : ""}`;
-  } catch {
-    ctx.addIssue({ code: "custom", message: "公开地址须为合法 HTTPS 根地址，可包含路径前缀，不能包含凭据、查询参数或片段" });
-    return z.NEVER;
-  }
-});
+export const publicBaseUrlSchema = z
+  .string()
+  .trim()
+  .max(2048)
+  .transform((value, ctx) => {
+    if (!value) return "";
+    try {
+      const url = new URL(value);
+      if (
+        url.protocol !== "https:" ||
+        url.username ||
+        url.password ||
+        /[\\?#\s]/u.test(value) ||
+        !matchesSiteHost(url.host, "")
+      )
+        throw new Error("Invalid public URL");
+      const segments = url.pathname
+        .split("/")
+        .filter(Boolean)
+        .map((part) => {
+          const decoded = decodeURIComponent(part);
+          if (decoded === "." || decoded === ".." || /[/\\\u0000-\u0020\u007f]/u.test(decoded)) {
+            throw new Error("Invalid public URL path");
+          }
+          return encodeURIComponent(decoded);
+        });
+      return `${url.origin}${segments.length ? `/${segments.join("/")}` : ""}`;
+    } catch {
+      ctx.addIssue({
+        code: "custom",
+        message: "公开地址须为合法 HTTPS 根地址，可包含路径前缀，不能包含凭据、查询参数或片段"
+      });
+      return z.NEVER;
+    }
+  });
 
 export function publicUrlMatchesHost(base: URL, host: string) {
   const authority = host.trim().toLowerCase();
@@ -29,8 +45,10 @@ export function publicUrlMatchesHost(base: URL, host: string) {
 export function publicUrlUsesSiteHost(publicBaseUrl: string, siteDomain: string) {
   if (!publicBaseUrl || !hasExplicitSiteDomain(siteDomain)) return false;
   const url = new URL(publicBaseUrl);
-  return matchesSiteHost(url.host, siteDomain)
-    || (!url.port && matchesSiteHost(`${url.hostname}:443`, siteDomain));
+  return (
+    matchesSiteHost(url.host, siteDomain) ||
+    (!url.port && matchesSiteHost(`${url.hostname}:443`, siteDomain))
+  );
 }
 
 type HttpsUrlOptions = {

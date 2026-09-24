@@ -2,8 +2,7 @@ import type { AuthorDerivedIdentityDto } from "@imageshow/shared/browser";
 import { appConfig } from "@imageshow/shared";
 
 const supportedAuthorIdentityProviders = appConfig.authorIdentity.providers;
-type AuthorIdentityProvider =
-  (typeof supportedAuthorIdentityProviders)[number];
+type AuthorIdentityProvider = (typeof supportedAuthorIdentityProviders)[number];
 
 export type AuthorIdentity = {
   provider: AuthorIdentityProvider;
@@ -35,11 +34,11 @@ export function deriveAuthorIdentityFromLink(link: string): AuthorIdentity | nul
     return null;
   }
   if (
-    url.protocol !== "https:"
-    || url.hostname.toLowerCase() !== "weibo.com"
-    || url.username
-    || url.password
-    || url.port
+    url.protocol !== "https:" ||
+    url.hostname.toLowerCase() !== "weibo.com" ||
+    url.username ||
+    url.password ||
+    url.port
   ) {
     return null;
   }
@@ -50,10 +49,7 @@ export function deriveAuthorIdentityFromLink(link: string): AuthorIdentity | nul
 export function projectAuthorDerivedIdentity(
   columns: AuthorIdentityColumns
 ): AuthorDerivedIdentityDto | null {
-  if (
-    columns.identity_provider === "weibo"
-    && columns.identity_id !== null
-  ) {
+  if (columns.identity_provider === "weibo" && columns.identity_id !== null) {
     return { provider: "weibo", id: columns.identity_id };
   }
   return null;

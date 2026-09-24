@@ -27,9 +27,7 @@ type StorageBackendSnapshotRow = Omit<
   "ingestion_session_count" | "cleanup_job_count"
 >;
 
-export function storageBackendUsage(
-  row: Record<string, unknown>
-): StorageBackendUsage {
+export function storageBackendUsage(row: Record<string, unknown>): StorageBackendUsage {
   return {
     image_count: Number(row.image_count ?? 0),
     ingestion_session_count: Number(row.ingestion_session_count ?? 0),
@@ -42,10 +40,8 @@ export function assertPhysicalLocationChangeAllowed(
   usage: StorageBackendUsage
 ) {
   if (
-    !changedFields.length
-    || (!usage.image_count
-      && !usage.ingestion_session_count
-      && !usage.cleanup_job_count)
+    !changedFields.length ||
+    (!usage.image_count && !usage.ingestion_session_count && !usage.cleanup_job_count)
   ) {
     return;
   }
@@ -62,8 +58,9 @@ export async function readStorageBackendSnapshot(
   signal?: AbortSignal
 ): Promise<StorageBackendSnapshot> {
   signal?.throwIfAborted();
-  const row = (await pool.query(
-    `SELECT backend.slug,
+  const row = (
+    await pool.query(
+      `SELECT backend.slug,
             backend.type,
             backend.config,
             backend.namespace_identities,
@@ -73,15 +70,12 @@ export async function readStorageBackendSnapshot(
               WHERE metadata.storage_slug=backend.slug) AS image_count
        FROM storage_backend AS backend
       WHERE backend.slug=$1`,
-    [slug]
-  )).rows[0] as StorageBackendSnapshotRow | undefined;
+      [slug]
+    )
+  ).rows[0] as StorageBackendSnapshotRow | undefined;
   signal?.throwIfAborted();
   if (!row) {
-    throw new ApiError(
-      404,
-      "storage_backend_not_found",
-      `Unknown storage backend: ${slug}`
-    );
+    throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
   }
   const [cleanupJobCount, activeIngestionCounts] = await Promise.all([
     countUnresolvedMoveCleanupJobs(slug),
@@ -101,11 +95,13 @@ export async function readStorageBackendConfiguration(
   signal?: AbortSignal
 ): Promise<StorageBackendConfigRow> {
   signal?.throwIfAborted();
-  const row = (await pool.query<StorageBackendConfigRow>(
-    `SELECT slug, type, config, namespace_identities
+  const row = (
+    await pool.query<StorageBackendConfigRow>(
+      `SELECT slug, type, config, namespace_identities
        FROM storage_backend WHERE slug=$1`,
-    [slug]
-  )).rows[0];
+      [slug]
+    )
+  ).rows[0];
   signal?.throwIfAborted();
   if (!row) {
     throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);

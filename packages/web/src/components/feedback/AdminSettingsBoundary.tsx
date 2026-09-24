@@ -3,7 +3,9 @@ import type { AdminSettings } from "@imageshow/shared/browser";
 import { useAdminSettings } from "../../lib/api/admin-settings.js";
 import { QueryErrorState } from "./QueryErrorState.js";
 
-export function AdminSettingsBoundary({ children }: {
+export function AdminSettingsBoundary({
+  children
+}: {
   children: (settings: AdminSettings) => ReactNode;
 }) {
   const query = useAdminSettings();
@@ -20,5 +22,9 @@ export function AdminSettingsBoundary({ children }: {
       />
     );
   }
-  return <div className="center" role="status">加载中</div>;
+  return (
+    <div className="center" role="status">
+      加载中
+    </div>
+  );
 }

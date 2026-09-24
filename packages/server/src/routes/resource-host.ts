@@ -1,7 +1,11 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { isAllowedSiteHost } from "../config/site-host.ts";
-import { hasExplicitSiteDomain, matchesSiteHost, publicUrlMatchesHost } from "../core/url-validation.ts";
+import {
+  hasExplicitSiteDomain,
+  matchesSiteHost,
+  publicUrlMatchesHost
+} from "../core/url-validation.ts";
 import { publishedLocalPublicUrl } from "../storage/backends/registry.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { noStoreCacheControl, setPublicResourceCors } from "../core/http/headers.ts";
@@ -15,30 +19,45 @@ const corsRequestHeaders = new Set(["range", "if-none-match", "if-modified-since
 function resourcePreflight(c: Context) {
   const requestedMethod = c.req.header("access-control-request-method") ?? "";
   const requestedHeaders = (c.req.header("access-control-request-headers") ?? "")
-    .toLowerCase().split(",").map((header) => header.trim()).filter(Boolean);
-  if (!["GET", "HEAD"].includes(requestedMethod)
-    || requestedHeaders.some((header) => !corsRequestHeaders.has(header))) {
+    .toLowerCase()
+    .split(",")
+    .map((header) => header.trim())
+    .filter(Boolean);
+  if (
+    !["GET", "HEAD"].includes(requestedMethod) ||
+    requestedHeaders.some((header) => !corsRequestHeaders.has(header))
+  ) {
     return apiErrorResponse({ status: 403, message: "Unsupported resource preflight" });
   }
-  return new Response(null, { status: 204, headers: {
-    "Cache-Control": noStoreCacheControl,
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, HEAD",
-    "Access-Control-Allow-Headers": [...corsRequestHeaders].join(", ")
-  } });
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Cache-Control": noStoreCacheControl,
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, HEAD",
+      "Access-Control-Allow-Headers": [...corsRequestHeaders].join(", ")
+    }
+  });
 }
 
 function localImageObject(path: string, base: URL) {
   const root = base.pathname.replace(/\/+$/, "");
-  const prefix = path.startsWith(`${root}/full/`) ? "full"
-    : path.startsWith(`${root}/thumbs/`) ? "thumbs" : null;
+  const prefix = path.startsWith(`${root}/full/`)
+    ? "full"
+    : path.startsWith(`${root}/thumbs/`)
+      ? "thumbs"
+      : null;
   const key = prefix ? path.slice(`${root}/${prefix}/`.length) : "";
   const parsed = parseImageObjectKey(key);
   return prefix && parsed && (prefix !== "thumbs" || thumbnailObjectKey(parsed.id) === key)
-    ? { prefix, key } as const : null;
+    ? ({ prefix, key } as const)
+    : null;
 }
 
-async function serveLocalImageHost(c: Context, object: NonNullable<ReturnType<typeof localImageObject>>) {
+async function serveLocalImageHost(
+  c: Context,
+  object: NonNullable<ReturnType<typeof localImageObject>>
+) {
   const { prefix, key } = object;
   const method = c.req.method;
   let response: Response;
@@ -83,12 +102,19 @@ export function resourceHostBoundary(
         if (publicUrlMatchesHost(base, host)) assetsBase = base;
       }
     }
-    if (!isMain && !localBase && !assetsBase) return apiErrorResponse({ status: 404, message: "Not Found" });
-    const healthRequest = !localBase && !assetsBase && (c.req.path === "/livez" || c.req.path === "/readyz");
+    if (!isMain && !localBase && !assetsBase)
+      return apiErrorResponse({ status: 404, message: "Not Found" });
+    const healthRequest =
+      !localBase && !assetsBase && (c.req.path === "/livez" || c.req.path === "/readyz");
     if (!healthRequest && !businessGateIsOpen()) {
-      return apiErrorResponse({
-        status: 503, code: "redis_unavailable", message: "Redis cold-start validation has not completed"
-      }, { phase: "cold_start" });
+      return apiErrorResponse(
+        {
+          status: 503,
+          code: "redis_unavailable",
+          message: "Redis cold-start validation has not completed"
+        },
+        { phase: "cold_start" }
+      );
     }
     if (!localBase && !assetsBase) return next();
     // Image and static resource URLs may share a Host with separate namespaces.

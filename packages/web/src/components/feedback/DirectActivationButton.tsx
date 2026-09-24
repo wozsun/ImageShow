@@ -26,17 +26,13 @@ type DirectPointerPress = {
   releaseFocusTarget: ReleasableFocusTarget | null;
 };
 
-const pendingActivationSuppressions =
-  new WeakMap<Document, CompatibilityActivationGuard>();
+const pendingActivationSuppressions = new WeakMap<Document, CompatibilityActivationGuard>();
 const compatibilityMouseEvents = ["mousedown", "mouseup"] as const;
 
 function activeReleasableFocusTarget(ownerDocument: Document) {
   const activeElement = ownerDocument.activeElement;
-  if (
-    !activeElement
-    || !("blur" in activeElement)
-    || typeof activeElement.blur !== "function"
-  ) return null;
+  if (!activeElement || !("blur" in activeElement) || typeof activeElement.blur !== "function")
+    return null;
   return activeElement as ReleasableFocusTarget;
 }
 
@@ -61,11 +57,7 @@ function suppressCompatibilityActivation(ownerDocument: Document) {
   let releaseForNextPointer: EventListener;
   const release = () => {
     for (const eventName of compatibilityMouseEvents) {
-      eventRoot.removeEventListener(
-        eventName,
-        captureCompatibilityMouse,
-        true
-      );
+      eventRoot.removeEventListener(eventName, captureCompatibilityMouse, true);
     }
     eventRoot.removeEventListener("click", captureClick, true);
     eventRoot.removeEventListener("pointerdown", releaseForNextPointer, true);
@@ -104,11 +96,7 @@ function suppressCompatibilityActivation(ownerDocument: Document) {
 
   pendingActivationSuppressions.set(ownerDocument, guard);
   for (const eventName of compatibilityMouseEvents) {
-    eventRoot.addEventListener(
-      eventName,
-      captureCompatibilityMouse,
-      true
-    );
+    eventRoot.addEventListener(eventName, captureCompatibilityMouse, true);
   }
   eventRoot.addEventListener("click", captureClick, true);
   // A new physical press belongs to a new gesture. It releases a stale guard
@@ -145,10 +133,7 @@ function useDirectActivation(
     }
   };
   const cancelPointerPress = (event: PointerEvent<HTMLButtonElement>) => {
-    if (
-      pointerPressRef.current?.pointerId === event.pointerId
-      && event.pointerType !== "mouse"
-    ) {
+    if (pointerPressRef.current?.pointerId === event.pointerId && event.pointerType !== "mouse") {
       // Refresh the post-gesture window from cancellation rather than from
       // pointerdown, so a long press cannot outlive its suppression.
       suppressCompatibilityActivation(event.currentTarget.ownerDocument);
@@ -158,12 +143,11 @@ function useDirectActivation(
 
   return {
     onPointerDown(event: PointerEvent<HTMLButtonElement>) {
-      const directPrimaryPress = (
-        !event.currentTarget.disabled
-        && event.pointerType !== "mouse"
-        && event.isPrimary !== false
-        && event.button === 0
-      );
+      const directPrimaryPress =
+        !event.currentTarget.disabled &&
+        event.pointerType !== "mouse" &&
+        event.isPrimary !== false &&
+        event.button === 0;
       if (pointerFocus === "preserve" || directPrimaryPress) {
         // Cancelling pointerdown asks conforming browsers not to emit
         // compatibility mouse events. The capture guard still handles click,
@@ -182,60 +166,48 @@ function useDirectActivation(
           clientY: event.clientY
         },
         movementIntent: null,
-        releaseFocusTarget: pointerFocus === "release-after-activation"
-          ? activeReleasableFocusTarget(
-              event.currentTarget.ownerDocument
-            )
-          : null
+        releaseFocusTarget:
+          pointerFocus === "release-after-activation"
+            ? activeReleasableFocusTarget(event.currentTarget.ownerDocument)
+            : null
       };
       suppressCompatibilityActivation(event.currentTarget.ownerDocument);
     },
     onPointerMove(event: PointerEvent<HTMLButtonElement>) {
       const press = pointerPressRef.current;
-      if (
-        !press
-        || press.pointerId !== event.pointerId
-        || press.movementIntent
-      ) return;
+      if (!press || press.pointerId !== event.pointerId || press.movementIntent) return;
       press.movementIntent = classifyMovementIntent(press.origin, event);
     },
     onPointerUp(event: PointerEvent<HTMLButtonElement>) {
       const press = pointerPressRef.current;
       const ownsPress = press?.pointerId === event.pointerId;
-      if (
-        ownsPress
-        && event.pointerType !== "mouse"
-      ) {
+      if (ownsPress && event.pointerType !== "mouse") {
         // pointerdown arms early enough to catch interleaved mousedown;
         // pointerup renews the bounded guard for mouse events grouped after
         // gesture recognition, including long presses.
         suppressCompatibilityActivation(event.currentTarget.ownerDocument);
       }
       const movementIntent = press
-        ? press.movementIntent
-          ?? classifyMovementIntent(press.origin, event)
+        ? (press.movementIntent ?? classifyMovementIntent(press.origin, event))
         : null;
       clearPointerPress(event);
-      if (
-        event.currentTarget.disabled
-        || event.pointerType === "mouse"
-      ) return;
-      const pressedHere = (
-        event.isPrimary !== false
-        && event.button === 0
-        && ownsPress
-        && press !== null
-        && !movementIntent
-      );
+      if (event.currentTarget.disabled || event.pointerType === "mouse") return;
+      const pressedHere =
+        event.isPrimary !== false &&
+        event.button === 0 &&
+        ownsPress &&
+        press !== null &&
+        !movementIntent;
       if (!pressedHere) return;
 
       const rect = event.currentTarget.getBoundingClientRect();
       if (
-        event.clientX < rect.left
-        || event.clientX > rect.right
-        || event.clientY < rect.top
-        || event.clientY > rect.bottom
-      ) return;
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom
+      )
+        return;
 
       event.preventDefault();
       if (pointerFocus === "target") {
@@ -251,10 +223,9 @@ function useDirectActivation(
       }
       onActivateRef.current();
       if (
-        pointerFocus === "release-after-activation"
-        && press.releaseFocusTarget
-        && event.currentTarget.ownerDocument.activeElement
-          === press.releaseFocusTarget
+        pointerFocus === "release-after-activation" &&
+        press.releaseFocusTarget &&
+        event.currentTarget.ownerDocument.activeElement === press.releaseFocusTarget
       ) {
         press.releaseFocusTarget.blur();
       }
@@ -266,10 +237,7 @@ function useDirectActivation(
       // detail=0 identifies keyboard, assistive-technology and programmatic
       // activation. Keep their focus position; only a physical pointer close
       // should retire the target focus after the action.
-      if (
-        pointerFocus === "release-after-activation"
-        && event.detail !== 0
-      ) {
+      if (pointerFocus === "release-after-activation" && event.detail !== 0) {
         event.currentTarget.blur();
       }
     }
@@ -292,24 +260,10 @@ function useDirectActivation(
  * release-after-activation keeps that focus stable through pointerup before
  * releasing it after a closing action. Keyboard focus is retained.
  */
-export const DirectActivationButton = forwardRef<
-  HTMLButtonElement,
-  DirectActivationButtonProps
->(function DirectActivationButton({
-  onActivate,
-  pointerFocus = "target",
-  ...buttonProps
-}, ref) {
-  const activationHandlers = useDirectActivation(
-    onActivate,
-    pointerFocus
-  );
+export const DirectActivationButton = forwardRef<HTMLButtonElement, DirectActivationButtonProps>(
+  function DirectActivationButton({ onActivate, pointerFocus = "target", ...buttonProps }, ref) {
+    const activationHandlers = useDirectActivation(onActivate, pointerFocus);
 
-  return (
-    <button
-      {...buttonProps}
-      {...activationHandlers}
-      ref={ref}
-    />
-  );
-});
+    return <button {...buttonProps} {...activationHandlers} ref={ref} />;
+  }
+);

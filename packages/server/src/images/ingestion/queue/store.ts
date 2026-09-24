@@ -1,8 +1,5 @@
 import { appConfig } from "@imageshow/shared";
-import {
-  metadataFromHashReply,
-  parseStoredIngestionSession
-} from "../sessions/codec.ts";
+import { metadataFromHashReply, parseStoredIngestionSession } from "../sessions/codec.ts";
 import {
   ingestionQueueStructureError,
   type IngestionSessionCommandRunner
@@ -48,14 +45,14 @@ export async function readIngestionQueueSnapshot(
   const excludeItems = options.excludeItems ?? [];
   const includeItems = options.includeItems ?? [];
   if (
-    !Number.isSafeInteger(offset)
-    || offset < 0
-    || !Number.isSafeInteger(limit)
-    || limit < 0
-    || limit > appConfig.ingestionRuntime.snapshotMaxItems
-    || excludeItems.length > appConfig.ingestion.batchHardLimit
-    || includeItems.length > appConfig.ingestionRuntime.snapshotMaxItems
-    || limit + includeItems.length > appConfig.ingestionRuntime.snapshotMaxItems
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    !Number.isSafeInteger(limit) ||
+    limit < 0 ||
+    limit > appConfig.ingestionRuntime.snapshotMaxItems ||
+    excludeItems.length > appConfig.ingestion.batchHardLimit ||
+    includeItems.length > appConfig.ingestionRuntime.snapshotMaxItems ||
+    limit + includeItems.length > appConfig.ingestionRuntime.snapshotMaxItems
   ) {
     throw new RangeError("Redis ingestion snapshot range is invalid");
   }
@@ -96,23 +93,17 @@ export async function readIngestionQueueSnapshot(
   }
   const metadataEnd = 2 + metadataLength;
   const metadata = metadataFromHashReply(reply.slice(2, metadataEnd));
-  const itemCount = redisReplyInteger(
-    reply[metadataEnd],
-    "queue snapshot item count"
-  );
+  const itemCount = redisReplyInteger(reply[metadataEnd], "queue snapshot item count");
   const itemStart = metadataEnd + 1;
   const itemEnd = itemStart + itemCount;
   const serialized = reply.slice(itemStart, itemEnd);
-  const staleCount = redisReplyInteger(
-    reply[itemEnd],
-    "queue snapshot stale item count"
-  );
+  const staleCount = redisReplyInteger(reply[itemEnd], "queue snapshot stale item count");
   const staleValues = reply.slice(itemEnd + 1);
   if (
-    itemCount < 0
-    || serialized.length !== itemCount
-    || staleCount < 0
-    || staleValues.length !== staleCount * 2
+    itemCount < 0 ||
+    serialized.length !== itemCount ||
+    staleCount < 0 ||
+    staleValues.length !== staleCount * 2
   ) {
     throw new Error("Redis ingestion snapshot returned an invalid item count");
   }
@@ -120,18 +111,12 @@ export async function readIngestionQueueSnapshot(
     metadata,
     offset,
     limit,
-    items: serialized.map((item) => parseStoredIngestionSession(
-      redisReplyString(item, "queue snapshot item")
-    )),
+    items: serialized.map((item) =>
+      parseStoredIngestionSession(redisReplyString(item, "queue snapshot item"))
+    ),
     staleItems: Array.from({ length: staleCount }, (_value, index) => ({
-      session_id: redisReplyString(
-        staleValues[index * 2],
-        "queue snapshot stale session id"
-      ),
-      image_id: redisReplyString(
-        staleValues[index * 2 + 1],
-        "queue snapshot stale image id"
-      )
+      session_id: redisReplyString(staleValues[index * 2], "queue snapshot stale session id"),
+      image_id: redisReplyString(staleValues[index * 2 + 1], "queue snapshot stale image id")
     }))
   };
 }
@@ -145,16 +130,17 @@ export async function scanIngestionQueueAction(
   limit = appConfig.ingestionRuntime.queueActionBatchSize
 ) {
   if (
-    !Number.isSafeInteger(maximumOrder)
-    || maximumOrder < 0
-    || !Number.isSafeInteger(cursor)
-    || cursor < 0
-    || cursor > maximumOrder
-    || (maximumOrder === 0 ? cursor !== 0 : cursor < 1)
-    || !Number.isSafeInteger(limit)
-    || limit < 1
-    || limit > appConfig.ingestionRuntime.queueActionBatchSize
-  ) throw new RangeError("Redis ingestion action scan range is invalid");
+    !Number.isSafeInteger(maximumOrder) ||
+    maximumOrder < 0 ||
+    !Number.isSafeInteger(cursor) ||
+    cursor < 0 ||
+    cursor > maximumOrder ||
+    (maximumOrder === 0 ? cursor !== 0 : cursor < 1) ||
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > appConfig.ingestionRuntime.queueActionBatchSize
+  )
+    throw new RangeError("Redis ingestion action scan range is invalid");
   const raw = await run(
     "imageshowScanIngestionQueueAction",
     ingestionOwnerQueueKey(owner, queue),
@@ -177,28 +163,23 @@ export async function scanIngestionQueueAction(
     throw new Error("Redis ingestion action scan returned an invalid shape");
   }
   const count = redisReplyInteger(reply[1], "queue action scan count");
-  const hasMore = redisReplyInteger(
-    reply[2],
-    "queue action scan continuation"
-  );
+  const hasMore = redisReplyInteger(reply[2], "queue action scan continuation");
   const nextCursor = redisReplyInteger(reply[3], "queue action scan cursor");
   const serialized = reply.slice(4);
   if (
-    count < 0
-    || count > limit
-    || serialized.length !== count
-    || (hasMore !== 0 && hasMore !== 1)
-    || (hasMore === 0 && nextCursor !== 0)
-    || (hasMore === 1 && (
-      nextCursor <= cursor || nextCursor > maximumOrder
-    ))
+    count < 0 ||
+    count > limit ||
+    serialized.length !== count ||
+    (hasMore !== 0 && hasMore !== 1) ||
+    (hasMore === 0 && nextCursor !== 0) ||
+    (hasMore === 1 && (nextCursor <= cursor || nextCursor > maximumOrder))
   ) {
     throw new Error("Redis ingestion action scan returned invalid bounds");
   }
   return {
-    items: serialized.map((item) => parseStoredIngestionSession(
-      redisReplyString(item, "queue action scan item")
-    )),
+    items: serialized.map((item) =>
+      parseStoredIngestionSession(redisReplyString(item, "queue action scan item"))
+    ),
     nextCursor: hasMore === 1 ? nextCursor : null
   };
 }
@@ -210,14 +191,12 @@ export async function deleteStoredCompletedReceipts(
   receipts: readonly CompletedIngestionReceipt[]
 ) {
   if (
-    receipts.length < 1
-    || receipts.length > appConfig.ingestionRuntime
-      .snapshotStaleReceiptCleanupBudget
-    || receipts.some((receipt) => (
-      receipt.owner !== owner
-      || receipt.queue !== queue
-      || receipt.status !== "completed"
-    ))
+    receipts.length < 1 ||
+    receipts.length > appConfig.ingestionRuntime.snapshotStaleReceiptCleanupBudget ||
+    receipts.some(
+      (receipt) =>
+        receipt.owner !== owner || receipt.queue !== queue || receipt.status !== "completed"
+    )
   ) {
     throw new RangeError("Stale completed receipt batch is invalid");
   }
@@ -231,18 +210,17 @@ export async function deleteStoredCompletedReceipts(
     ingestionCanonicalKeyPrefix(owner),
     owner,
     queue,
-    JSON.stringify(receipts.map((receipt) => ({
-      session_id: receipt.session_id,
-      image_id: receipt.image_id,
-      version: receipt.version
-    }))),
+    JSON.stringify(
+      receipts.map((receipt) => ({
+        session_id: receipt.session_id,
+        image_id: receipt.image_id,
+        version: receipt.version
+      }))
+    ),
     appConfig.ingestionRuntime.snapshotStaleReceiptCleanupBudget
   );
   const reply = redisReplyArray(raw, "stale completed receipt cleanup");
-  const status = redisReplyInteger(
-    reply[0],
-    "stale completed receipt cleanup status"
-  );
+  const status = redisReplyInteger(reply[0], "stale completed receipt cleanup status");
   if (status === 0) return { removed: 0, metadata: null };
   if (status !== 1) {
     throw new Error("Redis ingestion stale receipt cleanup returned unknown status");
@@ -265,13 +243,13 @@ async function discoverIngestionSessionPage(
   runnableTail = 0
 ) {
   if (
-    !Number.isSafeInteger(bound)
-    || bound < 0
-    || !Number.isSafeInteger(runnableTail)
-    || runnableTail < 0
-    || !Number.isSafeInteger(limit)
-    || limit < 1
-    || limit > maximumLimit
+    !Number.isSafeInteger(bound) ||
+    bound < 0 ||
+    !Number.isSafeInteger(runnableTail) ||
+    runnableTail < 0 ||
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > maximumLimit
   ) {
     throw new RangeError("Redis ingestion discovery range is invalid");
   }
@@ -294,48 +272,33 @@ async function discoverIngestionSessionPage(
   const count = redisReplyInteger(reply[0], "session discovery count");
   const total = redisReplyInteger(reply[1], "session discovery total");
   const scanned = redisReplyInteger(reply[2], "session discovery scanned count");
-  const frozenTailScore = redisReplyInteger(
-    reply[3],
-    "session discovery frozen tail"
-  );
-  const lastScannedScore = redisReplyInteger(
-    reply[4],
-    "session discovery cursor"
-  );
+  const frozenTailScore = redisReplyInteger(reply[3], "session discovery frozen tail");
+  const lastScannedScore = redisReplyInteger(reply[4], "session discovery cursor");
   if (
-    count < 0
-    || total < 0
-    || total < scanned
-    || scanned < count
-    || scanned > limit
-    || frozenTailScore < 0
-    || lastScannedScore < 0
-    || (mode === "runnable" && (
-      frozenTailScore < bound
-      || lastScannedScore < bound
-      || lastScannedScore > frozenTailScore
-      || (scanned > 0 && lastScannedScore === bound && count > 0)
-    ))
-    || (mode !== "runnable" && (
-      frozenTailScore !== 0 || lastScannedScore !== 0
-    ))
-    || reply.length !== 5 + count * 2
+    count < 0 ||
+    total < 0 ||
+    total < scanned ||
+    scanned < count ||
+    scanned > limit ||
+    frozenTailScore < 0 ||
+    lastScannedScore < 0 ||
+    (mode === "runnable" &&
+      (frozenTailScore < bound ||
+        lastScannedScore < bound ||
+        lastScannedScore > frozenTailScore ||
+        (scanned > 0 && lastScannedScore === bound && count > 0))) ||
+    (mode !== "runnable" && (frozenTailScore !== 0 || lastScannedScore !== 0)) ||
+    reply.length !== 5 + count * 2
   ) {
     throw new Error("Redis ingestion discovery returned an invalid shape");
   }
   const items = Array.from({ length: count }, (_, index) => {
-    const canonicalKey = redisReplyString(
-      reply[5 + index * 2],
-      "discovery key"
+    const canonicalKey = redisReplyString(reply[5 + index * 2], "discovery key");
+    const session = parseStoredIngestionSession(
+      redisReplyString(reply[6 + index * 2], "discovery snapshot")
     );
-    const session = parseStoredIngestionSession(redisReplyString(
-      reply[6 + index * 2],
-      "discovery snapshot"
-    ));
-    if (canonicalKey !== ingestionCanonicalKey(
-      session.owner,
-      session.session_id
-    )) throw ingestionQueueStructureError();
+    if (canonicalKey !== ingestionCanonicalKey(session.owner, session.session_id))
+      throw ingestionQueueStructureError();
     return { canonicalKey, session };
   });
   return {
@@ -357,15 +320,9 @@ async function discoverIngestionSessions(
   maximumLimit: number,
   runnableTail = 0
 ) {
-  return (await discoverIngestionSessionPage(
-    run,
-    key,
-    mode,
-    bound,
-    limit,
-    maximumLimit,
-    runnableTail
-  )).items;
+  return (
+    await discoverIngestionSessionPage(run, key, mode, bound, limit, maximumLimit, runnableTail)
+  ).items;
 }
 
 export function discoverRunnableIngestionSessions(

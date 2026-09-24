@@ -6,9 +6,7 @@ import { NumberInput } from "../../../components/form/NumberInput.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
 import { storageBackendDisplay, storageTypeLabel } from "../../../lib/ui/select-options.js";
 import type { S3Settings, StorageBackendAdmin } from "../../../lib/types.js";
-import {
-  useAsyncActionStatus
-} from "../../../hooks/useAsyncActionStatus.js";
+import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import {
   storageBackendEditConfigPatch,
   storageBackendS3AfterSuccessfulSave,
@@ -24,7 +22,13 @@ const storageTestPresentation = {
 
 type StorageSaveOperation = "create" | "save";
 
-export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
+export function StorageBackendModal({
+  target,
+  busy,
+  onClose,
+  onSave,
+  onTest
+}: {
   target: StorageBackendAdmin | "new";
   busy: string;
   onClose: () => void;
@@ -35,9 +39,7 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
   const backend = creating ? null : target;
   const isLocal = backend?.type === "local";
   const locationLocked = Boolean(
-    backend?.image_count
-      || backend?.ingestion_session_count
-      || backend?.cleanup_job_count
+    backend?.image_count || backend?.ingestion_session_count || backend?.cleanup_job_count
   );
   const locationUsage = backend
     ? [
@@ -45,13 +47,11 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
         backend.ingestion_session_count
           ? `${backend.ingestion_session_count} 个未清理内容接入会话`
           : "",
-        backend.cleanup_job_count
-          ? `${backend.cleanup_job_count} 个旧对象删除任务`
-          : "",
-        backend.failed_cleanup_job_count
-          ? `${backend.failed_cleanup_job_count} 个删除任务失败`
-          : ""
-      ].filter(Boolean).join("、")
+        backend.cleanup_job_count ? `${backend.cleanup_job_count} 个旧对象删除任务` : "",
+        backend.failed_cleanup_job_count ? `${backend.failed_cleanup_job_count} 个删除任务失败` : ""
+      ]
+        .filter(Boolean)
+        .join("、")
     : "";
   const locationUnlockGuidance = backend
     ? [
@@ -62,16 +62,18 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
           : backend.cleanup_job_count
             ? "等待旧对象删除任务完成"
             : ""
-      ].filter(Boolean).join("，并")
+      ]
+        .filter(Boolean)
+        .join("，并")
     : "";
   const [slug, setSlug] = useState(backend?.slug ?? "");
   const [displayName, setDisplayName] = useState(backend?.display_name ?? "");
-  const [localPublicUrl, setLocalPublicUrl] = useState(backend?.type === "local" ? backend.public_base_url : "");
-  const [s3, setS3] = useState<S3Settings>(() => (
-    storageBackendS3FormSettings(
-      backend?.type === "s3" ? backend : undefined
-    )
-  ));
+  const [localPublicUrl, setLocalPublicUrl] = useState(
+    backend?.type === "local" ? backend.public_base_url : ""
+  );
+  const [s3, setS3] = useState<S3Settings>(() =>
+    storageBackendS3FormSettings(backend?.type === "s3" ? backend : undefined)
+  );
   const effectiveType = creating ? "s3" : backend!.type;
   const titleId = useId();
   const descriptionId = useId();
@@ -86,9 +88,7 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
   const saveStatus = useAsyncActionStatus();
 
   const isCreateForm = creating && createdSlug === null;
-  const formBusy = Boolean(busy)
-    || connectionTest.pending
-    || saveStatus.pending;
+  const formBusy = Boolean(busy) || connectionTest.pending || saveStatus.pending;
   const savePresentation = {
     idle: {
       icon: "save-3-line",
@@ -120,10 +120,13 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
   const submit = async () => {
     const creatingNow = isCreateForm;
     setSaveOperation(creatingNow ? "create" : "save");
-    const targetSlug = creatingNow ? slug : createdSlug ?? backend!.slug;
+    const targetSlug = creatingNow ? slug : (createdSlug ?? backend!.slug);
     const payload = creatingNow
       ? { slug, display_name: displayName, s3 }
-      : { display_name: displayName, ...(isLocal ? { public_base_url: localPublicUrl } : configPayload()) };
+      : {
+          display_name: displayName,
+          ...(isLocal ? { public_base_url: localPublicUrl } : configPayload())
+        };
     const succeeded = await saveStatus.run(() => onSave(targetSlug, payload, creatingNow));
     if (succeeded) {
       setS3(storageBackendS3AfterSuccessfulSave);
@@ -149,12 +152,23 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
       {({ requestClose }) => (
         <form
           className="operation-modal storage-edit-modal"
-          onSubmit={(event) => { event.preventDefault(); void submit(); }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
         >
           <header>
             <div>
-              <h2 id={titleId}>{isCreateForm ? "新增存储后端" : `编辑：${storageBackendDisplay(backend ?? { slug: createdSlug!, display_name: displayName })}`}</h2>
-              {!isCreateForm && <p id={descriptionId}>{createdSlug ?? backend!.slug} · {storageTypeLabel(effectiveType)}</p>}
+              <h2 id={titleId}>
+                {isCreateForm
+                  ? "新增存储后端"
+                  : `编辑：${storageBackendDisplay(backend ?? { slug: createdSlug!, display_name: displayName })}`}
+              </h2>
+              {!isCreateForm && (
+                <p id={descriptionId}>
+                  {createdSlug ?? backend!.slug} · {storageTypeLabel(effectiveType)}
+                </p>
+              )}
             </div>
             <button
               ref={closeButtonRef}
@@ -191,21 +205,34 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
               <>
                 <label>
                   公开 URL
-                  <input value={localPublicUrl} onChange={(event) => setLocalPublicUrl(event.target.value)}
-                    placeholder="https://images.example.com" />
+                  <input
+                    value={localPublicUrl}
+                    onChange={(event) => setLocalPublicUrl(event.target.value)}
+                    placeholder="https://images.example.com"
+                  />
                 </label>
-                <p className="hint">完整图与缩略图共用，可包含路径前缀；留空使用主站地址。独立 Host 的图片请求由本机读取本地存储。</p>
+                <p className="hint">
+                  完整图与缩略图共用，可包含路径前缀；留空使用主站地址。独立 Host
+                  的图片请求由本机读取本地存储。
+                </p>
               </>
             ) : (
               <>
                 {locationLocked && (
                   <p className="notice-line" role="note">
-                    此后端仍有 {locationUsage}。Bucket / 根目录已锁定；
-                    如需改变请先{locationUnlockGuidance}。Endpoint 仍可修改，
+                    此后端仍有 {locationUsage}。Bucket / 根目录已锁定； 如需改变请先
+                    {locationUnlockGuidance}。Endpoint 仍可修改，
                     保存时服务端会证明新旧地址指向同一命名空间；验证失败会保留原配置。
                   </p>
                 )}
-                <S3Fields value={s3} onChange={setS3} configured={backend?.type === "s3" ? backend.s3.secret_access_key_configured : undefined} locationLocked={locationLocked} />
+                <S3Fields
+                  value={s3}
+                  onChange={setS3}
+                  configured={
+                    backend?.type === "s3" ? backend.s3.secret_access_key_configured : undefined
+                  }
+                  locationLocked={locationLocked}
+                />
               </>
             )}
           </div>
@@ -222,7 +249,9 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
               />
             </div>
             <div className="modal-footer-actions">
-              <button type="button" disabled={formBusy} onClick={() => requestClose()}>取消</button>
+              <button type="button" disabled={formBusy} onClick={() => requestClose()}>
+                取消
+              </button>
               <AsyncActionButton
                 className="button"
                 type="submit"
@@ -238,28 +267,46 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
   );
 }
 
-function S3Fields({ value, onChange, configured, locationLocked }: { value: S3Settings; onChange: (next: S3Settings) => void; configured?: boolean; locationLocked: boolean }) {
+function S3Fields({
+  value,
+  onChange,
+  configured,
+  locationLocked
+}: {
+  value: S3Settings;
+  onChange: (next: S3Settings) => void;
+  configured?: boolean;
+  locationLocked: boolean;
+}) {
   const patch = (next: Partial<S3Settings>) => onChange({ ...value, ...next });
   return (
     <>
       <label>
         Endpoint
-        <input value={value.endpoint} onChange={(event) => patch({ endpoint: event.target.value })} placeholder="（https://）s3.example.com" />
-      </label>
-      <label>
-        Region
         <input
-          value={value.region}
-          onChange={(event) => patch({ region: event.target.value })}
+          value={value.endpoint}
+          onChange={(event) => patch({ endpoint: event.target.value })}
+          placeholder="（https://）s3.example.com"
         />
       </label>
       <label>
+        Region
+        <input value={value.region} onChange={(event) => patch({ region: event.target.value })} />
+      </label>
+      <label>
         Bucket
-        <input value={value.bucket} onChange={(event) => patch({ bucket: event.target.value })} disabled={locationLocked} />
+        <input
+          value={value.bucket}
+          onChange={(event) => patch({ bucket: event.target.value })}
+          disabled={locationLocked}
+        />
       </label>
       <label>
         Access Key
-        <input value={value.access_key_id} onChange={(event) => patch({ access_key_id: event.target.value })} />
+        <input
+          value={value.access_key_id}
+          onChange={(event) => patch({ access_key_id: event.target.value })}
+        />
       </label>
       <label>
         Secret Key
@@ -277,14 +324,14 @@ function S3Fields({ value, onChange, configured, locationLocked }: { value: S3Se
         onChange={patch}
       />
       <label>
-        <input type="checkbox" checked={value.force_path_style} onChange={(event) => patch({ force_path_style: event.target.checked })} />
+        <input
+          type="checkbox"
+          checked={value.force_path_style}
+          onChange={(event) => patch({ force_path_style: event.target.checked })}
+        />
         Path-style
       </label>
-      <StorageRequestTimeoutFields
-        value={value}
-        onChange={patch}
-        connectLabel="连接超时（秒）"
-      />
+      <StorageRequestTimeoutFields value={value} onChange={patch} connectLabel="连接超时（秒）" />
     </>
   );
 }
@@ -294,8 +341,15 @@ function StorageRequestTimeoutFields({
   onChange,
   connectLabel
 }: {
-  value: Pick<S3Settings, "connect_timeout_seconds" | "idle_timeout_seconds" | "task_timeout_seconds">;
-  onChange: (patch: Partial<Pick<S3Settings, "connect_timeout_seconds" | "idle_timeout_seconds" | "task_timeout_seconds">>) => void;
+  value: Pick<
+    S3Settings,
+    "connect_timeout_seconds" | "idle_timeout_seconds" | "task_timeout_seconds"
+  >;
+  onChange: (
+    patch: Partial<
+      Pick<S3Settings, "connect_timeout_seconds" | "idle_timeout_seconds" | "task_timeout_seconds">
+    >
+  ) => void;
   connectLabel: string;
 }) {
   return (
@@ -306,9 +360,11 @@ function StorageRequestTimeoutFields({
           min={1}
           max={120}
           value={value.connect_timeout_seconds}
-          onChange={(connect_timeout_seconds) => onChange({
-            connect_timeout_seconds
-          })}
+          onChange={(connect_timeout_seconds) =>
+            onChange({
+              connect_timeout_seconds
+            })
+          }
         />
       </label>
       <label>
@@ -317,9 +373,11 @@ function StorageRequestTimeoutFields({
           min={1}
           max={300}
           value={value.idle_timeout_seconds}
-          onChange={(idle_timeout_seconds) => onChange({
-            idle_timeout_seconds
-          })}
+          onChange={(idle_timeout_seconds) =>
+            onChange({
+              idle_timeout_seconds
+            })
+          }
         />
       </label>
       <label>
@@ -328,9 +386,11 @@ function StorageRequestTimeoutFields({
           min={15}
           max={3600}
           value={value.task_timeout_seconds}
-          onChange={(task_timeout_seconds) => onChange({
-            task_timeout_seconds
-          })}
+          onChange={(task_timeout_seconds) =>
+            onChange({
+              task_timeout_seconds
+            })
+          }
         />
       </label>
     </>
@@ -346,10 +406,7 @@ function StorageLocationFields({
   rootPath: string;
   publicBaseUrl: string;
   locationLocked: boolean;
-  onChange: (patch: {
-    root_path?: string;
-    public_base_url?: string;
-  }) => void;
+  onChange: (patch: { root_path?: string; public_base_url?: string }) => void;
 }) {
   return (
     <>
@@ -366,9 +423,11 @@ function StorageLocationFields({
         Public Base URL
         <input
           value={publicBaseUrl}
-          onChange={(event) => onChange({
-            public_base_url: event.target.value
-          })}
+          onChange={(event) =>
+            onChange({
+              public_base_url: event.target.value
+            })
+          }
           placeholder="https://cdn.example.com"
         />
       </label>

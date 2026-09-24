@@ -4,11 +4,7 @@ import {
   type AdminImageSort,
   type PublicImageView
 } from "@imageshow/shared/browser";
-import {
-  encodeImageCursor,
-  type ImageBrowseContext,
-  type ImageBrowsePosition
-} from "../cursor.ts";
+import { encodeImageCursor, type ImageBrowseContext, type ImageBrowsePosition } from "../cursor.ts";
 import {
   adminImageListPresentationColumns,
   adminImageListPresentationColumnsWithTags,
@@ -68,11 +64,13 @@ export async function fetchPublicImageCardPage(
   };
   const count = parameter(limit + 1);
   const columns = [
-    "id", "title", "width", "height", "storage_slug",
+    "id",
+    "title",
+    "width",
+    "height",
+    "storage_slug",
     "image_time::text AS cursor_image_time",
-    ...(view === "gallery" ? [
-      "device", "brightness", "theme", "author", "image_time"
-    ] : [])
+    ...(view === "gallery" ? ["device", "brightness", "theme", "author", "image_time"] : [])
   ].join(", ");
   let selection: string;
   let ordering: string;
@@ -82,26 +80,29 @@ export async function fetchPublicImageCardPage(
       ? `(right(id::text, 12), id) > (${parameter(position.id.slice(-12))}, ${parameter(position.id)}::uuid)`
       : null;
     const phases = position?.phase === 1 ? [1] : [0, 1];
-    selection = phases.map((phase) => {
-      const clauses = [
-        ...where,
-        `right(id::text, 12) ${phase === 0 ? ">=" : "<"} ${start}`,
-        ...(boundary && phase === position?.phase ? [boundary] : [])
-      ];
-      return `(SELECT ${columns}, right(id::text, 12) AS suffix, ${phase} AS phase
+    selection = phases
+      .map((phase) => {
+        const clauses = [
+          ...where,
+          `right(id::text, 12) ${phase === 0 ? ">=" : "<"} ${start}`,
+          ...(boundary && phase === position?.phase ? [boundary] : [])
+        ];
+        return `(SELECT ${columns}, right(id::text, 12) AS suffix, ${phase} AS phase
                  FROM metadata
                 WHERE ${clauses.join(" AND ")}
                 ORDER BY right(id::text, 12), id
                 LIMIT ${count})`;
-    }).join(" UNION ALL ");
+      })
+      .join(" UNION ALL ");
     ordering = "phase, suffix, id";
   } else {
     const direction = context.order === "oldest" ? "ASC" : "DESC";
     const comparison = context.order === "oldest" ? ">" : "<";
     const clauses = [...where];
-    if (position) clauses.push(
-      `(image_time, id) ${comparison} (${parameter(position.imageTime)}::timestamptz, ${parameter(position.id)}::uuid)`
-    );
+    if (position)
+      clauses.push(
+        `(image_time, id) ${comparison} (${parameter(position.imageTime)}::timestamptz, ${parameter(position.id)}::uuid)`
+      );
     selection = `SELECT ${columns}, image_time AS sort_time
                    FROM metadata WHERE ${clauses.join(" AND ")}
                   ORDER BY image_time ${direction}, id ${direction} LIMIT ${count}`;
@@ -114,9 +115,7 @@ export async function fetchPublicImageCardPage(
   const result = await reader.query(sql, params);
   const rows = result.rows.slice(0, limit);
   const last = rows.at(-1) as PositionRow | undefined;
-  const nextCursor = result.rows.length > limit && last
-    ? encodeImageCursor(last, context)
-    : null;
+  const nextCursor = result.rows.length > limit && last ? encodeImageCursor(last, context) : null;
   return view === "show"
     ? { view, nextCursor, rows: rows as PublicShowImageRecord[] }
     : { view, nextCursor, rows: rows as Array<PublicImageCardRecord & { tags: string[] }> };

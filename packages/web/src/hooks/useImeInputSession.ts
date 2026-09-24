@@ -44,8 +44,7 @@ export function useImeInputSession(settledValue: string) {
       return false;
     },
     endComposition(input: InputElement) {
-      const belongsToCurrentSession =
-        stateRef.current.active && stateRef.current.composing;
+      const belongsToCurrentSession = stateRef.current.active && stateRef.current.composing;
       stateRef.current.composing = false;
       if (belongsToCurrentSession) return true;
       restoreSettledValue(input);

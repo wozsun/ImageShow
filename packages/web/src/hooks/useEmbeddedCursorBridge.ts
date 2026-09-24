@@ -25,9 +25,9 @@ export function useEmbeddedCursorBridge(enabled: boolean) {
     if (!enabled || window.parent === window) return;
 
     const parent = window.parent;
-    const bridgeId = Array.from(crypto.getRandomValues(new Uint32Array(4)), (value) => (
+    const bridgeId = Array.from(crypto.getRandomValues(new Uint32Array(4)), (value) =>
       value.toString(16).padStart(8, "0")
-    )).join("");
+    ).join("");
     const root = document.documentElement;
     const finePointer = window.matchMedia("(pointer: fine)");
     const listeners = new AbortController();
@@ -55,8 +55,12 @@ export function useEmbeddedCursorBridge(enabled: boolean) {
       inside = false;
     };
     const syncActive = () => {
-      active = connected && finePointer.matches && !pageHidden
-        && document.visibilityState === "visible" && !document.fullscreenElement;
+      active =
+        connected &&
+        finePointer.matches &&
+        !pageHidden &&
+        document.visibilityState === "visible" &&
+        !document.fullscreenElement;
       if (active) root.setAttribute(cursorAttribute, "host");
       else {
         root.removeAttribute(cursorAttribute);
@@ -70,12 +74,21 @@ export function useEmbeddedCursorBridge(enabled: boolean) {
       if (parentOrigin !== null && event.origin !== parentOrigin) return;
       const data = event.data;
       if (!data || typeof data !== "object" || Array.isArray(data)) return;
-      if (!("channel" in data) || data.channel !== channel
-        || !("version" in data) || data.version !== version || !("type" in data)) return;
+      if (
+        !("channel" in data) ||
+        data.channel !== channel ||
+        !("version" in data) ||
+        data.version !== version ||
+        !("type" in data)
+      )
+        return;
       if (data.type === "hello") {
         announce(event.origin);
-      } else if ((data.type === "connect" || data.type === "disconnect")
-        && "bridgeId" in data && data.bridgeId === bridgeId) {
+      } else if (
+        (data.type === "connect" || data.type === "disconnect") &&
+        "bridgeId" in data &&
+        data.bridgeId === bridgeId
+      ) {
         parentOrigin = event.origin;
         connected = data.type === "connect";
         syncActive();
@@ -97,8 +110,12 @@ export function useEmbeddedCursorBridge(enabled: boolean) {
         viewportHeight: window.innerHeight
       };
       // Captured drags can continue outside the iframe's visible viewport.
-      if (sample.x < 0 || sample.y < 0
-        || sample.x >= sample.viewportWidth || sample.y >= sample.viewportHeight) {
+      if (
+        sample.x < 0 ||
+        sample.y < 0 ||
+        sample.x >= sample.viewportWidth ||
+        sample.y >= sample.viewportHeight
+      ) {
         leave();
         return;
       }

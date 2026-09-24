@@ -30,10 +30,7 @@ import {
 
 const SCAN_BATCH_SIZE = 1_000;
 
-export async function clearReadyImageCacheData(
-  client: Redis,
-  signal?: AbortSignal
-) {
+export async function clearReadyImageCacheData(client: Redis, signal?: AbortSignal) {
   // Deleting while SCAN advances can move hash-table buckets. Repeat complete
   // passes until one observes only the retained meta key, so a rebuild cannot
   // accidentally publish over an owned key skipped by an earlier pass.
@@ -51,9 +48,7 @@ export async function clearReadyImageCacheData(
         SCAN_BATCH_SIZE
       );
       cursor = nextCursor;
-      const keys = [...new Set(scanned)].filter((key) => (
-        key !== READY_IMAGE_META_KEY
-      ));
+      const keys = [...new Set(scanned)].filter((key) => key !== READY_IMAGE_META_KEY);
       for (const key of keys) assertReadyImageCacheKey(key);
       if (keys.length) {
         removedInPass += await client.unlink(...keys);
@@ -70,10 +65,9 @@ async function queueHashEntries(
 ) {
   for (const chunk of chunkHashEntries(entries)) {
     const flat = chunk.flat();
-    await writer.queue(
-      estimatedRedisBytes(key, ...flat),
-      (pipeline) => { pipeline.hset(key, ...flat); }
-    );
+    await writer.queue(estimatedRedisBytes(key, ...flat), (pipeline) => {
+      pipeline.hset(key, ...flat);
+    });
   }
 }
 
@@ -128,21 +122,15 @@ export async function writeReadyImageCacheBatch(
     sortedSetEntries(allIndexMembers)
   )) {
     const members = entries.flat();
-    await writer.queue(
-      estimatedRedisBytes(READY_IMAGE_ALL_INDEX_KEY, ...members),
-      (pipeline) => {
-        pipeline.zadd(READY_IMAGE_ALL_INDEX_KEY, ...members);
-      }
-    );
+    await writer.queue(estimatedRedisBytes(READY_IMAGE_ALL_INDEX_KEY, ...members), (pipeline) => {
+      pipeline.zadd(READY_IMAGE_ALL_INDEX_KEY, ...members);
+    });
   }
   await writer.flush();
   signal?.throwIfAborted();
 }
 
-export async function measureReadyImageCoreMemory(
-  client: Redis,
-  signal?: AbortSignal
-) {
+export async function measureReadyImageCoreMemory(client: Redis, signal?: AbortSignal) {
   signal?.throwIfAborted();
   const pipeline = client.pipeline();
   for (const key of READY_IMAGE_CORE_KEYS) {

@@ -19,10 +19,7 @@ const statusLabels: Record<IngestionJob["status"], string> = {
 
 export function ingestionJobStatusLabel(job: IngestionJob) {
   if (job.failureStage === "cancel") return "取消失败";
-  if (
-    ingestionJobNeedsDuplicateConfirmation(job)
-    && (job.duplicateCount ?? 0) > 0
-  ) {
+  if (ingestionJobNeedsDuplicateConfirmation(job) && (job.duplicateCount ?? 0) > 0) {
     return "待确认";
   }
   return statusLabels[job.status];
@@ -49,19 +46,14 @@ export function ingestionJobStatusDetail(job: IngestionJob): string | null {
       return "处理图片并生成缩略图";
     case "ready":
       if (job.duplicateDecision === "confirmed") return "已确认保留副本";
-      if (
-        ingestionJobNeedsDuplicateConfirmation(job)
-        && (job.duplicateCount ?? 0) > 0
-      ) {
+      if (ingestionJobNeedsDuplicateConfirmation(job) && (job.duplicateCount ?? 0) > 0) {
         return "发现重复图片，请确认";
       }
       return "图片处理完成，等待提交";
     case "commit-queued":
       return "等待提交";
     case "committing":
-      return job.resultState === "recovering"
-        ? "正在确认提交结果"
-        : "写入图库中";
+      return job.resultState === "recovering" ? "正在确认提交结果" : "写入图库中";
     case "finalized":
       if (job.resultState === "recovering") return "正在确认提交结果";
       if (job.resultState === "error") {

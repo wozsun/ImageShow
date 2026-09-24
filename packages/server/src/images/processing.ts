@@ -33,10 +33,10 @@ function unsupportedFileTypeError() {
 function normalizeSharpInputError(error: unknown): never {
   if (error instanceof ApiError) throw error;
   if (
-    typeof error === "object"
-    && error !== null
-    && "code" in error
-    && typeof error.code === "string"
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
   ) {
     throw error;
   }
@@ -45,12 +45,18 @@ function normalizeSharpInputError(error: unknown): never {
 
 function imageExtFromSharpMetadata(metadata: SharpMetadata): ImageExt | undefined {
   switch (metadata.format) {
-    case "jpeg": return "jpg";
-    case "png": return "png";
-    case "webp": return "webp";
-    case "gif": return "gif";
-    case "heif": return metadata.compression === "av1" ? "avif" : undefined;
-    default: return undefined;
+    case "jpeg":
+      return "jpg";
+    case "png":
+      return "png";
+    case "webp":
+      return "webp";
+    case "gif":
+      return "gif";
+    case "heif":
+      return metadata.compression === "av1" ? "avif" : undefined;
+    default:
+      return undefined;
   }
 }
 
@@ -79,17 +85,18 @@ async function storedImageMetadata(path: string): Promise<StoredImageMetadata> {
   const longEdge = Math.max(rawWidth, rawHeight);
   const limit = getIngestionMaxLongEdge();
   if (
-    !Number.isSafeInteger(rawWidth)
-    || !Number.isSafeInteger(rawHeight)
-    || rawWidth <= 0
-    || rawHeight <= 0
-    || longEdge > limit
+    !Number.isSafeInteger(rawWidth) ||
+    !Number.isSafeInteger(rawHeight) ||
+    rawWidth <= 0 ||
+    rawHeight <= 0 ||
+    longEdge > limit
   ) {
     throw new ApiError(400, "image_too_large", "图片尺寸超过限制", { limit });
   }
-  const rotated = typeof metadata.orientation === "number"
-    && metadata.orientation >= 5
-    && metadata.orientation <= 8;
+  const rotated =
+    typeof metadata.orientation === "number" &&
+    metadata.orientation >= 5 &&
+    metadata.orientation <= 8;
   return {
     ext,
     width: rotated ? rawHeight : rawWidth,
@@ -101,7 +108,12 @@ export async function createThumbnail(input: ImageInput) {
   const thumbnail = getThumbnailSettings();
   return sharp(input)
     .rotate()
-    .resize({ width: thumbnail.long_edge, height: thumbnail.long_edge, fit: "inside", withoutEnlargement: true })
+    .resize({
+      width: thumbnail.long_edge,
+      height: thumbnail.long_edge,
+      fit: "inside",
+      withoutEnlargement: true
+    })
     .webp({ quality: thumbnail.quality })
     .toBuffer();
 }
@@ -133,7 +145,11 @@ export type PreparedStoredImage = {
   transcoded: boolean;
 };
 
-export async function transcodeStoredImage(path: string, settings: StoredImageTranscodeSettings, signal?: AbortSignal): Promise<PreparedStoredImage> {
+export async function transcodeStoredImage(
+  path: string,
+  settings: StoredImageTranscodeSettings,
+  signal?: AbortSignal
+): Promise<PreparedStoredImage> {
   signal?.throwIfAborted();
   const [sourceSize, source] = await Promise.all([
     stat(path).then((value) => value.size),
@@ -141,9 +157,10 @@ export async function transcodeStoredImage(path: string, settings: StoredImageTr
   ]);
   signal?.throwIfAborted();
   // 小体积 WebP 且尺寸已达标时保留原字节，避免重复有损编码；缩略图仍重新生成，保证尺寸与配置一致。
-  const canSkip = source.ext === "webp"
-    && sourceSize < settings.skip_webp_under_kb * 1024
-    && Math.max(source.width, source.height) <= settings.max_long_edge;
+  const canSkip =
+    source.ext === "webp" &&
+    sourceSize < settings.skip_webp_under_kb * 1024 &&
+    Math.max(source.width, source.height) <= settings.max_long_edge;
   const thumbnailPromise = createThumbnail(path);
   const convertedPromise = canSkip
     ? readFile(path).then((buffer) => ({
@@ -191,22 +208,25 @@ export async function transcodeStoredImage(path: string, settings: StoredImageTr
   };
 }
 
-async function transcodeImageToWebp(input: ImageInput, settings: ImageTranscodeSettings, signal?: AbortSignal) {
+async function transcodeImageToWebp(
+  input: ImageInput,
+  settings: ImageTranscodeSettings,
+  signal?: AbortSignal
+) {
   signal?.throwIfAborted();
-  const pipeline = sharp(input)
-    .rotate()
-    .resize({
-      width: settings.max_long_edge,
-      height: settings.max_long_edge,
-      fit: "inside",
-      withoutEnlargement: true
-    });
+  const pipeline = sharp(input).rotate().resize({
+    width: settings.max_long_edge,
+    height: settings.max_long_edge,
+    fit: "inside",
+    withoutEnlargement: true
+  });
   const maxBytes = Math.floor(settings.max_size_kb * 1024);
   let quality = settings.quality;
   let lastDropMultiplier = 1;
   const encode = async (targetQuality: number) => {
     signal?.throwIfAborted();
-    const encoded = await pipeline.clone()
+    const encoded = await pipeline
+      .clone()
       .webp({ quality: targetQuality })
       .toBuffer({ resolveWithObject: true });
     signal?.throwIfAborted();

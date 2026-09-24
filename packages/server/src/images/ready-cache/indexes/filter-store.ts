@@ -5,9 +5,7 @@ import {
 } from "../redis/commands.ts";
 import { execRedisPipeline } from "../../../core/redis/pipeline.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
-import {
-  getReadyImageCacheCoordinatorStatus
-} from "../coordinator.ts";
+import { getReadyImageCacheCoordinatorStatus } from "../coordinator.ts";
 import {
   discardReadyImageDerivedResult,
   registerReadyImageDerivedResult,
@@ -16,32 +14,25 @@ import {
 import { READY_IMAGE_DERIVED_CACHE_POLICY } from "../derived/policy.ts";
 import { readReadyImageDerivedIndexSnapshot } from "../derived/index-snapshot.ts";
 import { withReadyImageCacheWriteFence } from "../sync/fence.ts";
-import {
-  readyImageFilterKey,
-  readyImageFilterMetaKey
-} from "../keys.ts";
+import { readyImageFilterKey, readyImageFilterMetaKey } from "../keys.ts";
 import type { ReadyImageCacheMeta } from "../model.ts";
-import {
-  readReadyImageSourceIndexStates,
-  type ReadyImageSourceIndexState
-} from "./attribute.ts";
+import { readReadyImageSourceIndexStates, type ReadyImageSourceIndexState } from "./attribute.ts";
 
 type ReadyImageResolvedIndex = {
   key: string;
   revision: string;
 };
 
-export type ReadyImageFilterIndex = ReadyImageResolvedIndex & (
-  | { kind: "core"; count: number; metaKey: null; instanceToken: null }
-  | { kind: "attribute"; count: number; metaKey: string; instanceToken: string }
-  | { kind: "filter"; count: number; metaKey: string; instanceToken: string }
-);
+export type ReadyImageFilterIndex = ReadyImageResolvedIndex &
+  (
+    | { kind: "core"; count: number; metaKey: null; instanceToken: null }
+    | { kind: "attribute"; count: number; metaKey: string; instanceToken: string }
+    | { kind: "filter"; count: number; metaKey: string; instanceToken: string }
+  );
 
 function currentRevision() {
   const status = getReadyImageCacheCoordinatorStatus();
-  return status.readable && status.meta?.state === "ready"
-    ? status.meta.appliedRevision
-    : null;
+  return status.readable && status.meta?.state === "ready" ? status.meta.appliedRevision : null;
 }
 
 export async function storeReadyImageFilterSetOperation(
@@ -55,8 +46,7 @@ export async function storeReadyImageFilterSetOperation(
     destination,
     sources,
     expectedMembers,
-    temporaryTtlSeconds:
-      READY_IMAGE_DERIVED_CACHE_POLICY.temporaryTtlSeconds
+    temporaryTtlSeconds: READY_IMAGE_DERIVED_CACHE_POLICY.temporaryTtlSeconds
   });
 }
 
@@ -77,13 +67,15 @@ export async function readReadyImageFilterIndex(
       await discardReadyImageDerivedResult(key, "filter");
       return null;
     }
-    if (!await touchReadyImageFilterResult({
-      key,
-      revision,
-      count: snapshot.count,
-      itemCount: snapshot.itemCount,
-      instanceToken: snapshot.instanceToken
-    })) {
+    if (
+      !(await touchReadyImageFilterResult({
+        key,
+        revision,
+        count: snapshot.count,
+        itemCount: snapshot.itemCount,
+        instanceToken: snapshot.instanceToken
+      }))
+    ) {
       await discardReadyImageDerivedResult(key, "filter");
       return null;
     }
@@ -125,12 +117,12 @@ export async function publishReadyImageFilterIndex(options: {
       const status = getReadyImageCacheCoordinatorStatus();
       const connection = getRedisConnectionState();
       if (
-        !status.readable
-        || status.meta?.state !== "ready"
-        || status.meta !== options.startingMeta
-        || status.meta.appliedRevision !== options.revision
-        || !connection.ready
-        || connection.epoch !== options.connectionEpoch
+        !status.readable ||
+        status.meta?.state !== "ready" ||
+        status.meta !== options.startingMeta ||
+        status.meta.appliedRevision !== options.revision ||
+        !connection.ready ||
+        connection.epoch !== options.connectionEpoch
       ) {
         return null;
       }
@@ -139,12 +131,12 @@ export async function publishReadyImageFilterIndex(options: {
         options.revision
       );
       if (
-        !publishedSourceStates
-        || [...options.sourceStates].some(([key, sourceState]) => (
-          publishedSourceStates.get(key)?.count !== sourceState.count
-          || publishedSourceStates.get(key)?.instanceToken
-            !== sourceState.instanceToken
-        ))
+        !publishedSourceStates ||
+        [...options.sourceStates].some(
+          ([key, sourceState]) =>
+            publishedSourceStates.get(key)?.count !== sourceState.count ||
+            publishedSourceStates.get(key)?.instanceToken !== sourceState.instanceToken
+        )
       ) {
         return null;
       }
@@ -153,10 +145,7 @@ export async function publishReadyImageFilterIndex(options: {
       transaction.del(finalKey, metaKey);
       if (options.count > 0) {
         transaction.rename(options.temporaryKey, finalKey);
-        transaction.expire(
-          finalKey,
-          READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds
-        );
+        transaction.expire(finalKey, READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds);
       }
       transaction.hset(metaKey, {
         applied_revision: options.revision,
@@ -164,10 +153,7 @@ export async function publishReadyImageFilterIndex(options: {
         built_at: new Date().toISOString(),
         instance_token: instanceToken
       });
-      transaction.expire(
-        metaKey,
-        READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds
-      );
+      transaction.expire(metaKey, READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds);
       await execRedisPipeline(transaction);
       const retained = await registerReadyImageDerivedResult({
         key: finalKey,
@@ -182,13 +168,11 @@ export async function publishReadyImageFilterIndex(options: {
       return instanceToken;
     });
   } catch (error) {
-    await discardReadyImageDerivedResult(finalKey, "filter")
-      .catch(() => undefined);
+    await discardReadyImageDerivedResult(finalKey, "filter").catch(() => undefined);
     throw error;
   }
   if (!publishedInstanceToken) {
-    await discardReadyImageDerivedResult(finalKey, "filter")
-      .catch(() => undefined);
+    await discardReadyImageDerivedResult(finalKey, "filter").catch(() => undefined);
     return null;
   }
   const snapshot = await readReadyImageDerivedIndexSnapshot({
@@ -202,8 +186,7 @@ export async function publishReadyImageFilterIndex(options: {
     }
   });
   if (!snapshot) {
-    await discardReadyImageDerivedResult(finalKey, "filter")
-      .catch(() => undefined);
+    await discardReadyImageDerivedResult(finalKey, "filter").catch(() => undefined);
     return null;
   }
   return {
@@ -220,21 +203,22 @@ export async function validatePublishedReadyImageFilterIndex(
   index: Extract<ReadyImageFilterIndex, { kind: "filter" }>
 ) {
   try {
-    const valid = Boolean(await readReadyImageDerivedIndexSnapshot({
-      kind: "filter",
-      key: index.key,
-      metaKey: index.metaKey,
-      revision: index.revision,
-      expected: {
-        count: index.count,
-        instanceToken: index.instanceToken
-      }
-    }));
+    const valid = Boolean(
+      await readReadyImageDerivedIndexSnapshot({
+        kind: "filter",
+        key: index.key,
+        metaKey: index.metaKey,
+        revision: index.revision,
+        expected: {
+          count: index.count,
+          instanceToken: index.instanceToken
+        }
+      })
+    );
     if (!valid) await discardReadyImageDerivedResult(index.key, "filter");
     return valid;
   } catch (error) {
-    await discardReadyImageDerivedResult(index.key, "filter")
-      .catch(() => undefined);
+    await discardReadyImageDerivedResult(index.key, "filter").catch(() => undefined);
     throw error;
   }
 }

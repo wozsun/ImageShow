@@ -1,9 +1,5 @@
 import { memo } from "react";
-import type {
-  FacetOption,
-  ImageDraft,
-  AdminImageListItem
-} from "../../../../../lib/types.js";
+import type { FacetOption, ImageDraft, AdminImageListItem } from "../../../../../lib/types.js";
 import type { IngestionJob } from "../model/ingestion-job.js";
 import { IngestionJobCard } from "./IngestionJobCard.js";
 import type { IngestionPreviewTarget } from "./DuplicateMatchPanel.js";
@@ -21,16 +17,8 @@ type IngestionJobListProps = {
   isRetryPending: (job: IngestionJob) => boolean;
   onRemove: (job: IngestionJob) => void;
   onConfirmDuplicate: (job: IngestionJob) => void;
-  onOpenDetail: (
-    job: IngestionJob,
-    item: AdminImageListItem,
-    opener: HTMLElement
-  ) => void;
-  onFocusWithin: (
-    job: IngestionJob,
-    card: HTMLElement,
-    target: HTMLElement
-  ) => void;
+  onOpenDetail: (job: IngestionJob, item: AdminImageListItem, opener: HTMLElement) => void;
+  onFocusWithin: (job: IngestionJob, card: HTMLElement, target: HTMLElement) => void;
   onPreview: (target: IngestionPreviewTarget) => void;
 };
 

@@ -13,25 +13,21 @@ import { requestSlugInput } from "./primitives.ts";
 
 export const storageSlugInput = requestSlugInput;
 
-export const storageBackendMigrationInput = z.strictObject({
-  source: storageSlugInput,
-  target: storageSlugInput
-}).refine(
-  ({ source, target }) => source !== target,
-  {
+export const storageBackendMigrationInput = z
+  .strictObject({
+    source: storageSlugInput,
+    target: storageSlugInput
+  })
+  .refine(({ source, target }) => source !== target, {
     path: ["target"],
     message: "目标存储后端不能与源后端相同"
-  }
-);
+  });
 
 const storageDisplayInput = z.string().trim().max(64);
-const nonEmptySettingsObject = z.record(z.string(), z.unknown()).refine(
-  (value) => Object.keys(value).length > 0,
-  "远端存储配置至少需要提供一个字段"
-);
-const s3SettingsUpdateSchema = nonEmptySettingsObject.pipe(
-  s3SettingsPatchSchema
-);
+const nonEmptySettingsObject = z
+  .record(z.string(), z.unknown())
+  .refine((value) => Object.keys(value).length > 0, "远端存储配置至少需要提供一个字段");
+const s3SettingsUpdateSchema = nonEmptySettingsObject.pipe(s3SettingsPatchSchema);
 
 export const storageBackendCreateInput = z.strictObject({
   slug: storageSlugInput,
@@ -39,20 +35,24 @@ export const storageBackendCreateInput = z.strictObject({
   s3: s3SettingsSchema.prefault({})
 }) satisfies z.ZodType<StorageBackendCreateInput>;
 
-export const storageBackendUpdateInput = z.strictObject({
-  display_name: storageDisplayInput.optional(),
-  enabled: z.boolean().optional(),
-  public_base_url: localPublicUrlSchema.optional(),
-  s3: s3SettingsUpdateSchema.optional()
-}).refine(
-  (value) => Object.values(value).some((field) => field !== undefined),
-  "存储后端更新至少需要提供一个字段"
-) satisfies z.ZodType<StorageBackendUpdateInput>;
+export const storageBackendUpdateInput = z
+  .strictObject({
+    display_name: storageDisplayInput.optional(),
+    enabled: z.boolean().optional(),
+    public_base_url: localPublicUrlSchema.optional(),
+    s3: s3SettingsUpdateSchema.optional()
+  })
+  .refine(
+    (value) => Object.values(value).some((field) => field !== undefined),
+    "存储后端更新至少需要提供一个字段"
+  ) satisfies z.ZodType<StorageBackendUpdateInput>;
 
-export const storageBackendTestInput = z.strictObject({
-  slug: storageSlugInput.optional(),
-  s3: s3SettingsPatchSchema.optional()
-}).refine(
-  (value) => Object.values(value).some((field) => field !== undefined),
-  "存储测试至少需要提供一个配置字段"
-) satisfies z.ZodType<StorageBackendTestInput>;
+export const storageBackendTestInput = z
+  .strictObject({
+    slug: storageSlugInput.optional(),
+    s3: s3SettingsPatchSchema.optional()
+  })
+  .refine(
+    (value) => Object.values(value).some((field) => field !== undefined),
+    "存储测试至少需要提供一个配置字段"
+  ) satisfies z.ZodType<StorageBackendTestInput>;

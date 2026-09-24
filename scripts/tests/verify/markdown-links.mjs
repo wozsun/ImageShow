@@ -26,11 +26,12 @@ function displayPath(path) {
 function localTarget(rawTarget) {
   const target = rawTarget.trim().replace(/^<|>$/g, "");
   if (
-    !target
-    || target.startsWith("#")
-    || target.startsWith("/")
-    || /^[a-z][a-z\d+.-]*:/i.test(target)
-  ) return null;
+    !target ||
+    target.startsWith("#") ||
+    target.startsWith("/") ||
+    /^[a-z][a-z\d+.-]*:/i.test(target)
+  )
+    return null;
   const withoutFragment = target.split("#", 1)[0].split("?", 1)[0];
   if (!withoutFragment) return null;
   try {

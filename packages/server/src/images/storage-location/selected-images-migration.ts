@@ -1,6 +1,4 @@
-import type {
-  ImageStorageMigrationItemResultDto
-} from "@imageshow/shared/browser";
+import type { ImageStorageMigrationItemResultDto } from "@imageshow/shared/browser";
 import { ApiError } from "../../core/api-error.ts";
 import { mapWithWorkerPool } from "../../core/concurrency.ts";
 import { pool } from "../../core/database/pools.ts";
@@ -8,12 +6,8 @@ import {
   migrateImageToStorageBackend,
   type ImageStorageMigrationRecord
 } from "./image-migration.ts";
-import {
-  assertStorageWriteTarget
-} from "../../storage/backends/registry.ts";
-import {
-  IMAGE_TRANSFER_CONCURRENCY
-} from "../../storage/objects/image-transfer-admission.ts";
+import { assertStorageWriteTarget } from "../../storage/backends/registry.ts";
+import { IMAGE_TRANSFER_CONCURRENCY } from "../../storage/objects/image-transfer-admission.ts";
 import { withPlannedImageMutation } from "../mutation-sync.ts";
 
 type SelectedImageStorageMigrationMetrics = {
@@ -32,21 +26,21 @@ export async function migrateSelectedImagesToStorageBackend(
 ) {
   const execute = async () => {
     options.signal?.throwIfAborted();
-    const rows = (await pool.query(
-      `SELECT id, ext, storage_slug, md5,
+    const rows = (
+      await pool.query(
+        `SELECT id, ext, storage_slug, md5,
               image_size, thumbnail_size
          FROM metadata
         WHERE id = ANY($1::uuid[])`,
-      [ids]
-    )).rows as ImageStorageMigrationRecord[];
+        [ids]
+      )
+    ).rows as ImageStorageMigrationRecord[];
     options.signal?.throwIfAborted();
     if (rows.some((row) => row.storage_slug !== target)) {
       await assertStorageWriteTarget(target);
       options.signal?.throwIfAborted();
     }
-    const rowsById = new Map(
-      rows.map((row) => [row.id.toLowerCase(), row])
-    );
+    const rowsById = new Map(rows.map((row) => [row.id.toLowerCase(), row]));
     let maxImageDurationMs = 0;
     const results = await mapWithWorkerPool(
       ids,
@@ -79,11 +73,7 @@ export async function migrateSelectedImagesToStorageBackend(
             status: result
           } satisfies ImageStorageMigrationItemResultDto;
         } catch (error) {
-          if (
-            error instanceof ApiError
-            && error.status >= 400
-            && error.status < 500
-          ) {
+          if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
             return {
               id,
               status: "failed",
@@ -98,20 +88,13 @@ export async function migrateSelectedImagesToStorageBackend(
             message: "Image storage migration failed"
           } satisfies ImageStorageMigrationItemResultDto;
         } finally {
-          maxImageDurationMs = Math.max(
-            maxImageDurationMs,
-            performance.now() - startedAt
-          );
+          maxImageDurationMs = Math.max(maxImageDurationMs, performance.now() - startedAt);
         }
       },
       { signal: options.signal }
     );
-    const migrated = results.filter(
-      (result) => result.status === "migrated"
-    ).length;
-    const failed = results.filter(
-      (result) => result.status === "failed"
-    ).length;
+    const migrated = results.filter((result) => result.status === "migrated").length;
+    const failed = results.filter((result) => result.status === "failed").length;
 
     options.onMetrics?.({
       maxImageDurationMs

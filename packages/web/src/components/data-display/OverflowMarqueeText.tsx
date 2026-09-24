@@ -12,10 +12,7 @@ type VisibilityListener = (visible: boolean) => void;
 const visibilityListeners = new Map<Element, VisibilityListener>();
 let visibilityObserver: IntersectionObserver | undefined;
 
-function observeVisibility(
-  element: Element,
-  listener: VisibilityListener
-) {
+function observeVisibility(element: Element, listener: VisibilityListener) {
   if (typeof IntersectionObserver === "undefined") {
     listener(true);
     return () => undefined;
@@ -23,9 +20,7 @@ function observeVisibility(
 
   visibilityObserver ??= new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      visibilityListeners.get(entry.target)?.(
-        entry.isIntersecting && entry.intersectionRatio > 0
-      );
+      visibilityListeners.get(entry.target)?.(entry.isIntersecting && entry.intersectionRatio > 0);
     }
   });
   visibilityListeners.set(element, listener);
@@ -60,9 +55,7 @@ export function OverflowMarqueeText({
     if (!viewport || !track || !content) return;
 
     const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const interactionOwner = viewport.closest<HTMLElement>(
-      "button, a, [tabindex]"
-    ) ?? viewport;
+    const interactionOwner = viewport.closest<HTMLElement>("button, a, [tabindex]") ?? viewport;
     const pauseReasons = new Set<"focus" | "pointer">();
     let animation: Animation | undefined;
     let visible = typeof IntersectionObserver === "undefined";
@@ -76,10 +69,7 @@ export function OverflowMarqueeText({
     const measure = () => {
       cancelAnimation();
 
-      const tailDistance = Math.max(
-        0,
-        Math.ceil(content.scrollWidth - viewport.clientWidth)
-      );
+      const tailDistance = Math.max(0, Math.ceil(content.scrollWidth - viewport.clientWidth));
       const nextHeadDistance = content.scrollWidth + 24;
       const isOverflowing = tailDistance > 1;
       setOverflowing(isOverflowing);
@@ -88,42 +78,38 @@ export function OverflowMarqueeText({
       const headPauseMs = 1_500;
       const tailPauseMs = 1_000;
       const pixelsPerSecond = 32;
-      const moveToTailMs = tailDistance / pixelsPerSecond * 1_000;
-      const moveToNextHeadMs = (
-        nextHeadDistance - tailDistance
-      ) / pixelsPerSecond * 1_000;
+      const moveToTailMs = (tailDistance / pixelsPerSecond) * 1_000;
+      const moveToNextHeadMs = ((nextHeadDistance - tailDistance) / pixelsPerSecond) * 1_000;
       const duration = headPauseMs + moveToTailMs + tailPauseMs + moveToNextHeadMs;
       const tailArrivalOffset = (headPauseMs + moveToTailMs) / duration;
-      const tailDepartureOffset = (
-        headPauseMs + moveToTailMs + tailPauseMs
-      ) / duration;
+      const tailDepartureOffset = (headPauseMs + moveToTailMs + tailPauseMs) / duration;
 
-      const nextAnimation = track.animate([
-        { transform: "translateX(0)", offset: 0 },
-        { transform: "translateX(0)", offset: headPauseMs / duration },
+      const nextAnimation = track.animate(
+        [
+          { transform: "translateX(0)", offset: 0 },
+          { transform: "translateX(0)", offset: headPauseMs / duration },
+          {
+            transform: `translateX(-${tailDistance}px)`,
+            offset: tailArrivalOffset
+          },
+          {
+            transform: `translateX(-${tailDistance}px)`,
+            offset: tailDepartureOffset
+          },
+          { transform: `translateX(-${nextHeadDistance}px)`, offset: 1 }
+        ],
         {
-          transform: `translateX(-${tailDistance}px)`,
-          offset: tailArrivalOffset
-        },
-        {
-          transform: `translateX(-${tailDistance}px)`,
-          offset: tailDepartureOffset
-        },
-        { transform: `translateX(-${nextHeadDistance}px)`, offset: 1 }
-      ], {
-        duration,
-        easing: "linear",
-        iterations: Infinity
-      });
+          duration,
+          easing: "linear",
+          iterations: Infinity
+        }
+      );
       animation = nextAnimation;
       if (pauseReasons.size > 0) animation.pause();
       setAnimating(true);
     };
 
-    const setPaused = (
-      reason: "focus" | "pointer",
-      paused: boolean
-    ) => {
+    const setPaused = (reason: "focus" | "pointer", paused: boolean) => {
       if (paused) pauseReasons.add(reason);
       else pauseReasons.delete(reason);
       if (pauseReasons.size > 0) animation?.pause();
@@ -140,9 +126,8 @@ export function OverflowMarqueeText({
       visible = nextVisible;
       measure();
     });
-    const observer = typeof ResizeObserver === "undefined"
-      ? undefined
-      : new ResizeObserver(measure);
+    const observer =
+      typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
     observer?.observe(viewport);
     observer?.observe(content);
     motionQuery.addEventListener("change", measure);
@@ -176,12 +161,16 @@ export function OverflowMarqueeText({
         overflowing ? "is-overflowing" : "",
         animating ? "is-animating" : "",
         className
-      ].filter(Boolean).join(" ")}
+      ]
+        .filter(Boolean)
+        .join(" ")}
       title={overflowing ? text : undefined}
     >
       <span ref={trackRef} className="overflow-marquee-track">
         <span ref={contentRef}>{children ?? text}</span>
-        <span className="overflow-marquee-copy" aria-hidden="true">{children ?? text}</span>
+        <span className="overflow-marquee-copy" aria-hidden="true">
+          {children ?? text}
+        </span>
       </span>
     </Element>
   );

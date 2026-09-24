@@ -12,34 +12,29 @@ import {
 } from "./config.ts";
 import { validateStorageBackendCandidate } from "./probe.ts";
 import { storageConfigFromRow, type StorageBackendConfigRow } from "./record.ts";
-import {
-  invalidateStorageBackendRegistry,
-  resolveStorageAccess
-} from "./registry.ts";
+import { invalidateStorageBackendRegistry, resolveStorageAccess } from "./registry.ts";
 
 async function saveProbedCapabilities(
   config: S3StorageConfig,
   capabilities: S3Capabilities,
   signal?: AbortSignal
 ) {
-  const save = () => withAdvisoryLock(
-    `imageshow:storage-backend:${config.slug}`,
-    async (lockSignal, client) => {
-      const combinedSignal = signal
-        ? AbortSignal.any([signal, lockSignal])
-        : lockSignal;
+  const save = () =>
+    withAdvisoryLock(`imageshow:storage-backend:${config.slug}`, async (lockSignal, client) => {
+      const combinedSignal = signal ? AbortSignal.any([signal, lockSignal]) : lockSignal;
       try {
         await withTransactionOnClient(client, async () => {
           combinedSignal.throwIfAborted();
-          const row = (await client.query<StorageBackendConfigRow>(
-            `SELECT slug, type, config FROM storage_backend
+          const row = (
+            await client.query<StorageBackendConfigRow>(
+              `SELECT slug, type, config FROM storage_backend
               WHERE slug=$1 FOR UPDATE`,
-            [config.slug]
-          )).rows[0];
+              [config.slug]
+            )
+          ).rows[0];
           if (
-            !row
-            || storageDriverSignature(storageConfigFromRow(row))
-              !== storageDriverSignature(config)
+            !row ||
+            storageDriverSignature(storageConfigFromRow(row)) !== storageDriverSignature(config)
           ) {
             throw new ApiError(
               409,
@@ -61,25 +56,15 @@ async function saveProbedCapabilities(
         // A committed capability update can outlive its acknowledgement.
         invalidateStorageBackendRegistry();
       }
-    }
-  );
+    });
   await (signal ? runWithAdvisoryLockAcquisitionSignal(signal, save) : save());
 }
 
-export async function testStorageBackend(
-  config?: StorageConfig,
-  signal?: AbortSignal
-) {
+export async function testStorageBackend(config?: StorageConfig, signal?: AbortSignal) {
   signal?.throwIfAborted();
   const effective = config ?? (await resolveStorageAccess()).config;
-  const result = await validateStorageBackendCandidate(
-    effective, undefined, undefined, signal
-  );
-  if (
-    effective.type === "s3"
-    && effective.slug !== "(test)"
-    && result.capabilities
-  ) {
+  const result = await validateStorageBackendCandidate(effective, undefined, undefined, signal);
+  if (effective.type === "s3" && effective.slug !== "(test)" && result.capabilities) {
     await saveProbedCapabilities(effective, result.capabilities, signal);
   }
   return result;

@@ -1,8 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useState
-} from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { defaultAdminImageSort, type AdminImageSort } from "@imageshow/shared/browser";
 import type { ImageAdminFilterValues } from "./ImageAdminFilters.js";
@@ -38,27 +34,14 @@ export function useImageAdminPageNavigation({
   });
   const pageNumber = effectiveImageAdminPage(state, scopeKey);
   const query = useQuery({
-    ...adminImageListQuery(
-      view,
-      filters,
-      scopeKey,
-      pageNumber,
-      pageSize,
-      sort
-    )
+    ...adminImageListQuery(view, filters, scopeKey, pageNumber, pageSize, sort)
   });
   // Total belongs to the normalized scope, not to one numeric page. Keep the
   // newest successful scope snapshot while the target page has no data yet.
   // Millisecond timestamp ties only win after this observer sees a success.
   const retainedTotal = state.scopeKey === scopeKey ? state.total : null;
-  const retainedTotalUpdatedAt = state.scopeKey === scopeKey
-    ? state.totalUpdatedAt
-    : 0;
-  const {
-    currentQueryHasObservedSuccessfulData,
-    queryTotal,
-    total
-  } = resolveImageAdminScopeTotal({
+  const retainedTotalUpdatedAt = state.scopeKey === scopeKey ? state.totalUpdatedAt : 0;
+  const { currentQueryHasObservedSuccessfulData, queryTotal, total } = resolveImageAdminScopeTotal({
     retainedTotal,
     retainedUpdatedAt: retainedTotalUpdatedAt,
     queryData: query.data,
@@ -69,14 +52,16 @@ export function useImageAdminPageNavigation({
   const totalPages = imageAdminTotalPages(total, pageSize);
 
   useEffect(() => {
-    setState((current) => current.scopeKey === scopeKey
-      ? current
-      : {
-          scopeKey,
-          page: 1,
-          total: null,
-          totalUpdatedAt: 0
-        });
+    setState((current) =>
+      current.scopeKey === scopeKey
+        ? current
+        : {
+            scopeKey,
+            page: 1,
+            total: null,
+            totalUpdatedAt: 0
+          }
+    );
   }, [scopeKey]);
 
   useEffect(() => {
@@ -84,19 +69,19 @@ export function useImageAdminPageNavigation({
     const successfulTotalPages = imageAdminTotalPages(queryTotal, pageSize);
     setState((current) => {
       if (
-        current.scopeKey !== scopeKey
-        || (
-          current.total !== null
-          && query.dataUpdatedAt <= current.totalUpdatedAt
-          && !currentQueryHasObservedSuccessfulData
-        )
-      ) return current;
+        current.scopeKey !== scopeKey ||
+        (current.total !== null &&
+          query.dataUpdatedAt <= current.totalUpdatedAt &&
+          !currentQueryHasObservedSuccessfulData)
+      )
+        return current;
       const nextPage = Math.min(current.page, successfulTotalPages);
       if (
-        current.page === nextPage
-        && current.total === queryTotal
-        && current.totalUpdatedAt === query.dataUpdatedAt
-      ) return current;
+        current.page === nextPage &&
+        current.total === queryTotal &&
+        current.totalUpdatedAt === query.dataUpdatedAt
+      )
+        return current;
       return {
         scopeKey,
         page: nextPage,
@@ -104,31 +89,27 @@ export function useImageAdminPageNavigation({
         totalUpdatedAt: query.dataUpdatedAt
       };
     });
-  }, [
-    currentQueryHasObservedSuccessfulData,
-    pageSize,
-    query.dataUpdatedAt,
-    queryTotal,
-    scopeKey
-  ]);
+  }, [currentQueryHasObservedSuccessfulData, pageSize, query.dataUpdatedAt, queryTotal, scopeKey]);
 
-  const loadPage = useCallback((targetPage: number, blocked: boolean) => {
-    if (
-      blocked
-      || !Number.isSafeInteger(targetPage)
-      || targetPage < 1
-      || targetPage > totalPages
-      || targetPage === pageNumber
-    ) return;
-    setState((current) => ({
-      scopeKey,
-      page: targetPage,
-      total: current.scopeKey === scopeKey ? current.total : null,
-      totalUpdatedAt: current.scopeKey === scopeKey
-        ? current.totalUpdatedAt
-        : 0
-    }));
-  }, [pageNumber, scopeKey, totalPages]);
+  const loadPage = useCallback(
+    (targetPage: number, blocked: boolean) => {
+      if (
+        blocked ||
+        !Number.isSafeInteger(targetPage) ||
+        targetPage < 1 ||
+        targetPage > totalPages ||
+        targetPage === pageNumber
+      )
+        return;
+      setState((current) => ({
+        scopeKey,
+        page: targetPage,
+        total: current.scopeKey === scopeKey ? current.total : null,
+        totalUpdatedAt: current.scopeKey === scopeKey ? current.totalUpdatedAt : 0
+      }));
+    },
+    [pageNumber, scopeKey, totalPages]
+  );
 
   const resetPage = useCallback(() => {
     setState((current) => resetImageAdminPage(current, scopeKey));

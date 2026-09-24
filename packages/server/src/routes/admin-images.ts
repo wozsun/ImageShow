@@ -11,16 +11,13 @@ import {
   type ImageUpdateRequestDto,
   type ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
-import {
-  apiSuccess,
-  privateCacheableApiSuccess
-} from "../core/http/responses.ts";
+import { apiSuccess, privateCacheableApiSuccess } from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
 import { logger } from "../core/logger.ts";
 import {
   imageUpdatePath,
   getRequestBodyBytes,
-  limitImageUpdateBody,
+  limitImageUpdateBody
 } from "../core/http/request-body-limit.ts";
 import {
   adminImageListQuery,
@@ -29,13 +26,11 @@ import {
   imagePurgeInput,
   imageSnapshotInput,
   imageStorageMigrationInput,
-  imageUpdateInput,
+  imageUpdateInput
 } from "./validation/images.ts";
 import { parse } from "./validation/parse.ts";
 import { uuidInput } from "./validation/primitives.ts";
-import {
-  migrateSelectedImagesToStorageBackend
-} from "../images/storage-location/selected-images-migration.ts";
+import { migrateSelectedImagesToStorageBackend } from "../images/storage-location/selected-images-migration.ts";
 import { updateImages } from "../images/image-update.ts";
 import {
   getAdminImageSnapshots,
@@ -43,10 +38,7 @@ import {
   listAdminImages
 } from "../images/read-models/admin-images.ts";
 import { getOverviewStats } from "../images/read-models/overview.ts";
-import {
-  moveImagesToTrash,
-  restoreImages
-} from "../images/trash/mutations.ts";
+import { moveImagesToTrash, restoreImages } from "../images/trash/mutations.ts";
 import { purgeImages } from "../images/trash/purge.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 import { listStorageBackends } from "../storage/backends/registry.ts";
@@ -55,18 +47,19 @@ import { requireAdminSession } from "../users/admin-session.ts";
 import { serveAdminExternalOriginal } from "../images/serving/external-original.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
-  app.get("/images/original/:id", requireAdminSession, async (c) => serveAdminExternalOriginal(
-    parse(uuidInput, c.req.param("id")),
-    {
+  app.get("/images/original/:id", requireAdminSession, async (c) =>
+    serveAdminExternalOriginal(parse(uuidInput, c.req.param("id")), {
       userAgent: c.req.header("user-agent") ?? "",
       method: c.req.method === "HEAD" ? "HEAD" : "GET",
       ifNoneMatch: c.req.header("if-none-match"),
       ifModifiedSince: c.req.header("if-modified-since"),
       signal: c.req.raw.signal
-    }
-  ));
+    })
+  );
 
-  app.get(`${adminApiBasePath}/overview`, async (c) => c.json(apiSuccess(await getOverviewStats())));
+  app.get(`${adminApiBasePath}/overview`, async (c) =>
+    c.json(apiSuccess(await getOverviewStats()))
+  );
 
   app.get(`${adminApiBasePath}/images`, async (c) => {
     c.header(adminImageListReadStartedAtHeader, String(Date.now()));
@@ -76,8 +69,10 @@ export function registerAdminImageRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/images/snapshot`, async (c) => {
     const input = parse(imageSnapshotInput, await readJsonBody(c));
-    const response: ImageSnapshotResponseDto =
-      await getAdminImageSnapshots(input.ids, c.req.raw.signal);
+    const response: ImageSnapshotResponseDto = await getAdminImageSnapshots(
+      input.ids,
+      c.req.raw.signal
+    );
     return c.json(apiSuccess(response));
   });
 
@@ -128,7 +123,7 @@ export function registerAdminImageRoutes(app: Hono) {
         signal: c.req.raw.signal,
         onMetrics(metrics) {
           maxItemDurationMs = metrics.maxImageDurationMs;
-        },
+        }
       });
       logger.info("image_storage_migration_summary", {
         requested: result.requested,
@@ -137,7 +132,7 @@ export function registerAdminImageRoutes(app: Hono) {
         total_duration_ms: Math.round((performance.now() - startedAt) * 100) / 100,
         max_item_duration_ms: Math.round(maxItemDurationMs * 100) / 100,
         request_body_bytes: getRequestBodyBytes(c),
-        entity_count_invalidation_triggered: false,
+        entity_count_invalidation_triggered: false
       });
       const response = {
         migrated: result.migrated,
@@ -151,17 +146,14 @@ export function registerAdminImageRoutes(app: Hono) {
 
   app.post(imageUpdatePath, limitImageUpdateBody, async (c) => {
     const startedAt = performance.now();
-    const input = parse(
-      imageUpdateInput,
-      await readJsonBody(c)
-    ) satisfies ImageUpdateRequestDto;
+    const input = parse(imageUpdateInput, await readJsonBody(c)) satisfies ImageUpdateRequestDto;
     let maxGroupDurationMs = 0;
     let entityCountInvalidationTriggered = false;
     const result = await updateImages(input.items, {
       onMetrics(metrics) {
         maxGroupDurationMs = metrics.maxGroupDurationMs;
         entityCountInvalidationTriggered = metrics.entityCountInvalidationTriggered;
-      },
+      }
     });
     logger.info("image_update_summary", {
       requested: input.items.length,
@@ -170,7 +162,7 @@ export function registerAdminImageRoutes(app: Hono) {
       total_duration_ms: Math.round((performance.now() - startedAt) * 100) / 100,
       max_group_duration_ms: Math.round(maxGroupDurationMs * 100) / 100,
       request_body_bytes: getRequestBodyBytes(c),
-      entity_count_invalidation_triggered: entityCountInvalidationTriggered,
+      entity_count_invalidation_triggered: entityCountInvalidationTriggered
     });
     const response = {
       updated: result.updated,

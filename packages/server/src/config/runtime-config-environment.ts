@@ -19,11 +19,7 @@ type RuntimeConfigLeafPath<T = RuntimeConfig> = {
 type RuntimeConfigEnvironmentLeafPath = RuntimeConfigLeafPath;
 
 type RuntimeConfigEnvironmentValueKind =
-  | "string"
-  | "number"
-  | "boolean"
-  | "json-array"
-  | "json-object";
+  "string" | "number" | "boolean" | "json-array" | "json-object";
 
 type RuntimeConfigEnvironmentBinding = {
   path: RuntimeConfigEnvironmentLeafPath;
@@ -37,69 +33,221 @@ export const runtimeConfigEnvironmentBindings = [
   { path: "site.title", environmentVariable: "SITE_TITLE", valueKind: "string" },
   { path: "site.description", environmentVariable: "SITE_DESCRIPTION", valueKind: "string" },
   { path: "site.header_name", environmentVariable: "SITE_HEADER_NAME", valueKind: "string" },
-  { path: "site.version.enabled", environmentVariable: "SITE_VERSION_ENABLED", valueKind: "boolean" },
-  { path: "site.version.link_enabled", environmentVariable: "SITE_VERSION_LINK_ENABLED", valueKind: "boolean" },
+  {
+    path: "site.version.enabled",
+    environmentVariable: "SITE_VERSION_ENABLED",
+    valueKind: "boolean"
+  },
+  {
+    path: "site.version.link_enabled",
+    environmentVariable: "SITE_VERSION_LINK_ENABLED",
+    valueKind: "boolean"
+  },
   { path: "site.root", environmentVariable: "SITE_ROOT", valueKind: "string" },
   { path: "site.home.enabled", environmentVariable: "SITE_HOME_ENABLED", valueKind: "boolean" },
-  { path: "site.home.browse_target", environmentVariable: "SITE_HOME_BROWSE_TARGET", valueKind: "string" },
-  { path: "site.home.background", environmentVariable: "SITE_HOME_BACKGROUND", valueKind: "string" },
-  { path: "site.home.banner_label", environmentVariable: "SITE_HOME_BANNER_LABEL", valueKind: "string" },
-  { path: "site.home.banner_title", environmentVariable: "SITE_HOME_BANNER_TITLE", valueKind: "string" },
+  {
+    path: "site.home.browse_target",
+    environmentVariable: "SITE_HOME_BROWSE_TARGET",
+    valueKind: "string"
+  },
+  {
+    path: "site.home.background",
+    environmentVariable: "SITE_HOME_BACKGROUND",
+    valueKind: "string"
+  },
+  {
+    path: "site.home.banner_label",
+    environmentVariable: "SITE_HOME_BANNER_LABEL",
+    valueKind: "string"
+  },
+  {
+    path: "site.home.banner_title",
+    environmentVariable: "SITE_HOME_BANNER_TITLE",
+    valueKind: "string"
+  },
   { path: "site.show.enabled", environmentVariable: "SITE_SHOW_ENABLED", valueKind: "boolean" },
   { path: "site.show.autoplay", environmentVariable: "SITE_SHOW_AUTOPLAY", valueKind: "boolean" },
   { path: "site.show.mode", environmentVariable: "SITE_SHOW_MODE", valueKind: "string" },
   { path: "site.show.density", environmentVariable: "SITE_SHOW_DENSITY", valueKind: "string" },
-  { path: "site.show.drift_speed", environmentVariable: "SITE_SHOW_DRIFT_SPEED", valueKind: "number" },
+  {
+    path: "site.show.drift_speed",
+    environmentVariable: "SITE_SHOW_DRIFT_SPEED",
+    valueKind: "number"
+  },
   { path: "site.show.order", environmentVariable: "SITE_SHOW_ORDER", valueKind: "string" },
-  { path: "site.gallery.enabled", environmentVariable: "SITE_GALLERY_ENABLED", valueKind: "boolean" },
+  {
+    path: "site.gallery.enabled",
+    environmentVariable: "SITE_GALLERY_ENABLED",
+    valueKind: "boolean"
+  },
   { path: "site.gallery.order", environmentVariable: "SITE_GALLERY_ORDER", valueKind: "string" },
   { path: "site.random_method", environmentVariable: "SITE_RANDOM_METHOD", valueKind: "string" },
   { path: "site.random_size", environmentVariable: "SITE_RANDOM_SIZE", valueKind: "string" },
-  { path: "site.assets_base_url", environmentVariable: "SITE_ASSETS_BASE_URL", valueKind: "string" },
+  {
+    path: "site.assets_base_url",
+    environmentVariable: "SITE_ASSETS_BASE_URL",
+    valueKind: "string"
+  },
   { path: "site.robots_enabled", environmentVariable: "SITE_ROBOTS_ENABLED", valueKind: "boolean" },
   { path: "site.icp", environmentVariable: "SITE_ICP", valueKind: "string" },
   { path: "site.mps", environmentVariable: "SITE_MPS", valueKind: "string" },
   { path: "site.footer", environmentVariable: "SITE_FOOTER", valueKind: "string" },
   { path: "embed.enabled", environmentVariable: "EMBED_ENABLED", valueKind: "boolean" },
-  { path: "embed.allowed_origins", environmentVariable: "EMBED_ALLOWED_ORIGINS", valueKind: "json-array" },
-  { path: "ingestion.max_file_size_mb", environmentVariable: "INGESTION_MAX_FILE_SIZE_MB", valueKind: "number" },
-  { path: "ingestion.max_long_edge", environmentVariable: "INGESTION_MAX_LONG_EDGE", valueKind: "number" },
-  { path: "ingestion.list_page_size", environmentVariable: "INGESTION_LIST_PAGE_SIZE", valueKind: "number" },
-  { path: "ingestion.commit_concurrency", environmentVariable: "INGESTION_COMMIT_CONCURRENCY", valueKind: "number" },
+  {
+    path: "embed.allowed_origins",
+    environmentVariable: "EMBED_ALLOWED_ORIGINS",
+    valueKind: "json-array"
+  },
+  {
+    path: "ingestion.max_file_size_mb",
+    environmentVariable: "INGESTION_MAX_FILE_SIZE_MB",
+    valueKind: "number"
+  },
+  {
+    path: "ingestion.max_long_edge",
+    environmentVariable: "INGESTION_MAX_LONG_EDGE",
+    valueKind: "number"
+  },
+  {
+    path: "ingestion.list_page_size",
+    environmentVariable: "INGESTION_LIST_PAGE_SIZE",
+    valueKind: "number"
+  },
+  {
+    path: "ingestion.commit_concurrency",
+    environmentVariable: "INGESTION_COMMIT_CONCURRENCY",
+    valueKind: "number"
+  },
   { path: "upload.max_items", environmentVariable: "UPLOAD_MAX_ITEMS", valueKind: "number" },
-  { path: "upload.browser_concurrency", environmentVariable: "UPLOAD_BROWSER_CONCURRENCY", valueKind: "number" },
-  { path: "upload.raw_concurrency", environmentVariable: "UPLOAD_RAW_CONCURRENCY", valueKind: "number" },
-  { path: "import.keep_original_link", environmentVariable: "IMPORT_KEEP_ORIGINAL_LINK", valueKind: "json-array" },
+  {
+    path: "upload.browser_concurrency",
+    environmentVariable: "UPLOAD_BROWSER_CONCURRENCY",
+    valueKind: "number"
+  },
+  {
+    path: "upload.raw_concurrency",
+    environmentVariable: "UPLOAD_RAW_CONCURRENCY",
+    valueKind: "number"
+  },
+  {
+    path: "import.keep_original_link",
+    environmentVariable: "IMPORT_KEEP_ORIGINAL_LINK",
+    valueKind: "json-array"
+  },
   { path: "import.auto_import", environmentVariable: "IMPORT_AUTO_IMPORT", valueKind: "boolean" },
-  { path: "import.fetch_timeout_seconds", environmentVariable: "IMPORT_FETCH_TIMEOUT_SECONDS", valueKind: "number" },
+  {
+    path: "import.fetch_timeout_seconds",
+    environmentVariable: "IMPORT_FETCH_TIMEOUT_SECONDS",
+    valueKind: "number"
+  },
   { path: "import.max_items", environmentVariable: "IMPORT_MAX_ITEMS", valueKind: "number" },
   { path: "weibo.max_items", environmentVariable: "WEIBO_MAX_ITEMS", valueKind: "number" },
-  { path: "weibo.source_enabled", environmentVariable: "WEIBO_SOURCE_ENABLED", valueKind: "boolean" },
-  { path: "weibo.request_delay_seconds", environmentVariable: "WEIBO_REQUEST_DELAY_SECONDS", valueKind: "json-array" },
-  { path: "normalize.concurrency", environmentVariable: "NORMALIZE_CONCURRENCY", valueKind: "number" },
+  {
+    path: "weibo.source_enabled",
+    environmentVariable: "WEIBO_SOURCE_ENABLED",
+    valueKind: "boolean"
+  },
+  {
+    path: "weibo.request_delay_seconds",
+    environmentVariable: "WEIBO_REQUEST_DELAY_SECONDS",
+    valueKind: "json-array"
+  },
+  {
+    path: "normalize.concurrency",
+    environmentVariable: "NORMALIZE_CONCURRENCY",
+    valueKind: "number"
+  },
   { path: "normalize.quality", environmentVariable: "NORMALIZE_QUALITY", valueKind: "number" },
-  { path: "normalize.quality_step", environmentVariable: "NORMALIZE_QUALITY_STEP", valueKind: "number" },
-  { path: "normalize.min_quality", environmentVariable: "NORMALIZE_MIN_QUALITY", valueKind: "number" },
-  { path: "normalize.max_long_edge", environmentVariable: "NORMALIZE_MAX_LONG_EDGE", valueKind: "number" },
-  { path: "normalize.max_size_kb", environmentVariable: "NORMALIZE_MAX_SIZE_KB", valueKind: "number" },
-  { path: "normalize.skip_webp_under_kb", environmentVariable: "NORMALIZE_SKIP_WEBP_UNDER_KB", valueKind: "number" },
+  {
+    path: "normalize.quality_step",
+    environmentVariable: "NORMALIZE_QUALITY_STEP",
+    valueKind: "number"
+  },
+  {
+    path: "normalize.min_quality",
+    environmentVariable: "NORMALIZE_MIN_QUALITY",
+    valueKind: "number"
+  },
+  {
+    path: "normalize.max_long_edge",
+    environmentVariable: "NORMALIZE_MAX_LONG_EDGE",
+    valueKind: "number"
+  },
+  {
+    path: "normalize.max_size_kb",
+    environmentVariable: "NORMALIZE_MAX_SIZE_KB",
+    valueKind: "number"
+  },
+  {
+    path: "normalize.skip_webp_under_kb",
+    environmentVariable: "NORMALIZE_SKIP_WEBP_UNDER_KB",
+    valueKind: "number"
+  },
   { path: "thumbnail.long_edge", environmentVariable: "THUMBNAIL_LONG_EDGE", valueKind: "number" },
   { path: "thumbnail.quality", environmentVariable: "THUMBNAIL_QUALITY", valueKind: "number" },
-  { path: "admin.login_background", environmentVariable: "ADMIN_LOGIN_BACKGROUND", valueKind: "string" },
-  { path: "admin.image_page_size", environmentVariable: "ADMIN_IMAGE_PAGE_SIZE", valueKind: "number" },
-  { path: "admin.recent_uploads", environmentVariable: "ADMIN_RECENT_UPLOADS", valueKind: "number" },
-  { path: "security.session_ttl_seconds", environmentVariable: "SECURITY_SESSION_TTL_SECONDS", valueKind: "number" },
-  { path: "security.login_failure_window_seconds", environmentVariable: "SECURITY_LOGIN_FAILURE_WINDOW_SECONDS", valueKind: "number" },
-  { path: "security.login_max_failures", environmentVariable: "SECURITY_LOGIN_MAX_FAILURES", valueKind: "number" },
-  { path: "security.login_global_window_seconds", environmentVariable: "SECURITY_LOGIN_GLOBAL_WINDOW_SECONDS", valueKind: "number" },
-  { path: "security.login_global_max_attempts", environmentVariable: "SECURITY_LOGIN_GLOBAL_MAX_ATTEMPTS", valueKind: "number" },
-  { path: "security.random_window_seconds", environmentVariable: "SECURITY_RANDOM_WINDOW_SECONDS", valueKind: "number" },
-  { path: "security.random_max_requests", environmentVariable: "SECURITY_RANDOM_MAX_REQUESTS", valueKind: "number" },
-  { path: "security.random_limit_max_requests", environmentVariable: "SECURITY_RANDOM_LIMIT_MAX_REQUESTS", valueKind: "number" },
+  {
+    path: "admin.login_background",
+    environmentVariable: "ADMIN_LOGIN_BACKGROUND",
+    valueKind: "string"
+  },
+  {
+    path: "admin.image_page_size",
+    environmentVariable: "ADMIN_IMAGE_PAGE_SIZE",
+    valueKind: "number"
+  },
+  {
+    path: "admin.recent_uploads",
+    environmentVariable: "ADMIN_RECENT_UPLOADS",
+    valueKind: "number"
+  },
+  {
+    path: "security.session_ttl_seconds",
+    environmentVariable: "SECURITY_SESSION_TTL_SECONDS",
+    valueKind: "number"
+  },
+  {
+    path: "security.login_failure_window_seconds",
+    environmentVariable: "SECURITY_LOGIN_FAILURE_WINDOW_SECONDS",
+    valueKind: "number"
+  },
+  {
+    path: "security.login_max_failures",
+    environmentVariable: "SECURITY_LOGIN_MAX_FAILURES",
+    valueKind: "number"
+  },
+  {
+    path: "security.login_global_window_seconds",
+    environmentVariable: "SECURITY_LOGIN_GLOBAL_WINDOW_SECONDS",
+    valueKind: "number"
+  },
+  {
+    path: "security.login_global_max_attempts",
+    environmentVariable: "SECURITY_LOGIN_GLOBAL_MAX_ATTEMPTS",
+    valueKind: "number"
+  },
+  {
+    path: "security.random_window_seconds",
+    environmentVariable: "SECURITY_RANDOM_WINDOW_SECONDS",
+    valueKind: "number"
+  },
+  {
+    path: "security.random_max_requests",
+    environmentVariable: "SECURITY_RANDOM_MAX_REQUESTS",
+    valueKind: "number"
+  },
+  {
+    path: "security.random_limit_max_requests",
+    environmentVariable: "SECURITY_RANDOM_LIMIT_MAX_REQUESTS",
+    valueKind: "number"
+  },
   { path: "altcha.enabled", environmentVariable: "ALTCHA_ENABLED", valueKind: "boolean" },
   { path: "altcha.ttl_seconds", environmentVariable: "ALTCHA_TTL_SECONDS", valueKind: "number" },
   { path: "altcha.cost", environmentVariable: "ALTCHA_COST", valueKind: "number" },
-  { path: "altcha.counter_range", environmentVariable: "ALTCHA_COUNTER_RANGE", valueKind: "json-array" },
+  {
+    path: "altcha.counter_range",
+    environmentVariable: "ALTCHA_COUNTER_RANGE",
+    valueKind: "json-array"
+  },
   { path: "log.level", environmentVariable: "LOG_LEVEL", valueKind: "string" },
   { path: "log.max_size_mb", environmentVariable: "LOG_MAX_SIZE_MB", valueKind: "number" },
   { path: "log.max_files", environmentVariable: "LOG_MAX_FILES", valueKind: "number" }
@@ -126,7 +274,7 @@ function parseStrictJsonValue(source: string) {
         escaped = false;
       } else if (character === "\\") {
         escaped = true;
-      } else if (character === "\"") {
+      } else if (character === '"') {
         index += 1;
         try {
           return JSON.parse(source.slice(start, index)) as string;
@@ -151,9 +299,7 @@ function parseStrictJsonValue(source: string) {
   }
 
   function consumeNumber() {
-    const match = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(
-      source.slice(index)
-    );
+    const match = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(source.slice(index));
     if (!match) fail("invalid JSON number");
     index += match[0].length;
   }
@@ -188,7 +334,7 @@ function parseStrictJsonValue(source: string) {
       return;
     }
     while (index < source.length) {
-      if (source[index] !== "\"") fail("expected a quoted JSON object key");
+      if (source[index] !== '"') fail("expected a quoted JSON object key");
       const key = consumeString();
       if (key === "__proto__") {
         throw new Error('JSON object key "__proto__" is not allowed');
@@ -214,7 +360,7 @@ function parseStrictJsonValue(source: string) {
   function consumeValue() {
     skipWhitespace();
     const character = source[index];
-    if (character === "\"") consumeString();
+    if (character === '"') consumeString();
     else if (character === "[") consumeArray();
     else if (character === "{") consumeObject();
     else if (character === "t") consumeLiteral("true");
@@ -229,10 +375,7 @@ function parseStrictJsonValue(source: string) {
   return JSON.parse(source) as unknown;
 }
 
-function parseEnvironmentValue(
-  binding: RuntimeConfigEnvironmentBinding,
-  value: string
-) {
+function parseEnvironmentValue(binding: RuntimeConfigEnvironmentBinding, value: string) {
   if (binding.valueKind === "string") return value;
   if (binding.valueKind === "number") {
     if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value)) {
@@ -252,8 +395,8 @@ function parseEnvironmentValue(
     throw new Error("must be a JSON array");
   }
   if (
-    binding.valueKind === "json-object"
-    && (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
+    binding.valueKind === "json-object" &&
+    (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
   ) {
     throw new Error("must be a JSON object");
   }
@@ -269,11 +412,10 @@ function setPatchValue(
   let target = patch as Record<string, unknown>;
   for (const segment of segments.slice(0, -1)) {
     const existing = target[segment];
-    const nested = existing !== null
-      && typeof existing === "object"
-      && !Array.isArray(existing)
-      ? existing as Record<string, unknown>
-      : {};
+    const nested =
+      existing !== null && typeof existing === "object" && !Array.isArray(existing)
+        ? (existing as Record<string, unknown>)
+        : {};
     if (nested !== existing) target[segment] = nested;
     target = nested;
   }
@@ -314,11 +456,13 @@ export function runtimeConfigFromEnvironment(
     const configured = configuredBindings
       .map(({ environmentVariable, path }) => `${environmentVariable} (${path})`)
       .join(", ");
-    const issues = error.issues.map((issue) => {
-      const path = issue.path.map(String).join(".") || "<root>";
-      const binding = issueBinding(issue.path);
-      return `${binding?.environmentVariable ?? "<no environment binding>"} (${path}): ${issue.message}`;
-    }).join("; ");
+    const issues = error.issues
+      .map((issue) => {
+        const path = issue.path.map(String).join(".") || "<root>";
+        const binding = issueBinding(issue.path);
+        return `${binding?.environmentVariable ?? "<no environment binding>"} (${path}): ${issue.message}`;
+      })
+      .join("; ");
     throw new Error(
       `Invalid RuntimeConfig environment seed from ${configured || "<defaults>"}: ${issues}`,
       { cause: error }

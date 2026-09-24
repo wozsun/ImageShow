@@ -50,16 +50,13 @@ export type RedisWindowReservation = {
   retryAfterSeconds: number;
 };
 
-type RedisWindowCommand = (
-  ...arguments_: Array<string | number>
-) => Promise<unknown>;
+type RedisWindowCommand = (...arguments_: Array<string | number>) => Promise<unknown>;
 
 export type RedisWindowCommandClient = Readonly<{
   imageshowReserveWindows: RedisWindowCommand;
 }>;
 
-type RedisWindowRegistrar = Pick<Redis, "defineCommand"> &
-  Partial<Pick<Redis, "options">>;
+type RedisWindowRegistrar = Pick<Redis, "defineCommand"> & Partial<Pick<Redis, "options">>;
 type RedisWindowCommandSource = RedisWindowCommandClient | RedisWindowRegistrar;
 
 function redisWindowCandidate(client: object) {
@@ -69,13 +66,10 @@ function redisWindowCandidate(client: object) {
 function hasRedisWindowCommand(
   client: RedisWindowCommandSource
 ): client is RedisWindowCommandClient {
-  return typeof redisWindowCandidate(client).imageshowReserveWindows
-    === "function";
+  return typeof redisWindowCandidate(client).imageshowReserveWindows === "function";
 }
 
-function isRedisWindowRegistrar(
-  client: RedisWindowCommandSource
-): client is RedisWindowRegistrar {
+function isRedisWindowRegistrar(client: RedisWindowCommandSource): client is RedisWindowRegistrar {
   return typeof redisWindowCandidate(client).defineCommand === "function";
 }
 
@@ -94,10 +88,7 @@ export function registerRedisWindowCommand(
     };
   }
   if (!hasRedisWindowCommand(client)) {
-    client.defineCommand(
-      "imageshowReserveWindows",
-      redisWindowScripts.imageshowReserveWindows
-    );
+    client.defineCommand("imageshowReserveWindows", redisWindowScripts.imageshowReserveWindows);
   }
   return client as unknown as RedisWindowCommandClient;
 }
@@ -114,16 +105,11 @@ export async function reserveRedisWindowsCommand(
   client: RedisWindowCommandSource,
   windows: readonly RedisWindow[]
 ): Promise<RedisWindowReservation[]> {
-  const commandClient = hasRedisWindowCommand(client)
-    ? client
-    : registerRedisWindowCommand(client);
+  const commandClient = hasRedisWindowCommand(client) ? client : registerRedisWindowCommand(client);
   const raw = await commandClient.imageshowReserveWindows(
     String(windows.length),
     ...windows.map((window) => window.key),
-    ...windows.flatMap((window) => [
-      String(window.capacity),
-      String(window.windowSeconds)
-    ])
+    ...windows.flatMap((window) => [String(window.capacity), String(window.windowSeconds)])
   );
   if (!Array.isArray(raw) || raw.length !== windows.length * 4) {
     throw new Error("Redis window script returned an invalid result count");
@@ -136,10 +122,10 @@ export async function reserveRedisWindowsCommand(
     const increment = integer(raw[offset + 2], "reservation increment");
     const ttl = integer(raw[offset + 3], "reservation TTL");
     if (
-      ![-1, 0, 1].includes(state)
-      || current < 0
-      || ![0, 1].includes(increment)
-      || (state === 1) !== (increment === 1)
+      ![-1, 0, 1].includes(state) ||
+      current < 0 ||
+      ![0, 1].includes(increment) ||
+      (state === 1) !== (increment === 1)
     ) {
       throw new Error("Redis window script returned inconsistent state");
     }

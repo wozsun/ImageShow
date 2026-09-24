@@ -1,16 +1,17 @@
 import { databaseReadiness, requiredTableNames, type DatabaseReader } from "./contract.ts";
 
 export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
-  const rows = (await database.query<{
-    table_name: string;
-    relation_kind: string;
-    column_name: string;
-    type_name: string;
-    type_modifier: number;
-    not_null: boolean;
-    default_value: string | null;
-  }>(
-    `SELECT relation.relname AS table_name,
+  const rows = (
+    await database.query<{
+      table_name: string;
+      relation_kind: string;
+      column_name: string;
+      type_name: string;
+      type_modifier: number;
+      not_null: boolean;
+      default_value: string | null;
+    }>(
+      `SELECT relation.relname AS table_name,
             relation.relkind::text AS relation_kind,
             attribute.attname AS column_name,
             type.typname AS type_name,
@@ -28,12 +29,11 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
          ON defaults.adrelid=attribute.attrelid AND defaults.adnum=attribute.attnum
       WHERE namespace.nspname='public'
         AND relation.relname = ANY($1::text[])`,
-    [requiredTableNames]
-  )).rows;
+      [requiredTableNames]
+    )
+  ).rows;
 
-  const relationKinds = new Map(
-    rows.map((row) => [row.table_name, row.relation_kind])
-  );
+  const relationKinds = new Map(rows.map((row) => [row.table_name, row.relation_kind]));
   const invalidTables = requiredTableNames.filter((table) => {
     const kind = relationKinds.get(table);
     return kind !== "r" && kind !== "p";
@@ -44,18 +44,12 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
     );
   }
 
-  const actualColumns = new Map(
-    rows.map((row) => [`${row.table_name}.${row.column_name}`, row])
-  );
+  const actualColumns = new Map(rows.map((row) => [`${row.table_name}.${row.column_name}`, row]));
   const incompatible: string[] = [];
   for (const [table, readiness] of Object.entries(databaseReadiness)) {
     for (const [column, expectedType] of Object.entries(readiness.columns)) {
       const actual = actualColumns.get(`${table}.${column}`);
-      if (
-        !actual
-        || actual.type_name !== expectedType
-        || actual.type_modifier !== -1
-      ) {
+      if (!actual || actual.type_name !== expectedType || actual.type_modifier !== -1) {
         incompatible.push(`${table}.${column}`);
       }
     }

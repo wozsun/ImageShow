@@ -1,24 +1,17 @@
-import {
-  createHmac,
-  randomBytes,
-  timingSafeEqual
-} from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import { ApiError } from "../../../core/api-error.ts";
 import { stableJson } from "./projection.ts";
 
-export const uploadCredentialPurpose =
-  "imageshow/ingestion/upload/credential";
-export const ingestionActionWatermarkPurpose =
-  "imageshow/ingestion/action/watermark";
-export const ingestionActionContinuationPurpose =
-  "imageshow/ingestion/action/continuation";
+export const uploadCredentialPurpose = "imageshow/ingestion/upload/credential";
+export const ingestionActionWatermarkPurpose = "imageshow/ingestion/action/watermark";
+export const ingestionActionContinuationPurpose = "imageshow/ingestion/action/continuation";
 export const ingestionTokenPurposes = [
   uploadCredentialPurpose,
   ingestionActionWatermarkPurpose,
   ingestionActionContinuationPurpose
 ] as const;
-export type IngestionTokenPurpose = typeof ingestionTokenPurposes[number];
+export type IngestionTokenPurpose = (typeof ingestionTokenPurposes)[number];
 
 type IngestionTokenEnvelope = Record<string, unknown> & {
   purpose: IngestionTokenPurpose;
@@ -45,10 +38,8 @@ function decodeBase64Url(value: string, maximumBytes: number) {
   } catch {
     throw invalidToken();
   }
-  if (
-    decoded.length > maximumBytes
-    || decoded.toString("base64url") !== value
-  ) throw invalidToken();
+  if (decoded.length > maximumBytes || decoded.toString("base64url") !== value)
+    throw invalidToken();
   return decoded;
 }
 
@@ -62,14 +53,15 @@ function validateEnvelope(
   }
   const envelope = value as IngestionTokenEnvelope;
   if (
-    envelope.purpose !== expectedPurpose
-    || !Number.isSafeInteger(envelope.issued_at)
-    || !Number.isSafeInteger(envelope.expires_at)
-    || envelope.issued_at < 0
-    || envelope.expires_at <= envelope.issued_at
-    || envelope.issued_at > now
-    || envelope.expires_at <= now
-  ) throw invalidToken("内容接入凭证已过期或时间无效");
+    envelope.purpose !== expectedPurpose ||
+    !Number.isSafeInteger(envelope.issued_at) ||
+    !Number.isSafeInteger(envelope.expires_at) ||
+    envelope.issued_at < 0 ||
+    envelope.expires_at <= envelope.issued_at ||
+    envelope.issued_at > now ||
+    envelope.expires_at <= now
+  )
+    throw invalidToken("内容接入凭证已过期或时间无效");
   return envelope;
 }
 
@@ -86,10 +78,9 @@ export class IngestionTokenService {
     }
     this.#rootKey = Buffer.from(rootKey);
     this.#now = options.now ?? Date.now;
-    this.#maximumTokenBytes = options.maximumTokenBytes
-      ?? appConfig.ingestionRuntime.tokenMaxBytes;
-    this.#maximumPayloadBytes = options.maximumPayloadBytes
-      ?? appConfig.ingestionRuntime.tokenPayloadMaxBytes;
+    this.#maximumTokenBytes = options.maximumTokenBytes ?? appConfig.ingestionRuntime.tokenMaxBytes;
+    this.#maximumPayloadBytes =
+      options.maximumPayloadBytes ?? appConfig.ingestionRuntime.tokenPayloadMaxBytes;
   }
 
   #mac(purpose: IngestionTokenPurpose, payload: Buffer) {
@@ -107,14 +98,15 @@ export class IngestionTokenService {
     issuedAt = this.#now()
   ) {
     if (
-      "purpose" in claims
-      || "issued_at" in claims
-      || "expires_at" in claims
-      || !Number.isSafeInteger(issuedAt)
-      || !Number.isSafeInteger(expiresAt)
-      || issuedAt < 0
-      || expiresAt <= issuedAt
-    ) throw new RangeError("Ingestion token claims or lifetime are invalid");
+      "purpose" in claims ||
+      "issued_at" in claims ||
+      "expires_at" in claims ||
+      !Number.isSafeInteger(issuedAt) ||
+      !Number.isSafeInteger(expiresAt) ||
+      issuedAt < 0 ||
+      expiresAt <= issuedAt
+    )
+      throw new RangeError("Ingestion token claims or lifetime are invalid");
     const envelope = {
       purpose,
       issued_at: issuedAt,
@@ -125,10 +117,9 @@ export class IngestionTokenService {
     if (payload.length > this.#maximumPayloadBytes) {
       throw new RangeError("Ingestion token payload exceeds its byte limit");
     }
-    const token = `${payload.toString("base64url")}.${this.#mac(
-      purpose,
-      payload
-    ).toString("base64url")}`;
+    const token = `${payload.toString("base64url")}.${this.#mac(purpose, payload).toString(
+      "base64url"
+    )}`;
     if (Buffer.byteLength(token, "utf8") > this.#maximumTokenBytes) {
       throw new RangeError("Ingestion token exceeds its byte limit");
     }
@@ -140,22 +131,15 @@ export class IngestionTokenService {
     token: string,
     validateClaims: (value: IngestionTokenEnvelope) => value is T
   ): T {
-    if (
-      typeof token !== "string"
-      || Buffer.byteLength(token, "utf8") > this.#maximumTokenBytes
-    ) throw invalidToken();
+    if (typeof token !== "string" || Buffer.byteLength(token, "utf8") > this.#maximumTokenBytes)
+      throw invalidToken();
     const segments = token.split(".");
     if (segments.length !== 2) throw invalidToken();
-    const payload = decodeBase64Url(
-      segments[0] ?? "",
-      this.#maximumPayloadBytes
-    );
+    const payload = decodeBase64Url(segments[0] ?? "", this.#maximumPayloadBytes);
     const suppliedMac = decodeBase64Url(segments[1] ?? "", 32);
     const expectedMac = this.#mac(purpose, payload);
-    if (
-      suppliedMac.length !== expectedMac.length
-      || !timingSafeEqual(suppliedMac, expectedMac)
-    ) throw invalidToken();
+    if (suppliedMac.length !== expectedMac.length || !timingSafeEqual(suppliedMac, expectedMac))
+      throw invalidToken();
     let parsed: unknown;
     try {
       parsed = JSON.parse(payload.toString("utf8"));

@@ -31,18 +31,11 @@ export function ingestionDisplayQueueKey(owner: string, queue: IngestionQueueTyp
   return `${ingestionDisplayQueueKeyRoot}${ingestionOwnerKey(owner)}:${queue}`;
 }
 
-export function ingestionQueueMetadataKey(
-  owner: string,
-  queue: IngestionQueueType
-) {
+export function ingestionQueueMetadataKey(owner: string, queue: IngestionQueueType) {
   return `${ingestionQueueMetadataKeyRoot}${ingestionOwnerKey(owner)}:${queue}`;
 }
 
-export function ingestionSessionKeys(
-  owner: string,
-  queue: IngestionQueueType,
-  sessionId: string
-) {
+export function ingestionSessionKeys(owner: string, queue: IngestionQueueType, sessionId: string) {
   return {
     canonical: ingestionCanonicalKey(owner, sessionId),
     owner: ingestionOwnerQueueKey(owner, queue),

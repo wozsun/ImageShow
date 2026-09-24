@@ -4,14 +4,8 @@ import type {
   ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
 import { normalizeIngestionDraftUrl } from "@imageshow/shared/browser";
-import type {
-  EditableImageSnapshot,
-  ImageDraft
-} from "../../../lib/types.js";
-import {
-  normalizeAuthor,
-  normalizeTheme
-} from "../../../lib/image-draft.js";
+import type { EditableImageSnapshot, ImageDraft } from "../../../lib/types.js";
+import { normalizeAuthor, normalizeTheme } from "../../../lib/image-draft.js";
 
 export type ImageMetadataUpdate = ImageUpdateItemInputDto;
 
@@ -33,11 +27,7 @@ export type ImageMetadataSaveReport = ImageUpdateResponseDto & {
   unavailableIds: string[];
 };
 
-export type ImageMetadataCardSaveState =
-  | "saved"
-  | "failed"
-  | "pending"
-  | null;
+export type ImageMetadataCardSaveState = "saved" | "failed" | "pending" | null;
 
 export type ImageMetadataSaveOutcome = {
   attempt: ImageMetadataSaveAttempt;
@@ -74,9 +64,7 @@ function draftFromImage(item: EditableImageSnapshot): ImageDraft {
 }
 
 function draftsFromImages(items: EditableImageSnapshot[]) {
-  return Object.fromEntries(
-    items.map((item) => [item.id, draftFromImage(item)])
-  );
+  return Object.fromEntries(items.map((item) => [item.id, draftFromImage(item)]));
 }
 
 export function createImageMetadataSession(
@@ -90,8 +78,7 @@ export function createImageMetadataSession(
 }
 
 function tagsChanged(draftTags: string[], savedTags: string[]) {
-  return JSON.stringify([...draftTags].sort())
-    !== JSON.stringify([...savedTags].sort());
+  return JSON.stringify([...draftTags].sort()) !== JSON.stringify([...savedTags].sort());
 }
 
 export function fieldsChangedFor(
@@ -164,10 +151,7 @@ function submittedIntentMatchesSnapshot(
   const authoritativeDraft = draftFromImage(item);
   // auto 是重新识别命令，不是 PostgreSQL 的持久值。具体分类无法证明命令已经
   // 执行；只有服务端明确返回 updated 时才能清除，failed 或响应丢失都保留草稿。
-  if (
-    (field === "device" || field === "brightness")
-    && submitted === "auto"
-  ) {
+  if ((field === "device" || field === "brightness") && submitted === "auto") {
     return false;
   }
   // Persisted text is trimmed by the server. Draft identity above must keep
@@ -181,23 +165,17 @@ function submittedIntentMatchesSnapshot(
   return valuesEqual(field, submitted, authoritativeDraft[field]);
 }
 
-function updateMatchesSnapshot(
-  update: ImageMetadataUpdate,
-  item: EditableImageSnapshot
-) {
-  return imageDraftFields.every((field) => (
-    !Object.hasOwn(update, field)
-    || submittedIntentMatchesSnapshot(field, update, item)
-  ));
+function updateMatchesSnapshot(update: ImageMetadataUpdate, item: EditableImageSnapshot) {
+  return imageDraftFields.every(
+    (field) => !Object.hasOwn(update, field) || submittedIntentMatchesSnapshot(field, update, item)
+  );
 }
 
 export function createImageMetadataSaveReport(
   attempt: ImageMetadataSaveAttempt,
   authoritativeItems: EditableImageSnapshot[] | null
 ): ImageMetadataSaveReport {
-  const authoritativeById = new Map(
-    (authoritativeItems ?? []).map((item) => [item.id, item])
-  );
+  const authoritativeById = new Map((authoritativeItems ?? []).map((item) => [item.id, item]));
   const responseReceived = attempt.response !== null;
   let response = attempt.response;
   if (!response) {
@@ -223,9 +201,10 @@ export function createImageMetadataSaveReport(
     ...response,
     responseReceived,
     snapshotFailed: authoritativeItems === null,
-    unavailableIds: authoritativeItems === null
-      ? []
-      : attempt.activeIds.filter((id) => !authoritativeById.has(id))
+    unavailableIds:
+      authoritativeItems === null
+        ? []
+        : attempt.activeIds.filter((id) => !authoritativeById.has(id))
   };
 }
 
@@ -243,9 +222,7 @@ export function imageMetadataCardSaveState(
   const result = report.results.find((candidate) => candidate.id === imageId);
   if (!result) return null;
   if (report.snapshotFailed) {
-    return report.responseReceived && result.status === "failed"
-      ? "failed"
-      : "pending";
+    return report.responseReceived && result.status === "failed" ? "failed" : "pending";
   }
   if (result.status === "failed") return "failed";
   return "saved";
@@ -256,12 +233,8 @@ export function reconcileImageMetadataSession(
   attempt: ImageMetadataSaveAttempt,
   authoritativeItems: EditableImageSnapshot[]
 ): ImageMetadataSessionState {
-  const oldBaselineById = new Map(
-    state.baselineItems.map((item) => [item.id, item])
-  );
-  const authoritativeById = new Map(
-    authoritativeItems.map((item) => [item.id, item])
-  );
+  const oldBaselineById = new Map(state.baselineItems.map((item) => [item.id, item]));
+  const authoritativeById = new Map(authoritativeItems.map((item) => [item.id, item]));
   const updateById = new Map(attempt.items.map((item) => [item.id, item]));
   const resultById = new Map(
     (attempt.response?.results ?? []).map((result) => [result.id, result])
@@ -276,9 +249,9 @@ export function reconcileImageMetadataSession(
     const result = resultById.get(item.id);
     const changedBefore = oldBaseline
       ? fieldsChangedFor(oldBaseline, currentDraft)
-      : Object.fromEntries(
+      : (Object.fromEntries(
           imageDraftFields.map((field) => [field, false])
-        ) as ImageMetadataChanges;
+        ) as ImageMetadataChanges);
     const nextDraft = { ...currentDraft };
     const writableDraft = nextDraft as Record<keyof ImageDraft, unknown>;
 
@@ -292,10 +265,7 @@ export function reconcileImageMetadataSession(
         // 回读失败后用户可能继续编辑；新意图不属于上一轮提交，必须保留。
         continue;
       }
-      if (
-        result?.status === "updated"
-        || submittedIntentMatchesSnapshot(field, update, item)
-      ) {
+      if (result?.status === "updated" || submittedIntentMatchesSnapshot(field, update, item)) {
         writableDraft[field] = authoritativeDraft[field];
       }
     }
@@ -316,9 +286,7 @@ export function reconcileImageMetadataSession(
 export function restoreImageMetadataDrafts(
   state: ImageMetadataSessionState
 ): ImageMetadataSessionState {
-  const baselineById = new Map(
-    state.baselineItems.map((item) => [item.id, item])
-  );
+  const baselineById = new Map(state.baselineItems.map((item) => [item.id, item]));
   const drafts = { ...state.drafts };
   for (const id of state.activeIds) {
     const item = baselineById.get(id);

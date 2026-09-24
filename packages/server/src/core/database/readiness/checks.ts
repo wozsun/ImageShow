@@ -32,18 +32,14 @@ function isIdentityPairCheck(row: CheckConstraintRow) {
     return false;
   }
   const expression = normalizedExpression(row.definition);
-  const nullPairs = orderedPairs(
-    "identity_providerisnull",
-    "identity_idisnull"
+  const nullPairs = orderedPairs("identity_providerisnull", "identity_idisnull");
+  const valuePairs = orderedPairs("identity_providerisnotnull", "identity_idisnotnull");
+  return nullPairs.some((nullPair) =>
+    valuePairs.some(
+      (valuePair) =>
+        expression === `${nullPair}or${valuePair}` || expression === `${valuePair}or${nullPair}`
+    )
   );
-  const valuePairs = orderedPairs(
-    "identity_providerisnotnull",
-    "identity_idisnotnull"
-  );
-  return nullPairs.some((nullPair) => valuePairs.some((valuePair) => (
-    expression === `${nullPair}or${valuePair}`
-    || expression === `${valuePair}or${nullPair}`
-  )));
 }
 
 function isIdentityProviderTokenCheck(row: CheckConstraintRow) {
@@ -57,15 +53,11 @@ function isIdentityProviderTokenCheck(row: CheckConstraintRow) {
       "char_length(identity_provider)<=32",
       pattern
     ),
-    ...orderedPairs(
-      "char_length(identity_provider)between1and32",
-      pattern
-    )
+    ...orderedPairs("char_length(identity_provider)between1and32", pattern)
   ];
-  return boundedBodies.some((body) => (
-    expression === `${nullable}or${body}`
-    || expression === `${body}or${nullable}`
-  ));
+  return boundedBodies.some(
+    (body) => expression === `${nullable}or${body}` || expression === `${body}or${nullable}`
+  );
 }
 
 function isIdentityIdNonemptyCheck(row: CheckConstraintRow) {
@@ -77,12 +69,10 @@ function isIdentityIdNonemptyCheck(row: CheckConstraintRow) {
   ].includes(expression);
 }
 
-async function validatedChecksFor(
-  database: DatabaseReader,
-  table: string
-) {
-  return (await database.query<CheckConstraintRow>(
-    `SELECT ARRAY(
+async function validatedChecksFor(database: DatabaseReader, table: string) {
+  return (
+    await database.query<CheckConstraintRow>(
+      `SELECT ARRAY(
               SELECT attribute.attname
                 FROM unnest(constraint_record.conkey)
                   WITH ORDINALITY AS key(attnum, ordinal)
@@ -103,8 +93,9 @@ async function validatedChecksFor(
       WHERE namespace.nspname='public'
         AND relation.relname=$1
         AND constraint_record.contype='c'`,
-    [table]
-  )).rows.filter((row) => row.is_validated);
+      [table]
+    )
+  ).rows.filter((row) => row.is_validated);
 }
 
 export async function assertRequiredCheckConstraints(database: DatabaseReader) {
@@ -114,21 +105,15 @@ export async function assertRequiredCheckConstraints(database: DatabaseReader) {
     ["author identity null pairing", isIdentityPairCheck],
     ["author identity provider token", isIdentityProviderTokenCheck],
     ["author identity nonempty ID", isIdentityIdNonemptyCheck]
-  ].flatMap(([label, matches]) => (
-    authorRows.some(matches as (row: CheckConstraintRow) => boolean)
-      ? []
-      : [label as string]
-  ));
+  ].flatMap(([label, matches]) =>
+    authorRows.some(matches as (row: CheckConstraintRow) => boolean) ? [] : [label as string]
+  );
   if (missing.length) {
-    throw new Error(
-      `required CHECK constraints are missing or invalid: ${missing.join(", ")}`
-    );
+    throw new Error(`required CHECK constraints are missing or invalid: ${missing.join(", ")}`);
   }
 }
 
-export async function assertSupportedAuthorIdentityProviders(
-  database: DatabaseReader
-) {
+export async function assertSupportedAuthorIdentityProviders(database: DatabaseReader) {
   const result = await database.query<{ unsupported: boolean }>(
     `SELECT EXISTS(
               SELECT 1

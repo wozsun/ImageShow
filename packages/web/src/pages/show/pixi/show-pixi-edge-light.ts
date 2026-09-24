@@ -33,9 +33,8 @@ export class ShowPixiEdgeLight {
         const shift = (2 - channel) * 8;
         const lightValue = (light.color >> shift) & 255;
         const borderValue = (border.color >> shift) & 255;
-        ramp.data[pixel * 4 + channel] = alpha > 0
-          ? Math.round((lightValue * lightAlpha + borderValue * borderAlpha) / alpha)
-          : 0;
+        ramp.data[pixel * 4 + channel] =
+          alpha > 0 ? Math.round((lightValue * lightAlpha + borderValue * borderAlpha) / alpha) : 0;
       }
       ramp.data[pixel * 4 + 3] = Math.round(alpha * 255);
     }
@@ -45,11 +44,14 @@ export class ShowPixiEdgeLight {
     const indices = new Uint32Array(pointCount * 6);
     for (let point = 0; point < pointCount; point += 1) {
       const outer = point * 2;
-      const next = (point + 1) % pointCount * 2;
+      const next = ((point + 1) % pointCount) * 2;
       indices.set([outer, next, outer + 1, next, next + 1, outer + 1], point * 6);
     }
     this.mesh = new MeshSimple({
-      texture, vertices: this.#positions, uvs: this.#uvs, indices,
+      texture,
+      vertices: this.#positions,
+      uvs: this.#uvs,
+      indices,
       roundPixels: false
     });
     // The pointer owns one small textured ring; batch it with the photo so
@@ -75,10 +77,11 @@ export class ShowPixiEdgeLight {
     for (let offset = 0; offset < this.#local.length; offset += 4) {
       const x = this.#local[offset]!;
       const y = this.#local[offset + 1]!;
-      const distance = Math.min(1, Math.hypot(
-        x / (width / 2) - magnet.normalizedX,
-        y / (height / 2) - magnet.normalizedY
-      ) / 1.3);
+      const distance = Math.min(
+        1,
+        Math.hypot(x / (width / 2) - magnet.normalizedX, y / (height / 2) - magnet.normalizedY) /
+          1.3
+      );
       // Encode both the radial falloff and the center-to-edge strength in the
       // same ramp, matching the gallery's 65% ellipse and magnet opacity.
       const u = (0.5 + (1 - (1 - distance) * magnet.edgeStrength) * 127) / 128;
@@ -108,9 +111,9 @@ export class ShowPixiEdgeLight {
       const signY = corner < 2 ? 1 : -1;
       const centerX = signX * (halfWidth - radius);
       const centerY = signY * (halfHeight - radius);
-      const start = corner * Math.PI / 2;
+      const start = (corner * Math.PI) / 2;
       for (let step = 0; step < arcSteps; step += 1) {
-        const angle = start + step / arcSteps * Math.PI / 2;
+        const angle = start + ((step / arcSteps) * Math.PI) / 2;
         const normalX = Math.cos(angle);
         const normalY = Math.sin(angle);
         append(centerX + radius * normalX, centerY + radius * normalY, normalX, normalY);
@@ -120,11 +123,12 @@ export class ShowPixiEdgeLight {
       const normalY = Math.sin(end);
       const edgeLength = corner % 2 === 0 ? this.#width - radius * 2 : this.#height - radius * 2;
       for (let step = 0; step < straightSteps; step += 1) {
-        const along = step / straightSteps * edgeLength;
+        const along = (step / straightSteps) * edgeLength;
         append(
           centerX + radius * normalX - normalY * along,
           centerY + radius * normalY + normalX * along,
-          normalX, normalY
+          normalX,
+          normalY
         );
       }
     }

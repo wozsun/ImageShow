@@ -18,11 +18,17 @@ export async function removeStorageMaintenanceCandidate(
   try {
     scheduleSignal.throwIfAborted();
     operationSignal.throwIfAborted();
-    const results = await removeStorageObjectsAndConfirm([{
-      prefix: candidate.prefix,
-      key: candidate.key,
-      storageSlug: candidate.backend
-    }], { signal: operationSignal }, scheduleSignal);
+    const results = await removeStorageObjectsAndConfirm(
+      [
+        {
+          prefix: candidate.prefix,
+          key: candidate.key,
+          storageSlug: candidate.backend
+        }
+      ],
+      { signal: operationSignal },
+      scheduleSignal
+    );
     assertStorageRemovalResults(results);
     const result = results[0]!;
     scheduleSignal.throwIfAborted();
@@ -59,14 +65,14 @@ export async function pruneStorageMaintenanceDirectories(
   for (const { backend, group, directorySnapshot } of groups) {
     scheduleSignal.throwIfAborted();
     try {
-      const changedObjects = items.flatMap((item) => (
-        (item.action === "repair_thumbnail" || item.action === "remove_object")
-        && group.slugs.includes(item.backend)
-        && item.prefix !== "*"
-        && (item.action === "remove_object" || item.key !== "*")
+      const changedObjects = items.flatMap((item) =>
+        (item.action === "repair_thumbnail" || item.action === "remove_object") &&
+        group.slugs.includes(item.backend) &&
+        item.prefix !== "*" &&
+        (item.action === "remove_object" || item.key !== "*")
           ? [{ prefix: item.prefix, key: item.key }]
           : []
-      ));
+      );
       prunedDirectories += await pruneEmptyStorageDirs(backend, {
         signal: lockSignal,
         directorySnapshot,

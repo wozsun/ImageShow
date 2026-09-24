@@ -2,45 +2,57 @@
   --public-color-gallery-sky-left: #151820;
   --public-color-gallery-sky-center: #0e1623;
   --public-color-gallery-sky-right: #101c2a;
-  --public-color-gallery-star-primary: rgba(255, 255, 255, .82);
-  --public-color-gallery-star-primary-halo: rgba(164, 171, 194, .24);
-  --public-color-gallery-star-secondary: rgba(182, 205, 231, .68);
-  --public-color-gallery-star-secondary-halo: rgba(116, 147, 184, .2);
-  --public-color-gallery-star-tertiary: rgba(218, 215, 233, .58);
-  --public-color-gallery-star-tertiary-halo: rgba(151, 143, 178, .18);
-  --public-color-gallery-mask-strongest: rgba(0, 0, 0, .92);
-  --public-color-gallery-mask-light: rgba(0, 0, 0, .58);
-  --public-color-gallery-mask-strong: rgba(0, 0, 0, .84);
-  --public-color-gallery-mask-soft: rgba(0, 0, 0, .52);
-  --public-color-gallery-mask-edge: rgba(0, 0, 0, .9);
+  --public-color-gallery-star-primary: rgba(255, 255, 255, 0.82);
+  --public-color-gallery-star-primary-halo: rgba(164, 171, 194, 0.24);
+  --public-color-gallery-star-secondary: rgba(182, 205, 231, 0.68);
+  --public-color-gallery-star-secondary-halo: rgba(116, 147, 184, 0.2);
+  --public-color-gallery-star-tertiary: rgba(218, 215, 233, 0.58);
+  --public-color-gallery-star-tertiary-halo: rgba(151, 143, 178, 0.18);
+  --public-color-gallery-mask-strongest: rgba(0, 0, 0, 0.92);
+  --public-color-gallery-mask-light: rgba(0, 0, 0, 0.58);
+  --public-color-gallery-mask-strong: rgba(0, 0, 0, 0.84);
+  --public-color-gallery-mask-soft: rgba(0, 0, 0, 0.52);
+  --public-color-gallery-mask-edge: rgba(0, 0, 0, 0.9);
   --public-color-gallery-control-surface: var(--color-dark-surface-muted);
-  --public-color-gallery-menu-surface: rgba(12, 19, 34, .98);
-  --public-shadow-gallery-menu: rgba(0, 2, 8, .5);
+  --public-color-gallery-menu-surface: rgba(12, 19, 34, 0.98);
+  --public-shadow-gallery-menu: rgba(0, 2, 8, 0.5);
   --public-color-gallery-menu-selection-border: var(--color-dark-control-border-selected);
-  --public-color-gallery-code-surface: rgba(86, 128, 185, .14);
-  --public-shadow-gallery-tile: rgba(0, 3, 10, .28);
-  --public-color-gallery-tile-border-hover: rgba(145, 199, 255, .5);
-  --public-color-card-edge-light: rgba(221, 237, 255, .85);
-  --public-shadow-gallery-tile-hover: rgba(66, 148, 255, .34);
+  --public-color-gallery-code-surface: rgba(86, 128, 185, 0.14);
+  --public-shadow-gallery-tile: rgba(0, 3, 10, 0.28);
+  --public-color-gallery-tile-border-hover: rgba(145, 199, 255, 0.5);
+  --public-color-card-edge-light: rgba(221, 237, 255, 0.85);
+  --public-shadow-gallery-tile-hover: rgba(66, 148, 255, 0.34);
   --public-color-gallery-tile-surface: #0d1422;
   --public-color-gallery-tile-surface-raised: #18243a;
   --public-color-gallery-tile-overlay-clear: rgba(14, 18, 28, 0);
-  --public-color-gallery-tile-overlay: rgba(14, 18, 28, .78);
-  --public-color-gallery-back-to-top: rgba(10, 16, 28, .94);
-  --public-shadow-gallery-back-to-top: rgba(0, 3, 10, .38);
+  --public-color-gallery-tile-overlay: rgba(14, 18, 28, 0.78);
+  --public-color-gallery-back-to-top: rgba(10, 16, 28, 0.94);
+  --public-shadow-gallery-back-to-top: rgba(0, 3, 10, 0.38);
   --public-color-show-hint-text: color-mix(in srgb, var(--public-color-text-secondary) 70%, #fff);
-  --public-color-show-hint-outline: rgba(24, 28, 35, .7);
+  --public-color-show-hint-outline: rgba(24, 28, 35, 0.7);
   --public-color-filter-surface: var(--color-dark-canvas);
-  --public-color-filter-header: color-mix(in srgb, var(--color-dark-control-surface) 65%, var(--color-dark-canvas));
+  --public-color-filter-header: color-mix(
+    in srgb,
+    var(--color-dark-control-surface) 65%,
+    var(--color-dark-canvas)
+  );
   --public-color-filter-search: var(--color-dark-canvas);
   --public-color-filter-option: var(--color-dark-control-surface);
   --public-color-filter-border: var(--color-dark-border-default);
-  --public-color-filter-muted: color-mix(in srgb, var(--color-dark-control-text-secondary) 80%, var(--color-dark-control-text-primary));
+  --public-color-filter-muted: color-mix(
+    in srgb,
+    var(--color-dark-control-text-secondary) 80%,
+    var(--color-dark-control-text-primary)
+  );
   --public-color-filter-directory-text: var(--color-dark-control-text-secondary);
   --public-color-filter-chip-mask: #000;
   --public-color-filter-selected: var(--color-dark-control-surface-hover);
   --public-color-filter-action: var(--color-dark-control-action-text);
-  --public-color-filter-action-fill: color-mix(in srgb, var(--color-dark-control-action) 80%, var(--color-dark-control-surface));
+  --public-color-filter-action-fill: color-mix(
+    in srgb,
+    var(--color-dark-control-action) 80%,
+    var(--color-dark-control-surface)
+  );
   --public-color-filter-action-text: var(--color-dark-control-text-on-action);
   --public-color-filter-warning: var(--color-dark-warning-text);
 }

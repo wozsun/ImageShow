@@ -32,7 +32,5 @@ export function DialogLayerPortal({ children }: { children: DialogLayerElement }
   // together, the parent ref is still null during the child's first render and
   // the nested layer already lives inside that parent. Moving it into a Portal
   // on the first controlled-input update would remount the field and drop focus.
-  return portalTargetRef.current
-    ? createPortal(layer, portalTargetRef.current)
-    : layer;
+  return portalTargetRef.current ? createPortal(layer, portalTargetRef.current) : layer;
 }

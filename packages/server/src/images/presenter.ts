@@ -11,7 +11,10 @@ import {
 } from "@imageshow/shared/browser";
 import { storageBackendLabel } from "../storage/backends/label.ts";
 import type { StorageConfig } from "../storage/backends/config.ts";
-import { getStorageBackendConfigs, type StorageRegistryAccess } from "../storage/backends/registry.ts";
+import {
+  getStorageBackendConfigs,
+  type StorageRegistryAccess
+} from "../storage/backends/registry.ts";
 import {
   publicImageUrl,
   publicImageUrlsForConfig,
@@ -177,7 +180,8 @@ export type PublicImageCardRecord = Pick<
   | "storage_slug"
   | "author"
   | "title"
-> & PublicImageTimeRecord;
+> &
+  PublicImageTimeRecord;
 
 export type PublicImageDetailRecord = Pick<
   AdminImageCommonRecord,
@@ -191,23 +195,24 @@ export type PublicImageDetailRecord = Pick<
   | "device"
   | "brightness"
   | "theme"
-> & PublicImageTimeRecord & { tags: string[] };
+> &
+  PublicImageTimeRecord & { tags: string[] };
 
 export type PublicShowImageRecord = Pick<
   PublicImageCardRecord,
   "id" | "title" | "width" | "height" | "storage_slug"
 >;
 
-type PublicImageUrlRecord = Pick<
-  AdminImageCommonRecord,
-  "storage_slug"
->;
+type PublicImageUrlRecord = Pick<AdminImageCommonRecord, "storage_slug">;
 
 function storageConfigsForRows(
   rows: readonly PublicImageUrlRecord[],
   access: StorageRegistryAccess = {}
 ) {
-  return getStorageBackendConfigs(rows.map((row) => row.storage_slug), access);
+  return getStorageBackendConfigs(
+    rows.map((row) => row.storage_slug),
+    access
+  );
 }
 
 function serializeTimestamp(value: DatabaseTimestamp) {
@@ -296,23 +301,14 @@ function adminImageListItem(
 export async function adminImageListItemsWithTags(rows: ImageRecordWithTags[]) {
   if (!rows.length) return [];
   const configs = await storageConfigsForRows(rows);
-  return rows.map((row) => adminImageListItem(
-    row,
-    row.tags,
-    configs
-  ));
+  return rows.map((row) => adminImageListItem(row, row.tags, configs));
 }
 
-export async function adminImageDetailItemsWithTags(
-  rows: AdminImageDetailRecordWithTags[]
-) {
+export async function adminImageDetailItemsWithTags(rows: AdminImageDetailRecordWithTags[]) {
   if (!rows.length) return [];
   const configs = await storageConfigsForRows(rows);
   return rows.map((row): AdminImageDetailItemDto => {
-    const {
-      storage_slug: storageSlug,
-      ...base
-    } = presentAdminImageBase(row, row.tags, configs);
+    const { storage_slug: storageSlug, ...base } = presentAdminImageBase(row, row.tags, configs);
     return {
       ...base,
       md5: row.md5,
@@ -327,9 +323,7 @@ export async function adminImageDetailItemsWithTags(
   });
 }
 
-export async function editableImageSnapshotsWithTags(
-  rows: EditableImageSnapshotRecordWithTags[]
-) {
+export async function editableImageSnapshotsWithTags(rows: EditableImageSnapshotRecordWithTags[]) {
   if (!rows.length) return [];
   const configs = await storageConfigsForRows(rows);
   return rows.map((row): EditableImageSnapshotDto => {
@@ -360,11 +354,7 @@ export async function publicImageDetail(
     description: row.description,
     source: row.source || null,
     object_url: objectUrl,
-    original_url: includeOriginal ? adminOriginalAccessUrl(
-      row.id,
-      row.original,
-      objectUrl
-    ) : null
+    original_url: includeOriginal ? adminOriginalAccessUrl(row.id, row.original, objectUrl) : null
   };
 }
 
@@ -402,7 +392,7 @@ function publicImageCard(
     theme: row.theme,
     author: row.author ?? "",
     tags,
-    image_time: serializePublicImageTime(row),
+    image_time: serializePublicImageTime(row)
   };
 }
 

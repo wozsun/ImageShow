@@ -11,13 +11,8 @@ import {
   storeReadyImageStatsResult,
   touchReadyImageStatsResult
 } from "../derived/lifecycle.ts";
-import {
-  READY_IMAGE_DERIVED_CACHE_POLICY
-} from "../derived/policy.ts";
-import {
-  ReadyImageCoreCacheError,
-  isReadyImageCoreCacheError
-} from "../cache-errors.ts";
+import { READY_IMAGE_DERIVED_CACHE_POLICY } from "../derived/policy.ts";
+import { ReadyImageCoreCacheError, isReadyImageCoreCacheError } from "../cache-errors.ts";
 import { withReadyImageCacheWriteFence } from "../sync/fence.ts";
 import {
   ensureReadyImageAttributeIndexes,
@@ -25,10 +20,7 @@ import {
 } from "../indexes/attribute.ts";
 import type { ImageFilterPlan } from "../../filter-plan.ts";
 import type { GalleryTagCountPlans } from "../../read-models/gallery-stats-plan.ts";
-import {
-  READY_IMAGE_STATS_KEY,
-  readyImageStatsResultKey
-} from "../keys.ts";
+import { READY_IMAGE_STATS_KEY, readyImageStatsResultKey } from "../keys.ts";
 import {
   isUnfilteredReadyImagePlan,
   parseCachedReadyImageCountSnapshot,
@@ -55,44 +47,37 @@ type ReadyImageCountResult =
   | { cached: true; value: ReadyImageCountSnapshot }
   | { cached: false; context?: ReadyImageCountContext };
 
-async function readCachedCountSnapshot(
-  key: string,
-  revision: string,
-  expectedTotal: number
-) {
+async function readCachedCountSnapshot(key: string, revision: string, expectedTotal: number) {
   try {
     const lease = await withReadyImageCacheRead(async () => {
-      if (
-        getReadyImageCacheCoordinatorStatus().meta?.appliedRevision !== revision
-      ) {
+      if (getReadyImageCacheCoordinatorStatus().meta?.appliedRevision !== revision) {
         return null;
       }
       const pipeline = redis.pipeline();
       pipeline.get(key);
       pipeline.ttl(key);
       const results = await execRedisPipeline(pipeline);
-      const raw = results[0]?.[1] as string | null ?? null;
+      const raw = (results[0]?.[1] as string | null) ?? null;
       const ttl = Number(results[1]?.[1] ?? -2);
       if (
-        raw !== null
-        && Buffer.byteLength(raw, "utf8")
-          > READY_IMAGE_DERIVED_CACHE_POLICY.maxStatsResultBytes
+        raw !== null &&
+        Buffer.byteLength(raw, "utf8") > READY_IMAGE_DERIVED_CACHE_POLICY.maxStatsResultBytes
       ) {
         await discardReadyImageDerivedResult(key, "stats-result");
         return null;
       }
       const cached = parseCachedReadyImageCountSnapshot(raw);
       if (
-        !cached
-        || !Number.isSafeInteger(ttl)
-        || ttl <= 0
-        || cached.revision !== revision
-        || cached.value.total !== expectedTotal
+        !cached ||
+        !Number.isSafeInteger(ttl) ||
+        ttl <= 0 ||
+        cached.revision !== revision ||
+        cached.value.total !== expectedTotal
       ) {
         await discardReadyImageDerivedResult(key, "stats-result");
         return null;
       }
-      if (!await touchReadyImageStatsResult(key, raw!, expectedTotal)) {
+      if (!(await touchReadyImageStatsResult(key, raw!, expectedTotal))) {
         await discardReadyImageDerivedResult(key, "stats-result");
         return null;
       }
@@ -100,13 +85,8 @@ async function readCachedCountSnapshot(
     });
     return lease.acquired ? lease.value : null;
   } catch (error) {
-    recordReadyImageCacheError(
-      "derived",
-      "derived_stats_result_read_failed",
-      error
-    );
-    await discardReadyImageDerivedResult(key, "stats-result")
-      .catch(() => undefined);
+    recordReadyImageCacheError("derived", "derived_stats_result_read_failed", error);
+    await discardReadyImageDerivedResult(key, "stats-result").catch(() => undefined);
     logger.warn("ready_image_derived_stats_result_discarded", {
       key,
       error: error
@@ -119,25 +99,16 @@ function parseCoreStats(raw: Record<string, string>, expectedTotal: number) {
   try {
     return parseReadyImageGlobalStats(raw, expectedTotal);
   } catch (cause) {
-    throw new ReadyImageCoreCacheError(
-      "Ready-image core statistics are invalid",
-      { cause }
-    );
+    throw new ReadyImageCoreCacheError("Ready-image core statistics are invalid", { cause });
   }
 }
 
 async function readCoreStats(expectedTotal: number) {
   try {
-    return parseCoreStats(
-      await redis.hgetall(READY_IMAGE_STATS_KEY),
-      expectedTotal
-    );
+    return parseCoreStats(await redis.hgetall(READY_IMAGE_STATS_KEY), expectedTotal);
   } catch (cause) {
     if (isReadyImageCoreCacheError(cause)) throw cause;
-    throw new ReadyImageCoreCacheError(
-      "Ready-image core statistics could not be read",
-      { cause }
-    );
+    throw new ReadyImageCoreCacheError("Ready-image core statistics could not be read", { cause });
   }
 }
 
@@ -160,17 +131,11 @@ export async function readReadyImageCountSnapshot(
     for (let attempt = 0; attempt < 2; attempt += 1) {
       signal?.throwIfAborted();
       const status = getReadyImageCacheCoordinatorStatus();
-      const meta = status.readable && status.meta?.state === "ready"
-        ? status.meta
-        : null;
+      const meta = status.readable && status.meta?.state === "ready" ? status.meta : null;
       if (!meta) return { cached: false };
       const revision = meta.appliedRevision;
       const key = readyImageStatsResultKey(tagCounts?.signature ?? plan.signature);
-      const cached = await readCachedCountSnapshot(
-        key,
-        revision,
-        meta.itemCount
-      );
+      const cached = await readCachedCountSnapshot(key, revision, meta.itemCount);
       if (cached && (cached.tagGroups?.length ?? 0) === (tagCounts?.groups.length ?? 0)) {
         return { cached: true, value: cached };
       }
@@ -190,11 +155,7 @@ export async function readReadyImageCountSnapshot(
         context: { revision, globalStats: initialStats }
       };
 
-      const preflight = preflightReadyImageCountSnapshotWork(
-        plan,
-        initialStats,
-        tagCounts
-      );
+      const preflight = preflightReadyImageCountSnapshotWork(plan, initialStats, tagCounts);
       if (!("candidates" in preflight)) {
         logger.debug("ready_image_stats_work_rejected", {
           signature: plan.signature,
@@ -205,30 +166,18 @@ export async function readReadyImageCountSnapshot(
         return fallback;
       }
       const candidateKeys = preflight.candidates.all;
-      if (!await ensureReadyImageAttributeIndexes(
-        candidateKeys,
-        revision,
-        signal,
-        background
-      )) {
+      if (!(await ensureReadyImageAttributeIndexes(candidateKeys, revision, signal, background))) {
         return fallback;
       }
 
       const plans = [...Object.values(preflight.plans), ...(tagCounts?.groups ?? [])];
-      const indexes = await resolveReadyImageCountIndexes(
-        plans,
-        signal,
-        background
-      );
+      const indexes = await resolveReadyImageCountIndexes(plans, signal, background);
       if (!indexes) return fallback;
       const lease = await withReadyImageCacheRead(async () => {
         const current = getReadyImageCacheCoordinatorStatus();
         if (current.meta?.appliedRevision !== revision) return null;
         const stats = await readCoreStats(current.meta.itemCount);
-        const sourceStates = await readReadyImageSourceIndexStates(
-          candidateKeys,
-          revision
-        );
+        const sourceStates = await readReadyImageSourceIndexStates(candidateKeys, revision);
         if (!sourceStates) {
           return null;
         }
@@ -240,17 +189,14 @@ export async function readReadyImageCountSnapshot(
           tagCounts
         );
         if (!value) return null;
-        const currentStates = await readReadyImageSourceIndexStates(
-          candidateKeys,
-          revision
-        );
+        const currentStates = await readReadyImageSourceIndexStates(candidateKeys, revision);
         if (
-          !currentStates
-          || [...sourceStates].some(([sourceKey, sourceState]) => (
-            currentStates.get(sourceKey)?.count !== sourceState.count
-            || currentStates.get(sourceKey)?.instanceToken
-              !== sourceState.instanceToken
-          ))
+          !currentStates ||
+          [...sourceStates].some(
+            ([sourceKey, sourceState]) =>
+              currentStates.get(sourceKey)?.count !== sourceState.count ||
+              currentStates.get(sourceKey)?.instanceToken !== sourceState.instanceToken
+          )
         ) {
           return null;
         }
@@ -267,11 +213,7 @@ export async function readReadyImageCountSnapshot(
     if (isReadyImageCoreCacheError(error)) {
       reportReadyImageCacheFailure(error);
     } else {
-      recordReadyImageCacheError(
-        "derived",
-        "derived_stats_build_failed",
-        error
-      );
+      recordReadyImageCacheError("derived", "derived_stats_build_failed", error);
       logger.warn("ready_image_derived_stats_failed", {
         signature: plan.signature,
         error: error
@@ -281,17 +223,13 @@ export async function readReadyImageCountSnapshot(
   }
 }
 
-async function storeCountSnapshot(
-  key: string,
-  revision: string,
-  value: ReadyImageCountSnapshot
-) {
+async function storeCountSnapshot(key: string, revision: string, value: ReadyImageCountSnapshot) {
   await withReadyImageCacheWriteFence(async () => {
     const current = getReadyImageCacheCoordinatorStatus();
     if (
-      !current.readable
-      || current.meta?.state !== "ready"
-      || current.meta.appliedRevision !== revision
+      !current.readable ||
+      current.meta?.state !== "ready" ||
+      current.meta.appliedRevision !== revision
     ) {
       return;
     }

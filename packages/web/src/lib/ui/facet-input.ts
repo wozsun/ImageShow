@@ -1,7 +1,4 @@
-import {
-  slugMaxLength,
-  slugPattern
-} from "@imageshow/shared/browser";
+import { slugMaxLength, slugPattern } from "@imageshow/shared/browser";
 import type { FacetOption } from "../types.js";
 
 export type FacetTextMatch = {
@@ -20,9 +17,7 @@ export function normalizeFacetSearchQuery(value: string) {
 
 export function parseFacetSlug(value: string) {
   const slug = value.trim().toLowerCase();
-  return slug.length <= slugMaxLength && slugPattern.test(slug)
-    ? slug
-    : null;
+  return slug.length <= slugMaxLength && slugPattern.test(slug) ? slug : null;
 }
 
 export function matchFacetText(value: string, query: string): FacetTextMatch | null {

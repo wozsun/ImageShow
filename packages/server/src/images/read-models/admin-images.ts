@@ -8,9 +8,7 @@ import type {
 } from "@imageshow/shared/browser";
 import { defaultAdminImageSort } from "@imageshow/shared/browser";
 import { pool } from "../../core/database/pools.ts";
-import {
-  withReadOnlyRepeatableReadTransaction
-} from "../../core/database/transactions.ts";
+import { withReadOnlyRepeatableReadTransaction } from "../../core/database/transactions.ts";
 import {
   runWithAdvisoryLockAcquisitionSignal,
   withAdvisoryLocks
@@ -26,10 +24,7 @@ import {
   editableImageSnapshotsWithTags,
   type EditableImageSnapshotRecordWithTags
 } from "../presenter.ts";
-import {
-  buildImageListFilters,
-  buildResolvedReadyImageListFilters
-} from "./list-filters.ts";
+import { buildImageListFilters, buildResolvedReadyImageListFilters } from "./list-filters.ts";
 import { fetchAdminImageOffsetRows } from "./pagination.ts";
 import { storageBackendLabel } from "../../storage/backends/label.ts";
 
@@ -52,8 +47,7 @@ export async function listAdminImages(
     sort_by: query.sort_by ?? defaultAdminImageSort.sort_by,
     order: query.order ?? defaultAdminImageSort.order
   };
-  let readyPlan: Awaited<ReturnType<typeof resolveImageFilterPlan>>
-    | null = null;
+  let readyPlan: Awaited<ReturnType<typeof resolveImageFilterPlan>> | null = null;
   if (query.status === "ready") {
     readyPlan = await resolveImageFilterPlan(query, { redisMode: "required" });
     // The ready index is ordered by image_time. Entry time uses PostgreSQL's
@@ -62,13 +56,15 @@ export async function listAdminImages(
       const cached = await readReadyImagePageWindow(readyPlan, window, sort.order);
       if (cached.status === "redis_unavailable") throw cached.error;
       if (cached.status === "hit") {
-        const images = await adminImageListItemsWithTags(cached.value.items.map((item) => ({
-          ...item,
-          image_time: new Date(Math.floor(item.sort_score / 1_000)),
-          status: "ready",
-          deleted_at: null,
-          purge_pending: false
-        })));
+        const images = await adminImageListItemsWithTags(
+          cached.value.items.map((item) => ({
+            ...item,
+            image_time: new Date(Math.floor(item.sort_score / 1_000)),
+            status: "ready",
+            deleted_at: null,
+            purge_pending: false
+          }))
+        );
         return {
           items: images,
           total: cached.value.total
@@ -80,28 +76,21 @@ export async function listAdminImages(
     ? buildResolvedReadyImageListFilters(readyPlan)
     : await buildImageListFilters(query, { redisMode: "required" });
 
-  const snapshot = await withReadOnlyRepeatableReadTransaction(
-    async (client) => {
-      const countResult = await client.query(
-        `SELECT count(*)::text AS count FROM metadata WHERE ${where.join(" AND ")}`,
-        [...params]
-      );
-      const total = Number(countResult.rows[0]?.count ?? 0);
-      if (!Number.isSafeInteger(total) || total < 0) {
-        throw new Error("PostgreSQL returned an invalid image count");
-      }
-      const rows = window.start >= total
-        ? []
-        : await fetchAdminImageOffsetRows(
-            [...where],
-            [...params],
-            window,
-            client,
-            sort
-          );
-      return { rows, total };
+  const snapshot = await withReadOnlyRepeatableReadTransaction(async (client) => {
+    const countResult = await client.query(
+      `SELECT count(*)::text AS count FROM metadata WHERE ${where.join(" AND ")}`,
+      [...params]
+    );
+    const total = Number(countResult.rows[0]?.count ?? 0);
+    if (!Number.isSafeInteger(total) || total < 0) {
+      throw new Error("PostgreSQL returned an invalid image count");
     }
-  );
+    const rows =
+      window.start >= total
+        ? []
+        : await fetchAdminImageOffsetRows([...where], [...params], window, client, sort);
+    return { rows, total };
+  });
   return {
     items: await adminImageListItemsWithTags(snapshot.rows),
     total: snapshot.total
@@ -113,9 +102,8 @@ export async function getAdminImageSnapshots(
   signal?: AbortSignal
 ): Promise<ImageSnapshotResponseDto> {
   const canonicalIds = [...new Set(ids.map((id) => id.toLowerCase()))];
-  const read = () => withAdvisoryLocks(
-    imageUpdateLockRequests(canonicalIds),
-    async () => {
+  const read = () =>
+    withAdvisoryLocks(imageUpdateLockRequests(canonicalIds), async () => {
       signal?.throwIfAborted();
       const result = await pool.query(
         `SELECT ${editableImagePresentationColumnsWithTags}
@@ -139,14 +127,14 @@ export async function getAdminImageSnapshots(
           return item ? [item] : [];
         })
       };
-    }
-  );
+    });
   return signal ? runWithAdvisoryLockAcquisitionSignal(signal, read) : read();
 }
 
 export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> {
-  const row = (await pool.query(
-    `SELECT m.id,
+  const row = (
+    await pool.query(
+      `SELECT m.id,
             m.md5,
             m.storage_slug,
             m.created_at::text AS created_at,
@@ -156,15 +144,18 @@ export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> 
        LEFT JOIN storage_backend sb ON sb.slug = m.storage_slug
       WHERE m.id=$1
       LIMIT 1`,
-    [id]
-  )).rows[0] as {
-    id: string;
-    md5: string;
-    storage_slug: string;
-    created_at: string;
-    updated_at: string;
-    storage_display_name: string;
-  } | undefined;
+      [id]
+    )
+  ).rows[0] as
+    | {
+        id: string;
+        md5: string;
+        storage_slug: string;
+        created_at: string;
+        updated_at: string;
+        storage_display_name: string;
+      }
+    | undefined;
   if (!row) throw new ApiError(404, "not_found", "Image not found");
   return {
     id: row.id,

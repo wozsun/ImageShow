@@ -28,18 +28,12 @@ import {
   measureReadyImageCoreMemory,
   writeReadyImageCacheBatch
 } from "./sync/redis-writer.ts";
-import {
-  compareReadyImageRevisions,
-  getReadyImageRevision
-} from "./revision.ts";
+import { compareReadyImageRevisions, getReadyImageRevision } from "./revision.ts";
 import { readReadyImageSourceSnapshot } from "./source.ts";
 
 const SAMPLE_SIZE = 32;
 
-async function observeReadyImageCacheMemory(
-  client: Redis,
-  signal?: AbortSignal
-) {
+async function observeReadyImageCacheMemory(client: Redis, signal?: AbortSignal) {
   try {
     const bytes = await measureReadyImageCoreMemory(client, signal);
     return {
@@ -55,10 +49,7 @@ async function observeReadyImageCacheMemory(
   }
 }
 
-async function clearReadyImageCacheForRebuild(
-  client: Redis,
-  signal?: AbortSignal
-) {
+async function clearReadyImageCacheForRebuild(client: Redis, signal?: AbortSignal) {
   await clearReadyImageCacheData(client, signal);
 }
 
@@ -81,13 +72,9 @@ function addSamples(
     const position = firstPosition + index;
     const item = items[index];
     if (
-      item
-      && samples.length < SAMPLE_SIZE
-      && (
-        position === 0
-        || position === total - 1
-        || position % interval === 0
-      )
+      item &&
+      samples.length < SAMPLE_SIZE &&
+      (position === 0 || position === total - 1 || position % interval === 0)
     ) {
       samples.push(item);
     }
@@ -101,11 +88,7 @@ async function buildAttempt(
 ): Promise<{ changed: true } | { changed: false; meta: ReadyImageCacheMeta }> {
   const startedAt = new Date().toISOString();
   const previousMeta = await readReadyImageCacheMeta(client).catch(() => null);
-  let progress = rebuildingReadyImageCacheMeta(
-    previousRevision,
-    startedAt,
-    previousMeta
-  );
+  let progress = rebuildingReadyImageCacheMeta(previousRevision, startedAt, previousMeta);
   await withReadyImageCacheWriteFence(async () => {
     await writeReadyImageCacheMeta(progress, client);
     await clearReadyImageCacheForRebuild(client, signal);
@@ -129,13 +112,7 @@ async function buildAttempt(
     },
     async (items, state) => {
       addSamples(samples, items, state.processed - items.length, state.total);
-      await writeReadyImageCacheBatch(
-        items,
-        cardinalities,
-        stats,
-        client,
-        signal
-      );
+      await writeReadyImageCacheBatch(items, cardinalities, stats, client, signal);
       progress = {
         ...progress,
         itemCount: state.processed,
@@ -154,20 +131,9 @@ async function buildAttempt(
     throw new Error("Ready-image cache statistics differ from the source");
   }
 
-  const expected = await writeReadyImageStatsAndIntegrity(
-    stats,
-    cardinalities,
-    client,
-    signal
-  );
+  const expected = await writeReadyImageStatsAndIntegrity(stats, cardinalities, client, signal);
   const memory = await observeReadyImageCacheMemory(client, signal);
-  await validateBuiltReadyImageCache(
-    expected,
-    stats,
-    samples,
-    client,
-    signal
-  );
+  await validateBuiltReadyImageCache(expected, stats, samples, client, signal);
   signal?.throwIfAborted();
 
   return withReadyImageCacheWriteFence(async () => {
@@ -196,12 +162,15 @@ async function buildAttempt(
     // operator writes that commit during the cross-system publish itself.
     const afterPublish = (await getReadyImageRevision()).revision;
     if (compareReadyImageRevisions(snapshot.revision, afterPublish) !== 0) {
-      await writeReadyImageCacheMeta({
-        ...progress,
-        appliedRevision: afterPublish,
-        lastUpdatedAt: new Date().toISOString(),
-        lastError: "PostgreSQL changed while the cache was being published"
-      }, client);
+      await writeReadyImageCacheMeta(
+        {
+          ...progress,
+          appliedRevision: afterPublish,
+          lastUpdatedAt: new Date().toISOString(),
+          lastError: "PostgreSQL changed while the cache was being published"
+        },
+        client
+      );
       return { changed: true };
     }
     return { changed: false, meta };
@@ -224,23 +193,23 @@ async function discardFailedBuild(error: unknown, client: Redis) {
       }
       try {
         const failedAt = new Date().toISOString();
-        const degradedBase = current?.state === "rebuilding"
-          ? current
-          : rebuildingReadyImageCacheMeta(
-              fallback.appliedRevision,
-              failedAt,
-              fallback
-            );
-        await writeReadyImageCacheMeta({
-          ...degradedBase,
-          state: "degraded",
-          itemCount: 0,
-          lastUpdatedAt: failedAt,
-          fullRebuildCompletedAt: "",
-          processed: 0,
-          total: 0,
-          lastError: errorMessage(error)
-        }, client);
+        const degradedBase =
+          current?.state === "rebuilding"
+            ? current
+            : rebuildingReadyImageCacheMeta(fallback.appliedRevision, failedAt, fallback);
+        await writeReadyImageCacheMeta(
+          {
+            ...degradedBase,
+            state: "degraded",
+            itemCount: 0,
+            lastUpdatedAt: failedAt,
+            fullRebuildCompletedAt: "",
+            processed: 0,
+            total: 0,
+            lastError: errorMessage(error)
+          },
+          client
+        );
       } catch (metaError) {
         cleanupErrors.push(metaError);
       }
@@ -263,8 +232,8 @@ export async function rebuildReadyImageCache(
   options: { signal?: AbortSignal; client?: Redis } = {}
 ): Promise<ReadyImageCacheMeta> {
   const client = options.client ?? redis;
-  let previousRevision = (await readReadyImageCacheMeta(client).catch(() => null))
-    ?.appliedRevision ?? "0";
+  let previousRevision =
+    (await readReadyImageCacheMeta(client).catch(() => null))?.appliedRevision ?? "0";
   try {
     for (let attempt = 0; attempt < READY_IMAGE_REBUILD_MAX_ATTEMPTS; attempt += 1) {
       options.signal?.throwIfAborted();

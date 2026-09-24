@@ -10,7 +10,12 @@ function parseDraft(draft: string) {
   return /^[+-]?\d+$/.test(text) && Number.isSafeInteger(value) ? value : null;
 }
 
-export function SortOrderInput({ value, itemLabel, disabled, onSave }: {
+export function SortOrderInput({
+  value,
+  itemLabel,
+  disabled,
+  onSave
+}: {
   value: number;
   itemLabel: string;
   disabled: boolean;
@@ -27,7 +32,9 @@ export function SortOrderInput({ value, itemLabel, disabled, onSave }: {
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
   useLayoutEffect(() => {
     setForm((current) => ({
@@ -40,10 +47,12 @@ export function SortOrderInput({ value, itemLabel, disabled, onSave }: {
     if (busy || runningRef.current) return;
     if (form.draft === String(value)) return;
     if (parsed === null || !isSortOrder(parsed)) {
-      setError(createActionFeedback(
-        `请输入 ${sortOrderMin.toLocaleString("en-US")} 至 ${sortOrderMax.toLocaleString("en-US")} 之间的整数`,
-        "error"
-      ));
+      setError(
+        createActionFeedback(
+          `请输入 ${sortOrderMin.toLocaleString("en-US")} 至 ${sortOrderMax.toLocaleString("en-US")} 之间的整数`,
+          "error"
+        )
+      );
       return;
     }
     if (parsed === value) {
@@ -58,10 +67,13 @@ export function SortOrderInput({ value, itemLabel, disabled, onSave }: {
       const saved = await onSave(parsed);
       if (mountedRef.current) setForm({ draft: String(saved), savedValue: saved });
     } catch (failure) {
-      if (mountedRef.current) setError(createActionFeedback(
-        failure instanceof Error ? failure.message : "排序保存失败，请重试",
-        "error"
-      ));
+      if (mountedRef.current)
+        setError(
+          createActionFeedback(
+            failure instanceof Error ? failure.message : "排序保存失败，请重试",
+            "error"
+          )
+        );
     } finally {
       runningRef.current = false;
       if (mountedRef.current) setPending(false);
@@ -91,12 +103,15 @@ export function SortOrderInput({ value, itemLabel, disabled, onSave }: {
           void commit();
         }}
       >
-        <button type="button" className="icon sort-order-step"
+        <button
+          type="button"
+          className="icon sort-order-step"
           aria-label={`${itemLabel}排序值减一`}
           title="排序值减 1（更靠后）"
           disabled={busy}
           aria-disabled={busy || parsed === null || parsed <= sortOrderMin}
-          onClick={() => step(-1)}>
+          onClick={() => step(-1)}
+        >
           <Icon name="subtract-line" />
         </button>
         <input
@@ -122,12 +137,15 @@ export function SortOrderInput({ value, itemLabel, disabled, onSave }: {
             step(event.key === "ArrowUp" ? 1 : -1);
           }}
         />
-        <button type="button" className="icon sort-order-step"
+        <button
+          type="button"
+          className="icon sort-order-step"
           aria-label={`${itemLabel}排序值加一`}
           title="排序值加 1（更靠前）"
           disabled={busy}
           aria-disabled={busy || parsed === null || parsed >= sortOrderMax}
-          onClick={() => step(1)}>
+          onClick={() => step(1)}
+        >
           <Icon name="add-line" />
         </button>
       </div>

@@ -29,15 +29,22 @@ await runIntegrationScenario(async (runtime) => {
   const restoreConnect = installProperties(pg.Pool.prototype, {
     connect(this: pg.Pool, ...args: unknown[]) {
       const pending = Reflect.apply(originalConnect, this, args);
-      if (this.options.application_name !== "imageshow-advisory-locks"
-        || typeof args.at(-1) === "function") return pending;
+      if (
+        this.options.application_name !== "imageshow-advisory-locks" ||
+        typeof args.at(-1) === "function"
+      )
+        return pending;
       return (pending as Promise<PoolClient>).then((client) => {
         checkouts++;
         maximumActive = Math.max(maximumActive, ++active);
         const restoreQuery = interceptSqlQueries(client, async (sql, values, query) => {
           const result = await query();
-          if (sql.includes("pg_advisory_lock(") && Array.isArray(values)
-            && String(values[0]).startsWith("imageshow:image-update:") && !entered.has(client)) {
+          if (
+            sql.includes("pg_advisory_lock(") &&
+            Array.isArray(values) &&
+            String(values[0]).startsWith("imageshow:image-update:") &&
+            !entered.has(client)
+          ) {
             entered.add(client);
             if (entered.size === count) allRequestsEntered.resolve();
             await allRequestsEntered.promise;
@@ -57,10 +64,18 @@ await runIntegrationScenario(async (runtime) => {
       });
     }
   });
-  const requests = Array.from({ length: count }, (_, index) => updateImages([
-    { id: images[index * 2]!.id, brightness: "auto", theme: "pool-theme", author: "pool-author", tags: ["pool-tag"] },
-    { id: images[index * 2 + 1]!.id, device: "mb", tags: ["pool-tag", "pool-second"] }
-  ]));
+  const requests = Array.from({ length: count }, (_, index) =>
+    updateImages([
+      {
+        id: images[index * 2]!.id,
+        brightness: "auto",
+        theme: "pool-theme",
+        author: "pool-author",
+        tags: ["pool-tag"]
+      },
+      { id: images[index * 2 + 1]!.id, device: "mb", tags: ["pool-tag", "pool-second"] }
+    ])
+  );
   let results;
   try {
     results = await settleWithin(Promise.all(requests), 20_000);
@@ -70,29 +85,53 @@ await runIntegrationScenario(async (runtime) => {
     restoreConnect();
   }
   assert.equal(entered.size, count);
-  assert.deepEqual(results.map((result) => [result.updated, result.failed]), Array.from({ length: count }, () => [2, 0]));
+  assert.deepEqual(
+    results.map((result) => [result.updated, result.failed]),
+    Array.from({ length: count }, () => [2, 0])
+  );
   assert.equal(checkouts, count, "分类、词表与自动读取不得在请求持锁后再借锁连接");
   assert.equal(maximumActive, count);
   assert.equal(active, 0);
-  assert.equal((await runtime.databasePools.pool.query(
-    "SELECT count(*)::int AS count FROM metadata WHERE theme='pool-theme' AND author='pool-author'"
-  )).rows[0].count, count);
-  assert.equal((await runtime.databasePools.pool.query(
-    "SELECT count(*)::int AS count FROM image_tag WHERE tag_slug='pool-tag'"
-  )).rows[0].count, count * 2);
+  assert.equal(
+    (
+      await runtime.databasePools.pool.query(
+        "SELECT count(*)::int AS count FROM metadata WHERE theme='pool-theme' AND author='pool-author'"
+      )
+    ).rows[0].count,
+    count
+  );
+  assert.equal(
+    (
+      await runtime.databasePools.pool.query(
+        "SELECT count(*)::int AS count FROM image_tag WHERE tag_slug='pool-tag'"
+      )
+    ).rows[0].count,
+    count * 2
+  );
 
   const overlappingId = images[0]!.id;
   const completed: number[] = [];
-  const overlapping = await settleWithin(Promise.all(Array.from({ length: count }, (_, index) => (
-    updateImages([{ id: overlappingId, title: `writer-${index}`, tags: [`writer-${index}`] }])
-      .then((result) => { completed.push(index); return result; })
-  ))), 20_000);
+  const overlapping = await settleWithin(
+    Promise.all(
+      Array.from({ length: count }, (_, index) =>
+        updateImages([
+          { id: overlappingId, title: `writer-${index}`, tags: [`writer-${index}`] }
+        ]).then((result) => {
+          completed.push(index);
+          return result;
+        })
+      )
+    ),
+    20_000
+  );
   assert.ok(overlapping.every((result) => result.updated === 1 && result.failed === 0));
   const last = completed.at(-1)!;
-  const row = (await runtime.databasePools.pool.query(
-    "SELECT title, ARRAY(SELECT tag_slug FROM image_tag WHERE image_id=metadata.id) AS tags FROM metadata WHERE id=$1",
-    [overlappingId]
-  )).rows[0];
+  const row = (
+    await runtime.databasePools.pool.query(
+      "SELECT title, ARRAY(SELECT tag_slug FROM image_tag WHERE image_id=metadata.id) AS tags FROM metadata WHERE id=$1",
+      [overlappingId]
+    )
+  ).rows[0];
   assert.deepEqual(row, { title: `writer-${last}`, tags: [`writer-${last}`] });
 
   const partial = await updateImages([
@@ -100,11 +139,30 @@ await runIntegrationScenario(async (runtime) => {
     { id: images[1]!.id, theme: "survivor", tags: ["survivor"] },
     { id: images[2]!.id, title: "following-group", tags: ["following-group"] }
   ]);
-  assert.deepEqual(partial.results.map((item) => item.status), ["failed", "updated", "updated"]);
+  assert.deepEqual(
+    partial.results.map((item) => item.status),
+    ["failed", "updated", "updated"]
+  );
   assert.equal(partial.results[0]?.status === "failed" && partial.results[0].code, "not_found");
-  assert.equal((await runtime.databasePools.pool.query(
-    "SELECT count(*)::int AS count FROM theme WHERE slug='missing-image-theme'"
-  )).rows[0].count, 0);
+  assert.equal(
+    (
+      await runtime.databasePools.pool.query(
+        "SELECT count(*)::int AS count FROM theme WHERE slug='missing-image-theme'"
+      )
+    ).rows[0].count,
+    0
+  );
   assert.equal((await updateImages([{ id: images[1]!.id, theme: null, tags: [] }])).updated, 1);
-  console.log(JSON.stringify({ scenario: "image-update-locking", requests: count, images: images.length, checkouts, maximumActive, active, overlapping: overlapping.length, partial: partial.results.map((item) => item.status) }));
+  console.log(
+    JSON.stringify({
+      scenario: "image-update-locking",
+      requests: count,
+      images: images.length,
+      checkouts,
+      maximumActive,
+      active,
+      overlapping: overlapping.length,
+      partial: partial.results.map((item) => item.status)
+    })
+  );
 });

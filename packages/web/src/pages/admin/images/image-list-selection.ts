@@ -65,12 +65,7 @@ function updateImageRangeSelection({
 
   const anchorIndex = anchorId === null ? -1 : pageIds.indexOf(anchorId);
   if (anchorIndex < 0) {
-    return updateSingleImageSelection(
-      pageIds,
-      selectedIds,
-      targetId,
-      checked
-    );
+    return updateSingleImageSelection(pageIds, selectedIds, targetId, checked);
   }
 
   const selected = new Set(selectedIdsInPageOrder(pageIds, selectedIds));
@@ -98,18 +93,11 @@ export class ImageListSelectionController {
     if (busy) return selectedIds;
     if (!extendRange) {
       this.#anchorId = targetId;
-      return updateSingleImageSelection(
-        pageIds,
-        selectedIds,
-        targetId,
-        checked
-      );
+      return updateSingleImageSelection(pageIds, selectedIds, targetId, checked);
     }
 
-    const anchorId = this.#anchorId !== null
-      && pageIds.includes(this.#anchorId)
-      ? this.#anchorId
-      : targetId;
+    const anchorId =
+      this.#anchorId !== null && pageIds.includes(this.#anchorId) ? this.#anchorId : targetId;
     this.#anchorId = anchorId;
     return updateImageRangeSelection({
       pageIds,
@@ -121,13 +109,10 @@ export class ImageListSelectionController {
   }
 
   reconcile(pageIds: string[], selectedIds: string[]) {
-    const reconciledSelectedIds = selectedIdsInPageOrder(
-      pageIds,
-      selectedIds
-    );
+    const reconciledSelectedIds = selectedIdsInPageOrder(pageIds, selectedIds);
     if (
-      !reconciledSelectedIds.length
-      || (this.#anchorId !== null && !pageIds.includes(this.#anchorId))
+      !reconciledSelectedIds.length ||
+      (this.#anchorId !== null && !pageIds.includes(this.#anchorId))
     ) {
       this.#anchorId = null;
     }

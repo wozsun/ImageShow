@@ -8,10 +8,7 @@ type WorkerExecutionCoordinatorOptions<Job, Result> = {
   leaseRenewalIntervalMs: number;
   renewLease(job: Job): Promise<boolean>;
   execute(job: Job, signal: AbortSignal): Promise<Result>;
-  settle(
-    job: Job,
-    completion: WorkerExecutionCompletion<Result>
-  ): Promise<void>;
+  settle(job: Job, completion: WorkerExecutionCompletion<Result>): Promise<void>;
   onLeaseLost?(job: Job): void;
   onLeaseRenewalError?(job: Job, error: unknown): void;
 };
@@ -89,9 +86,7 @@ export class WorkerExecutionCoordinator<Job, Result> {
     this.accepting = true;
   }
 
-  async claimAndRun(
-    claim: () => Promise<Job | null | undefined>
-  ): Promise<boolean> {
+  async claimAndRun(claim: () => Promise<Job | null | undefined>): Promise<boolean> {
     if (!this.accepting) return false;
     this.pendingClaims += 1;
 
@@ -156,10 +151,7 @@ export class WorkerExecutionCoordinator<Job, Result> {
     additionalWork: readonly Promise<unknown>[] = []
   ): Promise<boolean> {
     const idle = this.waitForIdle();
-    const completed = Promise.allSettled([
-      idle.promise,
-      ...additionalWork
-    ]).then(() => true);
+    const completed = Promise.allSettled([idle.promise, ...additionalWork]).then(() => true);
     if (timeoutMs <= 0) {
       idle.cancel();
       return this.isIdle() && additionalWork.length === 0;
@@ -206,13 +198,8 @@ export class WorkerExecutionCoordinator<Job, Result> {
     }
   }
 
-  private completionFromError(
-    error: unknown,
-    stopped: boolean
-  ): WorkerExecutionCompletion<Result> {
-    return stopped
-      ? { status: "stopped", reason: error }
-      : { status: "rejected", error };
+  private completionFromError(error: unknown, stopped: boolean): WorkerExecutionCompletion<Result> {
+    return stopped ? { status: "stopped", reason: error } : { status: "rejected", error };
   }
 
   private async run(record: ActiveExecution<Job>) {
@@ -246,9 +233,12 @@ export class WorkerExecutionCoordinator<Job, Result> {
       Math.max(1, this.options.leaseRenewalIntervalMs)
     );
     renewalTimer.unref();
-    const deadlineTimer = setTimeout(() => {
-      this.abort(record, new WorkerTaskTimeoutError(this.options.taskTimeoutMs));
-    }, Math.max(1, this.options.taskTimeoutMs));
+    const deadlineTimer = setTimeout(
+      () => {
+        this.abort(record, new WorkerTaskTimeoutError(this.options.taskTimeoutMs));
+      },
+      Math.max(1, this.options.taskTimeoutMs)
+    );
     deadlineTimer.unref();
 
     let completion: WorkerExecutionCompletion<Result>;
@@ -261,10 +251,7 @@ export class WorkerExecutionCoordinator<Job, Result> {
       // Some APIs translate an AbortSignal into their own AbortError. The
       // controller still owns the authoritative cause: normal stop must be
       // requeued, while timeout and lease failures must remain failures.
-      completion = this.completionFromError(
-        signal.aborted ? signal.reason : error,
-        record.stopped
-      );
+      completion = this.completionFromError(signal.aborted ? signal.reason : error, record.stopped);
     } finally {
       renewalStopped = true;
       clearInterval(renewalTimer);

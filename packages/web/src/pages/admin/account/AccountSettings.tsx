@@ -24,10 +24,11 @@ export function AccountSettings() {
 
   const nextInvalid = next.length > 0 && !isValidAdminPassword(next);
   const mismatch = confirm.length > 0 && next !== confirm;
-  const canSubmit = current.length > 0
-    && isValidAdminPassword(next)
-    && next === confirm
-    && !updatePasswordStatus.pending;
+  const canSubmit =
+    current.length > 0 &&
+    isValidAdminPassword(next) &&
+    next === confirm &&
+    !updatePasswordStatus.pending;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -93,7 +94,11 @@ export function AccountSettings() {
             autoComplete="new-password"
           />
         </label>
-        {mismatch && <p className="admin-error" role="alert">两次输入的新密码不一致。</p>}
+        {mismatch && (
+          <p className="admin-error" role="alert">
+            两次输入的新密码不一致。
+          </p>
+        )}
         <AsyncActionButton
           className="button"
           type="submit"

@@ -3,8 +3,7 @@ import { z } from "zod";
 
 const UUID_V7_MAX_TIMESTAMP = 0xffffffffffff;
 
-export const normalizedUuidSchema = z.uuid()
-  .transform((value) => value.toLowerCase());
+export const normalizedUuidSchema = z.uuid().transform((value) => value.toLowerCase());
 
 export const normalizedUuidV7Schema = normalizedUuidSchema.pipe(
   z.uuidv7({ error: "必须使用 RFC 9562 UUIDv7" })
@@ -24,7 +23,12 @@ export function randomUuidV7At(date: Date, randA?: number) {
   }
 
   const source = randomUUIDv7().replaceAll("-", "");
-  const encodedRandA = randA === undefined ? source.slice(13, 16) : randA.toString(16).padStart(3, "0");
-  const value = timestamp.toString(16).padStart(12, "0") + source.slice(12, 13) + encodedRandA + source.slice(16);
+  const encodedRandA =
+    randA === undefined ? source.slice(13, 16) : randA.toString(16).padStart(3, "0");
+  const value =
+    timestamp.toString(16).padStart(12, "0") +
+    source.slice(12, 13) +
+    encodedRandA +
+    source.slice(16);
   return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
 }

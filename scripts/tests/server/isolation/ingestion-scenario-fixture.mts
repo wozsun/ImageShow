@@ -1,66 +1,133 @@
 import type { ImageDraftDto } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import type { IngestionPreparedManifest, IngestionSessionSnapshot, StoredIngestionSession } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
+import type {
+  IngestionPreparedManifest,
+  IngestionSessionSnapshot,
+  StoredIngestionSession
+} from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
 import type { IntegrationRuntime } from "./integration-runtime.mts";
 import type { IngestionSessionRepository } from "../../../../packages/server/src/images/ingestion/repository.ts";
 
 export async function createIngestionScenarioFixture(runtime: IntegrationRuntime) {
-  const { requireOperationalRedis } = await import("../../../../packages/server/src/core/runtime-availability.ts");
+  const { requireOperationalRedis } =
+    await import("../../../../packages/server/src/core/runtime-availability.ts");
   await requireOperationalRedis();
-  const { IngestionSessionRepository } = await import(
-    "../../../../packages/server/src/images/ingestion/repository.ts"
-  );
-  const identity = await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
+  const { IngestionSessionRepository } =
+    await import("../../../../packages/server/src/images/ingestion/repository.ts");
+  const identity =
+    await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
   const { randomUuidV7At } = await import("../../../../packages/server/src/core/uuid.ts");
-  const ingestionRepository = new IngestionSessionRepository(runtime.redisClient.redis, (work) => work());
+  const ingestionRepository = new IngestionSessionRepository(runtime.redisClient.redis, (work) =>
+    work()
+  );
   const productionIngestionRepository = new IngestionSessionRepository(runtime.redisClient.redis);
   const serviceNow = Date.parse("2026-08-23T01:02:03.456Z");
   const displayKeys = new Map<string, string>();
   const displayOrderKey = (sessionId: string, position: number, now = serviceNow) => {
     const existing = displayKeys.get(sessionId);
     if (existing) return existing;
-    const key = identity.createIngestionDisplayOrderKey(randomUuidV7At(new Date(now)), position, sessionId);
+    const key = identity.createIngestionDisplayOrderKey(
+      randomUuidV7At(new Date(now)),
+      position,
+      sessionId
+    );
     displayKeys.set(sessionId, key);
     return key;
   };
   const serviceDraft: ImageDraftDto = {
-    device: "auto", brightness: "auto", theme: null, author: "", title: "service batch",
-    description: "", source: "", original: "", tags: []
+    device: "auto",
+    brightness: "auto",
+    theme: null,
+    author: "",
+    title: "service batch",
+    description: "",
+    source: "",
+    original: "",
+    tags: []
   };
   const ingestionMetadata: ImageDraftDto = { ...serviceDraft, title: "current domain" };
   const templateId = randomUuidV7At(new Date(serviceNow));
   const importTemplate: Omit<IngestionSessionSnapshot, "semantic_hash"> = {
-    owner: "fixture-template", queue: "import", source_type: "url",
+    owner: "fixture-template",
+    queue: "import",
+    source_type: "url",
     session_id: identity.createIngestionSessionId("fixture-template", "import", "template"),
-    image_id: templateId, image_time: new Date(serviceNow).toISOString(),
-    request_hash: "d".repeat(64), import_download: { url: "https://example.com/current-domain.jpg" },
-    metadata: ingestionMetadata, storage_slug: "local", status: "queued", phase: "queued",
-    message: "queued", progress: null, version: 0, progress_seq: 0, last_semantic_revision: 0,
-    accepted_at: 0, accepted_order: 0, execution_token: "", raw_generation: "", raw_size: 0, discard_at: 0
+    image_id: templateId,
+    image_time: new Date(serviceNow).toISOString(),
+    request_hash: "d".repeat(64),
+    import_download: { url: "https://example.com/current-domain.jpg" },
+    metadata: ingestionMetadata,
+    storage_slug: "local",
+    status: "queued",
+    phase: "queued",
+    message: "queued",
+    progress: null,
+    version: 0,
+    progress_seq: 0,
+    last_semantic_revision: 0,
+    accepted_at: 0,
+    accepted_order: 0,
+    execution_token: "",
+    raw_generation: "",
+    raw_size: 0,
+    discard_at: 0
   };
   const body = Buffer.from("queue-prepared-fixture");
   const preparedTemplate: IngestionPreparedManifest = {
     producer_execution_token: templateId,
     prepared_image_sha256: createHash("sha256").update(body).digest("hex"),
     prepared_thumbnail_sha256: createHash("sha256").update(body).digest("hex"),
-    original_size: body.length, original_width: 1200, original_height: 800,
-    width: 1200, height: 800, ext: "webp", md5: createHash("md5").update(body).digest("hex"),
-    size: body.length, thumbnail_size: body.length, quality: 90, transcoded: true, detected_brightness: "dark", duplicate_count: 0, generation: templateId
+    original_size: body.length,
+    original_width: 1200,
+    original_height: 800,
+    width: 1200,
+    height: 800,
+    ext: "webp",
+    md5: createHash("md5").update(body).digest("hex"),
+    size: body.length,
+    thumbnail_size: body.length,
+    quality: 90,
+    transcoded: true,
+    detected_brightness: "dark",
+    duplicate_count: 0,
+    generation: templateId
   };
-  const transitions = await import("../../../../packages/server/src/images/ingestion/sessions/transitions.ts");
+  const transitions =
+    await import("../../../../packages/server/src/images/ingestion/sessions/transitions.ts");
   const discardOrderProbe = async (session: IngestionSessionSnapshot, now: number) => {
-    const discarded = await ingestionRepository.mutateSemantic(session, session.version,
-      transitions.discardedIngestionReceipt(session, now), now);
-    await ingestionRepository.deleteSession(terminalSession(discarded.session), discarded.session.version, now + 1);
+    const discarded = await ingestionRepository.mutateSemantic(
+      session,
+      session.version,
+      transitions.discardedIngestionReceipt(session, now),
+      now
+    );
+    await ingestionRepository.deleteSession(
+      terminalSession(discarded.session),
+      discarded.session.version,
+      now + 1
+    );
   };
-  return { ingestionRepository, productionIngestionRepository, serviceNow, displayOrderKey, serviceDraft,
-    ingestionMetadata, importTemplate, preparedTemplate, discardOrderProbe };
+  return {
+    ingestionRepository,
+    productionIngestionRepository,
+    serviceNow,
+    displayOrderKey,
+    serviceDraft,
+    ingestionMetadata,
+    importTemplate,
+    preparedTemplate,
+    discardOrderProbe
+  };
 }
 
-export function activeSession(value: StoredIngestionSession | null | undefined): IngestionSessionSnapshot {
-  assert.ok(value && value.status !== "completed" && value.status !== "discarded",
-    "fixture operation must return an active canonical session");
+export function activeSession(
+  value: StoredIngestionSession | null | undefined
+): IngestionSessionSnapshot {
+  assert.ok(
+    value && value.status !== "completed" && value.status !== "discarded",
+    "fixture operation must return an active canonical session"
+  );
   return value;
 }
 
@@ -87,15 +154,21 @@ export function discardedSession(value: StoredIngestionSession | null | undefine
   return session;
 }
 
-export function activeResult<T extends { session: StoredIngestionSession | null | undefined }>(result: T) {
+export function activeResult<T extends { session: StoredIngestionSession | null | undefined }>(
+  result: T
+) {
   return { ...result, session: activeSession(result.session) };
 }
 
-export function completedResult<T extends { session: StoredIngestionSession | null | undefined }>(result: T) {
+export function completedResult<T extends { session: StoredIngestionSession | null | undefined }>(
+  result: T
+) {
   return { ...result, session: completedSession(result.session) };
 }
 
-export function discardedResult<T extends { session: StoredIngestionSession | null | undefined }>(result: T) {
+export function discardedResult<T extends { session: StoredIngestionSession | null | undefined }>(
+  result: T
+) {
   return { ...result, session: discardedSession(result.session) };
 }
 

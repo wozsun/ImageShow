@@ -1,30 +1,37 @@
-
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
-const databasePools = runtime.databasePools;
-const database = {
-  ...databasePools,
-  ...await import("../../../../packages/server/src/core/database/advisory-locks.ts")
-};
+  const databasePools = runtime.databasePools;
+  const database = {
+    ...databasePools,
+    ...(await import("../../../../packages/server/src/core/database/advisory-locks.ts"))
+  };
 
-const imageUpdate = await import("../../../../packages/server/src/images/image-update.ts");
-const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
-const readyCacheCoordinator = await import("../../../../packages/server/src/images/ready-cache/coordinator.ts");
-const readyCacheMeta = await import("../../../../packages/server/src/images/ready-cache/meta.ts");
-const readyCacheAdminStatus = await import("../../../../packages/server/src/images/ready-cache/admin-status.ts");
-const redisInspect = await import("../../../../packages/server/src/checks/redis-inspect.ts");
-const vocabCache = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
-const runtimeAvailability = await import("../../../../packages/server/src/core/runtime-availability.ts");
-await runtimeAvailability.requireOperationalRedis();
-const readReadyRevision = async () => BigInt(String((
-  await database.pool.query(
-    "SELECT revision::text FROM ready_image_revision WHERE singleton=1"
-  )
-).rows[0].revision));
+  const imageUpdate = await import("../../../../packages/server/src/images/image-update.ts");
+  const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
+  const readyCacheCoordinator =
+    await import("../../../../packages/server/src/images/ready-cache/coordinator.ts");
+  const readyCacheMeta = await import("../../../../packages/server/src/images/ready-cache/meta.ts");
+  const readyCacheAdminStatus =
+    await import("../../../../packages/server/src/images/ready-cache/admin-status.ts");
+  const redisInspect = await import("../../../../packages/server/src/checks/redis-inspect.ts");
+  const vocabCache = await import("../../../../packages/server/src/vocab/vocab-cache.ts");
+  const runtimeAvailability =
+    await import("../../../../packages/server/src/core/runtime-availability.ts");
+  await runtimeAvailability.requireOperationalRedis();
+  const readReadyRevision = async () =>
+    BigInt(
+      String(
+        (
+          await database.pool.query(
+            "SELECT revision::text FROM ready_image_revision WHERE singleton=1"
+          )
+        ).rows[0].revision
+      )
+    );
   const imageUpdateIds = {
     first: randomUUID(),
     missing: randomUUID(),
@@ -39,14 +46,10 @@ const readReadyRevision = async () => BigInt(String((
     await database.pool.query(
       `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5)
        VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2)`,
-      [
-        id,
-        String(index + 1).repeat(32)
-      ]
+      [id, String(index + 1).repeat(32)]
     );
   }
-  const readyCacheStatus = await readyCacheCoordinator
-    .initializeReadyImageCacheCoordinator();
+  const readyCacheStatus = await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
   assert.equal(readyCacheStatus.readable, true);
   const initialReadyMeta = readyCacheStatus.meta;
   assert.ok(initialReadyMeta);
@@ -58,9 +61,7 @@ const readReadyRevision = async () => BigInt(String((
   assert.ok(Number.isFinite(Date.parse(initialReadyMeta.fullRebuildStartedAt)));
   assert.ok(Number.isFinite(Date.parse(initialReadyMeta.fullRebuildCompletedAt)));
   assert.ok((initialReadyMeta.lastFullRebuildCoreMemoryBytes ?? 0) > 0);
-  assert.ok(Number.isFinite(Date.parse(
-    initialReadyMeta.lastFullRebuildMeasuredAt
-  )));
+  assert.ok(Number.isFinite(Date.parse(initialReadyMeta.lastFullRebuildMeasuredAt)));
   const initialFullRebuildSnapshot = {
     startedAt: initialReadyMeta.fullRebuildStartedAt,
     completedAt: initialReadyMeta.fullRebuildCompletedAt,
@@ -68,26 +69,44 @@ const readReadyRevision = async () => BigInt(String((
     measuredAt: initialReadyMeta.lastFullRebuildMeasuredAt
   };
 
-
-  const delta = await import("../../../../packages/server/src/images/ready-cache/sync/incremental-projection.ts");
-  const manifest = await import("../../../../packages/server/src/images/ready-cache/integrity/manifest.ts");
+  const delta =
+    await import("../../../../packages/server/src/images/ready-cache/sync/incremental-projection.ts");
+  const manifest =
+    await import("../../../../packages/server/src/images/ready-cache/integrity/manifest.ts");
   const keys = await import("../../../../packages/server/src/images/ready-cache/keys.ts");
   const previousItems = await delta.readPreviousReadyImageCacheItems([imageUpdateIds.first]);
   const statsBefore = await manifest.validateReadyImageStatsIntegrity(null, redisClient.redis);
   const itemsBefore = await redisClient.redis.hgetall(keys.READY_IMAGE_ITEMS_KEY);
   await delta.applyReadyImageCacheDelta(previousItems, previousItems, 3, new Map(statsBefore));
   await delta.applyReadyImageCacheDelta([], [], 3, new Map(statsBefore));
-  assert.deepEqual(await manifest.validateReadyImageStatsIntegrity(statsBefore, redisClient.redis), statsBefore);
+  assert.deepEqual(
+    await manifest.validateReadyImageStatsIntegrity(statsBefore, redisClient.redis),
+    statsBefore
+  );
   assert.deepEqual(await redisClient.redis.hgetall(keys.READY_IMAGE_ITEMS_KEY), itemsBefore);
   const insufficient = new Map(statsBefore).set("total", 0);
-  await assert.rejects(delta.applyReadyImageCacheDelta(previousItems, previousItems, 3, insufficient), /statistics differ before updating/);
-  assert.deepEqual(await redisClient.redis.hgetall(keys.READY_IMAGE_ITEMS_KEY), itemsBefore, "净变化为零也必须在任何写入前拒绝原统计下溢");
-  const untouchedField = [...statsBefore.keys()].find(field => field !== "total")!;
+  await assert.rejects(
+    delta.applyReadyImageCacheDelta(previousItems, previousItems, 3, insufficient),
+    /statistics differ before updating/
+  );
+  assert.deepEqual(
+    await redisClient.redis.hgetall(keys.READY_IMAGE_ITEMS_KEY),
+    itemsBefore,
+    "净变化为零也必须在任何写入前拒绝原统计下溢"
+  );
+  const untouchedField = [...statsBefore.keys()].find((field) => field !== "total")!;
   try {
     await redisClient.redis.hincrby(keys.READY_IMAGE_STATS_KEY, untouchedField, 1);
-    await assert.rejects(manifest.validateReadyImageStatsIntegrity(null, redisClient.redis), /digest differs/);
+    await assert.rejects(
+      manifest.validateReadyImageStatsIntegrity(null, redisClient.redis),
+      /digest differs/
+    );
   } finally {
-    await redisClient.redis.hset(keys.READY_IMAGE_STATS_KEY, untouchedField, statsBefore.get(untouchedField)!);
+    await redisClient.redis.hset(
+      keys.READY_IMAGE_STATS_KEY,
+      untouchedField,
+      statsBefore.get(untouchedField)!
+    );
   }
 
   const manyImageUpdate = await imageUpdate.updateImages([
@@ -113,36 +132,40 @@ const readReadyRevision = async () => BigInt(String((
   assert.ok(incrementalMeta);
   assert.equal(incrementalMeta.itemCount, 3);
   assert.equal(incrementalMeta.appliedRevision, String(await readReadyRevision()));
-  assert.deepEqual(await manifest.validateReadyImageStatsIntegrity(statsBefore, redisClient.redis), statsBefore,
-    "仅修改文字字段仍发布新 revision，并保持完整统计一致");
+  assert.deepEqual(
+    await manifest.validateReadyImageStatsIntegrity(statsBefore, redisClient.redis),
+    statsBefore,
+    "仅修改文字字段仍发布新 revision，并保持完整统计一致"
+  );
   assert.equal(incrementalMeta.processed, 0);
   assert.equal(incrementalMeta.total, 0);
-  assert.deepEqual({
-    startedAt: incrementalMeta.fullRebuildStartedAt,
-    completedAt: incrementalMeta.fullRebuildCompletedAt,
-    memoryBytes: incrementalMeta.lastFullRebuildCoreMemoryBytes,
-    measuredAt: incrementalMeta.lastFullRebuildMeasuredAt
-  }, initialFullRebuildSnapshot);
-  assert.ok(
-    Date.parse(incrementalMeta.lastUpdatedAt)
-      >= Date.parse(initialReadyMeta.lastUpdatedAt)
+  assert.deepEqual(
+    {
+      startedAt: incrementalMeta.fullRebuildStartedAt,
+      completedAt: incrementalMeta.fullRebuildCompletedAt,
+      memoryBytes: incrementalMeta.lastFullRebuildCoreMemoryBytes,
+      measuredAt: incrementalMeta.lastFullRebuildMeasuredAt
+    },
+    initialFullRebuildSnapshot
   );
-  const incrementalStatus = await readyCacheAdminStatus
-    .readReadyImageCacheAdminStatus(
-      String(await readReadyRevision())
-    );
+  assert.ok(
+    Date.parse(incrementalMeta.lastUpdatedAt) >= Date.parse(initialReadyMeta.lastUpdatedAt)
+  );
+  const incrementalStatus = await readyCacheAdminStatus.readReadyImageCacheAdminStatus(
+    String(await readReadyRevision())
+  );
   assert.equal(incrementalStatus.item_count, 3);
   assert.equal(incrementalStatus.processed, null);
   assert.equal(incrementalStatus.total, null);
+  assert.equal(incrementalStatus.last_updated_at, incrementalMeta.lastUpdatedAt);
   assert.equal(
-    incrementalStatus.last_updated_at,
-    incrementalMeta.lastUpdatedAt
+    incrementalStatus.full_rebuild_duration_ms,
+    Math.max(
+      0,
+      Date.parse(incrementalMeta.fullRebuildCompletedAt) -
+        Date.parse(incrementalMeta.fullRebuildStartedAt)
+    )
   );
-  assert.equal(incrementalStatus.full_rebuild_duration_ms, Math.max(
-    0,
-    Date.parse(incrementalMeta.fullRebuildCompletedAt)
-      - Date.parse(incrementalMeta.fullRebuildStartedAt)
-  ));
 
   const redisDeepCheck = await redisInspect.inspectRedisState(undefined, {
     deadlineMs: 5_000,
@@ -151,12 +174,10 @@ const readReadyRevision = async () => BigInt(String((
   });
   assert.equal(redisDeepCheck.deep_inspection.complete, true);
   assert.equal(redisDeepCheck.deep_inspection.source, "deep");
-  assert.ok(Number.isFinite(Date.parse(
-    redisDeepCheck.deep_inspection.measured_at
-  )));
+  assert.ok(Number.isFinite(Date.parse(redisDeepCheck.deep_inspection.measured_at)));
   assert.ok(
-    redisDeepCheck.deep_inspection.image_projection_usage.core.member_count
-      >= incrementalMeta.itemCount
+    redisDeepCheck.deep_inspection.image_projection_usage.core.member_count >=
+      incrementalMeta.itemCount
   );
   let deepCursor = "0";
   const directCoreKeys = new Set<string>();
@@ -175,55 +196,67 @@ const readReadyRevision = async () => BigInt(String((
       }
     }
   } while (deepCursor !== "0");
-  const directCoreMemory = (await Promise.all(
-    [...directCoreKeys].map((key) => redisClient.redis.call(
-      "MEMORY",
-      "USAGE",
-      key,
-      "SAMPLES",
-      "0"
-    ))
-  )).reduce<number>((sum, value) => sum + Number(value ?? 0), 0);
+  const directCoreMemory = (
+    await Promise.all(
+      [...directCoreKeys].map((key) =>
+        redisClient.redis.call("MEMORY", "USAGE", key, "SAMPLES", "0")
+      )
+    )
+  ).reduce<number>((sum, value) => sum + Number(value ?? 0), 0);
   assert.equal(
     redisDeepCheck.deep_inspection.image_projection_usage.core.memory_bytes,
     directCoreMemory
   );
-  const singleImageUpdate = await imageUpdate.updateImages([{
-    id: imageUpdateIds.first,
-    title: "single"
-  }]);
+  const singleImageUpdate = await imageUpdate.updateImages([
+    {
+      id: imageUpdateIds.first,
+      title: "single"
+    }
+  ]);
   assert.deepEqual(singleImageUpdate, {
     updated: 1,
     failed: 0,
     results: [{ id: imageUpdateIds.first, status: "updated" }]
   });
   assert.deepEqual(
-    (await database.pool.query(
-      "SELECT id::text, title, description FROM metadata "
-        + "WHERE id=ANY($1::uuid[]) ORDER BY id",
-      [[imageUpdateIds.first, imageUpdateIds.third]]
-    )).rows,
+    (
+      await database.pool.query(
+        "SELECT id::text, title, description FROM metadata " +
+          "WHERE id=ANY($1::uuid[]) ORDER BY id",
+        [[imageUpdateIds.first, imageUpdateIds.third]]
+      )
+    ).rows,
     [
       { id: imageUpdateIds.first, title: "single", description: "" },
       { id: imageUpdateIds.third, title: "", description: "third" }
     ].sort((left, right) => left.id.localeCompare(right.id))
   );
 
-  const readAtomicImage = async (id: string) => (await database.pool.query(
-    `SELECT title, ARRAY(
+  const readAtomicImage = async (id: string) =>
+    (
+      await database.pool.query(
+        `SELECT title, ARRAY(
        SELECT tag_slug FROM image_tag
         WHERE image_id=metadata.id ORDER BY tag_slug
      ) AS tags
        FROM metadata WHERE id=$1`,
-    [id]
-  )).rows[0];
+        [id]
+      )
+    ).rows[0];
 
   const revisionBeforeAtomicUpdate = await readReadyRevision();
-  assert.equal((await imageUpdate.updateImages([{
-    id: imageUpdateIds.first,
-    title: "atomic",
-    tags: ["atomic-tag"]
-  }])).failed, 0);
+  assert.equal(
+    (
+      await imageUpdate.updateImages([
+        {
+          id: imageUpdateIds.first,
+          title: "atomic",
+          tags: ["atomic-tag"]
+        }
+      ])
+    ).failed,
+    0
+  );
   assert.equal(await readReadyRevision(), revisionBeforeAtomicUpdate + 1n);
   assert.deepEqual(await readAtomicImage(imageUpdateIds.first), {
     title: "atomic",
@@ -231,22 +264,34 @@ const readReadyRevision = async () => BigInt(String((
   });
 
   const revisionBeforeNoop = await readReadyRevision();
-  assert.deepEqual(await imageUpdate.updateImages([{
-    id: imageUpdateIds.first,
-    title: "atomic",
-    tags: ["atomic-tag"]
-  }]), {
-    updated: 1,
-    failed: 0,
-    results: [{ id: imageUpdateIds.first, status: "updated" }]
-  });
+  assert.deepEqual(
+    await imageUpdate.updateImages([
+      {
+        id: imageUpdateIds.first,
+        title: "atomic",
+        tags: ["atomic-tag"]
+      }
+    ]),
+    {
+      updated: 1,
+      failed: 0,
+      results: [{ id: imageUpdateIds.first, status: "updated" }]
+    }
+  );
   assert.equal(await readReadyRevision(), revisionBeforeNoop);
 
-  assert.equal((await imageUpdate.updateImages([{
-    id: imageUpdateIds.third,
-    title: "stable",
-    tags: ["stable-tag"]
-  }])).failed, 0);
+  assert.equal(
+    (
+      await imageUpdate.updateImages([
+        {
+          id: imageUpdateIds.third,
+          title: "stable",
+          tags: ["stable-tag"]
+        }
+      ])
+    ).failed,
+    0
+  );
   await database.pool.query(`
     CREATE OR REPLACE FUNCTION imageshow_test_reject_atomic_tag()
     RETURNS trigger
@@ -264,11 +309,13 @@ const readReadyRevision = async () => BigInt(String((
       FOR EACH ROW EXECUTE FUNCTION imageshow_test_reject_atomic_tag();
   `);
   const revisionBeforeRollback = await readReadyRevision();
-  const rolledBackUpdate = await imageUpdate.updateImages([{
-    id: imageUpdateIds.third,
-    title: "rolled-back",
-    tags: ["atomic-fail"]
-  }]);
+  const rolledBackUpdate = await imageUpdate.updateImages([
+    {
+      id: imageUpdateIds.third,
+      title: "rolled-back",
+      tags: ["atomic-fail"]
+    }
+  ]);
   assert.equal(rolledBackUpdate.updated, 0);
   assert.equal(rolledBackUpdate.failed, 1);
   assert.equal(rolledBackUpdate.results[0]?.status, "failed");
@@ -277,9 +324,13 @@ const readReadyRevision = async () => BigInt(String((
     title: "stable",
     tags: ["stable-tag"]
   });
-  assert.equal(Number((await database.pool.query(
-    "SELECT count(*)::int AS count FROM tag WHERE slug='atomic-fail'"
-  )).rows[0].count), 0);
+  assert.equal(
+    Number(
+      (await database.pool.query("SELECT count(*)::int AS count FROM tag WHERE slug='atomic-fail'"))
+        .rows[0].count
+    ),
+    0
+  );
   await database.pool.query(`
     DROP TRIGGER imageshow_test_reject_atomic_tag ON image_tag;
     DROP FUNCTION imageshow_test_reject_atomic_tag();
@@ -287,24 +338,31 @@ const readReadyRevision = async () => BigInt(String((
 
   const revisionBeforeOverlap = await readReadyRevision();
   const completionOrder: string[] = [];
-  const leftUpdate = imageUpdate.updateImages([
-    { id: imageUpdateIds.first, description: "left-a" },
-    { id: imageUpdateIds.third, title: "left-b", tags: ["left-tag"] }
-  ]).then((result) => {
-    completionOrder.push("left");
-    return result;
-  });
-  const rightUpdate = imageUpdate.updateImages([
-    { id: imageUpdateIds.third, title: "right-b", tags: ["right-tag"] },
-    { id: imageUpdateIds.fourth, description: "right-c" }
-  ]).then((result) => {
-    completionOrder.push("right");
-    return result;
-  });
+  const leftUpdate = imageUpdate
+    .updateImages([
+      { id: imageUpdateIds.first, description: "left-a" },
+      { id: imageUpdateIds.third, title: "left-b", tags: ["left-tag"] }
+    ])
+    .then((result) => {
+      completionOrder.push("left");
+      return result;
+    });
+  const rightUpdate = imageUpdate
+    .updateImages([
+      { id: imageUpdateIds.third, title: "right-b", tags: ["right-tag"] },
+      { id: imageUpdateIds.fourth, description: "right-c" }
+    ])
+    .then((result) => {
+      completionOrder.push("right");
+      return result;
+    });
   const overlappingResults = await Promise.all([leftUpdate, rightUpdate]);
   assert.deepEqual(
     overlappingResults.map((result) => result.results.map((item) => item.status)),
-    [["updated", "updated"], ["updated", "updated"]]
+    [
+      ["updated", "updated"],
+      ["updated", "updated"]
+    ]
   );
   assert.equal(await readReadyRevision(), revisionBeforeOverlap + 4n);
   const expectedLastWriter = completionOrder.at(-1);
@@ -330,16 +388,15 @@ const readReadyRevision = async () => BigInt(String((
   };
   await redisClient.redis.ping();
   assert.deepEqual(observedRedisCommands, ["ping"]);
-  assert.equal(
-    readyCacheCoordinator.getReadyImageCacheCoordinatorStatus().readable,
-    true
-  );
+  assert.equal(readyCacheCoordinator.getReadyImageCacheCoordinatorStatus().readable, true);
   let committedThroughReadyCacheFailure;
   try {
-    committedThroughReadyCacheFailure = await imageUpdate.updateImages([{
-      id: imageUpdateIds.first,
-      source: "https://example.com/ready-cache-failure-committed"
-    }]);
+    committedThroughReadyCacheFailure = await imageUpdate.updateImages([
+      {
+        id: imageUpdateIds.first,
+        source: "https://example.com/ready-cache-failure-committed"
+      }
+    ]);
   } finally {
     redisClient.redis.sendCommand = originalRedisSendCommand;
   }
@@ -350,10 +407,11 @@ const readReadyRevision = async () => BigInt(String((
   });
   assert.equal(readyCacheFailureInjected, true);
   assert.equal(await readReadyRevision(), revisionBeforeReadyCacheFailure + 1n);
-  assert.equal((await database.pool.query(
-    "SELECT source FROM metadata WHERE id=$1",
-    [imageUpdateIds.first]
-  )).rows[0]?.source, "https://example.com/ready-cache-failure-committed");
+  assert.equal(
+    (await database.pool.query("SELECT source FROM metadata WHERE id=$1", [imageUpdateIds.first]))
+      .rows[0]?.source,
+    "https://example.com/ready-cache-failure-committed"
+  );
   assert.equal(
     (await readyCacheCoordinator.ensureReadyImageCacheCurrent()).appliedRevision,
     String(await readReadyRevision())
@@ -376,10 +434,12 @@ const readReadyRevision = async () => BigInt(String((
   };
   let committedThroughVocabularyCacheFailure;
   try {
-    committedThroughVocabularyCacheFailure = await imageUpdate.updateImages([{
-      id: imageUpdateIds.first,
-      tags: ["cache-repair-tag"]
-    }]);
+    committedThroughVocabularyCacheFailure = await imageUpdate.updateImages([
+      {
+        id: imageUpdateIds.first,
+        tags: ["cache-repair-tag"]
+      }
+    ]);
   } finally {
     redisClient.redis.unlink = originalRedisUnlink;
     redisClient.redis.set = originalRedisSet;
@@ -391,57 +451,104 @@ const readReadyRevision = async () => BigInt(String((
     failed: 0,
     results: [{ id: imageUpdateIds.first, status: "updated" }]
   });
-  assert.equal(
-    await readReadyRevision(),
-    revisionBeforeVocabularyCacheFailure + 1n
-  );
+  assert.equal(await readReadyRevision(), revisionBeforeVocabularyCacheFailure + 1n);
   assert.deepEqual(await readAtomicImage(imageUpdateIds.first), {
     title: "atomic",
     tags: ["cache-repair-tag"]
   });
-  assert.equal(Number((await database.pool.query(
-    "SELECT count(*)::int AS count FROM tag WHERE slug='cache-repair-tag'"
-  )).rows[0].count), 1);
+  assert.equal(
+    Number(
+      (
+        await database.pool.query(
+          "SELECT count(*)::int AS count FROM tag WHERE slug='cache-repair-tag'"
+        )
+      ).rows[0].count
+    ),
+    1
+  );
 
   const themeMutations = await import("../../../../packages/server/src/themes/mutations.ts");
   const tagMutations = await import("../../../../packages/server/src/tags/mutations.ts");
-  const { withTransactionOnClient } = await import("../../../../packages/server/src/core/database/transactions.ts");
+  const { withTransactionOnClient } =
+    await import("../../../../packages/server/src/core/database/transactions.ts");
   const tagClient = await database.pool.connect();
   const rollback = new Error("rollback tag contract fixture");
   const tagsBefore = (await tagClient.query("SELECT slug, sort_order FROM tag ORDER BY slug")).rows;
   const imageBefore = await readAtomicImage(imageUpdateIds.first);
   const revisionBeforeTagCases = await readReadyRevision();
   try {
-    await assert.rejects(withTransactionOnClient(tagClient, async (client) => {
-      const result = await tagMutations.replaceImageTags(client, imageUpdateIds.first, [
-        "set-second", "cache-repair-tag", "set-first", "set-second"
-      ]);
-      assert.equal(result.createdTag, true);
-      assert.deepEqual((await client.query(
-        "SELECT tag_slug FROM image_tag WHERE image_id=$1 ORDER BY tag_slug", [imageUpdateIds.first]
-      )).rows.map((row) => row.tag_slug), ["cache-repair-tag", "set-first", "set-second"]);
-      assert.equal((await tagMutations.replaceImageTags(client, imageUpdateIds.first, ["set-first"])).createdTag, false);
-      assert.equal((await tagMutations.replaceImageTags(client, imageUpdateIds.first, [])).createdTag, false);
-      assert.equal((await client.query("SELECT count(*)::int AS count FROM image_tag WHERE image_id=$1", [imageUpdateIds.first])).rows[0].count, 0);
-      assert.equal(BigInt((await client.query("SELECT revision::text FROM ready_image_revision")).rows[0].revision), revisionBeforeTagCases + 1n);
-      throw rollback;
-    }), (error) => error === rollback);
+    await assert.rejects(
+      withTransactionOnClient(tagClient, async (client) => {
+        const result = await tagMutations.replaceImageTags(client, imageUpdateIds.first, [
+          "set-second",
+          "cache-repair-tag",
+          "set-first",
+          "set-second"
+        ]);
+        assert.equal(result.createdTag, true);
+        assert.deepEqual(
+          (
+            await client.query(
+              "SELECT tag_slug FROM image_tag WHERE image_id=$1 ORDER BY tag_slug",
+              [imageUpdateIds.first]
+            )
+          ).rows.map((row) => row.tag_slug),
+          ["cache-repair-tag", "set-first", "set-second"]
+        );
+        assert.equal(
+          (await tagMutations.replaceImageTags(client, imageUpdateIds.first, ["set-first"]))
+            .createdTag,
+          false
+        );
+        assert.equal(
+          (await tagMutations.replaceImageTags(client, imageUpdateIds.first, [])).createdTag,
+          false
+        );
+        assert.equal(
+          (
+            await client.query("SELECT count(*)::int AS count FROM image_tag WHERE image_id=$1", [
+              imageUpdateIds.first
+            ])
+          ).rows[0].count,
+          0
+        );
+        assert.equal(
+          BigInt(
+            (await client.query("SELECT revision::text FROM ready_image_revision")).rows[0].revision
+          ),
+          revisionBeforeTagCases + 1n
+        );
+        throw rollback;
+      }),
+      (error) => error === rollback
+    );
     const controller = new AbortController();
     const cancelled = new Error("cancel tag replacement after a database operation");
-    await assert.rejects(withTransactionOnClient(tagClient, async (client) => {
-      const cancelAfterQuery = new Proxy(client, {
-        get(target, property, receiver) {
-          if (property !== "query") return Reflect.get(target, property, receiver);
-          return async (text: string, values?: unknown[]) => {
-            const result = await target.query(text, values);
-            controller.abort(cancelled);
-            return result;
-          };
-        }
-      });
-      await tagMutations.replaceImageTagAssociations(cancelAfterQuery, imageUpdateIds.first, ["cancelled-set"], controller.signal);
-    }), (error) => error === cancelled);
-    assert.deepEqual((await tagClient.query("SELECT slug, sort_order FROM tag ORDER BY slug")).rows, tagsBefore);
+    await assert.rejects(
+      withTransactionOnClient(tagClient, async (client) => {
+        const cancelAfterQuery = new Proxy(client, {
+          get(target, property, receiver) {
+            if (property !== "query") return Reflect.get(target, property, receiver);
+            return async (text: string, values?: unknown[]) => {
+              const result = await target.query(text, values);
+              controller.abort(cancelled);
+              return result;
+            };
+          }
+        });
+        await tagMutations.replaceImageTagAssociations(
+          cancelAfterQuery,
+          imageUpdateIds.first,
+          ["cancelled-set"],
+          controller.signal
+        );
+      }),
+      (error) => error === cancelled
+    );
+    assert.deepEqual(
+      (await tagClient.query("SELECT slug, sort_order FROM tag ORDER BY slug")).rows,
+      tagsBefore
+    );
     assert.deepEqual(await readAtomicImage(imageUpdateIds.first), imageBefore);
     assert.equal(await readReadyRevision(), revisionBeforeTagCases);
   } finally {
@@ -454,22 +561,42 @@ const readReadyRevision = async () => BigInt(String((
   ]);
   assert.ok(concurrentTags.every((result) => result.updated === 1 && result.failed === 0));
   assert.deepEqual((await readAtomicImage(imageUpdateIds.third)).tags, ["left-set", "shared-set"]);
-  assert.deepEqual((await readAtomicImage(imageUpdateIds.fourth)).tags, ["right-set", "shared-set"]);
-  assert.equal((await database.pool.query("SELECT count(*)::int AS count FROM tag WHERE slug='shared-set'")).rows[0].count, 1);
-  const readThemeImage = async () => (await database.pool.query(
-    "SELECT theme, ext, md5, image_time, author FROM metadata WHERE id=$1",
-    [imageUpdateIds.first]
-  )).rows[0];
+  assert.deepEqual((await readAtomicImage(imageUpdateIds.fourth)).tags, [
+    "right-set",
+    "shared-set"
+  ]);
+  assert.equal(
+    (await database.pool.query("SELECT count(*)::int AS count FROM tag WHERE slug='shared-set'"))
+      .rows[0].count,
+    1
+  );
+  const readThemeImage = async () =>
+    (
+      await database.pool.query(
+        "SELECT theme, ext, md5, image_time, author FROM metadata WHERE id=$1",
+        [imageUpdateIds.first]
+      )
+    ).rows[0];
   const originalThemeImage = await readThemeImage();
   assert.equal(originalThemeImage.theme, null);
   await themeMutations.createTheme("none", "普通主题");
   const themeQuery = await import("../../../../packages/server/src/themes/query.ts");
   assert.deepEqual(await themeQuery.resolveThemeSlugs(["none", "null"]), ["none", "null"]);
   for (const theme of ["clearable", "none"]) {
-    assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, theme }])).updated, 1);
-    assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, title: "retain-theme" }])).updated, 1);
+    assert.equal(
+      (await imageUpdate.updateImages([{ id: imageUpdateIds.first, theme }])).updated,
+      1
+    );
+    assert.equal(
+      (await imageUpdate.updateImages([{ id: imageUpdateIds.first, title: "retain-theme" }]))
+        .updated,
+      1
+    );
     assert.equal((await readThemeImage()).theme, theme);
-    assert.equal((await imageUpdate.updateImages([{ id: imageUpdateIds.first, theme: null }])).updated, 1);
+    assert.equal(
+      (await imageUpdate.updateImages([{ id: imageUpdateIds.first, theme: null }])).updated,
+      1
+    );
     assert.deepEqual(await readThemeImage(), originalThemeImage);
   }
   await themeMutations.deleteTheme("none");
@@ -478,26 +605,36 @@ const readReadyRevision = async () => BigInt(String((
     { id: imageUpdateIds.third, theme: "clearable" },
     { id: imageUpdateIds.fourth, theme: "retained" }
   ]);
-  await database.pool.query("UPDATE metadata SET status='deleted', deleted_at=now() WHERE id=$1", [imageUpdateIds.third]);
+  await database.pool.query("UPDATE metadata SET status='deleted', deleted_at=now() WHERE id=$1", [
+    imageUpdateIds.third
+  ]);
   await themeMutations.deleteTheme("clearable");
   assert.deepEqual(await readThemeImage(), originalThemeImage);
-  assert.equal((await database.pool.query("SELECT theme FROM metadata WHERE id=$1", [imageUpdateIds.third])).rows[0].theme, null);
-  assert.equal((await database.pool.query("SELECT theme FROM metadata WHERE id=$1", [imageUpdateIds.fourth])).rows[0].theme, "retained");
-
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id=ANY($1::uuid[])",
-    [[imageUpdateIds.first, imageUpdateIds.third, imageUpdateIds.fourth]]
+  assert.equal(
+    (await database.pool.query("SELECT theme FROM metadata WHERE id=$1", [imageUpdateIds.third]))
+      .rows[0].theme,
+    null
   );
-  await database.pool.query(
-    "DELETE FROM tag WHERE slug=ANY($1::text[])",
-    [[
+  assert.equal(
+    (await database.pool.query("SELECT theme FROM metadata WHERE id=$1", [imageUpdateIds.fourth]))
+      .rows[0].theme,
+    "retained"
+  );
+
+  await database.pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [
+    [imageUpdateIds.first, imageUpdateIds.third, imageUpdateIds.fourth]
+  ]);
+  await database.pool.query("DELETE FROM tag WHERE slug=ANY($1::text[])", [
+    [
       "atomic-tag",
       "stable-tag",
       "left-tag",
       "right-tag",
       "atomic-fail",
       "cache-repair-tag",
-      "shared-set", "left-set", "right-set"
-    ]]
-  );
+      "shared-set",
+      "left-set",
+      "right-set"
+    ]
+  ]);
 });

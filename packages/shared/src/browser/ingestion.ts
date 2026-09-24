@@ -13,9 +13,7 @@ function isIpHostname(hostname: string) {
   const bareHostname = hostname.replace(/^\[|\]$/g, "");
   if (bareHostname.includes(":")) return true;
   const parts = bareHostname.split(".");
-  return parts.length === 4 && parts.every((part) => (
-    /^\d+$/u.test(part) && Number(part) <= 255
-  ));
+  return parts.length === 4 && parts.every((part) => /^\d+$/u.test(part) && Number(part) <= 255);
 }
 
 /**
@@ -33,8 +31,7 @@ export function normalizeIngestionDraftUrl(
 }
 
 export const ingestionDuplicateDecisions = ["upload", "confirmed"] as const;
-export type IngestionDuplicateDecision =
-  (typeof ingestionDuplicateDecisions)[number];
+export type IngestionDuplicateDecision = (typeof ingestionDuplicateDecisions)[number];
 
 export type ImportManifestItemDto = {
   line: number;
@@ -100,13 +97,13 @@ export const ingestionActionScopeHeader = "x-imageshow-ingestion-action-scope";
 export const uploadCredentialHeader = "x-imageshow-upload-credential";
 
 export const ingestionQueueTypes = ["upload", "import"] as const;
-export type IngestionQueueTypeDto = typeof ingestionQueueTypes[number];
+export type IngestionQueueTypeDto = (typeof ingestionQueueTypes)[number];
 
 export const importSourceTypes = ["url", "jsonl", "weibo"] as const;
-export type ImportSourceTypeDto = typeof importSourceTypes[number];
+export type ImportSourceTypeDto = (typeof importSourceTypes)[number];
 
 export const ingestionSourceTypes = ["upload", ...importSourceTypes] as const;
-export type IngestionSourceTypeDto = typeof ingestionSourceTypes[number];
+export type IngestionSourceTypeDto = (typeof ingestionSourceTypes)[number];
 
 export const serverIngestionStatuses = [
   "queued",
@@ -119,7 +116,7 @@ export const serverIngestionStatuses = [
   "completed",
   "failed"
 ] as const;
-export type ServerIngestionStatusDto = typeof serverIngestionStatuses[number];
+export type ServerIngestionStatusDto = (typeof serverIngestionStatuses)[number];
 
 export type IngestionSessionPairDto = {
   session_id: string;
@@ -144,17 +141,21 @@ export type UploadIntentInputDto = {
 type AcceptedIngestionItemDto = IngestionSessionPairDto & {
   resolved_image_time: string;
   accepted_order: number;
-} & ({
-  status: "accepted";
-  version: number;
-  last_semantic_revision: number;
-} | {
-  status: "completed";
-  version?: number;
-  last_semantic_revision?: number;
-} | {
-  status: "discarded";
-});
+} & (
+    | {
+        status: "accepted";
+        version: number;
+        last_semantic_revision: number;
+      }
+    | {
+        status: "completed";
+        version?: number;
+        last_semantic_revision?: number;
+      }
+    | {
+        status: "discarded";
+      }
+  );
 
 type IngestionItemFailureDto = {
   idempotency_key: string;
@@ -163,13 +164,16 @@ type IngestionItemFailureDto = {
   message: string;
 };
 
-export type UploadIntentItemDto = {
-  session_id: string;
-  candidate_image_id: string;
-  resolved_image_time: string;
-  credential: string;
-  status: "intent";
-} | AcceptedIngestionItemDto | IngestionItemFailureDto;
+export type UploadIntentItemDto =
+  | {
+      session_id: string;
+      candidate_image_id: string;
+      resolved_image_time: string;
+      credential: string;
+      status: "intent";
+    }
+  | AcceptedIngestionItemDto
+  | IngestionItemFailureDto;
 
 export type UploadIntentResultDto = {
   items: UploadIntentItemDto[];
@@ -284,9 +288,7 @@ export type CompletedServerIngestionItemDto = IngestionSessionPairDto & {
   completed_item: CompletedIngestionImageDto;
 };
 
-export type ServerIngestionItemDto =
-  | ActiveServerIngestionItemDto
-  | CompletedServerIngestionItemDto;
+export type ServerIngestionItemDto = ActiveServerIngestionItemDto | CompletedServerIngestionItemDto;
 
 export type IngestionQueueSummaryDto = {
   total: number;
@@ -328,41 +330,45 @@ export type IngestionQueueTerminalEventItemDto = IngestionSessionPairDto & {
   accepted_order: number;
 };
 
-export type IngestionQueueEventDto = {
-  type: "ready";
-  queue: IngestionQueueTypeDto;
-  revision: number;
-  action_scope: string;
-} | {
-  type: "mutation";
-  queue: IngestionQueueTypeDto;
-  kind: "semantic" | "progress" | "removed";
-  revision: number;
-  last_accepted_order: number;
-  summary: IngestionQueueSummaryDto;
-  session: ServerIngestionItemDto | IngestionQueueTerminalEventItemDto;
-  action_watermark?: string;
-} | {
-  type: "ping";
-  queue: IngestionQueueTypeDto;
-};
+export type IngestionQueueEventDto =
+  | {
+      type: "ready";
+      queue: IngestionQueueTypeDto;
+      revision: number;
+      action_scope: string;
+    }
+  | {
+      type: "mutation";
+      queue: IngestionQueueTypeDto;
+      kind: "semantic" | "progress" | "removed";
+      revision: number;
+      last_accepted_order: number;
+      summary: IngestionQueueSummaryDto;
+      session: ServerIngestionItemDto | IngestionQueueTerminalEventItemDto;
+      action_watermark?: string;
+    }
+  | {
+      type: "ping";
+      queue: IngestionQueueTypeDto;
+    };
 
 export type IngestionStatusInputDto = {
   items: IngestionSessionPairDto[];
 };
 
-export type IngestionStatusItemDto = IngestionSessionPairDto & (
-  | { status: "present"; item: ActiveServerIngestionItemDto }
-  | {
-      status: "completed";
-      completed_item: CompletedIngestionImageDto;
-      display?: CompletedIngestionDisplayDto;
-      redis_status: "active" | "completed" | "missing";
-      redis_version?: number;
-      redis_last_semantic_revision?: number;
-    }
-  | { status: "missing" }
-);
+export type IngestionStatusItemDto = IngestionSessionPairDto &
+  (
+    | { status: "present"; item: ActiveServerIngestionItemDto }
+    | {
+        status: "completed";
+        completed_item: CompletedIngestionImageDto;
+        display?: CompletedIngestionDisplayDto;
+        redis_status: "active" | "completed" | "missing";
+        redis_version?: number;
+        redis_last_semantic_revision?: number;
+      }
+    | { status: "missing" }
+  );
 
 export type IngestionStatusResultDto = {
   items: IngestionStatusItemDto[];
@@ -379,16 +385,17 @@ export type IngestionSessionUpdateInputDto = {
   items: IngestionSessionUpdateItemDto[];
 };
 
-export type IngestionSessionUpdateItemResultDto = IngestionSessionPairDto & (
-  | {
-      status: "changed" | "unchanged";
-      version: number;
-      last_semantic_revision: number;
-      duplicate_count: number;
-      duplicate_decision: IngestionDuplicateDecision;
-    }
-  | { status: "failed"; code: string; message: string }
-);
+export type IngestionSessionUpdateItemResultDto = IngestionSessionPairDto &
+  (
+    | {
+        status: "changed" | "unchanged";
+        version: number;
+        last_semantic_revision: number;
+        duplicate_count: number;
+        duplicate_decision: IngestionDuplicateDecision;
+      }
+    | { status: "failed"; code: string; message: string }
+  );
 
 export type IngestionSessionUpdateResultDto = {
   items: IngestionSessionUpdateItemResultDto[];
@@ -414,22 +421,23 @@ export type IngestionCommitItemInputDto = IngestionSessionPairDto & {
   metadata: ImageDraftDto;
 };
 
-export type IngestionCommitItemResultDto = IngestionSessionPairDto & (
-  | { status: "accepted"; version: number }
-  | {
-      status: "completed";
-      version: number;
-      completed_item: CompletedIngestionImageDto;
-    }
-  | {
-      status: "failed";
-      code: string;
-      message: string;
-      version?: number;
-      duplicate_count?: number;
-      duplicates?: AdminImageListItemDto[];
-    }
-);
+export type IngestionCommitItemResultDto = IngestionSessionPairDto &
+  (
+    | { status: "accepted"; version: number }
+    | {
+        status: "completed";
+        version: number;
+        completed_item: CompletedIngestionImageDto;
+      }
+    | {
+        status: "failed";
+        code: string;
+        message: string;
+        version?: number;
+        duplicate_count?: number;
+        duplicates?: AdminImageListItemDto[];
+      }
+  );
 
 export type IngestionCommitInputDto = {
   items: IngestionCommitItemInputDto[];
@@ -447,12 +455,13 @@ export type IngestionCancelInputDto = {
   items: IngestionCancelItemInputDto[];
 };
 
-export type IngestionCancelItemResultDto = IngestionSessionPairDto & (
-  | { status: "discarded"; queue_revision: number }
-  | { status: "resolving" }
-  | { status: "completed"; completed_item: CompletedIngestionImageDto }
-  | { status: "failed"; code?: string; message?: string }
-);
+export type IngestionCancelItemResultDto = IngestionSessionPairDto &
+  (
+    | { status: "discarded"; queue_revision: number }
+    | { status: "resolving" }
+    | { status: "completed"; completed_item: CompletedIngestionImageDto }
+    | { status: "failed"; code?: string; message?: string }
+  );
 
 export type IngestionCancelResultDto = {
   items: IngestionCancelItemResultDto[];
@@ -467,7 +476,7 @@ export const ingestionQueueActionTypes = [
   "clear_completed",
   "clear_queue"
 ] as const;
-export type IngestionQueueActionTypeDto = typeof ingestionQueueActionTypes[number];
+export type IngestionQueueActionTypeDto = (typeof ingestionQueueActionTypes)[number];
 
 export type IngestionQueueActionInputDto = {
   queue: IngestionQueueTypeDto;
@@ -487,11 +496,13 @@ export type IngestionQueueActionResultDto = {
   changed: number;
   failed: number;
   continuation?: string;
-  items: Array<IngestionSessionPairDto & {
-    status: "changed" | "unchanged" | "skipped" | "failed";
-    queue_revision?: number;
-    code?: string;
-    message?: string;
-    completed_item?: CompletedIngestionImageDto;
-  }>;
+  items: Array<
+    IngestionSessionPairDto & {
+      status: "changed" | "unchanged" | "skipped" | "failed";
+      queue_revision?: number;
+      code?: string;
+      message?: string;
+      completed_item?: CompletedIngestionImageDto;
+    }
+  >;
 };

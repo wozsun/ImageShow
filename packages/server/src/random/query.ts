@@ -62,14 +62,7 @@ const randomAllowedQueryValues = [
   "limit"
 ] as const;
 const randomAllowedQuery = new Set<string>(randomAllowedQueryValues);
-const randomSingleValueQuery = new Set([
-  "device",
-  "brightness",
-  "seed",
-  "mode",
-  "size",
-  "limit"
-]);
+const randomSingleValueQuery = new Set(["device", "brightness", "seed", "mode", "size", "limit"]);
 const randomBrightnessSet = new Set(randomBrightnesses);
 const disallowedSelectorCharacters = /[\u0000-\u001f\u007f]/u;
 const fullUuidPattern = new RegExp(
@@ -110,11 +103,7 @@ function mixedSelectorsError(noun: string, include: string[], exclude: string[])
   );
 }
 
-function parseSelectorGroup(
-  query: URLSearchParams,
-  field: "theme" | "author",
-  noun: string
-) {
+function parseSelectorGroup(query: URLSearchParams, field: "theme" | "author", noun: string) {
   const include: string[] = [];
   const exclude: string[] = [];
   let submittedCount = 0;
@@ -167,15 +156,18 @@ function parseSelectorGroup(
 
 function targetedIdCombinationError(query: URLSearchParams) {
   if (!query.has("id")) return null;
-  const incompatible = [...new Set(
-    [...query.keys()].filter((key) => (
-      key !== "id"
-      && key !== "mode"
-      && key !== "size"
-      && key !== "limit"
-      && !(key === "device" && query.get(key)?.toLowerCase() === "auto")
-    ))
-  )].sort();
+  const incompatible = [
+    ...new Set(
+      [...query.keys()].filter(
+        (key) =>
+          key !== "id" &&
+          key !== "mode" &&
+          key !== "size" &&
+          key !== "limit" &&
+          !(key === "device" && query.get(key)?.toLowerCase() === "auto")
+      )
+    )
+  ].sort();
   if (!incompatible.length) return null;
   return apiErrorResponse(
     { status: 400, message: "Bad Request: id cannot be combined with filters" },
@@ -187,10 +179,7 @@ function targetedIdCombinationError(query: URLSearchParams) {
   );
 }
 
-function parseJsonLimit(
-  query: URLSearchParams,
-  explicitMode: string | null
-): number | Response {
+function parseJsonLimit(query: URLSearchParams, explicitMode: string | null): number | Response {
   if (!query.has("limit")) return 1;
   if (explicitMode !== "json") {
     return apiErrorResponse(
@@ -219,8 +208,8 @@ function parseJsonLimit(
 
   const maximum = String(appConfig.randomQuery.maxJsonItems);
   if (
-    significant.length > maximum.length
-    || (significant.length === maximum.length && significant > maximum)
+    significant.length > maximum.length ||
+    (significant.length === maximum.length && significant > maximum)
   ) {
     return appConfig.randomQuery.maxJsonItems;
   }
@@ -273,9 +262,9 @@ function parseSeed(query: URLSearchParams, limit: number): string | null | Respo
   const seed = query.get("seed");
   if (seed === null) return null;
   if (
-    !seed.trim()
-    || disallowedSelectorCharacters.test(seed)
-    || [...seed].length > appConfig.randomQuery.maxSeedCharacters
+    !seed.trim() ||
+    disallowedSelectorCharacters.test(seed) ||
+    [...seed].length > appConfig.randomQuery.maxSeedCharacters
   ) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid seed" },
@@ -320,8 +309,7 @@ export function parseRandomQuery(
       { field: "mode" }
     );
   }
-  const size = query.get("size")?.toLowerCase()
-    ?? (explicitMode === "json" ? null : defaultSize);
+  const size = query.get("size")?.toLowerCase() ?? (explicitMode === "json" ? null : defaultSize);
   if (size !== null && !randomSizes.has(size)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid size" },
@@ -376,8 +364,7 @@ export function parseRandomQuery(
   }
   const author = parseSelectorGroup(query, "author", "author");
   if (author instanceof Response) return author;
-  const selectorCount =
-    theme.submittedCount + tag.termCount + author.submittedCount;
+  const selectorCount = theme.submittedCount + tag.termCount + author.submittedCount;
   if (selectorCount > appConfig.randomQuery.maxSelectorCount) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Too many selectors" },
@@ -431,26 +418,19 @@ export function normalizeRandomQuery(
   query: ParsedRandomQuery,
   maps: RandomSelectorMaps
 ): NormalizedRandomQuery | Response {
-  const theme = normalizeSelectorGroup(
-    "theme",
-    "theme",
-    query.theme,
-    maps.theme
-  );
+  const theme = normalizeSelectorGroup("theme", "theme", query.theme, maps.theme);
   if (theme instanceof Response) return theme;
   let tag: TagExpression;
   try {
     tag = resolveTagExpression(query.tag, maps.tag);
   } catch (error) {
     if (!(error instanceof TagFilterError)) throw error;
-    return apiErrorResponse({ status: 404, message: error.message }, { field: "tag", value: error.term });
+    return apiErrorResponse(
+      { status: 404, message: error.message },
+      { field: "tag", value: error.term }
+    );
   }
-  const author = normalizeSelectorGroup(
-    "author",
-    "author",
-    query.author,
-    maps.author
-  );
+  const author = normalizeSelectorGroup("author", "author", query.author, maps.author);
   if (author instanceof Response) return author;
 
   const normalized = {

@@ -2,47 +2,23 @@ import { storageObjectKey } from "@imageshow/shared/browser";
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 import { createReadStream } from "node:fs";
-import {
-  createHash,
-  randomUUID
-} from "node:crypto";
-import {
-  rm,
-  writeFile
-} from "node:fs/promises";
-import {
-  createServer as createHttpServer,
-  request as httpRequest
-} from "node:http";
-import {
-  type AddressInfo
-} from "node:net";
-import {
-  join,
-  resolve,
-  toNamespacedPath
-} from "node:path";
-import {
-  PassThrough,
-  Readable
-} from "node:stream";
-import {
-  setTimeout as delay
-} from "node:timers/promises";
-import {
-  pathToFileURL
-} from "node:url";
+import { createHash, randomUUID } from "node:crypto";
+import { rm, writeFile } from "node:fs/promises";
+import { createServer as createHttpServer, request as httpRequest } from "node:http";
+import { type AddressInfo } from "node:net";
+import { join, resolve, toNamespacedPath } from "node:path";
+import { PassThrough, Readable } from "node:stream";
+import { setTimeout as delay } from "node:timers/promises";
+import { pathToFileURL } from "node:url";
 import test, { after, type TestContext } from "node:test";
-import { pool, configureDatabasePools, closeDatabasePools } from "../../../packages/server/src/core/database/pools.ts";
 import {
-  createTestDirectory
-} from "../support/test-directory.ts";
-import {
-  runProcess
-} from "../support/process-runner.ts";
-import {
-  Hono
-} from "hono";
+  pool,
+  configureDatabasePools,
+  closeDatabasePools
+} from "../../../packages/server/src/core/database/pools.ts";
+import { createTestDirectory } from "../support/test-directory.ts";
+import { runProcess } from "../support/process-runner.ts";
+import { Hono } from "hono";
 import {
   CopyObjectCommand,
   DeleteObjectsCommand,
@@ -50,18 +26,10 @@ import {
   PutObjectCommand,
   S3Client
 } from "@aws-sdk/client-s3";
-import {
-  adminApiBasePath
-} from "../../../packages/shared/src/browser.ts";
-import {
-  ApiError
-} from "../../../packages/server/src/core/api-error.ts";
-import {
-  storageBackendUpdateInput
-} from "../../../packages/server/src/routes/validation/storage.ts";
-import {
-  handleApiError
-} from "../../../packages/server/src/core/http/responses.ts";
+import { adminApiBasePath } from "../../../packages/shared/src/browser.ts";
+import { ApiError } from "../../../packages/server/src/core/api-error.ts";
+import { storageBackendUpdateInput } from "../../../packages/server/src/routes/validation/storage.ts";
+import { handleApiError } from "../../../packages/server/src/core/http/responses.ts";
 import {
   assertLocalPublicUrlDomain,
   missingS3Fields,
@@ -77,10 +45,13 @@ import {
   s3ListPrefix,
   storageS3ObjectName
 } from "../../../packages/server/src/storage/objects/keys.ts";
-import { assertCanonicalImageObjectKey, isCanonicalImageObjectKey, parseImageObjectKey, thumbnailObjectKey } from "../../../packages/server/src/storage/objects/image-paths.ts";
 import {
-  storageConfigFromRow
-} from "../../../packages/server/src/storage/backends/record.ts";
+  assertCanonicalImageObjectKey,
+  isCanonicalImageObjectKey,
+  parseImageObjectKey,
+  thumbnailObjectKey
+} from "../../../packages/server/src/storage/objects/image-paths.ts";
+import { storageConfigFromRow } from "../../../packages/server/src/storage/backends/record.ts";
 import {
   groupStorageNamespaces,
   shareStorageNamespace,
@@ -91,82 +62,78 @@ import {
   batchStorageKeys,
   STORAGE_ADMIN_LIST_MAX_KEYS
 } from "../../../packages/server/src/storage/objects/key-listing.ts";
-import {
-  isMissingFileError
-} from "../../../packages/server/src/storage/objects/not-found.ts";
+import { isMissingFileError } from "../../../packages/server/src/storage/objects/not-found.ts";
 import type {
   StorageDriver,
   StorageObjectReference
 } from "../../../packages/server/src/storage/drivers/driver.ts";
-import {
-  removeDriverObjectsAndConfirm
-} from "../../../packages/server/src/storage/drivers/removal.ts";
+import { removeDriverObjectsAndConfirm } from "../../../packages/server/src/storage/drivers/removal.ts";
 import {
   ensureVerifiedObjectAtDestination,
   verifyStorageTarget,
   writeVerifiedFileToStorage
 } from "../../../packages/server/src/storage/objects/transfer.ts";
 import { createS3HttpFixture } from "../support/s3-http-fixture.ts";
-import {
-  manageStorageDriver
-} from "../../../packages/server/src/storage/drivers/lifecycle.ts";
+import { manageStorageDriver } from "../../../packages/server/src/storage/drivers/lifecycle.ts";
 import {
   S3Backend,
   type S3CommandClient
 } from "../../../packages/server/src/storage/drivers/s3.ts";
-import {
-  S3RequestRuntime
-} from "../../../packages/server/src/storage/drivers/s3-request-runtime.ts";
-import {
-  registerCheckRoutes
-} from "../../../packages/server/src/routes/check.ts";
-import {
-  imageId
-} from "../support/server-test-context.ts";
+import { S3RequestRuntime } from "../../../packages/server/src/storage/drivers/s3-request-runtime.ts";
+import { registerCheckRoutes } from "../../../packages/server/src/routes/check.ts";
+import { imageId } from "../support/server-test-context.ts";
 import { webReadableFromNode } from "../../../packages/server/src/storage/objects/stream-buffer.ts";
 import { responseWithCleanup } from "../../../packages/server/src/core/http/response-lifecycle.ts";
 
-test("[Server/存储] 响应流取消在首次读取前及在途读取中均只释放一次", { timeout: 2_000 }, async (t) => {
-  for (const pendingRead of [false, true]) {
-    let destroyed = 0;
-    let released = 0;
-    const started = Promise.withResolvers<void>();
-    const source = new Readable({
-      read() { started.resolve(); },
-      destroy(error, done) {
-        destroyed += 1;
-        setImmediate(() => done(error));
-      }
-    });
-    const closed = new Promise<void>((resolveClose) => source.once("close", resolveClose));
-    const response = responseWithCleanup(
-      new Response(webReadableFromNode(source)),
-      () => { released += 1; }
-    );
-    const reader = response.body!.getReader();
-    const pending = pendingRead ? reader.read() : Promise.resolve();
-    if (pendingRead) await started.promise;
-    await reader.cancel(new Error("synthetic consumer cancellation"));
-    await Promise.all([pending, closed]);
-    assert.equal(source.destroyed, true);
-    assert.equal(destroyed, 1);
-    assert.equal(released, 1);
-  }
+test(
+  "[Server/存储] 响应流取消在首次读取前及在途读取中均只释放一次",
+  { timeout: 2_000 },
+  async (t) => {
+    for (const pendingRead of [false, true]) {
+      let destroyed = 0;
+      let released = 0;
+      const started = Promise.withResolvers<void>();
+      const source = new Readable({
+        read() {
+          started.resolve();
+        },
+        destroy(error, done) {
+          destroyed += 1;
+          setImmediate(() => done(error));
+        }
+      });
+      const closed = new Promise<void>((resolveClose) => source.once("close", resolveClose));
+      const response = responseWithCleanup(new Response(webReadableFromNode(source)), () => {
+        released += 1;
+      });
+      const reader = response.body!.getReader();
+      const pending = pendingRead ? reader.read() : Promise.resolve();
+      if (pendingRead) await started.promise;
+      await reader.cancel(new Error("synthetic consumer cancellation"));
+      await Promise.all([pending, closed]);
+      assert.equal(source.destroyed, true);
+      assert.equal(destroyed, 1);
+      assert.equal(released, 1);
+    }
 
-  const directory = await createTestDirectory("cancel-opening-stream-");
-  t.after(() => rm(directory, { recursive: true, force: true }));
-  const opening = createReadStream(join(directory, "missing.webp"));
-  const closed = new Promise<void>((resolveClose) => opening.once("close", resolveClose));
-  await webReadableFromNode(opening).cancel();
-  await closed;
-  assert.equal(opening.closed, true);
-  assert.equal(opening.listenerCount("error"), 0);
-});
+    const directory = await createTestDirectory("cancel-opening-stream-");
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const opening = createReadStream(join(directory, "missing.webp"));
+    const closed = new Promise<void>((resolveClose) => opening.once("close", resolveClose));
+    await webReadableFromNode(opening).cancel();
+    await closed;
+    assert.equal(opening.closed, true);
+    assert.equal(opening.listenerCount("error"), 0);
+  }
+);
 
 function mockCleanupLeaseReads(context: TestContext) {
   configureDatabasePools({
-    host: "database.invalid", port: 5432, name: "imageshow_test",
-    user: "imageshow_test", password: process.env.DATABASE_PASSWORD!
+    host: "database.invalid",
+    port: 5432,
+    name: "imageshow_test",
+    user: "imageshow_test",
+    password: process.env.DATABASE_PASSWORD!
   });
   context.mock.method(pool, "query", async (sql: string) => {
     assert.match(sql, /background_job/u);
@@ -182,9 +149,8 @@ function s3CommandName(command: unknown) {
 type ManagedTestStorageDriver = Omit<StorageDriver, "close"> & {
   close(): Promise<void>;
 };
-const manageTestStorageDriver = (driver: StorageDriver) => (
-  manageStorageDriver(driver) as ManagedTestStorageDriver
-);
+const manageTestStorageDriver = (driver: StorageDriver) =>
+  manageStorageDriver(driver) as ManagedTestStorageDriver;
 
 test("[Server/存储] 存储维护只保留中性写入口并在业务执行前拒绝越权", async () => {
   const app = new Hono<{
@@ -198,20 +164,16 @@ test("[Server/存储] 存储维护只保留中性写入口并在业务执行前�
   });
   registerCheckRoutes(app as unknown as Hono);
 
-  const post = (path: string, role: "super" | "image" = "image") => (
-    app.request(new Request(`http://imageshow.test${path}`, {
-      method: "POST",
-      headers: { "x-test-role": role }
-    }))
-  );
-  const forbidden = await post(
-    `${adminApiBasePath}/check/storage-maintenance`
-  );
+  const post = (path: string, role: "super" | "image" = "image") =>
+    app.request(
+      new Request(`http://imageshow.test${path}`, {
+        method: "POST",
+        headers: { "x-test-role": role }
+      })
+    );
+  const forbidden = await post(`${adminApiBasePath}/check/storage-maintenance`);
   assert.equal(forbidden.status, 403);
-  assert.equal(
-    (await forbidden.json() as { code?: string }).code,
-    "forbidden"
-  );
+  assert.equal(((await forbidden.json()) as { code?: string }).code, "forbidden");
 });
 test("[Server/存储] 存储键列举保持固定批大小、显式完整性和取消边界", async () => {
   async function consumeListing(
@@ -273,10 +235,10 @@ test("[Server/存储] 存储键列举保持固定批大小、显式完整性和�
     }
   }
   await assert.rejects(
-    () => consumeListing(
-      batchStorageKeys(slowKeys(), { signal: cancel.signal }),
-      () => cancel.abort(cancelReason)
-    ),
+    () =>
+      consumeListing(batchStorageKeys(slowKeys(), { signal: cancel.signal }), () =>
+        cancel.abort(cancelReason)
+      ),
     (error) => error === cancelReason
   );
 
@@ -288,29 +250,34 @@ test("[Server/存储] 存储键列举保持固定批大小、显式完整性和�
     throw ioFailure;
   }
   await assert.rejects(
-    () => consumeListing(
-      batchStorageKeys(failingKeys()),
-      () => undefined
-    ),
+    () => consumeListing(batchStorageKeys(failingKeys()), () => undefined),
     (error) => error === ioFailure
   );
   assert.equal(isMissingFileError({ code: "ENOENT" }), true);
   assert.equal(isMissingFileError({ code: "EACCES" }), false);
   assert.equal(isMissingFileError({ code: "EIO" }), false);
-
-
 });
 test("[Server/存储] local / S3 配置只按实际连接参数复用 driver", () => {
-  const local = storageBackendUpdateInput.parse({ public_base_url: " https://IMAGES.example.com:443///pictures/// " });
+  const local = storageBackendUpdateInput.parse({
+    public_base_url: " https://IMAGES.example.com:443///pictures/// "
+  });
   assert.equal(local.public_base_url, "https://images.example.com/pictures");
   for (const domain of ["images.example.com", "images.example.com:443"]) {
-    assert.throws(() => assertLocalPublicUrlDomain(local.public_base_url!, domain),
-      { code: "storage_public_url_host_conflict" });
+    assert.throws(() => assertLocalPublicUrlDomain(local.public_base_url!, domain), {
+      code: "storage_public_url_host_conflict"
+    });
   }
   assert.doesNotThrow(() => assertLocalPublicUrlDomain(local.public_base_url!, "main.example.com"));
-  assert.deepEqual(storageBackendUpdateInput.parse({ public_base_url: "" }), { public_base_url: "" });
-  for (const public_base_url of ["http://images.example.com", "https://user:pass@images.example.com",
-    "https://images.example.com/?token=x", "https://images.example.com/#x", "https://images.example.com/%2fsecret"]) {
+  assert.deepEqual(storageBackendUpdateInput.parse({ public_base_url: "" }), {
+    public_base_url: ""
+  });
+  for (const public_base_url of [
+    "http://images.example.com",
+    "https://user:pass@images.example.com",
+    "https://images.example.com/?token=x",
+    "https://images.example.com/#x",
+    "https://images.example.com/%2fsecret"
+  ]) {
     assert.equal(storageBackendUpdateInput.safeParse({ public_base_url }).success, false);
   }
   const current = s3SettingsSchema.parse({
@@ -397,15 +364,16 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
       root_path: "/bounded"
     })
   };
-  const commandInput = (command: unknown) => (
-    command as {
-      input: {
-        Prefix?: string;
-        ContinuationToken?: string;
-        MaxKeys?: number;
-      };
-    }
-  ).input;
+  const commandInput = (command: unknown) =>
+    (
+      command as {
+        input: {
+          Prefix?: string;
+          ContinuationToken?: string;
+          MaxKeys?: number;
+        };
+      }
+    ).input;
 
   for (const total of [50_000, 100_000]) {
     let pageCalls = 0;
@@ -427,7 +395,9 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
           NextContinuationToken: end < total ? String(end) : undefined
         };
       },
-      destroy() { destroyed = true; }
+      destroy() {
+        destroyed = true;
+      }
     };
     const backend = new S3Backend(config, { client });
     const listing = backend.listKeys("full", {
@@ -478,7 +448,9 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
     truncatedBackend.listKeys("full", {
       maxKeys: STORAGE_ADMIN_LIST_MAX_KEYS
     }),
-    (batch) => { truncatedObserved += batch.length; }
+    (batch) => {
+      truncatedObserved += batch.length;
+    }
   );
   assert.deepEqual(truncated, {
     complete: false,
@@ -507,9 +479,11 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
     destroy() {}
   };
   const slowBackend = new S3Backend(config, { client: slowClient });
-  const pendingPage = slowBackend.listKeys("full", {
-    signal: cancel.signal
-  }).next();
+  const pendingPage = slowBackend
+    .listKeys("full", {
+      signal: cancel.signal
+    })
+    .next();
   cancel.abort(cancelReason);
   await assert.rejects(pendingPage, (error) => error === cancelReason);
   assert.equal(cancellationObserved, true);
@@ -522,14 +496,13 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
     $response: { body: responseBody }
   });
   const deniedClient: S3CommandClient = {
-    async send() { throw permissionError; },
+    async send() {
+      throw permissionError;
+    },
     destroy() {}
   };
   const deniedBackend = new S3Backend(config, { client: deniedClient });
-  await assert.rejects(
-    deniedBackend.listKeys("full").next(),
-    (error) => error === permissionError
-  );
+  await assert.rejects(deniedBackend.listKeys("full").next(), (error) => error === permissionError);
   assert.equal(responseBody.destroyed, true);
   deniedBackend.close();
 
@@ -541,14 +514,13 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
     });
     const failureBackend = new S3Backend(config, {
       client: {
-        async send() { throw serviceError; },
+        async send() {
+          throw serviceError;
+        },
         destroy() {}
       }
     });
-    await assert.rejects(
-      failureBackend.listKeys("full").next(),
-      (error) => error === serviceError
-    );
+    await assert.rejects(failureBackend.listKeys("full").next(), (error) => error === serviceError);
     assert.equal(failureBody.destroyed, true);
     failureBackend.close();
   }
@@ -568,11 +540,7 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
   });
   await assert.rejects(
     () => consumeListing(invalidPageBackend.listKeys("full"), () => undefined),
-    (error) => (
-      error instanceof Error
-      && "code" in error
-      && error.code === "storage_list_invalid"
-    )
+    (error) => error instanceof Error && "code" in error && error.code === "storage_list_invalid"
   );
   invalidPageBackend.close();
 
@@ -584,24 +552,15 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
         return {
           Contents: [],
           IsTruncated: true,
-          NextContinuationToken: cyclicTokenCalls % 2 === 1
-            ? "token-a"
-            : "token-b"
+          NextContinuationToken: cyclicTokenCalls % 2 === 1 ? "token-a" : "token-b"
         };
       },
       destroy() {}
     }
   });
   await assert.rejects(
-    () => consumeListing(
-      repeatedTokenBackend.listKeys("full"),
-      () => undefined
-    ),
-    (error) => (
-      error instanceof Error
-      && "code" in error
-      && error.code === "storage_list_invalid"
-    )
+    () => consumeListing(repeatedTokenBackend.listKeys("full"), () => undefined),
+    (error) => error instanceof Error && "code" in error && error.code === "storage_list_invalid"
   );
   assert.equal(cyclicTokenCalls, 3);
   repeatedTokenBackend.close();
@@ -621,15 +580,8 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
     }
   });
   await assert.rejects(
-    () => consumeListing(
-      noProgressBackend.listKeys("full"),
-      () => undefined
-    ),
-    (error) => (
-      error instanceof Error
-      && "code" in error
-      && error.code === "storage_list_invalid"
-    )
+    () => consumeListing(noProgressBackend.listKeys("full"), () => undefined),
+    (error) => error instanceof Error && "code" in error && error.code === "storage_list_invalid"
   );
   assert.equal(emptyPageCalls, 9);
   noProgressBackend.close();
@@ -647,15 +599,8 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
     client: outsidePrefixClient
   });
   await assert.rejects(
-    () => consumeListing(
-      outsidePrefixBackend.listKeys("full"),
-      () => undefined
-    ),
-    (error) => (
-      error instanceof Error
-      && "code" in error
-      && error.code === "storage_list_invalid"
-    )
+    () => consumeListing(outsidePrefixBackend.listKeys("full"), () => undefined),
+    (error) => error instanceof Error && "code" in error && error.code === "storage_list_invalid"
   );
   outsidePrefixBackend.close();
 });
@@ -692,14 +637,18 @@ test("[Server/存储] S3 删除响应丢失后允许 move.cleanup 的幂等确�
     destroy() {}
   };
   const backend = new S3Backend(config, { client });
-  const first = await backend.removeObjects([{
-    prefix: "full",
-    key: "candidate.webp"
-  }]);
-  const retry = await backend.removeObjects([{
-    prefix: "full",
-    key: "candidate.webp"
-  }]);
+  const first = await backend.removeObjects([
+    {
+      prefix: "full",
+      key: "candidate.webp"
+    }
+  ]);
+  const retry = await backend.removeObjects([
+    {
+      prefix: "full",
+      key: "candidate.webp"
+    }
+  ]);
   assert.equal(first[0]?.status, "removed");
   assert.equal(retry[0]?.status, "missing");
   assert.deepEqual(commands, [
@@ -784,16 +733,22 @@ test("[Server/存储] S3 MD5 探测通过实际 SDK 区分校验、忽略和不�
         assert.deepEqual(result.capabilities, { content_md5: capability === "enforced" });
         const puts = fixture.requests.filter((request) => request.method === "PUT");
         assert.equal(puts.length, capability === "ignored" ? 3 : 2);
-        assert.equal(puts[0]!.headers["content-md5"],
-          createHash("md5").update(puts[0]!.body).digest("base64"));
+        assert.equal(
+          puts[0]!.headers["content-md5"],
+          createHash("md5").update(puts[0]!.body).digest("base64")
+        );
         if (capability !== "unsupported") {
           assert.equal(Buffer.from(String(puts[1]!.headers["content-md5"]), "base64").length, 16);
-          assert.notEqual(puts[1]!.headers["content-md5"],
-            createHash("md5").update(puts[1]!.body).digest("base64"));
+          assert.notEqual(
+            puts[1]!.headers["content-md5"],
+            createHash("md5").update(puts[1]!.body).digest("base64")
+          );
           assert.equal(puts[1]!.status, capability === "enforced" ? 400 : 200);
         }
-        assert.equal(fixture.requests.filter((request) => request.method === "GET").length,
-          capability === "enforced" ? 0 : 1);
+        assert.equal(
+          fixture.requests.filter((request) => request.method === "GET").length,
+          capability === "enforced" ? 0 : 1
+        );
         for (const request of puts) {
           assert.equal(request.headers["content-length"], "32");
           assert.equal(request.body.length, 32);
@@ -817,13 +772,18 @@ test("[Server/存储] S3 MD5 探测通过实际 SDK 区分校验、忽略和不�
       await t.test(`探测错误 ${failure.code}`, async () => {
         fixture.state.capability = "enforced";
         fixture.requests.length = 0;
-        fixture.state.putError = (request) => !failure.wrongOnly || request.key.endsWith("-invalid")
-          ? { ...failure, message: "controlled provider failure" } : undefined;
+        fixture.state.putError = (request) =>
+          !failure.wrongOnly || request.key.endsWith("-invalid")
+            ? { ...failure, message: "controlled provider failure" }
+            : undefined;
         await assert.rejects(backend.selfTest(), { name: failure.code });
         const puts = fixture.requests.filter((request) => request.method === "PUT");
         assert.equal(puts.length, failure.wrongOnly ? 2 : 1);
-        assert.equal(puts.every((request) => Boolean(request.headers["content-md5"])), true,
-          "真实错误必须结束探测，不能改用无校验上传掩盖错误");
+        assert.equal(
+          puts.every((request) => Boolean(request.headers["content-md5"])),
+          true,
+          "真实错误必须结束探测，不能改用无校验上传掩盖错误"
+        );
         assert.equal(fixture.objects.size, 0);
       });
     }
@@ -846,13 +806,16 @@ test("[Server/存储] 已预检的 S3 目标按能力上传或回读，并复用
   const sourcePath = join(directory, "image.webp");
   await writeFile(sourcePath, body);
   const expected = {
-    size: body.length, sha256: createHash("sha256").update(body).digest("hex"),
+    size: body.length,
+    sha256: createHash("sha256").update(body).digest("hex"),
     md5: createHash("md5").update(body).digest("hex")
   };
   try {
     for (const supported of [true, false, undefined]) {
       const config: S3StorageConfig = {
-        slug: "commit", type: "s3", s3: fixture.settings,
+        slug: "commit",
+        type: "s3",
+        s3: fixture.settings,
         ...(supported === undefined ? {} : { capabilities: { content_md5: supported } })
       };
       const driver = new S3Backend(config);
@@ -863,40 +826,79 @@ test("[Server/存储] 已预检的 S3 目标按能力上传或回读，并复用
         for (const prefix of ["full", "thumbs"] as const) {
           const key = `${String(supported)}.webp`;
           const target = await verifyStorageTarget({ storage, prefix, key, expected });
-          const result = await writeVerifiedFileToStorage({ target, sourcePath, contentType: "image/webp" });
+          const result = await writeVerifiedFileToStorage({
+            target,
+            sourcePath,
+            contentType: "image/webp"
+          });
           assert.equal(result.created, true);
           assert.deepEqual(fixture.objects.get(`${prefix}/${key}`), body);
         }
-        const counts = Object.fromEntries(["HEAD", "PUT", "GET"].map((method) => [
-          method, fixture.requests.filter((request) => request.method === method).length
-        ]));
+        const counts = Object.fromEntries(
+          ["HEAD", "PUT", "GET"].map((method) => [
+            method,
+            fixture.requests.filter((request) => request.method === method).length
+          ])
+        );
         assert.deepEqual(counts, { HEAD: 2, PUT: 2, GET: supported ? 0 : 2 });
         for (const request of fixture.requests) {
           if (request.method === "PUT") {
-            assert.equal(request.headers["content-md5"], supported
-              ? Buffer.from(expected.md5, "hex").toString("base64") : undefined);
+            assert.equal(
+              request.headers["content-md5"],
+              supported ? Buffer.from(expected.md5, "hex").toString("base64") : undefined
+            );
           }
-          if (request.method === "GET") assert.equal(request.headers["x-amz-checksum-mode"], undefined);
+          if (request.method === "GET")
+            assert.equal(request.headers["x-amz-checksum-mode"], undefined);
         }
         fixture.requests.length = 0;
-        const target = await verifyStorageTarget({ storage, prefix: "full", key: `${String(supported)}.webp`, expected });
-        assert.equal((await writeVerifiedFileToStorage({ target, sourcePath, contentType: "image/webp" })).created, false);
-        assert.deepEqual(fixture.requests.map((request) => request.method), ["HEAD", "GET"]);
+        const target = await verifyStorageTarget({
+          storage,
+          prefix: "full",
+          key: `${String(supported)}.webp`,
+          expected
+        });
+        assert.equal(
+          (await writeVerifiedFileToStorage({ target, sourcePath, contentType: "image/webp" }))
+            .created,
+          false
+        );
+        assert.deepEqual(
+          fixture.requests.map((request) => request.method),
+          ["HEAD", "GET"]
+        );
         fixture.objects.set("full/conflict.webp", Buffer.alloc(body.length));
-        await assert.rejects(verifyStorageTarget({ storage, prefix: "full", key: "conflict.webp", expected }),
-          { code: "storage_object_conflict" });
+        await assert.rejects(
+          verifyStorageTarget({ storage, prefix: "full", key: "conflict.webp", expected }),
+          { code: "storage_object_conflict" }
+        );
 
         if (!supported) {
           fixture.state.readBody = (stored) => Buffer.alloc(stored.length);
-          const corrupt = await verifyStorageTarget({ storage, prefix: "full", key: `corrupt-${supported}.webp`, expected });
+          const corrupt = await verifyStorageTarget({
+            storage,
+            prefix: "full",
+            key: `corrupt-${supported}.webp`,
+            expected
+          });
           let cleanupKey = "";
-          await assert.rejects(writeVerifiedFileToStorage({ target: corrupt, sourcePath, contentType: "image/webp",
-            cleanupCandidate: async (object) => { cleanupKey = object.key; }
-          }), { code: "storage_transfer_integrity_failed" });
+          await assert.rejects(
+            writeVerifiedFileToStorage({
+              target: corrupt,
+              sourcePath,
+              contentType: "image/webp",
+              cleanupCandidate: async (object) => {
+                cleanupKey = object.key;
+              }
+            }),
+            { code: "storage_transfer_integrity_failed" }
+          );
           assert.equal(cleanupKey, `corrupt-${supported}.webp`);
           fixture.state.readBody = undefined;
         }
-      } finally { driver.close(); }
+      } finally {
+        driver.close();
+      }
     }
   } finally {
     await fixture.close();
@@ -914,10 +916,11 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
     Deleted?: Array<{ Key?: string }>;
     Errors?: Array<{ Key?: string; Code?: string; Message?: string }>;
   }>;
-  const missingObject = () => Object.assign(new Error("not found"), {
-    name: "NotFound",
-    $metadata: { httpStatusCode: 404 }
-  });
+  const missingObject = () =>
+    Object.assign(new Error("not found"), {
+      name: "NotFound",
+      $metadata: { httpStatusCode: 404 }
+    });
   const fullObject = (key: string): StorageObjectReference => ({
     prefix: "full",
     key
@@ -945,17 +948,10 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
           maximumActiveDeletes = Math.max(maximumActiveDeletes, activeDeletes);
           try {
             if (handler) {
-              return await handler(
-                keys,
-                quiet,
-                deleteCalls,
-                options?.abortSignal
-              );
+              return await handler(keys, quiet, deleteCalls, options?.abortSignal);
             }
             for (const key of keys) objects.delete(key);
-            return quiet
-              ? { Errors: [] }
-              : { Deleted: keys.map((Key) => ({ Key })), Errors: [] };
+            return quiet ? { Errors: [] } : { Deleted: keys.map((Key) => ({ Key })), Errors: [] };
           } finally {
             activeDeletes -= 1;
           }
@@ -964,40 +960,45 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
       },
       destroy() {}
     };
-    const backend = new S3Backend({
-      slug: `memory-s3-${randomUUID()}`,
-      type: "s3",
-      s3: mergeS3Settings({
-        endpoint: "https://s3.example.test",
-        region: "auto",
-        bucket: "test-bucket",
-        access_key_id: "test-access-key",
-        secret_access_key: "test-secret-key",
-        root_path: "/"
-      })
-    }, { client });
+    const backend = new S3Backend(
+      {
+        slug: `memory-s3-${randomUUID()}`,
+        type: "s3",
+        s3: mergeS3Settings({
+          endpoint: "https://s3.example.test",
+          region: "auto",
+          bucket: "test-bucket",
+          access_key_id: "test-access-key",
+          secret_access_key: "test-secret-key",
+          root_path: "/"
+        })
+      },
+      { client }
+    );
     return {
       backend,
       objects,
       deleteBatches,
-      get deleteCalls() { return deleteCalls; },
-      get maximumActiveDeletes() { return maximumActiveDeletes; }
+      get deleteCalls() {
+        return deleteCalls;
+      },
+      get maximumActiveDeletes() {
+        return maximumActiveDeletes;
+      }
     };
   };
 
   await t.test("N=1、N>1、Quiet 与 Verbose 使用同一结果模型", async () => {
     for (const quiet of [false, true]) {
       const storage = memoryS3([physical("a"), physical("b")]);
-      const results = await storage.backend.removeObjects([
-        fullObject("a"),
-        fullObject("missing"),
-        fullObject("b")
-      ], { quiet });
-      assert.deepEqual(results.map((result) => result.status), [
-        "removed",
-        "missing",
-        "removed"
-      ]);
+      const results = await storage.backend.removeObjects(
+        [fullObject("a"), fullObject("missing"), fullObject("b")],
+        { quiet }
+      );
+      assert.deepEqual(
+        results.map((result) => result.status),
+        ["removed", "missing", "removed"]
+      );
       assert.deepEqual(storage.deleteBatches, [[physical("a"), physical("b")]]);
       storage.backend.close();
     }
@@ -1012,8 +1013,14 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
       return { Errors: [] };
     });
     const results = await storage.backend.removeObjects(keys.map(fullObject));
-    assert.equal(results.every((result) => result.status === "removed"), true);
-    assert.deepEqual(storage.deleteBatches.map((batch) => batch.length), [1_000, 1]);
+    assert.equal(
+      results.every((result) => result.status === "removed"),
+      true
+    );
+    assert.deepEqual(
+      storage.deleteBatches.map((batch) => batch.length),
+      [1_000, 1]
+    );
     assert.equal(storage.maximumActiveDeletes, 1);
     storage.backend.close();
   });
@@ -1027,11 +1034,13 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
           storage.objects.delete(physical("c"));
           return {
             Deleted: [{ Key: physical("a") }, { Key: physical("c") }],
-            Errors: [{
-              Key: physical("b"),
-              Code: "SlowDown",
-              Message: "retry this key"
-            }]
+            Errors: [
+              {
+                Key: physical("b"),
+                Code: "SlowDown",
+                Message: "retry this key"
+              }
+            ]
           };
         }
         assert.deepEqual(keys, [physical("b")]);
@@ -1039,10 +1048,14 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
         return { Deleted: [{ Key: physical("b") }], Errors: [] };
       }
     );
-    const results = await storage.backend.removeObjects([
-      fullObject("a"), fullObject("b"), fullObject("c"), fullObject("a")
-    ], { quiet: false });
-    assert.equal(results.every((result) => result.status === "removed"), true);
+    const results = await storage.backend.removeObjects(
+      [fullObject("a"), fullObject("b"), fullObject("c"), fullObject("a")],
+      { quiet: false }
+    );
+    assert.equal(
+      results.every((result) => result.status === "removed"),
+      true
+    );
     assert.deepEqual(storage.deleteBatches, [
       [physical("a"), physical("b"), physical("c")],
       [physical("b")]
@@ -1061,9 +1074,10 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
     const results = await storage.backend.removeObjects(keys.map(fullObject), {
       signal: controller.signal
     });
-    assert.equal(results.slice(0, 1_000).every((result) => (
-      result.status === "unknown"
-    )), true);
+    assert.equal(
+      results.slice(0, 1_000).every((result) => result.status === "unknown"),
+      true
+    );
     assert.equal(results[1_000]?.status, "failed");
     assert.equal(storage.deleteBatches.length, 1);
     storage.backend.close();
@@ -1073,23 +1087,28 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
     await assert.rejects(
       removeDriverObjectsAndConfirm({
         objects: [],
-        async exists() { return false; },
-        async remove() { return []; }
+        async exists() {
+          return false;
+        },
+        async remove() {
+          return [];
+        }
       }),
       /at least one object/
     );
 
-    const malformed = memoryS3(
-      [physical("a"), physical("b")],
-      async () => ({
-        Deleted: [{ Key: physical("a") }, { Key: physical("a") }],
-        Errors: []
-      })
+    const malformed = memoryS3([physical("a"), physical("b")], async () => ({
+      Deleted: [{ Key: physical("a") }, { Key: physical("a") }],
+      Errors: []
+    }));
+    const malformedResults = await malformed.backend.removeObjects(
+      [fullObject("a"), fullObject("b")],
+      { quiet: false }
     );
-    const malformedResults = await malformed.backend.removeObjects([
-      fullObject("a"), fullObject("b")
-    ], { quiet: false });
-    assert.equal(malformedResults.every((result) => result.status === "failed"), true);
+    assert.equal(
+      malformedResults.every((result) => result.status === "failed"),
+      true
+    );
     assert.equal(malformed.deleteCalls, 2);
     malformed.backend.close();
 
@@ -1101,10 +1120,12 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
         return existsCalls === 1;
       },
       async remove() {
-        return [{
-          status: "not_started",
-          error: { code: "cancelled", message: "not dispatched" }
-        }];
+        return [
+          {
+            status: "not_started",
+            error: { code: "cancelled", message: "not dispatched" }
+          }
+        ];
       }
     });
     assert.equal(notStarted[0]?.status, "failed");
@@ -1129,13 +1150,17 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
     let failedRemoveCalls = 0;
     const failed = await removeDriverObjectsAndConfirm({
       objects: [fullObject("persistent-failure")],
-      async exists() { return true; },
+      async exists() {
+        return true;
+      },
       async remove() {
         failedRemoveCalls += 1;
-        return [{
-          status: "failed",
-          error: { code: "denied", message: "still present" }
-        }];
+        return [
+          {
+            status: "failed",
+            error: { code: "denied", message: "still present" }
+          }
+        ];
       }
     });
     assert.equal(failed[0]?.status, "failed");
@@ -1166,10 +1191,10 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
         deleteHeaders = request.headers;
         present = false;
         const body = Buffer.from(
-          "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-            + "<DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
-            + "<Deleted><Key>full/checksum.bin</Key></Deleted>"
-            + "</DeleteResult>"
+          '<?xml version="1.0" encoding="UTF-8"?>' +
+            '<DeleteResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">' +
+            "<Deleted><Key>full/checksum.bin</Key></Deleted>" +
+            "</DeleteResult>"
         );
         response.writeHead(200, {
           "content-type": "application/xml",
@@ -1195,19 +1220,22 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
         secretAccessKey: "test-secret-key"
       }
     });
-    const backend = new S3Backend({
-      slug: "checksum-test",
-      type: "s3",
-      s3: mergeS3Settings({
-        endpoint: "https://s3.example.test",
-        region: "test-region",
-        bucket: "test-bucket",
-        access_key_id: "test-access-key",
-        secret_access_key: "test-secret-key",
-        force_path_style: true,
-        root_path: "/"
-      })
-    }, { client });
+    const backend = new S3Backend(
+      {
+        slug: "checksum-test",
+        type: "s3",
+        s3: mergeS3Settings({
+          endpoint: "https://s3.example.test",
+          region: "test-region",
+          bucket: "test-bucket",
+          access_key_id: "test-access-key",
+          secret_access_key: "test-secret-key",
+          force_path_style: true,
+          root_path: "/"
+        })
+      },
+      { client }
+    );
     try {
       const results = await backend.removeObjects([fullObject("checksum.bin")], {
         quiet: false
@@ -1217,10 +1245,7 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
       const contentMd5 = Array.isArray(deleteHeaders?.["content-md5"])
         ? deleteHeaders["content-md5"][0]
         : deleteHeaders?.["content-md5"];
-      assert.equal(
-        contentMd5,
-        createHash("md5").update(deleteBody).digest("base64")
-      );
+      assert.equal(contentMd5, createHash("md5").update(deleteBody).digest("base64"));
       const authorization = Array.isArray(deleteHeaders?.authorization)
         ? deleteHeaders.authorization[0]
         : deleteHeaders?.authorization;
@@ -1228,7 +1253,7 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
     } finally {
       backend.close();
       await new Promise<void>((resolve, reject) => {
-        server.close((error) => error ? reject(error) : resolve());
+        server.close((error) => (error ? reject(error) : resolve()));
       });
     }
   });
@@ -1237,10 +1262,11 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
   mockCleanupLeaseReads(context);
   const body = Buffer.from("server-copy-and-stream-source");
   const expectedMd5 = createHash("md5").update(body).digest("hex");
-  const missingObject = () => Object.assign(new Error("not found"), {
-    name: "NotFound",
-    $metadata: { httpStatusCode: 404 }
-  });
+  const missingObject = () =>
+    Object.assign(new Error("not found"), {
+      name: "NotFound",
+      $metadata: { httpStatusCode: 404 }
+    });
   const config = (
     slug: string,
     bucket: string,
@@ -1277,36 +1303,28 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
   });
 
   let copyCalls = 0;
-  const compatibleTarget = new S3Backend(
-    config("copy-target", "copy-target-bucket"),
-    {
-      client: {
-        async send(command) {
-          if (command instanceof HeadObjectCommand) throw missingObject();
-          assert.ok(command instanceof CopyObjectCommand);
-          copyCalls += 1;
-          assert.deepEqual(command.input, {
-            Bucket: "copy-target-bucket",
-            CopySource: "source-bucket/migration/full/object.webp",
-            CopySourceIfMatch: '"source-etag"',
-            Key: "migration/full/object.webp"
-          });
-          return {};
-        },
-        destroy() {}
-      }
+  const compatibleTarget = new S3Backend(config("copy-target", "copy-target-bucket"), {
+    client: {
+      async send(command) {
+        if (command instanceof HeadObjectCommand) throw missingObject();
+        assert.ok(command instanceof CopyObjectCommand);
+        copyCalls += 1;
+        assert.deepEqual(command.input, {
+          Bucket: "copy-target-bucket",
+          CopySource: "source-bucket/migration/full/object.webp",
+          CopySourceIfMatch: '"source-etag"',
+          Key: "migration/full/object.webp"
+        });
+        return {};
+      },
+      destroy() {}
     }
-  );
+  });
 
   let streamedBody = Buffer.alloc(0);
   let streamCalls = 0;
   const streamTarget = new S3Backend(
-    config(
-      "stream-target",
-      "stream-target-bucket",
-      "other-access-key",
-      "other-secret-key"
-    ),
+    config("stream-target", "stream-target-bucket", "other-access-key", "other-secret-key"),
     {
       client: {
         async send(command) {
@@ -1331,37 +1349,31 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
   );
 
   let existingTargetReads = 0;
-  const existingTarget = new S3Backend(
-    config("existing-target", "existing-target-bucket"),
-    {
-      client: {
-        async send(command) {
-          if (command instanceof HeadObjectCommand) {
-            return { ContentLength: body.byteLength, ETag: '"target-etag"' };
-          }
-          existingTargetReads += 1;
-          return {
-            Body: Readable.from([body]),
-            ContentLength: body.byteLength,
-            ETag: '"target-etag"'
-          };
-        },
-        destroy() {}
-      }
+  const existingTarget = new S3Backend(config("existing-target", "existing-target-bucket"), {
+    client: {
+      async send(command) {
+        if (command instanceof HeadObjectCommand) {
+          return { ContentLength: body.byteLength, ETag: '"target-etag"' };
+        }
+        existingTargetReads += 1;
+        return {
+          Body: Readable.from([body]),
+          ContentLength: body.byteLength,
+          ETag: '"target-etag"'
+        };
+      },
+      destroy() {}
     }
-  );
-  const missingSource = new S3Backend(
-    config("missing-source", "missing-source-bucket"),
-    {
-      client: {
-        async send(command) {
-          assert.equal(s3CommandName(command), "GetObjectCommand");
-          throw missingObject();
-        },
-        destroy() {}
-      }
+  });
+  const missingSource = new S3Backend(config("missing-source", "missing-source-bucket"), {
+    client: {
+      async send(command) {
+        assert.equal(s3CommandName(command), "GetObjectCommand");
+        throw missingObject();
+      },
+      destroy() {}
     }
-  );
+  });
 
   const sourceEndpoint = { config: config("source", "source-bucket"), driver: source };
   try {
@@ -1417,10 +1429,7 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
         expected: { size: body.byteLength, md5: "0".repeat(32) },
         contentType: "image/webp"
       }),
-      (error) => (
-        error instanceof ApiError
-        && error.code === "storage_source_integrity_failed"
-      )
+      (error) => error instanceof ApiError && error.code === "storage_source_integrity_failed"
     );
     assert.equal(copyCalls, 1, "数据库 MD5 不匹配时不得发布 CopyObject");
 
@@ -1439,16 +1448,9 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
         expected: { size: body.byteLength, md5: expectedMd5 },
         contentType: "image/webp"
       }),
-      (error) => (
-        error instanceof ApiError
-        && error.code === "storage_source_object_not_found"
-      )
+      (error) => error instanceof ApiError && error.code === "storage_source_object_not_found"
     );
-    assert.equal(
-      existingTargetReads,
-      0,
-      "源缺失时不得读取或改写已经存在的目标对象"
-    );
+    assert.equal(existingTargetReads, 0, "源缺失时不得读取或改写已经存在的目标对象");
   } finally {
     source.close();
     compatibleTarget.close();
@@ -1462,10 +1464,14 @@ test("[Server/存储] 流式迁移到不支持 MD5 的后端以目标正文完�
   const fixture = await createS3HttpFixture();
   const body = Buffer.from("migration source with verified content");
   const sourceConfig: S3StorageConfig = {
-    type: "s3", slug: "source", s3: { ...fixture.settings, root_path: "/source" }
+    type: "s3",
+    slug: "source",
+    s3: { ...fixture.settings, root_path: "/source" }
   };
   const targetConfig: S3StorageConfig = {
-    type: "s3", slug: "target", capabilities: { content_md5: false },
+    type: "s3",
+    slug: "target",
+    capabilities: { content_md5: false },
     s3: { ...fixture.settings, root_path: "/target", access_key_id: randomUUID() }
   };
   const source = { config: sourceConfig, driver: new S3Backend(sourceConfig) };
@@ -1476,29 +1482,49 @@ test("[Server/存储] 流式迁移到不支持 MD5 的后端以目标正文完�
       const key = `image-${corrupt}.webp`;
       fixture.objects.set(`source/full/${key}`, body);
       fixture.state.beforeRequest = async (request) => {
-        fixture.state.readBody = corrupt && request.method === "GET" && request.key.startsWith("target/")
-          ? (stored) => Buffer.alloc(stored.length) : undefined;
+        fixture.state.readBody =
+          corrupt && request.method === "GET" && request.key.startsWith("target/")
+            ? (stored) => Buffer.alloc(stored.length)
+            : undefined;
       };
-      const transfer = ensureVerifiedObjectAtDestination({ source, target, prefix: "full", key,
+      const transfer = ensureVerifiedObjectAtDestination({
+        source,
+        target,
+        prefix: "full",
+        key,
         expected: { size: body.length, md5: createHash("md5").update(body).digest("hex") },
-        contentType: "image/webp", cleanupCandidate: async () => {}
+        contentType: "image/webp",
+        cleanupCandidate: async () => {}
       });
       if (corrupt) await assert.rejects(transfer, { code: "storage_transfer_integrity_failed" });
       else {
         assert.deepEqual(await transfer, { created: true });
         assert.deepEqual(fixture.objects.get(`target/full/${key}`), body);
-        assert.equal(fixture.requests.find((request) => request.method === "PUT")!.headers["content-md5"], undefined);
+        assert.equal(
+          fixture.requests.find((request) => request.method === "PUT")!.headers["content-md5"],
+          undefined
+        );
       }
     }
-  } finally { source.driver.close(); target.driver.close(); await fixture.close(); }
+  } finally {
+    source.driver.close();
+    target.driver.close();
+    await fixture.close();
+  }
 });
 
 test("[Server/存储] 跨 driver 迁移在目标提前拒绝、退休与取消时释放源流", async (context) => {
   mockCleanupLeaseReads(context);
   const baseDriver = (overrides: Partial<StorageDriver>): StorageDriver => ({
-    async exists() { return false; },
-    async openRead() { throw new Error("unexpected openRead"); },
-    async readBuffer() { return Buffer.alloc(0); },
+    async exists() {
+      return false;
+    },
+    async openRead() {
+      throw new Error("unexpected openRead");
+    },
+    async readBuffer() {
+      return Buffer.alloc(0);
+    },
     async writeBuffer() {},
     async writeStream() {},
     async removeObjects(objects) {
@@ -1507,20 +1533,27 @@ test("[Server/存储] 跨 driver 迁移在目标提前拒绝、退休与取消�
         status: "missing" as const
       }));
     },
-    serverCopySource() { return undefined; },
-    supportsServerCopySource() { return false; },
+    serverCopySource() {
+      return undefined;
+    },
+    supportsServerCopySource() {
+      return false;
+    },
     async copyFromServerSource() {
       throw new Error("unexpected server copy");
     },
-    listKeys(_prefix, options) { return batchStorageKeys([], options); },
-    async selfTest() { return { backend: "s3", writable: true }; },
-    async pruneEmptyDirs() { return 0; },
+    listKeys(_prefix, options) {
+      return batchStorageKeys([], options);
+    },
+    async selfTest() {
+      return { backend: "s3", writable: true };
+    },
+    async pruneEmptyDirs() {
+      return 0;
+    },
     ...overrides
   });
-  const config = (
-    slug: string,
-    accessKeyId: string
-  ): StorageConfig => ({
+  const config = (slug: string, accessKeyId: string): StorageConfig => ({
     slug,
     type: "s3",
     s3: mergeS3Settings({
@@ -1538,37 +1571,48 @@ test("[Server/存储] 跨 driver 迁移在目标提前拒绝、退休与取消�
     let sourceClosed = 0;
     let targetClosed = 0;
     let writeEntered!: () => void;
-    const entered = new Promise<void>((resolve) => { writeEntered = resolve; });
+    const entered = new Promise<void>((resolve) => {
+      writeEntered = resolve;
+    });
     const controller = new AbortController();
     let cleanupAfter: Date | undefined;
     let target!: StorageDriver;
-    const source = manageStorageDriver(baseDriver({
-      async openRead() {
-        if (mode === "retire") await target.close?.();
-        return {
-          body: sourceBody,
-          size: 16,
-          totalSize: 16,
-          backend: "s3"
-        };
-      },
-      async close() { sourceClosed += 1; }
-    }));
-    target = manageStorageDriver(baseDriver({
-      async writeStream(_prefix, _key, _body, _size, _type, options) {
-        if (mode === "reject") throw new Error("target rejected before read");
-        if (mode === "retire") throw new Error("retired target was invoked");
-        writeEntered();
-        await new Promise<never>((_resolve, reject) => {
-          const rejectWithSignal = () => reject(options?.signal?.reason);
-          if (options?.signal?.aborted) rejectWithSignal();
-          else options?.signal?.addEventListener("abort", rejectWithSignal, {
-            once: true
+    const source = manageStorageDriver(
+      baseDriver({
+        async openRead() {
+          if (mode === "retire") await target.close?.();
+          return {
+            body: sourceBody,
+            size: 16,
+            totalSize: 16,
+            backend: "s3"
+          };
+        },
+        async close() {
+          sourceClosed += 1;
+        }
+      })
+    );
+    target = manageStorageDriver(
+      baseDriver({
+        async writeStream(_prefix, _key, _body, _size, _type, options) {
+          if (mode === "reject") throw new Error("target rejected before read");
+          if (mode === "retire") throw new Error("retired target was invoked");
+          writeEntered();
+          await new Promise<never>((_resolve, reject) => {
+            const rejectWithSignal = () => reject(options?.signal?.reason);
+            if (options?.signal?.aborted) rejectWithSignal();
+            else
+              options?.signal?.addEventListener("abort", rejectWithSignal, {
+                once: true
+              });
           });
-        });
-      },
-      async close() { targetClosed += 1; }
-    }));
+        },
+        async close() {
+          targetClosed += 1;
+        }
+      })
+    );
 
     const startedAt = Date.now();
     const transfer = ensureVerifiedObjectAtDestination({
@@ -1603,9 +1647,15 @@ test("[Server/存储] 预存在迁移目标只在源完整性通过后读取目�
   const expectedBody = Buffer.from("expected-source");
   let targetReads = 0;
   const driver = (overrides: Partial<StorageDriver>): StorageDriver => ({
-    async exists() { return false; },
-    async openRead() { throw new Error("unexpected openRead"); },
-    async readBuffer() { return Buffer.alloc(0); },
+    async exists() {
+      return false;
+    },
+    async openRead() {
+      throw new Error("unexpected openRead");
+    },
+    async readBuffer() {
+      return Buffer.alloc(0);
+    },
     async writeBuffer() {},
     async writeStream() {},
     async removeObjects(objects) {
@@ -1614,12 +1664,22 @@ test("[Server/存储] 预存在迁移目标只在源完整性通过后读取目�
         status: "missing" as const
       }));
     },
-    serverCopySource() { return undefined; },
-    supportsServerCopySource() { return false; },
+    serverCopySource() {
+      return undefined;
+    },
+    supportsServerCopySource() {
+      return false;
+    },
     async copyFromServerSource() {},
-    listKeys(_prefix, options) { return batchStorageKeys([], options); },
-    async selfTest() { return { backend: "s3", writable: true }; },
-    async pruneEmptyDirs() { return 0; },
+    listKeys(_prefix, options) {
+      return batchStorageKeys([], options);
+    },
+    async selfTest() {
+      return { backend: "s3", writable: true };
+    },
+    async pruneEmptyDirs() {
+      return 0;
+    },
     ...overrides
   });
   const config = (slug: string, credential: string): StorageConfig => ({
@@ -1650,7 +1710,9 @@ test("[Server/存储] 预存在迁移目标只在源完整性通过后读取目�
       target: {
         config: config("existing-target", "target-key"),
         driver: driver({
-          async exists() { return true; },
+          async exists() {
+            return true;
+          },
           async openRead() {
             targetReads += 1;
             return {
@@ -1670,8 +1732,7 @@ test("[Server/存储] 预存在迁移目标只在源完整性通过后读取目�
       },
       contentType: "image/webp"
     }),
-    (error) => error instanceof ApiError
-      && error.code === "storage_source_integrity_failed"
+    (error) => error instanceof ApiError && error.code === "storage_source_integrity_failed"
   );
   assert.equal(targetReads, 0);
 });
@@ -1705,19 +1766,18 @@ test("[Server/存储] S3 Range 错误释放响应体并保留权威对象总长�
     destroy() {}
   };
   const backend = new S3Backend(config, { client });
-  await assert.rejects(
-    backend.openRead("full", "range.webp", "bytes=1234-1235"),
-    (error) => {
-      const value = error as {
-        status?: number;
-        code?: string;
-        details?: { total_size?: number };
-      };
-      return value.status === 416
-        && value.code === "range_not_satisfiable"
-        && value.details?.total_size === 1234;
-    }
-  );
+  await assert.rejects(backend.openRead("full", "range.webp", "bytes=1234-1235"), (error) => {
+    const value = error as {
+      status?: number;
+      code?: string;
+      details?: { total_size?: number };
+    };
+    return (
+      value.status === 416 &&
+      value.code === "range_not_satisfiable" &&
+      value.details?.total_size === 1234
+    );
+  });
   assert.equal(commands, 1, "Content-Range 已给出总长度时不应再发 HEAD");
   assert.equal(rangeBody.destroyed, true);
   backend.close();
@@ -1728,8 +1788,7 @@ test("[Server/存储] S3 Range 错误释放响应体并保留权威对象总长�
     client: {
       async send(command) {
         fallbackCommands += 1;
-        const commandName = (command as { constructor: { name: string } })
-          .constructor.name;
+        const commandName = (command as { constructor: { name: string } }).constructor.name;
         if (commandName === "GetObjectCommand") {
           throw Object.assign(new Error("Invalid Range"), {
             $metadata: { httpStatusCode: 416 },
@@ -1744,311 +1803,330 @@ test("[Server/存储] S3 Range 错误释放响应体并保留权威对象总长�
   });
   await assert.rejects(
     fallbackBackend.openRead("full", "fallback.webp", "bytes=2048-"),
-    (error) => (
-      (error as { details?: { total_size?: number } })
-        .details?.total_size === 2048
-    )
+    (error) => (error as { details?: { total_size?: number } }).details?.total_size === 2048
   );
   assert.equal(fallbackCommands, 2);
   assert.equal(fallbackBody.destroyed, true);
   fallbackBackend.close();
 });
-test("[Server/存储] S3 响应期限和 driver 引用退休覆盖完整流生命周期", {
-  timeout: 5_000
-}, async () => {
-  const consume = async (stream: Readable) => {
-    const chunks: Buffer[] = [];
-    for await (const chunk of stream) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-    return Buffer.concat(chunks);
-  };
-  const bodyFrom = <T extends { Body: Readable }>(result: T) => result.Body;
-  const timeoutError = (error: unknown) => (
-    error instanceof Error
-    && "code" in error
-    && error.code === "storage_timeout"
-  );
-
-  const normalRuntime = new S3RequestRuntime({
-    idleTimeoutMs: 200,
-    taskTimeoutMs: 500
-  });
-  const normalBody = new PassThrough();
-  const normalResult = await normalRuntime.run(
-    async () => ({ Body: normalBody }),
-    {},
-    bodyFrom
-  );
-  const normalRead = consume(normalResult.Body);
-  normalBody.end("ok");
-  assert.equal((await normalRead).toString(), "ok");
-
-  const idleRuntime = new S3RequestRuntime({
-    idleTimeoutMs: 20,
-    taskTimeoutMs: 500
-  });
-  const idleBody = new PassThrough();
-  const idleResult = await idleRuntime.run(
-    async () => ({ Body: idleBody }),
-    {},
-    bodyFrom
-  );
-  await assert.rejects(() => consume(idleResult.Body), timeoutError);
-  assert.equal(idleBody.destroyed, true);
-
-  const taskRuntime = new S3RequestRuntime({
-    idleTimeoutMs: 500,
-    taskTimeoutMs: 20
-  });
-  const taskBody = new PassThrough();
-  const taskResult = await taskRuntime.run(
-    async () => ({ Body: taskBody }),
-    {},
-    bodyFrom
-  );
-  await assert.rejects(() => consume(taskResult.Body), timeoutError);
-  assert.equal(taskBody.destroyed, true);
-
-  const caller = new AbortController();
-  const callerReason = new Error("caller cancelled S3 body");
-  const callerBody = new PassThrough();
-  const callerResult = await normalRuntime.run(
-    async () => ({ Body: callerBody }),
-    { signal: caller.signal },
-    bodyFrom
-  );
-  const callerRead = consume(callerResult.Body);
-  caller.abort(callerReason);
-  await assert.rejects(callerRead, (error) => error === callerReason);
-  assert.equal(callerBody.destroyed, true);
-
-  await assert.rejects(
-    normalRuntime.run(async () => {
-      throw Object.assign(new Error("socket timed out"), { code: "ETIMEDOUT" });
-    }),
-    timeoutError
-  );
-
-  const pendingRequestRuntime = new S3RequestRuntime({
-    idleTimeoutMs: 500,
-    taskTimeoutMs: 20
-  });
-  await assert.rejects(
-    pendingRequestRuntime.run((signal) => new Promise((_resolve, reject) => {
-      signal.addEventListener("abort", () => reject(signal.reason), {
-        once: true
-      });
-    })),
-    timeoutError
-  );
-
-  const incomingServer = createHttpServer((request, response) => {
-    response.writeHead(200, { "content-type": "application/octet-stream" });
-    if (request.url === "/complete") {
-      response.end("complete");
-      return;
-    }
-    response.write("partial");
-  });
-  await new Promise<void>((resolveListen, rejectListen) => {
-    incomingServer.once("error", rejectListen);
-    incomingServer.listen(0, "127.0.0.1", () => resolveListen());
-  });
-  try {
-    const address = incomingServer.address();
-    assert.ok(address && typeof address === "object");
-    const incomingRuntime = new S3RequestRuntime({
-      idleTimeoutMs: 40,
-      taskTimeoutMs: 1_000
-    });
-    const completeResult = await incomingRuntime.run(
-      (signal) => new Promise<{ Body: Readable }>((resolveRequest, rejectRequest) => {
-        const request = httpRequest({
-          host: "127.0.0.1",
-          port: address.port,
-          path: "/complete",
-          signal
-        }, (response) => resolveRequest({ Body: response }));
-        request.once("error", rejectRequest);
-        request.end();
-      }),
-      {},
-      bodyFrom
-    );
-    assert.equal((await consume(completeResult.Body)).toString(), "complete");
-    assert.equal(completeResult.Body.listenerCount("timeout"), 0);
-
-    const incomingResult = await incomingRuntime.run(
-      (signal) => new Promise<{ Body: Readable }>((resolveRequest, rejectRequest) => {
-        const request = httpRequest({
-          host: "127.0.0.1",
-          port: address.port,
-          path: "/idle",
-          signal
-        }, (response) => resolveRequest({ Body: response }));
-        request.once("error", rejectRequest);
-        request.end();
-      }),
-      {},
-      bodyFrom
-    );
-    await assert.rejects(() => consume(incomingResult.Body), timeoutError);
-    assert.equal(incomingResult.Body.destroyed, true);
-  } finally {
-    incomingServer.closeAllConnections();
-    await new Promise<void>((resolveClose) => incomingServer.close(() => resolveClose()));
-  }
-
-  function streamDriver(body: PassThrough, onClose: () => void): StorageDriver {
-    return {
-      async exists() { return false; },
-      async openRead() {
-        return {
-          body,
-          size: undefined,
-          totalSize: undefined,
-          backend: "s3"
-        };
-      },
-      async readBuffer() { return Buffer.alloc(0); },
-      async writeBuffer() {},
-      async writeStream() {},
-      async removeObjects(objects) {
-        return objects.map((object) => ({
-          ...object,
-          status: "missing" as const
-        }));
-      },
-      serverCopySource() { return undefined; },
-      supportsServerCopySource() { return false; },
-      async copyFromServerSource() {},
-      listKeys(_prefix, options) {
-        return batchStorageKeys(["one.webp"], options);
-      },
-      async selfTest() { return { backend: "s3", writable: true }; },
-      async pruneEmptyDirs() { return 0; },
-      async close() { onClose(); }
+test(
+  "[Server/存储] S3 响应期限和 driver 引用退休覆盖完整流生命周期",
+  {
+    timeout: 5_000
+  },
+  async () => {
+    const consume = async (stream: Readable) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      return Buffer.concat(chunks);
     };
-  }
+    const bodyFrom = <T extends { Body: Readable }>(result: T) => result.Body;
+    const timeoutError = (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "storage_timeout";
 
-  const leasedBody = new PassThrough();
-  let leasedDriverClosed = 0;
-  const managed = manageTestStorageDriver(
-    streamDriver(leasedBody, () => { leasedDriverClosed += 1; })
-  );
-  const opened = await managed.openRead("full", "leased.webp");
-  let closeSettled = false;
-  const closing = managed.close().then(() => { closeSettled = true; });
-  await delay(10);
-  assert.equal(closeSettled, false);
-  assert.equal(leasedDriverClosed, 0);
-  await assert.rejects(
-    managed.exists("full", "new-operation.webp"),
-    (error) => (
-      error instanceof Error
-      && "code" in error
-      && error.code === "storage_driver_retired"
-    )
-  );
-  const leasedRead = consume(opened.body);
-  leasedBody.end("leased");
-  assert.equal((await leasedRead).toString(), "leased");
-  await closing;
-  assert.equal(leasedDriverClosed, 1);
+    const normalRuntime = new S3RequestRuntime({
+      idleTimeoutMs: 200,
+      taskTimeoutMs: 500
+    });
+    const normalBody = new PassThrough();
+    const normalResult = await normalRuntime.run(async () => ({ Body: normalBody }), {}, bodyFrom);
+    const normalRead = consume(normalResult.Body);
+    normalBody.end("ok");
+    assert.equal((await normalRead).toString(), "ok");
 
-  const listingBody = new PassThrough();
-  let listingDriverClosed = 0;
-  const listingManaged = manageTestStorageDriver(
-    streamDriver(listingBody, () => { listingDriverClosed += 1; })
-  );
-  const leasedListing = listingManaged.listKeys("full");
-  const firstBatch = await leasedListing.next();
-  assert.equal(firstBatch.done, false);
-  const listingClose = listingManaged.close();
-  await delay(10);
-  assert.equal(listingDriverClosed, 0);
-  await leasedListing.return(undefined as never);
-  await listingClose;
-  assert.equal(listingDriverClosed, 1);
-  listingBody.destroy();
+    const idleRuntime = new S3RequestRuntime({
+      idleTimeoutMs: 20,
+      taskTimeoutMs: 500
+    });
+    const idleBody = new PassThrough();
+    const idleResult = await idleRuntime.run(async () => ({ Body: idleBody }), {}, bodyFrom);
+    await assert.rejects(() => consume(idleResult.Body), timeoutError);
+    assert.equal(idleBody.destroyed, true);
 
-  const pendingBody = new PassThrough();
-  let pendingDriverClosed = 0;
-  let finishPendingExists: (value: boolean) => void = () => {};
-  const pendingDriver = streamDriver(
-    pendingBody,
-    () => { pendingDriverClosed += 1; }
-  );
-  pendingDriver.exists = () => new Promise((resolve) => {
-    finishPendingExists = resolve;
-  });
-  const pendingManaged = manageTestStorageDriver(pendingDriver);
-  const pendingExists = pendingManaged.exists("full", "pending.webp");
-  const pendingClose = pendingManaged.close();
-  await delay(10);
-  assert.equal(pendingDriverClosed, 0);
-  finishPendingExists(true);
-  assert.equal(await pendingExists, true);
-  await pendingClose;
-  assert.equal(pendingDriverClosed, 1);
-  pendingBody.destroy();
+    const taskRuntime = new S3RequestRuntime({
+      idleTimeoutMs: 500,
+      taskTimeoutMs: 20
+    });
+    const taskBody = new PassThrough();
+    const taskResult = await taskRuntime.run(async () => ({ Body: taskBody }), {}, bodyFrom);
+    await assert.rejects(() => consume(taskResult.Body), timeoutError);
+    assert.equal(taskBody.destroyed, true);
 
-  for (const ending of ["eof", "error"] as const) {
-    const body = new PassThrough();
-    let closed = 0;
-    const driver = streamDriver(body, () => { closed += 1; });
-    if (ending === "error") {
-      driver.listKeys = () => (async function* () {
-        yield ["one.webp"];
-        throw new Error("listing failed");
-      })();
-    }
-    const lifecycleManaged = manageTestStorageDriver(driver);
-    const listing = lifecycleManaged.listKeys("full");
-    assert.equal((await listing.next()).done, false);
-    const lifecycleClose = lifecycleManaged.close();
-    await delay(10);
-    assert.equal(closed, 0);
-    if (ending === "eof") {
-      assert.equal((await listing.next()).done, true);
-    } else {
-      await assert.rejects(() => listing.next(), /listing failed/);
-    }
-    await lifecycleClose;
-    assert.equal(closed, 1, `${ending} must release the listing reference`);
-    body.destroy();
-  }
-
-  for (const ending of ["destroy", "error"] as const) {
-    const body = new PassThrough();
-    let closed = 0;
-    const lifecycleManaged = manageTestStorageDriver(
-      streamDriver(body, () => { closed += 1; })
+    const caller = new AbortController();
+    const callerReason = new Error("caller cancelled S3 body");
+    const callerBody = new PassThrough();
+    const callerResult = await normalRuntime.run(
+      async () => ({ Body: callerBody }),
+      { signal: caller.signal },
+      bodyFrom
     );
-    await lifecycleManaged.openRead("full", `${ending}.webp`);
-    const lifecycleClose = lifecycleManaged.close();
-    await delay(10);
-    body.destroy(ending === "error" ? new Error("stream failed") : undefined);
-    await lifecycleClose;
-    assert.equal(closed, 1, `${ending} must release the object-body lease`);
-  }
+    const callerRead = consume(callerResult.Body);
+    caller.abort(callerReason);
+    await assert.rejects(callerRead, (error) => error === callerReason);
+    assert.equal(callerBody.destroyed, true);
 
-  let failedCloseCalls = 0;
-  const closeFailure = new Error("driver close failed");
-  const failingDriver = streamDriver(new PassThrough(), () => undefined);
-  failingDriver.close = async () => {
-    failedCloseCalls += 1;
-    throw closeFailure;
-  };
-  const failingManaged = manageTestStorageDriver(failingDriver);
-  const firstClose = failingManaged.close();
-  const repeatedClose = failingManaged.close();
-  assert.equal(firstClose, repeatedClose);
-  await assert.rejects(firstClose, (error) => error === closeFailure);
-  await assert.rejects(repeatedClose, (error) => error === closeFailure);
-  assert.equal(failedCloseCalls, 1, "driver 只关闭一次");
-});
+    await assert.rejects(
+      normalRuntime.run(async () => {
+        throw Object.assign(new Error("socket timed out"), { code: "ETIMEDOUT" });
+      }),
+      timeoutError
+    );
+
+    const pendingRequestRuntime = new S3RequestRuntime({
+      idleTimeoutMs: 500,
+      taskTimeoutMs: 20
+    });
+    await assert.rejects(
+      pendingRequestRuntime.run(
+        (signal) =>
+          new Promise((_resolve, reject) => {
+            signal.addEventListener("abort", () => reject(signal.reason), {
+              once: true
+            });
+          })
+      ),
+      timeoutError
+    );
+
+    const incomingServer = createHttpServer((request, response) => {
+      response.writeHead(200, { "content-type": "application/octet-stream" });
+      if (request.url === "/complete") {
+        response.end("complete");
+        return;
+      }
+      response.write("partial");
+    });
+    await new Promise<void>((resolveListen, rejectListen) => {
+      incomingServer.once("error", rejectListen);
+      incomingServer.listen(0, "127.0.0.1", () => resolveListen());
+    });
+    try {
+      const address = incomingServer.address();
+      assert.ok(address && typeof address === "object");
+      const incomingRuntime = new S3RequestRuntime({
+        idleTimeoutMs: 40,
+        taskTimeoutMs: 1_000
+      });
+      const completeResult = await incomingRuntime.run(
+        (signal) =>
+          new Promise<{ Body: Readable }>((resolveRequest, rejectRequest) => {
+            const request = httpRequest(
+              {
+                host: "127.0.0.1",
+                port: address.port,
+                path: "/complete",
+                signal
+              },
+              (response) => resolveRequest({ Body: response })
+            );
+            request.once("error", rejectRequest);
+            request.end();
+          }),
+        {},
+        bodyFrom
+      );
+      assert.equal((await consume(completeResult.Body)).toString(), "complete");
+      assert.equal(completeResult.Body.listenerCount("timeout"), 0);
+
+      const incomingResult = await incomingRuntime.run(
+        (signal) =>
+          new Promise<{ Body: Readable }>((resolveRequest, rejectRequest) => {
+            const request = httpRequest(
+              {
+                host: "127.0.0.1",
+                port: address.port,
+                path: "/idle",
+                signal
+              },
+              (response) => resolveRequest({ Body: response })
+            );
+            request.once("error", rejectRequest);
+            request.end();
+          }),
+        {},
+        bodyFrom
+      );
+      await assert.rejects(() => consume(incomingResult.Body), timeoutError);
+      assert.equal(incomingResult.Body.destroyed, true);
+    } finally {
+      incomingServer.closeAllConnections();
+      await new Promise<void>((resolveClose) => incomingServer.close(() => resolveClose()));
+    }
+
+    function streamDriver(body: PassThrough, onClose: () => void): StorageDriver {
+      return {
+        async exists() {
+          return false;
+        },
+        async openRead() {
+          return {
+            body,
+            size: undefined,
+            totalSize: undefined,
+            backend: "s3"
+          };
+        },
+        async readBuffer() {
+          return Buffer.alloc(0);
+        },
+        async writeBuffer() {},
+        async writeStream() {},
+        async removeObjects(objects) {
+          return objects.map((object) => ({
+            ...object,
+            status: "missing" as const
+          }));
+        },
+        serverCopySource() {
+          return undefined;
+        },
+        supportsServerCopySource() {
+          return false;
+        },
+        async copyFromServerSource() {},
+        listKeys(_prefix, options) {
+          return batchStorageKeys(["one.webp"], options);
+        },
+        async selfTest() {
+          return { backend: "s3", writable: true };
+        },
+        async pruneEmptyDirs() {
+          return 0;
+        },
+        async close() {
+          onClose();
+        }
+      };
+    }
+
+    const leasedBody = new PassThrough();
+    let leasedDriverClosed = 0;
+    const managed = manageTestStorageDriver(
+      streamDriver(leasedBody, () => {
+        leasedDriverClosed += 1;
+      })
+    );
+    const opened = await managed.openRead("full", "leased.webp");
+    let closeSettled = false;
+    const closing = managed.close().then(() => {
+      closeSettled = true;
+    });
+    await delay(10);
+    assert.equal(closeSettled, false);
+    assert.equal(leasedDriverClosed, 0);
+    await assert.rejects(
+      managed.exists("full", "new-operation.webp"),
+      (error) =>
+        error instanceof Error && "code" in error && error.code === "storage_driver_retired"
+    );
+    const leasedRead = consume(opened.body);
+    leasedBody.end("leased");
+    assert.equal((await leasedRead).toString(), "leased");
+    await closing;
+    assert.equal(leasedDriverClosed, 1);
+
+    const listingBody = new PassThrough();
+    let listingDriverClosed = 0;
+    const listingManaged = manageTestStorageDriver(
+      streamDriver(listingBody, () => {
+        listingDriverClosed += 1;
+      })
+    );
+    const leasedListing = listingManaged.listKeys("full");
+    const firstBatch = await leasedListing.next();
+    assert.equal(firstBatch.done, false);
+    const listingClose = listingManaged.close();
+    await delay(10);
+    assert.equal(listingDriverClosed, 0);
+    await leasedListing.return(undefined as never);
+    await listingClose;
+    assert.equal(listingDriverClosed, 1);
+    listingBody.destroy();
+
+    const pendingBody = new PassThrough();
+    let pendingDriverClosed = 0;
+    let finishPendingExists: (value: boolean) => void = () => {};
+    const pendingDriver = streamDriver(pendingBody, () => {
+      pendingDriverClosed += 1;
+    });
+    pendingDriver.exists = () =>
+      new Promise((resolve) => {
+        finishPendingExists = resolve;
+      });
+    const pendingManaged = manageTestStorageDriver(pendingDriver);
+    const pendingExists = pendingManaged.exists("full", "pending.webp");
+    const pendingClose = pendingManaged.close();
+    await delay(10);
+    assert.equal(pendingDriverClosed, 0);
+    finishPendingExists(true);
+    assert.equal(await pendingExists, true);
+    await pendingClose;
+    assert.equal(pendingDriverClosed, 1);
+    pendingBody.destroy();
+
+    for (const ending of ["eof", "error"] as const) {
+      const body = new PassThrough();
+      let closed = 0;
+      const driver = streamDriver(body, () => {
+        closed += 1;
+      });
+      if (ending === "error") {
+        driver.listKeys = () =>
+          (async function* () {
+            yield ["one.webp"];
+            throw new Error("listing failed");
+          })();
+      }
+      const lifecycleManaged = manageTestStorageDriver(driver);
+      const listing = lifecycleManaged.listKeys("full");
+      assert.equal((await listing.next()).done, false);
+      const lifecycleClose = lifecycleManaged.close();
+      await delay(10);
+      assert.equal(closed, 0);
+      if (ending === "eof") {
+        assert.equal((await listing.next()).done, true);
+      } else {
+        await assert.rejects(() => listing.next(), /listing failed/);
+      }
+      await lifecycleClose;
+      assert.equal(closed, 1, `${ending} must release the listing reference`);
+      body.destroy();
+    }
+
+    for (const ending of ["destroy", "error"] as const) {
+      const body = new PassThrough();
+      let closed = 0;
+      const lifecycleManaged = manageTestStorageDriver(
+        streamDriver(body, () => {
+          closed += 1;
+        })
+      );
+      await lifecycleManaged.openRead("full", `${ending}.webp`);
+      const lifecycleClose = lifecycleManaged.close();
+      await delay(10);
+      body.destroy(ending === "error" ? new Error("stream failed") : undefined);
+      await lifecycleClose;
+      assert.equal(closed, 1, `${ending} must release the object-body lease`);
+    }
+
+    let failedCloseCalls = 0;
+    const closeFailure = new Error("driver close failed");
+    const failingDriver = streamDriver(new PassThrough(), () => undefined);
+    failingDriver.close = async () => {
+      failedCloseCalls += 1;
+      throw closeFailure;
+    };
+    const failingManaged = manageTestStorageDriver(failingDriver);
+    const firstClose = failingManaged.close();
+    const repeatedClose = failingManaged.close();
+    assert.equal(firstClose, repeatedClose);
+    await assert.rejects(firstClose, (error) => error === closeFailure);
+    await assert.rejects(repeatedClose, (error) => error === closeFailure);
+    assert.equal(failedCloseCalls, 1, "driver 只关闭一次");
+  }
+);
 test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空间保持统一", () => {
   const s3 = s3SettingsSchema.parse({
     endpoint: "objects.example.com",
@@ -2072,18 +2150,27 @@ test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空
     },
     { connect: 15, idle: 15, task: 300 }
   );
-  assert.equal(s3SettingsSchema.safeParse({
-    ...s3,
-    connect_timeout_seconds: 0
-  }).success, false);
-  assert.equal(s3SettingsSchema.safeParse({
-    ...s3,
-    idle_timeout_seconds: 301
-  }).success, false);
-  assert.equal(s3SettingsSchema.safeParse({
-    ...s3,
-    task_timeout_seconds: 14
-  }).success, false);
+  assert.equal(
+    s3SettingsSchema.safeParse({
+      ...s3,
+      connect_timeout_seconds: 0
+    }).success,
+    false
+  );
+  assert.equal(
+    s3SettingsSchema.safeParse({
+      ...s3,
+      idle_timeout_seconds: 301
+    }).success,
+    false
+  );
+  assert.equal(
+    s3SettingsSchema.safeParse({
+      ...s3,
+      task_timeout_seconds: 14
+    }).success,
+    false
+  );
 
   const first: StorageConfig = {
     slug: "archive-a",
@@ -2106,31 +2193,41 @@ test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空
   };
   const local: StorageConfig = { slug: "local", type: "local" };
   assert.equal("s3" in local, false);
-  assert.deepEqual(storageConfigFromRow({
-    slug: "local",
-    type: "local",
-    config: { ignored_extra_config: true }
-  }), {
-    slug: "local",
-    type: "local",
-    public_base_url: "",
-    namespace_identities: []
-  });
-  assert.deepEqual(storageConfigFromRow({
-    slug: "s3-only",
-    type: "s3",
-    config: s3
-  }), {
-    slug: "s3-only",
-    type: "s3",
-    namespace_identities: [],
-    s3
-  });
-  assert.throws(() => storageConfigFromRow({
-    slug: "unsupported",
-    type: "unsupported",
-    config: {}
-  }), /Unsupported storage backend type: unsupported/);
+  assert.deepEqual(
+    storageConfigFromRow({
+      slug: "local",
+      type: "local",
+      config: { ignored_extra_config: true }
+    }),
+    {
+      slug: "local",
+      type: "local",
+      public_base_url: "",
+      namespace_identities: []
+    }
+  );
+  assert.deepEqual(
+    storageConfigFromRow({
+      slug: "s3-only",
+      type: "s3",
+      config: s3
+    }),
+    {
+      slug: "s3-only",
+      type: "s3",
+      namespace_identities: [],
+      s3
+    }
+  );
+  assert.throws(
+    () =>
+      storageConfigFromRow({
+        slug: "unsupported",
+        type: "unsupported",
+        config: {}
+      }),
+    /Unsupported storage backend type: unsupported/
+  );
   assert.equal(storageNamespaceIdentity(first), storageNamespaceIdentity(second));
   assert.equal(shareStorageNamespace(first, second), true);
   const historicalAliasA: StorageConfig = {
@@ -2167,17 +2264,13 @@ test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空
       .toSorted((left, right) => left[0].localeCompare(right[0])),
     [["historical-a", "historical-b", "historical-c"], ["unrelated"]]
   );
-  const historicalGroup = historicalGroups.find((group) => (
+  const historicalGroup = historicalGroups.find((group) =>
     group.some((config) => config.slug === historicalAliasA.slug)
-  ));
+  );
   assert.ok(historicalGroup);
   assert.equal(
     storageNamespaceGroupIdentity(historicalGroup),
-    storageNamespaceGroupIdentity([
-      historicalAliasB,
-      transitiveAlias,
-      historicalAliasA
-    ])
+    storageNamespaceGroupIdentity([historicalAliasB, transitiveAlias, historicalAliasA])
   );
 
   const canonicalKey = storageObjectKey(imageId, "avif");
@@ -2186,37 +2279,20 @@ test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空
   assert.equal(isCanonicalImageObjectKey(canonicalKey), true);
   assert.equal(isCanonicalImageObjectKey("00/" + imageId + ".avif"), false);
   assert.equal(isCanonicalImageObjectKey(imageId + ".avif"), false);
-  assert.equal(
-    isCanonicalImageObjectKey("nested/" + imageId + ".avif"),
-    false
-  );
+  assert.equal(isCanonicalImageObjectKey("nested/" + imageId + ".avif"), false);
   assert.throws(
     () => assertCanonicalImageObjectKey("nested/" + imageId + ".avif"),
     /Invalid image object key/
   );
-  assert.throws(
-    () => thumbnailObjectKey("nested/" + imageId + ".avif"),
-    /Invalid image UUID/
-  );
+  assert.throws(() => thumbnailObjectKey("nested/" + imageId + ".avif"), /Invalid image UUID/);
   assert.deepEqual(parseImageObjectKey(thumbnailObjectKey(imageId)), { id: imageId, ext: "webp" });
   assert.deepEqual(parseImageObjectKey(canonicalKey), { id: imageId, ext: "avif" });
   assert.equal(parseImageObjectKey(`ff/${imageId}.avif`), null);
-  assert.equal(
-    storageS3ObjectName(first, "full", canonicalKey),
-    "images/full/" + canonicalKey
-  );
+  assert.equal(storageS3ObjectName(first, "full", canonicalKey), "images/full/" + canonicalKey);
   assert.equal(s3ListPrefix(first, "thumbs"), "images/thumbs/");
-  assert.equal(
-    s3CopySource(first, "full", canonicalKey),
-    "gallery/images/full/" + canonicalKey
-  );
+  assert.equal(s3CopySource(first, "full", canonicalKey), "gallery/images/full/" + canonicalKey);
   assert.equal(contentType("webp"), "image/webp");
-  assert.throws(
-    () => storageS3ObjectName(first, "full", "../escape.webp"),
-    /Unsafe storage path/
-  );
-
-
+  assert.throws(() => storageS3ObjectName(first, "full", "../escape.webp"), /Unsafe storage path/);
 });
 test("[Server/存储] Local 驱动取消阻止发布，候选清理及并行自检互相隔离", async () => {
   const root = await createTestDirectory("local-contract-");
@@ -2332,8 +2408,16 @@ console.log("local-contract-ok");
   try {
     await writeFile(helper, source);
     const result = await runProcess(process.execPath, ["--experimental-strip-types", helper], {
-      cwd: resolve("."), env: { ...process.env, NODE_ENV: "development", IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: toNamespacedPath(root) }, timeoutMs: 30_000
+      cwd: resolve("."),
+      env: {
+        ...process.env,
+        NODE_ENV: "development",
+        IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: toNamespacedPath(root)
+      },
+      timeoutMs: 30_000
     });
     assert.match(result.stdout, /local-contract-ok/);
-  } finally { await rm(root, { recursive: true, force: true }); }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

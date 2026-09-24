@@ -18,10 +18,7 @@ import {
   type LoadedCancelItem
 } from "./items.ts";
 import { cleanupRetiredSessions } from "./retired-cleanup.ts";
-import {
-  completedIngestionReceipt,
-  publishCompletedReceipt
-} from "../commit/completion.ts";
+import { completedIngestionReceipt, publishCompletedReceipt } from "../commit/completion.ts";
 import { ingestionCleanupRetryQueue } from "../cleanup/retry-queue.ts";
 import { IngestionIrreversibleCoordinator } from "../execution/irreversible-coordinator.ts";
 import {
@@ -31,10 +28,7 @@ import {
   type StoredIngestionSession
 } from "../sessions/model.ts";
 import { IngestionSessionRepository } from "../repository.ts";
-import {
-  discardedIngestionReceipt,
-  semanticIngestionSession
-} from "../sessions/transitions.ts";
+import { discardedIngestionReceipt, semanticIngestionSession } from "../sessions/transitions.ts";
 
 type AbortActiveIngestion = (pair: IngestionSessionPair) => Promise<unknown> | void;
 type CommittedIngestionResults = Awaited<
@@ -43,28 +37,27 @@ type CommittedIngestionResults = Awaited<
 
 type CancelBoundaryValue =
   | Readonly<{
-    status: "completed";
-    cleanup: IngestionSessionSnapshot;
-  }>
+      status: "completed";
+      cleanup: IngestionSessionSnapshot;
+    }>
   | Readonly<{
-    status: "discarded";
-    cleanup: IngestionSessionSnapshot;
-    queueRevision: number;
-  }>;
+      status: "discarded";
+      cleanup: IngestionSessionSnapshot;
+      queueRevision: number;
+    }>;
 
 type CancelBoundaryResult =
   | Readonly<{
-    status: "discarded";
-    value: CancelBoundaryValue;
-  }>
+      status: "discarded";
+      value: CancelBoundaryValue;
+    }>
   | Readonly<{
-    status: "resolving";
-    settled: Promise<unknown>;
-  }>;
+      status: "resolving";
+      settled: Promise<unknown>;
+    }>;
 
 type BoundaryOutcome =
-  | Readonly<{ ok: true; result: CancelBoundaryResult }>
-  | Readonly<{ ok: false; error: unknown }>;
+  Readonly<{ ok: true; result: CancelBoundaryResult }> | Readonly<{ ok: false; error: unknown }>;
 
 type ActiveBoundaryWork = Readonly<{
   admitted: Promise<void>;
@@ -91,10 +84,7 @@ const cancelMutationLimiter = new DynamicConcurrencyLimiter(
   (signal) => signal.reason ?? new Error("Ingestion cancellation stopped")
 );
 
-function abortActiveBestEffort(
-  pair: IngestionSessionPair,
-  abortActive: AbortActiveIngestion
-) {
+function abortActiveBestEffort(pair: IngestionSessionPair, abortActive: AbortActiveIngestion) {
   try {
     void Promise.resolve(abortActive(pair)).catch((error) => {
       logger.warn("ingestion_discarded_abort_deferred", {
@@ -112,17 +102,15 @@ function abortActiveBestEffort(
   }
 }
 
-function matchingActiveSession(
-  session: StoredIngestionSession | null,
-  pair: IngestionSessionPair
-) {
+function matchingActiveSession(session: StoredIngestionSession | null, pair: IngestionSessionPair) {
   if (
-    !session
-    || session.session_id !== pair.session_id
-    || session.image_id !== pair.image_id
-    || session.status === "completed"
-    || session.status === "discarded"
-  ) return null;
+    !session ||
+    session.session_id !== pair.session_id ||
+    session.image_id !== pair.image_id ||
+    session.status === "completed" ||
+    session.status === "discarded"
+  )
+    return null;
   return session as IngestionSessionSnapshot;
 }
 
@@ -132,21 +120,12 @@ async function retireCompletedSession(
   input: IngestionSessionPair,
   completedItem?: CompletedIngestionImageDto
 ) {
-  if (
-    session
-    && session.session_id === input.session_id
-    && session.image_id === input.image_id
-  ) {
+  if (session && session.session_id === input.session_id && session.image_id === input.image_id) {
     try {
       let terminal = session;
       if (session.status !== "completed" && session.status !== "discarded") {
         try {
-          await publishCompletedReceipt(
-            repository,
-            session,
-            Date.now(),
-            completedItem
-          );
+          await publishCompletedReceipt(repository, session, Date.now(), completedItem);
         } catch (error) {
           // PostgreSQL has already established the authoritative outcome. A
           // stale Redis state or a raced CAS must not prevent the canonical
@@ -157,10 +136,7 @@ async function retireCompletedSession(
             error: error
           });
         }
-        const current = await repository.readSession(
-          session.owner,
-          session.session_id
-        );
+        const current = await repository.readSession(session.owner, session.session_id);
         if (!current || current.image_id !== input.image_id) {
           return;
         }
@@ -192,14 +168,8 @@ async function retireCompletedSession(
   }
 }
 
-function committedExpiryTransition(
-  active: IngestionSessionSnapshot,
-  now: number
-) {
-  if (
-    (active.status === "committing" || active.status === "resolving")
-    && active.commit
-  ) {
+function committedExpiryTransition(active: IngestionSessionSnapshot, now: number) {
+  if ((active.status === "committing" || active.status === "resolving") && active.commit) {
     return completedIngestionReceipt(active, now);
   }
   return discardedIngestionReceipt(active, now);
@@ -240,12 +210,7 @@ async function expireResolvingSession(
     message: "数据库事务已经开始，正在确认最终结果",
     progress: null
   });
-  await repository.expireSession(
-    active,
-    active.version,
-    cutoff,
-    resolving
-  );
+  await repository.expireSession(active, active.version, cutoff, resolving);
   return "resolving" as const;
 }
 
@@ -258,8 +223,9 @@ async function cancelLoadedIngestionSessions(
   dependencies: CancelIngestionSessionsDependencies = defaultDependencies
 ) {
   if (!loaded.length) return [];
-  const scheduleCleanup = dependencies.scheduleCleanup
-    ?? ((work: () => Promise<void>) => ingestionCleanupRetryQueue.enqueue(work));
+  const scheduleCleanup =
+    dependencies.scheduleCleanup ??
+    ((work: () => Promise<void>) => ingestionCleanupRetryQueue.enqueue(work));
   const sessionsPendingCleanup = new Map<string, IngestionSessionSnapshot>();
   const rememberSessionForCleanup = (session: IngestionSessionSnapshot) => {
     sessionsPendingCleanup.set(pairKey(session), session);
@@ -276,11 +242,12 @@ async function cancelLoadedIngestionSessions(
   for (const [index, input] of items.entries()) {
     const initial = sessions[index];
     if (
-      !initial
-      || initial.status === "completed"
-      || initial.status === "discarded"
-      || initial.version !== input.expected_version
-    ) continue;
+      !initial ||
+      initial.status === "completed" ||
+      initial.status === "discarded" ||
+      initial.version !== input.expected_version
+    )
+      continue;
     const active = initial as IngestionSessionSnapshot;
     const pair = {
       session_id: input.session_id,
@@ -301,52 +268,41 @@ async function cancelLoadedIngestionSessions(
           pair.image_id,
           loaded[index]!.owner
         );
-        return cancelMutationLimiter.run(
-          cancelMutationSignal,
-          async () => {
-            if (committedResult) {
-              if (options.expiryCutoff !== undefined) {
-                await expireCommittedSession(
-                  repository,
-                  active,
-                  options.expiryCutoff
-                );
-                abortActiveBestEffort(pair, abortActive);
-              }
-              return {
-                status: "completed" as const,
-                cleanup: active
-              };
+        return cancelMutationLimiter.run(cancelMutationSignal, async () => {
+          if (committedResult) {
+            if (options.expiryCutoff !== undefined) {
+              await expireCommittedSession(repository, active, options.expiryCutoff);
+              abortActiveBestEffort(pair, abortActive);
             }
-            const receipt = discardedIngestionReceipt(active, Date.now());
-            let queueRevision: number;
-            if (options.expiryCutoff === undefined) {
-              const mutation = await repository.mutateSemantic(
-                active,
-                active.version,
-                receipt
-              );
-              queueRevision = mutation.metadata.revision;
-            } else {
-              const mutation = await repository.expireSession(
-                active,
-                active.version,
-                options.expiryCutoff,
-                receipt
-              );
-              queueRevision = mutation.metadata.revision;
-            }
-            // Abort only after a known successful CAS. If the Redis response
-            // is unknown, the execution token remains the durable fence and
-            // the caller must retry instead of racing a current executor.
-            abortActiveBestEffort(pair, abortActive);
             return {
-              status: "discarded" as const,
-              cleanup: active,
-              queueRevision
+              status: "completed" as const,
+              cleanup: active
             };
           }
-        );
+          const receipt = discardedIngestionReceipt(active, Date.now());
+          let queueRevision: number;
+          if (options.expiryCutoff === undefined) {
+            const mutation = await repository.mutateSemantic(active, active.version, receipt);
+            queueRevision = mutation.metadata.revision;
+          } else {
+            const mutation = await repository.expireSession(
+              active,
+              active.version,
+              options.expiryCutoff,
+              receipt
+            );
+            queueRevision = mutation.metadata.revision;
+          }
+          // Abort only after a known successful CAS. If the Redis response
+          // is unknown, the execution token remains the durable fence and
+          // the caller must retry instead of racing a current executor.
+          abortActiveBestEffort(pair, abortActive);
+          return {
+            status: "discarded" as const,
+            cleanup: active,
+            queueRevision
+          };
+        });
       });
       const outcome = boundary.then<BoundaryOutcome, BoundaryOutcome>(
         (result) => {
@@ -370,9 +326,7 @@ async function cancelLoadedIngestionSessions(
   let committed: CommittedIngestionResults;
   try {
     await Promise.all([...workByPair.values()].map((work) => work.admitted));
-    committed = await dependencies.readCommitted(
-      [...new Set(items.map((item) => item.image_id))]
-    );
+    committed = await dependencies.readCommitted([...new Set(items.map((item) => item.image_id))]);
     committedGate.resolve(committed);
   } catch (error) {
     if (workByPair.size) {
@@ -383,9 +337,11 @@ async function cancelLoadedIngestionSessions(
   }
 
   const outcomes = new Map<string, BoundaryOutcome>();
-  await Promise.all([...workByPair.entries()].map(async ([key, work]) => {
-    outcomes.set(key, await work.outcome);
-  }));
+  await Promise.all(
+    [...workByPair.entries()].map(async ([key, work]) => {
+      outcomes.set(key, await work.outcome);
+    })
+  );
 
   const results: IngestionCancelItemResultDto[] = [];
   for (const [index, input] of items.entries()) {
@@ -408,15 +364,12 @@ async function cancelLoadedIngestionSessions(
         }
         if (!outcome.ok) throw outcome.error;
         if (outcome.result.status === "resolving") {
-          const current = await repository.readSession(
-            loaded[index]!.owner,
-            input.session_id
-          );
+          const current = await repository.readSession(loaded[index]!.owner, input.session_id);
           if (committedResult) {
             if (
-              options.expiryCutoff !== undefined
-              && current
-              && current.image_id === input.image_id
+              options.expiryCutoff !== undefined &&
+              current &&
+              current.image_id === input.image_id
             ) {
               const cleanup = await expireCommittedSession(
                 repository,
@@ -428,8 +381,8 @@ async function cancelLoadedIngestionSessions(
               }
             } else if (options.expiryCutoff === undefined) {
               abortActiveBestEffort(pair, abortActive);
-              const cleanup = matchingActiveSession(current, pair)
-                ?? matchingActiveSession(initial, pair);
+              const cleanup =
+                matchingActiveSession(current, pair) ?? matchingActiveSession(initial, pair);
               if (cleanup) {
                 rememberSessionForCleanup(cleanup);
               }
@@ -443,10 +396,7 @@ async function cancelLoadedIngestionSessions(
             results.push(completedCancelResult(pair, committedResult));
             continue;
           }
-          if (
-            current
-            && current.image_id === input.image_id
-          ) {
+          if (current && current.image_id === input.image_id) {
             if (options.expiryCutoff === undefined) {
               if (current.status === "committing") {
                 const resolving = semanticIngestionSession(current, {
@@ -455,18 +405,12 @@ async function cancelLoadedIngestionSessions(
                   message: "数据库事务已经开始，正在确认最终结果",
                   progress: null
                 });
-                await repository.mutateSemantic(
-                  current,
-                  current.version,
-                  resolving
-                ).catch(() => undefined);
+                await repository
+                  .mutateSemantic(current, current.version, resolving)
+                  .catch(() => undefined);
               }
             } else {
-              await expireResolvingSession(
-                repository,
-                current,
-                options.expiryCutoff
-              );
+              await expireResolvingSession(repository, current, options.expiryCutoff);
             }
           }
           results.push({ ...pair, status: "resolving" });
@@ -479,12 +423,7 @@ async function cancelLoadedIngestionSessions(
           }
           if (options.expiryCutoff === undefined) {
             abortActiveBestEffort(pair, abortActive);
-            await retireCompletedSession(
-              repository,
-              initial,
-              pair,
-              committedResult.item
-            );
+            await retireCompletedSession(repository, initial, pair, committedResult.item);
           }
           results.push(completedCancelResult(pair, committedResult));
         } else {
@@ -500,11 +439,7 @@ async function cancelLoadedIngestionSessions(
 
       if (committedResult) {
         if (options.expiryCutoff !== undefined && initial) {
-          const cleanup = await expireCommittedSession(
-            repository,
-            initial,
-            options.expiryCutoff
-          );
+          const cleanup = await expireCommittedSession(repository, initial, options.expiryCutoff);
           if (cleanup) {
             abortActiveBestEffort(pair, abortActive);
             rememberSessionForCleanup(cleanup);
@@ -515,29 +450,16 @@ async function cancelLoadedIngestionSessions(
           if (cleanup) {
             rememberSessionForCleanup(cleanup);
           }
-          await retireCompletedSession(
-            repository,
-            initial,
-            pair,
-            committedResult.item
-          );
+          await retireCompletedSession(repository, initial, pair, committedResult.item);
         }
         results.push(completedCancelResult(pair, committedResult));
         continue;
       }
       if (loaded[index]!.incarnationMismatch) {
-        throw new ApiError(
-          409,
-          "ingestion_incarnation_conflict",
-          "内容接入任务身份已被替换"
-        );
+        throw new ApiError(409, "ingestion_incarnation_conflict", "内容接入任务身份已被替换");
       }
       if (!initial) {
-        throw new ApiError(
-          410,
-          "ingestion_session_missing",
-          "未完成内容接入已过期或被服务器丢弃"
-        );
+        throw new ApiError(410, "ingestion_session_missing", "未完成内容接入已过期或被服务器丢弃");
       }
       if (initial.status === "completed") {
         await repository.deleteSession(initial, initial.version);
@@ -558,9 +480,7 @@ async function cancelLoadedIngestionSessions(
       if (initial.version !== input.expected_version) {
         throw new ApiError(409, "ingestion_version_conflict", "内容接入任务版本已变化");
       }
-      throw new Error(
-        "Ingestion cancel boundary was not created for an active session"
-      );
+      throw new Error("Ingestion cancel boundary was not created for an active session");
     } catch (error) {
       results.push(cancelFailure(pair, error));
     }

@@ -33,9 +33,10 @@ export function createContentSnapshot<T extends object>(render: (snapshot: T) =>
   return (source: T): ContentRepresentation => {
     if (cached?.source === source) return cached.representation;
     const body = render(source);
-    const representation = cached?.representation.body === body
-      ? cached.representation
-      : createContentRepresentation(body);
+    const representation =
+      cached?.representation.body === body
+        ? cached.representation
+        : createContentRepresentation(body);
     cached = { source, representation };
     return representation;
   };

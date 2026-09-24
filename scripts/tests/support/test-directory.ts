@@ -1,17 +1,6 @@
-import {
-  mkdirSync,
-  mkdtempSync
-} from "node:fs";
-import {
-  rm
-} from "node:fs/promises";
-import {
-  isAbsolute,
-  join,
-  relative,
-  resolve,
-  sep
-} from "node:path";
+import { mkdirSync, mkdtempSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 export const temporaryTestRoot = resolve(import.meta.dirname, "../../../tests/tmp");
 const registeredTestDirectories = new Set<string>();
@@ -28,10 +17,10 @@ export function registerTestDirectory(directory: string) {
   const target = resolve(directory);
   const relativeTarget = relative(temporaryTestRoot, target);
   if (
-    !relativeTarget
-    || relativeTarget === ".."
-    || relativeTarget.startsWith(`..${sep}`)
-    || isAbsolute(relativeTarget)
+    !relativeTarget ||
+    relativeTarget === ".." ||
+    relativeTarget.startsWith(`..${sep}`) ||
+    isAbsolute(relativeTarget)
   ) {
     throw new Error(`测试临时目录必须位于 ${temporaryTestRoot} 内：${target}`);
   }

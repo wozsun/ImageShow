@@ -1,7 +1,5 @@
 import type { IngestionStatusItemDto } from "@imageshow/shared/browser";
-import type {
-  ImageDraft
-} from "../../../../../lib/types.js";
+import type { ImageDraft } from "../../../../../lib/types.js";
 import type { IngestionJob } from "./ingestion-job.js";
 import {
   ingestionJobFromServerItem,
@@ -30,20 +28,14 @@ export const draftSyncMutationAttempts = 8;
 
 export function draftSyncTarget(job: IngestionJob): DraftSyncTarget | null {
   if (
-    !ingestionJobHasServerAuthority(job)
-    || !job.sessionId
-    || !job.imageId
-    || !job.serverVersion
-    || job.commitIntent
-    || ![
-      "queued",
-      "downloading",
-      "received",
-      "processing",
-      "ready",
-      "failed"
-    ].includes(job.status)
-  ) return null;
+    !ingestionJobHasServerAuthority(job) ||
+    !job.sessionId ||
+    !job.imageId ||
+    !job.serverVersion ||
+    job.commitIntent ||
+    !["queued", "downloading", "received", "processing", "ready", "failed"].includes(job.status)
+  )
+    return null;
   return {
     id: job.id,
     attemptKey: job.attemptKey,
@@ -54,14 +46,13 @@ export function draftSyncTarget(job: IngestionJob): DraftSyncTarget | null {
   };
 }
 
-export function matchesDraftTarget(
-  job: IngestionJob,
-  target: DraftSyncTarget
-) {
-  return job.id === target.id
-    && job.attemptKey === target.attemptKey
-    && job.sessionId === target.sessionId
-    && job.imageId?.toLowerCase() === target.imageId.toLowerCase();
+export function matchesDraftTarget(job: IngestionJob, target: DraftSyncTarget) {
+  return (
+    job.id === target.id &&
+    job.attemptKey === target.attemptKey &&
+    job.sessionId === target.sessionId &&
+    job.imageId?.toLowerCase() === target.imageId.toLowerCase()
+  );
 }
 
 function completedDraft(
@@ -80,13 +71,9 @@ function completedDraft(
   };
 }
 
-export function authoritativeDraftFromStatus(
-  status: IngestionStatusItemDto | undefined
-) {
+export function authoritativeDraftFromStatus(status: IngestionStatusItemDto | undefined) {
   if (status?.status === "present") {
     return ingestionJobFromServerItem(status.item).draft;
   }
-  return status?.status === "completed"
-    ? completedDraft(status.completed_item)
-    : undefined;
+  return status?.status === "completed" ? completedDraft(status.completed_item) : undefined;
 }

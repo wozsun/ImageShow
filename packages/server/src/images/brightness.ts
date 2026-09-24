@@ -71,7 +71,12 @@ function classifyBrightnessHistogram(hist: number[]): "dark" | "light" {
 
 async function imageBrightnessHistogram(input: Buffer | string): Promise<number[]> {
   const { data, info } = await sharp(input)
-    .resize({ width: BRIGHTNESS_THUMBNAIL, height: BRIGHTNESS_THUMBNAIL, fit: "inside", withoutEnlargement: true })
+    .resize({
+      width: BRIGHTNESS_THUMBNAIL,
+      height: BRIGHTNESS_THUMBNAIL,
+      fit: "inside",
+      withoutEnlargement: true
+    })
     .flatten({ background: "#ffffff" })
     .toColourspace("srgb")
     .raw()

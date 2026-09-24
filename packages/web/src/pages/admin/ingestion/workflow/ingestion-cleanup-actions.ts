@@ -1,7 +1,4 @@
-export type IngestionCleanupActionId =
-  | "duplicates"
-  | "uncommitted"
-  | "completed";
+export type IngestionCleanupActionId = "duplicates" | "uncommitted" | "completed";
 
 type IngestionCleanupConfirmation = {
   title: string;
@@ -34,9 +31,8 @@ const ingestionCleanupActionDefinitions: IngestionCleanupActionDefinition[] = [
     label: "清空未提交",
     confirmation: {
       title: "清空未提交任务",
-      description: (count) => (
-        `将清空当前 ${count} 张未提交图片；仍在处理的任务会被取消，已成功提交的图片不受影响。`
-      ),
+      description: (count) =>
+        `将清空当前 ${count} 张未提交图片；仍在处理的任务会被取消，已成功提交的图片不受影响。`,
       confirmLabel: (count) => `清空 ${count} 张`
     }
   },

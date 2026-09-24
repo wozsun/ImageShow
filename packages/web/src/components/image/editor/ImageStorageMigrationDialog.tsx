@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type RefObject
-} from "react";
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import type { ImageStorageMigrationResponseDto } from "@imageshow/shared/browser";
 import { AsyncActionButton } from "../../actions/AsyncActionButton.js";
 import { DialogFrame } from "../../feedback/DialogFrame.js";
@@ -46,21 +40,17 @@ export function ImageStorageMigrationDialog({
   // 目标至少要让一张图片真正离开当前后端。单图编辑因此不会再列出其本身的
   // 存储；混合来源的批量迁移仍可选择其中一个已启用来源，以迁移其余图片。
   const options = (data?.backends ?? [])
-    .filter((backend) => backend.enabled && currentStorageSlugs.some(
-      (storageSlug) => storageSlug !== backend.slug
-    ))
+    .filter(
+      (backend) =>
+        backend.enabled && currentStorageSlugs.some((storageSlug) => storageSlug !== backend.slug)
+    )
     .map((backend) => ({
       value: backend.slug,
       label: backend.display_name || backend.slug
     }));
-  const defaultStorageSlug = data?.backends.find(
-    (backend) => backend.is_default
-  )?.slug;
-  const defaultTarget = options.find(
-    (option) => option.value === defaultStorageSlug
-  )?.value
-    ?? options[0]?.value
-    ?? "";
+  const defaultStorageSlug = data?.backends.find((backend) => backend.is_default)?.slug;
+  const defaultTarget =
+    options.find((option) => option.value === defaultStorageSlug)?.value ?? options[0]?.value ?? "";
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const [target, setTarget] = useState(defaultTarget);
   const [error, setError] = useState("");
@@ -106,19 +96,12 @@ export function ImageStorageMigrationDialog({
 
       // 迁移结果已经由服务端提交后，界面刷新失败不能把 mutation 误报为失败或诱导
       // 用户重复迁移。刷新异常单独记录，成功/部分失败仍严格按服务端统计呈现。
-      const unchanged = Math.max(
-        0,
-        imageIds.length - response.migrated - response.failed
-      );
+      const unchanged = Math.max(0, imageIds.length - response.migrated - response.failed);
       if (response.migrated || unchanged) {
         try {
           await onSaved();
         } catch (refreshError) {
-          reportAdminUiError(
-            "image_metadata.storage_migration_refresh",
-            refreshError,
-            response
-          );
+          reportAdminUiError("image_metadata.storage_migration_refresh", refreshError, response);
         }
       }
       if (response.failed) {
@@ -127,13 +110,17 @@ export function ImageStorageMigrationDialog({
           new Error(`图片存储迁移失败 ${response.failed}/${imageIds.length}`),
           response
         );
-        const reasons = [...new Set(response.results.flatMap((result) => (
-          result.status === "failed" ? [result.message] : []
-        )))];
+        const reasons = [
+          ...new Set(
+            response.results.flatMap((result) =>
+              result.status === "failed" ? [result.message] : []
+            )
+          )
+        ];
         setError(
-          `迁移未全部完成：已迁移 ${response.migrated} 项，`
-          + `未变化 ${unchanged} 项，失败 ${response.failed} 项。`
-          + (reasons.length ? ` ${reasons.join("；")}` : "")
+          `迁移未全部完成：已迁移 ${response.migrated} 项，` +
+            `未变化 ${unchanged} 项，失败 ${response.failed} 项。` +
+            (reasons.length ? ` ${reasons.join("；")}` : "")
         );
         return false;
       }
@@ -142,15 +129,14 @@ export function ImageStorageMigrationDialog({
         ? response.migrated
           ? `图片已迁移到${targetLabel}`
           : `图片已在${targetLabel}，无需迁移`
-        : `存储迁移完成：已迁移 ${response.migrated} 张${unchanged ? `，${unchanged} 张未变化` : ""
-        }`;
+        : `存储迁移完成：已迁移 ${response.migrated} 张${
+            unchanged ? `，${unchanged} 张未变化` : ""
+          }`;
       completedMessage = message;
       completedStorageLabel = targetLabel;
       return true;
     });
-    return succeeded
-      ? { message: completedMessage, storageLabel: completedStorageLabel }
-      : null;
+    return succeeded ? { message: completedMessage, storageLabel: completedStorageLabel } : null;
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -171,17 +157,15 @@ export function ImageStorageMigrationDialog({
       onClose={close}
     >
       {({ requestClose }) => (
-        <form
-          className="operation-modal"
-          tabIndex={-1}
-          onSubmit={submit}
-        >
+        <form className="operation-modal" tabIndex={-1} onSubmit={submit}>
           <header>
             <div>
               <h2>{single ? "迁移存储" : "批量迁移存储"}</h2>
-              <p>{single
-                ? "将这张图片迁移到目标存储后端。"
-                : `将这批 ${imageIds.length} 张图片迁移到目标存储后端。`}</p>
+              <p>
+                {single
+                  ? "将这张图片迁移到目标存储后端。"
+                  : `将这批 ${imageIds.length} 张图片迁移到目标存储后端。`}
+              </p>
             </div>
             <button
               ref={closeButtonRef}
@@ -212,15 +196,17 @@ export function ImageStorageMigrationDialog({
                 没有可迁移的其他存储后端，请先在设置页启用其他后端。
               </p>
             )}
-            <p className="notice-line">迁移会复制对象与缩略图到目标后端、更新引用，并删除源副本；目标为对象存储时需先在设置页配置好该后端。</p>
-            {error && <p className="admin-error" role="alert" title={error}>{error}</p>}
+            <p className="notice-line">
+              迁移会复制对象与缩略图到目标后端、更新引用，并删除源副本；目标为对象存储时需先在设置页配置好该后端。
+            </p>
+            {error && (
+              <p className="admin-error" role="alert" title={error}>
+                {error}
+              </p>
+            )}
           </div>
           <footer>
-            <button
-              type="button"
-              disabled={status.pending}
-              onClick={() => requestClose()}
-            >
+            <button type="button" disabled={status.pending} onClick={() => requestClose()}>
               取消
             </button>
             <AsyncActionButton

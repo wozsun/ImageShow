@@ -10,10 +10,7 @@ import {
   readyImageAttributeIndexSpec,
   readyImageFilterMetaKeyForFilterKey
 } from "../keys.ts";
-import {
-  READY_IMAGE_DERIVED_CACHE_POLICY,
-  type ReadyImageDerivedResultKind
-} from "./policy.ts";
+import { READY_IMAGE_DERIVED_CACHE_POLICY, type ReadyImageDerivedResultKind } from "./policy.ts";
 
 const signaturePattern = /^[0-9a-f]{64}$/u;
 let lastAccessScore = 0;
@@ -49,9 +46,7 @@ function digestSuffix(key: string, prefix: string) {
   return signaturePattern.test(signature) ? signature : null;
 }
 
-export function describeReadyImageDerivedResult(
-  key: string
-): DerivedResultDescriptor | null {
+export function describeReadyImageDerivedResult(key: string): DerivedResultDescriptor | null {
   if (readyImageAttributeIndexSpec(key)) {
     return {
       key,
@@ -62,29 +57,30 @@ export function describeReadyImageDerivedResult(
   }
   if (key.startsWith(READY_IMAGE_FILTER_KEY_PREFIX)) {
     const signature = digestSuffix(key, READY_IMAGE_FILTER_KEY_PREFIX);
-    return signature ? {
-      key,
-      kind: "filter",
-      metaKey: readyImageFilterMetaKeyForFilterKey(key),
-      signature
-    } : null;
+    return signature
+      ? {
+          key,
+          kind: "filter",
+          metaKey: readyImageFilterMetaKeyForFilterKey(key),
+          signature
+        }
+      : null;
   }
   if (key.startsWith(READY_IMAGE_STATS_RESULT_KEY_PREFIX)) {
     const signature = digestSuffix(key, READY_IMAGE_STATS_RESULT_KEY_PREFIX);
-    return signature ? {
-      key,
-      kind: "stats-result",
-      metaKey: null,
-      signature
-    } : null;
+    return signature
+      ? {
+          key,
+          kind: "stats-result",
+          metaKey: null,
+          signature
+        }
+      : null;
   }
   return null;
 }
 
-export function assertReadyImageDerivedResult(
-  key: string,
-  kind?: ReadyImageDerivedResultKind
-) {
+export function assertReadyImageDerivedResult(key: string, kind?: ReadyImageDerivedResultKind) {
   assertReadyImageDerivedCacheKey(key);
   const descriptor = describeReadyImageDerivedResult(key);
   if (!descriptor || (kind && descriptor.kind !== kind)) {
@@ -94,15 +90,9 @@ export function assertReadyImageDerivedResult(
 }
 
 export function readyImageDerivedMembershipLimit(itemCount: number) {
-  const multiplied = itemCount
-    * READY_IMAGE_DERIVED_CACHE_POLICY.totalMemberMultiplier;
+  const multiplied = itemCount * READY_IMAGE_DERIVED_CACHE_POLICY.totalMemberMultiplier;
   if (!Number.isSafeInteger(multiplied)) {
-    throw new Error(
-      "Ready-image derived membership limit is outside the safe range"
-    );
+    throw new Error("Ready-image derived membership limit is outside the safe range");
   }
-  return Math.max(
-    READY_IMAGE_DERIVED_CACHE_POLICY.minimumTotalMembers,
-    multiplied
-  );
+  return Math.max(READY_IMAGE_DERIVED_CACHE_POLICY.minimumTotalMembers, multiplied);
 }

@@ -12,10 +12,7 @@ import {
   finalizeSecurityHeaders,
   noStoreCacheControl
 } from "./core/http/headers.ts";
-import {
-  requireAdminCsrf,
-  requireAdminSession
-} from "./users/admin-session.ts";
+import { requireAdminCsrf, requireAdminSession } from "./users/admin-session.ts";
 import {
   limitApiRequestBody,
   limitProtectedAdminRequestBody
@@ -30,10 +27,7 @@ import { registerAdminPreferenceRoutes } from "./routes/admin-preferences.ts";
 import { registerAdminCacheRoutes } from "./routes/admin-cache.ts";
 import { registerCheckRoutes } from "./routes/check.ts";
 import { registerHealthRoutes } from "./routes/health.ts";
-import {
-  registerProtectedAuthRoutes,
-  registerPublicAuthRoutes
-} from "./routes/auth.ts";
+import { registerProtectedAuthRoutes, registerPublicAuthRoutes } from "./routes/auth.ts";
 import { registerPublicRoutes } from "./routes/public.ts";
 import { serveRobotsTxt } from "./routes/robots.ts";
 import { registerRandomRoutes } from "./routes/random.ts";
@@ -43,10 +37,7 @@ import { createAssetHandler, registerAssetRoutes } from "./routes/assets.ts";
 import { registerSpaRoutes } from "./routes/spa.ts";
 import { registerIngestionRoutes } from "./routes/ingestion.ts";
 import { resourceHostBoundary } from "./routes/resource-host.ts";
-import {
-  auditAdminMutation,
-  markAdminReadRequest
-} from "./core/audit-log.ts";
+import { auditAdminMutation, markAdminReadRequest } from "./core/audit-log.ts";
 import { blockCrossSiteFetch } from "./core/http/request-security.ts";
 import {
   businessAvailabilityGateIsOpen,
@@ -64,12 +55,9 @@ const defaultHttpAvailabilityDependencies: HttpAvailabilityDependencies = {
 };
 
 export function createHttpApp(): Hono;
+export function createHttpApp(availability: HttpAvailabilityDependencies): Hono;
 export function createHttpApp(
-  availability: HttpAvailabilityDependencies
-): Hono;
-export function createHttpApp(
-  availability: HttpAvailabilityDependencies =
-    defaultHttpAvailabilityDependencies
+  availability: HttpAvailabilityDependencies = defaultHttpAvailabilityDependencies
 ) {
   // Route handlers depend on the process-wide runtime snapshot. Keep assembly
   // explicit so importing this module remains pure while incorrect startup
@@ -84,7 +72,10 @@ export function createHttpApp(
     finalizeSecurityHeaders(c);
   });
   const serveAssets = createAssetHandler();
-  app.use("*", resourceHostBoundary(() => availability.businessGateIsOpen(), serveAssets));
+  app.use(
+    "*",
+    resourceHostBoundary(() => availability.businessGateIsOpen(), serveAssets)
+  );
   app.options(
     "*",
     async (c, next) => {
@@ -92,10 +83,11 @@ export function createHttpApp(
       return next();
     },
     blockCrossSiteFetch,
-    async () => new Response(null, {
-      status: 204,
-      headers: { "Cache-Control": noStoreCacheControl }
-    })
+    async () =>
+      new Response(null, {
+        status: 204,
+        headers: { "Cache-Control": noStoreCacheControl }
+      })
   );
   app.get("/robots.txt", serveRobotsTxt);
 
@@ -111,10 +103,7 @@ export function createHttpApp(
       await next();
       temporaryContentLength = await prepareCompressionThreshold(c, 1024);
     });
-    if (
-      temporaryContentLength
-      && !c.res.headers.has("Content-Encoding")
-    ) {
+    if (temporaryContentLength && !c.res.headers.has("Content-Encoding")) {
       c.res.headers.delete("Content-Length");
     }
   });
@@ -140,10 +129,7 @@ export function createHttpApp(
     ingestionStatusPath
   ]);
   app.use(`${adminApiBasePath}/*`, async (c, next) => {
-    if (
-      c.req.method === "POST"
-      && adminReadPostPaths.has(new URL(c.req.url).pathname)
-    ) {
+    if (c.req.method === "POST" && adminReadPostPaths.has(new URL(c.req.url).pathname)) {
       markAdminReadRequest(c);
     }
     await next();

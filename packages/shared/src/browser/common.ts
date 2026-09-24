@@ -13,14 +13,13 @@ export function normalizeHttpsUrlInput(value: string): string | null {
   const trimmed = value.trim();
   if (trimmed.length > httpsUrlInputMaxLength) return null;
   if (!trimmed) return "";
-  const normalized = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
-    ? trimmed
-    : `https://${trimmed}`;
+  const normalized = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   if (normalized.length > httpsUrlInputMaxLength) return null;
   try {
     const parsed = new URL(normalized);
-    return parsed.protocol === "https:" && parsed.hostname
-      && !parsed.username && !parsed.password ? normalized : null;
+    return parsed.protocol === "https:" && parsed.hostname && !parsed.username && !parsed.password
+      ? normalized
+      : null;
   } catch {
     return null;
   }
@@ -29,8 +28,7 @@ export function normalizeHttpsUrlInput(value: string): string | null {
 export const ingestionBatchHardLimit = 3_600;
 export const ingestionQueueSnapshotMaxItems = 100;
 export const configPackageMaxBytes = 1024 * 1024;
-export const configPackageRequestMaxBytes =
-  configPackageMaxBytes + 64 * 1024;
+export const configPackageRequestMaxBytes = configPackageMaxBytes + 64 * 1024;
 export const adminImagePageLimit = 60;
 export const altchaSolveTimeoutMs = 60_000;
 
@@ -68,8 +66,7 @@ export const adminPermissions = {
   storageMaintenanceExecute: "storage.maintenance.execute",
   cacheMaintenanceRebuild: "cache.maintenance.rebuild"
 } as const;
-export type AdminPermission =
-  (typeof adminPermissions)[keyof typeof adminPermissions];
+export type AdminPermission = (typeof adminPermissions)[keyof typeof adminPermissions];
 
 export const adminImageSortFields = ["image_time", "created_at"] as const;
 export const adminImageOrders = ["latest", "oldest"] as const;
@@ -102,12 +99,11 @@ export type AdminPreferenceValues = {
   [Key in AdminPreferenceKey]: (typeof adminPreferenceValueOptions)[Key][number];
 };
 
-export const defaultAdminPreferences: Readonly<AdminPreferenceValues> =
-  Object.freeze({
-    color_scheme: "system",
-    image_sort_by: defaultAdminImageSort.sort_by,
-    image_sort_order: defaultAdminImageSort.order
-  });
+export const defaultAdminPreferences: Readonly<AdminPreferenceValues> = Object.freeze({
+  color_scheme: "system",
+  image_sort_by: defaultAdminImageSort.sort_by,
+  image_sort_order: defaultAdminImageSort.order
+});
 
 export type AdminPreferences = Partial<AdminPreferenceValues>;
 
@@ -141,21 +137,23 @@ export type ApiSuccessResponseDto<T extends Record<string, unknown>> = {
   ok: true;
 } & T;
 
-export type AuthStateDto = {
-  authenticated: false;
-  altcha_enabled: boolean;
-  login_background: string;
-} | {
-  authenticated: true;
-  username: string;
-  role: AdminRole;
-  permissions: AdminPermission[];
-  csrf_token: string;
-  application_version: string;
-  preferences: AdminPreferences;
-  preferences_etag: string;
-  version_settings: SiteVersionSettings;
-};
+export type AuthStateDto =
+  | {
+      authenticated: false;
+      altcha_enabled: boolean;
+      login_background: string;
+    }
+  | {
+      authenticated: true;
+      username: string;
+      role: AdminRole;
+      permissions: AdminPermission[];
+      csrf_token: string;
+      application_version: string;
+      preferences: AdminPreferences;
+      preferences_etag: string;
+      version_settings: SiteVersionSettings;
+    };
 
 export type AdminLoginResultDto = {
   csrf_token: string;

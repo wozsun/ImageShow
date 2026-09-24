@@ -11,9 +11,7 @@ import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
 
 type AdminImageCardProps = {
   item: AdminImageListItem;
-  storageName: (item: {
-    storage_slug: string;
-  }) => string;
+  storageName: (item: { storage_slug: string }) => string;
   checked: boolean;
   busy: boolean;
   actionsDisabled: boolean;
@@ -59,14 +57,10 @@ export function AdminImageCard({
   const title = imageDisplayTitle(item);
   const classification = formatImageClassification(item);
   const storage = item.status === "ready" ? storageName(item) : "";
-  const deletedAt = item.status === "deleted" && item.deleted_at
-    ? `删除于 ${formatDate(item.deleted_at)}`
-    : "";
+  const deletedAt =
+    item.status === "deleted" && item.deleted_at ? `删除于 ${formatDate(item.deleted_at)}` : "";
   const trashStatus = item.purge_pending ? "待彻底删除" : deletedAt;
-  const selectionDisabled = busy
-    || actionsDisabled
-    || detailPending
-    || item.purge_pending;
+  const selectionDisabled = busy || actionsDisabled || detailPending || item.purge_pending;
 
   return (
     <article
@@ -90,10 +84,12 @@ export function AdminImageCard({
           checked={checked}
           disabled={selectionDisabled}
           aria-label={`选择图片：${title}`}
-          onChange={(event) => onCheck(
-            event.target.checked,
-            "shiftKey" in event.nativeEvent && event.nativeEvent.shiftKey === true
-          )}
+          onChange={(event) =>
+            onCheck(
+              event.target.checked,
+              "shiftKey" in event.nativeEvent && event.nativeEvent.shiftKey === true
+            )
+          }
         />
       </label>
       <button
@@ -121,18 +117,12 @@ export function AdminImageCard({
         }}
       >
         <span className="admin-image-card-thumb">
-          <ThumbImage
-            src={item.thumb_url}
-            alt=""
-          />
+          <ThumbImage src={item.thumb_url} alt="" />
         </span>
         <span className="admin-image-card-main">
           <strong title={title}>{title}</strong>
           <span title={classification}>{classification}</span>
-          <AdminImageCardMetadata
-            storage={storage}
-            deletedAt={trashStatus}
-          />
+          <AdminImageCardMetadata storage={storage} deletedAt={trashStatus} />
         </span>
       </button>
       <div className="admin-image-card-actions">
@@ -171,12 +161,7 @@ export function AdminImageCard({
               type="button"
               title="恢复"
               aria-label={`恢复图片：${title}`}
-              disabled={
-                busy
-                || actionsDisabled
-                || detailPending
-                || item.purge_pending
-              }
+              disabled={busy || actionsDisabled || detailPending || item.purge_pending}
               onClick={onRestore}
             >
               <AdminIcon name="arrow-go-back-line" />
@@ -187,12 +172,7 @@ export function AdminImageCard({
                 className="danger-button is-subtle"
                 title="永久删除"
                 aria-label={`永久删除图片：${title}`}
-                disabled={
-                  busy
-                  || actionsDisabled
-                  || detailPending
-                  || item.purge_pending
-                }
+                disabled={busy || actionsDisabled || detailPending || item.purge_pending}
                 onClick={onPurge}
               >
                 <AdminIcon name="delete-bin-6-line" />
@@ -205,13 +185,7 @@ export function AdminImageCard({
   );
 }
 
-function AdminImageCardMetadata({
-  storage,
-  deletedAt
-}: {
-  storage: string;
-  deletedAt: string;
-}) {
+function AdminImageCardMetadata({ storage, deletedAt }: { storage: string; deletedAt: string }) {
   if (storage) {
     return (
       <span className="admin-image-card-meta" title={`存储：${storage}`}>
@@ -222,7 +196,11 @@ function AdminImageCardMetadata({
   }
 
   if (deletedAt) {
-    return <span className="admin-image-card-meta" title={deletedAt}>{deletedAt}</span>;
+    return (
+      <span className="admin-image-card-meta" title={deletedAt}>
+        {deletedAt}
+      </span>
+    );
   }
   return null;
 }

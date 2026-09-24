@@ -26,20 +26,14 @@ export function readRuntimeConfigFile(): RuntimeConfigFileSnapshot | null {
   try {
     value = JSON.parse(readFileSync(runtimePaths.configFile, "utf8"));
   } catch (error) {
-    throw new Error(
-      "Cannot parse runtime config",
-      { cause: error }
-    );
+    throw new Error("Cannot parse runtime config", { cause: error });
   }
 
   let normalized: RuntimeConfig;
   try {
     normalized = normalizeRuntimeConfig(value);
   } catch (error) {
-    throw new Error(
-      "Invalid runtime config",
-      { cause: error }
-    );
+    throw new Error("Invalid runtime config", { cause: error });
   }
   return {
     config: normalized,
@@ -49,8 +43,7 @@ export function readRuntimeConfigFile(): RuntimeConfigFileSnapshot | null {
 
 export function writeRuntimeConfigFile(value: RuntimeConfig) {
   mkdirSync(runtimePaths.configDirectory, { recursive: true });
-  const temporaryPath =
-    `${runtimePaths.configFile}.${process.pid}.${randomUUID()}.tmp`;
+  const temporaryPath = `${runtimePaths.configFile}.${process.pid}.${randomUUID()}.tmp`;
   try {
     const temporaryFile = openSync(temporaryPath, "wx", 0o600);
     try {

@@ -23,16 +23,27 @@ export function createAssetHandler() {
     if (path !== c.req.path) {
       const url = new URL(c.req.url);
       url.pathname = path;
-      context = new HonoContext(new Request(url, {
-        method: c.req.method, headers: c.req.raw.headers, signal: c.req.raw.signal
-      }), { env: c.env, path });
+      context = new HonoContext(
+        new Request(url, {
+          method: c.req.method,
+          headers: c.req.raw.headers,
+          signal: c.req.raw.signal
+        }),
+        { env: c.env, path }
+      );
     }
-    const response = await serveStaticWithValidators(context, assetStatic)
-      ?? apiErrorResponse({ status: 404, message: "Not Found" });
+    const response =
+      (await serveStaticWithValidators(context, assetStatic)) ??
+      apiErrorResponse({ status: 404, message: "Not Found" });
     response.headers.set("Vary", "Accept-Encoding");
-    response.headers.set("Cache-Control", response.status < 400
-      ? path.startsWith("/assets/brand/") ? publicStaticCacheControl : immutableCacheControl
-      : noStoreCacheControl);
+    response.headers.set(
+      "Cache-Control",
+      response.status < 400
+        ? path.startsWith("/assets/brand/")
+          ? publicStaticCacheControl
+          : immutableCacheControl
+        : noStoreCacheControl
+    );
     setPublicResourceCors(response);
     return response;
   };
@@ -48,6 +59,6 @@ export function registerAssetRoutes(app: Hono, serveAssets: AssetHandler = creat
     c.header("Cache-Control", c.res.status < 400 ? publicStaticCacheControl : noStoreCacheControl);
   });
   app.get("/favicon.ico", async (c, next) => {
-    return await serveStaticWithValidators(c, faviconStatic) ?? next();
+    return (await serveStaticWithValidators(c, faviconStatic)) ?? next();
   });
 }

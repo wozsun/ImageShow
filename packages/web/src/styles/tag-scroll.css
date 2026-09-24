@@ -15,7 +15,9 @@
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
-.tag-input-scroll-window::-webkit-scrollbar { display: none; }
+.tag-input-scroll-window::-webkit-scrollbar {
+  display: none;
+}
 .tag-input-nav {
   position: absolute;
   z-index: 2;
@@ -36,20 +38,12 @@
 .tag-input-nav.is-backward {
   left: 1px;
   border-radius: 5px 0 0 5px;
-  background: linear-gradient(
-    90deg,
-    var(--tag-input-nav-surface) 58%,
-    transparent
-  );
+  background: linear-gradient(90deg, var(--tag-input-nav-surface) 58%, transparent);
 }
 .tag-input-nav.is-forward {
   right: 1px;
   border-radius: 0 5px 5px 0;
-  background: linear-gradient(
-    270deg,
-    var(--tag-input-nav-surface) 58%,
-    transparent
-  );
+  background: linear-gradient(270deg, var(--tag-input-nav-surface) 58%, transparent);
 }
 .tag-input-nav:hover {
   color: var(--color-control-text-primary);
@@ -75,5 +69,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tag-input-scroll-window { scroll-behavior: auto; }
+  .tag-input-scroll-window {
+    scroll-behavior: auto;
+  }
 }

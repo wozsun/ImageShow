@@ -86,20 +86,18 @@ export async function forceTerminateProcessTree(child) {
   if (!child.pid || closedProcesses.has(child)) return;
   if (!windows) {
     killPosixGroup(child, "SIGKILL");
-    if (!await waitForProcessClose(child, 5_000)) {
+    if (!(await waitForProcessClose(child, 5_000))) {
       throw new Error(`process group ${child.pid} did not exit after SIGKILL`);
     }
     return;
   }
   if (processHasExited(child)) {
-    if (!await waitForProcessClose(child, 5_000)) {
+    if (!(await waitForProcessClose(child, 5_000))) {
       throw new Error(`process ${child.pid} exited but its stdio did not close`);
     }
     return;
   }
-  const killed = spawnSync("taskkill", [
-    "/pid", String(child.pid), "/t", "/f"
-  ], {
+  const killed = spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
     windowsHide: true,
     timeout: 5_000,
     killSignal: "SIGKILL",
@@ -108,10 +106,9 @@ export async function forceTerminateProcessTree(child) {
   });
   const closed = await waitForProcessClose(child, 5_000);
   if (closed) return;
-  const reason = killed.error?.message
-    || killed.stderr?.trim()
-    || `taskkill exited with ${killed.status ?? "no status"}`;
-  throw new Error(
-    `taskkill could not terminate process tree ${child.pid}: ${reason}`
-  );
+  const reason =
+    killed.error?.message ||
+    killed.stderr?.trim() ||
+    `taskkill exited with ${killed.status ?? "no status"}`;
+  throw new Error(`taskkill could not terminate process tree ${child.pid}: ${reason}`);
 }

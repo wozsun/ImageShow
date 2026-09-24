@@ -13,6 +13,12 @@
   --admin-color-navigation-version-surface: light-dark(#f4f7fb, #151a21);
   --admin-color-navigation-version-hover-text: light-dark(#1559b7, #79c0ff);
   --admin-color-navigation-version-hover-surface: light-dark(#e7f0ff, #182a3f);
-  --admin-color-navigation-scrollbar: light-dark(rgba(71, 85, 105, .28), rgba(201, 209, 217, .24));
-  --admin-color-navigation-scrollbar-active: light-dark(rgba(71, 85, 105, .46), rgba(201, 209, 217, .42));
+  --admin-color-navigation-scrollbar: light-dark(
+    rgba(71, 85, 105, 0.28),
+    rgba(201, 209, 217, 0.24)
+  );
+  --admin-color-navigation-scrollbar-active: light-dark(
+    rgba(71, 85, 105, 0.46),
+    rgba(201, 209, 217, 0.42)
+  );
 }

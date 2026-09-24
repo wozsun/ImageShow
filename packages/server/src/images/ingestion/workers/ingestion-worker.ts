@@ -1,8 +1,5 @@
 import { appConfig } from "@imageshow/shared";
-import {
-  getRuntimeConfig,
-  onRuntimeConfigChange
-} from "../../../config/runtime-config-store.ts";
+import { getRuntimeConfig, onRuntimeConfigChange } from "../../../config/runtime-config-store.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { logger } from "../../../core/logger.ts";
 import {
@@ -32,10 +29,7 @@ import {
 } from "../sessions/model.ts";
 import { IngestionSessionRecovery } from "./session-recovery.ts";
 import { IngestionSessionRepository } from "../repository.ts";
-import {
-  failedIngestionSession,
-  semanticIngestionSession
-} from "../sessions/transitions.ts";
+import { failedIngestionSession, semanticIngestionSession } from "../sessions/transitions.ts";
 import { withImportPrefetchAdmission } from "./import-prefetch.ts";
 
 export function isSameFailedIngestionExecution(
@@ -43,20 +37,24 @@ export function isSameFailedIngestionExecution(
   failed: IngestionSessionSnapshot
 ) {
   if (
-    current.image_id !== failed.image_id
-    || !("execution_token" in current)
-    || !failed.execution_token
-    || current.execution_token !== failed.execution_token
-  ) return false;
+    current.image_id !== failed.image_id ||
+    !("execution_token" in current) ||
+    !failed.execution_token ||
+    current.execution_token !== failed.execution_token
+  )
+    return false;
   if (current.status === failed.status) {
-    return current.version === failed.version || (
-      current.version > failed.version
-      && (current.status === "downloading" || current.status === "preparing")
+    return (
+      current.version === failed.version ||
+      (current.version > failed.version &&
+        (current.status === "downloading" || current.status === "preparing"))
     );
   }
-  return failed.status === "committing"
-    && current.status === "resolving"
-    && current.version === failed.version + 1;
+  return (
+    failed.status === "committing" &&
+    current.status === "resolving" &&
+    current.version === failed.version + 1
+  );
 }
 
 export type IngestionWorkerLane = "import" | "upload" | "commit";
@@ -100,9 +98,9 @@ function ingestionRunnablePassComplete(
   cursorScore: number
 ) {
   return (
-    !page.scanned
-    || page.lastScannedScore === cursorScore
-    || page.lastScannedScore >= page.frozenTailScore
+    !page.scanned ||
+    page.lastScannedScore === cursorScore ||
+    page.lastScannedScore >= page.frozenTailScore
   );
 }
 
@@ -119,17 +117,18 @@ function ingestionWorkerLaneForSession(
 
 export function planIngestionWorkerLanes(
   sessions: readonly StoredIngestionSession[],
-  active: Iterable<Readonly<{
-    pair: IngestionSessionPair;
-    lane: IngestionWorkerLane;
-    dispatchSlotHeld?: boolean;
-  }>>,
+  active: Iterable<
+    Readonly<{
+      pair: IngestionSessionPair;
+      lane: IngestionWorkerLane;
+      dispatchSlotHeld?: boolean;
+    }>
+  >,
   previouslyBlocked: ReadonlySet<IngestionWorkerLane> = new Set(),
-  windows: Readonly<Record<IngestionWorkerLane, number>>
-    = ingestionWorkerDispatchWindows(
-      appConfig.runtimeDefaults.normalize.concurrency,
-      appConfig.runtimeDefaults.ingestion.commit_concurrency
-    )
+  windows: Readonly<Record<IngestionWorkerLane, number>> = ingestionWorkerDispatchWindows(
+    appConfig.runtimeDefaults.normalize.concurrency,
+    appConfig.runtimeDefaults.ingestion.commit_concurrency
+  )
 ) {
   const remaining: Record<IngestionWorkerLane, number> = {
     ...windows
@@ -140,10 +139,12 @@ export function planIngestionWorkerLanes(
     if (item.dispatchSlotHeld !== false) remaining[item.lane] -= 1;
   }
   const blockedLanes = new Set(previouslyBlocked);
-  const candidates: Array<Readonly<{
-    session: IngestionSessionSnapshot;
-    lane: IngestionWorkerLane;
-  }>> = [];
+  const candidates: Array<
+    Readonly<{
+      session: IngestionSessionSnapshot;
+      lane: IngestionWorkerLane;
+    }>
+  > = [];
   for (const session of sessions) {
     if (session.status === "completed" || session.status === "discarded") continue;
     if (activeKeys.has(pairKey(session))) continue;
@@ -189,10 +190,7 @@ export class IngestionSessionWorker {
   readonly #preCommitRefillCursors = {
     import: { cursorScore: 0, frozenTailScore: 0 },
     upload: { cursorScore: 0, frozenTailScore: 0 }
-  } satisfies Record<
-    IngestionPreCommitLane,
-    { cursorScore: number; frozenTailScore: number }
-  >;
+  } satisfies Record<IngestionPreCommitLane, { cursorScore: number; frozenTailScore: number }>;
 
   constructor(
     repository = new IngestionSessionRepository(),
@@ -200,10 +198,8 @@ export class IngestionSessionWorker {
   ) {
     this.repository = repository;
     this.#coordinator = coordinator;
-    this.#recovery = new IngestionSessionRecovery(
-      repository,
-      coordinator,
-      (pair) => this.abortActive(pair)
+    this.#recovery = new IngestionSessionRecovery(repository, coordinator, (pair) =>
+      this.abortActive(pair)
     );
   }
 
@@ -279,12 +275,10 @@ export class IngestionSessionWorker {
     }).finally(() => {
       if (this.#tickPromise === promise) this.#tickPromise = null;
       if (
-        this.#accepting
-        && (
-          this.#generalTickRequested
-          || this.#commitRefillRequested
-          || this.#preCommitRefillRequested.size > 0
-        )
+        this.#accepting &&
+        (this.#generalTickRequested ||
+          this.#commitRefillRequested ||
+          this.#preCommitRefillRequested.size > 0)
       ) {
         void this.#ensureTick().catch((error) => {
           logger.error("ingestion_worker_tick_failed", error);
@@ -366,11 +360,13 @@ export class IngestionSessionWorker {
     return count;
   }
 
-  async #runTick(options: Readonly<{
-    runGeneral: boolean;
-    refillCommit: boolean;
-    refillPreCommit: readonly IngestionPreCommitLane[];
-  }>) {
+  async #runTick(
+    options: Readonly<{
+      runGeneral: boolean;
+      refillCommit: boolean;
+      refillPreCommit: readonly IngestionPreCommitLane[];
+    }>
+  ) {
     if (!this.#accepting) return;
     if (!this.#recovery.complete) {
       await this.#recovery.step();
@@ -424,10 +420,7 @@ export class IngestionSessionWorker {
 
   async #refillCommitDispatchWindow() {
     const limit = appConfig.ingestionRuntime.ingestionSessionScanBatchSize;
-    if (
-      this.#activeCommitCount()
-      >= ingestionCommitDispatchWindow(this.#commitConcurrency)
-    ) return;
+    if (this.#activeCommitCount() >= ingestionCommitDispatchWindow(this.#commitConcurrency)) return;
     const page = await this.repository.discoverRunnablePage(
       this.#commitRefillCursorScore,
       this.#commitRefillFrozenTailScore,
@@ -435,27 +428,19 @@ export class IngestionSessionWorker {
     );
     if (!this.#accepting) return;
     for (const { session } of page.items) {
-      if (
-        this.#activeCommitCount()
-        >= ingestionCommitDispatchWindow(this.#commitConcurrency)
-      ) return;
+      if (this.#activeCommitCount() >= ingestionCommitDispatchWindow(this.#commitConcurrency))
+        return;
       if (session.status !== "committing") continue;
       this.#startSession(session, "commit");
     }
-    if (ingestionRunnablePassComplete(
-      page,
-      this.#commitRefillCursorScore
-    )) {
+    if (ingestionRunnablePassComplete(page, this.#commitRefillCursorScore)) {
       this.#commitRefillCursorScore = 0;
       this.#commitRefillFrozenTailScore = 0;
       return;
     }
     this.#commitRefillCursorScore = page.lastScannedScore;
     this.#commitRefillFrozenTailScore = page.frozenTailScore;
-    if (
-      this.#activeCommitCount()
-      < ingestionCommitDispatchWindow(this.#commitConcurrency)
-    ) {
+    if (this.#activeCommitCount() < ingestionCommitDispatchWindow(this.#commitConcurrency)) {
       // Continue one bounded Redis page at a time. Timer-driven general scans
       // can join between pages, so sparse Commit work cannot monopolize the
       // shared Worker loop.
@@ -470,18 +455,12 @@ export class IngestionSessionWorker {
       this.#runnableFrozenTailScore,
       limit
     );
-    const passComplete = ingestionRunnablePassComplete(
-      page,
-      this.#runnableCursorScore
-    );
+    const passComplete = ingestionRunnablePassComplete(page, this.#runnableCursorScore);
     const plan = planIngestionWorkerLanes(
       page.items.map(({ session }) => session),
       this.#active.values(),
       this.#runnableBlockedLanes,
-      ingestionWorkerDispatchWindows(
-        this.#normalizeConcurrency,
-        this.#commitConcurrency
-      )
+      ingestionWorkerDispatchWindows(this.#normalizeConcurrency, this.#commitConcurrency)
     );
     for (const { session, lane } of plan.candidates) {
       if (!this.#accepting) break;
@@ -498,10 +477,7 @@ export class IngestionSessionWorker {
     }
   }
 
-  #startSession(
-    session: IngestionSessionSnapshot,
-    lane: IngestionWorkerLane
-  ) {
+  #startSession(session: IngestionSessionSnapshot, lane: IngestionWorkerLane) {
     const key = pairKey(session);
     if (this.#active.has(key)) return false;
     const controller = new AbortController();
@@ -524,11 +500,7 @@ export class IngestionSessionWorker {
       .then(() => undefined)
       .catch(async (error) => {
         if (failedExecution) {
-          await this.#settleStageFailure(
-            failedExecution,
-            error,
-            controller.signal
-          );
+          await this.#settleStageFailure(failedExecution, error, controller.signal);
         }
       })
       .finally(() => {
@@ -538,9 +510,9 @@ export class IngestionSessionWorker {
         // byte admission remains in #active and is never fetched again as an
         // apparent empty slot.
         if (
-          lane === "commit"
-          && this.#accepting
-          && this.#activeCommitCount() <= this.#commitConcurrency
+          lane === "commit" &&
+          this.#accepting &&
+          this.#activeCommitCount() <= this.#commitConcurrency
         ) {
           this.#scheduleCommitRefill();
         } else if (lane !== "commit" && active.dispatchSlotHeld) {
@@ -568,22 +540,14 @@ export class IngestionSessionWorker {
       return withImportPrefetchAdmission(signal, async (onNormalizationAdmitted) => {
         const claimed = await this.#claimStage(session, "downloading");
         onExecution(claimed);
-        const downloaded = await downloadIngestionSessionSnapshot(
-          this.repository,
-          claimed,
-          signal
-        );
+        const downloaded = await downloadIngestionSessionSnapshot(this.repository, claimed, signal);
         signal.throwIfAborted();
         const preparing = await this.#claimStage(downloaded, "preparing");
         onExecution(preparing);
-        await this.#prepareSession(
-          preparing,
-          signal,
-          () => {
-            onNormalizationAdmitted();
-            onImportNormalizationAdmitted();
-          }
-        );
+        await this.#prepareSession(preparing, signal, () => {
+          onNormalizationAdmitted();
+          onImportNormalizationAdmitted();
+        });
       });
     }
     if (session.status === "received") {
@@ -591,19 +555,15 @@ export class IngestionSessionWorker {
         signal.throwIfAborted();
         const claimed = await this.#claimStage(session, "preparing");
         onExecution(claimed);
-        await this.#prepareSession(
-          claimed,
-          signal,
-          onNormalizationAdmitted
-        );
+        await this.#prepareSession(claimed, signal, onNormalizationAdmitted);
       };
       return session.queue === "import"
-        ? withImportPrefetchAdmission(signal, (onNormalizationAdmitted) => (
+        ? withImportPrefetchAdmission(signal, (onNormalizationAdmitted) =>
             prepare(() => {
               onNormalizationAdmitted();
               onImportNormalizationAdmitted();
             })
-          ))
+          )
         : prepare();
     }
     if (session.status === "committing") {
@@ -611,19 +571,10 @@ export class IngestionSessionWorker {
         1,
         (session.prepared?.size ?? 0) + (session.prepared?.thumbnail_size ?? 0)
       );
-      return withIngestionCommitAdmission(
-        bytes,
-        signal,
-        () => {
-          onExecution(session);
-          return commitIngestionSessionSnapshot(
-            this.repository,
-            this.#coordinator,
-            session,
-            signal
-          );
-        }
-      );
+      return withIngestionCommitAdmission(bytes, signal, () => {
+        onExecution(session);
+        return commitIngestionSessionSnapshot(this.repository, this.#coordinator, session, signal);
+      });
     }
   }
 
@@ -632,38 +583,24 @@ export class IngestionSessionWorker {
     signal: AbortSignal,
     onNormalizationAdmitted?: () => void
   ) {
-    return withIngestionExecutionHeartbeat(
-      this.repository,
-      session,
-      signal,
-      (executionSignal) => prepareIngestionSessionSnapshot(
-        this.repository,
-        session,
-        executionSignal,
-        { onNormalizationAdmitted }
-      )
+    return withIngestionExecutionHeartbeat(this.repository, session, signal, (executionSignal) =>
+      prepareIngestionSessionSnapshot(this.repository, session, executionSignal, {
+        onNormalizationAdmitted
+      })
     );
   }
 
-  async #claimStage(
-    session: IngestionSessionSnapshot,
-    status: "downloading" | "preparing"
-  ) {
+  async #claimStage(session: IngestionSessionSnapshot, status: "downloading" | "preparing") {
     const next = semanticIngestionSession(session, {
       status,
       phase: status === "preparing" ? "prepare-waiting" : status,
-      message: status === "downloading"
-        ? "服务器正在下载原图"
-        : "原图素材已接收，等待图片处理许可",
+      message: status === "downloading" ? "服务器正在下载原图" : "原图素材已接收，等待图片处理许可",
       progress: status === "downloading" ? 0 : null,
       execution_token: randomUuidV7(),
       error: undefined
     });
-    return (await this.repository.mutateSemantic(
-      session,
-      session.version,
-      next
-    )).session as IngestionSessionSnapshot;
+    return (await this.repository.mutateSemantic(session, session.version, next))
+      .session as IngestionSessionSnapshot;
   }
 
   async #settleStageFailure(
@@ -673,19 +610,15 @@ export class IngestionSessionWorker {
   ) {
     if (signal.aborted || !this.#accepting) return;
     try {
-      const current = await this.repository.readSession(
-        execution.owner,
-        execution.session_id
-      );
+      const current = await this.repository.readSession(execution.owner, execution.session_id);
       if (
-        !current
-        || current.status === "completed"
-        || current.status === "discarded"
-        || !isSameFailedIngestionExecution(current, execution)
-      ) return;
-      const committed = await readCommittedIngestionResultsByImageIds([
-        current.image_id
-      ]);
+        !current ||
+        current.status === "completed" ||
+        current.status === "discarded" ||
+        !isSameFailedIngestionExecution(current, execution)
+      )
+        return;
+      const committed = await readCommittedIngestionResultsByImageIds([current.image_id]);
       const committedResult = committedIngestionResultForOwner(
         committed,
         current.image_id,
@@ -701,32 +634,29 @@ export class IngestionSessionWorker {
         return;
       }
       if (
-        !("execution_token" in current)
-        || !["downloading", "preparing", "committing", "resolving"].includes(current.status)
-      ) return;
+        !("execution_token" in current) ||
+        !["downloading", "preparing", "committing", "resolving"].includes(current.status)
+      )
+        return;
       if (current.status === "resolving") {
         await cancelIngestionSessions(
           this.repository,
           this.#coordinator,
           current.owner,
-          [{
-            session_id: current.session_id,
-            image_id: current.image_id,
-            expected_version: current.version
-          }],
+          [
+            {
+              session_id: current.session_id,
+              image_id: current.image_id,
+              expected_version: current.version
+            }
+          ],
           (pair) => this.abortActive(pair)
         );
         return;
       }
-      if (await recoverIngestionCommitDuplicateConflict(
-        this.repository,
-        current,
-        error
-      )) return;
-      await mutateIngestionExecution(
-        this.repository,
-        current,
-        (latest) => failedIngestionSession(latest, error)
+      if (await recoverIngestionCommitDuplicateConflict(this.repository, current, error)) return;
+      await mutateIngestionExecution(this.repository, current, (latest) =>
+        failedIngestionSession(latest, error)
       );
     } catch (settleError) {
       logger.error("ingestion_worker_failure_publish_failed", {

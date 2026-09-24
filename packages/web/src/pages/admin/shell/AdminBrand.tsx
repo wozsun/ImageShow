@@ -12,7 +12,7 @@ function fitName(name: HTMLElement) {
 
   const fittedSize = Math.max(
     minimumNameFontSize,
-    Math.min(maximumNameFontSize, maximumNameFontSize * availableWidth / requiredWidth)
+    Math.min(maximumNameFontSize, (maximumNameFontSize * availableWidth) / requiredWidth)
   );
   name.style.fontSize = `${Math.floor(fittedSize * 10) / 10}px`;
 }
@@ -32,9 +32,10 @@ export function AdminBrand({
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLAnchorElement>(null);
-  const visibleVersion = versionEnabled && applicationVersion && applicationVersion !== "unknown"
-    ? applicationVersion
-    : "";
+  const visibleVersion =
+    versionEnabled && applicationVersion && applicationVersion !== "unknown"
+      ? applicationVersion
+      : "";
   const releaseTag = `v${applicationVersion}`;
   const releaseUrl = `https://github.com/wozsun/ImageShow/releases/tag/${encodeURIComponent(releaseTag)}`;
 
@@ -46,9 +47,7 @@ export function AdminBrand({
     const fit = () => fitName(name);
     fit();
 
-    const observer = typeof ResizeObserver === "undefined"
-      ? undefined
-      : new ResizeObserver(fit);
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(fit);
     observer?.observe(root);
 
     let active = true;
@@ -62,10 +61,7 @@ export function AdminBrand({
   }, [siteHeaderName, visibleVersion]);
 
   return (
-    <div
-      ref={rootRef}
-      className={`admin-brand${visibleVersion ? " has-version" : ""}`}
-    >
+    <div ref={rootRef} className={`admin-brand${visibleVersion ? " has-version" : ""}`}>
       <Link ref={nameRef} className="admin-brand-name" to={to} title={siteHeaderName}>
         {siteHeaderName}
       </Link>

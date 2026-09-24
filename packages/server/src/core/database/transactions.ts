@@ -17,13 +17,16 @@ export async function withTransactionOnClient<T>(
   options: TransactionOptions = {}
 ): Promise<T> {
   try {
-    await client.query(options.mode === "read_only_repeatable_read"
-      ? "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
-      : "BEGIN");
+    await client.query(
+      options.mode === "read_only_repeatable_read"
+        ? "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
+        : "BEGIN"
+    );
     if (options.onTransactionId) {
-      const transactionId = String((await client.query(
-        "SELECT pg_current_xact_id()::text AS transaction_id"
-      )).rows[0]?.transaction_id ?? "");
+      const transactionId = String(
+        (await client.query("SELECT pg_current_xact_id()::text AS transaction_id")).rows[0]
+          ?.transaction_id ?? ""
+      );
       if (!transactionId) {
         throw new Error("PostgreSQL did not assign a transaction ID");
       }
@@ -44,10 +47,8 @@ export type TransactionOutcome = "committed" | "rolled_back" | "unknown";
 export async function inspectTransactionOutcome(
   transactionId: string
 ): Promise<TransactionOutcome> {
-  const status = (await pool.query(
-    "SELECT pg_xact_status($1::xid8) AS status",
-    [transactionId]
-  )).rows[0]?.status;
+  const status = (await pool.query("SELECT pg_xact_status($1::xid8) AS status", [transactionId]))
+    .rows[0]?.status;
   if (status === "committed") return "committed";
   if (status === "aborted") return "rolled_back";
   return "unknown";

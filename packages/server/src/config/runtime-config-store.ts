@@ -1,14 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { RuntimeConfig } from "@imageshow/shared/browser";
 import { runtimeConfigFromEnvironment, runtimePaths } from "./bootstrap-env.ts";
-import {
-  readRuntimeConfigFile,
-  writeRuntimeConfigFile
-} from "./runtime-config-file.ts";
-import {
-  mergeRuntimeConfig,
-  type RuntimeConfigPatch
-} from "./runtime-config.ts";
+import { readRuntimeConfigFile, writeRuntimeConfigFile } from "./runtime-config-file.ts";
+import { mergeRuntimeConfig, type RuntimeConfigPatch } from "./runtime-config.ts";
 import { logger } from "../core/logger.ts";
 
 let runtimeConfig: RuntimeConfig | undefined;
@@ -62,9 +56,7 @@ function notifyRuntimeConfigChange() {
 }
 
 /** Serialize every writer, including a config import's persistence and settlement window. */
-export async function withRuntimeConfigWriteLease<T>(
-  work: () => T | Promise<T>
-): Promise<T> {
+export async function withRuntimeConfigWriteLease<T>(work: () => T | Promise<T>): Promise<T> {
   if (runtimeConfigWriteLeaseContext.getStore()) return await work();
 
   const predecessor = runtimeConfigWriteLeaseTail;
@@ -85,10 +77,7 @@ function publishRuntimeConfig(next: RuntimeConfig) {
   return next;
 }
 
-function persistAndPublishRuntimeConfig(
-  next: RuntimeConfig,
-  shouldWriteFile = true
-) {
+function persistAndPublishRuntimeConfig(next: RuntimeConfig, shouldWriteFile = true) {
   if (shouldWriteFile) writeRuntimeConfigFile(next);
   return publishRuntimeConfig(next);
 }
@@ -131,9 +120,6 @@ export function reloadRuntimeConfigFromDisk(validate?: (config: RuntimeConfig) =
       throw new Error(`Runtime config ${runtimePaths.configFile} does not exist`);
     }
     await validate?.(snapshot.config);
-    return persistAndPublishRuntimeConfig(
-      snapshot.config,
-      snapshot.needsWriteBack
-    );
+    return persistAndPublishRuntimeConfig(snapshot.config, snapshot.needsWriteBack);
   });
 }

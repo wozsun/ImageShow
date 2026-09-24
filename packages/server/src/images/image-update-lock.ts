@@ -3,9 +3,7 @@ function imageUpdateLockKey(imageId: string) {
 }
 
 export function imageUpdateLockRequests(imageIds: string[]) {
-  return [...new Set(
-    imageIds.map((imageId) => imageUpdateLockKey(imageId.toLowerCase()))
-  )]
+  return [...new Set(imageIds.map((imageId) => imageUpdateLockKey(imageId.toLowerCase())))]
     .sort()
     .map((key) => ({ key }));
 }

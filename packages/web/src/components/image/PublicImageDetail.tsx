@@ -3,13 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import type { PublicImageDetailResponseDto, ShowImageCardDto } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
-import { completePublicDetailValidation, publicDetailValidation } from "../../lib/api/image-data-revision.js";
+import {
+  completePublicDetailValidation,
+  publicDetailValidation
+} from "../../lib/api/image-data-revision.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
-import type {
-  EditableImageSnapshot,
-  GalleryImageCard,
-  PublicImageItem
-} from "../../lib/types.js";
+import type { EditableImageSnapshot, GalleryImageCard, PublicImageItem } from "../../lib/types.js";
 import { ImageDetailModal } from "./ImageDetailModal.js";
 import { useOptionalAuthSessionQuery } from "../../hooks/useAuthSession.js";
 
@@ -36,7 +35,7 @@ export function PublicImageDetail({
   onTrashed,
   onItemUpdated,
   onItemRefreshRequested,
-  returnFocusRef,
+  returnFocusRef
 }: {
   card: ShowImageCardDto | GalleryImageCard;
   onClose: () => void;
@@ -49,9 +48,7 @@ export function PublicImageDetail({
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
   const [trashCommitted, setTrashCommitted] = useState(false);
   const authQuery = useOptionalAuthSessionQuery();
-  const authIdentity = authQuery?.data?.authenticated
-    ? authQuery.data.username
-    : null;
+  const authIdentity = authQuery?.data?.authenticated ? authQuery.data.username : null;
   const { data, isPending, isFetching, isError, error, refetch } =
     useQuery<PublicImageDetailResponseDto>({
       queryKey: [...queryKeys.publicImageDetail, card.id, authIdentity],
@@ -59,10 +56,15 @@ export function PublicImageDetail({
       // remount. Full-image DOM work remains owned and cancelled by the modal.
       queryFn: async ({ queryKey, client }) => {
         const validation = publicDetailValidation(client, card.id);
-        const response = await api<PublicImageDetailResponseDto>(`/api/images/${encodeURIComponent(card.id)}`, {
-          credentials: authIdentity ? "same-origin" : "omit",
-          ...(validation || client.getQueryState(queryKey)?.isInvalidated ? { cache: "no-cache" as const } : {})
-        });
+        const response = await api<PublicImageDetailResponseDto>(
+          `/api/images/${encodeURIComponent(card.id)}`,
+          {
+            credentials: authIdentity ? "same-origin" : "omit",
+            ...(validation || client.getQueryState(queryKey)?.isInvalidated
+              ? { cache: "no-cache" as const }
+              : {})
+          }
+        );
         if (validation) completePublicDetailValidation(client, card.id, validation);
         return response;
       },
@@ -70,14 +72,9 @@ export function PublicImageDetail({
       enabled: !trashCommitted && !(authQuery?.isPending && authQuery.isFetching)
     });
   const detail = data?.item.id === card.id ? data.item : null;
-  const item = useMemo(
-    () => ({ ...placeholder, ...(detail ?? {}) }),
-    [placeholder, detail]
-  );
+  const item = useMemo(() => ({ ...placeholder, ...(detail ?? {}) }), [placeholder, detail]);
   const detailLoading = isPending || (isFetching && !detail);
-  const detailError = isError && !detail && !isFetching
-    ? errorMessage(error)
-    : "";
+  const detailError = isError && !detail && !isFetching ? errorMessage(error) : "";
 
   return (
     <ImageDetailModal

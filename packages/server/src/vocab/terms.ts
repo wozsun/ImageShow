@@ -1,6 +1,9 @@
 type VocabularyTermRow = { slug: string; display_name: string };
 
-export async function resolveTermSlugMap(loadVocabulary: () => Promise<VocabularyTermRow[]>, terms: string[]): Promise<Map<string, string>> {
+export async function resolveTermSlugMap(
+  loadVocabulary: () => Promise<VocabularyTermRow[]>,
+  terms: string[]
+): Promise<Map<string, string>> {
   const requestedTerms = new Set(terms.map((term) => term.trim().toLowerCase()).filter(Boolean));
   const slugsByTerm = new Map<string, string>();
   if (!requestedTerms.size) return slugsByTerm;
@@ -15,7 +18,10 @@ export async function resolveTermSlugMap(loadVocabulary: () => Promise<Vocabular
   return slugsByTerm;
 }
 
-export async function resolveVocabularySlugs(loadVocabulary: () => Promise<VocabularyTermRow[]>, terms: string[]): Promise<string[]> {
+export async function resolveVocabularySlugs(
+  loadVocabulary: () => Promise<VocabularyTermRow[]>,
+  terms: string[]
+): Promise<string[]> {
   const slugsByTerm = await resolveTermSlugMap(loadVocabulary, terms);
   const normalizedTerms = terms.map((term) => term.trim().toLowerCase()).filter(Boolean);
   return [...new Set(normalizedTerms.map((term) => slugsByTerm.get(term) ?? term))];

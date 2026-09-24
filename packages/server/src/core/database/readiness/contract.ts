@@ -2,15 +2,7 @@ import type { PoolClient } from "pg";
 
 export type DatabaseReader = Pick<PoolClient, "query">;
 type PostgreSqlType =
-  | "_text"
-  | "bool"
-  | "int2"
-  | "int4"
-  | "int8"
-  | "jsonb"
-  | "text"
-  | "timestamptz"
-  | "uuid";
+  "_text" | "bool" | "int2" | "int4" | "int8" | "jsonb" | "text" | "timestamptz" | "uuid";
 type TablePrivilege = "SELECT" | "INSERT" | "UPDATE" | "DELETE";
 type TableReadiness = {
   columns: Record<string, PostgreSqlType>;

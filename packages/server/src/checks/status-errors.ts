@@ -14,17 +14,19 @@ function looksLikeConnectionFailure(error: unknown) {
   const value = error as { code?: unknown; name?: unknown };
   const code = typeof value?.code === "string" ? value.code : "";
   const name = typeof value?.name === "string" ? value.name : "";
-  return name === "redis_unavailable"
-    || code.startsWith("08")
-    || [
+  return (
+    name === "redis_unavailable" ||
+    code.startsWith("08") ||
+    [
       "ECONNREFUSED",
       "ECONNRESET",
       "EHOSTUNREACH",
       "ENETUNREACH",
       "ETIMEDOUT",
       "NR_CLOSED"
-    ].includes(code)
-    || /connection|socket|redis unavailable/iu.test(errorMessage(error));
+    ].includes(code) ||
+    /connection|socket|redis unavailable/iu.test(errorMessage(error))
+  );
 }
 
 function adminCheckFailure(
@@ -33,9 +35,7 @@ function adminCheckFailure(
   fallbackCode: string
 ): AdminCheckFailureDto {
   return {
-    category: looksLikeConnectionFailure(error)
-      ? "connection"
-      : fallbackCategory,
+    category: looksLikeConnectionFailure(error) ? "connection" : fallbackCategory,
     code: errorCode(error, fallbackCode),
     message: errorMessage(error)
   };

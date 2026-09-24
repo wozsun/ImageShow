@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
-import {
-  type RuntimeConfig
-} from "@imageshow/shared/browser";
+import { type RuntimeConfig } from "@imageshow/shared/browser";
 import {
   altchaCost,
   altchaCounter,
@@ -127,29 +125,27 @@ export const runtimeConfigSchema = z.strictObject({
   weibo: z.strictObject({
     max_items: weiboImportMaxItems,
     source_enabled: z.boolean(),
-    request_delay_seconds: z.tuple([
-      weiboRequestDelaySeconds,
-      weiboRequestDelaySeconds
-    ]).refine(
-      ([minDelaySeconds, maxDelaySeconds]) => minDelaySeconds <= maxDelaySeconds,
-      {
+    request_delay_seconds: z
+      .tuple([weiboRequestDelaySeconds, weiboRequestDelaySeconds])
+      .refine(([minDelaySeconds, maxDelaySeconds]) => minDelaySeconds <= maxDelaySeconds, {
         message: "minimum delay must not exceed maximum delay",
         path: [0]
-      }
-    )
+      })
   }),
-  normalize: z.strictObject({
-    concurrency: normalizeConcurrency,
-    quality: normalizeQuality,
-    quality_step: normalizeQualityStep,
-    min_quality: normalizeMinQuality,
-    max_long_edge: normalizeMaxLongEdge,
-    max_size_kb: normalizeMaxSizeKb,
-    skip_webp_under_kb: skipWebpUnderKb
-  }).refine((value) => value.min_quality <= value.quality, {
-    message: "min_quality must not exceed quality",
-    path: ["min_quality"]
-  }),
+  normalize: z
+    .strictObject({
+      concurrency: normalizeConcurrency,
+      quality: normalizeQuality,
+      quality_step: normalizeQualityStep,
+      min_quality: normalizeMinQuality,
+      max_long_edge: normalizeMaxLongEdge,
+      max_size_kb: normalizeMaxSizeKb,
+      skip_webp_under_kb: skipWebpUnderKb
+    })
+    .refine((value) => value.min_quality <= value.quality, {
+      message: "min_quality must not exceed quality",
+      path: ["min_quality"]
+    }),
   thumbnail: z.strictObject({ long_edge: thumbnailLongEdge, quality: thumbnailQuality }),
   admin: z.strictObject({
     login_background: loginBackground,
@@ -166,31 +162,30 @@ export const runtimeConfigSchema = z.strictObject({
     random_max_requests: randomMaxRequests,
     random_limit_max_requests: randomMaxRequests
   }),
-  altcha: z.strictObject({
-    enabled: z.boolean(),
-    ttl_seconds: altchaTtlSeconds,
-    cost: altchaCost,
-    counter_range: z.tuple([altchaCounter, altchaCounter])
-  }).superRefine((value, context) => {
-    const [minCounter, maxCounter] = value.counter_range;
-    if (minCounter > maxCounter) {
-      context.addIssue({
-        code: "custom",
-        message: "minimum counter must not exceed maximum counter",
-        path: ["counter_range", 0]
-      });
-    }
-    if (
-      value.cost * maxCounter >
-      appConfig.authentication.altcha.maximumWorkFactor
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: `cost * maximum counter must not exceed ${appConfig.authentication.altcha.maximumWorkFactor}`,
-        path: ["counter_range", 1]
-      });
-    }
-  }),
+  altcha: z
+    .strictObject({
+      enabled: z.boolean(),
+      ttl_seconds: altchaTtlSeconds,
+      cost: altchaCost,
+      counter_range: z.tuple([altchaCounter, altchaCounter])
+    })
+    .superRefine((value, context) => {
+      const [minCounter, maxCounter] = value.counter_range;
+      if (minCounter > maxCounter) {
+        context.addIssue({
+          code: "custom",
+          message: "minimum counter must not exceed maximum counter",
+          path: ["counter_range", 0]
+        });
+      }
+      if (value.cost * maxCounter > appConfig.authentication.altcha.maximumWorkFactor) {
+        context.addIssue({
+          code: "custom",
+          message: `cost * maximum counter must not exceed ${appConfig.authentication.altcha.maximumWorkFactor}`,
+          path: ["counter_range", 1]
+        });
+      }
+    }),
   log: z.strictObject({ level: logLevel, max_size_mb: logMaxSizeMb, max_files: logMaxFiles })
 });
 
@@ -221,10 +216,17 @@ function mergeDefined(base: Record<string, unknown>, patch: Record<string, unkno
     if (value === undefined) continue;
     const current = result[key];
     if (
-      value !== null && typeof value === "object" && !Array.isArray(value) &&
-      current !== null && typeof current === "object" && !Array.isArray(current)
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      current !== null &&
+      typeof current === "object" &&
+      !Array.isArray(current)
     ) {
-      result[key] = mergeDefined(current as Record<string, unknown>, value as Record<string, unknown>);
+      result[key] = mergeDefined(
+        current as Record<string, unknown>,
+        value as Record<string, unknown>
+      );
     } else {
       result[key] = value;
     }
@@ -235,26 +237,28 @@ function mergeDefined(base: Record<string, unknown>, patch: Record<string, unkno
 export function parseRuntimeConfig(value: unknown): RuntimeConfig {
   const config = runtimeConfigSchema.parse(value);
   if (publicUrlUsesSiteHost(config.site.assets_base_url, config.site.domain)) {
-    throw new z.ZodError([{
-      code: "custom", path: ["site", "assets_base_url"],
-      message: "静态资源公开地址须使用独立 Host；使用主站地址请将公开 URL 留空"
-    }]);
+    throw new z.ZodError([
+      {
+        code: "custom",
+        path: ["site", "assets_base_url"],
+        message: "静态资源公开地址须使用独立 Host；使用主站地址请将公开 URL 留空"
+      }
+    ]);
   }
   return config;
 }
 
 export function normalizeRuntimeConfig(value: unknown): RuntimeConfig {
-  return parseRuntimeConfig(projectKnownConfig(
-    appConfig.runtimeDefaults,
-    value
-  ));
+  return parseRuntimeConfig(projectKnownConfig(appConfig.runtimeDefaults, value));
 }
 
-export function mergeRuntimeConfig(current: RuntimeConfig, patch: RuntimeConfigPatch): RuntimeConfig {
-  return parseRuntimeConfig(mergeDefined(
-    current as unknown as Record<string, unknown>,
-    patch as Record<string, unknown>
-  ));
+export function mergeRuntimeConfig(
+  current: RuntimeConfig,
+  patch: RuntimeConfigPatch
+): RuntimeConfig {
+  return parseRuntimeConfig(
+    mergeDefined(current as unknown as Record<string, unknown>, patch as Record<string, unknown>)
+  );
 }
 
 export function runtimeConfigDefaults(): RuntimeConfig {

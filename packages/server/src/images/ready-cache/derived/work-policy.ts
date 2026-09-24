@@ -32,10 +32,10 @@ export type ReadyImageDerivedWorkEstimate = {
 export type ReadyImageDerivedWorkAdmission =
   | { admitted: true; estimate: ReadyImageDerivedWorkEstimate }
   | {
-    admitted: false;
-    estimate: ReadyImageDerivedWorkEstimate;
-    reason: string;
-  };
+      admitted: false;
+      estimate: ReadyImageDerivedWorkEstimate;
+      reason: string;
+    };
 
 type SetOperationEstimate = {
   kind: "union" | "intersection" | "difference";
@@ -62,28 +62,19 @@ function safeMemberCount(count: number) {
 function summarizeOperations(operations: SetOperationEstimate[]) {
   const estimate = emptyEstimate();
   for (const operation of operations) {
-    const sourceMembers = operation.sourceCounts.reduce(
-      (total, count) => total + count,
-      0
-    );
+    const sourceMembers = operation.sourceCounts.reduce((total, count) => total + count, 0);
     estimate.operationCount += 1;
     if (operation.kind !== "union") {
       estimate.intersectionDifferenceOperations += 1;
     }
     estimate.totalSourceMembers += sourceMembers;
-    estimate.peakSourceMembers = Math.max(
-      estimate.peakSourceMembers,
-      sourceMembers
-    );
+    estimate.peakSourceMembers = Math.max(estimate.peakSourceMembers, sourceMembers);
     estimate.totalExpectedMembers += operation.expectedMembers;
     estimate.peakExpectedMembers = Math.max(
       estimate.peakExpectedMembers,
       operation.expectedMembers
     );
-    estimate.peakOperands = Math.max(
-      estimate.peakOperands,
-      operation.sourceCounts.length
-    );
+    estimate.peakOperands = Math.max(estimate.peakOperands, operation.sourceCounts.length);
   }
   return estimate;
 }
@@ -104,22 +95,28 @@ export function assessReadyImageFilterWork(input: {
   const { itemCount, positive, tagClauses = [], exclusions } = input;
   const groups = [...positive, ...tagClauses, ...exclusions];
   if (
-    !safeMemberCount(itemCount)
-    || groups.some((counts) => counts.some((count) => !safeMemberCount(count)))
+    !safeMemberCount(itemCount) ||
+    groups.some((counts) => counts.some((count) => !safeMemberCount(count)))
   ) {
     return rejected(emptyEstimate(), "invalid_member_count");
   }
   let sequence = 0;
   const nextKey = () => String(sequence++);
-  const sources = (groups: number[][]) => groups.map((counts) => counts.map((count) => ({ key: nextKey(), count })));
-  const plan = readyImageFilterOperations({
-    all: { key: nextKey(), count: itemCount },
-    positive: sources(positive),
-    tagClauses: sources(tagClauses),
-    exclusions: sources(exclusions)
-  }, nextKey);
+  const sources = (groups: number[][]) =>
+    groups.map((counts) => counts.map((count) => ({ key: nextKey(), count })));
+  const plan = readyImageFilterOperations(
+    {
+      all: { key: nextKey(), count: itemCount },
+      positive: sources(positive),
+      tagClauses: sources(tagClauses),
+      exclusions: sources(exclusions)
+    },
+    nextKey
+  );
   const operations = plan.operations.map(({ kind, sources, result }) => ({
-    kind, sourceCounts: sources.map((source) => source.count), expectedMembers: result.count
+    kind,
+    sourceCounts: sources.map((source) => source.count),
+    expectedMembers: result.count
   }));
 
   const estimate = summarizeOperations(operations);
@@ -127,10 +124,7 @@ export function assessReadyImageFilterWork(input: {
   if (estimate.peakOperands > policy.maxSetOperationOperands) {
     return rejected(estimate, "set_operation_operands");
   }
-  if (
-    estimate.peakSourceMembers
-      > policy.maxMaterializedSourceMembersPerOperation
-  ) {
+  if (estimate.peakSourceMembers > policy.maxMaterializedSourceMembersPerOperation) {
     return rejected(estimate, "operation_source_members");
   }
   if (estimate.totalSourceMembers > policy.maxSourceMembersPerFilterBuild) {
@@ -142,10 +136,7 @@ export function assessReadyImageFilterWork(input: {
   if (estimate.operationCount > policy.maxSetOperationsPerFilterBuild) {
     return rejected(estimate, "set_operation_count");
   }
-  if (
-    estimate.intersectionDifferenceOperations
-      > policy.maxIntersectionDifferenceOperations
-  ) {
+  if (estimate.intersectionDifferenceOperations > policy.maxIntersectionDifferenceOperations) {
     return rejected(estimate, "intersection_difference_operations");
   }
   return { admitted: true, estimate };
@@ -157,10 +148,11 @@ export function assessReadyImageStatsWork(input: {
 }): ReadyImageDerivedWorkAdmission {
   const { dynamicDimensions, intersections } = input;
   if (
-    !safeMemberCount(dynamicDimensions)
-    || intersections.some(({ baseCount, candidateCount }) => (
-      !safeMemberCount(baseCount) || !safeMemberCount(candidateCount)
-    ))
+    !safeMemberCount(dynamicDimensions) ||
+    intersections.some(
+      ({ baseCount, candidateCount }) =>
+        !safeMemberCount(baseCount) || !safeMemberCount(candidateCount)
+    )
   ) {
     return rejected(emptyEstimate(), "invalid_member_count");
   }
@@ -177,10 +169,7 @@ export function assessReadyImageStatsWork(input: {
   if (estimate.peakOperands > policy.maxSetOperationOperands) {
     return rejected(estimate, "set_operation_operands");
   }
-  if (
-    estimate.peakSourceMembers
-      > policy.maxCardinalitySourceMembersPerOperation
-  ) {
+  if (estimate.peakSourceMembers > policy.maxCardinalitySourceMembersPerOperation) {
     return rejected(estimate, "operation_source_members");
   }
   if (estimate.peakExpectedMembers > policy.maxExpectedResultMembers) {
@@ -209,15 +198,12 @@ function slotRelease(release: () => void) {
   };
 }
 
-export function tryAcquireReadyImageFilterBuildSlot(
-  estimate: ReadyImageDerivedWorkEstimate
-) {
+export function tryAcquireReadyImageFilterBuildSlot(estimate: ReadyImageDerivedWorkEstimate) {
   const policy = READY_IMAGE_DERIVED_WORK_POLICY;
   const large = estimate.totalSourceMembers >= policy.largeFilterSourceMembers;
   if (
-    activeFilterBuilds >= policy.maxConcurrentFilterBuilds
-    || (large
-      && activeLargeFilterBuilds >= policy.maxConcurrentLargeFilterBuilds)
+    activeFilterBuilds >= policy.maxConcurrentFilterBuilds ||
+    (large && activeLargeFilterBuilds >= policy.maxConcurrentLargeFilterBuilds)
   ) {
     return null;
   }
@@ -229,15 +215,12 @@ export function tryAcquireReadyImageFilterBuildSlot(
   });
 }
 
-export function tryAcquireReadyImageStatsBuildSlot(
-  estimate: ReadyImageDerivedWorkEstimate
-) {
+export function tryAcquireReadyImageStatsBuildSlot(estimate: ReadyImageDerivedWorkEstimate) {
   const policy = READY_IMAGE_DERIVED_WORK_POLICY;
   const large = estimate.totalExpectedMembers >= policy.largeStatsExpectedMembers;
   if (
-    activeStatsBuilds >= policy.maxConcurrentStatsBuilds
-    || (large
-      && activeLargeStatsBuilds >= policy.maxConcurrentLargeStatsBuilds)
+    activeStatsBuilds >= policy.maxConcurrentStatsBuilds ||
+    (large && activeLargeStatsBuilds >= policy.maxConcurrentLargeStatsBuilds)
   ) {
     return null;
   }

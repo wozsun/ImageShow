@@ -27,7 +27,8 @@ export function useImeSearchInput(query: string, publish: (value: string) => voi
         const composing = session.isComposing((event.nativeEvent as InputEvent).isComposing);
         // A reset can settle the session while the input keeps focus. A new
         // ordinary input resumes editing; late events after blur remain ignored.
-        if (!composing && event.currentTarget.ownerDocument.activeElement === event.currentTarget) session.beginEditing();
+        if (!composing && event.currentTarget.ownerDocument.activeElement === event.currentTarget)
+          session.beginEditing();
         if (!session.acceptInput(event.currentTarget)) return;
         const value = event.currentTarget.value;
         setText(value);

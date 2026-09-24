@@ -11,9 +11,12 @@ export function galleryInitialBatchLimit(
   height: number,
   device: string
 ) {
-  const width = Math.max(1, (geometry.contentWidth - geometry.gap * (geometry.columnCount - 1)) / geometry.columnCount);
+  const width = Math.max(
+    1,
+    (geometry.contentWidth - geometry.gap * (geometry.columnCount - 1)) / geometry.columnCount
+  );
   const ratio = device === "mb" ? 16 / 9 : 9 / 16;
-  const required = geometry.columnCount * Math.ceil(height * 2 / (width * ratio + geometry.gap));
+  const required = geometry.columnCount * Math.ceil((height * 2) / (width * ratio + geometry.gap));
   return imageBatchTier(required, [60, 120, 180]);
 }
 
@@ -40,10 +43,10 @@ export function galleryImagePageQueryOptions(
       if (cursor) params.set("cursor", cursor);
       params.set("limit", String(limit));
       params.sort();
-      return api<PublicImageListResponseDto>(
-        `/api/images?${readableFilterSearch(params)}`,
-        { signal, ...(forceValidation ? { cache: "no-cache" as const } : {}) }
-      );
+      return api<PublicImageListResponseDto>(`/api/images?${readableFilterSearch(params)}`, {
+        signal,
+        ...(forceValidation ? { cache: "no-cache" as const } : {})
+      });
     },
     staleTime: 0,
     gcTime: 0,

@@ -1,8 +1,4 @@
-export type {
-  AdminSettings,
-  Brightness,
-  Device
-} from "@imageshow/shared/browser";
+export type { AdminSettings, Brightness, Device } from "@imageshow/shared/browser";
 import type {
   AdminUserDto,
   AdvancedConfigPreviewDto,
@@ -38,10 +34,7 @@ export type Author = AuthorDto;
 export type ImageDraft = ImageDraftDto;
 
 // 写入表单中的秘密只存在于 Web 页面和提交请求；共享 DTO 只描述服务端已脱敏的读取结果。
-export type S3Settings = Omit<
-  StorageBackendS3Dto,
-  "secret_access_key_configured"
-> & {
+export type S3Settings = Omit<StorageBackendS3Dto, "secret_access_key_configured"> & {
   secret_access_key?: string;
 };
 export type StorageBackendAdmin = StorageBackendAdminDto;

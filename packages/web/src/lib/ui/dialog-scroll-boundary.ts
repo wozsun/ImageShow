@@ -1,9 +1,6 @@
 const scrollBoundaryEpsilon = 1;
 
-type DialogScrollMetrics = Pick<
-  HTMLElement,
-  "clientHeight" | "scrollHeight" | "scrollTop"
->;
+type DialogScrollMetrics = Pick<HTMLElement, "clientHeight" | "scrollHeight" | "scrollTop">;
 
 type DialogHorizontalScrollMetrics = Pick<
   HTMLElement,
@@ -24,8 +21,7 @@ export function canDialogScrollOwnerConsumeTouchMove(
     return false;
   }
   if (touchDeltaY < 0) {
-    return owner.scrollTop + owner.clientHeight
-      < owner.scrollHeight - scrollBoundaryEpsilon;
+    return owner.scrollTop + owner.clientHeight < owner.scrollHeight - scrollBoundaryEpsilon;
   }
   return owner.scrollTop > scrollBoundaryEpsilon;
 }
@@ -44,8 +40,7 @@ export function canDialogHorizontalScrollOwnerConsumeTouchMove(
     return false;
   }
   if (touchDeltaX < 0) {
-    return owner.scrollLeft + owner.clientWidth
-      < owner.scrollWidth - scrollBoundaryEpsilon;
+    return owner.scrollLeft + owner.clientWidth < owner.scrollWidth - scrollBoundaryEpsilon;
   }
   return owner.scrollLeft > scrollBoundaryEpsilon;
 }
@@ -55,10 +50,7 @@ export function consumeDialogHorizontalTouchMove(
   touchDeltaX: number
 ) {
   const maximum = Math.max(0, owner.scrollWidth - owner.clientWidth);
-  const next = Math.min(
-    maximum,
-    Math.max(0, owner.scrollLeft - touchDeltaX)
-  );
+  const next = Math.min(maximum, Math.max(0, owner.scrollLeft - touchDeltaX));
   // scrollLeft is a double. Preserve every post-intent subpixel delta instead
   // of dropping high-refresh touch samples after lastClientX has advanced.
   if (next === owner.scrollLeft) return false;
@@ -74,10 +66,7 @@ export function dialogEventTargetElement(target: EventTarget | null) {
 }
 
 function isScrollableElement(element: HTMLElement) {
-  if (
-    element.scrollHeight
-      <= element.clientHeight + scrollBoundaryEpsilon
-  ) return false;
+  if (element.scrollHeight <= element.clientHeight + scrollBoundaryEpsilon) return false;
   const view = element.ownerDocument.defaultView;
   const style = view?.getComputedStyle(element);
   const overflowY = style?.overflowY || style?.overflow || "";
@@ -97,17 +86,11 @@ function isDialogHorizontalScrollOwner(element: HTMLElement) {
   return /^(auto|scroll|overlay)$/.test(overflowX);
 }
 
-export function findDialogTouchScrollOwner(
-  target: EventTarget | null,
-  frame: HTMLElement
-) {
+export function findDialogTouchScrollOwner(target: EventTarget | null, frame: HTMLElement) {
   let element = dialogEventTargetElement(target);
   if (!element || !frame.contains(element)) return null;
   while (element) {
-    if (
-      element instanceof HTMLElement
-      && isScrollableElement(element)
-    ) return element;
+    if (element instanceof HTMLElement && isScrollableElement(element)) return element;
     if (element === frame) break;
     element = element.parentElement;
   }
@@ -121,10 +104,7 @@ export function findDialogHorizontalTouchScrollOwner(
   let element = dialogEventTargetElement(target);
   if (!element || !frame.contains(element)) return null;
   while (element) {
-    if (
-      element instanceof HTMLElement
-      && isDialogHorizontalScrollOwner(element)
-    ) return element;
+    if (element instanceof HTMLElement && isDialogHorizontalScrollOwner(element)) return element;
     if (element === frame) break;
     element = element.parentElement;
   }

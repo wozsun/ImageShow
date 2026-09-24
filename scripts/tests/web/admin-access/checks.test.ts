@@ -1,22 +1,16 @@
 import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  parseHTML
-} from "linkedom";
+import { parseHTML } from "linkedom";
 
 test("[Web/后台访问] ready cache 检查面板区分当前数量与完整重建进度时间", async () => {
   const React = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const { QueryClient, QueryClientProvider } = await import(
-    "@tanstack/react-query"
-  );
-  const { ReadyImageCachePanel } = await import(
-    "../../../../packages/web/src/pages/admin/check/ReadyImageCachePanel.tsx"
-  );
-  const { readyImageProjectionUsage } = await import(
-    "../../../../packages/web/src/pages/admin/check/check-redis-inspection.ts"
-  );
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const { ReadyImageCachePanel } =
+    await import("../../../../packages/web/src/pages/admin/check/ReadyImageCachePanel.tsx");
+  const { readyImageProjectionUsage } =
+    await import("../../../../packages/web/src/pages/admin/check/check-redis-inspection.ts");
   const { registerHooks } = await import("node:module");
   const cssHooks = registerHooks({
     load(url, context, nextLoad) {
@@ -26,9 +20,10 @@ test("[Web/后台访问] ready cache 检查面板区分当前数量与完整重�
       return nextLoad(url, context);
     }
   });
-  const { ReadyImageCacheMaintenancePanel } = await import(
-    "../../../../packages/web/src/pages/admin/check/CheckMaintenanceCapability.tsx"
-  ).finally(() => cssHooks.deregister());
+  const { ReadyImageCacheMaintenancePanel } =
+    await import("../../../../packages/web/src/pages/admin/check/CheckMaintenanceCapability.tsx").finally(
+      () => cssHooks.deregister()
+    );
   const previousReact = Object.getOwnPropertyDescriptor(globalThis, "React");
   Object.defineProperty(globalThis, "React", {
     configurable: true,
@@ -36,233 +31,246 @@ test("[Web/后台访问] ready cache 检查面板区分当前数量与完整重�
     value: React
   });
   try {
-  const projection = {
-    readable: true,
-    rebuilding: false,
-    synchronized: true,
-    state: "ready",
-    reason: "ready",
-    authoritative_revision: "17",
-    applied_revision: "17",
-    item_count: 123,
-    processed: null,
-    total: null,
-    last_updated_at: "2026-08-11T00:00:04.000Z",
-    full_rebuild_started_at: "2026-08-11T00:00:01.000Z",
-    full_rebuild_completed_at: "2026-08-11T00:00:02.500Z",
-    full_rebuild_duration_ms: 1_500,
-    last_full_rebuild_core_memory_bytes: 4_404_019,
-    last_full_rebuild_measured_at: "2026-08-11T00:00:02.400Z",
-    recent_errors: {
-      core: {
-        category: "core" as const,
-        code: "controlled_error",
-        message: "受控的最近错误",
-        occurred_at: "2026-08-11T00:00:03.000Z"
-      },
-      derived: null
-    }
-  };
-  const query = {
-    data: {
-      postgresql: {
-        status: "ok",
-        data: {
-          connection: "connected",
-          version: "18",
-          latency_ms: 1,
-          ready_images: 123,
-          total_images: 123,
-          authoritative_revision: "17",
-          abnormal_jobs: 0
+    const projection = {
+      readable: true,
+      rebuilding: false,
+      synchronized: true,
+      state: "ready",
+      reason: "ready",
+      authoritative_revision: "17",
+      applied_revision: "17",
+      item_count: 123,
+      processed: null,
+      total: null,
+      last_updated_at: "2026-08-11T00:00:04.000Z",
+      full_rebuild_started_at: "2026-08-11T00:00:01.000Z",
+      full_rebuild_completed_at: "2026-08-11T00:00:02.500Z",
+      full_rebuild_duration_ms: 1_500,
+      last_full_rebuild_core_memory_bytes: 4_404_019,
+      last_full_rebuild_measured_at: "2026-08-11T00:00:02.400Z",
+      recent_errors: {
+        core: {
+          category: "core" as const,
+          code: "controlled_error",
+          message: "受控的最近错误",
+          occurred_at: "2026-08-11T00:00:03.000Z"
         },
-        error: null
-      },
-      redis: {
-        status: "ok",
-        data: {
-          connection: "connected",
-          version: "8",
-          configured_db: 0,
-          latency_ms: 1,
-          memory: {
-            scope: "redis_instance",
-            used_memory_bytes: 456,
-            used_memory_rss_bytes: 789,
-            fragmentation_ratio: 1
+        derived: null
+      }
+    };
+    const query = {
+      data: {
+        postgresql: {
+          status: "ok",
+          data: {
+            connection: "connected",
+            version: "18",
+            latency_ms: 1,
+            ready_images: 123,
+            total_images: 123,
+            authoritative_revision: "17",
+            abnormal_jobs: 0
           },
-          image_projection: projection
+          error: null
         },
-        error: null
-      }
-    },
-    dataUpdatedAt: 1,
-    error: null,
-    isError: false,
-    isFetching: false,
-    isSuccess: true,
-    refetch: async () => ({ isSuccess: true })
-  };
-  const readOnlyHtml = renderToStaticMarkup(React.createElement(
-    QueryClientProvider,
-    { client: new QueryClient() },
-    React.createElement(ReadyImageCachePanel, {
-      query: query as never
-    })
-  ));
-  assert.doesNotMatch(readOnlyHtml, /重建图片投影/);
-
-  const html = renderToStaticMarkup(React.createElement(
-    QueryClientProvider,
-    { client: new QueryClient() },
-    React.createElement(ReadyImageCacheMaintenancePanel, {
-      query: query as never
-    })
-  ));
-
-  for (const visible of [
-    "状态",
-    "图片数量",
-    "123",
-    "最后更新时间",
-    "完整重建开始时间",
-    "完整重建完成时间",
-    "完整重建耗时",
-    "1.5 秒",
-    "数据库 revision 指纹",
-    "Redis revision 指纹",
-    "核心投影",
-    "123 个图片成员",
-    "4.2 MB",
-    "派生缓存",
-    "受控的最近错误",
-    "重建图片投影"
-  ]) {
-    assert.match(html, new RegExp(visible));
-  }
-  assert.doesNotMatch(html, /完整重建进度/);
-  assert.doesNotMatch(html, /123\s*\/\s*123/);
-  assert.match(html, /最近完整重建快照/);
-  assert.match(html, /完成 Redis 检测后显示当前派生缓存占用/);
-
-  const detectingHtml = renderToStaticMarkup(React.createElement(
-    QueryClientProvider,
-    { client: new QueryClient() },
-    React.createElement(ReadyImageCachePanel, {
-      query: query as never,
-      projectionUsageNotice: "正在后台自动检测当前 Redis 占用。"
-    })
-  ));
-  assert.match(detectingHtml, /正在后台自动检测当前 Redis 占用/);
-  assert.match(detectingHtml, /aria-busy="true"/);
-
-  const deepHtml = renderToStaticMarkup(React.createElement(
-    QueryClientProvider,
-    { client: new QueryClient() },
-    React.createElement(ReadyImageCachePanel, {
-      query: query as never,
-      projectionUsage: {
-        measured_at: "2026-08-11T00:00:05.000Z",
-        core: {
-          key_count: 8,
-          memory_bytes: 8_192
-        },
-        derived: {
-          key_count: 3,
-          member_count: 41,
-          memory_bytes: 2_048
+        redis: {
+          status: "ok",
+          data: {
+            connection: "connected",
+            version: "8",
+            configured_db: 0,
+            latency_ms: 1,
+            memory: {
+              scope: "redis_instance",
+              used_memory_bytes: 456,
+              used_memory_rss_bytes: 789,
+              fragmentation_ratio: 1
+            },
+            image_projection: projection
+          },
+          error: null
         }
-      }
-    })
-  ));
-  assert.match(deepHtml, /8 个键/);
-  assert.match(deepHtml, /123 个图片成员/);
-  assert.doesNotMatch(deepHtml, /456 个图片/);
-  assert.match(deepHtml, /8.0 KB/);
-  assert.match(deepHtml, /3 个键/);
-  assert.match(deepHtml, /41 个结果成员/);
-  assert.match(deepHtml, /2.0 KB/);
-  assert.match(deepHtml, /最近一次完整 Redis 深检快照/);
+      },
+      dataUpdatedAt: 1,
+      error: null,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      refetch: async () => ({ isSuccess: true })
+    };
+    const readOnlyHtml = renderToStaticMarkup(
+      React.createElement(
+        QueryClientProvider,
+        { client: new QueryClient() },
+        React.createElement(ReadyImageCachePanel, {
+          query: query as never
+        })
+      )
+    );
+    assert.doesNotMatch(readOnlyHtml, /重建图片投影/);
 
-  const deepResult = {
-    ok: true,
-    deep_inspection: {
-      complete: true,
-      source: "deep",
-      measured_at: "2026-08-11T00:00:05.000Z",
-      image_projection_usage: {
-        core: {
-          key_count: 8,
-          member_count: 456,
-          memory_bytes: 8_192
-        },
-        derived: {
-          key_count: 3,
-          member_count: 41,
-          memory_bytes: 2_048
-        }
-      }
+    const html = renderToStaticMarkup(
+      React.createElement(
+        QueryClientProvider,
+        { client: new QueryClient() },
+        React.createElement(ReadyImageCacheMaintenancePanel, {
+          query: query as never
+        })
+      )
+    );
+
+    for (const visible of [
+      "状态",
+      "图片数量",
+      "123",
+      "最后更新时间",
+      "完整重建开始时间",
+      "完整重建完成时间",
+      "完整重建耗时",
+      "1.5 秒",
+      "数据库 revision 指纹",
+      "Redis revision 指纹",
+      "核心投影",
+      "123 个图片成员",
+      "4.2 MB",
+      "派生缓存",
+      "受控的最近错误",
+      "重建图片投影"
+    ]) {
+      assert.match(html, new RegExp(visible));
     }
-  };
-  assert.deepEqual(
-    readyImageProjectionUsage(deepResult, "redis"),
-    {
+    assert.doesNotMatch(html, /完整重建进度/);
+    assert.doesNotMatch(html, /123\s*\/\s*123/);
+    assert.match(html, /最近完整重建快照/);
+    assert.match(html, /完成 Redis 检测后显示当前派生缓存占用/);
+
+    const detectingHtml = renderToStaticMarkup(
+      React.createElement(
+        QueryClientProvider,
+        { client: new QueryClient() },
+        React.createElement(ReadyImageCachePanel, {
+          query: query as never,
+          projectionUsageNotice: "正在后台自动检测当前 Redis 占用。"
+        })
+      )
+    );
+    assert.match(detectingHtml, /正在后台自动检测当前 Redis 占用/);
+    assert.match(detectingHtml, /aria-busy="true"/);
+
+    const deepHtml = renderToStaticMarkup(
+      React.createElement(
+        QueryClientProvider,
+        { client: new QueryClient() },
+        React.createElement(ReadyImageCachePanel, {
+          query: query as never,
+          projectionUsage: {
+            measured_at: "2026-08-11T00:00:05.000Z",
+            core: {
+              key_count: 8,
+              memory_bytes: 8_192
+            },
+            derived: {
+              key_count: 3,
+              member_count: 41,
+              memory_bytes: 2_048
+            }
+          }
+        })
+      )
+    );
+    assert.match(deepHtml, /8 个键/);
+    assert.match(deepHtml, /123 个图片成员/);
+    assert.doesNotMatch(deepHtml, /456 个图片/);
+    assert.match(deepHtml, /8.0 KB/);
+    assert.match(deepHtml, /3 个键/);
+    assert.match(deepHtml, /41 个结果成员/);
+    assert.match(deepHtml, /2.0 KB/);
+    assert.match(deepHtml, /最近一次完整 Redis 深检快照/);
+
+    const deepResult = {
+      ok: true,
+      deep_inspection: {
+        complete: true,
+        source: "deep",
+        measured_at: "2026-08-11T00:00:05.000Z",
+        image_projection_usage: {
+          core: {
+            key_count: 8,
+            member_count: 456,
+            memory_bytes: 8_192
+          },
+          derived: {
+            key_count: 3,
+            member_count: 41,
+            memory_bytes: 2_048
+          }
+        }
+      }
+    };
+    assert.deepEqual(readyImageProjectionUsage(deepResult, "redis"), {
       measured_at: "2026-08-11T00:00:05.000Z",
       core: { key_count: 8, memory_bytes: 8_192 },
       derived: { key_count: 3, member_count: 41, memory_bytes: 2_048 }
-    }
-  );
-  assert.deepEqual(
-    readyImageProjectionUsage({
-      redis: { status: "ok", data: deepResult }
-    }, "all"),
-    readyImageProjectionUsage(deepResult, "redis")
-  );
-  assert.equal(
-    readyImageProjectionUsage({
-      ...deepResult,
-      deep_inspection: {
-        ...deepResult.deep_inspection,
-        complete: false
-      }
-    }, "redis"),
-    null
-  );
-
-  const rebuildingProjection = {
-    ...projection,
-    readable: false,
-    rebuilding: true,
-    synchronized: false,
-    state: "rebuilding",
-    reason: "rebuilding",
-    item_count: 41,
-    processed: 41,
-    total: 123,
-    full_rebuild_completed_at: null,
-    full_rebuild_duration_ms: null
-  };
-  const rebuildingHtml = renderToStaticMarkup(React.createElement(
-    QueryClientProvider,
-    { client: new QueryClient() },
-    React.createElement(ReadyImageCachePanel, {
-      query: {
-        ...query,
-        data: {
-          ...query.data,
-          redis: {
-            ...query.data.redis,
-            data: {
-              ...query.data.redis.data,
-              image_projection: rebuildingProjection
-            }
+    });
+    assert.deepEqual(
+      readyImageProjectionUsage(
+        {
+          redis: { status: "ok", data: deepResult }
+        },
+        "all"
+      ),
+      readyImageProjectionUsage(deepResult, "redis")
+    );
+    assert.equal(
+      readyImageProjectionUsage(
+        {
+          ...deepResult,
+          deep_inspection: {
+            ...deepResult.deep_inspection,
+            complete: false
           }
-        }
-      } as never
-    })
-  ));
-  assert.match(rebuildingHtml, /完整重建进度/);
-  assert.match(rebuildingHtml, /41\s*\/\s*123/);
+        },
+        "redis"
+      ),
+      null
+    );
+
+    const rebuildingProjection = {
+      ...projection,
+      readable: false,
+      rebuilding: true,
+      synchronized: false,
+      state: "rebuilding",
+      reason: "rebuilding",
+      item_count: 41,
+      processed: 41,
+      total: 123,
+      full_rebuild_completed_at: null,
+      full_rebuild_duration_ms: null
+    };
+    const rebuildingHtml = renderToStaticMarkup(
+      React.createElement(
+        QueryClientProvider,
+        { client: new QueryClient() },
+        React.createElement(ReadyImageCachePanel, {
+          query: {
+            ...query,
+            data: {
+              ...query.data,
+              redis: {
+                ...query.data.redis,
+                data: {
+                  ...query.data.redis.data,
+                  image_projection: rebuildingProjection
+                }
+              }
+            }
+          } as never
+        })
+      )
+    );
+    assert.match(rebuildingHtml, /完整重建进度/);
+    assert.match(rebuildingHtml, /41\s*\/\s*123/);
   } finally {
     if (previousReact) {
       Object.defineProperty(globalThis, "React", previousReact);
@@ -274,14 +282,11 @@ test("[Web/后台访问] ready cache 检查面板区分当前数量与完整重�
 test("[Web/后台访问] 自动 Redis 占用检测在 Strict Mode 单飞并在重新进入时重测", async () => {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
-  const { QueryClient, QueryClientProvider } = await import(
-    "@tanstack/react-query"
-  );
-  const { useAdminRedisInspection } = await import(
-    "../../../../packages/web/src/pages/admin/check/check-redis-inspection.ts"
-  );
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const { useAdminRedisInspection } =
+    await import("../../../../packages/web/src/pages/admin/check/check-redis-inspection.ts");
   const { document, window } = parseHTML(
-    "<!doctype html><html><body><div id=\"root\"></div></body></html>"
+    '<!doctype html><html><body><div id="root"></div></body></html>'
   );
   let fetchCount = 0;
   let resolveFirstFetch!: (response: Response) => void;
@@ -305,10 +310,12 @@ test("[Web/后台访问] 自动 Redis 占用检测在 Strict Mode 单飞并在�
     fetchCount += 1;
     return fetchCount === 1
       ? firstFetch
-      : Promise.resolve(new Response(responseBody, {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }));
+      : Promise.resolve(
+          new Response(responseBody, {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          })
+        );
   };
   const installedGlobals = {
     window,
@@ -326,9 +333,9 @@ test("[Web/后台访问] 自动 Redis 占用检测在 Strict Mode 单飞并在�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -345,21 +352,14 @@ test("[Web/后台访问] 自动 Redis 占用检测在 Strict Mode 单飞并在�
   assert.ok(container);
   function Probe() {
     const query = useAdminRedisInspection();
-    return React.createElement(
-      "span",
-      null,
-      query.isSuccess ? "complete" : "pending"
-    );
+    return React.createElement("span", null, query.isSuccess ? "complete" : "pending");
   }
-  const renderProbe = () => React.createElement(
-    React.StrictMode,
-    null,
+  const renderProbe = () =>
     React.createElement(
-      QueryClientProvider,
-      { client },
-      React.createElement(Probe)
-    )
-  );
+      React.StrictMode,
+      null,
+      React.createElement(QueryClientProvider, { client }, React.createElement(Probe))
+    );
   const settleUntil = async (predicate: () => boolean) => {
     for (let attempt = 0; attempt < 20; attempt += 1) {
       await React.act(async () => {
@@ -379,10 +379,12 @@ test("[Web/后台访问] 自动 Redis 占用检测在 Strict Mode 单飞并在�
     assert.equal(fetchCount, 1);
 
     await React.act(async () => {
-      resolveFirstFetch(new Response(responseBody, {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      }));
+      resolveFirstFetch(
+        new Response(responseBody, {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      );
     });
     await settleUntil(() => container.textContent === "complete");
     assert.equal(container.textContent, "complete");
@@ -393,9 +395,7 @@ test("[Web/后台访问] 自动 Redis 占用检测在 Strict Mode 单飞并在�
     await React.act(async () => {
       secondRoot.render(renderProbe());
     });
-    await settleUntil(() => (
-      container.textContent === "complete" && fetchCount === 2
-    ));
+    await settleUntil(() => container.textContent === "complete" && fetchCount === 2);
     assert.equal(container.textContent, "complete");
     assert.equal(fetchCount, 2);
     await React.act(async () => secondRoot.unmount());
@@ -413,20 +413,17 @@ test("[Web/后台访问] 自动 Redis 占用检测在 Strict Mode 单飞并在�
 test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删除任务预览", async () => {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
-  const { QueryClient, QueryClientProvider } = await import(
-    "@tanstack/react-query"
-  );
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const { document, window } = parseHTML(
-    "<!doctype html><html><body><div id=\"root\"></div></body></html>"
+    '<!doctype html><html><body><div id="root"></div></body></html>'
   );
   Object.defineProperty(window, "location", {
     configurable: true,
     value: new URL("https://imageshow.test/admin/check")
   });
   Object.assign(window, {
-    requestAnimationFrame: (callback: FrameRequestCallback) => (
-      setTimeout(() => callback(Date.now()), 0) as unknown as number
-    ),
+    requestAnimationFrame: (callback: FrameRequestCallback) =>
+      setTimeout(() => callback(Date.now()), 0) as unknown as number,
     cancelAnimationFrame: (handle: number) => clearTimeout(handle),
     scrollTo() {},
     innerWidth: 1280,
@@ -520,9 +517,9 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -540,9 +537,10 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
       return nextLoad(url, context);
     }
   });
-  const { CheckStorageMaintenanceActions } = await import(
-    "../../../../packages/web/src/pages/admin/check/CheckMaintenanceCapability.tsx"
-  ).finally(() => cssHooks.deregister());
+  const { CheckStorageMaintenanceActions } =
+    await import("../../../../packages/web/src/pages/admin/check/CheckMaintenanceCapability.tsx").finally(
+      () => cssHooks.deregister()
+    );
   const checkNames: string[] = [];
   const published: unknown[] = [];
   let showStorageCount = 0;
@@ -558,53 +556,52 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
   };
   const click = async (target: HTMLElement) => {
     await React.act(async () => {
-      target.dispatchEvent(new window.Event("click", {
-        bubbles: true,
-        cancelable: true
-      }));
+      target.dispatchEvent(
+        new window.Event("click", {
+          bubbles: true,
+          cancelable: true
+        })
+      );
       await settle();
     });
   };
 
   try {
     await React.act(async () => {
-      root.render(React.createElement(
-        QueryClientProvider,
-        { client },
-        React.createElement(CheckStorageMaintenanceActions, {
-          canMaintainStorage: true,
-          canMigrateStorage: false,
-          running: "",
-          onPublishResult(value: unknown) {
-            published.push(value);
-          },
-          async onRunCheck(name: string) {
-            checkNames.push(name);
-            return null;
-          },
-          onRunningChange() {},
-          onShowStorage() {
-            showStorageCount += 1;
-          }
-        })
-      ));
+      root.render(
+        React.createElement(
+          QueryClientProvider,
+          { client },
+          React.createElement(CheckStorageMaintenanceActions, {
+            canMaintainStorage: true,
+            canMigrateStorage: false,
+            running: "",
+            onPublishResult(value: unknown) {
+              published.push(value);
+            },
+            async onRunCheck(name: string) {
+              checkNames.push(name);
+              return null;
+            },
+            onRunningChange() {},
+            onShowStorage() {
+              showStorageCount += 1;
+            }
+          })
+        )
+      );
       await settle();
     });
 
-    const topLevelButtons = [...container.querySelectorAll<HTMLButtonElement>(
-      "button"
-    )];
-    const maintenanceButton = topLevelButtons.find((button) => (
+    const topLevelButtons = [...container.querySelectorAll<HTMLButtonElement>("button")];
+    const maintenanceButton = topLevelButtons.find((button) =>
       button.textContent?.includes("存储维护")
-    ));
+    );
     assert.ok(maintenanceButton);
     await click(maintenanceButton);
     assert.deepEqual(
       requestPaths.toSorted(),
-      [
-        "/api/admin/check/storage",
-        "/api/admin/check/trash"
-      ].toSorted()
+      ["/api/admin/check/storage", "/api/admin/check/trash"].toSorted()
     );
     assert.deepEqual(checkNames, []);
     assert.equal(showStorageCount, 1);
@@ -623,15 +620,17 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
     assert.match(document.body.textContent ?? "", /将重试异常成功任务2/);
     assert.match(document.body.textContent ?? "", /停滞任务只报告/);
 
-    const cancelButton = [...document.querySelectorAll<HTMLButtonElement>(
-      '[role="dialog"] button'
-    )].find((button) => button.textContent?.trim() === "取消");
+    const cancelButton = [
+      ...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')
+    ].find((button) => button.textContent?.trim() === "取消");
     assert.ok(cancelButton);
     await click(cancelButton);
     await React.act(async () => {
-      maintenanceDialog.dispatchEvent(new window.Event("animationend", {
-        bubbles: true
-      }));
+      maintenanceDialog.dispatchEvent(
+        new window.Event("animationend", {
+          bubbles: true
+        })
+      );
       await settle();
     });
     assert.equal(document.querySelector('[role="dialog"]') === null, true);
@@ -658,10 +657,7 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
         getClientRectsDescriptor
       );
     } else {
-      delete (window.HTMLElement.prototype as unknown as Record<
-        string,
-        unknown
-      >).getClientRects;
+      delete (window.HTMLElement.prototype as unknown as Record<string, unknown>).getClientRects;
     }
     for (const [key, descriptor] of previousGlobals) {
       if (descriptor) {
@@ -675,13 +671,10 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
 test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检测与全部检查", async () => {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
-  const { QueryClient, QueryClientProvider } = await import(
-    "@tanstack/react-query"
-  );
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const { MemoryRouter } = await import("react-router");
-  const { AuthSessionProvider } = await import(
-    "../../../../packages/web/src/hooks/useAuthSession.tsx"
-  );
+  const { AuthSessionProvider } =
+    await import("../../../../packages/web/src/hooks/useAuthSession.tsx");
   const { registerHooks } = await import("node:module");
   const cssHooks = registerHooks({
     load(url, context, nextLoad) {
@@ -691,11 +684,12 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
       return nextLoad(url, context);
     }
   });
-  const { CheckPage } = await import(
-    "../../../../packages/web/src/pages/admin/check/CheckPage.tsx"
-  ).finally(() => cssHooks.deregister());
+  const { CheckPage } =
+    await import("../../../../packages/web/src/pages/admin/check/CheckPage.tsx").finally(() =>
+      cssHooks.deregister()
+    );
   const { document, window } = parseHTML(
-    "<!doctype html><html><body><div id=\"root\"></div></body></html>"
+    '<!doctype html><html><body><div id="root"></div></body></html>'
   );
 
   const projection = (rebuilding = false) => ({
@@ -711,9 +705,7 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
     total: rebuilding ? 124 : null,
     last_updated_at: "2026-08-11T00:00:04.000Z",
     full_rebuild_started_at: "2026-08-11T00:00:01.000Z",
-    full_rebuild_completed_at: rebuilding
-      ? null
-      : "2026-08-11T00:00:02.500Z",
+    full_rebuild_completed_at: rebuilding ? null : "2026-08-11T00:00:02.500Z",
     full_rebuild_duration_ms: rebuilding ? null : 1_500,
     last_full_rebuild_core_memory_bytes: 4_404_019,
     last_full_rebuild_measured_at: "2026-08-11T00:00:02.400Z",
@@ -751,11 +743,7 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
       error: null
     }
   });
-  const redisResult = (
-    measuredAt: string,
-    memoryBytes: number,
-    complete = true
-  ) => ({
+  const redisResult = (measuredAt: string, memoryBytes: number, complete = true) => ({
     ok: true,
     deep_inspection: {
       complete,
@@ -788,12 +776,14 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
     job_counts: { pending: 0, running: 0, retrying: 0, exhausted: 0 },
     jobs: [],
     issues: [],
-    candidates: [{
-      id: "00000000-0000-7000-8000-000000000001",
-      object_key: "01/00000000-0000-7000-8000-000000000001.webp",
-      deleted_at: "2026-08-11T00:00:03.000Z",
-      purge_pending: false
-    }]
+    candidates: [
+      {
+        id: "00000000-0000-7000-8000-000000000001",
+        object_key: "01/00000000-0000-7000-8000-000000000001.webp",
+        deleted_at: "2026-08-11T00:00:03.000Z",
+        purge_pending: false
+      }
+    ]
   };
   let resolveStatus!: (response: Response) => void;
   let resolveAutomaticRedis!: (response: Response) => void;
@@ -814,10 +804,11 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
   let redisRequests = 0;
   let allRequests = 0;
   let trashRequests = 0;
-  const jsonResponse = (value: unknown) => new Response(JSON.stringify(value), {
-    status: 200,
-    headers: { "content-type": "application/json" }
-  });
+  const jsonResponse = (value: unknown) =>
+    new Response(JSON.stringify(value), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
   const fetchStub = (input: RequestInfo | URL) => {
     const path = String(input);
     if (path === "/api/admin/check/status") return statusResponse;
@@ -853,9 +844,9 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -887,8 +878,8 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
     await new Promise((resolve) => setTimeout(resolve, 0));
   };
   const button = (label: string) => {
-    const match = [...container.querySelectorAll("button")].find(
-      (candidate) => candidate.textContent?.includes(label)
+    const match = [...container.querySelectorAll("button")].find((candidate) =>
+      candidate.textContent?.includes(label)
     );
     assert.ok(match, `missing ${label} button`);
     return match as HTMLButtonElement;
@@ -902,19 +893,17 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
 
   try {
     await React.act(async () => {
-      root.render(React.createElement(
-        QueryClientProvider,
-        { client },
+      root.render(
         React.createElement(
-          MemoryRouter,
-          { initialEntries: ["/admin/check"] },
+          QueryClientProvider,
+          { client },
           React.createElement(
-            AuthSessionProvider,
-            null,
-            React.createElement(CheckPage)
+            MemoryRouter,
+            { initialEntries: ["/admin/check"] },
+            React.createElement(AuthSessionProvider, null, React.createElement(CheckPage))
           )
         )
-      ));
+      );
       await settle();
     });
 
@@ -922,8 +911,8 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
     assert.equal(allRequests, 0);
     assert.equal(redisRequests, 0);
     assert.equal(
-      [...container.querySelectorAll("button")].some(
-        (candidate) => candidate.textContent?.includes("彻底删除维护")
+      [...container.querySelectorAll("button")].some((candidate) =>
+        candidate.textContent?.includes("彻底删除维护")
       ),
       false,
       "图片管理员不应加载或显示超级管理员彻底删除维护入口"
@@ -936,10 +925,7 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
     assert.equal(button("全部").disabled, true);
 
     await React.act(async () => {
-      resolveAutomaticRedis(jsonResponse(redisResult(
-        "2026-08-11T00:00:05.000Z",
-        8_192
-      )));
+      resolveAutomaticRedis(jsonResponse(redisResult("2026-08-11T00:00:05.000Z", 8_192)));
       await settle();
     });
     assert.equal(button("全部").disabled, false);
@@ -949,19 +935,18 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
     assert.equal(redisRequests, 2);
     assert.equal(button("全部").disabled, true);
     await React.act(async () => {
-      resolvePartialRedis(jsonResponse(redisResult(
-        "2026-08-11T00:00:06.000Z",
-        4_096,
-        false
-      )));
+      resolvePartialRedis(jsonResponse(redisResult("2026-08-11T00:00:06.000Z", 4_096, false)));
       await settle();
     });
     await click(button("状态"));
     assert.match(container.textContent ?? "", /8\.0 KB/);
-    assert.ok([...container.querySelectorAll("[title]")].some((element) => (
-      element.getAttribute("title")?.includes("本次检测未完成")
-      && element.getAttribute("title")?.includes("最近一次完整 Redis 深检快照")
-    )));
+    assert.ok(
+      [...container.querySelectorAll("[title]")].some(
+        (element) =>
+          element.getAttribute("title")?.includes("本次检测未完成") &&
+          element.getAttribute("title")?.includes("最近一次完整 Redis 深检快照")
+      )
+    );
 
     await click(button("全部"));
     assert.equal(allRequests, 1);

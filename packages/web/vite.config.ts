@@ -10,9 +10,7 @@ function webSourcePath(id: string | null) {
   const normalized = id.replaceAll("\\", "/");
   const marker = "/packages/web/";
   const markerIndex = normalized.lastIndexOf(marker);
-  return markerIndex < 0
-    ? null
-    : normalized.slice(markerIndex + marker.length);
+  return markerIndex < 0 ? null : normalized.slice(markerIndex + marker.length);
 }
 
 type ChunkingContext = {
@@ -44,9 +42,11 @@ function entryRootIds(moduleId: string, context: ChunkingContext) {
 function semanticOwnerLabel(root: string) {
   const sourcePath = webSourcePath(root) ?? root.replaceAll("\\", "/");
   if (sourcePath.endsWith("index.html")) return "app";
-  const baseName = sourcePath.split("/").at(-1)
-    ?.replace(/\.[^.]+$/, "")
-    ?? "asset";
+  const baseName =
+    sourcePath
+      .split("/")
+      .at(-1)
+      ?.replace(/\.[^.]+$/, "") ?? "asset";
   let label = baseName
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
     .replace(/([A-Z])([A-Z][a-z])/g, "$1-$2")
@@ -71,9 +71,7 @@ function semanticOwnerCategory(root: string) {
   const segments = sourcePath.split("/");
   if (segments[0] === "src" && segments.length > 2) {
     if (["pages", "components", "lib"].includes(segments[1]!)) {
-      return segments[2]!
-        .replace(/[^A-Za-z0-9]+/g, "-")
-        .toLowerCase();
+      return segments[2]!.replace(/[^A-Za-z0-9]+/g, "-").toLowerCase();
     }
   }
   return semanticOwnerLabel(root);
@@ -100,18 +98,12 @@ const chunkResponsibilityAliases: Readonly<Record<string, string>> = {
   "capability-user-vocabulary": "slug-chip"
 };
 
-const semanticChunkNameAssignments = new Map<
-  string,
-  Map<string, string>
->();
+const semanticChunkNameAssignments = new Map<string, Map<string, string>>();
 
 function rootSetChunkName(prefix: string, roots: string[]) {
-  const exactLabels = [...new Set(
-    roots.map(semanticOwnerLabel)
-  )].sort();
-  const ownerLabels = exactLabels.length <= 3
-    ? exactLabels
-    : [...new Set(roots.map(semanticOwnerCategory))].sort();
+  const exactLabels = [...new Set(roots.map(semanticOwnerLabel))].sort();
+  const ownerLabels =
+    exactLabels.length <= 3 ? exactLabels : [...new Set(roots.map(semanticOwnerCategory))].sort();
   const generatedName = `${prefix}-${ownerLabels.join("-") || "shared"}`;
   const baseName = chunkResponsibilityAliases[generatedName] ?? generatedName;
   const rootKey = roots.join("\n");
@@ -135,19 +127,20 @@ function sharedChunkName(moduleId: string, context: ChunkingContext) {
   const home = roots.some((id) => /\/src\/pages\/home\//.test(id));
   const show = roots.some((id) => /\/src\/pages\/show\//.test(id));
   const gallery = roots.some((id) => /\/src\/pages\/gallery\//.test(id));
-  const hasNonPublicRoot = roots.some((id) => (
-    !/\/src\/pages\/(?:home|show|gallery)\//.test(id)
-  ));
+  const hasNonPublicRoot = roots.some((id) => !/\/src\/pages\/(?:home|show|gallery)\//.test(id));
   if (
-    roots.some((id) => id.endsWith("/index.html"))
-    || ((home && gallery || home && show || show && gallery) && hasNonPublicRoot)
+    roots.some((id) => id.endsWith("/index.html")) ||
+    (((home && gallery) || (home && show) || (show && gallery)) && hasNonPublicRoot)
   ) {
     return "app-foundation";
   }
-  const initialRouteRoots = roots.filter((id) => (
-    /\/src\/pages\/(?:home|show|gallery)\//.test(id)
-    || /\/src\/pages\/admin\/(?:shell\/(?:AdminShell|AuthenticatedAdminShell)|account\/(?:AdminLogin|LoginChallenge)|images\/ImageAdmin)\.tsx$/.test(id)
-  ));
+  const initialRouteRoots = roots.filter(
+    (id) =>
+      /\/src\/pages\/(?:home|show|gallery)\//.test(id) ||
+      /\/src\/pages\/admin\/(?:shell\/(?:AdminShell|AuthenticatedAdminShell)|account\/(?:AdminLogin|LoginChallenge)|images\/ImageAdmin)\.tsx$/.test(
+        id
+      )
+  );
   return initialRouteRoots.length > 0
     ? rootSetChunkName("route", initialRouteRoots)
     : rootSetChunkName("capability", roots);
@@ -188,12 +181,8 @@ function javascriptAssetPattern(name: string) {
 function staticAssetPattern(names: string[]) {
   const originalName = names[0] ?? "asset";
   const extensionIndex = originalName.lastIndexOf(".");
-  const extension = extensionIndex >= 0
-    ? originalName.slice(extensionIndex)
-    : "";
-  const baseName = extensionIndex >= 0
-    ? originalName.slice(0, extensionIndex)
-    : originalName;
+  const extension = extensionIndex >= 0 ? originalName.slice(extensionIndex) : "";
+  const baseName = extensionIndex >= 0 ? originalName.slice(0, extensionIndex) : originalName;
   return `assets/${assetResponsibilityName(baseName)}-[hash]${extension}`;
 }
 
@@ -204,9 +193,7 @@ const storageBackendImageMigrationModuleSuffixes = [
 
 function isStorageBackendImageMigrationModule(id: string) {
   const normalized = id.replaceAll("\\", "/");
-  return storageBackendImageMigrationModuleSuffixes.some((suffix) => (
-    normalized.endsWith(suffix)
-  ));
+  return storageBackendImageMigrationModuleSuffixes.some((suffix) => normalized.endsWith(suffix));
 }
 
 function webBuildReport(): Plugin {
@@ -233,27 +220,31 @@ function webBuildReport(): Plugin {
         const modules = moduleIds
           .map(webSourcePath)
           .filter((path): path is string => path !== null);
-        const moduleRoots = Object.fromEntries(moduleIds.flatMap((id) => {
-          const path = webSourcePath(id);
-          if (!path) return [];
-          const roots = entryRootIds(id, reportContext)
-            .map(webSourcePath)
-            .filter((root): root is string => root !== null);
-          return [[path, roots]];
-        }));
-        return [{
-          file: output.fileName,
-          name: output.name,
-          facade: webSourcePath(output.facadeModuleId),
-          isEntry: output.isEntry,
-          isDynamicEntry: output.isDynamicEntry,
-          imports: output.imports,
-          dynamicImports: output.dynamicImports,
-          css: [...(metadata.viteMetadata?.importedCss ?? [])],
-          emitted: output.code.length > 0,
-          modules,
-          moduleRoots
-        }];
+        const moduleRoots = Object.fromEntries(
+          moduleIds.flatMap((id) => {
+            const path = webSourcePath(id);
+            if (!path) return [];
+            const roots = entryRootIds(id, reportContext)
+              .map(webSourcePath)
+              .filter((root): root is string => root !== null);
+            return [[path, roots]];
+          })
+        );
+        return [
+          {
+            file: output.fileName,
+            name: output.name,
+            facade: webSourcePath(output.facadeModuleId),
+            isEntry: output.isEntry,
+            isDynamicEntry: output.isDynamicEntry,
+            imports: output.imports,
+            dynamicImports: output.dynamicImports,
+            css: [...(metadata.viteMetadata?.importedCss ?? [])],
+            emitted: output.code.length > 0,
+            modules,
+            moduleRoots
+          }
+        ];
       });
       const dynamicImporters = new Map<string, string[]>();
       const cssOwners = new Map<string, Array<{ file: string; facade: string | null }>>();
@@ -271,16 +262,12 @@ function webBuildReport(): Plugin {
       }
       const chunks = collectedChunks.map((chunk) => ({
         ...chunk,
-        dynamicImporters: [...new Set(
-          dynamicImporters.get(chunk.file) ?? []
-        )].sort()
+        dynamicImporters: [...new Set(dynamicImporters.get(chunk.file) ?? [])].sort()
       }));
-      const styles = [...cssOwners.keys()]
-        .sort()
-        .map((file) => ({
-          file,
-          owners: cssOwners.get(file)!
-        }));
+      const styles = [...cssOwners.keys()].sort().map((file) => ({
+        file,
+        owners: cssOwners.get(file)!
+      }));
       this.emitFile({
         type: "asset",
         fileName: ".vite/web-build-report.json",
@@ -297,8 +284,7 @@ function resolveProxyTarget() {
       const config = JSON.parse(readFileSync(configPath, "utf8")) as { site?: { domain?: string } };
       const domain = config.site?.domain;
       if (domain) return `http://${domain.replace(/:\d+$/, "")}:${appConfig.applicationPort}`;
-    } catch {
-    }
+    } catch {}
   }
   if (process.env.SITE_DOMAIN) {
     return `http://${process.env.SITE_DOMAIN.replace(/:\d+$/, "")}:${appConfig.applicationPort}`;
@@ -346,13 +332,11 @@ export default defineConfig({
             },
             {
               name: sharedChunkName,
-              test: (id) => !id.endsWith(".css") && (
-                (
-                  /[\\/]packages[\\/]web[\\/]src[\\/]/.test(id)
-                  && !/[\\/]packages[\\/]web[\\/]src[\\/]pages[\\/]/.test(id)
-                )
-                || /[\\/]packages[\\/]shared[\\/]dist[\\/]browser(?:[\\/]|\.js$)/.test(id)
-              ),
+              test: (id) =>
+                !id.endsWith(".css") &&
+                ((/[\\/]packages[\\/]web[\\/]src[\\/]/.test(id) &&
+                  !/[\\/]packages[\\/]web[\\/]src[\\/]pages[\\/]/.test(id)) ||
+                  /[\\/]packages[\\/]shared[\\/]dist[\\/]browser(?:[\\/]|\.js$)/.test(id)),
               priority: 1,
               minShareCount: 2,
               includeDependenciesRecursively: false

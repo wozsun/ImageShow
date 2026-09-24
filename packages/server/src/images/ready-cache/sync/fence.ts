@@ -4,9 +4,7 @@ let activeReaders = 0;
 let readersDrained: Promise<void> = Promise.resolve();
 let resolveReadersDrained: (() => void) | null = null;
 
-export type ReadyImageCacheReadLease<T> =
-  | { acquired: true; value: T }
-  | { acquired: false };
+export type ReadyImageCacheReadLease<T> = { acquired: true; value: T } | { acquired: false };
 
 function acquireReadFence() {
   if (activeReaders === 0) {
@@ -80,9 +78,7 @@ export async function withReadyImageCacheReadFence<T>(
  * mutations. The pending count closes cache reads synchronously, before a
  * mutation can begin its PostgreSQL transaction.
  */
-export async function withReadyImageCacheWriteFence<T>(
-  work: () => Promise<T>
-): Promise<T> {
+export async function withReadyImageCacheWriteFence<T>(work: () => Promise<T>): Promise<T> {
   pendingFenceHolders += 1;
   const previous = fenceTail;
   const { promise, resolve: release } = Promise.withResolvers<void>();

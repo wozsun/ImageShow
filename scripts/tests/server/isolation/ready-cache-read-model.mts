@@ -1,79 +1,67 @@
-
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import {
-  runIntegrationScenario
-} from "./integration-runtime.mts";
+import { runIntegrationScenario } from "./integration-runtime.mts";
 
-type AdminImagesReadModelModule = typeof import(
-  "../../../../packages/server/src/images/read-models/admin-images.ts"
-);
-type CoreUuidModule = typeof import(
-  "../../../../packages/server/src/core/uuid.ts"
-);
-type ImageFilterPlanModule = typeof import(
-  "../../../../packages/server/src/images/filter-plan.ts"
-);
-type PublicImagesReadModelModule = typeof import(
-  "../../../../packages/server/src/images/read-models/public-images.ts"
-);
-type PublicUrlsModule = typeof import(
-  "../../../../packages/server/src/storage/objects/public-urls.ts"
-);
-type ReadyCacheCoordinatorModule = typeof import(
-  "../../../../packages/server/src/images/ready-cache/coordinator.ts"
-);
-type ReadyCacheFilterIndexModule = typeof import(
-  "../../../../packages/server/src/images/ready-cache/indexes/filter.ts"
-);
-type RuntimeAvailabilityModule = typeof import(
-  "../../../../packages/server/src/core/runtime-availability.ts"
-);
-type VocabCacheModule = typeof import(
-  "../../../../packages/server/src/vocab/vocab-cache.ts"
-);
+type AdminImagesReadModelModule =
+  typeof import("../../../../packages/server/src/images/read-models/admin-images.ts");
+type CoreUuidModule = typeof import("../../../../packages/server/src/core/uuid.ts");
+type ImageFilterPlanModule = typeof import("../../../../packages/server/src/images/filter-plan.ts");
+type PublicImagesReadModelModule =
+  typeof import("../../../../packages/server/src/images/read-models/public-images.ts");
+type PublicUrlsModule =
+  typeof import("../../../../packages/server/src/storage/objects/public-urls.ts");
+type ReadyCacheCoordinatorModule =
+  typeof import("../../../../packages/server/src/images/ready-cache/coordinator.ts");
+type ReadyCacheFilterIndexModule =
+  typeof import("../../../../packages/server/src/images/ready-cache/indexes/filter.ts");
+type RuntimeAvailabilityModule =
+  typeof import("../../../../packages/server/src/core/runtime-availability.ts");
+type VocabCacheModule = typeof import("../../../../packages/server/src/vocab/vocab-cache.ts");
 
 await runIntegrationScenario(async (runtime) => {
-  const adminImages = await import(
+  const adminImages = (await import(
     runtime.moduleUrl("packages/server/src/images/read-models/admin-images.ts")
-  ) as AdminImagesReadModelModule;
-  const publicImages = await import(
+  )) as AdminImagesReadModelModule;
+  const publicImages = (await import(
     runtime.moduleUrl("packages/server/src/images/read-models/public-images.ts")
-  ) as PublicImagesReadModelModule;
+  )) as PublicImagesReadModelModule;
 
-  const publicUrls = await import(
+  const publicUrls = (await import(
     runtime.moduleUrl("packages/server/src/storage/objects/public-urls.ts")
-  ) as PublicUrlsModule;
-  const coreUuid = await import(
+  )) as PublicUrlsModule;
+  const coreUuid = (await import(
     runtime.moduleUrl("packages/server/src/core/uuid.ts")
-  ) as CoreUuidModule;
-  const filterPlan = await import(
+  )) as CoreUuidModule;
+  const filterPlan = (await import(
     runtime.moduleUrl("packages/server/src/images/filter-plan.ts")
-  ) as ImageFilterPlanModule;
-  const filterIndex = await import(
+  )) as ImageFilterPlanModule;
+  const filterIndex = (await import(
     runtime.moduleUrl("packages/server/src/images/ready-cache/indexes/filter.ts")
-  ) as ReadyCacheFilterIndexModule;
-  const coordinator = await import(
+  )) as ReadyCacheFilterIndexModule;
+  const coordinator = (await import(
     runtime.moduleUrl("packages/server/src/images/ready-cache/coordinator.ts")
-  ) as ReadyCacheCoordinatorModule;
-  const runtimeAvailability = await import(
+  )) as ReadyCacheCoordinatorModule;
+  const runtimeAvailability = (await import(
     runtime.moduleUrl("packages/server/src/core/runtime-availability.ts")
-  ) as RuntimeAvailabilityModule;
-  const vocabCache = await import(
+  )) as RuntimeAvailabilityModule;
+  const vocabCache = (await import(
     runtime.moduleUrl("packages/server/src/vocab/vocab-cache.ts")
-  ) as VocabCacheModule;
+  )) as VocabCacheModule;
   const { Hono } = await import("hono");
   const { registerPublicRoutes } = await import("../../../../packages/server/src/routes/public.ts");
-  const { registerPublicAuthRoutes } = await import("../../../../packages/server/src/routes/auth.ts");
+  const { registerPublicAuthRoutes } =
+    await import("../../../../packages/server/src/routes/auth.ts");
   const { handleApiError } = await import("../../../../packages/server/src/core/http/responses.ts");
-  const { adminSessionKey } = await import("../../../../packages/server/src/users/admin-session-key.ts");
+  const { adminSessionKey } =
+    await import("../../../../packages/server/src/users/admin-session-key.ts");
   const trash = await import("../../../../packages/server/src/images/trash/mutations.ts");
   const serving = await import("../../../../packages/server/src/images/serving/record.ts");
   const app = new Hono();
   app.onError((error, context) => handleApiError(context, error));
   registerPublicRoutes(app);
   registerPublicAuthRoutes(app);
-  const { registerAdminImageRoutes } = await import("../../../../packages/server/src/routes/admin-images.ts");
+  const { registerAdminImageRoutes } =
+    await import("../../../../packages/server/src/routes/admin-images.ts");
   registerAdminImageRoutes(app);
   const baselineConfig = structuredClone(runtime.runtimeConfigStore.getRuntimeConfig());
   const originalFetch = globalThis.fetch;
@@ -88,7 +76,11 @@ await runIntegrationScenario(async (runtime) => {
   const login = async () => {
     const response = await app.request("http://images.example/api/admin/auth/login", {
       method: "POST",
-      headers: { "content-type": "application/json", host: "images.example", origin: "http://images.example" },
+      headers: {
+        "content-type": "application/json",
+        host: "images.example",
+        origin: "http://images.example"
+      },
       body: JSON.stringify({ username: "integration-admin", password: "IntegrationAdmin123!" })
     });
     assert.equal(response.status, 200, await response.clone().text());
@@ -129,15 +121,15 @@ await runIntegrationScenario(async (runtime) => {
         `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, author, image_time, title)
        VALUES ($1, 'integration-admin', 'ready', 'local', $2, $3, $4, 'webp', $5, $6, $7, $8)`,
         [
-        imageId,
-        position === 1 ? "mb" : "pc",
-        position === 2 ? "light" : "dark",
-        theme,
-        createHash("md5").update(imageId).digest("hex"),
-        author,
-        imageDate,
-        `cache item ${position}`
-      ]
+          imageId,
+          position === 1 ? "mb" : "pc",
+          position === 2 ? "light" : "dark",
+          theme,
+          createHash("md5").update(imageId).digest("hex"),
+          author,
+          imageDate,
+          `cache item ${position}`
+        ]
       );
       await runtime.databasePools.pool.query(
         "INSERT INTO image_tag(image_id, tag_slug) VALUES($1,$2)",
@@ -150,37 +142,44 @@ await runIntegrationScenario(async (runtime) => {
       site: { domain: "images.example" },
       altcha: { enabled: false }
     });
-    const displayed = await publicUrls.publicImageUrl(
-      { id: imageIds[2], ext: "webp" }, "local"
-    );
+    const displayed = await publicUrls.publicImageUrl({ id: imageIds[2], ext: "webp" }, "local");
     await runtime.databasePools.pool.query(
       "UPDATE metadata SET original=$2, source=$3 WHERE id=$1",
       [imageIds[0], originalUrl, "https://source.example.com/post"]
     );
-    await runtime.databasePools.pool.query(
-      "UPDATE metadata SET original=$2 WHERE id=$1",
-      [imageIds[2], `${displayed}#original`]
-    );
+    await runtime.databasePools.pool.query("UPDATE metadata SET original=$2 WHERE id=$1", [
+      imageIds[2],
+      `${displayed}#original`
+    ]);
     // Before the ready projection is initialized, detail reads use PostgreSQL.
-    const databaseDetails = await Promise.all(imageIds.map((id) => (
-      publicImages.getPublicImage(id, undefined, true)
-    )));
-    assert.equal(databaseDetails[0].original_url, `https://images.example/images/original/${imageIds[0]}`);
+    const databaseDetails = await Promise.all(
+      imageIds.map((id) => publicImages.getPublicImage(id, undefined, true))
+    );
+    assert.equal(
+      databaseDetails[0].original_url,
+      `https://images.example/images/original/${imageIds[0]}`
+    );
     assert.equal(databaseDetails[1].original_url, null);
     assert.equal(databaseDetails[2].original_url, null);
-    assert.deepEqual(databaseDetails.map((item) => item.source), [
-      "https://source.example.com/post", null, null
-    ]);
+    assert.deepEqual(
+      databaseDetails.map((item) => item.source),
+      ["https://source.example.com/post", null, null]
+    );
     const sessionId = await login();
-    const detailRequest = (cookie = "", etag = "") => app.request(
-      `http://images.example/api/images/${imageIds[0]}`,
-      { headers: { cookie, ...(etag ? { "If-None-Match": etag } : {}) } }
-    );
+    const detailRequest = (cookie = "", etag = "") =>
+      app.request(`http://images.example/api/images/${imageIds[0]}`, {
+        headers: { cookie, ...(etag ? { "If-None-Match": etag } : {}) }
+      });
     const sessionCookie = `imageshow_session=${sessionId}`;
-    const resourceRequest = (cookie = "", method = "GET", id = imageIds[0]) => app.request(
-      `http://images.example/images/original/${id}`,
-      { method, headers: { cookie, "If-None-Match": '"cached-original"', "If-Modified-Since": "Sun, 20 Sep 2026 00:00:00 GMT" } }
-    );
+    const resourceRequest = (cookie = "", method = "GET", id = imageIds[0]) =>
+      app.request(`http://images.example/images/original/${id}`, {
+        method,
+        headers: {
+          cookie,
+          "If-None-Match": '"cached-original"',
+          "If-Modified-Since": "Sun, 20 Sep 2026 00:00:00 GMT"
+        }
+      });
     const assertOriginalDenied = async (cookie = "") => {
       const before = sourceRequests;
       for (const method of ["GET", "HEAD"]) {
@@ -195,15 +194,23 @@ await runIntegrationScenario(async (runtime) => {
     };
     const assertDetailVisibility = async () => {
       // Concurrent consumers may share a PostgreSQL row, never its identity-dependent DTO.
-      const projections = await Promise.all([false, true, false, true].map(include => (
-        publicImages.getPublicImage(imageIds[0], undefined, include)
-      )));
-      assert.deepEqual(projections.map(item => item.original_url), [
-        null, databaseDetails[0].original_url, null, databaseDetails[0].original_url
-      ]);
-      const responses = await Promise.all(["", sessionCookie, "imageshow_session=expired"].map(cookie => detailRequest(cookie)));
-      const bodies = await Promise.all(responses.map(response => response.clone().json()));
-      assert.deepEqual(bodies.map(body => body.item.original_url), [null, databaseDetails[0].original_url, null]);
+      const projections = await Promise.all(
+        [false, true, false, true].map((include) =>
+          publicImages.getPublicImage(imageIds[0], undefined, include)
+        )
+      );
+      assert.deepEqual(
+        projections.map((item) => item.original_url),
+        [null, databaseDetails[0].original_url, null, databaseDetails[0].original_url]
+      );
+      const responses = await Promise.all(
+        ["", sessionCookie, "imageshow_session=expired"].map((cookie) => detailRequest(cookie))
+      );
+      const bodies = await Promise.all(responses.map((response) => response.clone().json()));
+      assert.deepEqual(
+        bodies.map((body) => body.item.original_url),
+        [null, databaseDetails[0].original_url, null]
+      );
       for (const response of responses) {
         assert.equal(response.status, 200);
         assert.equal(response.headers.get("Cache-Control"), "private, no-cache");
@@ -212,7 +219,10 @@ await runIntegrationScenario(async (runtime) => {
       }
       const anonymousEtag = responses[0].headers.get("ETag")!;
       const adminEtag = responses[1].headers.get("ETag")!;
-      for (const [cookie, etag] of [["", anonymousEtag], [sessionCookie, adminEtag]]) {
+      for (const [cookie, etag] of [
+        ["", anonymousEtag],
+        [sessionCookie, adminEtag]
+      ]) {
         const revalidated = await detailRequest(cookie, etag);
         assert.equal(revalidated.status, 304);
         assert.equal(revalidated.headers.get("Cache-Control"), "private, no-cache");
@@ -240,7 +250,14 @@ await runIntegrationScenario(async (runtime) => {
     };
     assert.equal(databaseResources?.original, originalUrl);
     assert.ok(databaseResources);
-    assert.deepEqual({ id: databaseResources.id, ext: databaseResources.ext, storage_slug: databaseResources.storage_slug }, storedResource);
+    assert.deepEqual(
+      {
+        id: databaseResources.id,
+        ext: databaseResources.ext,
+        storage_slug: databaseResources.storage_slug
+      },
+      storedResource
+    );
     await coordinator.initializeReadyImageCacheCoordinator();
     await coordinator.requestReadyImageCacheRebuild();
     assert.equal(coordinator.getReadyImageCacheCoordinatorStatus().readable, true);
@@ -257,11 +274,14 @@ await runIntegrationScenario(async (runtime) => {
       page: 1,
       limit: 10
     });
-    assert.deepEqual(adminPage.items.map((item) => item.id), expectedOrder);
+    assert.deepEqual(
+      adminPage.items.map((item) => item.id),
+      expectedOrder
+    );
     assert.equal(adminPage.total, 3);
-    const cachedDetails = await Promise.all(imageIds.map((id) => (
-      publicImages.getPublicImage(id, undefined, true)
-    )));
+    const cachedDetails = await Promise.all(
+      imageIds.map((id) => publicImages.getPublicImage(id, undefined, true))
+    );
     assert.deepEqual(cachedDetails, databaseDetails);
     const cachedOriginal = await readServingResources();
     assert.ok(cachedOriginal);
@@ -274,13 +294,27 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal((await (await detailRequest(sessionCookie)).json()).item.original_url, null);
     await assertOriginalDenied(sessionCookie);
     const revokedId = await login();
-    await runtime.databasePools.pool.query("UPDATE admin_account SET role='image' WHERE username='integration-admin'");
-    assert.equal((await (await detailRequest(`imageshow_session=${revokedId}`)).json()).item.original_url, null);
+    await runtime.databasePools.pool.query(
+      "UPDATE admin_account SET role='image' WHERE username='integration-admin'"
+    );
+    assert.equal(
+      (await (await detailRequest(`imageshow_session=${revokedId}`)).json()).item.original_url,
+      null
+    );
     await assertOriginalDenied(`imageshow_session=${revokedId}`);
     const imageAdminId = await login();
-    assert.equal((await (await detailRequest(`imageshow_session=${imageAdminId}`)).json()).item.original_url, databaseDetails[0].original_url);
-    for (const method of ["GET", "HEAD"]) assert.equal((await resourceRequest(`imageshow_session=${imageAdminId}`, method)).status, 302);
-    await runtime.databasePools.pool.query("UPDATE admin_account SET role='super' WHERE username='integration-admin'");
+    assert.equal(
+      (await (await detailRequest(`imageshow_session=${imageAdminId}`)).json()).item.original_url,
+      databaseDetails[0].original_url
+    );
+    for (const method of ["GET", "HEAD"])
+      assert.equal(
+        (await resourceRequest(`imageshow_session=${imageAdminId}`, method)).status,
+        302
+      );
+    await runtime.databasePools.pool.query(
+      "UPDATE admin_account SET role='super' WHERE username='integration-admin'"
+    );
     const trashAdminId = await login();
     const snapshots = await adminImages.getAdminImageSnapshots(imageIds);
     assert.deepEqual(
@@ -292,37 +326,49 @@ await runIntegrationScenario(async (runtime) => {
       databaseDetails.map((item) => item.source)
     );
     for (const item of adminPage.items) {
-      assert.equal(item.original_url, databaseDetails.find((detail) => (
-        detail.id === item.id
-      ))?.original_url);
-      assert.equal(item.source, databaseDetails.find((detail) => (
-        detail.id === item.id
-      ))?.source);
+      assert.equal(
+        item.original_url,
+        databaseDetails.find((detail) => detail.id === item.id)?.original_url
+      );
+      assert.equal(item.source, databaseDetails.find((detail) => detail.id === item.id)?.source);
     }
-    const publicPage = await publicImages.listPublicImages({
-      status: "ready",
-      view: "gallery",
-      theme,
-      tag,
-      author,
-      order: "latest",
-      limit: 10
-    }, new AbortController().signal);
-    assert.deepEqual(publicPage.items.map((item) => item.id), expectedOrder);
+    const publicPage = await publicImages.listPublicImages(
+      {
+        status: "ready",
+        view: "gallery",
+        theme,
+        tag,
+        author,
+        order: "latest",
+        limit: 10
+      },
+      new AbortController().signal
+    );
+    assert.deepEqual(
+      publicPage.items.map((item) => item.id),
+      expectedOrder
+    );
     assert.equal(publicPage.next_cursor, null);
     await trash.moveImagesToTrash([imageIds[0]]);
     const trashedResources = await readServingResources();
     assert.equal(trashedResources?.original, originalUrl);
     assert.ok(trashedResources);
-    assert.deepEqual({ id: trashedResources.id, ext: trashedResources.ext, storage_slug: trashedResources.storage_slug }, storedResource);
+    assert.deepEqual(
+      {
+        id: trashedResources.id,
+        ext: trashedResources.ext,
+        storage_slug: trashedResources.storage_slug
+      },
+      storedResource
+    );
     const deletedPage = await adminImages.listAdminImages({
-      status: "deleted", theme, page: 1, limit: 10
+      status: "deleted",
+      theme,
+      page: 1,
+      limit: 10
     });
     assert.equal(deletedPage.items.length, 1);
-    assert.equal(
-      deletedPage.items[0].original_url,
-      databaseDetails[0].original_url
-    );
+    assert.equal(deletedPage.items[0].original_url, databaseDetails[0].original_url);
     assert.equal(deletedPage.items[0].object_url, databaseDetails[0].object_url);
     assert.equal((await detailRequest()).status, 404);
     await assertOriginalDenied();
@@ -331,19 +377,27 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(trashedOriginal.headers.get("Location"), originalUrl);
     assert.equal(trashedOriginal.headers.get("Cache-Control"), "private, no-cache");
     await trash.restoreImages([imageIds[0]]);
-    assert.equal((await publicImages.getPublicImage(imageIds[0], undefined, true)).original_url, databaseDetails[0].original_url);
+    assert.equal(
+      (await publicImages.getPublicImage(imageIds[0], undefined, true)).original_url,
+      databaseDetails[0].original_url
+    );
   } catch (error) {
     errors.push(error);
   }
   const cleanupSteps: Array<() => Promise<unknown>> = [
-    async () => { globalThis.fetch = originalFetch; },
+    async () => {
+      globalThis.fetch = originalFetch;
+    },
     () => runtime.runtimeConfigStore.replaceRuntimeConfig(baselineConfig),
-    () => runtime.databasePools.pool.query("UPDATE admin_account SET role='super' WHERE username='integration-admin'"),
-    ...sessionIds.map(id => () => runtime.redisClient.redis.del(adminSessionKey(id))),
-    () => runtime.databasePools.pool.query(
-      "DELETE FROM metadata WHERE id = ANY($1::uuid[])",
-      [imageIds]
-    ),
+    () =>
+      runtime.databasePools.pool.query(
+        "UPDATE admin_account SET role='super' WHERE username='integration-admin'"
+      ),
+    ...sessionIds.map((id) => () => runtime.redisClient.redis.del(adminSessionKey(id))),
+    () =>
+      runtime.databasePools.pool.query("DELETE FROM metadata WHERE id = ANY($1::uuid[])", [
+        imageIds
+      ]),
     () => runtime.databasePools.pool.query("DELETE FROM tag WHERE slug=$1", [tag]),
     () => runtime.databasePools.pool.query("DELETE FROM theme WHERE slug=$1", [theme]),
     () => runtime.databasePools.pool.query("DELETE FROM author WHERE slug=$1", [author]),

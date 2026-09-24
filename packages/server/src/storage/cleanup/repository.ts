@@ -2,23 +2,18 @@ import type { PoolClient } from "pg";
 import type { ReadablePrefix } from "../objects/keys.ts";
 import { pool } from "../../core/database/pools.ts";
 import { enqueueRerunnableJobs } from "../../jobs/repository.ts";
-import type {
-  CapturedMoveCleanupObject,
-  MoveCleanupJobPayload
-} from "./types.ts";
+import type { CapturedMoveCleanupObject, MoveCleanupJobPayload } from "./types.ts";
 
-function normalizedCleanupObjects(
-  objects: readonly CapturedMoveCleanupObject[]
-) {
-  return [...new Map(
-    objects.map((object) => [
-      `${object.backend}:${object.prefix}:${object.key}`,
-      object
-    ])
-  ).values()].sort((left, right) => (
-    `${left.backend}:${left.prefix}:${left.key}`
-      .localeCompare(`${right.backend}:${right.prefix}:${right.key}`)
-  ));
+function normalizedCleanupObjects(objects: readonly CapturedMoveCleanupObject[]) {
+  return [
+    ...new Map(
+      objects.map((object) => [`${object.backend}:${object.prefix}:${object.key}`, object])
+    ).values()
+  ].sort((left, right) =>
+    `${left.backend}:${left.prefix}:${left.key}`.localeCompare(
+      `${right.backend}:${right.prefix}:${right.key}`
+    )
+  );
 }
 
 function cleanupIdempotencyKey(
@@ -43,13 +38,18 @@ export async function enqueueMoveCleanupJob(
     confirmAbsentAfter?: Date;
   }> = {}
 ) {
-  await enqueueMoveCleanupJobs([{
-    imageId,
-    objects,
-    reason,
-    guardToken: options.guardToken,
-    confirmAbsentAfter: options.confirmAbsentAfter
-  }], options.client);
+  await enqueueMoveCleanupJobs(
+    [
+      {
+        imageId,
+        objects,
+        reason,
+        guardToken: options.guardToken,
+        confirmAbsentAfter: options.confirmAbsentAfter
+      }
+    ],
+    options.client
+  );
 }
 
 /**
@@ -98,15 +98,17 @@ export async function readRunningMoveCleanupJobPayload(
   jobId: string,
   executionToken: string
 ): Promise<Record<string, unknown> | null> {
-  const row = (await pool.query(
-    `SELECT payload
+  const row = (
+    await pool.query(
+      `SELECT payload
        FROM background_job
       WHERE id=$1
         AND type='move.cleanup'
         AND status='running'
         AND execution_token=$2`,
-    [jobId, executionToken]
-  )).rows[0] as { payload: Record<string, unknown> } | undefined;
+      [jobId, executionToken]
+    )
+  ).rows[0] as { payload: Record<string, unknown> } | undefined;
   return row?.payload ?? null;
 }
 
@@ -118,10 +120,7 @@ type MoveCleanupJobInput = Readonly<{
   confirmAbsentAfter?: Date;
 }>;
 
-async function enqueueMoveCleanupJobs(
-  jobs: readonly MoveCleanupJobInput[],
-  client?: PoolClient
-) {
+async function enqueueMoveCleanupJobs(jobs: readonly MoveCleanupJobInput[], client?: PoolClient) {
   const normalized = jobs.flatMap((job) => {
     const objects = normalizedCleanupObjects(job.objects);
     if (!objects.length) return [];
@@ -133,16 +132,14 @@ async function enqueueMoveCleanupJobs(
         ? { confirm_absent_after: job.confirmAbsentAfter.toISOString() }
         : {})
     };
-    return [{
-      type: "move.cleanup" as const,
-      targetId: job.imageId,
-      payload,
-      idempotencyKey: cleanupIdempotencyKey(
-        job.imageId,
-        objects,
-        job.guardToken
-      )
-    }];
+    return [
+      {
+        type: "move.cleanup" as const,
+        targetId: job.imageId,
+        payload,
+        idempotencyKey: cleanupIdempotencyKey(job.imageId, objects, job.guardToken)
+      }
+    ];
   });
   await enqueueRerunnableJobs(normalized, client);
 }
@@ -157,8 +154,9 @@ export type MoveCleanupJobCount = {
 async function unresolvedMoveCleanupJobCounts(
   storageSlug: string | null
 ): Promise<MoveCleanupJobCount[]> {
-  const rows = (await pool.query(
-    `WITH unresolved AS (
+  const rows = (
+    await pool.query(
+      `WITH unresolved AS (
        SELECT id, payload, status, next_retry_at
          FROM background_job
         WHERE type='move.cleanup'
@@ -192,15 +190,14 @@ async function unresolvedMoveCleanupJobCounts(
             )::int AS exhausted_cleanup_job_count
        FROM cleanup_references
       GROUP BY backend`,
-    [storageSlug]
-  )).rows;
+      [storageSlug]
+    )
+  ).rows;
   return rows.map((row) => ({
     storage_slug: String(row.storage_slug),
     cleanup_job_count: Number(row.cleanup_job_count ?? 0),
     failed_cleanup_job_count: Number(row.failed_cleanup_job_count ?? 0),
-    exhausted_cleanup_job_count: Number(
-      row.exhausted_cleanup_job_count ?? 0
-    )
+    exhausted_cleanup_job_count: Number(row.exhausted_cleanup_job_count ?? 0)
   }));
 }
 
@@ -210,8 +207,7 @@ export function listUnresolvedMoveCleanupJobCounts() {
 }
 
 export async function countUnresolvedMoveCleanupJobs(storageSlug: string) {
-  return (await unresolvedMoveCleanupJobCounts(storageSlug))[0]
-    ?.cleanup_job_count ?? 0;
+  return (await unresolvedMoveCleanupJobCounts(storageSlug))[0]?.cleanup_job_count ?? 0;
 }
 
 export type UnresolvedMoveCleanupReference = {
@@ -227,8 +223,9 @@ export async function listUnresolvedMoveCleanupReferences(
   prefix: ReadablePrefix,
   key: string
 ): Promise<UnresolvedMoveCleanupReference[]> {
-  const rows = (await pool.query(
-    `WITH unresolved AS (
+  const rows = (
+    await pool.query(
+      `WITH unresolved AS (
        SELECT target_id,
               NULLIF(payload->>'reason', '') AS reason,
               NULLIF(payload->>'guard_token', '') AS guard_token,
@@ -258,8 +255,9 @@ export async function listUnresolvedMoveCleanupReferences(
         AND namespace_identity IS NOT NULL
         AND prefix=$1
         AND key=$2`,
-    [prefix, key]
-  )).rows;
+      [prefix, key]
+    )
+  ).rows;
   return rows.map((row) => ({
     backend: String(row.backend),
     namespace_identity: String(row.namespace_identity),

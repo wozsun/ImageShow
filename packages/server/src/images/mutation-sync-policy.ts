@@ -7,28 +7,22 @@ export type ImageMutationSyncDecision =
 
 export type ImageMutationSyncResult =
   | {
-    mode: "none";
-    affectedCount: 0;
-    cacheAction: "none";
-  }
+      mode: "none";
+      affectedCount: 0;
+      cacheAction: "none";
+    }
   | {
-    mode: "exact";
-    affectedCount: number;
-    cacheAction:
-      | "synchronized"
-      | "rebuild_requested"
-      | "not_initialized"
-      | "not_needed";
-  }
+      mode: "exact";
+      affectedCount: number;
+      cacheAction: "synchronized" | "rebuild_requested" | "not_initialized" | "not_needed";
+    }
   | {
-    mode: "rebuild";
-    affectedCount: number;
-    cacheAction: "rebuild_requested" | "not_initialized" | "not_needed";
-  };
+      mode: "rebuild";
+      affectedCount: number;
+      cacheAction: "rebuild_requested" | "not_initialized" | "not_needed";
+    };
 
-export function decideImageMutationSync(
-  affectedCount: number
-): ImageMutationSyncDecision {
+export function decideImageMutationSync(affectedCount: number): ImageMutationSyncDecision {
   if (!Number.isSafeInteger(affectedCount) || affectedCount < 0) {
     throw new Error("Image mutation affected count must be a non-negative integer");
   }

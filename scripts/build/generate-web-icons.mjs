@@ -6,9 +6,7 @@ const repo = resolve(import.meta.dirname, "..", "..");
 const webPackage = resolve(repo, "packages", "web");
 const iconDirectory = resolve(webPackage, "src", "components", "icon");
 const checkOnly = process.argv.slice(2).includes("--check");
-const unknownArguments = process.argv.slice(2).filter((argument) => (
-  argument !== "--check"
-));
+const unknownArguments = process.argv.slice(2).filter((argument) => argument !== "--check");
 if (unknownArguments.length > 0) {
   throw new Error(`Unknown generate-icons arguments: ${unknownArguments.join(", ")}`);
 }
@@ -132,7 +130,9 @@ for (const name of [...iconNames].sort()) {
   const drawables = [...svg.matchAll(/<(path|circle|rect|g|polygon|line|ellipse|polyline)\b/g)];
   const pathData = svg.match(/<path\b[^>]*\bd="([^"]+)"/);
   if (drawables.length !== 1 || !pathData) {
-    throw new Error(`Icon "${name}" is not a single <path> (found ${drawables.length} drawable element(s)); the inline path-map can't represent it`);
+    throw new Error(
+      `Icon "${name}" is not a single <path> (found ${drawables.length} drawable element(s)); the inline path-map can't represent it`
+    );
   }
   const path = pathData[1];
   const duplicateName = nameByPath.get(path);
@@ -164,17 +164,15 @@ if (checkOnly) {
   }
   if (stale.length > 0) {
     throw new Error(
-      "Generated icon sources are stale; run `npm run icons:generate`: "
-      + stale.map((file) => file.replace(`${repo}\\`, "")).join(", ")
+      "Generated icon sources are stale; run `npm run icons:generate`: " +
+        stale.map((file) => file.replace(`${repo}\\`, "")).join(", ")
     );
   }
   console.log(
     `generate-icons: verified ${iconGroups.map((group) => `${group.names.length} ${group.label}`).join(" and ")} icons`
   );
 } else {
-  await Promise.all(iconGroups.map((group) => (
-    writeFile(group.outFile, generatedSource(group))
-  )));
+  await Promise.all(iconGroups.map((group) => writeFile(group.outFile, generatedSource(group))));
   console.log(
     `generate-icons: wrote ${iconGroups.map((group) => `${group.names.length} ${group.label}`).join(" and ")} icons without duplicate paths`
   );

@@ -3,7 +3,9 @@
   flex-direction: column;
   overflow: hidden;
 }
-.settings-page > .workspace-head { flex: 0 0 auto; }
+.settings-page > .workspace-head {
+  flex: 0 0 auto;
+}
 .settings-scroll-region {
   flex: 1;
   min-height: 0;
@@ -20,13 +22,17 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--admin-card-grid-gap);
 }
-.settings-card-wide { grid-column: 1 / -1; }
+.settings-card-wide {
+  grid-column: 1 / -1;
+}
 .settings-field-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px 12px;
 }
-.settings-field-grid label { margin-bottom: 0; }
+.settings-field-grid label {
+  margin-bottom: 0;
+}
 .settings-head-actions {
   display: flex;
   align-items: center;
@@ -50,8 +56,12 @@
   margin-bottom: 10px;
   color: var(--admin-color-text-label);
 }
-.settings-grid section > h2:has(+ .hint) { margin-bottom: 4px; }
-.settings-grid section > h2 + .hint { margin-bottom: 18px; }
+.settings-grid section > h2:has(+ .hint) {
+  margin-bottom: 4px;
+}
+.settings-grid section > h2 + .hint {
+  margin-bottom: 18px;
+}
 .settings-grid label:has(input[type="checkbox"]) {
   grid-template-columns: auto 1fr;
   align-items: center;
@@ -63,7 +73,14 @@
 }
 
 @media (max-width: 760px) {
-  .settings-grid { grid-template-columns: 1fr; }
-  .settings-head-actions { flex-wrap: wrap; }
-  .settings-head-actions .settings-config-button { flex: 1 1 auto; min-width: 0; }
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+  .settings-head-actions {
+    flex-wrap: wrap;
+  }
+  .settings-head-actions .settings-config-button {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 }

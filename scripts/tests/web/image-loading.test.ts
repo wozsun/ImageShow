@@ -29,17 +29,27 @@ function imageHarness(t: TestContext) {
     }
   });
   return {
-    container, scheduler, root,
+    container,
+    scheduler,
+    root,
     async render(props: React.ComponentProps<typeof ProgressiveImage>) {
       await React.act(async () => {
-        root.render(React.createElement(ImageLoadSchedulerProvider, {
-          scheduler,
-          children: React.createElement(React.StrictMode, null, React.createElement(ProgressiveImage, props))
-        }));
+        root.render(
+          React.createElement(ImageLoadSchedulerProvider, {
+            scheduler,
+            children: React.createElement(
+              React.StrictMode,
+              null,
+              React.createElement(ProgressiveImage, props)
+            )
+          })
+        );
       });
     },
     async dispatch(image: HTMLImageElement, event: string) {
-      await React.act(async () => { image.dispatchEvent(new Event(event)); });
+      await React.act(async () => {
+        image.dispatchEvent(new Event(event));
+      });
     },
     full() {
       const element = container.querySelector<HTMLImageElement>('[data-image-role="full"]');
@@ -53,7 +63,12 @@ for (const thumbSrc of ["", "/thumb.webp"]) {
   test(`[Web/图片详情] 完整图失败可显式重试且保留可用图层 / ${thumbSrc ? "有缩略图" : "无缩略图"}`, async (t) => {
     const h = imageHarness(t);
     let parentClicks = 0;
-    await h.render({ imageKey: "a", fullSrc: "/full.jpg", thumbSrc, onClick: () => parentClicks++ });
+    await h.render({
+      imageKey: "a",
+      fullSrc: "/full.jpg",
+      thumbSrc,
+      onClick: () => parentClicks++
+    });
     const thumbnail = h.container.querySelector<HTMLImageElement>(".progressive-image-thumb");
     if (thumbSrc) {
       assert.ok(thumbnail);

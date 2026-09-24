@@ -15,9 +15,7 @@ export type IngestionQueueMutation = Readonly<{
   completedItem?: CompletedIngestionImageDto;
 }>;
 
-export type IngestionQueueListener = (
-  event: IngestionQueueMutation
-) => void | Promise<void>;
+export type IngestionQueueListener = (event: IngestionQueueMutation) => void | Promise<void>;
 
 export class IngestionQueueListenerHub {
   readonly #listeners = new Map<string, Set<IngestionQueueListener>>();
@@ -26,16 +24,9 @@ export class IngestionQueueListenerHub {
     return `${owner}\0${queue}`;
   }
 
-  subscribe(
-    owner: string,
-    queue: IngestionQueueType,
-    listener: IngestionQueueListener
-  ) {
+  subscribe(owner: string, queue: IngestionQueueType, listener: IngestionQueueListener) {
     const scope = this.#scope(owner, queue);
-    const listeners = this.#listeners.getOrInsertComputed(
-      scope,
-      () => new Set()
-    );
+    const listeners = this.#listeners.getOrInsertComputed(scope, () => new Set());
     listeners.add(listener);
     return () => {
       listeners.delete(listener);
@@ -44,9 +35,9 @@ export class IngestionQueueListenerHub {
   }
 
   publish(event: IngestionQueueMutation) {
-    for (const listener of [...(this.#listeners.get(
-      this.#scope(event.owner, event.queue)
-    ) ?? [])]) {
+    for (const listener of [
+      ...(this.#listeners.get(this.#scope(event.owner, event.queue)) ?? [])
+    ]) {
       try {
         void Promise.resolve(listener(event)).catch((error: unknown) => {
           logger.error("ingestion_queue_listener_failed", error);

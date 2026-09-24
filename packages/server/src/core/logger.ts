@@ -14,9 +14,7 @@ let runtimeLogConfig = () => appConfig.runtimeDefaults.log as RuntimeLogConfig;
 
 let currentLogBytes = 0;
 
-export function configureRuntimeLogger(
-  getLogConfig: () => RuntimeLogConfig
-) {
+export function configureRuntimeLogger(getLogConfig: () => RuntimeLogConfig) {
   runtimeLogConfig = getLogConfig;
 }
 

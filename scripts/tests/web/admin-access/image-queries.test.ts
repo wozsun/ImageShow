@@ -1,9 +1,7 @@
 import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  parseHTML
-} from "linkedom";
+import { parseHTML } from "linkedom";
 import {
   adminPermissions,
   type AdminPreferences,
@@ -16,30 +14,18 @@ import {
   apiWithEtag,
   clearCsrfToken
 } from "../../../../packages/web/src/lib/api/client.ts";
-import {
-  invalidateImageDataAfterMetadataSave
-} from "../../../../packages/web/src/lib/api/query-invalidation.ts";
-import {
-  queryKeys
-} from "../../../../packages/web/src/lib/api/query-keys.ts";
+import { invalidateImageDataAfterMetadataSave } from "../../../../packages/web/src/lib/api/query-invalidation.ts";
+import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
 
-import {
-  adminRoutePreloadPolicies
-} from "../../../../packages/web/src/pages/admin/shell/admin-route-modules.ts";
-import {
-  createPageLifetimeModuleLoader
-} from "../../../../packages/web/src/lib/page-lifetime-module-loader.ts";
-import {
-  createPublicRouteModuleLoader
-} from "../../../../packages/web/src/lib/public-route-modules.ts";
+import { adminRoutePreloadPolicies } from "../../../../packages/web/src/pages/admin/shell/admin-route-modules.ts";
+import { createPageLifetimeModuleLoader } from "../../../../packages/web/src/lib/page-lifetime-module-loader.ts";
+import { createPublicRouteModuleLoader } from "../../../../packages/web/src/lib/public-route-modules.ts";
 import {
   preloadIntentProps,
   usePreloadIntentProps
 } from "../../../../packages/web/src/lib/ui/preload-intent.ts";
 
-import {
-  useImageAdminPageNavigation
-} from "../../../../packages/web/src/pages/admin/images/useImageAdminPageNavigation.ts";
+import { useImageAdminPageNavigation } from "../../../../packages/web/src/pages/admin/images/useImageAdminPageNavigation.ts";
 import {
   adminImageListQuery,
   effectiveImageAdminPage,
@@ -48,16 +34,10 @@ import {
   resetImageAdminPage,
   resolveImageAdminScopeTotal
 } from "../../../../packages/web/src/pages/admin/images/image-admin-list-query.ts";
-import {
-  emptyImageAdminFilters
-} from "../../../../packages/web/src/pages/admin/images/ImageAdminFilters.tsx";
-import {
-  galleryCard
-} from "../../support/web-test-context.ts";
+import { emptyImageAdminFilters } from "../../../../packages/web/src/pages/admin/images/ImageAdminFilters.tsx";
+import { galleryCard } from "../../support/web-test-context.ts";
 
-import {
-  installControlledClock
-} from "../../support/controlled-clock.ts";
+import { installControlledClock } from "../../support/controlled-clock.ts";
 
 test("[Web/后台访问] API 拒绝损坏成功响应且保留已有查询快照和安全 HTTP 错误", async () => {
   const { QueryClient } = await import("@tanstack/react-query");
@@ -74,19 +54,26 @@ test("[Web/后台访问] API 拒绝损坏成功响应且保留已有查询快照
         assert.deepEqual(error.details, {});
         return true;
       };
-      await assert.rejects(client.fetchQuery({
-        queryKey: queryKeys.siteConfig,
-        queryFn: () => api("/api/site-config")
-      }), assertSafeError);
+      await assert.rejects(
+        client.fetchQuery({
+          queryKey: queryKeys.siteConfig,
+          queryFn: () => api("/api/site-config")
+        }),
+        assertSafeError
+      );
       assert.equal(client.getQueryData(queryKeys.siteConfig), undefined);
       assert.equal(client.getQueryState(queryKeys.siteConfig)?.status, "error");
       await assert.rejects(apiWithEtag("/api/site-config"), assertSafeError);
     }
     const prior = { site: { title: "可用快照" } };
     client.setQueryData(queryKeys.siteConfig, prior, { updatedAt: 123 });
-    await assert.rejects(client.fetchQuery({
-      queryKey: queryKeys.siteConfig, queryFn: () => api("/api/site-config"), staleTime: 0
-    }));
+    await assert.rejects(
+      client.fetchQuery({
+        queryKey: queryKeys.siteConfig,
+        queryFn: () => api("/api/site-config"),
+        staleTime: 0
+      })
+    );
     assert.strictEqual(client.getQueryData(queryKeys.siteConfig), prior);
     assert.equal(client.getQueryState(queryKeys.siteConfig)?.dataUpdatedAt, 123);
     for (const value of [{ ok: true, items: [] }, [1, 2], null]) {
@@ -95,7 +82,8 @@ test("[Web/后台访问] API 拒绝损坏成功响应且保留已有查询快照
     }
     globalThis.fetch = (async () => new Response(null, { status: 204 })) as typeof fetch;
     assert.deepEqual(await api("/api/images", { method: "OPTIONS" }), {});
-    globalThis.fetch = (async () => new Response("<html>private proxy error</html>", { status: 502 })) as typeof fetch;
+    globalThis.fetch = (async () =>
+      new Response("<html>private proxy error</html>", { status: 502 })) as typeof fetch;
     await assert.rejects(api("/api/site-config"), (error: unknown) => {
       assert.ok(error instanceof ApiClientError);
       assert.equal(error.message, "HTTP 502");
@@ -195,10 +183,7 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
     resolve: (value: { page: string }) => void;
     reject: (error: Error) => void;
   }> = [];
-  const routeWindowDescriptor = Object.getOwnPropertyDescriptor(
-    globalThis,
-    "window"
-  );
+  const routeWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
   Reflect.deleteProperty(globalThis, "window");
   try {
     const retryableLoader = createPublicRouteModuleLoader(() => {
@@ -239,7 +224,13 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     writable: true,
-    value: { location: { reload: () => { documentReloads += 1; } } }
+    value: {
+      location: {
+        reload: () => {
+          documentReloads += 1;
+        }
+      }
+    }
   });
   try {
     completedFailureLoader.preload();
@@ -248,11 +239,7 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
     const recovery = completedFailureLoader.load();
     assert.ok(recovery instanceof Promise);
     assert.equal(documentReloads, 1);
-    assert.equal(
-      completedPreloadImports,
-      1,
-      "已缓存失败不能在当前文档重试同一原生模块"
-    );
+    assert.equal(completedPreloadImports, 1, "已缓存失败不能在当前文档重试同一原生模块");
   } finally {
     if (previousWindow) {
       Object.defineProperty(globalThis, "window", previousWindow);
@@ -297,9 +284,9 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -378,44 +365,49 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
   assert.notEqual(scope, pageSizeScope);
   assert.notEqual(scope, unsetScope);
   assert.equal(
-    effectiveImageAdminPage({
-      scopeKey: scope,
-      page: 100,
-      total: 6_000,
-      totalUpdatedAt: 1
-    }, scope),
+    effectiveImageAdminPage(
+      {
+        scopeKey: scope,
+        page: 100,
+        total: 6_000,
+        totalUpdatedAt: 1
+      },
+      scope
+    ),
     100
   );
   assert.equal(
-    effectiveImageAdminPage({
-      scopeKey: scope,
-      page: 100,
-      total: 6_000,
-      totalUpdatedAt: 1
-    }, unsetScope),
+    effectiveImageAdminPage(
+      {
+        scopeKey: scope,
+        page: 100,
+        total: 6_000,
+        totalUpdatedAt: 1
+      },
+      unsetScope
+    ),
     1
   );
-  const hiddenThemeScope = imageAdminPaginationScopeKey("unset", {
-    ...emptyImageAdminFilters,
-    theme: "night"
-  }, 60);
-  const emptyUnsetScope = imageAdminPaginationScopeKey(
+  const hiddenThemeScope = imageAdminPaginationScopeKey(
     "unset",
-    emptyImageAdminFilters,
+    {
+      ...emptyImageAdminFilters,
+      theme: "night"
+    },
     60
   );
-  assert.equal(
-    hiddenThemeScope,
-    emptyUnsetScope,
-    "无主题视图的隐藏主题值不得建立第二个查询 scope"
-  );
+  const emptyUnsetScope = imageAdminPaginationScopeKey("unset", emptyImageAdminFilters, 60);
+  assert.equal(hiddenThemeScope, emptyUnsetScope, "无主题视图的隐藏主题值不得建立第二个查询 scope");
   assert.deepEqual(
-    resetImageAdminPage({
-      scopeKey: hiddenThemeScope,
-      page: 8,
-      total: 480,
-      totalUpdatedAt: 12
-    }, hiddenThemeScope),
+    resetImageAdminPage(
+      {
+        scopeKey: hiddenThemeScope,
+        page: 8,
+        total: 480,
+        totalUpdatedAt: 12
+      },
+      hiddenThemeScope
+    ),
     {
       scopeKey: hiddenThemeScope,
       page: 1,
@@ -524,25 +516,10 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
       }
     }
   ]) {
-    assert.deepEqual(
-      resolveImageAdminScopeTotal(scenario.input),
-      scenario.expected,
-      scenario.name
-    );
+    assert.deepEqual(resolveImageAdminScopeTotal(scenario.input), scenario.expected, scenario.name);
   }
-  const options = adminImageListQuery(
-    "ready",
-    filters,
-    scope,
-    100,
-    60
-  );
-  assert.deepEqual(options.queryKey, [
-    ...queryKeys.adminImages,
-    scope,
-    100,
-    60
-  ]);
+  const options = adminImageListQuery("ready", filters, scope, 100, 60);
+  assert.deepEqual(options.queryKey, [...queryKeys.adminImages, scope, 100, 60]);
   const requested: string[] = [];
   const validators: string[] = [];
   const previousFetch = globalThis.fetch;
@@ -555,17 +532,20 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
         headers: { ETag: 'W/"admin-page"' }
       });
     }
-    return new Response(JSON.stringify({
-      ok: true,
-      items: [],
-      total: 6_000
-    }), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        ETag: 'W/"admin-page"'
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        items: [],
+        total: 6_000
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ETag: 'W/"admin-page"'
+        }
       }
-    });
+    );
   };
   try {
     const { QueryClient } = await import("@tanstack/react-query");
@@ -602,13 +582,7 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
   assert.equal(target.searchParams.get("sort_by"), "image_time");
   assert.equal(target.searchParams.get("order"), "latest");
 
-  const unsetOptions = adminImageListQuery(
-    "unset",
-    filters,
-    unsetScope,
-    1,
-    60
-  );
+  const unsetOptions = adminImageListQuery("unset", filters, unsetScope, 1, 60);
   const previousUnsetFetch = globalThis.fetch;
   let unsetUrl = "";
   globalThis.fetch = async (input) => {
@@ -631,7 +605,6 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
   assert.equal(unsetTarget.searchParams.get("status"), "ready");
   assert.equal(unsetTarget.searchParams.get("theme"), "null");
   assert.equal(unsetTarget.searchParams.get("page"), "1");
-
 });
 test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试并一次夹紧", async (t) => {
   const { window, document } = parseHTML(
@@ -653,9 +626,9 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -703,29 +676,26 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
         resolvePage100 = resolve;
       });
     }
-    if (
-      url.searchParams.get("status") === "ready"
-      && page === 50
-      && page50Attempts++ === 0
-    ) {
-      return new Response(JSON.stringify({
-        ok: false,
-        code: "controlled_failure",
-        error: "controlled page failure",
-        details: {}
-      }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" }
-      });
+    if (url.searchParams.get("status") === "ready" && page === 50 && page50Attempts++ === 0) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          code: "controlled_failure",
+          error: "controlled page failure",
+          details: {}
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
     }
     if (url.searchParams.get("theme") === "null") {
       return new Promise<Response>((resolve) => {
         resolveUnsetPage = resolve;
       });
     }
-    const total = url.searchParams.get("status") === "ready" && page === 50
-      ? 120
-      : 6_000;
+    const total = url.searchParams.get("status") === "ready" && page === 50 ? 120 : 6_000;
     return new Response(JSON.stringify({ ok: true, items: [], total }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
@@ -734,9 +704,7 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { QueryClient, QueryClientProvider } = await import(
-      "@tanstack/react-query"
-    );
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const client = new QueryClient({
       defaultOptions: {
         queries: {
@@ -754,21 +722,14 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     let latest!: ReturnType<typeof useImageAdminPageNavigation>;
     function Harness() {
       latest = useImageAdminPageNavigation(props);
-      return React.createElement(
-        "output",
-        null,
-        `${latest.pageNumber}:${latest.totalPages}`
-      );
+      return React.createElement("output", null, `${latest.pageNumber}:${latest.totalPages}`);
     }
-    const tree = () => React.createElement(
-      React.StrictMode,
-      null,
+    const tree = () =>
       React.createElement(
-        QueryClientProvider,
-        { client },
-        React.createElement(Harness)
-      )
-    );
+        React.StrictMode,
+        null,
+        React.createElement(QueryClientProvider, { client }, React.createElement(Harness))
+      );
     const container = document.getElementById("root");
     assert.ok(container);
     const root = createRoot(container);
@@ -787,12 +748,7 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     assert.equal(latest.hasCurrentPageData, true);
     assert.equal(requests.length, 1, "Strict Mode 初始查询必须单飞");
 
-    const pageOneState = client.getQueryState([
-      ...queryKeys.adminImages,
-      latest.scopeKey,
-      1,
-      60
-    ]);
+    const pageOneState = client.getQueryState([...queryKeys.adminImages, latest.scopeKey, 1, 60]);
     assert.ok(pageOneState);
     const page80Key = [...queryKeys.adminImages, latest.scopeKey, 80, 60];
     client.setQueryData(
@@ -830,18 +786,23 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     assert.equal(latest.total, 6_000, "加载目标页时必须保留已知总项数");
     assert.equal(latest.hasCurrentPageData, false);
     assert.equal(latest.items.length, 0, "不得把上一页 items 伪装成目标页内容");
-    const finishPage100 = resolvePage100 as (
-      ((response: Response) => void) | null
-    );
+    const finishPage100 = resolvePage100 as ((response: Response) => void) | null;
     assert.ok(finishPage100);
-    await React.act(async () => finishPage100(new Response(JSON.stringify({
-      ok: true,
-      items: [],
-      total: 6_000
-    }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    })));
+    await React.act(async () =>
+      finishPage100(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            items: [],
+            total: 6_000
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          }
+        )
+      )
+    );
     await waitFor(() => latest.pageNumber === 100 && !latest.isFetching);
     assert.equal(
       requests.filter((value) => new URL(value).searchParams.get("page") === "100").length,
@@ -860,35 +821,38 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     assert.equal(latest.pageNumber, 1, "scope 变化的同一渲染必须立即使用第 1 页");
     assert.equal(latest.totalPages, 1, "新 scope 不得沿用旧总页数");
     assert.equal(latest.total, 0, "新 scope 不得沿用旧总项数");
-    const finishUnsetPage = resolveUnsetPage as (
-      ((response: Response) => void) | null
-    );
+    const finishUnsetPage = resolveUnsetPage as ((response: Response) => void) | null;
     assert.ok(finishUnsetPage);
-    await React.act(async () => finishUnsetPage(new Response(JSON.stringify({
-      ok: true,
-      items: [],
-      total: 180
-    }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    })));
+    await React.act(async () =>
+      finishUnsetPage(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            items: [],
+            total: 180
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          }
+        )
+      )
+    );
     await waitFor(() => page75Aborted && latest.total === 180);
     assert.equal(latest.totalPages, 3);
-    assert.equal(requests.some((value) => {
-      const url = new URL(value);
-      return url.searchParams.get("theme") === "null"
-        && url.searchParams.get("page") !== "1";
-    }), false);
+    assert.equal(
+      requests.some((value) => {
+        const url = new URL(value);
+        return url.searchParams.get("theme") === "null" && url.searchParams.get("page") !== "1";
+      }),
+      false
+    );
 
     const beforeRouteReturn = requests.length;
     props = { ...props, view: "ready" };
     await React.act(async () => root.render(tree()));
     await waitFor(() => latest.pageNumber === 1 && latest.total === 6_000);
-    assert.equal(
-      requests.length,
-      beforeRouteReturn,
-      "返回 90 秒内的新鲜 scope 不得重新请求"
-    );
+    assert.equal(requests.length, beforeRouteReturn, "返回 90 秒内的新鲜 scope 不得重新请求");
 
     await React.act(async () => latest.loadPage(50, false));
     await waitFor(() => latest.pageNumber === 50 && latest.isError);
@@ -899,27 +863,20 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     await React.act(async () => {
       await latest.refetch();
     });
-    await waitFor(() => (
-      latest.pageNumber === 2
-      && latest.total === 6_000
-      && !latest.isFetching
-    ));
+    await waitFor(() => latest.pageNumber === 2 && latest.total === 6_000 && !latest.isFetching);
     const readyPages = requests
       .map((value) => new URL(value))
-      .filter((url) => (
-        url.searchParams.get("status") === "ready"
-        && url.searchParams.get("theme") !== "null"
-      ))
+      .filter(
+        (url) =>
+          url.searchParams.get("status") === "ready" && url.searchParams.get("theme") !== "null"
+      )
       .map((url) => url.searchParams.get("page"));
     assert.equal(readyPages.filter((page) => page === "50").length, 2);
     assert.equal(readyPages.filter((page) => page === "2").length, 1);
     assert.equal(
-      readyPages.some((page) => (
-        Number(page) > 2
-        && page !== "50"
-        && page !== "75"
-        && page !== "100"
-      )),
+      readyPages.some(
+        (page) => Number(page) > 2 && page !== "50" && page !== "75" && page !== "100"
+      ),
       false,
       "total 收缩只能直接夹到最终页，不能逐页回退"
     );
@@ -935,18 +892,23 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     assert.equal(latest.totalPages, 1, "page size scope 不得沿用旧总页数");
     assert.equal(latest.total, 0, "page size scope 不得沿用旧总项数");
     assert.equal(latest.items.length, 0);
-    const finishPageSizeRequest = resolvePageSizeRequest as (
-      ((response: Response) => void) | null
-    );
+    const finishPageSizeRequest = resolvePageSizeRequest as ((response: Response) => void) | null;
     assert.ok(finishPageSizeRequest);
-    await React.act(async () => finishPageSizeRequest(new Response(JSON.stringify({
-      ok: true,
-      items: [],
-      total: 6_000
-    }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    })));
+    await React.act(async () =>
+      finishPageSizeRequest(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            items: [],
+            total: 6_000
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          }
+        )
+      )
+    );
     await waitFor(() => latest.total === 6_000 && !latest.isFetching);
     assert.equal(requests.length, beforeStableRender + 1);
     const resized = new URL(requests.at(-1)!);
@@ -980,9 +942,8 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
       localStorageValues.delete(key);
     }
   };
-  const requestAnimationFrame = (callback: FrameRequestCallback) => (
-    setTimeout(() => callback(Date.now()), 0) as unknown as number
-  );
+  const requestAnimationFrame = (callback: FrameRequestCallback) =>
+    setTimeout(() => callback(Date.now()), 0) as unknown as number;
   const cancelAnimationFrame = (handle: number) => clearTimeout(handle);
   Object.defineProperty(window, "location", {
     configurable: true,
@@ -1009,10 +970,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
     includeGlobalTimers: true,
     includeDateNow: false
   });
-  const elementScrollTo = Object.getOwnPropertyDescriptor(
-    window.HTMLElement.prototype,
-    "scrollTo"
-  );
+  const elementScrollTo = Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, "scrollTo");
   Object.defineProperty(window.HTMLElement.prototype, "scrollTo", {
     configurable: true,
     writable: true,
@@ -1038,9 +996,9 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -1053,7 +1011,8 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
   const expectedListErrors: unknown[][] = [];
   const expectedMutationErrors: unknown[][] = [];
   console.error = (...args: unknown[]) => {
-    const report = args[0] === "[ImageShow]" ? args[1] as { context?: string } | undefined : undefined;
+    const report =
+      args[0] === "[ImageShow]" ? (args[1] as { context?: string } | undefined) : undefined;
     if (report?.context === "image_admin.list_load") {
       expectedListErrors.push(args);
       return;
@@ -1067,19 +1026,14 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { QueryClient, QueryClientProvider } = await import(
-      "@tanstack/react-query"
-    );
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { MemoryRouter } = await import("react-router");
-    const { AuthSessionProvider } = await import(
-      "../../../../packages/web/src/hooks/useAuthSession.tsx"
-    );
-    const { AdminPreferencesProvider } = await import(
-      "../../../../packages/web/src/hooks/useAdminPreferences.tsx"
-    );
-    const { ActionFeedbackProvider } = await import(
-      "../../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx"
-    );
+    const { AuthSessionProvider } =
+      await import("../../../../packages/web/src/hooks/useAuthSession.tsx");
+    const { AdminPreferencesProvider } =
+      await import("../../../../packages/web/src/hooks/useAdminPreferences.tsx");
+    const { ActionFeedbackProvider } =
+      await import("../../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
     const { registerHooks } = await import("node:module");
     const cssHooks = registerHooks({
       load(url, context, nextLoad) {
@@ -1089,22 +1043,20 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         return nextLoad(url, context);
       }
     });
-    const { ImageAdmin } = await import(
-      "../../../../packages/web/src/pages/admin/images/ImageAdmin.tsx"
-    ).finally(() => cssHooks.deregister());
-    const { ADMIN_ICONS } = await import(
-      "../../../../packages/web/src/components/icon/admin-icons.generated.ts"
-    );
+    const { ImageAdmin } =
+      await import("../../../../packages/web/src/pages/admin/images/ImageAdmin.tsx").finally(() =>
+        cssHooks.deregister()
+      );
+    const { ADMIN_ICONS } =
+      await import("../../../../packages/web/src/components/icon/admin-icons.generated.ts");
     const container = document.getElementById("root");
     assert.ok(container);
 
-    const jsonResponse = (value: unknown) => new Response(
-      JSON.stringify({ ok: true, ...value as Record<string, unknown> }),
-      {
+    const jsonResponse = (value: unknown) =>
+      new Response(JSON.stringify({ ok: true, ...(value as Record<string, unknown>) }), {
         status: 200,
         headers: { "content-type": "application/json" }
-      }
-    );
+      });
     const image = (serial: string): AdminImageListItemDto => ({
       ...galleryCard(`00000000-0000-7000-8000-${serial}`),
       description: "",
@@ -1140,28 +1092,27 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
     };
     const submitForm = async (target: HTMLFormElement) => {
       await React.act(async () => {
-        target.dispatchEvent(new window.Event("submit", {
-          bubbles: true,
-          cancelable: true
-        }));
+        target.dispatchEvent(
+          new window.Event("submit", {
+            bubbles: true,
+            cancelable: true
+          })
+        );
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
     };
     const buttonWithText = (text: string) => {
-      const target = [...document.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent?.includes(text));
+      const target = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+        button.textContent?.includes(text)
+      );
       assert.ok(target, `missing ${text} button`);
       return target;
     };
 
-    const runMutationScenario = async (
-      mode: "restore" | "purge" | "purge-unknown"
-    ) => {
+    const runMutationScenario = async (mode: "restore" | "purge" | "purge-unknown") => {
       const purgeMode = mode !== "restore";
       const mutationKind = purgeMode ? "purge" : "restore";
-      const permissions = purgeMode
-        ? [adminPermissions.imageTrashPurge]
-        : [];
+      const permissions = purgeMode ? [adminPermissions.imageTrashPurge] : [];
       const client = new QueryClient({
         defaultOptions: {
           queries: { retry: false, refetchOnWindowFocus: false }
@@ -1190,12 +1141,14 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         authors: []
       });
       client.setQueryData(queryKeys.storageOptions, {
-        backends: [{
-          slug: "local",
-          display_name: "本地存储",
-          enabled: true,
-          is_default: true
-        }]
+        backends: [
+          {
+            slug: "local",
+            display_name: "本地存储",
+            enabled: true,
+            is_default: true
+          }
+        ]
       });
 
       const listRequests: number[] = [];
@@ -1220,15 +1173,18 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
             });
           }
           if (page === 2 && !shrunk && pageTwoAttempts++ === 0) {
-            return new Response(JSON.stringify({
-              ok: false,
-              code: "controlled_failure",
-              error: "controlled page failure",
-              details: {}
-            }), {
-              status: 500,
-              headers: { "Content-Type": "application/json" }
-            });
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                code: "controlled_failure",
+                error: "controlled page failure",
+                details: {}
+              }),
+              {
+                status: 500,
+                headers: { "Content-Type": "application/json" }
+              }
+            );
           }
           if (page === 2 && !shrunk && !pageTwoStarted) {
             pageTwoStarted = true;
@@ -1237,9 +1193,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
             });
           }
           return jsonResponse({
-            items: page <= total
-              ? [image(String(page).padStart(12, "0"))]
-              : [],
+            items: page <= total ? [image(String(page).padStart(12, "0"))] : [],
             total
           });
         }
@@ -1258,10 +1212,12 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
                 requested: 1,
                 restored: 1,
                 ignored: 0,
-                results: [{
-                  id: "00000000-0000-7000-8000-000000000002",
-                  status: "restored"
-                }]
+                results: [
+                  {
+                    id: "00000000-0000-7000-8000-000000000002",
+                    status: "restored"
+                  }
+                ]
               })
             : jsonResponse({
                 requested: 1,
@@ -1281,44 +1237,45 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
       const root = createRoot(container);
       try {
         await React.act(async () => {
-          root.render(React.createElement(
-            QueryClientProvider,
-            { client },
+          root.render(
             React.createElement(
-              MemoryRouter,
-              { initialEntries: ["/admin/images?view=deleted"] },
+              QueryClientProvider,
+              { client },
               React.createElement(
-                AuthSessionProvider,
-                null,
+                MemoryRouter,
+                { initialEntries: ["/admin/images?view=deleted"] },
                 React.createElement(
-                  AdminPreferencesProvider,
-                  {
-                    username: `pagination-${mode}`,
-                    serverPreferences: {},
-                    serverPreferencesEtag: 'W/"pagination-preferences"',
-                    serverPreferencesUpdatedAt: Date.now()
-                  },
+                  AuthSessionProvider,
+                  null,
                   React.createElement(
-                    ActionFeedbackProvider,
-                    null,
-                    React.createElement(ImageAdmin)
+                    AdminPreferencesProvider,
+                    {
+                      username: `pagination-${mode}`,
+                      serverPreferences: {},
+                      serverPreferencesEtag: 'W/"pagination-preferences"',
+                      serverPreferencesUpdatedAt: Date.now()
+                    },
+                    React.createElement(
+                      ActionFeedbackProvider,
+                      null,
+                      React.createElement(ImageAdmin)
+                    )
                   )
                 )
               )
             )
-          ));
+          );
         });
         await waitFor(
-          () => listRequests.length === 1 && /第 1 \/ 2 页/.test(
-            container.textContent ?? ""
-          ),
+          () => listRequests.length === 1 && /第 1 \/ 2 页/.test(container.textContent ?? ""),
           `${mode} scenario initial page did not load`
         );
         await click(buttonWithText("下一页"));
         await waitFor(
-          () => [...container.querySelectorAll("button")].some(
-            (button) => button.textContent?.includes("重试")
-          ),
+          () =>
+            [...container.querySelectorAll("button")].some((button) =>
+              button.textContent?.includes("重试")
+            ),
           `${mode} scenario page 2 failure did not render`
         );
         const pageStatus = container.querySelector<HTMLElement>(
@@ -1331,23 +1288,22 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           "失败且无页数据时不得伪造本页 0 项"
         );
         await click(buttonWithText("重试"));
-        await waitFor(
-          () => pageTwoStarted,
-          `${mode} scenario page 2 request did not start`
-        );
+        await waitFor(() => pageTwoStarted, `${mode} scenario page 2 request did not start`);
         assert.equal(
           pageStatus.textContent,
           "第 2 / 2 页 · 共 2 项 · 加载中",
           "加载期间只应显示稳定分页元数据和加载状态"
         );
-        const finishPageTwo = resolvePageTwo as (
-          ((response: Response) => void) | null
-        );
+        const finishPageTwo = resolvePageTwo as ((response: Response) => void) | null;
         assert.ok(finishPageTwo);
-        await React.act(async () => finishPageTwo(jsonResponse({
-          items: [image("000000000002")],
-          total: 2
-        })));
+        await React.act(async () =>
+          finishPageTwo(
+            jsonResponse({
+              items: [image("000000000002")],
+              total: 2
+            })
+          )
+        );
         await waitFor(
           () => pageStatus.textContent === "第 2 / 2 页 · 共 2 项 · 本页 1 项",
           `${mode} scenario page 2 did not load`
@@ -1364,12 +1320,12 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           const listRequestsBeforeDialog = listRequests.length;
           await click(buttonWithText("清空回收站"));
           await waitFor(
-            () => Boolean(document.querySelector('[data-dialog-frame]')),
+            () => Boolean(document.querySelector("[data-dialog-frame]")),
             "purge confirmation did not open"
           );
           await click(buttonWithText("取消"));
           await waitFor(
-            () => !document.querySelector('[data-dialog-frame]'),
+            () => !document.querySelector("[data-dialog-frame]"),
             "purge confirmation did not close"
           );
           assert.equal(
@@ -1393,13 +1349,11 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           assert.ok(firstPurge);
           await click(firstPurge);
           await waitFor(
-            () => Boolean(document.querySelector('[data-dialog-frame]')),
+            () => Boolean(document.querySelector("[data-dialog-frame]")),
             "single purge confirmation did not open"
           );
           assert.equal(mutationRequests, 0);
-          const purgeDialog = document.querySelector<HTMLElement>(
-            '[data-dialog-frame]'
-          );
+          const purgeDialog = document.querySelector<HTMLElement>("[data-dialog-frame]");
           assert.ok(purgeDialog);
           const permanentDelete = purgeDialog.querySelector<HTMLButtonElement>(
             'button[aria-label="永久删除"]'
@@ -1414,9 +1368,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           await submitForm(purgeForm);
           assert.equal(mutationRequests, 0, "首次弹窗确认只能进入二次确认态");
           await waitFor(
-            () => Boolean(purgeDialog.querySelector(
-              'button[aria-label="确认删除"]'
-            )),
+            () => Boolean(purgeDialog.querySelector('button[aria-label="确认删除"]')),
             "purge dialog did not enter final confirmation state"
           );
           const confirmedPurge = purgeDialog.querySelector<HTMLButtonElement>(
@@ -1429,9 +1381,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           );
           await submitForm(purgeForm);
           await waitFor(
-            () => Boolean(purgeDialog.querySelector(
-              'button[aria-label="正在删除"]'
-            )),
+            () => Boolean(purgeDialog.querySelector('button[aria-label="正在删除"]')),
             "purge dialog did not enter pending state"
           );
           const pendingPurge = purgeDialog.querySelector<HTMLButtonElement>(
@@ -1444,20 +1394,21 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           );
         }
         if (mode === "purge-unknown") {
-          const unknownMessage = "操作结果未能确认，图片列表已刷新，但无法确认操作已经收口，请稍后再次刷新";
+          const unknownMessage =
+            "操作结果未能确认，图片列表已刷新，但无法确认操作已经收口，请稍后再次刷新";
           await waitFor(
-            () => Boolean(document.querySelector(
-              ".confirm-dialog-error"
-            )?.textContent?.includes(unknownMessage)),
+            () =>
+              Boolean(
+                document
+                  .querySelector(".confirm-dialog-error")
+                  ?.textContent?.includes(unknownMessage)
+              ),
             "unknown purge result was not presented inside the dialog"
           );
-          const purgeDialog = document.querySelector<HTMLElement>(
-            '[data-dialog-frame]'
-          );
+          const purgeDialog = document.querySelector<HTMLElement>("[data-dialog-frame]");
           assert.ok(purgeDialog);
-          const failedConfirm = purgeDialog.querySelector<HTMLButtonElement>(
-            "button.danger-button"
-          );
+          const failedConfirm =
+            purgeDialog.querySelector<HTMLButtonElement>("button.danger-button");
           assert.ok(failedConfirm);
           assert.equal(failedConfirm.disabled, true, "未知删除结果不得盲目重试");
           assert.equal(
@@ -1468,7 +1419,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           await React.act(async () => {
             await clock.advanceBy(3_200);
           });
-          assert.ok(document.querySelector('[data-dialog-frame]'));
+          assert.ok(document.querySelector("[data-dialog-frame]"));
           assert.match(
             document.querySelector(".confirm-dialog-error")?.textContent ?? "",
             /操作结果未能确认/,
@@ -1477,7 +1428,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           assert.equal(mutationRequests, 1);
           await click(buttonWithText("取消"));
           await waitFor(
-            () => !document.querySelector('[data-dialog-frame]'),
+            () => !document.querySelector("[data-dialog-frame]"),
             "unknown purge dialog did not close explicitly"
           );
           const reopenPurge = container.querySelector<HTMLButtonElement>(
@@ -1486,12 +1437,10 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           assert.ok(reopenPurge);
           await click(reopenPurge);
           await waitFor(
-            () => Boolean(document.querySelector('[data-dialog-frame]')),
+            () => Boolean(document.querySelector("[data-dialog-frame]")),
             "purge dialog did not reopen after an unknown result"
           );
-          const reopenedDialog = document.querySelector<HTMLElement>(
-            '[data-dialog-frame]'
-          );
+          const reopenedDialog = document.querySelector<HTMLElement>("[data-dialog-frame]");
           assert.ok(reopenedDialog);
           assert.equal(reopenedDialog.querySelector(".confirm-dialog-error"), null);
           const reopenedConfirm = reopenedDialog.querySelector<HTMLButtonElement>(
@@ -1501,24 +1450,20 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           assert.equal(reopenedConfirm.disabled, false);
           await click(buttonWithText("取消"));
           await waitFor(
-            () => !document.querySelector('[data-dialog-frame]'),
+            () => !document.querySelector("[data-dialog-frame]"),
             "reopened purge dialog did not close"
           );
           return;
         }
-        const expectedResult = mode === "restore"
-          ? "已恢复 1 张"
-          : "已永久删除 1 张";
+        const expectedResult = mode === "restore" ? "已恢复 1 张" : "已永久删除 1 张";
         await waitFor(
-          () => postMutationRefreshStarted
-            && (mode === "purge"
-              || (container.textContent ?? "").includes(expectedResult)),
+          () =>
+            postMutationRefreshStarted &&
+            (mode === "purge" || (container.textContent ?? "").includes(expectedResult)),
           `${mode} list refresh did not start at the expected result boundary`
         );
         assert.ok(
-          document.getElementById(
-            "admin-image-select-00000000-0000-7000-8000-000000000002"
-          ),
+          document.getElementById("admin-image-select-00000000-0000-7000-8000-000000000002"),
           `${mode} must retain the affected card until the list refresh settles`
         );
         if (mode === "restore") {
@@ -1537,24 +1482,25 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           await React.act(async () => {
             await clock.advanceBy(3_200);
           });
-          assert.ok(document.querySelector('[data-dialog-frame]'));
-          assert.equal(
-            (container.textContent ?? "").includes(expectedResult),
-            false
-          );
+          assert.ok(document.querySelector("[data-dialog-frame]"));
+          assert.equal((container.textContent ?? "").includes(expectedResult), false);
         }
-        const finishPostMutationRefresh = resolvePostMutationRefresh as (
-          ((response: Response) => void) | null
-        );
+        const finishPostMutationRefresh = resolvePostMutationRefresh as
+          ((response: Response) => void) | null;
         assert.ok(finishPostMutationRefresh);
-        await React.act(async () => finishPostMutationRefresh(jsonResponse({
-          items: [],
-          total: 1
-        })));
+        await React.act(async () =>
+          finishPostMutationRefresh(
+            jsonResponse({
+              items: [],
+              total: 1
+            })
+          )
+        );
         await waitFor(
-          () => mutationRequests === 1
-            && /第 1 \/ 1 页/.test(container.textContent ?? "")
-            && listRequests.at(-1) === 1,
+          () =>
+            mutationRequests === 1 &&
+            /第 1 \/ 1 页/.test(container.textContent ?? "") &&
+            listRequests.at(-1) === 1,
           `${mode} scenario did not clamp to the new last page`
         );
         assert.deepEqual(
@@ -1564,13 +1510,14 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         );
         if (mode === "purge") {
           await waitFor(
-            () => !document.querySelector('[data-dialog-frame]')
-              && (container.textContent ?? "").includes(expectedResult),
+            () =>
+              !document.querySelector("[data-dialog-frame]") &&
+              (container.textContent ?? "").includes(expectedResult),
             "purge result did not become visible after the slow dialog operation"
           );
-          assert.ok(document.querySelector(
-            ".image-admin-feedback-region .action-feedback-success"
-          ));
+          assert.ok(
+            document.querySelector(".image-admin-feedback-region .action-feedback-success")
+          );
         }
       } finally {
         await React.act(async () => root.unmount());
@@ -1609,19 +1556,17 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         authors: []
       });
       client.setQueryData(queryKeys.storageOptions, {
-        backends: [{
-          slug: "local",
-          display_name: "本地存储",
-          enabled: true,
-          is_default: true
-        }]
+        backends: [
+          {
+            slug: "local",
+            display_name: "本地存储",
+            enabled: true,
+            is_default: true
+          }
+        ]
       });
 
-      const readyItems = [
-        "000000000011",
-        "000000000012",
-        "000000000013"
-      ].map((serial) => ({
+      const readyItems = ["000000000011", "000000000012", "000000000013"].map((serial) => ({
         ...image(serial),
         status: "ready" as const,
         deleted_at: null
@@ -1649,9 +1594,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
             return new Promise<Response>((resolve, reject) => {
               pendingTrashRefreshes.push({
                 resolve: () => resolve(response),
-                reject: () => reject(new Error(
-                  "controlled trash list refresh failure"
-                ))
+                reject: () => reject(new Error("controlled trash list refresh failure"))
               });
             });
           }
@@ -1668,12 +1611,14 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
             releaseTrashMutations.push(() => {
               for (const id of body.ids) trashedIds.add(id);
               deferNextTrashRefresh = true;
-              resolve(jsonResponse({
-                requested: body.ids.length,
-                trashed: body.ids.length,
-                ignored: 0,
-                results: body.ids.map((id) => ({ id, status: "trashed" }))
-              }));
+              resolve(
+                jsonResponse({
+                  requested: body.ids.length,
+                  trashed: body.ids.length,
+                  ignored: 0,
+                  results: body.ids.map((id) => ({ id, status: "trashed" }))
+                })
+              );
             });
           });
         }
@@ -1686,41 +1631,41 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
       const root = createRoot(container);
       try {
         await React.act(async () => {
-          root.render(React.createElement(
-            QueryClientProvider,
-            { client },
+          root.render(
             React.createElement(
-              MemoryRouter,
-              { initialEntries: ["/admin/images"] },
+              QueryClientProvider,
+              { client },
               React.createElement(
-                AuthSessionProvider,
-                null,
+                MemoryRouter,
+                { initialEntries: ["/admin/images"] },
                 React.createElement(
-                  AdminPreferencesProvider,
-                  {
-                    username: "trash-interface",
-                    serverPreferences: {},
-                    serverPreferencesEtag: 'W/"trash-interface-preferences"',
-                    serverPreferencesUpdatedAt: Date.now()
-                  },
+                  AuthSessionProvider,
+                  null,
                   React.createElement(
-                    ActionFeedbackProvider,
-                    null,
-                    React.createElement(ImageAdmin)
+                    AdminPreferencesProvider,
+                    {
+                      username: "trash-interface",
+                      serverPreferences: {},
+                      serverPreferencesEtag: 'W/"trash-interface-preferences"',
+                      serverPreferencesUpdatedAt: Date.now()
+                    },
+                    React.createElement(
+                      ActionFeedbackProvider,
+                      null,
+                      React.createElement(ImageAdmin)
+                    )
                   )
                 )
               )
             )
-          ));
+          );
         });
         await waitFor(
           () => container.querySelectorAll(".admin-image-card").length === 2,
           "trash interface scenario did not load ready items"
         );
         const selectionTargets = [
-          ...container.querySelectorAll<HTMLElement>(
-            ".admin-image-card-checkbox-hit-area"
-          )
+          ...container.querySelectorAll<HTMLElement>(".admin-image-card-checkbox-hit-area")
         ];
         assert.equal(selectionTargets.length, 2);
         await click(selectionTargets[0]!);
@@ -1735,12 +1680,11 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         assert.equal(trashBodies.length, 0);
         assert.equal(batchTrash.getAttribute("aria-pressed"), "true");
         assert.match(batchTrash.textContent ?? "", /确认删除/);
-        assert.equal(document.querySelector('[data-dialog-frame]'), null);
+        assert.equal(document.querySelector("[data-dialog-frame]"), null);
 
         await click(selectionTargets[0]!);
         await waitFor(
-          () => /已选 1/.test(container.textContent ?? "")
-            && Boolean(buttonWithText("批量删除")),
+          () => /已选 1/.test(container.textContent ?? "") && Boolean(buttonWithText("批量删除")),
           "selection change did not disarm frozen batch delete"
         );
         assert.equal(trashBodies.length, 0);
@@ -1770,10 +1714,9 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         );
         await React.act(async () => releaseTrashMutations.shift()?.());
         await waitFor(
-          () => pendingTrashRefreshes.length === 1
-            && (container.textContent ?? "").includes(
-              "已移入回收站 2 张"
-            ),
+          () =>
+            pendingTrashRefreshes.length === 1 &&
+            (container.textContent ?? "").includes("已移入回收站 2 张"),
           "batch trash result was not rendered before list refresh"
         );
         assert.equal(
@@ -1784,18 +1727,15 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         for (const item of initialReadyItems) {
           assert.ok(document.getElementById(`admin-image-select-${item.id}`));
         }
-        assert.ok(container.querySelector(
-          ".image-admin-feedback-region .action-feedback-success"
-        ));
+        assert.ok(container.querySelector(".image-admin-feedback-region .action-feedback-success"));
         assert.doesNotMatch(container.textContent ?? "", /0 张未处理/);
         await React.act(async () => pendingTrashRefreshes.shift()?.resolve());
         await waitFor(
-          () => Boolean(buttonWithText("批量删除"))
-            && !container.querySelector('[aria-busy="true"].two-step-confirm-text-button')
-            && container.querySelectorAll(".admin-image-card").length === 1
-            && Boolean(document.getElementById(
-              `admin-image-select-${readyItems[2]!.id}`
-            )),
+          () =>
+            Boolean(buttonWithText("批量删除")) &&
+            !container.querySelector('[aria-busy="true"].two-step-confirm-text-button') &&
+            container.querySelectorAll(".admin-image-card").length === 1 &&
+            Boolean(document.getElementById(`admin-image-select-${readyItems[2]!.id}`)),
           "batch trash did not return to its idle state"
         );
 
@@ -1820,22 +1760,20 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           pendingSingleTrash.querySelector("path")?.getAttribute("d"),
           ADMIN_ICONS["delete-bin-5-line"]
         );
-        assert.equal(document.querySelector('[data-dialog-frame]'), null);
+        assert.equal(document.querySelector("[data-dialog-frame]"), null);
         await React.act(async () => releaseTrashMutations.shift()?.());
         await waitFor(
-          () => pendingTrashRefreshes.length === 1
-            && (container.textContent ?? "").includes(
-              "已移入回收站 1 张"
-            ),
+          () =>
+            pendingTrashRefreshes.length === 1 &&
+            (container.textContent ?? "").includes("已移入回收站 1 张"),
           "single trash result was not rendered before list refresh"
         );
-        assert.ok(document.getElementById(
-          `admin-image-select-${readyItems[2]!.id}`
-        ));
+        assert.ok(document.getElementById(`admin-image-select-${readyItems[2]!.id}`));
         await React.act(async () => pendingTrashRefreshes.shift()?.reject());
         await waitFor(
-            () => !container.querySelector('button[aria-label^="删除中："]')
-            && (container.textContent ?? "").includes(
+          () =>
+            !container.querySelector('button[aria-label^="删除中："]') &&
+            (container.textContent ?? "").includes(
               "已移入回收站 1 张；图片列表刷新失败，请重新加载页面"
             ),
           "single trash did not surface the real list refresh failure"
@@ -1845,9 +1783,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           1,
           "刷新失败时必须保留缓存卡片并明确要求重新加载"
         );
-        assert.ok(container.querySelector(
-          ".image-admin-feedback-region .action-feedback-error"
-        ));
+        assert.ok(container.querySelector(".image-admin-feedback-region .action-feedback-error"));
       } finally {
         await React.act(async () => root.unmount());
         client.clear();
@@ -1858,25 +1794,37 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
 
     const runSortScenario = async () => {
       const username = "sort-preference-admin";
-      const client = new QueryClient({ defaultOptions: {
-        queries: { retry: false, refetchOnWindowFocus: false }
-      } });
+      const client = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, refetchOnWindowFocus: false }
+        }
+      });
       client.setQueryData(queryKeys.me, {
-        authenticated: true, username, role: "image", permissions: [],
-        csrf_token: "sort-token", application_version: "current-test",
-        preferences: {}, preferences_etag: 'W/"sort-preferences"',
+        authenticated: true,
+        username,
+        role: "image",
+        permissions: [],
+        csrf_token: "sort-token",
+        application_version: "current-test",
+        preferences: {},
+        preferences_etag: 'W/"sort-preferences"',
         version_settings: { enabled: true, link_enabled: true }
       });
-      client.setQueryData(queryKeys.settings, { settings: {
-        admin: { image_page_size: 1 }, ingestion: { list_page_size: 1 }
-      } });
+      client.setQueryData(queryKeys.settings, {
+        settings: {
+          admin: { image_page_size: 1 },
+          ingestion: { list_page_size: 1 }
+        }
+      });
       client.setQueryData(queryKeys.ingestionVocabulary, { themes: [], tags: [], authors: [] });
       client.setQueryData(queryKeys.storageOptions, { backends: [] });
       let saved: AdminPreferences = {};
       const patches: AdminPreferences[] = [];
       const requests: URL[] = [];
       let releaseFirstPatch!: () => void;
-      const firstPatchGate = new Promise<void>((resolve) => { releaseFirstPatch = resolve; });
+      const firstPatchGate = new Promise<void>((resolve) => {
+        releaseFirstPatch = resolve;
+      });
       let offline = false;
       const previousFetch = globalThis.fetch;
       globalThis.fetch = async (input, init) => {
@@ -1884,7 +1832,9 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         if (url.pathname === "/api/admin/images") {
           requests.push(url);
           return jsonResponse({
-            items: [{ ...image(String(url.searchParams.get("page")).padStart(12, "0")), status: "ready" }],
+            items: [
+              { ...image(String(url.searchParams.get("page")).padStart(12, "0")), status: "ready" }
+            ],
             total: 3
           });
         }
@@ -1903,23 +1853,46 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         throw new Error(`unexpected sorting request: ${url.pathname}`);
       };
       const root = createRoot(container);
-      const render = async (visit: number) => React.act(async () => {
-        root.render(React.createElement(QueryClientProvider, { client },
-          React.createElement(MemoryRouter, { initialEntries: ["/admin/images"] },
-            React.createElement(AuthSessionProvider, null,
-              React.createElement(AdminPreferencesProvider, {
-                username, serverPreferences: {},
-                serverPreferencesEtag: 'W/"sort-preferences"', serverPreferencesUpdatedAt: 1
-              }, React.createElement(ActionFeedbackProvider, null,
-                React.createElement(React.StrictMode, null, React.createElement(ImageAdmin, { key: visit }))
-              ))
+      const render = async (visit: number) =>
+        React.act(async () => {
+          root.render(
+            React.createElement(
+              QueryClientProvider,
+              { client },
+              React.createElement(
+                MemoryRouter,
+                { initialEntries: ["/admin/images"] },
+                React.createElement(
+                  AuthSessionProvider,
+                  null,
+                  React.createElement(
+                    AdminPreferencesProvider,
+                    {
+                      username,
+                      serverPreferences: {},
+                      serverPreferencesEtag: 'W/"sort-preferences"',
+                      serverPreferencesUpdatedAt: 1
+                    },
+                    React.createElement(
+                      ActionFeedbackProvider,
+                      null,
+                      React.createElement(
+                        React.StrictMode,
+                        null,
+                        React.createElement(ImageAdmin, { key: visit })
+                      )
+                    )
+                  )
+                )
+              )
             )
-          )
-        ));
-      });
-      const sortButtons = () => [...container.querySelectorAll<HTMLButtonElement>(
-        '[role="group"][aria-label="图片列表排序"] > button'
-      )];
+          );
+        });
+      const sortButtons = () => [
+        ...container.querySelectorAll<HTMLButtonElement>(
+          '[role="group"][aria-label="图片列表排序"] > button'
+        )
+      ];
       const labels = () => sortButtons().map((button) => button.textContent);
       const cacheKey = `imageshow.admin.preferences.${username}`;
       try {
@@ -1928,7 +1901,10 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         assert.deepEqual(labels(), ["图片", "最新"]);
         assert.equal(patches.length, 0, "reading defaults must not write preferences");
         await click(buttonWithText("下一页"));
-        await waitFor(() => requests.at(-1)?.searchParams.get("page") === "2", "page 2 did not load");
+        await waitFor(
+          () => requests.at(-1)?.searchParams.get("page") === "2",
+          "page 2 did not load"
+        );
         await click(sortButtons()[0]!);
         await waitFor(() => patches.length === 1, "field preference was not queued");
         assert.equal(requests.at(-1)?.searchParams.get("page"), "1");
@@ -1936,38 +1912,71 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         await click(sortButtons()[0]!);
         assert.deepEqual(labels(), ["图片", "最旧"]);
         releaseFirstPatch();
-        await waitFor(() => saved.image_sort_by === "image_time"
-          && saved.image_sort_order === "oldest", "queued sort writes did not converge");
-        assert.deepEqual(patches, [
-          { image_sort_by: "created_at" }, { image_sort_order: "oldest" }, { image_sort_by: "image_time" }
-        ], "each click saves only its changed dimension");
-        assert.equal(new Set(requests.map((url) =>
-          `${url.searchParams.get("sort_by")}/${url.searchParams.get("order")}`)).size, 4);
+        await waitFor(
+          () => saved.image_sort_by === "image_time" && saved.image_sort_order === "oldest",
+          "queued sort writes did not converge"
+        );
+        assert.deepEqual(
+          patches,
+          [
+            { image_sort_by: "created_at" },
+            { image_sort_order: "oldest" },
+            { image_sort_by: "image_time" }
+          ],
+          "each click saves only its changed dimension"
+        );
+        assert.equal(
+          new Set(
+            requests.map(
+              (url) => `${url.searchParams.get("sort_by")}/${url.searchParams.get("order")}`
+            )
+          ).size,
+          4
+        );
         await render(2);
         assert.deepEqual(labels(), ["图片", "最旧"], "re-entry must restore the saved selection");
         const requestCount = requests.length;
-        localStorage.setItem(cacheKey, JSON.stringify({
-          values: { image_sort_by: "created_at", image_sort_order: "latest" }, pending: {}
-        }));
+        localStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            values: { image_sort_by: "created_at", image_sort_order: "latest" },
+            pending: {}
+          })
+        );
         const storageEvent = new window.Event("storage");
         Object.defineProperties(storageEvent, {
-          key: { value: cacheKey }, storageArea: { value: localStorage }
+          key: { value: cacheKey },
+          storageArea: { value: localStorage }
         });
         await React.act(async () => window.dispatchEvent(storageEvent));
-        assert.deepEqual(labels(), ["图片", "最旧"], "another window must not reorder the active list");
+        assert.deepEqual(
+          labels(),
+          ["图片", "最旧"],
+          "another window must not reorder the active list"
+        );
         assert.equal(requests.length, requestCount);
         await render(3);
-        assert.deepEqual(labels(), ["入库", "最新"], "the next visit consumes synchronized preferences");
+        assert.deepEqual(
+          labels(),
+          ["入库", "最新"],
+          "the next visit consumes synchronized preferences"
+        );
         offline = true;
         await click(sortButtons()[1]!);
         await waitFor(() => patches.length === 4, "offline preference was not attempted");
         assert.deepEqual(labels(), ["入库", "最旧"]);
-        assert.equal(JSON.parse(localStorage.getItem(cacheKey)!).pending.image_sort_order, "oldest");
+        assert.equal(
+          JSON.parse(localStorage.getItem(cacheKey)!).pending.image_sort_order,
+          "oldest"
+        );
         offline = false;
         await React.act(async () => window.dispatchEvent(new window.Event("online")));
-        await waitFor(() => patches.length === 5
-          && Object.keys(JSON.parse(localStorage.getItem(cacheKey)!).pending).length === 0,
-        "reconnection did not persist the pending preference");
+        await waitFor(
+          () =>
+            patches.length === 5 &&
+            Object.keys(JSON.parse(localStorage.getItem(cacheKey)!).pending).length === 0,
+          "reconnection did not persist the pending preference"
+        );
       } finally {
         releaseFirstPatch();
         await React.act(async () => root.unmount());
@@ -1982,31 +1991,19 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
     await runMutationScenario("purge-unknown");
     await runTrashScenario();
     assert.deepEqual(
-      expectedListErrors.map((args) => (
-        args[1] as { error?: { code?: string } } | undefined
-      )?.error?.code).filter((code) => code === "controlled_failure"),
+      expectedListErrors
+        .map((args) => (args[1] as { error?: { code?: string } } | undefined)?.error?.code)
+        .filter((code) => code === "controlled_failure"),
       ["controlled_failure", "controlled_failure", "controlled_failure"],
       "三轮受控列表失败必须各报告一次且不得污染测试输出"
     );
-    assert.equal(
-      expectedListErrors.length,
-      4,
-      "每次列表失败只能由查询 owner 上报一次"
-    );
-    assert.equal(
-      expectedMutationErrors.length,
-      1,
-      "未知永久删除请求必须只记录一次 mutation 错误"
-    );
+    assert.equal(expectedListErrors.length, 4, "每次列表失败只能由查询 owner 上报一次");
+    assert.equal(expectedMutationErrors.length, 1, "未知永久删除请求必须只记录一次 mutation 错误");
   } finally {
     console.error = previousConsoleError;
     clearCsrfToken();
     if (elementScrollTo) {
-      Object.defineProperty(
-        window.HTMLElement.prototype,
-        "scrollTo",
-        elementScrollTo
-      );
+      Object.defineProperty(window.HTMLElement.prototype, "scrollTo", elementScrollTo);
     } else {
       delete (window.HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
     }
@@ -2034,7 +2031,8 @@ test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复�
       queryKeys.themes,
       queryKeys.tags,
       queryKeys.authors
-    ]) client.setQueryData(key, {});
+    ])
+      client.setQueryData(key, {});
     for (const identity of [null, "image-admin", "super-admin"]) {
       client.setQueryData([...queryKeys.publicImageDetail, "image-1", identity], {});
     }
@@ -2043,10 +2041,8 @@ test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复�
     t.after(() => client.clear());
     return client;
   };
-  const invalidated = (
-    client: InstanceType<typeof QueryClient>,
-    key: readonly unknown[]
-  ) => client.getQueryState(key)?.isInvalidated === true;
+  const invalidated = (client: InstanceType<typeof QueryClient>, key: readonly unknown[]) =>
+    client.getQueryState(key)?.isInvalidated === true;
 
   const titleClient = createClient();
   await invalidateImageDataAfterMetadataSave(
@@ -2056,16 +2052,10 @@ test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复�
   );
   assert.equal(invalidated(titleClient, queryKeys.adminImages), true);
   assert.equal(invalidated(titleClient, queryKeys.overview), true);
-  assert.equal(
-    invalidated(titleClient, [...queryKeys.adminImageInfo, "image-1"]),
-    true
-  );
+  assert.equal(invalidated(titleClient, [...queryKeys.adminImageInfo, "image-1"]), true);
   assert.equal(invalidated(titleClient, queryKeys.galleryStats), false);
   assert.equal(invalidated(titleClient, queryKeys.galleryFacets), false);
-  assert.equal(
-    invalidated(titleClient, [...queryKeys.publicImageDetail, "image-1", null]),
-    false
-  );
+  assert.equal(invalidated(titleClient, [...queryKeys.publicImageDetail, "image-1", null]), false);
 
   const membershipClient = createClient();
   await invalidateImageDataAfterMetadataSave(
@@ -2078,7 +2068,8 @@ test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复�
     queryKeys.galleryFacets,
     queryKeys.themes,
     queryKeys.tags
-  ]) assert.equal(invalidated(membershipClient, key), true, key[0]);
+  ])
+    assert.equal(invalidated(membershipClient, key), true, key[0]);
   assert.equal(invalidated(membershipClient, queryKeys.authors), false);
 
   const missingSnapshotClient = createClient();
@@ -2088,27 +2079,34 @@ test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复�
     null
   );
   assert.equal(
-    invalidated(
-      missingSnapshotClient,
-      [...queryKeys.publicImageDetail, "image-1", null]
-    ),
+    invalidated(missingSnapshotClient, [...queryKeys.publicImageDetail, "image-1", null]),
     true
   );
 
   for (const identity of [null, "image-admin", "super-admin"]) {
-    assert.equal(invalidated(missingSnapshotClient,
-      [...queryKeys.publicImageDetail, "image-1", identity]), true);
+    assert.equal(
+      invalidated(missingSnapshotClient, [...queryKeys.publicImageDetail, "image-1", identity]),
+      true
+    );
   }
-  assert.equal(invalidated(missingSnapshotClient,
-    [...queryKeys.publicImageDetail, "image-2", null]), false);
+  assert.equal(
+    invalidated(missingSnapshotClient, [...queryKeys.publicImageDetail, "image-2", null]),
+    false
+  );
 
-  const { invalidateImageDataAfterTrash } = await import("../../../../packages/web/src/lib/api/query-invalidation.ts");
+  const { invalidateImageDataAfterTrash } =
+    await import("../../../../packages/web/src/lib/api/query-invalidation.ts");
   const pendingClient = createClient();
   const lateResponses: Array<() => void> = [];
-  const pendingDetails = [null, "image-admin", "super-admin"].map(identity => pendingClient.fetchQuery({
-    queryKey: [...queryKeys.publicImageDetail, "image-1", identity],
-    queryFn: () => new Promise<object>(resolve => lateResponses.push(() => resolve({ original_url: "/images/original/image-1" })))
-  }));
+  const pendingDetails = [null, "image-admin", "super-admin"].map((identity) =>
+    pendingClient.fetchQuery({
+      queryKey: [...queryKeys.publicImageDetail, "image-1", identity],
+      queryFn: () =>
+        new Promise<object>((resolve) =>
+          lateResponses.push(() => resolve({ original_url: "/images/original/image-1" }))
+        )
+    })
+  );
   const retired = Promise.allSettled(pendingDetails);
   assert.equal(lateResponses.length, 3);
   await invalidateImageDataAfterTrash(pendingClient, ["image-1"]);
@@ -2116,7 +2114,15 @@ test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复�
   for (const resolve of lateResponses) resolve();
   await Promise.resolve();
   for (const identity of [null, "image-admin", "super-admin"]) {
-    assert.equal(pendingClient.getQueryState([...queryKeys.publicImageDetail, "image-1", identity])?.fetchStatus, "idle");
-    assert.deepEqual(pendingClient.getQueryData([...queryKeys.publicImageDetail, "image-1", identity]), {}, "迟到结果不覆盖提交前已退休的详情");
+    assert.equal(
+      pendingClient.getQueryState([...queryKeys.publicImageDetail, "image-1", identity])
+        ?.fetchStatus,
+      "idle"
+    );
+    assert.deepEqual(
+      pendingClient.getQueryData([...queryKeys.publicImageDetail, "image-1", identity]),
+      {},
+      "迟到结果不覆盖提交前已退休的详情"
+    );
   }
 });

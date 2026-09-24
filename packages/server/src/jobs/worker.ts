@@ -2,10 +2,7 @@ import { appConfig } from "@imageshow/shared";
 import { logger } from "../core/logger.ts";
 import { backgroundJobTypes } from "./types.ts";
 import { STORAGE_OBJECT_REMOVAL_CONCURRENCY } from "../storage/objects/removal-admission.ts";
-import {
-  handleBackgroundJob,
-  type BackgroundJobOutcome
-} from "./handlers.ts";
+import { handleBackgroundJob, type BackgroundJobOutcome } from "./handlers.ts";
 import {
   claimBackgroundJob,
   cleanupBackgroundJobHistory,
@@ -18,10 +15,7 @@ import {
   type BackgroundJob,
   type BackgroundJobType
 } from "./repository.ts";
-import {
-  WorkerExecutionCoordinator,
-  type WorkerExecutionCompletion
-} from "./worker-execution.ts";
+import { WorkerExecutionCoordinator, type WorkerExecutionCompletion } from "./worker-execution.ts";
 
 let timer: NodeJS.Timeout | undefined;
 let tickPromise: Promise<void> | null = null;
@@ -64,16 +58,13 @@ async function settleBackgroundJob(
   completion: WorkerExecutionCompletion<BackgroundJobOutcome>
 ) {
   if (completion.status === "stopped") {
-    if (!await rescheduleBackgroundJob(
-      job,
-      0
-    )) {
+    if (!(await rescheduleBackgroundJob(job, 0))) {
       logDiscardedBackgroundJobTransition(job, "rescheduled");
     }
     return;
   }
   if (completion.status === "rejected") {
-    if (!await markBackgroundJobFailed(job, completion.error)) {
+    if (!(await markBackgroundJobFailed(job, completion.error))) {
       logDiscardedBackgroundJobTransition(job, "failed");
     }
     return;
@@ -84,10 +75,7 @@ async function settleBackgroundJob(
   let transition: "rescheduled" | "succeeded";
   if (outcome.status === "reschedule") {
     transition = "rescheduled";
-    stored = await rescheduleBackgroundJob(
-      job,
-      outcome.delayMs
-    );
+    stored = await rescheduleBackgroundJob(job, outcome.delayMs);
   } else {
     transition = "succeeded";
     stored = await markBackgroundJobSucceeded(job);
@@ -96,10 +84,7 @@ async function settleBackgroundJob(
 }
 
 const taskTimeoutMs = appConfig.backgroundJob.taskTimeoutSeconds * 1_000;
-const executionCoordinator = new WorkerExecutionCoordinator<
-  BackgroundJob,
-  BackgroundJobOutcome
->({
+const executionCoordinator = new WorkerExecutionCoordinator<BackgroundJob, BackgroundJobOutcome>({
   taskTimeoutMs,
   leaseRenewalIntervalMs: Math.max(1_000, Math.floor(taskTimeoutMs / 3)),
   renewLease: renewBackgroundJobLease,
@@ -139,9 +124,7 @@ async function runBackgroundJobType(
   async function runLane() {
     while (reserveClaim()) {
       if (!executionCoordinator.isAccepting()) return;
-      const ran = await executionCoordinator.claimAndRun(
-        () => claimBackgroundJob(type)
-      );
+      const ran = await executionCoordinator.claimAndRun(() => claimBackgroundJob(type));
       if (!ran) return;
       processed += 1;
     }
@@ -150,8 +133,8 @@ async function runBackgroundJobType(
   return {
     processed,
     durationMs: performance.now() - startedAt,
-    budgetExhausted: claimed >= appConfig.backgroundJob.queueSliceMaxJobs
-      || performance.now() >= deadline
+    budgetExhausted:
+      claimed >= appConfig.backgroundJob.queueSliceMaxJobs || performance.now() >= deadline
   };
 }
 
@@ -185,23 +168,23 @@ async function runWorkerTick() {
     if (activeTypeSlices.has(row.type)) continue;
     // Keep each type's concurrency bound while subsequent ticks can discover
     // other types and run periodic maintenance during a slow handler.
-    const slice = runBackgroundJobType(
-      row.type,
-      Math.min(jobTypeConcurrency(row.type), row.n)
-    ).then((result) => {
-      logger.debug("worker_queue_slice", {
-        type: row.type,
-        backlog: row.n,
-        oldest_wait_ms: row.oldest_wait_ms,
-        processed: result.processed,
-        duration_ms: Math.round(result.durationMs * 100) / 100,
-        budget_exhausted: result.budgetExhausted
+    const slice = runBackgroundJobType(row.type, Math.min(jobTypeConcurrency(row.type), row.n))
+      .then((result) => {
+        logger.debug("worker_queue_slice", {
+          type: row.type,
+          backlog: row.n,
+          oldest_wait_ms: row.oldest_wait_ms,
+          processed: result.processed,
+          duration_ms: Math.round(result.durationMs * 100) / 100,
+          budget_exhausted: result.budgetExhausted
+        });
+      })
+      .catch((error: unknown) => {
+        logger.error("worker queue slice failed", { type: row.type, error });
+      })
+      .finally(() => {
+        activeTypeSlices.delete(row.type);
       });
-    }).catch((error: unknown) => {
-      logger.error("worker queue slice failed", { type: row.type, error });
-    }).finally(() => {
-      activeTypeSlices.delete(row.type);
-    });
     activeTypeSlices.set(row.type, slice);
   }
 }
@@ -231,9 +214,7 @@ export function stopBackgroundJobWorker() {
   executionCoordinator.stop();
 }
 
-export async function drainBackgroundJobWorker(
-  timeoutMs = appConfig.backgroundJob.drainTimeoutMs
-) {
+export async function drainBackgroundJobWorker(timeoutMs = appConfig.backgroundJob.drainTimeoutMs) {
   const additionalWork = [...activeTypeSlices.values()];
   if (tickPromise) additionalWork.push(tickPromise);
   const drained = await executionCoordinator.drain(timeoutMs, additionalWork);

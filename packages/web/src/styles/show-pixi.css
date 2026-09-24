@@ -21,14 +21,18 @@
   cursor: grab;
 }
 
-.show-pixi-viewport.is-waterfall:active { cursor: grabbing; }
+.show-pixi-viewport.is-waterfall:active {
+  cursor: grabbing;
+}
 
 .show-pixi-viewport.is-float {
   touch-action: none;
   cursor: grab;
 }
 
-.show-pixi-viewport.is-float:active { cursor: grabbing; }
+.show-pixi-viewport.is-float:active {
+  cursor: grabbing;
+}
 
 .show-pixi-accessibility {
   z-index: 3;

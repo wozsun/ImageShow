@@ -1,9 +1,5 @@
-import {
-  createPageLifetimeModuleLoader
-} from "../../../lib/page-lifetime-module-loader.js";
-import type {
-  PreloadIntentPolicy
-} from "../../../lib/ui/preload-intent.js";
+import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-module-loader.js";
+import type { PreloadIntentPolicy } from "../../../lib/ui/preload-intent.js";
 
 // React.lazy 与导航意图共用同一组页面生命周期加载器：预加载只获取模块及其
 // 静态 CSS / 依赖，不挂载页面，也不会触发页面查询。

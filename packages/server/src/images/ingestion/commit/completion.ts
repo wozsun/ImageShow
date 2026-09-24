@@ -12,11 +12,7 @@ export function completedIngestionReceipt(
   completedAt: number
 ): CompletedIngestionReceipt {
   if (!session.commit) {
-    throw new ApiError(
-      409,
-      "ingestion_commit_intent_missing",
-      "内容接入任务缺少已冻结的提交意图"
-    );
+    throw new ApiError(409, "ingestion_commit_intent_missing", "内容接入任务缺少已冻结的提交意图");
   }
   const display = completedIngestionDisplay(session);
   return {
@@ -51,11 +47,5 @@ export async function publishCompletedReceipt(
   if (current.status !== "committing" && current.status !== "resolving") return;
   if (!("commit" in current) || !current.commit) return;
   const receipt = completedIngestionReceipt(current, completedAt);
-  await repository.mutateSemantic(
-    current,
-    current.version,
-    receipt,
-    Date.now(),
-    { completedItem }
-  );
+  await repository.mutateSemantic(current, current.version, receipt, Date.now(), { completedItem });
 }

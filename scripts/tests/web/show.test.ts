@@ -2,9 +2,7 @@ import "../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "node:http";
-import {
-  parseHTML
-} from "linkedom";
+import { parseHTML } from "linkedom";
 import {
   Container,
   Point,
@@ -13,9 +11,7 @@ import {
   type Rectangle,
   type Renderer
 } from "pixi.js";
-import {
-  emptyGalleryFilters
-} from "../../../packages/web/src/lib/gallery/gallery-query.ts";
+import { emptyGalleryFilters } from "../../../packages/web/src/lib/gallery/gallery-query.ts";
 import {
   showCardGeometry,
   showCardRect,
@@ -23,12 +19,8 @@ import {
   showViewportWindow,
   type ShowResidencePolicy
 } from "../../../packages/web/src/pages/show/show-layout.ts";
-import {
-  ShowDataPool
-} from "../../../packages/web/src/pages/show/show-data-pool.ts";
-import {
-  ShowWindowController
-} from "../../../packages/web/src/pages/show/show-window-controller.ts";
+import { ShowDataPool } from "../../../packages/web/src/pages/show/show-data-pool.ts";
+import { ShowWindowController } from "../../../packages/web/src/pages/show/show-window-controller.ts";
 import {
   clampShowFloatSizeIndex,
   clampShowWaterfallColumns,
@@ -39,22 +31,14 @@ import {
   showWaterfallDensity,
   smallerShowWaterfallImages
 } from "../../../packages/web/src/pages/show/pixi/show-pixi-layout.ts";
-import {
-  ShowPixiCamera
-} from "../../../packages/web/src/pages/show/pixi/show-pixi-camera.ts";
-import {
-  ShowPixiWaterfallScene
-} from "../../../packages/web/src/pages/show/pixi/show-pixi-waterfall-scene.ts";
+import { ShowPixiCamera } from "../../../packages/web/src/pages/show/pixi/show-pixi-camera.ts";
+import { ShowPixiWaterfallScene } from "../../../packages/web/src/pages/show/pixi/show-pixi-waterfall-scene.ts";
 import {
   ShowPixiRuntime,
   showPixiTextureCacheOptions
 } from "../../../packages/web/src/pages/show/pixi/show-pixi-runtime.ts";
-import type {
-  ShowPixiTextureCache
-} from "../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts";
-import type {
-  ShowPixiVisibleItem
-} from "../../../packages/web/src/pages/show/pixi/show-pixi-types.ts";
+import type { ShowPixiTextureCache } from "../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts";
+import type { ShowPixiVisibleItem } from "../../../packages/web/src/pages/show/pixi/show-pixi-types.ts";
 import {
   createPublicNavigationHarness,
   showImages,
@@ -66,17 +50,17 @@ import {
   editableImage,
   createConfigStreamHarness
 } from "../support/web-test-context.ts";
+import { installProperties } from "../support/property-descriptors.ts";
 import {
-  installProperties
-} from "../support/property-descriptors.ts";
-import { imageMatchesFilters, shuffledImageBatch } from "../../../packages/web/src/lib/gallery/image-browse.ts";
+  imageMatchesFilters,
+  shuffledImageBatch
+} from "../../../packages/web/src/lib/gallery/image-browse.ts";
 import { imageBatchTier } from "../../../packages/web/src/lib/gallery/image-browse.ts";
 import { showInitialBatchLimit } from "../../../packages/web/src/pages/show/show-browse.ts";
 import { installControlledClock } from "../support/controlled-clock.ts";
 
-const unchangedTextureLods: ShowPixiTextureCache["fitResidentLods"] = (requests) => (
-  requests.map(({ lod }) => lod)
-);
+const unchangedTextureLods: ShowPixiTextureCache["fitResidentLods"] = (requests) =>
+  requests.map(({ lod }) => lod);
 
 const nativeFetch = globalThis.fetch;
 
@@ -90,7 +74,10 @@ test("[Web/展映] HTTP 错误立即中止未结束的响应正文且保留显�
     response.on("close", () => closed.resolve());
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  t.after(() => { server.closeAllConnections(); server.close(); });
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   const h = await createTextureRecoveryHarness(t);
@@ -115,10 +102,9 @@ test("[Web/展映] HTTP 错误立即中止未结束的响应正文且保留显�
 function pixiPointerEvent(
   x: number,
   y: number,
-  overrides: Partial<Pick<
-    FederatedPointerEvent,
-    "button" | "isPrimary" | "pointerId" | "pointerType"
-  >> = {}
+  overrides: Partial<
+    Pick<FederatedPointerEvent, "button" | "isPrimary" | "pointerId" | "pointerType">
+  > = {}
 ): FederatedPointerEvent {
   return {
     global: new Point(x, y),
@@ -145,7 +131,8 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
     }
   });
   t.after(() => hooks.deregister());
-  const { ShowPixiStage } = await import("../../../packages/web/src/pages/show/pixi/ShowPixiStage.tsx");
+  const { ShowPixiStage } =
+    await import("../../../packages/web/src/pages/show/pixi/ShowPixiStage.tsx");
   const { window, document } = parseHTML("<html><body><div id=root></div></body></html>");
   const restore = installProperties(globalThis, { window, document, React });
   const root = createRoot(document.getElementById("root")!);
@@ -165,11 +152,22 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
   t.mock.method(ShowPixiRuntime, "create", (host: HTMLElement, options: Options) => {
     const ready = Promise.withResolvers<ShowPixiRuntime>();
     const creation = {
-      host, options, ready, destroys: 0,
+      host,
+      options,
+      ready,
+      destroys: 0,
       instance: {
-        setScene() {}, setImages() {}, setWaterfallColumns() {}, setFloatSizeIndex() {},
-        setSpeed() {}, setRunning() {}, setDialogOpen() {}, focusCard() {},
-        destroy() { creation.destroys++; }
+        setScene() {},
+        setImages() {},
+        setWaterfallColumns() {},
+        setFloatSizeIndex() {},
+        setSpeed() {},
+        setRunning() {},
+        setDialogOpen() {},
+        focusCard() {},
+        destroy() {
+          creation.destroys++;
+        }
       } as unknown as ShowPixiRuntime
     };
     creations.push(creation);
@@ -178,31 +176,73 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
   const calls: { name: string; revision: number; args: unknown[] }[] = [];
   const images = showImages(2);
   const usage: Parameters<Options["onNeedImages"]>[0] = {
-    dataKey: "stage", activeIds: [images[0].id], consumedIds: [], available: 1, capacity: 800
+    dataKey: "stage",
+    activeIds: [images[0].id],
+    consumedIds: [],
+    available: 1,
+    capacity: 800
   };
   const callbacks = (revision: number) => ({
-    onColumnsChange: (value: number) => { calls.push({ name: "columns", revision, args: [value] }); return value + revision; },
-    onFloatSizeIndexChange: (value: number) => { calls.push({ name: "float", revision, args: [value] }); return value + revision; },
-    onManualVerticalMovement: (delta: number, pointerType?: string) => { calls.push({ name: "movement", revision, args: [delta, pointerType] }); },
-    onMotionActiveChange: (active: boolean) => { calls.push({ name: "motion", revision, args: [active] }); },
-    onNeedImages: (next: typeof usage) => { calls.push({ name: "need", revision, args: [next] }); },
-    onOpen: (image: typeof images[number], opener: HTMLElement) => { calls.push({ name: "open", revision, args: [image, opener] }); }
+    onColumnsChange: (value: number) => {
+      calls.push({ name: "columns", revision, args: [value] });
+      return value + revision;
+    },
+    onFloatSizeIndexChange: (value: number) => {
+      calls.push({ name: "float", revision, args: [value] });
+      return value + revision;
+    },
+    onManualVerticalMovement: (delta: number, pointerType?: string) => {
+      calls.push({ name: "movement", revision, args: [delta, pointerType] });
+    },
+    onMotionActiveChange: (active: boolean) => {
+      calls.push({ name: "motion", revision, args: [active] });
+    },
+    onNeedImages: (next: typeof usage) => {
+      calls.push({ name: "need", revision, args: [next] });
+    },
+    onOpen: (image: (typeof images)[number], opener: HTMLElement) => {
+      calls.push({ name: "open", revision, args: [image, opener] });
+    }
   });
   const pendingRender = Promise.withResolvers<void>();
   let suspended = 0;
   function Block({ active }: { active: boolean }) {
-    if (active) { suspended++; throw pendingRender.promise; }
+    if (active) {
+      suspended++;
+      throw pendingRender.promise;
+    }
     return null;
   }
-  const render = (revision: number, blocked = false, key = "current") => root.render(
-    React.createElement(React.StrictMode, null,
-      React.createElement(React.Suspense, { fallback: "pending" },
-        React.createElement(ShowPixiStage, {
-          key, dataKey: "stage", dialogOpen: false, floatSizeIndex: 5, images, hasMore: true,
-          order: "latest", reducedMotion: false, running: false, scene: "waterfall", speed: 28,
-          waterfallColumns: 4, ...callbacks(revision)
-        }, React.createElement(Block, { active: blocked }))))
-  );
+  const render = (revision: number, blocked = false, key = "current") =>
+    root.render(
+      React.createElement(
+        React.StrictMode,
+        null,
+        React.createElement(
+          React.Suspense,
+          { fallback: "pending" },
+          React.createElement(
+            ShowPixiStage,
+            {
+              key,
+              dataKey: "stage",
+              dialogOpen: false,
+              floatSizeIndex: 5,
+              images,
+              hasMore: true,
+              order: "latest",
+              reducedMotion: false,
+              running: false,
+              scene: "waterfall",
+              speed: 28,
+              waterfallColumns: 4,
+              ...callbacks(revision)
+            },
+            React.createElement(Block, { active: blocked })
+          )
+        )
+      )
+    );
   const assertCallbacks = async (revision: number) => {
     calls.length = 0;
     const options = creations[0].options;
@@ -214,8 +254,10 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
       options.onNeedImages(usage);
       options.onOpen(images[0], "slot");
     });
-    assert.deepEqual(calls.map(({ name, revision }) => [name, revision]),
-      ["columns", "float", "movement", "motion", "need", "open"].map((name) => [name, revision]));
+    assert.deepEqual(
+      calls.map(({ name, revision }) => [name, revision]),
+      ["columns", "float", "movement", "motion", "need", "open"].map((name) => [name, revision])
+    );
     assert.deepEqual(calls[2].args, [12, "touch"]);
     assert.equal(calls[4].args[0], usage);
     assert.equal(calls[5].args[0], images[0]);
@@ -248,8 +290,13 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
   await React.act(async () => render(6, false, "failure"));
   await React.act(async () => creations[1].ready.resolve(creations[1].instance));
   assert.equal(creations[1].destroys, 1, "过期异步初始化结果被销毁");
-  await React.act(async () => creations[2].ready.reject(new Error("controlled initialization failure")));
-  assert.match(document.querySelector('[role="alert"]')!.textContent!, /controlled initialization failure/u);
+  await React.act(async () =>
+    creations[2].ready.reject(new Error("controlled initialization failure"))
+  );
+  assert.match(
+    document.querySelector('[role="alert"]')!.textContent!,
+    /controlled initialization failure/u
+  );
   calls.length = 0;
   await React.act(async () => root.unmount());
   unmounted = true;
@@ -297,7 +344,8 @@ test("[Web/展映] waterfall 在窄屏与宽屏高密度视口执行各自 Sprit
       installPixiPaletteFixture(t);
       t.after(installProperties(globalThis, { devicePixelRatio: 1 }));
       const target = createCameraTestElement(width, 5_000);
-      const scene = new ShowPixiWaterfallScene({ hasMore: false,
+      const scene = new ShowPixiWaterfallScene({
+        hasMore: false,
         width,
         height: 5_000,
         columns: showWaterfallDensity(width).maximumColumns,
@@ -335,9 +383,8 @@ test("[Web/展映] Pixi 纹理策略在窄屏与宽屏执行 12 / 16 个真实�
     { width: 761, maximumInFlight: 16 }
   ]) {
     await t.test(`${width}px`, async (t) => {
-      const { ShowPixiTextureCache } = await import(
-        "../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts"
-      );
+      const { ShowPixiTextureCache } =
+        await import("../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts");
       let requests = 0;
       const requestSignals: AbortSignal[] = [];
       const restoreGlobals = installProperties(globalThis, {
@@ -394,15 +441,15 @@ test("[Web/展映] Pixi 纹理策略在窄屏与宽屏执行 12 / 16 个真实�
           throw new AggregateError(errors, "纹理并发用例资源未能全部清理");
         }
       });
-      cache = new ShowPixiTextureCache(
-        showPixiTextureCacheOptions(width, false)
-      );
+      cache = new ShowPixiTextureCache(showPixiTextureCacheOptions(width, false));
       for (let index = 0; index < 32; index += 1) {
-        leases.push(cache.acquire(
-          `https://images.example/${index}.webp`,
-          { pixelWidth: 128, pixelHeight: 128 },
-          () => undefined
-        ));
+        leases.push(
+          cache.acquire(
+            `https://images.example/${index}.webp`,
+            { pixelWidth: 128, pixelHeight: 128 },
+            () => undefined
+          )
+        );
       }
       const textures = cache.stats();
       assert.equal(textures.inFlight, maximumInFlight);
@@ -423,22 +470,22 @@ test("[Web/展映] 模式切换提示和状态播报使用瀑布与漂浮显示�
   t.after(installProperties(globalThis, { React }));
   const { renderToStaticMarkup } = await import("react-dom/server");
   const { MemoryRouter } = await import("react-router");
-  const { ShowMobileControls } = await import(
-    "../../../packages/web/src/pages/show/ShowControls.tsx"
-  );
-  const render = (scene: "waterfall" | "float") => renderToStaticMarkup(
-    React.createElement(
-      MemoryRouter,
-      null,
-      React.createElement(ShowMobileControls, {
-        onRunningChange() {},
-        getSceneHref: (nextScene) => `/show?mode=${nextScene}`,
-        reducedMotion: false,
-        running: true,
-        scene,
-      })
-    )
-  );
+  const { ShowMobileControls } =
+    await import("../../../packages/web/src/pages/show/ShowControls.tsx");
+  const render = (scene: "waterfall" | "float") =>
+    renderToStaticMarkup(
+      React.createElement(
+        MemoryRouter,
+        null,
+        React.createElement(ShowMobileControls, {
+          onRunningChange() {},
+          getSceneHref: (nextScene) => `/show?mode=${nextScene}`,
+          reducedMotion: false,
+          running: true,
+          scene
+        })
+      )
+    );
 
   const assertModeLabels = (
     scene: "waterfall" | "float",
@@ -450,7 +497,10 @@ test("[Web/展映] 模式切换提示和状态播报使用瀑布与漂浮显示�
     const expectedControlLabel = `当前画面：${currentLabel}；点击切换为${nextLabel}`;
     assert.equal(sceneControl?.getAttribute("aria-label"), expectedControlLabel);
     assert.equal(sceneControl?.getAttribute("title"), expectedControlLabel);
-    assert.equal(sceneControl?.getAttribute("href"), `/show?mode=${scene === "waterfall" ? "float" : "waterfall"}`);
+    assert.equal(
+      sceneControl?.getAttribute("href"),
+      `/show?mode=${scene === "waterfall" ? "float" : "waterfall"}`
+    );
   };
 
   assertModeLabels("waterfall", "瀑布", "漂浮");
@@ -544,8 +594,12 @@ test("[Web/展映] waterfall 导航位移保留拖动和惯性的指针类型，
       const target = createCameraTestElement();
       const pointerTypes: Array<string | undefined> = [];
       const camera = new ShowPixiCamera({
-        element: target.element, width: 800, height: 600,
-        initialScale: 1, minimumScale: 0.5, maximumScale: 2,
+        element: target.element,
+        width: 800,
+        height: 600,
+        initialScale: 1,
+        minimumScale: 0.5,
+        maximumScale: 2,
         onManualVerticalMovement: (_delta, type) => pointerTypes.push(type)
       });
       t.after(() => camera.destroy());
@@ -559,7 +613,10 @@ test("[Web/展映] waterfall 导航位移保留拖动和惯性的指针类型，
       target.emit("wheel", { deltaY: -120 });
       camera.update(16);
       assert.ok(pointerTypes.length > 0);
-      assert.ok(pointerTypes.every((type) => type === undefined), "后续滚轮不继承鼠标拖动限制");
+      assert.ok(
+        pointerTypes.every((type) => type === undefined),
+        "后续滚轮不继承鼠标拖动限制"
+      );
     });
   }
 });
@@ -568,8 +625,12 @@ test("[Web/展映] 相机在应用滚轮或双指缩放前取得允许的尺寸�
   const requests: Array<{ requested: number; before: number }> = [];
   const movements: number[] = [];
   const camera = new ShowPixiCamera({
-    element: target.element, width: 800, height: 600,
-    initialScale: 1, minimumScale: 0.1, maximumScale: 2,
+    element: target.element,
+    width: 800,
+    height: 600,
+    initialScale: 1,
+    minimumScale: 0.1,
+    maximumScale: 2,
     onManualVerticalMovement: (delta) => movements.push(delta),
     onZoomRequest: (requested) => {
       requests.push({ requested, before: camera.scale });
@@ -585,7 +646,13 @@ test("[Web/展映] 相机在应用滚轮或双指缩放前取得允许的尺寸�
   assert.equal(requests.length, 1);
   target.emit("pointerdown", { pointerId: 1, pointerType: "touch", clientX: 100, clientY: 200 });
   target.emit("pointerdown", { pointerId: 2, pointerType: "touch", clientX: 300, clientY: 200 });
-  target.emit("pointermove", { pointerId: 2, pointerType: "touch", clientX: 150, clientY: 200, timeStamp: 16 });
+  target.emit("pointermove", {
+    pointerId: 2,
+    pointerType: "touch",
+    clientX: 150,
+    clientY: 200,
+    timeStamp: 16
+  });
   assert.equal(requests[1].requested, 0.25);
   assert.equal(requests[1].before, 1);
   assert.equal(camera.scale, 0.5);
@@ -601,10 +668,17 @@ test("[Web/展映] waterfall 超过 3G 前停在边界，允许后继续缩放�
       const target = createCameraTestElement(width, 600);
       const requests: number[] = [];
       let confirmed = false;
-      const scene = new ShowPixiWaterfallScene({ hasMore: false,
-        width, height: 600, columns: density.warningColumns - 1,
-        images: [], dataKey: "density-warning", order: "latest",
-        running: false, reducedMotion: false, speed: 28,
+      const scene = new ShowPixiWaterfallScene({
+        hasMore: false,
+        width,
+        height: 600,
+        columns: density.warningColumns - 1,
+        images: [],
+        dataKey: "density-warning",
+        order: "latest",
+        running: false,
+        reducedMotion: false,
+        speed: 28,
         inputElement: target.element,
         textureCache: { fitResidentLods: unchangedTextureLods } as ShowPixiTextureCache,
         renderer: {} as Renderer,
@@ -645,12 +719,15 @@ test("[Web/展映] Show Pixi 窄相机 wheel 与 pinch 按锚点缩放、夹取�
   });
   const wheelAnchor = { x: 300, y: 240 };
   const wheelWorld = camera.screenToWorld(wheelAnchor);
-  assert.equal(target.emit("wheel", {
-    ctrlKey: true,
-    clientX: wheelAnchor.x,
-    clientY: wheelAnchor.y,
-    deltaY: -180
-  }), true);
+  assert.equal(
+    target.emit("wheel", {
+      ctrlKey: true,
+      clientX: wheelAnchor.x,
+      clientY: wheelAnchor.y,
+      deltaY: -180
+    }),
+    true
+  );
   assert.ok(camera.scale > 1 && camera.scale < 2);
   const wheelScreen = camera.worldToScreen(wheelWorld);
   assert.ok(Math.abs(wheelScreen.x - wheelAnchor.x) < 0.0001);
@@ -736,7 +813,13 @@ test("[Web/展映] waterfall 只有手动纵向平移上报导航，缩放、res
     movements.length = 0;
     target.emit("pointerdown", { clientX: 200, clientY: 200, pointerId: 1, pointerType: "touch" });
     target.emit("pointerdown", { clientX: 600, clientY: 200, pointerId: 2, pointerType: "touch" });
-    target.emit("pointermove", { clientX: 700, clientY: 260, pointerId: 2, pointerType: "touch", timeStamp: 16 });
+    target.emit("pointermove", {
+      clientX: 700,
+      clientY: 260,
+      pointerId: 2,
+      pointerType: "touch",
+      timeStamp: 16
+    });
     target.emit("pointerup", { pointerId: 1, pointerType: "touch", timeStamp: 20 });
     target.emit("pointerup", { pointerId: 2, pointerType: "touch", timeStamp: 20 });
     camera.update(16);
@@ -746,13 +829,17 @@ test("[Web/展映] waterfall 只有手动纵向平移上报导航，缩放、res
   }
 });
 test("[Web/展映] 纹理缓存保留原图比例做居中裁剪，共享引用且释放全部解码资源", async (t) => {
-  const { ShowPixiTextureCache } = await import("../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts");
+  const { ShowPixiTextureCache } =
+    await import("../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts");
   const calls: unknown[][] = [];
   const bitmaps: Array<{ width: number; height: number; closed: boolean; close: () => void }> = [];
   let requests = 0;
   const originals = new Map<string, PropertyDescriptor | undefined>();
   const replacements = {
-    fetch: async () => { requests += 1; return new Response(new Blob(["image"])); },
+    fetch: async () => {
+      requests += 1;
+      return new Response(new Blob(["image"]));
+    },
     createImageBitmap: async (...args: unknown[]) => {
       calls.push(args);
       const options = args.at(-1) as { resizeWidth?: number; resizeHeight?: number };
@@ -760,7 +847,9 @@ test("[Web/展映] 纹理缓存保留原图比例做居中裁剪，共享引用�
         width: options.resizeWidth ?? 200,
         height: options.resizeHeight ?? 800,
         closed: false,
-        close() { this.closed = true; }
+        close() {
+          this.closed = true;
+        }
       };
       bitmaps.push(bitmap);
       return bitmap;
@@ -771,8 +860,11 @@ test("[Web/展映] 纹理缓存保留原图比例做居中裁剪，共享引用�
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
   }
   const cache = new ShowPixiTextureCache({
-    maximumEntries: 2, maximumPixels: 100_000, maximumInFlight: 1,
-    maximumUnreferenced: 0, generateMipmaps: false
+    maximumEntries: 2,
+    maximumPixels: 100_000,
+    maximumInFlight: 1,
+    maximumUnreferenced: 0,
+    generateMipmaps: false
   });
   t.after(() => {
     cache.destroy();
@@ -783,9 +875,15 @@ test("[Web/展映] 纹理缓存保留原图比例做居中裁剪，共享引用�
   });
   let lease!: ReturnType<ShowPixiTextureCache["acquire"]>;
   const texture = await new Promise<Texture | null>((resolve) => {
-    lease = cache.acquire("https://images.example/tall.webp", {
-      pixelWidth: 128, pixelHeight: 128, sourceRatio: 4
-    }, resolve);
+    lease = cache.acquire(
+      "https://images.example/tall.webp",
+      {
+        pixelWidth: 128,
+        pixelHeight: 128,
+        sourceRatio: 4
+      },
+      resolve
+    );
   });
   assert.ok(texture);
   assert.equal(requests, 1);
@@ -794,9 +892,15 @@ test("[Web/展映] 纹理缓存保留原图比例做居中裁剪，共享引用�
   assert.equal(bitmaps[0].closed, true);
   let secondLease!: ReturnType<ShowPixiTextureCache["acquire"]>;
   const reused = await new Promise<Texture | null>((resolve) => {
-    secondLease = cache.acquire("https://images.example/tall.webp", {
-      pixelWidth: 128, pixelHeight: 128, sourceRatio: 4
-    }, resolve);
+    secondLease = cache.acquire(
+      "https://images.example/tall.webp",
+      {
+        pixelWidth: 128,
+        pixelHeight: 128,
+        sourceRatio: 4
+      },
+      resolve
+    );
   });
   assert.equal(reused, texture);
   assert.equal(requests, 1);
@@ -849,9 +953,8 @@ test("[Web/展映] 展映图片只响应完整点击，来回拖动、取消与�
     openedIdentity = { id: image.id, key };
   });
   await h.flush();
-  const event = (x: number, pointerId = 1, isPrimary = true) => (
-    pixiPointerEvent(x, 100, { pointerId, isPrimary, pointerType: "touch" })
-  );
+  const event = (x: number, pointerId = 1, isPrimary = true) =>
+    pixiPointerEvent(x, 100, { pointerId, isPrimary, pointerType: "touch" });
   card.root.emit("pointerdown", event(100));
   card.root.emit("pointermove", event(300));
   card.root.emit("pointermove", event(100));
@@ -870,12 +973,16 @@ test("[Web/展映] 展映图片只响应完整点击，来回拖动、取消与�
   card.clearPointerHover();
   card.root.emit("pointerup", event(100));
   assert.equal(opened, 0, "场景取消跨卡片多指意图后不能打开详情");
-  card.assign("second-copy", card.image!, 100, 100, .04);
+  card.assign("second-copy", card.image!, 100, 100, 0.04);
   card.root.emit("pointerdown", event(100));
   card.root.emit("pointermove", event(103));
   card.root.emit("pointerup", event(102));
   assert.equal(opened, 1, "保留正常点击的小幅抖动容差");
-  assert.deepEqual(openedIdentity, { id: "pointer", key: "second-copy" }, "详情查询和返回焦点分别使用图片 ID 与当前槽位");
+  assert.deepEqual(
+    openedIdentity,
+    { id: "pointer", key: "second-copy" },
+    "详情查询和返回焦点分别使用图片 ID 与当前槽位"
+  );
 });
 test("[Web/展映] 展映卡片身份更换清理旧焦点，调整尺寸仍保留当前焦点", async (t) => {
   const h = await createTextureRecoveryHarness(t);
@@ -883,22 +990,25 @@ test("[Web/展映] 展映卡片身份更换清理旧焦点，调整尺寸仍保�
   await h.flush();
   const image = card.image!;
   card.setFocused(true);
-  card.assign(card.key, image, 110, 110, .04, true);
+  card.assign(card.key, image, 110, 110, 0.04, true);
   assert.equal(card.isInteractionActive, true, "同一图片缩放不丢失键盘焦点");
-  card.assign("replacement", { ...image, id: "replacement" }, 110, 110, .04);
+  card.assign("replacement", { ...image, id: "replacement" }, 110, 110, 0.04);
   assert.equal(card.isInteractionActive, false, "复用卡片不能把旧焦点转给新图");
   assert.equal(card.root.zIndex, 1);
 });
 test("[Web/展映] 悬浮卡片缩放时快照、边框与透视命中边界保持对齐", async (t) => {
   installPixiPaletteFixture(t);
-  const { ShowPixiCard, ShowPixiPerspectiveCoordinator } = await import("../../../packages/web/src/pages/show/pixi/show-pixi-card.ts");
+  const { ShowPixiCard, ShowPixiPerspectiveCoordinator } =
+    await import("../../../packages/web/src/pages/show/pixi/show-pixi-card.ts");
   const { Polygon, RenderTexture, PerspectiveMesh, MeshSimple } = await import("pixi.js");
   class TestCanvas {
     width = 128;
     height = 1;
     getContext() {
       return {
-        createImageData: (width: number, height: number) => ({ data: new Uint8ClampedArray(width * height * 4) }),
+        createImageData: (width: number, height: number) => ({
+          data: new Uint8ClampedArray(width * height * 4)
+        }),
         putImageData() {}
       };
     }
@@ -906,10 +1016,14 @@ test("[Web/展映] 悬浮卡片缩放时快照、边框与透视命中边界保�
   const globals = {
     HTMLCanvasElement: TestCanvas,
     document: { documentElement: {}, createElement: () => new TestCanvas() },
-    window: { devicePixelRatio: 1 }, devicePixelRatio: 1
+    window: { devicePixelRatio: 1 },
+    devicePixelRatio: 1
   };
-  const originals = new Map(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
-  for (const [key, value] of Object.entries(globals)) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  const originals = new Map(
+    Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)])
+  );
+  for (const [key, value] of Object.entries(globals))
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
   let snapshotCount = 0;
   let snapshot!: { frame: Rectangle; photo: number[]; texture: InstanceType<typeof RenderTexture> };
   let renderScale = 1;
@@ -923,7 +1037,10 @@ test("[Web/展映] 悬浮卡片缩放时快照、边框与透视命中边界保�
   const renderer = {
     generateTexture({ frame }: { frame: Rectangle }) {
       snapshotCount += 1;
-      const texture = RenderTexture.create({ width: Math.floor(frame.width), height: Math.floor(frame.height) });
+      const texture = RenderTexture.create({
+        width: Math.floor(frame.width),
+        height: Math.floor(frame.height)
+      });
       snapshot = {
         frame: frame.clone(),
         photo: photoRect(card.width, card.height),
@@ -932,7 +1049,9 @@ test("[Web/展映] 悬浮卡片缩放时快照、边框与透视命中边界保�
       return texture;
     }
   } as unknown as Renderer;
-  const cache = { acquire: () => ({ release() {} }) } as unknown as import("../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts").ShowPixiTextureCache;
+  const cache = {
+    acquire: () => ({ release() {} })
+  } as unknown as import("../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts").ShowPixiTextureCache;
   card = new ShowPixiCard(cache, () => {}, renderer, new ShowPixiPerspectiveCoordinator());
   t.after(() => {
     card.destroy();
@@ -952,28 +1071,47 @@ test("[Web/展映] 悬浮卡片缩放时快照、边框与透视命中边界保�
   const projectSnapshot = (x: number, y: number, corners: number[]) => {
     const u = (x - snapshot.frame.x) / snapshot.texture.width;
     const v = (y - snapshot.frame.y) / snapshot.texture.height;
-    const [x0,y0,x1,y1,x2,y2,x3,y3] = corners;
-    const dx1=x1-x2, dx2=x3-x2, dx3=x0-x1+x2-x3;
-    const dy1=y1-y2, dy2=y3-y2, dy3=y0-y1+y2-y3;
-    const denominator=dx1*dy2-dx2*dy1;
-    const g=(dx3*dy2-dx2*dy3)/denominator;
-    const h=(dx1*dy3-dx3*dy1)/denominator;
-    const divisor=g*u+h*v+1;
-    return [((x1-x0+g*x1)*u+(x3-x0+h*x3)*v+x0)/divisor,
-      ((y1-y0+g*y1)*u+(y3-y0+h*y3)*v+y0)/divisor];
+    const [x0, y0, x1, y1, x2, y2, x3, y3] = corners;
+    const dx1 = x1 - x2,
+      dx2 = x3 - x2,
+      dx3 = x0 - x1 + x2 - x3;
+    const dy1 = y1 - y2,
+      dy2 = y3 - y2,
+      dy3 = y0 - y1 + y2 - y3;
+    const denominator = dx1 * dy2 - dx2 * dy1;
+    const g = (dx3 * dy2 - dx2 * dy3) / denominator;
+    const h = (dx1 * dy3 - dx3 * dy1) / denominator;
+    const divisor = g * u + h * v + 1;
+    return [
+      ((x1 - x0 + g * x1) * u + (x3 - x0 + h * x3) * v + x0) / divisor,
+      ((y1 - y0 + g * y1) * u + (y3 - y0 + h * y3) * v + y0) / divisor
+    ];
   };
   const assertAligned = () => {
-    const photoMesh = card.visual.children.find((child) => child instanceof PerspectiveMesh)! as InstanceType<typeof PerspectiveMesh>;
-    const edge = card.visual.children.find((child) => child instanceof MeshSimple)! as InstanceType<typeof MeshSimple>;
-    assert.ok(photoMesh); assert.ok(edge);
-    const [x,y,width,height] = snapshot.photo;
+    const photoMesh = card.visual.children.find(
+      (child) => child instanceof PerspectiveMesh
+    )! as InstanceType<typeof PerspectiveMesh>;
+    const edge = card.visual.children.find((child) => child instanceof MeshSimple)! as InstanceType<
+      typeof MeshSimple
+    >;
+    assert.ok(photoMesh);
+    assert.ok(edge);
+    const [x, y, width, height] = snapshot.photo;
     const edgePositions = edge.geometry.getBuffer("aPosition").data;
     // Each side midpoint is an actual vertex: 6 arc samples + 8 straight samples.
-    for (const [side, sx, sy] of [[0,0,y+height],[1,x,0],[2,0,y],[3,x+width,0]]) {
+    for (const [side, sx, sy] of [
+      [0, 0, y + height],
+      [1, x, 0],
+      [2, 0, y],
+      [3, x + width, 0]
+    ]) {
       const projected = projectSnapshot(sx, sy, photoMesh.geometry.corners);
       const offset = (side * 22 + 14) * 4 + 2;
-      const error = Math.hypot(projected[0]-edgePositions[offset], projected[1]-edgePositions[offset+1]);
-      assert.ok(error < .002, `图片与边框偏移 ${error.toFixed(4)}px`);
+      const error = Math.hypot(
+        projected[0] - edgePositions[offset],
+        projected[1] - edgePositions[offset + 1]
+      );
+      assert.ok(error < 0.002, `图片与边框偏移 ${error.toFixed(4)}px`);
     }
   };
   for (let frame = 0; frame < 12; frame += 1) {
@@ -985,17 +1123,17 @@ test("[Web/展映] 悬浮卡片缩放时快照、边框与透视命中边界保�
   assert.equal(perspectiveHitArea.points.length, 8);
   assert.ok(perspectiveHitArea.contains(0, 0));
   const insetCorners = [
-    [-card.width * .49, -card.height * .49],
-    [card.width * .49, -card.height * .49],
-    [card.width * .49, card.height * .49],
-    [-card.width * .49, card.height * .49]
+    [-card.width * 0.49, -card.height * 0.49],
+    [card.width * 0.49, -card.height * 0.49],
+    [card.width * 0.49, card.height * 0.49],
+    [-card.width * 0.49, card.height * 0.49]
   ];
   assert.ok(
     insetCorners.some(([x, y]) => !perspectiveHitArea.contains(x!, y!)),
     "倾斜后旧矩形角落不能继续成为透明命中区"
   );
   const initialCount = snapshotCount;
-  for (const scale of [1.02,1.05,1.08,1.03,.96,1]) {
+  for (const scale of [1.02, 1.05, 1.08, 1.03, 0.96, 1]) {
     renderScale = scale;
     card.setRenderScale(scale);
     card.update(16);
@@ -1004,11 +1142,16 @@ test("[Web/展映] 悬浮卡片缩放时快照、边框与透视命中边界保�
   }
   assert.equal(snapshotCount, initialCount, "同档连续缩放不逐帧重新截图");
   card.assign("zoom", image, 400.75, 601.125, 0, true);
-  for (let frame=0; frame<50; frame+=1) { card.update(16, true); assertAligned(); }
+  for (let frame = 0; frame < 50; frame += 1) {
+    card.update(16, true);
+    assertAligned();
+  }
   assert.equal(snapshotCount, initialCount, "Float 平滑尺寸变化继续复用快照");
   renderScale = 1.3;
-  card.setRenderScale(1.3); card.update(16); assertAligned();
-  assert.equal(snapshotCount, initialCount+1, "跨分辨率档位仅重建一次快照");
+  card.setRenderScale(1.3);
+  card.update(16);
+  assertAligned();
+  assert.equal(snapshotCount, initialCount + 1, "跨分辨率档位仅重建一次快照");
   card.clearPointerHover();
   assert.equal(card.root.hitArea, restingHitArea, "离开透视后恢复稳定矩形命中区");
   assert.equal(card.visual.children.length, 1, "离开悬浮释放快照和边框网格");
@@ -1023,7 +1166,9 @@ test("[Web/展映] float 单图循环填屏时键盘只固定当前卡片，其�
   const before = new Map(h.scene.root.children.map((card) => [card, card.y]));
   h.advance(30);
   assert.equal(focused[0].y, before.get(focused[0]));
-  assert.ok(h.scene.root.children.some((card) => card !== focused[0] && card.y !== before.get(card)));
+  assert.ok(
+    h.scene.root.children.some((card) => card !== focused[0] && card.y !== before.get(card))
+  );
   h.scene.focusCard(null);
   h.advance(2);
   assert.ok(focused[0].y < before.get(focused[0])!);
@@ -1034,15 +1179,29 @@ test("[Web/展映] waterfall 单图循环填屏时焦点只属于当前卡片槽
   Object.defineProperty(globalThis, "devicePixelRatio", { configurable: true, value: 1 });
   let visible: readonly ShowPixiVisibleItem[] = [];
   const target = createCameraTestElement(1440, 900);
-  const scene = new ShowPixiWaterfallScene({ hasMore: false,
-    width: 1440, height: 900, columns: 4,
-    images: showImages(1), dataKey: "single-image", order: "latest",
-    running: false, reducedMotion: false, speed: 28,
+  const scene = new ShowPixiWaterfallScene({
+    hasMore: false,
+    width: 1440,
+    height: 900,
+    columns: 4,
+    images: showImages(1),
+    dataKey: "single-image",
+    order: "latest",
+    running: false,
+    reducedMotion: false,
+    speed: 28,
     inputElement: target.element,
-    textureCache: { fitResidentLods: unchangedTextureLods, acquire: () => ({ release() {} }) } as unknown as ShowPixiTextureCache,
+    textureCache: {
+      fitResidentLods: unchangedTextureLods,
+      acquire: () => ({ release() {} })
+    } as unknown as ShowPixiTextureCache,
     renderer: {} as Renderer,
-    onNeedImages() {}, onOpen() {}, onManualVerticalMovement() {},
-    onVisibleItems: (items) => { visible = items; },
+    onNeedImages() {},
+    onOpen() {},
+    onManualVerticalMovement() {},
+    onVisibleItems: (items) => {
+      visible = items;
+    },
     onColumnsChange: (columns) => columns
   });
   t.after(() => {
@@ -1071,21 +1230,49 @@ test("[Web/展映] 瀑布稳定暂停后仍响应数据、尺寸、手动移动�
   let visible: readonly ShowPixiVisibleItem[] = [];
   const images = showImages(80);
   const scene = new ShowPixiWaterfallScene({
-    width: 1440, height: 900, columns: 4, images, dataKey: "paused", order: "latest", hasMore: false,
-    running: false, reducedMotion: false, speed: 28, inputElement: target.element,
-    textureCache: { fitResidentLods: unchangedTextureLods, acquire: () => ({ release() {} }) } as unknown as ShowPixiTextureCache,
-    renderer: {} as Renderer, onNeedImages() {}, onOpen() {}, onManualVerticalMovement() {},
-    onVisibleItems: items => { visible = items; }, onColumnsChange: columns => columns
+    width: 1440,
+    height: 900,
+    columns: 4,
+    images,
+    dataKey: "paused",
+    order: "latest",
+    hasMore: false,
+    running: false,
+    reducedMotion: false,
+    speed: 28,
+    inputElement: target.element,
+    textureCache: {
+      fitResidentLods: unchangedTextureLods,
+      acquire: () => ({ release() {} })
+    } as unknown as ShowPixiTextureCache,
+    renderer: {} as Renderer,
+    onNeedImages() {},
+    onOpen() {},
+    onManualVerticalMovement() {},
+    onVisibleItems: (items) => {
+      visible = items;
+    },
+    onColumnsChange: (columns) => columns
   });
   t.after(() => scene.destroy());
-  const advance = () => { for (let i = 0; i < 120; i++) { now += 16; scene.update(16); } };
+  const advance = () => {
+    for (let i = 0; i < 120; i++) {
+      now += 16;
+      scene.update(16);
+    }
+  };
   const before = scene.stats();
   advance();
   assert.equal(scene.stats().waterfallCameraY, before.waterfallCameraY);
   assert.equal(scene.stats().layoutRevision, before.layoutRevision);
   const id = visible[0]!.image.id;
-  scene.setImages(images.map(image => image.id === id ? { ...image, title: "updated while paused" } : image), "paused", "latest", false);
-  assert.equal(visible.find(item => item.image.id === id)?.image.title, "updated while paused");
+  scene.setImages(
+    images.map((image) => (image.id === id ? { ...image, title: "updated while paused" } : image)),
+    "paused",
+    "latest",
+    false
+  );
+  assert.equal(visible.find((item) => item.image.id === id)?.image.title, "updated while paused");
   scene.resize(760, 600);
   assert.ok(visible.length > 0);
   const top = scene.stats().waterfallCameraY!;
@@ -1109,22 +1296,32 @@ test("[Web/展映] 展映诊断按需采集，运动回调和销毁不依赖诊�
       let resizeDisconnected = 0;
       let tick = (_ticker: { elapsedMS: number }) => {};
       const globals = {
-        document, devicePixelRatio: 1,
+        document,
+        devicePixelRatio: 1,
         window: Object.assign(new EventTarget(), {
-          innerWidth: 1440, innerHeight: 900,
+          innerWidth: 1440,
+          innerHeight: 900,
           matchMedia: () => Object.assign(new EventTarget(), { matches: false })
         }),
         ResizeObserver: class {
           observe() {}
-          disconnect() { resizeDisconnected++; }
+          disconnect() {
+            resizeDisconnected++;
+          }
         },
         PerformanceObserver: class {
           static supportedEntryTypes = ["longtask"];
-          observe() { observed++; }
-          disconnect() { disconnected++; }
+          observe() {
+            observed++;
+          }
+          disconnect() {
+            disconnected++;
+          }
         }
       };
-      const originals = new Map(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+      const originals = new Map(
+        Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)])
+      );
       for (const [key, value] of Object.entries(globals)) {
         Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
       }
@@ -1144,28 +1341,57 @@ test("[Web/展映] 展映诊断按需采集，运动回调和销毁不依赖诊�
       document.body.appendChild(host);
       const output = enabled ? document.createElement("output") : null;
       const app = {
-        canvas: document.createElement("canvas"), stage: new Container(),
+        canvas: document.createElement("canvas"),
+        stage: new Container(),
         renderer: { resize() {}, events: { setCursor() {} } },
         ticker: {
-          count: 0, started: true,
-          add(callback: typeof tick) { tick = callback; this.count++; },
-          remove(callback: typeof tick) { assert.equal(callback, tick); this.count--; }
+          count: 0,
+          started: true,
+          add(callback: typeof tick) {
+            tick = callback;
+            this.count++;
+          },
+          remove(callback: typeof tick) {
+            assert.equal(callback, tick);
+            this.count--;
+          }
         },
-        start() { this.ticker.started = true; },
-        stop() { this.ticker.started = false; },
-        destroy() { this.canvas.remove(); this.stage.destroy({ children: true }); }
+        start() {
+          this.ticker.started = true;
+        },
+        stop() {
+          this.ticker.started = false;
+        },
+        destroy() {
+          this.canvas.remove();
+          this.stage.destroy({ children: true });
+        }
       };
       // Inject the GPU shell; exercise the actual runtime and scenes, without
       // creating another initialization or diagnostic implementation for tests.
-      runtime = Reflect.construct(ShowPixiRuntime, [host, app, {
-        scene: "float", images: [], dataKey: "diagnostics", order: "latest",
-        waterfallColumns: 4, floatSizeIndex: 5,
-        running: true, reducedMotion: false, speed: 28, statsElement: output,
-        onColumnsChange: (value: number) => value,
-        onFloatSizeIndexChange: (value: number) => value,
-        onMotionActiveChange: (active: boolean) => motion.push(active),
-        onManualVerticalMovement() {}, onNeedImages() {}, onOpen() {}, onVisibleItems() {}
-      }]) as ShowPixiRuntime;
+      runtime = Reflect.construct(ShowPixiRuntime, [
+        host,
+        app,
+        {
+          scene: "float",
+          images: [],
+          dataKey: "diagnostics",
+          order: "latest",
+          waterfallColumns: 4,
+          floatSizeIndex: 5,
+          running: true,
+          reducedMotion: false,
+          speed: 28,
+          statsElement: output,
+          onColumnsChange: (value: number) => value,
+          onFloatSizeIndexChange: (value: number) => value,
+          onMotionActiveChange: (active: boolean) => motion.push(active),
+          onManualVerticalMovement() {},
+          onNeedImages() {},
+          onOpen() {},
+          onVisibleItems() {}
+        }
+      ]) as ShowPixiRuntime;
       for (let i = 0; i < 10; i++) tick({ elapsedMS: 16 });
       assert.equal(runtime.snapshot().frames, enabled ? 10 : 0);
       assert.equal(observed, enabled ? 1 : 0);
@@ -1192,11 +1418,16 @@ test("[Web/展映] 展映诊断按需采集，运动回调和销毁不依赖诊�
       assert.equal(app.ticker.started, false);
       assert.equal(app.canvas.isConnected, false);
       assert.equal(window.__imageShowPixiDebug, undefined);
-      if (enabled) assert.deepEqual(window.__imageShowPixiLastCleanup, {
-        activePointers: 0, canvasConnected: false, inputListenerCount: 0,
-        runtimeTickerRemoved: true, sceneActive: false, textureEntries: 0,
-        tickerStarted: false
-      });
+      if (enabled)
+        assert.deepEqual(window.__imageShowPixiLastCleanup, {
+          activePointers: 0,
+          canvasConnected: false,
+          inputListenerCount: 0,
+          runtimeTickerRemoved: true,
+          sceneActive: false,
+          textureEntries: 0,
+          tickerStarted: false
+        });
     });
   }
 });
@@ -1208,14 +1439,14 @@ test("[Web/展映] 展映稳定几何复用命中矩形，缩放和聚焦变化�
   card.update(16);
   assert.equal(card.root.hitArea, bounds);
   assert.deepEqual([bounds.x, bounds.y, bounds.width, bounds.height], [-50, -50, 100, 100]);
-  card.assign(card.key, card.image!, 180, 260, .04, true);
+  card.assign(card.key, card.image!, 180, 260, 0.04, true);
   card.setFocused(true);
   for (let i = 0; i < 150; i++) card.update(16, true);
   assert.equal(card.root.hitArea, bounds);
   assert.deepEqual([bounds.x, bounds.y, bounds.width, bounds.height], [-90, -130, 180, 260]);
   assert.equal(card.root.zIndex, 100_000);
   assert.ok(card.root.scale.x > 1);
-  card.setRenderScale(.5);
+  card.setRenderScale(0.5);
   card.update(16);
   assert.equal(card.root.hitArea, bounds);
   assert.equal(card.isInteractionActive, true);
@@ -1237,38 +1468,55 @@ test("[Web/展映] float 键盘聚焦卡片回收后不向新图片传递焦点"
 });
 test("[Web/展映] 高密度瀑布在像素预算内原位补齐全部驻留卡片", async (t) => {
   for (const width of [760, 1440]) {
-    for (const densityOffset of [0, 4]) await t.test(`${width}px / 最大列数减 ${densityOffset}`, async (t) => {
-      const policy = showPixiTextureCacheOptions(width, true);
-      const h = await createTextureRecoveryHarness(t, policy);
-      t.after(installProperties(globalThis, { devicePixelRatio: 3 }));
-      const height = 1800;
-      const target = createCameraTestElement(width, height);
-      const scene = new ShowPixiWaterfallScene({
-        width, height, columns: showWaterfallDensity(width).maximumColumns - densityOffset,
-        images: showImages(800), dataKey: "resident-budget", order: "latest", hasMore: false,
-        running: false, reducedMotion: false, speed: 28,
-        inputElement: target.element, textureCache: h.cache, renderer: {} as Renderer,
-        onNeedImages() {}, onOpen() {}, onVisibleItems() {}, onManualVerticalMovement() {},
-        onColumnsChange: (columns) => columns
+    for (const densityOffset of [0, 4])
+      await t.test(`${width}px / 最大列数减 ${densityOffset}`, async (t) => {
+        const policy = showPixiTextureCacheOptions(width, true);
+        const h = await createTextureRecoveryHarness(t, policy);
+        t.after(installProperties(globalThis, { devicePixelRatio: 3 }));
+        const height = 1800;
+        const target = createCameraTestElement(width, height);
+        const scene = new ShowPixiWaterfallScene({
+          width,
+          height,
+          columns: showWaterfallDensity(width).maximumColumns - densityOffset,
+          images: showImages(800),
+          dataKey: "resident-budget",
+          order: "latest",
+          hasMore: false,
+          running: false,
+          reducedMotion: false,
+          speed: 28,
+          inputElement: target.element,
+          textureCache: h.cache,
+          renderer: {} as Renderer,
+          onNeedImages() {},
+          onOpen() {},
+          onVisibleItems() {},
+          onManualVerticalMovement() {},
+          onColumnsChange: (columns) => columns
+        });
+        t.after(() => scene.destroy());
+        const before = scene.stats();
+        assert.ok(before.activeSprites > 300, "必须覆盖真实高密度驻留集合");
+        await h.flush();
+        const loaded = scene.stats();
+        assert.equal(
+          loaded.textureReadySprites,
+          loaded.activeSprites,
+          "无需缩放、重排或下一次 tick 才补齐"
+        );
+        assert.equal(loaded.layoutRevision, before.layoutRevision);
+        assert.equal(loaded.waterfallScale, before.waterfallScale);
+        assert.equal(h.cache.stats().rejected, 0, "完整驻留集合本身必须可被预算容纳");
+        assert.ok(h.cache.stats().reservedPixels <= policy.maximumPixels);
+        const requests = h.requests.length;
+        scene.setImages(showImages(800), "resident-budget", "latest", false);
+        await h.flush();
+        assert.equal(h.requests.length, requests, "同一集合保持已解码纹理复用");
+        scene.destroy();
+        await h.flush();
+        assert.equal(h.cache.stats().referenced, 0);
       });
-      t.after(() => scene.destroy());
-      const before = scene.stats();
-      assert.ok(before.activeSprites > 300, "必须覆盖真实高密度驻留集合");
-      await h.flush();
-      const loaded = scene.stats();
-      assert.equal(loaded.textureReadySprites, loaded.activeSprites, "无需缩放、重排或下一次 tick 才补齐");
-      assert.equal(loaded.layoutRevision, before.layoutRevision);
-      assert.equal(loaded.waterfallScale, before.waterfallScale);
-      assert.equal(h.cache.stats().rejected, 0, "完整驻留集合本身必须可被预算容纳");
-      assert.ok(h.cache.stats().reservedPixels <= policy.maximumPixels);
-      const requests = h.requests.length;
-      scene.setImages(showImages(800), "resident-budget", "latest", false);
-      await h.flush();
-      assert.equal(h.requests.length, requests, "同一集合保持已解码纹理复用");
-      scene.destroy();
-      await h.flush();
-      assert.equal(h.cache.stats().referenced, 0);
-    });
   }
 });
 
@@ -1276,26 +1524,38 @@ test("[Web/展映] 驻留预算共享同图副本，集合缩小后恢复目标�
   const h = await createTextureRecoveryHarness(t, { maximumEntries: 20, maximumPixels: 100_000 });
   const requested = { pixelWidth: 256, pixelHeight: 256, sourceRatio: 1 };
   const copies = Array.from({ length: 800 }, (_, index) => ({
-    url: index % 2 ? "https://TEXTURES.example:443/shared.webp" : "https://textures.example/shared.webp",
+    url:
+      index % 2
+        ? "https://TEXTURES.example:443/shared.webp"
+        : "https://textures.example/shared.webp",
     lod: requested
   }));
   assert.ok(h.cache.fitResidentLods(copies).every((lod) => lod.pixelWidth === 256));
-  const crowded = h.cache.fitResidentLods(Array.from({ length: 8 }, (_, index) => ({
-    url: `https://textures.example/${index}.webp`, lod: requested
-  })));
+  const crowded = h.cache.fitResidentLods(
+    Array.from({ length: 8 }, (_, index) => ({
+      url: `https://textures.example/${index}.webp`,
+      lod: requested
+    }))
+  );
   assert.ok(crowded.every((lod) => lod.pixelWidth < 256 && lod.pixelWidth === lod.pixelHeight));
-  assert.deepEqual(h.cache.fitResidentLods(copies), copies.map(() => requested));
+  assert.deepEqual(
+    h.cache.fitResidentLods(copies),
+    copies.map(() => requested)
+  );
   assert.equal(h.requests.length, 0, "选择解码尺寸本身不发请求或占用纹理");
 });
 
 test("[Web/展映] 下载挂起时纹理等待节点有界，恢复后只加载仍有效的任务", async (t) => {
   const h = await createTextureRecoveryHarness(t, {
-    maximumEntries: 4, maximumInFlight: 2, maximumUnreferenced: 2
+    maximumEntries: 4,
+    maximumInFlight: 2,
+    maximumUnreferenced: 2
   });
   const releaseFirst = h.hold("held-first");
   const releaseSecond = h.hold("held-second");
   const lod = { pixelWidth: 16, pixelHeight: 16 };
-  const acquire = (id: string) => h.cache.acquire(`https://textures.example/${id}.webp`, lod, () => {});
+  const acquire = (id: string) =>
+    h.cache.acquire(`https://textures.example/${id}.webp`, lod, () => {});
   const first = acquire("held-first");
   const second = acquire("held-second");
   for (let index = 0; index < 10_000; index += 1) {
@@ -1308,10 +1568,13 @@ test("[Web/展映] 下载挂起时纹理等待节点有界，恢复后只加载�
   releaseFirst();
   releaseSecond();
   await h.flush();
-  assert.deepEqual(h.requests, ["held-first", "held-second", "still-needed"].map(
-    (id) => `https://textures.example/${id}.webp`
-  ));
-  first.release(); second.release(); valid.release();
+  assert.deepEqual(
+    h.requests,
+    ["held-first", "held-second", "still-needed"].map((id) => `https://textures.example/${id}.webp`)
+  );
+  first.release();
+  second.release();
+  valid.release();
   h.cache.destroy();
   assert.equal(h.cache.stats().queued, 0);
   assert.equal(h.cache.stats().entries, 0);
@@ -1319,24 +1582,47 @@ test("[Web/展映] 下载挂起时纹理等待节点有界，恢复后只加载�
 
 test("[Web/展映] 同步释放与拒绝交错时补发错过的容量变化，容量不变时不空转", async (t) => {
   const h = await createTextureRecoveryHarness(t, {
-    maximumEntries: 3, maximumPixels: 1_000, maximumUnreferenced: 2
+    maximumEntries: 3,
+    maximumPixels: 1_000,
+    maximumUnreferenced: 2
   });
-  const { ShowPixiCard, ShowPixiPerspectiveCoordinator } = await import(
-    "../../../packages/web/src/pages/show/pixi/show-pixi-card.ts"
+  const { ShowPixiCard, ShowPixiPerspectiveCoordinator } =
+    await import("../../../packages/web/src/pages/show/pixi/show-pixi-card.ts");
+  const first = h.cache.acquire(
+    "https://textures.example/a.webp",
+    { pixelWidth: 20, pixelHeight: 20 },
+    () => {}
   );
-  const first = h.cache.acquire("https://textures.example/a.webp", { pixelWidth: 20, pixelHeight: 20 }, () => {});
-  const second = h.cache.acquire("https://textures.example/b.webp", { pixelWidth: 20, pixelHeight: 20 }, () => {});
+  const second = h.cache.acquire(
+    "https://textures.example/b.webp",
+    { pixelWidth: 20, pixelHeight: 20 },
+    () => {}
+  );
   await h.flush();
-  const card = new ShowPixiCard(h.cache, () => {}, {} as Renderer, new ShowPixiPerspectiveCoordinator());
+  const card = new ShowPixiCard(
+    h.cache,
+    () => {},
+    {} as Renderer,
+    new ShowPixiPerspectiveCoordinator()
+  );
   t.after(() => card.destroy());
   first.release();
-  card.assign("c", { ...showImages(1)[0], thumb_url: "https://textures.example/c.webp" },
-    100, 200, .04, false, 100, 1, { pixelWidth: 20, pixelHeight: 40 });
+  card.assign(
+    "c",
+    { ...showImages(1)[0], thumb_url: "https://textures.example/c.webp" },
+    100,
+    200,
+    0.04,
+    false,
+    100,
+    1,
+    { pixelWidth: 20, pixelHeight: 40 }
+  );
   card.root.position.set(143, 257);
   second.release();
   await h.flush();
   assert.equal(card.isTextureReady, true, "通知先于等待注册时也应补图，不依赖缩放或其他释放");
-  assert.deepEqual([card.root.x, card.root.y, card.root.rotation], [143, 257, .04]);
+  assert.deepEqual([card.root.x, card.root.y, card.root.rotation], [143, 257, 0.04]);
   assert.equal(h.requests.length, 3);
   const waiting = h.card("still-full");
   await h.flush();
@@ -1349,29 +1635,46 @@ test("[Web/展映] 同步释放与拒绝交错时补发错过的容量变化，�
 
 for (const phase of ["headers", "body"] as const) {
   test(`[Web/展映] 挂起纹理读取超时释放槽位，显式恢复可重试且销毁不记故障 / ${phase}`, async (t) => {
-    const clock = installControlledClock(t, window, { includeGlobalTimers: true, includeDateNow: false });
+    const clock = installControlledClock(t, window, {
+      includeGlobalTimers: true,
+      includeDateNow: false
+    });
     const h = await createTextureRecoveryHarness(t, { maximumEntries: 4, maximumInFlight: 2 });
     const healthyFetch = globalThis.fetch;
     const signals: AbortSignal[] = [];
     let recovered = false;
     let reads = 0;
-    t.after(installProperties(globalThis, { fetch: (input: RequestInfo | URL, init?: RequestInit) => {
-      reads++;
-      if (!String(input).includes("hung") || recovered) return healthyFetch(input, init);
-      const signal = init?.signal;
-      assert.ok(signal);
-      signals.push(signal);
-      if (phase === "headers") return new Promise<Response>((_resolve, reject) => {
-        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-      });
-      return Promise.resolve(new Response(new ReadableStream({ start(controller) {
-        controller.enqueue(new Uint8Array([1, 2]));
-        signal.addEventListener("abort", () => controller.error(signal.reason), { once: true });
-      } })));
-    } }));
+    t.after(
+      installProperties(globalThis, {
+        fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+          reads++;
+          if (!String(input).includes("hung") || recovered) return healthyFetch(input, init);
+          const signal = init?.signal;
+          assert.ok(signal);
+          signals.push(signal);
+          if (phase === "headers")
+            return new Promise<Response>((_resolve, reject) => {
+              signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+            });
+          return Promise.resolve(
+            new Response(
+              new ReadableStream({
+                start(controller) {
+                  controller.enqueue(new Uint8Array([1, 2]));
+                  signal.addEventListener("abort", () => controller.error(signal.reason), {
+                    once: true
+                  });
+                }
+              })
+            )
+          );
+        }
+      })
+    );
     const first = h.card("hung-first");
     const second = h.card("hung-second");
-    first.destroy(); second.destroy();
+    first.destroy();
+    second.destroy();
     const healthy = h.card("healthy");
     await clock.advanceBy(29_999);
     assert.equal(reads, 2);
@@ -1380,7 +1683,7 @@ for (const phase of ["headers", "body"] as const) {
     await h.flush();
     assert.equal(healthy.isTextureReady, true);
     assert.equal(reads, 3);
-    assert.ok(signals.every(signal => signal.aborted && signal.reason.name === "TimeoutError"));
+    assert.ok(signals.every((signal) => signal.aborted && signal.reason.name === "TimeoutError"));
     assert.equal(h.cache.stats().failures, 2);
     assert.equal(clock.pendingCount(), 0);
     recovered = true;
@@ -1407,14 +1710,14 @@ test("[Web/展映] 纹理容量释放唤醒等待卡片且不重置位置，销�
   assert.equal(first.isTextureReady, true);
   const waiting = h.card("waiting");
   waiting.root.position.set(143, 257);
-  waiting.root.rotation = .08;
+  waiting.root.rotation = 0.08;
   await h.flush();
   assert.equal(waiting.isTextureReady, false);
   assert.equal(h.requests.length, 1, "容量不足不发请求");
   first.destroy();
   await h.flush();
   assert.equal(waiting.isTextureReady, true, "不依赖重新 assign 或 ticker 才恢复");
-  assert.deepEqual([waiting.root.x, waiting.root.y, waiting.root.rotation], [143, 257, .08]);
+  assert.deepEqual([waiting.root.x, waiting.root.y, waiting.root.rotation], [143, 257, 0.08]);
   const removed = h.card("removed");
   await h.flush();
   removed.destroy();
@@ -1425,7 +1728,10 @@ test("[Web/展映] 纹理容量释放唤醒等待卡片且不重置位置，销�
   assert.equal(h.cache.stats().reservedPixels, 0);
 });
 test("[Web/展映] 加载中释放的纹理在完成后唤醒等待卡片，即使空闲 LRU 未超限", async (t) => {
-  const h = await createTextureRecoveryHarness(t, { maximumUnreferenced: 1, maximumPixels: 100_000 });
+  const h = await createTextureRecoveryHarness(t, {
+    maximumUnreferenced: 1,
+    maximumPixels: 100_000
+  });
   const finish = h.hold("held");
   const first = h.card("held");
   const waiting = h.card("waiting");
@@ -1459,8 +1765,19 @@ test("[Web/展映] 纹理传输失败有界暂停，恢复联网允许重试且�
       h.setOffline(false);
       h.cache.resumeTransportRequests();
       await h.flush();
-      assert.equal(resumedCard.isTextureReady, true, "同一提交内创建卡片并恢复播放不能丢掉待恢复租约");
-      assert.ok(cards.every((card) => card.isTextureReady), JSON.stringify({ ready: cards.map((card) => card.isTextureReady), requests: h.requests, stats: h.cache.stats() }));
+      assert.equal(
+        resumedCard.isTextureReady,
+        true,
+        "同一提交内创建卡片并恢复播放不能丢掉待恢复租约"
+      );
+      assert.ok(
+        cards.every((card) => card.isTextureReady),
+        JSON.stringify({
+          ready: cards.map((card) => card.isTextureReady),
+          requests: h.requests,
+          stats: h.cache.stats()
+        })
+      );
       assert.equal(missing.isTextureReady, false);
       assert.equal(h.requests.filter((url) => url.includes("missing")).length, 1);
       assert.equal(h.requests.length, 8);
@@ -1482,7 +1799,7 @@ test("[Web/展映] 详情成功加载同一 URL 后恢复失败纹理，原位�
       await h.flush();
       const second = h.card("recover");
       first.root.position.set(143, 257);
-      first.root.rotation = .08;
+      first.root.rotation = 0.08;
       await h.flush();
       assert.equal(first.isTextureReady, false);
       assert.equal(h.requests.length, 3);
@@ -1500,8 +1817,12 @@ test("[Web/展映] 详情成功加载同一 URL 后恢复失败纹理，原位�
       assert.equal(second.isTextureReady, true);
       assert.equal(healthy.isTextureReady, true);
       assert.equal(other.isTextureReady, false);
-      assert.equal(h.requests.length, 4, "重复成功信号和相同 LOD 副本共用一次重试，健康纹理保持复用");
-      assert.deepEqual([first.root.x, first.root.y, first.root.rotation], [143, 257, .08]);
+      assert.equal(
+        h.requests.length,
+        4,
+        "重复成功信号和相同 LOD 副本共用一次重试，健康纹理保持复用"
+      );
+      assert.deepEqual([first.root.x, first.root.y, first.root.rotation], [143, 257, 0.08]);
       h.cache.retryFailedUrl(url);
       await h.flush();
       assert.equal(h.requests.length, 4, "已恢复纹理不会再次请求");
@@ -1533,7 +1854,7 @@ test("[Web/展映] 图片成功信号解除来源暂停，CORS 仍失败时再�
   h.cache.retryFailedUrl("https://textures.example/recovery-3.webp");
   await h.flush();
   assert.equal(cards[3].isTextureReady, true, "尚未发请求、仅被来源暂停拦住的卡片也能恢复");
-  assert.ok(cards.slice(0, 3).every(card => !card.isTextureReady));
+  assert.ok(cards.slice(0, 3).every((card) => !card.isTextureReady));
   h.setOffline(true);
   h.cache.retryFailedUrl("https://textures.example/recovery-0.webp");
   await h.flush();
@@ -1555,13 +1876,21 @@ test("[Web/展映] 两种场景和三种排序原位更新元数据并保持卡�
       h.advance(16);
       const positions = floatCardPositions(h.scene);
       const leases = h.activeLeases().map((entry) => entry.key);
-      h.scene.setImages(images.map((image) => ({ ...image, title: "更新标题" })), "edited-float", order, true);
+      h.scene.setImages(
+        images.map((image) => ({ ...image, title: "更新标题" })),
+        "edited-float",
+        order,
+        true
+      );
       h.advance(16);
       assert.equal(h.scene.stats().retainedDtos, 500);
       assert.ok(h.visibleItems().length > 0);
       assert.ok(h.visibleItems().every(({ image }) => image.title === "更新标题"));
       assert.deepEqual(floatCardPositions(h.scene), positions);
-      assert.deepEqual(h.activeLeases().map((entry) => entry.key), leases);
+      assert.deepEqual(
+        h.activeLeases().map((entry) => entry.key),
+        leases
+      );
     });
     await t.test(`waterfall/${order}`, (t) => {
       installPixiPaletteFixture(t);
@@ -1571,18 +1900,36 @@ test("[Web/展映] 两种场景和三种排序原位更新元数据并保持卡�
       let visible: readonly ShowPixiVisibleItem[] = [];
       let acquired = 0;
       let released = 0;
-      const scene = new ShowPixiWaterfallScene({ hasMore: false,
-        width: 1440, height: 900, columns: 4,
-        images, dataKey: "edited-waterfall", order,
-        running: false, reducedMotion: false, speed: 28,
+      const scene = new ShowPixiWaterfallScene({
+        hasMore: false,
+        width: 1440,
+        height: 900,
+        columns: 4,
+        images,
+        dataKey: "edited-waterfall",
+        order,
+        running: false,
+        reducedMotion: false,
+        speed: 28,
         inputElement: target.element,
-        textureCache: { fitResidentLods: unchangedTextureLods, acquire() {
-          acquired++;
-          return { release() { released++; } };
-        } } as unknown as ShowPixiTextureCache,
+        textureCache: {
+          fitResidentLods: unchangedTextureLods,
+          acquire() {
+            acquired++;
+            return {
+              release() {
+                released++;
+              }
+            };
+          }
+        } as unknown as ShowPixiTextureCache,
         renderer: {} as Renderer,
-        onNeedImages() {}, onOpen() {}, onManualVerticalMovement() {},
-        onVisibleItems: (items) => { visible = items; },
+        onNeedImages() {},
+        onOpen() {},
+        onManualVerticalMovement() {},
+        onVisibleItems: (items) => {
+          visible = items;
+        },
         onColumnsChange: (columns) => columns
       });
       t.after(() => {
@@ -1590,12 +1937,21 @@ test("[Web/展映] 两种场景和三种排序原位更新元数据并保持卡�
         assert.equal(acquired, released);
         assert.equal(target.listenerCount(), 0);
       });
-      const positions = () => scene.root.children.map((root) => ({
-        root, x: root.x, y: root.y, rotation: root.rotation
-      }));
+      const positions = () =>
+        scene.root.children.map((root) => ({
+          root,
+          x: root.x,
+          y: root.y,
+          rotation: root.rotation
+        }));
       const before = positions();
       const leases = { acquired, released };
-      scene.setImages(images.map((image) => ({ ...image, title: "更新标题" })), "edited-waterfall", order, false);
+      scene.setImages(
+        images.map((image) => ({ ...image, title: "更新标题" })),
+        "edited-waterfall",
+        order,
+        false
+      );
       assert.equal(scene.stats().retainedDtos, 800);
       assert.ok(visible.length > 0);
       assert.ok(visible.every(({ image }) => image.title === "更新标题"));
@@ -1640,11 +1996,20 @@ test("[Web/展映] float 桌面三种尺寸保持混排宽度、卡片与候选�
   }
 });
 test("[Web/展映] float 横竖长图保持真实比例，并在各视口保留完整图面的观看空间", async (t) => {
-  for (const [width, height] of [[359, 800], [390, 844], [844, 390], [768, 1024], [1440, 900], [3840, 2160]] as const) {
+  for (const [width, height] of [
+    [359, 800],
+    [390, 844],
+    [844, 390],
+    [768, 1024],
+    [1440, 900],
+    [3840, 2160]
+  ] as const) {
     await t.test(`${width}×${height}`, (t) => {
       const h = createFloatSceneHarness(t, { width, height, sizeIndex: 10 });
       const images = showImages(80).map((image, index) => ({
-        ...image, width: index % 2 ? 3000 : 900, height: index % 2 ? 900 : 3000
+        ...image,
+        width: index % 2 ? 3000 : 900,
+        height: index % 2 ? 900 : 3000
       }));
       h.scene.setImages(images, "long-image-viewing", "latest", false);
       const cards = floatCardPositions(h.scene);
@@ -1669,13 +2034,19 @@ test("[Web/展映] float 暂停时连续双向补图，保留反向预取并接�
   assert.ok(reverseReserve.length >= 6);
   h.resolveTextures();
   h.dragBy(-2700);
-  assert.ok(reverseReserve.every((entry) => entry.active), "向上移动不取消上方的反向储备");
+  assert.ok(
+    reverseReserve.every((entry) => entry.active),
+    "向上移动不取消上方的反向储备"
+  );
   assert.ok(h.acquisitions.some((entry) => entry.shared && entry.readyAtAcquire));
   const upwardRecycles = h.scene.stats().recycledSprites;
   assert.ok(upwardRecycles > 0);
   h.dragBy(2700);
   assert.ok(h.scene.stats().recycledSprites > upwardRecycles);
-  assert.ok(reverseReserve.some((entry) => !entry.active), "向下移动消费事先保留的上方队列");
+  assert.ok(
+    reverseReserve.some((entry) => !entry.active),
+    "向下移动消费事先保留的上方队列"
+  );
   for (const delta of [-450, 450, -3600, 3600, -900, 900]) {
     h.dragBy(delta);
     assert.equal(h.scene.stats().activeSprites, initialCount);
@@ -1705,7 +2076,10 @@ test("[Web/展映] float 快速反向直接响应新滚轮方向，屏内卡片�
   h.advance(120);
   const settled = floatCardPositions(h.scene).map(({ x, y, rotation }) => ({ x, y, rotation }));
   h.advance(30);
-  assert.deepEqual(floatCardPositions(h.scene).map(({ x, y, rotation }) => ({ x, y, rotation })), settled);
+  assert.deepEqual(
+    floatCardPositions(h.scene).map(({ x, y, rotation }) => ({ x, y, rotation })),
+    settled
+  );
 });
 test("[Web/展映] float 自动上浮与轻旋转保留，手动输入让位后无需等待恢复", (t) => {
   const h = createFloatSceneHarness(t);
@@ -1715,7 +2089,7 @@ test("[Web/展映] float 自动上浮与轻旋转保留，手动输入让位后�
   h.advance(30);
   assert.ok(card.root.y < card.y);
   assert.ok(Math.abs(card.root.rotation - card.rotation) > 0);
-  assert.ok(Math.abs(card.root.rotation - card.rotation) <= 3 * Math.PI / 180);
+  assert.ok(Math.abs(card.root.rotation - card.rotation) <= (3 * Math.PI) / 180);
   h.target.emit("pointerdown", { clientY: 400, timeStamp: 100 });
   const heldY = card.root.y;
   h.advance(5);
@@ -1738,18 +2112,20 @@ test("[Web/展映] float 鼠标悬停平滑摆正，提前释放和完整释放�
       const h = createFloatSceneHarness(t);
       h.scene.setMotion(true, false);
       h.advance(10);
-      const card = floatCardPositions(h.scene).find((item) => item.y > 200 && item.y < 700 && Math.abs(item.rotation) > .01)!;
+      const card = floatCardPositions(h.scene).find(
+        (item) => item.y > 200 && item.y < 700 && Math.abs(item.rotation) > 0.01
+      )!;
       assert.ok(card);
       const heldY = card.root.y;
       card.root.emit("pointerover", pixiPointerEvent(card.x, card.y));
       h.advance(frames);
       assert.equal(card.root.y, heldY);
       assert.ok(Math.abs(card.root.rotation) < Math.abs(card.rotation));
-      if (frames === 20) assert.ok(Math.abs(card.root.rotation) < .00001);
+      if (frames === 20) assert.ok(Math.abs(card.root.rotation) < 0.00001);
       const releasedAngle = card.root.rotation;
       card.root.emit("pointerout", pixiPointerEvent(card.x, card.y));
       h.advance(1);
-      assert.ok(Math.abs(card.root.rotation - releasedAngle) < .001, "释放不能跳回旧倾角");
+      assert.ok(Math.abs(card.root.rotation - releasedAngle) < 0.001, "释放不能跳回旧倾角");
       assert.ok(card.root.y < heldY);
     });
   }
@@ -1768,11 +2144,16 @@ test("[Web/展映] 展映补图失败只等待显式重试，切换查询会取�
   await h.React.act(async () => current.loadMore());
   await h.respond(1, { error: "补图失败" }, 503);
   assert.ok(current.error);
-  await h.React.act(async () => { for (let frame = 0; frame < 100; frame += 1) current.loadMore(); });
+  await h.React.act(async () => {
+    for (let frame = 0; frame < 100; frame += 1) current.loadMore();
+  });
   assert.equal(h.pending.length, 2, "场景逐帧补图信号不能变成网络重试循环");
   await h.React.act(async () => current.retry());
   assert.equal(h.pending.length, 3);
-  assert.equal(new URL(h.pending[2].path, "https://img.example").searchParams.get("cursor"), "next");
+  assert.equal(
+    new URL(h.pending[2].path, "https://img.example").searchParams.get("cursor"),
+    "next"
+  );
   await h.render(h.React.createElement(Probe, { theme: "second" }));
   assert.equal(h.pending[2].signal?.aborted, true);
   assert.equal(current.committedKey.split("#")[0], "first");
@@ -1802,21 +2183,37 @@ test("[Web/展映] 编辑累计批次中的图片只原位更新目标并保持�
       const before = current.images;
       const target = before[250]!;
       await h.React.act(async () => current.loadMore());
-      await h.React.act(async () => current.updateImage(editableImage(target.id, {
-        ...target, title: "更新后的标题", theme: "changed"
-      })));
-      assert.deepEqual(current.images.map(({ id }) => id), before.map(({ id }) => id));
+      await h.React.act(async () =>
+        current.updateImage(
+          editableImage(target.id, {
+            ...target,
+            title: "更新后的标题",
+            theme: "changed"
+          })
+        )
+      );
+      assert.deepEqual(
+        current.images.map(({ id }) => id),
+        before.map(({ id }) => id)
+      );
       assert.equal(current.images[250]!.title, "更新后的标题");
       assert.equal(current.images[250]!.width, target.width);
-      for (const index of [0, 249, 251, 299]) assert.strictEqual(current.images[index], before[index]);
+      for (const index of [0, 249, 251, 299])
+        assert.strictEqual(current.images[index], before[index]);
       assert.equal(h.pending.length, 3);
       if (order !== "random") {
-        assert.equal(new URL(h.pending[2]!.path, "https://img.example").searchParams.get("cursor"), "page-3");
+        assert.equal(
+          new URL(h.pending[2]!.path, "https://img.example").searchParams.get("cursor"),
+          "page-3"
+        );
       }
       await h.respond(2, { count: 101, items: [target, ...initial.slice(300)], next_cursor: null });
       assert.equal(current.images.length, 300, "编辑前的响应已被隔离");
       await h.React.act(async () => current.loadMore());
-      assert.equal(new URL(h.pending[3]!.path, "https://img.example").searchParams.get("cursor"), "page-3");
+      assert.equal(
+        new URL(h.pending[3]!.path, "https://img.example").searchParams.get("cursor"),
+        "page-3"
+      );
       await h.respond(3, { items: initial.slice(300), next_cursor: null });
       assert.equal(current.images.length, 400);
       assert.equal(current.images[250]!.title, "更新后的标题");
@@ -1847,7 +2244,9 @@ test("[Web/展映] 定向回读按 ID 收敛连续编辑并保留失败前的已
   await h.respond(1, { items: [editableImage(target.id, { ...target, title: "过时回读" })] });
   assert.equal(current.images[1]!.title, "较新回读");
   await h.React.act(async () => current.refreshImage(target.id));
-  await h.React.act(async () => current.updateImage(editableImage(target.id, { ...target, title: "保存快照" })));
+  await h.React.act(async () =>
+    current.updateImage(editableImage(target.id, { ...target, title: "保存快照" }))
+  );
   assert.equal(h.pending[3]!.signal?.aborted, true);
   await h.respond(3, { items: [editableImage(target.id, { ...target, title: "快照前回读" })] });
   assert.equal(current.images[1]!.title, "保存快照");
@@ -1881,15 +2280,18 @@ test("[Web/展映] 退出筛选或删除只移除目标并隔离在途补图后�
       await h.React.act(async () => current.loadMore());
       const target = initial[0]!;
       if (action === "edit") {
-        await h.React.act(async () => current.updateImage(editableImage(target.id, { ...target, theme: "excluded" })));
+        await h.React.act(async () =>
+          current.updateImage(editableImage(target.id, { ...target, theme: "excluded" }))
+        );
       } else if (action === "trash") {
         await h.React.act(async () => current.removeImage(target.id));
         await h.React.act(async () => current.loadMore());
       } else {
         await h.React.act(async () => current.refreshImage(target.id));
-        await h.respond(2, { items: action === "missing" ? [] : [
-          editableImage(target.id, { ...target, theme: "excluded" })
-        ] });
+        await h.respond(2, {
+          items:
+            action === "missing" ? [] : [editableImage(target.id, { ...target, theme: "excluded" })]
+        });
       }
       assert.equal(h.pending[1]!.signal?.aborted, true);
       const resumedRequest = h.pending.at(-1)!;
@@ -1898,9 +2300,15 @@ test("[Web/展映] 退出筛选或删除只移除目标并隔离在途补图后�
       });
       assert.equal(resumedRequest.signal?.aborted, false, "重复删除回执不打断已恢复的补图流");
       await h.respond(1, { items: initial, next_cursor: "stale" });
-      assert.deepEqual(current.images.map(({ id }) => id), initial.slice(1).map(({ id }) => id));
+      assert.deepEqual(
+        current.images.map(({ id }) => id),
+        initial.slice(1).map(({ id }) => id)
+      );
       const nextRequest = h.pending.length - 1;
-      assert.equal(new URL(h.pending[nextRequest]!.path, "https://img.example").searchParams.get("cursor"), "next");
+      assert.equal(
+        new URL(h.pending[nextRequest]!.path, "https://img.example").searchParams.get("cursor"),
+        "next"
+      );
       await h.respond(nextRequest, { items: [showImages(4)[3]], next_cursor: null });
       assert.equal(current.images.length, 3);
       assert.strictEqual(current.images[0], preserved[1]);
@@ -1928,49 +2336,87 @@ test("[Web/展映] 分页前部插入图片后，末项回读仍按当前筛选�
   // still returns its current record, independent of where it is now sorted.
   const request = h.pending[1]!;
   const isSnapshot = request.path === "/api/admin/images/snapshot";
-  await h.respond(1, isSnapshot
-    ? { items: [editableImage(target.id, { ...target, theme: "included", title: "仍然有效" })] }
-    : { items: shiftedPage, next_cursor: "shifted" });
-  assert.equal(current.images.find(image => image.id === target.id)?.title, "仍然有效");
-  assert.deepEqual(current.images.map(image => image.id), originalPage.map(image => image.id));
-  await h.React.act(async () => current.loadMore({
-    dataKey: current.committedKey, capacity: 20, available: 0,
-    activeIds: [], consumedIds: originalPage.map(image => image.id)
-  }));
+  await h.respond(
+    1,
+    isSnapshot
+      ? { items: [editableImage(target.id, { ...target, theme: "included", title: "仍然有效" })] }
+      : { items: shiftedPage, next_cursor: "shifted" }
+  );
+  assert.equal(current.images.find((image) => image.id === target.id)?.title, "仍然有效");
+  assert.deepEqual(
+    current.images.map((image) => image.id),
+    originalPage.map((image) => image.id)
+  );
+  await h.React.act(async () =>
+    current.loadMore({
+      dataKey: current.committedKey,
+      capacity: 20,
+      available: 0,
+      activeIds: [],
+      consumedIds: originalPage.map((image) => image.id)
+    })
+  );
   await h.respond(2, { items: [target, ...shiftedPage], next_cursor: null });
-  await h.React.act(async () => current.loadMore({
-    dataKey: current.committedKey, capacity: 20, available: 0,
-    activeIds: [], consumedIds: current.images.map(image => image.id)
-  }));
+  await h.React.act(async () =>
+    current.loadMore({
+      dataKey: current.committedKey,
+      capacity: 20,
+      available: 0,
+      activeIds: [],
+      consumedIds: current.images.map((image) => image.id)
+    })
+  );
   await h.respond(3, { items: [target], next_cursor: null });
-  assert.ok(current.images.some(image => image.id === target.id), "确认有效的图片不能被写入永久移除集合");
+  assert.ok(
+    current.images.some((image) => image.id === target.id),
+    "确认有效的图片不能被写入永久移除集合"
+  );
 });
 test("[Web/展映] 编辑成员判断遵循包含、排除和自动设备筛选", () => {
-  const image = editableImage(showImages(2)[1]!.id, { device: "pc", brightness: "dark", theme: "night", tags: ["blue", "stars"], author: "author" });
+  const image = editableImage(showImages(2)[1]!.id, {
+    device: "pc",
+    brightness: "dark",
+    theme: "night",
+    tags: ["blue", "stars"],
+    author: "author"
+  });
   for (const [filter, expected] of [
-    [{ theme: "night,day" }, true], [{ theme: "!night" }, false],
-    [{ tag: "red,stars" }, true], [{ tag: "red,green" }, false],
-    [{ tag: "all:blue,stars" }, true], [{ tag: "all:red,stars" }, false],
+    [{ theme: "night,day" }, true],
+    [{ theme: "!night" }, false],
+    [{ tag: "red,stars" }, true],
+    [{ tag: "red,green" }, false],
+    [{ tag: "all:blue,stars" }, true],
+    [{ tag: "all:red,stars" }, false],
     [{ author: "author" }, true],
-    [{ author: "!author" }, false], [{ brightness: "light" }, false],
+    [{ author: "!author" }, false],
+    [{ brightness: "light" }, false],
     [{ device: "mb" }, false]
   ] as const) {
     assert.equal(imageMatchesFilters(image, { ...emptyGalleryFilters, ...filter }, ""), expected);
   }
-  assert.equal(imageMatchesFilters(image, { ...emptyGalleryFilters, device: "auto" }, "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"), true);
-  assert.equal(imageMatchesFilters(image, { ...emptyGalleryFilters, device: "auto" }, "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile"), false);
+  assert.equal(
+    imageMatchesFilters(
+      image,
+      { ...emptyGalleryFilters, device: "auto" },
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    ),
+    true
+  );
+  assert.equal(
+    imageMatchesFilters(
+      image,
+      { ...emptyGalleryFilters, device: "auto" },
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile"
+    ),
+    false
+  );
 });
 test("[Web/展映] 瀑布缩放保持视口四周 35% 驻留缓冲并按世界坐标换算", () => {
   const residence: ShowResidencePolicy = {
     horizontalOverscanScreens: 0.35,
     verticalOverscanScreens: 0.35
   };
-  const window = showViewportWindow(
-    { x: 120, y: 240 },
-    { width: 800, height: 600 },
-    2,
-    residence
-  );
+  const window = showViewportWindow({ x: 120, y: 240 }, { width: 800, height: 600 }, 2, residence);
   assert.deepEqual(window.visible, {
     left: 60,
     top: 120,
@@ -1983,24 +2429,14 @@ test("[Web/展映] 瀑布缩放保持视口四周 35% 驻留缓冲并按世界�
     right: 600,
     bottom: 525
   });
-  const zoomed = showViewportWindow(
-    { x: -140, y: -30 },
-    { width: 800, height: 600 },
-    1,
-    residence
-  );
+  const zoomed = showViewportWindow({ x: -140, y: -30 }, { width: 800, height: 600 }, 1, residence);
   assert.deepEqual(zoomed.resident, { left: -420, top: -240, right: 940, bottom: 780 });
 });
 test("[Web/展映] 展映窗口可独立指定四向缓冲比例", () => {
-  const window = showViewportWindow(
-    { x: 120, y: 240 },
-    { width: 800, height: 600 },
-    2,
-    {
-      horizontalOverscanScreens: 0.5,
-      verticalOverscanScreens: 0.5
-    }
-  );
+  const window = showViewportWindow({ x: 120, y: 240 }, { width: 800, height: 600 }, 2, {
+    horizontalOverscanScreens: 0.5,
+    verticalOverscanScreens: 0.5
+  });
   assert.deepEqual(window.resident, {
     left: -140,
     top: -30,
@@ -2010,9 +2446,9 @@ test("[Web/展映] 展映窗口可独立指定四向缓冲比例", () => {
 });
 test("[Web/展映] 展映卡片维持窄缝且不回退为刚性网格", () => {
   const source = showImages(1)[0];
-  const geometries = Array.from({ length: 80 }, (_, index) => (
-    showCardGeometry(source, index % 9 - 4, index - 40)
-  ));
+  const geometries = Array.from({ length: 80 }, (_, index) =>
+    showCardGeometry(source, (index % 9) - 4, index - 40)
+  );
   for (const geometry of geometries) {
     assert.ok(geometry.width >= 360 * 0.985);
     assert.ok(geometry.width < 360 * 0.992);
@@ -2027,11 +2463,13 @@ test("[Web/展映] 展映乱序保持元素完整、可重现且不改写输入"
   const sourceIds = source.map((image) => image.id);
   const shuffle = () => {
     const values = [0.25, 0.75, 0.5];
-    return shuffledImageBatch(source, () => values.shift() ?? 0)
-      .map((image) => image.id);
+    return shuffledImageBatch(source, () => values.shift() ?? 0).map((image) => image.id);
   };
   const shuffledIds = shuffle();
-  assert.deepEqual(source.map((image) => image.id), sourceIds);
+  assert.deepEqual(
+    source.map((image) => image.id),
+    sourceIds
+  );
   assert.equal(shuffledIds.length, sourceIds.length);
   assert.deepEqual(new Set(shuffledIds), new Set(sourceIds));
   assert.notDeepEqual(shuffledIds, sourceIds, "代表性随机输入必须实际改变顺序");
@@ -2060,15 +2498,10 @@ test("[Web/展映] 展映有限图片池仍填满超密驻留窗口", () => {
   pool.add(showImages(4));
   const controller = new ShowWindowController(pool);
   const viewport = { width: 736, height: 526 };
-  controller.reconcile(
-    { x: 0, y: 0 },
-    viewport,
-    0.25,
-    {
-      horizontalOverscanScreens: 0.5,
-      verticalOverscanScreens: 0.5
-    }
-  );
+  controller.reconcile({ x: 0, y: 0 }, viewport, 0.25, {
+    horizontalOverscanScreens: 0.5,
+    verticalOverscanScreens: 0.5
+  });
   const snapshot = controller.snapshot();
   assert.equal(snapshot.missingCards, 0);
   assert.ok(snapshot.cards.length > 4);
@@ -2087,7 +2520,8 @@ test("[Web/展映] 展映长距离二维移动保持卡片有界并填满驻留�
   const density = showWaterfallDensity(1440);
   const denseScale = 1440 / density.normalMaximumColumns / 360;
   const residence: ShowResidencePolicy = {
-    horizontalOverscanScreens: 0.35, verticalOverscanScreens: 0.35
+    horizontalOverscanScreens: 0.35,
+    verticalOverscanScreens: 0.35
   };
   let maximumCards = 0;
   let minimumCards = Number.POSITIVE_INFINITY;
@@ -2103,14 +2537,10 @@ test("[Web/展映] 展映长距离二维移动保持卡片有界并填满驻留�
     maximumCards = Math.max(maximumCards, snapshot.cards.length);
     minimumCards = Math.min(minimumCards, snapshot.cards.length);
     assert.equal(snapshot.missingCards, 0);
-    assert.equal(
-      new Set(snapshot.cards.map((card) => card.image.id)).size,
-      snapshot.cards.length
+    assert.equal(new Set(snapshot.cards.map((card) => card.image.id)).size, snapshot.cards.length);
+    const outside = snapshot.cards.find(
+      (card) => !showRectsIntersect(showCardRect(card), snapshot.window.resident)
     );
-    const outside = snapshot.cards.find((card) => !showRectsIntersect(
-      showCardRect(card),
-      snapshot.window.resident
-    ));
     assert.equal(
       outside,
       undefined,
@@ -2128,7 +2558,8 @@ test("[Web/展映] 瀑布在上下边缘间隙暂停保留候选，进入边缘�
   const viewport = { width: 808, height: 734 };
   const scale = viewport.width / (3 * 360);
   const residence: ShowResidencePolicy = {
-    horizontalOverscanScreens: 0.35, verticalOverscanScreens: 0.35
+    horizontalOverscanScreens: 0.35,
+    verticalOverscanScreens: 0.35
   };
   for (const edge of ["top", "bottom"] as const) {
     const pool = new ShowDataPool(800);
@@ -2139,11 +2570,10 @@ test("[Web/展映] 瀑布在上下边缘间隙暂停保留候选，进入边缘�
     controller.reconcile(camera, viewport, scale, residence);
     const column = controller.snapshot().cards.filter((card) => card.column === 0);
     assert.ok(column.length > 1);
-    const boundary = edge === "top"
-      ? column[0]!.y - 0.5
-      : column.at(-1)!.y + column.at(-1)!.height + 0.5;
-    camera.y = boundary * scale + (edge === "top"
-      ? viewport.height * 0.35 : -viewport.height * 1.35);
+    const boundary =
+      edge === "top" ? column[0]!.y - 0.5 : column.at(-1)!.y + column.at(-1)!.height + 0.5;
+    camera.y =
+      boundary * scale + (edge === "top" ? viewport.height * 0.35 : -viewport.height * 1.35);
     controller.reconcile(camera, viewport, scale, residence);
     const before = controller.snapshot();
     const usage = pool.usage("paused");
@@ -2159,8 +2589,10 @@ test("[Web/展映] 瀑布在上下边缘间隙暂停保留候选，进入边缘�
     controller.reconcile(camera, viewport, scale, residence);
     const previous = new Set(usage.consumedIds);
     const consumed = pool.usage("entered").consumedIds.filter((id) => !previous.has(id));
-    const entered = controller.snapshot().cards
-      .map((card) => card.image.id).filter((id) => !previous.has(id));
+    const entered = controller
+      .snapshot()
+      .cards.map((card) => card.image.id)
+      .filter((id) => !previous.has(id));
     assert.ok(entered.length > 0, edge);
     assert.deepEqual(new Set(consumed), new Set(entered), edge);
   }
@@ -2172,19 +2604,15 @@ test("[Web/展映] 展映远距离横移只保留驻留列并为回程生成新�
   const controller = new ShowWindowController(pool);
   const viewport = { width: 736, height: 526 };
   const residence: ShowResidencePolicy = {
-    horizontalOverscanScreens: 0.35, verticalOverscanScreens: 0.35
+    horizontalOverscanScreens: 0.35,
+    verticalOverscanScreens: 0.35
   };
   controller.reconcile({ x: 0, y: 0 }, viewport, 1, residence);
   const initialKey = controller.snapshot().cards.find((card) => card.column === 0)?.key;
   assert.ok(initialKey);
 
   for (let step = 1; step <= 2_000; step += 1) {
-    controller.reconcile(
-      { x: step * 1_000, y: step * 3 },
-      viewport,
-      1,
-      residence
-    );
+    controller.reconcile({ x: step * 1_000, y: step * 3 }, viewport, 1, residence);
     const snapshot = controller.snapshot();
     assert.ok(snapshot.activeColumns < 32);
     assert.ok(snapshot.cards.length < 320);
@@ -2200,12 +2628,10 @@ test("[Web/展映] 展映窗口清空时释放全部卡位与 DTO 强引用", ()
   const pool = new ShowDataPool(300);
   pool.add(showImages(300));
   const controller = new ShowWindowController(pool);
-  controller.reconcile(
-    { x: 0, y: 0 },
-    { width: 736, height: 526 },
-    1,
-    { horizontalOverscanScreens: 0.35, verticalOverscanScreens: 0.35 }
-  );
+  controller.reconcile({ x: 0, y: 0 }, { width: 736, height: 526 }, 1, {
+    horizontalOverscanScreens: 0.35,
+    verticalOverscanScreens: 0.35
+  });
   assert.ok(pool.snapshot().active > 0);
   const unconsumed = pool.snapshot().available;
   controller.clear();
@@ -2216,14 +2642,34 @@ test("[Web/展映] 展映窗口清空时释放全部卡位与 DTO 强引用", ()
 });
 
 test("[Web/展映] 首批向上选档，驻留容量释放后继续接收新候选", async (t) => {
-  for (const [required, expected] of [[1, 200], [200, 200], [201, 500], [500, 500], [501, 800], [900, 800]]) {
+  for (const [required, expected] of [
+    [1, 200],
+    [200, 200],
+    [201, 500],
+    [500, 500],
+    [501, 800],
+    [900, 800]
+  ]) {
     assert.equal(imageBatchTier(required!, [200, 500, 800]), expected);
   }
-  assert.equal(showInitialBatchLimit({ width: 1440, height: 900, mode: "waterfall", columns: 40, floatSizeIndex: 0, device: "pc" }), 800);
+  assert.equal(
+    showInitialBatchLimit({
+      width: 1440,
+      height: 900,
+      mode: "waterfall",
+      columns: 40,
+      floatSizeIndex: 0,
+      device: "pc"
+    }),
+    800
+  );
   const h = await createConfigStreamHarness(t);
   const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
   let current!: ReturnType<typeof useShowData>;
-  function Probe() { current = useShowData(emptyGalleryFilters, "capacity", "latest", 800); return null; }
+  function Probe() {
+    current = useShowData(emptyGalleryFilters, "capacity", "latest", 800);
+    return null;
+  }
   const images = showImages(1600);
   await h.render(h.React.createElement(Probe));
   assert.equal(new URL(h.pending[0]!.path, "https://img.example").searchParams.get("limit"), "800");
@@ -2232,18 +2678,30 @@ test("[Web/展映] 首批向上选档，驻留容量释放后继续接收新候�
   assert.equal(h.pending.length, 1, "容量不足时不能提前推进游标");
   for (let offset = 800; offset < 1600; offset += 100) {
     const active = current.images.slice(0, 10);
-    await h.React.act(async () => current.loadMore({
-      dataKey: current.committedKey, activeIds: active.map(x => x.id),
-      consumedIds: current.images.map(x => x.id), available: 0, capacity: 800
-    }));
+    await h.React.act(async () =>
+      current.loadMore({
+        dataKey: current.committedKey,
+        activeIds: active.map((x) => x.id),
+        consumedIds: current.images.map((x) => x.id),
+        available: 0,
+        capacity: 800
+      })
+    );
     const index: number = h.pending.length - 1;
-    const params: URLSearchParams = new URL(h.pending[index]!.path, "https://img.example").searchParams;
+    const params: URLSearchParams = new URL(h.pending[index]!.path, "https://img.example")
+      .searchParams;
     assert.equal(params.get("limit"), "100");
     assert.equal(params.get("cursor"), String(offset));
-    await h.respond(index, { items: images.slice(offset, offset + 100), next_cursor: offset + 100 < 1600 ? String(offset + 100) : null });
+    await h.respond(index, {
+      items: images.slice(offset, offset + 100),
+      next_cursor: offset + 100 < 1600 ? String(offset + 100) : null
+    });
     assert.ok(current.images.length <= 800);
-    assert.ok(active.every(item => current.images.includes(item)), "当前屏内引用保持稳定");
-    assert.ok(current.images.some(item => item.id === images[offset + 99]!.id));
+    assert.ok(
+      active.every((item) => current.images.includes(item)),
+      "当前屏内引用保持稳定"
+    );
+    assert.ok(current.images.some((item) => item.id === images[offset + 99]!.id));
   }
 });
 
@@ -2251,35 +2709,51 @@ test("[Web/展映] 重复候选扫描有界并按游标续取，真实错误仍�
   const h = await createConfigStreamHarness(t);
   const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
   let current!: ReturnType<typeof useShowData>;
-  function Probe() { current = useShowData(emptyGalleryFilters, "random", "random"); return null; }
+  function Probe() {
+    current = useShowData(emptyGalleryFilters, "random", "random");
+    return null;
+  }
   const images = showImages(3);
   const original = structuredClone(images);
   await h.render(h.React.createElement(Probe));
   await h.respond(0, { items: images, next_cursor: "1" });
   assert.deepEqual(images, original, "洗牌只改变页面批次副本");
-  assert.deepEqual(new Set(current.images.map(x => x.id)), new Set(images.map(x => x.id)));
+  assert.deepEqual(new Set(current.images.map((x) => x.id)), new Set(images.map((x) => x.id)));
   await h.React.act(async () => current.loadMore());
-  for (let index = 1; index <= 4; index++) await h.respond(index, { items: images, next_cursor: String(index + 1) });
+  for (let index = 1; index <= 4; index++)
+    await h.respond(index, { items: images, next_cursor: String(index + 1) });
   assert.equal(current.error, null, "成功的重复批次不暂停播放");
   assert.equal(h.pending.length, 5, "一轮最多扫描四批，不自行发起下一轮");
-  await h.React.act(async () => { for (let i = 0; i < 10; i++) current.loadMore(); });
+  await h.React.act(async () => {
+    for (let i = 0; i < 10; i++) current.loadMore();
+  });
   assert.equal(h.pending.length, 6, "后续消费信号续扫，同一时刻只保留一个请求");
   assert.equal(new URL(h.pending[5]!.path, "https://img.example").searchParams.get("cursor"), "5");
   const fresh = { ...images[0]!, id: "fresh-candidate" };
   await h.respond(5, { items: [fresh], next_cursor: "6" });
   assert.equal(current.error, null);
-  assert.ok(current.images.some(item => item.id === fresh.id));
+  assert.ok(current.images.some((item) => item.id === fresh.id));
   await h.React.act(async () => current.loadMore());
   await h.respond(6, { error: "expired", code: "cursor_expired" }, 409);
   assert.ok(current.error);
-  await h.React.act(async () => { for (let i = 0; i < 10; i++) current.loadMore(); });
+  await h.React.act(async () => {
+    for (let i = 0; i < 10; i++) current.loadMore();
+  });
   assert.equal(h.pending.length, 7, "真实错误不会因场景消费信号自动重试");
   const round = current.committedKey;
   await h.React.act(async () => current.retry());
   assert.equal(new URL(h.pending[7]!.path, "https://img.example").searchParams.get("cursor"), null);
   await h.respond(7, { items: images, next_cursor: null });
   assert.notEqual(current.committedKey, round);
-  await h.React.act(async () => current.loadMore({ dataKey: current.committedKey, activeIds: [], consumedIds: images.map(x => x.id), available: 0, capacity: 800 }));
+  await h.React.act(async () =>
+    current.loadMore({
+      dataKey: current.committedKey,
+      activeIds: [],
+      consumedIds: images.map((x) => x.id),
+      available: 0,
+      capacity: 800
+    })
+  );
   assert.equal(h.pending.length, 8, "有限小池本地复用，无首批网络循环");
 });
 
@@ -2297,36 +2771,61 @@ test("[Web/展映] 四批重复后横移清空窗口，末页仅命中近期记�
     h.React.useEffect(() => {
       if (!connectEmptyScene) return;
       if (scene) scene.setImages(current.images, current.committedKey, "latest", current.hasMore);
-      else scene = new ShowPixiWaterfallScene({
-        width: 1440, height: 900, columns: 20, images: current.images,
-        dataKey: current.committedKey, order: "latest", hasMore: current.hasMore,
-        running: false, reducedMotion: false, speed: 28, inputElement: target.element,
-        textureCache: { fitResidentLods: unchangedTextureLods, acquire: () => ({ release() {} }) } as unknown as ShowPixiTextureCache,
-        renderer: {} as Renderer, onNeedImages: usage => current.loadMore(usage),
-        onOpen() {}, onManualVerticalMovement() {}, onVisibleItems() {}, onColumnsChange: columns => columns
-      });
+      else
+        scene = new ShowPixiWaterfallScene({
+          width: 1440,
+          height: 900,
+          columns: 20,
+          images: current.images,
+          dataKey: current.committedKey,
+          order: "latest",
+          hasMore: current.hasMore,
+          running: false,
+          reducedMotion: false,
+          speed: 28,
+          inputElement: target.element,
+          textureCache: {
+            fitResidentLods: unchangedTextureLods,
+            acquire: () => ({ release() {} })
+          } as unknown as ShowPixiTextureCache,
+          renderer: {} as Renderer,
+          onNeedImages: (usage) => current.loadMore(usage),
+          onOpen() {},
+          onManualVerticalMovement() {},
+          onVisibleItems() {},
+          onColumnsChange: (columns) => columns
+        });
     }, [current.images, current.committedKey, current.hasMore]);
     return null;
   }
   t.after(() => scene?.destroy());
   const images = showImages(600);
-  const consume = (activeIds: string[]) => h.React.act(async () => current.loadMore({
-    dataKey: current.committedKey, activeIds,
-    consumedIds: current.images.map(image => image.id), available: 0, capacity: 800
-  }));
+  const consume = (activeIds: string[]) =>
+    h.React.act(async () =>
+      current.loadMore({
+        dataKey: current.committedKey,
+        activeIds,
+        consumedIds: current.images.map((image) => image.id),
+        available: 0,
+        capacity: 800
+      })
+    );
   const respondPage = async (index: number, from: number, count = 100) => {
     const params = new URL(h.pending[index]!.path, "https://img.example").searchParams;
     assert.equal(params.get("cursor"), from ? String(from) : null);
-    await h.respond(index, { items: images.slice(from, from + count), next_cursor: from + count < 600 ? String(from + count) : null });
+    await h.respond(index, {
+      items: images.slice(from, from + count),
+      next_cursor: from + count < 600 ? String(from + count) : null
+    });
   };
   await h.render(h.React.createElement(Probe));
   await respondPage(0, 0, 500);
-  await consume(images.slice(100, 500).map(image => image.id));
+  await consume(images.slice(100, 500).map((image) => image.id));
   await respondPage(1, 500);
-  await consume(current.images.map(image => image.id));
+  await consume(current.images.map((image) => image.id));
   await respondPage(2, 0);
   assert.equal(current.images.length, 600);
-  await consume(current.images.map(image => image.id));
+  await consume(current.images.map((image) => image.id));
   for (let index = 3; index <= 6; index++) await respondPage(index, (index - 2) * 100);
   assert.equal(h.pending.length, 7, "重复扫描有界让出");
   assert.equal(current.error, null);
@@ -2347,8 +2846,10 @@ test("[Web/展映] 四批重复后横移清空窗口，末页仅命中近期记�
 });
 
 for (const [timing, following] of [
-  ["before scene sync", "success"], ["before scene sync", "failure"],
-  ["after scene sync", "success"], ["after scene sync", "failure"]
+  ["before scene sync", "success"],
+  ["before scene sync", "failure"],
+  ["after scene sync", "success"],
+  ["after scene sync", "failure"]
 ] as const) {
   test(`[Web/展映] 末页在 ${timing} 保留复用候选，后续 ${following} 不清空展示`, async (t) => {
     const h = await createConfigStreamHarness(t);
@@ -2367,14 +2868,33 @@ for (const [timing, following] of [
       h.React.useEffect(() => {
         synchronizedCounts.push(current.images.length);
         if (scene) scene.setImages(current.images, current.committedKey, "latest", current.hasMore);
-        else scene = new ShowPixiWaterfallScene({
-          width: 1440, height: 900, columns: 40, images: current.images,
-          dataKey: current.committedKey, order: "latest", hasMore: current.hasMore,
-          running: false, reducedMotion: false, speed: 28, inputElement: target.element,
-          textureCache: { fitResidentLods: unchangedTextureLods, acquire: () => ({ release() {} }) } as unknown as ShowPixiTextureCache,
-          renderer: {} as Renderer, onNeedImages: usage => { usages.push(usage); current.loadMore(usage); },
-          onOpen() {}, onManualVerticalMovement() {}, onVisibleItems() {}, onColumnsChange: columns => columns
-        });
+        else
+          scene = new ShowPixiWaterfallScene({
+            width: 1440,
+            height: 900,
+            columns: 40,
+            images: current.images,
+            dataKey: current.committedKey,
+            order: "latest",
+            hasMore: current.hasMore,
+            running: false,
+            reducedMotion: false,
+            speed: 28,
+            inputElement: target.element,
+            textureCache: {
+              fitResidentLods: unchangedTextureLods,
+              acquire: () => ({ release() {} })
+            } as unknown as ShowPixiTextureCache,
+            renderer: {} as Renderer,
+            onNeedImages: (usage) => {
+              usages.push(usage);
+              current.loadMore(usage);
+            },
+            onOpen() {},
+            onManualVerticalMovement() {},
+            onVisibleItems() {},
+            onColumnsChange: (columns) => columns
+          });
       }, [current.images, current.committedKey, current.hasMore]);
       return null;
     }
@@ -2396,7 +2916,7 @@ for (const [timing, following] of [
         // Keep the response and retirement in the same React batch: the scene
         // never observes the intermediate empty images array.
         h.pending[1]!.resolve(Response.json({ items: images.slice(0, 100), next_cursor: null }));
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
     });
     if (timing === "after scene sync") {
@@ -2404,17 +2924,30 @@ for (const [timing, following] of [
     }
     await h.flush();
     assert.equal(current.images.length, 100, "刚复用的末页不被旧消费快照再次退役");
-    assert.equal(synchronizedCounts.includes(0), timing === "after scene sync", "固定场景是否收到中间空池");
+    assert.equal(
+      synchronizedCounts.includes(0),
+      timing === "after scene sync",
+      "固定场景是否收到中间空池"
+    );
     assert.ok(scene!.stats().visibleSprites > 0, "不依赖额外环回响应即可恢复填屏");
     assert.equal(h.pending.length, 3, "后续补图仍只保留一个请求");
-    await h.respond(2, following === "success"
-      ? { items: showImages(100).map(image => ({ ...image, id: `next-${image.id}` })), next_cursor: null }
-      : { error: "unavailable" }, following === "success" ? 200 : 503);
+    await h.respond(
+      2,
+      following === "success"
+        ? {
+            items: showImages(100).map((image) => ({ ...image, id: `next-${image.id}` })),
+            next_cursor: null
+          }
+        : { error: "unavailable" },
+      following === "success" ? 200 : 503
+    );
     assert.ok(scene!.stats().visibleSprites > 0, "后续请求结果不移除已恢复的活动候选");
     assert.ok(current.images.length >= 100);
     assert.equal(Boolean(current.error), following === "failure");
     const count = h.pending.length;
-    await h.React.act(async () => { for (let frame = 0; frame < 10; frame++) scene!.update(16); });
+    await h.React.act(async () => {
+      for (let frame = 0; frame < 10; frame++) scene!.update(16);
+    });
     assert.equal(h.pending.length, count);
   });
 }
@@ -2434,14 +2967,30 @@ for (const ending of ["fresh page", "recent EOF"] as const) {
       h.React.useEffect(() => {
         if (!connectEmptyScene) return;
         if (scene) scene.setImages(current.images, current.committedKey, "latest", current.hasMore);
-        else scene = new ShowPixiWaterfallScene({
-          width: 1440, height: 900, columns: 40, images: current.images,
-          dataKey: current.committedKey, order: "latest", hasMore: current.hasMore,
-          running: false, reducedMotion: false, speed: 28, inputElement: target.element,
-          textureCache: { fitResidentLods: unchangedTextureLods, acquire: () => ({ release() {} }) } as unknown as ShowPixiTextureCache,
-          renderer: {} as Renderer, onNeedImages: usage => current.loadMore(usage),
-          onOpen() {}, onManualVerticalMovement() {}, onVisibleItems() {}, onColumnsChange: columns => columns
-        });
+        else
+          scene = new ShowPixiWaterfallScene({
+            width: 1440,
+            height: 900,
+            columns: 40,
+            images: current.images,
+            dataKey: current.committedKey,
+            order: "latest",
+            hasMore: current.hasMore,
+            running: false,
+            reducedMotion: false,
+            speed: 28,
+            inputElement: target.element,
+            textureCache: {
+              fitResidentLods: unchangedTextureLods,
+              acquire: () => ({ release() {} })
+            } as unknown as ShowPixiTextureCache,
+            renderer: {} as Renderer,
+            onNeedImages: (usage) => current.loadMore(usage),
+            onOpen() {},
+            onManualVerticalMovement() {},
+            onVisibleItems() {},
+            onColumnsChange: (columns) => columns
+          });
       }, [current.images, current.committedKey, current.hasMore]);
       return null;
     }
@@ -2450,28 +2999,38 @@ for (const ending of ["fresh page", "recent EOF"] as const) {
     await h.render(h.React.createElement(Probe, {}));
     await h.respond(0, { items: images.slice(0, 800), next_cursor: "800" });
     connectEmptyScene = true;
-    await h.React.act(async () => current.loadMore({
-      dataKey: current.committedKey, activeIds: [],
-      consumedIds: current.images.map(image => image.id), available: 0, capacity: 800
-    }));
+    await h.React.act(async () =>
+      current.loadMore({
+        dataKey: current.committedKey,
+        activeIds: [],
+        consumedIds: current.images.map((image) => image.id),
+        available: 0,
+        capacity: 800
+      })
+    );
     assert.equal(scene!.stats().visibleSprites, 0);
     for (let index = 1; index <= 12; index++) {
       assert.equal(h.pending.length, index + 1, "空窗口在四批预算之后仍有唯一后续请求");
       await h.respond(index, {
-        items: images.slice(((index - 1) % 8) * 100, ((index - 1) % 8 + 1) * 100),
+        items: images.slice(((index - 1) % 8) * 100, (((index - 1) % 8) + 1) * 100),
         next_cursor: String(800 + index * 100)
       });
       assert.equal(current.error, null);
     }
-    await h.respond(13, ending === "recent EOF"
-      ? { items: images.slice(0, 100), next_cursor: null }
-      : { items: images.slice(800), next_cursor: "fresh" });
+    await h.respond(
+      13,
+      ending === "recent EOF"
+        ? { items: images.slice(0, 100), next_cursor: null }
+        : { items: images.slice(800), next_cursor: "fresh" }
+    );
     assert.ok(scene!.stats().visibleSprites > 0, "无需再次移动或人工重试即可填屏");
     const inFlight = h.pending.length - 1;
     await h.respond(inFlight, { error: "unavailable" }, 503);
     assert.ok(current.error);
     const stopped = h.pending.length;
-    await h.React.act(async () => { for (let frame = 0; frame < 100; frame++) scene!.update(16); });
+    await h.React.act(async () => {
+      for (let frame = 0; frame < 100; frame++) scene!.update(16);
+    });
     await h.flush();
     assert.equal(h.pending.length, stopped, "真实失败后不自动续扫");
     await h.React.act(async () => current.retry());
@@ -2492,7 +3051,11 @@ for (const action of ["source", "disable", "unmount", "eof", "removed-eof"] as c
     // Linkedom's window forwards property definitions to Node globals. Shadow
     // only the browser clock so React's real zero-delay flush remains runnable.
     const clockWindow = Object.create(h.window) as Window;
-    Object.defineProperty(globalThis, "window", { configurable: true, writable: true, value: clockWindow });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      writable: true,
+      value: clockWindow
+    });
     t.after(() => {
       if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
       else Reflect.deleteProperty(globalThis, "window");
@@ -2507,10 +3070,15 @@ for (const action of ["source", "disable", "unmount", "eof", "removed-eof"] as c
     const images = showImages(3);
     await h.render(h.React.createElement(Probe));
     await h.respond(0, { items: images, next_cursor: "1" });
-    await h.React.act(async () => current.loadMore({
-      dataKey: current.committedKey, activeIds: [], consumedIds: images.map(image => image.id),
-      available: 0, capacity: 800
-    }));
+    await h.React.act(async () =>
+      current.loadMore({
+        dataKey: current.committedKey,
+        activeIds: [],
+        consumedIds: images.map((image) => image.id),
+        available: 0,
+        capacity: 800
+      })
+    );
     for (let i = 1; i <= 4; i++) await h.respond(i, { items: images, next_cursor: String(i + 1) });
     assert.equal(h.pending.length, 5, "四批后先让出任务队列");
     assert.equal(clock.pendingCount(), 1, "只保留一个空窗口续扫任务");
@@ -2520,9 +3088,14 @@ for (const action of ["source", "disable", "unmount", "eof", "removed-eof"] as c
     else {
       await h.React.act(async () => clock.advanceBy(0));
       assert.equal(h.pending.length, 6);
-      assert.equal(new URL(h.pending[5]!.path, "https://img.example").searchParams.get("cursor"), "5");
+      assert.equal(
+        new URL(h.pending[5]!.path, "https://img.example").searchParams.get("cursor"),
+        "5"
+      );
       if (action === "removed-eof") {
-        await h.React.act(async () => { for (const image of images) current.removeImage(image.id); });
+        await h.React.act(async () => {
+          for (const image of images) current.removeImage(image.id);
+        });
       }
       await h.respond(5, { items: action === "removed-eof" ? images : [], next_cursor: null });
       assert.equal(current.images.length, 0, "空末页和已移除候选均不会被重新接纳");
@@ -2537,56 +3110,74 @@ for (const action of ["source", "disable", "unmount", "eof", "removed-eof"] as c
 }
 
 test("[Web/展映] 编辑与删除在途替换仍能提交当前排序", async (t) => {
-  for (const operation of ["update", "remove"] as const) await t.test(operation, async (t) => {
-    const h = await createConfigStreamHarness(t, { honorAbort: false });
-    const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
-    let current!: ReturnType<typeof useShowData>;
-    function Probe({ order }: { order: "latest" | "oldest" }) { current = useShowData(emptyGalleryFilters, order, order); return null; }
-    await h.render(h.React.createElement(Probe, { order: "latest" }));
-    await h.respond(0, { items: showImages(3), next_cursor: "next" });
-    await h.render(h.React.createElement(Probe, { order: "oldest" }));
-    const id = current.images[0]!.id;
-    await h.React.act(async () => {
-      if (operation === "update") current.updateImage(editableImage(id, { title: "confirmed" }));
-      else current.removeImage(id);
+  for (const operation of ["update", "remove"] as const)
+    await t.test(operation, async (t) => {
+      const h = await createConfigStreamHarness(t, { honorAbort: false });
+      const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
+      let current!: ReturnType<typeof useShowData>;
+      function Probe({ order }: { order: "latest" | "oldest" }) {
+        current = useShowData(emptyGalleryFilters, order, order);
+        return null;
+      }
+      await h.render(h.React.createElement(Probe, { order: "latest" }));
+      await h.respond(0, { items: showImages(3), next_cursor: "next" });
+      await h.render(h.React.createElement(Probe, { order: "oldest" }));
+      const id = current.images[0]!.id;
+      await h.React.act(async () => {
+        if (operation === "update") current.updateImage(editableImage(id, { title: "confirmed" }));
+        else current.removeImage(id);
+      });
+      assert.equal(h.pending[1]!.signal?.aborted, true);
+      await h.respond(1, { items: showImages(2), next_cursor: "stale" });
+      await h.respond(2, { items: showImages(4), next_cursor: null });
+      assert.equal(current.committedOrder, "oldest");
+      assert.equal(current.initialLoading, false);
+      if (operation === "update")
+        assert.equal(current.images.find((x) => x.id === id)?.title, "confirmed");
+      else assert.equal(current.images.length, 3);
     });
-    assert.equal(h.pending[1]!.signal?.aborted, true);
-    await h.respond(1, { items: showImages(2), next_cursor: "stale" });
-    await h.respond(2, { items: showImages(4), next_cursor: null });
-    assert.equal(current.committedOrder, "oldest");
-    assert.equal(current.initialLoading, false);
-    if (operation === "update") assert.equal(current.images.find(x => x.id === id)?.title, "confirmed");
-    else assert.equal(current.images.length, 3);
-  });
 });
 
 test("[Web/展映] 不同图片操作保留各自尚未完成的确认回读", async (t) => {
-  for (const operation of ["update", "remove", "refresh"] as const) await t.test(operation, async (t) => {
-    const h = await createConfigStreamHarness(t, { honorAbort: false });
-    const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
-    let current!: ReturnType<typeof useShowData>;
-    function Probe() { current = useShowData(emptyGalleryFilters, "latest", "latest"); return null; }
-    const images = showImages(3);
-    await h.render(h.React.createElement(Probe));
-    await h.respond(0, { items: images, next_cursor: null });
-    await h.React.act(async () => current.refreshImage(images[0]!.id));
-    await h.React.act(async () => {
-      if (operation === "update") current.updateImage(editableImage(images[1]!.id, { ...images[1]!, title: "B" }));
-      else if (operation === "remove") current.removeImage(images[1]!.id);
-      else current.refreshImage(images[1]!.id);
+  for (const operation of ["update", "remove", "refresh"] as const)
+    await t.test(operation, async (t) => {
+      const h = await createConfigStreamHarness(t, { honorAbort: false });
+      const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
+      let current!: ReturnType<typeof useShowData>;
+      function Probe() {
+        current = useShowData(emptyGalleryFilters, "latest", "latest");
+        return null;
+      }
+      const images = showImages(3);
+      await h.render(h.React.createElement(Probe));
+      await h.respond(0, { items: images, next_cursor: null });
+      await h.React.act(async () => current.refreshImage(images[0]!.id));
+      await h.React.act(async () => {
+        if (operation === "update")
+          current.updateImage(editableImage(images[1]!.id, { ...images[1]!, title: "B" }));
+        else if (operation === "remove") current.removeImage(images[1]!.id);
+        else current.refreshImage(images[1]!.id);
+      });
+      assert.equal(h.pending[1]!.signal?.aborted, false);
+      await h.respond(1, {
+        items: [editableImage(images[0]!.id, { ...images[0]!, title: "A refreshed" })]
+      });
+      assert.equal(current.images.find((x) => x.id === images[0]!.id)?.title, "A refreshed");
+      if (operation === "refresh")
+        await h.respond(2, { items: [editableImage(images[1]!.id, images[1]!)] });
     });
-    assert.equal(h.pending[1]!.signal?.aborted, false);
-    await h.respond(1, { items: [editableImage(images[0]!.id, { ...images[0]!, title: "A refreshed" })] });
-    assert.equal(current.images.find(x => x.id === images[0]!.id)?.title, "A refreshed");
-    if (operation === "refresh") await h.respond(2, { items: [editableImage(images[1]!.id, images[1]!)] });
-  });
 });
 
 test("[Web/展映] 漂浮候选耗尽时删除当前图仍释放卡片与可访问项", (t) => {
   const h = createFloatSceneHarness(t, { count: 80, hasMore: true, sizeIndex: 0 });
   const id = h.visibleItems()[0]!.image.id;
-  h.scene.setImages(showImages(80).filter(x => x.id !== id), "desktop-float", "latest", true);
+  h.scene.setImages(
+    showImages(80).filter((x) => x.id !== id),
+    "desktop-float",
+    "latest",
+    true
+  );
   h.advance(20);
-  assert.ok(h.visibleItems().every(item => item.image.id !== id));
+  assert.ok(h.visibleItems().every((item) => item.image.id !== id));
   assert.ok(h.visibleItems().length > 0);
 });

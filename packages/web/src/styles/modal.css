@@ -7,37 +7,57 @@
   padding: 24px;
   overscroll-behavior: none;
   background: var(--color-modal-overlay);
-  animation: modal-fade .16s ease-out;
+  animation: modal-fade 0.16s ease-out;
 }
 
 .modal.is-closing {
   pointer-events: none;
-  animation: modal-fade-out .12s ease-in forwards;
+  animation: modal-fade-out 0.12s ease-in forwards;
 }
 
 .modal.is-closing > article,
 .modal.is-closing > form {
-  animation: modal-pop-out .12s ease-in forwards;
+  animation: modal-pop-out 0.12s ease-in forwards;
 }
 
 @keyframes modal-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes modal-pop {
-  from { opacity: .86; transform: translateY(8px) scale(.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0.86;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes modal-fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes modal-pop-out {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to { opacity: 0; transform: translateY(8px) scale(.985); }
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -45,10 +65,16 @@
   .modal article,
   .modal.is-closing,
   .modal.is-closing > article,
-  .modal.is-closing > form { animation: none; }
+  .modal.is-closing > form {
+    animation: none;
+  }
 }
 
 @media (max-width: 760px) {
-  .modal { padding: 10px; }
-  .modal-footer-actions > * { flex: 1; }
+  .modal {
+    padding: 10px;
+  }
+  .modal-footer-actions > * {
+    flex: 1;
+  }
 }

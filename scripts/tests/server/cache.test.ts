@@ -1,16 +1,10 @@
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
-import {
-  setTimeout as delay
-} from "node:timers/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import { coalesce } from "../../../packages/server/src/core/coalesce.ts";
-import {
-  appConfig
-} from "../../../packages/shared/src/app-config.ts";
-import {
-  readRequiredRedisCommandCapabilities
-} from "../../../packages/server/src/core/redis/client.ts";
+import { appConfig } from "../../../packages/shared/src/app-config.ts";
+import { readRequiredRedisCommandCapabilities } from "../../../packages/server/src/core/redis/client.ts";
 import {
   deleteRedisStringIfEqual,
   deleteRedisStringsIfEqual,
@@ -44,22 +38,14 @@ import {
   type RedisReadyImageDerivedSampleCommandClient,
   type RedisStatsTouchCommandClient
 } from "../../../packages/server/src/images/ready-cache/redis/commands.ts";
-import {
-  createPublicDatabaseAdmission
-} from "../../../packages/server/src/core/database/public-admission.ts";
-import {
-  createPublicDatabaseReadScope
-} from "../../../packages/server/src/core/database/public-fallback.ts";
-import {
-  readImageServingRecordById
-} from "../../../packages/server/src/images/serving/record.ts";
+import { createPublicDatabaseAdmission } from "../../../packages/server/src/core/database/public-admission.ts";
+import { createPublicDatabaseReadScope } from "../../../packages/server/src/core/database/public-fallback.ts";
+import { readImageServingRecordById } from "../../../packages/server/src/images/serving/record.ts";
 import {
   readyImageMember,
   serializeReadyImageCacheItem
 } from "../../../packages/server/src/images/ready-cache/model.ts";
-import {
-  ReadyImageCacheCoordinator
-} from "../../../packages/server/src/images/ready-cache/coordinator-machine.ts";
+import { ReadyImageCacheCoordinator } from "../../../packages/server/src/images/ready-cache/coordinator-machine.ts";
 import {
   readReadyImageCacheMeta,
   rebuildingReadyImageCacheMeta
@@ -68,24 +54,12 @@ import {
   getReadyImageCacheOverviewStatus,
   readReadyImageCacheAdminStatus
 } from "../../../packages/server/src/images/ready-cache/admin-status.ts";
-import {
-  measureReadyImageCoreMemory
-} from "../../../packages/server/src/images/ready-cache/sync/redis-writer.ts";
-import {
-  READY_IMAGE_CORE_KEYS
-} from "../../../packages/server/src/images/ready-cache/keys.ts";
-import {
-  sampleResolvedReadyImageIndex
-} from "../../../packages/server/src/images/ready-cache/random-sampler.ts";
-import {
-  inspectRedisKeyspaceDeep
-} from "../../../packages/server/src/checks/redis-deep-inspection.ts";
-import {
-  inspectRedisState
-} from "../../../packages/server/src/checks/redis-inspect.ts";
-import type {
-  RedisOperationalState
-} from "../../../packages/server/src/core/runtime-availability.ts";
+import { measureReadyImageCoreMemory } from "../../../packages/server/src/images/ready-cache/sync/redis-writer.ts";
+import { READY_IMAGE_CORE_KEYS } from "../../../packages/server/src/images/ready-cache/keys.ts";
+import { sampleResolvedReadyImageIndex } from "../../../packages/server/src/images/ready-cache/random-sampler.ts";
+import { inspectRedisKeyspaceDeep } from "../../../packages/server/src/checks/redis-deep-inspection.ts";
+import { inspectRedisState } from "../../../packages/server/src/checks/redis-inspect.ts";
+import type { RedisOperationalState } from "../../../packages/server/src/core/runtime-availability.ts";
 
 import {
   imageId,
@@ -122,9 +96,11 @@ test("[Server/缓存与 Redis] 公开 PostgreSQL 回源在缓存命中时零准�
     maximumActive = 0;
     readonly execute: (text: string) => Promise<unknown>;
 
-    constructor(execute: (text: string) => Promise<unknown> = async () => ({
-      rows: []
-    })) {
+    constructor(
+      execute: (text: string) => Promise<unknown> = async () => ({
+        rows: []
+      })
+    ) {
       this.execute = execute;
     }
 
@@ -171,10 +147,7 @@ test("[Server/缓存与 Redis] 公开 PostgreSQL 回源在缓存命中时零准�
   } as never);
 
   assert.equal(
-    await scope(
-      new AbortController().signal,
-      async () => "redis cache hit"
-    ),
+    await scope(new AbortController().signal, async () => "redis cache hit"),
     "redis cache hit"
   );
   assert.equal(admissionAcquires, 0);
@@ -190,9 +163,8 @@ test("[Server/缓存与 Redis] 公开 PostgreSQL 回源在缓存命中时零准�
   assert.equal(admissionAcquires, 0);
   assert.equal(connects, 0);
 
-  assert.equal(await scope(
-    new AbortController().signal,
-    async ({ reader }) => {
+  assert.equal(
+    await scope(new AbortController().signal, async ({ reader }) => {
       await Promise.all([
         reader.query("theme vocabulary"),
         reader.query("tag vocabulary"),
@@ -200,8 +172,9 @@ test("[Server/缓存与 Redis] 公开 PostgreSQL 回源在缓存命中时零准�
       ]);
       await reader.query("public response body");
       return "PostgreSQL fallback";
-    }
-  ), "PostgreSQL fallback");
+    }),
+    "PostgreSQL fallback"
+  );
   assert.equal(admissionAcquires, 1);
   assert.equal(connects, 1);
   assert.deepEqual(client.queries, [
@@ -218,9 +191,7 @@ test("[Server/缓存与 Redis] 公开 PostgreSQL 回源在缓存命中时零准�
     ...appConfig.publicPgFallback,
     totalConcurrency: 1
   });
-  const blockedHolder = await blockedAdmission.acquire(
-    new AbortController().signal
-  );
+  const blockedHolder = await blockedAdmission.acquire(new AbortController().signal);
   let blockedConnects = 0;
   const blockedScope = createPublicDatabaseReadScope({
     pool: {
@@ -234,15 +205,15 @@ test("[Server/缓存与 Redis] 公开 PostgreSQL 回源在缓存命中时零准�
     retryAfterSeconds: 1
   });
   const detachedErrors: unknown[] = [];
-  assert.equal(await blockedScope(
-    new AbortController().signal,
-    async ({ reader }) => {
+  assert.equal(
+    await blockedScope(new AbortController().signal, async ({ reader }) => {
       void reader.query("detached").catch((error) => {
         detachedErrors.push(error);
       });
       return "returned early";
-    }
-  ), "returned early");
+    }),
+    "returned early"
+  );
   assert.deepEqual(blockedAdmission.snapshot(), { active: 1, queued: 0 });
   assert.equal(blockedConnects, 0);
   blockedHolder.release();
@@ -278,43 +249,23 @@ test("[Server/缓存与 Redis] serving record 统一 Redis 命中、空命中与
     readReadyImageById: async () => idCache
   } as never;
 
-  const cached = await readImageServingRecordById(
-    item.id,
-    {},
-    dependencies
-  );
+  const cached = await readImageServingRecordById(item.id, {}, dependencies);
   assert.deepEqual(cached, readyRow);
   assert.equal(queryParameters.length, 0);
 
   idCache = { cached: true, value: null };
-  assert.equal(
-    await readImageServingRecordById(item.id, { reader }, dependencies),
-    null
-  );
+  assert.equal(await readImageServingRecordById(item.id, { reader }, dependencies), null);
   assert.equal(queryParameters.length, 1, "ready 空命中仍需检查回收站记录");
 
   queryRows = [deletedRow];
-  const deleted = await readImageServingRecordById(
-    item.id,
-    { reader },
-    dependencies
-  );
+  const deleted = await readImageServingRecordById(item.id, { reader }, dependencies);
   assert.deepEqual(deleted, deletedRow);
   assert.deepEqual(queryParameters.at(-1), [item.id]);
 
   idCache = { cached: false };
   queryRows = [readyRow];
-  assert.deepEqual(
-    await readImageServingRecordById(
-      item.id,
-      { reader },
-      dependencies
-    ),
-    cached
-  );
+  assert.deepEqual(await readImageServingRecordById(item.id, { reader }, dependencies), cached);
   assert.deepEqual(queryParameters.at(-1), [item.id]);
-
-
 });
 test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision、mutation 与 shutdown 行为", async () => {
   type CoordinatorDependencies = NonNullable<
@@ -388,10 +339,10 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   assert.equal(status.meta?.appliedRevision, "1");
   assert.equal(cleanupCalls, 1);
   assert.equal(rebuildCalls, 0);
-  assert.deepEqual(
-    await coordinator.withRead(async () => "redis"),
-    { acquired: true, value: "redis" }
-  );
+  assert.deepEqual(await coordinator.withRead(async () => "redis"), {
+    acquired: true,
+    value: "redis"
+  });
 
   const manualProbeEntered = Promise.withResolvers<void>();
   const finishManualProbe = Promise.withResolvers<void>();
@@ -480,10 +431,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   coordinator.handleRedisOperationalStateChange(operational);
   assert.equal(coordinator.getStatus().readable, false);
   assert.equal(coordinator.getStatus().reason, "connection_unavailable");
-  assert.deepEqual(
-    await coordinator.withRead(async () => "unused"),
-    { acquired: false }
-  );
+  assert.deepEqual(await coordinator.withRead(async () => "unused"), { acquired: false });
 
   connection = { ready: true, epoch: 2 };
   operational = {
@@ -578,10 +526,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   await failedValidationEntered.promise;
   const rebuildAfterFailedValidation = coordinator.requestRebuild();
   finishFailedValidation.resolve();
-  assert.equal(
-    (await rebuildAfterFailedValidation).appliedRevision,
-    persistedMeta.appliedRevision
-  );
+  assert.equal((await rebuildAfterFailedValidation).appliedRevision, persistedMeta.appliedRevision);
   assert.equal(rebuildCalls - rebuildCallsBeforeFailedValidation, 1);
   assert.equal(coordinator.getStatus().readable, true);
 
@@ -597,10 +542,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   const releaseSecond = coordinator.beginPlannedMutation(9);
   assert.equal(coordinator.plannedMutationIsActive(), true);
   assert.equal(coordinator.getStatus().readable, false);
-  await assert.rejects(
-    coordinator.requestRebuild(),
-    /rebuild deferred until mutation completes/
-  );
+  await assert.rejects(coordinator.requestRebuild(), /rebuild deferred until mutation completes/);
   assert.equal(coordinator.getStatus().rebuilding, true);
   const rebuildCallsBeforeMutation = rebuildCalls;
   assert.equal(releaseFirst(false), false);
@@ -702,22 +644,13 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   const joinedFailedRebuild = coordinator.requestRebuild();
   finishRebuildFailure.resolve();
   await Promise.all([
-    assert.rejects(
-      firstFailedRebuild,
-      (error: Error) => error === rebuildFailure
-    ),
-    assert.rejects(
-      joinedFailedRebuild,
-      (error: Error) => error === rebuildFailure
-    )
+    assert.rejects(firstFailedRebuild, (error: Error) => error === rebuildFailure),
+    assert.rejects(joinedFailedRebuild, (error: Error) => error === rebuildFailure)
   ]);
   assert.equal(rebuildCalls - rebuildCallsBeforeSharedFailure, 1);
   assert.equal(coordinator.getStatus().readable, false);
   assert.match(coordinator.getStatus().reason, /^degraded:/);
-  assert.equal(
-    validationFailureCalls - validationFailureCallsBeforeRebuild,
-    1
-  );
+  assert.equal(validationFailureCalls - validationFailureCallsBeforeRebuild, 1);
 
   const degradedValidationEntered = Promise.withResolvers<void>();
   const finishDegradedValidation = Promise.withResolvers<void>();
@@ -745,13 +678,13 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   };
   const finalRebuild = coordinator.requestRebuild();
   await finalRebuildEntered.promise;
-  const lateJoinStarted = Promise.withResolvers<
-    ReturnType<typeof coordinator.requestRebuild>
-  >();
+  const lateJoinStarted = Promise.withResolvers<ReturnType<typeof coordinator.requestRebuild>>();
   finishFinalRebuild.resolve(persistedMeta);
-  queueMicrotask(() => queueMicrotask(() => {
-    lateJoinStarted.resolve(coordinator.requestRebuild());
-  }));
+  queueMicrotask(() =>
+    queueMicrotask(() => {
+      lateJoinStarted.resolve(coordinator.requestRebuild());
+    })
+  );
   const lateJoin = await lateJoinStarted.promise;
   assert.equal(coordinator.getStatus().readable, true);
   assert.equal(coordinator.getStatus().rebuilding, false);
@@ -787,28 +720,41 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   assert.equal(releaseAfterStop(false), false);
   assert.equal(coordinator.getStatus().readable, false);
   assert.equal(coordinator.getStatus().reason, "stopped");
-  await assert.rejects(
-    coordinator.requestRebuild(),
-    /Ready-image cache coordinator is stopped/
-  );
+  await assert.rejects(coordinator.requestRebuild(), /Ready-image cache coordinator is stopped/);
 });
 test("[Server/缓存与 Redis] 共享读取独立取消、最后离开释放作用域及失败后重试", async () => {
   const admission = createPublicDatabaseAdmission({
-    totalConcurrency: 1, queueLimit: 1, queueTimeoutMs: 1000, retryAfterSeconds: 1
+    totalConcurrency: 1,
+    queueLimit: 1,
+    queueTimeoutMs: 1000,
+    retryAfterSeconds: 1
   });
   let queries = 0;
   const releases: boolean[] = [];
   let finish = Promise.withResolvers<{ rows: never[] }>();
   const scope = createPublicDatabaseReadScope({
-    admission, executionTimeoutMs: 1000, retryAfterSeconds: 1,
-    pool: { connect: async () => ({
-      query: () => { queries += 1; return finish.promise; },
-      release: (destroy: boolean) => { releases.push(destroy); }
-    }) as never }
+    admission,
+    executionTimeoutMs: 1000,
+    retryAfterSeconds: 1,
+    pool: {
+      connect: async () =>
+        ({
+          query: () => {
+            queries += 1;
+            return finish.promise;
+          },
+          release: (destroy: boolean) => {
+            releases.push(destroy);
+          }
+        }) as never
+    }
   });
-  const read = (signal: AbortSignal) => coalesce("shared-read-contract", (sharedSignal) => (
-    scope(sharedSignal, ({ reader }) => reader.query("SELECT 1"))
-  ), signal);
+  const read = (signal: AbortSignal) =>
+    coalesce(
+      "shared-read-contract",
+      (sharedSignal) => scope(sharedSignal, ({ reader }) => reader.query("SELECT 1")),
+      signal
+    );
   const first = new AbortController();
   const second = new AbortController();
   const cancelled = read(first.signal);
@@ -844,7 +790,12 @@ test("[Server/缓存与 Redis] 共享读取独立取消、最后离开释放作�
   assert.equal(queries, 3);
   finish.resolve({ rows: [] });
   await Promise.all([next, joined]);
-  await assert.rejects(coalesce("failed-shared", async () => { throw new Error("failed"); }), /failed/);
+  await assert.rejects(
+    coalesce("failed-shared", async () => {
+      throw new Error("failed");
+    }),
+    /failed/
+  );
   assert.equal(await coalesce("failed-shared", async () => "retried"), "retried");
   assert.deepEqual(admission.snapshot(), { active: 0, queued: 0 });
 });
@@ -858,8 +809,14 @@ test("[Server/缓存与 Redis] 恢复入库失败保留意图且等待重试不�
   let rebuilds = 0;
   const coordinator = new ReadyImageCacheCoordinator({
     getRedisConnectionState: () => ({ ready: true, epoch: 1 }),
-    getRedisOperationalState: () => ({ available: true, connectionEpoch: 1, reason: "ready", capabilities: null }),
-    probeRedisOperationalState: async () => ({ available: true, missing: [], commands: {} }) as never,
+    getRedisOperationalState: () => ({
+      available: true,
+      connectionEpoch: 1,
+      reason: "ready",
+      capabilities: null
+    }),
+    probeRedisOperationalState: async () =>
+      ({ available: true, missing: [], commands: {} }) as never,
     clearDisposableCaches: async () => true,
     withWriteFence: async (work) => work(),
     getRevision: async () => {
@@ -868,9 +825,15 @@ test("[Server/缓存与 Redis] 恢复入库失败保留意图且等待重试不�
       return { revision: "1", updatedAt: "2026-09-14T00:00:00Z" };
     },
     validateCache: async () => ({ valid: true, meta: persistedMeta }),
-    rebuildCache: async () => { rebuilds += 1; return persistedMeta; },
+    rebuildCache: async () => {
+      rebuilds += 1;
+      return persistedMeta;
+    },
     readMeta: async () => persistedMeta,
-    handleValidationFailure: async () => { scheduled += 1; throw new Error("job insert unavailable"); }
+    handleValidationFailure: async () => {
+      scheduled += 1;
+      throw new Error("job insert unavailable");
+    }
   });
   const drain = () => new Promise<void>((resolve) => setImmediate(resolve));
   try {
@@ -890,7 +853,10 @@ test("[Server/缓存与 Redis] 恢复入库失败保留意图且等待重试不�
     assert.equal(reads, 2);
     releaseMutation(false);
     await drain();
-    assert.deepEqual(await coordinator.withRead(async () => "cache"), { acquired: true, value: "cache" });
+    assert.deepEqual(await coordinator.withRead(async () => "cache"), {
+      acquired: true,
+      value: "cache"
+    });
     assert.equal(rebuilds, 0);
 
     databaseAvailable = false;
@@ -919,10 +885,7 @@ test("[Server/缓存与 Redis] ready cache 管理状态以固定读取恢复数�
     preservedRebuildSnapshot.lastFullRebuildCoreMemoryBytes,
     meta.lastFullRebuildCoreMemoryBytes
   );
-  assert.equal(
-    preservedRebuildSnapshot.lastFullRebuildMeasuredAt,
-    meta.lastFullRebuildMeasuredAt
-  );
+  assert.equal(preservedRebuildSnapshot.lastFullRebuildMeasuredAt, meta.lastFullRebuildMeasuredAt);
   assert.equal(preservedRebuildSnapshot.fullRebuildCompletedAt, "");
   const recentCoreError = {
     category: "core" as const,
@@ -974,14 +937,8 @@ test("[Server/缓存与 Redis] ready cache 管理状态以固定读取恢复数�
   assert.equal(status.full_rebuild_started_at, meta.fullRebuildStartedAt);
   assert.equal(status.full_rebuild_completed_at, meta.fullRebuildCompletedAt);
   assert.equal(status.full_rebuild_duration_ms, 1_000);
-  assert.equal(
-    status.last_full_rebuild_core_memory_bytes,
-    meta.lastFullRebuildCoreMemoryBytes
-  );
-  assert.equal(
-    status.last_full_rebuild_measured_at,
-    meta.lastFullRebuildMeasuredAt
-  );
+  assert.equal(status.last_full_rebuild_core_memory_bytes, meta.lastFullRebuildCoreMemoryBytes);
+  assert.equal(status.last_full_rebuild_measured_at, meta.lastFullRebuildMeasuredAt);
   assert.deepEqual(status.recent_errors, {
     core: recentCoreError,
     derived: null
@@ -1023,26 +980,23 @@ test("[Server/缓存与 Redis] ready cache 管理状态以固定读取恢复数�
   assert.equal(rebuilding.full_rebuild_completed_at, null);
   assert.equal(rebuilding.full_rebuild_duration_ms, null);
 
-  const healthyWithCorruptPersisted = await readReadyImageCacheAdminStatus(
-    "8",
-    {
-      getCoordinatorStatus: () => ({
-        initialized: true,
-        readable: true,
-        rebuilding: false,
-        reason: "ready",
-        meta
-      }),
-      getRevision: async () => ({
-        revision: "8",
-        updatedAt: "2026-08-11T00:00:00.000Z"
-      }),
-      readMeta: async () => {
-        throw new Error("controlled corrupt persisted meta");
-      },
-      recentErrors: () => ({ core: null, derived: null })
-    }
-  );
+  const healthyWithCorruptPersisted = await readReadyImageCacheAdminStatus("8", {
+    getCoordinatorStatus: () => ({
+      initialized: true,
+      readable: true,
+      rebuilding: false,
+      reason: "ready",
+      meta
+    }),
+    getRevision: async () => ({
+      revision: "8",
+      updatedAt: "2026-08-11T00:00:00.000Z"
+    }),
+    readMeta: async () => {
+      throw new Error("controlled corrupt persisted meta");
+    },
+    recentErrors: () => ({ core: null, derived: null })
+  });
   assert.equal(healthyWithCorruptPersisted.synchronized, false);
   assert.equal(healthyWithCorruptPersisted.state, "unavailable");
   assert.equal(healthyWithCorruptPersisted.item_count, null);
@@ -1093,16 +1047,13 @@ test("[Server/缓存与 Redis] 概览以固定核心键准确测量当前 Redis 
   };
   assert.equal(
     await measureReadyImageCoreMemory(redisClient as never),
-    READY_IMAGE_CORE_KEYS.length * (READY_IMAGE_CORE_KEYS.length + 1) / 2
+    (READY_IMAGE_CORE_KEYS.length * (READY_IMAGE_CORE_KEYS.length + 1)) / 2
   );
   assert.equal(scanCalls, 0);
-  assert.deepEqual(commands, READY_IMAGE_CORE_KEYS.map((key) => [
-    "MEMORY",
-    "USAGE",
-    key,
-    "SAMPLES",
-    "0"
-  ]));
+  assert.deepEqual(
+    commands,
+    READY_IMAGE_CORE_KEYS.map((key) => ["MEMORY", "USAGE", key, "SAMPLES", "0"])
+  );
 
   const meta = readyCacheMeta("18");
   const statusDependencies = {
@@ -1133,37 +1084,31 @@ test("[Server/缓存与 Redis] 概览以固定核心键准确测量当前 Redis 
     },
     now: () => new Date("2026-08-15T03:00:00.000Z")
   };
-  const first = getReadyImageCacheOverviewStatus(
-    statusDependencies,
-    measurementDependencies
-  );
-  const second = getReadyImageCacheOverviewStatus(
-    statusDependencies,
-    measurementDependencies
-  );
+  const first = getReadyImageCacheOverviewStatus(statusDependencies, measurementDependencies);
+  const second = getReadyImageCacheOverviewStatus(statusDependencies, measurementDependencies);
   releaseMeasurement();
   const concurrentOverviews = await Promise.all([first, second]);
   assert.equal(measurementCalls, 1, "并发概览必须共用同一准确测量 Promise");
-  assert.deepEqual(concurrentOverviews.map((item) => ({
-    current_core_memory_bytes: item.current_core_memory_bytes,
-    current_core_measured_at: item.current_core_measured_at
-  })), [
-    {
-      current_core_memory_bytes: 12_345,
-      current_core_measured_at: "2026-08-15T03:00:00.000Z"
-    },
-    {
-      current_core_memory_bytes: 12_345,
-      current_core_measured_at: "2026-08-15T03:00:00.000Z"
-    }
-  ]);
-  const overview = await getReadyImageCacheOverviewStatus(
-    statusDependencies,
-    {
-      measureCoreMemory: async () => 54_321,
-      now: () => new Date("2026-08-15T03:01:00.000Z")
-    }
+  assert.deepEqual(
+    concurrentOverviews.map((item) => ({
+      current_core_memory_bytes: item.current_core_memory_bytes,
+      current_core_measured_at: item.current_core_measured_at
+    })),
+    [
+      {
+        current_core_memory_bytes: 12_345,
+        current_core_measured_at: "2026-08-15T03:00:00.000Z"
+      },
+      {
+        current_core_memory_bytes: 12_345,
+        current_core_measured_at: "2026-08-15T03:00:00.000Z"
+      }
+    ]
   );
+  const overview = await getReadyImageCacheOverviewStatus(statusDependencies, {
+    measureCoreMemory: async () => 54_321,
+    now: () => new Date("2026-08-15T03:01:00.000Z")
+  });
   assert.deepEqual(overview, {
     state: "ready",
     synchronized: true,
@@ -1171,20 +1116,16 @@ test("[Server/缓存与 Redis] 概览以固定核心键准确测量当前 Redis 
     item_count: meta.itemCount,
     current_core_memory_bytes: 54_321,
     current_core_measured_at: "2026-08-15T03:01:00.000Z",
-    last_full_rebuild_core_memory_bytes:
-      meta.lastFullRebuildCoreMemoryBytes,
+    last_full_rebuild_core_memory_bytes: meta.lastFullRebuildCoreMemoryBytes,
     last_full_rebuild_measured_at: meta.lastFullRebuildMeasuredAt
   });
 
-  const failedMeasurement = await getReadyImageCacheOverviewStatus(
-    statusDependencies,
-    {
-      measureCoreMemory: async () => {
-        throw new Error("controlled MEMORY USAGE failure");
-      },
-      now: () => new Date("2026-08-15T03:02:00.000Z")
-    }
-  );
+  const failedMeasurement = await getReadyImageCacheOverviewStatus(statusDependencies, {
+    measureCoreMemory: async () => {
+      throw new Error("controlled MEMORY USAGE failure");
+    },
+    now: () => new Date("2026-08-15T03:02:00.000Z")
+  });
   assert.equal(failedMeasurement.state, "ready");
   assert.equal(failedMeasurement.item_count, meta.itemCount);
   assert.equal(failedMeasurement.current_core_memory_bytes, null);
@@ -1204,15 +1145,18 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
   ]);
   const pipelineSizes: number[] = [];
   const scanPages = new Map<string, [string, string[]]>([
-    ["0", ["1", [
-      "imageshow:cache:images:meta",
-      "imageshow:cache:images:items",
-      "imageshow:cache:images:meta"
-    ]]],
-    ["1", ["0", [
-      "imageshow:cache:images:derived:filter:a",
-      "imageshow:other"
-    ]]]
+    [
+      "0",
+      [
+        "1",
+        [
+          "imageshow:cache:images:meta",
+          "imageshow:cache:images:items",
+          "imageshow:cache:images:meta"
+        ]
+      ]
+    ],
+    ["1", ["0", ["imageshow:cache:images:derived:filter:a", "imageshow:other"]]]
   ]);
   const client = {
     scan: async (cursor: string) => scanPages.get(cursor) ?? ["0", []],
@@ -1224,10 +1168,7 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
         },
         exec: async () => {
           pipelineSizes.push(keys.length);
-          return keys.map((key) => [
-            null,
-            measurements.get(key) ?? ["none", 0, 0]
-          ]);
+          return keys.map((key) => [null, measurements.get(key) ?? ["none", 0, 0]]);
         }
       };
     }
@@ -1268,11 +1209,14 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
   const limited = await inspectRedisKeyspaceDeep({
     client: {
       ...client,
-      scan: async () => ["0", [
-        "imageshow:cache:images:meta",
-        "imageshow:cache:images:items",
-        "imageshow:cache:images:derived:filter:a"
-      ]]
+      scan: async () => [
+        "0",
+        [
+          "imageshow:cache:images:meta",
+          "imageshow:cache:images:items",
+          "imageshow:cache:images:derived:filter:a"
+        ]
+      ]
     } as never,
     deadlineMs: 1_000,
     maxKeys: 2,
@@ -1377,17 +1321,21 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
       });
     }
   };
-  assert.deepEqual(await reserveRedisWindowsCommand(registrar as never, [
-    { key: "registration:window", capacity: 1, windowSeconds: 30 }
-  ]), [{
-    attempted: true,
-    allowed: true,
-    value: 1,
-    retryAfterSeconds: 30
-  }]);
-  assert.deepEqual(await sampleReadyImageCoreIndexCommand(
-    registrar as never,
-    {
+  assert.deepEqual(
+    await reserveRedisWindowsCommand(registrar as never, [
+      { key: "registration:window", capacity: 1, windowSeconds: 30 }
+    ]),
+    [
+      {
+        attempted: true,
+        allowed: true,
+        value: 1,
+        retryAfterSeconds: 30
+      }
+    ]
+  );
+  assert.deepEqual(
+    await sampleReadyImageCoreIndexCommand(registrar as never, {
       keys: ["meta", "integrity", "index", "items"],
       revision: "1",
       count: 0,
@@ -1397,23 +1345,26 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
         historySize: 30,
         maximumLimit: 200
       }
-    }
-  ), { status: "empty", pairs: [] });
+    }),
+    { status: "empty", pairs: [] }
+  );
   registerRedisWindowCommand(registrar as never);
   registerRedisWindowCommand(registrar as never);
   registerReadyImageRedisCommands(registrar as never);
   registerReadyImageRedisCommands(registrar as never);
   assert.deepEqual(
     registrationOrder.filter((entry) => entry.startsWith("define:")).sort(),
-    Object.keys(redisScripts).map((name) => `define:${name}`).sort()
+    Object.keys(redisScripts)
+      .map((name) => `define:${name}`)
+      .sort()
   );
   assert.ok(
-    registrationOrder.indexOf("define:imageshowReserveWindows")
-      < registrationOrder.indexOf("call:imageshowReserveWindows")
+    registrationOrder.indexOf("define:imageshowReserveWindows") <
+      registrationOrder.indexOf("call:imageshowReserveWindows")
   );
   assert.ok(
-    registrationOrder.indexOf("define:imageshowSampleReadyImageCoreIndex")
-      < registrationOrder.indexOf("call:imageshowSampleReadyImageCoreIndex")
+    registrationOrder.indexOf("define:imageshowSampleReadyImageCoreIndex") <
+      registrationOrder.indexOf("call:imageshowSampleReadyImageCoreIndex")
   );
   assert.deepEqual(
     new Set(Object.keys(registrar.options.scripts)),
@@ -1427,42 +1378,47 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
       return [1, 1, 1, 30, 0, 5, 0, 12];
     }
   } satisfies RedisWindowCommandClient;
-  assert.deepEqual(await reserveRedisWindowsCommand(windowClient, [
-    { key: "login:user", capacity: 3, windowSeconds: 30 },
-    { key: "login:global", capacity: 5, windowSeconds: 60 }
-  ]), [
-    {
-      attempted: true,
-      allowed: true,
-      value: 1,
-      retryAfterSeconds: 30
-    },
-    {
-      attempted: true,
-      allowed: false,
-      value: 5,
-      retryAfterSeconds: 12
-    }
-  ]);
-  assert.deepEqual(windowCalls, [[
-    "2",
-    "login:user",
-    "login:global",
-    "3",
-    "30",
-    "5",
-    "60"
-  ]]);
+  assert.deepEqual(
+    await reserveRedisWindowsCommand(windowClient, [
+      { key: "login:user", capacity: 3, windowSeconds: 30 },
+      { key: "login:global", capacity: 5, windowSeconds: 60 }
+    ]),
+    [
+      {
+        attempted: true,
+        allowed: true,
+        value: 1,
+        retryAfterSeconds: 30
+      },
+      {
+        attempted: true,
+        allowed: false,
+        value: 5,
+        retryAfterSeconds: 12
+      }
+    ]
+  );
+  assert.deepEqual(windowCalls, [["2", "login:user", "login:global", "3", "30", "5", "60"]]);
   await assert.rejects(
-    reserveRedisWindowsCommand({
-      async imageshowReserveWindows() { return [1, 1, 0, 30]; }
-    }, [{ key: "broken", capacity: 1, windowSeconds: 30 }]),
+    reserveRedisWindowsCommand(
+      {
+        async imageshowReserveWindows() {
+          return [1, 1, 0, 30];
+        }
+      },
+      [{ key: "broken", capacity: 1, windowSeconds: 30 }]
+    ),
     /inconsistent state/
   );
   await assert.rejects(
-    reserveRedisWindowsCommand({
-      async imageshowReserveWindows() { return []; }
-    }, [{ key: "broken", capacity: 1, windowSeconds: 30 }]),
+    reserveRedisWindowsCommand(
+      {
+        async imageshowReserveWindows() {
+          return [];
+        }
+      },
+      [{ key: "broken", capacity: 1, windowSeconds: 30 }]
+    ),
     /invalid result count/
   );
 
@@ -1505,18 +1461,9 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
     accessedAt: "2026-08-21T00:00:00.000Z",
     accessScore: 123
   };
-  assert.equal(
-    await touchReadyImageIndexedResultCommand(indexedClient, indexedInput),
-    1
-  );
-  assert.equal(
-    await touchReadyImageIndexedResultCommand(indexedClient, indexedInput),
-    -1
-  );
-  assert.equal(
-    await touchReadyImageIndexedResultCommand(indexedClient, indexedInput),
-    0
-  );
+  assert.equal(await touchReadyImageIndexedResultCommand(indexedClient, indexedInput), 1);
+  assert.equal(await touchReadyImageIndexedResultCommand(indexedClient, indexedInput), -1);
+  assert.equal(await touchReadyImageIndexedResultCommand(indexedClient, indexedInput), 0);
   assert.deepEqual(indexedCalls[0], [
     "derived:index:theme:night",
     "derived:index-meta:theme:night",
@@ -1553,24 +1500,27 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
       return 1;
     }
   } satisfies RedisStatsTouchCommandClient;
-  assert.equal(await touchReadyImageStatsResultCommand(statsClient, {
-    descriptor: {
-      key: "derived:stats:" + "b".repeat(64),
-      kind: "stats-result",
-      metaKey: null,
-      signature: "b".repeat(64)
-    },
-    registry,
-    serialized: "{\"count\":2}",
-    itemCount: 10,
-    accessScore: 124
-  }), 1);
+  assert.equal(
+    await touchReadyImageStatsResultCommand(statsClient, {
+      descriptor: {
+        key: "derived:stats:" + "b".repeat(64),
+        kind: "stats-result",
+        metaKey: null,
+        signature: "b".repeat(64)
+      },
+      registry,
+      serialized: '{"count":2}',
+      itemCount: 10,
+      accessScore: 124
+    }),
+    1
+  );
   assert.deepEqual(statsCalls[0], [
     "derived:stats:" + "b".repeat(64),
     "derived:stats:" + "b".repeat(64),
     ...registry.keys,
     "derived:stats:" + "b".repeat(64),
-    "{\"count\":2}",
+    '{"count":2}',
     "300",
     "b".repeat(64),
     "124",
@@ -1591,11 +1541,7 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
 
   const filterCalls: unknown[][] = [];
   const removedDestinations: string[] = [];
-  const filterReplies: unknown[] = [
-    [1, 3, 1, 3],
-    "invalid",
-    [0, 1, 7]
-  ];
+  const filterReplies: unknown[] = [[1, 3, 1, 3], "invalid", [0, 1, 7]];
   const filterClient = {
     async imageshowStoreReadyImageFilterSet(...arguments_: unknown[]) {
       filterCalls.push(arguments_);
@@ -1616,10 +1562,7 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
     expectedMembers: 3,
     temporaryTtlSeconds: 60
   };
-  assert.equal(
-    await storeReadyImageFilterSetCommand(filterClient, filterInput),
-    3
-  );
+  assert.equal(await storeReadyImageFilterSetCommand(filterClient, filterInput), 3);
   assert.deepEqual(filterCalls[0], [
     "3",
     "source:first",
@@ -1659,18 +1602,9 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
     instanceToken: "c".repeat(32),
     ttlSeconds: 300
   };
+  assert.equal(await publishReadyImageAttributeIndexCommand(attributeClient, attributeInput), true);
   assert.equal(
-    await publishReadyImageAttributeIndexCommand(
-      attributeClient,
-      attributeInput
-    ),
-    true
-  );
-  assert.equal(
-    await publishReadyImageAttributeIndexCommand(
-      attributeClient,
-      attributeInput
-    ),
+    await publishReadyImageAttributeIndexCommand(attributeClient, attributeInput),
     false
   );
   assert.deepEqual(attributeCalls[0], [
@@ -1689,58 +1623,37 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
   const coreSampleClient = {
     async imageshowSampleReadyImageCoreIndex(...arguments_: unknown[]) {
       coreSampleCalls.push(arguments_);
-      return [
-        1,
-        2,
-        "image:first",
-        "{\"id\":\"first\"}",
-        "image:second",
-        "{\"id\":\"second\"}"
-      ];
+      return [1, 2, "image:first", '{"id":"first"}', "image:second", '{"id":"second"}'];
     }
   } satisfies RedisReadyImageCoreSampleCommandClient;
-  assert.deepEqual(await sampleReadyImageCoreIndexCommand(coreSampleClient, {
-    keys: ["core:meta", "core:integrity", "core:index", "core:items"],
-    revision: "42",
-    count: 2,
-    bounds: { limit: 2, recentSize: 0, historySize: 30, maximumLimit: 200 }
-  }), {
-    status: "ok",
-    pairs: [
-      { member: "image:first", value: "{\"id\":\"first\"}" },
-      { member: "image:second", value: "{\"id\":\"second\"}" }
-    ]
-  });
-  assert.deepEqual(coreSampleCalls, [[
-    "core:meta",
-    "core:integrity",
-    "core:index",
-    "core:items",
-    "42",
-    "2",
-    "2",
-    "0",
-    "30",
-    "200"
-  ]]);
+  assert.deepEqual(
+    await sampleReadyImageCoreIndexCommand(coreSampleClient, {
+      keys: ["core:meta", "core:integrity", "core:index", "core:items"],
+      revision: "42",
+      count: 2,
+      bounds: { limit: 2, recentSize: 0, historySize: 30, maximumLimit: 200 }
+    }),
+    {
+      status: "ok",
+      pairs: [
+        { member: "image:first", value: '{"id":"first"}' },
+        { member: "image:second", value: '{"id":"second"}' }
+      ]
+    }
+  );
+  assert.deepEqual(coreSampleCalls, [
+    ["core:meta", "core:integrity", "core:index", "core:items", "42", "2", "2", "0", "30", "200"]
+  ]);
 
   const derivedSampleCalls: unknown[][] = [];
   const derivedSampleClient = {
     async imageshowSampleReadyImageDerivedIndex(...arguments_: unknown[]) {
       derivedSampleCalls.push(arguments_);
-      return [
-        -7,
-        2,
-        "image:missing",
-        null,
-        "image:retained",
-        "{\"id\":\"retained\"}"
-      ];
+      return [-7, 2, "image:missing", null, "image:retained", '{"id":"retained"}'];
     }
   } satisfies RedisReadyImageDerivedSampleCommandClient;
-  assert.deepEqual(await sampleReadyImageDerivedIndexCommand(
-    derivedSampleClient,
-    {
+  assert.deepEqual(
+    await sampleReadyImageDerivedIndexCommand(derivedSampleClient, {
       keys: [
         "core:meta",
         "core:integrity",
@@ -1756,43 +1669,49 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
       instanceToken: "d".repeat(32),
       maximumIndexMembers: 1_000,
       bounds: { limit: 2, recentSize: 0, historySize: 30, maximumLimit: 200 }
-    }
-  ), {
-    status: "derived_missing_item",
-    pairs: [
-      { member: "image:missing", value: null },
-      { member: "image:retained", value: "{\"id\":\"retained\"}" }
-    ]
-  });
-  assert.deepEqual(derivedSampleCalls, [[
-    "core:meta",
-    "core:integrity",
-    "core:index",
-    "core:items",
-    "derived:index",
-    "derived:meta",
-    "42",
-    "10",
-    "2",
-    "d".repeat(32),
-    "filter",
-    "2",
-    "0",
-    "30",
-    "200",
-    "1000"
-  ]]);
-  await assert.rejects(
-    sampleReadyImageCoreIndexCommand({
-      async imageshowSampleReadyImageCoreIndex() {
-        return [1, 1, "image:missing", null];
-      }
-    }, {
-      keys: ["core:meta", "core:integrity", "core:index", "core:items"],
-      revision: "42",
-      count: 1,
-      bounds: { limit: 1, recentSize: 0, historySize: 0, maximumLimit: 200 }
     }),
+    {
+      status: "derived_missing_item",
+      pairs: [
+        { member: "image:missing", value: null },
+        { member: "image:retained", value: '{"id":"retained"}' }
+      ]
+    }
+  );
+  assert.deepEqual(derivedSampleCalls, [
+    [
+      "core:meta",
+      "core:integrity",
+      "core:index",
+      "core:items",
+      "derived:index",
+      "derived:meta",
+      "42",
+      "10",
+      "2",
+      "d".repeat(32),
+      "filter",
+      "2",
+      "0",
+      "30",
+      "200",
+      "1000"
+    ]
+  ]);
+  await assert.rejects(
+    sampleReadyImageCoreIndexCommand(
+      {
+        async imageshowSampleReadyImageCoreIndex() {
+          return [1, 1, "image:missing", null];
+        }
+      },
+      {
+        keys: ["core:meta", "core:integrity", "core:index", "core:items"],
+        revision: "42",
+        count: 1,
+        bounds: { limit: 1, recentSize: 0, historySize: 0, maximumLimit: 200 }
+      }
+    ),
     /inconsistent items/
   );
 });
@@ -1803,12 +1722,12 @@ test("[Server/缓存与 Redis] ready 随机抽样只调用一次 Redis 并优先
     "00000000-0000-7002-8000-00000000008f",
     "00000000-0000-7002-8000-000000000090"
   ];
-  const samplingItems = samplingIds.map((id, position) => (
+  const samplingItems = samplingIds.map((id, position) =>
     servingReadyCacheItem({
       id,
       sort_score: String(position + 1)
     })
-  ));
+  );
   const coreCalls: unknown[] = [];
   let derivedCalls = 0;
   let revisionReads = 0;
@@ -1851,10 +1770,10 @@ test("[Server/缓存与 Redis] ready 随机抽样只调用一次 Redis 并优先
   assert.ok(sampled);
   assert.equal(sampled.length, 3);
   assert.equal(new Set(sampled.map((item) => item.id)).size, 3);
-  assert.deepEqual(new Set(sampled.slice(0, 2).map((item) => item.id)), new Set([
-    samplingIds[1],
-    samplingIds[3]
-  ]));
+  assert.deepEqual(
+    new Set(sampled.slice(0, 2).map((item) => item.id)),
+    new Set([samplingIds[1], samplingIds[3]])
+  );
   assert.ok([samplingIds[0], samplingIds[2]].includes(sampled[2]!.id));
   assert.equal(coreCalls.length, 1);
   assert.equal(derivedCalls, 0);
@@ -1872,19 +1791,22 @@ test("[Server/缓存与 Redis] ready 随机抽样只调用一次 Redis 并优先
       return { status: "token_changed" as const, pairs: [] };
     }
   } satisfies ReadyImageSampleDependencies;
-  assert.equal(await sampleResolvedReadyImageIndex(
-    {
-      kind: "filter",
-      key: "derived:index",
-      revision: "42",
-      count: 2,
-      metaKey: "derived:meta",
-      instanceToken: "d".repeat(32)
-    },
-    1,
-    new Set(),
-    tokenReplacementDependencies
-  ), null);
+  assert.equal(
+    await sampleResolvedReadyImageIndex(
+      {
+        kind: "filter",
+        key: "derived:index",
+        revision: "42",
+        count: 2,
+        metaKey: "derived:meta",
+        instanceToken: "d".repeat(32)
+      },
+      1,
+      new Set(),
+      tokenReplacementDependencies
+    ),
+    null
+  );
   assert.equal(tokenReplacementCalls, 1);
 });
 
@@ -1892,7 +1814,7 @@ test("[Server/缓存与 Redis] 小集合固定候选顺序在近期覆盖后仍�
   const ids = [imageId, "00000000-0000-7002-8000-00000000008e"];
   const pairs = ids.map((id) => {
     const item = servingReadyCacheItem({
-      id,
+      id
     });
     return { member: readyImageMember(id), value: serializeReadyImageCacheItem(item) };
   });
@@ -1933,8 +1855,16 @@ test("[Server/缓存与 Redis] 小集合固定候选顺序在近期覆盖后仍�
       assert.deepEqual(selected, new Set(ids));
     }
     for (draw of [0, 0.99]) {
-      const unseen = await sampleResolvedReadyImageIndex(index, 1, new Set([ids[0]!]), dependencies);
-      assert.deepEqual(unseen?.map((item) => item.id), [ids[1]]);
+      const unseen = await sampleResolvedReadyImageIndex(
+        index,
+        1,
+        new Set([ids[0]!]),
+        dependencies
+      );
+      assert.deepEqual(
+        unseen?.map((item) => item.id),
+        [ids[1]]
+      );
       const batch = await sampleResolvedReadyImageIndex(index, 3, new Set(ids), dependencies);
       assert.equal(batch?.length, 2);
       assert.deepEqual(new Set(batch!.map((item) => item.id)), new Set(ids));
@@ -1950,40 +1880,18 @@ test("[Server/缓存与 Redis] Redis 原生条件字符串命令严格解析替�
       return replies.shift();
     }
   };
-  assert.equal(await replaceRedisStringIfEqualKeepingTtl(
-    commandClient,
-    "session",
-    "before",
-    "after"
-  ), true);
-  assert.equal(await replaceRedisStringIfEqualKeepingTtl(
-    commandClient,
-    "session",
-    "stale",
-    "unexpected"
-  ), false);
-  assert.equal(await refreshRedisStringTtlIfEqual(
-    commandClient,
-    "session",
-    "after",
-    300
-  ), true);
-  assert.equal(await refreshRedisStringTtlIfEqual(
-    commandClient,
-    "missing",
-    "after",
-    480
-  ), false);
-  assert.equal(await deleteRedisStringIfEqual(
-    commandClient,
-    "session",
-    "after"
-  ), true);
-  assert.equal(await deleteRedisStringIfEqual(
-    commandClient,
-    "missing",
-    "after"
-  ), false);
+  assert.equal(
+    await replaceRedisStringIfEqualKeepingTtl(commandClient, "session", "before", "after"),
+    true
+  );
+  assert.equal(
+    await replaceRedisStringIfEqualKeepingTtl(commandClient, "session", "stale", "unexpected"),
+    false
+  );
+  assert.equal(await refreshRedisStringTtlIfEqual(commandClient, "session", "after", 300), true);
+  assert.equal(await refreshRedisStringTtlIfEqual(commandClient, "missing", "after", 480), false);
+  assert.equal(await deleteRedisStringIfEqual(commandClient, "session", "after"), true);
+  assert.equal(await deleteRedisStringIfEqual(commandClient, "missing", "after"), false);
   assert.deepEqual(commandCalls, [
     ["SET", "session", "after", "IFEQ", "before", "KEEPTTL"],
     ["SET", "session", "unexpected", "IFEQ", "stale", "KEEPTTL"],
@@ -2011,14 +1919,18 @@ test("[Server/缓存与 Redis] Redis 原生条件字符串命令严格解析替�
         pipelineCalls.push([command, ...arguments_]);
       },
       async exec(): Promise<Array<[Error | null, unknown]>> {
-        return [[null, 1], [null, 0], [null, 1]];
+        return [
+          [null, 1],
+          [null, 0],
+          [null, 1]
+        ];
       }
     })
   };
-  assert.deepEqual(
-    await deleteRedisStringsIfEqual(partialClient, snapshots),
-    [snapshots[0], snapshots[2]]
-  );
+  assert.deepEqual(await deleteRedisStringsIfEqual(partialClient, snapshots), [
+    snapshots[0],
+    snapshots[2]
+  ]);
   assert.deepEqual(pipelineCalls, [
     ["DELEX", "first", "IFEQ", "one"],
     ["DELEX", "raced", "IFEQ", "old"],
@@ -2027,36 +1939,45 @@ test("[Server/缓存与 Redis] Redis 原生条件字符串命令严格解析替�
 
   const pipelineFailure = new Error("controlled DELEX failure");
   await assert.rejects(
-    deleteRedisStringsIfEqual({
-      pipeline: () => ({
-        call() {},
-        async exec(): Promise<Array<[Error | null, unknown]>> {
-          return [[pipelineFailure, null]];
-        }
-      })
-    }, [{ key: "first", value: "one" }]),
+    deleteRedisStringsIfEqual(
+      {
+        pipeline: () => ({
+          call() {},
+          async exec(): Promise<Array<[Error | null, unknown]>> {
+            return [[pipelineFailure, null]];
+          }
+        })
+      },
+      [{ key: "first", value: "one" }]
+    ),
     (error: Error) => error === pipelineFailure
   );
   await assert.rejects(
-    deleteRedisStringsIfEqual({
-      pipeline: () => ({
-        call() {},
-        async exec(): Promise<Array<[Error | null, unknown]>> {
-          return [[null, 2]];
-        }
-      })
-    }, [{ key: "first", value: "one" }]),
+    deleteRedisStringsIfEqual(
+      {
+        pipeline: () => ({
+          call() {},
+          async exec(): Promise<Array<[Error | null, unknown]>> {
+            return [[null, 2]];
+          }
+        })
+      },
+      [{ key: "first", value: "one" }]
+    ),
     /invalid result/
   );
   await assert.rejects(
-    deleteRedisStringsIfEqual({
-      pipeline: () => ({
-        call() {},
-        async exec(): Promise<Array<[Error | null, unknown]>> {
-          return [];
-        }
-      })
-    }, [{ key: "first", value: "one" }]),
+    deleteRedisStringsIfEqual(
+      {
+        pipeline: () => ({
+          call() {},
+          async exec(): Promise<Array<[Error | null, unknown]>> {
+            return [];
+          }
+        })
+      },
+      [{ key: "first", value: "one" }]
+    ),
     /invalid result count/
   );
 });
@@ -2103,111 +2024,105 @@ test("[Server/缓存与 Redis] Redis 必需能力探针验证条件成功、失�
   };
 
   const successful = probeClient(successfulResults());
+  assert.deepEqual(await readRequiredRedisCommandCapabilities(successful.client as never), {
+    available: true,
+    commands: {
+      INCREX: true,
+      ARRING: true,
+      ARLASTITEMS: true,
+      SET_IFEQ_KEEPTTL: true,
+      DELEX_IFEQ: true
+    },
+    missing: []
+  });
   assert.deepEqual(
-    await readRequiredRedisCommandCapabilities(successful.client as never),
-    {
-      available: true,
-      commands: {
-        INCREX: true,
-        ARRING: true,
-        ARLASTITEMS: true,
-        SET_IFEQ_KEEPTTL: true,
-        DELEX_IFEQ: true
-      },
-      missing: []
-    }
+    successful.commands.map(([command]) => command),
+    [
+      "INCREX",
+      "ARRING",
+      "EXPIRE",
+      "ARLASTITEMS",
+      "SET",
+      "PTTL",
+      "SET",
+      "PTTL",
+      "SET",
+      "GET",
+      "SET",
+      "EXISTS",
+      "SET",
+      "DELEX",
+      "GET",
+      "DELEX",
+      "EXISTS",
+      "DELEX",
+      "UNLINK"
+    ]
   );
-  assert.deepEqual(successful.commands.map(([command]) => command), [
-    "INCREX",
-    "ARRING",
-    "EXPIRE",
-    "ARLASTITEMS",
-    "SET",
-    "PTTL",
-    "SET",
-    "PTTL",
-    "SET",
-    "GET",
-    "SET",
-    "EXISTS",
-    "SET",
-    "DELEX",
-    "GET",
-    "DELEX",
-    "EXISTS",
-    "DELEX",
-    "UNLINK"
-  ]);
-  assert.deepEqual(successful.commands[6]?.slice(-3), [
-    "IFEQ",
-    "before",
-    "KEEPTTL"
-  ]);
+  assert.deepEqual(successful.commands[6]?.slice(-3), ["IFEQ", "before", "KEEPTTL"]);
 
   const invalidResults = successfulResults();
   invalidResults[6] = [null, -1];
   invalidResults[12] = [null, "0"];
   const invalid = probeClient(invalidResults);
-  assert.deepEqual(
-    await readRequiredRedisCommandCapabilities(invalid.client as never),
-    {
-      available: false,
-      commands: {
-        INCREX: true,
-        ARRING: true,
-        ARLASTITEMS: true,
-        SET_IFEQ_KEEPTTL: false,
-        DELEX_IFEQ: false
-      },
-      missing: ["SET_IFEQ_KEEPTTL", "DELEX_IFEQ"]
-    }
-  );
+  assert.deepEqual(await readRequiredRedisCommandCapabilities(invalid.client as never), {
+    available: false,
+    commands: {
+      INCREX: true,
+      ARRING: true,
+      ARLASTITEMS: true,
+      SET_IFEQ_KEEPTTL: false,
+      DELEX_IFEQ: false
+    },
+    missing: ["SET_IFEQ_KEEPTTL", "DELEX_IFEQ"]
+  });
 });
 test("[Server/缓存与 Redis] Redis 命令能力探针取消后不再调度阶段且原子收口探针键", async () => {
   const pendingIncrex = Promise.withResolvers<unknown>();
   let pipelineCreations = 0;
   const increxCommands: string[] = [];
   const increxController = new AbortController();
-  const increxProbe = readRequiredRedisCommandCapabilities({
-    call: async (command: string) => {
-      increxCommands.push(command);
-      return pendingIncrex.promise;
-    },
-    pipeline: () => {
-      pipelineCreations += 1;
-      return { call: () => undefined, exec: async () => [] };
-    }
-  } as never, increxController.signal);
+  const increxProbe = readRequiredRedisCommandCapabilities(
+    {
+      call: async (command: string) => {
+        increxCommands.push(command);
+        return pendingIncrex.promise;
+      },
+      pipeline: () => {
+        pipelineCreations += 1;
+        return { call: () => undefined, exec: async () => [] };
+      }
+    } as never,
+    increxController.signal
+  );
   await delay(0);
   assert.deepEqual(increxCommands, ["INCREX"]);
   const increxAbortReason = new Error("controlled INCREX probe abort");
   increxController.abort(increxAbortReason);
-  await assert.rejects(
-    increxProbe,
-    (error: Error) => error === increxAbortReason
-  );
+  await assert.rejects(increxProbe, (error: Error) => error === increxAbortReason);
   pendingIncrex.resolve([0, 1]);
   await delay(10);
   assert.equal(pipelineCreations, 0);
 
-  const pendingArrayPipeline = Promise.withResolvers<
-    Array<[Error | null, unknown]>
-  >();
+  const pendingArrayPipeline = Promise.withResolvers<Array<[Error | null, unknown]>>();
   const pipelineStarted = Promise.withResolvers<void>();
   const arrayCommands: string[] = [];
   const arrayController = new AbortController();
-  const arrayProbe = readRequiredRedisCommandCapabilities({
-    call: async () => [0, 1],
-    pipeline: () => ({
-      call: (command: string) => {
-        arrayCommands.push(command);
-      },
-      exec: async () => {
-        pipelineStarted.resolve();
-        return pendingArrayPipeline.promise;
-      }
-    })
-  } as never, arrayController.signal);
+  const arrayProbe = readRequiredRedisCommandCapabilities(
+    {
+      call: async () => [0, 1],
+      pipeline: () => ({
+        call: (command: string) => {
+          arrayCommands.push(command);
+        },
+        exec: async () => {
+          pipelineStarted.resolve();
+          return pendingArrayPipeline.promise;
+        }
+      })
+    } as never,
+    arrayController.signal
+  );
   await pipelineStarted.promise;
   assert.deepEqual(arrayCommands, [
     "ARRING",
@@ -2231,10 +2146,7 @@ test("[Server/缓存与 Redis] Redis 命令能力探针取消后不再调度阶�
   ]);
   const arrayAbortReason = new Error("controlled array probe abort");
   arrayController.abort(arrayAbortReason);
-  await assert.rejects(
-    arrayProbe,
-    (error: Error) => error === arrayAbortReason
-  );
+  await assert.rejects(arrayProbe, (error: Error) => error === arrayAbortReason);
   const scheduledAtReturn = [...arrayCommands];
   pendingArrayPipeline.resolve([
     [null, 1],

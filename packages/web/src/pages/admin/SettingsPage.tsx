@@ -102,23 +102,27 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
     await status.run(async () => {
       try {
         const response = await api<AdminSettingsResponseDto>(
-          `${adminApiBasePath}/settings${reload ? "/reload" : ""}`, {
-          method: "POST",
-          signal,
-          body: reload ? undefined : JSON.stringify({
-            site: submitted.site,
-            ingestion: {
-              list_page_size: submitted.ingestion.list_page_size,
-              commit_concurrency: submitted.ingestion.commit_concurrency
-            },
-            upload: {
-              browser_concurrency: submitted.upload.browser_concurrency
-            },
-            normalize: submitted.normalize,
-            thumbnail: submitted.thumbnail,
-            admin: submitted.admin
-          })
-        });
+          `${adminApiBasePath}/settings${reload ? "/reload" : ""}`,
+          {
+            method: "POST",
+            signal,
+            body: reload
+              ? undefined
+              : JSON.stringify({
+                  site: submitted.site,
+                  ingestion: {
+                    list_page_size: submitted.ingestion.list_page_size,
+                    commit_concurrency: submitted.ingestion.commit_concurrency
+                  },
+                  upload: {
+                    browser_concurrency: submitted.upload.browser_concurrency
+                  },
+                  normalize: submitted.normalize,
+                  thumbnail: submitted.thumbnail,
+                  admin: submitted.admin
+                })
+          }
+        );
         signal.throwIfAborted();
         await client.cancelQueries({ queryKey: queryKeys.settings, exact: true });
         signal.throwIfAborted();
@@ -146,14 +150,22 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
       setDraft(JSON.stringify(next) === JSON.stringify(serverSettings) ? null : next);
     }
   };
-  const updateSite = (patch: Partial<AdminSettings["site"]>) => setSettings({ ...settings, site: { ...settings.site, ...patch } });
-  const updateSiteHome = (patch: Partial<AdminSettings["site"]["home"]>) => updateSite({ home: { ...settings.site.home, ...patch } });
-  const updateSiteGallery = (patch: Partial<AdminSettings["site"]["gallery"]>) => updateSite({ gallery: { ...settings.site.gallery, ...patch } });
-  const updateIngestion = (patch: Partial<AdminSettings["ingestion"]>) => setSettings({ ...settings, ingestion: { ...settings.ingestion, ...patch } });
-  const updateUpload = (patch: Partial<AdminSettings["upload"]>) => setSettings({ ...settings, upload: { ...settings.upload, ...patch } });
-  const updateNormalize = (patch: Partial<AdminSettings["normalize"]>) => setSettings({ ...settings, normalize: { ...settings.normalize, ...patch } });
-  const updateThumbnail = (patch: Partial<AdminSettings["thumbnail"]>) => setSettings({ ...settings, thumbnail: { ...settings.thumbnail, ...patch } });
-  const updateAdmin = (patch: Partial<AdminSettings["admin"]>) => setSettings({ ...settings, admin: { ...settings.admin, ...patch } });
+  const updateSite = (patch: Partial<AdminSettings["site"]>) =>
+    setSettings({ ...settings, site: { ...settings.site, ...patch } });
+  const updateSiteHome = (patch: Partial<AdminSettings["site"]["home"]>) =>
+    updateSite({ home: { ...settings.site.home, ...patch } });
+  const updateSiteGallery = (patch: Partial<AdminSettings["site"]["gallery"]>) =>
+    updateSite({ gallery: { ...settings.site.gallery, ...patch } });
+  const updateIngestion = (patch: Partial<AdminSettings["ingestion"]>) =>
+    setSettings({ ...settings, ingestion: { ...settings.ingestion, ...patch } });
+  const updateUpload = (patch: Partial<AdminSettings["upload"]>) =>
+    setSettings({ ...settings, upload: { ...settings.upload, ...patch } });
+  const updateNormalize = (patch: Partial<AdminSettings["normalize"]>) =>
+    setSettings({ ...settings, normalize: { ...settings.normalize, ...patch } });
+  const updateThumbnail = (patch: Partial<AdminSettings["thumbnail"]>) =>
+    setSettings({ ...settings, thumbnail: { ...settings.thumbnail, ...patch } });
+  const updateAdmin = (patch: Partial<AdminSettings["admin"]>) =>
+    setSettings({ ...settings, admin: { ...settings.admin, ...patch } });
   return (
     <section className="workspace workspace-contained settings-page">
       <WorkspaceHeader
@@ -182,12 +194,21 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
           </>
         }
       />
-      {actionError && <p className="hint" role="alert">{actionError}</p>}
+      {actionError && (
+        <p className="hint" role="alert">
+          {actionError}
+        </p>
+      )}
       <div className="settings-scroll-region" ref={scrollRef}>
         <fieldset className="settings-grid" disabled={busy} aria-busy={busy}>
           <section>
-            <h2><AdminIcon name="information-line" />站点信息</h2>
-            <p className="hint">这些非敏感配置只保存到容器配置目录；环境变量仅在配置文件首次生成时读取。</p>
+            <h2>
+              <AdminIcon name="information-line" />
+              站点信息
+            </h2>
+            <p className="hint">
+              这些非敏感配置只保存到容器配置目录；环境变量仅在配置文件首次生成时读取。
+            </p>
             <label>
               网页标题
               <input
@@ -240,7 +261,10 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
             </label>
           </section>
           <section>
-            <h2><AdminIcon name="settings-3-line" />页面行为</h2>
+            <h2>
+              <AdminIcon name="settings-3-line" />
+              页面行为
+            </h2>
             <label>
               根路径页面
               <SelectMenu
@@ -256,7 +280,9 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
               <SelectMenu
                 disabled={busy}
                 value={settings.site.gallery.order}
-                onChange={(value) => updateSiteGallery({ order: value as AdminSettings["site"]["gallery"]["order"] })}
+                onChange={(value) =>
+                  updateSiteGallery({ order: value as AdminSettings["site"]["gallery"]["order"] })
+                }
                 options={galleryOrderSelectOptions}
                 ariaLabel="画廊排序"
               />
@@ -275,9 +301,11 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
               <SelectMenu
                 value={settings.site.random_method}
                 disabled={busy}
-                onChange={(value) => updateSite({
-                  random_method: value as RandomDefaultMethod
-                })}
+                onChange={(value) =>
+                  updateSite({
+                    random_method: value as RandomDefaultMethod
+                  })
+                }
                 options={randomMethodOptions}
                 ariaLabel="随机图默认模式"
               />
@@ -301,12 +329,19 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
                 onChange={(event) => updateSite({ assets_base_url: event.target.value })}
                 placeholder="留空使用主站；例如 https://asset.example.com"
               />
-              <span className="hint">此地址直接作为静态资源根目录，支持路径前缀。请先接入域名并配置回源，保存后刷新页面生效。</span>
+              <span className="hint">
+                此地址直接作为静态资源根目录，支持路径前缀。请先接入域名并配置回源，保存后刷新页面生效。
+              </span>
             </label>
           </section>
           <section className="settings-card-wide">
-            <h2><AdminIcon name="image-line" />图片设置</h2>
-            <p className="hint">这些配置影响新上传、链接下载、缩略图生成和图片管理列表；已存在图片不会自动重新处理。</p>
+            <h2>
+              <AdminIcon name="image-line" />
+              图片设置
+            </h2>
+            <p className="hint">
+              这些配置影响新上传、链接下载、缩略图生成和图片管理列表；已存在图片不会自动重新处理。
+            </p>
             <div className="settings-field-grid">
               <label>
                 接入队列与批量编辑每页数量

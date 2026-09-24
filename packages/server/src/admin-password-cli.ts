@@ -1,10 +1,7 @@
 import { emitKeypressEvents } from "node:readline";
 import { formatLogContext } from "@imageshow/shared/browser";
 import { deploymentConfig } from "./config/deployment-config.ts";
-import {
-  closeDatabasePools,
-  configureDatabasePools
-} from "./core/database/pools.ts";
+import { closeDatabasePools, configureDatabasePools } from "./core/database/pools.ts";
 import { pingDatabase } from "./core/database/schema.ts";
 import { adminUsernameInput } from "./users/credentials.ts";
 import { pingRedis, redis } from "./core/redis/client.ts";
@@ -86,7 +83,9 @@ async function main() {
     password
   );
   if (result.sessionsInvalidated) {
-    process.stdout.write(`管理员 ${result.username} 的密码已重置，已清除 ${result.removedSessions} 个登录会话。\n`);
+    process.stdout.write(
+      `管理员 ${result.username} 的密码已重置，已清除 ${result.removedSessions} 个登录会话。\n`
+    );
     return;
   }
 
@@ -94,7 +93,7 @@ async function main() {
   process.stdout.write(`管理员 ${result.username} 的密码已重置。\n`);
   process.stderr.write(
     `警告：Redis 会话清理失败（${reason}）。目标账号的旧会话已因密码绑定失效，\n` +
-    "但其他管理员会话未按恢复流程清除；Redis 恢复后可重新执行命令。\n"
+      "但其他管理员会话未按恢复流程清除；Redis 恢复后可重新执行命令。\n"
   );
 }
 

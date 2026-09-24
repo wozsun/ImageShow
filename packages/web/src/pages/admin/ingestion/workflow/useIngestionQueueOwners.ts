@@ -45,7 +45,11 @@ export function useUploadQueueOwner({
     maxLongEdge,
     browserConcurrency
   });
-  const retry = useIngestionRetry({ queue, retryBrowserJobs: uploadFlow.retryMany, commitJobs: commit.commit });
+  const retry = useIngestionRetry({
+    queue,
+    retryBrowserJobs: uploadFlow.retryMany,
+    commitJobs: commit.commit
+  });
   return { queue, commit, ...uploadFlow, ...retry };
 }
 
@@ -83,6 +87,10 @@ export function useImportQueueOwner({
     storageSlug,
     maxItems
   });
-  const retry = useIngestionRetry({ queue, retryBrowserJobs: importFlow.retryMany, commitJobs: commit.commit });
+  const retry = useIngestionRetry({
+    queue,
+    retryBrowserJobs: importFlow.retryMany,
+    commitJobs: commit.commit
+  });
   return { queue, commit, ...importFlow, ...retry };
 }

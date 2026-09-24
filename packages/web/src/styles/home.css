@@ -26,7 +26,7 @@
   color: var(--public-color-text-secondary);
   font-size: 12px;
   line-height: 1.8;
-  letter-spacing: .02em;
+  letter-spacing: 0.02em;
   text-align: center;
   overflow-wrap: anywhere;
   text-shadow: 0 1px 4px var(--public-shadow-home-copy);
@@ -125,10 +125,8 @@
   transform: scale(1.05);
   transform-origin: center top;
   transition:
-    opacity var(--home-background-reveal-duration)
-      var(--public-motion-ease-cinematic),
-    transform var(--home-background-reveal-duration)
-      var(--public-motion-ease-cinematic);
+    opacity var(--home-background-reveal-duration) var(--public-motion-ease-cinematic),
+    transform var(--home-background-reveal-duration) var(--public-motion-ease-cinematic);
 }
 
 .home-random-background.is-ready img {
@@ -151,10 +149,8 @@
   height: var(--public-page-header-height);
 }
 
-.home-navigation-frame.is-entrance-pending
-  .public-navigation-stack::before,
-.home-navigation-frame.is-entrance-pending
-  .public-navigation-stack::after,
+.home-navigation-frame.is-entrance-pending .public-navigation-stack::before,
+.home-navigation-frame.is-entrance-pending .public-navigation-stack::after,
 .home-navigation-frame.is-entrance-pending .topbar {
   opacity: 0;
   visibility: hidden;
@@ -194,15 +190,13 @@
 
 .home-random-background::after {
   z-index: 3;
-  opacity: .18;
+  opacity: 0.18;
   background-image:
-    repeating-linear-gradient(
-      0deg,
-      transparent 0 3px,
-      var(--public-color-home-grain-line) 4px
-    ),
-    radial-gradient(var(--public-color-home-grain-dot) .6px, transparent .6px);
-  background-size: auto, 5px 5px;
+    repeating-linear-gradient(0deg, transparent 0 3px, var(--public-color-home-grain-line) 4px),
+    radial-gradient(var(--public-color-home-grain-dot) 0.6px, transparent 0.6px);
+  background-size:
+    auto,
+    5px 5px;
   mix-blend-mode: soft-light;
 }
 
@@ -247,22 +241,17 @@
 }
 
 .home-filter-bar.is-home-filter-bar-entrance {
-  animation:
-    home-filter-bar-surface-reveal
-    var(--home-navigation-entrance-duration) ease-out
+  animation: home-filter-bar-surface-reveal var(--home-navigation-entrance-duration) ease-out
     var(--home-navigation-entrance-delay) backwards;
 }
 
 .home-filter-bar.is-home-filter-bar-entrance > * {
-  animation:
-    home-filter-bar-content-reveal
-    var(--home-navigation-entrance-duration) ease-out
+  animation: home-filter-bar-content-reveal var(--home-navigation-entrance-duration) ease-out
     var(--home-navigation-entrance-delay) backwards;
 }
 
-.home-filter-bar.is-home-filter-bar-entrance
-  > .home-filter-reset:disabled {
-  --home-filter-bar-content-end-opacity: .38;
+.home-filter-bar.is-home-filter-bar-entrance > .home-filter-reset:disabled {
+  --home-filter-bar-content-end-opacity: 0.38;
 }
 
 .home-filter-bar-spacer {
@@ -281,7 +270,7 @@
   color: var(--public-color-accent);
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: .14em;
+  letter-spacing: 0.14em;
 }
 
 .home-filter-bar > div > strong {
@@ -312,10 +301,10 @@
   font-weight: 750;
   white-space: nowrap;
   transition:
-    color .16s ease,
-    background-color .16s ease,
-    border-color .16s ease,
-    transform .1s ease;
+    color 0.16s ease,
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.1s ease;
 }
 
 .home-filter-reset {
@@ -329,7 +318,7 @@
 }
 
 .home-filter-reset:disabled {
-  opacity: .38;
+  opacity: 0.38;
   cursor: default;
 }
 
@@ -344,7 +333,7 @@
 
 .home-gallery-entry span {
   font-size: 18px;
-  transition: transform .16s ease;
+  transition: transform 0.16s ease;
 }
 
 .home-gallery-entry.is-disabled {
@@ -359,7 +348,8 @@
   position: relative;
   z-index: 1;
   min-height: calc(
-    100svh - var(--public-page-header-height) - var(--public-navigation-safe-top) - var(--home-filter-bar-height)
+    100svh - var(--public-page-header-height) - var(--public-navigation-safe-top) -
+      var(--home-filter-bar-height)
   );
   padding: clamp(64px, 10vw, 148px) max(28px, calc((100% - 1180px) / 2)) 56px;
   padding-left: max(28px, calc((100% - 1180px) / 2), calc(var(--public-safe-area-left) + 12px));
@@ -383,7 +373,7 @@
   color: var(--public-color-home-eyebrow);
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: .18em;
+  letter-spacing: 0.18em;
 }
 
 .home-banner h1 {
@@ -391,7 +381,7 @@
   font-family: Georgia, "Times New Roman", "Noto Serif SC", serif;
   font-size: clamp(48px, 7vw, 88px);
   font-weight: 600;
-  letter-spacing: -.045em;
+  letter-spacing: -0.045em;
   line-height: 1.08;
   white-space: pre-line;
 }
@@ -413,7 +403,7 @@
   color: var(--public-color-home-stats-label);
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: .16em;
+  letter-spacing: 0.16em;
 }
 
 .home-site-stats > ul {
@@ -453,7 +443,7 @@
   font-size: clamp(22px, 2.2vw, 30px);
   font-weight: 600;
   font-variant-numeric: lining-nums tabular-nums;
-  letter-spacing: -.035em;
+  letter-spacing: -0.035em;
   line-height: 1;
 }
 
@@ -479,7 +469,7 @@
 
 .home-stat-value > span {
   flex: none;
-  padding-bottom: .16em;
+  padding-bottom: 0.16em;
   color: var(--public-color-home-stats-unit);
   font-size: 11px;
   line-height: 1;
@@ -504,10 +494,10 @@
   border-bottom: 1px solid var(--public-color-home-scroll-border);
   border-radius: 0;
   font-size: 12px;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
   transition:
-    color .16s ease,
-    border-color .16s ease,
+    color 0.16s ease,
+    border-color 0.16s ease,
     opacity 400ms ease-out 400ms,
     transform 400ms var(--public-motion-ease-soft) 400ms,
     visibility 0s linear;
@@ -521,8 +511,7 @@
   transform: translateY(0);
   transition:
     opacity var(--home-hero-duration) ease-out var(--home-hero-delay),
-    transform var(--home-hero-duration)
-      var(--public-motion-ease-cinematic) var(--home-hero-delay),
+    transform var(--home-hero-duration) var(--public-motion-ease-cinematic) var(--home-hero-delay),
     visibility 0s linear;
 }
 
@@ -536,20 +525,10 @@
   --home-hero-delay: 60ms;
   transition-property: opacity, transform, letter-spacing, visibility;
   transition-duration:
-    var(--home-hero-duration),
-    var(--home-hero-duration),
-    var(--home-hero-duration),
-    0s;
+    var(--home-hero-duration), var(--home-hero-duration), var(--home-hero-duration), 0s;
   transition-timing-function:
-    ease-out,
-    var(--public-motion-ease-cinematic),
-    var(--public-motion-ease-cinematic),
-    linear;
-  transition-delay:
-    var(--home-hero-delay),
-    var(--home-hero-delay),
-    var(--home-hero-delay),
-    0s;
+    ease-out, var(--public-motion-ease-cinematic), var(--public-motion-ease-cinematic), linear;
+  transition-delay: var(--home-hero-delay), var(--home-hero-delay), var(--home-hero-delay), 0s;
 }
 
 .home-site-stats {
@@ -562,8 +541,7 @@
   opacity: 1;
   transform: translateY(0);
   transition:
-    opacity 320ms ease-out
-      calc(160ms + var(--home-stat-index, 0) * 50ms),
+    opacity 320ms ease-out calc(160ms + var(--home-stat-index, 0) * 50ms),
     transform 380ms var(--public-motion-ease-cinematic)
       calc(160ms + var(--home-stat-index, 0) * 50ms);
 }
@@ -580,12 +558,12 @@
 }
 
 .home-banner.is-entrance-pending .home-banner-title {
-  letter-spacing: -.015em;
+  letter-spacing: -0.015em;
   transform: translateY(22px);
 }
 
 .home-banner.is-entrance-pending > .home-site-stats {
-  transform: translateY(14px) scale(.96);
+  transform: translateY(14px) scale(0.96);
 }
 
 .home-banner.is-entrance-pending .home-site-stats li {
@@ -616,21 +594,27 @@
 }
 
 @keyframes home-filter-bar-surface-reveal {
-  from { background-color: var(--home-filter-bar-surface-start); }
-  to { background-color: var(--home-filter-bar-surface-end); }
+  from {
+    background-color: var(--home-filter-bar-surface-start);
+  }
+  to {
+    background-color: var(--home-filter-bar-surface-end);
+  }
 }
 
 @keyframes home-filter-bar-content-reveal {
-  from { opacity: 0; }
-  to { opacity: var(--home-filter-bar-content-end-opacity, 1); }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: var(--home-filter-bar-content-end-opacity, 1);
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {
   .home-filter-bar {
-    --home-filter-bar-surface-start:
-      var(--public-color-navigation-surface-solid);
-    --home-filter-bar-surface-end:
-      var(--public-color-navigation-surface-solid);
+    --home-filter-bar-surface-start: var(--public-color-navigation-surface-solid);
+    --home-filter-bar-surface-end: var(--public-color-navigation-surface-solid);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }

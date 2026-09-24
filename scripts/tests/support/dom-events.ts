@@ -1,7 +1,4 @@
-function setNativeControlValue(
-  control: HTMLInputElement | HTMLTextAreaElement,
-  value: string
-) {
+function setNativeControlValue(control: HTMLInputElement | HTMLTextAreaElement, value: string) {
   let prototype: object | null = Object.getPrototypeOf(control);
   while (prototype) {
     const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
@@ -25,12 +22,12 @@ export function dispatchDomEvent(
     bubbles: true,
     cancelable: true
   });
-  Object.defineProperties(event, Object.fromEntries(
-    Object.entries(properties).map(([key, value]) => [
-      key,
-      { configurable: true, value }
-    ])
-  ));
+  Object.defineProperties(
+    event,
+    Object.fromEntries(
+      Object.entries(properties).map(([key, value]) => [key, { configurable: true, value }])
+    )
+  );
   target.dispatchEvent(event);
   return event;
 }
@@ -67,9 +64,7 @@ export function inputText(
       control.selectionEnd = control.value.length;
     };
   }
-  const missingInputType = control.tagName === "INPUT" && !(
-    control as HTMLInputElement
-  ).type;
+  const missingInputType = control.tagName === "INPUT" && !(control as HTMLInputElement).type;
   if (missingInputType) {
     Object.defineProperty(control, "type", {
       configurable: true,

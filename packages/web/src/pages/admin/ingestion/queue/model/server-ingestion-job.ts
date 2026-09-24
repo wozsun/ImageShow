@@ -28,20 +28,16 @@ export function ingestionJobHasServerAuthority(job: IngestionJob) {
   return job.serverAccepted === true;
 }
 
-export function ingestionJobAwaitsActionCoverage(
-  job: IngestionJob,
-  serverRevision: number | null
-) {
-  if (
-    !ingestionJobHasServerAuthority(job)
-    || job.serverHandoffPending !== true
-  ) return false;
+export function ingestionJobAwaitsActionCoverage(job: IngestionJob, serverRevision: number | null) {
+  if (!ingestionJobHasServerAuthority(job) || job.serverHandoffPending !== true) return false;
   // This is deliberately independent of the canonical DTO revision/order: an
   // older DTO may already exist when a newer accept or completion replay HTTP
   // response arrives. Unknown completion revisions require a fresh snapshot.
-  return job.serverHandoffRevision === undefined
-    || serverRevision === null
-    || job.serverHandoffRevision > serverRevision;
+  return (
+    job.serverHandoffRevision === undefined ||
+    serverRevision === null ||
+    job.serverHandoffRevision > serverRevision
+  );
 }
 
 export function serverIngestionJobPairKey(job: IngestionJob) {
@@ -58,14 +54,10 @@ export function ingestionHandoffRetryDecision(
   currentRevision: number | null,
   observedSemanticRevision?: number
 ) {
-  const retryAfterRevision = Math.max(
-    requestRevision ?? 0,
-    observedSemanticRevision ?? 0
-  );
+  const retryAfterRevision = Math.max(requestRevision ?? 0, observedSemanticRevision ?? 0);
   return {
     retryAfterRevision,
-    retryImmediately: currentRevision !== null
-      && currentRevision > retryAfterRevision
+    retryImmediately: currentRevision !== null && currentRevision > retryAfterRevision
   };
 }
 
@@ -76,20 +68,19 @@ export function serverIngestionJobsForCombinedPage(
   visibleHandoffPairs: ReadonlySet<string> = new Set()
 ) {
   if (limit <= 0) return [];
-  const jobsByPair = new Map(
-    jobs.map((job) => [serverIngestionJobPairKey(job), job])
-  );
+  const jobsByPair = new Map(jobs.map((job) => [serverIngestionJobPairKey(job), job]));
   const snapshotPairs = new Set(items.map(serverIngestionPairKey));
   const seen = new Set<string>();
   const result: IngestionJob[] = [];
   for (const job of jobs) {
     const pairKey = serverIngestionJobPairKey(job);
     if (
-      !pairKey
-      || !visibleHandoffPairs.has(pairKey)
-      || snapshotPairs.has(pairKey)
-      || seen.has(pairKey)
-    ) continue;
+      !pairKey ||
+      !visibleHandoffPairs.has(pairKey) ||
+      snapshotPairs.has(pairKey) ||
+      seen.has(pairKey)
+    )
+      continue;
     seen.add(pairKey);
     result.push(job);
   }
@@ -107,16 +98,22 @@ export function activeIngestionClientStatus(
   item: Pick<ActiveServerIngestionItemDto, "status" | "phase">
 ): IngestionJob["status"] {
   switch (item.status) {
-    case "queued": return "queued";
-    case "downloading": return "downloading";
-    case "received": return "received";
-    case "preparing": return item.phase === "prepare-waiting"
-      ? "received"
-      : "processing";
-    case "ready": return "ready";
-    case "committing": return "committing";
-    case "resolving": return "finalized";
-    case "failed": return "failed";
+    case "queued":
+      return "queued";
+    case "downloading":
+      return "downloading";
+    case "received":
+      return "received";
+    case "preparing":
+      return item.phase === "prepare-waiting" ? "received" : "processing";
+    case "ready":
+      return "ready";
+    case "committing":
+      return "committing";
+    case "resolving":
+      return "finalized";
+    case "failed":
+      return "failed";
   }
 }
 
@@ -127,64 +124,68 @@ function activeIngestionJob(
 ): IngestionJob {
   const pairKey = serverIngestionPairKey(item);
   const prepared = item.prepared;
-  const detected = prepared ? {
-    device: imageDevice(prepared.width, prepared.height),
-    brightness: prepared.detected_brightness
-  } : undefined;
+  const detected = prepared
+    ? {
+        device: imageDevice(prepared.width, prepared.height),
+        brightness: prepared.detected_brightness
+      }
+    : undefined;
   const canonicalDraft = detected
     ? draftWithDetectedClassification(item.metadata, detected)
     : item.metadata;
-  const draft = existing?.serverDraftPending
-    ? existing.draft
-    : canonicalDraft;
+  const draft = existing?.serverDraftPending ? existing.draft : canonicalDraft;
   const semanticPending = existing?.serverDraftPending === true;
-  const serverVersion = semanticPending && existing?.serverVersion !== undefined
-    ? Math.max(item.version, existing.serverVersion)
-    : item.version;
-  const serverSemanticRevision = semanticPending
-    && existing?.serverSemanticRevision !== undefined
-    ? Math.max(item.last_semantic_revision, existing.serverSemanticRevision)
-    : item.last_semantic_revision;
+  const serverVersion =
+    semanticPending && existing?.serverVersion !== undefined
+      ? Math.max(item.version, existing.serverVersion)
+      : item.version;
+  const serverSemanticRevision =
+    semanticPending && existing?.serverSemanticRevision !== undefined
+      ? Math.max(item.last_semantic_revision, existing.serverSemanticRevision)
+      : item.last_semantic_revision;
   const duplicateCount = semanticPending
-    ? existing.duplicateCount ?? prepared?.duplicate_count ?? 0
-    : prepared?.duplicate_count ?? 0;
+    ? (existing.duplicateCount ?? prepared?.duplicate_count ?? 0)
+    : (prepared?.duplicate_count ?? 0);
   const duplicateDecision: IngestionJob["duplicateDecision"] =
     semanticPending && existing
       ? existing.duplicateDecision
       : item.duplicate_decision === "confirmed"
-      ? "confirmed"
-      : item.duplicate_decision === "upload"
-        ? "upload"
-        : duplicateCount > 0 ? "undecided" : "upload";
+        ? "confirmed"
+        : item.duplicate_decision === "upload"
+          ? "upload"
+          : duplicateCount > 0
+            ? "undecided"
+            : "upload";
   const failed = item.status === "failed";
-  const commitIntent = item.commit ? {
-    attemptId: item.commit.commit_request_id,
-    md5: item.commit.expected_md5,
-    metadata: item.commit.metadata
-  } : undefined;
-  const handoffPending = existing?.serverHandoffPending === true && (
-    existing.serverHandoffRevision === undefined
-    || serverRevision === undefined
-    || serverRevision === null
-    || serverRevision < existing.serverHandoffRevision
-  );
-  const manifestSource = item.source_type === "weibo"
-    || item.source_type === "jsonl"
-    ? item.source_type
+  const commitIntent = item.commit
+    ? {
+        attemptId: item.commit.commit_request_id,
+        md5: item.commit.expected_md5,
+        metadata: item.commit.metadata
+      }
     : undefined;
+  const handoffPending =
+    existing?.serverHandoffPending === true &&
+    (existing.serverHandoffRevision === undefined ||
+      serverRevision === undefined ||
+      serverRevision === null ||
+      serverRevision < existing.serverHandoffRevision);
+  const manifestSource =
+    item.source_type === "weibo" || item.source_type === "jsonl" ? item.source_type : undefined;
   return {
     id: existing?.id ?? `server:${pairKey}`,
     attemptKey: existing?.attemptKey ?? pairKey,
     batchKey: existing?.batchKey ?? pairKey,
     kind: item.queue,
     status: activeIngestionClientStatus(item),
-    message: item.status === "ready"
-      ? semanticPending && existing
-        ? existing.message
-        : duplicateDecision === "confirmed"
-        ? "已确认提交副本"
-        : ingestionDuplicateMessage(duplicateCount)
-      : item.error?.message || item.message,
+    message:
+      item.status === "ready"
+        ? semanticPending && existing
+          ? existing.message
+          : duplicateDecision === "confirmed"
+            ? "已确认提交副本"
+            : ingestionDuplicateMessage(duplicateCount)
+        : item.error?.message || item.message,
     preview: prepared?.preview_url ?? existing?.preview ?? "",
     previewFull: prepared?.preview_full_url ?? existing?.previewFull,
     objectUrl: prepared ? undefined : existing?.objectUrl,
@@ -197,10 +198,12 @@ function activeIngestionJob(
     duplicates: existing?.duplicates ?? [],
     duplicateCount,
     duplicateDecision,
-    ...(detected ? {
-      detectedClassification: detected,
-      classificationOverride: classificationOverrideFor(draft, detected)
-    } : {}),
+    ...(detected
+      ? {
+          detectedClassification: detected,
+          classificationOverride: classificationOverrideFor(draft, detected)
+        }
+      : {}),
     file: existing?.file,
     fileFingerprint: existing?.fileFingerprint,
     md5: prepared?.md5 ?? existing?.md5,
@@ -216,17 +219,13 @@ function activeIngestionJob(
     serverProgressSeq: item.progress_seq,
     serverSemanticRevision,
     serverHandoffPending: handoffPending,
-    serverHandoffRevision: handoffPending
-      ? existing?.serverHandoffRevision
-      : undefined,
+    serverHandoffRevision: handoffPending ? existing?.serverHandoffRevision : undefined,
     // Exact-pair SSE/status projection can precede the bounded snapshot that
     // adopts this accepted item into its global summary. Keep both temporary
     // display and count leases until that snapshot revision actually covers
     // the handoff; otherwise every early active event briefly removes one
     // card/count before the new summary arrives.
-    serverHandoffDisplayPage: handoffPending
-      ? existing?.serverHandoffDisplayPage
-      : undefined,
+    serverHandoffDisplayPage: handoffPending ? existing?.serverHandoffDisplayPage : undefined,
     serverHandoffProvisionalTotal: handoffPending
       ? existing?.serverHandoffProvisionalTotal
       : undefined,
@@ -237,20 +236,17 @@ function activeIngestionJob(
     manifestProvidedCommonFields: existing?.manifestProvidedCommonFields,
     manifestLine: item.manifest_line ?? existing?.manifestLine,
     batchPosition: item.batch_position ?? existing?.batchPosition,
-    browserDisplayReleased: existing
-      ? existing.browserDisplayReleased
-      : true,
+    browserDisplayReleased: existing ? existing.browserDisplayReleased : true,
     originalSize: prepared?.original_size ?? existing?.originalSize,
     finalSize: prepared?.size ?? existing?.finalSize,
     quality: prepared ? prepared.quality : existing?.quality,
     transcoded: prepared?.transcoded ?? existing?.transcoded,
     storageSlug: item.storage_slug,
-    failureStage: failed ? item.commit ? "commit" : "prepare" : undefined,
+    failureStage: failed ? (item.commit ? "commit" : "prepare") : undefined,
     commitFailureCheckpoint: failed && item.commit ? "committing" : undefined,
     commitIntent,
-    resultState: item.status === "committing" || item.status === "resolving"
-      ? "pending"
-      : undefined,
+    resultState:
+      item.status === "committing" || item.status === "resolving" ? "pending" : undefined,
     resultError: undefined,
     serverStatus: item.status,
     serverPhase: item.phase,
@@ -268,8 +264,8 @@ function completedIngestionJob(
 ): IngestionJob {
   const pairKey = serverIngestionPairKey(item);
   const completed = item.completed_item;
-  const retainsExistingClock = existing?.serverVersion !== undefined
-    && existing.serverVersion >= item.version;
+  const retainsExistingClock =
+    existing?.serverVersion !== undefined && existing.serverVersion >= item.version;
   return {
     id: existing?.id ?? `server:${pairKey}`,
     attemptKey: existing?.attemptKey ?? pairKey,
@@ -288,9 +284,7 @@ function completedIngestionJob(
     manifestProvidedCommonFields: existing?.manifestProvidedCommonFields,
     manifestLine: existing?.manifestLine,
     batchPosition: existing?.batchPosition,
-    browserDisplayReleased: existing
-      ? existing.browserDisplayReleased
-      : true,
+    browserDisplayReleased: existing ? existing.browserDisplayReleased : true,
     ...completedIngestionJobPatch(completed, item.display),
     duplicates: [],
     duplicateDecision: "upload",
@@ -298,9 +292,7 @@ function completedIngestionJob(
     sessionId: item.session_id,
     imageId: item.image_id,
     serverVersion: retainsExistingClock ? existing.serverVersion : item.version,
-    serverProgressSeq: retainsExistingClock
-      ? existing.serverProgressSeq
-      : item.progress_seq,
+    serverProgressSeq: retainsExistingClock ? existing.serverProgressSeq : item.progress_seq,
     serverSemanticRevision: Math.max(
       existing?.serverSemanticRevision ?? 0,
       item.last_semantic_revision
@@ -318,10 +310,10 @@ export function completedIngestionJobPatch(
   completed: CompletedIngestionImageDto,
   display?: CompletedIngestionDisplayDto
 ) {
-  const manifestSource = display?.source_type === "weibo"
-    || display?.source_type === "jsonl"
-    ? display.source_type
-    : undefined;
+  const manifestSource =
+    display?.source_type === "weibo" || display?.source_type === "jsonl"
+      ? display.source_type
+      : undefined;
   return {
     status: "done",
     message: "已完成",
@@ -341,20 +333,18 @@ export function completedIngestionJobPatch(
     },
     width: completed.width,
     height: completed.height,
-    ...(display ? {
-      originalWidth: display.original_width,
-      originalHeight: display.original_height,
-      originalSize: display.original_size,
-      quality: display.quality,
-      transcoded: display.transcoded,
-      ...(manifestSource ? { manifestSource } : {}),
-      ...(display.manifest_line === undefined
-        ? {}
-        : { manifestLine: display.manifest_line }),
-      ...(display.batch_position === undefined
-        ? {}
-        : { batchPosition: display.batch_position })
-    } : {}),
+    ...(display
+      ? {
+          originalWidth: display.original_width,
+          originalHeight: display.original_height,
+          originalSize: display.original_size,
+          quality: display.quality,
+          transcoded: display.transcoded,
+          ...(manifestSource ? { manifestSource } : {}),
+          ...(display.manifest_line === undefined ? {} : { manifestLine: display.manifest_line }),
+          ...(display.batch_position === undefined ? {} : { batchPosition: display.batch_position })
+        }
+      : {}),
     finalSize: completed.image_size,
     md5: completed.md5,
     imageTime: completed.image_time,
@@ -384,35 +374,36 @@ export function completedIngestionOwnerPatch(
   }>
 ): Partial<IngestionJob> | null {
   if (
-    !existing.sessionId
-    || !existing.imageId
-    || existing.sessionId !== completed.pair.session_id
-    || existing.imageId.toLowerCase() !== completed.pair.image_id.toLowerCase()
-  ) return null;
-  const retainsExistingClock = completed.serverVersion !== undefined
-    && existing.serverVersion !== undefined
-    && existing.serverVersion >= completed.serverVersion;
+    !existing.sessionId ||
+    !existing.imageId ||
+    existing.sessionId !== completed.pair.session_id ||
+    existing.imageId.toLowerCase() !== completed.pair.image_id.toLowerCase()
+  )
+    return null;
+  const retainsExistingClock =
+    completed.serverVersion !== undefined &&
+    existing.serverVersion !== undefined &&
+    existing.serverVersion >= completed.serverVersion;
   return {
     serverAttemptKey: existing.attemptKey,
     serverSessionId: existing.sessionId,
     serverImageId: existing.imageId,
     originalSize: existing.originalSize ?? existing.file?.size,
     ...completedIngestionJobPatch(completed.item, completed.display),
-    ...(completed.serverVersion === undefined ? {} : {
-      serverVersion: Math.max(
-        existing.serverVersion ?? 0,
-        completed.serverVersion
-      ),
-      serverProgressSeq: retainsExistingClock
-        ? existing.serverProgressSeq
-        : 0
-    }),
-    ...(completed.serverSemanticRevision === undefined ? {} : {
-      serverSemanticRevision: Math.max(
-        existing.serverSemanticRevision ?? 0,
-        completed.serverSemanticRevision
-      )
-    })
+    ...(completed.serverVersion === undefined
+      ? {}
+      : {
+          serverVersion: Math.max(existing.serverVersion ?? 0, completed.serverVersion),
+          serverProgressSeq: retainsExistingClock ? existing.serverProgressSeq : 0
+        }),
+    ...(completed.serverSemanticRevision === undefined
+      ? {}
+      : {
+          serverSemanticRevision: Math.max(
+            existing.serverSemanticRevision ?? 0,
+            completed.serverSemanticRevision
+          )
+        })
   };
 }
 
@@ -421,22 +412,21 @@ export function completedIngestionReceiptOwnerPatch(
   completed: IngestionQueueTerminalEventItemDto & { status: "completed" }
 ): Partial<IngestionJob> | null {
   if (
-    !existing.sessionId
-    || !existing.imageId
-    || existing.sessionId !== completed.session_id
-    || existing.imageId.toLowerCase() !== completed.image_id.toLowerCase()
-  ) return null;
-  const retainsExistingClock = existing.serverVersion !== undefined
-    && existing.serverVersion >= completed.version;
+    !existing.sessionId ||
+    !existing.imageId ||
+    existing.sessionId !== completed.session_id ||
+    existing.imageId.toLowerCase() !== completed.image_id.toLowerCase()
+  )
+    return null;
+  const retainsExistingClock =
+    existing.serverVersion !== undefined && existing.serverVersion >= completed.version;
   return {
     serverAttemptKey: existing.attemptKey,
     serverSessionId: existing.sessionId,
     serverImageId: existing.imageId,
     status: "done",
     message: "已完成",
-    resultState: existing.resultState === "hydrated"
-      ? "hydrated"
-      : "recovering",
+    resultState: existing.resultState === "hydrated" ? "hydrated" : "recovering",
     resultError: undefined,
     failureStage: undefined,
     commitFailureCheckpoint: undefined,
@@ -445,15 +435,12 @@ export function completedIngestionReceiptOwnerPatch(
     serverError: "",
     serverProgress: undefined,
     serverVersion: Math.max(existing.serverVersion ?? 0, completed.version),
-    serverProgressSeq: retainsExistingClock
-      ? existing.serverProgressSeq
-      : 0,
+    serverProgressSeq: retainsExistingClock ? existing.serverProgressSeq : 0,
     serverSemanticRevision: Math.max(
       existing.serverSemanticRevision ?? 0,
       completed.last_semantic_revision
     ),
-    serverAcceptedOrder: existing.serverAcceptedOrder
-      ?? completed.accepted_order,
+    serverAcceptedOrder: existing.serverAcceptedOrder ?? completed.accepted_order,
     serverDraftPending: false
   };
 }
@@ -471,17 +458,13 @@ export function ingestionJobFromServerItem(
     return completedIngestionJob(item, existing);
   }
   if (
-    existing?.serverVersion !== undefined
-    && (
-      item.version < existing.serverVersion
-      || item.version === existing.serverVersion
-        && item.progress_seq < (existing.serverProgressSeq ?? 0)
-    )
-  ) return existing;
-  if (
-    existing?.status === "done"
-    && existing.serverStatus === "completed"
-  ) return existing;
+    existing?.serverVersion !== undefined &&
+    (item.version < existing.serverVersion ||
+      (item.version === existing.serverVersion &&
+        item.progress_seq < (existing.serverProgressSeq ?? 0)))
+  )
+    return existing;
+  if (existing?.status === "done" && existing.serverStatus === "completed") return existing;
   return activeIngestionJob(item, existing, serverRevision);
 }
 
@@ -512,9 +495,5 @@ export function ingestionJobFromKnownCompletedStatus(
 ) {
   return status.redis_status !== "missing"
     ? null
-    : ingestionJobFromKnownCompletedResult(
-        existing,
-        status.completed_item,
-        status.display
-      );
+    : ingestionJobFromKnownCompletedResult(existing, status.completed_item, status.display);
 }

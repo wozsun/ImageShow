@@ -16,10 +16,13 @@ function bind(params: unknown[], value: unknown) {
 }
 
 function filterClause(plan: ImageFilterPlan) {
-  const clause = buildImageFilterSql({
-    status: "ready",
-    plan
-  }, { alias: "m" });
+  const clause = buildImageFilterSql(
+    {
+      status: "ready",
+      plan
+    },
+    { alias: "m" }
+  );
   return { params: clause.params, sql: clause.where.join(" AND ") };
 }
 
@@ -35,9 +38,7 @@ function uuidV7Milliseconds(id: string) {
 function randomPivot(minId: string, maxId: string) {
   const minimum = uuidV7Milliseconds(minId);
   const maximum = uuidV7Milliseconds(maxId);
-  const timestamp = minimum + Math.floor(
-    Math.random() * (Math.max(0, maximum - minimum) + 1)
-  );
+  const timestamp = minimum + Math.floor(Math.random() * (Math.max(0, maximum - minimum) + 1));
   return randomUuidV7At(new Date(timestamp));
 }
 
@@ -62,15 +63,17 @@ async function readCandidates(
   const clause = filterClause(plan);
   const pivotParameter = bind(clause.params, pivot);
   const limitParameter = bind(clause.params, limit);
-  const rows = (await reader.query(
-    `SELECT ${readyImageSourceColumns}
+  const rows = (
+    await reader.query(
+      `SELECT ${readyImageSourceColumns}
        FROM metadata m
       WHERE ${clause.sql}
         AND m.id ${comparison} ${pivotParameter}::uuid
       ORDER BY m.id ASC
       LIMIT ${limitParameter}`,
-    clause.params
-  )).rows as ReadyImageSourceRow[];
+      clause.params
+    )
+  ).rows as ReadyImageSourceRow[];
   signal?.throwIfAborted();
   return rows.map(readyImageCacheItemFromRow);
 }
@@ -88,11 +91,12 @@ export async function sampleReadyImagesFromPostgres(
     return selectSeededImage(plan, seededStart, reader, signal);
   }
   const clause = filterClause(plan);
-  const bounds = (await reader.query<{
-    min_id: string | null;
-    max_id: string | null;
-  }>(
-    `SELECT lower_bound.id::text AS min_id,
+  const bounds = (
+    await reader.query<{
+      min_id: string | null;
+      max_id: string | null;
+    }>(
+      `SELECT lower_bound.id::text AS min_id,
             upper_bound.id::text AS max_id
        FROM LATERAL (
          SELECT m.id
@@ -108,41 +112,23 @@ export async function sampleReadyImagesFromPostgres(
           ORDER BY m.id DESC
           LIMIT 1
        ) upper_bound`,
-    clause.params
-  )).rows[0];
+      clause.params
+    )
+  ).rows[0];
   signal?.throwIfAborted();
   if (!bounds?.min_id || !bounds.max_id) return [];
 
   const pivot = randomPivot(bounds.min_id, bounds.max_id);
   const candidateLimit = Math.min(
     appConfig.publicPgFallback.maximumRandomCandidates,
-    Math.max(
-      appConfig.publicPgFallback.minimumRandomCandidates,
-      limit * 3,
-      limit + recent.size
-    )
+    Math.max(appConfig.publicPgFallback.minimumRandomCandidates, limit * 3, limit + recent.size)
   );
-  const forward = await readCandidates(
-    plan,
-    pivot,
-    ">=",
-    candidateLimit,
-    reader,
-    signal
-  );
-  const wrapped = forward.length < candidateLimit
-    ? await readCandidates(
-        plan,
-        pivot,
-        "<",
-        candidateLimit - forward.length,
-        reader,
-        signal
-      )
-    : [];
-  const unique = new Map(
-    [...forward, ...wrapped].map((item) => [item.id, item])
-  );
+  const forward = await readCandidates(plan, pivot, ">=", candidateLimit, reader, signal);
+  const wrapped =
+    forward.length < candidateLimit
+      ? await readCandidates(plan, pivot, "<", candidateLimit - forward.length, reader, signal)
+      : [];
+  const unique = new Map([...forward, ...wrapped].map((item) => [item.id, item]));
   const randomized = shuffle([...unique.values()]);
   const fresh = randomized.filter((item) => !recent.has(item.id));
   const repeated = randomized.filter((item) => recent.has(item.id));
@@ -158,16 +144,21 @@ async function selectSeededImage(
 ) {
   const clause = filterClause(plan);
   const pivot = bind(clause.params, start.toString(16).padStart(12, "0"));
-  const phases = [0, 1].map((phase) => `(
+  const phases = [0, 1]
+    .map(
+      (phase) => `(
     SELECT m.id, right(m.id::text, 12) AS suffix, ${phase} AS phase
       FROM metadata m
      WHERE ${clause.sql}
        AND right(m.id::text, 12) ${phase === 0 ? ">=" : "<"} ${pivot}
      ORDER BY right(m.id::text, 12), m.id
      LIMIT 1
-  )`).join(" UNION ALL ");
-  const rows = (await reader.query(
-    `WITH selected AS (
+  )`
+    )
+    .join(" UNION ALL ");
+  const rows = (
+    await reader.query(
+      `WITH selected AS (
        SELECT id FROM (${phases}) candidates
         ORDER BY phase, suffix, id
         LIMIT 1
@@ -175,8 +166,9 @@ async function selectSeededImage(
      SELECT ${readyImageSourceColumns}
        FROM metadata m
        JOIN selected ON selected.id=m.id`,
-    clause.params
-  )).rows as ReadyImageSourceRow[];
+      clause.params
+    )
+  ).rows as ReadyImageSourceRow[];
   signal?.throwIfAborted();
   return rows.map(readyImageCacheItemFromRow);
 }

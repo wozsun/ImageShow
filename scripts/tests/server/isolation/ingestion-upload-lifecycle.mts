@@ -1,8 +1,16 @@
-
-import type { IngestionSessionSnapshot, StoredIngestionSession, UploadIntentSnapshot } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
+import type {
+  IngestionSessionSnapshot,
+  StoredIngestionSession,
+  UploadIntentSnapshot
+} from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
 import type { IngestionTokenEnvelope } from "../../../../packages/server/src/images/ingestion/sessions/token-service.ts";
 import { requiredValue } from "./ingestion-scenario-fixture.mts";
-import { activeResult, activeSession, completedResult, discardedResult } from "./ingestion-scenario-fixture.mts";
+import {
+  activeResult,
+  activeSession,
+  completedResult,
+  discardedResult
+} from "./ingestion-scenario-fixture.mts";
 import { repositoryWithOverrides } from "./ingestion-scenario-fixture.mts";
 import assert from "node:assert/strict";
 import sharp from "sharp";
@@ -13,60 +21,62 @@ import { runIntegrationScenario } from "./integration-runtime.mts";
 import { interceptSqlQueries } from "./database-faults.mts";
 
 await runIntegrationScenario(async (runtime) => {
-const databasePools = runtime.databasePools;
-const database = {
-  ...databasePools,
-  ...await import("../../../../packages/server/src/core/database/advisory-locks.ts")
-};
+  const databasePools = runtime.databasePools;
+  const database = {
+    ...databasePools,
+    ...(await import("../../../../packages/server/src/core/database/advisory-locks.ts"))
+  };
 
-const sharedAppConfig = await import("@imageshow/shared");
-const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
-const runtimeAvailability = await import("../../../../packages/server/src/core/runtime-availability.ts");
-const ingestionSessionRepository = await import(
-  "../../../../packages/server/src/images/ingestion/repository.ts"
-);
-const ingestionSessionView = await import("../../../../packages/server/src/images/ingestion/queue/session-view.ts");
-const ingestionSessionTransitions = await import(
-  "../../../../packages/server/src/images/ingestion/sessions/transitions.ts"
-);
-const ingestionSessionCodec = await import("../../../../packages/server/src/images/ingestion/sessions/codec.ts");
-const ingestionRawUpload = await import("../../../../packages/server/src/images/ingestion/raw/upload.ts");
-const ingestionRawFiles = {
-  ...await import("../../../../packages/server/src/images/ingestion/raw/paths.ts"),
-  ...await import("../../../../packages/server/src/images/ingestion/raw/files.ts"),
-  ...await import("../../../../packages/server/src/images/ingestion/raw/lease-registry.ts"),
-  ...await import("../../../../packages/server/src/images/ingestion/raw/orphan-scanner.ts")
-};
-const ingestionCommitCompletion = await import(
-  "../../../../packages/server/src/images/ingestion/commit/completion.ts"
-);
-const ingestionTokenService = await import("../../../../packages/server/src/images/ingestion/sessions/token-service.ts");
-const ingestionActionScope = await import("../../../../packages/server/src/images/ingestion/queue/action-scope.ts");
-const ingestionQueueSnapshot = await import("../../../../packages/server/src/images/ingestion/queue/snapshot.ts");
-const ingestionSessionIdentity = await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
-const ingestionSessionProjection = await import(
-  "../../../../packages/server/src/images/ingestion/sessions/projection.ts"
-);
-const ingestionSessionKeys = await import("../../../../packages/server/src/images/ingestion/sessions/keys.ts");
-const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
-const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
-const { ingestionRepository, productionIngestionRepository, serviceNow, displayOrderKey } = await createIngestionScenarioFixture(runtime);
+  const sharedAppConfig = await import("@imageshow/shared");
+  const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
+  const runtimeAvailability =
+    await import("../../../../packages/server/src/core/runtime-availability.ts");
+  const ingestionSessionRepository =
+    await import("../../../../packages/server/src/images/ingestion/repository.ts");
+  const ingestionSessionView =
+    await import("../../../../packages/server/src/images/ingestion/queue/session-view.ts");
+  const ingestionSessionTransitions =
+    await import("../../../../packages/server/src/images/ingestion/sessions/transitions.ts");
+  const ingestionSessionCodec =
+    await import("../../../../packages/server/src/images/ingestion/sessions/codec.ts");
+  const ingestionRawUpload =
+    await import("../../../../packages/server/src/images/ingestion/raw/upload.ts");
+  const ingestionRawFiles = {
+    ...(await import("../../../../packages/server/src/images/ingestion/raw/paths.ts")),
+    ...(await import("../../../../packages/server/src/images/ingestion/raw/files.ts")),
+    ...(await import("../../../../packages/server/src/images/ingestion/raw/lease-registry.ts")),
+    ...(await import("../../../../packages/server/src/images/ingestion/raw/orphan-scanner.ts"))
+  };
+  const ingestionCommitCompletion =
+    await import("../../../../packages/server/src/images/ingestion/commit/completion.ts");
+  const ingestionTokenService =
+    await import("../../../../packages/server/src/images/ingestion/sessions/token-service.ts");
+  const ingestionActionScope =
+    await import("../../../../packages/server/src/images/ingestion/queue/action-scope.ts");
+  const ingestionQueueSnapshot =
+    await import("../../../../packages/server/src/images/ingestion/queue/snapshot.ts");
+  const ingestionSessionIdentity =
+    await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
+  const ingestionSessionProjection =
+    await import("../../../../packages/server/src/images/ingestion/sessions/projection.ts");
+  const ingestionSessionKeys =
+    await import("../../../../packages/server/src/images/ingestion/sessions/keys.ts");
+  const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
+  const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
+  const { ingestionRepository, productionIngestionRepository, serviceNow, displayOrderKey } =
+    await createIngestionScenarioFixture(runtime);
   const ingestionOwner = "current-domain-" + randomUUID();
   const ingestionSessionId = ingestionSessionIdentity.createIngestionSessionId(
     ingestionOwner,
     "upload",
     "stable-idempotency-key"
   );
-  const ingestionResolvedTime = imageTime.parseImageTime(
-    "2026-08-23T01:02:03.456Z"
-  );
+  const ingestionResolvedTime = imageTime.parseImageTime("2026-08-23T01:02:03.456Z");
   const ingestionImageId = imageTime.createImageId(ingestionResolvedTime.date, 37);
-  const intentTtlMs = sharedAppConfig.appConfig.ingestionRuntime
-    .uploadIntentTtlSeconds * 1000;
-  const intentClaimStaleMs = sharedAppConfig.appConfig.ingestionRuntime
-    .uploadClaimStaleSeconds * 1000;
-  const uploadTtlMs = sharedAppConfig.appConfig.ingestionRuntime
-    .uploadSessionIdleTtlSeconds * 1000;
+  const intentTtlMs = sharedAppConfig.appConfig.ingestionRuntime.uploadIntentTtlSeconds * 1000;
+  const intentClaimStaleMs =
+    sharedAppConfig.appConfig.ingestionRuntime.uploadClaimStaleSeconds * 1000;
+  const uploadTtlMs = sharedAppConfig.appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds * 1000;
   const ingestionMetadata = {
     device: "auto" as const,
     brightness: "auto" as const,
@@ -113,16 +123,14 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     ...ingestionIntent,
     owner: malformedIntentOwner,
     session_id: malformedIntentSessionId,
-    display_order_key: displayOrderKey(
-      malformedIntentSessionId,
-      37,
-      serviceNow
-    )
+    display_order_key: displayOrderKey(malformedIntentSessionId, 37, serviceNow)
   };
-  await assert.rejects(ingestionRepository.createUploadIntent({
-    ...malformedIntentBase,
-    created_at: Number.NaN
-  }));
+  await assert.rejects(
+    ingestionRepository.createUploadIntent({
+      ...malformedIntentBase,
+      created_at: Number.NaN
+    })
+  );
   const malformedIntentTemplates = [
     {
       ...malformedIntentBase,
@@ -142,23 +150,24 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     }
   ];
   for (const malformed of malformedIntentTemplates) {
-    assert.throws(() => ingestionSessionCodec.parseUploadIntent(
-      JSON.stringify({
-        ...malformed,
-        expires_at: ingestionIntent.created_at + intentTtlMs
-      })
-    ));
-    await assert.rejects(ingestionRepository.createUploadIntent(malformed as unknown as UploadIntentSnapshot));
+    assert.throws(() =>
+      ingestionSessionCodec.parseUploadIntent(
+        JSON.stringify({
+          ...malformed,
+          expires_at: ingestionIntent.created_at + intentTtlMs
+        })
+      )
+    );
+    await assert.rejects(
+      ingestionRepository.createUploadIntent(malformed as unknown as UploadIntentSnapshot)
+    );
   }
   assert.equal(
     await redisClient.redis.type(malformedIntentKey),
     "none",
     "invalid 或开放 schema 的 intent 不得留下 Redis Hash"
   );
-  assert.equal(
-    (await ingestionRepository.createUploadIntent(ingestionIntent)).kind,
-    "intent"
-  );
+  assert.equal((await ingestionRepository.createUploadIntent(ingestionIntent)).kind, "intent");
   const initialIntent = await ingestionRepository.readUploadIntent(
     ingestionOwner,
     ingestionSessionId
@@ -179,20 +188,25 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     const operationalBeforeIntentHashFailure = {
       ...runtimeAvailability.getRedisOperationalState()
     };
-    await assert.rejects(productionIngestionRepository.readUploadIntent(
-      ingestionOwner,
-      ingestionSessionId
-    ), (error: unknown) => error instanceof Error && "code" in error && error.code === "upload_intent_state_conflict");
-    await assert.rejects(productionIngestionRepository.claimUploadIntent(
-      ingestionOwner,
-      {
-        session_id: ingestionSessionId,
-        candidate_image_id: ingestionImageId,
-        request_hash: ingestionIntent.request_hash
-      },
-      coreUuid.randomUuidV7(),
-      ingestionIntent.created_at + 1
-    ), (error: unknown) => error instanceof Error && "code" in error && error.code === "upload_intent_state_conflict");
+    await assert.rejects(
+      productionIngestionRepository.readUploadIntent(ingestionOwner, ingestionSessionId),
+      (error: unknown) =>
+        error instanceof Error && "code" in error && error.code === "upload_intent_state_conflict"
+    );
+    await assert.rejects(
+      productionIngestionRepository.claimUploadIntent(
+        ingestionOwner,
+        {
+          session_id: ingestionSessionId,
+          candidate_image_id: ingestionImageId,
+          request_hash: ingestionIntent.request_hash
+        },
+        coreUuid.randomUuidV7(),
+        ingestionIntent.created_at + 1
+      ),
+      (error: unknown) =>
+        error instanceof Error && "code" in error && error.code === "upload_intent_state_conflict"
+    );
     assert.deepEqual(
       await redisClient.redis.hgetall(liveIntentKey),
       malformedIntentHash,
@@ -212,21 +226,29 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   const intentOperationalBeforeSchemaFailure = {
     ...runtimeAvailability.getRedisOperationalState()
   };
-  await redisClient.redis.hset(liveIntentKey, "snapshot", JSON.stringify({
-    ...initialIntent,
-    raw_path: "forbidden/path"
-  }));
+  await redisClient.redis.hset(
+    liveIntentKey,
+    "snapshot",
+    JSON.stringify({
+      ...initialIntent,
+      raw_path: "forbidden/path"
+    })
+  );
   const openSchemaIntentState = await redisClient.redis.hgetall(liveIntentKey);
-  await assert.rejects(productionIngestionRepository.claimUploadIntent(
-    ingestionOwner,
-    {
-      session_id: ingestionSessionId,
-      candidate_image_id: ingestionImageId,
-      request_hash: ingestionIntent.request_hash
-    },
-    coreUuid.randomUuidV7(),
-    ingestionIntent.created_at + 1
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "upload_intent_state_conflict");
+  await assert.rejects(
+    productionIngestionRepository.claimUploadIntent(
+      ingestionOwner,
+      {
+        session_id: ingestionSessionId,
+        candidate_image_id: ingestionImageId,
+        request_hash: ingestionIntent.request_hash
+      },
+      coreUuid.randomUuidV7(),
+      ingestionIntent.created_at + 1
+    ),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "upload_intent_state_conflict"
+  );
   assert.deepEqual(
     await redisClient.redis.hgetall(liveIntentKey),
     openSchemaIntentState,
@@ -237,50 +259,41 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     intentOperationalBeforeSchemaFailure,
     "intent 领域 schema 错误不得降级全局 Redis operational state"
   );
+  await redisClient.redis.hset(liveIntentKey, "snapshot", JSON.stringify(initialIntent));
   await redisClient.redis.hset(
     liveIntentKey,
     "snapshot",
-    JSON.stringify(initialIntent)
+    JSON.stringify({
+      ...initialIntent,
+      metadata: {
+        ...initialIntent.metadata,
+        tags: { unexpected: "value" }
+      }
+    })
   );
-  await redisClient.redis.hset(liveIntentKey, "snapshot", JSON.stringify({
-    ...initialIntent,
-    metadata: {
-      ...initialIntent.metadata,
-      tags: { unexpected: "value" }
-    }
-  }));
-  const malformedTagsIntentState = await redisClient.redis.hgetall(
-    liveIntentKey
+  const malformedTagsIntentState = await redisClient.redis.hgetall(liveIntentKey);
+  await assert.rejects(
+    ingestionRepository.claimUploadIntent(
+      ingestionOwner,
+      {
+        session_id: ingestionSessionId,
+        candidate_image_id: ingestionImageId,
+        request_hash: ingestionIntent.request_hash
+      },
+      coreUuid.randomUuidV7(),
+      ingestionIntent.created_at + 1
+    )
   );
-  await assert.rejects(ingestionRepository.claimUploadIntent(
-    ingestionOwner,
-    {
-      session_id: ingestionSessionId,
-      candidate_image_id: ingestionImageId,
-      request_hash: ingestionIntent.request_hash
-    },
-    coreUuid.randomUuidV7(),
-    ingestionIntent.created_at + 1
-  ));
   assert.deepEqual(
     await redisClient.redis.hgetall(liveIntentKey),
     malformedTagsIntentState,
     "非数组 tags 的 intent 必须 fail closed 且不得被 claim 重写"
   );
-  await redisClient.redis.hset(
-    liveIntentKey,
-    "snapshot",
-    JSON.stringify(initialIntent)
-  );
-  const regeneratedIntentTime = imageTime.parseImageTime(
-    "2026-08-23T01:02:06.456Z"
-  );
+  await redisClient.redis.hset(liveIntentKey, "snapshot", JSON.stringify(initialIntent));
+  const regeneratedIntentTime = imageTime.parseImageTime("2026-08-23T01:02:06.456Z");
   const resignedIntent = await ingestionRepository.createUploadIntent({
     ...ingestionIntent,
-    candidate_image_id: imageTime.createImageId(
-      regeneratedIntentTime.date,
-      41
-    ),
+    candidate_image_id: imageTime.createImageId(regeneratedIntentTime.date, 41),
     resolved_image_time: regeneratedIntentTime.iso,
     created_at: ingestionIntent.created_at + 10_000
   });
@@ -292,26 +305,34 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     initialIntent,
     "读取或重签不得延长上传意图的逻辑有效期"
   );
-  await assert.rejects(ingestionRepository.createUploadIntent({
-    ...ingestionIntent,
-    request_hash: "b".repeat(64),
-    created_at: ingestionIntent.created_at + 20_000
-  }), (error: unknown) => error instanceof Error && "code" in error && error.code === "idempotency_conflict");
+  await assert.rejects(
+    ingestionRepository.createUploadIntent({
+      ...ingestionIntent,
+      request_hash: "b".repeat(64),
+      created_at: ingestionIntent.created_at + 20_000
+    }),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "idempotency_conflict"
+  );
   assert.deepEqual(
     await ingestionRepository.readUploadIntent(ingestionOwner, ingestionSessionId),
     initialIntent,
     "不同 request hash 的 intent 冲突不得改变现有 intent 或 TTL"
   );
-  await assert.rejects(ingestionRepository.claimUploadIntent(
-    ingestionOwner,
-    {
-      session_id: ingestionSessionId,
-      candidate_image_id: ingestionImageId,
-      request_hash: ingestionIntent.request_hash
-    },
-    "",
-    initialIntent.created_at + 1
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_execution_fenced");
+  await assert.rejects(
+    ingestionRepository.claimUploadIntent(
+      ingestionOwner,
+      {
+        session_id: ingestionSessionId,
+        candidate_image_id: ingestionImageId,
+        request_hash: ingestionIntent.request_hash
+      },
+      "",
+      initialIntent.created_at + 1
+    ),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "ingestion_execution_fenced"
+  );
   assert.deepEqual(
     await ingestionRepository.readUploadIntent(ingestionOwner, ingestionSessionId),
     initialIntent,
@@ -324,13 +345,8 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "upload",
     "expires-at-boundary"
   );
-  const expiredIntentTime = imageTime.parseImageTime(
-    "2026-08-23T01:02:04.456Z"
-  );
-  const expiredIntentImageId = imageTime.createImageId(
-    expiredIntentTime.date,
-    38
-  );
+  const expiredIntentTime = imageTime.parseImageTime("2026-08-23T01:02:04.456Z");
+  const expiredIntentImageId = imageTime.createImageId(expiredIntentTime.date, 38);
   const expiredIntent = {
     ...ingestionIntent,
     owner: expiredIntentOwner,
@@ -347,20 +363,24 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     created_at: 2_000
   };
   await ingestionRepository.createUploadIntent(expiredIntent);
-  await assert.rejects(ingestionRepository.claimUploadIntent(
-    expiredIntentOwner,
-    {
-      session_id: expiredIntentSessionId,
-      candidate_image_id: expiredIntentImageId,
-      request_hash: expiredIntent.request_hash
-    },
-    coreUuid.randomUuidV7(),
-    expiredIntent.created_at + intentTtlMs
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "upload_intent_expired");
-  assert.equal(await ingestionRepository.readUploadIntent(
-    expiredIntentOwner,
-    expiredIntentSessionId
-  ), null);
+  await assert.rejects(
+    ingestionRepository.claimUploadIntent(
+      expiredIntentOwner,
+      {
+        session_id: expiredIntentSessionId,
+        candidate_image_id: expiredIntentImageId,
+        request_hash: expiredIntent.request_hash
+      },
+      coreUuid.randomUuidV7(),
+      expiredIntent.created_at + intentTtlMs
+    ),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "upload_intent_expired"
+  );
+  assert.equal(
+    await ingestionRepository.readUploadIntent(expiredIntentOwner, expiredIntentSessionId),
+    null
+  );
 
   const ingestionExecutionToken = coreUuid.randomUuidV7();
   const firstIntentClaimedAt = initialIntent.expires_at - 1;
@@ -374,21 +394,22 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     ingestionExecutionToken,
     firstIntentClaimedAt
   );
-  assert.equal(
-    firstClaimedIngestionIntent.expires_at,
-    firstIntentClaimedAt + intentTtlMs
-  );
+  assert.equal(firstClaimedIngestionIntent.expires_at, firstIntentClaimedAt + intentTtlMs);
   const takeoverToken = coreUuid.randomUuidV7();
-  await assert.rejects(ingestionRepository.claimUploadIntent(
-    ingestionOwner,
-    {
-      session_id: ingestionSessionId,
-      candidate_image_id: ingestionImageId,
-      request_hash: ingestionIntent.request_hash
-    },
-    takeoverToken,
-    firstIntentClaimedAt + intentClaimStaleMs - 1
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "upload_in_progress");
+  await assert.rejects(
+    ingestionRepository.claimUploadIntent(
+      ingestionOwner,
+      {
+        session_id: ingestionSessionId,
+        candidate_image_id: ingestionImageId,
+        request_hash: ingestionIntent.request_hash
+      },
+      takeoverToken,
+      firstIntentClaimedAt + intentClaimStaleMs - 1
+    ),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "upload_in_progress"
+  );
   assert.deepEqual(
     await ingestionRepository.readUploadIntent(ingestionOwner, ingestionSessionId),
     firstClaimedIngestionIntent,
@@ -410,26 +431,34 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     ingestionOwner,
     ingestionSessionId
   );
-  await assert.rejects(ingestionRepository.heartbeatUploadIntent(
-    ingestionOwner,
-    {
-      session_id: ingestionSessionId,
-      candidate_image_id: ingestionImageId,
-      request_hash: ingestionIntent.request_hash
-    },
-    ingestionExecutionToken,
-    takeoverAt + 1
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_execution_fenced");
-  await assert.rejects(ingestionRepository.releaseUploadIntent(
-    ingestionOwner,
-    {
-      session_id: ingestionSessionId,
-      candidate_image_id: ingestionImageId,
-      request_hash: ingestionIntent.request_hash
-    },
-    ingestionExecutionToken,
-    takeoverAt + 1
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_execution_fenced");
+  await assert.rejects(
+    ingestionRepository.heartbeatUploadIntent(
+      ingestionOwner,
+      {
+        session_id: ingestionSessionId,
+        candidate_image_id: ingestionImageId,
+        request_hash: ingestionIntent.request_hash
+      },
+      ingestionExecutionToken,
+      takeoverAt + 1
+    ),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "ingestion_execution_fenced"
+  );
+  await assert.rejects(
+    ingestionRepository.releaseUploadIntent(
+      ingestionOwner,
+      {
+        session_id: ingestionSessionId,
+        candidate_image_id: ingestionImageId,
+        request_hash: ingestionIntent.request_hash
+      },
+      ingestionExecutionToken,
+      takeoverAt + 1
+    ),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "ingestion_execution_fenced"
+  );
   assert.deepEqual(
     await ingestionRepository.readUploadIntent(ingestionOwner, ingestionSessionId),
     stateAfterTakeover,
@@ -483,13 +512,10 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     ingestionExecutionToken,
     intentHeartbeatAt
   );
-  assert.equal(
-    heartbeatedIngestionIntent.expires_at,
-    intentHeartbeatAt + intentTtlMs
-  );
+  assert.equal(heartbeatedIngestionIntent.expires_at, intentHeartbeatAt + intentTtlMs);
   assert.deepEqual(heartbeatedIngestionIntent.metadata, ingestionMetadata);
   assert.equal(
-    (requiredValue(await ingestionRepository.readUploadIntent(ingestionOwner, ingestionSessionId)))
+    requiredValue(await ingestionRepository.readUploadIntent(ingestionOwner, ingestionSessionId))
       .expires_at,
     heartbeatedIngestionIntent.expires_at
   );
@@ -536,11 +562,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     ...runtimeAvailability.getRedisOperationalState()
   };
   for (const malformed of takeoverIntentSchemaVariants) {
-    await redisClient.redis.hset(
-      liveIntentKey,
-      "snapshot",
-      JSON.stringify(malformed)
-    );
+    await redisClient.redis.hset(liveIntentKey, "snapshot", JSON.stringify(malformed));
     const stateBeforeMalformedTakeover = {
       intent: await redisClient.redis.hgetall(liveIntentKey),
       canonicalType: await redisClient.redis.type(
@@ -553,24 +575,31 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
         ingestionSessionKeys.ingestionQueueMetadataKey(ingestionOwner, "upload")
       )
     };
-    await assert.rejects(productionIngestionRepository.convertUploadIntent(
-      ingestionCanonical,
-      ingestionExecutionToken,
-      canonicalCreatedAt
-    ), (error: unknown) => error instanceof Error && "code" in error && error.code === "upload_intent_state_conflict");
-    assert.deepEqual({
-      intent: await redisClient.redis.hgetall(liveIntentKey),
-      canonicalType: await redisClient.redis.type(
-        ingestionSessionKeys.ingestionCanonicalKey(ingestionOwner, ingestionSessionId)
+    await assert.rejects(
+      productionIngestionRepository.convertUploadIntent(
+        ingestionCanonical,
+        ingestionExecutionToken,
+        canonicalCreatedAt
       ),
-      ownerType: await redisClient.redis.type(
-        ingestionSessionKeys.ingestionOwnerQueueKey(ingestionOwner, "upload")
-      ),
-      metadataType: await redisClient.redis.type(
-        ingestionSessionKeys.ingestionQueueMetadataKey(ingestionOwner, "upload")
-      )
-    }, stateBeforeMalformedTakeover,
-    "畸形既存 intent 不得在 takeover 时被删除或创建 canonical");
+      (error: unknown) =>
+        error instanceof Error && "code" in error && error.code === "upload_intent_state_conflict"
+    );
+    assert.deepEqual(
+      {
+        intent: await redisClient.redis.hgetall(liveIntentKey),
+        canonicalType: await redisClient.redis.type(
+          ingestionSessionKeys.ingestionCanonicalKey(ingestionOwner, ingestionSessionId)
+        ),
+        ownerType: await redisClient.redis.type(
+          ingestionSessionKeys.ingestionOwnerQueueKey(ingestionOwner, "upload")
+        ),
+        metadataType: await redisClient.redis.type(
+          ingestionSessionKeys.ingestionQueueMetadataKey(ingestionOwner, "upload")
+        )
+      },
+      stateBeforeMalformedTakeover,
+      "畸形既存 intent 不得在 takeover 时被删除或创建 canonical"
+    );
   }
   assert.deepEqual(
     runtimeAvailability.getRedisOperationalState(),
@@ -603,40 +632,35 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     { ...ingestionCanonical, raw_generation: "" }
   ];
   for (const tampered of takeoverTampering) {
-    await assert.rejects(ingestionRepository.convertUploadIntent(
-      tampered,
-      ingestionExecutionToken,
-      canonicalCreatedAt
-    ));
+    await assert.rejects(
+      ingestionRepository.convertUploadIntent(tampered, ingestionExecutionToken, canonicalCreatedAt)
+    );
     assert.equal(ingestionListenerCalls, 0);
     assert.equal(ingestionAsyncListenerCalls, 0);
-    assert.ok(await ingestionRepository.readUploadIntent(
-      ingestionOwner,
-      ingestionSessionId
-    ));
+    assert.ok(await ingestionRepository.readUploadIntent(ingestionOwner, ingestionSessionId));
   }
-  assert.equal((await ingestionRepository.snapshot(
-    ingestionOwner,
-    "upload",
-    0,
-    10
-  )).items.length, 0);
-  const convertedUpload = activeResult(await ingestionRepository.convertUploadIntent(
-    ingestionCanonical,
-    ingestionExecutionToken,
-    canonicalCreatedAt
-  ));
-  assert.equal(convertedUpload.session.version, 1);
   assert.equal(
-    convertedUpload.session.discard_at,
-    canonicalCreatedAt + uploadTtlMs
+    (await ingestionRepository.snapshot(ingestionOwner, "upload", 0, 10)).items.length,
+    0
   );
+  const convertedUpload = activeResult(
+    await ingestionRepository.convertUploadIntent(
+      ingestionCanonical,
+      ingestionExecutionToken,
+      canonicalCreatedAt
+    )
+  );
+  assert.equal(convertedUpload.session.version, 1);
+  assert.equal(convertedUpload.session.discard_at, canonicalCreatedAt + uploadTtlMs);
   assert.equal(ingestionListenerCalls, 1);
   assert.equal(ingestionAsyncListenerCalls, 1);
   const unknownRawBody = await sharp({
     create: { width: 2, height: 2, channels: 3, background: "red" }
-  }).png().toBuffer();
-  const { IngestionSessionService } = await import("../../../../packages/server/src/images/ingestion/session-service.ts");
+  })
+    .png()
+    .toBuffer();
+  const { IngestionSessionService } =
+    await import("../../../../packages/server/src/images/ingestion/session-service.ts");
   const unknownRawCanonicals: IngestionSessionSnapshot[] = [];
   const unknownRawOwner = ingestionOwner + "-unknown-convert";
   const unknownRawRepository = repositoryWithOverrides(ingestionRepository, {
@@ -646,20 +670,38 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
       throw new Error("conversion response lost");
     }
   });
-  const unknownRawService = new IngestionSessionService(unknownRawRepository,
-    new ingestionTokenService.IngestionTokenService({ rootKey: new Uint8Array(32).fill(37) }));
-  const [unknownIntent] = await unknownRawService.createUploadIntents(unknownRawOwner, [{
-    ...ingestionMetadata, idempotency_key: "unknown-convert-result", batch_key: coreUuid.randomUuidV7(),
-    batch_position: 49, expected_size: unknownRawBody.length, max_long_edge: 16
-  }]);
+  const unknownRawService = new IngestionSessionService(
+    unknownRawRepository,
+    new ingestionTokenService.IngestionTokenService({ rootKey: new Uint8Array(32).fill(37) })
+  );
+  const [unknownIntent] = await unknownRawService.createUploadIntents(unknownRawOwner, [
+    {
+      ...ingestionMetadata,
+      idempotency_key: "unknown-convert-result",
+      batch_key: coreUuid.randomUuidV7(),
+      batch_position: 49,
+      expected_size: unknownRawBody.length,
+      max_long_edge: 16
+    }
+  ]);
   assert.ok(unknownIntent.status === "intent");
-  await assert.rejects(ingestionRawUpload.receiveUploadIntentBody(
-    unknownRawService, unknownRawOwner, unknownIntent.credential,
-    new Response(unknownRawBody).body, new AbortController().signal
-  ), /conversion response lost/);
+  await assert.rejects(
+    ingestionRawUpload.receiveUploadIntentBody(
+      unknownRawService,
+      unknownRawOwner,
+      unknownIntent.credential,
+      new Response(unknownRawBody).body,
+      new AbortController().signal
+    ),
+    /conversion response lost/
+  );
   const unknownRawCanonical = requiredValue(unknownRawCanonicals[0]);
-  const unknownRawPair = { session_id: unknownRawCanonical.session_id, image_id: unknownRawCanonical.image_id };
-  const retainedUnknownRawPath = ingestionRawFiles.ingestionRawPath(unknownRawPair,
+  const unknownRawPair = {
+    session_id: unknownRawCanonical.session_id,
+    image_id: unknownRawCanonical.image_id
+  };
+  const retainedUnknownRawPath = ingestionRawFiles.ingestionRawPath(
+    unknownRawPair,
     unknownRawCanonical.raw_generation
   );
   assert.deepEqual(
@@ -667,54 +709,94 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     unknownRawBody,
     "convert 结果未知且 canonical 引用当前 generation 时不得删除 raw"
   );
-  const sessionUpdate = await import("../../../../packages/server/src/images/ingestion/queue/session-update.ts");
-  const prepareSession = await import("../../../../packages/server/src/images/ingestion/workers/prepare-session.ts");
-  const preparedFiles = await import("../../../../packages/server/src/images/ingestion/raw/prepared.ts");
-  const failedUpload = activeSession((await ingestionRepository.mutateSemantic(
-    unknownRawCanonical, unknownRawCanonical.version,
-    ingestionSessionTransitions.failedIngestionSession(unknownRawCanonical, new Error("prepare interrupted"))
-  )).session);
-  const [retriedUpload] = await sessionUpdate.updateIngestionSessions(ingestionRepository, unknownRawOwner, [{
-    ...unknownRawPair, expected_version: failedUpload.version, retry_prepare: true
-  }]);
+  const sessionUpdate =
+    await import("../../../../packages/server/src/images/ingestion/queue/session-update.ts");
+  const prepareSession =
+    await import("../../../../packages/server/src/images/ingestion/workers/prepare-session.ts");
+  const preparedFiles =
+    await import("../../../../packages/server/src/images/ingestion/raw/prepared.ts");
+  const failedUpload = activeSession(
+    (
+      await ingestionRepository.mutateSemantic(
+        unknownRawCanonical,
+        unknownRawCanonical.version,
+        ingestionSessionTransitions.failedIngestionSession(
+          unknownRawCanonical,
+          new Error("prepare interrupted")
+        )
+      )
+    ).session
+  );
+  const [retriedUpload] = await sessionUpdate.updateIngestionSessions(
+    ingestionRepository,
+    unknownRawOwner,
+    [
+      {
+        ...unknownRawPair,
+        expected_version: failedUpload.version,
+        retry_prepare: true
+      }
+    ]
+  );
   assert.equal(retriedUpload.status, "changed");
-  const receivedRetry = activeSession(await ingestionRepository.readSession(unknownRawOwner, unknownRawCanonical.session_id));
+  const receivedRetry = activeSession(
+    await ingestionRepository.readSession(unknownRawOwner, unknownRawCanonical.session_id)
+  );
   assert.equal(receivedRetry.status, "received");
   assert.equal(receivedRetry.raw_generation, unknownRawCanonical.raw_generation);
   assert.equal(receivedRetry.image_time, unknownRawCanonical.image_time);
   assert.equal(receivedRetry.image_id, unknownRawCanonical.image_id);
   assert.equal(receivedRetry.accepted_order, unknownRawCanonical.accepted_order);
-  assert.deepEqual(await readFile(retainedUnknownRawPath), unknownRawBody, "重试不能把继续使用的上传原图作为旧代次清理");
-  const preparingRetry = activeSession((await ingestionRepository.mutateSemantic(receivedRetry, receivedRetry.version,
-    ingestionSessionTransitions.semanticIngestionSession(receivedRetry, {
-      status: "preparing", phase: "prepare-waiting", execution_token: coreUuid.randomUuidV7()
-    })
-  )).session);
-  const preparedRetry = activeSession((await prepareSession.prepareIngestionSessionSnapshot(
-    ingestionRepository, preparingRetry, new AbortController().signal
-  )));
+  assert.deepEqual(
+    await readFile(retainedUnknownRawPath),
+    unknownRawBody,
+    "重试不能把继续使用的上传原图作为旧代次清理"
+  );
+  const preparingRetry = activeSession(
+    (
+      await ingestionRepository.mutateSemantic(
+        receivedRetry,
+        receivedRetry.version,
+        ingestionSessionTransitions.semanticIngestionSession(receivedRetry, {
+          status: "preparing",
+          phase: "prepare-waiting",
+          execution_token: coreUuid.randomUuidV7()
+        })
+      )
+    ).session
+  );
+  const preparedRetry = activeSession(
+    await prepareSession.prepareIngestionSessionSnapshot(
+      ingestionRepository,
+      preparingRetry,
+      new AbortController().signal
+    )
+  );
   assert.equal(preparedRetry.status, "ready", "服务器仅用已接收的原图完成重新处理");
   assert.ok(preparedRetry.prepared);
   await preparedFiles.removeIngestionPreparedFiles([
     ...ingestionRawFiles.ingestionPreparedFiles(preparedRetry, preparedRetry.prepared)
   ]);
   await rm(retainedUnknownRawPath, { force: true });
-  const discardedUnknownRaw = discardedResult(await ingestionRepository.mutateSemantic(
-    preparedRetry, preparedRetry.version,
-    ingestionSessionTransitions.discardedIngestionReceipt(preparedRetry, Date.now())
-  ));
-  await ingestionRepository.deleteSession(discardedUnknownRaw.session, discardedUnknownRaw.session.version);
+  const discardedUnknownRaw = discardedResult(
+    await ingestionRepository.mutateSemantic(
+      preparedRetry,
+      preparedRetry.version,
+      ingestionSessionTransitions.discardedIngestionReceipt(preparedRetry, Date.now())
+    )
+  );
+  await ingestionRepository.deleteSession(
+    discardedUnknownRaw.session,
+    discardedUnknownRaw.session.version
+  );
   const staleIngestionImageId = imageTime.createImageId(
     imageTime.parseImageTime("2026-08-23T01:02:04.456Z").date,
     38
   );
-  const mixedIncarnationReads = await productionIngestionRepository.readSessions(
-    ingestionOwner,
-    [
-      { session_id: ingestionSessionId, image_id: staleIngestionImageId },
-      { session_id: ingestionSessionId, image_id: ingestionImageId }
-    ]
-  );
+  const mixedIncarnationReads = await productionIngestionRepository.readSessions(ingestionOwner, [
+    { session_id: ingestionSessionId, image_id: staleIngestionImageId },
+    { session_id: ingestionSessionId, image_id: ingestionImageId }
+  ]);
   assert.equal(
     mixedIncarnationReads[0],
     ingestionSessionRepository.ingestionSessionIncarnationMismatch
@@ -736,55 +818,35 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     ingestionSessionId
   );
   const readIngestionBusinessState = async () => ({
-    canonical: await redisClient.redis.hget(
-      ingestionTestKeys.canonical,
-      "snapshot"
-    ),
+    canonical: await redisClient.redis.hget(ingestionTestKeys.canonical, "snapshot"),
     metadata: await redisClient.redis.hgetall(ingestionTestKeys.metadata),
-    owner: await redisClient.redis.zrange(
-      ingestionTestKeys.owner,
-      0,
-      "-1",
-      "WITHSCORES"
-    ),
-    display: await redisClient.redis.zrange(
-      ingestionTestKeys.display,
-      0,
-      "-1",
-      "WITHSCORES"
-    )
+    owner: await redisClient.redis.zrange(ingestionTestKeys.owner, 0, "-1", "WITHSCORES"),
+    display: await redisClient.redis.zrange(ingestionTestKeys.display, 0, "-1", "WITHSCORES")
   });
   const readActiveSchemaState = async () => ({
-    ...await readIngestionBusinessState(),
+    ...(await readIngestionBusinessState()),
     runnable: await redisClient.redis.zscore(
       ingestionTestKeys.runnable,
       ingestionTestKeys.canonical
     ),
-    expires: await redisClient.redis.zscore(
-      ingestionTestKeys.expires,
-      ingestionTestKeys.canonical
-    )
+    expires: await redisClient.redis.zscore(ingestionTestKeys.expires, ingestionTestKeys.canonical)
   });
   await redisClient.redis.hset(liveIntentKey, "unexpected", "stale-intent");
-  const malformedIntentBesideCanonical = await redisClient.redis.hgetall(
-    liveIntentKey
-  );
-  const reusedCanonicalBeforeMalformedIntent = await productionIngestionRepository
-    .createUploadIntent({
+  const malformedIntentBesideCanonical = await redisClient.redis.hgetall(liveIntentKey);
+  const reusedCanonicalBeforeMalformedIntent =
+    await productionIngestionRepository.createUploadIntent({
       ...ingestionIntent,
       created_at: canonicalCreatedAt + 1
     });
   assert.equal(reusedCanonicalBeforeMalformedIntent.kind, "canonical");
-  assert.equal(
-    reusedCanonicalBeforeMalformedIntent.session.image_id,
-    ingestionImageId
-  );
-  const convertedBeforeMalformedIntent = activeResult(await productionIngestionRepository
-    .convertUploadIntent(
+  assert.equal(reusedCanonicalBeforeMalformedIntent.session.image_id, ingestionImageId);
+  const convertedBeforeMalformedIntent = activeResult(
+    await productionIngestionRepository.convertUploadIntent(
       ingestionCanonical,
       ingestionExecutionToken,
       canonicalCreatedAt + 1
-    ));
+    )
+  );
   assert.equal(convertedBeforeMalformedIntent.created, false);
   assert.deepEqual(
     await redisClient.redis.hgetall(liveIntentKey),
@@ -792,9 +854,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "已有 canonical 的幂等读取不得校验或改写残留 intent"
   );
   await redisClient.redis.del(liveIntentKey);
-  const originalCanonicalHash = await redisClient.redis.hgetall(
-    ingestionTestKeys.canonical
-  );
+  const originalCanonicalHash = await redisClient.redis.hgetall(ingestionTestKeys.canonical);
   for (const [field, value] of [
     ["unexpected", "leaks"],
     ["status", "queued"]
@@ -804,31 +864,51 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     const operationalBeforeCanonicalHashFailure = {
       ...runtimeAvailability.getRedisOperationalState()
     };
-    await assert.rejects(productionIngestionRepository.readSession(
-      ingestionOwner,
-      ingestionSessionId
-    ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
-    await assert.rejects(productionIngestionRepository.readSessions(
-      ingestionOwner,
-      [{ session_id: ingestionSessionId, image_id: ingestionImageId }]
-    ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
-    await assert.rejects(productionIngestionRepository.snapshot(
-      ingestionOwner,
-      "upload",
-      0,
-      10
-    ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
-    await assert.rejects(productionIngestionRepository.discoverRunnable(),
-      (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
-    await assert.rejects(productionIngestionRepository.mutateSemantic(
-      convertedUpload.session,
-      convertedUpload.session.version,
-      {
-        ...convertedUpload.session,
-        message: "不得越过损坏的 canonical Hash"
-      },
-      canonicalCreatedAt + 1
-    ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+    await assert.rejects(
+      productionIngestionRepository.readSession(ingestionOwner, ingestionSessionId),
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid"
+    );
+    await assert.rejects(
+      productionIngestionRepository.readSessions(ingestionOwner, [
+        { session_id: ingestionSessionId, image_id: ingestionImageId }
+      ]),
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid"
+    );
+    await assert.rejects(
+      productionIngestionRepository.snapshot(ingestionOwner, "upload", 0, 10),
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid"
+    );
+    await assert.rejects(
+      productionIngestionRepository.discoverRunnable(),
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid"
+    );
+    await assert.rejects(
+      productionIngestionRepository.mutateSemantic(
+        convertedUpload.session,
+        convertedUpload.session.version,
+        {
+          ...convertedUpload.session,
+          message: "不得越过损坏的 canonical Hash"
+        },
+        canonicalCreatedAt + 1
+      ),
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid"
+    );
     assert.deepEqual(
       await readActiveSchemaState(),
       malformedCanonicalHashState,
@@ -863,17 +943,16 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "读取 upload canonical 不应校验同一 owner 的 import 队列"
   );
   assert.deepEqual(
-    await productionIngestionRepository.readSessions(ingestionOwner, [{
-      session_id: ingestionSessionId,
-      image_id: ingestionImageId
-    }]),
+    await productionIngestionRepository.readSessions(ingestionOwner, [
+      {
+        session_id: ingestionSessionId,
+        image_id: ingestionImageId
+      }
+    ]),
     [convertedUpload.session],
     "批量读取 upload canonical 不应被损坏的同级 import 队列阻断"
   );
-  assert.equal(
-    await redisClient.redis.get(siblingIngestionMetadataKey),
-    "wrong-type"
-  );
+  assert.equal(await redisClient.redis.get(siblingIngestionMetadataKey), "wrong-type");
   assert.deepEqual(
     runtimeAvailability.getRedisOperationalState(),
     operationalBeforeSiblingQueueFailure,
@@ -916,15 +995,21 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     ...runtimeAvailability.getRedisOperationalState()
   };
   for (const malformed of malformedActiveCanonicals) {
-    assert.throws(() => ingestionSessionCodec.parseStoredIngestionSession(
-      JSON.stringify(malformed)
-    ));
-    await assert.rejects(productionIngestionRepository.mutateSemantic(
-      convertedUpload.session,
-      convertedUpload.session.version,
-      (malformed) as unknown as StoredIngestionSession,
-      canonicalCreatedAt + 1
-    ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+    assert.throws(() =>
+      ingestionSessionCodec.parseStoredIngestionSession(JSON.stringify(malformed))
+    );
+    await assert.rejects(
+      productionIngestionRepository.mutateSemantic(
+        convertedUpload.session,
+        convertedUpload.session.version,
+        malformed as unknown as StoredIngestionSession,
+        canonicalCreatedAt + 1
+      ),
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid"
+    );
     assert.deepEqual(
       await readActiveSchemaState(),
       stateBeforeActiveSchemaFailures,
@@ -946,15 +1031,14 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     ...JSON.parse(canonicalBeforeOpenSchemaRead),
     raw_path: "forbidden/path"
   });
-  await redisClient.redis.hset(
-    ingestionTestKeys.canonical,
-    "snapshot",
-    openSchemaCanonical
+  await redisClient.redis.hset(ingestionTestKeys.canonical, "snapshot", openSchemaCanonical);
+  await assert.rejects(
+    productionIngestionRepository.readSession(ingestionOwner, ingestionSessionId),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
   );
-  await assert.rejects(productionIngestionRepository.readSession(
-    ingestionOwner,
-    ingestionSessionId
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
   assert.equal(
     await redisClient.redis.hget(ingestionTestKeys.canonical, "snapshot"),
     openSchemaCanonical,
@@ -970,11 +1054,15 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     canonicalBeforeOpenSchemaRead
   );
   const stateBeforeActiveDelete = await readIngestionBusinessState();
-  await assert.rejects(productionIngestionRepository.deleteSession(
-    convertedUpload.session as unknown as Parameters<typeof ingestionRepository.deleteSession>[0],
-    convertedUpload.session.version,
-    canonicalCreatedAt + 1
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_session_state_conflict");
+  await assert.rejects(
+    productionIngestionRepository.deleteSession(
+      convertedUpload.session as unknown as Parameters<typeof ingestionRepository.deleteSession>[0],
+      convertedUpload.session.version,
+      canonicalCreatedAt + 1
+    ),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "ingestion_session_state_conflict"
+  );
   assert.deepEqual(
     await readIngestionBusinessState(),
     stateBeforeActiveDelete,
@@ -985,9 +1073,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     ingestionTestKeys.owner,
     ingestionSessionId
   );
-  const originalQueueMetadata = await redisClient.redis.hgetall(
-    ingestionTestKeys.metadata
-  );
+  const originalQueueMetadata = await redisClient.redis.hgetall(ingestionTestKeys.metadata);
   assert.ok(originalOwnerScore);
   const clockSessionId = ingestionSessionIdentity.createIngestionSessionId(
     ingestionOwner,
@@ -1001,11 +1087,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     session_id: clockSessionId,
     candidate_image_id: clockImageId,
     request_hash: clockRequestHash,
-    display_order_key: displayOrderKey(
-      clockSessionId,
-      38,
-      canonicalCreatedAt + 10
-    ),
+    display_order_key: displayOrderKey(clockSessionId, 38, canonicalCreatedAt + 10),
     batch_position: 38,
     created_at: canonicalCreatedAt + 10
   };
@@ -1031,9 +1113,8 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   };
   const clockCanonical = {
     ...clockCanonicalWithoutHash,
-    semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-      clockCanonicalWithoutHash
-    )
+    semantic_hash:
+      ingestionSessionProjection.ingestionSessionSemanticHash(clockCanonicalWithoutHash)
   };
   const clockTestKeys = ingestionSessionKeys.ingestionSessionKeys(
     ingestionOwner,
@@ -1058,11 +1139,17 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     const operationalBeforeRegressedClockCreate = {
       ...runtimeAvailability.getRedisOperationalState()
     };
-    await assert.rejects(productionIngestionRepository.convertUploadIntent(
-      clockCanonical,
-      clockExecutionToken,
-      clockIntent.created_at + 2
-    ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+    await assert.rejects(
+      productionIngestionRepository.convertUploadIntent(
+        clockCanonical,
+        clockExecutionToken,
+        clockIntent.created_at + 2
+      ),
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid"
+    );
     assert.deepEqual(
       await readClockCreateState(),
       stateBeforeRegressedClockCreate,
@@ -1073,31 +1160,36 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
       operationalBeforeRegressedClockCreate,
       "队列时钟领域损坏不得降级全局 Redis operational state"
     );
-    await redisClient.redis.hset(
-      ingestionTestKeys.metadata,
-      field,
-      originalQueueMetadata[field]
-    );
+    await redisClient.redis.hset(ingestionTestKeys.metadata, field, originalQueueMetadata[field]);
   }
   const assertQueueReadFailsClosed = async (message: string) => {
     const operationalBefore = {
       ...runtimeAvailability.getRedisOperationalState()
     };
-    await assert.rejects(productionIngestionRepository.readSession(
-      ingestionOwner,
-      ingestionSessionId
-    ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
-    await assert.rejects(productionIngestionRepository.readSessions(
-      ingestionOwner,
-      [{ session_id: ingestionSessionId, image_id: ingestionImageId }]
-    ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
-    await assert.rejects(productionIngestionRepository.discoverRunnable(),
-      (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
-    assert.deepEqual(
-      runtimeAvailability.getRedisOperationalState(),
-      operationalBefore,
-      message
+    await assert.rejects(
+      productionIngestionRepository.readSession(ingestionOwner, ingestionSessionId),
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid"
     );
+    await assert.rejects(
+      productionIngestionRepository.readSessions(ingestionOwner, [
+        { session_id: ingestionSessionId, image_id: ingestionImageId }
+      ]),
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid"
+    );
+    await assert.rejects(
+      productionIngestionRepository.discoverRunnable(),
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid"
+    );
+    assert.deepEqual(runtimeAvailability.getRedisOperationalState(), operationalBefore, message);
   };
   const parsedOriginalQueueMetadata = ingestionSessionCodec.metadataFromHashReply(
     Object.entries(originalQueueMetadata).flat()
@@ -1105,86 +1197,101 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   const operationalBeforeInvalidSnapshotRange = {
     ...runtimeAvailability.getRedisOperationalState()
   };
-  await assert.rejects(productionIngestionRepository.snapshot(
-    ingestionOwner,
-    "upload",
-    0,
-    sharedAppConfig.appConfig.ingestionRuntime.snapshotMaxItems + 1
-  ), RangeError);
+  await assert.rejects(
+    productionIngestionRepository.snapshot(
+      ingestionOwner,
+      "upload",
+      0,
+      sharedAppConfig.appConfig.ingestionRuntime.snapshotMaxItems + 1
+    ),
+    RangeError
+  );
   assert.deepEqual(
     runtimeAvailability.getRedisOperationalState(),
     operationalBeforeInvalidSnapshotRange,
     "超上限 snapshot 必须在 Redis 调用前拒绝"
   );
-  await assert.rejects(productionIngestionRepository.discoverRunnable(
-    sharedAppConfig.appConfig.ingestionRuntime.ingestionSessionScanBatchSize + 1
-  ), RangeError);
   await assert.rejects(
-    productionIngestionRepository.discoverRunnablePage(-1, 0),
+    productionIngestionRepository.discoverRunnable(
+      sharedAppConfig.appConfig.ingestionRuntime.ingestionSessionScanBatchSize + 1
+    ),
+    RangeError
+  );
+  await assert.rejects(productionIngestionRepository.discoverRunnablePage(-1, 0), RangeError);
+  await assert.rejects(productionIngestionRepository.discoverRunnablePage(0, -1), RangeError);
+  await assert.rejects(
+    productionIngestionRepository.discoverExpired(
+      canonicalCreatedAt,
+      sharedAppConfig.appConfig.ingestionRuntime.expiryScanBatchSize + 1
+    ),
     RangeError
   );
   await assert.rejects(
-    productionIngestionRepository.discoverRunnablePage(0, -1),
+    productionIngestionRepository.discoverExpiryPage(
+      0,
+      sharedAppConfig.appConfig.ingestionRuntime.ingestionSessionScanBatchSize + 1
+    ),
     RangeError
   );
-  await assert.rejects(productionIngestionRepository.discoverExpired(
-    canonicalCreatedAt,
-    sharedAppConfig.appConfig.ingestionRuntime.expiryScanBatchSize + 1
-  ), RangeError);
-  await assert.rejects(productionIngestionRepository.discoverExpiryPage(
-    0,
-    sharedAppConfig.appConfig.ingestionRuntime.ingestionSessionScanBatchSize + 1
-  ), RangeError);
   assert.deepEqual(
     runtimeAvailability.getRedisOperationalState(),
     operationalBeforeInvalidSnapshotRange,
     "超上限 discovery 必须在 Redis 调用前拒绝"
   );
-  assert.throws(() => ingestionSessionCodec.parseIngestionQueueMetadata({
-    ...parsedOriginalQueueMetadata,
-    revision: parsedOriginalQueueMetadata.last_accepted_order - 1
-  }));
-  assert.throws(() => ingestionSessionCodec.parseIngestionQueueMetadata({
-    ...parsedOriginalQueueMetadata,
-    committing_resolving: 0,
-    resolving: 1
-  }));
+  assert.throws(() =>
+    ingestionSessionCodec.parseIngestionQueueMetadata({
+      ...parsedOriginalQueueMetadata,
+      revision: parsedOriginalQueueMetadata.last_accepted_order - 1
+    })
+  );
+  assert.throws(() =>
+    ingestionSessionCodec.parseIngestionQueueMetadata({
+      ...parsedOriginalQueueMetadata,
+      committing_resolving: 0,
+      resolving: 1
+    })
+  );
   for (const invalidIntegerText of ["1.0", "01", ""]) {
-    assert.throws(() => ingestionSessionCodec.metadataFromHashReply(
-      Object.entries({
-        ...originalQueueMetadata,
-        revision: invalidIntegerText
-      }).flat()
-    ));
+    assert.throws(() =>
+      ingestionSessionCodec.metadataFromHashReply(
+        Object.entries({
+          ...originalQueueMetadata,
+          revision: invalidIntegerText
+        }).flat()
+      )
+    );
   }
-  assert.throws(() => ingestionSessionCodec.parseIngestionQueueMetadata({
-    ...parsedOriginalQueueMetadata,
-    unexpected: "leaks"
-  }));
-  await redisClient.redis.hset(
-    ingestionTestKeys.metadata,
-    "unexpected",
-    "leaks"
+  assert.throws(() =>
+    ingestionSessionCodec.parseIngestionQueueMetadata({
+      ...parsedOriginalQueueMetadata,
+      unexpected: "leaks"
+    })
   );
+  await redisClient.redis.hset(ingestionTestKeys.metadata, "unexpected", "leaks");
   const stateWithUnexpectedMetadata = await readActiveSchemaState();
-  await assertQueueReadFailsClosed(
-    "metadata 额外字段必须只让当前队列 fail closed"
+  await assertQueueReadFailsClosed("metadata 额外字段必须只让当前队列 fail closed");
+  await assert.rejects(
+    productionIngestionRepository.snapshot(ingestionOwner, "upload", 0, 10),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
   );
-  await assert.rejects(productionIngestionRepository.snapshot(
-    ingestionOwner,
-    "upload",
-    0,
-    10
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
-  await assert.rejects(productionIngestionRepository.mutateSemantic(
-    convertedUpload.session,
-    convertedUpload.session.version,
-    {
-      ...convertedUpload.session,
-      message: "不得越过开放 metadata schema"
-    },
-    canonicalCreatedAt + 1
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+  await assert.rejects(
+    productionIngestionRepository.mutateSemantic(
+      convertedUpload.session,
+      convertedUpload.session.version,
+      {
+        ...convertedUpload.session,
+        message: "不得越过开放 metadata schema"
+      },
+      canonicalCreatedAt + 1
+    ),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
+  );
   assert.deepEqual(
     await readActiveSchemaState(),
     stateWithUnexpectedMetadata,
@@ -1195,11 +1302,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   await assertQueueReadFailsClosed(
     "owner 成员缺失必须让 pair read/discovery 领域失败而不降级全局 Redis"
   );
-  await redisClient.redis.zadd(
-    ingestionTestKeys.owner,
-    originalOwnerScore,
-    ingestionSessionId
-  );
+  await redisClient.redis.zadd(ingestionTestKeys.owner, originalOwnerScore, ingestionSessionId);
   await redisClient.redis.del(ingestionTestKeys.metadata);
   await assertQueueReadFailsClosed(
     "metadata 缺失必须让 pair read/discovery 领域失败而不降级全局 Redis"
@@ -1214,30 +1317,29 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   };
   await redisClient.redis.del(ingestionTestKeys.canonical);
   const stateBeforeMissingCanonicalIntent = {
-    owner: await redisClient.redis.zrange(
-      ingestionTestKeys.owner,
-      0,
-      "-1",
-      "WITHSCORES"
-    ),
+    owner: await redisClient.redis.zrange(ingestionTestKeys.owner, 0, "-1", "WITHSCORES"),
     metadata: await redisClient.redis.hgetall(ingestionTestKeys.metadata),
     intentType: await redisClient.redis.type(liveIntentKey)
   };
-  await assert.rejects(productionIngestionRepository.createUploadIntent({
-    ...ingestionIntent,
-    created_at: canonicalCreatedAt + 2
-  }), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
-  assert.deepEqual({
-    owner: await redisClient.redis.zrange(
-      ingestionTestKeys.owner,
-      0,
-      "-1",
-      "WITHSCORES"
-    ),
-    metadata: await redisClient.redis.hgetall(ingestionTestKeys.metadata),
-    intentType: await redisClient.redis.type(liveIntentKey)
-  }, stateBeforeMissingCanonicalIntent,
-  "canonical 缺失但 owner 成员仍在时不得创建 upload intent");
+  await assert.rejects(
+    productionIngestionRepository.createUploadIntent({
+      ...ingestionIntent,
+      created_at: canonicalCreatedAt + 2
+    }),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
+  );
+  assert.deepEqual(
+    {
+      owner: await redisClient.redis.zrange(ingestionTestKeys.owner, 0, "-1", "WITHSCORES"),
+      metadata: await redisClient.redis.hgetall(ingestionTestKeys.metadata),
+      intentType: await redisClient.redis.type(liveIntentKey)
+    },
+    stateBeforeMissingCanonicalIntent,
+    "canonical 缺失但 owner 成员仍在时不得创建 upload intent"
+  );
   assert.deepEqual(
     runtimeAvailability.getRedisOperationalState(),
     operationalBeforeMissingPairStructure,
@@ -1245,34 +1347,13 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   );
   const readMissingCanonicalDiscoveryState = async () => ({
     canonicalType: await redisClient.redis.type(ingestionTestKeys.canonical),
-    owner: await redisClient.redis.zrange(
-      ingestionTestKeys.owner,
-      0,
-      "-1",
-      "WITHSCORES"
-    ),
-    display: await redisClient.redis.zrange(
-      ingestionTestKeys.display,
-      0,
-      "-1",
-      "WITHSCORES"
-    ),
+    owner: await redisClient.redis.zrange(ingestionTestKeys.owner, 0, "-1", "WITHSCORES"),
+    display: await redisClient.redis.zrange(ingestionTestKeys.display, 0, "-1", "WITHSCORES"),
     metadata: await redisClient.redis.hgetall(ingestionTestKeys.metadata),
-    runnable: await redisClient.redis.zrange(
-      ingestionTestKeys.runnable,
-      0,
-      "-1",
-      "WITHSCORES"
-    ),
-    expires: await redisClient.redis.zrange(
-      ingestionTestKeys.expires,
-      0,
-      "-1",
-      "WITHSCORES"
-    )
+    runnable: await redisClient.redis.zrange(ingestionTestKeys.runnable, 0, "-1", "WITHSCORES"),
+    expires: await redisClient.redis.zrange(ingestionTestKeys.expires, 0, "-1", "WITHSCORES")
   });
-  const stateBeforeMissingCanonicalDiscovery =
-    await readMissingCanonicalDiscoveryState();
+  const stateBeforeMissingCanonicalDiscovery = await readMissingCanonicalDiscoveryState();
   for (const discover of [
     () => productionIngestionRepository.discoverRunnable(),
     () => productionIngestionRepository.discoverExpired(Number.MAX_SAFE_INTEGER),
@@ -1280,7 +1361,10 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   ]) {
     await assert.rejects(
       discover(),
-      (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid"
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid"
     );
     assert.deepEqual(
       await readMissingCanonicalDiscoveryState(),
@@ -1312,14 +1396,18 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "execution_token",
     expiredIntentDuringMissingCanonical.execution_token
   );
-  const expiredIntentHashDuringMissingCanonical = await redisClient.redis.hgetall(
-    liveIntentKey
+  const expiredIntentHashDuringMissingCanonical = await redisClient.redis.hgetall(liveIntentKey);
+  await assert.rejects(
+    productionIngestionRepository.convertUploadIntent(
+      ingestionCanonical,
+      ingestionExecutionToken,
+      canonicalCreatedAt + 2
+    ),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
   );
-  await assert.rejects(productionIngestionRepository.convertUploadIntent(
-    ingestionCanonical,
-    ingestionExecutionToken,
-    canonicalCreatedAt + 2
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
   assert.deepEqual(
     await redisClient.redis.hgetall(liveIntentKey),
     expiredIntentHashDuringMissingCanonical,
@@ -1332,13 +1420,8 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "upload",
     "balanced-display-corruption"
   );
-  await redisClient.redis.zadd(
-    ingestionTestKeys.owner,
-    originalOwnerScore,
-    balancedOwnerSessionId
-  );
-  const balancedMissingCanonicalState =
-    await readMissingCanonicalDiscoveryState();
+  await redisClient.redis.zadd(ingestionTestKeys.owner, originalOwnerScore, balancedOwnerSessionId);
+  const balancedMissingCanonicalState = await readMissingCanonicalDiscoveryState();
   for (const discover of [
     () => productionIngestionRepository.discoverRunnable(),
     () => productionIngestionRepository.discoverExpired(Number.MAX_SAFE_INTEGER),
@@ -1346,7 +1429,10 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   ]) {
     await assert.rejects(
       discover(),
-      (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid"
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "ingestion_queue_structure_invalid"
     );
     assert.deepEqual(
       await readMissingCanonicalDiscoveryState(),
@@ -1360,14 +1446,22 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     );
   }
   await redisClient.redis.zrem(ingestionTestKeys.owner, balancedOwnerSessionId);
-  await assert.rejects(productionIngestionRepository.readSession(
-    ingestionOwner,
-    ingestionSessionId
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
-  await assert.rejects(productionIngestionRepository.readSessions(
-    ingestionOwner,
-    [{ session_id: ingestionSessionId, image_id: ingestionImageId }]
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+  await assert.rejects(
+    productionIngestionRepository.readSession(ingestionOwner, ingestionSessionId),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
+  );
+  await assert.rejects(
+    productionIngestionRepository.readSessions(ingestionOwner, [
+      { session_id: ingestionSessionId, image_id: ingestionImageId }
+    ]),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
+  );
   assert.deepEqual(
     await redisClient.redis.hgetall(ingestionTestKeys.metadata),
     originalQueueMetadata,
@@ -1380,10 +1474,13 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
 
   await redisClient.redis.del(ingestionTestKeys.metadata);
   await redisClient.redis.set(ingestionTestKeys.metadata, "wrong-type");
-  await assert.rejects(productionIngestionRepository.readSession(
-    ingestionOwner,
-    ingestionSessionId
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+  await assert.rejects(
+    productionIngestionRepository.readSession(ingestionOwner, ingestionSessionId),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
+  );
   assert.equal(
     await redisClient.redis.get(ingestionTestKeys.metadata),
     "wrong-type",
@@ -1402,11 +1499,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     ingestionTestKeys.canonical,
     ...Object.entries(originalCanonicalHash).flat()
   );
-  await redisClient.redis.zadd(
-    ingestionTestKeys.owner,
-    originalOwnerScore,
-    ingestionSessionId
-  );
+  await redisClient.redis.zadd(ingestionTestKeys.owner, originalOwnerScore, ingestionSessionId);
 
   const missingDiscoverySessionId = ingestionSessionIdentity.createIngestionSessionId(
     ingestionOwner,
@@ -1417,11 +1510,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     ingestionOwner,
     missingDiscoverySessionId
   );
-  await redisClient.redis.zadd(
-    ingestionTestKeys.runnable,
-    0,
-    missingDiscoveryKey
-  );
+  await redisClient.redis.zadd(ingestionTestKeys.runnable, 0, missingDiscoveryKey);
   await redisClient.redis.hset(
     ingestionTestKeys.canonical,
     "unexpected",
@@ -1433,15 +1522,15 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "-1",
     "WITHSCORES"
   );
-  await assert.rejects(productionIngestionRepository.discoverRunnable(),
-    (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+  await assert.rejects(
+    productionIngestionRepository.discoverRunnable(),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
+  );
   assert.deepEqual(
-    await redisClient.redis.zrange(
-      ingestionTestKeys.runnable,
-      0,
-      "-1",
-      "WITHSCORES"
-    ),
+    await redisClient.redis.zrange(ingestionTestKeys.runnable, 0, "-1", "WITHSCORES"),
     runnableBeforeMixedDiscoveryFailure,
     "discovery 必须在整批校验完成后才清理缺失 canonical 的成员"
   );
@@ -1451,11 +1540,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     await redisClient.redis.zscore(ingestionTestKeys.runnable, missingDiscoveryKey),
     null
   );
-  await redisClient.redis.zadd(
-    ingestionTestKeys.expires,
-    0,
-    missingDiscoveryKey
-  );
+  await redisClient.redis.zadd(ingestionTestKeys.expires, 0, missingDiscoveryKey);
   await ingestionRepository.discoverExpired(canonicalCreatedAt + 1);
   assert.equal(
     await redisClient.redis.zscore(ingestionTestKeys.runnable, missingDiscoveryKey),
@@ -1467,44 +1552,49 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     null,
     "expires 指向缺失 canonical 时只清理派生成员"
   );
-  await assert.rejects(ingestionRepository.createUploadIntent({
-    ...ingestionIntent,
-    request_hash: "b".repeat(64),
-    created_at: canonicalCreatedAt + 1
-  }), (error: unknown) => error instanceof Error && "code" in error && error.code === "idempotency_conflict");
+  await assert.rejects(
+    ingestionRepository.createUploadIntent({
+      ...ingestionIntent,
+      request_hash: "b".repeat(64),
+      created_at: canonicalCreatedAt + 1
+    }),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "idempotency_conflict"
+  );
   assert.equal(ingestionListenerCalls, 1);
   assert.equal(ingestionAsyncListenerCalls, 1);
-  const reusedUpload = activeResult(await ingestionRepository.convertUploadIntent(
-    {
-      ...ingestionCanonical,
-      image_id: imageTime.createImageId(regeneratedIntentTime.date, 42),
-      image_time: regeneratedIntentTime.iso
-    },
-    ingestionExecutionToken,
-    canonicalCreatedAt + 1
-  ));
+  const reusedUpload = activeResult(
+    await ingestionRepository.convertUploadIntent(
+      {
+        ...ingestionCanonical,
+        image_id: imageTime.createImageId(regeneratedIntentTime.date, 42),
+        image_time: regeneratedIntentTime.iso
+      },
+      ingestionExecutionToken,
+      canonicalCreatedAt + 1
+    )
+  );
   assert.equal(reusedUpload.created, false);
   assert.equal(reusedUpload.session.image_id, convertedUpload.session.image_id);
   assert.equal(ingestionListenerCalls, 1, "幂等 canonical 复用不得发送 semantic 事件");
   assert.equal(ingestionAsyncListenerCalls, 1);
   const reusedViaIntent = await ingestionRepository.createUploadIntent({
     ...ingestionIntent,
-    candidate_image_id: imageTime.createImageId(
-      regeneratedIntentTime.date,
-      43
-    ),
+    candidate_image_id: imageTime.createImageId(regeneratedIntentTime.date, 43),
     resolved_image_time: regeneratedIntentTime.iso,
     created_at: canonicalCreatedAt + 1
   });
   assert.equal(reusedViaIntent.kind, "canonical");
   assert.equal(reusedViaIntent.session.image_id, convertedUpload.session.image_id);
   assert.equal(ingestionListenerCalls, 1);
-  const unchangedUpload = activeResult(await ingestionRepository.mutateSemantic(
-    convertedUpload.session,
-    convertedUpload.session.version,
-    { ...convertedUpload.session, semantic_hash: "f".repeat(64) },
-    canonicalCreatedAt + 2
-  ));
+  const unchangedUpload = activeResult(
+    await ingestionRepository.mutateSemantic(
+      convertedUpload.session,
+      convertedUpload.session.version,
+      { ...convertedUpload.session, semantic_hash: "f".repeat(64) },
+      canonicalCreatedAt + 2
+    )
+  );
   assert.equal(unchangedUpload.changed, false);
   assert.equal(unchangedUpload.session.version, 1);
   assert.equal(unchangedUpload.session.discard_at, convertedUpload.session.discard_at);
@@ -1525,28 +1615,29 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
       preparingUploadWithoutHash
     )
   };
-  const preparedTransition = activeResult(await ingestionRepository.mutateSemantic(
-    convertedUpload.session,
-    convertedUpload.session.version,
-    preparingUpload,
-    canonicalCreatedAt + 3
-  ));
+  const preparedTransition = activeResult(
+    await ingestionRepository.mutateSemantic(
+      convertedUpload.session,
+      convertedUpload.session.version,
+      preparingUpload,
+      canonicalCreatedAt + 3
+    )
+  );
   assert.equal(ingestionListenerCalls, 2);
   assert.equal(ingestionAsyncListenerCalls, 2);
   assert.equal(preparedTransition.metadata.waiting, 0);
   assert.equal(preparedTransition.metadata.running, 0);
   assert.equal(preparedTransition.metadata.total, convertedUpload.metadata.total);
   assert.equal(preparedTransition.metadata.unfinished, convertedUpload.metadata.unfinished);
-  const progressUpload = activeResult(await ingestionRepository.updateProgress(
-    preparedTransition.session,
-    preparedTransition.session.version,
-    { phase: "normalizing" as const, message: "normalizing", progress: 50 },
-    canonicalCreatedAt + 4
-  ));
-  assert.equal(
-    progressUpload.session.discard_at,
-    preparedTransition.session.discard_at
+  const progressUpload = activeResult(
+    await ingestionRepository.updateProgress(
+      preparedTransition.session,
+      preparedTransition.session.version,
+      { phase: "normalizing" as const, message: "normalizing", progress: 50 },
+      canonicalCreatedAt + 4
+    )
   );
+  assert.equal(progressUpload.session.discard_at, preparedTransition.session.discard_at);
   assert.equal(progressUpload.session.progress_seq, 1);
   assert.equal(progressUpload.metadata.waiting, 0);
   assert.equal(progressUpload.metadata.running, 1);
@@ -1556,12 +1647,18 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   const operationalBeforeNullProgress = {
     ...runtimeAvailability.getRedisOperationalState()
   };
-  await assert.rejects(productionIngestionRepository.updateProgress(
-    progressUpload.session,
-    progressUpload.session.version,
-    null as unknown as Parameters<typeof ingestionRepository.updateProgress>[2],
-    canonicalCreatedAt + 5
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+  await assert.rejects(
+    productionIngestionRepository.updateProgress(
+      progressUpload.session,
+      progressUpload.session.version,
+      null as unknown as Parameters<typeof ingestionRepository.updateProgress>[2],
+      canonicalCreatedAt + 5
+    ),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
+  );
   assert.deepEqual(
     await readActiveSchemaState(),
     stateBeforeNullProgress,
@@ -1573,68 +1670,83 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "null progress 领域错误不得降级全局 Redis operational state"
   );
   const discardAtBeforeOldHeartbeat = preparedTransition.session.discard_at;
-  const oldHeartbeat = activeResult(await ingestionRepository.heartbeat(
-    progressUpload.session,
-    progressUpload.session.version,
-    canonicalCreatedAt
-  ));
+  const oldHeartbeat = activeResult(
+    await ingestionRepository.heartbeat(
+      progressUpload.session,
+      progressUpload.session.version,
+      canonicalCreatedAt
+    )
+  );
   assert.equal(oldHeartbeat.session.discard_at, discardAtBeforeOldHeartbeat);
   assert.equal(ingestionListenerCalls, 3);
   assert.equal(ingestionAsyncListenerCalls, 3);
   const heartbeatAt = canonicalCreatedAt + 60_000;
-  const extendedHeartbeat = activeResult(await ingestionRepository.heartbeat(
-    progressUpload.session,
-    progressUpload.session.version,
-    heartbeatAt
-  ));
+  const extendedHeartbeat = activeResult(
+    await ingestionRepository.heartbeat(
+      progressUpload.session,
+      progressUpload.session.version,
+      heartbeatAt
+    )
+  );
   assert.equal(extendedHeartbeat.session.discard_at, heartbeatAt + uploadTtlMs);
   assert.equal(ingestionListenerCalls, 3, "执行心跳不得发布队列事件");
   assert.equal(ingestionAsyncListenerCalls, 3, "执行心跳不得发布异步队列事件");
   assert.equal(
-    (activeSession(await ingestionRepository.readSession(ingestionOwner, ingestionSessionId))).discard_at,
+    activeSession(await ingestionRepository.readSession(ingestionOwner, ingestionSessionId))
+      .discard_at,
     extendedHeartbeat.session.discard_at,
     "读取 canonical 不得延长逻辑有效期"
   );
-  await assert.rejects(ingestionRepository.expireSession(
-    extendedHeartbeat.session,
-    extendedHeartbeat.session.version,
-    discardAtBeforeOldHeartbeat,
-    ingestionSessionTransitions.discardedIngestionReceipt(
+  await assert.rejects(
+    ingestionRepository.expireSession(
       extendedHeartbeat.session,
-      discardAtBeforeOldHeartbeat
-    )
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_session_not_expired");
+      extendedHeartbeat.session.version,
+      discardAtBeforeOldHeartbeat,
+      ingestionSessionTransitions.discardedIngestionReceipt(
+        extendedHeartbeat.session,
+        discardAtBeforeOldHeartbeat
+      )
+    ),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "ingestion_session_not_expired"
+  );
   assert.equal(
-    (activeSession(await ingestionRepository.readSession(ingestionOwner, ingestionSessionId))).discard_at,
+    activeSession(await ingestionRepository.readSession(ingestionOwner, ingestionSessionId))
+      .discard_at,
     extendedHeartbeat.session.discard_at,
     "旧 expiry 候选不得越过已经成功的 execution heartbeat"
   );
-  await assert.rejects(ingestionRepository.updateProgress(
-    extendedHeartbeat.session,
-    extendedHeartbeat.session.version,
-    { phase: "expired" as const, message: "expired", progress: 75 },
-    extendedHeartbeat.session.discard_at
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_session_expired");
+  await assert.rejects(
+    ingestionRepository.updateProgress(
+      extendedHeartbeat.session,
+      extendedHeartbeat.session.version,
+      { phase: "expired" as const, message: "expired", progress: 75 },
+      extendedHeartbeat.session.discard_at
+    ),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "ingestion_session_expired"
+  );
   const changedImageTimeWithoutHash = {
     ...extendedHeartbeat.session,
     image_time: "2027-08-23T01:02:03.456Z",
     semantic_hash: ""
   };
-  await assert.rejects(ingestionRepository.mutateSemantic(
-    extendedHeartbeat.session,
-    extendedHeartbeat.session.version,
-    {
-      ...changedImageTimeWithoutHash,
-      semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-        changedImageTimeWithoutHash
-      )
-    },
-    heartbeatAt + 1
-  ));
-  const canonicalBeforeStructureFailure = activeSession(await ingestionRepository.readSession(
-    ingestionOwner,
-    ingestionSessionId
-  ));
+  await assert.rejects(
+    ingestionRepository.mutateSemantic(
+      extendedHeartbeat.session,
+      extendedHeartbeat.session.version,
+      {
+        ...changedImageTimeWithoutHash,
+        semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
+          changedImageTimeWithoutHash
+        )
+      },
+      heartbeatAt + 1
+    )
+  );
+  const canonicalBeforeStructureFailure = activeSession(
+    await ingestionRepository.readSession(ingestionOwner, ingestionSessionId)
+  );
   await redisClient.redis.hset(
     ingestionSessionKeys.ingestionQueueMetadataKey(ingestionOwner, "upload"),
     "unfinished",
@@ -1643,37 +1755,38 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   const operationalStateBeforeDomainFailure = {
     ...runtimeAvailability.getRedisOperationalState()
   };
-  await assert.rejects(productionIngestionRepository.snapshot(
-    ingestionOwner,
-    "upload",
-    0,
-    10
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+  await assert.rejects(
+    productionIngestionRepository.snapshot(ingestionOwner, "upload", 0, 10),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
+  );
   assert.deepEqual(
     runtimeAvailability.getRedisOperationalState(),
     operationalStateBeforeDomainFailure,
     "单队列领域错误不得降级全局 Redis operational state"
   );
-  await assert.rejects(ingestionRepository.snapshot(
-    ingestionOwner,
-    "upload",
-    0,
-    10
-  ));
-  await assert.rejects(ingestionRepository.mutateSemantic(
-    extendedHeartbeat.session,
-    extendedHeartbeat.session.version,
-    {
-      ...extendedHeartbeat.session,
-      status: "ready" as const,
-      semantic_hash: "b".repeat(64)
-    },
-    heartbeatAt + 2
-  ));
-  await assert.rejects(productionIngestionRepository.readSession(
-    ingestionOwner,
-    ingestionSessionId
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+  await assert.rejects(ingestionRepository.snapshot(ingestionOwner, "upload", 0, 10));
+  await assert.rejects(
+    ingestionRepository.mutateSemantic(
+      extendedHeartbeat.session,
+      extendedHeartbeat.session.version,
+      {
+        ...extendedHeartbeat.session,
+        status: "ready" as const,
+        semantic_hash: "b".repeat(64)
+      },
+      heartbeatAt + 2
+    )
+  );
+  await assert.rejects(
+    productionIngestionRepository.readSession(ingestionOwner, ingestionSessionId),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
+  );
   assert.equal(ingestionListenerCalls, 3);
   assert.equal(ingestionAsyncListenerCalls, 3);
   await redisClient.redis.hset(ingestionTestKeys.metadata, "unfinished", "1");
@@ -1687,20 +1800,17 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "snapshot"
   );
   assert.ok(canonicalJsonBeforeCorruption);
-  await redisClient.redis.hset(
-    ingestionTestKeys.canonical,
-    "snapshot",
-    "{truncated"
-  );
+  await redisClient.redis.hset(ingestionTestKeys.canonical, "snapshot", "{truncated");
   const operationalStateBeforeBadJson = {
     ...runtimeAvailability.getRedisOperationalState()
   };
-  await assert.rejects(productionIngestionRepository.snapshot(
-    ingestionOwner,
-    "upload",
-    0,
-    10
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+  await assert.rejects(
+    productionIngestionRepository.snapshot(ingestionOwner, "upload", 0, 10),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
+  );
   assert.deepEqual(
     runtimeAvailability.getRedisOperationalState(),
     operationalStateBeforeBadJson,
@@ -1722,12 +1832,13 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   const operationalStateBeforeWrongType = {
     ...runtimeAvailability.getRedisOperationalState()
   };
-  await assert.rejects(productionIngestionRepository.snapshot(
-    ingestionOwner,
-    "upload",
-    0,
-    10
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+  await assert.rejects(
+    productionIngestionRepository.snapshot(ingestionOwner, "upload", 0, 10),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
+  );
   assert.deepEqual(
     runtimeAvailability.getRedisOperationalState(),
     operationalStateBeforeWrongType,
@@ -1746,44 +1857,42 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   );
   assert.ok(displayOrderKeyBeforeWrongType);
   assert.equal(
-    await redisClient.redis.zscore(
-      ingestionTestKeys.display,
-      displayOrderKeyBeforeWrongType
-    ),
+    await redisClient.redis.zscore(ingestionTestKeys.display, displayOrderKeyBeforeWrongType),
     "0"
   );
   await redisClient.redis.del(ingestionTestKeys.display);
   await redisClient.redis.set(ingestionTestKeys.display, "wrong-type");
-  await assert.rejects(productionIngestionRepository.snapshot(
-    ingestionOwner,
-    "upload",
-    0,
-    10
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
-  await redisClient.redis.del(ingestionTestKeys.display);
-  await redisClient.redis.zadd(
-    ingestionTestKeys.display,
-    0,
-    displayOrderKeyBeforeWrongType
+  await assert.rejects(
+    productionIngestionRepository.snapshot(ingestionOwner, "upload", 0, 10),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
   );
+  await redisClient.redis.del(ingestionTestKeys.display);
+  await redisClient.redis.zadd(ingestionTestKeys.display, 0, displayOrderKeyBeforeWrongType);
 
   const stateBeforeMalformedMutations = await readIngestionBusinessState();
-  await assert.rejects(ingestionRepository.mutateSemantic(
-    extendedHeartbeat.session,
-    extendedHeartbeat.session.version,
-    ({
-      ...extendedHeartbeat.session,
-      raw_size: "1",
-      semantic_hash: ""
-    }) as unknown as StoredIngestionSession,
-    heartbeatAt + 3
-  ));
-  await assert.rejects(ingestionRepository.updateProgress(
-    extendedHeartbeat.session,
-    extendedHeartbeat.session.version,
-    { phase: "invalid" as const, message: "invalid", progress: 101 },
-    heartbeatAt + 3
-  ));
+  await assert.rejects(
+    ingestionRepository.mutateSemantic(
+      extendedHeartbeat.session,
+      extendedHeartbeat.session.version,
+      {
+        ...extendedHeartbeat.session,
+        raw_size: "1",
+        semantic_hash: ""
+      } as unknown as StoredIngestionSession,
+      heartbeatAt + 3
+    )
+  );
+  await assert.rejects(
+    ingestionRepository.updateProgress(
+      extendedHeartbeat.session,
+      extendedHeartbeat.session.version,
+      { phase: "invalid" as const, message: "invalid", progress: 101 },
+      heartbeatAt + 3
+    )
+  );
   assert.deepEqual(
     await readIngestionBusinessState(),
     stateBeforeMalformedMutations,
@@ -1800,30 +1909,26 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   };
   await redisClient.redis.hset(ingestionTestKeys.metadata, "running", "1.0");
   const readIntegerRegressionState = async () => ({
-    ...await readIngestionBusinessState(),
-    runnable: await redisClient.redis.zrange(
-      ingestionTestKeys.runnable,
-      0,
-      "-1",
-      "WITHSCORES"
-    ),
-    expires: await redisClient.redis.zrange(
-      ingestionTestKeys.expires,
-      0,
-      "-1",
-      "WITHSCORES"
-    )
+    ...(await readIngestionBusinessState()),
+    runnable: await redisClient.redis.zrange(ingestionTestKeys.runnable, 0, "-1", "WITHSCORES"),
+    expires: await redisClient.redis.zrange(ingestionTestKeys.expires, 0, "-1", "WITHSCORES")
   });
   const stateWithNonCanonicalInteger = await readIntegerRegressionState();
   const operationalStateBeforeNonCanonicalInteger = {
     ...runtimeAvailability.getRedisOperationalState()
   };
-  await assert.rejects(productionIngestionRepository.mutateSemantic(
-    extendedHeartbeat.session,
-    extendedHeartbeat.session.version,
-    blockedReady,
-    heartbeatAt + 3
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid");
+  await assert.rejects(
+    productionIngestionRepository.mutateSemantic(
+      extendedHeartbeat.session,
+      extendedHeartbeat.session.version,
+      blockedReady,
+      heartbeatAt + 3
+    ),
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid"
+  );
   assert.deepEqual(
     await readIntegerRegressionState(),
     stateWithNonCanonicalInteger,
@@ -1835,22 +1940,21 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "单队列整数结构错误不得降级全局 Redis operational state"
   );
   await redisClient.redis.hset(ingestionTestKeys.metadata, "running", "1");
-  const originalRevision = await redisClient.redis.hget(
-    ingestionTestKeys.metadata,
-    "revision"
-  );
+  const originalRevision = await redisClient.redis.hget(ingestionTestKeys.metadata, "revision");
   await redisClient.redis.hset(
     ingestionTestKeys.metadata,
     "revision",
     String(Number.MAX_SAFE_INTEGER)
   );
   const stateAtMaximumRevision = await readIngestionBusinessState();
-  await assert.rejects(ingestionRepository.mutateSemantic(
-    extendedHeartbeat.session,
-    extendedHeartbeat.session.version,
-    blockedReady,
-    heartbeatAt + 3
-  ));
+  await assert.rejects(
+    ingestionRepository.mutateSemantic(
+      extendedHeartbeat.session,
+      extendedHeartbeat.session.version,
+      blockedReady,
+      heartbeatAt + 3
+    )
+  );
   assert.deepEqual(await readIngestionBusinessState(), stateAtMaximumRevision);
   await redisClient.redis.hset(
     ingestionTestKeys.metadata,
@@ -1858,12 +1962,14 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     String(Number.MAX_SAFE_INTEGER + 1)
   );
   const stateAtUnsafeRevision = await readIngestionBusinessState();
-  await assert.rejects(ingestionRepository.updateProgress(
-    extendedHeartbeat.session,
-    extendedHeartbeat.session.version,
-    { phase: "blocked" as const, message: "blocked", progress: 99 },
-    heartbeatAt + 3
-  ));
+  await assert.rejects(
+    ingestionRepository.updateProgress(
+      extendedHeartbeat.session,
+      extendedHeartbeat.session.version,
+      { phase: "blocked" as const, message: "blocked", progress: 99 },
+      heartbeatAt + 3
+    )
+  );
   assert.deepEqual(await readIngestionBusinessState(), stateAtUnsafeRevision);
   await redisClient.redis.hset(
     ingestionTestKeys.metadata,
@@ -1872,21 +1978,29 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   );
   const stateBeforeWrongTypes = await readIngestionBusinessState();
   await redisClient.redis.set(ingestionTestKeys.runnable, "wrong-type");
-  await assert.rejects(ingestionRepository.mutateSemantic(
-    extendedHeartbeat.session,
-    extendedHeartbeat.session.version,
-    blockedReady,
-    heartbeatAt + 3
-  ));
-  await assert.rejects(ingestionRepository.deleteSession(
-    extendedHeartbeat.session as unknown as Parameters<typeof ingestionRepository.deleteSession>[0],
-    extendedHeartbeat.session.version,
-    heartbeatAt + 3
-  ));
-  await assert.rejects(ingestionRepository.createUploadIntent({
-    ...ingestionIntent,
-    created_at: heartbeatAt + 3
-  }));
+  await assert.rejects(
+    ingestionRepository.mutateSemantic(
+      extendedHeartbeat.session,
+      extendedHeartbeat.session.version,
+      blockedReady,
+      heartbeatAt + 3
+    )
+  );
+  await assert.rejects(
+    ingestionRepository.deleteSession(
+      extendedHeartbeat.session as unknown as Parameters<
+        typeof ingestionRepository.deleteSession
+      >[0],
+      extendedHeartbeat.session.version,
+      heartbeatAt + 3
+    )
+  );
+  await assert.rejects(
+    ingestionRepository.createUploadIntent({
+      ...ingestionIntent,
+      created_at: heartbeatAt + 3
+    })
+  );
   assert.deepEqual(await readIngestionBusinessState(), stateBeforeWrongTypes);
   assert.equal(await redisClient.redis.get(ingestionTestKeys.runnable), "wrong-type");
   await redisClient.redis.del(ingestionTestKeys.runnable);
@@ -1898,11 +2012,13 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   assert.ok(expiresScore);
   await redisClient.redis.del(ingestionTestKeys.expires);
   await redisClient.redis.set(ingestionTestKeys.expires, "wrong-type");
-  await assert.rejects(ingestionRepository.heartbeat(
-    extendedHeartbeat.session,
-    extendedHeartbeat.session.version,
-    heartbeatAt + 4
-  ));
+  await assert.rejects(
+    ingestionRepository.heartbeat(
+      extendedHeartbeat.session,
+      extendedHeartbeat.session.version,
+      heartbeatAt + 4
+    )
+  );
   assert.deepEqual(await readIngestionBusinessState(), stateBeforeWrongTypes);
   assert.equal(await redisClient.redis.get(ingestionTestKeys.expires), "wrong-type");
   await redisClient.redis.del(ingestionTestKeys.expires);
@@ -1930,12 +2046,14 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     String(wrongOrderValue.accepted_order)
   );
   const stateWithWrongOrder = await readIngestionBusinessState();
-  await assert.rejects(ingestionRepository.mutateSemantic(
-    extendedHeartbeat.session,
-    extendedHeartbeat.session.version,
-    blockedReady,
-    heartbeatAt + 5
-  ));
+  await assert.rejects(
+    ingestionRepository.mutateSemantic(
+      extendedHeartbeat.session,
+      extendedHeartbeat.session.version,
+      blockedReady,
+      heartbeatAt + 5
+    )
+  );
   assert.deepEqual(await readIngestionBusinessState(), stateWithWrongOrder);
   await redisClient.redis.hset(
     ingestionTestKeys.canonical,
@@ -1954,11 +2072,15 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "corrupt"
   );
   const stateWithWrongStatus = await readIngestionBusinessState();
-  await assert.rejects(ingestionRepository.deleteSession(
-    extendedHeartbeat.session as unknown as Parameters<typeof ingestionRepository.deleteSession>[0],
-    extendedHeartbeat.session.version,
-    heartbeatAt + 6
-  ));
+  await assert.rejects(
+    ingestionRepository.deleteSession(
+      extendedHeartbeat.session as unknown as Parameters<
+        typeof ingestionRepository.deleteSession
+      >[0],
+      extendedHeartbeat.session.version,
+      heartbeatAt + 6
+    )
+  );
   assert.deepEqual(await readIngestionBusinessState(), stateWithWrongStatus);
   await redisClient.redis.hset(
     ingestionTestKeys.canonical,
@@ -1988,10 +2110,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     generation: coreUuid.randomUuidV7()
   };
   const stateBeforeMissingPreparedHashes = await readActiveSchemaState();
-  for (const omittedHash of [
-    "prepared_image_sha256",
-    "prepared_thumbnail_sha256"
-  ]) {
+  for (const omittedHash of ["prepared_image_sha256", "prepared_thumbnail_sha256"]) {
     const preparedWithoutHash = { ...preparedManifest };
     Reflect.deleteProperty(preparedWithoutHash, omittedHash);
     const missingHashCandidate = {
@@ -2006,95 +2125,105 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     };
     const serializedMissingHashCandidate = {
       ...missingHashCandidate,
-      semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-        missingHashCandidate
-      )
+      semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(missingHashCandidate)
     };
-    assert.throws(() => ingestionSessionCodec.parseStoredIngestionSession(
-      JSON.stringify(serializedMissingHashCandidate)
-    ));
-    await assert.rejects(ingestionRepository.mutateSemantic(
-      extendedHeartbeat.session,
-      extendedHeartbeat.session.version,
-      missingHashCandidate,
-      heartbeatAt + 9
-    ), /INGESTION_QUEUE_STRUCTURE prepared_fields/);
+    assert.throws(() =>
+      ingestionSessionCodec.parseStoredIngestionSession(
+        JSON.stringify(serializedMissingHashCandidate)
+      )
+    );
+    await assert.rejects(
+      ingestionRepository.mutateSemantic(
+        extendedHeartbeat.session,
+        extendedHeartbeat.session.version,
+        missingHashCandidate,
+        heartbeatAt + 9
+      ),
+      /INGESTION_QUEUE_STRUCTURE prepared_fields/
+    );
     assert.deepEqual(
       await readActiveSchemaState(),
       stateBeforeMissingPreparedHashes,
       "缺少任一 prepared SHA-256 的 canonical 必须零写入"
     );
   }
-  const readyDuplicate = activeResult(await ingestionRepository.mutateSemantic(
-    extendedHeartbeat.session,
-    extendedHeartbeat.session.version,
-    {
-      ...extendedHeartbeat.session,
-      status: "ready" as const,
-      phase: "ready" as const,
-      message: "duplicate decision required",
-      progress: 100,
-      execution_token: "",
-      prepared: preparedManifest,
-      semantic_hash: ""
-    },
-    heartbeatAt + 10
-  ));
+  const readyDuplicate = activeResult(
+    await ingestionRepository.mutateSemantic(
+      extendedHeartbeat.session,
+      extendedHeartbeat.session.version,
+      {
+        ...extendedHeartbeat.session,
+        status: "ready" as const,
+        phase: "ready" as const,
+        message: "duplicate decision required",
+        progress: 100,
+        execution_token: "",
+        prepared: preparedManifest,
+        semantic_hash: ""
+      },
+      heartbeatAt + 10
+    )
+  );
   assert.equal(readyDuplicate.metadata.duplicate_pending, 1);
   assert.equal(readyDuplicate.metadata.ready, 0);
-  const readyDecided = activeResult(await ingestionRepository.mutateSemantic(
-    readyDuplicate.session,
-    readyDuplicate.session.version,
-    {
-      ...readyDuplicate.session,
-      duplicate_decision: "upload" as const,
-      semantic_hash: ""
-    },
-    heartbeatAt + 11
-  ));
+  const readyDecided = activeResult(
+    await ingestionRepository.mutateSemantic(
+      readyDuplicate.session,
+      readyDuplicate.session.version,
+      {
+        ...readyDuplicate.session,
+        duplicate_decision: "upload" as const,
+        semantic_hash: ""
+      },
+      heartbeatAt + 11
+    )
+  );
   assert.equal(readyDecided.metadata.duplicate_pending, 0);
   assert.equal(readyDecided.metadata.ready, 1);
   const commitRequestId = coreUuid.randomUuidV7();
-  const committing = activeResult(await ingestionRepository.mutateSemantic(
-    readyDecided.session,
-    readyDecided.session.version,
-    {
-      ...readyDecided.session,
-      status: "committing" as const,
-      phase: "committing" as const,
-      message: "committing",
-      progress: null,
-      execution_token: coreUuid.randomUuidV7(),
-      commit: {
-        commit_request_id: commitRequestId,
-        commit_intent_hash: "2".repeat(64),
-        created_by: ingestionOwner,
-        expected_md5: preparedManifest.md5,
-        duplicate_decision: "upload" as const,
-        metadata: { ...ingestionMetadata, tags: [] }
+  const committing = activeResult(
+    await ingestionRepository.mutateSemantic(
+      readyDecided.session,
+      readyDecided.session.version,
+      {
+        ...readyDecided.session,
+        status: "committing" as const,
+        phase: "committing" as const,
+        message: "committing",
+        progress: null,
+        execution_token: coreUuid.randomUuidV7(),
+        commit: {
+          commit_request_id: commitRequestId,
+          commit_intent_hash: "2".repeat(64),
+          created_by: ingestionOwner,
+          expected_md5: preparedManifest.md5,
+          duplicate_decision: "upload" as const,
+          metadata: { ...ingestionMetadata, tags: [] }
+        },
+        semantic_hash: ""
       },
-      semantic_hash: ""
-    },
-    heartbeatAt + 12
-  ));
+      heartbeatAt + 12
+    )
+  );
   assert.equal(committing.metadata.committing_resolving, 1);
   assert.equal(committing.metadata.resolving, 0);
   assert.ok(Array.isArray(committing.session.metadata.tags));
   assert.ok(committing.session.commit);
   assert.ok(Array.isArray(committing.session.commit.metadata.tags));
-  const committingRunnableScore = Number(await redisClient.redis.zscore(
-    ingestionTestKeys.runnable,
-    ingestionTestKeys.canonical
-  ));
-  assert.ok(
-    Number.isSafeInteger(committingRunnableScore) && committingRunnableScore > 0
+  const committingRunnableScore = Number(
+    await redisClient.redis.zscore(ingestionTestKeys.runnable, ingestionTestKeys.canonical)
   );
+  assert.ok(Number.isSafeInteger(committingRunnableScore) && committingRunnableScore > 0);
   const stateBeforeCommittingDelete = await readIngestionBusinessState();
-  await assert.rejects(productionIngestionRepository.deleteSession(
-    committing.session as unknown as Parameters<typeof ingestionRepository.deleteSession>[0],
-    committing.session.version,
-    heartbeatAt + 13
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_session_state_conflict");
+  await assert.rejects(
+    productionIngestionRepository.deleteSession(
+      committing.session as unknown as Parameters<typeof ingestionRepository.deleteSession>[0],
+      committing.session.version,
+      heartbeatAt + 13
+    ),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "ingestion_session_state_conflict"
+  );
   assert.deepEqual(
     await readIngestionBusinessState(),
     stateBeforeCommittingDelete,
@@ -2109,18 +2238,23 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
       progress: null
     }
   );
-  const resolvingUpload = activeResult(await ingestionRepository.expireSession(
-    committing.session,
-    committing.session.version,
-    committing.session.discard_at,
-    resolvingCandidate
-  ));
+  const resolvingUpload = activeResult(
+    await ingestionRepository.expireSession(
+      committing.session,
+      committing.session.version,
+      committing.session.discard_at,
+      resolvingCandidate
+    )
+  );
   assert.equal(resolvingUpload.metadata.committing_resolving, 1);
   assert.equal(resolvingUpload.metadata.resolving, 1);
   await redisClient.redis.hdel(ingestionTestKeys.metadata, "resolving");
   await assert.rejects(
     productionIngestionRepository.snapshot(ingestionOwner, "upload", 0, 1),
-    (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_queue_structure_invalid",
+    (error: unknown) =>
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ingestion_queue_structure_invalid",
     "当前 metadata 缺少 resolving 子计数必须 fail closed，不能扫描队列修复"
   );
   await redisClient.redis.hset(ingestionTestKeys.metadata, "resolving", "1");
@@ -2129,34 +2263,38 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "过期 committing 进入 resolving 时必须在同一个 Lua 中刷新期限"
   );
   assert.equal(
-    await redisClient.redis.zscore(
-      ingestionTestKeys.runnable,
-      ingestionTestKeys.canonical
-    ),
+    await redisClient.redis.zscore(ingestionTestKeys.runnable, ingestionTestKeys.canonical),
     null
   );
-  await assert.rejects(ingestionRepository.expireSession(
-    resolvingUpload.session,
-    resolvingUpload.session.version,
-    committing.session.discard_at,
-    ingestionSessionTransitions.semanticIngestionSession(
+  await assert.rejects(
+    ingestionRepository.expireSession(
       resolvingUpload.session,
-      { message: "stale expiry must not win" }
-    )
-  ), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_session_not_expired");
+      resolvingUpload.session.version,
+      committing.session.discard_at,
+      ingestionSessionTransitions.semanticIngestionSession(resolvingUpload.session, {
+        message: "stale expiry must not win"
+      })
+    ),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "ingestion_session_not_expired"
+  );
   const completedReceipt = ingestionCommitCompletion.completedIngestionReceipt(
     resolvingUpload.session,
     heartbeatAt + 14
   );
   const publishedCompletionMutations: Parameters<typeof ingestionRepository.mutateSemantic>[] = [];
   const completionMutationClockLowerBound = Date.now();
-  await ingestionCommitCompletion.publishCompletedReceipt(repositoryWithOverrides(ingestionRepository, {
-    readSession: async () => resolvingUpload.session,
-    mutateSemantic: async (...args) => {
-      publishedCompletionMutations.push(args);
-      return { changed: true, session: args[2], metadata: resolvingUpload.metadata };
-    }
-  }), resolvingUpload.session, heartbeatAt + 14);
+  await ingestionCommitCompletion.publishCompletedReceipt(
+    repositoryWithOverrides(ingestionRepository, {
+      readSession: async () => resolvingUpload.session,
+      mutateSemantic: async (...args) => {
+        publishedCompletionMutations.push(args);
+        return { changed: true, session: args[2], metadata: resolvingUpload.metadata };
+      }
+    }),
+    resolvingUpload.session,
+    heartbeatAt + 14
+  );
   assert.equal(
     (publishedCompletionMutations[0]?.[2] as { completed_at?: number }).completed_at,
     heartbeatAt + 14,
@@ -2197,16 +2335,21 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
       code: "ingestion_queue_structure_invalid"
     }
   ];
-  assert.throws(() => ingestionSessionCodec.parseStoredIngestionSession(
-    JSON.stringify(invalidCompletedIdentities[0].receipt)
-  ));
+  assert.throws(() =>
+    ingestionSessionCodec.parseStoredIngestionSession(
+      JSON.stringify(invalidCompletedIdentities[0].receipt)
+    )
+  );
   for (const invalid of invalidCompletedIdentities) {
-    await assert.rejects(productionIngestionRepository.mutateSemantic(
-      resolvingUpload.session,
-      resolvingUpload.session.version,
-      (invalid.receipt) as unknown as StoredIngestionSession,
-      heartbeatAt + 14
-    ), (error: unknown) => error instanceof Error && "code" in error && error.code === invalid.code);
+    await assert.rejects(
+      productionIngestionRepository.mutateSemantic(
+        resolvingUpload.session,
+        resolvingUpload.session.version,
+        invalid.receipt as unknown as StoredIngestionSession,
+        heartbeatAt + 14
+      ),
+      (error: unknown) => error instanceof Error && "code" in error && error.code === invalid.code
+    );
     assert.deepEqual(
       await readActiveSchemaState(),
       stateBeforeInvalidCompletedIdentity,
@@ -2218,12 +2361,14 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     operationalBeforeInvalidCompletedIdentity,
     "completed identity 领域错误不得降级全局 Redis operational state"
   );
-  const completedUpload = completedResult(await ingestionRepository.expireSession(
-    resolvingUpload.session,
-    resolvingUpload.session.version,
-    resolvingUpload.session.discard_at,
-    completedReceipt
-  ));
+  const completedUpload = completedResult(
+    await ingestionRepository.expireSession(
+      resolvingUpload.session,
+      resolvingUpload.session.version,
+      resolvingUpload.session.discard_at,
+      completedReceipt
+    )
+  );
   assert.equal(completedUpload.metadata.completed, 1);
   assert.equal(completedUpload.metadata.unfinished, 0);
   assert.equal(completedUpload.metadata.total, 1);
@@ -2250,19 +2395,22 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "completed Redis 收据不得保留 progress_seq、semantic_hash 或活动态字段"
   );
   assert.deepEqual(
-    Object.keys(JSON.parse(requiredValue(await redisClient.redis.hget(
-      ingestionTestKeys.canonical,
-      "snapshot"
-    )))).sort(),
+    Object.keys(
+      JSON.parse(
+        requiredValue(await redisClient.redis.hget(ingestionTestKeys.canonical, "snapshot"))
+      )
+    ).sort(),
     completedReceiptFields
   );
   const metadataBeforeTerminalMutation = completedUpload.metadata;
-  await assert.rejects(ingestionRepository.mutateSemantic(
-    completedUpload.session,
-    completedUpload.session.version,
-    completedUpload.session,
-    heartbeatAt + 15
-  ));
+  await assert.rejects(
+    ingestionRepository.mutateSemantic(
+      completedUpload.session,
+      completedUpload.session.version,
+      completedUpload.session,
+      heartbeatAt + 15
+    )
+  );
   assert.deepEqual(
     (await ingestionRepository.snapshot(ingestionOwner, "upload", 0, 10)).metadata,
     metadataBeforeTerminalMutation,
@@ -2271,26 +2419,21 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3)`,
-    [
-        completedUpload.session.image_id,
-        ingestionOwner,
-        "9".repeat(32)
-      ]
+    [completedUpload.session.image_id, ingestionOwner, "9".repeat(32)]
   );
   const completedStatus = await ingestionSessionView.readIngestionStatuses(
     ingestionRepository,
     ingestionOwner,
-    [{
-      session_id: completedUpload.session.session_id,
-      image_id: completedUpload.session.image_id
-    }]
+    [
+      {
+        session_id: completedUpload.session.session_id,
+        image_id: completedUpload.session.image_id
+      }
+    ]
   );
   assert.equal(completedStatus[0].status, "completed");
   assert.equal(completedStatus[0].redis_status, "completed");
-  assert.deepEqual(
-    completedStatus[0].display,
-    completedUpload.session.display
-  );
+  assert.deepEqual(completedStatus[0].display, completedUpload.session.display);
   assert.equal(
     completedStatus[0].redis_last_semantic_revision,
     completedUpload.session.last_semantic_revision
@@ -2309,11 +2452,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
       await database.pool.query(
         `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3)`,
-        [
-        statusBarrierImageId,
-        ingestionOwner,
-        "7".repeat(32)
-      ]
+        [statusBarrierImageId, ingestionOwner, "7".repeat(32)]
       );
       statusBarrierPublished = true;
       return [statusBarrierReceipt];
@@ -2324,34 +2463,42 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     }
   });
   const restoreStatusQueries = interceptSqlQueries(database.pool, async (sql, values, query) => {
-    if (sql.includes("SELECT") && sql.includes("FROM metadata")
-      && Array.isArray(values)
-      && values.some((value) => Array.isArray(value)
-        && value.length === 1 && value[0] === statusBarrierImageId)) {
+    if (
+      sql.includes("SELECT") &&
+      sql.includes("FROM metadata") &&
+      Array.isArray(values) &&
+      values.some(
+        (value) => Array.isArray(value) && value.length === 1 && value[0] === statusBarrierImageId
+      )
+    ) {
       statusBarrierReads += 1;
-      assert.equal(statusBarrierPublished, true,
-        "status lookup must observe PostgreSQL after the completed receipt publication");
+      assert.equal(
+        statusBarrierPublished,
+        true,
+        "status lookup must observe PostgreSQL after the completed receipt publication"
+      );
     }
     return query();
   });
   try {
-    const statusAfterCompletedPublication = await ingestionSessionView
-    .readIngestionStatuses(
+    const statusAfterCompletedPublication = await ingestionSessionView.readIngestionStatuses(
       statusBarrierRepository,
       ingestionOwner,
-      [{
-        session_id: statusBarrierReceipt.session_id,
-        image_id: statusBarrierImageId
-      }]
+      [
+        {
+          session_id: statusBarrierReceipt.session_id,
+          image_id: statusBarrierImageId
+        }
+      ]
     );
-  assert.equal(statusAfterCompletedPublication[0].status, "completed");
-  assert.equal(statusAfterCompletedPublication[0].redis_status, "completed");
-  assert.ok(statusBarrierReads > 0, "the actual PostgreSQL status lookup must be observed");
-  assert.equal(
-    statusBarrierDeleteAttempted,
-    false,
-    "先观察到 Redis completed 后的 PG 查询不得误删有效回执"
-  );
+    assert.equal(statusAfterCompletedPublication[0].status, "completed");
+    assert.equal(statusAfterCompletedPublication[0].redis_status, "completed");
+    assert.ok(statusBarrierReads > 0, "the actual PostgreSQL status lookup must be observed");
+    assert.equal(
+      statusBarrierDeleteAttempted,
+      false,
+      "先观察到 Redis completed 后的 PG 查询不得误删有效回执"
+    );
   } finally {
     restoreStatusQueries();
     await database.pool.query("DELETE FROM metadata WHERE id=$1", [statusBarrierImageId]);
@@ -2360,11 +2507,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3)`,
-    [
-        pgOnlyImageId,
-        ingestionOwner,
-        "8".repeat(32)
-      ]
+    [pgOnlyImageId, ingestionOwner, "8".repeat(32)]
   );
   const pgOnlyStatus = await ingestionSessionView.readIngestionStatuses(
     ingestionRepository,
@@ -2382,90 +2525,7 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     "upload",
     () => undefined
   );
-  const hydratedCompletedPage = await ingestionQueueSnapshot
-    .readStableIngestionQueueSnapshot({
-      repository: ingestionRepository,
-      tokens: snapshotTokens,
-      session: { id: "snapshot-admin-session", username: ingestionOwner },
-      actionScope: snapshotScope.id,
-      queue: "upload" as const,
-      offset: 0,
-      limit: 10
-    });
-  assert.equal(hydratedCompletedPage.items.length, 1);
-  assert.equal(hydratedCompletedPage.items[0].status, "completed");
-  assert.deepEqual(
-    hydratedCompletedPage.items[0].display,
-    completedUpload.session.display
-  );
-  assert.equal(
-    hydratedCompletedPage.items[0].completed_item.id,
-    completedUpload.session.image_id
-  );
-  assert.deepEqual({
-    total: hydratedCompletedPage.total,
-    unfinished: hydratedCompletedPage.unfinished,
-    waiting: hydratedCompletedPage.waiting,
-    running: hydratedCompletedPage.running,
-    ready: hydratedCompletedPage.ready,
-    duplicate_pending: hydratedCompletedPage.duplicate_pending,
-    committing: hydratedCompletedPage.committing,
-    resolving: hydratedCompletedPage.resolving,
-    completed: hydratedCompletedPage.completed,
-    failed: hydratedCompletedPage.failed
-  }, ingestionSessionProjection.presentIngestionQueueSummary(
-    completedUpload.metadata
-  ), "稳定 snapshot 顶层 summary 必须独立于 action watermark");
-  const watermarkClaims = snapshotTokens.verify(
-    "imageshow/ingestion/action/watermark",
-    hydratedCompletedPage.action_watermark,
-    (value): value is IngestionTokenEnvelope => value.action_scope === snapshotScope.id
-      && value.owner === ingestionOwner
-      && value.queue === "upload"
-  );
-  assert.equal(
-    watermarkClaims.captured_queue_revision,
-    hydratedCompletedPage.revision
-  );
-  assert.equal(
-    watermarkClaims.max_accepted_order,
-    completedUpload.metadata.last_accepted_order
-  );
-
-  await database.pool.query(
-    "DELETE FROM metadata WHERE id=$1",
-    [completedUpload.session.image_id]
-  );
-  const stablePageAfterStaleCleanup = await ingestionQueueSnapshot
-    .readStableIngestionQueueSnapshot({
-      repository: ingestionRepository,
-      tokens: snapshotTokens,
-      session: { id: "snapshot-admin-session", username: ingestionOwner },
-      actionScope: snapshotScope.id,
-      queue: "upload" as const,
-      offset: 0,
-      limit: 10
-    });
-  assert.equal(stablePageAfterStaleCleanup.items.length, 0);
-  assert.equal(stablePageAfterStaleCleanup.total, 0);
-  assert.equal(stablePageAfterStaleCleanup.completed, 0);
-  assert.equal(await redisClient.redis.exists(ingestionTestKeys.canonical), 0);
-  const metadataOnlyPage = await ingestionQueueSnapshot
-    .readStableIngestionQueueSnapshot({
-      repository: ingestionRepository,
-      tokens: snapshotTokens,
-      session: { id: "snapshot-admin-session", username: ingestionOwner },
-      actionScope: snapshotScope.id,
-      queue: "upload" as const,
-      offset: 500,
-      limit: 0
-    });
-  assert.equal(metadataOnlyPage.offset, 500);
-  assert.equal(metadataOnlyPage.limit, 0);
-  assert.deepEqual(metadataOnlyPage.items, []);
-  assert.ok(metadataOnlyPage.action_watermark);
-  snapshotScope.close();
-  await assert.rejects(ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
+  const hydratedCompletedPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
     repository: ingestionRepository,
     tokens: snapshotTokens,
     session: { id: "snapshot-admin-session", username: ingestionOwner },
@@ -2473,23 +2533,89 @@ const { ingestionRepository, productionIngestionRepository, serviceNow, displayO
     queue: "upload" as const,
     offset: 0,
     limit: 10
-  }), (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_action_scope_stale");
+  });
+  assert.equal(hydratedCompletedPage.items.length, 1);
+  assert.equal(hydratedCompletedPage.items[0].status, "completed");
+  assert.deepEqual(hydratedCompletedPage.items[0].display, completedUpload.session.display);
+  assert.equal(hydratedCompletedPage.items[0].completed_item.id, completedUpload.session.image_id);
+  assert.deepEqual(
+    {
+      total: hydratedCompletedPage.total,
+      unfinished: hydratedCompletedPage.unfinished,
+      waiting: hydratedCompletedPage.waiting,
+      running: hydratedCompletedPage.running,
+      ready: hydratedCompletedPage.ready,
+      duplicate_pending: hydratedCompletedPage.duplicate_pending,
+      committing: hydratedCompletedPage.committing,
+      resolving: hydratedCompletedPage.resolving,
+      completed: hydratedCompletedPage.completed,
+      failed: hydratedCompletedPage.failed
+    },
+    ingestionSessionProjection.presentIngestionQueueSummary(completedUpload.metadata),
+    "稳定 snapshot 顶层 summary 必须独立于 action watermark"
+  );
+  const watermarkClaims = snapshotTokens.verify(
+    "imageshow/ingestion/action/watermark",
+    hydratedCompletedPage.action_watermark,
+    (value): value is IngestionTokenEnvelope =>
+      value.action_scope === snapshotScope.id &&
+      value.owner === ingestionOwner &&
+      value.queue === "upload"
+  );
+  assert.equal(watermarkClaims.captured_queue_revision, hydratedCompletedPage.revision);
+  assert.equal(watermarkClaims.max_accepted_order, completedUpload.metadata.last_accepted_order);
+
+  await database.pool.query("DELETE FROM metadata WHERE id=$1", [completedUpload.session.image_id]);
+  const stablePageAfterStaleCleanup = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot(
+    {
+      repository: ingestionRepository,
+      tokens: snapshotTokens,
+      session: { id: "snapshot-admin-session", username: ingestionOwner },
+      actionScope: snapshotScope.id,
+      queue: "upload" as const,
+      offset: 0,
+      limit: 10
+    }
+  );
+  assert.equal(stablePageAfterStaleCleanup.items.length, 0);
+  assert.equal(stablePageAfterStaleCleanup.total, 0);
+  assert.equal(stablePageAfterStaleCleanup.completed, 0);
+  assert.equal(await redisClient.redis.exists(ingestionTestKeys.canonical), 0);
+  const metadataOnlyPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
+    repository: ingestionRepository,
+    tokens: snapshotTokens,
+    session: { id: "snapshot-admin-session", username: ingestionOwner },
+    actionScope: snapshotScope.id,
+    queue: "upload" as const,
+    offset: 500,
+    limit: 0
+  });
+  assert.equal(metadataOnlyPage.offset, 500);
+  assert.equal(metadataOnlyPage.limit, 0);
+  assert.deepEqual(metadataOnlyPage.items, []);
+  assert.ok(metadataOnlyPage.action_watermark);
+  snapshotScope.close();
+  await assert.rejects(
+    ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
+      repository: ingestionRepository,
+      tokens: snapshotTokens,
+      session: { id: "snapshot-admin-session", username: ingestionOwner },
+      actionScope: snapshotScope.id,
+      queue: "upload" as const,
+      offset: 0,
+      limit: 10
+    }),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "ingestion_action_scope_stale"
+  );
   assert.equal(
-    stablePageAfterStaleCleanup.action_watermark.length
-      <= sharedAppConfig.appConfig.ingestionRuntime.tokenMaxBytes,
+    stablePageAfterStaleCleanup.action_watermark.length <=
+      sharedAppConfig.appConfig.ingestionRuntime.tokenMaxBytes,
     true
   );
-  assert.ok(
-    stablePageAfterStaleCleanup.revision > completedUpload.metadata.revision
-  );
+  assert.ok(stablePageAfterStaleCleanup.revision > completedUpload.metadata.revision);
+  await redisClient.redis.del(ingestionTestKeys.owner, ingestionTestKeys.metadata);
   await redisClient.redis.del(
-    ingestionTestKeys.owner,
-    ingestionTestKeys.metadata
-  );
-  await redisClient.redis.del(
-    ingestionSessionKeys.ingestionUploadIntentKey(
-      expiredIntentOwner,
-      expiredIntentSessionId
-    )
+    ingestionSessionKeys.ingestionUploadIntentKey(expiredIntentOwner, expiredIntentSessionId)
   );
 });

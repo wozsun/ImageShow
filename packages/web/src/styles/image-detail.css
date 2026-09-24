@@ -1,16 +1,26 @@
 @import "./image-detail-semantic-colors.css";
 
 @keyframes image-detail-backdrop-in {
-  from { background-color: var(--color-detail-backdrop-clear); }
-  to { background-color: var(--color-modal-overlay); }
+  from {
+    background-color: var(--color-detail-backdrop-clear);
+  }
+  to {
+    background-color: var(--color-modal-overlay);
+  }
 }
 
 @keyframes image-detail-surface-in {
-  from { transform: translateY(8px) scale(.985); }
-  to { transform: translateY(0) scale(1); }
+  from {
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    transform: translateY(0) scale(1);
+  }
 }
 
-.image-detail-modal { animation: image-detail-backdrop-in .16s ease-out; }
+.image-detail-modal {
+  animation: image-detail-backdrop-in 0.16s ease-out;
+}
 .image-detail-modal > article {
   width: min(1100px, 96vw);
   height: 90vh;
@@ -21,7 +31,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
   overflow: hidden;
-  animation: image-detail-surface-in .18s cubic-bezier(.2, .8, .2, 1);
+  animation: image-detail-surface-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .image-detail-modal .image-detail-image {
   width: 100%;
@@ -38,7 +48,12 @@
   :root[data-public-viewport] .image-detail-modal > article {
     min-width: 0;
     max-width: 100%;
-    height: min(90vh, calc(100dvh - max(24px, var(--public-safe-area-top)) - max(24px, var(--public-safe-area-bottom))));
+    height: min(
+      90vh,
+      calc(
+        100dvh - max(24px, var(--public-safe-area-top)) - max(24px, var(--public-safe-area-bottom))
+      )
+    );
     max-height: 100%;
   }
   :root[data-public-viewport] .image-detail-modal .image-detail-image {
@@ -46,10 +61,7 @@
     max-height: 100%;
   }
 }
-.image-detail-modal
-  > article
-  > .image-detail-image
-  > .progressive-image-full-frame.is-ready {
+.image-detail-modal > article > .image-detail-image > .progressive-image-full-frame.is-ready {
   pointer-events: auto;
 }
 .image-detail-panel {
@@ -108,7 +120,9 @@
   padding: 0 20px 20px;
 }
 
-.image-detail-title-link { color: inherit; }
+.image-detail-title-link {
+  color: inherit;
+}
 .image-detail-title-link:hover {
   color: var(--color-detail-action-text);
   text-decoration: underline;
@@ -133,7 +147,7 @@
   border: 1px solid var(--color-detail-panel-border);
   border-radius: 8px;
   background: var(--color-detail-surface-raised);
-  transition: box-shadow .14s ease;
+  transition: box-shadow 0.14s ease;
 }
 .image-detail-description-card.is-expanded {
   box-shadow: 0 10px 24px var(--color-detail-shadow);
@@ -171,8 +185,12 @@
   display: block;
   white-space: pre-wrap;
 }
-.image-detail-description-text.is-placeholder { color: var(--color-detail-text-secondary); }
-.image-detail-description-text.is-error { color: var(--color-detail-error); }
+.image-detail-description-text.is-placeholder {
+  color: var(--color-detail-text-secondary);
+}
+.image-detail-description-text.is-error {
+  color: var(--color-detail-error);
+}
 .image-detail-description-toggle,
 .image-detail-description-retry {
   position: absolute;
@@ -191,14 +209,16 @@
   color: var(--color-detail-action-text);
   line-height: 20px;
 }
-.image-detail-public-properties { margin-top: 0; }
+.image-detail-public-properties {
+  margin-top: 0;
+}
 .image-detail-actions {
   min-height: 38px;
   flex-wrap: nowrap;
   justify-content: flex-start;
 }
 .image-detail-source.is-disabled {
-  opacity: .45;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 .image-detail-admin-module-error {
@@ -217,10 +237,22 @@
   min-height: 30px;
   padding: 4px 10px;
 }
-.image-detail-modal dl { display: grid; grid-template-columns: 82px 1fr; gap: 8px 12px; }
-.image-detail-modal dt { color: var(--color-detail-text-secondary); }
-.image-detail-modal dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.image-detail-modal dd a { color: var(--color-detail-action-text); }
+.image-detail-modal dl {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 8px 12px;
+}
+.image-detail-modal dt {
+  color: var(--color-detail-text-secondary);
+}
+.image-detail-modal dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.image-detail-modal dd a {
+  color: var(--color-detail-action-text);
+}
 
 .image-detail-modal .image-detail-public-properties .tag-chip {
   color: var(--color-detail-chip-text);
@@ -254,7 +286,9 @@
   background: var(--color-detail-secondary-action-surface);
 }
 
-.image-detail-modal .image-detail-actions .image-detail-source:not(.is-disabled):is(:hover, :focus-visible) {
+.image-detail-modal
+  .image-detail-actions
+  .image-detail-source:not(.is-disabled):is(:hover, :focus-visible) {
   background: var(--color-detail-secondary-action-hover-surface);
   border-color: var(--color-detail-secondary-action-hover-border);
 }
@@ -287,10 +321,9 @@
     height: auto;
     min-height: min(30%, 15rem);
     max-height: calc(
-      100%
-      - var(--public-safe-area-top, env(safe-area-inset-top))
-      - var(--public-safe-area-bottom, env(safe-area-inset-bottom))
-      - var(--image-detail-mobile-controls-space)
+      100% - var(--public-safe-area-top, env(safe-area-inset-top)) -
+        var(--public-safe-area-bottom, env(safe-area-inset-bottom)) -
+        var(--image-detail-mobile-controls-space)
     );
     contain: none;
     isolation: auto;
@@ -341,10 +374,7 @@
   .image-detail-modal.is-closing > article {
     animation: none;
   }
-  .image-detail-modal
-    > article
-    > .image-detail-image
-    .progressive-image-full-frame.is-ready {
+  .image-detail-modal > article > .image-detail-image .progressive-image-full-frame.is-ready {
     opacity: 1;
     animation: none;
   }
@@ -396,5 +426,7 @@
 /* This file loads after app-core, so it owns the final detail-motion override. */
 @media (prefers-reduced-motion: reduce) {
   .image-detail-modal,
-  .image-detail-modal > article { animation: none; }
+  .image-detail-modal > article {
+    animation: none;
+  }
 }

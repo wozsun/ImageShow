@@ -26,18 +26,18 @@ export function ImageThumbnail({
       tabIndex={interactive ? 0 : undefined}
       title={interactive ? "点击预览" : undefined}
       onClick={onClick ? (event) => onClick(event.currentTarget) : undefined}
-      onKeyDown={interactive ? (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onClick!(event.currentTarget);
-        }
-      } : undefined}
+      onKeyDown={
+        interactive
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onClick!(event.currentTarget);
+              }
+            }
+          : undefined
+      }
     >
-      <ThumbImage
-        src={src}
-        alt={alt}
-        retainLoadedWhenEmpty={retainLoadedWhenEmpty}
-      />
+      <ThumbImage src={src} alt={alt} retainLoadedWhenEmpty={retainLoadedWhenEmpty} />
       {showLoadingIndicator && (
         <span className="image-thumbnail-loading" aria-hidden="true">
           <AdminIcon name="image-download-line" />

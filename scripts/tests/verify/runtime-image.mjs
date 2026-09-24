@@ -10,9 +10,7 @@ import {
 import { appConfig } from "../../../packages/shared/src/app-config.ts";
 
 const workspaceRoot = resolve(import.meta.dirname, "../../..");
-const { version } = JSON.parse(
-  await readFile(resolve(workspaceRoot, "package.json"), "utf8")
-);
+const { version } = JSON.parse(await readFile(resolve(workspaceRoot, "package.json"), "utf8"));
 const runtimeSeeds = { SITE_DOMAIN: "example.test", LOG_LEVEL: "INFO" };
 const expectedRuntimeConfig = structuredClone(appConfig.runtimeDefaults);
 expectedRuntimeConfig.site.domain = runtimeSeeds.SITE_DOMAIN;
@@ -45,17 +43,10 @@ let signalHandling = false;
 
 function runDocker(
   arguments_,
-  {
-    allowDuringInterrupt = false,
-    allowFailure = false,
-    stdio = "pipe",
-    timeoutMs = 30_000
-  } = {}
+  { allowDuringInterrupt = false, allowFailure = false, stdio = "pipe", timeoutMs = 30_000 } = {}
 ) {
   if (interruptedSignal && !allowDuringInterrupt) {
-    return Promise.reject(new Error(
-      `docker ${arguments_[0]} refused after ${interruptedSignal}`
-    ));
+    return Promise.reject(new Error(`docker ${arguments_[0]} refused after ${interruptedSignal}`));
   }
   return new Promise((resolveCommand, rejectCommand) => {
     const child = spawnManaged("docker", arguments_, {
@@ -71,16 +62,21 @@ function runDocker(
     const timeout = setTimeout(() => {
       timedOut = true;
       void forceTerminateProcessTree(child).then(
-        () => finish(() => rejectCommand(new Error(
-          `docker ${arguments_[0]} exceeded ${timeoutMs} ms`
-        ))),
+        () =>
+          finish(() =>
+            rejectCommand(new Error(`docker ${arguments_[0]} exceeded ${timeoutMs} ms`))
+          ),
         (error) => {
           releaseFailedProcessTree(child);
           activeChildren.delete(child);
-          finish(() => rejectCommand(new AggregateError(
-            [error],
-            `docker ${arguments_[0]} exceeded ${timeoutMs} ms and its process tree did not terminate`
-          )));
+          finish(() =>
+            rejectCommand(
+              new AggregateError(
+                [error],
+                `docker ${arguments_[0]} exceeded ${timeoutMs} ms and its process tree did not terminate`
+              )
+            )
+          );
         }
       );
     }, timeoutMs);
@@ -92,8 +88,14 @@ function runDocker(
       callback();
       return true;
     };
-    if (child.stdout) child.stdout.on("data", (chunk) => { stdout += chunk; });
-    if (child.stderr) child.stderr.on("data", (chunk) => { stderr += chunk; });
+    if (child.stdout)
+      child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+      });
+    if (child.stderr)
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+      });
     child.once("error", (error) => {
       activeChildren.delete(child);
       finish(() => rejectCommand(error));
@@ -108,25 +110,23 @@ function runDocker(
           stderr: stderr.trim()
         };
         if (timedOut) {
-          rejectCommand(new Error(
-            `docker ${arguments_[0]} exceeded ${timeoutMs} ms`
-          ));
+          rejectCommand(new Error(`docker ${arguments_[0]} exceeded ${timeoutMs} ms`));
           return;
         }
         if (interruptedSignal && !allowDuringInterrupt) {
-          rejectCommand(new Error(
-            `docker ${arguments_[0]} interrupted with ${interruptedSignal}`
-          ));
+          rejectCommand(new Error(`docker ${arguments_[0]} interrupted with ${interruptedSignal}`));
           return;
         }
         if (code === 0 || allowFailure) {
           resolveCommand(result);
           return;
         }
-        rejectCommand(new Error(
-          `docker ${arguments_[0]} failed${signal ? ` with ${signal}` : ` with exit code ${code}`}\n`
-          + `${stderr || stdout}`
-        ));
+        rejectCommand(
+          new Error(
+            `docker ${arguments_[0]} failed${signal ? ` with ${signal}` : ` with exit code ${code}`}\n` +
+              `${stderr || stdout}`
+          )
+        );
       });
     });
   });
@@ -137,9 +137,7 @@ function resultText(result) {
 }
 
 function isNotFound(result) {
-  return /no such (?:container|image|network|object)|not found/i.test(
-    resultText(result)
-  );
+  return /no such (?:container|image|network|object)|not found/i.test(resultText(result));
 }
 
 async function inspectImageIdentity(
@@ -152,9 +150,7 @@ async function inspectImageIdentity(
   });
   if (inspected.code !== 0) {
     if (allowMissing && isNotFound(inspected)) return null;
-    throw new Error(
-      `failed to inspect image ${reference}: ${resultText(inspected)}`
-    );
+    throw new Error(`failed to inspect image ${reference}: ${resultText(inspected)}`);
   }
   let payload;
   try {
@@ -174,20 +170,14 @@ async function inspectImageIdentity(
   };
 }
 
-async function confirmAbsent(
-  label,
-  inspectArguments,
-  { allowDuringInterrupt = false } = {}
-) {
+async function confirmAbsent(label, inspectArguments, { allowDuringInterrupt = false } = {}) {
   const inspected = await runDocker(inspectArguments, {
     allowDuringInterrupt,
     allowFailure: true
   });
   if (inspected.code === 0) throw new Error(`${label} still exists after cleanup`);
   if (!isNotFound(inspected)) {
-    throw new Error(
-      `${label} absence could not be proven: ${resultText(inspected)}`
-    );
+    throw new Error(`${label} absence could not be proven: ${resultText(inspected)}`);
   }
 }
 
@@ -199,21 +189,15 @@ async function removeContainer(name) {
   if (removed.code !== 0 && !isNotFound(removed)) {
     throw new Error(`failed to remove container ${name}: ${resultText(removed)}`);
   }
-  await confirmAbsent(
-    `container ${name}`,
-    ["container", "inspect", name],
-    { allowDuringInterrupt: true }
-  );
+  await confirmAbsent(`container ${name}`, ["container", "inspect", name], {
+    allowDuringInterrupt: true
+  });
 }
 
 async function terminateActiveChildren() {
   const children = [...activeChildren];
-  const results = await Promise.allSettled(
-    children.map(forceTerminateProcessTree)
-  );
-  const errors = results.flatMap((result) => (
-    result.status === "rejected" ? [result.reason] : []
-  ));
+  const results = await Promise.allSettled(children.map(forceTerminateProcessTree));
+  const errors = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
   results.forEach((result, index) => {
     if (result.status !== "rejected") return;
     releaseFailedProcessTree(children[index]);
@@ -234,9 +218,9 @@ async function performRuntimeCleanup() {
         attemptedContainers.delete(name);
       })
   );
-  errors.push(...containerResults.flatMap((result) => (
-    result.status === "rejected" ? [result.reason] : []
-  )));
+  errors.push(
+    ...containerResults.flatMap((result) => (result.status === "rejected" ? [result.reason] : []))
+  );
   if (attemptedNetwork) {
     try {
       const removed = await runDocker(["network", "rm", names.network], {
@@ -244,15 +228,11 @@ async function performRuntimeCleanup() {
         allowFailure: true
       });
       if (removed.code !== 0 && !isNotFound(removed)) {
-        throw new Error(
-          `failed to remove network ${names.network}: ${resultText(removed)}`
-        );
+        throw new Error(`failed to remove network ${names.network}: ${resultText(removed)}`);
       }
-      await confirmAbsent(
-        `network ${names.network}`,
-        ["network", "inspect", names.network],
-        { allowDuringInterrupt: true }
-      );
+      await confirmAbsent(`network ${names.network}`, ["network", "inspect", names.network], {
+        allowDuringInterrupt: true
+      });
       attemptedNetwork = false;
     } catch (error) {
       errors.push(error);
@@ -279,9 +259,7 @@ async function performTemporaryImageCleanup() {
   });
   if (taggedImage) {
     if (taggedImage.owner !== suffix) {
-      throw new Error(
-        `refusing to remove unowned image ${temporaryImageTag}`
-      );
+      throw new Error(`refusing to remove unowned image ${temporaryImageTag}`);
     }
     attemptedImageId = taggedImage.id;
     const removed = await runDocker(["image", "rm", temporaryImageTag], {
@@ -305,19 +283,14 @@ async function performTemporaryImageCleanup() {
       allowMissing: true
     });
     if (remainingImage && remainingImage.owner !== suffix) {
-      throw new Error(
-        `refusing to remove unowned image ${attemptedImageId}`
-      );
+      throw new Error(`refusing to remove unowned image ${attemptedImageId}`);
     }
-    const dangling = await runDocker([
-      "image", "ls", "--all", "--quiet", "--no-trunc",
-      "--filter", "dangling=true"
-    ], { allowDuringInterrupt: true });
+    const dangling = await runDocker(
+      ["image", "ls", "--all", "--quiet", "--no-trunc", "--filter", "dangling=true"],
+      { allowDuringInterrupt: true }
+    );
     const danglingIds = new Set(dangling.stdout.split(/\r?\n/u).filter(Boolean));
-    if (
-      danglingIds.has(attemptedImageId)
-      && !preexistingImageIds.has(attemptedImageId)
-    ) {
+    if (danglingIds.has(attemptedImageId) && !preexistingImageIds.has(attemptedImageId)) {
       const removedId = await runDocker(["image", "rm", attemptedImageId], {
         allowDuringInterrupt: true,
         allowFailure: true
@@ -367,10 +340,7 @@ function cleanup() {
     }
     const cleanupErrors = [...terminationErrors];
     if (attemptedContainers.size > 0 || attemptedNetwork) {
-      const remaining = [
-        ...attemptedContainers,
-        ...(attemptedNetwork ? [names.network] : [])
-      ];
+      const remaining = [...attemptedContainers, ...(attemptedNetwork ? [names.network] : [])];
       cleanupErrors.push(
         ...lastRuntimeErrors,
         new Error(`resources still tracked: ${remaining.join(", ")}`)
@@ -390,10 +360,7 @@ function cleanup() {
     }
     if (attemptedImage) cleanupErrors.push(...lastImageErrors);
     if (cleanupErrors.length === 0) return;
-    throw new AggregateError(
-      cleanupErrors,
-      "runtime-image cleanup failed after bounded retry"
-    );
+    throw new AggregateError(cleanupErrors, "runtime-image cleanup failed after bounded retry");
   })();
   return cleanupPromise;
 }
@@ -415,8 +382,8 @@ function handleSignal(signal) {
 
 function handleShutdownMessage(message) {
   if (
-    message?.type === "imageshow:shutdown"
-    && (message.signal === "SIGINT" || message.signal === "SIGTERM")
+    message?.type === "imageshow:shutdown" &&
+    (message.signal === "SIGINT" || message.signal === "SIGTERM")
   ) {
     handleSignal(message.signal);
   }
@@ -463,16 +430,17 @@ async function applicationProbe(timeoutMs) {
     "  if (status !== 200) throw new Error(path + ' returned ' + status);",
     "}"
   ].join("\n");
-  return runDocker(
-    ["exec", names.app, "node", "--input-type=module", "--eval", program],
-    { allowFailure: true, timeoutMs }
-  );
+  return runDocker(["exec", names.app, "node", "--input-type=module", "--eval", program], {
+    allowFailure: true,
+    timeoutMs
+  });
 }
 
 async function healthProbe(timeoutMs) {
-  const result = await runDocker([
-    "container", "inspect", "--format", "{{.State.Health.Status}}", names.app
-  ], { allowFailure: true, timeoutMs });
+  const result = await runDocker(
+    ["container", "inspect", "--format", "{{.State.Health.Status}}", names.app],
+    { allowFailure: true, timeoutMs }
+  );
   if (result.code === 0 && result.stdout === "healthy") return result;
   return {
     ...result,
@@ -482,23 +450,20 @@ async function healthProbe(timeoutMs) {
 }
 
 async function containerImageId() {
-  const result = await runDocker([
-    "container", "inspect", "--format", "{{.Image}}", names.app
-  ]);
+  const result = await runDocker(["container", "inspect", "--format", "{{.Image}}", names.app]);
   return result.stdout;
 }
 
 async function stoppedContainerProbe(name, exitCode, timeoutMs) {
-  const result = await runDocker([
-    "container", "inspect", "--format",
-    "{{.State.Status}} {{.State.ExitCode}}", name
-  ], { allowFailure: true, timeoutMs });
+  const result = await runDocker(
+    ["container", "inspect", "--format", "{{.State.Status}} {{.State.ExitCode}}", name],
+    { allowFailure: true, timeoutMs }
+  );
   if (result.code === 0 && result.stdout === `exited ${exitCode}`) return result;
   return {
     ...result,
     code: 1,
-    stderr: result.stderr
-      || `container state: ${result.stdout || "missing"}`
+    stderr: result.stderr || `container state: ${result.stdout || "missing"}`
   };
 }
 
@@ -512,39 +477,61 @@ async function applicationConnectionCount(databaseName) {
     "AND usename='imageshow' AND pid <> pg_backend_pid();"
   ].join(" ");
   const result = await runDocker([
-    "exec", "-e", `PGPASSWORD=${databasePassword}`, names.postgres,
-    "psql", "--username", "imageshow", "--dbname", "postgres",
-    "--tuples-only", "--no-align", "--command", sql
+    "exec",
+    "-e",
+    `PGPASSWORD=${databasePassword}`,
+    names.postgres,
+    "psql",
+    "--username",
+    "imageshow",
+    "--dbname",
+    "postgres",
+    "--tuples-only",
+    "--no-align",
+    "--command",
+    sql
   ]);
   return Number(result.stdout.trim());
 }
 
 async function redisApplicationConnectionCount() {
-  const result = await runDocker([
-    "exec", names.redis, "redis-cli", "--raw", "CLIENT", "LIST"
-  ]);
-  return result.stdout
-    .split(/\r?\n/)
-    .filter((line) => line && !/\bcmd=client\|list\b/.test(line))
+  const result = await runDocker(["exec", names.redis, "redis-cli", "--raw", "CLIENT", "LIST"]);
+  return result.stdout.split(/\r?\n/).filter((line) => line && !/\bcmd=client\|list\b/.test(line))
     .length;
 }
 
 function applicationContainerArguments(name, databaseName, imageId) {
   return [
-    "run", "--detach", "--name", name,
-    "--stop-timeout", "50",
-    "--network", names.network,
-    "--tmpfs", "/app/data:rw",
-    "--env", "ADMIN_USERNAME=verifyadmin",
-    "--env", `ADMIN_PASSWORD=${adminPassword}`,
-    "--env", "DATABASE_HOST=postgresql",
-    "--env", "DATABASE_PORT=5432",
-    "--env", `DATABASE_NAME=${databaseName}`,
-    "--env", "DATABASE_USER=imageshow",
-    "--env", `DATABASE_PASSWORD=${databasePassword}`,
-    "--env", "REDIS_HOST=redis",
-    "--env", "REDIS_PORT=6379",
-    "--env", "REDIS_DB=0",
+    "run",
+    "--detach",
+    "--name",
+    name,
+    "--stop-timeout",
+    "50",
+    "--network",
+    names.network,
+    "--tmpfs",
+    "/app/data:rw",
+    "--env",
+    "ADMIN_USERNAME=verifyadmin",
+    "--env",
+    `ADMIN_PASSWORD=${adminPassword}`,
+    "--env",
+    "DATABASE_HOST=postgresql",
+    "--env",
+    "DATABASE_PORT=5432",
+    "--env",
+    `DATABASE_NAME=${databaseName}`,
+    "--env",
+    "DATABASE_USER=imageshow",
+    "--env",
+    `DATABASE_PASSWORD=${databasePassword}`,
+    "--env",
+    "REDIS_HOST=redis",
+    "--env",
+    "REDIS_PORT=6379",
+    "--env",
+    "REDIS_DB=0",
     ...Object.entries(runtimeSeeds).flatMap(([key, value]) => ["--env", `${key}=${value}`]),
     imageId
   ];
@@ -556,35 +543,49 @@ async function schemaShape() {
     "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name;"
   ].join(" ");
   const result = await runDocker([
-    "exec", "-e", `PGPASSWORD=${databasePassword}`, names.postgres,
-    "psql", "--username", "imageshow", "--dbname", "imageshow",
-    "--tuples-only", "--no-align", "--command", sql
+    "exec",
+    "-e",
+    `PGPASSWORD=${databasePassword}`,
+    names.postgres,
+    "psql",
+    "--username",
+    "imageshow",
+    "--dbname",
+    "imageshow",
+    "--tuples-only",
+    "--no-align",
+    "--command",
+    sql
   ]);
   return result.stdout.trim();
 }
 
 try {
-  await confirmAbsent(
-    `temporary image tag ${temporaryImageTag}`,
-    ["image", "inspect", temporaryImageTag]
-  );
-  const imagesBeforeBuild = await runDocker([
-    "image", "ls", "--all", "--quiet", "--no-trunc"
+  await confirmAbsent(`temporary image tag ${temporaryImageTag}`, [
+    "image",
+    "inspect",
+    temporaryImageTag
   ]);
+  const imagesBeforeBuild = await runDocker(["image", "ls", "--all", "--quiet", "--no-trunc"]);
   for (const imageId of imagesBeforeBuild.stdout.split(/\r?\n/u)) {
     if (imageId) preexistingImageIds.add(imageId);
   }
   console.log(`[runtime-image] building ${temporaryImageTag}`);
   attemptedImage = true;
-  await runDocker([
-    "build",
-    "--label", `${verificationImageOwnerLabel}=${suffix}`,
-    "--tag", temporaryImageTag,
-    "."
-  ], {
-    stdio: "inherit",
-    timeoutMs: 10 * 60_000
-  });
+  await runDocker(
+    [
+      "build",
+      "--label",
+      `${verificationImageOwnerLabel}=${suffix}`,
+      "--tag",
+      temporaryImageTag,
+      "."
+    ],
+    {
+      stdio: "inherit",
+      timeoutMs: 10 * 60_000
+    }
+  );
   const image = await inspectImageIdentity(temporaryImageTag);
   if (image.owner !== suffix) {
     throw new Error(`temporary image ${temporaryImageTag} is not owned`);
@@ -593,59 +594,101 @@ try {
   attemptedImageId = imageId;
 
   await confirmAbsent(`network ${names.network}`, ["network", "inspect", names.network]);
-  for (const name of [
-    names.postgres,
-    names.redis,
-    names.failedApp,
-    names.app
-  ]) {
+  for (const name of [names.postgres, names.redis, names.failedApp, names.app]) {
     await confirmAbsent(`container ${name}`, ["container", "inspect", name]);
   }
 
   attemptedNetwork = true;
   await runDocker(["network", "create", names.network]);
   attemptedContainers.add(names.postgres);
-  await runDocker([
-    "run", "--detach", "--name", names.postgres,
-    "--network", names.network, "--network-alias", "postgresql",
-    "--tmpfs", "/var/lib/postgresql:rw",
-    "--env", "POSTGRES_DB=imageshow",
-    "--env", "POSTGRES_USER=imageshow",
-    "--env", `POSTGRES_PASSWORD=${databasePassword}`,
-    "postgres:18"
-  ], { timeoutMs: 3 * 60_000 });
+  await runDocker(
+    [
+      "run",
+      "--detach",
+      "--name",
+      names.postgres,
+      "--network",
+      names.network,
+      "--network-alias",
+      "postgresql",
+      "--tmpfs",
+      "/var/lib/postgresql:rw",
+      "--env",
+      "POSTGRES_DB=imageshow",
+      "--env",
+      "POSTGRES_USER=imageshow",
+      "--env",
+      `POSTGRES_PASSWORD=${databasePassword}`,
+      "postgres:18"
+    ],
+    { timeoutMs: 3 * 60_000 }
+  );
   attemptedContainers.add(names.redis);
-  await runDocker([
-    "run", "--detach", "--name", names.redis,
-    "--network", names.network, "--network-alias", "redis",
-    "--tmpfs", "/data:rw",
-    "redis:8"
-  ], { timeoutMs: 3 * 60_000 });
+  await runDocker(
+    [
+      "run",
+      "--detach",
+      "--name",
+      names.redis,
+      "--network",
+      names.network,
+      "--network-alias",
+      "redis",
+      "--tmpfs",
+      "/data:rw",
+      "redis:8"
+    ],
+    { timeoutMs: 3 * 60_000 }
+  );
 
-  await waitFor("PostgreSQL", (timeoutMs) => runDocker([
-    "exec", names.postgres, "pg_isready", "--host", "127.0.0.1",
-    "--username", "imageshow", "--dbname", "imageshow"
-  ], { allowFailure: true, timeoutMs }));
-  await waitFor("Redis", (timeoutMs) => runDocker([
-    "exec", names.redis, "redis-cli", "ping"
-  ], { allowFailure: true, timeoutMs }));
+  await waitFor("PostgreSQL", (timeoutMs) =>
+    runDocker(
+      [
+        "exec",
+        names.postgres,
+        "pg_isready",
+        "--host",
+        "127.0.0.1",
+        "--username",
+        "imageshow",
+        "--dbname",
+        "imageshow"
+      ],
+      { allowFailure: true, timeoutMs }
+    )
+  );
+  await waitFor("Redis", (timeoutMs) =>
+    runDocker(["exec", names.redis, "redis-cli", "ping"], { allowFailure: true, timeoutMs })
+  );
 
   await runDocker([
-    "exec", "-e", `PGPASSWORD=${databasePassword}`, names.postgres,
-    "psql", "--username", "imageshow", "--dbname", "postgres",
-    "--command", "CREATE DATABASE imageshow_broken"
+    "exec",
+    "-e",
+    `PGPASSWORD=${databasePassword}`,
+    names.postgres,
+    "psql",
+    "--username",
+    "imageshow",
+    "--dbname",
+    "postgres",
+    "--command",
+    "CREATE DATABASE imageshow_broken"
   ]);
   await runDocker([
-    "exec", "-e", `PGPASSWORD=${databasePassword}`, names.postgres,
-    "psql", "--username", "imageshow", "--dbname", "imageshow_broken",
-    "--command", "CREATE TABLE unrelated_marker(id integer PRIMARY KEY)"
+    "exec",
+    "-e",
+    `PGPASSWORD=${databasePassword}`,
+    names.postgres,
+    "psql",
+    "--username",
+    "imageshow",
+    "--dbname",
+    "imageshow_broken",
+    "--command",
+    "CREATE TABLE unrelated_marker(id integer PRIMARY KEY)"
   ]);
   attemptedContainers.add(names.failedApp);
-  await runDocker(applicationContainerArguments(
-    names.failedApp,
-    "imageshow_broken",
-    imageId
-  ));
+  await runDocker(applicationContainerArguments(names.failedApp, "imageshow_broken", imageId));
   await waitFor(
     "ImageShow initialization failure",
     (timeoutMs) => stoppedContainerProbe(names.failedApp, 1, timeoutMs),
@@ -658,23 +701,27 @@ try {
   if (!/application resources released/.test(resultText(failedLogs))) {
     throw new Error("initialization failure did not explicitly release resources");
   }
-  if (await applicationConnectionCount("imageshow_broken") !== 0) {
+  if ((await applicationConnectionCount("imageshow_broken")) !== 0) {
     throw new Error("failed ImageShow startup retained PostgreSQL connections");
   }
 
   attemptedContainers.add(names.app);
   await runDocker(applicationContainerArguments(names.app, "imageshow", imageId));
   await waitFor("ImageShow Docker health", healthProbe, 180_000);
-  if (await containerImageId() !== imageId) {
+  if ((await containerImageId()) !== imageId) {
     throw new Error("cold-start container does not use the inspected image ID");
   }
   const runtimeConfigLayout = await runDocker([
-    "exec", names.app, "node", "--input-type=module", "--eval",
-    "const { readFile } = await import('node:fs/promises'); "
-      + "const config = JSON.parse(await readFile('/app/data/config.json', 'utf8')); "
-      + "const { deepStrictEqual } = await import('node:assert/strict'); "
-      + `deepStrictEqual(config, ${JSON.stringify(expectedRuntimeConfig)}); `
-      + "console.log('runtime-config-layout-ok');"
+    "exec",
+    names.app,
+    "node",
+    "--input-type=module",
+    "--eval",
+    "const { readFile } = await import('node:fs/promises'); " +
+      "const config = JSON.parse(await readFile('/app/data/config.json', 'utf8')); " +
+      "const { deepStrictEqual } = await import('node:assert/strict'); " +
+      `deepStrictEqual(config, ${JSON.stringify(expectedRuntimeConfig)}); ` +
+      "console.log('runtime-config-layout-ok');"
   ]);
   if (runtimeConfigLayout.stdout !== "runtime-config-layout-ok") {
     throw new Error(`unexpected runtime config layout output: ${runtimeConfigLayout.stdout}`);
@@ -684,27 +731,34 @@ try {
   if (!coldShape) {
     throw new Error(`unexpected schema shape before restart: ${coldShape}`);
   }
-  if (await applicationConnectionCount("imageshow") < 1) {
+  if ((await applicationConnectionCount("imageshow")) < 1) {
     throw new Error("running ImageShow did not hold an expected PostgreSQL connection");
   }
-  if (await redisApplicationConnectionCount() < 1) {
+  if ((await redisApplicationConnectionCount()) < 1) {
     throw new Error("running ImageShow did not hold an expected Redis connection");
   }
 
-  await runDocker([
-    "exec", names.app, "node", "--input-type=module", "--eval",
-    "const { connect } = await import('node:net'); "
-      + "const { once } = await import('node:events'); "
-      + "const socket = connect(5518, '127.0.0.1'); "
-      + "socket.on('error', () => {}); "
-      + "await once(socket, 'connect'); "
-      + "socket.write('POST /api/admin/auth/login HTTP/1.1\\r\\n"
-      + "Host: example.test\\r\\nContent-Type: application/json\\r\\n"
-      + "Content-Length: 100\\r\\n\\r\\n{'); "
-      + "await new Promise((resolve) => setTimeout(resolve, 25)); "
-      + "process.kill(1, 'SIGTERM'); "
-      + "process.kill(1, 'SIGINT'); socket.destroy();"
-  ], { allowFailure: true });
+  await runDocker(
+    [
+      "exec",
+      names.app,
+      "node",
+      "--input-type=module",
+      "--eval",
+      "const { connect } = await import('node:net'); " +
+        "const { once } = await import('node:events'); " +
+        "const socket = connect(5518, '127.0.0.1'); " +
+        "socket.on('error', () => {}); " +
+        "await once(socket, 'connect'); " +
+        "socket.write('POST /api/admin/auth/login HTTP/1.1\\r\\n" +
+        "Host: example.test\\r\\nContent-Type: application/json\\r\\n" +
+        "Content-Length: 100\\r\\n\\r\\n{'); " +
+        "await new Promise((resolve) => setTimeout(resolve, 25)); " +
+        "process.kill(1, 'SIGTERM'); " +
+        "process.kill(1, 'SIGINT'); socket.destroy();"
+    ],
+    { allowFailure: true }
+  );
   await waitFor(
     "ImageShow repeated graceful shutdown",
     (timeoutMs) => stoppedContainerProbe(names.app, 0, timeoutMs),
@@ -726,15 +780,15 @@ try {
   if (!/application resources released/.test(stoppedLogText)) {
     throw new Error("graceful shutdown did not explicitly release resources");
   }
-  if (await applicationConnectionCount("imageshow") !== 0) {
+  if ((await applicationConnectionCount("imageshow")) !== 0) {
     throw new Error("graceful ImageShow shutdown retained PostgreSQL connections");
   }
-  if (await redisApplicationConnectionCount() !== 0) {
+  if ((await redisApplicationConnectionCount()) !== 0) {
     throw new Error("graceful ImageShow shutdown retained Redis connections");
   }
   await runDocker(["start", names.app], { timeoutMs: 60_000 });
   await waitFor("ImageShow Docker health after restart", healthProbe, 180_000);
-  if (await containerImageId() !== imageId) {
+  if ((await containerImageId()) !== imageId) {
     throw new Error("restarted container does not use the inspected image ID");
   }
   await waitFor("ImageShow HTTP after restart", applicationProbe, 30_000);
@@ -745,9 +799,9 @@ try {
 
   await cleanup();
   console.log(
-    `[runtime-image] verified ${imageId}; Docker health, immutable image ID, `
-    + "startup failure cleanup, repeated signals, explicit PostgreSQL/Redis release, "
-    + "cold/restart HTTP and persistent schema passed; temporary Docker resources removed"
+    `[runtime-image] verified ${imageId}; Docker health, immutable image ID, ` +
+      "startup failure cleanup, repeated signals, explicit PostgreSQL/Redis release, " +
+      "cold/restart HTTP and persistent schema passed; temporary Docker resources removed"
   );
 } catch (error) {
   if (!interruptedSignal) {

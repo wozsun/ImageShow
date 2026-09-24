@@ -35,10 +35,11 @@ export type FrozenLocalClearIntent = Readonly<{
 
 export type FrozenClearQueueIntent = FrozenLocalClearIntent;
 
-export type FrozenCleanupIntent = FrozenLocalClearIntent & Readonly<{
-  action: IngestionCleanupActionId;
-  count: number;
-}>;
+export type FrozenCleanupIntent = FrozenLocalClearIntent &
+  Readonly<{
+    action: IngestionCleanupActionId;
+    count: number;
+  }>;
 
 export type DeferredCompletedCleanup = {
   id: number;
@@ -58,12 +59,10 @@ export function retainUnresolvedLocalJobs(
   result: LocalClearResult
 ) {
   if (!result.unresolved.length) return [];
-  const unresolvedAttempts = new Set(result.unresolved.map(
-    (item) => `${item.id}\0${item.attemptKey}`
-  ));
-  return captured.filter((job) => (
-    unresolvedAttempts.has(`${job.id}\0${job.attemptKey}`)
-  ));
+  const unresolvedAttempts = new Set(
+    result.unresolved.map((item) => `${item.id}\0${item.attemptKey}`)
+  );
+  return captured.filter((job) => unresolvedAttempts.has(`${job.id}\0${job.attemptKey}`));
 }
 
 export function preserveUnresolvedLocalOutcomes(
@@ -71,15 +70,13 @@ export function preserveUnresolvedLocalOutcomes(
   previous: LocalClearResult
 ) {
   if (!current.unresolved.length || !previous.unresolved.length) return current;
-  const previousByAttempt = new Map(previous.unresolved.map((item) => (
-    [`${item.id}\0${item.attemptKey}`, item] as const
-  )));
+  const previousByAttempt = new Map(
+    previous.unresolved.map((item) => [`${item.id}\0${item.attemptKey}`, item] as const)
+  );
   return {
-    unresolved: current.unresolved.map((item) => (
-      item.outcome
-        ? item
-        : previousByAttempt.get(`${item.id}\0${item.attemptKey}`) ?? item
-    ))
+    unresolved: current.unresolved.map((item) =>
+      item.outcome ? item : (previousByAttempt.get(`${item.id}\0${item.attemptKey}`) ?? item)
+    )
   } satisfies LocalClearResult;
 }
 
@@ -103,9 +100,10 @@ export function serverIntentMatchesQueue(
 ) {
   if (!action.required) return true;
   const frozen = action.frozen;
-  return frozen !== null && (
-    status === "ready"
-    && frozen.connectionGeneration === connectionGeneration
-    && frozen.actionScope === actionScope
+  return (
+    frozen !== null &&
+    status === "ready" &&
+    frozen.connectionGeneration === connectionGeneration &&
+    frozen.actionScope === actionScope
   );
 }

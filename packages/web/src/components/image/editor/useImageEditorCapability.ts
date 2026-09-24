@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   imageEditorTargetKey,
@@ -12,9 +7,7 @@ import {
   type ImageEditorTarget
 } from "./image-editor-capability-loader.js";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
-import type {
-  EditableImageSnapshot
-} from "../../../lib/types.js";
+import type { EditableImageSnapshot } from "../../../lib/types.js";
 import type { IngestionVocabularyDto } from "@imageshow/shared/browser";
 
 type PreparedImageEditor = {
@@ -58,81 +51,84 @@ export function useImageEditorCapability({
     return () => requestFence.unmount();
   }, []);
 
-  const prepare = useCallback((target: ImageEditorTarget) => {
-    const key = imageEditorTargetKey(target);
-    if (
-      preparationRef.current?.key === key
-      && (
-        !preparationRef.current.settled
-        || Date.now() - preparationRef.current.createdAt
-          < editorPreparationReuseMs
-      )
-    ) {
-      return preparationRef.current.promise;
-    }
-
-    const promise = loadImageEditorCapabilityModule()
-      .then(async (module) => ({
-        module,
-        ...await module.prepareImageEditor(queryClient, target.sources)
-      }));
-    const preparation = {
-      createdAt: Date.now(),
-      key,
-      promise,
-      settled: false
-    };
-    preparationRef.current = preparation;
-    void promise.then(
-      () => { preparation.settled = true; },
-      () => { preparation.settled = true; }
-    );
-    void promise.catch((error: unknown) => {
-      if (preparationRef.current === preparation) {
-        preparationRef.current = null;
-      }
-      if (requestFenceRef.current.isMounted()) {
-        onPreparationErrorRef.current?.(error);
-      }
-    });
-    return promise;
-  }, [queryClient]);
-
-  const preload = useCallback((target: ImageEditorTarget) => {
-    void prepare(target).catch(() => undefined);
-  }, [prepare]);
-
-  const open = useCallback(async (
-    target: ImageEditorTarget,
-    opener: HTMLElement
-  ) => {
-    const requestFence = requestFenceRef.current;
-    const requestSequence = requestFence.begin();
-    const nextPending = {
-      itemIds: target.sources.map((item) => item.id)
-    };
-    setPending(nextPending);
-
-    try {
-      const prepared = await prepare(target);
+  const prepare = useCallback(
+    (target: ImageEditorTarget) => {
+      const key = imageEditorTargetKey(target);
       if (
-        !requestFence.isCurrent(requestSequence)
-        || !opener.isConnected
+        preparationRef.current?.key === key &&
+        (!preparationRef.current.settled ||
+          Date.now() - preparationRef.current.createdAt < editorPreparationReuseMs)
       ) {
-        return;
+        return preparationRef.current.promise;
       }
-      returnFocusRef.current = opener;
-      setSession(prepared);
-    } catch (error) {
-      if (requestFence.isCurrent(requestSequence)) {
-        onOpenErrorRef.current?.(error);
+
+      const promise = loadImageEditorCapabilityModule().then(async (module) => ({
+        module,
+        ...(await module.prepareImageEditor(queryClient, target.sources))
+      }));
+      const preparation = {
+        createdAt: Date.now(),
+        key,
+        promise,
+        settled: false
+      };
+      preparationRef.current = preparation;
+      void promise.then(
+        () => {
+          preparation.settled = true;
+        },
+        () => {
+          preparation.settled = true;
+        }
+      );
+      void promise.catch((error: unknown) => {
+        if (preparationRef.current === preparation) {
+          preparationRef.current = null;
+        }
+        if (requestFenceRef.current.isMounted()) {
+          onPreparationErrorRef.current?.(error);
+        }
+      });
+      return promise;
+    },
+    [queryClient]
+  );
+
+  const preload = useCallback(
+    (target: ImageEditorTarget) => {
+      void prepare(target).catch(() => undefined);
+    },
+    [prepare]
+  );
+
+  const open = useCallback(
+    async (target: ImageEditorTarget, opener: HTMLElement) => {
+      const requestFence = requestFenceRef.current;
+      const requestSequence = requestFence.begin();
+      const nextPending = {
+        itemIds: target.sources.map((item) => item.id)
+      };
+      setPending(nextPending);
+
+      try {
+        const prepared = await prepare(target);
+        if (!requestFence.isCurrent(requestSequence) || !opener.isConnected) {
+          return;
+        }
+        returnFocusRef.current = opener;
+        setSession(prepared);
+      } catch (error) {
+        if (requestFence.isCurrent(requestSequence)) {
+          onOpenErrorRef.current?.(error);
+        }
+      } finally {
+        if (requestFence.isCurrent(requestSequence)) {
+          setPending(null);
+        }
       }
-    } finally {
-      if (requestFence.isCurrent(requestSequence)) {
-        setPending(null);
-      }
-    }
-  }, [prepare]);
+    },
+    [prepare]
+  );
 
   const reset = useCallback(() => {
     requestFenceRef.current.invalidate();
@@ -148,7 +144,7 @@ export function useImageEditorCapability({
 
   const updateItems = useCallback((items: EditableImageSnapshot[]) => {
     preparationRef.current = null;
-    setSession((current) => current ? { ...current, items } : current);
+    setSession((current) => (current ? { ...current, items } : current));
   }, []);
 
   return {

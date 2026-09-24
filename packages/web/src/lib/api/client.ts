@@ -34,18 +34,22 @@ export function getCsrfToken() {
 function publicCacheableRequest(path: string, method: string) {
   if (method !== "GET" && method !== "HEAD") return false;
   const pathname = new URL(path, "https://imageshow.invalid").pathname;
-  return pathname === "/api/site-config"
-    || pathname === "/api/gallery-facets"
-    || pathname === "/api/gallery-stats"
-    || /^\/api\/images(?:\/[^/]+)?$/.test(pathname);
+  return (
+    pathname === "/api/site-config" ||
+    pathname === "/api/gallery-facets" ||
+    pathname === "/api/gallery-stats" ||
+    /^\/api\/images(?:\/[^/]+)?$/.test(pathname)
+  );
 }
 
 async function fetchApi(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
-  if (!(init.body instanceof FormData) && init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+  if (!(init.body instanceof FormData) && init.body && !headers.has("content-type"))
+    headers.set("content-type", "application/json");
   const method = String(init.method ?? "GET").toUpperCase();
   if (method !== "GET" && method !== "HEAD" && csrfToken) headers.set("x-csrf-token", csrfToken);
-  const credentials = init.credentials ?? (publicCacheableRequest(path, method) ? "omit" : "same-origin");
+  const credentials =
+    init.credentials ?? (publicCacheableRequest(path, method) ? "omit" : "same-origin");
   const response = await fetch(path, { ...init, headers, credentials });
   if (response.status === 401 && !path.includes("/auth/login") && !path.includes("/auth/me")) {
     clearCsrfToken();
@@ -70,14 +74,11 @@ async function parseApiResponse<T>(response: Response): Promise<T> {
     }
     // 非 JSON 错误由统一 HTTP fallback 展示，不泄露代理层 HTML 响应。
   }
-  const failure = data !== null && typeof data === "object"
-    ? data as Partial<ApiErrorResponseDto>
-    : {};
+  const failure =
+    data !== null && typeof data === "object" ? (data as Partial<ApiErrorResponseDto>) : {};
   if (!response.ok || failure.ok === false) {
     throw new ApiClientError(
-      typeof failure.error === "string"
-        ? failure.error
-        : `HTTP ${response.status}`,
+      typeof failure.error === "string" ? failure.error : `HTTP ${response.status}`,
       response.status,
       typeof failure.code === "string" ? failure.code : "",
       failure.details ?? {}

@@ -12,16 +12,19 @@ const host = runtimeConfig.config.site.domain || `127.0.0.1:${port}`;
 
 function requestReadiness() {
   return new Promise<number>((resolve, reject) => {
-    const outgoing = request({
-      hostname: "127.0.0.1",
-      port,
-      path: "/readyz",
-      method: "GET",
-      headers: { Host: host }
-    }, (incoming) => {
-      incoming.resume();
-      incoming.on("end", () => resolve(incoming.statusCode ?? 0));
-    });
+    const outgoing = request(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path: "/readyz",
+        method: "GET",
+        headers: { Host: host }
+      },
+      (incoming) => {
+        incoming.resume();
+        incoming.on("end", () => resolve(incoming.statusCode ?? 0));
+      }
+    );
     outgoing.on("error", reject);
     outgoing.end();
   });

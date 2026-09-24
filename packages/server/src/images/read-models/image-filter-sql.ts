@@ -1,10 +1,6 @@
 import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { brightnesses, devices } from "@imageshow/shared/browser";
-import type {
-  ImageFilterDimension,
-  ImageFilterPlan,
-  ImageSelectorGroup
-} from "../filter-plan.ts";
+import type { ImageFilterDimension, ImageFilterPlan, ImageSelectorGroup } from "../filter-plan.ts";
 
 export type ImageFilterAxis = ImageFilterDimension;
 
@@ -61,9 +57,10 @@ export function buildImageFilterSql(
     if (axes.length === 0) {
       where.push("FALSE");
     } else if (axes.length < devices.length * brightnesses.length) {
-      const predicates = axes.map(({ device, brightness }) => (
-        `(${prefix}device=${bind(device)} AND ${prefix}brightness=${bind(brightness)})`
-      ));
+      const predicates = axes.map(
+        ({ device, brightness }) =>
+          `(${prefix}device=${bind(device)} AND ${prefix}brightness=${bind(brightness)})`
+      );
       where.push(`(${predicates.join(" OR ")})`);
     }
   } else if (!omitted.has("device")) {
@@ -72,13 +69,9 @@ export function buildImageFilterSql(
       where.push(`${prefix}device=ANY(${bind(selectedDevices)}::text[])`);
     }
   } else if (!omitted.has("brightness")) {
-    const selectedBrightnesses = [
-      ...new Set(axes.map((axis) => axis.brightness))
-    ];
+    const selectedBrightnesses = [...new Set(axes.map((axis) => axis.brightness))];
     if (selectedBrightnesses.length < brightnesses.length) {
-      where.push(
-        `${prefix}brightness=ANY(${bind(selectedBrightnesses)}::text[])`
-      );
+      where.push(`${prefix}brightness=ANY(${bind(selectedBrightnesses)}::text[])`);
     }
   }
 
@@ -94,13 +87,15 @@ export function buildImageFilterSql(
       ? selection.values.filter((value) => value !== unsetThemeFilter)
       : selection.values;
     const matches = `${prefix}${column}=ANY(${bind(values)}::text[])`;
-    where.push(selection.exclude
-      ? includesNull
-        ? `(${prefix}${column} IS NOT NULL AND NOT (${matches}))`
-        : `(${prefix}${column} IS NULL OR NOT (${matches}))`
-      : includesNull
-        ? `(${prefix}${column} IS NULL OR ${matches})`
-        : matches);
+    where.push(
+      selection.exclude
+        ? includesNull
+          ? `(${prefix}${column} IS NOT NULL AND NOT (${matches}))`
+          : `(${prefix}${column} IS NULL OR NOT (${matches}))`
+        : includesNull
+          ? `(${prefix}${column} IS NULL OR ${matches})`
+          : matches
+    );
   }
 
   if (!omitted.has("tag") && input.plan.tag) {

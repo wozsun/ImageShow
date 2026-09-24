@@ -26,14 +26,19 @@ export function interceptPoolConnections(
 
 export function interceptSqlQueries(
   target: Pool | PoolClient,
-  intercept: (sql: string, values: unknown, query: () => Promise<QueryResult>) => Promise<QueryResult>
+  intercept: (
+    sql: string,
+    values: unknown,
+    query: () => Promise<QueryResult>
+  ) => Promise<QueryResult>
 ) {
   const original = target.query;
   return installProperties(target, {
     query(sql: unknown, ...args: unknown[]) {
       const query = () => Reflect.apply(original, target, [sql, ...args]) as Promise<QueryResult>;
       return typeof sql === "string" && typeof args.at(-1) !== "function"
-        ? intercept(sql, args[0], query) : query();
+        ? intercept(sql, args[0], query)
+        : query();
     }
   });
 }
@@ -55,30 +60,34 @@ export async function withCommitFault<T>(
       return (result as Promise<PoolClient>).then((client) => {
         if (clients.has(client)) return client;
         const originalQuery = client.query;
-        clients.set(client, installProperties(client, {
-          async query(sql: unknown, ...parameters: unknown[]) {
-            if (sql === "COMMIT") {
-              await beforeCommit();
-              if (mode === "success" || !shouldFaultCommit()) {
-                return Reflect.apply(originalQuery, client, [sql, ...parameters]);
+        clients.set(
+          client,
+          installProperties(client, {
+            async query(sql: unknown, ...parameters: unknown[]) {
+              if (sql === "COMMIT") {
+                await beforeCommit();
+                if (mode === "success" || !shouldFaultCommit()) {
+                  return Reflect.apply(originalQuery, client, [sql, ...parameters]);
+                }
+                if (mode === "committed") {
+                  await Reflect.apply(originalQuery, client, [sql, ...parameters]);
+                  throw new Error("controlled commit acknowledgement loss");
+                }
+                throw new Error(
+                  mode === "unknown"
+                    ? "controlled commit outcome unknown"
+                    : "controlled commit rollback"
+                );
               }
-              if (mode === "committed") {
-                await Reflect.apply(originalQuery, client, [sql, ...parameters]);
-                throw new Error("controlled commit acknowledgement loss");
-              }
-              throw new Error(mode === "unknown"
-                ? "controlled commit outcome unknown"
-                : "controlled commit rollback");
+              return Reflect.apply(originalQuery, client, [sql, ...parameters]);
             }
-            return Reflect.apply(originalQuery, client, [sql, ...parameters]);
-          }
-        }));
+          })
+        );
         return client;
       });
     },
     query(sql: unknown, ...parameters: unknown[]) {
-      if (mode === "unknown" && typeof sql === "string"
-        && sql.includes("SELECT pg_xact_status")) {
+      if (mode === "unknown" && typeof sql === "string" && sql.includes("SELECT pg_xact_status")) {
         throw new Error("controlled outcome inspection failure");
       }
       return Reflect.apply(query, pool, [sql, ...parameters]);

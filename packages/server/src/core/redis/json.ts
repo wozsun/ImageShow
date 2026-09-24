@@ -7,17 +7,13 @@ import {
 } from "../runtime-availability.ts";
 
 type RedisJsonLookup<T> =
-  | { status: "hit"; value: T }
-  | { status: "miss" }
-  | { status: "unavailable" };
+  { status: "hit"; value: T } | { status: "miss" } | { status: "unavailable" };
 
 function publicRedisIsUnavailable() {
   return !getRedisOperationalState().available;
 }
 
-async function getRedisJsonLookup<T>(
-  key: string
-): Promise<RedisJsonLookup<T>> {
+async function getRedisJsonLookup<T>(key: string): Promise<RedisJsonLookup<T>> {
   if (publicRedisIsUnavailable()) return { status: "unavailable" };
   let raw: string | null;
   try {
@@ -72,9 +68,7 @@ export async function setRequiredRedisJson(
 ) {
   const serialized = JSON.stringify(value);
   await requireOperationalRedis();
-  await runRequiredRedisCommand(() => (
-    redis.set(key, serialized, "EX", ttlSeconds)
-  ));
+  await runRequiredRedisCommand(() => redis.set(key, serialized, "EX", ttlSeconds));
   return true;
 }
 

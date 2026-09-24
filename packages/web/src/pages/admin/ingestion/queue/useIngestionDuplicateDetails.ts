@@ -31,8 +31,7 @@ function selectCachedDuplicateDetails(
 }
 
 function sameMd5s(left: readonly string[], right: readonly string[]) {
-  return left.length === right.length
-    && left.every((md5, index) => md5 === right[index]);
+  return left.length === right.length && left.every((md5, index) => md5 === right[index]);
 }
 
 export function invalidateIngestionDuplicateDetails(md5: string) {
@@ -46,20 +45,25 @@ export function useIngestionDuplicateDetails({
 }: {
   jobs: readonly IngestionJob[];
   updateJobs: (patches: ReadonlyMap<string, Partial<IngestionJob>>) => void;
-  updateDuplicateDecision: (
-    id: string,
-    decision: "upload" | "confirmed"
-  ) => Promise<boolean>;
+  updateDuplicateDecision: (id: string, decision: "upload" | "confirmed") => Promise<boolean>;
 }) {
   const pendingDecisionRef = useRef(new Set<string>());
-  const md5s = useMemo(() => [...new Set(jobs.flatMap((job) => (
-    job.status === "ready"
-      && job.duplicateDecision === "undecided"
-      && (job.duplicateCount ?? 0) > 0
-      && job.md5
-      ? [job.md5]
-      : []
-  )))].sort(), [jobs]);
+  const md5s = useMemo(
+    () =>
+      [
+        ...new Set(
+          jobs.flatMap((job) =>
+            job.status === "ready" &&
+            job.duplicateDecision === "undecided" &&
+            (job.duplicateCount ?? 0) > 0 &&
+            job.md5
+              ? [job.md5]
+              : []
+          )
+        )
+      ].sort(),
+    [jobs]
+  );
   const md5Key = md5s.join("\0");
   const md5SetRef = useRef(new Set(md5s));
   md5SetRef.current = new Set(md5s);
@@ -90,22 +94,19 @@ export function useIngestionDuplicateDetails({
   const queueMissingDetails = (query: DuplicateDetailsQuery) => {
     const cache = cacheRef.current;
     const activeRequest = activeRequestRef.current;
-    const activeMd5s = activeRequest?.revision === query.revision
-      ? new Set(activeRequest.md5s)
-      : null;
-    const missingMd5s = query.md5s.filter((md5) => (
-      !(cache?.revision === query.revision && cache.items.has(md5))
-      && !activeMd5s?.has(md5)
-    ));
+    const activeMd5s =
+      activeRequest?.revision === query.revision ? new Set(activeRequest.md5s) : null;
+    const missingMd5s = query.md5s.filter(
+      (md5) =>
+        !(cache?.revision === query.revision && cache.items.has(md5)) && !activeMd5s?.has(md5)
+    );
     if (!missingMd5s.length) {
       trailingRequestRef.current = null;
       return;
     }
     const trailingRequest = trailingRequestRef.current;
-    if (
-      trailingRequest?.revision === query.revision
-      && sameMd5s(trailingRequest.md5s, missingMd5s)
-    ) return;
+    if (trailingRequest?.revision === query.revision && sameMd5s(trailingRequest.md5s, missingMd5s))
+      return;
     trailingRequestRef.current = {
       revision: query.revision,
       md5s: missingMd5s
@@ -123,10 +124,7 @@ export function useIngestionDuplicateDetails({
         try {
           const result = await getIngestionDuplicateDetails([...request.md5s]);
           const currentQuery = currentQueryRef.current;
-          if (
-            mountedRef.current
-            && currentQuery?.revision === request.revision
-          ) {
+          if (mountedRef.current && currentQuery?.revision === request.revision) {
             let cache = cacheRef.current;
             if (cache?.revision !== request.revision) {
               cache = {
@@ -147,9 +145,9 @@ export function useIngestionDuplicateDetails({
         } catch (reason: unknown) {
           const currentQuery = currentQueryRef.current;
           if (
-            mountedRef.current
-            && currentQuery?.revision === request.revision
-            && request.md5s.some((md5) => currentQuery.md5s.includes(md5))
+            mountedRef.current &&
+            currentQuery?.revision === request.revision &&
+            request.md5s.some((md5) => currentQuery.md5s.includes(md5))
           ) {
             setError(reason instanceof Error ? reason.message : String(reason));
           }
@@ -181,10 +179,10 @@ export function useIngestionDuplicateDetails({
   useEffect(() => {
     const invalidate = (md5: string) => {
       if (
-        md5SetRef.current.has(md5)
-        || cacheRef.current?.items.has(md5)
-        || activeRequestRef.current?.md5s.includes(md5)
-        || trailingRequestRef.current?.md5s.includes(md5)
+        md5SetRef.current.has(md5) ||
+        cacheRef.current?.items.has(md5) ||
+        activeRequestRef.current?.md5s.includes(md5) ||
+        trailingRequestRef.current?.md5s.includes(md5)
       ) {
         setInvalidationRevision((current) => current + 1);
       }
@@ -227,23 +225,24 @@ export function useIngestionDuplicateDetails({
     const patches = new Map<string, Partial<IngestionJob>>();
     const decisions: Array<{ id: string; key: string }> = [];
     for (const job of jobs) {
-      if (
-        job.status !== "ready"
-        || job.duplicateDecision !== "undecided"
-        || !job.md5
-      ) continue;
+      if (job.status !== "ready" || job.duplicateDecision !== "undecided" || !job.md5) continue;
       const snapshot = snapshots.get(job.md5);
       if (!snapshot) continue;
-      patches.set(job.id, snapshot.match_count > 0 ? {
-        duplicates: snapshot.duplicates,
-        duplicateCount: snapshot.match_count,
-        message: ingestionDuplicateMessage(snapshot.match_count)
-      } : {
-        // Keep the last actionable duplicate state until the Server decision
-        // CAS succeeds. Clearing count first would hide both confirm/cancel
-        // controls and leave an undecided card with no reachable recovery.
-        message: "图库中的重复图片已不存在，正在恢复可提交状态"
-      });
+      patches.set(
+        job.id,
+        snapshot.match_count > 0
+          ? {
+              duplicates: snapshot.duplicates,
+              duplicateCount: snapshot.match_count,
+              message: ingestionDuplicateMessage(snapshot.match_count)
+            }
+          : {
+              // Keep the last actionable duplicate state until the Server decision
+              // CAS succeeds. Clearing count first would hide both confirm/cancel
+              // controls and leave an undecided card with no reachable recovery.
+              message: "图库中的重复图片已不存在，正在恢复可提交状态"
+            }
+      );
       if (snapshot.match_count === 0 && job.serverVersion) {
         const key = `${job.id}\0${job.serverVersion}`;
         if (!pendingDecisionRef.current.has(key)) {

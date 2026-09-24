@@ -2,9 +2,8 @@ import { withTransactionOnClient } from "../../core/database/transactions.ts";
 import { withTrashMembershipLock } from "./membership-lock.ts";
 
 export async function maintainTrashPurgeTasks() {
-  return withTrashMembershipLock((client) => withTransactionOnClient(
-    client,
-    async (transaction) => {
+  return withTrashMembershipLock((client) =>
+    withTransactionOnClient(client, async (transaction) => {
       const result = await transaction.query(
         `WITH candidates AS MATERIALIZED (
            SELECT id, status
@@ -33,6 +32,6 @@ export async function maintainTrashPurgeTasks() {
         retried_jobs: Number(result.rows[0]?.retried_jobs ?? 0),
         repaired_jobs: Number(result.rows[0]?.repaired_jobs ?? 0)
       };
-    }
-  ));
+    })
+  );
 }

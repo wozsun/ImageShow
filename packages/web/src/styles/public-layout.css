@@ -1,5 +1,9 @@
-.page { min-height: 100vh; }
-.home-page { min-height: 100svh; }
+.page {
+  min-height: 100vh;
+}
+.home-page {
+  min-height: 100svh;
+}
 
 .home-page,
 .gallery-page {
@@ -34,9 +38,7 @@
   isolation: isolate;
   /* 主、次导航共享这一位移，切换时保持边界连续。 */
   transform: translateY(var(--public-navigation-stack-shift));
-  transition:
-    transform var(--public-nav-motion-duration)
-    var(--public-nav-motion-easing);
+  transition: transform var(--public-nav-motion-duration) var(--public-nav-motion-easing);
 }
 
 .public-navigation-stack::before,
@@ -60,15 +62,43 @@
   left: 0;
   height: var(--app-header-height);
   background:
-    radial-gradient(circle at 20% 31%, var(--public-color-navigation-star-neutral-strong) 0 1px, transparent 1.8px),
-    radial-gradient(circle at 28% 72%, var(--public-color-navigation-star-primary) 0 .9px, transparent 1.7px),
-    radial-gradient(circle at 35% 22%, var(--public-color-navigation-star-neutral-soft) 0 .7px, transparent 1.45px),
-    radial-gradient(circle at 52% 68%, var(--public-color-navigation-star-primary-bright) 0 .9px, transparent 1.7px),
-    radial-gradient(circle at 61% 26%, var(--public-color-navigation-star-accent) 0 .8px, transparent 1.55px),
-    radial-gradient(circle at 72% 63%, var(--public-color-navigation-star-primary-soft) 0 .75px, transparent 1.5px),
-    radial-gradient(circle at 83% 28%, var(--public-color-navigation-star-neutral-muted) 0 .7px, transparent 1.45px);
-  opacity: .86;
-  filter: blur(.55px);
+    radial-gradient(
+      circle at 20% 31%,
+      var(--public-color-navigation-star-neutral-strong) 0 1px,
+      transparent 1.8px
+    ),
+    radial-gradient(
+      circle at 28% 72%,
+      var(--public-color-navigation-star-primary) 0 0.9px,
+      transparent 1.7px
+    ),
+    radial-gradient(
+      circle at 35% 22%,
+      var(--public-color-navigation-star-neutral-soft) 0 0.7px,
+      transparent 1.45px
+    ),
+    radial-gradient(
+      circle at 52% 68%,
+      var(--public-color-navigation-star-primary-bright) 0 0.9px,
+      transparent 1.7px
+    ),
+    radial-gradient(
+      circle at 61% 26%,
+      var(--public-color-navigation-star-accent) 0 0.8px,
+      transparent 1.55px
+    ),
+    radial-gradient(
+      circle at 72% 63%,
+      var(--public-color-navigation-star-primary-soft) 0 0.75px,
+      transparent 1.5px
+    ),
+    radial-gradient(
+      circle at 83% 28%,
+      var(--public-color-navigation-star-neutral-muted) 0 0.7px,
+      transparent 1.45px
+    );
+  opacity: 0.86;
+  filter: blur(0.55px);
 }
 
 .public-navigation-stack:not(:has(> .topbar))::after {
@@ -96,8 +126,8 @@
   z-index: 7;
   width: 100%;
   height: var(--app-header-height);
-  padding: 0 max(28px, calc(var(--public-safe-area-right) + 12px))
-    0 max(28px, calc(var(--public-safe-area-left) + 12px));
+  padding: 0 max(28px, calc(var(--public-safe-area-right) + 12px)) 0
+    max(28px, calc(var(--public-safe-area-left) + 12px));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -113,9 +143,7 @@
 }
 
 .topbar.is-public-navigation-entrance {
-  animation:
-    public-navigation-entrance
-    var(--public-motion-navigation-reveal) ease-out backwards;
+  animation: public-navigation-entrance var(--public-motion-navigation-reveal) ease-out backwards;
 }
 .topbar::after {
   content: "";
@@ -127,19 +155,8 @@
   height: 9px;
   pointer-events: none;
   background: var(--public-color-navigation-streak);
-  clip-path: polygon(
-    50% 0,
-    58% 42%,
-    100% 50%,
-    58% 58%,
-    50% 100%,
-    42% 58%,
-    0 50%,
-    42% 42%
-  );
-  filter:
-    blur(.36px)
-    drop-shadow(0 0 5px var(--public-color-navigation-streak-glow));
+  clip-path: polygon(50% 0, 58% 42%, 100% 50%, 58% 58%, 50% 100%, 42% 58%, 0 50%, 42% 42%);
+  filter: blur(0.36px) drop-shadow(0 0 5px var(--public-color-navigation-streak-glow));
 }
 .topbar > * {
   position: relative;
@@ -158,11 +175,23 @@
 }
 
 @keyframes public-navigation-entrance {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
-.brand { font-weight: 800; font-size: 20px; }
-.topbar .desktop-nav { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.brand {
+  font-weight: 800;
+  font-size: 20px;
+}
+.topbar .desktop-nav {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+}
 .topbar .desktop-nav a {
   min-height: 34px;
   padding: 6px 10px;
@@ -171,14 +200,20 @@
   align-items: center;
   gap: 8px;
   color: var(--public-color-navigation-link);
-  transition: color .16s ease, background-color .16s ease, font-weight .16s ease, transform .1s ease;
+  transition:
+    color 0.16s ease,
+    background-color 0.16s ease,
+    font-weight 0.16s ease,
+    transform 0.1s ease;
 }
 .topbar .desktop-nav a:hover {
   color: var(--color-public-text-strong);
   background: var(--public-color-navigation-control-surface);
   font-weight: 700;
 }
-.topbar .desktop-nav a:active { transform: scale(var(--pressable-scale-medium, .98)); }
+.topbar .desktop-nav a:active {
+  transform: scale(var(--pressable-scale-medium, 0.98));
+}
 
 .topbar .desktop-nav a.active {
   color: var(--color-public-text-strong);
@@ -192,13 +227,22 @@
 }
 
 @media (max-width: 760px) {
-  .topbar { padding: 0 max(16px, calc(var(--public-safe-area-right) + 12px)) 0 max(16px, calc(var(--public-safe-area-left) + 12px)); }
-  .desktop-nav { display: none !important; }
+  .topbar {
+    padding: 0 max(16px, calc(var(--public-safe-area-right) + 12px)) 0
+      max(16px, calc(var(--public-safe-area-left) + 12px));
+  }
+  .desktop-nav {
+    display: none !important;
+  }
 }
 
 /* Keep accessibility overrides after every public-navigation declaration. */
 @media (prefers-reduced-motion: reduce) {
   .public-navigation-stack,
-  .public-navigation-stack::before { transition: none; }
-  .topbar.is-public-navigation-entrance { animation: none; }
+  .public-navigation-stack::before {
+    transition: none;
+  }
+  .topbar.is-public-navigation-entrance {
+    animation: none;
+  }
 }

@@ -22,16 +22,12 @@ export function tagScrollContentMetrics(
   paddingLeft: number,
   paddingRight: number
 ): TagScrollMetrics {
-  const horizontalPadding = Math.max(0, paddingLeft)
-    + Math.max(0, paddingRight);
+  const horizontalPadding = Math.max(0, paddingLeft) + Math.max(0, paddingRight);
   const clientWidth = Math.max(0, metrics.clientWidth - horizontalPadding);
   return {
     clientWidth,
     scrollLeft: metrics.scrollLeft,
-    scrollWidth: Math.max(
-      clientWidth,
-      metrics.scrollWidth - horizontalPadding
-    )
+    scrollWidth: Math.max(clientWidth, metrics.scrollWidth - horizontalPadding)
   };
 }
 
@@ -65,10 +61,7 @@ export function tagScrollAvailability({
 }
 
 function clampTagScrollLeft(metrics: TagScrollMetrics, value: number) {
-  return Math.min(
-    Math.max(0, metrics.scrollWidth - metrics.clientWidth),
-    Math.max(0, value)
-  );
+  return Math.min(Math.max(0, metrics.scrollWidth - metrics.clientWidth), Math.max(0, value));
 }
 
 /**
@@ -86,10 +79,7 @@ export function tagScrollNavigationTarget(
     trailing: 0
   }
 ) {
-  const leadingInset = Math.min(
-    metrics.clientWidth,
-    Math.max(0, navigationInsets.leading)
-  );
+  const leadingInset = Math.min(metrics.clientWidth, Math.max(0, navigationInsets.leading));
   const trailingInset = Math.min(
     Math.max(0, metrics.clientWidth - leadingInset),
     Math.max(0, navigationInsets.trailing)
@@ -101,64 +91,46 @@ export function tagScrollNavigationTarget(
   const trailingClearance = trailingInset > 0 ? tagScrollEpsilon : 0;
   const visibleWidth = Math.max(
     tagScrollEpsilon,
-    metrics.clientWidth
-      - leadingInset
-      - trailingInset
-      - leadingClearance
-      - trailingClearance
+    metrics.clientWidth - leadingInset - trailingInset - leadingClearance - trailingClearance
   );
-  const visibleStart = metrics.scrollLeft
-    + leadingInset
-    + leadingClearance;
-  const visibleEnd = metrics.scrollLeft
-    + metrics.clientWidth
-    - trailingInset
-    - trailingClearance;
+  const visibleStart = metrics.scrollLeft + leadingInset + leadingClearance;
+  const visibleEnd = metrics.scrollLeft + metrics.clientWidth - trailingInset - trailingClearance;
   if (direction > 0) {
-    const nextItem = items.find((item) => (
-      item.offsetLeft + item.offsetWidth > visibleEnd + tagScrollEpsilon
-    ));
+    const nextItem = items.find(
+      (item) => item.offsetLeft + item.offsetWidth > visibleEnd + tagScrollEpsilon
+    );
     if (!nextItem) return clampTagScrollLeft(metrics, metrics.scrollWidth);
 
-    const trailingTarget = nextItem.offsetLeft
-      + nextItem.offsetWidth
-      - metrics.clientWidth
-      + trailingInset
-      + trailingClearance;
-    const target = nextItem.offsetWidth > visibleWidth
-      ? Math.min(metrics.scrollLeft + visibleWidth, trailingTarget)
-      : trailingTarget;
-    return clampTagScrollLeft(
-      metrics,
-      target
-    );
+    const trailingTarget =
+      nextItem.offsetLeft +
+      nextItem.offsetWidth -
+      metrics.clientWidth +
+      trailingInset +
+      trailingClearance;
+    const target =
+      nextItem.offsetWidth > visibleWidth
+        ? Math.min(metrics.scrollLeft + visibleWidth, trailingTarget)
+        : trailingTarget;
+    return clampTagScrollLeft(metrics, target);
   }
 
-  const previousItem = items.findLast((item) => (
-    item.offsetLeft < visibleStart - tagScrollEpsilon
-  ));
+  const previousItem = items.findLast((item) => item.offsetLeft < visibleStart - tagScrollEpsilon);
   if (!previousItem) return 0;
 
-  const trailingTarget = previousItem.offsetLeft
-    + previousItem.offsetWidth
-    - metrics.clientWidth
-    + trailingInset
-    + trailingClearance;
-  const leadingTarget = previousItem.offsetLeft
-    - leadingInset
-    - leadingClearance;
-  const target = previousItem.offsetWidth > visibleWidth
-    ? metrics.scrollLeft > trailingTarget + tagScrollEpsilon
-      ? Math.max(metrics.scrollLeft - visibleWidth, trailingTarget)
-      : Math.max(
-          leadingTarget,
-          metrics.scrollLeft - visibleWidth
-        )
-    : leadingTarget;
-  return clampTagScrollLeft(
-    metrics,
-    target
-  );
+  const trailingTarget =
+    previousItem.offsetLeft +
+    previousItem.offsetWidth -
+    metrics.clientWidth +
+    trailingInset +
+    trailingClearance;
+  const leadingTarget = previousItem.offsetLeft - leadingInset - leadingClearance;
+  const target =
+    previousItem.offsetWidth > visibleWidth
+      ? metrics.scrollLeft > trailingTarget + tagScrollEpsilon
+        ? Math.max(metrics.scrollLeft - visibleWidth, trailingTarget)
+        : Math.max(leadingTarget, metrics.scrollLeft - visibleWidth)
+      : leadingTarget;
+  return clampTagScrollLeft(metrics, target);
 }
 
 /**
@@ -177,17 +149,10 @@ export function tagVerticalWheelPixels({
   deltaY: number;
 }) {
   if (Math.abs(deltaX) > tagWheelHorizontalEpsilon) return null;
-  const pixels = deltaMode === 1
-    ? deltaY * 16
-    : deltaMode === 2
-      ? deltaY * clientWidth
-      : deltaY;
+  const pixels = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * clientWidth : deltaY;
   return Math.abs(pixels) <= tagScrollEpsilon ? null : pixels;
 }
 
-export function tagWheelScrollTarget(
-  metrics: TagScrollMetrics,
-  delta: number
-) {
+export function tagWheelScrollTarget(metrics: TagScrollMetrics, delta: number) {
   return clampTagScrollLeft(metrics, metrics.scrollLeft + delta);
 }

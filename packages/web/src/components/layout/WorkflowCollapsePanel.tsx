@@ -1,10 +1,7 @@
 import { useId, type ReactNode } from "react";
 import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
 import { useDismissiblePanel } from "../../hooks/useDismissiblePanel.js";
-import {
-  mobileViewportMediaQuery,
-  useMediaQuery
-} from "../../hooks/useMediaQuery.js";
+import { mobileViewportMediaQuery, useMediaQuery } from "../../hooks/useMediaQuery.js";
 import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import { Icon } from "../icon/Icon.js";
 import { InteractionSurfaceContext } from "../../lib/ui/interaction-surface.js";
@@ -16,7 +13,7 @@ export function WorkflowCollapsePanel({
   summary,
   expanded,
   onExpandedChange,
-  children,
+  children
 }: {
   className: string;
   contentClassName: string;
@@ -54,10 +51,10 @@ export function WorkflowCollapsePanel({
         <small>{summary}</small>
         <Icon name="arrow-down-s-line" />
       </DirectActivationButton>
-      <AnchoredMenuDismissSignalContext.Provider
-        value={disclosure.menuDismissSignal}
-      >
-        <InteractionSurfaceContext.Provider value={{ id: contentId, returnFocusRef: disclosure.triggerRef }}>
+      <AnchoredMenuDismissSignalContext.Provider value={disclosure.menuDismissSignal}>
+        <InteractionSurfaceContext.Provider
+          value={{ id: contentId, returnFocusRef: disclosure.triggerRef }}
+        >
           <div
             ref={disclosure.panelRef}
             id={contentId}

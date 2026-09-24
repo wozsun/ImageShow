@@ -31,9 +31,7 @@ type HomeEntranceControllerOptions = {
 const defaultScheduler: HomeEntranceScheduler = {
   now: () => globalThis.performance?.now() ?? Date.now(),
   setTimer: (callback, delayMs) => globalThis.setTimeout(callback, delayMs),
-  clearTimer: (handle) => globalThis.clearTimeout(
-    handle as ReturnType<typeof setTimeout>
-  )
+  clearTimer: (handle) => globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>)
 };
 
 export class HomeEntranceController {
@@ -56,9 +54,7 @@ export class HomeEntranceController {
     this.#scheduler = options.scheduler ?? defaultScheduler;
     const initiallyRevealed = options.initiallyRevealed ?? false;
     this.#snapshot = {
-      navigationRevealed:
-        initiallyRevealed
-        || (options.navigationInitiallyRevealed ?? false),
+      navigationRevealed: initiallyRevealed || (options.navigationInitiallyRevealed ?? false),
       heroRevealed: initiallyRevealed,
       catalogArmed: initiallyRevealed,
       backgroundReady: false,
@@ -76,27 +72,19 @@ export class HomeEntranceController {
     if (this.#disposed || this.#deadlineAt !== undefined) return;
     this.#deadlineAt = this.#scheduler.now() + homeEntranceTiming.deadlineMs;
     if (!this.#snapshot.heroRevealed) {
-      this.#deadlineTimer = this.#scheduler.setTimer(
-        () => {
-          this.#deadlineTimer = undefined;
-          this.reveal();
-        },
-        homeEntranceTiming.deadlineMs
-      );
+      this.#deadlineTimer = this.#scheduler.setTimer(() => {
+        this.#deadlineTimer = undefined;
+        this.reveal();
+      }, homeEntranceTiming.deadlineMs);
     }
   }
 
   backgroundBecameReady() {
-    if (
-      this.#disposed
-      || this.#backgroundFailed
-      || this.#snapshot.backgroundReady
-    ) return;
+    if (this.#disposed || this.#backgroundFailed || this.#snapshot.backgroundReady) return;
     const foregroundSequenceWasStarted = this.#foregroundSequenceStarted;
     this.#snapshot = {
       ...this.#snapshot,
-      navigationRevealed:
-        this.#snapshot.navigationRevealed || !foregroundSequenceWasStarted,
+      navigationRevealed: this.#snapshot.navigationRevealed || !foregroundSequenceWasStarted,
       backgroundReady: true,
       backgroundReadyAfterForeground: foregroundSequenceWasStarted
     };
@@ -107,11 +95,7 @@ export class HomeEntranceController {
   }
 
   backgroundFailed() {
-    if (
-      this.#disposed
-      || this.#backgroundFailed
-      || this.#snapshot.backgroundReady
-    ) return;
+    if (this.#disposed || this.#backgroundFailed || this.#snapshot.backgroundReady) return;
     this.#backgroundFailed = true;
     this.revealImmediately();
   }
@@ -121,11 +105,7 @@ export class HomeEntranceController {
   }
 
   reveal() {
-    if (
-      this.#disposed
-      || this.#snapshot.heroRevealed
-      || this.#deadlineReleased
-    ) return;
+    if (this.#disposed || this.#snapshot.heroRevealed || this.#deadlineReleased) return;
     this.#deadlineReleased = true;
     this.#foregroundSequenceStarted = true;
     const now = this.#scheduler.now();
@@ -149,8 +129,7 @@ export class HomeEntranceController {
         this.#revealHero();
       }, heroRevealAt - now);
     }
-    this.#catalogRevealAt = deadlineAnchor
-      + homeEntranceTiming.catalogDelayAfterDeadlineMs;
+    this.#catalogRevealAt = deadlineAnchor + homeEntranceTiming.catalogDelayAfterDeadlineMs;
     if (now >= this.#catalogRevealAt) {
       this.#revealCatalog();
     } else {
@@ -166,24 +145,18 @@ export class HomeEntranceController {
     if (this.#disposed || this.#snapshot.catalogArmed) return;
     const now = this.#scheduler.now();
     if (
-      !this.#snapshot.heroRevealed
-      && !this.#deadlineReleased
-      && this.#deadlineAt !== undefined
-      && now >= this.#deadlineAt
+      !this.#snapshot.heroRevealed &&
+      !this.#deadlineReleased &&
+      this.#deadlineAt !== undefined &&
+      now >= this.#deadlineAt
     ) {
       this.reveal();
       return;
     }
-    if (
-      this.#heroRevealAt !== undefined
-      && now >= this.#heroRevealAt
-    ) {
+    if (this.#heroRevealAt !== undefined && now >= this.#heroRevealAt) {
       this.#revealHero();
     }
-    if (
-      this.#catalogRevealAt !== undefined
-      && now >= this.#catalogRevealAt
-    ) {
+    if (this.#catalogRevealAt !== undefined && now >= this.#catalogRevealAt) {
       this.#revealCatalog();
       return;
     }
@@ -196,18 +169,14 @@ export class HomeEntranceController {
   }
 
   #deadlineAnchor(now: number) {
-    return this.#deadlineAt === undefined
-      ? now
-      : Math.min(now, this.#deadlineAt);
+    return this.#deadlineAt === undefined ? now : Math.min(now, this.#deadlineAt);
   }
 
   #startForegroundSequence() {
     this.#foregroundSequenceStarted = true;
     const now = this.#scheduler.now();
-    this.#heroRevealAt = now
-      + homeEntranceTiming.heroDelayAfterBackgroundMs;
-    this.#catalogRevealAt = now
-      + homeEntranceTiming.catalogDelayAfterBackgroundMs;
+    this.#heroRevealAt = now + homeEntranceTiming.heroDelayAfterBackgroundMs;
+    this.#catalogRevealAt = now + homeEntranceTiming.catalogDelayAfterBackgroundMs;
     this.#heroTimer = this.#scheduler.setTimer(() => {
       this.#heroTimer = undefined;
       this.#revealHero();
@@ -254,13 +223,12 @@ export class HomeEntranceController {
 
   #revealForegroundImmediately() {
     if (
-      this.#disposed
-      || (
-        this.#snapshot.navigationRevealed
-        && this.#snapshot.heroRevealed
-        && this.#snapshot.catalogArmed
-      )
-    ) return;
+      this.#disposed ||
+      (this.#snapshot.navigationRevealed &&
+        this.#snapshot.heroRevealed &&
+        this.#snapshot.catalogArmed)
+    )
+      return;
     this.#foregroundSequenceStarted = true;
     this.#deadlineReleased = true;
     this.#snapshot = {

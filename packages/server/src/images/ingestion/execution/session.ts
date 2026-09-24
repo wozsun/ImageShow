@@ -13,33 +13,33 @@ function canAdoptIngestionExecutionVersion(
   expected: IngestionSessionSnapshot
 ) {
   if (
-    current.owner !== expected.owner
-    || current.queue !== expected.queue
-    || current.session_id !== expected.session_id
-    || current.image_id !== expected.image_id
-    || current.status !== expected.status
-    || !current.execution_token
-    || current.execution_token !== expected.execution_token
-    || current.version < expected.version
-  ) return false;
-  return current.version === expected.version
-    || current.status === "downloading"
-    || current.status === "preparing";
+    current.owner !== expected.owner ||
+    current.queue !== expected.queue ||
+    current.session_id !== expected.session_id ||
+    current.image_id !== expected.image_id ||
+    current.status !== expected.status ||
+    !current.execution_token ||
+    current.execution_token !== expected.execution_token ||
+    current.version < expected.version
+  )
+    return false;
+  return (
+    current.version === expected.version ||
+    current.status === "downloading" ||
+    current.status === "preparing"
+  );
 }
 
 export async function refreshIngestionExecutionSession(
   repository: IngestionSessionRepository,
   expected: IngestionSessionSnapshot
 ) {
-  const current = await repository.readSession(
-    expected.owner,
-    expected.session_id
-  );
+  const current = await repository.readSession(expected.owner, expected.session_id);
   if (
-    !current
-    || current.status === "completed"
-    || current.status === "discarded"
-    || !canAdoptIngestionExecutionVersion(current, expected)
+    !current ||
+    current.status === "completed" ||
+    current.status === "discarded" ||
+    !canAdoptIngestionExecutionVersion(current, expected)
   ) {
     throw new ApiError(409, "ingestion_execution_fenced", "内容接入执行权已转移");
   }
@@ -56,10 +56,8 @@ async function retryIngestionExecutionMutation(
     try {
       return await mutate(current);
     } catch (error) {
-      if (
-        !isIngestionVersionConflict(error)
-        || attempt === executionMutationAttempts - 1
-      ) throw error;
+      if (!isIngestionVersionConflict(error) || attempt === executionMutationAttempts - 1)
+        throw error;
     }
     current = await refreshIngestionExecutionSession(repository, current);
   }
@@ -79,12 +77,9 @@ export function updateIngestionExecutionProgress(
   return retryIngestionExecutionMutation(
     repository,
     expected,
-    async (current) => (await repository.updateProgress(
-      current,
-      current.version,
-      progress,
-      now
-    )).session as IngestionSessionSnapshot
+    async (current) =>
+      (await repository.updateProgress(current, current.version, progress, now))
+        .session as IngestionSessionSnapshot
   );
 }
 
@@ -96,11 +91,9 @@ export function heartbeatIngestionExecution(
   return retryIngestionExecutionMutation(
     repository,
     expected,
-    async (current) => (await repository.heartbeat(
-      current,
-      current.version,
-      now
-    )).session as IngestionSessionSnapshot
+    async (current) =>
+      (await repository.heartbeat(current, current.version, now))
+        .session as IngestionSessionSnapshot
   );
 }
 
@@ -113,11 +106,8 @@ export function mutateIngestionExecution(
   return retryIngestionExecutionMutation(
     repository,
     expected,
-    async (current) => (await repository.mutateSemantic(
-      current,
-      current.version,
-      next(current),
-      now
-    )).session as IngestionSessionSnapshot
+    async (current) =>
+      (await repository.mutateSemantic(current, current.version, next(current), now))
+        .session as IngestionSessionSnapshot
   );
 }

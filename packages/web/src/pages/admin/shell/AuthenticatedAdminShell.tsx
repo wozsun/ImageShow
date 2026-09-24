@@ -1,9 +1,6 @@
 import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
-import type {
-  AdminPreferences,
-  AdminRole
-} from "@imageshow/shared/browser";
+import type { AdminPreferences, AdminRole } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
 import { MobileNavigation } from "../../../components/navigation/MobileNavigation.js";
@@ -105,37 +102,22 @@ function AuthenticatedAdminLayout({
   onLogout
 }: Omit<
   AuthenticatedAdminShellProps,
-  | "username"
-  | "serverPreferences"
-  | "serverPreferencesEtag"
-  | "serverPreferencesUpdatedAt"
+  "username" | "serverPreferences" | "serverPreferencesEtag" | "serverPreferencesUpdatedAt"
 >) {
   const routeLocation = useLocation();
   const navScrollRef = useRef<HTMLDivElement | null>(null);
   const [colorScheme, setColorScheme] = useAdminPreference("color_scheme");
-  const [colorSchemeCycle, setColorSchemeCycle] =
-    useState<AdminColorSchemeCycle | null>(null);
+  const [colorSchemeCycle, setColorSchemeCycle] = useState<AdminColorSchemeCycle | null>(null);
   const isSuper = role === "super";
   const navigation = adminNavigationForRole(role);
 
   const resolvedColorScheme = useAdminColorScheme(colorScheme);
   useLayoutEffect(() => {
-    setColorSchemeCycle((current) => reconcileAdminColorSchemeCycle(
-      colorScheme,
-      current
-    ));
+    setColorSchemeCycle((current) => reconcileAdminColorSchemeCycle(colorScheme, current));
   }, [colorScheme]);
-  const nextColorScheme = nextAdminColorScheme(
-    colorScheme,
-    resolvedColorScheme,
-    colorSchemeCycle
-  );
+  const nextColorScheme = nextAdminColorScheme(colorScheme, resolvedColorScheme, colorSchemeCycle);
   const handleColorSchemeChange = (next: typeof colorScheme) => {
-    setColorSchemeCycle(advanceAdminColorSchemeCycle(
-      colorScheme,
-      resolvedColorScheme,
-      next
-    ));
+    setColorSchemeCycle(advanceAdminColorSchemeCycle(colorScheme, resolvedColorScheme, next));
     setColorScheme(next);
   };
 
@@ -164,7 +146,8 @@ function AuthenticatedAdminLayout({
         <div className="admin-nav-divider logout-divider" role="separator" />
         <AdminNavigationLinks entries={navigation.account} variant="desktop" />
         <button className="logout-button" type="button" onClick={() => void onLogout()}>
-          <AdminIcon name="logout-box-r-line" />退出
+          <AdminIcon name="logout-box-r-line" />
+          退出
         </button>
       </aside>
       <header className="admin-mobile-header">
@@ -188,7 +171,8 @@ function AuthenticatedAdminLayout({
           <div className="admin-nav-divider" role="separator" />
           <AdminNavigationLinks entries={navigation.account} variant="mobile" />
           <button type="button" onClick={() => void onLogout()}>
-            <AdminIcon name="logout-box-r-line" />退出
+            <AdminIcon name="logout-box-r-line" />
+            退出
           </button>
         </MobileNavigation>
       </header>

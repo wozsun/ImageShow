@@ -7,7 +7,12 @@ import type {
   PrepareImageAttributeClear
 } from "../../lib/image-draft.js";
 
-const attributeLabels = { theme: "主题", tags: "标签", author: "作者", all: "主题、标签和作者" } as const;
+const attributeLabels = {
+  theme: "主题",
+  tags: "标签",
+  author: "作者",
+  all: "主题、标签和作者"
+} as const;
 
 export function WorkflowAttributeActions({
   disabled,
@@ -49,10 +54,16 @@ export function WorkflowAttributeActions({
           label: field === "all" ? "清空以上全部" : `清空全部${attributeLabels[field]}`,
           onSelect: () => select(field)
         }))}
-      >应用到全部</SplitActionButton>
+      >
+        应用到全部
+      </SplitActionButton>
       {confirmation && (
         <ConfirmDialog
-          title={confirmation.field === "all" ? "清空全部分类属性" : `清空全部${attributeLabels[confirmation.field]}`}
+          title={
+            confirmation.field === "all"
+              ? "清空全部分类属性"
+              : `清空全部${attributeLabels[confirmation.field]}`
+          }
           description={`将清空${scopeLabel}中本次选定的${confirmation.plan.maximumCount ? "最多 " : ""}${confirmation.plan.count} ${confirmation.plan.maximumCount ? "个任务" : "张图片"}的${attributeLabels[confirmation.field]}。仅修改${confirmation.field === "all" ? "这三项" : "这一项"}属性，其他图片信息和分类词条保留。${confirmation.plan.maximumCount ? "已提交、已移除或已锁定的任务会跳过；之后加入的任务不受影响。" : "保存后生效，保存前可通过“复原”撤销。"}`}
           confirmLabel="确认清空"
           confirmDisabled={confirmation.plan.count === 0}

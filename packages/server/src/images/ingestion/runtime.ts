@@ -31,11 +31,13 @@ function abortActiveIngestion(pair: IngestionSessionPair) {
 }
 
 export const ingestionExecutionControl = {
-  runQueueAction(input: Readonly<{
-    session: Pick<AdminSession, "id" | "username">;
-    actionScope: string;
-    request: IngestionQueueActionInputDto;
-  }>) {
+  runQueueAction(
+    input: Readonly<{
+      session: Pick<AdminSession, "id" | "username">;
+      actionScope: string;
+      request: IngestionQueueActionInputDto;
+    }>
+  ) {
     return runIngestionQueueAction({
       repository: ingestionSessionRepository,
       coordinator: ingestionCoordinator,
@@ -47,10 +49,7 @@ export const ingestionExecutionControl = {
     });
   },
 
-  cancelSessions(
-    owner: string,
-    items: readonly IngestionCancelItemInputDto[]
-  ) {
+  cancelSessions(owner: string, items: readonly IngestionCancelItemInputDto[]) {
     return cancelIngestionSessions(
       ingestionSessionRepository,
       ingestionCoordinator,
@@ -72,8 +71,5 @@ export function stopIngestionSessionWorker() {
 }
 
 export function drainIngestionSessionWorker() {
-  return Promise.all([
-    ingestionSessionWorker.drain(),
-    ingestionOrphanCleanupWorker.drain()
-  ]);
+  return Promise.all([ingestionSessionWorker.drain(), ingestionOrphanCleanupWorker.drain()]);
 }

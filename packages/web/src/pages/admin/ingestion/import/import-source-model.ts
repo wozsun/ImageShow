@@ -27,9 +27,10 @@ function urlImportIssueMessage(issue: ImportUrlParseIssue) {
 }
 
 export function urlImportIssuePreviewMessage(issue: ImportUrlParseIssue) {
-  const raw = issue.raw.length <= urlIssuePreviewRawMaxLength
-    ? issue.raw
-    : `${issue.raw.slice(0, urlIssuePreviewRawMaxLength)}...`;
+  const raw =
+    issue.raw.length <= urlIssuePreviewRawMaxLength
+      ? issue.raw
+      : `${issue.raw.slice(0, urlIssuePreviewRawMaxLength)}...`;
   return `${urlImportIssueMessage(issue)}：${raw}`;
 }
 
@@ -46,13 +47,12 @@ export type WeiboImportInputLine = {
 
 export function parseWeiboImportLines(input: string): WeiboImportInputLine[] {
   const seen = new Set<string>();
-  return input.split(/\r?\n/)
-    .flatMap((value, index) => {
-      const url = value.trim();
-      if (!url || seen.has(url)) return [];
-      seen.add(url);
-      return [{ line: index + 1, url }];
-    });
+  return input.split(/\r?\n/).flatMap((value, index) => {
+    const url = value.trim();
+    if (!url || seen.has(url)) return [];
+    seen.add(url);
+    return [{ line: index + 1, url }];
+  });
 }
 
 export function importSourceLimitState(
@@ -61,15 +61,13 @@ export function importSourceLimitState(
   limits: { link: number; weibo: number },
   urlParseResult?: ImportUrlParseResult
 ) {
-  const count = mode === "urls"
-    ? (urlParseResult ?? parseImportUrlInput(text)).candidateCount
-    : mode === "weibo"
-      ? parseWeiboImportLines(text).length
-      : text.split(/\r?\n/).filter((line) => line.trim()).length;
-  const maxItems = Math.min(
-    ingestionBatchHardLimit,
-    mode === "weibo" ? limits.weibo : limits.link
-  );
+  const count =
+    mode === "urls"
+      ? (urlParseResult ?? parseImportUrlInput(text)).candidateCount
+      : mode === "weibo"
+        ? parseWeiboImportLines(text).length
+        : text.split(/\r?\n/).filter((line) => line.trim()).length;
+  const maxItems = Math.min(ingestionBatchHardLimit, mode === "weibo" ? limits.weibo : limits.link);
   const overLimit = count > maxItems;
   return { count, maxItems, overLimit };
 }

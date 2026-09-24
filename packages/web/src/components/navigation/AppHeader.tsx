@@ -14,9 +14,7 @@ import { usePageScrollMovement } from "../../hooks/usePageScrollMovement.js";
 import { usePublicNavigationTopEdgeReveal } from "../../hooks/usePublicNavigationTopEdgeReveal.js";
 import { Icon } from "../icon/Icon.js";
 import { MobileNavigation } from "./MobileNavigation.js";
-import {
-  usePublicRoutePreloadIntents
-} from "../../lib/public-route-modules.js";
+import { usePublicRoutePreloadIntents } from "../../lib/public-route-modules.js";
 
 export function AppHeader({
   animateEntrance,
@@ -60,25 +58,22 @@ export function AppHeader({
   const rootPath = data?.site ? publicRootPath(data.site) : null;
   const showAdminEntry = Boolean(auth?.authenticated);
   const publicRoutePreloadIntents = usePublicRoutePreloadIntents();
-  const currentPublicRoute = pathname === "/gallery"
-    || (pathname === "/" && rootPath === "/gallery")
-    ? "gallery"
-    : pathname === "/show" || (pathname === "/" && rootPath === "/show")
-      ? "show"
-    : pathname === "/home" || (pathname === "/" && rootPath === "/home")
-      ? "home"
-      : null;
-  const homePreloadProps = currentPublicRoute !== "home"
-    ? publicRoutePreloadIntents.home
-    : {};
-  const showPreloadProps = currentPublicRoute !== "show"
-    ? publicRoutePreloadIntents.show
-    : {};
-  const galleryPreloadProps = currentPublicRoute !== "gallery"
-    ? publicRoutePreloadIntents.gallery
-    : {};
-  const navClassName = (target: "/home" | "/show" | "/gallery") => ({ isActive }: { isActive: boolean }) =>
-    isActive || (pathname === "/" && rootPath === target) ? "active" : undefined;
+  const currentPublicRoute =
+    pathname === "/gallery" || (pathname === "/" && rootPath === "/gallery")
+      ? "gallery"
+      : pathname === "/show" || (pathname === "/" && rootPath === "/show")
+        ? "show"
+        : pathname === "/home" || (pathname === "/" && rootPath === "/home")
+          ? "home"
+          : null;
+  const homePreloadProps = currentPublicRoute !== "home" ? publicRoutePreloadIntents.home : {};
+  const showPreloadProps = currentPublicRoute !== "show" ? publicRoutePreloadIntents.show : {};
+  const galleryPreloadProps =
+    currentPublicRoute !== "gallery" ? publicRoutePreloadIntents.gallery : {};
+  const navClassName =
+    (target: "/home" | "/show" | "/gallery") =>
+    ({ isActive }: { isActive: boolean }) =>
+      isActive || (pathname === "/" && rootPath === target) ? "active" : undefined;
 
   usePageScrollMovement(({ delta: scrollStep, position }) => {
     const header = headerRef.current;
@@ -93,8 +88,8 @@ export function AppHeader({
     }
     const navigationStack = header.closest<HTMLElement>(".public-navigation-stack") ?? header;
     if (
-      header.querySelector('[aria-expanded="true"]')
-      || (headerVisible && isPublicNavigationInteracting(navigationStack))
+      header.querySelector('[aria-expanded="true"]') ||
+      (headerVisible && isPublicNavigationInteracting(navigationStack))
     ) {
       upwardDistanceRef.current = 0;
       downwardDistanceRef.current = 0;
@@ -132,34 +127,89 @@ export function AppHeader({
         "topbar",
         entrance.active ? "is-public-navigation-entrance" : "",
         headerVisible ? "" : "is-scroll-hidden"
-      ].filter(Boolean).join(" ")}
+      ]
+        .filter(Boolean)
+        .join(" ")}
       inert={!headerVisible}
       onAnimationEnd={(event) => {
         if (
-          event.currentTarget === event.target
-          && event.animationName === "public-navigation-entrance"
+          event.currentTarget === event.target &&
+          event.animationName === "public-navigation-entrance"
         ) {
           entrance.finish();
         }
       }}
     >
-      <Link
-        className="brand"
-        to="/"
-      >
+      <Link className="brand" to="/">
         {data.site.header_name}
       </Link>
       <nav className="desktop-nav">
-        {homeEnabled && <NavLink to="/home" className={navClassName("/home")} {...homePreloadProps}><Icon name="home-4-line" />首页</NavLink>}
-        {showEnabled && <NavLink to={browseSearch ? `/show?${browseSearch}` : "/show"} className={navClassName("/show")} {...showPreloadProps}><Icon name="slideshow-3-line" />展映</NavLink>}
-        {galleryEnabled && <NavLink to={browseSearch ? `/gallery?${browseSearch}` : "/gallery"} className={navClassName("/gallery")} {...galleryPreloadProps}><Icon name="image-line" />画廊</NavLink>}
-        {showAdminEntry && <NavLink to={adminBasePath}><Icon name="settings-3-line" />管理</NavLink>}
+        {homeEnabled && (
+          <NavLink to="/home" className={navClassName("/home")} {...homePreloadProps}>
+            <Icon name="home-4-line" />
+            首页
+          </NavLink>
+        )}
+        {showEnabled && (
+          <NavLink
+            to={browseSearch ? `/show?${browseSearch}` : "/show"}
+            className={navClassName("/show")}
+            {...showPreloadProps}
+          >
+            <Icon name="slideshow-3-line" />
+            展映
+          </NavLink>
+        )}
+        {galleryEnabled && (
+          <NavLink
+            to={browseSearch ? `/gallery?${browseSearch}` : "/gallery"}
+            className={navClassName("/gallery")}
+            {...galleryPreloadProps}
+          >
+            <Icon name="image-line" />
+            画廊
+          </NavLink>
+        )}
+        {showAdminEntry && (
+          <NavLink to={adminBasePath}>
+            <Icon name="settings-3-line" />
+            管理
+          </NavLink>
+        )}
       </nav>
       <MobileNavigation onExpandedChange={onMenuExpandedChange}>
-        {homeEnabled && <NavLink to="/home" className={navClassName("/home")} {...homePreloadProps}><Icon name="home-4-line" />首页</NavLink>}
-        {showEnabled && <NavLink to={browseSearch ? `/show?${browseSearch}` : "/show"} className={navClassName("/show")} {...showPreloadProps}><Icon name="slideshow-3-line" />展映</NavLink>}
-        {galleryEnabled && <NavLink to={browseSearch ? `/gallery?${browseSearch}` : "/gallery"} className={navClassName("/gallery")} {...galleryPreloadProps}><Icon name="image-line" />画廊</NavLink>}
-        {showAdminEntry && <NavLink to={adminBasePath}><Icon name="settings-3-line" />管理</NavLink>}
+        {homeEnabled && (
+          <NavLink to="/home" className={navClassName("/home")} {...homePreloadProps}>
+            <Icon name="home-4-line" />
+            首页
+          </NavLink>
+        )}
+        {showEnabled && (
+          <NavLink
+            to={browseSearch ? `/show?${browseSearch}` : "/show"}
+            className={navClassName("/show")}
+            {...showPreloadProps}
+          >
+            <Icon name="slideshow-3-line" />
+            展映
+          </NavLink>
+        )}
+        {galleryEnabled && (
+          <NavLink
+            to={browseSearch ? `/gallery?${browseSearch}` : "/gallery"}
+            className={navClassName("/gallery")}
+            {...galleryPreloadProps}
+          >
+            <Icon name="image-line" />
+            画廊
+          </NavLink>
+        )}
+        {showAdminEntry && (
+          <NavLink to={adminBasePath}>
+            <Icon name="settings-3-line" />
+            管理
+          </NavLink>
+        )}
       </MobileNavigation>
     </header>
   );

@@ -6,7 +6,12 @@ import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
 
-const MENU_SIZE: AnchoredMenuSize = { minWidth: 120, flipThreshold: 180, minAvailable: 96, maxHeight: 240 };
+const MENU_SIZE: AnchoredMenuSize = {
+  minWidth: 120,
+  flipThreshold: 180,
+  minAvailable: 96,
+  maxHeight: 240
+};
 
 export function SelectMenu({
   value,
@@ -38,18 +43,22 @@ export function SelectMenu({
     onOpenChangeRef.current?.(nextOpen);
   };
   const menuId = useId();
-  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
+  const selectedIndex = Math.max(
+    0,
+    options.findIndex((option) => option.value === value)
+  );
   const selected = options[selectedIndex] ?? { value, label: value };
-  const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
-    triggerRef,
-    getSize: () => MENU_SIZE,
-    initialMaxHeight: 240,
-    disabled,
-    onClose: () => reportOpen(false),
-    closeOnEscape: true,
-    closeOnFocusOutside: true,
-    focusOnOpen: () => optionRefs.current[selectedIndex]
-  });
+  const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } =
+    useAnchoredMenu({
+      triggerRef,
+      getSize: () => MENU_SIZE,
+      initialMaxHeight: 240,
+      disabled,
+      onClose: () => reportOpen(false),
+      closeOnEscape: true,
+      closeOnFocusOutside: true,
+      focusOnOpen: () => optionRefs.current[selectedIndex]
+    });
   const handleOpen = () => {
     reportOpen(true);
     openMenu();
@@ -74,38 +83,42 @@ export function SelectMenu({
   };
 
   const menu = open ? (
-      <AnchoredPopup
-        popupRef={menuRef}
-        id={menuId}
-        className={[
-          "select-menu",
-          menuClassName,
-          opensUp ? "opens-up" : "",
-          closing ? "is-closing" : ""
-        ].filter(Boolean).join(" ")}
-        role="listbox"
-        aria-label={ariaLabel}
-        aria-hidden={closing}
-        inert={closing}
-        style={position}
-        onAnimationEnd={onAnimationEnd}
-      >
-        {options.map((option, index) => (
-          <MenuItemButton
-            ref={(element) => { optionRefs.current[index] = element; }}
-            key={option.value}
-            className={option.value === value ? "is-selected" : ""}
-            type="button"
-            role="option"
-            aria-selected={option.value === value}
-            onKeyDown={(event) => handleOptionKey(event, index)}
-            onActivate={() => choose(option.value)}
-          >
-            <span>{option.label}</span>
-          </MenuItemButton>
-        ))}
-      </AnchoredPopup>
-    ) : null;
+    <AnchoredPopup
+      popupRef={menuRef}
+      id={menuId}
+      className={[
+        "select-menu",
+        menuClassName,
+        opensUp ? "opens-up" : "",
+        closing ? "is-closing" : ""
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      role="listbox"
+      aria-label={ariaLabel}
+      aria-hidden={closing}
+      inert={closing}
+      style={position}
+      onAnimationEnd={onAnimationEnd}
+    >
+      {options.map((option, index) => (
+        <MenuItemButton
+          ref={(element) => {
+            optionRefs.current[index] = element;
+          }}
+          key={option.value}
+          className={option.value === value ? "is-selected" : ""}
+          type="button"
+          role="option"
+          aria-selected={option.value === value}
+          onKeyDown={(event) => handleOptionKey(event, index)}
+          onActivate={() => choose(option.value)}
+        >
+          <span>{option.label}</span>
+        </MenuItemButton>
+      ))}
+    </AnchoredPopup>
+  ) : null;
 
   return (
     <div className={`select-control ${className ?? ""}`.trim()}>
@@ -123,7 +136,7 @@ export function SelectMenu({
           event.preventDefault();
           if (!open) handleOpen();
         }}
-        onActivate={() => open ? requestClose() : handleOpen()}
+        onActivate={() => (open ? requestClose() : handleOpen())}
       >
         <span>{selected.label}</span>
       </DirectActivationButton>

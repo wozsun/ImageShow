@@ -1,10 +1,7 @@
 import { logger } from "../../../core/logger.ts";
 import { redis } from "../../../core/redis/client.ts";
 import { buildReadyImageAttributeIndex } from "./attribute-builder.ts";
-import {
-  readReadyImageAttributeIndex,
-  type ReadyImageAttributeIndex
-} from "./attribute-store.ts";
+import { readReadyImageAttributeIndex, type ReadyImageAttributeIndex } from "./attribute-store.ts";
 import { ReadyImageCoreCacheError } from "../cache-errors.ts";
 import { getReadyImageCacheCoordinatorStatus } from "../coordinator.ts";
 import { READY_IMAGE_DERIVED_CACHE_POLICY } from "../derived/policy.ts";
@@ -31,10 +28,7 @@ type ReadyImageAttributeIndexBuildTask = {
 let activeAttributeIndexBuilds = 0;
 let attributeIndexBackgroundTail: Promise<void> = Promise.resolve();
 const attributeIndexBuildSlotWaiters = new Set<() => void>();
-const attributeIndexBuildTasks = new Map<
-  string,
-  ReadyImageAttributeIndexBuildTask
->();
+const attributeIndexBuildTasks = new Map<string, ReadyImageAttributeIndexBuildTask>();
 
 async function buildAttributeIndex(
   spec: ReadyImageAttributeIndexSpec,
@@ -44,9 +38,7 @@ async function buildAttributeIndex(
   publicFallback = false
 ) {
   if (waitForSlot) {
-    while (
-      activeAttributeIndexBuilds >= ATTRIBUTE_INDEX_BUILD_MAX_CONCURRENCY
-    ) {
+    while (activeAttributeIndexBuilds >= ATTRIBUTE_INDEX_BUILD_MAX_CONCURRENCY) {
       signal?.throwIfAborted();
       await new Promise<void>((resolve, reject) => {
         const available = () => {
@@ -55,9 +47,7 @@ async function buildAttributeIndex(
         };
         const aborted = () => {
           cleanup();
-          reject(signal?.reason ?? new Error(
-            "Attribute index build wait aborted"
-          ));
+          reject(signal?.reason ?? new Error("Attribute index build wait aborted"));
         };
         const cleanup = () => {
           attributeIndexBuildSlotWaiters.delete(available);
@@ -67,20 +57,13 @@ async function buildAttributeIndex(
         signal?.addEventListener("abort", aborted, { once: true });
       });
     }
-  } else if (
-    activeAttributeIndexBuilds >= ATTRIBUTE_INDEX_BUILD_MAX_CONCURRENCY
-  ) {
+  } else if (activeAttributeIndexBuilds >= ATTRIBUTE_INDEX_BUILD_MAX_CONCURRENCY) {
     return null;
   }
   signal?.throwIfAborted();
   activeAttributeIndexBuilds += 1;
   try {
-    return await buildReadyImageAttributeIndex(
-      spec,
-      revision,
-      signal,
-      publicFallback
-    );
+    return await buildReadyImageAttributeIndex(spec, revision, signal, publicFallback);
   } finally {
     activeAttributeIndexBuilds -= 1;
     const waiters = [...attributeIndexBuildSlotWaiters];
@@ -108,10 +91,7 @@ function enqueueBackgroundAttributeIndexBuild(
   });
 }
 
-function waitForAttributeIndexBuild(
-  task: ReadyImageAttributeIndexBuildTask,
-  signal?: AbortSignal
-) {
+function waitForAttributeIndexBuild(task: ReadyImageAttributeIndexBuildTask, signal?: AbortSignal) {
   if (!signal) return task.promise;
   signal.throwIfAborted();
   return new Promise<ReadyImageAttributeIndex | null>((resolve, reject) => {
@@ -144,43 +124,34 @@ function attributeIndexBuildTask(
     if (background) existing.keepAlive = true;
     return existing;
   }
-  if (
-    attributeIndexBuildTasks.size
-      >= READY_IMAGE_DERIVED_CACHE_POLICY.maxResults
-  ) {
+  if (attributeIndexBuildTasks.size >= READY_IMAGE_DERIVED_CACHE_POLICY.maxResults) {
     return null;
   }
 
   const controller = new AbortController();
   let task!: ReadyImageAttributeIndexBuildTask;
-  const build = (waitForSlot = false) => buildAttributeIndex(
-    spec,
-    revision,
-    controller.signal,
-    waitForSlot,
-    background
-  );
+  const build = (waitForSlot = false) =>
+    buildAttributeIndex(spec, revision, controller.signal, waitForSlot, background);
   const started = background
-    ? enqueueBackgroundAttributeIndexBuild(
-        controller.signal,
-        () => build(true)
-      )
+    ? enqueueBackgroundAttributeIndexBuild(controller.signal, () => build(true))
     : build();
-  const promise = started.catch((error) => {
-    if (!controller.signal.aborted) {
-      logger.warn("ready_image_attribute_index_build_failed", {
-        key: readyImageAttributeIndexKey(spec),
-        revision,
-        error: error
-      });
-    }
-    return null;
-  }).finally(() => {
-    task.settled = true;
-    if (attributeIndexBuildTasks.get(taskKey) === task) {
-      attributeIndexBuildTasks.delete(taskKey);
-    }
-  });
+  const promise = started
+    .catch((error) => {
+      if (!controller.signal.aborted) {
+        logger.warn("ready_image_attribute_index_build_failed", {
+          key: readyImageAttributeIndexKey(spec),
+          revision,
+          error: error
+        });
+      }
+      return null;
+    })
+    .finally(() => {
+      task.settled = true;
+      if (attributeIndexBuildTasks.get(taskKey) === task) {
+        attributeIndexBuildTasks.delete(taskKey);
+      }
+    });
   task = {
     controller,
     promise,
@@ -206,12 +177,7 @@ export async function resolveReadyImageAttributeIndex(
     signal?.throwIfAborted();
     if (cached) return cached;
     const buildKey = `${key}:${revision}`;
-    const task = attributeIndexBuildTask(
-      buildKey,
-      spec,
-      revision,
-      background
-    );
+    const task = attributeIndexBuildTask(buildKey, spec, revision, background);
     if (!task) return null;
     if (background) return null;
     task.waiters += 1;
@@ -220,9 +186,7 @@ export async function resolveReadyImageAttributeIndex(
     } finally {
       task.waiters -= 1;
       if (!task.keepAlive && !task.settled && task.waiters === 0) {
-        task.controller.abort(
-          new Error("Ready-image attribute index build has no active waiters")
-        );
+        task.controller.abort(new Error("Ready-image attribute index build has no active waiters"));
       }
     }
   } catch (error) {
@@ -240,12 +204,7 @@ export async function ensureReadyImageAttributeIndexes(
   const indexes = new Map<string, ReadyImageAttributeIndex>();
   let missing = false;
   for (const key of new Set(keys)) {
-    const index = await resolveReadyImageAttributeIndex(
-      key,
-      revision,
-      signal,
-      background
-    );
+    const index = await resolveReadyImageAttributeIndex(key, revision, signal, background);
     if (!index) {
       if (!background) return null;
       missing = true;
@@ -261,15 +220,12 @@ export type ReadyImageSourceIndexState = {
   instanceToken: string | null;
 };
 
-export async function readReadyImageSourceIndexStates(
-  keys: Iterable<string>,
-  revision: string
-) {
+export async function readReadyImageSourceIndexStates(keys: Iterable<string>, revision: string) {
   const status = getReadyImageCacheCoordinatorStatus();
   if (
-    !status.readable
-    || status.meta?.state !== "ready"
-    || status.meta.appliedRevision !== revision
+    !status.readable ||
+    status.meta?.state !== "ready" ||
+    status.meta.appliedRevision !== revision
   ) {
     return null;
   }
@@ -280,15 +236,10 @@ export async function readReadyImageSourceIndexStates(
       try {
         count = await redis.zcard(key);
       } catch (cause) {
-        throw new ReadyImageCoreCacheError(
-          "Ready-image core index could not be read",
-          { cause }
-        );
+        throw new ReadyImageCoreCacheError("Ready-image core index could not be read", { cause });
       }
       if (count !== status.meta.itemCount) {
-        throw new ReadyImageCoreCacheError(
-          "Ready-image core index cardinality differs from meta"
-        );
+        throw new ReadyImageCoreCacheError("Ready-image core index cardinality differs from meta");
       }
       states.set(key, { count, instanceToken: null });
       continue;

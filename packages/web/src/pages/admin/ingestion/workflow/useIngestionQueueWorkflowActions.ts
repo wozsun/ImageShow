@@ -53,430 +53,416 @@ export function useIngestionQueueWorkflowActions({
   const deferredCompletedCleanupIdRef = useRef(0);
   const runningCompletedCleanupRevisionsRef = useRef(new Set<number>());
   const [deferredCleanupEpoch, setDeferredCleanupEpoch] = useState(0);
-  const completedCleanupCovered = useCallback((revision: number) => (
-    [...runningCompletedCleanupRevisionsRef.current].some(
-      (coveredRevision) => coveredRevision >= revision
-    )
-    || deferredCompletedCleanupRef.current.some(
-      (pending) => pending.maxSemanticRevision >= revision
-    )
-  ), []);
-  const convergeCompletedCleanup = useCallback(async (
-    result: IngestionQueueActionResultDto
-  ) => {
-    // The combined owner removes only pairs the action proved cleared, fences
-    // pre-action snapshot proof, and reuses the raw owner's recovery
-    // single-flight. Failed/skipped and post-boundary completions stay visible.
-    await queue.recoverAfterSuccessfulAction(result).catch(() => undefined);
-  }, [
-    queue.recoverAfterSuccessfulAction
-  ]);
-
-  const captureServerAction = useCallback((
-    action: Parameters<typeof queue.actions.freeze>[0],
-    required: boolean,
-    metadata?: Parameters<typeof queue.actions.freeze>[1]
-  ) => {
-    if (!required) {
-      return { frozen: null, required: false } satisfies CapturedServerAction;
-    }
-    const frozen = queue.actions.freeze(action, metadata);
-    return { frozen, required: true } satisfies CapturedServerAction;
-  }, [queue.actions]);
-
-  const serverRequiresCleanup = useCallback((action: IngestionCleanupActionId) => {
-    const summary = queue.server.summary;
-    if (queue.server.status !== "ready" || !summary) return true;
-    if (action === "duplicates") return summary.duplicate_pending > 0;
-    if (action === "completed") return summary.completed > 0;
-    return summary.unfinished - summary.committing - summary.resolving > 0;
-  }, [
-    queue.server.status,
-    queue.server.summary
-  ]);
-
-  const captureLocalJobs = useCallback((
-    predicate: (job: IngestionJob) => boolean
-  ): CapturedLocalJob[] => queue.captureBrowserActionJobs(predicate)
-    .filter(ingestionJobCanLeaveQueue), [queue.captureBrowserActionJobs]);
-
-  const clearCapturedLocalJobs = useCallback(async (
-    captured: readonly CapturedLocalJob[],
-    stillMatches: (job: IngestionJob) => boolean
-  ) => {
-    const removableIds = new Set<string>();
-    const cancellationTargets: IngestionJob[] = [];
-    const unresolved: UnresolvedLocalClear[] = [];
-    for (const target of captured) {
-      let current = queue.jobsRef.current.find((job) => (
-        job.id === target.id && job.attemptKey === target.attemptKey
-      ));
-      if (!current && queue.jobsRef.current.some((job) => job.id === target.id)) {
-        // 同一 UI id 已进入新的 attempt；它不属于冻结集合，旧 attempt 也已不再
-        // 由当前 owner 持有。保留新任务即可，不能让旧确认永久变成不可达重试。
-        continue;
-      }
-      const targetNeedsOwner = target.status === "cancelling"
-        || ingestionJobCanBeCancelled(target);
-      if (!current && targetNeedsOwner) {
-        // placeholder 在冻结后可能已被 canonical 页面替换。把同一 attempt 的本地
-        // 意图恢复给 owner，再由原幂等身份核对并取消已接管 pair。
-        queue.appendJobs([target]);
-        current = queue.jobsRef.current.find((job) => (
-          job.id === target.id && job.attemptKey === target.attemptKey
-        ));
-      }
-      if (!current) {
-        if (targetNeedsOwner) {
-          unresolved.push({ id: target.id, attemptKey: target.attemptKey });
-        }
-        continue;
-      }
-      // 冻结集合限定“最多处理哪些任务”，执行时仍须复核原动作谓词。
-      // 其他窗口在确认期间推进的任务由当前卡片状态直接反映，不能按旧状态删除。
-      if (!stillMatches(current)) continue;
-      if (!ingestionJobCanLeaveQueue(current)) {
-        unresolved.push({ id: target.id, attemptKey: target.attemptKey });
-        continue;
-      }
-      if (
-        current.status === "cancelling"
-        || ingestionJobCanBeCancelled(current)
-      ) {
-        cancellationTargets.push(current);
-      } else {
-        removableIds.add(current.id);
-      }
-    }
-    // 固定本地 ID 与 attemptKey；网络等待期间新加入或重试后的任务不会被误删，
-    // 取消结果未知的占位继续留在队列中供用户重试。
-    queue.clearJobIds(removableIds);
-    const outcomes = await cancelJobs(cancellationTargets);
-    const cancelledIds = new Set<string>();
-    const resolvedServerTargets: Array<{
-      id: string;
-      attemptKey: string;
-      pair: IngestionSessionPairDto;
-      releasedRevision?: number;
-      releasedSummary?: IngestionQueueSummaryDto;
-    }> = [];
-    for (const target of cancellationTargets) {
-      const current = queue.jobsRef.current.find((job) => job.id === target.id);
-      const outcome = outcomes.get(target.id);
-      if (current && current.attemptKey !== target.attemptKey) {
-        // 取消等待期间产生的新 attempt 不属于冻结范围；其卡片必须原样保留。
-        continue;
-      }
-      if (outcome?.succeeded === true) {
-        if (outcome.pair) {
-          resolvedServerTargets.push({
-            id: target.id,
-            attemptKey: target.attemptKey,
-            pair: outcome.pair,
-            ...(outcome.releasedRevision !== undefined
-              ? { releasedRevision: outcome.releasedRevision }
-              : {}),
-            ...(outcome.releasedSummary
-              ? { releasedSummary: outcome.releasedSummary }
-              : {})
-          });
-        } else if (current) {
-          cancelledIds.add(target.id);
-        }
-      } else {
-        unresolved.push({
-          id: target.id,
-          attemptKey: target.attemptKey,
-          outcome
-        });
-      }
-    }
-    const released = queue.releaseResolvedServerJobs(resolvedServerTargets);
-    for (const target of resolvedServerTargets) {
-      if (!released.has(target.id)) {
-        unresolved.push({ id: target.id, attemptKey: target.attemptKey });
-      }
-    }
-    queue.clearJobIds(cancelledIds);
-    return { unresolved } satisfies LocalClearResult;
-  }, [
-    cancelJobs,
-    queue.appendJobs,
-    queue.clearJobIds,
-    queue.jobsRef,
-    queue.releaseResolvedServerJobs
-  ]);
-
-  const reconcileLocalClear = useCallback((
-    local: LocalClearResult,
-    server: IngestionQueueActionResultDto | null,
-    frozenAction?: FrozenIngestionQueueAction,
-    stillMatches?: (job: IngestionJob) => boolean
-  ) => {
-    if (!local.unresolved.length) return local;
-    const serverResults = new Map((server?.items ?? []).map((item) => (
-      [serverIngestionPairKey(item), item] as const
-    )));
-    const releaseTargets: Array<Readonly<{
-      item: UnresolvedLocalClear;
-      pair: IngestionSessionPairDto;
-      releasedRevision?: number;
-      releasedSummary?: IngestionQueueSummaryDto;
-    }>> = [];
-    const unresolved: UnresolvedLocalClear[] = [];
-    for (const item of local.unresolved) {
-      const current = queue.jobsRef.current.find((job) => job.id === item.id);
-      if (current && current.attemptKey !== item.attemptKey) {
-        // 对账只收敛冻结的旧 attempt，不能因同 id 新 attempt 存在而永久重试。
-        continue;
-      }
-      const outcomePair = item.outcome?.pair;
-      const serverResult = outcomePair
-        ? serverResults.get(serverIngestionPairKey(outcomePair))
-        : undefined;
-      const serverStatus = serverResult?.status;
-      if (
-        outcomePair
-        && (serverStatus === "changed" || serverStatus === "unchanged")
-      ) {
-        releaseTargets.push({
-          item,
-          pair: outcomePair,
-          ...(serverResult?.queue_revision !== undefined
-            ? { releasedRevision: serverResult.queue_revision }
-            : item.outcome?.releasedRevision !== undefined
-              ? { releasedRevision: item.outcome.releasedRevision }
-              : {}),
-          ...(item.outcome?.releasedSummary
-            ? { releasedSummary: item.outcome.releasedSummary }
-            : {})
-        });
-        continue;
-      }
-      if (serverStatus === "skipped" || serverStatus === "failed") {
-        // Server 已明确保留该 pair；卡片状态/详情就是逐项结果，确认无需等待重试。
-        continue;
-      }
-      if (current && stillMatches && !stillMatches(current)) {
-        // status/cancel 在并行动作后把本地 owner 推进出原筛选集合；保留新状态。
-        continue;
-      }
-      const coveredBySuccessfulClear = item.outcome?.terminal === "completed"
-        && outcomePair
-        && server !== null
-        && frozenAction?.action === "clear_queue";
-      if (coveredBySuccessfulClear) {
-        releaseTargets.push({
-          item,
-          pair: outcomePair,
-          ...(item.outcome?.releasedRevision !== undefined
-            ? { releasedRevision: item.outcome.releasedRevision }
-            : {}),
-          ...(item.outcome?.releasedSummary
-            ? { releasedSummary: item.outcome.releasedSummary }
-            : {})
-        });
-      } else {
-        unresolved.push(item);
-      }
-    }
-    const released = queue.releaseResolvedServerJobs(releaseTargets.map(
-      ({ item, pair, releasedRevision, releasedSummary }) => ({
-        id: item.id,
-        attemptKey: item.attemptKey,
-        pair,
-        ...(releasedRevision !== undefined ? { releasedRevision } : {}),
-        ...(releasedSummary ? { releasedSummary } : {})
-      })
-    ));
-    for (const target of releaseTargets) {
-      if (!released.has(target.item.id)) unresolved.push(target.item);
-    }
-    return { unresolved } satisfies LocalClearResult;
-  }, [queue.jobsRef, queue.releaseResolvedServerJobs]);
-
-  const executeFrozenLocalClear = useCallback(async (
-    intent: FrozenLocalClearIntent,
-    stillMatches: (job: IngestionJob) => boolean
-  ) => {
-    let observedServerResult: IngestionQueueActionResultDto = {
-      processed: 0,
-      changed: 0,
-      failed: 0,
-      items: []
-    };
-    let hasSuccessfulCompletedCleanup = false;
-    const frozenServerAction = intent.serverAction.frozen;
-    const [serverResult, currentLocalResult] = await Promise.all([
-      frozenServerAction
-        ? queue.actions.run(
-            frozenServerAction,
-            undefined,
-            frozenServerAction.action === "clear_completed"
-              ? {
-                  onBatchResult: (batch) => {
-                    observedServerResult = {
-                      processed: observedServerResult.processed
-                        + batch.processed,
-                      changed: observedServerResult.changed + batch.changed,
-                      failed: observedServerResult.failed + batch.failed,
-                      items: [...observedServerResult.items, ...batch.items]
-                    };
-                    if (batch.items.some((item) => (
-                      item.status === "changed"
-                      || item.status === "unchanged"
-                    ))) {
-                      hasSuccessfulCompletedCleanup = true;
-                    }
-                    // Exact per-item success is display authority immediately;
-                    // do not wait for the next continuation or proof snapshot.
-                    queue.projectCompletedCleanupBatch(batch);
-                  },
-                  onSettled: async () => {
-                    if (!hasSuccessfulCompletedCleanup) return false;
-                    await convergeCompletedCleanup(observedServerResult);
-                    return true;
-                  }
-                }
-              : undefined
-          )
-        : Promise.resolve(null),
-      clearCapturedLocalJobs(intent.localJobs, stillMatches)
-    ]);
-    const localResult = preserveUnresolvedLocalOutcomes(
-      currentLocalResult,
-      intent.unresolvedLocal
-    );
-    const reconciledLocal = reconcileLocalClear(
-      localResult,
-      serverResult ?? (
-        observedServerResult.items.length ? observedServerResult : null
+  const completedCleanupCovered = useCallback(
+    (revision: number) =>
+      [...runningCompletedCleanupRevisionsRef.current].some(
+        (coveredRevision) => coveredRevision >= revision
+      ) ||
+      deferredCompletedCleanupRef.current.some(
+        (pending) => pending.maxSemanticRevision >= revision
       ),
-      frozenServerAction ?? undefined,
-      stillMatches
-    );
-    return {
-      serverResult,
-      serverChanged: serverResult?.changed ?? observedServerResult.changed,
-      settled: (
-        (!intent.serverAction.required || serverResult !== null)
-        && reconciledLocal.unresolved.length === 0
-      ),
-      retainedLocalJobs: retainUnresolvedLocalJobs(
-        intent.localJobs,
-        reconciledLocal
-      ),
-      unresolvedLocal: reconciledLocal
-    } as const;
-  }, [
-    clearCapturedLocalJobs,
-    convergeCompletedCleanup,
-    queue.actions,
-    queue.projectCompletedCleanupBatch,
-    reconcileLocalClear
-  ]);
+    []
+  );
+  const convergeCompletedCleanup = useCallback(
+    async (result: IngestionQueueActionResultDto) => {
+      // The combined owner removes only pairs the action proved cleared, fences
+      // pre-action snapshot proof, and reuses the raw owner's recovery
+      // single-flight. Failed/skipped and post-boundary completions stay visible.
+      await queue.recoverAfterSuccessfulAction(result).catch(() => undefined);
+    },
+    [queue.recoverAfterSuccessfulAction]
+  );
 
-  const runCleanupAction = useCallback((action: IngestionCleanupActionId) => {
-    const completedCleanupRevision = action === "completed"
-      ? queue.server.revision ?? -1
-      : null;
-    if (
-      completedCleanupRevision !== null
-      && completedCleanupCovered(completedCleanupRevision)
-    ) return;
-    const localPredicate = cleanupLocalPredicate(action);
-    const localJobs = captureLocalJobs(localPredicate);
-    const serverAction = captureServerAction(
-      cleanupActionType(action),
-      serverRequiresCleanup(action)
-    );
-    if (serverAction.required && !serverAction.frozen) {
-      if (action === "completed") {
-        const maxSemanticRevision = queue.server.revision;
-        const knownServerCompletions = queue.server.summary?.completed ?? 0;
-        if (maxSemanticRevision !== null && knownServerCompletions > 0) {
-          deferredCompletedCleanupRef.current.push({
-            id: ++deferredCompletedCleanupIdRef.current,
-            maxSemanticRevision,
-            localJobs,
-            unresolvedLocal: { unresolved: [] },
-            releaseConnection: queue.actions.retainConnection(),
-            running: false
-          });
-          setDeferredCleanupEpoch((current) => current + 1);
-          queue.server.refresh();
-          return;
-        }
-        // Without an authoritative Server revision there is no safe way to
-        // broaden a close-time cleanup later. Remove only the exact browser
-        // completions captured now and let a later open expose unknown items.
-        const localOnlyIntent: FrozenLocalClearIntent = {
-          queueType: queue.queueType,
-          serverAction: { frozen: null, required: false },
-          localJobs,
-          unresolvedLocal: { unresolved: [] },
-          retryable: false
-        };
-        const localCoverageRevision = completedCleanupRevision ?? -1;
-        runningCompletedCleanupRevisionsRef.current.add(
-          localCoverageRevision
+  const captureServerAction = useCallback(
+    (
+      action: Parameters<typeof queue.actions.freeze>[0],
+      required: boolean,
+      metadata?: Parameters<typeof queue.actions.freeze>[1]
+    ) => {
+      if (!required) {
+        return { frozen: null, required: false } satisfies CapturedServerAction;
+      }
+      const frozen = queue.actions.freeze(action, metadata);
+      return { frozen, required: true } satisfies CapturedServerAction;
+    },
+    [queue.actions]
+  );
+
+  const serverRequiresCleanup = useCallback(
+    (action: IngestionCleanupActionId) => {
+      const summary = queue.server.summary;
+      if (queue.server.status !== "ready" || !summary) return true;
+      if (action === "duplicates") return summary.duplicate_pending > 0;
+      if (action === "completed") return summary.completed > 0;
+      return summary.unfinished - summary.committing - summary.resolving > 0;
+    },
+    [queue.server.status, queue.server.summary]
+  );
+
+  const captureLocalJobs = useCallback(
+    (predicate: (job: IngestionJob) => boolean): CapturedLocalJob[] =>
+      queue.captureBrowserActionJobs(predicate).filter(ingestionJobCanLeaveQueue),
+    [queue.captureBrowserActionJobs]
+  );
+
+  const clearCapturedLocalJobs = useCallback(
+    async (captured: readonly CapturedLocalJob[], stillMatches: (job: IngestionJob) => boolean) => {
+      const removableIds = new Set<string>();
+      const cancellationTargets: IngestionJob[] = [];
+      const unresolved: UnresolvedLocalClear[] = [];
+      for (const target of captured) {
+        let current = queue.jobsRef.current.find(
+          (job) => job.id === target.id && job.attemptKey === target.attemptKey
         );
-        void executeFrozenLocalClear(localOnlyIntent, localPredicate)
-          .then((result) => {
-            if (result.settled && localJobs.length > 0) onDone();
-          })
-          .finally(() => {
-            runningCompletedCleanupRevisionsRef.current.delete(
-              localCoverageRevision
-            );
-          });
-      }
-      queue.server.refresh();
-      return;
-    }
-    const intent: FrozenLocalClearIntent = {
-      queueType: queue.queueType,
-      serverAction,
-      localJobs,
-      unresolvedLocal: { unresolved: [] },
-      retryable: false
-    };
-    const releaseCompletedConnection = action === "completed"
-      && serverAction.required
-      ? queue.actions.retainConnection()
-      : null;
-    if (completedCleanupRevision !== null) {
-      runningCompletedCleanupRevisionsRef.current.add(
-        completedCleanupRevision
-      );
-    }
-    void executeFrozenLocalClear(intent, localPredicate)
-      .then((result) => {
-        if (action === "completed" && (
-          result.serverChanged > 0 || localJobs.length > 0
-        )) onDone();
-      })
-      .finally(() => {
-        releaseCompletedConnection?.();
-        if (completedCleanupRevision !== null) {
-          runningCompletedCleanupRevisionsRef.current.delete(
-            completedCleanupRevision
+        if (!current && queue.jobsRef.current.some((job) => job.id === target.id)) {
+          // 同一 UI id 已进入新的 attempt；它不属于冻结集合，旧 attempt 也已不再
+          // 由当前 owner 持有。保留新任务即可，不能让旧确认永久变成不可达重试。
+          continue;
+        }
+        const targetNeedsOwner =
+          target.status === "cancelling" || ingestionJobCanBeCancelled(target);
+        if (!current && targetNeedsOwner) {
+          // placeholder 在冻结后可能已被 canonical 页面替换。把同一 attempt 的本地
+          // 意图恢复给 owner，再由原幂等身份核对并取消已接管 pair。
+          queue.appendJobs([target]);
+          current = queue.jobsRef.current.find(
+            (job) => job.id === target.id && job.attemptKey === target.attemptKey
           );
         }
-      });
-  }, [
-    captureLocalJobs,
-    captureServerAction,
-    completedCleanupCovered,
-    executeFrozenLocalClear,
-    onDone,
-    queue.queueType,
-    queue.actions,
-    queue.server.revision,
-    queue.server.refresh,
-    queue.server.summary,
-    serverRequiresCleanup
-  ]);
+        if (!current) {
+          if (targetNeedsOwner) {
+            unresolved.push({ id: target.id, attemptKey: target.attemptKey });
+          }
+          continue;
+        }
+        // 冻结集合限定“最多处理哪些任务”，执行时仍须复核原动作谓词。
+        // 其他窗口在确认期间推进的任务由当前卡片状态直接反映，不能按旧状态删除。
+        if (!stillMatches(current)) continue;
+        if (!ingestionJobCanLeaveQueue(current)) {
+          unresolved.push({ id: target.id, attemptKey: target.attemptKey });
+          continue;
+        }
+        if (current.status === "cancelling" || ingestionJobCanBeCancelled(current)) {
+          cancellationTargets.push(current);
+        } else {
+          removableIds.add(current.id);
+        }
+      }
+      // 固定本地 ID 与 attemptKey；网络等待期间新加入或重试后的任务不会被误删，
+      // 取消结果未知的占位继续留在队列中供用户重试。
+      queue.clearJobIds(removableIds);
+      const outcomes = await cancelJobs(cancellationTargets);
+      const cancelledIds = new Set<string>();
+      const resolvedServerTargets: Array<{
+        id: string;
+        attemptKey: string;
+        pair: IngestionSessionPairDto;
+        releasedRevision?: number;
+        releasedSummary?: IngestionQueueSummaryDto;
+      }> = [];
+      for (const target of cancellationTargets) {
+        const current = queue.jobsRef.current.find((job) => job.id === target.id);
+        const outcome = outcomes.get(target.id);
+        if (current && current.attemptKey !== target.attemptKey) {
+          // 取消等待期间产生的新 attempt 不属于冻结范围；其卡片必须原样保留。
+          continue;
+        }
+        if (outcome?.succeeded === true) {
+          if (outcome.pair) {
+            resolvedServerTargets.push({
+              id: target.id,
+              attemptKey: target.attemptKey,
+              pair: outcome.pair,
+              ...(outcome.releasedRevision !== undefined
+                ? { releasedRevision: outcome.releasedRevision }
+                : {}),
+              ...(outcome.releasedSummary ? { releasedSummary: outcome.releasedSummary } : {})
+            });
+          } else if (current) {
+            cancelledIds.add(target.id);
+          }
+        } else {
+          unresolved.push({
+            id: target.id,
+            attemptKey: target.attemptKey,
+            outcome
+          });
+        }
+      }
+      const released = queue.releaseResolvedServerJobs(resolvedServerTargets);
+      for (const target of resolvedServerTargets) {
+        if (!released.has(target.id)) {
+          unresolved.push({ id: target.id, attemptKey: target.attemptKey });
+        }
+      }
+      queue.clearJobIds(cancelledIds);
+      return { unresolved } satisfies LocalClearResult;
+    },
+    [
+      cancelJobs,
+      queue.appendJobs,
+      queue.clearJobIds,
+      queue.jobsRef,
+      queue.releaseResolvedServerJobs
+    ]
+  );
+
+  const reconcileLocalClear = useCallback(
+    (
+      local: LocalClearResult,
+      server: IngestionQueueActionResultDto | null,
+      frozenAction?: FrozenIngestionQueueAction,
+      stillMatches?: (job: IngestionJob) => boolean
+    ) => {
+      if (!local.unresolved.length) return local;
+      const serverResults = new Map(
+        (server?.items ?? []).map((item) => [serverIngestionPairKey(item), item] as const)
+      );
+      const releaseTargets: Array<
+        Readonly<{
+          item: UnresolvedLocalClear;
+          pair: IngestionSessionPairDto;
+          releasedRevision?: number;
+          releasedSummary?: IngestionQueueSummaryDto;
+        }>
+      > = [];
+      const unresolved: UnresolvedLocalClear[] = [];
+      for (const item of local.unresolved) {
+        const current = queue.jobsRef.current.find((job) => job.id === item.id);
+        if (current && current.attemptKey !== item.attemptKey) {
+          // 对账只收敛冻结的旧 attempt，不能因同 id 新 attempt 存在而永久重试。
+          continue;
+        }
+        const outcomePair = item.outcome?.pair;
+        const serverResult = outcomePair
+          ? serverResults.get(serverIngestionPairKey(outcomePair))
+          : undefined;
+        const serverStatus = serverResult?.status;
+        if (outcomePair && (serverStatus === "changed" || serverStatus === "unchanged")) {
+          releaseTargets.push({
+            item,
+            pair: outcomePair,
+            ...(serverResult?.queue_revision !== undefined
+              ? { releasedRevision: serverResult.queue_revision }
+              : item.outcome?.releasedRevision !== undefined
+                ? { releasedRevision: item.outcome.releasedRevision }
+                : {}),
+            ...(item.outcome?.releasedSummary
+              ? { releasedSummary: item.outcome.releasedSummary }
+              : {})
+          });
+          continue;
+        }
+        if (serverStatus === "skipped" || serverStatus === "failed") {
+          // Server 已明确保留该 pair；卡片状态/详情就是逐项结果，确认无需等待重试。
+          continue;
+        }
+        if (current && stillMatches && !stillMatches(current)) {
+          // status/cancel 在并行动作后把本地 owner 推进出原筛选集合；保留新状态。
+          continue;
+        }
+        const coveredBySuccessfulClear =
+          item.outcome?.terminal === "completed" &&
+          outcomePair &&
+          server !== null &&
+          frozenAction?.action === "clear_queue";
+        if (coveredBySuccessfulClear) {
+          releaseTargets.push({
+            item,
+            pair: outcomePair,
+            ...(item.outcome?.releasedRevision !== undefined
+              ? { releasedRevision: item.outcome.releasedRevision }
+              : {}),
+            ...(item.outcome?.releasedSummary
+              ? { releasedSummary: item.outcome.releasedSummary }
+              : {})
+          });
+        } else {
+          unresolved.push(item);
+        }
+      }
+      const released = queue.releaseResolvedServerJobs(
+        releaseTargets.map(({ item, pair, releasedRevision, releasedSummary }) => ({
+          id: item.id,
+          attemptKey: item.attemptKey,
+          pair,
+          ...(releasedRevision !== undefined ? { releasedRevision } : {}),
+          ...(releasedSummary ? { releasedSummary } : {})
+        }))
+      );
+      for (const target of releaseTargets) {
+        if (!released.has(target.item.id)) unresolved.push(target.item);
+      }
+      return { unresolved } satisfies LocalClearResult;
+    },
+    [queue.jobsRef, queue.releaseResolvedServerJobs]
+  );
+
+  const executeFrozenLocalClear = useCallback(
+    async (intent: FrozenLocalClearIntent, stillMatches: (job: IngestionJob) => boolean) => {
+      let observedServerResult: IngestionQueueActionResultDto = {
+        processed: 0,
+        changed: 0,
+        failed: 0,
+        items: []
+      };
+      let hasSuccessfulCompletedCleanup = false;
+      const frozenServerAction = intent.serverAction.frozen;
+      const [serverResult, currentLocalResult] = await Promise.all([
+        frozenServerAction
+          ? queue.actions.run(
+              frozenServerAction,
+              undefined,
+              frozenServerAction.action === "clear_completed"
+                ? {
+                    onBatchResult: (batch) => {
+                      observedServerResult = {
+                        processed: observedServerResult.processed + batch.processed,
+                        changed: observedServerResult.changed + batch.changed,
+                        failed: observedServerResult.failed + batch.failed,
+                        items: [...observedServerResult.items, ...batch.items]
+                      };
+                      if (
+                        batch.items.some(
+                          (item) => item.status === "changed" || item.status === "unchanged"
+                        )
+                      ) {
+                        hasSuccessfulCompletedCleanup = true;
+                      }
+                      // Exact per-item success is display authority immediately;
+                      // do not wait for the next continuation or proof snapshot.
+                      queue.projectCompletedCleanupBatch(batch);
+                    },
+                    onSettled: async () => {
+                      if (!hasSuccessfulCompletedCleanup) return false;
+                      await convergeCompletedCleanup(observedServerResult);
+                      return true;
+                    }
+                  }
+                : undefined
+            )
+          : Promise.resolve(null),
+        clearCapturedLocalJobs(intent.localJobs, stillMatches)
+      ]);
+      const localResult = preserveUnresolvedLocalOutcomes(
+        currentLocalResult,
+        intent.unresolvedLocal
+      );
+      const reconciledLocal = reconcileLocalClear(
+        localResult,
+        serverResult ?? (observedServerResult.items.length ? observedServerResult : null),
+        frozenServerAction ?? undefined,
+        stillMatches
+      );
+      return {
+        serverResult,
+        serverChanged: serverResult?.changed ?? observedServerResult.changed,
+        settled:
+          (!intent.serverAction.required || serverResult !== null) &&
+          reconciledLocal.unresolved.length === 0,
+        retainedLocalJobs: retainUnresolvedLocalJobs(intent.localJobs, reconciledLocal),
+        unresolvedLocal: reconciledLocal
+      } as const;
+    },
+    [
+      clearCapturedLocalJobs,
+      convergeCompletedCleanup,
+      queue.actions,
+      queue.projectCompletedCleanupBatch,
+      reconcileLocalClear
+    ]
+  );
+
+  const runCleanupAction = useCallback(
+    (action: IngestionCleanupActionId) => {
+      const completedCleanupRevision =
+        action === "completed" ? (queue.server.revision ?? -1) : null;
+      if (completedCleanupRevision !== null && completedCleanupCovered(completedCleanupRevision))
+        return;
+      const localPredicate = cleanupLocalPredicate(action);
+      const localJobs = captureLocalJobs(localPredicate);
+      const serverAction = captureServerAction(
+        cleanupActionType(action),
+        serverRequiresCleanup(action)
+      );
+      if (serverAction.required && !serverAction.frozen) {
+        if (action === "completed") {
+          const maxSemanticRevision = queue.server.revision;
+          const knownServerCompletions = queue.server.summary?.completed ?? 0;
+          if (maxSemanticRevision !== null && knownServerCompletions > 0) {
+            deferredCompletedCleanupRef.current.push({
+              id: ++deferredCompletedCleanupIdRef.current,
+              maxSemanticRevision,
+              localJobs,
+              unresolvedLocal: { unresolved: [] },
+              releaseConnection: queue.actions.retainConnection(),
+              running: false
+            });
+            setDeferredCleanupEpoch((current) => current + 1);
+            queue.server.refresh();
+            return;
+          }
+          // Without an authoritative Server revision there is no safe way to
+          // broaden a close-time cleanup later. Remove only the exact browser
+          // completions captured now and let a later open expose unknown items.
+          const localOnlyIntent: FrozenLocalClearIntent = {
+            queueType: queue.queueType,
+            serverAction: { frozen: null, required: false },
+            localJobs,
+            unresolvedLocal: { unresolved: [] },
+            retryable: false
+          };
+          const localCoverageRevision = completedCleanupRevision ?? -1;
+          runningCompletedCleanupRevisionsRef.current.add(localCoverageRevision);
+          void executeFrozenLocalClear(localOnlyIntent, localPredicate)
+            .then((result) => {
+              if (result.settled && localJobs.length > 0) onDone();
+            })
+            .finally(() => {
+              runningCompletedCleanupRevisionsRef.current.delete(localCoverageRevision);
+            });
+        }
+        queue.server.refresh();
+        return;
+      }
+      const intent: FrozenLocalClearIntent = {
+        queueType: queue.queueType,
+        serverAction,
+        localJobs,
+        unresolvedLocal: { unresolved: [] },
+        retryable: false
+      };
+      const releaseCompletedConnection =
+        action === "completed" && serverAction.required ? queue.actions.retainConnection() : null;
+      if (completedCleanupRevision !== null) {
+        runningCompletedCleanupRevisionsRef.current.add(completedCleanupRevision);
+      }
+      void executeFrozenLocalClear(intent, localPredicate)
+        .then((result) => {
+          if (action === "completed" && (result.serverChanged > 0 || localJobs.length > 0))
+            onDone();
+        })
+        .finally(() => {
+          releaseCompletedConnection?.();
+          if (completedCleanupRevision !== null) {
+            runningCompletedCleanupRevisionsRef.current.delete(completedCleanupRevision);
+          }
+        });
+    },
+    [
+      captureLocalJobs,
+      captureServerAction,
+      completedCleanupCovered,
+      executeFrozenLocalClear,
+      onDone,
+      queue.queueType,
+      queue.actions,
+      queue.server.revision,
+      queue.server.refresh,
+      queue.server.summary,
+      serverRequiresCleanup
+    ]
+  );
 
   useEffect(() => {
     if (queue.server.status === "error") {
@@ -492,16 +478,16 @@ export function useIngestionQueueWorkflowActions({
     const pending = deferredCompletedCleanupRef.current.find((item) => {
       if (item.running) return false;
       const retryAfter = item.retryAfterAuthority;
-      return !retryAfter
-        || retryAfter.connectionGeneration !== currentAuthority.connectionGeneration
-        || retryAfter.revision !== currentAuthority.revision;
+      return (
+        !retryAfter ||
+        retryAfter.connectionGeneration !== currentAuthority.connectionGeneration ||
+        retryAfter.revision !== currentAuthority.revision
+      );
     });
     if (!pending || queue.server.status !== "ready") return;
-    const frozen = queue.actions.freeze(
-      "clear_completed",
-      undefined,
-      { maxSemanticRevision: pending.maxSemanticRevision }
-    );
+    const frozen = queue.actions.freeze("clear_completed", undefined, {
+      maxSemanticRevision: pending.maxSemanticRevision
+    });
     if (!frozen) {
       queue.server.refresh();
       return;
@@ -518,57 +504,57 @@ export function useIngestionQueueWorkflowActions({
       unresolvedLocal: pending.unresolvedLocal,
       retryable: false
     };
-    void executeFrozenLocalClear(
-      intent,
-      cleanupLocalPredicate("completed")
-    ).then((result) => {
-      const index = deferredCompletedCleanupRef.current.findIndex(
-        (item) => item.id === pending.id
-      );
-      if (index < 0) return;
-      if (result.serverChanged > 0) onDone();
-      if (result.settled) {
-        const settledIndex = deferredCompletedCleanupRef.current.findIndex(
+    void executeFrozenLocalClear(intent, cleanupLocalPredicate("completed"))
+      .then((result) => {
+        const index = deferredCompletedCleanupRef.current.findIndex(
           (item) => item.id === pending.id
         );
-        if (settledIndex < 0) {
+        if (index < 0) return;
+        if (result.serverChanged > 0) onDone();
+        if (result.settled) {
+          const settledIndex = deferredCompletedCleanupRef.current.findIndex(
+            (item) => item.id === pending.id
+          );
+          if (settledIndex < 0) {
+            pending.releaseConnection();
+            return;
+          }
+          deferredCompletedCleanupRef.current.splice(settledIndex, 1);
           pending.releaseConnection();
-          return;
+          if (result.serverChanged === 0 && pending.localJobs.length) {
+            onDone();
+          }
+        } else {
+          // A failed action already performs one bounded authority refresh in
+          // useIngestionQueueActions. Do not self-trigger another action from the
+          // same connection/revision: sustained 5xx responses would otherwise form
+          // an action + snapshot loop while the window is hidden. Retain the
+          // frozen close boundary and retry only after a new authority appears.
+          pending.releaseConnection();
+          deferredCompletedCleanupRef.current[index] = {
+            ...pending,
+            localJobs: result.retainedLocalJobs,
+            unresolvedLocal: result.unresolvedLocal,
+            running: false,
+            retryAfterAuthority: currentAuthority
+          };
         }
-        deferredCompletedCleanupRef.current.splice(settledIndex, 1);
-        pending.releaseConnection();
-        if (result.serverChanged === 0 && pending.localJobs.length) {
-          onDone();
+        if (result.settled) {
+          setDeferredCleanupEpoch((current) => current + 1);
         }
-      } else {
-        // A failed action already performs one bounded authority refresh in
-        // useIngestionQueueActions. Do not self-trigger another action from the
-        // same connection/revision: sustained 5xx responses would otherwise form
-        // an action + snapshot loop while the window is hidden. Retain the
-        // frozen close boundary and retry only after a new authority appears.
-        pending.releaseConnection();
-        deferredCompletedCleanupRef.current[index] = {
-          ...pending,
-          localJobs: result.retainedLocalJobs,
-          unresolvedLocal: result.unresolvedLocal,
-          running: false,
-          retryAfterAuthority: currentAuthority
-        };
-      }
-      if (result.settled) {
-        setDeferredCleanupEpoch((current) => current + 1);
-      }
-    }).catch(() => {
-      const index = deferredCompletedCleanupRef.current.findIndex(
-        (item) => item.id === pending.id
-      );
-      if (index >= 0) {
-        deferredCompletedCleanupRef.current.splice(index, 1);
-        pending.releaseConnection();
-      }
-      void queue.server.recoverAuthority().catch(() => undefined);
-      setDeferredCleanupEpoch((value) => value + 1);
-    }).finally(releaseExecutionConnection);
+      })
+      .catch(() => {
+        const index = deferredCompletedCleanupRef.current.findIndex(
+          (item) => item.id === pending.id
+        );
+        if (index >= 0) {
+          deferredCompletedCleanupRef.current.splice(index, 1);
+          pending.releaseConnection();
+        }
+        void queue.server.recoverAuthority().catch(() => undefined);
+        setDeferredCleanupEpoch((value) => value + 1);
+      })
+      .finally(releaseExecutionConnection);
   }, [
     deferredCleanupEpoch,
     executeFrozenLocalClear,
@@ -581,100 +567,91 @@ export function useIngestionQueueWorkflowActions({
     queue.server.status
   ]);
 
-  const armCleanupAction = useCallback((
-    action: IngestionCleanupActionId,
-    confirmationCount?: number
-  ) => {
-    const retained = cleanupIntentRef.current;
-    if (
-      retained?.retryable
-      && retained.queueType === queue.queueType
-      && retained.action === action
-      && serverIntentMatchesQueue(
-        retained.serverAction,
-        queue.server.status,
-        queue.server.connectionGeneration,
-        queue.server.actionScope
+  const armCleanupAction = useCallback(
+    (action: IngestionCleanupActionId, confirmationCount?: number) => {
+      const retained = cleanupIntentRef.current;
+      if (
+        retained?.retryable &&
+        retained.queueType === queue.queueType &&
+        retained.action === action &&
+        serverIntentMatchesQueue(
+          retained.serverAction,
+          queue.server.status,
+          queue.server.connectionGeneration,
+          queue.server.actionScope
+        )
       )
-    ) return { count: retained.count } as const;
-    const serverAction = captureServerAction(
-      cleanupActionType(action),
-      serverRequiresCleanup(action)
-    );
-    if (serverAction.required && !serverAction.frozen) {
-      queue.server.refresh();
-      return false;
-    }
-    const localJobs = captureLocalJobs(cleanupLocalPredicate(action));
-    cleanupIntentRef.current = {
-      queueType: queue.queueType,
-      action,
-      count: confirmationCount ?? localJobs.length,
-      serverAction,
-      localJobs,
-      unresolvedLocal: { unresolved: [] },
-      retryable: false
-    };
-    return { count: cleanupIntentRef.current.count } as const;
-  }, [
-    captureLocalJobs,
-    captureServerAction,
-    queue.queueType,
-    queue.server.actionScope,
-    queue.server.connectionGeneration,
-    queue.server.refresh,
-    queue.server.status,
-    serverRequiresCleanup
-  ]);
-
-  const confirmCleanupAction = useCallback(async (
-    action: IngestionCleanupActionId
-  ) => {
-    const frozen = cleanupIntentRef.current;
-    if (
-      !frozen
-      || frozen.queueType !== queue.queueType
-      || frozen.action !== action
-    ) return false;
-    const executing = frozen.retryable
-      ? frozen
-      : { ...frozen, retryable: true };
-    if (cleanupIntentRef.current === frozen) {
-      cleanupIntentRef.current = executing;
-    }
-    const result = await executeFrozenLocalClear(
-      executing,
-      cleanupLocalPredicate(executing.action)
-    );
-    if (action === "completed" && (
-      result.serverChanged > 0 || executing.localJobs.length > 0
-    )) onDone();
-    if (!result.settled) {
-      if (cleanupIntentRef.current === executing) {
-        cleanupIntentRef.current = {
-          ...executing,
-          localJobs: result.retainedLocalJobs,
-          unresolvedLocal: result.unresolvedLocal
-        };
+        return { count: retained.count } as const;
+      const serverAction = captureServerAction(
+        cleanupActionType(action),
+        serverRequiresCleanup(action)
+      );
+      if (serverAction.required && !serverAction.frozen) {
+        queue.server.refresh();
+        return false;
       }
-      return false;
-    }
-    // 已取得终态响应后，failed/skipped 直接留给卡片状态与详情区域表达；
-    // 只有网络/对账尚未收敛时才保留同一冻结意图供弹窗直接重试。
-    if (cleanupIntentRef.current === executing) cleanupIntentRef.current = null;
-    return true;
-  }, [
-    executeFrozenLocalClear,
-    onDone,
-    queue.queueType
-  ]);
+      const localJobs = captureLocalJobs(cleanupLocalPredicate(action));
+      cleanupIntentRef.current = {
+        queueType: queue.queueType,
+        action,
+        count: confirmationCount ?? localJobs.length,
+        serverAction,
+        localJobs,
+        unresolvedLocal: { unresolved: [] },
+        retryable: false
+      };
+      return { count: cleanupIntentRef.current.count } as const;
+    },
+    [
+      captureLocalJobs,
+      captureServerAction,
+      queue.queueType,
+      queue.server.actionScope,
+      queue.server.connectionGeneration,
+      queue.server.refresh,
+      queue.server.status,
+      serverRequiresCleanup
+    ]
+  );
+
+  const confirmCleanupAction = useCallback(
+    async (action: IngestionCleanupActionId) => {
+      const frozen = cleanupIntentRef.current;
+      if (!frozen || frozen.queueType !== queue.queueType || frozen.action !== action) return false;
+      const executing = frozen.retryable ? frozen : { ...frozen, retryable: true };
+      if (cleanupIntentRef.current === frozen) {
+        cleanupIntentRef.current = executing;
+      }
+      const result = await executeFrozenLocalClear(
+        executing,
+        cleanupLocalPredicate(executing.action)
+      );
+      if (action === "completed" && (result.serverChanged > 0 || executing.localJobs.length > 0))
+        onDone();
+      if (!result.settled) {
+        if (cleanupIntentRef.current === executing) {
+          cleanupIntentRef.current = {
+            ...executing,
+            localJobs: result.retainedLocalJobs,
+            unresolvedLocal: result.unresolvedLocal
+          };
+        }
+        return false;
+      }
+      // 已取得终态响应后，failed/skipped 直接留给卡片状态与详情区域表达；
+      // 只有网络/对账尚未收敛时才保留同一冻结意图供弹窗直接重试。
+      if (cleanupIntentRef.current === executing) cleanupIntentRef.current = null;
+      return true;
+    },
+    [executeFrozenLocalClear, onDone, queue.queueType]
+  );
 
   const armClearQueue = useCallback(() => {
     const retained = clearQueueIntentRef.current;
     if (
-      retained?.retryable
-      && retained.queueType === queue.queueType
-      && serverIntentMatchesQueue(
+      retained?.retryable &&
+      retained.queueType === queue.queueType &&
+      serverIntentMatchesQueue(
         retained.serverAction,
         queue.server.status,
         queue.server.connectionGeneration,
@@ -687,9 +664,7 @@ export function useIngestionQueueWorkflowActions({
     }
     const serverAction = captureServerAction(
       "clear_queue",
-      queue.server.status !== "ready"
-        || !queue.server.summary
-        || queue.server.summary.total > 0
+      queue.server.status !== "ready" || !queue.server.summary || queue.server.summary.total > 0
     );
     if (serverAction.required && !serverAction.frozen) {
       queue.server.refresh();
@@ -716,13 +691,8 @@ export function useIngestionQueueWorkflowActions({
 
   const confirmClearQueue = useCallback(async () => {
     const frozen = clearQueueIntentRef.current;
-    if (
-      !frozen
-      || frozen.queueType !== queue.queueType
-    ) return false;
-    const executing = frozen.retryable
-      ? frozen
-      : { ...frozen, retryable: true };
+    if (!frozen || frozen.queueType !== queue.queueType) return false;
+    const executing = frozen.retryable ? frozen : { ...frozen, retryable: true };
     if (clearQueueIntentRef.current === frozen) {
       clearQueueIntentRef.current = executing;
     }
@@ -741,32 +711,21 @@ export function useIngestionQueueWorkflowActions({
       clearQueueIntentRef.current = null;
     }
     return true;
-  }, [
-    executeFrozenLocalClear,
-    queue.queueType
-  ]);
+  }, [executeFrozenLocalClear, queue.queueType]);
 
-  const {
-    applyDefaultsToQueue,
-    prepareAttributeClear,
-    commitReadyJobs
-  } = useIngestionQueueSubmitActions({
-    queue,
-    defaults,
-    commitJobs,
-    onDone,
-    captureServerAction
-  });
+  const { applyDefaultsToQueue, prepareAttributeClear, commitReadyJobs } =
+    useIngestionQueueSubmitActions({
+      queue,
+      defaults,
+      commitJobs,
+      onDone,
+      captureServerAction
+    });
 
-  const confirmationScope = useMemo(() => [
-    queue.queueType,
-    queue.server.connectionGeneration,
-    queue.server.actionScope
-  ].join("\0"), [
-    queue.queueType,
-    queue.server.actionScope,
-    queue.server.connectionGeneration
-  ]);
+  const confirmationScope = useMemo(
+    () => [queue.queueType, queue.server.connectionGeneration, queue.server.actionScope].join("\0"),
+    [queue.queueType, queue.server.actionScope, queue.server.connectionGeneration]
+  );
 
   const discardUnconfirmedIntents = useCallback(() => {
     if (!cleanupIntentRef.current?.retryable) cleanupIntentRef.current = null;
@@ -780,12 +739,15 @@ export function useIngestionQueueWorkflowActions({
     clearQueueIntentRef.current = null;
   }, [confirmationScope]);
 
-  useEffect(() => () => {
-    cleanupIntentRef.current = null;
-    clearQueueIntentRef.current = null;
-    deferredCompletedCleanupRef.current = [];
-    runningCompletedCleanupRevisionsRef.current.clear();
-  }, []);
+  useEffect(
+    () => () => {
+      cleanupIntentRef.current = null;
+      clearQueueIntentRef.current = null;
+      deferredCompletedCleanupRef.current = [];
+      runningCompletedCleanupRevisionsRef.current.clear();
+    },
+    []
+  );
 
   return {
     runCleanupAction,

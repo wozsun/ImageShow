@@ -15,25 +15,16 @@ import {
 import { readDuplicateSnapshotsByMd5 } from "../../read-models/duplicates.ts";
 import { canonicalImportMetadata } from "../sessions/import-metadata.ts";
 import { ingestionSessionWithDuplicateConflict } from "./conflict-recovery.ts";
-import type {
-  IngestionSessionSnapshot,
-  StoredIngestionSession
-} from "../sessions/model.ts";
+import type { IngestionSessionSnapshot, StoredIngestionSession } from "../sessions/model.ts";
 import {
   ingestionSessionSemanticHash,
   semanticIngestionSessionHash
 } from "../sessions/projection.ts";
-import {
-  ingestionSessionIncarnationMismatch,
-  IngestionSessionRepository
-} from "../repository.ts";
+import { ingestionSessionIncarnationMismatch, IngestionSessionRepository } from "../repository.ts";
 
 const COMMIT_INTENT_WORKER_COUNT = 10;
 
-function commitIntentHash(
-  session: IngestionSessionSnapshot,
-  input: IngestionCommitItemInputDto
-) {
+function commitIntentHash(session: IngestionSessionSnapshot, input: IngestionCommitItemInputDto) {
   return semanticIngestionSessionHash({
     commit_request_id: input.commit_request_id,
     expected_md5: input.expected_md5,
@@ -49,20 +40,15 @@ function commitMetadata(
   metadata: ImageDraftDto,
   runtime: ReturnType<typeof getRuntimeConfig>
 ): ImageDraftDto {
-  if (
-    session.queue !== "import"
-    || session.source_type === "upload"
-    || !session.import_download
-  ) return metadata;
+  if (session.queue !== "import" || session.source_type === "upload" || !session.import_download)
+    return metadata;
   if (session.commit) {
     // Controlled Import fields are no longer caller intent after the first
     // commit freeze. Reuse them across retries and later config reloads.
     return {
       ...metadata,
       original: session.commit.metadata.original,
-      source: session.source_type === "weibo"
-        ? session.commit.metadata.source
-        : metadata.source
+      source: session.source_type === "weibo" ? session.commit.metadata.source : metadata.source
     };
   }
   return canonicalImportMetadata(
@@ -79,21 +65,20 @@ function failedResult(
   version?: number
 ): IngestionCommitItemResultDto {
   if (error instanceof ApiError) {
-    const details = error.code === "ingestion_duplicate_conflict"
-      ? error.details as {
-          duplicates?: AdminImageListItemDto[];
-          duplicate_count?: number;
-        }
-      : undefined;
+    const details =
+      error.code === "ingestion_duplicate_conflict"
+        ? (error.details as {
+            duplicates?: AdminImageListItemDto[];
+            duplicate_count?: number;
+          })
+        : undefined;
     return {
       ...pair,
       status: "failed",
       code: error.code,
       message: error.message,
       ...(version ? { version } : {}),
-      ...(details?.duplicate_count
-        ? { duplicate_count: details.duplicate_count }
-        : {}),
+      ...(details?.duplicate_count ? { duplicate_count: details.duplicate_count } : {}),
       ...(details?.duplicates ? { duplicates: details.duplicates } : {})
     };
   }
@@ -110,20 +95,17 @@ function assertDuplicateDecision(
   snapshot: Awaited<ReturnType<typeof readDuplicateSnapshotsByMd5>> extends Map<
     string,
     infer Snapshot
-  > ? Snapshot : never,
+  >
+    ? Snapshot
+    : never,
   decision: IngestionCommitItemInputDto["duplicate_decision"]
 ) {
-  const ownVisible = snapshot.items.some(
-    (item) => item.id.toLowerCase() === imageId.toLowerCase()
-  );
+  const ownVisible = snapshot.items.some((item) => item.id.toLowerCase() === imageId.toLowerCase());
   const duplicates = snapshot.items.filter(
     (item) => item.id.toLowerCase() !== imageId.toLowerCase()
   );
   if (duplicates.length && decision !== "confirmed") {
-    const duplicateCount = Math.max(
-      duplicates.length,
-      snapshot.matchCount - (ownVisible ? 1 : 0)
-    );
+    const duplicateCount = Math.max(duplicates.length, snapshot.matchCount - (ownVisible ? 1 : 0));
     throw new ApiError(
       409,
       "ingestion_duplicate_conflict",
@@ -139,17 +121,22 @@ async function publishDuplicateConflict(
   error: unknown
 ) {
   if (
-    !(error instanceof ApiError)
-    || error.code !== "ingestion_duplicate_conflict"
-    || !stored
-    || stored === ingestionSessionIncarnationMismatch
-    || stored.status !== "ready"
-    || !stored.prepared
-    || stored.commit
-  ) return undefined;
-  const duplicateCount = Number((error.details as {
-    duplicate_count?: unknown;
-  })?.duplicate_count);
+    !(error instanceof ApiError) ||
+    error.code !== "ingestion_duplicate_conflict" ||
+    !stored ||
+    stored === ingestionSessionIncarnationMismatch ||
+    stored.status !== "ready" ||
+    !stored.prepared ||
+    stored.commit
+  )
+    return undefined;
+  const duplicateCount = Number(
+    (
+      error.details as {
+        duplicate_count?: unknown;
+      }
+    )?.duplicate_count
+  );
   if (!Number.isSafeInteger(duplicateCount) || duplicateCount < 1) {
     return undefined;
   }
@@ -185,37 +172,23 @@ async function convergeCommitVersionConflict(
     session_id: input.session_id,
     image_id: input.image_id
   };
-  const committedResult = committedIngestionResultForOwner(
-    committed,
-    input.image_id,
-    owner
-  );
+  const committedResult = committedIngestionResultForOwner(committed, input.image_id, owner);
   if (committedResult) {
     return {
       ...pair,
       status: "completed",
-      version: current && current !== ingestionSessionIncarnationMismatch
-        ? current.version
-        : 1,
+      version: current && current !== ingestionSessionIncarnationMismatch ? current.version : 1,
       completed_item: committedResult.item
     };
   }
   if (current === ingestionSessionIncarnationMismatch) {
-    throw new ApiError(
-      409,
-      "ingestion_incarnation_conflict",
-      "内容接入任务身份已被替换"
-    );
+    throw new ApiError(409, "ingestion_incarnation_conflict", "内容接入任务身份已被替换");
   }
   if (!current) {
     throw new ApiError(410, "ingestion_session_missing", "未完成内容接入已过期或被服务器丢弃");
   }
   if (current.status === "completed") {
-    throw new ApiError(
-      503,
-      "ingestion_result_unknown",
-      "Redis 完成回执缺少 PostgreSQL 正式图片"
-    );
+    throw new ApiError(503, "ingestion_result_unknown", "Redis 完成回执缺少 PostgreSQL 正式图片");
   }
   if (current.status === "discarded") {
     throw new ApiError(409, "ingestion_discarded", "内容接入任务已取消");
@@ -227,13 +200,11 @@ async function convergeCommitVersionConflict(
       })
     : intentHash;
   if (
-    current.commit?.commit_request_id === input.commit_request_id
-    && current.commit.commit_intent_hash === convergedIntentHash
-    && (
-      current.status === "committing"
-      || current.status === "resolving"
-      || current.status === "failed"
-    )
+    current.commit?.commit_request_id === input.commit_request_id &&
+    current.commit.commit_intent_hash === convergedIntentHash &&
+    (current.status === "committing" ||
+      current.status === "resolving" ||
+      current.status === "failed")
   ) {
     return {
       ...pair,
@@ -249,11 +220,7 @@ async function convergeCommitVersionConflict(
     );
   }
   if (current.commit) {
-    throw new ApiError(
-      409,
-      "ingestion_already_finalizing",
-      "内容接入任务的提交意图已经冻结"
-    );
+    throw new ApiError(409, "ingestion_already_finalizing", "内容接入任务的提交意图已经冻结");
   }
   throw error;
 }
@@ -269,15 +236,17 @@ export async function acceptIngestionCommitIntents(
   );
   const sessions = await repository.readSessions(owner, items);
   const duplicateSnapshots = await readDuplicateSnapshotsByMd5([
-    ...new Set(sessions.flatMap((stored) => (
-      stored
-      && stored !== ingestionSessionIncarnationMismatch
-      && stored.status === "ready"
-      && "prepared" in stored
-      && stored.prepared
-        ? [stored.prepared.md5]
-        : []
-    )))
+    ...new Set(
+      sessions.flatMap((stored) =>
+        stored &&
+        stored !== ingestionSessionIncarnationMismatch &&
+        stored.status === "ready" &&
+        "prepared" in stored &&
+        stored.prepared
+          ? [stored.prepared.md5]
+          : []
+      )
+    )
   ]);
   return mapWithWorkerPool(
     items,
@@ -289,30 +258,24 @@ export async function acceptIngestionCommitIntents(
       };
       const stored = sessions[index];
       try {
-        const committedResult = committedIngestionResultForOwner(
-          committed,
-          input.image_id,
-          owner
-        );
+        const committedResult = committedIngestionResultForOwner(committed, input.image_id, owner);
         if (committedResult) {
           return {
             ...pair,
             status: "completed",
-            version: stored && stored !== ingestionSessionIncarnationMismatch
-              ? stored.version
-              : 1,
+            version: stored && stored !== ingestionSessionIncarnationMismatch ? stored.version : 1,
             completed_item: committedResult.item
           };
         }
         if (stored === ingestionSessionIncarnationMismatch) {
-          throw new ApiError(
-            409,
-            "ingestion_incarnation_conflict",
-            "内容接入任务身份已被替换"
-          );
+          throw new ApiError(409, "ingestion_incarnation_conflict", "内容接入任务身份已被替换");
         }
         if (!stored) {
-          throw new ApiError(410, "ingestion_session_missing", "未完成内容接入已过期或被服务器丢弃");
+          throw new ApiError(
+            410,
+            "ingestion_session_missing",
+            "未完成内容接入已过期或被服务器丢弃"
+          );
         }
         if (stored.status === "completed") {
           throw new ApiError(
@@ -331,21 +294,17 @@ export async function acceptIngestionCommitIntents(
         const canonicalInput = { ...input, metadata };
         const intentHash = commitIntentHash(stored, canonicalInput);
         if (
-          stored.status === "committing"
-          || stored.status === "resolving"
-          || (stored.status === "failed" && stored.commit)
+          stored.status === "committing" ||
+          stored.status === "resolving" ||
+          (stored.status === "failed" && stored.commit)
         ) {
           if (
-            stored.commit?.commit_request_id === input.commit_request_id
-            && stored.commit.commit_intent_hash === intentHash
+            stored.commit?.commit_request_id === input.commit_request_id &&
+            stored.commit.commit_intent_hash === intentHash
           ) {
             if (stored.status === "failed") {
               if (stored.version !== input.expected_version) {
-                throw new ApiError(
-                  409,
-                  "ingestion_version_conflict",
-                  "内容接入任务版本已变化"
-                );
+                throw new ApiError(409, "ingestion_version_conflict", "内容接入任务版本已变化");
               }
               const retryWithoutHash = {
                 ...stored,
@@ -358,14 +317,10 @@ export async function acceptIngestionCommitIntents(
                 semantic_hash: ""
               };
               try {
-                const retried = await repository.mutateSemantic(
-                  stored,
-                  stored.version,
-                  {
-                    ...retryWithoutHash,
-                    semantic_hash: ingestionSessionSemanticHash(retryWithoutHash)
-                  }
-                );
+                const retried = await repository.mutateSemantic(stored, stored.version, {
+                  ...retryWithoutHash,
+                  semantic_hash: ingestionSessionSemanticHash(retryWithoutHash)
+                });
                 return {
                   ...pair,
                   status: "accepted",
@@ -395,11 +350,7 @@ export async function acceptIngestionCommitIntents(
               "同一 commit_request_id 已用于不同提交意图"
             );
           }
-          throw new ApiError(
-            409,
-            "ingestion_already_finalizing",
-            "内容接入任务的提交意图已经冻结"
-          );
+          throw new ApiError(409, "ingestion_already_finalizing", "内容接入任务的提交意图已经冻结");
         }
         if (stored.status !== "ready") {
           throw new ApiError(409, "invalid_ingestion_state", "图片尚未准备完成");
@@ -445,11 +396,7 @@ export async function acceptIngestionCommitIntents(
           semantic_hash: ingestionSessionSemanticHash(nextWithoutHash)
         };
         try {
-          const accepted = await repository.mutateSemantic(
-            stored,
-            stored.version,
-            next
-          );
+          const accepted = await repository.mutateSemantic(stored, stored.version, next);
           return {
             ...pair,
             status: "accepted",
@@ -466,11 +413,7 @@ export async function acceptIngestionCommitIntents(
           );
         }
       } catch (error) {
-        return failedResult(
-          pair,
-          error,
-          await publishDuplicateConflict(repository, stored, error)
-        );
+        return failedResult(pair, error, await publishDuplicateConflict(repository, stored, error));
       }
     }
   );

@@ -18,10 +18,7 @@ export async function withIngestionExecutionHeartbeat<T>(
     heartbeat = heartbeat.then(async () => {
       if (stopped || combinedSignal.aborted) return;
       try {
-        heartbeatSession = await heartbeatIngestionExecution(
-          repository,
-          heartbeatSession
-        );
+        heartbeatSession = await heartbeatIngestionExecution(repository, heartbeatSession);
       } catch (error) {
         if (!stopped && !combinedSignal.aborted) controller.abort(error);
       }

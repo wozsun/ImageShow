@@ -4,11 +4,7 @@ import { errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/database/pools.ts";
 import { logger } from "../core/logger.ts";
 import { randomUuidV7 } from "../core/uuid.ts";
-import {
-  parseBackgroundJobType,
-  type BackgroundJob,
-  type BackgroundJobType
-} from "./types.ts";
+import { parseBackgroundJobType, type BackgroundJob, type BackgroundJobType } from "./types.ts";
 
 export type { BackgroundJob, BackgroundJobType } from "./types.ts";
 
@@ -30,16 +26,20 @@ export async function enqueueRerunnableJobs(
   client?: PoolClient
 ) {
   if (!jobs.length) return;
-  const uniqueJobs = [...new Map(jobs.map((job) => [
-    job.idempotencyKey,
-    {
-      id: randomUuidV7(),
-      type: job.type,
-      target_id: job.targetId,
-      payload: job.payload,
-      idempotency_key: job.idempotencyKey
-    }
-  ])).values()];
+  const uniqueJobs = [
+    ...new Map(
+      jobs.map((job) => [
+        job.idempotencyKey,
+        {
+          id: randomUuidV7(),
+          type: job.type,
+          target_id: job.targetId,
+          payload: job.payload,
+          idempotency_key: job.idempotencyKey
+        }
+      ])
+    ).values()
+  ];
   const query = `INSERT INTO background_job(
                    id, type, target_id, payload, idempotency_key
                  )
@@ -131,12 +131,17 @@ export function enqueueRerunnableJob(
   idempotencyKey: string,
   client?: PoolClient
 ) {
-  return enqueueRerunnableJobs([{
-    type,
-    targetId,
-    payload,
-    idempotencyKey
-  }], client);
+  return enqueueRerunnableJobs(
+    [
+      {
+        type,
+        targetId,
+        payload,
+        idempotencyKey
+      }
+    ],
+    client
+  );
 }
 
 type BackgroundJobRow = Omit<BackgroundJob, "type"> & { type: unknown };
@@ -208,10 +213,7 @@ export async function markBackgroundJobSucceeded(job: BackgroundJob) {
   return updated.rowCount === 1;
 }
 
-export async function rescheduleBackgroundJob(
-  job: BackgroundJob,
-  delayMs: number
-) {
+export async function rescheduleBackgroundJob(job: BackgroundJob, delayMs: number) {
   const updated = await pool.query(
     `UPDATE background_job
      SET status='pending',
@@ -220,19 +222,12 @@ export async function rescheduleBackgroundJob(
          execution_token=NULL,
          updated_at=now()
      WHERE id=$1 AND status='running' AND execution_token=$2`,
-    [
-      job.id,
-      job.execution_token,
-      Math.max(0, delayMs)
-    ]
+    [job.id, job.execution_token, Math.max(0, delayMs)]
   );
   return updated.rowCount === 1;
 }
 
-export async function markBackgroundJobFailed(
-  job: BackgroundJob,
-  error: unknown
-) {
+export async function markBackgroundJobFailed(job: BackgroundJob, error: unknown) {
   const retry = job.retry_count + 1;
   const maxRetries = appConfig.backgroundJob.maxRetries;
   const backoff = appConfig.backgroundJob.retryBackoffSeconds;
@@ -249,13 +244,7 @@ export async function markBackgroundJobFailed(
          execution_token=NULL,
          updated_at=now()
      WHERE id=$1 AND status='running' AND execution_token=$5`,
-    [
-      job.id,
-      retry,
-      exhausted ? null : seconds,
-      errorMessage(error),
-      job.execution_token
-    ]
+    [job.id, retry, exhausted ? null : seconds, errorMessage(error), job.execution_token]
   );
   if (updated.rowCount === 1) {
     logger[exhausted ? "error" : "warn"](
@@ -269,8 +258,9 @@ export async function markBackgroundJobFailed(
 }
 
 export async function listRunnableBackgroundJobCounts() {
-  return (await pool.query(
-    `SELECT type,
+  return (
+    await pool.query(
+      `SELECT type,
             count(*)::int AS n,
             floor(
               extract(epoch FROM (now() - min(created_at))) * 1000
@@ -280,7 +270,8 @@ export async function listRunnableBackgroundJobCounts() {
        status='pending' AND (next_retry_at IS NULL OR next_retry_at <= now())
      ) OR (status='failed' AND next_retry_at <= now())
      GROUP BY type`
-  )).rows.map((row) => ({
+    )
+  ).rows.map((row) => ({
     type: parseBackgroundJobType(row.type),
     n: Number(row.n),
     oldest_wait_ms: Number(row.oldest_wait_ms ?? 0)
@@ -301,10 +292,7 @@ export async function recoverStaleBackgroundJobs() {
          updated_at=now()
      WHERE status='running'
        AND updated_at < now() - ($1 || ' seconds')::interval`,
-    [
-      appConfig.backgroundJob.taskTimeoutSeconds,
-      appConfig.backgroundJob.maxRetries
-    ]
+    [appConfig.backgroundJob.taskTimeoutSeconds, appConfig.backgroundJob.maxRetries]
   );
 }
 

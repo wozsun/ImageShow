@@ -4,9 +4,7 @@ import ipaddr from "ipaddr.js";
 export const externalImageLookupErrorCode = "EXTERNAL_IMAGE_LOOKUP_REJECTED";
 
 type ExternalImageAddress = { address: string; family: number };
-type ExternalImageAddressResolver = (
-  hostname: string
-) => Promise<ExternalImageAddress[]>;
+type ExternalImageAddressResolver = (hostname: string) => Promise<ExternalImageAddress[]>;
 
 type Ipv4Address = ReturnType<typeof ipaddr.IPv4.parse>;
 type Ipv6Address = ReturnType<typeof ipaddr.IPv6.parse>;
@@ -93,22 +91,14 @@ const ipv6SpecialPurposeRules: readonly Ipv6SpecialPurposeRule[] = [
 
 const ipv4MulticastBase = ipaddr.IPv4.parse("224.0.0.0");
 const parsedIpv4SpecialPurposeRules = ipv4SpecialPurposeRules.map(
-  ([base, prefixLength, globallyReachable]) => [
-    ipaddr.IPv4.parse(base),
-    prefixLength,
-    globallyReachable
-  ] as const
+  ([base, prefixLength, globallyReachable]) =>
+    [ipaddr.IPv4.parse(base), prefixLength, globallyReachable] as const
 );
 const parsedIpv6SpecialPurposeRules = ipv6SpecialPurposeRules.map(
-  ([base, prefixLength, policy]) => [
-    ipaddr.IPv6.parse(base),
-    prefixLength,
-    policy
-  ] as const
+  ([base, prefixLength, policy]) => [ipaddr.IPv6.parse(base), prefixLength, policy] as const
 );
 
 function isGloballyReachableIpv4(address: Ipv4Address) {
-
   // Multicast is maintained in a separate IANA registry, not the
   // Special-Purpose Address Registry.
   if (address.match(ipv4MulticastBase, 4)) return false;
@@ -117,10 +107,7 @@ function isGloballyReachableIpv4(address: Ipv4Address) {
   let globallyReachable = true;
   for (const rule of parsedIpv4SpecialPurposeRules) {
     const [base, prefixLength, ruleGloballyReachable] = rule;
-    if (
-      prefixLength > matchedPrefixLength &&
-      address.match(base, prefixLength)
-    ) {
+    if (prefixLength > matchedPrefixLength && address.match(base, prefixLength)) {
       matchedPrefixLength = prefixLength;
       globallyReachable = ruleGloballyReachable;
     }
@@ -133,10 +120,7 @@ function isGloballyReachableIpv6(address: Ipv6Address) {
   let policy: Ipv6SpecialPurposeRule[2] = false;
   for (const rule of parsedIpv6SpecialPurposeRules) {
     const [base, prefixLength, rulePolicy] = rule;
-    if (
-      prefixLength > matchedPrefixLength &&
-      address.match(base, prefixLength)
-    ) {
+    if (prefixLength > matchedPrefixLength && address.match(base, prefixLength)) {
       matchedPrefixLength = prefixLength;
       policy = rulePolicy;
     }
@@ -144,28 +128,30 @@ function isGloballyReachableIpv6(address: Ipv6Address) {
 
   if (policy !== "embedded-ipv4") return policy;
   const embeddedAddress = ipaddr.fromByteArray(address.toByteArray().slice(-4));
-  return embeddedAddress instanceof ipaddr.IPv4 &&
-    isGloballyReachableIpv4(embeddedAddress);
+  return embeddedAddress instanceof ipaddr.IPv4 && isGloballyReachableIpv4(embeddedAddress);
 }
 
 function isGloballyReachableAddress({ address, family }: ExternalImageAddress) {
   const parsedFamily = isIP(address);
   if (parsedFamily !== family) return false;
   if (family === 4) {
-    return ipaddr.IPv4.isValidFourPartDecimal(address) &&
-      isGloballyReachableIpv4(ipaddr.IPv4.parse(address));
+    return (
+      ipaddr.IPv4.isValidFourPartDecimal(address) &&
+      isGloballyReachableIpv4(ipaddr.IPv4.parse(address))
+    );
   }
   if (family === 6) {
     // ipaddr.js canonicalizes bare IPv4-tail IPv6 text to ::ffff:w.x.y.z.
     // Reject that syntax before parsing so the actual ::/96 address cannot
     // inherit the mapped-address policy.
-    const isBareIpv4Compatible = address.startsWith("::") &&
-      address.lastIndexOf(":") === 1 &&
-      address.includes(".");
-    return !address.includes("%") &&
+    const isBareIpv4Compatible =
+      address.startsWith("::") && address.lastIndexOf(":") === 1 && address.includes(".");
+    return (
+      !address.includes("%") &&
       !isBareIpv4Compatible &&
       ipaddr.IPv6.isValid(address) &&
-      isGloballyReachableIpv6(ipaddr.IPv6.parse(address));
+      isGloballyReachableIpv6(ipaddr.IPv6.parse(address))
+    );
   }
   return false;
 }
@@ -186,31 +172,28 @@ export function createExternalImageLookup(
   resolveAddresses: ExternalImageAddressResolver
 ): LookupFunction {
   return (hostname, options, callback) => {
-    Promise.resolve().then(() => resolveAddresses(hostname)).then((addresses) => {
-      try {
-        assertExternalImageAddresses(addresses);
-        const requestedFamily = typeof options.family === "number"
-          ? options.family
-          : 0;
-        const candidates = requestedFamily
-          ? addresses.filter(({ family }) => family === requestedFamily)
-          : addresses;
-        if (!candidates.length) {
-          throw externalImageLookupError(
-            "No external image address for requested family"
-          );
+    Promise.resolve()
+      .then(() => resolveAddresses(hostname))
+      .then(
+        (addresses) => {
+          try {
+            assertExternalImageAddresses(addresses);
+            const requestedFamily = typeof options.family === "number" ? options.family : 0;
+            const candidates = requestedFamily
+              ? addresses.filter(({ family }) => family === requestedFamily)
+              : addresses;
+            if (!candidates.length) {
+              throw externalImageLookupError("No external image address for requested family");
+            }
+            if (options.all) callback(null, candidates);
+            else callback(null, candidates[0].address, candidates[0].family);
+          } catch (error) {
+            callback(error as NodeJS.ErrnoException, "", 0);
+          }
+        },
+        (error) => {
+          callback(externalImageLookupError("External image DNS lookup failed", error), "", 0);
         }
-        if (options.all) callback(null, candidates);
-        else callback(null, candidates[0].address, candidates[0].family);
-      } catch (error) {
-        callback(error as NodeJS.ErrnoException, "", 0);
-      }
-    }, (error) => {
-      callback(
-        externalImageLookupError("External image DNS lookup failed", error),
-        "",
-        0
       );
-    });
   };
 }

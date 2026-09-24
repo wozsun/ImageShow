@@ -13,10 +13,7 @@ import type {
   StorageSelfTest,
   StorageStreamWriteOptions
 } from "./driver.ts";
-import type {
-  StorageKeyListing,
-  StorageKeyListOptions
-} from "../objects/key-listing.ts";
+import type { StorageKeyListing, StorageKeyListOptions } from "../objects/key-listing.ts";
 
 function retiredDriverError() {
   return new ApiError(
@@ -93,10 +90,7 @@ class ManagedStorageDriver implements StorageDriver {
   ) {
     const release = this.retain();
     try {
-      return this.retainBody(
-        await this.driver.openRead(prefix, key, range, options),
-        release
-      );
+      return this.retainBody(await this.driver.openRead(prefix, key, range, options), release);
     } catch (error) {
       release();
       throw error;
@@ -114,9 +108,9 @@ class ManagedStorageDriver implements StorageDriver {
     contentType: string,
     options?: StorageRequestOptions
   ) {
-    return this.usingReference(() => (
+    return this.usingReference(() =>
       this.driver.writeBuffer(prefix, key, body, contentType, options)
-    ));
+    );
   }
 
   writeStream(
@@ -127,18 +121,13 @@ class ManagedStorageDriver implements StorageDriver {
     contentType: string,
     options?: StorageStreamWriteOptions
   ) {
-    return this.usingReference(() => (
+    return this.usingReference(() =>
       this.driver.writeStream(prefix, key, body, size, contentType, options)
-    ));
+    );
   }
 
-  removeObjects(
-    objects: readonly StorageObjectReference[],
-    options?: StorageRemoveOptions
-  ) {
-    return this.usingReference(() => (
-      this.driver.removeObjects(objects, options)
-    ));
+  removeObjects(objects: readonly StorageObjectReference[], options?: StorageRemoveOptions) {
+    return this.usingReference(() => this.driver.removeObjects(objects, options));
   }
 
   serverCopySource(prefix: StoragePrefix, key: string, size: number) {
@@ -155,18 +144,12 @@ class ManagedStorageDriver implements StorageDriver {
     toKey: string,
     options: StorageServerCopyOptions
   ) {
-    return this.usingReference(() => this.driver.copyFromServerSource(
-      source,
-      toPrefix,
-      toKey,
-      options
-    ));
+    return this.usingReference(() =>
+      this.driver.copyFromServerSource(source, toPrefix, toKey, options)
+    );
   }
 
-  async *listKeys(
-    prefix: StoragePrefix,
-    options?: StorageKeyListOptions
-  ): StorageKeyListing {
+  async *listKeys(prefix: StoragePrefix, options?: StorageKeyListOptions): StorageKeyListing {
     const release = this.retain();
     try {
       return yield* this.driver.listKeys(prefix, options);
@@ -192,7 +175,9 @@ class ManagedStorageDriver implements StorageDriver {
 
   private async closeAfterDrain() {
     if (this.activeReferences > 0) {
-      await new Promise<void>((resolve) => { this.drained = resolve; });
+      await new Promise<void>((resolve) => {
+        this.drained = resolve;
+      });
     }
     await this.driver.close?.();
   }

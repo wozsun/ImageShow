@@ -18,10 +18,7 @@ export function storageBackendS3FormSettings(
   backend?: Extract<StorageBackendAdmin, { type: "s3" }>
 ): S3Settings {
   if (!backend) return { ...emptyStorageBackendS3Settings };
-  const {
-    secret_access_key_configured: _secretConfigured,
-    ...settings
-  } = backend.s3;
+  const { secret_access_key_configured: _secretConfigured, ...settings } = backend.s3;
   return {
     ...emptyStorageBackendS3Settings,
     ...settings,
@@ -30,9 +27,7 @@ export function storageBackendS3FormSettings(
 }
 
 export function storageBackendS3AfterSuccessfulSave(settings: S3Settings) {
-  return settings.secret_access_key
-    ? { ...settings, secret_access_key: "" }
-    : settings;
+  return settings.secret_access_key ? { ...settings, secret_access_key: "" } : settings;
 }
 
 export function storageBackendEditConfigPatch(
@@ -40,9 +35,11 @@ export function storageBackendEditConfigPatch(
   settings: S3Settings
 ) {
   const { secret_access_key, ...visibleSettings } = settings;
-  const changed = Object.fromEntries(Object.entries(visibleSettings).filter(
-    ([key, value]) => backend.s3[key as keyof typeof visibleSettings] !== value
-  ));
+  const changed = Object.fromEntries(
+    Object.entries(visibleSettings).filter(
+      ([key, value]) => backend.s3[key as keyof typeof visibleSettings] !== value
+    )
+  );
   if (secret_access_key) changed.secret_access_key = secret_access_key;
   return Object.keys(changed).length ? { s3: changed } : {};
 }

@@ -1,24 +1,12 @@
-
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const workspace = resolve(import.meta.dirname, "../../../..");
-const moduleUrl = (relativePath: string) => (
-  pathToFileURL(resolve(workspace, relativePath)).href
-);
+const moduleUrl = (relativePath: string) => pathToFileURL(resolve(workspace, relativePath)).href;
 import assert from "node:assert/strict";
 
-const [
-  mode,
-  host,
-  port,
-  name,
-  user,
-  password,
-  dataDirectory,
-  redisHost,
-  redisPort
-] = process.argv.slice(2);
+const [mode, host, port, name, user, password, dataDirectory, redisHost, redisPort] =
+  process.argv.slice(2);
 Object.assign(process.env, {
   DATABASE_HOST: host,
   DATABASE_PORT: port,
@@ -51,7 +39,6 @@ const ingestionSessionProjection = await import(
   moduleUrl("packages/server/src/images/ingestion/sessions/projection.ts")
 );
 const imageTime = await import(moduleUrl("packages/server/src/images/image-time.ts"));
-
 
 const owner = "current-cold-start-owner";
 const beforeTime = imageTime.parseImageTime("2026-08-23T06:00:00.000Z");
@@ -117,21 +104,27 @@ try {
       raw_size: 0,
       discard_at: 0
     };
-    await repository.acceptImportSession({
-      ...withoutHash,
-      semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-        withoutHash
-      )
-    }, ingestionSessionIdentity.createIngestionDisplayOrderKey(
-      "019f8457-063a-7000-8000-000000000001",
-      21,
-      beforeSessionId
-    ), Date.now());
+    await repository.acceptImportSession(
+      {
+        ...withoutHash,
+        semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(withoutHash)
+      },
+      ingestionSessionIdentity.createIngestionDisplayOrderKey(
+        "019f8457-063a-7000-8000-000000000001",
+        21,
+        beforeSessionId
+      ),
+      Date.now()
+    );
     await redisClient.redis.set("imageshow:test:cold-start-marker", "present");
-    assert.equal((await databasePools.pool.query(
-      "SELECT count(*)::int AS count FROM metadata WHERE id=$1",
-      [persistedImageId]
-    )).rows[0]?.count, 1);
+    assert.equal(
+      (
+        await databasePools.pool.query("SELECT count(*)::int AS count FROM metadata WHERE id=$1", [
+          persistedImageId
+        ])
+      ).rows[0]?.count,
+      1
+    );
   } else if (mode === "verify") {
     assert.equal(await redisClient.redis.dbsize(), 0);
     assert.equal(
@@ -139,14 +132,17 @@ try {
       null,
       "停机清空后的旧 Redis canonical 必须无条件消失"
     );
-    const persisted = (await databasePools.pool.query(
-      "SELECT created_by, title FROM metadata WHERE id=$1",
-      [persistedImageId]
-    )).rows;
-    assert.deepEqual(persisted, [{
-      created_by: owner,
-      title: "cold start persisted truth"
-    }]);
+    const persisted = (
+      await databasePools.pool.query("SELECT created_by, title FROM metadata WHERE id=$1", [
+        persistedImageId
+      ])
+    ).rows;
+    assert.deepEqual(persisted, [
+      {
+        created_by: owner,
+        title: "cold start persisted truth"
+      }
+    ]);
     const afterTime = imageTime.parseImageTime("2026-08-23T06:00:01.000Z");
     const afterSessionId = ingestionSessionIdentity.createIngestionSessionId(
       owner,
@@ -188,18 +184,20 @@ try {
       raw_size: 0,
       discard_at: 0
     };
-    const accepted = await repository.acceptImportSession({
-      ...afterWithoutHash,
-      semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-        afterWithoutHash
-      )
-    }, ingestionSessionIdentity.createIngestionDisplayOrderKey(
-      "019f8457-063b-7000-8000-000000000002",
-      22,
-      afterSessionId
-    ), Date.now());
+    const accepted = await repository.acceptImportSession(
+      {
+        ...afterWithoutHash,
+        semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(afterWithoutHash)
+      },
+      ingestionSessionIdentity.createIngestionDisplayOrderKey(
+        "019f8457-063b-7000-8000-000000000002",
+        22,
+        afterSessionId
+      ),
+      Date.now()
+    );
     assert.equal(accepted.session.session_id, afterSessionId);
-    assert.ok(await redisClient.redis.dbsize() > 0);
+    assert.ok((await redisClient.redis.dbsize()) > 0);
   } else {
     throw new Error("unknown cold Redis helper mode");
   }

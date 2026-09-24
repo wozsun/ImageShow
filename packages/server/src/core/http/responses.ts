@@ -1,8 +1,5 @@
 import type { Context } from "hono";
-import type {
-  ApiErrorResponseDto,
-  ApiSuccessResponseDto
-} from "@imageshow/shared/browser";
+import type { ApiErrorResponseDto, ApiSuccessResponseDto } from "@imageshow/shared/browser";
 import { ApiError } from "../api-error.ts";
 import { logger } from "../logger.ts";
 import { requestLogContext } from "./request-security.ts";
@@ -19,17 +16,13 @@ import {
 } from "./content-response.ts";
 
 export function apiSuccess(): { ok: true };
-export function apiSuccess<T extends Record<string, unknown>>(
-  fields: T
-): ApiSuccessResponseDto<T>;
+export function apiSuccess<T extends Record<string, unknown>>(fields: T): ApiSuccessResponseDto<T>;
 export function apiSuccess(fields: Record<string, unknown> = {}) {
   return { ok: true as const, ...fields };
 }
 
 export function apiSuccessEtag<T extends Record<string, unknown>>(fields: T) {
-  return createContentRepresentation(
-    JSON.stringify(apiSuccess(fields))
-  ).etag;
+  return createContentRepresentation(JSON.stringify(apiSuccess(fields))).etag;
 }
 
 export function createApiSuccessSnapshot<T extends object>(
@@ -43,25 +36,17 @@ export function cacheableApiSuccess<T extends Record<string, unknown>>(
   fields: T,
   cacheControl: string
 ) {
-  return cacheableContentResponse(
-    context,
-    JSON.stringify(apiSuccess(fields)),
-    {
-      cacheControl,
-      contentType: "application/json; charset=UTF-8"
-    }
-  );
+  return cacheableContentResponse(context, JSON.stringify(apiSuccess(fields)), {
+    cacheControl,
+    contentType: "application/json; charset=UTF-8"
+  });
 }
 
 export function privateCacheableApiSuccess<T extends Record<string, unknown>>(
   context: Context,
   fields: T
 ) {
-  return cacheableApiSuccess(
-    context,
-    fields,
-    privateRevalidationCacheControl
-  );
+  return cacheableApiSuccess(context, fields, privateRevalidationCacheControl);
 }
 
 export function cacheableContentResponse(
@@ -96,10 +81,7 @@ export function handleApiError(context: Context, error: unknown) {
       (error.details as { total_size?: unknown })?.total_size
     );
     if (error.status === 416 && totalSize !== undefined) {
-      context.header(
-        "Content-Range",
-        `bytes */${totalSize}`
-      );
+      context.header("Content-Range", `bytes */${totalSize}`);
     }
     const payload = {
       ok: false,
@@ -132,13 +114,20 @@ export function handleApiError(context: Context, error: unknown) {
 
 function codeForStatus(status: number): string {
   switch (status) {
-    case 400: return "bad_request";
-    case 403: return "forbidden";
-    case 404: return "not_found";
-    case 405: return "method_not_allowed";
-    case 429: return "too_many_requests";
-    case 503: return "service_unavailable";
-    default: return status >= 500 ? "internal_error" : "request_error";
+    case 400:
+      return "bad_request";
+    case 403:
+      return "forbidden";
+    case 404:
+      return "not_found";
+    case 405:
+      return "method_not_allowed";
+    case 429:
+      return "too_many_requests";
+    case 503:
+      return "service_unavailable";
+    default:
+      return status >= 500 ? "internal_error" : "request_error";
   }
 }
 

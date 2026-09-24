@@ -29,8 +29,12 @@
   overflow: visible;
 }
 .login-altcha .altcha,
-.login-altcha .altcha-main { width: 100%; }
-.login-altcha .altcha-main { padding-right: 40px; }
+.login-altcha .altcha-main {
+  width: 100%;
+}
+.login-altcha .altcha-main {
+  padding-right: 40px;
+}
 .login-altcha .altcha-popover[data-variant="error"] {
   --altcha-popover-color: var(--admin-color-danger-border);
   left: 0;
@@ -74,4 +78,6 @@
   color: var(--admin-color-danger-text);
   cursor: pointer;
 }
-.login-challenge-retry:hover { background: var(--admin-color-danger-surface); }
+.login-challenge-retry:hover {
+  background: var(--admin-color-danger-surface);
+}

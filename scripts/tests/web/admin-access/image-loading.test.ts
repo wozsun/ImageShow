@@ -1,18 +1,13 @@
 import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  parseHTML
-} from "linkedom";
+import { parseHTML } from "linkedom";
 
 test("[Web/后台访问] 缩略图真实挂载只请求一次并忽略快速换源的迟到结果", async () => {
-  const { window, document } = parseHTML(
-    "<!doctype html><html><body></body></html>"
-  );
+  const { window, document } = parseHTML("<!doctype html><html><body></body></html>");
   const React = await import("react");
-  const requestAnimationFrame = (callback: FrameRequestCallback) => (
-    setTimeout(() => callback(Date.now()), 0) as unknown as number
-  );
+  const requestAnimationFrame = (callback: FrameRequestCallback) =>
+    setTimeout(() => callback(Date.now()), 0) as unknown as number;
   const cancelAnimationFrame = (handle: number) => clearTimeout(handle);
   Object.assign(window, { requestAnimationFrame, cancelAnimationFrame });
 
@@ -34,9 +29,9 @@ test("[Web/后台访问] 缩略图真实挂载只请求一次并忽略快速换�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -57,19 +52,15 @@ test("[Web/后台访问] 缩略图真实挂载只请求一次并忽略快速换�
   try {
     const { createRoot } = await import("react-dom/client");
     const { flushSync } = await import("react-dom");
-    const { ThumbImage } = await import(
-      "../../../../packages/web/src/components/image/ThumbImage.tsx"
-    );
+    const { ThumbImage } =
+      await import("../../../../packages/web/src/components/image/ThumbImage.tsx");
 
     const settleReact = async () => {
       await Promise.resolve();
       await Promise.resolve();
     };
-    const imageWithSource = (container: HTMLElement, source: string) => (
-      [...container.querySelectorAll("img")].find(
-        (image) => image.getAttribute("src") === source
-      )
-    );
+    const imageWithSource = (container: HTMLElement, source: string) =>
+      [...container.querySelectorAll("img")].find((image) => image.getAttribute("src") === source);
 
     for (const lateOutcome of ["load", "error"] as const) {
       const container = document.createElement("div");
@@ -80,11 +71,12 @@ test("[Web/后台访问] 缩略图真实挂载只请求一次并忽略快速换�
       const sourceB = `${prefix}-b.webp`;
       const sourceC = `${prefix}-c.webp`;
       const startWrite = sourceWrites.length;
-      const renderThumb = (source: string) => React.createElement(
-        React.StrictMode,
-        null,
-        React.createElement(ThumbImage, { src: source, alt: "测试缩略图" })
-      );
+      const renderThumb = (source: string) =>
+        React.createElement(
+          React.StrictMode,
+          null,
+          React.createElement(ThumbImage, { src: source, alt: "测试缩略图" })
+        );
 
       await React.act(async () => {
         root.render(renderThumb(sourceA));
@@ -96,10 +88,7 @@ test("[Web/后台访问] 缩略图真实挂载只请求一次并忽略快速换�
         imageA.dispatchEvent(new window.Event("load"));
         await settleReact();
       });
-      assert.equal(
-        container.querySelector("img.is-ready")?.getAttribute("src"),
-        sourceA
-      );
+      assert.equal(container.querySelector("img.is-ready")?.getAttribute("src"), sourceA);
 
       await React.act(async () => {
         root.render(renderThumb(sourceB));
@@ -113,25 +102,16 @@ test("[Web/后台访问] 缩略图真实挂载只请求一次并忽略快速换�
         flushSync(() => root.render(renderThumb(sourceC)));
         await settleReact();
       });
-      assert.equal(
-        container.querySelector("img.is-ready")?.getAttribute("src"),
-        sourceA
-      );
+      assert.equal(container.querySelector("img.is-ready")?.getAttribute("src"), sourceA);
       const imageC = imageWithSource(container, sourceC);
       assert.ok(imageC);
-      assert.deepEqual(
-        sourceWrites.slice(startWrite),
-        [sourceA, sourceB, sourceC]
-      );
+      assert.deepEqual(sourceWrites.slice(startWrite), [sourceA, sourceB, sourceC]);
 
       await React.act(async () => {
         imageC.dispatchEvent(new window.Event("load"));
         await settleReact();
       });
-      assert.equal(
-        container.querySelector("img.is-ready")?.getAttribute("src"),
-        sourceC
-      );
+      assert.equal(container.querySelector("img.is-ready")?.getAttribute("src"), sourceC);
       assert.equal(container.querySelectorAll("img").length, 1);
 
       await React.act(async () => root.unmount());

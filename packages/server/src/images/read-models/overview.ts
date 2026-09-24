@@ -1,9 +1,7 @@
 import type { AdminOverviewDto } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { pool } from "../../core/database/pools.ts";
-import {
-  getReadyImageCacheOverviewStatus
-} from "../ready-cache/admin-status.ts";
+import { getReadyImageCacheOverviewStatus } from "../ready-cache/admin-status.ts";
 import {
   adminImageDetailItemsWithTags,
   adminImageDetailPresentationColumnsWithTags,
@@ -12,14 +10,9 @@ import {
 
 export async function getOverviewStats(): Promise<AdminOverviewDto> {
   const recentLimit = getRuntimeConfig().admin.recent_uploads;
-  const [
-    statsResult,
-    topThemesResult,
-    recentResult,
-    backendResult,
-    readyImageCache
-  ] = await Promise.all([
-    pool.query(`
+  const [statsResult, topThemesResult, recentResult, backendResult, readyImageCache] =
+    await Promise.all([
+      pool.query(`
       SELECT
         count(*) FILTER (WHERE status='ready')::int AS gallery,
         count(*) FILTER (WHERE status='ready' AND theme IS NULL)::int AS theme_unset,
@@ -39,7 +32,7 @@ export async function getOverviewStats(): Promise<AdminOverviewDto> {
       FROM metadata m
       JOIN storage_backend sb ON sb.slug = m.storage_slug
     `),
-    pool.query(`
+      pool.query(`
       SELECT theme, count(*)::int AS count
       FROM metadata
       WHERE status='ready' AND theme IS NOT NULL
@@ -47,8 +40,8 @@ export async function getOverviewStats(): Promise<AdminOverviewDto> {
       ORDER BY count DESC, theme ASC
       LIMIT 8
     `),
-    pool.query(
-      `SELECT ${adminImageDetailPresentationColumnsWithTags},
+      pool.query(
+        `SELECT ${adminImageDetailPresentationColumnsWithTags},
               COALESCE((
                 SELECT sb.display_name
                   FROM storage_backend sb
@@ -58,11 +51,11 @@ export async function getOverviewStats(): Promise<AdminOverviewDto> {
         WHERE status='ready'
         ORDER BY created_at DESC, id DESC
         LIMIT $1`,
-      [recentLimit]
-    ),
-    pool.query("SELECT count(*)::int AS n FROM storage_backend"),
-    getReadyImageCacheOverviewStatus()
-  ]);
+        [recentLimit]
+      ),
+      pool.query("SELECT count(*)::int AS n FROM storage_backend"),
+      getReadyImageCacheOverviewStatus()
+    ]);
 
   const row = statsResult.rows[0];
   const recent = await adminImageDetailItemsWithTags(
@@ -95,14 +88,10 @@ export async function getOverviewStats(): Promise<AdminOverviewDto> {
       synchronized: readyImageCache.synchronized,
       rebuilding: readyImageCache.rebuilding,
       item_count: readyImageCache.item_count,
-      current_core_memory_bytes:
-        readyImageCache.current_core_memory_bytes,
-      current_core_measured_at:
-        readyImageCache.current_core_measured_at,
-      last_full_rebuild_core_memory_bytes:
-        readyImageCache.last_full_rebuild_core_memory_bytes,
-      last_full_rebuild_measured_at:
-        readyImageCache.last_full_rebuild_measured_at
+      current_core_memory_bytes: readyImageCache.current_core_memory_bytes,
+      current_core_measured_at: readyImageCache.current_core_measured_at,
+      last_full_rebuild_core_memory_bytes: readyImageCache.last_full_rebuild_core_memory_bytes,
+      last_full_rebuild_measured_at: readyImageCache.last_full_rebuild_measured_at
     }
   };
 }

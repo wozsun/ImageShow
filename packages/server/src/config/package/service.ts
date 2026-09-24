@@ -3,9 +3,7 @@ import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { inspectTransactionOutcome } from "../../core/database/transactions.ts";
 import { logger } from "../../core/logger.ts";
 import { applicationVersion } from "../../core/application-version.ts";
-import {
-  listStorageBackends
-} from "../../storage/backends/registry.ts";
+import { listStorageBackends } from "../../storage/backends/registry.ts";
 import { importStorageBackends } from "../../storage/backends/mutations.ts";
 import {
   buildConfigPackage,
@@ -21,18 +19,12 @@ import {
 } from "../runtime-config-store.ts";
 
 export async function createConfigPackage() {
-  return buildConfigPackage(
-    getRuntimeConfig(),
-    await listStorageBackends(),
-    applicationVersion()
-  );
+  return buildConfigPackage(getRuntimeConfig(), await listStorageBackends(), applicationVersion());
 }
 
 export async function previewConfigPackage(value: unknown) {
   const pkg = parseConfigPackage(value);
-  const existingSlugs = new Set(
-    (await listStorageBackends()).map((backend) => backend.slug)
-  );
+  const existingSlugs = new Set((await listStorageBackends()).map((backend) => backend.slug));
   return projectConfigPackagePreview(pkg, existingSlugs);
 }
 
@@ -43,14 +35,8 @@ export async function importConfigPackage(
 ) {
   const pkg = parseConfigPackage(value);
   return withRuntimeConfigWriteLease(async () => {
-    const existingSlugs = new Set(
-      (await listStorageBackends()).map((backend) => backend.slug)
-    );
-    const resolved = resolveImportedStorageBackends(
-      pkg,
-      existingSlugs,
-      slugMappings
-    );
+    const existingSlugs = new Set((await listStorageBackends()).map((backend) => backend.slug));
+    const resolved = resolveImportedStorageBackends(pkg, existingSlugs, slugMappings);
     const previousRuntimeConfig = structuredClone(getRuntimeConfig());
     const importedRuntimeConfig = materializeImportedRuntimeConfig(
       pkg.config,
@@ -64,8 +50,7 @@ export async function importConfigPackage(
       is_default: backend.is_default,
       config: backend.s3
     }));
-    let candidateFileState: "pending" | "persisted" | "write_failed" =
-      "pending";
+    let candidateFileState: "pending" | "persisted" | "write_failed" = "pending";
     let importTransactionId: string | null = null;
     const restorePreviousRuntimeConfigFile = (originalError: unknown) => {
       try {
@@ -77,7 +62,9 @@ export async function importConfigPackage(
           restore_error: errorMessage(restoreError)
         };
         logger.error("config_package_file_restore_failed", {
-          ...details, original_error: originalError, restore_error: restoreError
+          ...details,
+          original_error: originalError,
+          restore_error: restoreError
         });
         throw new ApiError(
           503,
@@ -116,8 +103,7 @@ export async function importConfigPackage(
       }
 
       const outcome = importTransactionId
-        ? await inspectTransactionOutcome(importTransactionId)
-          .catch(() => "unknown" as const)
+        ? await inspectTransactionOutcome(importTransactionId).catch(() => "unknown" as const)
         : "unknown";
       if (outcome === "committed") {
         publishRuntimeConfigForPackageImport(importedRuntimeConfig);

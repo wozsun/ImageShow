@@ -6,15 +6,9 @@ import {
   type StorageBackendMigrationResponseDto,
   type StorageBackendsAdminResponseDto
 } from "@imageshow/shared/browser";
-import {
-  apiSuccess,
-  privateCacheableApiSuccess
-} from "../core/http/responses.ts";
+import { apiSuccess, privateCacheableApiSuccess } from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
-import {
-  requireAdminPermission,
-  requireSuperAdmin
-} from "../users/admin-authorization.ts";
+import { requireAdminPermission, requireSuperAdmin } from "../users/admin-authorization.ts";
 import {
   storageBackendMigrationInput,
   storageBackendCreateInput,
@@ -38,9 +32,7 @@ import { resolveStorageTestConfig } from "../storage/backends/probe.ts";
 import { updateStorageBackend } from "../storage/backends/update.ts";
 import { retryStorageBackendCleanup } from "../storage/cleanup/service.ts";
 import { testStorageBackend } from "../storage/backends/self-test.ts";
-import {
-  migrateStorageBackendImages
-} from "../images/storage-location/storage-backend-migration.ts";
+import { migrateStorageBackendImages } from "../images/storage-location/storage-backend-migration.ts";
 
 export function registerStorageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/storage/options`, async (c) => {
@@ -61,10 +53,7 @@ export function registerStorageRoutes(app: Hono) {
     `${adminApiBasePath}/storage/backends/migrate`,
     requireAdminPermission(adminPermissions.storageMaintenanceMigrate),
     async (c) => {
-      const input = parse(
-        storageBackendMigrationInput,
-        await readJsonBody(c)
-      );
+      const input = parse(storageBackendMigrationInput, await readJsonBody(c));
       const response = apiSuccess(
         await migrateStorageBackendImages(input.source, input.target, {
           signal: c.req.raw.signal
@@ -80,12 +69,16 @@ export function registerStorageRoutes(app: Hono) {
     return c.json(apiSuccess());
   });
 
-  app.post(`${adminApiBasePath}/storage/backends/:slug/sort-order`, requireSuperAdmin, async (c) => {
-    const slug = parse(storageSlugInput, c.req.param("slug"));
-    const input = parse(sortOrderUpdateInput, await readJsonBody(c));
-    await setStorageBackendSortOrder(slug, input.sort_order);
-    return c.json(apiSuccess());
-  });
+  app.post(
+    `${adminApiBasePath}/storage/backends/:slug/sort-order`,
+    requireSuperAdmin,
+    async (c) => {
+      const slug = parse(storageSlugInput, c.req.param("slug"));
+      const input = parse(sortOrderUpdateInput, await readJsonBody(c));
+      await setStorageBackendSortOrder(slug, input.sort_order);
+      return c.json(apiSuccess());
+    }
+  );
 
   app.post(`${adminApiBasePath}/storage/backends/:slug/default`, requireSuperAdmin, async (c) => {
     const slug = parse(storageSlugInput, c.req.param("slug"));
@@ -99,11 +92,15 @@ export function registerStorageRoutes(app: Hono) {
     return c.json(apiSuccess());
   });
 
-  app.post(`${adminApiBasePath}/storage/backends/:slug/cleanup/retry`, requireSuperAdmin, async (c) => {
-    const slug = parse(storageSlugInput, c.req.param("slug"));
-    await retryStorageBackendCleanup(slug);
-    return c.json(apiSuccess());
-  });
+  app.post(
+    `${adminApiBasePath}/storage/backends/:slug/cleanup/retry`,
+    requireSuperAdmin,
+    async (c) => {
+      const slug = parse(storageSlugInput, c.req.param("slug"));
+      await retryStorageBackendCleanup(slug);
+      return c.json(apiSuccess());
+    }
+  );
 
   app.post(`${adminApiBasePath}/storage/backends/:slug`, requireSuperAdmin, async (c) => {
     const slug = parse(storageSlugInput, c.req.param("slug"));

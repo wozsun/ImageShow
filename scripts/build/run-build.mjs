@@ -9,7 +9,7 @@ import {
 
 const workspaceRoot = resolve(import.meta.dirname, "../..");
 const windows = process.platform === "win32";
-const npmCommand = windows ? (process.env.ComSpec || "cmd.exe") : "npm";
+const npmCommand = windows ? process.env.ComSpec || "cmd.exe" : "npm";
 const children = new Map();
 let interruptedExitCode = 0;
 let interruptFailed = false;
@@ -20,7 +20,9 @@ function signalChildren(signal) {
       child,
       signal,
       10_000,
-      () => { interruptFailed = true; },
+      () => {
+        interruptFailed = true;
+      },
       (error) => state.failForcedShutdown(error)
     );
   }
@@ -59,9 +61,7 @@ function ensureNotInterrupted() {
 
 function runNpm(label, args) {
   return new Promise((resolveCommand, rejectCommand) => {
-    const commandArguments = windows
-      ? ["/d", "/s", "/c", "npm", ...args]
-      : args;
+    const commandArguments = windows ? ["/d", "/s", "/c", "npm", ...args] : args;
     const child = spawnManaged(npmCommand, commandArguments, {
       cwd: workspaceRoot,
       stdio: "inherit",
@@ -80,10 +80,14 @@ function runNpm(label, args) {
         releaseFailedProcessTree(child);
         state.cancelFallback?.();
         children.delete(child);
-        finish(() => rejectCommand(new AggregateError(
-          [error],
-          `${label} process tree did not terminate after forced fallback`
-        )));
+        finish(() =>
+          rejectCommand(
+            new AggregateError(
+              [error],
+              `${label} process tree did not terminate after forced fallback`
+            )
+          )
+        );
       }
     };
     children.set(child, state);
@@ -99,9 +103,11 @@ function runNpm(label, args) {
         finish(resolveCommand);
         return;
       }
-      finish(() => rejectCommand(new Error(
-        `${label} failed${signal ? ` with ${signal}` : ` with exit code ${code}`}`
-      )));
+      finish(() =>
+        rejectCommand(
+          new Error(`${label} failed${signal ? ` with ${signal}` : ` with exit code ${code}`}`)
+        )
+      );
     });
   });
 }
@@ -109,9 +115,7 @@ function runNpm(label, args) {
 async function main() {
   await cleanBuildOutput();
   ensureNotInterrupted();
-  await runNpm("shared build", [
-    "run", "build", "--workspace", "@imageshow/shared"
-  ]);
+  await runNpm("shared build", ["run", "build", "--workspace", "@imageshow/shared"]);
   ensureNotInterrupted();
 
   const builds = [
@@ -127,9 +131,7 @@ async function main() {
   }
   ensureNotInterrupted();
 
-  await runNpm("server asset assembly", [
-    "run", "assemble", "--workspace", "@imageshow/server"
-  ]);
+  await runNpm("server asset assembly", ["run", "assemble", "--workspace", "@imageshow/server"]);
 }
 
 try {

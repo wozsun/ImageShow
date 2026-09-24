@@ -1,8 +1,15 @@
 import type { z } from "zod";
 import type { RuntimeConfig } from "@imageshow/shared/browser";
-import { parseRuntimeConfig, runtimeConfigDefaults, runtimeConfigSchema } from "../runtime-config.ts";
+import {
+  parseRuntimeConfig,
+  runtimeConfigDefaults,
+  runtimeConfigSchema
+} from "../runtime-config.ts";
 
-const portableSiteConfigSchema = runtimeConfigSchema.shape.site.omit({ domain: true, assets_base_url: true });
+const portableSiteConfigSchema = runtimeConfigSchema.shape.site.omit({
+  domain: true,
+  assets_base_url: true
+});
 
 export const portableRuntimeConfigSchema = runtimeConfigSchema.extend({
   site: portableSiteConfigSchema
@@ -95,8 +102,7 @@ function countPortableConfigValues(value: unknown): number {
 }
 
 function configPathStartsWith(path: ConfigPath, prefix: ConfigPath) {
-  return prefix.length <= path.length
-    && prefix.every((segment, index) => segment === path[index]);
+  return prefix.length <= path.length && prefix.every((segment, index) => segment === path[index]);
 }
 
 function setConfigCandidate(
@@ -137,25 +143,16 @@ function configIssueSignature(issue: {
 }
 
 /** Keep valid package values and default missing, unknown or invalid input. */
-export function projectPortableRuntimeConfig(
-  input: unknown
-): PortableRuntimeConfigProjection {
+export function projectPortableRuntimeConfig(input: unknown): PortableRuntimeConfigProjection {
   const defaults = portableConfig(runtimeConfigDefaults());
   const candidates: ConfigCandidate[] = [];
-  const unknownValues = collectPortableConfigCandidates(
-    defaults,
-    input,
-    [],
-    candidates
-  );
+  const unknownValues = collectPortableConfigCandidates(defaults, input, [], candidates);
   const activeCandidates = new Set(candidates.map((_, index) => index));
 
   while (true) {
-    const result = portableRuntimeConfigSchema.safeParse(configFromCandidates(
-      defaults,
-      candidates,
-      activeCandidates
-    ));
+    const result = portableRuntimeConfigSchema.safeParse(
+      configFromCandidates(defaults, candidates, activeCandidates)
+    );
     if (result.success) {
       return {
         config: result.data,
@@ -169,8 +166,8 @@ export function projectPortableRuntimeConfig(
     for (const issue of result.error.issues) {
       for (const index of activeCandidates) {
         if (
-          configPathStartsWith(issue.path, candidates[index]!.path)
-          && !directlyInvalid.includes(index)
+          configPathStartsWith(issue.path, candidates[index]!.path) &&
+          !directlyInvalid.includes(index)
         ) {
           directlyInvalid.push(index);
         }
@@ -182,20 +179,20 @@ export function projectPortableRuntimeConfig(
     // every affected current section, preferring the candidate that preserves
     // the most other valid values. Directly reported candidates win only when
     // two removals have the same validation result.
-    const issueOwnerPaths = result.error.issues.flatMap((issue) => (
+    const issueOwnerPaths = result.error.issues.flatMap((issue) =>
       issue.path.length <= 1
         ? [[]]
-        : Array.from(
-            { length: issue.path.length - 1 },
-            (_, index) => issue.path.slice(0, index + 1)
+        : Array.from({ length: issue.path.length - 1 }, (_, index) =>
+            issue.path.slice(0, index + 1)
           )
-    ));
+    );
     const relatedCandidates = [...activeCandidates].filter((index) => {
       const candidatePath = candidates[index]!.path;
-      return issueOwnerPaths.some((issueOwnerPath) => (
-        configPathStartsWith(candidatePath, issueOwnerPath)
-        || configPathStartsWith(issueOwnerPath, candidatePath)
-      ));
+      return issueOwnerPaths.some(
+        (issueOwnerPath) =>
+          configPathStartsWith(candidatePath, issueOwnerPath) ||
+          configPathStartsWith(issueOwnerPath, candidatePath)
+      );
     });
     const fallbackCandidates = [
       ...directlyInvalid,
@@ -204,9 +201,7 @@ export function projectPortableRuntimeConfig(
     if (fallbackCandidates.length === 0) {
       fallbackCandidates.push(...activeCandidates);
     }
-    const currentIssueSignatures = new Set(
-      result.error.issues.map(configIssueSignature)
-    );
+    const currentIssueSignatures = new Set(result.error.issues.map(configIssueSignature));
     let bestCandidate = fallbackCandidates[0];
     let bestResolvedIssues = -1;
     let bestRemainingIssues = Number.MAX_SAFE_INTEGER;
@@ -215,28 +210,25 @@ export function projectPortableRuntimeConfig(
     for (const index of fallbackCandidates) {
       const trialCandidates = new Set(activeCandidates);
       trialCandidates.delete(index);
-      const trial = portableRuntimeConfigSchema.safeParse(configFromCandidates(
-        defaults,
-        candidates,
-        trialCandidates
-      ));
+      const trial = portableRuntimeConfigSchema.safeParse(
+        configFromCandidates(defaults, candidates, trialCandidates)
+      );
       const isValid = trial.success;
       const resolvedIssues = isValid
         ? currentIssueSignatures.size
-        : [...currentIssueSignatures].filter((signature) => (
-            !trial.error.issues.some(
-              (trialIssue) => configIssueSignature(trialIssue) === signature
-            )
-          )).length;
+        : [...currentIssueSignatures].filter(
+            (signature) =>
+              !trial.error.issues.some(
+                (trialIssue) => configIssueSignature(trialIssue) === signature
+              )
+          ).length;
       const remainingIssues = isValid ? 0 : trial.error.issues.length;
       if (
-        (isValid && !bestIsValid)
-        || (isValid === bestIsValid && resolvedIssues > bestResolvedIssues)
-        || (
-          isValid === bestIsValid
-          && resolvedIssues === bestResolvedIssues
-          && remainingIssues < bestRemainingIssues
-        )
+        (isValid && !bestIsValid) ||
+        (isValid === bestIsValid && resolvedIssues > bestResolvedIssues) ||
+        (isValid === bestIsValid &&
+          resolvedIssues === bestResolvedIssues &&
+          remainingIssues < bestRemainingIssues)
       ) {
         bestCandidate = index;
         bestIsValid = isValid;

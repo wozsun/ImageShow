@@ -33,10 +33,7 @@ function readyImageSampleRanks(itemCount: number) {
   return [...ranks].sort((left, right) => left - right);
 }
 
-export async function validateReadyImageSamples(
-  samples: ReadyImageCacheItem[],
-  client: Redis
-) {
+export async function validateReadyImageSamples(samples: ReadyImageCacheItem[], client: Redis) {
   let pipeline = client.pipeline();
   let validators: Array<(value: unknown) => void> = [];
   const flush = async () => {
@@ -49,10 +46,7 @@ export async function validateReadyImageSamples(
     pipeline = client.pipeline();
     validators = [];
   };
-  const queue = async (
-    command: () => unknown,
-    validate: (value: unknown) => void
-  ) => {
+  const queue = async (command: () => unknown, validate: (value: unknown) => void) => {
     command();
     validators.push(validate);
     if (validators.length >= REDIS_BATCH_MAX_COMMANDS) await flush();
@@ -71,9 +65,9 @@ export async function validateReadyImageSamples(
       () => pipeline.zscore(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY, member),
       (value) => {
         if (
-          value === null
-          || value === undefined
-          || Number(value) !== readyImageIdSuffixScore(item)
+          value === null ||
+          value === undefined ||
+          Number(value) !== readyImageIdSuffixScore(item)
         ) {
           throw new Error("Ready-image cache suffix sample failed validation");
         }
@@ -82,11 +76,7 @@ export async function validateReadyImageSamples(
     await queue(
       () => pipeline.zscore(READY_IMAGE_ALL_INDEX_KEY, member),
       (value) => {
-        if (
-          value === null
-          || value === undefined
-          || Number(value) !== item.sort_score
-        ) {
+        if (value === null || value === undefined || Number(value) !== item.sort_score) {
           throw new Error("Ready-image cache index sample failed validation");
         }
       }
@@ -95,20 +85,13 @@ export async function validateReadyImageSamples(
   await flush();
 }
 
-export async function validatePersistedReadyImageSamples(
-  itemCount: number,
-  client: Redis
-) {
+export async function validatePersistedReadyImageSamples(itemCount: number, client: Redis) {
   const ranks = readyImageSampleRanks(itemCount);
   if (!ranks.length) return;
 
   const rankPipeline = client.pipeline();
   for (const rank of ranks) {
-    rankPipeline.zrange(
-      READY_IMAGE_ALL_INDEX_KEY,
-      String(rank),
-      String(rank)
-    );
+    rankPipeline.zrange(READY_IMAGE_ALL_INDEX_KEY, String(rank), String(rank));
   }
   const rankResults = await execRedisPipeline(rankPipeline);
   const members = rankResults.map((result) => {

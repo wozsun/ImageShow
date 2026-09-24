@@ -35,10 +35,11 @@ export function StorageBackendDeletionBlockedDialog({
           </header>
           <div className="operation-body">
             <ul>
-              {(reasons.length
-                ? reasons
-                : ["当前状态不允许删除，请刷新页面后重试。"]
-              ).map((reason) => <li key={reason}>{reason}</li>)}
+              {(reasons.length ? reasons : ["当前状态不允许删除，请刷新页面后重试。"]).map(
+                (reason) => (
+                  <li key={reason}>{reason}</li>
+                )
+              )}
             </ul>
           </div>
           <footer>

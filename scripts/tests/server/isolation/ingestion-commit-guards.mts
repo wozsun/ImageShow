@@ -1,5 +1,10 @@
 import { storageObjectKey } from "@imageshow/shared/browser";
-import { activeSession, preparedSession, committingSession, completedSession } from "./ingestion-scenario-fixture.mts";
+import {
+  activeSession,
+  preparedSession,
+  committingSession,
+  completedSession
+} from "./ingestion-scenario-fixture.mts";
 import { repositoryWithOverrides } from "./ingestion-scenario-fixture.mts";
 import assert from "node:assert/strict";
 import { access } from "node:fs/promises";
@@ -10,50 +15,57 @@ import { createIngestionScenarioFixture } from "./ingestion-scenario-fixture.mts
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
-const databasePools = runtime.databasePools;
-const database = {
-  ...databasePools,
-  ...await import("../../../../packages/server/src/core/database/advisory-locks.ts")
-};
-const cleanupJob = await import("../../../../packages/server/src/storage/cleanup/job.ts");
-const jobs = await import("../../../../packages/server/src/jobs/repository.ts");
-const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
-const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
-const runtimeConfigStore = await import("../../../../packages/server/src/config/runtime-config-store.ts");
-const objectAccess = await import("../../../../packages/server/src/storage/objects/access.ts");
-const preparedFiles = await import("../../../../packages/server/src/images/ingestion/raw/prepared.ts");
-const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
-const ingestionSessionTransitions = await import(
-  "../../../../packages/server/src/images/ingestion/sessions/transitions.ts"
-);
-const ingestionCommitIntent = await import("../../../../packages/server/src/images/ingestion/commit/intent.ts");
-const ingestionCommitWorker = await import("../../../../packages/server/src/images/ingestion/commit/worker.ts");
-const ingestionIrreversibleCoordinator = await import(
-  "../../../../packages/server/src/images/ingestion/execution/irreversible-coordinator.ts"
-);
-const ingestionQueueActionHandlers = await import(
-  "../../../../packages/server/src/images/ingestion/queue/action-handlers.ts"
-);
-const ingestionSessionUpdate = await import("../../../../packages/server/src/images/ingestion/queue/session-update.ts");
-const ingestionSessionIdentity = await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
-const ingestionSessionProjection = await import(
-  "../../../../packages/server/src/images/ingestion/sessions/projection.ts"
-);
-const ingestionSessionKeys = await import("../../../../packages/server/src/images/ingestion/sessions/keys.ts");
-const ingestionPaths = await import("../../../../packages/server/src/images/ingestion/raw/paths.ts");
-const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
-const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
-const { ingestionRepository, displayOrderKey, ingestionMetadata, importTemplate: importCanonicalWithoutHash } = await createIngestionScenarioFixture(runtime);
-const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfig());
+  const databasePools = runtime.databasePools;
+  const database = {
+    ...databasePools,
+    ...(await import("../../../../packages/server/src/core/database/advisory-locks.ts"))
+  };
+  const cleanupJob = await import("../../../../packages/server/src/storage/cleanup/job.ts");
+  const jobs = await import("../../../../packages/server/src/jobs/repository.ts");
+  const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
+  const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
+  const runtimeConfigStore =
+    await import("../../../../packages/server/src/config/runtime-config-store.ts");
+  const objectAccess = await import("../../../../packages/server/src/storage/objects/access.ts");
+  const preparedFiles =
+    await import("../../../../packages/server/src/images/ingestion/raw/prepared.ts");
+  const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
+  const ingestionSessionTransitions =
+    await import("../../../../packages/server/src/images/ingestion/sessions/transitions.ts");
+  const ingestionCommitIntent =
+    await import("../../../../packages/server/src/images/ingestion/commit/intent.ts");
+  const ingestionCommitWorker =
+    await import("../../../../packages/server/src/images/ingestion/commit/worker.ts");
+  const ingestionIrreversibleCoordinator =
+    await import("../../../../packages/server/src/images/ingestion/execution/irreversible-coordinator.ts");
+  const ingestionQueueActionHandlers =
+    await import("../../../../packages/server/src/images/ingestion/queue/action-handlers.ts");
+  const ingestionSessionUpdate =
+    await import("../../../../packages/server/src/images/ingestion/queue/session-update.ts");
+  const ingestionSessionIdentity =
+    await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
+  const ingestionSessionProjection =
+    await import("../../../../packages/server/src/images/ingestion/sessions/projection.ts");
+  const ingestionSessionKeys =
+    await import("../../../../packages/server/src/images/ingestion/sessions/keys.ts");
+  const ingestionPaths =
+    await import("../../../../packages/server/src/images/ingestion/raw/paths.ts");
+  const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
+  const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
+  const {
+    ingestionRepository,
+    displayOrderKey,
+    ingestionMetadata,
+    importTemplate: importCanonicalWithoutHash
+  } = await createIngestionScenarioFixture(runtime);
+  const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfig());
   const commitActor = "current-commit-actor-" + randomUUID();
   const commitSessionId = ingestionSessionIdentity.createIngestionSessionId(
     commitActor,
     "import",
     "real-commit"
   );
-  const commitImageTime = imageTime.parseImageTime(
-    "2026-08-23T01:02:06.456Z"
-  );
+  const commitImageTime = imageTime.parseImageTime("2026-08-23T01:02:06.456Z");
   const commitImageId = imageTime.createImageId(commitImageTime.date, 46);
   const commitAcceptedAt = Date.now();
   const commitQueuedWithoutHash = {
@@ -74,44 +86,55 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
       original: "https://submitted.example.com/policy-draft.webp"
     }
   };
-  const commitQueued = activeSession((await ingestionRepository.acceptImportSession({
-    ...commitQueuedWithoutHash,
-    semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-      commitQueuedWithoutHash
-    )
-  }, displayOrderKey(
-    commitSessionId,
-    46,
-    commitAcceptedAt
-  ), commitAcceptedAt)).session);
+  const commitQueued = activeSession(
+    (
+      await ingestionRepository.acceptImportSession(
+        {
+          ...commitQueuedWithoutHash,
+          semantic_hash:
+            ingestionSessionProjection.ingestionSessionSemanticHash(commitQueuedWithoutHash)
+        },
+        displayOrderKey(commitSessionId, 46, commitAcceptedAt),
+        commitAcceptedAt
+      )
+    ).session
+  );
   const commitPreparationToken = coreUuid.randomUuidV7();
   const commitGeneration = coreUuid.randomUuidV7();
-  const commitImageKey = ingestionPaths.ingestionPreparedFile({
-    session_id: commitSessionId,
-    image_id: commitImageId,
-    generation: commitGeneration,
-    execution_token: commitPreparationToken
-  }, "image");
-  const commitThumbnailKey = ingestionPaths.ingestionPreparedFile({
-    session_id: commitSessionId,
-    image_id: commitImageId,
-    generation: commitGeneration,
-    execution_token: commitPreparationToken
-  }, "thumb");
-  const commitImageBody = Buffer.from("current-real-commit-image-" + commitImageId);
-  const commitThumbnailBody = Buffer.from(
-    "current-real-commit-thumbnail-" + commitImageId
+  const commitImageKey = ingestionPaths.ingestionPreparedFile(
+    {
+      session_id: commitSessionId,
+      image_id: commitImageId,
+      generation: commitGeneration,
+      execution_token: commitPreparationToken
+    },
+    "image"
   );
-  await preparedFiles.writeIngestionPreparedFile(commitImageKey, commitImageBody, new AbortController().signal);
-  await preparedFiles.writeIngestionPreparedFile(commitThumbnailKey, commitThumbnailBody, new AbortController().signal);
+  const commitThumbnailKey = ingestionPaths.ingestionPreparedFile(
+    {
+      session_id: commitSessionId,
+      image_id: commitImageId,
+      generation: commitGeneration,
+      execution_token: commitPreparationToken
+    },
+    "thumb"
+  );
+  const commitImageBody = Buffer.from("current-real-commit-image-" + commitImageId);
+  const commitThumbnailBody = Buffer.from("current-real-commit-thumbnail-" + commitImageId);
+  await preparedFiles.writeIngestionPreparedFile(
+    commitImageKey,
+    commitImageBody,
+    new AbortController().signal
+  );
+  await preparedFiles.writeIngestionPreparedFile(
+    commitThumbnailKey,
+    commitThumbnailBody,
+    new AbortController().signal
+  );
   const realPrepared = {
     producer_execution_token: commitPreparationToken,
-    prepared_image_sha256: createHash("sha256")
-      .update(commitImageBody)
-      .digest("hex"),
-    prepared_thumbnail_sha256: createHash("sha256")
-      .update(commitThumbnailBody)
-      .digest("hex"),
+    prepared_image_sha256: createHash("sha256").update(commitImageBody).digest("hex"),
+    prepared_thumbnail_sha256: createHash("sha256").update(commitThumbnailBody).digest("hex"),
     original_size: commitImageBody.length,
     original_width: 1200,
     original_height: 800,
@@ -127,65 +150,66 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
     duplicate_count: 0,
     generation: commitGeneration
   };
-  const commitReady = preparedSession((await ingestionRepository.mutateSemantic(
-    commitQueued,
-    commitQueued.version,
-    ingestionSessionTransitions.semanticIngestionSession(commitQueued, {
-      status: "ready" as const,
-      phase: "ready" as const,
-      message: "ready for real commit",
-      progress: 100,
-      execution_token: "",
-      prepared: realPrepared
-    }),
-    commitAcceptedAt + 1
-  )).session);
+  const commitReady = preparedSession(
+    (
+      await ingestionRepository.mutateSemantic(
+        commitQueued,
+        commitQueued.version,
+        ingestionSessionTransitions.semanticIngestionSession(commitQueued, {
+          status: "ready" as const,
+          phase: "ready" as const,
+          message: "ready for real commit",
+          progress: 100,
+          execution_token: "",
+          prepared: realPrepared
+        }),
+        commitAcceptedAt + 1
+      )
+    ).session
+  );
   const [directPolicyUpdate] = await ingestionSessionUpdate.updateIngestionSessions(
     ingestionRepository,
     commitActor,
-    [{
-      session_id: commitReady.session_id,
-      image_id: commitReady.image_id,
-      expected_version: commitReady.version,
-      metadata: {
-        ...commitReady.metadata,
-        source: "https://weibo.com/1234567890/DirectUpdate",
-        original: "https://submitted.example.com/direct-update.webp"
+    [
+      {
+        session_id: commitReady.session_id,
+        image_id: commitReady.image_id,
+        expected_version: commitReady.version,
+        metadata: {
+          ...commitReady.metadata,
+          source: "https://weibo.com/1234567890/DirectUpdate",
+          original: "https://submitted.example.com/direct-update.webp"
+        }
       }
-    }]
+    ]
   );
   assert.equal(directPolicyUpdate.status, "changed");
-  const afterDirectPolicyUpdate = activeSession(await ingestionRepository.readSession(
-    commitActor,
-    commitSessionId
-  ));
-  const [bulkPolicyUpdate] = await ingestionQueueActionHandlers
-    .executeIngestionQueueActionBatch({
-      repository: ingestionRepository,
-      coordinator: new (
-        ingestionIrreversibleCoordinator.IngestionIrreversibleCoordinator
-      )(),
-      owner: commitActor,
-      request: {
-        queue: "import" as const,
-        action_request_id: coreUuid.randomUuidV7(),
-        action: "apply_metadata" as const,
-        action_watermark: "batch-handler-receives-verified-watermark",
-        metadata: {
-          source: "https://weibo.com/1234567890/BulkUpdate",
-          original: "https://submitted.example.com/bulk-update.webp"
-        }
-      },
-      sessions: [afterDirectPolicyUpdate],
-      capturedRevision: afterDirectPolicyUpdate.last_semantic_revision,
-      abortActive: () => {},
-      assertScope: () => {}
-    });
+  const afterDirectPolicyUpdate = activeSession(
+    await ingestionRepository.readSession(commitActor, commitSessionId)
+  );
+  const [bulkPolicyUpdate] = await ingestionQueueActionHandlers.executeIngestionQueueActionBatch({
+    repository: ingestionRepository,
+    coordinator: new ingestionIrreversibleCoordinator.IngestionIrreversibleCoordinator(),
+    owner: commitActor,
+    request: {
+      queue: "import" as const,
+      action_request_id: coreUuid.randomUuidV7(),
+      action: "apply_metadata" as const,
+      action_watermark: "batch-handler-receives-verified-watermark",
+      metadata: {
+        source: "https://weibo.com/1234567890/BulkUpdate",
+        original: "https://submitted.example.com/bulk-update.webp"
+      }
+    },
+    sessions: [afterDirectPolicyUpdate],
+    capturedRevision: afterDirectPolicyUpdate.last_semantic_revision,
+    abortActive: () => {},
+    assertScope: () => {}
+  });
   assert.equal(bulkPolicyUpdate.status, "changed");
-  const commitPolicyReady = preparedSession(await ingestionRepository.readSession(
-    commitActor,
-    commitSessionId
-  ));
+  const commitPolicyReady = preparedSession(
+    await ingestionRepository.readSession(commitActor, commitSessionId)
+  );
   const realCommitRequest = {
     session_id: commitSessionId,
     image_id: commitImageId,
@@ -247,20 +271,19 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
     }
   });
   let overlappingCommitResults;
-  const concurrentCommits: Array<ReturnType<
-    typeof ingestionCommitIntent.acceptIngestionCommitIntents
-  >> = [];
+  const concurrentCommits: Array<
+    ReturnType<typeof ingestionCommitIntent.acceptIngestionCommitIntents>
+  > = [];
   await runtimeConfigStore.updateRuntimeConfig({
     import: { keep_original_link: ["url"] },
     weibo: { source_enabled: false }
   });
   try {
-    const firstConcurrentCommit = ingestionCommitIntent
-      .acceptIngestionCommitIntents(
-        firstConcurrentCommitRepository,
-        commitActor,
-        [realCommitRequest]
-      );
+    const firstConcurrentCommit = ingestionCommitIntent.acceptIngestionCommitIntents(
+      firstConcurrentCommitRepository,
+      commitActor,
+      [realCommitRequest]
+    );
     concurrentCommits.push(firstConcurrentCommit);
     void firstConcurrentCommit.catch(() => undefined);
     await Promise.race([
@@ -271,12 +294,11 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
       import: { keep_original_link: ["url", "jsonl", "weibo"] },
       weibo: { source_enabled: true }
     });
-    const secondConcurrentCommit = ingestionCommitIntent
-      .acceptIngestionCommitIntents(
-        secondConcurrentCommitRepository,
-        commitActor,
-        [realCommitRequest]
-      );
+    const secondConcurrentCommit = ingestionCommitIntent.acceptIngestionCommitIntents(
+      secondConcurrentCommitRepository,
+      commitActor,
+      [realCommitRequest]
+    );
     concurrentCommits.push(secondConcurrentCommit);
     void secondConcurrentCommit.catch(() => undefined);
     overlappingCommitResults = await Promise.all(concurrentCommits);
@@ -306,42 +328,55 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
   assert.equal(realCommitAccepted[0].status, "failed");
   assert.equal(realCommitAccepted[0].code, "ingestion_incarnation_conflict");
   assert.equal(realCommitAccepted[1].status, "accepted");
-  const firstFrozenCommitSession = committingSession(await ingestionRepository.readSession(
-    commitActor,
-    commitSessionId
-  ));
+  const firstFrozenCommitSession = committingSession(
+    await ingestionRepository.readSession(commitActor, commitSessionId)
+  );
   assert.equal(firstFrozenCommitSession.status, "committing");
   assert.equal(firstFrozenCommitSession.commit.created_by, commitActor);
   assert.equal(firstFrozenCommitSession.commit.metadata.source, "");
   assert.equal(firstFrozenCommitSession.commit.metadata.original, "");
-  const [controlledFieldReplay] = await ingestionCommitIntent
-    .acceptIngestionCommitIntents(ingestionRepository, commitActor, [{
-      ...realCommitRequest,
-      metadata: {
-        ...realCommitRequest.metadata,
-        source: "https://weibo.com/1234567890/LateReplay",
-        original: "https://submitted.example.com/late-replay.webp"
+  const [controlledFieldReplay] = await ingestionCommitIntent.acceptIngestionCommitIntents(
+    ingestionRepository,
+    commitActor,
+    [
+      {
+        ...realCommitRequest,
+        metadata: {
+          ...realCommitRequest.metadata,
+          source: "https://weibo.com/1234567890/LateReplay",
+          original: "https://submitted.example.com/late-replay.webp"
+        }
       }
-    }]);
+    ]
+  );
   assert.equal(controlledFieldReplay.status, "accepted");
-  const [changedTitleReplay] = await ingestionCommitIntent
-    .acceptIngestionCommitIntents(ingestionRepository, commitActor, [{
-      ...realCommitRequest,
-      metadata: {
-        ...realCommitRequest.metadata,
-        title: "conflicting replay title"
+  const [changedTitleReplay] = await ingestionCommitIntent.acceptIngestionCommitIntents(
+    ingestionRepository,
+    commitActor,
+    [
+      {
+        ...realCommitRequest,
+        metadata: {
+          ...realCommitRequest.metadata,
+          title: "conflicting replay title"
+        }
       }
-    }]);
+    ]
+  );
   assert.equal(changedTitleReplay.status, "failed");
   assert.equal(changedTitleReplay.code, "ingestion_commit_intent_conflict");
-  const failedCommitSession = activeSession((await ingestionRepository.mutateSemantic(
-    firstFrozenCommitSession,
-    firstFrozenCommitSession.version,
-    ingestionSessionTransitions.failedIngestionSession(
-      firstFrozenCommitSession,
-      new Error("retryable commit failure")
-    )
-  )).session);
+  const failedCommitSession = activeSession(
+    (
+      await ingestionRepository.mutateSemantic(
+        firstFrozenCommitSession,
+        firstFrozenCommitSession.version,
+        ingestionSessionTransitions.failedIngestionSession(
+          firstFrozenCommitSession,
+          new Error("retryable commit failure")
+        )
+      )
+    ).session
+  );
   const retriedCommit = await ingestionCommitIntent.acceptIngestionCommitIntents(
     ingestionRepository,
     commitActor,
@@ -349,10 +384,9 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
   );
   assert.equal(retriedCommit[0].status, "accepted");
   assert.ok(retriedCommit[0].version > failedCommitSession.version);
-  const frozenCommitSession = committingSession(await ingestionRepository.readSession(
-    commitActor,
-    commitSessionId
-  ));
+  const frozenCommitSession = committingSession(
+    await ingestionRepository.readSession(commitActor, commitSessionId)
+  );
   assert.equal(frozenCommitSession.status, "committing");
   assert.equal(
     frozenCommitSession.commit.commit_request_id,
@@ -360,12 +394,16 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
     "提交失败重试必须复用已经冻结的意图"
   );
   assert.equal(frozenCommitSession.commit.created_by, commitActor);
-  const realCommitCoordinator = new (
-    ingestionIrreversibleCoordinator.IngestionIrreversibleCoordinator
-  )();
-  const committedObjectKey = storageObjectKey(frozenCommitSession.image_id, frozenCommitSession.prepared.ext);
+  const realCommitCoordinator =
+    new ingestionIrreversibleCoordinator.IngestionIrreversibleCoordinator();
+  const committedObjectKey = storageObjectKey(
+    frozenCommitSession.image_id,
+    frozenCommitSession.prepared.ext
+  );
   const committedObjectPrefix = "full";
-  const committedThumbnailKey = imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(committedObjectKey)!.id);
+  const committedThumbnailKey = imagePaths.thumbnailObjectKey(
+    imagePaths.parseImageObjectKey(committedObjectKey)!.id
+  );
   const commitStorageAccess = await registry.resolveStorageAccess("local");
   const originalCommitWrite = commitStorageAccess.driver.writeStream.bind(
     commitStorageAccess.driver
@@ -387,38 +425,47 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
         frozenCommitSession,
         new AbortController().signal
       ),
-      (error: unknown) => error instanceof Error
-        && "code" in error && error.code === "storage_backend_disabled"
+      (error: unknown) =>
+        error instanceof Error && "code" in error && error.code === "storage_backend_disabled"
     );
     await access(ingestionPaths.ingestionPreparedPath(commitImageKey));
     await access(ingestionPaths.ingestionPreparedPath(commitThumbnailKey));
     assert.equal(commitWriteCalls, 0);
-    assert.equal(Number((await database.pool.query(
-      "SELECT count(*)::int AS count FROM metadata WHERE id=$1",
-      [commitImageId]
-    )).rows[0]?.count), 0);
-    assert.equal(Number((await database.pool.query(
-      "SELECT count(*)::int AS count FROM background_job WHERE target_id=$1",
-      [commitImageId]
-    )).rows[0]?.count), 0);
+    assert.equal(
+      Number(
+        (
+          await database.pool.query("SELECT count(*)::int AS count FROM metadata WHERE id=$1", [
+            commitImageId
+          ])
+        ).rows[0]?.count
+      ),
+      0
+    );
+    assert.equal(
+      Number(
+        (
+          await database.pool.query(
+            "SELECT count(*)::int AS count FROM background_job WHERE target_id=$1",
+            [commitImageId]
+          )
+        ).rows[0]?.count
+      ),
+      0
+    );
   } finally {
     await database.pool.query(
       "UPDATE storage_backend SET enabled=true, is_default=true WHERE slug='local'"
     );
     registry.invalidateStorageBackendRegistry();
   }
-  const preExistingConflictBody = Buffer.from(
-    "unowned-formal-conflict-" + commitImageId
-  );
+  const preExistingConflictBody = Buffer.from("unowned-formal-conflict-" + commitImageId);
   await commitStorageAccess.driver.writeBuffer(
     committedObjectPrefix,
     committedObjectKey,
     preExistingConflictBody,
     "image/webp"
   );
-  const originalCommitExists = commitStorageAccess.driver.exists.bind(
-    commitStorageAccess.driver
-  );
+  const originalCommitExists = commitStorageAccess.driver.exists.bind(commitStorageAccess.driver);
   let siblingPreflightStarted = false;
   let siblingPreflightAborted = false;
   let siblingPreflightDrained = false;
@@ -435,9 +482,10 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
           }, 10);
         };
         if (preflightSignal?.aborted) rejectAfterDrain();
-        else preflightSignal?.addEventListener("abort", rejectAfterDrain, {
-          once: true
-        });
+        else
+          preflightSignal?.addEventListener("abort", rejectAfterDrain, {
+            once: true
+          });
       });
     }
     return originalCommitExists(prefix, key, options);
@@ -450,7 +498,8 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
         frozenCommitSession,
         new AbortController().signal
       ),
-      (error: unknown) => error instanceof Error && "code" in error && error.code === "storage_object_conflict"
+      (error: unknown) =>
+        error instanceof Error && "code" in error && error.code === "storage_object_conflict"
     );
   } finally {
     commitStorageAccess.driver.exists = originalCommitExists;
@@ -463,33 +512,31 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
     "任一正式目标冲突时必须取消并排空另一条摘要读取后再释放锁"
   );
   assert.equal(commitWriteCalls, 0);
-  assert.equal(Number((await database.pool.query(
-    "SELECT count(*)::int AS count FROM background_job "
-      + "WHERE type='move.cleanup' AND target_id=$1 "
-      + "AND payload->>'reason'=$2",
-    [commitImageId, "ingestion_commit_candidate_guard"]
-  )).rows[0]?.count), 0, "不匹配的预存正式对象不得被 guard 接管");
-  assert.deepEqual(
-    await commitStorageAccess.driver.readBuffer(
-      committedObjectPrefix,
-      committedObjectKey
+  assert.equal(
+    Number(
+      (
+        await database.pool.query(
+          "SELECT count(*)::int AS count FROM background_job " +
+            "WHERE type='move.cleanup' AND target_id=$1 " +
+            "AND payload->>'reason'=$2",
+          [commitImageId, "ingestion_commit_candidate_guard"]
+        )
+      ).rows[0]?.count
     ),
+    0,
+    "不匹配的预存正式对象不得被 guard 接管"
+  );
+  assert.deepEqual(
+    await commitStorageAccess.driver.readBuffer(committedObjectPrefix, committedObjectKey),
     preExistingConflictBody,
     "提交冲突不得删除本次从未创建或采用的正式对象"
   );
-  await removeDriverObject(
-    commitStorageAccess.driver,
-    committedObjectPrefix,
-    committedObjectKey
-  );
+  await removeDriverObject(commitStorageAccess.driver, committedObjectPrefix, committedObjectKey);
   const guardRegistrationFailure = new Error(
     "injected ingestion candidate guard registration failure"
   );
   const restoreGuardQuery = interceptSqlQueries(database.pool, async (sql, _values, query) => {
-    if (
-      sql.includes("INSERT INTO background_job(")
-      && sql.includes("jsonb_to_recordset")
-    ) {
+    if (sql.includes("INSERT INTO background_job(") && sql.includes("jsonb_to_recordset")) {
       throw guardRegistrationFailure;
     }
     return query();
@@ -513,14 +560,14 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, width, height, image_size, thumbnail_size, image_time, title)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 1200, 800, $4, $5, $6, $7)`,
     [
-        commitImageId,
-        conflictingCommitActor,
-        realPrepared.md5,
-        commitImageBody.length,
-        commitThumbnailBody.length,
-        commitImageTime.iso,
-        "conflicting owner"
-      ]
+      commitImageId,
+      conflictingCommitActor,
+      realPrepared.md5,
+      commitImageBody.length,
+      commitThumbnailBody.length,
+      commitImageTime.iso,
+      "conflicting owner"
+    ]
   );
   let commitGuardJob;
   try {
@@ -531,30 +578,34 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
         frozenCommitSession,
         new AbortController().signal
       ),
-      (error: unknown) => error instanceof Error && "code" in error && error.code === "ingestion_image_owner_conflict"
+      (error: unknown) =>
+        error instanceof Error && "code" in error && error.code === "ingestion_image_owner_conflict"
     );
     assert.equal(commitWriteCalls, 2, "guard 成功后 full/thumb 才能开始写入");
     assert.equal(
-      (await database.pool.query(
-        "SELECT created_by FROM metadata WHERE id=$1",
-        [commitImageId]
-      )).rows[0]?.created_by,
+      (await database.pool.query("SELECT created_by FROM metadata WHERE id=$1", [commitImageId]))
+        .rows[0]?.created_by,
       conflictingCommitActor,
       "不同 owner 的既有正式图片不得被内容接入提交接管"
     );
-    commitGuardJob = (await database.pool.query(
-      "SELECT * FROM background_job WHERE type='move.cleanup' "
-        + "AND target_id=$1 AND payload->>'reason'=$2",
-      [commitImageId, "ingestion_commit_candidate_guard"]
-    )).rows[0];
+    commitGuardJob = (
+      await database.pool.query(
+        "SELECT * FROM background_job WHERE type='move.cleanup' " +
+          "AND target_id=$1 AND payload->>'reason'=$2",
+        [commitImageId, "ingestion_commit_candidate_guard"]
+      )
+    ).rows[0];
     assert.ok(commitGuardJob, "写入前必须已经持久化正式候选 guard");
     assert.match(commitGuardJob.payload.guard_token, /^[0-9a-f-]{36}$/i);
-    const commitFullCandidateKey = committedObjectKey
-      + ".candidate-" + commitGuardJob.payload.guard_token;
-    const commitThumbnailCandidateKey = committedThumbnailKey
-      + ".candidate-" + commitGuardJob.payload.guard_token;
+    const commitFullCandidateKey =
+      committedObjectKey + ".candidate-" + commitGuardJob.payload.guard_token;
+    const commitThumbnailCandidateKey =
+      committedThumbnailKey + ".candidate-" + commitGuardJob.payload.guard_token;
     assert.deepEqual(
-      commitGuardJob.payload.objects.map(({ prefix, key }: { prefix: string; key: string }) => ({ prefix, key })),
+      commitGuardJob.payload.objects.map(({ prefix, key }: { prefix: string; key: string }) => ({
+        prefix,
+        key
+      })),
       [
         { prefix: committedObjectPrefix, key: committedObjectKey },
         { prefix: committedObjectPrefix, key: commitFullCandidateKey },
@@ -562,40 +613,28 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
         { prefix: "thumbs", key: commitThumbnailCandidateKey }
       ]
     );
-    await database.pool.query(
-      "DELETE FROM metadata WHERE id=$1",
-      [commitImageId]
-    );
+    await database.pool.query("DELETE FROM metadata WHERE id=$1", [commitImageId]);
     await commitStorageAccess.driver.writeBuffer(
       committedObjectPrefix,
       commitFullCandidateKey,
       Buffer.from("simulated-local-write-crash"),
       "image/webp"
     );
-    commitGuardJob = (await database.pool.query(
-      "UPDATE background_job SET status='running', execution_token=$2 "
-        + "WHERE id=$1 RETURNING *",
-      [commitGuardJob.id, randomUUID()]
-    )).rows[0];
-    await cleanupJob.handleMoveCleanupJob(
-      commitGuardJob,
-      new AbortController().signal
-    );
+    commitGuardJob = (
+      await database.pool.query(
+        "UPDATE background_job SET status='running', execution_token=$2 " +
+          "WHERE id=$1 RETURNING *",
+        [commitGuardJob.id, randomUUID()]
+      )
+    ).rows[0];
+    await cleanupJob.handleMoveCleanupJob(commitGuardJob, new AbortController().signal);
     assert.equal(
-      await objectAccess.storageObjectExists(
-        committedObjectPrefix,
-        committedObjectKey,
-        "local"
-      ),
+      await objectAccess.storageObjectExists(committedObjectPrefix, committedObjectKey, "local"),
       false,
       "PG 失败后 guard 必须删除未引用 full 候选"
     );
     assert.equal(
-      await objectAccess.storageObjectExists(
-        "thumbs",
-        committedThumbnailKey,
-        "local"
-      ),
+      await objectAccess.storageObjectExists("thumbs", committedThumbnailKey, "local"),
       false,
       "PG 失败后 guard 必须删除未引用 thumbnail 候选"
     );
@@ -615,17 +654,13 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
         frozenCommitSession,
         new AbortController().signal
       ),
-      (error: unknown) => error instanceof Error && "code" in error && error.code === "storage_object_cleanup_pending"
+      (error: unknown) =>
+        error instanceof Error && "code" in error && error.code === "storage_object_cleanup_pending"
     );
-    assert.equal(
-      commitWriteCalls,
-      2,
-      "旧 guard 未收口时不得旁路其删除租约"
-    );
-    await database.pool.query(
-      "UPDATE background_job SET status='succeeded' WHERE id=$1",
-      [commitGuardJob.id]
-    );
+    assert.equal(commitWriteCalls, 2, "旧 guard 未收口时不得旁路其删除租约");
+    await database.pool.query("UPDATE background_job SET status='succeeded' WHERE id=$1", [
+      commitGuardJob.id
+    ]);
     await ingestionCommitWorker.commitIngestionSessionSnapshot(
       ingestionRepository,
       realCommitCoordinator,
@@ -633,73 +668,61 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
       new AbortController().signal
     );
     assert.equal(commitWriteCalls, 4, "同一 guard 只能放行持锁的本次重试");
-    let retriedCommitGuardJob = (await database.pool.query(
-      "SELECT * FROM background_job WHERE type='move.cleanup' "
-        + "AND target_id=$1 AND payload->>'reason'=$2 "
-        + "AND status='pending' ORDER BY created_at DESC LIMIT 1",
-      [commitImageId, "ingestion_commit_candidate_guard"]
-    )).rows[0];
+    let retriedCommitGuardJob = (
+      await database.pool.query(
+        "SELECT * FROM background_job WHERE type='move.cleanup' " +
+          "AND target_id=$1 AND payload->>'reason'=$2 " +
+          "AND status='pending' ORDER BY created_at DESC LIMIT 1",
+        [commitImageId, "ingestion_commit_candidate_guard"]
+      )
+    ).rows[0];
     assert.ok(retriedCommitGuardJob);
     assert.notEqual(
       retriedCommitGuardJob.payload.guard_token,
       commitGuardJob.payload.guard_token,
       "每次写入尝试必须只旁路本次新建 guard"
     );
-    const retriedThumbnailCandidateKey = committedThumbnailKey
-      + ".candidate-" + retriedCommitGuardJob.payload.guard_token;
+    const retriedThumbnailCandidateKey =
+      committedThumbnailKey + ".candidate-" + retriedCommitGuardJob.payload.guard_token;
     await commitStorageAccess.driver.writeBuffer(
       "thumbs",
       retriedThumbnailCandidateKey,
       Buffer.from("simulated-post-commit-local-candidate"),
       "image/webp"
     );
-    retriedCommitGuardJob = (await database.pool.query(
-      "UPDATE background_job SET status='running', execution_token=$2 "
-        + "WHERE id=$1 RETURNING *",
-      [retriedCommitGuardJob.id, randomUUID()]
-    )).rows[0];
-    await cleanupJob.handleMoveCleanupJob(
-      retriedCommitGuardJob,
-      new AbortController().signal
-    );
+    retriedCommitGuardJob = (
+      await database.pool.query(
+        "UPDATE background_job SET status='running', execution_token=$2 " +
+          "WHERE id=$1 RETURNING *",
+        [retriedCommitGuardJob.id, randomUUID()]
+      )
+    ).rows[0];
+    await cleanupJob.handleMoveCleanupJob(retriedCommitGuardJob, new AbortController().signal);
     assert.equal(
-      await objectAccess.storageObjectExists(
-        committedObjectPrefix,
-        committedObjectKey,
-        "local"
-      ),
+      await objectAccess.storageObjectExists(committedObjectPrefix, committedObjectKey, "local"),
       true,
       "PG 引用建立后 guard 必须永久保留正式对象"
     );
     assert.equal(
-      await objectAccess.storageObjectExists(
-        "thumbs",
-        committedThumbnailKey,
-        "local"
-      ),
+      await objectAccess.storageObjectExists("thumbs", committedThumbnailKey, "local"),
       true,
       "PG 引用建立后 guard 必须永久保留正式缩略图"
     );
     assert.equal(
-      await objectAccess.storageObjectExists(
-        "thumbs",
-        retriedThumbnailCandidateKey,
-        "local"
-      ),
+      await objectAccess.storageObjectExists("thumbs", retriedThumbnailCandidateKey, "local"),
       false,
       "PG 正式引用不应保留 local 原子写入临时候选"
     );
-    assert.equal(
-      await jobs.markBackgroundJobSucceeded(retriedCommitGuardJob),
-      true
-    );
+    assert.equal(await jobs.markBackgroundJobSucceeded(retriedCommitGuardJob), true);
   } finally {
     commitStorageAccess.driver.writeStream = originalCommitWrite;
   }
-  const committedActorRow = (await database.pool.query(
-    "SELECT created_by, image_time, title, source, original FROM metadata WHERE id=$1",
-    [commitImageId]
-  )).rows[0];
+  const committedActorRow = (
+    await database.pool.query(
+      "SELECT created_by, image_time, title, source, original FROM metadata WHERE id=$1",
+      [commitImageId]
+    )
+  ).rows[0];
   assert.deepEqual(committedActorRow, {
     created_by: commitActor,
     image_time: commitImageTime.date,
@@ -714,12 +737,15 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
   );
   assert.equal(completedCommitRetry[0].status, "completed");
   assert.equal(completedCommitRetry[0].completed_item.id, commitImageId);
-  await assert.rejects(access(ingestionPaths.ingestionPreparedPath(commitImageKey)), { code: "ENOENT" });
-  await assert.rejects(access(ingestionPaths.ingestionPreparedPath(commitThumbnailKey)), { code: "ENOENT" });
-  const completedCommitReceipt = completedSession(await ingestionRepository.readSession(
-    commitActor,
-    commitSessionId
-  ));
+  await assert.rejects(access(ingestionPaths.ingestionPreparedPath(commitImageKey)), {
+    code: "ENOENT"
+  });
+  await assert.rejects(access(ingestionPaths.ingestionPreparedPath(commitThumbnailKey)), {
+    code: "ENOENT"
+  });
+  const completedCommitReceipt = completedSession(
+    await ingestionRepository.readSession(commitActor, commitSessionId)
+  );
   assert.equal(completedCommitReceipt.status, "completed");
   await ingestionRepository.deleteSession(
     completedCommitReceipt,
@@ -738,8 +764,8 @@ const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfi
   );
   await database.pool.query("DELETE FROM metadata WHERE id=$1", [commitImageId]);
   await database.pool.query(
-    "DELETE FROM background_job WHERE type='move.cleanup' "
-      + "AND target_id=$1 AND payload->>'reason'=$2",
+    "DELETE FROM background_job WHERE type='move.cleanup' " +
+      "AND target_id=$1 AND payload->>'reason'=$2",
     [commitImageId, "ingestion_commit_candidate_guard"]
   );
   objectAccess.assertStorageRemovalResults(

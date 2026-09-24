@@ -14,10 +14,12 @@ function endpointMismatch(reason: string) {
 }
 
 async function removeChallengeObject(driver: StorageDriver, key: string) {
-  const [result] = await driver.removeObjects([{
-    prefix: "full",
-    key
-  }]);
+  const [result] = await driver.removeObjects([
+    {
+      prefix: "full",
+      key
+    }
+  ]);
   if (result?.status === "failed" || result?.status === "unknown") {
     throw new Error(result.error.message);
   }
@@ -37,18 +39,10 @@ async function verifyBidirectionalChallenge(
 
   try {
     signal?.throwIfAborted();
-    await current.writeBuffer(
-      "full",
-      currentKey,
-      currentChallenge,
-      "application/octet-stream",
-      { signal }
-    );
-    const readThroughCandidate = await candidate.readBuffer(
-      "full",
-      currentKey,
-      { signal }
-    );
+    await current.writeBuffer("full", currentKey, currentChallenge, "application/octet-stream", {
+      signal
+    });
+    const readThroughCandidate = await candidate.readBuffer("full", currentKey, { signal });
     if (!readThroughCandidate.equals(currentChallenge)) {
       throw endpointMismatch("candidate_read_mismatch");
     }
@@ -60,11 +54,7 @@ async function verifyBidirectionalChallenge(
       "application/octet-stream",
       { signal }
     );
-    const readThroughCurrent = await current.readBuffer(
-      "full",
-      candidateKey,
-      { signal }
-    );
+    const readThroughCurrent = await current.readBuffer("full", candidateKey, { signal });
     if (!readThroughCurrent.equals(candidateChallenge)) {
       throw endpointMismatch("current_read_mismatch");
     }
@@ -83,12 +73,13 @@ async function verifyBidirectionalChallenge(
     .map((result) => result.reason);
 
   if (cleanupFailures.length) {
-    const mismatch = verificationError instanceof ApiError
-      && verificationError.code === "storage_endpoint_rebind_mismatch"
-      ? verificationError
-      : verificationError
-        ? endpointMismatch(errorMessage(verificationError))
-        : undefined;
+    const mismatch =
+      verificationError instanceof ApiError &&
+      verificationError.code === "storage_endpoint_rebind_mismatch"
+        ? verificationError
+        : verificationError
+          ? endpointMismatch(errorMessage(verificationError))
+          : undefined;
     throw new ApiError(
       502,
       "storage_endpoint_rebind_cleanup_failed",
@@ -106,8 +97,8 @@ async function verifyBidirectionalChallenge(
   }
   signal?.throwIfAborted();
   if (verificationError) {
-    throw verificationError instanceof ApiError
-      && verificationError.code === "storage_endpoint_rebind_mismatch"
+    throw verificationError instanceof ApiError &&
+      verificationError.code === "storage_endpoint_rebind_mismatch"
       ? verificationError
       : endpointMismatch(errorMessage(verificationError));
   }

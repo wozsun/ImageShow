@@ -1,11 +1,7 @@
 import { Container, type Renderer } from "pixi.js";
 import type { ShowOrder } from "@imageshow/shared/browser";
 import { ShowDataPool, type ShowCandidateUsage } from "../show-data-pool.js";
-import {
-  showLayoutColumnWidth,
-  type ShowCardSlot,
-  type ShowImage
-} from "../show-layout.js";
+import { showLayoutColumnWidth, type ShowCardSlot, type ShowImage } from "../show-layout.js";
 import { ShowWindowController } from "../show-window-controller.js";
 import {
   ShowPixiCard,
@@ -13,10 +9,7 @@ import {
   showPixiTextureLod
 } from "./show-pixi-card.js";
 import { ShowPixiCamera } from "./show-pixi-camera.js";
-import {
-  clampShowWaterfallColumns,
-  showWaterfallDensity
-} from "./show-pixi-layout.js";
+import { clampShowWaterfallColumns, showWaterfallDensity } from "./show-pixi-layout.js";
 import type { ShowPixiTextureCache } from "./show-pixi-texture-cache.js";
 import type {
   ShowPixiSceneController,
@@ -34,7 +27,7 @@ type WaterfallSceneOptions = ShowPixiSceneOptions & {
   onManualVerticalMovement: (delta: number, pointerType?: string) => void;
 };
 
-const waterfallMaximumSprites = (width: number) => width <= 760 ? 960 : 2_800;
+const waterfallMaximumSprites = (width: number) => (width <= 760 ? 960 : 2_800);
 const waterfallOverscan = 0.35;
 function intersectionArea(card: ShowCardSlot, width: number, height: number) {
   const left = Math.max(0, card.x);
@@ -191,17 +184,10 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
     const scaleDelta = this.#targetScale - this.#camera.scale;
     if (Math.abs(scaleDelta) > 0.00005 && !this.#camera.zooming) {
       const progress = 1 - Math.exp(-elapsed / 150);
-      this.#camera.setZoom(
-        this.#camera.scale + scaleDelta * progress
-      );
+      this.#camera.setZoom(this.#camera.scale + scaleDelta * progress);
     }
-    if (
-      this.#running
-      && !this.#reducedMotion
-      && !this.#camera.moving
-      && !this.#camera.zooming
-    ) {
-      this.#camera.panScreen(0, -this.#speed * elapsed / 1_000);
+    if (this.#running && !this.#reducedMotion && !this.#camera.moving && !this.#camera.zooming) {
+      this.#camera.panScreen(0, (-this.#speed * elapsed) / 1_000);
     }
     this.#reconcile(false);
     for (const card of this.#cards.values()) {
@@ -253,8 +239,13 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
     const y = this.#camera.top;
     // Image and viewport updates force reconciliation; texture handoffs and
     // card animations continue in update() without rebuilding stable slots.
-    if (!force && x === this.#lastReconcileX && y === this.#lastReconcileY
-      && scale === this.#lastReconcileScale) return;
+    if (
+      !force &&
+      x === this.#lastReconcileX &&
+      y === this.#lastReconcileY &&
+      scale === this.#lastReconcileScale
+    )
+      return;
     const now = performance.now();
     if (!force && now - this.#lastReconcileAt < 72) return;
     this.#lastReconcileAt = now;
@@ -279,16 +270,14 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
     const centerX = (snapshot.window.visible.left + snapshot.window.visible.right) / 2;
     const centerY = (snapshot.window.visible.top + snapshot.window.visible.bottom) / 2;
     const maximum = waterfallMaximumSprites(this.#width);
-    const desired = [...snapshot.cards].sort((left, right) => (
-      Number(right.visible) - Number(left.visible)
-      || Math.hypot(
-        left.x + left.width / 2 - centerX,
-        left.y + left.height / 2 - centerY
-      ) - Math.hypot(
-        right.x + right.width / 2 - centerX,
-        right.y + right.height / 2 - centerY
+    const desired = [...snapshot.cards]
+      .sort(
+        (left, right) =>
+          Number(right.visible) - Number(left.visible) ||
+          Math.hypot(left.x + left.width / 2 - centerX, left.y + left.height / 2 - centerY) -
+            Math.hypot(right.x + right.width / 2 - centerX, right.y + right.height / 2 - centerY)
       )
-    )).slice(0, maximum);
+      .slice(0, maximum);
     this.#rejectedSprites = Math.max(0, snapshot.cards.length - desired.length);
     const retainedKeys = new Set(desired.map((slot) => slot.key));
     for (const [key, card] of this.#cards) {
@@ -301,10 +290,12 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
     let visibleSprites = 0;
     let visibleArea = 0;
     const visibleItems: ShowPixiVisibleItem[] = [];
-    const textureLods = this.#textureCache.fitResidentLods(desired.map((slot) => ({
-      url: slot.image.thumb_url,
-      lod: showPixiTextureLod(slot.image, slot.width * scale, slot.height / slot.width)
-    })));
+    const textureLods = this.#textureCache.fitResidentLods(
+      desired.map((slot) => ({
+        url: slot.image.thumb_url,
+        lod: showPixiTextureLod(slot.image, slot.width * scale, slot.height / slot.width)
+      }))
+    );
     for (const [index, slot] of desired.entries()) {
       let card = this.#cards.get(slot.key);
       if (!card) {
@@ -323,43 +314,44 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
         slot.image,
         slot.width,
         slot.height,
-        slot.angle * Math.PI / 180,
+        (slot.angle * Math.PI) / 180,
         false,
         slot.width * scale,
         scale,
         textureLods[index]
       );
-      card.root.position.set(
-        slot.x + slot.width / 2,
-        slot.y + slot.height / 2
-      );
+      card.root.position.set(slot.x + slot.width / 2, slot.y + slot.height / 2);
       card.setVisible(true);
       if (slot.visible) {
         visibleSprites += 1;
         if (visibleItems.length < 96) {
           visibleItems.push({ key: slot.key, image: slot.image });
         }
-        visibleArea += intersectionArea({
-          ...slot,
-          x: (slot.x - snapshot.window.visible.left) * scale,
-          y: (slot.y - snapshot.window.visible.top) * scale,
-          width: slot.width * scale,
-          height: slot.height * scale
-        }, this.#width, this.#height);
+        visibleArea += intersectionArea(
+          {
+            ...slot,
+            x: (slot.x - snapshot.window.visible.left) * scale,
+            y: (slot.y - snapshot.window.visible.top) * scale,
+            width: slot.width * scale,
+            height: slot.height * scale
+          },
+          this.#width,
+          this.#height
+        );
       }
     }
     this.#visibleSprites = visibleSprites;
-    this.#coverageRatio = Math.min(
-      1,
-      visibleArea / Math.max(1, this.#width * this.#height)
-    );
+    this.#coverageRatio = Math.min(1, visibleArea / Math.max(1, this.#width * this.#height));
     const signature = visibleItems.map((item) => `${item.key}:${item.image.id}`).join("|");
     if (signature !== this.#lastVisibleSignature) {
       this.#lastVisibleSignature = signature;
       this.#onVisibleItems(visibleItems);
     }
     const poolStats = this.#pool.snapshot();
-    if ((snapshot.missingCards > 0 || poolStats.available < 100) && this.#lastUsageRevision !== this.#pool.revision) {
+    if (
+      (snapshot.missingCards > 0 || poolStats.available < 100) &&
+      this.#lastUsageRevision !== this.#pool.revision
+    ) {
       this.#lastUsageRevision = this.#pool.revision;
       this.#onNeedImages(this.#pool.usage(this.#dataKey));
     }
@@ -386,8 +378,7 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
   }
 
   #allowsPerspective(columns: number) {
-    return columns <= showWaterfallDensity(this.#width).galleryColumns * 5
-      + 0.001;
+    return columns <= showWaterfallDensity(this.#width).galleryColumns * 5 + 0.001;
   }
 
   #setCardPerspectiveEnabled(enabled: boolean) {
@@ -406,12 +397,10 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
   #cameraColumnCeiling() {
     const density = showWaterfallDensity(this.#width);
     const precisionBoundary = density.galleryColumns * 5;
-    const nextCeiling = this.#columns >= precisionBoundary - 0.001
-      ? this.#columns + 3
-      : Math.min(
-        precisionBoundary,
-        this.#columns + density.galleryColumns * 2
-      );
+    const nextCeiling =
+      this.#columns >= precisionBoundary - 0.001
+        ? this.#columns + 3
+        : Math.min(precisionBoundary, this.#columns + density.galleryColumns * 2);
     return Math.min(density.maximumColumns, nextCeiling);
   }
 
@@ -424,9 +413,7 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
   }
 
   #requestCameraZoom(scale: number) {
-    const requestedColumns = this.#clampColumns(
-      this.#width / (scale * showLayoutColumnWidth)
-    );
+    const requestedColumns = this.#clampColumns(this.#width / (scale * showLayoutColumnWidth));
     const warningColumns = showWaterfallDensity(this.#width).warningColumns;
     if (requestedColumns <= warningColumns + 0.001 || this.#columns > warningColumns + 0.001) {
       return scale;

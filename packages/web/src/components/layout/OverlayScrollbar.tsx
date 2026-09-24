@@ -43,7 +43,7 @@ export function OverlayScrollbar({
   pageEdge,
   tone = "default",
   layer = "default",
-  enableOnTouch = false,
+  enableOnTouch = false
 }: OverlayScrollbarProps = {}) {
   const [enabled, setEnabled] = useState(false);
   const enableQuery = enableOnTouch ? "(forced-colors: none)" : ENABLE_QUERY;
@@ -89,14 +89,14 @@ function OverlayScrollbarHandle({
   topInsetRef,
   pageEdge,
   tone,
-  layer,
+  layer
 }: OverlayScrollbarProps) {
   const [metrics, setMetrics] = useState<Metrics>({
     visible: false,
     top: 0,
     height: 0,
     right: 0,
-    trackHeight: 0,
+    trackHeight: 0
   });
   const [active, setActive] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -121,9 +121,7 @@ function OverlayScrollbarHandle({
 
   useLayoutEffect(() => {
     if (handleRef.current) {
-      handleRef.current.style.transform = handleTransform(
-        metricsRef.current.top
-      );
+      handleRef.current.style.transform = handleTransform(metricsRef.current.top);
     }
   });
 
@@ -150,16 +148,14 @@ function OverlayScrollbarHandle({
           viewport,
           total,
           scroll: el.scrollTop,
-          offsetTop: containerRect
-            ? rect.top - containerRect.top + insetHeight
-            : hitTop,
+          offsetTop: containerRect ? rect.top - containerRect.top + insetHeight : hitTop,
           hitTop,
           right: containerRect
             ? Math.max(0, containerRect.right - rect.right)
             : pageEdge
               ? 0
               : Math.max(0, window.innerWidth - rect.right),
-          edgeRight,
+          edgeRight
         };
       }
       const viewport = window.innerHeight;
@@ -170,7 +166,7 @@ function OverlayScrollbarHandle({
         offsetTop: 0,
         hitTop: 0,
         right: 0,
-        edgeRight: window.innerWidth,
+        edgeRight: window.innerWidth
       };
     };
 
@@ -204,10 +200,10 @@ function OverlayScrollbarHandle({
         handleRef.current.style.transform = handleTransform(top);
       }
       if (
-        current.visible !== next.visible
-        || current.height !== next.height
-        || current.right !== next.right
-        || current.trackHeight !== next.trackHeight
+        current.visible !== next.visible ||
+        current.height !== next.height ||
+        current.right !== next.right ||
+        current.trackHeight !== next.trackHeight
       ) {
         setMetrics(next);
       }
@@ -218,7 +214,10 @@ function OverlayScrollbarHandle({
       // scroll/resize/pointermove 可能高频触发，统一合并到下一帧读取布局，减少强制同步 reflow。
       if (framePending) return;
       framePending = true;
-      frame = window.requestAnimationFrame(() => { framePending = false; recompute(); });
+      frame = window.requestAnimationFrame(() => {
+        framePending = false;
+        recompute();
+      });
     };
 
     const reveal = () => {
@@ -226,7 +225,10 @@ function OverlayScrollbarHandle({
       scheduleHide();
     };
 
-    const onScroll = () => { scheduleRecompute(); reveal(); };
+    const onScroll = () => {
+      scheduleRecompute();
+      reveal();
+    };
     const onAncestorScroll = () => scheduleRecompute();
     const onResize = () => scheduleRecompute();
     const onPointerMove = (event: PointerEvent) => {
@@ -237,7 +239,15 @@ function OverlayScrollbarHandle({
       const { hitTop, viewport, edgeRight } = read();
       const near = edgeRight - event.clientX;
       // 鼠标靠近目标滚动区域右边缘时才显示，避免浮层长期遮挡内容。
-      if (near >= 0 && near <= EDGE_ZONE && event.clientY >= hitTop && event.clientY <= hitTop + viewport) { scheduleRecompute(); reveal(); }
+      if (
+        near >= 0 &&
+        near <= EDGE_ZONE &&
+        event.clientY >= hitTop &&
+        event.clientY <= hitTop + viewport
+      ) {
+        scheduleRecompute();
+        reveal();
+      }
     };
 
     const scrollTarget: EventTarget = el ?? window;
@@ -256,7 +266,7 @@ function OverlayScrollbarHandle({
     const pageLockObserver = windowMode ? new MutationObserver(scheduleRecompute) : null;
     pageLockObserver?.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["class"],
+      attributeFilter: ["class"]
     });
     recompute();
     return () => {
@@ -292,7 +302,8 @@ function OverlayScrollbarHandle({
       if (travel <= 0) return;
       // 拖动距离按“手柄可移动距离 : 内容可滚动距离”换算，窗口和容器模式共用同一套算法。
       const delta = ((moveEvent.clientY - startY) / travel) * maxScroll;
-      if (el) el.scrollTop = startScroll + delta; else window.scrollTo(0, startScroll + delta);
+      if (el) el.scrollTop = startScroll + delta;
+      else window.scrollTo(0, startScroll + delta);
     };
     const onUp = () => {
       draggingRef.current = false;

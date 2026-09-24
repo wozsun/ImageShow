@@ -1,18 +1,8 @@
 import assert from "node:assert/strict";
-import {
-  readFileSync
-} from "node:fs";
-import {
-  type TestContext
-} from "node:test";
-import {
-  parseHTML
-} from "linkedom";
-import {
-  Texture,
-  type Rectangle,
-  type Renderer
-} from "pixi.js";
+import { readFileSync } from "node:fs";
+import { type TestContext } from "node:test";
+import { parseHTML } from "linkedom";
+import { Texture, type Rectangle, type Renderer } from "pixi.js";
 import {
   type AdminImageListItemDto,
   type GalleryImageCardDto,
@@ -25,31 +15,17 @@ import type {
   GalleryImageCard
 } from "../../../packages/web/src/lib/types.ts";
 import type { IngestionJob } from "../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
-import {
-  defaultShowFloatSizeIndex
-} from "../../../packages/web/src/pages/show/pixi/show-pixi-layout.ts";
-import {
-  ShowPixiFloatScene
-} from "../../../packages/web/src/pages/show/pixi/show-pixi-float-scene.ts";
-import type {
-  ShowPixiTextureCache
-} from "../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts";
-import type {
-  ShowPixiVisibleItem
-} from "../../../packages/web/src/pages/show/pixi/show-pixi-types.ts";
-import {
-  publicNavigationAutoHideDelayMs
-} from "../../../packages/web/src/lib/ui/public-navigation.ts";
+import { defaultShowFloatSizeIndex } from "../../../packages/web/src/pages/show/pixi/show-pixi-layout.ts";
+import { ShowPixiFloatScene } from "../../../packages/web/src/pages/show/pixi/show-pixi-float-scene.ts";
+import type { ShowPixiTextureCache } from "../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts";
+import type { ShowPixiVisibleItem } from "../../../packages/web/src/pages/show/pixi/show-pixi-types.ts";
+import { publicNavigationAutoHideDelayMs } from "../../../packages/web/src/lib/ui/public-navigation.ts";
 import {
   GalleryDataWindow,
   type GalleryPageIntent
 } from "../../../packages/web/src/pages/gallery/gallery-data-window.ts";
 
-export function galleryCardDto(
-  id: string,
-  width = 100,
-  height = 100
-): GalleryImageCardDto {
+export function galleryCardDto(id: string, width = 100, height = 100): GalleryImageCardDto {
   return {
     id,
     title: id,
@@ -207,13 +183,19 @@ export function imageUpdateResponse(
 }
 export async function createPublicNavigationHarness(
   t: TestContext,
-  { movement = "manual", headerPresent = true, mobileLayout = false }: {
+  {
+    movement = "manual",
+    headerPresent = true,
+    mobileLayout = false
+  }: {
     movement?: "manual" | "page";
     headerPresent?: boolean;
     mobileLayout?: boolean;
   } = {}
 ) {
-  const { window: domWindow, document } = parseHTML('<html><body><div id=root></div></body></html>');
+  const { window: domWindow, document } = parseHTML(
+    "<html><body><div id=root></div></body></html>"
+  );
   const React = await import("react");
   let now = 0;
   let serial = 0;
@@ -242,29 +224,51 @@ export async function createPublicNavigationHarness(
     requestAnimationFrame: (callback: FrameRequestCallback) => schedule(() => callback(now), 16),
     cancelAnimationFrame: (id: number) => timers.delete(id),
     matchMedia: (media: string) => ({
-      matches: media === "(max-width: 760px)" ? mobileLayout
-        : media === "(hover: hover) and (pointer: fine)" && !mobileLayout,
-      media, addEventListener() {}, removeEventListener() {}
+      matches:
+        media === "(max-width: 760px)"
+          ? mobileLayout
+          : media === "(hover: hover) and (pointer: fine)" && !mobileLayout,
+      media,
+      addEventListener() {},
+      removeEventListener() {}
     })
   };
   const window = new Proxy(domWindow, {
-    get: (target, key) => typeof key === "string" && key in overrides
-      ? overrides[key] : Reflect.get(target, key),
-    set: (_target, key, value) => { overrides[String(key)] = value; return true; }
+    get: (target, key) =>
+      typeof key === "string" && key in overrides ? overrides[key] : Reflect.get(target, key),
+    set: (_target, key, value) => {
+      overrides[String(key)] = value;
+      return true;
+    }
   });
   for (const element of [document.documentElement, document.body]) {
     Object.defineProperty(element, "scrollHeight", { configurable: true, value: 10_000 });
   }
-  Object.defineProperty(document, "activeElement", { configurable: true, get: () => activeElement });
+  Object.defineProperty(document, "activeElement", {
+    configurable: true,
+    get: () => activeElement
+  });
   Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
   const globals = {
-    window, self: window, document, navigator: domWindow.navigator,
-    Node: domWindow.Node, Element: domWindow.Element, HTMLElement: domWindow.HTMLElement,
-    Event: domWindow.Event, MutationObserver: domWindow.MutationObserver,
-    ResizeObserver: class { observe() {} disconnect() {} },
-    React, IS_REACT_ACT_ENVIRONMENT: true
+    window,
+    self: window,
+    document,
+    navigator: domWindow.navigator,
+    Node: domWindow.Node,
+    Element: domWindow.Element,
+    HTMLElement: domWindow.HTMLElement,
+    Event: domWindow.Event,
+    MutationObserver: domWindow.MutationObserver,
+    ResizeObserver: class {
+      observe() {}
+      disconnect() {}
+    },
+    React,
+    IS_REACT_ACT_ENVIRONMENT: true
   };
-  const previous = new Map(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  const previous = new Map(
+    Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)])
+  );
   for (const [key, value] of Object.entries(globals)) {
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
   }
@@ -282,7 +286,8 @@ export async function createPublicNavigationHarness(
     }
   });
   const { createRoot } = await import("react-dom/client");
-  const { usePublicImageViewportControls } = await import("../../../packages/web/src/hooks/usePublicImageViewportControls.ts");
+  const { usePublicImageViewportControls } =
+    await import("../../../packages/web/src/hooks/usePublicImageViewportControls.ts");
   const installed = new WeakSet<HTMLElement>();
   function Harness() {
     const [playing, updatePlaying] = React.useState(true);
@@ -291,55 +296,86 @@ export async function createPublicNavigationHarness(
     setPaused = updatePaused;
     const [filterActive, setFilterActive] = React.useState(false);
     const controls = usePublicImageViewportControls({
-      movement, headerPresent, paused: paused || filterActive,
-      autoHideAfterMs: movement === "manual" && playing ? publicNavigationAutoHideDelayMs : undefined
+      movement,
+      headerPresent,
+      paused: paused || filterActive,
+      autoHideAfterMs:
+        movement === "manual" && playing ? publicNavigationAutoHideDelayMs : undefined
     });
     toolbarVisible = controls.toolbarVisible;
     filtersOpen = filterActive;
     advanceManualNavigation = controls.advanceManualNavigation;
-    return React.createElement("div", {
-      className: "public-navigation-stack",
-      ref: (element: HTMLElement | null) => {
-        if (!element || installed.has(element)) return;
-        installed.add(element);
-        const nativeMatches = element.matches.bind(element);
-        const nativeQuerySelector = element.querySelector.bind(element);
-        Object.defineProperty(element, "matches", {
-          configurable: true,
-          value: (selector: string) => selector === ":hover"
-            ? hovered
-            : selector === ":hover, :focus-within"
-            ? hovered || focused
-            : selector === ":focus-visible"
-              ? false
-              : nativeMatches(selector)
-        });
-        element.querySelector = ((selector: string) => selector === ":focus-visible"
-          ? focused && keyboardFocus ? nativeQuerySelector("button") : null
-          : nativeQuerySelector(selector)) as typeof element.querySelector;
-        element.getBoundingClientRect = () => ({ height: 96 } as DOMRect);
-      }
-    }, React.createElement("div", {
-      ref: (element: HTMLElement | null) => {
-        controls.toolbarRef.current = element;
-        if (element) element.getBoundingClientRect = () => ({ height: 36 } as DOMRect);
-      }
-    }, React.createElement("button", {
-      "aria-expanded": filterActive,
-      onClick: () => setFilterActive((current) => !current),
-      ref: (element: HTMLButtonElement | null) => {
-        if (!element) return;
-        element.getBoundingClientRect = () => ({ bottom: 96, height: 36 } as DOMRect);
-        element.focus = () => { focused = true; activeElement = element; };
-        element.blur = () => { focused = false; activeElement = null; };
-      }
-    }, "筛选")));
+    return React.createElement(
+      "div",
+      {
+        className: "public-navigation-stack",
+        ref: (element: HTMLElement | null) => {
+          if (!element || installed.has(element)) return;
+          installed.add(element);
+          const nativeMatches = element.matches.bind(element);
+          const nativeQuerySelector = element.querySelector.bind(element);
+          Object.defineProperty(element, "matches", {
+            configurable: true,
+            value: (selector: string) =>
+              selector === ":hover"
+                ? hovered
+                : selector === ":hover, :focus-within"
+                  ? hovered || focused
+                  : selector === ":focus-visible"
+                    ? false
+                    : nativeMatches(selector)
+          });
+          element.querySelector = ((selector: string) =>
+            selector === ":focus-visible"
+              ? focused && keyboardFocus
+                ? nativeQuerySelector("button")
+                : null
+              : nativeQuerySelector(selector)) as typeof element.querySelector;
+          element.getBoundingClientRect = () => ({ height: 96 }) as DOMRect;
+        }
+      },
+      React.createElement(
+        "div",
+        {
+          ref: (element: HTMLElement | null) => {
+            controls.toolbarRef.current = element;
+            if (element) element.getBoundingClientRect = () => ({ height: 36 }) as DOMRect;
+          }
+        },
+        React.createElement(
+          "button",
+          {
+            "aria-expanded": filterActive,
+            onClick: () => setFilterActive((current) => !current),
+            ref: (element: HTMLButtonElement | null) => {
+              if (!element) return;
+              element.getBoundingClientRect = () => ({ bottom: 96, height: 36 }) as DOMRect;
+              element.focus = () => {
+                focused = true;
+                activeElement = element;
+              };
+              element.blur = () => {
+                focused = false;
+                activeElement = null;
+              };
+            }
+          },
+          "筛选"
+        )
+      )
+    );
   }
   const root = createRoot(document.getElementById("root")!);
-  unmount = async () => { await React.act(async () => root.unmount()); };
+  unmount = async () => {
+    await React.act(async () => root.unmount());
+  };
   await React.act(async () => root.render(React.createElement(Harness)));
   const navigation = document.querySelector<HTMLElement>(".public-navigation-stack")!;
-  const dispatch = async (target: EventTarget, type: string, values: Record<string, unknown> = {}) => {
+  const dispatch = async (
+    target: EventTarget,
+    type: string,
+    values: Record<string, unknown> = {}
+  ) => {
     await React.act(async () => {
       const event = new domWindow.Event(type, { bubbles: true });
       Object.assign(event, values);
@@ -355,7 +391,8 @@ export async function createPublicNavigationHarness(
       await React.act(async () => {
         const until = now + milliseconds;
         while (true) {
-          const next = [...timers].filter(([, value]) => value.due <= until)
+          const next = [...timers]
+            .filter(([, value]) => value.due <= until)
             .sort((left, right) => left[1].due - right[1].due)[0];
           if (!next) break;
           now = next[1].due;
@@ -365,27 +402,46 @@ export async function createPublicNavigationHarness(
         now = until;
       });
     },
-    pointer: (clientY: number, buttons = 0, isTrusted = true) => dispatch(document, "pointermove", { clientY, buttons, pointerType: "mouse", isTrusted }),
-    pointerOver: (relatedTarget: EventTarget | null) => dispatch(document, "pointerover", {
-      clientY: 10, buttons: 0, pointerType: "mouse", isTrusted: true, relatedTarget
-    }),
+    pointer: (clientY: number, buttons = 0, isTrusted = true) =>
+      dispatch(document, "pointermove", { clientY, buttons, pointerType: "mouse", isTrusted }),
+    pointerOver: (relatedTarget: EventTarget | null) =>
+      dispatch(document, "pointerover", {
+        clientY: 10,
+        buttons: 0,
+        pointerType: "mouse",
+        isTrusted: true,
+        relatedTarget
+      }),
     documentBody: document.body,
-    playing: async (playing: boolean) => { await React.act(async () => setPlaying(playing)); },
-    paused: async (paused: boolean) => { await React.act(async () => setPaused(paused)); },
-    hidden: async (value: boolean) => { hidden = value; await dispatch(document, "visibilitychange"); },
+    playing: async (playing: boolean) => {
+      await React.act(async () => setPlaying(playing));
+    },
+    paused: async (paused: boolean) => {
+      await React.act(async () => setPaused(paused));
+    },
+    hidden: async (value: boolean) => {
+      hidden = value;
+      await dispatch(document, "visibilitychange");
+    },
     click: () => dispatch(document.body, "click"),
     toggleFilters: () => dispatch(navigation.querySelector("button")!, "click"),
     manual: async (delta: number, pointerType?: string) => {
       await React.act(async () => advanceManualNavigation(delta, pointerType));
     },
-    hover: async (value: boolean) => { hovered = value; await dispatch(navigation, value ? "mouseenter" : "mouseleave"); },
+    hover: async (value: boolean) => {
+      hovered = value;
+      await dispatch(navigation, value ? "mouseenter" : "mouseleave");
+    },
     focus: async (value: boolean, visible = true) => {
       focused = value;
       keyboardFocus = visible;
       activeElement = value ? navigation.querySelector("button") : null;
       await dispatch(navigation, value ? "focusin" : "focusout");
     },
-    scroll: async (scrollY: number) => { overrides.scrollY = scrollY; await dispatch(window, "scroll"); }
+    scroll: async (scrollY: number) => {
+      overrides.scrollY = scrollY;
+      await dispatch(window, "scroll");
+    }
   };
 }
 export function showImages(count: number): ShowImageCardDto[] {
@@ -446,24 +502,25 @@ export function createCameraTestElement(width = 800, height = 600) {
       for (const listener of listeners.get(type) ?? []) listener(event);
       return prevented;
     },
-    listenerCount: () => [...listeners.values()].reduce(
-      (total, entries) => total + entries.size,
-      0
-    )
+    listenerCount: () => [...listeners.values()].reduce((total, entries) => total + entries.size, 0)
   };
 }
 export function installPixiPaletteFixture(t: TestContext) {
   // Exercise the production palette using its real CSS values. Geometry tests
   // do not need a GPU, but cards now correctly share the browser color owner.
   const css = ["semantic-colors.css", "gallery-semantic-colors.css"]
-    .map((name) => readFileSync(`packages/web/src/styles/${name}`, "utf8")).join("\n");
-  const tokens = new Map([...css.matchAll(/(--[\w-]+):\s*([^;]+);/gu)]
-    .map((match) => [match[1], match[2].trim()]));
+    .map((name) => readFileSync(`packages/web/src/styles/${name}`, "utf8"))
+    .join("\n");
+  const tokens = new Map(
+    [...css.matchAll(/(--[\w-]+):\s*([^;]+);/gu)].map((match) => [match[1], match[2].trim()])
+  );
   const globals = {
     document: { documentElement: {} },
     getComputedStyle: () => ({ getPropertyValue: (key: string) => tokens.get(key) ?? "" })
   };
-  const originals = new Map(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  const originals = new Map(
+    Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)])
+  );
   for (const [key, value] of Object.entries(globals)) {
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
   }
@@ -476,8 +533,18 @@ export function installPixiPaletteFixture(t: TestContext) {
 }
 export function createFloatSceneHarness(
   t: TestContext,
-  { width = 1440, height = 900, sizeIndex = defaultShowFloatSizeIndex, count = 700, hasMore = count > 500 }: {
-    width?: number; height?: number; sizeIndex?: number; count?: number; hasMore?: boolean;
+  {
+    width = 1440,
+    height = 900,
+    sizeIndex = defaultShowFloatSizeIndex,
+    count = 700,
+    hasMore = count > 500
+  }: {
+    width?: number;
+    height?: number;
+    sizeIndex?: number;
+    count?: number;
+    hasMore?: boolean;
   } = {}
 ) {
   installPixiPaletteFixture(t);
@@ -511,10 +578,15 @@ export function createFloatSceneHarness(
         notify
       };
       acquisitions.push(acquisition);
-      if (ready.has(key)) queueMicrotask(() => {
-        if (acquisition.active) notify(Texture.EMPTY, false, 0);
-      });
-      return { release: () => { acquisition.active = false; } };
+      if (ready.has(key))
+        queueMicrotask(() => {
+          if (acquisition.active) notify(Texture.EMPTY, false, 0);
+        });
+      return {
+        release: () => {
+          acquisition.active = false;
+        }
+      };
     }
   } as unknown as ShowPixiTextureCache;
   let visibleItems: readonly ShowPixiVisibleItem[] = [];
@@ -539,9 +611,13 @@ export function createFloatSceneHarness(
     running: false,
     reducedMotion: false,
     speed: 28,
-    onNeedImages: () => { requests += 1; },
+    onNeedImages: () => {
+      requests += 1;
+    },
     onOpen: () => undefined,
-    onVisibleItems: (items) => { visibleItems = items; },
+    onVisibleItems: (items) => {
+      visibleItems = items;
+    },
     onSizeIndexChange: (index) => index,
     onManualVerticalMovement: (delta, pointerType) => {
       movements.push(delta);
@@ -589,7 +665,14 @@ export function createFloatSceneHarness(
 export function floatCardPositions(scene: ShowPixiFloatScene) {
   return scene.root.children.map((root) => {
     const bounds = root.hitArea as Rectangle;
-    return { root, x: root.x, y: root.y, width: bounds.width, height: bounds.height, rotation: root.rotation };
+    return {
+      root,
+      x: root.x,
+      y: root.y,
+      width: bounds.width,
+      height: bounds.height,
+      rotation: root.rotation
+    };
   });
 }
 type TextureRecoveryHarnessOptions = {
@@ -600,16 +683,21 @@ type TextureRecoveryHarnessOptions = {
   generateMipmaps?: boolean;
 };
 
-export async function createTextureRecoveryHarness(t: TestContext, {
-  maximumEntries = 1,
-  maximumPixels = maximumEntries * 128 * 128,
-  maximumUnreferenced = 0,
-  maximumInFlight = 1,
-  generateMipmaps = false
-}: TextureRecoveryHarnessOptions = {}) {
+export async function createTextureRecoveryHarness(
+  t: TestContext,
+  {
+    maximumEntries = 1,
+    maximumPixels = maximumEntries * 128 * 128,
+    maximumUnreferenced = 0,
+    maximumInFlight = 1,
+    generateMipmaps = false
+  }: TextureRecoveryHarnessOptions = {}
+) {
   installPixiPaletteFixture(t);
-  const { ShowPixiTextureCache } = await import("../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts");
-  const { ShowPixiCard, ShowPixiPerspectiveCoordinator } = await import("../../../packages/web/src/pages/show/pixi/show-pixi-card.ts");
+  const { ShowPixiTextureCache } =
+    await import("../../../packages/web/src/pages/show/pixi/show-pixi-texture-cache.ts");
+  const { ShowPixiCard, ShowPixiPerspectiveCoordinator } =
+    await import("../../../packages/web/src/pages/show/pixi/show-pixi-card.ts");
   const requests: string[] = [];
   const holds = new Map<string, Promise<void>>();
   const statuses = new Map<string, number>();
@@ -624,22 +712,35 @@ export async function createTextureRecoveryHarness(t: TestContext, {
       await holds.get(url);
       if (offline) {
         if (failurePhase === "headers") throw new TypeError("Failed to fetch");
-        return new Response(new ReadableStream({ start(controller) { controller.error(new TypeError("Response interrupted")); } }));
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(new TypeError("Response interrupted"));
+            }
+          })
+        );
       }
-      return new Response(new Blob(["image"]), { status: statuses.get(url) ?? (url.includes("missing") ? 404 : 200) });
+      return new Response(new Blob(["image"]), {
+        status: statuses.get(url) ?? (url.includes("missing") ? 404 : 200)
+      });
     },
     createImageBitmap: async (_blob: Blob, options: ImageBitmapOptions = {}) => {
       if (decodeFails) throw new Error("Invalid image bytes");
       return { width: options.resizeWidth ?? 128, height: options.resizeHeight ?? 128, close() {} };
     }
   };
-  const originals = new Map(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  const originals = new Map(
+    Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)])
+  );
   for (const [key, value] of Object.entries(globals)) {
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
   }
   const cache = new ShowPixiTextureCache({
-    maximumEntries, maximumPixels, maximumInFlight,
-    maximumUnreferenced, generateMipmaps
+    maximumEntries,
+    maximumPixels,
+    maximumInFlight,
+    maximumUnreferenced,
+    generateMipmaps
   });
   const cards: InstanceType<typeof ShowPixiCard>[] = [];
   const coordinator = new ShowPixiPerspectiveCoordinator();
@@ -652,16 +753,24 @@ export async function createTextureRecoveryHarness(t: TestContext, {
     }
   });
   return {
-    cache, requests,
+    cache,
+    requests,
     hold(id: string) {
       const pending = Promise.withResolvers<void>();
       holds.set(`https://textures.example/${id}.webp`, pending.promise);
       t.after(() => pending.resolve());
       return pending.resolve;
     },
-    setOffline(value: boolean, phase: "headers" | "body" = "headers") { offline = value; failurePhase = phase; },
-    setStatus(id: string, status: number) { statuses.set(`https://textures.example/${id}.webp`, status); },
-    setDecodeFailure(value: boolean) { decodeFails = value; },
+    setOffline(value: boolean, phase: "headers" | "body" = "headers") {
+      offline = value;
+      failurePhase = phase;
+    },
+    setStatus(id: string, status: number) {
+      statuses.set(`https://textures.example/${id}.webp`, status);
+    },
+    setDecodeFailure(value: boolean) {
+      decodeFails = value;
+    },
     async flush() {
       for (let turn = 0; turn < 200; turn += 1) {
         await new Promise((resolve) => setImmediate(resolve));
@@ -669,52 +778,109 @@ export async function createTextureRecoveryHarness(t: TestContext, {
       }
       assert.fail(`纹理队列未收敛: ${JSON.stringify(cache.stats())}`);
     },
-    card(id: string, onOpen: (image: { id: string }, key: string) => void = () => undefined,
-      thumbUrl = `https://textures.example/${id}.webp`) {
+    card(
+      id: string,
+      onOpen: (image: { id: string }, key: string) => void = () => undefined,
+      thumbUrl = `https://textures.example/${id}.webp`
+    ) {
       const card = new ShowPixiCard(cache, onOpen, {} as Renderer, coordinator);
       cards.push(card);
-      card.assign(id, { ...showImages(1)[0], id, width: 128, height: 128, thumb_url: thumbUrl }, 100, 100, .04);
+      card.assign(
+        id,
+        { ...showImages(1)[0], id, width: 128, height: 128, thumb_url: thumbUrl },
+        100,
+        100,
+        0.04
+      );
       return card;
     }
   };
 }
-export async function createConfigStreamHarness(t: TestContext, {
-  honorAbort = true,
-  animationFrame
-}: {
-  honorAbort?: boolean;
-  animationFrame?: Pick<Window, "requestAnimationFrame" | "cancelAnimationFrame">;
-} = {}) {
+export async function createConfigStreamHarness(
+  t: TestContext,
+  {
+    honorAbort = true,
+    animationFrame
+  }: {
+    honorAbort?: boolean;
+    animationFrame?: Pick<Window, "requestAnimationFrame" | "cancelAnimationFrame">;
+  } = {}
+) {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { window, document } = parseHTML("<html><body><div id=root></div></body></html>");
-  const pending: Array<{ path: string; body?: BodyInit | null; headers?: HeadersInit; cache?: RequestCache; credentials?: RequestCredentials; signal: AbortSignal | null | undefined; resolve: (response: Response) => void }> = [];
+  const pending: Array<{
+    path: string;
+    body?: BodyInit | null;
+    headers?: HeadersInit;
+    cache?: RequestCache;
+    credentials?: RequestCredentials;
+    signal: AbortSignal | null | undefined;
+    resolve: (response: Response) => void;
+  }> = [];
   const globals = {
-    window, document, self: window, navigator: window.navigator,
-    innerWidth: 1024, innerHeight: 768,
-    requestAnimationFrame: animationFrame?.requestAnimationFrame
-      ?? ((callback: FrameRequestCallback) => window.setTimeout(() => callback(Date.now()), 0)),
-    cancelAnimationFrame: animationFrame?.cancelAnimationFrame
-      ?? ((id: number) => window.clearTimeout(id)),
+    window,
+    document,
+    self: window,
+    navigator: window.navigator,
+    innerWidth: 1024,
+    innerHeight: 768,
+    requestAnimationFrame:
+      animationFrame?.requestAnimationFrame ??
+      ((callback: FrameRequestCallback) => window.setTimeout(() => callback(Date.now()), 0)),
+    cancelAnimationFrame:
+      animationFrame?.cancelAnimationFrame ?? ((id: number) => window.clearTimeout(id)),
     location: new URL("https://img.example/show"),
-    matchMedia: (media: string) => ({ media, matches: false, addEventListener() {}, removeEventListener() {} }),
-    HTMLElement: window.HTMLElement, Element: window.Element, Node: window.Node,
-    ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
-    React, IS_REACT_ACT_ENVIRONMENT: true,
-    fetch: (path: string, init?: RequestInit) => new Promise<Response>((resolve, reject) => {
-      if (String(path).endsWith("/logs/client-errors")) { resolve(Response.json({ ok: true })); return; }
-      pending.push({ path: String(path), body: init?.body, headers: init?.headers, cache: init?.cache, credentials: init?.credentials, signal: init?.signal, resolve });
-      if (honorAbort) init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
-    })
+    matchMedia: (media: string) => ({
+      media,
+      matches: false,
+      addEventListener() {},
+      removeEventListener() {}
+    }),
+    HTMLElement: window.HTMLElement,
+    Element: window.Element,
+    Node: window.Node,
+    ResizeObserver: class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+    React,
+    IS_REACT_ACT_ENVIRONMENT: true,
+    fetch: (path: string, init?: RequestInit) =>
+      new Promise<Response>((resolve, reject) => {
+        if (String(path).endsWith("/logs/client-errors")) {
+          resolve(Response.json({ ok: true }));
+          return;
+        }
+        pending.push({
+          path: String(path),
+          body: init?.body,
+          headers: init?.headers,
+          cache: init?.cache,
+          credentials: init?.credentials,
+          signal: init?.signal,
+          resolve
+        });
+        if (honorAbort)
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("aborted", "AbortError")),
+            { once: true }
+          );
+      })
   };
-  const originals = new Map(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  const originals = new Map(
+    Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)])
+  );
   for (const [key, value] of Object.entries(globals)) {
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
   }
   const root = createRoot(document.getElementById("root")!);
   t.after(async () => {
-    try { await React.act(async () => root.unmount()); }
-    finally {
+    try {
+      await React.act(async () => root.unmount());
+    } finally {
       for (const [key, descriptor] of originals) {
         if (descriptor) Object.defineProperty(globalThis, key, descriptor);
         else delete (globalThis as Record<string, unknown>)[key];
@@ -722,11 +888,20 @@ export async function createConfigStreamHarness(t: TestContext, {
     }
   });
   const flush = async () => {
-    await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await React.act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
   };
   return {
-    React, root, window: window as unknown as Window, document, pending, flush,
-    render: async (node: import("react").ReactNode) => { await React.act(async () => root.render(node)); },
+    React,
+    root,
+    window: window as unknown as Window,
+    document,
+    pending,
+    flush,
+    render: async (node: import("react").ReactNode) => {
+      await React.act(async () => root.render(node));
+    },
     respond: async (index: number, body: unknown, status = 200) => {
       await React.act(async () => pending[index].resolve(Response.json(body, { status })));
       await flush();

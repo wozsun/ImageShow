@@ -42,11 +42,17 @@ export async function readReadyImageRandomMembers(
     } else {
       // Continue across a deleted boundary without relying on a member rank.
       const peers = await redis.zrangebyscore(
-        key, position.sortScore, position.sortScore, "LIMIT", 0, scanBatch
+        key,
+        position.sortScore,
+        position.sortScore,
+        "LIMIT",
+        0,
+        scanBatch
       );
       if (peers.length === scanBatch) return null;
-      start = await redis.zcount(key, "-inf", `(${position.sortScore}`)
-        + peers.filter((id) => id <= boundaryMember).length;
+      start =
+        (await redis.zcount(key, "-inf", `(${position.sortScore}`)) +
+        peers.filter((id) => id <= boundaryMember).length;
     }
   }
   let scanned = 0;
@@ -68,8 +74,8 @@ export async function readReadyImageRandomMembers(
     }
     scanned += count;
     start += count;
-    const scores = index.key === READY_IMAGE_ALL_INDEX_KEY
-      ? null : await redis.zmscore(index.key, ...members);
+    const scores =
+      index.key === READY_IMAGE_ALL_INDEX_KEY ? null : await redis.zmscore(index.key, ...members);
     if (scores && scores.length !== members.length) throw new Error("Incomplete filter membership");
     for (let offset = 0; offset < members.length; offset += 1) {
       if (scores && scores[offset] === null) continue;

@@ -5,14 +5,21 @@
 :root {
   --admin-color-workflow-trigger-surface: light-dark(#f7f9fc, #151a21);
   --admin-color-workflow-content-surface: light-dark(#edf1f5, #1a1f26);
-  --admin-color-preview-close-surface: light-dark(rgba(255, 255, 255, .92), rgba(16, 21, 28, .92));
-  --admin-shadow-workflow-panel: light-dark(rgba(32, 42, 56, .16), rgba(0, 0, 0, .48));
-  --admin-shadow-preview: light-dark(rgba(0, 0, 0, .4), rgba(0, 0, 0, .64));
+  --admin-color-preview-close-surface: light-dark(
+    rgba(255, 255, 255, 0.92),
+    rgba(16, 21, 28, 0.92)
+  );
+  --admin-shadow-workflow-panel: light-dark(rgba(32, 42, 56, 0.16), rgba(0, 0, 0, 0.48));
+  --admin-shadow-preview: light-dark(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.64));
 }
 
-.workflow-collapse-toggle { display: none; }
+.workflow-collapse-toggle {
+  display: none;
+}
 
-.image-preview-modal { z-index: 50; }
+.image-preview-modal {
+  z-index: 50;
+}
 .image-preview-modal .image-preview-image {
   width: min(96vw, 1280px);
   max-width: 96vw;
@@ -20,9 +27,11 @@
   aspect-ratio: var(--image-preview-ratio, 1.7778);
   border-radius: 8px;
   box-shadow: 0 18px 60px var(--admin-shadow-preview);
-  animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1);
+  animation: modal-pop 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.image-preview-modal.is-closing .image-preview-image { animation: modal-pop-out .12s ease-in forwards; }
+.image-preview-modal.is-closing .image-preview-image {
+  animation: modal-pop-out 0.12s ease-in forwards;
+}
 .image-preview-modal .image-preview-close {
   position: fixed;
   top: 16px;
@@ -58,10 +67,22 @@
   justify-self: end;
   min-width: 0;
 }
-.image-workflow-pagination button { min-height: 38px; }
+.image-workflow-pagination button {
+  min-height: 38px;
+}
 
-.image-fields { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-.image-fields-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: start; }
+.image-fields {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.image-fields-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: start;
+}
 
 .workflow-defaults {
   display: flex;
@@ -71,14 +92,22 @@
   padding: 12px 16px;
   border-bottom: 1px solid var(--admin-color-border-default);
 }
-.workflow-attribute-actions { align-self: end; }
-.workflow-attribute-actions .apply-to-all-button { flex: 1; }
-.confirm-dialog[data-interaction-surface] { z-index: 110; }
+.workflow-attribute-actions {
+  align-self: end;
+}
+.workflow-attribute-actions .apply-to-all-button {
+  flex: 1;
+}
+.confirm-dialog[data-interaction-surface] {
+  z-index: 110;
+}
 .select-control.workflow-default-select {
   width: 120px;
   flex: 0 0 auto;
 }
-.workflow-default-select .select-trigger { padding-right: 30px; }
+.workflow-default-select .select-trigger {
+  padding-right: 30px;
+}
 .slug-combo-control.workflow-default-theme,
 .slug-combo-control.workflow-default-author {
   min-width: 150px;
@@ -90,10 +119,17 @@
   flex: 2 1 0;
   align-self: end;
 }
-.workflow-default-pair { display: contents; }
+.workflow-default-pair {
+  display: contents;
+}
 
-.image-fields-urls > input { flex: 1 1 0; min-width: 0; }
-.image-fields-desc { min-height: 62px; }
+.image-fields-urls > input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.image-fields-desc {
+  min-height: 62px;
+}
 
 /* 窗口较宽时六项同排，固定设备与亮度宽度，其余项按比例分配空间。 */
 @media (min-width: 761px) {
@@ -107,23 +143,42 @@
       minmax(0, 1.3fr)
       minmax(0, 2fr);
   }
-  .image-fields-primary :is(
-    .image-fields-title,
-    .image-fields-device,
-    .image-fields-brightness,
-    .image-fields-theme,
-    .image-fields-author,
-    .image-fields-tags
-  ) {
+  .image-fields-primary
+    :is(
+      .image-fields-title,
+      .image-fields-device,
+      .image-fields-brightness,
+      .image-fields-theme,
+      .image-fields-author,
+      .image-fields-tags
+    ) {
     width: auto;
     min-width: 0;
   }
-  .image-fields-primary > .image-fields-title { grid-column: 1; grid-row: 1; }
-  .image-fields-primary > .image-fields-device { grid-column: 2; grid-row: 1; }
-  .image-fields-primary > .image-fields-brightness { grid-column: 3; grid-row: 1; }
-  .image-fields-primary > .image-fields-theme { grid-column: 4; grid-row: 1; }
-  .image-fields-primary > .image-fields-author { grid-column: 5; grid-row: 1; }
-  .image-fields-primary > .image-fields-tags { grid-column: 6; grid-row: 1; }
+  .image-fields-primary > .image-fields-title {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .image-fields-primary > .image-fields-device {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .image-fields-primary > .image-fields-brightness {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .image-fields-primary > .image-fields-theme {
+    grid-column: 4;
+    grid-row: 1;
+  }
+  .image-fields-primary > .image-fields-author {
+    grid-column: 5;
+    grid-row: 1;
+  }
+  .image-fields-primary > .image-fields-tags {
+    grid-column: 6;
+    grid-row: 1;
+  }
 
   /* 紧凑布局第一排为标题、设备、亮度和作者，第二排主题与标签按 1:2 分配。 */
   @container image-workflow (max-width: 980px) {
@@ -135,10 +190,22 @@
         minmax(0, 1.5fr);
       reading-flow: grid-rows;
     }
-    .image-fields-primary > .image-fields-title { grid-column: 1; grid-row: 1; }
-    .image-fields-primary > .image-fields-device { grid-column: 2; grid-row: 1; }
-    .image-fields-primary > .image-fields-brightness { grid-column: 3; grid-row: 1; }
-    .image-fields-primary > .image-fields-author { grid-column: 4; grid-row: 1; }
+    .image-fields-primary > .image-fields-title {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .image-fields-primary > .image-fields-device {
+      grid-column: 2;
+      grid-row: 1;
+    }
+    .image-fields-primary > .image-fields-brightness {
+      grid-column: 3;
+      grid-row: 1;
+    }
+    .image-fields-primary > .image-fields-author {
+      grid-column: 4;
+      grid-row: 1;
+    }
     .image-fields-primary > .image-fields-theme {
       grid-column: 1 / -1;
       grid-row: 2;
@@ -209,14 +276,15 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .image-fields-primary :is(
-    .image-fields-title,
-    .image-fields-device,
-    .image-fields-brightness,
-    .image-fields-theme,
-    .image-fields-author,
-    .image-fields-tags
-  ) {
+  .image-fields-primary
+    :is(
+      .image-fields-title,
+      .image-fields-device,
+      .image-fields-brightness,
+      .image-fields-theme,
+      .image-fields-author,
+      .image-fields-tags
+    ) {
     width: auto;
     min-width: 0;
   }
@@ -244,11 +312,17 @@
     grid-column: 1 / -1;
     grid-row: 4;
   }
-  .image-fields-urls { display: grid; grid-template-columns: minmax(0, 1fr); }
-  .image-fields-urls > input { width: 100%; min-width: 0; }
+  .image-fields-urls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .image-fields-urls > input {
+    width: 100%;
+    min-width: 0;
+  }
 
   .workflow-collapse-toggle {
-    --pressable-active-scale: var(--pressable-scale-large, .99);
+    --pressable-active-scale: var(--pressable-scale-large, 0.99);
     width: 100%;
     min-height: 48px;
     display: grid;
@@ -262,7 +336,10 @@
     background: var(--workflow-collapse-trigger-surface);
     text-align: left;
   }
-  .workflow-collapse-toggle > span { font-weight: 600; white-space: nowrap; }
+  .workflow-collapse-toggle > span {
+    font-weight: 600;
+    white-space: nowrap;
+  }
   .workflow-collapse-toggle > small {
     min-width: 0;
     overflow: hidden;
@@ -270,13 +347,17 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .workflow-collapse-toggle > .app-icon { transition: transform 120ms ease-out; }
+  .workflow-collapse-toggle > .app-icon {
+    transition: transform 120ms ease-out;
+  }
   .workflow-collapse-panel {
     --workflow-collapse-trigger-surface: var(--admin-color-workflow-trigger-surface);
     --workflow-collapse-content-surface: var(--admin-color-workflow-content-surface);
     position: relative;
   }
-  .workflow-collapse-panel.is-expanded { z-index: 20; }
+  .workflow-collapse-panel.is-expanded {
+    z-index: 20;
+  }
   .workflow-collapse-panel.is-expanded .workflow-collapse-toggle > .app-icon {
     transform: rotate(180deg);
   }
@@ -292,9 +373,7 @@
     gap: 8px;
     width: 100%;
     min-width: 0;
-    padding:
-      10px max(12px, env(safe-area-inset-right))
-      12px max(12px, env(safe-area-inset-left));
+    padding: 10px max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left));
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
@@ -321,32 +400,30 @@
     transform: translateY(0);
     transition-delay: 0s;
   }
-  .workflow-collapse-panel > .workflow-collapse-content :is(
-    .select-control.workflow-default-select,
-    .slug-combo-control.workflow-default-theme,
-    .slug-combo-control.workflow-default-author,
-    .tag-input-control.workflow-default-tags
-  ) {
+  .workflow-collapse-panel
+    > .workflow-collapse-content
+    :is(
+      .select-control.workflow-default-select,
+      .slug-combo-control.workflow-default-theme,
+      .slug-combo-control.workflow-default-author,
+      .tag-input-control.workflow-default-tags
+    ) {
     width: auto;
     min-width: 0;
   }
-  .workflow-collapse-panel > .workflow-collapse-content :is(
-    .tag-input-control.workflow-default-tags,
-    .workflow-attribute-actions
-  ) {
+  .workflow-collapse-panel
+    > .workflow-collapse-content
+    :is(.tag-input-control.workflow-default-tags, .workflow-attribute-actions) {
     grid-column: 1 / -1;
   }
   .workflow-collapse-panel > .workflow-collapse-content .apply-to-all-button {
-    --pressable-active-scale: var(--pressable-scale-large, .99);
+    --pressable-active-scale: var(--pressable-scale-large, 0.99);
   }
 }
 
 @media (max-width: 760px) and (max-height: 560px) {
   .workflow-collapse-panel > .workflow-collapse-content {
-    max-height: min(
-      50dvh,
-      var(--dismissible-panel-available-height, 50dvh)
-    );
+    max-height: min(50dvh, var(--dismissible-panel-available-height, 50dvh));
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -355,7 +432,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .image-preview-modal .image-preview-image,
-  .image-preview-modal.is-closing .image-preview-image { animation: none; }
+  .image-preview-modal.is-closing .image-preview-image {
+    animation: none;
+  }
   .workflow-collapse-panel > .workflow-collapse-content,
   .workflow-collapse-panel.is-motion-enabled > .workflow-collapse-content {
     transition: none;

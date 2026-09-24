@@ -29,9 +29,7 @@ type HomeFacetCount = {
   slug: string;
 };
 
-export function homeThemesWithUnsetLast<T extends { slug: string }>(
-  items: readonly T[]
-) {
+export function homeThemesWithUnsetLast<T extends { slug: string }>(items: readonly T[]) {
   const configured: T[] = [];
   const unset: T[] = [];
   for (const item of items) {
@@ -50,7 +48,9 @@ export function boundedHomeRevealIndexes(
   for (const item of items) {
     const isSelected = selected.has(item.slug);
     const { disabled, locked } = publicFilterOptionState({
-      selected: isSelected, count: item.image_count, unverified: availabilityUnverified
+      selected: isSelected,
+      count: item.image_count,
+      unverified: availabilityUnverified
     });
     if (disabled || locked || indexes.size >= limit) continue;
     indexes.set(item.slug, indexes.size);
@@ -62,10 +62,7 @@ export function selectedSlugs(value: string) {
   return value.split(",").filter(Boolean);
 }
 
-export function facetLabel(item: {
-  slug: string;
-  display_name?: string;
-}) {
+export function facetLabel(item: { slug: string; display_name?: string }) {
   if (item.slug === unsetThemeFilter && !item.display_name?.trim()) return "未设置";
   return displayNameOrSlug(item);
 }
@@ -74,10 +71,7 @@ export function countLabel(count: number) {
   return `${homeNumberFormatter.format(count)} 张`;
 }
 
-export function selectedFacetLabels(
-  items: readonly GalleryStatsFacetDto[],
-  value: string
-) {
+export function selectedFacetLabels(items: readonly GalleryStatsFacetDto[], value: string) {
   const names = new Map(items.map((item) => [item.slug, facetLabel(item)]));
   return value
     .split(",")

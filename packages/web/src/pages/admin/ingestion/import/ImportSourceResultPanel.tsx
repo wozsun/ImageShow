@@ -5,30 +5,21 @@ import type {
   WeiboImportParseError
 } from "../queue/ingestion-http-client.js";
 import type { ParsedImportSourceResult } from "./import-source-adapters.js";
-import {
-  urlImportIssuePreviewMessage,
-  urlImportIssueText
-} from "./import-source-model.js";
+import { urlImportIssuePreviewMessage, urlImportIssueText } from "./import-source-model.js";
 
 const importIssuePreviewMaxItems = 200;
 
 function issuePreviewSuffix(totalCount: number, visibleCount: number) {
   if (visibleCount >= totalCount) return "";
-  return visibleCount > 0
-    ? `（仅显示前 ${visibleCount} 条）`
-    : "（明细未显示）";
+  return visibleCount > 0 ? `（仅显示前 ${visibleCount} 条）` : "（明细未显示）";
 }
 
 function parseErrorText(errors: ImportManifestParseError[]) {
-  return errors
-    .map((error) => `第 ${error.line} 行：${error.error}\n${error.raw}`)
-    .join("\n\n");
+  return errors.map((error) => `第 ${error.line} 行：${error.error}\n${error.raw}`).join("\n\n");
 }
 
 function weiboErrorText(errors: WeiboImportParseError[]) {
-  return errors
-    .map((error) => `第 ${error.line} 行：${error.error}\n${error.url}`)
-    .join("\n\n");
+  return errors.map((error) => `第 ${error.line} 行：${error.error}\n${error.url}`).join("\n\n");
 }
 
 function ImportIssuePreview({
@@ -49,11 +40,10 @@ function ImportIssuePreview({
         <button
           type="button"
           className="button secondary"
-          onClick={() => void copyTextToClipboard(
-            getCopyText()
-          ).catch(() => undefined)}
+          onClick={() => void copyTextToClipboard(getCopyText()).catch(() => undefined)}
         >
-          <AdminIcon name="file-copy-line" />{copyLabel}
+          <AdminIcon name="file-copy-line" />
+          {copyLabel}
         </button>
       </div>
       {items.length > 0 && (
@@ -70,11 +60,7 @@ function ImportIssuePreview({
   );
 }
 
-export function ImportSourceResultSummary({
-  result
-}: {
-  result: ParsedImportSourceResult;
-}) {
+export function ImportSourceResultSummary({ result }: { result: ParsedImportSourceResult }) {
   const warning = result.submitCount === 0 || result.blockingIssueCount > 0;
   return (
     <p
@@ -87,29 +73,23 @@ export function ImportSourceResultSummary({
   );
 }
 
-export function ImportSourceResultPanel({
-  result
-}: {
-  result: ParsedImportSourceResult;
-}) {
-  const urlIssues = result.mode === "urls"
-    ? result.result.issues.filter((issue) => issue.type === "invalid")
-    : [];
+export function ImportSourceResultPanel({ result }: { result: ParsedImportSourceResult }) {
+  const urlIssues =
+    result.mode === "urls" ? result.result.issues.filter((issue) => issue.type === "invalid") : [];
   const visibleUrlIssues = urlIssues.slice(0, importIssuePreviewMaxItems);
   const weiboErrors = result.mode === "weibo" ? result.result.errors : [];
   const visibleWeiboErrors = weiboErrors.slice(0, importIssuePreviewMaxItems);
-  const manifest = result.mode === "jsonl"
-    ? result.manifest
-    : result.mode === "weibo"
-      ? result.result.manifest
-      : null;
-  const manifestPreviewBudget = result.mode === "weibo"
-    ? importIssuePreviewMaxItems - visibleWeiboErrors.length
-    : importIssuePreviewMaxItems;
-  const visibleManifestErrors = manifest?.errors.slice(
-    0,
-    manifestPreviewBudget
-  ) ?? [];
+  const manifest =
+    result.mode === "jsonl"
+      ? result.manifest
+      : result.mode === "weibo"
+        ? result.result.manifest
+        : null;
+  const manifestPreviewBudget =
+    result.mode === "weibo"
+      ? importIssuePreviewMaxItems - visibleWeiboErrors.length
+      : importIssuePreviewMaxItems;
+  const visibleManifestErrors = manifest?.errors.slice(0, manifestPreviewBudget) ?? [];
 
   return (
     <>

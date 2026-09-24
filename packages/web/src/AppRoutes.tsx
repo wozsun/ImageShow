@@ -12,27 +12,35 @@ import {
   PublicRoutePreloadProvider
 } from "./lib/public-route-modules.js";
 
-const homeRouteModule = createPublicRouteModuleLoader(
-  () => import("./pages/home/HomePage.js")
-);
+const homeRouteModule = createPublicRouteModuleLoader(() => import("./pages/home/HomePage.js"));
 const galleryRouteModule = createPublicRouteModuleLoader(
   () => import("./pages/gallery/GalleryPage.js")
 );
-const showRouteModule = createPublicRouteModuleLoader(
-  () => import("./pages/show/ShowPage.js")
-);
+const showRouteModule = createPublicRouteModuleLoader(() => import("./pages/show/ShowPage.js"));
 const publicRoutePreloadIntents = createPublicRoutePreloadIntents(
   homeRouteModule,
   showRouteModule,
   galleryRouteModule
 );
-const HomePage = lazy(() => homeRouteModule.load().then((module) => ({ default: module.HomePage })));
-const GalleryPage = lazy(() => galleryRouteModule.load().then((module) => ({ default: module.GalleryPage })));
-const ShowPage = lazy(() => showRouteModule.load().then((module) => ({
-  default: module.ShowPage
-})));
-const AdminShell = lazy(() => import("./pages/admin/shell/AdminShell.js").then((module) => ({ default: module.AdminShell })));
-const EmbeddedPageLayout = lazy(() => import("./components/layout/EmbeddedPageLayout.js").then((module) => ({ default: module.EmbeddedPageLayout })));
+const HomePage = lazy(() =>
+  homeRouteModule.load().then((module) => ({ default: module.HomePage }))
+);
+const GalleryPage = lazy(() =>
+  galleryRouteModule.load().then((module) => ({ default: module.GalleryPage }))
+);
+const ShowPage = lazy(() =>
+  showRouteModule.load().then((module) => ({
+    default: module.ShowPage
+  }))
+);
+const AdminShell = lazy(() =>
+  import("./pages/admin/shell/AdminShell.js").then((module) => ({ default: module.AdminShell }))
+);
+const EmbeddedPageLayout = lazy(() =>
+  import("./components/layout/EmbeddedPageLayout.js").then((module) => ({
+    default: module.EmbeddedPageLayout
+  }))
+);
 
 function PublicPageNotFound() {
   return (
@@ -46,9 +54,7 @@ function PublicPageNotFound() {
 }
 
 function publicFallback(rootPath: ReturnType<typeof publicRootPath>) {
-  return rootPath
-    ? <Navigate to={rootPath} replace />
-    : <PublicPageNotFound />;
+  return rootPath ? <Navigate to={rootPath} replace /> : <PublicPageNotFound />;
 }
 
 export function AppRoutes() {
@@ -56,7 +62,14 @@ export function AppRoutes() {
   const siteConfig = useSiteConfig();
   const { data } = siteConfig;
   if (!data) {
-    if (siteConfig.isError) return <QueryErrorState error={siteConfig.error} onRetry={() => void siteConfig.refetch()} fullPage />;
+    if (siteConfig.isError)
+      return (
+        <QueryErrorState
+          error={siteConfig.error}
+          onRetry={() => void siteConfig.refetch()}
+          fullPage
+        />
+      );
     return <AppLoadingScreen />;
   }
   const rootPath = publicRootPath(data.site);
@@ -66,61 +79,98 @@ export function AppRoutes() {
       <RouteLoadBoundary resetKey={routeLocation.pathname} fullPage>
         <Suspense fallback={<AppLoadingScreen />}>
           <Routes>
-            <Route element={<AuthSessionProvider><Outlet /></AuthSessionProvider>}>
+            <Route
+              element={
+                <AuthSessionProvider>
+                  <Outlet />
+                </AuthSessionProvider>
+              }
+            >
               <Route
                 path="/"
-                element={rootPath === "/home"
-                  ? <HomePage site={data.site} />
-                  : rootPath === "/show"
-                    ? <ShowPage settings={data.site.show} />
-                    : rootPath === "/gallery"
-                      ? <GalleryPage order={data.site.gallery.order} />
-                      : <PublicPageNotFound />}
+                element={
+                  rootPath === "/home" ? (
+                    <HomePage site={data.site} />
+                  ) : rootPath === "/show" ? (
+                    <ShowPage settings={data.site.show} />
+                  ) : rootPath === "/gallery" ? (
+                    <GalleryPage order={data.site.gallery.order} />
+                  ) : (
+                    <PublicPageNotFound />
+                  )
+                }
               />
               <Route
                 path="/home"
-                element={data.site.home.enabled === false
-                  ? publicFallback(rootPath)
-                  : <HomePage site={data.site} />}
+                element={
+                  data.site.home.enabled === false ? (
+                    publicFallback(rootPath)
+                  ) : (
+                    <HomePage site={data.site} />
+                  )
+                }
               />
               <Route
                 path="/gallery"
-                element={data.site.gallery.enabled
-                  ? <GalleryPage order={data.site.gallery.order} />
-                  : publicFallback(rootPath)}
+                element={
+                  data.site.gallery.enabled ? (
+                    <GalleryPage order={data.site.gallery.order} />
+                  ) : (
+                    publicFallback(rootPath)
+                  )
+                }
               />
               <Route
                 path="/show"
-                element={data.site.show.enabled
-                  ? <ShowPage settings={data.site.show} />
-                  : publicFallback(rootPath)}
+                element={
+                  data.site.show.enabled ? (
+                    <ShowPage settings={data.site.show} />
+                  ) : (
+                    publicFallback(rootPath)
+                  )
+                }
               />
-              <Route path={`${adminBasePath}/*`} element={<AdminShell siteHeaderName={data.site.header_name} />} />
+              <Route
+                path={`${adminBasePath}/*`}
+                element={<AdminShell siteHeaderName={data.site.header_name} />}
+              />
             </Route>
             <Route element={<EmbeddedPageLayout enabled={data.embed.enabled} />}>
               <Route
                 path="/embed/home"
                 element={
-                  !data.embed.enabled
-                    ? publicFallback(rootPath)
-                    : data.site.home.enabled === false
-                      ? embeddedBrowsePath
-                        ? <Navigate to={embeddedBrowsePath} replace />
-                        : publicFallback(rootPath)
-                      : <HomePage embedded site={data.site} />
+                  !data.embed.enabled ? (
+                    publicFallback(rootPath)
+                  ) : data.site.home.enabled === false ? (
+                    embeddedBrowsePath ? (
+                      <Navigate to={embeddedBrowsePath} replace />
+                    ) : (
+                      publicFallback(rootPath)
+                    )
+                  ) : (
+                    <HomePage embedded site={data.site} />
+                  )
                 }
               />
               <Route
                 path="/embed/show"
-                element={data.embed.enabled && data.site.show.enabled
-                  ? <ShowPage embedded settings={data.site.show} />
-                  : publicFallback(rootPath)}
+                element={
+                  data.embed.enabled && data.site.show.enabled ? (
+                    <ShowPage embedded settings={data.site.show} />
+                  ) : (
+                    publicFallback(rootPath)
+                  )
+                }
               />
               <Route
                 path="/embed/gallery"
-                element={data.embed.enabled && data.site.gallery.enabled
-                  ? <GalleryPage embedded order={data.site.gallery.order} />
-                  : publicFallback(rootPath)}
+                element={
+                  data.embed.enabled && data.site.gallery.enabled ? (
+                    <GalleryPage embedded order={data.site.gallery.order} />
+                  ) : (
+                    publicFallback(rootPath)
+                  )
+                }
               />
             </Route>
             <Route path="*" element={publicFallback(rootPath)} />

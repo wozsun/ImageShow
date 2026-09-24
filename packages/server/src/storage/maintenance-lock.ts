@@ -18,10 +18,7 @@ type StorageLocationLockContext = {
   additionalLockActive: boolean;
   additionalLockQueue: { tail: Promise<void> };
 };
-type StorageLockWork<T> = (
-  signal: AbortSignal,
-  lockClient: PoolClient
-) => Promise<T>;
+type StorageLockWork<T> = (signal: AbortSignal, lockClient: PoolClient) => Promise<T>;
 const storageLocationLockContext = new AsyncLocalStorage<StorageLocationLockContext>();
 
 function storageLocationContext(
@@ -76,10 +73,11 @@ export function withStorageLocationReadAndAdvisoryLocksOnClient<T>(
     client,
     signal,
     [{ key: storageLocationLockKey, mode: "shared" }, ...locks],
-    (lockSignal, lockClient) => storageLocationLockContext.run(
-      storageLocationContext("read", lockSignal, lockClient, true),
-      () => work(lockSignal, lockClient)
-    )
+    (lockSignal, lockClient) =>
+      storageLocationLockContext.run(
+        storageLocationContext("read", lockSignal, lockClient, true),
+        () => work(lockSignal, lockClient)
+      )
   );
 }
 
@@ -97,10 +95,11 @@ export function withStorageLocationReadLock<T>(work: StorageLockWork<T>): Promis
   }
   return withAdvisoryLock(
     storageLocationLockKey,
-    (signal, lockClient) => storageLocationLockContext.run(
-      storageLocationContext("read", signal, lockClient, false),
-      () => work(signal, lockClient)
-    ),
+    (signal, lockClient) =>
+      storageLocationLockContext.run(
+        storageLocationContext("read", signal, lockClient, false),
+        () => work(signal, lockClient)
+      ),
     "shared"
   );
 }
@@ -119,25 +118,18 @@ function withStorageLocationReadAndAdvisoryLocks<T>(
   const held = storageLocationLockContext.getStore();
   if (held) {
     held.signal.throwIfAborted();
-    return queueAdditionalLockWork(held, () => withAdvisoryLocksOnClient(
-      held.lockClient,
-      held.signal,
-      locks,
-      (signal, lockClient) => storageLocationLockContext.run(
-        additionalLockContext(held),
-        () => work(signal, lockClient)
+    return queueAdditionalLockWork(held, () =>
+      withAdvisoryLocksOnClient(held.lockClient, held.signal, locks, (signal, lockClient) =>
+        storageLocationLockContext.run(additionalLockContext(held), () => work(signal, lockClient))
       )
-    ));
+    );
   }
   return withAdvisoryLocks(
-    [
-      { key: storageLocationLockKey, mode: "shared" },
-      ...locks
-    ],
-    (signal, lockClient) => storageLocationLockContext.run(
-      storageLocationContext("read", signal, lockClient, true),
-      () => work(signal, lockClient)
-    )
+    [{ key: storageLocationLockKey, mode: "shared" }, ...locks],
+    (signal, lockClient) =>
+      storageLocationLockContext.run(storageLocationContext("read", signal, lockClient, true), () =>
+        work(signal, lockClient)
+      )
   );
 }
 
@@ -148,25 +140,18 @@ export function tryWithStorageLocationReadAndAdvisoryLocks<T>(
   const held = storageLocationLockContext.getStore();
   if (held) {
     held.signal.throwIfAborted();
-    return queueAdditionalLockWork(held, () => tryWithAdvisoryLocksOnClient(
-      held.lockClient,
-      held.signal,
-      locks,
-      (signal, lockClient) => storageLocationLockContext.run(
-        additionalLockContext(held),
-        () => work(signal, lockClient)
+    return queueAdditionalLockWork(held, () =>
+      tryWithAdvisoryLocksOnClient(held.lockClient, held.signal, locks, (signal, lockClient) =>
+        storageLocationLockContext.run(additionalLockContext(held), () => work(signal, lockClient))
       )
-    ));
+    );
   }
   return tryWithAdvisoryLocks(
-    [
-      { key: storageLocationLockKey, mode: "shared" },
-      ...locks
-    ],
-    (signal, lockClient) => storageLocationLockContext.run(
-      storageLocationContext("read", signal, lockClient, true),
-      () => work(signal, lockClient)
-    )
+    [{ key: storageLocationLockKey, mode: "shared" }, ...locks],
+    (signal, lockClient) =>
+      storageLocationLockContext.run(storageLocationContext("read", signal, lockClient, true), () =>
+        work(signal, lockClient)
+      )
   );
 }
 
@@ -183,10 +168,7 @@ export function withImageStorageMutationLock<T>(
   imageId: string,
   work: StorageLockWork<T>
 ): Promise<T> {
-  return withStorageLocationReadAndAdvisoryLock(
-    imageStorageMutationLockKey(imageId),
-    work
-  );
+  return withStorageLocationReadAndAdvisoryLock(imageStorageMutationLockKey(imageId), work);
 }
 
 /**
@@ -204,11 +186,9 @@ export function withStorageLocationWriteLock<T>(work: StorageLockWork<T>): Promi
   if (held?.mode === "read") {
     throw new Error("Cannot upgrade a storage location read lock to a write lock");
   }
-  return withAdvisoryLock(
-    storageLocationLockKey,
-    (signal, lockClient) => storageLocationLockContext.run(
-      storageLocationContext("write", signal, lockClient, false),
-      () => work(signal, lockClient)
+  return withAdvisoryLock(storageLocationLockKey, (signal, lockClient) =>
+    storageLocationLockContext.run(storageLocationContext("write", signal, lockClient, false), () =>
+      work(signal, lockClient)
     )
   );
 }
@@ -223,24 +203,15 @@ export function withStorageLocationWriteAndAdvisoryLock<T>(
   }
   if (held?.mode === "write") {
     held.signal.throwIfAborted();
-    return queueAdditionalLockWork(held, () => withAdvisoryLocksOnClient(
-      held.lockClient,
-      held.signal,
-      [{ key }],
-      (signal, lockClient) => storageLocationLockContext.run(
-        additionalLockContext(held),
-        () => work(signal, lockClient)
+    return queueAdditionalLockWork(held, () =>
+      withAdvisoryLocksOnClient(held.lockClient, held.signal, [{ key }], (signal, lockClient) =>
+        storageLocationLockContext.run(additionalLockContext(held), () => work(signal, lockClient))
       )
-    ));
+    );
   }
-  return withAdvisoryLocks(
-    [
-      { key: storageLocationLockKey },
-      { key }
-    ],
-    (signal, lockClient) => storageLocationLockContext.run(
-      storageLocationContext("write", signal, lockClient, true),
-      () => work(signal, lockClient)
+  return withAdvisoryLocks([{ key: storageLocationLockKey }, { key }], (signal, lockClient) =>
+    storageLocationLockContext.run(storageLocationContext("write", signal, lockClient, true), () =>
+      work(signal, lockClient)
     )
   );
 }

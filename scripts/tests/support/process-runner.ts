@@ -1,7 +1,4 @@
-import type {
-  ChildProcess,
-  SpawnOptions
-} from "node:child_process";
+import type { ChildProcess, SpawnOptions } from "node:child_process";
 import {
   forceTerminateProcessTree,
   releaseFailedProcessTree,
@@ -77,12 +74,12 @@ export function createProcessRunner(options: ProcessRunnerOptions = {}) {
   const onSigTerm = () => handleInterruption("SIGTERM");
   const onShutdownMessage = (message: unknown) => {
     if (
-      typeof message === "object"
-      && message !== null
-      && "type" in message
-      && message.type === "imageshow:shutdown"
-      && "signal" in message
-      && (message.signal === "SIGINT" || message.signal === "SIGTERM")
+      typeof message === "object" &&
+      message !== null &&
+      "type" in message &&
+      message.type === "imageshow:shutdown" &&
+      "signal" in message &&
+      (message.signal === "SIGINT" || message.signal === "SIGTERM")
     ) {
       handleInterruption(message.signal);
     }
@@ -132,9 +129,11 @@ export function createProcessRunner(options: ProcessRunnerOptions = {}) {
       };
       const onClose = (code: number | null) => {
         const interruptedCode = interruption === "SIGINT" ? 130 : 143;
-        finish(!forcing && code !== 0 && code !== interruptedCode
-          ? new Error(`IPC helper ${child.pid} exited with ${code} during cleanup`)
-          : undefined);
+        finish(
+          !forcing && code !== 0 && code !== interruptedCode
+            ? new Error(`IPC helper ${child.pid} exited with ${code} during cleanup`)
+            : undefined
+        );
       };
       const force = () => {
         if (settled || forcing) return;
@@ -155,12 +154,10 @@ export function createProcessRunner(options: ProcessRunnerOptions = {}) {
 
   const terminateActiveProcesses = async () => {
     const processes = [...activeProcesses];
-    const results = await Promise.allSettled(
-      processes.map(terminateProcess)
-    );
-    const errors = results.flatMap((result) => (
+    const results = await Promise.allSettled(processes.map(terminateProcess));
+    const errors = results.flatMap((result) =>
       result.status === "rejected" ? [result.reason] : []
-    ));
+    );
     results.forEach((result, index) => {
       activeProcesses.delete(processes[index]!);
       if (result.status === "rejected") {
@@ -176,88 +173,94 @@ export function createProcessRunner(options: ProcessRunnerOptions = {}) {
     command: string,
     args: string[],
     options: ProcessRunOptions = {}
-  ): Promise<ProcessResult> => new Promise((resolveProcess, rejectProcess) => {
-    const child = spawnProcess(command, args, {
-      cwd: options.cwd,
-      env: options.env,
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    let stdout = "";
-    let stderr = "";
-    let settled = false;
-    let timedOut = false;
-    const finish = (callback: () => void) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      callback();
-    };
-    const timeoutMs = options.timeoutMs ?? 60_000;
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      void forceTerminateProcessTree(child).then(
-        () => finish(() => rejectProcess(new Error(
-          `${command} exceeded ${timeoutMs} ms: ${stderr || stdout}`
-        ))),
-        (error) => {
-          releaseFailedProcessTree(child);
-          releaseActiveProcess(child);
-          finish(() => rejectProcess(new AggregateError(
-            [error],
-            `${command} exceeded ${timeoutMs} ms and did not terminate`
-          )));
-        }
-      );
-    }, timeoutMs);
-    child.stdout?.on("data", (chunk: Buffer | string) => {
-      stdout += String(chunk);
-    });
-    child.stderr?.on("data", (chunk: Buffer | string) => {
-      stderr += String(chunk);
-    });
-    child.on("error", (error: Error) => {
-      releaseActiveProcess(child);
-      finish(() => rejectProcess(error));
-    });
-    child.on("close", (code: number | null) => {
-      finish(() => {
-        const exitCode = code ?? -1;
-        if (timedOut) {
-          rejectProcess(new Error(
-            `${command} exceeded ${timeoutMs} ms: ${stderr || stdout}`
-          ));
-          return;
-        }
-        if (exitCode !== 0 && !options.allowFailure) {
-          rejectProcess(new Error(
-            `${command} exited with ${exitCode}: ${stderr || stdout}`
-          ));
-          return;
-        }
-        resolveProcess({ code: exitCode, stdout, stderr });
+  ): Promise<ProcessResult> =>
+    new Promise((resolveProcess, rejectProcess) => {
+      const child = spawnProcess(command, args, {
+        cwd: options.cwd,
+        env: options.env,
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "pipe"]
       });
+      let stdout = "";
+      let stderr = "";
+      let settled = false;
+      let timedOut = false;
+      const finish = (callback: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        callback();
+      };
+      const timeoutMs = options.timeoutMs ?? 60_000;
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        void forceTerminateProcessTree(child).then(
+          () =>
+            finish(() =>
+              rejectProcess(new Error(`${command} exceeded ${timeoutMs} ms: ${stderr || stdout}`))
+            ),
+          (error) => {
+            releaseFailedProcessTree(child);
+            releaseActiveProcess(child);
+            finish(() =>
+              rejectProcess(
+                new AggregateError(
+                  [error],
+                  `${command} exceeded ${timeoutMs} ms and did not terminate`
+                )
+              )
+            );
+          }
+        );
+      }, timeoutMs);
+      child.stdout?.on("data", (chunk: Buffer | string) => {
+        stdout += String(chunk);
+      });
+      child.stderr?.on("data", (chunk: Buffer | string) => {
+        stderr += String(chunk);
+      });
+      child.on("error", (error: Error) => {
+        releaseActiveProcess(child);
+        finish(() => rejectProcess(error));
+      });
+      child.on("close", (code: number | null) => {
+        finish(() => {
+          const exitCode = code ?? -1;
+          if (timedOut) {
+            rejectProcess(new Error(`${command} exceeded ${timeoutMs} ms: ${stderr || stdout}`));
+            return;
+          }
+          if (exitCode !== 0 && !options.allowFailure) {
+            rejectProcess(new Error(`${command} exited with ${exitCode}: ${stderr || stdout}`));
+            return;
+          }
+          resolveProcess({ code: exitCode, stdout, stderr });
+        });
+      });
+      try {
+        if (!child.pid) throw new Error(`${command} did not expose a child PID`);
+        options.onSpawn?.(child.pid);
+      } catch (error) {
+        void forceTerminateProcessTree(child).then(
+          () => {
+            releaseActiveProcess(child);
+            finish(() => rejectProcess(error));
+          },
+          (terminationError) => {
+            releaseFailedProcessTree(child);
+            releaseActiveProcess(child);
+            finish(() =>
+              rejectProcess(
+                new AggregateError(
+                  [error, terminationError],
+                  `${command} spawn callback failed and its process tree did not terminate`
+                )
+              )
+            );
+          }
+        );
+      }
     });
-    try {
-      if (!child.pid) throw new Error(`${command} did not expose a child PID`);
-      options.onSpawn?.(child.pid);
-    } catch (error) {
-      void forceTerminateProcessTree(child).then(
-        () => {
-          releaseActiveProcess(child);
-          finish(() => rejectProcess(error));
-        },
-        (terminationError) => {
-          releaseFailedProcessTree(child);
-          releaseActiveProcess(child);
-          finish(() => rejectProcess(new AggregateError(
-            [error, terminationError],
-            `${command} spawn callback failed and its process tree did not terminate`
-          )));
-        }
-      );
-    }
-  });
 
   // The suite owns registered temporary directories even between helper
   // processes, so interruption handling spans the complete module lifetime.

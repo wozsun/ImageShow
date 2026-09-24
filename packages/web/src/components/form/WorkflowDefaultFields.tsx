@@ -62,9 +62,7 @@ export function WorkflowDefaultFields({
   clearScope: string;
   clearScopeLabel: string;
 }) {
-  const changedClass = (field: WorkflowDefaultField) => (
-    changed[field] ? " is-changed" : ""
-  );
+  const changedClass = (field: WorkflowDefaultField) => (changed[field] ? " is-changed" : "");
 
   return (
     <>

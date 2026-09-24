@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  useQueryClient,
-  type UseQueryResult
-} from "@tanstack/react-query";
+import { useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import {
   adminApiBasePath,
   type AdminCheckStatusDto,
@@ -21,22 +18,14 @@ import {
 import { migrateStorageBackendImages } from "../../../lib/api/storage-backend-image-migration.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { ReadyImageCachePanel } from "./ReadyImageCachePanel.js";
-import type {
-  ReadyImageProjectionUsageSnapshot
-} from "./check-redis-inspection.js";
+import type { ReadyImageProjectionUsageSnapshot } from "./check-redis-inspection.js";
 import { StorageBackendMigrationDialog } from "../storage/StorageBackendMigrationDialog.js";
 import { storageMaintenancePreview } from "../storage/storage-maintenance-preview.js";
 import "../../../styles/admin/check-maintenance.css";
 
-type RunCheck = (
-  name: string,
-  body?: Record<string, unknown>
-) => Promise<unknown | null>;
+type RunCheck = (name: string, body?: Record<string, unknown>) => Promise<unknown | null>;
 
-type TrashMaintenanceIssue = Pick<
-  AdminTrashCheckDto["issues"][number],
-  "kind" | "count"
->;
+type TrashMaintenanceIssue = Pick<AdminTrashCheckDto["issues"][number], "kind" | "count">;
 
 type TrashMaintenancePreview = {
   unqueued_count: number;
@@ -45,12 +34,7 @@ type TrashMaintenancePreview = {
   issues: TrashMaintenanceIssue[];
 };
 
-const trashPurgeJobStates = [
-  "pending",
-  "running",
-  "retrying",
-  "exhausted"
-] as const;
+const trashPurgeJobStates = ["pending", "running", "retrying", "exhausted"] as const;
 const trashCheckIssueKinds = [
   "succeeded_target_remaining",
   "target_not_deleted",
@@ -61,30 +45,29 @@ function isCount(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) >= 0;
 }
 
-function isTrashMaintenancePreview(
-  value: unknown
-): value is TrashMaintenancePreview {
+function isTrashMaintenancePreview(value: unknown): value is TrashMaintenancePreview {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Record<string, unknown>;
   const jobCounts = candidate.job_counts;
-  return isCount(candidate.unqueued_count)
-    && isCount(candidate.purge_pending_count)
-    && Boolean(jobCounts)
-    && typeof jobCounts === "object"
-    && !Array.isArray(jobCounts)
-    && trashPurgeJobStates.every((state) => (
-      isCount((jobCounts as Record<string, unknown>)[state])
-    ))
-    && Array.isArray(candidate.issues)
-    && candidate.issues.every((issue) => {
+  return (
+    isCount(candidate.unqueued_count) &&
+    isCount(candidate.purge_pending_count) &&
+    Boolean(jobCounts) &&
+    typeof jobCounts === "object" &&
+    !Array.isArray(jobCounts) &&
+    trashPurgeJobStates.every((state) => isCount((jobCounts as Record<string, unknown>)[state])) &&
+    Array.isArray(candidate.issues) &&
+    candidate.issues.every((issue) => {
       if (!issue || typeof issue !== "object" || Array.isArray(issue)) {
         return false;
       }
       const record = issue as Record<string, unknown>;
-      return trashCheckIssueKinds.includes(
-        record.kind as typeof trashCheckIssueKinds[number]
-      ) && isCount(record.count);
-    });
+      return (
+        trashCheckIssueKinds.includes(record.kind as (typeof trashCheckIssueKinds)[number]) &&
+        isCount(record.count)
+      );
+    })
+  );
 }
 
 type StorageMaintenancePreviewState = {
@@ -110,13 +93,10 @@ export function CheckStorageMaintenanceActions({
   onShowStorage: () => void;
 }) {
   const client = useQueryClient();
-  const [maintenancePreview, setMaintenancePreview] = useState<
-    StorageMaintenancePreviewState | null
-  >(null);
+  const [maintenancePreview, setMaintenancePreview] =
+    useState<StorageMaintenancePreviewState | null>(null);
   const [operationModal, setOperationModal] = useState<
-    | "storage-backend-image-migration"
-    | "storage-maintenance"
-    | null
+    "storage-backend-image-migration" | "storage-maintenance" | null
   >(null);
 
   const openStorageMaintenance = async () => {
@@ -127,10 +107,7 @@ export function CheckStorageMaintenanceActions({
         api(`${adminApiBasePath}/check/storage`, { method: "POST" }),
         api(`${adminApiBasePath}/check/trash`, { method: "POST" })
       ]);
-      if (
-        !storageMaintenancePreview(storage)
-        || !isTrashMaintenancePreview(trash)
-      ) {
+      if (!storageMaintenancePreview(storage) || !isTrashMaintenancePreview(trash)) {
         throw new Error("Storage maintenance preview is incomplete");
       }
       const preview = { storage, trash };
@@ -144,9 +121,7 @@ export function CheckStorageMaintenanceActions({
       onRunningChange("");
     }
   };
-  const runStorageMaintenance = async () => (
-    await onRunCheck("storage-maintenance") !== null
-  );
+  const runStorageMaintenance = async () => (await onRunCheck("storage-maintenance")) !== null;
   const runStorageMigration = async (source: string, target: string) => {
     onRunningChange("storage-backend-image-migration");
     try {
@@ -193,23 +168,19 @@ export function CheckStorageMaintenanceActions({
             <StableButtonLabel
               idle="存储维护"
               busyText="处理中"
-              busy={running === "storage-maintenance-preview"
-                || running === "storage-maintenance"}
+              busy={running === "storage-maintenance-preview" || running === "storage-maintenance"}
             />
           </button>
         )}
       </div>
-      {operationModal === "storage-backend-image-migration"
-        && canMigrateStorage && (
-          <StorageBackendMigrationDialog
-            busy={Boolean(running)}
-            onClose={() => setOperationModal(null)}
-            onRun={runStorageMigration}
-          />
-        )}
-      {operationModal === "storage-maintenance"
-        && canMaintainStorage
-        && maintenancePreview && (
+      {operationModal === "storage-backend-image-migration" && canMigrateStorage && (
+        <StorageBackendMigrationDialog
+          busy={Boolean(running)}
+          onClose={() => setOperationModal(null)}
+          onRun={runStorageMigration}
+        />
+      )}
+      {operationModal === "storage-maintenance" && canMaintainStorage && maintenancePreview && (
         <StorageMaintenanceDialog
           preview={maintenancePreview}
           running={running}
@@ -224,7 +195,12 @@ export function CheckStorageMaintenanceActions({
   );
 }
 
-function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
+function StorageMaintenanceDialog({
+  preview,
+  running,
+  onClose,
+  onRun
+}: {
   preview: StorageMaintenancePreviewState;
   running: string;
   onClose: () => void;
@@ -240,7 +216,8 @@ function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
     .filter((issue) => issue.kind === "stalled_job")
     .reduce((total, issue) => total + issue.count, 0);
   const title = "存储维护";
-  const description = "修复缩略图与孤儿对象，并维护已请求彻底删除的持久任务。普通回收站图片和有效内容接入仍会保留。";
+  const description =
+    "修复缩略图与孤儿对象，并维护已请求彻底删除的持久任务。普通回收站图片和有效内容接入仍会保留。";
   return (
     <DialogFrame
       className="modal edit-modal"
@@ -279,44 +256,57 @@ function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
           <div className="operation-body">
             <section className="storage-maintenance-section">
               <h3>存储对象</h3>
-              {summary && <dl className="storage-maintenance-preview">
-                <div>
-                  <dt>可重建缩略图</dt>
-                  <dd>{summary.repairable_thumbnails.toLocaleString()}</dd>
-                </div>
-                <div>
-                  <dt>缺失原图</dt>
-                  <dd>{summary.missing_originals.toLocaleString()}</dd>
-                </div>
-                <div>
-                  <dt>可清理对象</dt>
-                  <dd>{summary.removable_objects.toLocaleString()}</dd>
-                </div>
-              </dl>}
+              {summary && (
+                <dl className="storage-maintenance-preview">
+                  <div>
+                    <dt>可重建缩略图</dt>
+                    <dd>{summary.repairable_thumbnails.toLocaleString()}</dd>
+                  </div>
+                  <div>
+                    <dt>缺失原图</dt>
+                    <dd>{summary.missing_originals.toLocaleString()}</dd>
+                  </div>
+                  <div>
+                    <dt>可清理对象</dt>
+                    <dd>{summary.removable_objects.toLocaleString()}</dd>
+                  </div>
+                </dl>
+              )}
             </section>
             <section className="storage-maintenance-section">
               <h3>持久彻底删除任务</h3>
               <dl className="trash-purge-maintenance-preview">
-                <div><dt>待彻底删除</dt><dd>{preview.trash.purge_pending_count.toLocaleString()}</dd></div>
-                <div><dt>将重试耗尽任务</dt><dd>{preview.trash.job_counts.exhausted.toLocaleString()}</dd></div>
-                <div><dt>将重试异常成功任务</dt><dd>{repairableJobs.toLocaleString()}</dd></div>
-                <div><dt>保留普通回收站</dt><dd>{preview.trash.unqueued_count.toLocaleString()}</dd></div>
+                <div>
+                  <dt>待彻底删除</dt>
+                  <dd>{preview.trash.purge_pending_count.toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt>将重试耗尽任务</dt>
+                  <dd>{preview.trash.job_counts.exhausted.toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt>将重试异常成功任务</dt>
+                  <dd>{repairableJobs.toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt>保留普通回收站</dt>
+                  <dd>{preview.trash.unqueued_count.toLocaleString()}</dd>
+                </div>
               </dl>
             </section>
             <p className="notice-line">
               以上仅为当前检查预览。执行时服务端会在独占维护锁内重新读取数据库和完整存储快照；
-              {summary && (
-                summary.blocked_namespaces
-                || summary.unavailable_logical_backends
-              )
+              {summary && (summary.blocked_namespaces || summary.unavailable_logical_backends)
                 ? `当前另有 ${[
-                  summary.blocked_namespaces
-                    ? `${summary.blocked_namespaces} 个不可用或列举不完整的命名空间`
-                    : "",
-                  summary.unavailable_logical_backends
-                    ? `${summary.unavailable_logical_backends} 个不可读逻辑后端`
-                    : ""
-                ].filter(Boolean).join("、")}，${summary.blocked_items} 个相关项目只报告、不计入可执行数量。`
+                    summary.blocked_namespaces
+                      ? `${summary.blocked_namespaces} 个不可用或列举不完整的命名空间`
+                      : "",
+                    summary.unavailable_logical_backends
+                      ? `${summary.unavailable_logical_backends} 个不可读逻辑后端`
+                      : ""
+                  ]
+                    .filter(Boolean)
+                    .join("、")}，${summary.blocked_items} 个相关项目只报告、不计入可执行数量。`
                 : "预览之后发生的上传或迁移不会直接沿用旧结果。"}
               持久任务维护也会按执行时真值重试目标仍在回收站的异常成功任务及全部耗尽任务；
               {stalledJobs
@@ -333,15 +323,13 @@ function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
               <span>我已核对预览，并确认执行存储对象维护及持久彻底删除任务维护。</span>
             </label>
             {errorMessage && (
-              <p className="admin-error" role="alert">{errorMessage}</p>
+              <p className="admin-error" role="alert">
+                {errorMessage}
+              </p>
             )}
           </div>
           <footer>
-            <button
-              type="button"
-              disabled={Boolean(running)}
-              onClick={() => requestClose()}
-            >
+            <button type="button" disabled={Boolean(running)} onClick={() => requestClose()}>
               取消
             </button>
             <button
@@ -385,30 +373,23 @@ export function ReadyImageCacheMaintenancePanel({
   const [rebuildStarting, setRebuildStarting] = useState(false);
   const [confirmRebuild, setConfirmRebuild] = useState(false);
   const [rebuildError, setRebuildError] = useState("");
-  const [rebuildErrorBaseline, setRebuildErrorBaseline] = useState<
-    RebuildErrorBaseline | null
-  >(null);
+  const [rebuildErrorBaseline, setRebuildErrorBaseline] = useState<RebuildErrorBaseline | null>(
+    null
+  );
   const status = readyImageProjection(query.data);
 
   useEffect(() => {
     const current = readyImageProjection(query.data);
     if (
-      rebuildErrorBaseline !== null
-      && query.isSuccess
-      && current
-      && query.dataUpdatedAt > rebuildErrorBaseline.dataUpdatedAt
-      && (
-        current.rebuilding
-        || (
-          rebuildErrorBaseline.hadStatus
-          && (
-            current.state !== rebuildErrorBaseline.state
-            || current.reason !== rebuildErrorBaseline.reason
-            || current.applied_revision
-            !== rebuildErrorBaseline.appliedRevision
-          )
-        )
-      )
+      rebuildErrorBaseline !== null &&
+      query.isSuccess &&
+      current &&
+      query.dataUpdatedAt > rebuildErrorBaseline.dataUpdatedAt &&
+      (current.rebuilding ||
+        (rebuildErrorBaseline.hadStatus &&
+          (current.state !== rebuildErrorBaseline.state ||
+            current.reason !== rebuildErrorBaseline.reason ||
+            current.applied_revision !== rebuildErrorBaseline.appliedRevision)))
     ) {
       setRebuildError("");
       setRebuildErrorBaseline(null);
@@ -425,10 +406,9 @@ export function ReadyImageCacheMaintenancePanel({
         queryKey: queryKeys.adminCheckStatus,
         exact: true
       });
-      const nextStatus = await api<AdminCheckStatusDto>(
-        readyImageCacheRebuildPath,
-        { method: "POST" }
-      );
+      const nextStatus = await api<AdminCheckStatusDto>(readyImageCacheRebuildPath, {
+        method: "POST"
+      });
       client.setQueryData(queryKeys.adminCheckStatus, nextStatus);
       await client.invalidateQueries({
         queryKey: queryKeys.overview,
@@ -439,9 +419,7 @@ export function ReadyImageCacheMaintenancePanel({
       setRebuildErrorBaseline(null);
     } catch (requestError) {
       reportAdminUiError("cache.ready_images.rebuild", requestError);
-      setRebuildError(
-        "图片投影重建未能启动，请检查 Redis 与 PostgreSQL 状态。"
-      );
+      setRebuildError("图片投影重建未能启动，请检查 Redis 与 PostgreSQL 状态。");
       setRebuildErrorBaseline({
         dataUpdatedAt: query.dataUpdatedAt,
         hadStatus: status !== undefined,
@@ -468,17 +446,9 @@ export function ReadyImageCacheMaintenancePanel({
           setRebuildErrorBaseline(null);
         }}
         renderMaintenanceAction={({ disabled }) => (
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => setConfirmRebuild(true)}
-          >
+          <button type="button" disabled={disabled} onClick={() => setConfirmRebuild(true)}>
             <AdminIcon name="database-2-line" />
-            <StableButtonLabel
-              idle="重建图片投影"
-              busyText="启动中"
-              busy={rebuildStarting}
-            />
+            <StableButtonLabel idle="重建图片投影" busyText="启动中" busy={rebuildStarting} />
           </button>
         )}
       />
@@ -493,19 +463,18 @@ export function ReadyImageCacheMaintenancePanel({
   );
 }
 
-function RebuildConfirmation({ busy, onClose, onConfirm }: {
+function RebuildConfirmation({
+  busy,
+  onClose,
+  onConfirm
+}: {
   busy: boolean;
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }) {
   const title = "重建 Redis 图片投影";
   return (
-    <DialogFrame
-      className="modal edit-modal"
-      ariaLabel={title}
-      busy={busy}
-      onClose={onClose}
-    >
+    <DialogFrame className="modal edit-modal" ariaLabel={title} busy={busy} onClose={onClose}>
       {({ requestClose }) => (
         <form
           className="operation-modal"
@@ -536,20 +505,12 @@ function RebuildConfirmation({ busy, onClose, onConfirm }: {
             </p>
           </div>
           <footer>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => requestClose()}
-            >
+            <button type="button" disabled={busy} onClick={() => requestClose()}>
               取消
             </button>
             <button className="button" type="submit" disabled={busy}>
               <AdminIcon name="database-2-line" />
-              <StableButtonLabel
-                idle="确认重建"
-                busyText="启动中"
-                busy={busy}
-              />
+              <StableButtonLabel idle="确认重建" busyText="启动中" busy={busy} />
             </button>
           </footer>
         </form>

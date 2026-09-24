@@ -1,7 +1,4 @@
-import {
-  galleryLoadBufferScreens,
-  galleryResidenceBufferScreens
-} from "../../lib/constants.js";
+import { galleryLoadBufferScreens, galleryResidenceBufferScreens } from "../../lib/constants.js";
 
 export type GalleryImageVisibility = {
   inViewport: boolean;
@@ -9,9 +6,7 @@ export type GalleryImageVisibility = {
   inResidenceRange: boolean;
 };
 
-type GalleryVisibilityListener = (
-  visibility: GalleryImageVisibility
-) => void;
+type GalleryVisibilityListener = (visibility: GalleryImageVisibility) => void;
 
 type VisibilityRecord = {
   state: GalleryImageVisibility;
@@ -20,39 +15,30 @@ type VisibilityRecord = {
 
 type ObserverKind = keyof GalleryImageVisibility;
 
-const observerKinds: ObserverKind[] = [
-  "inViewport",
-  "inLoadRange",
-  "inResidenceRange"
-];
+const observerKinds: ObserverKind[] = ["inViewport", "inLoadRange", "inResidenceRange"];
 
-function visibilityRootMargin(
-  kind: ObserverKind,
-  viewportHeight: number
-) {
+function visibilityRootMargin(kind: ObserverKind, viewportHeight: number) {
   if (kind === "inViewport") return "0px";
-  const screens = kind === "inLoadRange"
-    ? galleryLoadBufferScreens
-    : galleryResidenceBufferScreens;
+  const screens = kind === "inLoadRange" ? galleryLoadBufferScreens : galleryResidenceBufferScreens;
   return `${Math.max(1, Math.ceil(viewportHeight * screens))}px 0px`;
 }
 
-function equalVisibility(
-  left: GalleryImageVisibility,
-  right: GalleryImageVisibility
-) {
-  return left.inViewport === right.inViewport
-    && left.inLoadRange === right.inLoadRange
-    && left.inResidenceRange === right.inResidenceRange;
+function equalVisibility(left: GalleryImageVisibility, right: GalleryImageVisibility) {
+  return (
+    left.inViewport === right.inViewport &&
+    left.inLoadRange === right.inLoadRange &&
+    left.inResidenceRange === right.inResidenceRange
+  );
 }
 
 export function shouldRefreshGalleryVisibility(
   previous: { width: number; height: number },
   next: { width: number; height: number }
 ) {
-  return Math.abs(next.width - previous.width) >= 1
-    || Math.abs(next.height - previous.height)
-      >= Math.max(96, previous.height * 0.15);
+  return (
+    Math.abs(next.width - previous.width) >= 1 ||
+    Math.abs(next.height - previous.height) >= Math.max(96, previous.height * 0.15)
+  );
 }
 
 /**
@@ -120,9 +106,9 @@ export class GalleryImageVisibilityController {
   updateViewportHeight(viewportHeight: number) {
     const next = Math.max(1, Math.ceil(viewportHeight));
     if (
-      this.#disposed
-      || typeof IntersectionObserver === "undefined"
-      || next === this.#viewportHeight
+      this.#disposed ||
+      typeof IntersectionObserver === "undefined" ||
+      next === this.#viewportHeight
     ) {
       return;
     }
@@ -153,22 +139,25 @@ export class GalleryImageVisibilityController {
   #createObservers() {
     if (typeof IntersectionObserver === "undefined") return;
     for (const kind of observerKinds) {
-      const observer = new IntersectionObserver((entries) => {
-        if (this.#disposed || this.#observers.get(kind) !== observer) return;
-        for (const entry of entries) {
-          const record = this.#records.get(entry.target);
-          if (!record) continue;
-          const next = {
-            ...record.state,
-            [kind]: entry.isIntersecting
-          };
-          if (equalVisibility(record.state, next)) continue;
-          record.state = next;
-          record.listener(next);
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (this.#disposed || this.#observers.get(kind) !== observer) return;
+          for (const entry of entries) {
+            const record = this.#records.get(entry.target);
+            if (!record) continue;
+            const next = {
+              ...record.state,
+              [kind]: entry.isIntersecting
+            };
+            if (equalVisibility(record.state, next)) continue;
+            record.state = next;
+            record.listener(next);
+          }
+        },
+        {
+          rootMargin: visibilityRootMargin(kind, this.#viewportHeight)
         }
-      }, {
-        rootMargin: visibilityRootMargin(kind, this.#viewportHeight)
-      });
+      );
       this.#observers.set(kind, observer);
     }
   }

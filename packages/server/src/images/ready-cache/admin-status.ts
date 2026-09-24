@@ -2,14 +2,10 @@ import type {
   ReadyImageCacheAdminStatusDto,
   ReadyImageCacheRecentErrorDto
 } from "@imageshow/shared/browser";
-import {
-  getReadyImageCacheCoordinatorStatus
-} from "./coordinator.ts";
+import { getReadyImageCacheCoordinatorStatus } from "./coordinator.ts";
 import { readReadyImageCacheMeta } from "./meta.ts";
 import { getReadyImageRevision } from "./revision.ts";
-import {
-  getReadyImageCacheRecentErrors
-} from "./status-observability.ts";
+import { getReadyImageCacheRecentErrors } from "./status-observability.ts";
 import { redis } from "../../core/redis/client.ts";
 import { measureReadyImageCoreMemory } from "./sync/redis-writer.ts";
 
@@ -32,8 +28,7 @@ export type ReadyImageCacheOverviewMeasurementDependencies = {
   now: () => Date;
 };
 
-const defaultOverviewMeasurementDependencies:
-  ReadyImageCacheOverviewMeasurementDependencies = {
+const defaultOverviewMeasurementDependencies: ReadyImageCacheOverviewMeasurementDependencies = {
   measureCoreMemory: () => measureReadyImageCoreMemory(redis),
   now: () => new Date()
 };
@@ -43,12 +38,10 @@ type ReadyImageCacheOverviewMeasurement = {
   current_core_measured_at: string | null;
 };
 
-let overviewMeasurementPromise:
-Promise<ReadyImageCacheOverviewMeasurement> | null = null;
+let overviewMeasurementPromise: Promise<ReadyImageCacheOverviewMeasurement> | null = null;
 
 function measureReadyImageCacheOverview(
-  dependencies: ReadyImageCacheOverviewMeasurementDependencies =
-    defaultOverviewMeasurementDependencies
+  dependencies: ReadyImageCacheOverviewMeasurementDependencies = defaultOverviewMeasurementDependencies
 ) {
   if (overviewMeasurementPromise) return overviewMeasurementPromise;
   overviewMeasurementPromise = Promise.resolve()
@@ -92,17 +85,18 @@ async function readProjectionSnapshot(
   return {
     coordinator,
     meta,
-    synchronized: authoritativeRevision === null
-      ? null
-      : Boolean(
-        coordinator.readable
-        && meta?.state === "ready"
-        && meta.appliedRevision === authoritativeRevision
-      ),
+    synchronized:
+      authoritativeRevision === null
+        ? null
+        : Boolean(
+            coordinator.readable &&
+            meta?.state === "ready" &&
+            meta.appliedRevision === authoritativeRevision
+          ),
     state: coordinator.rebuilding
-      ? meta?.state ?? "rebuilding"
+      ? (meta?.state ?? "rebuilding")
       : coordinator.readable
-        ? meta?.state ?? "unavailable"
+        ? (meta?.state ?? "unavailable")
         : "degraded"
   };
 }
@@ -117,13 +111,9 @@ function rebuildDurationMs(startedAt: string, completedAt: string) {
 
 export async function readReadyImageCacheAdminStatus(
   authoritativeRevision: string | null,
-  dependencies: ReadyImageCacheAdminStatusDependencies =
-    defaultAdminStatusDependencies
+  dependencies: ReadyImageCacheAdminStatusDependencies = defaultAdminStatusDependencies
 ): Promise<ReadyImageCacheAdminStatusDto> {
-  const snapshot = await readProjectionSnapshot(
-    authoritativeRevision,
-    dependencies
-  );
+  const snapshot = await readProjectionSnapshot(authoritativeRevision, dependencies);
   const { coordinator, meta } = snapshot;
   const recent = dependencies.recentErrors();
   return {
@@ -135,40 +125,26 @@ export async function readReadyImageCacheAdminStatus(
     authoritative_revision: authoritativeRevision,
     applied_revision: meta?.appliedRevision ?? null,
     item_count: meta?.itemCount ?? null,
-    processed: coordinator.rebuilding && meta?.state === "rebuilding"
-      ? meta.processed
-      : null,
-    total: coordinator.rebuilding && meta?.state === "rebuilding"
-      ? meta.total
-      : null,
+    processed: coordinator.rebuilding && meta?.state === "rebuilding" ? meta.processed : null,
+    total: coordinator.rebuilding && meta?.state === "rebuilding" ? meta.total : null,
     last_updated_at: meta?.lastUpdatedAt ?? null,
     full_rebuild_started_at: meta?.fullRebuildStartedAt ?? null,
     full_rebuild_completed_at: meta?.fullRebuildCompletedAt || null,
     full_rebuild_duration_ms: meta
-      ? rebuildDurationMs(
-          meta.fullRebuildStartedAt,
-          meta.fullRebuildCompletedAt
-        )
+      ? rebuildDurationMs(meta.fullRebuildStartedAt, meta.fullRebuildCompletedAt)
       : null,
-    last_full_rebuild_core_memory_bytes:
-      meta?.lastFullRebuildCoreMemoryBytes ?? null,
-    last_full_rebuild_measured_at:
-      meta?.lastFullRebuildMeasuredAt || null,
+    last_full_rebuild_core_memory_bytes: meta?.lastFullRebuildCoreMemoryBytes ?? null,
+    last_full_rebuild_measured_at: meta?.lastFullRebuildMeasuredAt || null,
     recent_errors: {
-      core: recent.core ?? persistedCoreError(
-        meta?.lastError ?? "",
-        meta?.lastUpdatedAt ?? null
-      ),
+      core: recent.core ?? persistedCoreError(meta?.lastError ?? "", meta?.lastUpdatedAt ?? null),
       derived: recent.derived
     }
   };
 }
 
 export async function getReadyImageCacheOverviewStatus(
-  dependencies: ReadyImageCacheAdminStatusDependencies =
-    defaultAdminStatusDependencies,
-  measurementDependencies: ReadyImageCacheOverviewMeasurementDependencies =
-    defaultOverviewMeasurementDependencies
+  dependencies: ReadyImageCacheAdminStatusDependencies = defaultAdminStatusDependencies,
+  measurementDependencies: ReadyImageCacheOverviewMeasurementDependencies = defaultOverviewMeasurementDependencies
 ) {
   const [revision, measurement] = await Promise.all([
     dependencies.getRevision(),
@@ -181,10 +157,8 @@ export async function getReadyImageCacheOverviewStatus(
     rebuilding: snapshot.coordinator.rebuilding,
     item_count: snapshot.meta?.itemCount ?? null,
     ...measurement,
-    last_full_rebuild_core_memory_bytes:
-      snapshot.meta?.lastFullRebuildCoreMemoryBytes ?? null,
-    last_full_rebuild_measured_at:
-      snapshot.meta?.lastFullRebuildMeasuredAt || null
+    last_full_rebuild_core_memory_bytes: snapshot.meta?.lastFullRebuildCoreMemoryBytes ?? null,
+    last_full_rebuild_measured_at: snapshot.meta?.lastFullRebuildMeasuredAt || null
   };
 }
 
@@ -195,12 +169,13 @@ export function applyReadyImageAuthoritativeRevision(
   return {
     ...status,
     authoritative_revision: authoritativeRevision,
-    synchronized: authoritativeRevision === null
-      ? null
-      : Boolean(
-        status.readable
-        && status.state === "ready"
-        && status.applied_revision === authoritativeRevision
-      )
+    synchronized:
+      authoritativeRevision === null
+        ? null
+        : Boolean(
+            status.readable &&
+            status.state === "ready" &&
+            status.applied_revision === authoritativeRevision
+          )
   };
 }

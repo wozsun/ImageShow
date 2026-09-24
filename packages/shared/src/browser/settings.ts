@@ -74,18 +74,13 @@ type PublicPageAvailability = {
   gallery: Pick<SiteGallerySettings, "enabled">;
 };
 
-export function publicPageEnabled(
-  site: PublicPageAvailability,
-  root: SiteRoot
-) {
+export function publicPageEnabled(site: PublicPageAvailability, root: SiteRoot) {
   if (root === "home") return site.home.enabled;
   if (root === "show") return site.show.enabled;
   return site.gallery.enabled;
 }
 
-export function publicRootPath(
-  site: PublicPageAvailability
-): PublicPagePath | null {
+export function publicRootPath(site: PublicPageAvailability): PublicPagePath | null {
   if (publicPageEnabled(site, site.root)) return `/${site.root}`;
   for (const fallback of ["gallery", "show", "home"] as const) {
     if (publicPageEnabled(site, fallback)) return `/${fallback}`;
@@ -221,40 +216,24 @@ export type AdminSiteSettings = Omit<
   "domain" | "home" | "icon" | "show" | "gallery"
 > & {
   gallery: Pick<SiteGallerySettings, "order">;
-  home: Pick<
-    SiteHomeSettings,
-    "background" | "banner_label" | "banner_title"
-  >;
+  home: Pick<SiteHomeSettings, "background" | "banner_label" | "banner_title">;
 };
 
 export type AdminIngestionSettings = Pick<
   IngestionSettings,
-  | "max_file_size_mb"
-  | "max_long_edge"
-  | "list_page_size"
-  | "commit_concurrency"
+  "max_file_size_mb" | "max_long_edge" | "list_page_size" | "commit_concurrency"
 >;
 
-export type AdminUploadSettings = Pick<
-  UploadSettings,
-  | "max_items"
-  | "browser_concurrency"
->;
+export type AdminUploadSettings = Pick<UploadSettings, "max_items" | "browser_concurrency">;
 
 export type AdminImportSettings = Pick<
   ImportSettings,
   "keep_original_link" | "auto_import" | "max_items"
 >;
 
-export type AdminWeiboSettings = Pick<
-  WeiboSettings,
-  "max_items"
->;
+export type AdminWeiboSettings = Pick<WeiboSettings, "max_items">;
 
-export type AdminNormalizeSettings = Omit<
-  NormalizeSettings,
-  "quality_step"
->;
+export type AdminNormalizeSettings = Omit<NormalizeSettings, "quality_step">;
 
 export type AdminSettings = {
   site: AdminSiteSettings;

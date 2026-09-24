@@ -13,7 +13,10 @@ export type DetectedClassification = {
   brightness: Brightness;
 };
 
-export function deviceFromDimensions(width: string | number | null | undefined, height: string | number | null | undefined): Device | undefined {
+export function deviceFromDimensions(
+  width: string | number | null | undefined,
+  height: string | number | null | undefined
+): Device | undefined {
   const actualWidth = Number(width ?? 0);
   const actualHeight = Number(height ?? 0);
   if (actualWidth <= 0 || actualHeight <= 0) return undefined;
@@ -24,7 +27,10 @@ function resolveDevice(input: DeviceSelection, detected: Device): Device {
   return input === "auto" ? detected : input;
 }
 
-export function resolveOptionalDeviceWith(input: DeviceSelection | undefined, detect: () => Device | undefined): Device | undefined {
+export function resolveOptionalDeviceWith(
+  input: DeviceSelection | undefined,
+  detect: () => Device | undefined
+): Device | undefined {
   if (input === undefined) return undefined;
   return input === "auto" ? detect() : input;
 }

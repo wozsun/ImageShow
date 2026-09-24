@@ -2,10 +2,7 @@ import type { Redis } from "ioredis";
 import { redis } from "../../core/redis/client.ts";
 import { execRedisPipeline } from "../../core/redis/pipeline.ts";
 import { READY_IMAGE_META_KEY } from "./keys.ts";
-import {
-  type ReadyImageCacheMeta,
-  type ReadyImageCacheState
-} from "./model.ts";
+import { type ReadyImageCacheMeta, type ReadyImageCacheState } from "./model.ts";
 
 const metaFields = new Set([
   "state",
@@ -20,11 +17,7 @@ const metaFields = new Set([
   "last_full_rebuild_measured_at",
   "last_error"
 ]);
-const cacheStates = new Set<ReadyImageCacheState>([
-  "ready",
-  "rebuilding",
-  "degraded"
-]);
+const cacheStates = new Set<ReadyImageCacheState>(["ready", "rebuilding", "degraded"]);
 
 function decimalRevision(value: unknown) {
   const revision = String(value ?? "");
@@ -60,13 +53,11 @@ function optionalTimestamp(value: unknown, field: string) {
   return timestamp;
 }
 
-function parseReadyImageCacheMeta(
-  raw: Record<string, string>
-): ReadyImageCacheMeta | null {
+function parseReadyImageCacheMeta(raw: Record<string, string>): ReadyImageCacheMeta | null {
   if (!Object.keys(raw).length) return null;
   if (
-    Object.keys(raw).length !== metaFields.size
-    || Object.keys(raw).some((field) => !metaFields.has(field))
+    Object.keys(raw).length !== metaFields.size ||
+    Object.keys(raw).some((field) => !metaFields.has(field))
   ) {
     throw new Error("Ready-image cache meta has an unsupported shape");
   }
@@ -79,19 +70,14 @@ function parseReadyImageCacheMeta(
     appliedRevision: decimalRevision(raw.applied_revision),
     itemCount: nonNegativeInteger(raw.item_count, "item_count"),
     lastUpdatedAt: optionalTimestamp(raw.last_updated_at, "last_updated_at"),
-    fullRebuildStartedAt: optionalTimestamp(
-      raw.full_rebuild_started_at,
-      "full_rebuild_started_at"
-    ),
+    fullRebuildStartedAt: optionalTimestamp(raw.full_rebuild_started_at, "full_rebuild_started_at"),
     fullRebuildCompletedAt: optionalTimestamp(
       raw.full_rebuild_completed_at,
       "full_rebuild_completed_at"
     ),
     processed: nonNegativeInteger(raw.processed, "processed"),
     total: nonNegativeInteger(raw.total, "total"),
-    lastFullRebuildCoreMemoryBytes: optionalMemoryBytes(
-      raw.last_full_rebuild_core_memory_bytes
-    ),
+    lastFullRebuildCoreMemoryBytes: optionalMemoryBytes(raw.last_full_rebuild_core_memory_bytes),
     lastFullRebuildMeasuredAt: optionalTimestamp(
       raw.last_full_rebuild_measured_at,
       "last_full_rebuild_measured_at"
@@ -105,41 +91,34 @@ function parseReadyImageCacheMeta(
     throw new Error("Ready-image cache meta is missing required timestamps");
   }
   if (
-    meta.fullRebuildCompletedAt
-    && Date.parse(meta.fullRebuildCompletedAt)
-      < Date.parse(meta.fullRebuildStartedAt)
+    meta.fullRebuildCompletedAt &&
+    Date.parse(meta.fullRebuildCompletedAt) < Date.parse(meta.fullRebuildStartedAt)
   ) {
-    throw new Error(
-      "Ready-image cache full rebuild timestamps are out of order"
-    );
+    throw new Error("Ready-image cache full rebuild timestamps are out of order");
   }
-  if (
-    (meta.lastFullRebuildCoreMemoryBytes === null)
-    !== (meta.lastFullRebuildMeasuredAt === "")
-  ) {
+  if ((meta.lastFullRebuildCoreMemoryBytes === null) !== (meta.lastFullRebuildMeasuredAt === "")) {
     throw new Error("Ready-image cache memory snapshot is incomplete");
   }
-  if (meta.state === "ready" && (
-    !meta.fullRebuildCompletedAt
-    || meta.processed !== 0
-    || meta.total !== 0
-    || meta.lastError
-  )) {
+  if (
+    meta.state === "ready" &&
+    (!meta.fullRebuildCompletedAt || meta.processed !== 0 || meta.total !== 0 || meta.lastError)
+  ) {
     throw new Error("Ready-image cache ready meta is internally inconsistent");
   }
-  if (meta.state === "rebuilding" && (
-    meta.fullRebuildCompletedAt
-    || meta.itemCount !== meta.processed
-  )) {
+  if (
+    meta.state === "rebuilding" &&
+    (meta.fullRebuildCompletedAt || meta.itemCount !== meta.processed)
+  ) {
     throw new Error("Ready-image cache rebuilding meta is internally inconsistent");
   }
-  if (meta.state === "degraded" && (
-    meta.fullRebuildCompletedAt
-    || meta.itemCount !== 0
-    || meta.processed !== 0
-    || meta.total !== 0
-    || !meta.lastError
-  )) {
+  if (
+    meta.state === "degraded" &&
+    (meta.fullRebuildCompletedAt ||
+      meta.itemCount !== 0 ||
+      meta.processed !== 0 ||
+      meta.total !== 0 ||
+      !meta.lastError)
+  ) {
     throw new Error("Ready-image cache degraded meta is internally inconsistent");
   }
   return meta;
@@ -170,10 +149,7 @@ export async function readReadyImageCacheMeta(
   return parseReadyImageCacheMeta(await client.hgetall(READY_IMAGE_META_KEY));
 }
 
-export async function writeReadyImageCacheMeta(
-  meta: ReadyImageCacheMeta,
-  client: Redis = redis
-) {
+export async function writeReadyImageCacheMeta(meta: ReadyImageCacheMeta, client: Redis = redis) {
   const transaction = client.multi();
   transaction.del(READY_IMAGE_META_KEY);
   transaction.hset(READY_IMAGE_META_KEY, serializedMeta(meta));
@@ -194,10 +170,8 @@ export function rebuildingReadyImageCacheMeta(
     fullRebuildCompletedAt: "",
     processed: 0,
     total: 0,
-    lastFullRebuildCoreMemoryBytes:
-      previous?.lastFullRebuildCoreMemoryBytes ?? null,
-    lastFullRebuildMeasuredAt:
-      previous?.lastFullRebuildMeasuredAt ?? "",
+    lastFullRebuildCoreMemoryBytes: previous?.lastFullRebuildCoreMemoryBytes ?? null,
+    lastFullRebuildMeasuredAt: previous?.lastFullRebuildMeasuredAt ?? "",
     lastError: ""
   };
 }

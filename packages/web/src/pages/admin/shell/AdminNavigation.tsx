@@ -1,15 +1,10 @@
 import { Fragment, useState } from "react";
 import { NavLink } from "react-router";
-import type {
-  AdminColorScheme,
-  AdminRole
-} from "@imageshow/shared/browser";
+import type { AdminColorScheme, AdminRole } from "@imageshow/shared/browser";
 import { AdminIcon, type AdminIconName } from "../../../components/icon/AdminIcon.js";
 import { adminBasePath } from "../../../lib/constants.js";
 import { AdminNavGroup } from "./AdminNavGroup.js";
-import {
-  type AdminRouteModuleKey
-} from "./admin-route-modules.js";
+import { type AdminRouteModuleKey } from "./admin-route-modules.js";
 import { useAdminRoutePreloadIntent } from "./useAdminRoutePreloadIntent.js";
 
 type AdminNavigationLink = {
@@ -180,8 +175,7 @@ function navigationEntriesForRole(
       visibleEntries.push({
         ...entry,
         items,
-        desktopDefaultOpen:
-          entry.desktopDefaultOpenRoles?.includes(role) ?? false
+        desktopDefaultOpen: entry.desktopDefaultOpenRoles?.includes(role) ?? false
       });
     }
   }
@@ -209,12 +203,14 @@ function NavigationLink({
       to={item.to}
       end={item.end}
       {...preloadIntent}
-      className={({ isActive }) => [
-        variant === "desktop" ? item.desktopClassName : "",
-        isActive ? "active" : ""
-      ].filter(Boolean).join(" ")}
+      className={({ isActive }) =>
+        [variant === "desktop" ? item.desktopClassName : "", isActive ? "active" : ""]
+          .filter(Boolean)
+          .join(" ")
+      }
     >
-      <AdminIcon name={item.icon} />{item.label}
+      <AdminIcon name={item.icon} />
+      {item.label}
     </NavLink>
   );
 }
@@ -255,10 +251,13 @@ const adminAppearanceOptions = {
   dark: { label: "暗色模式", icon: "moon-line" },
   light: { label: "亮色模式", icon: "sun-line" },
   system: { label: "自动模式（跟随系统）", icon: "computer-line" }
-} as const satisfies Record<AdminColorScheme, {
-  label: string;
-  icon: AdminIconName;
-}>;
+} as const satisfies Record<
+  AdminColorScheme,
+  {
+    label: string;
+    icon: AdminIconName;
+  }
+>;
 
 export function AdminSiteNavigation({
   entries,
@@ -280,10 +279,9 @@ export function AdminSiteNavigation({
     <div className="admin-site-navigation">
       <AdminNavigationLinks entries={entries} variant={variant} />
       <button
-        className={[
-          "admin-color-scheme-toggle",
-          holdCommittedIcon ? "is-current-icon-held" : ""
-        ].filter(Boolean).join(" ")}
+        className={["admin-color-scheme-toggle", holdCommittedIcon ? "is-current-icon-held" : ""]
+          .filter(Boolean)
+          .join(" ")}
         type="button"
         data-color-scheme={colorScheme}
         aria-label={`当前外观：${current.label}；切换到${target.label}`}

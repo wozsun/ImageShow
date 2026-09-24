@@ -22,8 +22,7 @@ function isMarkedAdminReadRequest(context: Context) {
 }
 
 function requestBodyRejected(error: unknown) {
-  return error instanceof ApiError
-    && requestBodyRejectionCode(error.code);
+  return error instanceof ApiError && requestBodyRejectionCode(error.code);
 }
 
 function requestBodyRejectionCode(code: unknown) {
@@ -34,7 +33,7 @@ async function responseErrorDetails(c: Context) {
   const contentType = c.res.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) return {};
   try {
-    const body = await c.res.clone().json() as unknown;
+    const body = (await c.res.clone().json()) as unknown;
     if (!body || typeof body !== "object") return {};
     const { code, error } = body as { code?: unknown; error?: unknown };
     return {
@@ -81,7 +80,10 @@ export async function auditAdminMutation(c: Context, next: Next) {
     logger.warn("admin action failed", {
       ...base,
       ...requestLogContext(c),
-      status: error && typeof error === "object" && "status" in error ? (error as { status?: unknown }).status : undefined,
+      status:
+        error && typeof error === "object" && "status" in error
+          ? (error as { status?: unknown }).status
+          : undefined,
       duration_ms: Date.now() - started,
       ...(error instanceof ApiError ? { code: error.code } : {}),
       error

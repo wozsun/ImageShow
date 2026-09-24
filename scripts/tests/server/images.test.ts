@@ -2,27 +2,13 @@ import { storageObjectKey } from "@imageshow/shared/browser";
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 
-import {
-  randomUUID
-} from "node:crypto";
-import {
-  readFile,
-  rm,
-  writeFile
-} from "node:fs/promises";
-import {
-  join
-} from "node:path";
-import {
-  setTimeout as delay
-} from "node:timers/promises";
+import { randomUUID } from "node:crypto";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
-import {
-  createTestDirectory
-} from "../support/test-directory.ts";
-import {
-  Hono
-} from "hono";
+import { createTestDirectory } from "../support/test-directory.ts";
+import { Hono } from "hono";
 import ipaddr from "ipaddr.js";
 import sharp from "sharp";
 import {
@@ -35,12 +21,8 @@ import {
   getIngestionMaxLongEdge,
   parseSettingsInput
 } from "../../../packages/server/src/config/app-settings.ts";
-import {
-  initializeRuntimeConfig
-} from "../../../packages/server/src/config/runtime-config-store.ts";
-import {
-  ApiError
-} from "../../../packages/server/src/core/api-error.ts";
+import { initializeRuntimeConfig } from "../../../packages/server/src/config/runtime-config-store.ts";
+import { ApiError } from "../../../packages/server/src/core/api-error.ts";
 import {
   imageActionInput,
   imagePurgeInput,
@@ -57,9 +39,7 @@ import {
   importAcceptInput,
   uploadIntentInput
 } from "../../../packages/server/src/routes/validation/ingestion.ts";
-import {
-  parse
-} from "../../../packages/server/src/routes/validation/parse.ts";
+import { parse } from "../../../packages/server/src/routes/validation/parse.ts";
 
 import {
   storageBackendCreateInput,
@@ -84,9 +64,7 @@ import {
   privateRevalidationCacheControl,
   publicRedirectCacheControl
 } from "../../../packages/server/src/core/http/headers.ts";
-import {
-  handleApiError
-} from "../../../packages/server/src/core/http/responses.ts";
+import { handleApiError } from "../../../packages/server/src/core/http/responses.ts";
 import {
   deviceFromDimensions,
   resolveClassification
@@ -102,29 +80,20 @@ import {
   imageFilterPlanHasAllAxes,
   imageFilterPlanWithout
 } from "../../../packages/server/src/images/filter-plan.ts";
-import {
-  createPageWindow
-} from "../../../packages/server/src/images/page-window.ts";
-import {
-  createImageId,
-  parseImageTime
-} from "../../../packages/server/src/images/image-time.ts";
+import { createPageWindow } from "../../../packages/server/src/images/page-window.ts";
+import { createImageId, parseImageTime } from "../../../packages/server/src/images/image-time.ts";
 import {
   servePublicStoredObject,
   servePublicStoredThumbnail
 } from "../../../packages/server/src/images/serving/stored-image.ts";
-import {
-  serveAdminExternalOriginal
-} from "../../../packages/server/src/images/serving/external-original.ts";
+import { serveAdminExternalOriginal } from "../../../packages/server/src/images/serving/external-original.ts";
 import {
   configureSharpRuntime,
   md5Buffer,
   transcodeStoredImage,
   type StoredImageTranscodeSettings
 } from "../../../packages/server/src/images/processing.ts";
-import {
-  buildImageFilterSql
-} from "../../../packages/server/src/images/read-models/image-filter-sql.ts";
+import { buildImageFilterSql } from "../../../packages/server/src/images/read-models/image-filter-sql.ts";
 import {
   fetchAdminImageOffsetRows,
   fetchPublicImageCardPage
@@ -137,37 +106,30 @@ import {
   readReadyImageOrderedWindow,
   type ReadyImageWindowDependencies
 } from "../../../packages/server/src/images/ready-cache/ordered-window.ts";
-import {
-  isRedisUnavailableError
-} from "../../../packages/server/src/core/runtime-availability.ts";
+import { isRedisUnavailableError } from "../../../packages/server/src/core/runtime-availability.ts";
 import {
   normalizeRandomQuery,
   parseRandomQuery,
   type ParsedRandomQuery,
   type RandomSelectorMaps
 } from "../../../packages/server/src/random/query.ts";
-import {
-  resolveCandidateAxes
-} from "../../../packages/server/src/random/selection-model.ts";
-import {
-  registerAdminImageRoutes
-} from "../../../packages/server/src/routes/admin-images.ts";
-import {
-  registerPublicRoutes
-} from "../../../packages/server/src/routes/public.ts";
-import {
-  imageId,
-  servingReadyCacheItem
-} from "../support/server-test-context.ts";
+import { resolveCandidateAxes } from "../../../packages/server/src/random/selection-model.ts";
+import { registerAdminImageRoutes } from "../../../packages/server/src/routes/admin-images.ts";
+import { registerPublicRoutes } from "../../../packages/server/src/routes/public.ts";
+import { imageId, servingReadyCacheItem } from "../support/server-test-context.ts";
 
 test("[Server/图片] 完成结果统一分类图片与存储配置断连并保留格式化错误", async (t) => {
   const database = await import("../../../packages/server/src/core/database/pools.ts");
   const registry = await import("../../../packages/server/src/storage/backends/registry.ts");
-  const { readCommittedIngestionResultsByImageIds } = await import("../../../packages/server/src/images/read-models/ingestion-results.ts");
+  const { readCommittedIngestionResultsByImageIds } =
+    await import("../../../packages/server/src/images/read-models/ingestion-results.ts");
   initializeRuntimeConfig();
   database.configureDatabasePools({
-    host: "database.invalid", port: 5432, name: "imageshow_test",
-    user: "imageshow_test", password: process.env.DATABASE_PASSWORD!
+    host: "database.invalid",
+    port: 5432,
+    name: "imageshow_test",
+    user: "imageshow_test",
+    password: process.env.DATABASE_PASSWORD!
   });
   const id = "00000000-0000-7000-8000-000000000001";
   const connectionError = Object.assign(new Error("connection refused"), { code: "ECONNREFUSED" });
@@ -177,20 +139,50 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
     if (sql.includes("FROM metadata")) {
       reads.push("metadata");
       if (fault === "metadata") throw connectionError;
-      return { rows: [{
-        id: fault === "format" ? "invalid" : id, ext: "webp", created_by: "owner", storage_slug: "local",
-        device: "pc", brightness: "dark", theme: null, author: null, tags: [],
-        title: "fixture", description: "", source: "", original: "", width: 100, height: 100,
-        image_size: 10, md5: "a".repeat(32), image_time: "2026-09-15T00:00:00.000Z"
-      }] };
+      return {
+        rows: [
+          {
+            id: fault === "format" ? "invalid" : id,
+            ext: "webp",
+            created_by: "owner",
+            storage_slug: "local",
+            device: "pc",
+            brightness: "dark",
+            theme: null,
+            author: null,
+            tags: [],
+            title: "fixture",
+            description: "",
+            source: "",
+            original: "",
+            width: 100,
+            height: 100,
+            image_size: 10,
+            md5: "a".repeat(32),
+            image_time: "2026-09-15T00:00:00.000Z"
+          }
+        ]
+      };
     }
     assert.match(sql, /FROM storage_backend/u);
     reads.push("storage");
     if (fault === "storage") throw connectionError;
-    return { rows: fault === "missing" ? [] : [{
-      slug: "local", type: "local", config: {}, display_name: "Local", enabled: true,
-      is_default: true, namespace_identities: []
-    }] };
+    return {
+      rows:
+        fault === "missing"
+          ? []
+          : [
+              {
+                slug: "local",
+                type: "local",
+                config: {},
+                display_name: "Local",
+                enabled: true,
+                is_default: true,
+                namespace_identities: []
+              }
+            ]
+    };
   });
   t.after(() => registry.invalidateStorageBackendRegistry());
   for (const phase of ["metadata", "storage"] as const) {
@@ -211,9 +203,13 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
   await assert.rejects(readCommittedIngestionResultsByImageIds([id]), TypeError);
   fault = "missing";
   registry.invalidateStorageBackendRegistry();
-  await assert.rejects(readCommittedIngestionResultsByImageIds([id]), (error: unknown) => (
-    error instanceof ApiError && error.code === "storage_backend_not_found" && error.status === 404
-  ));
+  await assert.rejects(
+    readCommittedIngestionResultsByImageIds([id]),
+    (error: unknown) =>
+      error instanceof ApiError &&
+      error.code === "storage_backend_not_found" &&
+      error.status === 404
+  );
   fault = "none";
   registry.invalidateStorageBackendRegistry();
   const results = await readCommittedIngestionResultsByImageIds([id, id.toUpperCase()]);
@@ -224,7 +220,8 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
 
 test("[Server/主题] null 保留给未设置，写入必须使用 JSON null 且不限制标签作者", async () => {
   const { imageThemeInput } = await import("../../../packages/server/src/images/metadata-theme.ts");
-  const { themeCreateInput, tagCreateInput, authorSlugInput } = await import("../../../packages/server/src/routes/validation/vocabulary.ts");
+  const { themeCreateInput, tagCreateInput, authorSlugInput } =
+    await import("../../../packages/server/src/routes/validation/vocabulary.ts");
   assert.equal(imageThemeInput.parse(null), null);
   assert.equal(imageThemeInput.parse(" Portrait "), "portrait");
   for (const theme of ["null", " NULL "]) {
@@ -254,27 +251,36 @@ test("[Server/图片] 存储输入归一化 slug 并补齐缺省 S3 设置", () 
     display_name: "",
     s3: defaultS3
   });
-  assert.deepEqual(parse(storageBackendCreateInput, {
-    slug: "archive",
-    s3: { endpoint: " https://s3.example.com ", bucket: " images ", force_path_style: false }
-  }).s3, {
-    ...defaultS3,
-    endpoint: "https://s3.example.com",
-    bucket: "images",
-    force_path_style: false
-  });
+  assert.deepEqual(
+    parse(storageBackendCreateInput, {
+      slug: "archive",
+      s3: { endpoint: " https://s3.example.com ", bucket: " images ", force_path_style: false }
+    }).s3,
+    {
+      ...defaultS3,
+      endpoint: "https://s3.example.com",
+      bucket: "images",
+      force_path_style: false
+    }
+  );
   assert.deepEqual(parse(storageBackendTestInput, { slug: " Archive " }), { slug: "archive" });
   assert.deepEqual(parse(storageBackendMigrationInput, { source: " Archive ", target: "LOCAL" }), {
-    source: "archive", target: "local"
+    source: "archive",
+    target: "local"
   });
   assert.equal(parse(storageBackendCreateInput, { slug: "a".repeat(32) }).slug, "a".repeat(32));
   assert.throws(() => parse(storageBackendCreateInput, { slug: "a".repeat(33) }), {
     code: "validation_error",
     message: "标识 slug 最长 32 个字符"
   });
-  assert.throws(() => parse(storageBackendCreateInput, {
-    slug: "archive", s3: { endpoint: "http://s3.example.com" }
-  }), { code: "validation_error", message: "endpoint must use HTTPS" });
+  assert.throws(
+    () =>
+      parse(storageBackendCreateInput, {
+        slug: "archive",
+        s3: { endpoint: "http://s3.example.com" }
+      }),
+    { code: "validation_error", message: "endpoint must use HTTPS" }
+  );
 });
 
 test("[Server/图片] 亮度分类识别深色浅色与透明背景", async () => {
@@ -285,7 +291,9 @@ test("[Server/图片] 亮度分类识别深色浅色与透明背景", async () =
   ] as const) {
     const input = await sharp({
       create: { width: 16, height: 16, channels: 4, background }
-    }).png().toBuffer();
+    })
+      .png()
+      .toBuffer();
     assert.equal(await detectBrightness(input), expected);
   }
 });
@@ -304,32 +312,49 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     }).success,
     false
   );
-  assert.equal(imageUpdateInput.safeParse({
-    items: [{ id: metadataId }]
-  }).success, false);
-  assert.equal(imageUpdateInput.safeParse({
-    items: [{
-      id: metadataId,
-      title: "有效字段",
-      unknown_title: "未知字段"
-    }]
-  }).success, false);
+  assert.equal(
+    imageUpdateInput.safeParse({
+      items: [{ id: metadataId }]
+    }).success,
+    false
+  );
+  assert.equal(
+    imageUpdateInput.safeParse({
+      items: [
+        {
+          id: metadataId,
+          title: "有效字段",
+          unknown_title: "未知字段"
+        }
+      ]
+    }).success,
+    false
+  );
   assert.equal(storageBackendUpdateInput.safeParse({}).success, false);
   assert.equal(storageBackendUpdateInput.safeParse({ s3: {} }).success, false);
   assert.equal(storageBackendUpdateInput.safeParse({ unsupported: {} }).success, false);
-  assert.equal(storageBackendCreateInput.safeParse({
-    slug: "archive",
-    s3: {}
-  }).success, true);
-  assert.equal(storageBackendCreateInput.safeParse({
-    slug: "archive",
-    type: "s3",
-    s3: {}
-  }).success, false);
-  assert.equal(storageBackendCreateInput.safeParse({
-    slug: "archive",
-    unsupported: {}
-  }).success, false);
+  assert.equal(
+    storageBackendCreateInput.safeParse({
+      slug: "archive",
+      s3: {}
+    }).success,
+    true
+  );
+  assert.equal(
+    storageBackendCreateInput.safeParse({
+      slug: "archive",
+      type: "s3",
+      s3: {}
+    }).success,
+    false
+  );
+  assert.equal(
+    storageBackendCreateInput.safeParse({
+      slug: "archive",
+      unsupported: {}
+    }).success,
+    false
+  );
   assert.throws(
     () => parse(storageBackendCreateInput, { slug: "" }),
     (error) => {
@@ -338,8 +363,8 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
       assert.equal(error.code, "validation_error");
       assert.equal(
         error.message,
-        "标识 slug 不能为空；"
-          + "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾"
+        "标识 slug 不能为空；" +
+          "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾"
       );
       assert.deepEqual(error.details, {
         formErrors: [],
@@ -353,34 +378,38 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
       return true;
     }
   );
-  assert.equal(storageBackendUpdateInput.safeParse({
-    display_name: "对象存储",
-    unknown_option: true
-  }).success, false);
+  assert.equal(
+    storageBackendUpdateInput.safeParse({
+      display_name: "对象存储",
+      unknown_option: true
+    }).success,
+    false
+  );
   assert.equal(storageBackendTestInput.safeParse({}).success, false);
   assert.equal(storageBackendTestInput.safeParse({ slug: "archive" }).success, true);
   assert.equal(storageBackendTestInput.safeParse({ s3: {} }).success, true);
   assert.throws(
     () => parse(storageBackendTestInput, { slug: "bad_slug" }),
-    (error) => error instanceof ApiError
-      && error.status === 400
-      && error.code === "validation_error"
-      && error.message === (
-        "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾"
-      )
-      && JSON.stringify(error.details) === JSON.stringify({
-        formErrors: [],
-        fieldErrors: {
-          slug: [
-            "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾"
-          ]
-        }
-      })
+    (error) =>
+      error instanceof ApiError &&
+      error.status === 400 &&
+      error.code === "validation_error" &&
+      error.message === "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾" &&
+      JSON.stringify(error.details) ===
+        JSON.stringify({
+          formErrors: [],
+          fieldErrors: {
+            slug: ["标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾"]
+          }
+        })
   );
-  assert.equal(storageBackendTestInput.safeParse({
-    type: "s3",
-    s3: { unknown_option: true }
-  }).success, false);
+  assert.equal(
+    storageBackendTestInput.safeParse({
+      type: "s3",
+      s3: { unknown_option: true }
+    }).success,
+    false
+  );
   assert.throws(() => parseSettingsInput({}));
   assert.throws(() => parseSettingsInput({ site: {} }));
   assert.throws(() => parseSettingsInput({ site: { home: {} } }));
@@ -388,14 +417,12 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
   assert.throws(() => parseSettingsInput({ unknown_group: true }));
   assert.equal(parseSettingsInput({ site: { root: "gallery" } }).site?.root, "gallery");
   assert.equal(
-    parseSettingsInput({ ingestion: { list_page_size: 100 } })
-      .ingestion?.list_page_size,
+    parseSettingsInput({ ingestion: { list_page_size: 100 } }).ingestion?.list_page_size,
     100
   );
   assert.throws(() => parseSettingsInput({ ingestion: { list_page_size: 101 } }));
   assert.equal(
-    parseSettingsInput({ ingestion: { commit_concurrency: 16 } })
-      .ingestion?.commit_concurrency,
+    parseSettingsInput({ ingestion: { commit_concurrency: 16 } }).ingestion?.commit_concurrency,
     16
   );
   assert.throws(() => parseSettingsInput({ ingestion: { commit_concurrency: 17 } }));
@@ -404,9 +431,11 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
   assert.throws(() => parseSettingsInput({ import: { auto_import: false } }));
   assert.throws(() => parseSettingsInput({ weibo: { source_enabled: false } }));
   assert.throws(() => parseSettingsInput({ normalize: { quality_step: 10 } }));
-  assert.throws(() => parseSettingsInput({
-    site: { unknown_site_key: "gallery" }
-  }));
+  assert.throws(() =>
+    parseSettingsInput({
+      site: { unknown_site_key: "gallery" }
+    })
+  );
   assert.equal(isHttpsUrl("https://example.com/image.jpg", { requireDomain: true }), true);
   assert.equal(isHttpsUrl("https://127.0.0.1/image.jpg", { requireDomain: true }), false);
   assert.equal(isRootRelativeOrHttpsUrl("/random?mode=redirect"), true);
@@ -418,9 +447,12 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
   assert.equal(validUpdate.items[0]?.id, imageId);
   assert.deepEqual(validUpdate.items[0]?.tags, ["stage"]);
   assert.equal(imageUpdateInput.safeParse({ items: [{ id: imageId }] }).success, false);
-  assert.equal(imageUpdateInput.safeParse({
-    items: [{ id: imageId, title: "a", removed_field: true }]
-  }).success, false);
+  assert.equal(
+    imageUpdateInput.safeParse({
+      items: [{ id: imageId, title: "a", removed_field: true }]
+    }).success,
+    false
+  );
   const duplicateUpdate = imageUpdateInput.safeParse({
     items: [
       { id: imageId, title: "a" },
@@ -440,9 +472,12 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
   }
   const secondImageId = "00000000-0000-7002-8000-00000000008e";
   assert.equal(imageSnapshotInput.safeParse({ ids: [imageId] }).success, true);
-  assert.equal(imageSnapshotInput.safeParse({
-    ids: [imageId, secondImageId]
-  }).success, true);
+  assert.equal(
+    imageSnapshotInput.safeParse({
+      ids: [imageId, secondImageId]
+    }).success,
+    true
+  );
   const duplicateSnapshot = imageSnapshotInput.safeParse({
     ids: [imageId, imageId.toUpperCase()]
   });
@@ -451,17 +486,26 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     assert.deepEqual(duplicateSnapshot.error.issues[0]?.path, ["ids", 1]);
   }
   assert.equal(imageActionInput.safeParse({ ids: [imageId] }).success, true);
-  assert.equal(imageActionInput.safeParse({
-    ids: [imageId, secondImageId]
-  }).success, true);
+  assert.equal(
+    imageActionInput.safeParse({
+      ids: [imageId, secondImageId]
+    }).success,
+    true
+  );
   assert.equal(imageActionInput.safeParse({ ids: [] }).success, false);
-  assert.equal(imageActionInput.safeParse({
-    ids: [imageId, imageId.toUpperCase()]
-  }).success, false);
-  assert.equal(imagePurgeInput.safeParse({
-    scope: "selected",
-    ids: [imageId]
-  }).success, true);
+  assert.equal(
+    imageActionInput.safeParse({
+      ids: [imageId, imageId.toUpperCase()]
+    }).success,
+    false
+  );
+  assert.equal(
+    imagePurgeInput.safeParse({
+      scope: "selected",
+      ids: [imageId]
+    }).success,
+    true
+  );
   assert.equal(imagePurgeInput.safeParse({ scope: "all" }).success, true);
   for (const invalidPurge of [
     { scope: "selected" },
@@ -474,28 +518,31 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
   ]) {
     assert.equal(imagePurgeInput.safeParse(invalidPurge).success, false);
   }
-  assert.equal(imageStorageMigrationInput.safeParse({
-    ids: [imageId],
-    target: "archive"
-  }).success, true);
-  assert.equal(imageStorageMigrationInput.safeParse({
-    ids: [imageId, imageId.toUpperCase()],
-    target: "archive"
-  }).success, false);
-  assert.equal(storageBackendMigrationInput.safeParse({
-    source: "local",
-    target: "local"
-  }).success, false);
+  assert.equal(
+    imageStorageMigrationInput.safeParse({
+      ids: [imageId],
+      target: "archive"
+    }).success,
+    true
+  );
+  assert.equal(
+    imageStorageMigrationInput.safeParse({
+      ids: [imageId, imageId.toUpperCase()],
+      target: "archive"
+    }).success,
+    false
+  );
+  assert.equal(
+    storageBackendMigrationInput.safeParse({
+      source: "local",
+      target: "local"
+    }).success,
+    false
+  );
 
-  const tags50 = Array.from(
-    { length: 50 },
-    (_, index) => `tag-${String(index).padStart(2, "0")}`
-  );
+  const tags50 = Array.from({ length: 50 }, (_, index) => `tag-${String(index).padStart(2, "0")}`);
   const tags51 = [...tags50, "tag-50"];
-  const repeatedTags = Array.from(
-    { length: 51 },
-    (_, index) => index % 2 ? " Stage " : "stage"
-  );
+  const repeatedTags = Array.from({ length: 51 }, (_, index) => (index % 2 ? " Stage " : "stage"));
   const commonIngestionMetadata = {
     device: "auto" as const,
     brightness: "auto" as const
@@ -509,67 +556,94 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     max_long_edge: 4096
   };
   assert.equal(uploadIntentInput.safeParse({ items: [uploadItem] }).success, true);
-  assert.equal(uploadIntentInput.parse({
-    items: [{ ...uploadItem, idempotency_key: imageId.toUpperCase() }]
-  }).items[0]?.idempotency_key, imageId);
-  assert.equal(uploadIntentInput.safeParse({
-    items: [{ ...uploadItem, expected_size: undefined }]
-  }).success, false);
-  assert.equal(uploadIntentInput.safeParse({
-    items: [{ ...uploadItem, created_by: "forged-admin" }]
-  }).success, false);
+  assert.equal(
+    uploadIntentInput.parse({
+      items: [{ ...uploadItem, idempotency_key: imageId.toUpperCase() }]
+    }).items[0]?.idempotency_key,
+    imageId
+  );
+  assert.equal(
+    uploadIntentInput.safeParse({
+      items: [{ ...uploadItem, expected_size: undefined }]
+    }).success,
+    false
+  );
+  assert.equal(
+    uploadIntentInput.safeParse({
+      items: [{ ...uploadItem, created_by: "forged-admin" }]
+    }).success,
+    false
+  );
   const rejectedImportDownload = importAcceptInput.safeParse({
-    items: [{
-      ...commonIngestionMetadata,
-      idempotency_key: imageId,
-      batch_key: secondImageId,
-      batch_position: 0,
-      source_type: "url",
-      download_url: "http://example.com/image.jpg"
-    }]
-  });
-  assert.equal(rejectedImportDownload.success, false);
-  if (!rejectedImportDownload.success) {
-    assert.equal(
-      rejectedImportDownload.error.issues.some((issue) => (
-        issue.message === "外部图片请求未通过安全校验"
-      )),
-      true,
-      "真正的 Import 下载入口必须保留既有安全拒绝提示"
-    );
-  }
-  assert.equal(importAcceptInput.safeParse({
-    items: [{
-      ...commonIngestionMetadata,
-      idempotency_key: imageId,
-      batch_key: secondImageId,
-      batch_position: 0,
-      source_type: "url",
-      download_url: "https://example.com/image.jpg"
-    }]
-  }).success, true);
-  for (const [tags, expected] of [[tags50, true], [tags51, false]] as const) {
-    assert.equal(importAcceptInput.safeParse({
-      items: [{
+    items: [
+      {
         ...commonIngestionMetadata,
         idempotency_key: imageId,
         batch_key: secondImageId,
         batch_position: 0,
-        source_type: "jsonl",
-        download_url: "https://example.com/image.jpg",
-        tags
-      }]
-    }).success, expected, "Import 合并后的标签仍受 50 个唯一标签边界约束");
+        source_type: "url",
+        download_url: "http://example.com/image.jpg"
+      }
+    ]
+  });
+  assert.equal(rejectedImportDownload.success, false);
+  if (!rejectedImportDownload.success) {
+    assert.equal(
+      rejectedImportDownload.error.issues.some(
+        (issue) => issue.message === "外部图片请求未通过安全校验"
+      ),
+      true,
+      "真正的 Import 下载入口必须保留既有安全拒绝提示"
+    );
+  }
+  assert.equal(
+    importAcceptInput.safeParse({
+      items: [
+        {
+          ...commonIngestionMetadata,
+          idempotency_key: imageId,
+          batch_key: secondImageId,
+          batch_position: 0,
+          source_type: "url",
+          download_url: "https://example.com/image.jpg"
+        }
+      ]
+    }).success,
+    true
+  );
+  for (const [tags, expected] of [
+    [tags50, true],
+    [tags51, false]
+  ] as const) {
+    assert.equal(
+      importAcceptInput.safeParse({
+        items: [
+          {
+            ...commonIngestionMetadata,
+            idempotency_key: imageId,
+            batch_key: secondImageId,
+            batch_position: 0,
+            source_type: "jsonl",
+            download_url: "https://example.com/image.jpg",
+            tags
+          }
+        ]
+      }).success,
+      expected,
+      "Import 合并后的标签仍受 50 个唯一标签边界约束"
+    );
   }
 
   const uploadWithRepeatedTags = uploadIntentInput.parse({
-    items: [{
-      ...uploadItem,
-      tags: repeatedTags,
-      theme: " Theme-A ",
-      author: " Author-A ",
-      title: "  标题  "
-    }]
+    items: [
+      {
+        ...uploadItem,
+        tags: repeatedTags,
+        theme: " Theme-A ",
+        author: " Author-A ",
+        title: "  标题  "
+      }
+    ]
   });
   assert.deepEqual(uploadWithRepeatedTags.items[0]?.tags, ["stage"]);
   assert.deepEqual(
@@ -580,31 +654,45 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     },
     { theme: "theme-a", author: "author-a", title: "标题" }
   );
-  assert.equal(uploadIntentInput.safeParse({
-    items: [{ ...uploadItem, tags: tags50 }]
-  }).success, true);
-  assert.equal(uploadIntentInput.safeParse({
-    items: [{ ...uploadItem, tags: tags51 }]
-  }).success, false);
-  assert.equal(imageUpdateInput.safeParse({
-    items: [{ id: imageId, tags: tags50 }]
-  }).success, true);
-  assert.equal(imageUpdateInput.safeParse({
-    items: [{ id: imageId, tags: tags51 }]
-  }).success, false);
+  assert.equal(
+    uploadIntentInput.safeParse({
+      items: [{ ...uploadItem, tags: tags50 }]
+    }).success,
+    true
+  );
+  assert.equal(
+    uploadIntentInput.safeParse({
+      items: [{ ...uploadItem, tags: tags51 }]
+    }).success,
+    false
+  );
+  assert.equal(
+    imageUpdateInput.safeParse({
+      items: [{ id: imageId, tags: tags50 }]
+    }).success,
+    true
+  );
+  assert.equal(
+    imageUpdateInput.safeParse({
+      items: [{ id: imageId, tags: tags51 }]
+    }).success,
+    false
+  );
 
   const sessionId = "A".repeat(43);
   const unreachableDraft = ingestionSessionUpdateInput.parse({
-    items: [{
-      session_id: sessionId,
-      image_id: imageId,
-      expected_version: 1,
-      metadata: {
-        ...commonIngestionMetadata,
-        original: " draft-image.invalid/image.jpg ",
-        source: "draft-source.invalid/post"
+    items: [
+      {
+        session_id: sessionId,
+        image_id: imageId,
+        expected_version: 1,
+        metadata: {
+          ...commonIngestionMetadata,
+          original: " draft-image.invalid/image.jpg ",
+          source: "draft-source.invalid/post"
+        }
       }
-    }]
+    ]
   });
   assert.deepEqual(
     {
@@ -617,17 +705,23 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     },
     "草稿 URL 只做同步格式归一，不应要求保留域名可解析或可连接"
   );
-  assert.equal(ingestionSessionUpdateInput.safeParse({
-    items: [{
-      session_id: sessionId,
-      image_id: imageId,
-      expected_version: 1,
-      metadata: {
-        ...commonIngestionMetadata,
-        source: "https://127.0.0.1/source"
-      }
-    }]
-  }).success, true, "来源 URL 保留既有的 HTTPS IP 格式接受范围");
+  assert.equal(
+    ingestionSessionUpdateInput.safeParse({
+      items: [
+        {
+          session_id: sessionId,
+          image_id: imageId,
+          expected_version: 1,
+          metadata: {
+            ...commonIngestionMetadata,
+            source: "https://127.0.0.1/source"
+          }
+        }
+      ]
+    }).success,
+    true,
+    "来源 URL 保留既有的 HTTPS IP 格式接受范围"
+  );
   for (const [field, value, message] of [
     ["original", "http://example.com/image.jpg", "内容接入草稿原图 URL 格式无效"],
     ["original", "https://127.0.0.1/image.jpg", "内容接入草稿原图 URL 格式无效"],
@@ -635,20 +729,23 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     ["source", "x".repeat(2_049), "内容接入草稿来源 URL 格式无效"]
   ] as const) {
     const rejectedDraft = ingestionSessionUpdateInput.safeParse({
-      items: [{
-        session_id: sessionId,
-        image_id: imageId,
-        expected_version: 1,
-        metadata: { ...commonIngestionMetadata, [field]: value }
-      }]
+      items: [
+        {
+          session_id: sessionId,
+          image_id: imageId,
+          expected_version: 1,
+          metadata: { ...commonIngestionMetadata, [field]: value }
+        }
+      ]
     });
     assert.equal(rejectedDraft.success, false);
     if (!rejectedDraft.success) {
-      assert.equal(rejectedDraft.error.issues.some((issue) => issue.message === message), true);
       assert.equal(
-        rejectedDraft.error.issues.some((issue) => (
-          issue.message === "外部图片请求未通过安全校验"
-        )),
+        rejectedDraft.error.issues.some((issue) => issue.message === message),
+        true
+      );
+      assert.equal(
+        rejectedDraft.error.issues.some((issue) => issue.message === "外部图片请求未通过安全校验"),
         false,
         "草稿纯格式失败不得冒充外部图片安全请求失败"
       );
@@ -663,18 +760,20 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     duplicate_decision: "upload" as const
   };
   const commitWithRepeatedTags = ingestionCommitIntentInput.parse({
-    items: [{
-      ...commitBinding,
-      image_id: imageId.toUpperCase(),
-      metadata: {
-        device: "auto",
-        brightness: "auto",
-        tags: repeatedTags,
-        theme: " Theme-A ",
-        author: " Author-A ",
-        title: "  标题  "
+    items: [
+      {
+        ...commitBinding,
+        image_id: imageId.toUpperCase(),
+        metadata: {
+          device: "auto",
+          brightness: "auto",
+          tags: repeatedTags,
+          theme: " Theme-A ",
+          author: " Author-A ",
+          title: "  标题  "
+        }
       }
-    }]
+    ]
   });
   assert.equal(commitWithRepeatedTags.items[0]?.image_id, imageId);
   assert.deepEqual(commitWithRepeatedTags.items[0]?.metadata.tags, ["stage"]);
@@ -686,18 +785,28 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     },
     { theme: "theme-a", author: "author-a", title: "标题" }
   );
-  assert.equal(ingestionCommitIntentInput.safeParse({
-    items: [{
-      ...commitBinding,
-      metadata: { device: "auto", brightness: "auto", tags: tags50 }
-    }]
-  }).success, true);
-  assert.equal(ingestionCommitIntentInput.safeParse({
-    items: [{
-      ...commitBinding,
-      metadata: { device: "auto", brightness: "auto", tags: tags51 }
-    }]
-  }).success, false);
+  assert.equal(
+    ingestionCommitIntentInput.safeParse({
+      items: [
+        {
+          ...commitBinding,
+          metadata: { device: "auto", brightness: "auto", tags: tags50 }
+        }
+      ]
+    }).success,
+    true
+  );
+  assert.equal(
+    ingestionCommitIntentInput.safeParse({
+      items: [
+        {
+          ...commitBinding,
+          metadata: { device: "auto", brightness: "auto", tags: tags51 }
+        }
+      ]
+    }).success,
+    false
+  );
   const boundedCompletedCleanup = {
     queue: "import",
     action_request_id: secondImageId,
@@ -705,43 +814,61 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     action_watermark: "signed-watermark",
     max_semantic_revision: 117
   };
+  assert.equal(ingestionQueueActionInput.safeParse(boundedCompletedCleanup).success, true);
   assert.equal(
-    ingestionQueueActionInput.safeParse(boundedCompletedCleanup).success,
-    true
+    ingestionQueueActionInput.safeParse({
+      ...boundedCompletedCleanup,
+      action: "clear_queue"
+    }).success,
+    false,
+    "semantic revision 上限只允许关闭时清理完成态"
   );
-  assert.equal(ingestionQueueActionInput.safeParse({
-    ...boundedCompletedCleanup,
-    action: "clear_queue"
-  }).success, false, "semantic revision 上限只允许关闭时清理完成态");
   const exactAttributeAction = {
-    queue: "import", action: "apply_metadata", action_request_id: secondImageId,
-    action_watermark: "signed-watermark", metadata: { theme: null, tags: [], author: "" },
+    queue: "import",
+    action: "apply_metadata",
+    action_request_id: secondImageId,
+    action_watermark: "signed-watermark",
+    metadata: { theme: null, tags: [], author: "" },
     items: [{ session_id: sessionId, image_id: imageId }]
   };
   assert.deepEqual(ingestionQueueActionInput.parse(exactAttributeAction), exactAttributeAction);
   for (const invalid of [
     { ...exactAttributeAction, items: [] },
-    { ...exactAttributeAction, items: [...exactAttributeAction.items, ...exactAttributeAction.items] },
+    {
+      ...exactAttributeAction,
+      items: [...exactAttributeAction.items, ...exactAttributeAction.items]
+    },
     { ...exactAttributeAction, items: [{ session_id: sessionId, image_id: "invalid" }] },
     { ...exactAttributeAction, continuation: "signed-continuation" },
     { ...exactAttributeAction, action: "clear_queue", metadata: undefined }
-  ]) assert.equal(ingestionQueueActionInput.safeParse(invalid).success, false);
+  ])
+    assert.equal(ingestionQueueActionInput.safeParse(invalid).success, false);
   const boundedPairs = Array.from({ length: ingestionBatchHardLimit + 1 }, (_, index) => ({
     session_id: sessionId,
     image_id: `01900000-0000-7000-8000-${String(index).padStart(12, "0")}`
   }));
-  assert.equal(ingestionQueueActionInput.safeParse({
-    ...exactAttributeAction, items: boundedPairs.slice(0, ingestionBatchHardLimit)
-  }).success, true);
-  assert.equal(ingestionQueueActionInput.safeParse({
-    ...exactAttributeAction, items: boundedPairs
-  }).success, false);
+  assert.equal(
+    ingestionQueueActionInput.safeParse({
+      ...exactAttributeAction,
+      items: boundedPairs.slice(0, ingestionBatchHardLimit)
+    }).success,
+    true
+  );
+  assert.equal(
+    ingestionQueueActionInput.safeParse({
+      ...exactAttributeAction,
+      items: boundedPairs
+    }).success,
+    false
+  );
   const invalidCommitId = ingestionCommitIntentInput.safeParse({
-    items: [{
-      ...commitBinding,
-      image_id: "not-a-uuid",
-      metadata: { device: "auto", brightness: "auto" }
-    }]
+    items: [
+      {
+        ...commitBinding,
+        image_id: "not-a-uuid",
+        metadata: { device: "auto", brightness: "auto" }
+      }
+    ]
   });
   assert.equal(invalidCommitId.success, false);
   if (!invalidCommitId.success) {
@@ -771,26 +898,34 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     ["duplicate_decision", "skip"]
   ] as const) {
     const invalidBinding = ingestionCommitIntentInput.safeParse({
-      items: [{
-        ...commitBinding,
-        [field]: value,
-        metadata: { device: "auto", brightness: "auto" }
-      }]
+      items: [
+        {
+          ...commitBinding,
+          [field]: value,
+          metadata: { device: "auto", brightness: "auto" }
+        }
+      ]
     });
     assert.equal(invalidBinding.success, false, field);
     if (!invalidBinding.success) {
       assert.deepEqual(invalidBinding.error.issues[0]?.path, ["items", 0, field]);
     }
   }
-  assert.equal(ingestionStatusInput.safeParse({
-    items: [{ session_id: sessionId, image_id: imageId }]
-  }).success, true);
-  assert.equal(ingestionStatusInput.safeParse({
-    items: [
-      { session_id: sessionId, image_id: imageId },
-      { session_id: sessionId, image_id: imageId.toUpperCase() }
-    ]
-  }).success, false);
+  assert.equal(
+    ingestionStatusInput.safeParse({
+      items: [{ session_id: sessionId, image_id: imageId }]
+    }).success,
+    true
+  );
+  assert.equal(
+    ingestionStatusInput.safeParse({
+      items: [
+        { session_id: sessionId, image_id: imageId },
+        { session_id: sessionId, image_id: imageId.toUpperCase() }
+      ]
+    }).success,
+    false
+  );
 });
 test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文层级", async () => {
   const app = new Hono<{
@@ -807,18 +942,17 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
   registerAdminImageRoutes(app as unknown as Hono);
   registerPublicRoutes(app as unknown as Hono);
 
-  const post = (
-    path: string,
-    body: string,
-    role: "super" | "image" = "super"
-  ) => app.request(new Request(`http://imageshow.test${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-test-role": role
-    },
-    body
-  }));
+  const post = (path: string, body: string, role: "super" | "image" = "super") =>
+    app.request(
+      new Request(`http://imageshow.test${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-test-role": role
+        },
+        body
+      })
+    );
   const jsonBody = (value: unknown) => JSON.stringify(value);
 
   for (const query of [
@@ -830,30 +964,21 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
     "page=1.5",
     `page=${Number.MAX_SAFE_INTEGER}&limit=2`
   ]) {
-    const response = await app.request(new Request(
-      `http://imageshow.test${adminApiBasePath}/images?${query}`,
-      { headers: { "x-test-role": "super" } }
-    ));
-    assert.equal(response.status, 400);
-    assert.equal(
-      (await response.json() as { code?: string }).code,
-      "validation_error"
+    const response = await app.request(
+      new Request(`http://imageshow.test${adminApiBasePath}/images?${query}`, {
+        headers: { "x-test-role": "super" }
+      })
     );
+    assert.equal(response.status, 400);
+    assert.equal(((await response.json()) as { code?: string }).code, "validation_error");
   }
 
-  for (const query of [
-    "page=2",
-    "offset=60",
-    "unknown=true"
-  ]) {
-    const response = await app.request(new Request(
-      `http://imageshow.test/api/images?view=gallery&limit=60&${query}`
-    ));
-    assert.equal(response.status, 400);
-    assert.equal(
-      (await response.json() as { code?: string }).code,
-      "validation_error"
+  for (const query of ["page=2", "offset=60", "unknown=true"]) {
+    const response = await app.request(
+      new Request(`http://imageshow.test/api/images?view=gallery&limit=60&${query}`)
     );
+    assert.equal(response.status, 400);
+    assert.equal(((await response.json()) as { code?: string }).code, "validation_error");
   }
 
   const duplicateIds = [imageId, imageId.toUpperCase()];
@@ -862,10 +987,7 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
     jsonBody({ ids: duplicateIds })
   );
   assert.equal(snapshotDuplicate.status, 400);
-  assert.equal(
-    (await snapshotDuplicate.json() as { code?: string }).code,
-    "validation_error"
-  );
+  assert.equal(((await snapshotDuplicate.json()) as { code?: string }).code, "validation_error");
 
   const updateDuplicate = await post(
     `${adminApiBasePath}/images/update`,
@@ -881,10 +1003,7 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
       jsonBody({ ids: duplicateIds })
     );
     assert.equal(duplicate.status, 400);
-    assert.equal(
-      (await duplicate.json() as { code?: string }).code,
-      "validation_error"
-    );
+    assert.equal(((await duplicate.json()) as { code?: string }).code, "validation_error");
   }
 
   const purgeForbidden = await post(
@@ -893,10 +1012,7 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
     "image"
   );
   assert.equal(purgeForbidden.status, 403);
-  assert.equal(
-    (await purgeForbidden.json() as { code?: string }).code,
-    "forbidden"
-  );
+  assert.equal(((await purgeForbidden.json()) as { code?: string }).code, "forbidden");
   for (const invalidPurge of [
     { scope: "selected" },
     { scope: "selected", ids: [] },
@@ -906,10 +1022,7 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
     { scope: "all", ids: "*" },
     { ids: [imageId] }
   ]) {
-    const response = await post(
-      `${adminApiBasePath}/images/purge`,
-      jsonBody(invalidPurge)
-    );
+    const response = await post(`${adminApiBasePath}/images/purge`, jsonBody(invalidPurge));
     assert.equal(response.status, 400);
   }
 
@@ -919,10 +1032,7 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
     "image"
   );
   assert.equal(migrationForbidden.status, 403);
-  assert.equal(
-    (await migrationForbidden.json() as { code?: string }).code,
-    "forbidden"
-  );
+  assert.equal(((await migrationForbidden.json()) as { code?: string }).code, "forbidden");
 
   const migrationDuplicate = await post(
     `${adminApiBasePath}/images/migrate-storage`,
@@ -937,10 +1047,7 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
     })
   );
   assert.equal(aboveStandardTier.status, 400);
-  assert.equal(
-    (await aboveStandardTier.json() as { code?: string }).code,
-    "validation_error"
-  );
+  assert.equal(((await aboveStandardTier.json()) as { code?: string }).code, "validation_error");
 
   const aboveImageUpdateTier = await post(
     `${adminApiBasePath}/images/update`,
@@ -950,7 +1057,7 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
   );
   assert.equal(aboveImageUpdateTier.status, 413);
   assert.equal(
-    (await aboveImageUpdateTier.json() as { code?: string }).code,
+    ((await aboveImageUpdateTier.json()) as { code?: string }).code,
     "request_body_too_large"
   );
 });
@@ -964,18 +1071,17 @@ test("[Server/图片] 外部图片 DNS 地址策略保持严格解析、最长�
     lookup: ReturnType<typeof createExternalImageLookup>,
     options: { all?: boolean; family?: number } = {},
     hostname = "images.fixture.example"
-  ) => new Promise<unknown[]>((resolve) => {
-    (lookup as unknown as RawLookup)(hostname, options, (...args) => resolve(args));
-  });
+  ) =>
+    new Promise<unknown[]>((resolve) => {
+      (lookup as unknown as RawLookup)(hostname, options, (...args) => resolve(args));
+    });
   const addressAllowed = async (address: string, family: number) => {
     const lookup = createExternalImageLookup(async () => [{ address, family }]);
     const [error] = await invokeLookup(lookup);
     return error === null;
   };
-  const bytesToValue = (bytes: number[]) => bytes.reduce(
-    (value, byte) => (value << 8n) | BigInt(byte),
-    0n
-  );
+  const bytesToValue = (bytes: number[]) =>
+    bytes.reduce((value, byte) => (value << 8n) | BigInt(byte), 0n);
   const valueToBytes = (input: bigint, length: number) => {
     let value = input;
     const bytes = Array.from({ length }, () => 0);
@@ -999,14 +1105,12 @@ test("[Server/图片] 外部图片 DNS 地址策略保持严格解析、最长�
       rangeStart,
       rangeEnd,
       rangeEnd < maximum ? rangeEnd + 1n : null
-    ].map((value) => value === null
-      ? null
-      : ipaddr.fromByteArray(valueToBytes(value, baseBytes.length)).toString());
+    ].map((value) =>
+      value === null ? null : ipaddr.fromByteArray(valueToBytes(value, baseBytes.length)).toString()
+    );
   };
 
-  const ipv4BoundaryExpectations: Readonly<
-    Record<string, readonly (boolean | null)[]>
-  > = {
+  const ipv4BoundaryExpectations: Readonly<Record<string, readonly (boolean | null)[]>> = {
     "224.0.0.0/4": [true, false, false, false],
     "0.0.0.0/8": [null, false, false, true],
     "0.0.0.0/32": [null, false, false, false],
@@ -1035,9 +1139,7 @@ test("[Server/图片] 外部图片 DNS 地址策略保持严格解析、最长�
     "240.0.0.0/4": [false, false, false, null],
     "255.255.255.255/32": [false, false, false, null]
   };
-  const ipv6BoundaryExpectations: Readonly<
-    Record<string, readonly (boolean | null)[]>
-  > = {
+  const ipv6BoundaryExpectations: Readonly<Record<string, readonly (boolean | null)[]>> = {
     "::/96": [null, false, false, false],
     "::/128": [null, false, false, false],
     "::1/128": [false, false, false, false],
@@ -1069,15 +1171,19 @@ test("[Server/图片] 外部图片 DNS 地址策略保持严格解析、最长�
   };
 
   for (const [cidr, expected] of Object.entries(ipv4BoundaryExpectations)) {
-    const actual = await Promise.all(cidrBoundaryAddresses(cidr).map((address) => (
-      address === null ? null : addressAllowed(address, 4)
-    )));
+    const actual = await Promise.all(
+      cidrBoundaryAddresses(cidr).map((address) =>
+        address === null ? null : addressAllowed(address, 4)
+      )
+    );
     assert.deepEqual(actual, expected, `IPv4 boundary ${cidr}`);
   }
   for (const [cidr, expected] of Object.entries(ipv6BoundaryExpectations)) {
-    const actual = await Promise.all(cidrBoundaryAddresses(cidr).map((address) => (
-      address === null ? null : addressAllowed(address, 6)
-    )));
+    const actual = await Promise.all(
+      cidrBoundaryAddresses(cidr).map((address) =>
+        address === null ? null : addressAllowed(address, 6)
+      )
+    );
     assert.deepEqual(actual, expected, `IPv6 boundary ${cidr}`);
   }
 
@@ -1129,11 +1235,7 @@ test("[Server/图片] 外部图片 DNS 地址策略保持严格解析、最长�
   const allResultPromise = invokeLookup(lookup, { all: true });
   assert.equal(resolverStarted, false);
   assert.deepEqual(await allResultPromise, [null, safeAddresses]);
-  assert.deepEqual(await invokeLookup(lookup, { family: 6 }), [
-    null,
-    "2606:4700:4700::1111",
-    6
-  ]);
+  assert.deepEqual(await invokeLookup(lookup, { family: 6 }), [null, "2606:4700:4700::1111", 6]);
 
   const blockedMix = createExternalImageLookup(async () => [
     { address: "8.8.8.8", family: 4 },
@@ -1148,10 +1250,7 @@ test("[Server/图片] 外部图片 DNS 地址策略保持严格解析、最长�
   const missingFamily = createExternalImageLookup(async () => [safeAddresses[0]]);
   const missingFamilyArgs = await invokeLookup(missingFamily, { family: 6 });
   assert.ok(missingFamilyArgs[0] instanceof Error);
-  assert.equal(
-    (missingFamilyArgs[0] as NodeJS.ErrnoException).code,
-    externalImageLookupErrorCode
-  );
+  assert.equal((missingFamilyArgs[0] as NodeJS.ErrnoException).code, externalImageLookupErrorCode);
   assert.equal(
     (missingFamilyArgs[0] as Error).message,
     "No external image address for requested family"
@@ -1165,9 +1264,11 @@ test("[Server/图片] 外部图片 DNS 地址策略保持严格解析、最长�
   assert.deepEqual(emptyArgs.slice(1), ["", 0]);
 
   const dnsCause = new Error("fixture resolver failure");
-  const failedDnsArgs = await invokeLookup(createExternalImageLookup(async () => {
-    throw dnsCause;
-  }));
+  const failedDnsArgs = await invokeLookup(
+    createExternalImageLookup(async () => {
+      throw dnsCause;
+    })
+  );
   assert.ok(failedDnsArgs[0] instanceof Error);
   assert.equal((failedDnsArgs[0] as NodeJS.ErrnoException).code, externalImageLookupErrorCode);
   assert.equal((failedDnsArgs[0] as Error).message, "External image DNS lookup failed");
@@ -1225,11 +1326,8 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   });
   const baseDependencies = {
     readImageServingRecordById: async () => servingRecord,
-    resolveReadableObject: async (
-      prefix: "full" | "thumbs",
-      key: string,
-      backend: string
-    ) => resolvedObject(prefix, key, "", backend),
+    resolveReadableObject: async (prefix: "full" | "thumbs", key: string, backend: string) =>
+      resolvedObject(prefix, key, "", backend),
     streamResolvedObject: async (
       object: Record<string, unknown>,
       contentTypeValue: string,
@@ -1265,10 +1363,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
       getRequest,
       baseDependencies as never
     );
-    assert.deepEqual(
-      Buffer.from(await stableResponse.arrayBuffer()),
-      storedBytes
-    );
+    assert.deepEqual(Buffer.from(await stableResponse.arrayBuffer()), storedBytes);
     assert.equal(streamCalls.at(-1)?.object.storageSlug, storageSlug);
     assert.equal(streamCalls.at(-1)?.cacheControl, immutableCacheControl);
   }
@@ -1279,27 +1374,13 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
     request,
     {
       ...baseDependencies,
-      resolveReadableObject: async (
-        prefix: "full" | "thumbs",
-        key: string
-      ) =>
-        resolvedObject(
-          prefix,
-          key,
-          "https://cdn.example.com/full/image.jpg",
-          "s3-public"
-        )
+      resolveReadableObject: async (prefix: "full" | "thumbs", key: string) =>
+        resolvedObject(prefix, key, "https://cdn.example.com/full/image.jpg", "s3-public")
     } as never
   );
   assert.equal(redirectResponse.status, 302);
-  assert.equal(
-    redirectResponse.headers.get("Location"),
-    "https://cdn.example.com/full/image.jpg"
-  );
-  assert.equal(
-    redirectResponse.headers.get("Cache-Control"),
-    publicRedirectCacheControl
-  );
+  assert.equal(redirectResponse.headers.get("Location"), "https://cdn.example.com/full/image.jpg");
+  assert.equal(redirectResponse.headers.get("Cache-Control"), publicRedirectCacheControl);
   servingRecord = record;
 
   streamCalls.length = 0;
@@ -1321,10 +1402,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
       getRequest,
       baseDependencies as never
     );
-    assert.deepEqual(
-      Buffer.from(await stableThumbnail.arrayBuffer()),
-      storedBytes
-    );
+    assert.deepEqual(Buffer.from(await stableThumbnail.arrayBuffer()), storedBytes);
     assert.equal(streamCalls.at(-1)?.object.storageSlug, storageSlug);
     assert.equal(streamCalls.at(-1)?.cacheControl, immutableCacheControl);
   }
@@ -1336,24 +1414,14 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
     request,
     {
       ...baseDependencies,
-      resolveReadableObject: async (
-        prefix: "full" | "thumbs",
-        key: string
-      ) =>
+      resolveReadableObject: async (prefix: "full" | "thumbs", key: string) =>
         resolvedObject(prefix, key, "https://cdn.example.com/thumb.webp")
     } as never
   );
   assert.equal(thumbnailRedirect.status, 302);
-  assert.equal(
-    thumbnailRedirect.headers.get("Location"),
-    "https://cdn.example.com/thumb.webp"
-  );
+  assert.equal(thumbnailRedirect.headers.get("Location"), "https://cdn.example.com/thumb.webp");
   assert.equal(streamCalls.length, 0);
-  assert.equal(
-    thumbnailExistsCalls,
-    0,
-    "公开 S3 缩略图直链不得先执行存在性探测"
-  );
+  assert.equal(thumbnailExistsCalls, 0, "公开 S3 缩略图直链不得先执行存在性探测");
   servingRecord = record;
 
   await assert.rejects(
@@ -1367,9 +1435,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
         }
       } as never
     ),
-    (error) => error instanceof ApiError
-      && error.status === 404
-      && error.code === "not_found"
+    (error) => error instanceof ApiError && error.status === 404 && error.code === "not_found"
   );
 
   await assert.rejects(
@@ -1383,46 +1449,33 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
         }
       } as never
     ),
-    (error) => error instanceof ApiError
-      && error.status === 503
-      && error.code === "storage_read_unavailable"
+    (error) =>
+      error instanceof ApiError && error.status === 503 && error.code === "storage_read_unavailable"
   );
 
   let invalidKeyRead = false;
   await assert.rejects(
-    servePublicStoredObject(
-      `${item.id}.jpg/../secret`,
-      request,
-      {
-        ...baseDependencies,
-        readImageServingRecordById: async () => {
-          invalidKeyRead = true;
-          return record;
-        }
-      } as never
-    ),
-    (error) => error instanceof ApiError
-      && error.status === 404
-      && error.code === "not_found"
+    servePublicStoredObject(`${item.id}.jpg/../secret`, request, {
+      ...baseDependencies,
+      readImageServingRecordById: async () => {
+        invalidKeyRead = true;
+        return record;
+      }
+    } as never),
+    (error) => error instanceof ApiError && error.status === 404 && error.code === "not_found"
   );
   assert.equal(invalidKeyRead, false);
 
   let invalidThumbnailKeyRead = false;
   await assert.rejects(
-    servePublicStoredThumbnail(
-      storageObjectKey(item.id, item.ext),
-      request,
-      {
-        ...baseDependencies,
-        readImageServingRecordById: async () => {
-          invalidThumbnailKeyRead = true;
-          return record;
-        }
-      } as never
-    ),
-    (error) => error instanceof ApiError
-      && error.status === 404
-      && error.code === "not_found"
+    servePublicStoredThumbnail(storageObjectKey(item.id, item.ext), request, {
+      ...baseDependencies,
+      readImageServingRecordById: async () => {
+        invalidThumbnailKeyRead = true;
+        return record;
+      }
+    } as never),
+    (error) => error instanceof ApiError && error.status === 404 && error.code === "not_found"
   );
   assert.equal(invalidThumbnailKeyRead, false);
 });
@@ -1493,24 +1546,31 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   assert.equal(proxyCalls.length, 1);
   assert.equal(directRedirect.status, 302);
   assert.equal(directRedirect.headers.get("Location"), item.original);
-  assert.equal(
-    directRedirect.headers.get("Cache-Control"),
-    privateRevalidationCacheControl
-  );
+  assert.equal(directRedirect.headers.get("Cache-Control"), privateRevalidationCacheControl);
   assert.equal(directRedirect.headers.get("Referrer-Policy"), "no-referrer");
 
   assert.equal(directRedirect.headers.get("Vary"), "Cookie, User-Agent");
   const redirectUrls = [
     ["https://img.example.com/照片.webp", "https://img.example.com/%E7%85%A7%E7%89%87.webp"],
-    ["https://例子.中国/p.png?标题=照片", "https://xn--fsqu00a.xn--fiqs8s/p.png?%E6%A0%87%E9%A2%98=%E7%85%A7%E7%89%87"],
-    ["https://img.example.com/café.png?sig=a%2Bb%2Fc+d&x=1&x=2", "https://img.example.com/caf%C3%A9.png?sig=a%2Bb%2Fc+d&x=1&x=2"]
+    [
+      "https://例子.中国/p.png?标题=照片",
+      "https://xn--fsqu00a.xn--fiqs8s/p.png?%E6%A0%87%E9%A2%98=%E7%85%A7%E7%89%87"
+    ],
+    [
+      "https://img.example.com/café.png?sig=a%2Bb%2Fc+d&x=1&x=2",
+      "https://img.example.com/caf%C3%A9.png?sig=a%2Bb%2Fc+d&x=1&x=2"
+    ]
   ];
   for (const [original, expected] of redirectUrls) {
     for (const method of ["GET", "HEAD"] as const) {
-      const response = await serveAdminExternalOriginal(item.id, { method }, {
-        ...dependencies,
-        readImageServingRecordById: async () => ({ ...record, original })
-      });
+      const response = await serveAdminExternalOriginal(
+        item.id,
+        { method },
+        {
+          ...dependencies,
+          readImageServingRecordById: async () => ({ ...record, original })
+        }
+      );
       assert.equal(response.status, 302);
       assert.equal(response.headers.get("Location"), expected);
       assert.equal(response.headers.get("Cache-Control"), privateRevalidationCacheControl);
@@ -1519,35 +1579,61 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
     }
   }
   for (const control of ["\r", "\n", "\t", "\u200b"]) {
-    await assert.rejects(serveAdminExternalOriginal(item.id, {}, {
-      ...dependencies,
-      readImageServingRecordById: async () => ({
-        ...record, original: `https://img.example.com/${control}photo.png`
-      })
-    }), /Unsafe Location/);
-  }
-  for (const unavailable of [null, { ...record, original: "" }, {
-    ...record, original: `https://img.example.com/images/full/${storageObjectKey(item.id, item.ext)}`
-  }]) {
     await assert.rejects(
-      serveAdminExternalOriginal(item.id, {}, {
-        ...dependencies,
-        readImageServingRecordById: async () => unavailable
-      }),
+      serveAdminExternalOriginal(
+        item.id,
+        {},
+        {
+          ...dependencies,
+          readImageServingRecordById: async () => ({
+            ...record,
+            original: `https://img.example.com/${control}photo.png`
+          })
+        }
+      ),
+      /Unsafe Location/
+    );
+  }
+  for (const unavailable of [
+    null,
+    { ...record, original: "" },
+    {
+      ...record,
+      original: `https://img.example.com/images/full/${storageObjectKey(item.id, item.ext)}`
+    }
+  ]) {
+    await assert.rejects(
+      serveAdminExternalOriginal(
+        item.id,
+        {},
+        {
+          ...dependencies,
+          readImageServingRecordById: async () => unavailable
+        }
+      ),
       (error: { status?: number; code?: string }) =>
         error.status === 404 && error.code === "not_found"
     );
   }
 });
 test("[Server/图片] 原图代理使用私有重验证缓存，条件请求及 HEAD 释放上游正文", async (t) => {
-  const { proxyExternalImage } = await import("../../../packages/server/src/images/external-image-proxy.ts");
-  const { proxyEtagForUpstream } = await import("../../../packages/server/src/core/http/proxy-validators.ts");
+  const { proxyExternalImage } =
+    await import("../../../packages/server/src/images/external-image-proxy.ts");
+  const { proxyEtagForUpstream } =
+    await import("../../../packages/server/src/core/http/proxy-validators.ts");
   const originalFetch = globalThis.fetch;
-  t.after(() => { globalThis.fetch = originalFetch; });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
   const url = "https://original.example.test/image.png";
-  const image = await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } }).png().toBuffer();
+  const image = await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } })
+    .png()
+    .toBuffer();
   const updatedAt = "2026-09-01T00:00:00.000Z";
-  const baseHeaders = { "Cache-Control": privateRevalidationCacheControl, Vary: "Cookie, User-Agent" };
+  const baseHeaders = {
+    "Cache-Control": privateRevalidationCacheControl,
+    Vary: "Cookie, User-Agent"
+  };
   const expires = "Wed, 09 Sep 2037 00:00:00 GMT";
   const policies: Array<Record<string, string>> = [
     {},
@@ -1563,14 +1649,28 @@ test("[Server/图片] 原图代理使用私有重验证缓存，条件请求及 
         assert.equal(init?.method, method);
         const headers = new Headers(init?.headers);
         assert.equal(headers.get("Referer"), "https://original.example.test/");
-        return new Response(new ReadableStream({
-          start(controller) { controller.enqueue(image); if (method === "GET") controller.close(); },
-          cancel() { cancelled++; }
-        }), { headers: { "content-type": "image/png", etag: '"origin"', ...policy } });
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(image);
+              if (method === "GET") controller.close();
+            },
+            cancel() {
+              cancelled++;
+            }
+          }),
+          { headers: { "content-type": "image/png", etag: '"origin"', ...policy } }
+        );
       };
-      const response = await proxyExternalImage(url, "png", {
-        method, validators: { resourceUpdatedAt: updatedAt }
-      }, baseHeaders);
+      const response = await proxyExternalImage(
+        url,
+        "png",
+        {
+          method,
+          validators: { resourceUpdatedAt: updatedAt }
+        },
+        baseHeaders
+      );
       assert.equal(response.status, 200);
       assert.equal(response.headers.get("Cache-Control"), privateRevalidationCacheControl);
       assert.equal(response.headers.get("Expires"), null);
@@ -1588,22 +1688,41 @@ test("[Server/图片] 原图代理使用私有重验证缓存，条件请求及 
     assert.equal(new Headers(init?.headers).get("If-None-Match"), '"origin"');
     return new Response(null, { status: 304, headers: { etag: '"origin"' } });
   };
-  const revalidated = await proxyExternalImage(url, "png", {
-    method: "GET", validators: { resourceUpdatedAt: updatedAt, ifNoneMatch: proxyEtagForUpstream(url, '"origin"')! }
-  }, baseHeaders);
+  const revalidated = await proxyExternalImage(
+    url,
+    "png",
+    {
+      method: "GET",
+      validators: {
+        resourceUpdatedAt: updatedAt,
+        ifNoneMatch: proxyEtagForUpstream(url, '"origin"')!
+      }
+    },
+    baseHeaders
+  );
   assert.equal(revalidated.status, 304);
   assert.equal(await revalidated.text(), "");
   assert.equal(revalidated.headers.get("Cache-Control"), privateRevalidationCacheControl);
   assert.equal(revalidated.headers.get("Vary"), "Cookie, User-Agent");
   let failedBodyCancelled = 0;
-  globalThis.fetch = async () => new Response(new ReadableStream({ cancel() { failedBodyCancelled++; } }), { status: 503 });
+  globalThis.fetch = async () =>
+    new Response(
+      new ReadableStream({
+        cancel() {
+          failedBodyCancelled++;
+        }
+      }),
+      { status: 503 }
+    );
   const fallback = await proxyExternalImage(url, "png", { method: "GET" }, baseHeaders);
   assert.equal(fallback.status, 302);
   assert.equal(fallback.headers.get("Location"), url);
   assert.equal(fallback.headers.get("Cache-Control"), "no-store");
   assert.equal(failedBodyCancelled, 1);
-  await assert.rejects(proxyExternalImage("https://127.0.0.1/private.png", "png", { method: "GET" }, baseHeaders),
-    (error: { code?: string }) => error.code === "external_image_rejected");
+  await assert.rejects(
+    proxyExternalImage("https://127.0.0.1/private.png", "png", { method: "GET" }, baseHeaders),
+    (error: { code?: string }) => error.code === "external_image_rejected"
+  );
 });
 
 test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既有格式与质量边界", async () => {
@@ -1619,9 +1738,8 @@ test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既
     for (let x = 0; x < width; x += 1) {
       for (let channel = 0; channel < 3; channel += 1) {
         randomState = (Math.imul(randomState, 1_664_525) + 1_013_904_223) >>> 0;
-        pixels[(y * width + x) * 3 + channel] = (
-          x * 3 + y * 2 + channel * 41 + (randomState >>> 29)
-        ) & 255;
+        pixels[(y * width + x) * 3 + channel] =
+          (x * 3 + y * 2 + channel * 41 + (randomState >>> 29)) & 255;
       }
     }
   }
@@ -1643,10 +1761,7 @@ test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既
 
   try {
     const fixturePaths = Object.fromEntries(
-      ["jpg", "png", "webp", "gif", "avif"].map((ext) => [
-        ext,
-        join(fixtureRoot, `source.${ext}`)
-      ])
+      ["jpg", "png", "webp", "gif", "avif"].map((ext) => [ext, join(fixtureRoot, `source.${ext}`)])
     );
     await source().jpeg({ quality: 90 }).toFile(fixturePaths.jpg!);
     await source().png().toFile(fixturePaths.png!);
@@ -1671,15 +1786,9 @@ test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既
     }
 
     const orientedPath = join(fixtureRoot, "oriented.jpg");
-    await source()
-      .withMetadata({ orientation: 6 })
-      .jpeg({ quality: 90 })
-      .toFile(orientedPath);
+    await source().withMetadata({ orientation: 6 }).jpeg({ quality: 90 }).toFile(orientedPath);
     const oriented = await transcodeStoredImage(orientedPath, settings);
-    assert.deepEqual(
-      [oriented.sourceWidth, oriented.sourceHeight],
-      [height, width]
-    );
+    assert.deepEqual([oriented.sourceWidth, oriented.sourceHeight], [height, width]);
     assert.deepEqual([oriented.width, oriented.height], [height, width]);
 
     const frameWidth = 96;
@@ -1713,10 +1822,7 @@ test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既
         [normalized.sourceWidth, normalized.sourceHeight],
         [frameWidth, frameHeight]
       );
-      assert.deepEqual(
-        [normalized.width, normalized.height],
-        [frameWidth, frameHeight]
-      );
+      assert.deepEqual([normalized.width, normalized.height], [frameWidth, frameHeight]);
       assert.equal(outputMetadata.pages, undefined, "默认读取仍只处理首帧");
       if (format === "webp") {
         const inputBytes = await readFile(path);
@@ -1788,10 +1894,7 @@ test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既
           }
           return { quality, successfulQuality };
         }
-        lastDropMultiplier = Math.min(
-          3,
-          Math.max(1, Math.floor(size / maxBytes))
-        );
+        lastDropMultiplier = Math.min(3, Math.max(1, Math.floor(size / maxBytes)));
         quality = Math.max(
           qualitySettings.min_quality,
           quality - qualitySettings.quality_step * lastDropMultiplier
@@ -1799,11 +1902,7 @@ test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既
       }
     };
     let backfillCase: { maxBytes: number; quality: number } | undefined;
-    for (
-      let maxBytes = 50 * 1024;
-      maxBytes < qualitySizes.get(100)!;
-      maxBytes += 1
-    ) {
+    for (let maxBytes = 50 * 1024; maxBytes < qualitySizes.get(100)!; maxBytes += 1) {
       const simulated = simulateQuality(maxBytes);
       if (simulated.quality > simulated.successfulQuality) {
         backfillCase = { maxBytes, quality: simulated.quality };
@@ -1822,10 +1921,7 @@ test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既
     const tiffPath = join(fixtureRoot, "unsupported.tiff");
     const svgPath = join(fixtureRoot, "unsupported.svg");
     await source().tiff().toFile(tiffPath);
-    await writeFile(
-      svgPath,
-      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="32" />'
-    );
+    await writeFile(svgPath, '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="32" />');
     await assert.rejects(
       transcodeStoredImage(tiffPath, settings),
       invalidImage("unsupported_file_type")
@@ -1863,7 +1959,9 @@ test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既
         channels: 3,
         background: "#000000"
       }
-    }).png().toFile(oversizedPath);
+    })
+      .png()
+      .toFile(oversizedPath);
     await assert.rejects(
       transcodeStoredImage(oversizedPath, settings),
       invalidImage("image_too_large")
@@ -1881,7 +1979,10 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
 
   const id = createImageId(new Date(parsedTime.iso));
   assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-  assert.equal(Number.parseInt(id.replaceAll("-", "").slice(0, 12), 16), Date.parse(parsedTime.iso));
+  assert.equal(
+    Number.parseInt(id.replaceAll("-", "").slice(0, 12), 16),
+    Date.parse(parsedTime.iso)
+  );
 
   const context = createImageBrowseContext("latest");
   const cursorId = "00000000-0000-7000-8000-0000000000ab";
@@ -1899,30 +2000,53 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
     assert.equal(encodeImageCursor({ id: cursorId, sort_score: score }, context), encoded);
     for (const order of ["latest", "oldest"] as const) {
       assert.deepEqual(decodeImageCursor(encoded, createImageBrowseContext(order)), {
-        imageTime: time, id: cursorId, sortScore: score, phase: 0
+        imageTime: time,
+        id: cursorId,
+        sortScore: score,
+        phase: 0
       });
     }
   }
-  const adjacent = [1_588_262_400_123_456, 1_588_262_400_123_457].map((sort_score) => (
+  const adjacent = [1_588_262_400_123_456, 1_588_262_400_123_457].map((sort_score) =>
     encodeImageCursor({ id: cursorId, sort_score }, context)
-  ));
+  );
   assert.notEqual(adjacent[0], adjacent[1]);
   assert.equal(decodeImageCursor(adjacent[1]!, context).imageTime, "2020-04-30T16:00:00.123457Z");
   for (const sort_score of [NaN, Infinity, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
-    assert.throws(() => encodeImageCursor({ id: cursorId, sort_score }, context), /Invalid image list cursor row/);
+    assert.throws(
+      () => encodeImageCursor({ id: cursorId, sort_score }, context),
+      /Invalid image list cursor row/
+    );
   }
   const fixedCursorRow = { cursor_image_time: positions[0]!.time, id: cursorId };
   const encoded = encodeImageCursor(fixedCursorRow, context);
-  for (const invalid of ["invalid", encoded.slice(1), `${encoded}=`, `${encoded.slice(0, -1)}!`, `${encoded.slice(0, -1)}B`]) {
+  for (const invalid of [
+    "invalid",
+    encoded.slice(1),
+    `${encoded}=`,
+    `${encoded.slice(0, -1)}!`,
+    `${encoded.slice(0, -1)}B`
+  ]) {
     assert.throws(() => decodeImageCursor(invalid, context), /Invalid image list cursor/);
   }
   const invalidUuid = Buffer.from(encoded, "base64url");
   invalidUuid[15] = 0;
-  assert.throws(() => decodeImageCursor(invalidUuid.toString("base64url"), context), /Invalid image list cursor/);
-  assert.throws(() => encodeImageCursor({ ...fixedCursorRow,
-    cursor_image_time: "2255-06-05T23:47:34.740992Z"
-  }, context), /Invalid image list cursor row/);
-  assert.throws(() => encodeImageCursor({ ...fixedCursorRow, id: "not-a-uuid" }, context), /Invalid image list cursor row/);
+  assert.throws(
+    () => decodeImageCursor(invalidUuid.toString("base64url"), context),
+    /Invalid image list cursor/
+  );
+  assert.throws(
+    () =>
+      encodeImageCursor(
+        { ...fixedCursorRow, cursor_image_time: "2255-06-05T23:47:34.740992Z" },
+        context
+      ),
+    /Invalid image list cursor row/
+  );
+  assert.throws(
+    () => encodeImageCursor({ ...fixedCursorRow, id: "not-a-uuid" }, context),
+    /Invalid image list cursor row/
+  );
 
   // The day number remains exact across the epoch and beyond a 16-bit counter.
   for (const day of [-1, 0, 65_536]) {
@@ -1933,20 +2057,30 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
       const randomCursor = encodeImageCursor({ ...fixedCursorRow, id }, randomContext);
       assert.equal(randomCursor.length, 26);
       assert.deepEqual(decodeImageCursor(randomCursor, randomContext), {
-        id, imageTime: "", sortScore: Number.parseInt(suffix, 16), phase: suffix[0] === "0" ? 1 : 0
+        id,
+        imageTime: "",
+        sortScore: Number.parseInt(suffix, 16),
+        phase: suffix[0] === "0" ? 1 : 0
       });
-      assert.throws(() => decodeImageCursor(randomCursor,
-        createImageBrowseContext("random", now + 86_400_000)), { code: "cursor_expired" });
-      assert.throws(() => decodeImageCursor(`${randomCursor.slice(0, -1)}B`, randomContext), { code: "invalid_cursor" });
+      assert.throws(
+        () => decodeImageCursor(randomCursor, createImageBrowseContext("random", now + 86_400_000)),
+        { code: "cursor_expired" }
+      );
+      assert.throws(() => decodeImageCursor(`${randomCursor.slice(0, -1)}B`, randomContext), {
+        code: "invalid_cursor"
+      });
     }
   }
 
   assert.equal(deviceFromDimensions(1920, 1080), "pc");
   assert.equal(deviceFromDimensions(800, 1200), "mb");
-  assert.deepEqual(resolveClassification(
-    { device: "auto", brightness: "light" },
-    { device: "mb", brightness: "dark" }
-  ), { device: "mb", brightness: "light" });
+  assert.deepEqual(
+    resolveClassification(
+      { device: "auto", brightness: "light" },
+      { device: "mb", brightness: "dark" }
+    ),
+    { device: "mb", brightness: "light" }
+  );
 
   const plan = createImageFilterPlan({
     devices: ["pc"],
@@ -1967,9 +2101,13 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
     ["live", "stage"]
   ]);
   assert.match(sql.where.join(" AND "), /EXISTS/);
-  assert.throws(() => createImageFilterPlan({
-    author: { include: ["owner"], exclude: ["blocked"] }
-  }), /Cannot mix include and exclude/);
+  assert.throws(
+    () =>
+      createImageFilterPlan({
+        author: { include: ["owner"], exclude: ["blocked"] }
+      }),
+    /Cannot mix include and exclude/
+  );
 });
 test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读取精确目标页", async () => {
   let sql = "";
@@ -1981,12 +2119,7 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
       return { rows: [] };
     }
   } as never;
-  await fetchAdminImageOffsetRows(
-    ["status=$1"],
-    ["deleted"],
-    createPageWindow(100, 60),
-    reader
-  );
+  await fetchAdminImageOffsetRows(["status=$1"], ["deleted"], createPageWindow(100, 60), reader);
   assert.match(sql, /ORDER BY image_time DESC, id DESC/);
   assert.match(sql, /LIMIT \$2 OFFSET \$3/);
   assert.match(sql, /AS tags/);
@@ -2010,12 +2143,7 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
   assert.match(sql, /\(image_time, id\) > \(\$3::timestamptz, \$4::uuid\)/);
   assert.match(sql, /ORDER BY image_time ASC, id ASC/);
   assert.match(sql, /LIMIT \$2/);
-  assert.deepEqual(sqlParams, [
-    "ready",
-    61,
-    publicCursorTime,
-    publicCursorId
-  ]);
+  assert.deepEqual(sqlParams, ["ready", 61, publicCursorTime, publicCursorId]);
 
   const first = servingReadyCacheItem({ id: randomUUID() });
   const second = servingReadyCacheItem({ id: randomUUID() });
@@ -2030,10 +2158,7 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
     },
     items: async () => {
       hydrationCalls += 1;
-      return [
-        serializeReadyImageCacheItem(first),
-        serializeReadyImageCacheItem(second)
-      ];
+      return [serializeReadyImageCacheItem(first), serializeReadyImageCacheItem(second)];
     },
     assertDerivedItems: async () => undefined
   };
@@ -2045,30 +2170,21 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
     metaKey: null,
     instanceToken: null
   };
-  const window = await readReadyImageOrderedWindow(
-    index,
-    2,
-    2,
-    "fallback",
-    dependencies
-  );
+  const window = await readReadyImageOrderedWindow(index, 2, 2, "fallback", dependencies);
   assert.deepEqual(memberWindow, [2, 3]);
   assert.equal(hydrationCalls, 1);
-  assert.deepEqual(window?.items.map((item) => item.id), [first.id, second.id]);
+  assert.deepEqual(
+    window?.items.map((item) => item.id),
+    [first.id, second.id]
+  );
   assert.equal(window?.total, 5);
 
   memberWindow = null;
   hydrationCalls = 0;
-  assert.deepEqual(
-    await readReadyImageOrderedWindow(
-      index,
-      5,
-      2,
-      "fallback",
-      dependencies
-    ),
-    { items: [], total: 5 }
-  );
+  assert.deepEqual(await readReadyImageOrderedWindow(index, 5, 2, "fallback", dependencies), {
+    items: [],
+    total: 5
+  });
   assert.equal(memberWindow, null);
   assert.equal(hydrationCalls, 0);
 
@@ -2090,30 +2206,20 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
   for (const stage of ["validate", "members", "items"] as const) {
     const failure = new Error(`controlled Redis ${stage} failure`);
     await assert.rejects(
-      readReadyImageOrderedWindow(
-        oneItemIndex,
-        0,
-        1,
-        "required",
-        {
-          ...operationalDependencies,
-          [stage]: async () => {
-            throw failure;
-          }
+      readReadyImageOrderedWindow(oneItemIndex, 0, 1, "required", {
+        ...operationalDependencies,
+        [stage]: async () => {
+          throw failure;
         }
-      ),
-      (error) => isRedisUnavailableError(error)
-        && error.cause === failure
+      }),
+      (error) => isRedisUnavailableError(error) && error.cause === failure
     );
   }
   await assert.rejects(
-    readReadyImageOrderedWindow(
-      oneItemIndex,
-      0,
-      1,
-      "fallback",
-      { ...operationalDependencies, items: async () => [] }
-    ),
+    readReadyImageOrderedWindow(oneItemIndex, 0, 1, "fallback", {
+      ...operationalDependencies,
+      items: async () => []
+    }),
     /incomplete core items/
   );
 
@@ -2138,8 +2244,7 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
         }
       }
     ),
-    (error) => error === logicalMismatch
-      && !isRedisUnavailableError(error)
+    (error) => error === logicalMismatch && !isRedisUnavailableError(error)
   );
 });
 test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整参数契约", async () => {
@@ -2152,9 +2257,18 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
     return result as ParsedRandomQuery;
   };
   const maps: RandomSelectorMaps = {
-    theme: new Map([["舞台", "stage"], ["stage", "stage"]]),
-    tag: new Map([["现场", "live"], ["live", "live"]]),
-    author: new Map([["摄影师", "photographer"], ["photographer", "photographer"]])
+    theme: new Map([
+      ["舞台", "stage"],
+      ["stage", "stage"]
+    ]),
+    tag: new Map([
+      ["现场", "live"],
+      ["live", "live"]
+    ]),
+    author: new Map([
+      ["摄影师", "photographer"],
+      ["photographer", "photographer"]
+    ])
   };
 
   const omittedDevice = parseQuery("");
@@ -2164,7 +2278,13 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   for (const defaultSize of ["full", "thumb"] as const) {
     for (const mode of ["proxy", "redirect", "json"]) {
       for (const explicitSize of ["", "full", "thumb"]) {
-        const query = parseRandomQuery(new URL(`https://img.example.com/random?mode=${mode}${explicitSize ? `&size=${explicitSize}` : ""}`), "redirect", defaultSize);
+        const query = parseRandomQuery(
+          new URL(
+            `https://img.example.com/random?mode=${mode}${explicitSize ? `&size=${explicitSize}` : ""}`
+          ),
+          "redirect",
+          defaultSize
+        );
         assert.ok(!(query instanceof Response));
         assert.equal(query.size, explicitSize || (mode === "json" ? null : defaultSize));
       }
@@ -2175,10 +2295,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   const normalizedAuto = normalizeRandomQuery(explicitAuto, maps);
   assert.equal(normalizedOmitted instanceof Response, false);
   assert.equal(normalizedAuto instanceof Response, false);
-  if (
-    normalizedOmitted instanceof Response
-    || normalizedAuto instanceof Response
-  ) {
+  if (normalizedOmitted instanceof Response || normalizedAuto instanceof Response) {
     assert.fail("auto 随机查询未完成归一化");
   }
   assert.equal(normalizedOmitted.signature, normalizedAuto.signature);
@@ -2186,52 +2303,46 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
     const sized = normalizeRandomQuery(parseQuery(`size=${size.toUpperCase()}`), maps);
     assert.ok(!(sized instanceof Response));
     assert.equal(sized.size, size);
-    assert.equal(sized.signature, normalizedOmitted.signature, "size does not partition selection or dedupe");
+    assert.equal(
+      sized.signature,
+      normalizedOmitted.signature,
+      "size does not partition selection or dedupe"
+    );
     assert.equal(parseQuery(`id=${imageId}&size=${size}`).size, size);
     assert.equal(parseQuery(`seed=synthetic-seed&size=${size}`).size, size);
   }
   assert.equal(
     normalizedOmitted.signature,
-    '{"d":"","b":"","t":{"include":[],"exclude":[]},'
-      + '"tag":null,'
-      + '"a":{"include":[],"exclude":[]}}'
+    '{"d":"","b":"","t":{"include":[],"exclude":[]},' +
+      '"tag":null,' +
+      '"a":{"include":[],"exclude":[]}}'
   );
+  assert.equal(detectDeviceFromUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"), "pc");
   assert.equal(
-    detectDeviceFromUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-    ),
-    "pc"
-  );
-  assert.equal(
-    detectDeviceFromUserAgent(
-      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)"
-    ),
+    detectDeviceFromUserAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)"),
     "mb"
   );
   assert.equal(detectDeviceFromUserAgent("unrecognized-client"), null);
   assert.deepEqual(
-    resolveCandidateAxes("auto", null, "Mozilla/5.0 (Windows NT 10.0)")
-      .deviceCandidates,
+    resolveCandidateAxes("auto", null, "Mozilla/5.0 (Windows NT 10.0)").deviceCandidates,
     ["pc"]
   );
-  assert.deepEqual(
-    resolveCandidateAxes("auto", null, "Mozilla/5.0 (iPhone)")
-      .deviceCandidates,
-    ["mb"]
-  );
-  assert.deepEqual(
-    resolveCandidateAxes("auto", null, "unrecognized-client")
-      .deviceCandidates,
-    ["pc", "mb"]
-  );
-  assert.deepEqual(
-    resolveCandidateAxes("all", null, "Mozilla/5.0 (iPhone)")
-      .deviceCandidates,
-    ["pc", "mb"]
-  );
+  assert.deepEqual(resolveCandidateAxes("auto", null, "Mozilla/5.0 (iPhone)").deviceCandidates, [
+    "mb"
+  ]);
+  assert.deepEqual(resolveCandidateAxes("auto", null, "unrecognized-client").deviceCandidates, [
+    "pc",
+    "mb"
+  ]);
+  assert.deepEqual(resolveCandidateAxes("all", null, "Mozilla/5.0 (iPhone)").deviceCandidates, [
+    "pc",
+    "mb"
+  ]);
 
   const normalized = normalizeRandomQuery(
-    parseQuery("device=PC&brightness=DARK&theme=%E8%88%9E%E5%8F%B0&tag=%E7%8E%B0%E5%9C%BA&author=%E6%91%84%E5%BD%B1%E5%B8%88&mode=PROXY"),
+    parseQuery(
+      "device=PC&brightness=DARK&theme=%E8%88%9E%E5%8F%B0&tag=%E7%8E%B0%E5%9C%BA&author=%E6%91%84%E5%BD%B1%E5%B8%88&mode=PROXY"
+    ),
     maps
   );
   assert.equal(normalized instanceof Response, false);
@@ -2243,10 +2354,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   assert.equal(normalized.brightness, "dark");
   assert.equal(normalized.mode, "proxy");
 
-  const targeted = parseQuery(
-    "id=" + imageId
-    + "&id=00000000008d&device=auto&mode=json&limit=2"
-  );
+  const targeted = parseQuery("id=" + imageId + "&id=00000000008d&device=auto&mode=json&limit=2");
   assert.deepEqual(targeted.ids, [imageId, "00000000008d"].sort());
   assert.equal(targeted.mode, "json");
   assert.equal(targeted.limit, 2);
@@ -2259,8 +2367,14 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
     "limit=2",
     "unknown=value",
     "device=invalid",
-    "size=", "size=%20", "size=small", "size=%20full", "size=thumb&size=thumb",
-    "size=full&size=thumb", "size=thumb&limit=2", `size=full&id=${imageId}&seed=synthetic-seed`
+    "size=",
+    "size=%20",
+    "size=small",
+    "size=%20full",
+    "size=thumb&size=thumb",
+    "size=full&size=thumb",
+    "size=thumb&limit=2",
+    `size=full&id=${imageId}&seed=synthetic-seed`
   ]) {
     const result = parseRandomQuery(
       new URL("https://img.example.com/random?" + search),
@@ -2271,7 +2385,8 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   }
 });
 test("[Server/图片] 固定 seed 保留 Unicode 原值并限制单张和互斥参数", () => {
-  const parse = (search: string) => parseRandomQuery(new URL(`https://img.example.com/random?${search}`), "redirect");
+  const parse = (search: string) =>
+    parseRandomQuery(new URL(`https://img.example.com/random?${search}`), "redirect");
   for (const seed of ["wallpaper", "Wallpaper", "  wallpaper  ", "2026-09-15", "图😀".repeat(64)]) {
     for (const mode of ["proxy", "redirect", "json"]) {
       const result = parse(new URLSearchParams({ seed, mode }).toString());
@@ -2288,9 +2403,15 @@ test("[Server/图片] 固定 seed 保留 Unicode 原值并限制单张和互斥�
   assert.ok(!(explicit instanceof Response));
   assert.equal(explicit.limit, 1);
   for (const search of [
-    "seed=", "seed=+%20", "seed=%00", "seed=%0A", "seed=%7F",
+    "seed=",
+    "seed=+%20",
+    "seed=%00",
+    "seed=%0A",
+    "seed=%7F",
     `seed=${encodeURIComponent("😀".repeat(129))}`,
-    "seed=a&seed=a", "seed=fixed&mode=json&limit=2", "seed=fixed&limit=1",
+    "seed=a&seed=a",
+    "seed=fixed&mode=json&limit=2",
+    "seed=fixed&limit=1",
     `seed=fixed&id=${imageId}`
   ]) {
     const result = parse(search);
@@ -2300,33 +2421,18 @@ test("[Server/图片] 固定 seed 保留 Unicode 原值并限制单张和互斥�
 });
 
 test("[Server/图片] 图片处理共享许可并同时限制 commit 数量和字节", async () => {
-  const cancellationError = (signal: AbortSignal) => (
-    signal.reason ?? new Error("cancelled")
-  );
-  const normalizeAdmission = new DynamicConcurrencyLimiter(
-    () => 1,
-    cancellationError
-  );
-  const commitAdmission = new DynamicConcurrencyLimiter(
-    () => 2,
-    cancellationError
-  );
-  const commitByteAdmission = new DynamicWeightedLimiter(
-    () => 10,
-    cancellationError
-  );
+  const cancellationError = (signal: AbortSignal) => signal.reason ?? new Error("cancelled");
+  const normalizeAdmission = new DynamicConcurrencyLimiter(() => 1, cancellationError);
+  const commitAdmission = new DynamicConcurrencyLimiter(() => 2, cancellationError);
+  const commitByteAdmission = new DynamicWeightedLimiter(() => 10, cancellationError);
   const signal = new AbortController().signal;
   const pools = {
-    prepare: <Result>(admissionSignal: AbortSignal, work: () => Promise<Result>) => (
-      normalizeAdmission.run(admissionSignal, work)
-    ),
-    commit: <Result>(
-      bytes: number,
-      admissionSignal: AbortSignal,
-      work: () => Promise<Result>
-    ) => commitAdmission.run(admissionSignal, () => (
-      commitByteAdmission.run(bytes, admissionSignal, work)
-    ))
+    prepare: <Result>(admissionSignal: AbortSignal, work: () => Promise<Result>) =>
+      normalizeAdmission.run(admissionSignal, work),
+    commit: <Result>(bytes: number, admissionSignal: AbortSignal, work: () => Promise<Result>) =>
+      commitAdmission.run(admissionSignal, () =>
+        commitByteAdmission.run(bytes, admissionSignal, work)
+      )
   };
 
   const stageStarts: string[] = [];
@@ -2344,13 +2450,8 @@ test("[Server/图片] 图片处理共享许可并同时限制 commit 数量和�
   while (stageStarts.length < 1) await delay(0);
   assert.deepEqual(stageStarts, ["upload-prepare"]);
   releasePrepare();
-  await Promise.all([
-    uploadPrepare,
-    ingestionPrepare
-  ]);
-  assert.ok(stageStarts.indexOf("import-prepare") > stageStarts.indexOf(
-    "upload-prepare"
-  ));
+  await Promise.all([uploadPrepare, ingestionPrepare]);
+  assert.ok(stageStarts.indexOf("import-prepare") > stageStarts.indexOf("upload-prepare"));
 
   let releaseLargeCommit: () => void = () => {};
   const largeCommitGate = new Promise<void>((resolve) => {
@@ -2371,15 +2472,13 @@ test("[Server/图片] 图片处理共享许可并同时限制 commit 数量和�
   assert.deepEqual(commitStarts, ["large"]);
   releaseLargeCommit();
   await Promise.all([largeCommit, byteBlockedCommit, itemBlockedCommit]);
-  assert.deepEqual(commitStarts, [
-    "large",
-    "blocked-by-bytes",
-    "blocked-by-items"
-  ]);
+  assert.deepEqual(commitStarts, ["large", "blocked-by-bytes", "blocked-by-items"]);
 
-  await assert.rejects(pools.commit(10, signal, async () => {
-    throw new Error("commit failed");
-  }));
+  await assert.rejects(
+    pools.commit(10, signal, async () => {
+      throw new Error("commit failed");
+    })
+  );
   assert.equal(await pools.commit(10, signal, async () => "released"), "released");
 });
 test("[Server/图片] 标准化取消等待当前编码与缩略图收口，停止降质及质量回补", async (t) => {
@@ -2387,80 +2486,177 @@ test("[Server/图片] 标准化取消等待当前编码与缩略图收口，停�
   const root = await createTestDirectory("encode-cancel-");
   t.after(() => rm(root, { recursive: true, force: true }));
   const path = join(root, "source.png");
-  await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } }).png().toFile(path);
-  const settings = { quality: 90, min_quality: 10, quality_step: 10, max_size_kb: 1, skip_webp_under_kb: 0, max_long_edge: 100 };
-  const preCancelled = new AbortController(); preCancelled.abort(new Error("already cancelled"));
-  await assert.rejects(transcodeStoredImage("missing-file", settings, preCancelled.signal), (e) => e === preCancelled.signal.reason);
+  await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } })
+    .png()
+    .toFile(path);
+  const settings = {
+    quality: 90,
+    min_quality: 10,
+    quality_step: 10,
+    max_size_kb: 1,
+    skip_webp_under_kb: 0,
+    max_long_edge: 100
+  };
+  const preCancelled = new AbortController();
+  preCancelled.abort(new Error("already cancelled"));
+  await assert.rejects(
+    transcodeStoredImage("missing-file", settings, preCancelled.signal),
+    (e) => e === preCancelled.signal.reason
+  );
   const original = sharp.prototype.toBuffer;
-  t.after(() => { sharp.prototype.toBuffer = original; });
+  t.after(() => {
+    sharp.prototype.toBuffer = original;
+  });
   for (const cancelAt of [1, 2, 3]) {
     const abort = new AbortController();
     const reason = new Error("cancel encode " + cancelAt);
     let releaseEncode!: () => void;
     let releaseThumbnail!: () => void;
     let markStarted!: () => void;
-    const encodeGate = new Promise<void>((resolve) => { releaseEncode = resolve; });
-    const thumbnailGate = new Promise<void>((resolve) => { releaseThumbnail = resolve; });
-    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const encodeGate = new Promise<void>((resolve) => {
+      releaseEncode = resolve;
+    });
+    const thumbnailGate = new Promise<void>((resolve) => {
+      releaseThumbnail = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
     const qualities: number[] = [];
-    sharp.prototype.toBuffer = (async function (
+    sharp.prototype.toBuffer = async function (
       this: { options: { webpQuality: number } },
       options: { resolveWithObject?: boolean }
     ) {
-      if (!options?.resolveWithObject) { await thumbnailGate; return Buffer.from("thumbnail"); }
+      if (!options?.resolveWithObject) {
+        await thumbnailGate;
+        return Buffer.from("thumbnail");
+      }
       qualities.push(this.options.webpQuality);
-      if (qualities.length === cancelAt) { markStarted(); await encodeGate; }
-      return { data: Buffer.from("image"), info: { width: 8, height: 8, size: qualities.length === 1 ? 4096 : 512 } };
-    }) as typeof sharp.prototype.toBuffer;
+      if (qualities.length === cancelAt) {
+        markStarted();
+        await encodeGate;
+      }
+      return {
+        data: Buffer.from("image"),
+        info: { width: 8, height: 8, size: qualities.length === 1 ? 4096 : 512 }
+      };
+    } as typeof sharp.prototype.toBuffer;
     let settled = false;
-    const pending = transcodeStoredImage(path, settings, abort.signal).finally(() => { settled = true; });
+    const pending = transcodeStoredImage(path, settings, abort.signal).finally(() => {
+      settled = true;
+    });
     const rejected = assert.rejects(pending, (error) => error === reason);
-    await started; abort.abort(reason);
-    await delay(0); assert.equal(settled, false);
-    releaseEncode(); await delay(0);
+    await started;
+    abort.abort(reason);
+    await delay(0);
+    assert.equal(settled, false);
+    releaseEncode();
+    await delay(0);
     assert.equal(settled, false, "仍在编码的缩略图必须一起收口");
     assert.equal(qualities.length, cancelAt, "取消后不能进入下一轮或继续回补");
-    releaseThumbnail(); await rejected;
+    releaseThumbnail();
+    await rejected;
   }
 });
 test("[Server/图片] 安全抓取在预取消时不联网，原图代理头部及正文取消传到上游且不 fallback", async (t) => {
-  const { safeFetchExternalImage } = await import("../../../packages/server/src/core/external-image-fetch.ts");
-  const { proxyExternalImage } = await import("../../../packages/server/src/images/external-image-proxy.ts");
+  const { safeFetchExternalImage } =
+    await import("../../../packages/server/src/core/external-image-fetch.ts");
+  const { proxyExternalImage } =
+    await import("../../../packages/server/src/images/external-image-proxy.ts");
   const originalFetch = globalThis.fetch;
-  t.after(() => { globalThis.fetch = originalFetch; });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
   let fetches = 0;
-  globalThis.fetch = async () => { fetches++; throw Error("must not fetch"); };
-  const pre = new AbortController(); pre.abort();
-  await assert.rejects(safeFetchExternalImage("https://example.com/image", { signal: pre.signal, timeoutMs: 1000 }), (e: any) => e.code === "external_image_cancelled");
-  await assert.rejects(proxyExternalImage("https://example.com/image", "png", { method: "GET", signal: pre.signal }, {}));
+  globalThis.fetch = async () => {
+    fetches++;
+    throw Error("must not fetch");
+  };
+  const pre = new AbortController();
+  pre.abort();
+  await assert.rejects(
+    safeFetchExternalImage("https://example.com/image", { signal: pre.signal, timeoutMs: 1000 }),
+    (e: any) => e.code === "external_image_cancelled"
+  );
+  await assert.rejects(
+    proxyExternalImage(
+      "https://example.com/image",
+      "png",
+      { method: "GET", signal: pre.signal },
+      {}
+    )
+  );
   assert.equal(fetches, 0);
-  const image = await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } }).png().toBuffer();
+  const image = await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } })
+    .png()
+    .toBuffer();
   for (const phase of ["headers", "body"] as const) {
-    const abort = new AbortController(); const reason = new Error("cancel " + phase);
-    let signal!: AbortSignal; let markFetched!: () => void;
-    const fetched = new Promise<void>((resolve) => { markFetched = resolve; });
+    const abort = new AbortController();
+    const reason = new Error("cancel " + phase);
+    let signal!: AbortSignal;
+    let markFetched!: () => void;
+    const fetched = new Promise<void>((resolve) => {
+      markFetched = resolve;
+    });
     globalThis.fetch = async (_url, init) => {
-      fetches++; signal = init!.signal!;
+      fetches++;
+      signal = init!.signal!;
       markFetched();
-      if (phase === "headers") return new Promise<Response>((_resolve, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }));
-      return new Response(new ReadableStream({ start(controller) { controller.enqueue(image); signal.addEventListener("abort", () => controller.error(signal.reason), { once: true }); } }), { headers: { "content-type": "image/png" } });
+      if (phase === "headers")
+        return new Promise<Response>((_resolve, reject) =>
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true })
+        );
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(image);
+            signal.addEventListener("abort", () => controller.error(signal.reason), { once: true });
+          }
+        }),
+        { headers: { "content-type": "image/png" } }
+      );
     };
-    const pending = proxyExternalImage("https://example.com/image", "png", { method: "GET", signal: abort.signal }, {});
+    const pending = proxyExternalImage(
+      "https://example.com/image",
+      "png",
+      { method: "GET", signal: abort.signal },
+      {}
+    );
     if (phase === "headers") {
       const rejection = assert.rejects(pending, (error) => error === reason);
-      await fetched; abort.abort(reason); await rejection;
+      await fetched;
+      abort.abort(reason);
+      await rejection;
     } else {
       const response = await pending;
       const reader = response.body!.getReader();
       assert.deepEqual((await reader.read()).value, image);
-      const rejection = assert.rejects(reader.read()); abort.abort(reason); await rejection;
+      const rejection = assert.rejects(reader.read());
+      abort.abort(reason);
+      await rejection;
     }
     assert.equal(signal.aborted, true);
   }
   const redirected = new AbortController();
-  globalThis.fetch = async () => { fetches++; return new Response(new ReadableStream({ cancel() { redirected.abort(); } }), { status: 302, headers: { location: "https://example.com/next" } }); };
+  globalThis.fetch = async () => {
+    fetches++;
+    return new Response(
+      new ReadableStream({
+        cancel() {
+          redirected.abort();
+        }
+      }),
+      { status: 302, headers: { location: "https://example.com/next" } }
+    );
+  };
   const beforeRedirect = fetches;
-  await assert.rejects(safeFetchExternalImage("https://example.com/start", { timeoutMs: 1000, signal: redirected.signal }), (e: any) => e.code === "external_image_cancelled");
+  await assert.rejects(
+    safeFetchExternalImage("https://example.com/start", {
+      timeoutMs: 1000,
+      signal: redirected.signal
+    }),
+    (e: any) => e.code === "external_image_cancelled"
+  );
   assert.equal(fetches - beforeRedirect, 1);
 });
 test("[Server/图片] 管理员原图等待共享探测时单个 HTTP 取消不影响另一消费者", async () => {
@@ -2468,21 +2664,41 @@ test("[Server/图片] 管理员原图等待共享探测时单个 HTTP 取消不�
   let resolveProbe!: (value: boolean) => void;
   let started!: () => void;
   let probeCalls = 0;
-  const ready = new Promise<void>((resolve) => { started = resolve; });
-  const probe = new Promise<boolean>((resolve) => { resolveProbe = resolve; });
+  const ready = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const probe = new Promise<boolean>((resolve) => {
+    resolveProbe = resolve;
+  });
   const dependencies = {
     readImageServingRecordById: async () => ({ ...item, status: "ready" }),
     displayUrlForOriginalComparison: async () => "https://display.example.com/image.webp",
-    supportsDirectAccess: (...args: unknown[]) => { assert.equal(args.length, 2, "共享探测不接收单个消费者的 signal"); if (++probeCalls === 2) started(); return probe; },
-    proxyExternalImage: async () => { throw Error("direct probe should succeed"); }
+    supportsDirectAccess: (...args: unknown[]) => {
+      assert.equal(args.length, 2, "共享探测不接收单个消费者的 signal");
+      if (++probeCalls === 2) started();
+      return probe;
+    },
+    proxyExternalImage: async () => {
+      throw Error("direct probe should succeed");
+    }
   };
-  const cancelled = new AbortController(); const other = new AbortController();
-  const first = serveAdminExternalOriginal(item.id, { signal: cancelled.signal }, dependencies as never);
-  const second = serveAdminExternalOriginal(item.id, { signal: other.signal }, dependencies as never);
+  const cancelled = new AbortController();
+  const other = new AbortController();
+  const first = serveAdminExternalOriginal(
+    item.id,
+    { signal: cancelled.signal },
+    dependencies as never
+  );
+  const second = serveAdminExternalOriginal(
+    item.id,
+    { signal: other.signal },
+    dependencies as never
+  );
   await ready;
   const reason = new Error("caller left");
   const rejected = assert.rejects(first, (error) => error === reason);
-  cancelled.abort(reason); await rejected;
+  cancelled.abort(reason);
+  await rejected;
   assert.equal(other.signal.aborted, false);
   resolveProbe(true);
   assert.equal((await second).status, 302);
@@ -2500,9 +2716,16 @@ test("[Server/图片] URL 补全后的长度边界在草稿与正式输入间保
         const accepted = expected.length <= 2048;
         const metadata = { device: "auto", brightness: "auto", [field]: ` ${input} ` };
         const formal = imageMetadataCreateInput.safeParse(metadata);
-        const draft = ingestionSessionUpdateInput.safeParse({ items: [{
-          session_id: "A".repeat(43), image_id: imageId, expected_version: 1, metadata
-        }] });
+        const draft = ingestionSessionUpdateInput.safeParse({
+          items: [
+            {
+              session_id: "A".repeat(43),
+              image_id: imageId,
+              expected_version: 1,
+              metadata
+            }
+          ]
+        });
         assert.equal(formal.success, accepted, `${field}: ${protocol} ${length}`);
         assert.equal(draft.success, accepted);
         assert.equal(normalizeIngestionDraftUrl(field, input), accepted ? expected : null);

@@ -1,8 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import {
-  adminPermissions,
-  type AdminCheckStatusDto
-} from "@imageshow/shared/browser";
+import { adminPermissions, type AdminCheckStatusDto } from "@imageshow/shared/browser";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { api } from "../../../lib/api/client.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
@@ -10,38 +7,30 @@ import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
 import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
-import {
-  readyImageProjection,
-  useAdminCheckStatus
-} from "../../../lib/api/ready-image-cache.js";
+import { readyImageProjection, useAdminCheckStatus } from "../../../lib/api/ready-image-cache.js";
 import {
   readyImageProjectionUsage,
   useAdminRedisInspection,
   useRetainedReadyImageProjectionUsage
 } from "./check-redis-inspection.js";
-import {
-  createPageLifetimeModuleLoader
-} from "../../../lib/page-lifetime-module-loader.js";
-import {
-  formatBytes,
-  revisionFingerprint
-} from "../../../lib/ui/formatters.js";
+import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-module-loader.js";
+import { formatBytes, revisionFingerprint } from "../../../lib/ui/formatters.js";
 import { ReadyImageCachePanel } from "./ReadyImageCachePanel.js";
 import "../../../styles/admin/check.css";
 
 const loadCheckMaintenanceCapability = createPageLifetimeModuleLoader(
   () => import("./CheckMaintenanceCapability.js")
 );
-const CheckStorageMaintenanceActions = lazy(() => (
+const CheckStorageMaintenanceActions = lazy(() =>
   loadCheckMaintenanceCapability().then((module) => ({
     default: module.CheckStorageMaintenanceActions
   }))
-));
-const ReadyImageCacheMaintenancePanel = lazy(() => (
+);
+const ReadyImageCacheMaintenancePanel = lazy(() =>
   loadCheckMaintenanceCapability().then((module) => ({
     default: module.ReadyImageCacheMaintenancePanel
   }))
-));
+);
 const checkViews = [
   { name: "status", label: "状态" },
   { name: "db", label: "数据库" },
@@ -51,24 +40,22 @@ const checkViews = [
   { name: "all", label: "全部" }
 ] as const;
 
-type CheckView = typeof checkViews[number]["name"];
+type CheckView = (typeof checkViews)[number]["name"];
 
 export function CheckPage() {
   const [result, setResult] = useState<unknown>(null);
   const [running, setRunning] = useState("");
-  const [automaticInspectionSatisfied, setAutomaticInspectionSatisfied] =
-    useState(false);
+  const [automaticInspectionSatisfied, setAutomaticInspectionSatisfied] = useState(false);
   const [checkView, setCheckView] = useState<CheckView>("status");
   const permissions = useAdminPermissions();
   const statusQuery = useAdminCheckStatus();
   const projectionStatus = readyImageProjection(statusQuery.data);
-  const automaticInspectionEligible = statusQuery.isSuccess
-    && statusQuery.data.redis.status === "ok"
-    && projectionStatus?.rebuilding !== true;
+  const automaticInspectionEligible =
+    statusQuery.isSuccess &&
+    statusQuery.data.redis.status === "ok" &&
+    projectionStatus?.rebuilding !== true;
   const redisInspectionQuery = useAdminRedisInspection({
-    enabled: automaticInspectionEligible
-      && !automaticInspectionSatisfied
-      && running !== "all"
+    enabled: automaticInspectionEligible && !automaticInspectionSatisfied && running !== "all"
   });
   const {
     currentProjectionUsage: automaticProjectionUsage,
@@ -85,31 +72,25 @@ export function CheckPage() {
         ? projectionUsage
           ? "自动检测失败，继续显示最近一次完整快照；请点击 Redis 重试。"
           : "自动检测失败，请点击 Redis 重试。"
-        : redisInspectionQuery.data !== undefined
-          && !automaticProjectionUsage
-          && !automaticInspectionSatisfied
+        : redisInspectionQuery.data !== undefined &&
+            !automaticProjectionUsage &&
+            !automaticInspectionSatisfied
           ? projectionUsage
             ? "本次检测未完成，继续显示最近一次完整快照。"
             : "检测未完成，部分结果未采用；请点击 Redis 查看明细。"
           : "";
-  const redisInclusiveCheckBlocked = statusQuery.isPending
-    || projectionStatus?.rebuilding === true
-    || redisInspectionQuery.isFetching;
-  const canMigrateStorage = permissions.includes(
-    adminPermissions.storageMaintenanceMigrate
-  );
-  const canMaintainStorage = permissions.includes(
-    adminPermissions.storageMaintenanceExecute
-  ) && permissions.includes(adminPermissions.imageTrashPurge);
-  const canRebuildCache = permissions.includes(
-    adminPermissions.cacheMaintenanceRebuild
-  );
+  const redisInclusiveCheckBlocked =
+    statusQuery.isPending ||
+    projectionStatus?.rebuilding === true ||
+    redisInspectionQuery.isFetching;
+  const canMigrateStorage = permissions.includes(adminPermissions.storageMaintenanceMigrate);
+  const canMaintainStorage =
+    permissions.includes(adminPermissions.storageMaintenanceExecute) &&
+    permissions.includes(adminPermissions.imageTrashPurge);
+  const canRebuildCache = permissions.includes(adminPermissions.cacheMaintenanceRebuild);
   useEffect(() => {
     if (!redisInspectionQuery.error) return;
-    reportAdminUiError(
-      "check.redis.inspection",
-      redisInspectionQuery.error
-    );
+    reportAdminUiError("check.redis.inspection", redisInspectionQuery.error);
   }, [redisInspectionQuery.error]);
 
   useEffect(() => {
@@ -123,21 +104,22 @@ export function CheckPage() {
     if (name === "all") setAutomaticInspectionSatisfied(true);
     setRunning(name);
     try {
-      const value = name === "redis"
-        ? await refetchRedisInspection(redisInspectionQuery)
-        : await api(`${adminApiBasePath}/check/${name}`, {
-          method: "POST",
-          body: body ? JSON.stringify(body) : undefined
-        });
+      const value =
+        name === "redis"
+          ? await refetchRedisInspection(redisInspectionQuery)
+          : await api(`${adminApiBasePath}/check/${name}`, {
+              method: "POST",
+              body: body ? JSON.stringify(body) : undefined
+            });
       setResult(value);
       if (name === "redis") {
         if (retainProjectionUsage(readyImageProjectionUsage(value, "redis"))) {
           setAutomaticInspectionSatisfied(true);
         }
       } else if (name === "all") {
-        allInspectionSatisfied = Boolean(retainProjectionUsage(
-          readyImageProjectionUsage(value, "all")
-        ));
+        allInspectionSatisfied = Boolean(
+          retainProjectionUsage(readyImageProjectionUsage(value, "all"))
+        );
       }
       return value;
     } catch (error) {
@@ -159,7 +141,10 @@ export function CheckPage() {
   return (
     <section className="workspace">
       <header className="workspace-head">
-        <div><h1>检查</h1><p>检查数据库、Redis 与存储一致性</p></div>
+        <div>
+          <h1>检查</h1>
+          <p>检查数据库、Redis 与存储一致性</p>
+        </div>
         <div className="check-actions">
           <div className="actions">
             {checkViews.map((check) => (
@@ -168,13 +153,18 @@ export function CheckPage() {
                 key={check.name}
                 className={checkView === check.name ? "active" : undefined}
                 aria-pressed={checkView === check.name}
-                disabled={Boolean(running) || (
-                  redisInclusiveCheckBlocked
-                  && (check.name === "redis" || check.name === "all")
-                )}
+                disabled={
+                  Boolean(running) ||
+                  (redisInclusiveCheckBlocked && (check.name === "redis" || check.name === "all"))
+                }
                 onClick={() => selectCheckView(check.name)}
               >
-                <AdminIcon name={check.name === "status" ? "dashboard-line" : "refresh-line"} /><StableButtonLabel idle={check.label} busyText="运行中" busy={running === check.name} />
+                <AdminIcon name={check.name === "status" ? "dashboard-line" : "refresh-line"} />
+                <StableButtonLabel
+                  idle={check.label}
+                  busyText="运行中"
+                  busy={running === check.name}
+                />
               </button>
             ))}
           </div>
@@ -196,30 +186,30 @@ export function CheckPage() {
       {(checkView === "status" || checkView === "all") && (
         <>
           <LightweightStatusCards query={statusQuery} />
-          {canRebuildCache
-            ? (
-              <Suspense fallback={(
+          {canRebuildCache ? (
+            <Suspense
+              fallback={
                 <ReadyImageCachePanel
                   query={statusQuery}
                   projectionUsage={projectionUsage}
                   projectionUsageNotice={projectionUsageNotice}
                   reportQueryError={false}
                 />
-              )}>
-                <ReadyImageCacheMaintenancePanel
-                  query={statusQuery}
-                  projectionUsage={projectionUsage}
-                  projectionUsageNotice={projectionUsageNotice}
-                />
-              </Suspense>
-            )
-            : (
-              <ReadyImageCachePanel
+              }
+            >
+              <ReadyImageCacheMaintenancePanel
                 query={statusQuery}
                 projectionUsage={projectionUsage}
                 projectionUsageNotice={projectionUsageNotice}
               />
-            )}
+            </Suspense>
+          ) : (
+            <ReadyImageCachePanel
+              query={statusQuery}
+              projectionUsage={projectionUsage}
+              projectionUsageNotice={projectionUsageNotice}
+            />
+          )}
         </>
       )}
       {result !== null && <CheckResult result={result} />}
@@ -227,9 +217,7 @@ export function CheckPage() {
   );
 }
 
-async function refetchRedisInspection(
-  query: ReturnType<typeof useAdminRedisInspection>
-) {
+async function refetchRedisInspection(query: ReturnType<typeof useAdminRedisInspection>) {
   const result = await query.refetch({ cancelRefetch: false });
   if (result.isError) throw result.error;
   if (result.data === undefined) {
@@ -238,27 +226,43 @@ async function refetchRedisInspection(
   return result.data;
 }
 
-function LightweightStatusCards({ query }: {
-  query: UseQueryResult<AdminCheckStatusDto, Error>;
-}) {
+function LightweightStatusCards({ query }: { query: UseQueryResult<AdminCheckStatusDto, Error> }) {
   const postgresql = query.data?.postgresql;
   const redis = query.data?.redis;
   const requestError = query.isError ? "轻量状态请求失败，请手动刷新重试。" : "";
   return (
     <div className="check-status-grid">
-      <section className={`check-status-card ${postgresql?.status === "ok"
-          ? "ok"
-          : postgresql?.status === "error" || requestError
-            ? "warn"
-            : ""
-        }`}>
+      <section
+        className={`check-status-card ${
+          postgresql?.status === "ok"
+            ? "ok"
+            : postgresql?.status === "error" || requestError
+              ? "warn"
+              : ""
+        }`}
+      >
         <header>
-          <div><h2>PostgreSQL</h2><p>权威图片与后台任务真相源</p></div>
-          <span>{postgresql?.status === "ok" ? "已连接" : postgresql?.status === "error" ? "异常" : "读取中"}</span>
+          <div>
+            <h2>PostgreSQL</h2>
+            <p>权威图片与后台任务真相源</p>
+          </div>
+          <span>
+            {postgresql?.status === "ok"
+              ? "已连接"
+              : postgresql?.status === "error"
+                ? "异常"
+                : "读取中"}
+          </span>
         </header>
-        {requestError && <p className="admin-error" role="alert">{requestError}</p>}
+        {requestError && (
+          <p className="admin-error" role="alert">
+            {requestError}
+          </p>
+        )}
         {postgresql?.status === "error" && (
-          <p className="admin-error" role="alert">{postgresql.error.category} · {postgresql.error.code} · {postgresql.error.message}</p>
+          <p className="admin-error" role="alert">
+            {postgresql.error.category} · {postgresql.error.code} · {postgresql.error.message}
+          </p>
         )}
         <dl>
           <div>
@@ -267,45 +271,101 @@ function LightweightStatusCards({ query }: {
               {postgresql?.status === "ok" ? postgresql.data.version : "—"}
             </dd>
           </div>
-          <div><dt>响应耗时</dt><dd>{postgresql?.status === "ok" ? `${postgresql.data.latency_ms} ms` : "—"}</dd></div>
-          <div><dt>ready / 总图片</dt><dd>{postgresql?.status === "ok" ? `${postgresql.data.ready_images.toLocaleString()} / ${postgresql.data.total_images.toLocaleString()}` : "—"}</dd></div>
           <div>
-            <dt>权威 revision 指纹</dt>
-            <dd title={postgresql?.status === "ok" ? `完整 revision：${postgresql.data.authoritative_revision}` : undefined}>
-              {revisionFingerprint(postgresql?.status === "ok" ? postgresql.data.authoritative_revision : null)}
+            <dt>响应耗时</dt>
+            <dd>{postgresql?.status === "ok" ? `${postgresql.data.latency_ms} ms` : "—"}</dd>
+          </div>
+          <div>
+            <dt>ready / 总图片</dt>
+            <dd>
+              {postgresql?.status === "ok"
+                ? `${postgresql.data.ready_images.toLocaleString()} / ${postgresql.data.total_images.toLocaleString()}`
+                : "—"}
             </dd>
           </div>
-          <div><dt>异常后台任务</dt><dd>{postgresql?.status === "ok" ? postgresql.data.abnormal_jobs.toLocaleString() : "—"}</dd></div>
+          <div>
+            <dt>权威 revision 指纹</dt>
+            <dd
+              title={
+                postgresql?.status === "ok"
+                  ? `完整 revision：${postgresql.data.authoritative_revision}`
+                  : undefined
+              }
+            >
+              {revisionFingerprint(
+                postgresql?.status === "ok" ? postgresql.data.authoritative_revision : null
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt>异常后台任务</dt>
+            <dd>
+              {postgresql?.status === "ok" ? postgresql.data.abnormal_jobs.toLocaleString() : "—"}
+            </dd>
+          </div>
         </dl>
       </section>
-      <section className={`check-status-card ${redis?.status === "ok"
-          ? "ok"
-          : redis?.status === "error" || requestError
-            ? "warn"
-            : ""
-        }`}>
+      <section
+        className={`check-status-card ${
+          redis?.status === "ok" ? "ok" : redis?.status === "error" || requestError ? "warn" : ""
+        }`}
+      >
         <header>
-          <div><h2>Redis</h2><p>缓存、会话与安全运行时依赖</p></div>
-          <span>{redis?.status === "ok" ? "已连接" : redis?.status === "error" ? "异常" : "读取中"}</span>
+          <div>
+            <h2>Redis</h2>
+            <p>缓存、会话与安全运行时依赖</p>
+          </div>
+          <span>
+            {redis?.status === "ok" ? "已连接" : redis?.status === "error" ? "异常" : "读取中"}
+          </span>
         </header>
-        {requestError && <p className="admin-error" role="alert">{requestError}</p>}
+        {requestError && (
+          <p className="admin-error" role="alert">
+            {requestError}
+          </p>
+        )}
         {redis?.status === "error" && (
-          <p className="admin-error" role="alert">{redis.error.category} · {redis.error.code} · {redis.error.message}</p>
+          <p className="admin-error" role="alert">
+            {redis.error.category} · {redis.error.code} · {redis.error.message}
+          </p>
         )}
         <dl>
-          <div><dt>版本 / DB</dt><dd>{redis?.status === "ok" ? `${redis.data.version} / ${redis.data.configured_db}` : "—"}</dd></div>
-          <div><dt>响应耗时</dt><dd>{redis?.status === "ok" ? `${redis.data.latency_ms} ms` : "—"}</dd></div>
-          <div><dt>全局碎片率</dt><dd>{redis?.status === "ok" ? redis.data.memory.fragmentation_ratio ?? "—" : "—"}</dd></div>
+          <div>
+            <dt>版本 / DB</dt>
+            <dd>
+              {redis?.status === "ok" ? `${redis.data.version} / ${redis.data.configured_db}` : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt>响应耗时</dt>
+            <dd>{redis?.status === "ok" ? `${redis.data.latency_ms} ms` : "—"}</dd>
+          </div>
+          <div>
+            <dt>全局碎片率</dt>
+            <dd>{redis?.status === "ok" ? (redis.data.memory.fragmentation_ratio ?? "—") : "—"}</dd>
+          </div>
           <div>
             <dt title="Redis 分配器已分配的总内存（INFO MEMORY: used_memory）">全局 used</dt>
-            <dd>{redis?.status === "ok" ? formatStatusBytes(redis.data.memory.used_memory_bytes) : "—"}</dd>
+            <dd>
+              {redis?.status === "ok"
+                ? formatStatusBytes(redis.data.memory.used_memory_bytes)
+                : "—"}
+            </dd>
           </div>
           <div>
-            <dt title="操作系统观测到的 Redis 常驻内存（INFO MEMORY: used_memory_rss）">全局 RSS</dt>
-            <dd>{redis?.status === "ok" ? formatStatusBytes(redis.data.memory.used_memory_rss_bytes) : "—"}</dd>
+            <dt title="操作系统观测到的 Redis 常驻内存（INFO MEMORY: used_memory_rss）">
+              全局 RSS
+            </dt>
+            <dd>
+              {redis?.status === "ok"
+                ? formatStatusBytes(redis.data.memory.used_memory_rss_bytes)
+                : "—"}
+            </dd>
           </div>
         </dl>
-        <p className="check-status-note">内存字段来自 INFO MEMORY，仅表示整个 Redis 实例的观测值。</p>
+        <p className="check-status-note">
+          内存字段来自 INFO MEMORY，仅表示整个 Redis 实例的观测值。
+        </p>
       </section>
     </div>
   );
@@ -316,15 +376,23 @@ function formatStatusBytes(value: number | null) {
 }
 
 function CheckResult({ result }: { result: unknown }) {
-  const objectResult = result && typeof result === "object" ? result as Record<string, unknown> : { value: result };
+  const objectResult =
+    result && typeof result === "object" ? (result as Record<string, unknown>) : { value: result };
   const entries = Object.entries(objectResult).filter(([key]) => key !== "ok");
   const totalIssues = countCheckIssues(objectResult);
   const maintenanceSummary = storageMaintenanceSummary(objectResult);
   return (
     <>
-      <div className={`check-summary ${maintenanceSummary?.warning || totalIssues ? "warn" : "ok"}`}>
-        <strong>{maintenanceSummary?.title ?? (totalIssues ? `发现 ${totalIssues} 项需要处理` : "检查结果正常")}</strong>
-        <span>{maintenanceSummary?.detail ?? "下方卡片展示每项检查的摘要，展开 JSON 可查看原始明细。"}</span>
+      <div
+        className={`check-summary ${maintenanceSummary?.warning || totalIssues ? "warn" : "ok"}`}
+      >
+        <strong>
+          {maintenanceSummary?.title ??
+            (totalIssues ? `发现 ${totalIssues} 项需要处理` : "检查结果正常")}
+        </strong>
+        <span>
+          {maintenanceSummary?.detail ?? "下方卡片展示每项检查的摘要，展开 JSON 可查看原始明细。"}
+        </span>
       </div>
       <div className="check-result">
         {entries.map(([key, value]) => {
@@ -408,7 +476,7 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   images: "图片总数",
   default_backend: "默认存储后端",
   storage: "存储深度检查",
-  trash: "回收站深度检查",
+  trash: "回收站深度检查"
 };
 
 function checkResultLabel(key: string) {
@@ -417,20 +485,32 @@ function checkResultLabel(key: string) {
 
 function isIssueKey(key: string) {
   return [
-    "issues", "operations", "failures", "failed", "unavailable_backends", "incomplete_listings", "error", "error_count",
-    "missing_objects", "missing_thumbs", "pending_thumbnail_repairs",
-    "orphan_objects", "orphan_thumbs",
-    "stale_ingestion_raw_files", "stale_ingestion_part_files", "stale_ingestion_prepared_files",
-    "incomplete_ingestion_temp_scan", "ready_cache_mismatch"
+    "issues",
+    "operations",
+    "failures",
+    "failed",
+    "unavailable_backends",
+    "incomplete_listings",
+    "error",
+    "error_count",
+    "missing_objects",
+    "missing_thumbs",
+    "pending_thumbnail_repairs",
+    "orphan_objects",
+    "orphan_thumbs",
+    "stale_ingestion_raw_files",
+    "stale_ingestion_part_files",
+    "stale_ingestion_prepared_files",
+    "incomplete_ingestion_temp_scan",
+    "ready_cache_mismatch"
   ].includes(key);
 }
 
 function storageMaintenanceSummary(result: Record<string, unknown>) {
-  const storage = result.storage
-    && typeof result.storage === "object"
-    && !Array.isArray(result.storage)
-    ? result.storage as Record<string, unknown>
-    : result;
+  const storage =
+    result.storage && typeof result.storage === "object" && !Array.isArray(result.storage)
+      ? (result.storage as Record<string, unknown>)
+      : result;
   if (!("requested" in storage) || !("repaired" in storage) || !("items" in storage)) {
     return null;
   }
@@ -440,11 +520,12 @@ function storageMaintenanceSummary(result: Record<string, unknown>) {
   const skipped = numericResult(storage.skipped);
   const failed = numericResult(storage.failed);
   const prunedDirs = numericResult(storage.pruned_dirs);
-  const trashPurge = result.trash_purge
-    && typeof result.trash_purge === "object"
-    && !Array.isArray(result.trash_purge)
-    ? result.trash_purge as Record<string, unknown>
-    : {};
+  const trashPurge =
+    result.trash_purge &&
+    typeof result.trash_purge === "object" &&
+    !Array.isArray(result.trash_purge)
+      ? (result.trash_purge as Record<string, unknown>)
+      : {};
   const retriedJobs = numericResult(trashPurge.retried_jobs);
   const repairedJobs = numericResult(trashPurge.repaired_jobs);
   return {
@@ -468,9 +549,11 @@ function countCheckIssues(result: Record<string, unknown>) {
     if (key === "ok") continue;
     if (isIssueKey(key)) {
       if (
-        (key === "stale_ingestion_raw_files" || key === "stale_ingestion_part_files" || key === "stale_ingestion_prepared_files")
-        && value
-        && typeof value === "object"
+        (key === "stale_ingestion_raw_files" ||
+          key === "stale_ingestion_part_files" ||
+          key === "stale_ingestion_prepared_files") &&
+        value &&
+        typeof value === "object"
       ) {
         total += numericResult((value as Record<string, unknown>).count);
       } else {

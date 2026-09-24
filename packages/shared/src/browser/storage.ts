@@ -1,11 +1,7 @@
 import type { ApiSuccessResponseDto } from "./common.ts";
 
 export type StorageBackendDeleteBlocker =
-  | "built_in"
-  | "default"
-  | "images"
-  | "ingestion_sessions"
-  | "cleanup_jobs";
+  "built_in" | "default" | "images" | "ingestion_sessions" | "cleanup_jobs";
 
 export type StorageBackendDeleteAction = "delete" | "migrate" | "blocked";
 
@@ -95,10 +91,11 @@ type StorageBackendAdminBaseDto = StorageBackendOptionDto & {
   deletion: StorageBackendDeletionState;
 };
 
-export type StorageBackendAdminDto = StorageBackendAdminBaseDto & (
-  | { type: "local"; public_base_url: string }
-  | { type: "s3"; s3: StorageBackendS3Dto; content_md5: boolean | null }
-);
+export type StorageBackendAdminDto = StorageBackendAdminBaseDto &
+  (
+    | { type: "local"; public_base_url: string }
+    | { type: "s3"; s3: StorageBackendS3Dto; content_md5: boolean | null }
+  );
 
 export type StorageBackendsAdminResponseDto = {
   backends: StorageBackendAdminDto[];

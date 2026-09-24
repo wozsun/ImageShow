@@ -1,43 +1,26 @@
 import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  parseHTML
-} from "linkedom";
+import { parseHTML } from "linkedom";
 import {
   type AdminCheckStatusDto,
   type AdminOverviewDto
 } from "../../../../packages/shared/src/browser.ts";
-import type {
-  PublicImageItem
-} from "../../../../packages/web/src/lib/types.ts";
-import {
-  ApiClientError,
-  clearCsrfToken
-} from "../../../../packages/web/src/lib/api/client.ts";
+import type { PublicImageItem } from "../../../../packages/web/src/lib/types.ts";
+import { ApiClientError, clearCsrfToken } from "../../../../packages/web/src/lib/api/client.ts";
 
-import {
-  queryKeys
-} from "../../../../packages/web/src/lib/api/query-keys.ts";
+import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
 
-import {
-  imageAdminConfirmationCopy
-} from "../../../../packages/web/src/pages/admin/images/useImageAdminOperations.ts";
+import { imageAdminConfirmationCopy } from "../../../../packages/web/src/pages/admin/images/useImageAdminOperations.ts";
 
-import {
-  adminImageListItem
-} from "../../support/web-test-context.ts";
-import {
-  inputText
-} from "../../support/dom-events.ts";
+import { adminImageListItem } from "../../support/web-test-context.ts";
+import { inputText } from "../../support/dom-events.ts";
 
 test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重建结束只刷新一次", async () => {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const { QueryClient, QueryClientProvider } = await import(
-    "@tanstack/react-query"
-  );
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
   const { MemoryRouter } = await import("react-router");
   const { registerHooks } = await import("node:module");
   const cssHooks = registerHooks({
@@ -48,13 +31,12 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
       return nextLoad(url, context);
     }
   });
-  const { Overview } = await import(
-    "../../../../packages/web/src/pages/admin/Overview.tsx"
-  ).finally(() => cssHooks.deregister());
+  const { Overview } =
+    await import("../../../../packages/web/src/pages/admin/Overview.tsx").finally(() =>
+      cssHooks.deregister()
+    );
 
-  const overviewResult = (
-    redisCache: AdminOverviewDto["redis_cache"]
-  ): AdminOverviewDto => ({
+  const overviewResult = (redisCache: AdminOverviewDto["redis_cache"]): AdminOverviewDto => ({
     gallery: 7,
     theme_unset: 0,
     trash: 0,
@@ -131,9 +113,7 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
           total: rebuilding ? 7 : null,
           last_updated_at: "2026-08-15T01:00:00.000Z",
           full_rebuild_started_at: "2026-08-15T00:59:00.000Z",
-          full_rebuild_completed_at: rebuilding
-            ? null
-            : "2026-08-15T01:00:00.000Z",
+          full_rebuild_completed_at: rebuilding ? null : "2026-08-15T01:00:00.000Z",
           full_rebuild_duration_ms: rebuilding ? null : 60_000,
           last_full_rebuild_core_memory_bytes: 2_048,
           last_full_rebuild_measured_at: "2026-08-15T01:00:00.000Z",
@@ -155,15 +135,17 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
       value: React
     });
     try {
-      return renderToStaticMarkup(React.createElement(
-        QueryClientProvider,
-        { client },
+      return renderToStaticMarkup(
         React.createElement(
-          MemoryRouter,
-          { initialEntries: ["/admin"] },
-          React.createElement(Overview, { canManageStorage: true })
+          QueryClientProvider,
+          { client },
+          React.createElement(
+            MemoryRouter,
+            { initialEntries: ["/admin"] },
+            React.createElement(Overview, { canManageStorage: true })
+          )
         )
-      ));
+      );
     } finally {
       client.clear();
       if (previousReact) {
@@ -174,59 +156,41 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
     }
   };
 
-  const currentMarkup = renderOverviewMarkup(overviewResult(cacheResult(
-    1_024,
-    "2026-08-15T01:00:01.000Z",
-    2_048,
-    "2026-08-15T01:00:00.000Z"
-  )));
-  assert.match(currentMarkup, />1\.0 KB · 已同步</);
-  assert.match(
-    currentMarkup,
-    /title="当前核心图片投影占用 1\.0 KB，测量于 [^"]+"/
+  const currentMarkup = renderOverviewMarkup(
+    overviewResult(
+      cacheResult(1_024, "2026-08-15T01:00:01.000Z", 2_048, "2026-08-15T01:00:00.000Z")
+    )
   );
-  const historicalMarkup = renderOverviewMarkup(overviewResult(cacheResult(
-    null,
-    null,
-    2_048,
-    "2026-08-15T01:00:00.000Z"
-  )));
+  assert.match(currentMarkup, />1\.0 KB · 已同步</);
+  assert.match(currentMarkup, /title="当前核心图片投影占用 1\.0 KB，测量于 [^"]+"/);
+  const historicalMarkup = renderOverviewMarkup(
+    overviewResult(cacheResult(null, null, 2_048, "2026-08-15T01:00:00.000Z"))
+  );
   assert.match(historicalMarkup, />2\.0 KB · 已同步</);
   assert.match(
     historicalMarkup,
     /title="当前核心占用未知；最近完整重建核心占用 2\.0 KB，测量于 [^"]+"/
   );
-  const unknownMarkup = renderOverviewMarkup(overviewResult(cacheResult(
-    null,
-    null,
-    null,
-    null
-  )));
+  const unknownMarkup = renderOverviewMarkup(overviewResult(cacheResult(null, null, null, null)));
   assert.match(unknownMarkup, />— · 已同步</);
   assert.match(unknownMarkup, /title="当前核心图片投影占用未知"/);
 
   const { document, window } = parseHTML(
-    "<!doctype html><html><body><div id=\"root\"></div></body></html>"
+    '<!doctype html><html><body><div id="root"></div></body></html>'
   );
-  const initialOverview = overviewResult(cacheResult(
-    null,
-    null,
-    2_048,
-    "2026-08-15T01:00:00.000Z",
-    true
-  ));
-  const refreshedOverview = overviewResult(cacheResult(
-    3_072,
-    "2026-08-15T01:01:00.000Z",
-    2_048,
-    "2026-08-15T01:00:00.000Z"
-  ));
+  const initialOverview = overviewResult(
+    cacheResult(null, null, 2_048, "2026-08-15T01:00:00.000Z", true)
+  );
+  const refreshedOverview = overviewResult(
+    cacheResult(3_072, "2026-08-15T01:01:00.000Z", 2_048, "2026-08-15T01:00:00.000Z")
+  );
   let statusRequests = 0;
   let overviewRequests = 0;
-  const jsonResponse = (value: unknown) => new Response(JSON.stringify(value), {
-    status: 200,
-    headers: { "content-type": "application/json" }
-  });
+  const jsonResponse = (value: unknown) =>
+    new Response(JSON.stringify(value), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
   const fetchStub = async (input: RequestInfo | URL) => {
     const path = String(input);
     if (path === "/api/admin/check/status") {
@@ -255,9 +219,9 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -285,20 +249,21 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
 
   try {
     await React.act(async () => {
-      root.render(React.createElement(
-        QueryClientProvider,
-        { client },
+      root.render(
         React.createElement(
-          MemoryRouter,
-          { initialEntries: ["/admin"] },
-          React.createElement(Overview, { canManageStorage: true })
+          QueryClientProvider,
+          { client },
+          React.createElement(
+            MemoryRouter,
+            { initialEntries: ["/admin"] },
+            React.createElement(Overview, { canManageStorage: true })
+          )
         )
-      ));
+      );
     });
-    await settleUntil(() => (
-      statusRequests === 1
-      && client.getQueryState(queryKeys.overview)?.isInvalidated === true
-    ));
+    await settleUntil(
+      () => statusRequests === 1 && client.getQueryState(queryKeys.overview)?.isInvalidated === true
+    );
     assert.equal(overviewRequests, 0, "重建中只标脏，不得刷新 overview");
 
     await React.act(async () => {
@@ -310,11 +275,7 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
       client.setQueryData(queryKeys.adminCheckStatus, checkStatus(false));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    assert.equal(
-      overviewRequests,
-      1,
-      "rebuilding→ready 后只允许唯一 overview owner 刷新一次"
-    );
+    assert.equal(overviewRequests, 1, "rebuilding→ready 后只允许唯一 overview owner 刷新一次");
   } finally {
     await React.act(async () => root.unmount());
     client.clear();
@@ -332,9 +293,8 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
     "<!doctype html><html><body><div id=root></div></body></html>"
   );
   const React = await import("react");
-  const requestAnimationFrame = (callback: FrameRequestCallback) => (
-    setTimeout(() => callback(Date.now()), 0) as unknown as number
-  );
+  const requestAnimationFrame = (callback: FrameRequestCallback) =>
+    setTimeout(() => callback(Date.now()), 0) as unknown as number;
   const cancelAnimationFrame = (handle: number) => clearTimeout(handle);
   const matchMedia = (query: string) => ({
     matches: false,
@@ -403,9 +363,9 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -428,16 +388,12 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
     });
     deregisterCssHooks = () => cssHooks.deregister();
     const { createRoot } = await import("react-dom/client");
-    const { QueryClient, QueryClientProvider } = await import(
-      "@tanstack/react-query"
-    );
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { MemoryRouter } = await import("react-router");
-    const { AuthSessionProvider } = await import(
-      "../../../../packages/web/src/hooks/useAuthSession.tsx"
-    );
-    const { ImageDetailModal } = await import(
-      "../../../../packages/web/src/components/image/ImageDetailModal.tsx"
-    );
+    const { AuthSessionProvider } =
+      await import("../../../../packages/web/src/hooks/useAuthSession.tsx");
+    const { ImageDetailModal } =
+      await import("../../../../packages/web/src/components/image/ImageDetailModal.tsx");
     const container = document.getElementById("root");
     assert.ok(container);
     const publicItem = (originalUrl: string | null): PublicImageItem => ({
@@ -524,71 +480,79 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
           version_settings: { enabled: true, link_enabled: true }
         });
       } else if (auth === "expired") {
-        await client.fetchQuery({
-          queryKey: queryKeys.me,
-          queryFn: async () => {
-            throw new ApiClientError("管理员登录已失效", 401);
-          },
-          retry: false
-        }).catch(() => undefined);
+        await client
+          .fetchQuery({
+            queryKey: queryKeys.me,
+            queryFn: async () => {
+              throw new ApiClientError("管理员登录已失效", 401);
+            },
+            retry: false
+          })
+          .catch(() => undefined);
       }
 
       const root = createRoot(container);
       try {
         await React.act(async () => {
-          root.render(React.createElement(
-            QueryClientProvider,
-            { client },
+          root.render(
             React.createElement(
-              MemoryRouter,
-              { initialEntries: ["/"] },
+              QueryClientProvider,
+              { client },
               React.createElement(
-                AuthSessionProvider,
-                null,
-                admin
-                  ? React.createElement(ImageDetailModal, {
-                      item: adminImageListItem({
-                        id: publicItem(originalUrl).id,
-                        status: "deleted",
-                        original_url: originalUrl
-                      }),
-                      admin: true,
-                      storageLabel: "本地存储",
-                      onClose() {}
-                    })
-                  : React.createElement(ImageDetailModal, {
-                      item: { ...publicItem(originalUrl), source: sourceUrl, ...(objectUrl === undefined ? {} : { object_url: objectUrl }) },
-                      admin: false,
-                      detailLoading,
-                      detailError,
-                      onClose() {}
-                    })
+                MemoryRouter,
+                { initialEntries: ["/"] },
+                React.createElement(
+                  AuthSessionProvider,
+                  null,
+                  admin
+                    ? React.createElement(ImageDetailModal, {
+                        item: adminImageListItem({
+                          id: publicItem(originalUrl).id,
+                          status: "deleted",
+                          original_url: originalUrl
+                        }),
+                        admin: true,
+                        storageLabel: "本地存储",
+                        onClose() {}
+                      })
+                    : React.createElement(ImageDetailModal, {
+                        item: {
+                          ...publicItem(originalUrl),
+                          source: sourceUrl,
+                          ...(objectUrl === undefined ? {} : { object_url: objectUrl })
+                        },
+                        admin: false,
+                        detailLoading,
+                        detailError,
+                        onClose() {}
+                      })
+                )
               )
             )
-          ));
+          );
           await Promise.resolve();
         });
-        const original = document.querySelector<HTMLAnchorElement>(
-          ".image-detail-original"
-        );
-        const source = document.querySelector<HTMLAnchorElement>(
-          ".image-detail-source"
-        );
+        const original = document.querySelector<HTMLAnchorElement>(".image-detail-original");
+        const source = document.querySelector<HTMLAnchorElement>(".image-detail-source");
         return {
           titleText: document.querySelector(".image-detail-title-row h2")?.textContent ?? "",
-          titleHref: document.querySelector(".image-detail-title-link")?.getAttribute("href") ?? null,
-          titleFocusable: Boolean(document.querySelector('.image-detail-title-row h2 a[href], .image-detail-title-row h2 [tabindex]')),
+          titleHref:
+            document.querySelector(".image-detail-title-link")?.getAttribute("href") ?? null,
+          titleFocusable: Boolean(
+            document.querySelector(
+              ".image-detail-title-row h2 a[href], .image-detail-title-row h2 [tabindex]"
+            )
+          ),
           present: Boolean(original),
           href: original?.getAttribute("href") ?? null,
           ariaDisabled: original?.getAttribute("aria-disabled") ?? null,
           sourceHref: source?.getAttribute("href") ?? null,
           sourceAriaDisabled: source?.getAttribute("aria-disabled") ?? null,
-          publicProperties: document.querySelector(
-            ".image-detail-public-properties"
-          )?.textContent ?? "",
-          actionClasses: [...document.querySelectorAll<HTMLElement>(
-            ".image-detail-actions > a"
-          )].map((element) => element.className)
+          publicProperties:
+            document.querySelector(".image-detail-public-properties")?.textContent ?? "",
+          actionClasses: [
+            ...document.querySelectorAll<HTMLElement>(".image-detail-actions > a")
+          ].map((element) => element.className)
         };
       } finally {
         await React.act(async () => root.unmount());
@@ -616,30 +580,29 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
     assert.equal(loadedTitle.titleFocusable, true);
 
     for (const auth of ["pending", "expired", "guest"] as const) {
-      assert.equal((await renderScenario({
-        auth
-      })).present, false, `${auth} 即使残留原图链接也不显示按钮`);
+      assert.equal(
+        (
+          await renderScenario({
+            auth
+          })
+        ).present,
+        false,
+        `${auth} 即使残留原图链接也不显示按钮`
+      );
     }
     const guestDetail = await renderScenario({
-      auth: "guest",
+      auth: "guest"
     });
     assert.equal(guestDetail.present, false);
-    assert.equal(
-      guestDetail.href,
-      null
-    );
-    assert.equal(
-      guestDetail.sourceHref,
-      null,
-      "公开卡片不应把任意长度来源地址预载进列表响应"
-    );
+    assert.equal(guestDetail.href, null);
+    assert.equal(guestDetail.sourceHref, null, "公开卡片不应把任意长度来源地址预载进列表响应");
     assert.equal(guestDetail.sourceAriaDisabled, "true");
     assert.match(guestDetail.publicProperties, /主题夜景/);
     assert.match(guestDetail.publicProperties, /标签蓝色星空/);
     assert.deepEqual(
-      guestDetail.actionClasses.map((className) => (
+      guestDetail.actionClasses.map((className) =>
         className.includes("image-detail-source") ? "source" : "original"
-      )),
+      ),
       ["source"],
       "访客仅显示来源入口"
     );
@@ -647,12 +610,23 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
       const detail = await renderScenario({ auth });
       assert.equal(detail.present, true, `${auth} 管理员使用详情提供的原图链接`);
       assert.match(detail.href!, /\/images\/original\//);
-      assert.deepEqual(detail.actionClasses.map(name => name.includes("image-detail-source") ? "source" : "original"), ["source", "original"]);
+      assert.deepEqual(
+        detail.actionClasses.map((name) =>
+          name.includes("image-detail-source") ? "source" : "original"
+        ),
+        ["source", "original"]
+      );
     }
-    assert.equal((await renderScenario({
-      auth: "pending",
-      admin: true
-    })).present, true, "后台调用方必须继续由 admin 上下文显示原图");
+    assert.equal(
+      (
+        await renderScenario({
+          auth: "pending",
+          admin: true
+        })
+      ).present,
+      true,
+      "后台调用方必须继续由 admin 上下文显示原图"
+    );
     const unavailableOriginal = await renderScenario({
       auth: "guest",
       originalUrl: null
@@ -669,11 +643,22 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
         assert.equal(pending.sourceAriaDisabled, "true");
       }
     }
-    const sourceReady = await renderScenario({ auth: "guest", originalUrl: null, sourceUrl: "https://source.example/item" });
+    const sourceReady = await renderScenario({
+      auth: "guest",
+      originalUrl: null,
+      sourceUrl: "https://source.example/item"
+    });
     assert.equal(sourceReady.sourceHref, "https://source.example/item");
     assert.equal(sourceReady.sourceAriaDisabled, "false");
-    const deleted = await renderScenario({ auth: "super", admin: true, originalUrl: "https://img.example.com/images/original/00000000-0000-7000-8000-000000000544" });
-    assert.equal(deleted.href, "https://img.example.com/images/original/00000000-0000-7000-8000-000000000544");
+    const deleted = await renderScenario({
+      auth: "super",
+      admin: true,
+      originalUrl: "https://img.example.com/images/original/00000000-0000-7000-8000-000000000544"
+    });
+    assert.equal(
+      deleted.href,
+      "https://img.example.com/images/original/00000000-0000-7000-8000-000000000544"
+    );
   } finally {
     window.HTMLElement.prototype.focus = originalFocus;
     window.HTMLElement.prototype.blur = originalBlur;
@@ -690,7 +675,7 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
 });
 test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前置且不追加列表读取", async () => {
   const { window, document } = parseHTML(
-    "<!doctype html><html><body><div id=\"root\"></div></body></html>"
+    '<!doctype html><html><body><div id="root"></div></body></html>'
   );
   const React = await import("react");
   const matchMedia = (query: string) => ({
@@ -726,11 +711,17 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
     link: "https://weibo.com/u/4444444444",
     derived_identity: { provider: "weibo", id: "4444444444" }
   };
-  const createdAuthor = { ...initialAuthor, slug: "author-new-first", display_name: "New first", sort_order: 2 };
-  const jsonResponse = (value: unknown) => new Response(JSON.stringify(value), {
-    status: 200,
-    headers: { "content-type": "application/json" }
-  });
+  const createdAuthor = {
+    ...initialAuthor,
+    slug: "author-new-first",
+    display_name: "New first",
+    sort_order: 2
+  };
+  const jsonResponse = (value: unknown) =>
+    new Response(JSON.stringify(value), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
   const fetchStub = async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = new URL(String(input), "https://imageshow.test").pathname;
     const method = String(init?.method ?? "GET").toUpperCase();
@@ -742,10 +733,7 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
       authorGets += 1;
       return jsonResponse({ ok: true, items: [initialAuthor] });
     }
-    if (
-      path === "/api/admin/authors/author-profile-test"
-      && method === "POST"
-    ) {
+    if (path === "/api/admin/authors/author-profile-test" && method === "POST") {
       authorPosts += 1;
       submittedBodies.push(JSON.parse(String(init?.body ?? "{}")));
       return jsonResponse({ ok: true, item: committedAuthor });
@@ -768,9 +756,9 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -793,19 +781,14 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
     });
     deregisterCssHooks = () => cssHooks.deregister();
     const { createRoot } = await import("react-dom/client");
-    const { QueryClient, QueryClientProvider } = await import(
-      "@tanstack/react-query"
-    );
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
     const { MemoryRouter } = await import("react-router");
-    const { AuthSessionProvider } = await import(
-      "../../../../packages/web/src/hooks/useAuthSession.tsx"
-    );
-    const { ActionFeedbackProvider } = await import(
-      "../../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx"
-    );
-    const { VocabularyAdmin } = await import(
-      "../../../../packages/web/src/pages/admin/VocabularyAdmin.tsx"
-    );
+    const { AuthSessionProvider } =
+      await import("../../../../packages/web/src/hooks/useAuthSession.tsx");
+    const { ActionFeedbackProvider } =
+      await import("../../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
+    const { VocabularyAdmin } =
+      await import("../../../../packages/web/src/pages/admin/VocabularyAdmin.tsx");
     const client = new QueryClient({
       defaultOptions: {
         queries: {
@@ -833,7 +816,8 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
       queryKeys.galleryFacets,
       queryKeys.galleryStats,
       queryKeys.ingestionVocabulary
-    ]) client.setQueryData(key, {});
+    ])
+      client.setQueryData(key, {});
     const container = document.getElementById("root");
     assert.ok(container);
     const root = createRoot(container);
@@ -850,31 +834,35 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
     };
     try {
       await React.act(async () => {
-        root.render(React.createElement(
-          React.StrictMode,
-          null,
+        root.render(
           React.createElement(
-            QueryClientProvider,
-            { client },
+            React.StrictMode,
+            null,
             React.createElement(
-              MemoryRouter,
-              { initialEntries: ["/admin/authors"] },
+              QueryClientProvider,
+              { client },
               React.createElement(
-                AuthSessionProvider,
-                null,
+                MemoryRouter,
+                { initialEntries: ["/admin/authors"] },
                 React.createElement(
-                  ActionFeedbackProvider,
+                  AuthSessionProvider,
                   null,
-                  React.createElement(VocabularyAdmin, { kind: "authors" })
+                  React.createElement(
+                    ActionFeedbackProvider,
+                    null,
+                    React.createElement(VocabularyAdmin, { kind: "authors" })
+                  )
                 )
               )
             )
           )
-        ));
+        );
       });
-      await settleUntil(() => authorGets >= 1 && Boolean(
-        container.querySelector("input[aria-label='作者 author-profile-test 链接']")
-      ));
+      await settleUntil(
+        () =>
+          authorGets >= 1 &&
+          Boolean(container.querySelector("input[aria-label='作者 author-profile-test 链接']"))
+      );
       await React.act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
       });
@@ -891,51 +879,50 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
       const initialCardChildren = card.childElementCount;
 
       await React.act(async () => {
-        inputText(
-          window as unknown as Window,
-          linkInput,
-          committedAuthor.link
-        );
+        inputText(window as unknown as Window, linkInput, committedAuthor.link);
         await Promise.resolve();
       });
       assert.equal(linkInput.value, committedAuthor.link, "DOM 输入事件必须提交新链接值");
-      await settleUntil(() => [...container.querySelectorAll("button")].some(
+      await settleUntil(() =>
+        [...container.querySelectorAll("button")].some((button) =>
+          button.textContent?.includes("保存")
+        )
+      );
+      const saveButton = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
         (button) => button.textContent?.includes("保存")
-      ));
-      const saveButton = [...container.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent?.includes("保存"));
+      );
       assert.ok(saveButton);
       await React.act(async () => {
-        saveButton.dispatchEvent(new window.Event("click", {
-          bubbles: true,
-          cancelable: true
-        }));
+        saveButton.dispatchEvent(
+          new window.Event("click", {
+            bubbles: true,
+            cancelable: true
+          })
+        );
         await Promise.resolve();
       });
-      await settleUntil(() => (
-        authorPosts === 1
-        && linkInput.getAttribute("title")
-          === "平台: weibo; UID: 4444444444"
-      ));
-      assert.equal(authorGets, authorGetsBeforeSave, "保存成功不得追加作者列表 GET");
-      assert.deepEqual(submittedBodies, [{
-        display_name: "Profile Test",
-        link: "https://weibo.com/u/4444444444"
-      }]);
-      assert.deepEqual(
-        client.getQueryData<{ items: unknown[] }>(queryKeys.authors),
-        { ok: true, items: [committedAuthor] }
+      await settleUntil(
+        () =>
+          authorPosts === 1 && linkInput.getAttribute("title") === "平台: weibo; UID: 4444444444"
       );
+      assert.equal(authorGets, authorGetsBeforeSave, "保存成功不得追加作者列表 GET");
+      assert.deepEqual(submittedBodies, [
+        {
+          display_name: "Profile Test",
+          link: "https://weibo.com/u/4444444444"
+        }
+      ]);
+      assert.deepEqual(client.getQueryData<{ items: unknown[] }>(queryKeys.authors), {
+        ok: true,
+        items: [committedAuthor]
+      });
       assert.equal(linkInput.value, committedAuthor.link);
       assert.equal(linkInput.getAttribute("title"), "平台: weibo; UID: 4444444444");
       assert.equal(authorGets, authorGetsBeforeSave);
       assert.equal(card.childElementCount, initialCardChildren);
       assert.equal(card.querySelectorAll(".entity-card-link-row").length, 1);
       assert.equal(card.querySelectorAll("[role='tooltip']").length, 0);
-      assert.equal(
-        client.getQueryState(queryKeys.authors)?.isInvalidated,
-        false
-      );
+      assert.equal(client.getQueryState(queryKeys.authors)?.isInvalidated, false);
       for (const key of [
         queryKeys.galleryFacets,
         queryKeys.galleryStats,
@@ -947,12 +934,21 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
       const createForm = container.querySelector(".admin-create-form");
       assert.ok(createInput);
       assert.ok(createForm);
-      await React.act(async () => { inputText(window as unknown as Window, createInput, createdAuthor.slug); });
+      await React.act(async () => {
+        inputText(window as unknown as Window, createInput, createdAuthor.slug);
+      });
       await React.act(async () => {
         createForm.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
       });
-      await settleUntil(() => container.querySelector<HTMLInputElement>(".entity-card input")?.value === createdAuthor.slug);
-      assert.deepEqual(client.getQueryData(queryKeys.authors), { ok: true, items: [createdAuthor, committedAuthor] });
+      await settleUntil(
+        () =>
+          container.querySelector<HTMLInputElement>(".entity-card input")?.value ===
+          createdAuthor.slug
+      );
+      assert.deepEqual(client.getQueryData(queryKeys.authors), {
+        ok: true,
+        items: [createdAuthor, committedAuthor]
+      });
       assert.equal(authorGets, authorGetsBeforeSave, "新建直接前置权威 DTO，不追加列表 GET");
     } finally {
       await React.act(async () => root.unmount());
@@ -1006,9 +1002,9 @@ test("[Web/后台访问] 单图移入回收站按钮必须在同一按钮上点�
     IS_REACT_ACT_ENVIRONMENT: true
   };
   const previousGlobals = new Map(
-    Object.keys(installedGlobals).map((key) => (
-      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    ))
+    Object.keys(installedGlobals).map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    )
   );
   for (const [key, value] of Object.entries(installedGlobals)) {
     Object.defineProperty(globalThis, key, {
@@ -1020,26 +1016,28 @@ test("[Web/后台访问] 单图移入回收站按钮必须在同一按钮上点�
 
   try {
     const { createRoot } = await import("react-dom/client");
-    const { TwoStepConfirmIconButton } = await import(
-      "../../../../packages/web/src/components/actions/TwoStepConfirmIconButton.tsx"
-    );
-    const { ADMIN_ICONS } = await import(
-      "../../../../packages/web/src/components/icon/admin-icons.generated.ts"
-    );
+    const { TwoStepConfirmIconButton } =
+      await import("../../../../packages/web/src/components/actions/TwoStepConfirmIconButton.tsx");
+    const { ADMIN_ICONS } =
+      await import("../../../../packages/web/src/components/icon/admin-icons.generated.ts");
     let confirmed = 0;
     const container = document.getElementById("root");
     assert.ok(container);
     const root = createRoot(container);
     await React.act(async () => {
-      root.render(React.createElement(TwoStepConfirmIconButton, {
-        idleIcon: "delete-bin-6-line",
-        confirmIcon: "delete-bin-2-line",
-        busyIcon: "delete-bin-5-line",
-        idleLabel: "删除图片",
-        confirmLabel: "再次点击确认删除图片",
-        busyLabel: "删除中",
-        onConfirm: () => { confirmed += 1; }
-      }));
+      root.render(
+        React.createElement(TwoStepConfirmIconButton, {
+          idleIcon: "delete-bin-6-line",
+          confirmIcon: "delete-bin-2-line",
+          busyIcon: "delete-bin-5-line",
+          idleLabel: "删除图片",
+          confirmLabel: "再次点击确认删除图片",
+          busyLabel: "删除中",
+          onConfirm: () => {
+            confirmed += 1;
+          }
+        })
+      );
       await Promise.resolve();
     });
     const button = container.querySelector("button");
@@ -1063,9 +1061,11 @@ test("[Web/后台访问] 单图移入回收站按钮必须在同一按钮上点�
     });
     assert.equal(button.getAttribute("aria-pressed"), "true");
     await React.act(async () => {
-      document.body.dispatchEvent(new window.Event("pointerdown", {
-        bubbles: true
-      }));
+      document.body.dispatchEvent(
+        new window.Event("pointerdown", {
+          bubbles: true
+        })
+      );
       await Promise.resolve();
     });
     assert.equal(
@@ -1079,24 +1079,25 @@ test("[Web/后台访问] 单图移入回收站按钮必须在同一按钮上点�
     });
     assert.equal(confirmed, 1, "解除后下一次点击只能重新 armed");
     await React.act(async () => {
-      root.render(React.createElement(TwoStepConfirmIconButton, {
-        idleIcon: "delete-bin-6-line",
-        confirmIcon: "delete-bin-2-line",
-        busyIcon: "delete-bin-5-line",
-        idleLabel: "删除图片",
-        confirmLabel: "再次点击确认删除图片",
-        busyLabel: "删除中",
-        busy: true,
-        disabled: true,
-        onConfirm: () => { confirmed += 1; }
-      }));
+      root.render(
+        React.createElement(TwoStepConfirmIconButton, {
+          idleIcon: "delete-bin-6-line",
+          confirmIcon: "delete-bin-2-line",
+          busyIcon: "delete-bin-5-line",
+          idleLabel: "删除图片",
+          confirmLabel: "再次点击确认删除图片",
+          busyLabel: "删除中",
+          busy: true,
+          disabled: true,
+          onConfirm: () => {
+            confirmed += 1;
+          }
+        })
+      );
       await Promise.resolve();
     });
     assert.equal(button.getAttribute("aria-label"), "删除中");
-    assert.equal(
-      button.querySelector("path")?.getAttribute("d"),
-      ADMIN_ICONS["delete-bin-5-line"]
-    );
+    assert.equal(button.querySelector("path")?.getAttribute("d"), ADMIN_ICONS["delete-bin-5-line"]);
     await React.act(async () => root.unmount());
   } finally {
     for (const [key, descriptor] of previousGlobals) {

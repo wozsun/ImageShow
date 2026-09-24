@@ -7,25 +7,58 @@
   --admin-color-role-image-surface: light-dark(#e0e7ff, #1e1f44);
 }
 
-.admin-scroll-list { max-height: calc(100svh - 210px); overflow-y: auto; padding-right: 2px; }
+.admin-scroll-list {
+  max-height: calc(100svh - 210px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
 
 /* 主题 / 标签 / 用户管理：卡片网格（共用 .entity-* 类）。 */
-.admin-create-form { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
-.admin-create-form input { flex: 1 1 200px; max-width: 280px; }
+.admin-create-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.admin-create-form input {
+  flex: 1 1 200px;
+  max-width: 280px;
+}
 /* slug 输入框在列向的 .entity-slug-field 包裹内（下方堆叠校验提示），所以重置基础规则给 input 的
    flex（否则 flex-basis:200px 会被当成列主轴=高度，把输入框撑成 200px 高）：自然高度、填满包裹宽。 */
-.admin-create-form .entity-create-slug { flex: 0 0 auto; max-width: none; }
+.admin-create-form .entity-create-slug {
+  flex: 0 0 auto;
+  max-width: none;
+}
 
-.admin-create-field { flex: 1 1 200px; max-width: 280px; display: flex; flex-direction: column; gap: 4px; }
-.admin-create-form:has(.admin-create-field) { align-items: flex-start; }
+.admin-create-field {
+  flex: 1 1 200px;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.admin-create-form:has(.admin-create-field) {
+  align-items: flex-start;
+}
 /* 主题 / 标签 / 作者的 slug 字段以显示名框（最宽 280px）为基准取约 3/5，即 170px。 */
-.entity-slug-field { flex: 0 1 170px; max-width: 170px; }
+.entity-slug-field {
+  flex: 0 1 170px;
+  max-width: 170px;
+}
 /* 校验提示保持单行，利用显示名输入框下方的空白，而不在 170px 窄框内折行。 */
-.entity-slug-field .admin-field-error { white-space: nowrap; }
+.entity-slug-field .admin-field-error {
+  white-space: nowrap;
+}
 /* 用户管理的密码框略宽，完整容纳密码提示和显示密码按钮。 */
-.user-password-field { flex: 1 1 300px; max-width: 360px; }
+.user-password-field {
+  flex: 1 1 300px;
+  max-width: 360px;
+}
 /* 密码输入框填满字段包裹，使绝对定位的显示按钮保持在输入框内。 */
-.admin-create-form .password-input input { max-width: none; }
+.admin-create-form .password-input input {
+  max-width: none;
+}
 
 /* 滚动视口与卡片网格分层：视口可以延伸到页面边缘，网格独立维护内容留白和列布局。 */
 .entity-admin-grid {
@@ -35,7 +68,9 @@
   gap: var(--admin-card-grid-gap);
   align-content: start;
 }
-.entity-vocabulary-grid { padding-bottom: 8px; }
+.entity-vocabulary-grid {
+  padding-bottom: 8px;
+}
 .entity-card {
   display: flex;
   flex-direction: column;
@@ -45,7 +80,12 @@
   border-radius: 10px;
   background: var(--admin-color-surface-primary);
 }
-.entity-card-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.entity-card-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
 /* 等宽 slug 小框：固定宽度让每张卡片的「显示名」输入框（及角色徽标）横向对齐。本身就是一个只读
    输入框（见 SlugChip）——光标可右移 / 横向滚动来查看并选中完整 slug（普通文本元素做不到）。超长时
    由原生 text-overflow:ellipsis 紧贴文字末尾画出截断号「…」（间距最短、与文字相连），聚焦时浏览器
@@ -65,28 +105,74 @@
   text-overflow: ellipsis;
   cursor: text;
 }
-.entity-display-input { flex: 1 1 0; min-width: 0; }
+.entity-display-input {
+  flex: 1 1 0;
+  min-width: 0;
+}
 
-.entity-link-input { flex: 1 1 0; min-width: 0; }
+.entity-link-input {
+  flex: 1 1 0;
+  min-width: 0;
+}
 /* 页脚只有文字时也以相同最小高度保持卡片对齐。 */
-.entity-card-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; min-height: 34px; }
+.entity-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  min-height: 34px;
+}
 /* 页脚所有按钮固定 34px 高、图标按钮 36px 宽（对齐图片管理卡片页脚）。保存按钮带文字行高，仅用
    min-height 仍会高于 34px 把页脚（和卡片）顶高，故用 height 钉死并去掉纵向内边距（box-sizing 为
    border-box，内容区 32px 足够容纳 18px 图标+文字），使其与图标按钮等高、出现/消失不改变卡片高度。 */
-.entity-card-foot button { height: 34px; min-height: 34px; padding-top: 0; padding-bottom: 0; }
-.entity-card-foot .icon { width: 36px; flex: 0 0 36px; }
-.entity-count { margin-right: auto; white-space: nowrap; }
+.entity-card-foot button {
+  height: 34px;
+  min-height: 34px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.entity-card-foot .icon {
+  width: 36px;
+  flex: 0 0 36px;
+}
+.entity-count {
+  margin-right: auto;
+  white-space: nowrap;
+}
 
-.user-card .entity-card-foot { justify-content: flex-end; }
+.user-card .entity-card-foot {
+  justify-content: flex-end;
+}
 
-.entity-card.is-pinned { background: var(--admin-color-entity-surface-pinned); border-style: dashed; }
-.role-badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
-.role-super { background: var(--admin-color-role-super-surface); color: var(--admin-color-role-super-text); }
-.role-image { background: var(--admin-color-role-image-surface); color: var(--admin-color-role-image-text); }
+.entity-card.is-pinned {
+  background: var(--admin-color-entity-surface-pinned);
+  border-style: dashed;
+}
+.role-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.role-super {
+  background: var(--admin-color-role-super-surface);
+  color: var(--admin-color-role-super-text);
+}
+.role-image {
+  background: var(--admin-color-role-image-surface);
+  color: var(--admin-color-role-image-text);
+}
 
 @media (max-width: 760px) {
   .admin-create-form input,
   .admin-create-form .admin-create-field,
-  .admin-create-form .entity-slug-field { flex-basis: 100%; max-width: none; }
-  .admin-create-form > button { flex: 1; min-height: 44px; }
+  .admin-create-form .entity-slug-field {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .admin-create-form > button {
+    flex: 1;
+    min-height: 44px;
+  }
 }

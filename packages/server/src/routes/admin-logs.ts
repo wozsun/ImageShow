@@ -19,19 +19,25 @@ const clientErrorInput = z.strictObject({
 });
 
 function adminSession(c: Context) {
-  return c.get("session") as {
-    username?: string;
-    role?: string;
-  } | undefined;
+  return c.get("session") as
+    | {
+        username?: string;
+        role?: string;
+      }
+    | undefined;
 }
 
 export function registerAdminLogRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/logs`, requireSuperAdmin, async (c) => {
     const url = new URL(c.req.url);
-    return c.json(apiSuccess(await readRecentLogFile({
-      file: url.searchParams.get("file"),
-      limit: url.searchParams.get("limit")
-    })));
+    return c.json(
+      apiSuccess(
+        await readRecentLogFile({
+          file: url.searchParams.get("file"),
+          limit: url.searchParams.get("limit")
+        })
+      )
+    );
   });
 
   app.post(`${adminApiBasePath}/logs/level`, requireSuperAdmin, async (c) => {

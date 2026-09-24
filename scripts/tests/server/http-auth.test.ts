@@ -1,31 +1,18 @@
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
-import {
-  randomUUID
-} from "node:crypto";
-import {
-  rm,
-  writeFile
-} from "node:fs/promises";
-import {
-  join,
-  resolve,
-  toNamespacedPath
-} from "node:path";
-import {
-  pathToFileURL
-} from "node:url";
+import { randomUUID } from "node:crypto";
+import { rm, writeFile } from "node:fs/promises";
+import { join, resolve, toNamespacedPath } from "node:path";
+import { pathToFileURL } from "node:url";
 import test, { after } from "node:test";
-import { pool, configureDatabasePools, closeDatabasePools } from "../../../packages/server/src/core/database/pools.ts";
 import {
-  createTestDirectory
-} from "../support/test-directory.ts";
-import {
-  runProcess
-} from "../support/process-runner.ts";
-import {
-  Hono
-} from "hono";
+  pool,
+  configureDatabasePools,
+  closeDatabasePools
+} from "../../../packages/server/src/core/database/pools.ts";
+import { createTestDirectory } from "../support/test-directory.ts";
+import { runProcess } from "../support/process-runner.ts";
+import { Hono } from "hono";
 import {
   adminImageListReadStartedAtHeader,
   adminPermissions
@@ -36,23 +23,15 @@ import {
   galleryStatsQuery,
   listQuery
 } from "../../../packages/server/src/routes/validation/images.ts";
-import {
-  parse
-} from "../../../packages/server/src/routes/validation/parse.ts";
+import { parse } from "../../../packages/server/src/routes/validation/parse.ts";
 import {
   normalizePartialContentRange,
   parseSingleByteRange,
   totalSizeFromContentRange
 } from "../../../packages/server/src/core/http/byte-range.ts";
-import {
-  finalizeSecurityHeaders
-} from "../../../packages/server/src/core/http/headers.ts";
-import {
-  readJsonBody
-} from "../../../packages/server/src/core/http/json-body.ts";
-import {
-  limitAdminLoginBody
-} from "../../../packages/server/src/core/http/request-body-limit.ts";
+import { finalizeSecurityHeaders } from "../../../packages/server/src/core/http/headers.ts";
+import { readJsonBody } from "../../../packages/server/src/core/http/json-body.ts";
+import { limitAdminLoginBody } from "../../../packages/server/src/core/http/request-body-limit.ts";
 import {
   assertSameOrigin,
   requestClientIp,
@@ -67,9 +46,7 @@ import {
   auditAdminMutation,
   markAdminReadRequest
 } from "../../../packages/server/src/core/audit-log.ts";
-import {
-  logger
-} from "../../../packages/server/src/core/logger.ts";
+import { logger } from "../../../packages/server/src/core/logger.ts";
 import {
   proxyEtagForUpstream,
   proxyLastModified,
@@ -81,15 +58,9 @@ import {
   isCurrentPasswordHash,
   verifyPassword
 } from "../../../packages/server/src/core/password.ts";
-import {
-  createPageWindow
-} from "../../../packages/server/src/images/page-window.ts";
-import {
-  presentRandomJsonItems
-} from "../../../packages/server/src/random/json-presentation.ts";
-import {
-  invalidateStorageBackendRegistry
-} from "../../../packages/server/src/storage/backends/registry.ts";
+import { createPageWindow } from "../../../packages/server/src/images/page-window.ts";
+import { presentRandomJsonItems } from "../../../packages/server/src/random/json-presentation.ts";
+import { invalidateStorageBackendRegistry } from "../../../packages/server/src/storage/backends/registry.ts";
 import {
   parseReadyImageCacheItem,
   readyImageCacheItemFromRow,
@@ -97,12 +68,8 @@ import {
   serializeReadyImageCacheItem
 } from "../../../packages/server/src/images/ready-cache/model.ts";
 
-import {
-  adminPermissionsForRole
-} from "../../../packages/server/src/users/admin-authorization.ts";
-import {
-  authorizeAdminSessionCredentialTransition
-} from "../../../packages/server/src/users/admin-session.ts";
+import { adminPermissionsForRole } from "../../../packages/server/src/users/admin-authorization.ts";
+import { authorizeAdminSessionCredentialTransition } from "../../../packages/server/src/users/admin-session.ts";
 import {
   closeAdminSessionConnections,
   closeAllAdminSessionConnections,
@@ -122,30 +89,20 @@ import {
   invalidateAllAdminSessions,
   invalidateCommittedAdminSessionsByUsername
 } from "../../../packages/server/src/users/session-invalidation.ts";
-import {
-  imageId,
-  servingReadyCacheItem
-} from "../support/server-test-context.ts";
-import {
-  initializeRuntimeConfig
-} from "../../../packages/server/src/config/runtime-config-store.ts";
+import { imageId, servingReadyCacheItem } from "../support/server-test-context.ts";
+import { initializeRuntimeConfig } from "../../../packages/server/src/config/runtime-config-store.ts";
 
 test("[Server/HTTP 与鉴权] 主站 Host、图片路径与域名热加载遵循统一边界", async () => {
   const repositoryRoot = resolve(import.meta.dirname, "../../..");
   const helperRoot = await createTestDirectory("imageshow-host-boundary-");
   const helperPath = join(helperRoot, "verify-host-boundary.mjs");
-  const runtimeConfigStoreUrl = pathToFileURL(resolve(
-    repositoryRoot,
-    "packages/server/src/config/runtime-config-store.ts"
-  )).href;
-  const siteHostUrl = pathToFileURL(resolve(
-    repositoryRoot,
-    "packages/server/src/config/site-host.ts"
-  )).href;
-  const httpAppUrl = pathToFileURL(resolve(
-    repositoryRoot,
-    "packages/server/src/http-app.ts"
-  )).href;
+  const runtimeConfigStoreUrl = pathToFileURL(
+    resolve(repositoryRoot, "packages/server/src/config/runtime-config-store.ts")
+  ).href;
+  const siteHostUrl = pathToFileURL(
+    resolve(repositoryRoot, "packages/server/src/config/site-host.ts")
+  ).href;
+  const httpAppUrl = pathToFileURL(resolve(repositoryRoot, "packages/server/src/http-app.ts")).href;
   const helperSource = `
 import assert from "node:assert/strict";
 import {
@@ -228,19 +185,20 @@ console.log("host-boundary-ok");
 `;
   try {
     await writeFile(helperPath, helperSource);
-    const result = await runProcess(process.execPath, [
-      resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"),
-      helperPath
-    ], {
-      cwd: repositoryRoot,
-      env: {
-        ...process.env,
-        NODE_ENV: "development",
-        IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: toNamespacedPath(helperRoot),
-        SITE_DOMAIN: "img.example.com"
-      },
-      timeoutMs: 30_000
-    });
+    const result = await runProcess(
+      process.execPath,
+      [resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"), helperPath],
+      {
+        cwd: repositoryRoot,
+        env: {
+          ...process.env,
+          NODE_ENV: "development",
+          IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: toNamespacedPath(helperRoot),
+          SITE_DOMAIN: "img.example.com"
+        },
+        timeoutMs: 30_000
+      }
+    );
     assert.match(result.stdout, /host-boundary-ok/);
   } finally {
     await rm(helperRoot, { recursive: true, force: true });
@@ -274,11 +232,7 @@ test("[Server/HTTP 与鉴权] 公开 cursor 与后台数字页使用严格且互
   assert.equal(galleryStatsQuery.safeParse(completeFilters).success, true);
   assert.equal(adminImageListQuery.safeParse(completeFilters).success, true);
 
-  for (const query of [
-    { page: "2" },
-    { offset: "60" },
-    { unexpected: "true" }
-  ]) {
+  for (const query of [{ page: "2" }, { offset: "60" }, { unexpected: "true" }]) {
     const result = listQuery.safeParse({ ...publicBase, ...query });
     assert.equal(result.success, false);
   }
@@ -312,48 +266,64 @@ test("[Server/HTTP 与鉴权] 公开 cursor 与后台数字页使用严格且互
   });
   assert.throws(
     () => createPageWindow(Number.MAX_SAFE_INTEGER, 2),
-    (error: { status?: number; code?: string }) => (
+    (error: { status?: number; code?: string }) =>
       error.status === 400 && error.code === "validation_error"
-    )
   );
 });
 test("[Server/HTTP 与鉴权] 可信单跳入口忽略转发 Host 并只接受单值客户端 IP", async () => {
   const app = new Hono();
   app.onError((error, context) => handleApiError(context, error));
-  app.get("/inspect", (context) => context.json({
-    ip: requestClientIp(context),
-    secure: requestIsSecure(context)
-  }));
+  app.get("/inspect", (context) =>
+    context.json({
+      ip: requestClientIp(context),
+      secure: requestIsSecure(context)
+    })
+  );
   app.post("/same-origin", (context) => {
     assertSameOrigin(context);
     return context.json({ ok: true });
   });
 
-  const inspect = async (headers: Record<string, string>) => (
-    await (await app.request(new Request("http://internal.test/inspect", {
-      headers: {
-        host: "img.example.com",
-        ...headers
-      }
-    }))).json() as { ip: string; secure: boolean }
+  const inspect = async (headers: Record<string, string>) =>
+    (await (
+      await app.request(
+        new Request("http://internal.test/inspect", {
+          headers: {
+            host: "img.example.com",
+            ...headers
+          }
+        })
+      )
+    ).json()) as { ip: string; secure: boolean };
+  assert.deepEqual(
+    await inspect({
+      "x-forwarded-host": "attacker.example",
+      "x-forwarded-proto": "https",
+      "x-real-ip": "203.0.113.8",
+      "x-forwarded-for": "198.51.100.4, 10.0.0.2"
+    }),
+    { ip: "203.0.113.8", secure: true }
   );
-  assert.deepEqual(await inspect({
-    "x-forwarded-host": "attacker.example",
-    "x-forwarded-proto": "https",
-    "x-real-ip": "203.0.113.8",
-    "x-forwarded-for": "198.51.100.4, 10.0.0.2"
-  }), { ip: "203.0.113.8", secure: true });
-  assert.deepEqual(await inspect({
-    "x-forwarded-for": "198.51.100.4, 10.0.0.2"
-  }), { ip: "unknown", secure: false });
-  assert.deepEqual(await inspect({
-    "x-forwarded-for": "198.51.100.4"
-  }), { ip: "198.51.100.4", secure: false });
-  assert.deepEqual(await inspect({
-    "x-forwarded-proto": "https, http",
-    "x-real-ip": "not-an-ip",
-    "x-forwarded-for": "2001:db8::7"
-  }), { ip: "2001:db8::7", secure: false });
+  assert.deepEqual(
+    await inspect({
+      "x-forwarded-for": "198.51.100.4, 10.0.0.2"
+    }),
+    { ip: "unknown", secure: false }
+  );
+  assert.deepEqual(
+    await inspect({
+      "x-forwarded-for": "198.51.100.4"
+    }),
+    { ip: "198.51.100.4", secure: false }
+  );
+  assert.deepEqual(
+    await inspect({
+      "x-forwarded-proto": "https, http",
+      "x-real-ip": "not-an-ip",
+      "x-forwarded-for": "2001:db8::7"
+    }),
+    { ip: "2001:db8::7", secure: false }
+  );
 
   const sameOriginHeaders = {
     host: "img.example.com",
@@ -361,20 +331,31 @@ test("[Server/HTTP 与鉴权] 可信单跳入口忽略转发 Host 并只接受�
     "x-forwarded-host": "attacker.example",
     "x-forwarded-proto": "https"
   };
-  assert.equal((await app.request(new Request(
-    "http://internal.test/same-origin",
-    { method: "POST", headers: sameOriginHeaders }
-  ))).status, 200);
-  assert.equal((await app.request(new Request(
-    "http://internal.test/same-origin",
-    {
-      method: "POST",
-      headers: {
-        ...sameOriginHeaders,
-        origin: "https://attacker.example"
-      }
-    }
-  ))).status, 403);
+  assert.equal(
+    (
+      await app.request(
+        new Request("http://internal.test/same-origin", {
+          method: "POST",
+          headers: sameOriginHeaders
+        })
+      )
+    ).status,
+    200
+  );
+  assert.equal(
+    (
+      await app.request(
+        new Request("http://internal.test/same-origin", {
+          method: "POST",
+          headers: {
+            ...sameOriginHeaders,
+            origin: "https://attacker.example"
+          }
+        })
+      )
+    ).status,
+    403
+  );
 });
 test("[Server/HTTP 与鉴权] 写路由集中拒绝无效 JSON、未知字段和空更新且无副作用", async () => {
   const app = new Hono();
@@ -393,10 +374,7 @@ test("[Server/HTTP 与鉴权] 写路由集中拒绝无效 JSON、未知字段和
   app.use("/*", auditAdminMutation);
   app.use("/write", limitAdminLoginBody);
   app.post("/write", async (context) => {
-    const input = parse(
-      imageUpdateInput,
-      await readJsonBody(context)
-    );
+    const input = parse(imageUpdateInput, await readJsonBody(context));
     writes.push(input.items[0]?.title ?? "");
     return context.json({ ok: true });
   });
@@ -406,18 +384,18 @@ test("[Server/HTTP 与鉴权] 写路由集中拒绝无效 JSON、未知字段和
     body: string,
     contentType = "application/json; charset=utf-8",
     signal?: AbortSignal
-  ) => app.request(new Request("http://imageshow.test/write", {
-    method: "POST",
-    headers: { "Content-Type": contentType },
-    body,
-    signal
-  }));
-  const expectFailure = async (
-    response: Response,
-    code: string
-  ) => {
+  ) =>
+    app.request(
+      new Request("http://imageshow.test/write", {
+        method: "POST",
+        headers: { "Content-Type": contentType },
+        body,
+        signal
+      })
+    );
+  const expectFailure = async (response: Response, code: string) => {
     assert.equal(response.status, 400);
-    assert.equal((await response.json() as { code?: string }).code, code);
+    assert.equal(((await response.json()) as { code?: string }).code, code);
     assert.deepEqual(writes, []);
     assert.deepEqual(auditEntries, []);
   };
@@ -427,32 +405,42 @@ test("[Server/HTTP 与鉴权] 写路由集中拒绝无效 JSON、未知字段和
     await expectFailure(await request('{"title":"truncated'), "invalid_json");
     await expectFailure(await request(""), "invalid_json");
     await expectFailure(
-      await request(JSON.stringify({
-        items: [{ id: imageId, title: "wrong media type" }]
-      }), "text/plain"),
+      await request(
+        JSON.stringify({
+          items: [{ id: imageId, title: "wrong media type" }]
+        }),
+        "text/plain"
+      ),
       "invalid_json"
     );
     await expectFailure(
-      await request(JSON.stringify({
-        items: [{
-          id: imageId,
-          title: "value",
-          unknown_title: "unknown"
-        }]
-      })),
+      await request(
+        JSON.stringify({
+          items: [
+            {
+              id: imageId,
+              title: "value",
+              unknown_title: "unknown"
+            }
+          ]
+        })
+      ),
       "validation_error"
     );
     await expectFailure(await request('{"items":[]}'), "validation_error");
 
     const abortController = new AbortController();
     abortController.abort();
-    await expectFailure(await request(
-      JSON.stringify({
-        items: [{ id: imageId, title: "must not commit" }]
-      }),
-      "application/json",
-      abortController.signal
-    ), "invalid_json");
+    await expectFailure(
+      await request(
+        JSON.stringify({
+          items: [{ id: imageId, title: "must not commit" }]
+        }),
+        "application/json",
+        abortController.signal
+      ),
+      "invalid_json"
+    );
 
     const valid = await request(
       JSON.stringify({ items: [{ id: imageId, title: "committed" }] }),
@@ -461,9 +449,11 @@ test("[Server/HTTP 与鉴权] 写路由集中拒绝无效 JSON、未知字段和
     assert.equal(valid.status, 200);
     assert.deepEqual(writes, ["committed"]);
     assert.deepEqual(auditEntries, ["admin action"]);
-    const read = await app.request(new Request("http://imageshow.test/read", {
-      method: "POST"
-    }));
+    const read = await app.request(
+      new Request("http://imageshow.test/read", {
+        method: "POST"
+      })
+    );
     assert.equal(read.status, 200);
     assert.deepEqual(auditEntries, ["admin action"]);
   } finally {
@@ -476,8 +466,11 @@ after(closeDatabasePools);
 test("[Server/HTTP 与鉴权] 随机 JSON 卡片复用 canonical 字段且不额外读取详情", async (context) => {
   initializeRuntimeConfig();
   configureDatabasePools({
-    host: "database.invalid", port: 5432, name: "imageshow_test",
-    user: "imageshow_test", password: process.env.DATABASE_PASSWORD!
+    host: "database.invalid",
+    port: 5432,
+    name: "imageshow_test",
+    user: "imageshow_test",
+    password: process.env.DATABASE_PASSWORD!
   });
   const item = servingReadyCacheItem({
     author: "photographer",
@@ -488,22 +481,22 @@ test("[Server/HTTP 与鉴权] 随机 JSON 卡片复用 canonical 字段且不额
     assert.match(sql, /FROM storage_backend/);
     storageQueries += 1;
     return {
-      rows: [{
-        slug: "local",
-        display_name: "Local",
-        type: "local",
-        config: {},
-        enabled: true,
-        is_default: true,
-        namespace_identities: []
-      }]
+      rows: [
+        {
+          slug: "local",
+          display_name: "Local",
+          type: "local",
+          config: {},
+          enabled: true,
+          is_default: true,
+          namespace_identities: []
+        }
+      ]
     };
   });
   invalidateStorageBackendRegistry();
   try {
-    const [presented] = await presentRandomJsonItems(
-      [item]
-    );
+    const [presented] = await presentRandomJsonItems([item]);
     assert.equal(storageQueries, 1);
     assert.equal(presented.id, item.id);
     assert.equal(presented.title, "Random card");
@@ -516,9 +509,12 @@ test("[Server/HTTP 与鉴权] 随机 JSON 卡片复用 canonical 字段且不额
       const cards = await presentRandomJsonItems([item, item], { size });
       assert.equal(storageQueries, 1, "the registry is shared across size variants");
       for (const card of cards) {
-        assert.deepEqual(card, size === "thumb"
-          ? Object.fromEntries(Object.entries(presented).filter(([key]) => key !== "object_url"))
-          : Object.fromEntries(Object.entries(presented).filter(([key]) => key !== "thumb_url")));
+        assert.deepEqual(
+          card,
+          size === "thumb"
+            ? Object.fromEntries(Object.entries(presented).filter(([key]) => key !== "object_url"))
+            : Object.fromEntries(Object.entries(presented).filter(([key]) => key !== "thumb_url"))
+        );
       }
     }
   } finally {
@@ -561,10 +557,7 @@ test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验�
   ]);
   assert.equal(parseReadyImageCacheItem("not-json"), null);
 
-  assert.deepEqual(
-    adminPermissionsForRole("super").sort(),
-    Object.values(adminPermissions).sort()
-  );
+  assert.deepEqual(adminPermissionsForRole("super").sort(), Object.values(adminPermissions).sort());
   assert.deepEqual(adminPermissionsForRole("image"), []);
 
   const password = "ImageShow-final-version-password";
@@ -575,9 +568,10 @@ test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验�
   assert.equal(isCurrentPasswordHash(encoded), true);
   assert.equal(isCurrentPasswordHash("invalid"), false);
 
-  const malformedHash = "$argon2id$v=19$m=65536,t=3,p=4$"
-    + "AAAAAAAAAAAAAAAAAAAAAA$"
-    + "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  const malformedHash =
+    "$argon2id$v=19$m=65536,t=3,p=4$" +
+    "AAAAAAAAAAAAAAAAAAAAAA$" +
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
   assert.equal(isCurrentPasswordHash(malformedHash), false);
   assert.equal(await verifyPassword(malformedHash, password), false);
 });
@@ -588,22 +582,16 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
   const thirdVersion = adminCredentialVersion("third-password-hash");
   assert.equal(firstVersion.length, 43);
   assert.deepEqual(parseAdminCredentialVersions([firstVersion]), [firstVersion]);
-  assert.deepEqual(
-    parseAdminCredentialVersions([firstVersion, secondVersion]),
-    [firstVersion, secondVersion]
-  );
-  assert.deepEqual(
-    adminCredentialTransitionVersions(
-      "first-password-hash",
-      secondVersion
-    ),
-    [firstVersion, secondVersion]
-  );
+  assert.deepEqual(parseAdminCredentialVersions([firstVersion, secondVersion]), [
+    firstVersion,
+    secondVersion
+  ]);
+  assert.deepEqual(adminCredentialTransitionVersions("first-password-hash", secondVersion), [
+    firstVersion,
+    secondVersion
+  ]);
   assert.notDeepEqual(
-    adminCredentialTransitionVersions(
-      "first-password-hash",
-      secondVersion
-    ),
+    adminCredentialTransitionVersions("first-password-hash", secondVersion),
     [initialVersion, secondVersion],
     "等待行锁后的第二次改密必须使用锁内最新代际"
   );
@@ -628,12 +616,13 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
     csrf: "csrf-token",
     role: "image" as const
   };
-  const strictSessionPayload = (credentialVersions: string[]) => JSON.stringify({
-    username: authenticatedSession.username,
-    csrf: authenticatedSession.csrf,
-    role: authenticatedSession.role,
-    credential_versions: credentialVersions
-  });
+  const strictSessionPayload = (credentialVersions: string[]) =>
+    JSON.stringify({
+      username: authenticatedSession.username,
+      csrf: authenticatedSession.csrf,
+      role: authenticatedSession.role,
+      credential_versions: credentialVersions
+    });
   let currentSessionPayload = strictSessionPayload([initialVersion]);
   const replacedSnapshots: string[] = [];
   const transitionStore = {
@@ -641,11 +630,7 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
       assert.equal(id, authenticatedSession.id);
       return currentSessionPayload;
     },
-    async replaceSessionSnapshot(
-      id: string,
-      expectedPayload: string,
-      nextPayload: string
-    ) {
+    async replaceSessionSnapshot(id: string, expectedPayload: string, nextPayload: string) {
       assert.equal(id, authenticatedSession.id);
       if (currentSessionPayload !== expectedPayload) return false;
       replacedSnapshots.push(expectedPayload);
@@ -655,22 +640,16 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
   };
   await authorizeAdminSessionCredentialTransition(
     authenticatedSession,
-    adminCredentialTransitionVersions(
-      "initial-password-hash",
-      firstVersion
-    ),
+    adminCredentialTransitionVersions("initial-password-hash", firstVersion),
     transitionStore
   );
-  assert.deepEqual(
-    JSON.parse(currentSessionPayload).credential_versions,
-    [initialVersion, firstVersion]
-  );
+  assert.deepEqual(JSON.parse(currentSessionPayload).credential_versions, [
+    initialVersion,
+    firstVersion
+  ]);
   await authorizeAdminSessionCredentialTransition(
     authenticatedSession,
-    adminCredentialTransitionVersions(
-      "first-password-hash",
-      secondVersion
-    ),
+    adminCredentialTransitionVersions("first-password-hash", secondVersion),
     transitionStore
   );
   assert.deepEqual(
@@ -684,21 +663,13 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
   await assert.rejects(
     authorizeAdminSessionCredentialTransition(
       authenticatedSession,
-      adminCredentialTransitionVersions(
-        "first-password-hash",
-        secondVersion
-      ),
+      adminCredentialTransitionVersions("first-password-hash", secondVersion),
       transitionStore
     ),
-    (error: unknown) => (
-      (error as { code?: string }).code === "unauthorized"
-    ),
+    (error: unknown) => (error as { code?: string }).code === "unauthorized",
     "相同明文 reset 或同名重建后，stale 会话不得绑定新行锁代际"
   );
-  assert.equal(
-    currentSessionPayload,
-    strictSessionPayload([initialVersion])
-  );
+  assert.equal(currentSessionPayload, strictSessionPayload([initialVersion]));
 
   const snapshotRaceStore = {
     async readSession() {
@@ -711,15 +682,10 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
   await assert.rejects(
     authorizeAdminSessionCredentialTransition(
       authenticatedSession,
-      adminCredentialTransitionVersions(
-        "initial-password-hash",
-        firstVersion
-      ),
+      adminCredentialTransitionVersions("initial-password-hash", firstVersion),
       snapshotRaceStore
     ),
-    (error: unknown) => (
-      (error as { code?: string }).code === "unauthorized"
-    ),
+    (error: unknown) => (error as { code?: string }).code === "unauthorized",
     "读取后 payload 变化时必须拒绝盲写"
   );
 
@@ -729,22 +695,34 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
   const otherUserKey = adminSessionKey("other-user");
   const currentKeys = [preservedKey, staleKey, transitionedKey, otherUserKey];
   const payloads = new Map([
-    [preservedKey, JSON.stringify({
-      username: "alice",
-      credential_versions: [firstVersion]
-    })],
-    [staleKey, JSON.stringify({
-      username: "alice",
-      credential_versions: [firstVersion]
-    })],
-    [transitionedKey, JSON.stringify({
-      username: "alice",
-      credential_versions: [firstVersion, secondVersion]
-    })],
-    [otherUserKey, JSON.stringify({
-      username: "bob",
-      credential_versions: [firstVersion]
-    })]
+    [
+      preservedKey,
+      JSON.stringify({
+        username: "alice",
+        credential_versions: [firstVersion]
+      })
+    ],
+    [
+      staleKey,
+      JSON.stringify({
+        username: "alice",
+        credential_versions: [firstVersion]
+      })
+    ],
+    [
+      transitionedKey,
+      JSON.stringify({
+        username: "alice",
+        credential_versions: [firstVersion, secondVersion]
+      })
+    ],
+    [
+      otherUserKey,
+      JSON.stringify({
+        username: "bob",
+        credential_versions: [firstVersion]
+      })
+    ]
   ]);
   const removed: string[] = [];
   const closedSessionConnections: string[] = [];
@@ -764,12 +742,8 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
     async readSessions(keys: string[]) {
       return keys.map((key) => payloads.get(key) ?? null);
     },
-    async unlinkSessionsIfUnchanged(
-      snapshots: Array<{ key: string; value: string }>
-    ) {
-      const targets = snapshots.filter(({ key, value }) => (
-        payloads.get(key) === value
-      ));
+    async unlinkSessionsIfUnchanged(snapshots: Array<{ key: string; value: string }>) {
+      const targets = snapshots.filter(({ key, value }) => payloads.get(key) === value);
       removed.push(...targets.map(({ key }) => key));
       return targets;
     },
@@ -778,16 +752,15 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
       return keys.length;
     }
   };
-  assert.equal(await invalidateCommittedAdminSessionsByUsername(
-    client,
-    "alice",
-    {
+  assert.equal(
+    await invalidateCommittedAdminSessionsByUsername(client, "alice", {
       operation: "password_change",
       preservedSessionId: "preserved",
       staleCredentialVersion: firstVersion,
       validCredentialVersion: secondVersion
-    }
-  ), 1);
+    }),
+    1
+  );
   assert.deepEqual(removed, [staleKey]);
   assert.deepEqual(closedSessionConnections, ["stale"]);
 
@@ -825,12 +798,8 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
       racingPayloads.set(racingKey, transitionedPayload);
       return snapshot;
     },
-    async unlinkSessionsIfUnchanged(
-      snapshots: Array<{ key: string; value: string }>
-    ) {
-      const targets = snapshots.filter(({ key, value }) => (
-        racingPayloads.get(key) === value
-      ));
+    async unlinkSessionsIfUnchanged(snapshots: Array<{ key: string; value: string }>) {
+      const targets = snapshots.filter(({ key, value }) => racingPayloads.get(key) === value);
       racingRemoved.push(...targets.map(({ key }) => key));
       return targets;
     },
@@ -839,16 +808,15 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
       return keys.length;
     }
   };
-  assert.equal(await invalidateCommittedAdminSessionsByUsername(
-    racingClient,
-    "alice",
-    {
+  assert.equal(
+    await invalidateCommittedAdminSessionsByUsername(racingClient, "alice", {
       operation: "password_change",
       preservedSessionId: "preserved",
       staleCredentialVersion: firstVersion,
       validCredentialVersion: secondVersion
-    }
-  ), 0);
+    }),
+    0
+  );
   assert.deepEqual(racingRemoved, []);
   assert.equal(racingPayloads.get(racingKey), transitionedPayload);
   assert.deepEqual(racingClosed, []);
@@ -871,9 +839,7 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
     async readSessions() {
       return [delayedPayload];
     },
-    async unlinkSessionsIfUnchanged(
-      snapshots: Array<{ key: string; value: string }>
-    ) {
+    async unlinkSessionsIfUnchanged(snapshots: Array<{ key: string; value: string }>) {
       delayedUnlinkCalls += 1;
       return snapshots;
     },
@@ -881,38 +847,31 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
       return keys.length;
     }
   };
-  assert.equal(await invalidateCommittedAdminSessionsByUsername(
-    delayedClient,
-    "alice",
-    {
+  assert.equal(
+    await invalidateCommittedAdminSessionsByUsername(delayedClient, "alice", {
       operation: "password_change",
       preservedSessionId: "preserved",
       staleCredentialVersion: initialVersion,
       validCredentialVersion: firstVersion
-    }
-  ), 0);
-  assert.equal(await invalidateCommittedAdminSessionsByUsername(
-    delayedClient,
-    "alice",
-    {
+    }),
+    0
+  );
+  assert.equal(
+    await invalidateCommittedAdminSessionsByUsername(delayedClient, "alice", {
       operation: "password_reset",
       staleCredentialVersion: initialVersion,
       validCredentialVersion: firstVersion
-    }
-  ), 0);
-  assert.equal(await invalidateCommittedAdminSessionsByUsername(
-    delayedClient,
-    "alice",
-    {
+    }),
+    0
+  );
+  assert.equal(
+    await invalidateCommittedAdminSessionsByUsername(delayedClient, "alice", {
       operation: "account_delete",
       staleCredentialVersion: initialVersion
-    }
-  ), 0);
-  assert.equal(
-    delayedUnlinkCalls,
-    0,
-    "stale 清理不得选择已跨过其代际的新会话或同名重建会话"
+    }),
+    0
   );
+  assert.equal(delayedUnlinkCalls, 0, "stale 清理不得选择已跨过其代际的新会话或同名重建会话");
 
   const delexCalls: string[][] = [];
   const adapter = adminSessionRedisClient({
@@ -930,22 +889,35 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
         delexCalls.push([command, ...arguments_]);
       },
       async exec(): Promise<Array<[Error | null, unknown]>> {
-        return [[null, 0], [null, 1]];
+        return [
+          [null, 0],
+          [null, 1]
+        ];
       }
     })
   });
-  assert.deepEqual(await adapter.unlinkSessionsIfUnchanged([
-    { key: staleKey, value: stalePayload },
-    { key: racingKey, value: transitionedPayload }
-  ]), [{ key: racingKey, value: transitionedPayload }]);
+  assert.deepEqual(
+    await adapter.unlinkSessionsIfUnchanged([
+      { key: staleKey, value: stalePayload },
+      { key: racingKey, value: transitionedPayload }
+    ]),
+    [{ key: racingKey, value: transitionedPayload }]
+  );
   assert.deepEqual(delexCalls, [
     ["DELEX", staleKey, "IFEQ", stalePayload],
     ["DELEX", racingKey, "IFEQ", transitionedPayload]
   ]);
 });
 test("[Server/HTTP 与鉴权] HTTP 范围、缓存验证器和安全响应头遵循当前协议", async () => {
-  const { localObjectEtag } = await import("../../../packages/server/src/storage/objects/validator.ts");
-  const stats = { dev: 1n, ino: 2n, size: 10n, mtimeNs: 1_700_000_000_000_000_000n, ctimeNs: 1_700_000_000_000_000_000n };
+  const { localObjectEtag } =
+    await import("../../../packages/server/src/storage/objects/validator.ts");
+  const stats = {
+    dev: 1n,
+    ino: 2n,
+    size: 10n,
+    mtimeNs: 1_700_000_000_000_000_000n,
+    ctimeNs: 1_700_000_000_000_000_000n
+  };
   const localEtag = localObjectEtag(stats);
   assert.match(localEtag, /^"[A-Za-z0-9_-]{16}"$/);
   assert.equal(localObjectEtag({ ...stats }), localEtag);
@@ -971,27 +943,38 @@ test("[Server/HTTP 与鉴权] HTTP 范围、缓存验证器和安全响应头遵
     assert.equal(upstreamIfNoneMatchForProxy(url, encoded.replace(/^W\//, "")), upstream);
     assert.equal(upstreamIfNoneMatchForProxy(url, `${encoded}, ${encoded}`), upstream);
   }
-  for (const invalid of ['*', '"a", "b"', '"bad\r\nheader"', '"' + "a".repeat(511) + '"']) {
+  for (const invalid of ["*", '"a", "b"', '"bad\r\nheader"', '"' + "a".repeat(511) + '"']) {
     assert.equal(proxyEtagForUpstream(url, invalid), undefined);
   }
   const prefix = proxyEtag!.slice(0, proxyEtag!.lastIndexOf(".") + 1);
-  for (const invalid of ["=", "_", Buffer.from('"a", "b"').toString("base64url"), Buffer.from("*").toString("base64url")]) {
+  for (const invalid of [
+    "=",
+    "_",
+    Buffer.from('"a", "b"').toString("base64url"),
+    Buffer.from("*").toString("base64url")
+  ]) {
     assert.equal(upstreamIfNoneMatchForProxy(url, prefix + invalid + '"'), undefined);
   }
   assert.equal(
     upstreamIfNoneMatchForProxy("https://images.example.com/other.jpg", proxyEtag),
     undefined
   );
-  assert.equal(proxyLastModified(
-    "Mon, 08 Jul 2013 18:06:40 GMT",
-    "2026-08-07T10:00:00.500Z",
-    Date.parse("2026-08-07T12:00:00Z")
-  ), "Fri, 07 Aug 2026 10:00:01 GMT");
-  assert.equal(upstreamIfModifiedSinceForProxy(
-    "Fri, 07 Aug 2026 11:00:00 GMT",
-    "2026-08-07T10:00:00Z",
-    Date.parse("2026-08-07T12:00:00Z")
-  ), "Fri, 07 Aug 2026 11:00:00 GMT");
+  assert.equal(
+    proxyLastModified(
+      "Mon, 08 Jul 2013 18:06:40 GMT",
+      "2026-08-07T10:00:00.500Z",
+      Date.parse("2026-08-07T12:00:00Z")
+    ),
+    "Fri, 07 Aug 2026 10:00:01 GMT"
+  );
+  assert.equal(
+    upstreamIfModifiedSinceForProxy(
+      "Fri, 07 Aug 2026 11:00:00 GMT",
+      "2026-08-07T10:00:00Z",
+      Date.parse("2026-08-07T12:00:00Z")
+    ),
+    "Fri, 07 Aug 2026 11:00:00 GMT"
+  );
 
   const app = new Hono();
   app.use("*", async (context, next) => {
@@ -1020,38 +1003,35 @@ test("[Server/HTTP 与鉴权] HTTP 范围、缓存验证器和安全响应头遵
   assert.equal(preferences.headers.get("cache-control"), "private, no-cache");
   assert.match(preferenceEtag ?? "", /^W\/"[A-Za-z0-9_-]{16}"$/u);
   assert.notEqual(preferenceEtag, apiSuccessEtag({ preferences: { admin_scheme: "light" } }));
-  assert.equal(preferenceEtag, apiSuccessEtag({
-    preferences: { admin_scheme: "dark" }
-  }), "认证首帧可复用完全相同的偏好表示验证器");
+  assert.equal(
+    preferenceEtag,
+    apiSuccessEtag({
+      preferences: { admin_scheme: "dark" }
+    }),
+    "认证首帧可复用完全相同的偏好表示验证器"
+  );
   assert.deepEqual(await preferences.json(), {
     ok: true,
     preferences: { admin_scheme: "dark" }
   });
-  const unchangedPreferences = await app.request(
-    "http://imageshow.test/preferences",
-    { headers: { "If-None-Match": preferenceEtag ?? "" } }
-  );
+  const unchangedPreferences = await app.request("http://imageshow.test/preferences", {
+    headers: { "If-None-Match": preferenceEtag ?? "" }
+  });
   assert.equal(unchangedPreferences.status, 304);
-  assert.equal(
-    unchangedPreferences.headers.get(adminImageListReadStartedAtHeader),
-    "123"
-  );
+  assert.equal(unchangedPreferences.headers.get(adminImageListReadStartedAtHeader), "123");
   assert.equal(unchangedPreferences.headers.get("etag"), preferenceEtag);
   assert.equal(await unchangedPreferences.text(), "");
-
 });
 test("[Server/HTTP 与鉴权] 日志尾读循环读取实际字节并区分缺失与 I/O 错误", async () => {
   const repositoryRoot = resolve(import.meta.dirname, "../../..");
   const helperRoot = await createTestDirectory("imageshow-log-tail-");
   const helperPath = join(helperRoot, "verify-log-tail.mjs");
-  const runtimeConfigStoreUrl = pathToFileURL(resolve(
-    repositoryRoot,
-    "packages/server/src/config/runtime-config-store.ts"
-  )).href;
-  const logFilesUrl = pathToFileURL(resolve(
-    repositoryRoot,
-    "packages/server/src/core/log-files.ts"
-  )).href;
+  const runtimeConfigStoreUrl = pathToFileURL(
+    resolve(repositoryRoot, "packages/server/src/config/runtime-config-store.ts")
+  ).href;
+  const logFilesUrl = pathToFileURL(
+    resolve(repositoryRoot, "packages/server/src/core/log-files.ts")
+  ).href;
   const helperSource = `
 import assert from "node:assert/strict";
 import { mkdir, open, rename, rm, unlink, writeFile } from "node:fs/promises";
@@ -1165,18 +1145,19 @@ console.log("log-tail-ok");
 
   try {
     await writeFile(helperPath, helperSource);
-    const result = await runProcess(process.execPath, [
-      resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"),
-      helperPath
-    ], {
-      cwd: repositoryRoot,
-      env: {
-        ...process.env,
-        NODE_ENV: "development",
-        IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: toNamespacedPath(helperRoot)
-      },
-      timeoutMs: 30_000
-    });
+    const result = await runProcess(
+      process.execPath,
+      [resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"), helperPath],
+      {
+        cwd: repositoryRoot,
+        env: {
+          ...process.env,
+          NODE_ENV: "development",
+          IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: toNamespacedPath(helperRoot)
+        },
+        timeoutMs: 30_000
+      }
+    );
     assert.match(result.stdout, /log-tail-ok/);
   } finally {
     await rm(helperRoot, { recursive: true, force: true });

@@ -2,21 +2,14 @@ import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-type AdminBootstrapModule = typeof import(
-  "../../../../packages/server/src/users/admin-bootstrap.ts"
-);
-type DatabasePoolsModule = typeof import(
-  "../../../../packages/server/src/core/database/pools.ts"
-);
-type RedisClientModule = typeof import(
-  "../../../../packages/server/src/core/redis/client.ts"
-);
-type RuntimeConfigStoreModule = typeof import(
-  "../../../../packages/server/src/config/runtime-config-store.ts"
-);
-type StorageRegistryModule = typeof import(
-  "../../../../packages/server/src/storage/backends/registry.ts"
-);
+type AdminBootstrapModule =
+  typeof import("../../../../packages/server/src/users/admin-bootstrap.ts");
+type DatabasePoolsModule = typeof import("../../../../packages/server/src/core/database/pools.ts");
+type RedisClientModule = typeof import("../../../../packages/server/src/core/redis/client.ts");
+type RuntimeConfigStoreModule =
+  typeof import("../../../../packages/server/src/config/runtime-config-store.ts");
+type StorageRegistryModule =
+  typeof import("../../../../packages/server/src/storage/backends/registry.ts");
 
 export type IntegrationRuntime = {
   dataDirectory: string;
@@ -53,9 +46,7 @@ export async function createIntegrationRuntime(): Promise<IntegrationRuntime> {
   const dataDirectory = requiredArgument(rawDataDirectory, "data directory");
   const redisHost = requiredArgument(rawRedisHost, "Redis host");
   const redisPort = requiredArgument(rawRedisPort, "Redis port");
-  const moduleUrl = (relativePath: string) => (
-    pathToFileURL(resolve(workspace, relativePath)).href
-  );
+  const moduleUrl = (relativePath: string) => pathToFileURL(resolve(workspace, relativePath)).href;
 
   Object.assign(process.env, {
     DATABASE_HOST: host,
@@ -69,25 +60,20 @@ export async function createIntegrationRuntime(): Promise<IntegrationRuntime> {
     REDIS_DB: "0"
   });
 
-  const [
-    databasePools,
-    redisClient,
-    runtimeConfigStore,
-    storageRegistry,
-    adminBootstrap
-  ] = await Promise.all([
-    import(moduleUrl("packages/server/src/core/database/pools.ts")),
-    import(moduleUrl("packages/server/src/core/redis/client.ts")),
-    import(moduleUrl("packages/server/src/config/runtime-config-store.ts")),
-    import(moduleUrl("packages/server/src/storage/backends/registry.ts")),
-    import(moduleUrl("packages/server/src/users/admin-bootstrap.ts"))
-  ]) as [
-    DatabasePoolsModule,
-    RedisClientModule,
-    RuntimeConfigStoreModule,
-    StorageRegistryModule,
-    AdminBootstrapModule
-  ];
+  const [databasePools, redisClient, runtimeConfigStore, storageRegistry, adminBootstrap] =
+    (await Promise.all([
+      import(moduleUrl("packages/server/src/core/database/pools.ts")),
+      import(moduleUrl("packages/server/src/core/redis/client.ts")),
+      import(moduleUrl("packages/server/src/config/runtime-config-store.ts")),
+      import(moduleUrl("packages/server/src/storage/backends/registry.ts")),
+      import(moduleUrl("packages/server/src/users/admin-bootstrap.ts"))
+    ])) as [
+      DatabasePoolsModule,
+      RedisClientModule,
+      RuntimeConfigStoreModule,
+      StorageRegistryModule,
+      AdminBootstrapModule
+    ];
   databasePools.configureDatabasePools({
     host,
     port: Number(port),
@@ -127,9 +113,8 @@ export async function createIntegrationRuntime(): Promise<IntegrationRuntime> {
 async function closeIntegrationRuntime(runtime: IntegrationRuntime) {
   const errors: unknown[] = [];
   try {
-    const { closeIngestionTempCleanupCursor } = await import(
-      "../../../../packages/server/src/images/ingestion/raw/orphan-scanner.ts"
-    );
+    const { closeIngestionTempCleanupCursor } =
+      await import("../../../../packages/server/src/images/ingestion/raw/orphan-scanner.ts");
     await closeIngestionTempCleanupCursor();
   } catch (error) {
     errors.push(error);
@@ -154,9 +139,7 @@ async function closeIntegrationRuntime(runtime: IntegrationRuntime) {
   }
 }
 
-export async function runIntegrationScenario(
-  work: (runtime: IntegrationRuntime) => Promise<void>
-) {
+export async function runIntegrationScenario(work: (runtime: IntegrationRuntime) => Promise<void>) {
   const runtime = await createIntegrationRuntime();
   const errors: unknown[] = [];
   try {

@@ -4,7 +4,7 @@ import { ApiError } from "../../core/api-error.ts";
 import type { S3StorageConfig } from "../backends/config.ts";
 
 export const STORAGE_PREFIXES = ["full", "thumbs"] as const;
-export type StoragePrefix = typeof STORAGE_PREFIXES[number];
+export type StoragePrefix = (typeof STORAGE_PREFIXES)[number];
 export type ReadablePrefix = "full" | "thumbs";
 
 const reservedRootPrefixPattern = new RegExp(`^(${STORAGE_PREFIXES.join("|")})/`);
@@ -42,7 +42,10 @@ export function storageS3ObjectName(config: S3StorageConfig, prefix: StoragePref
 }
 
 export function s3ListPrefix(config: S3StorageConfig, prefix: StoragePrefix) {
-  return [s3RootPath(config), `${prefix}/`].filter(Boolean).join("/").replace(/^(?!$)(.*[^/])$/, "$1/");
+  return [s3RootPath(config), `${prefix}/`]
+    .filter(Boolean)
+    .join("/")
+    .replace(/^(?!$)(.*[^/])$/, "$1/");
 }
 
 export function s3CopySource(config: S3StorageConfig, prefix: StoragePrefix, key: string) {

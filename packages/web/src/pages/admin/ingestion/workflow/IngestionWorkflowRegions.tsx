@@ -13,11 +13,7 @@ import {
   uploadCommonDeviceOptions,
   type SelectOption
 } from "../../../../lib/ui/select-options.js";
-import type {
-  AdminImageListItem,
-  FacetOption,
-  ImageDraft
-} from "../../../../lib/types.js";
+import type { AdminImageListItem, FacetOption, ImageDraft } from "../../../../lib/types.js";
 import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 
 import type { IngestionPreviewTarget } from "../queue/cards/DuplicateMatchPanel.js";
@@ -62,10 +58,7 @@ export function IngestionWorkflowHeader({
   }>;
   cleanup: Readonly<{
     actions: IngestionCleanupAction[];
-    onSelect: (
-      action: IngestionCleanupActionId,
-      returnFocusTarget: HTMLElement
-    ) => void;
+    onSelect: (action: IngestionCleanupActionId, returnFocusTarget: HTMLElement) => void;
   }>;
   source: Readonly<{
     pending: boolean;
@@ -118,15 +111,10 @@ export function IngestionWorkflowHeader({
           ))}
         </div>
         <div className="ingestion-primary-actions">
-          <IngestionCleanupMenu
-            actions={cleanup.actions}
-            onSelect={cleanup.onSelect}
-          />
+          <IngestionCleanupMenu actions={cleanup.actions} onSelect={cleanup.onSelect} />
           {mode === "import" ? (
             <div
-              className={`ingestion-source-picker${
-                source.pending ? " is-disabled" : ""
-              }`}
+              className={`ingestion-source-picker${source.pending ? " is-disabled" : ""}`}
               role="group"
               aria-label="选择导入来源"
               aria-disabled={source.pending}
@@ -205,12 +193,10 @@ export function IngestionWorkflowDefaults({
   clearScopeLabel: string;
 }) {
   const summary = [
-    uploadCommonDeviceOptions.find(
-      (option) => option.value === defaults.device
-    )?.label ?? "设备不设",
-    uploadCommonBrightnessOptions.find(
-      (option) => option.value === defaults.brightness
-    )?.label ?? "亮暗不设",
+    uploadCommonDeviceOptions.find((option) => option.value === defaults.device)?.label ??
+      "设备不设",
+    uploadCommonBrightnessOptions.find((option) => option.value === defaults.brightness)?.label ??
+      "亮暗不设",
     facetDisplayName(themes, defaults.theme, "主题不设"),
     facetDisplayName(authors, defaults.author, "作者不设"),
     `${defaults.tags.length} 个标签`
@@ -228,14 +214,16 @@ export function IngestionWorkflowDefaults({
       <WorkflowDefaultFields
         values={defaults}
         onChange={{
-          device: (device) => onChange({
-            ...defaults,
-            device: device as IngestionAttributeDefaults["device"]
-          }),
-          brightness: (brightness) => onChange({
-            ...defaults,
-            brightness: brightness as IngestionAttributeDefaults["brightness"]
-          }),
+          device: (device) =>
+            onChange({
+              ...defaults,
+              device: device as IngestionAttributeDefaults["device"]
+            }),
+          brightness: (brightness) =>
+            onChange({
+              ...defaults,
+              brightness: brightness as IngestionAttributeDefaults["brightness"]
+            }),
           theme: (theme) => onChange({ ...defaults, theme }),
           author: (author) => onChange({ ...defaults, author }),
           tags: (nextTags) => onChange({ ...defaults, tags: nextTags })
@@ -303,16 +291,8 @@ export function IngestionWorkflowQueueBody({
     onRetry: (job: IngestionJob) => void;
     onRemove: (job: IngestionJob) => void;
     onConfirmDuplicate: (job: IngestionJob) => void;
-    onOpenDetail: (
-      job: IngestionJob,
-      item: AdminImageListItem,
-      opener: HTMLElement
-    ) => void;
-    onFocusWithin: (
-      job: IngestionJob,
-      card: HTMLElement,
-      target: HTMLElement
-    ) => void;
+    onOpenDetail: (job: IngestionJob, item: AdminImageListItem, opener: HTMLElement) => void;
+    onFocusWithin: (job: IngestionJob, card: HTMLElement, target: HTMLElement) => void;
     onPreview: (target: IngestionPreviewTarget) => void;
   }>;
   fileInputRef: RefObject<HTMLInputElement | null>;
@@ -328,28 +308,25 @@ export function IngestionWorkflowQueueBody({
   // This is an entry affordance, not an empty-queue proof. Keep it through the
   // summary-to-card hydration gap, then let the bounded visible projection
   // replace it as soon as any task card exists.
-  const showDefaultEntry = queue.visibleJobs.length === 0
-    && !serverFailed;
+  const showDefaultEntry = queue.visibleJobs.length === 0 && !serverFailed;
 
   return (
-    <div
-      className="modal-scroll-list image-workflow-list ingestion-list"
-      ref={listRef}
-    >
+    <div className="modal-scroll-list image-workflow-list ingestion-list" ref={listRef}>
       {importParseErrors.length > 0 && (
         <div className="ingestion-queue-notice">
           <span>{importParseErrors.length} 行未创建任务</span>
           <button
             type="button"
-            onClick={() => void copyTextToClipboard(
-              importParseErrors
-                .map((error) => (
-                  `第 ${error.line} 行：${error.error}\n${error.raw}`
-                ))
-                .join("\n\n")
-            ).catch(() => undefined)}
+            onClick={() =>
+              void copyTextToClipboard(
+                importParseErrors
+                  .map((error) => `第 ${error.line} 行：${error.error}\n${error.raw}`)
+                  .join("\n\n")
+              ).catch(() => undefined)
+            }
           >
-            <AdminIcon name="file-copy-line" />复制错误
+            <AdminIcon name="file-copy-line" />
+            复制错误
           </button>
           <button type="button" onClick={onClearImportParseErrors}>
             清除
@@ -361,7 +338,8 @@ export function IngestionWorkflowQueueBody({
           <span>{queue.serverNotice}</span>
           {queue.serverNoticeRetryable && (
             <button type="button" onClick={queue.retryServerNotice}>
-              <AdminIcon name="refresh-line" />重试
+              <AdminIcon name="refresh-line" />
+              重试
             </button>
           )}
         </div>
@@ -375,7 +353,8 @@ export function IngestionWorkflowQueueBody({
         <div className="ingestion-queue-notice" role="alert">
           <span>{duplicateDetails.error}</span>
           <button type="button" onClick={duplicateDetails.refresh}>
-            <AdminIcon name="refresh-line" />重试
+            <AdminIcon name="refresh-line" />
+            重试
           </button>
         </div>
       )}
@@ -383,7 +362,8 @@ export function IngestionWorkflowQueueBody({
         <div className="ingestion-queue-notice" role="alert">
           <span>{queue.server.error || "服务端队列读取失败"}</span>
           <button type="button" onClick={queue.server.refresh}>
-            <AdminIcon name="refresh-line" />重试
+            <AdminIcon name="refresh-line" />
+            重试
           </button>
         </div>
       )}
@@ -404,39 +384,38 @@ export function IngestionWorkflowQueueBody({
         onFocusWithin={jobActions.onFocusWithin}
         onPreview={jobActions.onPreview}
       />
-      {showDefaultEntry && (mode === "import" ? (
-        <button
-          type="button"
-          className="ingestion-empty-state upload-dropzone"
-          disabled={source.pending}
-          {...preloadIntentProps(source.onPreload)}
-          onClick={() => source.onOpen("urls")}
-        >
-          <AdminIcon name="download-cloud-2-line" />
-          <span>点击此处选择图片来源</span>
-        </button>
-      ) : (
-        <button
-          type="button"
-          className={`ingestion-empty-state upload-dropzone${
-            dragOver ? " is-dragover" : ""
-          }`}
-          onClick={() => fileInputRef.current?.click()}
-          onDragOver={(event) => {
-            event.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setDragOver(false);
-            source.onAddFiles(event.dataTransfer.files);
-          }}
-        >
-          <AdminIcon name="image-line" />
-          <span>点击此处选择图片，或将图片拖到这里</span>
-        </button>
-      ))}
+      {showDefaultEntry &&
+        (mode === "import" ? (
+          <button
+            type="button"
+            className="ingestion-empty-state upload-dropzone"
+            disabled={source.pending}
+            {...preloadIntentProps(source.onPreload)}
+            onClick={() => source.onOpen("urls")}
+          >
+            <AdminIcon name="download-cloud-2-line" />
+            <span>点击此处选择图片来源</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={`ingestion-empty-state upload-dropzone${dragOver ? " is-dragover" : ""}`}
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragOver(false);
+              source.onAddFiles(event.dataTransfer.files);
+            }}
+          >
+            <AdminIcon name="image-line" />
+            <span>点击此处选择图片，或将图片拖到这里</span>
+          </button>
+        ))}
     </div>
   );
 }
@@ -469,11 +448,7 @@ export function IngestionWorkflowFooter({
   }>;
 }) {
   return (
-    <footer
-      className={`image-workflow-footer${
-        queue.totalPages > 1 ? " has-pagination" : ""
-      }`}
-    >
+    <footer className={`image-workflow-footer${queue.totalPages > 1 ? " has-pagination" : ""}`}>
       <div className="ingestion-footer-left image-workflow-leading-actions">
         <div className="ingestion-backend">
           <SelectMenu
@@ -502,7 +477,9 @@ export function IngestionWorkflowFooter({
             "ingestion-queue-clear-button",
             clear.dangerous ? "danger-button" : "",
             clear.armed ? "is-armed" : ""
-          ].filter(Boolean).join(" ")}
+          ]
+            .filter(Boolean)
+            .join(" ")}
           aria-label={clear.ariaLabel}
           aria-pressed={clear.armed}
           onBlur={clear.onBlur}

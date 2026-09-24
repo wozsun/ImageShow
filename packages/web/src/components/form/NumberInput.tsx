@@ -4,8 +4,9 @@ type FormSubmitter = HTMLButtonElement | HTMLInputElement;
 
 function isFormSubmitter(element: Element): element is FormSubmitter {
   if (element instanceof HTMLButtonElement) return element.type === "submit";
-  return element instanceof HTMLInputElement
-    && (element.type === "submit" || element.type === "image");
+  return (
+    element instanceof HTMLInputElement && (element.type === "submit" || element.type === "image")
+  );
 }
 
 function defaultFormSubmitter(form: HTMLFormElement) {
@@ -23,7 +24,16 @@ type NumberInputProps = {
   ariaLabel?: string;
 };
 
-export function NumberInput({ value, onChange, min, max, placeholder, disabled, className, ariaLabel }: NumberInputProps) {
+export function NumberInput({
+  value,
+  onChange,
+  min,
+  max,
+  placeholder,
+  disabled,
+  className,
+  ariaLabel
+}: NumberInputProps) {
   const [draft, setDraft] = useState(String(value));
   const [editing, setEditing] = useState(false);
 

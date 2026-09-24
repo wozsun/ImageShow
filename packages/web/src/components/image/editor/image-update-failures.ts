@@ -7,8 +7,7 @@ const failureSampleMessageLimit = 160;
 
 export function summarizeImageUpdateFailures(response: ImageUpdateResponseDto) {
   const failures = response.results.filter(
-    (result): result is Extract<typeof result, { status: "failed" }> =>
-      result.status === "failed"
+    (result): result is Extract<typeof result, { status: "failed" }> => result.status === "failed"
   );
   const codeCounts = new Map<string, number>();
   for (const failure of failures) {

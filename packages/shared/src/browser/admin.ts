@@ -88,12 +88,7 @@ export type AdminOverviewDto = {
 };
 
 export type AdminCheckErrorCategory =
-  | "connection"
-  | "query"
-  | "command"
-  | "projection"
-  | "storage"
-  | "unknown";
+  "connection" | "query" | "command" | "projection" | "storage" | "unknown";
 
 export type AdminCheckFailureDto = {
   category: AdminCheckErrorCategory;
@@ -164,11 +159,7 @@ export type AdminCheckStatusDto = {
   redis: AdminCheckResourceDto<AdminRedisStatusDto>;
 };
 
-export type TrashPurgeJobStateDto =
-  | "pending"
-  | "running"
-  | "retrying"
-  | "exhausted";
+export type TrashPurgeJobStateDto = "pending" | "running" | "retrying" | "exhausted";
 
 export type AdminTrashPurgeJobDto = {
   id: string;
@@ -181,10 +172,7 @@ export type AdminTrashPurgeJobDto = {
 };
 
 export type AdminTrashCheckIssueDto = {
-  kind:
-    | "succeeded_target_remaining"
-    | "target_not_deleted"
-    | "stalled_job";
+  kind: "succeeded_target_remaining" | "target_not_deleted" | "stalled_job";
   count: number;
   sample_ids: string[];
 };

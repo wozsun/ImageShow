@@ -1,12 +1,7 @@
 import { slugMaxLength, slugPattern, unsetThemeFilter } from "@imageshow/shared/browser";
-import {
-  withAdvisoryLock
-} from "../core/database/advisory-locks.ts";
+import { withAdvisoryLock } from "../core/database/advisory-locks.ts";
 import { ApiError } from "../core/api-error.ts";
-import {
-  invalidateEntityCountCaches,
-  refreshEntityVocabularies
-} from "./vocab-cache.ts";
+import { invalidateEntityCountCaches, refreshEntityVocabularies } from "./vocab-cache.ts";
 
 export type VocabularyEntity = "author" | "tag" | "theme";
 
@@ -16,19 +11,14 @@ const vocabularyLabels: Record<VocabularyEntity, string> = {
   theme: "Theme"
 };
 
-function vocabularyMutationLockKey(
-  entity: VocabularyEntity,
-  slug: string
-) {
+function vocabularyMutationLockKey(entity: VocabularyEntity, slug: string) {
   return `imageshow:${entity}:${slug}`;
 }
 
 export function vocabularyAssociationLockRequests(
   entries: readonly { entity: VocabularyEntity; slug: string }[]
 ) {
-  return [...new Set(entries.map(({ entity, slug }) => (
-    vocabularyMutationLockKey(entity, slug)
-  )))]
+  return [...new Set(entries.map(({ entity, slug }) => vocabularyMutationLockKey(entity, slug)))]
     .sort()
     .map((key) => ({ key, mode: "shared" as const }));
 }
@@ -41,17 +31,13 @@ export function withVocabularyMutationLock<T>(
   return withAdvisoryLock(vocabularyMutationLockKey(entity, slug), work);
 }
 
-export function assertVocabularySlug(
-  entity: VocabularyEntity,
-  slug: string
-) {
+export function assertVocabularySlug(entity: VocabularyEntity, slug: string) {
   if (entity === "theme" && slug === unsetThemeFilter) {
-    throw new ApiError(400, "invalid_theme", "null 是未设置主题的保留值，不能用作主题标识", { slug });
+    throw new ApiError(400, "invalid_theme", "null 是未设置主题的保留值，不能用作主题标识", {
+      slug
+    });
   }
-  if (
-    slug.length > slugMaxLength
-    || !slugPattern.test(slug)
-  ) {
+  if (slug.length > slugMaxLength || !slugPattern.test(slug)) {
     const label = vocabularyLabels[entity];
     throw new ApiError(
       400,
@@ -76,16 +62,9 @@ export function assertVocabularyCreated(
   throw new ApiError(409, `${entity}_exists`, messages[entity], { slug });
 }
 
-export function assertVocabularyFound(
-  entity: VocabularyEntity,
-  rowCount: number | null
-) {
+export function assertVocabularyFound(entity: VocabularyEntity, rowCount: number | null) {
   if (rowCount) return;
-  throw new ApiError(
-    404,
-    "not_found",
-    `${vocabularyLabels[entity]} not found`
-  );
+  throw new ApiError(404, "not_found", `${vocabularyLabels[entity]} not found`);
 }
 
 export async function withVocabularyMutationSync<T>(
@@ -97,9 +76,6 @@ export async function withVocabularyMutationSync<T>(
   } finally {
     // A lost write acknowledgement does not prove rollback. Invalidate while
     // the caller still owns its vocabulary lease and any image cache fence.
-    await Promise.all([
-      refreshEntityVocabularies([entity]),
-      invalidateEntityCountCaches([entity])
-    ]);
+    await Promise.all([refreshEntityVocabularies([entity]), invalidateEntityCountCaches([entity])]);
   }
 }

@@ -1,7 +1,5 @@
 import { pool, type DatabaseReader } from "../../core/database/pools.ts";
-import type {
-  PublicDatabaseReadAccess
-} from "../../core/database/public-fallback.ts";
+import type { PublicDatabaseReadAccess } from "../../core/database/public-fallback.ts";
 import { readReadyImageById } from "../ready-cache/query.ts";
 import type { ReadyImageCacheItem } from "../ready-cache/model.ts";
 
@@ -31,9 +29,7 @@ function readDatabase<T>(
   return read(access.reader ?? pool);
 }
 
-function storedImageServingRecord(
-  item: ReadyImageCacheItem
-): StoredImageServingRecord {
+function storedImageServingRecord(item: ReadyImageCacheItem): StoredImageServingRecord {
   return {
     id: item.id,
     ext: item.ext,
@@ -44,8 +40,7 @@ function storedImageServingRecord(
 export async function readImageServingRecordById(
   id: string,
   database: PublicDatabaseReadAccess = {},
-  dependencies: ImageServingRecordDependencies =
-    defaultImageServingRecordDependencies
+  dependencies: ImageServingRecordDependencies = defaultImageServingRecordDependencies
 ): Promise<ImageServingRecord | null> {
   const cached = await dependencies.readReadyImageById(id);
   if (cached.cached && cached.value) {
@@ -55,15 +50,19 @@ export async function readImageServingRecordById(
       updated_at: cached.value.updated_at
     };
   }
-  const row = await readDatabase(database, async (reader) => (
-    (await reader.query<ImageServingRecord>(
-      `SELECT id, original, ext, storage_slug, updated_at::text AS updated_at
+  const row = await readDatabase(
+    database,
+    async (reader) =>
+      (
+        await reader.query<ImageServingRecord>(
+          `SELECT id, original, ext, storage_slug, updated_at::text AS updated_at
          FROM metadata
         WHERE id=$1
           AND status IN ('ready', 'deleted')
         LIMIT 1`,
-      [id]
-    )).rows[0]
-  ));
+          [id]
+        )
+      ).rows[0]
+  );
   return row ?? null;
 }

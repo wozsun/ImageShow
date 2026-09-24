@@ -18,20 +18,13 @@ import type { SelectOption } from "../../../../lib/ui/select-options.js";
 import type { PrepareImageAttributeClear } from "../../../../lib/image-draft.js";
 import { useTwoStepConfirmation } from "../../../../hooks/useTwoStepConfirmation.js";
 import { useIngestionDuplicateDetails } from "../queue/useIngestionDuplicateDetails.js";
-import type {
-  FacetOption,
-  ImageDraft,
-  AdminImageListItem
-} from "../../../../lib/types.js";
+import type { FacetOption, ImageDraft, AdminImageListItem } from "../../../../lib/types.js";
 import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 
 import type { IngestionPreviewTarget } from "../queue/cards/DuplicateMatchPanel.js";
 import { ingestionJobPreviewAvailable } from "../queue/model/duplicate-match.js";
 import type { ImportManifestParseError } from "../queue/ingestion-http-client.js";
-import type {
-  ImportSourceMode,
-  ImportSourceSubmission
-} from "../import/ImportSourceDialog.js";
+import type { ImportSourceMode, ImportSourceSubmission } from "../import/ImportSourceDialog.js";
 import {
   createIngestionCleanupActions,
   type IngestionCleanupActionId
@@ -45,7 +38,7 @@ import {
 } from "./IngestionWorkflowRegions.js";
 
 type ImportSourceDialogComponent =
-  typeof import("../import/ImportSourceDialog.js")["ImportSourceDialog"];
+  (typeof import("../import/ImportSourceDialog.js"))["ImportSourceDialog"];
 
 type IngestionWorkflowCloseOptions = Readonly<{
   skipCompletedCleanup?: boolean;
@@ -56,9 +49,7 @@ type IngestionWorkflowWindowProps = {
   busy: boolean;
   queue: IngestionQueueController;
   returnFocusRef: RefObject<HTMLElement | null>;
-  onPrepareClose: (
-    options?: IngestionWorkflowCloseOptions
-  ) => () => void;
+  onPrepareClose: (options?: IngestionWorkflowCloseOptions) => () => void;
   onClose: (options?: IngestionWorkflowCloseOptions) => void;
   defaults: IngestionAttributeDefaults;
   onDefaultsChange: (defaults: IngestionAttributeDefaults) => void;
@@ -145,10 +136,7 @@ function ingestionJobElementPath(card: HTMLElement, target: HTMLElement) {
   return current === card ? path.reverse() : [];
 }
 
-function ingestionJobElementAtPath(
-  card: HTMLElement,
-  path: readonly number[]
-) {
+function ingestionJobElementAtPath(card: HTMLElement, path: readonly number[]) {
   let current: HTMLElement = card;
   for (const index of path) {
     const child: Element | undefined = [...current.children][index];
@@ -163,9 +151,7 @@ function ingestionJobElementOwner(
   card: HTMLElement,
   target: HTMLElement
 ): IngestionJobElementOwner {
-  const focusable = [...card.querySelectorAll<HTMLElement>(
-    ingestionJobFocusableSelector
-  )];
+  const focusable = [...card.querySelectorAll<HTMLElement>(ingestionJobFocusableSelector)];
   return {
     jobId: job.id,
     attemptKey: job.attemptKey,
@@ -182,25 +168,21 @@ function ingestionJobElementOwner(
   };
 }
 
-function ingestionJobElementForOwner(
-  card: HTMLElement,
-  owner: IngestionJobElementOwner
-) {
+function ingestionJobElementForOwner(card: HTMLElement, owner: IngestionJobElementOwner) {
   const exact = ingestionJobElementAtPath(card, owner.path);
-  const semanticMatch = (candidate: HTMLElement) => (
-    candidate.tagName === owner.tagName
-    && candidate.getAttribute("aria-label") === owner.ariaLabel
-    && candidate.getAttribute("title") === owner.title
-    && candidate.getAttribute("name") === owner.name
-    && candidate.getAttribute("role") === owner.role
-  );
+  const semanticMatch = (candidate: HTMLElement) =>
+    candidate.tagName === owner.tagName &&
+    candidate.getAttribute("aria-label") === owner.ariaLabel &&
+    candidate.getAttribute("title") === owner.title &&
+    candidate.getAttribute("name") === owner.name &&
+    candidate.getAttribute("role") === owner.role;
   if (exact && semanticMatch(exact)) return exact;
-  const focusable = [...card.querySelectorAll<HTMLElement>(
-    ingestionJobFocusableSelector
-  )];
-  return focusable.find(semanticMatch)
-    ?? (owner.focusableIndex >= 0 ? focusable[owner.focusableIndex] : null)
-    ?? null;
+  const focusable = [...card.querySelectorAll<HTMLElement>(ingestionJobFocusableSelector)];
+  return (
+    focusable.find(semanticMatch) ??
+    (owner.focusableIndex >= 0 ? focusable[owner.focusableIndex] : null) ??
+    null
+  );
 }
 
 export function IngestionWorkflowWindow({
@@ -293,9 +275,8 @@ export function IngestionWorkflowWindow({
     ? cleanupActions.find((action) => action.id === pendingCleanup.actionId)
     : undefined;
   const modeTitle = mode === "upload" ? "上传图片" : "导入图片";
-  const emptySubtitle = mode === "upload"
-    ? "选择后立即上传并在服务端准备图片"
-    : "输入来源后立即创建并准备图片任务";
+  const emptySubtitle =
+    mode === "upload" ? "选择后立即上传并在服务端准备图片" : "输入来源后立即创建并准备图片任务";
   const {
     readyCount,
     waitingJobs: stageWaitingJobs,
@@ -314,27 +295,18 @@ export function IngestionWorkflowWindow({
     invalidationKey: confirmationScope,
     onDisarm: onDiscardUnconfirmedIntents
   });
-  const clearRequiresConfirmation = clearDangerous
-    || clearConfirmation.armed;
+  const clearRequiresConfirmation = clearDangerous || clearConfirmation.armed;
 
   useEffect(() => {
-    if (
-      pendingCleanup
-      && pendingCleanup.confirmationScope !== confirmationScope
-    ) {
+    if (pendingCleanup && pendingCleanup.confirmationScope !== confirmationScope) {
       onDiscardUnconfirmedIntents();
       setPendingCleanup(null);
     }
   }, [confirmationScope, onDiscardUnconfirmedIntents, pendingCleanup]);
 
   const selectCleanupAction = useCallback(
-    (
-      actionId: IngestionCleanupActionId,
-      returnFocusTarget: HTMLElement
-    ) => {
-      const action = cleanupActionsRef.current.find(
-        (candidate) => candidate.id === actionId
-      );
+    (actionId: IngestionCleanupActionId, returnFocusTarget: HTMLElement) => {
+      const action = cleanupActionsRef.current.find((candidate) => candidate.id === actionId);
       if (!action?.enabled) return;
       if (!action.confirmation) {
         action.run();
@@ -357,25 +329,21 @@ export function IngestionWorkflowWindow({
     return onConfirmCleanupAction(pendingCleanup.actionId);
   }, [onConfirmCleanupAction, pendingCleanup]);
 
-  const openJobDetail = useCallback((
-    job: IngestionJob,
-    item: AdminImageListItem,
-    opener: HTMLElement
-  ) => {
-    const card = opener.closest<HTMLElement>("[data-ingestion-job-id]");
-    detailOwnerRef.current = card
-      ? ingestionJobElementOwner(job, card, opener)
-      : null;
-    detailReturnFocusRef.current = opener;
-    setDetailItem(item);
-  }, []);
-  const captureJobFocus = useCallback((
-    job: IngestionJob,
-    card: HTMLElement,
-    target: HTMLElement
-  ) => {
-    focusedJobElementRef.current = ingestionJobElementOwner(job, card, target);
-  }, []);
+  const openJobDetail = useCallback(
+    (job: IngestionJob, item: AdminImageListItem, opener: HTMLElement) => {
+      const card = opener.closest<HTMLElement>("[data-ingestion-job-id]");
+      detailOwnerRef.current = card ? ingestionJobElementOwner(job, card, opener) : null;
+      detailReturnFocusRef.current = opener;
+      setDetailItem(item);
+    },
+    []
+  );
+  const captureJobFocus = useCallback(
+    (job: IngestionJob, card: HTMLElement, target: HTMLElement) => {
+      focusedJobElementRef.current = ingestionJobElementOwner(job, card, target);
+    },
+    []
+  );
   const openJobPreview = useCallback((target: IngestionPreviewTarget) => {
     previewReturnFocusRef.current = target.opener ?? null;
     setPreview(target);
@@ -385,49 +353,56 @@ export function IngestionWorkflowWindow({
     const cards = listRef.current?.querySelectorAll<HTMLElement>(
       "[data-ingestion-job-id][data-ingestion-attempt-key]"
     );
-    return [...cards ?? []].find((candidate) => (
-      candidate.dataset.ingestionJobId === job.id
-      && candidate.dataset.ingestionAttemptKey === job.attemptKey
-    )) ?? null;
+    return (
+      [...(cards ?? [])].find(
+        (candidate) =>
+          candidate.dataset.ingestionJobId === job.id &&
+          candidate.dataset.ingestionAttemptKey === job.attemptKey
+      ) ?? null
+    );
   }, []);
-  const previewOpenerForJob = useCallback((job: IngestionJob) => (
-    cardForJob(job)?.querySelector<HTMLElement>(
-      ".ingestion-job-thumbnail[role='button']"
-    ) ?? null
-  ), [cardForJob]);
+  const previewOpenerForJob = useCallback(
+    (job: IngestionJob) =>
+      cardForJob(job)?.querySelector<HTMLElement>(".ingestion-job-thumbnail[role='button']") ??
+      null,
+    [cardForJob]
+  );
 
   useLayoutEffect(() => {
-    const matchingJob = (owner: IngestionJobElementOwner) => (
-      queue.visibleJobs.find((job) => (
-        job.id === owner.jobId && job.attemptKey === owner.attemptKey
-      ))
-      ?? (owner.sessionId && owner.imageId
-        ? queue.visibleJobs.find((job) => (
-            job.sessionId === owner.sessionId
-            && job.imageId?.toLowerCase() === owner.imageId?.toLowerCase()
-          ))
-        : undefined)
-      ?? (owner.sessionId
+    const matchingJob = (owner: IngestionJobElementOwner) =>
+      queue.visibleJobs.find(
+        (job) => job.id === owner.jobId && job.attemptKey === owner.attemptKey
+      ) ??
+      (owner.sessionId && owner.imageId
+        ? queue.visibleJobs.find(
+            (job) =>
+              job.sessionId === owner.sessionId &&
+              job.imageId?.toLowerCase() === owner.imageId?.toLowerCase()
+          )
+        : undefined) ??
+      (owner.sessionId
         ? queue.visibleJobs.find((job) => job.sessionId === owner.sessionId)
-        : undefined)
-    );
+        : undefined);
     const transfer = (owner: IngestionJobElementOwner | null) => {
       if (!owner) return null;
       const job = matchingJob(owner);
       if (!job) return null;
       const card = cardForJob(job);
       if (!card) return null;
-      const element = owner.element.isConnected && card.contains(owner.element)
-        ? owner.element
-        : ingestionJobElementForOwner(card, owner);
-      return element ? {
-        ...owner,
-        jobId: job.id,
-        attemptKey: job.attemptKey,
-        sessionId: job.sessionId,
-        imageId: job.imageId,
-        element
-      } : null;
+      const element =
+        owner.element.isConnected && card.contains(owner.element)
+          ? owner.element
+          : ingestionJobElementForOwner(card, owner);
+      return element
+        ? {
+            ...owner,
+            jobId: job.id,
+            attemptKey: job.attemptKey,
+            sessionId: job.sessionId,
+            imageId: job.imageId,
+            element
+          }
+        : null;
     };
 
     const previousFocused = focusedJobElementRef.current;
@@ -436,44 +411,38 @@ export function IngestionWorkflowWindow({
       const transferred = transfer(previousFocused);
       focusedJobElementRef.current = transferred;
       const activeElement = document.activeElement;
-      const focusWasLost = !(activeElement instanceof HTMLElement)
-        || activeElement === document.body
-        || !activeElement.isConnected;
+      const focusWasLost =
+        !(activeElement instanceof HTMLElement) ||
+        activeElement === document.body ||
+        !activeElement.isConnected;
       if (
-        transferred
-        && previousElementLost
-        && focusWasLost
-        && !detailItem
-        && !preview
-        && !sourceDialogOpen
-        && !pendingCleanup
-      ) transferred.element.focus({ preventScroll: true });
+        transferred &&
+        previousElementLost &&
+        focusWasLost &&
+        !detailItem &&
+        !preview &&
+        !sourceDialogOpen &&
+        !pendingCleanup
+      )
+        transferred.element.focus({ preventScroll: true });
     }
 
     if (detailItem && detailOwnerRef.current) {
       const transferred = transfer(detailOwnerRef.current);
       detailOwnerRef.current = transferred;
-      detailReturnFocusRef.current = transferred?.element
-        ?? closeButtonRef.current;
+      detailReturnFocusRef.current = transferred?.element ?? closeButtonRef.current;
     }
-  }, [
-    cardForJob,
-    detailItem,
-    pendingCleanup,
-    preview,
-    queue.visibleJobs,
-    sourceDialogOpen
-  ]);
+  }, [cardForJob, detailItem, pendingCleanup, preview, queue.visibleJobs, sourceDialogOpen]);
 
   useLayoutEffect(() => {
     if (!preview) return;
-    const exact = queue.visibleJobs.find((job) => (
-      job.id === preview.jobId && job.attemptKey === preview.attemptKey
-    ));
+    const exact = queue.visibleJobs.find(
+      (job) => job.id === preview.jobId && job.attemptKey === preview.attemptKey
+    );
     if (exact && ingestionJobPreviewAvailable(exact)) {
       const opener = preview.opener?.isConnected
         ? preview.opener
-        : previewOpenerForJob(exact) ?? undefined;
+        : (previewOpenerForJob(exact) ?? undefined);
       const next = {
         ...preview,
         sessionId: exact.sessionId,
@@ -485,13 +454,13 @@ export function IngestionWorkflowWindow({
         opener
       };
       if (
-        next.sessionId !== preview.sessionId
-        || next.imageId?.toLowerCase() !== preview.imageId?.toLowerCase()
-        || next.src !== preview.src
-        || next.thumbSrc !== preview.thumbSrc
-        || next.width !== preview.width
-        || next.height !== preview.height
-        || next.opener !== preview.opener
+        next.sessionId !== preview.sessionId ||
+        next.imageId?.toLowerCase() !== preview.imageId?.toLowerCase() ||
+        next.src !== preview.src ||
+        next.thumbSrc !== preview.thumbSrc ||
+        next.width !== preview.width ||
+        next.height !== preview.height ||
+        next.opener !== preview.opener
       ) {
         previewReturnFocusRef.current = opener ?? null;
         setPreview(next);
@@ -558,12 +527,7 @@ export function IngestionWorkflowWindow({
     <DialogFrame
       className="ingestion-overlay"
       ariaLabel={modeTitle}
-      paused={Boolean(
-        detailItem
-        || preview
-        || sourceDialogOpen
-        || pendingCleanup
-      )}
+      paused={Boolean(detailItem || preview || sourceDialogOpen || pendingCleanup)}
       initialFocusRef={closeButtonRef}
       returnFocusRef={returnFocusRef}
       prepareClose={() => {
@@ -580,10 +544,7 @@ export function IngestionWorkflowWindow({
     >
       {({ requestClose }) => (
         <>
-          <section
-            className="ingestion-window image-workflow-window"
-            tabIndex={-1}
-          >
+          <section className="ingestion-window image-workflow-window" tabIndex={-1}>
             <IngestionWorkflowHeader
               mode={mode}
               modeTitle={modeTitle}
@@ -700,9 +661,11 @@ export function IngestionWorkflowWindow({
               commit={{
                 count: submitCount,
                 retryAll: canRetryAll || retryingAll,
-                pending: busy || retryBusy || committingCount !== null || queue.server.status !== "ready",
+                pending:
+                  busy || retryBusy || committingCount !== null || queue.server.status !== "ready",
                 onClick: () => {
-                  if (busy || retryBusy || committingRef.current || queue.server.status !== "ready") return;
+                  if (busy || retryBusy || committingRef.current || queue.server.status !== "ready")
+                    return;
                   if (canRetryAll) {
                     void onRetryAll();
                     return;
@@ -710,10 +673,12 @@ export function IngestionWorkflowWindow({
                   if (readyCount === 0) return;
                   committingRef.current = true;
                   setCommittingCount(readyCount);
-                  void Promise.resolve().then(onCommitReady).finally(() => {
-                    committingRef.current = false;
-                    setCommittingCount(null);
-                  });
+                  void Promise.resolve()
+                    .then(onCommitReady)
+                    .finally(() => {
+                      committingRef.current = false;
+                      setCommittingCount(null);
+                    });
                 }
               }}
             />

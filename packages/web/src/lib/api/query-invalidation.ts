@@ -8,20 +8,15 @@ import type {
 } from "@imageshow/shared/browser";
 import { queryKeys } from "./query-keys.js";
 import { advanceImageDataRevision, markPublicDetailValidation } from "./image-data-revision.js";
-import {
-  adminImageListValidationCovers
-} from "./admin-image-list-validation.js";
+import { adminImageListValidationCovers } from "./admin-image-list-validation.js";
 
-function invalidate(
-  client: QueryClient,
-  queryKeysToInvalidate: readonly (readonly unknown[])[]
-) {
+function invalidate(client: QueryClient, queryKeysToInvalidate: readonly (readonly unknown[])[]) {
   if (queryKeysToInvalidate.includes(queryKeys.publicImages)) {
     advanceImageDataRevision(client);
   }
-  return Promise.all(queryKeysToInvalidate.map((queryKey) => (
-    client.invalidateQueries({ queryKey })
-  )));
+  return Promise.all(
+    queryKeysToInvalidate.map((queryKey) => client.invalidateQueries({ queryKey }))
+  );
 }
 
 function removeQueries(client: QueryClient, queryKeysToRemove: readonly (readonly unknown[])[]) {
@@ -67,16 +62,17 @@ export function invalidateImageData(client: QueryClient) {
   return invalidate(client, imageDataQueryKeys);
 }
 
-export function invalidateImageDataAfterAdminListMutation(
-  client: QueryClient
-) {
+export function invalidateImageDataAfterAdminListMutation(client: QueryClient) {
   return Promise.all([
     // ImageAdmin reports the current list refresh outcome to the user. Other
     // derived projections remain best-effort invalidations and must not
     // masquerade as a list refresh failure.
-    client.invalidateQueries({ queryKey: queryKeys.adminImages }, {
-      throwOnError: true
-    }),
+    client.invalidateQueries(
+      { queryKey: queryKeys.adminImages },
+      {
+        throwOnError: true
+      }
+    ),
     invalidate(
       client,
       imageDataQueryKeys.filter((queryKey) => queryKey !== queryKeys.adminImages)
@@ -96,9 +92,12 @@ export function invalidateVocabularyData(client: QueryClient, listKey?: readonly
 export function invalidateDataAfterSortOrderSave(client: QueryClient, listKey: readonly unknown[]) {
   return Promise.all([
     client.invalidateQueries({ queryKey: listKey, exact: true }, { throwOnError: true }),
-    invalidate(client, listKey === queryKeys.storageBackends
-      ? [queryKeys.storageOptions]
-      : [queryKeys.galleryFacets, queryKeys.galleryStats, queryKeys.ingestionVocabulary])
+    invalidate(
+      client,
+      listKey === queryKeys.storageBackends
+        ? [queryKeys.storageOptions]
+        : [queryKeys.galleryFacets, queryKeys.galleryStats, queryKeys.ingestionVocabulary]
+    )
   ]);
 }
 
@@ -116,41 +115,43 @@ export function invalidateImageDataAfterMetadataSave(
 ) {
   if (!updates.length) return Promise.resolve([]);
   advanceImageDataRevision(client);
-  markPublicDetailValidation(client, updates.map((update) => update.id));
+  markPublicDetailValidation(
+    client,
+    updates.map((update) => update.id)
+  );
   const changesDevice = updatesField(updates, "device");
   const changesBrightness = updatesField(updates, "brightness");
   const changesTheme = updatesField(updates, "theme");
   const changesAuthor = updatesField(updates, "author");
   const changesTags = updatesField(updates, "tags");
-  const changesMembership = changesDevice
-    || changesBrightness
-    || changesTheme
-    || changesAuthor
-    || changesTags;
+  const changesMembership =
+    changesDevice || changesBrightness || changesTheme || changesAuthor || changesTags;
   const changesFacetVocabulary = changesTheme || changesAuthor || changesTags;
-  const authoritativeIds = new Set(
-    (authoritativeItems ?? []).map((item) => item.id)
-  );
+  const authoritativeIds = new Set((authoritativeItems ?? []).map((item) => item.id));
   const exactInvalidations = updates.flatMap((update) => {
-    const requests = [client.invalidateQueries({
-      queryKey: [...queryKeys.adminImageInfo, update.id],
-      exact: true
-    })];
-    requests.push((async () => {
-      const queryKey = [...queryKeys.publicImageDetail, update.id];
-      // Retire a pre-commit promise as well as its HTTP freshness. A closed
-      // modal must not join that promise when it immediately opens again.
-      await client.cancelQueries({ queryKey });
-      if (authoritativeIds.has(update.id)) return;
-      // Without the authoritative snapshot every editable field may already
-      // have committed despite the lost confirmation. The active public
-      // detail owns a wider projection than its Gallery card, so the exact
-      // detail must re-read instead of retaining stale fields over the card's
-      // background page refresh.
-      await client.invalidateQueries({
-        queryKey
-      });
-    })());
+    const requests = [
+      client.invalidateQueries({
+        queryKey: [...queryKeys.adminImageInfo, update.id],
+        exact: true
+      })
+    ];
+    requests.push(
+      (async () => {
+        const queryKey = [...queryKeys.publicImageDetail, update.id];
+        // Retire a pre-commit promise as well as its HTTP freshness. A closed
+        // modal must not join that promise when it immediately opens again.
+        await client.cancelQueries({ queryKey });
+        if (authoritativeIds.has(update.id)) return;
+        // Without the authoritative snapshot every editable field may already
+        // have committed despite the lost confirmation. The active public
+        // detail owns a wider projection than its Gallery card, so the exact
+        // detail must re-read instead of retaining stale fields over the card's
+        // background page refresh.
+        await client.invalidateQueries({
+          queryKey
+        });
+      })()
+    );
     return requests;
   });
   return Promise.all([
@@ -172,20 +173,19 @@ async function invalidateIngestionVocabulary(
   client: QueryClient,
   items: readonly Partial<Pick<AdminImageListItemDto, "theme" | "author" | "tags">>[]
 ) {
-  const query = client.getQueryState<IngestionVocabularyDto>(
-    queryKeys.ingestionVocabulary
-  );
+  const query = client.getQueryState<IngestionVocabularyDto>(queryKeys.ingestionVocabulary);
   if (!query) return;
   const vocabulary = query.data;
   if (vocabulary) {
     const themes = new Set(vocabulary.themes.map(({ slug }) => slug));
     const tags = new Set(vocabulary.tags.map(({ slug }) => slug));
     const authors = new Set(vocabulary.authors.map(({ slug }) => slug));
-    const changed = items.some((item) => (
-      (item.theme != null && !themes.has(item.theme))
-      || (item.author !== undefined && item.author !== "" && !authors.has(item.author))
-      || item.tags?.some((tag) => !tags.has(tag))
-    ));
+    const changed = items.some(
+      (item) =>
+        (item.theme != null && !themes.has(item.theme)) ||
+        (item.author !== undefined && item.author !== "" && !authors.has(item.author)) ||
+        item.tags?.some((tag) => !tags.has(tag))
+    );
     if (!changed) return;
   } else if (query.fetchStatus !== "idle") {
     // TanStack reuses an in-flight initial fetch even when invalidated. Retire
@@ -204,34 +204,39 @@ export function invalidateImageDataAfterIngestion(
   const hasAuthors = items.some((item) => item.author !== "");
   const completedAt = options.completedAt;
   const adminImagesInFlight = new Set(
-    client.getQueryCache().findAll({ queryKey: queryKeys.adminImages })
+    client
+      .getQueryCache()
+      .findAll({ queryKey: queryKeys.adminImages })
       .filter((query) => query.state.fetchStatus !== "idle")
   );
   const invalidateAdminImages = async () => {
-    const notCovered = completedAt === undefined
-      ? undefined
-      : (query: Query) => !adminImageListValidationCovers(
-          query,
-          completedAt
-        );
-    await client.invalidateQueries({
-      queryKey: queryKeys.adminImages,
-      predicate: notCovered
-    }, {
-      // 多个完成事件共享同一管理员列表所有者；先让在途读取自然完成，
-      // 避免默认 cancelRefetch 制造 aborted fetch。
-      cancelRefetch: false
-    });
-    await client.invalidateQueries({
-      queryKey: queryKeys.adminImages,
-      predicate: completedAt === undefined
-        ? (query) => adminImagesInFlight.has(query)
-        : notCovered
-    }, {
-      // 若在途读取早于完成水位，顺序补一次尾随读取；若它已经覆盖该
-      // 完成项，响应头水位会让 predicate 直接跳过，不产生重复请求。
-      cancelRefetch: false
-    });
+    const notCovered =
+      completedAt === undefined
+        ? undefined
+        : (query: Query) => !adminImageListValidationCovers(query, completedAt);
+    await client.invalidateQueries(
+      {
+        queryKey: queryKeys.adminImages,
+        predicate: notCovered
+      },
+      {
+        // 多个完成事件共享同一管理员列表所有者；先让在途读取自然完成，
+        // 避免默认 cancelRefetch 制造 aborted fetch。
+        cancelRefetch: false
+      }
+    );
+    await client.invalidateQueries(
+      {
+        queryKey: queryKeys.adminImages,
+        predicate:
+          completedAt === undefined ? (query) => adminImagesInFlight.has(query) : notCovered
+      },
+      {
+        // 若在途读取早于完成水位，顺序补一次尾随读取；若它已经覆盖该
+        // 完成项，响应头水位会让 predicate 直接跳过，不产生重复请求。
+        cancelRefetch: false
+      }
+    );
   };
   return Promise.all([
     invalidate(client, [
@@ -248,16 +253,17 @@ export function invalidateImageDataAfterIngestion(
   ]);
 }
 
-export async function invalidateImageDataAfterTrash(
-  client: QueryClient,
-  imageIds: string[]
-) {
+export async function invalidateImageDataAfterTrash(client: QueryClient, imageIds: string[]) {
   if (imageIds.length) advanceImageDataRevision(client);
   // 当前公开详情在移入回收站后必然返回 404。先终止可能尚未完成的旧读取，但不改变
   // 它的 freshness；详情关闭后 gcTime: 0 会自然回收它。
-  await Promise.all(imageIds.map((imageId) => client.cancelQueries({
-    queryKey: [...queryKeys.publicImageDetail, imageId]
-  })));
+  await Promise.all(
+    imageIds.map((imageId) =>
+      client.cancelQueries({
+        queryKey: [...queryKeys.publicImageDetail, imageId]
+      })
+    )
+  );
   // 查询所有者会在 mutation 提交时先把当前 ID 集合设为 disabled。这里不能再把仍
   // active 的详情标为 stale，否则关闭动画期间的窗口聚焦或网络重连仍可能读取 404。
   // 详情卸载后由 gcTime: 0 回收。当前公开列表已在 mutation 成功边界精确移除
@@ -266,10 +272,7 @@ export async function invalidateImageDataAfterTrash(
   return invalidate(
     client,
     imageDataQueryKeys.filter(
-      (queryKey) => (
-        queryKey !== queryKeys.publicImages
-        && queryKey !== queryKeys.publicImageDetail
-      )
+      (queryKey) => queryKey !== queryKeys.publicImages && queryKey !== queryKeys.publicImageDetail
     )
   );
 }
@@ -282,14 +285,11 @@ export function invalidateStorageData(client: QueryClient) {
     queryKeys.publicImages,
     queryKeys.publicImageDetail,
     queryKeys.adminImages,
-    queryKeys.adminImageInfo,
+    queryKeys.adminImageInfo
   ]);
 }
 
-export function invalidateRuntimeData(
-  client: QueryClient,
-  settings?: AdminSettingsResponseDto
-) {
+export function invalidateRuntimeData(client: QueryClient, settings?: AdminSettingsResponseDto) {
   if (settings) client.setQueryData(queryKeys.settings, settings);
   return invalidate(client, [
     ...(settings ? [] : [queryKeys.settings]),

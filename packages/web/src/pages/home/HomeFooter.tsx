@@ -5,9 +5,7 @@ function footerLink(value: string | null) {
   if (!value) return undefined;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password
-      ? url.href
-      : undefined;
+    return url.protocol === "https:" && !url.username && !url.password ? url.href : undefined;
   } catch {
     return undefined;
   }
@@ -24,9 +22,13 @@ function footerNodes(nodes: NodeListOf<ChildNode>, prefix = ""): ReactNode[] {
     if (element.localName !== "a") return null;
     const children = footerNodes(element.childNodes, `${key}-`);
     const href = footerLink(element.getAttribute("href"));
-    return href
-      ? <a key={key} href={href} target="_blank" rel="noopener noreferrer">{children}</a>
-      : <Fragment key={key}>{children}</Fragment>;
+    return href ? (
+      <a key={key} href={href} target="_blank" rel="noopener noreferrer">
+        {children}
+      </a>
+    ) : (
+      <Fragment key={key}>{children}</Fragment>
+    );
   });
 }
 

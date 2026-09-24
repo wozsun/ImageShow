@@ -1,7 +1,8 @@
 import { randomUuidV7At } from "../core/uuid.ts";
 
 const localImageTimePattern = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/;
-const zonedImageTimePattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
+const zonedImageTimePattern =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
 const earliestImageTime = 0;
 const latestImageTime = Math.floor(Number.MAX_SAFE_INTEGER / 1_000);
 const latestImageTimeIso = new Date(latestImageTime).toISOString();

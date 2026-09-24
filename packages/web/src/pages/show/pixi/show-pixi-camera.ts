@@ -36,13 +36,11 @@ export type ShowPixiCameraOptions = {
   onZoomEnd?: (scale: number) => void;
 };
 
-const clamp = (value: number, minimum: number, maximum: number) => (
-  Math.min(maximum, Math.max(minimum, value))
-);
+const clamp = (value: number, minimum: number, maximum: number) =>
+  Math.min(maximum, Math.max(minimum, value));
 
-const distance = (left: ShowPixiCameraPoint, right: ShowPixiCameraPoint) => (
-  Math.hypot(left.x - right.x, left.y - right.y)
-);
+const distance = (left: ShowPixiCameraPoint, right: ShowPixiCameraPoint) =>
+  Math.hypot(left.x - right.x, left.y - right.y);
 
 const midpoint = (left: ShowPixiCameraPoint, right: ShowPixiCameraPoint) => ({
   x: (left.x + right.x) / 2,
@@ -107,8 +105,7 @@ export class ShowPixiCamera {
       if (pair && this.#pinch) {
         const nextMidpoint = midpoint(pair[0].point, pair[1].point);
         const nextDistance = Math.max(1, distance(pair[0].point, pair[1].point));
-        const nextScale = this.#pinch.scale
-          * nextDistance / this.#pinch.distance;
+        const nextScale = (this.#pinch.scale * nextDistance) / this.#pinch.distance;
         this.#setScaleAtWorldAnchor(
           this.#onZoomRequest(this.#clampScale(nextScale)),
           nextMidpoint,
@@ -157,22 +154,17 @@ export class ShowPixiCamera {
   readonly #handleWheel = (event: WheelEvent) => {
     if (!this.#inputEnabled) return;
     const lineHeight = 16;
-    const normalizedDelta = event.deltaY * (
-      event.deltaMode === 1
-        ? lineHeight
-        : event.deltaMode === 2
-          ? this.#height
-          : 1
-    );
+    const normalizedDelta =
+      event.deltaY *
+      (event.deltaMode === 1 ? lineHeight : event.deltaMode === 2 ? this.#height : 1);
     if (!Number.isFinite(normalizedDelta) || normalizedDelta === 0) return;
     this.#velocityX = 0;
     this.#velocityY = 0;
     if (event.ctrlKey) {
       this.#wheelPanRemainingY = 0;
       const anchor = this.#eventPoint(event.clientX, event.clientY);
-      const nextScale = this.scale * Math.exp(
-        -clamp(normalizedDelta, -720, 720) * this.#wheelZoomRate
-      );
+      const nextScale =
+        this.scale * Math.exp(-clamp(normalizedDelta, -720, 720) * this.#wheelZoomRate);
       this.setZoom(this.#onZoomRequest(this.#clampScale(nextScale)), anchor);
       this.#wheelIdleMs = 140;
     } else {
@@ -251,9 +243,11 @@ export class ShowPixiCamera {
   }
 
   get moving() {
-    return this.#dragging || Math.hypot(this.#velocityX, this.#velocityY) >= (
-      this.#minimumVelocity
-    ) || Math.abs(this.#wheelPanRemainingY) >= wheelPanStopDistance;
+    return (
+      this.#dragging ||
+      Math.hypot(this.#velocityX, this.#velocityY) >= this.#minimumVelocity ||
+      Math.abs(this.#wheelPanRemainingY) >= wheelPanStopDistance
+    );
   }
 
   get scale() {
@@ -298,10 +292,7 @@ export class ShowPixiCamera {
 
   panScreen(deltaX: number, deltaY: number) {
     if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return;
-    this.root.position.set(
-      this.root.position.x + deltaX,
-      this.root.position.y + deltaY
-    );
+    this.root.position.set(this.root.position.x + deltaX, this.root.position.y + deltaY);
   }
 
   resize(width: number, height: number) {
@@ -378,11 +369,7 @@ export class ShowPixiCamera {
       this.#velocityY = 0;
       return;
     }
-    this.#panFromInput(
-      this.#velocityX * elapsed,
-      this.#velocityY * elapsed,
-      this.#dragPointerType
-    );
+    this.#panFromInput(this.#velocityX * elapsed, this.#velocityY * elapsed, this.#dragPointerType);
     const decay = this.#friction ** (elapsed / (1_000 / 60));
     this.#velocityX *= decay;
     this.#velocityY *= decay;
@@ -457,9 +444,7 @@ export class ShowPixiCamera {
 
   #pointerPair() {
     const values = [...this.#pointers.values()];
-    return values.length >= 2
-      ? [values[0], values[1]] as const
-      : null;
+    return values.length >= 2 ? ([values[0], values[1]] as const) : null;
   }
 
   #removeListeners() {

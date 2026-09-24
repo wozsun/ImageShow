@@ -6,11 +6,11 @@ function safeUpstreamEtag(value: string | null | undefined) {
   const candidate = value?.trim() ?? "";
   const candidates = ifNoneMatchCandidates(candidate);
   if (
-    !candidate
-    || Buffer.byteLength(candidate) > maxUpstreamEtagBytes
-    || candidates.length !== 1
-    || candidates[0] !== candidate
-    || candidate === "*"
+    !candidate ||
+    Buffer.byteLength(candidate) > maxUpstreamEtagBytes ||
+    candidates.length !== 1 ||
+    candidates[0] !== candidate ||
+    candidate === "*"
   ) {
     return undefined;
   }
@@ -22,10 +22,7 @@ function safeUpstreamEtag(value: string | null | undefined) {
   }
 }
 
-export function proxyEtagForUpstream(
-  originalUrl: string,
-  upstreamEtag: string | null | undefined
-) {
+export function proxyEtagForUpstream(originalUrl: string, upstreamEtag: string | null | undefined) {
   const safeEtag = safeUpstreamEtag(upstreamEtag);
   if (!safeEtag) return undefined;
   const encoded = Buffer.from(safeEtag).toString("base64url");
@@ -33,8 +30,7 @@ export function proxyEtagForUpstream(
 }
 
 function upstreamEtagFromProxy(originalUrl: string, proxyEtag: string) {
-  const match = /^(?:W\/)?"p\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-]+)"$/u
-    .exec(proxyEtag);
+  const match = /^(?:W\/)?"p\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-]+)"$/u.exec(proxyEtag);
   if (!match || match[1] !== entityTagDigest(originalUrl)) return undefined;
   try {
     const decoded = Buffer.from(match[2]!, "base64url").toString("utf8");
@@ -50,12 +46,11 @@ export function upstreamIfNoneMatchForProxy(
   clientHeader: string | null | undefined
 ) {
   if (clientHeader == null) return undefined;
-  const upstreamEtags = ifNoneMatchCandidates(clientHeader)
-    .flatMap((candidate) => {
-      if (candidate === "*") return [candidate];
-      const upstream = upstreamEtagFromProxy(originalUrl, candidate);
-      return upstream ? [upstream] : [];
-    });
+  const upstreamEtags = ifNoneMatchCandidates(clientHeader).flatMap((candidate) => {
+    if (candidate === "*") return [candidate];
+    const upstream = upstreamEtagFromProxy(originalUrl, candidate);
+    return upstream ? [upstream] : [];
+  });
   return upstreamEtags.length ? [...new Set(upstreamEtags)].join(", ") : undefined;
 }
 
@@ -74,9 +69,7 @@ function safeResourceRevisionDate(value: string, now: number) {
   // change in the same second from validating the new URL. Until that fence
   // has passed, omit Last-Modified and do not forward date conditions.
   const revisionFence = Math.floor(timestamp / 1000) * 1000 + 1000;
-  return revisionFence <= Math.floor(now / 1000) * 1000
-    ? revisionFence
-    : undefined;
+  return revisionFence <= Math.floor(now / 1000) * 1000 ? revisionFence : undefined;
 }
 
 export function proxyLastModified(
@@ -105,10 +98,7 @@ function combinedProxyLastModified(
 ) {
   const resource = safeResourceRevisionDate(resourceUpdatedAt, now);
   if (resource === undefined) return undefined;
-  const timestamp = Math.max(
-    upstream ?? Number.NEGATIVE_INFINITY,
-    resource
-  );
+  const timestamp = Math.max(upstream ?? Number.NEGATIVE_INFINITY, resource);
   return Number.isFinite(timestamp) ? new Date(timestamp).toUTCString() : undefined;
 }
 

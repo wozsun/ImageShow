@@ -5,10 +5,7 @@ import type {
   UploadIntentItemDto,
   UploadIntentItemInputDto
 } from "@imageshow/shared/browser";
-import {
-  getIngestionMaxFileBytes,
-  getIngestionMaxLongEdge
-} from "../../config/app-settings.ts";
+import { getIngestionMaxFileBytes, getIngestionMaxLongEdge } from "../../config/app-settings.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
@@ -79,23 +76,28 @@ type UploadCredential = IngestionTokenEnvelope & {
 
 function isUploadCredential(value: IngestionTokenEnvelope): value is UploadCredential {
   const keys = Object.keys(value).sort();
-  return keys.join(",") === [
-    "candidate_image_id",
-    "expires_at",
-    "issued_at",
-    "owner",
-    "purpose",
-    "request_hash",
-    "session_id"
-  ].sort().join(",")
-    && typeof value.owner === "string"
-    && Boolean(value.owner)
-    && typeof value.session_id === "string"
-    && Boolean(value.session_id)
-    && typeof value.candidate_image_id === "string"
-    && Boolean(value.candidate_image_id)
-    && typeof value.request_hash === "string"
-    && /^[a-f0-9]{64}$/u.test(value.request_hash);
+  return (
+    keys.join(",") ===
+      [
+        "candidate_image_id",
+        "expires_at",
+        "issued_at",
+        "owner",
+        "purpose",
+        "request_hash",
+        "session_id"
+      ]
+        .sort()
+        .join(",") &&
+    typeof value.owner === "string" &&
+    Boolean(value.owner) &&
+    typeof value.session_id === "string" &&
+    Boolean(value.session_id) &&
+    typeof value.candidate_image_id === "string" &&
+    Boolean(value.candidate_image_id) &&
+    typeof value.request_hash === "string" &&
+    /^[a-f0-9]{64}$/u.test(value.request_hash)
+  );
 }
 
 function normalizedImageTime(value?: string, batchTime?: string, now?: Date) {
@@ -129,18 +131,17 @@ async function resolvedStorageSlug(storageSlug?: string) {
 
 type IngestionItemFailure = Extract<UploadIntentItemDto, { status: "failed" }>;
 
-type SettledItem<Input, Result> = Readonly<{
-  input: Input;
-  result: Result;
-}> | Readonly<{
-  input: Input;
-  error: unknown;
-}>;
+type SettledItem<Input, Result> =
+  | Readonly<{
+      input: Input;
+      result: Result;
+    }>
+  | Readonly<{
+      input: Input;
+      error: unknown;
+    }>;
 
-type AcceptedIngestionItem = Exclude<
-  ImportAcceptItemDto,
-  { status: "failed" }
->;
+type AcceptedIngestionItem = Exclude<ImportAcceptItemDto, { status: "failed" }>;
 
 type IngestionSessionServiceDependencies = Readonly<{
   readCommitted: typeof readCommittedIngestionResultsByImageIds;
@@ -203,11 +204,7 @@ export class IngestionSessionService {
   }
 
   verifyUploadCredential(token: string, owner: string) {
-    const claims = this.tokens.verify(
-      uploadCredentialPurpose,
-      token,
-      isUploadCredential
-    );
+    const claims = this.tokens.verify(uploadCredentialPurpose, token, isUploadCredential);
     if (claims.owner !== owner) {
       throw new ApiError(403, "upload_credential_owner_mismatch", "上传凭证不属于当前管理员");
     }
@@ -233,10 +230,12 @@ export class IngestionSessionService {
         resolved_image_time: databaseResult.image_time,
         status: "completed",
         accepted_order: session.accepted_order,
-        ...(session.status === "completed" ? {
-          version: session.version,
-          last_semantic_revision: session.last_semantic_revision
-        } : {})
+        ...(session.status === "completed"
+          ? {
+              version: session.version,
+              last_semantic_revision: session.last_semantic_revision
+            }
+          : {})
       };
     }
     if (lookupError) {
@@ -293,10 +292,12 @@ export class IngestionSessionService {
     const maximumBytes = getIngestionMaxFileBytes();
     const maximumLongEdge = getIngestionMaxLongEdge();
     const results = await this.#dependencies.withStorageReadLock(async (signal) => {
-      const created: Array<SettledItem<
-        UploadIntentItemInputDto,
-        Awaited<ReturnType<IngestionSessionRepository["createUploadIntent"]>>
-      >> = [];
+      const created: Array<
+        SettledItem<
+          UploadIntentItemInputDto,
+          Awaited<ReturnType<IngestionSessionRepository["createUploadIntent"]>>
+        >
+      > = [];
       for (const item of items) {
         signal.throwIfAborted();
         try {
@@ -306,28 +307,15 @@ export class IngestionSessionService {
             });
           }
           if (item.max_long_edge > maximumLongEdge) {
-            throw new ApiError(
-              400,
-              "upload_dimensions_exceeded",
-              "图片长边约束超过服务端限制",
-              { limit: maximumLongEdge }
-            );
+            throw new ApiError(400, "upload_dimensions_exceeded", "图片长边约束超过服务端限制", {
+              limit: maximumLongEdge
+            });
           }
-          const storageSlug = await this.#dependencies.resolveStorageSlug(
-            item.storage_slug
-          );
+          const storageSlug = await this.#dependencies.resolveStorageSlug(item.storage_slug);
           await this.#dependencies.assertStorageWriteTarget(storageSlug);
           const explicitTime = providedImageTime(item.image_time, item.batch_time);
-          const resolvedTime = normalizedImageTime(
-            item.image_time,
-            item.batch_time,
-            new Date(now)
-          );
-          const sessionId = createIngestionSessionId(
-            owner,
-            "upload",
-            item.idempotency_key
-          );
+          const resolvedTime = normalizedImageTime(item.image_time, item.batch_time, new Date(now));
+          const sessionId = createIngestionSessionId(owner, "upload", item.idempotency_key);
           const requestHash = ingestionIntentRequestHash({
             queue: "upload",
             source_type: "upload",
@@ -343,10 +331,7 @@ export class IngestionSessionService {
           const intent: UploadIntentSnapshot = {
             owner,
             session_id: sessionId,
-            candidate_image_id: createImageId(
-              resolvedTime.date,
-              item.batch_position
-            ),
+            candidate_image_id: createImageId(resolvedTime.date, item.batch_position),
             resolved_image_time: resolvedTime.iso,
             request_hash: requestHash,
             display_order_key: createIngestionDisplayOrderKey(
@@ -360,8 +345,7 @@ export class IngestionSessionService {
             expected_size: item.expected_size,
             max_long_edge: item.max_long_edge,
             created_at: now,
-            expires_at: now
-              + appConfig.ingestionRuntime.uploadIntentTtlSeconds * 1000,
+            expires_at: now + appConfig.ingestionRuntime.uploadIntentTtlSeconds * 1000,
             execution_token: "",
             claim_heartbeat_at: 0
           };
@@ -377,11 +361,9 @@ export class IngestionSessionService {
       return created;
     });
 
-    const canonicalIds = results.flatMap((entry) => (
-      "result" in entry && entry.result.kind === "canonical"
-        ? [entry.result.session.image_id]
-        : []
-    ));
+    const canonicalIds = results.flatMap((entry) =>
+      "result" in entry && entry.result.kind === "canonical" ? [entry.result.session.image_id] : []
+    );
     let committed = new Map<string, CommittedIngestionResult>();
     let lookupError: unknown = null;
     try {
@@ -409,13 +391,15 @@ export class IngestionSessionService {
         }
         continue;
       }
-      response.push(await this.#canonicalResult(
-        entry.input.idempotency_key,
-        entry.result.session,
-        committed,
-        lookupError,
-        now
-      ));
+      response.push(
+        await this.#canonicalResult(
+          entry.input.idempotency_key,
+          entry.result.session,
+          committed,
+          lookupError,
+          now
+        )
+      );
     }
     return response;
   }
@@ -435,28 +419,19 @@ export class IngestionSessionService {
       );
     }
     const accepted = await this.#dependencies.withStorageReadLock(async (signal) => {
-      const results: Array<SettledItem<
-        ImportItemInputDto,
-        StoredIngestionSession
-      >> = [];
+      const results: Array<SettledItem<ImportItemInputDto, StoredIngestionSession>> = [];
       for (const item of items) {
         signal.throwIfAborted();
         try {
-          const storageSlug = options.cancelIfMissing && item.storage_slug
-            ? item.storage_slug
-            : await this.#dependencies.resolveStorageSlug(item.storage_slug);
-          if (!options.cancelIfMissing) await this.#dependencies.assertStorageWriteTarget(storageSlug);
+          const storageSlug =
+            options.cancelIfMissing && item.storage_slug
+              ? item.storage_slug
+              : await this.#dependencies.resolveStorageSlug(item.storage_slug);
+          if (!options.cancelIfMissing)
+            await this.#dependencies.assertStorageWriteTarget(storageSlug);
           const explicitTime = providedImageTime(item.image_time, item.batch_time);
-          const resolvedTime = normalizedImageTime(
-            item.image_time,
-            item.batch_time,
-            new Date(now)
-          );
-          const sessionId = createIngestionSessionId(
-            owner,
-            "import",
-            item.idempotency_key
-          );
+          const resolvedTime = normalizedImageTime(item.image_time, item.batch_time, new Date(now));
+          const sessionId = createIngestionSessionId(owner, "import", item.idempotency_key);
           const metadata = canonicalImportMetadata(
             runtime,
             item.source_type,
@@ -475,10 +450,7 @@ export class IngestionSessionService {
             expected_size: null,
             max_long_edge: null
           });
-          const imageId = createImageId(
-            resolvedTime.date,
-            item.batch_position
-          );
+          const imageId = createImageId(resolvedTime.date, item.batch_position);
           const template = withSessionSemanticHash({
             owner,
             queue: "import",
@@ -504,21 +476,18 @@ export class IngestionSessionService {
             execution_token: "",
             raw_generation: "",
             raw_size: 0,
-            discard_at: now
-              + appConfig.ingestionRuntime.importSessionIdleTtlSeconds * 1000
+            discard_at: now + appConfig.ingestionRuntime.importSessionIdleTtlSeconds * 1000
           });
           results.push({
             input: item,
-            result: (await this.repository.acceptImportSession(
-              template,
-              createIngestionDisplayOrderKey(
-                item.batch_key,
-                item.batch_position,
-                sessionId
-              ),
-              now,
-              options.cancelIfMissing
-            )).session
+            result: (
+              await this.repository.acceptImportSession(
+                template,
+                createIngestionDisplayOrderKey(item.batch_key, item.batch_position, sessionId),
+                now,
+                options.cancelIfMissing
+              )
+            ).session
           });
         } catch (error) {
           if (signal.aborted) throw error;
@@ -528,9 +497,9 @@ export class IngestionSessionService {
       return results;
     });
 
-    const canonicalIds = accepted.flatMap((entry) => (
+    const canonicalIds = accepted.flatMap((entry) =>
       "result" in entry ? [entry.result.image_id] : []
-    ));
+    );
     let committed = new Map<string, CommittedIngestionResult>();
     let lookupError: unknown = null;
     try {
@@ -544,13 +513,15 @@ export class IngestionSessionService {
         response.push(failedItem(entry.input.idempotency_key, entry.error));
         continue;
       }
-      response.push(await this.#canonicalResult(
-        entry.input.idempotency_key,
-        entry.result,
-        committed,
-        lookupError,
-        now
-      ));
+      response.push(
+        await this.#canonicalResult(
+          entry.input.idempotency_key,
+          entry.result,
+          committed,
+          lookupError,
+          now
+        )
+      );
     }
     return response;
   }
@@ -589,8 +560,7 @@ export class IngestionSessionService {
       execution_token: "",
       raw_generation: rawGeneration,
       raw_size: rawSize,
-      discard_at: now
-        + appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds * 1000
+      discard_at: now + appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds * 1000
     });
   }
 

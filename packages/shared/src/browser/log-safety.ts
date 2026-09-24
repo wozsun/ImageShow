@@ -1,12 +1,44 @@
 const redacted = "[redacted]";
 const truncated = "[truncated]";
 const sensitiveFields = new Set([
-  "password", "passwordhash", "passphrase", "secret", "secretaccesskey", "accesskeyid", "accesskey",
-  "token", "accesstoken", "refreshtoken", "sessiontoken", "sessionid", "producerexecutiontoken", "executiontoken",
-  "authorization", "proxyauthorization", "cookie", "setcookie", "csrf", "csrftoken", "xcsrftoken",
-  "body", "requestbody", "responsebody", "payload", "raw", "source", "original", "originalurl",
-  "path", "filepath", "localpath", "directory", "rootpath", "storagedirectory", "configfile",
-  "namespaceidentity", "namespaceidentities"
+  "password",
+  "passwordhash",
+  "passphrase",
+  "secret",
+  "secretaccesskey",
+  "accesskeyid",
+  "accesskey",
+  "token",
+  "accesstoken",
+  "refreshtoken",
+  "sessiontoken",
+  "sessionid",
+  "producerexecutiontoken",
+  "executiontoken",
+  "authorization",
+  "proxyauthorization",
+  "cookie",
+  "setcookie",
+  "csrf",
+  "csrftoken",
+  "xcsrftoken",
+  "body",
+  "requestbody",
+  "responsebody",
+  "payload",
+  "raw",
+  "source",
+  "original",
+  "originalurl",
+  "path",
+  "filepath",
+  "localpath",
+  "directory",
+  "rootpath",
+  "storagedirectory",
+  "configfile",
+  "namespaceidentity",
+  "namespaceidentities"
 ]);
 const fieldName = (key: string) => key.toLowerCase().replace(/[-_]/g, "");
 
@@ -23,22 +55,33 @@ export function safeLogText(value: string, maximumLength = 2_000): string {
   });
   text = text.replace(/\b(?:Bearer|Basic)\s+[^\s,;"']+/gi, redacted);
   text = text.replace(/\b(?:cookie|set-cookie)\s*:[^\r\n]*/gi, redacted);
-  text = text.replace(/("?([a-z][a-z0-9_-]{0,63})"?\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;{}]+)/gi,
-    (whole, prefix: string, key: string) => sensitiveFields.has(fieldName(key)) ? `${prefix}${redacted}` : whole);
+  text = text.replace(
+    /("?([a-z][a-z0-9_-]{0,63})"?\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;{}]+)/gi,
+    (whole, prefix: string, key: string) =>
+      sensitiveFields.has(fieldName(key)) ? `${prefix}${redacted}` : whole
+  );
   text = text.replace(/(?:\b[a-z]:[\\/]|\\\\)[^\r\n"'<>|]*/gi, "[path]");
   text = text.replace(/(^|[\s('"=])\/[^\s"'<>()[\]{},;]+/g, "$1[path]");
-  text = text.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g,
-    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
+  text = text.replace(
+    /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g,
+    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`
+  );
   return text.length > maximumLength ? text.slice(0, maximumLength) + truncated : text;
 }
 
 function safeStack(value: unknown) {
-  if (Array.isArray(value)) value = value.slice(0, 10).filter((item) => typeof item === "string").join("\n");
+  if (Array.isArray(value))
+    value = value
+      .slice(0, 10)
+      .filter((item) => typeof item === "string")
+      .join("\n");
   if (typeof value !== "string") return undefined;
   const frames: string[] = [];
   for (const line of value.slice(0, 16_384).split("\n")) {
     const normalized = line.replace(/\\/g, "/");
-    const location = normalized.match(/((?:packages|node_modules|assets)\/[\w./@-]+:\d+:\d+|node:[\w/.-]+:\d+:\d+)/)?.[1];
+    const location = normalized.match(
+      /((?:packages|node_modules|assets)\/[\w./@-]+:\d+:\d+|node:[\w/.-]+:\d+:\d+)/
+    )?.[1];
     if (!location) continue;
     const name = normalized.match(/^\s*(?:at\s+)?([\w.$<> [\]-]+)\s+\(/)?.[1]?.trim();
     frames.push(name ? `${safeLogText(name, 120)} (${location})` : location);
@@ -47,7 +90,8 @@ function safeStack(value: unknown) {
   return frames;
 }
 
-export type SafeLogValue = null | boolean | number | string | SafeLogValue[] | { [key: string]: SafeLogValue };
+export type SafeLogValue =
+  null | boolean | number | string | SafeLogValue[] | { [key: string]: SafeLogValue };
 
 /** Builds bounded plain data; only known Error fields use guarded accessor reads. */
 export function safeLogValue(value: unknown): SafeLogValue {
@@ -80,7 +124,11 @@ export function safeLogValue(value: unknown): SafeLogValue {
     try {
       if (current instanceof Error) {
         const field = (name: string) => {
-          try { return Reflect.get(current, name) as unknown; } catch { return undefined; }
+          try {
+            return Reflect.get(current, name) as unknown;
+          } catch {
+            return undefined;
+          }
         };
         const name = field("name");
         const message = field("message");
@@ -89,23 +137,36 @@ export function safeLogValue(value: unknown): SafeLogValue {
         };
         // Parser/validator errors may echo complete configuration or response fragments.
         if (name === "SyntaxError" || name === "ZodError") {
-          result.message = name === "SyntaxError" ? "Invalid syntax (input omitted)" : "Validation failed (input omitted)";
+          result.message =
+            name === "SyntaxError"
+              ? "Invalid syntax (input omitted)"
+              : "Validation failed (input omitted)";
           if (typeof message === "string") {
             const position = message.match(/\bposition (\d+)(?: \(line (\d+) column (\d+)\))?/);
             if (position) result.position = position[0];
           }
           const issues = field("issues");
           if (name === "ZodError" && Array.isArray(issues)) {
-            result.issues = visit(issues.slice(0, 16).map((issue) => ({
-              code: issue.code,
-              field: Array.isArray(issue.path) ? issue.path.filter((part: unknown) => typeof part === "string" || typeof part === "number").join(".") : ""
-            })), depth + 1);
+            result.issues = visit(
+              issues.slice(0, 16).map((issue) => ({
+                code: issue.code,
+                field: Array.isArray(issue.path)
+                  ? issue.path
+                      .filter(
+                        (part: unknown) => typeof part === "string" || typeof part === "number"
+                      )
+                      .join(".")
+                  : ""
+              })),
+              depth + 1
+            );
           }
         } else if (typeof message === "string") {
           let safeMessage = message.slice(0, 16_384);
           for (const fieldName of ["path", "dest"]) {
             const path = field(fieldName);
-            if (typeof path === "string" && path) safeMessage = safeMessage.split(path).join("[path]");
+            if (typeof path === "string" && path)
+              safeMessage = safeMessage.split(path).join("[path]");
           }
           result.message = text(safeMessage);
         }
@@ -123,7 +184,9 @@ export function safeLogValue(value: unknown): SafeLogValue {
         const result: SafeLogValue[] = [];
         for (let index = 0; index < Math.min(current.length, 32); index++) {
           const descriptor = Object.getOwnPropertyDescriptor(current, String(index));
-          result.push(descriptor && "value" in descriptor ? visit(descriptor.value, depth + 1) : "[accessor]");
+          result.push(
+            descriptor && "value" in descriptor ? visit(descriptor.value, depth + 1) : "[accessor]"
+          );
           if (remainingNodes <= 0) break;
         }
         if (current.length > result.length) result.push(truncated);
@@ -135,11 +198,17 @@ export function safeLogValue(value: unknown): SafeLogValue {
       let count = 0;
       for (const key in current) {
         if (!Object.hasOwn(current, key)) continue;
-        if (count++ === 32 || remainingNodes <= 0) { result.truncated = true; break; }
+        if (count++ === 32 || remainingNodes <= 0) {
+          result.truncated = true;
+          break;
+        }
         const descriptor = Object.getOwnPropertyDescriptor(current, key);
-        result[text(key, 120)] = contentError && key === "message" ? "Invalid input (content omitted)" : descriptor && "value" in descriptor
-          ? visit(descriptor.value, depth + 1, key)
-          : "[accessor]";
+        result[text(key, 120)] =
+          contentError && key === "message"
+            ? "Invalid input (content omitted)"
+            : descriptor && "value" in descriptor
+              ? visit(descriptor.value, depth + 1, key)
+              : "[accessor]";
       }
       return result;
     } catch {
@@ -155,6 +224,8 @@ export function formatLogContext(value: unknown): string {
   const text = JSON.stringify(safeLogValue(value));
   const encoder = new TextEncoder();
   if (encoder.encode(text).byteLength <= 8_192) return text;
-  const preview = new TextDecoder().decode(encoder.encode(text).subarray(0, 4_000), { stream: true });
+  const preview = new TextDecoder().decode(encoder.encode(text).subarray(0, 4_000), {
+    stream: true
+  });
   return JSON.stringify({ truncated: true, preview });
 }

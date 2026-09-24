@@ -10,33 +10,26 @@ import {
   assertStorageRemovalResults,
   removeStorageObjectsAndConfirm
 } from "../storage/objects/access.ts";
-import {
-  digestStorageObject,
-  type StorageAccess
-} from "../storage/objects/transfer.ts";
-import type {
-  MaintenanceImage,
-  MaintenanceItem
-} from "./storage-maintenance-plan.ts";
+import { digestStorageObject, type StorageAccess } from "../storage/objects/transfer.ts";
+import type { MaintenanceImage, MaintenanceItem } from "./storage-maintenance-plan.ts";
 
 async function readThumbnailAuthority(imageId: string) {
-  return (await pool.query<MaintenanceImage>(
-    `SELECT id, ext, status, storage_slug, md5, thumbnail_size
+  return (
+    await pool.query<MaintenanceImage>(
+      `SELECT id, ext, status, storage_slug, md5, thumbnail_size
        FROM metadata
       WHERE id=$1`,
-    [imageId]
-  )).rows[0];
+      [imageId]
+    )
+  ).rows[0];
 }
 
-function sameThumbnailAuthority(
-  before: MaintenanceImage,
-  after: MaintenanceImage | undefined
-) {
+function sameThumbnailAuthority(before: MaintenanceImage, after: MaintenanceImage | undefined) {
   return Boolean(
-    after
-    && (after.status === "ready" || after.status === "deleted")
-    && after.ext === before.ext
-    && after.storage_slug === before.storage_slug
+    after &&
+    (after.status === "ready" || after.status === "deleted") &&
+    after.ext === before.ext &&
+    after.storage_slug === before.storage_slug
   );
 }
 
@@ -51,16 +44,10 @@ async function cleanupFailedThumbnailWrite(
       [{ prefix: "thumbs", key, storageSlug: storage.config.slug }],
       { signal }
     );
-    assertStorageRemovalResults(
-      results,
-      "无法确认失败的缩略图候选已清理"
-    );
+    assertStorageRemovalResults(results, "无法确认失败的缩略图候选已清理");
   } catch (cleanupError) {
     signal.throwIfAborted();
-    throw new AggregateError(
-      [failure, cleanupError],
-      "缩略图写入失败，且无法确认候选对象已清理"
-    );
+    throw new AggregateError([failure, cleanupError], "缩略图写入失败，且无法确认候选对象已清理");
   }
   throw failure;
 }
@@ -75,13 +62,7 @@ async function writeVerifiedThumbnail(
 
   let writeFailure: unknown;
   try {
-    await storage.driver.writeBuffer(
-      "thumbs",
-      key,
-      body,
-      "image/webp",
-      { signal }
-    );
+    await storage.driver.writeBuffer("thumbs", key, body, "image/webp", { signal });
   } catch (error) {
     signal.throwIfAborted();
     writeFailure = error;
@@ -92,26 +73,19 @@ async function writeVerifiedThumbnail(
     digest = await digestStorageObject(storage, "thumbs", key, { signal });
   } catch (error) {
     signal.throwIfAborted();
-    return cleanupFailedThumbnailWrite(
-      storage,
-      key,
-      signal,
-      writeFailure ?? error
-    );
+    return cleanupFailedThumbnailWrite(storage, key, signal, writeFailure ?? error);
   }
-  const matches = digest.size === body.byteLength
-    && digest.sha256 === sha256Buffer(body);
+  const matches = digest.size === body.byteLength && digest.sha256 === sha256Buffer(body);
   if (!matches) {
     return cleanupFailedThumbnailWrite(
       storage,
       key,
       signal,
-      new ApiError(
-        502,
-        "storage_transfer_integrity_failed",
-        "缩略图写入后完整性校验失败",
-        { backend: storage.config.slug, prefix: "thumbs", key }
-      )
+      new ApiError(502, "storage_transfer_integrity_failed", "缩略图写入后完整性校验失败", {
+        backend: storage.config.slug,
+        prefix: "thumbs",
+        key
+      })
     );
   }
   return { responseRecovered: writeFailure !== undefined };
@@ -131,12 +105,7 @@ async function persistThumbnailSize(
           AND storage_slug=$3
           AND ext=$4
           AND status IN ('ready','deleted')`,
-      [
-        authority.id,
-        thumbnailSize,
-        authority.storage_slug,
-        authority.ext
-      ]
+      [authority.id, thumbnailSize, authority.storage_slug, authority.ext]
     );
     signal.throwIfAborted();
     if (updated.rowCount) return;
@@ -148,18 +117,15 @@ async function persistThumbnailSize(
   const current = await readThumbnailAuthority(authority.id);
   signal.throwIfAborted();
   if (
-    sameThumbnailAuthority(authority, current)
-    && Number(current?.thumbnail_size) === thumbnailSize
+    sameThumbnailAuthority(authority, current) &&
+    Number(current?.thumbnail_size) === thumbnailSize
   ) {
     return;
   }
   if (updateFailure) throw updateFailure;
-  throw new ApiError(
-    409,
-    "image_location_changed",
-    "图片位置或缩略图状态在维修期间发生变化",
-    { image_id: authority.id }
-  );
+  throw new ApiError(409, "image_location_changed", "图片位置或缩略图状态在维修期间发生变化", {
+    image_id: authority.id
+  });
 }
 
 /** Caller owns the global storage-location write lock until all work settles. */
@@ -201,61 +167,54 @@ export async function repairStorageThumbnail(
     operationSignal.throwIfAborted();
     await assertObjectNotPendingCleanup(storage.config, "thumbs", thumbKey);
     operationSignal.throwIfAborted();
-    if (!await storage.driver.exists(
-      "full",
-      storageObjectKey(authority.id, authority.ext),
-      { signal: operationSignal }
-    )) {
+    if (
+      !(await storage.driver.exists("full", storageObjectKey(authority.id, authority.ext), {
+        signal: operationSignal
+      }))
+    ) {
       return { ...itemBase, outcome: "skipped", reason: "当前位置的原图不存在" };
     }
     if (
-      Number(authority.thumbnail_size) > 0
-      && await storage.driver.exists(
-        "thumbs",
-        thumbKey,
-        { signal: operationSignal }
-      )
+      Number(authority.thumbnail_size) > 0 &&
+      (await storage.driver.exists("thumbs", thumbKey, { signal: operationSignal }))
     ) {
       return { ...itemBase, outcome: "skipped", reason: "缩略图已存在，无需维修" };
     }
     const sourceAuthority = authority;
-    const thumbnail = await withNormalizationAdmission(
-      scheduleSignal,
-      async () => {
-        const source = await storage.driver.readBuffer(
-          "full",
-          storageObjectKey(sourceAuthority.id, sourceAuthority.ext),
-          { signal: operationSignal }
+    const thumbnail = await withNormalizationAdmission(scheduleSignal, async () => {
+      const source = await storage.driver.readBuffer(
+        "full",
+        storageObjectKey(sourceAuthority.id, sourceAuthority.ext),
+        { signal: operationSignal }
+      );
+      operationSignal.throwIfAborted();
+      if (sourceAuthority.md5 && md5Buffer(source) !== sourceAuthority.md5) {
+        throw new ApiError(
+          502,
+          "storage_source_integrity_failed",
+          "源存储对象与数据库记录的 MD5 不一致",
+          {
+            image_id: sourceAuthority.id,
+            object_key: storageObjectKey(sourceAuthority.id, sourceAuthority.ext)
+          }
         );
-        operationSignal.throwIfAborted();
-        if (sourceAuthority.md5 && md5Buffer(source) !== sourceAuthority.md5) {
-          throw new ApiError(
-            502,
-            "storage_source_integrity_failed",
-            "源存储对象与数据库记录的 MD5 不一致",
-            {
-              image_id: sourceAuthority.id,
-              object_key: storageObjectKey(sourceAuthority.id, sourceAuthority.ext)
-            }
-          );
-        }
-        return createThumbnail(source);
       }
-    );
+      return createThumbnail(source);
+    });
     operationSignal.throwIfAborted();
 
-    const currentThumbnailExists = await storage.driver.exists(
-      "thumbs",
-      thumbKey,
-      { signal: operationSignal }
-    );
+    const currentThumbnailExists = await storage.driver.exists("thumbs", thumbKey, {
+      signal: operationSignal
+    });
     if (currentThumbnailExists) {
       const removals = await removeStorageObjectsAndConfirm(
-        [{
-          prefix: "thumbs",
-          key: thumbKey,
-          storageSlug: authority.storage_slug
-        }],
+        [
+          {
+            prefix: "thumbs",
+            key: thumbKey,
+            storageSlug: authority.storage_slug
+          }
+        ],
         { signal: operationSignal }
       );
       assertStorageRemovalResults(removals);
@@ -271,28 +230,17 @@ export async function repairStorageThumbnail(
     );
     operationSignal.throwIfAborted();
     try {
-      await persistThumbnailSize(
-        pendingAuthority,
-        thumbnail.byteLength,
-        operationSignal
-      );
+      await persistThumbnailSize(pendingAuthority, thumbnail.byteLength, operationSignal);
     } catch (error) {
       operationSignal.throwIfAborted();
-      return await cleanupFailedThumbnailWrite(
-        storage,
-        thumbKey,
-        operationSignal,
-        error
-      );
+      return await cleanupFailedThumbnailWrite(storage, thumbKey, operationSignal, error);
     }
     operationSignal.throwIfAborted();
     return {
       ...itemBase,
       outcome: "repaired",
       thumbnail_size: thumbnail.byteLength,
-      ...(materialized.responseRecovered
-        ? { reason: "写入响应丢失后已通过完整性回读确认" }
-        : {})
+      ...(materialized.responseRecovered ? { reason: "写入响应丢失后已通过完整性回读确认" } : {})
     };
   } catch (error) {
     if (scheduleSignal.aborted) throw scheduleSignal.reason ?? error;

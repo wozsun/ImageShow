@@ -4,9 +4,7 @@ import {
   signalProcessTree,
   spawnManaged
 } from "../../build/process-tree.mjs";
-import {
-  completeVerificationEnvironment
-} from "../support/verification-environment.ts";
+import { completeVerificationEnvironment } from "../support/verification-environment.ts";
 
 const workspaceRoot = resolve(import.meta.dirname, "../../..");
 const windows = process.platform === "win32";
@@ -16,13 +14,16 @@ let interruptedExitCode = 0;
 let interruptedSignal = "";
 
 class CommandFailure extends Error {
-  constructor(message, {
-    cause,
-    childSignal = null,
-    cooperativeShutdown = false,
-    exitCode,
-    forcedShutdown = false
-  } = {}) {
+  constructor(
+    message,
+    {
+      cause,
+      childSignal = null,
+      cooperativeShutdown = false,
+      exitCode,
+      forcedShutdown = false
+    } = {}
+  ) {
     super(message, cause ? { cause } : undefined);
     this.childSignal = childSignal;
     this.cooperativeShutdown = cooperativeShutdown;
@@ -38,7 +39,17 @@ const phases = {
     ["dead code", "npm", ["run", "knip"]],
     ["semantic colors", "npm", ["run", "check:colors"]],
     ["generated icons", "npm", ["run", "icons:check"]],
-    ["dependency and config contract", "npx", ["--no-install", "tsx", "--tsconfig", "packages/server/tsconfig.check.json", "scripts/tests/verify/source-contract.mjs"]],
+    [
+      "dependency and config contract",
+      "npx",
+      [
+        "--no-install",
+        "tsx",
+        "--tsconfig",
+        "packages/server/tsconfig.check.json",
+        "scripts/tests/verify/source-contract.mjs"
+      ]
+    ],
     ["version contract", "node", ["scripts/tests/verify/version-contract.mjs"]],
     ["Markdown links", "node", ["scripts/tests/verify/markdown-links.mjs"]]
   ],
@@ -50,17 +61,10 @@ const phases = {
     [
       "Server acceptance",
       "node",
-      [
-        "--test", "--test-isolation=none",
-        "scripts/tests/final-server.test.ts"
-      ],
+      ["--test", "--test-isolation=none", "scripts/tests/final-server.test.ts"],
       { cooperativeShutdown: true }
     ],
-    [
-      "Web acceptance",
-      "npm",
-      ["run", "test:final:web"]
-    ],
+    ["Web acceptance", "npm", ["run", "test:final:web"]],
     [
       "isolated production image",
       "node",
@@ -92,7 +96,9 @@ function stopChildren(signal) {
       child,
       signal,
       state.cooperativeShutdown ? 5 * 60_000 : 10_000,
-      () => { state.forcedShutdown = true; },
+      () => {
+        state.forcedShutdown = true;
+      },
       (error) => state.failForcedShutdown(error)
     );
   }
@@ -102,29 +108,22 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => stopChildren(signal));
 }
 
-function runCommand(
-  label,
-  command,
-  arguments_,
-  { cooperativeShutdown = false } = {}
-) {
+function runCommand(label, command, arguments_, { cooperativeShutdown = false } = {}) {
   return new Promise((resolveCommand, rejectCommand) => {
     console.log(`\n[verify] ${label}`);
-    const executable = windows && (command === "npm" || command === "npx")
-      ? (process.env.ComSpec || "cmd.exe")
-      : command;
-    const commandArguments = executable === command
-      ? arguments_
-      : ["/d", "/s", "/c", command, ...arguments_];
+    const executable =
+      windows && (command === "npm" || command === "npx")
+        ? process.env.ComSpec || "cmd.exe"
+        : command;
+    const commandArguments =
+      executable === command ? arguments_ : ["/d", "/s", "/c", command, ...arguments_];
     const child = spawnManaged(executable, commandArguments, {
       cwd: workspaceRoot,
       // Scenario selectors belong to direct diagnostic commands. Every verify
       // mode must execute the complete acceptance surface even when a caller
       // has left a selector in its shell environment.
       env: childEnvironment,
-      stdio: cooperativeShutdown
-        ? ["inherit", "inherit", "inherit", "ipc"]
-        : "inherit",
+      stdio: cooperativeShutdown ? ["inherit", "inherit", "inherit", "ipc"] : "inherit",
       windowsHide: true
     });
     let settled = false;
@@ -142,14 +141,15 @@ function runCommand(
         releaseFailedProcessTree(child);
         state.cancelFallback?.();
         children.delete(child);
-        finish(() => rejectCommand(new CommandFailure(
-          `${label} process tree did not terminate after forced fallback`,
-          {
-            cause: error,
-            cooperativeShutdown,
-            forcedShutdown: true
-          }
-        )));
+        finish(() =>
+          rejectCommand(
+            new CommandFailure(`${label} process tree did not terminate after forced fallback`, {
+              cause: error,
+              cooperativeShutdown,
+              forcedShutdown: true
+            })
+          )
+        );
       }
     };
     children.set(child, state);
@@ -157,11 +157,15 @@ function runCommand(
       const currentState = children.get(child);
       currentState?.cancelFallback?.();
       children.delete(child);
-      finish(() => rejectCommand(new CommandFailure(`${label} could not start`, {
-        cause: error,
-        cooperativeShutdown,
-        forcedShutdown: currentState?.forcedShutdown ?? false
-      })));
+      finish(() =>
+        rejectCommand(
+          new CommandFailure(`${label} could not start`, {
+            cause: error,
+            cooperativeShutdown,
+            forcedShutdown: currentState?.forcedShutdown ?? false
+          })
+        )
+      );
     });
     child.once("close", (code, signal) => {
       const currentState = children.get(child);
@@ -171,17 +175,21 @@ function runCommand(
         finish(resolveCommand);
         return;
       }
-      finish(() => rejectCommand(new CommandFailure(
-        currentState?.forcedShutdown
-          ? `${label} exceeded its shutdown deadline and required forced termination`
-          : `${label} failed${signal ? ` with ${signal}` : ` with exit code ${code}`}`,
-        {
-          childSignal: signal,
-          cooperativeShutdown,
-          exitCode: code,
-          forcedShutdown: currentState?.forcedShutdown ?? false
-        }
-      )));
+      finish(() =>
+        rejectCommand(
+          new CommandFailure(
+            currentState?.forcedShutdown
+              ? `${label} exceeded its shutdown deadline and required forced termination`
+              : `${label} failed${signal ? ` with ${signal}` : ` with exit code ${code}`}`,
+            {
+              childSignal: signal,
+              cooperativeShutdown,
+              exitCode: code,
+              forcedShutdown: currentState?.forcedShutdown ?? false
+            }
+          )
+        )
+      );
     });
   });
 }
@@ -192,9 +200,7 @@ if (!mode || !["source", "build", "runtime", "release"].includes(mode)) {
 }
 if (process.argv.length > 3) throw new Error("verify: unexpected arguments");
 
-const selectedPhases = mode === "release"
-  ? ["source", "build", "runtime"]
-  : [mode];
+const selectedPhases = mode === "release" ? ["source", "build", "runtime"] : [mode];
 try {
   for (const phase of selectedPhases) {
     for (const [label, command, arguments_, options] of phases[phase]) {
@@ -211,17 +217,16 @@ try {
   }
 } catch (error) {
   if (interruptedExitCode) {
-    const normalCooperativeExit = error instanceof CommandFailure
-      && error.cooperativeShutdown
-      && !error.forcedShutdown
-      && (
-        error.exitCode === interruptedExitCode
-        || error.childSignal === interruptedSignal
-      );
-    const normalSimpleInterrupt = error instanceof CommandFailure
-      && !error.cooperativeShutdown
-      && !error.forcedShutdown
-      && (error.exitCode !== undefined || error.childSignal !== null);
+    const normalCooperativeExit =
+      error instanceof CommandFailure &&
+      error.cooperativeShutdown &&
+      !error.forcedShutdown &&
+      (error.exitCode === interruptedExitCode || error.childSignal === interruptedSignal);
+    const normalSimpleInterrupt =
+      error instanceof CommandFailure &&
+      !error.cooperativeShutdown &&
+      !error.forcedShutdown &&
+      (error.exitCode !== undefined || error.childSignal !== null);
     if (normalCooperativeExit || normalSimpleInterrupt) {
       process.exitCode = interruptedExitCode;
     } else {

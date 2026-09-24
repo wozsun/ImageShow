@@ -5,10 +5,7 @@ import { finished } from "node:stream/promises";
 import { ApiError } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
 import type { StorageConfig } from "../backends/config.ts";
-import type {
-  StorageDriver,
-  StorageRequestOptions
-} from "../drivers/driver.ts";
+import type { StorageDriver, StorageRequestOptions } from "../drivers/driver.ts";
 import {
   assertObjectNotPendingCleanup,
   setIngestionCandidateGuardConfirmationDeadline
@@ -103,17 +100,12 @@ function objectConflict(
   key: string,
   sourceSlug?: string
 ) {
-  return new ApiError(
-    409,
-    "storage_object_conflict",
-    "正式存储对象与候选内容不一致",
-    {
-      prefix,
-      key,
-      ...(sourceSlug ? { source: sourceSlug } : {}),
-      target: target.config.slug
-    }
-  );
+  return new ApiError(409, "storage_object_conflict", "正式存储对象与候选内容不一致", {
+    prefix,
+    key,
+    ...(sourceSlug ? { source: sourceSlug } : {}),
+    target: target.config.slug
+  });
 }
 
 function transferIntegrityFailure(
@@ -122,23 +114,16 @@ function transferIntegrityFailure(
   key: string,
   sourceSlug?: string
 ) {
-  return new ApiError(
-    502,
-    "storage_transfer_integrity_failed",
-    "存储对象写入后完整性校验失败",
-    {
-      prefix,
-      key,
-      ...(sourceSlug ? { source: sourceSlug } : {}),
-      target: target.config.slug
-    }
-  );
+  return new ApiError(502, "storage_transfer_integrity_failed", "存储对象写入后完整性校验失败", {
+    prefix,
+    key,
+    ...(sourceSlug ? { source: sourceSlug } : {}),
+    target: target.config.slug
+  });
 }
 
 function updateHashes(hashes: Hash[], chunk: unknown) {
-  const bytes = Buffer.isBuffer(chunk)
-    ? chunk
-    : Buffer.from(chunk as Uint8Array);
+  const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
   for (const hash of hashes) hash.update(bytes);
   return bytes.byteLength;
 }
@@ -182,23 +167,21 @@ async function verifyWrittenObject(input: {
   signal?: AbortSignal;
 }) {
   const { storage, prefix, key, expected, sourceSlug, signal } = input;
-  const stored = await digestStorageObject(storage, prefix, key, { signal })
-    .catch(() => {
-      signal?.throwIfAborted();
-      throw transferIntegrityFailure(storage, prefix, key, sourceSlug);
-    });
+  const stored = await digestStorageObject(storage, prefix, key, { signal }).catch(() => {
+    signal?.throwIfAborted();
+    throw transferIntegrityFailure(storage, prefix, key, sourceSlug);
+  });
   if (!sameDigest(stored, expected)) {
     throw transferIntegrityFailure(storage, prefix, key, sourceSlug);
   }
 }
 
-function digestMatchesExpected(
-  digest: StorageObjectDigest,
-  expected: SourceDigestExpectation
-) {
-  return (expected.size === undefined || digest.size === expected.size)
-    && (!expected.sha256 || digest.sha256 === expected.sha256.toLowerCase())
-    && (!expected.md5 || digest.md5 === expected.md5.toLowerCase());
+function digestMatchesExpected(digest: StorageObjectDigest, expected: SourceDigestExpectation) {
+  return (
+    (expected.size === undefined || digest.size === expected.size) &&
+    (!expected.sha256 || digest.sha256 === expected.sha256.toLowerCase()) &&
+    (!expected.md5 || digest.md5 === expected.md5.toLowerCase())
+  );
 }
 
 /**
@@ -304,21 +287,16 @@ export async function writeVerifiedFileToStorage(input: {
     signal
   } = input;
   const { storage, prefix: toPrefix, key: toKey, expected: expectedSource } = target;
-  const verifyUpload = storage.config.type === "s3"
-    && storage.config.capabilities?.content_md5 === true;
+  const verifyUpload =
+    storage.config.type === "s3" && storage.config.capabilities?.content_md5 === true;
   const sourceDigest = await digestReadable(
     createReadStream(sourcePath, { signal }),
     verifyUpload || Boolean(expectedSource.md5)
   );
   if (!digestMatchesExpected(sourceDigest, expectedSource)) {
-    throw new ApiError(
-      sourceMismatch.status,
-      sourceMismatch.code,
-      sourceMismatch.message,
-      {
-        backend: storage.config.slug
-      }
-    );
+    throw new ApiError(sourceMismatch.status, sourceMismatch.code, sourceMismatch.message, {
+      backend: storage.config.slug
+    });
   }
 
   await assertObjectNotPendingCleanup(storage.config, toPrefix, toKey, {
@@ -334,9 +312,8 @@ export async function writeVerifiedFileToStorage(input: {
     key: toKey,
     backend: storage.config.slug
   };
-  const s3UncertaintyWindowMs = storage.config.type === "s3"
-    ? storage.config.s3.task_timeout_seconds * 1_000
-    : 0;
+  const s3UncertaintyWindowMs =
+    storage.config.type === "s3" ? storage.config.s3.task_timeout_seconds * 1_000 : 0;
   if (s3UncertaintyWindowMs && ownedIngestionCandidateGuard) {
     // Cover the upload, any readback and one remote-settlement window.
     // The error path extends this from the actual rejection time.
@@ -354,17 +331,19 @@ export async function writeVerifiedFileToStorage(input: {
     const sourceClosed = finished(source, { cleanup: true }).catch(() => undefined);
     let transferred = 0;
     let lastProgressAt = 0;
-    const body = Readable.from((async function* () {
-      for await (const chunk of source) {
-        signal?.throwIfAborted();
-        transferred += (chunk as Buffer).byteLength;
-        yield chunk;
-        if (onProgress && Date.now() - lastProgressAt >= 500) {
-          await onProgress(transferred);
-          lastProgressAt = Date.now();
+    const body = Readable.from(
+      (async function* () {
+        for await (const chunk of source) {
+          signal?.throwIfAborted();
+          transferred += (chunk as Buffer).byteLength;
+          yield chunk;
+          if (onProgress && Date.now() - lastProgressAt >= 500) {
+            await onProgress(transferred);
+            lastProgressAt = Date.now();
+          }
         }
-      }
-    })());
+      })()
+    );
     const bodyClosed = finished(body, { cleanup: true }).catch(() => undefined);
     try {
       await storage.driver.writeStream(toPrefix, toKey, body, sourceDigest.size, contentType, {
@@ -400,9 +379,7 @@ export async function writeVerifiedFileToStorage(input: {
   } catch (error) {
     const cleanupOptions = s3UncertaintyWindowMs
       ? {
-          confirmAbsentAfter: new Date(
-            Date.now() + s3UncertaintyWindowMs
-          )
+          confirmAbsentAfter: new Date(Date.now() + s3UncertaintyWindowMs)
         }
       : undefined;
     let transferError = error;
@@ -428,28 +405,18 @@ export async function writeVerifiedFileToStorage(input: {
       }
     }
     if (candidateCleanup || !ownedIngestionCandidateGuard) {
-      await cleanupCandidate(
-        candidate,
-        candidateCleanup,
-        transferError,
-        cleanupOptions
-      );
+      await cleanupCandidate(candidate, candidateCleanup, transferError, cleanupOptions);
     }
     throw transferError;
   }
 }
 
-function storageSourceObjectMissing(
-  source: StorageAccess,
-  prefix: StoragePrefix,
-  key: string
-) {
-  return new ApiError(
-    404,
-    "storage_source_object_not_found",
-    "Source storage object not found",
-    { backend: source.config.slug, prefix, key }
-  );
+function storageSourceObjectMissing(source: StorageAccess, prefix: StoragePrefix, key: string) {
+  return new ApiError(404, "storage_source_object_not_found", "Source storage object not found", {
+    backend: source.config.slug,
+    prefix,
+    key
+  });
 }
 
 function throwStorageSourceReadError(
@@ -464,11 +431,7 @@ function throwStorageSourceReadError(
   throw error;
 }
 
-function storageSourceIntegrityFailure(
-  source: StorageAccess,
-  prefix: StoragePrefix,
-  key: string
-) {
+function storageSourceIntegrityFailure(source: StorageAccess, prefix: StoragePrefix, key: string) {
   return new ApiError(
     502,
     "storage_source_integrity_failed",
@@ -486,9 +449,9 @@ function normalizeTransferExpectation(
   const size = Number(expected.size);
   const md5 = expected.md5?.trim().toLowerCase();
   if (
-    !Number.isSafeInteger(size)
-    || size < 0
-    || (md5 !== undefined && !/^[0-9a-f]{32}$/u.test(md5))
+    !Number.isSafeInteger(size) ||
+    size < 0 ||
+    (md5 !== undefined && !/^[0-9a-f]{32}$/u.test(md5))
   ) {
     throw storageSourceIntegrityFailure(source, prefix, key);
   }
@@ -539,21 +502,8 @@ async function validateTransferSource(
   expected: StorageTransferExpectation,
   signal?: AbortSignal
 ) {
-  const opened = await openTransferSource(
-    source,
-    prefix,
-    key,
-    expected.size,
-    signal
-  );
-  return validateOpenedTransferSource(
-    source,
-    prefix,
-    key,
-    opened,
-    expected,
-    signal
-  );
+  const opened = await openTransferSource(source, prefix, key, expected.size, signal);
+  return validateOpenedTransferSource(source, prefix, key, opened, expected, signal);
 }
 
 async function validateOpenedTransferSource(
@@ -569,9 +519,7 @@ async function validateOpenedTransferSource(
   try {
     for await (const chunk of opened.body) {
       signal?.throwIfAborted();
-      const bytes = Buffer.isBuffer(chunk)
-        ? chunk
-        : Buffer.from(chunk as Uint8Array);
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
       size += bytes.byteLength;
       md5?.update(bytes);
     }
@@ -581,10 +529,7 @@ async function validateOpenedTransferSource(
   }
   signal?.throwIfAborted();
   const actualMd5 = md5?.digest("hex");
-  if (
-    size !== expected.size
-    || (expected.md5 !== undefined && actualMd5 !== expected.md5)
-  ) {
+  if (size !== expected.size || (expected.md5 !== undefined && actualMd5 !== expected.md5)) {
     throw storageSourceIntegrityFailure(source, prefix, key);
   }
 }
@@ -599,41 +544,38 @@ function verifiedTransferReadable(input: {
 }) {
   const { source, prefix, key, opened, expected, signal } = input;
   let digest: StorageObjectDigest | undefined;
-  const body = Readable.from((async function* () {
-    const sha256 = createHash("sha256");
-    const md5 = expected.md5 ? createHash("md5") : undefined;
-    let size = 0;
-    try {
-      for await (const chunk of opened.body) {
+  const body = Readable.from(
+    (async function* () {
+      const sha256 = createHash("sha256");
+      const md5 = expected.md5 ? createHash("md5") : undefined;
+      let size = 0;
+      try {
+        for await (const chunk of opened.body) {
+          signal?.throwIfAborted();
+          const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+          size += bytes.byteLength;
+          sha256.update(bytes);
+          md5?.update(bytes);
+          yield bytes;
+        }
+        await finished(opened.body, { cleanup: true });
         signal?.throwIfAborted();
-        const bytes = Buffer.isBuffer(chunk)
-          ? chunk
-          : Buffer.from(chunk as Uint8Array);
-        size += bytes.byteLength;
-        sha256.update(bytes);
-        md5?.update(bytes);
-        yield bytes;
+        const actualMd5 = md5?.digest("hex");
+        if (size !== expected.size || (expected.md5 !== undefined && actualMd5 !== expected.md5)) {
+          throw storageSourceIntegrityFailure(source, prefix, key);
+        }
+        digest = {
+          size,
+          sha256: sha256.digest("hex"),
+          ...(actualMd5 ? { md5: actualMd5 } : {})
+        };
+      } finally {
+        if (!opened.body.destroyed && !opened.body.readableEnded) {
+          opened.body.destroy();
+        }
       }
-      await finished(opened.body, { cleanup: true });
-      signal?.throwIfAborted();
-      const actualMd5 = md5?.digest("hex");
-      if (
-        size !== expected.size
-        || (expected.md5 !== undefined && actualMd5 !== expected.md5)
-      ) {
-        throw storageSourceIntegrityFailure(source, prefix, key);
-      }
-      digest = {
-        size,
-        sha256: sha256.digest("hex"),
-        ...(actualMd5 ? { md5: actualMd5 } : {})
-      };
-    } finally {
-      if (!opened.body.destroyed && !opened.body.readableEnded) {
-        opened.body.destroy();
-      }
-    }
-  })());
+    })()
+  );
   return { body, digest: () => digest };
 }
 
@@ -653,27 +595,12 @@ export async function ensureVerifiedObjectAtDestination(input: {
   signal?: AbortSignal;
 }): Promise<VerifiedObjectTransfer> {
   const { source, target, prefix, key, contentType, signal } = input;
-  const expected = normalizeTransferExpectation(
-    source,
-    prefix,
-    key,
-    input.expected
-  );
+  const expected = normalizeTransferExpectation(source, prefix, key, input.expected);
   const sharedNamespace = shareStorageNamespace(source.config, target.config);
   if (sharedNamespace) {
-    await assertObjectNotPendingCleanup(
-      target.config,
-      prefix,
-      key
-    );
-    await validateTransferSource(
-      source,
-      prefix,
-      key,
-      expected,
-      signal
-    );
-    if (!await target.driver.exists(prefix, key, { signal })) {
+    await assertObjectNotPendingCleanup(target.config, prefix, key);
+    await validateTransferSource(source, prefix, key, expected, signal);
+    if (!(await target.driver.exists(prefix, key, { signal }))) {
       throw new ApiError(
         502,
         "storage_shared_object_unavailable",
@@ -691,17 +618,10 @@ export async function ensureVerifiedObjectAtDestination(input: {
 
   await assertObjectNotPendingCleanup(target.config, prefix, key);
   if (await target.driver.exists(prefix, key, { signal })) {
-    const sourceDigest = await digestStorageObject(
-      source,
-      prefix,
-      key,
-      { includeMd5: Boolean(expected.md5), signal }
-    ).catch((error) => throwStorageSourceReadError(
-      error,
-      source,
-      prefix,
-      key
-    ));
+    const sourceDigest = await digestStorageObject(source, prefix, key, {
+      includeMd5: Boolean(expected.md5),
+      signal
+    }).catch((error) => throwStorageSourceReadError(error, source, prefix, key));
     if (!digestMatchesExpected(sourceDigest, expected)) {
       throw storageSourceIntegrityFailure(source, prefix, key);
     }
@@ -714,20 +634,10 @@ export async function ensureVerifiedObjectAtDestination(input: {
     return { created: false };
   }
 
-  const serverCopySource = source.driver.serverCopySource(
-    prefix,
-    key,
-    expected.size
-  );
-  const canCopyServerSide = serverCopySource !== undefined
-    && target.driver.supportsServerCopySource(serverCopySource);
-  const opened = await openTransferSource(
-    source,
-    prefix,
-    key,
-    expected.size,
-    signal
-  );
+  const serverCopySource = source.driver.serverCopySource(prefix, key, expected.size);
+  const canCopyServerSide =
+    serverCopySource !== undefined && target.driver.supportsServerCopySource(serverCopySource);
+  const opened = await openTransferSource(source, prefix, key, expected.size, signal);
   const candidate = {
     prefix,
     key,
@@ -736,34 +646,19 @@ export async function ensureVerifiedObjectAtDestination(input: {
   let attempted = false;
   let streamedBody: Readable | undefined;
   try {
-    if (
-      canCopyServerSide
-      && serverCopySource
-      && opened.serverCopyValidator
-    ) {
-      await validateOpenedTransferSource(
-        source,
-        prefix,
-        key,
-        opened,
-        expected,
-        signal
-      );
+    if (canCopyServerSide && serverCopySource && opened.serverCopyValidator) {
+      await validateOpenedTransferSource(source, prefix, key, opened, expected, signal);
       signal?.throwIfAborted();
       attempted = true;
-      await target.driver.copyFromServerSource(
-        serverCopySource,
-        prefix,
-        key,
-        {
-          signal,
-          sourceValidator: opened.serverCopyValidator
-        }
-      );
+      await target.driver.copyFromServerSource(serverCopySource, prefix, key, {
+        signal,
+        sourceValidator: opened.serverCopyValidator
+      });
     } else {
-      const verifyUpload = target.config.type === "s3"
-        && target.config.capabilities?.content_md5 === true
-        && expected.md5 !== undefined;
+      const verifyUpload =
+        target.config.type === "s3" &&
+        target.config.capabilities?.content_md5 === true &&
+        expected.md5 !== undefined;
       const verified = verifiedTransferReadable({
         source,
         prefix,
@@ -774,22 +669,13 @@ export async function ensureVerifiedObjectAtDestination(input: {
       });
       streamedBody = verified.body;
       attempted = true;
-      await target.driver.writeStream(
-        prefix,
-        key,
-        verified.body,
-        expected.size,
-        contentType,
-        { signal, expectedMd5: verifyUpload ? expected.md5 : undefined }
-      );
+      await target.driver.writeStream(prefix, key, verified.body, expected.size, contentType, {
+        signal,
+        expectedMd5: verifyUpload ? expected.md5 : undefined
+      });
       const sourceDigest = verified.digest();
       if (!sourceDigest) {
-        throw transferIntegrityFailure(
-          target,
-          prefix,
-          key,
-          source.config.slug
-        );
+        throw transferIntegrityFailure(target, prefix, key, source.config.slug);
       }
       if (target.config.type === "s3" && !verifyUpload) {
         await verifyWrittenObject({

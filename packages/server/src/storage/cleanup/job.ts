@@ -9,10 +9,7 @@ import {
 } from "../../jobs/handler-outcome.ts";
 import type { BackgroundJob } from "../../jobs/types.ts";
 import { getStorageBackend } from "../backends/registry.ts";
-import {
-  assertCanonicalImageObjectKey,
-  thumbnailObjectKey
-} from "../objects/image-paths.ts";
+import { assertCanonicalImageObjectKey, thumbnailObjectKey } from "../objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../maintenance-lock.ts";
 import {
   assertStorageRemovalResults,
@@ -21,14 +18,9 @@ import {
 } from "../objects/access.ts";
 import type { CapturedMoveCleanupObject } from "./types.ts";
 import { readRunningMoveCleanupJobPayload } from "./repository.ts";
-import {
-  shareStorageNamespace,
-  storageNamespaceIncludesIdentity
-} from "../objects/namespace.ts";
+import { shareStorageNamespace, storageNamespaceIncludesIdentity } from "../objects/namespace.ts";
 
-function cleanupObjectsFromPayload(
-  job: BackgroundJob
-): CapturedMoveCleanupObject[] | null {
+function cleanupObjectsFromPayload(job: BackgroundJob): CapturedMoveCleanupObject[] | null {
   if (!Array.isArray(job.payload.objects) || !job.payload.objects.length) {
     return null;
   }
@@ -37,13 +29,13 @@ function cleanupObjectsFromPayload(
     if (!candidate || typeof candidate !== "object") return null;
     const object = candidate as Record<string, unknown>;
     if (
-      typeof object.key !== "string"
-      || !object.key
-      || typeof object.backend !== "string"
-      || !object.backend
-      || typeof object.namespace_identity !== "string"
-      || !object.namespace_identity
-      || !["full", "thumbs"].includes(String(object.prefix))
+      typeof object.key !== "string" ||
+      !object.key ||
+      typeof object.backend !== "string" ||
+      !object.backend ||
+      typeof object.namespace_identity !== "string" ||
+      !object.namespace_identity ||
+      !["full", "thumbs"].includes(String(object.prefix))
     ) {
       return null;
     }
@@ -91,8 +83,7 @@ export async function handleMoveCleanupJob(
       { job_id: job.id, image_id: job.target_id }
     );
   }
-  const ingestionCandidateGuard =
-    job.payload.reason === "ingestion_commit_candidate_guard";
+  const ingestionCandidateGuard = job.payload.reason === "ingestion_commit_candidate_guard";
   if (confirmationDelay > 0 && !ingestionCandidateGuard) {
     return jobRescheduled(confirmationDelay);
   }
@@ -103,10 +94,7 @@ export async function handleMoveCleanupJob(
     let lockedObjects = objects;
     if (ingestionCandidateGuard) {
       admissionSignal.throwIfAborted();
-      const payload = await readRunningMoveCleanupJobPayload(
-        job.id,
-        job.execution_token
-      );
+      const payload = await readRunningMoveCleanupJobPayload(job.id, job.execution_token);
       admissionSignal.throwIfAborted();
       if (!payload) {
         throw new ApiError(
@@ -130,10 +118,7 @@ export async function handleMoveCleanupJob(
       if (refreshedDelay > 0) return jobRescheduled(refreshedDelay);
       lockedObjects = refreshedObjects;
     }
-    const candidateBackends = new Map<
-      string,
-      Awaited<ReturnType<typeof getStorageBackend>>
-    >();
+    const candidateBackends = new Map<string, Awaited<ReturnType<typeof getStorageBackend>>>();
     const candidateBackend = async (slug: string) => {
       let config = candidateBackends.get(slug);
       if (!config) {
@@ -148,16 +133,20 @@ export async function handleMoveCleanupJob(
     admissionSignal.throwIfAborted();
     // This locked read is the deletion boundary: every payload object is
     // compared with the same latest metadata snapshot before one batch starts.
-    const latest = (await pool.query(
-      `SELECT id, ext, storage_slug
+    const latest = (
+      await pool.query(
+        `SELECT id, ext, storage_slug
          FROM metadata
         WHERE id=$1`,
-      [job.target_id]
-    )).rows[0] as {
-      id: string;
-      ext: string;
-      storage_slug: string;
-    } | undefined;
+        [job.target_id]
+      )
+    ).rows[0] as
+      | {
+          id: string;
+          ext: string;
+          storage_slug: string;
+        }
+      | undefined;
     admissionSignal.throwIfAborted();
 
     const seen = new Set<string>();
@@ -169,10 +158,7 @@ export async function handleMoveCleanupJob(
       seen.add(identity);
 
       const objectBackend = await candidateBackend(object.backend);
-      if (!storageNamespaceIncludesIdentity(
-        objectBackend,
-        object.namespace_identity
-      )) {
+      if (!storageNamespaceIncludesIdentity(objectBackend, object.namespace_identity)) {
         throw new ApiError(
           409,
           "storage_cleanup_namespace_changed",
@@ -190,10 +176,7 @@ export async function handleMoveCleanupJob(
         if (!stillReferenced) {
           const latestBackend = await getStorageBackend(latest.storage_slug);
           admissionSignal.throwIfAborted();
-          stillReferenced = shareStorageNamespace(
-            objectBackend,
-            latestBackend
-          );
+          stillReferenced = shareStorageNamespace(objectBackend, latestBackend);
         }
         if (stillReferenced) continue;
       }
@@ -206,21 +189,21 @@ export async function handleMoveCleanupJob(
 
     if (removals.length) {
       try {
-        const results = await removeStorageObjectsAndConfirm(removals, {
-          signal: lockSignal
-        }, admissionSignal);
-        assertStorageRemovalResults(
-          results,
-          "持久存储清理任务未能确认全部对象删除"
+        const results = await removeStorageObjectsAndConfirm(
+          removals,
+          {
+            signal: lockSignal
+          },
+          admissionSignal
         );
+        assertStorageRemovalResults(results, "持久存储清理任务未能确认全部对象删除");
       } catch (error) {
         logger.warn("move_cleanup_object_delete_failed", {
           job_id: job.id,
           image_id: job.target_id,
           objects: removals.length,
-          cleanup_reason: typeof lockedJob.payload.reason === "string"
-            ? lockedJob.payload.reason
-            : "",
+          cleanup_reason:
+            typeof lockedJob.payload.reason === "string" ? lockedJob.payload.reason : "",
           error: error
         });
         throw error;

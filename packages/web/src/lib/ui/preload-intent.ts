@@ -1,14 +1,7 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  type PointerEventHandler
-} from "react";
+import { useCallback, useEffect, useRef, type PointerEventHandler } from "react";
 
 export type PreloadIntentPolicy =
-  | { hover: "immediate" }
-  | { hover: "dwell"; delayMs: number }
-  | { hover: "none" };
+  { hover: "immediate" } | { hover: "dwell"; delayMs: number } | { hover: "none" };
 
 const immediatePreloadIntentPolicy = { hover: "immediate" } as const;
 
@@ -46,23 +39,26 @@ export function usePreloadIntentProps(
 
   useEffect(() => clearHoverIntent, [clearHoverIntent, policy, preload]);
 
-  const onPointerEnter = useCallback<PointerEventHandler<HTMLElement>>((event) => {
-    if (!preload || event.pointerType !== "mouse" || policy.hover === "none") {
-      return;
-    }
-    clearHoverIntent();
-    if (policy.hover === "immediate") {
-      preload();
-      return;
-    }
-    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
-      return;
-    }
-    hoverTimeoutRef.current = setTimeout(() => {
-      hoverTimeoutRef.current = null;
-      preload();
-    }, policy.delayMs);
-  }, [clearHoverIntent, policy, preload]);
+  const onPointerEnter = useCallback<PointerEventHandler<HTMLElement>>(
+    (event) => {
+      if (!preload || event.pointerType !== "mouse" || policy.hover === "none") {
+        return;
+      }
+      clearHoverIntent();
+      if (policy.hover === "immediate") {
+        preload();
+        return;
+      }
+      if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+        return;
+      }
+      hoverTimeoutRef.current = setTimeout(() => {
+        hoverTimeoutRef.current = null;
+        preload();
+      }, policy.delayMs);
+    },
+    [clearHoverIntent, policy, preload]
+  );
 
   const preloadImmediately = useCallback(() => {
     clearHoverIntent();
