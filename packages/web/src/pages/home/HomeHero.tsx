@@ -1,6 +1,10 @@
 import { unsetThemeFilter } from "@imageshow/shared/browser";
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
-import type { CSSProperties, RefObject, SyntheticEvent } from "react";
+import type {
+  CSSProperties,
+  RefObject,
+  SyntheticEvent
+} from "react";
 import { homeNumberFormatter } from "./home-ui.js";
 
 export function HomeBackground({
@@ -60,7 +64,9 @@ export function HomeHero({
   onCatalogIntent: () => void;
 }) {
   const totalImages = stats?.total_images ?? 0;
-  const themeCount = stats?.themes.filter((item) => item.slug !== unsetThemeFilter).length ?? 0;
+  const themeCount = stats?.themes.filter(
+    (item) => item.slug !== unsetThemeFilter
+  ).length ?? 0;
   const siteStats = [
     { label: "全站图片", value: totalImages, unit: "张", primary: true },
     { label: "主题", value: themeCount, unit: "个" },
@@ -94,7 +100,9 @@ export function HomeHero({
         <span>LIBRARY STATS</span>
         <ul>
           {siteStats.map((item, index) => {
-            const value = stats ? homeNumberFormatter.format(item.value) : "—";
+            const value = stats
+              ? homeNumberFormatter.format(item.value)
+              : "—";
             const longValueLength = item.primary ? 10 : 6;
             const wideValueLength = item.primary ? 7 : 4;
             const valueWidth =

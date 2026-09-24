@@ -1,5 +1,8 @@
 import { ApiError } from "../../../core/api-error.ts";
-import { parseIngestionQueueMetadata, parseStoredIngestionSession } from "./codec.ts";
+import {
+  parseIngestionQueueMetadata,
+  parseStoredIngestionSession
+} from "./codec.ts";
 import { throwIngestionCommandConflict } from "./command-runner.ts";
 import type {
   CompletedIngestionReceipt,
@@ -82,7 +85,10 @@ export function redisReplyArray(value: unknown, context: string) {
   return value;
 }
 
-export function parseCanonicalReply(raw: unknown, operation: "create" | "mutate") {
+export function parseCanonicalReply(
+  raw: unknown,
+  operation: "create" | "mutate"
+) {
   const reply = redisReplyArray(raw, "canonical result");
   const code = redisReplyInteger(reply[0], "canonical status");
   if (code < 0) {
@@ -103,7 +109,11 @@ export function parseCanonicalReply(raw: unknown, operation: "create" | "mutate"
       throw new ApiError(410, "ingestion_session_expired", "内容接入任务已经到期");
     }
     if (code === -6) {
-      throw new ApiError(409, "ingestion_session_not_expired", "内容接入任务的有效期已经刷新");
+      throw new ApiError(
+        409,
+        "ingestion_session_not_expired",
+        "内容接入任务的有效期已经刷新"
+      );
     }
     throwIngestionCommandConflict(code);
   }

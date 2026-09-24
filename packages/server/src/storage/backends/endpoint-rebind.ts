@@ -42,7 +42,11 @@ async function verifyBidirectionalChallenge(
     await current.writeBuffer("full", currentKey, currentChallenge, "application/octet-stream", {
       signal
     });
-    const readThroughCandidate = await candidate.readBuffer("full", currentKey, { signal });
+    const readThroughCandidate = await candidate.readBuffer(
+      "full",
+      currentKey,
+      { signal }
+    );
     if (!readThroughCandidate.equals(currentChallenge)) {
       throw endpointMismatch("candidate_read_mismatch");
     }
@@ -54,7 +58,11 @@ async function verifyBidirectionalChallenge(
       "application/octet-stream",
       { signal }
     );
-    const readThroughCurrent = await current.readBuffer("full", candidateKey, { signal });
+    const readThroughCurrent = await current.readBuffer(
+      "full",
+      candidateKey,
+      { signal }
+    );
     if (!readThroughCurrent.equals(candidateChallenge)) {
       throw endpointMismatch("current_read_mismatch");
     }

@@ -21,10 +21,16 @@ export function WorkspaceHeader({
   actionsClassName = ""
 }: WorkspaceHeaderProps) {
   const hasActions = actions !== undefined && actions !== null;
-  const headerClasses = ["workspace-head", "workspace-grid-head", hasActions ? "has-actions" : ""]
+  const headerClasses = [
+    "workspace-head",
+    "workspace-grid-head",
+    hasActions ? "has-actions" : ""
+  ]
     .filter(Boolean)
     .join(" ");
-  const actionClasses = ["workspace-header-actions", actionsClassName].filter(Boolean).join(" ");
+  const actionClasses = ["workspace-header-actions", actionsClassName]
+    .filter(Boolean)
+    .join(" ");
   const feedbackRegion = feedbackTarget ? (
     <ActionFeedbackRegion target={feedbackTarget} variant="page" />
   ) : null;

@@ -1,5 +1,8 @@
 import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
-import type { EditableImageSnapshot, AdminImageListItem } from "../../../lib/types.js";
+import type {
+  EditableImageSnapshot,
+  AdminImageListItem,
+} from "../../../lib/types.js";
 
 export type ImageEditorSource = Pick<AdminImageListItem, "id"> &
   Partial<EditableImageSnapshot> &

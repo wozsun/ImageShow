@@ -1,4 +1,9 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState
+} from "react";
 
 const sectionRevealRootMargin = "140px 0px";
 
@@ -25,7 +30,8 @@ export function useOneShotSectionReveal(armed: boolean) {
     if (!section) return;
 
     const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (motionQuery.matches || typeof IntersectionObserver === "undefined") {
+    if (motionQuery.matches
+      || typeof IntersectionObserver === "undefined") {
       revealImmediately();
       return;
     }

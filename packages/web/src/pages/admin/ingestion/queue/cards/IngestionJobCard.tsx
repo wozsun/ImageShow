@@ -1,13 +1,17 @@
 import { memo } from "react";
 import { AdminIcon } from "../../../../../components/icon/AdminIcon.js";
-import { ImageThumbnail } from "../../../../../components/image/ImageThumbnail.js";
+import { ImageThumbnailFrame } from "../../../../../components/image/ImageThumbnailFrame.js";
 import { ImageDraftFields } from "../../../../../components/form/ImageDraftFields.js";
 import {
   ingestionCardBrightnessSelectOptions,
   ingestionCardDeviceSelectOptions
 } from "../../../../../lib/ui/select-options.js";
 import { formatBytes } from "../../../../../lib/ui/formatters.js";
-import type { FacetOption, ImageDraft, AdminImageListItem } from "../../../../../lib/types.js";
+import type {
+  FacetOption,
+  ImageDraft,
+  AdminImageListItem
+} from "../../../../../lib/types.js";
 import type { IngestionJob } from "../model/ingestion-job.js";
 import { DuplicateMatchPanel, type IngestionPreviewTarget } from "./DuplicateMatchPanel.js";
 import {
@@ -57,8 +61,16 @@ type IngestionJobCardProps = {
   onRetry: (job: IngestionJob) => void;
   onRemove: (job: IngestionJob) => void;
   onConfirmDuplicate: (job: IngestionJob) => void;
-  onOpenDetail: (job: IngestionJob, item: AdminImageListItem, opener: HTMLElement) => void;
-  onFocusWithin: (job: IngestionJob, card: HTMLElement, target: HTMLElement) => void;
+  onOpenDetail: (
+    job: IngestionJob,
+    item: AdminImageListItem,
+    opener: HTMLElement
+  ) => void;
+  onFocusWithin: (
+    job: IngestionJob,
+    card: HTMLElement,
+    target: HTMLElement
+  ) => void;
   onPreview: (target: IngestionPreviewTarget) => void;
 };
 
@@ -85,7 +97,8 @@ export const IngestionJobCard = memo(function IngestionJobCard({
   const cancelling = job.status === "cancelling";
   const cancellationFailed = job.failureStage === "cancel";
   const confirmDuplicate =
-    ingestionJobNeedsDuplicateConfirmation(job) && (job.duplicateCount ?? 0) > 0;
+    ingestionJobNeedsDuplicateConfirmation(job)
+      && (job.duplicateCount ?? 0) > 0;
   const retryable = ingestionJobRetryKind(job) !== null;
   const statusLabel = ingestionJobStatusLabel(job);
   const hasFinalSize = typeof job.finalSize === "number";
@@ -102,9 +115,12 @@ export const IngestionJobCard = memo(function IngestionJobCard({
   const finalSizeText = hasFinalSize ? formatBytes(job.finalSize ?? 0) : "—";
   const dimensionsText = formatJobDimensions(job, hasFinalSize);
   const qualityText =
-    job.quality != null ? String(job.quality) : job.transcoded === false ? "跳过转码" : "";
+    job.quality != null
+      ? String(job.quality)
+      : job.transcoded === false ? "跳过转码" : "";
   const showsTransferProgress =
-    ["uploading", "downloading"].includes(job.status) && typeof job.transferProgress === "number";
+    ["uploading", "downloading"].includes(job.status)
+      && typeof job.transferProgress === "number";
   const transferProgress = Math.min(100, Math.max(0, Math.round(job.transferProgress ?? 0)));
   const transferProgressLabel = job.status === "downloading" ? "下载进度" : "上传进度";
   const statusDetailText = ingestionJobStatusDetail(job);
@@ -113,7 +129,9 @@ export const IngestionJobCard = memo(function IngestionJobCard({
     .filter(Boolean)
     .join(" · ");
   const sizeSummaryText = `${
-    hasFinalSize && !hasOriginalSize ? finalSizeText : `${originalSizeText} → ${finalSizeText}`
+    hasFinalSize && !hasOriginalSize
+      ? finalSizeText
+      : `${originalSizeText} → ${finalSizeText}`
   }${qualityText ? ` · ${qualityText}` : ""}`;
   const automaticClassificationLabel = ingestionAutomaticClassificationLabel(job);
   const previewSrc = job.preview;
@@ -137,17 +155,24 @@ export const IngestionJobCard = memo(function IngestionJobCard({
       data-ingestion-job-id={job.id}
       data-ingestion-attempt-key={job.attemptKey}
       onFocusCapture={(event) =>
-        onFocusWithin(job, event.currentTarget, event.target as HTMLElement)
+        onFocusWithin(
+          job,
+          event.currentTarget,
+          event.target as HTMLElement
+        )
       }
     >
       <div className="ingestion-job-aside">
         <div className="ingestion-job-preview">
-          <ImageThumbnail
+          <ImageThumbnailFrame
             src={previewSrc}
             className="ingestion-job-thumbnail"
             onClick={openPreview}
             showLoadingIndicator
-            retainLoadedWhenEmpty={["committing", "finalized"].includes(job.status)}
+            retainLoadedWhenEmpty={[
+              "committing",
+              "finalized"
+            ].includes(job.status)}
           />
         </div>
         <span className="ingestion-job-size is-vertical">

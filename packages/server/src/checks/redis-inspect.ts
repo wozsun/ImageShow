@@ -1,6 +1,9 @@
 import type { Redis } from "ioredis";
 import { deploymentConfig } from "../config/deployment-config.ts";
-import { abortSignalError, raceWithAbortSignal } from "../core/abort.ts";
+import {
+  abortSignalError,
+  raceWithAbortSignal
+} from "../core/abort.ts";
 import {
   parseRedisInfoFields,
   parseRedisMemoryState,
@@ -11,7 +14,10 @@ import {
 import { getReadyImageCacheCoordinatorStatus } from "../images/ready-cache/coordinator.ts";
 import { readReadyImageCacheMeta } from "../images/ready-cache/meta.ts";
 import { readReadyImageCacheAdminStatus } from "../images/ready-cache/admin-status.ts";
-import { READY_IMAGE_CORE_KEYS, READY_IMAGE_EMPTY_CORE_KEYS } from "../images/ready-cache/keys.ts";
+import {
+  READY_IMAGE_CORE_KEYS,
+  READY_IMAGE_EMPTY_CORE_KEYS
+} from "../images/ready-cache/keys.ts";
 import {
   inspectRedisKeyspaceDeep,
   redisDeepInspectionDeadlineResult,
@@ -84,15 +90,23 @@ function deadlineInspectionResponse(options: {
       status: options.dependencies.client.status,
       configured_db: deploymentConfig.redis.db,
       redis_version: options.serverInfo
-        ? (parseRedisInfo(options.serverInfo, new Set(["redis_version"])).redis_version ??
+        ? (parseRedisInfo(
+            options.serverInfo,
+            new Set(["redis_version"])
+          ).redis_version ??
           "unknown")
         : "unknown",
       dbsize: options.dbsize,
       required_commands: options.requiredCommands?.commands ?? null,
       memory: unknownMemoryState(options.memoryInfo),
-      keyspace: options.keyspaceInfo ? parseRedisInfo(options.keyspaceInfo) : {}
+      keyspace: options.keyspaceInfo
+        ? parseRedisInfo(options.keyspaceInfo)
+        : {}
     },
-    deep_inspection: redisDeepInspectionDeadlineResult(options.deepInspection, options.now),
+    deep_inspection: redisDeepInspectionDeadlineResult(
+      options.deepInspection,
+      options.now
+    ),
     image_projection: options.projection,
     issues: ["Redis 手动检查达到总期限；部分结果不代表当前总量"]
   };
@@ -109,14 +123,21 @@ export async function inspectRedisState(
   const deadline = new AbortController();
   const inspection = new AbortController();
   const deadlineError = new Error("Redis inspection total deadline reached");
-  const deadlineTimer = setTimeout(() => deadline.abort(deadlineError), deadlineMs);
+  const deadlineTimer = setTimeout(
+    () => deadline.abort(deadlineError),
+    deadlineMs
+  );
   const operationSignal = AbortSignal.any([
     ...(signal ? [signal] : []),
     deadline.signal,
     inspection.signal
   ]);
   const run = <T>(operation: Promise<T>) =>
-    raceWithAbortSignal(operationSignal, operation, "Redis inspection aborted");
+    raceWithAbortSignal(
+      operationSignal,
+      operation,
+      "Redis inspection aborted"
+    );
   let serverInfo: string | null = null;
   let memoryInfo: string | null = null;
   let keyspaceInfo: string | null = null;
@@ -132,12 +153,17 @@ export async function inspectRedisState(
   try {
     await run(dependencies.ping(operationSignal));
     operationSignal.throwIfAborted();
-    const remainingMs = Math.max(1, Math.ceil(deadlineAt - performance.now()));
+    const remainingMs = Math.max(
+      1,
+      Math.ceil(deadlineAt - performance.now())
+    );
     deepInspectionPromise = inspectRedisKeyspaceDeep({
       ...deepOptions,
       deadlineMs: remainingMs,
       client: dependencies.client,
-      signal: signal ? AbortSignal.any([signal, inspection.signal]) : inspection.signal
+      signal: signal
+        ? AbortSignal.any([signal, inspection.signal])
+        : inspection.signal
     }).then((value) => {
       deepInspection = value;
       return value;
@@ -223,7 +249,10 @@ export async function inspectRedisState(
         status: dependencies.client.status,
         configured_db: deploymentConfig.redis.db,
         redis_version:
-          parseRedisInfo(currentServerInfo, new Set(["redis_version"])).redis_version ?? "unknown",
+          parseRedisInfo(
+            currentServerInfo,
+            new Set(["redis_version"])
+          ).redis_version ?? "unknown",
         dbsize: currentDbsize,
         required_commands: currentRequiredCommands.commands,
         memory: {
@@ -244,12 +273,16 @@ export async function inspectRedisState(
       throw abortSignalError(signal, "Redis inspection aborted");
     }
     if (!deadline.signal.aborted) {
-      inspection.abort(error instanceof Error ? error : new Error("Redis inspection failed"));
+      inspection.abort(error instanceof Error
+          ? error
+          : new Error("Redis inspection failed"));
       await Promise.allSettled(inspectionTasks);
       throw error;
     }
     await Promise.allSettled(inspectionTasks);
-    deepInspection = deepInspectionPromise ? await deepInspectionPromise.catch(() => null) : null;
+    deepInspection = deepInspectionPromise
+      ? await deepInspectionPromise.catch(() => null)
+      : null;
     return deadlineInspectionResponse({
       dependencies,
       serverInfo,

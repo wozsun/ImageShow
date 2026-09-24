@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { slugMaxLength, slugPattern } from "@imageshow/shared/browser";
+import {
+  slugMaxLength,
+  slugPattern
+} from "@imageshow/shared/browser";
 
 const imageTagSlugSchema = z
   .string()

@@ -71,7 +71,9 @@ await runIntegrationScenario(async (runtime) => {
       assert.equal(checkouts, 1, "identical requests share one bounded PostgreSQL scope");
       assert.deepEqual(
         (result[0]!.value as { tags: unknown }).tags,
-        endpoint === "gallery-stats" ? [] : [{ slug: "shared-tag", display_name: "Shared tag" }]
+        endpoint === "gallery-stats"
+          ? []
+          : [{ slug: "shared-tag", display_name: "Shared tag" }]
       );
       for (const entry of result) assert.deepEqual(entry.value, result[0]!.value);
       assert.deepEqual(getPublicPgFallbackAdmissionSnapshot(), { active: 0, queued: 0 });

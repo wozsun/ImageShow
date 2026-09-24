@@ -5,7 +5,10 @@ import { getStorageBackend, type StorageRegistryAccess } from "../backends/regis
 import type { StorageConfig } from "../backends/config.ts";
 import { storageObjectKey } from "@imageshow/shared/browser";
 import { assertCanonicalImageObjectKey, thumbnailObjectKey } from "./image-paths.ts";
-import { storageS3ObjectName, type ReadablePrefix } from "./keys.ts";
+import {
+  storageS3ObjectName,
+  type ReadablePrefix
+} from "./keys.ts";
 
 function encodeKeyPath(key: string) {
   return key.split("/").map(encodeURIComponent).join("/");
@@ -15,7 +18,11 @@ function localStorageObjectUrl(prefix: ReadablePrefix, key: string) {
   return `/${prefix}/${encodeKeyPath(key)}`;
 }
 
-export function directStorageObjectUrl(config: StorageConfig, prefix: ReadablePrefix, key: string) {
+export function directStorageObjectUrl(
+  config: StorageConfig,
+  prefix: ReadablePrefix,
+  key: string
+) {
   if (config.type === "local") {
     if (config.public_base_url)
       assertLocalPublicUrlDomain(config.public_base_url, getRuntimeConfig().site.domain);

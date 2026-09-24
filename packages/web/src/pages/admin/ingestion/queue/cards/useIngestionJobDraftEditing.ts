@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type IngestionDraftUrlField, normalizeIngestionDraftUrl } from "@imageshow/shared/browser";
+import {
+  type IngestionDraftUrlField,
+  normalizeIngestionDraftUrl
+} from "@imageshow/shared/browser";
 import type {
   ImageDraftDeferredEditing,
   ImageDraftDeferredField
@@ -67,7 +70,8 @@ export function useIngestionJobDraftEditing({
   const focus = useCallback(
     (field: ImageDraftDeferredField) => {
       const current = jobRef.current;
-      if (busyRef.current || !ingestionJobAttributesEditable(current)) return;
+      if (busyRef.current
+        || !ingestionJobAttributesEditable(current)) return;
       const value = current.draft[field] ?? "";
       replaceSession({
         field,
@@ -82,7 +86,9 @@ export function useIngestionJobDraftEditing({
   const changeText = useCallback(
     (field: DeferredPlainField, value: string) => {
       const current = sessionRef.current;
-      if (!current || current.field !== field || !currentSessionJob(current)) return;
+      if (!current
+        || current.field !== field
+        || !currentSessionJob(current)) return;
       replaceSession({ ...current, value });
     },
     [currentSessionJob, replaceSession]
@@ -93,8 +99,11 @@ export function useIngestionJobDraftEditing({
       const edit = sessionRef.current;
       if (!edit || edit.field !== field) return;
       const current = currentSessionJob(edit);
-      if (!current || value === edit.initialValue || value === current.draft[field]) return;
-      if (isIngestionDraftUrlField(field) && normalizeIngestionDraftUrl(field, value) === null) {
+      if (!current
+        || value === edit.initialValue
+        || value === current.draft[field]) return;
+      if (isIngestionDraftUrlField(field)
+        && normalizeIngestionDraftUrl(field, value) === null) {
         reportInvalidDraftUrl(field);
         return;
       }
@@ -115,10 +124,15 @@ export function useIngestionJobDraftEditing({
 
   const editable = ingestionJobAttributesEditable(job) && !busy;
   const currentSession =
-    session && editable && session.incarnation === job.attemptKey ? session : null;
+    session
+      && editable
+      && session.incarnation === job.attemptKey
+      ? session
+      : null;
   useEffect(() => {
     const current = sessionRef.current;
-    if (current && (!editable || current.incarnation !== job.attemptKey)) replaceSession(null);
+    if (current
+      && (!editable || current.incarnation !== job.attemptKey)) replaceSession(null);
   }, [editable, job.attemptKey, replaceSession]);
   const textValue = (field: DeferredPlainField) =>
     currentSession?.field === field ? currentSession.value : job.draft[field];

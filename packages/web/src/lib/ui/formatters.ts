@@ -51,7 +51,8 @@ export function errorMessage(err: unknown): string {
   ) {
     return "网络请求失败，请检查网络连接后重试";
   }
-  if (err instanceof SyntaxError && /json|unexpected|expected|unterminated|end of/i.test(message)) {
+  if (err instanceof SyntaxError
+    && /json|unexpected|expected|unterminated|end of/i.test(message)) {
     return "JSON 格式不正确，请检查语法";
   }
 

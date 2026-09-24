@@ -75,7 +75,9 @@ export function preserveUnresolvedLocalOutcomes(
   );
   return {
     unresolved: current.unresolved.map((item) =>
-      item.outcome ? item : (previousByAttempt.get(`${item.id}\0${item.attemptKey}`) ?? item)
+      item.outcome
+        ? item
+        : previousByAttempt.get(`${item.id}\0${item.attemptKey}`) ?? item
     )
   } satisfies LocalClearResult;
 }

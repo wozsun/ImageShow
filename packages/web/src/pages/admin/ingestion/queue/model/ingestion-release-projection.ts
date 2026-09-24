@@ -27,7 +27,8 @@ export function ingestionJobMatchesResolvedServerTarget(
     return false;
   }
   if (job.id === target.id && job.attemptKey === target.attemptKey) return true;
-  return ingestionJobHasServerAuthority(job) && job.serverAttemptKey === target.attemptKey;
+  return ingestionJobHasServerAuthority(job)
+    && job.serverAttemptKey === target.attemptKey;
 }
 
 function serverItemSummary(item: ServerIngestionItemDto): IngestionQueueSummaryDto {
@@ -76,7 +77,10 @@ export function withoutReleasedServerSummaries(
     waiting: subtract(summary.waiting, released.waiting),
     running: subtract(summary.running, released.running),
     ready: subtract(summary.ready, released.ready),
-    duplicate_pending: subtract(summary.duplicate_pending, released.duplicate_pending),
+    duplicate_pending: subtract(
+      summary.duplicate_pending,
+      released.duplicate_pending
+    ),
     committing: subtract(summary.committing, released.committing),
     resolving: subtract(summary.resolving, released.resolving),
     completed: subtract(summary.completed, released.completed),

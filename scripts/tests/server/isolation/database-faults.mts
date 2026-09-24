@@ -87,7 +87,8 @@ export async function withCommitFault<T>(
       });
     },
     query(sql: unknown, ...parameters: unknown[]) {
-      if (mode === "unknown" && typeof sql === "string" && sql.includes("SELECT pg_xact_status")) {
+      if (mode === "unknown" && typeof sql === "string"
+        && sql.includes("SELECT pg_xact_status")) {
         throw new Error("controlled outcome inspection failure");
       }
       return Reflect.apply(query, pool, [sql, ...parameters]);

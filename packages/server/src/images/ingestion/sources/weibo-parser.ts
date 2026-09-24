@@ -4,7 +4,11 @@ import {
   type ExtractedWeiboPost,
   type ParsedWeiboPostUrl
 } from "./weibo-types.ts";
-import { asRecord, scalarString, type UnknownRecord } from "./weibo-values.ts";
+import {
+  asRecord,
+  scalarString,
+  type UnknownRecord
+} from "./weibo-values.ts";
 import { isWeiboUserId } from "../../../authors/identity.ts";
 
 /** Parses one supported Weibo post URL into its canonical identifiers. */
@@ -54,7 +58,10 @@ export function parseWeiboPostUrl(input: string): ParsedWeiboPostUrl {
   }
   identifier = identifier.replace(/\.html$/i, "");
   if (!/^[A-Za-z0-9]{1,32}$/.test(identifier)) {
-    throw new WeiboImportError("weibo_invalid_url", "无法从链接中识别微博 ID 或短码");
+    throw new WeiboImportError(
+      "weibo_invalid_url",
+      "无法从链接中识别微博 ID 或短码"
+    );
   }
 
   return { identifier, sourceUrl: url.toString() };
@@ -186,7 +193,8 @@ export function extractWeiboPost(
   parsedUrl: ParsedWeiboPostUrl
 ): ExtractedWeiboPost {
   const status = asRecord(rawStatus);
-  const returnedWeiboId = scalarString(status?.idstr) || scalarString(status?.id);
+  const returnedWeiboId = scalarString(status?.idstr)
+    || scalarString(status?.id);
   const createdAt = scalarString(status?.created_at);
   if (!status || !createdAt) {
     throw new WeiboImportError(
@@ -199,12 +207,18 @@ export function extractWeiboPost(
   const user = asRecord(status.user);
   const userId = scalarString(user?.idstr) || scalarString(user?.id);
   if (!publishedAt || !isWeiboUserId(userId)) {
-    throw new WeiboImportError("weibo_post_incomplete", "微博缺少可识别的发布时间或用户 ID");
+    throw new WeiboImportError(
+      "weibo_post_incomplete",
+      "微博缺少可识别的发布时间或用户 ID"
+    );
   }
 
   const images = extractOriginalWeiboImages(status);
   if (!images.length) {
-    throw new WeiboImportError("weibo_no_images", "这条微博没有可导入的公开图片");
+    throw new WeiboImportError(
+      "weibo_no_images",
+      "这条微博没有可导入的公开图片"
+    );
   }
 
   const mblogId = scalarString(status.mblogid);

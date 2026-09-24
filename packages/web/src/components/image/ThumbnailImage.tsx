@@ -2,13 +2,13 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../icon/Icon.js";
 import { loadImageElement } from "./image-element-loader.js";
 
-type ThumbLoadState = {
+type ThumbnailLoadState = {
   requestedSrc: string;
   visibleSrc: string;
   status: "loading" | "ready" | "failed";
 };
 
-function initialLoadState(src: string): ThumbLoadState {
+function initialLoadState(src: string): ThumbnailLoadState {
   return {
     requestedSrc: src,
     visibleSrc: "",
@@ -16,7 +16,7 @@ function initialLoadState(src: string): ThumbLoadState {
   };
 }
 
-export function ThumbImage({
+export function ThumbnailImage({
   src,
   alt = "",
   className = "",
@@ -29,7 +29,7 @@ export function ThumbImage({
 }) {
   const pendingImageRef = useRef<HTMLImageElement | null>(null);
   const currentSrcRef = useRef(src);
-  const [state, setState] = useState<ThumbLoadState>(() => initialLoadState(src));
+  const [state, setState] = useState<ThumbnailLoadState>(() => initialLoadState(src));
 
   useLayoutEffect(() => {
     currentSrcRef.current = src;
@@ -44,7 +44,9 @@ export function ThumbImage({
                 status: "ready"
               };
         }
-        return current.requestedSrc === "" && !current.visibleSrc ? current : initialLoadState("");
+        return current.requestedSrc === "" && !current.visibleSrc
+          ? current
+          : initialLoadState("");
       }
       if (current.requestedSrc === src) return current;
       return {
@@ -75,7 +77,11 @@ export function ThumbImage({
     // a duplicate request for the same address.
     queueMicrotask(() => {
       if (controller.signal.aborted) return;
-      void loadImageElement(image, { src: loadingSrc, loading: "lazy" }, controller.signal).then(
+      void loadImageElement(
+        image,
+        { src: loadingSrc, loading: "lazy" },
+        controller.signal
+      ).then(
         () => {
           if (currentSrcRef.current !== loadingSrc) return;
           setState((current) =>
@@ -89,7 +95,8 @@ export function ThumbImage({
           );
         },
         () => {
-          if (controller.signal.aborted || currentSrcRef.current !== loadingSrc) return;
+          if (controller.signal.aborted
+            || currentSrcRef.current !== loadingSrc) return;
           setState((current) =>
             current.requestedSrc === loadingSrc
               ? { ...current, visibleSrc: "", status: "failed" }
@@ -118,7 +125,10 @@ export function ThumbImage({
 
   // 待加载节点完成 load/decode 后会沿用同一个 key 成为可见节点；此前的图层
   // 始终保留，避免地址切换期间出现空白帧。
-  const layerSources = [state.visibleSrc, shouldLoad ? state.requestedSrc : ""].filter(Boolean);
+  const layerSources = [
+    state.visibleSrc,
+    shouldLoad ? state.requestedSrc : ""
+  ].filter(Boolean);
 
   return (
     <span className={`thumb-image ${state.visibleSrc ? "is-ready" : ""} ${className}`.trim()}>

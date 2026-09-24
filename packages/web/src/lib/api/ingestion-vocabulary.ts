@@ -3,7 +3,10 @@ import { api } from "./client.js";
 import { queryKeys } from "./query-keys.js";
 import { readRequestRetryOptions } from "./read-request-retry.js";
 import { requestWithDeadline } from "./request-deadline.js";
-import { ingestionVocabularyPath, type IngestionVocabularyDto } from "@imageshow/shared/browser";
+import {
+  ingestionVocabularyPath,
+  type IngestionVocabularyDto
+} from "@imageshow/shared/browser";
 
 // 内容接入词表只会在图片或词条写操作后变化，这些入口都会统一失效
 // ingestionVocabulary。会话内永久保留，避免编辑器和内容接入窗口反复挂载时重新读取。

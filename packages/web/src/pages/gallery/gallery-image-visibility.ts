@@ -1,4 +1,7 @@
-import { galleryLoadBufferScreens, galleryResidenceBufferScreens } from "../../lib/constants.js";
+import {
+  galleryLoadBufferScreens,
+  galleryResidenceBufferScreens
+} from "../../lib/constants.js";
 
 export type GalleryImageVisibility = {
   inViewport: boolean;
@@ -15,15 +18,27 @@ type VisibilityRecord = {
 
 type ObserverKind = keyof GalleryImageVisibility;
 
-const observerKinds: ObserverKind[] = ["inViewport", "inLoadRange", "inResidenceRange"];
+const observerKinds: ObserverKind[] = [
+  "inViewport",
+  "inLoadRange",
+  "inResidenceRange"
+];
 
-function visibilityRootMargin(kind: ObserverKind, viewportHeight: number) {
+function visibilityRootMargin(
+  kind: ObserverKind,
+  viewportHeight: number
+) {
   if (kind === "inViewport") return "0px";
-  const screens = kind === "inLoadRange" ? galleryLoadBufferScreens : galleryResidenceBufferScreens;
+  const screens = kind === "inLoadRange"
+    ? galleryLoadBufferScreens
+    : galleryResidenceBufferScreens;
   return `${Math.max(1, Math.ceil(viewportHeight * screens))}px 0px`;
 }
 
-function equalVisibility(left: GalleryImageVisibility, right: GalleryImageVisibility) {
+function equalVisibility(
+  left: GalleryImageVisibility,
+  right: GalleryImageVisibility
+) {
   return (
     left.inViewport === right.inViewport &&
     left.inLoadRange === right.inLoadRange &&

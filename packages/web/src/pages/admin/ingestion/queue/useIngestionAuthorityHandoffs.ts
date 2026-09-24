@@ -80,7 +80,8 @@ export function useIngestionAuthorityHandoffs(
     if (!changed) return;
     const patches = new Map<string, Partial<IngestionJob>>();
     for (const job of jobsRefRef.current.current) {
-      if (job.serverHandoffPending === true && pairKeys.has(serverIngestionJobPairKey(job))) {
+      if (job.serverHandoffPending === true
+        && pairKeys.has(serverIngestionJobPairKey(job))) {
         patches.set(job.id, {
           serverHandoffPending: false,
           serverHandoffRevision: undefined
@@ -96,7 +97,8 @@ export function useIngestionAuthorityHandoffs(
     for (const [pairKey, revision] of revisions) {
       const current = fencesRef.current.get(pairKey);
       if (!current) continue;
-      if (current.revision === revision && !current.statusCheckRequired) continue;
+      if (current.revision === revision
+        && !current.statusCheckRequired) continue;
       fencesRef.current.set(pairKey, {
         ...current,
         revision,
@@ -135,7 +137,8 @@ export function useIngestionAuthorityHandoffs(
           ? server.connectionGeneration
           : requestConnectionGeneration;
       const responseBelongsToCurrentGeneration =
-        requestGeneration !== null && requestGeneration === server.connectionGeneration;
+        requestGeneration !== null
+          && requestGeneration === server.connectionGeneration;
       if (binding.serverHandoffPending !== true) return binding;
 
       const pairKey = serverIngestionPairKey({
@@ -149,7 +152,8 @@ export function useIngestionAuthorityHandoffs(
         ? binding.serverHandoffRevision
         : undefined;
       const revision =
-        existingRevision !== undefined && responseRevision !== undefined
+        existingRevision !== undefined
+          && responseRevision !== undefined
           ? Math.max(existingRevision, responseRevision)
           : (existingRevision ?? responseRevision);
       const responseCompletionRequired = binding.serverHandoffRevision === undefined;
@@ -188,20 +192,24 @@ export function useIngestionAuthorityHandoffs(
       if (responseBelongsToCurrentGeneration) {
         const coverageAlreadyScheduled = scheduledCoverageRef.current !== null;
         const scheduledCoverage =
-          scheduledCoverageRef.current ?? new Map<string, ScheduledAuthorityCoverage>();
+          scheduledCoverageRef.current
+            ?? new Map<string, ScheduledAuthorityCoverage>();
         const scheduled = scheduledCoverage.get(pairKey);
         const scheduledRevision =
           scheduled?.connectionGeneration === server.connectionGeneration
             ? scheduled.revision
             : undefined;
         const hadScheduledPair = scheduled?.connectionGeneration === server.connectionGeneration;
-        const unknown = (hadScheduledPair && scheduled.unknown) || revision === undefined;
+        const unknown = (
+          hadScheduledPair && scheduled.unknown
+        ) || revision === undefined;
         let combinedRevision: number | undefined;
         if (!hadScheduledPair) {
           combinedRevision = revision;
         } else {
           combinedRevision =
-            scheduledRevision !== undefined && revision !== undefined
+            scheduledRevision !== undefined
+              && revision !== undefined
               ? Math.max(scheduledRevision, revision)
               : (scheduledRevision ?? revision);
         }
@@ -225,14 +233,19 @@ export function useIngestionAuthorityHandoffs(
             const hasKnownRevision = currentCoverage.some((entry) => entry.revision !== undefined);
             const maximumRevision = currentCoverage.reduce<number>(
               (maximum, entry) =>
-                entry.revision === undefined ? maximum : Math.max(maximum, entry.revision),
+                entry.revision === undefined
+                  ? maximum
+                  : Math.max(maximum, entry.revision),
               0
             );
             if (unknown) {
               serverRef.current.ensureRevision(undefined, currentGeneration);
             }
             if (hasKnownRevision) {
-              serverRef.current.ensureRevision(maximumRevision, currentGeneration);
+              serverRef.current.ensureRevision(
+                maximumRevision,
+                currentGeneration
+              );
             }
           });
         }
@@ -270,7 +283,9 @@ export function useIngestionAuthorityHandoffs(
     [clearFences]
   );
 
-  const hasPair = useCallback((pairKey: string) => fencesRef.current.has(pairKey), []);
+  const hasPair = useCallback((pairKey: string) => (
+    fencesRef.current.has(pairKey)
+  ), []);
   const hasExternalPair = useCallback(
     (pairKey: string) => fencesRef.current.get(pairKey)?.externalStatusOwner === true,
     []
@@ -315,7 +330,8 @@ export function useIngestionAuthorityHandoffs(
       : new Set<string>();
     for (const [pairKey, fence] of fencesRef.current) {
       if (fence.connectionGeneration !== input.server.connectionGeneration) {
-        const externalStatusOwner = fence.externalStatusOwner || promotedPairs.has(pairKey);
+        const externalStatusOwner = fence.externalStatusOwner
+          || promotedPairs.has(pairKey);
         fencesRef.current.set(pairKey, {
           ...fence,
           connectionGeneration: input.server.connectionGeneration,
@@ -364,7 +380,8 @@ export function useIngestionAuthorityHandoffs(
     if (input.server.status !== "ready") return;
     const generation = input.server.connectionGeneration;
     const entries = [...fencesRef.current].filter(
-      ([, fence]) => fence.connectionGeneration === generation && fence.statusCheckRequired
+      ([, fence]) => fence.connectionGeneration === generation
+        && fence.statusCheckRequired
     );
     if (!entries.length) return;
     const controller = new AbortController();
@@ -396,7 +413,10 @@ export function useIngestionAuthorityHandoffs(
               if (current.completionRequired) {
                 resolved.add(pairKey);
               } else {
-                revisions.set(pairKey, status.item.last_semantic_revision);
+                revisions.set(
+                  pairKey,
+                  status.item.last_semantic_revision
+                );
               }
               continue;
             }
@@ -407,14 +427,22 @@ export function useIngestionAuthorityHandoffs(
             if (status.redis_status === "missing") {
               resolved.add(pairKey);
             } else if (
-              (status.redis_status === "completed" || !current.completionRequired) &&
+              (status.redis_status === "completed"
+                || !current.completionRequired) &&
               status.redis_last_semantic_revision !== undefined
             ) {
-              revisions.set(pairKey, status.redis_last_semantic_revision);
-            } else if (current.completionRequired && status.redis_status === "active") {
+              revisions.set(
+                pairKey,
+                status.redis_last_semantic_revision
+              );
+            } else if (current.completionRequired
+              && status.redis_status === "active") {
               deferred.set(
                 pairKey,
-                Math.max(requestRevision ?? 0, status.redis_last_semantic_revision ?? 0)
+                Math.max(
+                  requestRevision ?? 0,
+                  status.redis_last_semantic_revision ?? 0
+                )
               );
             }
           }
@@ -425,7 +453,10 @@ export function useIngestionAuthorityHandoffs(
             (maximum, revision) => Math.max(maximum, revision),
             0
           );
-          serverRef.current.ensureRevision(maximumRevision, generation);
+          serverRef.current.ensureRevision(
+            maximumRevision,
+            generation
+          );
         }
         if (deferred.size) deferFenceStatusChecks(deferred);
         if (resolved.size) clearFences(resolved);

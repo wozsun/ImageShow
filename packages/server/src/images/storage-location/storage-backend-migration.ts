@@ -7,7 +7,10 @@ import {
   migrateImageToStorageBackend,
   type ImageStorageMigrationRecord
 } from "./image-migration.ts";
-import { assertStorageWriteTarget, getStorageBackend } from "../../storage/backends/registry.ts";
+import {
+  assertStorageWriteTarget,
+  getStorageBackend
+} from "../../storage/backends/registry.ts";
 import { withPlannedImageMutationRebuild } from "../mutation-sync.ts";
 import {
   READY_IMAGE_EXACT_SYNC_MAX_ITEMS,
@@ -52,7 +55,10 @@ async function readStorageBackendImageMigrationPlan(
   };
 }
 
-async function readStorageBackendImageMigrationRows(source: string, upperBoundImageId: string) {
+async function readStorageBackendImageMigrationRows(
+  source: string,
+  upperBoundImageId: string
+) {
   return (
     await pool.query(
       `SELECT id, ext, storage_slug, md5,
@@ -149,7 +155,9 @@ async function migrateBackendImages(
         error: {
           id: image.id,
           object_key: storageObjectKey(image.id, image.ext),
-          code: error instanceof ApiError ? error.code : "storage_migration_failed",
+          code: error instanceof ApiError
+            ? error.code
+            : "storage_migration_failed",
           message: errorMessage(error)
         }
       } satisfies StorageBackendImageMigrationOutcome;
@@ -202,7 +210,12 @@ export async function migrateStorageBackendImages(
   options.signal?.throwIfAborted();
   if (!plan.affectedCount || !plan.upperBoundImageId) {
     return {
-      migration: await migrateBackendImages(source, target, [], options.signal)
+      migration: await migrateBackendImages(
+        source,
+        target,
+        [],
+        options.signal
+      )
     };
   }
   await assertStorageWriteTarget(target);
@@ -215,19 +228,32 @@ export async function migrateStorageBackendImages(
       plan.upperBoundImageId!,
       options.signal
     );
-    const migration = await migrateBackendImages(source, target, images, options.signal);
+    const migration = await migrateBackendImages(
+      source,
+      target,
+      images,
+      options.signal
+    );
     return { migration };
   };
   if (decision.mode === "rebuild") {
     return withPlannedImageMutationRebuild(decision, executeRebuild);
   }
 
-  const rows = await readStorageBackendImageMigrationRows(source, plan.upperBoundImageId);
+  const rows = await readStorageBackendImageMigrationRows(
+    source,
+    plan.upperBoundImageId
+  );
   options.signal?.throwIfAborted();
   const refreshedDecision = decideImageMutationSync(rows.length);
   return refreshedDecision.mode === "rebuild"
     ? withPlannedImageMutationRebuild(refreshedDecision, executeRebuild)
     : {
-        migration: await migrateBackendImages(source, target, rows, options.signal)
+        migration: await migrateBackendImages(
+          source,
+          target,
+          rows,
+          options.signal
+        )
       };
 }

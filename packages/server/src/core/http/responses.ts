@@ -1,5 +1,8 @@
 import type { Context } from "hono";
-import type { ApiErrorResponseDto, ApiSuccessResponseDto } from "@imageshow/shared/browser";
+import type {
+  ApiErrorResponseDto,
+  ApiSuccessResponseDto
+} from "@imageshow/shared/browser";
 import { ApiError } from "../api-error.ts";
 import { logger } from "../logger.ts";
 import { requestLogContext } from "./request-security.ts";
@@ -46,7 +49,11 @@ export function privateCacheableApiSuccess<T extends Record<string, unknown>>(
   context: Context,
   fields: T
 ) {
-  return cacheableApiSuccess(context, fields, privateRevalidationCacheControl);
+  return cacheableApiSuccess(
+    context,
+    fields,
+    privateRevalidationCacheControl
+  );
 }
 
 export function cacheableContentResponse(
@@ -81,7 +88,10 @@ export function handleApiError(context: Context, error: unknown) {
       (error.details as { total_size?: unknown })?.total_size
     );
     if (error.status === 416 && totalSize !== undefined) {
-      context.header("Content-Range", `bytes */${totalSize}`);
+      context.header(
+        "Content-Range",
+        `bytes */${totalSize}`
+      );
     }
     const payload = {
       ok: false,

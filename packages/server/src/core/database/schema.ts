@@ -48,7 +48,9 @@ function databaseReadinessError(error: unknown) {
 
 async function initializeDatabaseSchemaOnClient(client: PoolClient) {
   const empty = await databaseHasNoUserRelations(client);
-  const schema = empty ? await readFile(databaseSchemaPath(), "utf8") : null;
+  const schema = empty
+    ? await readFile(databaseSchemaPath(), "utf8")
+    : null;
   await client.query("BEGIN");
   try {
     if (schema) await client.query(schema);

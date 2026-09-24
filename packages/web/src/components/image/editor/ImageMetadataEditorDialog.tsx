@@ -91,7 +91,10 @@ export function ImageMetadataEditorDialog({
   onTrashCommitted: (imageIds: string[]) => void | Promise<void>;
   publicImageMembershipHandled?: boolean;
   onSaved: ImageEditorSavedHandler;
-  onStorageMigrationSucceeded?: (message: string, storageLabel: string) => void;
+  onStorageMigrationSucceeded?: (
+    message: string,
+    storageLabel: string
+  ) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const singleItem = items.length === 1;
@@ -159,7 +162,10 @@ export function ImageMetadataEditorDialog({
     }));
 
   const changedByItem = new Map(
-    activeItems.map((item) => [item.id, fieldsChangedFor(item, session.drafts[item.id])])
+    activeItems.map((item) => [
+      item.id,
+      fieldsChangedFor(item, session.drafts[item.id])
+    ])
   );
   const changedCount = activeItems.filter((item) =>
     Object.values(changedByItem.get(item.id)!).some(Boolean)
@@ -209,13 +215,18 @@ export function ImageMetadataEditorDialog({
     const authoritativeItems = outcome?.authoritativeItems;
     if (authoritativeItems) {
       setSession((current) =>
-        reconcileImageMetadataSession(current, outcome.attempt, authoritativeItems)
+        reconcileImageMetadataSession(
+          current,
+          outcome.attempt,
+          authoritativeItems
+        )
       );
     }
     return Boolean(
       outcome &&
       (outcome.report.snapshotFailed ||
-        (outcome.report.failed === 0 && outcome.report.unavailableIds.length === 0))
+        (outcome.report.failed === 0
+          && outcome.report.unavailableIds.length === 0))
     );
   };
   const restoreAllChanges = async () => {
@@ -229,7 +240,11 @@ export function ImageMetadataEditorDialog({
       }
       setSession((current) =>
         restoreImageMetadataDrafts(
-          reconcileImageMetadataSession(current, outcome.attempt, authoritativeItems)
+          reconcileImageMetadataSession(
+            current,
+            outcome.attempt,
+            authoritativeItems
+          )
         )
       );
       return true;
@@ -268,7 +283,9 @@ export function ImageMetadataEditorDialog({
       className="modal edit-modal image-editor-overlay"
       ariaLabel={title}
       busy={busy}
-      paused={Boolean((canMigrateStorage && migrating) || preview || restoreConfirmation)}
+      paused={Boolean((canMigrateStorage && migrating)
+        || preview
+        || restoreConfirmation)}
       initialFocusRef={closeButtonRef}
       returnFocusRef={returnFocusRef}
       onClose={onClose}
@@ -437,7 +454,9 @@ export function ImageMetadataEditorDialog({
                       confirmIcon="delete-bin-2-line"
                       busyIcon="delete-bin-5-line"
                       idleLabel={
-                        multipleItems ? `删除这 ${activeItems.length} 张图片` : "删除此图片"
+                        multipleItems
+                          ? `删除这 ${activeItems.length} 张图片`
+                          : "删除此图片"
                       }
                       confirmLabel={
                         multipleItems
@@ -445,7 +464,9 @@ export function ImageMetadataEditorDialog({
                           : "再次点击确认删除此图片"
                       }
                       busyLabel={
-                        multipleItems ? `正在删除这 ${activeItems.length} 张图片` : "删除中"
+                        multipleItems
+                          ? `正在删除这 ${activeItems.length} 张图片`
+                          : "删除中"
                       }
                       disabled={busy || !activeItems.length}
                       busy={trashAction.pending}

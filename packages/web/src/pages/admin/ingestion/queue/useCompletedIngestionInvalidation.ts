@@ -52,7 +52,8 @@ export function useCompletedIngestionInvalidation() {
       if (activeInvalidationRef.current === promise) {
         activeInvalidationRef.current = null;
       }
-      if (invalidationRequestedRef.current && pendingItemsRef.current.size) {
+      if (invalidationRequestedRef.current
+        && pendingItemsRef.current.size) {
         void flush().catch(() => undefined);
       }
     });

@@ -1,6 +1,6 @@
 # 项目结构详细说明
 
-ImageShow 使用 npm workspaces 管理三个包。依赖方向固定为：
+ImageShow 使用 npm workspaces 管理三个包。代码排版与命名遵循[可读性规范](code-style.md)。依赖方向固定为：
 
 ```text
 packages/server ──► packages/shared
@@ -166,7 +166,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 ### 配置与资源入口
 
 `config/runtime-config.ts` 持有当前 schema、默认值、严格保存校验与启动归一化。
-`config/package/` 组合可移植配置与存储注册表：`format.ts` 负责包结构和预览，
+`config/bundle/` 组合可移植配置与存储注册表：`format.ts` 负责包结构和预览，
 `runtime-projection.ts` 负责宽松导入与目标站点字段保留，`service.ts` 负责写入编排。
 配置包依赖运行配置 schema；日常运行配置不反向依赖包导入算法。
 
@@ -176,7 +176,7 @@ CORS 头由 `core/http/headers.ts` 统一设置。
 
 `config/runtime-config-store.ts` 唯一拥有进程内 RuntimeConfig、listener 与 FIFO 写租约。普通设置、
 高级配置和磁盘重载都先完成所需原子文件写入，再替换内存并逐个通知 listener；同步 listener
-异常只记录结构化错误，不中断后续 listener 或反转已持久化结果。`config/package/service.ts` 在同一
+异常只记录结构化错误，不中断后续 listener 或反转已持久化结果。`config/bundle/service.ts` 在同一
 租约内先完成导入后端的存储探测，再通过 store 的专用阶段持久化候选文件并等待 PostgreSQL 事务结果；只有正常提交、确认
 已提交或结果 unknown 时才发布候选，确认回滚只恢复旧文件且不发布中间快照。
 
@@ -592,7 +592,7 @@ hooks ──► lib
   只在取得真实配置后挂载后台图库、词表与设置表单；初次失败提供重试，后台刷新失败时
   保留已有配置和页面状态。图库将该快照经 `IngestionLauncher` 传给 `Ingestion`，
   接入页复用该设置快照中的分页、数量、体积、长边、并发和导入策略。
-  `components/form/useTagScroll.ts` 将单行标签 viewport 的 DOM 几何、两端可用状态、逐项定位与滚轮生命周期统一接到相邻 `tag-input-scroll.ts` 纯模型。
+  `hooks/useChipStripScroll.ts` 将单行已选项 viewport 的 DOM 几何、两端可用状态、逐项定位与滚轮生命周期统一接到 `lib/ui/chip-strip-scroll.ts` 纯模型。
   `TagInput` 与公开筛选的 `PublicFilterChips` 共用该 Hook 和 `styles/tag-scroll.css` 的平滑滚动视口，不复制 Upload / Import 或公开筛选的滚动实现。编辑器保留覆盖式边缘按钮；公开筛选使用独立样式的 22px 外置箭头，固定占位、到达边缘时禁用。滚动区内部两侧各预留 6px，利用同一可滚动状态在有隐藏内容的一侧绘制等宽渐隐，最外沿完全透明，不向外扩展或拦截点击。自动定位读取实际内边距，使目标条件落在完整可见区。Hook 按真实几何计算按钮遮挡，外置按钮的遮挡为零。
   公开筛选在成功新增条件后向 `PublicFilterChips` 传递本次定位目标，按滚动区实际宽度平滑定位局部已选栏，不改焦点、不滚动弹窗正文、不因数量更新反复定位。已成组标签按组编号定位，成组和向组内添加标签时显示对应组；组条目宽于视口时定位末尾，使最新添加的标签可见。选择超限失败和移除条件不触发新增定位；无需维护自动定位期间的独立箭头状态。
   `TagInput` 仍独立拥有输入、候选及编辑焦点，并在非交互

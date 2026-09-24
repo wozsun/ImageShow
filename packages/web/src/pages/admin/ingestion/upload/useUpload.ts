@@ -22,7 +22,10 @@ import {
   revokeUploadJobPreviews,
   selectUploadFiles
 } from "./upload-jobs.js";
-import { BrowserUploadBatchSequencer, BrowserUploadLane } from "./browser-upload-lane.js";
+import {
+  BrowserUploadBatchSequencer,
+  BrowserUploadLane
+} from "./browser-upload-lane.js";
 import {
   runRawUploadBatch,
   type ActiveRawUpload,
@@ -95,7 +98,9 @@ export function useUpload(options: {
     async (jobs: IngestionJob[]) => {
       const candidates = jobs.filter(
         (job) =>
-          job.file && mounted.current && isCurrentIngestionAttempt(queue, job.id, job.attemptKey)
+          job.file
+          && mounted.current
+          && isCurrentIngestionAttempt(queue, job.id, job.attemptKey)
       );
       if (!candidates.length) return;
       const inputs = candidates.map((job) => buildUploadIntentItemInput(job, maxLongEdge));
@@ -111,7 +116,8 @@ export function useUpload(options: {
         intentOwnershipSettled = true;
         for (const job of candidates) {
           const pending = pendingIntents.current.get(job.id);
-          if (pending?.attemptKey === job.attemptKey && pending.settled === intentSettled)
+          if (pending?.attemptKey === job.attemptKey
+            && pending.settled === intentSettled)
             pendingIntents.current.delete(job.id);
         }
         resolveIntentOwnership();
@@ -437,7 +443,8 @@ export function useUpload(options: {
               terminal: "completed"
             });
           }
-          if (ownerOutcome.status === "accepted" && ownerOutcome.target)
+          if (ownerOutcome.status === "accepted"
+            && ownerOutcome.target)
             cancellable.push(ownerOutcome.target);
           continue;
         }
@@ -464,7 +471,8 @@ export function useUpload(options: {
                 }
               : {})
           });
-        } else if (current.serverVersion === undefined && current.uploadIntentItemInput) {
+        } else if (current.serverVersion === undefined
+          && current.uploadIntentItemInput) {
           replay.push(current);
         } else {
           cancellable.push(current);
@@ -507,7 +515,8 @@ export function useUpload(options: {
             queue.updateJob(current.id, {
               status: "failed",
               failureStage: "cancel",
-              message: result?.message ?? "服务端是否已接管任务暂时无法确认，请重试取消"
+              message: result?.message
+                ?? "服务端是否已接管任务暂时无法确认，请重试取消"
             });
             continue;
           }

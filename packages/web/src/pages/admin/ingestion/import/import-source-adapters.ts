@@ -61,7 +61,9 @@ export type ImportSourceModeAdapter = {
 
 function jsonlResultSummary(result: JsonlManifestResult) {
   if (!result.items.length) return "没有可导入的有效清单项";
-  const invalidPart = result.errors.length ? `、无效 ${result.errors.length}` : "";
+  const invalidPart = result.errors.length
+    ? `、无效 ${result.errors.length}`
+    : "";
   return `共解析 ${result.items.length + result.errors.length} 行，其中有效 ${result.items.length}${invalidPart}`;
 }
 
@@ -88,10 +90,14 @@ const urlsAdapter: ImportSourceModeAdapter = {
     return {
       mode: "urls",
       result,
-      submission: result.urls.length ? { mode: "urls", urls: result.urls } : null,
+      submission: result.urls.length
+        ? { mode: "urls", urls: result.urls }
+        : null,
       blockingIssueCount: result.invalidCount,
       submitCount: result.urls.length,
-      summary: result.urls.length ? formatUrlImportSummary(result) : "没有可导入的有效链接"
+      summary: result.urls.length
+        ? formatUrlImportSummary(result)
+        : "没有可导入的有效链接"
     };
   }
 };
@@ -113,7 +119,9 @@ const jsonlAdapter: ImportSourceModeAdapter = {
     return {
       mode: "jsonl",
       manifest,
-      submission: manifest.items.length ? { mode: "jsonl", manifest } : null,
+      submission: manifest.items.length
+        ? { mode: "jsonl", manifest }
+        : null,
       blockingIssueCount: manifest.errors.length,
       submitCount: manifest.items.length,
       summary: jsonlResultSummary(manifest)

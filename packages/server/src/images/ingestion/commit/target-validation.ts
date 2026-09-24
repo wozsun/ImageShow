@@ -1,7 +1,10 @@
 import { ApiError } from "../../../core/api-error.ts";
 import { verifyStorageTarget } from "../../../storage/objects/transfer.ts";
 import { readDuplicateSnapshotByMd5 } from "../../read-models/duplicates.ts";
-import type { IngestionPreparedManifest, IngestionSessionSnapshot } from "../sessions/model.ts";
+import type {
+  IngestionPreparedManifest,
+  IngestionSessionSnapshot
+} from "../sessions/model.ts";
 import { IngestionSessionRepository } from "../repository.ts";
 
 type CommitTargetAvailability = Omit<Parameters<typeof verifyStorageTarget>[0], "signal">;
@@ -40,7 +43,10 @@ export async function assertCurrentCommitExecution(
   repository: IngestionSessionRepository,
   expected: IngestionSessionSnapshot
 ) {
-  const current = await repository.readSession(expected.owner, expected.session_id);
+  const current = await repository.readSession(
+    expected.owner,
+    expected.session_id
+  );
   if (
     !current ||
     !("execution_token" in current) ||

@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState
+} from "react";
 import { useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -40,7 +45,10 @@ import { useAdminPreference } from "../../../hooks/useAdminPreferences.js";
 import { useAdminImageDetailCapability } from "../../../components/image/useAdminImageDetailCapability.js";
 import { useImageEditorCapability } from "../../../components/image/editor/useImageEditorCapability.js";
 import type { ImageMetadataSaveCommit } from "../../../components/image/editor/image-editor-capability-loader.js";
-import { mobileViewportMediaQuery, useMediaQuery } from "../../../hooks/useMediaQuery.js";
+import {
+  mobileViewportMediaQuery,
+  useMediaQuery
+} from "../../../hooks/useMediaQuery.js";
 import { useTwoStepConfirmation } from "../../../hooks/useTwoStepConfirmation.js";
 import {
   imageAdminConfirmationCopy,
@@ -66,7 +74,9 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get("view");
   const routeView: ImageAdminView =
-    viewParam === "unset" || viewParam === "deleted" ? viewParam : "ready";
+    viewParam === "unset" || viewParam === "deleted"
+      ? viewParam
+      : "ready";
   const [view, setView] = useState<ImageAdminView>(routeView);
   const [filters, setFilters] = useState<ImageAdminFilterValues>(emptyImageAdminFilters);
   const [preferredSortBy, setPreferredSortBy] = useAdminPreference("image_sort_by");
@@ -121,7 +131,11 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
         await invalidateImageData(client);
         return;
       }
-      await invalidateImageDataAfterMetadataSave(client, commit.updates, commit.authoritativeItems);
+      await invalidateImageDataAfterMetadataSave(
+        client,
+        commit.updates,
+        commit.authoritativeItems
+      );
     },
     [client, selection.clear]
   );
@@ -164,7 +178,10 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const finishIngestionBatch = selection.clear;
   const canTrashReadyItems = view !== "deleted";
   const batchTrashDisabled =
-    !canTrashReadyItems || !selected.length || interfaceBusy || batchTrashPending;
+    !canTrashReadyItems
+    || !selected.length
+    || interfaceBusy
+    || batchTrashPending;
   const batchTrashConfirmation = useTwoStepConfirmation<HTMLButtonElement>({
     disabled: batchTrashDisabled,
     busy: batchTrashPending,
@@ -179,7 +196,12 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     clearImageSelection();
     resetTransientState();
     gridRef.current?.scrollTo({ top: 0, left: 0 });
-  }, [clearImageSelection, resetTransientState, routeView, view]);
+  }, [
+    clearImageSelection,
+    resetTransientState,
+    routeView,
+    view
+  ]);
   const applyFilters = (nextFilters: ImageAdminFilterValues) => {
     if (
       interfaceBusy ||
@@ -198,7 +220,10 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
     resetTransientState();
     gridRef.current?.scrollTo({ top: 0, left: 0 });
   };
-  const changeFilter = (key: keyof ImageAdminFilterValues, nextValue: string) => {
+  const changeFilter = (
+    key: keyof ImageAdminFilterValues,
+    nextValue: string
+  ) => {
     applyFilters({ ...filters, [key]: nextValue });
   };
   const clearFilters = () => {
@@ -328,7 +353,10 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                 type="checkbox"
                 checked={allSelected}
                 disabled={interfaceBusy}
-                onChange={(event) => selection.selectAll(event.target.checked, interfaceBusy)}
+                onChange={(event) => selection.selectAll(
+                  event.target.checked,
+                  interfaceBusy
+                )}
               />
               全选
             </label>
@@ -388,7 +416,9 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
               {(view === "ready" || view === "unset") && (
                 <button
                   type="button"
-                  disabled={!selected.length || editorConflictBusy || selectedEditorPending}
+                  disabled={!selected.length
+                    || editorConflictBusy
+                    || selectedEditorPending}
                   aria-busy={selectedEditorPending || undefined}
                   {...preloadIntentProps(preloadBatchEditor)}
                   onClick={(event) => {
@@ -468,7 +498,9 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                     }
                   />
                   <StableButtonLabel
-                    idle={batchTrashConfirmation.armed ? "确认删除" : "批量删除"}
+                    idle={batchTrashConfirmation.armed
+                      ? "确认删除"
+                      : "批量删除"}
                     busyText="正在删除"
                     busy={batchTrashPending}
                   />
@@ -500,11 +532,14 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                   <StableButtonLabel
                     idle={selected.length ? "删除已选图" : "清空回收站"}
                     busyText={
-                      confirmAction?.kind === "purge" && confirmAction.request.scope === "selected"
+                      confirmAction?.kind === "purge"
+                        && confirmAction.request.scope === "selected"
                         ? "正在删除"
                         : "正在清空"
                     }
-                    busy={actionBusy && confirmAction?.kind === "purge"}
+                    busy={actionBusy && (
+                      confirmAction?.kind === "purge"
+                    )}
                   />
                 </button>
               )}
@@ -524,9 +559,19 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
               detailPending={detailCapability.pendingItemId === item.id}
               onPreloadDetail={detailCapability.preload}
               onCheck={(checked, extendRange) =>
-                selection.update(item.id, checked, extendRange, interfaceBusy)
+                selection.update(
+                  item.id,
+                  checked,
+                  extendRange,
+                  interfaceBusy
+                )
               }
-              onSelectRange={() => selection.update(item.id, true, true, interfaceBusy)}
+              onSelectRange={() => selection.update(
+                item.id,
+                true,
+                true,
+                interfaceBusy
+              )}
               rangeSelectionHelpId={imageRangeSelectionHelpId}
               onDetail={(opener) => {
                 void detailCapability.open(item, opener);
@@ -607,7 +652,9 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
           onTrashCommitted={(imageIds) => {
             selection.clear();
             showFeedback(
-              imageIds.length === 1 ? "图片已移入回收站" : `${imageIds.length} 张图片已移入回收站`,
+              imageIds.length === 1
+                ? "图片已移入回收站"
+                : `${imageIds.length} 张图片已移入回收站`,
               "success"
             );
           }}

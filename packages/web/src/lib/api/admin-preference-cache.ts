@@ -17,7 +17,10 @@ export function shouldReplaceAdminPreferenceQuerySnapshot(
   return cachedUpdatedAt === undefined || cachedUpdatedAt < serverUpdatedAt;
 }
 
-export function sameAdminPreferences(left: AdminPreferences, right: AdminPreferences) {
+export function sameAdminPreferences(
+  left: AdminPreferences,
+  right: AdminPreferences
+) {
   return adminPreferenceKeys.every((key) => left[key] === right[key]);
 }
 

@@ -61,10 +61,17 @@ const phases = {
     [
       "Server acceptance",
       "node",
-      ["--test", "--test-isolation=none", "scripts/tests/final-server.test.ts"],
+      [
+        "--test", "--test-isolation=none",
+        "scripts/tests/final-server.test.ts"
+      ],
       { cooperativeShutdown: true }
     ],
-    ["Web acceptance", "npm", ["run", "test:final:web"]],
+    [
+      "Web acceptance",
+      "npm",
+      ["run", "test:final:web"]
+    ],
     [
       "isolated production image",
       "node",
@@ -108,7 +115,12 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => stopChildren(signal));
 }
 
-function runCommand(label, command, arguments_, { cooperativeShutdown = false } = {}) {
+function runCommand(
+  label,
+  command,
+  arguments_,
+  { cooperativeShutdown = false } = {}
+) {
   return new Promise((resolveCommand, rejectCommand) => {
     console.log(`\n[verify] ${label}`);
     const executable =
@@ -116,14 +128,18 @@ function runCommand(label, command, arguments_, { cooperativeShutdown = false } 
         ? process.env.ComSpec || "cmd.exe"
         : command;
     const commandArguments =
-      executable === command ? arguments_ : ["/d", "/s", "/c", command, ...arguments_];
+      executable === command
+        ? arguments_
+        : ["/d", "/s", "/c", command, ...arguments_];
     const child = spawnManaged(executable, commandArguments, {
       cwd: workspaceRoot,
       // Scenario selectors belong to direct diagnostic commands. Every verify
       // mode must execute the complete acceptance surface even when a caller
       // has left a selector in its shell environment.
       env: childEnvironment,
-      stdio: cooperativeShutdown ? ["inherit", "inherit", "inherit", "ipc"] : "inherit",
+      stdio: cooperativeShutdown
+        ? ["inherit", "inherit", "inherit", "ipc"]
+        : "inherit",
       windowsHide: true
     });
     let settled = false;
@@ -200,7 +216,9 @@ if (!mode || !["source", "build", "runtime", "release"].includes(mode)) {
 }
 if (process.argv.length > 3) throw new Error("verify: unexpected arguments");
 
-const selectedPhases = mode === "release" ? ["source", "build", "runtime"] : [mode];
+const selectedPhases = mode === "release"
+  ? ["source", "build", "runtime"]
+  : [mode];
 try {
   for (const phase of selectedPhases) {
     for (const [label, command, arguments_, options] of phases[phase]) {
@@ -221,7 +239,8 @@ try {
       error instanceof CommandFailure &&
       error.cooperativeShutdown &&
       !error.forcedShutdown &&
-      (error.exitCode === interruptedExitCode || error.childSignal === interruptedSignal);
+      (error.exitCode === interruptedExitCode
+        || error.childSignal === interruptedSignal);
     const normalSimpleInterrupt =
       error instanceof CommandFailure &&
       !error.cooperativeShutdown &&

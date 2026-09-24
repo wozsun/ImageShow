@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 
-const COLLAPSED_CARD_HEIGHT = 52;
-const CARD_BOUNDARY_GAP = 8;
-const EXPANDED_CARD_CHROME_HEIGHT = 42;
+const collapsedCardHeightPixels = 52;
+const cardBoundaryGapPixels = 8;
+const expandedCardChromeHeightPixels = 42;
 
 export function ImageDescriptionSlot({
   description,
@@ -26,7 +33,7 @@ export function ImageDescriptionSlot({
   const cardBodyRef = useRef<HTMLDivElement | null>(null);
   const [overflowing, setOverflowing] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [expandedHeight, setExpandedHeight] = useState(COLLAPSED_CARD_HEIGHT);
+  const [expandedHeight, setExpandedHeight] = useState(collapsedCardHeightPixels);
   const normalizedDescription = description.trim();
   const normalizedError = error.trim();
   const placeholder = normalizedError ? "详情加载失败" : loading ? "描述加载中…" : "暂无描述";
@@ -34,7 +41,7 @@ export function ImageDescriptionSlot({
 
   const collapseDescription = useCallback(() => {
     setExpanded(false);
-    setExpandedHeight(COLLAPSED_CARD_HEIGHT);
+    setExpandedHeight(collapsedCardHeightPixels);
   }, []);
 
   const measureExpandedHeight = useCallback(() => {
@@ -49,16 +56,16 @@ export function ImageDescriptionSlot({
     let availableBottom = Math.min(contentBounds.bottom, window.innerHeight);
 
     if (boundaryBounds && boundaryBounds.top > slotBounds.bottom) {
-      availableBottom = Math.min(availableBottom, boundaryBounds.top - CARD_BOUNDARY_GAP);
+      availableBottom = Math.min(availableBottom, boundaryBounds.top - cardBoundaryGapPixels);
     }
 
     const availableHeight = Math.max(
-      COLLAPSED_CARD_HEIGHT,
+      collapsedCardHeightPixels,
       Math.floor(availableBottom - slotBounds.top)
     );
     const contentHeight = Math.max(
-      COLLAPSED_CARD_HEIGHT,
-      Math.ceil(textElement.scrollHeight + EXPANDED_CARD_CHROME_HEIGHT)
+      collapsedCardHeightPixels,
+      Math.ceil(textElement.scrollHeight + expandedCardChromeHeightPixels)
     );
     setExpandedHeight(Math.min(availableHeight, contentHeight));
   }, [boundaryRef]);
@@ -137,7 +144,7 @@ export function ImageDescriptionSlot({
         style={
           inlineExpansion && expanded
             ? undefined
-            : { height: `${expanded ? expandedHeight : COLLAPSED_CARD_HEIGHT}px` }
+            : { height: `${expanded ? expandedHeight : collapsedCardHeightPixels}px` }
         }
       >
         <div ref={cardBodyRef} className="image-detail-description-card-body">

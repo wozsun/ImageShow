@@ -1,6 +1,12 @@
 import { z } from "zod";
-import { vocabularyDisplayNameMaxLength, isThemeSlug } from "@imageshow/shared/browser";
-import { httpsUrlField, requestSlugInput } from "./primitives.ts";
+import {
+  vocabularyDisplayNameMaxLength,
+  isThemeSlug
+} from "@imageshow/shared/browser";
+import {
+  httpsUrlField,
+  requestSlugInput
+} from "./primitives.ts";
 
 const displayNameInput = z
   .string()

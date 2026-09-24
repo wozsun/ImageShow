@@ -12,7 +12,10 @@ import {
 } from "./config.ts";
 import { validateStorageBackendCandidate } from "./probe.ts";
 import { storageConfigFromRow, type StorageBackendConfigRow } from "./record.ts";
-import { invalidateStorageBackendRegistry, resolveStorageAccess } from "./registry.ts";
+import {
+  invalidateStorageBackendRegistry,
+  resolveStorageAccess
+} from "./registry.ts";
 
 async function saveProbedCapabilities(
   config: S3StorageConfig,
@@ -21,7 +24,9 @@ async function saveProbedCapabilities(
 ) {
   const save = () =>
     withAdvisoryLock(`imageshow:storage-backend:${config.slug}`, async (lockSignal, client) => {
-      const combinedSignal = signal ? AbortSignal.any([signal, lockSignal]) : lockSignal;
+      const combinedSignal = signal
+        ? AbortSignal.any([signal, lockSignal])
+        : lockSignal;
       try {
         await withTransactionOnClient(client, async () => {
           combinedSignal.throwIfAborted();
@@ -60,11 +65,18 @@ async function saveProbedCapabilities(
   await (signal ? runWithAdvisoryLockAcquisitionSignal(signal, save) : save());
 }
 
-export async function testStorageBackend(config?: StorageConfig, signal?: AbortSignal) {
+export async function testStorageBackend(
+  config?: StorageConfig,
+  signal?: AbortSignal
+) {
   signal?.throwIfAborted();
   const effective = config ?? (await resolveStorageAccess()).config;
-  const result = await validateStorageBackendCandidate(effective, undefined, undefined, signal);
-  if (effective.type === "s3" && effective.slug !== "(test)" && result.capabilities) {
+  const result = await validateStorageBackendCandidate(
+    effective, undefined, undefined, signal
+  );
+  if (effective.type === "s3"
+    && effective.slug !== "(test)"
+    && result.capabilities) {
     await saveProbedCapabilities(effective, result.capabilities, signal);
   }
   return result;

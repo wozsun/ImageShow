@@ -53,7 +53,10 @@ export type JsonlManifestResult = ImportManifestResultDto;
 export type WeiboImportParseError = WeiboImportParseErrorDto;
 export type WeiboImportResult = WeiboImportResultDto;
 
-export function createUploadIntents(input: UploadIntentInputDto, signal?: AbortSignal) {
+export function createUploadIntents(
+  input: UploadIntentInputDto,
+  signal?: AbortSignal
+) {
   return api<UploadIntentResultDto>(uploadIntentPath, {
     method: "POST",
     body: JSON.stringify(input),
@@ -61,7 +64,10 @@ export function createUploadIntents(input: UploadIntentInputDto, signal?: AbortS
   });
 }
 
-export function acceptImports(input: ImportAcceptInputDto, signal?: AbortSignal) {
+export function acceptImports(
+  input: ImportAcceptInputDto,
+  signal?: AbortSignal
+) {
   return api<ImportAcceptResultDto>(importAcceptPath, {
     method: "POST",
     body: JSON.stringify(input),
@@ -69,7 +75,10 @@ export function acceptImports(input: ImportAcceptInputDto, signal?: AbortSignal)
   });
 }
 
-export function getIngestionStatuses(items: IngestionSessionPairDto[], signal?: AbortSignal) {
+export function getIngestionStatuses(
+  items: IngestionSessionPairDto[],
+  signal?: AbortSignal
+) {
   return api<IngestionStatusResultDto>(ingestionStatusPath, {
     method: "POST",
     body: JSON.stringify({ items }),
@@ -163,12 +172,18 @@ export function uploadRaw(
     const csrf = getCsrfToken();
     if (csrf) request.setRequestHeader("x-csrf-token", csrf);
     request.setRequestHeader(uploadCredentialHeader, credential);
-    request.setRequestHeader("content-type", file.type || "application/octet-stream");
+    request.setRequestHeader(
+      "content-type",
+      file.type || "application/octet-stream"
+    );
     request.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) {
         const rawProgress = (event.loaded / event.total) * 100;
         if (!Number.isFinite(rawProgress)) return;
-        const progress = Math.min(100, Math.max(0, Math.round(rawProgress)));
+        const progress = Math.min(
+          100,
+          Math.max(0, Math.round(rawProgress))
+        );
         if (progress !== lastProgress) {
           lastProgress = progress;
           callbacks.onProgress(progress);

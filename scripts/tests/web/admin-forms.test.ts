@@ -15,9 +15,9 @@ import {
 import { invalidateImageDataAfterMetadataSave } from "../../../packages/web/src/lib/api/query-invalidation.ts";
 import { queryKeys } from "../../../packages/web/src/lib/api/query-keys.ts";
 import {
-  configPackageRecognitionNotice,
-  configPackageSlugMappingError
-} from "../../../packages/web/src/pages/admin/advanced-config/ConfigPackageImportDialog.tsx";
+  configBundleRecognitionNotice,
+  configBundleSlugMappingError
+} from "../../../packages/web/src/pages/admin/advanced-config/ConfigBundleImportDialog.tsx";
 import {
   imageMetadataCardSaveState,
   changedMetadataUpdate,
@@ -43,20 +43,23 @@ import {
 } from "../../../packages/web/src/pages/admin/storage/storage-backend-form.ts";
 import { storageMaintenancePreview } from "../../../packages/web/src/pages/admin/storage/storage-maintenance-preview.ts";
 import {
-  tagScrollAvailability,
-  tagScrollContentMetrics,
-  tagScrollItemMetrics,
-  tagScrollNavigationTarget,
-  tagVerticalWheelPixels,
-  tagWheelScrollTarget
-} from "../../../packages/web/src/components/form/tag-input-scroll.ts";
+  chipStripScrollAvailability,
+  chipStripScrollContentMetrics,
+  chipStripScrollItemMetrics,
+  chipStripScrollNavigationTarget,
+  chipStripVerticalWheelPixels,
+  chipStripWheelScrollTarget
+} from "../../../packages/web/src/lib/ui/chip-strip-scroll.ts";
 import { TagInput } from "../../../packages/web/src/components/form/TagInput.tsx";
 import {
   editableImage,
   imageUpdateResponse,
   createConfigStreamHarness
 } from "../support/web-test-context.ts";
-import { dispatchDomEvent, inputText } from "../support/dom-events.ts";
+import {
+  dispatchDomEvent,
+  inputText
+} from "../support/dom-events.ts";
 import { installControlledClock } from "../support/controlled-clock.ts";
 
 test("[Web/后台表单] 存储维护预览区分可修复、缺失原图、可清理与受阻项", () => {
@@ -105,7 +108,7 @@ test("[Web/后台表单] 存储维护预览区分可修复、缺失原图、可�
   assert.equal(storageMaintenancePreview({ missing_objects: [] }), null);
 });
 test("[Web/后台表单] 配置包预览明确提示目标版本的采用、回退、忽略与跳过结果", () => {
-  const partialNotice = configPackageRecognitionNotice({
+  const partialNotice = configBundleRecognitionNotice({
     config_values: {
       recognized: 37,
       defaulted: 9,
@@ -118,7 +121,7 @@ test("[Web/后台表单] 配置包预览明确提示目标版本的采用、回�
   assert.match(partialNotice, /忽略 3 个未知或错误的运行时配置字段/u);
   assert.match(partialNotice, /跳过 2 个无法安全识别的存储后端/u);
 
-  const exactNotice = configPackageRecognitionNotice({
+  const exactNotice = configBundleRecognitionNotice({
     config_values: {
       recognized: 46,
       defaulted: 0,
@@ -143,10 +146,21 @@ test("[Web/后台表单] 配置包冲突重命名在提交前执行与服务端�
     ]
   };
   assert.equal(
-    configPackageSlugMappingError(preview, { archive: "a".repeat(33) }, "archive"),
+    configBundleSlugMappingError(
+      preview,
+      { archive: "a".repeat(33) },
+      "archive"
+    ),
     "slug 不能超过 32 个字符"
   );
-  assert.equal(configPackageSlugMappingError(preview, { archive: "a".repeat(32) }, "archive"), "");
+  assert.equal(
+    configBundleSlugMappingError(
+      preview,
+      { archive: "a".repeat(32) },
+      "archive"
+    ),
+    ""
+  );
 });
 test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保持 bootstrap 反馈语义", async () => {
   const { window, document } = parseHTML(
@@ -212,7 +226,9 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
     return new Response(
       JSON.stringify({
         ok: false,
-        error: scenario === "site-config" ? "site config unavailable" : "auth unavailable"
+        error: scenario === "site-config"
+          ? "site config unavailable"
+          : "auth unavailable"
       }),
       {
         status: scenario === "public-auth-401" ? 401 : 503,
@@ -263,7 +279,10 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
     const container = document.getElementById("root");
     assert.ok(container);
 
-    const renderFailure = async (path: "/" | "/admin", content: React.ReactNode) => {
+    const renderFailure = async (
+      path: "/" | "/admin",
+      content: React.ReactNode
+    ) => {
       document.documentElement.dataset.uiContext = "bootstrap";
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } }
@@ -277,7 +296,11 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
             React.createElement(
               MemoryRouter,
               { initialEntries: [path] },
-              React.createElement(AuthSessionProvider, null, content)
+              React.createElement(
+                AuthSessionProvider,
+                null,
+                content
+              )
             )
           )
         );
@@ -319,7 +342,10 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
         React.createElement(AdminShell, { siteHeaderName: siteConfig.site.header_name })
       )
     );
-    assert.deepEqual(requestedPaths.sort(), ["/api/admin/auth/me", "/api/site-config"]);
+    assert.deepEqual(
+      requestedPaths.sort(),
+      ["/api/admin/auth/me", "/api/site-config"]
+    );
     assert.equal(
       document.querySelector<HTMLMetaElement>('meta[name="description"]')?.content,
       "自定义站点描述"
@@ -339,7 +365,10 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
         React.createElement(AdminShell, { siteHeaderName: siteConfig.site.header_name })
       )
     );
-    assert.deepEqual(requestedPaths.sort(), ["/api/admin/auth/me", "/api/site-config"]);
+    assert.deepEqual(
+      requestedPaths.sort(),
+      ["/api/admin/auth/me", "/api/site-config"]
+    );
     assert.equal(
       document.querySelector<HTMLMetaElement>('meta[name="description"]')?.content,
       "服务端投影后的描述"
@@ -358,7 +387,10 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
         React.createElement(AdminShell, { siteHeaderName: siteConfig.site.header_name })
       )
     );
-    assert.deepEqual(requestedPaths.sort(), ["/api/admin/auth/me", "/api/site-config"]);
+    assert.deepEqual(
+      requestedPaths.sort(),
+      ["/api/admin/auth/me", "/api/site-config"]
+    );
     assert.equal(
       document.querySelector<HTMLMetaElement>('meta[name="description"]')?.content,
       "服务端权威描述"
@@ -387,7 +419,11 @@ test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保�
           React.createElement(
             MemoryRouter,
             { initialEntries: ["/"] },
-            React.createElement(AuthSessionProvider, null, React.createElement(PublicAuthProbe))
+            React.createElement(
+              AuthSessionProvider,
+              null,
+              React.createElement(PublicAuthProbe)
+            )
           )
         )
       );
@@ -420,7 +456,10 @@ for (const itemCount of [1, 3]) {
     state = {
       ...state,
       drafts: Object.fromEntries(
-        ids.map((id) => [id, { ...state.drafts[id]!, title: `${id}-saved` }])
+        ids.map((id) => [
+          id,
+          { ...state.drafts[id]!, title: `${id}-saved` }
+        ])
       )
     };
     const updates = ids.map((id, index) =>
@@ -469,20 +508,35 @@ for (const itemCount of [1, 3]) {
     const pendingWithResponse = createImageMetadataSaveReport(attempt, null);
     assert.equal(pendingWithResponse.responseReceived, true);
     for (const id of ids) {
-      assert.equal(imageMetadataCardSaveState(pendingWithResponse, id), "pending");
+      assert.equal(imageMetadataCardSaveState(
+        pendingWithResponse,
+        id
+      ), "pending");
     }
 
     const unknownAttempt: ImageMetadataSaveAttempt = {
       ...attempt,
       response: null
     };
-    const pendingWithoutResponse = createImageMetadataSaveReport(unknownAttempt, null);
-    const confirmedWithoutResponse = createImageMetadataSaveReport(unknownAttempt, authority);
+    const pendingWithoutResponse = createImageMetadataSaveReport(
+      unknownAttempt,
+      null
+    );
+    const confirmedWithoutResponse = createImageMetadataSaveReport(
+      unknownAttempt,
+      authority
+    );
     assert.equal(pendingWithoutResponse.responseReceived, false);
     assert.equal(confirmedWithoutResponse.responseReceived, false);
     for (const id of ids) {
-      assert.equal(imageMetadataCardSaveState(pendingWithoutResponse, id), "pending");
-      assert.equal(imageMetadataCardSaveState(confirmedWithoutResponse, id), "saved");
+      assert.equal(imageMetadataCardSaveState(
+        pendingWithoutResponse,
+        id
+      ), "pending");
+      assert.equal(imageMetadataCardSaveState(
+        confirmedWithoutResponse,
+        id
+      ), "saved");
     }
   });
 }
@@ -601,7 +655,10 @@ for (const { field, raw, saved } of [
 }
 
 test("[Web/后台表单] 图片元数据部分失败保留对应卡片草稿", () => {
-  let state = createImageMetadataSession([editableImage("a"), editableImage("b")]);
+  let state = createImageMetadataSession([
+    editableImage("a"),
+    editableImage("b")
+  ]);
   state = {
     ...state,
     drafts: {
@@ -642,15 +699,26 @@ test("[Web/后台表单] 图片编辑器 trash 以逐项结果和权威回读收
       { id: "outside", status: "trashed" as const }
     ]
   };
-  assert.deepEqual(imageTrashIdsNeedingSnapshot(requestedIds, response), ["b", "c"]);
-  const reconciled = reconcileImageEditorTrash(requestedIds, response, [editableImage("B")]);
+  assert.deepEqual(
+    imageTrashIdsNeedingSnapshot(requestedIds, response),
+    ["b", "c"]
+  );
+  const reconciled = reconcileImageEditorTrash(
+    requestedIds,
+    response,
+    [editableImage("B")]
+  );
   assert.deepEqual(reconciled, {
     trashedIds: ["A", "c"],
     editableIds: ["b"],
     unknownIds: []
   });
 
-  const responseLost = reconcileImageEditorTrash(requestedIds, null, [editableImage("A")]);
+  const responseLost = reconcileImageEditorTrash(
+    requestedIds,
+    null,
+    [editableImage("A")]
+  );
   assert.deepEqual(responseLost, {
     trashedIds: ["b", "c"],
     editableIds: ["A"],
@@ -793,12 +861,12 @@ test("[Web/后台表单] 存储编辑只提交变化字段并省略空凭据", (
 });
 test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯纵向滚轮", () => {
   assert.deepEqual(
-    tagScrollItemMetrics(747, 5_922, { left: -5_171, width: 117 }, 4),
+    chipStripScrollItemMetrics(747, 5_922, { left: -5_171, width: 117 }, 4),
     { offsetLeft: 0, offsetWidth: 117 },
     "弹窗外层坐标与 viewport 内边距必须归一化到标签内容坐标"
   );
   assert.deepEqual(
-    tagScrollContentMetrics(
+    chipStripScrollContentMetrics(
       {
         clientWidth: 208,
         scrollLeft: 300,
@@ -826,17 +894,17 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
     { offsetLeft: 198, offsetWidth: 60 },
     { offsetLeft: 264, offsetWidth: 140 }
   ];
-  assert.deepEqual(tagScrollAvailability(metrics), {
+  assert.deepEqual(chipStripScrollAvailability(metrics), {
     backward: false,
     forward: true
   });
   assert.equal(
-    tagScrollNavigationTarget(metrics, items, 1),
+    chipStripScrollNavigationTarget(metrics, items, 1),
     58,
     "前进应以最小位移只补齐首个被右侧遮挡的标签"
   );
   assert.equal(
-    tagScrollNavigationTarget({ ...metrics, scrollLeft: 58 }, items, -1),
+    chipStripScrollNavigationTarget({ ...metrics, scrollLeft: 58 }, items, -1),
     0,
     "后退应以最小位移只补齐首个被左侧遮挡的标签"
   );
@@ -845,24 +913,38 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
     trailing: 14
   };
   assert.equal(
-    tagScrollNavigationTarget(metrics, items, 1, navigationInsets),
+    chipStripScrollNavigationTarget(metrics, items, 1, navigationInsets),
     7,
     "按钮渐变覆盖了当前末项的一小部分时，应先以最小位移将该项补齐"
   );
   assert.equal(
-    tagScrollNavigationTarget({ ...metrics, scrollLeft: 58 }, items, 1, navigationInsets),
+    chipStripScrollNavigationTarget(
+      { ...metrics, scrollLeft: 58 },
+      items,
+      1,
+      navigationInsets
+    ),
     73,
     "继续前进时必须把目标标签完整移出按钮包含半透明渐变在内的覆盖区"
   );
   assert.equal(
-    tagScrollNavigationTarget({ ...metrics, scrollLeft: 72 }, items, -1, navigationInsets),
+    chipStripScrollNavigationTarget(
+      { ...metrics, scrollLeft: 72 },
+      items,
+      -1,
+      navigationInsets
+    ),
     51,
     "后退补齐标签时必须把其左边界移出按钮的完整覆盖区"
   );
   assert.equal(
-    tagScrollNavigationTarget(
+    chipStripScrollNavigationTarget(
       { clientWidth: 200, scrollLeft: 526, scrollWidth: 726 },
-      [...items, { offsetLeft: 500, offsetWidth: 140 }, { offsetLeft: 646, offsetWidth: 80 }],
+      [
+        ...items,
+        { offsetLeft: 500, offsetWidth: 140 },
+        { offsetLeft: 646, offsetWidth: 80 }
+      ],
       -1
     ),
     500,
@@ -878,22 +960,34 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
     { offsetLeft: 406, offsetWidth: 80 }
   ];
   assert.equal(
-    tagScrollNavigationTarget(wideMetrics, wideItems, 1),
+    chipStripScrollNavigationTarget(wideMetrics, wideItems, 1),
     200,
     "超宽首项应先显示连续中段，不能只移动内边距"
   );
   assert.equal(
-    tagScrollNavigationTarget({ ...wideMetrics, scrollLeft: 200 }, wideItems, 1),
+    chipStripScrollNavigationTarget(
+      { ...wideMetrics, scrollLeft: 200 },
+      wideItems,
+      1
+    ),
     286,
     "超宽首项末端已对齐后应以最小位移补齐尾部输入组"
   );
   assert.equal(
-    tagScrollNavigationTarget({ ...wideMetrics, scrollLeft: 290 }, wideItems, -1),
+    chipStripScrollNavigationTarget(
+      { ...wideMetrics, scrollLeft: 290 },
+      wideItems,
+      -1
+    ),
     200,
     "从尾部后退应先对齐超宽项末端"
   );
   assert.equal(
-    tagScrollNavigationTarget({ ...wideMetrics, scrollLeft: 200 }, wideItems, -1),
+    chipStripScrollNavigationTarget(
+      { ...wideMetrics, scrollLeft: 200 },
+      wideItems,
+      -1
+    ),
     0,
     "超宽项第二次后退应回到其起始边界"
   );
@@ -908,21 +1002,29 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
   ];
   assert.deepEqual(
     [0, 200, 400].map((scrollLeft) =>
-      tagScrollNavigationTarget({ ...extraWideMetrics, scrollLeft }, extraWideItems, 1)
+      chipStripScrollNavigationTarget(
+        { ...extraWideMetrics, scrollLeft },
+        extraWideItems,
+        1
+      )
     ),
     [200, 400, 486],
     "超过两个 viewport 的标签必须逐屏连续前进后才进入尾部输入组"
   );
   assert.deepEqual(
     [490, 400, 200].map((scrollLeft) =>
-      tagScrollNavigationTarget({ ...extraWideMetrics, scrollLeft }, extraWideItems, -1)
+      chipStripScrollNavigationTarget(
+        { ...extraWideMetrics, scrollLeft },
+        extraWideItems,
+        -1
+      )
     ),
     [400, 200, 0],
     "超过两个 viewport 的标签必须逐屏连续后退"
   );
   assert.equal(
-    tagScrollNavigationTarget(
-      tagScrollContentMetrics(
+    chipStripScrollNavigationTarget(
+      chipStripScrollContentMetrics(
         {
           clientWidth: 208,
           scrollLeft: 300,
@@ -937,12 +1039,12 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
     250,
     "普通项后退时应以最小位移让左边界落入物理可视区"
   );
-  assert.deepEqual(tagScrollAvailability({ ...metrics, scrollLeft: 210 }), {
+  assert.deepEqual(chipStripScrollAvailability({ ...metrics, scrollLeft: 210 }), {
     backward: true,
     forward: false
   });
   assert.equal(
-    tagVerticalWheelPixels({
+    chipStripVerticalWheelPixels({
       clientWidth: 200,
       deltaMode: 0,
       deltaX: 0,
@@ -951,7 +1053,7 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
     48
   );
   assert.equal(
-    tagVerticalWheelPixels({
+    chipStripVerticalWheelPixels({
       clientWidth: 200,
       deltaMode: 1,
       deltaX: 0,
@@ -960,7 +1062,7 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
     -48
   );
   assert.equal(
-    tagVerticalWheelPixels({
+    chipStripVerticalWheelPixels({
       clientWidth: 200,
       deltaMode: 2,
       deltaX: 0,
@@ -969,7 +1071,7 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
     200
   );
   assert.equal(
-    tagVerticalWheelPixels({
+    chipStripVerticalWheelPixels({
       clientWidth: 200,
       deltaMode: 0,
       deltaX: 0,
@@ -979,7 +1081,7 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
     "不足一个像素的纵向噪声不得接管滚轮"
   );
   assert.equal(
-    tagVerticalWheelPixels({
+    chipStripVerticalWheelPixels({
       clientWidth: 200,
       deltaMode: 0,
       deltaX: 0.25,
@@ -988,9 +1090,9 @@ test("[Web/后台表单] 标签可视窗口逐个补齐相邻项目并独占纯�
     null,
     "混合 deltaX/deltaY 应保留触控板原生横向路径"
   );
-  assert.equal(tagWheelScrollTarget(metrics, 80), 80);
+  assert.equal(chipStripWheelScrollTarget(metrics, 80), 80);
   assert.equal(
-    tagWheelScrollTarget({ ...metrics, scrollLeft: 210 }, 80),
+    chipStripWheelScrollTarget({ ...metrics, scrollLeft: 210 }, 80),
     210,
     "末端纵向滚轮仍应锁定在标签横向边界"
   );
@@ -1209,7 +1311,11 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     }
     assert.equal(forward.disabled, false, "启用态内容溢出后应显示前进键");
 
-    const dispatchWheel = async (target: Element, deltaX: number, deltaY: number) => {
+    const dispatchWheel = async (
+      target: Element,
+      deltaX: number,
+      deltaY: number
+    ) => {
       const event = new window.Event("wheel", {
         bubbles: true,
         cancelable: true
@@ -1390,8 +1496,16 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
       true,
       "触控轻点必须在原生 touchend 取消兼容焦点与 click"
     );
-    assert.equal(document.activeElement, input, "未达到手势阈值的 touchend 必须直接聚焦末尾编辑器");
-    assert.equal(scrollLeft, 200, "已有标签占满视区时，聚焦必须同时露出末尾输入位置");
+    assert.equal(
+      document.activeElement,
+      input,
+      "未达到手势阈值的 touchend 必须直接聚焦末尾编辑器"
+    );
+    assert.equal(
+      scrollLeft,
+      200,
+      "已有标签占满视区时，聚焦必须同时露出末尾输入位置"
+    );
     const synthesizedClick = dispatchDomEvent(window as Window, firstChip, "click");
     assert.equal(
       synthesizedClick.defaultPrevented,
@@ -1480,7 +1594,11 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     });
     assert.equal(changes.length, 0, "Tab 到翻页键不得提交草稿");
     assert.equal(input.value, "draft-pending", "Tab 到翻页键不得清空输入");
-    assert.equal(input.getAttribute("aria-expanded"), "true", "翻页键取得键盘焦点时建议菜单应保持");
+    assert.equal(
+      input.getAttribute("aria-expanded"),
+      "true",
+      "翻页键取得键盘焦点时建议菜单应保持"
+    );
 
     await React.act(async () => {
       activeElement = forward;
@@ -1492,7 +1610,11 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     assert.equal(changes.length, 0, "键盘与辅助技术 click 路径不得提交草稿");
     assert.equal(input.value, "draft-pending");
     assert.equal(forward.disabled, true, "到达末端后前进键必须立即失效");
-    assert.equal(document.activeElement, input, "当前键盘导航按钮失效前必须把焦点无结算地归还输入");
+    assert.equal(
+      document.activeElement,
+      input,
+      "当前键盘导航按钮失效前必须把焦点无结算地归还输入"
+    );
     assert.equal(changes.length, 0, "边界禁用导致的焦点转移不得提交草稿");
     assert.equal(input.value, "draft-pending");
     assert.equal(input.getAttribute("aria-expanded"), "true");
@@ -1530,7 +1652,11 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     assert.equal(scrollLeft, 80, "禁用态前进键应移动到右端");
     assert.equal(forward.disabled, true);
     assert.equal(backward.disabled, false);
-    assert.equal(document.activeElement, input, "整体禁用时应由只读编辑器稳定接管键盘焦点");
+    assert.equal(
+      document.activeElement,
+      input,
+      "整体禁用时应由只读编辑器稳定接管键盘焦点"
+    );
     assert.equal(changes.length, 0, "禁用态翻页方向互换不得提交草稿");
     assert.equal(input.value, "draft-pending");
 
@@ -1542,18 +1668,34 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
     });
     assert.equal(backward.disabled, true);
     assert.equal(forward.disabled, true);
-    assert.equal(document.activeElement, input, "禁用态无可用方向时焦点仍应留在标签复合控件内");
+    assert.equal(
+      document.activeElement,
+      input,
+      "禁用态无可用方向时焦点仍应留在标签复合控件内"
+    );
     assert.equal(changes.length, 0, "整体禁用时导航键失焦不得提交草稿");
     assert.equal(input.value, "draft-pending", "整体禁用时应保留未结算草稿");
-    assert.equal(forward.disabled, true, "禁用期间可用宽度变化后应立即隐藏失效翻页键");
+    assert.equal(
+      forward.disabled,
+      true,
+      "禁用期间可用宽度变化后应立即隐藏失效翻页键"
+    );
 
     scrollWidth = 300;
     await React.act(async () => {
       root.render(renderTagInputs(false));
       await Promise.resolve();
     });
-    assert.equal(forward.disabled, false, "恢复可编辑并重新溢出后应立即恢复前进键");
-    assert.equal(document.activeElement, input, "复合控件恢复编辑时应保留输入焦点");
+    assert.equal(
+      forward.disabled,
+      false,
+      "恢复可编辑并重新溢出后应立即恢复前进键"
+    );
+    assert.equal(
+      document.activeElement,
+      input,
+      "复合控件恢复编辑时应保留输入焦点"
+    );
     await React.act(async () => {
       const event = dispatchDomEvent(window as Window, input, "keydown", {
         key: "Enter",
@@ -2136,7 +2278,9 @@ test("[Web/后台表单] 存储能力显示三态，连接测试后刷新一次�
   await h.respond(0, { ok: true });
   assert.deepEqual(
     h.pending.map((request) => request.path),
-    ["/api/admin/storage/test", "/api/admin/storage/backends"]
+    [
+      "/api/admin/storage/test", "/api/admin/storage/backends"
+    ]
   );
   await h.respond(1, { backends: [{ ...backend, content_md5: true }] });
   await h.React.act(async () => clock.advanceBy(500));

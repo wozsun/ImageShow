@@ -2,7 +2,7 @@ import {
   adminImagePageLimit,
   altchaSolveTimeoutMs,
   brightnesses,
-  configPackageMaxBytes,
+  configBundleMaxBytes,
   devices,
   imageDescriptionMaxLength,
   imageTitleMaxLength,
@@ -38,8 +38,8 @@ export const appConfig = {
 
   randomQuery: randomQueryLimits,
 
-  configPackage: {
-    maxBytes: configPackageMaxBytes,
+  configBundle: {
+    maxBytes: configBundleMaxBytes,
     maxStorageBackends: 100
   },
 

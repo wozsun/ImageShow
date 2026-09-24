@@ -69,7 +69,9 @@ export function UserAdmin() {
   const usernameValid = username.trim().length > 0 && slugPattern.test(username.trim());
   const passwordInvalid = password.length > 0 && !isValidAdminPassword(password);
   const createFormBusy =
-    Boolean(mutation) || createAction.pending || generatePasswordStatus.pending;
+    Boolean(mutation)
+      || createAction.pending
+      || generatePasswordStatus.pending;
 
   const create = async (event: FormEvent) => {
     event.preventDefault();

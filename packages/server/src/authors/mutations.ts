@@ -10,7 +10,10 @@ import {
   withVocabularyMutationSync,
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
-import { withImageMutationSync, type ImageMutationSyncBatch } from "../images/mutation-sync.ts";
+import {
+  withImageMutationSync,
+  type ImageMutationSyncBatch
+} from "../images/mutation-sync.ts";
 import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
 import {
   deriveAuthorIdentityFromLink,
@@ -25,7 +28,10 @@ type AuthorMutationRow = AuthorIdentityColumns & {
   link: string;
 };
 
-function authorMutationDto(row: AuthorMutationRow, imageCount: number): AuthorDto {
+function authorMutationDto(
+  row: AuthorMutationRow,
+  imageCount: number
+): AuthorDto {
   return {
     slug: row.slug,
     sort_order: row.sort_order,
@@ -38,13 +44,20 @@ function authorMutationDto(row: AuthorMutationRow, imageCount: number): AuthorDt
 
 function authorIdentityConflict(error: unknown): never {
   if ((error as { code?: string }).code === "23505") {
-    throw new ApiError(409, "author_identity_exists", "该作者主页身份已绑定到其他作者");
+    throw new ApiError(
+      409,
+      "author_identity_exists",
+      "该作者主页身份已绑定到其他作者"
+    );
   }
   throw error;
 }
 
 /** Use only while the caller owns a shared association or exclusive mutation lock. */
-export async function ensureAuthorWithMutationLockHeld(client: Pool | PoolClient, slug: string) {
+export async function ensureAuthorWithMutationLockHeld(
+  client: Pool | PoolClient,
+  slug: string
+) {
   if (!slug) return false;
   const result = await client.query(
     `INSERT INTO author(slug, sort_order)
@@ -174,7 +187,10 @@ async function deleteAuthorUnderLock(
 ) {
   return withTransaction(async (client) => {
     signal.throwIfAborted();
-    const author = await client.query("SELECT slug FROM author WHERE slug=$1 FOR UPDATE", [slug]);
+    const author = await client.query(
+      "SELECT slug FROM author WHERE slug=$1 FOR UPDATE",
+      [slug]
+    );
     signal.throwIfAborted();
     if (!author.rowCount) {
       return { deleted: false, affected: [] as ClearedAuthorImage[] };
@@ -214,7 +230,10 @@ async function deleteAuthorUnderLock(
     );
     signal.throwIfAborted();
     const deleted = Boolean(
-      (await client.query("DELETE FROM author WHERE slug=$1", [slug])).rowCount
+      (await client.query(
+        "DELETE FROM author WHERE slug=$1",
+        [slug]
+      )).rowCount
     );
     signal.throwIfAborted();
     if (affectedCount) await bumpReadyImageRevision(client);
@@ -226,7 +245,11 @@ export async function deleteAuthor(slug: string) {
   const result = await withVocabularyMutationLock("author", slug, (signal) =>
     withImageMutationSync((mutationBatch) =>
       withVocabularyMutationSync("author", async () => {
-        const deleted = await deleteAuthorUnderLock(slug, signal, mutationBatch);
+        const deleted = await deleteAuthorUnderLock(
+          slug,
+          signal,
+          mutationBatch
+        );
         for (const image of deleted.affected) {
           mutationBatch.add({ id: image.id });
         }

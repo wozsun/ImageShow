@@ -1,4 +1,7 @@
-import { jobSucceeded, type BackgroundJobOutcome } from "./handler-outcome.ts";
+import {
+  jobSucceeded,
+  type BackgroundJobOutcome
+} from "./handler-outcome.ts";
 import type { BackgroundJob, BackgroundJobType } from "./types.ts";
 import { handleTrashPurgeJob } from "../images/trash/purge-job.ts";
 import { ensureReadyImageCacheCurrent } from "../images/ready-cache/coordinator.ts";
@@ -26,5 +29,8 @@ export async function handleBackgroundJob(
   signal: AbortSignal = new AbortController().signal
 ): Promise<BackgroundJobOutcome> {
   const handler = backgroundJobHandlers[job.type];
-  return runWithAdvisoryLockAcquisitionSignal(signal, () => handler(job, signal));
+  return runWithAdvisoryLockAcquisitionSignal(
+    signal,
+    () => handler(job, signal)
+  );
 }

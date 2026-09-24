@@ -43,7 +43,9 @@ export function embedSpaDocumentHeaders(
   allowedOrigins: readonly string[],
   assetsBaseUrl = ""
 ): Readonly<Record<string, string>> {
-  const frameAncestors = allowedOrigins.length ? allowedOrigins.join(" ") : "'none'";
+  const frameAncestors = allowedOrigins.length
+    ? allowedOrigins.join(" ")
+    : "'none'";
   return {
     ...commonSecurityHeaders,
     "Content-Security-Policy": `${documentScriptPolicy(assetsBaseUrl)}; frame-ancestors ${frameAncestors}`
@@ -115,11 +117,16 @@ export function safeRedirectLocation(value: string) {
   // Validate before URL parsing can strip control characters. External URLs
   // need IDNA / percent encoding for HTTP; application paths are already encoded.
   assertSafeHeaderCharacters("Location", value);
-  return safeResponseHeaderValue("Location", value.startsWith("/") ? value : new URL(value).href);
+  return safeResponseHeaderValue(
+    "Location",
+    value.startsWith("/") ? value : new URL(value).href
+  );
 }
 
 export function responseContentLengthValue(value: unknown) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+  return typeof value === "number"
+    && Number.isSafeInteger(value)
+    && value >= 0
     ? String(value)
     : undefined;
 }

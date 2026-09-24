@@ -9,7 +9,11 @@ import {
 import { pool, type DatabaseReader } from "../../core/database/pools.ts";
 import { createImageFilterPlan } from "../filter-plan.ts";
 import { readReadyImageCountSnapshot } from "../ready-cache/counts/query.ts";
-import { getAuthorVocab, getTagVocab, getThemeVocab } from "../../vocab/vocab-cache.ts";
+import {
+  getAuthorVocab,
+  getTagVocab,
+  getThemeVocab
+} from "../../vocab/vocab-cache.ts";
 
 type FacetMembershipRow = {
   themes: string[];
@@ -79,7 +83,10 @@ async function getPublicGalleryFacetsWithAccess(
   if (cached.cached) return facetVocabulary(cached.value, database);
   return database.reader
     ? readFacetsFromPostgres(database.reader)
-    : coalesce("gallery-facets:postgres", () => readFacetsFromPostgres(pool));
+    : coalesce(
+        "gallery-facets:postgres",
+        () => readFacetsFromPostgres(pool)
+      );
 }
 
 export function getPublicGalleryFacets(signal?: AbortSignal): Promise<GalleryFacetsDto> {

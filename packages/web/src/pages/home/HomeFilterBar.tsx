@@ -8,7 +8,12 @@ import {
   galleryHref,
   type GalleryFilters
 } from "../../lib/gallery/gallery-query.js";
-import { brightnessLabels, countLabel, deviceLabels, selectedFacetLabels } from "./home-ui.js";
+import {
+  brightnessLabels,
+  countLabel,
+  deviceLabels,
+  selectedFacetLabels
+} from "./home-ui.js";
 import { usePublicRoutePreloadIntents } from "../../lib/public-route-modules.js";
 
 export function HomeFilterBar({
@@ -35,7 +40,9 @@ export function HomeFilterBar({
   const selectedLabels = stats
     ? [
         filters.device ? deviceLabels[filters.device] : "",
-        filters.brightness ? brightnessLabels[filters.brightness] : "",
+        filters.brightness
+          ? brightnessLabels[filters.brightness]
+          : "",
         selectedFacetLabels(stats.themes, filters.theme).join("/"),
         selectedFacetLabels(stats.tags, tagSelection.selected.join(",")).join(
           tagSelection.mode === "all" ? "&" : "/"
@@ -45,7 +52,11 @@ export function HomeFilterBar({
     : [];
   const destination = browsePath ? galleryHref(filters, browsePath) : null;
   const targetIsShow = browsePath === "/show" || browsePath === "/embed/show";
-  const targetLabel = targetIsShow ? "展映" : browsePath ? "画廊" : "展示页";
+  const targetLabel = targetIsShow
+    ? "展映"
+    : browsePath
+      ? "画廊"
+      : "展示页";
   const hasFilters = Object.values(filters).some(Boolean);
   const publicRoutePreloadIntents = usePublicRoutePreloadIntents();
   const targetPreloadProps = targetIsShow
@@ -70,7 +81,9 @@ export function HomeFilterBar({
     >
       <div>
         <span>IMAGE FILTER</span>
-        <strong>{browsePath ? `选择后进入${targetLabel}` : "暂无可用展示页"}</strong>
+        <strong>{browsePath
+          ? `选择后进入${targetLabel}`
+          : "暂无可用展示页"}</strong>
         <small>
           {!browsePath
             ? "画廊与展映均已关闭，可继续预选筛选条件"

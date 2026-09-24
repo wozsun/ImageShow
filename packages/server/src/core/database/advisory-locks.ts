@@ -20,7 +20,10 @@ class AdvisoryLockLostError extends Error {
   }
 }
 
-type AdvisoryLockWork<T> = (signal: AbortSignal, lockClient: PoolClient) => Promise<T>;
+type AdvisoryLockWork<T> = (
+  signal: AbortSignal,
+  lockClient: PoolClient
+) => Promise<T>;
 
 type AdvisoryLockSignalContext = Readonly<{
   acquisitionSignal: AbortSignal;
@@ -36,7 +39,9 @@ export function runWithAdvisoryLockAcquisitionSignal<T>(
   work: () => Promise<T>
 ): Promise<T> {
   const parent = advisoryLockSignalContext.getStore();
-  const acquisitionSignal = parent ? AbortSignal.any([parent.acquisitionSignal, signal]) : signal;
+  const acquisitionSignal = parent
+    ? AbortSignal.any([parent.acquisitionSignal, signal])
+    : signal;
   acquisitionSignal.throwIfAborted();
   return advisoryLockSignalContext.run(
     {
@@ -86,7 +91,9 @@ function advisoryLockFunction(lock: AdvisoryLockRequest) {
 }
 
 function advisoryUnlockFunction(lock: AdvisoryLockRequest) {
-  return lock.mode === "shared" ? "pg_advisory_unlock_shared" : "pg_advisory_unlock";
+  return lock.mode === "shared"
+    ? "pg_advisory_unlock_shared"
+    : "pg_advisory_unlock";
 }
 
 async function runAdvisoryLockWork<T>(
@@ -136,7 +143,10 @@ async function runWithAdvisoryLocksOnClient<T>(
         acquisitionSignal.throwIfAborted();
         result = await raceWithAbortSignal(
           acquisitionSignal,
-          client.query(`SELECT ${advisoryLockFunction(lock)}(hashtext($1)) AS acquired`, [lock.key])
+          client.query(
+            `SELECT ${advisoryLockFunction(lock)}(hashtext($1)) AS acquired`,
+            [lock.key]
+          )
         );
       } catch (error) {
         // The server may have acquired the lock before the response was lost.
@@ -222,7 +232,12 @@ export async function withAdvisoryLocksOnClient<T>(
   locks: readonly Omit<AdvisoryLockRequest, "acquisition">[],
   work: AdvisoryLockWork<T>
 ): Promise<T> {
-  const attempt = await runWithAdvisoryLocksOnClient(client, signal, locks, work);
+  const attempt = await runWithAdvisoryLocksOnClient(
+    client,
+    signal,
+    locks,
+    work
+  );
   if (!attempt.acquired) {
     throw new Error("Blocking advisory lock was not acquired");
   }
@@ -236,7 +251,12 @@ export function tryWithAdvisoryLocksOnClient<T>(
   locks: readonly AdvisoryLockRequest[],
   work: AdvisoryLockWork<T>
 ): Promise<AdvisoryLockAttempt<T>> {
-  return runWithAdvisoryLocksOnClient(client, signal, locks, work);
+  return runWithAdvisoryLocksOnClient(
+    client,
+    signal,
+    locks,
+    work
+  );
 }
 
 export async function withAdvisoryLocks<T>(

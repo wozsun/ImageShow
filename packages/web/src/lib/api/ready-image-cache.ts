@@ -1,6 +1,13 @@
 import { useEffect } from "react";
-import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import type { AdminCheckStatusDto, AdminOverviewDto } from "@imageshow/shared/browser";
+import {
+  useQuery,
+  useQueryClient,
+  type QueryClient
+} from "@tanstack/react-query";
+import type {
+  AdminCheckStatusDto,
+  AdminOverviewDto
+} from "@imageshow/shared/browser";
 import { adminApiBasePath } from "../constants.js";
 import { api } from "./client.js";
 import { queryKeys } from "./query-keys.js";
@@ -10,10 +17,15 @@ const adminCheckStatusPath = `${adminApiBasePath}/check/status`;
 export const readyImageCacheRebuildPath = `${adminApiBasePath}/cache/ready-images/rebuild`;
 
 export function readyImageProjection(status: AdminCheckStatusDto | undefined) {
-  return status?.redis.status === "ok" ? status.redis.data.image_projection : undefined;
+  return status?.redis.status === "ok"
+    ? status.redis.data.image_projection
+    : undefined;
 }
 
-function reconcileOverviewAfterStatus(client: QueryClient, status: AdminCheckStatusDto) {
+function reconcileOverviewAfterStatus(
+  client: QueryClient,
+  status: AdminCheckStatusDto
+) {
   const projection = readyImageProjection(status);
   if (!projection) return;
   if (projection.rebuilding) {
@@ -26,7 +38,8 @@ function reconcileOverviewAfterStatus(client: QueryClient, status: AdminCheckSta
   }
 
   const overviewState = client.getQueryState<AdminOverviewDto>(queryKeys.overview);
-  if (overviewState?.isInvalidated || overviewState?.data?.redis_cache.rebuilding) {
+  if (overviewState?.isInvalidated
+    || overviewState?.data?.redis_cache.rebuilding) {
     void client.invalidateQueries({
       queryKey: queryKeys.overview,
       exact: true,
@@ -51,7 +64,10 @@ export function useAdminCheckStatus(options: { enabled?: boolean; refreshAfter?:
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     enabled,
-    refetchInterval: (query) => adminCheckStatusRefetchInterval(query, refreshAfter)
+    refetchInterval: (query) => adminCheckStatusRefetchInterval(
+      query,
+      refreshAfter
+    )
   });
 
   useEffect(() => {

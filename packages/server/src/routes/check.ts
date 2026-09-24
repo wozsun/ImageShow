@@ -1,5 +1,8 @@
 import type { Hono } from "hono";
-import { adminApiBasePath, adminPermissions } from "@imageshow/shared/browser";
+import {
+  adminApiBasePath,
+  adminPermissions
+} from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 import { inspectRedisState } from "../checks/redis-inspect.ts";

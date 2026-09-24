@@ -1,6 +1,12 @@
 import { z } from "zod";
-import { adminPreferenceValueOptions, adminPreferencesMaxBytes } from "@imageshow/shared/browser";
-import { adminPasswordInput, adminUsernameInput } from "../../users/credentials.ts";
+import {
+  adminPreferenceValueOptions,
+  adminPreferencesMaxBytes
+} from "@imageshow/shared/browser";
+import {
+  adminPasswordInput,
+  adminUsernameInput
+} from "../../users/credentials.ts";
 
 export const userCreateInput = z.strictObject({
   username: adminUsernameInput,

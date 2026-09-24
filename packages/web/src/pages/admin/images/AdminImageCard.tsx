@@ -1,6 +1,6 @@
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { TwoStepConfirmIconButton } from "../../../components/actions/TwoStepConfirmIconButton.js";
-import { ThumbImage } from "../../../components/image/ThumbImage.js";
+import { ThumbnailImage } from "../../../components/image/ThumbnailImage.js";
 import type { AdminImageListItem } from "../../../lib/types.js";
 import {
   formatDate,
@@ -58,9 +58,14 @@ export function AdminImageCard({
   const classification = formatImageClassification(item);
   const storage = item.status === "ready" ? storageName(item) : "";
   const deletedAt =
-    item.status === "deleted" && item.deleted_at ? `删除于 ${formatDate(item.deleted_at)}` : "";
+    item.status === "deleted" && item.deleted_at
+      ? `删除于 ${formatDate(item.deleted_at)}`
+      : "";
   const trashStatus = item.purge_pending ? "待彻底删除" : deletedAt;
-  const selectionDisabled = busy || actionsDisabled || detailPending || item.purge_pending;
+  const selectionDisabled = busy
+    || actionsDisabled
+    || detailPending
+    || item.purge_pending;
 
   return (
     <article
@@ -117,7 +122,7 @@ export function AdminImageCard({
         }}
       >
         <span className="admin-image-card-thumb">
-          <ThumbImage src={item.thumb_url} alt="" />
+          <ThumbnailImage src={item.thumb_url} alt="" />
         </span>
         <span className="admin-image-card-main">
           <strong title={title}>{title}</strong>
@@ -150,7 +155,9 @@ export function AdminImageCard({
               idleTitle="删除"
               confirmTitle="再次点击确认删除"
               busyTitle="删除中"
-              disabled={busy || actionsDisabled || detailPending}
+              disabled={busy
+                || actionsDisabled
+                || detailPending}
               busy={busy}
               onConfirm={onTrash}
             />
@@ -161,7 +168,10 @@ export function AdminImageCard({
               type="button"
               title="恢复"
               aria-label={`恢复图片：${title}`}
-              disabled={busy || actionsDisabled || detailPending || item.purge_pending}
+              disabled={busy
+                || actionsDisabled
+                || detailPending
+                || item.purge_pending}
               onClick={onRestore}
             >
               <AdminIcon name="arrow-go-back-line" />
@@ -172,7 +182,10 @@ export function AdminImageCard({
                 className="danger-button is-subtle"
                 title="永久删除"
                 aria-label={`永久删除图片：${title}`}
-                disabled={busy || actionsDisabled || detailPending || item.purge_pending}
+                disabled={busy
+                  || actionsDisabled
+                  || detailPending
+                  || item.purge_pending}
                 onClick={onPurge}
               >
                 <AdminIcon name="delete-bin-6-line" />

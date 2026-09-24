@@ -2,13 +2,19 @@ import { hashPassword } from "../core/password.ts";
 import { adminPasswordInput, adminUsernameInput } from "./credentials.ts";
 import { pool } from "../core/database/pools.ts";
 
-type PasswordRecoveryMutation = (username: string, passwordHash: string) => Promise<string>;
+type PasswordRecoveryMutation = (
+  username: string,
+  passwordHash: string
+) => Promise<string>;
 
 type AdministratorPasswordRecoveryResult =
   | { username: string; sessionsInvalidated: true; removedSessions: number }
   | { username: string; sessionsInvalidated: false; error: unknown };
 
-export async function resetAdministratorPasswordHash(username: string, passwordHash: string) {
+export async function resetAdministratorPasswordHash(
+  username: string,
+  passwordHash: string
+) {
   const result = await pool.query<{ username: string }>(
     `UPDATE admin_account
         SET password_hash=$2,
@@ -38,7 +44,11 @@ export async function resetAdministratorPasswordWithSessionCleanup(
   usernameInput: string,
   passwordInput: string
 ): Promise<AdministratorPasswordRecoveryResult> {
-  const username = await resetAdministratorPassword(mutate, usernameInput, passwordInput);
+  const username = await resetAdministratorPassword(
+    mutate,
+    usernameInput,
+    passwordInput
+  );
   try {
     return {
       username,

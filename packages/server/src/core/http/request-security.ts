@@ -22,7 +22,9 @@ export function requestLogContext(context: Context) {
 }
 
 function requestProtocol(context: Context) {
-  const forwarded = context.req.header("x-forwarded-proto")?.trim().toLowerCase();
+  const forwarded = context.req.header("x-forwarded-proto")
+    ?.trim()
+    .toLowerCase();
   if (forwarded === "http" || forwarded === "https") return forwarded;
   return new URL(context.req.url).protocol.replace(":", "");
 }
@@ -60,7 +62,11 @@ export function blockCrossSiteFetch(context: Context, next: Next) {
   appendVaryHeader(context, "Sec-Fetch-Site");
   const site = context.req.header("sec-fetch-site");
   if (site === "cross-site" || site === "same-site") {
-    throw new ApiError(403, "cross_origin_forbidden", "Cross-origin request forbidden");
+    throw new ApiError(
+      403,
+      "cross_origin_forbidden",
+      "Cross-origin request forbidden"
+    );
   }
   return next();
 }
@@ -73,6 +79,8 @@ export function requestClientIp(context: Context): string {
   const realIp = exactIp(context.req.header("x-real-ip"));
   if (realIp) return realIp;
   const forwardedValue = context.req.header("x-forwarded-for");
-  const forwarded = forwardedValue?.includes(",") ? "" : exactIp(forwardedValue);
+  const forwarded = forwardedValue?.includes(",")
+    ? ""
+    : exactIp(forwardedValue);
   return forwarded || "unknown";
 }

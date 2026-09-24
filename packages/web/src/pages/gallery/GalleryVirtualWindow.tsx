@@ -1,4 +1,8 @@
-import { memo, type CSSProperties, type RefObject } from "react";
+import {
+  memo,
+  type CSSProperties,
+  type RefObject
+} from "react";
 import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
 import type { GalleryWindowPosition } from "./gallery-data-window.js";
 import type { GalleryTileRenderProps } from "./gallery-tile-rendering.js";

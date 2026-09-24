@@ -7,9 +7,19 @@ import { resolveTagTermMap } from "../tags/query.ts";
 import { resolveThemeTermMap } from "../themes/query.ts";
 import { createImageFilterPlan } from "../images/filter-plan.ts";
 import { sampleReadyImages } from "../images/ready-cache/query.ts";
-import { recentlyServedIds, rememberServedIds } from "./dedupe.ts";
-import { normalizeRandomQuery, parseRandomQuery, type RandomSelectorGroup } from "./query.ts";
-import { resolveCandidateAxes, type SelectedReadyImage } from "./selection-model.ts";
+import {
+  recentlyServedIds,
+  rememberServedIds
+} from "./dedupe.ts";
+import {
+  normalizeRandomQuery,
+  parseRandomQuery,
+  type RandomSelectorGroup
+} from "./query.ts";
+import {
+  resolveCandidateAxes,
+  type SelectedReadyImage
+} from "./selection-model.ts";
 import { pickTargetedImages } from "./targeted-selection.ts";
 import { sampleReadyImagesFromPostgres } from "./postgres-selection.ts";
 import type { PublicDatabaseReadAccess } from "../core/database/public-fallback.ts";
@@ -34,17 +44,32 @@ export async function selectRandomImages(
 ): Promise<RandomImageSelection | Response> {
   signal?.throwIfAborted();
   const { random_method, random_size } = getRuntimeConfig().site;
-  const parsed = parseRandomQuery(url, random_method, random_size);
+  const parsed = parseRandomQuery(
+    url,
+    random_method,
+    random_size
+  );
   if (parsed instanceof Response) return parsed;
   if (parsed.ids.length) {
-    const items = await pickTargetedImages(parsed.ids, parsed.limit, signal, database);
-    return items instanceof Response ? items : { mode: parsed.mode, size: parsed.size, items };
+    const items = await pickTargetedImages(
+      parsed.ids,
+      parsed.limit,
+      signal,
+      database
+    );
+    return items instanceof Response
+      ? items
+      : { mode: parsed.mode, size: parsed.size, items };
   }
 
   const [themeMap, tagMap, authorMap] = await Promise.all([
-    resolveSelectorMap(parsed.theme, (terms) => resolveThemeTermMap(terms, database)),
+    resolveSelectorMap(parsed.theme, (terms) => (
+      resolveThemeTermMap(terms, database)
+    )),
     resolveTagTermMap(parsed.tag?.anyOf.flat() ?? [], database),
-    resolveSelectorMap(parsed.author, (terms) => resolveAuthorTermMap(terms, database))
+    resolveSelectorMap(parsed.author, (terms) => (
+      resolveAuthorTermMap(terms, database)
+    ))
   ]);
   signal?.throwIfAborted();
   const query = normalizeRandomQuery(parsed, {
@@ -53,7 +78,11 @@ export async function selectRandomImages(
     author: authorMap
   });
   if (query instanceof Response) return query;
-  const axes = resolveCandidateAxes(query.device, query.brightness, userAgent);
+  const axes = resolveCandidateAxes(
+    query.device,
+    query.brightness,
+    userAgent
+  );
   const plan = createImageFilterPlan({
     devices: axes.deviceCandidates,
     brightnesses: axes.brightnessCandidates,
@@ -72,7 +101,9 @@ export async function selectRandomImages(
           16
         );
   const recent =
-    query.seed === null ? await recentlyServedIds(clientId, query.signature) : new Set<string>();
+    query.seed === null
+      ? await recentlyServedIds(clientId, query.signature)
+      : new Set<string>();
   signal?.throwIfAborted();
   const cached = await sampleReadyImages(
     plan,

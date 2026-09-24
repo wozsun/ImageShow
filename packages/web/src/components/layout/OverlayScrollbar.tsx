@@ -16,11 +16,11 @@ type Metrics = {
   trackHeight: number;
 };
 
-const HIDE_DELAY = 900;
-const EDGE_ZONE = 24;
-const MIN_HANDLE = 36;
+const scrollbarHideDelayMs = 900;
+const scrollbarEdgeZonePixels = 24;
+const minimumHandlePixels = 36;
 
-const ENABLE_QUERY = "(hover: hover) and (pointer: fine) and (forced-colors: none)";
+const precisionPointerScrollbarMediaQuery = "(hover: hover) and (pointer: fine) and (forced-colors: none)";
 
 function handleTransform(top: number) {
   return `translateY(${top}px)`;
@@ -46,7 +46,7 @@ export function OverlayScrollbar({
   enableOnTouch = false
 }: OverlayScrollbarProps = {}) {
   const [enabled, setEnabled] = useState(false);
-  const enableQuery = enableOnTouch ? "(forced-colors: none)" : ENABLE_QUERY;
+  const enableQuery = enableOnTouch ? "(forced-colors: none)" : precisionPointerScrollbarMediaQuery;
 
   useEffect(() => {
     const mq = window.matchMedia(enableQuery);
@@ -116,7 +116,7 @@ function OverlayScrollbarHandle({
     window.clearTimeout(hideTimer.current);
     hideTimer.current = window.setTimeout(() => {
       if (!draggingRef.current) updateActive(false);
-    }, HIDE_DELAY);
+    }, scrollbarHideDelayMs);
   };
 
   useLayoutEffect(() => {
@@ -148,7 +148,9 @@ function OverlayScrollbarHandle({
           viewport,
           total,
           scroll: el.scrollTop,
-          offsetTop: containerRect ? rect.top - containerRect.top + insetHeight : hitTop,
+          offsetTop: containerRect
+            ? rect.top - containerRect.top + insetHeight
+            : hitTop,
           hitTop,
           right: containerRect
             ? Math.max(0, containerRect.right - rect.right)
@@ -182,7 +184,7 @@ function OverlayScrollbarHandle({
         return;
       }
       // 滚动条手柄高度按可视区域占全文比例计算，并设最小值确保可拖拽。
-      const handle = Math.min(viewport, Math.max(MIN_HANDLE, (viewport / total) * viewport));
+      const handle = Math.min(viewport, Math.max(minimumHandlePixels, (viewport / total) * viewport));
       const maxScroll = total - viewport;
       const top = offsetTop + (maxScroll > 0 ? (scroll / maxScroll) * (viewport - handle) : 0);
       const current = metricsRef.current;
@@ -234,14 +236,14 @@ function OverlayScrollbarHandle({
     const onPointerMove = (event: PointerEvent) => {
       if (windowMode) {
         const distanceFromPageEdge = window.innerWidth - event.clientX;
-        if (distanceFromPageEdge < 0 || distanceFromPageEdge > EDGE_ZONE) return;
+        if (distanceFromPageEdge < 0 || distanceFromPageEdge > scrollbarEdgeZonePixels) return;
       }
       const { hitTop, viewport, edgeRight } = read();
       const near = edgeRight - event.clientX;
       // 鼠标靠近目标滚动区域右边缘时才显示，避免浮层长期遮挡内容。
       if (
         near >= 0 &&
-        near <= EDGE_ZONE &&
+        near <= scrollbarEdgeZonePixels &&
         event.clientY >= hitTop &&
         event.clientY <= hitTop + viewport
       ) {

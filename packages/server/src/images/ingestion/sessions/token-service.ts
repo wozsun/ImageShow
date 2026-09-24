@@ -1,4 +1,8 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  createHmac,
+  randomBytes,
+  timingSafeEqual
+} from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import { ApiError } from "../../../core/api-error.ts";
 import { stableJson } from "./projection.ts";
@@ -38,7 +42,8 @@ function decodeBase64Url(value: string, maximumBytes: number) {
   } catch {
     throw invalidToken();
   }
-  if (decoded.length > maximumBytes || decoded.toString("base64url") !== value)
+  if (decoded.length > maximumBytes
+    || decoded.toString("base64url") !== value)
     throw invalidToken();
   return decoded;
 }
@@ -78,9 +83,11 @@ export class IngestionTokenService {
     }
     this.#rootKey = Buffer.from(rootKey);
     this.#now = options.now ?? Date.now;
-    this.#maximumTokenBytes = options.maximumTokenBytes ?? appConfig.ingestionRuntime.tokenMaxBytes;
+    this.#maximumTokenBytes = options.maximumTokenBytes
+      ?? appConfig.ingestionRuntime.tokenMaxBytes;
     this.#maximumPayloadBytes =
-      options.maximumPayloadBytes ?? appConfig.ingestionRuntime.tokenPayloadMaxBytes;
+      options.maximumPayloadBytes
+        ?? appConfig.ingestionRuntime.tokenPayloadMaxBytes;
   }
 
   #mac(purpose: IngestionTokenPurpose, payload: Buffer) {
@@ -117,7 +124,10 @@ export class IngestionTokenService {
     if (payload.length > this.#maximumPayloadBytes) {
       throw new RangeError("Ingestion token payload exceeds its byte limit");
     }
-    const token = `${payload.toString("base64url")}.${this.#mac(purpose, payload).toString(
+    const token = `${payload.toString("base64url")}.${this.#mac(
+      purpose,
+      payload
+    ).toString(
       "base64url"
     )}`;
     if (Buffer.byteLength(token, "utf8") > this.#maximumTokenBytes) {
@@ -131,14 +141,22 @@ export class IngestionTokenService {
     token: string,
     validateClaims: (value: IngestionTokenEnvelope) => value is T
   ): T {
-    if (typeof token !== "string" || Buffer.byteLength(token, "utf8") > this.#maximumTokenBytes)
+    if (typeof token !== "string"
+      || Buffer.byteLength(token, "utf8") > this.#maximumTokenBytes)
       throw invalidToken();
     const segments = token.split(".");
     if (segments.length !== 2) throw invalidToken();
-    const payload = decodeBase64Url(segments[0] ?? "", this.#maximumPayloadBytes);
+    const payload = decodeBase64Url(
+      segments[0] ?? "",
+      this.#maximumPayloadBytes
+    );
     const suppliedMac = decodeBase64Url(segments[1] ?? "", 32);
-    const expectedMac = this.#mac(purpose, payload);
-    if (suppliedMac.length !== expectedMac.length || !timingSafeEqual(suppliedMac, expectedMac))
+    const expectedMac = this.#mac(
+      purpose,
+      payload
+    );
+    if (suppliedMac.length !== expectedMac.length
+      || !timingSafeEqual(suppliedMac, expectedMac))
       throw invalidToken();
     let parsed: unknown;
     try {

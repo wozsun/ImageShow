@@ -254,7 +254,8 @@ export async function readPublicGalleryCountSnapshot(
     const unfiltered = isUnfilteredReadyImagePlan(plan);
     // The unfiltered path always uses four business SELECTs, without a revision query.
     const globalStats =
-      !unfiltered && context && (await getReadyImageRevision(client)).revision === context.revision
+      !unfiltered && context
+        && (await getReadyImageRevision(client)).revision === context.revision
         ? context.globalStats
         : null;
     const categoryRows = await filteredRows<CategoryRow>(

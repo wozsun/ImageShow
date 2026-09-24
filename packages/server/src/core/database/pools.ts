@@ -17,7 +17,10 @@ let configuredConnection: DatabaseConnectionConfig | null = null;
 export let pool: pg.Pool;
 let advisoryLockPool: pg.Pool | null = null;
 
-function sameConnection(left: DatabaseConnectionConfig, right: DatabaseConnectionConfig) {
+function sameConnection(
+  left: DatabaseConnectionConfig,
+  right: DatabaseConnectionConfig
+) {
   return (
     left.host === right.host &&
     left.port === right.port &&
@@ -78,7 +81,8 @@ export function connectAdvisoryLockClient(): Promise<PoolClient> {
 
 export async function closeDatabasePools() {
   const pools = [pool, advisoryLockPool].filter(
-    (candidate): candidate is pg.Pool => candidate !== undefined && candidate !== null
+    (candidate): candidate is pg.Pool => candidate !== undefined
+      && candidate !== null
   );
   await Promise.allSettled(pools.map((candidate) => candidate.end()));
 }

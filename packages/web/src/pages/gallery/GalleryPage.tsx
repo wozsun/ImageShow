@@ -28,7 +28,10 @@ import { AppLoadingRegion } from "../../components/feedback/AppLoadingScreen.js"
 import { pageScrollRestoredEvent } from "../../hooks/usePageScrollLock.js";
 import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
-import { useGalleryColumnCount, useGalleryGeometry } from "./gallery-layout.js";
+import {
+  useGalleryColumnCount,
+  useGalleryGeometry
+} from "./gallery-layout.js";
 import { GalleryImageRuntime } from "./GalleryImageRuntime.js";
 import { GalleryVirtualWindow } from "./GalleryVirtualWindow.js";
 import {
@@ -159,7 +162,10 @@ export function GalleryPage({
   const loading = initialLoading || nextPageLoading;
   const showBackToTop = backToTopVisible && !dialogOpen;
 
-  const openDetail = useCallback((card: GalleryImageCard, opener: HTMLButtonElement) => {
+  const openDetail = useCallback((
+    card: GalleryImageCard,
+    opener: HTMLButtonElement
+  ) => {
     detailReturnFocusRef.current = opener;
     setPinnedImageId(card.id);
     setSelected(card);
@@ -188,7 +194,8 @@ export function GalleryPage({
         const focusTarget = opener?.isConnected ? opener : fallback;
         if (focusTarget) {
           const targetRect = focusTarget.getBoundingClientRect();
-          if (targetRect.bottom <= 0 || targetRect.top >= window.innerHeight) {
+          if (targetRect.bottom <= 0
+            || targetRect.top >= window.innerHeight) {
             focusTarget.scrollIntoView({ block: "nearest" });
           }
           focusTarget.focus({ preventScroll: true });
@@ -224,7 +231,9 @@ export function GalleryPage({
         className={`page gallery-page${embedded ? " is-embedded" : ""}`}
         style={
           {
-            "--gallery-toolbar-height": toolbarHeight ? `${toolbarHeight}px` : undefined
+            "--gallery-toolbar-height": toolbarHeight
+              ? `${toolbarHeight}px`
+              : undefined
           } as CSSProperties
         }
       >
@@ -271,7 +280,9 @@ export function GalleryPage({
         {filtersReady && galleryData.snapshot.error && (
           <div
             className={`gallery-query-error${
-              galleryData.snapshot.errorRequest?.kind === "hydrate" ? " gallery-window-error" : ""
+              galleryData.snapshot.errorRequest?.kind === "hydrate"
+                  ? " gallery-window-error"
+                  : ""
             }`}
           >
             <QueryErrorState error={galleryData.snapshot.error} onRetry={galleryData.retry} />
@@ -281,7 +292,12 @@ export function GalleryPage({
           !galleryData.snapshot.error &&
           !loading &&
           galleryData.snapshot.compactItems === 0 && <p className="gallery-empty">暂无图片</p>}
-        {initialLoading && <AppLoadingRegion className="gallery-initial-loading" extraDots={3} />}
+        {initialLoading && (
+          <AppLoadingRegion
+            className="gallery-initial-loading"
+            extraDots={3}
+          />
+        )}
         {nextPageLoading && <p className="gallery-loading">加载中</p>}
         <div
           className="gallery-floating-controls public-floating-controls"

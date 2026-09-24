@@ -154,7 +154,10 @@ export class ShowDataPool {
     this.#consumed.add(imageId);
     this.revision += 1;
     this.#activeBySlot.set(slotKey, imageId);
-    this.#activeCounts.set(imageId, (this.#activeCounts.get(imageId) ?? 0) + 1);
+    this.#activeCounts.set(
+      imageId,
+      (this.#activeCounts.get(imageId) ?? 0) + 1
+    );
     return image;
   }
 

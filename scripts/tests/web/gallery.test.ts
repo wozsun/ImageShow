@@ -89,7 +89,10 @@ test("[Web/画廊] 首页目录、瀑布流、分页预载与滚动导航组成�
       { index: 3, x: 110, y: 110 }
     ]
   );
-  assert.deepEqual(layout.windowIndexes({ start: 105, end: 215 }), [2, 3]);
+  assert.deepEqual(
+    layout.windowIndexes({ start: 105, end: 215 }),
+    [2, 3]
+  );
 
   const dataWindow = new GalleryDataWindow({
     geometry: { contentWidth: 210, gap: 10, columnCount: 2 }
@@ -132,7 +135,8 @@ test("[Web/画廊] 首页目录、瀑布流、分页预载与滚动导航组成�
         pinnedId: null
       })
       .map(({ id }) => id),
-    syntheticGalleryPage({ count: 4, start: 0, total: 4 }).items.map(({ id }) => id)
+    syntheticGalleryPage({ count: 4, start: 0, total: 4 })
+      .items.map(({ id }) => id)
   );
 
   const hidden = advancePublicImageNavigation(initialPublicImageNavigationState, {
@@ -164,15 +168,36 @@ test("[Web/画廊] 常规滚动画廊渲染窗口按半屏重定位并覆盖图�
     visibleEnd: 800,
     preloadEnd: 1_600
   });
-  assert.equal(shouldRefreshGalleryRenderViewport(initial, 399, viewportHeight), false);
-  assert.equal(shouldRefreshGalleryRenderViewport(initial, 400, viewportHeight), true);
+  assert.equal(
+    shouldRefreshGalleryRenderViewport(initial, 399, viewportHeight),
+    false
+  );
+  assert.equal(
+    shouldRefreshGalleryRenderViewport(initial, 400, viewportHeight),
+    true
+  );
 
   const deep = createGalleryRenderViewport(1_600, viewportHeight);
-  assert.equal(shouldRefreshGalleryRenderViewport(deep, 1_201, viewportHeight), false);
-  assert.equal(shouldRefreshGalleryRenderViewport(deep, 1_200, viewportHeight), true);
-  assert.equal(shouldRefreshGalleryRenderViewport(deep, 1_999, viewportHeight), false);
-  assert.equal(shouldRefreshGalleryRenderViewport(deep, 2_000, viewportHeight), true);
-  assert.equal(shouldRefreshGalleryRenderViewport(deep, 1_600, 799), true);
+  assert.equal(
+    shouldRefreshGalleryRenderViewport(deep, 1_201, viewportHeight),
+    false
+  );
+  assert.equal(
+    shouldRefreshGalleryRenderViewport(deep, 1_200, viewportHeight),
+    true
+  );
+  assert.equal(
+    shouldRefreshGalleryRenderViewport(deep, 1_999, viewportHeight),
+    false
+  );
+  assert.equal(
+    shouldRefreshGalleryRenderViewport(deep, 2_000, viewportHeight),
+    true
+  );
+  assert.equal(
+    shouldRefreshGalleryRenderViewport(deep, 1_600, 799),
+    true
+  );
   assert.ok(
     galleryVirtualOverscanScreens - galleryRenderViewportHysteresisScreens >
       galleryResidenceBufferScreens
@@ -264,7 +289,10 @@ test("[Web/画廊] 画廊数据窗口在 1 千、1 万和 5 万张长会话中�
       snapshot.estimatedCompactBytes <= compactBudgets.get(total)!,
       `${total}: compact index budget`
     );
-    assert.ok(snapshot.estimatedFullDtoBytes < 1024 * 1024, `${total}: retained DTO bytes`);
+    assert.ok(
+      snapshot.estimatedFullDtoBytes < 1024 * 1024,
+      `${total}: retained DTO bytes`
+    );
     const tailPositions = dataWindow.windowPositions({
       start: Math.max(0, snapshot.totalHeight - 4_000),
       end: snapshot.totalHeight,
@@ -273,7 +301,10 @@ test("[Web/画廊] 画廊数据窗口在 1 千、1 万和 5 万张长会话中�
       pinnedId: null
     });
     assert.ok(tailPositions.length <= 180);
-    assert.equal(new Set(tailPositions.map(({ id }) => id)).size, tailPositions.length);
+    assert.equal(
+      new Set(tailPositions.map(({ id }) => id)).size,
+      tailPositions.length
+    );
     assert.ok(tailPositions.every(({ item }) => item !== null));
 
     assert.equal(
@@ -543,10 +574,14 @@ test("[Web/画廊] 画廊远页水合失败保留可见错误边界并可恢复"
     visibleEnd: 700,
     preloadEnd: 1_500
   };
-  const hydrate = dataWindow.updateViewport(topViewport, null).find(({ cursor }) => cursor === "")!;
+  const hydrate = dataWindow.updateViewport(topViewport, null)
+    .find(({ cursor }) => cursor === "")!;
   assert.deepEqual(hydrate, { cursor: "", kind: "hydrate" });
   const failedRequest = dataWindow.claimRequest(hydrate)!;
-  assert.equal(dataWindow.rejectPage(failedRequest, new Error("hydrate failed")), true);
+  assert.equal(
+    dataWindow.rejectPage(failedRequest, new Error("hydrate failed")),
+    true
+  );
   const failedSnapshot = dataWindow.snapshot();
   assert.equal(failedSnapshot.error?.message, "hydrate failed");
   assert.equal(failedSnapshot.errorRequest?.kind, "hydrate");
@@ -623,7 +658,10 @@ test("[Web/画廊] 公共详情保存为目标页建立新权威边界", () => {
     original: "https://example.com/saved.webp",
     object_url: "https://example.com/saved.webp"
   });
-  const refreshIntent = dataWindow.prepareImageRefresh(firstId, authoritativeSnapshot);
+  const refreshIntent = dataWindow.prepareImageRefresh(
+    firstId,
+    authoritativeSnapshot
+  );
   assert.equal(refreshIntent, null, "确认快照直接更新卡片，无额外列表请求");
   const immediateItems = dataWindow.windowPositions({
     ...viewport,
@@ -638,7 +676,10 @@ test("[Web/画廊] 公共详情保存为目标页建立新权威边界", () => {
   assert.strictEqual(secondImmediate, secondBefore);
   assert.notEqual(dataWindow.positionForId(firstId)!.height, before.height);
   assert.equal(
-    dataWindow.resolvePage(staleAppend, syntheticGalleryPage({ count: 60, start: 60, total: 120 })),
+    dataWindow.resolvePage(
+      staleAppend,
+      syntheticGalleryPage({ count: 60, start: 60, total: 120 })
+    ),
     false
   );
 
@@ -713,7 +754,9 @@ test("[Web/画廊] 画廊图片同节点换源隔离失败与迟到解码并保�
     Element: window.Element
   };
   const previous = new Map(
-    Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)])
+    Object.keys(globals).map((key) => [
+      key, Object.getOwnPropertyDescriptor(globalThis, key)
+    ])
   );
   for (const [key, value] of Object.entries(globals)) {
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
@@ -1243,7 +1286,8 @@ test("[Web/画廊] 画廊调试快照覆盖查询、DTO、紧凑布局、揭示�
   assert.equal(snapshot.fullItems, 480);
   assert.equal(snapshot.materializedPositions, 180);
   assert.equal(snapshot.revealHighWater, 49_999);
-  assert.ok(snapshot.usedJsHeapBytes === null || snapshot.usedJsHeapBytes >= 0);
+  assert.ok(snapshot.usedJsHeapBytes === null
+    || snapshot.usedJsHeapBytes >= 0);
   debug.resetDataWindow();
   assert.equal(debug.snapshot().revealHighWater, -1);
   assert.equal(debug.snapshot().compactItems, 0);

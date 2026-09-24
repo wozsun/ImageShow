@@ -9,7 +9,9 @@ export async function reserveRandomRequest(ip: string, hasLimit: boolean) {
   const [reservation] = await reserveRedisWindows([
     {
       key: `imageshow:random_rate:${bucket}:${source}`,
-      capacity: hasLimit ? limits.random_limit_max_requests : limits.random_max_requests,
+      capacity: hasLimit
+        ? limits.random_limit_max_requests
+        : limits.random_max_requests,
       windowSeconds: limits.random_window_seconds
     }
   ]);

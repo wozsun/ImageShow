@@ -43,11 +43,18 @@ const IMAGE_FILTER_AXES = devices.flatMap((device) =>
   brightnesses.map((brightness) => ({ device, brightness }))
 );
 
-function normalizedGroup(group: Partial<ImageSelectorGroup> | undefined, noun: string) {
+function normalizedGroup(
+  group: Partial<ImageSelectorGroup> | undefined,
+  noun: string
+) {
   const include = [...new Set(group?.include ?? [])].sort();
   const exclude = [...new Set(group?.exclude ?? [])].sort();
   if (include.length && exclude.length) {
-    throw new ApiError(400, "validation_error", `Cannot mix include and exclude ${noun} selectors`);
+    throw new ApiError(
+      400,
+      "validation_error",
+      `Cannot mix include and exclude ${noun} selectors`
+    );
   }
   return { include, exclude };
 }
@@ -60,7 +67,9 @@ export function createImageFilterPlan(input: {
   author?: Partial<ImageSelectorGroup>;
 }): ImageFilterPlan {
   const selectedDevices = [...new Set(input.devices ?? devices)].sort();
-  const selectedBrightnesses = [...new Set(input.brightnesses ?? brightnesses)].sort();
+  const selectedBrightnesses = [
+    ...new Set(input.brightnesses ?? brightnesses)
+  ].sort();
   const axes = selectedDevices.flatMap((device) =>
     selectedBrightnesses.map((brightness) => ({ device, brightness }))
   );
@@ -116,9 +125,13 @@ export async function resolveImageFilterPlan(
     throw new ApiError(400, "validation_error", error.message, { field: "tag" });
   }
   const [theme, tag, author] = await Promise.all([
-    resolveSelector(input.theme, "theme", (terms) => resolveThemeSlugs(terms, access)),
+    resolveSelector(input.theme, "theme", (terms) => (
+      resolveThemeSlugs(terms, access)
+    )),
     resolveImageTagExpressions([parsedTag], access).then(([expression]) => expression ?? null),
-    resolveSelector(input.author, "author", (terms) => resolveAuthorSlugs(terms, access))
+    resolveSelector(input.author, "author", (terms) => (
+      resolveAuthorSlugs(terms, access)
+    ))
   ]);
   return createImageFilterPlan({
     devices: input.device ? [input.device] : devices,
@@ -129,12 +142,17 @@ export async function resolveImageFilterPlan(
   });
 }
 
-export function imageFilterPlanWithout(plan: ImageFilterPlan, dimension: ImageFilterDimension) {
+export function imageFilterPlanWithout(
+  plan: ImageFilterPlan,
+  dimension: ImageFilterDimension
+) {
   const planDevices = [...new Set(plan.axes.map((axis) => axis.device))];
   const planBrightnesses = [...new Set(plan.axes.map((axis) => axis.brightness))];
   return createImageFilterPlan({
     devices: dimension === "device" ? devices : planDevices,
-    brightnesses: dimension === "brightness" ? brightnesses : planBrightnesses,
+    brightnesses: dimension === "brightness"
+      ? brightnesses
+      : planBrightnesses,
     theme: dimension === "theme" ? undefined : plan.theme,
     tag: dimension === "tag" ? undefined : plan.tag,
     author: dimension === "author" ? undefined : plan.author

@@ -6,7 +6,11 @@ import {
   requireOperationalRedis,
   runRequiredRedisCommand
 } from "../../core/runtime-availability.ts";
-import { encodeImageCursor, type ImageBrowseContext, type ImageBrowsePosition } from "../cursor.ts";
+import {
+  encodeImageCursor,
+  type ImageBrowseContext,
+  type ImageBrowsePosition
+} from "../cursor.ts";
 import type { AdminImageSort, PublicImageOrder } from "@imageshow/shared/browser";
 import {
   getReadyImageCacheCoordinatorStatus,
@@ -19,7 +23,10 @@ import {
   validateReadyImageFilterIndex,
   type ReadyImageFilterIndex
 } from "./indexes/filter.ts";
-import { ReadyImageCoreCacheError, isReadyImageCoreCacheError } from "./cache-errors.ts";
+import {
+  ReadyImageCoreCacheError,
+  isReadyImageCoreCacheError
+} from "./cache-errors.ts";
 import { discardReadyImageDerivedResult } from "./derived/lifecycle.ts";
 import type { ImageFilterPlan } from "../filter-plan.ts";
 import type { PageWindow } from "../page-window.ts";
@@ -62,7 +69,8 @@ function cacheItemCount() {
 
 function parsedItem(raw: string | null, expectedMember?: string) {
   const item = parseReadyImageCacheItem(raw);
-  if (!item || (expectedMember && readyImageMember(item.id) !== expectedMember)) {
+  if (!item
+    || (expectedMember && readyImageMember(item.id) !== expectedMember)) {
     throw new ReadyImageCoreCacheError("Ready-image cache returned a corrupt core item");
   }
   return item;
@@ -76,7 +84,9 @@ async function readCache<T>(
 ): Promise<ReadyImageCacheResult<T>> {
   try {
     const lease = await withReadyImageCacheRead(work);
-    return lease.acquired ? { cached: true, value: lease.value } : { cached: false };
+    return lease.acquired
+      ? { cached: true, value: lease.value }
+      : { cached: false };
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error;
     if (isRedisUnavailableError(error)) throw error;
@@ -102,11 +112,17 @@ async function readCoreItems(members: string[]) {
   try {
     return await redis.hmget(READY_IMAGE_ITEMS_KEY, ...members);
   } catch (cause) {
-    throw new ReadyImageCoreCacheError("Ready-image core items could not be read", { cause });
+    throw new ReadyImageCoreCacheError(
+      "Ready-image core items could not be read",
+      { cause }
+    );
   }
 }
 
-async function assertDerivedMissingItemsAreNotCore(members: string[], raws: Array<string | null>) {
+async function assertDerivedMissingItemsAreNotCore(
+  members: string[],
+  raws: Array<string | null>
+) {
   const missingMembers = members.filter((_, index) => raws[index] === null);
   if (!missingMembers.length) return;
   let results: Awaited<ReturnType<typeof execRedisPipeline>>;
@@ -152,7 +168,10 @@ export async function readReadyImageById(
   });
 }
 
-function executePageRedisCommand<T>(mode: ReadyImagePageReadMode, work: () => Promise<T>) {
+function executePageRedisCommand<T>(
+  mode: ReadyImagePageReadMode,
+  work: () => Promise<T>
+) {
   return mode === "required" ? runRequiredRedisCommand(work) : work();
 }
 
@@ -168,7 +187,10 @@ async function cursorWindowStart(
   cursorState.zscore(index.key, member);
   if (order === "oldest") cursorState.zrank(index.key, member);
   else cursorState.zrevrank(index.key, member);
-  const cursorResults = await executePageRedisCommand(mode, () => execRedisPipeline(cursorState));
+  const cursorResults = await executePageRedisCommand(
+    mode,
+    () => execRedisPipeline(cursorState)
+  );
   const scoreRaw = cursorResults[0]?.[1];
   const rankRaw = cursorResults[1]?.[1];
   if (scoreRaw === null || rankRaw === null) return null;
@@ -264,7 +286,13 @@ async function resolvedReadyImagePage<T>(
         : await resolveReadyImageFilterIndex(plan, signal, background);
     if (!index) return { status: "fallback" };
     if (read) return await read(index);
-    return readPageFromIndex(index, (readMode) => locate(index, readMode), limit, order, mode);
+    return readPageFromIndex(
+      index,
+      (readMode) => locate(index, readMode),
+      limit,
+      order,
+      mode
+    );
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error;
     if (isRedisUnavailableError(error)) {
@@ -276,7 +304,11 @@ async function resolvedReadyImagePage<T>(
     if (isReadyImageCoreCacheError(error)) {
       reportReadyImageCacheFailure(error);
     } else {
-      recordReadyImageCacheError("derived", "derived_filter_resolution_failed", error);
+      recordReadyImageCacheError(
+        "derived",
+        "derived_filter_resolution_failed",
+        error
+      );
       logger.warn("ready_image_derived_filter_resolution_failed", {
         signature: plan.signature,
         error: error
@@ -430,7 +462,11 @@ export async function sampleReadyImages(
         : { cached: false };
     }
     const result = await readCache(
-      () => sampleResolvedReadyImageIndex(index, limit, recent),
+      () => sampleResolvedReadyImageIndex(
+        index,
+        limit,
+        recent
+      ),
       index.kind === "core" ? "core" : "derived",
       async () => {
         await discardReadyImageQueryIndex(index);
@@ -444,7 +480,11 @@ export async function sampleReadyImages(
     if (isReadyImageCoreCacheError(error)) {
       reportReadyImageCacheFailure(error);
     } else {
-      recordReadyImageCacheError("derived", "derived_random_resolution_failed", error);
+      recordReadyImageCacheError(
+        "derived",
+        "derived_random_resolution_failed",
+        error
+      );
       logger.warn("ready_image_derived_random_resolution_failed", {
         signature: plan.signature,
         error: error
@@ -466,7 +506,11 @@ export async function readTargetedReadyImages(
       pipeline.zcard(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY);
       for (const suffix of suffixes) {
         const score = Number.parseInt(suffix, 16);
-        pipeline.zrangebyscore(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY, score, score);
+        pipeline.zrangebyscore(
+          READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
+          score,
+          score
+        );
       }
       const results = await execRedisPipeline(pipeline);
       if (Number(results[0]?.[1] ?? 0) !== cacheItemCount()) {
@@ -485,7 +529,8 @@ export async function readTargetedReadyImages(
     pipeline.zmscore(READY_IMAGE_ALL_INDEX_KEY, ...orderedMembers);
     const results = await execRedisPipeline(pipeline);
     const expected = cacheItemCount();
-    if (Number(results[0]?.[1] ?? 0) !== expected || Number(results[1]?.[1] ?? 0) !== expected) {
+    if (Number(results[0]?.[1] ?? 0) !== expected
+      || Number(results[1]?.[1] ?? 0) !== expected) {
       throw new Error("Ready-image cache core projection is incomplete");
     }
     const raws = (results[2]?.[1] as Array<string | null>) ?? [];

@@ -27,7 +27,9 @@ export function storageBackendS3FormSettings(
 }
 
 export function storageBackendS3AfterSuccessfulSave(settings: S3Settings) {
-  return settings.secret_access_key ? { ...settings, secret_access_key: "" } : settings;
+  return settings.secret_access_key
+    ? { ...settings, secret_access_key: "" }
+    : settings;
 }
 
 export function storageBackendEditConfigPatch(

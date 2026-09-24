@@ -1,8 +1,18 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import type { AdminSettings } from "@imageshow/shared/browser";
 import { storageBackendLabel } from "../../../lib/ui/select-options.js";
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";
-import { storageNameResolver, useStorageOptions } from "../../../lib/api/storage-options.js";
+import {
+  storageNameResolver,
+  useStorageOptions
+} from "../../../lib/api/storage-options.js";
 import type { FacetOption } from "../../../lib/types.js";
 import type { IngestionJob, IngestionAttributeDefaults } from "./queue/model/ingestion-job.js";
 
@@ -11,10 +21,16 @@ import {
   ingestionJobCanBeCancelled,
   ingestionJobCanBeRemovedLocally
 } from "./queue/model/ingestion-queue-state.js";
-import type { ImportSourceMode, ImportSourceSubmission } from "./import/ImportSourceDialog.js";
+import type {
+  ImportSourceMode,
+  ImportSourceSubmission
+} from "./import/ImportSourceDialog.js";
 import { createManifestImportJobs } from "./import/manifest-jobs.js";
 import type { ImportManifestParseError } from "./queue/ingestion-http-client.js";
-import { useImportQueueOwner, useUploadQueueOwner } from "./workflow/useIngestionQueueOwners.js";
+import {
+  useImportQueueOwner,
+  useUploadQueueOwner
+} from "./workflow/useIngestionQueueOwners.js";
 import { useIngestionQueueWorkflowActions } from "./workflow/useIngestionQueueWorkflowActions.js";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import { IngestionWorkflowWindow } from "./workflow/IngestionWorkflowWindow.js";
@@ -108,7 +124,10 @@ export function Ingestion({
         })),
     [storageBackends]
   );
-  const resolveStorageName = useMemo(() => storageNameResolver(storageBackends), [storageBackends]);
+  const resolveStorageName = useMemo(
+    () => storageNameResolver(storageBackends),
+    [storageBackends]
+  );
   const storageName = useCallback(
     (slug: string) => resolveStorageName({ storage_slug: slug }),
     [resolveStorageName]
@@ -153,11 +172,17 @@ export function Ingestion({
   const uploadCommit = uploadOwner.commit;
   const importCommit = importOwner.commit;
   const confirmIngestionDuplicate =
-    mode === "upload" ? uploadCommit.confirmDuplicate : importCommit.confirmDuplicate;
-  const commitBusy = mode === "upload" ? uploadCommit.busy : importCommit.busy;
+    mode === "upload"
+      ? uploadCommit.confirmDuplicate
+      : importCommit.confirmDuplicate;
+  const commitBusy = mode === "upload"
+    ? uploadCommit.busy
+    : importCommit.busy;
   const cancelJob = useCallback(
     async (job: IngestionJob) => {
-      const outcome = job.kind === "upload" ? await cancelUpload(job) : await cancelImport(job);
+      const outcome = job.kind === "upload"
+        ? await cancelUpload(job)
+        : await cancelImport(job);
       if (!outcome.succeeded) return false;
       if (outcome.pair) {
         const released = queue.releaseResolvedServerJobs([
@@ -168,7 +193,9 @@ export function Ingestion({
             ...(outcome.releasedRevision !== undefined
               ? { releasedRevision: outcome.releasedRevision }
               : {}),
-            ...(outcome.releasedSummary ? { releasedSummary: outcome.releasedSummary } : {})
+            ...(outcome.releasedSummary
+              ? { releasedSummary: outcome.releasedSummary }
+              : {})
           }
         ]);
         if (!released.has(job.id)) {
@@ -178,7 +205,13 @@ export function Ingestion({
       }
       return queue.removeJob(job.id);
     },
-    [cancelImport, cancelUpload, queue.releaseResolvedServerJobs, queue.removeJob, queue.server]
+    [
+      cancelImport,
+      cancelUpload,
+      queue.releaseResolvedServerJobs,
+      queue.removeJob,
+      queue.server
+    ]
   );
   const commitUploadQueueJobs = useCallback(
     (jobs: IngestionJob[]) => uploadCommit.commit(jobs, { notifyDone: false }),
@@ -202,7 +235,9 @@ export function Ingestion({
     commitJobs: commitImportQueueJobs,
     onDone
   });
-  const queueWorkflow = mode === "upload" ? uploadQueueWorkflow : importQueueWorkflow;
+  const queueWorkflow = mode === "upload"
+    ? uploadQueueWorkflow
+    : importQueueWorkflow;
   const prepareCloseWorkflow = useCallback(
     (
       options: Readonly<{
@@ -328,7 +363,11 @@ export function Ingestion({
           opened = await openInMode("upload", activation.opener, intent);
           return;
         }
-        opened = await openImportSource(activation.kind, activation.opener, intent);
+        opened = await openImportSource(
+          activation.kind,
+          activation.opener,
+          intent
+        );
       } catch (error) {
         if (intentFenceRef.current.isCurrent(intent)) onLoadError(error);
       } finally {
@@ -369,7 +408,10 @@ export function Ingestion({
       );
       return;
     }
-    setImportParseErrors((current) => [...current, ...submission.manifest.errors]);
+    setImportParseErrors((current) => [
+      ...current,
+      ...submission.manifest.errors
+    ]);
     const jobs = createManifestImportJobs(
       submission.manifest.items,
       defaults,

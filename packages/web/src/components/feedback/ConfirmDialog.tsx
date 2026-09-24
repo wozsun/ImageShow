@@ -50,8 +50,13 @@ export function ConfirmDialog({
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const blocked = busy || confirmStatus.pending;
   const finalConfirmationActive =
-    requireFinalConfirmation && finalConfirmationArmed && !blocked && !confirmDisabled;
-  const displayedStatus = finalConfirmationActive ? "idle" : confirmStatus.status;
+    requireFinalConfirmation
+    && finalConfirmationArmed
+    && !blocked
+    && !confirmDisabled;
+  const displayedStatus = finalConfirmationActive
+    ? "idle"
+    : confirmStatus.status;
   const confirmPresentation = {
     idle: {
       icon: finalConfirmationActive ? finalConfirmationIcon : confirmIcon,
@@ -120,7 +125,9 @@ export function ConfirmDialog({
             <AsyncActionButton
               className={[
                 danger ? "danger-button" : "button",
-                requireFinalConfirmation ? "confirm-dialog-final-confirmation" : "",
+                requireFinalConfirmation
+                  ? "confirm-dialog-final-confirmation"
+                  : "",
                 finalConfirmationActive ? "is-armed" : ""
               ]
                 .filter(Boolean)
@@ -129,7 +136,9 @@ export function ConfirmDialog({
               status={displayedStatus}
               presentation={confirmPresentation}
               disabled={blocked || confirmDisabled}
-              aria-pressed={requireFinalConfirmation ? finalConfirmationActive : undefined}
+              aria-pressed={requireFinalConfirmation
+                ? finalConfirmationActive
+                : undefined}
               onBlur={() => setFinalConfirmationArmed(false)}
             />
           </footer>

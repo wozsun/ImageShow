@@ -1,9 +1,16 @@
 import { useCallback, useState } from "react";
 import type { ImagePurgeRequestDto } from "@imageshow/shared/browser";
-import { moveImagesToTrash, purgeImages, restoreImages } from "../../../lib/api/image-mutations.js";
+import {
+  moveImagesToTrash,
+  purgeImages,
+  restoreImages
+} from "../../../lib/api/image-mutations.js";
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import type { AdminImageListItem } from "../../../lib/types.js";
-import { createActionFeedback, type ActionFeedbackState } from "../../../lib/ui/action-feedback.js";
+import {
+  createActionFeedback,
+  type ActionFeedbackState
+} from "../../../lib/ui/action-feedback.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { waitForMinimumPendingDuration } from "../../../lib/ui/async-action-timing.js";
 
@@ -60,7 +67,10 @@ export async function settleConfirmedImageAdminMutation({
   status: ConfirmedMutationStatus;
   feedbackTiming: ConfirmedMutationFeedbackTiming;
   refresh: () => Promise<unknown>;
-  present: (text: string, status: ConfirmedMutationStatus) => void;
+  present: (
+    text: string,
+    status: ConfirmedMutationStatus
+  ) => void;
 }) {
   const presentBeforeRefresh = feedbackTiming === "before-list-refresh";
   if (presentBeforeRefresh) {
@@ -83,13 +93,19 @@ export async function settleConfirmedImageAdminMutation({
     await waitForMinimumPendingDuration(startedAt);
   }
   if (refreshFailed) {
-    present(`${text}；图片列表刷新失败，请重新加载页面`, "error");
+    present(
+      `${text}；图片列表刷新失败，请重新加载页面`,
+      "error"
+    );
   } else if (!presentBeforeRefresh) {
     present(text, status);
   }
 }
 
-function unknownOutcomeFeedback(result: UnknownOutcomeRefreshResult, subject = "操作") {
+function unknownOutcomeFeedback(
+  result: UnknownOutcomeRefreshResult,
+  subject = "操作"
+) {
   if (!result.refreshSucceeded) {
     return `${subject}结果未能确认，且图片列表刷新失败，请重新加载页面`;
   }
@@ -119,11 +135,17 @@ export function useImageAdminOperations({
     setConfirmError("");
     setConfirmActionState(action);
   }, []);
-  const showFeedback = useCallback((text: string, status: "error" | "success") => {
+  const showFeedback = useCallback((
+    text: string,
+    status: "error" | "success"
+  ) => {
     setFeedback(createActionFeedback(text, status));
   }, []);
   const presentConfirmedMutation = useCallback(
-    (text: string, status: ConfirmedMutationStatus) => {
+    (
+      text: string,
+      status: ConfirmedMutationStatus
+    ) => {
       setOperationText(text);
       showFeedback(text, status);
     },
@@ -140,7 +162,10 @@ export function useImageAdminOperations({
   }, []);
 
   const refreshUnknownOutcome = useCallback(
-    async (context: string, imageIds?: string[]) => {
+    async (
+      context: string,
+      imageIds?: string[]
+    ) => {
       let boundaryConfirmed = false;
       if (imageIds?.length) {
         try {
@@ -177,9 +202,15 @@ export function useImageAdminOperations({
           result = await restoreImages(ids);
         } catch (error) {
           reportAdminUiError("image_admin.restore", error);
-          const reconciliation = await refreshUnknownOutcome("image_admin.restore", ids);
+          const reconciliation = await refreshUnknownOutcome(
+            "image_admin.restore",
+            ids
+          );
           await waitForMinimumPendingDuration(startedAt);
-          showFeedback(unknownOutcomeFeedback(reconciliation, "恢复"), "error");
+          showFeedback(
+            unknownOutcomeFeedback(reconciliation, "恢复"),
+            "error"
+          );
           return;
         }
         if (result.ignored) {
@@ -190,7 +221,10 @@ export function useImageAdminOperations({
         }
         await settleConfirmedImageAdminMutation({
           startedAt,
-          text: withIgnoredImageCount(`已恢复 ${result.restored} 张`, result.ignored),
+          text: withIgnoredImageCount(
+            `已恢复 ${result.restored} 张`,
+            result.ignored
+          ),
           status: result.ignored ? "error" : "success",
           feedbackTiming: "before-list-refresh",
           refresh,
@@ -202,13 +236,21 @@ export function useImageAdminOperations({
         setBusyIds([]);
       }
     },
-    [operationBusy, presentConfirmedMutation, refresh, refreshUnknownOutcome, showFeedback]
+    [
+      operationBusy,
+      presentConfirmedMutation,
+      refresh,
+      refreshUnknownOutcome,
+      showFeedback
+    ]
   );
 
   const runAction = useCallback(
     async (action: ImageAdminAction) => {
       if (operationBusy) return false;
-      const purgeRequest = action.kind === "purge" ? action.request : null;
+      const purgeRequest = action.kind === "purge"
+        ? action.request
+        : null;
       const affectedIds =
         action.kind === "trash"
           ? action.ids
@@ -237,7 +279,10 @@ export function useImageAdminOperations({
         try {
           if (action.kind === "trash") {
             const result = await moveImagesToTrash(action.ids);
-            text = withIgnoredImageCount(`已移入回收站 ${result.trashed} 张`, result.ignored);
+            text = withIgnoredImageCount(
+              `已移入回收站 ${result.trashed} 张`,
+              result.ignored
+            );
             status = result.ignored ? "error" : "success";
             if (result.ignored) {
               reportAdminUiError(
@@ -256,13 +301,18 @@ export function useImageAdminOperations({
                 }`;
             status = result.remaining || result.ignored ? "error" : "success";
             if (status === "error") {
-              reportAdminUiError("image_admin.purge_partial", new Error(text));
+              reportAdminUiError(
+                "image_admin.purge_partial",
+                new Error(text)
+              );
             }
           }
         } catch (error) {
           reportAdminUiError("image_admin.trash_or_purge", error);
           const reconciliation = await refreshUnknownOutcome(
-            action.kind === "trash" ? "image_admin.trash" : "image_admin.purge",
+            action.kind === "trash"
+              ? "image_admin.trash"
+              : "image_admin.purge",
             action.kind === "trash" ? action.ids : undefined
           );
           await waitForMinimumPendingDuration(startedAt);
@@ -281,7 +331,9 @@ export function useImageAdminOperations({
           startedAt,
           text,
           status,
-          feedbackTiming: action.kind === "trash" ? "before-list-refresh" : "after-list-refresh",
+          feedbackTiming: action.kind === "trash"
+            ? "before-list-refresh"
+            : "after-list-refresh",
           refresh,
           present: presentConfirmedMutation
         });
@@ -292,14 +344,24 @@ export function useImageAdminOperations({
         setBusyIds([]);
       }
     },
-    [items, operationBusy, presentConfirmedMutation, refresh, refreshUnknownOutcome, showFeedback]
+    [
+      items,
+      operationBusy,
+      presentConfirmedMutation,
+      refresh,
+      refreshUnknownOutcome,
+      showFeedback
+    ]
   );
 
   const runConfirmedAction = useCallback(
     () => (confirmAction ? runAction(confirmAction) : Promise.resolve(false)),
     [confirmAction, runAction]
   );
-  const trash = useCallback((ids: string[]) => runAction({ kind: "trash", ids }), [runAction]);
+  const trash = useCallback(
+    (ids: string[]) => runAction({ kind: "trash", ids }),
+    [runAction]
+  );
   return {
     operationText,
     feedback,

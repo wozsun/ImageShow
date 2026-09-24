@@ -21,17 +21,23 @@ export class GalleryCardRevealRegistry {
   #revealedThroughIndex = -1;
 
   constructor(options: GalleryCardRevealRegistryOptions) {
-    this.#enteredAt = options.enteredAt ?? globalThis.performance?.now() ?? Date.now();
+    this.#enteredAt = options.enteredAt
+      ?? (globalThis.performance?.now() ?? Date.now());
     this.#routeEntrance = options.routeEntrance;
   }
 
-  prepare(imageIndex: number, options: GalleryCardRevealOptions): GalleryCardReveal {
-    if (options.reduceMotion || imageIndex <= this.#revealedThroughIndex) {
+  prepare(
+    imageIndex: number,
+    options: GalleryCardRevealOptions
+  ): GalleryCardReveal {
+    if (options.reduceMotion
+      || imageIndex <= this.#revealedThroughIndex) {
       return { variant: "settled", delayMs: 0 };
     }
 
     if (this.#routeEntrance && options.initialViewport) {
-      const now = options.now ?? globalThis.performance?.now() ?? Date.now();
+      const now = options.now
+        ?? (globalThis.performance?.now() ?? Date.now());
       const remainingRouteDelay = Math.max(0, 220 - (now - this.#enteredAt));
       return {
         variant: "initial",
@@ -46,7 +52,10 @@ export class GalleryCardRevealRegistry {
   }
 
   markRevealed(imageIndex: number) {
-    this.#revealedThroughIndex = Math.max(this.#revealedThroughIndex, Math.floor(imageIndex));
+    this.#revealedThroughIndex = Math.max(
+      this.#revealedThroughIndex,
+      Math.floor(imageIndex)
+    );
   }
 
   get revealedThroughIndex() {

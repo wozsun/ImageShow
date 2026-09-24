@@ -94,7 +94,11 @@ await runIntegrationScenario(async (runtime) => {
           semantic_hash:
             ingestionSessionProjection.ingestionSessionSemanticHash(commitQueuedWithoutHash)
         },
-        displayOrderKey(commitSessionId, 46, commitAcceptedAt),
+        displayOrderKey(
+          commitSessionId,
+          46,
+          commitAcceptedAt
+        ),
         commitAcceptedAt
       )
     ).session
@@ -133,8 +137,12 @@ await runIntegrationScenario(async (runtime) => {
   );
   const realPrepared = {
     producer_execution_token: commitPreparationToken,
-    prepared_image_sha256: createHash("sha256").update(commitImageBody).digest("hex"),
-    prepared_thumbnail_sha256: createHash("sha256").update(commitThumbnailBody).digest("hex"),
+    prepared_image_sha256: createHash("sha256")
+      .update(commitImageBody)
+      .digest("hex"),
+    prepared_thumbnail_sha256: createHash("sha256")
+      .update(commitThumbnailBody)
+      .digest("hex"),
     original_size: commitImageBody.length,
     original_width: 1200,
     original_height: 800,
@@ -185,7 +193,10 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.equal(directPolicyUpdate.status, "changed");
   const afterDirectPolicyUpdate = activeSession(
-    await ingestionRepository.readSession(commitActor, commitSessionId)
+    await ingestionRepository.readSession(
+      commitActor,
+      commitSessionId
+    )
   );
   const [bulkPolicyUpdate] = await ingestionQueueActionHandlers.executeIngestionQueueActionBatch({
     repository: ingestionRepository,
@@ -208,7 +219,10 @@ await runIntegrationScenario(async (runtime) => {
   });
   assert.equal(bulkPolicyUpdate.status, "changed");
   const commitPolicyReady = preparedSession(
-    await ingestionRepository.readSession(commitActor, commitSessionId)
+    await ingestionRepository.readSession(
+      commitActor,
+      commitSessionId
+    )
   );
   const realCommitRequest = {
     session_id: commitSessionId,
@@ -329,7 +343,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(realCommitAccepted[0].code, "ingestion_incarnation_conflict");
   assert.equal(realCommitAccepted[1].status, "accepted");
   const firstFrozenCommitSession = committingSession(
-    await ingestionRepository.readSession(commitActor, commitSessionId)
+    await ingestionRepository.readSession(
+      commitActor,
+      commitSessionId
+    )
   );
   assert.equal(firstFrozenCommitSession.status, "committing");
   assert.equal(firstFrozenCommitSession.commit.created_by, commitActor);
@@ -385,7 +402,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(retriedCommit[0].status, "accepted");
   assert.ok(retriedCommit[0].version > failedCommitSession.version);
   const frozenCommitSession = committingSession(
-    await ingestionRepository.readSession(commitActor, commitSessionId)
+    await ingestionRepository.readSession(
+      commitActor,
+      commitSessionId
+    )
   );
   assert.equal(frozenCommitSession.status, "committing");
   assert.equal(
@@ -426,7 +446,8 @@ await runIntegrationScenario(async (runtime) => {
         new AbortController().signal
       ),
       (error: unknown) =>
-        error instanceof Error && "code" in error && error.code === "storage_backend_disabled"
+        error instanceof Error
+          && "code" in error && error.code === "storage_backend_disabled"
     );
     await access(ingestionPaths.ingestionPreparedPath(commitImageKey));
     await access(ingestionPaths.ingestionPreparedPath(commitThumbnailKey));
@@ -499,7 +520,8 @@ await runIntegrationScenario(async (runtime) => {
         new AbortController().signal
       ),
       (error: unknown) =>
-        error instanceof Error && "code" in error && error.code === "storage_object_conflict"
+        error instanceof Error
+          && "code" in error && error.code === "storage_object_conflict"
     );
   } finally {
     commitStorageAccess.driver.exists = originalCommitExists;
@@ -527,16 +549,24 @@ await runIntegrationScenario(async (runtime) => {
     "不匹配的预存正式对象不得被 guard 接管"
   );
   assert.deepEqual(
-    await commitStorageAccess.driver.readBuffer(committedObjectPrefix, committedObjectKey),
+    await commitStorageAccess.driver.readBuffer(
+      committedObjectPrefix,
+      committedObjectKey
+    ),
     preExistingConflictBody,
     "提交冲突不得删除本次从未创建或采用的正式对象"
   );
-  await removeDriverObject(commitStorageAccess.driver, committedObjectPrefix, committedObjectKey);
+  await removeDriverObject(
+    commitStorageAccess.driver,
+    committedObjectPrefix,
+    committedObjectKey
+  );
   const guardRegistrationFailure = new Error(
     "injected ingestion candidate guard registration failure"
   );
   const restoreGuardQuery = interceptSqlQueries(database.pool, async (sql, _values, query) => {
-    if (sql.includes("INSERT INTO background_job(") && sql.includes("jsonb_to_recordset")) {
+    if (sql.includes("INSERT INTO background_job(")
+      && sql.includes("jsonb_to_recordset")) {
       throw guardRegistrationFailure;
     }
     return query();
@@ -579,11 +609,15 @@ await runIntegrationScenario(async (runtime) => {
         new AbortController().signal
       ),
       (error: unknown) =>
-        error instanceof Error && "code" in error && error.code === "ingestion_image_owner_conflict"
+        error instanceof Error
+          && "code" in error && error.code === "ingestion_image_owner_conflict"
     );
     assert.equal(commitWriteCalls, 2, "guard 成功后 full/thumb 才能开始写入");
     assert.equal(
-      (await database.pool.query("SELECT created_by FROM metadata WHERE id=$1", [commitImageId]))
+      (await database.pool.query(
+        "SELECT created_by FROM metadata WHERE id=$1",
+        [commitImageId]
+      ))
         .rows[0]?.created_by,
       conflictingCommitActor,
       "不同 owner 的既有正式图片不得被内容接入提交接管"
@@ -613,7 +647,10 @@ await runIntegrationScenario(async (runtime) => {
         { prefix: "thumbs", key: commitThumbnailCandidateKey }
       ]
     );
-    await database.pool.query("DELETE FROM metadata WHERE id=$1", [commitImageId]);
+    await database.pool.query(
+      "DELETE FROM metadata WHERE id=$1",
+      [commitImageId]
+    );
     await commitStorageAccess.driver.writeBuffer(
       committedObjectPrefix,
       commitFullCandidateKey,
@@ -627,14 +664,25 @@ await runIntegrationScenario(async (runtime) => {
         [commitGuardJob.id, randomUUID()]
       )
     ).rows[0];
-    await cleanupJob.handleMoveCleanupJob(commitGuardJob, new AbortController().signal);
+    await cleanupJob.handleMoveCleanupJob(
+      commitGuardJob,
+      new AbortController().signal
+    );
     assert.equal(
-      await objectAccess.storageObjectExists(committedObjectPrefix, committedObjectKey, "local"),
+      await objectAccess.storageObjectExists(
+        committedObjectPrefix,
+        committedObjectKey,
+        "local"
+      ),
       false,
       "PG 失败后 guard 必须删除未引用 full 候选"
     );
     assert.equal(
-      await objectAccess.storageObjectExists("thumbs", committedThumbnailKey, "local"),
+      await objectAccess.storageObjectExists(
+        "thumbs",
+        committedThumbnailKey,
+        "local"
+      ),
       false,
       "PG 失败后 guard 必须删除未引用 thumbnail 候选"
     );
@@ -655,9 +703,14 @@ await runIntegrationScenario(async (runtime) => {
         new AbortController().signal
       ),
       (error: unknown) =>
-        error instanceof Error && "code" in error && error.code === "storage_object_cleanup_pending"
+        error instanceof Error
+          && "code" in error && error.code === "storage_object_cleanup_pending"
     );
-    assert.equal(commitWriteCalls, 2, "旧 guard 未收口时不得旁路其删除租约");
+    assert.equal(
+      commitWriteCalls,
+      2,
+      "旧 guard 未收口时不得旁路其删除租约"
+    );
     await database.pool.query("UPDATE background_job SET status='succeeded' WHERE id=$1", [
       commitGuardJob.id
     ]);
@@ -697,23 +750,41 @@ await runIntegrationScenario(async (runtime) => {
         [retriedCommitGuardJob.id, randomUUID()]
       )
     ).rows[0];
-    await cleanupJob.handleMoveCleanupJob(retriedCommitGuardJob, new AbortController().signal);
+    await cleanupJob.handleMoveCleanupJob(
+      retriedCommitGuardJob,
+      new AbortController().signal
+    );
     assert.equal(
-      await objectAccess.storageObjectExists(committedObjectPrefix, committedObjectKey, "local"),
+      await objectAccess.storageObjectExists(
+        committedObjectPrefix,
+        committedObjectKey,
+        "local"
+      ),
       true,
       "PG 引用建立后 guard 必须永久保留正式对象"
     );
     assert.equal(
-      await objectAccess.storageObjectExists("thumbs", committedThumbnailKey, "local"),
+      await objectAccess.storageObjectExists(
+        "thumbs",
+        committedThumbnailKey,
+        "local"
+      ),
       true,
       "PG 引用建立后 guard 必须永久保留正式缩略图"
     );
     assert.equal(
-      await objectAccess.storageObjectExists("thumbs", retriedThumbnailCandidateKey, "local"),
+      await objectAccess.storageObjectExists(
+        "thumbs",
+        retriedThumbnailCandidateKey,
+        "local"
+      ),
       false,
       "PG 正式引用不应保留 local 原子写入临时候选"
     );
-    assert.equal(await jobs.markBackgroundJobSucceeded(retriedCommitGuardJob), true);
+    assert.equal(
+      await jobs.markBackgroundJobSucceeded(retriedCommitGuardJob),
+      true
+    );
   } finally {
     commitStorageAccess.driver.writeStream = originalCommitWrite;
   }
@@ -744,7 +815,10 @@ await runIntegrationScenario(async (runtime) => {
     code: "ENOENT"
   });
   const completedCommitReceipt = completedSession(
-    await ingestionRepository.readSession(commitActor, commitSessionId)
+    await ingestionRepository.readSession(
+      commitActor,
+      commitSessionId
+    )
   );
   assert.equal(completedCommitReceipt.status, "completed");
   await ingestionRepository.deleteSession(
@@ -762,7 +836,10 @@ await runIntegrationScenario(async (runtime) => {
     commitQueueKeys.display,
     commitQueueKeys.metadata
   );
-  await database.pool.query("DELETE FROM metadata WHERE id=$1", [commitImageId]);
+  await database.pool.query(
+    "DELETE FROM metadata WHERE id=$1",
+    [commitImageId]
+  );
   await database.pool.query(
     "DELETE FROM background_job WHERE type='move.cleanup' " +
       "AND target_id=$1 AND payload->>'reason'=$2",

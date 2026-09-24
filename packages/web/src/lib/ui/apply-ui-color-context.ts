@@ -1,4 +1,7 @@
-import { defaultAdminPreferences, type AdminColorScheme } from "@imageshow/shared/browser";
+import {
+  defaultAdminPreferences,
+  type AdminColorScheme
+} from "@imageshow/shared/browser";
 import {
   readSystemPrefersDark,
   resolveUiColorContext,
@@ -33,8 +36,14 @@ export function applyUiColorContext(
 ) {
   const resolvedSystemPreference =
     systemPrefersDark ??
-    (uiContext === "admin" && adminColorScheme === "system" ? readSystemPrefersDark() : true);
-  const appearance = resolveUiColorContext(uiContext, adminColorScheme, resolvedSystemPreference);
+    (uiContext === "admin" && adminColorScheme === "system"
+      ? readSystemPrefersDark()
+      : true);
+  const appearance = resolveUiColorContext(
+    uiContext,
+    adminColorScheme,
+    resolvedSystemPreference
+  );
   const root = document.documentElement;
   root.dataset.uiContext = uiContext;
   root.dataset.colorScheme = appearance;

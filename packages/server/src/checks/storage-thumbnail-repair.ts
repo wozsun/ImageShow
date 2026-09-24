@@ -10,8 +10,14 @@ import {
   assertStorageRemovalResults,
   removeStorageObjectsAndConfirm
 } from "../storage/objects/access.ts";
-import { digestStorageObject, type StorageAccess } from "../storage/objects/transfer.ts";
-import type { MaintenanceImage, MaintenanceItem } from "./storage-maintenance-plan.ts";
+import {
+  digestStorageObject,
+  type StorageAccess
+} from "../storage/objects/transfer.ts";
+import type {
+  MaintenanceImage,
+  MaintenanceItem
+} from "./storage-maintenance-plan.ts";
 
 async function readThumbnailAuthority(imageId: string) {
   return (
@@ -24,7 +30,10 @@ async function readThumbnailAuthority(imageId: string) {
   ).rows[0];
 }
 
-function sameThumbnailAuthority(before: MaintenanceImage, after: MaintenanceImage | undefined) {
+function sameThumbnailAuthority(
+  before: MaintenanceImage,
+  after: MaintenanceImage | undefined
+) {
   return Boolean(
     after &&
     (after.status === "ready" || after.status === "deleted") &&
@@ -44,10 +53,16 @@ async function cleanupFailedThumbnailWrite(
       [{ prefix: "thumbs", key, storageSlug: storage.config.slug }],
       { signal }
     );
-    assertStorageRemovalResults(results, "无法确认失败的缩略图候选已清理");
+    assertStorageRemovalResults(
+      results,
+      "无法确认失败的缩略图候选已清理"
+    );
   } catch (cleanupError) {
     signal.throwIfAborted();
-    throw new AggregateError([failure, cleanupError], "缩略图写入失败，且无法确认候选对象已清理");
+    throw new AggregateError(
+      [failure, cleanupError],
+      "缩略图写入失败，且无法确认候选对象已清理"
+    );
   }
   throw failure;
 }
@@ -62,7 +77,13 @@ async function writeVerifiedThumbnail(
 
   let writeFailure: unknown;
   try {
-    await storage.driver.writeBuffer("thumbs", key, body, "image/webp", { signal });
+    await storage.driver.writeBuffer(
+      "thumbs",
+      key,
+      body,
+      "image/webp",
+      { signal }
+    );
   } catch (error) {
     signal.throwIfAborted();
     writeFailure = error;
@@ -73,9 +94,15 @@ async function writeVerifiedThumbnail(
     digest = await digestStorageObject(storage, "thumbs", key, { signal });
   } catch (error) {
     signal.throwIfAborted();
-    return cleanupFailedThumbnailWrite(storage, key, signal, writeFailure ?? error);
+    return cleanupFailedThumbnailWrite(
+      storage,
+      key,
+      signal,
+      writeFailure ?? error
+    );
   }
-  const matches = digest.size === body.byteLength && digest.sha256 === sha256Buffer(body);
+  const matches = digest.size === body.byteLength
+    && digest.sha256 === sha256Buffer(body);
   if (!matches) {
     return cleanupFailedThumbnailWrite(
       storage,
@@ -105,7 +132,12 @@ async function persistThumbnailSize(
           AND storage_slug=$3
           AND ext=$4
           AND status IN ('ready','deleted')`,
-      [authority.id, thumbnailSize, authority.storage_slug, authority.ext]
+      [
+        authority.id,
+        thumbnailSize,
+        authority.storage_slug,
+        authority.ext
+      ]
     );
     signal.throwIfAborted();
     if (updated.rowCount) return;
@@ -176,7 +208,11 @@ export async function repairStorageThumbnail(
     }
     if (
       Number(authority.thumbnail_size) > 0 &&
-      (await storage.driver.exists("thumbs", thumbKey, { signal: operationSignal }))
+      (await storage.driver.exists(
+        "thumbs",
+        thumbKey,
+        { signal: operationSignal }
+      ))
     ) {
       return { ...itemBase, outcome: "skipped", reason: "缩略图已存在，无需维修" };
     }
@@ -230,17 +266,28 @@ export async function repairStorageThumbnail(
     );
     operationSignal.throwIfAborted();
     try {
-      await persistThumbnailSize(pendingAuthority, thumbnail.byteLength, operationSignal);
+      await persistThumbnailSize(
+        pendingAuthority,
+        thumbnail.byteLength,
+        operationSignal
+      );
     } catch (error) {
       operationSignal.throwIfAborted();
-      return await cleanupFailedThumbnailWrite(storage, thumbKey, operationSignal, error);
+      return await cleanupFailedThumbnailWrite(
+        storage,
+        thumbKey,
+        operationSignal,
+        error
+      );
     }
     operationSignal.throwIfAborted();
     return {
       ...itemBase,
       outcome: "repaired",
       thumbnail_size: thumbnail.byteLength,
-      ...(materialized.responseRecovered ? { reason: "写入响应丢失后已通过完整性回读确认" } : {})
+      ...(materialized.responseRecovered
+        ? { reason: "写入响应丢失后已通过完整性回读确认" }
+        : {})
     };
   } catch (error) {
     if (scheduleSignal.aborted) throw scheduleSignal.reason ?? error;

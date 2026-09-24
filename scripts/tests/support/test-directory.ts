@@ -1,6 +1,15 @@
-import { mkdirSync, mkdtempSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync
+} from "node:fs";
 import { rm } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep
+} from "node:path";
 
 export const temporaryTestRoot = resolve(import.meta.dirname, "../../../tests/tmp");
 const registeredTestDirectories = new Set<string>();

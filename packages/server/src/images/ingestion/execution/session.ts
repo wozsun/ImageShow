@@ -34,7 +34,10 @@ export async function refreshIngestionExecutionSession(
   repository: IngestionSessionRepository,
   expected: IngestionSessionSnapshot
 ) {
-  const current = await repository.readSession(expected.owner, expected.session_id);
+  const current = await repository.readSession(
+    expected.owner,
+    expected.session_id
+  );
   if (
     !current ||
     current.status === "completed" ||
@@ -56,7 +59,8 @@ async function retryIngestionExecutionMutation(
     try {
       return await mutate(current);
     } catch (error) {
-      if (!isIngestionVersionConflict(error) || attempt === executionMutationAttempts - 1)
+      if (!isIngestionVersionConflict(error)
+        || attempt === executionMutationAttempts - 1)
         throw error;
     }
     current = await refreshIngestionExecutionSession(repository, current);
@@ -78,7 +82,12 @@ export function updateIngestionExecutionProgress(
     repository,
     expected,
     async (current) =>
-      (await repository.updateProgress(current, current.version, progress, now))
+      (await repository.updateProgress(
+        current,
+        current.version,
+        progress,
+        now
+      ))
         .session as IngestionSessionSnapshot
   );
 }
@@ -92,7 +101,11 @@ export function heartbeatIngestionExecution(
     repository,
     expected,
     async (current) =>
-      (await repository.heartbeat(current, current.version, now))
+      (await repository.heartbeat(
+        current,
+        current.version,
+        now
+      ))
         .session as IngestionSessionSnapshot
   );
 }
@@ -107,7 +120,12 @@ export function mutateIngestionExecution(
     repository,
     expected,
     async (current) =>
-      (await repository.mutateSemantic(current, current.version, next(current), now))
+      (await repository.mutateSemantic(
+        current,
+        current.version,
+        next(current),
+        now
+      ))
         .session as IngestionSessionSnapshot
   );
 }

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { AdminSettings } from "@imageshow/shared/browser";
 import { storageOptionsQueryOptions } from "../../../lib/api/storage-options.js";
@@ -6,7 +12,10 @@ import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-module-loader.js";
 import { usePageScrollLock } from "../../../hooks/usePageScrollLock.js";
 import { IngestionTriggers } from "./IngestionTriggers.js";
-import type { IngestionActivation, IngestionActivationKind } from "./ingestion-activation.js";
+import type {
+  IngestionActivation,
+  IngestionActivationKind
+} from "./ingestion-activation.js";
 import "../../../styles/admin/ingestion-triggers.css";
 
 type IngestionModule = typeof import("./Ingestion.js");
@@ -41,7 +50,8 @@ export function IngestionLauncher({
 }) {
   const queryClient = useQueryClient();
   const ingestionLoader = moduleLoaders?.ingestion ?? loadIngestionModule;
-  const importSourceLoader = moduleLoaders?.importSource ?? loadImportSourceModule;
+  const importSourceLoader = moduleLoaders?.importSource
+    ?? loadImportSourceModule;
   const [IngestionComponent, setIngestionComponent] = useState<IngestionModule["Ingestion"] | null>(
     null
   );
@@ -72,7 +82,9 @@ export function IngestionLauncher({
     if (launchPending) return;
     const target = failedLaunchFocusRef.current;
     failedLaunchFocusRef.current = null;
-    if (target?.isConnected && !target.disabled && !target.closest("[inert]")) target.focus();
+    if (target?.isConnected
+      && !target.disabled
+      && !target.closest("[inert]")) target.focus();
   }, [launchPending]);
 
   useEffect(() => {
@@ -95,7 +107,10 @@ export function IngestionLauncher({
   const preloadImportSource = () => {
     void importSourceLoader().catch(() => undefined);
   };
-  const activate = async (kind: IngestionActivationKind, opener: HTMLButtonElement) => {
+  const activate = async (
+    kind: IngestionActivationKind,
+    opener: HTMLButtonElement
+  ) => {
     if (activationActiveRef.current || disabled) return;
     const launchFence = launchFenceRef.current;
     const launchSequence = launchFence.begin();
@@ -104,13 +119,16 @@ export function IngestionLauncher({
     updateLaunchPending(true);
     let dispatched = false;
     try {
-      const needsImportSource = kind === "urls" || kind === "jsonl" || kind === "weibo";
+      const needsImportSource = kind === "urls"
+        || kind === "jsonl"
+        || kind === "weibo";
       const [ingestionModule] = await Promise.all([
         ingestionLoader(),
         queryClient.fetchQuery(storageOptionsQueryOptions),
         ...(needsImportSource ? [importSourceLoader()] : [])
       ]);
-      if (!launchFence.isCurrent(launchSequence) || !showTriggersRef.current) {
+      if (!launchFence.isCurrent(launchSequence)
+        || !showTriggersRef.current) {
         return;
       }
       setIngestionComponent(() => ingestionModule.Ingestion);
@@ -123,11 +141,13 @@ export function IngestionLauncher({
       });
       dispatched = true;
     } catch (error) {
-      if (launchFence.isCurrent(launchSequence) && showTriggersRef.current) {
+      if (launchFence.isCurrent(launchSequence)
+        && showTriggersRef.current) {
         onLoadError(error);
       }
     } finally {
-      if (!dispatched && launchFence.isCurrent(launchSequence)) {
+      if (!dispatched
+        && launchFence.isCurrent(launchSequence)) {
         activationActiveRef.current = false;
         failedLaunchFocusRef.current = opener;
         updateLaunchPending(false);
@@ -151,7 +171,8 @@ export function IngestionLauncher({
   );
   const settleActivation = useCallback(
     (sequence: number) => {
-      if (launchFenceRef.current.isMounted() && activeSequenceRef.current === sequence) {
+      if (launchFenceRef.current.isMounted()
+        && activeSequenceRef.current === sequence) {
         launchFenceRef.current.invalidate();
         activationActiveRef.current = false;
         setActivation((current) => (current?.sequence === sequence ? null : current));

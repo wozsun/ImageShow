@@ -4,7 +4,13 @@ import {
   type TagMatchMode
 } from "@imageshow/shared/browser";
 import type { PublicSiteSettings } from "@imageshow/shared/browser";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import {
   AppLoadingText,
   type AppLoadingExtraDots
@@ -79,7 +85,10 @@ export function HomePage({
     if (next.tag) setTagMode(basicTagSelection(next.tag).mode);
     else if (filters.tag || !Object.values(next).some(Boolean)) setTagMode("any");
   };
-  const statsSearch = useMemo(() => galleryStatsSearch(filters), [filters]);
+  const statsSearch = useMemo(
+    () => galleryStatsSearch(filters),
+    [filters]
+  );
   const statsQuery = usePublicFilterStats(statsSearch);
   const stats = statsQuery.displayData;
   const background = site.home.background;
@@ -95,10 +104,15 @@ export function HomePage({
 
   useLayoutEffect(() => {
     if (entrance.navigationRevealed) markNavigationAppeared();
-  }, [entrance.navigationRevealed, markNavigationAppeared]);
+  }, [
+    entrance.navigationRevealed,
+    markNavigationAppeared
+  ]);
 
   const startupFeedbackSettled =
-    entrance.backgroundReady || entrance.deadlineReached || entrance.heroRevealed;
+    entrance.backgroundReady
+      || entrance.deadlineReached
+      || entrance.heroRevealed;
 
   return (
     <main className={`page home-page${embedded ? " is-embedded" : ""}`}>
@@ -111,7 +125,10 @@ export function HomePage({
         onError={entrance.onBackgroundError}
       />
       <div
-        className={["home-startup-feedback", startupFeedbackSettled ? "is-settled" : ""]
+        className={[
+          "home-startup-feedback",
+          startupFeedbackSettled ? "is-settled" : ""
+        ]
           .filter(Boolean)
           .join(" ")}
         aria-hidden={startupFeedbackSettled ? true : undefined}
@@ -122,7 +139,9 @@ export function HomePage({
         className={[
           "public-navigation-frame",
           "home-navigation-frame",
-          `is-entrance-${entrance.navigationRevealed ? "visible" : "pending"}`
+          `is-entrance-${entrance.navigationRevealed
+            ? "visible"
+            : "pending"}`
         ].join(" ")}
         aria-hidden={entrance.navigationRevealed ? undefined : true}
         inert={entrance.navigationRevealed ? undefined : true}

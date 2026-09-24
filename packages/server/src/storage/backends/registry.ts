@@ -5,7 +5,10 @@ import {
   publicPgFallbackWorkLimitExceeded,
   withPublicDatabaseRead
 } from "../../core/database/public-fallback.ts";
-import { pool, type DatabaseReader } from "../../core/database/pools.ts";
+import {
+  pool,
+  type DatabaseReader
+} from "../../core/database/pools.ts";
 import { logger } from "../../core/logger.ts";
 import {
   assertLocalPublicUrlDomain,
@@ -34,7 +37,11 @@ const storageDriverCache = new Map<string, StorageDriver>();
 const closingStorageDrivers = new Set<Promise<void>>();
 
 function closedRegistryError() {
-  return new ApiError(503, "storage_registry_closed", "Storage backend registry is shutting down");
+  return new ApiError(
+    503,
+    "storage_registry_closed",
+    "Storage backend registry is shutting down"
+  );
 }
 
 function assertRegistryOpen() {
@@ -122,7 +129,10 @@ async function loadStorageBackends(
   return rows.map((row) => storageBackendRecordFromRow(row));
 }
 
-function loadStorageBackendsForRevision(revision: number, access: StorageRegistryAccess) {
+function loadStorageBackendsForRevision(
+  revision: number,
+  access: StorageRegistryAccess
+) {
   return access.signal
     ? coalesce(
         `storage-registry:public:${revision}`,
@@ -225,7 +235,10 @@ export function getStorageBackendConfigs(
   }, access);
 }
 
-function storageRecordBySlug(backends: readonly StorageBackendRecord[], slug: string) {
+function storageRecordBySlug(
+  backends: readonly StorageBackendRecord[],
+  slug: string
+) {
   return requireStorageRecord(
     backends.find((backend) => backend.slug === slug),
     slug
@@ -234,7 +247,11 @@ function storageRecordBySlug(backends: readonly StorageBackendRecord[], slug: st
 
 function requireStorageRecord(record: StorageBackendRecord | undefined, slug: string) {
   if (!record) {
-    throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
+    throw new ApiError(
+      404,
+      "storage_backend_not_found",
+      `Unknown storage backend: ${slug}`
+    );
   }
   return record;
 }
@@ -242,7 +259,12 @@ function requireStorageRecord(record: StorageBackendRecord | undefined, slug: st
 function assertStorageConfigComplete(config: StorageConfig) {
   const missing = config.type === "s3" ? missingS3Fields(config.s3) : [];
   if (missing.length) {
-    throw new ApiError(400, "storage_config_incomplete", "Storage config incomplete", { missing });
+    throw new ApiError(
+      400,
+      "storage_config_incomplete",
+      "Storage config incomplete",
+      { missing }
+    );
   }
   return config;
 }
@@ -267,14 +289,23 @@ function defaultStorageRecord(backends: readonly StorageBackendRecord[]): Storag
     backends.find((backend) => backend.slug === "local") ??
     backends[0];
   if (!record) {
-    throw new ApiError(503, "storage_unconfigured", "No storage backend configured");
+    throw new ApiError(
+      503,
+      "storage_unconfigured",
+      "No storage backend configured"
+    );
   }
   return record;
 }
 
-export async function resolveStorageAccess(slug?: string, access: StorageRegistryAccess = {}) {
+export async function resolveStorageAccess(
+  slug?: string,
+  access: StorageRegistryAccess = {}
+) {
   return withCurrentStorageBackends((backends) => {
-    const record = slug ? storageRecordBySlug(backends, slug) : defaultStorageRecord(backends);
+    const record = slug
+      ? storageRecordBySlug(backends, slug)
+      : defaultStorageRecord(backends);
     const config = storageConfigFromRecord(record);
     return { config, driver: storageDriverForConfig(config) };
   }, access);

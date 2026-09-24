@@ -10,7 +10,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { anchoredPopupBoundaryClass } from "../../lib/ui/anchored-popup-boundary.js";
-import { fixedPositionFromViewport, localizeAnchoredPosition } from "../../lib/ui/menu-position.js";
+import {
+  fixedPositionFromViewport,
+  localizeAnchoredPosition
+} from "../../lib/ui/menu-position.js";
 import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 import { DialogPortalTargetContext } from "./DialogPortalContext.js";
 import { InteractionSurfaceContext } from "../../lib/ui/interaction-surface.js";
@@ -77,7 +80,9 @@ export function AnchoredPopup({
     [popupRef]
   );
   const dialogPortalTarget =
-    typeof document === "undefined" ? null : (dialogPortalTargetRef?.current ?? null);
+    typeof document === "undefined"
+      ? null
+      : dialogPortalTargetRef?.current ?? null;
 
   useLayoutEffect(() => {
     if (dialogPortalTarget) return;
@@ -87,13 +92,19 @@ export function AnchoredPopup({
     const left = Number.isFinite(rect.left) ? rect.left : 0;
     const top = Number.isFinite(rect.top) ? rect.top : 0;
     setFixedOrigin((current) =>
-      current.left === left && current.top === top ? current : { left, top }
+      current.left === left && current.top === top
+        ? current
+        : { left, top }
     );
   }, [dialogPortalTarget, style]);
 
   if (typeof document === "undefined") return null;
   const portalTarget = dialogPortalTarget ?? document.body;
-  const portalStyle = localizePopupStyle(style, dialogPortalTarget, fixedOrigin);
+  const portalStyle = localizePopupStyle(
+    style,
+    dialogPortalTarget,
+    fixedOrigin
+  );
 
   return createPortal(
     <div className={anchoredPopupBoundaryClass} data-interaction-surface={interactionSurface?.id}>
@@ -116,7 +127,9 @@ export function AnchoredPopup({
       {overlayScrollbar && (
         <OverlayScrollbar
           targetRef={popupElementRef}
-          containerRef={dialogPortalTarget ? (dialogPortalTargetRef ?? undefined) : undefined}
+          containerRef={dialogPortalTarget
+            ? dialogPortalTargetRef ?? undefined
+            : undefined}
           layer="menu"
         />
       )}

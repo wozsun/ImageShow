@@ -48,7 +48,9 @@ const safePixels = (value: number) => (Number.isFinite(value) ? Math.max(1, Math
 
 // The full mip chain costs at most 1 + 1/4 + 1/16 + ... = 4/3 texels.
 const mipmappedPixels = (basePixels: number, generateMipmaps: boolean) =>
-  generateMipmaps ? Math.ceil((safePixels(basePixels) * 4) / 3) : safePixels(basePixels);
+  generateMipmaps
+    ? Math.ceil(safePixels(basePixels) * 4 / 3)
+    : safePixels(basePixels);
 
 const normalizedLod = (lod: ShowPixiTextureLod) => {
   const sourceRatio = lod.sourceRatio;
@@ -56,13 +58,19 @@ const normalizedLod = (lod: ShowPixiTextureLod) => {
     pixelWidth: Math.min(512, Math.max(1, Math.round(lod.pixelWidth))),
     pixelHeight: Math.min(1_024, Math.max(1, Math.round(lod.pixelHeight))),
     sourceRatio:
-      sourceRatio !== undefined && Number.isFinite(sourceRatio) && sourceRatio > 0
+      sourceRatio !== undefined
+        && Number.isFinite(sourceRatio)
+        && sourceRatio > 0
         ? sourceRatio
         : lod.pixelHeight / Math.max(1, lod.pixelWidth)
   };
 };
 
-function coverSourceRectangle(width: number, height: number, targetRatio: number) {
+function coverSourceRectangle(
+  width: number,
+  height: number,
+  targetRatio: number
+) {
   const sourceRatio = height / Math.max(1, width);
   let x = 0;
   let y = 0;
@@ -269,7 +277,10 @@ export class ShowPixiTextureCache {
     if (!entry) {
       const reservation = Math.min(
         this.#options.maximumPixels,
-        mipmappedPixels(lod.pixelWidth * lod.pixelHeight, this.#options.generateMipmaps)
+        mipmappedPixels(
+          lod.pixelWidth * lod.pixelHeight,
+          this.#options.generateMipmaps
+        )
       );
       this.#evictFor(reservation);
       if (
@@ -357,7 +368,10 @@ export class ShowPixiTextureCache {
         const lod = lods[index]!;
         unique.set(
           `${urls[index]}\n${lod.pixelWidth}x${lod.pixelHeight}`,
-          mipmappedPixels(lod.pixelWidth * lod.pixelHeight, this.#options.generateMipmaps)
+          mipmappedPixels(
+            lod.pixelWidth * lod.pixelHeight,
+            this.#options.generateMipmaps
+          )
         );
       }
       if ([...unique.values()].reduce((sum, pixels) => sum + pixels, 0) <= budget) {
@@ -460,7 +474,8 @@ export class ShowPixiTextureCache {
       this.#reservedPixels + requiredPixels > this.#options.maximumPixels
     ) {
       const candidate = [...this.#entries.values()]
-        .filter((entry) => entry.references === 0 && entry.state !== "loading")
+        .filter((entry) => entry.references === 0
+          && entry.state !== "loading")
         .sort((left, right) => left.touchedAt - right.touchedAt)[0];
       if (!candidate) return;
       this.#evict(candidate);
@@ -468,7 +483,9 @@ export class ShowPixiTextureCache {
   }
 
   #pump() {
-    while (!this.#destroyed && this.#inFlight < this.#options.maximumInFlight && this.#queue.size) {
+    while (!this.#destroyed
+      && this.#inFlight < this.#options.maximumInFlight
+      && this.#queue.size) {
       const entry = this.#queue.values().next().value!;
       this.#queue.delete(entry);
       if (this.#isBlocked(entry.url)) {
@@ -483,7 +500,12 @@ export class ShowPixiTextureCache {
       entry.state = "loading";
       entry.controller = new AbortController();
       this.#inFlight += 1;
-      void bitmapTexture(entry.url, entry, this.#options.generateMipmaps, entry.controller.signal)
+      void bitmapTexture(
+        entry.url,
+        entry,
+        this.#options.generateMipmaps,
+        entry.controller.signal
+      )
         .then(({ bitmap, texture }) => {
           if (this.#destroyed || this.#entries.get(entry.key) !== entry) {
             bitmap?.close();
@@ -536,7 +558,8 @@ export class ShowPixiTextureCache {
   #trimUnreferenced() {
     while (true) {
       const candidates = [...this.#entries.values()]
-        .filter((entry) => entry.references === 0 && entry.state !== "loading")
+        .filter((entry) => entry.references === 0
+          && entry.state !== "loading")
         .sort((left, right) => left.touchedAt - right.touchedAt);
       if (
         candidates.length <= this.#options.maximumUnreferenced &&
@@ -583,7 +606,10 @@ export class ShowPixiTextureCache {
     if (blockUrl) this.#rememberFailedUrl(entry.url, transportFailure);
     if (this.#entries.get(entry.key) === entry) {
       this.#entries.delete(entry.key);
-      this.#reservedPixels = Math.max(0, this.#reservedPixels - entry.reservedPixels);
+      this.#reservedPixels = Math.max(
+        0,
+        this.#reservedPixels - entry.reservedPixels
+      );
       entry.reservedPixels = 0;
     }
     const revision = this.#availabilityRevision;
@@ -636,7 +662,8 @@ export class ShowPixiTextureCache {
   }
 
   #isBlocked(url: string) {
-    return this.#failedUrls.has(url) || this.#blockedOrigins.has(this.#origin(url));
+    return this.#failedUrls.has(url)
+      || this.#blockedOrigins.has(this.#origin(url));
   }
 
   #recordTransportFailure(url: string) {

@@ -17,7 +17,10 @@ import {
   parseFacetSlug
 } from "../../lib/ui/facet-input.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
-import { classifyMovementIntent, type ClientPoint } from "../../lib/ui/movement-intent.js";
+import {
+  classifyMovementIntent,
+  type ClientPoint
+} from "../../lib/ui/movement-intent.js";
 import type { FacetOption } from "../../lib/types.js";
 import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import {
@@ -25,7 +28,7 @@ import {
   SuggestionList,
   suggestionMenuSize
 } from "./SuggestionList.js";
-import { useTagScroll } from "./useTagScroll.js";
+import { useChipStripScroll } from "../../hooks/useChipStripScroll.js";
 import "../../styles/tag-scroll.css";
 
 type TouchEditorFocusCandidate = {
@@ -34,7 +37,8 @@ type TouchEditorFocusCandidate = {
 };
 
 function isTagEditorSurface(target: EventTarget | null) {
-  return !(target instanceof Element && target.closest("button, input"));
+  return !(target instanceof Element
+    && target.closest("button, input"));
 }
 
 function touchWithIdentifier(touches: TouchList, identifier: number) {
@@ -75,7 +79,7 @@ export function TagInput({
     refreshScrollAvailability,
     cancelPendingScroll,
     scrollTags
-  } = useTagScroll(inputRef);
+  } = useChipStripScroll(inputRef);
   const touchEditorFocusCandidateRef = useRef<TouchEditorFocusCandidate | null>(null);
   const choiceSettledCompositionRef = useRef(false);
   const previousDisabledRef = useRef(disabled);
@@ -125,7 +129,9 @@ export function TagInput({
 
     const onTouchStart = (event: TouchEvent) => {
       touchEditorFocusCandidateRef.current = null;
-      if (disabled || event.touches.length !== 1 || !isTagEditorSurface(event.target)) {
+      if (disabled
+        || event.touches.length !== 1
+        || !isTagEditorSurface(event.target)) {
         return;
       }
       const touch = event.changedTouches[0] ?? event.touches[0];
@@ -142,15 +148,20 @@ export function TagInput({
       const candidate = touchEditorFocusCandidateRef.current;
       if (!candidate) return;
       const touch = touchWithIdentifier(event.touches, candidate.identifier);
-      if (!touch || classifyMovementIntent(candidate.origin, touch))
+      if (!touch
+        || classifyMovementIntent(candidate.origin, touch))
         touchEditorFocusCandidateRef.current = null;
     };
     const onTouchEnd = (event: TouchEvent) => {
       const candidate = touchEditorFocusCandidateRef.current;
       if (!candidate) return;
       touchEditorFocusCandidateRef.current = null;
-      const touch = touchWithIdentifier(event.changedTouches, candidate.identifier);
-      if (!touch || classifyMovementIntent(candidate.origin, touch)) return;
+      const touch = touchWithIdentifier(
+        event.changedTouches,
+        candidate.identifier
+      );
+      if (!touch
+        || classifyMovementIntent(candidate.origin, touch)) return;
 
       // Prevent the compatibility focus/click in the same native touch
       // transaction. Otherwise focusing and revealing the editor can move
@@ -195,7 +206,9 @@ export function TagInput({
       return;
     }
     const input = inputRef.current;
-    if (wasDisabled && input && input === input.ownerDocument.activeElement) {
+    if (wasDisabled
+      && input
+      && input === input.ownerDocument.activeElement) {
       choiceSettledCompositionRef.current = false;
       imeSession.beginEditing();
     }
@@ -210,7 +223,8 @@ export function TagInput({
     const previous = previousEditingStateRef.current;
     if (
       value.length > previous.valueLength ||
-      (text !== previous.text && inputRef.current === box.ownerDocument.activeElement)
+      (text !== previous.text
+        && inputRef.current === box.ownerDocument.activeElement)
     ) {
       box.scrollLeft = box.scrollWidth;
     }
@@ -241,7 +255,8 @@ export function TagInput({
 
   const addTag = (raw: string) => {
     const tag = parseFacetSlug(raw);
-    if (tag === null || selected.has(tag)) return false;
+    if (tag === null
+      || selected.has(tag)) return false;
     onChange([...value, tag]);
     setText("");
     setActiveIndex(-1);
@@ -266,7 +281,8 @@ export function TagInput({
     onChange(value.filter((item) => item !== tag));
   };
   const handleKey = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (imeSession.isComposing(event.nativeEvent.isComposing) || event.keyCode === 229) return;
+    if (imeSession.isComposing(event.nativeEvent.isComposing)
+      || event.keyCode === 229) return;
 
     if (
       handleSuggestionNavigationKey(event, {
@@ -339,7 +355,9 @@ export function TagInput({
       data-tag-input-disabled={disabled ? "" : undefined}
       onPointerDown={(event) => {
         if (disabled || event.pointerType === "touch") return;
-        if (event.button !== 0 || event.isPrimary === false || !isTagEditorSurface(event.target))
+        if (event.button !== 0
+          || event.isPrimary === false
+          || !isTagEditorSurface(event.target))
           return;
         event.preventDefault();
         inputRef.current?.focus({ preventScroll: true });
@@ -353,7 +371,8 @@ export function TagInput({
       onBlur={(event) => {
         const nextTarget = event.relatedTarget;
         const staysInControl =
-          nextTarget instanceof Node && event.currentTarget.contains(nextTarget);
+          nextTarget instanceof Node
+          && event.currentTarget.contains(nextTarget);
         if (staysInControl || disabled) return;
         settleEditing();
       }}

@@ -1,5 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { adminPermissions, type AdminCheckStatusDto } from "@imageshow/shared/browser";
+import {
+  adminPermissions,
+  type AdminCheckStatusDto
+} from "@imageshow/shared/browser";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { api } from "../../../lib/api/client.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
@@ -7,14 +10,20 @@ import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
 import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
-import { readyImageProjection, useAdminCheckStatus } from "../../../lib/api/ready-image-cache.js";
+import {
+  readyImageProjection,
+  useAdminCheckStatus
+} from "../../../lib/api/ready-image-cache.js";
 import {
   readyImageProjectionUsage,
   useAdminRedisInspection,
   useRetainedReadyImageProjectionUsage
 } from "./check-redis-inspection.js";
 import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-module-loader.js";
-import { formatBytes, revisionFingerprint } from "../../../lib/ui/formatters.js";
+import {
+  formatBytes,
+  revisionFingerprint
+} from "../../../lib/ui/formatters.js";
 import { ReadyImageCachePanel } from "./ReadyImageCachePanel.js";
 import "../../../styles/admin/check.css";
 
@@ -55,7 +64,9 @@ export function CheckPage() {
     statusQuery.data.redis.status === "ok" &&
     projectionStatus?.rebuilding !== true;
   const redisInspectionQuery = useAdminRedisInspection({
-    enabled: automaticInspectionEligible && !automaticInspectionSatisfied && running !== "all"
+    enabled: automaticInspectionEligible
+      && !automaticInspectionSatisfied
+      && running !== "all"
   });
   const {
     currentProjectionUsage: automaticProjectionUsage,
@@ -90,7 +101,10 @@ export function CheckPage() {
   const canRebuildCache = permissions.includes(adminPermissions.cacheMaintenanceRebuild);
   useEffect(() => {
     if (!redisInspectionQuery.error) return;
-    reportAdminUiError("check.redis.inspection", redisInspectionQuery.error);
+    reportAdminUiError(
+      "check.redis.inspection",
+      redisInspectionQuery.error
+    );
   }, [redisInspectionQuery.error]);
 
   useEffect(() => {
@@ -155,7 +169,8 @@ export function CheckPage() {
                 aria-pressed={checkView === check.name}
                 disabled={
                   Boolean(running) ||
-                  (redisInclusiveCheckBlocked && (check.name === "redis" || check.name === "all"))
+                  (redisInclusiveCheckBlocked
+                    && (check.name === "redis" || check.name === "all"))
                 }
                 onClick={() => selectCheckView(check.name)}
               >
@@ -307,7 +322,11 @@ function LightweightStatusCards({ query }: { query: UseQueryResult<AdminCheckSta
       </section>
       <section
         className={`check-status-card ${
-          redis?.status === "ok" ? "ok" : redis?.status === "error" || requestError ? "warn" : ""
+          redis?.status === "ok"
+              ? "ok"
+              : redis?.status === "error" || requestError
+                ? "warn"
+                : ""
         }`}
       >
         <header>
@@ -508,7 +527,9 @@ function isIssueKey(key: string) {
 
 function storageMaintenanceSummary(result: Record<string, unknown>) {
   const storage =
-    result.storage && typeof result.storage === "object" && !Array.isArray(result.storage)
+    result.storage
+      && typeof result.storage === "object"
+      && !Array.isArray(result.storage)
       ? (result.storage as Record<string, unknown>)
       : result;
   if (!("requested" in storage) || !("repaired" in storage) || !("items" in storage)) {

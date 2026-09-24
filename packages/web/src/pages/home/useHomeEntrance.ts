@@ -7,7 +7,10 @@ import {
   type RefObject,
   type SyntheticEvent
 } from "react";
-import { HomeEntranceController, type HomeEntranceSnapshot } from "./home-entrance-controller.js";
+import {
+  HomeEntranceController,
+  type HomeEntranceSnapshot
+} from "./home-entrance-controller.js";
 
 type ActiveHomeEntrance = {
   controller: HomeEntranceController;
@@ -35,7 +38,8 @@ export function useHomeEntrance(
   const [snapshot, setSnapshot] = useState<HomeEntranceSnapshot>(() => {
     const revealImmediately = reducedMotionPreferred();
     return {
-      navigationRevealed: revealImmediately || navigationInitiallyRevealed,
+      navigationRevealed: revealImmediately
+        || navigationInitiallyRevealed,
       heroRevealed: revealImmediately,
       catalogArmed: revealImmediately,
       backgroundReady: false,
@@ -52,7 +56,9 @@ export function useHomeEntrance(
 
   const settleLoadedImage = useCallback((image: HTMLImageElement) => {
     const active = activeRef.current;
-    if (!active || active.decodeStarted || imageRef.current !== image) return;
+    if (!active
+      || active.decodeStarted
+      || imageRef.current !== image) return;
     active.decodeStarted = true;
 
     let decode = decodeRef.current;
@@ -92,7 +98,9 @@ export function useHomeEntrance(
     generationRef.current = generation;
     const reduceMotion = reducedMotionPreferred();
     const foregroundAlreadyVisible =
-      reduceMotion || snapshotRef.current.heroRevealed || snapshotRef.current.catalogArmed;
+      reduceMotion
+        || snapshotRef.current.heroRevealed
+        || snapshotRef.current.catalogArmed;
     const navigationAlreadyVisible =
       foregroundAlreadyVisible ||
       navigationInitiallyRevealed ||
@@ -115,9 +123,13 @@ export function useHomeEntrance(
     activeRef.current = active;
 
     setSnapshot((current) => {
-      const preserveForeground = reduceMotion || current.heroRevealed || current.catalogArmed;
+      const preserveForeground = reduceMotion
+        || current.heroRevealed
+        || current.catalogArmed;
       const preserveNavigation =
-        preserveForeground || navigationInitiallyRevealed || current.navigationRevealed;
+        preserveForeground
+          || navigationInitiallyRevealed
+          || current.navigationRevealed;
       const nextSnapshot = {
         navigationRevealed: preserveNavigation,
         heroRevealed: preserveForeground,
@@ -159,7 +171,11 @@ export function useHomeEntrance(
       controller.dispose();
       if (activeRef.current === active) activeRef.current = null;
     };
-  }, [navigationInitiallyRevealed, settleLoadedImage, source]);
+  }, [
+    navigationInitiallyRevealed,
+    settleLoadedImage,
+    source
+  ]);
 
   const revealImmediately = useCallback(() => {
     activeRef.current?.controller.revealImmediately();
@@ -173,7 +189,8 @@ export function useHomeEntrance(
       const catalog = catalogRef.current;
       if (
         catalog &&
-        (window.scrollY > 0 || catalog.getBoundingClientRect().top < window.innerHeight - 1)
+        (window.scrollY > 0
+          || catalog.getBoundingClientRect().top < window.innerHeight - 1)
       ) {
         revealImmediately();
       }
@@ -192,10 +209,18 @@ export function useHomeEntrance(
     return () => {
       window.removeEventListener("scroll", scheduleCatalogCheck);
       window.removeEventListener("resize", scheduleCatalogCheck);
-      document.removeEventListener("keydown", revealForKeyboardNavigation, true);
+      document.removeEventListener(
+        "keydown",
+        revealForKeyboardNavigation,
+        true
+      );
       if (frame !== undefined) window.cancelAnimationFrame(frame);
     };
-  }, [catalogRef, revealImmediately, snapshot.catalogArmed]);
+  }, [
+    catalogRef,
+    revealImmediately,
+    snapshot.catalogArmed
+  ]);
 
   return {
     backgroundReady: snapshot.backgroundReady,

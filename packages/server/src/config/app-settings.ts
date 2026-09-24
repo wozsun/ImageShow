@@ -1,5 +1,9 @@
 import { z } from "zod";
-import type { AdminSettings, RuntimeConfig, SiteConfigDto } from "@imageshow/shared/browser";
+import type {
+  AdminSettings,
+  RuntimeConfig,
+  SiteConfigDto
+} from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import {
   ingestionCommitConcurrency,
@@ -26,7 +30,10 @@ import {
   thumbnailQuality,
   uploadBrowserConcurrency
 } from "./field-schemas.ts";
-import { getRuntimeConfig, updateRuntimeConfig } from "./runtime-config-store.ts";
+import {
+  getRuntimeConfig,
+  updateRuntimeConfig
+} from "./runtime-config-store.ts";
 import { effectiveEmbedAncestorSources } from "./embed-ancestors.ts";
 import { publicBaseUrlSchema } from "../core/url-validation.ts";
 import { staticResourceBaseUrl } from "./site-host.ts";

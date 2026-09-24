@@ -117,13 +117,23 @@ export async function readAdminCheckStatus(
   dependencies: AdminCheckStatusDependencies = defaultAdminCheckStatusDependencies
 ): Promise<AdminCheckStatusDto> {
   const [postgresql, redisStatus] = await Promise.all([
-    captureAdminCheck(dependencies.readPostgresql, "query", "postgresql_status_failed"),
-    captureAdminCheck(dependencies.readRedis, "command", "redis_status_failed")
+    captureAdminCheck(
+      dependencies.readPostgresql,
+      "query",
+      "postgresql_status_failed"
+    ),
+    captureAdminCheck(
+      dependencies.readRedis,
+      "command",
+      "redis_status_failed"
+    )
   ]);
   if (redisStatus.status === "ok") {
     redisStatus.data.image_projection = applyReadyImageAuthoritativeRevision(
       redisStatus.data.image_projection,
-      postgresql.status === "ok" ? postgresql.data.authoritative_revision : null
+      postgresql.status === "ok"
+        ? postgresql.data.authoritative_revision
+        : null
     );
   }
   return { postgresql, redis: redisStatus };

@@ -6,9 +6,15 @@ import {
   type StorageBackendMigrationResponseDto,
   type StorageBackendsAdminResponseDto
 } from "@imageshow/shared/browser";
-import { apiSuccess, privateCacheableApiSuccess } from "../core/http/responses.ts";
+import {
+  apiSuccess,
+  privateCacheableApiSuccess
+} from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
-import { requireAdminPermission, requireSuperAdmin } from "../users/admin-authorization.ts";
+import {
+  requireAdminPermission,
+  requireSuperAdmin
+} from "../users/admin-authorization.ts";
 import {
   storageBackendMigrationInput,
   storageBackendCreateInput,
@@ -53,7 +59,10 @@ export function registerStorageRoutes(app: Hono) {
     `${adminApiBasePath}/storage/backends/migrate`,
     requireAdminPermission(adminPermissions.storageMaintenanceMigrate),
     async (c) => {
-      const input = parse(storageBackendMigrationInput, await readJsonBody(c));
+      const input = parse(
+        storageBackendMigrationInput,
+        await readJsonBody(c)
+      );
       const response = apiSuccess(
         await migrateStorageBackendImages(input.source, input.target, {
           signal: c.req.raw.signal

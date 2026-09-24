@@ -13,7 +13,11 @@ import {
 } from "./lease-registry.ts";
 
 /** The caller holds the attempt's path leases through canonical publication. */
-export async function writeIngestionPreparedFile(file: string, body: Buffer, signal: AbortSignal) {
+export async function writeIngestionPreparedFile(
+  file: string,
+  body: Buffer,
+  signal: AbortSignal
+) {
   const path = ingestionPreparedPath(file);
   const part = `${path}.part`;
   await mkdir(dirname(path), { recursive: true });

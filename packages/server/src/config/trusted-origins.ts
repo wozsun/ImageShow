@@ -11,7 +11,11 @@ export function trustedOriginSources(config: TrustedOriginConfig = getRuntimeCon
   const siteUrl = new URL(`https://${config.site.domain}`);
   const authority = `${siteUrl.hostname}${siteUrl.port ? `:${siteUrl.port}` : ""}`;
   return [
-    ...new Set([`https://${authority}`, `https://*.${authority}`, ...config.embed.allowed_origins])
+    ...new Set([
+      `https://${authority}`,
+      `https://*.${authority}`,
+      ...config.embed.allowed_origins
+    ])
   ];
 }
 

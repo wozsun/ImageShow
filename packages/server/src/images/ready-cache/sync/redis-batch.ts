@@ -25,7 +25,10 @@ export class RedisPipelineBatcher {
     this.#pipeline = client.pipeline();
   }
 
-  async queue(estimatedBytes: number, enqueue: (pipeline: RedisPipeline) => void) {
+  async queue(
+    estimatedBytes: number,
+    enqueue: (pipeline: RedisPipeline) => void
+  ) {
     if (
       this.#commands > 0 &&
       (this.#commands >= REDIS_BATCH_MAX_COMMANDS ||

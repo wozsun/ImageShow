@@ -9,7 +9,10 @@ import {
 } from "../../jobs/handler-outcome.ts";
 import type { BackgroundJob } from "../../jobs/types.ts";
 import { getStorageBackend } from "../backends/registry.ts";
-import { assertCanonicalImageObjectKey, thumbnailObjectKey } from "../objects/image-paths.ts";
+import {
+  assertCanonicalImageObjectKey,
+  thumbnailObjectKey
+} from "../objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../maintenance-lock.ts";
 import {
   assertStorageRemovalResults,
@@ -18,7 +21,10 @@ import {
 } from "../objects/access.ts";
 import type { CapturedMoveCleanupObject } from "./types.ts";
 import { readRunningMoveCleanupJobPayload } from "./repository.ts";
-import { shareStorageNamespace, storageNamespaceIncludesIdentity } from "../objects/namespace.ts";
+import {
+  shareStorageNamespace,
+  storageNamespaceIncludesIdentity
+} from "../objects/namespace.ts";
 
 function cleanupObjectsFromPayload(job: BackgroundJob): CapturedMoveCleanupObject[] | null {
   if (!Array.isArray(job.payload.objects) || !job.payload.objects.length) {
@@ -94,7 +100,10 @@ export async function handleMoveCleanupJob(
     let lockedObjects = objects;
     if (ingestionCandidateGuard) {
       admissionSignal.throwIfAborted();
-      const payload = await readRunningMoveCleanupJobPayload(job.id, job.execution_token);
+      const payload = await readRunningMoveCleanupJobPayload(
+        job.id,
+        job.execution_token
+      );
       admissionSignal.throwIfAborted();
       if (!payload) {
         throw new ApiError(
@@ -158,7 +167,10 @@ export async function handleMoveCleanupJob(
       seen.add(identity);
 
       const objectBackend = await candidateBackend(object.backend);
-      if (!storageNamespaceIncludesIdentity(objectBackend, object.namespace_identity)) {
+      if (!storageNamespaceIncludesIdentity(
+        objectBackend,
+        object.namespace_identity
+      )) {
         throw new ApiError(
           409,
           "storage_cleanup_namespace_changed",
@@ -176,7 +188,10 @@ export async function handleMoveCleanupJob(
         if (!stillReferenced) {
           const latestBackend = await getStorageBackend(latest.storage_slug);
           admissionSignal.throwIfAborted();
-          stillReferenced = shareStorageNamespace(objectBackend, latestBackend);
+          stillReferenced = shareStorageNamespace(
+            objectBackend,
+            latestBackend
+          );
         }
         if (stillReferenced) continue;
       }
@@ -196,14 +211,19 @@ export async function handleMoveCleanupJob(
           },
           admissionSignal
         );
-        assertStorageRemovalResults(results, "持久存储清理任务未能确认全部对象删除");
+        assertStorageRemovalResults(
+          results,
+          "持久存储清理任务未能确认全部对象删除"
+        );
       } catch (error) {
         logger.warn("move_cleanup_object_delete_failed", {
           job_id: job.id,
           image_id: job.target_id,
           objects: removals.length,
           cleanup_reason:
-            typeof lockedJob.payload.reason === "string" ? lockedJob.payload.reason : "",
+            typeof lockedJob.payload.reason === "string"
+              ? lockedJob.payload.reason
+              : "",
           error: error
         });
         throw error;

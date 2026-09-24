@@ -1,5 +1,8 @@
 import { appConfig } from "@imageshow/shared";
-import { metadataFromHashReply, parseStoredIngestionSession } from "../sessions/codec.ts";
+import {
+  metadataFromHashReply,
+  parseStoredIngestionSession
+} from "../sessions/codec.ts";
 import {
   ingestionQueueStructureError,
   type IngestionSessionCommandRunner
@@ -93,11 +96,17 @@ export async function readIngestionQueueSnapshot(
   }
   const metadataEnd = 2 + metadataLength;
   const metadata = metadataFromHashReply(reply.slice(2, metadataEnd));
-  const itemCount = redisReplyInteger(reply[metadataEnd], "queue snapshot item count");
+  const itemCount = redisReplyInteger(
+    reply[metadataEnd],
+    "queue snapshot item count"
+  );
   const itemStart = metadataEnd + 1;
   const itemEnd = itemStart + itemCount;
   const serialized = reply.slice(itemStart, itemEnd);
-  const staleCount = redisReplyInteger(reply[itemEnd], "queue snapshot stale item count");
+  const staleCount = redisReplyInteger(
+    reply[itemEnd],
+    "queue snapshot stale item count"
+  );
   const staleValues = reply.slice(itemEnd + 1);
   if (
     itemCount < 0 ||
@@ -115,8 +124,14 @@ export async function readIngestionQueueSnapshot(
       parseStoredIngestionSession(redisReplyString(item, "queue snapshot item"))
     ),
     staleItems: Array.from({ length: staleCount }, (_value, index) => ({
-      session_id: redisReplyString(staleValues[index * 2], "queue snapshot stale session id"),
-      image_id: redisReplyString(staleValues[index * 2 + 1], "queue snapshot stale image id")
+      session_id: redisReplyString(
+        staleValues[index * 2],
+        "queue snapshot stale session id"
+      ),
+      image_id: redisReplyString(
+        staleValues[index * 2 + 1],
+        "queue snapshot stale image id"
+      )
     }))
   };
 }
@@ -163,7 +178,10 @@ export async function scanIngestionQueueAction(
     throw new Error("Redis ingestion action scan returned an invalid shape");
   }
   const count = redisReplyInteger(reply[1], "queue action scan count");
-  const hasMore = redisReplyInteger(reply[2], "queue action scan continuation");
+  const hasMore = redisReplyInteger(
+    reply[2],
+    "queue action scan continuation"
+  );
   const nextCursor = redisReplyInteger(reply[3], "queue action scan cursor");
   const serialized = reply.slice(4);
   if (
@@ -172,7 +190,9 @@ export async function scanIngestionQueueAction(
     serialized.length !== count ||
     (hasMore !== 0 && hasMore !== 1) ||
     (hasMore === 0 && nextCursor !== 0) ||
-    (hasMore === 1 && (nextCursor <= cursor || nextCursor > maximumOrder))
+    (hasMore === 1 && (
+      nextCursor <= cursor || nextCursor > maximumOrder
+    ))
   ) {
     throw new Error("Redis ingestion action scan returned invalid bounds");
   }
@@ -195,7 +215,9 @@ export async function deleteStoredCompletedReceipts(
     receipts.length > appConfig.ingestionRuntime.snapshotStaleReceiptCleanupBudget ||
     receipts.some(
       (receipt) =>
-        receipt.owner !== owner || receipt.queue !== queue || receipt.status !== "completed"
+        receipt.owner !== owner
+        || receipt.queue !== queue
+        || receipt.status !== "completed"
     )
   ) {
     throw new RangeError("Stale completed receipt batch is invalid");
@@ -220,7 +242,10 @@ export async function deleteStoredCompletedReceipts(
     appConfig.ingestionRuntime.snapshotStaleReceiptCleanupBudget
   );
   const reply = redisReplyArray(raw, "stale completed receipt cleanup");
-  const status = redisReplyInteger(reply[0], "stale completed receipt cleanup status");
+  const status = redisReplyInteger(
+    reply[0],
+    "stale completed receipt cleanup status"
+  );
   if (status === 0) return { removed: 0, metadata: null };
   if (status !== 1) {
     throw new Error("Redis ingestion stale receipt cleanup returned unknown status");
@@ -272,8 +297,14 @@ async function discoverIngestionSessionPage(
   const count = redisReplyInteger(reply[0], "session discovery count");
   const total = redisReplyInteger(reply[1], "session discovery total");
   const scanned = redisReplyInteger(reply[2], "session discovery scanned count");
-  const frozenTailScore = redisReplyInteger(reply[3], "session discovery frozen tail");
-  const lastScannedScore = redisReplyInteger(reply[4], "session discovery cursor");
+  const frozenTailScore = redisReplyInteger(
+    reply[3],
+    "session discovery frozen tail"
+  );
+  const lastScannedScore = redisReplyInteger(
+    reply[4],
+    "session discovery cursor"
+  );
   if (
     count < 0 ||
     total < 0 ||
@@ -287,17 +318,28 @@ async function discoverIngestionSessionPage(
         lastScannedScore < bound ||
         lastScannedScore > frozenTailScore ||
         (scanned > 0 && lastScannedScore === bound && count > 0))) ||
-    (mode !== "runnable" && (frozenTailScore !== 0 || lastScannedScore !== 0)) ||
+    (mode !== "runnable" && (
+      frozenTailScore !== 0 || lastScannedScore !== 0
+    )) ||
     reply.length !== 5 + count * 2
   ) {
     throw new Error("Redis ingestion discovery returned an invalid shape");
   }
   const items = Array.from({ length: count }, (_, index) => {
-    const canonicalKey = redisReplyString(reply[5 + index * 2], "discovery key");
-    const session = parseStoredIngestionSession(
-      redisReplyString(reply[6 + index * 2], "discovery snapshot")
+    const canonicalKey = redisReplyString(
+      reply[5 + index * 2],
+      "discovery key"
     );
-    if (canonicalKey !== ingestionCanonicalKey(session.owner, session.session_id))
+    const session = parseStoredIngestionSession(
+      redisReplyString(
+        reply[6 + index * 2],
+        "discovery snapshot"
+      )
+    );
+    if (canonicalKey !== ingestionCanonicalKey(
+      session.owner,
+      session.session_id
+    ))
       throw ingestionQueueStructureError();
     return { canonicalKey, session };
   });
@@ -321,7 +363,15 @@ async function discoverIngestionSessions(
   runnableTail = 0
 ) {
   return (
-    await discoverIngestionSessionPage(run, key, mode, bound, limit, maximumLimit, runnableTail)
+    await discoverIngestionSessionPage(
+      run,
+      key,
+      mode,
+      bound,
+      limit,
+      maximumLimit,
+      runnableTail
+    )
   ).items;
 }
 

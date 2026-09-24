@@ -1,7 +1,10 @@
 import { emitKeypressEvents } from "node:readline";
 import { formatLogContext } from "@imageshow/shared/browser";
 import { deploymentConfig } from "./config/deployment-config.ts";
-import { closeDatabasePools, configureDatabasePools } from "./core/database/pools.ts";
+import {
+  closeDatabasePools,
+  configureDatabasePools
+} from "./core/database/pools.ts";
 import { pingDatabase } from "./core/database/schema.ts";
 import { adminUsernameInput } from "./users/credentials.ts";
 import { pingRedis, redis } from "./core/redis/client.ts";

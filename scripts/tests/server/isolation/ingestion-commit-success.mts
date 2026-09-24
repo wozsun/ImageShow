@@ -4,7 +4,10 @@ import { ingestionPreparedPath } from "../../../../packages/server/src/images/in
 import type { IngestionSessionSnapshot } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
 import { createS3HttpFixture } from "../../support/s3-http-fixture.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
-import { freezeFixtureCommit, runWithReadyIngestionFixture } from "./ingestion-fixture.mts";
+import {
+  freezeFixtureCommit,
+  runWithReadyIngestionFixture
+} from "./ingestion-fixture.mts";
 
 type CommitWorkerModule =
   typeof import("../../../../packages/server/src/images/ingestion/commit/worker.ts");
@@ -102,7 +105,10 @@ await runIntegrationScenario(async (runtime) => {
             code: "ENOENT"
           });
           assert.equal(
-            (await fixture.repository.readSession(fixture.owner, fixture.sessionId))?.status,
+            (await fixture.repository.readSession(
+              fixture.owner,
+              fixture.sessionId
+            ))?.status,
             "completed"
           );
         },

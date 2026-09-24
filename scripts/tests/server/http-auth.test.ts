@@ -1,8 +1,15 @@
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { rm, writeFile } from "node:fs/promises";
-import { join, resolve, toNamespacedPath } from "node:path";
+import {
+  rm,
+  writeFile
+} from "node:fs/promises";
+import {
+  join,
+  resolve,
+  toNamespacedPath
+} from "node:path";
 import { pathToFileURL } from "node:url";
 import test, { after } from "node:test";
 import {
@@ -89,7 +96,10 @@ import {
   invalidateAllAdminSessions,
   invalidateCommittedAdminSessionsByUsername
 } from "../../../packages/server/src/users/session-invalidation.ts";
-import { imageId, servingReadyCacheItem } from "../support/server-test-context.ts";
+import {
+  imageId,
+  servingReadyCacheItem
+} from "../support/server-test-context.ts";
 import { initializeRuntimeConfig } from "../../../packages/server/src/config/runtime-config-store.ts";
 
 test("[Server/HTTP 与鉴权] 主站 Host、图片路径与域名热加载遵循统一边界", async () => {
@@ -97,12 +107,21 @@ test("[Server/HTTP 与鉴权] 主站 Host、图片路径与域名热加载遵循
   const helperRoot = await createTestDirectory("imageshow-host-boundary-");
   const helperPath = join(helperRoot, "verify-host-boundary.mjs");
   const runtimeConfigStoreUrl = pathToFileURL(
-    resolve(repositoryRoot, "packages/server/src/config/runtime-config-store.ts")
+    resolve(
+      repositoryRoot,
+      "packages/server/src/config/runtime-config-store.ts"
+    )
   ).href;
   const siteHostUrl = pathToFileURL(
-    resolve(repositoryRoot, "packages/server/src/config/site-host.ts")
+    resolve(
+      repositoryRoot,
+      "packages/server/src/config/site-host.ts"
+    )
   ).href;
-  const httpAppUrl = pathToFileURL(resolve(repositoryRoot, "packages/server/src/http-app.ts")).href;
+  const httpAppUrl = pathToFileURL(resolve(
+    repositoryRoot,
+    "packages/server/src/http-app.ts"
+  )).href;
   const helperSource = `
 import assert from "node:assert/strict";
 import {
@@ -187,7 +206,10 @@ console.log("host-boundary-ok");
     await writeFile(helperPath, helperSource);
     const result = await runProcess(
       process.execPath,
-      [resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"), helperPath],
+      [
+        resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"),
+        helperPath
+      ],
       {
         cwd: repositoryRoot,
         env: {
@@ -232,7 +254,11 @@ test("[Server/HTTP 与鉴权] 公开 cursor 与后台数字页使用严格且互
   assert.equal(galleryStatsQuery.safeParse(completeFilters).success, true);
   assert.equal(adminImageListQuery.safeParse(completeFilters).success, true);
 
-  for (const query of [{ page: "2" }, { offset: "60" }, { unexpected: "true" }]) {
+  for (const query of [
+    { page: "2" },
+    { offset: "60" },
+    { unexpected: "true" }
+  ]) {
     const result = listQuery.safeParse({ ...publicBase, ...query });
     assert.equal(result.success, false);
   }
@@ -374,7 +400,10 @@ test("[Server/HTTP 与鉴权] 写路由集中拒绝无效 JSON、未知字段和
   app.use("/*", auditAdminMutation);
   app.use("/write", limitAdminLoginBody);
   app.post("/write", async (context) => {
-    const input = parse(imageUpdateInput, await readJsonBody(context));
+    const input = parse(
+      imageUpdateInput,
+      await readJsonBody(context)
+    );
     writes.push(input.items[0]?.title ?? "");
     return context.json({ ok: true });
   });
@@ -393,7 +422,10 @@ test("[Server/HTTP 与鉴权] 写路由集中拒绝无效 JSON、未知字段和
         signal
       })
     );
-  const expectFailure = async (response: Response, code: string) => {
+  const expectFailure = async (
+    response: Response,
+    code: string
+  ) => {
     assert.equal(response.status, 400);
     assert.equal(((await response.json()) as { code?: string }).code, code);
     assert.deepEqual(writes, []);
@@ -557,7 +589,10 @@ test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验�
   ]);
   assert.equal(parseReadyImageCacheItem("not-json"), null);
 
-  assert.deepEqual(adminPermissionsForRole("super").sort(), Object.values(adminPermissions).sort());
+  assert.deepEqual(
+    adminPermissionsForRole("super").sort(),
+    Object.values(adminPermissions).sort()
+  );
   assert.deepEqual(adminPermissionsForRole("image"), []);
 
   const password = "ImageShow-final-version-password";
@@ -586,12 +621,18 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
     firstVersion,
     secondVersion
   ]);
-  assert.deepEqual(adminCredentialTransitionVersions("first-password-hash", secondVersion), [
+  assert.deepEqual(adminCredentialTransitionVersions(
+      "first-password-hash",
+      secondVersion
+    ), [
     firstVersion,
     secondVersion
   ]);
   assert.notDeepEqual(
-    adminCredentialTransitionVersions("first-password-hash", secondVersion),
+    adminCredentialTransitionVersions(
+      "first-password-hash",
+      secondVersion
+    ),
     [initialVersion, secondVersion],
     "等待行锁后的第二次改密必须使用锁内最新代际"
   );
@@ -630,7 +671,11 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
       assert.equal(id, authenticatedSession.id);
       return currentSessionPayload;
     },
-    async replaceSessionSnapshot(id: string, expectedPayload: string, nextPayload: string) {
+    async replaceSessionSnapshot(
+      id: string,
+      expectedPayload: string,
+      nextPayload: string
+    ) {
       assert.equal(id, authenticatedSession.id);
       if (currentSessionPayload !== expectedPayload) return false;
       replacedSnapshots.push(expectedPayload);
@@ -640,7 +685,10 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
   };
   await authorizeAdminSessionCredentialTransition(
     authenticatedSession,
-    adminCredentialTransitionVersions("initial-password-hash", firstVersion),
+    adminCredentialTransitionVersions(
+      "initial-password-hash",
+      firstVersion
+    ),
     transitionStore
   );
   assert.deepEqual(JSON.parse(currentSessionPayload).credential_versions, [
@@ -649,7 +697,10 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
   ]);
   await authorizeAdminSessionCredentialTransition(
     authenticatedSession,
-    adminCredentialTransitionVersions("first-password-hash", secondVersion),
+    adminCredentialTransitionVersions(
+      "first-password-hash",
+      secondVersion
+    ),
     transitionStore
   );
   assert.deepEqual(
@@ -663,13 +714,19 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
   await assert.rejects(
     authorizeAdminSessionCredentialTransition(
       authenticatedSession,
-      adminCredentialTransitionVersions("first-password-hash", secondVersion),
+      adminCredentialTransitionVersions(
+        "first-password-hash",
+        secondVersion
+      ),
       transitionStore
     ),
     (error: unknown) => (error as { code?: string }).code === "unauthorized",
     "相同明文 reset 或同名重建后，stale 会话不得绑定新行锁代际"
   );
-  assert.equal(currentSessionPayload, strictSessionPayload([initialVersion]));
+  assert.equal(
+    currentSessionPayload,
+    strictSessionPayload([initialVersion])
+  );
 
   const snapshotRaceStore = {
     async readSession() {
@@ -682,7 +739,10 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
   await assert.rejects(
     authorizeAdminSessionCredentialTransition(
       authenticatedSession,
-      adminCredentialTransitionVersions("initial-password-hash", firstVersion),
+      adminCredentialTransitionVersions(
+        "initial-password-hash",
+        firstVersion
+      ),
       snapshotRaceStore
     ),
     (error: unknown) => (error as { code?: string }).code === "unauthorized",
@@ -871,7 +931,11 @@ test("[Server/HTTP 与鉴权] 管理员会话只接受当前 namespace 和严格
     }),
     0
   );
-  assert.equal(delayedUnlinkCalls, 0, "stale 清理不得选择已跨过其代际的新会话或同名重建会话");
+  assert.equal(
+    delayedUnlinkCalls,
+    0,
+    "stale 清理不得选择已跨过其代际的新会话或同名重建会话"
+  );
 
   const delexCalls: string[][] = [];
   const adapter = adminSessionRedisClient({
@@ -1018,7 +1082,10 @@ test("[Server/HTTP 与鉴权] HTTP 范围、缓存验证器和安全响应头遵
     headers: { "If-None-Match": preferenceEtag ?? "" }
   });
   assert.equal(unchangedPreferences.status, 304);
-  assert.equal(unchangedPreferences.headers.get(adminImageListReadStartedAtHeader), "123");
+  assert.equal(
+    unchangedPreferences.headers.get(adminImageListReadStartedAtHeader),
+    "123"
+  );
   assert.equal(unchangedPreferences.headers.get("etag"), preferenceEtag);
   assert.equal(await unchangedPreferences.text(), "");
 });
@@ -1027,10 +1094,16 @@ test("[Server/HTTP 与鉴权] 日志尾读循环读取实际字节并区分缺�
   const helperRoot = await createTestDirectory("imageshow-log-tail-");
   const helperPath = join(helperRoot, "verify-log-tail.mjs");
   const runtimeConfigStoreUrl = pathToFileURL(
-    resolve(repositoryRoot, "packages/server/src/config/runtime-config-store.ts")
+    resolve(
+      repositoryRoot,
+      "packages/server/src/config/runtime-config-store.ts"
+    )
   ).href;
   const logFilesUrl = pathToFileURL(
-    resolve(repositoryRoot, "packages/server/src/core/log-files.ts")
+    resolve(
+      repositoryRoot,
+      "packages/server/src/core/log-files.ts"
+    )
   ).href;
   const helperSource = `
 import assert from "node:assert/strict";
@@ -1147,7 +1220,10 @@ console.log("log-tail-ok");
     await writeFile(helperPath, helperSource);
     const result = await runProcess(
       process.execPath,
-      [resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"), helperPath],
+      [
+        resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"),
+        helperPath
+      ],
       {
         cwd: repositoryRoot,
         env: {

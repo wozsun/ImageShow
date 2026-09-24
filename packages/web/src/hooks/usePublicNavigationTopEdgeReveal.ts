@@ -1,7 +1,10 @@
 import { useEffect, useEffectEvent } from "react";
 import { publicNavigationTopEdgeRevealHeight } from "../lib/ui/public-navigation.js";
 
-export function usePublicNavigationTopEdgeReveal(onReveal: () => void, enabled = true) {
+export function usePublicNavigationTopEdgeReveal(
+  onReveal: () => void,
+  enabled = true
+) {
   const reveal = useEffectEvent(onReveal);
 
   useEffect(() => {

@@ -32,7 +32,10 @@ import { storageSlugInput } from "./storage.ts";
 
 const externalImageRejectedMessage = "外部图片请求未通过安全校验";
 const classificationDevices = [...appConfig.devices, "auto"] as const;
-const classificationBrightnesses = [...appConfig.brightnesses, "auto"] as const;
+const classificationBrightnesses = [
+  ...appConfig.brightnesses,
+  "auto"
+] as const;
 
 const imageMetadataFieldInputs = {
   device: z.enum(classificationDevices),
@@ -45,7 +48,8 @@ const imageMetadataFieldInputs = {
     .max(slugMaxLength)
     .refine((value) => value === "" || slugPattern.test(value), "author must be a lowercase slug"),
   title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength),
-  description: z.string().trim().max(appConfig.imageMetadata.descriptionMaxLength),
+  description: z.string().trim()
+    .max(appConfig.imageMetadata.descriptionMaxLength),
   source: requestUrlInput("来源页面链接需为有效的 HTTPS 链接"),
   original: requestUrlInput(externalImageRejectedMessage).refine(
     (value) => !value || isHttpsUrl(value, { requireDomain: true }),
@@ -111,7 +115,12 @@ const uniqueImageIdsInput = z
   .min(1)
   .max(200)
   .superRefine((ids, context) => {
-    addDuplicateValueIssues(ids, context, (index) => [index], "请求不能包含重复 ID");
+    addDuplicateValueIssues(
+      ids,
+      context,
+      (index) => [index],
+      "请求不能包含重复 ID"
+    );
   });
 
 export const imageActionInput = z.strictObject({
@@ -229,5 +238,6 @@ export const adminImageListQuery = z.strictObject({
   sort_by: z.enum(adminImageSortFields).default(defaultAdminImageSort.sort_by),
   order: z.enum(adminImageOrders).default(defaultAdminImageSort.order),
   page: safePositiveIntegerInput.default(1),
-  limit: safePositiveIntegerInput.max(appConfig.pagination.maxLimit).default(adminImagePageLimit)
+  limit: safePositiveIntegerInput.max(appConfig.pagination.maxLimit)
+    .default(adminImagePageLimit)
 }) satisfies z.ZodType<AdminImageListQuery>;

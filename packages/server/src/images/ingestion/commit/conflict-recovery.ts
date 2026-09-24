@@ -1,6 +1,9 @@
 import { ApiError } from "../../../core/api-error.ts";
 import { readDuplicateMatchCountsByMd5 } from "../../read-models/duplicates.ts";
-import type { IngestionSessionSnapshot, StoredIngestionSession } from "../sessions/model.ts";
+import type {
+  IngestionSessionSnapshot,
+  StoredIngestionSession
+} from "../sessions/model.ts";
 import type { IngestionSessionRepository } from "../repository.ts";
 import { semanticIngestionSession } from "../sessions/transitions.ts";
 

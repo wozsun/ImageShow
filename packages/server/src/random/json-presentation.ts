@@ -1,5 +1,8 @@
 import { microsecondsTimestamp } from "../core/microseconds.ts";
-import type { RandomImageJsonItemDto, RandomImageSize } from "@imageshow/shared/browser";
+import type {
+  RandomImageJsonItemDto,
+  RandomImageSize
+} from "@imageshow/shared/browser";
 import { publicImageUrlsForConfig } from "../storage/objects/public-urls.ts";
 import { getStorageBackendConfigs } from "../storage/backends/registry.ts";
 import type { SelectedReadyImage } from "./selection-model.ts";

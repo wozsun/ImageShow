@@ -2,7 +2,10 @@ import type { ImageDraft } from "../../../../lib/types.js";
 import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 import { normalizeAuthor, normalizeTheme } from "../../../../lib/image-draft.js";
 
-import { webIngestionBatchKey, webUuidV7 } from "../queue/model/ingestion-identity.js";
+import {
+  webIngestionBatchKey,
+  webUuidV7
+} from "../queue/model/ingestion-identity.js";
 import {
   filterNewUploadFiles,
   uploadFileFingerprint
@@ -49,7 +52,10 @@ async function loadImageDimensions(previewUrl: string): Promise<{ width: number;
   });
 }
 
-async function inspectUploadPreview(defaults: IngestionAttributeDefaults, previewUrl: string) {
+async function inspectUploadPreview(
+  defaults: IngestionAttributeDefaults,
+  previewUrl: string
+) {
   const dimensions = await loadImageDimensions(previewUrl);
   return {
     draft: createUploadDraft(defaults),
@@ -58,7 +64,10 @@ async function inspectUploadPreview(defaults: IngestionAttributeDefaults, previe
   };
 }
 
-export function buildUploadIntentItemInput(job: IngestionJob, maxLongEdge: number) {
+export function buildUploadIntentItemInput(
+  job: IngestionJob,
+  maxLongEdge: number
+) {
   if (!job.file) throw new Error("上传任务缺少图片文件");
   if (job.batchPosition === undefined) {
     throw new Error("上传任务缺少批次位置");
@@ -114,7 +123,10 @@ export async function createUploadJobs({
   const batchTime = new Date().toISOString();
   const batchKey = webIngestionBatchKey();
   const outcomes = await Promise.allSettled(
-    files.map((file, batchPosition): Promise<IngestionJob> =>
+    files.map((
+      file,
+      batchPosition
+    ): Promise<IngestionJob> =>
       runInBrowserLane(async () => {
         const objectUrl = URL.createObjectURL(file);
         try {
@@ -132,7 +144,11 @@ export async function createUploadJobs({
             fileFingerprint: uploadFileFingerprint(file),
             status: tooLarge || tooWide ? "failed" : "queued",
             failureStage: tooLarge || tooWide ? "create" : undefined,
-            message: tooLarge ? "图片大小超过限制" : tooWide ? "图片长边超过限制" : "等待上传",
+            message: tooLarge
+              ? "图片大小超过限制"
+              : tooWide
+                ? "图片长边超过限制"
+                : "等待上传",
             preview: objectUrl,
             objectUrl,
             draft: preview.draft,

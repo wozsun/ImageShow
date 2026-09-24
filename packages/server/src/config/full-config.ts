@@ -1,4 +1,7 @@
-import type { RuntimeConfig, RuntimeConfigChangeSummaryDto } from "@imageshow/shared/browser";
+import type {
+  RuntimeConfig,
+  RuntimeConfigChangeSummaryDto
+} from "@imageshow/shared/browser";
 import { z } from "zod";
 import { ApiError } from "../core/api-error.ts";
 import { assertLocalImageHostForSite } from "../storage/backends/registry.ts";
@@ -14,7 +17,9 @@ function summarizeRuntimeConfigChanges(
   candidate: RuntimeConfig
 ): RuntimeConfigChangeSummaryDto {
   return {
-    access_changes: current.site.domain === candidate.site.domain ? [] : ["site.domain" as const]
+    access_changes: current.site.domain === candidate.site.domain
+      ? []
+      : ["site.domain" as const]
   };
 }
 

@@ -12,7 +12,10 @@ type VisibilityListener = (visible: boolean) => void;
 const visibilityListeners = new Map<Element, VisibilityListener>();
 let visibilityObserver: IntersectionObserver | undefined;
 
-function observeVisibility(element: Element, listener: VisibilityListener) {
+function observeVisibility(
+  element: Element,
+  listener: VisibilityListener
+) {
   if (typeof IntersectionObserver === "undefined") {
     listener(true);
     return () => undefined;
@@ -55,7 +58,9 @@ export function OverflowMarqueeText({
     if (!viewport || !track || !content) return;
 
     const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const interactionOwner = viewport.closest<HTMLElement>("button, a, [tabindex]") ?? viewport;
+    const interactionOwner = viewport.closest<HTMLElement>(
+      "button, a, [tabindex]"
+    ) ?? viewport;
     const pauseReasons = new Set<"focus" | "pointer">();
     let animation: Animation | undefined;
     let visible = typeof IntersectionObserver === "undefined";
@@ -69,7 +74,10 @@ export function OverflowMarqueeText({
     const measure = () => {
       cancelAnimation();
 
-      const tailDistance = Math.max(0, Math.ceil(content.scrollWidth - viewport.clientWidth));
+      const tailDistance = Math.max(
+        0,
+        Math.ceil(content.scrollWidth - viewport.clientWidth)
+      );
       const nextHeadDistance = content.scrollWidth + 24;
       const isOverflowing = tailDistance > 1;
       setOverflowing(isOverflowing);
@@ -109,7 +117,10 @@ export function OverflowMarqueeText({
       setAnimating(true);
     };
 
-    const setPaused = (reason: "focus" | "pointer", paused: boolean) => {
+    const setPaused = (
+      reason: "focus" | "pointer",
+      paused: boolean
+    ) => {
       if (paused) pauseReasons.add(reason);
       else pauseReasons.delete(reason);
       if (pauseReasons.size > 0) animation?.pause();
@@ -127,7 +138,9 @@ export function OverflowMarqueeText({
       measure();
     });
     const observer =
-      typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver(measure);
     observer?.observe(viewport);
     observer?.observe(content);
     motionQuery.addEventListener("change", measure);

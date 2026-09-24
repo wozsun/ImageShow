@@ -1,5 +1,14 @@
-import type { FocusEvent, MouseEvent, PointerEvent } from "react";
-import { createElement, createContext, useContext, type ReactNode } from "react";
+import type {
+  FocusEvent,
+  MouseEvent,
+  PointerEvent
+} from "react";
+import {
+  createElement,
+  createContext,
+  useContext,
+  type ReactNode
+} from "react";
 
 /**
  * Reuses a public route request while it is pending or fulfilled, and records
@@ -113,7 +122,11 @@ export function PublicRoutePreloadProvider({
   children: ReactNode;
   intents: PublicRoutePreloadIntents;
 }) {
-  return createElement(PublicRoutePreloadContext.Provider, { value: intents }, children);
+  return createElement(
+    PublicRoutePreloadContext.Provider,
+    { value: intents },
+    children
+  );
 }
 
 export function usePublicRoutePreloadIntents() {

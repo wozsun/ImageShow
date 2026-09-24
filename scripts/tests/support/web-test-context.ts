@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { type TestContext } from "node:test";
 import { parseHTML } from "linkedom";
-import { Texture, type Rectangle, type Renderer } from "pixi.js";
+import {
+  Texture,
+  type Rectangle,
+  type Renderer
+} from "pixi.js";
 import {
   type AdminImageListItemDto,
   type GalleryImageCardDto,
@@ -25,7 +29,11 @@ import {
   type GalleryPageIntent
 } from "../../../packages/web/src/pages/gallery/gallery-data-window.ts";
 
-export function galleryCardDto(id: string, width = 100, height = 100): GalleryImageCardDto {
+export function galleryCardDto(
+  id: string,
+  width = 100,
+  height = 100
+): GalleryImageCardDto {
   return {
     id,
     title: id,
@@ -40,7 +48,11 @@ export function galleryCardDto(id: string, width = 100, height = 100): GalleryIm
     image_time: "2026-09-01T00:00:00.000Z"
   };
 }
-export function galleryCard(id: string, width = 100, height = 100): GalleryImageCard {
+export function galleryCard(
+  id: string,
+  width = 100,
+  height = 100
+): GalleryImageCard {
   return galleryCardDto(id, width, height);
 }
 export function syntheticGalleryPage({
@@ -235,7 +247,9 @@ export async function createPublicNavigationHarness(
   };
   const window = new Proxy(domWindow, {
     get: (target, key) =>
-      typeof key === "string" && key in overrides ? overrides[key] : Reflect.get(target, key),
+      typeof key === "string" && key in overrides
+        ? overrides[key]
+        : Reflect.get(target, key),
     set: (_target, key, value) => {
       overrides[String(key)] = value;
       return true;
@@ -502,7 +516,10 @@ export function createCameraTestElement(width = 800, height = 600) {
       for (const listener of listeners.get(type) ?? []) listener(event);
       return prevented;
     },
-    listenerCount: () => [...listeners.values()].reduce((total, entries) => total + entries.size, 0)
+    listenerCount: () => [...listeners.values()].reduce(
+      (total, entries) => total + entries.size,
+      0
+    )
   };
 }
 export function installPixiPaletteFixture(t: TestContext) {
@@ -512,7 +529,8 @@ export function installPixiPaletteFixture(t: TestContext) {
     .map((name) => readFileSync(`packages/web/src/styles/${name}`, "utf8"))
     .join("\n");
   const tokens = new Map(
-    [...css.matchAll(/(--[\w-]+):\s*([^;]+);/gu)].map((match) => [match[1], match[2].trim()])
+    [...css.matchAll(/(--[\w-]+):\s*([^;]+);/gu)]
+      .map((match) => [match[1], match[2].trim()])
   );
   const globals = {
     document: { documentElement: {} },
@@ -829,7 +847,8 @@ export async function createConfigStreamHarness(
       animationFrame?.requestAnimationFrame ??
       ((callback: FrameRequestCallback) => window.setTimeout(() => callback(Date.now()), 0)),
     cancelAnimationFrame:
-      animationFrame?.cancelAnimationFrame ?? ((id: number) => window.clearTimeout(id)),
+      animationFrame?.cancelAnimationFrame
+        ?? ((id: number) => window.clearTimeout(id)),
     location: new URL("https://img.example/show"),
     matchMedia: (media: string) => ({
       media,

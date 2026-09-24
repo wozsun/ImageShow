@@ -6,8 +6,13 @@ export async function mapWithWorkerPool<T, Result>(
 ): Promise<Result[]> {
   if (items.length === 0) return [];
 
-  const normalizedLimit = Number.isFinite(limit) ? Math.max(1, Math.floor(limit)) : 1;
-  const workerCount = Math.min(items.length, normalizedLimit);
+  const normalizedLimit = Number.isFinite(limit)
+    ? Math.max(1, Math.floor(limit))
+    : 1;
+  const workerCount = Math.min(
+    items.length,
+    normalizedLimit
+  );
   const results = new Array<Result>(items.length);
   let nextIndex = 0;
   let stopped = false;
@@ -67,7 +72,10 @@ export class DynamicConcurrencyLimiter {
   private readonly limit: () => number;
   private readonly cancellationError: (signal: AbortSignal) => unknown;
 
-  constructor(limit: () => number, cancellationError: (signal: AbortSignal) => unknown) {
+  constructor(
+    limit: () => number,
+    cancellationError: (signal: AbortSignal) => unknown
+  ) {
     this.limit = limit;
     this.cancellationError = cancellationError;
   }
@@ -137,7 +145,9 @@ export class DynamicConcurrencyLimiter {
 
   private currentLimit() {
     const configured = this.limit();
-    return Number.isFinite(configured) ? Math.max(1, Math.floor(configured)) : 1;
+    return Number.isFinite(configured)
+      ? Math.max(1, Math.floor(configured))
+      : 1;
   }
 
   private drain() {
@@ -171,7 +181,10 @@ export class DynamicWeightedLimiter {
   private readonly limit: () => number;
   private readonly cancellationError: (signal: AbortSignal) => unknown;
 
-  constructor(limit: () => number, cancellationError: (signal: AbortSignal) => unknown) {
+  constructor(
+    limit: () => number,
+    cancellationError: (signal: AbortSignal) => unknown
+  ) {
     this.limit = limit;
     this.cancellationError = cancellationError;
   }
@@ -182,7 +195,11 @@ export class DynamicWeightedLimiter {
     work: () => Promise<Result>,
     hooks: DynamicConcurrencyHooks = {}
   ): Promise<Result> {
-    const acquiredWeight = await this.acquire(requestedWeight, signal, hooks.onQueued);
+    const acquiredWeight = await this.acquire(
+      requestedWeight,
+      signal,
+      hooks.onQueued
+    );
     try {
       if (signal.aborted) throw this.cancellationError(signal);
       hooks.onStarted?.();
@@ -252,16 +269,21 @@ export class DynamicWeightedLimiter {
 
   private currentLimit() {
     const configured = this.limit();
-    return Number.isFinite(configured) ? Math.max(1, Math.floor(configured)) : 1;
+    return Number.isFinite(configured)
+      ? Math.max(1, Math.floor(configured))
+      : 1;
   }
 
   private normalizedWeight(requestedWeight: number) {
-    return Number.isFinite(requestedWeight) ? Math.max(1, Math.floor(requestedWeight)) : 1;
+    return Number.isFinite(requestedWeight)
+      ? Math.max(1, Math.floor(requestedWeight))
+      : 1;
   }
 
   private canStart(weight: number) {
     const limit = this.currentLimit();
-    return this.activeWeight + weight <= limit || (this.activeWeight === 0 && weight > limit);
+    return this.activeWeight + weight <= limit
+      || (this.activeWeight === 0 && weight > limit);
   }
 
   private drain() {

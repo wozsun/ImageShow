@@ -3,7 +3,9 @@ import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Readable } from "node:stream";
 import { promisify } from "node:util";
-import { brotliDecompress, gunzip, constants, createZstdDecompress } from "node:zlib";
+import {
+  brotliDecompress, gunzip, constants, createZstdDecompress
+} from "node:zlib";
 import {
   compressStaticAsset,
   staticAssetCompression

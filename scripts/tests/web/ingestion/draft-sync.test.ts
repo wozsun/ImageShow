@@ -8,8 +8,14 @@ import {
 } from "../../../../packages/shared/src/browser.ts";
 import type { IngestionJob } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
 import { reduceIngestionQueue } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
-import { ingestionJob, adminImageListItem } from "../../support/web-test-context.ts";
-import { dispatchDomEvent, inputText } from "../../support/dom-events.ts";
+import {
+  ingestionJob,
+  adminImageListItem
+} from "../../support/web-test-context.ts";
+import {
+  dispatchDomEvent,
+  inputText
+} from "../../support/dom-events.ts";
 import { installControlledClock } from "../../support/controlled-clock.ts";
 
 test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语义 no-op 收敛响应丢失", async () => {
@@ -268,7 +274,10 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
     assert.equal(thirdItem.expected_version, 2);
     assert.equal((thirdItem.metadata as Record<string, unknown>).title, "第一版");
     assert.equal(fourthItem.expected_version, 3);
-    assert.equal((fourthItem.metadata as Record<string, unknown>).title, "等待期间的新版本");
+    assert.equal(
+      (fourthItem.metadata as Record<string, unknown>).title,
+      "等待期间的新版本"
+    );
     assert.equal(jobsRef.current[0]?.serverVersion, 4);
     assert.equal(jobsRef.current[0]?.serverDraftPending, false);
     assert.deepEqual(errors, []);
@@ -302,7 +311,10 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
     });
     assert.equal(fetchCalls, 5);
     const fencedItem = (requests[4]?.items as Array<Record<string, unknown>>)[0]!;
-    assert.equal((fencedItem.metadata as Record<string, unknown>).title, "接管前冻结的草稿");
+    assert.equal(
+      (fencedItem.metadata as Record<string, unknown>).title,
+      "接管前冻结的草稿"
+    );
     assert.equal(
       sync!.hasPendingUpdates(),
       true,
@@ -341,7 +353,10 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
     const offPageItem = (requests[5]?.items as Array<Record<string, unknown>>)[0]!;
     assert.equal(offPageItem.session_id, sessionId);
     assert.equal(offPageItem.image_id, imageId);
-    assert.equal((offPageItem.metadata as Record<string, unknown>).title, "翻页后仍须写回");
+    assert.equal(
+      (offPageItem.metadata as Record<string, unknown>).title,
+      "翻页后仍须写回"
+    );
 
     state = {
       page: 1,
@@ -544,7 +559,10 @@ test("[Web/内容接入] ready 草稿空主题规范化、串行写回并以语�
     assert.equal(errors.length, previousErrorCount + 1);
     assert.match(errors.at(-1) ?? "", /本地草稿未写入/u);
     assert.equal(jobsRef.current[0]?.serverDraftPending, false);
-    assert.equal(jobsRef.current[0]?.draft.title, "另一设备已冻结的权威草稿");
+    assert.equal(
+      jobsRef.current[0]?.draft.title,
+      "另一设备已冻结的权威草稿"
+    );
     server.items = [];
 
     state = {
@@ -835,7 +853,11 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
       });
       await Promise.resolve();
     });
-    assert.equal(publications.length, beforeCandidate + 1, "候选选择必须维持即时离散发布语义");
+    assert.equal(
+      publications.length,
+      beforeCandidate + 1,
+      "候选选择必须维持即时离散发布语义"
+    );
     assert.deepEqual(publications.at(-1)?.patch, { theme: "candidate-theme" });
     await React.act(async () => {
       dispatchDomEvent(window as Window, theme, "focusout", {
@@ -1073,7 +1095,11 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
 
     const original = container.querySelector<HTMLInputElement>("input[placeholder='原图 URL']")!;
     await React.act(async () => {
-      inputText(window as Window, original, "http://draft-image.invalid/image.jpg");
+      inputText(
+        window as Window,
+        original,
+        "http://draft-image.invalid/image.jpg"
+      );
       dispatchDomEvent(window as Window, original, "focusout", {
         relatedTarget: document.body
       });
@@ -1082,7 +1108,10 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
     assert.equal(requestCount, 1, "无效原图 URL 不得进入草稿同步请求");
     assert.equal(reportedErrors.length, 0, "无效 URL 不得进入可见草稿错误入口");
     assert.equal(original.classList.contains("is-changed"), false);
-    assert.equal(consoleMessages.at(-1), "[ImageShow] 内容接入草稿原图 URL 格式无效，未保存");
+    assert.equal(
+      consoleMessages.at(-1),
+      "[ImageShow] 内容接入草稿原图 URL 格式无效，未保存"
+    );
 
     await React.act(async () => {
       inputText(window as Window, original, "draft-image.invalid/image.jpg");
@@ -1104,7 +1133,11 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
 
     const source = container.querySelector<HTMLInputElement>("input[placeholder='来源 URL']")!;
     await React.act(async () => {
-      inputText(window as Window, source, "https://user:password@example.com/post");
+      inputText(
+        window as Window,
+        source,
+        "https://user:password@example.com/post"
+      );
       dispatchDomEvent(window as Window, source, "focusout", {
         relatedTarget: document.body
       });
@@ -1112,7 +1145,10 @@ test("[Web/内容接入] 任务卡片慢速键入与 URL 格式校验只产生�
     });
     assert.equal(requestCount, 2, "无效来源 URL 不得进入草稿同步请求");
     assert.equal(reportedErrors.length, 0);
-    assert.equal(consoleMessages.at(-1), "[ImageShow] 内容接入草稿来源 URL 格式无效，未保存");
+    assert.equal(
+      consoleMessages.at(-1),
+      "[ImageShow] 内容接入草稿来源 URL 格式无效，未保存"
+    );
     await React.act(async () => root.unmount());
   } finally {
     console.info = previousConsoleInfo;
@@ -1192,7 +1228,11 @@ test("[Web/内容接入] 未接管 placeholder 的草稿 fence 不阻塞 Server 
         reportError: () => undefined,
         observeCompletedIngestions: () => undefined
       });
-      return React.createElement("output", null, String(sync.hasPendingUpdates()));
+      return React.createElement(
+        "output",
+        null,
+        String(sync.hasPendingUpdates())
+      );
     }
     const container = document.getElementById("root");
     assert.ok(container);
@@ -1300,7 +1340,11 @@ test("[Web/内容接入] 离页草稿 owner 可按 session incarnation 静默退
         reportError: () => undefined,
         observeCompletedIngestions: () => undefined
       });
-      return React.createElement("output", null, String(sync.hasPendingUpdates()));
+      return React.createElement(
+        "output",
+        null,
+        String(sync.hasPendingUpdates())
+      );
     }
     const container = document.getElementById("root");
     assert.ok(container);

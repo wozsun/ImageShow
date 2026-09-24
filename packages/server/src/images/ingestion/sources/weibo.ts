@@ -3,8 +3,14 @@ import type { WeiboImportResultDto } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
 import { resolveWeiboAuthorSlugs } from "../../../authors/query.ts";
 import { parseJsonlManifest } from "./jsonl.ts";
-import { createWeiboVisitorCookie, fetchWeiboStatus } from "./weibo-client.ts";
-import { extractWeiboPost, parseWeiboPostUrl } from "./weibo-parser.ts";
+import {
+  createWeiboVisitorCookie,
+  fetchWeiboStatus
+} from "./weibo-client.ts";
+import {
+  extractWeiboPost,
+  parseWeiboPostUrl
+} from "./weibo-parser.ts";
 import { createWeiboRequestScheduler } from "./weibo-request-scheduler.ts";
 import {
   WeiboImportError,
@@ -74,7 +80,11 @@ function assertWeiboImageCountWithinHardLimit(imageCount: number) {
   );
 }
 
-function createWeiboPostParseError(error: unknown, line: number, url: string): WeiboPostParseError {
+function createWeiboPostParseError(
+  error: unknown,
+  line: number,
+  url: string
+): WeiboPostParseError {
   if (!(error instanceof WeiboImportError)) throw error;
   return { line, url, code: error.code, error: error.message };
 }
@@ -149,7 +159,11 @@ export async function createWeiboImportBatchManifest(
     posts.flatMap((post) => post.images.flatMap((image) => (image.user_id ? [image.user_id] : [])))
   );
   const manifest = parseJsonlManifest(
-    posts.map((post) => weiboPostToJsonl(post, options.sourceEnabled, authorSlugs)).join("\n"),
+    posts.map((post) => weiboPostToJsonl(
+      post,
+      options.sourceEnabled,
+      authorSlugs
+    )).join("\n"),
     {
       maxItems: appConfig.ingestion.weiboImageHardLimit,
       timeZone: options.timeZone

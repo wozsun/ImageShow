@@ -3,7 +3,11 @@ import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 
 import { randomUUID } from "node:crypto";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import {
+  readFile,
+  rm,
+  writeFile
+} from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
@@ -81,7 +85,10 @@ import {
   imageFilterPlanWithout
 } from "../../../packages/server/src/images/filter-plan.ts";
 import { createPageWindow } from "../../../packages/server/src/images/page-window.ts";
-import { createImageId, parseImageTime } from "../../../packages/server/src/images/image-time.ts";
+import {
+  createImageId,
+  parseImageTime
+} from "../../../packages/server/src/images/image-time.ts";
 import {
   servePublicStoredObject,
   servePublicStoredThumbnail
@@ -116,7 +123,10 @@ import {
 import { resolveCandidateAxes } from "../../../packages/server/src/random/selection-model.ts";
 import { registerAdminImageRoutes } from "../../../packages/server/src/routes/admin-images.ts";
 import { registerPublicRoutes } from "../../../packages/server/src/routes/public.ts";
-import { imageId, servingReadyCacheItem } from "../support/server-test-context.ts";
+import {
+  imageId,
+  servingReadyCacheItem
+} from "../support/server-test-context.ts";
 
 test("[Server/图片] 完成结果统一分类图片与存储配置断连并保留格式化错误", async (t) => {
   const database = await import("../../../packages/server/src/core/database/pools.ts");
@@ -540,9 +550,15 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     false
   );
 
-  const tags50 = Array.from({ length: 50 }, (_, index) => `tag-${String(index).padStart(2, "0")}`);
+  const tags50 = Array.from(
+    { length: 50 },
+    (_, index) => `tag-${String(index).padStart(2, "0")}`
+  );
   const tags51 = [...tags50, "tag-50"];
-  const repeatedTags = Array.from({ length: 51 }, (_, index) => (index % 2 ? " Stage " : "stage"));
+  const repeatedTags = Array.from(
+    { length: 51 },
+    (_, index) => index % 2 ? " Stage " : "stage"
+  );
   const commonIngestionMetadata = {
     device: "auto" as const,
     brightness: "auto" as const
@@ -814,7 +830,10 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
     action_watermark: "signed-watermark",
     max_semantic_revision: 117
   };
-  assert.equal(ingestionQueueActionInput.safeParse(boundedCompletedCleanup).success, true);
+  assert.equal(
+    ingestionQueueActionInput.safeParse(boundedCompletedCleanup).success,
+    true
+  );
   assert.equal(
     ingestionQueueActionInput.safeParse({
       ...boundedCompletedCleanup,
@@ -942,7 +961,11 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
   registerAdminImageRoutes(app as unknown as Hono);
   registerPublicRoutes(app as unknown as Hono);
 
-  const post = (path: string, body: string, role: "super" | "image" = "super") =>
+  const post = (
+    path: string,
+    body: string,
+    role: "super" | "image" = "super"
+  ) =>
     app.request(
       new Request(`http://imageshow.test${path}`, {
         method: "POST",
@@ -970,15 +993,25 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
       })
     );
     assert.equal(response.status, 400);
-    assert.equal(((await response.json()) as { code?: string }).code, "validation_error");
+    assert.equal(
+      (await response.json() as { code?: string }).code,
+      "validation_error"
+    );
   }
 
-  for (const query of ["page=2", "offset=60", "unknown=true"]) {
+  for (const query of [
+    "page=2",
+    "offset=60",
+    "unknown=true"
+  ]) {
     const response = await app.request(
       new Request(`http://imageshow.test/api/images?view=gallery&limit=60&${query}`)
     );
     assert.equal(response.status, 400);
-    assert.equal(((await response.json()) as { code?: string }).code, "validation_error");
+    assert.equal(
+      (await response.json() as { code?: string }).code,
+      "validation_error"
+    );
   }
 
   const duplicateIds = [imageId, imageId.toUpperCase()];
@@ -987,7 +1020,10 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
     jsonBody({ ids: duplicateIds })
   );
   assert.equal(snapshotDuplicate.status, 400);
-  assert.equal(((await snapshotDuplicate.json()) as { code?: string }).code, "validation_error");
+  assert.equal(
+    (await snapshotDuplicate.json() as { code?: string }).code,
+    "validation_error"
+  );
 
   const updateDuplicate = await post(
     `${adminApiBasePath}/images/update`,
@@ -1003,7 +1039,10 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
       jsonBody({ ids: duplicateIds })
     );
     assert.equal(duplicate.status, 400);
-    assert.equal(((await duplicate.json()) as { code?: string }).code, "validation_error");
+    assert.equal(
+      (await duplicate.json() as { code?: string }).code,
+      "validation_error"
+    );
   }
 
   const purgeForbidden = await post(
@@ -1012,7 +1051,10 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
     "image"
   );
   assert.equal(purgeForbidden.status, 403);
-  assert.equal(((await purgeForbidden.json()) as { code?: string }).code, "forbidden");
+  assert.equal(
+    (await purgeForbidden.json() as { code?: string }).code,
+    "forbidden"
+  );
   for (const invalidPurge of [
     { scope: "selected" },
     { scope: "selected", ids: [] },
@@ -1022,7 +1064,10 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
     { scope: "all", ids: "*" },
     { ids: [imageId] }
   ]) {
-    const response = await post(`${adminApiBasePath}/images/purge`, jsonBody(invalidPurge));
+    const response = await post(
+      `${adminApiBasePath}/images/purge`,
+      jsonBody(invalidPurge)
+    );
     assert.equal(response.status, 400);
   }
 
@@ -1032,7 +1077,10 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
     "image"
   );
   assert.equal(migrationForbidden.status, 403);
-  assert.equal(((await migrationForbidden.json()) as { code?: string }).code, "forbidden");
+  assert.equal(
+    (await migrationForbidden.json() as { code?: string }).code,
+    "forbidden"
+  );
 
   const migrationDuplicate = await post(
     `${adminApiBasePath}/images/migrate-storage`,
@@ -1047,7 +1095,10 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
     })
   );
   assert.equal(aboveStandardTier.status, 400);
-  assert.equal(((await aboveStandardTier.json()) as { code?: string }).code, "validation_error");
+  assert.equal(
+    (await aboveStandardTier.json() as { code?: string }).code,
+    "validation_error"
+  );
 
   const aboveImageUpdateTier = await post(
     `${adminApiBasePath}/images/update`,
@@ -1081,7 +1132,10 @@ test("[Server/图片] 外部图片 DNS 地址策略保持严格解析、最长�
     return error === null;
   };
   const bytesToValue = (bytes: number[]) =>
-    bytes.reduce((value, byte) => (value << 8n) | BigInt(byte), 0n);
+    bytes.reduce(
+      (value, byte) => (value << 8n) | BigInt(byte),
+      0n
+    );
   const valueToBytes = (input: bigint, length: number) => {
     let value = input;
     const bytes = Array.from({ length }, () => 0);
@@ -1106,7 +1160,9 @@ test("[Server/图片] 外部图片 DNS 地址策略保持严格解析、最长�
       rangeEnd,
       rangeEnd < maximum ? rangeEnd + 1n : null
     ].map((value) =>
-      value === null ? null : ipaddr.fromByteArray(valueToBytes(value, baseBytes.length)).toString()
+      value === null
+        ? null
+        : ipaddr.fromByteArray(valueToBytes(value, baseBytes.length)).toString()
     );
   };
 
@@ -1235,7 +1291,11 @@ test("[Server/图片] 外部图片 DNS 地址策略保持严格解析、最长�
   const allResultPromise = invokeLookup(lookup, { all: true });
   assert.equal(resolverStarted, false);
   assert.deepEqual(await allResultPromise, [null, safeAddresses]);
-  assert.deepEqual(await invokeLookup(lookup, { family: 6 }), [null, "2606:4700:4700::1111", 6]);
+  assert.deepEqual(await invokeLookup(lookup, { family: 6 }), [
+    null,
+    "2606:4700:4700::1111",
+    6
+  ]);
 
   const blockedMix = createExternalImageLookup(async () => [
     { address: "8.8.8.8", family: 4 },
@@ -1250,7 +1310,10 @@ test("[Server/图片] 外部图片 DNS 地址策略保持严格解析、最长�
   const missingFamily = createExternalImageLookup(async () => [safeAddresses[0]]);
   const missingFamilyArgs = await invokeLookup(missingFamily, { family: 6 });
   assert.ok(missingFamilyArgs[0] instanceof Error);
-  assert.equal((missingFamilyArgs[0] as NodeJS.ErrnoException).code, externalImageLookupErrorCode);
+  assert.equal(
+    (missingFamilyArgs[0] as NodeJS.ErrnoException).code,
+    externalImageLookupErrorCode
+  );
   assert.equal(
     (missingFamilyArgs[0] as Error).message,
     "No external image address for requested family"
@@ -1326,7 +1389,11 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   });
   const baseDependencies = {
     readImageServingRecordById: async () => servingRecord,
-    resolveReadableObject: async (prefix: "full" | "thumbs", key: string, backend: string) =>
+    resolveReadableObject: async (
+      prefix: "full" | "thumbs",
+      key: string,
+      backend: string
+    ) =>
       resolvedObject(prefix, key, "", backend),
     streamResolvedObject: async (
       object: Record<string, unknown>,
@@ -1363,7 +1430,10 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
       getRequest,
       baseDependencies as never
     );
-    assert.deepEqual(Buffer.from(await stableResponse.arrayBuffer()), storedBytes);
+    assert.deepEqual(
+      Buffer.from(await stableResponse.arrayBuffer()),
+      storedBytes
+    );
     assert.equal(streamCalls.at(-1)?.object.storageSlug, storageSlug);
     assert.equal(streamCalls.at(-1)?.cacheControl, immutableCacheControl);
   }
@@ -1374,13 +1444,27 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
     request,
     {
       ...baseDependencies,
-      resolveReadableObject: async (prefix: "full" | "thumbs", key: string) =>
-        resolvedObject(prefix, key, "https://cdn.example.com/full/image.jpg", "s3-public")
+      resolveReadableObject: async (
+        prefix: "full" | "thumbs",
+        key: string
+      ) =>
+        resolvedObject(
+          prefix,
+          key,
+          "https://cdn.example.com/full/image.jpg",
+          "s3-public"
+        )
     } as never
   );
   assert.equal(redirectResponse.status, 302);
-  assert.equal(redirectResponse.headers.get("Location"), "https://cdn.example.com/full/image.jpg");
-  assert.equal(redirectResponse.headers.get("Cache-Control"), publicRedirectCacheControl);
+  assert.equal(
+    redirectResponse.headers.get("Location"),
+    "https://cdn.example.com/full/image.jpg"
+  );
+  assert.equal(
+    redirectResponse.headers.get("Cache-Control"),
+    publicRedirectCacheControl
+  );
   servingRecord = record;
 
   streamCalls.length = 0;
@@ -1402,7 +1486,10 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
       getRequest,
       baseDependencies as never
     );
-    assert.deepEqual(Buffer.from(await stableThumbnail.arrayBuffer()), storedBytes);
+    assert.deepEqual(
+      Buffer.from(await stableThumbnail.arrayBuffer()),
+      storedBytes
+    );
     assert.equal(streamCalls.at(-1)?.object.storageSlug, storageSlug);
     assert.equal(streamCalls.at(-1)?.cacheControl, immutableCacheControl);
   }
@@ -1414,14 +1501,24 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
     request,
     {
       ...baseDependencies,
-      resolveReadableObject: async (prefix: "full" | "thumbs", key: string) =>
+      resolveReadableObject: async (
+        prefix: "full" | "thumbs",
+        key: string
+      ) =>
         resolvedObject(prefix, key, "https://cdn.example.com/thumb.webp")
     } as never
   );
   assert.equal(thumbnailRedirect.status, 302);
-  assert.equal(thumbnailRedirect.headers.get("Location"), "https://cdn.example.com/thumb.webp");
+  assert.equal(
+    thumbnailRedirect.headers.get("Location"),
+    "https://cdn.example.com/thumb.webp"
+  );
   assert.equal(streamCalls.length, 0);
-  assert.equal(thumbnailExistsCalls, 0, "公开 S3 缩略图直链不得先执行存在性探测");
+  assert.equal(
+    thumbnailExistsCalls,
+    0,
+    "公开 S3 缩略图直链不得先执行存在性探测"
+  );
   servingRecord = record;
 
   await assert.rejects(
@@ -1435,7 +1532,9 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
         }
       } as never
     ),
-    (error) => error instanceof ApiError && error.status === 404 && error.code === "not_found"
+    (error) => error instanceof ApiError
+      && error.status === 404
+      && error.code === "not_found"
   );
 
   await assert.rejects(
@@ -1450,7 +1549,9 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
       } as never
     ),
     (error) =>
-      error instanceof ApiError && error.status === 503 && error.code === "storage_read_unavailable"
+      error instanceof ApiError
+        && error.status === 503
+        && error.code === "storage_read_unavailable"
   );
 
   let invalidKeyRead = false;
@@ -1462,7 +1563,9 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
         return record;
       }
     } as never),
-    (error) => error instanceof ApiError && error.status === 404 && error.code === "not_found"
+    (error) => error instanceof ApiError
+      && error.status === 404
+      && error.code === "not_found"
   );
   assert.equal(invalidKeyRead, false);
 
@@ -1475,7 +1578,9 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
         return record;
       }
     } as never),
-    (error) => error instanceof ApiError && error.status === 404 && error.code === "not_found"
+    (error) => error instanceof ApiError
+      && error.status === 404
+      && error.code === "not_found"
   );
   assert.equal(invalidThumbnailKeyRead, false);
 });
@@ -1546,7 +1651,10 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   assert.equal(proxyCalls.length, 1);
   assert.equal(directRedirect.status, 302);
   assert.equal(directRedirect.headers.get("Location"), item.original);
-  assert.equal(directRedirect.headers.get("Cache-Control"), privateRevalidationCacheControl);
+  assert.equal(
+    directRedirect.headers.get("Cache-Control"),
+    privateRevalidationCacheControl
+  );
   assert.equal(directRedirect.headers.get("Referrer-Policy"), "no-referrer");
 
   assert.equal(directRedirect.headers.get("Vary"), "Cookie, User-Agent");
@@ -1761,7 +1869,10 @@ test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既
 
   try {
     const fixturePaths = Object.fromEntries(
-      ["jpg", "png", "webp", "gif", "avif"].map((ext) => [ext, join(fixtureRoot, `source.${ext}`)])
+      ["jpg", "png", "webp", "gif", "avif"].map((ext) => [
+        ext,
+        join(fixtureRoot, `source.${ext}`)
+      ])
     );
     await source().jpeg({ quality: 90 }).toFile(fixturePaths.jpg!);
     await source().png().toFile(fixturePaths.png!);
@@ -1786,9 +1897,15 @@ test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既
     }
 
     const orientedPath = join(fixtureRoot, "oriented.jpg");
-    await source().withMetadata({ orientation: 6 }).jpeg({ quality: 90 }).toFile(orientedPath);
+    await source()
+      .withMetadata({ orientation: 6 })
+      .jpeg({ quality: 90 })
+      .toFile(orientedPath);
     const oriented = await transcodeStoredImage(orientedPath, settings);
-    assert.deepEqual([oriented.sourceWidth, oriented.sourceHeight], [height, width]);
+    assert.deepEqual(
+      [oriented.sourceWidth, oriented.sourceHeight],
+      [height, width]
+    );
     assert.deepEqual([oriented.width, oriented.height], [height, width]);
 
     const frameWidth = 96;
@@ -1822,7 +1939,10 @@ test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既
         [normalized.sourceWidth, normalized.sourceHeight],
         [frameWidth, frameHeight]
       );
-      assert.deepEqual([normalized.width, normalized.height], [frameWidth, frameHeight]);
+      assert.deepEqual(
+        [normalized.width, normalized.height],
+        [frameWidth, frameHeight]
+      );
       assert.equal(outputMetadata.pages, undefined, "默认读取仍只处理首帧");
       if (format === "webp") {
         const inputBytes = await readFile(path);
@@ -1894,7 +2014,10 @@ test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既
           }
           return { quality, successfulQuality };
         }
-        lastDropMultiplier = Math.min(3, Math.max(1, Math.floor(size / maxBytes)));
+        lastDropMultiplier = Math.min(
+          3,
+          Math.max(1, Math.floor(size / maxBytes))
+        );
         quality = Math.max(
           qualitySettings.min_quality,
           quality - qualitySettings.quality_step * lastDropMultiplier
@@ -1921,7 +2044,10 @@ test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既
     const tiffPath = join(fixtureRoot, "unsupported.tiff");
     const svgPath = join(fixtureRoot, "unsupported.svg");
     await source().tiff().toFile(tiffPath);
-    await writeFile(svgPath, '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="32" />');
+    await writeFile(
+      svgPath,
+      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="32" />'
+    );
     await assert.rejects(
       transcodeStoredImage(tiffPath, settings),
       invalidImage("unsupported_file_type")
@@ -2063,7 +2189,8 @@ test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保�
         phase: suffix[0] === "0" ? 1 : 0
       });
       assert.throws(
-        () => decodeImageCursor(randomCursor, createImageBrowseContext("random", now + 86_400_000)),
+        () => decodeImageCursor(randomCursor,
+          createImageBrowseContext("random", now + 86_400_000)),
         { code: "cursor_expired" }
       );
       assert.throws(() => decodeImageCursor(`${randomCursor.slice(0, -1)}B`, randomContext), {
@@ -2119,7 +2246,12 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
       return { rows: [] };
     }
   } as never;
-  await fetchAdminImageOffsetRows(["status=$1"], ["deleted"], createPageWindow(100, 60), reader);
+  await fetchAdminImageOffsetRows(
+    ["status=$1"],
+    ["deleted"],
+    createPageWindow(100, 60),
+    reader
+  );
   assert.match(sql, /ORDER BY image_time DESC, id DESC/);
   assert.match(sql, /LIMIT \$2 OFFSET \$3/);
   assert.match(sql, /AS tags/);
@@ -2143,7 +2275,12 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
   assert.match(sql, /\(image_time, id\) > \(\$3::timestamptz, \$4::uuid\)/);
   assert.match(sql, /ORDER BY image_time ASC, id ASC/);
   assert.match(sql, /LIMIT \$2/);
-  assert.deepEqual(sqlParams, ["ready", 61, publicCursorTime, publicCursorId]);
+  assert.deepEqual(sqlParams, [
+    "ready",
+    61,
+    publicCursorTime,
+    publicCursorId
+  ]);
 
   const first = servingReadyCacheItem({ id: randomUUID() });
   const second = servingReadyCacheItem({ id: randomUUID() });
@@ -2158,7 +2295,10 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
     },
     items: async () => {
       hydrationCalls += 1;
-      return [serializeReadyImageCacheItem(first), serializeReadyImageCacheItem(second)];
+      return [
+        serializeReadyImageCacheItem(first),
+        serializeReadyImageCacheItem(second)
+      ];
     },
     assertDerivedItems: async () => undefined
   };
@@ -2170,7 +2310,13 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
     metaKey: null,
     instanceToken: null
   };
-  const window = await readReadyImageOrderedWindow(index, 2, 2, "fallback", dependencies);
+  const window = await readReadyImageOrderedWindow(
+    index,
+    2,
+    2,
+    "fallback",
+    dependencies
+  );
   assert.deepEqual(memberWindow, [2, 3]);
   assert.equal(hydrationCalls, 1);
   assert.deepEqual(
@@ -2181,7 +2327,13 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
 
   memberWindow = null;
   hydrationCalls = 0;
-  assert.deepEqual(await readReadyImageOrderedWindow(index, 5, 2, "fallback", dependencies), {
+  assert.deepEqual(await readReadyImageOrderedWindow(
+    index,
+    5,
+    2,
+    "fallback",
+    dependencies
+  ), {
     items: [],
     total: 5
   });
@@ -2212,7 +2364,8 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
           throw failure;
         }
       }),
-      (error) => isRedisUnavailableError(error) && error.cause === failure
+      (error) => isRedisUnavailableError(error)
+        && error.cause === failure
     );
   }
   await assert.rejects(
@@ -2244,7 +2397,8 @@ test("[Server/图片] 公开 cursor、后台 offset 与 Redis 有序窗口只读
         }
       }
     ),
-    (error) => error === logicalMismatch && !isRedisUnavailableError(error)
+    (error) => error === logicalMismatch
+      && !isRedisUnavailableError(error)
   );
 });
 test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整参数契约", async () => {
@@ -2295,7 +2449,8 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   const normalizedAuto = normalizeRandomQuery(explicitAuto, maps);
   assert.equal(normalizedOmitted instanceof Response, false);
   assert.equal(normalizedAuto instanceof Response, false);
-  if (normalizedOmitted instanceof Response || normalizedAuto instanceof Response) {
+  if (normalizedOmitted instanceof Response
+    || normalizedAuto instanceof Response) {
     assert.fail("auto 随机查询未完成归一化");
   }
   assert.equal(normalizedOmitted.signature, normalizedAuto.signature);
@@ -2317,7 +2472,12 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
       '"tag":null,' +
       '"a":{"include":[],"exclude":[]}}'
   );
-  assert.equal(detectDeviceFromUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"), "pc");
+  assert.equal(
+    detectDeviceFromUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    ),
+    "pc"
+  );
   assert.equal(
     detectDeviceFromUserAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)"),
     "mb"
@@ -2422,14 +2582,27 @@ test("[Server/图片] 固定 seed 保留 Unicode 原值并限制单张和互斥�
 
 test("[Server/图片] 图片处理共享许可并同时限制 commit 数量和字节", async () => {
   const cancellationError = (signal: AbortSignal) => signal.reason ?? new Error("cancelled");
-  const normalizeAdmission = new DynamicConcurrencyLimiter(() => 1, cancellationError);
-  const commitAdmission = new DynamicConcurrencyLimiter(() => 2, cancellationError);
-  const commitByteAdmission = new DynamicWeightedLimiter(() => 10, cancellationError);
+  const normalizeAdmission = new DynamicConcurrencyLimiter(
+    () => 1,
+    cancellationError
+  );
+  const commitAdmission = new DynamicConcurrencyLimiter(
+    () => 2,
+    cancellationError
+  );
+  const commitByteAdmission = new DynamicWeightedLimiter(
+    () => 10,
+    cancellationError
+  );
   const signal = new AbortController().signal;
   const pools = {
     prepare: <Result>(admissionSignal: AbortSignal, work: () => Promise<Result>) =>
       normalizeAdmission.run(admissionSignal, work),
-    commit: <Result>(bytes: number, admissionSignal: AbortSignal, work: () => Promise<Result>) =>
+    commit: <Result>(
+      bytes: number,
+      admissionSignal: AbortSignal,
+      work: () => Promise<Result>
+    ) =>
       commitAdmission.run(admissionSignal, () =>
         commitByteAdmission.run(bytes, admissionSignal, work)
       )
@@ -2450,7 +2623,10 @@ test("[Server/图片] 图片处理共享许可并同时限制 commit 数量和�
   while (stageStarts.length < 1) await delay(0);
   assert.deepEqual(stageStarts, ["upload-prepare"]);
   releasePrepare();
-  await Promise.all([uploadPrepare, ingestionPrepare]);
+  await Promise.all([
+    uploadPrepare,
+    ingestionPrepare
+  ]);
   assert.ok(stageStarts.indexOf("import-prepare") > stageStarts.indexOf("upload-prepare"));
 
   let releaseLargeCommit: () => void = () => {};
@@ -2472,7 +2648,11 @@ test("[Server/图片] 图片处理共享许可并同时限制 commit 数量和�
   assert.deepEqual(commitStarts, ["large"]);
   releaseLargeCommit();
   await Promise.all([largeCommit, byteBlockedCommit, itemBlockedCommit]);
-  assert.deepEqual(commitStarts, ["large", "blocked-by-bytes", "blocked-by-items"]);
+  assert.deepEqual(commitStarts, [
+    "large",
+    "blocked-by-bytes",
+    "blocked-by-items"
+  ]);
 
   await assert.rejects(
     pools.commit(10, signal, async () => {

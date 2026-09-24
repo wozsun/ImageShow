@@ -1,7 +1,10 @@
 import { redis } from "../../../core/redis/client.ts";
 import { assertReadyImageDerivedResult } from "./registry-metadata.ts";
 import { clearReadyImageDisposableCachesUnchecked } from "./cleanup.ts";
-import { READY_IMAGE_DERIVED_CACHE_POLICY, type ReadyImageDerivedResultKind } from "./policy.ts";
+import {
+  READY_IMAGE_DERIVED_CACHE_POLICY,
+  type ReadyImageDerivedResultKind
+} from "./policy.ts";
 import {
   evictReadyImageDerivedResults,
   registerReadyImageDerivedResultUnchecked
@@ -153,7 +156,12 @@ export async function storeReadyImageStatsResult(
         await evictReadyImageDerivedResults([key]);
         return false;
       }
-      await redis.set(key, serialized, "EX", READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds);
+      await redis.set(
+        key,
+        serialized,
+        "EX",
+        READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds
+      );
       return await registerReadyImageDerivedResultUnchecked({
         key,
         kind: "stats-result",

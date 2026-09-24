@@ -61,7 +61,9 @@ function ensureNotInterrupted() {
 
 function runNpm(label, args) {
   return new Promise((resolveCommand, rejectCommand) => {
-    const commandArguments = windows ? ["/d", "/s", "/c", "npm", ...args] : args;
+    const commandArguments = windows
+      ? ["/d", "/s", "/c", "npm", ...args]
+      : args;
     const child = spawnManaged(npmCommand, commandArguments, {
       cwd: workspaceRoot,
       stdio: "inherit",
@@ -115,7 +117,9 @@ function runNpm(label, args) {
 async function main() {
   await cleanBuildOutput();
   ensureNotInterrupted();
-  await runNpm("shared build", ["run", "build", "--workspace", "@imageshow/shared"]);
+  await runNpm("shared build", [
+    "run", "build", "--workspace", "@imageshow/shared"
+  ]);
   ensureNotInterrupted();
 
   const builds = [
@@ -131,7 +135,9 @@ async function main() {
   }
   ensureNotInterrupted();
 
-  await runNpm("server asset assembly", ["run", "assemble", "--workspace", "@imageshow/server"]);
+  await runNpm("server asset assembly", [
+    "run", "assemble", "--workspace", "@imageshow/server"
+  ]);
 }
 
 try {

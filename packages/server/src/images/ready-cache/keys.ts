@@ -47,7 +47,11 @@ export const READY_IMAGE_FIXED_ATTRIBUTE_SUFFIXES = Object.freeze(
     ...brightnesses.map((brightness) => `axis:${device}:${brightness}`)
   ])
 );
-export const READY_IMAGE_NAMED_ATTRIBUTE_KINDS = ["theme", "tag", "author"] as const;
+export const READY_IMAGE_NAMED_ATTRIBUTE_KINDS = [
+  "theme",
+  "tag",
+  "author"
+] as const;
 
 export type ReadyImageAttributeIndexSpec =
   | { kind: "axis"; device: Device; brightness: Brightness }
@@ -56,7 +60,8 @@ export type ReadyImageAttributeIndexSpec =
 
 export function readyImageAttributeIndexKey(spec: ReadyImageAttributeIndexSpec) {
   if (spec.kind === "axis") {
-    if (!devices.includes(spec.device) || !brightnesses.includes(spec.brightness)) {
+    if (!devices.includes(spec.device)
+      || !brightnesses.includes(spec.brightness)) {
       throw new Error("Invalid ready-image attribute axis");
     }
     return `${READY_IMAGE_DERIVED_INDEX_PREFIX}axis:${spec.device}:${spec.brightness}`;
@@ -80,7 +85,10 @@ export function readyImageAttributeIndexKey(spec: ReadyImageAttributeIndexSpec) 
 export function readyImageAttributeIndexSpec(key: string): ReadyImageAttributeIndexSpec | null {
   if (!key.startsWith(READY_IMAGE_DERIVED_INDEX_PREFIX)) return null;
   const parts = key.slice(READY_IMAGE_DERIVED_INDEX_PREFIX.length).split(":");
-  if (parts.length === 3 && READY_IMAGE_FIXED_ATTRIBUTE_SUFFIXES.includes(parts.join(":"))) {
+  if (parts.length === 3
+    && READY_IMAGE_FIXED_ATTRIBUTE_SUFFIXES.includes(
+      parts.join(":")
+    )) {
     return {
       kind: "axis",
       device: parts[1] as "pc" | "mb",
@@ -147,14 +155,22 @@ export function readyImageStatsResultKey(signature: string) {
   return `${READY_IMAGE_STATS_RESULT_KEY_PREFIX}${filterDigest(signature)}`;
 }
 
-export function readyImageFilterTemporaryKey(token: string, sequence: number) {
-  if (!/^[0-9a-f]{32}$/u.test(token) || !Number.isSafeInteger(sequence) || sequence < 0) {
+export function readyImageFilterTemporaryKey(
+  token: string,
+  sequence: number
+) {
+  if (!/^[0-9a-f]{32}$/u.test(token)
+    || !Number.isSafeInteger(sequence)
+    || sequence < 0) {
     throw new Error("Invalid ready-image filter temporary key owner");
   }
   return `${READY_IMAGE_FILTER_TEMP_KEY_PREFIX}${token}:${sequence}`;
 }
 
-export function readyImageFilterTemporaryKeyBelongsTo(key: string, token: string) {
+export function readyImageFilterTemporaryKeyBelongsTo(
+  key: string,
+  token: string
+) {
   if (!/^[0-9a-f]{32}$/u.test(token)) return false;
   const prefix = `${READY_IMAGE_FILTER_TEMP_KEY_PREFIX}${token}:`;
   const sequence = key.slice(prefix.length);

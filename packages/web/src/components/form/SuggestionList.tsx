@@ -100,7 +100,8 @@ export function SuggestionList({
     >
       {matches.map((option, index) => {
         const active = index === activeIndex;
-        const selected = selectedSlug !== undefined && option.slug === selectedSlug;
+        const selected = selectedSlug !== undefined
+          && option.slug === selectedSlug;
 
         return (
           <MenuItemButton

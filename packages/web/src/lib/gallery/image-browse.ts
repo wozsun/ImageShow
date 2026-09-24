@@ -27,7 +27,9 @@ export function imageMatchesFilters(
   filters: GalleryFilters,
   userAgent: string
 ) {
-  const device = filters.device === "auto" ? detectDeviceFromUserAgent(userAgent) : filters.device;
+  const device = filters.device === "auto"
+    ? detectDeviceFromUserAgent(userAgent)
+    : filters.device;
   const tag = parseGalleryTagFilter(tagFilterValues(filters.tag)).expression;
   return (
     (!device || image.device === device) &&

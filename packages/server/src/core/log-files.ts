@@ -95,7 +95,12 @@ async function tailFile(name: string, limitBytes: number) {
     while (bytesRead < size) {
       let result: { bytesRead: number };
       try {
-        result = await handle.read(buffer, bytesRead, size - bytesRead, start + bytesRead);
+        result = await handle.read(
+          buffer,
+          bytesRead,
+          size - bytesRead,
+          start + bytesRead
+        );
       } catch (error) {
         if (isMissingLogFile(error)) break;
         throw error;

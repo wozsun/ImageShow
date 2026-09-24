@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseHTML } from "linkedom";
 
-import { authExpiredEvent, clearCsrfToken } from "../../../../packages/web/src/lib/api/client.ts";
+import {
+  authExpiredEvent,
+  clearCsrfToken
+} from "../../../../packages/web/src/lib/api/client.ts";
 
 import { AuthSessionRefreshCoordinator } from "../../../../packages/web/src/lib/api/auth-session.ts";
 
@@ -183,7 +186,11 @@ test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个�
           React.createElement(
             MemoryRouter,
             { initialEntries: ["/admin"] },
-            React.createElement(AuthSessionProvider, null, React.createElement(AuthProbe))
+            React.createElement(
+              AuthSessionProvider,
+              null,
+              React.createElement(AuthProbe)
+            )
           )
         )
       );
@@ -203,7 +210,8 @@ test("[Web/后台访问] 认证会话恢复保持最新刷新并只注册一个�
 
     await React.act(async () => root.render(tree()));
     await settleUntil(
-      () => !authIsFetching && container.textContent === `auth-recovery-${fetchCount}`
+      () => !authIsFetching
+        && container.textContent === `auth-recovery-${fetchCount}`
     );
     const initialFetchCount = fetchCount;
     assert.ok(initialFetchCount >= 1);

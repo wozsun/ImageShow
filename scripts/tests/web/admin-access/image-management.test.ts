@@ -7,7 +7,10 @@ import {
   type AdminOverviewDto
 } from "../../../../packages/shared/src/browser.ts";
 import type { PublicImageItem } from "../../../../packages/web/src/lib/types.ts";
-import { ApiClientError, clearCsrfToken } from "../../../../packages/web/src/lib/api/client.ts";
+import {
+  ApiClientError,
+  clearCsrfToken
+} from "../../../../packages/web/src/lib/api/client.ts";
 
 import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
 
@@ -113,7 +116,9 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
           total: rebuilding ? 7 : null,
           last_updated_at: "2026-08-15T01:00:00.000Z",
           full_rebuild_started_at: "2026-08-15T00:59:00.000Z",
-          full_rebuild_completed_at: rebuilding ? null : "2026-08-15T01:00:00.000Z",
+          full_rebuild_completed_at: rebuilding
+            ? null
+            : "2026-08-15T01:00:00.000Z",
           full_rebuild_duration_ms: rebuilding ? null : 60_000,
           last_full_rebuild_core_memory_bytes: 2_048,
           last_full_rebuild_measured_at: "2026-08-15T01:00:00.000Z",
@@ -158,20 +163,38 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
 
   const currentMarkup = renderOverviewMarkup(
     overviewResult(
-      cacheResult(1_024, "2026-08-15T01:00:01.000Z", 2_048, "2026-08-15T01:00:00.000Z")
+      cacheResult(
+        1_024,
+        "2026-08-15T01:00:01.000Z",
+        2_048,
+        "2026-08-15T01:00:00.000Z"
+      )
     )
   );
   assert.match(currentMarkup, />1\.0 KB · 已同步</);
-  assert.match(currentMarkup, /title="当前核心图片投影占用 1\.0 KB，测量于 [^"]+"/);
+  assert.match(
+    currentMarkup,
+    /title="当前核心图片投影占用 1\.0 KB，测量于 [^"]+"/
+  );
   const historicalMarkup = renderOverviewMarkup(
-    overviewResult(cacheResult(null, null, 2_048, "2026-08-15T01:00:00.000Z"))
+    overviewResult(cacheResult(
+      null,
+      null,
+      2_048,
+      "2026-08-15T01:00:00.000Z"
+    ))
   );
   assert.match(historicalMarkup, />2\.0 KB · 已同步</);
   assert.match(
     historicalMarkup,
     /title="当前核心占用未知；最近完整重建核心占用 2\.0 KB，测量于 [^"]+"/
   );
-  const unknownMarkup = renderOverviewMarkup(overviewResult(cacheResult(null, null, null, null)));
+  const unknownMarkup = renderOverviewMarkup(overviewResult(cacheResult(
+    null,
+    null,
+    null,
+    null
+  )));
   assert.match(unknownMarkup, />— · 已同步</);
   assert.match(unknownMarkup, /title="当前核心图片投影占用未知"/);
 
@@ -179,10 +202,21 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
     '<!doctype html><html><body><div id="root"></div></body></html>'
   );
   const initialOverview = overviewResult(
-    cacheResult(null, null, 2_048, "2026-08-15T01:00:00.000Z", true)
+    cacheResult(
+      null,
+      null,
+      2_048,
+      "2026-08-15T01:00:00.000Z",
+      true
+    )
   );
   const refreshedOverview = overviewResult(
-    cacheResult(3_072, "2026-08-15T01:01:00.000Z", 2_048, "2026-08-15T01:00:00.000Z")
+    cacheResult(
+      3_072,
+      "2026-08-15T01:01:00.000Z",
+      2_048,
+      "2026-08-15T01:00:00.000Z"
+    )
   );
   let statusRequests = 0;
   let overviewRequests = 0;
@@ -262,7 +296,8 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
       );
     });
     await settleUntil(
-      () => statusRequests === 1 && client.getQueryState(queryKeys.overview)?.isInvalidated === true
+      () => statusRequests === 1
+        && client.getQueryState(queryKeys.overview)?.isInvalidated === true
     );
     assert.equal(overviewRequests, 0, "重建中只标脏，不得刷新 overview");
 
@@ -275,7 +310,11 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
       client.setQueryData(queryKeys.adminCheckStatus, checkStatus(false));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    assert.equal(overviewRequests, 1, "rebuilding→ready 后只允许唯一 overview owner 刷新一次");
+    assert.equal(
+      overviewRequests,
+      1,
+      "rebuilding→ready 后只允许唯一 overview owner 刷新一次"
+    );
   } finally {
     await React.act(async () => root.unmount());
     client.clear();
@@ -549,7 +588,9 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
           sourceHref: source?.getAttribute("href") ?? null,
           sourceAriaDisabled: source?.getAttribute("aria-disabled") ?? null,
           publicProperties:
-            document.querySelector(".image-detail-public-properties")?.textContent ?? "",
+            document.querySelector(
+              ".image-detail-public-properties"
+            )?.textContent ?? "",
           actionClasses: [
             ...document.querySelectorAll<HTMLElement>(".image-detail-actions > a")
           ].map((element) => element.className)
@@ -594,8 +635,15 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
       auth: "guest"
     });
     assert.equal(guestDetail.present, false);
-    assert.equal(guestDetail.href, null);
-    assert.equal(guestDetail.sourceHref, null, "公开卡片不应把任意长度来源地址预载进列表响应");
+    assert.equal(
+      guestDetail.href,
+      null
+    );
+    assert.equal(
+      guestDetail.sourceHref,
+      null,
+      "公开卡片不应把任意长度来源地址预载进列表响应"
+    );
     assert.equal(guestDetail.sourceAriaDisabled, "true");
     assert.match(guestDetail.publicProperties, /主题夜景/);
     assert.match(guestDetail.publicProperties, /标签蓝色星空/);
@@ -733,7 +781,8 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
       authorGets += 1;
       return jsonResponse({ ok: true, items: [initialAuthor] });
     }
-    if (path === "/api/admin/authors/author-profile-test" && method === "POST") {
+    if (path === "/api/admin/authors/author-profile-test"
+      && method === "POST") {
       authorPosts += 1;
       submittedBodies.push(JSON.parse(String(init?.body ?? "{}")));
       return jsonResponse({ ok: true, item: committedAuthor });
@@ -879,7 +928,11 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
       const initialCardChildren = card.childElementCount;
 
       await React.act(async () => {
-        inputText(window as unknown as Window, linkInput, committedAuthor.link);
+        inputText(
+          window as unknown as Window,
+          linkInput,
+          committedAuthor.link
+        );
         await Promise.resolve();
       });
       assert.equal(linkInput.value, committedAuthor.link, "DOM 输入事件必须提交新链接值");
@@ -903,7 +956,9 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
       });
       await settleUntil(
         () =>
-          authorPosts === 1 && linkInput.getAttribute("title") === "平台: weibo; UID: 4444444444"
+          authorPosts === 1
+          && linkInput.getAttribute("title")
+            === "平台: weibo; UID: 4444444444"
       );
       assert.equal(authorGets, authorGetsBeforeSave, "保存成功不得追加作者列表 GET");
       assert.deepEqual(submittedBodies, [
@@ -922,7 +977,10 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
       assert.equal(card.childElementCount, initialCardChildren);
       assert.equal(card.querySelectorAll(".entity-card-link-row").length, 1);
       assert.equal(card.querySelectorAll("[role='tooltip']").length, 0);
-      assert.equal(client.getQueryState(queryKeys.authors)?.isInvalidated, false);
+      assert.equal(
+        client.getQueryState(queryKeys.authors)?.isInvalidated,
+        false
+      );
       for (const key of [
         queryKeys.galleryFacets,
         queryKeys.galleryStats,
@@ -1097,7 +1155,10 @@ test("[Web/后台访问] 单图移入回收站按钮必须在同一按钮上点�
       await Promise.resolve();
     });
     assert.equal(button.getAttribute("aria-label"), "删除中");
-    assert.equal(button.querySelector("path")?.getAttribute("d"), ADMIN_ICONS["delete-bin-5-line"]);
+    assert.equal(
+      button.querySelector("path")?.getAttribute("d"),
+      ADMIN_ICONS["delete-bin-5-line"]
+    );
     await React.act(async () => root.unmount());
   } finally {
     for (const [key, descriptor] of previousGlobals) {

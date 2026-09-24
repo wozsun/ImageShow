@@ -34,7 +34,9 @@ export function completedIngestionObservations(
             pair: status,
             item: status.completed_item,
             ...(status.display ? { display: status.display } : {}),
-            ...(status.redis_version === undefined ? {} : { serverVersion: status.redis_version }),
+            ...(status.redis_version === undefined
+              ? {}
+              : { serverVersion: status.redis_version }),
             ...(status.redis_last_semantic_revision === undefined
               ? {}
               : { serverSemanticRevision: status.redis_last_semantic_revision })

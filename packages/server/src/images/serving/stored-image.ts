@@ -6,12 +6,21 @@ import {
   publicRedirectCacheControl,
   safeRedirectLocation
 } from "../../core/http/headers.ts";
-import { parseImageObjectKey, thumbnailObjectKey } from "../../storage/objects/image-paths.ts";
+import {
+  parseImageObjectKey,
+  thumbnailObjectKey
+} from "../../storage/objects/image-paths.ts";
 import { resolveReadableObject } from "../../storage/objects/access.ts";
 import { contentType } from "../../storage/objects/keys.ts";
 import { isStorageObjectNotFound } from "../../storage/objects/not-found.ts";
-import { readImageServingRecordById, type ImageServingRecord } from "./record.ts";
-import { streamResolvedObject, type StoredResponseRequest } from "./stored-object-response.ts";
+import {
+  readImageServingRecordById,
+  type ImageServingRecord
+} from "./record.ts";
+import {
+  streamResolvedObject,
+  type StoredResponseRequest
+} from "./stored-object-response.ts";
 
 type StoredThumbnailRecord = Pick<ImageServingRecord, "id" | "storage_slug">;
 

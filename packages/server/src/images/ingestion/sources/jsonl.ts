@@ -23,7 +23,8 @@ const pageUrl = z
   .max(2048)
   .url()
   .refine((value) => new URL(value).protocol === "https:", "必须使用 HTTPS URL");
-const slug = z.string().trim().toLowerCase().min(1).max(slugMaxLength).regex(slugPattern);
+const slug = z.string().trim().toLowerCase().min(1)
+  .max(slugMaxLength).regex(slugPattern);
 
 const jsonlRowSchema = z
   .object({

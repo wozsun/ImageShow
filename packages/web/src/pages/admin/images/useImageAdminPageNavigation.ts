@@ -1,4 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { defaultAdminImageSort, type AdminImageSort } from "@imageshow/shared/browser";
 import type { ImageAdminFilterValues } from "./ImageAdminFilters.js";
@@ -34,13 +38,22 @@ export function useImageAdminPageNavigation({
   });
   const pageNumber = effectiveImageAdminPage(state, scopeKey);
   const query = useQuery({
-    ...adminImageListQuery(view, filters, scopeKey, pageNumber, pageSize, sort)
+    ...adminImageListQuery(
+      view,
+      filters,
+      scopeKey,
+      pageNumber,
+      pageSize,
+      sort
+    )
   });
   // Total belongs to the normalized scope, not to one numeric page. Keep the
   // newest successful scope snapshot while the target page has no data yet.
   // Millisecond timestamp ties only win after this observer sees a success.
   const retainedTotal = state.scopeKey === scopeKey ? state.total : null;
-  const retainedTotalUpdatedAt = state.scopeKey === scopeKey ? state.totalUpdatedAt : 0;
+  const retainedTotalUpdatedAt = state.scopeKey === scopeKey
+    ? state.totalUpdatedAt
+    : 0;
   const { currentQueryHasObservedSuccessfulData, queryTotal, total } = resolveImageAdminScopeTotal({
     retainedTotal,
     retainedUpdatedAt: retainedTotalUpdatedAt,
@@ -89,7 +102,13 @@ export function useImageAdminPageNavigation({
         totalUpdatedAt: query.dataUpdatedAt
       };
     });
-  }, [currentQueryHasObservedSuccessfulData, pageSize, query.dataUpdatedAt, queryTotal, scopeKey]);
+  }, [
+    currentQueryHasObservedSuccessfulData,
+    pageSize,
+    query.dataUpdatedAt,
+    queryTotal,
+    scopeKey
+  ]);
 
   const loadPage = useCallback(
     (targetPage: number, blocked: boolean) => {
@@ -105,7 +124,9 @@ export function useImageAdminPageNavigation({
         scopeKey,
         page: targetPage,
         total: current.scopeKey === scopeKey ? current.total : null,
-        totalUpdatedAt: current.scopeKey === scopeKey ? current.totalUpdatedAt : 0
+        totalUpdatedAt: current.scopeKey === scopeKey
+          ? current.totalUpdatedAt
+          : 0
       }));
     },
     [pageNumber, scopeKey, totalPages]

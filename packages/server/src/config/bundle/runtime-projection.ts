@@ -24,7 +24,7 @@ type PortableRuntimeConfigProjection = {
   ignoredValues: number;
 };
 
-export function portableConfig(runtime: RuntimeConfig): PortableRuntimeConfig {
+export function extractPortableRuntimeConfig(runtime: RuntimeConfig): PortableRuntimeConfig {
   const { domain: _domain, assets_base_url: _assetsBaseUrl, ...portableSite } = runtime.site;
   return portableRuntimeConfigSchema.parse({ ...runtime, site: portableSite });
 }
@@ -102,7 +102,8 @@ function countPortableConfigValues(value: unknown): number {
 }
 
 function configPathStartsWith(path: ConfigPath, prefix: ConfigPath) {
-  return prefix.length <= path.length && prefix.every((segment, index) => segment === path[index]);
+  return prefix.length <= path.length
+    && prefix.every((segment, index) => segment === path[index]);
 }
 
 function setConfigCandidate(
@@ -143,15 +144,24 @@ function configIssueSignature(issue: {
 }
 
 /** Keep valid package values and default missing, unknown or invalid input. */
-export function projectPortableRuntimeConfig(input: unknown): PortableRuntimeConfigProjection {
-  const defaults = portableConfig(runtimeConfigDefaults());
+export function projectImportedRuntimeConfig(input: unknown): PortableRuntimeConfigProjection {
+  const defaults = extractPortableRuntimeConfig(runtimeConfigDefaults());
   const candidates: ConfigCandidate[] = [];
-  const unknownValues = collectPortableConfigCandidates(defaults, input, [], candidates);
+  const unknownValues = collectPortableConfigCandidates(
+    defaults,
+    input,
+    [],
+    candidates
+  );
   const activeCandidates = new Set(candidates.map((_, index) => index));
 
   while (true) {
     const result = portableRuntimeConfigSchema.safeParse(
-      configFromCandidates(defaults, candidates, activeCandidates)
+      configFromCandidates(
+        defaults,
+        candidates,
+        activeCandidates
+      )
     );
     if (result.success) {
       return {
@@ -211,7 +221,11 @@ export function projectPortableRuntimeConfig(input: unknown): PortableRuntimeCon
       const trialCandidates = new Set(activeCandidates);
       trialCandidates.delete(index);
       const trial = portableRuntimeConfigSchema.safeParse(
-        configFromCandidates(defaults, candidates, trialCandidates)
+        configFromCandidates(
+          defaults,
+          candidates,
+          trialCandidates
+        )
       );
       const isValid = trial.success;
       const resolvedIssues = isValid

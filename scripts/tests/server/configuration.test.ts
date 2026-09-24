@@ -1,8 +1,15 @@
-import { materializeImportedRuntimeConfig } from "../../../packages/server/src/config/package/runtime-projection.ts";
+import { materializeImportedRuntimeConfig } from "../../../packages/server/src/config/bundle/runtime-projection.ts";
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
-import { rm, writeFile } from "node:fs/promises";
-import { join, resolve, toNamespacedPath } from "node:path";
+import {
+  rm,
+  writeFile
+} from "node:fs/promises";
+import {
+  join,
+  resolve,
+  toNamespacedPath
+} from "node:path";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { createTestDirectory } from "../support/test-directory.ts";
@@ -17,11 +24,11 @@ import {
 import { runtimeConfigFromEnvironment } from "../../../packages/server/src/config/bootstrap-env.ts";
 import { runtimeConfigEnvironmentBindings } from "../../../packages/server/src/config/runtime-config-environment.ts";
 import {
-  buildConfigPackage,
-  parseConfigPackage,
-  projectConfigPackagePreview,
+  buildConfigBundle,
+  parseConfigBundle,
+  projectConfigBundlePreview,
   resolveImportedStorageBackends
-} from "../../../packages/server/src/config/package/format.ts";
+} from "../../../packages/server/src/config/bundle/format.ts";
 import { effectiveEmbedAncestorSources } from "../../../packages/server/src/config/embed-ancestors.ts";
 import { isTrustedReferer } from "../../../packages/server/src/config/trusted-origins.ts";
 import { ApiError } from "../../../packages/server/src/core/api-error.ts";
@@ -343,7 +350,10 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   for (const maxFileSizeMb of [0.001, 200]) {
     const current = structuredClone(defaults);
     current.ingestion.max_file_size_mb = maxFileSizeMb;
-    assert.equal(parseRuntimeConfig(current).ingestion.max_file_size_mb, maxFileSizeMb);
+    assert.equal(
+      parseRuntimeConfig(current).ingestion.max_file_size_mb,
+      maxFileSizeMb
+    );
   }
   for (const maxFileSizeMb of [0, 200.001]) {
     const current = structuredClone(defaults);
@@ -353,7 +363,10 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   for (const listPageSize of [1, 100]) {
     const current = structuredClone(defaults);
     current.ingestion.list_page_size = listPageSize;
-    assert.equal(parseRuntimeConfig(current).ingestion.list_page_size, listPageSize);
+    assert.equal(
+      parseRuntimeConfig(current).ingestion.list_page_size,
+      listPageSize
+    );
   }
   for (const listPageSize of [0, 101]) {
     const current = structuredClone(defaults);
@@ -363,7 +376,10 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   for (const commitConcurrency of [1, 16]) {
     const current = structuredClone(defaults);
     current.ingestion.commit_concurrency = commitConcurrency;
-    assert.equal(parseRuntimeConfig(current).ingestion.commit_concurrency, commitConcurrency);
+    assert.equal(
+      parseRuntimeConfig(current).ingestion.commit_concurrency,
+      commitConcurrency
+    );
   }
   for (const commitConcurrency of [0, 17]) {
     const current = structuredClone(defaults);
@@ -373,7 +389,10 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   for (const normalizeConcurrency of [1, 8]) {
     const current = structuredClone(defaults);
     current.normalize.concurrency = normalizeConcurrency;
-    assert.equal(parseRuntimeConfig(current).normalize.concurrency, normalizeConcurrency);
+    assert.equal(
+      parseRuntimeConfig(current).normalize.concurrency,
+      normalizeConcurrency
+    );
   }
   for (const normalizeConcurrency of [0, 9]) {
     const current = structuredClone(defaults);
@@ -383,7 +402,10 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   for (const normalizedLongEdge of [300, 32_000]) {
     const current = structuredClone(defaults);
     current.normalize.max_long_edge = normalizedLongEdge;
-    assert.equal(parseRuntimeConfig(current).normalize.max_long_edge, normalizedLongEdge);
+    assert.equal(
+      parseRuntimeConfig(current).normalize.max_long_edge,
+      normalizedLongEdge
+    );
   }
   for (const normalizedLongEdge of [299, 32_001]) {
     const current = structuredClone(defaults);
@@ -627,13 +649,22 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
   const helperRoot = await createTestDirectory("imageshow-config-lifecycle-");
   const helperPath = join(helperRoot, "verify-config-lifecycle.mjs");
   const runtimeConfigUrl = pathToFileURL(
-    resolve(repositoryRoot, "packages/server/src/config/runtime-config.ts")
+    resolve(
+      repositoryRoot,
+      "packages/server/src/config/runtime-config.ts"
+    )
   ).href;
   const runtimeConfigStoreUrl = pathToFileURL(
-    resolve(repositoryRoot, "packages/server/src/config/runtime-config-store.ts")
+    resolve(
+      repositoryRoot,
+      "packages/server/src/config/runtime-config-store.ts"
+    )
   ).href;
   const appSettingsUrl = pathToFileURL(
-    resolve(repositoryRoot, "packages/server/src/config/app-settings.ts")
+    resolve(
+      repositoryRoot,
+      "packages/server/src/config/app-settings.ts"
+    )
   ).href;
   const helperSource = `
 import assert from "node:assert/strict";
@@ -924,7 +955,10 @@ console.log("config-existing-ok");
     for (const scenario of scenarios) {
       const result = await runProcess(
         process.execPath,
-        [resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"), helperPath],
+        [
+          resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"),
+          helperPath
+        ],
         {
           cwd: repositoryRoot,
           env: {
@@ -983,7 +1017,7 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   packageRuntime.site.assets_base_url = "https://source-assets.example.com/static";
   packageRuntime.site.random_size = "thumb";
   packageRuntime.site.description = "来源说明";
-  const pkg = buildConfigPackage(
+  const pkg = buildConfigBundle(
     packageRuntime,
     backends,
     "current-build",
@@ -1003,7 +1037,7 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
       s3
     }
   ]);
-  const complete = parseConfigPackage(pkg);
+  const complete = parseConfigBundle(pkg);
   assert.deepEqual(complete.config, pkg.config);
   assert.ok(complete.config_values.recognized > 0);
   assert.equal(complete.config_values.defaulted, 0);
@@ -1057,7 +1091,7 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
     }
   );
 
-  const parsed = parseConfigPackage(source);
+  const parsed = parseConfigBundle(source);
   const defaults = runtimeConfigDefaults();
   assert.equal(parsed.format, "future-config");
   assert.equal(parsed.application_version, null);
@@ -1086,7 +1120,7 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   assert.equal(materialized.site.assets_base_url, "https://target-assets.example.com/static");
   assert.equal(materialized.site.random_size, "thumb");
 
-  const preview = projectConfigPackagePreview(parsed, new Set(["local", "archive"]));
+  const preview = projectConfigBundlePreview(parsed, new Set(["local", "archive"]));
   assert.deepEqual(preview.config_values, parsed.config_values);
   assert.equal(preview.skipped_storage_backends, 4);
   assert.deepEqual(preview.conflicts, ["archive"]);
@@ -1097,8 +1131,13 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
     ["archive-imported"]
   );
   assert.throws(
-    () => resolveImportedStorageBackends(parsed, new Set(["local", "archive"]), {}),
-    (error) => error instanceof ApiError && error.code === "config_storage_slug_conflict"
+    () => resolveImportedStorageBackends(
+      parsed,
+      new Set(["local", "archive"]),
+      {}
+    ),
+    (error) => error instanceof ApiError
+      && error.code === "config_storage_slug_conflict"
   );
   assert.throws(
     () =>
@@ -1111,7 +1150,7 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
       error.code === "config_slug_mapping_invalid"
   );
 
-  const empty = parseConfigPackage({});
+  const empty = parseConfigBundle({});
   const { domain: _domain, assets_base_url: _assets, ...portableSiteDefaults } = defaults.site;
   assert.equal(empty.format, null);
   assert.equal(empty.application_version, null);
@@ -1121,13 +1160,13 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   assert.ok(empty.config_values.defaulted > 0);
   assert.equal(empty.storage_backends.length, 0);
 
-  const loneCombinationValue = parseConfigPackage({
+  const loneCombinationValue = parseConfigBundle({
     config: { normalize: { quality: 10 } }
   });
   assert.equal(loneCombinationValue.config.normalize.quality, defaults.normalize.quality);
   assert.equal(loneCombinationValue.config_values.ignored, 1);
 
-  const competingNormalizeValues = parseConfigPackage({
+  const competingNormalizeValues = parseConfigBundle({
     config: { normalize: { quality: 10, min_quality: 30 } }
   });
   assert.equal(
@@ -1138,7 +1177,7 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
   assert.equal(competingNormalizeValues.config.normalize.min_quality, 30);
   assert.equal(competingNormalizeValues.config_values.ignored, 1);
 
-  const competingAltchaValues = parseConfigPackage({
+  const competingAltchaValues = parseConfigBundle({
     config: { altcha: { cost: 100_000, counter_range: [100, 2_000] } }
   });
   assert.equal(competingAltchaValues.config.altcha.cost, defaults.altcha.cost);
@@ -1151,24 +1190,30 @@ test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入�
 
   for (const scalarRoot of [null, false, 0, "", []]) {
     assert.throws(
-      () => parseConfigPackage(scalarRoot),
+      () => parseConfigBundle(scalarRoot),
       (error) =>
-        error instanceof ApiError && error.status === 400 && error.code === "config_package_invalid"
+        error instanceof ApiError
+          && error.status === 400
+          && error.code === "config_package_invalid"
     );
   }
 
   assert.throws(
     () =>
-      parseConfigPackage({
+      parseConfigBundle({
         storage_backends: Array.from({ length: 101 }, () => null)
       }),
     (error) =>
-      error instanceof ApiError && error.status === 400 && error.code === "config_package_invalid"
+      error instanceof ApiError
+        && error.status === 400
+        && error.code === "config_package_invalid"
   );
   assert.throws(
-    () => parseConfigPackage({ content: "x".repeat(appConfig.configPackage.maxBytes) }),
+    () => parseConfigBundle({ content: "x".repeat(appConfig.configBundle.maxBytes) }),
     (error) =>
-      error instanceof ApiError && error.status === 413 && error.code === "config_package_too_large"
+      error instanceof ApiError
+        && error.status === 413
+        && error.code === "config_package_too_large"
   );
 });
 test("[Server/配置] SPA 复用已发布快照并同步配置、验证器和嵌入权限", async () => {
@@ -1176,13 +1221,22 @@ test("[Server/配置] SPA 复用已发布快照并同步配置、验证器和嵌
   const helperRoot = await createTestDirectory("imageshow-spa-description-");
   const helperPath = join(helperRoot, "verify-spa-description.mjs");
   const runtimeConfigUrl = pathToFileURL(
-    resolve(repositoryRoot, "packages/server/dist/config/runtime-config.js")
+    resolve(
+      repositoryRoot,
+      "packages/server/dist/config/runtime-config.js"
+    )
   ).href;
   const runtimeConfigStoreUrl = pathToFileURL(
-    resolve(repositoryRoot, "packages/server/dist/config/runtime-config-store.js")
+    resolve(
+      repositoryRoot,
+      "packages/server/dist/config/runtime-config-store.js"
+    )
   ).href;
   const spaRoutesUrl = pathToFileURL(
-    resolve(repositoryRoot, "packages/server/dist/routes/spa.js")
+    resolve(
+      repositoryRoot,
+      "packages/server/dist/routes/spa.js"
+    )
   ).href;
   const publicRoutesUrl = pathToFileURL(
     resolve(repositoryRoot, "packages/server/dist/routes/public.js")
@@ -1190,9 +1244,15 @@ test("[Server/配置] SPA 复用已发布快照并同步配置、验证器和嵌
   const settingsRoutesUrl = pathToFileURL(
     resolve(repositoryRoot, "packages/server/dist/routes/settings.js")
   ).href;
-  const honoUrl = pathToFileURL(resolve(repositoryRoot, "node_modules/hono/dist/index.js")).href;
+  const honoUrl = pathToFileURL(resolve(
+    repositoryRoot,
+    "node_modules/hono/dist/index.js"
+  )).href;
   const htmlParserUrl = pathToFileURL(
-    resolve(repositoryRoot, "node_modules/linkedom/esm/index.js")
+    resolve(
+      repositoryRoot,
+      "node_modules/linkedom/esm/index.js"
+    )
   ).href;
   const helperSource = `
 import assert from "node:assert/strict";
@@ -1210,8 +1270,8 @@ import {
   replaceRuntimeConfig,
   reloadRuntimeConfigFromDisk,
   withRuntimeConfigWriteLease,
-  persistRuntimeConfigForPackageImport,
-  publishRuntimeConfigForPackageImport
+  persistRuntimeConfigForBundleImport,
+  publishRuntimeConfigForBundleImport
 } from ${JSON.stringify(runtimeConfigStoreUrl)};
 import { registerSpaRoutes } from ${JSON.stringify(spaRoutesUrl)};
 import { registerAssetRoutes, createAssetHandler } from ${JSON.stringify(new URL("./assets.js", spaRoutesUrl).href)};
@@ -1392,13 +1452,13 @@ await withRuntimeConfigWriteLease(async () => {
   const beforeImport = structuredClone(getRuntimeConfig());
   const candidate = structuredClone(beforeImport);
   candidate.site.title = "Imported snapshot";
-  persistRuntimeConfigForPackageImport(candidate);
+  persistRuntimeConfigForBundleImport(candidate);
   await verifyJsonSnapshots();
   assert.match(await html(), /Reloaded snapshot/);
-  persistRuntimeConfigForPackageImport(beforeImport);
+  persistRuntimeConfigForBundleImport(beforeImport);
   assert.match(await html(), /Reloaded snapshot/);
-  persistRuntimeConfigForPackageImport(candidate);
-  publishRuntimeConfigForPackageImport(candidate);
+  persistRuntimeConfigForBundleImport(candidate);
+  publishRuntimeConfigForBundleImport(candidate);
   await verifyJsonSnapshots();
   assert.match(await html(), /Imported snapshot/);
 });

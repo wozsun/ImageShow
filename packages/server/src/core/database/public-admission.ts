@@ -44,7 +44,12 @@ export function createPublicDatabaseFallbackError(
   message: string,
   retryAfterSeconds = appConfig.publicPgFallback.retryAfterSeconds
 ) {
-  return new PublicDatabaseFallbackError(status, code, message, retryAfterSeconds);
+  return new PublicDatabaseFallbackError(
+    status,
+    code,
+    message,
+    retryAfterSeconds
+  );
 }
 
 /** @public Dependency-injection seam used by the local admission tests. */
@@ -83,7 +88,10 @@ export function createPublicDatabaseAdmission(
       clearTimeout(entry.timer);
       entry.signal.removeEventListener("abort", entry.onAbort);
       if (entry.signal.aborted) {
-        entry.reject(abortSignalError(entry.signal, "Public PostgreSQL fallback aborted"));
+        entry.reject(abortSignalError(
+          entry.signal,
+          "Public PostgreSQL fallback aborted"
+        ));
         continue;
       }
       entry.resolve(activate());
@@ -112,7 +120,10 @@ export function createPublicDatabaseAdmission(
       entry.reject = reject;
       entry.onAbort = () => {
         if (remove(entry)) {
-          reject(abortSignalError(signal, "Public PostgreSQL fallback aborted"));
+          reject(abortSignalError(
+            signal,
+            "Public PostgreSQL fallback aborted"
+          ));
         }
       };
       entry.timer = setTimeout(() => {

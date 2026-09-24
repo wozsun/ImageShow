@@ -6,7 +6,10 @@ import {
   publicPgFallbackWorkLimitExceeded,
   type PublicDatabaseReadAccess
 } from "../core/database/public-fallback.ts";
-import { pool, type DatabaseReader } from "../core/database/pools.ts";
+import {
+  pool,
+  type DatabaseReader
+} from "../core/database/pools.ts";
 import {
   deleteRedisKeys,
   deleteRequiredRedisKeys,
@@ -22,7 +25,10 @@ import type {
   TagDto as Tag,
   ThemeDto as Theme
 } from "@imageshow/shared/browser";
-import { projectAuthorDerivedIdentity, type AuthorIdentityColumns } from "../authors/identity.ts";
+import {
+  projectAuthorDerivedIdentity,
+  type AuthorIdentityColumns
+} from "../authors/identity.ts";
 
 const THEME_VOCAB_KEY = "imageshow:theme_vocab";
 const TAG_VOCAB_KEY = "imageshow:tag_vocab";
@@ -73,7 +79,11 @@ function vocabFromRows(rows: Array<{ slug: string; display_name: string }>): Voc
   return rows.map(({ slug, display_name }) => ({ slug, display_name }));
 }
 
-async function queryVocabularyRows<T>(sql: string, reader: DatabaseReader = pool, bounded = false) {
+async function queryVocabularyRows<T>(
+  sql: string,
+  reader: DatabaseReader = pool,
+  bounded = false
+) {
   const maximumRows = appConfig.publicPgFallback.maximumVocabularyRows;
   const rows = (
     await reader.query(
@@ -87,11 +97,21 @@ async function queryVocabularyRows<T>(sql: string, reader: DatabaseReader = pool
   return rows;
 }
 
-async function readVocabularyRows<T>(sql: string, access: VocabularyReadAccess) {
-  return queryVocabularyRows<T>(sql, access.reader ?? pool, Boolean(access.reader));
+async function readVocabularyRows<T>(
+  sql: string,
+  access: VocabularyReadAccess
+) {
+  return queryVocabularyRows<T>(
+    sql,
+    access.reader ?? pool,
+    Boolean(access.reader)
+  );
 }
 
-async function loadTagVocab(revision: number, access: VocabularyReadAccess = {}) {
+async function loadTagVocab(
+  revision: number,
+  access: VocabularyReadAccess = {}
+) {
   const rows = await readVocabularyRows<VocabEntry>(
     `SELECT slug, display_name
        FROM tag
@@ -102,7 +122,10 @@ async function loadTagVocab(revision: number, access: VocabularyReadAccess = {})
   return rows;
 }
 
-async function loadThemeVocab(revision: number, access: VocabularyReadAccess = {}) {
+async function loadThemeVocab(
+  revision: number,
+  access: VocabularyReadAccess = {}
+) {
   const rows = await readVocabularyRows<VocabEntry>(
     `SELECT slug, display_name
        FROM theme
@@ -114,7 +137,10 @@ async function loadThemeVocab(revision: number, access: VocabularyReadAccess = {
   return rows;
 }
 
-async function loadAuthorVocab(revision: number, access: VocabularyReadAccess = {}) {
+async function loadAuthorVocab(
+  revision: number,
+  access: VocabularyReadAccess = {}
+) {
   const rows = await readVocabularyRows<AuthorVocabEntry>(
     `SELECT slug, display_name, link
        FROM author
@@ -178,7 +204,12 @@ async function loadAdminAuthorList(revision: number) {
       })
     };
   });
-  await cacheAdminEntityList("author", ADMIN_AUTHOR_LIST_KEY, revision, projected);
+  await cacheAdminEntityList(
+    "author",
+    ADMIN_AUTHOR_LIST_KEY,
+    revision,
+    projected
+  );
   return projected;
 }
 

@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { IngestionSessionSnapshot } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
-import { freezeFixtureCommit, runWithReadyIngestionFixture } from "./ingestion-fixture.mts";
+import {
+  freezeFixtureCommit,
+  runWithReadyIngestionFixture
+} from "./ingestion-fixture.mts";
 
 type CleanupJobModule = typeof import("../../../../packages/server/src/storage/cleanup/job.ts");
 type CommitWorkerModule =
@@ -66,7 +69,10 @@ await runIntegrationScenario(async (runtime) => {
       )
     ).rows[0];
     assert.ok(guard?.id, "copy attempt must persist its cleanup guard first");
-    await runtime.databasePools.pool.query("DELETE FROM metadata WHERE id=$1", [fixture.imageId]);
+    await runtime.databasePools.pool.query(
+      "DELETE FROM metadata WHERE id=$1",
+      [fixture.imageId]
+    );
     const runningGuard = (
       await runtime.databasePools.pool.query(
         "UPDATE background_job SET status='running', execution_token=$2 " +
@@ -74,8 +80,17 @@ await runIntegrationScenario(async (runtime) => {
         [guard.id, randomUUID()]
       )
     ).rows[0];
-    await cleanupJob.handleMoveCleanupJob(runningGuard, new AbortController().signal);
-    assert.equal(await fixture.driver.exists("full", fixture.finalObjectKey), false);
-    assert.equal(await fixture.driver.exists("thumbs", fixture.finalThumbnailKey), false);
+    await cleanupJob.handleMoveCleanupJob(
+      runningGuard,
+      new AbortController().signal
+    );
+    assert.equal(
+      await fixture.driver.exists("full", fixture.finalObjectKey),
+      false
+    );
+    assert.equal(
+      await fixture.driver.exists("thumbs", fixture.finalThumbnailKey),
+      false
+    );
   });
 });

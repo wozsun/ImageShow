@@ -35,7 +35,10 @@ export function ingestionTempPathIsActive(path: string) {
   return activeTempPaths.has(tempPathIdentity(path));
 }
 
-export async function tryWithInactiveIngestionTempPath<T>(path: string, work: () => Promise<T>) {
+export async function tryWithInactiveIngestionTempPath<T>(
+  path: string,
+  work: () => Promise<T>
+) {
   const identity = tempPathIdentity(path);
   if (activeTempPaths.has(identity) || deletingTempPaths.has(identity)) {
     return null;
@@ -71,7 +74,10 @@ async function retainActiveTempDirectory(identity: string) {
       await pruning;
       continue;
     }
-    activeTempDirectories.set(identity, (activeTempDirectories.get(identity) ?? 0) + 1);
+    activeTempDirectories.set(
+      identity,
+      (activeTempDirectories.get(identity) ?? 0) + 1
+    );
     return;
   }
 }
@@ -83,7 +89,10 @@ function releaseActiveTempDirectory(identity: string) {
 }
 
 function retainScanningTempDirectory(identity: string) {
-  scanningTempDirectories.set(identity, (scanningTempDirectories.get(identity) ?? 0) + 1);
+  scanningTempDirectories.set(
+    identity,
+    (scanningTempDirectories.get(identity) ?? 0) + 1
+  );
 }
 
 function releaseScanningTempDirectory(identity: string) {
@@ -107,7 +116,8 @@ export async function pruneIngestionTempDirectory(path: string) {
   const identity = tempPathIdentity(path);
   const pending = pruningTempDirectories.get(identity);
   if (pending) return pending;
-  if (activeTempDirectories.has(identity) || scanningTempDirectories.has(identity)) return;
+  if (activeTempDirectories.has(identity)
+    || scanningTempDirectories.has(identity)) return;
   const { promise: pruning, resolve: settle } = Promise.withResolvers<void>();
   pruningTempDirectories.set(identity, pruning);
   try {

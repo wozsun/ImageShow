@@ -1,5 +1,8 @@
 import { storageObjectKey } from "@imageshow/shared/browser";
-import type { ImagePurgeRequestDto, ImagePurgeResponseDto } from "@imageshow/shared/browser";
+import type {
+  ImagePurgeRequestDto,
+  ImagePurgeResponseDto
+} from "@imageshow/shared/browser";
 import { setTimeout as delay } from "node:timers/promises";
 import type { PoolClient } from "pg";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../core/database/advisory-locks.ts";
@@ -66,7 +69,10 @@ function uuidArrayField(value: unknown, field: string) {
   return value as string[];
 }
 
-async function selectedQueueCounts(client: PoolClient, ids: string[]): Promise<QueuePlan> {
+async function selectedQueueCounts(
+  client: PoolClient,
+  ids: string[]
+): Promise<QueuePlan> {
   const row = (
     await client.query(
       `SELECT count(*)::int AS requested,
@@ -97,11 +103,18 @@ async function selectedQueueCounts(client: PoolClient, ids: string[]): Promise<Q
     )
   ).rows[0] as Record<string, unknown> | undefined;
   const requested = numberField(row?.requested, "selected purge count");
-  const alreadyQueued = numberField(row?.already_queued, "selected already-queued purge count");
+  const alreadyQueued = numberField(
+    row?.already_queued,
+    "selected already-queued purge count"
+  );
   const queueable = numberField(row?.queueable, "selected queueable count");
   const targetIds = uuidArrayField(row?.target_ids, "selected purge targets");
-  const queueableIds = uuidArrayField(row?.queueable_ids, "selected queueable purge targets");
-  if (targetIds.length !== alreadyQueued + queueable || queueableIds.length !== queueable) {
+  const queueableIds = uuidArrayField(
+    row?.queueable_ids,
+    "selected queueable purge targets"
+  );
+  if (targetIds.length !== alreadyQueued + queueable
+      || queueableIds.length !== queueable) {
     throw new Error("PostgreSQL returned inconsistent selected purge targets");
   }
   return {
@@ -139,11 +152,18 @@ async function allQueueCounts(client: PoolClient): Promise<QueuePlan> {
     )
   ).rows[0] as Record<string, unknown> | undefined;
   const requested = numberField(row?.requested, "trash purge count");
-  const alreadyQueued = numberField(row?.already_queued, "already-queued trash purge count");
+  const alreadyQueued = numberField(
+    row?.already_queued,
+    "already-queued trash purge count"
+  );
   const queueable = numberField(row?.queueable, "queueable trash purge count");
   const targetIds = uuidArrayField(row?.target_ids, "trash purge targets");
-  const queueableIds = uuidArrayField(row?.queueable_ids, "queueable trash purge targets");
-  if (targetIds.length !== alreadyQueued + queueable || queueableIds.length !== queueable) {
+  const queueableIds = uuidArrayField(
+    row?.queueable_ids,
+    "queueable trash purge targets"
+  );
+  if (targetIds.length !== alreadyQueued + queueable
+      || queueableIds.length !== queueable) {
     throw new Error("PostgreSQL returned inconsistent trash purge targets");
   }
   return {
@@ -217,10 +237,17 @@ async function waitForPurgeTargets(
   let state = await readPurgeWaitState(plan.targetIds);
   while (state.remaining && !state.deferred && Date.now() < deadline) {
     signal?.throwIfAborted();
-    const remainingWaitMs = Math.min(purgeRequestPollMs, deadline - Date.now());
+    const remainingWaitMs = Math.min(
+      purgeRequestPollMs,
+      deadline - Date.now()
+    );
     if (remainingWaitMs <= 0) break;
     try {
-      await delay(remainingWaitMs, undefined, signal ? { signal } : undefined);
+      await delay(
+        remainingWaitMs,
+        undefined,
+        signal ? { signal } : undefined
+      );
     } catch (error) {
       if (signal?.aborted) throw signal.reason;
       throw error;
@@ -248,12 +275,18 @@ export async function purgeImages(
   options: PurgeOptions = {}
 ): Promise<ImagePurgeResponseDto> {
   const plan = await withTrashMembershipLock((client) =>
-    withTransactionOnClient(client, (transaction) => queueTrashPurge(transaction, request))
+    withTransactionOnClient(
+      client,
+      (transaction) => queueTrashPurge(transaction, request)
+    )
   );
   return waitForPurgeTargets(plan, options.signal);
 }
 
-async function purgeJobImage(job: BackgroundJob, scheduleSignal: AbortSignal) {
+async function purgeJobImage(
+  job: BackgroundJob,
+  scheduleSignal: AbortSignal
+) {
   const purgeWhileLocked = () =>
     withImageStorageMutationLock(job.target_id, async (lockSignal) => {
       const admissionSignal = AbortSignal.any([scheduleSignal, lockSignal]);
@@ -291,7 +324,10 @@ async function purgeJobImage(job: BackgroundJob, scheduleSignal: AbortSignal) {
       // Once physical deletion starts, finish the database side under the
       // image lock even if this execution's deadline or lease expires.
       lockSignal.throwIfAborted();
-      assertStorageRemovalResults(removals, "无法确认回收站图片的全部存储对象已删除");
+      assertStorageRemovalResults(
+        removals,
+        "无法确认回收站图片的全部存储对象已删除"
+      );
       const deleted = await pool.query(
         `DELETE FROM metadata
           WHERE id=$1 AND status='deleted'
@@ -307,7 +343,10 @@ async function purgeJobImage(job: BackgroundJob, scheduleSignal: AbortSignal) {
   return runWithAdvisoryLockAcquisitionSignal(scheduleSignal, purgeWhileLocked);
 }
 
-export async function processTrashPurgeJob(job: BackgroundJob, signal: AbortSignal) {
+export async function processTrashPurgeJob(
+  job: BackgroundJob,
+  signal: AbortSignal
+) {
   try {
     await purgeJobImage(job, signal);
   } finally {

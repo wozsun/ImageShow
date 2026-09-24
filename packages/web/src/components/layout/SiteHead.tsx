@@ -15,7 +15,8 @@ function ensureMeta(name: string) {
 }
 
 function isAdminRoute(pathname: string) {
-  return pathname === adminBasePath || pathname.startsWith(`${adminBasePath}/`);
+  return pathname === adminBasePath
+    || pathname.startsWith(`${adminBasePath}/`);
 }
 
 export function SiteHead() {

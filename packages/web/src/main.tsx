@@ -14,7 +14,8 @@ const queryClient = new QueryClient({
 
 function AppOverlayScrollbar() {
   const { pathname } = useLocation();
-  const adminRoute = pathname === adminBasePath || pathname.startsWith(`${adminBasePath}/`);
+  const adminRoute = pathname === adminBasePath
+    || pathname.startsWith(`${adminBasePath}/`);
   return <OverlayScrollbar tone={adminRoute ? "default" : "dark"} />;
 }
 

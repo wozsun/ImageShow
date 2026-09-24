@@ -2,12 +2,18 @@ import type { PoolClient } from "pg";
 import type { ReadablePrefix } from "../objects/keys.ts";
 import { pool } from "../../core/database/pools.ts";
 import { enqueueRerunnableJobs } from "../../jobs/repository.ts";
-import type { CapturedMoveCleanupObject, MoveCleanupJobPayload } from "./types.ts";
+import type {
+  CapturedMoveCleanupObject,
+  MoveCleanupJobPayload
+} from "./types.ts";
 
 function normalizedCleanupObjects(objects: readonly CapturedMoveCleanupObject[]) {
   return [
     ...new Map(
-      objects.map((object) => [`${object.backend}:${object.prefix}:${object.key}`, object])
+      objects.map((object) => [
+        `${object.backend}:${object.prefix}:${object.key}`,
+        object
+      ])
     ).values()
   ].sort((left, right) =>
     `${left.backend}:${left.prefix}:${left.key}`.localeCompare(
@@ -120,7 +126,10 @@ type MoveCleanupJobInput = Readonly<{
   confirmAbsentAfter?: Date;
 }>;
 
-async function enqueueMoveCleanupJobs(jobs: readonly MoveCleanupJobInput[], client?: PoolClient) {
+async function enqueueMoveCleanupJobs(
+  jobs: readonly MoveCleanupJobInput[],
+  client?: PoolClient
+) {
   const normalized = jobs.flatMap((job) => {
     const objects = normalizedCleanupObjects(job.objects);
     if (!objects.length) return [];
@@ -137,7 +146,11 @@ async function enqueueMoveCleanupJobs(jobs: readonly MoveCleanupJobInput[], clie
         type: "move.cleanup" as const,
         targetId: job.imageId,
         payload,
-        idempotencyKey: cleanupIdempotencyKey(job.imageId, objects, job.guardToken)
+        idempotencyKey: cleanupIdempotencyKey(
+          job.imageId,
+          objects,
+          job.guardToken
+        )
       }
     ];
   });
@@ -207,7 +220,8 @@ export function listUnresolvedMoveCleanupJobCounts() {
 }
 
 export async function countUnresolvedMoveCleanupJobs(storageSlug: string) {
-  return (await unresolvedMoveCleanupJobCounts(storageSlug))[0]?.cleanup_job_count ?? 0;
+  return (await unresolvedMoveCleanupJobCounts(storageSlug))[0]
+    ?.cleanup_job_count ?? 0;
 }
 
 export type UnresolvedMoveCleanupReference = {

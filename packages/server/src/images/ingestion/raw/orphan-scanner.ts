@@ -80,7 +80,10 @@ async function* directoryEntries(
   }
 }
 
-async function* listIngestionTempFiles(budget: IngestionTempScanBudget, signal?: AbortSignal) {
+async function* listIngestionTempFiles(
+  budget: IngestionTempScanBudget,
+  signal?: AbortSignal
+) {
   const root = ingestionTempRoot();
   for await (const session of directoryEntries(root, budget, signal)) {
     if (!session.isDirectory() || !isIngestionTempSessionName(session.name)) {
@@ -91,7 +94,11 @@ async function* listIngestionTempFiles(budget: IngestionTempScanBudget, signal?:
       if (!image.isDirectory() || !isIngestionTempImageName(image.name)) continue;
       const imagePath = join(sessionPath, image.name);
       for await (const file of directoryEntries(imagePath, budget, signal)) {
-        const entry = await ingestionTempFileEntry(imagePath, file, signal);
+        const entry = await ingestionTempFileEntry(
+          imagePath,
+          file,
+          signal
+        );
         if (entry) yield entry;
       }
     }
@@ -173,7 +180,8 @@ async function nextTempCleanupFile(
 
     const currentSession = tempCleanupCursor.session;
     if (!currentSession) {
-      const entry = tempCleanupCursor.pendingSession ?? (await tempCleanupCursor.root.read());
+      const entry = tempCleanupCursor.pendingSession
+        ?? await tempCleanupCursor.root.read();
       tempCleanupCursor.pendingSession = entry;
       signal?.throwIfAborted();
       if (!entry) {
@@ -202,7 +210,8 @@ async function nextTempCleanupFile(
 
     const currentImage = currentSession.image;
     if (!currentImage) {
-      const entry = currentSession.pendingImage ?? (await currentSession.directory.read());
+      const entry = currentSession.pendingImage
+        ?? await currentSession.directory.read();
       currentSession.pendingImage = entry;
       signal?.throwIfAborted();
       if (!entry) {
@@ -228,7 +237,8 @@ async function nextTempCleanupFile(
       continue;
     }
 
-    const file = currentImage.pendingFile ?? (await currentImage.directory.read());
+    const file = currentImage.pendingFile
+      ?? await currentImage.directory.read();
     currentImage.pendingFile = file;
     signal?.throwIfAborted();
     if (!file) {
@@ -238,7 +248,11 @@ async function nextTempCleanupFile(
       continue;
     }
     budget.remaining -= 1;
-    const entry = await ingestionTempFileEntry(currentImage.path, file, signal);
+    const entry = await ingestionTempFileEntry(
+      currentImage.path,
+      file,
+      signal
+    );
     if (entry) return { kind: "file", entry };
     currentImage.pendingFile = null;
   }

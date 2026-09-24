@@ -28,7 +28,10 @@ function naturalMenuHeight(menu: HTMLElement | null) {
   return menu.scrollHeight + Math.max(0, menu.offsetHeight - menu.clientHeight);
 }
 
-function isWithinTriggerInteractionBoundary(trigger: HTMLElement | null, target: Node) {
+function isWithinTriggerInteractionBoundary(
+  trigger: HTMLElement | null,
+  target: Node
+) {
   if (!trigger) return false;
   if (trigger.contains(target)) return true;
   if (!(target instanceof Element)) return false;

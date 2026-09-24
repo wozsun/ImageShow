@@ -88,7 +88,10 @@ export function registerRedisWindowCommand(
     };
   }
   if (!hasRedisWindowCommand(client)) {
-    client.defineCommand("imageshowReserveWindows", redisWindowScripts.imageshowReserveWindows);
+    client.defineCommand(
+      "imageshowReserveWindows",
+      redisWindowScripts.imageshowReserveWindows
+    );
   }
   return client as unknown as RedisWindowCommandClient;
 }
@@ -105,11 +108,16 @@ export async function reserveRedisWindowsCommand(
   client: RedisWindowCommandSource,
   windows: readonly RedisWindow[]
 ): Promise<RedisWindowReservation[]> {
-  const commandClient = hasRedisWindowCommand(client) ? client : registerRedisWindowCommand(client);
+  const commandClient = hasRedisWindowCommand(client)
+    ? client
+    : registerRedisWindowCommand(client);
   const raw = await commandClient.imageshowReserveWindows(
     String(windows.length),
     ...windows.map((window) => window.key),
-    ...windows.flatMap((window) => [String(window.capacity), String(window.windowSeconds)])
+    ...windows.flatMap((window) => [
+      String(window.capacity),
+      String(window.windowSeconds)
+    ])
   );
   if (!Array.isArray(raw) || raw.length !== windows.length * 4) {
     throw new Error("Redis window script returned an invalid result count");

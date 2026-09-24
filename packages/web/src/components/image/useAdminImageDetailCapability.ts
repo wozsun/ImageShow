@@ -1,8 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState
+} from "react";
 import { loadImageAdminDetailsModule } from "./image-admin-details-loader.js";
 import { AsyncIntentFence } from "../../lib/async-intent-fence.js";
 import { createPageLifetimeModuleLoader } from "../../lib/page-lifetime-module-loader.js";
-import type { AdminImageDetailItem, AdminImageListItem } from "../../lib/types.js";
+import type {
+  AdminImageDetailItem,
+  AdminImageListItem
+} from "../../lib/types.js";
 
 type ImageDetailModalModule = typeof import("./ImageDetailModal.js");
 type ImageDetailModalComponent = ImageDetailModalModule["ImageDetailModal"];
@@ -13,7 +21,10 @@ const loadImageDetailModalModule = createPageLifetimeModuleLoader<ImageDetailMod
 );
 
 function loadAdminImageDetailCapability() {
-  return Promise.all([loadImageDetailModalModule(), loadImageAdminDetailsModule()]).then(
+  return Promise.all([
+    loadImageDetailModalModule(),
+    loadImageAdminDetailsModule()
+  ]).then(
     ([modalModule]) => modalModule
   );
 }
@@ -45,7 +56,8 @@ export function useAdminImageDetailCapability<T extends AdminDetailItem>(
     setPendingItemId(nextItem.id);
     try {
       const module = await loadAdminImageDetailCapability();
-      if (!requestFence.isCurrent(requestSequence) || !opener.isConnected) {
+      if (!requestFence.isCurrent(requestSequence)
+        || !opener.isConnected) {
         return;
       }
       returnFocusRef.current = opener;

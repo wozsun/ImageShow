@@ -33,7 +33,7 @@ import {
   validatePublicFilterEdit,
   type PublicFilterChip,
   type PublicFilterDraft,
-  type PublicFilterSection as PublicFilterSectionName,
+  type PublicFilterSectionKey,
   type TagSelection
 } from "../../../lib/gallery/public-filter-draft.js";
 import "../../../styles/public-filter-dialog.css";
@@ -55,7 +55,7 @@ const fixedOptions = {
 function filterOptions(
   options: readonly FacetOption[],
   query: string,
-  section: Exclude<PublicFilterSectionName, "device" | "brightness">,
+  section: Exclude<PublicFilterSectionKey, "device" | "brightness">,
   matchName: typeof matchFacetText
 ) {
   if (!query || publicFilterLabels[section].includes(query)) return [...options];
@@ -133,7 +133,8 @@ export function PublicFilterDialog({
     (section) => !normalizedQuery || (section !== "device" && section !== "brightness")
   );
   const visibleSections = directorySections.filter(
-    (section) => !normalizedQuery || options[section].length || (section === "tag" && !totals.data)
+    (section) => !normalizedQuery || options[section].length
+      || (section === "tag" && !totals.data)
   );
   const { scrollRef, activeSection, goToSection, rememberPosition } = usePublicFilterScroll(
     visibleSections
@@ -243,7 +244,7 @@ export function PublicFilterDialog({
         }
       });
   };
-  const toggle = (section: PublicFilterSectionName, slug: string) => {
+  const toggle = (section: PublicFilterSectionKey, slug: string) => {
     if (section === "device" || section === "brightness") {
       if (edit({ ...draft, [section]: slug }) && slug) setRevealChip({ section, value: slug });
       return;
@@ -265,7 +266,7 @@ export function PublicFilterDialog({
   };
   const reset = () => edit(createPublicFilterDraft());
 
-  const renderSection = (section: PublicFilterSectionName) => (
+  const renderSection = (section: PublicFilterSectionKey) => (
     <PublicFilterSection
       key={section}
       section={section}

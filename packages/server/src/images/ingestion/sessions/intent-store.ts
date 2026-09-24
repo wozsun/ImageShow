@@ -1,6 +1,9 @@
 import { appConfig } from "@imageshow/shared";
 import { ApiError } from "../../../core/api-error.ts";
-import { parseStoredIngestionSession, parseUploadIntent } from "./codec.ts";
+import {
+  parseStoredIngestionSession,
+  parseUploadIntent
+} from "./codec.ts";
 import {
   throwIngestionCommandConflict,
   type IngestionSessionCommandRunner
@@ -57,14 +60,20 @@ export async function readStoredUploadIntent(
   owner: string,
   sessionId: string
 ) {
-  const raw = await run("imageshowReadUploadIntent", ingestionUploadIntentKey(owner, sessionId));
+  const raw = await run(
+    "imageshowReadUploadIntent",
+    ingestionUploadIntentKey(owner, sessionId)
+  );
   const reply = redisReplyArray(raw, "upload-intent read");
   const status = redisReplyInteger(reply[0], "upload-intent read status");
   if (status === 0 && reply.length === 1) return null;
   if (status !== 1 || reply.length !== 7) {
     throw new Error("Redis upload-intent read returned an invalid shape");
   }
-  const intent = parseUploadIntent(redisReplyString(reply[1], "upload-intent snapshot"));
+  const intent = parseUploadIntent(redisReplyString(
+    reply[1],
+    "upload-intent snapshot"
+  ));
   const directFields = [
     intent.session_id,
     intent.candidate_image_id,
@@ -74,11 +83,19 @@ export async function readStoredUploadIntent(
   ];
   for (let index = 0; index < directFields.length; index += 1) {
     if (redisReplyString(reply[index + 2], "upload-intent field") !== directFields[index]) {
-      throw new ApiError(409, "upload_intent_state_conflict", "上传意图结构与当前操作不一致");
+      throw new ApiError(
+        409,
+        "upload_intent_state_conflict",
+        "上传意图结构与当前操作不一致"
+      );
     }
   }
   if (intent.owner !== owner || intent.session_id !== sessionId) {
-    throw new ApiError(409, "upload_intent_state_conflict", "上传意图结构与当前操作不一致");
+    throw new ApiError(
+      409,
+      "upload_intent_state_conflict",
+      "上传意图结构与当前操作不一致"
+    );
   }
   return intent;
 }
@@ -109,5 +126,8 @@ export async function mutateStoredUploadIntent(
     throw new ApiError(409, "upload_in_progress", "该图片正在由另一上传请求接收");
   }
   if (code < 0) throwIngestionCommandConflict(code);
-  return parseUploadIntent(redisReplyString(reply[1], "upload-intent mutation snapshot"));
+  return parseUploadIntent(redisReplyString(
+    reply[1],
+    "upload-intent mutation snapshot"
+  ));
 }

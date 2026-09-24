@@ -104,7 +104,10 @@ export const storedS3ConfigSchema = s3SettingsPatchSchema
     ...(capabilities ? { capabilities } : {})
   }));
 
-export function mergeS3Settings(patch: S3SettingsPatch = {}, current?: S3Settings) {
+export function mergeS3Settings(
+  patch: S3SettingsPatch = {},
+  current?: S3Settings
+) {
   return s3SettingsSchema.parse({ ...current, ...patch });
 }
 
@@ -170,7 +173,10 @@ export function storageDriverSignature(config: StorageConfig) {
   return JSON.stringify(["s3", driverSettings]);
 }
 
-export function sameStorageBackendSettings(current: StorageConfig, candidate: StorageConfig) {
+export function sameStorageBackendSettings(
+  current: StorageConfig,
+  candidate: StorageConfig
+) {
   if (current.type !== candidate.type) return false;
   if (current.type === "local" && candidate.type === "local") {
     return (current.public_base_url ?? "") === (candidate.public_base_url ?? "");

@@ -76,7 +76,10 @@ await runIntegrationScenario(async (runtime) => {
   await pool.query(
     `INSERT INTO metadata(id, created_by, status, storage_slug, device, brightness, ext, md5)
        VALUES ($1, 'integration-admin', 'ready', 'local', 'pc', 'dark', 'webp', $2)`,
-    [imageId, "1".repeat(32)]
+    [
+          imageId,
+          "1".repeat(32)
+        ]
   );
   try {
     await assert.rejects(themes.createTheme("null", ""), { status: 400, code: "invalid_theme" });

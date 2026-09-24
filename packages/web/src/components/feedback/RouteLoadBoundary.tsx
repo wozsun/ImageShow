@@ -24,7 +24,8 @@ export class RouteLoadBoundary extends Component<RouteLoadBoundaryProps, RouteLo
   }
 
   componentDidUpdate(previousProps: RouteLoadBoundaryProps) {
-    if (this.state.error && previousProps.resetKey !== this.props.resetKey) {
+    if (this.state.error
+      && previousProps.resetKey !== this.props.resetKey) {
       this.setState({ error: null });
     }
   }

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import {
+  useQueryClient,
+  type UseQueryResult
+} from "@tanstack/react-query";
 import {
   adminApiBasePath,
   type AdminCheckStatusDto,
@@ -23,7 +26,10 @@ import { StorageBackendMigrationDialog } from "../storage/StorageBackendMigratio
 import { storageMaintenancePreview } from "../storage/storage-maintenance-preview.js";
 import "../../../styles/admin/check-maintenance.css";
 
-type RunCheck = (name: string, body?: Record<string, unknown>) => Promise<unknown | null>;
+type RunCheck = (
+  name: string,
+  body?: Record<string, unknown>
+) => Promise<unknown | null>;
 
 type TrashMaintenanceIssue = Pick<AdminTrashCheckDto["issues"][number], "kind" | "count">;
 
@@ -34,7 +40,12 @@ type TrashMaintenancePreview = {
   issues: TrashMaintenanceIssue[];
 };
 
-const trashPurgeJobStates = ["pending", "running", "retrying", "exhausted"] as const;
+const trashPurgeJobStates = [
+  "pending",
+  "running",
+  "retrying",
+  "exhausted"
+] as const;
 const trashCheckIssueKinds = [
   "succeeded_target_remaining",
   "target_not_deleted",
@@ -107,7 +118,8 @@ export function CheckStorageMaintenanceActions({
         api(`${adminApiBasePath}/check/storage`, { method: "POST" }),
         api(`${adminApiBasePath}/check/trash`, { method: "POST" })
       ]);
-      if (!storageMaintenancePreview(storage) || !isTrashMaintenancePreview(trash)) {
+      if (!storageMaintenancePreview(storage)
+        || !isTrashMaintenancePreview(trash)) {
         throw new Error("Storage maintenance preview is incomplete");
       }
       const preview = { storage, trash };
@@ -168,19 +180,23 @@ export function CheckStorageMaintenanceActions({
             <StableButtonLabel
               idle="存储维护"
               busyText="处理中"
-              busy={running === "storage-maintenance-preview" || running === "storage-maintenance"}
+              busy={running === "storage-maintenance-preview"
+                || running === "storage-maintenance"}
             />
           </button>
         )}
       </div>
-      {operationModal === "storage-backend-image-migration" && canMigrateStorage && (
+      {operationModal === "storage-backend-image-migration"
+        && canMigrateStorage && (
         <StorageBackendMigrationDialog
           busy={Boolean(running)}
           onClose={() => setOperationModal(null)}
           onRun={runStorageMigration}
         />
       )}
-      {operationModal === "storage-maintenance" && canMaintainStorage && maintenancePreview && (
+      {operationModal === "storage-maintenance"
+        && canMaintainStorage
+        && maintenancePreview && (
         <StorageMaintenanceDialog
           preview={maintenancePreview}
           running={running}
@@ -296,7 +312,10 @@ function StorageMaintenanceDialog({
             </section>
             <p className="notice-line">
               以上仅为当前检查预览。执行时服务端会在独占维护锁内重新读取数据库和完整存储快照；
-              {summary && (summary.blocked_namespaces || summary.unavailable_logical_backends)
+              {summary && (
+                summary.blocked_namespaces
+                || summary.unavailable_logical_backends
+              )
                 ? `当前另有 ${[
                     summary.blocked_namespaces
                       ? `${summary.blocked_namespaces} 个不可用或列举不完整的命名空间`

@@ -59,7 +59,9 @@ export function getPageScrollY() {
  * dialog focus instead.
  */
 export function getPageScrollLockFocusTarget() {
-  return lockCount === 1 && lockedPageFocusTarget?.isConnected ? lockedPageFocusTarget : null;
+  return lockCount === 1 && lockedPageFocusTarget?.isConnected
+    ? lockedPageFocusTarget
+    : null;
 }
 
 function installDialogTouchBoundary() {
@@ -69,8 +71,16 @@ function installDialogTouchBoundary() {
     capture: true,
     passive: false
   } as const;
-  document.addEventListener("touchstart", boundary.onTouchStart, captureNonPassive);
-  document.addEventListener("touchmove", boundary.onTouchMove, captureNonPassive);
+  document.addEventListener(
+    "touchstart",
+    boundary.onTouchStart,
+    captureNonPassive
+  );
+  document.addEventListener(
+    "touchmove",
+    boundary.onTouchMove,
+    captureNonPassive
+  );
   document.addEventListener("touchend", boundary.onTouchEnd, true);
   document.addEventListener("touchcancel", boundary.onTouchEnd, true);
   removeDialogTouchBoundary = () => {
@@ -97,7 +107,8 @@ export function usePageScrollLock(active = true) {
       if (lockedPageRoot) {
         const activeElement = document.activeElement;
         lockedPageFocusTarget =
-          activeElement instanceof HTMLElement && lockedPageRoot.contains(activeElement)
+          activeElement instanceof HTMLElement
+            && lockedPageRoot.contains(activeElement)
             ? activeElement
             : null;
         previousPageRootState = {
@@ -137,7 +148,10 @@ export function usePageScrollLock(active = true) {
         if (previousPageRootState.ariaHidden === null) {
           lockedPageRoot.removeAttribute("aria-hidden");
         } else {
-          lockedPageRoot.setAttribute("aria-hidden", previousPageRootState.ariaHidden);
+          lockedPageRoot.setAttribute(
+            "aria-hidden",
+            previousPageRootState.ariaHidden
+          );
         }
       }
       lockedPageRoot = null;

@@ -11,10 +11,15 @@ import { applyUiColorContext } from "../lib/ui/apply-ui-color-context.js";
  * 在后台外观可以接管启动底色后应用管理员偏好；自动模式额外订阅设备外观变化。
  * 该 Hook 不会在公开路由挂载，因此画廊内的管理弹窗不会继承后台偏好。
  */
-export function useAdminColorScheme(colorScheme: AdminColorScheme, enabled = true) {
+export function useAdminColorScheme(
+  colorScheme: AdminColorScheme,
+  enabled = true
+) {
   const [systemPrefersDark, setSystemPrefersDark] = useState(readSystemPrefersDark);
   const currentSystemPreference =
-    colorScheme === "system" ? readSystemPrefersDark() : systemPrefersDark;
+    colorScheme === "system"
+      ? readSystemPrefersDark()
+      : systemPrefersDark;
 
   useInsertionEffect(() => {
     if (!enabled) return;

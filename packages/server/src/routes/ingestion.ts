@@ -32,7 +32,10 @@ import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { resolveIngestionSnapshotLimit } from "../config/app-settings.ts";
 import { ApiError } from "../core/api-error.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
-import { apiSuccess, privateCacheableApiSuccess } from "../core/http/responses.ts";
+import {
+  apiSuccess,
+  privateCacheableApiSuccess
+} from "../core/http/responses.ts";
 import {
   ingestionCancelInput,
   ingestionCommitIntentInput,
@@ -91,7 +94,11 @@ function ingestionActionScope(c: Context) {
     !/^[A-Za-z0-9_-]{32}$/u.test(value) ||
     Buffer.byteLength(value, "utf8") > appConfig.ingestionRuntime.tokenMaxBytes
   ) {
-    throw new ApiError(409, "ingestion_action_scope_stale", "请先连接内容接入队列状态通道");
+    throw new ApiError(
+      409,
+      "ingestion_action_scope_stale",
+      "请先连接内容接入队列状态通道"
+    );
   }
   return value;
 }
@@ -109,7 +116,11 @@ function uploadCredential(c: Context) {
     !credential ||
     Buffer.byteLength(credential, "utf8") > appConfig.ingestionRuntime.tokenMaxBytes
   ) {
-    throw new ApiError(401, "upload_credential_invalid", "上传凭证无效或缺失");
+    throw new ApiError(
+      401,
+      "upload_credential_invalid",
+      "上传凭证无效或缺失"
+    );
   }
   return credential;
 }
@@ -132,9 +143,16 @@ export function registerIngestionRoutes(app: Hono) {
   app.post(ingestionSnapshotPath, async (c) => {
     const input = parse(ingestionSnapshotQuery, c.req.query());
     const limit = resolveIngestionSnapshotLimit(input.limit);
-    const selection = parse(ingestionSnapshotSelectionInput, await readJsonBody(c));
+    const selection = parse(
+      ingestionSnapshotSelectionInput,
+      await readJsonBody(c)
+    );
     if (limit + selection.include_items.length > appConfig.ingestionRuntime.snapshotMaxItems) {
-      throw new ApiError(400, "invalid_ingestion_snapshot", "队列页与补入任务总数超过快照上限");
+      throw new ApiError(
+        400,
+        "invalid_ingestion_snapshot",
+        "队列页与补入任务总数超过快照上限"
+      );
     }
     return c.json(
       apiSuccess(
@@ -235,9 +253,16 @@ export function registerIngestionRoutes(app: Hono) {
   app.post(importWeiboParsePath, async (c) => {
     const input = parse(weiboImportInput, await readJsonBody(c));
     const runtimeConfig = getRuntimeConfig();
-    const maxPosts = Math.min(appConfig.ingestion.batchHardLimit, runtimeConfig.weibo.max_items);
+    const maxPosts = Math.min(
+      appConfig.ingestion.batchHardLimit,
+      runtimeConfig.weibo.max_items
+    );
     if (input.urls.length > maxPosts) {
-      throw new ApiError(400, "weibo_batch_limit_exceeded", `单批最多允许 ${maxPosts} 条微博链接`);
+      throw new ApiError(
+        400,
+        "weibo_batch_limit_exceeded",
+        `单批最多允许 ${maxPosts} 条微博链接`
+      );
     }
     try {
       return c.json(
@@ -255,7 +280,8 @@ export function registerIngestionRoutes(app: Hono) {
       }
       if (error instanceof WeiboImportError) {
         let status: 400 | 422 | 502 = 422;
-        if (error.code === "weibo_invalid_url" || error.code === "weibo_image_limit_exceeded")
+        if (error.code === "weibo_invalid_url"
+          || error.code === "weibo_image_limit_exceeded")
           status = 400;
         if (
           error.code === "weibo_visitor_failed" ||
@@ -339,7 +365,10 @@ export function registerIngestionRoutes(app: Hono) {
   app.post(ingestionCancelPath, async (c) => {
     const input = parse(ingestionCancelInput, await readJsonBody(c));
     const response = {
-      items: await ingestionExecutionControl.cancelSessions(authenticatedUsername(c), input.items)
+      items: await ingestionExecutionControl.cancelSessions(
+        authenticatedUsername(c),
+        input.items
+      )
     } satisfies IngestionCancelResultDto;
     return c.json(apiSuccess(response));
   });

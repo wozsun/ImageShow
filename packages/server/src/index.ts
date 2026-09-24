@@ -2,7 +2,10 @@ import { serve } from "@hono/node-server";
 import { appConfig } from "@imageshow/shared";
 import { bootstrapEnvironment } from "./config/bootstrap-env.ts";
 import { deploymentConfig } from "./config/deployment-config.ts";
-import { getRuntimeConfig, initializeRuntimeConfig } from "./config/runtime-config-store.ts";
+import {
+  getRuntimeConfig,
+  initializeRuntimeConfig
+} from "./config/runtime-config-store.ts";
 import { configureSharpRuntime } from "./images/processing.ts";
 import {
   initializeReadyImageCacheCoordinator,
@@ -13,7 +16,10 @@ import {
   startIngestionSessionWorker,
   stopIngestionSessionWorker
 } from "./images/ingestion/runtime.ts";
-import { closeDatabasePools, configureDatabasePools } from "./core/database/pools.ts";
+import {
+  closeDatabasePools,
+  configureDatabasePools
+} from "./core/database/pools.ts";
 import { initializeDatabaseSchema } from "./core/database/schema.ts";
 import { ensureSuperAdmin } from "./users/admin-bootstrap.ts";
 import { redis } from "./core/redis/client.ts";

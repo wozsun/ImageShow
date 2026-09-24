@@ -18,7 +18,10 @@ import {
   type ShowPixiTextureLod
 } from "./show-pixi-texture-cache.js";
 
-const pointerDistance = (event: FederatedPointerEvent, start: { x: number; y: number }) =>
+const pointerDistance = (
+  event: FederatedPointerEvent,
+  start: { x: number; y: number }
+) =>
   Math.hypot(event.global.x - start.x, event.global.y - start.y);
 
 const portraitMagnetOptions = {
@@ -88,16 +91,26 @@ export class ShowPixiPerspectiveCoordinator {
   }
 }
 
-export function showPixiTextureLod(image: ShowImage, renderedWidth: number, targetRatio: number) {
-  const sourceRatio = image.width > 0 && image.height > 0 ? image.height / image.width : 1;
-  const ratio = Number.isFinite(targetRatio) && targetRatio > 0 ? targetRatio : sourceRatio;
+export function showPixiTextureLod(
+  image: ShowImage,
+  renderedWidth: number,
+  targetRatio: number
+) {
+  const sourceRatio = image.width > 0 && image.height > 0
+    ? image.height / image.width
+    : 1;
+  const ratio = Number.isFinite(targetRatio) && targetRatio > 0
+    ? targetRatio
+    : sourceRatio;
   const renderedPixels = renderedWidth * Math.max(1, devicePixelRatio);
   const edge = renderedPixels <= 140 ? 128 : renderedPixels <= 300 ? 256 : 512;
   const pixelHeight = Math.max(1, Math.round(edge * ratio));
   // Keep the target aspect ratio even for uncommon panoramas or tall images.
   // When the height reaches the cache ceiling, reduce width instead of
   // stretching a capped bitmap back over the card geometry.
-  const pixelWidth = pixelHeight > 1_024 ? Math.max(1, Math.round(1_024 / ratio)) : edge;
+  const pixelWidth = pixelHeight > 1_024
+    ? Math.max(1, Math.round(1_024 / ratio))
+    : edge;
   return {
     pixelWidth,
     pixelHeight: Math.min(1_024, pixelHeight),
@@ -176,7 +189,10 @@ export class ShowPixiCard {
       this.#hovered = event.pointerType === "mouse";
       if (this.#hovered && this.#perspectiveEnabled) {
         this.#perspectiveUnavailableSignature = "";
-        this.#perspectiveCoordinator.claim(this, () => this.#cancelPointerPerspective());
+        this.#perspectiveCoordinator.claim(
+          this,
+          () => this.#cancelPointerPerspective()
+        );
         this.#updateTiltTarget(event);
       }
       this.#updateDepth();
@@ -192,7 +208,9 @@ export class ShowPixiCard {
       if (start && event.pointerId === start.pointerId && pointerDistance(event, start) > 6) {
         start.dragged = true;
       }
-      if (event.pointerType !== "mouse" || !this.#hovered || !this.#perspectiveEnabled) return;
+      if (event.pointerType !== "mouse"
+        || !this.#hovered
+        || !this.#perspectiveEnabled) return;
       this.#updateTiltTarget(event);
     });
     this.root.on("pointerdown", (event) => {
@@ -240,7 +258,11 @@ export class ShowPixiCard {
     const identityChanged = this.image?.id !== image.id || this.key !== key;
     const resolvedTextureUrl = image.thumb_url;
     const lod =
-      textureLod ?? showPixiTextureLod(image, textureRenderedWidth, height / Math.max(1, width));
+      textureLod ?? showPixiTextureLod(
+        image,
+        textureRenderedWidth,
+        height / Math.max(1, width)
+      );
     const nextTextureKey = `${resolvedTextureUrl}\n${lod.pixelWidth}x${lod.pixelHeight}`;
     const textureChanged = identityChanged || this.#textureKey !== nextTextureKey;
     this.key = key;
@@ -276,7 +298,11 @@ export class ShowPixiCard {
     this.#loadTexture(resolvedTextureUrl, lod, generationKey);
   }
 
-  #loadTexture(url: string, lod: ShowPixiTextureLod, generationKey: string) {
+  #loadTexture(
+    url: string,
+    lod: ShowPixiTextureLod,
+    generationKey: string
+  ) {
     if (
       this.#destroyed ||
       generationKey !== `${this.key}:${this.image?.id ?? ""}:${this.#textureKey}`
@@ -352,7 +378,10 @@ export class ShowPixiCard {
     }
     if (!this.#hovered) return;
     this.#perspectiveUnavailableSignature = "";
-    this.#perspectiveCoordinator.claim(this, () => this.#cancelPointerPerspective());
+    this.#perspectiveCoordinator.claim(
+      this,
+      () => this.#cancelPointerPerspective()
+    );
   }
 
   setRenderScale(renderScale: number) {
@@ -394,7 +423,9 @@ export class ShowPixiCard {
       }
     }
     const portrait = (this.image?.height ?? 0) > (this.image?.width ?? 0);
-    const targetScale = this.#focused || this.#hovered ? (portrait ? 1.08 : 1.1) : 1;
+    const targetScale = this.#focused || this.#hovered
+      ? portrait ? 1.08 : 1.1
+      : 1;
     const scaleProgress = 1 - Math.exp(-Math.max(0, elapsedMs) / 95);
     const nextScale = this.root.scale.x + (targetScale - this.root.scale.x) * scaleProgress;
     this.root.scale.set(nextScale);
@@ -404,7 +435,9 @@ export class ShowPixiCard {
     this.#tiltY += (this.#tiltTargetY - this.#tiltY) * tiltProgress;
     if (
       this.#perspectiveEnabled &&
-      (this.#hovered || Math.abs(this.#tiltX) > 0.001 || Math.abs(this.#tiltY) > 0.001)
+      (this.#hovered
+        || Math.abs(this.#tiltX) > 0.001
+        || Math.abs(this.#tiltY) > 0.001)
     ) {
       this.#applyPointerPerspective(portrait);
     } else {
@@ -437,14 +470,24 @@ export class ShowPixiCard {
     const active = this.#focused || this.#hovered;
     const width = Math.max(1, this.width);
     const height = Math.max(1, this.height);
-    if (this.#surfaceSignature && this.#hitArea.width === width && this.#hitArea.height === height)
+    if (this.#surfaceSignature
+      && this.#hitArea.width === width
+      && this.#hitArea.height === height)
       return;
     this.#hitArea.x = -width / 2;
     this.#hitArea.y = -height / 2;
     this.#hitArea.width = width;
     this.#hitArea.height = height;
-    const borderWidth = Math.min(width / 2, height / 2, 1 / this.#renderScale);
-    const radius = Math.min(width / 2, height / 2, 6 / this.#renderScale);
+    const borderWidth = Math.min(
+      width / 2,
+      height / 2,
+      1 / this.#renderScale
+    );
+    const radius = Math.min(
+      width / 2,
+      height / 2,
+      6 / this.#renderScale
+    );
     const signature = [
       width.toFixed(2),
       height.toFixed(2),
@@ -521,11 +564,17 @@ export class ShowPixiCard {
     const hoverScale = Math.max(0.01, this.root.scale.x);
     this.#tiltTargetX = Math.max(
       -1,
-      Math.min(1, (local.x * hoverScale) / Math.max(0.5, this.width / 2))
+      Math.min(
+        1,
+        local.x * hoverScale / Math.max(0.5, this.width / 2)
+      )
     );
     this.#tiltTargetY = Math.max(
       -1,
-      Math.min(1, (local.y * hoverScale) / Math.max(0.5, this.height / 2))
+      Math.min(
+        1,
+        local.y * hoverScale / Math.max(0.5, this.height / 2)
+      )
     );
   }
 
@@ -611,7 +660,8 @@ export class ShowPixiCard {
       aspect.toFixed(4),
       scaleBucket
     ].join(":");
-    if (this.#perspectiveMesh && this.#perspectiveSourceSignature === sourceSignature)
+    if (this.#perspectiveMesh
+      && this.#perspectiveSourceSignature === sourceSignature)
       return this.#perspectiveMesh;
     if (this.#perspectiveUnavailableSignature === sourceSignature) return null;
     this.#releasePerspectiveSurface();
@@ -631,7 +681,10 @@ export class ShowPixiCard {
       texture = this.#renderer.generateTexture({
         target: this.surface,
         frame,
-        resolution: Math.min(2, Math.max(1, (window.devicePixelRatio || 1) * this.#renderScale)),
+        resolution: Math.min(2, Math.max(
+          1,
+          (window.devicePixelRatio || 1) * this.#renderScale
+        )),
         antialias: true,
         clearColor: [0, 0, 0, 0],
         textureSourceOptions: { scaleMode: "linear" }

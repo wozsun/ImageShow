@@ -7,7 +7,10 @@ import {
 import { FacetSelector } from "../../../components/data-display/FacetSelector.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { SelectMenu } from "../../../components/form/SelectMenu.js";
-import { brightnessOptionLabel, deviceOptionLabel } from "../../../lib/ui/select-options.js";
+import {
+  brightnessOptionLabel,
+  deviceOptionLabel
+} from "../../../lib/ui/select-options.js";
 import { AnchoredMenuDismissSignalContext } from "../../../hooks/useAnchoredMenu.js";
 import { useDismissiblePanel } from "../../../hooks/useDismissiblePanel.js";
 import type { ImageAdminView } from "./useImageAdminOperations.js";
@@ -111,7 +114,11 @@ export function ImageAdminFilters({
     (value.tag ? 1 : 0) +
     (value.author ? 1 : 0);
   const hasFilters = Boolean(
-    value.device || value.brightness || value.theme || value.tag || value.author
+    value.device
+    || value.brightness
+    || value.theme
+    || value.tag
+    || value.author
   );
   const clearFilters = () => {
     disclosure.dismissMenus();
@@ -209,12 +216,16 @@ export function ImageAdminFilters({
           aria-expanded={open}
           aria-controls="admin-image-filter-panel"
           onClick={() =>
-            open ? disclosure.setOpen(false, { restoreFocus: true }) : disclosure.setOpen(true)
+            open
+              ? disclosure.setOpen(false, { restoreFocus: true })
+              : disclosure.setOpen(true)
           }
         >
           <AdminIcon name="filter-3-line" />
           筛选
-          {activeCount > 0 && <span className="image-list-filter-count">{activeCount}</span>}
+          {activeCount > 0 && (
+            <span className="image-list-filter-count">{activeCount}</span>
+          )}
           <span className="image-list-filter-chevron">
             <AdminIcon name="arrow-down-s-line" />
           </span>

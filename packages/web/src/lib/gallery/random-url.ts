@@ -8,7 +8,7 @@ import {
   type RandomImageSize,
   type TagFilterValue
 } from "@imageshow/shared/browser";
-import type { RandomMode } from "../types.js";
+import type { RandomResponseMode } from "../types.js";
 
 export function buildRandomUrl(input: {
   origin?: string;
@@ -17,7 +17,7 @@ export function buildRandomUrl(input: {
   theme: string;
   tag: TagFilterValue;
   author: string;
-  mode?: RandomMode;
+  mode?: RandomResponseMode;
   size?: RandomImageSize;
 }) {
   const params = new URLSearchParams();

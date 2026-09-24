@@ -25,14 +25,22 @@ export async function displayUrlForOriginalComparison(
   image: OriginalComparableImage,
   access: StorageRegistryAccess = {}
 ) {
-  return publicImageUrl(image, image.storage_slug, access);
+  return publicImageUrl(
+    image,
+    image.storage_slug,
+    access
+  );
 }
 
 export function hasDistinctOriginalUrl(original: string, displayUrl: string) {
   return /^https:\/\//i.test(original.trim()) && !equivalentUrl(original, displayUrl);
 }
 
-export function adminOriginalAccessUrl(id: string, original: string, displayUrl: string) {
+export function adminOriginalAccessUrl(
+  id: string,
+  original: string,
+  displayUrl: string
+) {
   return hasDistinctOriginalUrl(original, displayUrl)
     ? `${imageResourceBaseUrl()}/original/${encodeURIComponent(id)}`
     : null;

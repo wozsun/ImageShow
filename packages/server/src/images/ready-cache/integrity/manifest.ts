@@ -53,7 +53,8 @@ function persistentDataKey(key: string) {
 }
 
 function cardinalityKind(key: string): "hash" | "zset" {
-  if (key === READY_IMAGE_ITEMS_KEY || key === READY_IMAGE_STATS_KEY) {
+  if (key === READY_IMAGE_ITEMS_KEY
+    || key === READY_IMAGE_STATS_KEY) {
     return "hash";
   }
   return "zset";
@@ -84,7 +85,12 @@ async function readReadyImageStats(client: Redis) {
   const stats: ReadyImageStats = new Map();
   let cursor = "0";
   do {
-    const [next, fields] = await client.hscan(READY_IMAGE_STATS_KEY, cursor, "COUNT", SCAN_COUNT);
+    const [next, fields] = await client.hscan(
+      READY_IMAGE_STATS_KEY,
+      cursor,
+      "COUNT",
+      SCAN_COUNT
+    );
     cursor = next;
     for (let index = 0; index < fields.length; index += 2) {
       const field = fields[index];
@@ -98,7 +104,8 @@ async function readReadyImageStats(client: Redis) {
 
 function sameReadyImageStats(left: ReadyImageStats, right: ReadyImageStats) {
   return (
-    left.size === right.size && [...left].every(([field, count]) => right.get(field) === count)
+    left.size === right.size
+      && [...left].every(([field, count]) => right.get(field) === count)
   );
 }
 
@@ -119,7 +126,10 @@ export async function validateReadyImageStatsIntegrity(
   return stats;
 }
 
-function queueCardinality(client: RedisCardinalityCommands, key: string) {
+function queueCardinality(
+  client: RedisCardinalityCommands,
+  key: string
+) {
   if (cardinalityKind(key) === "hash") client.hlen(key);
   else client.zcard(key);
 }
@@ -169,7 +179,10 @@ export async function readReadyImageIntegrity(client: Redis): Promise<ReadyImage
     INTEGRITY_ENTRY_COUNT_FIELD,
     INTEGRITY_STATS_DIGEST_FIELD
   );
-  const entryCount = nonNegativeCardinality(entryCountRaw, INTEGRITY_ENTRY_COUNT_FIELD);
+  const entryCount = nonNegativeCardinality(
+    entryCountRaw,
+    INTEGRITY_ENTRY_COUNT_FIELD
+  );
   if (!/^[0-9a-f]{64}$/u.test(statsDigest ?? "")) {
     throw new Error("Ready-image cache integrity has an invalid statistics digest");
   }
@@ -186,7 +199,9 @@ export async function readReadyImageIntegrity(client: Redis): Promise<ReadyImage
     for (let index = 0; index < fields.length; index += 2) {
       const key = fields[index];
       const value = fields[index + 1];
-      if (!key || key === INTEGRITY_ENTRY_COUNT_FIELD || key === INTEGRITY_STATS_DIGEST_FIELD) {
+      if (!key
+        || key === INTEGRITY_ENTRY_COUNT_FIELD
+        || key === INTEGRITY_STATS_DIGEST_FIELD) {
         continue;
       }
       if (!persistentDataKey(key)) {
@@ -208,7 +223,8 @@ export function sameReadyImageCardinalities(
   left: ReadyImageCardinalities,
   right: ReadyImageCardinalities
 ) {
-  return left.size === right.size && [...left].every(([key, value]) => right.get(key) === value);
+  return left.size === right.size
+    && [...left].every(([key, value]) => right.get(key) === value);
 }
 
 export async function validateReadyImageCardinalities(
@@ -240,14 +256,20 @@ export async function validateReadyImageCardinalities(
   signal?.throwIfAborted();
 }
 
-export async function readReadyImageCardinalities(keys: string[], client: Redis) {
+export async function readReadyImageCardinalities(
+  keys: string[],
+  client: Redis
+) {
   const pairs = await readReadyImageCardinalityPairs(keys, client);
   const cardinalities = new Map<string, number>();
   for (const { key, actual } of pairs) cardinalities.set(key, actual);
   return cardinalities;
 }
 
-async function readReadyImageCardinalityPairs(keys: string[], client: Redis) {
+async function readReadyImageCardinalityPairs(
+  keys: string[],
+  client: Redis
+) {
   const pairs: Array<{
     key: string;
     expected: number | null;
@@ -267,8 +289,13 @@ async function readReadyImageCardinalityPairs(keys: string[], client: Redis) {
       pairs.push({
         key,
         expected:
-          existing === null ? null : nonNegativeCardinality(existing, `integrity value for ${key}`),
-        actual: nonNegativeCardinality(results[index * 2 + 1]?.[1], `cardinality for ${key}`)
+          existing === null
+            ? null
+            : nonNegativeCardinality(existing, `integrity value for ${key}`),
+        actual: nonNegativeCardinality(
+          results[index * 2 + 1]?.[1],
+          `cardinality for ${key}`
+        )
       });
     });
   }
@@ -297,16 +324,27 @@ export async function updateReadyImageIntegrity(
   if (entryCount < 0) {
     throw new Error("Ready-image integrity manifest disappeared during sync");
   }
-  await client.hset(READY_IMAGE_INTEGRITY_KEY, INTEGRITY_ENTRY_COUNT_FIELD, String(entryCount));
+  await client.hset(
+    READY_IMAGE_INTEGRITY_KEY,
+    INTEGRITY_ENTRY_COUNT_FIELD,
+    String(entryCount)
+  );
 }
 
-export async function publishReadyImageStatsIntegrity(expected: ReadyImageStats, client: Redis) {
+export async function publishReadyImageStatsIntegrity(
+  expected: ReadyImageStats,
+  client: Redis
+) {
   const stats = await readReadyImageStats(client);
   if (!sameReadyImageStats(stats, expected)) {
     throw new Error("Ready-image cache statistics differ after incremental sync");
   }
   const transaction = client.multi();
-  transaction.hset(READY_IMAGE_INTEGRITY_KEY, READY_IMAGE_STATS_KEY, String(stats.size));
+  transaction.hset(
+    READY_IMAGE_INTEGRITY_KEY,
+    READY_IMAGE_STATS_KEY,
+    String(stats.size)
+  );
   transaction.hset(
     READY_IMAGE_INTEGRITY_KEY,
     INTEGRITY_STATS_DIGEST_FIELD,

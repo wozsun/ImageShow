@@ -8,7 +8,12 @@ type AsyncActionPresentationItem = {
 
 export type AsyncActionPresentation = Record<AsyncActionStatus, AsyncActionPresentationItem>;
 
-const asyncActionStatuses: AsyncActionStatus[] = ["idle", "pending", "success", "error"];
+const asyncActionStatuses: AsyncActionStatus[] = [
+  "idle",
+  "pending",
+  "success",
+  "error"
+];
 
 type AsyncActionButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
   status: AsyncActionStatus;
@@ -28,8 +33,12 @@ export function AsyncActionButton({
   ...buttonProps
 }: AsyncActionButtonProps) {
   const current = presentation[status];
-  const currentAriaLabel = typeof current.label === "string" ? current.label : current.ariaLabel;
-  const classes = ["async-action-button", `is-${status}`, className].filter(Boolean).join(" ");
+  const currentAriaLabel = typeof current.label === "string"
+    ? current.label
+    : current.ariaLabel;
+  const classes = ["async-action-button", `is-${status}`, className]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <button

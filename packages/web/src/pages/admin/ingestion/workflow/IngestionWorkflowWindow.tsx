@@ -18,13 +18,20 @@ import type { SelectOption } from "../../../../lib/ui/select-options.js";
 import type { PrepareImageAttributeClear } from "../../../../lib/image-draft.js";
 import { useTwoStepConfirmation } from "../../../../hooks/useTwoStepConfirmation.js";
 import { useIngestionDuplicateDetails } from "../queue/useIngestionDuplicateDetails.js";
-import type { FacetOption, ImageDraft, AdminImageListItem } from "../../../../lib/types.js";
+import type {
+  FacetOption,
+  ImageDraft,
+  AdminImageListItem
+} from "../../../../lib/types.js";
 import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 
 import type { IngestionPreviewTarget } from "../queue/cards/DuplicateMatchPanel.js";
 import { ingestionJobPreviewAvailable } from "../queue/model/duplicate-match.js";
 import type { ImportManifestParseError } from "../queue/ingestion-http-client.js";
-import type { ImportSourceMode, ImportSourceSubmission } from "../import/ImportSourceDialog.js";
+import type {
+  ImportSourceMode,
+  ImportSourceSubmission
+} from "../import/ImportSourceDialog.js";
 import {
   createIngestionCleanupActions,
   type IngestionCleanupActionId
@@ -136,7 +143,10 @@ function ingestionJobElementPath(card: HTMLElement, target: HTMLElement) {
   return current === card ? path.reverse() : [];
 }
 
-function ingestionJobElementAtPath(card: HTMLElement, path: readonly number[]) {
+function ingestionJobElementAtPath(
+  card: HTMLElement,
+  path: readonly number[]
+) {
   let current: HTMLElement = card;
   for (const index of path) {
     const child: Element | undefined = [...current.children][index];
@@ -168,7 +178,10 @@ function ingestionJobElementOwner(
   };
 }
 
-function ingestionJobElementForOwner(card: HTMLElement, owner: IngestionJobElementOwner) {
+function ingestionJobElementForOwner(
+  card: HTMLElement,
+  owner: IngestionJobElementOwner
+) {
   const exact = ingestionJobElementAtPath(card, owner.path);
   const semanticMatch = (candidate: HTMLElement) =>
     candidate.tagName === owner.tagName &&
@@ -276,7 +289,9 @@ export function IngestionWorkflowWindow({
     : undefined;
   const modeTitle = mode === "upload" ? "上传图片" : "导入图片";
   const emptySubtitle =
-    mode === "upload" ? "选择后立即上传并在服务端准备图片" : "输入来源后立即创建并准备图片任务";
+    mode === "upload"
+      ? "选择后立即上传并在服务端准备图片"
+      : "输入来源后立即创建并准备图片任务";
   const {
     readyCount,
     waitingJobs: stageWaitingJobs,
@@ -295,17 +310,22 @@ export function IngestionWorkflowWindow({
     invalidationKey: confirmationScope,
     onDisarm: onDiscardUnconfirmedIntents
   });
-  const clearRequiresConfirmation = clearDangerous || clearConfirmation.armed;
+  const clearRequiresConfirmation = clearDangerous
+    || clearConfirmation.armed;
 
   useEffect(() => {
-    if (pendingCleanup && pendingCleanup.confirmationScope !== confirmationScope) {
+    if (pendingCleanup
+      && pendingCleanup.confirmationScope !== confirmationScope) {
       onDiscardUnconfirmedIntents();
       setPendingCleanup(null);
     }
   }, [confirmationScope, onDiscardUnconfirmedIntents, pendingCleanup]);
 
   const selectCleanupAction = useCallback(
-    (actionId: IngestionCleanupActionId, returnFocusTarget: HTMLElement) => {
+    (
+      actionId: IngestionCleanupActionId,
+      returnFocusTarget: HTMLElement
+    ) => {
       const action = cleanupActionsRef.current.find((candidate) => candidate.id === actionId);
       if (!action?.enabled) return;
       if (!action.confirmation) {
@@ -330,16 +350,26 @@ export function IngestionWorkflowWindow({
   }, [onConfirmCleanupAction, pendingCleanup]);
 
   const openJobDetail = useCallback(
-    (job: IngestionJob, item: AdminImageListItem, opener: HTMLElement) => {
+    (
+      job: IngestionJob,
+      item: AdminImageListItem,
+      opener: HTMLElement
+    ) => {
       const card = opener.closest<HTMLElement>("[data-ingestion-job-id]");
-      detailOwnerRef.current = card ? ingestionJobElementOwner(job, card, opener) : null;
+      detailOwnerRef.current = card
+        ? ingestionJobElementOwner(job, card, opener)
+        : null;
       detailReturnFocusRef.current = opener;
       setDetailItem(item);
     },
     []
   );
   const captureJobFocus = useCallback(
-    (job: IngestionJob, card: HTMLElement, target: HTMLElement) => {
+    (
+      job: IngestionJob,
+      card: HTMLElement,
+      target: HTMLElement
+    ) => {
       focusedJobElementRef.current = ingestionJobElementOwner(job, card, target);
     },
     []
@@ -430,9 +460,17 @@ export function IngestionWorkflowWindow({
     if (detailItem && detailOwnerRef.current) {
       const transferred = transfer(detailOwnerRef.current);
       detailOwnerRef.current = transferred;
-      detailReturnFocusRef.current = transferred?.element ?? closeButtonRef.current;
+      detailReturnFocusRef.current = transferred?.element
+        ?? closeButtonRef.current;
     }
-  }, [cardForJob, detailItem, pendingCleanup, preview, queue.visibleJobs, sourceDialogOpen]);
+  }, [
+    cardForJob,
+    detailItem,
+    pendingCleanup,
+    preview,
+    queue.visibleJobs,
+    sourceDialogOpen
+  ]);
 
   useLayoutEffect(() => {
     if (!preview) return;
@@ -527,7 +565,10 @@ export function IngestionWorkflowWindow({
     <DialogFrame
       className="ingestion-overlay"
       ariaLabel={modeTitle}
-      paused={Boolean(detailItem || preview || sourceDialogOpen || pendingCleanup)}
+      paused={Boolean(detailItem
+        || preview
+        || sourceDialogOpen
+        || pendingCleanup)}
       initialFocusRef={closeButtonRef}
       returnFocusRef={returnFocusRef}
       prepareClose={() => {

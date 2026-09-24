@@ -17,7 +17,9 @@ export function useImageAdminSelection(items: readonly AdminImageListItem[]) {
   const [selected, setSelected] = useState<string[]>([]);
   const controllerRef = useRef(new ImageListSelectionController());
   const pageIds = useMemo(
-    () => items.filter((item) => !item.purge_pending).map((item) => item.id),
+    () => items
+      .filter((item) => !item.purge_pending)
+      .map((item) => item.id),
     [items]
   );
 
@@ -37,7 +39,12 @@ export function useImageAdminSelection(items: readonly AdminImageListItem[]) {
   }, [pageIds, selected]);
 
   const update = useCallback(
-    (targetId: string, checked: boolean, extendRange: boolean, busy: boolean) => {
+    (
+      targetId: string,
+      checked: boolean,
+      extendRange: boolean,
+      busy: boolean
+    ) => {
       setSelected((current) =>
         controllerRef.current.update({
           pageIds,
@@ -62,7 +69,10 @@ export function useImageAdminSelection(items: readonly AdminImageListItem[]) {
   );
 
   const clearFromPageClick = useCallback(
-    (event: ReactMouseEvent<HTMLElement>, busy: boolean) => {
+    (
+      event: ReactMouseEvent<HTMLElement>,
+      busy: boolean
+    ) => {
       if (!selected.length || busy) return;
       const target = event.target;
       if (

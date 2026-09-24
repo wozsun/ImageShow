@@ -10,7 +10,10 @@ import {
   type IngestionQueueSummaryDto
 } from "../../../../packages/shared/src/browser.ts";
 import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
-import { ingestionJob, adminImageListItem } from "../../support/web-test-context.ts";
+import {
+  ingestionJob,
+  adminImageListItem
+} from "../../support/web-test-context.ts";
 import { installControlledClock } from "../../support/controlled-clock.ts";
 
 const selectedQueueScenario = process.env.IMAGESHOW_WEB_QUEUE_SCENARIO;
@@ -57,13 +60,19 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
       ControlledEventSource.active.add(this);
     }
 
-    addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+    addEventListener(
+      type: string,
+      listener: EventListenerOrEventListenerObject
+    ) {
       const listeners = this.listeners.get(type) ?? new Set();
       listeners.add(listener);
       this.listeners.set(type, listeners);
     }
 
-    removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+    removeEventListener(
+      type: string,
+      listener: EventListenerOrEventListenerObject
+    ) {
       this.listeners.get(type)?.delete(listener);
     }
 
@@ -196,7 +205,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
     let recoverAuthorityProbe: (() => Promise<void>) | undefined;
     let recoverAfterSuccessfulActionProbe: (() => Promise<void>) | undefined;
     let ensureRevisionProbe:
-      ((revision?: number, connectionGeneration?: number) => void) | undefined;
+      ((
+        revision?: number,
+        connectionGeneration?: number
+      ) => void) | undefined;
     const probeCompletedObservations: string[] = [];
     const probeServerItemObservations: Array<{
       imageId: string;
@@ -339,7 +351,9 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
     const loadingAcceptedImageId = visibleReadyReleaseImageIds[0];
     const visibleReadyReleaseTargetImageId = visibleReadyReleaseImageIds[4];
     const visibleReadyReleaseSessionIds = visibleReadyReleaseImageIds.map((_imageId, index) =>
-      index === 0 ? loadingAcceptedSessionId : String(index).repeat(43)
+      index === 0
+        ? loadingAcceptedSessionId
+        : String(index).repeat(43)
     );
     const readyReleaseSummary: IngestionQueueSummaryDto = {
       total: 1,
@@ -637,9 +651,13 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
         queue.clearJobIds(new Set(queue.localJobs.map((job) => job.id)));
         const placeholders = Array.from({ length: 21 }, (_, index) =>
           ingestionJob({
-            id: index === 20 ? releaseRacePlaceholderId : `owner-release-race-fill-${index}`,
+            id: index === 20
+              ? releaseRacePlaceholderId
+              : `owner-release-race-fill-${index}`,
             attemptKey:
-              index === 20 ? releaseRaceAttemptKey : `owner-release-race-fill-attempt-${index}`,
+              index === 20
+                ? releaseRaceAttemptKey
+                : `owner-release-race-fill-attempt-${index}`,
             batchKey: "owner-release-race-batch",
             kind: "upload",
             status: "received"
@@ -912,16 +930,22 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             : []
         );
       };
-      releaseVisibleReady = (imageId = visibleReadyReleaseTargetImageId, release) => {
+      releaseVisibleReady = (
+        imageId = visibleReadyReleaseTargetImageId,
+        release
+      ) => {
         const visibleIndex = visibleReadyReleaseImageIds.indexOf(
           imageId as (typeof visibleReadyReleaseImageIds)[number]
         );
         assert.notEqual(visibleIndex, -1);
         const current = queue.jobsRef.current.find((job) => job.imageId === imageId);
-        const targetId = current?.id ?? `owner-visible-ready-release-placeholder-${visibleIndex}`;
+        const targetId = current?.id
+          ?? `owner-visible-ready-release-placeholder-${visibleIndex}`;
         const targetAttemptKey =
-          current?.attemptKey ?? `owner-visible-ready-release-attempt-${visibleIndex}`;
-        const targetSessionId = current?.sessionId ?? visibleReadyReleaseSessionIds[visibleIndex]!;
+          current?.attemptKey
+            ?? `owner-visible-ready-release-attempt-${visibleIndex}`;
+        const targetSessionId = current?.sessionId
+          ?? visibleReadyReleaseSessionIds[visibleIndex]!;
         if (current) {
           queue.updateJob(current.id, {
             status: "cancelled",
@@ -1031,7 +1055,11 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
         adminImageInvalidations += 1;
     });
     const withQueryClient = (child: React.ReactNode) =>
-      React.createElement(QueryClientProvider, { client: queryClient }, child);
+      React.createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        child
+      );
     const view = () =>
       JSON.parse(container.textContent || "{}") as {
         status: string;
@@ -1053,12 +1081,19 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
       assert.fail(
         `Server Ingestion queue Hook did not settle: ${container.textContent}; ` +
           `pending=${requests
-            .filter((request) => !request.aborted && !request.resolved)
-            .map((request) => new URL(request.url, "https://imageshow.test").pathname)
+            .filter((request) => !request.aborted
+              && !request.resolved)
+            .map((request) => new URL(
+              request.url,
+              "https://imageshow.test"
+            ).pathname)
             .join(",")}; recent=${requests
             .slice(-8)
             .map((request) => {
-              const url = new URL(request.url, "https://imageshow.test");
+              const url = new URL(
+                request.url,
+                "https://imageshow.test"
+              );
               return (
                 `${url.pathname}?${url.searchParams.toString()}` +
                 `:${request.aborted ? "aborted" : request.resolved ? "resolved" : "pending"}`
@@ -1067,7 +1102,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             .join(",")}`
       );
     };
-    const respond = (request: PendingSnapshot, payload: Record<string, unknown>) => {
+    const respond = (
+      request: PendingSnapshot,
+      payload: Record<string, unknown>
+    ) => {
       request.resolve(
         new Response(JSON.stringify({ ok: true, ...payload }), {
           status: 200,
@@ -1082,9 +1120,16 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           (request) =>
             !request.aborted &&
             !request.resolved &&
-            new URL(request.url, "https://imageshow.test").pathname === path
+            new URL(
+              request.url,
+              "https://imageshow.test"
+            ).pathname === path
         );
-    const runQueueScenario = (id: string, name: string, work: () => Promise<void>) =>
+    const runQueueScenario = (
+      id: string,
+      name: string,
+      work: () => Promise<void>
+    ) =>
       t.test(
         name,
         {
@@ -1342,7 +1387,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           await settleUntil(() => requests.length === authorityRecoveryStart + 1);
           await React.act(async () => {
             requests[authorityRecoveryStart]!.resolve(
-              new Response("snapshot response lost", { status: 502 })
+              new Response(
+                "snapshot response lost",
+                { status: 502 }
+              )
             );
             await clock.advanceBy(100);
           });
@@ -1358,7 +1406,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               items: [serverItem("preparing", 2, 20)],
               action_watermark: "watermark-authority-recovered"
             });
-            await Promise.all([firstAuthorityRecovery, coalescedAuthorityRecovery]);
+            await Promise.all([
+              firstAuthorityRecovery,
+              coalescedAuthorityRecovery
+            ]);
           });
           assert.equal(view().watermark, "watermark-authority-recovered");
           assert.equal(
@@ -1446,7 +1497,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             [completedServerItem.image_id],
             "raw owner 应保留有界基线，由组合 owner 精确投影动作成功项"
           );
-          assert.equal(view().watermark, "watermark-completed-before-cleanup");
+          assert.equal(
+            view().watermark,
+            "watermark-completed-before-cleanup"
+          );
           await settleUntil(() => requests.length === cleanupRecoveryStart + 2);
           const lateCompletedSessionId = "T".repeat(43);
           const lateCompletedImageId = "00000000-0000-7092-8000-00000000008e";
@@ -1579,7 +1633,11 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           assert.deepEqual(probeCompletedObservations, [offPageCompletedImageId]);
-          assert.equal(requests.length, 1, "跨页完成失效不应为了当前页额外读取 snapshot");
+          assert.equal(
+            requests.length,
+            1,
+            "跨页完成失效不应为了当前页额外读取 snapshot"
+          );
           assert.equal(view().revision, 10);
 
           await React.act(async () => {
@@ -1730,7 +1788,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           await settleUntil(() => requests.length === failedRefreshStart + 1);
           await React.act(async () => {
             requests[failedRefreshStart]!.resolve(
-              new Response("coalesced ordinary refresh failed", { status: 503 })
+              new Response(
+                "coalesced ordinary refresh failed",
+                { status: 503 }
+              )
             );
             await clock.advanceBy(99);
           });
@@ -2002,14 +2063,24 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           assert.equal(requests.length, revertedFailureStart + 1);
           await React.act(async () => {
             obsoleteExpandedRequest.resolve(
-              new Response("obsolete expanded snapshot failed", { status: 503 })
+              new Response(
+                "obsolete expanded snapshot failed",
+                { status: 503 }
+              )
             );
             await clock.advanceBy(100);
           });
           await settleUntil(() => requests.length === revertedFailureStart + 2);
-          assert.equal(obsoleteExpandedRequest.aborted, false, "参数恢复不得中止同页扩大请求");
           assert.equal(
-            new URL(requests[revertedFailureStart + 1]!.url, "http://localhost").searchParams.get(
+            obsoleteExpandedRequest.aborted,
+            false,
+            "参数恢复不得中止同页扩大请求"
+          );
+          assert.equal(
+            new URL(
+              requests[revertedFailureStart + 1]!.url,
+              "http://localhost"
+            ).searchParams.get(
               "limit"
             ),
             "20",
@@ -2147,7 +2218,11 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             "watermark-filter-reset",
             "保留水位必须止于跳变前 accepted-order，不能纳入触发重读的新任务"
           );
-          assert.equal(view().items[0]?.status, "ready", "撤销旧快照权威时仍须保留稳定卡片展示");
+          assert.equal(
+            view().items[0]?.status,
+            "ready",
+            "撤销旧快照权威时仍须保留稳定卡片展示"
+          );
           await React.act(async () => {
             respond(requests[semanticReloadStart]!, {
               queue: "upload",
@@ -2186,7 +2261,11 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             });
             await Promise.resolve();
           });
-          assert.equal(view().status, "ready", "在途同页刷新发现语义跳变时也应保留有界旧操作权威");
+          assert.equal(
+            view().status,
+            "ready",
+            "在途同页刷新发现语义跳变时也应保留有界旧操作权威"
+          );
           assert.equal(requests.length, queuedSemanticReloadStart + 1);
           await React.act(async () => {
             respond(requests[queuedSemanticReloadStart]!, {
@@ -2207,7 +2286,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             "ready",
             "尾随读取前旧签名水位仍可稳定服务点击且不会扩大范围"
           );
-          assert.equal(view().watermark, "watermark-semantic-gap-refreshed");
+          assert.equal(
+            view().watermark,
+            "watermark-semantic-gap-refreshed"
+          );
           assert.equal(requests[queuedSemanticReloadStart]!.aborted, false);
           await React.act(async () => {
             respond(requests[queuedSemanticReloadStart + 1]!, {
@@ -2859,7 +2941,8 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(
-            () => ownerView().pendingHandoff && requests.length === ownerRequestStart + 5
+            () => ownerView().pendingHandoff
+                && requests.length === ownerRequestStart + 5
           );
           assert.equal(
             ownerView().total,
@@ -2880,7 +2963,12 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               last_accepted_order: 60,
               summary: reducedSummary,
               session: {
-                ...serverItem("preparing", 2, 6, "00000000-0000-7012-8000-00000000008e"),
+                ...serverItem(
+                  "preparing",
+                  2,
+                  6,
+                  "00000000-0000-7012-8000-00000000008e"
+                ),
                 session_id: "O".repeat(43),
                 last_semantic_revision: 32
               },
@@ -2894,7 +2982,11 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             true,
             "离开当前页的 pair 仍须由 owner fence 等待其 HTTP revision"
           );
-          assert.equal(ownerView().total, 6, "loading 中的不相关事件不得丢掉稳定 Server total");
+          assert.equal(
+            ownerView().total,
+            6,
+            "loading 中的不相关事件不得丢掉稳定 Server total"
+          );
           assert.equal(
             ownerView().visible.filter((job) => job.id === handoffImageId).length,
             1,
@@ -2936,7 +3028,8 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             });
             await Promise.resolve();
           });
-          await settleUntil(() => ownerView().status === "ready" && !ownerView().pendingHandoff);
+          await settleUntil(() => ownerView().status === "ready"
+            && !ownerView().pendingHandoff);
           assert.equal(ownerView().total, 6);
           assert.equal(
             ownerView().visible.filter((job) => job.id === handoffImageId).length,
@@ -3038,7 +3131,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             .filter(
               (request) =>
                 !request.aborted &&
-                new URL(request.url, "https://imageshow.test").pathname === ingestionStatusPath
+                new URL(
+                  request.url,
+                  "https://imageshow.test"
+                ).pathname === ingestionStatusPath
             ).length;
           assert.equal(oldGenerationStatusCount, 1);
 
@@ -3119,7 +3215,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .filter(
                 (request) =>
                   !request.aborted &&
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionStatusPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionStatusPath
               ).length,
             1,
             "新连接空基线必须重新核对，且收敛后不得继续轮询"
@@ -3220,7 +3319,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .filter(
                 (request) =>
                   !request.aborted &&
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionStatusPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionStatusPath
               ).length,
             1,
             "已被稳定 baseline 覆盖的离页 receipt 必须当场收敛"
@@ -3240,7 +3342,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .slice(crossGenerationRequestStart)
               .some(
                 (request) =>
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionSnapshotPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionSnapshotPath
               ),
             false,
             "当前代基线已覆盖旧代 HTTP revision 时应直接批量核对 pair"
@@ -3284,7 +3389,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             "status 先水合的同 attempt done 卡仍须被后到 clear 结果释放"
           );
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, crossGenerationReleaseStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              crossGenerationReleaseStart
+            ))
           );
           const crossGenerationReleaseSnapshot = pendingRequest(
             ingestionSnapshotPath,
@@ -3326,10 +3434,16 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, releaseRaceRequestStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              releaseRaceRequestStart
+            ))
           );
           await React.act(async () => {
-            respond(pendingRequest(ingestionSnapshotPath, releaseRaceRequestStart)!, {
+            respond(pendingRequest(
+              ingestionSnapshotPath,
+              releaseRaceRequestStart
+            )!, {
               queue: "upload",
               revision: 102,
               last_accepted_order: 2,
@@ -3351,9 +3465,15 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionStatusPath, releaseRaceRequestStart))
+            Boolean(pendingRequest(
+              ingestionStatusPath,
+              releaseRaceRequestStart
+            ))
           );
-          const staleReleaseStatus = pendingRequest(ingestionStatusPath, releaseRaceRequestStart)!;
+          const staleReleaseStatus = pendingRequest(
+            ingestionStatusPath,
+            releaseRaceRequestStart
+          )!;
           await React.act(async () => {
             releaseRaceHandoff!();
             await Promise.resolve();
@@ -3386,7 +3506,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             "同一 Server clear 已释放的 pair 不得被迟到 status 重新注入"
           );
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, releaseRaceRequestStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              releaseRaceRequestStart
+            ))
           );
           const releaseRaceRecoverySnapshot = pendingRequest(
             ingestionSnapshotPath,
@@ -3435,7 +3558,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             "commit-owned finalized 卡必须由专用权威释放动作移出"
           );
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, mountedReleaseRequestStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              mountedReleaseRequestStart
+            ))
           );
           const mountedReleaseSnapshot = pendingRequest(
             ingestionSnapshotPath,
@@ -3473,7 +3599,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .slice(mountedReleaseRequestStart)
               .filter(
                 (request) =>
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionSnapshotPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionSnapshotPath
               ).length,
             1,
             "一页 Server 替补必须让 mounted release 以一次快照收敛"
@@ -3481,7 +3610,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           await settleUntil(
             () =>
               ownerView().status === "ready" &&
-              !pendingRequest(ingestionSnapshotPath, mountedReleaseRequestStart)
+              !pendingRequest(
+                ingestionSnapshotPath,
+                mountedReleaseRequestStart
+              )
           );
 
           assert.ok(bindCrossGenerationCompletedCoverage);
@@ -3555,7 +3687,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .filter(
                 (request) =>
                   !request.aborted &&
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionStatusPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionStatusPath
               ).length,
             1,
             "completed coverage 应主动刷新权威快照且不得轮询 status"
@@ -3575,7 +3710,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .slice(presentCoverageStart)
               .some(
                 (request) =>
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionSnapshotPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionSnapshotPath
               ),
             false,
             "当前代 revision 已覆盖时应先核对跨代 pair，不预读同一快照"
@@ -3593,7 +3731,12 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
                   image_id: crossGenerationPresentImageId,
                   status: "present",
                   item: {
-                    ...serverItem("ready", 4, 5, crossGenerationPresentImageId),
+                    ...serverItem(
+                      "ready",
+                      4,
+                      5,
+                      crossGenerationPresentImageId
+                    ),
                     session_id: crossGenerationPresentSessionId,
                     last_semantic_revision: 110
                   }
@@ -3646,7 +3789,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .filter(
                 (request) =>
                   !request.aborted &&
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionStatusPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionStatusPath
               ).length,
             1,
             "present coverage 应以一次 status 加一次权威快照收敛，不得轮询"
@@ -3670,19 +3816,26 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           );
           assert.equal(
             ownerView().visible.some(
-              (job) => job.id === oldIncarnationImageId || job.id === nextIncarnationImageId
+              (job) => job.id === oldIncarnationImageId
+                || job.id === nextIncarnationImageId
             ),
             false,
             "释放新 incarnation 后不得残留旧 pair 的围栏或卡片"
           );
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, incarnationRequestStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              incarnationRequestStart
+            ))
           );
           const incarnationSnapshot = pendingRequest(
             ingestionSnapshotPath,
             incarnationRequestStart
           )!;
-          const incarnationSnapshotUrl = new URL(incarnationSnapshot.url, "https://imageshow.test");
+          const incarnationSnapshotUrl = new URL(
+            incarnationSnapshot.url,
+            "https://imageshow.test"
+          );
           await React.act(async () => {
             respond(incarnationSnapshot, {
               queue: "upload",
@@ -3710,7 +3863,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             incarnationRequestStart
           );
           if (incarnationTrailingSnapshot) {
-            const trailingUrl = new URL(incarnationTrailingSnapshot.url, "https://imageshow.test");
+            const trailingUrl = new URL(
+              incarnationTrailingSnapshot.url,
+              "https://imageshow.test"
+            );
             await React.act(async () => {
               respond(incarnationTrailingSnapshot, {
                 queue: "upload",
@@ -3737,7 +3893,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           await settleUntil(
             () =>
               ownerView().status === "ready" &&
-              !pendingRequest(ingestionSnapshotPath, incarnationRequestStart)
+              !pendingRequest(
+                ingestionSnapshotPath,
+                incarnationRequestStart
+              )
           );
 
           assert.ok(bindReconnectAcceptedOwners);
@@ -3747,7 +3906,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, reconnectAcceptedStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              reconnectAcceptedStart
+            ))
           );
           const preReconnectSnapshot = pendingRequest(
             ingestionSnapshotPath,
@@ -3764,7 +3926,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(() => {
-            const pending = pendingRequest(ingestionSnapshotPath, reconnectAcceptedStart);
+            const pending = pendingRequest(
+              ingestionSnapshotPath,
+              reconnectAcceptedStart
+            );
             return Boolean(pending && pending !== preReconnectSnapshot);
           });
           assert.equal(
@@ -3772,8 +3937,14 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             true,
             "owner 换代也必须只取消旧 scope 的在途快照"
           );
-          const reconnectSnapshot = pendingRequest(ingestionSnapshotPath, reconnectAcceptedStart)!;
-          const reconnectSnapshotUrl = new URL(reconnectSnapshot.url, "https://imageshow.test");
+          const reconnectSnapshot = pendingRequest(
+            ingestionSnapshotPath,
+            reconnectAcceptedStart
+          )!;
+          const reconnectSnapshotUrl = new URL(
+            reconnectSnapshot.url,
+            "https://imageshow.test"
+          );
           await React.act(async () => {
             respond(reconnectSnapshot, {
               queue: "upload",
@@ -3797,9 +3968,15 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionStatusPath, reconnectAcceptedStart))
+            Boolean(pendingRequest(
+              ingestionStatusPath,
+              reconnectAcceptedStart
+            ))
           );
-          const reconnectStatus = pendingRequest(ingestionStatusPath, reconnectAcceptedStart)!;
+          const reconnectStatus = pendingRequest(
+            ingestionStatusPath,
+            reconnectAcceptedStart
+          )!;
           const requestedReconnectPairs = (
             JSON.parse(String(reconnectStatus.init.body ?? "{}")) as {
               items: Array<{ session_id: string; image_id: string }>;
@@ -3833,7 +4010,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .filter(
                 (request) =>
                   !request.aborted &&
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionStatusPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionStatusPath
               ).length,
             1,
             "reconnect promotion 必须用一次批量 status 收敛且不得轮询"
@@ -3848,9 +4028,15 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           await settleUntil(
             () =>
               ownerView().status === "ready" &&
-              Boolean(pendingRequest(ingestionSnapshotPath, loadingSnapshotStart))
+              Boolean(pendingRequest(
+                ingestionSnapshotPath,
+                loadingSnapshotStart
+              ))
           );
-          const loadingSnapshot = pendingRequest(ingestionSnapshotPath, loadingSnapshotStart)!;
+          const loadingSnapshot = pendingRequest(
+            ingestionSnapshotPath,
+            loadingSnapshotStart
+          )!;
           assert.ok(bindLoadingAcceptedOwner);
           const loadingAcceptedStart = requests.length;
           const staleRequestGeneration = ownerView().generation - 1;
@@ -3866,7 +4052,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
                 (request) =>
                   !request.aborted &&
                   !request.resolved &&
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionSnapshotPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionSnapshotPath
               ).length,
             0,
             "已有同页快照在途时不得为新的收敛触发中止旧请求或并发读取"
@@ -3877,7 +4066,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             61,
             "loading 期间到达的新 accepted order 必须保留 provisional 总数"
           );
-          const loadingSnapshotUrl = new URL(loadingSnapshot.url, "https://imageshow.test");
+          const loadingSnapshotUrl = new URL(
+            loadingSnapshot.url,
+            "https://imageshow.test"
+          );
           await React.act(async () => {
             respond(loadingSnapshot, {
               queue: "upload",
@@ -3924,7 +4116,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           await settleUntil(
             () =>
               ownerView().status === "ready" &&
-              Boolean(pendingRequest(ingestionSnapshotPath, loadingAcceptedStart))
+              Boolean(pendingRequest(
+                ingestionSnapshotPath,
+                loadingAcceptedStart
+              ))
           );
           assert.equal(
             ownerView().total,
@@ -3935,7 +4130,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             ingestionSnapshotPath,
             loadingAcceptedStart
           )!;
-          const loadingCoverageUrl = new URL(loadingCoverageSnapshot.url, "https://imageshow.test");
+          const loadingCoverageUrl = new URL(
+            loadingCoverageSnapshot.url,
+            "https://imageshow.test"
+          );
           await React.act(async () => {
             respond(loadingCoverageSnapshot, {
               queue: "upload",
@@ -3970,7 +4168,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .filter(
                 (request) =>
                   !request.aborted &&
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionStatusPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionStatusPath
               ).length,
             1,
             "loading accepted 必须以一次 status 和一次 coverage 快照收敛"
@@ -4046,7 +4247,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
                 (request) =>
                   !request.aborted &&
                   !request.resolved &&
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionSnapshotPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionSnapshotPath
               ).length,
             0,
             "翻页参数落在同一组合 offset 时必须复用在途读取并只排队一个必要尾随快照"
@@ -4107,7 +4311,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           );
           assert.equal(preRepeatedReconnectSnapshot.aborted, true);
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, repeatedCompletedSnapshotStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              repeatedCompletedSnapshotStart
+            ))
           );
           const repeatedCompletedSnapshot = pendingRequest(
             ingestionSnapshotPath,
@@ -4162,14 +4369,23 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             bindLoadingAcceptedOwner!(renderGapRequestGeneration);
             await Promise.resolve();
           });
-          await settleUntil(() => Boolean(pendingRequest(ingestionSnapshotPath, renderGapStart)));
+          await settleUntil(() => Boolean(pendingRequest(
+            ingestionSnapshotPath,
+            renderGapStart
+          )));
           assert.equal(
             ownerView().pendingHandoff,
             true,
             "React render-gap 内的旧代响应不得被旧高 revision 快捷清除"
           );
-          const renderGapReadySnapshot = pendingRequest(ingestionSnapshotPath, renderGapStart)!;
-          const renderGapReadyUrl = new URL(renderGapReadySnapshot.url, "https://imageshow.test");
+          const renderGapReadySnapshot = pendingRequest(
+            ingestionSnapshotPath,
+            renderGapStart
+          )!;
+          const renderGapReadyUrl = new URL(
+            renderGapReadySnapshot.url,
+            "https://imageshow.test"
+          );
           await React.act(async () => {
             respond(renderGapReadySnapshot, {
               queue: "upload",
@@ -4211,8 +4427,14 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             });
             await Promise.resolve();
           });
-          await settleUntil(() => Boolean(pendingRequest(ingestionSnapshotPath, renderGapStart)));
-          const renderGapCoverageSnapshot = pendingRequest(ingestionSnapshotPath, renderGapStart)!;
+          await settleUntil(() => Boolean(pendingRequest(
+            ingestionSnapshotPath,
+            renderGapStart
+          )));
+          const renderGapCoverageSnapshot = pendingRequest(
+            ingestionSnapshotPath,
+            renderGapStart
+          )!;
           const renderGapCoverageUrl = new URL(
             renderGapCoverageSnapshot.url,
             "https://imageshow.test"
@@ -4245,14 +4467,18 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             });
             await Promise.resolve();
           });
-          await settleUntil(() => ownerView().status === "ready" && !ownerView().pendingHandoff);
+          await settleUntil(() => ownerView().status === "ready"
+            && !ownerView().pendingHandoff);
           assert.equal(
             requests
               .slice(renderGapStart)
               .filter(
                 (request) =>
                   !request.aborted &&
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionSnapshotPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionSnapshotPath
               ).length,
             2,
             "render-gap 只允许新代 ready 与当前 status revision 各一次快照"
@@ -4263,7 +4489,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .filter(
                 (request) =>
                   !request.aborted &&
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionStatusPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionStatusPath
               ).length,
             1,
             "render-gap handoff 必须恰好回读一次当前代 status"
@@ -4277,13 +4506,19 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, staleReleaseSnapshotStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              staleReleaseSnapshotStart
+            ))
           );
           const staleReleaseSnapshot = pendingRequest(
             ingestionSnapshotPath,
             staleReleaseSnapshotStart
           )!;
-          const staleReleaseUrl = new URL(staleReleaseSnapshot.url, "https://imageshow.test");
+          const staleReleaseUrl = new URL(
+            staleReleaseSnapshot.url,
+            "https://imageshow.test"
+          );
           const singleReleaseStart = requests.length;
           await React.act(async () => {
             prepareVisibleReadyRelease!();
@@ -4342,10 +4577,19 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           assert.equal(ownerView().total, 6, "单项移除后总数必须立即减少一次");
           assert.equal(ownerView().ready, 6, "单项移除后 ready 摘要必须立即减少一次");
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, singleReleaseStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              singleReleaseStart
+            ))
           );
-          const singleReleaseSnapshot = pendingRequest(ingestionSnapshotPath, singleReleaseStart)!;
-          const singleReleaseUrl = new URL(singleReleaseSnapshot.url, "https://imageshow.test");
+          const singleReleaseSnapshot = pendingRequest(
+            ingestionSnapshotPath,
+            singleReleaseStart
+          )!;
+          const singleReleaseUrl = new URL(
+            singleReleaseSnapshot.url,
+            "https://imageshow.test"
+          );
           await React.act(async () => {
             respond(singleReleaseSnapshot, {
               queue: "upload",
@@ -4385,7 +4629,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .filter(
                 (request) =>
                   !request.aborted &&
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionSnapshotPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionSnapshotPath
               ).length,
             1,
             "单项移除成功后只允许一次 post-trigger 权威快照"
@@ -4399,9 +4646,15 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
 
           const boundaryExtraImageIds = Array.from(
             { length: 15 },
-            (_value, index) => `019f8457-063a-${(0x7050 + index).toString(16)}-a580-00000000008e`
+            (
+              _value,
+              index
+            ) => `019f8457-063a-${(0x7050 + index).toString(16)}-a580-00000000008e`
           );
-          const boundaryImageIds = [...remainingReadyReleaseImageIds, ...boundaryExtraImageIds];
+          const boundaryImageIds = [
+            ...remainingReadyReleaseImageIds,
+            ...boundaryExtraImageIds
+          ];
           const boundarySessionIds = [
             ...remainingReadyReleaseImageIds.map(
               (imageId) =>
@@ -4422,10 +4675,19 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, boundaryBaselineStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              boundaryBaselineStart
+            ))
           );
-          const boundaryBaseline = pendingRequest(ingestionSnapshotPath, boundaryBaselineStart)!;
-          const boundaryBaselineUrl = new URL(boundaryBaseline.url, "https://imageshow.test");
+          const boundaryBaseline = pendingRequest(
+            ingestionSnapshotPath,
+            boundaryBaselineStart
+          )!;
+          const boundaryBaselineUrl = new URL(
+            boundaryBaseline.url,
+            "https://imageshow.test"
+          );
           await React.act(async () => {
             respond(boundaryBaseline, {
               queue: "upload",
@@ -4460,10 +4722,19 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, boundaryPageTwoStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              boundaryPageTwoStart
+            ))
           );
-          const boundaryPageTwo = pendingRequest(ingestionSnapshotPath, boundaryPageTwoStart)!;
-          const boundaryPageTwoUrl = new URL(boundaryPageTwo.url, "https://imageshow.test");
+          const boundaryPageTwo = pendingRequest(
+            ingestionSnapshotPath,
+            boundaryPageTwoStart
+          )!;
+          const boundaryPageTwoUrl = new URL(
+            boundaryPageTwo.url,
+            "https://imageshow.test"
+          );
           assert.equal(boundaryPageTwoUrl.searchParams.get("offset"), "20");
           await React.act(async () => {
             respond(boundaryPageTwo, {
@@ -4506,7 +4777,9 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           });
           assert.equal(releaseRaceReleased, true);
           await settleUntil(
-            () => ownerView().total === 20 && ownerView().page === 1 && ownerView().totalPages === 1
+            () => ownerView().total === 20
+              && ownerView().page === 1
+              && ownerView().totalPages === 1
           );
           assert.equal(
             ownerView().ready,
@@ -4514,7 +4787,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             "目标不在 bounded items 时仍须按 discard revision 立即扣减 ready"
           );
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, absentReleaseRecoveryStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              absentReleaseRecoveryStart
+            ))
           );
           const absentReleaseFailedProof = pendingRequest(
             ingestionSnapshotPath,
@@ -4534,7 +4810,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .slice(absentReleaseRecoveryStart)
               .filter(
                 (request) =>
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionSnapshotPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionSnapshotPath
               ).length,
             1,
             "跨页释放不得先按已越界 offset 发出随后被中止的 proof"
@@ -4557,13 +4836,19 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await clock.advanceBy(100);
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, absentReleaseRecoveryStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              absentReleaseRecoveryStart
+            ))
           );
           const absentReleaseProof = pendingRequest(
             ingestionSnapshotPath,
             absentReleaseRecoveryStart
           )!;
-          const absentReleaseProofUrl = new URL(absentReleaseProof.url, "https://imageshow.test");
+          const absentReleaseProofUrl = new URL(
+            absentReleaseProof.url,
+            "https://imageshow.test"
+          );
           await React.act(async () => {
             respond(absentReleaseProof, {
               queue: "upload",
@@ -4593,7 +4878,9 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           });
           await settleUntil(
             () =>
-              ownerView().status === "ready" && ownerView().total === 20 && ownerView().ready === 20
+              ownerView().status === "ready"
+              && ownerView().total === 20
+              && ownerView().ready === 20
           );
           assert.equal(
             requests
@@ -4601,7 +4888,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .filter(
                 (request) =>
                   !request.aborted &&
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionSnapshotPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionSnapshotPath
               ).length,
             2,
             "目标缺席时一次失败只允许按既定退避续接同一 proof snapshot"
@@ -4613,7 +4903,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, releaseBoundaryTrimStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              releaseBoundaryTrimStart
+            ))
           );
           const releaseBoundaryTrimSnapshot = pendingRequest(
             ingestionSnapshotPath,
@@ -4657,7 +4950,9 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           });
           await settleUntil(
             () =>
-              ownerView().status === "ready" && ownerView().page === 1 && ownerView().total === 5
+              ownerView().status === "ready"
+              && ownerView().page === 1
+              && ownerView().total === 5
           );
           assert.deepEqual(
             ownerView().visible.map((job) => job.id),
@@ -4687,7 +4982,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           const recoveryDelays = [100, 500, 1_500] as const;
           for (let attempt = 0; attempt < 4; attempt += 1) {
             await settleUntil(() =>
-              Boolean(pendingRequest(ingestionSnapshotPath, failedReleaseRecoveryStart))
+              Boolean(pendingRequest(
+                ingestionSnapshotPath,
+                failedReleaseRecoveryStart
+              ))
             );
             const failedRecoverySnapshot = pendingRequest(
               ingestionSnapshotPath,
@@ -4755,13 +5053,19 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, reopenedOwnerSnapshotStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              reopenedOwnerSnapshotStart
+            ))
           );
           const reopenedOwnerSnapshot = pendingRequest(
             ingestionSnapshotPath,
             reopenedOwnerSnapshotStart
           )!;
-          const reopenedOwnerUrl = new URL(reopenedOwnerSnapshot.url, "https://imageshow.test");
+          const reopenedOwnerUrl = new URL(
+            reopenedOwnerSnapshot.url,
+            "https://imageshow.test"
+          );
           await React.act(async () => {
             respond(reopenedOwnerSnapshot, {
               queue: "upload",
@@ -4795,7 +5099,8 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(
-            () => ownerView().status === "ready" && ownerView().visible.length === 5
+            () => ownerView().status === "ready"
+              && ownerView().visible.length === 5
           );
           assert.deepEqual(
             ownerView().visible.map((job) => job.id),
@@ -4834,7 +5139,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, completedCleanupBaselineStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              completedCleanupBaselineStart
+            ))
           );
           const completedCleanupBaseline = pendingRequest(
             ingestionSnapshotPath,
@@ -4862,16 +5170,32 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               completed: 3,
               failed: 0,
               items: [
-                ownerCompletedItem(clearedCompletedSessionId, clearedCompletedImageId, 7, 17),
-                ownerCompletedItem(retainedCompletedSessionId, retainedCompletedImageId, 8, 18),
-                ownerCompletedItem(browserCompletedSessionId, browserCompletedImageId, 9, 19)
+                ownerCompletedItem(
+                  clearedCompletedSessionId,
+                  clearedCompletedImageId,
+                  7,
+                  17
+                ),
+                ownerCompletedItem(
+                  retainedCompletedSessionId,
+                  retainedCompletedImageId,
+                  8,
+                  18
+                ),
+                ownerCompletedItem(
+                  browserCompletedSessionId,
+                  browserCompletedImageId,
+                  9,
+                  19
+                )
               ],
               action_watermark: "watermark-before-completed-cleanup"
             });
             await Promise.resolve();
           });
           await settleUntil(
-            () => ownerView().status === "ready" && ownerView().visible.length === 3
+            () => ownerView().status === "ready"
+              && ownerView().visible.length === 3
           );
           await React.act(async () => {
             markOwnerCompletedBrowserOwned!(browserCompletedImageId);
@@ -4906,7 +5230,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             ]
           };
           await React.act(async () => {
-            assert.equal(projectOwnerCompletedCleanupBatch!(completedCleanupResult), 2);
+            assert.equal(
+              projectOwnerCompletedCleanupBatch!(completedCleanupResult),
+              2
+            );
             await Promise.resolve();
           });
           assert.deepEqual(
@@ -4930,7 +5257,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             "动作后权威恢复期间必须继续保留逐批成功投影和边界外任务"
           );
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, completedCleanupRecoveryStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              completedCleanupRecoveryStart
+            ))
           );
           const completedCleanupRecoverySnapshot = pendingRequest(
             ingestionSnapshotPath,
@@ -4940,7 +5270,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             requests.filter(
               (request, index) =>
                 index >= completedCleanupRecoveryStart &&
-                new URL(request.url, "https://imageshow.test").pathname === ingestionSnapshotPath
+                new URL(
+                  request.url,
+                  "https://imageshow.test"
+                ).pathname === ingestionSnapshotPath
             ).length,
             1,
             "组合投影释放与 raw baseline 失效必须复用一个 post-action snapshot"
@@ -4967,7 +5300,12 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               completed: 1,
               failed: 0,
               items: [
-                ownerCompletedItem(retainedCompletedSessionId, retainedCompletedImageId, 8, 18)
+                ownerCompletedItem(
+                  retainedCompletedSessionId,
+                  retainedCompletedImageId,
+                  8,
+                  18
+                )
               ],
               action_watermark: "watermark-after-completed-cleanup"
             });
@@ -4980,8 +5318,12 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           );
           assert.deepEqual(
             requests
-              .filter((request) => !request.aborted && !request.resolved)
-              .map((request) => new URL(request.url, "https://imageshow.test").pathname),
+              .filter((request) => !request.aborted
+                && !request.resolved)
+              .map((request) => new URL(
+                request.url,
+                "https://imageshow.test"
+              ).pathname),
             [],
             "23 项离页完成回归开始前不得遗留权威读取"
           );
@@ -5012,13 +5354,19 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           assert.equal(ownerView().page, 1);
           assert.equal(ownerView().offPageCompletionOwners, 23);
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, offPageBaselineRequestStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              offPageBaselineRequestStart
+            ))
           );
           const offPageBaselineRequest = pendingRequest(
             ingestionSnapshotPath,
             offPageBaselineRequestStart
           )!;
-          const offPageBaselineUrl = new URL(offPageBaselineRequest.url, "https://imageshow.test");
+          const offPageBaselineUrl = new URL(
+            offPageBaselineRequest.url,
+            "https://imageshow.test"
+          );
           await React.act(async () => {
             respond(offPageBaselineRequest, {
               queue: "upload",
@@ -5167,7 +5515,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           assert.equal(ownerView().total, 23, JSON.stringify(ownerView()));
           assert.equal(ownerView().totalPages, 2, JSON.stringify(ownerView()));
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionStatusPath, offPageCompletionRequestStart))
+            Boolean(pendingRequest(
+              ingestionStatusPath,
+              offPageCompletionRequestStart
+            ))
           );
           const compactCompletedStatusRequest = pendingRequest(
             ingestionStatusPath,
@@ -5190,7 +5541,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .slice(offPageCompletionRequestStart)
               .filter(
                 (request) =>
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionSnapshotPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionSnapshotPath
               ).length,
             0,
             "compact 离页完成事件不得触发重复分页请求"
@@ -5256,13 +5610,19 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             "切换第二页后的首次渲染必须在分页响应前直接显示最终状态"
           );
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, secondPageFirstRenderRequestStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              secondPageFirstRenderRequestStart
+            ))
           );
           const secondPageSnapshot = pendingRequest(
             ingestionSnapshotPath,
             secondPageFirstRenderRequestStart
           )!;
-          const secondPageSnapshotUrl = new URL(secondPageSnapshot.url, "https://imageshow.test");
+          const secondPageSnapshotUrl = new URL(
+            secondPageSnapshot.url,
+            "https://imageshow.test"
+          );
           assert.equal(secondPageSnapshot.resolved, false);
           await React.act(async () => {
             respond(secondPageSnapshot, {
@@ -5321,7 +5681,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             await Promise.resolve();
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionSnapshotPath, compactChunkBaselineRequestStart))
+            Boolean(pendingRequest(
+              ingestionSnapshotPath,
+              compactChunkBaselineRequestStart
+            ))
           );
           const compactChunkBaselineRequest = pendingRequest(
             ingestionSnapshotPath,
@@ -5446,12 +5809,18 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           };
           await React.act(async () => {
             for (let index = 0; index < 101; index += 1) {
-              currentOwnerSource.emit("mutation", compactCompletedMutation(index));
+              currentOwnerSource.emit(
+                "mutation",
+                compactCompletedMutation(index)
+              );
             }
             await new Promise((resolve) => setTimeout(resolve, 0));
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionStatusPath, compactChunkHydrationStart))
+            Boolean(pendingRequest(
+              ingestionStatusPath,
+              compactChunkHydrationStart
+            ))
           );
           const compactChunkFirstRequest = pendingRequest(
             ingestionStatusPath,
@@ -5466,12 +5835,21 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           );
           await React.act(async () => {
             respond(compactChunkFirstRequest, {
-              items: Array.from({ length: 100 }, (_value, index) => compactCompletedStatus(index))
+              items: Array.from(
+                { length: 100 },
+                (
+                  _value,
+                  index
+                ) => compactCompletedStatus(index)
+              )
             });
             await Promise.resolve();
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionStatusPath, compactChunkHydrationStart))
+            Boolean(pendingRequest(
+              ingestionStatusPath,
+              compactChunkHydrationStart
+            ))
           );
           await React.act(async () => {
             await new Promise((resolve) => setTimeout(resolve, 0));
@@ -5480,7 +5858,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             .slice(compactChunkHydrationStart)
             .filter(
               (request) =>
-                new URL(request.url, "https://imageshow.test").pathname === ingestionStatusPath
+                new URL(
+                  request.url,
+                  "https://imageshow.test"
+                ).pathname === ingestionStatusPath
             );
           assert.equal(
             compactChunkRequests.length,
@@ -5539,11 +5920,17 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
 
           const compactChunkRetryStart = requests.length;
           await React.act(async () => {
-            currentOwnerSource.emit("mutation", compactCompletedMutation(101));
+            currentOwnerSource.emit(
+              "mutation",
+              compactCompletedMutation(101)
+            );
             await new Promise((resolve) => setTimeout(resolve, 0));
           });
           await settleUntil(() =>
-            Boolean(pendingRequest(ingestionStatusPath, compactChunkRetryStart))
+            Boolean(pendingRequest(
+              ingestionStatusPath,
+              compactChunkRetryStart
+            ))
           );
           const compactChunkRetryFirstRequest = pendingRequest(
             ingestionStatusPath,
@@ -5575,7 +5962,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           assert.equal(ownerView().jobCount, compactChunkRetainedJobCount);
           const compactReplayStart = requests.length;
           await React.act(async () => {
-            currentOwnerSource.emit("mutation", compactCompletedMutation(101));
+            currentOwnerSource.emit(
+              "mutation",
+              compactCompletedMutation(101)
+            );
             await new Promise((resolve) => setTimeout(resolve, 0));
           });
           assert.equal(
@@ -5588,7 +5978,10 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               .slice(compactChunkHydrationStart)
               .filter(
                 (request) =>
-                  new URL(request.url, "https://imageshow.test").pathname === ingestionSnapshotPath
+                  new URL(
+                    request.url,
+                    "https://imageshow.test"
+                  ).pathname === ingestionSnapshotPath
               ).length,
             0,
             "未知 compact 水合与失败重试不得追加分页 snapshot"

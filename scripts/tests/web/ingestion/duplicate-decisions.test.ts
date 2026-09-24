@@ -7,10 +7,16 @@ import {
   ingestionUpdatePath
 } from "../../../../packages/shared/src/browser.ts";
 import type { IngestionJob } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
-import { clearCsrfToken, setCsrfToken } from "../../../../packages/web/src/lib/api/client.ts";
+import {
+  clearCsrfToken,
+  setCsrfToken
+} from "../../../../packages/web/src/lib/api/client.ts";
 import { webUuidV7 } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-identity.ts";
 import { reduceIngestionQueue } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
-import { ingestionJob, adminImageListItem } from "../../support/web-test-context.ts";
+import {
+  ingestionJob,
+  adminImageListItem
+} from "../../support/web-test-context.ts";
 
 test("[Web/内容接入] 重复详情请求单飞执行并及时合并到最新队列", async () => {
   const { window, document } = parseHTML(
@@ -21,7 +27,10 @@ test("[Web/内容接入] 重复详情请求单飞执行并及时合并到最新�
   const requestMd5s: string[][] = [];
   const requestSignals: Array<AbortSignal | undefined> = [];
   const responses: Array<(response: Response) => void> = [];
-  const fetchStub = async (input: RequestInfo | URL, init: RequestInit = {}) => {
+  const fetchStub = async (
+    input: RequestInfo | URL,
+    init: RequestInit = {}
+  ) => {
     const path = new URL(String(input), "http://localhost").pathname;
     assert.equal(path, ingestionDuplicatesPath);
     const body = JSON.parse(String(init.body ?? "{}")) as { md5s: string[] };
@@ -502,7 +511,10 @@ test("[Web/内容接入] 重复决定合并同一在途请求且拒绝跨 incarn
   let resolveUpdate: ((response: Response) => void) | undefined;
   let updateCalls = 0;
   const requiredRevisions: number[] = [];
-  const fetchStub = async (input: RequestInfo | URL, init: RequestInit = {}) => {
+  const fetchStub = async (
+    input: RequestInfo | URL,
+    init: RequestInit = {}
+  ) => {
     assert.equal(String(input), ingestionUpdatePath);
     updateCalls += 1;
     const body = JSON.parse(String(init.body ?? "{}")) as {
@@ -587,7 +599,9 @@ test("[Web/内容接入] 重复决定合并同一在途请求且拒绝跨 incarn
         reportError: () => undefined,
         observeCompletedIngestions: () => undefined
       });
-      return React.createElement("output", null, String(sync.hasPendingUpdates()));
+      return React.createElement("output", null, String(
+        sync.hasPendingUpdates()
+      ));
     }
     const container = document.getElementById("root");
     assert.ok(container);

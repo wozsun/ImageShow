@@ -1,7 +1,7 @@
 import { storageObjectKey } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../icon/AdminIcon.js";
 import { ImageDraftFields } from "../../form/ImageDraftFields.js";
-import { ImageThumbnail } from "../ImageThumbnail.js";
+import { ImageThumbnailFrame } from "../ImageThumbnailFrame.js";
 import {
   formatBytes,
   formatDimensions,
@@ -12,7 +12,11 @@ import {
   cardBrightnessSelectOptions,
   editCardDeviceSelectOptions
 } from "../../../lib/ui/select-options.js";
-import type { FacetOption, EditableImageSnapshot, ImageDraft } from "../../../lib/types.js";
+import type {
+  FacetOption,
+  EditableImageSnapshot,
+  ImageDraft
+} from "../../../lib/types.js";
 import {
   imageMetadataCardSaveState,
   type ImageMetadataChanges,
@@ -53,7 +57,9 @@ export function ImageMetadataEditorCard({
   // A new edit supersedes an earlier success badge. Failed and pending cards
   // retain their feedback because the draft still needs another save or an
   // authoritative confirmation.
-  const cardSaveState = cardChanged && lastSaveState === "saved" ? null : lastSaveState;
+  const cardSaveState = cardChanged && lastSaveState === "saved"
+    ? null
+    : lastSaveState;
   const saveStatePresentation = cardSaveState
     ? {
         saved: {
@@ -79,7 +85,7 @@ export function ImageMetadataEditorCard({
       className={`image-editor-row${cardChanged ? " is-changed" : ""}${saveStatePresentation ? ` ${saveStatePresentation.rowClassName}` : ""}`}
     >
       <div className="image-editor-preview">
-        <ImageThumbnail src={item.thumb_url} onClick={onPreview} />
+        <ImageThumbnailFrame src={item.thumb_url} onClick={onPreview} />
         {item.image_size ? (
           <span className="image-editor-preview-size">{formatBytes(item.image_size)}</span>
         ) : null}

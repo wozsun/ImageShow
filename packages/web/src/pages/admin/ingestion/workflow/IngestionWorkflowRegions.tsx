@@ -13,7 +13,11 @@ import {
   uploadCommonDeviceOptions,
   type SelectOption
 } from "../../../../lib/ui/select-options.js";
-import type { AdminImageListItem, FacetOption, ImageDraft } from "../../../../lib/types.js";
+import type {
+  AdminImageListItem,
+  FacetOption,
+  ImageDraft
+} from "../../../../lib/types.js";
 import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 
 import type { IngestionPreviewTarget } from "../queue/cards/DuplicateMatchPanel.js";
@@ -58,7 +62,10 @@ export function IngestionWorkflowHeader({
   }>;
   cleanup: Readonly<{
     actions: IngestionCleanupAction[];
-    onSelect: (action: IngestionCleanupActionId, returnFocusTarget: HTMLElement) => void;
+    onSelect: (
+      action: IngestionCleanupActionId,
+      returnFocusTarget: HTMLElement
+    ) => void;
   }>;
   source: Readonly<{
     pending: boolean;
@@ -291,8 +298,16 @@ export function IngestionWorkflowQueueBody({
     onRetry: (job: IngestionJob) => void;
     onRemove: (job: IngestionJob) => void;
     onConfirmDuplicate: (job: IngestionJob) => void;
-    onOpenDetail: (job: IngestionJob, item: AdminImageListItem, opener: HTMLElement) => void;
-    onFocusWithin: (job: IngestionJob, card: HTMLElement, target: HTMLElement) => void;
+    onOpenDetail: (
+      job: IngestionJob,
+      item: AdminImageListItem,
+      opener: HTMLElement
+    ) => void;
+    onFocusWithin: (
+      job: IngestionJob,
+      card: HTMLElement,
+      target: HTMLElement
+    ) => void;
     onPreview: (target: IngestionPreviewTarget) => void;
   }>;
   fileInputRef: RefObject<HTMLInputElement | null>;
@@ -308,7 +323,8 @@ export function IngestionWorkflowQueueBody({
   // This is an entry affordance, not an empty-queue proof. Keep it through the
   // summary-to-card hydration gap, then let the bounded visible projection
   // replace it as soon as any task card exists.
-  const showDefaultEntry = queue.visibleJobs.length === 0 && !serverFailed;
+  const showDefaultEntry = queue.visibleJobs.length === 0
+    && !serverFailed;
 
   return (
     <div className="modal-scroll-list image-workflow-list ingestion-list" ref={listRef}>

@@ -83,8 +83,14 @@ export class S3RequestRuntime {
   private readonly taskTimeoutMs: number;
 
   constructor(options: S3RequestRuntimeOptions) {
-    this.idleTimeoutMs = checkedTimeout(options.idleTimeoutMs, "S3 idle timeout");
-    this.taskTimeoutMs = checkedTimeout(options.taskTimeoutMs, "S3 task timeout");
+    this.idleTimeoutMs = checkedTimeout(
+      options.idleTimeoutMs,
+      "S3 idle timeout"
+    );
+    this.taskTimeoutMs = checkedTimeout(
+      options.taskTimeoutMs,
+      "S3 task timeout"
+    );
   }
 
   async run<T>(
@@ -166,7 +172,10 @@ export class S3RequestRuntime {
     };
     const resetFallbackIdleTimer = () => {
       if (fallbackIdleTimer) clearTimeout(fallbackIdleTimer);
-      fallbackIdleTimer = setTimeout(() => destroyWithTimeout("idle"), this.idleTimeoutMs);
+      fallbackIdleTimer = setTimeout(
+        () => destroyWithTimeout("idle"),
+        this.idleTimeoutMs
+      );
     };
     const onIdleTimeout = () => destroyWithTimeout("idle");
     const onAbort = () => {

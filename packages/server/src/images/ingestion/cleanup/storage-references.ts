@@ -78,7 +78,10 @@ async function readIngestionStoragePass(
   const sessions = new Map<string, StoredIngestionSession>();
   for (;;) {
     signal?.throwIfAborted();
-    const page = await ingestionSessionRepository.discoverExpiryPage(offset, batchSize);
+    const page = await ingestionSessionRepository.discoverExpiryPage(
+      offset,
+      batchSize
+    );
     signal?.throwIfAborted();
     if (page.missing) return null;
     expectedTotal ??= page.total;
@@ -129,7 +132,10 @@ async function readStableIngestionStorageRows(options: IngestionStorageReference
   let stable: IngestionStoragePass | null = null;
   for (let pass = 0; pass < 6; pass += 1) {
     options.signal?.throwIfAborted();
-    const current = await readIngestionStoragePass(options.signal, options.maxItems);
+    const current = await readIngestionStoragePass(
+      options.signal,
+      options.maxItems
+    );
     if (current && previous?.signature === current.signature) {
       stable = current;
       break;
@@ -157,7 +163,10 @@ export async function activeIngestionStorageReferences(
   const referencesByBackend = new Map<string, Map<string, ActiveIngestionStorageReference>>();
   const tempPaths = new Set<string>();
   for (const row of rows) {
-    const references = referencesByBackend.getOrInsertComputed(row.storage_slug, () => new Map());
+    const references = referencesByBackend.getOrInsertComputed(
+      row.storage_slug,
+      () => new Map()
+    );
     references.set(row.id, row);
     for (const file of row.prepared
       ? ingestionPreparedFiles({ session_id: row.id, image_id: row.image_id }, row.prepared)

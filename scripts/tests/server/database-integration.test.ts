@@ -2,9 +2,15 @@ import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
-import { join, resolve, toNamespacedPath } from "node:path";
+import {
+  join,
+  resolve,
+  toNamespacedPath
+} from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import test, { type TestContext } from "node:test";
+import test, {
+  type TestContext
+} from "node:test";
 import {
   cleanupTestDirectories,
   createTestDirectory,
@@ -196,9 +202,9 @@ const storageIngestionScenarios = [
     script: join(isolationRoot, "auth-author-contracts.mts")
   },
   {
-    id: "config-package-consistency",
+    id: "config-bundle-consistency",
     name: "配置包导入的文件、内存与 PostgreSQL 事务一致性及权限",
-    script: join(isolationRoot, "config-package-consistency.mts")
+    script: join(isolationRoot, "config-bundle-consistency.mts")
   },
   {
     id: "redis-canonical",
@@ -237,7 +243,8 @@ const databaseScenarioIds = new Set([
 ]);
 const storageIngestionScenarioIds = new Set<string>(storageIngestionScenarios.map(({ id }) => id));
 assert.ok(
-  !selectedDatabaseScenario || databaseScenarioIds.has(selectedDatabaseScenario),
+  !selectedDatabaseScenario
+    || databaseScenarioIds.has(selectedDatabaseScenario),
   `未知数据库集成场景：${selectedDatabaseScenario}`
 );
 assert.ok(
@@ -364,10 +371,15 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           lastCleanupErrors = [error];
         }
         const resourcesConverged =
-          !containerAttempted && !redisContainerAttempted && (!helperRootPromise || helperRemoved);
+          !containerAttempted
+            && !redisContainerAttempted
+            && (!helperRootPromise || helperRemoved);
         if (resourcesConverged) {
           if (terminationErrors.length > 0) {
-            throw new AggregateError(terminationErrors, "数据库契约测试进程终止失败");
+            throw new AggregateError(
+              terminationErrors,
+              "数据库契约测试进程终止失败"
+            );
           }
           return;
         }
@@ -464,7 +476,10 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
       restoreSignalListeners();
     }
     if (cleanupError) {
-      throw new AggregateError([error, cleanupError], "数据库契约测试 helper 初始化及清理均失败");
+      throw new AggregateError(
+        [error, cleanupError],
+        "数据库契约测试 helper 初始化及清理均失败"
+      );
     }
     throw error;
   };
@@ -476,7 +491,9 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
     await failHelperSetup(error);
   }
   const testRuntimeRoot =
-    helperRoot ?? (await failHelperSetup(new Error("数据库契约测试 helper 目录未创建")));
+    helperRoot ?? await failHelperSetup(
+      new Error("数据库契约测试 helper 目录未创建")
+    );
 
   const helper = join(isolationRoot, "initialize-schema.mts");
   const coldRedisHelper = join(isolationRoot, "cold-redis.mts");
@@ -497,7 +514,10 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
       user: "postgres",
       password
     });
-  const withClient = async <T>(name: string, work: (client: Client) => Promise<T>) => {
+  const withClient = async <T>(
+    name: string,
+    work: (client: Client) => Promise<T>
+  ) => {
     const client = clientFor(name);
     await client.connect();
     try {
@@ -512,10 +532,19 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
       await client.query(`CREATE DATABASE "${name}"`);
     });
   };
-  const runTsx = (script: string, args: string[], allowFailure = false, timeoutMs = 60_000) =>
+  const runTsx = (
+    script: string,
+    args: string[],
+    allowFailure = false,
+    timeoutMs = 60_000
+  ) =>
     runProcess(
       process.execPath,
-      [resolve(workspace, "node_modules/tsx/dist/cli.mjs"), script, ...args],
+      [
+        resolve(workspace, "node_modules/tsx/dist/cli.mjs"),
+        script,
+        ...args
+      ],
       {
         cwd: workspace,
         allowFailure,
@@ -539,7 +568,17 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
     user: string,
     userPassword: string,
     allowFailure = false
-  ) => runTsx(helper, ["127.0.0.1", String(port), name, user, userPassword], allowFailure);
+  ) => runTsx(
+    helper,
+    [
+      "127.0.0.1",
+      String(port),
+      name,
+      user,
+      userPassword
+    ],
+    allowFailure
+  );
   const initialize = async (name: string, allowFailure = false) =>
     initializeAs(name, "postgres", password, allowFailure);
   const schemaDump = async (name: string) => {
@@ -623,7 +662,11 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
     assert.equal(result.rowCount, 1, `${table}(${columns.join(",")}) 约束不唯一`);
     return result.rows[0]!.constraint_name;
   };
-  const uniqueIndexName = async (client: Client, table: string, columns: string[]) => {
+  const uniqueIndexName = async (
+    client: Client,
+    table: string,
+    columns: string[]
+  ) => {
     const result = await client.query<{
       index_name: string;
       predicate: string | null;
@@ -658,7 +701,9 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
     return result.rows[0]!;
   };
   const publishedPort = async (name: string, containerPort: number) => {
-    const result = await runProcess("docker", ["port", name, `${containerPort}/tcp`]);
+    const result = await runProcess("docker", [
+      "port", name, `${containerPort}/tcp`
+    ]);
     const match = /^127\.0\.0\.1:(\d+)$/.exec(result.stdout.trim());
     assert.ok(match, "隔离容器必须发布到本机动态端口");
     return Number(match[1]);
@@ -874,7 +919,8 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
             {
               timeout: 150_000,
               skip: Boolean(
-                selectedStorageIngestionScenario && selectedStorageIngestionScenario !== scenario.id
+                selectedStorageIngestionScenario
+                  && selectedStorageIngestionScenario !== scenario.id
               )
             },
             async () => {
@@ -882,7 +928,12 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
                 `storage_${scenario.id.replaceAll("-", "_")}`
               );
               await createCurrentDatabase(integrationDatabase);
-              await runProcess("docker", ["exec", redisContainer, "redis-cli", "FLUSHDB"]);
+              await runProcess("docker", [
+                "exec",
+                redisContainer,
+                "redis-cli",
+                "FLUSHDB"
+              ]);
               const errors: unknown[] = [];
               try {
                 await runTsxScenario(
@@ -905,13 +956,21 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
                 errors.push(error);
               }
               try {
-                await runProcess("docker", ["exec", redisContainer, "redis-cli", "FLUSHDB"]);
+                await runProcess("docker", [
+                  "exec",
+                  redisContainer,
+                  "redis-cli",
+                  "FLUSHDB"
+                ]);
               } catch (error) {
                 errors.push(error);
               }
               if (errors.length === 1) throw errors[0];
               if (errors.length > 1) {
-                throw new AggregateError(errors, `${scenario.name} 与 Redis 清理均失败`);
+                throw new AggregateError(
+                  errors,
+                  `${scenario.name} 与 Redis 清理均失败`
+                );
               }
             }
           );
@@ -936,7 +995,12 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           "127.0.0.1",
           String(redisPort)
         ];
-        await runTsxScenario("冷 Redis 准备", coldRedisHelper, ["seed", ...coldRedisArgs], 60_000);
+        await runTsxScenario(
+          "冷 Redis 准备",
+          coldRedisHelper,
+          ["seed", ...coldRedisArgs],
+          60_000
+        );
         const coldRedisPostgresBefore = await dataDump(coldRedisDatabase);
         const redisSizeBeforeFlush = await runProcess("docker", [
           "exec",
@@ -1013,10 +1077,16 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         );
       `);
         });
-        const normalizedBefore = await Promise.all([schemaDump(normalized), dataDump(normalized)]);
+        const normalizedBefore = await Promise.all([
+          schemaDump(normalized),
+          dataDump(normalized)
+        ]);
         await initialize(normalized);
         assert.deepEqual(
-          await Promise.all([schemaDump(normalized), dataDump(normalized)]),
+          await Promise.all([
+            schemaDump(normalized),
+            dataDump(normalized)
+          ]),
           normalizedBefore,
           "已归一化非空库 readiness 不得写入结构或数据"
         );
@@ -1036,14 +1106,20 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           schemaDump(missingAuthorIdentity),
           dataDump(missingAuthorIdentity)
         ]);
-        const missingAuthorIdentityResult = await initialize(missingAuthorIdentity, true);
+        const missingAuthorIdentityResult = await initialize(
+          missingAuthorIdentity,
+          true
+        );
         assert.notEqual(missingAuthorIdentityResult.code, 0);
         assert.match(
           processResultText(missingAuthorIdentityResult),
           /required columns.*author\.identity_provider.*author\.identity_id/i
         );
         assert.deepEqual(
-          await Promise.all([schemaDump(missingAuthorIdentity), dataDump(missingAuthorIdentity)]),
+          await Promise.all([
+            schemaDump(missingAuthorIdentity),
+            dataDump(missingAuthorIdentity)
+          ]),
           missingAuthorIdentityBefore,
           "readiness 失败不得猜测补列或改写现有数据"
         );
@@ -1084,7 +1160,10 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           schemaDump(unsupportedAuthorProvider),
           dataDump(unsupportedAuthorProvider)
         ]);
-        const unsupportedAuthorResult = await initialize(unsupportedAuthorProvider, true);
+        const unsupportedAuthorResult = await initialize(
+          unsupportedAuthorProvider,
+          true
+        );
         assert.notEqual(unsupportedAuthorResult.code, 0);
         assert.match(
           processResultText(unsupportedAuthorResult),
@@ -1119,7 +1198,10 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           );
       `);
         });
-        const incompatibleAuthorCheckResult = await initialize(incompatibleAuthorCheck, true);
+        const incompatibleAuthorCheckResult = await initialize(
+          incompatibleAuthorCheck,
+          true
+        );
         assert.notEqual(incompatibleAuthorCheckResult.code, 0);
         assert.match(
           processResultText(incompatibleAuthorCheckResult),
@@ -1172,7 +1254,10 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         await initialize(compatibleSuperset);
         await initializeAs(compatibleSuperset, supersetRole, supersetPassword);
         assert.deepEqual(
-          await Promise.all([schemaDump(compatibleSuperset), dataDump(compatibleSuperset)]),
+          await Promise.all([
+            schemaDump(compatibleSuperset),
+            dataDump(compatibleSuperset)
+          ]),
           supersetBefore,
           "仅有业务表权限的账号可启动，部署方额外对象及其数据保持不变"
         );
@@ -1180,7 +1265,12 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         const missingPrimaryKey = databaseName("primarykey");
         await createCurrentDatabase(missingPrimaryKey);
         await withClient(missingPrimaryKey, async (client) => {
-          const name = await constraintName(client, "background_job", "p", ["id"]);
+          const name = await constraintName(
+            client,
+            "background_job",
+            "p",
+            ["id"]
+          );
           await client.query(`ALTER TABLE background_job DROP CONSTRAINT ${quoteIdentifier(name)}`);
         });
         const missingPrimaryKeyResult = await initialize(missingPrimaryKey, true);
@@ -1193,7 +1283,11 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         const incompatibleUniqueIndex = databaseName("uniqueindex");
         await createCurrentDatabase(incompatibleUniqueIndex);
         await withClient(incompatibleUniqueIndex, async (client) => {
-          const activeCacheRebuild = await uniqueIndexName(client, "background_job", ["type"]);
+          const activeCacheRebuild = await uniqueIndexName(
+            client,
+            "background_job",
+            ["type"]
+          );
           assert.match(activeCacheRebuild.predicate ?? "", /cache\.rebuild/i);
           await client.query(`
         DROP INDEX public.${quoteIdentifier(activeCacheRebuild.index_name)};
@@ -1202,7 +1296,10 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           WHERE type='cache.rebuild' AND status='pending';
       `);
         });
-        const incompatibleUniqueResult = await initialize(incompatibleUniqueIndex, true);
+        const incompatibleUniqueResult = await initialize(
+          incompatibleUniqueIndex,
+          true
+        );
         assert.notEqual(incompatibleUniqueResult.code, 0);
         assert.match(
           processResultText(incompatibleUniqueResult),
@@ -1212,7 +1309,12 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         const incompatibleForeignKey = databaseName("foreignkey");
         await createCurrentDatabase(incompatibleForeignKey);
         await withClient(incompatibleForeignKey, async (client) => {
-          const name = await constraintName(client, "metadata", "f", ["author"]);
+          const name = await constraintName(
+            client,
+            "metadata",
+            "f",
+            ["author"]
+          );
           await client.query(`
         ALTER TABLE metadata DROP CONSTRAINT ${quoteIdentifier(name)};
         ALTER TABLE metadata
@@ -1220,7 +1322,10 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           FOREIGN KEY(author) REFERENCES author(slug) ON DELETE RESTRICT;
       `);
         });
-        const incompatibleForeignResult = await initialize(incompatibleForeignKey, true);
+        const incompatibleForeignResult = await initialize(
+          incompatibleForeignKey,
+          true
+        );
         assert.notEqual(incompatibleForeignResult.code, 0);
         assert.match(
           processResultText(incompatibleForeignResult),
@@ -1268,7 +1373,10 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
         await withClient(incompatibleTypeModifier, async (client) => {
           await client.query("ALTER TABLE metadata ALTER COLUMN image_time TYPE timestamptz(0)");
         });
-        const incompatibleModifierResult = await initialize(incompatibleTypeModifier, true);
+        const incompatibleModifierResult = await initialize(
+          incompatibleTypeModifier,
+          true
+        );
         assert.notEqual(incompatibleModifierResult.code, 0);
         assert.match(
           processResultText(incompatibleModifierResult),
@@ -1311,7 +1419,10 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
           true
         );
         assert.notEqual(privilegeResult.code, 0);
-        assert.match(processResultText(privilegeResult), /lacks required table privileges/i);
+        assert.match(
+          processResultText(privilegeResult),
+          /lacks required table privileges/i
+        );
 
         const invalidSeed = databaseName("seed");
         await createCurrentDatabase(invalidSeed);

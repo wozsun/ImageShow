@@ -9,10 +9,16 @@ import {
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
 import { withTransaction } from "../core/database/transactions.ts";
-import { withImageMutationSync, type ImageMutationSyncBatch } from "../images/mutation-sync.ts";
+import {
+  withImageMutationSync,
+  type ImageMutationSyncBatch
+} from "../images/mutation-sync.ts";
 import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
 
-async function insertTheme(client: PoolClient, slug: string) {
+async function insertTheme(
+  client: PoolClient,
+  slug: string
+) {
   if (!slug) return false;
   assertVocabularySlug("theme", slug);
   const result = await client.query(
@@ -33,7 +39,10 @@ async function insertTheme(client: PoolClient, slug: string) {
  * This avoids acquiring the same advisory lock from the transaction client
  * after the caller's vocabulary/image compound lease is already held.
  */
-export function ensureThemeWithMutationLockHeld(client: PoolClient, slug: string) {
+export function ensureThemeWithMutationLockHeld(
+  client: PoolClient,
+  slug: string
+) {
   return insertTheme(client, slug);
 }
 
@@ -76,7 +85,10 @@ async function deleteThemeUnderLock(
 ) {
   return withTransaction(async (client) => {
     signal.throwIfAborted();
-    const theme = await client.query("SELECT slug FROM theme WHERE slug=$1 FOR UPDATE", [slug]);
+    const theme = await client.query(
+      "SELECT slug FROM theme WHERE slug=$1 FOR UPDATE",
+      [slug]
+    );
     signal.throwIfAborted();
     if (!theme.rowCount) return { deleted: false, affected: [] as { id: string }[] };
 
@@ -104,10 +116,16 @@ async function deleteThemeUnderLock(
           ).rows
         : [];
     signal.throwIfAborted();
-    await client.query(`UPDATE metadata SET theme=NULL, updated_at=now() WHERE theme=$1`, [slug]);
+    await client.query(
+      `UPDATE metadata SET theme=NULL, updated_at=now() WHERE theme=$1`,
+      [slug]
+    );
     signal.throwIfAborted();
     const deleted = Boolean(
-      (await client.query("DELETE FROM theme WHERE slug=$1", [slug])).rowCount
+      (await client.query(
+        "DELETE FROM theme WHERE slug=$1",
+        [slug]
+      )).rowCount
     );
     if (affectedCount) await bumpReadyImageRevision(client);
     signal.throwIfAborted();

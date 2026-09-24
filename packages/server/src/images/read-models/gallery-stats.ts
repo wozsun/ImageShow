@@ -1,4 +1,6 @@
-import { brightnesses, devices, type GalleryStatsDto } from "@imageshow/shared/browser";
+import {
+  brightnesses, devices, type GalleryStatsDto
+} from "@imageshow/shared/browser";
 import { coalesce } from "../../core/coalesce.ts";
 import {
   withPublicDatabaseRead,

@@ -1,4 +1,7 @@
-import type { ImageTrashResponseDto, ImageRestoreResponseDto } from "@imageshow/shared/browser";
+import type {
+  ImageTrashResponseDto,
+  ImageRestoreResponseDto
+} from "@imageshow/shared/browser";
 import { withAdvisoryLocks } from "../../core/database/advisory-locks.ts";
 import { withTransaction } from "../../core/database/transactions.ts";
 import { imageUpdateLockRequests } from "../image-update-lock.ts";

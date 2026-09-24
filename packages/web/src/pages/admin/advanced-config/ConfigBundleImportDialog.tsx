@@ -1,5 +1,9 @@
 import { useId, useRef, useState, type RefObject } from "react";
-import { slugFormatHint, slugMaxLength, slugPattern } from "../../../lib/constants.js";
+import {
+  slugFormatHint,
+  slugMaxLength,
+  slugPattern
+} from "../../../lib/constants.js";
 import type { AdvancedConfigPreview } from "../../../lib/types.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
@@ -20,7 +24,7 @@ function previewDate(value: string | null) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
-export function configPackageRecognitionNotice(
+export function configBundleRecognitionNotice(
   preview: Pick<AdvancedConfigPreview, "config_values" | "skipped_storage_backends">
 ) {
   const { recognized, defaulted, ignored } = preview.config_values;
@@ -39,7 +43,7 @@ function suggestedSlug(slug: string) {
   return `${slug.slice(0, slugMaxLength - suffix.length).replace(/-+$/, "")}${suffix}`;
 }
 
-export function configPackageSlugMappingError(
+export function configBundleSlugMappingError(
   preview: Pick<AdvancedConfigPreview, "conflicts" | "existing_slugs" | "storage_backends">,
   slugMappings: Record<string, string>,
   sourceSlug: string
@@ -60,7 +64,7 @@ export function configPackageSlugMappingError(
   return "";
 }
 
-export function ConfigPackageImportDialog({
+export function ConfigBundleImportDialog({
   preview,
   busy,
   returnFocusRef,
@@ -84,7 +88,11 @@ export function ConfigPackageImportDialog({
   const blocked = busy || importStatus.pending;
 
   const mappingError = (sourceSlug: string) =>
-    configPackageSlugMappingError(preview, slugMappings, sourceSlug);
+    configBundleSlugMappingError(
+      preview,
+      slugMappings,
+      sourceSlug
+    );
 
   const mappingErrors = preview.conflicts.map(mappingError).filter(Boolean);
   const submit = async (requestClose: () => void) => {
@@ -99,7 +107,7 @@ export function ConfigPackageImportDialog({
 
   return (
     <DialogFrame
-      className="modal edit-modal config-package-dialog"
+      className="modal edit-modal config-bundle-dialog"
       titleId={titleId}
       descriptionId={descriptionId}
       busy={blocked}
@@ -115,7 +123,7 @@ export function ConfigPackageImportDialog({
           }}
         >
           <header>
-            <div className="config-package-dialog-copy">
+            <div className="config-bundle-dialog-copy">
               <h2 id={titleId}>导入配置包</h2>
               <p id={descriptionId}>确认当前版本识别的配置和即将新增的自定义存储后端。</p>
             </div>
@@ -153,7 +161,7 @@ export function ConfigPackageImportDialog({
               </div>
             </dl>
             <p className="muted advanced-config-import-notice">
-              {configPackageRecognitionNotice(preview)}
+              {configBundleRecognitionNotice(preview)}
             </p>
             <div className="advanced-config-backends">
               {preview.storage_backends.length ? (

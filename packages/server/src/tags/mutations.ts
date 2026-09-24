@@ -81,7 +81,10 @@ export async function deleteTag(slug: string) {
                 ).rows as Array<{ id: string }>)
               : [];
           signal.throwIfAborted();
-          const deleted = await client.query("DELETE FROM tag WHERE slug = $1", [slug]);
+          const deleted = await client.query(
+            "DELETE FROM tag WHERE slug = $1",
+            [slug]
+          );
           if (affectedCount) await bumpReadyImageRevision(client);
           signal.throwIfAborted();
           return { deleted, affected };
@@ -105,7 +108,12 @@ export async function replaceImageTags(
   signal?.throwIfAborted();
   const image = await client.query("SELECT md5 FROM metadata WHERE id = $1", [imageId]);
   if (!image.rowCount) throw new ApiError(404, "not_found", "Image not found");
-  const { createdTag } = await replaceImageTagAssociations(client, imageId, slugs, signal);
+  const { createdTag } = await replaceImageTagAssociations(
+    client,
+    imageId,
+    slugs,
+    signal
+  );
   await bumpReadyImageRevision(client);
   signal?.throwIfAborted();
   return {

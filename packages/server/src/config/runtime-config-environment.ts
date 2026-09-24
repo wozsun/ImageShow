@@ -375,7 +375,10 @@ function parseStrictJsonValue(source: string) {
   return JSON.parse(source) as unknown;
 }
 
-function parseEnvironmentValue(binding: RuntimeConfigEnvironmentBinding, value: string) {
+function parseEnvironmentValue(
+  binding: RuntimeConfigEnvironmentBinding,
+  value: string
+) {
   if (binding.valueKind === "string") return value;
   if (binding.valueKind === "number") {
     if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value)) {
@@ -413,7 +416,9 @@ function setPatchValue(
   for (const segment of segments.slice(0, -1)) {
     const existing = target[segment];
     const nested =
-      existing !== null && typeof existing === "object" && !Array.isArray(existing)
+      existing !== null
+        && typeof existing === "object"
+        && !Array.isArray(existing)
         ? (existing as Record<string, unknown>)
         : {};
     if (nested !== existing) target[segment] = nested;

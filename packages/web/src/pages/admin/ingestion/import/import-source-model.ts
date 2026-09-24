@@ -67,7 +67,10 @@ export function importSourceLimitState(
       : mode === "weibo"
         ? parseWeiboImportLines(text).length
         : text.split(/\r?\n/).filter((line) => line.trim()).length;
-  const maxItems = Math.min(ingestionBatchHardLimit, mode === "weibo" ? limits.weibo : limits.link);
+  const maxItems = Math.min(
+    ingestionBatchHardLimit,
+    mode === "weibo" ? limits.weibo : limits.link
+  );
   const overLimit = count > maxItems;
   return { count, maxItems, overLimit };
 }

@@ -15,7 +15,10 @@ export function useIngestionCommit(options: {
   jobsRef: RefObject<IngestionJob[]>;
   updateJob: (id: string, patch: Partial<IngestionJob>) => void;
   updateJobs: (patches: ReadonlyMap<string, Partial<IngestionJob>>) => void;
-  updateDuplicateDecision: (id: string, decision: "upload" | "confirmed") => Promise<boolean>;
+  updateDuplicateDecision: (
+    id: string,
+    decision: "upload" | "confirmed"
+  ) => Promise<boolean>;
   flushPendingUpdates: () => Promise<void>;
   observeCompletedIngestions: (entries: readonly CompletedIngestionObservation[]) => void;
   onDone: () => void;
@@ -34,7 +37,10 @@ export function useIngestionCommit(options: {
   const [busy, setBusy] = useState(false);
 
   const commit = useCallback(
-    async (jobs: IngestionJob[], settings: Readonly<{ notifyDone?: boolean }> = {}) => {
+    async (
+      jobs: IngestionJob[],
+      settings: Readonly<{ notifyDone?: boolean }> = {}
+    ) => {
       if (runnerActiveRef.current) return false;
       runnerActiveRef.current = true;
       setBusy(true);
@@ -51,7 +57,9 @@ export function useIngestionCommit(options: {
           const current = jobsRef.current.find(
             (job) => job.id === requested.id && job.attemptKey === requested.attemptKey
           );
-          const request: IngestionCommitRequest = current?.commitIntent ? "resume" : "new";
+          const request: IngestionCommitRequest = current?.commitIntent
+            ? "resume"
+            : "new";
           if (!current || !ingestionJobCanStartCommit(current, request)) continue;
           if (!current.sessionId || !current.imageId || !current.serverVersion) {
             updateJob(current.id, {
@@ -65,7 +73,8 @@ export function useIngestionCommit(options: {
           const pair = serverIngestionJobPairKey(current);
           if (selectedPairs.has(pair)) continue;
           selectedPairs.add(pair);
-          const commitIntent = current.commitIntent ?? createIngestionCommitIntent(current);
+          const commitIntent = current.commitIntent
+            ?? createIngestionCommitIntent(current);
           const patch: Partial<IngestionJob> = {
             status: "commit-queued",
             commitIntent,
@@ -93,7 +102,14 @@ export function useIngestionCommit(options: {
         setBusy(false);
       }
     },
-    [flushPendingUpdates, jobsRef, observeCompletedIngestions, onDone, updateJob, updateJobs]
+    [
+      flushPendingUpdates,
+      jobsRef,
+      observeCompletedIngestions,
+      onDone,
+      updateJob,
+      updateJobs
+    ]
   );
 
   const confirmDuplicate = useCallback(

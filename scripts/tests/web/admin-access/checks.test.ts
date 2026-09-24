@@ -352,13 +352,21 @@ test("[Web/后台访问] 自动 Redis 占用检测在 Strict Mode 单飞并在�
   assert.ok(container);
   function Probe() {
     const query = useAdminRedisInspection();
-    return React.createElement("span", null, query.isSuccess ? "complete" : "pending");
+    return React.createElement(
+      "span",
+      null,
+      query.isSuccess ? "complete" : "pending"
+    );
   }
   const renderProbe = () =>
     React.createElement(
       React.StrictMode,
       null,
-      React.createElement(QueryClientProvider, { client }, React.createElement(Probe))
+      React.createElement(
+        QueryClientProvider,
+        { client },
+        React.createElement(Probe)
+      )
     );
   const settleUntil = async (predicate: () => boolean) => {
     for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -601,7 +609,10 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
     await click(maintenanceButton);
     assert.deepEqual(
       requestPaths.toSorted(),
-      ["/api/admin/check/storage", "/api/admin/check/trash"].toSorted()
+      [
+        "/api/admin/check/storage",
+        "/api/admin/check/trash"
+      ].toSorted()
     );
     assert.deepEqual(checkNames, []);
     assert.equal(showStorageCount, 1);
@@ -705,7 +716,9 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
     total: rebuilding ? 124 : null,
     last_updated_at: "2026-08-11T00:00:04.000Z",
     full_rebuild_started_at: "2026-08-11T00:00:01.000Z",
-    full_rebuild_completed_at: rebuilding ? null : "2026-08-11T00:00:02.500Z",
+    full_rebuild_completed_at: rebuilding
+      ? null
+      : "2026-08-11T00:00:02.500Z",
     full_rebuild_duration_ms: rebuilding ? null : 1_500,
     last_full_rebuild_core_memory_bytes: 4_404_019,
     last_full_rebuild_measured_at: "2026-08-11T00:00:02.400Z",
@@ -743,7 +756,11 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
       error: null
     }
   });
-  const redisResult = (measuredAt: string, memoryBytes: number, complete = true) => ({
+  const redisResult = (
+    measuredAt: string,
+    memoryBytes: number,
+    complete = true
+  ) => ({
     ok: true,
     deep_inspection: {
       complete,
@@ -900,7 +917,11 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
           React.createElement(
             MemoryRouter,
             { initialEntries: ["/admin/check"] },
-            React.createElement(AuthSessionProvider, null, React.createElement(CheckPage))
+            React.createElement(
+              AuthSessionProvider,
+              null,
+              React.createElement(CheckPage)
+            )
           )
         )
       );
@@ -925,7 +946,10 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
     assert.equal(button("全部").disabled, true);
 
     await React.act(async () => {
-      resolveAutomaticRedis(jsonResponse(redisResult("2026-08-11T00:00:05.000Z", 8_192)));
+      resolveAutomaticRedis(jsonResponse(redisResult(
+        "2026-08-11T00:00:05.000Z",
+        8_192
+      )));
       await settle();
     });
     assert.equal(button("全部").disabled, false);
@@ -935,7 +959,11 @@ test("[Web/后台访问] 检查页保留完整 Redis 快照并串行化自动检
     assert.equal(redisRequests, 2);
     assert.equal(button("全部").disabled, true);
     await React.act(async () => {
-      resolvePartialRedis(jsonResponse(redisResult("2026-08-11T00:00:06.000Z", 4_096, false)));
+      resolvePartialRedis(jsonResponse(redisResult(
+        "2026-08-11T00:00:06.000Z",
+        4_096,
+        false
+      )));
       await settle();
     });
     await click(button("状态"));

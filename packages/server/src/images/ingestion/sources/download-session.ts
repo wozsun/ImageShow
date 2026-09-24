@@ -41,7 +41,11 @@ export async function downloadIngestionSessionSnapshot(
   }
   const rawGeneration = randomUuidV7();
   const rawPath = ingestionRawPath(session, rawGeneration);
-  const partPath = ingestionRawPartPath(session, rawGeneration, session.execution_token);
+  const partPath = ingestionRawPartPath(
+    session,
+    rawGeneration,
+    session.execution_token
+  );
   const resolvedDependencies = { ...defaultDependencies, ...dependencies };
   return withActiveIngestionTempPaths([rawPath, partPath], () =>
     withIngestionExecutionHeartbeat(repository, session, signal, async (executionSignal) => {
@@ -49,7 +53,10 @@ export async function downloadIngestionSessionSnapshot(
       let progressUpdateFailed = false;
       let progressUpdateFailure: unknown;
       const progressController = new AbortController();
-      const downloadSignal = AbortSignal.any([executionSignal, progressController.signal]);
+      const downloadSignal = AbortSignal.any([
+        executionSignal,
+        progressController.signal
+      ]);
       let lastProgressAt = 0;
       try {
         const rawSize = await resolvedDependencies.fetchImageToFile(
@@ -60,7 +67,9 @@ export async function downloadIngestionSessionSnapshot(
           downloadSignal,
           (value) => {
             const now = resolvedDependencies.now();
-            if (value < 100 && lastProgressAt && now - lastProgressAt < 250) return;
+            if (value < 100
+              && lastProgressAt
+              && now - lastProgressAt < 250) return;
             lastProgressAt = now;
             progressUpdateChain = progressUpdateChain.then(
               async (current) =>
@@ -105,7 +114,11 @@ export async function downloadIngestionSessionSnapshot(
         });
       } catch (error) {
         await progressUpdateChain.catch(() => undefined);
-        await removeIngestionRawPart(session, rawGeneration, session.execution_token).catch(
+        await removeIngestionRawPart(
+          session,
+          rawGeneration,
+          session.execution_token
+        ).catch(
           () => undefined
         );
         throw progressUpdateFailed ? progressUpdateFailure : error;

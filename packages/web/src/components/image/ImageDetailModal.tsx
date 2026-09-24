@@ -30,7 +30,10 @@ import { useOptionalAuthSessionQuery } from "../../hooks/useAuthSession.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
 import { useDialogFocus } from "../../hooks/useDialogFocus.js";
-import { mobileViewportMediaQuery, useMediaQuery } from "../../hooks/useMediaQuery.js";
+import {
+  mobileViewportMediaQuery,
+  useMediaQuery
+} from "../../hooks/useMediaQuery.js";
 import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 import { ImageDescriptionSlot } from "./ImageDescriptionSlot.js";
 import { DialogLayerPortal } from "../feedback/DialogLayerPortal.js";
@@ -58,7 +61,8 @@ class ImageAdminDetailsModuleBoundary extends Component<
       resetKey: string;
     }>
   ) {
-    if (this.state.failed && previousProps.resetKey !== this.props.resetKey) {
+    if (this.state.failed
+      && previousProps.resetKey !== this.props.resetKey) {
       this.setState({ failed: false });
     }
   }
@@ -124,10 +128,13 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const [editedSnapshot, setEditedSnapshot] = useState<EditableImageSnapshot | null>(null);
   const admin = props.admin === true;
   const authQuery = useOptionalAuthSessionQuery();
-  const showAdminDetails = admin || authQuery?.data?.authenticated === true;
+  const showAdminDetails = admin
+    || authQuery?.data?.authenticated === true;
   const currentSnapshot = showAdminDetails ? editedSnapshot : null;
   const item = applyEditedSnapshot(props.item, currentSnapshot);
-  const adminItem = props.admin === true ? applyEditedSnapshot(props.item, editedSnapshot) : null;
+  const adminItem = props.admin === true
+    ? applyEditedSnapshot(props.item, editedSnapshot)
+    : null;
   const adminStorageLabel = props.admin ? props.storageLabel : undefined;
   const detailLoading = !currentSnapshot && !admin && props.detailLoading === true;
   const detailError = !currentSnapshot && !admin ? (props.detailError?.trim() ?? "") : "";
@@ -169,13 +176,18 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const [nestedDialogOpen, setNestedDialogOpen] = useState(false);
   useDialogFocus({
     containerRef: frameRef,
-    initialFocusRef: mobileLayout ? mobileCloseButtonRef : desktopCloseButtonRef,
+    initialFocusRef: mobileLayout
+      ? mobileCloseButtonRef
+      : desktopCloseButtonRef,
     returnFocusRef: props.returnFocusRef,
     onEscape: () => exit.requestClose(),
     paused: nestedDialogOpen
   });
   const { data: facets } = useGalleryFacets();
-  const taxonomyDisplay = useMemo(() => createGalleryTaxonomyDisplayFormatter(facets), [facets]);
+  const taxonomyDisplay = useMemo(
+    () => createGalleryTaxonomyDisplayFormatter(facets),
+    [facets]
+  );
   const authorMap = useMemo(
     () => new Map((facets?.authors ?? []).map((option) => [option.slug, option])),
     [facets]
@@ -200,7 +212,9 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
         : "暂无来源";
   const originalHref = showAdminDetails ? (item.original_url?.trim() ?? "") : "";
   const imageAspectRatio =
-    item.width > 0 && item.height > 0 ? `${item.width} / ${item.height}` : "16 / 9";
+    item.width > 0 && item.height > 0
+      ? `${item.width} / ${item.height}`
+      : "16 / 9";
 
   return (
     <DialogLayerPortal>

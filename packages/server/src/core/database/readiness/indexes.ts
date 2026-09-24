@@ -20,16 +20,23 @@ type UniqueIndexRow = {
 };
 
 function normalizedPredicate(predicate: string) {
-  return predicate.toLowerCase().replaceAll("::text", "").replace(/\s+/g, "");
+  return predicate
+    .toLowerCase()
+    .replaceAll("::text", "")
+    .replace(/\s+/g, "");
 }
 
-function predicateMatches(actual: string | null, expected: RequiredUniqueIndex["predicate"]) {
+function predicateMatches(
+  actual: string | null,
+  expected: RequiredUniqueIndex["predicate"]
+) {
   if (expected === "none") return actual === null;
   if (!actual) return false;
   const normalized = normalizedPredicate(actual);
   switch (expected) {
     case "default_storage":
-      return ["is_default", "is_default=true", "true=is_default"].includes(normalized);
+      return ["is_default", "is_default=true", "true=is_default"]
+        .includes(normalized);
     case "non_null_idempotency":
       return normalized === "idempotency_keyisnotnull";
     case "non_null_author_identity":
@@ -99,7 +106,11 @@ export async function assertRequiredUniqueIndexes(database: DatabaseReader) {
     )
   ).rows;
   const usable = (row: UniqueIndexRow) =>
-    row.is_unique && row.is_valid && row.is_ready && row.is_live && row.expressions === null;
+    row.is_unique
+    && row.is_valid
+    && row.is_ready
+    && row.is_live
+    && row.expressions === null;
   const missingPrimaryKeys = requiredPrimaryKeys.filter(
     (required) =>
       !rows.some(

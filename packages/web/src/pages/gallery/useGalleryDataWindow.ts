@@ -1,4 +1,7 @@
-import { isCancelledError, useQueryClient } from "@tanstack/react-query";
+import {
+  isCancelledError,
+  useQueryClient
+} from "@tanstack/react-query";
 import {
   useCallback,
   useEffect,
@@ -13,7 +16,10 @@ import {
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { imageDataRevision } from "../../lib/api/image-data-revision.js";
 import { galleryDataWindowMaxConcurrentPageLoads } from "../../lib/constants.js";
-import { isPageScrollLocked, pageScrollRestoredEvent } from "../../hooks/usePageScrollLock.js";
+import {
+  isPageScrollLocked,
+  pageScrollRestoredEvent
+} from "../../hooks/usePageScrollLock.js";
 import type { GalleryCompactGeometry } from "./compact-masonry-layout.js";
 import {
   GalleryDataWindow,
@@ -44,7 +50,9 @@ function viewportForAnchor(
   anchor: GalleryScrollAnchor | null
 ): GalleryDataWindowViewport {
   const position = anchor ? controller.positionForId(anchor.id) : null;
-  const visibleStart = position && anchor ? Math.max(0, position.y - anchor.offset) : 0;
+  const visibleStart = position && anchor
+    ? Math.max(0, position.y - anchor.offset)
+    : 0;
   return createGalleryRenderViewport(visibleStart, window.innerHeight);
 }
 
@@ -134,11 +142,15 @@ export function useGalleryDataWindow({
   const routeRestorationRef = useRef<{
     controller: GalleryDataWindow;
     anchor: GalleryScrollAnchor;
-  } | null>(session.anchor ? { controller, anchor: session.anchor } : null);
+  } | null>(session.anchor
+    ? { controller, anchor: session.anchor }
+    : null);
   const restorationControllerRef = useRef(controller);
   if (restorationControllerRef.current !== controller) {
     restorationControllerRef.current = controller;
-    routeRestorationRef.current = session.anchor ? { controller, anchor: session.anchor } : null;
+    routeRestorationRef.current = session.anchor
+      ? { controller, anchor: session.anchor }
+      : null;
   }
   const activeRequestsRef = useRef(new WeakMap<GalleryDataWindow, Map<string, Promise<void>>>());
   const requestPauseRef = useRef<{
@@ -157,7 +169,10 @@ export function useGalleryDataWindow({
       const existingAnchor = pendingAnchorRef.current;
       const anchor =
         existingAnchor ??
-        controller.viewportAnchor(visibleStart, visibleStart + window.innerHeight);
+        controller.viewportAnchor(
+          visibleStart,
+          visibleStart + window.innerHeight
+        );
       mutation();
       if (!anchor) return;
       const nextPosition = controller.positionForId(anchor.id);
@@ -178,7 +193,8 @@ export function useGalleryDataWindow({
         const pendingAnchor = pendingAnchorRef.current;
         pendingAnchorRef.current = null;
         const currentElement = windowRef.current;
-        if (!pendingAnchor || !currentElement || viewportControllerRef.current !== controller)
+        if (!pendingAnchor || !currentElement
+          || viewportControllerRef.current !== controller)
           return;
         const settledPosition = controller.positionForId(pendingAnchor.id);
         if (!settledPosition) return;
@@ -215,7 +231,10 @@ export function useGalleryDataWindow({
         controller.invalidatePendingRequests();
       }
     }
-    const next = viewportForAnchor(controller, restoring ? restoration.anchor : null);
+    const next = viewportForAnchor(
+      controller,
+      restoring ? restoration.anchor : null
+    );
     viewportRef.current = next;
     setViewport(next);
     const element = windowRef.current;
@@ -285,7 +304,11 @@ export function useGalleryDataWindow({
       // Crossing the next-screen boundary must not wait for a half-screen
       // render step. Other scroll frames retain the existing layout cadence.
       if (
-        !shouldRefreshGalleryRenderViewport(viewportRef.current, visibleStart, viewportHeight) &&
+        !shouldRefreshGalleryRenderViewport(
+          viewportRef.current,
+          visibleStart,
+          viewportHeight
+        ) &&
         !entersPreloadRange
       )
         return;
@@ -316,7 +339,8 @@ export function useGalleryDataWindow({
         active = new Map();
         activeRequestsRef.current.set(controller, active);
       }
-      if (active.has(intent.cursor) || active.size >= galleryDataWindowMaxConcurrentPageLoads) {
+      if (active.has(intent.cursor)
+        || active.size >= galleryDataWindowMaxConcurrentPageLoads) {
         return;
       }
       const request: GalleryPageRequest | null = controller.claimRequest(intent);
@@ -361,7 +385,8 @@ export function useGalleryDataWindow({
     if (!geometryReady) return;
     const element = windowRef.current;
     const liveViewport =
-      element && !isPageScrollLocked() && routeRestorationRef.current?.controller !== controller
+      element && !isPageScrollLocked()
+        && routeRestorationRef.current?.controller !== controller
         ? createGalleryRenderViewport(
             Math.max(0, -element.getBoundingClientRect().top),
             window.innerHeight
@@ -378,7 +403,10 @@ export function useGalleryDataWindow({
     );
     if (requestPauseRef.current?.controller === controller) return;
     const active = activeRequestsRef.current.get(controller);
-    const available = Math.max(0, galleryDataWindowMaxConcurrentPageLoads - (active?.size ?? 0));
+    const available = Math.max(
+      0,
+      galleryDataWindowMaxConcurrentPageLoads - (active?.size ?? 0)
+    );
     for (const request of requests.slice(0, available)) fetchPage(request);
   }, [
     controller,
@@ -463,7 +491,11 @@ export function useGalleryDataWindow({
   }, [controller, geometryReady, snapshot, windowRef]);
 
   const reportIntrinsicSize = useCallback(
-    (id: string, width: number, height: number) => {
+    (
+      id: string,
+      width: number,
+      height: number
+    ) => {
       if (!controller.needsIntrinsicMeasurement(id)) return;
       pendingMeasurementsRef.current.set(id, { id, width, height });
       if (measurementFrameRef.current !== null) return;
@@ -494,7 +526,14 @@ export function useGalleryDataWindow({
       estimatedCompactBytes: debug.estimatedCompactBytes,
       estimatedFullDtoBytes: debug.estimatedFullDtoBytes
     };
-  }, [controller, imageQuery, positions, queryClient, requestSlotRevision, snapshot.revision]);
+  }, [
+    controller,
+    imageQuery,
+    positions,
+    queryClient,
+    requestSlotRevision,
+    snapshot.revision
+  ]);
 
   const retry = useCallback(() => {
     const error = controller.snapshot().error;
@@ -588,8 +627,10 @@ export function useGalleryDataWindow({
   return {
     snapshot,
     positions,
-    initialLoading: snapshot.compactItems === 0 && snapshot.pendingQueryPages > 0,
-    nextPageLoading: snapshot.compactItems > 0 && snapshot.pendingAppendPages > 0,
+    initialLoading: snapshot.compactItems === 0
+      && snapshot.pendingQueryPages > 0,
+    nextPageLoading: snapshot.compactItems > 0
+      && snapshot.pendingAppendPages > 0,
     retry,
     refreshImage,
     removeImage,

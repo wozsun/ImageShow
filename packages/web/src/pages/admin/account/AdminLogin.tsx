@@ -5,7 +5,10 @@ import type { AdminLoginResultDto } from "@imageshow/shared/browser";
 import { api, clearCsrfToken, setCsrfToken } from "../../../lib/api/client.js";
 import { PasswordInput } from "../../../components/form/PasswordInput.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
-import { clearSessionProbeHint, rememberSessionProbeHint } from "../../../lib/api/auth-session.js";
+import {
+  clearSessionProbeHint,
+  rememberSessionProbeHint
+} from "../../../lib/api/auth-session.js";
 import { cssUrl } from "../../../lib/ui/formatters.js";
 import { establishAndConfirmAdminSession } from "./admin-login-session.js";
 import { useLoginVisualViewport } from "./useLoginVisualViewport.js";

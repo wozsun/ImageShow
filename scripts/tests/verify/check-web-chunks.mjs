@@ -13,7 +13,9 @@ const workspaceRoot = resolve(import.meta.dirname, "../../..");
 const webDist = resolve(workspaceRoot, "packages/web/dist");
 const serverPublic = resolve(workspaceRoot, "packages/server/dist/public");
 const compressionReport = JSON.parse(
-  await readFile(resolve(webDist, ".vite/static-compression-report.json"), "utf8")
+  await readFile(
+    resolve(webDist, ".vite/static-compression-report.json"), "utf8"
+  )
 );
 assert.equal(compressionReport.schemaVersion, 1);
 assert.deepEqual(compressionReport.policy, {
@@ -32,7 +34,10 @@ const decoders = [
   ["zstd", ".zst", "zstdBytes", promisify(zstdDecompress)],
   ["gzip", ".gz", "gzipBytes", promisify(gunzip)]
 ];
-const report = JSON.parse(await readFile(resolve(webDist, ".vite/web-build-report.json"), "utf8"));
+const report = JSON.parse(await readFile(
+  resolve(webDist, ".vite/web-build-report.json"),
+  "utf8"
+));
 
 if (!Array.isArray(report.chunks) || !Array.isArray(report.styles)) {
   throw new Error("check-web-chunks: invalid build report");
@@ -188,7 +193,9 @@ for (const file of compressedAssetRows.keys()) await assetCompression(file);
 function assertModulesExcluded(files, label, forbidden) {
   const violations = [...modulesIn(files)].filter((module) =>
     forbidden.some((pattern) =>
-      typeof pattern === "string" ? pattern === module : pattern.test(module)
+      typeof pattern === "string"
+        ? pattern === module
+        : pattern.test(module)
     )
   );
   if (violations.length) {
@@ -203,7 +210,8 @@ function isApplicationFoundation(roots) {
   const hasGallery = roots.some((root) => /^src\/pages\/gallery\//.test(root));
   const hasShow = roots.some((root) => /^src\/pages\/show\//.test(root));
   const hasOtherRoot = roots.some((root) => !/^src\/pages\/(?:home|show|gallery)\//.test(root));
-  return Number(hasHome) + Number(hasShow) + Number(hasGallery) >= 2 && hasOtherRoot;
+  return Number(hasHome) + Number(hasShow) + Number(hasGallery) >= 2
+    && hasOtherRoot;
 }
 
 function assertInitialModuleRoots(files, label, allowedFacades) {
@@ -214,7 +222,8 @@ function assertInitialModuleRoots(files, label, allowedFacades) {
     for (const module of chunk.modules) {
       if (!module.startsWith("src/")) continue;
       const roots = chunk.moduleRoots[module];
-      if (roots.some((root) => allowed.has(root)) || isApplicationFoundation(roots)) continue;
+      if (roots.some((root) => allowed.has(root))
+        || isApplicationFoundation(roots)) continue;
       violations.push({ module, roots });
     }
   }
@@ -299,7 +308,12 @@ const galleryAssets = initialAssets(entry, gallery);
 const homeInitialChunks = staticClosure([entry.file, home.file]);
 const showInitialChunks = staticClosure([entry.file, show.file]);
 const galleryInitialChunks = staticClosure([entry.file, gallery.file]);
-const publicInitialChunks = staticClosure([entry.file, home.file, show.file, gallery.file]);
+const publicInitialChunks = staticClosure([
+  entry.file,
+  home.file,
+  show.file,
+  gallery.file
+]);
 assertModulesExcluded(publicInitialChunks, "public initial routes", [
   /^src\/pages\/admin\//,
   /^src\/components\/image\/ImageAdminDetails\.tsx$/,
@@ -307,9 +321,21 @@ assertModulesExcluded(publicInitialChunks, "public initial routes", [
   /^src\/styles\/admin\//,
   /^src\/styles\/admin-core\.css$/
 ]);
-assertInitialModuleRoots(homeInitialChunks, "Home initial route", [home.facade]);
-assertInitialModuleRoots(showInitialChunks, "Show initial route", [show.facade]);
-assertInitialModuleRoots(galleryInitialChunks, "Gallery initial route", [gallery.facade]);
+assertInitialModuleRoots(
+  homeInitialChunks,
+  "Home initial route",
+  [home.facade]
+);
+assertInitialModuleRoots(
+  showInitialChunks,
+  "Show initial route",
+  [show.facade]
+);
+assertInitialModuleRoots(
+  galleryInitialChunks,
+  "Gallery initial route",
+  [gallery.facade]
+);
 
 const publicCss = new Set(
   [...homeAssets, ...showAssets, ...galleryAssets].filter((file) => file.endsWith(".css"))
@@ -337,7 +363,11 @@ const mergeArrivalScenarios = {
   show: showAssets,
   gallery: galleryAssets,
   publicDetail: galleryAssets,
-  adminLogin: staticAssets([entry.file, adminShell.file, adminLogin.file]),
+  adminLogin: staticAssets([
+    entry.file,
+    adminShell.file,
+    adminLogin.file
+  ]),
   imageAdmin: imageAdminAssets,
   imageEditor: incrementalAssets(imageEditor, imageAdminAssets),
   ingestion: incrementalAssets(ingestion, imageAdminAssets)
@@ -373,7 +403,9 @@ for (const chunk of chunks) {
   const compressed = await assetCompression(chunk.file);
   javascriptAssets.push({
     file: chunk.file,
-    kind: chunk.isEntry ? "entry" : chunk.isDynamicEntry ? "dynamic-entry" : "shared",
+    kind: chunk.isEntry
+      ? "entry"
+      : (chunk.isDynamicEntry ? "dynamic-entry" : "shared"),
     owner: chunk.name,
     facade: chunk.facade,
     isEntry: chunk.isEntry,
@@ -462,7 +494,12 @@ function routeScenarioAssets(routes) {
   return Object.fromEntries(
     Object.entries(routes).map(([name, route]) => [
       name,
-      staticAssets([entry.file, adminShell.file, authenticatedShell.file, route.file])
+      staticAssets([
+        entry.file,
+        adminShell.file,
+        authenticatedShell.file,
+        route.file
+      ])
     ])
   );
 }
@@ -506,7 +543,9 @@ function repeatedOwnershipGroups(items, signature) {
     files.push(item.file);
     groups.set(key, files);
   }
-  return [...groups.values()].filter((files) => files.length > 1).map((files) => files.sort());
+  return [...groups.values()]
+    .filter((files) => files.length > 1)
+    .map((files) => files.sort());
 }
 
 const identicalJavascriptRootGroups = repeatedOwnershipGroups(
@@ -514,7 +553,9 @@ const identicalJavascriptRootGroups = repeatedOwnershipGroups(
   (asset) => (asset.roots.length > 0 ? JSON.stringify(asset.roots) : "")
 );
 const identicalStyleOwnerGroups = repeatedOwnershipGroups(styleAssets, (style) =>
-  JSON.stringify(style.owners.map((owner) => `${owner.file}:${owner.facade ?? ""}`).sort())
+  JSON.stringify(style.owners
+    .map((owner) => `${owner.file}:${owner.facade ?? ""}`)
+    .sort())
 );
 
 const emittedAssets = new Set([
@@ -543,7 +584,11 @@ if (duplicateAssets.length) {
   );
 }
 
-const loginInitialChunks = staticClosure([entry.file, adminShell.file, adminLogin.file]);
+const loginInitialChunks = staticClosure([
+  entry.file,
+  adminShell.file,
+  adminLogin.file
+]);
 const loginEagerTargets = [
   authenticatedShell.file,
   loginChallenge.file,
@@ -574,7 +619,8 @@ const routeChunks = authenticatedShell.dynamicImports.map((file) => chunkByFile.
 if (
   routeChunks.length === 0 ||
   routeChunks.some(
-    (chunk) => !chunk.facade?.startsWith("src/pages/admin/") || authenticatedInitial.has(chunk.file)
+    (chunk) => !chunk.facade?.startsWith("src/pages/admin/")
+      || authenticatedInitial.has(chunk.file)
   )
 ) {
   throw new Error(
@@ -588,10 +634,26 @@ assertInitialModuleRoots(
   [authenticatedShell.facade, imageAdmin.facade]
 );
 
-const imageRoleRoutes = [overview, imageAdmin, vocabularyAdmin, accountSettings, checkPage];
-const superRoleRoutes = [settingsPage, advancedConfigPage, storageSettings, userAdmin, logPage];
+const imageRoleRoutes = [
+  overview,
+  imageAdmin,
+  vocabularyAdmin,
+  accountSettings,
+  checkPage
+];
+const superRoleRoutes = [
+  settingsPage,
+  advancedConfigPage,
+  storageSettings,
+  userAdmin,
+  logPage
+];
 for (const route of [...imageRoleRoutes, ...superRoleRoutes]) {
-  assertDynamicTarget(authenticatedShell, route, `administrator route ${route.facade}`);
+  assertDynamicTarget(
+    authenticatedShell,
+    route,
+    `administrator route ${route.facade}`
+  );
 }
 
 const checkMaintenanceOnlyModules = [
@@ -677,7 +739,9 @@ assertDeferredReachable(show, imageEditor, "Show public image editor");
 
 function totalBytes(assets) {
   return Object.fromEntries(
-    ["rawBytes", "gzipBytes", "brotliBytes", "zstdBytes", "effectiveBytes", "defaultBytes"].map(
+    [
+      "rawBytes", "gzipBytes", "brotliBytes", "zstdBytes", "effectiveBytes", "defaultBytes"
+    ].map(
       (field) => [field, assets.reduce((sum, asset) => sum + asset[field], 0)]
     )
   );
@@ -715,11 +779,13 @@ const analysis = {
   identicalStyleOwnerGroups,
   mergeCandidateChunkCounts,
   mergeCandidateChunks: mergeCandidateChunks.sort(
-    (left, right) => left.defaultBytes - right.defaultBytes || left.file.localeCompare(right.file)
+    (left, right) => left.defaultBytes - right.defaultBytes
+      || left.file.localeCompare(right.file)
   ),
   smallStyleCounts,
   smallStyleChunks: smallStyleChunks.sort(
-    (left, right) => left.defaultBytes - right.defaultBytes || left.file.localeCompare(right.file)
+    (left, right) => left.defaultBytes - right.defaultBytes
+      || left.file.localeCompare(right.file)
   )
 };
 

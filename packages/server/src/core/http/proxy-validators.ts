@@ -22,7 +22,10 @@ function safeUpstreamEtag(value: string | null | undefined) {
   }
 }
 
-export function proxyEtagForUpstream(originalUrl: string, upstreamEtag: string | null | undefined) {
+export function proxyEtagForUpstream(
+  originalUrl: string,
+  upstreamEtag: string | null | undefined
+) {
   const safeEtag = safeUpstreamEtag(upstreamEtag);
   if (!safeEtag) return undefined;
   const encoded = Buffer.from(safeEtag).toString("base64url");
@@ -30,7 +33,8 @@ export function proxyEtagForUpstream(originalUrl: string, upstreamEtag: string |
 }
 
 function upstreamEtagFromProxy(originalUrl: string, proxyEtag: string) {
-  const match = /^(?:W\/)?"p\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-]+)"$/u.exec(proxyEtag);
+  const match = /^(?:W\/)?"p\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-]+)"$/u
+    .exec(proxyEtag);
   if (!match || match[1] !== entityTagDigest(originalUrl)) return undefined;
   try {
     const decoded = Buffer.from(match[2]!, "base64url").toString("utf8");
@@ -69,7 +73,9 @@ function safeResourceRevisionDate(value: string, now: number) {
   // change in the same second from validating the new URL. Until that fence
   // has passed, omit Last-Modified and do not forward date conditions.
   const revisionFence = Math.floor(timestamp / 1000) * 1000 + 1000;
-  return revisionFence <= Math.floor(now / 1000) * 1000 ? revisionFence : undefined;
+  return revisionFence <= Math.floor(now / 1000) * 1000
+    ? revisionFence
+    : undefined;
 }
 
 export function proxyLastModified(
@@ -98,7 +104,10 @@ function combinedProxyLastModified(
 ) {
   const resource = safeResourceRevisionDate(resourceUpdatedAt, now);
   if (resource === undefined) return undefined;
-  const timestamp = Math.max(upstream ?? Number.NEGATIVE_INFINITY, resource);
+  const timestamp = Math.max(
+    upstream ?? Number.NEGATIVE_INFINITY,
+    resource
+  );
   return Number.isFinite(timestamp) ? new Date(timestamp).toUTCString() : undefined;
 }
 

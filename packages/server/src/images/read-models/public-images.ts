@@ -15,7 +15,10 @@ import {
 import { pool, type DatabaseReader } from "../../core/database/pools.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
 import { createImageBrowseContext, decodeImageCursor } from "../cursor.ts";
-import { readReadyImageById, readReadyImageCursorPage } from "../ready-cache/query.ts";
+import {
+  readReadyImageById,
+  readReadyImageCursorPage
+} from "../ready-cache/query.ts";
 import {
   publicImageCardsWithTags,
   publicShowImageCards,
@@ -50,7 +53,9 @@ async function listPublicImageRowsWithAccess(
   const plan = await resolveImageFilterPlan(query, database);
   const context = createImageBrowseContext(order, now);
   const position =
-    query.cursor === undefined ? undefined : decodeImageCursor(query.cursor, context);
+    query.cursor === undefined
+      ? undefined
+      : decodeImageCursor(query.cursor, context);
   const cached = await readReadyImageCursorPage(
     plan,
     limit,
@@ -70,11 +75,22 @@ async function listPublicImageRowsWithAccess(
   const fallbackKey = JSON.stringify({ ...query, limit, context });
   const load = async (reader: DatabaseReader) => {
     const { params, where } = buildResolvedReadyImageListFilters(plan);
-    return fetchPublicImageCardPage(where, params, limit, context, query.view, position, reader);
+    return fetchPublicImageCardPage(
+      where,
+      params,
+      limit,
+      context,
+      query.view,
+      position,
+      reader
+    );
   };
   const payload = database.reader
     ? await load(database.reader)
-    : await coalesce(`public-images:postgres:${fallbackKey}`, () => load(pool));
+    : await coalesce(
+        `public-images:postgres:${fallbackKey}`,
+        () => load(pool)
+      );
   return payload;
 }
 
@@ -137,7 +153,9 @@ export async function getPublicImage(
   includeOriginal = false
 ): Promise<PublicImageDetailDto> {
   const row = await (signal
-    ? withPublicDatabaseRead(signal, (database) => getPublicImageRecordWithAccess(id, database))
+    ? withPublicDatabaseRead(signal, (database) => (
+        getPublicImageRecordWithAccess(id, database)
+      ))
     : getPublicImageRecordWithAccess(id, {}));
   return publicImageDetail(row, { signal }, includeOriginal);
 }

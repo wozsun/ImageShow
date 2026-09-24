@@ -28,13 +28,19 @@ import {
   storedS3ConfigJson,
   type StorageBackendConfigRow
 } from "./record.ts";
-import { invalidateStorageBackendRegistry, getStorageBackend } from "./registry.ts";
+import {
+  invalidateStorageBackendRegistry,
+  getStorageBackend
+} from "./registry.ts";
 import {
   assertPhysicalLocationChangeAllowed,
   readStorageBackendConfiguration,
   readStorageBackendUsage
 } from "./usage.ts";
-import { validateStorageBackendCandidate, type ExistingStorageProbe } from "./probe.ts";
+import {
+  validateStorageBackendCandidate,
+  type ExistingStorageProbe
+} from "./probe.ts";
 import { withStorageLocationWriteAndAdvisoryLock } from "../maintenance-lock.ts";
 import {
   configuredStorageNamespaceIdentity,
@@ -59,7 +65,11 @@ function updatedStorageConfig(
       : current;
   }
   if (input.s3) {
-    throw new ApiError(400, "storage_backend_reserved", "内置本地后端没有可编辑的远程存储配置");
+    throw new ApiError(
+      400,
+      "storage_backend_reserved",
+      "内置本地后端没有可编辑的远程存储配置"
+    );
   }
   if (input.public_base_url === undefined) return current;
   const publicBaseUrl = localPublicUrlSchema.parse(input.public_base_url);
@@ -67,7 +77,10 @@ function updatedStorageConfig(
   return { ...current, public_base_url: publicBaseUrl };
 }
 
-function changedPhysicalLocationFields(current: StorageConfig, next: StorageConfig) {
+function changedPhysicalLocationFields(
+  current: StorageConfig,
+  next: StorageConfig
+) {
   if (current.type === "s3" && next.type === "s3") {
     const fields = ["endpoint", "bucket", "root_path"] as const;
     return fields.filter((field) => current.s3[field] !== next.s3[field]);
@@ -78,7 +91,10 @@ function changedPhysicalLocationFields(current: StorageConfig, next: StorageConf
 type StorageUpdateReceipt = { transactionId: string | null };
 type StorageNamespaceRow = StorageBackendConfigRow;
 
-function namespaceSetsOverlap(first: ReadonlySet<string>, second: ReadonlySet<string>) {
+function namespaceSetsOverlap(
+  first: ReadonlySet<string>,
+  second: ReadonlySet<string>
+) {
   return [...first].some((identity) => second.has(identity));
 }
 
@@ -112,7 +128,10 @@ function mergedStorageNamespaceComponent(
   };
 }
 
-async function hasRegisteredNamespacePeer(client: PoolClient, current: StorageConfig) {
+async function hasRegisteredNamespacePeer(
+  client: PoolClient,
+  current: StorageConfig
+) {
   const rows = (
     await client.query(
       `SELECT slug, type, config, namespace_identities
@@ -121,7 +140,10 @@ async function hasRegisteredNamespacePeer(client: PoolClient, current: StorageCo
       [current.slug]
     )
   ).rows as StorageNamespaceRow[];
-  return rows.some((row) => shareStorageNamespace(current, storageConfigFromRow(row)));
+  return rows.some((row) => shareStorageNamespace(
+    current,
+    storageConfigFromRow(row)
+  ));
 }
 
 function sameStorageBackendConfig(
@@ -135,7 +157,10 @@ function sameStorageBackendConfig(
   ) {
     return false;
   }
-  return sameStorageBackendSettings(storageConfigFromRow(snapshot), storageConfigFromRow(locked));
+  return sameStorageBackendSettings(
+    storageConfigFromRow(snapshot),
+    storageConfigFromRow(locked)
+  );
 }
 
 async function updateStorageBackendUnderLock(
@@ -150,7 +175,10 @@ async function updateStorageBackendUnderLock(
   signal.throwIfAborted();
   const currentConfig = storageConfigFromRow(snapshot);
   const nextConfig = updatedStorageConfig(currentConfig, input);
-  const configChanged = !sameStorageBackendSettings(currentConfig, nextConfig);
+  const configChanged = !sameStorageBackendSettings(
+    currentConfig,
+    nextConfig
+  );
   const driverChanged =
     storageDriverSignature(currentConfig) !== storageDriverSignature(nextConfig);
   const configuredNamespaceChanged =
@@ -211,7 +239,9 @@ async function updateStorageBackendUnderLock(
     const result = await validateStorageBackendCandidate(
       nextConfig,
       existingObject,
-      verifiedEndpointRebind ? { currentConfig } : undefined,
+      verifiedEndpointRebind
+        ? { currentConfig }
+        : undefined,
       signal
     );
     if (nextConfig.type === "s3") {
@@ -241,7 +271,11 @@ async function updateStorageBackendUnderLock(
         ).rows[0];
         signal.throwIfAborted();
         if (!row) {
-          throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
+          throw new ApiError(
+            404,
+            "storage_backend_not_found",
+            `Unknown storage backend: ${slug}`
+          );
         }
         if (!sameStorageBackendConfig(snapshot, row)) {
           throw new ApiError(
@@ -251,7 +285,11 @@ async function updateStorageBackendUnderLock(
           );
         }
         if (input.enabled === false && row.is_default) {
-          throw new ApiError(400, "storage_default_enabled", "默认后端不能停用，请先切换默认后端");
+          throw new ApiError(
+            400,
+            "storage_default_enabled",
+            "默认后端不能停用，请先切换默认后端"
+          );
         }
         if (input.enabled === false && row.slug === "local") {
           const alternativeDefault = await client.query(

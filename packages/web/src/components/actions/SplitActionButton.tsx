@@ -60,7 +60,9 @@ export function SplitActionButton({
   const menu = useAnchoredMenu({
     triggerRef: menuTriggerRef,
     getAnchor: () =>
-      window.matchMedia("(min-width: 761px)").matches ? splitRef.current : menuTriggerRef.current,
+      window.matchMedia("(min-width: 761px)").matches
+        ? splitRef.current
+        : menuTriggerRef.current,
     getSize: () => ({
       minWidth: window.matchMedia("(min-width: 761px)").matches ? 0 : 150,
       align: "end",

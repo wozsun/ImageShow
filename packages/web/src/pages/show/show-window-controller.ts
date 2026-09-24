@@ -50,8 +50,18 @@ export class ShowWindowController {
     readonly columnWidth = showLayoutColumnWidth
   ) {}
 
-  reconcile(camera: ShowPoint, viewport: ShowSize, scale: number, residence: ShowResidencePolicy) {
-    const nextWindow = showViewportWindow(camera, viewport, scale, residence);
+  reconcile(
+    camera: ShowPoint,
+    viewport: ShowSize,
+    scale: number,
+    residence: ShowResidencePolicy
+  ) {
+    const nextWindow = showViewportWindow(
+      camera,
+      viewport,
+      scale,
+      residence
+    );
     this.#window = nextWindow;
     this.#missingCards = 0;
     let changed = false;
@@ -81,14 +91,21 @@ export class ShowWindowController {
         this.#columns.set(columnIndex, column);
         changed = true;
       }
-      if (this.#reconcileColumn(columnIndex, column, nextWindow.resident)) changed = true;
+      if (this.#reconcileColumn(
+        columnIndex,
+        column,
+        nextWindow.resident
+      )) changed = true;
     }
 
     let visibleCards = 0;
     for (const column of this.#columns.values()) {
       for (let index = 0; index < column.cards.length; index += 1) {
         const card = column.cards[index];
-        const visible = showRectsIntersect(showCardRect(card), nextWindow.visible);
+        const visible = showRectsIntersect(
+          showCardRect(card),
+          nextWindow.visible
+        );
         if (visible) visibleCards += 1;
         if (card.visible === visible) continue;
         column.cards[index] = { ...card, visible };
@@ -150,7 +167,9 @@ export class ShowWindowController {
       .flatMap((column) => column.cards)
       .sort(
         (left, right) =>
-          left.column - right.column || left.y - right.y || left.ordinal - right.ordinal
+          left.column - right.column
+          || left.y - right.y
+          || left.ordinal - right.ordinal
       );
     return {
       activeColumns: this.#columns.size,
@@ -174,7 +193,11 @@ export class ShowWindowController {
     };
   }
 
-  #reconcileColumn(columnIndex: number, column: ShowColumn, resident: ShowRect) {
+  #reconcileColumn(
+    columnIndex: number,
+    column: ShowColumn,
+    resident: ShowRect
+  ) {
     let changed = false;
     const retained: ShowCardSlot[] = [];
     for (const card of column.cards) {

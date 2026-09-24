@@ -7,7 +7,10 @@ import {
   onRedisOperationalStateChange
 } from "../../../core/runtime-availability.ts";
 import type { AdminSession } from "../../../users/admin-session.ts";
-import type { IngestionQueueMetadata, IngestionQueueType } from "../sessions/model.ts";
+import type {
+  IngestionQueueMetadata,
+  IngestionQueueType
+} from "../sessions/model.ts";
 import {
   ingestionActionWatermarkPurpose,
   type IngestionTokenEnvelope,
@@ -169,7 +172,8 @@ export async function replayIngestionQueueActionBatch(
   while (true) {
     const scope = requireIngestionActionScope(scopeInput);
     const boundFingerprint = scope.replay.bindings.get(input.actionRequestId);
-    if (boundFingerprint && boundFingerprint !== input.requestFingerprint) {
+    if (boundFingerprint
+      && boundFingerprint !== input.requestFingerprint) {
       throw actionReplayError(
         "ingestion_action_request_conflict",
         "同一全局操作 ID 已绑定不同操作、水位或内容"
@@ -180,13 +184,19 @@ export async function replayIngestionQueueActionBatch(
         const oldest = scope.replay.bindings.keys().next().value;
         if (oldest) scope.replay.bindings.delete(oldest);
       }
-      scope.replay.bindings.set(input.actionRequestId, input.requestFingerprint);
+      scope.replay.bindings.set(
+        input.actionRequestId,
+        input.requestFingerprint
+      );
     }
     const current = scope.replay.current;
     if (!current) return start(scope);
     if (current.actionRequestId !== input.actionRequestId) {
       if (!current.settled) {
-        throw actionReplayError("ingestion_action_in_progress", "当前队列已有全局操作正在执行");
+        throw actionReplayError(
+          "ingestion_action_in_progress",
+          "当前队列已有全局操作正在执行"
+        );
       }
       return start(scope);
     }
@@ -196,14 +206,16 @@ export async function replayIngestionQueueActionBatch(
         "同一全局操作 ID 已绑定不同操作、水位或内容"
       );
     }
-    if (current.cursor === input.cursor && current.continuation === input.continuation) {
+    if (current.cursor === input.cursor
+      && current.continuation === input.continuation) {
       return current.result;
     }
 
     const previous = await current.result;
     requireIngestionActionScope(scopeInput);
     if (scope.replay.current !== current) continue;
-    if (!input.continuation || input.continuation !== previous.continuation) {
+    if (!input.continuation
+      || input.continuation !== previous.continuation) {
       throw actionReplayError(
         "ingestion_action_continuation_invalid",
         "内容接入队列操作游标已被后续批次取代"

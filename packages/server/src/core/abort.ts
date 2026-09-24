@@ -1,5 +1,10 @@
-export function abortSignalError(signal: AbortSignal, fallbackMessage = "Operation aborted") {
-  return signal.reason instanceof Error ? signal.reason : new Error(fallbackMessage);
+export function abortSignalError(
+  signal: AbortSignal,
+  fallbackMessage = "Operation aborted"
+) {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new Error(fallbackMessage);
 }
 
 export function raceWithAbortSignal<T>(

@@ -92,7 +92,10 @@ export function showCardGeometry(
 }
 
 export function showRectsIntersect(a: ShowRect, b: ShowRect) {
-  return a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom;
+  return a.right > b.left
+    && a.left < b.right
+    && a.bottom > b.top
+    && a.top < b.bottom;
 }
 
 export function showCardRect(card: Pick<ShowCardSlot, "x" | "y" | "width" | "height">): ShowRect {
@@ -126,7 +129,10 @@ export function showViewportWindow(
     right: left + width,
     bottom: top + height
   };
-  const horizontalOverscan = Math.max(0, residence.horizontalOverscanScreens);
+  const horizontalOverscan = Math.max(
+    0,
+    residence.horizontalOverscanScreens
+  );
   const verticalOverscan = Math.max(0, residence.verticalOverscanScreens);
   return {
     visible,

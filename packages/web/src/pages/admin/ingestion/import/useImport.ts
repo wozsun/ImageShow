@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
-import { ingestionBatchHardLimit, type IngestionSessionPairDto } from "@imageshow/shared/browser";
+import {
+  ingestionBatchHardLimit,
+  type IngestionSessionPairDto
+} from "@imageshow/shared/browser";
 import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 import { isApiClientError } from "../../../../lib/api/client.js";
 import { normalizeAuthor, normalizeTheme } from "../../../../lib/image-draft.js";
@@ -97,7 +100,10 @@ export function useImport(options: {
         let results: Awaited<ReturnType<typeof acceptImports>>["items"];
         const requestConnectionGeneration = queue.captureServerConnectionGeneration();
         try {
-          results = (await acceptImports({ items: inputs }, controller.signal)).items;
+          results = (await acceptImports(
+            { items: inputs },
+            controller.signal
+          )).items;
         } catch (error) {
           if (mounted.current && (error as Error).name !== "AbortError") {
             const rejectedBeforeAccept =
@@ -282,7 +288,10 @@ export function useImport(options: {
 
   const enqueueImportJobs = useCallback(
     async (jobs: IngestionJob[]) => {
-      const acceptedJobs = deduplicateImportJobsByDownloadUrl(queue.jobsRef.current, jobs);
+      const acceptedJobs = deduplicateImportJobsByDownloadUrl(
+        queue.jobsRef.current,
+        jobs
+      );
       if (queue.appendJobs(acceptedJobs) === false) {
         window.alert(`当前窗口待接管任务已达 ${ingestionBatchHardLimit} 项，请稍后再添加`);
         return;
@@ -312,10 +321,20 @@ export function useImport(options: {
   const addUrls = useCallback(
     async (urls: string[]) => {
       await enqueueImportJobs(
-        createUrlImportJobs(urls, defaults, keepOriginalLinkForUrlImports, storageSlug)
+        createUrlImportJobs(
+          urls,
+          defaults,
+          keepOriginalLinkForUrlImports,
+          storageSlug
+        )
       );
     },
-    [defaults, enqueueImportJobs, keepOriginalLinkForUrlImports, storageSlug]
+    [
+      defaults,
+      enqueueImportJobs,
+      keepOriginalLinkForUrlImports,
+      storageSlug
+    ]
   );
 
   const addParsedImports = useCallback(
@@ -391,7 +410,8 @@ export function useImport(options: {
               terminal: "completed"
             });
           }
-          if (acceptOutcome.status === "accepted" && acceptOutcome.target)
+          if (acceptOutcome.status === "accepted"
+            && acceptOutcome.target)
             cancellable.push(acceptOutcome.target);
           continue;
         }
@@ -465,7 +485,8 @@ export function useImport(options: {
             queue.updateJob(current.id, {
               status: "failed",
               failureStage: "cancel",
-              message: result?.message ?? "服务端是否已接管任务暂时无法确认，请重试取消"
+              message: result?.message
+                ?? "服务端是否已接管任务暂时无法确认，请重试取消"
             });
             continue;
           }
@@ -580,7 +601,8 @@ export function useImport(options: {
       const selected: IngestionJob[] = [];
       for (const target of targets) {
         const current = queue.jobsRef.current.find(
-          (job) => job.id === target.id && job.attemptKey === target.attemptKey
+          (job) => job.id === target.id
+            && job.attemptKey === target.attemptKey
         );
         if (
           !current ||

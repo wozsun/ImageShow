@@ -8,7 +8,7 @@ import { ApiError } from "../../../core/api-error.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../../core/database/advisory-locks.ts";
 import { logger } from "../../../core/logger.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
-import { resolveTagNames } from "../../../tags/query.ts";
+import { resolveTagSlugs } from "../../../tags/query.ts";
 import {
   invalidateEntityCountCaches,
   refreshEntityVocabularies
@@ -66,9 +66,11 @@ export async function commitIngestionSessionSnapshot(
   let databaseCommitted = false;
   const candidateGuardToken = randomUuidV7();
   try {
-    const resolvedTags = await resolveTagNames(commit.metadata.tags);
+    const resolvedTags = await resolveTagSlugs(commit.metadata.tags);
     const vocabularyLocks = vocabularyAssociationLockRequests([
-      ...(commit.metadata.theme ? [{ entity: "theme" as const, slug: commit.metadata.theme }] : []),
+      ...(commit.metadata.theme
+        ? [{ entity: "theme" as const, slug: commit.metadata.theme }]
+        : []),
       ...(commit.metadata.author
         ? [{ entity: "author" as const, slug: commit.metadata.author }]
         : []),

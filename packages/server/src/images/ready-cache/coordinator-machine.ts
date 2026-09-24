@@ -15,7 +15,7 @@ import {
 import { enqueueRerunnableJob } from "../../jobs/repository.ts";
 import { clearReadyImageDisposableCaches } from "./derived/lifecycle.ts";
 import {
-  readyImageCacheWriteFenceIsClosed,
+  readyImageCacheReadsAreBlocked,
   tryWithReadyImageCacheReadFence,
   withReadyImageCacheReadFence,
   withReadyImageCacheWriteFence,
@@ -63,7 +63,10 @@ type ReadyImageCacheCoordinatorDependencies = {
   validateCache: typeof validateReadyImageCacheAtStartup;
   rebuildCache: typeof rebuildReadyImageCache;
   readMeta: typeof readReadyImageCacheMeta;
-  handleValidationFailure(error: unknown, event: string): Promise<void>;
+  handleValidationFailure(
+    error: unknown,
+    event: string
+  ): Promise<void>;
 };
 
 class ReadyImageCacheRefreshDeferredError extends Error {
@@ -78,19 +81,31 @@ function redisConnectionIsUsable(
   operational: RedisOperationalState
 ) {
   return (
-    connection.ready && operational.available && operational.connectionEpoch === connection.epoch
+    connection.ready
+      && operational.available
+      && operational.connectionEpoch === connection.epoch
   );
 }
 
 function waitForTask<T>(task: Promise<T>, signal?: AbortSignal) {
-  return signal ? raceWithAbortSignal(signal, task, "Cache coordination wait aborted") : task;
+  return signal
+    ? raceWithAbortSignal(signal, task, "Cache coordination wait aborted")
+    : task;
 }
 
 async function scheduleRebuildJob() {
-  await enqueueRerunnableJob("cache.rebuild", "ready-images", {}, CACHE_REBUILD_JOB_KEY);
+  await enqueueRerunnableJob(
+    "cache.rebuild",
+    "ready-images",
+    {},
+    CACHE_REBUILD_JOB_KEY
+  );
 }
 
-async function handleRedisValidationFailure(error: unknown, event: string) {
+async function handleRedisValidationFailure(
+  error: unknown,
+  event: string
+) {
   if (isRedisRequiredCommandsError(error)) {
     logger.warn("ready_image_cache_required_redis_commands_missing", {
       missing: error.capabilities.missing
@@ -152,12 +167,15 @@ export class ReadyImageCacheCoordinator {
   getStatus(): ReadyImageCacheCoordinatorStatus {
     const rebuildRequested = this.pendingRefresh === "rebuild";
     const rebuildActive = Boolean(
-      this.activeTask?.progress.fulfillsRebuildRequest && this.phase !== "ready"
+      this.activeTask?.progress.fulfillsRebuildRequest
+      && this.phase !== "ready"
     );
     return {
       initialized: this.initialized,
       readable: this.isReadable(),
-      rebuilding: this.phase === "rebuilding" || rebuildRequested || rebuildActive,
+      rebuilding: this.phase === "rebuilding"
+        || rebuildRequested
+        || rebuildActive,
       reason:
         this.phase === "stopped"
           ? "stopped"
@@ -171,7 +189,7 @@ export class ReadyImageCacheCoordinator {
   }
 
   readyImageCacheIsReadable() {
-    return this.isReadable() && !readyImageCacheWriteFenceIsClosed();
+    return this.isReadable() && !readyImageCacheReadsAreBlocked();
   }
 
   withRead<T>(
@@ -186,11 +204,15 @@ export class ReadyImageCacheCoordinator {
       if (!initial.ready || !this.isReadable()) return { valid: false } as const;
       const stillCurrent = () => {
         const current = this.dependencies.getRedisConnectionState();
-        return current.ready && current.epoch === initial.epoch && this.isReadable();
+        return current.ready
+          && current.epoch === initial.epoch
+          && this.isReadable();
       };
       try {
         const value = await work();
-        return stillCurrent() ? ({ valid: true, value } as const) : ({ valid: false } as const);
+        return stillCurrent()
+          ? { valid: true, value } as const
+          : { valid: false } as const;
       } catch (error) {
         // A required request-path Redis command deliberately marks the
         // operational state unavailable before throwing. Do not turn that
@@ -231,10 +253,14 @@ export class ReadyImageCacheCoordinator {
   private connectionChangedSince(epoch: number) {
     const connection = this.dependencies.getRedisConnectionState();
     const operational = this.dependencies.getRedisOperationalState();
-    return redisConnectionIsUsable(connection, operational) && connection.epoch !== epoch;
+    return redisConnectionIsUsable(connection, operational)
+      && connection.epoch !== epoch;
   }
 
-  private async validateCurrentConnection(epoch: number, signal: AbortSignal) {
+  private async validateCurrentConnection(
+    epoch: number,
+    signal: AbortSignal
+  ) {
     let validMeta: ReadyImageCacheMeta | null = null;
     let rebuildRequired = false;
     await this.dependencies.withWriteFence(async () => {
@@ -264,7 +290,9 @@ export class ReadyImageCacheCoordinator {
         return;
       }
       validMeta = validation.meta;
-      if (this.mutationHolds === 0 && this.phase !== "stopped" && this.pendingRefresh === "none") {
+      if (this.mutationHolds === 0
+        && this.phase !== "stopped"
+        && this.pendingRefresh === "none") {
         this.phase = "ready";
         this.reason = "ready";
       }
@@ -311,11 +339,13 @@ export class ReadyImageCacheCoordinator {
         signal.throwIfAborted();
         const published = this.dependencies.getRedisConnectionState();
         const operationalAfter = this.dependencies.getRedisOperationalState();
-        if (!redisConnectionIsUsable(published, operationalAfter) || published.epoch !== epoch) {
+        if (!redisConnectionIsUsable(published, operationalAfter)
+          || published.epoch !== epoch) {
           throw new Error("Redis connection changed while cache was rebuilding");
         }
         this.meta = meta;
-        if (this.mutationHolds === 0 && this.pendingRefresh === "none") {
+        if (this.mutationHolds === 0
+          && this.pendingRefresh === "none") {
           this.phase = "ready";
           this.reason = "ready";
         }
@@ -348,7 +378,9 @@ export class ReadyImageCacheCoordinator {
     recordReadyImageCacheError("core", "core_rebuild_failed", error);
     this.phase = "unavailable";
     const operational = this.dependencies.getRedisOperationalState();
-    this.reason = operational.available ? `degraded:${errorMessage(error)}` : operational.reason;
+    this.reason = operational.available
+      ? `degraded:${errorMessage(error)}`
+      : operational.reason;
     this.meta = await this.dependencies.readMeta().catch(() => this.meta);
     if (this.getStatus().reason === "stopped") return;
     await this.dependencies
@@ -451,7 +483,10 @@ export class ReadyImageCacheCoordinator {
       }
       const active = this.activeTask;
       if (!active) {
-        return (await waitForTask(this.startRefresh(true), options.signal)).meta;
+        return (await waitForTask(
+          this.startRefresh(true),
+          options.signal
+        )).meta;
       }
       if (!active.progress.fulfillsRebuildRequest) {
         this.queueRefresh(true);
@@ -484,7 +519,8 @@ export class ReadyImageCacheCoordinator {
           signal?.throwIfAborted();
           const revision = (await this.dependencies.getRevision()).revision;
           signal?.throwIfAborted();
-          return this.meta?.state === "ready" && this.meta.appliedRevision === revision
+          return this.meta?.state === "ready"
+            && this.meta.appliedRevision === revision
             ? this.meta
             : null;
         },
@@ -493,7 +529,10 @@ export class ReadyImageCacheCoordinator {
       signal?.throwIfAborted();
       if (lease.acquired && lease.value) return lease.value;
       if (this.mutationHolds > 0) return this.requestRebuild(options);
-      return (await waitForTask(this.startRefresh(this.pendingRefresh === "rebuild"), signal)).meta;
+      return (await waitForTask(
+        this.startRefresh(this.pendingRefresh === "rebuild"),
+        signal
+      )).meta;
     }
   }
 
@@ -534,7 +573,10 @@ export class ReadyImageCacheCoordinator {
       return (_rebuildRequired: boolean) => false;
     }
     this.mutationHolds += 1;
-    this.mutationAffectedCount = Math.max(this.mutationAffectedCount, affectedCount);
+    this.mutationAffectedCount = Math.max(
+      this.mutationAffectedCount,
+      affectedCount
+    );
     this.phase = "unavailable";
     this.reason = `mutation_in_progress:${affectedCount}`;
     let released = false;
@@ -572,7 +614,10 @@ export class ReadyImageCacheCoordinator {
     if (!this.initialized) return false;
     if (this.mutationHolds > 0) {
       this.mutationRebuildRequired = true;
-      this.mutationAffectedCount = Math.max(this.mutationAffectedCount, affectedCount);
+      this.mutationAffectedCount = Math.max(
+        this.mutationAffectedCount,
+        affectedCount
+      );
       return true;
     }
     this.queueRefresh(true);

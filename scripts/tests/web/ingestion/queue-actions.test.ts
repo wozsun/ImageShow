@@ -8,9 +8,15 @@ import {
   type IngestionQueueActionResultDto
 } from "../../../../packages/shared/src/browser.ts";
 import type { IngestionJob } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
-import { clearCsrfToken, setCsrfToken } from "../../../../packages/web/src/lib/api/client.ts";
+import {
+  clearCsrfToken,
+  setCsrfToken
+} from "../../../../packages/web/src/lib/api/client.ts";
 import { getIngestionQueueSnapshot } from "../../../../packages/web/src/pages/admin/ingestion/queue/ingestion-http-client.ts";
-import { ingestionJob, adminImageListItem } from "../../support/web-test-context.ts";
+import {
+  ingestionJob,
+  adminImageListItem
+} from "../../support/web-test-context.ts";
 
 test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有界续传", async () => {
   const { window, document } = parseHTML(
@@ -26,7 +32,11 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
   });
   const connectionHold = { current: false };
   const fetchStub = async (_path: string, init?: RequestInit) => {
-    assert.equal(connectionHold.current, true, "continuation 执行期间必须持有当前 owner 状态通道");
+    assert.equal(
+      connectionHold.current,
+      true,
+      "continuation 执行期间必须持有当前 owner 状态通道"
+    );
     fetchCalls += 1;
     const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
     requests.push(body);
@@ -190,7 +200,11 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
       },
       { processed: 2, changed: 1, failed: 0 }
     );
-    assert.equal(actions.notice, "", "只有状态变化而无真实失败时不得显示协议动作汇总");
+    assert.equal(
+      actions.notice,
+      "",
+      "只有状态变化而无真实失败时不得显示协议动作汇总"
+    );
     assert.equal(fetchCalls, 4);
     assert.equal(refreshes, 0, "成功动作由 SSE 收敛，不得追加同页快照");
     assert.deepEqual(
@@ -211,7 +225,10 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
     assert.equal(requests[2]?.continuation, "signed-next-cursor");
     assert.deepEqual(requests[0], requests[1], "网络重试必须复用首批完整请求");
 
-    const nonBlockingFrozen = actions.freeze("apply_metadata", { title: "不阻塞输入框" });
+    const nonBlockingFrozen = actions.freeze(
+      "apply_metadata",
+      { title: "不阻塞输入框" }
+    );
     assert.ok(nonBlockingFrozen);
     let releaseNonBlockingPreflight!: () => void;
     const nonBlockingPreflight = new Promise<void>((resolve) => {
@@ -225,7 +242,11 @@ test("[Web/内容接入] 全队列动作冻结水位并以同一 action ID 有�
       await Promise.resolve();
     });
     assert.equal(connectionHold.current, true);
-    assert.equal(actions.busy, false, "应用默认值的后台持久化不得禁用整窗卡片控件");
+    assert.equal(
+      actions.busy,
+      false,
+      "应用默认值的后台持久化不得禁用整窗卡片控件"
+    );
     await React.act(async () => {
       releaseNonBlockingPreflight();
       await nonBlockingRun;
@@ -443,7 +464,11 @@ test("[Web/内容接入] 失效动作凭证先恢复 CSRF 再按 owner 刷新权
     assert.equal(uploadSnapshotRequests, 1);
     assert.equal(importSnapshotRequests, 0, "upload 恢复不得刷新 import owner");
     assert.equal(ordinaryRefreshes, 0, "凭证恢复不得抢先发出旧 CSRF snapshot");
-    assert.deepEqual(requestOrder, ["action:expired-csrf", "auth", "snapshot:upload:current-csrf"]);
+    assert.deepEqual(requestOrder, [
+      "action:expired-csrf",
+      "auth",
+      "snapshot:upload:current-csrf"
+    ]);
     assert.equal(uploadServer.actionWatermark, "fresh-upload-watermark");
     assert.equal(uploadActions!.notice, "", "新权威 snapshot 后应清除旧凭证提示");
     assert.equal(importActions!.notice, "");
@@ -508,7 +533,8 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
         }
       );
     }
-    if (actionBody.action === "clear_completed" && completedActionResponseHandler)
+    if (actionBody.action === "clear_completed"
+      && completedActionResponseHandler)
       return completedActionResponseHandler(actionBody);
     return new Response(
       JSON.stringify({
@@ -966,7 +992,11 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       failedDeferredRefreshSettled,
       "同一失败 authority 不得形成 snapshot 尾随循环"
     );
-    assert.equal(postActionRecoveries, 1, "清理动作没有成功时不得启动成功后的收敛");
+    assert.equal(
+      postActionRecoveries,
+      1,
+      "清理动作没有成功时不得启动成功后的收敛"
+    );
     Object.assign(server, {
       actionWatermark: "freshly-signed-same-revision-watermark"
     });
@@ -988,7 +1018,10 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       root.render(React.createElement(Probe));
       for (
         let attempt = 0;
-        attempt < 20 && (actionBodies.length < failedDeferredActionSettled + 1 || doneSignals < 3);
+        attempt < 20 && (
+          actionBodies.length < failedDeferredActionSettled + 1
+          || doneSignals < 3
+        );
         attempt += 1
       ) {
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1000,7 +1033,11 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       "同一 connection 内 semantic revision 推进后必须恰好恢复一次"
     );
     assert.equal(actionBodies.at(-1)?.max_semantic_revision, 118);
-    assert.equal(doneSignals, 2, "失败前已清理的本地卡片与零变更 Server 重试不应重复发送完成通知");
+    assert.equal(
+      doneSignals,
+      2,
+      "失败前已清理的本地卡片与零变更 Server 重试不应重复发送完成通知"
+    );
 
     const completedAtCloseRequest = ingestionJob({
       ...localJob,
@@ -1116,7 +1153,11 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       }
     });
     assert.equal(postActionRecoveries, closeRecoveryStart + 1);
-    assert.equal(connectionHold.current, true, "动作成功后必须持有连接直至权威快照收敛");
+    assert.equal(
+      connectionHold.current,
+      true,
+      "动作成功后必须持有连接直至权威快照收敛"
+    );
     assert.equal(postActionConnectionHolds.at(-1), true);
     assert.equal(recoveryConnectionHolds.at(-1), true);
     await React.act(async () => {
@@ -1243,7 +1284,8 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       for (
         let attempt = 0;
         attempt < 30 &&
-        (connectionHold.current || postActionRecoveries === pagedSuccessRecoveryStart);
+        (connectionHold.current
+          || postActionRecoveries === pagedSuccessRecoveryStart);
         attempt += 1
       )
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1331,7 +1373,10 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       releasePagedFailureSecond();
       for (
         let attempt = 0;
-        attempt < 30 && (connectionHold.current || pagedFailureContinuationCalls < 2);
+        attempt < 30 && (
+          connectionHold.current
+          || pagedFailureContinuationCalls < 2
+        );
         attempt += 1
       )
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1413,7 +1458,10 @@ test("[Web/内容接入] 应用到全部在默认空主题下发送规范化稀�
       workflow!.runCleanupAction("completed");
       for (
         let attempt = 0;
-        attempt < 30 && (connectionHold.current || authRecoveries === pagedAuthSessionStart);
+        attempt < 30 && (
+          connectionHold.current
+          || authRecoveries === pagedAuthSessionStart
+        );
         attempt += 1
       )
         await new Promise((resolve) => setTimeout(resolve, 0));

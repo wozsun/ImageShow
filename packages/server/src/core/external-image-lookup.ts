@@ -92,10 +92,18 @@ const ipv6SpecialPurposeRules: readonly Ipv6SpecialPurposeRule[] = [
 const ipv4MulticastBase = ipaddr.IPv4.parse("224.0.0.0");
 const parsedIpv4SpecialPurposeRules = ipv4SpecialPurposeRules.map(
   ([base, prefixLength, globallyReachable]) =>
-    [ipaddr.IPv4.parse(base), prefixLength, globallyReachable] as const
+    [
+      ipaddr.IPv4.parse(base),
+      prefixLength,
+      globallyReachable
+    ] as const
 );
 const parsedIpv6SpecialPurposeRules = ipv6SpecialPurposeRules.map(
-  ([base, prefixLength, policy]) => [ipaddr.IPv6.parse(base), prefixLength, policy] as const
+  ([base, prefixLength, policy]) => [
+    ipaddr.IPv6.parse(base),
+    prefixLength,
+    policy
+  ] as const
 );
 
 function isGloballyReachableIpv4(address: Ipv4Address) {
@@ -107,7 +115,8 @@ function isGloballyReachableIpv4(address: Ipv4Address) {
   let globallyReachable = true;
   for (const rule of parsedIpv4SpecialPurposeRules) {
     const [base, prefixLength, ruleGloballyReachable] = rule;
-    if (prefixLength > matchedPrefixLength && address.match(base, prefixLength)) {
+    if (prefixLength > matchedPrefixLength &&
+      address.match(base, prefixLength)) {
       matchedPrefixLength = prefixLength;
       globallyReachable = ruleGloballyReachable;
     }
@@ -120,7 +129,8 @@ function isGloballyReachableIpv6(address: Ipv6Address) {
   let policy: Ipv6SpecialPurposeRule[2] = false;
   for (const rule of parsedIpv6SpecialPurposeRules) {
     const [base, prefixLength, rulePolicy] = rule;
-    if (prefixLength > matchedPrefixLength && address.match(base, prefixLength)) {
+    if (prefixLength > matchedPrefixLength &&
+      address.match(base, prefixLength)) {
       matchedPrefixLength = prefixLength;
       policy = rulePolicy;
     }
@@ -128,7 +138,8 @@ function isGloballyReachableIpv6(address: Ipv6Address) {
 
   if (policy !== "embedded-ipv4") return policy;
   const embeddedAddress = ipaddr.fromByteArray(address.toByteArray().slice(-4));
-  return embeddedAddress instanceof ipaddr.IPv4 && isGloballyReachableIpv4(embeddedAddress);
+  return embeddedAddress instanceof ipaddr.IPv4 &&
+    isGloballyReachableIpv4(embeddedAddress);
 }
 
 function isGloballyReachableAddress({ address, family }: ExternalImageAddress) {
@@ -145,7 +156,9 @@ function isGloballyReachableAddress({ address, family }: ExternalImageAddress) {
     // Reject that syntax before parsing so the actual ::/96 address cannot
     // inherit the mapped-address policy.
     const isBareIpv4Compatible =
-      address.startsWith("::") && address.lastIndexOf(":") === 1 && address.includes(".");
+      address.startsWith("::") &&
+        address.lastIndexOf(":") === 1 &&
+        address.includes(".");
     return (
       !address.includes("%") &&
       !isBareIpv4Compatible &&
@@ -178,7 +191,9 @@ export function createExternalImageLookup(
         (addresses) => {
           try {
             assertExternalImageAddresses(addresses);
-            const requestedFamily = typeof options.family === "number" ? options.family : 0;
+            const requestedFamily = typeof options.family === "number"
+              ? options.family
+              : 0;
             const candidates = requestedFamily
               ? addresses.filter(({ family }) => family === requestedFamily)
               : addresses;
@@ -192,7 +207,11 @@ export function createExternalImageLookup(
           }
         },
         (error) => {
-          callback(externalImageLookupError("External image DNS lookup failed", error), "", 0);
+          callback(
+            externalImageLookupError("External image DNS lookup failed", error),
+            "",
+            0
+          );
         }
       );
   };

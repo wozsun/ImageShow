@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   imageEditorTargetKey,
@@ -102,7 +107,10 @@ export function useImageEditorCapability({
   );
 
   const open = useCallback(
-    async (target: ImageEditorTarget, opener: HTMLElement) => {
+    async (
+      target: ImageEditorTarget,
+      opener: HTMLElement
+    ) => {
       const requestFence = requestFenceRef.current;
       const requestSequence = requestFence.begin();
       const nextPending = {
@@ -112,7 +120,8 @@ export function useImageEditorCapability({
 
       try {
         const prepared = await prepare(target);
-        if (!requestFence.isCurrent(requestSequence) || !opener.isConnected) {
+        if (!requestFence.isCurrent(requestSequence)
+          || !opener.isConnected) {
           return;
         }
         returnFocusRef.current = opener;

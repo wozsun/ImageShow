@@ -59,17 +59,24 @@ export function AppHeader({
   const showAdminEntry = Boolean(auth?.authenticated);
   const publicRoutePreloadIntents = usePublicRoutePreloadIntents();
   const currentPublicRoute =
-    pathname === "/gallery" || (pathname === "/" && rootPath === "/gallery")
+    pathname === "/gallery"
+      || (pathname === "/" && rootPath === "/gallery")
       ? "gallery"
       : pathname === "/show" || (pathname === "/" && rootPath === "/show")
         ? "show"
         : pathname === "/home" || (pathname === "/" && rootPath === "/home")
           ? "home"
           : null;
-  const homePreloadProps = currentPublicRoute !== "home" ? publicRoutePreloadIntents.home : {};
-  const showPreloadProps = currentPublicRoute !== "show" ? publicRoutePreloadIntents.show : {};
+  const homePreloadProps = currentPublicRoute !== "home"
+    ? publicRoutePreloadIntents.home
+    : {};
+  const showPreloadProps = currentPublicRoute !== "show"
+    ? publicRoutePreloadIntents.show
+    : {};
   const galleryPreloadProps =
-    currentPublicRoute !== "gallery" ? publicRoutePreloadIntents.gallery : {};
+    currentPublicRoute !== "gallery"
+      ? publicRoutePreloadIntents.gallery
+      : {};
   const navClassName =
     (target: "/home" | "/show" | "/gallery") =>
     ({ isActive }: { isActive: boolean }) =>

@@ -15,7 +15,10 @@ import { DialogFrame } from "../../../../components/feedback/DialogFrame.js";
 import { AdminIcon } from "../../../../components/icon/AdminIcon.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
 import { useAsyncActionStatus } from "../../../../hooks/useAsyncActionStatus.js";
-import { mobileViewportMediaQuery, useMediaQuery } from "../../../../hooks/useMediaQuery.js";
+import {
+  mobileViewportMediaQuery,
+  useMediaQuery
+} from "../../../../hooks/useMediaQuery.js";
 import {
   importSourceModeAdapters,
   type ImportSourceSubmission,
@@ -26,7 +29,10 @@ import {
   importSourceTextareaRows,
   type ImportSourceMode
 } from "./import-source-model.js";
-import { ImportSourceResultPanel, ImportSourceResultSummary } from "./ImportSourceResultPanel.js";
+import {
+  ImportSourceResultPanel,
+  ImportSourceResultSummary
+} from "./ImportSourceResultPanel.js";
 import { parseImportUrlInput } from "../queue/model/import-job-source.js";
 
 export type { ImportSourceSubmission } from "./import-source-adapters.js";
@@ -120,7 +126,11 @@ export function ImportSourceDialog({
     requestControllerRef.current = controller;
     setParseError("");
     try {
-      const result = await adapter.parse(text, controller.signal, urlParseResult);
+      const result = await adapter.parse(
+        text,
+        controller.signal,
+        urlParseResult
+      );
       if (controller.signal.aborted) return null;
       setParsedResult(result);
       return result;
@@ -136,7 +146,10 @@ export function ImportSourceDialog({
     }
   };
 
-  const importSubmission = (submission: ImportSourceSubmission, requestClose: () => void) => {
+  const importSubmission = (
+    submission: ImportSourceSubmission,
+    requestClose: () => void
+  ) => {
     if (submittedRef.current) return;
     submittedRef.current = true;
     onSubmitRef.current(submission);
@@ -147,7 +160,9 @@ export function ImportSourceDialog({
     result: ParsedImportSourceResult,
     requestClose: () => void
   ) => {
-    if (!autoImportAfterParse || result.blockingIssueCount > 0 || !result.submission) {
+    if (!autoImportAfterParse
+      || result.blockingIssueCount > 0
+      || !result.submission) {
       return;
     }
     importSubmission(result.submission, requestClose);
@@ -299,7 +314,9 @@ export function ImportSourceDialog({
                     `已输入 ${limitState.count} 条，最多允许 ${limitState.maxItems} 条，请拆分后再导入`}
                 </p>
               )}
-              {parsedResult && <ImportSourceResultPanel result={parsedResult} />}
+              {parsedResult && (
+                <ImportSourceResultPanel result={parsedResult} />
+              )}
               <div className="import-source-actions">
                 {!mobileLayout && parsedResult && (
                   <ImportSourceResultSummary result={parsedResult} />

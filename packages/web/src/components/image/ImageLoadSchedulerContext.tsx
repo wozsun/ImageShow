@@ -1,5 +1,8 @@
 import { createContext, useContext } from "react";
-import { ImageLoadScheduler, preferredImageLoadConcurrency } from "./image-load-scheduler.js";
+import {
+  ImageLoadScheduler,
+  preferredImageLoadConcurrency
+} from "./image-load-scheduler.js";
 
 const ImageLoadSchedulerContext = createContext<ImageLoadScheduler | null>(null);
 

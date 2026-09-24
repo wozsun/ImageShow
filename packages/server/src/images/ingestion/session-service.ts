@@ -5,7 +5,10 @@ import type {
   UploadIntentItemDto,
   UploadIntentItemInputDto
 } from "@imageshow/shared/browser";
-import { getIngestionMaxFileBytes, getIngestionMaxLongEdge } from "../../config/app-settings.ts";
+import {
+  getIngestionMaxFileBytes,
+  getIngestionMaxLongEdge
+} from "../../config/app-settings.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
@@ -204,7 +207,11 @@ export class IngestionSessionService {
   }
 
   verifyUploadCredential(token: string, owner: string) {
-    const claims = this.tokens.verify(uploadCredentialPurpose, token, isUploadCredential);
+    const claims = this.tokens.verify(
+      uploadCredentialPurpose,
+      token,
+      isUploadCredential
+    );
     if (claims.owner !== owner) {
       throw new ApiError(403, "upload_credential_owner_mismatch", "上传凭证不属于当前管理员");
     }
@@ -314,8 +321,16 @@ export class IngestionSessionService {
           const storageSlug = await this.#dependencies.resolveStorageSlug(item.storage_slug);
           await this.#dependencies.assertStorageWriteTarget(storageSlug);
           const explicitTime = providedImageTime(item.image_time, item.batch_time);
-          const resolvedTime = normalizedImageTime(item.image_time, item.batch_time, new Date(now));
-          const sessionId = createIngestionSessionId(owner, "upload", item.idempotency_key);
+          const resolvedTime = normalizedImageTime(
+            item.image_time,
+            item.batch_time,
+            new Date(now)
+          );
+          const sessionId = createIngestionSessionId(
+            owner,
+            "upload",
+            item.idempotency_key
+          );
           const requestHash = ingestionIntentRequestHash({
             queue: "upload",
             source_type: "upload",
@@ -331,7 +346,10 @@ export class IngestionSessionService {
           const intent: UploadIntentSnapshot = {
             owner,
             session_id: sessionId,
-            candidate_image_id: createImageId(resolvedTime.date, item.batch_position),
+            candidate_image_id: createImageId(
+              resolvedTime.date,
+              item.batch_position
+            ),
             resolved_image_time: resolvedTime.iso,
             request_hash: requestHash,
             display_order_key: createIngestionDisplayOrderKey(
@@ -362,7 +380,9 @@ export class IngestionSessionService {
     });
 
     const canonicalIds = results.flatMap((entry) =>
-      "result" in entry && entry.result.kind === "canonical" ? [entry.result.session.image_id] : []
+      "result" in entry && entry.result.kind === "canonical"
+        ? [entry.result.session.image_id]
+        : []
     );
     let committed = new Map<string, CommittedIngestionResult>();
     let lookupError: unknown = null;
@@ -430,8 +450,16 @@ export class IngestionSessionService {
           if (!options.cancelIfMissing)
             await this.#dependencies.assertStorageWriteTarget(storageSlug);
           const explicitTime = providedImageTime(item.image_time, item.batch_time);
-          const resolvedTime = normalizedImageTime(item.image_time, item.batch_time, new Date(now));
-          const sessionId = createIngestionSessionId(owner, "import", item.idempotency_key);
+          const resolvedTime = normalizedImageTime(
+            item.image_time,
+            item.batch_time,
+            new Date(now)
+          );
+          const sessionId = createIngestionSessionId(
+            owner,
+            "import",
+            item.idempotency_key
+          );
           const metadata = canonicalImportMetadata(
             runtime,
             item.source_type,
@@ -450,7 +478,10 @@ export class IngestionSessionService {
             expected_size: null,
             max_long_edge: null
           });
-          const imageId = createImageId(resolvedTime.date, item.batch_position);
+          const imageId = createImageId(
+            resolvedTime.date,
+            item.batch_position
+          );
           const template = withSessionSemanticHash({
             owner,
             queue: "import",
@@ -483,7 +514,11 @@ export class IngestionSessionService {
             result: (
               await this.repository.acceptImportSession(
                 template,
-                createIngestionDisplayOrderKey(item.batch_key, item.batch_position, sessionId),
+                createIngestionDisplayOrderKey(
+                  item.batch_key,
+                  item.batch_position,
+                  sessionId
+                ),
                 now,
                 options.cancelIfMissing
               )

@@ -1,5 +1,8 @@
 import { pool } from "../../core/database/pools.ts";
-import type { StorageBackendAdminDto, StorageBackendOptionDto } from "@imageshow/shared/browser";
+import type {
+  StorageBackendAdminDto,
+  StorageBackendOptionDto
+} from "@imageshow/shared/browser";
 import { listStorageBackends } from "./registry.ts";
 import { listUnresolvedMoveCleanupJobCounts } from "../cleanup/repository.ts";
 import { resolveStorageBackendDeletionState } from "./deletion.ts";
@@ -26,7 +29,10 @@ export async function getStorageBackendsForAdmin(): Promise<StorageBackendAdminD
     listUnresolvedMoveCleanupJobCounts()
   ]);
   const imageCounts = new Map<string, number>(
-    imageCountRows.rows.map((row) => [String(row.storage_slug), Number(row.image_count ?? 0)])
+    imageCountRows.rows.map((row) => [
+      String(row.storage_slug),
+      Number(row.image_count ?? 0)
+    ])
   );
   const cleanupJobCounts = new Map(cleanupCountRows.map((row) => [row.storage_slug, row]));
   return backends.map((backend) => {

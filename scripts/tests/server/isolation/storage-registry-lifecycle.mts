@@ -25,8 +25,8 @@ await runIntegrationScenario(async (runtime) => {
   const objectAccess = await import("../../../../packages/server/src/storage/objects/access.ts");
   {
     const { createHttpApp } = await import("../../../../packages/server/src/http-app.ts");
-    const { createConfigPackage } =
-      await import("../../../../packages/server/src/config/package/service.ts");
+    const { createConfigBundle } =
+      await import("../../../../packages/server/src/config/bundle/service.ts");
     const originalDomain = runtime.runtimeConfigStore.getRuntimeConfig().site.domain;
     await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { domain: "main.example.test" } });
     const local = (await registry.resolveStorageAccess("local")).driver;
@@ -58,7 +58,7 @@ await runIntegrationScenario(async (runtime) => {
         publicUrls.directStorageObjectUrl(await registry.getStorageBackend("local"), "full", key),
         `https://images.example.test/pictures/full/${key}`
       );
-      const pkg = await createConfigPackage();
+      const pkg = await createConfigBundle();
       assert.ok(pkg.storage_backends.every((backend) => backend.slug !== "local"));
       await assert.rejects(
         backendUpdate.updateStorageBackend("local", {
@@ -359,12 +359,18 @@ await runIntegrationScenario(async (runtime) => {
     [registryBackend, JSON.stringify(registryConfig)]
   );
   registry.invalidateStorageBackendRegistry();
-  const registryExampleKey = storageObjectKey("00000000-0000-7000-8000-0000000000aa", "webp");
+  const registryExampleKey = storageObjectKey(
+    "00000000-0000-7000-8000-0000000000aa",
+    "webp"
+  );
   const projectedRegistryUrls = await publicUrls.publicImageUrl(
     { id: "00000000-0000-7000-8000-0000000000aa", ext: "webp" },
     registryBackend
   );
-  assert.equal(projectedRegistryUrls, "https://cdn.example.com/images/full/" + registryExampleKey);
+  assert.equal(
+    projectedRegistryUrls,
+    "https://cdn.example.com/images/full/" + registryExampleKey
+  );
   const { publicShowImageCards } =
     await import("../../../../packages/server/src/images/presenter.ts");
   const card = {
@@ -379,7 +385,11 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(cards[1]!.thumb_url, "/images/thumbs/" + registryExampleKey);
   const firstRegistryAccess = await registry.resolveStorageAccess(registryBackend);
   assert.equal(
-    publicUrls.directStorageObjectUrl(firstRegistryAccess.config, "full", registryExampleKey),
+    publicUrls.directStorageObjectUrl(
+      firstRegistryAccess.config,
+      "full",
+      registryExampleKey
+    ),
     "https://cdn.example.com/images/full/" + registryExampleKey
   );
 
@@ -422,7 +432,9 @@ await runIntegrationScenario(async (runtime) => {
   let delayRegistryLoad = true;
   const restoreRegistryQuery = interceptSqlQueries(database.pool, (text, _values, runQuery) => {
     const query = runQuery();
-    if (delayRegistryLoad && typeof text === "string" && text.includes("FROM storage_backend")) {
+    if (delayRegistryLoad
+      && typeof text === "string"
+      && text.includes("FROM storage_backend")) {
       delayRegistryLoad = false;
       return query.then(async (result) => {
         registryLoadStarted();
@@ -446,7 +458,10 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(currentRegistryAccess.config.type, "s3");
     assert.ok("s3" in currentRegistryAccess.config);
     assert.equal(currentRegistryAccess.config.s3.region, "ap-southeast-3");
-    assert.notEqual(currentRegistryAccess.driver, replacementRegistryAccess.driver);
+    assert.notEqual(
+      currentRegistryAccess.driver,
+      replacementRegistryAccess.driver
+    );
   } finally {
     releaseRegistryLoad();
     restoreRegistryQuery();
@@ -470,7 +485,11 @@ await runIntegrationScenario(async (runtime) => {
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size)
        VALUES ($1, 'integration-admin', $2, 'pc', 'dark', NULL, 'webp', $3, 1)`,
-    [inaccessibleAliasImage, inaccessibleAlias, "0".repeat(32)]
+    [
+        inaccessibleAliasImage,
+        inaccessibleAlias,
+        "0".repeat(32)
+      ]
   );
   registry.invalidateStorageBackendRegistry();
   const listingAliasAccess = await registry.resolveStorageAccess(registryBackend);
@@ -535,7 +554,10 @@ await runIntegrationScenario(async (runtime) => {
     delayedReadKey,
     delayedReadBackend
   );
-  await database.pool.query("DELETE FROM storage_backend WHERE slug=$1", [delayedReadBackend]);
+  await database.pool.query(
+    "DELETE FROM storage_backend WHERE slug=$1",
+    [delayedReadBackend]
+  );
   registry.invalidateStorageBackendRegistry();
   await assert.rejects(
     () => delayedReadable.open(),
@@ -553,10 +575,13 @@ await runIntegrationScenario(async (runtime) => {
   const selfTest = await import("../../../../packages/server/src/storage/backends/self-test.ts");
   const readModel = await import("../../../../packages/server/src/storage/backends/read-model.ts");
   const readConfig = async (slug = "capability") =>
-    (await database.pool.query("SELECT config FROM storage_backend WHERE slug=$1", [slug])).rows[0]
+    (await database.pool.query(
+      "SELECT config FROM storage_backend WHERE slug=$1", [slug]
+    )).rows[0]
       ?.config;
   const capDto = async () =>
-    (await readModel.getStorageBackendsForAdmin()).find((backend) => backend.slug === "capability");
+    (await readModel.getStorageBackendsForAdmin())
+      .find((backend) => backend.slug === "capability");
   try {
     await mutations.createStorageBackend({
       slug: "capability",

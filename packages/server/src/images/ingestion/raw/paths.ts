@@ -9,7 +9,11 @@ const rawNamePattern = /^([0-9a-f-]{36})\.raw$/iu;
 const partNamePattern = /^([0-9a-f-]{36})\.([0-9a-f-]{36})\.part$/iu;
 const preparedNamePattern = /^([0-9a-f-]{36})\.([0-9a-f-]{36})\.(image|thumb)\.webp(\.part)?$/iu;
 
-function assertPathSegment(value: string, pattern: RegExp, lowercase = true) {
+function assertPathSegment(
+  value: string,
+  pattern: RegExp,
+  lowercase = true
+) {
   if (!pattern.test(value)) {
     throw new ApiError(400, "unsafe_path", "Unsafe temporary ingestion identity");
   }
@@ -57,8 +61,14 @@ function rawDirectory(pair: IngestionSessionPair) {
   return path;
 }
 
-export function ingestionRawPath(pair: IngestionSessionPair, rawGeneration: string) {
-  return join(rawDirectory(pair), `${assertPathSegment(rawGeneration, uuidPattern)}.raw`);
+export function ingestionRawPath(
+  pair: IngestionSessionPair,
+  rawGeneration: string
+) {
+  return join(
+    rawDirectory(pair),
+    `${assertPathSegment(rawGeneration, uuidPattern)}.raw`
+  );
 }
 
 export function ingestionRawPartPath(

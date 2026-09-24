@@ -6,7 +6,10 @@ import { ApiError } from "../../../core/api-error.ts";
 import { safeFetchExternalImage } from "../../../core/external-image-fetch.ts";
 import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
 import { nodeReadableFromWeb } from "../../../storage/objects/stream-buffer.ts";
-import { calculateDownloadProgress, downloadProgressLength } from "./download-progress.ts";
+import {
+  calculateDownloadProgress,
+  downloadProgressLength
+} from "./download-progress.ts";
 import { publishIngestionRawPart } from "../raw/files.ts";
 
 async function fetchImportResponse(url: string, limitBytes: number, externalSignal?: AbortSignal) {

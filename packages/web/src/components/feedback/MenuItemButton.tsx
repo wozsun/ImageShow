@@ -16,7 +16,11 @@ import {
  * capture keeps the moving finger over the item.
  */
 export const MenuItemButton = forwardRef<HTMLButtonElement, DirectActivationButtonProps>(
-  function MenuItemButton({ className = "", onActivate, ...buttonProps }, ref) {
+  function MenuItemButton({
+    className = "",
+    onActivate,
+    ...buttonProps
+  }, ref) {
     return (
       <DirectActivationButton
         {...buttonProps}

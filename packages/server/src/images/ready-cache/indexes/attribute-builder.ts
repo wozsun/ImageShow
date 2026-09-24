@@ -15,7 +15,10 @@ import {
   readyImageAttributeIndexTemporaryKey,
   type ReadyImageAttributeIndexSpec
 } from "../keys.ts";
-import { readyImageMember, readyImageSortScore } from "../model.ts";
+import {
+  readyImageMember,
+  readyImageSortScore
+} from "../model.ts";
 import { chunkSortedSetEntries } from "../sync/redis-batch.ts";
 import { getReadyImageRevision } from "../revision.ts";
 import {
@@ -111,7 +114,10 @@ async function writeAttributeIndexBatch(
     const members = chunk.flat();
     const transaction = redis.multi();
     transaction.zadd(key, ...members);
-    transaction.expire(key, READY_IMAGE_DERIVED_CACHE_POLICY.temporaryTtlSeconds);
+    transaction.expire(
+      key,
+      READY_IMAGE_DERIVED_CACHE_POLICY.temporaryTtlSeconds
+    );
     await execRedisPipeline(transaction);
     signal?.throwIfAborted();
   }
@@ -154,7 +160,8 @@ async function buildAttributeIndexSource(
               id: last.id,
               imageTime: microsecondsTimestamp(BigInt(readyImageSortScore(last.sort_score)))!
             };
-      if (nextCursor.id === cursor?.id && nextCursor.imageTime === cursor?.imageTime) {
+      if (nextCursor.id === cursor?.id
+        && nextCursor.imageTime === cursor?.imageTime) {
         throw new Error("Ready-image attribute index keyset cursor did not advance");
       }
       cursor = nextCursor;
@@ -204,7 +211,9 @@ export async function buildReadyImageAttributeIndex(
   const temporaryKey = readyImageAttributeIndexTemporaryKey(randomUuidV7().replaceAll("-", ""));
   try {
     const build = async (client: DatabaseReader, databaseSignal: AbortSignal) => {
-      const buildSignal = signal ? AbortSignal.any([signal, databaseSignal]) : databaseSignal;
+      const buildSignal = signal
+        ? AbortSignal.any([signal, databaseSignal])
+        : databaseSignal;
       const count = await buildAttributeIndexSource(
         client,
         spec,

@@ -39,7 +39,9 @@ export async function coalesce<T>(
 
   shared.waiters += 1;
   try {
-    return (await (signal ? raceWithAbortSignal(signal, shared.promise) : shared.promise)) as T;
+    return (await (signal
+      ? raceWithAbortSignal(signal, shared.promise)
+      : shared.promise)) as T;
   } finally {
     shared.waiters -= 1;
     if (shared.waiters === 0 && !shared.settled) {

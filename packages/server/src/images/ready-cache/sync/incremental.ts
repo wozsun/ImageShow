@@ -2,14 +2,26 @@ import {
   completeReadyImageCacheMutation,
   getReadyImageCacheCoordinatorStatus
 } from "../coordinator.ts";
-import { getRedisConnectionState, redis } from "../../../core/redis/client.ts";
+import {
+  getRedisConnectionState,
+  redis
+} from "../../../core/redis/client.ts";
 import {
   applyReadyImageCacheDelta,
   readPreviousReadyImageCacheItems
 } from "./incremental-projection.ts";
-import { readReadyImageCacheMeta, writeReadyImageCacheMeta } from "../meta.ts";
-import { READY_IMAGE_INCREMENTAL_LIMIT, type ReadyImageCacheMeta } from "../model.ts";
-import { compareReadyImageRevisions, getReadyImageRevision } from "../revision.ts";
+import {
+  readReadyImageCacheMeta,
+  writeReadyImageCacheMeta
+} from "../meta.ts";
+import {
+  READY_IMAGE_INCREMENTAL_LIMIT,
+  type ReadyImageCacheMeta
+} from "../model.ts";
+import {
+  compareReadyImageRevisions,
+  getReadyImageRevision
+} from "../revision.ts";
 import { readReadyImageSourceItems } from "../source.ts";
 import {
   publishReadyImageStatsIntegrity,
@@ -61,7 +73,10 @@ export async function synchronizeReadyImageCacheMutation(
     !persistedMeta ||
     persistedMeta.state !== "ready" ||
     persistedMeta.appliedRevision !== status.meta.appliedRevision ||
-    compareReadyImageRevisions(persistedMeta.appliedRevision, committedRevision) >= 0
+    compareReadyImageRevisions(
+      persistedMeta.appliedRevision,
+      committedRevision
+    ) >= 0
   ) {
     throw new Error("Ready-image cache revision cannot accept the mutation");
   }
@@ -85,13 +100,23 @@ export async function synchronizeReadyImageCacheMutation(
     if (!Number.isSafeInteger(nextItemCount) || nextItemCount < 0) {
       throw new Error("Ready-image incremental item count is invalid");
     }
-    await applyReadyImageCacheDelta(previousItems, currentItems, nextItemCount, expectedStats);
+    await applyReadyImageCacheDelta(
+      previousItems,
+      currentItems,
+      nextItemCount,
+      expectedStats
+    );
     assertRedisConnectionEpoch(redisConnectionEpoch);
   }
 
   await publishReadyImageStatsIntegrity(expectedStats, redis);
   assertRedisConnectionEpoch(redisConnectionEpoch);
-  const meta = nextMeta(persistedMeta, committedRevision, nextItemCount, new Date().toISOString());
+  const meta = nextMeta(
+    persistedMeta,
+    committedRevision,
+    nextItemCount,
+    new Date().toISOString()
+  );
   await writeReadyImageCacheMeta(meta, redis);
   assertRedisConnectionEpoch(redisConnectionEpoch);
   if ((await getReadyImageRevision()).revision !== committedRevision) {

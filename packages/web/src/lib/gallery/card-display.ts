@@ -1,11 +1,17 @@
-import type { GalleryFacetsDto, GalleryImageCardDto } from "@imageshow/shared/browser";
+import type {
+  GalleryFacetsDto,
+  GalleryImageCardDto
+} from "@imageshow/shared/browser";
 import { displayNameOrSlug } from "../ui/formatters.js";
 
 type GalleryDisplayFacets = Pick<GalleryFacetsDto, "themes" | "tags">;
 type GalleryCardTaxonomy = Pick<GalleryImageCardDto, "theme" | "tags">;
 
 function displayNameMap(entries: GalleryDisplayFacets["themes"] | GalleryDisplayFacets["tags"]) {
-  return new Map(entries.map((entry) => [entry.slug, displayNameOrSlug(entry)]));
+  return new Map(entries.map((entry) => [
+    entry.slug,
+    displayNameOrSlug(entry)
+  ]));
 }
 
 /**
@@ -22,7 +28,10 @@ export function createGalleryTaxonomyDisplayFormatter(facets: GalleryDisplayFace
     return {
       themeLabel,
       tagLabels,
-      subtitle: [theme === null ? "" : themeLabel, tagLabels.join("/")].filter(Boolean).join(" · ")
+      subtitle: [
+        theme === null ? "" : themeLabel,
+        tagLabels.join("/")
+      ].filter(Boolean).join(" · ")
     };
   };
 }

@@ -12,7 +12,10 @@ import { PublicStarfield } from "../../../components/layout/PublicStarfield.js";
 import type { ShowImage } from "../show-layout.js";
 import type { ShowCandidateUsage } from "../show-data-pool.js";
 import { ShowPixiRuntime } from "./show-pixi-runtime.js";
-import type { ShowPixiSceneKind, ShowPixiVisibleItem } from "./show-pixi-types.js";
+import type {
+  ShowPixiSceneKind,
+  ShowPixiVisibleItem
+} from "./show-pixi-types.js";
 
 function imageLabel(image: ShowImage) {
   const title = image.title?.trim();
@@ -235,7 +238,11 @@ export function ShowPixiStage({
         </div>
       )}
       {children}
-      {diagnosticsEnabled && <output ref={statsRef} hidden data-show-pixi-debug-stats="" />}
+      {diagnosticsEnabled && <output
+        ref={statsRef}
+        hidden
+        data-show-pixi-debug-stats=""
+      />}
     </div>
   );
 }

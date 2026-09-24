@@ -72,8 +72,12 @@ export function fixedPositionFromViewport(
   // into the CSS offsets consumed by the same fixed positioning context.
   return {
     ...style,
-    left: typeof style.left === "number" ? style.left - fixedOrigin.left : style.left,
-    top: typeof style.top === "number" ? style.top - fixedOrigin.top : style.top
+    left: typeof style.left === "number"
+      ? style.left - fixedOrigin.left
+      : style.left,
+    top: typeof style.top === "number"
+      ? style.top - fixedOrigin.top
+      : style.top
   };
 }
 
@@ -94,7 +98,9 @@ export function localizeAnchoredPosition(
         ? style.left - origin.left + (origin.scrollLeft ?? 0)
         : style.left,
     top:
-      typeof style.top === "number" ? style.top - origin.top + (origin.scrollTop ?? 0) : style.top
+      typeof style.top === "number"
+        ? style.top - origin.top + (origin.scrollTop ?? 0)
+        : style.top
   };
 }
 

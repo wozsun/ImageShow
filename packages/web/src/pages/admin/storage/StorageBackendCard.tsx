@@ -6,7 +6,10 @@ import {
   type AsyncActionStatus
 } from "../../../hooks/useAsyncActionStatus.js";
 import type { StorageBackendAdmin } from "../../../lib/types.js";
-import { storageBackendLabel, storageTypeLabel } from "../../../lib/ui/select-options.js";
+import {
+  storageBackendLabel,
+  storageTypeLabel
+} from "../../../lib/ui/select-options.js";
 
 export function StorageBackendCard({
   backend,
@@ -39,7 +42,10 @@ export function StorageBackendCard({
   const showEnabledToggle = !isLocal || hasNonLocalBackend;
   const enabledStatus = useAsyncActionStatus({ successDurationMs: null });
   const title = backend.display_name || storageBackendLabel(backend.slug);
-  const cardBusy = Boolean(busy) || sortBusy || defaultActionPending || enabledStatus.pending;
+  const cardBusy = Boolean(busy)
+    || sortBusy
+    || defaultActionPending
+    || enabledStatus.pending;
   const defaultPresentation = {
     idle: {
       icon: backend.is_default ? "star-fill" : "star-line",
@@ -90,7 +96,9 @@ export function StorageBackendCard({
           {backend.ingestion_session_count > 0
             ? ` · ${backend.ingestion_session_count} 个未清理内容接入会话`
             : ""}
-          {backend.cleanup_job_count > 0 ? ` · 旧对象删除 ${backend.cleanup_job_count} 项` : ""}
+          {backend.cleanup_job_count > 0
+            ? ` · 旧对象删除 ${backend.cleanup_job_count} 项`
+            : ""}
           {backend.failed_cleanup_job_count > 0
             ? `（${backend.failed_cleanup_job_count} 项失败）`
             : ""}

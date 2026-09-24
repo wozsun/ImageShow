@@ -18,14 +18,18 @@ function nonNegativeCount(raw: unknown) {
   return Number.isSafeInteger(count) ? count : null;
 }
 
-function parseDerivedIndexMeta(raw: Record<string, string>, kind: ReadyImageDerivedIndexKind) {
+function parseDerivedIndexMeta(
+  raw: Record<string, string>,
+  kind: ReadyImageDerivedIndexKind
+) {
   const expectedFields = kind === "attribute" ? 5 : 4;
   const lastAccessed = kind === "attribute" ? raw.last_accessed : null;
   if (
     Object.keys(raw).length !== expectedFields ||
     !/^\d+$/u.test(raw.applied_revision ?? "") ||
     !Number.isFinite(Date.parse(raw.built_at ?? "")) ||
-    (kind === "attribute" && !Number.isFinite(Date.parse(lastAccessed ?? ""))) ||
+    (kind === "attribute"
+      && !Number.isFinite(Date.parse(lastAccessed ?? ""))) ||
     !/^[0-9a-f]{32}$/u.test(raw.instance_token ?? "")
   ) {
     return null;
@@ -78,7 +82,9 @@ export async function readReadyImageDerivedIndexSnapshot(options: {
     meta.count > READY_IMAGE_DERIVED_CACHE_POLICY.maxResultMembers ||
     !Number.isSafeInteger(metaTtl) ||
     metaTtl <= 0 ||
-    (meta.count > 0 && (!Number.isSafeInteger(indexTtl) || indexTtl <= 0)) ||
+    (meta.count > 0 && (
+      !Number.isSafeInteger(indexTtl) || indexTtl <= 0
+    )) ||
     (options.expected &&
       (meta.count !== options.expected.count ||
         meta.instanceToken !== options.expected.instanceToken))

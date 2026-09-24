@@ -18,12 +18,19 @@ import {
   cacheableContentResponse,
   createApiSuccessSnapshot
 } from "../core/http/responses.ts";
-import { galleryStatsQuery, imageListQueryValues, listQuery } from "./validation/images.ts";
+import {
+  galleryStatsQuery,
+  imageListQueryValues,
+  listQuery
+} from "./validation/images.ts";
 import { parse } from "./validation/parse.ts";
 import { uuidInput } from "./validation/primitives.ts";
 import { getPublicGalleryFacets } from "../images/read-models/facets.ts";
 import { getPublicGalleryStats } from "../images/read-models/gallery-stats.ts";
-import { getPublicImage, listPublicImages } from "../images/read-models/public-images.ts";
+import {
+  getPublicImage,
+  listPublicImages
+} from "../images/read-models/public-images.ts";
 import {
   servePublicStoredObject,
   servePublicStoredThumbnail
@@ -50,7 +57,10 @@ function storedResponseRequest(context: Context): StoredResponseRequest {
 
 export function registerPublicRoutes(app: Hono) {
   app.get("/api/images", blockCrossSiteFetch, async (c) => {
-    const q = parse(listQuery, imageListQueryValues(new URL(c.req.url).searchParams));
+    const q = parse(
+      listQuery,
+      imageListQueryValues(new URL(c.req.url).searchParams)
+    );
     const startedAt = Date.now();
     const response = await listPublicImages(q, c.req.raw.signal, startedAt);
     let cacheControl = publicImageCacheControl;
@@ -101,7 +111,10 @@ export function registerPublicRoutes(app: Hono) {
     );
     return cacheableApiSuccess(
       c,
-      await getPublicGalleryStats(parse(galleryStatsQuery, rawQuery), c.req.raw.signal),
+      await getPublicGalleryStats(
+        parse(galleryStatsQuery, rawQuery),
+        c.req.raw.signal
+      ),
       publicMetadataCacheControl
     );
   });
@@ -117,9 +130,15 @@ export function registerPublicRoutes(app: Hono) {
   });
 
   app.get("/images/full/*", requireImageReferer, async (c) =>
-    servePublicStoredObject(c.req.path.slice("/images/full/".length), storedResponseRequest(c))
+    servePublicStoredObject(
+      c.req.path.slice("/images/full/".length),
+      storedResponseRequest(c)
+    )
   );
   app.get("/images/thumbs/*", requireImageReferer, async (c) =>
-    servePublicStoredThumbnail(c.req.path.slice("/images/thumbs/".length), storedResponseRequest(c))
+    servePublicStoredThumbnail(
+      c.req.path.slice("/images/thumbs/".length),
+      storedResponseRequest(c)
+    )
   );
 }

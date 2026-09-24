@@ -46,10 +46,14 @@ await runIntegrationScenario(async (runtime) => {
     await database.pool.query(
       `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5)
        VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2)`,
-      [id, String(index + 1).repeat(32)]
+      [
+        id,
+        String(index + 1).repeat(32)
+      ]
     );
   }
-  const readyCacheStatus = await readyCacheCoordinator.initializeReadyImageCacheCoordinator();
+  const readyCacheStatus = await readyCacheCoordinator
+    .initializeReadyImageCacheCoordinator();
   assert.equal(readyCacheStatus.readable, true);
   const initialReadyMeta = readyCacheStatus.meta;
   assert.ok(initialReadyMeta);
@@ -157,7 +161,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(incrementalStatus.item_count, 3);
   assert.equal(incrementalStatus.processed, null);
   assert.equal(incrementalStatus.total, null);
-  assert.equal(incrementalStatus.last_updated_at, incrementalMeta.lastUpdatedAt);
+  assert.equal(
+    incrementalStatus.last_updated_at,
+    incrementalMeta.lastUpdatedAt
+  );
   assert.equal(
     incrementalStatus.full_rebuild_duration_ms,
     Math.max(
@@ -199,7 +206,13 @@ await runIntegrationScenario(async (runtime) => {
   const directCoreMemory = (
     await Promise.all(
       [...directCoreKeys].map((key) =>
-        redisClient.redis.call("MEMORY", "USAGE", key, "SAMPLES", "0")
+        redisClient.redis.call(
+          "MEMORY",
+          "USAGE",
+          key,
+          "SAMPLES",
+          "0"
+        )
       )
     )
   ).reduce<number>((sum, value) => sum + Number(value ?? 0), 0);
@@ -388,7 +401,10 @@ await runIntegrationScenario(async (runtime) => {
   };
   await redisClient.redis.ping();
   assert.deepEqual(observedRedisCommands, ["ping"]);
-  assert.equal(readyCacheCoordinator.getReadyImageCacheCoordinatorStatus().readable, true);
+  assert.equal(
+    readyCacheCoordinator.getReadyImageCacheCoordinatorStatus().readable,
+    true
+  );
   let committedThroughReadyCacheFailure;
   try {
     committedThroughReadyCacheFailure = await imageUpdate.updateImages([
@@ -408,7 +424,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(readyCacheFailureInjected, true);
   assert.equal(await readReadyRevision(), revisionBeforeReadyCacheFailure + 1n);
   assert.equal(
-    (await database.pool.query("SELECT source FROM metadata WHERE id=$1", [imageUpdateIds.first]))
+    (await database.pool.query(
+      "SELECT source FROM metadata WHERE id=$1",
+      [imageUpdateIds.first]
+    ))
       .rows[0]?.source,
     "https://example.com/ready-cache-failure-committed"
   );
@@ -451,7 +470,10 @@ await runIntegrationScenario(async (runtime) => {
     failed: 0,
     results: [{ id: imageUpdateIds.first, status: "updated" }]
   });
-  assert.equal(await readReadyRevision(), revisionBeforeVocabularyCacheFailure + 1n);
+  assert.equal(
+    await readReadyRevision(),
+    revisionBeforeVocabularyCacheFailure + 1n
+  );
   assert.deepEqual(await readAtomicImage(imageUpdateIds.first), {
     title: "atomic",
     tags: ["cache-repair-tag"]
@@ -622,7 +644,11 @@ await runIntegrationScenario(async (runtime) => {
   );
 
   await database.pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [
-    [imageUpdateIds.first, imageUpdateIds.third, imageUpdateIds.fourth]
+    [
+      imageUpdateIds.first,
+      imageUpdateIds.third,
+      imageUpdateIds.fourth
+    ]
   ]);
   await database.pool.query("DELETE FROM tag WHERE slug=ANY($1::text[])", [
     [

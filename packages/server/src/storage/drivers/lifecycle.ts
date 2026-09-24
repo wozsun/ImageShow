@@ -13,7 +13,10 @@ import type {
   StorageSelfTest,
   StorageStreamWriteOptions
 } from "./driver.ts";
-import type { StorageKeyListing, StorageKeyListOptions } from "../objects/key-listing.ts";
+import type {
+  StorageKeyListing,
+  StorageKeyListOptions
+} from "../objects/key-listing.ts";
 
 function retiredDriverError() {
   return new ApiError(
@@ -90,7 +93,10 @@ class ManagedStorageDriver implements StorageDriver {
   ) {
     const release = this.retain();
     try {
-      return this.retainBody(await this.driver.openRead(prefix, key, range, options), release);
+      return this.retainBody(
+        await this.driver.openRead(prefix, key, range, options),
+        release
+      );
     } catch (error) {
       release();
       throw error;
@@ -126,7 +132,10 @@ class ManagedStorageDriver implements StorageDriver {
     );
   }
 
-  removeObjects(objects: readonly StorageObjectReference[], options?: StorageRemoveOptions) {
+  removeObjects(
+    objects: readonly StorageObjectReference[],
+    options?: StorageRemoveOptions
+  ) {
     return this.usingReference(() => this.driver.removeObjects(objects, options));
   }
 
@@ -145,11 +154,19 @@ class ManagedStorageDriver implements StorageDriver {
     options: StorageServerCopyOptions
   ) {
     return this.usingReference(() =>
-      this.driver.copyFromServerSource(source, toPrefix, toKey, options)
+      this.driver.copyFromServerSource(
+        source,
+        toPrefix,
+        toKey,
+        options
+      )
     );
   }
 
-  async *listKeys(prefix: StoragePrefix, options?: StorageKeyListOptions): StorageKeyListing {
+  async *listKeys(
+    prefix: StoragePrefix,
+    options?: StorageKeyListOptions
+  ): StorageKeyListing {
     const release = this.retain();
     try {
       return yield* this.driver.listKeys(prefix, options);

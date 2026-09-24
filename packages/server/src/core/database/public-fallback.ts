@@ -19,13 +19,20 @@ type PublicDatabaseReadScopeDependencies = {
 };
 
 export function publicPgFallbackWorkLimitExceeded(message: string) {
-  return createPublicDatabaseFallbackError(503, "public_pg_fallback_work_limit", message);
+  return createPublicDatabaseFallbackError(
+    503, "public_pg_fallback_work_limit", message
+  );
 }
 
 /** @public Dependency-injection seam used by local resource-release tests. */
 export function createPublicDatabaseReadScope(dependencies: PublicDatabaseReadScopeDependencies) {
   const fallbackError = (code: string, message: string) =>
-    createPublicDatabaseFallbackError(503, code, message, dependencies.retryAfterSeconds);
+    createPublicDatabaseFallbackError(
+      503,
+      code,
+      message,
+      dependencies.retryAfterSeconds
+    );
 
   return async <T>(
     requestSignal: AbortSignal,
@@ -143,7 +150,10 @@ export function createPublicDatabaseReadScope(dependencies: PublicDatabaseReadSc
       }) as DatabaseReader["query"]
     };
 
-    const operation = Promise.resolve().then(() => work({ reader }, operationAbort.signal));
+    const operation = Promise.resolve().then(() => work(
+      { reader },
+      operationAbort.signal
+    ));
     try {
       const value = await raceWithAbortSignal(operationAbort.signal, operation);
       operationAbort.signal.throwIfAborted();

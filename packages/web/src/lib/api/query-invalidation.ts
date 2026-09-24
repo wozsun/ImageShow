@@ -10,7 +10,10 @@ import { queryKeys } from "./query-keys.js";
 import { advanceImageDataRevision, markPublicDetailValidation } from "./image-data-revision.js";
 import { adminImageListValidationCovers } from "./admin-image-list-validation.js";
 
-function invalidate(client: QueryClient, queryKeysToInvalidate: readonly (readonly unknown[])[]) {
+function invalidate(
+  client: QueryClient,
+  queryKeysToInvalidate: readonly (readonly unknown[])[]
+) {
   if (queryKeysToInvalidate.includes(queryKeys.publicImages)) {
     advanceImageDataRevision(client);
   }
@@ -125,7 +128,11 @@ export function invalidateImageDataAfterMetadataSave(
   const changesAuthor = updatesField(updates, "author");
   const changesTags = updatesField(updates, "tags");
   const changesMembership =
-    changesDevice || changesBrightness || changesTheme || changesAuthor || changesTags;
+    changesDevice
+      || changesBrightness
+      || changesTheme
+      || changesAuthor
+      || changesTags;
   const changesFacetVocabulary = changesTheme || changesAuthor || changesTags;
   const authoritativeIds = new Set((authoritativeItems ?? []).map((item) => item.id));
   const exactInvalidations = updates.flatMap((update) => {
@@ -213,7 +220,10 @@ export function invalidateImageDataAfterIngestion(
     const notCovered =
       completedAt === undefined
         ? undefined
-        : (query: Query) => !adminImageListValidationCovers(query, completedAt);
+        : (query: Query) => !adminImageListValidationCovers(
+            query,
+            completedAt
+          );
     await client.invalidateQueries(
       {
         queryKey: queryKeys.adminImages,
@@ -229,7 +239,9 @@ export function invalidateImageDataAfterIngestion(
       {
         queryKey: queryKeys.adminImages,
         predicate:
-          completedAt === undefined ? (query) => adminImagesInFlight.has(query) : notCovered
+          completedAt === undefined
+            ? (query) => adminImagesInFlight.has(query)
+            : notCovered
       },
       {
         // 若在途读取早于完成水位，顺序补一次尾随读取；若它已经覆盖该
@@ -253,7 +265,10 @@ export function invalidateImageDataAfterIngestion(
   ]);
 }
 
-export async function invalidateImageDataAfterTrash(client: QueryClient, imageIds: string[]) {
+export async function invalidateImageDataAfterTrash(
+  client: QueryClient,
+  imageIds: string[]
+) {
   if (imageIds.length) advanceImageDataRevision(client);
   // 当前公开详情在移入回收站后必然返回 404。先终止可能尚未完成的旧读取，但不改变
   // 它的 freshness；详情关闭后 gcTime: 0 会自然回收它。
@@ -272,7 +287,8 @@ export async function invalidateImageDataAfterTrash(client: QueryClient, imageId
   return invalidate(
     client,
     imageDataQueryKeys.filter(
-      (queryKey) => queryKey !== queryKeys.publicImages && queryKey !== queryKeys.publicImageDetail
+      (queryKey) => queryKey !== queryKeys.publicImages
+        && queryKey !== queryKeys.publicImageDetail
     )
   );
 }
@@ -289,7 +305,10 @@ export function invalidateStorageData(client: QueryClient) {
   ]);
 }
 
-export function invalidateRuntimeData(client: QueryClient, settings?: AdminSettingsResponseDto) {
+export function invalidateRuntimeData(
+  client: QueryClient,
+  settings?: AdminSettingsResponseDto
+) {
   if (settings) client.setQueryData(queryKeys.settings, settings);
   return invalidate(client, [
     ...(settings ? [] : [queryKeys.settings]),

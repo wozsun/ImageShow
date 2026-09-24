@@ -1,7 +1,10 @@
 import { storageObjectKey } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import type { ImageDraftDto, IngestionCommitItemInputDto } from "@imageshow/shared/browser";
+import type {
+  ImageDraftDto,
+  IngestionCommitItemInputDto
+} from "@imageshow/shared/browser";
 import type {
   IngestionPreparedManifest,
   IngestionSessionSnapshot
@@ -72,7 +75,8 @@ async function cleanupFixtureResources(fixture: ReadyIngestionFixture) {
     guardedObjects = jobs.rows.flatMap(({ payload }) =>
       Array.isArray(payload.objects)
         ? payload.objects.flatMap(({ key, prefix }) =>
-            typeof key === "string" && (prefix === "full" || prefix === "thumbs")
+            typeof key === "string"
+              && (prefix === "full" || prefix === "thumbs")
               ? [{ key, prefix }]
               : []
           )
@@ -157,7 +161,10 @@ export async function createReadyIngestionFixture(
   const owner = "integration-admin";
   const sessionId = identity.createIngestionSessionId(owner, "import", label);
   const resolvedTime = imageTime.parseImageTime("2026-09-07T00:00:00.000Z");
-  const imageId = imageTime.createImageId(resolvedTime.date, Math.floor(Math.random() * 0xfff));
+  const imageId = imageTime.createImageId(
+    resolvedTime.date,
+    Math.floor(Math.random() * 0xfff)
+  );
   const metadata: ImageDraftDto = {
     device: "auto",
     brightness: "auto",
@@ -337,7 +344,10 @@ export async function createReadyIngestionFixture(
     try {
       await cleanupFixtureResources(cleanupTarget);
     } catch (cleanupError) {
-      throw new AggregateError([error, cleanupError], "ingestion fixture setup and cleanup failed");
+      throw new AggregateError(
+        [error, cleanupError],
+        "ingestion fixture setup and cleanup failed"
+      );
     }
     throw error;
   }
@@ -350,7 +360,10 @@ export async function freezeFixtureCommit(fixture: ReadyIngestionFixture) {
     [fixture.commitRequest]
   );
   assert.equal(result?.status, "accepted");
-  const committing = await fixture.repository.readSession(fixture.owner, fixture.sessionId);
+  const committing = await fixture.repository.readSession(
+    fixture.owner,
+    fixture.sessionId
+  );
   assert.equal(committing?.status, "committing");
   assert.ok(committing && "commit" in committing && committing.commit);
   return committing;

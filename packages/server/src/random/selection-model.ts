@@ -1,4 +1,7 @@
-import { detectDeviceFromUserAgent, type Device } from "@imageshow/shared/browser";
+import {
+  detectDeviceFromUserAgent,
+  type Device
+} from "@imageshow/shared/browser";
 import type { ReadyImageCacheItem } from "../images/ready-cache/model.ts";
 import {
   isRandomBrightness,
@@ -15,7 +18,9 @@ export function resolveCandidateAxes(
   brightness: RandomBrightness | null,
   userAgent: string
 ) {
-  const detectedDevice = device === "auto" ? detectDeviceFromUserAgent(userAgent) : null;
+  const detectedDevice = device === "auto"
+    ? detectDeviceFromUserAgent(userAgent)
+    : null;
   let deviceCandidates: Device[];
   if (device === "pc" || device === "mb") {
     deviceCandidates = [device];
@@ -25,7 +30,10 @@ export function resolveCandidateAxes(
     deviceCandidates = [...randomDevices];
   }
   const brightnessCandidates =
-    brightness && isRandomBrightness(brightness) ? [brightness] : [...randomBrightnesses];
+    brightness
+      && isRandomBrightness(brightness)
+      ? [brightness]
+      : [...randomBrightnesses];
   return {
     deviceCandidates,
     brightnessCandidates,

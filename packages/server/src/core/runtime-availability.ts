@@ -83,7 +83,9 @@ function publishRedisState(next: RedisOperationalState) {
 }
 
 function openBusinessGateIfReady() {
-  if (businessGateOpened || !initializationComplete || !redisState.available) return false;
+  if (businessGateOpened
+    || !initializationComplete
+    || !redisState.available) return false;
   businessGateOpened = true;
   for (const listener of businessGateListeners) listener();
   businessGateListeners.clear();
@@ -158,7 +160,8 @@ export function probeRedisOperationalState() {
     try {
       const validation = await validateRedisRequiredFeaturesAtCurrentEpoch();
       const preparedConnection = getRedisConnectionState();
-      if (!preparedConnection.ready || preparedConnection.epoch !== validation.connectionEpoch) {
+      if (!preparedConnection.ready
+        || preparedConnection.epoch !== validation.connectionEpoch) {
         throw new Error("Redis connection changed during operational validation");
       }
       if (redisFailureSequence !== failureSequence) {
@@ -227,7 +230,9 @@ export async function runRequiredRedisCommand<T>(work: () => Promise<T>) {
     return await work();
   } catch (error) {
     markRedisUnavailable("command_failed");
-    throw error instanceof RedisUnavailableError ? error : new RedisUnavailableError(error);
+    throw error instanceof RedisUnavailableError
+      ? error
+      : new RedisUnavailableError(error);
   }
 }
 

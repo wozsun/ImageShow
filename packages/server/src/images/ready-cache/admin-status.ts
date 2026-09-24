@@ -113,7 +113,10 @@ export async function readReadyImageCacheAdminStatus(
   authoritativeRevision: string | null,
   dependencies: ReadyImageCacheAdminStatusDependencies = defaultAdminStatusDependencies
 ): Promise<ReadyImageCacheAdminStatusDto> {
-  const snapshot = await readProjectionSnapshot(authoritativeRevision, dependencies);
+  const snapshot = await readProjectionSnapshot(
+    authoritativeRevision,
+    dependencies
+  );
   const { coordinator, meta } = snapshot;
   const recent = dependencies.recentErrors();
   return {
@@ -125,18 +128,28 @@ export async function readReadyImageCacheAdminStatus(
     authoritative_revision: authoritativeRevision,
     applied_revision: meta?.appliedRevision ?? null,
     item_count: meta?.itemCount ?? null,
-    processed: coordinator.rebuilding && meta?.state === "rebuilding" ? meta.processed : null,
-    total: coordinator.rebuilding && meta?.state === "rebuilding" ? meta.total : null,
+    processed: coordinator.rebuilding && meta?.state === "rebuilding"
+      ? meta.processed
+      : null,
+    total: coordinator.rebuilding && meta?.state === "rebuilding"
+      ? meta.total
+      : null,
     last_updated_at: meta?.lastUpdatedAt ?? null,
     full_rebuild_started_at: meta?.fullRebuildStartedAt ?? null,
     full_rebuild_completed_at: meta?.fullRebuildCompletedAt || null,
     full_rebuild_duration_ms: meta
-      ? rebuildDurationMs(meta.fullRebuildStartedAt, meta.fullRebuildCompletedAt)
+      ? rebuildDurationMs(
+          meta.fullRebuildStartedAt,
+          meta.fullRebuildCompletedAt
+        )
       : null,
     last_full_rebuild_core_memory_bytes: meta?.lastFullRebuildCoreMemoryBytes ?? null,
     last_full_rebuild_measured_at: meta?.lastFullRebuildMeasuredAt || null,
     recent_errors: {
-      core: recent.core ?? persistedCoreError(meta?.lastError ?? "", meta?.lastUpdatedAt ?? null),
+      core: recent.core ?? persistedCoreError(
+        meta?.lastError ?? "",
+        meta?.lastUpdatedAt ?? null
+      ),
       derived: recent.derived
     }
   };

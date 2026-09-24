@@ -4,7 +4,10 @@ import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
 import { SelectMenu } from "../../../components/form/SelectMenu.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
-import { useStorageOptions, type StorageBackendOption } from "../../../lib/api/storage-options.js";
+import {
+  useStorageOptions,
+  type StorageBackendOption
+} from "../../../lib/api/storage-options.js";
 
 const migrationPresentation = {
   idle: { icon: "arrow-left-right-line", label: "开始执行" },
@@ -18,12 +21,18 @@ function backendLabel(backend: StorageBackendOption) {
   return backend.enabled ? name : `${name}（已停用）`;
 }
 
-function preferredSource(backends: readonly StorageBackendOption[], initialSource: string) {
+function preferredSource(
+  backends: readonly StorageBackendOption[],
+  initialSource: string
+) {
   if (initialSource) return initialSource;
   return backends[0]?.slug ?? "";
 }
 
-function preferredTarget(backends: readonly StorageBackendOption[], source: string) {
+function preferredTarget(
+  backends: readonly StorageBackendOption[],
+  source: string
+) {
   return (
     backends.find((backend) => backend.enabled && backend.is_default && backend.slug !== source)
       ?.slug ??
@@ -63,7 +72,9 @@ export function StorageBackendMigrationDialog({
     setTarget((current) => {
       if (
         backends.some(
-          (backend) => backend.slug === current && backend.enabled && backend.slug !== source
+          (backend) => backend.slug === current
+            && backend.enabled
+            && backend.slug !== source
         )
       ) {
         return current;
@@ -88,7 +99,10 @@ export function StorageBackendMigrationDialog({
   const hasTarget = targetOptions.some((option) => option.value === target);
   const sourceUnavailable = Boolean(data && sourceLocked && !hasSource);
 
-  const submit = async (event: FormEvent<HTMLFormElement>, requestClose: () => void) => {
+  const submit = async (
+    event: FormEvent<HTMLFormElement>,
+    requestClose: () => void
+  ) => {
     event.preventDefault();
     const succeeded = await status.run(() => onRun(source, target));
     if (succeeded) requestClose();

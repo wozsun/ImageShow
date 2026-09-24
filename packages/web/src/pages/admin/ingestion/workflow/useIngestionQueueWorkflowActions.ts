@@ -96,17 +96,24 @@ export function useIngestionQueueWorkflowActions({
       if (action === "completed") return summary.completed > 0;
       return summary.unfinished - summary.committing - summary.resolving > 0;
     },
-    [queue.server.status, queue.server.summary]
+    [
+      queue.server.status,
+      queue.server.summary
+    ]
   );
 
   const captureLocalJobs = useCallback(
     (predicate: (job: IngestionJob) => boolean): CapturedLocalJob[] =>
-      queue.captureBrowserActionJobs(predicate).filter(ingestionJobCanLeaveQueue),
+      queue.captureBrowserActionJobs(predicate)
+        .filter(ingestionJobCanLeaveQueue),
     [queue.captureBrowserActionJobs]
   );
 
   const clearCapturedLocalJobs = useCallback(
-    async (captured: readonly CapturedLocalJob[], stillMatches: (job: IngestionJob) => boolean) => {
+    async (
+      captured: readonly CapturedLocalJob[],
+      stillMatches: (job: IngestionJob) => boolean
+    ) => {
       const removableIds = new Set<string>();
       const cancellationTargets: IngestionJob[] = [];
       const unresolved: UnresolvedLocalClear[] = [];
@@ -120,7 +127,8 @@ export function useIngestionQueueWorkflowActions({
           continue;
         }
         const targetNeedsOwner =
-          target.status === "cancelling" || ingestionJobCanBeCancelled(target);
+          target.status === "cancelling"
+            || ingestionJobCanBeCancelled(target);
         if (!current && targetNeedsOwner) {
           // placeholder 在冻结后可能已被 canonical 页面替换。把同一 attempt 的本地
           // 意图恢复给 owner，再由原幂等身份核对并取消已接管 pair。
@@ -142,7 +150,8 @@ export function useIngestionQueueWorkflowActions({
           unresolved.push({ id: target.id, attemptKey: target.attemptKey });
           continue;
         }
-        if (current.status === "cancelling" || ingestionJobCanBeCancelled(current)) {
+        if (current.status === "cancelling"
+          || ingestionJobCanBeCancelled(current)) {
           cancellationTargets.push(current);
         } else {
           removableIds.add(current.id);
@@ -176,7 +185,9 @@ export function useIngestionQueueWorkflowActions({
               ...(outcome.releasedRevision !== undefined
                 ? { releasedRevision: outcome.releasedRevision }
                 : {}),
-              ...(outcome.releasedSummary ? { releasedSummary: outcome.releasedSummary } : {})
+              ...(outcome.releasedSummary
+                ? { releasedSummary: outcome.releasedSummary }
+                : {})
             });
           } else if (current) {
             cancelledIds.add(target.id);
@@ -238,7 +249,8 @@ export function useIngestionQueueWorkflowActions({
           ? serverResults.get(serverIngestionPairKey(outcomePair))
           : undefined;
         const serverStatus = serverResult?.status;
-        if (outcomePair && (serverStatus === "changed" || serverStatus === "unchanged")) {
+        if (outcomePair
+          && (serverStatus === "changed" || serverStatus === "unchanged")) {
           releaseTargets.push({
             item,
             pair: outcomePair,
@@ -299,7 +311,10 @@ export function useIngestionQueueWorkflowActions({
   );
 
   const executeFrozenLocalClear = useCallback(
-    async (intent: FrozenLocalClearIntent, stillMatches: (job: IngestionJob) => boolean) => {
+    async (
+      intent: FrozenLocalClearIntent,
+      stillMatches: (job: IngestionJob) => boolean
+    ) => {
       let observedServerResult: IngestionQueueActionResultDto = {
         processed: 0,
         changed: 0,
@@ -324,7 +339,8 @@ export function useIngestionQueueWorkflowActions({
                       };
                       if (
                         batch.items.some(
-                          (item) => item.status === "changed" || item.status === "unchanged"
+                          (item) => item.status === "changed"
+                            || item.status === "unchanged"
                         )
                       ) {
                         hasSuccessfulCompletedCleanup = true;
@@ -350,7 +366,9 @@ export function useIngestionQueueWorkflowActions({
       );
       const reconciledLocal = reconcileLocalClear(
         localResult,
-        serverResult ?? (observedServerResult.items.length ? observedServerResult : null),
+        serverResult ?? (
+          observedServerResult.items.length ? observedServerResult : null
+        ),
         frozenServerAction ?? undefined,
         stillMatches
       );
@@ -360,7 +378,10 @@ export function useIngestionQueueWorkflowActions({
         settled:
           (!intent.serverAction.required || serverResult !== null) &&
           reconciledLocal.unresolved.length === 0,
-        retainedLocalJobs: retainUnresolvedLocalJobs(intent.localJobs, reconciledLocal),
+        retainedLocalJobs: retainUnresolvedLocalJobs(
+          intent.localJobs,
+          reconciledLocal
+        ),
         unresolvedLocal: reconciledLocal
       } as const;
     },
@@ -376,8 +397,11 @@ export function useIngestionQueueWorkflowActions({
   const runCleanupAction = useCallback(
     (action: IngestionCleanupActionId) => {
       const completedCleanupRevision =
-        action === "completed" ? (queue.server.revision ?? -1) : null;
-      if (completedCleanupRevision !== null && completedCleanupCovered(completedCleanupRevision))
+        action === "completed"
+          ? queue.server.revision ?? -1
+          : null;
+      if (completedCleanupRevision !== null
+        && completedCleanupCovered(completedCleanupRevision))
         return;
       const localPredicate = cleanupLocalPredicate(action);
       const localJobs = captureLocalJobs(localPredicate);
@@ -433,13 +457,18 @@ export function useIngestionQueueWorkflowActions({
         retryable: false
       };
       const releaseCompletedConnection =
-        action === "completed" && serverAction.required ? queue.actions.retainConnection() : null;
+        action === "completed"
+          && serverAction.required
+          ? queue.actions.retainConnection()
+          : null;
       if (completedCleanupRevision !== null) {
         runningCompletedCleanupRevisionsRef.current.add(completedCleanupRevision);
       }
       void executeFrozenLocalClear(intent, localPredicate)
         .then((result) => {
-          if (action === "completed" && (result.serverChanged > 0 || localJobs.length > 0))
+          if (action === "completed" && (
+            result.serverChanged > 0 || localJobs.length > 0
+          ))
             onDone();
         })
         .finally(() => {
@@ -504,7 +533,10 @@ export function useIngestionQueueWorkflowActions({
       unresolvedLocal: pending.unresolvedLocal,
       retryable: false
     };
-    void executeFrozenLocalClear(intent, cleanupLocalPredicate("completed"))
+    void executeFrozenLocalClear(
+      intent,
+      cleanupLocalPredicate("completed")
+    )
       .then((result) => {
         const index = deferredCompletedCleanupRef.current.findIndex(
           (item) => item.id === pending.id
@@ -568,7 +600,10 @@ export function useIngestionQueueWorkflowActions({
   ]);
 
   const armCleanupAction = useCallback(
-    (action: IngestionCleanupActionId, confirmationCount?: number) => {
+    (
+      action: IngestionCleanupActionId,
+      confirmationCount?: number
+    ) => {
       const retained = cleanupIntentRef.current;
       if (
         retained?.retryable &&
@@ -617,8 +652,12 @@ export function useIngestionQueueWorkflowActions({
   const confirmCleanupAction = useCallback(
     async (action: IngestionCleanupActionId) => {
       const frozen = cleanupIntentRef.current;
-      if (!frozen || frozen.queueType !== queue.queueType || frozen.action !== action) return false;
-      const executing = frozen.retryable ? frozen : { ...frozen, retryable: true };
+      if (!frozen
+        || frozen.queueType !== queue.queueType
+        || frozen.action !== action) return false;
+      const executing = frozen.retryable
+        ? frozen
+        : { ...frozen, retryable: true };
       if (cleanupIntentRef.current === frozen) {
         cleanupIntentRef.current = executing;
       }
@@ -626,7 +665,9 @@ export function useIngestionQueueWorkflowActions({
         executing,
         cleanupLocalPredicate(executing.action)
       );
-      if (action === "completed" && (result.serverChanged > 0 || executing.localJobs.length > 0))
+      if (action === "completed" && (
+        result.serverChanged > 0 || executing.localJobs.length > 0
+      ))
         onDone();
       if (!result.settled) {
         if (cleanupIntentRef.current === executing) {
@@ -643,7 +684,11 @@ export function useIngestionQueueWorkflowActions({
       if (cleanupIntentRef.current === executing) cleanupIntentRef.current = null;
       return true;
     },
-    [executeFrozenLocalClear, onDone, queue.queueType]
+    [
+      executeFrozenLocalClear,
+      onDone,
+      queue.queueType
+    ]
   );
 
   const armClearQueue = useCallback(() => {
@@ -664,7 +709,9 @@ export function useIngestionQueueWorkflowActions({
     }
     const serverAction = captureServerAction(
       "clear_queue",
-      queue.server.status !== "ready" || !queue.server.summary || queue.server.summary.total > 0
+      queue.server.status !== "ready"
+        || !queue.server.summary
+        || queue.server.summary.total > 0
     );
     if (serverAction.required && !serverAction.frozen) {
       queue.server.refresh();
@@ -691,8 +738,11 @@ export function useIngestionQueueWorkflowActions({
 
   const confirmClearQueue = useCallback(async () => {
     const frozen = clearQueueIntentRef.current;
-    if (!frozen || frozen.queueType !== queue.queueType) return false;
-    const executing = frozen.retryable ? frozen : { ...frozen, retryable: true };
+    if (!frozen
+      || frozen.queueType !== queue.queueType) return false;
+    const executing = frozen.retryable
+      ? frozen
+      : { ...frozen, retryable: true };
     if (clearQueueIntentRef.current === frozen) {
       clearQueueIntentRef.current = executing;
     }
@@ -711,7 +761,10 @@ export function useIngestionQueueWorkflowActions({
       clearQueueIntentRef.current = null;
     }
     return true;
-  }, [executeFrozenLocalClear, queue.queueType]);
+  }, [
+    executeFrozenLocalClear,
+    queue.queueType
+  ]);
 
   const { applyDefaultsToQueue, prepareAttributeClear, commitReadyJobs } =
     useIngestionQueueSubmitActions({
@@ -723,8 +776,16 @@ export function useIngestionQueueWorkflowActions({
     });
 
   const confirmationScope = useMemo(
-    () => [queue.queueType, queue.server.connectionGeneration, queue.server.actionScope].join("\0"),
-    [queue.queueType, queue.server.actionScope, queue.server.connectionGeneration]
+    () => [
+      queue.queueType,
+      queue.server.connectionGeneration,
+      queue.server.actionScope
+    ].join("\0"),
+    [
+      queue.queueType,
+      queue.server.actionScope,
+      queue.server.connectionGeneration
+    ]
   );
 
   const discardUnconfirmedIntents = useCallback(() => {

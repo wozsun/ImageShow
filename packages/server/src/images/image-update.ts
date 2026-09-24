@@ -1,4 +1,7 @@
-import type { ImageUpdateItemResultDto, ImageUpdateResponseDto } from "@imageshow/shared/browser";
+import type {
+  ImageUpdateItemResultDto,
+  ImageUpdateResponseDto
+} from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { withAdvisoryLocks } from "../core/database/advisory-locks.ts";
 import { logger } from "../core/logger.ts";

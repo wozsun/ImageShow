@@ -35,7 +35,9 @@ function adminCheckFailure(
   fallbackCode: string
 ): AdminCheckFailureDto {
   return {
-    category: looksLikeConnectionFailure(error) ? "connection" : fallbackCategory,
+    category: looksLikeConnectionFailure(error)
+      ? "connection"
+      : fallbackCategory,
     code: errorCode(error, fallbackCode),
     message: errorMessage(error)
   };

@@ -4,7 +4,11 @@ import {
   type AdminImageSort,
   type PublicImageView
 } from "@imageshow/shared/browser";
-import { encodeImageCursor, type ImageBrowseContext, type ImageBrowsePosition } from "../cursor.ts";
+import {
+  encodeImageCursor,
+  type ImageBrowseContext,
+  type ImageBrowsePosition
+} from "../cursor.ts";
 import {
   adminImageListPresentationColumns,
   adminImageListPresentationColumnsWithTags,
@@ -70,7 +74,10 @@ export async function fetchPublicImageCardPage(
     "height",
     "storage_slug",
     "image_time::text AS cursor_image_time",
-    ...(view === "gallery" ? ["device", "brightness", "theme", "author", "image_time"] : [])
+    ...(view === "gallery" ? [
+      "device", "brightness", "theme", "author", "image_time"
+    ]
+    : [])
   ].join(", ");
   let selection: string;
   let ordering: string;
@@ -115,7 +122,9 @@ export async function fetchPublicImageCardPage(
   const result = await reader.query(sql, params);
   const rows = result.rows.slice(0, limit);
   const last = rows.at(-1) as PositionRow | undefined;
-  const nextCursor = result.rows.length > limit && last ? encodeImageCursor(last, context) : null;
+  const nextCursor = result.rows.length > limit && last
+    ? encodeImageCursor(last, context)
+    : null;
   return view === "show"
     ? { view, nextCursor, rows: rows as PublicShowImageRecord[] }
     : { view, nextCursor, rows: rows as Array<PublicImageCardRecord & { tags: string[] }> };

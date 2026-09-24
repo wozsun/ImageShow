@@ -65,10 +65,18 @@ type RedisSessionCommands = {
 
 export function adminSessionRedisClient(client: RedisSessionCommands): TargetSessionRedis {
   const run = <T>(work: () => Promise<T>) =>
-    client === redis ? runRequiredRedisCommand(work) : work();
+    client === redis
+      ? runRequiredRedisCommand(work)
+      : work();
   return {
     scanSessions: (cursor, pattern, count) =>
-      run(() => client.scan(cursor, "MATCH", pattern, "COUNT", count)),
+      run(() => client.scan(
+        cursor,
+        "MATCH",
+        pattern,
+        "COUNT",
+        count
+      )),
     readSessions: (keys) => run(() => client.mget(...keys)),
     unlinkSessions: (keys) => run(() => client.unlink(...keys)),
     unlinkSessionsIfUnchanged: (snapshots) =>
@@ -125,7 +133,9 @@ async function invalidateAdminSessionsByUsername(
   preservedSessionId?: string,
   validCredentialVersion?: string
 ) {
-  const preservedKey = preservedSessionId ? adminSessionKey(preservedSessionId) : "";
+  const preservedKey = preservedSessionId
+    ? adminSessionKey(preservedSessionId)
+    : "";
   let cursor = "0";
   let removed = 0;
   do {
@@ -153,7 +163,8 @@ async function invalidateAdminSessionsByUsername(
             identity?.username === username &&
             identity.credentialVersions.includes(staleCredentialVersion) &&
             !(
-              validCredentialVersion && identity.credentialVersions.includes(validCredentialVersion)
+              validCredentialVersion
+              && identity.credentialVersions.includes(validCredentialVersion)
             )
             ? [{ snapshot: { key, value }, sessionId }]
             : [];

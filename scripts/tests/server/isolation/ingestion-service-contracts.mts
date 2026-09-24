@@ -30,7 +30,12 @@ await runIntegrationScenario(async (runtime) => {
       await runtime.databasePools.pool.query(
         `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_time)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, $4)`,
-        [id, owners[index], "a".repeat(32), imageTime]
+        [
+        id,
+        owners[index],
+        "a".repeat(32),
+        imageTime
+      ]
       );
     }
     return readCommittedIngestionResultsByImageIds(ids);

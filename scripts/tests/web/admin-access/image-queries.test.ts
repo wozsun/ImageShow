@@ -183,7 +183,10 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
     resolve: (value: { page: string }) => void;
     reject: (error: Error) => void;
   }> = [];
-  const routeWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const routeWindowDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "window"
+  );
   Reflect.deleteProperty(globalThis, "window");
   try {
     const retryableLoader = createPublicRouteModuleLoader(() => {
@@ -220,7 +223,10 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
       rejectCompletedPreload = reject;
     });
   });
-  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const previousWindow = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "window"
+  );
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     writable: true,
@@ -239,7 +245,11 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
     const recovery = completedFailureLoader.load();
     assert.ok(recovery instanceof Promise);
     assert.equal(documentReloads, 1);
-    assert.equal(completedPreloadImports, 1, "已缓存失败不能在当前文档重试同一原生模块");
+    assert.equal(
+      completedPreloadImports,
+      1,
+      "已缓存失败不能在当前文档重试同一原生模块"
+    );
   } finally {
     if (previousWindow) {
       Object.defineProperty(globalThis, "window", previousWindow);
@@ -396,8 +406,16 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
     },
     60
   );
-  const emptyUnsetScope = imageAdminPaginationScopeKey("unset", emptyImageAdminFilters, 60);
-  assert.equal(hiddenThemeScope, emptyUnsetScope, "无主题视图的隐藏主题值不得建立第二个查询 scope");
+  const emptyUnsetScope = imageAdminPaginationScopeKey(
+    "unset",
+    emptyImageAdminFilters,
+    60
+  );
+  assert.equal(
+    hiddenThemeScope,
+    emptyUnsetScope,
+    "无主题视图的隐藏主题值不得建立第二个查询 scope"
+  );
   assert.deepEqual(
     resetImageAdminPage(
       {
@@ -516,10 +534,25 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
       }
     }
   ]) {
-    assert.deepEqual(resolveImageAdminScopeTotal(scenario.input), scenario.expected, scenario.name);
+    assert.deepEqual(
+      resolveImageAdminScopeTotal(scenario.input),
+      scenario.expected,
+      scenario.name
+    );
   }
-  const options = adminImageListQuery("ready", filters, scope, 100, 60);
-  assert.deepEqual(options.queryKey, [...queryKeys.adminImages, scope, 100, 60]);
+  const options = adminImageListQuery(
+    "ready",
+    filters,
+    scope,
+    100,
+    60
+  );
+  assert.deepEqual(options.queryKey, [
+    ...queryKeys.adminImages,
+    scope,
+    100,
+    60
+  ]);
   const requested: string[] = [];
   const validators: string[] = [];
   const previousFetch = globalThis.fetch;
@@ -582,7 +615,13 @@ test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔�
   assert.equal(target.searchParams.get("sort_by"), "image_time");
   assert.equal(target.searchParams.get("order"), "latest");
 
-  const unsetOptions = adminImageListQuery("unset", filters, unsetScope, 1, 60);
+  const unsetOptions = adminImageListQuery(
+    "unset",
+    filters,
+    unsetScope,
+    1,
+    60
+  );
   const previousUnsetFetch = globalThis.fetch;
   let unsetUrl = "";
   globalThis.fetch = async (input) => {
@@ -676,7 +715,9 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
         resolvePage100 = resolve;
       });
     }
-    if (url.searchParams.get("status") === "ready" && page === 50 && page50Attempts++ === 0) {
+    if (url.searchParams.get("status") === "ready"
+      && page === 50
+      && page50Attempts++ === 0) {
       return new Response(
         JSON.stringify({
           ok: false,
@@ -695,7 +736,9 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
         resolveUnsetPage = resolve;
       });
     }
-    const total = url.searchParams.get("status") === "ready" && page === 50 ? 120 : 6_000;
+    const total = url.searchParams.get("status") === "ready" && page === 50
+      ? 120
+      : 6_000;
     return new Response(JSON.stringify({ ok: true, items: [], total }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
@@ -722,13 +765,21 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     let latest!: ReturnType<typeof useImageAdminPageNavigation>;
     function Harness() {
       latest = useImageAdminPageNavigation(props);
-      return React.createElement("output", null, `${latest.pageNumber}:${latest.totalPages}`);
+      return React.createElement(
+        "output",
+        null,
+        `${latest.pageNumber}:${latest.totalPages}`
+      );
     }
     const tree = () =>
       React.createElement(
         React.StrictMode,
         null,
-        React.createElement(QueryClientProvider, { client }, React.createElement(Harness))
+        React.createElement(
+          QueryClientProvider,
+          { client },
+          React.createElement(Harness)
+        )
       );
     const container = document.getElementById("root");
     assert.ok(container);
@@ -748,7 +799,12 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     assert.equal(latest.hasCurrentPageData, true);
     assert.equal(requests.length, 1, "Strict Mode 初始查询必须单飞");
 
-    const pageOneState = client.getQueryState([...queryKeys.adminImages, latest.scopeKey, 1, 60]);
+    const pageOneState = client.getQueryState([
+      ...queryKeys.adminImages,
+      latest.scopeKey,
+      1,
+      60
+    ]);
     assert.ok(pageOneState);
     const page80Key = [...queryKeys.adminImages, latest.scopeKey, 80, 60];
     client.setQueryData(
@@ -843,7 +899,8 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     assert.equal(
       requests.some((value) => {
         const url = new URL(value);
-        return url.searchParams.get("theme") === "null" && url.searchParams.get("page") !== "1";
+        return url.searchParams.get("theme") === "null"
+          && url.searchParams.get("page") !== "1";
       }),
       false
     );
@@ -852,7 +909,11 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     props = { ...props, view: "ready" };
     await React.act(async () => root.render(tree()));
     await waitFor(() => latest.pageNumber === 1 && latest.total === 6_000);
-    assert.equal(requests.length, beforeRouteReturn, "返回 90 秒内的新鲜 scope 不得重新请求");
+    assert.equal(
+      requests.length,
+      beforeRouteReturn,
+      "返回 90 秒内的新鲜 scope 不得重新请求"
+    );
 
     await React.act(async () => latest.loadPage(50, false));
     await waitFor(() => latest.pageNumber === 50 && latest.isError);
@@ -863,19 +924,25 @@ test("[Web/后台访问] 后台数字页 Hook 在 Strict Mode 下直达、重试
     await React.act(async () => {
       await latest.refetch();
     });
-    await waitFor(() => latest.pageNumber === 2 && latest.total === 6_000 && !latest.isFetching);
+    await waitFor(() => latest.pageNumber === 2
+      && latest.total === 6_000
+      && !latest.isFetching);
     const readyPages = requests
       .map((value) => new URL(value))
       .filter(
         (url) =>
-          url.searchParams.get("status") === "ready" && url.searchParams.get("theme") !== "null"
+          url.searchParams.get("status") === "ready"
+          && url.searchParams.get("theme") !== "null"
       )
       .map((url) => url.searchParams.get("page"));
     assert.equal(readyPages.filter((page) => page === "50").length, 2);
     assert.equal(readyPages.filter((page) => page === "2").length, 1);
     assert.equal(
       readyPages.some(
-        (page) => Number(page) > 2 && page !== "50" && page !== "75" && page !== "100"
+        (page) => Number(page) > 2
+          && page !== "50"
+          && page !== "75"
+          && page !== "100"
       ),
       false,
       "total 收缩只能直接夹到最终页，不能逐页回退"
@@ -970,7 +1037,10 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
     includeGlobalTimers: true,
     includeDateNow: false
   });
-  const elementScrollTo = Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, "scrollTo");
+  const elementScrollTo = Object.getOwnPropertyDescriptor(
+    window.HTMLElement.prototype,
+    "scrollTo"
+  );
   Object.defineProperty(window.HTMLElement.prototype, "scrollTo", {
     configurable: true,
     writable: true,
@@ -1112,7 +1182,9 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
     const runMutationScenario = async (mode: "restore" | "purge" | "purge-unknown") => {
       const purgeMode = mode !== "restore";
       const mutationKind = purgeMode ? "purge" : "restore";
-      const permissions = purgeMode ? [adminPermissions.imageTrashPurge] : [];
+      const permissions = purgeMode
+        ? [adminPermissions.imageTrashPurge]
+        : [];
       const client = new QueryClient({
         defaultOptions: {
           queries: { retry: false, refetchOnWindowFocus: false }
@@ -1193,7 +1265,9 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
             });
           }
           return jsonResponse({
-            items: page <= total ? [image(String(page).padStart(12, "0"))] : [],
+            items: page <= total
+              ? [image(String(page).padStart(12, "0"))]
+              : [],
             total
           });
         }
@@ -1267,7 +1341,9 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           );
         });
         await waitFor(
-          () => listRequests.length === 1 && /第 1 \/ 2 页/.test(container.textContent ?? ""),
+          () => listRequests.length === 1 && /第 1 \/ 2 页/.test(
+            container.textContent ?? ""
+          ),
           `${mode} scenario initial page did not load`
         );
         await click(buttonWithText("下一页"));
@@ -1288,7 +1364,10 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           "失败且无页数据时不得伪造本页 0 项"
         );
         await click(buttonWithText("重试"));
-        await waitFor(() => pageTwoStarted, `${mode} scenario page 2 request did not start`);
+        await waitFor(
+          () => pageTwoStarted,
+          `${mode} scenario page 2 request did not start`
+        );
         assert.equal(
           pageStatus.textContent,
           "第 2 / 2 页 · 共 2 项 · 加载中",
@@ -1455,11 +1534,14 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           );
           return;
         }
-        const expectedResult = mode === "restore" ? "已恢复 1 张" : "已永久删除 1 张";
+        const expectedResult = mode === "restore"
+          ? "已恢复 1 张"
+          : "已永久删除 1 张";
         await waitFor(
           () =>
             postMutationRefreshStarted &&
-            (mode === "purge" || (container.textContent ?? "").includes(expectedResult)),
+            (mode === "purge"
+              || (container.textContent ?? "").includes(expectedResult)),
           `${mode} list refresh did not start at the expected result boundary`
         );
         assert.ok(
@@ -1483,7 +1565,10 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
             await clock.advanceBy(3_200);
           });
           assert.ok(document.querySelector("[data-dialog-frame]"));
-          assert.equal((container.textContent ?? "").includes(expectedResult), false);
+          assert.equal(
+            (container.textContent ?? "").includes(expectedResult),
+            false
+          );
         }
         const finishPostMutationRefresh = resolvePostMutationRefresh as
           ((response: Response) => void) | null;
@@ -1566,7 +1651,11 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         ]
       });
 
-      const readyItems = ["000000000011", "000000000012", "000000000013"].map((serial) => ({
+      const readyItems = [
+        "000000000011",
+        "000000000012",
+        "000000000013"
+      ].map((serial) => ({
         ...image(serial),
         status: "ready" as const,
         deleted_at: null
@@ -1684,7 +1773,8 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
 
         await click(selectionTargets[0]!);
         await waitFor(
-          () => /已选 1/.test(container.textContent ?? "") && Boolean(buttonWithText("批量删除")),
+          () => /已选 1/.test(container.textContent ?? "")
+            && Boolean(buttonWithText("批量删除")),
           "selection change did not disarm frozen batch delete"
         );
         assert.equal(trashBodies.length, 0);
@@ -1816,7 +1906,11 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           ingestion: { list_page_size: 1 }
         }
       });
-      client.setQueryData(queryKeys.ingestionVocabulary, { themes: [], tags: [], authors: [] });
+      client.setQueryData(queryKeys.ingestionVocabulary, {
+        themes: [],
+        tags: [],
+        authors: []
+      });
       client.setQueryData(queryKeys.storageOptions, { backends: [] });
       let saved: AdminPreferences = {};
       const patches: AdminPreferences[] = [];
@@ -1913,7 +2007,8 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         assert.deepEqual(labels(), ["图片", "最旧"]);
         releaseFirstPatch();
         await waitFor(
-          () => saved.image_sort_by === "image_time" && saved.image_sort_order === "oldest",
+          () => saved.image_sort_by === "image_time"
+            && saved.image_sort_order === "oldest",
           "queued sort writes did not converge"
         );
         assert.deepEqual(
@@ -1997,13 +2092,25 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
       ["controlled_failure", "controlled_failure", "controlled_failure"],
       "三轮受控列表失败必须各报告一次且不得污染测试输出"
     );
-    assert.equal(expectedListErrors.length, 4, "每次列表失败只能由查询 owner 上报一次");
-    assert.equal(expectedMutationErrors.length, 1, "未知永久删除请求必须只记录一次 mutation 错误");
+    assert.equal(
+      expectedListErrors.length,
+      4,
+      "每次列表失败只能由查询 owner 上报一次"
+    );
+    assert.equal(
+      expectedMutationErrors.length,
+      1,
+      "未知永久删除请求必须只记录一次 mutation 错误"
+    );
   } finally {
     console.error = previousConsoleError;
     clearCsrfToken();
     if (elementScrollTo) {
-      Object.defineProperty(window.HTMLElement.prototype, "scrollTo", elementScrollTo);
+      Object.defineProperty(
+        window.HTMLElement.prototype,
+        "scrollTo",
+        elementScrollTo
+      );
     } else {
       delete (window.HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
     }
@@ -2041,7 +2148,10 @@ test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复�
     t.after(() => client.clear());
     return client;
   };
-  const invalidated = (client: InstanceType<typeof QueryClient>, key: readonly unknown[]) =>
+  const invalidated = (
+    client: InstanceType<typeof QueryClient>,
+    key: readonly unknown[]
+  ) =>
     client.getQueryState(key)?.isInvalidated === true;
 
   const titleClient = createClient();
@@ -2052,10 +2162,16 @@ test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复�
   );
   assert.equal(invalidated(titleClient, queryKeys.adminImages), true);
   assert.equal(invalidated(titleClient, queryKeys.overview), true);
-  assert.equal(invalidated(titleClient, [...queryKeys.adminImageInfo, "image-1"]), true);
+  assert.equal(
+    invalidated(titleClient, [...queryKeys.adminImageInfo, "image-1"]),
+    true
+  );
   assert.equal(invalidated(titleClient, queryKeys.galleryStats), false);
   assert.equal(invalidated(titleClient, queryKeys.galleryFacets), false);
-  assert.equal(invalidated(titleClient, [...queryKeys.publicImageDetail, "image-1", null]), false);
+  assert.equal(
+    invalidated(titleClient, [...queryKeys.publicImageDetail, "image-1", null]),
+    false
+  );
 
   const membershipClient = createClient();
   await invalidateImageDataAfterMetadataSave(
@@ -2079,18 +2195,23 @@ test("[Web/后台访问] 图片元数据保存按实际字段失效投影并复�
     null
   );
   assert.equal(
-    invalidated(missingSnapshotClient, [...queryKeys.publicImageDetail, "image-1", null]),
+    invalidated(
+      missingSnapshotClient,
+      [...queryKeys.publicImageDetail, "image-1", null]
+    ),
     true
   );
 
   for (const identity of [null, "image-admin", "super-admin"]) {
     assert.equal(
-      invalidated(missingSnapshotClient, [...queryKeys.publicImageDetail, "image-1", identity]),
+      invalidated(missingSnapshotClient,
+        [...queryKeys.publicImageDetail, "image-1", identity]),
       true
     );
   }
   assert.equal(
-    invalidated(missingSnapshotClient, [...queryKeys.publicImageDetail, "image-2", null]),
+    invalidated(missingSnapshotClient,
+      [...queryKeys.publicImageDetail, "image-2", null]),
     false
   );
 

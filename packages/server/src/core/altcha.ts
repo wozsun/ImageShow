@@ -1,12 +1,19 @@
 import type { Context } from "hono";
 import { createHmac, hash, randomBytes } from "node:crypto";
 import { z } from "zod";
-import { createChallenge, randomInt, verifySolution } from "altcha-lib";
+import {
+  createChallenge,
+  randomInt,
+  verifySolution
+} from "altcha-lib";
 import { deriveKey } from "altcha-lib/algorithms/pbkdf2";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { ApiError } from "./api-error.ts";
 import { requestClientIp } from "./http/request-security.ts";
-import { noStoreCacheControl, safeResponseHeaderValue } from "./http/headers.ts";
+import {
+  noStoreCacheControl,
+  safeResponseHeaderValue
+} from "./http/headers.ts";
 import { redis } from "./redis/client.ts";
 import { runRequiredRedisCommand } from "./runtime-availability.ts";
 import { reserveRedisWindows } from "./redis/window-limit.ts";
@@ -26,7 +33,10 @@ const challengeParametersSchema = z.strictObject({
   keyPrefix: z.string().regex(hex16Bytes),
   keySignature: z.string().regex(hex32Bytes),
   expiresAt: z.number().int().positive(),
-  data: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional()
+  data: z.record(
+    z.string(),
+    z.union([z.string(), z.number(), z.boolean(), z.null()])
+  ).optional()
 });
 
 const payloadSchema = z.strictObject({
@@ -92,14 +102,20 @@ async function reserveChallengeRequest(c: Context) {
   if (!ipReservation.allowed) {
     c.header(
       "Retry-After",
-      safeResponseHeaderValue("Retry-After", String(ipReservation.retryAfterSeconds))
+      safeResponseHeaderValue(
+        "Retry-After",
+        String(ipReservation.retryAfterSeconds)
+      )
     );
     throw new ApiError(429, "altcha_rate_limited", "安全验证请求过于频繁，请稍后再试");
   }
   if (!globalReservation.allowed) {
     c.header(
       "Retry-After",
-      safeResponseHeaderValue("Retry-After", String(globalReservation.retryAfterSeconds))
+      safeResponseHeaderValue(
+        "Retry-After",
+        String(globalReservation.retryAfterSeconds)
+      )
     );
     throw new ApiError(429, "altcha_global_rate_limited", "安全验证服务请求过于频繁，请稍后再试");
   }

@@ -5,7 +5,10 @@ import type {
   IngestionAttributeDefaults
 } from "../queue/model/ingestion-job.js";
 
-import { webIngestionBatchKey, webUuidV7 } from "../queue/model/ingestion-identity.js";
+import {
+  webIngestionBatchKey,
+  webUuidV7
+} from "../queue/model/ingestion-identity.js";
 import type { ImportManifestItem } from "../queue/ingestion-http-client.js";
 
 function valueOrDefault<T>(value: T | undefined, fallback: T) {

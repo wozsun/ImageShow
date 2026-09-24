@@ -16,7 +16,10 @@ import {
 import { repairStorageThumbnail } from "./storage-thumbnail-repair.ts";
 import { maintainTrashPurgeTasks } from "../images/trash/purge-maintenance.ts";
 
-function summarizeMaintenance(items: readonly MaintenanceItem[], prunedDirectories: number) {
+function summarizeMaintenance(
+  items: readonly MaintenanceItem[],
+  prunedDirectories: number
+) {
   const count = (outcome: MaintenanceOutcome) =>
     items.filter((item) => item.outcome === outcome).length;
   return {
@@ -30,8 +33,13 @@ function summarizeMaintenance(items: readonly MaintenanceItem[], prunedDirectori
   };
 }
 
-async function maintainStorageUnderLock(lockSignal: AbortSignal, callerSignal?: AbortSignal) {
-  const scheduleSignal = callerSignal ? AbortSignal.any([callerSignal, lockSignal]) : lockSignal;
+async function maintainStorageUnderLock(
+  lockSignal: AbortSignal,
+  callerSignal?: AbortSignal
+) {
+  const scheduleSignal = callerSignal
+    ? AbortSignal.any([callerSignal, lockSignal])
+    : lockSignal;
   const plan = await buildStorageMaintenancePlan(scheduleSignal);
   scheduleSignal.throwIfAborted();
   type IndexedItem = Readonly<{ index: number; item: MaintenanceItem }>;
@@ -62,7 +70,11 @@ async function maintainStorageUnderLock(lockSignal: AbortSignal, callerSignal?: 
       getRuntimeConfig().normalize.concurrency,
       async ({ index, imageId }) => ({
         index,
-        item: await repairStorageThumbnail(imageId, scheduleSignal, lockSignal)
+        item: await repairStorageThumbnail(
+          imageId,
+          scheduleSignal,
+          lockSignal
+        )
       }),
       { signal: scheduleSignal }
     ),
@@ -71,7 +83,11 @@ async function maintainStorageUnderLock(lockSignal: AbortSignal, callerSignal?: 
       STORAGE_OBJECT_REMOVAL_CONCURRENCY,
       async ({ index, candidate }) => ({
         index,
-        item: await removeStorageMaintenanceCandidate(candidate, scheduleSignal, lockSignal)
+        item: await removeStorageMaintenanceCandidate(
+          candidate,
+          scheduleSignal,
+          lockSignal
+        )
       }),
       { signal: scheduleSignal }
     )
@@ -95,7 +111,10 @@ async function maintainStorageUnderLock(lockSignal: AbortSignal, callerSignal?: 
   );
   scheduleSignal.throwIfAborted();
   items.push(...pruned.failures);
-  return summarizeMaintenance(items, pruned.prunedDirectories);
+  return summarizeMaintenance(
+    items,
+    pruned.prunedDirectories
+  );
 }
 
 function maintainStorage(callerSignal?: AbortSignal) {
@@ -104,7 +123,9 @@ function maintainStorage(callerSignal?: AbortSignal) {
     withStorageLocationWriteLock((lockSignal) =>
       maintainStorageUnderLock(lockSignal, callerSignal)
     );
-  return callerSignal ? runWithAdvisoryLockAcquisitionSignal(callerSignal, maintain) : maintain();
+  return callerSignal
+    ? runWithAdvisoryLockAcquisitionSignal(callerSignal, maintain)
+    : maintain();
 }
 
 export async function maintainStorageAndPurgeTasks(callerSignal?: AbortSignal) {

@@ -152,12 +152,18 @@ export function galleryStatsSearch(
   return readableFilterSearch(params);
 }
 
-export function showOrderFromSearchParams(params: URLSearchParams, fallback: ShowOrder) {
+export function showOrderFromSearchParams(
+  params: URLSearchParams,
+  fallback: ShowOrder
+) {
   const value = params.get("order")?.trim().toLowerCase() as ShowOrder;
   return showOrderSet.has(value) ? value : fallback;
 }
 
-export function showModeFromSearchParams(params: URLSearchParams, fallback: ShowMode) {
+export function showModeFromSearchParams(
+  params: URLSearchParams,
+  fallback: ShowMode
+) {
   const value = params.get("mode")?.trim().toLowerCase() as ShowMode;
   return showModeSet.has(value) ? value : fallback;
 }

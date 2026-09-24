@@ -24,7 +24,10 @@ import {
   editableImageSnapshotsWithTags,
   type EditableImageSnapshotRecordWithTags
 } from "../presenter.ts";
-import { buildImageListFilters, buildResolvedReadyImageListFilters } from "./list-filters.ts";
+import {
+  buildImageListFilters,
+  buildResolvedReadyImageListFilters
+} from "./list-filters.ts";
 import { fetchAdminImageOffsetRows } from "./pagination.ts";
 import { storageBackendLabel } from "../../storage/backends/label.ts";
 
@@ -88,7 +91,13 @@ export async function listAdminImages(
     const rows =
       window.start >= total
         ? []
-        : await fetchAdminImageOffsetRows([...where], [...params], window, client, sort);
+        : await fetchAdminImageOffsetRows(
+            [...where],
+            [...params],
+            window,
+            client,
+            sort
+          );
     return { rows, total };
   });
   return {

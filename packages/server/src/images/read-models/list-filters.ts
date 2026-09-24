@@ -1,5 +1,8 @@
 import type { Brightness, Device } from "@imageshow/shared/browser";
-import { resolveImageFilterPlan, type ImageFilterPlan } from "../filter-plan.ts";
+import {
+  resolveImageFilterPlan,
+  type ImageFilterPlan
+} from "../filter-plan.ts";
 import type { VocabularyReadAccess } from "../../vocab/vocab-cache.ts";
 import { buildImageFilterSql } from "./image-filter-sql.ts";
 

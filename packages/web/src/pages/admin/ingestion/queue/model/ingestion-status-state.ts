@@ -2,10 +2,18 @@ import type { IngestionStatusItemDto } from "@imageshow/shared/browser";
 import type { IngestionJob } from "./ingestion-job.js";
 import { activeIngestionClientStatus, completedIngestionJobPatch } from "./server-ingestion-job.js";
 
-const terminalClientStatuses = new Set<IngestionJob["status"]>(["done", "cancelled"]);
+const terminalClientStatuses = new Set<IngestionJob["status"]>([
+  "done",
+  "cancelled"
+]);
 
-export function ingestionStatusPatchMovesForward(job: IngestionJob, patch: Partial<IngestionJob>) {
-  if (terminalClientStatuses.has(job.status) && patch.status && patch.status !== job.status)
+export function ingestionStatusPatchMovesForward(
+  job: IngestionJob,
+  patch: Partial<IngestionJob>
+) {
+  if (terminalClientStatuses.has(job.status)
+    && patch.status
+    && patch.status !== job.status)
     return false;
   if (patch.serverVersion !== undefined) {
     const currentVersion = job.serverVersion ?? 0;
@@ -74,7 +82,9 @@ export function ingestionStatusEventPatch(
     serverVersion: item.version,
     serverProgressSeq: item.progress_seq,
     status: activeIngestionClientStatus(item),
-    failureStage: failed ? (job.commitIntent ? "commit" : "prepare") : undefined,
+    failureStage: failed
+      ? job.commitIntent ? "commit" : "prepare"
+      : undefined,
     commitFailureCheckpoint:
       failed && job.commitIntent
         ? item.status === "failed" && item.prepared
@@ -82,7 +92,9 @@ export function ingestionStatusEventPatch(
           : "unknown"
         : undefined,
     resultState:
-      item.status === "committing" || item.status === "resolving" ? "pending" : undefined,
+      item.status === "committing" || item.status === "resolving"
+        ? "pending"
+        : undefined,
     message: item.error?.message || item.message,
     transferProgress: item.progress
   };

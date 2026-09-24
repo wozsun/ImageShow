@@ -18,7 +18,10 @@ import {
   type LoadedCancelItem
 } from "./items.ts";
 import { cleanupRetiredSessions } from "./retired-cleanup.ts";
-import { completedIngestionReceipt, publishCompletedReceipt } from "../commit/completion.ts";
+import {
+  completedIngestionReceipt,
+  publishCompletedReceipt
+} from "../commit/completion.ts";
 import { ingestionCleanupRetryQueue } from "../cleanup/retry-queue.ts";
 import { IngestionIrreversibleCoordinator } from "../execution/irreversible-coordinator.ts";
 import {
@@ -28,7 +31,10 @@ import {
   type StoredIngestionSession
 } from "../sessions/model.ts";
 import { IngestionSessionRepository } from "../repository.ts";
-import { discardedIngestionReceipt, semanticIngestionSession } from "../sessions/transitions.ts";
+import {
+  discardedIngestionReceipt,
+  semanticIngestionSession
+} from "../sessions/transitions.ts";
 
 type AbortActiveIngestion = (pair: IngestionSessionPair) => Promise<unknown> | void;
 type CommittedIngestionResults = Awaited<
@@ -84,7 +90,10 @@ const cancelMutationLimiter = new DynamicConcurrencyLimiter(
   (signal) => signal.reason ?? new Error("Ingestion cancellation stopped")
 );
 
-function abortActiveBestEffort(pair: IngestionSessionPair, abortActive: AbortActiveIngestion) {
+function abortActiveBestEffort(
+  pair: IngestionSessionPair,
+  abortActive: AbortActiveIngestion
+) {
   try {
     void Promise.resolve(abortActive(pair)).catch((error) => {
       logger.warn("ingestion_discarded_abort_deferred", {
@@ -102,7 +111,10 @@ function abortActiveBestEffort(pair: IngestionSessionPair, abortActive: AbortAct
   }
 }
 
-function matchingActiveSession(session: StoredIngestionSession | null, pair: IngestionSessionPair) {
+function matchingActiveSession(
+  session: StoredIngestionSession | null,
+  pair: IngestionSessionPair
+) {
   if (
     !session ||
     session.session_id !== pair.session_id ||
@@ -120,12 +132,19 @@ async function retireCompletedSession(
   input: IngestionSessionPair,
   completedItem?: CompletedIngestionImageDto
 ) {
-  if (session && session.session_id === input.session_id && session.image_id === input.image_id) {
+  if (session
+    && session.session_id === input.session_id
+    && session.image_id === input.image_id) {
     try {
       let terminal = session;
       if (session.status !== "completed" && session.status !== "discarded") {
         try {
-          await publishCompletedReceipt(repository, session, Date.now(), completedItem);
+          await publishCompletedReceipt(
+            repository,
+            session,
+            Date.now(),
+            completedItem
+          );
         } catch (error) {
           // PostgreSQL has already established the authoritative outcome. A
           // stale Redis state or a raced CAS must not prevent the canonical
@@ -136,7 +155,10 @@ async function retireCompletedSession(
             error: error
           });
         }
-        const current = await repository.readSession(session.owner, session.session_id);
+        const current = await repository.readSession(
+          session.owner,
+          session.session_id
+        );
         if (!current || current.image_id !== input.image_id) {
           return;
         }
@@ -168,8 +190,12 @@ async function retireCompletedSession(
   }
 }
 
-function committedExpiryTransition(active: IngestionSessionSnapshot, now: number) {
-  if ((active.status === "committing" || active.status === "resolving") && active.commit) {
+function committedExpiryTransition(
+  active: IngestionSessionSnapshot,
+  now: number
+) {
+  if ((active.status === "committing" || active.status === "resolving")
+    && active.commit) {
     return completedIngestionReceipt(active, now);
   }
   return discardedIngestionReceipt(active, now);
@@ -210,7 +236,12 @@ async function expireResolvingSession(
     message: "数据库事务已经开始，正在确认最终结果",
     progress: null
   });
-  await repository.expireSession(active, active.version, cutoff, resolving);
+  await repository.expireSession(
+    active,
+    active.version,
+    cutoff,
+    resolving
+  );
   return "resolving" as const;
 }
 
@@ -271,7 +302,11 @@ async function cancelLoadedIngestionSessions(
         return cancelMutationLimiter.run(cancelMutationSignal, async () => {
           if (committedResult) {
             if (options.expiryCutoff !== undefined) {
-              await expireCommittedSession(repository, active, options.expiryCutoff);
+              await expireCommittedSession(
+                repository,
+                active,
+                options.expiryCutoff
+              );
               abortActiveBestEffort(pair, abortActive);
             }
             return {
@@ -282,7 +317,11 @@ async function cancelLoadedIngestionSessions(
           const receipt = discardedIngestionReceipt(active, Date.now());
           let queueRevision: number;
           if (options.expiryCutoff === undefined) {
-            const mutation = await repository.mutateSemantic(active, active.version, receipt);
+            const mutation = await repository.mutateSemantic(
+              active,
+              active.version,
+              receipt
+            );
             queueRevision = mutation.metadata.revision;
           } else {
             const mutation = await repository.expireSession(
@@ -364,7 +403,10 @@ async function cancelLoadedIngestionSessions(
         }
         if (!outcome.ok) throw outcome.error;
         if (outcome.result.status === "resolving") {
-          const current = await repository.readSession(loaded[index]!.owner, input.session_id);
+          const current = await repository.readSession(
+            loaded[index]!.owner,
+            input.session_id
+          );
           if (committedResult) {
             if (
               options.expiryCutoff !== undefined &&
@@ -382,7 +424,8 @@ async function cancelLoadedIngestionSessions(
             } else if (options.expiryCutoff === undefined) {
               abortActiveBestEffort(pair, abortActive);
               const cleanup =
-                matchingActiveSession(current, pair) ?? matchingActiveSession(initial, pair);
+                matchingActiveSession(current, pair)
+                  ?? matchingActiveSession(initial, pair);
               if (cleanup) {
                 rememberSessionForCleanup(cleanup);
               }
@@ -396,7 +439,8 @@ async function cancelLoadedIngestionSessions(
             results.push(completedCancelResult(pair, committedResult));
             continue;
           }
-          if (current && current.image_id === input.image_id) {
+          if (current
+            && current.image_id === input.image_id) {
             if (options.expiryCutoff === undefined) {
               if (current.status === "committing") {
                 const resolving = semanticIngestionSession(current, {
@@ -410,7 +454,11 @@ async function cancelLoadedIngestionSessions(
                   .catch(() => undefined);
               }
             } else {
-              await expireResolvingSession(repository, current, options.expiryCutoff);
+              await expireResolvingSession(
+                repository,
+                current,
+                options.expiryCutoff
+              );
             }
           }
           results.push({ ...pair, status: "resolving" });
@@ -423,7 +471,12 @@ async function cancelLoadedIngestionSessions(
           }
           if (options.expiryCutoff === undefined) {
             abortActiveBestEffort(pair, abortActive);
-            await retireCompletedSession(repository, initial, pair, committedResult.item);
+            await retireCompletedSession(
+              repository,
+              initial,
+              pair,
+              committedResult.item
+            );
           }
           results.push(completedCancelResult(pair, committedResult));
         } else {
@@ -439,7 +492,11 @@ async function cancelLoadedIngestionSessions(
 
       if (committedResult) {
         if (options.expiryCutoff !== undefined && initial) {
-          const cleanup = await expireCommittedSession(repository, initial, options.expiryCutoff);
+          const cleanup = await expireCommittedSession(
+            repository,
+            initial,
+            options.expiryCutoff
+          );
           if (cleanup) {
             abortActiveBestEffort(pair, abortActive);
             rememberSessionForCleanup(cleanup);
@@ -450,16 +507,29 @@ async function cancelLoadedIngestionSessions(
           if (cleanup) {
             rememberSessionForCleanup(cleanup);
           }
-          await retireCompletedSession(repository, initial, pair, committedResult.item);
+          await retireCompletedSession(
+            repository,
+            initial,
+            pair,
+            committedResult.item
+          );
         }
         results.push(completedCancelResult(pair, committedResult));
         continue;
       }
       if (loaded[index]!.incarnationMismatch) {
-        throw new ApiError(409, "ingestion_incarnation_conflict", "内容接入任务身份已被替换");
+        throw new ApiError(
+          409,
+          "ingestion_incarnation_conflict",
+          "内容接入任务身份已被替换"
+        );
       }
       if (!initial) {
-        throw new ApiError(410, "ingestion_session_missing", "未完成内容接入已过期或被服务器丢弃");
+        throw new ApiError(
+          410,
+          "ingestion_session_missing",
+          "未完成内容接入已过期或被服务器丢弃"
+        );
       }
       if (initial.status === "completed") {
         await repository.deleteSession(initial, initial.version);

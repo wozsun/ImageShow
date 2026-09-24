@@ -75,10 +75,14 @@ async function parseApiResponse<T>(response: Response): Promise<T> {
     // 非 JSON 错误由统一 HTTP fallback 展示，不泄露代理层 HTML 响应。
   }
   const failure =
-    data !== null && typeof data === "object" ? (data as Partial<ApiErrorResponseDto>) : {};
+    data !== null && typeof data === "object"
+      ? data as Partial<ApiErrorResponseDto>
+      : {};
   if (!response.ok || failure.ok === false) {
     throw new ApiClientError(
-      typeof failure.error === "string" ? failure.error : `HTTP ${response.status}`,
+      typeof failure.error === "string"
+        ? failure.error
+        : `HTTP ${response.status}`,
       response.status,
       typeof failure.code === "string" ? failure.code : "",
       failure.details ?? {}

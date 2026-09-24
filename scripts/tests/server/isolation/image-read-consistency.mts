@@ -36,7 +36,11 @@ await runIntegrationScenario(async (runtime) => {
       await database.pool.query(
         `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3)`,
-        [id, duplicateMd5, index === 0 ? "ready" : "deleted"]
+        [
+          id,
+          duplicateMd5,
+          index === 0 ? "ready" : "deleted"
+        ]
       );
     }
     const snapshots = await duplicates.readDuplicateSnapshotsByMd5([duplicateMd5, "f".repeat(32)]);
@@ -94,7 +98,10 @@ await runIntegrationScenario(async (runtime) => {
     "INSERT INTO image_tag(image_id, tag_slug) VALUES ($1, 'pagination-old')",
     [paginationIds[0]]
   );
-  const initialPaginationOrder = [...paginationIds.slice(0, 2).sort().reverse(), paginationIds[2]];
+  const initialPaginationOrder = [
+    ...paginationIds.slice(0, 2).sort().reverse(),
+    paginationIds[2]
+  ];
   const firstDeletedPage = await adminImagesReadModel.listAdminImages({
     status: "deleted",
     page: 1,
@@ -142,7 +149,10 @@ await runIntegrationScenario(async (runtime) => {
     let gated = false;
     return interceptSqlQueries(client, async (sql, _values, query) => {
       const result = await query();
-      if (!gated && /^SELECT count\(\*\)::text AS count FROM metadata WHERE/.test(sql.trim())) {
+      if (!gated
+        && /^SELECT count\(\*\)::text AS count FROM metadata WHERE/.test(
+          sql.trim()
+        )) {
         gated = true;
         countObserved();
         await snapshotGate;
@@ -165,10 +175,19 @@ await runIntegrationScenario(async (runtime) => {
     await database.pool.query(
       `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, author, image_time, deleted_at, title)
        VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, 'alice', '2026-08-16T00:00:00.000Z', now(), 'pagination-concurrent')`,
-      [concurrentPaginationId, "8".repeat(32)]
+      [
+          concurrentPaginationId,
+          "8".repeat(32)
+        ]
     );
-    await database.pool.query("DELETE FROM metadata WHERE id=$1", [paginationIds[2]]);
-    await database.pool.query("DELETE FROM image_tag WHERE image_id=$1", [paginationIds[0]]);
+    await database.pool.query(
+      "DELETE FROM metadata WHERE id=$1",
+      [paginationIds[2]]
+    );
+    await database.pool.query(
+      "DELETE FROM image_tag WHERE image_id=$1",
+      [paginationIds[0]]
+    );
     await database.pool.query(
       "INSERT INTO image_tag(image_id, tag_slug) VALUES ($1, 'pagination-new')",
       [paginationIds[0]]
@@ -277,7 +296,10 @@ await runIntegrationScenario(async (runtime) => {
   await vocabCache.refreshEntityVocabularies(["theme", "tag", "author"]);
   await runtimeAvailability.requireOperationalRedis();
   await readyCacheCoordinator.requestReadyImageCacheRebuild();
-  assert.equal(readyCacheCoordinator.getReadyImageCacheCoordinatorStatus().readable, true);
+  assert.equal(
+    readyCacheCoordinator.getReadyImageCacheCoordinatorStatus().readable,
+    true
+  );
 
   const readyPageMatrix: Array<{
     name: string;
@@ -371,7 +393,10 @@ await runIntegrationScenario(async (runtime) => {
   try {
     for (const entry of readyPageMatrix) {
       const connectionsBefore = redisMatrixConnections;
-      redisMatrixPages.set(entry.name, await adminImagesReadModel.listAdminImages(entry.query));
+      redisMatrixPages.set(
+        entry.name,
+        await adminImagesReadModel.listAdminImages(entry.query)
+      );
       assert.equal(
         redisMatrixConnections,
         connectionsBefore,
@@ -473,7 +498,10 @@ await runIntegrationScenario(async (runtime) => {
       rebuildCommandStarted,
       controlledRebuild.then(() => assert.fail("rebuild must be intercepted"))
     ]);
-    assert.equal(readyCacheCoordinator.getReadyImageCacheCoordinatorStatus().rebuilding, true);
+    assert.equal(
+      readyCacheCoordinator.getReadyImageCacheCoordinatorStatus().rebuilding,
+      true
+    );
     let rebuildingFallbackConnections = 0;
     restoreFallbackConnections = interceptPoolConnections(database.pool, () => {
       rebuildingFallbackConnections += 1;
@@ -488,12 +516,17 @@ await runIntegrationScenario(async (runtime) => {
     }
     for (const { query, page } of publicCursorPages) {
       assert.deepEqual(
-        await publicImagesReadModel.listPublicImages(query, new AbortController().signal),
+        await publicImagesReadModel.listPublicImages(
+          query, new AbortController().signal
+        ),
         page,
         "public Redis/PostgreSQL cursor pages must agree: " + query.order
       );
     }
-    assert.equal(rebuildingFallbackConnections, readyPageMatrix.length + publicCursorPages.length);
+    assert.equal(
+      rebuildingFallbackConnections,
+      readyPageMatrix.length + publicCursorPages.length
+    );
   } finally {
     restoreFallbackConnections();
     releaseRebuildCommand();
@@ -638,7 +671,10 @@ await runIntegrationScenario(async (runtime) => {
       }
     }
   }
-  await database.pool.query("DELETE FROM metadata WHERE id = ANY($1::uuid[])", [matrixIds]);
+  await database.pool.query(
+    "DELETE FROM metadata WHERE id = ANY($1::uuid[])",
+    [matrixIds]
+  );
   await database.pool.query("DELETE FROM tag WHERE slug = ANY($1::text[])", [
     [matrixTag, matrixExtraTag, matrixEmptyTag]
   ]);

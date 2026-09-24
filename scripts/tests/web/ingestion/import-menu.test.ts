@@ -4,7 +4,10 @@ import test from "node:test";
 import type { IngestionJob } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
 import { createManifestImportJobs } from "../../../../packages/web/src/pages/admin/ingestion/import/manifest-jobs.ts";
 import { createConfigStreamHarness } from "../../support/web-test-context.ts";
-import { dispatchDomEvent, inputText } from "../../support/dom-events.ts";
+import {
+  dispatchDomEvent,
+  inputText
+} from "../../support/dom-events.ts";
 
 test("[Web/内容接入] 导入菜单键盘与来源标签保持真实 DOM 焦点和读屏关联", async (t) => {
   const h = await createConfigStreamHarness(t);

@@ -1,6 +1,8 @@
 export async function copyTextToClipboard(value: string) {
   const previouslyFocused =
-    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(value);
@@ -20,7 +22,8 @@ export async function copyTextToClipboard(value: string) {
   try {
     textarea.focus();
     textarea.select();
-    if (typeof document.execCommand !== "function" || !document.execCommand("copy")) {
+    if (typeof document.execCommand !== "function"
+      || !document.execCommand("copy")) {
       throw new Error("Copy command was rejected");
     }
   } finally {

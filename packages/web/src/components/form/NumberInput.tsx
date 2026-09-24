@@ -5,7 +5,8 @@ type FormSubmitter = HTMLButtonElement | HTMLInputElement;
 function isFormSubmitter(element: Element): element is FormSubmitter {
   if (element instanceof HTMLButtonElement) return element.type === "submit";
   return (
-    element instanceof HTMLInputElement && (element.type === "submit" || element.type === "image")
+    element instanceof HTMLInputElement
+      && (element.type === "submit" || element.type === "image")
   );
 }
 

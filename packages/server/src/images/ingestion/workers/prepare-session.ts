@@ -7,7 +7,10 @@ import { randomUuidV7 } from "../../../core/uuid.ts";
 import { removeIngestionPreparedFiles, writeIngestionPreparedFile } from "../raw/prepared.ts";
 import { detectBrightness } from "../../brightness.ts";
 import { withNormalizationAdmission } from "../../normalization-admission.ts";
-import { sha256Buffer, transcodeStoredImage } from "../../processing.ts";
+import {
+  sha256Buffer,
+  transcodeStoredImage
+} from "../../processing.ts";
 import { getDuplicateMatchCountByMd5 } from "../../read-models/duplicates.ts";
 import { ingestionCleanupRetryQueue } from "../cleanup/retry-queue.ts";
 import {
@@ -23,7 +26,10 @@ import {
   ingestionPreparedPath,
   ingestionPreparedFiles
 } from "../raw/paths.ts";
-import type { IngestionSessionSnapshot, StoredIngestionSession } from "../sessions/model.ts";
+import type {
+  IngestionSessionSnapshot,
+  StoredIngestionSession
+} from "../sessions/model.ts";
 import { ingestionSessionSemanticHash } from "../sessions/projection.ts";
 import { IngestionSessionRepository } from "../repository.ts";
 import { withIngestionPreparationAdmission } from "./preparation-admission.ts";
@@ -56,7 +62,12 @@ async function cleanupPreparedAttempt(
     const current = await repository.readSession(session.owner, session.session_id);
     // A semantic publish can succeed even when its response is lost. Preserve
     // the exact objects referenced by the canonical snapshot.
-    if (preparedAttemptIsReferenced(current, session, imageFile, thumbnailFile)) return;
+    if (preparedAttemptIsReferenced(
+      current,
+      session,
+      imageFile,
+      thumbnailFile
+    )) return;
     await removeIngestionPreparedFiles([imageFile, thumbnailFile]);
   };
   try {
@@ -83,7 +94,9 @@ export async function prepareIngestionSessionSnapshot(
     onNormalizationAdmitted?: () => void;
   }> = {}
 ) {
-  if (session.status !== "preparing" || !session.execution_token || !session.raw_generation) {
+  if (session.status !== "preparing"
+    || !session.execution_token
+    || !session.raw_generation) {
     throw new ApiError(409, "invalid_ingestion_state", "内容接入任务不能进入处理阶段");
   }
   const preparedGeneration = randomUuidV7();
@@ -95,7 +108,10 @@ export async function prepareIngestionSessionSnapshot(
   };
   const preparedImageFile = ingestionPreparedFile(attemptIdentity, "image");
   const preparedThumbnailFile = ingestionPreparedFile(attemptIdentity, "thumb");
-  const rawPath = ingestionRawPath(session, session.raw_generation);
+  const rawPath = ingestionRawPath(
+    session,
+    session.raw_generation
+  );
   const transcode = dependencies.transcode ?? transcodeStoredImage;
   let enteredLocalWrite = false;
 
@@ -113,7 +129,10 @@ export async function prepareIngestionSessionSnapshot(
         rawPath,
         {
           ...runtime.normalize,
-          max_long_edge: Math.min(runtime.normalize.max_long_edge, getIngestionMaxLongEdge())
+          max_long_edge: Math.min(
+            runtime.normalize.max_long_edge,
+            getIngestionMaxLongEdge()
+          )
         },
         signal
       );
@@ -153,7 +172,9 @@ export async function prepareIngestionSessionSnapshot(
         ...latest,
         status: "ready" as const,
         phase: "ready",
-        message: duplicateCount ? "处理完成，请确认重复图片" : "处理完成，可以提交",
+        message: duplicateCount
+          ? "处理完成，请确认重复图片"
+          : "处理完成，可以提交",
         progress: 100,
         execution_token: "",
         raw_generation: "",
@@ -189,8 +210,14 @@ export async function prepareIngestionSessionSnapshot(
 
   const prepareAttempt = async () => {
     signal.throwIfAborted();
-    const preparedSession = await withIngestionPreparationAdmission(signal, prepareAndPublish);
-    await removeOwnedIngestionRaw(session, session.raw_generation).catch((error) => {
+    const preparedSession = await withIngestionPreparationAdmission(
+      signal,
+      prepareAndPublish
+    );
+    await removeOwnedIngestionRaw(
+      session,
+      session.raw_generation
+    ).catch((error) => {
       logger.warn("ingestion_raw_cleanup_deferred", {
         session_id: session.session_id,
         image_id: session.image_id,
@@ -209,11 +236,19 @@ export async function prepareIngestionSessionSnapshot(
       })
     ];
     return await withActiveIngestionTempPaths(paths, () =>
-      runWithAdvisoryLockAcquisitionSignal(signal, prepareAttempt)
+      runWithAdvisoryLockAcquisitionSignal(
+        signal,
+        prepareAttempt
+      )
     );
   } catch (error) {
     if (enteredLocalWrite) {
-      await cleanupPreparedAttempt(repository, session, preparedImageFile, preparedThumbnailFile);
+      await cleanupPreparedAttempt(
+        repository,
+        session,
+        preparedImageFile,
+        preparedThumbnailFile
+      );
     }
     throw error;
   }

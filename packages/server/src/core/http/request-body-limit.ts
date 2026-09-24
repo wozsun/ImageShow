@@ -2,7 +2,7 @@ import { appConfig } from "@imageshow/shared";
 import {
   adminApiBasePath,
   adminPreferencesMaxBytes,
-  configPackageRequestMaxBytes,
+  configBundleRequestMaxBytes,
   ingestionActionPath,
   ingestionCancelPath,
   ingestionCommitPath,
@@ -18,11 +18,14 @@ import {
 } from "@imageshow/shared/browser";
 import type { Context, Next } from "hono";
 import { apiErrorResponse } from "./responses.ts";
-import { invalidJsonBodyError, isJsonContentType } from "./json-body.ts";
+import {
+  invalidJsonBodyError,
+  isJsonContentType
+} from "./json-body.ts";
 
 const standardApiBodyMaxBytes = 128 * 1024;
 const jsonlManifestBodyMaxBytes = appConfig.ingestion.jsonlManifestMaxBytes;
-const advancedConfigMaxBytes = configPackageRequestMaxBytes;
+const advancedConfigMaxBytes = configBundleRequestMaxBytes;
 const adminPreferencesBodyMaxBytes = adminPreferencesMaxBytes + 1024;
 const adminPreferencesPath = `${adminApiBasePath}/preferences`;
 // Fifty maximum-length URLs occupy about 600 KiB after worst-case JSON
@@ -90,7 +93,8 @@ function measuredBodyLimit(maxSize: number) {
         chunks.push(value);
       }
     } catch (error) {
-      if (c.req.raw.signal.aborted || isJsonContentType(c.req.header("content-type"))) {
+      if (c.req.raw.signal.aborted
+        || isJsonContentType(c.req.header("content-type"))) {
         throw invalidJsonBodyError();
       }
       throw error;

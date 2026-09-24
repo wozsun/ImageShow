@@ -75,14 +75,22 @@ class WeiboVisitorIdentity {
 
       const creating = this.creating;
       if (!this.creatingSignal?.aborted) {
-        return raceWithAbortSignal(signal, creating, "Weibo visitor identity wait aborted");
+        return raceWithAbortSignal(
+          signal,
+          creating,
+          "Weibo visitor identity wait aborted"
+        );
       }
 
       // A cancelled batch may leave its aborting handshake in flight briefly.
       // Let that one request settle before the next batch creates a new identity,
       // so cancellation cannot poison the next batch or create parallel visitors.
       try {
-        await raceWithAbortSignal(signal, creating, "Weibo visitor identity wait aborted");
+        await raceWithAbortSignal(
+          signal,
+          creating,
+          "Weibo visitor identity wait aborted"
+        );
       } catch (error) {
         if (signal.aborted) throw error;
       }
@@ -131,7 +139,10 @@ class WeiboRequestScheduler {
         abort: () => {
           if (batch.settled) return;
           this.removeQueuedBatch(batch);
-          this.rejectBatch(batch, abortSignalError(signal, "Weibo request batch aborted"));
+          this.rejectBatch(batch, abortSignalError(
+            signal,
+            "Weibo request batch aborted"
+          ));
         }
       };
       signal.addEventListener("abort", batch.abort, { once: true });
@@ -211,10 +222,12 @@ class WeiboRequestScheduler {
             value: await request(visitorIdentity, batch.signal)
           };
         } catch (error) {
-          if (error instanceof WeiboImportError && error.code === "weibo_visitor_rejected") {
+          if (error instanceof WeiboImportError
+            && error.code === "weibo_visitor_rejected") {
             this.visitorIdentity.invalidate(visitorIdentity);
           }
-          if (!(error instanceof WeiboImportError) || error.code === "weibo_image_limit_exceeded") {
+          if (!(error instanceof WeiboImportError)
+            || error.code === "weibo_image_limit_exceeded") {
             this.rejectBatch(batch, error);
           } else {
             result = { status: "rejected", reason: error };

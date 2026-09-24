@@ -65,7 +65,11 @@ export async function readReadyImageSourceItems(
   return rows.map(readyImageCacheItemFromRow);
 }
 
-async function readBatch(client: PoolClient, afterId: string | null, signal?: AbortSignal) {
+async function readBatch(
+  client: PoolClient,
+  afterId: string | null,
+  signal?: AbortSignal
+) {
   signal?.throwIfAborted();
   const rows = (
     await client.query(
@@ -84,7 +88,10 @@ async function readBatch(client: PoolClient, afterId: string | null, signal?: Ab
 
 export async function readReadyImageSourceSnapshot(
   onStart: (snapshot: Omit<ReadyImageSourceSnapshot, "processed">) => Promise<void>,
-  onBatch: (items: ReadyImageCacheItem[], snapshot: ReadyImageSourceSnapshot) => Promise<void>,
+  onBatch: (
+    items: ReadyImageCacheItem[],
+    snapshot: ReadyImageSourceSnapshot
+  ) => Promise<void>,
   signal?: AbortSignal
 ): Promise<ReadyImageSourceSnapshot> {
   const client = await pool.connect();

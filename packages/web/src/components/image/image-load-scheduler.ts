@@ -47,7 +47,9 @@ function abortError() {
 
 function taskResult(task: ImageLoadTask, error?: unknown): ImageLoadTaskResult {
   if (task.controller.signal.aborted) return { status: "cancelled" };
-  return error === undefined ? { status: "completed" } : { status: "failed", error };
+  return error === undefined
+    ? { status: "completed" }
+    : { status: "failed", error };
 }
 
 /**
@@ -193,7 +195,8 @@ export class ImageLoadScheduler {
       if (
         !candidate ||
         task.priority < candidate.priority ||
-        (task.priority === candidate.priority && task.sequence < candidate.sequence)
+        (task.priority === candidate.priority
+          && task.sequence < candidate.sequence)
       ) {
         candidate = task;
       }
@@ -237,7 +240,8 @@ export class ImageLoadScheduler {
 export function preferredImageLoadConcurrency(
   matchMedia: (query: string) => Pick<MediaQueryList, "matches">
 ) {
-  return matchMedia("(pointer: fine)").matches && matchMedia("(min-width: 1024px)").matches
+  return matchMedia("(pointer: fine)").matches
+    && matchMedia("(min-width: 1024px)").matches
     ? 18
     : 6;
 }

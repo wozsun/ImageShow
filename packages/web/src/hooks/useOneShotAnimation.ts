@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState
+} from "react";
 
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
 
 function reducedMotionPreferred() {
-  return typeof window !== "undefined" && window.matchMedia?.(reducedMotionQuery).matches === true;
+  return typeof window !== "undefined"
+    && window.matchMedia?.(reducedMotionQuery).matches === true;
 }
 
 /**

@@ -686,7 +686,9 @@ test("[Web/批量属性] 移动浮层拥有菜单与确认框，按层关闭且�
   await send(trigger, "click");
   assert.deepEqual(
     [...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent),
-    ["清空全部主题", "清空全部标签", "清空全部作者", "清空以上全部"]
+    [
+      "清空全部主题", "清空全部标签", "清空全部作者", "清空以上全部"
+    ]
   );
   const allItem = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].at(-1)!;
   await send(allItem, "touchstart");

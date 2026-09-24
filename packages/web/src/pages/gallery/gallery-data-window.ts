@@ -1,7 +1,13 @@
 import type { PublicImageListResponseDto } from "@imageshow/shared/browser";
 import { shuffledImageBatch } from "../../lib/gallery/image-browse.js";
-import { galleryDataWindowFullItemBudget, galleryMaxMountedTiles } from "../../lib/constants.js";
-import type { EditableImageSnapshot, GalleryImageCard } from "../../lib/types.js";
+import {
+  galleryDataWindowFullItemBudget,
+  galleryMaxMountedTiles
+} from "../../lib/constants.js";
+import type {
+  EditableImageSnapshot,
+  GalleryImageCard
+} from "../../lib/types.js";
 import {
   CompactMasonryLayout,
   galleryImageNumericRatio,
@@ -129,10 +135,15 @@ function itemsInStoredOrder(
     const retained = retainedById.get(id);
     return retained && galleryCardsEqual(retained, item) ? retained : item;
   });
-  return ordered.every((item) => item !== undefined) ? (ordered as GalleryImageCard[]) : null;
+  return ordered.every((item) => item !== undefined)
+    ? ordered as GalleryImageCard[]
+    : null;
 }
 
-function galleryCardsEqual(left: GalleryImageCard, right: GalleryImageCard) {
+function galleryCardsEqual(
+  left: GalleryImageCard,
+  right: GalleryImageCard
+) {
   return (
     left.id === right.id &&
     left.title === right.title &&
@@ -237,7 +248,8 @@ export class GalleryDataWindow {
 
   isNextPageWithinPreloadRange(preloadEnd: number) {
     return (
-      Boolean(this.#pages.at(-1)?.nextCursor) && preloadEnd >= this.#layout.minimumColumnHeight
+      Boolean(this.#pages.at(-1)?.nextCursor)
+        && preloadEnd >= this.#layout.minimumColumnHeight
     );
   }
 
@@ -253,7 +265,10 @@ export class GalleryDataWindow {
 
   debugSnapshot = (): GalleryDataWindowDebugSnapshot => {
     const retainedPages = this.#pages.filter((page) => page.items).length;
-    const fullItems = this.#pages.reduce((total, page) => total + (page.items?.length ?? 0), 0);
+    const fullItems = this.#pages.reduce(
+      (total, page) => total + (page.items?.length ?? 0),
+      0
+    );
     const cursorCharacters = this.#pages.reduce(
       (total, page) => total + requestCursorCharacters(page),
       0
@@ -302,7 +317,10 @@ export class GalleryDataWindow {
     return request;
   }
 
-  resolvePage(request: GalleryPageRequest, payload: PublicImageListResponseDto) {
+  resolvePage(
+    request: GalleryPageRequest,
+    payload: PublicImageListResponseDto
+  ) {
     if (!this.#takePendingRequest(request)) return false;
     const { cursor } = request;
     this.#failedCursors.delete(cursor);
@@ -310,7 +328,9 @@ export class GalleryDataWindow {
     if (pageIndex >= 0) {
       this.#hydrateOrReplacePage(pageIndex, cursor, payload);
     } else if (
-      this.#pages.length === 0 ? cursor === "" : cursor === this.#pages.at(-1)!.nextCursor
+      this.#pages.length === 0
+      ? cursor === ""
+      : cursor === this.#pages.at(-1)!.nextCursor
     ) {
       this.#appendPage(cursor, payload);
     } else if (cursor === "") {
@@ -398,13 +418,19 @@ export class GalleryDataWindow {
     const currentItem = page.items?.[offset];
     if (currentItem && authoritativeItem?.id === imageId) {
       this.#confirmedEdits.set(imageId, authoritativeItem);
-      const nextItem = galleryCardFromSnapshot(currentItem, authoritativeItem);
+      const nextItem = galleryCardFromSnapshot(
+        currentItem,
+        authoritativeItem
+      );
       if (nextItem !== currentItem) {
         const byteDelta = estimateCardBytes(nextItem) - estimateCardBytes(currentItem);
         page.items![offset] = nextItem;
         page.fullBytes += byteDelta;
         this.#fullBytes += byteDelta;
-        const geometryChanged = this.#layout.setRatioStates(itemIndex, [cardRatioState(nextItem)]);
+        const geometryChanged = this.#layout.setRatioStates(
+          itemIndex,
+          [cardRatioState(nextItem)]
+        );
         if (geometryChanged) this.#recalculatePageBounds();
       }
     }
@@ -415,7 +441,10 @@ export class GalleryDataWindow {
     return page.needsRefresh ? { cursor: page.cursor, kind: "hydrate" } : null;
   }
 
-  updateViewport(viewport: GalleryDataWindowViewport, pinnedId: string | null) {
+  updateViewport(
+    viewport: GalleryDataWindowViewport,
+    pinnedId: string | null
+  ) {
     this.#lastViewport = viewport;
     this.#pinnedId = pinnedId;
     const retentionChanged = this.#applyRetention();
@@ -463,7 +492,8 @@ export class GalleryDataWindow {
       const offset = index - page.startIndex;
       const position = this.#layout.position(index);
       const id = page.ids[offset];
-      if (!position || !id) return [];
+      if (!position
+        || !id) return [];
       return [
         {
           ...position,
@@ -531,7 +561,10 @@ export class GalleryDataWindow {
     return true;
   }
 
-  viewportAnchor(visibleStart: number, visibleEnd: number): GalleryViewportAnchor | null {
+  viewportAnchor(
+    visibleStart: number,
+    visibleEnd: number
+  ): GalleryViewportAnchor | null {
     const indexes = this.#layout.windowIndexes({
       start: visibleStart,
       end: visibleEnd,
@@ -542,10 +575,15 @@ export class GalleryDataWindow {
     for (const index of indexes) {
       const position = this.#layout.position(index);
       const id = this.#idAt(index);
-      if (!position || !id || position.bottom < visibleStart || position.y > visibleEnd) {
+      if (!position
+        || !id
+        || position.bottom < visibleStart
+        || position.y > visibleEnd) {
         continue;
       }
-      if (!anchor || position.y < anchor.y || (position.y === anchor.y && position.x < anchor.x)) {
+      if (!anchor
+        || position.y < anchor.y
+        || (position.y === anchor.y && position.x < anchor.x)) {
         anchor = { ...position, id };
       }
     }
@@ -591,7 +629,9 @@ export class GalleryDataWindow {
 
   #requestPlan(): GalleryPageIntent[] {
     if (this.#pages.length === 0) {
-      return this.#requestAvailable("") ? [{ cursor: "", kind: "initial" }] : [];
+      return this.#requestAvailable("")
+        ? [{ cursor: "", kind: "initial" }]
+        : [];
     }
     const center = (this.#lastViewport.visibleStart + this.#lastViewport.visibleEnd) / 2;
     const hydration = [...this.#activePageIndexes]
@@ -620,7 +660,8 @@ export class GalleryDataWindow {
   }
 
   #requestAvailable(cursor: string) {
-    return !this.#pendingCursors.has(cursor) && !this.#failedCursors.has(cursor);
+    return !this.#pendingCursors.has(cursor)
+      && !this.#failedCursors.has(cursor);
   }
 
   #takePendingRequest(request: GalleryPageRequest) {
@@ -645,7 +686,11 @@ export class GalleryDataWindow {
     }
   }
 
-  #hydrateOrReplacePage(pageIndex: number, cursor: string, payload: PublicImageListResponseDto) {
+  #hydrateOrReplacePage(
+    pageIndex: number,
+    cursor: string,
+    payload: PublicImageListResponseDto
+  ) {
     const page = this.#pages[pageIndex]!;
     // Preserve the accepted batch order when validation keeps its members.
     const orderedItems = itemsInStoredOrder(
@@ -718,7 +763,10 @@ export class GalleryDataWindow {
     const firstRemoved = this.#pages[start];
     if (!firstRemoved) return;
     for (const page of this.#pages.slice(start)) {
-      this.#idCharacters -= page.ids.reduce((total, id) => total + id.length, 0);
+      this.#idCharacters -= page.ids.reduce(
+        (total, id) => total + id.length,
+        0
+      );
       if (page.items) this.#fullBytes -= page.fullBytes;
     }
     this.#itemCount = firstRemoved.startIndex;
@@ -751,7 +799,8 @@ export class GalleryDataWindow {
     if (this.#pages.length === 0) return false;
     const visiblePages: number[] = [];
     for (const [index, page] of this.#pages.entries()) {
-      if (page.bottom >= this.#lastViewport.start && page.top <= this.#lastViewport.end) {
+      if (page.bottom >= this.#lastViewport.start
+        && page.top <= this.#lastViewport.end) {
         visiblePages.push(index);
       }
     }
@@ -794,7 +843,9 @@ export class GalleryDataWindow {
     // Walk outward in distance order; the lower index wins equal distances.
     while ((left >= 0 || right < this.#pages.length) && desiredItems < this.#fullItemBudget) {
       const index =
-        left >= 0 && (right >= this.#pages.length || centerPage - left <= right - centerPage)
+        left >= 0 && (
+          right >= this.#pages.length || centerPage - left <= right - centerPage
+        )
           ? left--
           : right++;
       if (desired.has(index)) continue;

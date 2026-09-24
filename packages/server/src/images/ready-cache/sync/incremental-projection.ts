@@ -58,7 +58,9 @@ function adjustExpectedReadyImageStats(
 export async function readPreviousReadyImageCacheItems(ids: string[]) {
   const items: ReadyImageCacheItem[] = [];
   for (let offset = 0; offset < ids.length; offset += READY_IMAGE_INCREMENTAL_LIMIT) {
-    const members = ids.slice(offset, offset + READY_IMAGE_INCREMENTAL_LIMIT).map(readyImageMember);
+    const members = ids
+      .slice(offset, offset + READY_IMAGE_INCREMENTAL_LIMIT)
+      .map(readyImageMember);
     const pipeline = redis.pipeline();
     pipeline.hmget(READY_IMAGE_ITEMS_KEY, ...members);
     pipeline.zmscore(READY_IMAGE_ALL_INDEX_KEY, ...members);
@@ -84,7 +86,10 @@ export async function readPreviousReadyImageCacheItems(ids: string[]) {
   return items;
 }
 
-async function queueRemoval(item: ReadyImageCacheItem, writer: RedisPipelineBatcher) {
+async function queueRemoval(
+  item: ReadyImageCacheItem,
+  writer: RedisPipelineBatcher
+) {
   const member = readyImageMember(item.id);
   await writer.queue(estimatedRedisBytes(READY_IMAGE_ITEMS_KEY, member), (pipeline) => {
     pipeline.hdel(READY_IMAGE_ITEMS_KEY, member);
@@ -114,9 +119,17 @@ async function queueAddition(
   }
   if (!previous) {
     await writer.queue(
-      estimatedRedisBytes(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY, readyImageIdSuffixScore(item), member),
+      estimatedRedisBytes(
+        READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
+        readyImageIdSuffixScore(item),
+        member
+      ),
       (pipeline) => {
-        pipeline.zadd(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY, readyImageIdSuffixScore(item), member);
+        pipeline.zadd(
+          READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
+          readyImageIdSuffixScore(item),
+          member
+        );
       }
     );
   }
@@ -213,8 +226,14 @@ export async function applyReadyImageCacheDelta(
     READY_IMAGE_STATS_KEY,
     READY_IMAGE_ALL_INDEX_KEY
   ];
-  const cardinalities = await readReadyImageCardinalities(touchedCardinalityKeys, redis);
-  await validateIncrementalCardinalities(cardinalities, nextItemCount);
+  const cardinalities = await readReadyImageCardinalities(
+    touchedCardinalityKeys,
+    redis
+  );
+  await validateIncrementalCardinalities(
+    cardinalities,
+    nextItemCount
+  );
   await updateReadyImageIntegrity(cardinalities, redis);
   await validateReadyImageSamples(currentItems, redis);
 }

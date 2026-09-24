@@ -84,7 +84,11 @@ export async function receiveUploadRaw(
   }>
 ) {
   const rawPath = ingestionRawPath(input.pair, input.raw_generation);
-  const partPath = ingestionRawPartPath(input.pair, input.raw_generation, input.execution_token);
+  const partPath = ingestionRawPartPath(
+    input.pair,
+    input.raw_generation,
+    input.execution_token
+  );
   await mkdir(dirname(rawPath), { recursive: true });
   let total = 0;
   const heartbeatController = new AbortController();
@@ -106,7 +110,10 @@ export async function receiveUploadRaw(
     });
   };
   const heartbeatTimer = input.heartbeat
-    ? setInterval(queueHeartbeat, appConfig.ingestionRuntime.workerHeartbeatSeconds * 1000)
+    ? setInterval(
+      queueHeartbeat,
+      appConfig.ingestionRuntime.workerHeartbeatSeconds * 1000
+    )
     : null;
   heartbeatTimer?.unref();
   const limiter = new TransformStream<Uint8Array, Uint8Array>({
@@ -149,7 +156,10 @@ export async function receiveUploadRaw(
   }
 }
 
-export async function removeIngestionRaw(pair: IngestionSessionPair, rawGeneration: string) {
+export async function removeIngestionRaw(
+  pair: IngestionSessionPair,
+  rawGeneration: string
+) {
   const path = ingestionRawPath(pair, rawGeneration);
   const removed = await tryWithInactiveIngestionTempPath(path, async () => {
     if (ingestionTempPathIsActive(path)) return false;
@@ -160,7 +170,10 @@ export async function removeIngestionRaw(pair: IngestionSessionPair, rawGenerati
 }
 
 /** Delete an exact raw generation while the caller owns its active-path lease. */
-export async function removeOwnedIngestionRaw(pair: IngestionSessionPair, rawGeneration: string) {
+export async function removeOwnedIngestionRaw(
+  pair: IngestionSessionPair,
+  rawGeneration: string
+) {
   const path = ingestionRawPath(pair, rawGeneration);
   await rm(path, { force: true });
   await pruneIngestionTempParents(path);

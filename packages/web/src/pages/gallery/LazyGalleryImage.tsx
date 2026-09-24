@@ -91,7 +91,9 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
 
   useEffect(() => {
     taskRef.current?.reprioritize(
-      visibility.inViewport ? imageLoadPriority.viewport : imageLoadPriority.nearby
+      visibility.inViewport
+        ? imageLoadPriority.viewport
+        : imageLoadPriority.nearby
     );
     if (galleryPaused) {
       if (!loaded) {
@@ -113,7 +115,9 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
       setRenderImage(true);
       return;
     }
-    if (!visibility.inLoadRange && !loaded && taskRef.current?.cancelPending()) {
+    if (!visibility.inLoadRange
+      && !loaded
+      && taskRef.current?.cancelPending()) {
       setRenderImage(false);
     }
   }, [failed, galleryPaused, loaded, visibility]);
@@ -130,7 +134,9 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
     let current = true;
     const task = scheduler.schedule({
       group: "gallery",
-      priority: inViewportRef.current ? imageLoadPriority.viewport : imageLoadPriority.nearby,
+      priority: inViewportRef.current
+        ? imageLoadPriority.viewport
+        : imageLoadPriority.nearby,
       run: (signal) => loadImageElement(image, { src }, signal).then(() => undefined)
     });
     taskRef.current = task;
@@ -138,7 +144,9 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
       if (!current || taskRef.current !== task) return;
       if (result.status === "completed") {
         const measurement = intrinsicMeasurementRef.current;
-        if (measurement.enabled && image.naturalWidth > 0 && image.naturalHeight > 0) {
+        if (measurement.enabled
+          && image.naturalWidth > 0
+          && image.naturalHeight > 0) {
           measurement.report(image.naturalWidth, image.naturalHeight);
         }
         setLoaded(true);
@@ -153,7 +161,12 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
       clearImageElement(image);
       if (taskRef.current === task) taskRef.current = null;
     };
-  }, [failed, renderImage, scheduler, src]);
+  }, [
+    failed,
+    renderImage,
+    scheduler,
+    src
+  ]);
 
   return (
     <div
@@ -165,8 +178,12 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
         } as CSSProperties
       }
     >
-      {import.meta.env?.DEV === true && renderImage && !failed && <GalleryImageDevelopmentStats />}
-      {import.meta.env?.DEV === true && failed && <GalleryThumbnailFallbackDevelopmentStats />}
+      {import.meta.env?.DEV === true && renderImage && !failed && (
+        <GalleryImageDevelopmentStats />
+      )}
+      {import.meta.env?.DEV === true && failed && (
+        <GalleryThumbnailFallbackDevelopmentStats />
+      )}
       {renderImage && !failed && (
         <img
           ref={setImageRef}

@@ -1,7 +1,11 @@
 import { Container, type Renderer } from "pixi.js";
 import type { ShowOrder } from "@imageshow/shared/browser";
 import { ShowDataPool, type ShowCandidateUsage } from "../show-data-pool.js";
-import { showLayoutColumnWidth, type ShowCardSlot, type ShowImage } from "../show-layout.js";
+import {
+  showLayoutColumnWidth,
+  type ShowCardSlot,
+  type ShowImage
+} from "../show-layout.js";
 import { ShowWindowController } from "../show-window-controller.js";
 import {
   ShowPixiCard,
@@ -9,7 +13,10 @@ import {
   showPixiTextureLod
 } from "./show-pixi-card.js";
 import { ShowPixiCamera } from "./show-pixi-camera.js";
-import { clampShowWaterfallColumns, showWaterfallDensity } from "./show-pixi-layout.js";
+import {
+  clampShowWaterfallColumns,
+  showWaterfallDensity
+} from "./show-pixi-layout.js";
 import type { ShowPixiTextureCache } from "./show-pixi-texture-cache.js";
 import type {
   ShowPixiSceneController,
@@ -186,7 +193,10 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
       const progress = 1 - Math.exp(-elapsed / 150);
       this.#camera.setZoom(this.#camera.scale + scaleDelta * progress);
     }
-    if (this.#running && !this.#reducedMotion && !this.#camera.moving && !this.#camera.zooming) {
+    if (this.#running
+      && !this.#reducedMotion
+      && !this.#camera.moving
+      && !this.#camera.zooming) {
       this.#camera.panScreen(0, (-this.#speed * elapsed) / 1_000);
     }
     this.#reconcile(false);
@@ -274,8 +284,14 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
       .sort(
         (left, right) =>
           Number(right.visible) - Number(left.visible) ||
-          Math.hypot(left.x + left.width / 2 - centerX, left.y + left.height / 2 - centerY) -
-            Math.hypot(right.x + right.width / 2 - centerX, right.y + right.height / 2 - centerY)
+          Math.hypot(
+            left.x + left.width / 2 - centerX,
+            left.y + left.height / 2 - centerY
+          ) -
+            Math.hypot(
+              right.x + right.width / 2 - centerX,
+              right.y + right.height / 2 - centerY
+            )
       )
       .slice(0, maximum);
     this.#rejectedSprites = Math.max(0, snapshot.cards.length - desired.length);
@@ -320,7 +336,10 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
         scale,
         textureLods[index]
       );
-      card.root.position.set(slot.x + slot.width / 2, slot.y + slot.height / 2);
+      card.root.position.set(
+        slot.x + slot.width / 2,
+        slot.y + slot.height / 2
+      );
       card.setVisible(true);
       if (slot.visible) {
         visibleSprites += 1;
@@ -341,7 +360,10 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
       }
     }
     this.#visibleSprites = visibleSprites;
-    this.#coverageRatio = Math.min(1, visibleArea / Math.max(1, this.#width * this.#height));
+    this.#coverageRatio = Math.min(
+      1,
+      visibleArea / Math.max(1, this.#width * this.#height)
+    );
     const signature = visibleItems.map((item) => `${item.key}:${item.image.id}`).join("|");
     if (signature !== this.#lastVisibleSignature) {
       this.#lastVisibleSignature = signature;
@@ -400,7 +422,10 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
     const nextCeiling =
       this.#columns >= precisionBoundary - 0.001
         ? this.#columns + 3
-        : Math.min(precisionBoundary, this.#columns + density.galleryColumns * 2);
+        : Math.min(
+          precisionBoundary,
+          this.#columns + density.galleryColumns * 2
+        );
     return Math.min(density.maximumColumns, nextCeiling);
   }
 

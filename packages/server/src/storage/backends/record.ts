@@ -15,7 +15,9 @@ export type StorageBackendConfigRow = {
 
 export function normalizedNamespaceIdentities(value: unknown) {
   if (!Array.isArray(value)) return [];
-  return [...new Set(value.map((identity) => String(identity).trim()).filter(Boolean))].sort();
+  return [...new Set(value
+    .map((identity) => String(identity).trim())
+    .filter(Boolean))].sort();
 }
 
 export function storageConfigFromRow(row: StorageBackendConfigRow): StorageConfig {

@@ -23,19 +23,32 @@ export function ingestionCanonicalKeyPrefix(owner: string) {
   return `${ingestionCanonicalKeyRoot}${ingestionOwnerKey(owner)}:`;
 }
 
-export function ingestionOwnerQueueKey(owner: string, queue: IngestionQueueType) {
+export function ingestionOwnerQueueKey(
+  owner: string,
+  queue: IngestionQueueType
+) {
   return `${ingestionOwnerQueueKeyRoot}${ingestionOwnerKey(owner)}:${queue}`;
 }
 
-export function ingestionDisplayQueueKey(owner: string, queue: IngestionQueueType) {
+export function ingestionDisplayQueueKey(
+  owner: string,
+  queue: IngestionQueueType
+) {
   return `${ingestionDisplayQueueKeyRoot}${ingestionOwnerKey(owner)}:${queue}`;
 }
 
-export function ingestionQueueMetadataKey(owner: string, queue: IngestionQueueType) {
+export function ingestionQueueMetadataKey(
+  owner: string,
+  queue: IngestionQueueType
+) {
   return `${ingestionQueueMetadataKeyRoot}${ingestionOwnerKey(owner)}:${queue}`;
 }
 
-export function ingestionSessionKeys(owner: string, queue: IngestionQueueType, sessionId: string) {
+export function ingestionSessionKeys(
+  owner: string,
+  queue: IngestionQueueType,
+  sessionId: string
+) {
   return {
     canonical: ingestionCanonicalKey(owner, sessionId),
     owner: ingestionOwnerQueueKey(owner, queue),

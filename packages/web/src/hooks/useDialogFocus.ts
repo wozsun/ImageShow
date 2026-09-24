@@ -66,11 +66,14 @@ export function useDialogFocus({
   useLayoutEffect(() => {
     if (active && !wasActiveRef.current) {
       const activeElement =
-        document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+        document.activeElement instanceof HTMLElement
+          && document.activeElement !== document.body
           ? document.activeElement
           : null;
       returnFocusTargetRef.current =
-        returnFocusRef?.current ?? activeElement ?? getPageScrollLockFocusTarget();
+        returnFocusRef?.current
+          ?? activeElement
+          ?? getPageScrollLockFocusTarget();
     } else if (!active && wasActiveRef.current) {
       restoreFocus();
       returnFocusTargetRef.current = null;

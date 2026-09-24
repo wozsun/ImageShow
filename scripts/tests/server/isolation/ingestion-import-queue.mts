@@ -214,14 +214,22 @@ await runIntegrationScenario(async (runtime) => {
       importCreatedAt
     )
   );
-  assert.equal(acceptedImport.session.discard_at, importCreatedAt + importTtlMs);
+  assert.equal(
+    acceptedImport.session.discard_at,
+    importCreatedAt + importTtlMs
+  );
   assert.equal(importListenerCalls, 1);
   const importTestKeys = ingestionSessionKeys.ingestionSessionKeys(
     importOwner,
     "import",
     importSessionId
   );
-  const importSnapshot = await ingestionRepository.snapshot(importOwner, "import", 0, 10);
+  const importSnapshot = await ingestionRepository.snapshot(
+    importOwner,
+    "import",
+    0,
+    10
+  );
   assert.equal(importSnapshot.items.length, 1);
   assert.equal(
     importSnapshot.items[0].discard_at,
@@ -238,7 +246,11 @@ await runIntegrationScenario(async (runtime) => {
         now
       )
     );
-    await ingestionRepository.deleteSession(discarded.session, discarded.session.version, now + 1);
+    await ingestionRepository.deleteSession(
+      discarded.session,
+      discarded.session.version,
+      now + 1
+    );
   };
   const importOrderOwner = "current-display-order-import-" + randomUUID();
   const olderImportBatchKey = coreUuid.randomUuidV7At(new Date(serviceNow + 1_000));
@@ -274,7 +286,11 @@ await runIntegrationScenario(async (runtime) => {
           ...withoutHash,
           semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(withoutHash)
         },
-        ingestionSessionIdentity.createIngestionDisplayOrderKey(batchKey, position, sessionId),
+        ingestionSessionIdentity.createIngestionDisplayOrderKey(
+          batchKey,
+          position,
+          sessionId
+        ),
         now
       )
     );
@@ -328,7 +344,12 @@ await runIntegrationScenario(async (runtime) => {
     "批内来源顺序必须跨页稳定，旧批次紧随新批次"
   );
   const externalImportBatchKey = coreUuid.randomUuidV7At(new Date(serviceNow + 3_000));
-  await acceptImportOrderProbe(externalImportBatchKey, "external", 0, serviceNow + 18_000);
+  await acceptImportOrderProbe(
+    externalImportBatchKey,
+    "external",
+    0,
+    serviceNow + 18_000
+  );
   const currentDocumentPairs = Array.from({ length: 12 }, (_, position) => {
     const session = importOrderSessions.get("newer-" + String(position));
     return {
@@ -405,8 +426,14 @@ await runIntegrationScenario(async (runtime) => {
     importOrderOwner,
     "import"
   );
-  assert.equal(await redisClient.redis.zrem(importDisplayQueueKey, displacedDisplayOrderKey), 1);
-  assert.equal(await redisClient.redis.zadd(importDisplayQueueKey, 0, orphanDisplayOrderKey), 1);
+  assert.equal(
+    await redisClient.redis.zrem(importDisplayQueueKey, displacedDisplayOrderKey),
+    1
+  );
+  assert.equal(
+    await redisClient.redis.zadd(importDisplayQueueKey, 0, orphanDisplayOrderKey),
+    1
+  );
   try {
     await assert.rejects(
       productionIngestionRepository.snapshot(importOrderOwner, "import", 0, 0, {
@@ -420,7 +447,11 @@ await runIntegrationScenario(async (runtime) => {
     );
   } finally {
     await redisClient.redis.zrem(importDisplayQueueKey, orphanDisplayOrderKey);
-    await redisClient.redis.zadd(importDisplayQueueKey, 0, displacedDisplayOrderKey);
+    await redisClient.redis.zadd(
+      importDisplayQueueKey,
+      0,
+      displacedDisplayOrderKey
+    );
   }
   const beyondFilteredImportPage = await ingestionRepository.snapshot(
     importOrderOwner,
@@ -456,7 +487,9 @@ await runIntegrationScenario(async (runtime) => {
     ],
     "当前文档已释放的旧 pair 必须跳过，不能把正常状态变化误报为结构损坏"
   );
-  assert.deepEqual(staleIncludedImportPage.staleItems, [currentDocumentPairs[0]]);
+  assert.deepEqual(staleIncludedImportPage.staleItems, [
+    currentDocumentPairs[0]
+  ]);
   const replacementTime = imageTime.parseImageTime("2026-08-23T01:11:00.456Z");
   const replacementWithoutHash = {
     ...importCanonicalWithoutHash,
@@ -464,7 +497,9 @@ await runIntegrationScenario(async (runtime) => {
     session_id: staleIncludedSession.session_id,
     image_id: imageTime.createImageId(replacementTime.date, 0),
     image_time: replacementTime.iso,
-    request_hash: createHash("sha256").update("newer-0-replacement").digest("hex")
+    request_hash: createHash("sha256")
+      .update("newer-0-replacement")
+      .digest("hex")
   };
   const replacement = activeResult(
     await ingestionRepository.acceptImportSession(
@@ -491,7 +526,9 @@ await runIntegrationScenario(async (runtime) => {
       includeItems: [currentDocumentPairs[0]]
     }
   );
-  assert.deepEqual(replacedIncarnationPage.staleItems, [currentDocumentPairs[0]]);
+  assert.deepEqual(replacedIncarnationPage.staleItems, [
+    currentDocumentPairs[0]
+  ]);
   assert.equal(
     replacedIncarnationPage.items.filter(
       (item) =>
@@ -559,7 +596,10 @@ await runIntegrationScenario(async (runtime) => {
         position,
         sessionId
       );
-      const canonicalKey = ingestionSessionKeys.ingestionCanonicalKey(staleScaleOwner, sessionId);
+      const canonicalKey = ingestionSessionKeys.ingestionCanonicalKey(
+        staleScaleOwner,
+        sessionId
+      );
       const snapshotWithoutHash = {
         ...importCanonicalWithoutHash,
         owner: staleScaleOwner,
@@ -659,7 +699,8 @@ await runIntegrationScenario(async (runtime) => {
     );
     const staleScaleFixtureResult = await staleScaleFixture.exec();
     assert.ok(
-      staleScaleFixtureResult && staleScaleFixtureResult.every(([error]) => error === null),
+      staleScaleFixtureResult
+        && staleScaleFixtureResult.every(([error]) => error === null),
       "3,600 项合成队列夹具必须完整建立"
     );
 
@@ -675,7 +716,9 @@ await runIntegrationScenario(async (runtime) => {
       await redisClient.redis.info("commandstats")
     );
     const staleScaleZscanCalls = Number(
-      staleScaleCommandStats.get("cmdstat_zscan")?.split(",", 1)[0]?.replace("calls=", "") ?? "0"
+      staleScaleCommandStats.get("cmdstat_zscan")
+        ?.split(",", 1)[0]
+        ?.replace("calls=", "") ?? "0"
     );
     assert.deepEqual(
       staleScaleSnapshot.items.map((item) => item.session_id),
@@ -701,10 +744,15 @@ await runIntegrationScenario(async (runtime) => {
         staleScaleCleanup.unlink(...keys);
       }
     }
-    staleScaleCleanup.unlink(staleScaleKeys.owner, staleScaleKeys.display, staleScaleKeys.metadata);
+    staleScaleCleanup.unlink(
+      staleScaleKeys.owner,
+      staleScaleKeys.display,
+      staleScaleKeys.metadata
+    );
     const staleScaleCleanupResult = await staleScaleCleanup.exec();
     assert.ok(
-      staleScaleCleanupResult && staleScaleCleanupResult.every(([error]) => error === null),
+      staleScaleCleanupResult
+        && staleScaleCleanupResult.every(([error]) => error === null),
       "3,600 项合成队列夹具必须完整清理"
     );
   }
@@ -725,7 +773,10 @@ await runIntegrationScenario(async (runtime) => {
     const created = await ingestionRepository.createUploadIntent({
       owner: uploadOrderOwner,
       session_id: sessionId,
-      candidate_image_id: imageTime.createImageId(uploadOrderTime.date, position),
+      candidate_image_id: imageTime.createImageId(
+        uploadOrderTime.date,
+        position
+      ),
       resolved_image_time: uploadOrderTime.iso,
       request_hash: requestHash,
       display_order_key: ingestionSessionIdentity.createIngestionDisplayOrderKey(
@@ -798,7 +849,12 @@ await runIntegrationScenario(async (runtime) => {
       ).session
     );
   }
-  const uploadOrderSnapshot = await ingestionRepository.snapshot(uploadOrderOwner, "upload", 0, 10);
+  const uploadOrderSnapshot = await ingestionRepository.snapshot(
+    uploadOrderOwner,
+    "upload",
+    0,
+    10
+  );
   assert.deepEqual(
     uploadOrderSnapshot.items.map((item) => item.session_id),
     convertedUploadOrderSessions.map((item) => item.session_id),
@@ -810,7 +866,11 @@ await runIntegrationScenario(async (runtime) => {
 
   const runnableProbe = async (label: string, position: number, createdAt: number) => {
     const owner = "current-runnable-" + label + "-" + randomUUID();
-    const sessionId = ingestionSessionIdentity.createIngestionSessionId(owner, "import", label);
+    const sessionId = ingestionSessionIdentity.createIngestionSessionId(
+      owner,
+      "import",
+      label
+    );
     const withoutHash = {
       ...importCanonicalWithoutHash,
       owner,
@@ -836,7 +896,11 @@ await runIntegrationScenario(async (runtime) => {
   const oldRunnableProbes = [];
   for (let index = 0; index < 3; index += 1) {
     oldRunnableProbes.push(
-      await runnableProbe("old-" + String(index), 100 + index, importCreatedAt + 20 + index)
+      await runnableProbe(
+        "old-" + String(index),
+        100 + index,
+        importCreatedAt + 20 + index
+      )
     );
   }
   let runnablePage = await ingestionRepository.discoverRunnablePage(0, 0, 1);
@@ -845,10 +909,15 @@ await runIntegrationScenario(async (runtime) => {
   const newRunnableProbes = [];
   for (let index = 0; index < 3; index += 1) {
     newRunnableProbes.push(
-      await runnableProbe("new-" + String(index), 110 + index, importCreatedAt + 30 + index)
+      await runnableProbe(
+        "new-" + String(index),
+        110 + index,
+        importCreatedAt + 30 + index
+      )
     );
   }
-  while (runnablePage.scanned && runnablePage.lastScannedScore < frozenRunnableTail) {
+  while (runnablePage.scanned
+    && runnablePage.lastScannedScore < frozenRunnableTail) {
     runnablePage = await ingestionRepository.discoverRunnablePage(
       runnablePage.lastScannedScore,
       frozenRunnableTail,
@@ -864,8 +933,14 @@ await runIntegrationScenario(async (runtime) => {
     "冻结尾部后的低 accepted_order 新 owner 不得把旧任务推出本轮扫描"
   );
   const runnableProbeScores = await Promise.all(
-    [...oldRunnableProbes, ...newRunnableProbes].map((probe) =>
-      redisClient.redis.zscore(probe.keys.runnable, probe.keys.canonical)
+    [
+      ...oldRunnableProbes,
+      ...newRunnableProbes
+    ].map((probe) =>
+      redisClient.redis.zscore(
+        probe.keys.runnable,
+        probe.keys.canonical
+      )
     )
   );
   assert.ok(runnableProbeScores.every((score) => score !== null));
@@ -876,19 +951,27 @@ await runIntegrationScenario(async (runtime) => {
     "全局 runnable score 必须与各 owner 的 accepted_order 独立递增"
   );
   assert.ok(
-    [...oldRunnableProbes, ...newRunnableProbes].every(
+    [
+      ...oldRunnableProbes,
+      ...newRunnableProbes
+    ].every(
       (probe) => probe.accepted.session.accepted_order === 1
     )
   );
   const nextRunnablePassKeys = new Set();
   const runnableScanBatchSize =
     sharedAppConfig.appConfig.ingestionRuntime.ingestionSessionScanBatchSize;
-  runnablePage = await ingestionRepository.discoverRunnablePage(0, 0, runnableScanBatchSize);
+  runnablePage = await ingestionRepository.discoverRunnablePage(
+    0,
+    0,
+    runnableScanBatchSize
+  );
   while (true) {
     for (const item of runnablePage.items) {
       nextRunnablePassKeys.add(item.canonicalKey);
     }
-    if (!runnablePage.scanned || runnablePage.lastScannedScore >= runnablePage.frozenTailScore)
+    if (!runnablePage.scanned
+      || runnablePage.lastScannedScore >= runnablePage.frozenTailScore)
       break;
     runnablePage = await ingestionRepository.discoverRunnablePage(
       runnablePage.lastScannedScore,
@@ -897,7 +980,10 @@ await runIntegrationScenario(async (runtime) => {
     );
   }
   assert.ok(newRunnableProbes.every((probe) => nextRunnablePassKeys.has(probe.keys.canonical)));
-  for (const probe of [...oldRunnableProbes, ...newRunnableProbes]) {
+  for (const probe of [
+    ...oldRunnableProbes,
+    ...newRunnableProbes
+  ]) {
     await redisClient.redis
       .multi()
       .zrem(probe.keys.runnable, probe.keys.canonical)
@@ -905,15 +991,31 @@ await runIntegrationScenario(async (runtime) => {
       .del(probe.keys.canonical, probe.keys.owner, probe.keys.metadata)
       .exec();
   }
-  await redisClient.redis.zrem(importTestKeys.runnable, importTestKeys.canonical);
-  await assert.rejects(ingestionRepository.snapshot(importOwner, "import", 0, 10));
+  await redisClient.redis.zrem(
+    importTestKeys.runnable,
+    importTestKeys.canonical
+  );
+  await assert.rejects(ingestionRepository.snapshot(
+    importOwner,
+    "import",
+    0,
+    10
+  ));
   await redisClient.redis.zadd(
     importTestKeys.runnable,
     acceptedImport.session.accepted_order,
     importTestKeys.canonical
   );
-  await redisClient.redis.zrem(importTestKeys.expires, importTestKeys.canonical);
-  await assert.rejects(ingestionRepository.snapshot(importOwner, "import", 0, 10));
+  await redisClient.redis.zrem(
+    importTestKeys.expires,
+    importTestKeys.canonical
+  );
+  await assert.rejects(ingestionRepository.snapshot(
+    importOwner,
+    "import",
+    0,
+    10
+  ));
   await redisClient.redis.zadd(
     importTestKeys.expires,
     acceptedImport.session.discard_at,
@@ -958,7 +1060,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(downloadingImport.metadata.waiting, 0);
   assert.equal(downloadingImport.metadata.running, 1);
   assert.equal(
-    await redisClient.redis.zscore(importTestKeys.runnable, importTestKeys.canonical),
+    await redisClient.redis.zscore(
+      importTestKeys.runnable,
+      importTestKeys.canonical
+    ),
     null
   );
   const receivedImport = activeResult(
@@ -984,7 +1089,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(receivedImport.metadata.total, acceptedImport.metadata.total);
   assert.equal(receivedImport.metadata.unfinished, acceptedImport.metadata.unfinished);
   const receivedRunnableScore = Number(
-    await redisClient.redis.zscore(importTestKeys.runnable, importTestKeys.canonical)
+    await redisClient.redis.zscore(
+      importTestKeys.runnable,
+      importTestKeys.canonical
+    )
   );
   assert.ok(Number.isSafeInteger(receivedRunnableScore) && receivedRunnableScore > 0);
   const failedImport = activeResult(
@@ -1065,7 +1173,10 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.deepEqual(
     Object.keys(
-      JSON.parse(requiredValue(await redisClient.redis.hget(importTestKeys.canonical, "snapshot")))
+      JSON.parse(requiredValue(await redisClient.redis.hget(
+        importTestKeys.canonical,
+        "snapshot"
+      )))
     ).sort(),
     discardedReceiptFields
   );
@@ -1112,7 +1223,10 @@ await runIntegrationScenario(async (runtime) => {
     "import",
     "exhausted-order"
   );
-  const exhaustedOrderImageId = imageTime.createImageId(importResolvedTime.date, 45);
+  const exhaustedOrderImageId = imageTime.createImageId(
+    importResolvedTime.date,
+    45
+  );
   const exhaustedOrderWithoutHash = {
     ...importCanonicalWithoutHash,
     session_id: exhaustedOrderSessionId,
@@ -1126,7 +1240,11 @@ await runIntegrationScenario(async (runtime) => {
         semantic_hash:
           ingestionSessionProjection.ingestionSessionSemanticHash(exhaustedOrderWithoutHash)
       },
-      displayOrderKey(exhaustedOrderSessionId, 45, importCreatedAt + 8),
+      displayOrderKey(
+        exhaustedOrderSessionId,
+        45,
+        importCreatedAt + 8
+      ),
       importCreatedAt + 8
     )
   );
@@ -1153,7 +1271,10 @@ await runIntegrationScenario(async (runtime) => {
     "import",
     "wrong-index-type"
   );
-  const blockedCreateImageId = imageTime.createImageId(importResolvedTime.date, 40);
+  const blockedCreateImageId = imageTime.createImageId(
+    importResolvedTime.date,
+    40
+  );
   const blockedCreateWithoutHash = {
     ...importCanonicalWithoutHash,
     owner: blockedCreateOwner,

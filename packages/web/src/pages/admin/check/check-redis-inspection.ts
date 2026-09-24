@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api/client.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
@@ -22,7 +27,9 @@ export type ReadyImageProjectionUsageSnapshot = {
 };
 
 function recordValue(value: unknown) {
-  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  return value !== null && typeof value === "object"
+    ? value as Record<string, unknown>
+    : null;
 }
 
 function projectionUsageAggregate(value: unknown) {
@@ -48,7 +55,9 @@ function derivedProjectionUsageAggregate(value: unknown) {
   const record = recordValue(value);
   const aggregate = projectionUsageAggregate(record);
   const memberCount = record?.member_count;
-  if (!aggregate || !Number.isSafeInteger(memberCount) || Number(memberCount) < 0) {
+  if (!aggregate
+    || !Number.isSafeInteger(memberCount)
+    || Number(memberCount) < 0) {
     return null;
   }
   return {
@@ -82,7 +91,9 @@ export function readyImageProjectionUsage(
   const usage = recordValue(deepInspection.image_projection_usage);
   const core = projectionUsageAggregate(usage?.core);
   const derived = derivedProjectionUsageAggregate(usage?.derived);
-  return core && derived ? { measured_at: deepInspection.measured_at, core, derived } : null;
+  return core && derived
+    ? { measured_at: deepInspection.measured_at, core, derived }
+    : null;
 }
 
 function latestReadyImageProjectionUsage(
@@ -91,7 +102,9 @@ function latestReadyImageProjectionUsage(
 ) {
   if (!first) return second;
   if (!second) return first;
-  return Date.parse(first.measured_at) >= Date.parse(second.measured_at) ? first : second;
+  return Date.parse(first.measured_at) >= Date.parse(second.measured_at)
+    ? first
+    : second;
 }
 
 export function useRetainedReadyImageProjectionUsage(result: unknown) {

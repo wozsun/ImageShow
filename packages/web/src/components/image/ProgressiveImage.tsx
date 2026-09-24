@@ -13,7 +13,10 @@ import {
   loadImageElement,
   type ImageElementLoadResult
 } from "./image-element-loader.js";
-import { imageLoadPriority, type ImageLoadTaskHandle } from "./image-load-scheduler.js";
+import {
+  imageLoadPriority,
+  type ImageLoadTaskHandle
+} from "./image-load-scheduler.js";
 
 export function ProgressiveImage({
   imageKey,
@@ -33,7 +36,9 @@ export function ProgressiveImage({
   style?: CSSProperties;
 }) {
   const scheduler = useImageLoadScheduler();
-  const hasSeparateThumb = Boolean(thumbSrc && fullSrc && thumbSrc !== fullSrc);
+  const hasSeparateThumb = Boolean(thumbSrc
+    && fullSrc
+    && thumbSrc !== fullSrc);
   const fullImageRef = useRef<HTMLImageElement | null>(null);
   const fullFrameRef = useRef<HTMLDivElement | null>(null);
   const fullTaskRef = useRef<ImageLoadTaskHandle | null>(null);
@@ -44,7 +49,10 @@ export function ProgressiveImage({
   const [thumbVisible, setThumbVisible] = useState(Boolean(thumbSrc));
   const [thumbFailed, setThumbFailed] = useState(false);
   const [decodeResult, setDecodeResult] = useState<ImageElementLoadResult | null>(null);
-  const thumbRendered = Boolean(thumbSrc && thumbSrc !== fullSrc && thumbVisible && !thumbFailed);
+  const thumbRendered = Boolean(thumbSrc
+    && thumbSrc !== fullSrc
+    && thumbVisible
+    && !thumbFailed);
   const thumbRef = useRef<HTMLImageElement | null>(null);
   const setFullImageRef = useCallback((image: HTMLImageElement | null) => {
     fullImageRef.current = image;
@@ -54,7 +62,8 @@ export function ProgressiveImage({
   }, []);
 
   useLayoutEffect(() => {
-    setThumbVisible(Boolean(thumbSrc && thumbSrc !== fullSrc));
+    setThumbVisible(Boolean(thumbSrc
+      && thumbSrc !== fullSrc));
     setThumbFailed(false);
   }, [fullSrc, imageKey, thumbSrc]);
 
@@ -70,7 +79,11 @@ export function ProgressiveImage({
       group: "detail",
       priority: imageLoadPriority.detailOriginal,
       run: async (signal) => {
-        const result = await loadImageElement(image, { src: fullSrc }, signal);
+        const result = await loadImageElement(
+          image,
+          { src: fullSrc },
+          signal
+        );
         if (current) setDecodeResult(result);
       }
     });
@@ -97,7 +110,11 @@ export function ProgressiveImage({
     const task = scheduler.schedule({
       group: "detail",
       priority: imageLoadPriority.detailPlaceholder,
-      run: (signal) => loadImageElement(image, { src: thumbSrc }, signal).then(() => undefined)
+      run: (signal) => loadImageElement(
+        image,
+        { src: thumbSrc },
+        signal
+      ).then(() => undefined)
     });
     thumbTaskRef.current = task;
     void task.result.then((result) => {
@@ -123,7 +140,9 @@ export function ProgressiveImage({
     };
     frameId = window.requestAnimationFrame(() => {
       frameId = undefined;
-      const animations = typeof frame.getAnimations === "function" ? frame.getAnimations() : [];
+      const animations = typeof frame.getAnimations === "function"
+        ? frame.getAnimations()
+        : [];
       if (!animations.length) {
         finish();
         return;

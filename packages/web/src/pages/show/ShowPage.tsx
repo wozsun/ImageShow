@@ -12,7 +12,10 @@ import {
   useState,
   type CSSProperties
 } from "react";
-import type { ShowDensity, SiteShowSettings } from "@imageshow/shared/browser";
+import type {
+  ShowDensity,
+  SiteShowSettings
+} from "@imageshow/shared/browser";
 import { AppLoadingRegion } from "../../components/feedback/AppLoadingScreen.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
@@ -56,7 +59,10 @@ import "../../styles/gallery-responsive.css";
 import "../../styles/show.css";
 import "../../styles/show-pixi.css";
 
-function configuredWaterfallColumns(density: ShowWaterfallDensity, configured: ShowDensity) {
+function configuredWaterfallColumns(
+  density: ShowWaterfallDensity,
+  configured: ShowDensity
+) {
   if (configured === "relaxed") return density.minimumColumns;
   if (configured === "dense") return density.normalMaximumColumns;
   return density.defaultColumns;
@@ -79,7 +85,10 @@ function remapWaterfallColumns(
     return next.normalMaximumColumns;
   }
   if (Math.abs(columns - previous.maximumColumns) < 0.01) return next.maximumColumns;
-  return clampShowWaterfallColumns((columns / previous.galleryColumns) * next.galleryColumns, next);
+  return clampShowWaterfallColumns(
+    columns / previous.galleryColumns * next.galleryColumns,
+    next
+  );
 }
 
 export function ShowPage({
@@ -101,12 +110,18 @@ export function ShowPage({
   } = browseRoute;
   const routeQuery = routeSearchParams.toString();
   const order = useMemo(
-    () => showOrderFromSearchParams(new URLSearchParams(routeQuery), settings.order),
+    () => showOrderFromSearchParams(
+      new URLSearchParams(routeQuery),
+      settings.order
+    ),
     [routeQuery, settings.order]
   );
   const configuredScene = settings.mode;
   const scene = useMemo(
-    () => showModeFromSearchParams(new URLSearchParams(routeQuery), configuredScene),
+    () => showModeFromSearchParams(
+      new URLSearchParams(routeQuery),
+      configuredScene
+    ),
     [configuredScene, routeQuery]
   );
   const sourceKey = useMemo(
@@ -152,7 +167,8 @@ export function ShowPage({
     }),
     filtersReady
   );
-  const playbackRunning = running && !data.initialLoading && !data.error && data.images.length > 0;
+  const playbackRunning = running && !data.initialLoading && !data.error
+    && data.images.length > 0;
   const navigationControls = usePublicImageViewportControls({
     autoHideAfterMs:
       playbackRunning && !reducedMotion && motionActive
@@ -230,7 +246,8 @@ export function ShowPage({
       (element) => element.dataset.imageId !== selected.id
     );
     detailReturnFocusRef.current =
-      fallback ?? document.querySelector<HTMLElement>(".show-pixi-canvas-host");
+      fallback
+        ?? document.querySelector<HTMLElement>(".show-pixi-canvas-host");
   }, [data.images, selected]);
 
   useEffect(() => {
@@ -250,7 +267,10 @@ export function ShowPage({
     };
   }, []);
 
-  const waterfallDensity = useMemo(() => showWaterfallDensity(viewportWidth), [viewportWidth]);
+  const waterfallDensity = useMemo(
+    () => showWaterfallDensity(viewportWidth),
+    [viewportWidth]
+  );
   const previousWaterfallDensityRef = useRef(waterfallDensity);
   const requestWaterfallColumns = useCallback(
     (columns: number) => {
@@ -269,7 +289,11 @@ export function ShowPage({
     const previous = previousWaterfallDensityRef.current;
     previousWaterfallDensityRef.current = waterfallDensity;
     if (previous.galleryColumns === waterfallDensity.galleryColumns) return;
-    setWaterfallColumns((current) => remapWaterfallColumns(current, previous, waterfallDensity));
+    setWaterfallColumns((current) => remapWaterfallColumns(
+      current,
+      previous,
+      waterfallDensity
+    ));
   }, [waterfallDensity]);
 
   const getShowModeHref = (nextScene: ShowPixiSceneKind) => {
@@ -278,7 +302,9 @@ export function ShowPage({
   };
   const floatSizeDescription = `当前尺寸档位 ${floatSizeIndex + 1}/${showFloatSizeSteps.length}`;
   const waterfallSizeDescription = `当前约 ${
-    Number.isInteger(waterfallColumns) ? waterfallColumns : waterfallColumns.toFixed(1)
+    Number.isInteger(waterfallColumns)
+      ? waterfallColumns
+      : waterfallColumns.toFixed(1)
   } 列`;
   const smallerDisabled =
     scene === "waterfall"
@@ -297,7 +323,9 @@ export function ShowPage({
       data-public-navigation-visible={headerVisible || toolbarVisible}
       style={
         {
-          "--gallery-toolbar-height": toolbarHeight ? `${toolbarHeight}px` : undefined
+          "--gallery-toolbar-height": toolbarHeight
+            ? `${toolbarHeight}px`
+            : undefined
         } as CSSProperties
       }
     >
@@ -395,7 +423,9 @@ export function ShowPage({
               : "上下拖动或滚轮纵移；Ctrl + 滚轮调整尺寸"}
           </span>
           <span className="show-interaction-hint-touch">
-            {scene === "waterfall" ? "拖动平移；点按 ± 或双指缩放" : "上下拖动；点按 ± 调整尺寸"}
+            {scene === "waterfall"
+              ? "拖动平移；点按 ± 或双指缩放"
+              : "上下拖动；点按 ± 调整尺寸"}
           </span>
         </p>
         {Boolean(filterError) && (

@@ -5,13 +5,17 @@ import type {
   IngestionAttributeDefaults
 } from "./ingestion-job.js";
 
-import { webIngestionBatchKey, webUuidV7 } from "./ingestion-identity.js";
+import {
+  webIngestionBatchKey,
+  webUuidV7
+} from "./ingestion-identity.js";
 
 const externalImageUrlMaxLength = 2048;
 
 function hasDirectIpHostname(hostname: string) {
   const unwrappedHostname = hostname.replace(/^\[|\]$/g, "");
-  return unwrappedHostname.includes(":") || /^(?:\d{1,3}\.){3}\d{1,3}$/.test(unwrappedHostname);
+  return unwrappedHostname.includes(":")
+    || /^(?:\d{1,3}\.){3}\d{1,3}$/.test(unwrappedHostname);
 }
 
 export function normalizeImportDownloadUrl(value: string) {
@@ -61,7 +65,8 @@ export function importPositionText(item: {
   batchPosition?: number;
 }) {
   if (item.manifestSource === "weibo") {
-    const position = item.batchPosition ?? (item.manifestLine ? item.manifestLine - 1 : undefined);
+    const position = item.batchPosition
+      ?? (item.manifestLine ? item.manifestLine - 1 : undefined);
     return position === undefined ? "" : `微博第 ${position + 1} 张`;
   }
   return item.manifestLine ? `JSONL 第 ${item.manifestLine} 行` : "";

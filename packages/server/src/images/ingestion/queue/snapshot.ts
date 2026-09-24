@@ -11,7 +11,10 @@ import {
   committedIngestionResultForOwner,
   readCommittedIngestionResultsByImageIds
 } from "../../read-models/ingestion-results.ts";
-import { requireIngestionActionScope, signIngestionActionWatermark } from "./action-scope.ts";
+import {
+  requireIngestionActionScope,
+  signIngestionActionWatermark
+} from "./action-scope.ts";
 import type {
   CompletedIngestionReceipt,
   IngestionQueueType,
@@ -98,7 +101,11 @@ export async function readStableIngestionQueueSnapshot(
     );
     const stale = receipts.filter(
       (receipt) =>
-        !committedIngestionResultForOwner(committed, receipt.image_id, input.session.username)
+        !committedIngestionResultForOwner(
+          committed,
+          receipt.image_id,
+          input.session.username
+        )
     );
     if (stale.length) {
       if (
@@ -141,7 +148,11 @@ export async function readStableIngestionQueueSnapshot(
       limit: snapshot.limit,
       items,
       stale_items: snapshot.staleItems,
-      action_watermark: signIngestionActionWatermark(scope, metadata, input.tokens)
+      action_watermark: signIngestionActionWatermark(
+        scope,
+        metadata,
+        input.tokens
+      )
     };
   }
 }

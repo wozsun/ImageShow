@@ -1,6 +1,10 @@
 import { hash } from "node:crypto";
 import type { ImageDraftDto } from "@imageshow/shared/browser";
-import type { IngestionQueueType, IngestionSourceType, ImportDownload } from "./model.ts";
+import type {
+  IngestionQueueType,
+  IngestionSourceType,
+  ImportDownload
+} from "./model.ts";
 import { stableJson } from "./projection.ts";
 
 export type IngestionIntentHashInput = Readonly<{
@@ -25,7 +29,9 @@ export function ingestionIntentRequestHash(input: IngestionIntentHashInput) {
       batch_key: input.batch_key,
       provided_image_time: input.provided_image_time,
       batch_position: input.batch_position,
-      import_download: input.import_download ? { url: input.import_download.url } : null,
+      import_download: input.import_download
+        ? { url: input.import_download.url }
+        : null,
       metadata: {
         device: input.metadata.device,
         brightness: input.metadata.brightness,

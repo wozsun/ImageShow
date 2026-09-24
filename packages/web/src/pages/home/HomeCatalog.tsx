@@ -51,7 +51,9 @@ function HomeRevealSection({
   const { revealImmediately, revealed, revealedImmediately, sectionRef } =
     useOneShotSectionReveal(armed);
   const entrance = useOneShotAnimation(
-    revealed && !revealedImmediately && revealVariant !== "state"
+    revealed
+    && !revealedImmediately
+    && revealVariant !== "state"
   );
   return (
     <section
@@ -73,7 +75,8 @@ function HomeRevealSection({
           event.animationName === "home-axis-group-reveal" &&
           event.target instanceof Element &&
           event.target.matches(".home-axis-group:last-child");
-        if (event.animationName === "home-section-track-glint" || finalAxesAnimation) {
+        if (event.animationName === "home-section-track-glint"
+          || finalAxesAnimation) {
           entrance.finish();
         }
         onAnimationEndCapture?.(event);
@@ -129,7 +132,11 @@ function AxisButton({
       aria-disabled={locked || undefined}
       data-availability-locked={locked || undefined}
       disabled={disabled}
-      title={disabled ? "当前组合下没有图片" : locked ? "当前候选数量尚未验证" : undefined}
+      title={disabled
+          ? "当前组合下没有图片"
+          : locked
+            ? "当前候选数量尚未验证"
+            : undefined}
       onClick={locked ? undefined : onClick}
     >
       <span className="home-axis-check" aria-hidden="true">
@@ -255,7 +262,10 @@ export function HomeCatalog({
     onFiltersChange({ ...filters, [key]: value });
   };
 
-  const toggleMultiFacet = (key: "theme" | "tag" | "author", slug: string) => {
+  const toggleMultiFacet = (
+    key: "theme" | "tag" | "author",
+    slug: string
+  ) => {
     const selected = key === "tag" ? [...tagSet] : selectedSlugs(filters[key]);
     if (availabilityUnverified && !selected.includes(slug)) return;
     const next = selected.includes(slug)
@@ -411,7 +421,9 @@ export function HomeCatalog({
                       type="button"
                       className={selected ? "is-selected" : undefined}
                       key={item.slug}
-                      data-reveal-item={revealIndex === undefined ? undefined : true}
+                      data-reveal-item={revealIndex === undefined
+                        ? undefined
+                        : true}
                       style={
                         revealIndex === undefined
                           ? undefined
@@ -430,7 +442,9 @@ export function HomeCatalog({
                             ? "当前候选数量尚未验证"
                             : undefined
                       }
-                      onClick={locked ? undefined : () => toggleMultiFacet("theme", item.slug)}
+                      onClick={locked
+                          ? undefined
+                          : () => toggleMultiFacet("theme", item.slug)}
                     >
                       <small>{String(index + 1).padStart(2, "0")}</small>
                       <span
@@ -510,7 +524,9 @@ export function HomeCatalog({
                         type="button"
                         className={`${selected ? "is-selected" : ""}${item.image_count === 0 ? " is-empty" : ""}`.trim()}
                         key={item.slug}
-                        data-reveal-item={revealIndex === undefined ? undefined : true}
+                        data-reveal-item={revealIndex === undefined
+                          ? undefined
+                          : true}
                         style={
                           revealIndex === undefined
                             ? undefined
@@ -529,7 +545,9 @@ export function HomeCatalog({
                               ? "当前候选数量尚未验证"
                               : undefined
                         }
-                        onClick={locked ? undefined : () => toggleMultiFacet("tag", item.slug)}
+                        onClick={locked
+                            ? undefined
+                            : () => toggleMultiFacet("tag", item.slug)}
                       >
                         <span aria-hidden="true">{selected ? "✓" : "#"}</span>
                         <OverflowMarqueeText as="strong" text={label} />
@@ -574,7 +592,9 @@ export function HomeCatalog({
                         type="button"
                         className={selected ? "is-selected" : undefined}
                         key={item.slug}
-                        data-reveal-item={revealIndex === undefined ? undefined : true}
+                        data-reveal-item={revealIndex === undefined
+                          ? undefined
+                          : true}
                         style={
                           revealIndex === undefined
                             ? undefined
@@ -593,7 +613,9 @@ export function HomeCatalog({
                               ? "当前候选数量尚未验证"
                               : undefined
                         }
-                        onClick={locked ? undefined : () => toggleMultiFacet("author", item.slug)}
+                        onClick={locked
+                            ? undefined
+                            : () => toggleMultiFacet("author", item.slug)}
                       >
                         <OverflowMarqueeText as="strong" text={label} />
                         <small>{countLabel(item.image_count)}</small>

@@ -78,7 +78,10 @@ export async function collectStorageBackendGroupSnapshot(
   const errors: Array<{ backend: string; error: string }> = [];
   for (const backend of group.backends) {
     try {
-      const snapshot = await collectStorageNamespaceSnapshot(backend.slug, options);
+      const snapshot = await collectStorageNamespaceSnapshot(
+        backend.slug,
+        options
+      );
       return { backend: backend.slug, snapshot, errors };
     } catch (error) {
       options.signal?.throwIfAborted();

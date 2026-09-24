@@ -27,8 +27,13 @@ export const loginRateLimiter = {
         windowSeconds: limits.login_global_window_seconds
       }
     ]);
-    if (!identity?.allowed || !global?.allowed) {
-      throw new ApiError(429, "too_many_login_attempts", "登录尝试过于频繁，请稍后再试");
+    if (!identity?.allowed
+      || !global?.allowed) {
+      throw new ApiError(
+        429,
+        "too_many_login_attempts",
+        "登录尝试过于频繁，请稍后再试"
+      );
     }
   },
 

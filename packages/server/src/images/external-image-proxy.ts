@@ -110,7 +110,10 @@ export async function proxyExternalImage(
     if (
       request.method === "HEAD" &&
       ([405, 501].includes(upstream.status) ||
-        (upstream.ok && !isAllowedExternalImageContentType(upstream.headers.get("content-type"))))
+        (upstream.ok
+          && !isAllowedExternalImageContentType(
+            upstream.headers.get("content-type")
+          )))
     ) {
       await upstream.body?.cancel().catch(() => undefined);
       upstream = await fetchUpstream("GET");
@@ -140,7 +143,10 @@ export async function proxyExternalImage(
     );
     headers.set(
       "Content-Type",
-      safeUpstreamResponseHeader("Content-Type", upstream.headers.get("content-type")) ||
+      safeUpstreamResponseHeader(
+        "Content-Type",
+        upstream.headers.get("content-type")
+      ) ||
         contentType(ext)
     );
     if (request.method === "HEAD") {
@@ -174,7 +180,10 @@ function proxyExternalResponseHeaders(
     const upstreamLastModified = upstream.headers.get("last-modified");
     const lastModified =
       upstream.status === 304
-        ? proxyLastModifiedForUpstream304(upstreamLastModified, resourceUpdatedAt)
+        ? proxyLastModifiedForUpstream304(
+          upstreamLastModified,
+          resourceUpdatedAt
+        )
         : proxyLastModified(upstreamLastModified, resourceUpdatedAt);
     if (lastModified) headers.set("Last-Modified", lastModified);
   }

@@ -17,7 +17,10 @@ export async function listAdminAccounts(): Promise<AdminUserDto[]> {
   ).rows as AdminUserDto[];
 }
 
-export async function createImageAdmin(username: string, password: string) {
+export async function createImageAdmin(
+  username: string,
+  password: string
+) {
   const hash = await hashPassword(password);
   try {
     await pool.query(
@@ -26,13 +29,21 @@ export async function createImageAdmin(username: string, password: string) {
     );
   } catch (error) {
     if ((error as { code?: string }).code === "23505") {
-      throw new ApiError(409, "username_taken", "用户名已存在", { username });
+      throw new ApiError(
+        409,
+        "username_taken",
+        "用户名已存在",
+        { username }
+      );
     }
     throw error;
   }
 }
 
-export async function resetImageAdminPassword(username: string, password: string) {
+export async function resetImageAdminPassword(
+  username: string,
+  password: string
+) {
   const hash = await hashPassword(password);
   const nextCredentialVersion = adminCredentialVersion(hash);
   return withTransaction(async (client) => {
@@ -47,13 +58,21 @@ export async function resetImageAdminPassword(username: string, password: string
       throw new ApiError(404, "not_found", "用户不存在");
     }
     if (target.rows[0].role === "super") {
-      throw new ApiError(409, "super_immutable", "超级管理员的密码无法在此修改", { username });
+      throw new ApiError(
+        409,
+        "super_immutable",
+        "超级管理员的密码无法在此修改",
+        { username }
+      );
     }
     await client.query(
       "UPDATE admin_account SET password_hash = $2, updated_at = now() WHERE username = $1",
       [username, hash]
     );
-    return adminCredentialTransitionVersions(target.rows[0]!.password_hash, nextCredentialVersion);
+    return adminCredentialTransitionVersions(
+      target.rows[0]!.password_hash,
+      nextCredentialVersion
+    );
   });
 }
 
@@ -103,9 +122,17 @@ export async function deleteImageAdmin(username: string) {
       throw new ApiError(404, "not_found", "用户不存在");
     }
     if (target.rows[0].role === "super") {
-      throw new ApiError(409, "super_immutable", "超级管理员不可删除", { username });
+      throw new ApiError(
+        409,
+        "super_immutable",
+        "超级管理员不可删除",
+        { username }
+      );
     }
-    await client.query("DELETE FROM admin_account WHERE username = $1", [username]);
+    await client.query(
+      "DELETE FROM admin_account WHERE username = $1",
+      [username]
+    );
     return adminCredentialVersion(target.rows[0]!.password_hash);
   });
 }

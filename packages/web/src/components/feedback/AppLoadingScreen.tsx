@@ -19,7 +19,10 @@ export function AppLoadingRegion({
   extraDots?: AppLoadingExtraDots;
 }) {
   return (
-    <div className={["app-loading-region", className].filter(Boolean).join(" ")}>
+    <div className={[
+      "app-loading-region",
+      className
+    ].filter(Boolean).join(" ")}>
       <AppLoadingText extraDots={extraDots} />
     </div>
   );

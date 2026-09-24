@@ -30,7 +30,12 @@ await runIntegrationScenario(async () => {
   const reserveKey = businessPrefix + "window:first";
   await redisClient.redis.call("SCRIPT", "FLUSH");
   assert.deepEqual(
-    await businessRedis.imageshowReserveWindows("1", reserveKey, "2", "60"),
+    await businessRedis.imageshowReserveWindows(
+      "1",
+      reserveKey,
+      "2",
+      "60"
+    ),
     [1, 1, 1, 60]
   );
   const repeatedReservation = await businessRedis.imageshowReserveWindows(
@@ -123,7 +128,13 @@ await runIntegrationScenario(async () => {
   const indexedMetaKey = businessPrefix + "derived:index-meta:device:pc";
   const indexedToken = "a".repeat(32);
   const indexedNow = "2026-08-21T00:00:00.000Z";
-  await installRegistryMember(indexedRegistry, indexedKey, "1", "attribute", "");
+  await installRegistryMember(
+    indexedRegistry,
+    indexedKey,
+    "1",
+    "attribute",
+    ""
+  );
   await redisClient.redis.zadd(indexedKey, "1", "image:one");
   await redisClient.redis.expire(indexedKey, 300);
   await redisClient.redis.hset(indexedMetaKey, {
@@ -186,7 +197,13 @@ await runIntegrationScenario(async () => {
   const statsSignature = "b".repeat(64);
   const statsKey = statsPrefix + statsSignature;
   const serializedStats = '{"total":1}';
-  await installRegistryMember(statsRegistry, statsKey, "0", "stats-result", statsSignature);
+  await installRegistryMember(
+    statsRegistry,
+    statsKey,
+    "0",
+    "stats-result",
+    statsSignature
+  );
   await redisClient.redis.set(statsKey, serializedStats, "EX", 300);
   assert.equal(
     await businessRedis.imageshowTouchReadyImageStatsResult(
@@ -259,7 +276,13 @@ await runIntegrationScenario(async () => {
   const publishedMetaKey = businessPrefix + "attribute:meta";
   const publishedTemporaryKey = businessPrefix + "attribute:temporary";
   const publishedToken = "c".repeat(32);
-  await redisClient.redis.zadd(publishedTemporaryKey, "1", "one", "2", "two");
+  await redisClient.redis.zadd(
+    publishedTemporaryKey,
+    "1",
+    "one",
+    "2",
+    "two"
+  );
   assert.equal(
     await businessRedis.imageshowPublishReadyImageAttributeIndex(
       publishedKey,
@@ -275,7 +298,10 @@ await runIntegrationScenario(async () => {
     1
   );
   assert.equal(await redisClient.redis.zcard(publishedKey), 2);
-  assert.equal(await redisClient.redis.hget(publishedMetaKey, "applied_revision"), "42");
+  assert.equal(
+    await redisClient.redis.hget(publishedMetaKey, "applied_revision"),
+    "42"
+  );
   assert.equal(
     await businessRedis.imageshowPublishReadyImageAttributeIndex(
       publishedKey,
@@ -290,7 +316,10 @@ await runIntegrationScenario(async () => {
     ),
     0
   );
-  assert.equal(await redisClient.redis.hget(publishedMetaKey, "applied_revision"), "42");
+  assert.equal(
+    await redisClient.redis.hget(publishedMetaKey, "applied_revision"),
+    "42"
+  );
 
   const sampleMetaKey = businessPrefix + "sample:core:meta";
   const sampleIntegrityKey = businessPrefix + "sample:core:integrity";
@@ -316,7 +345,10 @@ await runIntegrationScenario(async () => {
     sampleCoreIndexKey,
     ...sampleMembers.flatMap((member, index) => [String(index + 1), member])
   );
-  await redisClient.redis.hset(sampleItemsKey, Object.fromEntries(sampleValues));
+  await redisClient.redis.hset(
+    sampleItemsKey,
+    Object.fromEntries(sampleValues)
+  );
   const coreSampleArguments = [
     sampleMetaKey,
     sampleIntegrityKey,
@@ -329,7 +361,9 @@ await runIntegrationScenario(async () => {
     "30",
     "200"
   ];
-  const coreSample = await businessRedis.imageshowSampleReadyImageCoreIndex(...coreSampleArguments);
+  const coreSample = await businessRedis.imageshowSampleReadyImageCoreIndex(
+    ...coreSampleArguments
+  );
   assert.deepEqual(coreSample.slice(0, 2), [1, 3]);
   assert.equal(coreSample.length, 8);
   for (let index = 0; index < 3; index += 1) {
@@ -447,7 +481,9 @@ await runIntegrationScenario(async () => {
 
   await redisClient.redis.hset(sampleMetaKey, "applied_revision", "43");
   assert.deepEqual(
-    await businessRedis.imageshowSampleReadyImageCoreIndex(...coreSampleArguments),
+    await businessRedis.imageshowSampleReadyImageCoreIndex(
+      ...coreSampleArguments
+    ),
     [-3, 0]
   );
   await redisClient.redis.hset(sampleMetaKey, "applied_revision", "42");
@@ -463,7 +499,9 @@ await runIntegrationScenario(async () => {
   );
   await redisClient.redis.persist(sampleAttributeMetaKey);
   assert.deepEqual(
-    (await businessRedis.imageshowSampleReadyImageDerivedIndex(...derivedSampleArguments)).slice(
+    (await businessRedis.imageshowSampleReadyImageDerivedIndex(
+      ...derivedSampleArguments
+    )).slice(
       0,
       2
     ),
@@ -472,15 +510,23 @@ await runIntegrationScenario(async () => {
   await redisClient.redis.expire(sampleAttributeMetaKey, 300);
   await redisClient.redis.hset(sampleAttributeMetaKey, "built_at", "invalid");
   assert.deepEqual(
-    (await businessRedis.imageshowSampleReadyImageDerivedIndex(...derivedSampleArguments)).slice(
+    (await businessRedis.imageshowSampleReadyImageDerivedIndex(
+      ...derivedSampleArguments
+    )).slice(
       0,
       2
     ),
     [-2, 0]
   );
-  await redisClient.redis.hset(sampleAttributeMetaKey, "built_at", "2026-13-40T25:61:61.999Z");
+  await redisClient.redis.hset(
+    sampleAttributeMetaKey,
+    "built_at",
+    "2026-13-40T25:61:61.999Z"
+  );
   assert.deepEqual(
-    (await businessRedis.imageshowSampleReadyImageDerivedIndex(...derivedSampleArguments)).slice(
+    (await businessRedis.imageshowSampleReadyImageDerivedIndex(
+      ...derivedSampleArguments
+    )).slice(
       0,
       2
     ),
@@ -489,7 +535,9 @@ await runIntegrationScenario(async () => {
   await redisClient.redis.hset(sampleAttributeMetaKey, "built_at", indexedNow);
   await redisClient.redis.del(sampleAttributeIndexKey);
   assert.deepEqual(
-    (await businessRedis.imageshowSampleReadyImageDerivedIndex(...derivedSampleArguments)).slice(
+    (await businessRedis.imageshowSampleReadyImageDerivedIndex(
+      ...derivedSampleArguments
+    )).slice(
       0,
       2
     ),
@@ -505,7 +553,9 @@ await runIntegrationScenario(async () => {
   await redisClient.redis.expire(sampleAttributeIndexKey, 300);
   await redisClient.redis.zrem(sampleAttributeIndexKey, sampleMembers[0]);
   assert.deepEqual(
-    (await businessRedis.imageshowSampleReadyImageDerivedIndex(...derivedSampleArguments)).slice(
+    (await businessRedis.imageshowSampleReadyImageDerivedIndex(
+      ...derivedSampleArguments
+    )).slice(
       0,
       2
     ),
@@ -514,12 +564,22 @@ await runIntegrationScenario(async () => {
   await redisClient.redis.zadd(sampleAttributeIndexKey, "1", sampleMembers[0]);
   await redisClient.redis.expire(sampleAttributeIndexKey, 300);
 
-  await redisClient.redis.hset(sampleIntegrityKey, sampleCoreIndexKey, "2");
+  await redisClient.redis.hset(
+    sampleIntegrityKey,
+    sampleCoreIndexKey,
+    "2"
+  );
   assert.deepEqual(
-    await businessRedis.imageshowSampleReadyImageCoreIndex(...coreSampleArguments),
+    await businessRedis.imageshowSampleReadyImageCoreIndex(
+      ...coreSampleArguments
+    ),
     [-1, 0]
   );
-  await redisClient.redis.hset(sampleIntegrityKey, sampleCoreIndexKey, "3");
+  await redisClient.redis.hset(
+    sampleIntegrityKey,
+    sampleCoreIndexKey,
+    "3"
+  );
 
   const orphanIndexKey = businessPrefix + "sample:orphan:index";
   const orphanMetaKey = businessPrefix + "sample:orphan:meta";
@@ -571,13 +631,19 @@ await runIntegrationScenario(async () => {
   );
 
   await redisClient.redis.call("SCRIPT", "FLUSH");
-  await businessRedis.imageshowSampleReadyImageCoreIndex(...coreSampleArguments);
-  await businessRedis.imageshowSampleReadyImageCoreIndex(...coreSampleArguments);
+  await businessRedis.imageshowSampleReadyImageCoreIndex(
+    ...coreSampleArguments
+  );
+  await businessRedis.imageshowSampleReadyImageCoreIndex(
+    ...coreSampleArguments
+  );
 
   await redisClient.redis.call("SCRIPT", "FLUSH");
   const concurrentSamples = await Promise.all(
     Array.from({ length: 8 }, () =>
-      businessRedis.imageshowSampleReadyImageCoreIndex(...coreSampleArguments)
+      businessRedis.imageshowSampleReadyImageCoreIndex(
+        ...coreSampleArguments
+      )
     )
   );
   assert.ok(concurrentSamples.every((sample) => sample[0] === 1 && sample[1] === 3));
@@ -590,10 +656,15 @@ await runIntegrationScenario(async () => {
   const samplePipelineResults = await samplePipeline.exec();
   assert.equal(samplePipelineResults?.length, 3);
   assert.equal(samplePipelineResults?.[1]?.[0], null);
-  assert.deepEqual((samplePipelineResults?.[1]?.[1] as unknown[]).slice(0, 2), [1, 3]);
+  assert.deepEqual(
+    (samplePipelineResults?.[1]?.[1] as unknown[]).slice(0, 2),
+    [1, 3]
+  );
 
   const sampleMultiMarker = businessPrefix + "sample:multi:marker";
-  await businessRedis.imageshowSampleReadyImageDerivedIndex(...derivedSampleArguments);
+  await businessRedis.imageshowSampleReadyImageDerivedIndex(
+    ...derivedSampleArguments
+  );
   const sampleMulti = redisClient.redis.multi() as BusinessPipeline;
   sampleMulti.set(sampleMultiMarker, "sample-multi");
   sampleMulti.imageshowSampleReadyImageDerivedIndex(...derivedSampleArguments);
@@ -601,7 +672,10 @@ await runIntegrationScenario(async () => {
   const sampleMultiResults = await sampleMulti.exec();
   assert.equal(sampleMultiResults?.length, 3);
   assert.equal(sampleMultiResults?.[1]?.[0], null);
-  assert.deepEqual((sampleMultiResults?.[1]?.[1] as unknown[]).slice(0, 2), [1, 2]);
+  assert.deepEqual(
+    (sampleMultiResults?.[1]?.[1] as unknown[]).slice(0, 2),
+    [1, 2]
+  );
 
   const firstSampleConnection = redisClient.redis.duplicate({
     lazyConnect: true,
@@ -612,7 +686,8 @@ await runIntegrationScenario(async () => {
     await firstSampleConnection.ping();
     assert.deepEqual(
       (
-        await firstSampleConnection.imageshowSampleReadyImageCoreIndex(...coreSampleArguments)
+        await firstSampleConnection
+          .imageshowSampleReadyImageCoreIndex(...coreSampleArguments)
       ).slice(0, 2),
       [1, 3]
     );
@@ -626,7 +701,8 @@ await runIntegrationScenario(async () => {
     await replacementSampleConnection.connect();
     assert.deepEqual(
       (
-        await replacementSampleConnection.imageshowSampleReadyImageCoreIndex(...coreSampleArguments)
+        await replacementSampleConnection
+          .imageshowSampleReadyImageCoreIndex(...coreSampleArguments)
       ).slice(0, 2),
       [1, 3]
     );

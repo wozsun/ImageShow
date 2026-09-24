@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
-import type { AdminOverviewDto, AdminCheckStatusDto } from "@imageshow/shared/browser";
+import type {
+  AdminOverviewDto,
+  AdminCheckStatusDto
+} from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
-import { ThumbImage } from "../../components/image/ThumbImage.js";
+import { ThumbnailImage } from "../../components/image/ThumbnailImage.js";
 import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
-import { readyImageProjection, useAdminCheckStatus } from "../../lib/api/ready-image-cache.js";
+import {
+  readyImageProjection,
+  useAdminCheckStatus
+} from "../../lib/api/ready-image-cache.js";
 import { formatBytes } from "../../lib/ui/formatters.js";
 import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
@@ -82,7 +88,9 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
   );
   const checkStatusQuery = useAdminCheckStatus({
     enabled: observeReadyImageStatus,
-    refreshAfter: query.data?.redis_cache.rebuilding ? query.dataUpdatedAt : 0
+    refreshAfter: query.data?.redis_cache.rebuilding
+      ? query.dataUpdatedAt
+      : 0
   });
   const { data } = query;
   const currentReadyImageStatus = readyImageProjection(checkStatusQuery.data);
@@ -92,7 +100,9 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
     checkStatusQuery.dataUpdatedAt > query.dataUpdatedAt
   );
   const redisCache =
-    observeReadyImageStatus && readyImageStatusIsCurrent && currentReadyImageStatus
+    observeReadyImageStatus
+      && readyImageStatusIsCurrent
+      && currentReadyImageStatus
       ? {
           state: currentReadyImageStatus.state,
           synchronized: currentReadyImageStatus.synchronized === true,
@@ -267,7 +277,7 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
                       void detailCapability.open(img, event.currentTarget);
                     }}
                   >
-                    <ThumbImage src={img.thumb_url} alt="" />
+                    <ThumbnailImage src={img.thumb_url} alt="" />
                   </button>
                 ))}
               </div>

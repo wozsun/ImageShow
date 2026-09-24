@@ -126,7 +126,10 @@ export const runtimeConfigSchema = z.strictObject({
     max_items: weiboImportMaxItems,
     source_enabled: z.boolean(),
     request_delay_seconds: z
-      .tuple([weiboRequestDelaySeconds, weiboRequestDelaySeconds])
+      .tuple([
+        weiboRequestDelaySeconds,
+        weiboRequestDelaySeconds
+      ])
       .refine(([minDelaySeconds, maxDelaySeconds]) => minDelaySeconds <= maxDelaySeconds, {
         message: "minimum delay must not exceed maximum delay",
         path: [0]
@@ -249,7 +252,10 @@ export function parseRuntimeConfig(value: unknown): RuntimeConfig {
 }
 
 export function normalizeRuntimeConfig(value: unknown): RuntimeConfig {
-  return parseRuntimeConfig(projectKnownConfig(appConfig.runtimeDefaults, value));
+  return parseRuntimeConfig(projectKnownConfig(
+    appConfig.runtimeDefaults,
+    value
+  ));
 }
 
 export function mergeRuntimeConfig(
@@ -257,7 +263,10 @@ export function mergeRuntimeConfig(
   patch: RuntimeConfigPatch
 ): RuntimeConfig {
   return parseRuntimeConfig(
-    mergeDefined(current as unknown as Record<string, unknown>, patch as Record<string, unknown>)
+    mergeDefined(
+      current as unknown as Record<string, unknown>,
+      patch as Record<string, unknown>
+    )
   );
 }
 

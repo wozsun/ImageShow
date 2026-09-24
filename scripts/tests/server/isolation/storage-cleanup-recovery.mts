@@ -67,7 +67,10 @@ await runIntegrationScenario(async (runtime) => {
       [foregroundImage]
     )
   ).rows[0];
-  assert.deepEqual(Object.keys(foregroundCleanupReceipt.payload).sort(), ["objects", "reason"]);
+  assert.deepEqual(
+    Object.keys(foregroundCleanupReceipt.payload).sort(),
+    ["objects", "reason"]
+  );
   assert.ok(
     foregroundCleanupReceipt.payload.objects.every(
       (object: Record<string, unknown>) =>
@@ -85,7 +88,10 @@ await runIntegrationScenario(async (runtime) => {
       [foregroundCleanupReceipt.id, adoptedToken]
     )
   ).rows[0];
-  await cleanupJob.handleMoveCleanupJob(adoptedCleanupJob, new AbortController().signal);
+  await cleanupJob.handleMoveCleanupJob(
+    adoptedCleanupJob,
+    new AbortController().signal
+  );
   assert.equal(await jobs.markBackgroundJobSucceeded(adoptedCleanupJob), true);
   assert.equal(
     await localAccess.driver.exists("full", foregroundObjectKey),
@@ -117,8 +123,14 @@ await runIntegrationScenario(async (runtime) => {
       [foregroundCleanupReceipt.id, unreferencedToken]
     )
   ).rows[0];
-  await cleanupJob.handleMoveCleanupJob(unreferencedCleanupJob, new AbortController().signal);
-  assert.equal(await jobs.markBackgroundJobSucceeded(unreferencedCleanupJob), true);
+  await cleanupJob.handleMoveCleanupJob(
+    unreferencedCleanupJob,
+    new AbortController().signal
+  );
+  assert.equal(
+    await jobs.markBackgroundJobSucceeded(unreferencedCleanupJob),
+    true
+  );
   assert.equal(await localAccess.driver.exists("full", foregroundObjectKey), false);
   assert.equal(
     await localAccess.driver.exists(
@@ -130,7 +142,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(await localAccess.driver.exists("full", foregroundNextKey), true);
 
   const uncertainCleanupImage = randomUUID();
-  const uncertainCleanupKey = storageObjectKey(uncertainCleanupImage, "webp");
+  const uncertainCleanupKey = storageObjectKey(
+    uncertainCleanupImage,
+    "webp"
+  );
   await localAccess.driver.writeBuffer(
     "full",
     uncertainCleanupKey,
@@ -173,7 +188,10 @@ await runIntegrationScenario(async (runtime) => {
   };
   try {
     await assert.rejects(() =>
-      cleanupJob.handleMoveCleanupJob(uncertainJob, new AbortController().signal)
+      cleanupJob.handleMoveCleanupJob(
+        uncertainJob,
+        new AbortController().signal
+      )
     );
   } finally {
     localAccess.driver.removeObjects = originalCleanupRemoveObjects;
@@ -222,16 +240,30 @@ await runIntegrationScenario(async (runtime) => {
       [latePublishImage, latePublishToken]
     )
   ).rows[0];
-  assert.equal(latePublishJob.payload.confirm_absent_after, confirmAbsentAfter.toISOString());
+  assert.equal(
+    latePublishJob.payload.confirm_absent_after,
+    confirmAbsentAfter.toISOString()
+  );
   const deferredCleanup = await cleanupJob.handleMoveCleanupJob(
     latePublishJob,
     new AbortController().signal
   );
   assert.equal(deferredCleanup.status, "reschedule");
   assert.ok(deferredCleanup.delayMs > 0);
-  assert.equal(await jobs.rescheduleBackgroundJob(latePublishJob, deferredCleanup.delayMs), true);
-  await localAccess.driver.writeBuffer("full", latePublishKey, latePublishBody, "image/webp");
-  await new Promise((resolve) => setTimeout(resolve, deferredCleanup.delayMs + 25));
+  assert.equal(
+    await jobs.rescheduleBackgroundJob(latePublishJob, deferredCleanup.delayMs),
+    true
+  );
+  await localAccess.driver.writeBuffer(
+    "full",
+    latePublishKey,
+    latePublishBody,
+    "image/webp"
+  );
+  await new Promise((resolve) => setTimeout(
+    resolve,
+    deferredCleanup.delayMs + 25
+  ));
   const latePublishRetryToken = randomUUID();
   const latePublishRetryJob = (
     await database.pool.query(
@@ -240,10 +272,16 @@ await runIntegrationScenario(async (runtime) => {
     )
   ).rows[0];
   assert.deepEqual(
-    await cleanupJob.handleMoveCleanupJob(latePublishRetryJob, new AbortController().signal),
+    await cleanupJob.handleMoveCleanupJob(
+      latePublishRetryJob,
+      new AbortController().signal
+    ),
     { status: "succeeded" }
   );
-  assert.equal(await jobs.markBackgroundJobSucceeded(latePublishRetryJob), true);
+  assert.equal(
+    await jobs.markBackgroundJobSucceeded(latePublishRetryJob),
+    true
+  );
   assert.equal(
     await localAccess.driver.exists("full", latePublishKey),
     false,
@@ -251,7 +289,10 @@ await runIntegrationScenario(async (runtime) => {
   );
 
   const guardedLatePublishImage = randomUUID();
-  const guardedLatePublishKey = storageObjectKey(guardedLatePublishImage, "webp");
+  const guardedLatePublishKey = storageObjectKey(
+    guardedLatePublishImage,
+    "webp"
+  );
   const guardedLatePublishBody = Buffer.from("ingestion-guarded-late-publish");
   const guardedLatePublishToken = randomUUID();
   let lateGuardPublish;
@@ -347,9 +388,15 @@ await runIntegrationScenario(async (runtime) => {
     new AbortController().signal
   );
   assert.equal(staleGuardOutcome.status, "reschedule");
-  assert.ok(staleGuardOutcome.delayMs > 0, "已经领取的 guard 必须在单图锁内重读后来写入的截止时间");
+  assert.ok(
+    staleGuardOutcome.delayMs > 0,
+    "已经领取的 guard 必须在单图锁内重读后来写入的截止时间"
+  );
   assert.equal(
-    await jobs.rescheduleBackgroundJob(guardedLatePublishJob, staleGuardOutcome.delayMs),
+    await jobs.rescheduleBackgroundJob(
+      guardedLatePublishJob,
+      staleGuardOutcome.delayMs
+    ),
     true
   );
   await lateGuardPublish;
@@ -359,7 +406,10 @@ await runIntegrationScenario(async (runtime) => {
     "客户端失败后远端仍可在保护窗口内迟到发布"
   );
   await new Promise((resolve) =>
-    setTimeout(resolve, Math.max(0, Date.parse(persistedGuardDeadline) - Date.now()) + 25)
+    setTimeout(
+      resolve,
+      Math.max(0, Date.parse(persistedGuardDeadline) - Date.now()) + 25
+    )
   );
   guardedLatePublishJob = (
     await database.pool.query(
@@ -368,10 +418,16 @@ await runIntegrationScenario(async (runtime) => {
     )
   ).rows[0];
   assert.deepEqual(
-    await cleanupJob.handleMoveCleanupJob(guardedLatePublishJob, new AbortController().signal),
+    await cleanupJob.handleMoveCleanupJob(
+      guardedLatePublishJob,
+      new AbortController().signal
+    ),
     { status: "succeeded" }
   );
-  assert.equal(await jobs.markBackgroundJobSucceeded(guardedLatePublishJob), true);
+  assert.equal(
+    await jobs.markBackgroundJobSucceeded(guardedLatePublishJob),
+    true
+  );
   assert.equal(
     await localAccess.driver.exists("full", guardedLatePublishKey),
     false,
@@ -380,7 +436,10 @@ await runIntegrationScenario(async (runtime) => {
 
   for (const contentMd5 of [false, true]) {
     const settledGuardImage = randomUUID();
-    const settledGuardKey = storageObjectKey(settledGuardImage, "webp");
+    const settledGuardKey = storageObjectKey(
+      settledGuardImage,
+      "webp"
+    );
     const settledGuardToken = randomUUID();
     let settledTargetBody: Buffer | undefined;
     const settledSourceBody = Buffer.from("ingestion-guard-settled-upload");
@@ -419,7 +478,9 @@ await runIntegrationScenario(async (runtime) => {
           assert.ok(Date.parse(deadline) >= Date.now() + (contentMd5 ? 800 : 1_300));
           assert.equal(
             options?.expectedMd5,
-            contentMd5 ? createHash("md5").update(settledSourceBody).digest("hex") : undefined
+            contentMd5
+              ? createHash("md5").update(settledSourceBody).digest("hex")
+              : undefined
           );
           const chunks: Buffer[] = [];
           for await (const chunk of body) chunks.push(Buffer.from(chunk));
@@ -479,7 +540,10 @@ await runIntegrationScenario(async (runtime) => {
   }
 
   const admittedCleanupImage = randomUUID();
-  const admittedCleanupKey = storageObjectKey(admittedCleanupImage, "webp");
+  const admittedCleanupKey = storageObjectKey(
+    admittedCleanupImage,
+    "webp"
+  );
   await localAccess.driver.writeBuffer(
     "full",
     admittedCleanupKey,
@@ -519,7 +583,10 @@ await runIntegrationScenario(async (runtime) => {
   try {
     admittedCleanupResult = await database.runWithAdvisoryLockAcquisitionSignal(
       admittedCleanupController.signal,
-      () => cleanupJob.handleMoveCleanupJob(admittedCleanupJob, admittedCleanupController.signal)
+      () => cleanupJob.handleMoveCleanupJob(
+        admittedCleanupJob,
+        admittedCleanupController.signal
+      )
     );
   } finally {
     localAccess.driver.removeObjects = originalAdmittedCleanupRemove;
@@ -536,7 +603,12 @@ await runIntegrationScenario(async (runtime) => {
   const abortedImage = randomUUID();
   const abortedObjectKey = storageObjectKey(abortedImage, "webp");
   const abortedBody = Buffer.from("cancelled-move-cleanup");
-  await localAccess.driver.writeBuffer("thumbs", abortedObjectKey, abortedBody, "image/webp");
+  await localAccess.driver.writeBuffer(
+    "thumbs",
+    abortedObjectKey,
+    abortedBody,
+    "image/webp"
+  );
   const [abortedCleanupObject] = await cleanup.captureMoveCleanupObjects([
     { prefix: "thumbs", key: abortedObjectKey, backend: "local" }
   ]);
@@ -570,7 +642,10 @@ await runIntegrationScenario(async (runtime) => {
   try {
     await assert.rejects(() =>
       database.runWithAdvisoryLockAcquisitionSignal(cleanupAbort.signal, () =>
-        cleanupJob.handleMoveCleanupJob(abortedReceipt, cleanupAbort.signal)
+        cleanupJob.handleMoveCleanupJob(
+          abortedReceipt,
+          cleanupAbort.signal
+        )
       )
     );
   } finally {
@@ -581,6 +656,9 @@ await runIntegrationScenario(async (runtime) => {
     abortedBody,
     "取消后不得删除尚未开始处理的捕获对象"
   );
-  await database.pool.query("DELETE FROM background_job WHERE id=$1", [abortedReceipt.id]);
+  await database.pool.query(
+    "DELETE FROM background_job WHERE id=$1",
+    [abortedReceipt.id]
+  );
   await removeDriverObject(localAccess.driver, "thumbs", abortedObjectKey);
 });

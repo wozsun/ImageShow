@@ -48,7 +48,8 @@ async function createBridgeHarness(t: TestContext) {
   }
   const render = (enabled = true) =>
     h.render(
-      h.React.createElement(h.React.StrictMode, null, h.React.createElement(Bridge, { enabled }))
+      h.React.createElement(h.React.StrictMode, null,
+        h.React.createElement(Bridge, { enabled }))
     );
   const ready = () => messages.filter((message) => message.data.type === "ready").at(-1)!.data;
   const dispatch = (type: string, values: Record<string, unknown> = {}) => {

@@ -10,7 +10,9 @@ export type ShowWaterfallDensity = {
 };
 
 export const showWaterfallDensity = (viewportWidth: number): ShowWaterfallDensity => {
-  const width = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 360;
+  const width = Number.isFinite(viewportWidth) && viewportWidth > 0
+    ? viewportWidth
+    : 360;
   const galleryColumns = galleryColumnCount(width);
   return {
     galleryColumns,
@@ -22,23 +24,52 @@ export const showWaterfallDensity = (viewportWidth: number): ShowWaterfallDensit
   };
 };
 
-export const clampShowWaterfallColumns = (columns: number, density: ShowWaterfallDensity) =>
-  Math.min(density.maximumColumns, Math.max(density.minimumColumns, columns));
+export const clampShowWaterfallColumns = (
+  columns: number,
+  density: ShowWaterfallDensity
+) =>
+  Math.min(
+    density.maximumColumns,
+    Math.max(density.minimumColumns, columns)
+  );
 
-export const smallerShowWaterfallImages = (columns: number, density: ShowWaterfallDensity) =>
+export const smallerShowWaterfallImages = (
+  columns: number,
+  density: ShowWaterfallDensity
+) =>
   clampShowWaterfallColumns(columns + 1, density);
 
-export const largerShowWaterfallImages = (columns: number, density: ShowWaterfallDensity) =>
+export const largerShowWaterfallImages = (
+  columns: number,
+  density: ShowWaterfallDensity
+) =>
   clampShowWaterfallColumns(columns - 1, density);
 
-export const showFloatSizeSteps = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5] as const;
+export const showFloatSizeSteps = [
+  0.5,
+  0.6,
+  0.7,
+  0.8,
+  0.9,
+  1,
+  1.1,
+  1.2,
+  1.3,
+  1.4,
+  1.5
+] as const;
 
 export const defaultShowFloatSizeIndex = 5;
 
 export const showFloatDefaultWidth = (viewportWidth: number) => {
-  const width = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : 360;
+  const width = Number.isFinite(viewportWidth) && viewportWidth > 0
+    ? viewportWidth
+    : 360;
   return Math.min(width * 0.4, Math.sqrt(width) * 8);
 };
 
 export const clampShowFloatSizeIndex = (index: number) =>
-  Math.min(showFloatSizeSteps.length - 1, Math.max(0, Math.round(index)));
+  Math.min(
+    showFloatSizeSteps.length - 1,
+    Math.max(0, Math.round(index))
+  );

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import type { IngestionSessionSnapshot } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
-import { freezeFixtureCommit, runWithReadyIngestionFixture } from "./ingestion-fixture.mts";
+import {
+  freezeFixtureCommit,
+  runWithReadyIngestionFixture
+} from "./ingestion-fixture.mts";
 
 type CommitWorkerModule =
   typeof import("../../../../packages/server/src/images/ingestion/commit/worker.ts");
@@ -18,7 +21,12 @@ await runIntegrationScenario(async (runtime) => {
   await runWithReadyIngestionFixture(runtime, "commit-conflict", async (fixture) => {
     const committing = await freezeFixtureCommit(fixture);
     const foreignBody = Buffer.from(`foreign-object:${fixture.imageId}`);
-    await fixture.driver.writeBuffer("full", fixture.finalObjectKey, foreignBody, "image/webp");
+    await fixture.driver.writeBuffer(
+      "full",
+      fixture.finalObjectKey,
+      foreignBody,
+      "image/webp"
+    );
     await assert.rejects(
       commitWorker.commitIngestionSessionSnapshot(
         fixture.repository,

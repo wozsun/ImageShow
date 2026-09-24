@@ -1,8 +1,14 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { RuntimeConfig } from "@imageshow/shared/browser";
 import { runtimeConfigFromEnvironment, runtimePaths } from "./bootstrap-env.ts";
-import { readRuntimeConfigFile, writeRuntimeConfigFile } from "./runtime-config-file.ts";
-import { mergeRuntimeConfig, type RuntimeConfigPatch } from "./runtime-config.ts";
+import {
+  readRuntimeConfigFile,
+  writeRuntimeConfigFile
+} from "./runtime-config-file.ts";
+import {
+  mergeRuntimeConfig,
+  type RuntimeConfigPatch
+} from "./runtime-config.ts";
 import { logger } from "../core/logger.ts";
 
 let runtimeConfig: RuntimeConfig | undefined;
@@ -77,7 +83,10 @@ function publishRuntimeConfig(next: RuntimeConfig) {
   return next;
 }
 
-function persistAndPublishRuntimeConfig(next: RuntimeConfig, shouldWriteFile = true) {
+function persistAndPublishRuntimeConfig(
+  next: RuntimeConfig,
+  shouldWriteFile = true
+) {
   if (shouldWriteFile) writeRuntimeConfigFile(next);
   return publishRuntimeConfig(next);
 }
@@ -99,15 +108,15 @@ export function replaceRuntimeConfig(next: RuntimeConfig) {
   return withRuntimeConfigWriteLease(() => persistAndPublishRuntimeConfig(next));
 }
 
-/** Persist a config-package candidate or rollback snapshot without publishing. */
-export function persistRuntimeConfigForPackageImport(next: RuntimeConfig) {
+/** Persist a config-bundle candidate or rollback snapshot without publishing. */
+export function persistRuntimeConfigForBundleImport(next: RuntimeConfig) {
   assertRuntimeConfigWriteLeaseHeld();
   getRuntimeConfig();
   writeRuntimeConfigFile(next);
 }
 
-/** Publish a successfully persisted config-package candidate exactly once. */
-export function publishRuntimeConfigForPackageImport(next: RuntimeConfig) {
+/** Publish a successfully persisted config-bundle candidate exactly once. */
+export function publishRuntimeConfigForBundleImport(next: RuntimeConfig) {
   assertRuntimeConfigWriteLeaseHeld();
   return publishRuntimeConfig(next);
 }
@@ -120,6 +129,9 @@ export function reloadRuntimeConfigFromDisk(validate?: (config: RuntimeConfig) =
       throw new Error(`Runtime config ${runtimePaths.configFile} does not exist`);
     }
     await validate?.(snapshot.config);
-    return persistAndPublishRuntimeConfig(snapshot.config, snapshot.needsWriteBack);
+    return persistAndPublishRuntimeConfig(
+      snapshot.config,
+      snapshot.needsWriteBack
+    );
   });
 }

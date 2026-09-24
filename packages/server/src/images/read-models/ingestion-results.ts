@@ -61,7 +61,8 @@ export async function readCommittedIngestionResultsByImageIds(
       item.id.toLowerCase(),
       {
         image_id: item.id.toLowerCase(),
-        image_time: new Date(rowsById.get(item.id.toLowerCase())!.image_time).toISOString(),
+        image_time: new Date(rowsById.get(item.id.toLowerCase())!.image_time)
+          .toISOString(),
         created_by: rowsById.get(item.id.toLowerCase())!.created_by,
         item
       }

@@ -1,6 +1,9 @@
 import { hash } from "node:crypto";
 import type { IngestionQueueSummaryDto } from "@imageshow/shared/browser";
-import type { IngestionSessionSnapshot, IngestionQueueMetadata } from "./model.ts";
+import type {
+  IngestionSessionSnapshot,
+  IngestionQueueMetadata
+} from "./model.ts";
 
 export function stableJson(value: unknown): string {
   if (value === undefined) return "null";

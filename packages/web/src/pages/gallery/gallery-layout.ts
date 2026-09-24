@@ -1,4 +1,9 @@
-import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type RefObject
+} from "react";
 import type { Device } from "../../lib/types.js";
 import { galleryColumnCount } from "../../lib/gallery/gallery-columns.js";
 
@@ -72,7 +77,11 @@ export function useGalleryGeometry(galleryRef: RefObject<HTMLElement | null>) {
   return geometry;
 }
 
-export function galleryImageRatio(device: Device, width = 0, height = 0) {
+export function galleryImageRatio(
+  device: Device,
+  width = 0,
+  height = 0
+) {
   if (width > 0 && height > 0) return `${width} / ${height}`;
   if (device === "mb") return "9 / 16";
   if (device === "pc") return "16 / 9";

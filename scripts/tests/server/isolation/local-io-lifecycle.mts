@@ -8,10 +8,10 @@ import { runIntegrationScenario } from "./integration-runtime.mts";
 import { settleWithin } from "./storage-maintenance-fixture.mts";
 
 await runIntegrationScenario(async (runtime) => {
-  const { LocalBackend } = await import("../../../../packages/server/src/storage/drivers/local.ts");
+  const { LocalStorageDriver } = await import("../../../../packages/server/src/storage/drivers/local.ts");
   const { collectStorageKeyListing } =
     await import("../../../../packages/server/src/storage/objects/key-listing.ts");
-  const driver = new LocalBackend();
+  const driver = new LocalStorageDriver();
   await driver.writeBuffer(
     "full",
     "stream.bin",

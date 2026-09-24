@@ -11,7 +11,8 @@ export async function assertRuntimeDatabaseAccess(database: DatabaseReader) {
               AS public_schema_usage`
     )
   ).rows[0];
-  if (session?.transaction_read_only !== "off" || !session.public_schema_usage) {
+  if (session?.transaction_read_only !== "off"
+    || !session.public_schema_usage) {
     throw new Error(
       `database session cannot run ImageShow writes: ` +
         `transaction_read_only=${session?.transaction_read_only ?? "unknown"}, ` +
@@ -40,14 +41,19 @@ export async function assertRuntimeDatabaseAccess(database: DatabaseReader) {
             ) AS allowed
        FROM unnest($1::text[], $2::text[])
          AS required(table_name, privilege_name)`,
-      [required.map(({ table }) => table), required.map(({ privilege }) => privilege)]
+      [
+        required.map(({ table }) => table),
+        required.map(({ privilege }) => privilege)
+      ]
     )
   ).rows;
   const missing = rows.filter((row) => !row.allowed);
   if (missing.length) {
     throw new Error(
       `database role lacks required table privileges: ` +
-        missing.map((row) => `${row.table_name}.${row.privilege_name}`).join(", ")
+        missing
+          .map((row) => `${row.table_name}.${row.privilege_name}`)
+          .join(", ")
     );
   }
 }

@@ -156,7 +156,11 @@ export class ShowPixiRuntime {
     return new ShowPixiRuntime(host, app, options);
   }
 
-  private constructor(host: HTMLElement, app: Application, options: ShowPixiRuntimeOptions) {
+  private constructor(
+    host: HTMLElement,
+    app: Application,
+    options: ShowPixiRuntimeOptions
+  ) {
     const { signal } = this.#listenerController;
     this.#host = host;
     this.app = app;
@@ -385,7 +389,8 @@ export class ShowPixiRuntime {
     if (this.#destroyed) return;
     this.#destroyed = true;
     this.#applyMotionState();
-    const publishCleanup = this.#debugExposed && window.__imageShowPixiDebug === this.#debugApi;
+    const publishCleanup = this.#debugExposed
+      && window.__imageShowPixiDebug === this.#debugApi;
     if (publishCleanup) {
       delete window.__imageShowPixiDebug;
     }
@@ -459,7 +464,8 @@ export class ShowPixiRuntime {
 
   #applyMotionState() {
     const inputEnabled =
-      !this.#destroyed && !this.#dialogOpen && !this.#hidden && !this.#contextLost;
+      !this.#destroyed && !this.#dialogOpen
+        && !this.#hidden && !this.#contextLost;
     const running = this.#running && inputEnabled;
     this.#scene?.setInputEnabled(inputEnabled);
     this.#scene?.setMotion(running, this.#reducedMotion);

@@ -10,7 +10,10 @@ import {
   readyImageAttributeIndexSpec,
   readyImageFilterMetaKeyForFilterKey
 } from "../keys.ts";
-import { READY_IMAGE_DERIVED_CACHE_POLICY, type ReadyImageDerivedResultKind } from "./policy.ts";
+import {
+  READY_IMAGE_DERIVED_CACHE_POLICY,
+  type ReadyImageDerivedResultKind
+} from "./policy.ts";
 
 const signaturePattern = /^[0-9a-f]{64}$/u;
 let lastAccessScore = 0;
@@ -80,7 +83,10 @@ export function describeReadyImageDerivedResult(key: string): DerivedResultDescr
   return null;
 }
 
-export function assertReadyImageDerivedResult(key: string, kind?: ReadyImageDerivedResultKind) {
+export function assertReadyImageDerivedResult(
+  key: string,
+  kind?: ReadyImageDerivedResultKind
+) {
   assertReadyImageDerivedCacheKey(key);
   const descriptor = describeReadyImageDerivedResult(key);
   if (!descriptor || (kind && descriptor.kind !== kind)) {
@@ -94,5 +100,8 @@ export function readyImageDerivedMembershipLimit(itemCount: number) {
   if (!Number.isSafeInteger(multiplied)) {
     throw new Error("Ready-image derived membership limit is outside the safe range");
   }
-  return Math.max(READY_IMAGE_DERIVED_CACHE_POLICY.minimumTotalMembers, multiplied);
+  return Math.max(
+    READY_IMAGE_DERIVED_CACHE_POLICY.minimumTotalMembers,
+    multiplied
+  );
 }

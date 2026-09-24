@@ -42,7 +42,10 @@ import {
 } from "../../core/http/byte-range.ts";
 import { normalizeObjectEtag } from "../objects/validator.ts";
 import { isS3NotFound } from "../objects/not-found.ts";
-import { batchStorageKeys, type StorageKeyListOptions } from "../objects/key-listing.ts";
+import {
+  batchStorageKeys,
+  type StorageKeyListOptions
+} from "../objects/key-listing.ts";
 import { S3RequestRuntime } from "./s3-request-runtime.ts";
 import {
   removeDriverObjectsAndConfirm,
@@ -126,7 +129,9 @@ function deleteObjectsCommandWithContentMd5(
       if (!bytes) {
         throw new Error("DeleteObjects request body cannot be checksummed");
       }
-      request.headers["content-md5"] = createHash("md5").update(bytes).digest("base64");
+      request.headers["content-md5"] = createHash("md5")
+        .update(bytes)
+        .digest("base64");
       return next(args);
     },
     {
@@ -139,11 +144,14 @@ function deleteObjectsCommandWithContentMd5(
 }
 
 export type S3CommandClient = {
-  send(command: unknown, options?: { abortSignal?: AbortSignal }): Promise<unknown>;
+  send(
+    command: unknown,
+    options?: { abortSignal?: AbortSignal }
+  ): Promise<unknown>;
   destroy(): void;
 };
 
-export type S3BackendDependencies = {
+export type S3StorageDriverDependencies = {
   client?: S3CommandClient;
 };
 
@@ -170,14 +178,17 @@ function storageS3Client(config: S3StorageConfig): S3CommandClient {
   }) as unknown as S3CommandClient;
 }
 
-export class S3Backend implements StorageDriver {
+export class S3StorageDriver implements StorageDriver {
   private readonly client: S3CommandClient;
   private readonly bucket: string;
   private readonly config: S3StorageConfig;
   private readonly requests: S3RequestRuntime;
   private readonly copyCompatibility: string;
 
-  constructor(config: S3StorageConfig, dependencies: S3BackendDependencies = {}) {
+  constructor(
+    config: S3StorageConfig,
+    dependencies: S3StorageDriverDependencies = {}
+  ) {
     this.config = config;
     this.client = dependencies.client ?? storageS3Client(config);
     this.bucket = config.s3.bucket;
@@ -237,7 +248,11 @@ export class S3Backend implements StorageDriver {
     }
   }
 
-  async exists(prefix: StoragePrefix, key: string, options: StorageRequestOptions = {}) {
+  async exists(
+    prefix: StoragePrefix,
+    key: string,
+    options: StorageRequestOptions = {}
+  ) {
     try {
       await this.send(
         new HeadObjectCommand({
@@ -300,7 +315,9 @@ export class S3Backend implements StorageDriver {
     if (!body)
       throw new ApiError(502, "storage_read_failed", "Storage returned an empty response body");
     const rawSize = Number(result.ContentLength);
-    const size = Number.isSafeInteger(rawSize) && rawSize >= 0 ? rawSize : undefined;
+    const size = Number.isSafeInteger(rawSize) && rawSize >= 0
+      ? rawSize
+      : undefined;
     const contentRange = result.ContentRange;
     const totalSize = totalSizeFromContentRange(contentRange) ?? size;
     const serverCopyValidator = normalizeObjectEtag(result.ETag);
@@ -313,7 +330,8 @@ export class S3Backend implements StorageDriver {
       body,
       size,
       totalSize:
-        totalSize !== undefined && Number.isSafeInteger(totalSize) && totalSize >= 0
+        totalSize !== undefined
+          && Number.isSafeInteger(totalSize) && totalSize >= 0
           ? totalSize
           : undefined,
       contentRange,
@@ -326,9 +344,16 @@ export class S3Backend implements StorageDriver {
     };
   }
 
-  async readBuffer(prefix: StoragePrefix, key: string, options: StorageRequestOptions = {}) {
+  async readBuffer(
+    prefix: StoragePrefix,
+    key: string,
+    options: StorageRequestOptions = {}
+  ) {
     const limit = await getIngestionMaxFileBytes();
-    return openedReadToBuffer(await this.openRead(prefix, key, undefined, options), limit);
+    return openedReadToBuffer(
+      await this.openRead(prefix, key, undefined, options),
+      limit
+    );
   }
 
   async writeBuffer(
@@ -390,7 +415,10 @@ export class S3Backend implements StorageDriver {
     for (let offset = 0; offset < objects.length; offset += S3_DELETE_OBJECTS_MAX_KEYS) {
       const chunk = objects.slice(offset, offset + S3_DELETE_OBJECTS_MAX_KEYS);
       if (options.signal?.aborted) {
-        const error = storageRemovalFailure(options.signal.reason, "storage_delete_cancelled");
+        const error = storageRemovalFailure(
+          options.signal.reason,
+          "storage_delete_cancelled"
+        );
         for (let index = offset; index < objects.length; index += 1) {
           results[index] = { status: "not_started", error };
         }
@@ -410,7 +438,10 @@ export class S3Backend implements StorageDriver {
           options
         );
       } catch (error) {
-        const failure = storageRemovalFailure(error, "storage_delete_outcome_unknown");
+        const failure = storageRemovalFailure(
+          error,
+          "storage_delete_outcome_unknown"
+        );
         for (let index = 0; index < chunk.length; index += 1) {
           results[offset + index] = { status: "unknown", error: failure };
         }
@@ -429,7 +460,10 @@ export class S3Backend implements StorageDriver {
 
       const nameIndexes = new Map(names.map((name, index) => [name, index]));
       let invalidResponse = false;
-      const setResult = (name: string | undefined, result: StorageDeleteAttemptResult) => {
+      const setResult = (
+        name: string | undefined,
+        result: StorageDeleteAttemptResult
+      ) => {
         const index = name === undefined ? undefined : nameIndexes.get(name);
         if (index === undefined || results[offset + index]) {
           invalidResponse = true;
@@ -483,8 +517,15 @@ export class S3Backend implements StorageDriver {
     return removeDriverObjectsAndConfirm({
       objects,
       options,
-      exists: (object, requestOptions) => this.exists(object.prefix, object.key, requestOptions),
-      remove: (items, requestOptions) => this.sendS3DeleteObjectBatches(items, requestOptions)
+      exists: (object, requestOptions) => this.exists(
+        object.prefix,
+        object.key,
+        requestOptions
+      ),
+      remove: (items, requestOptions) => this.sendS3DeleteObjectBatches(
+        items,
+        requestOptions
+      )
     });
   }
 
@@ -583,7 +624,9 @@ export class S3Backend implements StorageDriver {
         yield item.Key.slice(prefixPath.length);
       }
       consecutiveEmptyPages =
-        pageKeyCount === 0 && result.IsTruncated ? consecutiveEmptyPages + 1 : 0;
+        pageKeyCount === 0 && result.IsTruncated
+          ? consecutiveEmptyPages + 1
+          : 0;
       if (consecutiveEmptyPages > S3_LIST_MAX_CONSECUTIVE_EMPTY_PAGES) {
         throw new ApiError(
           502,
@@ -591,7 +634,9 @@ export class S3Backend implements StorageDriver {
           "S3 object listing made no progress across truncated pages"
         );
       }
-      const nextToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+      const nextToken = result.IsTruncated
+        ? result.NextContinuationToken
+        : undefined;
       if (result.IsTruncated && !nextToken) {
         throw new ApiError(
           502,
@@ -611,9 +656,15 @@ export class S3Backend implements StorageDriver {
     } while (token);
   }
 
-  async *listKeys(prefix: StoragePrefix, options: StorageKeyListOptions = {}) {
+  async *listKeys(
+    prefix: StoragePrefix,
+    options: StorageKeyListOptions = {}
+  ) {
     const prefixPath = s3ListPrefix(this.config, prefix);
-    return yield* batchStorageKeys(this.listedKeys(prefixPath, options), options);
+    return yield* batchStorageKeys(
+      this.listedKeys(prefixPath, options),
+      options
+    );
   }
 
   async selfTest(options: StorageRequestOptions = {}): Promise<StorageSelfTest> {
@@ -623,7 +674,10 @@ export class S3Backend implements StorageDriver {
         missing
       });
     const probeId = randomUUID();
-    const keys = [`.storage-test-${probeId}-valid`, `.storage-test-${probeId}-invalid`] as const;
+    const keys = [
+      `.storage-test-${probeId}-valid`,
+      `.storage-test-${probeId}-invalid`
+    ] as const;
     let result: StorageSelfTest | undefined;
     let testError: unknown;
     try {
@@ -671,7 +725,10 @@ export class S3Backend implements StorageDriver {
         { reason: errorMessage(cleanupError), keys }
       );
       if (testError) {
-        throw new AggregateError([testError, failure], "S3 self-test and cleanup both failed");
+        throw new AggregateError(
+          [testError, failure],
+          "S3 self-test and cleanup both failed"
+        );
       }
       throw failure;
     }
@@ -685,7 +742,8 @@ export class S3Backend implements StorageDriver {
     options: StorageRequestOptions
   ) {
     const bytes = randomBytes(32);
-    const digest = createHash("md5").update(bytes).digest();
+    const digest = createHash("md5")
+      .update(bytes).digest();
     const put = async (key: string, expectedMd5?: string) => {
       const body = Readable.from([bytes]);
       const closed = finished(body, { cleanup: true }).catch(() => undefined);

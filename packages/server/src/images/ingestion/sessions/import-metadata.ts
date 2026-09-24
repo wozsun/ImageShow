@@ -1,4 +1,8 @@
-import type { ImageDraftDto, ImportSourceTypeDto, RuntimeConfig } from "@imageshow/shared/browser";
+import type {
+  ImageDraftDto,
+  ImportSourceTypeDto,
+  RuntimeConfig
+} from "@imageshow/shared/browser";
 
 type ImportMetadataRuntime = {
   import: Pick<RuntimeConfig["import"], "keep_original_link">;
@@ -13,7 +17,11 @@ export function canonicalImportMetadata(
 ): ImageDraftDto {
   return {
     ...metadata,
-    source: sourceType === "weibo" && !runtime.weibo.source_enabled ? "" : metadata.source,
-    original: runtime.import.keep_original_link.includes(sourceType) ? downloadUrl : ""
+    source: sourceType === "weibo" && !runtime.weibo.source_enabled
+      ? ""
+      : metadata.source,
+    original: runtime.import.keep_original_link.includes(sourceType)
+      ? downloadUrl
+      : ""
   };
 }

@@ -1,7 +1,15 @@
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
-import { spawnSync, type ChildProcess } from "node:child_process";
-import { readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  spawnSync,
+  type ChildProcess
+} from "node:child_process";
+import {
+  readFile,
+  rm,
+  stat,
+  writeFile
+} from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
@@ -435,7 +443,12 @@ test("[Server/数据库与进程] 单进程配置写租约覆盖嵌套调用和�
   assert.deepEqual(order, ["first:start"]);
   releaseLongIo();
   await Promise.all([first, second]);
-  assert.deepEqual(order, ["first:start", "first:nested", "first:end", "second"]);
+  assert.deepEqual(order, [
+    "first:start",
+    "first:nested",
+    "first:end",
+    "second"
+  ]);
 });
 test("[Server/数据库与进程] 共享 abort race 保留调用方 reason 并收口迟到 operation", async () => {
   const completed = await raceWithAbortSignal(
@@ -482,10 +495,16 @@ for (const mode of ["runProcess", "IPC owner"] as const) {
       const childPidPath = resolve(root, "child.pid");
       const ownedDirectory = resolve(root, "owned-directory");
       const processRunnerUrl = pathToFileURL(
-        resolve(import.meta.dirname, "../support/process-runner.ts")
+        resolve(
+          import.meta.dirname,
+          "../support/process-runner.ts"
+        )
       ).href;
       const testDirectoryUrl = pathToFileURL(
-        resolve(import.meta.dirname, "../support/test-directory.ts")
+        resolve(
+          import.meta.dirname,
+          "../support/test-directory.ts"
+        )
       ).href;
       const childSource = "setInterval(() => undefined, 1_000);";
       const publishPidSource = [
@@ -541,7 +560,12 @@ for (const mode of ["runProcess", "IPC owner"] as const) {
         await writeFile(helperPath, helperSource);
         helper = spawnSharedTestProcess(
           process.execPath,
-          ["--experimental-strip-types", helperPath, childPidPath, ownedDirectory],
+          [
+            "--experimental-strip-types",
+            helperPath,
+            childPidPath,
+            ownedDirectory
+          ],
           {
             stdio: ["ignore", "ignore", "pipe", "ipc"],
             windowsHide: true
@@ -585,10 +609,16 @@ test(
     const lateRegistrationResultPath = resolve(root, "late-registration-result.txt");
     const lateProcessResultPath = resolve(root, "late-process-result.txt");
     const processRunnerUrl = pathToFileURL(
-      resolve(import.meta.dirname, "../support/process-runner.ts")
+      resolve(
+        import.meta.dirname,
+        "../support/process-runner.ts"
+      )
     ).href;
     const testDirectoryUrl = pathToFileURL(
-      resolve(import.meta.dirname, "../support/test-directory.ts")
+      resolve(
+        import.meta.dirname,
+        "../support/test-directory.ts"
+      )
     ).href;
     const helperSource = [
       'import { mkdirSync, writeFileSync } from "node:fs";',
@@ -672,12 +702,19 @@ test(
   }
 );
 test("[Server/数据库与进程] 后台任务类型只接受当前固定集合", () => {
-  assert.deepEqual(backgroundJobTypes, ["move.cleanup", "trash.purge", "cache.rebuild"]);
+  assert.deepEqual(backgroundJobTypes, [
+    "move.cleanup",
+    "trash.purge",
+    "cache.rebuild"
+  ]);
   for (const type of backgroundJobTypes) {
     assert.equal(parseBackgroundJobType(type), type);
   }
   for (const unsupported of ["unsupported.job", "", null, 1]) {
-    assert.throws(() => parseBackgroundJobType(unsupported), /Unsupported background job type/);
+    assert.throws(
+      () => parseBackgroundJobType(unsupported),
+      /Unsupported background job type/
+    );
   }
 });
 test("[Server/数据库与进程] Worker 重复停止会中止并排空同一个活动执行", async () => {
@@ -759,11 +796,17 @@ test("[Server/数据库与进程] Worker 不丢弃已经发出的迟到续租失
     assert.equal(completion?.status, "rejected");
     if (completion?.status !== "rejected") assert.fail("expected rejection");
     if (scenario === "lost") {
-      assert.equal((completion.error as { code?: string }).code, "worker_lease_lost");
+      assert.equal(
+        (completion.error as { code?: string }).code,
+        "worker_lease_lost"
+      );
       assert.equal(leaseLostCalls, 1);
       assert.deepEqual(renewalErrors, []);
     } else {
-      assert.equal((completion.error as { code?: string }).code, "worker_lease_renewal_failed");
+      assert.equal(
+        (completion.error as { code?: string }).code,
+        "worker_lease_renewal_failed"
+      );
       assert.equal((completion.error as Error).cause, renewalError);
       assert.equal(leaseLostCalls, 0);
       assert.deepEqual(renewalErrors, [renewalError]);
@@ -841,7 +884,10 @@ test("[Server/数据库与进程] 公开数据库准入保持 FIFO、总并发�
   const queuedAbort = new AbortController();
   const abortReason = new Error("queued request disconnected");
   const queued = cancellationAdmission.acquire(queuedAbort.signal);
-  const queuedRejected = assert.rejects(queued, (error) => error === abortReason);
+  const queuedRejected = assert.rejects(
+    queued,
+    (error) => error === abortReason
+  );
   queuedAbort.abort(abortReason);
   await queuedRejected;
   assert.equal(cancellationAdmission.snapshot().queued, 0);
@@ -910,7 +956,9 @@ test("[Server/数据库与进程] 公开 reader 排队 SQL 在失败、取消和
       return Promise.all(queries);
     });
     const rejected = assert.rejects(operation, (error: { code?: string }) =>
-      outcome === "failure" ? error.code === "public_pg_fallback_query_failed" : error === failure
+      outcome === "failure"
+        ? error.code === "public_pg_fallback_query_failed"
+        : error === failure
     );
     await started.promise;
     if (outcome === "failure") firstQuery.reject(failure);
@@ -965,7 +1013,10 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
     retryAfterSeconds: 1
   } as never);
   await assert.rejects(
-    queryErrorScope(new AbortController().signal, async ({ reader }) => reader.query("broken")),
+    queryErrorScope(
+      new AbortController().signal,
+      async ({ reader }) => reader.query("broken")
+    ),
     (error: { code?: string }) => error.code === "public_pg_fallback_query_failed"
   );
   assert.deepEqual(queryErrorClient.releases, [true]);
@@ -1055,10 +1106,16 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
     retryAfterSeconds: 1
   } as never);
   const requestAbort = new AbortController();
-  const operation = activeScope(requestAbort.signal, async ({ reader }) => reader.query("active"));
+  const operation = activeScope(
+    requestAbort.signal,
+    async ({ reader }) => reader.query("active")
+  );
   await activeStarted.promise;
   const abortReason = new Error("public request disconnected");
-  const operationRejected = assert.rejects(operation, (error) => error === abortReason);
+  const operationRejected = assert.rejects(
+    operation,
+    (error) => error === abortReason
+  );
   requestAbort.abort(abortReason);
   await operationRejected;
   assert.deepEqual(activeClient.releases, [true]);
@@ -1092,7 +1149,10 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
   );
   await checkoutStarted.promise;
   const checkoutReason = new Error("disconnect during pool checkout");
-  const checkoutRejected = assert.rejects(checkoutOperation, (error) => error === checkoutReason);
+  const checkoutRejected = assert.rejects(
+    checkoutOperation,
+    (error) => error === checkoutReason
+  );
   checkoutAbort.abort(checkoutReason);
   await checkoutRejected;
   assert.equal(checkoutAdmissionReleases, 0);
@@ -1118,7 +1178,10 @@ test("[Server/数据库与进程] 公开 PostgreSQL 回源在故障、取消和�
     retryAfterSeconds: 1
   } as never);
   await assert.rejects(
-    timeoutScope(new AbortController().signal, async ({ reader }) => reader.query("slow")),
+    timeoutScope(
+      new AbortController().signal,
+      async ({ reader }) => reader.query("slow")
+    ),
     (error: { code?: string }) => error.code === "public_pg_fallback_execution_timeout"
   );
   assert.deepEqual(timeoutClient.releases, [true]);
@@ -1201,7 +1264,10 @@ test("[Server/数据库与进程] 数据库事务边界只在成功提交并在�
     }),
     "snapshot"
   );
-  assert.deepEqual(queries, ["BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY", "COMMIT"]);
+  assert.deepEqual(queries, [
+    "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
+    "COMMIT"
+  ]);
 
   queries.length = 0;
   await assert.rejects(
@@ -1214,7 +1280,10 @@ test("[Server/数据库与进程] 数据库事务边界只在成功提交并在�
     ),
     (error) => error === failure
   );
-  assert.deepEqual(queries, ["BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY", "ROLLBACK"]);
+  assert.deepEqual(queries, [
+    "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
+    "ROLLBACK"
+  ]);
 });
 test("[Server/数据库与进程] advisory lock 连接池等待可取消并释放迟到 client", async () => {
   const controller = new AbortController();
@@ -1224,7 +1293,10 @@ test("[Server/数据库与进程] advisory lock 连接池等待可取消并释�
     resolveClient = resolve;
   });
   let releases = 0;
-  const acquiring = acquireAdvisoryLockClient(controller.signal, () => pending as never);
+  const acquiring = acquireAdvisoryLockClient(
+    controller.signal,
+    () => pending as never
+  );
   controller.abort(reason);
   await assert.rejects(acquiring, (error) => error === reason);
   resolveClient({

@@ -32,12 +32,19 @@ function isIdentityPairCheck(row: CheckConstraintRow) {
     return false;
   }
   const expression = normalizedExpression(row.definition);
-  const nullPairs = orderedPairs("identity_providerisnull", "identity_idisnull");
-  const valuePairs = orderedPairs("identity_providerisnotnull", "identity_idisnotnull");
+  const nullPairs = orderedPairs(
+    "identity_providerisnull",
+    "identity_idisnull"
+  );
+  const valuePairs = orderedPairs(
+    "identity_providerisnotnull",
+    "identity_idisnotnull"
+  );
   return nullPairs.some((nullPair) =>
     valuePairs.some(
       (valuePair) =>
-        expression === `${nullPair}or${valuePair}` || expression === `${valuePair}or${nullPair}`
+        expression === `${nullPair}or${valuePair}`
+        || expression === `${valuePair}or${nullPair}`
     )
   );
 }
@@ -53,10 +60,14 @@ function isIdentityProviderTokenCheck(row: CheckConstraintRow) {
       "char_length(identity_provider)<=32",
       pattern
     ),
-    ...orderedPairs("char_length(identity_provider)between1and32", pattern)
+    ...orderedPairs(
+      "char_length(identity_provider)between1and32",
+      pattern
+    )
   ];
   return boundedBodies.some(
-    (body) => expression === `${nullable}or${body}` || expression === `${body}or${nullable}`
+    (body) => expression === `${nullable}or${body}`
+      || expression === `${body}or${nullable}`
   );
 }
 
@@ -69,7 +80,10 @@ function isIdentityIdNonemptyCheck(row: CheckConstraintRow) {
   ].includes(expression);
 }
 
-async function validatedChecksFor(database: DatabaseReader, table: string) {
+async function validatedChecksFor(
+  database: DatabaseReader,
+  table: string
+) {
   return (
     await database.query<CheckConstraintRow>(
       `SELECT ARRAY(
@@ -106,7 +120,9 @@ export async function assertRequiredCheckConstraints(database: DatabaseReader) {
     ["author identity provider token", isIdentityProviderTokenCheck],
     ["author identity nonempty ID", isIdentityIdNonemptyCheck]
   ].flatMap(([label, matches]) =>
-    authorRows.some(matches as (row: CheckConstraintRow) => boolean) ? [] : [label as string]
+    authorRows.some(matches as (row: CheckConstraintRow) => boolean)
+      ? []
+      : [label as string]
   );
   if (missing.length) {
     throw new Error(`required CHECK constraints are missing or invalid: ${missing.join(", ")}`);

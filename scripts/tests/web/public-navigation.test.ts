@@ -11,7 +11,10 @@ import {
   showOrderFromSearchParams,
   updateImageBrowseSearchParams
 } from "../../../packages/web/src/lib/gallery/gallery-query.ts";
-import { publicHomeBrowsePath, publicRootPath } from "../../../packages/web/src/lib/constants.ts";
+import {
+  publicHomeBrowsePath,
+  publicRootPath
+} from "../../../packages/web/src/lib/constants.ts";
 import { buildRandomUrl } from "../../../packages/web/src/lib/gallery/random-url.ts";
 import {
   publicNavigationAutoHideDelayMs,
@@ -556,12 +559,30 @@ test("[Web/公开导航] 站点根入口保持 home、show、gallery 与关闭�
   assert.equal(publicHomeBrowsePath(site("home", true, true, "show")), "/show");
   assert.equal(publicHomeBrowsePath(site("home", true, false, "show")), "/gallery");
   assert.equal(publicHomeBrowsePath(site("home", true, true, "gallery")), "/gallery");
-  assert.equal(publicHomeBrowsePath(site("home", true, true, "gallery", false)), "/show");
-  assert.equal(publicHomeBrowsePath(site("home", true, false, "gallery", false)), null);
-  assert.equal(publicHomeBrowsePath(site("home", true, true, "show"), true), "/embed/show");
-  assert.equal(publicHomeBrowsePath(site("home", true, true, "show", false), true), "/embed/show");
-  assert.equal(publicHomeBrowsePath(site("home", true, false, "show"), true), "/embed/gallery");
-  assert.equal(publicHomeBrowsePath(site("home", true, false, "show", false), true), null);
+  assert.equal(
+    publicHomeBrowsePath(site("home", true, true, "gallery", false)),
+    "/show"
+  );
+  assert.equal(
+    publicHomeBrowsePath(site("home", true, false, "gallery", false)),
+    null
+  );
+  assert.equal(
+    publicHomeBrowsePath(site("home", true, true, "show"), true),
+    "/embed/show"
+  );
+  assert.equal(
+    publicHomeBrowsePath(site("home", true, true, "show", false), true),
+    "/embed/show"
+  );
+  assert.equal(
+    publicHomeBrowsePath(site("home", true, false, "show"), true),
+    "/embed/gallery"
+  );
+  assert.equal(
+    publicHomeBrowsePath(site("home", true, false, "show", false), true),
+    null
+  );
 });
 test("[Web/公开导航] 桌面与嵌入展映三秒无点击收起，顶部 36px 唤出，导航内悬停和焦点取消计时", async (t) => {
   assert.equal(publicNavigationAutoHideDelayMs, 3000);
@@ -800,12 +821,18 @@ test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前�
     "/embed/gallery?device=pc&brightness=dark&theme=editorial,stage&tag=concert,red-carpet&author=startrail-photo"
   );
   assert.equal(galleryHref(emptyGalleryFilters), "/gallery");
-  assert.equal(galleryHref(emptyGalleryFilters, "/embed/gallery"), "/embed/gallery");
+  assert.equal(
+    galleryHref(emptyGalleryFilters, "/embed/gallery"),
+    "/embed/gallery"
+  );
 
   const automaticDevice = galleryFiltersFromSearchParams(
     new URLSearchParams("device=auto&brightness=light&theme=stage")
   );
-  assert.equal(galleryHref(automaticDevice), "/gallery?device=auto&brightness=light&theme=stage");
+  assert.equal(
+    galleryHref(automaticDevice),
+    "/gallery?device=auto&brightness=light&theme=stage"
+  );
   assert.equal(
     imageBrowseApiSearchParams(automaticDevice, "random", {
       view: "gallery",
@@ -839,9 +866,18 @@ test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前�
     showModeFromSearchParams(new URLSearchParams("mode=waterfall"), "float"),
     "waterfall"
   );
-  assert.equal(showModeFromSearchParams(new URLSearchParams("mode=invalid"), "float"), "float");
-  assert.equal(showOrderFromSearchParams(new URLSearchParams("order=latest"), "random"), "latest");
-  assert.equal(showOrderFromSearchParams(new URLSearchParams("order=invalid"), "random"), "random");
+  assert.equal(
+    showModeFromSearchParams(new URLSearchParams("mode=invalid"), "float"),
+    "float"
+  );
+  assert.equal(
+    showOrderFromSearchParams(new URLSearchParams("order=latest"), "random"),
+    "latest"
+  );
+  assert.equal(
+    showOrderFromSearchParams(new URLSearchParams("order=invalid"), "random"),
+    "random"
+  );
   const implicit = updateImageBrowseSearchParams(new URLSearchParams(), { theme: "stage" });
   assert.equal(implicit.toString(), "theme=stage");
   assert.equal(showOrderFromSearchParams(implicit, "random"), "random");

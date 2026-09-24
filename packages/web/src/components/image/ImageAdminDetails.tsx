@@ -1,6 +1,17 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, clearCsrfToken, isApiClientError } from "../../lib/api/client.js";
+import {
+  api,
+  clearCsrfToken,
+  isApiClientError
+} from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { clearSessionProbeHint } from "../../lib/api/auth-session.js";
@@ -25,7 +36,7 @@ import type {
 // 完整的管理表单色契约继续等到用户明确打开编辑器时再加载。
 import "../../styles/admin/image-details.css";
 
-const MD5_RESERVE = "0".repeat(32);
+const md5WidthPlaceholder = "0".repeat(32);
 
 type AdminDetailSource = AdminImageDetailItem | AdminImageListItem;
 
@@ -71,11 +82,14 @@ export function ImageAdminDetails({
   onNestedDialogChange?: (open: boolean) => void;
 }) {
   const admin = Boolean(adminItem);
-  const adminListItem = adminItem && isAdminImageListItem(adminItem) ? adminItem : null;
+  const adminListItem = adminItem && isAdminImageListItem(adminItem)
+    ? adminItem
+    : null;
   const queryClient = useQueryClient();
   const trashedImageRef = useRef<string | null>(null);
   const knownUneditable = Boolean(
-    adminListItem?.deleted_at || (adminListItem && adminListItem.status !== "ready")
+    adminListItem?.deleted_at
+    || (adminListItem && adminListItem.status !== "ready")
   );
 
   // 后台详情已有 Shell 确认过会话；公共详情只有在外层根据 /auth/me 的
@@ -143,7 +157,8 @@ export function ImageAdminDetails({
         setEditSuppressed(true);
         return;
       }
-      if (isApiClientError(error) && (error.status === 401 || error.status === 403)) {
+      if (isApiClientError(error)
+        && (error.status === 401 || error.status === 403)) {
         denyAdminAccess(error.status === 401);
       }
     },
@@ -250,10 +265,13 @@ export function ImageAdminDetails({
           imageIds: [imageId],
           commit,
           loadAdjacentData:
-            admin || commit === undefined ? loadAdminInfoAfterInvalidation : undefined
+            admin || commit === undefined
+              ? loadAdminInfoAfterInvalidation
+              : undefined
         });
 
-      if (adjacentDataResult.status === "fulfilled" && adjacentDataResult.value?.id === imageId) {
+      if (adjacentDataResult.status === "fulfilled"
+        && adjacentDataResult.value?.id === imageId) {
         setRefreshedAdminInfo(adjacentDataResult.value);
       }
       if (snapshotResult.status === "rejected") {
@@ -323,7 +341,11 @@ export function ImageAdminDetails({
   const fallback = unresolvedValue(admin, loading, failed);
   const md5 = refreshedAdminInfo?.md5 || adminItem?.md5 || adminInfo?.md5 || fallback;
   const refreshedPublicStorageLabel =
-    !admin && !query.isStale && !query.isError ? adminInfo?.storage_label : undefined;
+    !admin
+      && !query.isStale
+      && !query.isError
+      ? adminInfo?.storage_label
+      : undefined;
   // 迁移接口已经确认目标后端时，该显示名比打开详情时的首帧标签更新。
   // 后台详情以本轮显式回读优先；公开详情复用 active Query 的失效刷新，只有
   // Query 已成功收敛为 fresh 时才优先。刷新中或失败时不能退回旧存储名。
@@ -333,7 +355,9 @@ export function ImageAdminDetails({
     migratedStorageLabel ||
     adminStorageLabel ||
     adminInfo?.storage_label ||
-    (adminListItem ? storageBackendLabel(adminListItem.storage_slug) : fallback);
+    (adminListItem
+      ? storageBackendLabel(adminListItem.storage_slug)
+      : fallback);
   const createdAt =
     refreshedAdminInfo?.created_at ?? adminItem?.created_at ?? adminInfo?.created_at;
   const updatedAt =
@@ -390,7 +414,7 @@ export function ImageAdminDetails({
             <dt>MD5</dt>
             <dd className="image-detail-admin-md5">
               <span className="image-detail-admin-md5-reserve" aria-hidden="true">
-                {MD5_RESERVE}
+                {md5WidthPlaceholder}
               </span>
               <span>{md5}</span>
             </dd>

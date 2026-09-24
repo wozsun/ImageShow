@@ -75,7 +75,9 @@ export async function readReadyImageRandomMembers(
     scanned += count;
     start += count;
     const scores =
-      index.key === READY_IMAGE_ALL_INDEX_KEY ? null : await redis.zmscore(index.key, ...members);
+      index.key === READY_IMAGE_ALL_INDEX_KEY
+        ? null
+        : await redis.zmscore(index.key, ...members);
     if (scores && scores.length !== members.length) throw new Error("Incomplete filter membership");
     for (let offset = 0; offset < members.length; offset += 1) {
       if (scores && scores[offset] === null) continue;

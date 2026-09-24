@@ -13,11 +13,14 @@ export function normalizeHttpsUrlInput(value: string): string | null {
   const trimmed = value.trim();
   if (trimmed.length > httpsUrlInputMaxLength) return null;
   if (!trimmed) return "";
-  const normalized = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  const normalized = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
   if (normalized.length > httpsUrlInputMaxLength) return null;
   try {
     const parsed = new URL(normalized);
-    return parsed.protocol === "https:" && parsed.hostname && !parsed.username && !parsed.password
+    return parsed.protocol === "https:" && parsed.hostname
+      && !parsed.username && !parsed.password
       ? normalized
       : null;
   } catch {
@@ -27,8 +30,8 @@ export function normalizeHttpsUrlInput(value: string): string | null {
 
 export const ingestionBatchHardLimit = 3_600;
 export const ingestionQueueSnapshotMaxItems = 100;
-export const configPackageMaxBytes = 1024 * 1024;
-export const configPackageRequestMaxBytes = configPackageMaxBytes + 64 * 1024;
+export const configBundleMaxBytes = 1024 * 1024;
+export const configBundleRequestMaxBytes = configBundleMaxBytes + 64 * 1024;
 export const adminImagePageLimit = 60;
 export const altchaSolveTimeoutMs = 60_000;
 

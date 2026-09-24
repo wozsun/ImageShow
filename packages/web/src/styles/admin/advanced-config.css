@@ -120,26 +120,26 @@
 .advanced-config-file-input {
   display: none;
 }
-.config-package-dialog form {
+.config-bundle-dialog form {
   width: min(900px, 100%);
   max-height: min(820px, 92vh);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-.config-package-dialog header {
+.config-bundle-dialog header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 36px;
   grid-template-areas: "copy close";
   align-items: center;
 }
-.config-package-dialog-copy {
+.config-bundle-dialog-copy {
   grid-area: copy;
 }
-.config-package-dialog header > .close {
+.config-bundle-dialog header > .close {
   grid-area: close;
 }
-.config-package-dialog .operation-body {
+.config-bundle-dialog .operation-body {
   display: grid;
   gap: 12px;
   overflow-y: auto;

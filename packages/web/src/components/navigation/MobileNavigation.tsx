@@ -1,8 +1,18 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode
+} from "react";
 import { useLocation } from "react-router";
 import { Icon } from "../icon/Icon.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
-import { mobileViewportMediaQuery, useMediaQuery } from "../../hooks/useMediaQuery.js";
+import {
+  mobileViewportMediaQuery,
+  useMediaQuery
+} from "../../hooks/useMediaQuery.js";
 
 export function MobileNavigation({
   children,

@@ -98,7 +98,9 @@ function canonicalEmbedAncestorSource(value: string) {
     const wildcard = /^https:\/\/\*\./i.test(value);
     const hostname = wildcard ? parsed.hostname.slice(2) : parsed.hostname;
     const validWildcard = wildcard
-      ? parsed.hostname.startsWith("*.") && !hostname.includes("*") && hostname.includes(".")
+      ? parsed.hostname.startsWith("*.")
+        && !hostname.includes("*")
+        && hostname.includes(".")
       : !parsed.hostname.includes("*");
     if (
       parsed.protocol !== "https:" ||

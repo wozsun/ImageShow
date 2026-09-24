@@ -10,7 +10,7 @@ await runIntegrationScenario(async (runtime) => {
   const { registerRandomRoutes } = await import("../../../../packages/server/src/routes/random.ts");
   const { registerPublicRoutes } = await import("../../../../packages/server/src/routes/public.ts");
   const { handleApiError } = await import("../../../../packages/server/src/core/http/responses.ts");
-  const { LocalBackend } = await import("../../../../packages/server/src/storage/drivers/local.ts");
+  const { LocalStorageDriver } = await import("../../../../packages/server/src/storage/drivers/local.ts");
   const coordinator =
     await import("../../../../packages/server/src/images/ready-cache/coordinator.ts");
   const app = new Hono();
@@ -22,7 +22,7 @@ await runIntegrationScenario(async (runtime) => {
   const ids = ["00000000-0000-7000-8000-000000000011", "00000000-0000-7000-8000-000000000022"];
   const streams: Readable[] = [];
   const s3Keys: string[] = [];
-  const localDriver = new LocalBackend();
+  const localDriver = new LocalStorageDriver();
   await runtime.databasePools.pool.query(
     "INSERT INTO storage_backend(slug,display_name,type,config) VALUES('synthetic-s3','Synthetic S3','s3',$1::jsonb)",
     [
@@ -47,12 +47,12 @@ await runIntegrationScenario(async (runtime) => {
   }
   await localDriver.writeBuffer("full", storageObjectKey(ids[0]!, "jpg"), full, "image/jpeg");
   await localDriver.writeBuffer("thumbs", storageObjectKey(ids[0]!, "webp"), thumb, "image/webp");
-  const openLocal = LocalBackend.prototype.openRead;
+  const openLocal = LocalStorageDriver.prototype.openRead;
   mock.method(
-    LocalBackend.prototype,
+    LocalStorageDriver.prototype,
     "openRead",
     async function (
-      this: InstanceType<typeof LocalBackend>,
+      this: InstanceType<typeof LocalStorageDriver>,
       ...args: Parameters<typeof openLocal>
     ) {
       const opened = await openLocal.apply(this, args);

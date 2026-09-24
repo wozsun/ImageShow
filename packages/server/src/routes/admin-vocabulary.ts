@@ -8,9 +8,16 @@ import {
 import type { Hono } from "hono";
 import type { z } from "zod";
 import { listAuthorsWithMeta } from "../authors/query.ts";
-import { createAuthor, deleteAuthor, updateAuthorProfile } from "../authors/mutations.ts";
+import {
+  createAuthor,
+  deleteAuthor,
+  updateAuthorProfile
+} from "../authors/mutations.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
-import { apiSuccess, privateCacheableApiSuccess } from "../core/http/responses.ts";
+import {
+  apiSuccess,
+  privateCacheableApiSuccess
+} from "../core/http/responses.ts";
 import {
   authorCreateInput,
   authorMetaUpdateInput,
@@ -26,10 +33,18 @@ import { parse } from "./validation/parse.ts";
 import { sortOrderUpdateInput } from "./validation/sort-order.ts";
 import { setVocabularySortOrder } from "../vocab/sort-order.ts";
 import type { EntityCacheKind } from "../vocab/vocab-cache.ts";
-import { createTag, deleteTag, setTagDisplayName } from "../tags/mutations.ts";
+import {
+  createTag,
+  deleteTag,
+  setTagDisplayName
+} from "../tags/mutations.ts";
 import { listTagsWithCounts } from "../tags/query.ts";
 import { listThemesWithMeta } from "../themes/query.ts";
-import { createTheme, deleteTheme, updateThemeDisplayName } from "../themes/mutations.ts";
+import {
+  createTheme,
+  deleteTheme,
+  updateThemeDisplayName
+} from "../themes/mutations.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 
 type EntityRouteOptions<CreateSchema extends z.ZodType, UpdateSchema extends z.ZodType> = {
@@ -41,7 +56,10 @@ type EntityRouteOptions<CreateSchema extends z.ZodType, UpdateSchema extends z.Z
   deletePermission: AdminPermission;
   list: () => Promise<AdminEntityDto[]>;
   create: (input: z.infer<CreateSchema>) => Promise<AdminEntityDto | void>;
-  update: (slug: string, input: z.infer<UpdateSchema>) => Promise<AdminEntityDto | void>;
+  update: (
+    slug: string,
+    input: z.infer<UpdateSchema>
+  ) => Promise<AdminEntityDto | void>;
   remove: (slug: string) => Promise<void>;
 };
 
@@ -122,7 +140,11 @@ export function registerAdminVocabularyRoutes(app: Hono) {
     deletePermission: adminPermissions.authorDelete,
     list: listAuthorsWithMeta,
     create: (input) => createAuthor(input.slug, input.display_name, input.link),
-    update: (slug, input) => updateAuthorProfile(slug, input.display_name, input.link),
+    update: (slug, input) => updateAuthorProfile(
+      slug,
+      input.display_name,
+      input.link
+    ),
     remove: deleteAuthor
   });
 }

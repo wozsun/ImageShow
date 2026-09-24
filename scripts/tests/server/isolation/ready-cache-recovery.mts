@@ -59,7 +59,10 @@ try {
     await pool.query(
       `INSERT INTO metadata(id, created_by, status, storage_slug, device, brightness, ext, md5, image_time, title)
        VALUES ($1, 'integration-admin', 'ready', 'local', 'pc', 'dark', 'webp', $2, now(), 'Preserved image')`,
-      [imageId, "a".repeat(32)]
+      [
+          imageId,
+          "a".repeat(32)
+        ]
     );
     await probeRedisOperationalState();
     const originalMeta = await rebuildReadyImageCache();

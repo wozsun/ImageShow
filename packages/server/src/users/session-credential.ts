@@ -12,7 +12,10 @@ export function adminCredentialTransitionVersions(
   currentPasswordHash: string,
   nextCredentialVersion: string
 ): AdminCredentialTransitionVersions {
-  return [adminCredentialVersion(currentPasswordHash), nextCredentialVersion];
+  return [
+    adminCredentialVersion(currentPasswordHash),
+    nextCredentialVersion
+  ];
 }
 
 export function parseAdminCredentialVersions(value: unknown) {

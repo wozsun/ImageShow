@@ -130,7 +130,10 @@ test("[Server/标签] slug 优先于显示名且未知分支使完整条件失�
   });
   assert.throws(
     () =>
-      resolveTagExpression(parseTagFilter(["live", "all:live,missing"], "mixed").expression, terms),
+      resolveTagExpression(
+        parseTagFilter(["live", "all:live,missing"], "mixed").expression,
+        terms
+      ),
     { kind: "unknown", term: "missing" }
   );
   assert.throws(() => parseTagFilter(["all:现场,live", "empty"]), { kind: "mixed" });

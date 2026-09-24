@@ -17,7 +17,10 @@ import {
 } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
 import { uploadRaw } from "../../../../packages/web/src/pages/admin/ingestion/queue/ingestion-http-client.ts";
 import { ingestionJobFromServerItem } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/server-ingestion-job.ts";
-import { ingestionJob, createConfigStreamHarness } from "../../support/web-test-context.ts";
+import {
+  ingestionJob,
+  createConfigStreamHarness
+} from "../../support/web-test-context.ts";
 
 test("[Web/内容接入] 异常上传回执结束当前请求并释放下一张图片的上传槽", async (t) => {
   const accepted = {
@@ -109,7 +112,10 @@ test("[Web/内容接入] 浏览器上传 lane 统一约束页面工作并响应�
     const starts: string[] = [];
     const signal = new AbortController().signal;
     subtest.after(() => rawRelease.resolve());
-    const runLane = (name: string, work: () => Promise<void> = async () => {}) =>
+    const runLane = (
+      name: string,
+      work: () => Promise<void> = async () => {}
+    ) =>
       lane.run(signal, async () => {
         starts.push(name);
         await work();
@@ -121,11 +127,21 @@ test("[Web/内容接入] 浏览器上传 lane 统一约束页面工作并响应�
       await runLane("first-raw", () => rawRelease.promise);
     });
     const second = sequence.run(async () => {
-      await Promise.all([runLane("second-preview-1"), runLane("second-preview-2")]);
+      await Promise.all([
+        runLane("second-preview-1"),
+        runLane("second-preview-2")
+      ]);
     });
 
-    await waitFor(() => starts.includes("first-raw"), "first credential did not hand off to raw");
-    assert.deepEqual(starts, ["first-preview", "first-credential", "first-raw"]);
+    await waitFor(
+      () => starts.includes("first-raw"),
+      "first credential did not hand off to raw"
+    );
+    assert.deepEqual(starts, [
+      "first-preview",
+      "first-credential",
+      "first-raw"
+    ]);
     rawRelease.resolve();
     await Promise.all([first, second]);
     assert.deepEqual(starts, [

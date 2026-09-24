@@ -7,7 +7,10 @@ import {
   type StorageBackendTestInput,
   type StorageConfig
 } from "./config.ts";
-import { getStorageBackend, resolveStorageAccessForConfig } from "./registry.ts";
+import {
+  getStorageBackend,
+  resolveStorageAccessForConfig
+} from "./registry.ts";
 import type { StorageDriver } from "../drivers/driver.ts";
 import { assertCanonicalImageObjectKey } from "../objects/image-paths.ts";
 import { verifyStorageEndpointRebind } from "./endpoint-rebind.ts";
@@ -105,7 +108,9 @@ export async function validateStorageBackendCandidate(
 export async function resolveStorageTestConfig(
   input: StorageBackendTestInput
 ): Promise<StorageConfig> {
-  const current = input.slug ? await getStorageBackend(input.slug) : undefined;
+  const current = input.slug
+    ? await getStorageBackend(input.slug)
+    : undefined;
   if (current?.type === "local") return current;
 
   const currentS3 = current?.type === "s3" ? current.s3 : undefined;

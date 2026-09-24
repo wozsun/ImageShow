@@ -1,7 +1,7 @@
 import { AdminIcon } from "../icon/AdminIcon.js";
-import { ThumbImage } from "./ThumbImage.js";
+import { ThumbnailImage } from "./ThumbnailImage.js";
 
-export function ImageThumbnail({
+export function ImageThumbnailFrame({
   src,
   alt = "",
   size = "normal",
@@ -37,7 +37,7 @@ export function ImageThumbnail({
           : undefined
       }
     >
-      <ThumbImage src={src} alt={alt} retainLoadedWhenEmpty={retainLoadedWhenEmpty} />
+      <ThumbnailImage src={src} alt={alt} retainLoadedWhenEmpty={retainLoadedWhenEmpty} />
       {showLoadingIndicator && (
         <span className="image-thumbnail-loading" aria-hidden="true">
           <AdminIcon name="image-download-line" />

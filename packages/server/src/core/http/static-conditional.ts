@@ -1,5 +1,9 @@
 import { Context as HonoContext, type Context, type Handler } from "hono";
-import { conditionalRequestNotModified, ifRangeMatches, staticResponseEtag } from "./validators.ts";
+import {
+  conditionalRequestNotModified,
+  ifRangeMatches,
+  staticResponseEtag
+} from "./validators.ts";
 import { parseSingleByteRange } from "./byte-range.ts";
 
 function requestWithRange(request: Request, range?: string) {

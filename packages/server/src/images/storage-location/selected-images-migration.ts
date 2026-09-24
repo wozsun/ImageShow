@@ -73,7 +73,9 @@ export async function migrateSelectedImagesToStorageBackend(
             status: result
           } satisfies ImageStorageMigrationItemResultDto;
         } catch (error) {
-          if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+          if (error instanceof ApiError
+            && error.status >= 400
+            && error.status < 500) {
             return {
               id,
               status: "failed",
@@ -88,7 +90,10 @@ export async function migrateSelectedImagesToStorageBackend(
             message: "Image storage migration failed"
           } satisfies ImageStorageMigrationItemResultDto;
         } finally {
-          maxImageDurationMs = Math.max(maxImageDurationMs, performance.now() - startedAt);
+          maxImageDurationMs = Math.max(
+            maxImageDurationMs,
+            performance.now() - startedAt
+          );
         }
       },
       { signal: options.signal }

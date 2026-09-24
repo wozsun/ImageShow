@@ -1,4 +1,11 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode
+} from "react";
 import { createPortal } from "react-dom";
 import { ActionFeedback } from "./ActionFeedback.js";
 import type { ActionFeedbackState } from "../../lib/ui/action-feedback.js";
@@ -111,7 +118,11 @@ export function ActionFeedbackRegion({
     },
     [register, target]
   );
-  const classes = ["action-feedback-region", `is-${variant}`, className].filter(Boolean).join(" ");
+  const classes = [
+    "action-feedback-region",
+    `is-${variant}`,
+    className
+  ].filter(Boolean).join(" ");
   return <div ref={bindHost} className={classes} data-feedback-region={target.label} />;
 }
 

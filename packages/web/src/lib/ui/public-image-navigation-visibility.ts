@@ -47,7 +47,8 @@ export function advancePublicImageNavigation(
 ): PublicImageNavigationState {
   if (
     input.lockedOpen ||
-    (input.allowReveal !== false && input.scrollTop <= publicImageNavigationThresholds.revealAtTop)
+    (input.allowReveal !== false
+      && input.scrollTop <= publicImageNavigationThresholds.revealAtTop)
   ) {
     return settledState("visible");
   }
@@ -89,7 +90,10 @@ export function advancePublicImageNavigation(
     const previousScrollTop = input.scrollTop - input.delta;
     if (input.scrollTop <= toolbarBoundary) return settledState("visible");
     if (previousScrollTop < toolbarBoundary) carriedDistance = 0;
-    stepDistance = input.scrollTop - Math.max(toolbarBoundary, previousScrollTop);
+    stepDistance = input.scrollTop - Math.max(
+      toolbarBoundary,
+      previousScrollTop
+    );
     if (stepDistance <= 0) return settledState("visible");
   }
 

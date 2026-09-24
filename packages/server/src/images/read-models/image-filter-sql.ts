@@ -1,6 +1,10 @@
 import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { brightnesses, devices } from "@imageshow/shared/browser";
-import type { ImageFilterDimension, ImageFilterPlan, ImageSelectorGroup } from "../filter-plan.ts";
+import type {
+  ImageFilterDimension,
+  ImageFilterPlan,
+  ImageSelectorGroup
+} from "../filter-plan.ts";
 
 export type ImageFilterAxis = ImageFilterDimension;
 

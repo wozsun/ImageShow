@@ -38,7 +38,11 @@ export function nonNegativeReadyImageCount(value: unknown) {
 }
 
 function jsonReadyImageCount(value: unknown) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+  return typeof value === "number"
+    && Number.isSafeInteger(value)
+    && value >= 0
+    ? value
+    : null;
 }
 
 function countRecord(value: unknown): value is CountRecord {
@@ -65,11 +69,15 @@ function exactCountRecord(
   );
 }
 
-function boundedCountRecord(value: unknown, maximum: number): value is CountRecord {
+function boundedCountRecord(
+  value: unknown,
+  maximum: number
+): value is CountRecord {
   return (
     countRecord(value) &&
     Object.values(value).every((count) => count <= maximum) &&
-    Object.keys(value).every((key) => key.length <= slugMaxLength && slugPattern.test(key))
+    Object.keys(value).every((key) => key.length <= slugMaxLength
+      && slugPattern.test(key))
   );
 }
 
@@ -78,7 +86,11 @@ function safeCountSum(record: CountRecord) {
   return Number.isSafeInteger(sum) ? sum : null;
 }
 
-function countSumWithin(record: CountRecord, minimum: number, maximum: number) {
+function countSumWithin(
+  record: CountRecord,
+  minimum: number,
+  maximum: number
+) {
   const sum = safeCountSum(record);
   return sum !== null && sum >= minimum && sum <= maximum;
 }
@@ -152,7 +164,10 @@ export function parseCachedReadyImageCountSnapshot(raw: string | null) {
   }
 }
 
-export function activeReadyImageCounts(stats: Map<string, number>, prefix: string) {
+export function activeReadyImageCounts(
+  stats: Map<string, number>,
+  prefix: string
+) {
   const result: CountRecord = {};
   for (const [field, count] of stats) {
     if (field.startsWith(prefix)) result[field.slice(prefix.length)] = count;
@@ -160,7 +175,10 @@ export function activeReadyImageCounts(stats: Map<string, number>, prefix: strin
   return result;
 }
 
-export function readyImageAxisField(device: Device, brightness: Brightness) {
+export function readyImageAxisField(
+  device: Device,
+  brightness: Brightness
+) {
   return `${device}:${brightness}`;
 }
 
@@ -206,7 +224,8 @@ function assertGlobalStats(stats: Map<string, number>, expectedTotal: number) {
   if (
     [...stats].some(
       ([field, count]) =>
-        count > expectedTotal || (!validFixedFields.has(field) && !validDynamicField(field))
+        count > expectedTotal
+        || (!validFixedFields.has(field) && !validDynamicField(field))
     ) ||
     axisTotal !== total ||
     deviceTotal !== total ||
@@ -218,11 +237,16 @@ function assertGlobalStats(stats: Map<string, number>, expectedTotal: number) {
   }
 }
 
-export function parseReadyImageGlobalStats(raw: Record<string, string>, expectedTotal: number) {
+export function parseReadyImageGlobalStats(
+  raw: Record<string, string>,
+  expectedTotal: number
+) {
   const stats = new Map<string, number>();
   for (const [field, value] of Object.entries(raw)) {
     const numeric = /^\d+$/u.test(value) ? Number(value) : null;
-    const count = numeric !== null && Number.isSafeInteger(numeric) ? numeric : null;
+    const count = numeric !== null && Number.isSafeInteger(numeric)
+      ? numeric
+      : null;
     if (count === null) {
       throw new Error("Ready-image cache contains an invalid statistic");
     }
@@ -243,8 +267,14 @@ export function isUnfilteredReadyImagePlan(plan: ImageFilterPlan) {
   );
 }
 
-export function readyImageCountRecord(keys: string[], counts: number[]) {
-  return Object.fromEntries(keys.map((key, index) => [key, counts[index] ?? 0]));
+export function readyImageCountRecord(
+  keys: string[],
+  counts: number[]
+) {
+  return Object.fromEntries(keys.map((key, index) => [
+    key,
+    counts[index] ?? 0
+  ]));
 }
 
 export function readyImageSnapshotFromGlobalStats(stats: Map<string, number>) {
@@ -259,10 +289,16 @@ export function readyImageSnapshotFromGlobalStats(stats: Map<string, number>) {
       ])
     ),
     devices: Object.fromEntries(
-      devices.map((device) => [device, stats.get(`device:${device}`) ?? 0])
+      devices.map((device) => [
+        device,
+        stats.get(`device:${device}`) ?? 0
+      ])
     ),
     brightnesses: Object.fromEntries(
-      brightnesses.map((brightness) => [brightness, stats.get(`brightness:${brightness}`) ?? 0])
+      brightnesses.map((brightness) => [
+        brightness,
+        stats.get(`brightness:${brightness}`) ?? 0
+      ])
     ),
     themes: activeReadyImageCounts(stats, "theme:"),
     tags: activeReadyImageCounts(stats, "tag:"),

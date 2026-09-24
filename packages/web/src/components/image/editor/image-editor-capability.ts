@@ -31,7 +31,8 @@ class ImageNotEditableError extends Error {
 function editableSnapshotFromSource(source: ImageEditorSource): EditableImageSnapshot | null {
   if (source.deleted_at) return null;
   if (source.status && source.status !== "ready") return null;
-  if (typeof source.original !== "string" || typeof source.ext !== "string") {
+  if (typeof source.original !== "string"
+    || typeof source.ext !== "string") {
     return null;
   }
   return source as EditableImageSnapshot;
@@ -83,7 +84,11 @@ export async function refreshImageEditorAfterSave<TAdjacentData>({
   loadAdjacentData?: () => Promise<TAdjacentData>;
 }) {
   await (commit
-    ? invalidateImageDataAfterMetadataSave(queryClient, commit.updates, commit.authoritativeItems)
+    ? invalidateImageDataAfterMetadataSave(
+      queryClient,
+      commit.updates,
+      commit.authoritativeItems
+    )
     : invalidateImageData(queryClient));
   const snapshotRequest =
     commit === undefined
@@ -92,7 +97,8 @@ export async function refreshImageEditorAfterSave<TAdjacentData>({
         ? Promise.reject(new Error("图片权威快照读取失败"))
         : Promise.resolve({ items: commit.authoritativeItems });
   const adjacentDataRequest: Promise<TAdjacentData | null> =
-    loadAdjacentData && (commit === undefined || commit.updates.length > 0)
+    loadAdjacentData
+      && (commit === undefined || commit.updates.length > 0)
       ? loadAdjacentData()
       : Promise.resolve(null);
   const [snapshotResult, adjacentDataResult] = await Promise.allSettled([

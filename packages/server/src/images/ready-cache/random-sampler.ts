@@ -15,7 +15,11 @@ import {
   READY_IMAGE_ITEMS_KEY,
   READY_IMAGE_META_KEY
 } from "./keys.ts";
-import { parseReadyImageCacheItem, readyImageMember, type ReadyImageCacheItem } from "./model.ts";
+import {
+  parseReadyImageCacheItem,
+  readyImageMember,
+  type ReadyImageCacheItem
+} from "./model.ts";
 
 type ReadyImageCoreSampleInput = Parameters<typeof sampleReadyImageCoreIndexCommand>[1];
 type ReadyImageDerivedSampleInput = Parameters<typeof sampleReadyImageDerivedIndexCommand>[1];
@@ -29,7 +33,9 @@ type ReadyImageSampleDependencies = {
 
 function currentReadyImageRevision() {
   const status = getReadyImageCacheCoordinatorStatus();
-  return status.readable && status.meta?.state === "ready" ? status.meta.appliedRevision : null;
+  return status.readable && status.meta?.state === "ready"
+    ? status.meta.appliedRevision
+    : null;
 }
 
 function cacheItemCount() {

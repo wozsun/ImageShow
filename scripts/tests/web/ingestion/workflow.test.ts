@@ -10,7 +10,10 @@ import {
   summarizeIngestionJobs
 } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
 import { ingestionJobStatusLabel } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-status-detail.ts";
-import { ingestionJob, adminImageListItem } from "../../support/web-test-context.ts";
+import {
+  ingestionJob,
+  adminImageListItem
+} from "../../support/web-test-context.ts";
 import { installControlledClock } from "../../support/controlled-clock.ts";
 
 test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、来源切换和关闭回焦", async (t) => {
@@ -372,7 +375,11 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
           React.createElement(
             MemoryRouter,
             null,
-            React.createElement(AuthSessionProvider, null, React.createElement(Harness))
+            React.createElement(
+              AuthSessionProvider,
+              null,
+              React.createElement(Harness)
+            )
           )
         )
       );
@@ -387,12 +394,20 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       /点击此处选择图片来源/u,
       "首次快照到达前应随窗口首帧显示默认入口"
     );
-    for (const status of ["idle", "connecting", "loading", "disconnected"] as const) {
+    for (const status of [
+      "idle",
+      "connecting",
+      "loading",
+      "disconnected"
+    ] as const) {
       await React.act(async () => {
         setHarnessServerStatus?.(status);
         await Promise.resolve();
       });
-      assert.ok(dialog.querySelector(".ingestion-empty-state"), `${status} 首帧必须保留默认入口`);
+      assert.ok(
+        dialog.querySelector(".ingestion-empty-state"),
+        `${status} 首帧必须保留默认入口`
+      );
     }
     await React.act(async () => {
       setHarnessServerStatus?.("error");
@@ -447,7 +462,11 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
     );
     const localFileInput = dialog.querySelector<HTMLInputElement>('input[type="file"]');
     assert.ok(localFileInput);
-    assert.equal(localFileInput.disabled, false, "本地上传忙碌阶段仍须保持选择图片入口稳定可用");
+    assert.equal(
+      localFileInput.disabled,
+      false,
+      "本地上传忙碌阶段仍须保持选择图片入口稳定可用"
+    );
     assert.equal(
       localFileInput.closest(".upload-picker")?.classList.contains("is-disabled"),
       false,
@@ -484,7 +503,10 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       null,
       "服务端未完成任务到达后必须替换首帧默认入口"
     );
-    assert.match(dialog.querySelector(".ingestion-job")?.textContent ?? "", /处理中/u);
+    assert.match(
+      dialog.querySelector(".ingestion-job")?.textContent ?? "",
+      /处理中/u
+    );
     await React.act(async () => {
       setHarnessJobs?.([]);
       setHarnessTotalItems?.(null);
@@ -516,7 +538,11 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       });
       await Promise.resolve();
     });
-    assert.equal(applyDefaults.disabled, false, "交接中的未完成任务仍须保持应用动作可点击");
+    assert.equal(
+      applyDefaults.disabled,
+      false,
+      "交接中的未完成任务仍须保持应用动作可点击"
+    );
     await React.act(async () => {
       setHarnessJobs?.([
         {
@@ -553,7 +579,9 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       setHarnessJobs?.([waitingSummaryJob]);
       await Promise.resolve();
     });
-    const waitingSummary = dialog.querySelector(".ingestion-summary-primary")?.textContent ?? "";
+    const waitingSummary = dialog.querySelector(
+      ".ingestion-summary-primary"
+    )?.textContent ?? "";
     assert.match(waitingSummary, /共\s*1\s*张图片/u);
     assert.match(waitingSummary, /1\s*张等待中/u);
     assert.match(waitingSummary, /0\s*张处理中/u);
@@ -562,7 +590,9 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       setHarnessJobs?.([{ ...waitingSummaryJob, status: "received" }]);
       await Promise.resolve();
     });
-    const receivedSummary = dialog.querySelector(".ingestion-summary-primary")?.textContent ?? "";
+    const receivedSummary = dialog.querySelector(
+      ".ingestion-summary-primary"
+    )?.textContent ?? "";
     assert.match(receivedSummary, /共\s*1\s*张图片/u);
     assert.match(receivedSummary, /0\s*张等待中/u);
     assert.match(receivedSummary, /0\s*张处理中/u);
@@ -582,9 +612,13 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       await Promise.resolve();
     });
     const readyPrimarySummary =
-      dialog.querySelector(".ingestion-summary-primary")?.textContent ?? "";
+      dialog.querySelector(
+        ".ingestion-summary-primary"
+      )?.textContent ?? "";
     const readySecondarySummary =
-      dialog.querySelector(".ingestion-summary-secondary")?.textContent ?? "";
+      dialog.querySelector(
+        ".ingestion-summary-secondary"
+      )?.textContent ?? "";
     assert.match(readyPrimarySummary, /共\s*1\s*张图片/u);
     assert.match(readyPrimarySummary, /0\s*张等待中/u);
     assert.match(readyPrimarySummary, /0\s*张处理中/u);
@@ -746,7 +780,10 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       );
       await Promise.resolve();
       await clock.advanceBy(499);
-      assert.ok(document.querySelector(".confirm-dialog"), "最短反馈期限前清理确认保持打开");
+      assert.ok(
+        document.querySelector(".confirm-dialog"),
+        "最短反馈期限前清理确认保持打开"
+      );
       await clock.advanceBy(1);
     });
     assert.equal(
@@ -787,7 +824,11 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       ]);
       await Promise.resolve();
     });
-    assert.equal(clearQueueButton.textContent?.trim(), "清空", "新增任务不得重置整队列二次确认");
+    assert.equal(
+      clearQueueButton.textContent?.trim(),
+      "清空",
+      "新增任务不得重置整队列二次确认"
+    );
     await React.act(async () => {
       setHarnessServerStatus?.("loading");
       await Promise.resolve();
@@ -890,7 +931,10 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
     );
     assert.ok(nextPreviewOpener);
     const transferredPreview = document.querySelector<HTMLElement>(".image-preview-modal");
-    assert.ok(transferredPreview, "同 session 新 image 接管后必须把已打开预览切换到新 incarnation");
+    assert.ok(
+      transferredPreview,
+      "同 session 新 image 接管后必须把已打开预览切换到新 incarnation"
+    );
     const previewClose =
       transferredPreview.querySelector<HTMLButtonElement>(".image-preview-close");
     assert.ok(previewClose);
@@ -1251,7 +1295,11 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       await clock.advanceBy(1);
       await Promise.resolve();
     });
-    assert.equal(prepareCloseCount, 3, "显式 afterClose 必须跳过默认 completed 清理准备");
+    assert.equal(
+      prepareCloseCount,
+      3,
+      "显式 afterClose 必须跳过默认 completed 清理准备"
+    );
     assert.equal(finishPreparedCloseCount, 3);
     assert.equal(fallbackCloseCount, 1);
     assert.equal(closeCount, 4);
@@ -1531,7 +1579,13 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
       assert.fail(message);
     };
 
-    const activationKinds = ["workflow", "files", "urls", "jsonl", "weibo"] as const;
+    const activationKinds = [
+      "workflow",
+      "files",
+      "urls",
+      "jsonl",
+      "weibo"
+    ] as const;
     for (const [index, kind] of activationKinds.entries()) {
       const sequence = index + 1;
       await renderActivation(sequence, kind);
@@ -1539,7 +1593,11 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
         () => document.querySelector("[data-dialog-frame]") !== null,
         `${kind} 激活后未打开工作流`
       );
-      assert.equal(SilentEventSource.instances.size, 1, `${kind} 显示时只能订阅当前队列`);
+      assert.equal(
+        SilentEventSource.instances.size,
+        1,
+        `${kind} 显示时只能订阅当前队列`
+      );
       assert.equal(
         opened.filter((item) => item === sequence).length,
         1,
@@ -1617,9 +1675,16 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
         );
         await Promise.resolve();
       });
-      await waitFor(() => settled.includes(sequence), `${kind} 关闭后未释放页面锁`);
+      await waitFor(
+        () => settled.includes(sequence),
+        `${kind} 关闭后未释放页面锁`
+      );
       assert.equal(document.querySelector("[data-dialog-frame]"), null);
-      assert.equal(SilentEventSource.instances.size, 0, `${kind} 隐藏后必须关闭当前队列订阅`);
+      assert.equal(
+        SilentEventSource.instances.size,
+        0,
+        `${kind} 隐藏后必须关闭当前队列订阅`
+      );
       assert.equal(
         settled.filter((item) => item === sequence).length,
         1,
@@ -1684,7 +1749,11 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
     }
     await React.act(async () => {
       root.render(
-        React.createElement(QueryClientProvider, { client }, React.createElement(LauncherHarness))
+        React.createElement(
+          QueryClientProvider,
+          { client },
+          React.createElement(LauncherHarness)
+        )
       );
       await Promise.resolve();
     });
@@ -1710,13 +1779,21 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
       null,
       "同步点击阶段仍应覆盖按需模块尚未挂载弹窗的窗口"
     );
-    assert.equal(container.inert, true, "按需模块尚未挂载弹窗时必须先取得页面根交互锁");
+    assert.equal(
+      container.inert,
+      true,
+      "按需模块尚未挂载弹窗时必须先取得页面根交互锁"
+    );
     assert.equal(
       (document.getElementById("background-single-image-edit") as HTMLButtonElement).disabled,
       false,
       "启动互斥不得再提交背景按钮的禁用外观"
     );
-    assert.equal(uploadTrigger.disabled, false, "被点击的内容接入入口也不得闪现禁用态");
+    assert.equal(
+      uploadTrigger.disabled,
+      false,
+      "被点击的内容接入入口也不得闪现禁用态"
+    );
     await React.act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
@@ -1749,9 +1826,21 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
     const backgroundEdit = document.getElementById(
       "background-single-image-edit"
     ) as HTMLButtonElement;
-    assert.equal(backgroundEdit.disabled, false, "弹窗显示期间背景按钮不应继续呈现为业务禁用");
-    assert.equal(container.inert, true, "按钮恢复正常外观后，页面仍必须由模态边界统一设为 inert");
-    assert.equal(uploadTrigger.disabled, false, "入口按钮也不得在半透明遮罩后持续显示禁用态");
+    assert.equal(
+      backgroundEdit.disabled,
+      false,
+      "弹窗显示期间背景按钮不应继续呈现为业务禁用"
+    );
+    assert.equal(
+      container.inert,
+      true,
+      "按钮恢复正常外观后，页面仍必须由模态边界统一设为 inert"
+    );
+    assert.equal(
+      uploadTrigger.disabled,
+      false,
+      "入口按钮也不得在半透明遮罩后持续显示禁用态"
+    );
 
     const launcherCloseButton =
       document.querySelector<HTMLButtonElement>(".ingestion-close-button");
@@ -1769,7 +1858,11 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
     assert.ok(closingFrame);
     assert.equal(closingFrame.classList.contains("is-closing"), true);
     assert.equal(backgroundEdit.disabled, false);
-    assert.equal(container.inert, true, "淡出期间仍由现存 DialogFrame 阻止底层操作");
+    assert.equal(
+      container.inert,
+      true,
+      "淡出期间仍由现存 DialogFrame 阻止底层操作"
+    );
     await React.act(async () => {
       closingFrame.dispatchEvent(
         new window.Event("animationend", {
@@ -1789,7 +1882,11 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
       );
       await Promise.resolve();
     });
-    assert.equal(backgroundEditClicks, 1, "弹窗卸载后的首次单图编辑操作必须立即生效");
+    assert.equal(
+      backgroundEditClicks,
+      1,
+      "弹窗卸载后的首次单图编辑操作必须立即生效"
+    );
     await waitFor(
       () => !document.documentElement.classList.contains("page-scroll-restoring"),
       "弹窗关闭后的页面滚动位置未完成恢复"
@@ -1807,13 +1904,22 @@ test("[Web/内容接入] 内容接入入口只在模态边界接管前锁定页�
       );
     });
     assert.equal(container.inert, true);
-    assert.equal(activeElement, null, "启动根锁应先把焦点移出即将 inert 的页面");
+    assert.equal(
+      activeElement,
+      null,
+      "启动根锁应先把焦点移出即将 inert 的页面"
+    );
     await waitFor(
-      () => loadErrors.length === loadErrorCountBeforeLauncherFailure + 1 && !container.inert,
+      () => loadErrors.length === loadErrorCountBeforeLauncherFailure + 1
+        && !container.inert,
       "Launcher 加载失败后未解除页面根锁"
     );
     assert.equal(document.querySelector("[data-dialog-frame]"), null);
-    assert.equal(activeElement, uploadTrigger, "未挂载弹窗的加载失败必须在根锁清理后归焦启动入口");
+    assert.equal(
+      activeElement,
+      uploadTrigger,
+      "未挂载弹窗的加载失败必须在根锁清理后归焦启动入口"
+    );
     await waitFor(
       () => !document.documentElement.classList.contains("page-scroll-restoring"),
       "Launcher 加载失败后的页面滚动位置未完成恢复"
@@ -1974,7 +2080,11 @@ test("[Web/内容接入] 导入组合按钮共同预载且来源选择在菜单�
     assert.ok(mainButton);
     assert.ok(menuButton);
     assert.ok(uploadButton);
-    const dispatch = async (target: HTMLElement, type: string, pointerType?: string) => {
+    const dispatch = async (
+      target: HTMLElement,
+      type: string,
+      pointerType?: string
+    ) => {
       const event = new window.Event(type, { bubbles: true, cancelable: true });
       if (pointerType) {
         Object.defineProperty(event, "pointerType", { value: pointerType });
@@ -2012,7 +2122,11 @@ test("[Web/内容接入] 导入组合按钮共同预载且来源选择在菜单�
     );
     assert.ok(urlItem);
     await dispatch(urlItem, "click");
-    assert.equal(sourceActivations, 1, "来源激活不得延迟到菜单退出动画完成后");
+    assert.equal(
+      sourceActivations,
+      1,
+      "来源激活不得延迟到菜单退出动画完成后"
+    );
     const closingMenu = document.querySelector<HTMLElement>(
       '[role="menu"][aria-label="更多导入方式"].is-closing'
     );

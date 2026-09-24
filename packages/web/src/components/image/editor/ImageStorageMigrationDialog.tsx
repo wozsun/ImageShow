@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type RefObject
+} from "react";
 import type { ImageStorageMigrationResponseDto } from "@imageshow/shared/browser";
 import { AsyncActionButton } from "../../actions/AsyncActionButton.js";
 import { DialogFrame } from "../../feedback/DialogFrame.js";
@@ -42,7 +48,9 @@ export function ImageStorageMigrationDialog({
   const options = (data?.backends ?? [])
     .filter(
       (backend) =>
-        backend.enabled && currentStorageSlugs.some((storageSlug) => storageSlug !== backend.slug)
+        backend.enabled && currentStorageSlugs.some(
+          (storageSlug) => storageSlug !== backend.slug
+        )
     )
     .map((backend) => ({
       value: backend.slug,
@@ -50,7 +58,11 @@ export function ImageStorageMigrationDialog({
     }));
   const defaultStorageSlug = data?.backends.find((backend) => backend.is_default)?.slug;
   const defaultTarget =
-    options.find((option) => option.value === defaultStorageSlug)?.value ?? options[0]?.value ?? "";
+    options.find(
+      (option) => option.value === defaultStorageSlug
+    )?.value
+      ?? options[0]?.value
+      ?? "";
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const [target, setTarget] = useState(defaultTarget);
   const [error, setError] = useState("");
@@ -96,12 +108,19 @@ export function ImageStorageMigrationDialog({
 
       // 迁移结果已经由服务端提交后，界面刷新失败不能把 mutation 误报为失败或诱导
       // 用户重复迁移。刷新异常单独记录，成功/部分失败仍严格按服务端统计呈现。
-      const unchanged = Math.max(0, imageIds.length - response.migrated - response.failed);
+      const unchanged = Math.max(
+        0,
+        imageIds.length - response.migrated - response.failed
+      );
       if (response.migrated || unchanged) {
         try {
           await onSaved();
         } catch (refreshError) {
-          reportAdminUiError("image_metadata.storage_migration_refresh", refreshError, response);
+          reportAdminUiError(
+            "image_metadata.storage_migration_refresh",
+            refreshError,
+            response
+          );
         }
       }
       if (response.failed) {
@@ -136,7 +155,9 @@ export function ImageStorageMigrationDialog({
       completedStorageLabel = targetLabel;
       return true;
     });
-    return succeeded ? { message: completedMessage, storageLabel: completedStorageLabel } : null;
+    return succeeded
+      ? { message: completedMessage, storageLabel: completedStorageLabel }
+      : null;
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {

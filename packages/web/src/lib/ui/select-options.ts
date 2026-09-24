@@ -1,4 +1,7 @@
-import { publicImageOrders, type GalleryOrder } from "@imageshow/shared/browser";
+import {
+  publicImageOrders,
+  type GalleryOrder
+} from "@imageshow/shared/browser";
 
 export type SelectOption = { value: string; label: string };
 

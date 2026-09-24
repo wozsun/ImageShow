@@ -41,7 +41,11 @@ export async function runRawUploadBatch({
       if (
         !job.file ||
         !mounted.current ||
-        !isCurrentIngestionAttempt(queue, job.id, job.attemptKey)
+        !isCurrentIngestionAttempt(
+          queue,
+          job.id,
+          job.attemptKey
+        )
       )
         return;
       const controller = new AbortController();
@@ -50,13 +54,21 @@ export async function runRawUploadBatch({
         if (
           !job.file ||
           !mounted.current ||
-          !isCurrentIngestionAttempt(queue, job.id, job.attemptKey)
+          !isCurrentIngestionAttempt(
+            queue,
+            job.id,
+            job.attemptKey
+          )
         )
           return;
         const rawConnectionGeneration = queue.captureServerConnectionGeneration();
         request = uploadRaw(credential, job.file, {
           onProgress: (transferProgress) => {
-            if (isCurrentIngestionAttempt(queue, job.id, job.attemptKey)) {
+            if (isCurrentIngestionAttempt(
+              queue,
+              job.id,
+              job.attemptKey
+            )) {
               queue.updateJob(job.id, { transferProgress });
             }
           }
@@ -67,7 +79,11 @@ export async function runRawUploadBatch({
         );
         if (!current) return;
         const cancelling = current.status === "cancelling";
-        if (!cancelling && !isCurrentIngestionAttempt(queue, job.id, job.attemptKey)) return;
+        if (!cancelling && !isCurrentIngestionAttempt(
+          queue,
+          job.id,
+          job.attemptKey
+        )) return;
         if (cancelling) {
           cancellationOutcomes.current.set(job.id, {
             attemptKey: job.attemptKey,
@@ -98,7 +114,9 @@ export async function runRawUploadBatch({
             serverHandoffPending: true,
             serverHandoffRevision: accepted.last_semantic_revision,
             status: cancelling ? "cancelling" : "received",
-            message: cancelling ? "正在取消上传" : "上传已接收，等待图片处理许可",
+            message: cancelling
+              ? "正在取消上传"
+              : "上传已接收，等待图片处理许可",
             transferProgress: 100
           },
           rawConnectionGeneration,
@@ -123,7 +141,11 @@ export async function runRawUploadBatch({
       } catch (error) {
         if (
           mounted.current &&
-          isCurrentIngestionAttempt(queue, job.id, job.attemptKey) &&
+          isCurrentIngestionAttempt(
+            queue,
+            job.id,
+            job.attemptKey
+          ) &&
           (error as Error).name !== "AbortError"
         ) {
           queue.updateJob(job.id, {

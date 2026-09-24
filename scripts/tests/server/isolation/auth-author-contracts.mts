@@ -110,7 +110,11 @@ await runIntegrationScenario(async (runtime) => {
       link: "https://weibo.com/u/4444444444"
     }
   });
-  assert.equal(createdBySuperResponse.status, 200, await createdBySuperResponse.clone().text());
+  assert.equal(
+    createdBySuperResponse.status,
+    200,
+    await createdBySuperResponse.clone().text()
+  );
   const createdBySuper = await createdBySuperResponse.json();
   assert.deepEqual(createdBySuper.item, {
     slug: "identity-route-super",
@@ -129,7 +133,11 @@ await runIntegrationScenario(async (runtime) => {
       link: "https://example.com/author/image"
     }
   });
-  assert.equal(createdByImageResponse.status, 200, await createdByImageResponse.clone().text());
+  assert.equal(
+    createdByImageResponse.status,
+    200,
+    await createdByImageResponse.clone().text()
+  );
   assert.equal((await createdByImageResponse.json()).item.derived_identity, null);
 
   const internalFieldAttempt = await authorRouteRequest("", {
@@ -181,7 +189,11 @@ await runIntegrationScenario(async (runtime) => {
       link: "https://example.com/author/super"
     }
   });
-  assert.equal(clearedByImageResponse.status, 200, await clearedByImageResponse.clone().text());
+  assert.equal(
+    clearedByImageResponse.status,
+    200,
+    await clearedByImageResponse.clone().text()
+  );
   assert.equal((await clearedByImageResponse.json()).item.derived_identity, null);
   const reboundBySuperResponse = await authorRouteRequest("/identity-route-image", {
     method: "POST",
@@ -191,7 +203,11 @@ await runIntegrationScenario(async (runtime) => {
       link: "https://weibo.com/u/5555555555"
     }
   });
-  assert.equal(reboundBySuperResponse.status, 200, await reboundBySuperResponse.clone().text());
+  assert.equal(
+    reboundBySuperResponse.status,
+    200,
+    await reboundBySuperResponse.clone().text()
+  );
   const reboundBySuper = await reboundBySuperResponse.json();
   assert.deepEqual(reboundBySuper.item.derived_identity, {
     provider: "weibo",
@@ -221,7 +237,10 @@ await runIntegrationScenario(async (runtime) => {
   const ingestionVocabulary = await vocabCache.getIngestionVocabulary();
   for (const value of [publicAuthorVocabulary, ingestionVocabulary]) {
     const serialized = JSON.stringify(value);
-    assert.doesNotMatch(serialized, /identity_provider|identity_id|derived_identity/);
+    assert.doesNotMatch(
+      serialized,
+      /identity_provider|identity_id|derived_identity/
+    );
   }
   await authorMutations.deleteAuthor("identity-route-super");
   await authorMutations.deleteAuthor("identity-route-image");
@@ -289,7 +308,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(await redisClient.redis.expire(slidingSessionKey, 60), 1);
   const hotRenewalResponse = await authMe();
   assert.equal(hotRenewalResponse.status, 200);
-  assert.match(hotRenewalResponse.headers.get("set-cookie") ?? "", /Max-Age=480/u);
+  assert.match(
+    hotRenewalResponse.headers.get("set-cookie") ?? "",
+    /Max-Age=480/u
+  );
   const hotRenewalTtl = await redisClient.redis.ttl(slidingSessionKey);
   assert.ok(hotRenewalTtl > 470 && hotRenewalTtl <= 480);
 

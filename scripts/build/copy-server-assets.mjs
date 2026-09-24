@@ -7,10 +7,10 @@ import {
   staticAssetIsCompressible
 } from "./static-asset-compression.mjs";
 
-const repo = resolve(import.meta.dirname, "..", "..");
-const serverPackage = resolve(repo, "packages", "server");
-const serverDist = resolve(serverPackage, "dist");
-const webDist = resolve(repo, "packages", "web", "dist");
+const workspaceRoot = resolve(import.meta.dirname, "..", "..");
+const serverPackageDirectory = resolve(workspaceRoot, "packages", "server");
+const serverDist = resolve(serverPackageDirectory, "dist");
+const webDist = resolve(workspaceRoot, "packages", "web", "dist");
 const serverPublic = resolve(serverDist, "public");
 
 for (const [label, input] of [
@@ -18,7 +18,7 @@ for (const [label, input] of [
   ["web build", webDist]
 ]) {
   if (!existsSync(input)) {
-    throw new Error(`assemble-server: missing ${label} input at ${relative(repo, input)}`);
+    throw new Error(`assemble-server: missing ${label} input at ${relative(workspaceRoot, input)}`);
   }
 }
 
@@ -44,7 +44,9 @@ async function precompressDir(dir) {
       compressed.zstd
         ? writeFile(`${full}.zst`, compressed.zstd)
         : rm(`${full}.zst`, { force: true }),
-      compressed.gzip ? writeFile(`${full}.gz`, compressed.gzip) : rm(`${full}.gz`, { force: true })
+      compressed.gzip
+        ? writeFile(`${full}.gz`, compressed.gzip)
+        : rm(`${full}.gz`, { force: true })
     ]);
     const { brotli, zstd, gzip, ...sizes } = compressed;
     compressedAssets.push({ file, ...sizes });
@@ -52,14 +54,15 @@ async function precompressDir(dir) {
 }
 
 await mkdir(serverDist, { recursive: true });
-await cp(resolve(serverPackage, "schema.sql"), resolve(serverDist, "schema.sql"));
+await cp(resolve(serverPackageDirectory, "schema.sql"), resolve(serverDist, "schema.sql"));
 await rm(serverPublic, { recursive: true, force: true });
 await cp(webDist, serverPublic, {
   recursive: true,
   filter(source) {
     const path = relative(webDist, source).replaceAll("\\", "/");
     return (
-      path !== ".vite" && !path.startsWith(".vite/") && !/^index\.html\.(?:br|zst|gz)$/.test(path)
+      path !== ".vite" && !path.startsWith(".vite/")
+        && !/^index\.html\.(?:br|zst|gz)$/.test(path)
     );
   }
 });

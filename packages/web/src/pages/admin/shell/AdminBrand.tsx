@@ -47,7 +47,9 @@ export function AdminBrand({
     const fit = () => fitName(name);
     fit();
 
-    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(fit);
+    const observer = typeof ResizeObserver === "undefined"
+      ? undefined
+      : new ResizeObserver(fit);
     observer?.observe(root);
 
     let active = true;

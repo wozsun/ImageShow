@@ -1,5 +1,8 @@
 import { useState } from "react";
-import type { ImageUpdateRequestDto, ImageUpdateResponseDto } from "@imageshow/shared/browser";
+import type {
+  ImageUpdateRequestDto,
+  ImageUpdateResponseDto
+} from "@imageshow/shared/browser";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import { api } from "../../../lib/api/client.js";
 import { requestWithDeadline } from "../../../lib/api/request-deadline.js";
@@ -60,7 +63,10 @@ export function useImageMetadataOperations({
     initialAttempt: boolean
   ): Promise<ImageMetadataSaveOutcome> => {
     const authoritativeItems = await readAuthoritativeSnapshot();
-    const report = createImageMetadataSaveReport(attempt, authoritativeItems);
+    const report = createImageMetadataSaveReport(
+      attempt,
+      authoritativeItems
+    );
     setLastSaveReport(report);
     setPendingAttempt(authoritativeItems ? null : attempt);
 
@@ -118,7 +124,8 @@ export function useImageMetadataOperations({
       // not a second failed save. The next click only rereads the snapshot.
       return (
         outcome.report.snapshotFailed ||
-        (outcome.report.failed === 0 && outcome.report.unavailableIds.length === 0)
+        (outcome.report.failed === 0
+          && outcome.report.unavailableIds.length === 0)
       );
     });
     return outcome ?? null;

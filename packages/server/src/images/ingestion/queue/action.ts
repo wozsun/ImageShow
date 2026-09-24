@@ -3,7 +3,10 @@ import type {
   IngestionQueueActionResultDto
 } from "@imageshow/shared/browser";
 import type { AdminSession } from "../../../users/admin-session.ts";
-import { replayIngestionQueueActionBatch, requireIngestionActionScope } from "./action-scope.ts";
+import {
+  replayIngestionQueueActionBatch,
+  requireIngestionActionScope
+} from "./action-scope.ts";
 import type { IngestionIrreversibleCoordinator } from "../execution/irreversible-coordinator.ts";
 import { executeIngestionQueueActionBatch } from "./action-handlers.ts";
 import {
@@ -56,11 +59,17 @@ export async function runIngestionQueueAction(
     owner: input.session.username,
     queue: input.request.queue,
     actionRequestId: input.request.action_request_id,
-    requestFingerprint: [input.request.action, resolved.payloadHash, resolved.watermarkHash].join(
+    requestFingerprint: [
+      input.request.action,
+      resolved.payloadHash,
+      resolved.watermarkHash
+    ].join(
       "\0"
     ),
     cursor: resolved.cursor,
-    ...(input.request.continuation ? { continuation: input.request.continuation } : {}),
+    ...(input.request.continuation
+      ? { continuation: input.request.continuation }
+      : {}),
     execute: async () => {
       assertScope();
       const exactSessions = input.request.items

@@ -16,7 +16,10 @@ import type {
   StoredIngestionSession
 } from "../sessions/model.ts";
 import { IngestionSessionRepository } from "../repository.ts";
-import { failedIngestionSession, semanticIngestionSession } from "../sessions/transitions.ts";
+import {
+  failedIngestionSession,
+  semanticIngestionSession
+} from "../sessions/transitions.ts";
 
 type AbortActiveIngestion = (pair: IngestionSessionPair) => Promise<unknown> | void;
 type CommittedIngestionResults = Awaited<
@@ -52,7 +55,10 @@ const defaultDependencies: IngestionSessionRecoveryDependencies = {
   publishCompleted: publishCompletedReceipt,
   rawExists: async (session) => {
     if (!session.raw_generation) return false;
-    return access(ingestionRawPath(session, session.raw_generation)).then(
+    return access(ingestionRawPath(
+      session,
+      session.raw_generation
+    )).then(
       () => true,
       () => false
     );
@@ -113,7 +119,9 @@ export class IngestionSessionRecovery {
     this.#recoveredInPass +=
       page.missing +
       (await this.#recoverPage(
-        page.items.map(({ session }) => session).filter((session) => session.discard_at > now)
+        page.items
+          .map(({ session }) => session)
+          .filter((session) => session.discard_at > now)
       ));
     this.#offset += page.items.length;
     if (page.scanned >= appConfig.ingestionRuntime.ingestionSessionScanBatchSize) {
@@ -146,7 +154,11 @@ export class IngestionSessionRecovery {
         continue;
       }
       try {
-        await this.#repository.expireSession(session, session.version, cutoff);
+        await this.#repository.expireSession(
+          session,
+          session.version,
+          cutoff
+        );
       } catch (error) {
         if (!isRecoveryRace(error)) throw error;
       }
@@ -154,7 +166,10 @@ export class IngestionSessionRecovery {
     await this.#cancelSessions(active, cutoff);
   }
 
-  async #cancelSessions(sessions: readonly IngestionSessionSnapshot[], expiryCutoff?: number) {
+  async #cancelSessions(
+    sessions: readonly IngestionSessionSnapshot[],
+    expiryCutoff?: number
+  ) {
     let changed = 0;
     const settling: Promise<unknown>[] = [];
     const results = await this.#dependencies.cancel(
@@ -168,7 +183,11 @@ export class IngestionSessionRecovery {
       if (result.status === "failed") {
         const code = result.code ?? "ingestion_recovery_cancel_failed";
         if (recoveryRaceCodes.has(code)) continue;
-        throw new ApiError(409, code, result.message ?? "内容接入恢复取消失败");
+        throw new ApiError(
+          409,
+          code,
+          result.message ?? "内容接入恢复取消失败"
+        );
       }
       changed += 1;
       if (result.status === "resolving") {
@@ -192,7 +211,12 @@ export class IngestionSessionRecovery {
     const settling: Promise<unknown>[] = [];
     let changed = 0;
     for (const session of sessions) {
-      const result = await this.#recoverSession(session, committed, resolvingToCancel, settling);
+      const result = await this.#recoverSession(
+        session,
+        committed,
+        resolvingToCancel,
+        settling
+      );
       if (result) changed += 1;
     }
     changed += await this.#cancelSessions(resolvingToCancel);
@@ -223,7 +247,11 @@ export class IngestionSessionRecovery {
         raw_generation: "",
         raw_size: 0
       });
-      await this.#repository.mutateSemantic(active, active.version, next);
+      await this.#repository.mutateSemantic(
+        active,
+        active.version,
+        next
+      );
       return true;
     }
     if (active.status === "preparing") {
@@ -239,7 +267,11 @@ export class IngestionSessionRecovery {
             active,
             new ApiError(409, "ingestion_raw_missing", "恢复时原始素材已不存在")
           );
-      await this.#repository.mutateSemantic(active, active.version, next);
+      await this.#repository.mutateSemantic(
+        active,
+        active.version,
+        next
+      );
       return true;
     }
     if (active.status === "committing" || active.status === "resolving") {
@@ -261,7 +293,11 @@ export class IngestionSessionRecovery {
       } else if (active.status === "resolving") {
         resolvingToCancel.push(active);
       } else {
-        const currentExecution = [active.session_id, active.image_id, active.execution_token].join(
+        const currentExecution = [
+          active.session_id,
+          active.image_id,
+          active.execution_token
+        ].join(
           "\0"
         );
         if (this.#requeuedCommitTokens.has(currentExecution)) return false;
@@ -272,12 +308,18 @@ export class IngestionSessionRecovery {
           progress: null,
           execution_token: this.#dependencies.newExecutionToken()
         });
-        const recovered = await this.#repository.mutateSemantic(active, active.version, next);
+        const recovered = await this.#repository.mutateSemantic(
+          active,
+          active.version,
+          next
+        );
         this.#requeuedCommitTokens.add(
           [
             recovered.session.session_id,
             recovered.session.image_id,
-            "execution_token" in recovered.session ? recovered.session.execution_token : ""
+            "execution_token" in recovered.session
+              ? recovered.session.execution_token
+              : ""
           ].join("\0")
         );
       }

@@ -16,7 +16,10 @@ import {
 } from "../derived/work-policy.ts";
 import type { ReadyImageSourceIndexState } from "../indexes/attribute.ts";
 import type { GalleryTagCountPlans } from "../../read-models/gallery-stats-plan.ts";
-import { imageFilterPlanWithout, type ImageFilterPlan } from "../../filter-plan.ts";
+import {
+  imageFilterPlanWithout,
+  type ImageFilterPlan
+} from "../../filter-plan.ts";
 import { readyImageAttributeIndexKey } from "../keys.ts";
 import { REDIS_BATCH_MAX_COMMANDS } from "../sync/redis-batch.ts";
 import {
@@ -72,7 +75,9 @@ export function readyImageCountAttributeIndexes(stats: Map<string, number>) {
 function readyImageDynamicStatsDimensionCount(stats: Map<string, number>) {
   let count = 0;
   for (const field of stats.keys()) {
-    if (!field.startsWith("theme:") && !field.startsWith("tag:") && !field.startsWith("author:")) {
+    if (!field.startsWith("theme:")
+      && !field.startsWith("tag:")
+      && !field.startsWith("author:")) {
       continue;
     }
     count += 1;
@@ -97,7 +102,10 @@ export function readyImageCountFilterPlans(
   };
 }
 
-function readyImageFilterCountUpperBound(plan: ImageFilterPlan, stats: Map<string, number>) {
+function readyImageFilterCountUpperBound(
+  plan: ImageFilterPlan,
+  stats: Map<string, number>
+) {
   const total = stats.get("total") ?? 0;
   const positiveBounds: number[] = [];
   if (plan.axes.length < readyImageAxisPairs.length) {
@@ -114,7 +122,9 @@ function readyImageFilterCountUpperBound(plan: ImageFilterPlan, stats: Map<strin
   ] as const) {
     if (!group.include.length) continue;
     positiveBounds.push(
-      group.include.reduce((sum, slug) => sum + (stats.get(`${prefix}${slug}`) ?? 0), 0)
+      group.include.reduce((sum, slug) => (
+        sum + (stats.get(`${prefix}${slug}`) ?? 0)
+      ), 0)
     );
   }
   if (plan.tag) {
@@ -128,7 +138,9 @@ function readyImageFilterCountUpperBound(plan: ImageFilterPlan, stats: Map<strin
       )
     );
   }
-  return positiveBounds.length ? Math.min(total, ...positiveBounds) : total;
+  return positiveBounds.length
+    ? Math.min(total, ...positiveBounds)
+    : total;
 }
 
 function readyImageCandidateCounts(
@@ -137,7 +149,10 @@ function readyImageCandidateCounts(
 ) {
   const counts = new Map<string, number>();
   readyImageAxisPairs.forEach(({ device, brightness }, index) => {
-    counts.set(candidates.axisKeys[index]!, stats.get(`axis:${device}:${brightness}`) ?? 0);
+    counts.set(
+      candidates.axisKeys[index]!,
+      stats.get(`axis:${device}:${brightness}`) ?? 0
+    );
   });
   for (const [keys, slugs, prefix] of [
     [candidates.themeKeys, candidates.themeSlugs, "theme:"],
@@ -205,10 +220,15 @@ export function preflightReadyImageCountSnapshotWork(
       (key) => candidateCounts.get(key) ?? 0
     )
   });
-  return admission.admitted ? { admission, candidates, plans } : { admission };
+  return admission.admitted
+    ? { admission, candidates, plans }
+    : { admission };
 }
 
-async function intersectionCounts(base: ReadyImageFilterIndex, candidateKeys: string[]) {
+async function intersectionCounts(
+  base: ReadyImageFilterIndex,
+  candidateKeys: string[]
+) {
   const counts: number[] = [];
   for (let offset = 0; offset < candidateKeys.length; offset += REDIS_BATCH_MAX_COMMANDS) {
     const keys = candidateKeys.slice(offset, offset + REDIS_BATCH_MAX_COMMANDS);
@@ -363,7 +383,9 @@ export async function buildFilteredReadyImageCountSnapshot(
         brightness,
         readyImageAxisPairs.reduce(
           (sum, axis, index) =>
-            axis.brightness === brightness ? sum + (brightnessAxes[index] ?? 0) : sum,
+            axis.brightness === brightness
+              ? sum + (brightnessAxes[index] ?? 0)
+              : sum,
           0
         )
       ])

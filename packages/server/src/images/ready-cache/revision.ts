@@ -2,7 +2,10 @@ import type { PoolClient } from "pg";
 import { pool } from "../../core/database/pools.ts";
 
 type ReadyImageRevisionReader = {
-  query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
+  query(
+    text: string,
+    values?: unknown[]
+  ): Promise<{ rows: Record<string, unknown>[] }>;
 };
 
 export type ReadyImageRevision = string;
@@ -23,7 +26,9 @@ function parseRevision(value: unknown): ReadyImageRevision {
 function revisionSnapshot(row: Record<string, unknown> | undefined) {
   if (!row) throw new Error("ready_image_revision singleton is missing");
   const updatedAt =
-    row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at ?? "");
+    row.updated_at instanceof Date
+      ? row.updated_at.toISOString()
+      : String(row.updated_at ?? "");
   if (!Number.isFinite(Date.parse(updatedAt))) {
     throw new Error("PostgreSQL returned an invalid ready-image revision timestamp");
   }
@@ -86,7 +91,10 @@ export async function bumpReadyImageRevision(
   return revisionSnapshot(row);
 }
 
-export function compareReadyImageRevisions(left: ReadyImageRevision, right: ReadyImageRevision) {
+export function compareReadyImageRevisions(
+  left: ReadyImageRevision,
+  right: ReadyImageRevision
+) {
   const leftValue = BigInt(parseRevision(left));
   const rightValue = BigInt(parseRevision(right));
   return leftValue < rightValue ? -1 : leftValue > rightValue ? 1 : 0;

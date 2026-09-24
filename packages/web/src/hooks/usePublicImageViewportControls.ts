@@ -1,8 +1,18 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject
+} from "react";
 import { isPageScrollLocked } from "./usePageScrollLock.js";
 import { usePageScrollMovement } from "./usePageScrollMovement.js";
 import { usePublicNavigationTopEdgeReveal } from "./usePublicNavigationTopEdgeReveal.js";
-import { mobileViewportMediaQuery, useMediaQuery } from "./useMediaQuery.js";
+import {
+  mobileViewportMediaQuery,
+  useMediaQuery
+} from "./useMediaQuery.js";
 import {
   isPublicNavigationInteracting,
   publicNavigationTopRevealThreshold
@@ -174,7 +184,8 @@ function usePublicImageNavigationVisibility(
 
       // inert 会把隐藏工具栏移出交互与无障碍树；先释放内部焦点，避免浏览器
       // 保留一个已不可见的焦点目标。主导航由 AppHeader 在自身隐藏时清理焦点。
-      if (currentState.stage !== "hidden" && nextState.stage === "hidden") {
+      if (currentState.stage !== "hidden"
+        && nextState.stage === "hidden") {
         blurFocusedElement(toolbar);
       }
       setStage(nextState.stage);
@@ -192,7 +203,10 @@ function usePublicImageNavigationVisibility(
   const advanceManual = useCallback(
     (delta: number, pointerType?: string) => {
       if (paused || !Number.isFinite(delta) || delta === 0) return;
-      manualPositionRef.current = Math.max(0, manualPositionRef.current + delta);
+      manualPositionRef.current = Math.max(
+        0,
+        manualPositionRef.current + delta
+      );
       advance(
         delta,
         manualPositionRef.current,

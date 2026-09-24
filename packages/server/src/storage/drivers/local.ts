@@ -129,8 +129,10 @@ async function withLocalCandidate(candidate: string, publish: () => Promise<void
   if (publishFailed) throw publishError;
 }
 
-export class LocalBackend implements StorageDriver {
-  async exists(prefix: StoragePrefix, key: string, options: StorageRequestOptions = {}) {
+export class LocalStorageDriver implements StorageDriver {
+  async exists(
+    prefix: StoragePrefix, key: string, options: StorageRequestOptions = {}
+  ) {
     options.signal?.throwIfAborted();
     try {
       await access(safeStoragePath(prefix, key));
@@ -209,7 +211,9 @@ export class LocalBackend implements StorageDriver {
     }
   }
 
-  async readBuffer(prefix: StoragePrefix, key: string, options: StorageRequestOptions = {}) {
+  async readBuffer(
+    prefix: StoragePrefix, key: string, options: StorageRequestOptions = {}
+  ) {
     return openedReadToBuffer(
       await this.openRead(prefix, key, undefined, options),
       getIngestionMaxFileBytes()
@@ -279,7 +283,11 @@ export class LocalBackend implements StorageDriver {
     return removeDriverObjectsAndConfirm({
       objects,
       options,
-      exists: (object, requestOptions) => this.exists(object.prefix, object.key, requestOptions),
+      exists: (object, requestOptions) => this.exists(
+        object.prefix,
+        object.key,
+        requestOptions
+      ),
       remove: (items, requestOptions) =>
         mapStorageObjectsBounded(
           items,
@@ -331,7 +339,10 @@ export class LocalBackend implements StorageDriver {
     throw new RangeError("Local storage does not support server-side copy");
   }
 
-  async *listKeys(prefix: StoragePrefix, options: StorageKeyListOptions = {}) {
+  async *listKeys(
+    prefix: StoragePrefix,
+    options: StorageKeyListOptions = {}
+  ) {
     const root = join(runtimePaths.storageDirectory, prefix);
     return yield* batchStorageKeys(
       walkLocalKeys(root, root, options.signal, options.directorySnapshot),

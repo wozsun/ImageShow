@@ -1,7 +1,14 @@
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
-import { rm, writeFile } from "node:fs/promises";
-import { join, resolve, toNamespacedPath } from "node:path";
+import {
+  rm,
+  writeFile
+} from "node:fs/promises";
+import {
+  join,
+  resolve,
+  toNamespacedPath
+} from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
@@ -10,7 +17,10 @@ import { createTestDirectory } from "../support/test-directory.ts";
 import { runProcess } from "../support/process-runner.ts";
 import { Hono } from "hono";
 import { appConfig } from "@imageshow/shared";
-import { adminApiBasePath, ingestionUpdatePath } from "../../../packages/shared/src/browser.ts";
+import {
+  adminApiBasePath,
+  ingestionUpdatePath
+} from "../../../packages/shared/src/browser.ts";
 import {
   getRuntimeConfig,
   initializeRuntimeConfig
@@ -21,7 +31,10 @@ import {
   DynamicWeightedLimiter
 } from "../../../packages/server/src/core/concurrency.ts";
 import { limitProtectedAdminRequestBody } from "../../../packages/server/src/core/http/request-body-limit.ts";
-import { createImageId, parseImageTime } from "../../../packages/server/src/images/image-time.ts";
+import {
+  createImageId,
+  parseImageTime
+} from "../../../packages/server/src/images/image-time.ts";
 import {
   calculateDownloadProgress,
   downloadProgressLength
@@ -95,7 +108,9 @@ test("[Server/内容接入] 内容接入草稿批量更新在保护层后仍使�
     const body = await context.req.json<{ marker: string }>();
     return context.json({ ok: true, markerLength: body.marker.length });
   });
-  app.post(`${adminApiBasePath}/standard-body`, (context) => context.json({ ok: true }));
+  app.post(`${adminApiBasePath}/standard-body`, (context) => (
+    context.json({ ok: true })
+  ));
   const marker = "x".repeat(160 * 1024);
   const request = (path: string) =>
     app.request(
@@ -107,10 +122,16 @@ test("[Server/内容接入] 内容接入草稿批量更新在保护层后仍使�
     );
   const accepted = await request(ingestionUpdatePath);
   assert.equal(accepted.status, 200);
-  assert.equal(((await accepted.json()) as { markerLength: number }).markerLength, marker.length);
+  assert.equal(
+    (await accepted.json() as { markerLength: number }).markerLength,
+    marker.length
+  );
   const standard = await request(`${adminApiBasePath}/standard-body`);
   assert.equal(standard.status, 413);
-  assert.equal(((await standard.json()) as { code?: string }).code, "request_body_too_large");
+  assert.equal(
+    (await standard.json() as { code?: string }).code,
+    "request_body_too_large"
+  );
 });
 test("[Server/内容接入] JSONL 非空记录配额保留物理行号、批次位置与错误优先级", (t) => {
   const a = JSON.stringify({ original: "https://img.example.com/a.jpg" });
@@ -225,7 +246,10 @@ test("[Server/内容接入] 导入清单、下载进度与微博入口使用同�
   assert.equal(withWeiboSource.items[0]?.source, weiboPost.source_url);
   assert.equal(withWeiboSource.items[0]?.author, "alice");
   assert.equal(withoutWeiboSource.items[0]?.source, undefined);
-  assert.equal(withoutWeiboSource.items[0]?.original, weiboPost.images[0]!.original_url);
+  assert.equal(
+    withoutWeiboSource.items[0]?.original,
+    weiboPost.images[0]!.original_url
+  );
   const policyMetadata = {
     title: "",
     description: "",
@@ -271,7 +295,10 @@ test("[Server/内容接入] 导入清单、下载进度与微博入口使用同�
   const tooManyTags = parseJsonlManifest(
     JSON.stringify({
       original: "https://img.example.com/c.jpg",
-      tags: Array.from({ length: 51 }, (_, index) => `tag-${String(index).padStart(2, "0")}`)
+      tags: Array.from(
+        { length: 51 },
+        (_, index) => `tag-${String(index).padStart(2, "0")}`
+      )
     }),
     { maxItems: 1 }
   );
@@ -587,8 +614,18 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
   }
   const credential = credentials.get("imageshow/ingestion/upload/credential")!;
   assert.equal(
-    tokens.sign("imageshow/ingestion/action/watermark", { z: 1, a: 2 }, 2_000, 1_000),
-    tokens.sign("imageshow/ingestion/action/watermark", { a: 2, z: 1 }, 2_000, 1_000),
+    tokens.sign(
+      "imageshow/ingestion/action/watermark",
+      { z: 1, a: 2 },
+      2_000,
+      1_000
+    ),
+    tokens.sign(
+      "imageshow/ingestion/action/watermark",
+      { a: 2, z: 1 },
+      2_000,
+      1_000
+    ),
     "签名 payload 必须使用确定性字段顺序"
   );
   const isStrictMarker = (
@@ -596,7 +633,12 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
   ): value is IngestionTokenEnvelope & { marker: string } =>
     isMarker(value) &&
     Object.keys(value).sort().join(",") ===
-      ["expires_at", "issued_at", "marker", "purpose"].sort().join(",");
+      [
+        "expires_at",
+        "issued_at",
+        "marker",
+        "purpose"
+      ].sort().join(",");
   const extraClaims = tokens.sign(
     "imageshow/ingestion/upload/credential",
     { marker: "bound", unexpected: true },
@@ -604,7 +646,11 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
     1_000
   );
   assert.throws(() =>
-    tokens.verify("imageshow/ingestion/upload/credential", extraClaims, isStrictMarker)
+    tokens.verify(
+      "imageshow/ingestion/upload/credential",
+      extraClaims,
+      isStrictMarker
+    )
   );
   const futureIssued = tokens.sign(
     "imageshow/ingestion/upload/credential",
@@ -613,7 +659,11 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
     2_001
   );
   assert.throws(() =>
-    tokens.verify("imageshow/ingestion/upload/credential", futureIssued, isMarker)
+    tokens.verify(
+      "imageshow/ingestion/upload/credential",
+      futureIssued,
+      isMarker
+    )
   );
   assert.throws(() =>
     new IngestionTokenService({
@@ -631,16 +681,32 @@ test("[Server/内容接入] 内容接入身份、稳定哈希、状态投影、T
     }).verify("imageshow/ingestion/upload/credential", credential, isMarker)
   );
   assert.throws(() =>
-    tokens.verify("imageshow/ingestion/upload/credential", `!${credential}`, isMarker)
+    tokens.verify(
+      "imageshow/ingestion/upload/credential",
+      `!${credential}`,
+      isMarker
+    )
   );
   assert.throws(() =>
-    tokens.verify("imageshow/ingestion/upload/credential", credential.slice(0, -1), isMarker)
+    tokens.verify(
+      "imageshow/ingestion/upload/credential",
+      credential.slice(0, -1),
+      isMarker
+    )
   );
   assert.throws(() =>
-    tokens.verify("imageshow/ingestion/upload/credential", `${credential.slice(0, -1)}x`, isMarker)
+    tokens.verify(
+      "imageshow/ingestion/upload/credential",
+      `${credential.slice(0, -1)}x`,
+      isMarker
+    )
   );
   now = 2_000;
-  assert.throws(() => tokens.verify("imageshow/ingestion/upload/credential", credential, isMarker));
+  assert.throws(() => tokens.verify(
+    "imageshow/ingestion/upload/credential",
+    credential,
+    isMarker
+  ));
   assert.equal(appConfig.ingestionRuntime.uploadIntentTtlSeconds, 30 * 60);
   assert.equal(appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds, 2 * 60 * 60);
   assert.equal(appConfig.ingestionRuntime.importSessionIdleTtlSeconds, 24 * 60 * 60);
@@ -653,7 +719,9 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
     image_id: createImageId(new Date("2026-08-23T01:02:03.456Z"), 1)
   };
   const generation = createImageId(new Date("2026-08-23T01:02:04.456Z"), 2);
-  assert.equal(ingestionRawPath(pathPair, generation).includes(pathPair.session_id), true);
+  assert.equal(ingestionRawPath(pathPair, generation).includes(
+    pathPair.session_id
+  ), true);
   const file = ingestionPreparedFile(
     { ...pathPair, generation, execution_token: generation },
     "image"
@@ -686,14 +754,20 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
     }
   );
   while (!transactionStarted) await delay(0);
-  const resolving = await coordinator.cancelBoundary(pair, async () => "must-not-discard");
+  const resolving = await coordinator.cancelBoundary(
+    pair,
+    async () => "must-not-discard"
+  );
   assert.equal(resolving.status, "resolving");
   releaseTransaction();
   assert.equal(await transaction, "committed");
   await coordinator.waitForDatabaseTransactions();
 
   const cancellable = new IngestionIrreversibleCoordinator();
-  assert.deepEqual(await cancellable.cancelBoundary(pair, async () => "discarded"), {
+  assert.deepEqual(await cancellable.cancelBoundary(
+    pair,
+    async () => "discarded"
+  ), {
     status: "discarded",
     value: "discarded"
   });
@@ -742,7 +816,10 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
   );
   assert.equal(synchronousStartFailure.state(pair), "cancellable");
   assert.deepEqual(
-    await synchronousStartFailure.cancelBoundary(pair, async () => "discarded-after-start-failure"),
+    await synchronousStartFailure.cancelBoundary(
+      pair,
+      async () => "discarded-after-start-failure"
+    ),
     {
       status: "discarded",
       value: "discarded-after-start-failure"
@@ -812,7 +889,11 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
   releaseFirst();
   await firstTransaction;
   await delay(0);
-  assert.equal(drainSettled, false, "drain 必须继续等待首次快照之后进入 database_started 的事务");
+  assert.equal(
+    drainSettled,
+    false,
+    "drain 必须继续等待首次快照之后进入 database_started 的事务"
+  );
   releaseSecond();
   await Promise.all([secondTransaction, drain]);
   assert.equal(drainSettled, true);
@@ -829,7 +910,10 @@ test("[Server/内容接入] Ingestion Worker 跨页保持 Import queued 与 rece
       queue: "import",
       status
     }) as unknown as IngestionSessionSnapshot;
-  const queued = Array.from({ length: 3 }, (_, index) => importSession(index, "queued"));
+  const queued = Array.from(
+    { length: 3 },
+    (_, index) => importSession(index, "queued")
+  );
   const recovered = importSession(3, "received");
   const recoveredUpload = {
     ...importSession(4, "received"),
@@ -860,7 +944,10 @@ test("[Server/内容接入] Ingestion Worker 跨页保持 Import queued 与 rece
     "同一 frozen-tail pass 的后页 received 不得越过先前被窗口挡住的 queued"
   );
 
-  const nextPass = planIngestionWorkerLanes([queued[2], recovered], activeAfterOneSettled);
+  const nextPass = planIngestionWorkerLanes(
+    [queued[2], recovered],
+    activeAfterOneSettled
+  );
   assert.deepEqual(
     nextPass.candidates.map(({ session }) => session.session_id),
     [queued[2].session_id]
@@ -879,7 +966,12 @@ test("[Server/内容接入] Ingestion Commit dispatch window 由公开并发派�
     status: "committing"
   })) as never[];
   const windows = ingestionWorkerDispatchWindows(2, 16);
-  const first = planIngestionWorkerLanes(committing, [], new Set(), windows);
+  const first = planIngestionWorkerLanes(
+    committing,
+    [],
+    new Set(),
+    windows
+  );
   assert.equal(first.candidates.length, 24);
   assert.equal(first.blockedLanes.has("commit"), true);
 
@@ -887,8 +979,17 @@ test("[Server/内容接入] Ingestion Commit dispatch window 由公开并发派�
     pair: item.session,
     lane: item.lane
   }));
-  const refill = planIngestionWorkerLanes(committing.slice(20), active, new Set(), windows);
-  assert.equal(refill.candidates.length, 4, "等待数量或字节许可的 coordinator 仍占用候补窗口");
+  const refill = planIngestionWorkerLanes(
+    committing.slice(20),
+    active,
+    new Set(),
+    windows
+  );
+  assert.equal(
+    refill.candidates.length,
+    4,
+    "等待数量或字节许可的 coordinator 仍占用候补窗口"
+  );
 });
 test("[Server/内容接入] Ingestion pre-commit dispatch slot 由 Normalize 派生且交接后不重复领取活动 pair", () => {
   assert.deepEqual(ingestionWorkerDispatchWindows(1, 8), {
@@ -1014,7 +1115,10 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
         return withIngestionPreparationAdmission(new AbortController().signal, async () => {
           preparationStarts.push(index);
           activePreparations += 1;
-          maxActivePreparations = Math.max(maxActivePreparations, activePreparations);
+          maxActivePreparations = Math.max(
+            maxActivePreparations,
+            activePreparations
+          );
           onNormalizationAdmitted();
           try {
             await gate.promise;
@@ -1062,7 +1166,10 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
     const gates = Array.from({ length: limit }, () => Promise.withResolvers<void>());
     subtest.after(() => gates.forEach((gate) => gate.resolve()));
     const active = gates.map((gate) =>
-      withIngestionPreparationAdmission(new AbortController().signal, () => gate.promise)
+      withIngestionPreparationAdmission(
+        new AbortController().signal,
+        () => gate.promise
+      )
     );
     await nextTurn();
 
@@ -1089,7 +1196,10 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
     const helperRoot = await createTestDirectory("imageshow-preparation-admission-");
     const helperPath = join(helperRoot, "verify-preparation-admission.mjs");
     const runtimeConfigStoreUrl = pathToFileURL(
-      resolve(repositoryRoot, "packages/server/src/config/runtime-config-store.ts")
+      resolve(
+        repositoryRoot,
+        "packages/server/src/config/runtime-config-store.ts"
+      )
     ).href;
     const preparationAdmissionUrl = pathToFileURL(
       resolve(
@@ -1149,7 +1259,10 @@ console.log("preparation-admission-reload-ok");
       await writeFile(helperPath, helperSource);
       const result = await runProcess(
         process.execPath,
-        [resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"), helperPath],
+        [
+          resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"),
+          helperPath
+        ],
         {
           cwd: repositoryRoot,
           env: {
@@ -1192,7 +1305,10 @@ test("[Server/内容接入] Import 后继窗口在 Normalize 准入时交接并�
         return index;
       })
     );
-    await waitFor(() => starts.length === limit, "Import successor window did not fill");
+    await waitFor(
+      () => starts.length === limit,
+      "Import successor window did not fill"
+    );
     assert.deepEqual(
       starts,
       Array.from({ length: limit }, (_, index) => index)
@@ -1236,7 +1352,10 @@ test("[Server/内容接入] Import 后继窗口在 Normalize 准入时交接并�
       (error) => error === afterAdmission
     );
     assert.equal(
-      await withImportPrefetchAdmission(new AbortController().signal, async () => "released"),
+      await withImportPrefetchAdmission(
+        new AbortController().signal,
+        async () => "released"
+      ),
       "released"
     );
   });
@@ -1274,10 +1393,16 @@ test("[Server/内容接入] Import 后继窗口在 Normalize 准入时交接并�
     const helperRoot = await createTestDirectory("imageshow-import-prefetch-");
     const helperPath = join(helperRoot, "verify-import-prefetch.mjs");
     const runtimeConfigStoreUrl = pathToFileURL(
-      resolve(repositoryRoot, "packages/server/src/config/runtime-config-store.ts")
+      resolve(
+        repositoryRoot,
+        "packages/server/src/config/runtime-config-store.ts"
+      )
     ).href;
     const importPrefetchUrl = pathToFileURL(
-      resolve(repositoryRoot, "packages/server/src/images/ingestion/workers/import-prefetch.ts")
+      resolve(
+        repositoryRoot,
+        "packages/server/src/images/ingestion/workers/import-prefetch.ts"
+      )
     ).href;
     const helperSource = `
 import assert from "node:assert/strict";
@@ -1337,7 +1462,10 @@ console.log("import-prefetch-reload-ok");
       await writeFile(helperPath, helperSource);
       const result = await runProcess(
         process.execPath,
-        [resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"), helperPath],
+        [
+          resolve(repositoryRoot, "node_modules/tsx/dist/cli.mjs"),
+          helperPath
+        ],
         {
           cwd: repositoryRoot,
           env: {
@@ -1659,7 +1787,11 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
         active -= 1;
         return name;
       };
-    const first = scheduler.scheduleBatch([request("a1", true), request("a2"), request("a3")]);
+    const first = scheduler.scheduleBatch([
+      request("a1", true),
+      request("a2"),
+      request("a3")
+    ]);
     await waitFor(() => order.length === 1, "first Weibo request did not start");
     const second = scheduler.scheduleBatch([request("b1"), request("b2")]);
     firstRelease.resolve();
@@ -1690,7 +1822,12 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
     ]);
     await Promise.all([first, second]);
     assert.equal(creations, 1);
-    assert.deepEqual(order, ["handshake-1", "handshake-2", "post-a", "post-b"]);
+    assert.deepEqual(order, [
+      "handshake-1",
+      "handshake-2",
+      "post-a",
+      "post-b"
+    ]);
   });
 
   await t.test("每个相邻请求按开始等待时的当前区间采样", async () => {
@@ -1778,7 +1915,10 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
       activeController.signal
     );
     await waitFor(() => activeStarted, "active Weibo request did not start");
-    const activeRejected = assert.rejects(active, (error) => error === activeCancellation);
+    const activeRejected = assert.rejects(
+      active,
+      (error) => error === activeCancellation
+    );
     const next = activeScheduler.scheduleBatch([async () => "next"]);
     activeController.abort(activeCancellation);
     await activeRejected;
@@ -1844,7 +1984,10 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
     assert.equal(attempts, 2);
     assert.equal(creations, 2);
 
-    const limitError = new WeiboImportError("weibo_image_limit_exceeded", "too many images");
+    const limitError = new WeiboImportError(
+      "weibo_image_limit_exceeded",
+      "too many images"
+    );
     let afterLimitStarted = false;
     await assert.rejects(
       scheduler.scheduleBatch([
@@ -1904,7 +2047,14 @@ test("[Server/内容接入] 下载进度写入失败会立即被观察并中止�
       new AbortController().signal,
       {
         now: () => 1_000,
-        fetchImageToFile: async (_url, _target, _part, limit, signal, onProgress) => {
+        fetchImageToFile: async (
+          _url,
+          _target,
+          _part,
+          limit,
+          signal,
+          onProgress
+        ) => {
           assert.equal(limit, 100 * 1024 * 1024);
           onProgress?.(10);
           await delay(0);
@@ -1982,7 +2132,10 @@ test("[Server/内容接入] 同一 execution 可接力草稿版本且身份变�
       };
       return { session: canonical };
     },
-    heartbeat: async (current: { execution_token: string }, expectedVersion: number) => {
+    heartbeat: async (
+      current: { execution_token: string },
+      expectedVersion: number
+    ) => {
       assertCurrentExecution(current, expectedVersion);
       canonical = { ...canonical, discard_at: Date.now() + 120_000 };
       return { session: canonical };
@@ -2005,7 +2158,14 @@ test("[Server/内容接入] 同一 execution 可接力草稿版本且身份变�
     {
       maxFileBytes: () => 1024,
       now: () => 1_000,
-      fetchImageToFile: async (_url, _target, _part, limit, _signal, onProgress) => {
+      fetchImageToFile: async (
+        _url,
+        _target,
+        _part,
+        limit,
+        _signal,
+        onProgress
+      ) => {
         assert.equal(limit, 1024);
         canonical = {
           ...canonical,
@@ -2071,7 +2231,8 @@ test("[Server/内容接入] 同一 execution 可接力草稿版本且身份变�
 
   await assert.rejects(
     refreshIngestionExecutionSession(repository as never, preparingStale as never),
-    (error) => error instanceof ApiError && error.code === "ingestion_execution_fenced"
+    (error) => error instanceof ApiError
+      && error.code === "ingestion_execution_fenced"
   );
 });
 test("[Server/内容接入] 清理重试有界并让后续任务先于退避重试执行", async () => {
@@ -2180,7 +2341,10 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
       semantic_hash: String(index + 1).padStart(64, "0")
     };
   });
-  const bySession = new Map(sessions.map((session) => [session.session_id, session]));
+  const bySession = new Map(sessions.map((session) => [
+    session.session_id,
+    session
+  ]));
   for (const session of sessions) {
     assert.equal(coordinator.registerCancellable(session), true);
   }
@@ -2237,7 +2401,11 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
             )
         );
         await delay(0);
-        assert.equal(databaseStarts, 0, "PG 批量判定期间任何 pair 都不得越过取消临界区");
+        assert.equal(
+          databaseStarts,
+          0,
+          "PG 批量判定期间任何 pair 都不得越过取消临界区"
+        );
         return new Map();
       },
       scheduleCleanup: async (work) => {
@@ -2264,7 +2432,11 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
     return {
       ...session,
       owner: crossOwnerName,
-      session_id: createIngestionSessionId(crossOwnerName, "import", `item-${index}`)
+      session_id: createIngestionSessionId(
+        crossOwnerName,
+        "import",
+        `item-${index}`
+      )
     };
   });
   const crossOwnerCoordinator = new IngestionIrreversibleCoordinator();
@@ -2318,12 +2490,18 @@ test("[Server/内容接入] 取消批次把旧 incarnation 保留为逐项冲突
   const owner = "cancel-incarnation-owner";
   const stale = {
     session_id: createIngestionSessionId(owner, "import", "stale"),
-    image_id: createImageId(parseImageTime("2026-08-23T01:02:03.456Z").date, 1),
+    image_id: createImageId(
+      parseImageTime("2026-08-23T01:02:03.456Z").date,
+      1
+    ),
     expected_version: 1
   };
   const completed = {
     session_id: createIngestionSessionId(owner, "import", "completed"),
-    image_id: createImageId(parseImageTime("2026-08-23T01:02:04.456Z").date, 2),
+    image_id: createImageId(
+      parseImageTime("2026-08-23T01:02:04.456Z").date,
+      2
+    ),
     expected_version: 1
   };
   const results = await cancelIngestionSessions(
@@ -2445,7 +2623,11 @@ test("[Server/内容接入] 已启动事务的 expiry 只通过原子 cutoff 收
         next: { status: string }
       ) => {
         if (active.discard_at > cutoff) {
-          throw new ApiError(409, "ingestion_session_not_expired", "内容接入任务的有效期已经刷新");
+          throw new ApiError(
+            409,
+            "ingestion_session_not_expired",
+            "内容接入任务的有效期已经刷新"
+          );
         }
         transitions.push(next.status);
         return { session: next, metadata: { revision: transitions.length } };
@@ -2500,8 +2682,14 @@ test("[Server/内容接入] 已启动事务的 expiry 只通过原子 cutoff 收
 test("[Server/内容接入] PG 完成清理不会越过新的 session incarnation", async () => {
   const owner = "incarnation-owner";
   const sessionId = createIngestionSessionId(owner, "import", "same-intent");
-  const oldImageId = createImageId(new Date("2026-08-23T01:04:01.456Z"), 1);
-  const newImageId = createImageId(new Date("2026-08-23T01:04:02.456Z"), 2);
+  const oldImageId = createImageId(
+    new Date("2026-08-23T01:04:01.456Z"),
+    1
+  );
+  const newImageId = createImageId(
+    new Date("2026-08-23T01:04:02.456Z"),
+    2
+  );
   const active = (imageId: string) =>
     ({
       owner,
@@ -2567,7 +2755,10 @@ test("[Server/内容接入] PG 完成清理不会越过新的 session incarnatio
     () => undefined,
     {},
     {
-      readCommitted: async () => new Map([[oldImageId, { created_by: owner } as never]]),
+      readCommitted: async () => new Map([[
+        oldImageId,
+        { created_by: owner } as never
+      ]]),
       scheduleCleanup: () => undefined
     }
   );
@@ -2610,7 +2801,10 @@ test("[Server/内容接入] PG 完成会清退保留 commit 的 failed canonical
     accepted_at: 1,
     accepted_order: 1,
     execution_token: "",
-    raw_generation: createImageId(new Date("2026-08-23T01:05:02.456Z"), 2),
+    raw_generation: createImageId(
+      new Date("2026-08-23T01:05:02.456Z"),
+      2
+    ),
     raw_size: 1,
     commit: {
       commit_request_id: "commit-request",
@@ -2651,13 +2845,19 @@ test("[Server/内容接入] PG 完成会清退保留 commit 的 failed canonical
     discarded_at: 2,
     discard_at: failed.discard_at
   } as const;
-  for (const committedExt of ["webp", "jpg"] as const) {
+  for (const committedExt of [
+    "webp", "jpg"
+  ] as const) {
     const writes: string[] = [];
     const results = await cancelIngestionSessions(
       {
         readSessions: async () => [failed],
         readSession: async () => failed,
-        mutateSemantic: async (_current: unknown, _version: number, next: { status: string }) => {
+        mutateSemantic: async (
+          _current: unknown,
+          _version: number,
+          next: { status: string }
+        ) => {
           writes.push(next.status);
           assert.equal(next.status, "discarded");
           return { session: discarded, metadata: { revision: 3 } };
@@ -2701,7 +2901,10 @@ test("[Server/内容接入] 迟到失败接力同 execution 草稿版本且 prep
     version: 2,
     execution_token: "execution-a"
   };
-  assert.equal(isSameFailedIngestionExecution({ ...execution } as never, execution as never), true);
+  assert.equal(isSameFailedIngestionExecution(
+    { ...execution } as never,
+    execution as never
+  ), true);
   assert.equal(
     isSameFailedIngestionExecution(
       { ...execution, execution_token: "execution-b" } as never,
@@ -2710,7 +2913,10 @@ test("[Server/内容接入] 迟到失败接力同 execution 草稿版本且 prep
     false
   );
   assert.equal(
-    isSameFailedIngestionExecution({ ...execution, version: 3 } as never, execution as never),
+    isSameFailedIngestionExecution(
+      { ...execution, version: 3 } as never,
+      execution as never
+    ),
     true
   );
   assert.equal(
@@ -2759,7 +2965,11 @@ type RecoveryTestSession = Omit<IngestionSessionSnapshot, "status" | "commit"> &
 };
 test("[Server/内容接入] recovery 严格先收敛 expiry 并只重排一次未过期执行阶段", async () => {
   const now = 10_000;
-  const session = (imageId: string, status: string, discardAt: number): RecoveryTestSession => ({
+  const session = (
+    imageId: string,
+    status: string,
+    discardAt: number
+  ): RecoveryTestSession => ({
     owner: "recovery-owner",
     queue: "import",
     source_type: "url",
@@ -2934,7 +3144,10 @@ test("[Server/内容接入] recovery 严格先收敛 expiry 并只重排一次�
   assert.equal(sessions.get("raw-missing")?.status, "failed");
   assert.equal(sessions.get("ready")?.status, "ready");
   assert.equal(sessions.get("commit-retry")?.execution_token, "new-token-1");
-  assert.equal(operations.filter((value) => value === "mutate-commit-retry").length, 1);
+  assert.equal(
+    operations.filter((value) => value === "mutate-commit-retry").length,
+    1
+  );
   assert.equal(sessions.get("committed")?.status, "completed");
   assert.equal(
     publishedCompletedItem,
@@ -3071,7 +3284,9 @@ test("[Server/内容接入] 恢复按实际扫描边界越过缺失 canonical �
     {
       discoverExpired: async () => {
         expiryScan += 1;
-        return expiryScan === 2 ? [{ canonicalKey: expired.session_id, session: expired }] : [];
+        return expiryScan === 2
+          ? [{ canonicalKey: expired.session_id, session: expired }]
+          : [];
       },
       discoverExpiryPage: async (offset: number) => {
         shiftedOffsets.push(offset);
@@ -3115,7 +3330,8 @@ test("[Server/内容接入] 恢复按实际扫描边界越过缺失 canonical �
   assert.equal(await recoveryWithExpiryShift.step(), false);
   assert.equal(await recoveryWithExpiryShift.step(), false);
   assert.equal(await recoveryWithExpiryShift.step(), true);
-  assert.deepEqual(shiftedOffsets, [0, 0], "expiry 收敛改变 ZSET rank 后必须从头开始新的恢复轮次");
+  assert.deepEqual(shiftedOffsets, [0, 0],
+    "expiry 收敛改变 ZSET rank 后必须从头开始新的恢复轮次");
 });
 test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权并响应登录立即失效", async () => {
   const session = {
@@ -3165,7 +3381,11 @@ test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权�
   const order: string[] = [];
   let unsubscribeCount = 0;
   const repository = {
-    subscribe(owner: string, queue: "upload" | "import", listener: (event: unknown) => void) {
+    subscribe(
+      owner: string,
+      queue: "upload" | "import",
+      listener: (event: unknown) => void
+    ) {
       assert.equal(owner, session.username);
       assert.equal(queue, "upload");
       order.push("subscribe");
@@ -3208,7 +3428,10 @@ test("[Server/内容接入] 内容接入 SSE 先监听再快照、串行验权�
   let maximumActiveValidations = 0;
   const validateSession = async () => {
     activeValidations += 1;
-    maximumActiveValidations = Math.max(maximumActiveValidations, activeValidations);
+    maximumActiveValidations = Math.max(
+      maximumActiveValidations,
+      activeValidations
+    );
     await new Promise((resolve) => setTimeout(resolve, 2));
     validationCalls += 1;
     activeValidations -= 1;

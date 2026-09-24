@@ -13,7 +13,10 @@ import {
   readReadyImageAttributeIndex,
   readReadyImageSourceIndexStates
 } from "./attribute.ts";
-import { getReadyImageCacheCoordinatorStatus, withReadyImageCacheRead } from "../coordinator.ts";
+import {
+  getReadyImageCacheCoordinatorStatus,
+  withReadyImageCacheRead
+} from "../coordinator.ts";
 import {
   assessReadyImageFilterWork,
   tryAcquireReadyImageFilterBuildSlot
@@ -30,7 +33,10 @@ import {
   readyImageFilterTemporaryKeyBelongsTo
 } from "../keys.ts";
 
-function selectorComponents(group: ImageSelectorGroup, key: (value: string) => string) {
+function selectorComponents(
+  group: ImageSelectorGroup,
+  key: (value: string) => string
+) {
   return {
     include: group.include.map(key),
     exclude: group.exclude.map(key)
@@ -145,7 +151,12 @@ export async function buildReadyImageFilterIndex(
   const attributeKeys = sourceKeys.filter((key) => key !== READY_IMAGE_ALL_INDEX_KEY);
   if (
     attributeKeys.length &&
-    !(await ensureReadyImageAttributeIndexes(attributeKeys, revision, signal, background))
+    !(await ensureReadyImageAttributeIndexes(
+      attributeKeys,
+      revision,
+      signal,
+      background
+    ))
   ) {
     return null;
   }
@@ -226,7 +237,10 @@ export async function buildReadyImageFilterIndex(
           instanceToken: null
         };
       }
-      const attribute = await readReadyImageAttributeIndex(current.key, revision);
+      const attribute = await readReadyImageAttributeIndex(
+        current.key,
+        revision
+      );
       return attribute ? { kind: "attribute", ...attribute } : null;
     }
     return await publishReadyImageFilterIndex({

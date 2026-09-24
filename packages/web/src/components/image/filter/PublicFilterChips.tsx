@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type RefObject } from "react";
 import { DirectActivationButton } from "../../feedback/DirectActivationButton.js";
-import { useTagScroll } from "../../form/useTagScroll.js";
+import { useChipStripScroll } from "../../../hooks/useChipStripScroll.js";
 import { Icon } from "../../icon/Icon.js";
 import {
   publicFilterLabels,
@@ -30,7 +30,7 @@ export function PublicFilterChips({
     refreshScrollAvailability,
     cancelPendingScroll,
     scrollTags
-  } = useTagScroll(returnFocusRef);
+  } = useChipStripScroll(returnFocusRef);
   const revealedChipRef = useRef(revealChip);
 
   useLayoutEffect(() => {

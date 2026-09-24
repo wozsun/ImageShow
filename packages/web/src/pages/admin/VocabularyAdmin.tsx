@@ -19,7 +19,11 @@ import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { useActionFeedbackTarget } from "../../components/feedback/ActionFeedbackRegion.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import { VocabularyAdminCard } from "./VocabularyAdminCard.js";
-import { adminApiBasePath, slugFormatHint, slugPattern } from "../../lib/constants.js";
+import {
+  adminApiBasePath,
+  slugFormatHint,
+  slugPattern
+} from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { AdminSettingsBoundary } from "../../components/feedback/AdminSettingsBoundary.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
@@ -169,7 +173,10 @@ function VocabularyAdminContent({
         .getQueryData<AdminEntityListResponseDto<VocabularyEntry>>(queryKey)
         ?.items.find((item) => item.slug === slug)?.sort_order,
     reportError: (stage, error) =>
-      reportAdminUiError(`vocabulary_admin.${kind}.sort_order.${stage}`, error)
+      reportAdminUiError(
+        `vocabulary_admin.${kind}.sort_order.${stage}`,
+        error
+      )
   });
   const order = data?.items ?? [];
   const operationBusy = sorting.busy;

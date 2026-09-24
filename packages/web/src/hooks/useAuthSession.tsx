@@ -8,7 +8,11 @@ import {
   useState,
   type ReactNode
 } from "react";
-import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  type UseQueryResult
+} from "@tanstack/react-query";
 import { useLocation } from "react-router";
 import {
   normalizeAdminPreferences,
@@ -142,15 +146,25 @@ export function useOptionalAuthSessionRecovery() {
 export function useAuthPreferenceCacheBridge() {
   const queryClient = useQueryClient();
   const cancelPendingAuthRead = useCallback(
-    () => queryClient.cancelQueries({ queryKey: queryKeys.me, exact: true }, { silent: true }),
+    () => queryClient.cancelQueries(
+      { queryKey: queryKeys.me, exact: true },
+      { silent: true }
+    ),
     [queryClient]
   );
   const updateAuthPreferenceSnapshot = useCallback(
-    (username: string, preferences: AdminPreferences, etag: string) => {
+    (
+      username: string,
+      preferences: AdminPreferences,
+      etag: string
+    ) => {
       const current = queryClient.getQueryData<AuthStateDto>(queryKeys.me);
       if (!current?.authenticated || current.username !== username) return;
       if (
-        sameAdminPreferences(normalizeAdminPreferences(current.preferences), preferences) &&
+        sameAdminPreferences(
+          normalizeAdminPreferences(current.preferences),
+          preferences
+        ) &&
         current.preferences_etag === etag
       )
         return;

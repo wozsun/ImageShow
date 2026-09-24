@@ -13,7 +13,10 @@ import {
   showFloatDefaultWidth,
   showFloatSizeSteps
 } from "./show-pixi-layout.js";
-import type { ShowPixiTextureCache, ShowPixiTextureLease } from "./show-pixi-texture-cache.js";
+import type {
+  ShowPixiTextureCache,
+  ShowPixiTextureLease
+} from "./show-pixi-texture-cache.js";
 import type {
   ShowPixiSceneController,
   ShowPixiSceneOptions,
@@ -94,7 +97,12 @@ function imageRatio(image: ShowImage) {
   return image.height / image.width;
 }
 
-function floatCardFootprint(width: number, height: number, rotation: number, drift: number) {
+function floatCardFootprint(
+  width: number,
+  height: number,
+  rotation: number,
+  drift: number
+) {
   const maximumRotation = Math.abs(rotation) + floatRotationAmplitude;
   const cosine = Math.abs(Math.cos(maximumRotation));
   const sine = Math.abs(Math.sin(maximumRotation));
@@ -110,13 +118,25 @@ function rectanglesOverlap(
 ) {
   const overlapWidth = Math.max(
     0,
-    Math.min(left.x + left.width / 2, right.x + right.width / 2) -
-      Math.max(left.x - left.width / 2, right.x - right.width / 2)
+    Math.min(
+      left.x + left.width / 2,
+      right.x + right.width / 2
+    ) -
+      Math.max(
+        left.x - left.width / 2,
+        right.x - right.width / 2
+      )
   );
   const overlapHeight = Math.max(
     0,
-    Math.min(left.y + left.height / 2, right.y + right.height / 2) -
-      Math.max(left.y - left.height / 2, right.y - right.height / 2)
+    Math.min(
+      left.y + left.height / 2,
+      right.y + right.height / 2
+    ) -
+      Math.max(
+        left.y - left.height / 2,
+        right.y - right.height / 2
+      )
   );
   return overlapWidth * overlapHeight;
 }
@@ -156,7 +176,9 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     if (event.cancelable) event.preventDefault();
   };
   readonly #handlePointerMove = (event: PointerEvent) => {
-    if (!this.#inputEnabled || !this.#dragging || event.pointerId !== this.#dragPointerId) return;
+    if (!this.#inputEnabled
+      || !this.#dragging
+      || event.pointerId !== this.#dragPointerId) return;
     const nextY = this.#eventY(event.clientY);
     const elapsed = Math.min(64, Math.max(1, event.timeStamp - this.#dragLastAt));
     const requestedDelta = nextY - this.#dragLastY;
@@ -183,14 +205,21 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   readonly #handleWheel = (event: WheelEvent) => {
     if (!this.#inputEnabled) return;
     const normalizedDelta =
-      event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? this.#height : 1);
+      event.deltaY * (event.deltaMode === 1
+          ? 16
+          : event.deltaMode === 2
+            ? this.#height
+            : 1);
     if (!Number.isFinite(normalizedDelta) || normalizedDelta === 0) return;
     this.#dragVelocityY = 0;
     if (event.ctrlKey) {
       this.#wheelScrollRemainingY = 0;
       this.#wheelSizeAccumulator = Math.max(
         -240,
-        Math.min(240, this.#wheelSizeAccumulator + normalizedDelta)
+        Math.min(
+          240,
+          this.#wheelSizeAccumulator + normalizedDelta
+        )
       );
       if (
         Math.abs(this.#wheelSizeAccumulator) >= 48 &&
@@ -212,7 +241,10 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       const maximumPending = Math.max(480, this.#height * 1.25);
       this.#wheelScrollRemainingY = Math.max(
         -maximumPending,
-        Math.min(maximumPending, this.#wheelScrollRemainingY + nextDelta)
+        Math.min(
+          maximumPending,
+          this.#wheelScrollRemainingY + nextDelta
+        )
       );
     }
     if (event.cancelable) event.preventDefault();
@@ -297,9 +329,13 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     this.#width = Math.max(1, width);
     this.#height = Math.max(1, height);
     for (const state of this.#cards) {
-      state.y = previousHeight > 0 ? (state.y / previousHeight) * this.#height : state.y;
+      state.y = previousHeight > 0
+        ? state.y / previousHeight * this.#height
+        : state.y;
       state.x =
-        previousWidth > 0 ? (state.x / previousWidth) * this.#width : state.xRatio * this.#width;
+        previousWidth > 0
+          ? state.x / previousWidth * this.#width
+          : state.xRatio * this.#width;
       state.card.root.x = state.x;
       state.card.root.y = state.y;
       this.#retargetSize(state);
@@ -326,7 +362,10 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
         })
       : [];
     const additions = [...incoming.values()];
-    const nextImages = [...retained, ...additions].slice(0, 500);
+    const nextImages = [
+      ...retained,
+      ...additions
+    ].slice(0, 500);
     this.#dataKey = dataKey;
     this.#order = order;
     const previousCursor = this.#imageCursor;
@@ -340,7 +379,9 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     this.#meanImageRatio = nextImages.length
       ? nextImages.reduce((total, image) => total + imageRatio(image), 0) / nextImages.length
       : 1;
-    this.#imageCursor = replacing || !nextImages.length ? 0 : previousCursor % nextImages.length;
+    this.#imageCursor = replacing || !nextImages.length
+      ? 0
+      : previousCursor % nextImages.length;
     if (replacing) {
       this.#cancelVerticalInput();
       this.#clearTexturePrefetches();
@@ -505,7 +546,8 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       state.card.setVisible(onScreen);
     }
     if (moving) this.#recycleOutsideStream();
-    if (this.#cards.length < this.#targetCount() && this.#lifecycleElapsed >= this.#nextSpawnAt) {
+    if (this.#cards.length < this.#targetCount()
+      && this.#lifecycleElapsed >= this.#nextSpawnAt) {
       const state = this.#spawn(false);
       if (state) {
         if (moving || manualMovement) {
@@ -559,7 +601,9 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     for (const state of visible) {
       const bucket = Math.min(
         7,
-        Math.max(0, Math.floor((state.card.root.x / this.#width) * horizontalBuckets.length))
+        Math.max(0, Math.floor(
+          state.card.root.x / this.#width * horizontalBuckets.length
+        ))
       );
       horizontalBuckets[bucket] += 1;
     }
@@ -604,10 +648,26 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   }
 
   #addInputListeners() {
-    this.#inputElement.addEventListener("pointerdown", this.#handlePointerDown, { passive: false });
-    this.#inputElement.addEventListener("pointermove", this.#handlePointerMove, { passive: false });
-    this.#inputElement.addEventListener("pointerup", this.#handlePointerUp, { passive: false });
-    this.#inputElement.addEventListener("pointercancel", this.#handlePointerUp, { passive: false });
+    this.#inputElement.addEventListener(
+      "pointerdown",
+      this.#handlePointerDown,
+      { passive: false }
+    );
+    this.#inputElement.addEventListener(
+      "pointermove",
+      this.#handlePointerMove,
+      { passive: false }
+    );
+    this.#inputElement.addEventListener(
+      "pointerup",
+      this.#handlePointerUp,
+      { passive: false }
+    );
+    this.#inputElement.addEventListener(
+      "pointercancel",
+      this.#handlePointerUp,
+      { passive: false }
+    );
     this.#inputElement.addEventListener("lostpointercapture", this.#handlePointerUp, {
       passive: false
     });
@@ -715,7 +775,9 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     for (let index = this.#cards.length - 1; index >= 0; index -= 1) {
       const state = this.#cards[index];
       const direction: FloatStreamDirection | null =
-        state.y < this.#exitBoundary(state) ? -1 : state.y > this.#entryBoundary(state) ? 1 : null;
+        state.y < this.#exitBoundary(state)
+          ? -1
+          : state.y > this.#entryBoundary(state) ? 1 : null;
       if (direction === null) continue;
       if (state.retiring && this.#cards.length > this.#targetCount()) {
         this.#removeCard(index);
@@ -758,11 +820,23 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
   }
 
   #removeInputListeners() {
-    this.#inputElement.removeEventListener("pointerdown", this.#handlePointerDown);
-    this.#inputElement.removeEventListener("pointermove", this.#handlePointerMove);
+    this.#inputElement.removeEventListener(
+      "pointerdown",
+      this.#handlePointerDown
+    );
+    this.#inputElement.removeEventListener(
+      "pointermove",
+      this.#handlePointerMove
+    );
     this.#inputElement.removeEventListener("pointerup", this.#handlePointerUp);
-    this.#inputElement.removeEventListener("pointercancel", this.#handlePointerUp);
-    this.#inputElement.removeEventListener("lostpointercapture", this.#handlePointerUp);
+    this.#inputElement.removeEventListener(
+      "pointercancel",
+      this.#handlePointerUp
+    );
+    this.#inputElement.removeEventListener(
+      "lostpointercapture",
+      this.#handlePointerUp
+    );
     this.#inputElement.removeEventListener("wheel", this.#handleWheel);
     this.#inputListenerCount = 0;
   }
@@ -844,7 +918,8 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     direction: FloatStreamDirection = this.#streamDirection
   ) {
     const plan =
-      (initial ? null : this.#prefetchQueues[direction].shift()) ?? this.#createImagePlan();
+      (initial ? null : this.#prefetchQueues[direction].shift())
+        ?? this.#createImagePlan();
     if (!plan) return false;
     const { image, serial, widthFactor } = plan;
     state.widthFactor = widthFactor;
@@ -955,7 +1030,9 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     const maximumVelocity = Math.min(12, Math.max(6, state.card.targetWidth * 0.025));
     const desiredVelocity = Math.max(
       -maximumVelocity,
-      Math.min(maximumVelocity, (targetX - state.x) / 4 + driftVelocity)
+      Math.min(
+        maximumVelocity, (targetX - state.x) / 4 + driftVelocity
+      )
     );
     // Steer velocity continuously instead of rapidly chasing each new anchor.
     // Each card owns its phases, so releasing hover/focus has no time catch-up.
@@ -1053,7 +1130,9 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     );
     const minimumDepth = Math.min(
       buffer * 0.4,
-      Math.max(entryOffset, (footprint.height - height) / 2 + 24)
+      Math.max(
+        entryOffset, (footprint.height - height) / 2 + 24
+      )
     );
     // Keep a margin from the outer recycle boundary so a small reversal does
     // not immediately discard a card that has only just been replenished.
@@ -1061,7 +1140,9 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     const exitY = -(buffer + height / 2);
     const travelDistance = this.#height + buffer * 2 + height;
     const endMargin = travelDistance / Math.max(2, this.#targetCount() * 2);
-    const minimumY = bufferOnly ? this.#height + height / 2 + minimumDepth : exitY + endMargin;
+    const minimumY = bufferOnly
+      ? this.#height + height / 2 + minimumDepth
+      : exitY + endMargin;
     const availableDepth = bufferOnly
       ? Math.max(1, buffer - minimumDepth - outerMargin)
       : Math.max(1, travelDistance - endMargin * 2);
@@ -1126,7 +1207,10 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     }
     this.#nextPathAt = this.#elapsed;
     this.#nextSpacingAt = this.#elapsed;
-    this.#nextSpawnAt = Math.min(this.#nextSpawnAt, this.#lifecycleElapsed + 120);
+    this.#nextSpawnAt = Math.min(
+      this.#nextSpawnAt,
+      this.#lifecycleElapsed + 120
+    );
   }
 
   #placeStaticState(state: FloatCardState) {
@@ -1192,7 +1276,10 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     const count = this.#images.length
       ? Math.min(
           this.#width <= 760 ? 18 : 36,
-          Math.max(this.#width <= 760 ? 6 : 12, Math.ceil(this.#targetCount() / 3))
+          Math.max(
+            this.#width <= 760 ? 6 : 12,
+            Math.ceil(this.#targetCount() / 3)
+          )
         )
       : 0;
     const pending: {
@@ -1353,7 +1440,10 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
         ? candidateArea * 0.4 * (((ratio - center) * this.#width) / Math.max(1, width)) ** 2
         : 0;
       for (const existing of existingCards) {
-        const sharedArea = Math.max(1, Math.min(candidateArea, existing.width * existing.height));
+        const sharedArea = Math.max(1, Math.min(
+          candidateArea,
+          existing.width * existing.height
+        ));
         if (local) {
           const currentOverlap =
             rectanglesOverlap(
@@ -1473,14 +1563,17 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       let gapBehind = 1;
       let neighbors = 0;
       for (const other of cards) {
-        if (other.state === state || Math.abs(other.state.x - state.x) >= (other.width + width) / 2)
+        if (other.state === state
+          || Math.abs(other.state.x - state.x) >= (other.width + width) / 2)
           continue;
         neighbors += 1;
         gapAhead = Math.min(gapAhead, (phase - other.phase + 1) % 1);
         gapBehind = Math.min(gapBehind, (other.phase - phase + 1) % 1);
       }
       const targetGap = 1 / (neighbors + 1);
-      const adjustment = Math.max(-0.3, Math.min(0.3, ((gapAhead - gapBehind) / targetGap) * 0.3));
+      const adjustment = Math.max(-0.3, Math.min(
+        0.3, (gapAhead - gapBehind) / targetGap * 0.3
+      ));
       state.speed += (state.cruiseSpeed * (1 + adjustment) - state.speed) * 0.2;
     }
   }
@@ -1507,12 +1600,18 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
       const height = left.card.height;
       const clippedWidth = Math.max(
         0,
-        Math.min(this.#width, left.card.root.x + width / 2) -
+        Math.min(
+          this.#width,
+          left.card.root.x + width / 2
+        ) -
           Math.max(0, left.card.root.x - width / 2)
       );
       const clippedHeight = Math.max(
         0,
-        Math.min(this.#height, left.y + height / 2) - Math.max(0, left.y - height / 2)
+        Math.min(
+          this.#height,
+          left.y + height / 2
+        ) - Math.max(0, left.y - height / 2)
       );
       totalArea += clippedWidth * clippedHeight;
       for (let other = index + 1; other < visible.length; other += 1) {

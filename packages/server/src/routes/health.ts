@@ -34,7 +34,10 @@ export function registerHealthRoutes(
   app.all("/readyz", (context) => readinessHandler(context, dependencies));
 }
 
-async function readinessHandler(c: Context, dependencies: HealthDependencies) {
+async function readinessHandler(
+  c: Context,
+  dependencies: HealthDependencies
+) {
   if (c.req.method !== "GET")
     return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
   if (new URL(c.req.url).search)

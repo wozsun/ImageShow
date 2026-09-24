@@ -44,4 +44,4 @@ export type AdminUser = AdminUserDto;
 
 export type FacetOption = FacetOptionDto;
 
-export type RandomMode = "" | RandomMethod;
+export type RandomResponseMode = "" | RandomMethod;

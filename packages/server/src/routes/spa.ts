@@ -1,5 +1,9 @@
 import type { Context, Hono } from "hono";
-import { adminBasePath, publicRootPath, type RuntimeConfig } from "@imageshow/shared/browser";
+import {
+  adminBasePath,
+  publicRootPath,
+  type RuntimeConfig
+} from "@imageshow/shared/browser";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
@@ -41,11 +45,16 @@ const spaRepresentation = createContentSnapshot(buildSpaDocument);
 const encodedSpaRepresentation = createEncodedContentCache();
 
 function escapeHtmlText(value: string) {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function escapeHtmlAttr(value: string) {
-  return escapeHtmlText(value).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return escapeHtmlText(value)
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function buildSpaDocument(runtime: RuntimeConfig): string {

@@ -1,4 +1,7 @@
-import { readyImageRedisCommandClient, type ReadyImageRedisCommandSource } from "./client.ts";
+import {
+  readyImageRedisCommandClient,
+  type ReadyImageRedisCommandSource
+} from "./client.ts";
 
 export type RedisIndexedTouchCommandClient =
   ReadyImageRedisCommandSource<"imageshowTouchReadyImageIndexedResult">;
@@ -116,7 +119,10 @@ export async function touchReadyImageStatsResultCommand(
   }
 ) {
   const [lruKey, countsKey, kindsKey, signaturesKey] = input.registry.keys;
-  const commandClient = readyImageRedisCommandClient(client, "imageshowTouchReadyImageStatsResult");
+  const commandClient = readyImageRedisCommandClient(
+    client,
+    "imageshowTouchReadyImageStatsResult"
+  );
   const raw = await commandClient.imageshowTouchReadyImageStatsResult(
     input.descriptor.key,
     input.descriptor.key,
@@ -149,7 +155,10 @@ export async function storeReadyImageFilterSetCommand(
   }
 ) {
   const sourceKeys = input.sources.map(({ key }) => key);
-  const commandClient = readyImageRedisCommandClient(client, "imageshowStoreReadyImageFilterSet");
+  const commandClient = readyImageRedisCommandClient(
+    client,
+    "imageshowStoreReadyImageFilterSet"
+  );
   const raw = await commandClient.imageshowStoreReadyImageFilterSet(
     String(sourceKeys.length + 1),
     ...sourceKeys,
@@ -272,10 +281,22 @@ function nonNegativeSafeInteger(value: number, field: string) {
 
 function readyImageSampleBounds(bounds: RedisReadyImageSampleBounds) {
   const limit = nonNegativeSafeInteger(bounds.limit, "limit");
-  const recentSize = nonNegativeSafeInteger(bounds.recentSize, "recent history size");
-  const historySize = nonNegativeSafeInteger(bounds.historySize, "history bound");
-  const maximumLimit = nonNegativeSafeInteger(bounds.maximumLimit, "maximum limit");
-  if (limit === 0 || maximumLimit === 0 || limit > maximumLimit || recentSize > historySize) {
+  const recentSize = nonNegativeSafeInteger(
+    bounds.recentSize,
+    "recent history size"
+  );
+  const historySize = nonNegativeSafeInteger(
+    bounds.historySize,
+    "history bound"
+  );
+  const maximumLimit = nonNegativeSafeInteger(
+    bounds.maximumLimit,
+    "maximum limit"
+  );
+  if (limit === 0
+    || maximumLimit === 0
+    || limit > maximumLimit
+    || recentSize > historySize) {
     throw new Error("Ready-image sample bounds are inconsistent");
   }
   return { limit, recentSize, historySize, maximumLimit };
@@ -293,7 +314,10 @@ function expectedReadyImageSampleCount(
   return Math.min(indexCount, requested);
 }
 
-function readyImageSampleReply(raw: unknown, expectedCount: number): RedisReadyImageSampleResult {
+function readyImageSampleReply(
+  raw: unknown,
+  expectedCount: number
+): RedisReadyImageSampleResult {
   if (!Array.isArray(raw) || raw.length < 2) {
     throw new Error("Ready-image sample command returned invalid data");
   }
@@ -316,7 +340,9 @@ function readyImageSampleReply(raw: unknown, expectedCount: number): RedisReadyI
     if (
       typeof member !== "string" ||
       !member ||
-      !(typeof rawValue === "string" || rawValue === null || rawValue === false)
+      !(typeof rawValue === "string"
+        || rawValue === null
+        || rawValue === false)
     ) {
       throw new Error("Ready-image sample command returned an invalid pair");
     }
@@ -335,7 +361,8 @@ function readyImageSampleReply(raw: unknown, expectedCount: number): RedisReadyI
     if (expectedCount !== 0 || pairCount !== 0) {
       throw new Error("Ready-image sample command returned inconsistent emptiness");
     }
-  } else if (status === "core_missing_item" || status === "derived_missing_item") {
+  } else if (status === "core_missing_item"
+    || status === "derived_missing_item") {
     if (pairCount !== expectedCount || expectedCount === 0 || !missing) {
       throw new Error("Ready-image sample command lost a missing-item position");
     }
@@ -363,7 +390,10 @@ export async function sampleReadyImageCoreIndexCommand(
 ) {
   const count = nonNegativeSafeInteger(input.count, "core count");
   const bounds = readyImageSampleBounds(input.bounds);
-  const commandClient = readyImageRedisCommandClient(client, "imageshowSampleReadyImageCoreIndex");
+  const commandClient = readyImageRedisCommandClient(
+    client,
+    "imageshowSampleReadyImageCoreIndex"
+  );
   const raw = await commandClient.imageshowSampleReadyImageCoreIndex(
     ...input.keys,
     readyImageSampleRevision(input.revision),
@@ -373,7 +403,10 @@ export async function sampleReadyImageCoreIndexCommand(
     String(bounds.historySize),
     String(bounds.maximumLimit)
   );
-  return readyImageSampleReply(raw, expectedReadyImageSampleCount(count, bounds));
+  return readyImageSampleReply(
+    raw,
+    expectedReadyImageSampleCount(count, bounds)
+  );
 }
 
 export async function sampleReadyImageDerivedIndexCommand(
@@ -427,5 +460,8 @@ export async function sampleReadyImageDerivedIndexCommand(
     String(bounds.maximumLimit),
     String(maximumIndexMembers)
   );
-  return readyImageSampleReply(raw, expectedReadyImageSampleCount(indexCount, bounds));
+  return readyImageSampleReply(
+    raw,
+    expectedReadyImageSampleCount(indexCount, bounds)
+  );
 }

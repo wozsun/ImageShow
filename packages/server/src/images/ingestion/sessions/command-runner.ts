@@ -28,7 +28,11 @@ export function throwIngestionCommandConflict(code: number): never {
     throw new ApiError(410, "upload_intent_expired", "上传意图已过期，请重新签发");
   }
   if (code === -2) {
-    throw new ApiError(409, "idempotency_conflict", "同一幂等身份已用于不同内容接入意图");
+    throw new ApiError(
+      409,
+      "idempotency_conflict",
+      "同一幂等身份已用于不同内容接入意图"
+    );
   }
   if (code === -3) {
     throw new ApiError(410, "upload_intent_expired", "上传意图已过期，请重新签发");
@@ -61,7 +65,11 @@ function ingestionDomainReplyError(error: unknown) {
     );
   }
   if (/\bUPLOAD_INTENT\b/u.test(message)) {
-    return new ApiError(409, "upload_intent_state_conflict", "上传意图状态与当前操作不一致");
+    return new ApiError(
+      409,
+      "upload_intent_state_conflict",
+      "上传意图状态与当前操作不一致"
+    );
   }
   return null;
 }

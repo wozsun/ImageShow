@@ -49,7 +49,9 @@ function staleActionError() {
 }
 
 function actionResultIsUnknown(error: unknown) {
-  return !isApiClientError(error) || error.status >= 500 || error.code === "invalid_json_response";
+  return !isApiClientError(error)
+    || error.status >= 500
+    || error.code === "invalid_json_response";
 }
 
 async function executeWithResponseRetry(
@@ -107,7 +109,8 @@ export function useIngestionQueueActions(
   const [, setConnectionRetainEpoch] = useState(0);
 
   const updateConnectionHold = useCallback(() => {
-    connectionHoldRef.current = pendingRunsRef.current > 0 || retainedConnectionsRef.current > 0;
+    connectionHoldRef.current = pendingRunsRef.current > 0
+      || retainedConnectionsRef.current > 0;
   }, [connectionHoldRef]);
 
   const retainConnection = useCallback(() => {
@@ -118,7 +121,10 @@ export function useIngestionQueueActions(
     return () => {
       if (released) return;
       released = true;
-      retainedConnectionsRef.current = Math.max(0, retainedConnectionsRef.current - 1);
+      retainedConnectionsRef.current = Math.max(
+        0,
+        retainedConnectionsRef.current - 1
+      );
       updateConnectionHold();
       if (mountedRef.current) {
         setConnectionRetainEpoch((current) => current + 1);
@@ -149,11 +155,16 @@ export function useIngestionQueueActions(
       options?: Readonly<{ maxSemanticRevision?: number }>
     ): FrozenIngestionQueueAction | null => {
       const current = serverRef.current;
-      if (current.status !== "ready" || !current.actionScope || !current.actionWatermark) {
+      if (current.status !== "ready"
+        || !current.actionScope
+        || !current.actionWatermark) {
         setNotice("");
         return null;
       }
-      const actionTimestamp = Math.max(Date.now(), lastActionTimestampRef.current + 1);
+      const actionTimestamp = Math.max(
+        Date.now(),
+        lastActionTimestampRef.current + 1
+      );
       lastActionTimestampRef.current = actionTimestamp;
       return {
         queue,
@@ -224,7 +235,8 @@ export function useIngestionQueueActions(
                 // cursor and earlier results when a response is still unknown;
                 // returning to page one would lose the server's replay boundary.
                 unconfirmedPageRef.current =
-                  !controller.signal.aborted && actionResultIsUnknown(error)
+                  !controller.signal.aborted
+                    && actionResultIsUnknown(error)
                     ? {
                         actionRequestId: frozen.actionRequestId,
                         actionScope: frozen.actionScope,
@@ -242,7 +254,9 @@ export function useIngestionQueueActions(
               }
               completed.push(
                 ...response.items.flatMap((item) =>
-                  item.completed_item ? [{ pair: item, item: item.completed_item }] : []
+                  item.completed_item
+                    ? [{ pair: item, item: item.completed_item }]
+                    : []
                 )
               );
               processed += response.processed;

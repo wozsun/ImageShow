@@ -2,7 +2,10 @@ import type { Redis } from "ioredis";
 import { redis } from "../../core/redis/client.ts";
 import { execRedisPipeline } from "../../core/redis/pipeline.ts";
 import { READY_IMAGE_META_KEY } from "./keys.ts";
-import { type ReadyImageCacheMeta, type ReadyImageCacheState } from "./model.ts";
+import {
+  type ReadyImageCacheMeta,
+  type ReadyImageCacheState
+} from "./model.ts";
 
 const metaFields = new Set([
   "state",
@@ -17,7 +20,11 @@ const metaFields = new Set([
   "last_full_rebuild_measured_at",
   "last_error"
 ]);
-const cacheStates = new Set<ReadyImageCacheState>(["ready", "rebuilding", "degraded"]);
+const cacheStates = new Set<ReadyImageCacheState>([
+  "ready",
+  "rebuilding",
+  "degraded"
+]);
 
 function decimalRevision(value: unknown) {
   const revision = String(value ?? "");
@@ -70,7 +77,10 @@ function parseReadyImageCacheMeta(raw: Record<string, string>): ReadyImageCacheM
     appliedRevision: decimalRevision(raw.applied_revision),
     itemCount: nonNegativeInteger(raw.item_count, "item_count"),
     lastUpdatedAt: optionalTimestamp(raw.last_updated_at, "last_updated_at"),
-    fullRebuildStartedAt: optionalTimestamp(raw.full_rebuild_started_at, "full_rebuild_started_at"),
+    fullRebuildStartedAt: optionalTimestamp(
+      raw.full_rebuild_started_at,
+      "full_rebuild_started_at"
+    ),
     fullRebuildCompletedAt: optionalTimestamp(
       raw.full_rebuild_completed_at,
       "full_rebuild_completed_at"
@@ -101,13 +111,17 @@ function parseReadyImageCacheMeta(raw: Record<string, string>): ReadyImageCacheM
   }
   if (
     meta.state === "ready" &&
-    (!meta.fullRebuildCompletedAt || meta.processed !== 0 || meta.total !== 0 || meta.lastError)
+    (!meta.fullRebuildCompletedAt
+      || meta.processed !== 0
+      || meta.total !== 0
+      || meta.lastError)
   ) {
     throw new Error("Ready-image cache ready meta is internally inconsistent");
   }
   if (
     meta.state === "rebuilding" &&
-    (meta.fullRebuildCompletedAt || meta.itemCount !== meta.processed)
+    (meta.fullRebuildCompletedAt
+      || meta.itemCount !== meta.processed)
   ) {
     throw new Error("Ready-image cache rebuilding meta is internally inconsistent");
   }
@@ -149,7 +163,10 @@ export async function readReadyImageCacheMeta(
   return parseReadyImageCacheMeta(await client.hgetall(READY_IMAGE_META_KEY));
 }
 
-export async function writeReadyImageCacheMeta(meta: ReadyImageCacheMeta, client: Redis = redis) {
+export async function writeReadyImageCacheMeta(
+  meta: ReadyImageCacheMeta,
+  client: Redis = redis
+) {
   const transaction = client.multi();
   transaction.del(READY_IMAGE_META_KEY);
   transaction.hset(READY_IMAGE_META_KEY, serializedMeta(meta));

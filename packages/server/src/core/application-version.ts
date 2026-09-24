@@ -11,7 +11,9 @@ export function applicationVersion() {
       version?: unknown;
     };
     cachedApplicationVersion =
-      typeof value.version === "string" && value.version ? value.version : "unknown";
+      typeof value.version === "string" && value.version
+        ? value.version
+        : "unknown";
   } catch {
     cachedApplicationVersion = "unknown";
   }

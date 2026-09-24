@@ -10,7 +10,8 @@ export function ingestionJobPreviewAvailable(job: IngestionJob) {
 }
 
 export function ingestionJobNeedsDuplicateConfirmation(job: IngestionJob) {
-  return job.status === "ready" && job.duplicateDecision === "undecided";
+  return job.status === "ready"
+    && job.duplicateDecision === "undecided";
 }
 
 export function ingestionDuplicateMessage(libraryCount: number) {

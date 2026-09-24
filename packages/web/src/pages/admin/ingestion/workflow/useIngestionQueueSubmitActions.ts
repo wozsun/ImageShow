@@ -45,7 +45,11 @@ export function useIngestionQueueSubmitActions({
     const localJobs = queue.captureBrowserActionJobs(() => true);
     queue.applyDefaultsToLocalJobs(defaults, localJobs);
     if (serverAction.frozen) {
-      void queue.actions.run(serverAction.frozen, queue.flushPendingUpdates, { blockUi: false });
+      void queue.actions.run(
+        serverAction.frozen,
+        queue.flushPendingUpdates,
+        { blockUi: false }
+      );
     } else {
       void queue.flushPendingUpdates().catch(() => undefined);
     }
@@ -64,7 +68,9 @@ export function useIngestionQueueSubmitActions({
   const commitReadyJobs = useCallback(async () => {
     const capturedServerAction = captureServerAction(
       "commit_ready",
-      queue.server.status !== "ready" || !queue.server.summary || queue.server.summary.ready > 0
+      queue.server.status !== "ready"
+        || !queue.server.summary
+        || queue.server.summary.ready > 0
     );
     if (capturedServerAction.required && !capturedServerAction.frozen) {
       queue.server.refresh();
@@ -121,7 +127,9 @@ export function useIngestionQueueSubmitActions({
     const pending: Array<{
       frozen: FrozenIngestionQueueAction;
       retryItems?: IngestionSessionPairDto[];
-    }> = summary.unfinished - summary.committing - summary.resolving > 0 ? [{ frozen }] : [];
+    }> = summary.unfinished - summary.committing - summary.resolving > 0
+      ? [{ frozen }]
+      : [];
     let prepared = false;
     let disposed = false;
     return {

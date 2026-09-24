@@ -49,7 +49,10 @@ export const ingestionExecutionControl = {
     });
   },
 
-  cancelSessions(owner: string, items: readonly IngestionCancelItemInputDto[]) {
+  cancelSessions(
+    owner: string,
+    items: readonly IngestionCancelItemInputDto[]
+  ) {
     return cancelIngestionSessions(
       ingestionSessionRepository,
       ingestionCoordinator,
@@ -71,5 +74,8 @@ export function stopIngestionSessionWorker() {
 }
 
 export function drainIngestionSessionWorker() {
-  return Promise.all([ingestionSessionWorker.drain(), ingestionOrphanCleanupWorker.drain()]);
+  return Promise.all([
+    ingestionSessionWorker.drain(),
+    ingestionOrphanCleanupWorker.drain()
+  ]);
 }

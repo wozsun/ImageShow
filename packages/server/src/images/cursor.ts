@@ -16,13 +16,21 @@ function normalizedUuid(value: string) {
 
 function uuidBytes(value: string) {
   const normalized = normalizedUuid(value);
-  return normalized ? Buffer.from(normalized.replaceAll("-", ""), "hex") : null;
+  return normalized
+    ? Buffer.from(normalized.replaceAll("-", ""), "hex")
+    : null;
 }
 
 function uuidFromBytes(value: Buffer) {
   const hex = value.toString("hex");
   return normalizedUuid(
-    [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join(
+    [
+      hex.slice(0, 8),
+      hex.slice(8, 12),
+      hex.slice(12, 16),
+      hex.slice(16, 20),
+      hex.slice(20)
+    ].join(
       "-"
     )
   );
@@ -52,7 +60,10 @@ export function createImageBrowseContext(
     order,
     period,
     start:
-      date === null ? 0 : Number.parseInt(hash("sha256", `browse:${date}`, "hex").slice(0, 12), 16)
+      date === null ? 0
+      : Number.parseInt(
+        hash("sha256", `browse:${date}`, "hex").slice(0, 12), 16
+      )
   };
 }
 
@@ -85,14 +96,18 @@ export function encodeImageCursor(
   return payload.subarray(1).toString("base64url");
 }
 
-export function decodeImageCursor(value: string, context: ImageBrowseContext): ImageBrowsePosition {
+export function decodeImageCursor(
+  value: string,
+  context: ImageBrowseContext
+): ImageBrowsePosition {
   try {
     const random = context.order === "random";
     const payloadBytes = random ? randomPayloadBytes : orderedPayloadBytes;
     if (value.length !== Math.ceil((payloadBytes * 4) / 3)) throw new Error();
     if (!cursorPattern.test(value)) throw new Error();
     const payload = Buffer.from(value, "base64url");
-    if (payload.length !== payloadBytes || payload.toString("base64url") !== value) {
+    if (payload.length !== payloadBytes
+      || payload.toString("base64url") !== value) {
       throw new Error();
     }
     const id = uuidFromBytes(payload.subarray(random ? 3 : 7));

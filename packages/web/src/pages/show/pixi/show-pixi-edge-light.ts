@@ -34,7 +34,9 @@ export class ShowPixiEdgeLight {
         const lightValue = (light.color >> shift) & 255;
         const borderValue = (border.color >> shift) & 255;
         ramp.data[pixel * 4 + channel] =
-          alpha > 0 ? Math.round((lightValue * lightAlpha + borderValue * borderAlpha) / alpha) : 0;
+          alpha > 0
+            ? Math.round((lightValue * lightAlpha + borderValue * borderAlpha) / alpha)
+            : 0;
       }
       ramp.data[pixel * 4 + 3] = Math.round(alpha * 255);
     }
@@ -79,7 +81,10 @@ export class ShowPixiEdgeLight {
       const y = this.#local[offset + 1]!;
       const distance = Math.min(
         1,
-        Math.hypot(x / (width / 2) - magnet.normalizedX, y / (height / 2) - magnet.normalizedY) /
+        Math.hypot(
+          x / (width / 2) - magnet.normalizedX,
+          y / (height / 2) - magnet.normalizedY
+        ) /
           1.3
       );
       // Encode both the radial falloff and the center-to-edge strength in the

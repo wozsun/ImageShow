@@ -1,8 +1,14 @@
-import { conditionalRequestNotModified, ifRangeMatches } from "../../core/http/validators.ts";
+import {
+  conditionalRequestNotModified,
+  ifRangeMatches
+} from "../../core/http/validators.ts";
 import type { OpenedRead } from "../../storage/drivers/driver.ts";
 import type { ResolvedReadableObject } from "../../storage/objects/access.ts";
 import { webReadableFromNode } from "../../storage/objects/stream-buffer.ts";
-import { responseContentLengthValue, safeResponseHeaderValue } from "../../core/http/headers.ts";
+import {
+  responseContentLengthValue,
+  safeResponseHeaderValue
+} from "../../core/http/headers.ts";
 import { normalizePartialContentRange } from "../../core/http/byte-range.ts";
 import { ApiError } from "../../core/api-error.ts";
 
@@ -42,7 +48,9 @@ function safeStoredLastModified(value?: string) {
   try {
     const safeValue = safeResponseHeaderValue("Last-Modified", value);
     const timestamp = Date.parse(safeValue);
-    return Number.isFinite(timestamp) ? new Date(timestamp).toUTCString() : undefined;
+    return Number.isFinite(timestamp)
+      ? new Date(timestamp).toUTCString()
+      : undefined;
   } catch {
     return undefined;
   }
@@ -57,9 +65,13 @@ export async function streamResolvedObject(
   request.signal?.throwIfAborted();
   const storageRequest = { signal: request.signal };
   const validateBeforeRange = Boolean(
-    request.range && (request.ifNoneMatch || request.ifModifiedSince || request.ifRange)
+    request.range
+    && (request.ifNoneMatch || request.ifModifiedSince || request.ifRange)
   );
-  let opened = await object.open(validateBeforeRange ? undefined : request.range, storageRequest);
+  let opened = await object.open(
+    validateBeforeRange ? undefined : request.range,
+    storageRequest
+  );
   const initialEtag = safeStoredEtag(opened.etag);
   const initialLastModified = safeStoredLastModified(opened.lastModified);
   if (
@@ -107,7 +119,11 @@ export async function streamResolvedObject(
   const contentRange = normalizePartialContentRange(opened.contentRange);
   if (opened.contentRange && !contentRange) {
     opened.body.destroy();
-    throw new ApiError(502, "storage_read_failed", "Storage returned an invalid Content-Range");
+    throw new ApiError(
+      502,
+      "storage_read_failed",
+      "Storage returned an invalid Content-Range"
+    );
   }
   const headers = new Headers({
     "Content-Type": contentTypeValue,

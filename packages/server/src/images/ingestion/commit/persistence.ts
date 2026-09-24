@@ -31,7 +31,11 @@ export async function persistIngestionImage(
     ).rows[0];
     if (existing) {
       if (existing.created_by !== commit.created_by) {
-        throw new ApiError(409, "ingestion_image_owner_conflict", "图片 ID 已属于其他管理员");
+        throw new ApiError(
+          409,
+          "ingestion_image_owner_conflict",
+          "图片 ID 已属于其他管理员"
+        );
       }
       return {
         inserted: false,
@@ -86,7 +90,12 @@ export async function persistIngestionImage(
       ]
     );
     if (
-      (await replaceImageTags(client, session.image_id, resolvedTags, new AbortController().signal))
+      (await replaceImageTags(
+        client,
+        session.image_id,
+        resolvedTags,
+        new AbortController().signal
+      ))
         .createdTag
     ) {
       createdEntityKinds.add("tag");

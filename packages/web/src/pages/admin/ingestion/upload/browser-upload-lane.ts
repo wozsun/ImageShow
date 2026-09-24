@@ -51,7 +51,10 @@ export class BrowserUploadLane {
     return this.#limit;
   }
 
-  async run<Result>(signal: AbortSignal, work: () => Promise<Result>): Promise<Result> {
+  async run<Result>(
+    signal: AbortSignal,
+    work: () => Promise<Result>
+  ): Promise<Result> {
     await this.#acquire(signal);
     try {
       if (signal.aborted) throw abortError(signal);

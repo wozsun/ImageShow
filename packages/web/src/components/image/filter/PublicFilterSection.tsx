@@ -15,11 +15,11 @@ import {
   publicFilterLabels,
   publicFilterSections,
   type PublicFilterDraft,
-  type PublicFilterSection as PublicFilterSectionName,
+  type PublicFilterSectionKey,
   type TagSelection
 } from "../../../lib/gallery/public-filter-draft.js";
 
-export const publicFilterIcons: Record<PublicFilterSectionName, IconName> = {
+export const publicFilterIcons: Record<PublicFilterSectionKey, IconName> = {
   device: "slideshow-3-line",
   brightness: "contrast-2-line",
   theme: "image-line",
@@ -28,7 +28,7 @@ export const publicFilterIcons: Record<PublicFilterSectionName, IconName> = {
 };
 function optionCount(
   stats: GalleryStatsDto | undefined,
-  section: PublicFilterSectionName,
+  section: PublicFilterSectionKey,
   slug: string
 ): number | undefined {
   if (!stats) return undefined;
@@ -48,7 +48,7 @@ function optionCount(
 }
 
 type Props = {
-  section: PublicFilterSectionName;
+  section: PublicFilterSectionKey;
   id: string;
   draft: PublicFilterDraft;
   tag: { selection: TagSelection };
@@ -68,7 +68,7 @@ type Props = {
   ) => boolean;
   finishTagGroup: () => void;
   deleteTagGroup: (id: number) => void;
-  toggle: (section: PublicFilterSectionName, slug: string) => void;
+  toggle: (section: PublicFilterSectionKey, slug: string) => void;
 };
 
 export function PublicFilterSection({

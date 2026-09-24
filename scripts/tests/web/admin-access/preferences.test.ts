@@ -4,7 +4,10 @@ import test from "node:test";
 import { parseHTML } from "linkedom";
 import { type AdminPreferences } from "../../../../packages/shared/src/browser.ts";
 
-import { setCsrfToken, clearCsrfToken } from "../../../../packages/web/src/lib/api/client.ts";
+import {
+  setCsrfToken,
+  clearCsrfToken
+} from "../../../../packages/web/src/lib/api/client.ts";
 
 import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
 
@@ -271,7 +274,10 @@ test("[Web/后台访问] 后台偏好五分钟内聚焦零请求且首次过期�
   let preferenceWrites = 0;
   const preferenceEtag = 'W/"preference-focus-v1"';
   const updatedPreferenceEtag = 'W/"preference-focus-v2"';
-  const fetchStub = async (input: RequestInfo | URL, init: RequestInit = {}) => {
+  const fetchStub = async (
+    input: RequestInfo | URL,
+    init: RequestInit = {}
+  ) => {
     const url = new URL(String(input), "https://imageshow.test");
     assert.equal(url.pathname, "/api/admin/preferences");
     if (init.method === "PATCH") {
@@ -443,7 +449,11 @@ test("[Web/后台访问] 后台偏好五分钟内聚焦零请求且首次过期�
     });
     await staleAuthRead;
     assert.equal(preferenceWrites, 1);
-    assert.equal(authReadAborted, true, "偏好 PATCH 必须取消可能携带旧偏好和 ETag 的在途 /auth/me");
+    assert.equal(
+      authReadAborted,
+      true,
+      "偏好 PATCH 必须取消可能携带旧偏好和 ETag 的在途 /auth/me"
+    );
     assert.deepEqual(client.getQueryData(queryKeys.me), {
       authenticated: true,
       username,

@@ -1,28 +1,28 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import {
-  tagScrollAvailability,
-  tagScrollContentMetrics,
-  tagScrollItemMetrics,
-  tagScrollNavigationTarget,
-  tagVerticalWheelPixels,
-  tagWheelScrollTarget,
-  type TagScrollAvailability
-} from "./tag-input-scroll.js";
+  chipStripScrollAvailability,
+  chipStripScrollContentMetrics,
+  chipStripScrollItemMetrics,
+  chipStripScrollNavigationTarget,
+  chipStripVerticalWheelPixels,
+  chipStripWheelScrollTarget,
+  type ChipStripScrollAvailability
+} from "../lib/ui/chip-strip-scroll.js";
 
-const noTagScroll: TagScrollAvailability = {
+const noChipStripScroll: ChipStripScrollAvailability = {
   backward: false,
   forward: false
 };
 
 /** Shared horizontal chip navigation; editor focus and input remain with callers. */
-export function useTagScroll(focusFallbackRef?: RefObject<HTMLElement | null>) {
+export function useChipStripScroll(focusFallbackRef?: RefObject<HTMLElement | null>) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const backwardNavigationRef = useRef<HTMLButtonElement | null>(null);
   const forwardNavigationRef = useRef<HTMLButtonElement | null>(null);
   const wheelTargetRef = useRef<{ left: number; direction: number } | null>(null);
-  const [scrollAvailability, setScrollAvailability] = useState(noTagScroll);
-  const scrollAvailabilityRef = useRef(noTagScroll);
+  const [scrollAvailability, setScrollAvailability] = useState(noChipStripScroll);
+  const scrollAvailabilityRef = useRef(noChipStripScroll);
   const cancelPendingScroll = useCallback(() => {
     wheelTargetRef.current = null;
   }, []);
@@ -30,9 +30,10 @@ export function useTagScroll(focusFallbackRef?: RefObject<HTMLElement | null>) {
   const refreshScrollAvailability = useCallback(() => {
     const box = scrollRef.current;
     if (!box) return;
-    const next = tagScrollAvailability(box);
+    const next = chipStripScrollAvailability(box);
     const current = scrollAvailabilityRef.current;
-    const unchanged = current.backward === next.backward && current.forward === next.forward;
+    const unchanged = current.backward === next.backward
+      && current.forward === next.forward;
     const activeElement = box.ownerDocument.activeElement;
     const focusedNavigation =
       activeElement === backwardNavigationRef.current
@@ -42,8 +43,10 @@ export function useTagScroll(focusFallbackRef?: RefObject<HTMLElement | null>) {
           : null;
     const disablingFocusedNavigation =
       focusedNavigation !== null &&
-      ((focusedNavigation === backwardNavigationRef.current && !next.backward) ||
-        (focusedNavigation === forwardNavigationRef.current && !next.forward));
+      ((focusedNavigation === backwardNavigationRef.current
+        && !next.backward) ||
+        (focusedNavigation === forwardNavigationRef.current
+          && !next.forward));
     if (disablingFocusedNavigation) {
       // Keep keyboard focus on a stable owner when an edge button disappears.
       focusFallbackRef?.current?.focus({ preventScroll: true });
@@ -74,9 +77,10 @@ export function useTagScroll(focusFallbackRef?: RefObject<HTMLElement | null>) {
       }
     };
     const onWheel = (event: WheelEvent) => {
-      const finePointer = ownerWindow?.matchMedia?.("(any-pointer: fine)").matches ?? true;
+      const finePointer = ownerWindow?.matchMedia?.("(any-pointer: fine)")
+        .matches ?? true;
       if (!finePointer) return;
-      const delta = tagVerticalWheelPixels({
+      const delta = chipStripVerticalWheelPixels({
         clientWidth: box.clientWidth,
         deltaMode: event.deltaMode,
         deltaX: event.deltaX,
@@ -91,11 +95,13 @@ export function useTagScroll(focusFallbackRef?: RefObject<HTMLElement | null>) {
       // Accumulate same-direction samples against that destination, while a
       // reversal starts at the visible position for an immediate response.
       const pending = wheelTargetRef.current;
-      const target = tagWheelScrollTarget(
+      const target = chipStripWheelScrollTarget(
         {
           clientWidth: box.clientWidth,
           scrollWidth: box.scrollWidth,
-          scrollLeft: pending?.direction === Math.sign(delta) ? pending.left : box.scrollLeft
+          scrollLeft: pending?.direction === Math.sign(delta)
+            ? pending.left
+            : box.scrollLeft
         },
         delta
       );
@@ -138,24 +144,37 @@ export function useTagScroll(focusFallbackRef?: RefObject<HTMLElement | null>) {
     const style = box.ownerDocument.defaultView?.getComputedStyle(box);
     const paddingLeft = Number.parseFloat(style?.paddingLeft ?? "0") || 0;
     const paddingRight = Number.parseFloat(style?.paddingRight ?? "0") || 0;
-    const navigationMetrics = tagScrollContentMetrics(box, paddingLeft, paddingRight);
+    const navigationMetrics = chipStripScrollContentMetrics(
+      box,
+      paddingLeft,
+      paddingRight
+    );
     const contentLeft = boxRect.left + paddingLeft;
     const contentRight = boxRect.right - paddingRight;
     const backwardRect = backwardNavigationRef.current?.getBoundingClientRect();
     const forwardRect = forwardNavigationRef.current?.getBoundingClientRect();
-    const nextScrollLeft = tagScrollNavigationTarget(
+    const nextScrollLeft = chipStripScrollNavigationTarget(
       navigationMetrics,
       [...box.querySelectorAll<HTMLElement>("[data-tag-scroll-item]")].map((item) => {
         const itemRect = item.getBoundingClientRect();
-        return tagScrollItemMetrics(boxRect.left, box.scrollLeft, itemRect, paddingLeft);
+        return chipStripScrollItemMetrics(
+          boxRect.left,
+          box.scrollLeft,
+          itemRect,
+          paddingLeft
+        );
       }),
       direction,
       {
         // The whole overlaid button counts as covered, including its
         // translucent gradient edge. Reading the real overlap keeps scroll
         // behavior aligned with the control if its CSS geometry changes.
-        leading: backwardRect ? Math.max(0, backwardRect.right - contentLeft) : 0,
-        trailing: forwardRect ? Math.max(0, contentRight - forwardRect.left) : 0
+        leading: backwardRect
+          ? Math.max(0, backwardRect.right - contentLeft)
+          : 0,
+        trailing: forwardRect
+          ? Math.max(0, contentRight - forwardRect.left)
+          : 0
       }
     );
     if (Math.abs(nextScrollLeft - box.scrollLeft) < 1) return false;

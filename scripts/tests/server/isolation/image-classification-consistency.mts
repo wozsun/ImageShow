@@ -33,7 +33,11 @@ await runIntegrationScenario(async (runtime) => {
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, title)
        VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, 'before')`,
-    [classificationRollbackId, classificationRollbackMd5, classificationRollbackBody.byteLength]
+    [
+        classificationRollbackId,
+        classificationRollbackMd5,
+        classificationRollbackBody.byteLength
+      ]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -115,8 +119,14 @@ await runIntegrationScenario(async (runtime) => {
     0,
     "元数据事务失败不得生成存储补偿任务"
   );
-  assert.equal(await localAccess.driver.exists("full", classificationRollbackSource), true);
-  await database.pool.query("DELETE FROM metadata WHERE id=$1", [classificationRollbackId]);
+  assert.equal(
+    await localAccess.driver.exists("full", classificationRollbackSource),
+    true
+  );
+  await database.pool.query(
+    "DELETE FROM metadata WHERE id=$1",
+    [classificationRollbackId]
+  );
   await removeDriverObject(localAccess.driver, "full", classificationRollbackSource);
   await removeDriverObject(
     localAccess.driver,
@@ -127,11 +137,17 @@ await runIntegrationScenario(async (runtime) => {
   const classificationId = randomUUID();
   const classificationSourceKey = storageObjectKey(classificationId, "webp");
   const classificationBody = Buffer.from("classification-metadata-only");
-  const classificationMd5 = createHash("md5").update(classificationBody).digest("hex");
+  const classificationMd5 = createHash("md5")
+    .update(classificationBody)
+    .digest("hex");
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size, status)
        VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, $3, 'ready')`,
-    [classificationId, classificationMd5, classificationBody.byteLength]
+    [
+        classificationId,
+        classificationMd5,
+        classificationBody.byteLength
+      ]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -210,7 +226,10 @@ await runIntegrationScenario(async (runtime) => {
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size)
        VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, 0)`,
-    [classificationMissingThumbId, classificationMissingThumbMd5]
+    [
+        classificationMissingThumbId,
+        classificationMissingThumbMd5
+      ]
   );
   await localAccess.driver.writeBuffer(
     "full",
@@ -245,6 +264,9 @@ await runIntegrationScenario(async (runtime) => {
     true,
     "明确的分类修改不应依赖缩略图或创建新存储位置"
   );
-  await database.pool.query("DELETE FROM metadata WHERE id=$1", [classificationMissingThumbId]);
+  await database.pool.query(
+    "DELETE FROM metadata WHERE id=$1",
+    [classificationMissingThumbId]
+  );
   await removeDriverObject(localAccess.driver, "full", classificationMissingThumbSource);
 });

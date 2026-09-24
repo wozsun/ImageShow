@@ -47,7 +47,10 @@ export type TransactionOutcome = "committed" | "rolled_back" | "unknown";
 export async function inspectTransactionOutcome(
   transactionId: string
 ): Promise<TransactionOutcome> {
-  const status = (await pool.query("SELECT pg_xact_status($1::xid8) AS status", [transactionId]))
+  const status = (await pool.query(
+    "SELECT pg_xact_status($1::xid8) AS status",
+    [transactionId]
+  ))
     .rows[0]?.status;
   if (status === "committed") return "committed";
   if (status === "aborted") return "rolled_back";

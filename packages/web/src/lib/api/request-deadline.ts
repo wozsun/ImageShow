@@ -5,7 +5,9 @@ export async function requestWithDeadline<T>(
 ): Promise<T> {
   signal?.throwIfAborted();
   const controller = new AbortController();
-  const requestSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+  const requestSignal = signal
+    ? AbortSignal.any([signal, controller.signal])
+    : controller.signal;
   const timer = setTimeout(() => {
     controller.abort(new DOMException("请求响应超时", "TimeoutError"));
   }, 30_000);

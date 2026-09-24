@@ -14,7 +14,7 @@ import {
   withStorageLocationReadAndAdvisoryLocksOnClient
 } from "../storage/maintenance-lock.ts";
 import { replaceImageTagAssociations } from "../tags/mutations.ts";
-import { resolveTagNames } from "../tags/query.ts";
+import { resolveTagSlugs } from "../tags/query.ts";
 import { ensureThemeWithMutationLockHeld } from "../themes/mutations.ts";
 import {
   invalidateOrCollectEntityCountCaches,
@@ -25,7 +25,10 @@ import {
 import { vocabularyAssociationLockRequests } from "../vocab/mutation-sync.ts";
 import { detectBrightness } from "./brightness.ts";
 import { withNormalizationAdmission } from "./normalization-admission.ts";
-import { deviceFromDimensions, resolveOptionalDeviceWith } from "./classification.ts";
+import {
+  deviceFromDimensions,
+  resolveOptionalDeviceWith
+} from "./classification.ts";
 import { withImageMutationSync } from "./mutation-sync.ts";
 import {
   reportReadyImageCacheFailure,
@@ -87,7 +90,10 @@ function detectImageDevice(image: UpdateImageRecord) {
   return deviceFromDimensions(image.width, image.height);
 }
 
-async function detectImageBrightness(image: UpdateImageRecord, signal: AbortSignal) {
+async function detectImageBrightness(
+  image: UpdateImageRecord,
+  signal: AbortSignal
+) {
   if (image.status !== "ready") return undefined;
   const thumb = thumbnailRef(image);
   const storage = await resolveStorageAccess(thumb.slug);
@@ -100,11 +106,15 @@ async function detectImageBrightness(image: UpdateImageRecord, signal: AbortSign
     if (isStorageObjectNotFound(error)) return undefined;
     throw error;
   }
-  return withNormalizationAdmission(signal, () => detectBrightness(thumbnail));
+  return withNormalizationAdmission(
+    signal,
+    () => detectBrightness(thumbnail)
+  );
 }
 
 function sameTags(left: readonly string[], right: readonly string[]) {
-  return left.length === right.length && left.every((slug, index) => slug === right[index]);
+  return left.length === right.length
+    && left.every((slug, index) => slug === right[index]);
 }
 
 async function repairDerivedCaches(
@@ -168,7 +178,11 @@ async function commitImageUpdate({
     if (!locked) throw new ApiError(404, "not_found", "Image not found");
 
     if (classificationRequested && locked.status !== "ready") {
-      throw new ApiError(409, "invalid_image_state", "Only ready images can change category");
+      throw new ApiError(
+        409,
+        "invalid_image_state",
+        "Only ready images can change category"
+      );
     }
     if (sourceImage) {
       if (
@@ -202,12 +216,16 @@ async function commitImageUpdate({
 
     const nextClassification = {
       device:
-        resolveOptionalDeviceWith(item.device, () => detectImageDevice(locked)) ?? locked.device,
+        resolveOptionalDeviceWith(item.device, () => detectImageDevice(locked))
+          ?? locked.device,
       brightness:
-        (item.brightness === "auto" ? detectedBrightness : item.brightness) ?? locked.brightness,
+        (item.brightness === "auto" ? detectedBrightness : item.brightness)
+          ?? locked.brightness,
       theme: item.theme === undefined ? locked.theme : item.theme
     };
-    const nextAuthor = item.author === undefined ? locked.author : item.author || null;
+    const nextAuthor = item.author === undefined
+      ? locked.author
+      : item.author || null;
     const nextFields = {
       title: item.title ?? locked.title,
       description: item.description ?? locked.description,
@@ -221,11 +239,15 @@ async function commitImageUpdate({
     const authorChanged = nextAuthor !== locked.author;
     const fieldsChanged =
       (item.title !== undefined && nextFields.title !== locked.title) ||
-      (item.description !== undefined && nextFields.description !== locked.description) ||
+      (item.description !== undefined
+        && nextFields.description !== locked.description) ||
       (item.source !== undefined && nextFields.source !== locked.source) ||
       (item.original !== undefined && nextFields.original !== locked.original);
-    const metadataChanged = classificationChanged || authorChanged || fieldsChanged;
-    const tagsChanged = resolvedTags !== null && !sameTags(resolvedTags, currentTags ?? []);
+    const metadataChanged = classificationChanged
+      || authorChanged
+      || fieldsChanged;
+    const tagsChanged = resolvedTags !== null
+      && !sameTags(resolvedTags, currentTags ?? []);
     const changed = metadataChanged || tagsChanged;
     const changedEntityKinds = new Set<EntityCacheKind>();
     const createdEntityKinds = new Set<EntityCacheKind>();
@@ -240,7 +262,10 @@ async function commitImageUpdate({
     if (
       locked.theme !== nextClassification.theme &&
       nextClassification.theme !== null &&
-      (await ensureThemeWithMutationLockHeld(client, nextClassification.theme))
+      (await ensureThemeWithMutationLockHeld(
+        client,
+        nextClassification.theme
+      ))
     ) {
       createdEntityKinds.add("theme");
     }
@@ -323,7 +348,9 @@ async function mutateImageItem(
   signal: AbortSignal
 ) {
   const classificationRequested =
-    item.device !== undefined || item.brightness !== undefined || item.theme !== undefined;
+    item.device !== undefined
+      || item.brightness !== undefined
+      || item.theme !== undefined;
   let sourceImage: UpdateImageRecord | null = null;
   let detectedBrightness: Brightness | undefined;
   const commitState: {
@@ -334,12 +361,19 @@ async function mutateImageItem(
     if (item.brightness === "auto") {
       signal.throwIfAborted();
       sourceImage =
-        ((await pool.query(`SELECT ${updateImageColumns} FROM metadata WHERE id=$1`, [item.id]))
+        ((await pool.query(
+          `SELECT ${updateImageColumns} FROM metadata WHERE id=$1`,
+          [item.id]
+        ))
           .rows[0] as UpdateImageRecord | undefined) ?? null;
       signal.throwIfAborted();
       if (!sourceImage) throw new ApiError(404, "not_found", "Image not found");
       if (sourceImage.status !== "ready") {
-        throw new ApiError(409, "invalid_image_state", "Only ready images can change category");
+        throw new ApiError(
+          409,
+          "invalid_image_state",
+          "Only ready images can change category"
+        );
       }
       detectedBrightness = await detectImageBrightness(sourceImage, signal);
       signal.throwIfAborted();
@@ -382,7 +416,9 @@ export async function prepareImageUpdateItem(
   item: ImageUpdateItemInputDto
 ): Promise<PreparedImageUpdateItem> {
   const resolvedTags =
-    item.tags === undefined ? null : [...(await resolveTagNames(item.tags))].sort();
+    item.tags === undefined
+      ? null
+      : [...await resolveTagSlugs(item.tags)].sort();
   return { item, resolvedTags };
 }
 
@@ -395,8 +431,12 @@ export function withImageUpdateItemLocks<T>(
 ): Promise<T> {
   const vocabularyLocks = vocabularyAssociationLockRequests(
     items.flatMap(({ item, resolvedTags }) => [
-      ...(item.author ? [{ entity: "author" as const, slug: item.author }] : []),
-      ...(item.theme ? [{ entity: "theme" as const, slug: item.theme }] : []),
+      ...(item.author
+        ? [{ entity: "author" as const, slug: item.author }]
+        : []),
+      ...(item.theme
+        ? [{ entity: "theme" as const, slug: item.theme }]
+        : []),
       ...(resolvedTags ?? []).map((slug) => ({
         entity: "tag" as const,
         slug
@@ -412,7 +452,9 @@ export function withImageUpdateItemLocks<T>(
   if (items.some(({ item }) => item.brightness === "auto")) {
     return withStorageLocationReadAndAdvisoryLocksOnClient(lockClient, signal, locks, work);
   }
-  return locks.length ? withAdvisoryLocksOnClient(lockClient, signal, locks, work) : work(signal);
+  return locks.length
+    ? withAdvisoryLocksOnClient(lockClient, signal, locks, work)
+    : work(signal);
 }
 
 /** The request owns the group's image, vocabulary and optional storage locks. */

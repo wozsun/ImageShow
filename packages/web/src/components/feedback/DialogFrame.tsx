@@ -1,4 +1,9 @@
-import { useCallback, useRef, type ReactNode, type RefObject } from "react";
+import {
+  useCallback,
+  useRef,
+  type ReactNode,
+  type RefObject
+} from "react";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
 import { useDialogFocus } from "../../hooks/useDialogFocus.js";
@@ -46,7 +51,10 @@ export function DialogFrame({
     (afterClose?: () => void) => {
       if (busy) return;
       if (animateClose) {
-        requestAnimatedClose(afterClose, afterClose === undefined ? prepareClose : undefined);
+        requestAnimatedClose(
+          afterClose,
+          afterClose === undefined ? prepareClose : undefined
+        );
         return;
       }
       (afterClose ?? prepareClose?.() ?? onClose)();

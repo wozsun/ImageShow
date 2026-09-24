@@ -49,7 +49,8 @@ export function deriveAuthorIdentityFromLink(link: string): AuthorIdentity | nul
 export function projectAuthorDerivedIdentity(
   columns: AuthorIdentityColumns
 ): AuthorDerivedIdentityDto | null {
-  if (columns.identity_provider === "weibo" && columns.identity_id !== null) {
+  if (columns.identity_provider === "weibo"
+    && columns.identity_id !== null) {
     return { provider: "weibo", id: columns.identity_id };
   }
   return null;

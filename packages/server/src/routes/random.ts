@@ -60,7 +60,10 @@ async function respondRandom(c: Context, url: URL) {
   );
   if (selection instanceof Response) return selection;
   if (selection.mode === "json") {
-    const items = await presentRandomJsonItems(selection.items, { signal, size: selection.size });
+    const items = await presentRandomJsonItems(
+      selection.items,
+      { signal, size: selection.size }
+    );
     const body = JSON.stringify(
       apiSuccess({
         count: items.length,
@@ -92,7 +95,9 @@ async function respondRandom(c: Context, url: URL) {
   };
   const thumbnail = selection.size === "thumb";
   if (selection.mode === "proxy") {
-    const key = thumbnail ? thumbnailObjectKey(picked.id) : storageObjectKey(picked.id, picked.ext);
+    const key = thumbnail
+      ? thumbnailObjectKey(picked.id)
+      : storageObjectKey(picked.id, picked.ext);
     assertCanonicalImageObjectKey(key);
     const opened = await (
       await resolveReadableObject(thumbnail ? "thumbs" : "full", key, picked.storage_slug, {

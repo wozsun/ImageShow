@@ -8,13 +8,13 @@ import type { AdvancedConfigPreview } from "../../../lib/types.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
 import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
-import { ConfigPackageImportDialog } from "./ConfigPackageImportDialog.js";
+import { ConfigBundleImportDialog } from "./ConfigBundleImportDialog.js";
 import { RuntimeConfigEditor } from "./RuntimeConfigEditor.js";
 import { invalidateRuntimeData } from "../../../lib/api/query-invalidation.js";
 import "../../../styles/admin/advanced-config.css";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import { WorkspaceHeader } from "../../../components/layout/WorkspaceHeader.js";
-import { configPackageRequestMaxBytes } from "@imageshow/shared/browser";
+import { configBundleRequestMaxBytes } from "@imageshow/shared/browser";
 
 const previewPackagePresentation = {
   idle: { icon: "upload-cloud-2-line", label: "导入配置包" },
@@ -72,7 +72,7 @@ export function AdvancedConfigPage() {
     await previewPackageStatus.run(async () => {
       setBusy("preview");
       try {
-        if (file.size > configPackageRequestMaxBytes) {
+        if (file.size > configBundleRequestMaxBytes) {
           throw new Error("配置包文件过大");
         }
         const parsed = JSON.parse(await file.text()) as unknown;
@@ -153,7 +153,7 @@ export function AdvancedConfigPage() {
       <RuntimeConfigEditor reloadToken={runtimeConfigReloadToken} />
 
       {preview && (
-        <ConfigPackageImportDialog
+        <ConfigBundleImportDialog
           preview={preview}
           busy={busy === "import"}
           returnFocusRef={packageImportTriggerRef}

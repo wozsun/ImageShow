@@ -72,7 +72,9 @@ async function enqueueMigrationCandidateCleanup(
       target_backend: target,
       object_key: storageObjectKey(image.id, image.ext),
       cleanup_reason: reason,
-      ...(originalError ? { original_error: originalError } : {}),
+      ...(originalError
+        ? { original_error: originalError }
+        : {}),
       cleanup_error: cleanupError,
       candidates: created
     });
@@ -99,7 +101,11 @@ async function readImageStorageLocationState(
   ).rows[0] as ImageStorageLocationState | undefined;
 }
 
-function hasLocation(state: ImageStorageLocationState, storageSlug: string, ext: string) {
+function hasLocation(
+  state: ImageStorageLocationState,
+  storageSlug: string,
+  ext: string
+) {
   return state.storage_slug === storageSlug && state.ext === ext;
 }
 
@@ -284,16 +290,23 @@ async function migrateImageToStorageBackendWhileLocked(
         contentType(current.ext)
       );
     } catch (error) {
-      if (error instanceof ApiError && error.code === "storage_source_object_not_found") {
+      if (error instanceof ApiError
+        && error.code === "storage_source_object_not_found") {
         return "missing";
       }
       throw error;
     }
     signal.throwIfAborted();
     try {
-      await materialize("thumbs", thumbKey, { size: current.thumbnail_size }, "image/webp");
+      await materialize(
+        "thumbs",
+        thumbKey,
+        { size: current.thumbnail_size },
+        "image/webp"
+      );
     } catch (error) {
-      if (error instanceof ApiError && error.code === "storage_source_object_not_found") {
+      if (error instanceof ApiError
+        && error.code === "storage_source_object_not_found") {
         throw missingThumbnailSourceError({
           imageId: current.id,
           backend: current.storage_slug,
@@ -348,7 +361,12 @@ async function migrateImageToStorageBackendWhileLocked(
               AND storage_slug=$3
               AND ext=$4
           RETURNING status`,
-          [current.id, target, current.storage_slug, current.ext]
+          [
+            current.id,
+            target,
+            current.storage_slug,
+            current.ext
+          ]
         );
         const status = String(result.rows[0]?.status ?? "");
         if (!result.rowCount || !status) return null;
@@ -363,7 +381,13 @@ async function migrateImageToStorageBackendWhileLocked(
         return status;
       });
     } catch (error) {
-      const state = await settleSwitchError(current, target, created, sourceCleanup, error);
+      const state = await settleSwitchError(
+        current,
+        target,
+        created,
+        sourceCleanup,
+        error
+      );
       return finish(state.status);
     }
 
@@ -394,7 +418,11 @@ async function migrateImageToStorageBackendWhileLocked(
       );
       return finish(state.status);
     }
-    if (state && hasLocation(state, current.storage_slug, current.ext)) {
+    if (state && hasLocation(
+      state,
+      current.storage_slug,
+      current.ext
+    )) {
       await enqueueMigrationCandidateCleanup(
         current,
         target,
@@ -438,7 +466,10 @@ export function migrateImageToStorageBackend(
   const signal = options.signal ?? neverAbortedStorageMigrationSignal;
   return withImageTransferAdmission(signal, () =>
     options.signal
-      ? runWithAdvisoryLockAcquisitionSignal(options.signal, migrateWithImageLock)
+      ? runWithAdvisoryLockAcquisitionSignal(
+          options.signal,
+          migrateWithImageLock
+        )
       : migrateWithImageLock()
   );
 }

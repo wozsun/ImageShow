@@ -23,7 +23,10 @@ type PollingTracker = {
 
 const pollingTrackers = new WeakMap<object, PollingTracker>();
 
-function pollingTracker(query: ReadyImageCachePollingQuery, state: ReadyImageCachePollingState) {
+function pollingTracker(
+  query: ReadyImageCachePollingQuery,
+  state: ReadyImageCachePollingState
+) {
   let tracker = pollingTrackers.get(query);
   if (
     !tracker ||
@@ -60,7 +63,8 @@ function pollingTracker(query: ReadyImageCachePollingQuery, state: ReadyImageCac
 }
 
 function projectionIsRebuilding(status: AdminCheckStatusDto | undefined) {
-  return status?.redis.status === "ok" && status.redis.data.image_projection.rebuilding;
+  return status?.redis.status === "ok"
+    && status.redis.data.image_projection.rebuilding;
 }
 
 function redisResourceFailed(status: AdminCheckStatusDto | undefined) {
@@ -73,11 +77,18 @@ export function adminCheckStatusRefetchInterval(
 ): number | false {
   const state = query.state;
   const tracker = pollingTracker(query, state);
-  const needsNewerStatus = refreshAfter > 0 && state.dataUpdatedAt <= refreshAfter;
+  const needsNewerStatus = refreshAfter > 0
+    && state.dataUpdatedAt <= refreshAfter;
   if (!tracker.rebuilding && !needsNewerStatus) return false;
   if (state.status !== "error" && !redisResourceFailed(state.data)) {
     return STATUS_POLL_INTERVAL_MS;
   }
-  const exponent = Math.min(Math.max(tracker.failureStreak - 1, 0), 5);
-  return Math.min(STATUS_POLL_INTERVAL_MS * 2 ** exponent, STATUS_POLL_MAX_BACKOFF_MS);
+  const exponent = Math.min(
+    Math.max(tracker.failureStreak - 1, 0),
+    5
+  );
+  return Math.min(
+    STATUS_POLL_INTERVAL_MS * (2 ** exponent),
+    STATUS_POLL_MAX_BACKOFF_MS
+  );
 }

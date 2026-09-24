@@ -1,4 +1,7 @@
-import type { IngestionQueueSummaryDto, ServerIngestionStatusDto } from "@imageshow/shared/browser";
+import type {
+  IngestionQueueSummaryDto,
+  ServerIngestionStatusDto
+} from "@imageshow/shared/browser";
 
 export function ingestionStatusSummary(
   status: ServerIngestionStatusDto,

@@ -68,7 +68,10 @@ function normalizedGeometry(geometry: GalleryCompactGeometry): GalleryCompactGeo
   };
 }
 
-function geometryMatches(left: GalleryCompactGeometry, right: GalleryCompactGeometry) {
+function geometryMatches(
+  left: GalleryCompactGeometry,
+  right: GalleryCompactGeometry
+) {
   return (
     left.columnCount === right.columnCount &&
     left.contentWidth === right.contentWidth &&
@@ -91,7 +94,11 @@ function shortestColumn(heights: Float64Array) {
   return column;
 }
 
-export function galleryImageNumericRatio(device: Device, width = 0, height = 0) {
+export function galleryImageNumericRatio(
+  device: Device,
+  width = 0,
+  height = 0
+) {
   if (width > 0 && height > 0) return height / width;
   if (device === "mb") return 16 / 9;
   if (device === "pc") return 9 / 16;
@@ -143,7 +150,10 @@ export class CompactMasonryLayout {
       this.#columns.byteLength +
       this.#ys.byteLength +
       this.#heights.byteLength +
-      this.#columnIndexes.reduce((total, column) => total + column.byteLength, 0)
+      this.#columnIndexes.reduce(
+        (total, column) => total + column.byteLength,
+        0
+      )
     );
   }
 
@@ -175,16 +185,22 @@ export class CompactMasonryLayout {
     );
   }
 
-  setRatioStates(startIndex: number, states: readonly CompactMasonryRatioState[]) {
+  setRatioStates(
+    startIndex: number,
+    states: readonly CompactMasonryRatioState[]
+  ) {
     let changed = false;
     let resolutionChanged = false;
     for (const [offset, state] of states.entries()) {
       const index = startIndex + offset;
-      if (index < 0 || index >= this.#count) continue;
+      if (index < 0
+        || index >= this.#count) continue;
       if (!state.resolved && this.#resolvedRatios[index] === 1) {
         continue;
       }
-      const normalizedRatio = Number.isFinite(state.ratio) && state.ratio > 0 ? state.ratio : 1;
+      const normalizedRatio = Number.isFinite(state.ratio) && state.ratio > 0
+        ? state.ratio
+        : 1;
       if (Math.abs(this.#ratios[index]! - normalizedRatio) >= 0.00001) {
         this.#ratios[index] = normalizedRatio;
         changed = true;
@@ -203,7 +219,9 @@ export class CompactMasonryLayout {
     let changed = false;
     let resolutionChanged = false;
     for (const { index, ratio } of updates) {
-      if (index < 0 || index >= this.#count || this.#resolvedRatios[index] === 1) {
+      if (index < 0
+        || index >= this.#count
+        || this.#resolvedRatios[index] === 1) {
         continue;
       }
       const normalizedRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
@@ -219,11 +237,14 @@ export class CompactMasonryLayout {
   }
 
   needsRatioResolution(index: number) {
-    return index >= 0 && index < this.#count && this.#resolvedRatios[index] !== 1;
+    return index >= 0
+      && index < this.#count
+      && this.#resolvedRatios[index] !== 1;
   }
 
   remove(index: number) {
-    if (index < 0 || index >= this.#count) return false;
+    if (index < 0
+      || index >= this.#count) return false;
     const removedColumn = this.#columns[index]!;
     const removedSpace = this.#heights[index]! + this.#geometry.gap;
     for (let nextIndex = index; nextIndex < this.#count - 1; nextIndex += 1) {
@@ -258,7 +279,8 @@ export class CompactMasonryLayout {
   }
 
   position(index: number): CompactMasonryPosition | null {
-    if (index < 0 || index >= this.#count) return null;
+    if (index < 0
+      || index >= this.#count) return null;
     const column = this.#columns[index]!;
     const y = this.#ys[index]!;
     const height = this.#heights[index]!;
@@ -275,7 +297,10 @@ export class CompactMasonryLayout {
 
   pageBounds(startIndex: number, itemCount: number): CompactPageBounds {
     const start = Math.max(0, Math.min(this.#count, Math.floor(startIndex)));
-    const end = Math.max(start, Math.min(this.#count, start + Math.max(0, Math.floor(itemCount))));
+    const end = Math.max(
+      start,
+      Math.min(this.#count, start + Math.max(0, Math.floor(itemCount)))
+    );
     let top = Number.POSITIVE_INFINITY;
     let bottom = Number.NEGATIVE_INFINITY;
     for (let index = start; index < end; index += 1) {
@@ -283,7 +308,9 @@ export class CompactMasonryLayout {
       top = Math.min(top, y);
       bottom = Math.max(bottom, y + this.#heights[index]!);
     }
-    const fallback = start > 0 ? this.#ys[start - 1]! + this.#heights[start - 1]! : 0;
+    const fallback = start > 0
+      ? this.#ys[start - 1]! + this.#heights[start - 1]!
+      : 0;
     return Number.isFinite(top) && Number.isFinite(bottom)
       ? { top, bottom }
       : { top: fallback, bottom: fallback };
@@ -311,7 +338,8 @@ export class CompactMasonryLayout {
     const distanceFromPriority = (index: number) =>
       Math.abs(this.#ys[index]! + this.#heights[index]! / 2 - center);
     const byDistanceThenIndex = (left: number, right: number) =>
-      distanceFromPriority(left) - distanceFromPriority(right) || left - right;
+      distanceFromPriority(left) - distanceFromPriority(right)
+      || left - right;
     const intersecting: number[] = [];
     for (const column of this.#columnIndexes) {
       let index = this.#firstColumnIntersection(column, boundedStart);
@@ -331,7 +359,9 @@ export class CompactMasonryLayout {
             .sort(byDistanceThenIndex)
             .slice(0, itemLimit)
             .sort((left, right) => left - right);
-    if (pinnedIndex < 0 || pinnedIndex >= this.#count || mounted.includes(pinnedIndex)) {
+    if (pinnedIndex < 0
+      || pinnedIndex >= this.#count
+      || mounted.includes(pinnedIndex)) {
       return mounted;
     }
     if (mounted.length >= itemLimit) {

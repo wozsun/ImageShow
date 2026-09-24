@@ -41,7 +41,9 @@ export function assertPhysicalLocationChangeAllowed(
 ) {
   if (
     !changedFields.length ||
-    (!usage.image_count && !usage.ingestion_session_count && !usage.cleanup_job_count)
+    (!usage.image_count
+      && !usage.ingestion_session_count
+      && !usage.cleanup_job_count)
   ) {
     return;
   }
@@ -75,7 +77,11 @@ export async function readStorageBackendSnapshot(
   ).rows[0] as StorageBackendSnapshotRow | undefined;
   signal?.throwIfAborted();
   if (!row) {
-    throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
+    throw new ApiError(
+      404,
+      "storage_backend_not_found",
+      `Unknown storage backend: ${slug}`
+    );
   }
   const [cleanupJobCount, activeIngestionCounts] = await Promise.all([
     countUnresolvedMoveCleanupJobs(slug),
@@ -104,7 +110,11 @@ export async function readStorageBackendConfiguration(
   ).rows[0];
   signal?.throwIfAborted();
   if (!row) {
-    throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
+    throw new ApiError(
+      404,
+      "storage_backend_not_found",
+      `Unknown storage backend: ${slug}`
+    );
   }
   return row;
 }

@@ -156,7 +156,11 @@ export class ShowPixiCamera {
     const lineHeight = 16;
     const normalizedDelta =
       event.deltaY *
-      (event.deltaMode === 1 ? lineHeight : event.deltaMode === 2 ? this.#height : 1);
+      (event.deltaMode === 1
+          ? lineHeight
+          : event.deltaMode === 2
+            ? this.#height
+            : 1);
     if (!Number.isFinite(normalizedDelta) || normalizedDelta === 0) return;
     this.#velocityX = 0;
     this.#velocityY = 0;
@@ -292,7 +296,10 @@ export class ShowPixiCamera {
 
   panScreen(deltaX: number, deltaY: number) {
     if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return;
-    this.root.position.set(this.root.position.x + deltaX, this.root.position.y + deltaY);
+    this.root.position.set(
+      this.root.position.x + deltaX,
+      this.root.position.y + deltaY
+    );
   }
 
   resize(width: number, height: number) {
@@ -369,7 +376,11 @@ export class ShowPixiCamera {
       this.#velocityY = 0;
       return;
     }
-    this.#panFromInput(this.#velocityX * elapsed, this.#velocityY * elapsed, this.#dragPointerType);
+    this.#panFromInput(
+      this.#velocityX * elapsed,
+      this.#velocityY * elapsed,
+      this.#dragPointerType
+    );
     const decay = this.#friction ** (elapsed / (1_000 / 60));
     this.#velocityX *= decay;
     this.#velocityY *= decay;
@@ -444,7 +455,9 @@ export class ShowPixiCamera {
 
   #pointerPair() {
     const values = [...this.#pointers.values()];
-    return values.length >= 2 ? ([values[0], values[1]] as const) : null;
+    return values.length >= 2
+      ? [values[0], values[1]] as const
+      : null;
   }
 
   #removeListeners() {

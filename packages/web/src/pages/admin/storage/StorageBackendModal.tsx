@@ -39,7 +39,9 @@ export function StorageBackendModal({
   const backend = creating ? null : target;
   const isLocal = backend?.type === "local";
   const locationLocked = Boolean(
-    backend?.image_count || backend?.ingestion_session_count || backend?.cleanup_job_count
+    backend?.image_count
+      || backend?.ingestion_session_count
+      || backend?.cleanup_job_count
   );
   const locationUsage = backend
     ? [
@@ -47,8 +49,12 @@ export function StorageBackendModal({
         backend.ingestion_session_count
           ? `${backend.ingestion_session_count} 个未清理内容接入会话`
           : "",
-        backend.cleanup_job_count ? `${backend.cleanup_job_count} 个旧对象删除任务` : "",
-        backend.failed_cleanup_job_count ? `${backend.failed_cleanup_job_count} 个删除任务失败` : ""
+        backend.cleanup_job_count
+          ? `${backend.cleanup_job_count} 个旧对象删除任务`
+          : "",
+        backend.failed_cleanup_job_count
+          ? `${backend.failed_cleanup_job_count} 个删除任务失败`
+          : ""
       ]
         .filter(Boolean)
         .join("、")
@@ -88,7 +94,9 @@ export function StorageBackendModal({
   const saveStatus = useAsyncActionStatus();
 
   const isCreateForm = creating && createdSlug === null;
-  const formBusy = Boolean(busy) || connectionTest.pending || saveStatus.pending;
+  const formBusy = Boolean(busy)
+    || connectionTest.pending
+    || saveStatus.pending;
   const savePresentation = {
     idle: {
       icon: "save-3-line",

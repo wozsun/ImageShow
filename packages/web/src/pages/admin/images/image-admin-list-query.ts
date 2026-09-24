@@ -45,7 +45,9 @@ export function resolveImageAdminScopeTotal({
   isSuccess: boolean;
 }) {
   const currentQueryHasObservedSuccessfulData =
-    queryData !== undefined && isSuccess && fetchedAfterMount;
+    queryData !== undefined
+      && isSuccess
+      && fetchedAfterMount;
   const queryTotal =
     queryData !== undefined &&
     (retainedTotal === null ||
@@ -88,7 +90,10 @@ export function imageAdminPaginationScopeKey(
   return JSON.stringify(normalizedScope(view, filters, pageSize, sort));
 }
 
-export function effectiveImageAdminPage(state: ImageAdminPageState, scopeKey: string) {
+export function effectiveImageAdminPage(
+  state: ImageAdminPageState,
+  scopeKey: string
+) {
   return state.scopeKey === scopeKey ? state.page : 1;
 }
 
@@ -133,7 +138,12 @@ export function adminImageListQuery(
     params.set("tag", tagExpressionValues(parseTagFilter([filters.tag]).expression).join(","));
   if (filters.author) params.set("author", filters.author);
 
-  const queryKey = [...queryKeys.adminImages, scopeKey, page, pageSize] as const;
+  const queryKey = [
+    ...queryKeys.adminImages,
+    scopeKey,
+    page,
+    pageSize
+  ] as const;
   return {
     queryKey,
     queryFn: async (context: { signal: AbortSignal; client: QueryClient }) => {
@@ -155,7 +165,11 @@ export function adminImageListQuery(
         }
       );
       if (validationStartedAt !== undefined) {
-        recordAdminImageListValidation(context.client, queryKey, validationStartedAt);
+        recordAdminImageListValidation(
+          context.client,
+          queryKey,
+          validationStartedAt
+        );
       }
       if (result.data === cached && result.etag === cached.etag) return cached;
       return { ...result.data, etag: result.etag };

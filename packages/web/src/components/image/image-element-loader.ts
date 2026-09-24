@@ -46,7 +46,10 @@ export function loadImageElement(
       element.onload = null;
       element.onerror = null;
     };
-    const finish = (outcome: "resolve" | "reject", value: ImageElementLoadResult | unknown) => {
+    const finish = (
+      outcome: "resolve" | "reject",
+      value: ImageElementLoadResult | unknown
+    ) => {
       if (settled) return;
       settled = true;
       removeListeners();
@@ -107,7 +110,9 @@ export function loadImageElement(
     // Cached resources can already be complete before some DOM shims dispatch
     // a load event. The microtask keeps the listener-first ordering intact.
     queueMicrotask(() => {
-      if (!settled && element.complete && element.naturalWidth > 0) {
+      if (!settled
+        && element.complete
+        && element.naturalWidth > 0) {
         decodeLoadedImage();
       }
     });

@@ -45,7 +45,10 @@ function updateSingleImageSelection(
   targetId: string,
   checked: boolean
 ) {
-  const selected = new Set(selectedIdsInPageOrder(pageIds, selectedIds));
+  const selected = new Set(selectedIdsInPageOrder(
+    pageIds,
+    selectedIds
+  ));
   if (checked) selected.add(targetId);
   else selected.delete(targetId);
   return pageIds.filter((id) => selected.has(id));
@@ -60,15 +63,26 @@ function updateImageRangeSelection({
 }: ImageRangeSelectionOptions) {
   const targetIndex = pageIds.indexOf(targetId);
   if (targetIndex < 0) {
-    return selectedIdsInPageOrder(pageIds, selectedIds);
+    return selectedIdsInPageOrder(
+      pageIds,
+      selectedIds
+    );
   }
 
   const anchorIndex = anchorId === null ? -1 : pageIds.indexOf(anchorId);
   if (anchorIndex < 0) {
-    return updateSingleImageSelection(pageIds, selectedIds, targetId, checked);
+    return updateSingleImageSelection(
+      pageIds,
+      selectedIds,
+      targetId,
+      checked
+    );
   }
 
-  const selected = new Set(selectedIdsInPageOrder(pageIds, selectedIds));
+  const selected = new Set(selectedIdsInPageOrder(
+    pageIds,
+    selectedIds
+  ));
   const firstIndex = Math.min(anchorIndex, targetIndex);
   const lastIndex = Math.max(anchorIndex, targetIndex);
   for (let index = firstIndex; index <= lastIndex; index += 1) {
@@ -93,11 +107,19 @@ export class ImageListSelectionController {
     if (busy) return selectedIds;
     if (!extendRange) {
       this.#anchorId = targetId;
-      return updateSingleImageSelection(pageIds, selectedIds, targetId, checked);
+      return updateSingleImageSelection(
+        pageIds,
+        selectedIds,
+        targetId,
+        checked
+      );
     }
 
     const anchorId =
-      this.#anchorId !== null && pageIds.includes(this.#anchorId) ? this.#anchorId : targetId;
+      this.#anchorId !== null
+        && pageIds.includes(this.#anchorId)
+        ? this.#anchorId
+        : targetId;
     this.#anchorId = anchorId;
     return updateImageRangeSelection({
       pageIds,
@@ -109,7 +131,10 @@ export class ImageListSelectionController {
   }
 
   reconcile(pageIds: string[], selectedIds: string[]) {
-    const reconciledSelectedIds = selectedIdsInPageOrder(pageIds, selectedIds);
+    const reconciledSelectedIds = selectedIdsInPageOrder(
+      pageIds,
+      selectedIds
+    );
     if (
       !reconciledSelectedIds.length ||
       (this.#anchorId !== null && !pageIds.includes(this.#anchorId))

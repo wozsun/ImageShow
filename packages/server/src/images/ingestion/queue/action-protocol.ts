@@ -5,7 +5,10 @@ import {
 } from "@imageshow/shared/browser";
 import { ApiError } from "../../../core/api-error.ts";
 import type { AdminSession } from "../../../users/admin-session.ts";
-import { ingestionActionWatermarkHash, verifyIngestionActionWatermark } from "./action-scope.ts";
+import {
+  ingestionActionWatermarkHash,
+  verifyIngestionActionWatermark
+} from "./action-scope.ts";
 import { semanticIngestionSessionHash } from "../sessions/projection.ts";
 import {
   ingestionActionContinuationPurpose,

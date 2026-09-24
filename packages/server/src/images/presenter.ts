@@ -301,7 +301,11 @@ function adminImageListItem(
 export async function adminImageListItemsWithTags(rows: ImageRecordWithTags[]) {
   if (!rows.length) return [];
   const configs = await storageConfigsForRows(rows);
-  return rows.map((row) => adminImageListItem(row, row.tags, configs));
+  return rows.map((row) => adminImageListItem(
+    row,
+    row.tags,
+    configs
+  ));
 }
 
 export async function adminImageDetailItemsWithTags(rows: AdminImageDetailRecordWithTags[]) {
@@ -354,7 +358,12 @@ export async function publicImageDetail(
     description: row.description,
     source: row.source || null,
     object_url: objectUrl,
-    original_url: includeOriginal ? adminOriginalAccessUrl(row.id, row.original, objectUrl) : null
+    original_url: includeOriginal ? adminOriginalAccessUrl(
+      row.id,
+      row.original,
+      objectUrl
+    )
+    : null
   };
 }
 

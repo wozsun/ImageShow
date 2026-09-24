@@ -22,7 +22,8 @@ function isMarkedAdminReadRequest(context: Context) {
 }
 
 function requestBodyRejected(error: unknown) {
-  return error instanceof ApiError && requestBodyRejectionCode(error.code);
+  return error instanceof ApiError
+    && requestBodyRejectionCode(error.code);
 }
 
 function requestBodyRejectionCode(code: unknown) {

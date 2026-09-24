@@ -44,12 +44,18 @@ function createRuntime(): Omit<GalleryImageRuntimeValue, "galleryPaused"> {
   return {
     scheduler,
     visibility: new GalleryImageVisibilityController(currentViewportHeight()),
-    debug: import.meta.env?.DEV === true ? new GalleryDebugStats(scheduler) : null
+    debug: import.meta.env?.DEV === true
+      ? new GalleryDebugStats(scheduler)
+      : null
   };
 }
 
 function GalleryDevelopmentStats({ debug }: { debug: GalleryDebugController }) {
-  const snapshot = useSyncExternalStore(debug.subscribe, debug.snapshot, debug.snapshot);
+  const snapshot = useSyncExternalStore(
+    debug.subscribe,
+    debug.snapshot,
+    debug.snapshot
+  );
   return (
     <output
       hidden
@@ -211,7 +217,9 @@ export function GalleryImageRuntime({
     <GalleryImageRuntimeContext.Provider value={contextValue}>
       <ImageLoadSchedulerProvider scheduler={runtime.scheduler}>
         {children}
-        {development && runtime.debug && <GalleryDevelopmentStats debug={runtime.debug} />}
+        {development && runtime.debug && (
+          <GalleryDevelopmentStats debug={runtime.debug} />
+        )}
       </ImageLoadSchedulerProvider>
     </GalleryImageRuntimeContext.Provider>
   );

@@ -11,7 +11,10 @@ export function recordAdminImageListValidation(
   if (query) validationStarts.set(query, startedAt);
 }
 
-export function adminImageListValidationCovers(query: Query, completedAt: number) {
+export function adminImageListValidationCovers(
+  query: Query,
+  completedAt: number
+) {
   if (query.state.status !== "success") return false;
   const validatedAfter = validationStarts.get(query);
   return validatedAfter !== undefined && validatedAfter > completedAt;

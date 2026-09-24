@@ -19,7 +19,10 @@ export type StorageDeleteAttemptResult =
 type ConfirmedStorageRemovalOptions = Readonly<{
   objects: readonly StorageObjectReference[];
   options?: StorageRemoveOptions;
-  exists: (object: StorageObjectReference, options: StorageRequestOptions) => Promise<boolean>;
+  exists: (
+    object: StorageObjectReference,
+    options: StorageRequestOptions
+  ) => Promise<boolean>;
   remove: (
     objects: readonly StorageObjectReference[],
     options: StorageRemoveOptions
@@ -73,7 +76,9 @@ export async function mapStorageObjectsBounded<Item, Result>(
   const results = new Array<Result>(items.length);
   const workerCount = Math.min(
     items.length,
-    Number.isFinite(concurrency) ? Math.max(1, Math.floor(concurrency)) : 1
+    Number.isFinite(concurrency)
+      ? Math.max(1, Math.floor(concurrency))
+      : 1
   );
   let nextIndex = 0;
   await Promise.all(
@@ -104,7 +109,9 @@ async function confirmRemoval(
     }
     try {
       return {
-        state: (await exists(pending.object, options)) ? ("present" as const) : ("absent" as const)
+        state: await exists(pending.object, options)
+          ? "present" as const
+          : "absent" as const
       };
     } catch (error) {
       lastError = error;
@@ -112,7 +119,10 @@ async function confirmRemoval(
   }
   return {
     state: "unknown" as const,
-    error: storageRemovalFailure(lastError, "storage_delete_confirmation_failed")
+    error: storageRemovalFailure(
+      lastError,
+      "storage_delete_confirmation_failed"
+    )
   };
 }
 
@@ -129,7 +139,10 @@ export async function removeDriverObjectsAndConfirm(
   }
   const options = input.options ?? {};
   const unique = [
-    ...new Map(input.objects.map((object) => [objectIdentity(object), object])).values()
+    ...new Map(input.objects.map((object) => [
+      objectIdentity(object),
+      object
+    ])).values()
   ];
   const settled = new Map<string, StorageRemovalResult>();
   let pending: PendingRemoval[] = [];
@@ -149,7 +162,10 @@ export async function removeDriverObjectsAndConfirm(
       } catch (error) {
         return {
           object,
-          error: storageRemovalFailure(error, "storage_delete_preflight_failed")
+          error: storageRemovalFailure(
+            error,
+            "storage_delete_preflight_failed"
+          )
         };
       }
     }
@@ -187,7 +203,10 @@ export async function removeDriverObjectsAndConfirm(
     } catch (error) {
       attempts = pending.map(() => ({
         status: "unknown",
-        error: storageRemovalFailure(error, "storage_delete_outcome_unknown")
+        error: storageRemovalFailure(
+          error,
+          "storage_delete_outcome_unknown"
+        )
       }));
     }
 
@@ -254,7 +273,9 @@ export async function removeDriverObjectsAndConfirm(
       settled.set(identity, {
         ...item.object,
         status: attempt.status === "not_started" ? "failed" : "unknown",
-        error: attempt.status === "not_started" ? attempt.error : confirmation.error!
+        error: attempt.status === "not_started"
+          ? attempt.error
+          : confirmation.error!
       });
     }
     pending = retry;

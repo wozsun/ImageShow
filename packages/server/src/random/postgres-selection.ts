@@ -121,12 +121,30 @@ export async function sampleReadyImagesFromPostgres(
   const pivot = randomPivot(bounds.min_id, bounds.max_id);
   const candidateLimit = Math.min(
     appConfig.publicPgFallback.maximumRandomCandidates,
-    Math.max(appConfig.publicPgFallback.minimumRandomCandidates, limit * 3, limit + recent.size)
+    Math.max(
+      appConfig.publicPgFallback.minimumRandomCandidates,
+      limit * 3,
+      limit + recent.size
+    )
   );
-  const forward = await readCandidates(plan, pivot, ">=", candidateLimit, reader, signal);
+  const forward = await readCandidates(
+    plan,
+    pivot,
+    ">=",
+    candidateLimit,
+    reader,
+    signal
+  );
   const wrapped =
     forward.length < candidateLimit
-      ? await readCandidates(plan, pivot, "<", candidateLimit - forward.length, reader, signal)
+      ? await readCandidates(
+          plan,
+          pivot,
+          "<",
+          candidateLimit - forward.length,
+          reader,
+          signal
+        )
       : [];
   const unique = new Map([...forward, ...wrapped].map((item) => [item.id, item]));
   const randomized = shuffle([...unique.values()]);

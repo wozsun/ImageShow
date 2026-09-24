@@ -26,14 +26,20 @@ export function readRuntimeConfigFile(): RuntimeConfigFileSnapshot | null {
   try {
     value = JSON.parse(readFileSync(runtimePaths.configFile, "utf8"));
   } catch (error) {
-    throw new Error("Cannot parse runtime config", { cause: error });
+    throw new Error(
+      "Cannot parse runtime config",
+      { cause: error }
+    );
   }
 
   let normalized: RuntimeConfig;
   try {
     normalized = normalizeRuntimeConfig(value);
   } catch (error) {
-    throw new Error("Invalid runtime config", { cause: error });
+    throw new Error(
+      "Invalid runtime config",
+      { cause: error }
+    );
   }
   return {
     config: normalized,

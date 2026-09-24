@@ -1,4 +1,8 @@
-import { getAdminTagList, getTagVocab, type VocabularyReadAccess } from "../vocab/vocab-cache.ts";
+import {
+  getAdminTagList,
+  getTagVocab,
+  type VocabularyReadAccess
+} from "../vocab/vocab-cache.ts";
 import { resolveVocabularySlugs, resolveTermSlugMap } from "../vocab/terms.ts";
 import type { TagDto } from "@imageshow/shared/browser";
 
@@ -13,9 +17,9 @@ export function resolveTagTermMap(
   return resolveTermSlugMap(() => getTagVocab(access), terms);
 }
 
-export function resolveTagNames(
-  names: string[],
+export function resolveTagSlugs(
+  terms: string[],
   access: VocabularyReadAccess = {}
 ): Promise<string[]> {
-  return resolveVocabularySlugs(() => getTagVocab(access), names);
+  return resolveVocabularySlugs(() => getTagVocab(access), terms);
 }

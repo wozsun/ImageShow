@@ -1,12 +1,12 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import type { PublicFilterSection } from "../lib/gallery/public-filter-draft.js";
+import type { PublicFilterSectionKey } from "../lib/gallery/public-filter-draft.js";
 
 export function usePublicFilterScroll(sectionKey: string, searching: boolean) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const [activeSection, setActiveSection] = useState<PublicFilterSection | null>("device");
+  const [activeSection, setActiveSection] = useState<PublicFilterSectionKey | null>("device");
   const savedPosition = useRef<{ section: string; option?: string; offset: number } | null>(null);
   const wasSearching = useRef(searching);
-  const preferredSection = useRef<PublicFilterSection>("device");
+  const preferredSection = useRef<PublicFilterSectionKey>("device");
   const sectionScrollFrame = useRef<number | null>(null);
   const sectionScrollTarget = useRef<number | null>(null);
   const cancelSectionScroll = useCallback(() => {
@@ -81,7 +81,7 @@ export function usePublicFilterScroll(sectionKey: string, searching: boolean) {
         : [];
       const active =
         row.find((item) => item.dataset.filterSection === preferredSection.current) ?? row[0];
-      const next = active?.dataset.filterSection as PublicFilterSection | undefined;
+      const next = active?.dataset.filterSection as PublicFilterSectionKey | undefined;
       setActiveSection((current) => (current === (next ?? null) ? current : (next ?? null)));
     };
     const schedule = () => {
@@ -107,7 +107,7 @@ export function usePublicFilterScroll(sectionKey: string, searching: boolean) {
   }, [sectionKey, searching, cancelSectionScroll]);
 
   const goToSection = useCallback(
-    (section: PublicFilterSection) => {
+    (section: PublicFilterSectionKey) => {
       const root = scrollRef.current;
       const target = root?.querySelector<HTMLElement>(`[data-filter-section="${section}"]`);
       if (!root || !target) return;

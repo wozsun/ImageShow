@@ -36,7 +36,10 @@ export function IngestionCleanupMenu({
   onSelect
 }: {
   actions: IngestionCleanupAction[];
-  onSelect: (actionId: IngestionCleanupActionId, returnFocusTarget: HTMLButtonElement) => void;
+  onSelect: (
+    actionId: IngestionCleanupActionId,
+    returnFocusTarget: HTMLButtonElement
+  ) => void;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);

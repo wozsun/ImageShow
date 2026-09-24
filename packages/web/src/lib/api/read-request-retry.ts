@@ -10,7 +10,8 @@ export const readRequestRetryOptions = {
     }
     // 内部读取超时可重试；外部取消由查询所有者或 retryReadRequest 立即终止。
     return (
-      error instanceof TypeError || (error instanceof DOMException && error.name === "TimeoutError")
+      error instanceof TypeError
+        || (error instanceof DOMException && error.name === "TimeoutError")
     );
   },
   retryDelay(failureCount: number) {

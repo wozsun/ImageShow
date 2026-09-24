@@ -102,7 +102,8 @@ export function ingestionQueueBaselineCoversSelection(
   captured: IngestionQueueSnapshotSelection,
   requested: IngestionQueueSnapshotSelection
 ) {
-  if (requested.offset !== captured.offset || requested.limit > captured.limit) return false;
+  if (requested.offset !== captured.offset
+    || requested.limit > captured.limit) return false;
 
   const capturedExclude = new Set(captured.excludeItems.map(pairKey));
   const capturedInclude = new Set(captured.includeItems.map(pairKey));
@@ -114,7 +115,9 @@ export function ingestionQueueBaselineCoversSelection(
   const sameInclude =
     capturedInclude.size === requestedInclude.size &&
     [...capturedInclude].every((key) => requestedInclude.has(key));
-  if (sameExclude && sameInclude && requested.requiredItems <= captured.requiredItems) return true;
+  if (sameExclude
+    && sameInclude
+    && requested.requiredItems <= captured.requiredItems) return true;
   if (!sameExclude || !sameInclude) {
     if (
       [...capturedExclude].some((key) => !requestedExclude.has(key)) ||
@@ -140,7 +143,10 @@ export function ingestionQueueBaselineCoversSelection(
 
   const staleKeys = new Set(baseline.staleItems.map(pairKey));
   const activeCapturedExclusions = [...capturedExclude].filter((key) => !staleKeys.has(key)).length;
-  const capturedFilteredTotal = Math.max(0, baseline.summary.total - activeCapturedExclusions);
+  const capturedFilteredTotal = Math.max(
+    0,
+    baseline.summary.total - activeCapturedExclusions
+  );
   return captured.offset + capturedNormalCount >= capturedFilteredTotal;
 }
 
@@ -222,23 +228,29 @@ export function mergeIngestionQueueMutation(
       summary,
       actionWatermark: baseline.actionWatermark
     };
-    return next ? { kind: "accepted", baseline: next } : { kind: "reload", baseline };
+    return next
+      ? { kind: "accepted", baseline: next }
+      : { kind: "reload", baseline };
   }
 
   if (event.revision < baseline.revision) {
     return { kind: "ignored", baseline };
   }
   if (event.revision === baseline.revision) {
-    if (current && pairMatches(current, event.session) && event.session.version > current.version)
+    if (current
+      && pairMatches(current, event.session)
+      && event.session.version > current.version)
       return { kind: "reload", baseline };
     return { kind: "ignored", baseline };
   }
   if (event.revision !== baseline.revision + 1) {
     return { kind: "reload", baseline };
   }
-  if (event.kind === "removed" || event.session.status === "discarded")
+  if (event.kind === "removed"
+    || event.session.status === "discarded")
     return { kind: "reload", baseline };
-  if (event.session.status === "completed" && !("completed_item" in event.session)) {
+  if (event.session.status === "completed"
+    && !("completed_item" in event.session)) {
     // The exact-pair owner establishes the terminal fence and schedules the
     // existing bounded status hydration. Advance this page's global metadata
     // without fabricating a full DTO or issuing a duplicate page request.
@@ -277,5 +289,7 @@ export function mergeIngestionQueueMutation(
     return { kind: "reload", baseline };
   }
   const next = replaceItem(baseline, index, event);
-  return next ? { kind: "accepted", baseline: next } : { kind: "reload", baseline };
+  return next
+    ? { kind: "accepted", baseline: next }
+    : { kind: "reload", baseline };
 }

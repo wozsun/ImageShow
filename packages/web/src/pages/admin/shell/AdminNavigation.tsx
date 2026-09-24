@@ -1,6 +1,9 @@
 import { Fragment, useState } from "react";
 import { NavLink } from "react-router";
-import type { AdminColorScheme, AdminRole } from "@imageshow/shared/browser";
+import type {
+  AdminColorScheme,
+  AdminRole
+} from "@imageshow/shared/browser";
 import { AdminIcon, type AdminIconName } from "../../../components/icon/AdminIcon.js";
 import { adminBasePath } from "../../../lib/constants.js";
 import { AdminNavGroup } from "./AdminNavGroup.js";
@@ -204,7 +207,10 @@ function NavigationLink({
       end={item.end}
       {...preloadIntent}
       className={({ isActive }) =>
-        [variant === "desktop" ? item.desktopClassName : "", isActive ? "active" : ""]
+        [
+          variant === "desktop" ? item.desktopClassName : "",
+          isActive ? "active" : ""
+        ]
           .filter(Boolean)
           .join(" ")
       }
@@ -279,7 +285,10 @@ export function AdminSiteNavigation({
     <div className="admin-site-navigation">
       <AdminNavigationLinks entries={entries} variant={variant} />
       <button
-        className={["admin-color-scheme-toggle", holdCommittedIcon ? "is-current-icon-held" : ""]
+        className={[
+          "admin-color-scheme-toggle",
+          holdCommittedIcon ? "is-current-icon-held" : ""
+        ]
           .filter(Boolean)
           .join(" ")}
         type="button"

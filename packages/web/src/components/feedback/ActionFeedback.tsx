@@ -137,8 +137,12 @@ export function ActionFeedback({
     <div
       className={`action-feedback action-feedback-${feedback.status}${paused ? " is-countdown-paused" : ""}${closing ? " is-closing" : ""}`}
       data-feedback-id={feedback.id}
-      role={announce ? (feedback.status === "error" ? "alert" : "status") : undefined}
-      aria-live={announce ? (feedback.status === "error" ? "assertive" : "polite") : undefined}
+      role={announce
+        ? feedback.status === "error" ? "alert" : "status"
+        : undefined}
+      aria-live={announce
+        ? feedback.status === "error" ? "assertive" : "polite"
+        : undefined}
       aria-atomic={announce ? "true" : undefined}
       style={style}
       title={text}

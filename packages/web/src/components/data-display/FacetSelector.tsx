@@ -16,7 +16,10 @@ import { MenuItemButton } from "../feedback/MenuItemButton.js";
 import { AnchoredMenuDismissSignalContext, useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { useFacetSearchMatcher } from "../../hooks/useFacetSearchMatcher.js";
 import { useImeSearchInput } from "../../hooks/useImeSearchInput.js";
-import { facetSuggestions, normalizeFacetSearchQuery } from "../../lib/ui/facet-input.js";
+import {
+  facetSuggestions,
+  normalizeFacetSearchQuery
+} from "../../lib/ui/facet-input.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { FacetOption } from "../../lib/types.js";
@@ -153,7 +156,9 @@ export function FacetSelector({
 
   const menuButtons = () =>
     Array.from(
-      menuElementRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []
+      menuElementRef.current?.querySelectorAll<HTMLButtonElement>(
+        "button:not(:disabled)"
+      ) ?? []
     );
   const focusMenuEdge = (edge: "first" | "last") => {
     const buttons = menuButtons();

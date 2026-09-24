@@ -48,7 +48,11 @@ export function TwoStepConfirmIconButton({
   return (
     <button
       ref={confirmation.targetRef}
-      className={["two-step-confirm-icon-button", active ? "is-armed" : "", className]
+      className={[
+        "two-step-confirm-icon-button",
+        active ? "is-armed" : "",
+        className
+      ]
         .filter(Boolean)
         .join(" ")}
       type="button"
@@ -62,7 +66,11 @@ export function TwoStepConfirmIconButton({
         confirmation.activate(() => onArm?.(), onConfirm);
       }}
     >
-      <AdminIcon name={busy && busyIcon ? busyIcon : active ? confirmIcon : idleIcon} />
+      <AdminIcon name={busy && busyIcon
+        ? busyIcon
+        : active
+          ? confirmIcon
+          : idleIcon} />
     </button>
   );
 }

@@ -9,8 +9,14 @@ import {
 } from "react";
 import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
 import { imageDisplayTitle } from "../../lib/ui/formatters.js";
-import { applyPointerMagnet, resetPointerMagnet } from "../../lib/ui/pointer-magnet.js";
-import { galleryTilePropsEqual, type GalleryTileRenderProps } from "./gallery-tile-rendering.js";
+import {
+  applyPointerMagnet,
+  resetPointerMagnet
+} from "../../lib/ui/pointer-magnet.js";
+import {
+  galleryTilePropsEqual,
+  type GalleryTileRenderProps
+} from "./gallery-tile-rendering.js";
 import { useGalleryImageRuntime } from "./GalleryImageRuntime.js";
 import { LazyGalleryImage } from "./LazyGalleryImage.js";
 
@@ -44,7 +50,9 @@ export const GalleryTile = memo(function GalleryTile({
   );
   const entrance = useOneShotAnimation(reveal.variant !== "settled");
   const portrait =
-    item.width > 0 && item.height > 0 ? item.height > item.width : item.device === "mb";
+    item.width > 0 && item.height > 0
+      ? item.height > item.width
+      : item.device === "mb";
   const reportIntrinsicSize = useCallback(
     (width: number, height: number) => {
       onIntrinsicSize(item.id, width, height);
@@ -66,7 +74,9 @@ export const GalleryTile = memo(function GalleryTile({
       className={[
         "tile",
         "gallery-virtual-tile",
-        !entrance.active ? "" : `is-gallery-card-reveal-${reveal.variant}`
+        !entrance.active
+          ? ""
+          : `is-gallery-card-reveal-${reveal.variant}`
       ]
         .filter(Boolean)
         .join(" ")}
@@ -94,7 +104,9 @@ export const GalleryTile = memo(function GalleryTile({
         }
       }}
     >
-      {import.meta.env?.DEV === true && <GalleryTileDevelopmentStats imageIndex={position.index} />}
+      {import.meta.env?.DEV === true && (
+        <GalleryTileDevelopmentStats imageIndex={position.index} />
+      )}
       <LazyGalleryImage
         src={item.thumb_url}
         alt={title}

@@ -42,7 +42,12 @@ export async function createMaintenanceFixture(runtime: IntegrationRuntime) {
     await runtime.databasePools.pool.query(
       `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size)
        VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'png', $2, $3, $4)`,
-      [id, createHash("md5").update(body).digest("hex"), body.length, options.confirmedSize ?? 0]
+      [
+        id,
+        createHash("md5").update(body).digest("hex"),
+        body.length,
+        options.confirmedSize ?? 0
+      ]
     );
     if (options.source !== false) await access.driver.writeBuffer("full", key, body, "image/png");
     if (options.thumbnail)

@@ -75,10 +75,14 @@ function failedNamespaceItem(
   };
 }
 
-function retainedRowsForGroup(rows: readonly MaintenanceImage[], group: StorageBackendGroup) {
+function retainedRowsForGroup(
+  rows: readonly MaintenanceImage[],
+  group: StorageBackendGroup
+) {
   const slugs = new Set(group.slugs);
   return rows.filter(
-    (row) => slugs.has(row.storage_slug) && (row.status === "ready" || row.status === "deleted")
+    (row) => slugs.has(row.storage_slug)
+      && (row.status === "ready" || row.status === "deleted")
   );
 }
 

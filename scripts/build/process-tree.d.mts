@@ -1,4 +1,7 @@
-import type { ChildProcess, SpawnOptions } from "node:child_process";
+import type {
+  ChildProcess,
+  SpawnOptions
+} from "node:child_process";
 
 export function spawnManaged(
   command: string,

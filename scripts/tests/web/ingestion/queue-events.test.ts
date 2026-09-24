@@ -21,7 +21,10 @@ import {
   ingestionQueueBaselineCoversSelection,
   mergeIngestionQueueMutation
 } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/server-ingestion-queue-state.ts";
-import { ingestionJob, adminImageListItem } from "../../support/web-test-context.ts";
+import {
+  ingestionJob,
+  adminImageListItem
+} from "../../support/web-test-context.ts";
 
 test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增 progress", () => {
   const summary = {
@@ -91,7 +94,11 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
     includeItems: [selectedPair]
   };
   assert.equal(
-    ingestionQueueBaselineCoversSelection(baseline, emptySelection, selectedCurrentItem),
+    ingestionQueueBaselineCoversSelection(
+      baseline,
+      emptySelection,
+      selectedCurrentItem
+    ),
     true,
     "已读到队尾且新筛选任务已在基线中时不得重复 snapshot"
   );
@@ -109,7 +116,9 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
   );
   const reservoirItems = Array.from({ length: 20 }, (_, index) => ({
     ...active,
-    session_id: index === 0 ? active.session_id : String(index).padStart(43, "R"),
+    session_id: index === 0
+      ? active.session_id
+      : String(index).padStart(43, "R"),
     image_id:
       index === 0
         ? active.image_id
@@ -130,12 +139,20 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
     "筛选变化后替补仍覆盖实际展示槽位时不得为补满缓存重复读取"
   );
   assert.equal(
-    ingestionQueueBaselineCoversSelection(reservoirBaseline, emptySelection, selectedCurrentItem),
+    ingestionQueueBaselineCoversSelection(
+      reservoirBaseline,
+      emptySelection,
+      selectedCurrentItem
+    ),
     false,
     "实际展示需要完整 20 行时不能把 19 行替补误判为覆盖"
   );
   assert.equal(
-    ingestionQueueBaselineCoversSelection(baseline, selectedCurrentItem, emptySelection),
+    ingestionQueueBaselineCoversSelection(
+      baseline,
+      selectedCurrentItem,
+      emptySelection
+    ),
     false,
     "移除筛选会改变 Server 页面成员，必须重新读取"
   );
@@ -256,7 +273,10 @@ test("[Web/内容接入] 队列事件只合并连续 semantic 与同版本递增
     "携带 PostgreSQL 完成投影的 SSE 不得再请求同页 snapshot"
   );
   assert.equal(hydratedCompleted.baseline.items[0]?.status, "completed");
-  assert.equal(hydratedCompleted.baseline.items[0]?.completed_item.id, completedItem.id);
+  assert.equal(
+    hydratedCompleted.baseline.items[0]?.completed_item.id,
+    completedItem.id
+  );
 });
 test("[Web/内容接入] 队列 progress 以当前 revision 同步页内与离页汇总且不回退", () => {
   const waitingSummary = {
@@ -334,7 +354,9 @@ test("[Web/内容接入] 队列 progress 以当前 revision 同步页内与离�
   assert.equal(pageResult.kind, "accepted");
   const mergedPageItem = pageResult.baseline.items[0];
   assert.equal(
-    mergedPageItem && "phase" in mergedPageItem ? mergedPageItem.phase : undefined,
+    mergedPageItem && "phase" in mergedPageItem
+      ? mergedPageItem.phase
+      : undefined,
     "normalizing"
   );
   assert.deepEqual(pageResult.baseline.summary, runningSummary);
@@ -343,7 +365,10 @@ test("[Web/内容接入] 队列 progress 以当前 revision 同步页内与离�
     ...pageBaseline,
     items: []
   };
-  const offPageResult = mergeIngestionQueueMutation(offPageBaseline, progressEvent);
+  const offPageResult = mergeIngestionQueueMutation(
+    offPageBaseline,
+    progressEvent
+  );
   assert.equal(offPageResult.kind, "accepted");
   assert.deepEqual(offPageResult.baseline.summary, runningSummary);
   assert.deepEqual(offPageResult.baseline.items, []);
@@ -400,7 +425,10 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
   const originalFetch = globalThis.fetch;
   const calls: Array<{ path: string; init: RequestInit }> = [];
   const sessionIds = ["A".repeat(43), "B".repeat(43)];
-  const imageIds = ["00000000-0000-7005-8000-00000000008e", "00000000-0000-7006-8000-00000000008e"];
+  const imageIds = [
+    "00000000-0000-7005-8000-00000000008e",
+    "00000000-0000-7006-8000-00000000008e"
+  ];
   const attemptIds = [
     "00000000-0000-7007-8000-00000000008e",
     "00000000-0000-7008-8000-00000000008e"
@@ -421,7 +449,10 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
     });
     return {
       ...ready,
-      commitIntent: createIngestionCommitIntent(ready, commitRequestIds[index])
+      commitIntent: createIngestionCommitIntent(
+        ready,
+        commitRequestIds[index]
+      )
     };
   });
   const current = new Map(jobs.map((job) => [job.id, job]));
@@ -656,7 +687,10 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
   client.setQueryData(queryKeys.ingestionVocabulary, vocabulary);
 
   await invalidateImageDataAfterIngestion(client, [adminImageListItem()]);
-  const invalidated = (queryClient: InstanceType<typeof QueryClient>, key: readonly unknown[]) =>
+  const invalidated = (
+    queryClient: InstanceType<typeof QueryClient>,
+    key: readonly unknown[]
+  ) =>
     queryClient.getQueryState(key)?.isInvalidated === true;
   for (const key of [
     queryKeys.publicImages,
@@ -681,7 +715,11 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
   const changedClient = new QueryClient({
     defaultOptions: { queries: { retry: false } }
   });
-  for (const key of [queryKeys.tags, queryKeys.authors, queryKeys.ingestionVocabulary])
+  for (const key of [
+    queryKeys.tags,
+    queryKeys.authors,
+    queryKeys.ingestionVocabulary
+  ])
     changedClient.setQueryData(key, key === queryKeys.ingestionVocabulary ? vocabulary : {});
   await invalidateImageDataAfterIngestion(changedClient, [
     adminImageListItem({
@@ -692,7 +730,10 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
   ]);
   assert.equal(changedClient.getQueryState(queryKeys.tags)?.isInvalidated, true);
   assert.equal(changedClient.getQueryState(queryKeys.authors)?.isInvalidated, true);
-  assert.equal(changedClient.getQueryState(queryKeys.ingestionVocabulary)?.isInvalidated, true);
+  assert.equal(
+    changedClient.getQueryState(queryKeys.ingestionVocabulary)?.isInvalidated,
+    true
+  );
   const coveredClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } }
   });
@@ -719,7 +760,11 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
   await invalidateImageDataAfterIngestion(coveredClient, [adminImageListItem()], {
     completedAt: 300
   });
-  assert.equal(coveredReads, 1, "列表读取与完成事件处于同一毫秒时仍必须恰好重读一次");
+  assert.equal(
+    coveredReads,
+    1,
+    "列表读取与完成事件处于同一毫秒时仍必须恰好重读一次"
+  );
   unsubscribeCovered();
 
   const inFlightClient = new QueryClient({
@@ -742,7 +787,11 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
           resolveInFlight = resolve;
         });
       }
-      recordAdminImageListValidation(inFlightClient, inFlightKey, validationStartedAt);
+      recordAdminImageListValidation(
+        inFlightClient,
+        inFlightKey,
+        validationStartedAt
+      );
       return coveredData;
     }
   });
@@ -759,7 +808,11 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
   assert.ok(resolveInFlight);
   resolveInFlight();
   await invalidatingInFlight;
-  assert.equal(inFlightReads, 2, "早于完成水位的在途读取结束后必须顺序补一次读取");
+  assert.equal(
+    inFlightReads,
+    2,
+    "早于完成水位的在途读取结束后必须顺序补一次读取"
+  );
   assert.equal(inFlightAborted, false, "尾随读取也不得取消原始请求");
   unsubscribeInFlight();
 

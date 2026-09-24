@@ -11,10 +11,16 @@ import type {
   StorageRemoveOptions,
   StorageRequestOptions
 } from "../drivers/driver.ts";
-import type { ReadablePrefix, StoragePrefix } from "./keys.ts";
+import type {
+  ReadablePrefix,
+  StoragePrefix
+} from "./keys.ts";
 import { STORAGE_PREFIXES } from "./keys.ts";
 import { directStorageObjectUrl } from "./public-urls.ts";
-import { collectStorageKeyListing, type StorageKeyListOptions } from "./key-listing.ts";
+import {
+  collectStorageKeyListing,
+  type StorageKeyListOptions
+} from "./key-listing.ts";
 import { withStorageObjectRemovalAdmission } from "./removal-admission.ts";
 
 const neverAbortedStorageRemovalSignal = new AbortController().signal;
@@ -52,7 +58,8 @@ export async function removeStorageObjectsAndConfirm(
   if (!objects.length) {
     throw new RangeError("Storage cleanup requires at least one object");
   }
-  const operationSignal = options.signal ?? neverAbortedStorageRemovalSignal;
+  const operationSignal = options.signal
+    ?? neverAbortedStorageRemovalSignal;
   operationSignal.throwIfAborted();
   admissionSignal.throwIfAborted();
   const resolved = await Promise.all(
@@ -161,7 +168,10 @@ export async function collectStorageNamespaceSnapshot(
   }
 }
 
-export async function pruneEmptyStorageDirs(slug?: string, options?: StoragePruneOptions) {
+export async function pruneEmptyStorageDirs(
+  slug?: string,
+  options?: StoragePruneOptions
+) {
   return (await resolveStorageAccess(slug)).driver.pruneEmptyDirs(options);
 }
 
@@ -171,7 +181,10 @@ export type ResolvedReadableObject = {
   storageSlug: string;
   publicUrl: string;
   exists: (options?: StorageRequestOptions) => Promise<boolean>;
-  open: (range?: string, options?: StorageRequestOptions) => Promise<OpenedRead>;
+  open: (
+    range?: string,
+    options?: StorageRequestOptions
+  ) => Promise<OpenedRead>;
 };
 
 export async function resolveReadableObject(
@@ -189,6 +202,11 @@ export async function resolveReadableObject(
     exists: async (options) =>
       (await resolveStorageAccess(slug, access)).driver.exists(prefix, key, options),
     open: async (range, options) =>
-      (await resolveStorageAccess(slug, access)).driver.openRead(prefix, key, range, options)
+      (await resolveStorageAccess(slug, access)).driver.openRead(
+        prefix,
+        key,
+        range,
+        options
+      )
   };
 }

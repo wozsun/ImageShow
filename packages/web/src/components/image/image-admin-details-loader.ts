@@ -1,4 +1,9 @@
-import { createElement, lazy, type ComponentProps, type LazyExoticComponent } from "react";
+import {
+  createElement,
+  lazy,
+  type ComponentProps,
+  type LazyExoticComponent
+} from "react";
 import { createPageLifetimeModuleLoader } from "../../lib/page-lifetime-module-loader.js";
 
 type ImageAdminDetailsModule = typeof import("./ImageAdminDetails.js");
@@ -10,7 +15,8 @@ export const loadImageAdminDetailsModule = createPageLifetimeModuleLoader<ImageA
 );
 
 const LazyImageAdminDetailsComponent: LazyExoticComponent<ImageAdminDetailsComponent> = lazy(() =>
-  loadImageAdminDetailsModule().then((module) => ({ default: module.ImageAdminDetails }))
+  loadImageAdminDetailsModule()
+    .then((module) => ({ default: module.ImageAdminDetails }))
 );
 
 export function LazyImageAdminDetails(props: ImageAdminDetailsProps) {

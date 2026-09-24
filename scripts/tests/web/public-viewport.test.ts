@@ -109,7 +109,8 @@ test("[Web/公开视口] 嵌入安全区校验父窗口、实例、来源和尺�
   }
   const render = (enabled: boolean) =>
     h.render(
-      h.React.createElement(h.React.StrictMode, null, h.React.createElement(Bridge, { enabled }))
+      h.React.createElement(h.React.StrictMode, null,
+        h.React.createElement(Bridge, { enabled }))
     );
   await render(false);
   assert.equal(messages.length, 0);
@@ -239,7 +240,8 @@ test("[Web/公开视口] 原生安全区按订阅上报、合并变化，断开�
   }
   const render = (enabled: boolean) =>
     h.render(
-      h.React.createElement(h.React.StrictMode, null, h.React.createElement(Bridge, { enabled }))
+      h.React.createElement(h.React.StrictMode, null,
+        h.React.createElement(Bridge, { enabled }))
     );
   await render(true);
   let ready = messages.at(-1)!.data;
@@ -250,7 +252,8 @@ test("[Web/公开视口] 原生安全区按订阅上报、合并变化，断开�
     origin = "https://host.example"
   ) => {
     h.window.dispatchEvent(
-      Object.assign(new Event("message"), { source, origin, data: { ...ready, type, ...extra } })
+      Object.assign(new Event("message"), { source, origin,
+        data: { ...ready, type, ...extra } })
     );
   };
   const reports = () => messages.filter((message) => message.data.type === "native-insets");

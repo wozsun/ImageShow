@@ -193,7 +193,9 @@ await runIntegrationScenario(async ({ databasePools: { pool } }) => {
         );
         assert.deepEqual(removed, [{ status: "succeeded", count: 1 }]);
         assert.equal(
-          (await pool.query("SELECT id FROM background_job WHERE id=$1", [expiredId])).rowCount,
+          (await pool.query(
+            "SELECT id FROM background_job WHERE id=$1", [expiredId]
+          )).rowCount,
           0,
           "跳过正在重新入队的旧候选后，仍应清理其他过期任务"
         );

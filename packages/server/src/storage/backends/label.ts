@@ -7,6 +7,8 @@ export function storageBackendLabel(row: {
   storage_display_name?: string | null;
 }) {
   return (
-    row.storage_display_name?.trim() || storageBackendLabels[row.storage_slug] || row.storage_slug
+    row.storage_display_name?.trim()
+      || storageBackendLabels[row.storage_slug]
+      || row.storage_slug
   );
 }

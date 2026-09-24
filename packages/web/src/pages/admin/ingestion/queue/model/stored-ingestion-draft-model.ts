@@ -33,7 +33,14 @@ export function draftSyncTarget(job: IngestionJob): DraftSyncTarget | null {
     !job.imageId ||
     !job.serverVersion ||
     job.commitIntent ||
-    !["queued", "downloading", "received", "processing", "ready", "failed"].includes(job.status)
+    ![
+      "queued",
+      "downloading",
+      "received",
+      "processing",
+      "ready",
+      "failed"
+    ].includes(job.status)
   )
     return null;
   return {
@@ -46,7 +53,10 @@ export function draftSyncTarget(job: IngestionJob): DraftSyncTarget | null {
   };
 }
 
-export function matchesDraftTarget(job: IngestionJob, target: DraftSyncTarget) {
+export function matchesDraftTarget(
+  job: IngestionJob,
+  target: DraftSyncTarget
+) {
   return (
     job.id === target.id &&
     job.attemptKey === target.attemptKey &&
@@ -75,5 +85,7 @@ export function authoritativeDraftFromStatus(status: IngestionStatusItemDto | un
   if (status?.status === "present") {
     return ingestionJobFromServerItem(status.item).draft;
   }
-  return status?.status === "completed" ? completedDraft(status.completed_item) : undefined;
+  return status?.status === "completed"
+    ? completedDraft(status.completed_item)
+    : undefined;
 }

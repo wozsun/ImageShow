@@ -59,7 +59,8 @@ export function boundedHomeRevealIndexes(
 }
 
 export function selectedSlugs(value: string) {
-  return value.split(",").filter(Boolean);
+  return value
+    .split(",").filter(Boolean);
 }
 
 export function facetLabel(item: { slug: string; display_name?: string }) {
@@ -71,7 +72,10 @@ export function countLabel(count: number) {
   return `${homeNumberFormatter.format(count)} 张`;
 }
 
-export function selectedFacetLabels(items: readonly GalleryStatsFacetDto[], value: string) {
+export function selectedFacetLabels(
+  items: readonly GalleryStatsFacetDto[],
+  value: string
+) {
   const names = new Map(items.map((item) => [item.slug, facetLabel(item)]));
   return value
     .split(",")

@@ -11,8 +11,15 @@ import {
   normalizeIngestionDraftUrl
 } from "@imageshow/shared/browser";
 import { normalizedImageTagSlugsSchema } from "../../images/metadata-tags.ts";
-import { imageMetadataCreateInput, imageMetadataUpdateFields } from "./images.ts";
-import { addDuplicateValueIssues, optionalHttpsDomainUrlField, uuidV7Input } from "./primitives.ts";
+import {
+  imageMetadataCreateInput,
+  imageMetadataUpdateFields
+} from "./images.ts";
+import {
+  addDuplicateValueIssues,
+  optionalHttpsDomainUrlField,
+  uuidV7Input
+} from "./primitives.ts";
 import { storageSlugInput } from "./storage.ts";
 
 const externalImageRejectedMessage = "外部图片请求未通过安全校验";
@@ -138,7 +145,8 @@ function addDuplicateIngestionPairIssues(
 
 export const ingestionStatusInput = z
   .strictObject({
-    items: z.array(ingestionPairInput).min(1).max(ingestionStatusBatchMaxItems)
+    items: z.array(ingestionPairInput).min(1)
+      .max(ingestionStatusBatchMaxItems)
   })
   .superRefine((value, context) => {
     addDuplicateIngestionPairIssues(value.items, context);
@@ -147,17 +155,28 @@ export const ingestionStatusInput = z
 export const ingestionSnapshotQuery = z.strictObject({
   queue: z.enum(ingestionQueueTypes),
   offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().min(0).max(appConfig.ingestionRuntime.snapshotMaxItems).optional()
+  limit: z.coerce.number().int().min(0)
+    .max(appConfig.ingestionRuntime.snapshotMaxItems)
+    .optional()
 });
 
 export const ingestionSnapshotSelectionInput = z
   .strictObject({
     exclude_items: z.array(ingestionPairInput).max(ingestionBatchHardLimit),
-    include_items: z.array(ingestionPairInput).max(appConfig.ingestionRuntime.snapshotMaxItems)
+    include_items: z.array(ingestionPairInput)
+      .max(appConfig.ingestionRuntime.snapshotMaxItems)
   })
   .superRefine((value, context) => {
-    addDuplicateIngestionPairIssues(value.exclude_items, context, "exclude_items");
-    addDuplicateIngestionPairIssues(value.include_items, context, "include_items");
+    addDuplicateIngestionPairIssues(
+      value.exclude_items,
+      context,
+      "exclude_items"
+    );
+    addDuplicateIngestionPairIssues(
+      value.include_items,
+      context,
+      "include_items"
+    );
     addDuplicateValueIssues(
       value.exclude_items.map((item) => item.session_id),
       context,
@@ -287,11 +306,16 @@ export const ingestionQueueActionInput = z
     queue: z.enum(ingestionQueueTypes),
     action_request_id: uuidV7Input,
     action: z.enum(ingestionQueueActionTypes),
-    action_watermark: z.string().min(1).max(appConfig.ingestionRuntime.tokenMaxBytes),
-    continuation: z.string().min(1).max(appConfig.ingestionRuntime.tokenMaxBytes).optional(),
+    action_watermark: z.string().min(1)
+      .max(appConfig.ingestionRuntime.tokenMaxBytes),
+    continuation: z.string().min(1)
+      .max(appConfig.ingestionRuntime.tokenMaxBytes)
+      .optional(),
     metadata: ingestionActionMetadataInput.optional(),
     items: z.array(ingestionPairInput).min(1).max(ingestionBatchHardLimit).optional(),
-    max_semantic_revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional()
+    max_semantic_revision: z.number().int().nonnegative()
+      .max(Number.MAX_SAFE_INTEGER)
+      .optional()
   })
   .superRefine((value, context) => {
     if (value.action === "apply_metadata" && !value.metadata) {
@@ -318,7 +342,8 @@ export const ingestionQueueActionInput = z
         message: "当前全队列动作不接受 metadata"
       });
     }
-    if (value.action !== "clear_completed" && value.max_semantic_revision !== undefined) {
+    if (value.action !== "clear_completed"
+      && value.max_semantic_revision !== undefined) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["max_semantic_revision"],

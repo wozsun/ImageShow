@@ -74,7 +74,8 @@ export function useIngestionStatusHydration({
   useEffect(() => {
     if (
       server.status !== "ready" ||
-      (!handoffJobsRef.current.size && !completedReceiptHydrationsRef.current.size)
+      (!handoffJobsRef.current.size
+        && !completedReceiptHydrationsRef.current.size)
     )
       return;
     const controller = new AbortController();
@@ -138,7 +139,10 @@ export function useIngestionStatusHydration({
         verifiedExternalRevisions.set(pairKey, revision);
         handoffChanged = true;
         if ((serverConnectionRef.current.revision ?? -1) < revision) {
-          minimumCoverageRevision = Math.max(minimumCoverageRevision ?? 0, revision);
+          minimumCoverageRevision = Math.max(
+            minimumCoverageRevision ?? 0,
+            revision
+          );
         }
       };
       try {
@@ -156,7 +160,8 @@ export function useIngestionStatusHydration({
           const status = statuses[index];
           if (!status) continue;
           const activeHandoff =
-            entry.job !== undefined && handoffJobsRef.current.get(entry.pairKey) === entry.job;
+            entry.job !== undefined
+              && handoffJobsRef.current.get(entry.pairKey) === entry.job;
           const activeCompletedReceipt =
             entry.completedReceipt !== undefined &&
             completedReceiptHydrationsRef.current.get(entry.pairKey) === entry.completedReceipt;
@@ -175,7 +180,8 @@ export function useIngestionStatusHydration({
           const entryJob = entry.job;
           if (!activeHandoff || !entryJob) continue;
           const awaitsCompleted = completedPairsRef.current.has(entry.pairKey);
-          if (status.status === "present" && entryJob.serverDraftPending === true) {
+          if (status.status === "present"
+            && entryJob.serverDraftPending === true) {
             ensureDraftSnapshot(entryJob);
           }
           if (status.status === "present" && awaitsCompleted) {
@@ -198,7 +204,8 @@ export function useIngestionStatusHydration({
           }
           if (status.status === "present") {
             const current = jobsRef.current.find(
-              (job) => job.id === entryJob.id && job.attemptKey === entryJob.attemptKey
+              (job) => job.id === entryJob.id
+                && job.attemptKey === entryJob.attemptKey
             );
             if (current) {
               const next = {
@@ -210,11 +217,15 @@ export function useIngestionStatusHydration({
                 serverHandoffPending: true,
                 serverHandoffRevision: status.item.last_semantic_revision
               };
-              if (current.objectUrl?.startsWith("blob:") && !next.objectUrl?.startsWith("blob:"))
+              if (current.objectUrl?.startsWith("blob:")
+                && !next.objectUrl?.startsWith("blob:"))
                 revokeObjectUrl(current);
               presentPatches.set(current.id, next);
             }
-            requireSnapshotCoverage(entry.pairKey, status.item.last_semantic_revision);
+            requireSnapshotCoverage(
+              entry.pairKey,
+              status.item.last_semantic_revision
+            );
             continue;
           }
           if (status.status === "missing") {
@@ -283,7 +294,10 @@ export function useIngestionStatusHydration({
                 job.attemptKey === entryJob.attemptKey &&
                 serverIngestionJobPairKey(job) === entry.pairKey
             );
-            const completedJob = ingestionJobFromKnownCompletedStatus(current ?? entryJob, status);
+            const completedJob = ingestionJobFromKnownCompletedStatus(
+              current ?? entryJob,
+              status
+            );
             if (completedJob) {
               if (current) completedPatches.set(current.id, completedJob);
               else completedJobs.push(completedJob);
@@ -316,13 +330,21 @@ export function useIngestionStatusHydration({
         if (verifiedExternalRevisions.size) {
           verifyExternalStatusRevisions(verifiedExternalRevisions);
         }
-        if (handoffChanged || retryImmediately || entries.length > chunk.length) bumpHandoffEpoch();
+        if (handoffChanged
+          || retryImmediately
+          || entries.length > chunk.length) bumpHandoffEpoch();
         if (minimumCoverageRevision !== null) {
-          server.ensureRevision(minimumCoverageRevision, server.connectionGeneration);
+          server.ensureRevision(
+            minimumCoverageRevision,
+            server.connectionGeneration
+          );
         }
       } catch (error) {
         if (!controller.signal.aborted) {
-          reportError(error instanceof Error ? error.message : String(error), true);
+          reportError(
+            error instanceof Error ? error.message : String(error),
+            true
+          );
         }
       }
     })();

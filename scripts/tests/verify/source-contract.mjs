@@ -15,7 +15,11 @@ import { runtimeConfigDefaults } from "../../../packages/server/src/config/runti
 import { runtimeConfigEnvironmentBindings } from "../../../packages/server/src/config/runtime-config-environment.ts";
 
 const workspaceRoot = resolve(import.meta.dirname, "../../..");
-const sourceRoots = ["packages/shared/src", "packages/server/src", "packages/web/src"].map((path) =>
+const sourceRoots = [
+  "packages/shared/src",
+  "packages/server/src",
+  "packages/web/src"
+].map((path) =>
   resolve(workspaceRoot, path)
 );
 const codeExtensions = new Set([".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx"]);
@@ -52,13 +56,16 @@ try {
   });
   const programs = typeScriptSnapshot.getProjects().map((project) => project.program);
   for (const file of files) {
-    const sourceFile = programs.map((program) => program.getSourceFile(file)).find(Boolean);
+    const sourceFile = programs
+      .map((program) => program.getSourceFile(file))
+      .find(Boolean);
     if (!sourceFile) {
       throw new Error(`source-contract: TypeScript did not load ${displayPath(file)}`);
     }
     const specifiers = new Set();
     function visit(node) {
-      if (isImportDeclaration(node) && isStringLiteralLikeNode(node.moduleSpecifier)) {
+      if (isImportDeclaration(node)
+        && isStringLiteralLikeNode(node.moduleSpecifier)) {
         specifiers.add(node.moduleSpecifier.text);
       } else if (
         isExportDeclaration(node) &&
@@ -134,7 +141,8 @@ const allowedWebLayerDependencies = {
 };
 const allowedCoreDependencies = new Set(["core", "config", "types"]);
 function webLayer(path) {
-  return /^packages\/web\/src\/(pages|components|hooks|lib)(?:\/|$)/.exec(path)?.[1] ?? null;
+  return /^packages\/web\/src\/(pages|components|hooks|lib)(?:\/|$)/.exec(path)?.[1]
+    ?? null;
 }
 
 function serverLayer(path) {
@@ -179,7 +187,9 @@ for (const file of files) {
     ) {
       invalidServerDependencies.add(`${sourcePath} -> ${targetPath}`);
     }
-    if (sourceServerLayer && sourceServerLayer !== "routes" && targetServerLayer === "routes") {
+    if (sourceServerLayer
+      && sourceServerLayer !== "routes"
+      && targetServerLayer === "routes") {
       invalidServerDependencies.add(`${sourcePath} -> ${targetPath}`);
     }
     const ingestionDomainRoot = "packages/server/src/images/ingestion/";
@@ -351,7 +361,10 @@ function composeEnvironment(service) {
   if (environment === undefined || environment === null) return new Map();
   if (!Array.isArray(environment)) {
     return new Map(
-      Object.entries(objectRecord(environment, "Compose service environment")).map(
+      Object.entries(objectRecord(
+        environment,
+        "Compose service environment"
+      )).map(
         ([key, value]) => [key, value === null ? null : String(value)]
       )
     );
@@ -402,7 +415,9 @@ function composeVolumeMount(service, expected) {
       if (parts.length < 2 || parts.length > 3) return false;
       const [source, target, rawOptions = ""] = parts;
       const options = new Set(rawOptions.split(",").filter(Boolean));
-      const type = source.startsWith(".") || source.startsWith("/") ? "bind" : "volume";
+      const type = source.startsWith(".") || source.startsWith("/")
+        ? "bind"
+        : "volume";
       return (
         source === expected.source &&
         target === expected.target &&
@@ -523,7 +538,10 @@ for (const binding of runtimeConfigEnvironmentBindings) {
   }
 }
 
-const environmentExampleSource = await readFile(resolve(workspaceRoot, ".env.example"), "utf8");
+const environmentExampleSource = await readFile(
+  resolve(workspaceRoot, ".env.example"),
+  "utf8"
+);
 const environmentExample = parseDotEnvExample(environmentExampleSource);
 const deploymentEnvironmentVariables = [
   "DATABASE_NAME",
@@ -574,7 +592,10 @@ for (const binding of runtimeConfigEnvironmentBindings) {
   }
 }
 
-const configurationGuide = await readFile(resolve(workspaceRoot, "docs/CONFIG.md"), "utf8");
+const configurationGuide = await readFile(
+  resolve(workspaceRoot, "docs/CONFIG.md"),
+  "utf8"
+);
 const documentationEntries = new Map();
 for (const section of configurationGuide.split(/(?=^#{1,4} )/m)) {
   const path = /^#### (\w+(?:\.\w+)+)\r?$/m.exec(section)?.[1];
@@ -650,7 +671,8 @@ for (const path of runtimeDefaultPathOrder) {
 }
 
 const composeInterpolationVariables = new Set(
-  [...composeSource.matchAll(/(?<!\$)\$\{([A-Z][A-Z0-9_]*)[^}]*\}/g)].map((match) => match[1])
+  [...composeSource.matchAll(/(?<!\$)\$\{([A-Z][A-Z0-9_]*)[^}]*\}/g)]
+    .map((match) => match[1])
 );
 const missingInterpolationExamples = [...composeInterpolationVariables].filter(
   (variable) => !environmentExample.has(variable)

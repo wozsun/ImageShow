@@ -142,7 +142,9 @@ await runIntegrationScenario(async (runtime) => {
       site: { domain: "images.example" },
       altcha: { enabled: false }
     });
-    const displayed = await publicUrls.publicImageUrl({ id: imageIds[2], ext: "webp" }, "local");
+    const displayed = await publicUrls.publicImageUrl(
+      { id: imageIds[2], ext: "webp" }, "local"
+    );
     await runtime.databasePools.pool.query(
       "UPDATE metadata SET original=$2, source=$3 WHERE id=$1",
       [imageIds[0], originalUrl, "https://source.example.com/post"]
@@ -163,7 +165,9 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(databaseDetails[2].original_url, null);
     assert.deepEqual(
       databaseDetails.map((item) => item.source),
-      ["https://source.example.com/post", null, null]
+      [
+        "https://source.example.com/post", null, null
+      ]
     );
     const sessionId = await login();
     const detailRequest = (cookie = "", etag = "") =>
@@ -201,7 +205,9 @@ await runIntegrationScenario(async (runtime) => {
       );
       assert.deepEqual(
         projections.map((item) => item.original_url),
-        [null, databaseDetails[0].original_url, null, databaseDetails[0].original_url]
+        [
+          null, databaseDetails[0].original_url, null, databaseDetails[0].original_url
+        ]
       );
       const responses = await Promise.all(
         ["", sessionCookie, "imageshow_session=expired"].map((cookie) => detailRequest(cookie))
@@ -330,7 +336,9 @@ await runIntegrationScenario(async (runtime) => {
         item.original_url,
         databaseDetails.find((detail) => detail.id === item.id)?.original_url
       );
-      assert.equal(item.source, databaseDetails.find((detail) => detail.id === item.id)?.source);
+      assert.equal(item.source, databaseDetails.find((detail) => (
+        detail.id === item.id
+      ))?.source);
     }
     const publicPage = await publicImages.listPublicImages(
       {
@@ -368,7 +376,10 @@ await runIntegrationScenario(async (runtime) => {
       limit: 10
     });
     assert.equal(deletedPage.items.length, 1);
-    assert.equal(deletedPage.items[0].original_url, databaseDetails[0].original_url);
+    assert.equal(
+      deletedPage.items[0].original_url,
+      databaseDetails[0].original_url
+    );
     assert.equal(deletedPage.items[0].object_url, databaseDetails[0].object_url);
     assert.equal((await detailRequest()).status, 404);
     await assertOriginalDenied();

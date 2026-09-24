@@ -5,10 +5,16 @@ import { api, isApiClientError } from "../../../lib/api/client.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
-import { storageBackendDisplay, storageBackendLabel } from "../../../lib/ui/select-options.js";
+import {
+  storageBackendDisplay,
+  storageBackendLabel
+} from "../../../lib/ui/select-options.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import type { StorageBackendAdmin } from "../../../lib/types.js";
-import { createActionFeedback, type ActionFeedbackState } from "../../../lib/ui/action-feedback.js";
+import {
+  createActionFeedback,
+  type ActionFeedbackState
+} from "../../../lib/ui/action-feedback.js";
 import "../../../styles/admin/storage.css";
 import {
   ActionFeedbackOutlet,
@@ -69,7 +75,10 @@ export function StorageSettings() {
       client
         .getQueryData<StorageBackendsAdminResponseDto>(queryKeys.storageBackends)
         ?.backends.find((backend) => backend.slug === slug)?.sort_order,
-    reportError: (stage, error) => reportAdminUiError(`storage.sort_order.${stage}`, error)
+    reportError: (stage, error) => reportAdminUiError(
+      `storage.sort_order.${stage}`,
+      error
+    )
   });
   const operationBusy = sorting.busy;
 
@@ -93,7 +102,10 @@ export function StorageSettings() {
     }
   };
 
-  const runStorageAction = async (key: string, action: () => Promise<unknown>) =>
+  const runStorageAction = async (
+    key: string,
+    action: () => Promise<unknown>
+  ) =>
     (await executeStorageAction(key, action)).succeeded;
 
   const testConfig = async (body: unknown): Promise<boolean> => {
@@ -170,7 +182,9 @@ export function StorageSettings() {
           ? result.error.message
           : "存储后端删除失败，请稍后重试";
         setActionDialog((current) =>
-          current?.kind === "delete" ? { ...current, error: message } : current
+          current?.kind === "delete"
+            ? { ...current, error: message }
+            : current
         );
         setActionFeedback(createActionFeedback(message, "error"));
       }
@@ -199,7 +213,9 @@ export function StorageSettings() {
     } else {
       setActionFeedback(
         createActionFeedback(
-          migration.migrated ? `已迁移 ${migration.migrated} 张图片` : "源后端已没有需要迁移的图片",
+          migration.migrated
+            ? `已迁移 ${migration.migrated} 张图片`
+            : "源后端已没有需要迁移的图片",
           "success"
         )
       );
@@ -258,7 +274,9 @@ export function StorageSettings() {
               hasNonLocalBackend={hasNonLocalBackend}
               busy={busy}
               sortBusy={sorting.isSaving(backend.slug)}
-              defaultStatus={defaultActionSlug === backend.slug ? defaultAction.status : "idle"}
+              defaultStatus={defaultActionSlug === backend.slug
+                ? defaultAction.status
+                : "idle"}
               defaultActionPending={defaultAction.pending}
               onSortSave={(value) => sorting.save(backend.slug, value)}
               onEdit={() => openEditor(backend)}

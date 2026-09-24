@@ -74,7 +74,10 @@ type PublicPageAvailability = {
   gallery: Pick<SiteGallerySettings, "enabled">;
 };
 
-export function publicPageEnabled(site: PublicPageAvailability, root: SiteRoot) {
+export function publicPageEnabled(
+  site: PublicPageAvailability,
+  root: SiteRoot
+) {
   if (root === "home") return site.home.enabled;
   if (root === "show") return site.show.enabled;
   return site.gallery.enabled;

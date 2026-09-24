@@ -53,7 +53,10 @@ import {
   preserveUnresolvedLocalOutcomes,
   retainUnresolvedLocalJobs
 } from "../../../../packages/web/src/pages/admin/ingestion/workflow/ingestion-workflow-action-model.ts";
-import { ingestionJob, adminImageListItem } from "../../support/web-test-context.ts";
+import {
+  ingestionJob,
+  adminImageListItem
+} from "../../support/web-test-context.ts";
 
 test("[Web/内容接入] 内容接入模块保持 view、草稿、上传与清理纯边界", () => {
   assert.deepEqual(emptyServerIngestionQueueView("connecting", 3), {
@@ -242,7 +245,8 @@ test("[Web/内容接入] 导入与批量默认标签追加去重且保留来源�
       assert.deepEqual(job.draft.tags, expected);
       assert.equal(job.draft.theme, "source-theme");
       assert.equal(job.draft.author, "source-author");
-      if (tags?.length) assert.deepEqual(tags, ["2026", "shared", "2026"], "合并不能改写来源数组");
+      if (tags?.length) assert.deepEqual(tags, ["2026", "shared", "2026"],
+        "合并不能改写来源数组");
       for (const status of ["queued", "ready"] as const) {
         const editable = { ...job, status };
         const patch = ingestionAttributeDefaultsPatch(editable, {
@@ -335,10 +339,16 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     metadata: base.draft,
     storage_slug: "local"
   };
-  const waitingForNormalization = ingestionJobFromServerItem(prepareWaitingItem, base);
+  const waitingForNormalization = ingestionJobFromServerItem(
+    prepareWaitingItem,
+    base
+  );
   assert.equal(waitingForNormalization.status, "received");
   assert.equal(ingestionJobStatusLabel(waitingForNormalization), "待处理");
-  assert.equal(ingestionJobStatusDetail(waitingForNormalization), "原图素材已接收，等待处理");
+  assert.equal(
+    ingestionJobStatusDetail(waitingForNormalization),
+    "原图素材已接收，等待处理"
+  );
   assert.equal(
     summarizeIngestionJobs([waitingForNormalization]).waitingJobs,
     0,
@@ -621,7 +631,10 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     "PG 已接管且 Redis 回执缺失的本地完成卡仍可移除"
   );
   assert.equal(ingestionQueuePageCount(51, 20), 3);
-  const intent = createIngestionCommitIntent(ready, "00000000-0000-7004-8000-00000000008e");
+  const intent = createIngestionCommitIntent(
+    ready,
+    "00000000-0000-7004-8000-00000000008e"
+  );
   assert.equal(intent.attemptId[14], "7");
   assert.deepEqual(intent.metadata.tags, ["existing-tag"]);
   const failedFrozenCommit = ingestionJob({
@@ -1005,7 +1018,10 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   assert.equal(completedReplayAfterSnapshot.originalSize, 12_345_678);
   assert.equal(completedReplayAfterSnapshot.manifestSource, "weibo");
   assert.equal(completedReplayAfterSnapshot.batchPosition, 4);
-  assert.equal(ingestionJobAwaitsActionCoverage(completedReplayAfterSnapshot, 12), false);
+  assert.equal(
+    ingestionJobAwaitsActionCoverage(completedReplayAfterSnapshot, 12),
+    false
+  );
 
   const recoveredCompleted = ingestionJobFromServerItem(
     {
@@ -1335,7 +1351,10 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   const allCompletionPatches = new Map(
     paginationJobs.map((job) => [job.id, completedPatchFor(job)] as const)
   );
-  allCompletionPatches.set(paginationJobs[22]!.id, compactCompletionPatch);
+  allCompletionPatches.set(
+    paginationJobs[22]!.id,
+    compactCompletionPatch
+  );
   let completedPaginationState = reduceIngestionQueue(
     {
       jobs: paginationJobs,
@@ -1410,7 +1429,8 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     }
   );
   assert.ok(
-    partialPaginationState.jobs.slice(0, 20).every((job) => job.status === "committing"),
+    partialPaginationState.jobs.slice(0, 20)
+      .every((job) => job.status === "committing"),
     "顶部汇总不得被用来批量猜测未收到逐项事实的卡片"
   );
   partialPaginationState = reduceIngestionQueue(partialPaginationState, {
@@ -1460,7 +1480,10 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     jobs: [staleSnapshotOwner]
   });
   assert.equal(racedSnapshotState.jobs.length, 23);
-  assert.equal(racedSnapshotState.jobs.find((job) => job.id === completedOwner.id)?.status, "done");
+  assert.equal(
+    racedSnapshotState.jobs.find((job) => job.id === completedOwner.id)?.status,
+    "done"
+  );
   assert.equal(
     new Set(racedSnapshotState.jobs.map((job) => job.id)).size,
     23,
@@ -1595,7 +1618,9 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
       sessionId: fullPageAcceptedPositions.has(position)
         ? `full-page-session-${position}`
         : undefined,
-      imageId: fullPageAcceptedPositions.has(position) ? `full-page-image-${position}` : undefined,
+      imageId: fullPageAcceptedPositions.has(position)
+        ? `full-page-image-${position}`
+        : undefined,
       serverAccepted: fullPageAcceptedPositions.has(position),
       status: fullPageAcceptedPositions.has(position) ? "received" : "uploading"
     })
@@ -1670,7 +1695,12 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     "本地前缀填满页面时，逐项 takeover 不得把 Server 占位追加到当前页"
   );
   assert.deepEqual(
-    serverIngestionJobsForCombinedPage(takeoverJobs, [], 1, new Set(["session-0\0image-0"])).map(
+    serverIngestionJobsForCombinedPage(
+      takeoverJobs,
+      [],
+      1,
+      new Set(["session-0\0image-0"])
+    ).map(
       (job) => job.id
     ),
     ["takeover-0"],
@@ -1739,10 +1769,13 @@ test("[Web/内容接入] 逐项 active 事件在 bounded snapshot 前保留来�
     };
   };
   const projectedOwners = provisionalOwners.map((job, index) =>
-    index < 18 ? ingestionJobFromServerItem(activeEventFor(job, index), job) : job
+    index < 18
+      ? ingestionJobFromServerItem(activeEventFor(job, index), job)
+      : job
   );
   const retainedProvisionalOwners = projectedOwners.filter(
-    (job) => job.serverHandoffPending === true && job.serverHandoffProvisionalTotal === true
+    (job) => job.serverHandoffPending === true
+      && job.serverHandoffProvisionalTotal === true
   );
   assert.equal(
     retainedProvisionalOwners.length,

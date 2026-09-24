@@ -1,4 +1,7 @@
-import { defaultAdminPreferences, type AdminColorScheme } from "@imageshow/shared/browser";
+import {
+  defaultAdminPreferences,
+  type AdminColorScheme
+} from "@imageshow/shared/browser";
 
 export type BrowserColorScheme = "dark" | "light";
 export type UiColorContext = "bootstrap" | "public" | "admin";
@@ -51,7 +54,8 @@ export function nextAdminColorScheme(
   if (colorScheme === "system") {
     return oppositeColorScheme(resolvedColorScheme);
   }
-  if (cycle?.expectedColorScheme === colorScheme && cycle.returnToSystemAfter === colorScheme) {
+  if (cycle?.expectedColorScheme === colorScheme
+    && cycle.returnToSystemAfter === colorScheme) {
     return "system";
   }
   return oppositeColorScheme(colorScheme);
@@ -68,7 +72,9 @@ export function advanceAdminColorSchemeCycle(
   if (nextColorScheme === "system") return null;
   return {
     expectedColorScheme: nextColorScheme,
-    returnToSystemAfter: colorScheme === "system" ? resolvedColorScheme : nextColorScheme
+    returnToSystemAfter: colorScheme === "system"
+      ? resolvedColorScheme
+      : nextColorScheme
   };
 }
 

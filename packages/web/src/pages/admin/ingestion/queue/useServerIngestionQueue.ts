@@ -26,8 +26,8 @@ import {
 } from "./model/server-ingestion-queue-view.js";
 
 const clientMutationBufferLimit = 1_000;
-const snapshotRecoveryDelays = [100, 500, 1_500] as const;
-const protocolReconnectDelays = [100, 500] as const;
+const snapshotRecoveryDelaysMs = [100, 500, 1_500] as const;
+const protocolReconnectDelaysMs = [100, 500] as const;
 
 type SnapshotRequestReason = "refresh" | "parameters" | "reload" | "ready";
 
@@ -101,7 +101,10 @@ export function useServerIngestionQueue(
   const invalidateDisplayAuthorityRef = useRef<(() => void) | null>(null);
   const flushAuthorityRecoveryRef = useRef<(() => void) | null>(null);
   const ensureRevisionRef = useRef<
-    ((revision?: number, connectionGeneration?: number) => boolean) | null
+    ((
+      revision?: number,
+      connectionGeneration?: number
+    ) => boolean) | null
   >(null);
   const onCompletedIngestionsRef = useRef(input.onCompletedIngestions);
   onCompletedIngestionsRef.current = input.onCompletedIngestions;
@@ -159,7 +162,8 @@ export function useServerIngestionQueue(
     let authorityRecovery: AuthorityRecovery | null = null;
 
     const completeAuthorityRecovery = (serial: number) => {
-      if (authorityRecovery === null || serial < authorityRecovery.minimumSnapshotSerial) return;
+      if (authorityRecovery === null
+        || serial < authorityRecovery.minimumSnapshotSerial) return;
       const completed = authorityRecovery;
       authorityRecovery = null;
       completed.resolve();
@@ -313,7 +317,8 @@ export function useServerIngestionQueue(
       const displayBaseline =
         baseline !== null && baselineOffset === offset
           ? baseline
-          : retainedBaseline !== null && retainedOffset === offset
+          : retainedBaseline !== null
+            && retainedOffset === offset
             ? retainedBaseline
             : null;
       setView(
@@ -340,7 +345,9 @@ export function useServerIngestionQueue(
         return;
       }
       const loadingBaseline =
-        retainedBaseline !== null && retainedOffset === offset ? retainedBaseline : null;
+        retainedBaseline !== null && retainedOffset === offset
+          ? retainedBaseline
+          : null;
       setView(
         loadingBaseline
           ? retainedServerIngestionQueueView(
@@ -423,7 +430,9 @@ export function useServerIngestionQueue(
       // 但 offset 不变时旧页仍可安全裁切展示，不能把普通收敛伪装成重连。
       const refreshInPlace = baseline !== null && baselineOffset === offset;
       const retainDuringLoad =
-        !refreshInPlace && retainedBaseline !== null && retainedOffset === offset;
+        !refreshInPlace
+          && retainedBaseline !== null
+          && retainedOffset === offset;
       const serial = ++snapshotSerial;
       const controller = new AbortController();
       // A mutation or explicit refresh may recover before the bounded retry
@@ -523,7 +532,12 @@ export function useServerIngestionQueue(
           };
           retainedBaseline = merged;
           retainedOffset = offset;
-          satisfySnapshotCoverage(serial, requestedScope, requestedGeneration, merged);
+          satisfySnapshotCoverage(
+            serial,
+            requestedScope,
+            requestedGeneration,
+            merged
+          );
           clearSnapshotRecovery();
           const rerun = nextSnapshotReason();
           if (rerun === "reload" || rerun === "ready") {
@@ -534,10 +548,13 @@ export function useServerIngestionQueue(
           completeAuthorityRecovery(serial);
         })
         .catch((error: unknown) => {
-          if (disposed || controller.signal.aborted || serial !== snapshotSerial) {
+          if (disposed
+            || controller.signal.aborted
+            || serial !== snapshotSerial) {
             return;
           }
-          const immediateFollowup = immediateSnapshotFollowup && hasSnapshotRequirements();
+          const immediateFollowup = immediateSnapshotFollowup
+            && hasSnapshotRequirements();
           if (!hasSnapshotRequirements()) {
             // A parameter request can become unnecessary while it is in flight.
             // If that obsolete request then fails, retain the documented bounded
@@ -561,7 +578,8 @@ export function useServerIngestionQueue(
             const recoveryBaseline =
               baseline !== null && baselineOffset === offset
                 ? mergeBufferedMutations(baseline).merged
-                : retainedBaseline !== null && retainedOffset === offset
+                : retainedBaseline !== null
+                  && retainedOffset === offset
                   ? retainedBaseline
                   : null;
             if (recoveryBaseline) {
@@ -603,7 +621,7 @@ export function useServerIngestionQueue(
               actionScope
             };
           }
-          const retryDelay = snapshotRecoveryDelays[snapshotRecoveryAttempt];
+          const retryDelay = snapshotRecoveryDelaysMs[snapshotRecoveryAttempt];
           deferSuccessor = true;
           if (retryDelay !== undefined) {
             snapshotRecoveryAttempt += 1;
@@ -696,9 +714,12 @@ export function useServerIngestionQueue(
       revision?: number,
       expectedConnectionGeneration = connectionGeneration
     ) => {
-      if (disposed || expectedConnectionGeneration !== connectionGeneration) return false;
+      if (disposed
+        || expectedConnectionGeneration !== connectionGeneration) return false;
       alignSnapshotRequirements();
-      if (revision !== undefined && baseline !== null && baseline.revision >= revision) return true;
+      if (revision !== undefined
+        && baseline !== null
+        && baseline.revision >= revision) return true;
       if (revision === undefined) {
         const minimumSnapshotSerial = snapshotSerial + 1;
         const strengthened =
@@ -744,7 +765,9 @@ export function useServerIngestionQueue(
       clearSnapshotRecovery();
       const { offset } = parametersRef.current;
       const retained =
-        retainedBaseline !== null && retainedOffset === offset ? retainedBaseline : null;
+        retainedBaseline !== null && retainedOffset === offset
+          ? retainedBaseline
+          : null;
       setView(
         retained
           ? {
@@ -768,9 +791,12 @@ export function useServerIngestionQueue(
         clearTimeout(protocolReconnectTimer);
         protocolReconnectTimer = null;
       }
-      const delay = protocolReconnectDelays[protocolReconnectAttempt];
+      const delay = protocolReconnectDelaysMs[protocolReconnectAttempt];
       if (delay === undefined) {
-        disconnect("error", error instanceof Error ? error.message : String(error));
+        disconnect(
+          "error",
+          error instanceof Error ? error.message : String(error)
+        );
         failAuthorityRecovery(error);
         return;
       }
@@ -801,7 +827,11 @@ export function useServerIngestionQueue(
 
     const handleReady = (message: MessageEvent<string>) => {
       try {
-        const event = parseServerIngestionQueueEvent(message.data, "ready", input.queue) as Extract<
+        const event = parseServerIngestionQueueEvent(
+          message.data,
+          "ready",
+          input.queue
+        ) as Extract<
           IngestionQueueEventDto,
           { type: "ready" }
         >;
@@ -819,7 +849,8 @@ export function useServerIngestionQueue(
         alignSnapshotRequirements(true);
         const { offset } = parametersRef.current;
         setView(
-          retainedBaseline !== null && retainedOffset === offset
+          retainedBaseline !== null
+            && retainedOffset === offset
             ? retainedServerIngestionQueueView(
                 "loading",
                 connectionGeneration,
@@ -847,7 +878,8 @@ export function useServerIngestionQueue(
           input.queue
         ) as Extract<IngestionQueueEventDto, { type: "mutation" }>;
         if (!actionScope) return;
-        if (event.session.status === "completed" && "completed_item" in event.session) {
+        if (event.session.status === "completed"
+          && "completed_item" in event.session) {
           // Completion invalidation belongs to the queue owner, not to the
           // bounded page. A completed mutation outside this page still changes
           // both its retained browser card and the image-data projections.
@@ -855,7 +887,9 @@ export function useServerIngestionQueue(
             {
               pair: event.session,
               item: event.session.completed_item,
-              ...(event.session.display ? { display: event.session.display } : {}),
+              ...(event.session.display
+                ? { display: event.session.display }
+                : {}),
               serverVersion: event.session.version,
               serverSemanticRevision: event.session.last_semantic_revision,
               completedAt: event.session.completed_at
@@ -888,7 +922,10 @@ export function useServerIngestionQueue(
             requestSnapshot("reload");
           } else {
             if (bufferedAuthorityBaseline !== null) {
-              const preview = mergeIngestionQueueMutation(bufferedAuthorityBaseline, event);
+              const preview = mergeIngestionQueueMutation(
+                bufferedAuthorityBaseline,
+                event
+              );
               if (preview.kind === "reload") {
                 bufferedAuthorityBaseline = null;
                 // The active snapshot may already contain the mutation that
@@ -945,7 +982,10 @@ export function useServerIngestionQueue(
     }
 
     openEventSource();
-    setView((current) => emptyServerIngestionQueueView("connecting", current.connectionGeneration));
+    setView((current) => emptyServerIngestionQueueView(
+      "connecting",
+      current.connectionGeneration
+    ));
 
     return () => {
       disposed = true;
@@ -984,7 +1024,9 @@ export function useServerIngestionQueue(
   }, []);
   const recoverAuthority = useCallback(() => {
     const recover = recoverAuthorityRef.current;
-    return recover ? recover() : Promise.reject(new Error("内容接入队列连接尚未就绪"));
+    return recover
+      ? recover()
+      : Promise.reject(new Error("内容接入队列连接尚未就绪"));
   }, []);
   const recoverAfterSuccessfulAction = useCallback(() => {
     const invalidate = invalidateDisplayAuthorityRef.current;
@@ -995,7 +1037,10 @@ export function useServerIngestionQueue(
     invalidate();
     return recover();
   }, []);
-  const ensureRevision = useCallback((revision?: number, connectionGeneration?: number) => {
+  const ensureRevision = useCallback((
+    revision?: number,
+    connectionGeneration?: number
+  ) => {
     return ensureRevisionRef.current?.(revision, connectionGeneration) ?? false;
   }, []);
 

@@ -42,7 +42,8 @@ function createImageMutationSyncBatch(startingRevision: string): FlushableImageM
     let decision = forcedRebuildCount
       ? ({ mode: "rebuild", affectedCount: forcedRebuildCount } as const)
       : (declaredDecision ?? decideImageMutationSync(actualCount));
-    if (decision.mode === "exact" && decision.affectedCount !== actualCount) {
+    if (decision.mode === "exact"
+      && decision.affectedCount !== actualCount) {
       decision = {
         mode: "rebuild",
         affectedCount: Math.max(decision.affectedCount, actualCount)
@@ -92,7 +93,10 @@ function createImageMutationSyncBatch(startingRevision: string): FlushableImageM
     const pendingImageIds = [...imageIds];
     imageIds.clear();
     try {
-      await synchronizeReadyImageCacheMutation(pendingImageIds, committedRevision);
+      await synchronizeReadyImageCacheMutation(
+        pendingImageIds,
+        committedRevision
+      );
       return { ...decision, cacheAction: "synchronized" };
     } catch (error) {
       reportReadyImageCacheFailure(error);
@@ -230,7 +234,12 @@ export async function withPlannedImageMutationRebuild<T>(
   return value as T;
 }
 
-export function withPlannedImageMutation<T>(affectedCount: number, work: () => Promise<T>) {
+export function withPlannedImageMutation<T>(
+  affectedCount: number,
+  work: () => Promise<T>
+) {
   const decision = decideImageMutationSync(affectedCount);
-  return decision.mode === "rebuild" ? withPlannedImageMutationRebuild(decision, work) : work();
+  return decision.mode === "rebuild"
+    ? withPlannedImageMutationRebuild(decision, work)
+    : work();
 }

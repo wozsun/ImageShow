@@ -23,7 +23,10 @@ export function CopyButton({
       setStatus("failed");
     }
     window.clearTimeout(resetTimer.current);
-    resetTimer.current = window.setTimeout(() => setStatus("idle"), defaultUiFeedbackDurationMs);
+    resetTimer.current = window.setTimeout(
+      () => setStatus("idle"),
+      defaultUiFeedbackDurationMs
+    );
   };
 
   const copied = status === "copied";

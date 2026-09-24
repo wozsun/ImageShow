@@ -80,7 +80,9 @@ export async function assertRequiredForeignKeys(database: DatabaseReader) {
   );
   if (missing.length) {
     throw new Error(
-      `required foreign keys are missing or invalid: ${missing.map(foreignKeyLabel).join(", ")}`
+      `required foreign keys are missing or invalid: ${missing
+        .map(foreignKeyLabel)
+        .join(", ")}`
     );
   }
 }

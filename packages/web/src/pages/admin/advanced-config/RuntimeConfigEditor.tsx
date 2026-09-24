@@ -13,7 +13,10 @@ import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import type { RuntimeConfigChangeSummary } from "../../../lib/types.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
-import { createActionFeedback, type ActionFeedbackState } from "../../../lib/ui/action-feedback.js";
+import {
+  createActionFeedback,
+  type ActionFeedbackState
+} from "../../../lib/ui/action-feedback.js";
 import {
   ActionFeedbackOutlet,
   ActionFeedbackRegion,
@@ -73,7 +76,10 @@ export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
   const validateStatus = useAsyncActionStatus({ successDurationMs: null });
   const isDirty = text !== baseline;
   const actionPending =
-    Boolean(action) || formatStatus.pending || reloadStatus.pending || validateStatus.pending;
+    Boolean(action)
+      || formatStatus.pending
+      || reloadStatus.pending
+      || validateStatus.pending;
 
   const bindEditorScroll = (view: EditorView) => {
     editorScrollRef.current = view.scrollDOM;

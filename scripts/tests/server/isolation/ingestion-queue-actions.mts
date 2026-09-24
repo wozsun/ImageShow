@@ -106,7 +106,11 @@ await runIntegrationScenario(async (runtime) => {
             ...withoutHash,
             semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(withoutHash)
           },
-          displayOrderKey(sessionId, batchPosition, acceptedAt),
+          displayOrderKey(
+            sessionId,
+            batchPosition,
+            acceptedAt
+          ),
           acceptedAt
         )
       ).session
@@ -150,7 +154,11 @@ await runIntegrationScenario(async (runtime) => {
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
-    [actionFirst.image_id, actionOwner, actionFirst.prepared.md5]
+    [
+        actionFirst.image_id,
+        actionOwner,
+        actionFirst.prepared.md5
+      ]
   );
   const activePgStatus = await ingestionSessionView.readIngestionStatuses(
     ingestionRepository,
@@ -164,8 +172,14 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.equal(activePgStatus[0].status, "completed");
   assert.equal(activePgStatus[0].redis_status, "active");
-  assert.equal(activePgStatus[0].redis_last_semantic_revision, actionFirst.last_semantic_revision);
-  await database.pool.query("DELETE FROM metadata WHERE id=$1", [actionFirst.image_id]);
+  assert.equal(
+    activePgStatus[0].redis_last_semantic_revision,
+    actionFirst.last_semantic_revision
+  );
+  await database.pool.query(
+    "DELETE FROM metadata WHERE id=$1",
+    [actionFirst.image_id]
+  );
   const actionPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
     repository: ingestionRepository,
     tokens: actionTokens,
@@ -207,9 +221,16 @@ await runIntegrationScenario(async (runtime) => {
       request,
       abortActive: () => undefined
     });
-  const firstActionBatch = await runAction(limitedActionRepository, applyActionRequest);
+  const firstActionBatch = await runAction(
+    limitedActionRepository,
+    applyActionRequest
+  );
   assert.equal(firstActionBatch.processed, 1);
-  assert.equal(firstActionBatch.changed, 1, JSON.stringify(firstActionBatch));
+  assert.equal(
+    firstActionBatch.changed,
+    1,
+    JSON.stringify(firstActionBatch)
+  );
   assert.ok(firstActionBatch.continuation);
   assert.equal(firstActionBatch.items[0].session_id, actionFirst.session_id);
   const initialActionCursor = ingestionActionProtocol.resolveIngestionQueueActionCursor({
@@ -233,7 +254,10 @@ await runIntegrationScenario(async (runtime) => {
     "continuation 必须在冻结水位内单调向上推进"
   );
   const actionFirstAfterFirst = activeSession(
-    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      actionFirst.session_id
+    )
   );
   await assert.rejects(
     runAction(limitedActionRepository, {
@@ -263,11 +287,22 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.equal(editAfterLostResponse[0].status, "changed");
   const actionFirstAfterEdit = activeSession(
-    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      actionFirst.session_id
+    )
   );
-  const actionRevisionAfterEdit = (await ingestionRepository.snapshot(actionOwner, "import", 0, 0))
+  const actionRevisionAfterEdit = (await ingestionRepository.snapshot(
+    actionOwner,
+    "import",
+    0,
+    0
+  ))
     .metadata.revision;
-  const retriedFirstActionBatch = await runAction(limitedActionRepository, applyActionRequest);
+  const retriedFirstActionBatch = await runAction(
+    limitedActionRepository,
+    applyActionRequest
+  );
   assert.deepEqual(
     retriedFirstActionBatch,
     firstActionBatch,
@@ -275,18 +310,29 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.ok(retriedFirstActionBatch.continuation);
   assert.equal(
-    activeSession(await ingestionRepository.readSession(actionOwner, actionFirst.session_id))
+    activeSession(await ingestionRepository.readSession(
+      actionOwner,
+      actionFirst.session_id
+    ))
       .version,
     actionFirstAfterEdit.version,
     "首批响应丢失重试不得覆盖其后编辑或推进 version"
   );
   assert.equal(
-    activeSession(await ingestionRepository.readSession(actionOwner, actionFirst.session_id))
+    activeSession(await ingestionRepository.readSession(
+      actionOwner,
+      actionFirst.session_id
+    ))
       .metadata.title,
     "newer edit after lost action response"
   );
   assert.equal(
-    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0)).metadata.revision,
+    (await ingestionRepository.snapshot(
+      actionOwner,
+      "import",
+      0,
+      0
+    )).metadata.revision,
     actionRevisionAfterEdit,
     "首批响应丢失重试不得在后续编辑后推进 queue revision"
   );
@@ -313,7 +359,10 @@ await runIntegrationScenario(async (runtime) => {
     ascendingActionAfterFrozenWatermarkResult.version,
     ascendingActionAfterFrozenWatermark.version
   );
-  await discardOrderProbe(ascendingActionAfterFrozenWatermarkResult, Date.now());
+  await discardOrderProbe(
+    ascendingActionAfterFrozenWatermarkResult,
+    Date.now()
+  );
 
   const noOpActionPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
     repository: ingestionRepository,
@@ -325,10 +374,18 @@ await runIntegrationScenario(async (runtime) => {
     limit: 10
   });
   const noOpActionCurrent = activeSession(
-    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      actionFirst.session_id
+    )
   );
   const noOpVersionBefore = noOpActionCurrent.version;
-  const noOpRevisionBefore = (await ingestionRepository.snapshot(actionOwner, "import", 0, 0))
+  const noOpRevisionBefore = (await ingestionRepository.snapshot(
+    actionOwner,
+    "import",
+    0,
+    0
+  ))
     .metadata.revision;
   const noOpActionRequest = {
     ...applyActionRequest,
@@ -336,15 +393,26 @@ await runIntegrationScenario(async (runtime) => {
     action_watermark: noOpActionPage.action_watermark,
     metadata: { title: noOpActionCurrent.metadata.title }
   };
-  const noOpActionResult = await runAction(limitedActionRepository, noOpActionRequest);
+  const noOpActionResult = await runAction(
+    limitedActionRepository,
+    noOpActionRequest
+  );
   assert.equal(noOpActionResult.items[0].status, "unchanged");
   assert.equal(
-    activeSession(await ingestionRepository.readSession(actionOwner, actionFirst.session_id))
+    activeSession(await ingestionRepository.readSession(
+      actionOwner,
+      actionFirst.session_id
+    ))
       .version,
     noOpVersionBefore
   );
   assert.equal(
-    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0)).metadata.revision,
+    (await ingestionRepository.snapshot(
+      actionOwner,
+      "import",
+      0,
+      0
+    )).metadata.revision,
     noOpRevisionBefore
   );
 
@@ -353,10 +421,16 @@ await runIntegrationScenario(async (runtime) => {
     action_request_id: "00000000-0000-7004-8000-000000000091",
     metadata: { title: "new defaults at the same revision" }
   };
-  const sameRevisionNewResult = await runAction(limitedActionRepository, sameRevisionNewAction);
+  const sameRevisionNewResult = await runAction(
+    limitedActionRepository,
+    sameRevisionNewAction
+  );
   assert.equal(sameRevisionNewResult.items[0].status, "changed");
   const afterSameRevisionNewAction = activeSession(
-    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      actionFirst.session_id
+    )
   );
   assert.equal(
     afterSameRevisionNewAction.metadata.title,
@@ -364,12 +438,23 @@ await runIntegrationScenario(async (runtime) => {
     "纯 no-op 不推进 revision，因此同水位后执行操作仍可生效"
   );
   const revisionAfterSameRevisionNewAction = (
-    await ingestionRepository.snapshot(actionOwner, "import", 0, 0)
+    await ingestionRepository.snapshot(
+      actionOwner,
+      "import",
+      0,
+      0
+    )
   ).metadata.revision;
-  const retriedOlderNoOpAction = await runAction(limitedActionRepository, noOpActionRequest);
+  const retriedOlderNoOpAction = await runAction(
+    limitedActionRepository,
+    noOpActionRequest
+  );
   assert.equal(retriedOlderNoOpAction.items[0].status, "changed");
   const afterRetriedOlderAction = activeSession(
-    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      actionFirst.session_id
+    )
   );
   assert.equal(
     afterRetriedOlderAction.metadata.title,
@@ -377,7 +462,12 @@ await runIntegrationScenario(async (runtime) => {
     "应用到全部只按执行顺序 CAS，不按旧点击水位后的语义修订筛选"
   );
   assert.ok(
-    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0)).metadata.revision >
+    (await ingestionRepository.snapshot(
+      actionOwner,
+      "import",
+      0,
+      0
+    )).metadata.revision >
       revisionAfterSameRevisionNewAction
   );
 
@@ -398,23 +488,45 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.equal(editAfterNoOpAction[0].status, "changed");
   const noOpAfterEdit = activeSession(
-    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      actionFirst.session_id
+    )
   );
-  const noOpRevisionAfterEdit = (await ingestionRepository.snapshot(actionOwner, "import", 0, 0))
+  const noOpRevisionAfterEdit = (await ingestionRepository.snapshot(
+    actionOwner,
+    "import",
+    0,
+    0
+  ))
     .metadata.revision;
-  const retriedNoOpAction = await runAction(limitedActionRepository, sameRevisionNewAction);
+  const retriedNoOpAction = await runAction(
+    limitedActionRepository,
+    sameRevisionNewAction
+  );
   assert.equal(retriedNoOpAction.items[0].status, "changed");
   assert.equal(
-    activeSession(await ingestionRepository.readSession(actionOwner, actionFirst.session_id))
+    activeSession(await ingestionRepository.readSession(
+      actionOwner,
+      actionFirst.session_id
+    ))
       .metadata.title,
     "new defaults at the same revision"
   );
   assert.ok(
-    activeSession(await ingestionRepository.readSession(actionOwner, actionFirst.session_id))
+    activeSession(await ingestionRepository.readSession(
+      actionOwner,
+      actionFirst.session_id
+    ))
       .version > noOpAfterEdit.version
   );
   assert.ok(
-    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0)).metadata.revision >
+    (await ingestionRepository.snapshot(
+      actionOwner,
+      "import",
+      0,
+      0
+    )).metadata.revision >
       noOpRevisionAfterEdit
   );
 
@@ -429,7 +541,10 @@ await runIntegrationScenario(async (runtime) => {
     limit: 10
   });
   const atomicStaleSnapshot = activeSession(
-    await ingestionRepository.readSession(actionOwner, atomicActionSession.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      atomicActionSession.session_id
+    )
   );
   const staleActionRepository = repositoryWithOverrides(ingestionRepository, {
     scanAction: async () => ({
@@ -446,7 +561,10 @@ await runIntegrationScenario(async (runtime) => {
     action_watermark: atomicActionPage.action_watermark,
     metadata: { title: atomicStaleSnapshot.metadata.title }
   };
-  const atomicNewerResult = await runAction(staleActionRepository, atomicNewerRequest);
+  const atomicNewerResult = await runAction(
+    staleActionRepository,
+    atomicNewerRequest
+  );
   assert.equal(atomicNewerResult.items[0].status, "unchanged");
 
   const atomicOlderResult = await runAction(staleActionRepository, {
@@ -456,7 +574,10 @@ await runIntegrationScenario(async (runtime) => {
   });
   assert.equal(atomicOlderResult.items[0].status, "changed");
   let atomicCurrent = activeSession(
-    await ingestionRepository.readSession(actionOwner, atomicActionSession.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      atomicActionSession.session_id
+    )
   );
   assert.equal(
     atomicCurrent.metadata.title,
@@ -475,9 +596,15 @@ await runIntegrationScenario(async (runtime) => {
       error.code === "ingestion_action_request_conflict"
   );
   atomicCurrent = activeSession(
-    await ingestionRepository.readSession(actionOwner, atomicActionSession.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      atomicActionSession.session_id
+    )
   );
-  assert.equal(atomicCurrent.metadata.title, "later smaller-id action must apply");
+  assert.equal(
+    atomicCurrent.metadata.title,
+    "later smaller-id action must apply"
+  );
 
   const businessEditAfterAction = activeResult(
     await ingestionRepository.mutateSemantic(
@@ -532,7 +659,10 @@ await runIntegrationScenario(async (runtime) => {
     limit: 10
   });
   const orderedStaleSnapshot = activeSession(
-    await ingestionRepository.readSession(actionOwner, orderedActionSession.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      orderedActionSession.session_id
+    )
   );
   const orderedStaleRepository = repositoryWithOverrides(ingestionRepository, {
     scanAction: async () => ({
@@ -549,10 +679,16 @@ await runIntegrationScenario(async (runtime) => {
     action_watermark: orderedActionPage.action_watermark,
     metadata: { title: "smaller action landed first" }
   };
-  const orderedSmallerResult = await runAction(orderedStaleRepository, orderedSmallerRequest);
+  const orderedSmallerResult = await runAction(
+    orderedStaleRepository,
+    orderedSmallerRequest
+  );
   assert.equal(orderedSmallerResult.items[0].status, "changed");
   const orderedAfterSmaller = activeSession(
-    await ingestionRepository.readSession(actionOwner, orderedActionSession.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      orderedActionSession.session_id
+    )
   );
   const editBetweenOrderedActions = activeResult(
     await ingestionRepository.mutateSemantic(
@@ -574,7 +710,10 @@ await runIntegrationScenario(async (runtime) => {
   });
   assert.equal(orderedLargerResult.items[0].status, "changed");
   const orderedCurrent = activeSession(
-    await ingestionRepository.readSession(actionOwner, orderedActionSession.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      orderedActionSession.session_id
+    )
   );
   assert.equal(orderedCurrent.metadata.title, "larger action must win");
   assert.equal(
@@ -586,7 +725,10 @@ await runIntegrationScenario(async (runtime) => {
     await ingestionRepository.mutateSemantic(
       orderedCurrent,
       orderedCurrent.version,
-      ingestionSessionTransitions.discardedIngestionReceipt(orderedCurrent, Date.now())
+      ingestionSessionTransitions.discardedIngestionReceipt(
+        orderedCurrent,
+        Date.now()
+      )
     )
   );
   await ingestionRepository.deleteSession(
@@ -595,7 +737,10 @@ await runIntegrationScenario(async (runtime) => {
   );
 
   const actionFirstCurrent = activeSession(
-    await ingestionRepository.readSession(actionOwner, actionFirst.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      actionFirst.session_id
+    )
   );
   const noOpUpdate = await ingestionSessionUpdate.updateIngestionSessions(
     ingestionRepository,
@@ -635,7 +780,10 @@ await runIntegrationScenario(async (runtime) => {
     limit: 10
   });
   const actionSecondBeforeStale = activeSession(
-    await ingestionRepository.readSession(actionOwner, actionSecond.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      actionSecond.session_id
+    )
   );
   await ingestionSessionUpdate.updateIngestionSessions(ingestionRepository, actionOwner, [
     {
@@ -655,7 +803,10 @@ await runIntegrationScenario(async (runtime) => {
     action: "commit_ready" as const,
     action_watermark: commitActionPage.action_watermark
   };
-  const commitActionResult = await runAction(ingestionRepository, commitActionRequest);
+  const commitActionResult = await runAction(
+    ingestionRepository,
+    commitActionRequest
+  );
   assert.equal(commitActionResult.changed, 1);
   assert.equal(
     commitActionResult.items.filter((item) => item.code === "ingestion_action_state_changed")
@@ -665,18 +816,34 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.equal(
     activeSession(
-      await ingestionRepository.readSession(actionOwner, actionAfterWatermark.session_id)
+      await ingestionRepository.readSession(
+        actionOwner,
+        actionAfterWatermark.session_id
+      )
     ).status,
     "ready",
     "watermark 后新建的 canonical 不得进入旧全队列动作"
   );
   const actionRevisionAfterCommit = (
-    await ingestionRepository.snapshot(actionOwner, "import", 0, 0)
+    await ingestionRepository.snapshot(
+      actionOwner,
+      "import",
+      0,
+      0
+    )
   ).metadata.revision;
-  const retriedCommitAction = await runAction(ingestionRepository, commitActionRequest);
+  const retriedCommitAction = await runAction(
+    ingestionRepository,
+    commitActionRequest
+  );
   assert.equal(retriedCommitAction.failed, 0);
   assert.equal(
-    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0)).metadata.revision,
+    (await ingestionRepository.snapshot(
+      actionOwner,
+      "import",
+      0,
+      0
+    )).metadata.revision,
     actionRevisionAfterCommit,
     "相同全队列提交 action ID 重试必须语义 no-op"
   );
@@ -700,16 +867,28 @@ await runIntegrationScenario(async (runtime) => {
     "accepted"
   );
   const duplicateRecoveryCommitting = committingSession(
-    await ingestionRepository.readSession(actionOwner, duplicateRecoveryReady.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      duplicateRecoveryReady.session_id
+    )
   );
   const duplicateRecoveryImageId = coreUuid.randomUuidV7();
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
-    [duplicateRecoveryImageId, actionOwner, duplicateRecoveryReady.prepared.md5]
+    [
+        duplicateRecoveryImageId,
+        actionOwner,
+        duplicateRecoveryReady.prepared.md5
+      ]
   );
   const duplicateRecoverySummaryBefore = (
-    await ingestionRepository.snapshot(actionOwner, "import", 0, 0)
+    await ingestionRepository.snapshot(
+      actionOwner,
+      "import",
+      0,
+      0
+    )
   ).metadata;
   assert.equal(
     await ingestionCommitConflictRecovery.recoverIngestionCommitDuplicateConflict(
@@ -724,16 +903,27 @@ await runIntegrationScenario(async (runtime) => {
     true
   );
   const duplicateRecoveryCurrent = preparedSession(
-    await ingestionRepository.readSession(actionOwner, duplicateRecoveryReady.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      duplicateRecoveryReady.session_id
+    )
   );
   assert.equal(duplicateRecoveryCurrent.status, "ready");
   assert.equal(duplicateRecoveryCurrent.prepared.duplicate_count, 1);
   assert.equal(duplicateRecoveryCurrent.duplicate_decision, undefined);
   assert.equal(duplicateRecoveryCurrent.commit, undefined);
   assert.equal(duplicateRecoveryCurrent.error, undefined);
-  assert.equal(duplicateRecoveryCurrent.version, duplicateRecoveryCommitting.version + 1);
+  assert.equal(
+    duplicateRecoveryCurrent.version,
+    duplicateRecoveryCommitting.version + 1
+  );
   const duplicateRecoverySummaryAfter = (
-    await ingestionRepository.snapshot(actionOwner, "import", 0, 0)
+    await ingestionRepository.snapshot(
+      actionOwner,
+      "import",
+      0,
+      0
+    )
   ).metadata;
   assert.equal(
     duplicateRecoverySummaryAfter.committing_resolving,
@@ -744,14 +934,21 @@ await runIntegrationScenario(async (runtime) => {
     duplicateRecoverySummaryBefore.duplicate_pending + 1,
     "内容锁后出现的重复项必须回到可确认状态而不是冻结为提交失败"
   );
-  await database.pool.query("DELETE FROM metadata WHERE id=$1", [duplicateRecoveryImageId]);
+  await database.pool.query(
+    "DELETE FROM metadata WHERE id=$1",
+    [duplicateRecoveryImageId]
+  );
 
   const duplicateIntentReady = await createActionReadySession("duplicate-before-intent");
   const duplicateIntentImageId = coreUuid.randomUuidV7();
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
-    [duplicateIntentImageId, actionOwner, duplicateIntentReady.prepared.md5]
+    [
+        duplicateIntentImageId,
+        actionOwner,
+        duplicateIntentReady.prepared.md5
+      ]
   );
   const [duplicateIntentResult] = await ingestionCommitIntent.acceptIngestionCommitIntents(
     ingestionRepository,
@@ -773,13 +970,19 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(duplicateIntentResult.duplicate_count, 1);
   assert.equal(duplicateIntentResult.version, duplicateIntentReady.version + 1);
   const duplicateIntentCurrent = preparedSession(
-    await ingestionRepository.readSession(actionOwner, duplicateIntentReady.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      duplicateIntentReady.session_id
+    )
   );
   assert.equal(duplicateIntentCurrent.status, "ready");
   assert.equal(duplicateIntentCurrent.prepared.duplicate_count, 1);
   assert.equal(duplicateIntentCurrent.duplicate_decision, undefined);
   assert.equal(duplicateIntentCurrent.commit, undefined);
-  await database.pool.query("DELETE FROM metadata WHERE id=$1", [duplicateIntentImageId]);
+  await database.pool.query(
+    "DELETE FROM metadata WHERE id=$1",
+    [duplicateIntentImageId]
+  );
   const duplicateCountRefresh = await ingestionSessionUpdate.updateIngestionSessions(
     ingestionRepository,
     actionOwner,
@@ -796,11 +999,17 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(duplicateCountRefresh[0].duplicate_count, 0);
   assert.equal(duplicateCountRefresh[0].duplicate_decision, "upload");
   const duplicateCountCurrent = preparedSession(
-    await ingestionRepository.readSession(actionOwner, duplicateIntentCurrent.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      duplicateIntentCurrent.session_id
+    )
   );
   assert.equal(duplicateCountCurrent.prepared.duplicate_count, 0);
   assert.equal(duplicateCountCurrent.duplicate_decision, "upload");
-  const actionQueued = await createActionReadySession("apply-defaults-while-queued", false);
+  const actionQueued = await createActionReadySession(
+    "apply-defaults-while-queued",
+    false
+  );
   const queuedDraftUpdate = await ingestionSessionUpdate.updateIngestionSessions(
     ingestionRepository,
     actionOwner,
@@ -819,7 +1028,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(queuedDraftUpdate[0].status, "changed");
   assert.equal(queuedDraftUpdate[0].duplicate_count, 0);
   assert.equal(
-    activeSession(await ingestionRepository.readSession(actionOwner, actionQueued.session_id))
+    activeSession(await ingestionRepository.readSession(
+      actionOwner,
+      actionQueued.session_id
+    ))
       .metadata.title,
     "accepted 后补写的本地草稿",
     "页外 intent fence 必须能在 prepare 前写回 queued canonical"
@@ -846,7 +1058,10 @@ await runIntegrationScenario(async (runtime) => {
     "应用到全部必须覆盖点击水位内仍在 queued 的 canonical"
   );
   assert.equal(
-    activeSession(await ingestionRepository.readSession(actionOwner, actionQueued.session_id))
+    activeSession(await ingestionRepository.readSession(
+      actionOwner,
+      actionQueued.session_id
+    ))
       .metadata.author,
     "queued-default-author"
   );
@@ -892,7 +1107,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(staleNoOpResult[0].status, "failed");
   assert.equal(staleNoOpResult[0].code, "ingestion_version_conflict");
   const updateRaceCurrent = activeSession(
-    await ingestionRepository.readSession(actionOwner, updateRaceSession.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      updateRaceSession.session_id
+    )
   );
   assert.equal(
     updateRaceCurrent.metadata.title,
@@ -900,7 +1118,12 @@ await runIntegrationScenario(async (runtime) => {
     "旧快照的语义 no-op 不得吞掉并发草稿并报告成功"
   );
   const updateRaceSummaryBeforeReplay = (
-    await ingestionRepository.snapshot(actionOwner, "import", 0, 0)
+    await ingestionRepository.snapshot(
+      actionOwner,
+      "import",
+      0,
+      0
+    )
   ).metadata;
   const updateRaceDiscardAt = updateRaceCurrent.discard_at;
   const lostResponseReplay = await ingestionSessionUpdate.updateIngestionSessions(
@@ -918,7 +1141,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(lostResponseReplay[0].status, "unchanged");
   assert.equal(lostResponseReplay[0].version, updateRaceCurrent.version);
   const updateRaceAfterReplay = activeSession(
-    await ingestionRepository.readSession(actionOwner, updateRaceSession.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      updateRaceSession.session_id
+    )
   );
   assert.equal(updateRaceAfterReplay.version, updateRaceCurrent.version);
   assert.equal(updateRaceAfterReplay.discard_at, updateRaceDiscardAt);
@@ -937,7 +1163,12 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(futureVersionNoOp[0].status, "failed");
   assert.equal(futureVersionNoOp[0].code, "ingestion_version_conflict");
   assert.equal(
-    (await ingestionRepository.snapshot(actionOwner, "import", 0, 0)).metadata.revision,
+    (await ingestionRepository.snapshot(
+      actionOwner,
+      "import",
+      0,
+      0
+    )).metadata.revision,
     updateRaceSummaryBeforeReplay.revision,
     "响应丢失后的同语义重试不得推进 version、TTL 或 queue revision"
   );
@@ -963,14 +1194,21 @@ await runIntegrationScenario(async (runtime) => {
     "accepted"
   );
   const completedCommitActionCurrent = committingSession(
-    await ingestionRepository.readSession(actionOwner, completedCommitActionReady.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      completedCommitActionReady.session_id
+    )
   );
   assert.ok(completedCommitActionCurrent);
   assert.equal(completedCommitActionCurrent.status, "committing");
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
-    [completedCommitActionReady.image_id, actionOwner, completedCommitActionReady.prepared.md5]
+    [
+        completedCommitActionReady.image_id,
+        actionOwner,
+        completedCommitActionReady.prepared.md5
+      ]
   );
   const completedCommitActionPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
     repository: ingestionRepository,
@@ -1006,7 +1244,10 @@ await runIntegrationScenario(async (runtime) => {
     completedCommitActionReady.image_id
   ]);
 
-  const clearQueueVersionRace = await createActionReadySession("clear-queue-version-race", false);
+  const clearQueueVersionRace = await createActionReadySession(
+    "clear-queue-version-race",
+    false
+  );
   const clearQueueVersionRacePage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
     repository: ingestionRepository,
     tokens: actionTokens,
@@ -1017,7 +1258,10 @@ await runIntegrationScenario(async (runtime) => {
     limit: 10
   });
   const clearQueueVersionRaceStale = activeSession(
-    await ingestionRepository.readSession(actionOwner, clearQueueVersionRace.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      clearQueueVersionRace.session_id
+    )
   );
   let clearQueueVersionAdvanced = false;
   const clearQueueVersionRaceRepository = repositoryWithOverrides(ingestionRepository, {
@@ -1052,7 +1296,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(clearQueueVersionRaceResult.items[0]?.status, "changed");
   assert.equal(
     discardedSession(
-      await ingestionRepository.readSession(actionOwner, clearQueueVersionRace.session_id)
+      await ingestionRepository.readSession(
+        actionOwner,
+        clearQueueVersionRace.session_id
+      )
     )?.status,
     "discarded"
   );
@@ -1072,7 +1319,10 @@ await runIntegrationScenario(async (runtime) => {
       limit: 10
     });
   const filteredClearVersionRaceStale = activeSession(
-    await ingestionRepository.readSession(actionOwner, filteredClearVersionRace.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      filteredClearVersionRace.session_id
+    )
   );
   let filteredClearVersionAdvanced = false;
   const filteredClearVersionRaceRepository = repositoryWithOverrides(ingestionRepository, {
@@ -1110,7 +1360,10 @@ await runIntegrationScenario(async (runtime) => {
     "筛选清理应在 scan/cancel 竞态后重读并按冻结 revision 跳过"
   );
   const filteredClearVersionRaceCurrent = activeSession(
-    await ingestionRepository.readSession(actionOwner, filteredClearVersionRace.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      filteredClearVersionRace.session_id
+    )
   );
   assert.notEqual(filteredClearVersionRaceCurrent?.status, "discarded");
   const filteredClearVersionRaceDiscarded = discardedResult(
@@ -1147,12 +1400,19 @@ await runIntegrationScenario(async (runtime) => {
     "accepted"
   );
   const clearCompletedCommitting = committingSession(
-    await ingestionRepository.readSession(actionOwner, clearCompletedReady.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      clearCompletedReady.session_id
+    )
   );
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
-    [clearCompletedReady.image_id, actionOwner, clearCompletedReady.prepared.md5]
+    [
+        clearCompletedReady.image_id,
+        actionOwner,
+        clearCompletedReady.prepared.md5
+      ]
   );
   await ingestionCommitCompletion.publishCompletedReceipt(
     ingestionRepository,
@@ -1189,12 +1449,19 @@ await runIntegrationScenario(async (runtime) => {
     "accepted"
   );
   const deferredCompletedCommitting = committingSession(
-    await ingestionRepository.readSession(actionOwner, deferredCompletedReady.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      deferredCompletedReady.session_id
+    )
   );
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
        VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
-    [deferredCompletedReady.image_id, actionOwner, deferredCompletedReady.prepared.md5]
+    [
+        deferredCompletedReady.image_id,
+        actionOwner,
+        deferredCompletedReady.prepared.md5
+      ]
   );
   await ingestionCommitCompletion.publishCompletedReceipt(
     ingestionRepository,
@@ -1218,7 +1485,10 @@ await runIntegrationScenario(async (runtime) => {
     action_watermark: deferredCompletedExecutionPage.action_watermark,
     max_semantic_revision: clearCompletedPage.revision
   };
-  const clearCompletedResult = await runAction(ingestionRepository, clearCompletedActionRequest);
+  const clearCompletedResult = await runAction(
+    ingestionRepository,
+    clearCompletedActionRequest
+  );
   const clearedCompletedItem = clearCompletedResult.items.find(
     (item) => item.session_id === clearCompletedReady.session_id
   );
@@ -1229,12 +1499,18 @@ await runIntegrationScenario(async (runtime) => {
     "页外 completed 回执必须在删除前把 PG 水合 DTO 带回动作响应"
   );
   assert.deepEqual(
-    await runAction(ingestionRepository, clearCompletedActionRequest),
+    await runAction(
+      ingestionRepository,
+      clearCompletedActionRequest
+    ),
     clearCompletedResult,
     "completed 回执删除后的同批响应丢失重试必须重放原完成 DTO"
   );
   assert.equal(
-    await ingestionRepository.readSession(actionOwner, clearCompletedReady.session_id),
+    await ingestionRepository.readSession(
+      actionOwner,
+      clearCompletedReady.session_id
+    ),
     null
   );
   const deferredCompletedResult = clearCompletedResult.items.find(
@@ -1247,7 +1523,10 @@ await runIntegrationScenario(async (runtime) => {
     "重连后执行的关闭清理不得纳入旧 semantic revision 之后才完成的任务"
   );
   const retainedDeferredCompleted = completedSession(
-    await ingestionRepository.readSession(actionOwner, deferredCompletedReady.session_id)
+    await ingestionRepository.readSession(
+      actionOwner,
+      deferredCompletedReady.session_id
+    )
   );
   assert.ok(retainedDeferredCompleted);
   assert.equal(retainedDeferredCompleted?.status, "completed");
@@ -1595,7 +1874,8 @@ await runIntegrationScenario(async (runtime) => {
   );
   const isolatedFailure = retrySessions.find(
     (session) =>
-      session.session_id !== staleTarget.session_id && session.session_id !== retryTarget.session_id
+      session.session_id !== staleTarget.session_id
+        && session.session_id !== retryTarget.session_id
   )!;
   const retryRepository = repositoryWithOverrides(ingestionRepository, {
     mutateSemantic: async (...args) => {

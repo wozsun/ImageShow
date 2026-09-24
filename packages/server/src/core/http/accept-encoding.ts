@@ -27,7 +27,9 @@ export function preferredEncodingGroups(header: string | undefined): EncodingGro
       // Implicit identity is a fallback; an explicit weight participates in ranking.
       weight:
         weights.get(encoding) ??
-        (encoding === "identity" ? (wildcard === 0 ? 0 : -1) : (wildcard ?? 0))
+        (encoding === "identity"
+          ? wildcard === 0 ? 0 : -1
+          : wildcard ?? 0)
     }))
     .filter(({ weight }) => weight !== 0)
     .sort((left, right) => right.weight - left.weight);

@@ -5,7 +5,10 @@ import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
 import { readyImageProjection } from "../../../lib/api/ready-image-cache.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
-import { formatBytes, revisionFingerprint } from "../../../lib/ui/formatters.js";
+import {
+  formatBytes,
+  revisionFingerprint
+} from "../../../lib/ui/formatters.js";
 import type { ReadyImageProjectionUsageSnapshot } from "./check-redis-inspection.js";
 
 function formatTime(value: string | null) {
@@ -60,7 +63,9 @@ export function ReadyImageCachePanel({
     }
   };
 
-  const redisFailure = query.data?.redis.status === "error" ? query.data.redis.error : null;
+  const redisFailure = query.data?.redis.status === "error"
+    ? query.data.redis.error
+    : null;
   const healthy = Boolean(status?.synchronized === true && !status.rebuilding);
   const statusError = query.isError
     ? "无法读取检查状态，请稍后重试。"
@@ -72,7 +77,9 @@ export function ReadyImageCachePanel({
     key_count: projectionUsage?.core.key_count ?? null,
     count: status?.item_count ?? null,
     memory_bytes:
-      projectionUsage?.core.memory_bytes ?? status?.last_full_rebuild_core_memory_bytes ?? null
+      projectionUsage?.core.memory_bytes
+        ?? status?.last_full_rebuild_core_memory_bytes
+        ?? null
   };
   const derivedOccupancy = projectionUsage
     ? {
@@ -81,8 +88,12 @@ export function ReadyImageCachePanel({
         memory_bytes: projectionUsage.derived.memory_bytes
       }
     : null;
-  const deepMeasuredAt = projectionUsage ? formatTime(projectionUsage.measured_at) : null;
-  const projectionUsageNoticePrefix = projectionUsageNotice ? `${projectionUsageNotice} ` : "";
+  const deepMeasuredAt = projectionUsage
+    ? formatTime(projectionUsage.measured_at)
+    : null;
+  const projectionUsageNoticePrefix = projectionUsageNotice
+    ? `${projectionUsageNotice} `
+    : "";
   const coreDetails = projectionUsage
     ? `${projectionUsageNoticePrefix}图片成员来自当前轻量状态；键数和内存来自最近一次完整 Redis 深检快照，测量于 ${deepMeasuredAt}。`
     : status?.last_full_rebuild_measured_at
@@ -101,12 +112,15 @@ export function ReadyImageCachePanel({
           <p>核心投影持久化图片读取；派生结果按需生成并带生命周期。</p>
         </div>
         <div className="actions">
-          <button type="button" disabled={busy || query.isFetching} onClick={() => void refresh()}>
+          <button type="button" disabled={busy
+            || query.isFetching} onClick={() => void refresh()}>
             <AdminIcon name="refresh-line" />
             <StableButtonLabel idle="刷新状态" busyText="刷新中" busy={manualRefreshing} />
           </button>
           {renderMaintenanceAction?.({
-            disabled: busy || query.isFetching || Boolean(status?.rebuilding)
+            disabled: busy
+              || query.isFetching
+              || Boolean(status?.rebuilding)
           })}
         </div>
       </div>

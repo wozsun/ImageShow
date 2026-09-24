@@ -64,7 +64,11 @@ function unchanged(
   };
 }
 
-function skipped(session: StoredIngestionSession, code: string, message: string): ActionItem {
+function skipped(
+  session: StoredIngestionSession,
+  code: string,
+  message: string
+): ActionItem {
   return { ...pair(session), status: "skipped", code, message };
 }
 
@@ -88,7 +92,12 @@ function metadataForAction(
   patch: Readonly<Partial<ImageDraftDto>>
 ) {
   const prepared = session.prepared;
-  const directFields = ["title", "description", "source", "original"] as const;
+  const directFields = [
+    "title",
+    "description",
+    "source",
+    "original"
+  ] as const;
   const metadata = { ...session.metadata };
   for (const field of directFields) {
     if (patch[field] !== undefined) metadata[field] = patch[field];
@@ -101,12 +110,16 @@ function metadataForAction(
   }
   if (patch.brightness !== undefined) {
     metadata.brightness =
-      patch.brightness === "auto" && prepared ? prepared.detected_brightness : patch.brightness;
+      patch.brightness === "auto" && prepared
+        ? prepared.detected_brightness
+        : patch.brightness;
   }
   if (patch.theme !== undefined) metadata.theme = patch.theme;
   if (patch.author !== undefined) metadata.author = patch.author;
   if (patch.tags !== undefined) {
-    metadata.tags = patch.tags.length ? [...new Set([...metadata.tags, ...patch.tags])] : [];
+    metadata.tags = patch.tags.length
+      ? [...new Set([...metadata.tags, ...patch.tags])]
+      : [];
   }
   return metadata;
 }
@@ -141,17 +154,28 @@ async function applyMetadataAction(
         const metadata = metadataForAction(session, input.metadata);
         const next = semanticIngestionSession(session, { metadata });
         try {
-          const result = await input.repository.mutateSemantic(session, session.version, next);
-          return result.changed ? changed(result.session) : unchanged(result.session);
+          const result = await input.repository.mutateSemantic(
+            session,
+            session.version,
+            next
+          );
+          return result.changed
+            ? changed(result.session)
+            : unchanged(result.session);
         } catch (error) {
-          if (!isIngestionVersionConflict(error) || attempt === queueActionMutationAttempts - 1) {
+          if (!isIngestionVersionConflict(error)
+            || attempt === queueActionMutationAttempts - 1) {
             throw error;
           }
         }
 
         input.assertScope();
-        const current = await input.repository.readSession(session.owner, session.session_id);
-        if (!current || current.image_id.toLowerCase() !== session.image_id.toLowerCase()) {
+        const current = await input.repository.readSession(
+          session.owner,
+          session.session_id
+        );
+        if (!current
+          || current.image_id.toLowerCase() !== session.image_id.toLowerCase()) {
           return skipped(
             initialSession,
             "ingestion_action_predicate_changed",
@@ -212,7 +236,8 @@ async function commitReadyAction(
   }> = [];
   const completedRetries = input.sessions.filter(
     (session) =>
-      session.status === "completed" && session.commit_request_id === input.actionRequestId
+      session.status === "completed"
+      && session.commit_request_id === input.actionRequestId
   ) as CompletedIngestionReceipt[];
   if (completedRetries.length) {
     input.assertScope();
@@ -226,7 +251,10 @@ async function commitReadyAction(
         input.owner
       );
       if (committedResult) {
-        results.set(pairKey(session), unchanged(session, committedResult.item));
+        results.set(
+          pairKey(session),
+          unchanged(session, committedResult.item)
+        );
       } else {
         try {
           await input.repository.deleteSession(session, session.version);
@@ -243,7 +271,11 @@ async function commitReadyAction(
     if (session.status === "completed" || session.status === "discarded") {
       results.set(
         pairKey(session),
-        skipped(session, "ingestion_action_predicate_changed", "当前任务已不再处于可提交状态")
+        skipped(
+          session,
+          "ingestion_action_predicate_changed",
+          "当前任务已不再处于可提交状态"
+        )
       );
       continue;
     }
@@ -251,18 +283,27 @@ async function commitReadyAction(
     if (!retry && session.last_semantic_revision > input.capturedRevision) {
       results.set(
         pairKey(session),
-        skipped(session, "ingestion_action_state_changed", "任务在操作确认后已发生变化")
+        skipped(
+          session,
+          "ingestion_action_state_changed",
+          "任务在操作确认后已发生变化"
+        )
       );
       continue;
     }
     const ready =
       session.status === "ready" &&
       Boolean(session.prepared) &&
-      (!session.prepared?.duplicate_count || Boolean(session.duplicate_decision));
+      (!session.prepared?.duplicate_count
+        || Boolean(session.duplicate_decision));
     if (!retry && !ready) {
       results.set(
         pairKey(session),
-        skipped(session, "ingestion_action_predicate_changed", "当前任务已不再处于可提交状态")
+        skipped(
+          session,
+          "ingestion_action_predicate_changed",
+          "当前任务已不再处于可提交状态"
+        )
       );
       continue;
     }
@@ -306,7 +347,9 @@ async function commitReadyAction(
       }
       results.set(
         pairKey(selectedItem.session),
-        selectedItem.retry ? unchanged(selectedItem.session) : changed(selectedItem.session)
+        selectedItem.retry
+          ? unchanged(selectedItem.session)
+          : changed(selectedItem.session)
       );
     });
   }
@@ -370,7 +413,10 @@ async function retryFailedAction(
   });
 }
 
-function cancelPredicate(action: IngestionQueueActionTypeDto, session: StoredIngestionSession) {
+function cancelPredicate(
+  action: IngestionQueueActionTypeDto,
+  session: StoredIngestionSession
+) {
   if (action === "clear_queue") return session.status !== "discarded";
   if (action === "clear_completed") return session.status === "completed";
   if (session.status === "completed" || session.status === "discarded") {
@@ -394,11 +440,20 @@ function cancelActionSkip(
   capturedRevision: number,
   session: StoredIngestionSession
 ) {
-  if (action !== "clear_queue" && session.last_semantic_revision > capturedRevision) {
-    return skipped(session, "ingestion_action_state_changed", "任务在操作确认后已发生变化");
+  if (action !== "clear_queue"
+    && session.last_semantic_revision > capturedRevision) {
+    return skipped(
+      session,
+      "ingestion_action_state_changed",
+      "任务在操作确认后已发生变化"
+    );
   }
   if (!cancelPredicate(action, session)) {
-    return skipped(session, "ingestion_action_predicate_changed", "任务不再符合当前清理条件");
+    return skipped(
+      session,
+      "ingestion_action_predicate_changed",
+      "任务不再符合当前清理条件"
+    );
   }
   return null;
 }
@@ -418,7 +473,11 @@ async function clearQueueAction(
   const results = new Map<string, ActionItem>();
   const selected: StoredIngestionSession[] = [];
   for (const session of input.sessions) {
-    const skip = cancelActionSkip(input.action, input.capturedRevision, session);
+    const skip = cancelActionSkip(
+      input.action,
+      input.capturedRevision,
+      session
+    );
     if (skip) {
       results.set(pairKey(session), skip);
       continue;
@@ -441,7 +500,10 @@ async function clearQueueAction(
           session.image_id,
           input.owner
         );
-        results.set(pairKey(session), changed(session, committedResult?.item));
+        results.set(
+          pairKey(session),
+          changed(session, committedResult?.item)
+        );
       } catch (error) {
         results.set(pairKey(session), failed(session, error));
       }
@@ -462,13 +524,20 @@ async function clearQueueAction(
       result: IngestionCancelItemResultDto
     ) => {
       if (result.status === "discarded") {
-        results.set(pairKey(session), changed(session, undefined, result.queue_revision));
+        results.set(
+          pairKey(session),
+          changed(session, undefined, result.queue_revision)
+        );
         return;
       }
       if (result.status === "resolving") {
         results.set(
           pairKey(session),
-          skipped(session, "ingestion_action_resolving", "数据库事务已经开始，任务将保留到结果明确")
+          skipped(
+            session,
+            "ingestion_action_resolving",
+            "数据库事务已经开始，任务将保留到结果明确"
+          )
         );
         return;
       }
@@ -483,15 +552,24 @@ async function clearQueueAction(
       }
       try {
         input.assertScope();
-        const current = await input.repository.readSession(input.owner, session.session_id);
+        const current = await input.repository.readSession(
+          input.owner,
+          session.session_id
+        );
         if (
           current?.status === "completed" &&
           current.image_id.toLowerCase() === session.image_id.toLowerCase()
         ) {
           await input.repository.deleteSession(current, current.version);
-          results.set(pairKey(session), changed(session, result.completed_item));
+          results.set(
+            pairKey(session),
+            changed(session, result.completed_item)
+          );
         } else {
-          results.set(pairKey(session), unchanged(session, result.completed_item));
+          results.set(
+            pairKey(session),
+            unchanged(session, result.completed_item)
+          );
         }
       } catch (error) {
         results.set(pairKey(session), failed(session, error));
@@ -550,7 +628,11 @@ async function clearQueueAction(
           );
           continue;
         }
-        const skip = cancelActionSkip(input.action, input.capturedRevision, current);
+        const skip = cancelActionSkip(
+          input.action,
+          input.capturedRevision,
+          current
+        );
         if (skip) {
           results.set(pairKey(target.initial), skip);
         } else if (current.status === "completed") {

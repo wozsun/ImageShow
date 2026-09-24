@@ -7,11 +7,23 @@ import {
   runRequiredRedisCommand
 } from "../../../core/runtime-availability.ts";
 import type { ImageFilterPlan } from "../../filter-plan.ts";
-import { readReadyImageAttributeIndex, resolveReadyImageAttributeIndex } from "./attribute.ts";
-import { ReadyImageCoreCacheError, isReadyImageCoreCacheError } from "../cache-errors.ts";
-import { getReadyImageCacheCoordinatorStatus, readyImageCacheIsReadable } from "../coordinator.ts";
+import {
+  readReadyImageAttributeIndex,
+  resolveReadyImageAttributeIndex
+} from "./attribute.ts";
+import {
+  ReadyImageCoreCacheError,
+  isReadyImageCoreCacheError
+} from "../cache-errors.ts";
+import {
+  getReadyImageCacheCoordinatorStatus,
+  readyImageCacheIsReadable
+} from "../coordinator.ts";
 import { discardReadyImageDerivedResult } from "../derived/lifecycle.ts";
-import { buildReadyImageFilterIndex, resolveDirectReadyImageFilterKey } from "./filter-builder.ts";
+import {
+  buildReadyImageFilterIndex,
+  resolveDirectReadyImageFilterKey
+} from "./filter-builder.ts";
 import {
   readReadyImageFilterIndex,
   validatePublishedReadyImageFilterIndex,
@@ -41,7 +53,9 @@ type ReadyImageFilterIndexResolution =
 
 function currentRevision() {
   const status = getReadyImageCacheCoordinatorStatus();
-  return status.readable && status.meta?.state === "ready" ? status.meta.appliedRevision : null;
+  return status.readable && status.meta?.state === "ready"
+    ? status.meta.appliedRevision
+    : null;
 }
 
 async function resolveReadyImageFilterIndexWithMode(
@@ -78,7 +92,12 @@ async function resolveReadyImageFilterIndexWithMode(
     if (direct) {
       const attribute = required
         ? await runRequiredRedisCommand(() => readReadyImageAttributeIndex(direct, revision))
-        : await resolveReadyImageAttributeIndex(direct, revision, signal, options.background);
+        : await resolveReadyImageAttributeIndex(
+            direct,
+            revision,
+            signal,
+            options.background
+          );
       if (currentRevision() !== revision) continue;
       if (attribute) return { kind: "attribute", ...attribute };
       if (required) {
@@ -97,7 +116,12 @@ async function resolveReadyImageFilterIndexWithMode(
       return null;
     }
     const built = await coalesce(`ready-image-filter:${plan.signature}`, () =>
-      buildReadyImageFilterIndex(plan, revision, signal, options.background)
+      buildReadyImageFilterIndex(
+        plan,
+        revision,
+        signal,
+        options.background
+      )
     );
     if (currentRevision() !== revision) continue;
     if (built) return built;
@@ -119,8 +143,15 @@ export async function resolveReadyImageFilterIndex(
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error;
     if (isReadyImageCoreCacheError(error)) throw error;
-    recordReadyImageCacheError("derived", "derived_filter_build_failed", error);
-    await discardReadyImageDerivedResult(readyImageFilterKey(plan.signature), "filter").catch(
+    recordReadyImageCacheError(
+      "derived",
+      "derived_filter_build_failed",
+      error
+    );
+    await discardReadyImageDerivedResult(
+      readyImageFilterKey(plan.signature),
+      "filter"
+    ).catch(
       () => undefined
     );
     logger.warn("ready_image_derived_filter_failed", {
@@ -173,7 +204,11 @@ export async function validateReadyImageFilterIndex(
       : { status: "invalid" };
   }
   if (index.kind === "attribute") {
-    const current = await readReadyImageAttributeIndex(index.key, index.revision, false);
+    const current = await readReadyImageAttributeIndex(
+      index.key,
+      index.revision,
+      false
+    );
     return current &&
       current.metaKey === index.metaKey &&
       current.count === index.count &&

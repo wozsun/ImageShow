@@ -17,7 +17,9 @@ export function staticResponseEtag(headers: Headers) {
   const length = rangeTotal ?? headers.get("Content-Length");
   const modifiedTime = modified ? new Date(modified).getTime() : Number.NaN;
   const resourceLength = length === null ? Number.NaN : Number(length);
-  if (!Number.isFinite(modifiedTime) || !Number.isSafeInteger(resourceLength) || resourceLength < 0)
+  if (!Number.isFinite(modifiedTime)
+    || !Number.isSafeInteger(resourceLength)
+    || resourceLength < 0)
     return "";
   const encoding = headers.get("Content-Encoding") ?? "identity";
   return `W/"${entityTagDigest(`${modifiedTime}:${resourceLength}:${encoding}`)}"`;

@@ -2,7 +2,10 @@ import { appConfig } from "@imageshow/shared";
 import { logger } from "../core/logger.ts";
 import { backgroundJobTypes } from "./types.ts";
 import { STORAGE_OBJECT_REMOVAL_CONCURRENCY } from "../storage/objects/removal-admission.ts";
-import { handleBackgroundJob, type BackgroundJobOutcome } from "./handlers.ts";
+import {
+  handleBackgroundJob,
+  type BackgroundJobOutcome
+} from "./handlers.ts";
 import {
   claimBackgroundJob,
   cleanupBackgroundJobHistory,
@@ -15,13 +18,16 @@ import {
   type BackgroundJob,
   type BackgroundJobType
 } from "./repository.ts";
-import { WorkerExecutionCoordinator, type WorkerExecutionCompletion } from "./worker-execution.ts";
+import {
+  WorkerExecutionCoordinator,
+  type WorkerExecutionCompletion
+} from "./worker-execution.ts";
 
 let timer: NodeJS.Timeout | undefined;
 let tickPromise: Promise<void> | null = null;
 const activeTypeSlices = new Map<BackgroundJobType, Promise<void>>();
-let lastStaleRecovery = 0;
-let lastHistoryCleanup = 0;
+let lastStaleRecoveryAtMs = 0;
+let lastHistoryCleanupAtMs = 0;
 
 function jobTypeConcurrency(type: BackgroundJobType): number {
   switch (type) {
@@ -58,7 +64,10 @@ async function settleBackgroundJob(
   completion: WorkerExecutionCompletion<BackgroundJobOutcome>
 ) {
   if (completion.status === "stopped") {
-    if (!(await rescheduleBackgroundJob(job, 0))) {
+    if (!(await rescheduleBackgroundJob(
+      job,
+      0
+    ))) {
       logDiscardedBackgroundJobTransition(job, "rescheduled");
     }
     return;
@@ -75,7 +84,10 @@ async function settleBackgroundJob(
   let transition: "rescheduled" | "succeeded";
   if (outcome.status === "reschedule") {
     transition = "rescheduled";
-    stored = await rescheduleBackgroundJob(job, outcome.delayMs);
+    stored = await rescheduleBackgroundJob(
+      job,
+      outcome.delayMs
+    );
   } else {
     transition = "succeeded";
     stored = await markBackgroundJobSucceeded(job);
@@ -134,26 +146,27 @@ async function runBackgroundJobType(
     processed,
     durationMs: performance.now() - startedAt,
     budgetExhausted:
-      claimed >= appConfig.backgroundJob.queueSliceMaxJobs || performance.now() >= deadline
+      claimed >= appConfig.backgroundJob.queueSliceMaxJobs
+        || performance.now() >= deadline
   };
 }
 
 async function runWorkerTick() {
   if (!executionCoordinator.isAccepting()) return;
   const now = Date.now();
-  if (now - lastStaleRecovery >= appConfig.backgroundJob.staleRecoveryIntervalMs) {
-    const delayMs = lastStaleRecovery
-      ? Math.max(0, now - lastStaleRecovery - appConfig.backgroundJob.staleRecoveryIntervalMs)
+  if (now - lastStaleRecoveryAtMs >= appConfig.backgroundJob.staleRecoveryIntervalMs) {
+    const delayMs = lastStaleRecoveryAtMs
+      ? Math.max(0, now - lastStaleRecoveryAtMs - appConfig.backgroundJob.staleRecoveryIntervalMs)
       : 0;
-    lastStaleRecovery = now;
+    lastStaleRecoveryAtMs = now;
     await recoverStaleBackgroundJobs();
     logger.debug("worker_periodic_task", { task: "stale_recovery", delay_ms: delayMs });
   }
-  if (now - lastHistoryCleanup >= appConfig.backgroundJob.historyCleanupIntervalMs) {
-    const delayMs = lastHistoryCleanup
-      ? Math.max(0, now - lastHistoryCleanup - appConfig.backgroundJob.historyCleanupIntervalMs)
+  if (now - lastHistoryCleanupAtMs >= appConfig.backgroundJob.historyCleanupIntervalMs) {
+    const delayMs = lastHistoryCleanupAtMs
+      ? Math.max(0, now - lastHistoryCleanupAtMs - appConfig.backgroundJob.historyCleanupIntervalMs)
       : 0;
-    lastHistoryCleanup = now;
+    lastHistoryCleanupAtMs = now;
     await cleanupBackgroundJobHistory();
     logger.debug("worker_periodic_task", { task: "history_cleanup", delay_ms: delayMs });
   }
@@ -168,7 +181,10 @@ async function runWorkerTick() {
     if (activeTypeSlices.has(row.type)) continue;
     // Keep each type's concurrency bound while subsequent ticks can discover
     // other types and run periodic maintenance during a slow handler.
-    const slice = runBackgroundJobType(row.type, Math.min(jobTypeConcurrency(row.type), row.n))
+    const slice = runBackgroundJobType(
+      row.type,
+      Math.min(jobTypeConcurrency(row.type), row.n)
+    )
       .then((result) => {
         logger.debug("worker_queue_slice", {
           type: row.type,

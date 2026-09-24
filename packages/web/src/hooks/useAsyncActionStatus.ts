@@ -68,7 +68,9 @@ export function useAsyncActionStatus({
 
       if (mountedRef.current) {
         const nextStatus = successful && !operationFailed ? "success" : "error";
-        const nextDurationMs = nextStatus === "success" ? successDurationMs : errorDurationMs;
+        const nextDurationMs = nextStatus === "success"
+          ? successDurationMs
+          : errorDurationMs;
         if (nextDurationMs === null || nextDurationMs <= 0) {
           setStatus("idle");
         } else {

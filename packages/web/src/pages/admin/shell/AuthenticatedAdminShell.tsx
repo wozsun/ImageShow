@@ -1,6 +1,9 @@
 import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
-import type { AdminPreferences, AdminRole } from "@imageshow/shared/browser";
+import type {
+  AdminPreferences,
+  AdminRole
+} from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
 import { MobileNavigation } from "../../../components/navigation/MobileNavigation.js";
@@ -113,11 +116,22 @@ function AuthenticatedAdminLayout({
 
   const resolvedColorScheme = useAdminColorScheme(colorScheme);
   useLayoutEffect(() => {
-    setColorSchemeCycle((current) => reconcileAdminColorSchemeCycle(colorScheme, current));
+    setColorSchemeCycle((current) => reconcileAdminColorSchemeCycle(
+      colorScheme,
+      current
+    ));
   }, [colorScheme]);
-  const nextColorScheme = nextAdminColorScheme(colorScheme, resolvedColorScheme, colorSchemeCycle);
+  const nextColorScheme = nextAdminColorScheme(
+    colorScheme,
+    resolvedColorScheme,
+    colorSchemeCycle
+  );
   const handleColorSchemeChange = (next: typeof colorScheme) => {
-    setColorSchemeCycle(advanceAdminColorSchemeCycle(colorScheme, resolvedColorScheme, next));
+    setColorSchemeCycle(advanceAdminColorSchemeCycle(
+      colorScheme,
+      resolvedColorScheme,
+      next
+    ));
     setColorScheme(next);
   };
 

@@ -1,4 +1,9 @@
-import { brotliCompress, constants as zlibConstants, gzip, zstdCompress } from "node:zlib";
+import {
+  brotliCompress,
+  constants as zlibConstants,
+  gzip,
+  zstdCompress
+} from "node:zlib";
 import { promisify } from "node:util";
 
 const gzipAsync = promisify(gzip);
@@ -15,7 +20,8 @@ export const staticAssetCompression = Object.freeze({
 
 export function staticAssetIsCompressible(fileName) {
   return (
-    staticAssetCompression.precompressPattern.test(fileName) && !/\.(?:br|zst|gz)$/.test(fileName)
+    staticAssetCompression.precompressPattern.test(fileName)
+      && !/\.(?:br|zst|gz)$/.test(fileName)
   );
 }
 

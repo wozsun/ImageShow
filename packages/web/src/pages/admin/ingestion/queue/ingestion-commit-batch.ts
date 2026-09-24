@@ -1,6 +1,9 @@
 import { ingestionBatchHardLimit } from "@imageshow/shared/browser";
 import type { IngestionJob } from "./model/ingestion-job.js";
-import { commitStoredIngestions, getIngestionStatuses } from "./ingestion-http-client.js";
+import {
+  commitStoredIngestions,
+  getIngestionStatuses
+} from "./ingestion-http-client.js";
 import { ingestionStatusEventPatch } from "./model/ingestion-status-state.js";
 import {
   completedIngestionObservations,
@@ -16,7 +19,10 @@ type CommitSelectedIngestionsOptions = {
 };
 
 function commitInput(job: IngestionJob) {
-  if (!job.sessionId || !job.imageId || !job.serverVersion || !job.commitIntent) {
+  if (!job.sessionId
+    || !job.imageId
+    || !job.serverVersion
+    || !job.commitIntent) {
     throw new Error("提交任务缺少服务端 pair、版本或提交意图");
   }
   return {
@@ -26,12 +32,17 @@ function commitInput(job: IngestionJob) {
     expected_md5: job.commitIntent.md5,
     commit_request_id: job.commitIntent.attemptId,
     duplicate_decision:
-      job.duplicateDecision === "confirmed" ? ("confirmed" as const) : ("upload" as const),
+      job.duplicateDecision === "confirmed"
+        ? "confirmed" as const
+        : "upload" as const,
     metadata: job.commitIntent.metadata
   };
 }
 
-function currentCommitJob(options: CommitSelectedIngestionsOptions, selected: IngestionJob) {
+function currentCommitJob(
+  options: CommitSelectedIngestionsOptions,
+  selected: IngestionJob
+) {
   const current = options.getJob(selected.id);
   return current?.commitIntent?.attemptId === selected.commitIntent?.attemptId
     ? current
@@ -51,7 +62,10 @@ async function reconcileUnknownBatch(
       }))
     );
     const completed = completedIngestionObservations(states);
-    const statesByPair = new Map(states.map((state) => [serverIngestionPairKey(state), state]));
+    const statesByPair = new Map(states.map((state) => [
+      serverIngestionPairKey(state),
+      state
+    ]));
     for (const job of selected) {
       const current = currentCommitJob(options, job);
       if (!current) continue;
@@ -92,7 +106,10 @@ async function reconcileUnknownBatch(
   }
 }
 
-async function commitBatch(options: CommitSelectedIngestionsOptions, selected: IngestionJob[]) {
+async function commitBatch(
+  options: CommitSelectedIngestionsOptions,
+  selected: IngestionJob[]
+) {
   let response: Awaited<ReturnType<typeof commitStoredIngestions>>;
   try {
     response = await commitStoredIngestions(selected.map(commitInput));
@@ -102,7 +119,10 @@ async function commitBatch(options: CommitSelectedIngestionsOptions, selected: I
       completed: await reconcileUnknownBatch(options, selected, error)
     };
   }
-  const results = new Map(response.items.map((result) => [serverIngestionPairKey(result), result]));
+  const results = new Map(response.items.map((result) => [
+    serverIngestionPairKey(result),
+    result
+  ]));
   let accepted = 0;
   const completed: CompletedIngestionObservation[] = [];
   for (const job of selected) {
@@ -125,7 +145,8 @@ async function commitBatch(options: CommitSelectedIngestionsOptions, selected: I
       continue;
     }
     if (result.status === "failed") {
-      if (result.code === "ingestion_duplicate_conflict" && result.duplicates?.length) {
+      if (result.code === "ingestion_duplicate_conflict"
+        && result.duplicates?.length) {
         options.updateJob(current.id, {
           status: "ready",
           failureStage: undefined,
@@ -141,7 +162,9 @@ async function commitBatch(options: CommitSelectedIngestionsOptions, selected: I
         options.updateJob(current.id, {
           status: "failed",
           failureStage: "commit",
-          commitFailureCheckpoint: result.code === "invalid_ingestion_state" ? "ready" : "unknown",
+          commitFailureCheckpoint: result.code === "invalid_ingestion_state"
+            ? "ready"
+            : "unknown",
           resultState: undefined,
           message: result.message
         });

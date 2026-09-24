@@ -3,7 +3,11 @@ import { ApiError } from "../api-error.ts";
 import { parseHttpMimeType } from "./media-type.ts";
 
 export function invalidJsonBodyError() {
-  return new ApiError(400, "invalid_json", "Request body must contain valid JSON");
+  return new ApiError(
+    400,
+    "invalid_json",
+    "Request body must contain valid JSON"
+  );
 }
 
 export function isJsonContentType(value: string | undefined) {

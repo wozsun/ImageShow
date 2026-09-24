@@ -7,7 +7,7 @@ import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
   const { createHttpApp } = await import("../../../../packages/server/src/http-app.ts");
-  const { LocalBackend } = await import("../../../../packages/server/src/storage/drivers/local.ts");
+  const { LocalStorageDriver } = await import("../../../../packages/server/src/storage/drivers/local.ts");
   const { updateStorageBackend } =
     await import("../../../../packages/server/src/storage/backends/update.ts");
   const { reloadRuntimeConfigFromDisk } =
@@ -29,7 +29,7 @@ await runIntegrationScenario(async (runtime) => {
   const id = "00000000-0000-7000-8000-0000000000c1";
   const key = storageObjectKey(id, "webp");
   const bytes = Buffer.from("synthetic image bytes for access contracts");
-  const local = new LocalBackend();
+  const local = new LocalStorageDriver();
   await runtime.databasePools.pool.query(
     "INSERT INTO metadata(id,created_by,status,storage_slug,device,brightness,ext,md5) VALUES($1,'integration-admin','ready','local','pc','dark','webp',$2)",
     [id, "1".repeat(32)]
@@ -125,7 +125,7 @@ await runIntegrationScenario(async (runtime) => {
     embed: { allowed_origins: ["https://portal.example.test", "https://*.trusted.example.test"] }
   });
 
-  const openRead = mock.method(LocalBackend.prototype, "openRead");
+  const openRead = mock.method(LocalStorageDriver.prototype, "openRead");
   try {
     for (const prefix of ["full", "thumbs"]) {
       const path = `/images/${prefix}/${key}`;

@@ -1,5 +1,8 @@
 import { appConfig } from "@imageshow/shared";
-import { getRuntimeConfig, onRuntimeConfigChange } from "../../../config/runtime-config-store.ts";
+import {
+  getRuntimeConfig,
+  onRuntimeConfigChange
+} from "../../../config/runtime-config-store.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { logger } from "../../../core/logger.ts";
 import {
@@ -29,7 +32,10 @@ import {
 } from "../sessions/model.ts";
 import { IngestionSessionRecovery } from "./session-recovery.ts";
 import { IngestionSessionRepository } from "../repository.ts";
-import { failedIngestionSession, semanticIngestionSession } from "../sessions/transitions.ts";
+import {
+  failedIngestionSession,
+  semanticIngestionSession
+} from "../sessions/transitions.ts";
 import { withImportPrefetchAdmission } from "./import-prefetch.ts";
 
 export function isSameFailedIngestionExecution(
@@ -433,7 +439,10 @@ export class IngestionSessionWorker {
       if (session.status !== "committing") continue;
       this.#startSession(session, "commit");
     }
-    if (ingestionRunnablePassComplete(page, this.#commitRefillCursorScore)) {
+    if (ingestionRunnablePassComplete(
+      page,
+      this.#commitRefillCursorScore
+    )) {
       this.#commitRefillCursorScore = 0;
       this.#commitRefillFrozenTailScore = 0;
       return;
@@ -455,12 +464,18 @@ export class IngestionSessionWorker {
       this.#runnableFrozenTailScore,
       limit
     );
-    const passComplete = ingestionRunnablePassComplete(page, this.#runnableCursorScore);
+    const passComplete = ingestionRunnablePassComplete(
+      page,
+      this.#runnableCursorScore
+    );
     const plan = planIngestionWorkerLanes(
       page.items.map(({ session }) => session),
       this.#active.values(),
       this.#runnableBlockedLanes,
-      ingestionWorkerDispatchWindows(this.#normalizeConcurrency, this.#commitConcurrency)
+      ingestionWorkerDispatchWindows(
+        this.#normalizeConcurrency,
+        this.#commitConcurrency
+      )
     );
     for (const { session, lane } of plan.candidates) {
       if (!this.#accepting) break;
@@ -477,7 +492,10 @@ export class IngestionSessionWorker {
     }
   }
 
-  #startSession(session: IngestionSessionSnapshot, lane: IngestionWorkerLane) {
+  #startSession(
+    session: IngestionSessionSnapshot,
+    lane: IngestionWorkerLane
+  ) {
     const key = pairKey(session);
     if (this.#active.has(key)) return false;
     const controller = new AbortController();
@@ -500,7 +518,11 @@ export class IngestionSessionWorker {
       .then(() => undefined)
       .catch(async (error) => {
         if (failedExecution) {
-          await this.#settleStageFailure(failedExecution, error, controller.signal);
+          await this.#settleStageFailure(
+            failedExecution,
+            error,
+            controller.signal
+          );
         }
       })
       .finally(() => {
@@ -540,7 +562,11 @@ export class IngestionSessionWorker {
       return withImportPrefetchAdmission(signal, async (onNormalizationAdmitted) => {
         const claimed = await this.#claimStage(session, "downloading");
         onExecution(claimed);
-        const downloaded = await downloadIngestionSessionSnapshot(this.repository, claimed, signal);
+        const downloaded = await downloadIngestionSessionSnapshot(
+          this.repository,
+          claimed,
+          signal
+        );
         signal.throwIfAborted();
         const preparing = await this.#claimStage(downloaded, "preparing");
         onExecution(preparing);
@@ -555,7 +581,11 @@ export class IngestionSessionWorker {
         signal.throwIfAborted();
         const claimed = await this.#claimStage(session, "preparing");
         onExecution(claimed);
-        await this.#prepareSession(claimed, signal, onNormalizationAdmitted);
+        await this.#prepareSession(
+          claimed,
+          signal,
+          onNormalizationAdmitted
+        );
       };
       return session.queue === "import"
         ? withImportPrefetchAdmission(signal, (onNormalizationAdmitted) =>
@@ -573,7 +603,12 @@ export class IngestionSessionWorker {
       );
       return withIngestionCommitAdmission(bytes, signal, () => {
         onExecution(session);
-        return commitIngestionSessionSnapshot(this.repository, this.#coordinator, session, signal);
+        return commitIngestionSessionSnapshot(
+          this.repository,
+          this.#coordinator,
+          session,
+          signal
+        );
       });
     }
   }
@@ -590,16 +625,25 @@ export class IngestionSessionWorker {
     );
   }
 
-  async #claimStage(session: IngestionSessionSnapshot, status: "downloading" | "preparing") {
+  async #claimStage(
+    session: IngestionSessionSnapshot,
+    status: "downloading" | "preparing"
+  ) {
     const next = semanticIngestionSession(session, {
       status,
       phase: status === "preparing" ? "prepare-waiting" : status,
-      message: status === "downloading" ? "服务器正在下载原图" : "原图素材已接收，等待图片处理许可",
+      message: status === "downloading"
+        ? "服务器正在下载原图"
+        : "原图素材已接收，等待图片处理许可",
       progress: status === "downloading" ? 0 : null,
       execution_token: randomUuidV7(),
       error: undefined
     });
-    return (await this.repository.mutateSemantic(session, session.version, next))
+    return (await this.repository.mutateSemantic(
+      session,
+      session.version,
+      next
+    ))
       .session as IngestionSessionSnapshot;
   }
 
@@ -610,7 +654,10 @@ export class IngestionSessionWorker {
   ) {
     if (signal.aborted || !this.#accepting) return;
     try {
-      const current = await this.repository.readSession(execution.owner, execution.session_id);
+      const current = await this.repository.readSession(
+        execution.owner,
+        execution.session_id
+      );
       if (
         !current ||
         current.status === "completed" ||
@@ -654,7 +701,11 @@ export class IngestionSessionWorker {
         );
         return;
       }
-      if (await recoverIngestionCommitDuplicateConflict(this.repository, current, error)) return;
+      if (await recoverIngestionCommitDuplicateConflict(
+        this.repository,
+        current,
+        error
+      )) return;
       await mutateIngestionExecution(this.repository, current, (latest) =>
         failedIngestionSession(latest, error)
       );

@@ -97,7 +97,9 @@ export async function forceTerminateProcessTree(child) {
     }
     return;
   }
-  const killed = spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+  const killed = spawnSync("taskkill", [
+    "/pid", String(child.pid), "/t", "/f"
+  ], {
     windowsHide: true,
     timeout: 5_000,
     killSignal: "SIGKILL",

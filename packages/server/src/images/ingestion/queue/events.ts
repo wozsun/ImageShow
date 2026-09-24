@@ -11,14 +11,23 @@ import { streamSSE } from "hono/streaming";
 import { raceWithAbortSignal } from "../../../core/abort.ts";
 import { logger } from "../../../core/logger.ts";
 import { registerAdminSessionConnection } from "../../../users/admin-session-connections.ts";
-import { validateAdminSessionById, type AdminSession } from "../../../users/admin-session.ts";
+import {
+  validateAdminSessionById,
+  type AdminSession
+} from "../../../users/admin-session.ts";
 import {
   openIngestionActionScope,
   requireIngestionActionScope,
   signIngestionActionWatermark
 } from "./action-scope.ts";
-import type { IngestionQueueType, StoredIngestionSession } from "../sessions/model.ts";
-import { IngestionSessionRepository, type IngestionQueueMutation } from "../repository.ts";
+import type {
+  IngestionQueueType,
+  StoredIngestionSession
+} from "../sessions/model.ts";
+import {
+  IngestionSessionRepository,
+  type IngestionQueueMutation
+} from "../repository.ts";
 import { presentIngestionQueueSummary } from "../sessions/projection.ts";
 import { presentIngestionSession } from "./session-view.ts";
 import type { IngestionTokenService } from "../sessions/token-service.ts";
@@ -66,7 +75,10 @@ function completedEventItem(
   };
 }
 
-function eventSession(session: StoredIngestionSession, completedItem?: CompletedIngestionImageDto) {
+function eventSession(
+  session: StoredIngestionSession,
+  completedItem?: CompletedIngestionImageDto
+) {
   if (session.status === "completed" && completedItem) {
     return completedEventItem(session, completedItem);
   }
@@ -139,7 +151,9 @@ export function streamIngestionQueueEvents(
       wakeWriter.resolve();
     };
     const sessionMatches = (session: AdminSession | null) =>
-      session && session.username === input.session.username && session.role === input.session.role;
+      session
+        && session.username === input.session.username
+        && session.role === input.session.role;
 
     try {
       controller.signal.throwIfAborted();

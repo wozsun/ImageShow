@@ -54,7 +54,8 @@ export class HomeEntranceController {
     this.#scheduler = options.scheduler ?? defaultScheduler;
     const initiallyRevealed = options.initiallyRevealed ?? false;
     this.#snapshot = {
-      navigationRevealed: initiallyRevealed || (options.navigationInitiallyRevealed ?? false),
+      navigationRevealed: initiallyRevealed
+        || (options.navigationInitiallyRevealed ?? false),
       heroRevealed: initiallyRevealed,
       catalogArmed: initiallyRevealed,
       backgroundReady: false,
@@ -80,7 +81,9 @@ export class HomeEntranceController {
   }
 
   backgroundBecameReady() {
-    if (this.#disposed || this.#backgroundFailed || this.#snapshot.backgroundReady) return;
+    if (this.#disposed
+      || this.#backgroundFailed
+      || this.#snapshot.backgroundReady) return;
     const foregroundSequenceWasStarted = this.#foregroundSequenceStarted;
     this.#snapshot = {
       ...this.#snapshot,
@@ -95,7 +98,9 @@ export class HomeEntranceController {
   }
 
   backgroundFailed() {
-    if (this.#disposed || this.#backgroundFailed || this.#snapshot.backgroundReady) return;
+    if (this.#disposed
+      || this.#backgroundFailed
+      || this.#snapshot.backgroundReady) return;
     this.#backgroundFailed = true;
     this.revealImmediately();
   }
@@ -105,7 +110,9 @@ export class HomeEntranceController {
   }
 
   reveal() {
-    if (this.#disposed || this.#snapshot.heroRevealed || this.#deadlineReleased) return;
+    if (this.#disposed
+      || this.#snapshot.heroRevealed
+      || this.#deadlineReleased) return;
     this.#deadlineReleased = true;
     this.#foregroundSequenceStarted = true;
     const now = this.#scheduler.now();
@@ -153,10 +160,12 @@ export class HomeEntranceController {
       this.reveal();
       return;
     }
-    if (this.#heroRevealAt !== undefined && now >= this.#heroRevealAt) {
+    if (this.#heroRevealAt !== undefined
+      && now >= this.#heroRevealAt) {
       this.#revealHero();
     }
-    if (this.#catalogRevealAt !== undefined && now >= this.#catalogRevealAt) {
+    if (this.#catalogRevealAt !== undefined
+      && now >= this.#catalogRevealAt) {
       this.#revealCatalog();
       return;
     }
@@ -169,7 +178,9 @@ export class HomeEntranceController {
   }
 
   #deadlineAnchor(now: number) {
-    return this.#deadlineAt === undefined ? now : Math.min(now, this.#deadlineAt);
+    return this.#deadlineAt === undefined
+      ? now
+      : Math.min(now, this.#deadlineAt);
   }
 
   #startForegroundSequence() {
@@ -197,7 +208,8 @@ export class HomeEntranceController {
   }
 
   #revealHero() {
-    if (this.#disposed || this.#snapshot.heroRevealed) return;
+    if (this.#disposed
+      || this.#snapshot.heroRevealed) return;
     this.#heroRevealAt = undefined;
     this.#snapshot = {
       ...this.#snapshot,

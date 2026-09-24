@@ -54,7 +54,9 @@ function PublicPageNotFound() {
 }
 
 function publicFallback(rootPath: ReturnType<typeof publicRootPath>) {
-  return rootPath ? <Navigate to={rootPath} replace /> : <PublicPageNotFound />;
+  return rootPath
+    ? <Navigate to={rootPath} replace />
+    : <PublicPageNotFound />;
 }
 
 export function AppRoutes() {

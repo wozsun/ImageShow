@@ -170,7 +170,11 @@ async function inspectImageIdentity(
   };
 }
 
-async function confirmAbsent(label, inspectArguments, { allowDuringInterrupt = false } = {}) {
+async function confirmAbsent(
+  label,
+  inspectArguments,
+  { allowDuringInterrupt = false } = {}
+) {
   const inspected = await runDocker(inspectArguments, {
     allowDuringInterrupt,
     allowFailure: true
@@ -286,11 +290,15 @@ async function performTemporaryImageCleanup() {
       throw new Error(`refusing to remove unowned image ${attemptedImageId}`);
     }
     const dangling = await runDocker(
-      ["image", "ls", "--all", "--quiet", "--no-trunc", "--filter", "dangling=true"],
+      [
+        "image", "ls", "--all", "--quiet", "--no-trunc",
+        "--filter", "dangling=true"
+      ],
       { allowDuringInterrupt: true }
     );
     const danglingIds = new Set(dangling.stdout.split(/\r?\n/u).filter(Boolean));
-    if (danglingIds.has(attemptedImageId) && !preexistingImageIds.has(attemptedImageId)) {
+    if (danglingIds.has(attemptedImageId)
+      && !preexistingImageIds.has(attemptedImageId)) {
       const removedId = await runDocker(["image", "rm", attemptedImageId], {
         allowDuringInterrupt: true,
         allowFailure: true
@@ -340,7 +348,10 @@ function cleanup() {
     }
     const cleanupErrors = [...terminationErrors];
     if (attemptedContainers.size > 0 || attemptedNetwork) {
-      const remaining = [...attemptedContainers, ...(attemptedNetwork ? [names.network] : [])];
+      const remaining = [
+        ...attemptedContainers,
+        ...(attemptedNetwork ? [names.network] : [])
+      ];
       cleanupErrors.push(
         ...lastRuntimeErrors,
         new Error(`resources still tracked: ${remaining.join(", ")}`)
@@ -360,7 +371,10 @@ function cleanup() {
     }
     if (attemptedImage) cleanupErrors.push(...lastImageErrors);
     if (cleanupErrors.length === 0) return;
-    throw new AggregateError(cleanupErrors, "runtime-image cleanup failed after bounded retry");
+    throw new AggregateError(
+      cleanupErrors,
+      "runtime-image cleanup failed after bounded retry"
+    );
   })();
   return cleanupPromise;
 }
@@ -438,7 +452,9 @@ async function applicationProbe(timeoutMs) {
 
 async function healthProbe(timeoutMs) {
   const result = await runDocker(
-    ["container", "inspect", "--format", "{{.State.Health.Status}}", names.app],
+    [
+      "container", "inspect", "--format", "{{.State.Health.Status}}", names.app
+    ],
     { allowFailure: true, timeoutMs }
   );
   if (result.code === 0 && result.stdout === "healthy") return result;
@@ -450,20 +466,26 @@ async function healthProbe(timeoutMs) {
 }
 
 async function containerImageId() {
-  const result = await runDocker(["container", "inspect", "--format", "{{.Image}}", names.app]);
+  const result = await runDocker([
+    "container", "inspect", "--format", "{{.Image}}", names.app
+  ]);
   return result.stdout;
 }
 
 async function stoppedContainerProbe(name, exitCode, timeoutMs) {
   const result = await runDocker(
-    ["container", "inspect", "--format", "{{.State.Status}} {{.State.ExitCode}}", name],
+    [
+      "container", "inspect", "--format",
+      "{{.State.Status}} {{.State.ExitCode}}", name
+    ],
     { allowFailure: true, timeoutMs }
   );
   if (result.code === 0 && result.stdout === `exited ${exitCode}`) return result;
   return {
     ...result,
     code: 1,
-    stderr: result.stderr || `container state: ${result.stdout || "missing"}`
+    stderr: result.stderr
+      || `container state: ${result.stdout || "missing"}`
   };
 }
 
@@ -495,8 +517,12 @@ async function applicationConnectionCount(databaseName) {
 }
 
 async function redisApplicationConnectionCount() {
-  const result = await runDocker(["exec", names.redis, "redis-cli", "--raw", "CLIENT", "LIST"]);
-  return result.stdout.split(/\r?\n/).filter((line) => line && !/\bcmd=client\|list\b/.test(line))
+  const result = await runDocker([
+    "exec", names.redis, "redis-cli", "--raw", "CLIENT", "LIST"
+  ]);
+  return result.stdout
+    .split(/\r?\n/)
+    .filter((line) => line && !/\bcmd=client\|list\b/.test(line))
     .length;
 }
 
@@ -566,7 +592,9 @@ try {
     "inspect",
     temporaryImageTag
   ]);
-  const imagesBeforeBuild = await runDocker(["image", "ls", "--all", "--quiet", "--no-trunc"]);
+  const imagesBeforeBuild = await runDocker([
+    "image", "ls", "--all", "--quiet", "--no-trunc"
+  ]);
   for (const imageId of imagesBeforeBuild.stdout.split(/\r?\n/u)) {
     if (imageId) preexistingImageIds.add(imageId);
   }
@@ -594,7 +622,12 @@ try {
   attemptedImageId = imageId;
 
   await confirmAbsent(`network ${names.network}`, ["network", "inspect", names.network]);
-  for (const name of [names.postgres, names.redis, names.failedApp, names.app]) {
+  for (const name of [
+    names.postgres,
+    names.redis,
+    names.failedApp,
+    names.app
+  ]) {
     await confirmAbsent(`container ${name}`, ["container", "inspect", name]);
   }
 
@@ -658,7 +691,9 @@ try {
     )
   );
   await waitFor("Redis", (timeoutMs) =>
-    runDocker(["exec", names.redis, "redis-cli", "ping"], { allowFailure: true, timeoutMs })
+    runDocker([
+      "exec", names.redis, "redis-cli", "ping"
+    ], { allowFailure: true, timeoutMs })
   );
 
   await runDocker([
@@ -688,7 +723,11 @@ try {
     "CREATE TABLE unrelated_marker(id integer PRIMARY KEY)"
   ]);
   attemptedContainers.add(names.failedApp);
-  await runDocker(applicationContainerArguments(names.failedApp, "imageshow_broken", imageId));
+  await runDocker(applicationContainerArguments(
+    names.failedApp,
+    "imageshow_broken",
+    imageId
+  ));
   await waitFor(
     "ImageShow initialization failure",
     (timeoutMs) => stoppedContainerProbe(names.failedApp, 1, timeoutMs),

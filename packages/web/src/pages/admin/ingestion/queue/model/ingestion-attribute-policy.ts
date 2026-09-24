@@ -44,16 +44,21 @@ export function ingestionAutomaticClassificationLabel(
 }
 
 export function ingestionJobAttributesEditable(job: IngestionJob) {
-  return ingestionAttributePhase(job) === "ready" && job.serverHandoffPending !== true;
+  return ingestionAttributePhase(job) === "ready"
+    && job.serverHandoffPending !== true;
 }
 
-export function imageDraftPatchChanges(draft: ImageDraft, patch: Partial<ImageDraft>) {
+export function imageDraftPatchChanges(
+  draft: ImageDraft,
+  patch: Partial<ImageDraft>
+) {
   return (Object.keys(patch) as Array<keyof ImageDraft>).some((field) => {
     const current = draft[field];
     const next = patch[field];
     if (Array.isArray(current) && Array.isArray(next)) {
       return (
-        current.length !== next.length || current.some((value, index) => value !== next[index])
+        current.length !== next.length
+          || current.some((value, index) => value !== next[index])
       );
     }
     return current !== next;
@@ -77,9 +82,13 @@ function readyAttributePatch(
   job: IngestionJob,
   defaults: IngestionAttributeDefaults
 ): Partial<ImageDraft> {
-  const device = defaults.device === "auto" ? job.detectedClassification?.device : defaults.device;
+  const device = defaults.device === "auto"
+    ? job.detectedClassification?.device
+    : defaults.device;
   const brightness =
-    defaults.brightness === "auto" ? job.detectedClassification?.brightness : defaults.brightness;
+    defaults.brightness === "auto"
+      ? job.detectedClassification?.brightness
+      : defaults.brightness;
   return {
     ...(device ? { device } : {}),
     ...(brightness ? { brightness } : {}),
@@ -98,7 +107,9 @@ export function ingestionAttributeDefaultsPatch(
     ...(phase === "initial"
       ? initialAttributePatch(job, defaults)
       : readyAttributePatch(job, defaults)),
-    ...(defaults.tags.length ? { tags: [...new Set([...job.draft.tags, ...defaults.tags])] } : {})
+    ...(defaults.tags.length
+      ? { tags: [...new Set([...job.draft.tags, ...defaults.tags])] }
+      : {})
   };
 }
 
@@ -120,7 +131,10 @@ export function canApplyIngestionAttributeDefaults(
   job: IngestionJob,
   defaults: IngestionAttributeDefaults
 ) {
-  return imageDraftPatchChanges(job.draft, ingestionAttributeDefaultsPatch(job, defaults));
+  return imageDraftPatchChanges(
+    job.draft,
+    ingestionAttributeDefaultsPatch(job, defaults)
+  );
 }
 
 export function canClearIngestionAttribute(job: IngestionJob) {

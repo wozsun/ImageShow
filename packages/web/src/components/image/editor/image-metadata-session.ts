@@ -4,8 +4,14 @@ import type {
   ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
 import { normalizeIngestionDraftUrl } from "@imageshow/shared/browser";
-import type { EditableImageSnapshot, ImageDraft } from "../../../lib/types.js";
-import { normalizeAuthor, normalizeTheme } from "../../../lib/image-draft.js";
+import type {
+  EditableImageSnapshot,
+  ImageDraft
+} from "../../../lib/types.js";
+import {
+  normalizeAuthor,
+  normalizeTheme
+} from "../../../lib/image-draft.js";
 
 export type ImageMetadataUpdate = ImageUpdateItemInputDto;
 
@@ -151,7 +157,8 @@ function submittedIntentMatchesSnapshot(
   const authoritativeDraft = draftFromImage(item);
   // auto 是重新识别命令，不是 PostgreSQL 的持久值。具体分类无法证明命令已经
   // 执行；只有服务端明确返回 updated 时才能清除，failed 或响应丢失都保留草稿。
-  if ((field === "device" || field === "brightness") && submitted === "auto") {
+  if ((field === "device" || field === "brightness")
+    && submitted === "auto") {
     return false;
   }
   // Persisted text is trimmed by the server. Draft identity above must keep
@@ -165,9 +172,13 @@ function submittedIntentMatchesSnapshot(
   return valuesEqual(field, submitted, authoritativeDraft[field]);
 }
 
-function updateMatchesSnapshot(update: ImageMetadataUpdate, item: EditableImageSnapshot) {
+function updateMatchesSnapshot(
+  update: ImageMetadataUpdate,
+  item: EditableImageSnapshot
+) {
   return imageDraftFields.every(
-    (field) => !Object.hasOwn(update, field) || submittedIntentMatchesSnapshot(field, update, item)
+    (field) => !Object.hasOwn(update, field)
+      || submittedIntentMatchesSnapshot(field, update, item)
   );
 }
 
@@ -222,7 +233,9 @@ export function imageMetadataCardSaveState(
   const result = report.results.find((candidate) => candidate.id === imageId);
   if (!result) return null;
   if (report.snapshotFailed) {
-    return report.responseReceived && result.status === "failed" ? "failed" : "pending";
+    return report.responseReceived && result.status === "failed"
+      ? "failed"
+      : "pending";
   }
   if (result.status === "failed") return "failed";
   return "saved";
@@ -265,7 +278,8 @@ export function reconcileImageMetadataSession(
         // 回读失败后用户可能继续编辑；新意图不属于上一轮提交，必须保留。
         continue;
       }
-      if (result?.status === "updated" || submittedIntentMatchesSnapshot(field, update, item)) {
+      if (result?.status === "updated"
+        || submittedIntentMatchesSnapshot(field, update, item)) {
         writableDraft[field] = authoritativeDraft[field];
       }
     }

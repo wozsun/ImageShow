@@ -6,40 +6,48 @@ import { applicationVersion } from "../../core/application-version.ts";
 import { listStorageBackends } from "../../storage/backends/registry.ts";
 import { importStorageBackends } from "../../storage/backends/mutations.ts";
 import {
-  buildConfigPackage,
-  parseConfigPackage,
-  projectConfigPackagePreview,
+  buildConfigBundle,
+  parseConfigBundle,
+  projectConfigBundlePreview,
   resolveImportedStorageBackends
 } from "./format.ts";
 import {
   getRuntimeConfig,
-  persistRuntimeConfigForPackageImport,
-  publishRuntimeConfigForPackageImport,
+  persistRuntimeConfigForBundleImport,
+  publishRuntimeConfigForBundleImport,
   withRuntimeConfigWriteLease
 } from "../runtime-config-store.ts";
 
-export async function createConfigPackage() {
-  return buildConfigPackage(getRuntimeConfig(), await listStorageBackends(), applicationVersion());
+export async function createConfigBundle() {
+  return buildConfigBundle(
+    getRuntimeConfig(),
+    await listStorageBackends(),
+    applicationVersion()
+  );
 }
 
-export async function previewConfigPackage(value: unknown) {
-  const pkg = parseConfigPackage(value);
+export async function previewConfigBundle(value: unknown) {
+  const bundle = parseConfigBundle(value);
   const existingSlugs = new Set((await listStorageBackends()).map((backend) => backend.slug));
-  return projectConfigPackagePreview(pkg, existingSlugs);
+  return projectConfigBundlePreview(bundle, existingSlugs);
 }
 
-export async function importConfigPackage(
+export async function importConfigBundle(
   value: unknown,
   slugMappings: Record<string, string>,
   signal?: AbortSignal
 ) {
-  const pkg = parseConfigPackage(value);
+  const bundle = parseConfigBundle(value);
   return withRuntimeConfigWriteLease(async () => {
     const existingSlugs = new Set((await listStorageBackends()).map((backend) => backend.slug));
-    const resolved = resolveImportedStorageBackends(pkg, existingSlugs, slugMappings);
+    const resolved = resolveImportedStorageBackends(
+      bundle,
+      existingSlugs,
+      slugMappings
+    );
     const previousRuntimeConfig = structuredClone(getRuntimeConfig());
     const importedRuntimeConfig = materializeImportedRuntimeConfig(
-      pkg.config,
+      bundle.config,
       previousRuntimeConfig.site.domain,
       previousRuntimeConfig.site.assets_base_url
     );
@@ -54,7 +62,7 @@ export async function importConfigPackage(
     let importTransactionId: string | null = null;
     const restorePreviousRuntimeConfigFile = (originalError: unknown) => {
       try {
-        persistRuntimeConfigForPackageImport(previousRuntimeConfig);
+        persistRuntimeConfigForBundleImport(previousRuntimeConfig);
       } catch (restoreError) {
         const details = {
           transaction_id: importTransactionId,
@@ -80,7 +88,7 @@ export async function importConfigPackage(
         importedBackends,
         () => {
           try {
-            persistRuntimeConfigForPackageImport(importedRuntimeConfig);
+            persistRuntimeConfigForBundleImport(importedRuntimeConfig);
             candidateFileState = "persisted";
           } catch (error) {
             candidateFileState = "write_failed";
@@ -92,7 +100,7 @@ export async function importConfigPackage(
         },
         signal
       );
-      publishRuntimeConfigForPackageImport(importedRuntimeConfig);
+      publishRuntimeConfigForBundleImport(importedRuntimeConfig);
     } catch (error) {
       if (candidateFileState === "pending") throw error;
       if (candidateFileState === "write_failed") {
@@ -103,10 +111,11 @@ export async function importConfigPackage(
       }
 
       const outcome = importTransactionId
-        ? await inspectTransactionOutcome(importTransactionId).catch(() => "unknown" as const)
+        ? await inspectTransactionOutcome(importTransactionId)
+          .catch(() => "unknown" as const)
         : "unknown";
       if (outcome === "committed") {
-        publishRuntimeConfigForPackageImport(importedRuntimeConfig);
+        publishRuntimeConfigForBundleImport(importedRuntimeConfig);
         return;
       }
       if (outcome === "rolled_back") {
@@ -114,7 +123,7 @@ export async function importConfigPackage(
         throw error;
       }
 
-      publishRuntimeConfigForPackageImport(importedRuntimeConfig);
+      publishRuntimeConfigForBundleImport(importedRuntimeConfig);
       const details = {
         transaction_id: importTransactionId,
         original_error: errorMessage(error)

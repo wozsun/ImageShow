@@ -11,7 +11,10 @@ import {
   setIngestionCandidateGuardConfirmationDeadline as persistIngestionGuardDeadline,
   type UnresolvedMoveCleanupReference
 } from "./repository.ts";
-import type { CapturedMoveCleanupObject, MoveCleanupObjectInput } from "./types.ts";
+import type {
+  CapturedMoveCleanupObject,
+  MoveCleanupObjectInput
+} from "./types.ts";
 import {
   shareStorageNamespace,
   storageNamespaceIdentity,
@@ -38,7 +41,10 @@ async function cleanupReferenceMatchesTarget(
         backends.set(reference.backend, backend);
       }
       matchesTarget =
-        storageNamespaceIncludesIdentity(backend, reference.namespace_identity) &&
+        storageNamespaceIncludesIdentity(
+          backend,
+          reference.namespace_identity
+        ) &&
         shareStorageNamespace(backend, target);
     } catch {
       // If the lease owner can no longer be resolved, refusing reuse is
@@ -118,7 +124,11 @@ export async function setIngestionCandidateGuardConfirmationDeadline(
     await wait(delayMs);
     options.signal?.throwIfAborted();
     try {
-      await persistIngestionGuardDeadline(imageId, guardToken, confirmAbsentAfter);
+      await persistIngestionGuardDeadline(
+        imageId,
+        guardToken,
+        confirmAbsentAfter
+      );
       options.signal?.throwIfAborted();
       return;
     } catch (error) {
@@ -159,7 +169,12 @@ export function enqueueCapturedObjectsForCleanup(
   }
   return withStorageLocationReadLock(async (signal) => {
     signal.throwIfAborted();
-    await enqueueMoveCleanupWithRetry(imageId, objects, reason, signal);
+    await enqueueMoveCleanupWithRetry(
+      imageId,
+      objects,
+      reason,
+      signal
+    );
     signal.throwIfAborted();
   });
 }
@@ -242,7 +257,13 @@ export async function enqueueObjectsForCleanup(
     signal.throwIfAborted();
     const captured = await captureMoveCleanupObjects(objects);
     signal.throwIfAborted();
-    await enqueueMoveCleanupWithRetry(imageId, captured, reason, signal, options.guardToken);
+    await enqueueMoveCleanupWithRetry(
+      imageId,
+      captured,
+      reason,
+      signal,
+      options.guardToken
+    );
     signal.throwIfAborted();
   });
 }

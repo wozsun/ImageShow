@@ -4,7 +4,10 @@ import test from "node:test";
 import { parseHTML } from "linkedom";
 import { type IngestionVocabularyDto } from "../../../../packages/shared/src/browser.ts";
 
-import { authExpiredEvent, clearCsrfToken } from "../../../../packages/web/src/lib/api/client.ts";
+import {
+  authExpiredEvent,
+  clearCsrfToken
+} from "../../../../packages/web/src/lib/api/client.ts";
 
 import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
 
@@ -37,7 +40,10 @@ import {
   adminImageListItem,
   createConfigStreamHarness
 } from "../../support/web-test-context.ts";
-import { inputText, dispatchDomEvent } from "../../support/dom-events.ts";
+import {
+  inputText,
+  dispatchDomEvent
+} from "../../support/dom-events.ts";
 import { installProperties } from "../../support/property-descriptors.ts";
 
 test("[Web/后台访问] 无会话上下文的公开详情保持访客身份并隔离管理员缓存", async (t) => {
@@ -553,7 +559,11 @@ test("[Web/后台访问] 动画关闭捕获最新回调并在请求阶段冻结�
       await Promise.resolve();
     });
 
-    assert.deepEqual(closedRevisions, [1], "完成态提交后立即关闭必须使用最新已提交的清理回调");
+    assert.deepEqual(
+      closedRevisions,
+      [1],
+      "完成态提交后立即关闭必须使用最新已提交的清理回调"
+    );
     reduceMotion = false;
     await React.act(async () => {
       commitCompletedRevision?.(2);
@@ -564,7 +574,11 @@ test("[Web/后台访问] 动画关闭捕获最新回调并在请求阶段冻结�
       await Promise.resolve();
     });
     await React.act(async () => finishAnimatedClose?.());
-    assert.deepEqual(preparedRevisions, [2], "重复关闭请求不得重新准备或扩大已经冻结的动作");
+    assert.deepEqual(
+      preparedRevisions,
+      [2],
+      "重复关闭请求不得重新准备或扩大已经冻结的动作"
+    );
     assert.deepEqual(
       closedRevisions,
       [1, 2],
@@ -862,8 +876,14 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
   const elementPrototype = window.HTMLElement.prototype;
   const previousFocus = Object.getOwnPropertyDescriptor(elementPrototype, "focus");
   const previousBlur = Object.getOwnPropertyDescriptor(elementPrototype, "blur");
-  const previousRect = Object.getOwnPropertyDescriptor(elementPrototype, "getBoundingClientRect");
-  const previousOnInput = Object.getOwnPropertyDescriptor(elementPrototype, "oninput");
+  const previousRect = Object.getOwnPropertyDescriptor(
+    elementPrototype,
+    "getBoundingClientRect"
+  );
+  const previousOnInput = Object.getOwnPropertyDescriptor(
+    elementPrototype,
+    "oninput"
+  );
   let controlTop = 100;
   let fixedOriginTop = 0;
   let activeElement = document.body as HTMLElement;
@@ -934,7 +954,10 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
     Object.defineProperties(
       event,
       Object.fromEntries(
-        Object.entries(properties).map(([key, value]) => [key, { configurable: true, value }])
+        Object.entries(properties).map(([key, value]) => [
+          key,
+          { configurable: true, value }
+        ])
       )
     );
     target.dispatchEvent(event);
@@ -1055,7 +1078,12 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
     assert.equal(document.activeElement, search);
     assert.deepEqual(
       [...menu.children].map((child) => child.className),
-      ["facet-search-results", "facet-menu-divider", "facet-selected-list", "facet-mode-switch"]
+      [
+        "facet-search-results",
+        "facet-menu-divider",
+        "facet-selected-list",
+        "facet-mode-switch"
+      ]
     );
     assert.match(menu.querySelector(".facet-selected-list")?.textContent ?? "", /legacy/);
     assert.match(menu.querySelector(".facet-selected-list")?.textContent ?? "", /夜景/);
@@ -1102,7 +1130,10 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
     assert.equal(document.activeElement, search);
 
     await touchActivate(candidate);
-    assert.equal(document.querySelector(".facet-value")?.textContent, "!legacy,!night,!stage");
+    assert.equal(
+      document.querySelector(".facet-value")?.textContent,
+      "!legacy,!night,!stage"
+    );
     assert.equal(search.value, "", "成功添加后清空搜索词，方便搜索下一项");
     assert.equal(document.activeElement, search, "触摸选择后焦点回到搜索框");
     assert.ok(document.querySelector(".facet-select-menu"), "成功添加后菜单保持打开");
@@ -1152,7 +1183,10 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
     ].find((button) => button.getAttribute("title") === "移除 legacy");
     assert.ok(legacyRemoval);
     await touchActivate(legacyRemoval);
-    assert.equal(document.querySelector(".facet-value")?.textContent, "night,stage,editorial");
+    assert.equal(
+      document.querySelector(".facet-value")?.textContent,
+      "night,stage,editorial"
+    );
 
     visualViewport.height = 360;
     await React.act(async () => {
@@ -1182,7 +1216,8 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
       "iOS 键盘平移 fixed 原点后，弹层仍须停在内联搜索框上方"
     );
     assert.ok(
-      paintedMenuTop >= paintedViewportTop && paintedMenuBottom <= paintedViewportBottom,
+      paintedMenuTop >= paintedViewportTop
+      && paintedMenuBottom <= paintedViewportBottom,
       "弹层翻转与 maxHeight 必须使用校正后的可见视口边界"
     );
 
@@ -1215,7 +1250,11 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
     assert.equal(document.activeElement, trigger, "显式收起后应恢复筛选按钮焦点");
     assert.equal(trigger.hasAttribute("aria-controls"), false);
     const compatibilityClick = dispatch(window, "click", { detail: 1 });
-    assert.equal(compatibilityClick.defaultPrevented, true, "触控收起后的兼容 click 不得重开筛选");
+    assert.equal(
+      compatibilityClick.defaultPrevented,
+      true,
+      "触控收起后的兼容 click 不得重开筛选"
+    );
 
     await React.act(async () => {
       dispatch(trigger!, "click", { detail: 0 });
@@ -1348,7 +1387,11 @@ test("[Web/后台访问] 后台图片筛选在临界视口保持清空、无障�
     tags: facets.tags,
     authors: facets.authors
   };
-  const fieldIds = ["admin-image-theme-facet", "admin-image-tag-facet", "admin-image-author-facet"];
+  const fieldIds = [
+    "admin-image-theme-facet",
+    "admin-image-tag-facet",
+    "admin-image-author-facet"
+  ];
   const structures: string[][] = [];
 
   for (const width of [760, 761, 999, 1000, 1389, 1390]) {
@@ -1465,7 +1508,10 @@ test("[Web/后台访问] 后台图片筛选在临界视口保持清空、无障�
     const elementPrototype = window.HTMLElement.prototype;
     const previousFocus = Object.getOwnPropertyDescriptor(elementPrototype, "focus");
     const previousBlur = Object.getOwnPropertyDescriptor(elementPrototype, "blur");
-    const previousRect = Object.getOwnPropertyDescriptor(elementPrototype, "getBoundingClientRect");
+    const previousRect = Object.getOwnPropertyDescriptor(
+      elementPrototype,
+      "getBoundingClientRect"
+    );
     let activeElement = document.body as HTMLElement;
     Object.defineProperty(document, "activeElement", {
       configurable: true,
@@ -1504,11 +1550,17 @@ test("[Web/后台访问] 后台图片筛选在临界视口保持清空、无障�
       type: string,
       properties: Record<string, unknown> = {}
     ) => {
-      const event = new window.Event(type, { bubbles: true, cancelable: true });
+      const event = new window.Event(type, {
+        bubbles: true,
+        cancelable: true
+      });
       Object.defineProperties(
         event,
         Object.fromEntries(
-          Object.entries(properties).map(([key, value]) => [key, { configurable: true, value }])
+          Object.entries(properties).map(([key, value]) => [
+            key,
+            { configurable: true, value }
+          ])
         )
       );
       target.dispatchEvent(event);
@@ -1588,7 +1640,9 @@ test("[Web/后台访问] 后台图片筛选在临界视口保持清空、无障�
       }
       structures.push(
         controls.map((control) =>
-          [...control.children].map((child) => `${child.tagName}.${child.className}`).join(">")
+          [...control.children]
+            .map((child) => `${child.tagName}.${child.className}`)
+            .join(">")
         )
       );
 
@@ -1684,7 +1738,9 @@ test("[Web/后台访问] 后台图片筛选在临界视口保持清空、无障�
       assert.deepEqual(adminFilterChanges, []);
       assert.equal(adminClear.disabled, true);
       assert.equal(
-        openAdminMenu.isConnected ? openAdminMenu.classList.contains("is-closing") : true,
+        openAdminMenu.isConnected
+          ? openAdminMenu.classList.contains("is-closing")
+          : true,
         true,
         "清空必须收起已打开的后台 Facet 子菜单"
       );
@@ -1736,6 +1792,10 @@ test("[Web/后台访问] 后台图片筛选在临界视口保持清空、无障�
     }
   }
   for (const structure of structures.slice(1)) {
-    assert.deepEqual(structure, structures[0], "所有清空动作临界视口都不得切换 FacetSelector DOM");
+    assert.deepEqual(
+      structure,
+      structures[0],
+      "所有清空动作临界视口都不得切换 FacetSelector DOM"
+    );
   }
 });

@@ -1,7 +1,10 @@
 import { useId, type ReactNode } from "react";
 import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
 import { useDismissiblePanel } from "../../hooks/useDismissiblePanel.js";
-import { mobileViewportMediaQuery, useMediaQuery } from "../../hooks/useMediaQuery.js";
+import {
+  mobileViewportMediaQuery,
+  useMediaQuery
+} from "../../hooks/useMediaQuery.js";
 import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import { Icon } from "../icon/Icon.js";
 import { InteractionSurfaceContext } from "../../lib/ui/interaction-surface.js";

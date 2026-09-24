@@ -30,7 +30,10 @@ import {
 
 const SCAN_BATCH_SIZE = 1_000;
 
-export async function clearReadyImageCacheData(client: Redis, signal?: AbortSignal) {
+export async function clearReadyImageCacheData(
+  client: Redis,
+  signal?: AbortSignal
+) {
   // Deleting while SCAN advances can move hash-table buckets. Repeat complete
   // passes until one observes only the retained meta key, so a rebuild cannot
   // accidentally publish over an owned key skipped by an earlier pass.
@@ -130,7 +133,10 @@ export async function writeReadyImageCacheBatch(
   signal?.throwIfAborted();
 }
 
-export async function measureReadyImageCoreMemory(client: Redis, signal?: AbortSignal) {
+export async function measureReadyImageCoreMemory(
+  client: Redis,
+  signal?: AbortSignal
+) {
   signal?.throwIfAborted();
   const pipeline = client.pipeline();
   for (const key of READY_IMAGE_CORE_KEYS) {

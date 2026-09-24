@@ -131,7 +131,9 @@ export function browserDisplayPrefixJobs(jobs: readonly IngestionJob[]) {
     .filter(({ job }) => ingestionJobHasBrowserDisplayOrder(job))
     .sort((left, right) => {
       if (left.job.batchKey !== right.job.batchKey) {
-        return left.job.batchKey > right.job.batchKey ? -1 : 1;
+        return left.job.batchKey > right.job.batchKey
+          ? -1
+          : 1;
       }
       const position = left.job.batchPosition! - right.job.batchPosition!;
       return position || left.index - right.index;
@@ -171,7 +173,10 @@ export function planIngestionQueuePage(
     const pair = displayJobServerPair(job);
     return pair ? [pair] : [];
   });
-  const serverDisplayLimit = Math.max(0, pageSize - visibleDisplayPrefixJobs.length);
+  const serverDisplayLimit = Math.max(
+    0,
+    pageSize - visibleDisplayPrefixJobs.length
+  );
   const serverPageOffset = Math.max(0, pageStart - displayPrefixJobs.length);
 
   return {
@@ -181,7 +186,10 @@ export function planIngestionQueuePage(
     includedServerItems,
     serverDisplayLimit,
     serverOffset: serverPageOffset,
-    serverLimit: Math.min(pageSize, Math.max(0, snapshotMaxItems - includedServerItems.length))
+    serverLimit: Math.min(
+      pageSize,
+      Math.max(0, snapshotMaxItems - includedServerItems.length)
+    )
   };
 }
 
@@ -202,7 +210,10 @@ export function ingestionQueuePageCount(length: number, pageSize: number) {
   return Math.max(1, Math.ceil(length / pageSize));
 }
 
-export function ingestionJobCanStartCommit(job: IngestionJob, request: IngestionCommitRequest) {
+export function ingestionJobCanStartCommit(
+  job: IngestionJob,
+  request: IngestionCommitRequest
+) {
   if (!job.md5 || job.duplicateDecision === "undecided") return false;
   return request === "new"
     ? job.status === "ready" && !job.commitIntent
@@ -210,7 +221,8 @@ export function ingestionJobCanStartCommit(job: IngestionJob, request: Ingestion
         (job.status === "ready" ||
           (job.status === "failed" && job.failureStage === "commit") ||
           job.status === "committing" ||
-          (job.status === "finalized" && job.resultState !== "hydrated"));
+          (job.status === "finalized"
+            && job.resultState !== "hydrated"));
 }
 
 export function createIngestionCommitIntent(
@@ -236,7 +248,9 @@ function ingestionJobHasCommitOwnership(job: IngestionJob) {
 
 function ingestionJobHasConfirmedReadyCheckpoint(job: IngestionJob) {
   return (
-    Boolean(job.commitIntent) && job.status === "failed" && job.commitFailureCheckpoint === "ready"
+    Boolean(job.commitIntent)
+      && job.status === "failed"
+      && job.commitFailureCheckpoint === "ready"
   );
 }
 
@@ -289,16 +303,25 @@ function patchJobDraft(job: IngestionJob, patch: Partial<ImageDraft>): Ingestion
   const next = { ...job, draft: { ...job.draft, ...patch } };
   return {
     ...next,
-    classificationOverride: classificationOverrideFor(next.draft, next.detectedClassification)
+    classificationOverride: classificationOverrideFor(
+      next.draft,
+      next.detectedClassification
+    )
   };
 }
 
 function patchJob(job: IngestionJob, patch: Partial<IngestionJob>) {
-  const has = (field: keyof IngestionJob) => Object.prototype.hasOwnProperty.call(patch, field);
-  const attemptChanged = has("attemptKey") && patch.attemptKey !== job.attemptKey;
-  const sessionChanged = has("sessionId") && patch.sessionId !== job.sessionId;
+  const has = (field: keyof IngestionJob) => Object.prototype.hasOwnProperty.call(
+    patch,
+    field
+  );
+  const attemptChanged = has("attemptKey")
+    && patch.attemptKey !== job.attemptKey;
+  const sessionChanged = has("sessionId")
+    && patch.sessionId !== job.sessionId;
   const imageChanged =
-    has("imageId") && patch.imageId?.toLowerCase() !== job.imageId?.toLowerCase();
+    has("imageId")
+      && patch.imageId?.toLowerCase() !== job.imageId?.toLowerCase();
 
   // A binding change cannot inherit the previous owner's authority or commit
   // result. Browser prepare retries use a complete replacement separately.
@@ -333,7 +356,8 @@ function patchJob(job: IngestionJob, patch: Partial<IngestionJob>) {
   }
 
   const authorityPatch =
-    has("serverStatus") || has("serverPhase") || has("serverError") || has("serverProgress");
+    has("serverStatus") || has("serverPhase")
+      || has("serverError") || has("serverProgress");
   if (
     authorityPatch &&
     (patch.serverAttemptKey !== job.attemptKey ||
@@ -355,7 +379,9 @@ function patchJob(job: IngestionJob, patch: Partial<IngestionJob>) {
   ) {
     return job;
   }
-  if (job.commitIntent && has("commitIntent") && patch.commitIntent !== job.commitIntent) {
+  if (job.commitIntent
+    && has("commitIntent")
+    && patch.commitIntent !== job.commitIntent) {
     return job;
   }
   const changes = (Object.keys(patch) as Array<keyof IngestionJob>).some(
@@ -364,7 +390,10 @@ function patchJob(job: IngestionJob, patch: Partial<IngestionJob>) {
   return changes ? { ...job, ...patch } : job;
 }
 
-function mapJobsWithIdentity(jobs: IngestionJob[], mapper: (job: IngestionJob) => IngestionJob) {
+function mapJobsWithIdentity(
+  jobs: IngestionJob[],
+  mapper: (job: IngestionJob) => IngestionJob
+) {
   let changed = false;
   const nextJobs = jobs.map((job) => {
     const nextJob = mapper(job);
@@ -402,7 +431,10 @@ function updateQueueJobs(
   return { ...state, jobs };
 }
 
-function mergeCanonicalHandoff(canonical: IngestionJob, local: IngestionJob): IngestionJob {
+function mergeCanonicalHandoff(
+  canonical: IngestionJob,
+  local: IngestionJob
+): IngestionJob {
   const preserveLocalPreview = !canonical.md5 && !canonical.preview;
   const cancelling = local.status === "cancelling";
   const preserveLocalDraft = local.serverDraftPending === true;
@@ -417,16 +449,20 @@ function mergeCanonicalHandoff(canonical: IngestionJob, local: IngestionJob): In
       ? (local.objectUrl ?? canonical.objectUrl)
       : canonical.objectUrl,
     draft: preserveLocalDraft ? local.draft : canonical.draft,
-    serverDraftPending: preserveLocalDraft ? true : canonical.serverDraftPending,
+    serverDraftPending: preserveLocalDraft
+      ? true
+      : canonical.serverDraftPending,
     uploadIntentItemInput: local.uploadIntentItemInput ?? canonical.uploadIntentItemInput,
     importAcceptItemInput: local.importAcceptItemInput ?? canonical.importAcceptItemInput,
     batchTime: local.batchTime ?? canonical.batchTime,
     manifestSource: local.manifestSource ?? canonical.manifestSource,
     manifestProvidedCommonFields:
-      local.manifestProvidedCommonFields ?? canonical.manifestProvidedCommonFields,
+      local.manifestProvidedCommonFields
+        ?? canonical.manifestProvidedCommonFields,
     manifestLine: local.manifestLine ?? canonical.manifestLine,
     batchPosition: local.batchPosition ?? canonical.batchPosition,
-    serverHandoffPending: local.serverHandoffPending ?? canonical.serverHandoffPending,
+    serverHandoffPending: local.serverHandoffPending
+      ?? canonical.serverHandoffPending,
     serverHandoffRevision:
       local.serverHandoffPending !== undefined
         ? local.serverHandoffRevision
@@ -441,7 +477,10 @@ function mergeCanonicalHandoff(canonical: IngestionJob, local: IngestionJob): In
     serverSemanticRevision:
       (local.serverHandoffPending !== undefined || preserveLocalDraft) &&
       local.serverSemanticRevision !== undefined
-        ? Math.max(canonical.serverSemanticRevision ?? 0, local.serverSemanticRevision)
+        ? Math.max(
+            canonical.serverSemanticRevision ?? 0,
+            local.serverSemanticRevision
+          )
         : canonical.serverSemanticRevision,
     serverAttemptKey: local.attemptKey,
     ...(cancelling
@@ -466,7 +505,9 @@ function bindQueueJob(
     serverAccepted: true
   });
   const bound =
-    patched.serverAccepted === true ? patched : { ...patched, ...binding, serverAccepted: true };
+    patched.serverAccepted === true
+      ? patched
+      : { ...patched, ...binding, serverAccepted: true };
   const pair = serverIngestionJobPairKey(bound);
   const canonicalIndex = pair
     ? state.jobs.findIndex(
@@ -576,7 +617,10 @@ function removeQueueJobIds(
       : Math.max(0, totalItems - (state.jobs.length - jobs.length));
   return {
     jobs,
-    page: Math.min(state.page, ingestionQueuePageCount(nextTotalItems, pageSize))
+    page: Math.min(
+      state.page,
+      ingestionQueuePageCount(nextTotalItems, pageSize)
+    )
   };
 }
 
@@ -603,7 +647,9 @@ export function reduceIngestionQueue(
           return [];
         const pair = serverIngestionJobPairKey(job);
         if (pair && action.stalePairKeys?.has(pair)) return [];
-        const canonical = pair ? serverByPair.get(pair) : serverById.get(job.id);
+        const canonical = pair
+          ? serverByPair.get(pair)
+          : serverById.get(job.id);
         if (!canonical) return [job];
         consumedServerJobs.add(canonical);
         return [mergeCanonicalHandoff(canonical, job)];
@@ -646,7 +692,12 @@ export function reduceIngestionQueue(
           .filter((job) => action.ids.has(job.id) && ingestionJobCanLeaveQueue(job))
           .map((job) => job.id)
       );
-      return removeQueueJobIds(state, removable, action.pageSize, action.totalItems);
+      return removeQueueJobIds(
+        state,
+        removable,
+        action.pageSize,
+        action.totalItems
+      );
     }
     case "release-resolved": {
       const jobs = state.jobs.filter((job) => {
@@ -659,7 +710,10 @@ export function reduceIngestionQueue(
       });
       const page = Math.min(
         state.page,
-        ingestionQueuePageCount(action.projectedTotalItems, action.pageSize)
+        ingestionQueuePageCount(
+          action.projectedTotalItems,
+          action.pageSize
+        )
       );
       if (jobs.length === state.jobs.length && page === state.page) return state;
       return { jobs, page };
@@ -689,7 +743,10 @@ export function reduceIngestionQueue(
         1,
         Math.min(
           action.page,
-          ingestionQueuePageCount(action.totalItems ?? state.jobs.length, action.pageSize)
+          ingestionQueuePageCount(
+            action.totalItems ?? state.jobs.length,
+            action.pageSize
+          )
         )
       );
       return page === state.page ? state : { ...state, page };

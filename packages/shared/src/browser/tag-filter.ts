@@ -21,7 +21,11 @@ export class TagFilterError extends Error {
   readonly kind: "invalid" | "mixed" | "unknown";
   readonly term?: string;
 
-  constructor(message: string, kind: "invalid" | "mixed" | "unknown" = "invalid", term?: string) {
+  constructor(
+    message: string,
+    kind: "invalid" | "mixed" | "unknown" = "invalid",
+    term?: string
+  ) {
     super(message);
     this.name = "TagFilterError";
     this.kind = kind;
@@ -45,7 +49,10 @@ export function normalizeTagExpression(
   return { anyOf: sorted.map(([, clause]) => clause) as [TagClause, ...TagClause[]] };
 }
 
-export function parseTagFilter(values: readonly string[], capability: "basic" | "mixed" = "basic") {
+export function parseTagFilter(
+  values: readonly string[],
+  capability: "basic" | "mixed" = "basic"
+) {
   if (!values.length) return { expression: null, mode: "any" as TagMatchMode, termCount: 0 };
   if (
     values.length > tagFilterLimits.segments ||

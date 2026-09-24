@@ -12,7 +12,10 @@ import {
   finalizeSecurityHeaders,
   noStoreCacheControl
 } from "./core/http/headers.ts";
-import { requireAdminCsrf, requireAdminSession } from "./users/admin-session.ts";
+import {
+  requireAdminCsrf,
+  requireAdminSession
+} from "./users/admin-session.ts";
 import {
   limitApiRequestBody,
   limitProtectedAdminRequestBody
@@ -27,7 +30,10 @@ import { registerAdminPreferenceRoutes } from "./routes/admin-preferences.ts";
 import { registerAdminCacheRoutes } from "./routes/admin-cache.ts";
 import { registerCheckRoutes } from "./routes/check.ts";
 import { registerHealthRoutes } from "./routes/health.ts";
-import { registerProtectedAuthRoutes, registerPublicAuthRoutes } from "./routes/auth.ts";
+import {
+  registerProtectedAuthRoutes,
+  registerPublicAuthRoutes
+} from "./routes/auth.ts";
 import { registerPublicRoutes } from "./routes/public.ts";
 import { serveRobotsTxt } from "./routes/robots.ts";
 import { registerRandomRoutes } from "./routes/random.ts";
@@ -37,7 +43,10 @@ import { createAssetHandler, registerAssetRoutes } from "./routes/assets.ts";
 import { registerSpaRoutes } from "./routes/spa.ts";
 import { registerIngestionRoutes } from "./routes/ingestion.ts";
 import { resourceHostBoundary } from "./routes/resource-host.ts";
-import { auditAdminMutation, markAdminReadRequest } from "./core/audit-log.ts";
+import {
+  auditAdminMutation,
+  markAdminReadRequest
+} from "./core/audit-log.ts";
 import { blockCrossSiteFetch } from "./core/http/request-security.ts";
 import {
   businessAvailabilityGateIsOpen,
@@ -103,7 +112,8 @@ export function createHttpApp(
       await next();
       temporaryContentLength = await prepareCompressionThreshold(c, 1024);
     });
-    if (temporaryContentLength && !c.res.headers.has("Content-Encoding")) {
+    if (temporaryContentLength
+      && !c.res.headers.has("Content-Encoding")) {
       c.res.headers.delete("Content-Length");
     }
   });
@@ -129,7 +139,8 @@ export function createHttpApp(
     ingestionStatusPath
   ]);
   app.use(`${adminApiBasePath}/*`, async (c, next) => {
-    if (c.req.method === "POST" && adminReadPostPaths.has(new URL(c.req.url).pathname)) {
+    if (c.req.method === "POST"
+      && adminReadPostPaths.has(new URL(c.req.url).pathname)) {
       markAdminReadRequest(c);
     }
     await next();

@@ -8,7 +8,10 @@ import {
 import type { IngestionJob } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-job.ts";
 import { webUuidV7 } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-identity.ts";
 import { reduceIngestionQueue } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
-import { ingestionJob, createConfigStreamHarness } from "../../support/web-test-context.ts";
+import {
+  ingestionJob,
+  createConfigStreamHarness
+} from "../../support/web-test-context.ts";
 
 test("[Web/内容接入] 全部重试依据完整队列并冻结目标直到分批结果收敛", async (t) => {
   const h = await createConfigStreamHarness(t);

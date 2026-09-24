@@ -33,7 +33,10 @@ await runIntegrationScenario(async (runtime) => {
   await database.pool.query(
     `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5)
        VALUES ($1, 'integration-admin', 'ready', 'local', 'pc', 'dark', NULL, 'webp', $2)`,
-    [foregroundImage, "0".repeat(32)]
+    [
+     foregroundImage,
+     "0".repeat(32)
+   ]
   );
   const claimTrashPurgeJob = async () => {
     for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -65,7 +68,12 @@ await runIntegrationScenario(async (runtime) => {
       uncertainThumbnail.byteLength
     ]
   );
-  await localAccess.driver.writeBuffer("full", uncertainObjectKey, uncertainFull, "image/webp");
+  await localAccess.driver.writeBuffer(
+    "full",
+    uncertainObjectKey,
+    uncertainFull,
+    "image/webp"
+  );
   await localAccess.driver.writeBuffer(
     "thumbs",
     uncertainThumbKey,
@@ -143,7 +151,10 @@ await runIntegrationScenario(async (runtime) => {
   });
   assert.equal(
     Number(
-      (await database.pool.query("SELECT count(*) FROM metadata WHERE id=$1", [uncertainImage]))
+      (await database.pool.query(
+        "SELECT count(*) FROM metadata WHERE id=$1",
+        [uncertainImage]
+      ))
         .rows[0]?.count
     ),
     0
@@ -202,7 +213,11 @@ await runIntegrationScenario(async (runtime) => {
       (error) => ({ value: null, error })
     );
   const admittedCancelPurgeJob = await claimTrashPurgeJob();
-  assert.equal(admittedPurgeDeleteStarted, false, "HTTP 请求等待期间不得执行对象删除");
+  assert.equal(
+    admittedPurgeDeleteStarted,
+    false,
+    "HTTP 请求等待期间不得执行对象删除"
+  );
   assert.deepEqual(await trashMutations.restoreImages([admittedCancelImage]), {
     requested: 1,
     restored: 0,
@@ -229,8 +244,14 @@ await runIntegrationScenario(async (runtime) => {
     0,
     "物理删除开始后的调度取消必须继续完成 metadata 删除"
   );
-  assert.equal(await localAccess.driver.exists("full", admittedCancelObjectKey), false);
-  assert.equal(await localAccess.driver.exists("thumbs", admittedCancelThumbKey), false);
+  assert.equal(
+    await localAccess.driver.exists("full", admittedCancelObjectKey),
+    false
+  );
+  assert.equal(
+    await localAccess.driver.exists("thumbs", admittedCancelThumbKey),
+    false
+  );
   const interruptedImage = randomUUID();
   const interruptedObjectKey = storageObjectKey(interruptedImage, "webp");
   const interruptedThumbKey = imagePaths.thumbnailObjectKey(
@@ -247,7 +268,12 @@ await runIntegrationScenario(async (runtime) => {
       interruptedThumbnail.byteLength
     ]
   );
-  await localAccess.driver.writeBuffer("full", interruptedObjectKey, interruptedFull, "image/webp");
+  await localAccess.driver.writeBuffer(
+    "full",
+    interruptedObjectKey,
+    interruptedFull,
+    "image/webp"
+  );
   await localAccess.driver.writeBuffer(
     "thumbs",
     interruptedThumbKey,
@@ -272,11 +298,17 @@ await runIntegrationScenario(async (runtime) => {
     `trash.purge:${interruptedImage}`
   );
   interruptedController.abort(interruptedReason);
-  await assert.rejects(interruptedRequest, (error) => error === interruptedReason);
+  await assert.rejects(
+    interruptedRequest,
+    (error) => error === interruptedReason
+  );
   await finishTrashPurgeJob(interruptedContinuation);
   assert.equal(
     Number(
-      (await database.pool.query("SELECT count(*) FROM metadata WHERE id=$1", [interruptedImage]))
+      (await database.pool.query(
+        "SELECT count(*) FROM metadata WHERE id=$1",
+        [interruptedImage]
+      ))
         .rows[0]?.count
     ),
     0
@@ -298,7 +330,12 @@ await runIntegrationScenario(async (runtime) => {
       concurrentThumbnail.byteLength
     ]
   );
-  await localAccess.driver.writeBuffer("full", concurrentObjectKey, concurrentFull, "image/webp");
+  await localAccess.driver.writeBuffer(
+    "full",
+    concurrentObjectKey,
+    concurrentFull,
+    "image/webp"
+  );
   await localAccess.driver.writeBuffer(
     "thumbs",
     concurrentThumbKey,
@@ -348,13 +385,22 @@ await runIntegrationScenario(async (runtime) => {
     });
     assert.equal(
       Number(
-        (await database.pool.query("SELECT count(*) FROM metadata WHERE id=$1", [concurrentImage]))
+        (await database.pool.query(
+          "SELECT count(*) FROM metadata WHERE id=$1",
+          [concurrentImage]
+        ))
           .rows[0]?.count
       ),
       0
     );
-    assert.equal(await localAccess.driver.exists("full", concurrentObjectKey), false);
-    assert.equal(await localAccess.driver.exists("thumbs", concurrentThumbKey), false);
+    assert.equal(
+      await localAccess.driver.exists("full", concurrentObjectKey),
+      false
+    );
+    assert.equal(
+      await localAccess.driver.exists("thumbs", concurrentThumbKey),
+      false
+    );
   } finally {
     if (!concurrentMutationFinished) {
       await concurrentMutation.query("ROLLBACK").catch(() => undefined);
@@ -375,10 +421,25 @@ await runIntegrationScenario(async (runtime) => {
     await database.pool.query(
       `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, deleted_at)
        VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, clock_timestamp() - ($4 || ' seconds')::interval)`,
-      [id, createHash("md5").update(full).digest("hex"), thumbnail.byteLength, ageSeconds]
+      [
+        id,
+        createHash("md5").update(full).digest("hex"),
+        thumbnail.byteLength,
+        ageSeconds
+      ]
     );
-    await localAccess.driver.writeBuffer("full", objectKey, full, "image/webp");
-    await localAccess.driver.writeBuffer("thumbs", thumbKey, thumbnail, "image/webp");
+    await localAccess.driver.writeBuffer(
+      "full",
+      objectKey,
+      full,
+      "image/webp"
+    );
+    await localAccess.driver.writeBuffer(
+      "thumbs",
+      thumbKey,
+      thumbnail,
+      "image/webp"
+    );
     return { id, objectKey, thumbKey };
   };
 
@@ -424,7 +485,10 @@ await runIntegrationScenario(async (runtime) => {
     ignored: 0
   });
   assert.deepEqual(
-    (await database.pool.query("SELECT id FROM metadata WHERE id=$1", [addedAfterCapture.id])).rows,
+    (await database.pool.query(
+      "SELECT id FROM metadata WHERE id=$1",
+      [addedAfterCapture.id]
+    )).rows,
     [{ id: addedAfterCapture.id }],
     "scope all 只处理事务快照，不包含之后进入回收站的图片"
   );
@@ -491,7 +555,10 @@ await runIntegrationScenario(async (runtime) => {
     localAccess.driver.removeObjects = originalFailedRemove;
   }
   await finishTrashPurgeJob(independentJob);
-  assert.equal(await jobs.markBackgroundJobFailed(failedJob, failedJobError), true);
+  assert.equal(
+    await jobs.markBackgroundJobFailed(failedJob, failedJobError),
+    true
+  );
   assert.deepEqual(await failedPurgePromise, {
     requested: 2,
     queued: 2,
@@ -517,7 +584,10 @@ await runIntegrationScenario(async (runtime) => {
     await adminRead.listAdminImages({ status: "deleted", page: 1, limit: 20 })
   ).items.find((item) => item.id === failedItem.id);
   assert.equal(detail?.purge_pending, true);
-  assert.equal(retryingTrashCheck.jobs.find((job) => job.id === failedJob.id)?.state, "retrying");
+  assert.equal(
+    retryingTrashCheck.jobs.find((job) => job.id === failedJob.id)?.state,
+    "retrying"
+  );
   assert.deepEqual(
     await trash.purgeImages({
       scope: "selected",
@@ -627,12 +697,18 @@ await runIntegrationScenario(async (runtime) => {
       randomUUID()
     ]
   );
-  assert.deepEqual(await jobs.cleanupBackgroundJobHistory(), [{ status: "failed", count: 1 }]);
+  assert.deepEqual(await jobs.cleanupBackgroundJobHistory(), [
+    { status: "failed", count: 1 }
+  ]);
   assert.deepEqual(
     (
       await database.pool.query(
         "SELECT id FROM background_job WHERE id=ANY($1::uuid[]) ORDER BY id",
-        [[referencedHistoryJob, unreferencedHistoryJob, retainedMoveHistoryJob]]
+        [[
+          referencedHistoryJob,
+          unreferencedHistoryJob,
+          retainedMoveHistoryJob
+        ]]
       )
     ).rows.map((row) => row.id),
     [referencedHistoryJob, retainedMoveHistoryJob].sort(),
@@ -643,5 +719,8 @@ await runIntegrationScenario(async (runtime) => {
     repaired_jobs: 0
   });
   await finishTrashPurgeJob(await claimTrashPurgeJob());
-  await database.pool.query("DELETE FROM background_job WHERE id=$1", [retainedMoveHistoryJob]);
+  await database.pool.query(
+    "DELETE FROM background_job WHERE id=$1",
+    [retainedMoveHistoryJob]
+  );
 });

@@ -5,7 +5,10 @@ import { errorMessage } from "../core/api-error.ts";
 import { inspectIngestionTempOrphans } from "../images/ingestion/raw/orphan-scanner.ts";
 import { ingestionOrphanCutoffs } from "../images/ingestion/cleanup/retention.ts";
 import { resolveStorageAccess } from "../storage/backends/registry.ts";
-import { assertCanonicalImageObjectKey, thumbnailRef } from "../storage/objects/image-paths.ts";
+import {
+  assertCanonicalImageObjectKey,
+  thumbnailRef
+} from "../storage/objects/image-paths.ts";
 import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/objects/key-listing.ts";
 import {
   activeIngestionStorageReferences,
@@ -57,7 +60,9 @@ export async function checkStorage(signal?: AbortSignal) {
           namespace: storageBackendGroupName(group),
           blocks_maintenance: true,
           error:
-            captured.errors.map((entry) => `${entry.backend}: ${entry.error}`).join("; ") ||
+            captured.errors
+              .map((entry) => `${entry.backend}: ${entry.error}`)
+              .join("; ") ||
             "存储后端不可用"
         });
         return null;
@@ -106,10 +111,12 @@ export async function checkStorage(signal?: AbortSignal) {
 
     const aliases = new Set(group.slugs);
     const retainedBeforeEnumeration = rowsBeforeEnumeration.filter(
-      (row) => aliases.has(row.storage_slug) && (row.status === "ready" || row.status === "deleted")
+      (row) => aliases.has(row.storage_slug)
+        && (row.status === "ready" || row.status === "deleted")
     );
     const retainedDuringEnumeration = rowsReferencedDuringEnumeration.filter(
-      (row) => aliases.has(row.storage_slug) && (row.status === "ready" || row.status === "deleted")
+      (row) => aliases.has(row.storage_slug)
+        && (row.status === "ready" || row.status === "deleted")
     );
     const fullSet = new Set(full.keys);
     const thumbSet = new Set(thumbs.keys);
@@ -119,7 +126,10 @@ export async function checkStorage(signal?: AbortSignal) {
     for (const slug of group.slugs) {
       const rowsForSlug = retainedDuringEnumeration.filter((row) => row.storage_slug === slug);
       const sample =
-        rowsForSlug.find((row) => fullSet.has(storageObjectKey(row.id, row.ext))) ?? rowsForSlug[0];
+        rowsForSlug.find((row) => (
+          fullSet.has(storageObjectKey(row.id, row.ext))
+        ))
+          ?? rowsForSlug[0];
       if (!sample) continue;
       try {
         const access = await resolveStorageAccess(slug);
@@ -128,7 +138,9 @@ export async function checkStorage(signal?: AbortSignal) {
           storageObjectKey(sample.id, sample.ext),
           { signal }
         );
-        if (full.complete && fullSet.has(storageObjectKey(sample.id, sample.ext)) && !readable) {
+        if (full.complete
+          && fullSet.has(storageObjectKey(sample.id, sample.ext))
+          && !readable) {
           unavailableBackends.push({
             backend: slug,
             namespace,

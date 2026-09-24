@@ -1,4 +1,8 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useState,
+  type Dispatch,
+  type SetStateAction
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ImageTrashResponseDto } from "@imageshow/shared/browser";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
@@ -18,7 +22,10 @@ import {
   type ImageEditorTrashOutcome
 } from "./image-editor-trash.js";
 
-function unresolvedTrashMessage(requestedCount: number, outcome: ImageEditorTrashOutcome) {
+function unresolvedTrashMessage(
+  requestedCount: number,
+  outcome: ImageEditorTrashOutcome
+) {
   if (outcome.editableIds.length) {
     return requestedCount === 1
       ? "图片当前仍可编辑，删除未生效"
@@ -54,7 +61,10 @@ export function useImageEditorTrashAction({
         reportAdminUiError("image_metadata.trash", error, { imageIds });
       }
 
-      const idsNeedingSnapshot = imageTrashIdsNeedingSnapshot(imageIds, response);
+      const idsNeedingSnapshot = imageTrashIdsNeedingSnapshot(
+        imageIds,
+        response
+      );
       let authoritativeItems: EditableImageSnapshot[] | null = [];
       if (idsNeedingSnapshot.length) {
         try {
@@ -68,9 +78,16 @@ export function useImageEditorTrashAction({
         }
       }
 
-      const outcome = reconcileImageEditorTrash(imageIds, response, authoritativeItems);
+      const outcome = reconcileImageEditorTrash(
+        imageIds,
+        response,
+        authoritativeItems
+      );
       if (outcome.trashedIds.length) {
-        setSession((current) => pruneImageMetadataSessionAfterTrash(current, outcome.trashedIds));
+        setSession((current) => pruneImageMetadataSessionAfterTrash(
+          current,
+          outcome.trashedIds
+        ));
 
         // Local membership changes must precede invalidation so an active public
         // detail query is disabled before its now-404 projection is cancelled.
@@ -83,7 +100,10 @@ export function useImageEditorTrashAction({
         }
         try {
           if (publicImageMembershipHandled) {
-            await invalidateImageDataAfterTrash(queryClient, outcome.trashedIds);
+            await invalidateImageDataAfterTrash(
+              queryClient,
+              outcome.trashedIds
+            );
           } else {
             await invalidateImageData(queryClient);
           }

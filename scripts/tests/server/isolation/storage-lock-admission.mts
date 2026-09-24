@@ -25,7 +25,11 @@ await runIntegrationScenario(async (runtime) => {
         }
       ]);
       controller.abort(new Error("injected parent abort"));
-      assert.equal(lockSignal.aborted, false, "调度取消不得污染已取得 advisory lock 的连接信号");
+      assert.equal(
+        lockSignal.aborted,
+        false,
+        "调度取消不得污染已取得 advisory lock 的连接信号"
+      );
       await cleanup.enqueueCapturedObjectsForCleanupWithoutLocationLock(
         detachedImage,
         captured,
@@ -38,7 +42,10 @@ await runIntegrationScenario(async (runtime) => {
     [detachedImage]
   );
   assert.equal(receipt.rowCount, 1);
-  assert.equal(typeof receipt.rows[0]?.payload?.objects?.[0]?.namespace_identity, "string");
+  assert.equal(
+    typeof receipt.rows[0]?.payload?.objects?.[0]?.namespace_identity,
+    "string"
+  );
 
   const lockLossReason = new Error("injected advisory connection loss");
   await assert.rejects(
@@ -145,7 +152,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(queuedRemovalOutcome.status, "rejected");
   assert.equal(queuedRemovalOutcome.reason, queuedAdmissionReason);
   assert.equal(queuedRemovalStarted, false);
-  assert.equal(await localAccess.driver.exists("full", admittedRemovalKey), false);
+  assert.equal(
+    await localAccess.driver.exists("full", admittedRemovalKey),
+    false
+  );
   assert.equal(
     await localAccess.driver.exists("full", queuedRemovalKey),
     true,

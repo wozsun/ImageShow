@@ -11,7 +11,10 @@ import {
   type ImageUpdateRequestDto,
   type ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
-import { apiSuccess, privateCacheableApiSuccess } from "../core/http/responses.ts";
+import {
+  apiSuccess,
+  privateCacheableApiSuccess
+} from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
 import { logger } from "../core/logger.ts";
 import {
@@ -38,7 +41,10 @@ import {
   listAdminImages
 } from "../images/read-models/admin-images.ts";
 import { getOverviewStats } from "../images/read-models/overview.ts";
-import { moveImagesToTrash, restoreImages } from "../images/trash/mutations.ts";
+import {
+  moveImagesToTrash,
+  restoreImages
+} from "../images/trash/mutations.ts";
 import { purgeImages } from "../images/trash/purge.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 import { listStorageBackends } from "../storage/backends/registry.ts";
@@ -146,7 +152,10 @@ export function registerAdminImageRoutes(app: Hono) {
 
   app.post(imageUpdatePath, limitImageUpdateBody, async (c) => {
     const startedAt = performance.now();
-    const input = parse(imageUpdateInput, await readJsonBody(c)) satisfies ImageUpdateRequestDto;
+    const input = parse(
+      imageUpdateInput,
+      await readJsonBody(c)
+    ) satisfies ImageUpdateRequestDto;
     let maxGroupDurationMs = 0;
     let entityCountInvalidationTriggered = false;
     const result = await updateImages(input.items, {

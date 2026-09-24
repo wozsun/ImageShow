@@ -1654,7 +1654,9 @@ for (const phase of ["headers", "body"] as const) {
           signals.push(signal);
           if (phase === "headers")
             return new Promise<Response>((_resolve, reject) => {
-              signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+              signal.addEventListener("abort", () => reject(signal.reason), {
+                once: true
+              });
             });
           return Promise.resolve(
             new Response(
@@ -2290,7 +2292,10 @@ test("[Web/展映] 退出筛选或删除只移除目标并隔离在途补图后�
         await h.React.act(async () => current.refreshImage(target.id));
         await h.respond(2, {
           items:
-            action === "missing" ? [] : [editableImage(target.id, { ...target, theme: "excluded" })]
+            action === "missing" ? []
+            : [
+              editableImage(target.id, { ...target, theme: "excluded" })
+            ]
         });
       }
       assert.equal(h.pending[1]!.signal?.aborted, true);
@@ -2416,7 +2421,12 @@ test("[Web/展映] 瀑布缩放保持视口四周 35% 驻留缓冲并按世界�
     horizontalOverscanScreens: 0.35,
     verticalOverscanScreens: 0.35
   };
-  const window = showViewportWindow({ x: 120, y: 240 }, { width: 800, height: 600 }, 2, residence);
+  const window = showViewportWindow(
+    { x: 120, y: 240 },
+    { width: 800, height: 600 },
+    2,
+    residence
+  );
   assert.deepEqual(window.visible, {
     left: 60,
     top: 120,
@@ -2429,7 +2439,12 @@ test("[Web/展映] 瀑布缩放保持视口四周 35% 驻留缓冲并按世界�
     right: 600,
     bottom: 525
   });
-  const zoomed = showViewportWindow({ x: -140, y: -30 }, { width: 800, height: 600 }, 1, residence);
+  const zoomed = showViewportWindow(
+    { x: -140, y: -30 },
+    { width: 800, height: 600 },
+    1,
+    residence
+  );
   assert.deepEqual(zoomed.resident, { left: -420, top: -240, right: 940, bottom: 780 });
 });
 test("[Web/展映] 展映窗口可独立指定四向缓冲比例", () => {
@@ -2463,7 +2478,8 @@ test("[Web/展映] 展映乱序保持元素完整、可重现且不改写输入"
   const sourceIds = source.map((image) => image.id);
   const shuffle = () => {
     const values = [0.25, 0.75, 0.5];
-    return shuffledImageBatch(source, () => values.shift() ?? 0).map((image) => image.id);
+    return shuffledImageBatch(source, () => values.shift() ?? 0)
+      .map((image) => image.id);
   };
   const shuffledIds = shuffle();
   assert.deepEqual(
@@ -2537,9 +2553,15 @@ test("[Web/展映] 展映长距离二维移动保持卡片有界并填满驻留�
     maximumCards = Math.max(maximumCards, snapshot.cards.length);
     minimumCards = Math.min(minimumCards, snapshot.cards.length);
     assert.equal(snapshot.missingCards, 0);
-    assert.equal(new Set(snapshot.cards.map((card) => card.image.id)).size, snapshot.cards.length);
+    assert.equal(
+      new Set(snapshot.cards.map((card) => card.image.id)).size,
+      snapshot.cards.length
+    );
     const outside = snapshot.cards.find(
-      (card) => !showRectsIntersect(showCardRect(card), snapshot.window.resident)
+      (card) => !showRectsIntersect(
+        showCardRect(card),
+        snapshot.window.resident
+      )
     );
     assert.equal(
       outside,
@@ -2571,9 +2593,13 @@ test("[Web/展映] 瀑布在上下边缘间隙暂停保留候选，进入边缘�
     const column = controller.snapshot().cards.filter((card) => card.column === 0);
     assert.ok(column.length > 1);
     const boundary =
-      edge === "top" ? column[0]!.y - 0.5 : column.at(-1)!.y + column.at(-1)!.height + 0.5;
+      edge === "top"
+        ? column[0]!.y - 0.5
+        : column.at(-1)!.y + column.at(-1)!.height + 0.5;
     camera.y =
-      boundary * scale + (edge === "top" ? viewport.height * 0.35 : -viewport.height * 1.35);
+      boundary * scale + (edge === "top"
+        ? viewport.height * 0.35
+        : -viewport.height * 1.35);
     controller.reconcile(camera, viewport, scale, residence);
     const before = controller.snapshot();
     const usage = pool.usage("paused");
@@ -2612,7 +2638,12 @@ test("[Web/展映] 展映远距离横移只保留驻留列并为回程生成新�
   assert.ok(initialKey);
 
   for (let step = 1; step <= 2_000; step += 1) {
-    controller.reconcile({ x: step * 1_000, y: step * 3 }, viewport, 1, residence);
+    controller.reconcile(
+      { x: step * 1_000, y: step * 3 },
+      viewport,
+      1,
+      residence
+    );
     const snapshot = controller.snapshot();
     assert.ok(snapshot.activeColumns < 32);
     assert.ok(snapshot.cards.length < 320);

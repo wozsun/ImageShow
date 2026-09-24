@@ -214,7 +214,8 @@ async function transcodeImageToWebp(
   signal?: AbortSignal
 ) {
   signal?.throwIfAborted();
-  const pipeline = sharp(input).rotate().resize({
+  const pipeline = sharp(input)
+    .rotate().resize({
     width: settings.max_long_edge,
     height: settings.max_long_edge,
     fit: "inside",

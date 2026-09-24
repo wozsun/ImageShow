@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useRef, type PointerEventHandler } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type PointerEventHandler
+} from "react";
 
 export type PreloadIntentPolicy =
   { hover: "immediate" } | { hover: "dwell"; delayMs: number } | { hover: "none" };

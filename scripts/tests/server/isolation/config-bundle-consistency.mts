@@ -14,8 +14,8 @@ import { createS3HttpFixture } from "../../support/s3-http-fixture.ts";
 await runIntegrationScenario(async (runtime) => {
   const s3 = await createS3HttpFixture();
   try {
-    const { importConfigPackage } =
-      await import("../../../../packages/server/src/config/package/service.ts");
+    const { importConfigBundle } =
+      await import("../../../../packages/server/src/config/bundle/service.ts");
     const { ApiError } = await import("../../../../packages/server/src/core/api-error.ts");
     const { logger } = await import("../../../../packages/server/src/core/logger.ts");
     const { registerAdvancedConfigRoutes } =
@@ -70,7 +70,7 @@ await runIntegrationScenario(async (runtime) => {
       request.key.startsWith("fail/")
         ? { status: 403, code: "AccessDenied", message: "controlled import rejection" }
         : undefined;
-    await assert.rejects(importConfigPackage(rejectedPackage, {}), { name: "AccessDenied" });
+    await assert.rejects(importConfigBundle(rejectedPackage, {}), { name: "AccessDenied" });
     assert.equal(await backend("probe-success"), null);
     assert.equal(await backend("probe-failure"), null);
     assert.deepEqual(store.getRuntimeConfig(), baseline);
@@ -90,7 +90,7 @@ await runIntegrationScenario(async (runtime) => {
         const operation = withCommitFault(
           runtime.databasePools.pool,
           mode,
-          () => importConfigPackage(input(slug, mode), {}),
+          () => importConfigBundle(input(slug, mode), {}),
           async () => {
             assert.equal(store.getRuntimeConfig().site.header_name, baseline.site.header_name);
             assert.deepEqual(names, []);
@@ -171,12 +171,12 @@ await runIntegrationScenario(async (runtime) => {
             ? withCommitFault(
                 runtime.databasePools.pool,
                 "rolled_back",
-                () => importConfigPackage(input(slug, phase), {}),
+                () => importConfigBundle(input(slug, phase), {}),
                 async () => {
                   restoring = true;
                 }
               )
-            : importConfigPackage(input(slug, phase), {}),
+            : importConfigBundle(input(slug, phase), {}),
           (error: unknown) =>
             phase === "restore"
               ? error instanceof ApiError &&
@@ -207,7 +207,7 @@ await runIntegrationScenario(async (runtime) => {
     const importing = withCommitFault(
       runtime.databasePools.pool,
       "success",
-      () => importConfigPackage(input("package-lease", "Lease Candidate"), {}),
+      () => importConfigBundle(input("package-lease", "Lease Candidate"), {}),
       async () => {
         reached.resolve();
         await gate.promise;
@@ -273,7 +273,9 @@ await runIntegrationScenario(async (runtime) => {
       await next();
     });
     app.use("/api/admin/*", async (context, next) =>
-      context.req.method === "GET" ? next() : requireAdminCsrf(context, next)
+      context.req.method === "GET"
+        ? next()
+        : requireAdminCsrf(context, next)
     );
     app.use("/api/admin/*", limitProtectedAdminRequestBody);
     registerAdvancedConfigRoutes(app as unknown as Hono);
@@ -299,7 +301,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     assert.equal((await exported.json()).application_version, manifest.version);
     const content = "x".repeat(
-      appConfig.configPackage.maxBytes - Buffer.byteLength(JSON.stringify({ content: "" }))
+      appConfig.configBundle.maxBytes - Buffer.byteLength(JSON.stringify({ content: "" }))
     );
     assert.equal((await request("preview", { package: { content } })).status, 200);
     assert.equal((await request("preview", { package: { content: content + "x" } })).status, 413);
@@ -307,7 +309,7 @@ await runIntegrationScenario(async (runtime) => {
       (await request("preview", { package: { storage_backends: Array(101).fill(null) } })).status,
       400
     );
-    await importConfigPackage(input("route-existing", "Existing"), {});
+    await importConfigBundle(input("route-existing", "Existing"), {});
     await store.replaceRuntimeConfig(baseline);
     try {
       const response = await request("import", {

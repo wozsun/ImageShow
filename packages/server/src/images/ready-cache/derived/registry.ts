@@ -9,7 +9,10 @@ import {
   readyImageDerivedMembershipLimit,
   type DerivedResultDescriptor
 } from "./registry-metadata.ts";
-import { READY_IMAGE_DERIVED_CACHE_POLICY, type ReadyImageDerivedResultKind } from "./policy.ts";
+import {
+  READY_IMAGE_DERIVED_CACHE_POLICY,
+  type ReadyImageDerivedResultKind
+} from "./policy.ts";
 import {
   READY_IMAGE_DERIVED_REGISTRY_COUNTS_KEY,
   READY_IMAGE_DERIVED_REGISTRY_KINDS_KEY,
@@ -59,7 +62,8 @@ async function assertDerivedRegistryStructure() {
   const typeResults = await execRedisPipeline(typePipeline);
   const types = typeResults.map((result) => String(result?.[1] ?? ""));
   if (types.every((type) => type === "none")) return;
-  if (types[0] !== "zset" || types.slice(1).some((type) => type !== "hash")) {
+  if (types[0] !== "zset"
+    || types.slice(1).some((type) => type !== "hash")) {
     throw new Error("Ready-image derived registry has inconsistent key types");
   }
 
@@ -70,7 +74,8 @@ async function assertDerivedRegistryStructure() {
   sizePipeline.hlen(READY_IMAGE_DERIVED_REGISTRY_SIGNATURES_KEY);
   const sizeResults = await execRedisPipeline(sizePipeline);
   const sizes = sizeResults.map((result) => parseNonNegativeInteger(result?.[1]));
-  if (sizes.some((size) => size === null) || sizes.some((size) => size !== sizes[0])) {
+  if (sizes.some((size) => size === null)
+    || sizes.some((size) => size !== sizes[0])) {
     throw new Error("Ready-image derived registry has inconsistent field sets");
   }
   if ((sizes[0] ?? 0) > MAX_REGISTRY_ENTRIES_DURING_REGISTRATION) {
@@ -108,7 +113,11 @@ async function trimRegistryEntryCount() {
 async function readDerivedRegistry() {
   await assertDerivedRegistryStructure();
   await trimRegistryEntryCount();
-  const keys = await redis.zrange(READY_IMAGE_DERIVED_REGISTRY_LRU_KEY, "0", "-1");
+  const keys = await redis.zrange(
+    READY_IMAGE_DERIVED_REGISTRY_LRU_KEY,
+    "0",
+    "-1"
+  );
   if (!keys.length) return { valid: [], invalid: [] };
 
   const descriptors = keys.map(describeReadyImageDerivedResult);
@@ -196,7 +205,8 @@ export async function registerReadyImageDerivedResultUnchecked(options: {
   }
   if (
     kind !== "stats-result" &&
-    (count > itemCount || count > READY_IMAGE_DERIVED_CACHE_POLICY.maxResultMembers)
+    (count > itemCount
+      || count > READY_IMAGE_DERIVED_CACHE_POLICY.maxResultMembers)
   ) {
     await evictReadyImageDerivedResults([key]);
     return false;
@@ -206,12 +216,23 @@ export async function registerReadyImageDerivedResultUnchecked(options: {
   await trimRegistryEntryCount();
 
   const transaction = redis.multi();
-  transaction.zadd(READY_IMAGE_DERIVED_REGISTRY_LRU_KEY, nextDerivedAccessScore(), key);
+  transaction.zadd(
+    READY_IMAGE_DERIVED_REGISTRY_LRU_KEY,
+    nextDerivedAccessScore(),
+    key
+  );
   transaction.hset(READY_IMAGE_DERIVED_REGISTRY_COUNTS_KEY, key, String(count));
   transaction.hset(READY_IMAGE_DERIVED_REGISTRY_KINDS_KEY, key, kind);
-  transaction.hset(READY_IMAGE_DERIVED_REGISTRY_SIGNATURES_KEY, key, descriptor.signature ?? "");
+  transaction.hset(
+    READY_IMAGE_DERIVED_REGISTRY_SIGNATURES_KEY,
+    key,
+    descriptor.signature ?? ""
+  );
   for (const registryKey of derivedRegistryKeys) {
-    transaction.expire(registryKey, READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds);
+    transaction.expire(
+      registryKey,
+      READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds
+    );
   }
   await execRedisPipeline(transaction);
   const registry = await readDerivedRegistry();
@@ -233,7 +254,8 @@ export async function registerReadyImageDerivedResultUnchecked(options: {
   for (const entry of retained) {
     if (
       entry.kind !== "stats-result" &&
-      (entry.count > itemCount || entry.count > READY_IMAGE_DERIVED_CACHE_POLICY.maxResultMembers)
+      (entry.count > itemCount
+        || entry.count > READY_IMAGE_DERIVED_CACHE_POLICY.maxResultMembers)
     ) {
       remove(entry);
     }

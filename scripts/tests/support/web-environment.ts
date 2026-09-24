@@ -67,7 +67,8 @@ if (!environmentState[environmentKey]) {
   if (!elementPrototype.getClientRects) {
     elementPrototype.getClientRects = function () {
       const rects =
-        this.isConnected && !this.closest("[hidden]") && this.style.display !== "none"
+        this.isConnected && !this.closest("[hidden]")
+          && this.style.display !== "none"
           ? [this.getBoundingClientRect()]
           : [];
       return Object.assign(rects, {

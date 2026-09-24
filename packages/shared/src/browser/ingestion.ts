@@ -13,7 +13,9 @@ function isIpHostname(hostname: string) {
   const bareHostname = hostname.replace(/^\[|\]$/g, "");
   if (bareHostname.includes(":")) return true;
   const parts = bareHostname.split(".");
-  return parts.length === 4 && parts.every((part) => /^\d+$/u.test(part) && Number(part) <= 255);
+  return parts.length === 4 && parts.every((part) => (
+    /^\d+$/u.test(part) && Number(part) <= 255
+  ));
 }
 
 /**

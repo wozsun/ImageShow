@@ -111,7 +111,9 @@ export function readyImageSortScore(value: unknown) {
 }
 
 export function readyImageCacheItemFromRow(row: ReadyImageSourceRow): ReadyImageCacheItem {
-  const tags = Array.isArray(row.tags) ? [...new Set(row.tags.map(String))].sort() : [];
+  const tags = Array.isArray(row.tags)
+    ? [...new Set(row.tags.map(String))].sort()
+    : [];
   if (
     tags.length > 50 ||
     tags.some((tag) => tag.length > slugMaxLength || !slugPattern.test(tag))
@@ -144,10 +146,13 @@ export function readyImageCacheItemFromRow(row: ReadyImageSourceRow): ReadyImage
     !imageExtensions.has(item.ext) ||
     !devices.includes(item.device) ||
     !brightnesses.includes(item.brightness) ||
-    (item.theme !== null && (item.theme.length > slugMaxLength || !slugPattern.test(item.theme))) ||
+    (item.theme !== null && (item.theme.length > slugMaxLength
+      || !slugPattern.test(item.theme))) ||
     item.storage_slug.length > slugMaxLength ||
     !slugPattern.test(item.storage_slug) ||
-    (item.author && (item.author.length > slugMaxLength || !slugPattern.test(item.author)))
+    (item.author && (
+      item.author.length > slugMaxLength || !slugPattern.test(item.author)
+    ))
   ) {
     throw new Error("Ready-image cache row is outside the supported model");
   }

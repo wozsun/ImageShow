@@ -18,9 +18,15 @@ const storageBackendDeleteActions = new Set<StorageBackendDeleteAction>([
   "blocked"
 ]);
 
-function countFromDetails(details: Record<string, unknown>, key: string, fallback: number) {
+function countFromDetails(
+  details: Record<string, unknown>,
+  key: string,
+  fallback: number
+) {
   const value = details[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : fallback;
 }
 
 export function storageBackendDeletionReasons(backend: StorageBackendAdmin) {
@@ -45,15 +51,20 @@ export function storageBackendAfterDeleteRejection(
   error: unknown
 ): StorageBackendAdmin | null {
   if (!isApiClientError(error)) return null;
-  if (error.code !== "storage_default_delete" && error.code !== "storage_backend_in_use")
+  if (error.code !== "storage_default_delete"
+    && error.code !== "storage_backend_in_use")
     return null;
 
   const details =
-    error.details && typeof error.details === "object" && !Array.isArray(error.details)
+    error.details
+      && typeof error.details === "object"
+      && !Array.isArray(error.details)
       ? (error.details as Record<string, unknown>)
       : {};
   const deletion =
-    details.deletion && typeof details.deletion === "object" && !Array.isArray(details.deletion)
+    details.deletion
+      && typeof details.deletion === "object"
+      && !Array.isArray(details.deletion)
       ? (details.deletion as Record<string, unknown>)
       : {};
   const action =
@@ -78,7 +89,11 @@ export function storageBackendAfterDeleteRejection(
       "ingestion_session_count",
       backend.ingestion_session_count
     ),
-    cleanup_job_count: countFromDetails(details, "cleanup_job_count", backend.cleanup_job_count),
+    cleanup_job_count: countFromDetails(
+      details,
+      "cleanup_job_count",
+      backend.cleanup_job_count
+    ),
     deletion: {
       action,
       blockers

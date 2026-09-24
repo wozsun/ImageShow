@@ -59,7 +59,11 @@ export async function updateIngestionSessions(
       try {
         const current = sessions[index];
         if (current === ingestionSessionIncarnationMismatch) {
-          throw new ApiError(409, "ingestion_incarnation_conflict", "内容接入任务身份已被替换");
+          throw new ApiError(
+            409,
+            "ingestion_incarnation_conflict",
+            "内容接入任务身份已被替换"
+          );
         }
         if (!current || current.status === "discarded") {
           throw new ApiError(
@@ -87,7 +91,11 @@ export async function updateIngestionSessions(
           );
         }
         if (input.duplicate_decision && !current.prepared) {
-          throw new ApiError(409, "invalid_ingestion_state", "图片尚未准备完成，不能确认重复项");
+          throw new ApiError(
+            409,
+            "invalid_ingestion_state",
+            "图片尚未准备完成，不能确认重复项"
+          );
         }
         const metadata = input.metadata ?? current.metadata;
         const refreshedDuplicateCount = current.prepared
@@ -138,7 +146,9 @@ export async function updateIngestionSessions(
           // Cleanup only retired generations. Upload retries still own their
           // raw file; import retries download into a new raw generation.
           const retired =
-            current.queue === "upload" ? { ...current, raw_generation: "", raw_size: 0 } : current;
+            current.queue === "upload"
+              ? { ...current, raw_generation: "", raw_size: 0 }
+              : current;
           await ingestionCleanupRetryQueue.enqueue(() => cleanupRetiredSessions([retired]));
         }
         const updatedSession = updated.session as IngestionSessionSnapshot;

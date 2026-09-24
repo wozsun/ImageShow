@@ -1,7 +1,14 @@
 import { z } from "zod";
-import { normalizeHttpsUrlInput, slugMaxLength, slugPattern } from "@imageshow/shared/browser";
+import {
+  normalizeHttpsUrlInput,
+  slugMaxLength,
+  slugPattern
+} from "@imageshow/shared/browser";
 import { isHttpsUrl } from "../../core/url-validation.ts";
-import { normalizedUuidSchema, normalizedUuidV7Schema } from "../../core/uuid.ts";
+import {
+  normalizedUuidSchema,
+  normalizedUuidV7Schema
+} from "../../core/uuid.ts";
 
 export const uuidInput = normalizedUuidSchema;
 export const uuidV7Input = normalizedUuidV7Schema;

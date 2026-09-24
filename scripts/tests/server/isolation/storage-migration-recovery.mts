@@ -184,7 +184,10 @@ await runIntegrationScenario(async (runtime) => {
     ).rows[0]?.storage_slug,
     "local"
   );
-  await database.pool.query("DELETE FROM metadata WHERE id=$1", [thumbnailMissingMigrationId]);
+  await database.pool.query(
+    "DELETE FROM metadata WHERE id=$1",
+    [thumbnailMissingMigrationId]
+  );
   await removeDriverObject(localAccess.driver, "full", thumbnailMissingMigrationKey);
 
   const backendErrorIds = {
@@ -192,7 +195,11 @@ await runIntegrationScenario(async (runtime) => {
     known: randomUUID(),
     unknown: randomUUID()
   };
-  await addMigrationImage(backendErrorIds.missing, "local-migration", null);
+  await addMigrationImage(
+    backendErrorIds.missing,
+    "local-migration",
+    null
+  );
   const backendKnownErrorKey = await addMigrationImage(
     backendErrorIds.known,
     "local-migration",
@@ -301,7 +308,11 @@ await runIntegrationScenario(async (runtime) => {
   let existingTargetDigestReads = 0;
   missingSourceAccess.driver.openRead = async function (prefix, key, ...rest) {
     if (prefix === "full" && existingTargetKeys.has(key)) {
-      throw new apiError.ApiError(404, "storage_object_not_found", "Storage object not found");
+      throw new apiError.ApiError(
+        404,
+        "storage_object_not_found",
+        "Storage object not found"
+      );
     }
     return originalMissingSourceOpenRead.call(this, prefix, key, ...rest);
   };
@@ -370,7 +381,10 @@ await runIntegrationScenario(async (runtime) => {
       Object.fromEntries(
         backendExistingTargetMissing.migration.error_samples.map(({ id, code }) => [id, code])
       ),
-      Object.fromEntries(existingTargetIds.map((id) => [id, "source_object_missing"]))
+      Object.fromEntries(existingTargetIds.map((id) => [
+        id,
+        "source_object_missing"
+      ]))
     );
     assert.equal(
       existingTargetDigestReads,
@@ -381,7 +395,10 @@ await runIntegrationScenario(async (runtime) => {
     missingSourceAccess.driver.openRead = originalMissingSourceOpenRead;
     existingTargetAccess.driver.exists = originalExistingTargetExists;
     existingTargetAccess.driver.openRead = originalExistingTargetOpenRead;
-    await database.pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [existingTargetIds]);
+    await database.pool.query(
+      "DELETE FROM metadata WHERE id=ANY($1::uuid[])",
+      [existingTargetIds]
+    );
     await database.pool.query("DELETE FROM storage_backend WHERE slug=ANY($1::text[])", [
       [existingTargetSource, existingTargetDestination]
     ]);
@@ -418,8 +435,14 @@ await runIntegrationScenario(async (runtime) => {
       ({ code }) => code === "source_object_missing"
     )
   );
-  await database.pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [backendOverflowIds]);
-  await database.pool.query("DELETE FROM storage_backend WHERE slug=$1", [backendOverflowSource]);
+  await database.pool.query(
+    "DELETE FROM metadata WHERE id=ANY($1::uuid[])",
+    [backendOverflowIds]
+  );
+  await database.pool.query(
+    "DELETE FROM storage_backend WHERE slug=$1",
+    [backendOverflowSource]
+  );
   registry.invalidateStorageBackendRegistry();
 
   const waitForAbortReads = async (startedPromise: Promise<void>, label: string) => {
@@ -445,7 +468,12 @@ await runIntegrationScenario(async (runtime) => {
     await database.pool.query(
       `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size, status, deleted_at)
        VALUES ($1, 'integration-admin', $2, 'pc', 'dark', NULL, 'webp', $3, $4, $4, 'deleted', now())`,
-      [id, storageSlug, createHash("md5").update(body).digest("hex"), body.byteLength]
+      [
+        id,
+        storageSlug,
+        createHash("md5").update(body).digest("hex"),
+        body.byteLength
+      ]
     );
     await localAccess.driver.writeBuffer("full", key, body, "image/webp");
     await localAccess.driver.writeBuffer(
@@ -489,7 +517,10 @@ await runIntegrationScenario(async (runtime) => {
   const listAbortReadsStarted = new Promise<void>((resolve) => {
     markListAbortReadsStarted = resolve;
   });
-  const expectedListAbortReads = Math.min(migrationConcurrency, listAbortFixtures.length);
+  const expectedListAbortReads = Math.min(
+    migrationConcurrency,
+    listAbortFixtures.length
+  );
   localAccess.driver.openRead = async function (...args) {
     if (args[0] === "full" && listAbortKeys.has(args[1])) {
       listAbortReadCount += 1;
@@ -508,10 +539,16 @@ await runIntegrationScenario(async (runtime) => {
     { signal: listAbortController.signal }
   );
   try {
-    await waitForAbortReads(listAbortReadsStarted, "image migration list");
+    await waitForAbortReads(
+      listAbortReadsStarted,
+      "image migration list"
+    );
     listAbortController.abort(listAbortReason);
     releaseListAbortReads();
-    await assert.rejects(interruptedListMigration, (error) => error === listAbortReason);
+    await assert.rejects(
+      interruptedListMigration,
+      (error) => error === listAbortReason
+    );
   } finally {
     releaseListAbortReads();
     await interruptedListMigration.catch(() => undefined);
@@ -541,7 +578,10 @@ await runIntegrationScenario(async (runtime) => {
   registry.invalidateStorageBackendRegistry();
   const backendAbortFixtures = [];
   for (let index = 0; index < 3; index += 1) {
-    backendAbortFixtures.push(await addAbortMigrationImage(randomUUID(), backendAbortSource));
+    backendAbortFixtures.push(await addAbortMigrationImage(
+      randomUUID(),
+      backendAbortSource
+    ));
   }
   const backendAbortKeys = new Set(backendAbortFixtures.map((fixture) => fixture.key));
   const originalBackendAbortOpenRead = localAccess.driver.openRead;
@@ -570,22 +610,34 @@ await runIntegrationScenario(async (runtime) => {
     { signal: backendAbortController.signal }
   );
   try {
-    await waitForAbortReads(backendAbortReadStarted, "backend migration");
+    await waitForAbortReads(
+      backendAbortReadStarted,
+      "backend migration"
+    );
     backendAbortController.abort(backendAbortReason);
     releaseBackendAbortRead();
-    await assert.rejects(interruptedBackendMigration, (error) => error === backendAbortReason);
+    await assert.rejects(
+      interruptedBackendMigration,
+      (error) => error === backendAbortReason
+    );
   } finally {
     releaseBackendAbortRead();
     await interruptedBackendMigration.catch(() => undefined);
     localAccess.driver.openRead = originalBackendAbortOpenRead;
   }
-  assert.equal(backendAbortReadCount, Math.min(migrationConcurrency, backendAbortFixtures.length));
+  assert.equal(
+    backendAbortReadCount,
+    Math.min(migrationConcurrency, backendAbortFixtures.length)
+  );
   assert.equal(
     Number(
       (
         await database.pool.query(
           "SELECT count(*) FROM metadata WHERE id=ANY($1::uuid[]) " + "AND storage_slug=$2",
-          [backendAbortFixtures.map((fixture) => fixture.id), backendAbortSource]
+          [
+            backendAbortFixtures.map((fixture) => fixture.id),
+            backendAbortSource
+          ]
         )
       ).rows[0]?.count
     ),
@@ -593,7 +645,10 @@ await runIntegrationScenario(async (runtime) => {
     "整后端请求中止后只收口已进入固定准入片的项目，且不得提交当前位置"
   );
   await removeAbortMigrationImages(backendAbortFixtures);
-  await database.pool.query("DELETE FROM storage_backend WHERE slug=$1", [backendAbortSource]);
+  await database.pool.query(
+    "DELETE FROM storage_backend WHERE slug=$1",
+    [backendAbortSource]
+  );
   registry.invalidateStorageBackendRegistry();
 
   const responseLossId = randomUUID();
@@ -639,7 +694,10 @@ await runIntegrationScenario(async (runtime) => {
     }
     assert.equal(responseLost, true);
     assert.equal(
-      (await database.pool.query("SELECT storage_slug FROM metadata WHERE id=$1", [responseLossId]))
+      (await database.pool.query(
+        "SELECT storage_slug FROM metadata WHERE id=$1",
+        [responseLossId]
+      ))
         .rows[0]?.storage_slug,
       "local-migration"
     );

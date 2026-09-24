@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject
+} from "react";
 import { isDocumentFallbackFocusTarget } from "../lib/ui/focus-target.js";
 import { anchoredPopupBoundarySelector } from "../lib/ui/anchored-popup-boundary.js";
 import { topDialogFrame } from "../lib/ui/dialog-layer.js";
@@ -40,7 +47,9 @@ function useTransientPanelSemantics({ open, transient }: { open: boolean; transi
         trigger?.focus();
         if (trigger && document.activeElement === trigger) return;
       }
-      if (panel && activeElement instanceof HTMLElement && panel.contains(activeElement)) {
+      if (panel
+        && activeElement instanceof HTMLElement
+        && panel.contains(activeElement)) {
         activeElement.blur();
       }
     },
@@ -74,17 +83,22 @@ function isWithinPanelSurface(
 ) {
   const path = event.composedPath?.() ?? (event.target ? [event.target] : []);
   return path.some((entry) => {
-    if (entry === panel || entry === trigger || entry === auxiliarySurface) return true;
+    if (entry === panel
+      || entry === trigger
+      || entry === auxiliarySurface) return true;
     if (
       typeof Node !== "undefined" &&
       entry instanceof Node &&
-      (panel.contains(entry) || trigger.contains(entry) || auxiliarySurface?.contains(entry))
+      (panel.contains(entry)
+        || trigger.contains(entry)
+        || auxiliarySurface?.contains(entry))
     ) {
       return true;
     }
 
     const matches = (entry as Partial<Element>).matches;
-    return typeof matches === "function" && matches.call(entry, portalSelector);
+    return typeof matches === "function"
+      && matches.call(entry, portalSelector);
   });
 }
 
@@ -128,7 +142,10 @@ export function useDismissiblePanel({
   }, []);
 
   const setOpen = useCallback(
-    (nextOpen: boolean, closeOptions?: TransientPanelCloseOptions) => {
+    (
+      nextOpen: boolean,
+      closeOptions?: TransientPanelCloseOptions
+    ) => {
       window.clearTimeout(motionTimerRef.current);
       if (!nextOpen) {
         semantics.prepareForClose(closeOptions);
@@ -138,7 +155,10 @@ export function useDismissiblePanel({
       onOpenChangeRef.current(nextOpen);
       if (enabled) {
         // 动画只覆盖用户触发的本次开合，避免之后跨越响应式断点时误播。
-        motionTimerRef.current = window.setTimeout(() => setMotionEnabled(false), 100);
+        motionTimerRef.current = window.setTimeout(
+          () => setMotionEnabled(false),
+          100
+        );
       }
     },
     [dismissMenus, enabled, semantics.prepareForClose]
@@ -175,8 +195,14 @@ export function useDismissiblePanel({
       const viewportBottom = visualViewport
         ? visualViewport.offsetTop + visualViewport.height
         : window.innerHeight;
-      const availableHeight = Math.max(0, viewportBottom - trigger.getBoundingClientRect().bottom);
-      panel.style.setProperty(availableHeightProperty, `${availableHeight}px`);
+      const availableHeight = Math.max(
+        0,
+        viewportBottom - trigger.getBoundingClientRect().bottom
+      );
+      panel.style.setProperty(
+        availableHeightProperty,
+        `${availableHeight}px`
+      );
     };
     const scheduleUpdate = () => {
       if (frame !== undefined) return;
@@ -216,7 +242,10 @@ export function useDismissiblePanel({
         return;
       if (
         event.type === "focusin" &&
-        isDocumentFallbackFocusTarget(panel.ownerDocument, event.target)
+        isDocumentFallbackFocusTarget(
+          panel.ownerDocument,
+          event.target
+        )
       ) {
         // iOS can move focus to body/html while dismissing the keyboard.
         // A later physical interaction outside is handled independently.
@@ -261,7 +290,14 @@ export function useDismissiblePanel({
       );
     }
     return () => listeners.abort();
-  }, [enabled, open, portalSelector, closeOnEscape, setOpen, auxiliarySurfaceRef]);
+  }, [
+    enabled,
+    open,
+    portalSelector,
+    closeOnEscape,
+    setOpen,
+    auxiliarySurfaceRef
+  ]);
 
   return {
     panelHidden: semantics.panelHidden,

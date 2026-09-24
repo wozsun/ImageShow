@@ -18,7 +18,8 @@ export function gallerySelectorValue(field: GallerySelectorField, values: readon
   const label = gallerySelectorLabels[field];
   const tokens = [
     ...new Set(
-      values.flatMap((value) => value.split(",")).map((value) => value.trim().toLowerCase())
+      values.flatMap((value) => value.split(","))
+        .map((value) => value.trim().toLowerCase())
     )
   ];
   if (tokens.length === 1 && tokens[0] === "") return "";

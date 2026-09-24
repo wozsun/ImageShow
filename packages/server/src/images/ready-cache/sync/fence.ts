@@ -1,5 +1,5 @@
-let fenceTail: Promise<void> = Promise.resolve();
-let pendingFenceHolders = 0;
+let writerQueueTail: Promise<void> = Promise.resolve();
+let queuedOrActiveWriters = 0;
 let activeReaders = 0;
 let readersDrained: Promise<void> = Promise.resolve();
 let resolveReadersDrained: (() => void) | null = null;
@@ -35,7 +35,7 @@ async function runWithReadFence<T>(work: () => Promise<T>) {
 export async function tryWithReadyImageCacheReadFence<T>(
   work: () => Promise<T>
 ): Promise<ReadyImageCacheReadLease<T>> {
-  if (pendingFenceHolders > 0) return { acquired: false };
+  if (queuedOrActiveWriters > 0) return { acquired: false };
   return { acquired: true, value: await runWithReadFence(work) };
 }
 
@@ -65,8 +65,8 @@ export async function withReadyImageCacheReadFence<T>(
   signal?: AbortSignal
 ): Promise<T> {
   signal?.throwIfAborted();
-  while (pendingFenceHolders > 0) {
-    const pendingWriters = fenceTail;
+  while (queuedOrActiveWriters > 0) {
+    const pendingWriters = writerQueueTail;
     await waitForFenceTurn(pendingWriters, signal);
   }
   signal?.throwIfAborted();
@@ -79,20 +79,20 @@ export async function withReadyImageCacheReadFence<T>(
  * mutation can begin its PostgreSQL transaction.
  */
 export async function withReadyImageCacheWriteFence<T>(work: () => Promise<T>): Promise<T> {
-  pendingFenceHolders += 1;
-  const previous = fenceTail;
+  queuedOrActiveWriters += 1;
+  const previousWriter = writerQueueTail;
   const { promise, resolve: release } = Promise.withResolvers<void>();
-  fenceTail = promise;
-  await previous;
+  writerQueueTail = promise;
+  await previousWriter;
   try {
     await readersDrained;
     return await work();
   } finally {
-    pendingFenceHolders -= 1;
+    queuedOrActiveWriters -= 1;
     release();
   }
 }
 
-export function readyImageCacheWriteFenceIsClosed() {
-  return pendingFenceHolders > 0;
+export function readyImageCacheReadsAreBlocked() {
+  return queuedOrActiveWriters > 0;
 }

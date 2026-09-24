@@ -8,7 +8,11 @@ import {
   publicDetailValidation
 } from "../../lib/api/image-data-revision.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
-import type { EditableImageSnapshot, GalleryImageCard, PublicImageItem } from "../../lib/types.js";
+import type {
+  EditableImageSnapshot,
+  GalleryImageCard,
+  PublicImageItem
+} from "../../lib/types.js";
 import { ImageDetailModal } from "./ImageDetailModal.js";
 import { useOptionalAuthSessionQuery } from "../../hooks/useAuthSession.js";
 
@@ -48,7 +52,9 @@ export function PublicImageDetail({
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
   const [trashCommitted, setTrashCommitted] = useState(false);
   const authQuery = useOptionalAuthSessionQuery();
-  const authIdentity = authQuery?.data?.authenticated ? authQuery.data.username : null;
+  const authIdentity = authQuery?.data?.authenticated
+    ? authQuery.data.username
+    : null;
   const { data, isPending, isFetching, isError, error, refetch } =
     useQuery<PublicImageDetailResponseDto>({
       queryKey: [...queryKeys.publicImageDetail, card.id, authIdentity],
@@ -72,9 +78,14 @@ export function PublicImageDetail({
       enabled: !trashCommitted && !(authQuery?.isPending && authQuery.isFetching)
     });
   const detail = data?.item.id === card.id ? data.item : null;
-  const item = useMemo(() => ({ ...placeholder, ...(detail ?? {}) }), [placeholder, detail]);
+  const item = useMemo(
+    () => ({ ...placeholder, ...(detail ?? {}) }),
+    [placeholder, detail]
+  );
   const detailLoading = isPending || (isFetching && !detail);
-  const detailError = isError && !detail && !isFetching ? errorMessage(error) : "";
+  const detailError = isError && !detail && !isFetching
+    ? errorMessage(error)
+    : "";
 
   return (
     <ImageDetailModal

@@ -19,7 +19,10 @@ export type GalleryRestorationSession = {
 
 let retainedSession: GalleryRestorationSession | null = null;
 
-function geometryMatches(left: GalleryCompactGeometry, right: GalleryCompactGeometry) {
+function geometryMatches(
+  left: GalleryCompactGeometry,
+  right: GalleryCompactGeometry
+) {
   return (
     left.columnCount === right.columnCount &&
     Math.abs(left.contentWidth - right.contentWidth) < 0.5 &&

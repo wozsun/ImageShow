@@ -36,7 +36,14 @@ export async function replaceRedisStringIfEqualKeepingTtl(
   expectedValue: string,
   nextValue: string
 ) {
-  const reply = await client.call("SET", key, nextValue, "IFEQ", expectedValue, "KEEPTTL");
+  const reply = await client.call(
+    "SET",
+    key,
+    nextValue,
+    "IFEQ",
+    expectedValue,
+    "KEEPTTL"
+  );
   return parseRedisSetIfEqualReply(reply);
 }
 

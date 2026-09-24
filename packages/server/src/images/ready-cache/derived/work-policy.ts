@@ -62,19 +62,28 @@ function safeMemberCount(count: number) {
 function summarizeOperations(operations: SetOperationEstimate[]) {
   const estimate = emptyEstimate();
   for (const operation of operations) {
-    const sourceMembers = operation.sourceCounts.reduce((total, count) => total + count, 0);
+    const sourceMembers = operation.sourceCounts.reduce(
+      (total, count) => total + count,
+      0
+    );
     estimate.operationCount += 1;
     if (operation.kind !== "union") {
       estimate.intersectionDifferenceOperations += 1;
     }
     estimate.totalSourceMembers += sourceMembers;
-    estimate.peakSourceMembers = Math.max(estimate.peakSourceMembers, sourceMembers);
+    estimate.peakSourceMembers = Math.max(
+      estimate.peakSourceMembers,
+      sourceMembers
+    );
     estimate.totalExpectedMembers += operation.expectedMembers;
     estimate.peakExpectedMembers = Math.max(
       estimate.peakExpectedMembers,
       operation.expectedMembers
     );
-    estimate.peakOperands = Math.max(estimate.peakOperands, operation.sourceCounts.length);
+    estimate.peakOperands = Math.max(
+      estimate.peakOperands,
+      operation.sourceCounts.length
+    );
   }
   return estimate;
 }
@@ -203,7 +212,8 @@ export function tryAcquireReadyImageFilterBuildSlot(estimate: ReadyImageDerivedW
   const large = estimate.totalSourceMembers >= policy.largeFilterSourceMembers;
   if (
     activeFilterBuilds >= policy.maxConcurrentFilterBuilds ||
-    (large && activeLargeFilterBuilds >= policy.maxConcurrentLargeFilterBuilds)
+    (large
+      && activeLargeFilterBuilds >= policy.maxConcurrentLargeFilterBuilds)
   ) {
     return null;
   }
@@ -220,7 +230,8 @@ export function tryAcquireReadyImageStatsBuildSlot(estimate: ReadyImageDerivedWo
   const large = estimate.totalExpectedMembers >= policy.largeStatsExpectedMembers;
   if (
     activeStatsBuilds >= policy.maxConcurrentStatsBuilds ||
-    (large && activeLargeStatsBuilds >= policy.maxConcurrentLargeStatsBuilds)
+    (large
+      && activeLargeStatsBuilds >= policy.maxConcurrentLargeStatsBuilds)
   ) {
     return null;
   }

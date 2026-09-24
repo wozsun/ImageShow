@@ -95,7 +95,10 @@ function emptyCache(): CachedAdminPreferences {
 function writeCachedPreferences(username: string, cache: CachedAdminPreferences) {
   if (typeof window === "undefined") return false;
   try {
-    window.localStorage.setItem(localPreferenceKey(username), JSON.stringify(cache));
+    window.localStorage.setItem(
+      localPreferenceKey(username),
+      JSON.stringify(cache)
+    );
     return true;
   } catch {
     // 浏览器禁用 localStorage 时仍保留内存状态，并继续尝试 PostgreSQL 同步。
@@ -138,13 +141,19 @@ export function AdminPreferencesProvider({
 }>) {
   const queryClient = useQueryClient();
   const { cancelPendingAuthRead, updateAuthPreferenceSnapshot } = useAuthPreferenceCacheBridge();
-  const queryKey = useMemo(() => [...queryKeys.adminPreferences, username] as const, [username]);
+  const queryKey = useMemo(
+    () => [...queryKeys.adminPreferences, username] as const,
+    [username]
+  );
   const initialServerPreferences = useMemo(
     () => normalizeAdminPreferences(serverPreferences),
     [serverPreferences]
   );
   const [cache, setCache] = useState<CachedAdminPreferences>(() =>
-    reconcileAdminPreferenceCache(readCachedPreferences(username), initialServerPreferences)
+    reconcileAdminPreferenceCache(
+      readCachedPreferences(username),
+      initialServerPreferences
+    )
   );
   const cacheRef = useRef(cache);
   const syncScopeRef = useRef<PreferenceSyncScope | null>(null);
@@ -174,7 +183,10 @@ export function AdminPreferencesProvider({
 
   useLayoutEffect(() => {
     const cachedUpdatedAt = queryClient.getQueryState(queryKey)?.dataUpdatedAt;
-    if (!shouldReplaceAdminPreferenceQuerySnapshot(cachedUpdatedAt, serverPreferencesUpdatedAt))
+    if (!shouldReplaceAdminPreferenceQuerySnapshot(
+      cachedUpdatedAt,
+      serverPreferencesUpdatedAt
+    ))
       return;
     queryClient.setQueryData<AdminPreferencesQuerySnapshot>(
       queryKey,
@@ -203,7 +215,10 @@ export function AdminPreferencesProvider({
   );
 
   const syncAuthPreferenceSnapshot = useCallback(
-    (preferences: AdminPreferences, etag: string) => {
+    (
+      preferences: AdminPreferences,
+      etag: string
+    ) => {
       if (syncScopeRef.current?.username !== username) return;
       updateAuthPreferenceSnapshot(username, preferences, etag);
     },
@@ -213,7 +228,10 @@ export function AdminPreferencesProvider({
   const cancelPreferenceReads = useCallback(
     () =>
       Promise.all([
-        queryClient.cancelQueries({ queryKey, exact: true }, { silent: true }),
+        queryClient.cancelQueries(
+          { queryKey, exact: true },
+          { silent: true }
+        ),
         cancelPendingAuthRead()
       ]).then(() => undefined),
     [cancelPendingAuthRead, queryClient, queryKey]

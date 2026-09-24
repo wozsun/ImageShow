@@ -62,7 +62,14 @@ const randomAllowedQueryValues = [
   "limit"
 ] as const;
 const randomAllowedQuery = new Set<string>(randomAllowedQueryValues);
-const randomSingleValueQuery = new Set(["device", "brightness", "seed", "mode", "size", "limit"]);
+const randomSingleValueQuery = new Set([
+  "device",
+  "brightness",
+  "seed",
+  "mode",
+  "size",
+  "limit"
+]);
 const randomBrightnessSet = new Set(randomBrightnesses);
 const disallowedSelectorCharacters = /[\u0000-\u001f\u007f]/u;
 const fullUuidPattern = new RegExp(
@@ -103,7 +110,11 @@ function mixedSelectorsError(noun: string, include: string[], exclude: string[])
   );
 }
 
-function parseSelectorGroup(query: URLSearchParams, field: "theme" | "author", noun: string) {
+function parseSelectorGroup(
+  query: URLSearchParams,
+  field: "theme" | "author",
+  noun: string
+) {
   const include: string[] = [];
   const exclude: string[] = [];
   let submittedCount = 0;
@@ -179,7 +190,10 @@ function targetedIdCombinationError(query: URLSearchParams) {
   );
 }
 
-function parseJsonLimit(query: URLSearchParams, explicitMode: string | null): number | Response {
+function parseJsonLimit(
+  query: URLSearchParams,
+  explicitMode: string | null
+): number | Response {
   if (!query.has("limit")) return 1;
   if (explicitMode !== "json") {
     return apiErrorResponse(
@@ -309,7 +323,8 @@ export function parseRandomQuery(
       { field: "mode" }
     );
   }
-  const size = query.get("size")?.toLowerCase() ?? (explicitMode === "json" ? null : defaultSize);
+  const size = query.get("size")?.toLowerCase()
+    ?? (explicitMode === "json" ? null : defaultSize);
   if (size !== null && !randomSizes.has(size)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid size" },
@@ -418,7 +433,12 @@ export function normalizeRandomQuery(
   query: ParsedRandomQuery,
   maps: RandomSelectorMaps
 ): NormalizedRandomQuery | Response {
-  const theme = normalizeSelectorGroup("theme", "theme", query.theme, maps.theme);
+  const theme = normalizeSelectorGroup(
+    "theme",
+    "theme",
+    query.theme,
+    maps.theme
+  );
   if (theme instanceof Response) return theme;
   let tag: TagExpression;
   try {
@@ -430,7 +450,12 @@ export function normalizeRandomQuery(
       { field: "tag", value: error.term }
     );
   }
-  const author = normalizeSelectorGroup("author", "author", query.author, maps.author);
+  const author = normalizeSelectorGroup(
+    "author",
+    "author",
+    query.author,
+    maps.author
+  );
   if (author instanceof Response) return author;
 
   const normalized = {

@@ -2,7 +2,11 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api } from "./client.js";
 import { requestWithDeadline } from "./request-deadline.js";
 import { queryKeys } from "./query-keys.js";
-import type { GalleryFacetsDto, GalleryStatsDto, SiteConfigDto } from "@imageshow/shared/browser";
+import type {
+  GalleryFacetsDto,
+  GalleryStatsDto,
+  SiteConfigDto
+} from "@imageshow/shared/browser";
 
 export type SiteConfig = SiteConfigDto;
 
@@ -57,7 +61,10 @@ export function useGalleryStats(search = "", enabled = true) {
   return useQuery<GalleryStats>({
     queryKey: [...queryKeys.galleryStats, search],
     queryFn: ({ signal }) =>
-      api(search ? `/api/gallery-stats?${search}` : "/api/gallery-stats", { signal }),
+      api(
+        search ? `/api/gallery-stats?${search}` : "/api/gallery-stats",
+        { signal }
+      ),
     placeholderData: keepPreviousData,
     enabled,
     staleTime: 30_000,

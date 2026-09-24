@@ -49,7 +49,9 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
   for (const [table, readiness] of Object.entries(databaseReadiness)) {
     for (const [column, expectedType] of Object.entries(readiness.columns)) {
       const actual = actualColumns.get(`${table}.${column}`);
-      if (!actual || actual.type_name !== expectedType || actual.type_modifier !== -1) {
+      if (!actual
+        || actual.type_name !== expectedType
+        || actual.type_modifier !== -1) {
         incompatible.push(`${table}.${column}`);
       }
     }

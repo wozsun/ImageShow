@@ -8,15 +8,18 @@ import {
 } from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
-import { privateNoStoreCacheControl, safeResponseHeaderValue } from "../core/http/headers.ts";
+import {
+  privateNoStoreCacheControl,
+  safeResponseHeaderValue
+} from "../core/http/headers.ts";
 import { limitAdvancedConfigBody } from "../core/http/request-body-limit.ts";
 import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import { parse } from "./validation/parse.ts";
 import {
-  createConfigPackage,
-  importConfigPackage,
-  previewConfigPackage
-} from "../config/package/service.ts";
+  createConfigBundle,
+  importConfigBundle,
+  previewConfigBundle
+} from "../config/bundle/service.ts";
 import {
   getFullRuntimeConfig,
   saveFullRuntimeConfig,
@@ -72,17 +75,17 @@ export function registerAdvancedConfigRoutes(app: Hono) {
   );
 
   app.get(`${adminApiBasePath}/advanced-config/export`, requireSuperAdmin, async (c) => {
-    const pkg = await createConfigPackage();
+    const bundle = await createConfigBundle();
     c.header("Content-Type", "application/json; charset=utf-8");
     c.header(
       "Content-Disposition",
       safeResponseHeaderValue(
         "Content-Disposition",
-        `attachment; filename="${exportFilename(pkg.exported_at)}"`
+        `attachment; filename="${exportFilename(bundle.exported_at)}"`
       )
     );
     c.header("Cache-Control", "private, no-store");
-    return c.body(`${JSON.stringify(pkg, null, 2)}\n`);
+    return c.body(`${JSON.stringify(bundle, null, 2)}\n`);
   });
 
   app.post(
@@ -92,7 +95,7 @@ export function registerAdvancedConfigRoutes(app: Hono) {
     async (c) => {
       const input = parse(previewInput, await readJsonBody(c));
       const response = {
-        preview: await previewConfigPackage(input.package)
+        preview: await previewConfigBundle(input.package)
       } satisfies AdvancedConfigPreviewResponseDto;
       return c.json(apiSuccess(response));
     }
@@ -104,7 +107,7 @@ export function registerAdvancedConfigRoutes(app: Hono) {
     limitAdvancedConfigBody,
     async (c) => {
       const input = parse(importInput, await readJsonBody(c));
-      await importConfigPackage(input.package, input.slug_mappings, c.req.raw.signal);
+      await importConfigBundle(input.package, input.slug_mappings, c.req.raw.signal);
       return c.json(apiSuccess());
     }
   );

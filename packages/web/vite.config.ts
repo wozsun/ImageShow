@@ -10,7 +10,9 @@ function webSourcePath(id: string | null) {
   const normalized = id.replaceAll("\\", "/");
   const marker = "/packages/web/";
   const markerIndex = normalized.lastIndexOf(marker);
-  return markerIndex < 0 ? null : normalized.slice(markerIndex + marker.length);
+  return markerIndex < 0
+    ? null
+    : normalized.slice(markerIndex + marker.length);
 }
 
 type ChunkingContext = {
@@ -71,7 +73,9 @@ function semanticOwnerCategory(root: string) {
   const segments = sourcePath.split("/");
   if (segments[0] === "src" && segments.length > 2) {
     if (["pages", "components", "lib"].includes(segments[1]!)) {
-      return segments[2]!.replace(/[^A-Za-z0-9]+/g, "-").toLowerCase();
+      return segments[2]!
+        .replace(/[^A-Za-z0-9]+/g, "-")
+        .toLowerCase();
     }
   }
   return semanticOwnerLabel(root);
@@ -103,7 +107,9 @@ const semanticChunkNameAssignments = new Map<string, Map<string, string>>();
 function rootSetChunkName(prefix: string, roots: string[]) {
   const exactLabels = [...new Set(roots.map(semanticOwnerLabel))].sort();
   const ownerLabels =
-    exactLabels.length <= 3 ? exactLabels : [...new Set(roots.map(semanticOwnerCategory))].sort();
+    exactLabels.length <= 3
+      ? exactLabels
+      : [...new Set(roots.map(semanticOwnerCategory))].sort();
   const generatedName = `${prefix}-${ownerLabels.join("-") || "shared"}`;
   const baseName = chunkResponsibilityAliases[generatedName] ?? generatedName;
   const rootKey = roots.join("\n");
@@ -181,8 +187,12 @@ function javascriptAssetPattern(name: string) {
 function staticAssetPattern(names: string[]) {
   const originalName = names[0] ?? "asset";
   const extensionIndex = originalName.lastIndexOf(".");
-  const extension = extensionIndex >= 0 ? originalName.slice(extensionIndex) : "";
-  const baseName = extensionIndex >= 0 ? originalName.slice(0, extensionIndex) : originalName;
+  const extension = extensionIndex >= 0
+    ? originalName.slice(extensionIndex)
+    : "";
+  const baseName = extensionIndex >= 0
+    ? originalName.slice(0, extensionIndex)
+    : originalName;
   return `assets/${assetResponsibilityName(baseName)}-[hash]${extension}`;
 }
 
@@ -264,7 +274,8 @@ function webBuildReport(): Plugin {
         ...chunk,
         dynamicImporters: [...new Set(dynamicImporters.get(chunk.file) ?? [])].sort()
       }));
-      const styles = [...cssOwners.keys()].sort().map((file) => ({
+      const styles = [...cssOwners.keys()]
+        .sort().map((file) => ({
         file,
         owners: cssOwners.get(file)!
       }));

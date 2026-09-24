@@ -7,8 +7,15 @@ export type GalleryTileRenderProps = {
   revealOrder: number;
   revealRegistry: GalleryCardRevealRegistry;
   subtitle: string;
-  onOpen: (card: GalleryImageCard, opener: HTMLButtonElement) => void;
-  onIntrinsicSize: (imageId: string, width: number, height: number) => void;
+  onOpen: (
+    card: GalleryImageCard,
+    opener: HTMLButtonElement
+  ) => void;
+  onIntrinsicSize: (
+    imageId: string,
+    width: number,
+    height: number
+  ) => void;
 };
 
 export function galleryTilePropsEqual(

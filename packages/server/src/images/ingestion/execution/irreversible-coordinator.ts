@@ -125,7 +125,9 @@ export class IngestionIrreversibleCoordinator {
   async waitForDatabaseTransactions() {
     for (;;) {
       const transactions = [...this.#records.values()].flatMap((record) =>
-        record.state === "database_started" && record.settled ? [record.settled] : []
+        record.state === "database_started" && record.settled
+          ? [record.settled]
+          : []
       );
       if (!transactions.length) return;
       await Promise.allSettled(transactions);

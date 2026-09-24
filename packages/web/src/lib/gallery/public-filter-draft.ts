@@ -17,8 +17,8 @@ import { brightnessOptionLabel } from "../ui/select-options.js";
 import { gallerySelectorValue, type GallerySelectorField } from "./gallery-selectors.js";
 
 export const publicFilterSections = ["device", "brightness", "theme", "tag", "author"] as const;
-export type PublicFilterSection = (typeof publicFilterSections)[number];
-export const publicFilterLabels: Record<PublicFilterSection, string> = {
+export type PublicFilterSectionKey = (typeof publicFilterSections)[number];
+export const publicFilterLabels: Record<PublicFilterSectionKey, string> = {
   device: "设备",
   brightness: "明暗",
   theme: "主题",
@@ -93,7 +93,9 @@ export function resolvePublicFilterTag(
   facets: GalleryFacetsDto | undefined
 ) {
   let selection: TagSelection =
-    draft.tag.kind === "selection" ? draft.tag.selection : createTagSelection();
+    draft.tag.kind === "selection"
+      ? draft.tag.selection
+      : createTagSelection();
   try {
     if (draft.tag.kind === "unresolved") {
       if (!facets) throw new Error("读取标签目录后才能确认原有标签条件");
@@ -120,7 +122,8 @@ export function publicDraftFilters(draft: PublicFilterDraft, tag: TagSelection):
     return gallerySelectorValue(
       field,
       selector.unresolved ??
-        selector.selected.map((slug) => (selector.mode === "exclude" ? `!${slug}` : slug))
+        selector.selected
+          .map((slug) => selector.mode === "exclude" ? `!${slug}` : slug)
     );
   };
   return {
@@ -163,7 +166,7 @@ export function validatePublicFilterEdit(
 }
 
 export type PublicFilterChip = {
-  section: PublicFilterSection;
+  section: PublicFilterSectionKey;
   value: string;
   label: string;
   exclude: boolean;
