@@ -6,7 +6,7 @@ import {
   publicFilterLabels,
   type PublicFilterChip
 } from "../../../lib/gallery/public-filter-draft.js";
-import "../../../styles/tag-scroll.css";
+import "../../../styles/chip-strip-scroll.css";
 
 export function PublicFilterChips({
   chips,
@@ -29,7 +29,7 @@ export function PublicFilterChips({
     scrollAvailability,
     refreshScrollAvailability,
     cancelPendingScroll,
-    scrollTags
+    scrollItems
   } = useChipStripScroll(returnFocusRef);
   const revealedChipRef = useRef(revealChip);
 
@@ -76,17 +76,17 @@ export function PublicFilterChips({
         ref={backwardNavigationRef}
         type="button"
         className="public-filter-chip-nav is-backward"
-        data-tag-scroll-navigation=""
+        data-chip-strip-scroll-navigation=""
         disabled={!scrollAvailability.backward}
         aria-label="显示前一个被遮挡的已选条件"
         pointerFocus="preserve"
-        onActivate={() => scrollTags(-1)}
+        onActivate={() => scrollItems(-1)}
       >
         <Icon name="arrow-down-s-line" />
       </DirectActivationButton>
       <div
         ref={scrollRef}
-        className="public-filter-chips tag-input-scroll-window"
+        className="public-filter-chips chip-strip-scroll-window"
         data-scroll-backward={scrollAvailability.backward}
         data-scroll-forward={scrollAvailability.forward}
         data-dialog-horizontal-scroll-owner=""
@@ -101,7 +101,7 @@ export function PublicFilterChips({
             }
             type="button"
             className={chip.exclude ? "is-excluded" : undefined}
-            data-tag-scroll-item=""
+            data-chip-strip-scroll-item=""
             aria-label={`移除${chip.groupId === undefined ? "" : `第 ${chip.groupId} 组`}${publicFilterLabels[chip.section]}条件：${chip.exclude ? "排除" : ""}${chip.label}`}
             pointerFocus="preserve"
             onActivate={() => onRemove(chip)}
@@ -120,11 +120,11 @@ export function PublicFilterChips({
         ref={forwardNavigationRef}
         type="button"
         className="public-filter-chip-nav is-forward"
-        data-tag-scroll-navigation=""
+        data-chip-strip-scroll-navigation=""
         disabled={!scrollAvailability.forward}
         aria-label="显示后一个被遮挡的已选条件"
         pointerFocus="preserve"
-        onActivate={() => scrollTags(1)}
+        onActivate={() => scrollItems(1)}
       >
         <Icon name="arrow-down-s-line" />
       </DirectActivationButton>

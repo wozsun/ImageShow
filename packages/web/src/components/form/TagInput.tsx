@@ -30,7 +30,7 @@ import {
   suggestionMenuSize
 } from "./SuggestionList.js";
 import { useChipStripScroll } from "../../hooks/useChipStripScroll.js";
-import "../../styles/tag-scroll.css";
+import "../../styles/chip-strip-scroll.css";
 
 type TouchEditorFocusCandidate = {
   identifier: number;
@@ -81,7 +81,7 @@ export function TagInput({
     scrollAvailability,
     refreshScrollAvailability,
     cancelPendingScroll,
-    scrollTags
+    scrollItems
   } = useChipStripScroll(inputRef);
   const touchEditorFocusCandidateRef = useRef<TouchEditorFocusCandidate | null>(null);
   const choiceSettledCompositionRef = useRef(false);
@@ -311,14 +311,14 @@ export function TagInput({
       event.key === "ArrowLeft" &&
       event.currentTarget.selectionStart === 0 &&
       event.currentTarget.selectionEnd === 0 &&
-      scrollTags(-1)
+      scrollItems(-1)
     ) {
       event.preventDefault();
     } else if (
       event.key === "ArrowRight" &&
       event.currentTarget.selectionStart === text.length &&
       event.currentTarget.selectionEnd === text.length &&
-      scrollTags(1)
+      scrollItems(1)
     ) {
       event.preventDefault();
     } else if (event.key === "Backspace" && !text && value.length) {
@@ -389,17 +389,17 @@ export function TagInput({
         ref={backwardNavigationRef}
         type="button"
         className="tag-input-nav is-backward"
-        data-tag-scroll-navigation=""
+        data-chip-strip-scroll-navigation=""
         disabled={!scrollAvailability.backward}
         aria-label={`${ariaLabel ?? "标签"}，显示前一个被遮挡标签`}
         pointerFocus="preserve"
-        onActivate={() => scrollTags(-1)}
+        onActivate={() => scrollItems(-1)}
       >
         <Icon name="arrow-down-s-line" />
       </DirectActivationButton>
       <div
         ref={scrollRef}
-        className="tag-input-scroll-window"
+        className="chip-strip-scroll-window"
         data-dialog-horizontal-scroll-owner=""
         onScroll={refreshScrollAvailability}
       >
@@ -409,7 +409,7 @@ export function TagInput({
             <span
               key={tag}
               className={`tag-chip${isNew ? " is-new" : ""}`}
-              data-tag-scroll-item=""
+              data-chip-strip-scroll-item=""
               title={isNew ? `「${tag}」是新标签，提交后会自动创建` : undefined}
             >
               {facetDisplayName(suggestions, tag)}
@@ -431,7 +431,7 @@ export function TagInput({
           ref={inputRef}
           id={inputId}
           className="tag-input-field"
-          data-tag-scroll-item=""
+          data-chip-strip-scroll-item=""
           value={text}
           maxLength={vocabularyDisplayNameMaxLength}
           onFocus={() => {
@@ -474,11 +474,11 @@ export function TagInput({
         ref={forwardNavigationRef}
         type="button"
         className="tag-input-nav is-forward"
-        data-tag-scroll-navigation=""
+        data-chip-strip-scroll-navigation=""
         disabled={!scrollAvailability.forward}
         aria-label={`${ariaLabel ?? "标签"}，显示后一个被遮挡标签`}
         pointerFocus="preserve"
-        onActivate={() => scrollTags(1)}
+        onActivate={() => scrollItems(1)}
       >
         <Icon name="arrow-down-s-line" />
       </DirectActivationButton>

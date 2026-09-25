@@ -136,7 +136,7 @@ export function useChipStripScroll(focusFallbackRef?: RefObject<HTMLElement | nu
     };
   }, [refreshScrollAvailability]);
 
-  const scrollTags = (direction: -1 | 1) => {
+  const scrollItems = (direction: -1 | 1) => {
     wheelTargetRef.current = null;
     const box = scrollRef.current;
     if (!box) return false;
@@ -155,7 +155,7 @@ export function useChipStripScroll(focusFallbackRef?: RefObject<HTMLElement | nu
     const forwardRect = forwardNavigationRef.current?.getBoundingClientRect();
     const nextScrollLeft = chipStripScrollNavigationTarget(
       navigationMetrics,
-      [...box.querySelectorAll<HTMLElement>("[data-tag-scroll-item]")].map((item) => {
+      [...box.querySelectorAll<HTMLElement>("[data-chip-strip-scroll-item]")].map((item) => {
         const itemRect = item.getBoundingClientRect();
         return chipStripScrollItemMetrics(
           boxRect.left,
@@ -191,6 +191,6 @@ export function useChipStripScroll(focusFallbackRef?: RefObject<HTMLElement | nu
     scrollAvailability,
     refreshScrollAvailability,
     cancelPendingScroll,
-    scrollTags
+    scrollItems
   };
 }

@@ -1,4 +1,4 @@
-.tag-input-scroll-window {
+.chip-strip-scroll-window {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
@@ -15,7 +15,7 @@
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
-.tag-input-scroll-window::-webkit-scrollbar {
+.chip-strip-scroll-window::-webkit-scrollbar {
   display: none;
 }
 .tag-input-nav {
@@ -69,7 +69,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tag-input-scroll-window {
+  .chip-strip-scroll-window {
     scroll-behavior: auto;
   }
 }

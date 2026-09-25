@@ -1244,7 +1244,7 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
 
     const control = container.querySelector<HTMLElement>(".target-tag-input");
     assert.ok(control);
-    const viewport = control.querySelector<HTMLElement>(".tag-input-scroll-window");
+    const viewport = control.querySelector<HTMLElement>(".chip-strip-scroll-window");
     assert.ok(viewport);
     let clientWidth = 100;
     let scrollWidth = 300;
@@ -1270,7 +1270,7 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
       ".decoy-tag-input .tag-input-field"
     );
     const navigation = [
-      ...control.querySelectorAll<HTMLButtonElement>("[data-tag-scroll-navigation]")
+      ...control.querySelectorAll<HTMLButtonElement>("[data-chip-strip-scroll-navigation]")
     ];
     const removeButton = control.querySelector<HTMLButtonElement>(".tag-chip-remove");
     const backward = navigation[0];
@@ -1303,7 +1303,7 @@ test("[Web/后台表单] 标签翻页键的键盘焦点保留草稿且 disabled 
       configurable: true,
       value: () => testRect(0, 24)
     });
-    for (const item of control.querySelectorAll<HTMLElement>("[data-tag-scroll-item]")) {
+    for (const item of control.querySelectorAll<HTMLElement>("[data-chip-strip-scroll-item]")) {
       Object.defineProperty(item, "getBoundingClientRect", {
         configurable: true,
         value: () => testRect(4, 0)

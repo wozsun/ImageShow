@@ -593,7 +593,7 @@ hooks ──► lib
   保留已有配置和页面状态。图库将该快照经 `IngestionLauncher` 传给 `Ingestion`，
   接入页复用该设置快照中的分页、数量、体积、长边、并发和导入策略。
   `hooks/useChipStripScroll.ts` 将单行已选项 viewport 的 DOM 几何、两端可用状态、逐项定位与滚轮生命周期统一接到 `lib/ui/chip-strip-scroll.ts` 纯模型。
-  `TagInput` 与公开筛选的 `PublicFilterChips` 共用该 Hook 和 `styles/tag-scroll.css` 的平滑滚动视口，不复制 Upload / Import 或公开筛选的滚动实现。编辑器保留覆盖式边缘按钮；公开筛选使用独立样式的 22px 外置箭头，固定占位、到达边缘时禁用。滚动区内部两侧各预留 6px，利用同一可滚动状态在有隐藏内容的一侧绘制等宽渐隐，最外沿完全透明，不向外扩展或拦截点击。自动定位读取实际内边距，使目标条件落在完整可见区。Hook 按真实几何计算按钮遮挡，外置按钮的遮挡为零。
+  `TagInput` 与公开筛选的 `PublicFilterChips` 共用该 Hook 和 `styles/chip-strip-scroll.css` 的平滑滚动视口，不复制 Upload / Import 或公开筛选的滚动实现。编辑器保留覆盖式边缘按钮；公开筛选使用独立样式的 22px 外置箭头，固定占位、到达边缘时禁用。滚动区内部两侧各预留 6px，利用同一可滚动状态在有隐藏内容的一侧绘制等宽渐隐，最外沿完全透明，不向外扩展或拦截点击。自动定位读取实际内边距，使目标条件落在完整可见区。Hook 按真实几何计算按钮遮挡，外置按钮的遮挡为零。
   公开筛选在成功新增条件后向 `PublicFilterChips` 传递本次定位目标，按滚动区实际宽度平滑定位局部已选栏，不改焦点、不滚动弹窗正文、不因数量更新反复定位。已成组标签按组编号定位，成组和向组内添加标签时显示对应组；组条目宽于视口时定位末尾，使最新添加的标签可见。选择超限失败和移除条件不触发新增定位；无需维护自动定位期间的独立箭头状态。
   `TagInput` 仍独立拥有输入、候选及编辑焦点，并在非交互
   表面的轻点结束时提升编辑器焦点；它不重复决定主轴、消费触摸滚动或提交按钮激活。CSS 统一让
@@ -1167,13 +1167,19 @@ Web 继续使用 entries-aware 的入口根集合分块，`minShareCount: 2` 表
 
 生产 JS 与 CSS 使用从 Vite / Rolldown 构建图推导的简短语义 `[name]-[hash]` 文件名。独立
 facade 使用 PascalCase 职责名，例如 `Home`、`Gallery`、`Show`、`ImageAdmin`、`ImageEditor`；
-合并与共享块使用 kebab-case 职责名，例如 `public-ui`、`image-view`、`dialog-frame`。名称不按
+合并与共享块使用 kebab-case 职责名，例如 `public-ui`、`image-view`、`image-read`。名称不按
 字符数截断，也不使用序号或构建后 import 重写。内容哈希仍是缓存身份，名称只负责解释职责；
 资源 URL 大小写敏感，全部引用由构建器按实际名称生成，不在业务代码中手写。每次生产构建都生成
 `.vite/web-build-report.json`，记录 facade、dynamic importer、入口类型、静态 / 动态依赖、
 模块根和 CSS owner；服务端装配明确过滤 `.vite`，因此报告不进入最终镜像。
 报告生成在同一次同步 `generateBundle` 内复用模块信息查询，入口根遍历保持循环处理及动态根语义；
 复用结果不跨越分组命名阶段、重建或 Worker 构建图，完整报告内容保持原契约。
+
+`public-ui` 承载首页、画廊与展映共用的导航和筛选基础，`image-view` 承载画廊与展映共用的
+浏览交互；同名 CSS 包含两者共用的星空、筛选及画廊基础与响应式样式。`image-read` 承载
+可编辑图片快照读取及只读请求重试，`admin-colors` 是管理控件的配色样式。共用已选项滚动
+样式按源文件命名为 `chip-strip-scroll`，与 `useChipStripScroll` 和纯计算模型保持一致。
+产物别名跟随当前入口根和模块职责维护，不改变模块分组、加载时机或内容哈希规则。
 
 内容接入 facade 与样式使用 `Ingestion-[hash].js` / `Ingestion-[hash].css`，来源弹窗使用
 `ImportSource-[hash].js`，facade 与来源弹窗共享的 URL 来源解析能力按实际职责命名为

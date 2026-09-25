@@ -82,20 +82,15 @@ function semanticOwnerCategory(root: string) {
 }
 
 const chunkResponsibilityAliases: Readonly<Record<string, string>> = {
-  "route-authenticated-shell-gallery-image": "async-ui",
   "route-authenticated-shell-image": "workspace-ui",
-  "route-gallery-home": "public-ui",
-  "route-gallery-home-show-route": "public-ui",
-  "route-gallery-image": "image-ui",
-  "route-gallery": "image-view",
-  "route-gallery-show-route": "image-view",
+  "route-gallery-home-show": "public-ui",
+  "route-gallery-show": "image-view",
   "route-image": "image-actions",
-  "route-image-show-route": "dialog-frame",
+  "route-image-show": "image-read",
   "route-login": "password-input",
   "capability-account-user": "password",
   "capability-admin": "workspace-header",
   "capability-check-check-maintenance-overview": "cache-status",
-  "capability-check-maintenance-storage": "storage-migration-api",
   "capability-image-editor-ingestion": "image-fields",
   "capability-settings-storage": "number-input",
   "capability-storage-vocabulary": "sort-order",
@@ -173,7 +168,9 @@ const assetResponsibilityAliases: Readonly<Record<string, string>> = {
   StorageSettings: "Storage",
   UserAdmin: "Users",
   VocabularyAdmin: "Vocabulary",
-  "image-editor-capability": "ImageEditor"
+  "image-editor-capability": "ImageEditor",
+  "gallery-responsive": "image-view",
+  "semantic-colors": "admin-colors"
 };
 
 function assetResponsibilityName(name: string) {
