@@ -45,6 +45,11 @@
     var(--color-dark-control-text-primary)
   );
   --public-color-filter-directory-text: var(--color-dark-control-text-secondary);
+  --public-color-filter-directory-label: color-mix(
+    in srgb,
+    var(--color-dark-control-text-secondary) 40%,
+    var(--color-dark-control-text-primary)
+  );
   --public-color-filter-chip-mask: #000;
   --public-color-filter-selected: var(--color-dark-control-surface-hover);
   --public-color-filter-action: var(--color-dark-control-action-text);

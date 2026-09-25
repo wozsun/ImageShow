@@ -347,6 +347,10 @@
   font-size: 14px;
   font-weight: 500;
 }
+.public-filter-directory button:not([aria-current]) .app-icon,
+.public-filter-directory button:not([aria-current]) strong {
+  color: var(--public-color-filter-directory-label);
+}
 .public-filter-directory small {
   font-size: 11px;
   white-space: nowrap;
@@ -416,7 +420,7 @@
 }
 .public-filter-section-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
@@ -426,7 +430,7 @@
   align-items: baseline;
   gap: 10px;
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
 }
 .public-filter-section h3 > span {
   color: var(--public-color-filter-muted);
@@ -502,19 +506,21 @@
   border-radius: 4px;
   color: var(--public-color-filter-muted);
   background: transparent;
-  font-size: 12px;
+  font-size: 13px;
 }
 .public-filter-segment[aria-pressed="true"] {
   color: var(--public-color-filter-action);
   background: var(--public-color-filter-selected);
 }
 .public-filter-option {
+  --public-filter-option-name-size: 14px;
+  --public-filter-option-expanded-name-size: 13px;
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
-  min-height: 64px;
-  padding: 12px;
+  min-height: 60px;
+  padding: 10px 12px;
   text-align: left;
   color: var(--color-public-text-primary);
   background: var(--public-color-filter-option);
@@ -548,19 +554,26 @@
 .public-filter-option-label {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 18px 16px;
-  gap: 4px;
+  grid-template-rows: 20px;
+  gap: 0;
   flex: 1;
   min-width: 0;
-  font-size: 13px;
-  line-height: 18px;
+  font-size: var(--public-filter-option-name-size);
+  line-height: 20px;
 }
 .public-filter-option-label > small {
-  line-height: 16px;
+  min-height: 0;
+  font-size: 9px;
+  line-height: 12px;
+}
+.public-filter-option-label.has-slug {
+  grid-template-rows: 18px 12px;
+  gap: 2px;
+  font-size: var(--public-filter-option-expanded-name-size);
+  line-height: 18px;
 }
 .public-filter-option small {
   color: var(--public-color-filter-muted);
-  font-size: 11px;
   font-weight: 400;
 }
 .public-filter-option-label b {
@@ -584,10 +597,10 @@
   background: var(--color-dark-control-action);
 }
 .is-tags .public-filter-option {
-  min-height: 60px;
+  min-height: 56px;
   max-width: 100%;
   gap: 7px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-radius: 7px;
 }
 .public-filter-tag-mark {
@@ -597,6 +610,7 @@
 .public-filter-option-count {
   flex: 0 0 auto;
   margin-left: auto;
+  font-size: 11px;
   white-space: nowrap;
 }
 .public-filter-section-actions {
@@ -1041,16 +1055,10 @@
   }
   .public-filter-option {
     gap: 6px;
-    padding: 10px 8px;
-    min-height: 62px;
+    padding: 8px;
+    min-height: 58px;
   }
-  .public-filter-section:not(.public-filter-section-author) .public-filter-option-icon {
-    display: none;
-  }
-  .public-filter-option-label {
-    font-size: 12px;
-  }
-  .public-filter-option small {
+  .public-filter-option-count {
     font-size: 10px;
   }
   .public-filter-check {
@@ -1059,7 +1067,7 @@
     flex-basis: 13px;
   }
   .is-tags .public-filter-option {
-    padding: 10px 9px;
+    padding: 8px 9px;
     gap: 6px;
   }
   .public-filter-footer {
@@ -1096,6 +1104,10 @@
   }
 }
 @media (max-width: 350px) {
+  .public-filter-option-icon,
+  .public-filter-tag-mark {
+    display: none;
+  }
   .public-filter-body {
     grid-template-columns: 66px minmax(0, 1fr);
   }

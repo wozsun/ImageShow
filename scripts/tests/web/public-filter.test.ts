@@ -38,6 +38,7 @@ import { PublicFilterErrorState } from "../../../packages/web/src/components/fee
 import { PublicFilterDialog } from "../../../packages/web/src/components/image/filter/PublicFilterDialog.tsx";
 import { HomeCatalog } from "../../../packages/web/src/pages/home/HomeCatalog.tsx";
 import { queryKeys } from "../../../packages/web/src/lib/api/query-keys.ts";
+import { inputText } from "../support/dom-events.ts";
 
 const facets = {
   themes: [{ slug: "city", display_name: "城市" }],
@@ -602,6 +603,94 @@ test("[Web/公开筛选] 拼音与首字母高亮复用搜索排序，完整目�
   assert.equal(all.length, 82);
   assert.equal(facetSuggestions(options, "cs", undefined, matchPinyinFacetText).length, 50);
   assert.equal(matchPinyinFacetText("森林", "no-match"), null);
+});
+
+test("[Web/公开筛选] 名称优先展示，搜索仅在 slug 独立命中时补充副行，清空恢复重名区分", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  Object.assign(h.window, {
+    scrollY: 0,
+    scrollTo() {},
+    getComputedStyle: () => ({ paddingRight: "0px", getPropertyValue: () => "16px" })
+  });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } }
+  });
+  t.after(() => client.clear());
+  const options = [
+    { slug: "sample", display_name: "SAMPLE" },
+    { slug: "river", display_name: "河流" },
+    { slug: "chengshi-town", display_name: "城市" },
+    { slug: "lake-east", display_name: "湖泊" },
+    { slug: "lake-west", display_name: "湖泊" },
+    { slug: "bare", display_name: "" },
+    { slug: "same", display_name: "same" }
+  ].map((option) => ({ ...option, image_count: 1, link: "" }));
+  const stats: GalleryStatsDto = {
+    total_images: 7,
+    matching_images: 7,
+    themes: options,
+    tags: options,
+    authors: options,
+    devices: [],
+    brightnesses: [],
+    categories: []
+  };
+  client.setQueryData([...queryKeys.galleryStats, ""], stats);
+  await h.render(
+    h.React.createElement(QueryClientProvider, { client },
+      h.React.createElement(PublicFilterDialog, {
+        filters: emptyGalleryFilters,
+        unresolvedTags: [],
+        facets: { themes: options, tags: options, authors: options },
+        facetsLoading: false,
+        facetsError: null,
+        retryVocabulary() {},
+        returnFocusRef: { current: null },
+        onClose() {},
+        onApply() {},
+        view: "gallery"
+      })
+    )
+  );
+  const labels = (section: string) =>
+    [...h.document.querySelectorAll(`[data-filter-section="${section}"] .public-filter-option-label`)]
+      .map((label) => [...label.children].map((line) => line.firstElementChild!.firstElementChild!.textContent));
+  const expectLabels = (expected: string[][]) => {
+    for (const section of ["theme", "tag", "author"]) assert.deepEqual(labels(section), expected, section);
+  };
+  const defaultLabels = [
+    ["SAMPLE"], ["河流"], ["城市"], ["湖泊", "lake-east"], ["湖泊", "lake-west"], ["bare"], ["same"]
+  ];
+  expectLabels(defaultLabels);
+  const input = h.document.querySelector<HTMLInputElement>('input[aria-label="搜索筛选选项"]')!;
+  const search = async (query: string) => {
+    await h.React.act(async () => inputText(h.window, input, query));
+  };
+  await search("sample");
+  expectLabels([["SAMPLE"]]);
+  assert.equal(h.document.querySelector('[data-filter-section="device"]'), null);
+  assert.equal(h.document.querySelector('[data-filter-section="brightness"]'), null);
+  assert.equal(h.document.querySelector('.public-filter-option-label b')?.textContent, "SAMPLE");
+  await search("river");
+  expectLabels([["河流", "river"]]);
+  assert.equal(h.document.querySelector('.public-filter-option-label small b')?.textContent, "river");
+  await search("chengshi");
+  for (let attempt = 0; attempt < 100 && labels("theme")[0]?.length !== 1; attempt++) await h.flush();
+  expectLabels([["城市"]]);
+  assert.equal(h.document.querySelector('.public-filter-option-label b')?.textContent, "城市");
+  await search("湖泊");
+  expectLabels([["湖泊"], ["湖泊"]]);
+  await search("bare");
+  expectLabels([["bare"]]);
+  await search("same");
+  expectLabels([["same"], ["SAMPLE"]]);
+  await h.React.act(async () =>
+    h.document.querySelector<HTMLButtonElement>('button[aria-label="清空搜索"]')!.click()
+  );
+  expectLabels(defaultLabels);
+  assert.ok(h.document.querySelector('[data-filter-section="device"]'));
+  assert.ok(h.document.querySelector('[data-filter-section="brightness"]'));
+  await h.render(null);
 });
 
 test("[Web/公开筛选] 零图片选项在更新与失败期间保持禁用，已选项和不限可撤销", () => {

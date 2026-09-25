@@ -94,6 +94,13 @@ export function PublicFilterSection({
 }: Props) {
   const activeTagGroup = tag.selection.groups.find((group) => group.id === tag.selection.activeId)!;
   const isFixed = section === "device" || section === "brightness";
+  const nameCounts = new Map<string, number>();
+  if (!isFixed) {
+    for (const option of options) {
+      const name = option.display_name || option.slug;
+      nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+    }
+  }
   const selected = isFixed
     ? [draft[section]]
     : section === "tag"
@@ -295,6 +302,11 @@ export function PublicFilterSection({
               );
             const displayMatch = normalizedQuery ? matchName(name, normalizedQuery) : null;
             const slugMatch = normalizedQuery ? matchFacetText(option.slug, normalizedQuery) : null;
+            const showSlug =
+              name !== option.slug &&
+              (normalizedQuery
+                ? !displayMatch && Boolean(slugMatch)
+                : (nameCounts.get(name) ?? 0) > 1);
             return (
               <button
                 key={option.slug}
@@ -304,7 +316,7 @@ export function PublicFilterSection({
                 className={`public-filter-option${checked && mode === "exclude" ? " is-excluded" : ""}`}
                 aria-label={
                   section === "tag" && tag.selection.grouped
-                    ? `${name}；${memberships.length ? `属于第 ${memberships.map((group) => group.id).join("、")} 组；` : ""}${checked ? "移出" : "加入"}第 ${tag.selection.activeId} 组`
+                    ? `${name}${showSlug ? `（${option.slug}）` : ""}；${memberships.length ? `属于第 ${memberships.map((group) => group.id).join("、")} 组；` : ""}${checked ? "移出" : "加入"}第 ${tag.selection.activeId} 组`
                     : undefined
                 }
                 disabled={unavailable || (section === "tag" && tagLocked)}
@@ -325,13 +337,15 @@ export function PublicFilterSection({
                     #
                   </span>
                 )}
-                <span className="public-filter-option-label">
+                <span className={`public-filter-option-label${showSlug ? " has-slug" : ""}`}>
                   <OverflowMarqueeText text={name}>
                     <MatchedText text={name} match={displayMatch} />
                   </OverflowMarqueeText>
-                  <OverflowMarqueeText as="small" text={option.slug}>
-                    <MatchedText text={option.slug} match={slugMatch} />
-                  </OverflowMarqueeText>
+                  {showSlug && (
+                    <OverflowMarqueeText as="small" text={option.slug}>
+                      <MatchedText text={option.slug} match={slugMatch} />
+                    </OverflowMarqueeText>
+                  )}
                 </span>
                 <small className="public-filter-option-count">
                   {count === undefined ? "—" : `${count.toLocaleString()} 张`}
