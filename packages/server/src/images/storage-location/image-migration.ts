@@ -4,6 +4,7 @@ import { runWithAdvisoryLockAcquisitionSignal } from "../../core/database/adviso
 import { pool } from "../../core/database/pools.ts";
 import { withTransaction } from "../../core/database/transactions.ts";
 import { logger } from "../../core/logger.ts";
+import { assertBackgroundJobIdle } from "../../jobs/repository.ts";
 import { withImageMutationSync } from "../mutation-sync.ts";
 import { bumpReadyImageRevision } from "../ready-cache/revision.ts";
 import {
@@ -452,7 +453,8 @@ export function migrateImageToStorageBackend(
   options: { expectedSource?: string; signal?: AbortSignal } = {}
 ): Promise<ImageStorageMigrationResult> {
   const migrateWithImageLock = () =>
-    withImageStorageMutationLock(image.id, (lockSignal) => {
+    withImageStorageMutationLock(image.id, async (lockSignal) => {
+      await assertBackgroundJobIdle("normalize.prepare", "请先停止三档预生成并等待退出，再迁移图片后端");
       const operationSignal = options.signal
         ? AbortSignal.any([options.signal, lockSignal])
         : lockSignal;

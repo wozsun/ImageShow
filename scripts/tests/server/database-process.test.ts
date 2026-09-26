@@ -85,6 +85,7 @@ test("[Server/数据库与进程] Worker 慢类型不阻塞后来任务，停止
       logger: { debug() {}, warn() {}, error: (...args: unknown[]) => errors.push(args) }
     },
     "../storage/objects/removal-admission.ts": { STORAGE_OBJECT_REMOVAL_CONCURRENCY: 1 },
+    "../images/preparation/execution.ts": { recoverPreparationJob: async () => undefined },
     "./handlers.ts": {
       handleBackgroundJob: async (job: Job, signal: AbortSignal) => {
         started.push(job.id);
@@ -705,7 +706,8 @@ test("[Server/数据库与进程] 后台任务类型只接受当前固定集合"
   assert.deepEqual(backgroundJobTypes, [
     "move.cleanup",
     "trash.purge",
-    "cache.rebuild"
+    "cache.rebuild",
+    "normalize.prepare"
   ]);
   for (const type of backgroundJobTypes) {
     assert.equal(parseBackgroundJobType(type), type);

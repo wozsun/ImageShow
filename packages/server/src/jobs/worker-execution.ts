@@ -4,8 +4,8 @@ type WorkerExecutionCompletion<Result> =
   | { status: "stopped"; reason: unknown };
 
 type WorkerExecutionCoordinatorOptions<Job, Result> = {
-  taskTimeoutMs: number;
-  leaseRenewalIntervalMs: number;
+  taskTimeoutMs: number | ((job: Job) => number | null);
+  leaseRenewalIntervalMs: number | ((job: Job) => number);
   renewLease(job: Job): Promise<boolean>;
   execute(job: Job, signal: AbortSignal): Promise<Result>;
   settle(
@@ -241,16 +241,19 @@ export class WorkerExecutionCoordinator<Job, Result> {
 
     const renewalTimer = setInterval(
       queueRenewal,
-      Math.max(1, this.options.leaseRenewalIntervalMs)
+      Math.max(1, typeof this.options.leaseRenewalIntervalMs === "function"
+        ? this.options.leaseRenewalIntervalMs(job) : this.options.leaseRenewalIntervalMs)
     );
     renewalTimer.unref();
-    const deadlineTimer = setTimeout(
+    const taskTimeoutMs = typeof this.options.taskTimeoutMs === "function"
+      ? this.options.taskTimeoutMs(job) : this.options.taskTimeoutMs;
+    const deadlineTimer = taskTimeoutMs === null ? undefined : setTimeout(
       () => {
-        this.abort(record, new WorkerTaskTimeoutError(this.options.taskTimeoutMs));
+        this.abort(record, new WorkerTaskTimeoutError(taskTimeoutMs));
       },
-      Math.max(1, this.options.taskTimeoutMs)
+      Math.max(1, taskTimeoutMs)
     );
-    deadlineTimer.unref();
+    deadlineTimer?.unref();
 
     let completion: WorkerExecutionCompletion<Result>;
     try {

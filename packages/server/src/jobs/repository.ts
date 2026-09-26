@@ -1,6 +1,6 @@
 import { appConfig } from "@imageshow/shared";
 import type { PoolClient } from "pg";
-import { errorMessage } from "../core/api-error.ts";
+import { ApiError, errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/database/pools.ts";
 import { logger } from "../core/logger.ts";
 import { randomUuidV7 } from "../core/uuid.ts";
@@ -11,6 +11,13 @@ import {
 } from "./types.ts";
 
 export type { BackgroundJob, BackgroundJobType } from "./types.ts";
+
+export async function assertBackgroundJobIdle(type: BackgroundJobType, message: string) {
+  const result = await pool.query(
+    "SELECT 1 FROM background_job WHERE type=$1 AND status IN ('pending','running') LIMIT 1", [type]
+  );
+  if (result.rowCount) throw new ApiError(409, "background_job_active", message);
+}
 
 /**
  * Deterministic work that races with its current handler must survive the
@@ -311,6 +318,7 @@ export async function recoverStaleBackgroundJobs() {
          execution_token=NULL,
          updated_at=now()
      WHERE status='running'
+       AND type <> 'normalize.prepare'
        AND updated_at < now() - ($1 || ' seconds')::interval`,
     [
       appConfig.backgroundJob.taskTimeoutSeconds,
@@ -337,6 +345,7 @@ export async function cleanupBackgroundJobHistory() {
                AND updated_at < now() - ($2 || ' seconds')::interval
              )
            )
+           AND type <> 'normalize.prepare'
            AND (type <> 'trash.purge' OR NOT EXISTS (
              SELECT 1 FROM metadata
               WHERE metadata.id::text=background_job.target_id

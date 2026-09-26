@@ -10,7 +10,9 @@
         "scripts/tests/verify/source-contract.mjs",
         "scripts/tests/verify/markdown-links.mjs",
         "scripts/tests/verify/check-web-chunks.mjs",
-        "scripts/tests/verify/runtime-image.mjs"
+        "scripts/tests/verify/runtime-image.mjs",
+        "scripts/tests/verify/normalize-encoding.mjs",
+        "scripts/tests/verify/normalize-runtime.mjs"
       ],
       "ignoreDependencies": [
         "@aws-sdk/client-s3",
@@ -27,7 +29,7 @@
       ]
     },
     "packages/server": {
-      "entry": ["src/healthcheck-cli.ts"]
+      "entry": ["src/healthcheck-cli.ts", "src/normalize-prepare-cli.ts", "src/images/preparation/child.ts"]
     },
     "packages/web": {
       "ignoreDependencies": ["remixicon"]

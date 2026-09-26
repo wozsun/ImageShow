@@ -217,7 +217,7 @@ CREATE TABLE background_job (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT background_job_current_type_check
-    CHECK (type IN ('move.cleanup', 'trash.purge', 'cache.rebuild')),
+    CHECK (type IN ('move.cleanup', 'trash.purge', 'cache.rebuild', 'normalize.prepare')),
   CHECK (status IN ('pending', 'running', 'succeeded', 'failed'))
 );
 
@@ -232,6 +232,19 @@ ON background_job(target_id, type);
 
 CREATE UNIQUE INDEX idx_background_job_idempotency
 ON background_job(idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+-- Durable pre-generation receipts deliberately survive deletion of metadata.
+CREATE TABLE image_variant_preparation (
+  run_id UUID NOT NULL REFERENCES background_job(id),
+  image_id UUID NOT NULL,
+  state TEXT NOT NULL,
+  data JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY (run_id, image_id),
+  CHECK (state IN ('pending', 'running', 'ready', 'failed', 'stale', 'excluded')),
+  CHECK (jsonb_typeof(data) = 'object')
+);
+CREATE INDEX idx_image_variant_preparation_work ON image_variant_preparation(run_id,state,image_id);
 
 -- Administrative identities
 CREATE TABLE admin_account (

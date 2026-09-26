@@ -5,6 +5,7 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
     await database.query<{
       table_name: string;
       relation_kind: string;
+      persistence: string;
       column_name: string;
       type_name: string;
       type_modifier: number;
@@ -13,6 +14,7 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
     }>(
       `SELECT relation.relname AS table_name,
             relation.relkind::text AS relation_kind,
+            relation.relpersistence::text AS persistence,
             attribute.attname AS column_name,
             type.typname AS type_name,
             attribute.atttypmod::int AS type_modifier,
@@ -34,6 +36,9 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
   ).rows;
 
   const relationKinds = new Map(rows.map((row) => [row.table_name, row.relation_kind]));
+  if (rows.some((row) => row.table_name === "image_variant_preparation" && row.persistence !== "p")) {
+    throw new Error("image_variant_preparation must be a permanent WAL-logged table");
+  }
   const invalidTables = requiredTableNames.filter((table) => {
     const kind = relationKinds.get(table);
     return kind !== "r" && kind !== "p";

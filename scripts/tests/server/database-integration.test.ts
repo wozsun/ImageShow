@@ -27,6 +27,11 @@ import { Client } from "pg";
 const isolationRoot = resolve(import.meta.dirname, "isolation");
 const storageIngestionScenarios = [
   {
+    id: "normalize-preparation",
+    name: "三档预生成的持久回执、并发启停、退避、休息水位及来源变更",
+    script: join(isolationRoot, "normalize-preparation.mts")
+  },
+  {
     id: "public-request-access",
     name: "随机请求分档额度、来源豁免与图片 Referer 访问边界",
     script: join(isolationRoot, "public-request-access.mts")
@@ -827,7 +832,7 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
             {
               definition:
                 "CHECK (type = ANY (ARRAY['move.cleanup'::text, " +
-                "'trash.purge'::text, 'cache.rebuild'::text]))"
+                "'trash.purge'::text, 'cache.rebuild'::text, 'normalize.prepare'::text]))"
             }
           ]);
           assert.deepEqual(
@@ -1271,7 +1276,7 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
             "p",
             ["id"]
           );
-          await client.query(`ALTER TABLE background_job DROP CONSTRAINT ${quoteIdentifier(name)}`);
+          await client.query(`ALTER TABLE background_job DROP CONSTRAINT ${quoteIdentifier(name)} CASCADE`);
         });
         const missingPrimaryKeyResult = await initialize(missingPrimaryKey, true);
         assert.notEqual(missingPrimaryKeyResult.code, 0);

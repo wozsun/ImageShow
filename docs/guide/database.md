@@ -316,6 +316,12 @@ HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退�
 完整回滚该图片，纯 no-op 不推进。并发编辑采用 last-write-wins，不存储逐图编辑版本，也不
 以 `ready_image_revision` 充当编辑冲突仲裁。
 
+## image_variant_preparation —— 三档预生成回执
+
+三档预生成由 `background_job.type=normalize.prepare` 和普通 WAL 表 `image_variant_preparation` 保存持久状态。任务保存冻结 profile、执行意图、并发、扫描位置、逻辑尝试和随机休息事件；准备表以 `(run_id,image_id)` 为主键，保存来源快照、输入摘要、图片执行所有权、候选发布意图和文件事实。
+
+准备回执不外键关联 `metadata`，图片实际删除后仍保留文件归属证据；历史任务清理不删除预生成任务。图片字段及公开读取仍使用 full/thumbs 模型。使用与手工结构准备见[三档预生成](normalize-preparation.md)。
+
 ## author —— 作者
 
 作者有 `slug`、`display_name`、公开 `link`、可空 `identity_provider` / `identity_id`、排序和

@@ -42,6 +42,7 @@ import {
 } from "./storage/backends/registry.ts";
 import { createHttpApp } from "./http-app.ts";
 import { closeAllAdminSessionConnections } from "./users/admin-session-connections.ts";
+import { acquireApplicationHost } from "./images/preparation/process-ownership.ts";
 
 let coordinatorInitialization: Promise<unknown> | null = null;
 let unsubscribeBusinessAvailabilityGate: (() => void) | null = null;
@@ -49,6 +50,7 @@ let server: ReturnType<typeof serve> | null = null;
 let shuttingDown = false;
 let shutdownPromise: Promise<void> | null = null;
 let shutdownExitCode = 0;
+let applicationHost: Awaited<ReturnType<typeof acquireApplicationHost>> | undefined;
 
 async function settleCoordinatorInitialization() {
   const current = coordinatorInitialization;
@@ -62,6 +64,8 @@ try {
   const app = createHttpApp();
   await ensureRuntimeDirectories();
   await initializeDatabaseSchema();
+  applicationHost = await acquireApplicationHost();
+  applicationHost.signal.addEventListener("abort", () => void shutdown("application host ownership lost", 1), { once: true });
   await assertLocalImageHostForSite(getRuntimeConfig().site.domain);
   await ensureSuperAdmin({
     username: bootstrapEnvironment.adminUsername,
@@ -136,6 +140,7 @@ function shutdown(signal: string, exitCode = 0) {
       logger.error("application shutdown failed", error);
     } finally {
       await redis.quit().catch(() => redis.disconnect());
+      await applicationHost?.close().catch(() => undefined);
       await closeDatabasePools();
       logger.info("application resources released");
       clearTimeout(hardExit);

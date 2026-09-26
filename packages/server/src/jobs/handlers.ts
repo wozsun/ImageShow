@@ -7,6 +7,7 @@ import { handleTrashPurgeJob } from "../images/trash/purge-job.ts";
 import { ensureReadyImageCacheCurrent } from "../images/ready-cache/coordinator.ts";
 import { handleMoveCleanupJob } from "../storage/cleanup/job.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../core/database/advisory-locks.ts";
+import { handlePreparationJob } from "../images/preparation/execution.ts";
 
 type BackgroundJobHandler = (
   job: BackgroundJob,
@@ -14,6 +15,7 @@ type BackgroundJobHandler = (
 ) => Promise<BackgroundJobOutcome>;
 
 const backgroundJobHandlers: Record<BackgroundJobType, BackgroundJobHandler> = {
+  "normalize.prepare": handlePreparationJob,
   "move.cleanup": handleMoveCleanupJob,
   "trash.purge": handleTrashPurgeJob,
   "cache.rebuild": async (_job, signal) => {

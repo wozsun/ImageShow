@@ -54,6 +54,8 @@
   --admin-shadow-control-floating: light-dark(rgba(20, 30, 44, 0.18), rgba(0, 0, 0, 0.48));
   --admin-shadow-control-resting: light-dark(rgba(20, 30, 44, 0.12), rgba(0, 0, 0, 0.38));
   --admin-shadow-modal: light-dark(rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.58));
+  --admin-color-preparation-backdrop: rgb(0 0 0 / 55%);
+  --admin-shadow-preparation: rgb(0 0 0 / 25%);
   --admin-shadow-menu: light-dark(rgba(13, 18, 28, 0.16), rgba(0, 0, 0, 0.46));
   --admin-shadow-card-hover: light-dark(rgba(13, 18, 28, 0.08), rgba(0, 0, 0, 0.4));
 

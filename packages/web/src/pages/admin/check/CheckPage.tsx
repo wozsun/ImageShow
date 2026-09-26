@@ -35,6 +35,7 @@ const CheckStorageMaintenanceActions = lazy(() =>
     default: module.CheckStorageMaintenanceActions
   }))
 );
+const NormalizePreparationDialog = lazy(() => import("./NormalizePreparationDialog.js"));
 const ReadyImageCacheMaintenancePanel = lazy(() =>
   loadCheckMaintenanceCapability().then((module) => ({
     default: module.ReadyImageCacheMaintenancePanel
@@ -52,6 +53,7 @@ const checkViews = [
 type CheckView = (typeof checkViews)[number]["name"];
 
 export function CheckPage() {
+  const [preparationOpen, setPreparationOpen] = useState(false);
   const [result, setResult] = useState<unknown>(null);
   const [running, setRunning] = useState("");
   const [automaticInspectionSatisfied, setAutomaticInspectionSatisfied] = useState(false);
@@ -161,6 +163,9 @@ export function CheckPage() {
         </div>
         <div className="check-actions">
           <div className="actions">
+            {permissions.includes(adminPermissions.normalizePreparation) && (
+              <button type="button" onClick={() => setPreparationOpen(true)}>三档图片预生成</button>
+            )}
             {checkViews.map((check) => (
               <button
                 type="button"
@@ -198,6 +203,11 @@ export function CheckPage() {
           )}
         </div>
       </header>
+      {preparationOpen && permissions.includes(adminPermissions.normalizePreparation) && (
+        <Suspense fallback={null}>
+          <NormalizePreparationDialog onClose={() => setPreparationOpen(false)} />
+        </Suspense>
+      )}
       {(checkView === "status" || checkView === "all") && (
         <>
           <LightweightStatusCards query={statusQuery} />

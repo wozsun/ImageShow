@@ -1,7 +1,8 @@
 export const backgroundJobTypes = [
   "move.cleanup",
   "trash.purge",
-  "cache.rebuild"
+  "cache.rebuild",
+  "normalize.prepare"
 ] as const;
 
 export type BackgroundJobType = (typeof backgroundJobTypes)[number];

@@ -1,6 +1,7 @@
 import { appConfig } from "@imageshow/shared";
 import { logger } from "../core/logger.ts";
 import { backgroundJobTypes } from "./types.ts";
+import { recoverPreparationJob } from "../images/preparation/execution.ts";
 import { STORAGE_OBJECT_REMOVAL_CONCURRENCY } from "../storage/objects/removal-admission.ts";
 import {
   handleBackgroundJob,
@@ -38,6 +39,7 @@ function jobTypeConcurrency(type: BackgroundJobType): number {
       return STORAGE_OBJECT_REMOVAL_CONCURRENCY;
     case "trash.purge":
     case "cache.rebuild":
+    case "normalize.prepare":
       return 1;
   }
 }
@@ -73,6 +75,10 @@ async function settleBackgroundJob(
     return;
   }
   if (completion.status === "rejected") {
+    if (job.type === "normalize.prepare") {
+      await rescheduleBackgroundJob(job, 5_000);
+      return;
+    }
     if (!(await markBackgroundJobFailed(job, completion.error))) {
       logDiscardedBackgroundJobTransition(job, "failed");
     }
@@ -97,8 +103,9 @@ async function settleBackgroundJob(
 
 const taskTimeoutMs = appConfig.backgroundJob.taskTimeoutSeconds * 1_000;
 const executionCoordinator = new WorkerExecutionCoordinator<BackgroundJob, BackgroundJobOutcome>({
-  taskTimeoutMs,
-  leaseRenewalIntervalMs: Math.max(1_000, Math.floor(taskTimeoutMs / 3)),
+  taskTimeoutMs: (job) => job.type === "normalize.prepare" ? null : taskTimeoutMs,
+  leaseRenewalIntervalMs: (job) => job.type === "normalize.prepare"
+    ? 5_000 : Math.max(1_000, Math.floor(taskTimeoutMs / 3)),
   renewLease: renewBackgroundJobLease,
   execute: handleBackgroundJob,
   settle: settleBackgroundJob,
@@ -160,6 +167,7 @@ async function runWorkerTick() {
       : 0;
     lastStaleRecoveryAtMs = now;
     await recoverStaleBackgroundJobs();
+    await recoverPreparationJob();
     logger.debug("worker_periodic_task", { task: "stale_recovery", delay_ms: delayMs });
   }
   if (now - lastHistoryCleanupAtMs >= appConfig.backgroundJob.historyCleanupIntervalMs) {

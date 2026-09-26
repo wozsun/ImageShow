@@ -97,6 +97,7 @@ PowerShell 中使用 `$env:IMAGESHOW_DATABASE_SCENARIO = "cold-redis"`、
 | 接入服务与队列 | `ingestion-service-contracts`、`ingestion-action-protocol`、`ingestion-upload-lifecycle`、`ingestion-import-queue`、`ingestion-queue-actions`、`ingestion-http-boundaries`、`redis-canonical` |
 | 正式提交 | `ingestion-commit-guards`、`commit-success`、`commit-conflict`、`commit-recovery` |
 | 接入文件生命周期 | `ingestion-raw-lifecycle`、`ingestion-orphan-lifecycle` |
+| 三档预生成 | `normalize-preparation` |
 
 Web 定向命令使用 `--import ./scripts/tests/support/web-assets.mjs` 加载组件样式桩；
 真实 CSS 排版由浏览器验收覆盖，`test:final:web` 已包含此选项。
@@ -116,6 +117,9 @@ Web 队列场景值为 `strict-mode`、
   数据或文件副作用、取消和资源释放；它不接触部署中的现有实例。
 - 运行时镜像门禁另行验证生产镜像冷启动、HTTP、schema 和重启；局部测试通过不能替代
   `npm run verify:release`。
+- 三档预生成的编码、目录同步、子进程与文件发布使用隔离 Linux 生产镜像验收；
+  `verify/normalize-encoding.mjs` 和 `verify/normalize-runtime.mjs` 由镜像门禁复制后以 node 用户执行。
+  合成的中断检查点和进程强杀验证恢复协议，不替代独立虚拟机掉电演练。
 
 ## 数据与产物
 

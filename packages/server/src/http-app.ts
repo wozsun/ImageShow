@@ -29,6 +29,7 @@ import { registerAdminUserRoutes } from "./routes/admin-users.ts";
 import { registerAdminPreferenceRoutes } from "./routes/admin-preferences.ts";
 import { registerAdminCacheRoutes } from "./routes/admin-cache.ts";
 import { registerCheckRoutes } from "./routes/check.ts";
+import { registerNormalizePreparationRoutes } from "./routes/normalize-preparation.ts";
 import { registerHealthRoutes } from "./routes/health.ts";
 import {
   registerProtectedAuthRoutes,
@@ -165,6 +166,7 @@ export function createHttpApp(
   registerSettingsRoutes(app);
   registerStorageRoutes(app);
   registerCheckRoutes(app);
+  registerNormalizePreparationRoutes(app);
   registerAssetRoutes(app, serveAssets);
   registerSpaRoutes(app);
   app.notFound(() => apiErrorResponse({ status: 404, message: "Not Found" }));

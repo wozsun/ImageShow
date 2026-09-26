@@ -13,6 +13,8 @@
 
 ## RuntimeConfig 参数目录
 
+检查页的[三档预生成参数](guide/normalize-preparation.md)单独保存在 PostgreSQL 任务中，不属于 `config.json`。预生成弹窗和 CLI 使用同一组独立参数，现有 normalize / thumbnail 配置继续负责日常入库。
+
 以下列出 `config.json` 的全部配置项。数值除明确注明外均为整数；`KiB` 为 1024 字节，`MiB` 为 1024 KiB，`px` 为像素，时间项按名称使用秒。
 
 每项列出的环境变量只在配置文件不存在时用于生成初始值。已有配置文件时，以文件为准。Compose 标为“默认注入”的变量已在仓库部署清单中映射；“显式映射”表示使用前需自行加入清单，单独填写 `.env` 不会生效。

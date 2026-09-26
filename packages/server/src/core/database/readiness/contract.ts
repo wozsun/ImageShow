@@ -118,6 +118,12 @@ export const databaseReadiness = {
     },
     privileges: readWritePrivileges
   },
+  image_variant_preparation: {
+    columns: {
+      run_id: "uuid", image_id: "uuid", state: "text", data: "jsonb", updated_at: "timestamptz"
+    },
+    privileges: readWritePrivileges
+  },
   admin_account: {
     columns: {
       username: "text",
@@ -164,6 +170,7 @@ export const requiredPrimaryKeys = [
   { table: "image_tag", columns: ["image_id", "tag_slug"] },
   { table: "ready_image_revision", columns: ["singleton"] },
   { table: "background_job", columns: ["id"] },
+  { table: "image_variant_preparation", columns: ["run_id", "image_id"] },
   { table: "admin_account", columns: ["username"] }
 ] as const satisfies readonly RequiredPrimaryKey[];
 

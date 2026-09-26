@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { PoolClient } from "pg";
+import { assertBackgroundJobIdle } from "../jobs/repository.ts";
 import {
   tryWithAdvisoryLocksOnClient,
   tryWithAdvisoryLocks,
@@ -198,7 +199,7 @@ export function withImageStorageMutationLock<T>(
  * read lease would deadlock in PostgreSQL, so fail loudly if a caller violates
  * the lock ordering contract.
  */
-export function withStorageLocationWriteLock<T>(work: StorageLockWork<T>): Promise<T> {
+export async function withStorageLocationWriteLock<T>(work: StorageLockWork<T>): Promise<T> {
   const held = storageLocationLockContext.getStore();
   if (held?.mode === "write") {
     held.signal.throwIfAborted();
@@ -207,6 +208,7 @@ export function withStorageLocationWriteLock<T>(work: StorageLockWork<T>): Promi
   if (held?.mode === "read") {
     throw new Error("Cannot upgrade a storage location read lock to a write lock");
   }
+  await assertBackgroundJobIdle("normalize.prepare", "请先停止三档预生成，并等待所有图片进程退出后再进行全局存储维护");
   return withAdvisoryLock(storageLocationLockKey, (signal, lockClient) =>
     storageLocationLockContext.run(storageLocationContext("write", signal, lockClient, false), () =>
       work(signal, lockClient)
@@ -214,7 +216,7 @@ export function withStorageLocationWriteLock<T>(work: StorageLockWork<T>): Promi
   );
 }
 
-export function withStorageLocationWriteAndAdvisoryLock<T>(
+export async function withStorageLocationWriteAndAdvisoryLock<T>(
   key: string,
   work: StorageLockWork<T>
 ): Promise<T> {
@@ -233,6 +235,7 @@ export function withStorageLocationWriteAndAdvisoryLock<T>(
       )
     );
   }
+  await assertBackgroundJobIdle("normalize.prepare", "请先停止三档预生成，并等待所有图片进程退出后再进行全局存储维护");
   return withAdvisoryLocks([
       { key: storageLocationLockKey },
       { key }

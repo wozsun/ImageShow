@@ -129,6 +129,7 @@ core / config
   并处理优雅退出。
 - `src/admin-password-cli.ts` 是管理员密码恢复入口。
 - `src/healthcheck-cli.ts` 是容器 readiness 检查入口。
+- `src/normalize-prepare-cli.ts` 提供预生成控制与停机后的独立执行入口，和 HTTP 服务共用执行宿主互斥锁，不导入 HTTP 装配。
 - `images/mutation-sync-policy.ts` 只定义图片变更总量的纯决策与结果契约；
   `images/mutation-sync.ts` 持有写栅栏并执行精准发布或安排全量重建，领域 SQL 只负责在
   自己的事务边界 COUNT、推进 revision 和按决策读取有限 ID。
@@ -442,6 +443,10 @@ Endpoint 重绑定的双向随机挑战与精确探针清理位于 `storage/back
 revision、交接同一 mutation sync。
 
 ### 内容接入
+
+`images/variants/encoding.ts` 拥有三档质量网格、编码结果复用与流式完整解码核验。`images/preparation/` 拥有冻结 profile 的预生成状态、PostgreSQL 回执、子进程池、下载/处理/发布、控制、恢复与受保护抽查；它不进入普通 Ingestion 或公开资源读取。通用任务框架为 `normalize.prepare` 持续续租，不对整库作业套用短任务期限；每项图片操作仍有边界。候选文件同步和发布原语位于 `storage/drivers/local-publication.ts`，预生成地址独立于旧存储命名空间枚举。
+
+`shared/browser/normalize-preparation.ts` 保存可供弹窗与 CLI 共同消费的纯 profile 规则、档位映射和 DTO。检查页按钮只在超级管理员权限下显示，点击才加载 `NormalizePreparationDialog` 及其样式；弹窗拥有唯一状态查询，关闭即停止轮询，预生成任务继续在服务端执行。
 
 `images/ingestion/` 是 Upload 与 Import 共用的统一内容接入领域，稳定子目录表达允许依赖方向：
 
