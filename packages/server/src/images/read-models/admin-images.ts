@@ -144,7 +144,7 @@ export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> 
   const row = (
     await pool.query(
       `SELECT m.id,
-            m.md5,
+            m.l_md5 AS large_md5,
             m.storage_slug,
             m.created_at::text AS created_at,
             m.updated_at::text AS updated_at,
@@ -158,7 +158,7 @@ export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> 
   ).rows[0] as
     | {
         id: string;
-        md5: string;
+        large_md5: string;
         storage_slug: string;
         created_at: string;
         updated_at: string;
@@ -168,7 +168,7 @@ export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> 
   if (!row) throw new ApiError(404, "not_found", "Image not found");
   return {
     id: row.id,
-    md5: row.md5,
+    large_md5: row.large_md5,
     storage_label: storageBackendLabel(row),
     created_at: row.created_at ?? "",
     updated_at: row.updated_at ?? ""

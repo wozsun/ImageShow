@@ -15,6 +15,7 @@ type IrreversibleCoordinatorModule =
   typeof import("../../../../packages/server/src/images/ingestion/execution/irreversible-coordinator.ts");
 
 await runIntegrationScenario(async (runtime) => {
+  const { presentIngestionSession } = await import("../../../../packages/server/src/images/ingestion/queue/session-view.ts");
   const commitWorker = (await import(
     runtime.moduleUrl("packages/server/src/images/ingestion/commit/worker.ts")
   )) as CommitWorkerModule;
@@ -48,6 +49,16 @@ await runIntegrationScenario(async (runtime) => {
         `commit-${capability}`,
         async (fixture) => {
           const committing = await freezeFixtureCommit(fixture);
+          const preparedView = presentIngestionSession(committing as IngestionSessionSnapshot).prepared!;
+          for (const variant of ["large", "medium", "small"] as const) {
+            const facts = fixture.prepared.variants[variant];
+            assert.deepEqual(preparedView.variants[variant], {
+              width: facts.width, height: facts.height, byte_size: facts.bytes
+            });
+            assert.equal(preparedView.variant_quality[variant], facts.quality);
+          }
+          assert.equal(preparedView.original_width, fixture.prepared.original_width);
+          assert.equal(preparedView.original_height, fixture.prepared.original_height);
           s3.requests.length = 0;
           const item = await commitWorker.commitIngestionSessionSnapshot(
             fixture.repository,
@@ -64,53 +75,50 @@ await runIntegrationScenario(async (runtime) => {
                   s3.requests.filter((request) => request.method === method).length
                 ])
               ),
-              { HEAD: 2, PUT: 2, GET: capability === "supported" ? 0 : 2 }
+              { HEAD: 3, PUT: 3, GET: capability === "supported" ? 0 : 3 }
             );
             assert.equal(
               s3.requests.reduce(
                 (bytes, request) => bytes + (request.method === "PUT" ? request.body.length : 0),
                 0
               ),
-              fixture.imageBody.length + fixture.thumbnailBody.length
+              fixture.imageBody.length * 2 + fixture.thumbnailBody.length
             );
           }
           const row = (
             await runtime.databasePools.pool.query<{
               created_by: string;
-              md5: string;
-              ext: string;
+              l_md5: string;
               storage_slug: string;
-            }>("SELECT created_by, md5, ext, storage_slug FROM metadata WHERE id=$1", [
+            }>("SELECT created_by, l_md5, storage_slug FROM metadata WHERE id=$1", [
               fixture.imageId
             ])
           ).rows[0];
           assert.deepEqual(row, {
             created_by: fixture.owner,
-            md5: fixture.prepared.md5,
-            ext: fixture.prepared.ext,
+            l_md5: fixture.prepared.variants.large.md5,
             storage_slug: storageSlug
           });
           assert.deepEqual(
-            await fixture.driver.readBuffer("full", fixture.finalObjectKey),
+            await fixture.driver.readBuffer("large", fixture.finalObjectKey),
             fixture.imageBody
           );
           assert.deepEqual(
-            await fixture.driver.readBuffer("thumbs", fixture.finalThumbnailKey),
+            await fixture.driver.readBuffer("small", fixture.finalThumbnailKey),
             fixture.thumbnailBody
           );
           await assert.rejects(access(ingestionPreparedPath(fixture.preparedImageFile)), {
             code: "ENOENT"
           });
+          assert.deepEqual(await fixture.driver.readBuffer("medium", fixture.finalObjectKey), fixture.imageBody);
+          await assert.rejects(access(ingestionPreparedPath(fixture.preparedMediumFile)), {code: "ENOENT"});
           await assert.rejects(access(ingestionPreparedPath(fixture.preparedThumbnailFile)), {
             code: "ENOENT"
           });
-          assert.equal(
-            (await fixture.repository.readSession(
-              fixture.owner,
-              fixture.sessionId
-            ))?.status,
-            "completed"
-          );
+          const receipt = await fixture.repository.readSession(fixture.owner, fixture.sessionId);
+          assert.equal(receipt?.status, "completed");
+          assert.ok(receipt?.status === "completed");
+          assert.deepEqual(receipt.display?.variant_quality, preparedView.variant_quality);
         },
         storageSlug
       );

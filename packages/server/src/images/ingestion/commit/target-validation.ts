@@ -64,7 +64,7 @@ export async function assertCurrentDuplicateDecision(
   prepared: IngestionPreparedManifest,
   decision: "upload" | "confirmed"
 ) {
-  const duplicates = (await readDuplicateSnapshotByMd5(prepared.md5)).items.filter(
+  const duplicates = (await readDuplicateSnapshotByMd5(prepared.variants.large.md5)).items.filter(
     (item) => item.id.toLowerCase() !== imageId.toLowerCase()
   );
   if (duplicates.length && decision !== "confirmed") {

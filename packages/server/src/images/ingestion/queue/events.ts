@@ -1,3 +1,4 @@
+import { packImageAddresses } from "@imageshow/shared/browser";
 import { setTimeout as delay } from "node:timers/promises";
 import { appConfig } from "@imageshow/shared";
 import type {
@@ -136,7 +137,7 @@ export function streamIngestionQueueEvents(
     let closeScope: () => void = () => undefined;
     const enqueue = (event: string, payload: IngestionQueueEventDto, first = false) => {
       if (controller.signal.aborted) return;
-      const data = JSON.stringify(payload);
+      const data = JSON.stringify(packImageAddresses(payload));
       const bytes = Buffer.byteLength(`event: ${event}\ndata: ${data}\n\n`);
       // Include the in-flight write and the pre-snapshot buffer in one budget.
       if (pendingCount >= pendingEventLimit || pendingBytes + bytes > pendingByteLimit) {

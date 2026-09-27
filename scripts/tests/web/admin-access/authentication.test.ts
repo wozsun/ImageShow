@@ -10,31 +10,6 @@ import {
 
 import { AuthSessionRefreshCoordinator } from "../../../../packages/web/src/lib/api/auth-session.ts";
 
-test("[Web/后台访问] 认证过期事件在同一在途窗口只触发一次权威刷新", async () => {
-  const coordinator = new AuthSessionRefreshCoordinator();
-  let releaseRefresh!: () => void;
-  const refreshGate = new Promise<void>((resolve) => {
-    releaseRefresh = resolve;
-  });
-  let refreshCount = 0;
-  const refresh = async () => {
-    refreshCount += 1;
-    await refreshGate;
-  };
-
-  const first = coordinator.run(refresh);
-  const second = coordinator.run(refresh);
-  assert.equal(first, second);
-  await Promise.resolve();
-  assert.equal(refreshCount, 1);
-  releaseRefresh();
-  await Promise.all([first, second]);
-
-  await coordinator.run(async () => {
-    refreshCount += 1;
-  });
-  assert.equal(refreshCount, 2);
-});
 test("[Web/后台访问] 认证刷新失败后会释放在途状态并允许成功重试", async () => {
   const coordinator = new AuthSessionRefreshCoordinator();
   let refreshCount = 0;

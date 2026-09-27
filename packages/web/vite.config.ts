@@ -152,7 +152,6 @@ const assetResponsibilityAliases: Readonly<Record<string, string>> = {
   AccountSettings: "Account",
   AdminLogin: "Login",
   AdminShell: "AccessShell",
-  AdvancedConfigPage: "Config",
   AuthenticatedAdminShell: "WorkspaceShell",
   CheckMaintenanceCapability: "Maintenance",
   CheckPage: "Check",
@@ -340,6 +339,7 @@ export default defineConfig({
             },
             {
               name: sharedChunkName,
+              debugName: "shared-modules",
               test: (id) =>
                 !id.endsWith(".css") &&
                 ((/[\\/]packages[\\/]web[\\/]src[\\/]/.test(id) &&

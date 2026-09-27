@@ -5,8 +5,9 @@
 
 | 图片路径 | 职责 |
 | --- | --- |
-| `/images/full/*` | 完整图片对象 |
-| `/images/thumbs/*` | 缩略图对象 |
+| `/images/large/*` | large 细节图 |
+| `/images/medium/*` | medium 详情与主站供图 |
+| `/images/small/*` | small 缩略图 |
 | `/images/original/<id>` | 仅管理员可访问的外部 HTTPS 原图直连决策或安全代理 |
 
 强烈建议显式设置 `site.domain`，例如 `img.example.com`；应用生成的图片根地址为
@@ -24,7 +25,7 @@
 
 ## 轻量 Referer 防盗链
 
-主站 `/images/full/*`、`/images/thumbs/*` 与本地存储独立公开 URL 的 GET / HEAD
+主站 `/images/large/*`、`/images/medium/*`、`/images/small/*` 与本地存储独立公开 URL 的 GET / HEAD
 在对象读取、跳转、Range 和条件请求处理前检查 Referer：
 
 - 空 Referer 放行，兼容直接访问和页面现有的 `no-referrer` 图片加载。
@@ -44,8 +45,8 @@
 
 ## 图片寻址与外部原图
 
-主站 `full` 与 `thumbs` 按图片当前所属存储寻址；后端未配置公开 URL 时直接返回对象，配置后 302 到公开 URL。
-生成给页面和随机 JSON / 跳转的图片链接直接使用后端公开 URL；随机 proxy 继续由主站读取后端对象。
+主站 `large`、`medium`、`small` 按图片当前所属存储寻址；后端未配置公开 URL 时直接返回对象，配置后 302 到公开 URL。
+页面通过地址表与 ID 拼接所需档位，随机 JSON / 跳转返回所选档位链接；根地址采用后端公开 URL；随机 proxy 继续由主站读取后端对象。
 正常图片及回收站的外部原图统一通过 `/images/original/<id>` 读取。GET / HEAD 均先校验
 管理员会话，图片管理员与超级管理员均可访问；未登录或会话失效返回不可缓存的 401，
 不读取图片记录、不探测或抓取源图。ready cache 未命中时查询 PostgreSQL 的正常图片及
@@ -59,9 +60,9 @@
 
 ## 本地存储公开 URL
 
-超级管理员在本地存储编辑弹窗设置 `public_base_url`，完整图与缩略图共用一个 HTTPS 根地址，
+超级管理员在本地存储编辑弹窗设置 `public_base_url`，三档图片共用一个 HTTPS 根地址，
 可包含路径前缀；留空使用主站图片地址。公开 Host 必须与主站 Host 区分，地址不能包含凭据、查询参数或片段。
-例如配置 `https://images.example.com/pictures` 后，生成 `/pictures/full/<对象键>` 与 `/pictures/thumbs/<对象键>`。
+例如配置 `https://images.example.com/pictures` 后，生成 `/pictures/large/<对象键>`、`/pictures/medium/<对象键>`、`/pictures/small/<对象键>`。
 请求保留该 Host 和路径到达 ImageShow 即可，无需把回源 Host 改成主站；内部连接可使用 HTTP。
 
 此入口只读取本地正式图片对象，不查询图片当前存储位置，不转读其他后端，也不跳转回公开 URL。
@@ -70,18 +71,20 @@
 
 直接读取复用现有图片响应：GET / HEAD、Range / If-Range、ETag / Last-Modified 与 304；成功图片使用
 `public, max-age=31536000, immutable`，错误不缓存。ETag 从文件元信息生成，不包含 Host，也不读取整张图片计算哈希；
-304 仍打开文件并读取元信息。公开入口提供无凭据 CORS，允许展映读取完整图与缩略图。
+304 仍打开文件并读取元信息。公开入口提供无凭据 CORS，允许展映读取三档图片。
 
 保存后应用生成地址和 Host 识别采用新配置，清空后回退主站，不保留旧 Host 别名；已有浏览器 / CDN 缓存不自动清除。
-设置持久化在本地存储记录，配置包仍不导出或覆盖 local。修改公开地址不搬文件、不重建 driver；停用 local 只限制写入。
+设置持久化在本地存储记录。修改公开地址不搬文件、不重建 driver；停用 local 只限制写入。
 图片入口省略每图 Redis / PostgreSQL 位置查询，仍受现有应用可用性边界约束。
 
 浏览器按主站 Cookie 规则向同源图片请求发送 Cookie；公开资源处理器不读取管理员会话、
 不写 Cookie，也不按 Cookie 改变响应或缓存。同源图片无需额外 CORS；外部对象存储或 CDN
-的 `thumb_url` 须提供允许主站读取的 CORS 响应头，供 Show 纹理使用，公开无凭据媒体可使用
+的 small 地址 须提供允许主站读取的 CORS 响应头，供 Show 纹理使用，公开无凭据媒体可使用
 `Access-Control-Allow-Origin: *`。
 
 ## 原图按钮与详情
+
+详情默认读取 medium，标题打开 large；列表与展映读取 small，打开详情不预取 large。
 
 公开画廊、展映及其嵌入页的详情只向已登录管理员显示原图按钮，后台详情继续保留同一入口。
 `/api/images/<id>` 校验随请求携带的管理员会话：访客的 `original_url` 为 `null`，

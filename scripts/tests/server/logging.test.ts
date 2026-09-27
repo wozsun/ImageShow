@@ -34,7 +34,7 @@ test("[Server/日志] 脱敏凭据与命名空间并保留恢复定位和异常�
     source_backend: "local",
     target_backend: "s3",
     candidates: [
-      { backend: "s3", prefix: "full", key: "01/example.webp", namespace_identity: secret }
+      { backend: "s3", prefix: "large", key: "01/example.webp", namespace_identity: secret }
     ],
     session_id: secret,
     password: secret,

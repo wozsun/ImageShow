@@ -1,11 +1,10 @@
 import { storageObjectKey } from "@imageshow/shared/browser";
 import { pool } from "../core/database/pools.ts";
-import { thumbnailObjectKey } from "../storage/objects/image-paths.ts";
 import {
   STORAGE_ADMIN_LIST_MAX_KEYS,
   type StorageDirectorySnapshot
 } from "../storage/objects/key-listing.ts";
-import type { StoragePrefix } from "../storage/objects/keys.ts";
+import { STORAGE_PREFIXES, type StoragePrefix } from "../storage/objects/keys.ts";
 import {
   activeIngestionStorageReferences,
   collectStorageBackendGroupSnapshot,
@@ -16,13 +15,10 @@ import {
   type ImageStorageReferenceRow
 } from "./storage-inventory.ts";
 
-export type MaintenanceImage = ImageStorageReferenceRow & {
-  md5: string;
-  thumbnail_size: string | number;
-};
+export type MaintenanceImage = ImageStorageReferenceRow & { purging: boolean };
 
 type MaintenanceAction =
-  "repair_thumbnail" | "remove_object" | "inspect_namespace" | "prune_directories";
+  "repair_variant" | "remove_object" | "inspect_namespace" | "prune_directories";
 
 export type MaintenanceOutcome = "repaired" | "removed" | "skipped" | "failed";
 
@@ -33,13 +29,13 @@ export type MaintenanceItem = {
   prefix: StoragePrefix | "*";
   key: string;
   image_id?: string;
-  thumbnail_size?: number;
+  byte_size?: number;
   reason?: string;
   error?: string;
 };
 
 export type MaintenanceCandidate =
-  | { kind: "repair"; imageId: string }
+  | { kind: "repair"; imageId: string; prefix: StoragePrefix }
   | {
       kind: "remove";
       backend: string;
@@ -56,7 +52,9 @@ export type CapturedMaintenanceGroup = {
 };
 
 const maintenanceRowsQuery = `
-  SELECT id, ext, status, storage_slug, md5, thumbnail_size
+  SELECT id, status, storage_slug,
+         status='deleted' AND EXISTS (SELECT 1 FROM background_job
+                  WHERE type='trash.purge' AND target_id=metadata.id::text) AS purging
     FROM metadata
    ORDER BY id ASC`;
 
@@ -118,10 +116,7 @@ async function captureMaintenanceGroups(
       continue;
     }
     const incomplete = (
-      [
-        ["full", result.snapshot.full],
-        ["thumbs", result.snapshot.thumbs]
-      ] as const
+      STORAGE_PREFIXES.map((prefix) => [prefix, result.snapshot[prefix]] as const)
     ).filter(([, listing]) => !listing.complete);
     if (incomplete.length) {
       for (const [prefix, listing] of incomplete) {
@@ -160,44 +155,50 @@ function buildMaintenanceCandidates(
   initial: readonly MaintenanceCandidate[]
 ) {
   const candidates = [...initial];
-
+  const retained = new Map(rows
+    .filter((row) => row.status === "ready" || row.status === "deleted")
+    .map((row) => [storageObjectKey(row.id), row]));
+  const inspectedSlugs = new Set(groups.flatMap(({ group }) => group.slugs));
+  const repairs = new Set<string>();
+  const addRepair = (row: MaintenanceImage, prefix: StoragePrefix) => {
+    const identity = `${row.id}:${prefix}`;
+    if (repairs.has(identity)) return;
+    repairs.add(identity);
+    candidates.push({ kind: "repair", imageId: row.id, prefix });
+  };
   for (const { group, backend, snapshot } of groups) {
     const retainedRows = retainedRowsForGroup(rows, group);
-    const fullKeys = new Set(snapshot.full.keys);
-    const thumbKeys = new Set(snapshot.thumbs.keys);
-    for (const row of retainedRows) {
-      const thumbKey = thumbnailObjectKey(row.id);
-      if (
-        !fullKeys.has(storageObjectKey(row.id, row.ext)) ||
-        !thumbKeys.has(thumbKey) ||
-        Number(row.thumbnail_size) <= 0
-      ) {
-        candidates.push({ kind: "repair", imageId: row.id });
-      }
-    }
-
-    const referencedFull = new Set(
-      retainedRows.flatMap((row) => [storageObjectKey(row.id, row.ext)])
-    );
-    const referencedThumbs = new Set(retainedRows.map((row) => thumbnailObjectKey(row.id)));
     const activeReferences = mergeActiveIngestionStorageReferences(
       ...group.slugs.map((slug) => referencesByBackend.get(slug) ?? new Map())
     );
-    for (const ingestionReference of activeReferences.values()) {
-      for (const reference of ingestionFinalStorageReferences(ingestionReference)) {
-        if (reference.prefix === "full") referencedFull.add(reference.key);
-        if (reference.prefix === "thumbs") referencedThumbs.add(reference.key);
+    for (const prefix of STORAGE_PREFIXES) {
+      const present = new Set(snapshot[prefix].keys);
+      const referenced = new Set(retainedRows.map((row) => storageObjectKey(row.id)));
+      for (const row of retainedRows) {
+        if (!row.purging && !present.has(storageObjectKey(row.id))) addRepair(row, prefix);
       }
-    }
-
-    for (const key of snapshot.full.keys.toSorted()) {
-      if (!referencedFull.has(key)) {
-        candidates.push({ kind: "remove", backend, prefix: "full", key });
+      for (const active of activeReferences.values()) {
+        for (const reference of ingestionFinalStorageReferences(active)) {
+          if (reference.prefix === prefix) referenced.add(reference.key);
+        }
       }
-    }
-    for (const key of snapshot.thumbs.keys.toSorted()) {
-      if (!referencedThumbs.has(key)) {
-        candidates.push({ kind: "remove", backend, prefix: "thumbs", key });
+      for (const key of snapshot[prefix].keys.toSorted()) {
+        if (referenced.has(key)) continue;
+        const owner = retained.get(key);
+        if (owner?.purging || (owner && !inspectedSlugs.has(owner.storage_slug))) {
+          candidates.push({ kind: "result", item: {
+            action: "remove_object", outcome: "skipped", backend, prefix, key,
+            image_id: owner.id,
+            reason: owner.purging
+              ? "图片由永久删除任务处理，保留现存对象"
+              : "当前位置未完成检查，保留副本供恢复"
+          } });
+          continue;
+        }
+        // PostgreSQL facts survive failed writes and restarts. Prove the current
+        // object before deleting any retained image's cross-namespace replica.
+        if (owner) addRepair(owner, prefix);
+        candidates.push({ kind: "remove", backend, prefix, key });
       }
     }
   }

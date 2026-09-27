@@ -33,10 +33,7 @@ local function projection(snapshot)
     or (snapshot.status == 'preparing' and not prepare_waiting) then
     result.running = 1
   end
-  local duplicate_count = 0
-  if snapshot.prepared and snapshot.prepared.duplicate_count then
-    duplicate_count = tonumber(snapshot.prepared.duplicate_count) or 0
-  end
+  local duplicate_count = snapshot.prepared and snapshot.prepared.duplicate_count or 0
   local duplicate_pending = snapshot.status == 'ready'
     and duplicate_count > 0
     and not snapshot.duplicate_decision
@@ -451,53 +448,49 @@ end
 
 local function assert_prepared(value)
   assert_exact_fields(value, {
-    'producer_execution_token', 'original_size',
-    'original_width', 'original_height', 'width', 'height', 'ext', 'md5',
-    'prepared_image_sha256', 'prepared_thumbnail_sha256',
-    'size', 'thumbnail_size', 'quality', 'transcoded',
-    'detected_brightness', 'duplicate_count', 'generation'
+    'producer_execution_token', 'original_size', 'original_width', 'original_height',
+    'variants', 'detected_brightness', 'duplicate_count', 'generation'
   }, 'prepared')
-  local positive_fields = {
-    'original_size', 'original_width', 'original_height', 'width', 'height',
-    'size', 'thumbnail_size'
-  }
-  for _, field in ipairs(positive_fields) do
-    if not valid_integer(value[field], 1) then
-      error('INGESTION_QUEUE_STRUCTURE prepared_shape')
+  for _, field in ipairs({'original_size', 'original_width', 'original_height'}) do
+    if not valid_integer(value[field], 1) then error('INGESTION_QUEUE_STRUCTURE prepared_shape') end
+  end
+  assert_exact_fields(value.variants, {'large', 'medium', 'small'}, 'variants')
+  for _, variant in ipairs({'large', 'medium', 'small'}) do
+    local facts = value.variants[variant]
+    assert_exact_fields(facts, {'width', 'height', 'bytes', 'md5', 'sha256', 'quality', 'effort', 'passthrough', 'over_target'}, 'variant')
+    if not valid_integer(facts.width, 1) or not valid_integer(facts.height, 1)
+      or not valid_integer(facts.bytes, 1) or not valid_hash(facts.md5, 16) or not valid_hash(facts.sha256, 32)
+      or (facts.quality ~= cjson.null and (not valid_integer(facts.quality, 1) or facts.quality > 100))
+      or (facts.effort ~= cjson.null and (not valid_integer(facts.effort, 0) or facts.effort > 6))
+      or type(facts.passthrough) ~= 'boolean' or type(facts.over_target) ~= 'boolean' then
+      error('INGESTION_QUEUE_STRUCTURE variant_shape')
     end
   end
-  if type(value.producer_execution_token) ~= 'string'
-    or value.producer_execution_token == ''
-    or (value.ext ~= 'jpg' and value.ext ~= 'png'
-      and value.ext ~= 'webp' and value.ext ~= 'gif' and value.ext ~= 'avif')
-    or not valid_hash(value.md5, 16)
-    or (value.quality ~= cjson.null and not valid_integer(value.quality, 0))
-    or type(value.transcoded) ~= 'boolean'
-    or (value.detected_brightness ~= 'dark'
-      and value.detected_brightness ~= 'light')
-    or not valid_integer(value.duplicate_count, 0)
-    or type(value.generation) ~= 'string'
-    or value.generation == ''
-    or not valid_hash(value.prepared_image_sha256, 32)
-    or not valid_hash(value.prepared_thumbnail_sha256, 32) then
+  if type(value.producer_execution_token) ~= 'string' or value.producer_execution_token == ''
+    or (value.detected_brightness ~= 'dark' and value.detected_brightness ~= 'light')
+    or not valid_integer(value.duplicate_count, 0) or type(value.generation) ~= 'string' or value.generation == '' then
     error('INGESTION_QUEUE_STRUCTURE prepared_shape')
   end
 end
 
 local function assert_completed_display(value, queue)
   assert_allowed_fields(value, {
-    'source_type', 'original_width', 'original_height', 'original_size',
-    'quality', 'transcoded'
+    'source_type', 'original_width', 'original_height', 'original_size', 'variant_quality'
   }, {
     'batch_position', 'manifest_line'
   }, 'completed_display')
+  assert_exact_fields(value.variant_quality, {'large', 'medium', 'small'}, 'variant_quality')
+  for _, variant in ipairs({'large', 'medium', 'small'}) do
+    local quality = value.variant_quality[variant]
+    if quality ~= cjson.null and (not valid_integer(quality, 1) or quality > 100) then
+      error('INGESTION_QUEUE_STRUCTURE variant_quality')
+    end
+  end
   if (queue == 'upload' and value.source_type ~= 'upload')
     or (queue == 'import' and not valid_import_source_type(value.source_type))
     or not valid_integer(value.original_width, 1)
     or not valid_integer(value.original_height, 1)
     or not valid_integer(value.original_size, 1)
-    or (value.quality ~= cjson.null and not valid_integer(value.quality, 0))
-    or type(value.transcoded) ~= 'boolean'
     or (value.batch_position ~= nil
       and (not valid_integer(value.batch_position, 0)
         or value.batch_position > 4095))

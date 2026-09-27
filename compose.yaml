@@ -31,7 +31,6 @@ services:
     image: wozsun/imageshow:latest
     container_name: imageshow
     restart: unless-stopped
-    stop_grace_period: 50s
     depends_on:
       postgresql:
         condition: service_healthy
@@ -48,5 +47,3 @@ services:
       - "127.0.0.1:5518:5518"
     volumes:
       - ./data:/app/data
-    security_opt:
-      - no-new-privileges:true

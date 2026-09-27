@@ -3,12 +3,12 @@ import type {
   CompletedIngestionDisplayDto,
   ActiveServerIngestionItemDto,
   IngestionSessionPairDto,
-  IngestionStatusItemDto
+  IngestionStatusItemDto,
+  PreparedVariantFacts
 } from "@imageshow/shared/browser";
 import { ingestionPreviewPath } from "@imageshow/shared/browser";
 import { ApiError } from "../../../core/api-error.ts";
 import { privateNoStoreCacheControl } from "../../../core/http/headers.ts";
-import { contentType } from "../../../storage/objects/keys.ts";
 import { readIngestionPreparedFile } from "../raw/prepared.ts";
 import {
   committedIngestionResultForOwner,
@@ -16,6 +16,7 @@ import {
 } from "../../read-models/ingestion-results.ts";
 import {
   completedIngestionDisplay,
+  ingestionVariantQuality,
   type CompletedIngestionReceipt,
   type IngestionSessionSnapshot
 } from "../sessions/model.ts";
@@ -33,6 +34,12 @@ function previewPath(
   )}/${encodeURIComponent(session.image_id)}${full ? "/full" : ""}`;
 }
 
+function variantDimensions(
+  { width, height, bytes }: Pick<PreparedVariantFacts, "width" | "height" | "bytes">
+) {
+  return { width, height, byte_size: bytes };
+}
+
 export function presentIngestionSession(
   session: IngestionSessionSnapshot
 ): ActiveServerIngestionItemDto {
@@ -40,15 +47,16 @@ export function presentIngestionSession(
     ? {
         preview_url: previewPath(session),
         preview_full_url: previewPath(session, true),
-        width: session.prepared.width,
-        height: session.prepared.height,
         original_width: session.prepared.original_width,
         original_height: session.prepared.original_height,
-        md5: session.prepared.md5,
+        md5: session.prepared.variants.large.md5,
         original_size: session.prepared.original_size,
-        size: session.prepared.size,
-        quality: session.prepared.quality,
-        transcoded: session.prepared.transcoded,
+        variant_quality: ingestionVariantQuality(session.prepared),
+        variants: {
+          large: variantDimensions(session.prepared.variants.large),
+          medium: variantDimensions(session.prepared.variants.medium),
+          small: variantDimensions(session.prepared.variants.small)
+        },
         detected_brightness: session.prepared.detected_brightness,
         duplicate_count: session.prepared.duplicate_count
       }
@@ -210,13 +218,12 @@ export async function readIngestionPreview(
     throw new ApiError(409, "ingestion_version_conflict", "内容接入任务版本已变化");
   }
   const files = ingestionPreparedFiles(current, current.prepared!);
-  const key = files[variant === "full" ? 0 : 1];
-  const buffer = await readIngestionPreparedFile(key, requestSignal);
+  const key = files[variant === "full" ? 0 : 2]!;
+  const facts = current.prepared!.variants[variant === "full" ? "large" : "small"];
+  const buffer = await readIngestionPreparedFile(key, facts.bytes, requestSignal);
   return new Response(buffer as unknown as BodyInit, {
     headers: {
-      "Content-Type": variant === "full"
-        ? contentType(current.prepared!.ext)
-        : "image/webp",
+      "Content-Type": "image/webp",
       "Cache-Control": privateNoStoreCacheControl
     }
   });

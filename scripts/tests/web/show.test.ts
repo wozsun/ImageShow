@@ -13,7 +13,6 @@ import {
 } from "pixi.js";
 import { emptyGalleryFilters } from "../../../packages/web/src/lib/gallery/gallery-query.ts";
 import {
-  showCardGeometry,
   showCardRect,
   showRectsIntersect,
   showViewportWindow,
@@ -1554,8 +1553,9 @@ test("[Web/展映] 下载挂起时纹理等待节点有界，恢复后只加载�
   const releaseFirst = h.hold("held-first");
   const releaseSecond = h.hold("held-second");
   const lod = { pixelWidth: 16, pixelHeight: 16 };
+  const url = (id: string) => `https://textures.example/small/${id.slice(-2)}/${id}.webp`;
   const acquire = (id: string) =>
-    h.cache.acquire(`https://textures.example/${id}.webp`, lod, () => {});
+    h.cache.acquire(url(id), lod, () => {});
   const first = acquire("held-first");
   const second = acquire("held-second");
   for (let index = 0; index < 10_000; index += 1) {
@@ -1565,12 +1565,15 @@ test("[Web/展映] 下载挂起时纹理等待节点有界，恢复后只加载�
   assert.equal(h.cache.stats().inFlight, 2);
   assert.ok(h.cache.stats().queued <= 2, "实际等待节点随淘汰同步释放");
   const valid = acquire("still-needed");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(h.cache.stats().inFlight, 2, "释放前两次下载跨异步调度仍挂起");
+  assert.deepEqual(h.requests, [url("held-first"), url("held-second")]);
   releaseFirst();
   releaseSecond();
   await h.flush();
   assert.deepEqual(
     h.requests,
-    ["held-first", "held-second", "still-needed"].map((id) => `https://textures.example/${id}.webp`)
+    ["held-first", "held-second", "still-needed"].map(url)
   );
   first.release();
   second.release();
@@ -1609,7 +1612,7 @@ test("[Web/展映] 同步释放与拒绝交错时补发错过的容量变化，�
   first.release();
   card.assign(
     "c",
-    { ...showImages(1)[0], thumb_url: "https://textures.example/c.webp" },
+    {...showImages(1)[0],base_url:"/images"},
     100,
     200,
     0.04,
@@ -1811,7 +1814,7 @@ test("[Web/展映] 详情成功加载同一 URL 后恢复失败纹理，原位�
       h.cache.retryFailedUrl("https://textures.example/full-recover.webp");
       await h.flush();
       assert.equal(h.requests.length, 3, "不同原图 URL 成功不证明缩略图已恢复");
-      const url = "https://textures.example/recover.webp";
+      const url = "https://textures.example/small/er/recover.webp";
       h.cache.retryFailedUrl(url);
       h.cache.retryFailedUrl(url);
       await h.flush();
@@ -1834,14 +1837,14 @@ test("[Web/展映] 详情成功加载同一 URL 后恢复失败纹理，原位�
 test("[Web/展映] 纹理恢复按浏览器资源 URL 匹配，域名大小写与默认端口不产生两套失败记录", async (t) => {
   const h = await createTextureRecoveryHarness(t);
   h.setStatus("canonical", 503);
-  const card = h.card("canonical", () => undefined, "https://TEXTURES.example:443/canonical.webp");
+  const card = h.card("canonical", () => undefined, "https://TEXTURES.example:443");
   await h.flush();
   assert.equal(card.isTextureReady, false);
   h.setStatus("canonical", 200);
-  h.cache.retryFailedUrl("https://textures.example/canonical.webp");
+  h.cache.retryFailedUrl("https://textures.example/small/al/canonical.webp");
   await h.flush();
   assert.equal(card.isTextureReady, true);
-  assert.deepEqual(h.requests, Array(2).fill("https://textures.example/canonical.webp"));
+  assert.deepEqual(h.requests, Array(2).fill("https://textures.example/small/al/canonical.webp"));
 });
 test("[Web/展映] 图片成功信号解除来源暂停，CORS 仍失败时再次暂停且回收后不唤醒", async (t) => {
   const h = await createTextureRecoveryHarness(t, { maximumEntries: 6 });
@@ -1853,19 +1856,19 @@ test("[Web/展映] 图片成功信号解除来源暂停，CORS 仍失败时再�
   }
   assert.equal(h.requests.length, 3);
   h.setOffline(false);
-  h.cache.retryFailedUrl("https://textures.example/recovery-3.webp");
+  h.cache.retryFailedUrl("https://textures.example/small/-3/recovery-3.webp");
   await h.flush();
   assert.equal(cards[3].isTextureReady, true, "尚未发请求、仅被来源暂停拦住的卡片也能恢复");
   assert.ok(cards.slice(0, 3).every((card) => !card.isTextureReady));
   h.setOffline(true);
-  h.cache.retryFailedUrl("https://textures.example/recovery-0.webp");
+  h.cache.retryFailedUrl("https://textures.example/small/-0/recovery-0.webp");
   await h.flush();
   assert.equal(h.requests.length, 5);
   await h.flush();
   assert.equal(h.requests.length, 5, "DOM 图片成功不保证 CORS 成功；再次失败不能自动循环");
   cards[0].destroy();
   h.setOffline(false);
-  h.cache.retryFailedUrl("https://textures.example/recovery-0.webp");
+  h.cache.retryFailedUrl("https://textures.example/small/-0/recovery-0.webp");
   await h.flush();
   assert.equal(h.requests.length, 5, "已回收卡片不会因迟到成功信号发起请求");
 });
@@ -2446,32 +2449,6 @@ test("[Web/展映] 瀑布缩放保持视口四周 35% 驻留缓冲并按世界�
     residence
   );
   assert.deepEqual(zoomed.resident, { left: -420, top: -240, right: 940, bottom: 780 });
-});
-test("[Web/展映] 展映窗口可独立指定四向缓冲比例", () => {
-  const window = showViewportWindow({ x: 120, y: 240 }, { width: 800, height: 600 }, 2, {
-    horizontalOverscanScreens: 0.5,
-    verticalOverscanScreens: 0.5
-  });
-  assert.deepEqual(window.resident, {
-    left: -140,
-    top: -30,
-    right: 660,
-    bottom: 570
-  });
-});
-test("[Web/展映] 展映卡片维持窄缝且不回退为刚性网格", () => {
-  const source = showImages(1)[0];
-  const geometries = Array.from({ length: 80 }, (_, index) =>
-    showCardGeometry(source, (index % 9) - 4, index - 40)
-  );
-  for (const geometry of geometries) {
-    assert.ok(geometry.width >= 360 * 0.985);
-    assert.ok(geometry.width < 360 * 0.992);
-    assert.ok(geometry.gapAfter >= 4);
-    assert.ok(geometry.gapAfter < 6);
-  }
-  assert.ok(new Set(geometries.map((geometry) => geometry.gapAfter)).size > 70);
-  assert.ok(new Set(geometries.map((geometry) => geometry.angle)).size > 70);
 });
 test("[Web/展映] 展映乱序保持元素完整、可重现且不改写输入", () => {
   const source = showImages(4);

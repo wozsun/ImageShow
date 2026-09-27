@@ -17,7 +17,6 @@ import { verifyStorageEndpointRebind } from "./endpoint-rebind.ts";
 
 export type ExistingStorageProbe = {
   id: string;
-  ext: string;
   storage_slug: string;
 };
 
@@ -27,10 +26,10 @@ async function assertExistingObjectReadable(
   signal?: AbortSignal
 ) {
   try {
-    assertCanonicalImageObjectKey(storageObjectKey(existingObject.id, existingObject.ext));
+    assertCanonicalImageObjectKey(storageObjectKey(existingObject.id));
     const opened = await driver.openRead(
-      "full",
-      storageObjectKey(existingObject.id, existingObject.ext),
+      "large",
+      storageObjectKey(existingObject.id),
       "bytes=0-0",
       { signal }
     );

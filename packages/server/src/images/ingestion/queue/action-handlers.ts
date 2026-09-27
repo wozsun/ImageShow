@@ -105,7 +105,7 @@ function metadataForAction(
   if (patch.device !== undefined) {
     metadata.device =
       patch.device === "auto" && prepared
-        ? imageDevice(prepared.width, prepared.height)
+        ? imageDevice(prepared.variants.large.width, prepared.variants.large.height)
         : patch.device;
   }
   if (patch.brightness !== undefined) {
@@ -211,7 +211,7 @@ function commitInput(
   return {
     ...pair(session),
     expected_version: session.version,
-    expected_md5: session.prepared.md5,
+    expected_md5: session.prepared.variants.large.md5,
     commit_request_id: actionRequestId,
     duplicate_decision: session.duplicate_decision ?? "upload",
     metadata: session.metadata

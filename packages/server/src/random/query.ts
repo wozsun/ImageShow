@@ -25,7 +25,7 @@ export type RandomSelectorGroup = {
 
 export type ParsedRandomQuery = {
   mode: RandomMethod;
-  size: RandomImageSize | null;
+  size: RandomImageSize;
   limit: number;
   ids: string[];
   seed: string | null;
@@ -301,7 +301,7 @@ function parseSeed(query: URLSearchParams, limit: number): string | null | Respo
 export function parseRandomQuery(
   url: URL,
   defaultMode: RandomDefaultMethod,
-  defaultSize: RandomImageSize = "full"
+  defaultSize: RandomImageSize = "medium"
 ): ParsedRandomQuery | Response {
   const rawQuery = url.search.startsWith("?") ? url.search.slice(1) : url.search;
   const rawBytes = Buffer.byteLength(rawQuery, "utf8");
@@ -324,8 +324,8 @@ export function parseRandomQuery(
     );
   }
   const size = query.get("size")?.toLowerCase()
-    ?? (explicitMode === "json" ? null : defaultSize);
-  if (size !== null && !randomSizes.has(size)) {
+    ?? defaultSize;
+  if (!randomSizes.has(size)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid size" },
       { field: "size", allowedValues: randomImageSizes }
@@ -342,7 +342,7 @@ export function parseRandomQuery(
     if (ids instanceof Response) return ids;
     return {
       mode: (explicitMode ?? defaultMode) as RandomMethod,
-      size: size as RandomImageSize | null,
+      size: size as RandomImageSize,
       limit,
       ids,
       seed,
@@ -389,7 +389,7 @@ export function parseRandomQuery(
 
   return {
     mode: (explicitMode ?? defaultMode) as RandomMethod,
-    size: size as RandomImageSize | null,
+    size: size as RandomImageSize,
     limit,
     ids: [],
     seed,

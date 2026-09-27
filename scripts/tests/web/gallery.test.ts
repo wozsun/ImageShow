@@ -26,8 +26,6 @@ import {
 } from "../../../packages/web/src/pages/gallery/gallery-render-viewport.ts";
 import { GalleryCardRevealRegistry } from "../../../packages/web/src/pages/gallery/gallery-card-reveal.ts";
 import { imageDisplayTitle } from "../../../packages/web/src/lib/ui/formatters.ts";
-import { GalleryDebugStats } from "../../../packages/web/src/pages/gallery/gallery-debug-stats.ts";
-import { ImageLoadScheduler } from "../../../packages/web/src/components/image/image-load-scheduler.ts";
 import {
   galleryCardDto,
   galleryCard,
@@ -645,19 +643,7 @@ test("[Web/画廊] 公共详情保存为目标页建立新权威边界", () => {
   const secondBefore = beforeItems.find(({ id }) => id === secondId)!.item!;
 
   const staleAppend = dataWindow.claimRequest({ cursor: "cursor-60", kind: "append" })!;
-  const authoritativeSnapshot = editableImage(firstId, {
-    title: "saved title",
-    theme: "saved-theme",
-    author: firstBefore.author,
-    tags: ["saved-tag"],
-    thumb_url: firstBefore.thumb_url,
-    width: 100,
-    height: 300,
-    device: firstBefore.device,
-    brightness: firstBefore.brightness,
-    original: "https://example.com/saved.webp",
-    object_url: "https://example.com/saved.webp"
-  });
+  const authoritativeSnapshot = editableImage(firstId, {title: "saved title",theme: "saved-theme",author: firstBefore.author,tags: ["saved-tag"],width: 100,height: 300,device: firstBefore.device,brightness: firstBefore.brightness,original: "https://example.com/saved.webp",base_url:"/images",variants:{large:{width:1600,height:900,byte_size:1024},medium:{width:1200,height:675,byte_size:800},small:{width:600,height:338,byte_size:200}}});
   const refreshIntent = dataWindow.prepareImageRefresh(
     firstId,
     authoritativeSnapshot
@@ -792,8 +778,7 @@ test("[Web/画廊] 画廊图片同节点换源隔离失败与迟到解码并保�
     const { LazyGalleryImage } =
       await import("../../../packages/web/src/pages/gallery/LazyGalleryImage.tsx");
     root = createRoot(document.getElementById("root")!);
-    const measurements: Array<{ src: string; width: number; height: number }> = [];
-    const render = async (src: string, detailOpen = false, measureIntrinsicSize = false) =>
+    const render = async (src: string, detailOpen = false) =>
       React.act(async () => {
         root!.render(
           React.createElement(GalleryImageRuntime, {
@@ -804,12 +789,7 @@ test("[Web/画廊] 画廊图片同节点换源隔离失败与迟到解码并保�
               src,
               alt: "测试缩略图",
               width: 800,
-              height: 600,
-              device: "pc",
-              measureIntrinsicSize,
-              onIntrinsicSize(width, height) {
-                measurements.push({ src, width, height });
-              }
+              height: 600
             })
           })
         );
@@ -832,9 +812,8 @@ test("[Web/画廊] 画廊图片同节点换源隔离失败与迟到解码并保�
     assert.equal(document.querySelector(".tile-image-fallback"), null);
     await settle("load");
     assert.ok(shell().classList.contains("loaded"));
-    assert.equal(measurements.length, 0);
 
-    await render("/slow.webp", false, true);
+    await render("/slow.webp");
     const slowImage = image()!;
     Object.defineProperties(slowImage, {
       naturalWidth: { configurable: true, value: 512 },
@@ -843,12 +822,11 @@ test("[Web/画廊] 画廊图片同节点换源隔离失败与迟到解码并保�
     const decode = Promise.withResolvers<void>();
     Object.defineProperty(slowImage, "decode", { configurable: true, value: () => decode.promise });
     await settle("load");
-    await render("/new.webp", false, true);
+    await render("/new.webp");
     assert.strictEqual(image(), slowImage, "正常换源复用最终 img 节点");
     assert.equal(image()?.getAttribute("src"), "/new.webp");
     await React.act(async () => decode.resolve());
     assert.equal(shell().classList.contains("loaded"), false, "旧解码完成不得标记新地址就绪");
-    assert.equal(measurements.length, 0, "旧解码结果不能回填新地址的比例");
     await settle("error");
     assert.ok(document.querySelector(".tile-image-fallback"), "新地址失败仍需显示反馈");
     await render("/slow.webp");
@@ -865,7 +843,7 @@ test("[Web/画廊] 画廊图片同节点换源隔离失败与迟到解码并保�
     assert.equal(image()?.getAttribute("src"), "/slow.webp");
     await render("/paused.webp", true);
     assert.equal(image(), null, "详情打开时换源继续遵守画廊暂停");
-    await render("/paused.webp", false, true);
+    await render("/paused.webp");
     assert.equal(image()?.getAttribute("src"), "/paused.webp");
     Object.defineProperties(image()!, {
       naturalWidth: { configurable: true, value: 512 },
@@ -873,7 +851,6 @@ test("[Web/画廊] 画廊图片同节点换源隔离失败与迟到解码并保�
     });
     await settle("load");
     assert.ok(shell().classList.contains("loaded"));
-    assert.deepEqual(measurements, [{ src: "/paused.webp", width: 512, height: 341 }]);
     assert.equal(observations, 1, "换源不能重建共享可见性注册");
     await React.act(async () => root!.unmount());
     root = undefined;
@@ -887,31 +864,18 @@ test("[Web/画廊] 画廊图片同节点换源隔离失败与迟到解码并保�
     }
   }
 });
-test("[Web/画廊] 自然尺寸批量回填后远页水合、删除和 resize 继续使用已解析比例", () => {
+test("[Web/画廊] 已登记尺寸在远页水合、删除和 resize 后保持布局", () => {
   const dataWindow = new GalleryDataWindow({
     geometry: { contentWidth: 420, gap: 10, columnCount: 2 },
     fullItemBudget: 4
   });
   const page = syntheticGalleryPage({ count: 4, start: 0, total: 12 });
-  page.items[0] = galleryCard(page.items[0]!.id, 0, 0);
-  page.items[1] = galleryCard(page.items[1]!.id, 0, 0);
+  page.items[0] = galleryCard(page.items[0]!.id, 300, 600);
+  page.items[1] = galleryCard(page.items[1]!.id, 400, 300);
   resolveGalleryIntent(dataWindow, { cursor: "", kind: "initial" }, page);
   const [first, second] = page.items;
-  let commits = 0;
-  dataWindow.subscribe(() => {
-    commits += 1;
-  });
-  dataWindow.resolveIntrinsicSizes([
-    { id: first!.id, width: 300, height: 600 },
-    { id: second!.id, width: 400, height: 300 }
-  ]);
-  assert.equal(commits, 1);
-  const measured = dataWindow.positionForId(first!.id)!;
-  assert.equal(measured.height, (measured.width - 2) * 2 + 2);
-  assert.equal(dataWindow.needsIntrinsicMeasurement(first!.id), false);
-  assert.equal(dataWindow.needsIntrinsicMeasurement(second!.id), false);
-  dataWindow.resolveIntrinsicSizes([{ id: first!.id, width: 1, height: 1 }]);
-  assert.equal(commits, 1, "已解析结果不会再次提交布局");
+  const initial = dataWindow.positionForId(first!.id)!;
+  assert.equal(initial.height, (initial.width - 2) * 2 + 2);
   for (const start of [4, 8]) {
     resolveGalleryIntent(
       dataWindow,
@@ -926,7 +890,7 @@ test("[Web/画廊] 自然尺寸批量回填后远页水合、删除和 resize �
   }
   assert.equal(dataWindow.hasHydratedItem(first!.id), false);
   resolveGalleryIntent(dataWindow, { cursor: "", kind: "hydrate" }, page);
-  assert.equal(dataWindow.positionForId(first!.id)!.height, measured.height);
+  assert.equal(dataWindow.positionForId(first!.id)!.height, initial.height);
   dataWindow.removeImage(first!.id);
   dataWindow.setGeometry({ contentWidth: 210, gap: 10, columnCount: 1 });
   const remaining = dataWindow.positionForId(second!.id)!;
@@ -1261,38 +1225,6 @@ for (const mutation of ["metadata", "restore"] as const) {
     assert.equal(visibleStart, 150);
   });
 }
-
-test("[Web/画廊] 画廊调试快照覆盖查询、DTO、紧凑布局、揭示与 JS heap 指标", () => {
-  const scheduler = new ImageLoadScheduler(2);
-  const debug = new GalleryDebugStats(scheduler);
-  debug.updateDataWindow({
-    fetchedPages: 834,
-    retainedPages: 8,
-    queryCachePages: 2,
-    compactItems: 50_000,
-    fullItems: 480,
-    materializedPositions: 180,
-    compactLayoutBytes: 1_500_000,
-    estimatedCompactBytes: 6_000_000,
-    estimatedFullDtoBytes: 400_000
-  });
-  debug.recordReveal(49_999);
-  debug.sampleJsHeap();
-  const snapshot = debug.snapshot();
-  assert.equal(snapshot.fetchedPages, 834);
-  assert.equal(snapshot.retainedPages, 8);
-  assert.equal(snapshot.queryCachePages, 2);
-  assert.equal(snapshot.compactItems, 50_000);
-  assert.equal(snapshot.fullItems, 480);
-  assert.equal(snapshot.materializedPositions, 180);
-  assert.equal(snapshot.revealHighWater, 49_999);
-  assert.ok(snapshot.usedJsHeapBytes === null
-    || snapshot.usedJsHeapBytes >= 0);
-  debug.resetDataWindow();
-  assert.equal(debug.snapshot().revealHighWater, -1);
-  assert.equal(debug.snapshot().compactItems, 0);
-  debug.dispose();
-});
 
 test("[Web/画廊] 驻留选页保持同距顺序，跳过装不下的页并额外保留详情页", () => {
   for (const scenario of [

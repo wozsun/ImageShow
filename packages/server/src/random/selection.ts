@@ -27,7 +27,7 @@ import { pool } from "../core/database/pools.ts";
 
 export type RandomImageSelection = {
   mode: RandomMethod;
-  size: RandomImageSize | null;
+  size: RandomImageSize;
   items: SelectedReadyImage[];
 };
 

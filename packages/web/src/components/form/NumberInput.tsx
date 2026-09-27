@@ -19,6 +19,7 @@ type NumberInputProps = {
   onChange: (value: number) => void;
   min?: number;
   max?: number;
+  step?: number | "any";
   placeholder?: string;
   disabled?: boolean;
   className?: string;
@@ -30,6 +31,7 @@ export function NumberInput({
   onChange,
   min,
   max,
+  step,
   placeholder,
   disabled,
   className,
@@ -59,11 +61,12 @@ export function NumberInput({
   return (
     <input
       type="number"
-      inputMode="numeric"
+      inputMode={step === "any" ? "decimal" : "numeric"}
       className={className}
       aria-label={ariaLabel}
       min={min}
       max={max}
+      step={step}
       placeholder={placeholder}
       disabled={disabled}
       value={draft}

@@ -19,7 +19,7 @@ await runIntegrationScenario(async (runtime) => {
     locks.withStorageLocationReadLock(async (lockSignal) => {
       const captured = await cleanup.captureMoveCleanupObjects([
         {
-          prefix: "thumbs",
+          prefix: "small",
           key: detachedImage + ".webp",
           backend: "local"
         }
@@ -68,13 +68,13 @@ await runIntegrationScenario(async (runtime) => {
   const admittedRemovalKey = cleanupAdmissionPrefix + ".active.webp";
   const queuedRemovalKey = cleanupAdmissionPrefix + ".queued.webp";
   await localAccess.driver.writeBuffer(
-    "full",
+    "large",
     admittedRemovalKey,
     Buffer.from("active-cleanup-admission"),
     "image/webp"
   );
   await localAccess.driver.writeBuffer(
-    "full",
+    "large",
     queuedRemovalKey,
     Buffer.from("queued-cleanup-admission"),
     "image/webp"
@@ -108,7 +108,7 @@ await runIntegrationScenario(async (runtime) => {
       .removeStorageObjectsAndConfirm(
         [
           {
-            prefix: "full",
+            prefix: "large",
             key: admittedRemovalKey,
             storageSlug: "local"
           }
@@ -125,7 +125,7 @@ await runIntegrationScenario(async (runtime) => {
       .removeStorageObjectsAndConfirm(
         [
           {
-            prefix: "full",
+            prefix: "large",
             key: queuedRemovalKey,
             storageSlug: "local"
           }
@@ -153,13 +153,13 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(queuedRemovalOutcome.reason, queuedAdmissionReason);
   assert.equal(queuedRemovalStarted, false);
   assert.equal(
-    await localAccess.driver.exists("full", admittedRemovalKey),
+    await localAccess.driver.exists("large", admittedRemovalKey),
     false
   );
   assert.equal(
-    await localAccess.driver.exists("full", queuedRemovalKey),
+    await localAccess.driver.exists("large", queuedRemovalKey),
     true,
     "取消的中央准入等待不得启动后续 driver 删除"
   );
-  await removeDriverObject(localAccess.driver, "full", queuedRemovalKey);
+  await removeDriverObject(localAccess.driver, "large", queuedRemovalKey);
 });

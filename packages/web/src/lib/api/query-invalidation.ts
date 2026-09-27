@@ -1,7 +1,7 @@
 import type { Query, QueryClient } from "@tanstack/react-query";
 import type {
   AdminImageListItemDto,
-  AdminSettingsResponseDto,
+  AdminSettings,
   EditableImageSnapshotDto,
   ImageUpdateItemInputDto,
   IngestionVocabularyDto
@@ -46,6 +46,7 @@ export function clearAdminCacheAfterLogin(client: QueryClient) {
     queryKeys.adminPreferences,
     queryKeys.ingestionVocabulary,
     queryKeys.settings,
+    queryKeys.runtimeConfig,
     queryKeys.overview,
     queryKeys.adminCheckStatus,
     queryKeys.adminImages,
@@ -307,18 +308,15 @@ export function invalidateStorageData(client: QueryClient) {
 
 export function invalidateRuntimeData(
   client: QueryClient,
-  settings?: AdminSettingsResponseDto
+  settings: AdminSettings
 ) {
-  if (settings) client.setQueryData(queryKeys.settings, settings);
+  client.setQueryData(queryKeys.settings, { settings });
   return invalidate(client, [
-    ...(settings ? [] : [queryKeys.settings]),
     queryKeys.siteConfig,
     queryKeys.me,
-    queryKeys.storageBackends,
-    queryKeys.storageOptions,
+    queryKeys.logs,
     queryKeys.overview,
     queryKeys.publicImages,
-    queryKeys.publicImageDetail,
-    queryKeys.galleryFacets
+    queryKeys.publicImageDetail
   ]);
 }

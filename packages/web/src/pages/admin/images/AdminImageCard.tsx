@@ -1,3 +1,4 @@
+import { imageVariantUrl } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { TwoStepConfirmIconButton } from "../../../components/actions/TwoStepConfirmIconButton.js";
 import { ThumbnailImage } from "../../../components/image/ThumbnailImage.js";
@@ -122,7 +123,7 @@ export function AdminImageCard({
         }}
       >
         <span className="admin-image-card-thumb">
-          <ThumbnailImage src={item.thumb_url} alt="" />
+          <ThumbnailImage src={imageVariantUrl(item, "small")} alt="" />
         </span>
         <span className="admin-image-card-main">
           <strong title={title}>{title}</strong>

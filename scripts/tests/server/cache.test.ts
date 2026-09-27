@@ -227,7 +227,6 @@ test("[Server/缓存与 Redis] serving record 统一 Redis 命中、空命中与
   const item = servingReadyCacheItem();
   const storedRow = {
     id: item.id,
-    ext: item.ext,
     storage_slug: item.storage_slug
   };
   const readyRow = {
@@ -1202,9 +1201,9 @@ test("[Server/缓存与 Redis] 概览以固定核心键准确测量当前 Redis 
 test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限、批次和取消边界", async () => {
   type MeasuredKey = readonly [string, number, number];
   const measurements = new Map<string, MeasuredKey>([
-    ["imageshow:cache:images:meta", ["hash", 10, 12]],
-    ["imageshow:cache:images:items", ["hash", 20, 3]],
-    ["imageshow:cache:images:derived:filter:a", ["zset", 30, 2]]
+    ["imageshow:cache:variants:meta", ["hash", 10, 12]],
+    ["imageshow:cache:variants:items", ["hash", 20, 3]],
+    ["imageshow:cache:variants:derived:filter:a", ["zset", 30, 2]]
   ]);
   const pipelineSizes: number[] = [];
   const scanPages = new Map<string, [string, string[]]>([
@@ -1213,14 +1212,14 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
       [
         "1",
         [
-          "imageshow:cache:images:meta",
-          "imageshow:cache:images:items",
-          "imageshow:cache:images:meta"
+          "imageshow:cache:variants:meta",
+          "imageshow:cache:variants:items",
+          "imageshow:cache:variants:meta"
         ]
       ]
     ],
     ["1", ["0", [
-      "imageshow:cache:images:derived:filter:a",
+      "imageshow:cache:variants:derived:filter:a",
       "imageshow:other"
     ]]]
   ]);
@@ -1281,9 +1280,9 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
       scan: async () => [
         "0",
         [
-          "imageshow:cache:images:meta",
-          "imageshow:cache:images:items",
-          "imageshow:cache:images:derived:filter:a"
+          "imageshow:cache:variants:meta",
+          "imageshow:cache:variants:items",
+          "imageshow:cache:variants:derived:filter:a"
         ]
       ]
     } as never,

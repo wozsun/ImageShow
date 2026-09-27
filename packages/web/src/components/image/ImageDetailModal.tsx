@@ -1,3 +1,4 @@
+import { imageVariantUrl } from "@imageshow/shared/browser";
 import {
   Component,
   Suspense,
@@ -211,9 +212,11 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
         ? "打开来源页面"
         : "暂无来源";
   const originalHref = showAdminDetails ? (item.original_url?.trim() ?? "") : "";
+  const displayWidth = item.variants.medium.width || item.width;
+  const displayHeight = item.variants.medium.height || item.height;
   const imageAspectRatio =
-    item.width > 0 && item.height > 0
-      ? `${item.width} / ${item.height}`
+    displayWidth > 0 && displayHeight > 0
+      ? `${displayWidth} / ${displayHeight}`
       : "16 / 9";
 
   return (
@@ -248,8 +251,8 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
             <ProgressiveImage
               key={item.id}
               imageKey={item.id}
-              thumbSrc={item.thumb_url}
-              fullSrc={item.object_url}
+              thumbSrc={imageVariantUrl(item, "small")}
+              fullSrc={imageVariantUrl(item, "medium")}
               alt={title}
               className="image-detail-image"
               style={{ aspectRatio: imageAspectRatio }}
@@ -259,10 +262,10 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                 <header className="image-detail-head" ref={titleHeaderRef}>
                   <div className="image-detail-title-row">
                     <h2>
-                      {item.object_url.trim() ? (
+                      {item.base_url ? (
                         <a
                           className="image-detail-title-link"
-                          href={item.object_url}
+                          href={imageVariantUrl(item, "large")}
                           target="_blank"
                           rel="noreferrer noopener"
                           referrerPolicy="no-referrer"
@@ -348,7 +351,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                       </>
                     )}
                     <dt>尺寸</dt>
-                    <dd>{formatDimensions(item.width, item.height)}</dd>
+                    <dd>{formatDimensions(displayWidth, displayHeight)}</dd>
                     {imageTime && (
                       <>
                         <dt>图片时间</dt>

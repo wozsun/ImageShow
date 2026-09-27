@@ -40,8 +40,7 @@ await runIntegrationScenario(async (runtime) => {
   ];
   for (const [index, id] of ids.entries()) {
     await pool.query(
-      `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, image_time, title, width, height)
-       VALUES ($1, 'integration-admin', 'ready', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, $4, 1600, 900)`,
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,image_time,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local','pc','dark',NULL,$3,$4,1600,900,GREATEST(1,1),$2,1600,900,GREATEST(1,1),$2,1600,900,GREATEST(1,1),$2)`,
       [
         id,
         createHash("md5").update(id).digest("hex"),
@@ -59,7 +58,7 @@ await runIntegrationScenario(async (runtime) => {
       headers: etag ? { "If-None-Match": etag } : {}
     });
   const sortedKeys = (value: object) => Object.keys(value).sort();
-  const showKeys = ["id", "title", "thumb_url", "width", "height"].sort();
+  const showKeys = ["id", "title", "base_url", "width", "height"].sort();
   const galleryKeys = [
     ...showKeys,
     "author",
@@ -158,7 +157,7 @@ await runIntegrationScenario(async (runtime) => {
       assert.equal(response.status, 200);
       assert.equal(response.headers.get("cache-control"), "public, max-age=30, s-maxage=60");
       const body = await response.json();
-      assert.deepEqual(sortedKeys(body), ["items", "next_cursor", "ok"]);
+      assert.deepEqual(sortedKeys(body), ["base_urls", "items", "next_cursor", "ok"]);
       assert.deepEqual(
         body.items.map((item: { id: string }) => item.id),
         expected(order)
@@ -200,7 +199,7 @@ await runIntegrationScenario(async (runtime) => {
         "image_time",
         "description",
         "source",
-        "object_url",
+        "variants",
         "original_url"
       ].sort()
     );

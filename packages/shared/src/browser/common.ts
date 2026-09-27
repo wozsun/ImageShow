@@ -30,8 +30,6 @@ export function normalizeHttpsUrlInput(value: string): string | null {
 
 export const ingestionBatchHardLimit = 3_600;
 export const ingestionQueueSnapshotMaxItems = 100;
-export const configBundleMaxBytes = 1024 * 1024;
-export const configBundleRequestMaxBytes = configBundleMaxBytes + 64 * 1024;
 export const adminImagePageLimit = 60;
 export const altchaSolveTimeoutMs = 60_000;
 

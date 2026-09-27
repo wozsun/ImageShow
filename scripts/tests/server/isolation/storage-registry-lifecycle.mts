@@ -25,22 +25,20 @@ await runIntegrationScenario(async (runtime) => {
   const objectAccess = await import("../../../../packages/server/src/storage/objects/access.ts");
   {
     const { createHttpApp } = await import("../../../../packages/server/src/http-app.ts");
-    const { createConfigBundle } =
-      await import("../../../../packages/server/src/config/bundle/service.ts");
     const originalDomain = runtime.runtimeConfigStore.getRuntimeConfig().site.domain;
     await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { domain: "main.example.test" } });
     const local = (await registry.resolveStorageAccess("local")).driver;
-    const key = storageObjectKey("00000000-0000-7000-8000-0000000000a5", "webp");
+    const key = storageObjectKey("00000000-0000-7000-8000-0000000000a5");
     const bytes = Buffer.from("synthetic-local-public-image");
-    await local.writeBuffer("full", key, bytes, "image/webp");
-    await local.writeBuffer("thumbs", key, bytes, "image/webp");
+    await local.writeBuffer("large", key, bytes, "image/webp");
+    await local.writeBuffer("small", key, bytes, "image/webp");
     const app = createHttpApp({
       businessGateIsOpen: () => true,
       requireRedis: async () => undefined
     });
     const request = (
       host: string,
-      path = `/pictures/full/${key}`,
+      path = `/pictures/large/${key}`,
       method = "GET",
       headers: Record<string, string> = {}
     ) =>
@@ -55,11 +53,9 @@ await runIntegrationScenario(async (runtime) => {
       assert.equal(registry.publishedLocalPublicUrl(), "https://images.example.test/pictures");
       assert.equal((await registry.resolveStorageAccess("local")).driver, local);
       assert.equal(
-        publicUrls.directStorageObjectUrl(await registry.getStorageBackend("local"), "full", key),
-        `https://images.example.test/pictures/full/${key}`
+        publicUrls.directStorageObjectUrl(await registry.getStorageBackend("local"), "large", key),
+        `https://images.example.test/pictures/large/${key}`
       );
-      const pkg = await createConfigBundle();
-      assert.ok(pkg.storage_backends.every((backend) => backend.slug !== "local"));
       await assert.rejects(
         backendUpdate.updateStorageBackend("local", {
           public_base_url: "https://main.example.test/pictures"
@@ -86,9 +82,6 @@ await runIntegrationScenario(async (runtime) => {
         await next();
       });
       registerSettingsRoutes(settingsApp as unknown as Hono);
-      const { registerAdvancedConfigRoutes } =
-        await import("../../../../packages/server/src/routes/advanced-config.ts");
-      registerAdvancedConfigRoutes(settingsApp as unknown as Hono);
       const configFile = join(runtime.dataDirectory, "config.json");
       const previousFile = await readFile(configFile, "utf8");
       try {
@@ -110,13 +103,13 @@ await runIntegrationScenario(async (runtime) => {
         await writeFile(configFile, previousFile);
       }
 
-      const fullConfigRequest = (config: unknown, validate = false) =>
+      const fullConfigRequest = (config: unknown) =>
         settingsApp.request(
-          `http://main.example.test/api/admin/advanced-config/runtime${validate ? "/validate" : ""}`,
+          "http://main.example.test/api/admin/settings",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ config })
+            body: JSON.stringify(config)
           }
         );
       const savedConfig = structuredClone(runtime.runtimeConfigStore.getRuntimeConfig());
@@ -124,24 +117,18 @@ await runIntegrationScenario(async (runtime) => {
         ...savedConfig,
         site: { ...savedConfig.site, assets_base_url: "https://main.example.test/static" }
       };
-      for (const validate of [true, false]) {
-        const result = await fullConfigRequest(badAssets, validate);
+      {
+        const result = await fullConfigRequest(badAssets);
         assert.equal(result.status, 400);
         assert.equal((await result.json()).code, "validation_error");
       }
-      const badSettings = await settingsApp.request("http://main.example.test/api/admin/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ site: { assets_base_url: badAssets.site.assets_base_url } })
-      });
-      assert.equal(badSettings.status, 400);
       assert.deepEqual(runtime.runtimeConfigStore.getRuntimeConfig(), savedConfig);
       const conflictConfig = {
         ...savedConfig,
         site: { ...savedConfig.site, domain: "images.example.test" }
       };
-      for (const validate of [true, false]) {
-        const result = await fullConfigRequest(conflictConfig, validate);
+      {
+        const result = await fullConfigRequest(conflictConfig);
         assert.equal(result.status, 400);
         assert.equal((await result.json()).code, "storage_public_url_host_conflict");
         assert.deepEqual(runtime.runtimeConfigStore.getRuntimeConfig(), savedConfig);
@@ -151,7 +138,6 @@ await runIntegrationScenario(async (runtime) => {
         ...savedConfig,
         site: { ...savedConfig.site, domain: "new-main.example.test" }
       };
-      assert.equal((await fullConfigRequest(renamedConfig, true)).status, 200);
       assert.equal((await fullConfigRequest(renamedConfig)).status, 200);
       assert.equal(
         runtime.runtimeConfigStore.getRuntimeConfig().site.domain,
@@ -199,16 +185,16 @@ await runIntegrationScenario(async (runtime) => {
         "/api/admin/storage/backends",
         "/random",
         "/livez",
-        `/images/full/${key}`,
-        `/pictures/full/not-a-key`,
+        `/images/large/${key}`,
+        `/pictures/large/not-a-key`,
         `/pictures/original/${key}`,
-        `/pictures/full/${key}.candidate-x`
+        `/pictures/large/${key}.candidate-x`
       ]) {
         for (const method of ["GET", "HEAD", "OPTIONS"])
           assert.equal((await request("images.example.test", path, method)).status, 404);
       }
       assert.equal((await request("images.example.test", undefined, "POST")).status, 404);
-      const thumb = await request("images.example.test", `/pictures/thumbs/${key}`);
+      const thumb = await request("images.example.test", `/pictures/small/${key}`);
       assert.deepEqual(Buffer.from(await thumb.arrayBuffer()), bytes);
       await runtime.runtimeConfigStore.updateRuntimeConfig({
         site: { assets_base_url: "https://images.example.test/static" }
@@ -255,7 +241,7 @@ await runIntegrationScenario(async (runtime) => {
           "overlapping prefixes dispatch valid asset paths to the shared file handler"
         );
         const image = await sharedResources.request(
-          `http://internal.test${localRoot}/full/${key}`,
+          `http://internal.test${localRoot}/large/${key}`,
           { headers: { Host: "images.example.test" } }
         );
         assert.equal(image.status, 200);
@@ -270,14 +256,14 @@ await runIntegrationScenario(async (runtime) => {
       });
       await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { assets_base_url: "" } });
       await database.pool.query(
-        "INSERT INTO metadata (id, storage_slug, device, brightness, ext, md5, created_by) VALUES ($1, 'local', 'pc', 'light', 'webp', $2, 'integration-admin')",
+        "INSERT INTO metadata (id,storage_slug,device,brightness,created_by,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'local','pc','light','integration-admin',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)",
         ["00000000-0000-7000-8000-0000000000a5", "0".repeat(32)]
       );
-      const main = await request("main.example.test", `/images/full/${key}`);
+      const main = await request("main.example.test", `/images/large/${key}`);
       assert.equal(main.status, 302);
       assert.equal(
         main.headers.get("Location"),
-        `https://images.example.test/pictures/full/${key}`
+        `https://images.example.test/pictures/large/${key}`
       );
       await database.pool.query("DELETE FROM metadata WHERE id=$1", [
         "00000000-0000-7000-8000-0000000000a5"
@@ -302,7 +288,7 @@ await runIntegrationScenario(async (runtime) => {
         public_base_url: "https://new-images.example.test"
       });
       assert.equal((await request("images.example.test")).status, 404);
-      const newResponse = await request("new-images.example.test", `/full/${key}`);
+      const newResponse = await request("new-images.example.test", `/large/${key}`);
       assert.equal(newResponse.headers.get("ETag"), etag);
       await newResponse.body?.cancel();
       await backendUpdate.updateStorageBackend("local", {
@@ -310,7 +296,7 @@ await runIntegrationScenario(async (runtime) => {
       });
       const encodedUrl = publicUrls.directStorageObjectUrl(
         await registry.getStorageBackend("local"),
-        "thumbs",
+        "small",
         key
       );
       const encodedResponse = await request(
@@ -322,20 +308,20 @@ await runIntegrationScenario(async (runtime) => {
       await backendUpdate.updateStorageBackend("local", {
         public_base_url: "https://new-images.example.test"
       });
-      await removeDriverObject(local, "full", key);
-      const missing = await request("new-images.example.test", `/full/${key}`);
+      await removeDriverObject(local, "large", key);
+      const missing = await request("new-images.example.test", `/large/${key}`);
       assert.equal(missing.status, 404);
       assert.equal(missing.headers.get("Cache-Control"), "no-store");
       registry.invalidateStorageBackendRegistry();
       assert.equal((await registry.getStorageBackend("local")).type, "local");
       assert.equal(registry.publishedLocalPublicUrl(), "https://new-images.example.test");
       await backendUpdate.updateStorageBackend("local", { public_base_url: "" });
-      assert.equal((await request("new-images.example.test", `/thumbs/${key}`)).status, 404);
+      assert.equal((await request("new-images.example.test", `/small/${key}`)).status, 404);
     } finally {
       await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { assets_base_url: "" } });
       await backendUpdate.updateStorageBackend("local", { public_base_url: "" });
-      await removeDriverObject(local, "full", key);
-      await removeDriverObject(local, "thumbs", key);
+      await removeDriverObject(local, "large", key);
+      await removeDriverObject(local, "small", key);
       await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { domain: originalDomain } });
     }
   }
@@ -359,17 +345,13 @@ await runIntegrationScenario(async (runtime) => {
     [registryBackend, JSON.stringify(registryConfig)]
   );
   registry.invalidateStorageBackendRegistry();
-  const registryExampleKey = storageObjectKey(
-    "00000000-0000-7000-8000-0000000000aa",
-    "webp"
-  );
+  const registryExampleKey = storageObjectKey("00000000-0000-7000-8000-0000000000aa");
   const projectedRegistryUrls = await publicUrls.publicImageUrl(
-    { id: "00000000-0000-7000-8000-0000000000aa", ext: "webp" },
-    registryBackend
+    { id: "00000000-0000-7000-8000-0000000000aa" }, registryBackend, "large"
   );
   assert.equal(
     projectedRegistryUrls,
-    "https://cdn.example.com/images/full/" + registryExampleKey
+    "https://cdn.example.com/images/large/" + registryExampleKey
   );
   const { publicShowImageCards } =
     await import("../../../../packages/server/src/images/presenter.ts");
@@ -381,16 +363,16 @@ await runIntegrationScenario(async (runtime) => {
     storage_slug: registryBackend
   };
   const cards = await publicShowImageCards([card, { ...card, storage_slug: "local" }]);
-  assert.equal(cards[0]!.thumb_url, "https://cdn.example.com/images/thumbs/" + registryExampleKey);
-  assert.equal(cards[1]!.thumb_url, "/images/thumbs/" + registryExampleKey);
+  assert.equal(cards[0]!.base_url, "https://cdn.example.com/images");
+  assert.equal(cards[1]!.base_url, "/images");
   const firstRegistryAccess = await registry.resolveStorageAccess(registryBackend);
   assert.equal(
     publicUrls.directStorageObjectUrl(
       firstRegistryAccess.config,
-      "full",
+      "large",
       registryExampleKey
     ),
-    "https://cdn.example.com/images/full/" + registryExampleKey
+    "https://cdn.example.com/images/large/" + registryExampleKey
   );
 
   await backendUpdate.updateStorageBackend(registryBackend, {
@@ -401,10 +383,10 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(
     publicUrls.directStorageObjectUrl(
       presentationRegistryAccess.config,
-      "full",
+      "large",
       registryExampleKey
     ),
-    "https://assets.example.com/images/full/" + registryExampleKey
+    "https://assets.example.com/images/large/" + registryExampleKey
   );
 
   await database.pool.query(
@@ -415,7 +397,7 @@ await runIntegrationScenario(async (runtime) => {
   const replacementRegistryAccess = await registry.resolveStorageAccess(registryBackend);
   assert.notEqual(replacementRegistryAccess.driver, firstRegistryAccess.driver);
   await assert.rejects(
-    () => firstRegistryAccess.driver.exists("full", "retired.webp"),
+    () => firstRegistryAccess.driver.exists("large", "retired.webp"),
     (error: unknown) =>
       error instanceof Error && "code" in error && error.code === "storage_driver_retired"
   );
@@ -469,7 +451,7 @@ await runIntegrationScenario(async (runtime) => {
 
   const inaccessibleAlias = "registry-inaccessible-alias";
   const inaccessibleAliasImage = randomUUID();
-  const inaccessibleAliasKey = storageObjectKey(inaccessibleAliasImage, "webp");
+  const inaccessibleAliasKey = storageObjectKey(inaccessibleAliasImage);
   await database.pool.query(
     "INSERT INTO storage_backend (slug, display_name, type, config) " +
       "VALUES ($1, 'Registry inaccessible alias', 's3', $2::jsonb)",
@@ -483,8 +465,7 @@ await runIntegrationScenario(async (runtime) => {
     ]
   );
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size)
-       VALUES ($1, 'integration-admin', $2, 'pc', 'dark', NULL, 'webp', $3, 1)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin',$2,'pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         inaccessibleAliasImage,
         inaccessibleAlias,
@@ -506,7 +487,7 @@ await runIntegrationScenario(async (runtime) => {
   );
   const visibleStorageListing: StorageDriver["listKeys"] = (prefix) =>
     (async function* () {
-      const keys = prefix === "full" ? [inaccessibleAliasKey] : [];
+      const keys = prefix === "large" ? [inaccessibleAliasKey] : [];
       if (keys.length) yield keys;
       return { complete: true as const, count: keys.length };
     })();
@@ -544,13 +525,13 @@ await runIntegrationScenario(async (runtime) => {
   registry.invalidateStorageBackendRegistry();
   const delayedReadAccess = await registry.resolveStorageAccess(delayedReadBackend);
   await delayedReadAccess.driver.writeBuffer(
-    "full",
+    "large",
     delayedReadKey,
     Buffer.from("must-not-open-through-deleted-alias"),
     "image/webp"
   );
   const delayedReadable = await objectAccess.resolveReadableObject(
-    "full",
+    "large",
     delayedReadKey,
     delayedReadBackend
   );
@@ -565,7 +546,7 @@ await runIntegrationScenario(async (runtime) => {
       error instanceof Error && "code" in error && error.code === "storage_backend_not_found"
   );
   const currentLocalAccess = await registry.resolveStorageAccess("local");
-  await removeDriverObject(currentLocalAccess.driver, "full", delayedReadKey);
+  await removeDriverObject(currentLocalAccess.driver, "large", delayedReadKey);
   await database.pool.query("DELETE FROM storage_backend WHERE slug=$1", [registryBackend]);
   registry.invalidateStorageBackendRegistry();
 
@@ -834,37 +815,6 @@ await runIntegrationScenario(async (runtime) => {
         before
       );
       await mutations.deleteStorageBackend(slug);
-      const imported = ["sort-import-a", "sort-import-b"];
-      await mutations.importStorageBackends(
-        imported.map((slug) => ({
-          slug,
-          display_name: slug,
-          config: s3.settings,
-          enabled: true,
-          is_default: false
-        })),
-        () => undefined,
-        () => undefined
-      );
-      assert.deepEqual(
-        (
-          await database.pool.query(
-            "SELECT sort_order FROM storage_backend WHERE slug=ANY($1::text[]) ORDER BY slug",
-            [imported]
-          )
-        ).rows.map((row) => row.sort_order),
-        [1, 2].map((step) => Math.max(sortOrderMin, Math.min(sortOrderMax, baseline - step)))
-      );
-      assert.deepEqual(
-        (
-          await database.pool.query(
-            "SELECT slug, sort_order FROM storage_backend WHERE NOT slug=ANY($1::text[]) ORDER BY slug",
-            [imported]
-          )
-        ).rows,
-        before
-      );
-      for (const slug of imported) await mutations.deleteStorageBackend(slug);
     }
   } finally {
     await mutations.deleteStorageBackend("capability");

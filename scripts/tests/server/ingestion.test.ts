@@ -724,7 +724,7 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
   ), true);
   const file = ingestionPreparedFile(
     { ...pathPair, generation, execution_token: generation },
-    "image"
+    "large"
   );
   assert.ok(
     ingestionPreparedPath(file).endsWith(
@@ -2943,7 +2943,7 @@ test("[Server/内容接入] 迟到失败接力同 execution 草稿版本且 prep
   const prepared = { generation: pair.image_id, producer_execution_token: pair.image_id };
   const current = { ...pair, prepared };
   const files = ingestionPreparedFiles(pair, prepared);
-  assert.equal(preparedAttemptIsReferenced(current as never, pair, ...files), true);
+  assert.equal(preparedAttemptIsReferenced(current as never, pair, files), true);
   for (const changed of [
     { ...current, session_id: "b".repeat(43) },
     { ...current, image_id: "00000000-0000-7002-8000-00000000008e" },
@@ -2953,8 +2953,8 @@ test("[Server/内容接入] 迟到失败接力同 execution 草稿版本且 prep
       prepared: { ...prepared, producer_execution_token: "00000000-0000-7002-8000-00000000008e" }
     }
   ])
-    assert.equal(preparedAttemptIsReferenced(changed as never, pair, ...files), false);
-  assert.equal(preparedAttemptIsReferenced(null, pair, ...files), false);
+    assert.equal(preparedAttemptIsReferenced(changed as never, pair, files), false);
+  assert.equal(preparedAttemptIsReferenced(null, pair, files), false);
 });
 type RecoveryTestSession = Omit<IngestionSessionSnapshot, "status" | "commit"> & {
   status: string;

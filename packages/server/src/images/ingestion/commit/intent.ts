@@ -279,7 +279,7 @@ export async function acceptIngestionCommitIntents(
         stored.status === "ready" &&
         "prepared" in stored &&
         stored.prepared
-          ? [stored.prepared.md5]
+          ? [stored.prepared.variants.large.md5]
           : []
       )
     )
@@ -416,7 +416,7 @@ export async function acceptIngestionCommitIntents(
             "内容接入任务版本已变化"
           );
         }
-        if (stored.prepared.md5 !== input.expected_md5) {
+        if (stored.prepared.variants.large.md5 !== input.expected_md5) {
           throw new ApiError(
             409,
             "ingestion_prepared_content_changed",
@@ -425,7 +425,7 @@ export async function acceptIngestionCommitIntents(
         }
         assertDuplicateDecision(
           stored.image_id,
-          duplicateSnapshots.get(stored.prepared.md5)!,
+          duplicateSnapshots.get(stored.prepared.variants.large.md5)!,
           input.duplicate_decision
         );
         const executionToken = randomUuidV7();

@@ -13,7 +13,6 @@ type GalleryVirtualWindowProps = {
   cardSubtitle: (card: GalleryImageCard) => string;
   imageQuery: string;
   onOpen: GalleryTileRenderProps["onOpen"];
-  onIntrinsicSize: GalleryTileRenderProps["onIntrinsicSize"];
   positions: readonly GalleryWindowPosition[];
   revealRegistry: GalleryCardRevealRegistry;
   totalHeight: number;
@@ -42,7 +41,6 @@ export const GalleryVirtualWindow = memo(function GalleryVirtualWindow({
   cardSubtitle,
   imageQuery,
   onOpen,
-  onIntrinsicSize,
   positions,
   revealRegistry,
   totalHeight,
@@ -59,7 +57,6 @@ export const GalleryVirtualWindow = memo(function GalleryVirtualWindow({
             revealRegistry={revealRegistry}
             subtitle={cardSubtitle(position.item)}
             onOpen={onOpen}
-            onIntrinsicSize={onIntrinsicSize}
           />
         ) : (
           <GalleryWindowPlaceholder key={`${imageQuery}:${position.id}`} position={position} />

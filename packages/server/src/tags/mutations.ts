@@ -106,7 +106,7 @@ export async function replaceImageTags(
   signal?: AbortSignal
 ) {
   signal?.throwIfAborted();
-  const image = await client.query("SELECT md5 FROM metadata WHERE id = $1", [imageId]);
+  const image = await client.query("SELECT l_md5 FROM metadata WHERE id = $1", [imageId]);
   if (!image.rowCount) throw new ApiError(404, "not_found", "Image not found");
   const { createdTag } = await replaceImageTagAssociations(
     client,
@@ -118,7 +118,7 @@ export async function replaceImageTags(
   signal?.throwIfAborted();
   return {
     createdTag,
-    md5: String(image.rows[0]?.md5 ?? "")
+    large_md5: String(image.rows[0]?.l_md5 ?? "")
   };
 }
 

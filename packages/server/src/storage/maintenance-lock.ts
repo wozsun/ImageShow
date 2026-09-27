@@ -198,7 +198,7 @@ export function withImageStorageMutationLock<T>(
  * read lease would deadlock in PostgreSQL, so fail loudly if a caller violates
  * the lock ordering contract.
  */
-export function withStorageLocationWriteLock<T>(work: StorageLockWork<T>): Promise<T> {
+export async function withStorageLocationWriteLock<T>(work: StorageLockWork<T>): Promise<T> {
   const held = storageLocationLockContext.getStore();
   if (held?.mode === "write") {
     held.signal.throwIfAborted();
@@ -214,7 +214,7 @@ export function withStorageLocationWriteLock<T>(work: StorageLockWork<T>): Promi
   );
 }
 
-export function withStorageLocationWriteAndAdvisoryLock<T>(
+export async function withStorageLocationWriteAndAdvisoryLock<T>(
   key: string,
   work: StorageLockWork<T>
 ): Promise<T> {

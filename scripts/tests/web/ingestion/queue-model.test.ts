@@ -989,6 +989,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     originalWidth: 6002,
     originalHeight: 9000,
     originalSize: 12_345_678,
+    variantQuality: { large: null, medium: 75, small: 65 },
     manifestSource: "weibo" as const,
     batchPosition: 4
   };
@@ -1009,13 +1010,14 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     12
   );
   assert.equal(completedReplayAfterSnapshot.serverHandoffPending, false);
-  assert.equal(completedReplayAfterSnapshot.finalSize, 1);
+  assert.deepEqual(completedReplayAfterSnapshot.variants, adminImageListItem().variants);
   assert.equal(completedReplayAfterSnapshot.draft.source, "");
   assert.equal(completedReplayAfterSnapshot.width, 1600);
   assert.equal(completedReplayAfterSnapshot.height, 900);
   assert.equal(completedReplayAfterSnapshot.originalWidth, 6002);
   assert.equal(completedReplayAfterSnapshot.originalHeight, 9000);
   assert.equal(completedReplayAfterSnapshot.originalSize, 12_345_678);
+  assert.deepEqual(completedReplayAfterSnapshot.variantQuality, { large: null, medium: 75, small: 65 });
   assert.equal(completedReplayAfterSnapshot.manifestSource, "weibo");
   assert.equal(completedReplayAfterSnapshot.batchPosition, 4);
   assert.equal(
@@ -1040,14 +1042,13 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
         original_width: 6002,
         original_height: 9000,
         original_size: 12_345_678,
-        quality: 80,
-        transcoded: true
+        variant_quality: { large: null, medium: 75, small: 65 }
       },
       completed_item: adminImageListItem({
         id: imageId,
         width: 3001,
         height: 4500,
-        image_size: 456_789
+        variants:{large:{width:3001,height:4500,byte_size:456_789},medium:{width:1467,height:2200,byte_size:300000},small:{width:400,height:600,byte_size:50000}}
       })
     },
     ingestionJob({
@@ -1057,12 +1058,15 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   );
   assert.equal(recoveredCompleted.width, 3001);
   assert.equal(recoveredCompleted.height, 4500);
-  assert.equal(recoveredCompleted.finalSize, 456_789);
+  assert.deepEqual(recoveredCompleted.variants, {
+    large: { width: 3001, height: 4500, byte_size: 456_789 },
+    medium: { width: 1467, height: 2200, byte_size: 300_000 },
+    small: { width: 400, height: 600, byte_size: 50_000 }
+  });
   assert.equal(recoveredCompleted.originalWidth, 6002);
   assert.equal(recoveredCompleted.originalHeight, 9000);
   assert.equal(recoveredCompleted.originalSize, 12_345_678);
-  assert.equal(recoveredCompleted.quality, 80);
-  assert.equal(recoveredCompleted.transcoded, true);
+  assert.deepEqual(recoveredCompleted.variantQuality, { large: null, medium: 75, small: 65 });
   assert.equal(recoveredCompleted.manifestSource, "weibo");
   assert.equal(recoveredCompleted.batchPosition, 6);
   assert.equal(
@@ -1092,6 +1096,46 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     true,
     "无本地 owner 的恢复卡片必须立即使用 Server 稳定顺序"
   );
+  const restoredPrepared = ingestionJobFromServerItem({
+    session_id: "A".repeat(43),
+    image_id: "00000000-0000-7091-8000-00000000008e",
+    queue: "import",
+    source_type: "weibo",
+    resolved_image_time: "2026-08-23T01:02:03.456Z",
+    status: "ready",
+    phase: "ready",
+    message: "ready",
+    version: 2,
+    progress_seq: 0,
+    last_semantic_revision: 2,
+    accepted_order: 2,
+    metadata: localPlaceholder.draft,
+    storage_slug: "local",
+    prepared: {
+      preview_url: "/prepared/small",
+      preview_full_url: "/prepared/large",
+      original_width: 6000,
+      original_height: 4000,
+      md5: "a".repeat(32),
+      original_size: 2_000_000,
+      variant_quality: { large: 85, medium: 80, small: 70 },
+      variants: {
+        large: { width: 4200, height: 2800, byte_size: 700_000 },
+        medium: { width: 2200, height: 1467, byte_size: 300_000 },
+        small: { width: 600, height: 400, byte_size: 50_000 }
+      },
+      detected_brightness: "light",
+      duplicate_count: 0
+    }
+  });
+  assert.equal(restoredPrepared.originalWidth, 6000);
+  assert.equal(restoredPrepared.originalHeight, 4000);
+  assert.deepEqual(restoredPrepared.variantQuality, { large: 85, medium: 80, small: 70 });
+  assert.deepEqual(restoredPrepared.variants, {
+    large: { width: 4200, height: 2800, byte_size: 700_000 },
+    medium: { width: 2200, height: 1467, byte_size: 300_000 },
+    small: { width: 600, height: 400, byte_size: 50_000 }
+  });
   assert.equal(
     completedReplayDuringActiveSnapshot.browserDisplayReleased,
     undefined,
@@ -1111,6 +1155,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
       id: "00000000-0000-7092-8000-00000000008e"
     })
   });
+  assert.equal(restoredCompletedWithoutOwner.variantQuality, undefined);
   assert.equal(
     restoredCompletedWithoutOwner.browserDisplayReleased,
     true,

@@ -1,4 +1,4 @@
-import { getIngestionMaxLongEdge } from "../../../config/app-settings.ts";
+import { imageVariants } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../../core/database/advisory-locks.ts";
@@ -8,7 +8,6 @@ import { removeIngestionPreparedFiles, writeIngestionPreparedFile } from "../raw
 import { detectBrightness } from "../../brightness.ts";
 import { withNormalizationAdmission } from "../../normalization-admission.ts";
 import {
-  sha256Buffer,
   transcodeStoredImage
 } from "../../processing.ts";
 import { getDuplicateMatchCountByMd5 } from "../../read-models/duplicates.ts";
@@ -37,8 +36,7 @@ import { withIngestionPreparationAdmission } from "./preparation-admission.ts";
 export function preparedAttemptIsReferenced(
   current: StoredIngestionSession | null,
   expected: Pick<IngestionSessionSnapshot, "session_id" | "image_id">,
-  imageFile: string,
-  thumbnailFile: string
+  files: readonly string[]
 ) {
   return Boolean(
     current &&
@@ -47,7 +45,7 @@ export function preparedAttemptIsReferenced(
     "prepared" in current &&
     current.prepared &&
     ingestionPreparedFiles(current, current.prepared).every(
-      (file, index) => file === [imageFile, thumbnailFile][index]
+      (file, index) => file === files[index]
     )
   );
 }
@@ -55,8 +53,7 @@ export function preparedAttemptIsReferenced(
 async function cleanupPreparedAttempt(
   repository: IngestionSessionRepository,
   session: IngestionSessionSnapshot,
-  imageFile: string,
-  thumbnailFile: string
+  files: readonly string[]
 ) {
   const removeIfUnreferenced = async () => {
     const current = await repository.readSession(session.owner, session.session_id);
@@ -65,10 +62,9 @@ async function cleanupPreparedAttempt(
     if (preparedAttemptIsReferenced(
       current,
       session,
-      imageFile,
-      thumbnailFile
+      files
     )) return;
-    await removeIngestionPreparedFiles([imageFile, thumbnailFile]);
+    await removeIngestionPreparedFiles(files);
   };
   try {
     await removeIfUnreferenced();
@@ -106,8 +102,7 @@ export async function prepareIngestionSessionSnapshot(
     generation: preparedGeneration,
     execution_token: session.execution_token
   };
-  const preparedImageFile = ingestionPreparedFile(attemptIdentity, "image");
-  const preparedThumbnailFile = ingestionPreparedFile(attemptIdentity, "thumb");
+  const preparedFiles = imageVariants.map((variant) => ingestionPreparedFile(attemptIdentity, variant));
   const rawPath = ingestionRawPath(
     session,
     session.raw_generation
@@ -121,19 +116,13 @@ export async function prepareIngestionSessionSnapshot(
     const normalizedState = await withNormalizationAdmission(signal, async () => {
       current = await updateIngestionExecutionProgress(repository, current, {
         phase: "normalizing",
-        message: "校验格式、压缩原图并生成缩略图",
+        message: "校验格式并生成大、中、小三档图片",
         progress: null
       });
       dependencies.onNormalizationAdmitted?.();
       const normalized = await transcode(
         rawPath,
-        {
-          ...runtime.normalize,
-          max_long_edge: Math.min(
-            runtime.normalize.max_long_edge,
-            getIngestionMaxLongEdge()
-          )
-        },
+        runtime.normalize,
         signal
       );
       signal.throwIfAborted();
@@ -143,7 +132,7 @@ export async function prepareIngestionSessionSnapshot(
         message: "确认图片尺寸、设备类型和明暗",
         progress: null
       });
-      const detectedBrightness = await detectBrightness(normalized.thumbnail);
+      const detectedBrightness = await detectBrightness(normalized.variants.small.data);
       signal.throwIfAborted();
       current = await refreshIngestionExecutionSession(repository, current);
       return { normalized, detectedBrightness };
@@ -151,22 +140,21 @@ export async function prepareIngestionSessionSnapshot(
     const { normalized, detectedBrightness } = normalizedState;
     current = await updateIngestionExecutionProgress(repository, current, {
       phase: "staging",
-      message: "在本地保存处理结果和缩略图",
+      message: "在本地保存三档处理结果",
       progress: null
     });
     signal.throwIfAborted();
     enteredLocalWrite = true;
-    const writes = await Promise.allSettled([
-      writeIngestionPreparedFile(preparedImageFile, normalized.processed, signal),
-      writeIngestionPreparedFile(preparedThumbnailFile, normalized.thumbnail, signal)
-    ]);
+    const writes = await Promise.allSettled(imageVariants.map((variant, index) =>
+      writeIngestionPreparedFile(preparedFiles[index]!, normalized.variants[variant].data, signal)
+    ));
     const failure = writes.find(
       (result): result is PromiseRejectedResult => result.status === "rejected"
     );
     if (failure) throw failure.reason;
     signal.throwIfAborted();
     current = await refreshIngestionExecutionSession(repository, current);
-    const duplicateCount = await getDuplicateMatchCountByMd5(normalized.md5);
+    const duplicateCount = await getDuplicateMatchCountByMd5(normalized.variants.large.facts.md5);
     return mutateIngestionExecution(repository, current, (latest) => {
       const nextWithoutHash = {
         ...latest,
@@ -184,16 +172,11 @@ export async function prepareIngestionSessionSnapshot(
           original_size: normalized.sourceSize,
           original_width: normalized.sourceWidth,
           original_height: normalized.sourceHeight,
-          width: normalized.width,
-          height: normalized.height,
-          ext: normalized.ext,
-          md5: normalized.md5,
-          prepared_image_sha256: sha256Buffer(normalized.processed),
-          prepared_thumbnail_sha256: sha256Buffer(normalized.thumbnail),
-          size: normalized.size,
-          thumbnail_size: normalized.thumbnail.byteLength,
-          quality: normalized.quality,
-          transcoded: normalized.transcoded,
+          variants: {
+            large: normalized.variants.large.facts,
+            medium: normalized.variants.medium.facts,
+            small: normalized.variants.small.facts
+          },
           detected_brightness: detectedBrightness,
           duplicate_count: duplicateCount,
           generation: preparedGeneration
@@ -230,7 +213,7 @@ export async function prepareIngestionSessionSnapshot(
   try {
     const paths = [
       rawPath,
-      ...[preparedImageFile, preparedThumbnailFile].flatMap((file) => {
+      ...preparedFiles.flatMap((file) => {
         const path = ingestionPreparedPath(file);
         return [path, path + ".part"];
       })
@@ -246,8 +229,7 @@ export async function prepareIngestionSessionSnapshot(
       await cleanupPreparedAttempt(
         repository,
         session,
-        preparedImageFile,
-        preparedThumbnailFile
+        preparedFiles
       );
     }
     throw error;

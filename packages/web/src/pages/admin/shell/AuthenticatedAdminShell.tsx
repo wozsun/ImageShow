@@ -57,11 +57,6 @@ const SettingsPage = lazy(() =>
     default: module.SettingsPage
   }))
 );
-const AdvancedConfigPage = lazy(() =>
-  adminRouteModuleLoaders.advancedConfig().then((module) => ({
-    default: module.AdvancedConfigPage
-  }))
-);
 const StorageSettings = lazy(() =>
   adminRouteModuleLoaders.storage().then((module) => ({
     default: module.StorageSettings
@@ -201,7 +196,6 @@ function AuthenticatedAdminLayout({
               <Route path="authors" element={<VocabularyAdmin key="authors" kind="authors" />} />
               <Route path="account" element={<AccountSettings />} />
               {isSuper && <Route path="site" element={<SettingsPage />} />}
-              {isSuper && <Route path="advanced-config" element={<AdvancedConfigPage />} />}
               {isSuper && <Route path="storage" element={<StorageSettings />} />}
               {isSuper && <Route path="users" element={<UserAdmin />} />}
               <Route path="check" element={<CheckPage />} />

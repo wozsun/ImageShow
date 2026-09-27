@@ -1,8 +1,9 @@
 import { storageObjectKey } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import sharp from "sharp";
+import { randomUuidV7 } from "../../../../packages/server/src/core/uuid.ts";
 import type { Pool } from "pg";
 import type { IntegrationRuntime } from "./integration-runtime.mts";
 
@@ -29,37 +30,23 @@ export async function createMaintenanceFixture(runtime: IntegrationRuntime) {
   await requireOperationalRedis();
   const registry = runtime.storageRegistry;
   const access = await registry.resolveStorageAccess("local");
-  const paths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
   const body = await sharp({ create: { width: 2, height: 2, channels: 3, background: "red" } })
-    .png()
+    .webp()
     .toBuffer();
   const createImage = async (
     options: { source?: boolean; thumbnail?: Buffer; confirmedSize?: number } = {}
   ) => {
-    const id = randomUUID();
-    const key = storageObjectKey(id, "png");
-    const thumb = paths.thumbnailObjectKey(id);
+    const id = randomUuidV7();
+    const key = storageObjectKey(id);
+    const thumb = key;
+    const small = options.thumbnail ?? body;
     await runtime.databasePools.pool.query(
-      `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size)
-       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'png', $2, $3, $4)`,
-      [
-        id,
-        createHash("md5").update(body).digest("hex"),
-        body.length,
-        options.confirmedSize ?? 0
-      ]
+      "INSERT INTO metadata (id,created_by,storage_slug,device,brightness,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',2,2,$2,$3,2,2,$2,$3,2,2,$4,$5)",
+      [id,body.length,createHash("md5").update(body).digest("hex"),small.length,createHash("md5").update(small).digest("hex")]
     );
-    if (options.source !== false) await access.driver.writeBuffer("full", key, body, "image/png");
-    if (options.thumbnail)
-      await access.driver.writeBuffer("thumbs", thumb, options.thumbnail, "image/webp");
-    const row = async () =>
-      (
-        await runtime.databasePools.pool.query<{
-          storage_slug: string;
-          ext: string;
-          thumbnail_size: string;
-        }>("SELECT storage_slug, ext, thumbnail_size FROM metadata WHERE id=$1", [id])
-      ).rows[0]!;
+    if (options.source !== false) for(const prefix of ["large","medium"] as const) await access.driver.writeBuffer(prefix,key,body,"image/webp");
+    if (options.thumbnail) await access.driver.writeBuffer("small",thumb,small,"image/webp");
+    const row=async()=>(await runtime.databasePools.pool.query<{storage_slug:string;s_byte_size:string}>("SELECT storage_slug,s_byte_size FROM metadata WHERE id=$1",[id])).rows[0]!;
     return { id, key, thumb, row };
   };
   return { access, body, createImage };

@@ -51,11 +51,11 @@ export async function recoverIngestionCommitDuplicateConflict(
     !current.commit
   )
     return false;
-  const counts = await readDuplicateMatchCountsByMd5([current.prepared.md5]);
+  const counts = await readDuplicateMatchCountsByMd5([current.prepared.variants.large.md5]);
   await repository.mutateSemantic(
     current,
     current.version,
-    ingestionSessionWithDuplicateConflict(current, counts.get(current.prepared.md5)!)
+    ingestionSessionWithDuplicateConflict(current, counts.get(current.prepared.variants.large.md5)!)
   );
   return true;
 }

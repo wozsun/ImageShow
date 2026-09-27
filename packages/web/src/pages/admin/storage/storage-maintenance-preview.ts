@@ -13,10 +13,6 @@ function issueList(
     : [];
 }
 
-function issueId(issue: StorageIssue) {
-  return typeof issue.id === "string" ? issue.id : "";
-}
-
 function issueText(issue: StorageIssue, key: string) {
   return typeof issue[key] === "string" ? issue[key] : "";
 }
@@ -32,22 +28,13 @@ export function storageMaintenancePreview(result: unknown) {
   const storage = result as Record<string, unknown>;
   const requiredKeys = [
     "missing_objects",
-    "missing_thumbs",
-    "pending_thumbnail_repairs",
     "orphan_objects",
-    "orphan_thumbs",
     "incomplete_listings",
     "unavailable_backends"
   ];
   if (!requiredKeys.every((key) => Array.isArray(storage[key]))) return null;
 
   const missingObjects = issueList(storage, "missing_objects");
-  const missingObjectIds = new Set(missingObjects.map(issueId).filter(Boolean));
-  const missingThumbs = issueList(storage, "missing_thumbs");
-  const repairCandidates = [
-    ...missingThumbs,
-    ...issueList(storage, "pending_thumbnail_repairs")
-  ];
   const incompleteListings = issueList(storage, "incomplete_listings");
   const unavailableBackends = issueList(storage, "unavailable_backends");
   const blockedNamespaces = new Set(incompleteListings.map(issueNamespace).filter(Boolean));
@@ -66,36 +53,19 @@ export function storageMaintenancePreview(result: unknown) {
   const groupBlocked = (issue: StorageIssue) => blockedNamespaces.has(issueNamespace(issue));
   const repairBlocked = (issue: StorageIssue) =>
     groupBlocked(issue) || unavailableSlugs.has(issueText(issue, "backend"));
-  const repairableThumbnails = repairCandidates.filter(
-    (issue) => !missingObjectIds.has(issueId(issue))
-      && !repairBlocked(issue)
-  ).length;
-  const orphanIssues = [
-    ...issueList(storage, "orphan_objects"),
-    ...issueList(storage, "orphan_thumbs")
-  ];
+  const recoveryCandidates = missingObjects.filter((issue) => !repairBlocked(issue)).length;
+  const orphanIssues = issueList(storage, "orphan_objects");
   const removableObjects = orphanIssues.filter((issue) => !groupBlocked(issue)).length;
   const blockedItems =
-    [
-      ...missingObjects,
-      ...repairCandidates,
-      ...orphanIssues
-    ].filter((issue) => groupBlocked(issue))
-      .length +
-    repairCandidates.filter(
-      (issue) =>
-        !missingObjectIds.has(issueId(issue)) &&
-        !groupBlocked(issue) &&
-        unavailableSlugs.has(issueText(issue, "backend"))
-    ).length;
+    missingObjects.filter(repairBlocked).length + orphanIssues.filter(groupBlocked).length;
 
   return {
-    repairable_thumbnails: repairableThumbnails,
-    missing_originals: missingObjects.length,
+    recovery_candidates: recoveryCandidates,
+    missing_objects: missingObjects.length,
     removable_objects: removableObjects,
     blocked_namespaces: blockedNamespaces.size,
     unavailable_logical_backends: unavailableSlugs.size,
     blocked_items: blockedItems,
-    preview_items: repairableThumbnails + missingObjects.length + removableObjects
+    preview_items: recoveryCandidates + removableObjects
   };
 }

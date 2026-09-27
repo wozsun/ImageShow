@@ -261,7 +261,6 @@ export function GalleryPage({
             cardSubtitle={cardSubtitle}
             imageQuery={imageQuery}
             onOpen={openDetail}
-            onIntrinsicSize={galleryData.reportIntrinsicSize}
             positions={filtersReady ? galleryData.positions : []}
             revealRegistry={revealRegistry}
             totalHeight={filtersReady ? galleryData.snapshot.totalHeight : 0}

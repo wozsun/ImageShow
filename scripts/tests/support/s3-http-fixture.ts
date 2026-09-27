@@ -67,6 +67,17 @@ export async function createS3HttpFixture() {
         }
         objects.set(record.key, record.body);
         response.end();
+      } else if (record.method === "GET" && url.searchParams.get("list-type") === "2") {
+        const prefix = url.searchParams.get("prefix") ?? "";
+        const keys = [...objects.keys()].filter((key) => key.startsWith(prefix)).sort();
+        const start = Number(url.searchParams.get("continuation-token") ?? 0);
+        const end = Math.min(keys.length, start + Number(url.searchParams.get("max-keys") ?? 1000));
+        const escape = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+        response.writeHead(200, { "content-type": "application/xml" });
+        response.end(`<ListBucketResult><IsTruncated>${end < keys.length}</IsTruncated>` +
+          (end < keys.length ? `<NextContinuationToken>${end}</NextContinuationToken>` : "") +
+          keys.slice(start, end).map((key) => `<Contents><Key>${escape(key)}</Key><Size>${objects.get(key)!.length}</Size></Contents>`).join("") +
+          "</ListBucketResult>");
       } else if (record.method === "HEAD" || record.method === "GET") {
         const stored = objects.get(record.key);
         if (!stored) return fail({ status: 404, code: "NoSuchKey", message: "Object not found" });

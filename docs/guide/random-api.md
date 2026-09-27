@@ -39,15 +39,15 @@ Referer 的来源匹配本站 HTTPS origin、同端口子域或 `embed.allowed_o
 | `id` | 完整 UUID 或末 12 位 | 只从匹配到的可用图片中随机选择，可用逗号或重复参数给出多个值 |
 | `seed` | 非空字符串 | 在相同筛选条件和候选集合下固定选取一张图片；区分大小写，不解释日期 |
 | `mode` | `proxy` / `redirect` / `json` | 返回方式；缺省时取设置页的 `proxy` / `redirect` 默认值，`json` 只能显式指定 |
-| `size` | `thumb` / `full` | 图片资源尺寸；缺省时 `proxy` / `redirect` 使用 `site.random_size`（默认 `full`），`json` 提供两种 URL；显式指定时只输出对应尺寸 |
+| `size` | `large` / `medium` / `small` | 选择大、中、小图；所有模式缺省使用 site.random_size，默认 medium |
 | `limit` | 大于 0 的整数 | 仅显式指定 `mode=json` 时有效；缺省为 1，最多返回 200 张 |
 
 `theme` / `tag` / `author` 可填 slug 或显示名，服务端会先解析成 slug，再按字段排序去重并生成
 稳定筛选签名。`theme=null` 只选无主题，`theme=!null` 只选已设主题；排除普通主题仍
 包含空主题。`null` 是保留选择器，不能用作主题标识；JSON 图片响应的无主题为 `null`。
 基础随机、主题、标签和作者筛选都复用
-`imageshow:cache:images:*` 就绪图片投影：无筛选直接使用根层核心 `index:all`，设备 / 轴 / 主题 /
-标签 / 作者 ZSET 与组合结果统一位于 `imageshow:cache:images:derived:*`。核心重建只建立
+`imageshow:cache:variants:*` 就绪图片投影：无筛选直接使用根层核心 `index:all`，设备 / 轴 / 主题 /
+标签 / 作者 ZSET 与组合结果统一位于 `imageshow:cache:variants:derived:*`。核心重建只建立
 根层投影；公开请求首次使用某个属性时立即进入 PostgreSQL fallback，并触发独立的
 后台 keyset 分批构建；一次请求所需的全部缺失属性进入有界进程内串行队列。当前回源与
 后台构建都经过统一公开 PG 准入，属性构建全局最多并发 1、同一属性进程内单飞。索引及其
@@ -82,7 +82,7 @@ registry 不一致只使本次随机请求放弃派生结果，不触发核心�
 
 - 只接受表中十个精确小写键；`device`、`brightness`、`seed`、`mode`、`size`、`limit` 各最多出现一次。原始查询串最多
   4096 字节。
-- `size` 值不区分大小写；空值、未知值、包含额外空白或重复参数返回 400。未指定状态保留到输出阶段。
+- `size` 值不区分大小写；空值、未知值、包含额外空白或重复参数返回 400。未指定时统一使用站点默认尺寸。
 - `theme`、`tag`、`author` 每项最多 64 个字符，每类最多 32 项，三类合计最多 64 项。
   主题 / 作者按去重前提交项计算；标签按规范表达式去除同子句重复词及完全相同子句后计数，
   不同且子句共享的标签分别计数，不进行布尔代数化简。标签的 `all:` 不计入词项长度，
@@ -203,32 +203,27 @@ seed 不进入筛选索引 key，也不读取或更新客户端近期历史。
 
 ## 返回方式
 
-`size` 选择已有的全图或 WebP 缩略图资源，不做按请求动态缩放，也不改变筛选候选、固定 seed
-或客户端近期去重。它可以与三种 `mode`、定向 `id` 或固定 `seed` 分别组合，`id` 与 `seed`
-仍互斥。尺寸选择的缺省行为与显式指定不同：
+`size` 选择已生成的大、中、小 WebP，不做动态缩放，也不改变筛选、seed 或近期去重。
+它可与三种 mode、定向 id 或 seed 组合；id 与 seed 仍互斥。
 
-| `size` | `proxy` / `redirect` | JSON 每项的 URL 字段 |
+| size | proxy / redirect | JSON 每项 |
 | --- | --- | --- |
-| 未指定 | 全图字节 / 全图地址 | `object_url` 和 `thumb_url` |
-| `full` | 全图字节 / 全图地址 | 仅 `object_url` |
-| `thumb` | WebP 缩略图字节 / 缩略图地址 | 仅 `thumb_url` |
+| 未指定 | 站点默认尺寸，默认中图 m | 一个 url，指向默认尺寸 |
+| l | 大图字节 / 大图地址 | 一个 url，指向大图 |
+| m | 中图字节 / 中图地址 | 一个 url，指向中图 |
+| s | 小图字节 / 小图地址 | 一个 url，指向小图 |
 
-显式指定尺寸时，JSON 中另一 URL 字段被省略，不返回空字符串或 `null`。单图和多图应用同一规则。
+JSON 不返回 size 或多个 URL 字段；width、height、byte_size 均对应选中档位。
 
 ```text
-/random?device=pc&mode=proxy&size=thumb
-/random?device=all&mode=redirect&size=full
-/random?device=all&mode=json&size=thumb&limit=5
-/random?device=pc&seed=wallpaper&mode=json&size=full
+/random?device=pc&mode=proxy&size=small
+/random?device=all&mode=redirect&size=large
+/random?device=all&mode=json&size=medium&limit=5
 ```
 
-`mode=proxy` 从图片所属 local 或 S3 后端读取对应尺寸的已入库图片字节，缩略图使用
-`image/webp`，全图使用实际文件类型；并附带
-`X-Image-Info`（设备-明暗-主题-ID，无主题时主题段为空）；它不声明 `Accept-Ranges`。`mode=redirect` 返回 302 跳转到公开 URL。
-域名未设置、为空或为 `example.com` 时，应用提供的图片 URL 使用 `/images/...` 同源路径：
-浏览器会按访问地址解析，API 客户端应以请求 origin 解析 JSON 图片地址及相对 `Location`。
-已配置公开地址的 S3 对象继续返回存储直链。
-这里的 `proxy` 只是返回传输方式，与图片接入模式无关。
+proxy 读取图片当前 local 或 S3 对象，类型统一 image/webp，附带 X-Image-Info，不声明 Accept-Ranges。
+redirect 返回 302，Location 可以是主站同源路径或存储公开直链；json 的 url 始终为绝对 URL。
+没有显式站点域名时，JSON 以当前请求 origin 解析主站资源路径。全程不创建图片记录。
 
 `mode=json` 返回 `application/json`，顶层 `count` 是实际数量，`items` 是图片数组。以下为未指定 `size` 的响应：
 
@@ -241,22 +236,21 @@ seed 不进入筛选索引 key，也不读取或更新客户端近期历史。
       "id": "00000000-0000-7000-8000-000000000001",
       "title": "示例图片",
       "author": "photographer",
-      "object_url": "https://img.example.com/images/full/01/00000000-0000-7000-8000-000000000001.webp",
-      "thumb_url": "https://img.example.com/images/thumbs/01/00000000-0000-7000-8000-000000000001.webp",
+      "url": "https://img.example.com/images/medium/01/00000000-0000-7000-8000-000000000001.webp",
       "device": "pc",
       "brightness": "dark",
       "theme": "theme",
       "tags": ["sample"],
-      "width": 2560,
-      "height": 1440,
+      "width": 2200,
+      "height": 1238,
+      "byte_size": 218000,
       "image_time": "2026-08-03T12:00:00.000Z"
     }
   ]
 }
 ```
 
-`title` 为图片标题，`author` 为作者 slug。`width` / `height` 仍是已入库全图的尺寸，选择缩略图
-不会改写这些元数据。按 ID 定向读取采用同一 JSON 格式及尺寸规则。
+`title` 为图片标题，`author` 为作者 slug。尺寸和字节数对应实际选择的资源；按 ID 定向读取应用同一规则。
 
 站内画廊和展映通过 `/api/images` 获取图片列表，展映使用 `view=show` 并在乱序时打乱返回
 批次。描述、来源及仅向管理员提供的可空原图链接在打开图片详情时读取。列表与随机图共用图片读取和

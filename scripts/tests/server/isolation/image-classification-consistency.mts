@@ -11,7 +11,6 @@ await runIntegrationScenario(async (runtime) => {
     ...(await import("../../../../packages/server/src/core/database/advisory-locks.ts"))
   };
   const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
-  const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
   const imageUpdate = await import("../../../../packages/server/src/images/image-update.ts");
   const localAccess = await registry.resolveStorageAccess("local");
   const readReadyRevision = async () =>
@@ -25,14 +24,13 @@ await runIntegrationScenario(async (runtime) => {
       )
     );
   const classificationRollbackId = randomUUID();
-  const classificationRollbackSource = storageObjectKey(classificationRollbackId, "webp");
+  const classificationRollbackSource = storageObjectKey(classificationRollbackId);
   const classificationRollbackBody = Buffer.from("atomic-classification-rollback");
   const classificationRollbackMd5 = createHash("md5")
     .update(classificationRollbackBody)
     .digest("hex");
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, title)
-       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, 'before')`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,'before',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
         classificationRollbackId,
         classificationRollbackMd5,
@@ -40,14 +38,14 @@ await runIntegrationScenario(async (runtime) => {
       ]
   );
   await localAccess.driver.writeBuffer(
-    "full",
+    "large",
     classificationRollbackSource,
     classificationRollbackBody,
     "image/webp"
   );
   await localAccess.driver.writeBuffer(
-    "thumbs",
-    imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(classificationRollbackSource)!.id),
+    "small",
+    classificationRollbackSource,
     classificationRollbackBody,
     "image/webp"
   );
@@ -86,12 +84,11 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(await readReadyRevision(), revisionBeforeClassificationRollback);
   assert.deepEqual(
     (
-      await database.pool.query("SELECT ext, brightness, title FROM metadata WHERE id=$1", [
+      await database.pool.query("SELECT brightness, title FROM metadata WHERE id=$1", [
         classificationRollbackId
       ])
     ).rows[0],
     {
-      ext: "webp",
       brightness: "dark",
       title: "before"
     }
@@ -120,29 +117,28 @@ await runIntegrationScenario(async (runtime) => {
     "元数据事务失败不得生成存储补偿任务"
   );
   assert.equal(
-    await localAccess.driver.exists("full", classificationRollbackSource),
+    await localAccess.driver.exists("large", classificationRollbackSource),
     true
   );
   await database.pool.query(
     "DELETE FROM metadata WHERE id=$1",
     [classificationRollbackId]
   );
-  await removeDriverObject(localAccess.driver, "full", classificationRollbackSource);
+  await removeDriverObject(localAccess.driver, "large", classificationRollbackSource);
   await removeDriverObject(
     localAccess.driver,
-    "thumbs",
-    imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(classificationRollbackSource)!.id)
+    "small",
+    classificationRollbackSource
   );
 
   const classificationId = randomUUID();
-  const classificationSourceKey = storageObjectKey(classificationId, "webp");
+  const classificationSourceKey = storageObjectKey(classificationId);
   const classificationBody = Buffer.from("classification-metadata-only");
   const classificationMd5 = createHash("md5")
     .update(classificationBody)
     .digest("hex");
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size, status)
-       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, $3, 'ready')`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,'ready',1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2)`,
     [
         classificationId,
         classificationMd5,
@@ -150,14 +146,14 @@ await runIntegrationScenario(async (runtime) => {
       ]
   );
   await localAccess.driver.writeBuffer(
-    "full",
+    "large",
     classificationSourceKey,
     classificationBody,
     "image/webp"
   );
   await localAccess.driver.writeBuffer(
-    "thumbs",
-    imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(classificationSourceKey)!.id),
+    "small",
+    classificationSourceKey,
     classificationBody,
     "image/webp"
   );
@@ -176,24 +172,23 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.deepEqual(
     (
-      await database.pool.query("SELECT ext, brightness FROM metadata WHERE id=$1", [
+      await database.pool.query("SELECT brightness FROM metadata WHERE id=$1", [
         classificationId
       ])
     ).rows[0],
     {
-      ext: "webp",
       brightness: "light"
     }
   );
   assert.equal(
-    await localAccess.driver.exists("full", classificationSourceKey),
+    await localAccess.driver.exists("large", classificationSourceKey),
     true,
     "分类字段变化只修改 PostgreSQL 元数据"
   );
   assert.equal(
     await localAccess.driver.exists(
-      "thumbs",
-      imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(classificationSourceKey)!.id)
+      "small",
+      classificationSourceKey
     ),
     true
   );
@@ -210,29 +205,28 @@ await runIntegrationScenario(async (runtime) => {
     0
   );
   await database.pool.query("DELETE FROM metadata WHERE id=$1", [classificationId]);
-  await removeDriverObject(localAccess.driver, "full", classificationSourceKey);
+  await removeDriverObject(localAccess.driver, "large", classificationSourceKey);
   await removeDriverObject(
     localAccess.driver,
-    "thumbs",
-    imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(classificationSourceKey)!.id)
+    "small",
+    classificationSourceKey
   );
 
   const classificationMissingThumbId = randomUUID();
-  const classificationMissingThumbSource = storageObjectKey(classificationMissingThumbId, "webp");
+  const classificationMissingThumbSource = storageObjectKey(classificationMissingThumbId);
   const classificationMissingThumbBody = Buffer.from("classification-without-thumbnail");
   const classificationMissingThumbMd5 = createHash("md5")
     .update(classificationMissingThumbBody)
     .digest("hex");
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size)
-       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, 0)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,0),$2)`,
     [
         classificationMissingThumbId,
         classificationMissingThumbMd5
       ]
   );
   await localAccess.driver.writeBuffer(
-    "full",
+    "large",
     classificationMissingThumbSource,
     classificationMissingThumbBody,
     "image/webp"
@@ -250,17 +244,16 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.deepEqual(
     (
-      await database.pool.query("SELECT ext, brightness FROM metadata WHERE id=$1", [
+      await database.pool.query("SELECT brightness FROM metadata WHERE id=$1", [
         classificationMissingThumbId
       ])
     ).rows[0],
     {
-      ext: "webp",
       brightness: "light"
     }
   );
   assert.equal(
-    await localAccess.driver.exists("full", classificationMissingThumbSource),
+    await localAccess.driver.exists("large", classificationMissingThumbSource),
     true,
     "明确的分类修改不应依赖缩略图或创建新存储位置"
   );
@@ -268,5 +261,5 @@ await runIntegrationScenario(async (runtime) => {
     "DELETE FROM metadata WHERE id=$1",
     [classificationMissingThumbId]
   );
-  await removeDriverObject(localAccess.driver, "full", classificationMissingThumbSource);
+  await removeDriverObject(localAccess.driver, "large", classificationMissingThumbSource);
 });

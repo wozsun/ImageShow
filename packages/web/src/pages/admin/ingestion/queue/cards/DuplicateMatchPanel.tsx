@@ -1,3 +1,4 @@
+import { imageVariantUrl } from "@imageshow/shared/browser";
 import { ImageThumbnailFrame } from "../../../../../components/image/ImageThumbnailFrame.js";
 import { formatImageClassification, imageDisplayTitle } from "../../../../../lib/ui/formatters.js";
 import type { AdminImageListItem } from "../../../../../lib/types.js";
@@ -47,7 +48,7 @@ export function DuplicateMatchPanel({
               className="duplicate-item"
               onClick={(event) => onOpenDetail(item, event.currentTarget)}
             >
-              <ImageThumbnailFrame src={item.thumb_url} size="small" />
+              <ImageThumbnailFrame src={imageVariantUrl(item, "small")} size="small" />
               <span>{imageDisplayTitle(item)}</span>
               <small>{formatImageClassification(item)}</small>
             </button>

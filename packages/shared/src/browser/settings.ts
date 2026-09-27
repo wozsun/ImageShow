@@ -1,3 +1,4 @@
+import type { NormalizeProfile } from "./image-variants.ts";
 import type { LogLevel, SiteVersionSettings } from "./common.ts";
 import type { ImportSourceTypeDto } from "./ingestion.ts";
 import type { PublicImageOrder, RandomImageSize } from "./images.ts";
@@ -136,20 +137,7 @@ export type WeiboSettings = {
   request_delay_seconds: [number, number];
 };
 
-export type NormalizeSettings = {
-  concurrency: number;
-  quality: number;
-  quality_step: number;
-  min_quality: number;
-  max_long_edge: number;
-  max_size_kb: number;
-  skip_webp_under_kb: number;
-};
-
-export type ThumbnailSettings = {
-  long_edge: number;
-  quality: number;
-};
+export type NormalizeSettings = NormalizeProfile & { concurrency: number };
 
 export type AdminPanelSettings = {
   login_background: string;
@@ -165,7 +153,6 @@ export type RuntimeConfig = {
   import: ImportSettings;
   weibo: WeiboSettings;
   normalize: NormalizeSettings;
-  thumbnail: ThumbnailSettings;
   admin: AdminPanelSettings;
   security: {
     session_ttl_seconds: number;
@@ -190,22 +177,6 @@ export type RuntimeConfig = {
   };
 };
 
-export type SiteSettings = Pick<
-  RuntimeSiteSettings,
-  | "domain"
-  | "icon"
-  | "title"
-  | "header_name"
-  | "root"
-  | "home"
-  | "random_method"
-  | "random_size"
-  | "assets_base_url"
-> & {
-  gallery: Pick<SiteGallerySettings, "enabled" | "order">;
-  show: SiteShowSettings;
-};
-
 export type PublicSiteSettings = Pick<
   RuntimeSiteSettings,
   "icon" | "title" | "description" | "header_name" | "root" | "home" | "icp" | "mps" | "footer"
@@ -214,17 +185,9 @@ export type PublicSiteSettings = Pick<
   show: SiteShowSettings;
 };
 
-export type AdminSiteSettings = Omit<
-  SiteSettings,
-  "domain" | "home" | "icon" | "show" | "gallery"
-> & {
-  gallery: Pick<SiteGallerySettings, "order">;
-  home: Pick<SiteHomeSettings, "background" | "banner_label" | "banner_title">;
-};
-
 export type AdminIngestionSettings = Pick<
   IngestionSettings,
-  "max_file_size_mb" | "max_long_edge" | "list_page_size" | "commit_concurrency"
+  "max_file_size_mb" | "max_long_edge" | "list_page_size"
 >;
 
 export type AdminUploadSettings = Pick<UploadSettings, "max_items" | "browser_concurrency">;
@@ -236,17 +199,12 @@ export type AdminImportSettings = Pick<
 
 export type AdminWeiboSettings = Pick<WeiboSettings, "max_items">;
 
-export type AdminNormalizeSettings = Omit<NormalizeSettings, "quality_step">;
-
 export type AdminSettings = {
-  site: AdminSiteSettings;
   ingestion: AdminIngestionSettings;
   upload: AdminUploadSettings;
   import: AdminImportSettings;
   weibo: AdminWeiboSettings;
-  normalize: AdminNormalizeSettings;
-  thumbnail: ThumbnailSettings;
-  admin: AdminPanelSettings;
+  admin: Pick<AdminPanelSettings, "image_page_size">;
 };
 
 export type SiteConfigDto = {
@@ -254,18 +212,10 @@ export type SiteConfigDto = {
   embed: Pick<EmbedSettings, "enabled">;
 };
 
-export type RuntimeConfigChangeSummaryDto = {
-  access_changes: Array<"site.domain">;
-};
-
 export type AdminSettingsResponseDto = {
   settings: AdminSettings;
 };
 
-export type RuntimeConfigResponseDto = {
+export type RuntimeConfigResponseDto = AdminSettingsResponseDto & {
   config: RuntimeConfig;
-};
-
-export type RuntimeConfigValidationResponseDto = {
-  changes: RuntimeConfigChangeSummaryDto;
 };

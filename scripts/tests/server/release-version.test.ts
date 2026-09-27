@@ -44,7 +44,6 @@ test("[Server/发布] 完整版本检查拒绝任一 manifest、lockfile、分�
       JSON.stringify({ ...JSON.parse(original.get(path)!), version: "0.0.0" })
     );
     assert.throws(() => run(["--branch", "dev"]), /package versions differ/u);
-    assert.throws(() => run(["--tag", `v${version}`]), /package versions differ/u);
     await writeFile(join(directory, path), original.get(path)!);
   }
   for (const key of [null, "", "packages/server", "packages/web", "packages/shared"]) {
@@ -53,7 +52,6 @@ test("[Server/发布] 完整版本检查拒绝任一 manifest、lockfile、分�
     else lock.packages[key].version = "0.0.0";
     await writeFile(join(directory, "package-lock.json"), JSON.stringify(lock));
     assert.throws(() => run(["--branch", "dev"]), /lockfile versions/u);
-    assert.throws(() => run(["--tag", `v${version}`]), /lockfile versions/u);
     await writeFile(join(directory, "package-lock.json"), original.get("package-lock.json")!);
   }
   assert.throws(

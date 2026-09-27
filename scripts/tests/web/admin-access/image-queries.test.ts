@@ -17,13 +17,9 @@ import {
 import { invalidateImageDataAfterMetadataSave } from "../../../../packages/web/src/lib/api/query-invalidation.ts";
 import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
 
-import { adminRoutePreloadPolicies } from "../../../../packages/web/src/pages/admin/shell/admin-route-modules.ts";
 import { createPageLifetimeModuleLoader } from "../../../../packages/web/src/lib/page-lifetime-module-loader.ts";
 import { createPublicRouteModuleLoader } from "../../../../packages/web/src/lib/public-route-modules.ts";
-import {
-  preloadIntentProps,
-  usePreloadIntentProps
-} from "../../../../packages/web/src/lib/ui/preload-intent.ts";
+import { preloadIntentProps } from "../../../../packages/web/src/lib/ui/preload-intent.ts";
 
 import { useImageAdminPageNavigation } from "../../../../packages/web/src/pages/admin/images/useImageAdminPageNavigation.ts";
 import {
@@ -143,7 +139,7 @@ test("[Web/后台访问] 条件读取只让 304 复用旧 ETag，新的 200 表�
     }
   }
 });
-test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用页面生命周期请求", async (t) => {
+test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用页面生命周期请求", async () => {
   let immediatePreloads = 0;
   const immediateBindings = preloadIntentProps(() => {
     immediatePreloads += 1;
@@ -152,14 +148,6 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
   immediateBindings.onFocus?.();
   immediateBindings.onPointerDown?.();
   assert.equal(immediatePreloads, 3);
-
-  assert.deepEqual(adminRoutePreloadPolicies.advancedConfig, {
-    hover: "dwell",
-    delayMs: 150
-  });
-  for (const [route, policy] of Object.entries(adminRoutePreloadPolicies)) {
-    if (route !== "advancedConfig") assert.deepEqual(policy, { hover: "immediate" });
-  }
 
   let importCount = 0;
   let finishImport!: (value: { page: string }) => void;
@@ -174,8 +162,8 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
   const navigationLoad = loadModule();
   assert.strictEqual(navigationLoad, firstLoad);
   assert.equal(importCount, 1);
-  finishImport({ page: "advanced-config" });
-  assert.deepEqual(await firstLoad, { page: "advanced-config" });
+  finishImport({ page: "site" });
+  assert.deepEqual(await firstLoad, { page: "site" });
   assert.strictEqual(loadModule(), firstLoad);
 
   let retryImportCount = 0;
@@ -257,109 +245,8 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
       delete (globalThis as Record<string, unknown>).window;
     }
   }
-
-  const { window, document } = parseHTML(
-    "<!doctype html><html><body><div id=root></div></body></html>"
-  );
-  Object.assign(window, {
-    matchMedia: (query: string) => ({
-      matches: query === "(hover: hover) and (pointer: fine)",
-      media: query,
-      onchange: null,
-      addListener() {},
-      removeListener() {},
-      addEventListener() {},
-      removeEventListener() {},
-      dispatchEvent: () => true
-    })
-  });
-  const clock = installControlledClock(t, window as unknown as Window, {
-    minimumControlledDelayMs: 150,
-    includeGlobalTimers: true,
-    includeDateNow: false
-  });
-  const React = await import("react");
-  const installedGlobals = {
-    window,
-    self: window,
-    document,
-    navigator: window.navigator,
-    Node: window.Node,
-    Element: window.Element,
-    HTMLElement: window.HTMLElement,
-    Event: window.Event,
-    EventTarget: window.EventTarget,
-    MutationObserver: window.MutationObserver,
-    React,
-    IS_REACT_ACT_ENVIRONMENT: true
-  };
-  const previousGlobals = new Map(
-    Object.keys(installedGlobals).map(
-      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
-    )
-  );
-  for (const [key, value] of Object.entries(installedGlobals)) {
-    Object.defineProperty(globalThis, key, {
-      configurable: true,
-      writable: true,
-      value
-    });
-  }
-
-  try {
-    const { createRoot } = await import("react-dom/client");
-    let dwellPreloads = 0;
-    let bindings: ReturnType<typeof usePreloadIntentProps> | undefined;
-    function Harness() {
-      bindings = usePreloadIntentProps(() => {
-        dwellPreloads += 1;
-      }, adminRoutePreloadPolicies.advancedConfig);
-      return React.createElement("button", bindings, "高级配置");
-    }
-
-    const container = document.getElementById("root");
-    assert.ok(container);
-    const root = createRoot(container);
-    await React.act(async () => {
-      root.render(React.createElement(Harness));
-      await Promise.resolve();
-    });
-    assert.ok(bindings);
-
-    bindings.onPointerEnter({ pointerType: "mouse" } as never);
-    await clock.advanceBy(60);
-    bindings.onPointerLeave();
-    await clock.advanceBy(110);
-    assert.equal(dwellPreloads, 0, "短暂 hover 必须可取消");
-
-    bindings.onPointerEnter({ pointerType: "touch" } as never);
-    await clock.advanceBy(170);
-    assert.equal(dwellPreloads, 0, "触摸进入不应伪装成 hover 意图");
-
-    bindings.onPointerEnter({ pointerType: "mouse" } as never);
-    await clock.advanceBy(149);
-    assert.equal(dwellPreloads, 0, "dwell 门槛前不得预加载");
-    await clock.advanceBy(1);
-    assert.equal(dwellPreloads, 1, "持续鼠标 hover 应达到 dwell 门槛");
-
-    bindings.onFocus();
-    assert.equal(dwellPreloads, 2, "键盘 focus 应立即预加载");
-    bindings.onPointerEnter({ pointerType: "mouse" } as never);
-    bindings.onPointerDown();
-    await clock.advanceBy(150);
-    assert.equal(dwellPreloads, 3, "pointerdown 应立即加载并取消待定 dwell");
-
-    await React.act(async () => root.unmount());
-  } finally {
-    for (const [key, descriptor] of previousGlobals) {
-      if (descriptor) {
-        Object.defineProperty(globalThis, key, descriptor);
-      } else {
-        delete (globalThis as Record<string, unknown>)[key];
-      }
-    }
-  }
 });
+
 test("[Web/后台访问] 后台图片数字页由单一目标查询直达并隔离分页 scope", async (t) => {
   const filters = {
     ...emptyImageAdminFilters,
@@ -1127,24 +1014,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         status: 200,
         headers: { "content-type": "application/json" }
       });
-    const image = (serial: string): AdminImageListItemDto => ({
-      ...galleryCard(`00000000-0000-7000-8000-${serial}`),
-      description: "",
-      object_url: `/images/full/${serial.slice(-2)}/00000000-0000-7000-8000-${serial}.webp`,
-      original_url: null,
-      source: null,
-      thumb_url: "",
-      status: "deleted",
-      purge_pending: false,
-      ext: "webp",
-      storage_slug: "local",
-      md5: serial.padStart(32, "0").slice(-32),
-      original: "",
-      image_size: 1,
-      deleted_at: "2026-08-15T00:00:00.000Z",
-      created_at: "2026-08-14T00:00:00.000Z",
-      updated_at: "2026-08-15T00:00:00.000Z"
-    });
+    const image = (serial: string): AdminImageListItemDto => ({...galleryCard(`00000000-0000-7000-8000-${serial}`),description: "",original_url: null,source: null,status: "deleted",purge_pending: false,storage_slug: "local",original: "",deleted_at: "2026-08-15T00:00:00.000Z",created_at: "2026-08-14T00:00:00.000Z",updated_at: "2026-08-15T00:00:00.000Z",base_url:"/images",variants:{large:{width:1600,height:900,byte_size:1024},medium:{width:1200,height:675,byte_size:800},small:{width:600,height:338,byte_size:200}},large_md5:serial.padStart(32, "0").slice(-32)});
     const waitFor = async (condition: () => boolean, message: string) => {
       for (let attempt = 0; attempt < 120; attempt += 1) {
         await React.act(async () => {

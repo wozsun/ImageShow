@@ -1,3 +1,4 @@
+import { imageVariantColumns } from "../variants/record.ts";
 import type {
   Brightness,
   Device,
@@ -127,7 +128,7 @@ async function getPublicImageRecordWithAccess(
   const load = async (reader: DatabaseReader) => {
     const result = await reader.query(
       `SELECT id,
-              ext,
+              ${imageVariantColumns},
               storage_slug,
               description,
               source,

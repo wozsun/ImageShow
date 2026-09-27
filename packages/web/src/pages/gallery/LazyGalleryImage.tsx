@@ -16,8 +16,6 @@ import {
   imageLoadPriority,
   type ImageLoadTaskHandle
 } from "../../components/image/image-load-scheduler.js";
-import type { Device } from "../../lib/types.js";
-import { galleryImageRatio } from "./gallery-layout.js";
 import { type GalleryImageVisibility } from "./gallery-image-visibility.js";
 import { useGalleryImageRuntime } from "./GalleryImageRuntime.js";
 
@@ -47,38 +45,24 @@ function GalleryThumbnailFallbackDevelopmentStats() {
 export const LazyGalleryImage = memo(function LazyGalleryImage({
   src,
   alt,
-  device,
   width,
-  height,
-  measureIntrinsicSize,
-  onIntrinsicSize
+  height
 }: {
   src: string;
   alt: string;
-  device: Device;
   width: number;
   height: number;
-  measureIntrinsicSize: boolean;
-  onIntrinsicSize: (width: number, height: number) => void;
 }) {
   const { scheduler, visibility: visibilityController, galleryPaused } = useGalleryImageRuntime();
   const holderRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const taskRef = useRef<ImageLoadTaskHandle | null>(null);
-  const intrinsicMeasurementRef = useRef({
-    enabled: measureIntrinsicSize,
-    report: onIntrinsicSize
-  });
   const inViewportRef = useRef(false);
   const [visibility, setVisibility] = useState<GalleryImageVisibility>(hiddenVisibility);
   const [renderImage, setRenderImage] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   inViewportRef.current = visibility.inViewport;
-  intrinsicMeasurementRef.current = {
-    enabled: measureIntrinsicSize,
-    report: onIntrinsicSize
-  };
   const setImageRef = useCallback((image: HTMLImageElement | null) => {
     imageRef.current = image;
   }, []);
@@ -143,12 +127,6 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
     void task.result.then((result) => {
       if (!current || taskRef.current !== task) return;
       if (result.status === "completed") {
-        const measurement = intrinsicMeasurementRef.current;
-        if (measurement.enabled
-          && image.naturalWidth > 0
-          && image.naturalHeight > 0) {
-          measurement.report(image.naturalWidth, image.naturalHeight);
-        }
         setLoaded(true);
       } else if (result.status === "failed") {
         setFailed(true);
@@ -174,7 +152,7 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
       className={`tile-image-shell ${loaded ? "loaded" : ""}`}
       style={
         {
-          "--tile-ratio": galleryImageRatio(device, width, height)
+          "--tile-ratio": `${width} / ${height}`
         } as CSSProperties
       }
     >
@@ -191,8 +169,8 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
           loading="eager"
           fetchPriority={visibility.inViewport ? "high" : "auto"}
           decoding="async"
-          width={width > 0 ? width : undefined}
-          height={height > 0 ? height : undefined}
+          width={width}
+          height={height}
           referrerPolicy="no-referrer"
         />
       )}

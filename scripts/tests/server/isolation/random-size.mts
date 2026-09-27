@@ -17,7 +17,8 @@ await runIntegrationScenario(async (runtime) => {
   app.onError((error, context) => handleApiError(context, error));
   registerRandomRoutes(app);
   registerPublicRoutes(app);
-  const full = Buffer.from("synthetic JPEG original bytes");
+  const full = Buffer.from("synthetic WebP large bytes");
+  const medium = Buffer.from("synthetic WebP medium");
   const thumb = Buffer.from("synthetic WebP thumbnail");
   const ids = ["00000000-0000-7000-8000-000000000011", "00000000-0000-7000-8000-000000000022"];
   const streams: Readable[] = [];
@@ -40,13 +41,13 @@ await runIntegrationScenario(async (runtime) => {
   );
   for (const [i, id] of ids.entries()) {
     await runtime.databasePools.pool.query(
-      `INSERT INTO metadata(id,created_by,status,storage_slug,device,brightness,ext,md5,width,height,image_time)
-       VALUES($1,'integration-admin','ready',$2,'pc','dark','jpg',$3,1600,900,now())`,
-      [id, i === 0 ? "local" : "synthetic-s3", String(i).repeat(32)]
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,image_time,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready',$2,'pc','dark',now(),1600,900,$4,$3,1600,900,$5,$3,1600,900,$6,$3)`,
+      [id, i === 0 ? "local" : "synthetic-s3", String(i).repeat(32), full.length, medium.length, thumb.length]
     );
   }
-  await localDriver.writeBuffer("full", storageObjectKey(ids[0]!, "jpg"), full, "image/jpeg");
-  await localDriver.writeBuffer("thumbs", storageObjectKey(ids[0]!, "webp"), thumb, "image/webp");
+  await localDriver.writeBuffer("large", storageObjectKey(ids[0]!), full, "image/webp");
+  await localDriver.writeBuffer("medium", storageObjectKey(ids[0]!), medium, "image/webp");
+  await localDriver.writeBuffer("small", storageObjectKey(ids[0]!), thumb, "image/webp");
   const openLocal = LocalStorageDriver.prototype.openRead;
   mock.method(
     LocalStorageDriver.prototype,
@@ -70,7 +71,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     const key = command.input.Key!;
     s3Keys.push(key);
-    const bytes = key.includes("/thumbs/") ? thumb : full;
+    const bytes = key.includes("/small/") ? thumb : key.includes("/medium/") ? medium : full;
     const body = Readable.from([bytes]);
     streams.push(body);
     return { Body: body, ContentLength: bytes.length, ETag: '"synthetic-s3-etag"' };
@@ -81,7 +82,7 @@ await runIntegrationScenario(async (runtime) => {
       headers: { Referer: "http://images.example/gallery" }
     });
   try {
-    const localPath = `/images/full/${storageObjectKey(ids[0]!, "jpg")}`;
+    const localPath = `/images/large/${storageObjectKey(ids[0]!)}`;
     const original = await app.request(localPath);
     assert.equal(original.status, 200);
     assert.deepEqual(Buffer.from(await original.arrayBuffer()), full);
@@ -110,19 +111,19 @@ await runIntegrationScenario(async (runtime) => {
         );
       }
     }
-    for (const defaultSize of ["full", "thumb"] as const) {
+    for (const defaultSize of ["large", "medium", "small"] as const) {
       await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { random_size: defaultSize } });
       for (const id of ids) {
-        for (const size of [null, "full", "thumb"] as const) {
+        for (const size of [null, "large", "medium", "small"] as const) {
           const query = `id=${id}${size ? `&size=${size}` : ""}`;
           const selectedSize = size ?? defaultSize;
-          const expected = selectedSize === "thumb" ? thumb : full;
+          const expected = selectedSize === "small" ? thumb : selectedSize === "medium" ? medium : full;
           for (const method of ["GET", "HEAD"]) {
             const proxied = await request(`${query}&mode=proxy`, method);
             assert.equal(proxied.status, 200);
             assert.equal(
               proxied.headers.get("content-type"),
-              selectedSize === "thumb" ? "image/webp" : "image/jpeg"
+              "image/webp"
             );
             assert.equal(proxied.headers.get("content-length"), String(expected.length));
             assert.match(proxied.headers.get("cache-control")!, /no-store/);
@@ -135,13 +136,13 @@ await runIntegrationScenario(async (runtime) => {
             if (id === ids[1])
               assert.equal(
                 s3Keys.at(-1),
-                `gallery/${selectedSize === "thumb" ? "thumbs" : "full"}/${storageObjectKey(id, selectedSize === "thumb" ? "webp" : "jpg")}`
+                `gallery/${selectedSize}/${storageObjectKey(id)}`
               );
             const redirected = await request(`${query}&mode=redirect`, method);
             assert.equal(redirected.status, 302);
             assert.equal(
               redirected.headers.get("location"),
-              `/images/${selectedSize === "thumb" ? "thumbs" : "full"}/${storageObjectKey(id, selectedSize === "thumb" ? "webp" : "jpg")}`
+              `/images/${selectedSize}/${storageObjectKey(id)}`
             );
             const json = await request(`${query}&mode=json`, method);
             assert.equal(json.status, 200);
@@ -151,14 +152,14 @@ await runIntegrationScenario(async (runtime) => {
               assert.equal(body.items[0]!.id, id);
               assert.equal(body.items[0]!.width, 1600);
               assert.equal(body.items[0]!.height, 900);
-              assert.equal("object_url" in body.items[0]!, size !== "thumb");
-              assert.equal("thumb_url" in body.items[0]!, size !== "full");
+              assert.equal(body.items[0]!.url, `http://images.example/images/${selectedSize}/${storageObjectKey(id)}`);
+              assert.equal(body.items[0]!.byte_size, expected.length);
             }
           }
         }
       }
     }
-    for (const size of ["full", "thumb"]) {
+    for (const size of ["large", "medium", "small"]) {
       const response = await request(`id=${ids.join(",")}&mode=json&limit=2&size=${size}`);
       assert.equal(response.status, 200);
       const body = (await response.json()) as RandomImageJsonResponseDto;
@@ -166,14 +167,14 @@ await runIntegrationScenario(async (runtime) => {
       assert.ok(
         body.items.every(
           (item) =>
-            "object_url" in item === (size === "full") && "thumb_url" in item === (size === "thumb")
+            item.url === `http://images.example/images/${size}/${storageObjectKey(item.id)}`
         )
       );
     }
     const seedIds: string[] = [];
     for (const warmed of [false, true]) {
       if (warmed) await coordinator.initializeReadyImageCacheCoordinator();
-      for (const size of ["", "&size=full", "&size=thumb"]) {
+      for (const size of ["", "&size=large", "&size=medium", "&size=small"]) {
         const response = await request(`device=all&mode=json&seed=synthetic-size-seed${size}`);
         assert.equal(response.status, 200);
         seedIds.push(((await response.json()) as RandomImageJsonResponseDto).items[0]!.id);
@@ -189,11 +190,11 @@ await runIntegrationScenario(async (runtime) => {
       [JSON.stringify({ public_base_url: "https://public.example.com" })]
     );
     runtime.storageRegistry.invalidateStorageBackendRegistry();
-    for (const size of ["full", "thumb"] as const) {
+    for (const size of ["large", "medium", "small"] as const) {
       const response = await request(`id=${ids[1]}&mode=redirect&size=${size}`);
       assert.equal(
         response.headers.get("location"),
-        `https://public.example.com/gallery/${size === "thumb" ? "thumbs" : "full"}/${storageObjectKey(ids[1]!, size === "thumb" ? "webp" : "jpg")}`
+        `https://public.example.com/gallery/${size}/${storageObjectKey(ids[1]!)}`
       );
     }
   } finally {

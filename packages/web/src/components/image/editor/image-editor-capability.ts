@@ -32,7 +32,7 @@ function editableSnapshotFromSource(source: ImageEditorSource): EditableImageSna
   if (source.deleted_at) return null;
   if (source.status && source.status !== "ready") return null;
   if (typeof source.original !== "string"
-    || typeof source.ext !== "string") {
+    || typeof source.variants !== "object") {
     return null;
   }
   return source as EditableImageSnapshot;

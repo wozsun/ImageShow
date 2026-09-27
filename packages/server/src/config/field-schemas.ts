@@ -160,21 +160,6 @@ export const recentUploads = z.coerce.number().int().min(1).max(60);
 export const uploadBrowserConcurrency = z.coerce.number().int().min(1).max(8);
 export const uploadRawConcurrency = z.coerce.number().int().min(1).max(8);
 export const ingestionCommitConcurrency = z.coerce.number().int().min(1).max(16);
-export const normalizeConcurrency = z.coerce.number().int().min(1).max(8);
-export const normalizeQuality = z.coerce.number().int().min(1).max(100);
-export const normalizeQualityStep = z.coerce.number().int().min(1).max(50);
-export const normalizeMinQuality = z.coerce.number().int().min(1).max(100);
-export const normalizeMaxLongEdge = z.coerce.number().int().min(300).max(32_000);
-export const normalizeMaxSizeKb = z.coerce
-  .number()
-  .int()
-  .min(50)
-  .max(100 * 1024);
-export const skipWebpUnderKb = z.coerce
-  .number()
-  .int()
-  .min(0)
-  .max(100 * 1024);
 export const importFetchTimeoutSeconds = z.coerce.number().int().min(5).max(300);
 export const importMaxItems = z.coerce
   .number()
@@ -203,8 +188,6 @@ export const loginGlobalMaxAttempts = z.coerce.number().int().min(5).max(1_000);
 export const randomWindowSeconds = z.coerce.number().int().min(1).max(3_600);
 export const randomMaxRequests = z.coerce.number().int().min(1).max(10_000);
 
-export const thumbnailLongEdge = z.coerce.number().int().min(64).max(4096);
-export const thumbnailQuality = z.coerce.number().int().min(1).max(100);
 
 export const altchaTtlSeconds = z.coerce
   .number()

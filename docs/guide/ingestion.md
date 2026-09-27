@@ -8,6 +8,9 @@
 只存在于 Redis；只有最终 `metadata` 行是完成事实，Redis 的 completed 回执不能单独证明图片
 已经提交。
 
+canonical、Upload intent 与队列汇总按各自的严格存储结构读取。时间戳、心跳、进度序号及
+产物重复数量在校验后直接参与运算；新队列按当前结构初始化，未完成处理阶段可以尚无产物。
+
 服务端队列按来源分为 `upload` 和 `import`。每个任务都以大小写敏感的
 `(session_id, image_id)` pair 定位；`session_id` 是 owner、队列和幂等键的稳定摘要，
 `image_id` 是按独立 `image_time` 生成并校验的 UUIDv7。一次选择共享 `batch_time`，存在
@@ -220,8 +223,8 @@ Import 下载与 prepare 会在各自取得完整事实的 Server 边界再次�
    页面显示“待处理”，只计入总数和未完成数，不计入等待或处理等状态统计。
    只有真正进入全局 Normalize 许可回调后，Server 才发布
    `normalizing` phase，页面随之进入“处理中”。Sharp 校验格式、尺寸和 EXIF 展示方向，
-   按配置生成 processed image 与 thumbnail，计算 MD5/SHA-256、设备和明暗，再原子发布到
-   本地临时目录；两个文件及 ready canonical 发布完成后清理原始文件并释放 preparation
+   按独立参数生成 large / medium / small，计算 MD5/SHA-256、设备和明暗，再原子发布到
+   本地临时目录；三档文件及 ready canonical 发布完成后清理原始文件并释放 preparation
    许可。图片重工作结束即释放 Normalize 许可。下载 /
    prepare 期间的草稿编辑可以推进 semantic version；worker
    在 heartbeat、progress 和阶段发布的 CAS 冲突后重读 canonical，只在状态和 execution token
@@ -231,10 +234,10 @@ Import 下载与 prepare 会在各自取得完整事实的 Server 边界再次�
    UUIDv7 request ID、重复决定和完整 metadata；Server 冻结 intent hash、prepared generation、
    只由 UUID 尾部两位分片的规范正式对象键及当前认证 username。API 返回 `accepted` 后立即结束，
    不等待正式对象写入或数据库。
-   worker 在 storage、图片、词表和同 MD5 advisory lock 内，先核对两个正式目标并保存本次预检结果，
+   worker 在 storage、图片、词表和同 MD5 advisory lock 内，先核对三档正式目标并保存本次预检结果，
    再为确定正式键登记持久 `move.cleanup` candidate guard。写入阶段复用目标预检，校验本地
-   处理结果后流式写入；已确认支持 Content-MD5 的 S3 通过预计算摘要校验展示图和缩略图的
-   上传正文，其余 S3 与 local 写入后回读大小与 SHA-256。两份对象完成后，在不可逆协调器的临界区完成最后一次 token
+   处理结果后流式写入；已确认支持 Content-MD5 的 S3 通过预计算摘要校验三档的
+   上传正文，其余 S3 与 local 写入后回读大小与 SHA-256。三档对象完成后，在不可逆协调器的临界区完成最后一次 token
    复验并启动单个 PostgreSQL 事务。guard 登记前会拒绝强摘要不匹配的预存正式对象；本次
    attempt 只旁路自身唯一 guard token，旧删除租约继续阻断采用。guard 与提交共用单图存储
    变更锁：写入或事务失败时由 handler 删除未引用候选，PostgreSQL 正式引用成立时则保留对象。
@@ -273,10 +276,14 @@ commit 重试通过同一个 `WHERE id = ANY(...)` 只读模型批量水合完�
 Redis 会话读取，再发起 PostgreSQL
 查询：completed 只会在 PG 事务提交后发布，这一顺序避免把提交前 PG 快照与提交后 Redis
 回执拼成不存在的陈旧状态。completed 回执只额外保留卡片展示所需的来源类型、批次位置 / 清单行号、
-原始尺寸 / 大小和处理参数，不保留下载 URL、完整 prepared manifest、完整图片投影或草稿；完整
+原始尺寸 / 大小与三档最终质量，不保留下载 URL、完整 prepared manifest、完整图片投影或草稿；完整
 图片投影只在实时 SSE 写出期间短暂复用，Redis 仍保持紧凑。因此任务实时完成、
-窗口隐藏后完成及窗口重开恢复都会沿用已就绪时的“微博第 N 张”和处理前后尺寸，详情明确显示
-“图片已入库”，且不需要额外状态请求。
+窗口隐藏后完成及窗口重开恢复都会沿用已就绪时的“微博第 N 张”和原图尺寸。卡片以原始体积与三档实际体积合计作对比，
+悬浮合计值按“档位：质量 · 体积”显示各档最终编码质量和大小，质量数字不加 Q 前缀，原 WebP 直通时显示“原样保留”；
+悬浮原图尺寸可查看三档像素宽高。待提交从 prepared 投影取得三档事实，已完成从正式图片事实取得尺寸与体积，
+完成回执的 `display.variant_quality` 保留三档最终质量，供重开窗口后展示。回执失效后不反推质量或使用当前配置代替。
+以上均不增加悬浮请求或文件读取。卡片常态仅显示原图尺寸，质量只在体积悬浮明细展示，详情明确显示“图片已入库”。
+窄屏卡片取得图片 UUID 后，标题栏使用 `#` 加 UUID 后 12 位；尚未取得 UUID 时沿用当前名称，宽屏仍显示完整名称。
 
 内容接入入口在共享存储选项加载成功后打开，首次使用不临时回退到本地存储；加载失败可重试入口。
 来源解析后的自动导入使用提交时的当前存储选择和默认属性。

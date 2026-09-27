@@ -1,3 +1,4 @@
+import { unpackImageAddresses } from "@imageshow/shared/browser";
 import type {
   IngestionQueueEventDto,
   IngestionQueueSummaryDto,
@@ -78,7 +79,7 @@ export function parseServerIngestionQueueEvent(
   expectedType: IngestionQueueEventDto["type"],
   expectedQueue: IngestionQueueTypeDto
 ) {
-  const parsed = JSON.parse(raw) as Partial<IngestionQueueEventDto>;
+  const parsed = unpackImageAddresses(JSON.parse(raw)) as Partial<IngestionQueueEventDto>;
   if (parsed.type !== expectedType || parsed.queue !== expectedQueue) {
     throw new Error("内容接入队列事件格式无效");
   }

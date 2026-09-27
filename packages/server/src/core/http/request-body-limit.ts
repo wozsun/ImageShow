@@ -2,7 +2,6 @@ import { appConfig } from "@imageshow/shared";
 import {
   adminApiBasePath,
   adminPreferencesMaxBytes,
-  configBundleRequestMaxBytes,
   ingestionActionPath,
   ingestionCancelPath,
   ingestionCommitPath,
@@ -25,7 +24,6 @@ import {
 
 const standardApiBodyMaxBytes = 128 * 1024;
 const jsonlManifestBodyMaxBytes = appConfig.ingestion.jsonlManifestMaxBytes;
-const advancedConfigMaxBytes = configBundleRequestMaxBytes;
 const adminPreferencesBodyMaxBytes = adminPreferencesMaxBytes + 1024;
 const adminPreferencesPath = `${adminApiBasePath}/preferences`;
 // Fifty maximum-length URLs occupy about 600 KiB after worst-case JSON
@@ -43,10 +41,6 @@ const ingestionControlBodyMaxBytes = 160 * 1024 * 1024;
 // well below 1 MiB. Keep snapshot selection independent from the much larger
 // metadata-bearing ingestion control tier.
 const ingestionSnapshotBodyMaxBytes = 1024 * 1024;
-const advancedConfigLargeBodyPath = new RegExp(
-  `^${adminApiBasePath}/advanced-config/(?:preview|import|runtime(?:/validate)?)$`
-);
-
 function tooLarge(_c: Context) {
   return apiErrorResponse({
     status: 413,
@@ -127,8 +121,6 @@ const limitStandardApiBody = measuredBodyLimit(standardApiBodyMaxBytes);
 
 export const limitAdminLoginBody = measuredBodyLimit(standardApiBodyMaxBytes);
 
-export const limitAdvancedConfigBody = measuredBodyLimit(advancedConfigMaxBytes);
-
 export const limitImageUpdateBody = measuredBodyLimit(imageUpdateBodyMaxBytes);
 
 const limitIngestionControlBody = measuredBodyLimit(ingestionControlBodyMaxBytes);
@@ -173,9 +165,6 @@ export function limitProtectedAdminRequestBody(c: Context, next: Next) {
     return next();
   }
   if (c.req.method === "PATCH" && path === adminPreferencesPath) {
-    return next();
-  }
-  if (c.req.method === "POST" && advancedConfigLargeBodyPath.test(path)) {
     return next();
   }
   return limitStandardApiBody(c, next);

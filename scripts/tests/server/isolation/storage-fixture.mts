@@ -24,7 +24,7 @@ export function controlledStorageDriver(overrides: Partial<StorageDriver>): Stor
 
 export async function removeDriverObject(
   driver: StorageDriver,
-  prefix: "full" | "thumbs",
+  prefix: "large" | "medium" | "small",
   key: string
 ) {
   const [result] = await driver.removeObjects([{ prefix, key }]);

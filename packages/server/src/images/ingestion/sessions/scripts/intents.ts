@@ -79,7 +79,7 @@ if existing_json then
   assert_upload_intent_shape(existing, true)
   assert_upload_intent_hash(intent_key, existing)
   assert_json_array_field(existing_json, 'tags', 1, 'UPLOAD_INTENT')
-  if tonumber(existing.expires_at or 0) <= now then
+  if existing.expires_at <= now then
     redis.call('DEL', intent_key)
   elseif existing.session_id == template.session_id
     and existing.request_hash == template.request_hash
@@ -146,7 +146,7 @@ assert_json_array_field(current_json, 'tags', 1, 'UPLOAD_INTENT')
 if current.session_id ~= expected_session_id
   or current.candidate_image_id ~= expected_image_id
   or current.request_hash ~= expected_hash then return { -2 } end
-if tonumber(current.expires_at or 0) <= now then
+if current.expires_at <= now then
   redis.call('DEL', intent_key)
   return { -1 }
 end
@@ -155,15 +155,15 @@ if token == '' then return { -4 } end
 if action == 'claim' then
   if current.execution_token ~= ''
     and current.execution_token ~= token
-    and tonumber(current.claim_heartbeat_at or 0) + stale_ms > now then
+    and current.claim_heartbeat_at + stale_ms > now then
     return { -3, current_json }
   end
   current.execution_token = token
   current.claim_heartbeat_at = math.max(
-    tonumber(current.claim_heartbeat_at or 0), now
+    current.claim_heartbeat_at, now
   )
   current.expires_at = math.max(
-    tonumber(current.expires_at), now + ttl_seconds * 1000
+    current.expires_at, now + ttl_seconds * 1000
   )
   local serialized = encode_intent(current)
   redis.call('HSET', intent_key, 'snapshot', serialized, 'execution_token', token)
@@ -174,10 +174,10 @@ end
 if current.execution_token ~= token or token == '' then return { -4 } end
 if action == 'heartbeat' then
   current.claim_heartbeat_at = math.max(
-    tonumber(current.claim_heartbeat_at or 0), now
+    current.claim_heartbeat_at, now
   )
   current.expires_at = math.max(
-    tonumber(current.expires_at), now + ttl_seconds * 1000
+    current.expires_at, now + ttl_seconds * 1000
   )
   local serialized = encode_intent(current)
   redis.call('HSET', intent_key, 'snapshot', serialized)

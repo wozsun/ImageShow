@@ -158,8 +158,8 @@ export async function collectStorageNamespaceSnapshot(
     collectStorageKeyListing(driver.listKeys(prefix, { ...options, signal }))
   );
   try {
-    const [full, thumbs] = await Promise.all(tasks);
-    return { full, thumbs };
+    const [large, medium, small] = await Promise.all(tasks);
+    return { large: large!, medium: medium!, small: small! };
   } catch (error) {
     siblingAbort.abort(error);
     await Promise.allSettled(tasks);

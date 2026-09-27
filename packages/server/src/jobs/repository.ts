@@ -12,6 +12,7 @@ import {
 
 export type { BackgroundJob, BackgroundJobType } from "./types.ts";
 
+
 /**
  * Deterministic work that races with its current handler must survive the
  * running -> succeeded transition. The in-flight payload remains immutable

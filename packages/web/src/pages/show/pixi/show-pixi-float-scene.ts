@@ -1,3 +1,4 @@
+import { imageVariantUrl } from "@imageshow/shared/browser";
 import { Container, type Renderer } from "pixi.js";
 import type { ShowOrder } from "@imageshow/shared/browser";
 import type { ShowCandidateUsage } from "../show-data-pool.js";
@@ -1303,7 +1304,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
         const ratio = imageRatio(image);
         const width = this.#imageWidth(ratio, widthFactor);
         const lod = showPixiTextureLod(image, width, ratio);
-        const textureKey = `${image.id}:${image.thumb_url}:${lod.pixelWidth}x${lod.pixelHeight}`;
+        const textureKey = `${image.id}:${imageVariantUrl(image, "small")}:${lod.pixelWidth}x${lod.pixelHeight}`;
         if (plan.textureKey === textureKey && plan.lease) continue;
         this.#releaseImagePlan(plan);
         pending.push({ plan, textureKey, lod });
@@ -1312,7 +1313,7 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     // Release obsolete LODs at both ends before acquiring their replacements.
     for (const { plan, textureKey, lod } of pending) {
       plan.textureKey = textureKey;
-      plan.lease = this.#textureCache.acquire(plan.image.thumb_url, lod, () => undefined);
+      plan.lease = this.#textureCache.acquire(imageVariantUrl(plan.image, "small"), lod, () => undefined);
     }
     this.#requestCandidates();
   }

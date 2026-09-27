@@ -109,19 +109,18 @@ export async function checkTrash() {
     const candidates = (
       await client.query<{
         id: string;
-        ext: string;
         deleted_at: string;
         purge_pending: boolean;
       }>(
-        `SELECT id, ext, deleted_at::text AS deleted_at,
+        `SELECT id, deleted_at::text AS deleted_at,
               ${imageHasTrashPurgeJobSql} AS purge_pending
          FROM metadata WHERE status='deleted'
         ORDER BY deleted_at, id LIMIT $1`,
         [trashInspectionSampleLimit]
       )
-    ).rows.map(({ ext, ...candidate }) => ({
+    ).rows.map((candidate) => ({
       ...candidate,
-      object_key: storageObjectKey(candidate.id, ext)
+      object_key: storageObjectKey(candidate.id)
     }));
     const normalizedJobCounts: AdminTrashCheckDto["job_counts"] = {
       pending: 0,

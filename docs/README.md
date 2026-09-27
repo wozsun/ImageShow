@@ -22,7 +22,7 @@
 - 系统设计：[架构总览](guide/architecture.md)、[项目结构](guide/project-structure.md)
 - 开发验证：[长期测试与本地门禁](../scripts/tests/README.md)
 - 运行契约：[配置说明](CONFIG.md)、[数据库结构](guide/database.md)、[存储](guide/storage.md)、[安全](guide/security.md)
-- 功能出口：[功能与流程](guide/flows.md)、[图片接入](guide/ingestion.md)、[随机图 API](guide/random-api.md)、[主机与图片资源](guide/image-resources.md)
+- 功能出口：[功能与流程](guide/flows.md)、[图片接入](guide/ingestion.md)、[三档图片与地址协议](guide/three-tier-images.md)、[随机图 API](guide/random-api.md)、[主机与图片资源](guide/image-resources.md)
 - 嵌入接入：[宿主光标协作协议](guide/embed-cursor.md)、[公开页面与嵌入安全区](guide/embed-safe-area.md)
 
 本地结论、比较决策和验收说明统一放在被 Git 忽略的 `.agents/report/`，不替代上述现行指南。

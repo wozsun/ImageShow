@@ -113,8 +113,7 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(emptyCounts.snapshot.total, 0);
   for (const [index, row] of rows.entries()) {
     await pool.query(
-      `INSERT INTO metadata(id, created_by, status, storage_slug, device, brightness, theme, author, ext, md5, width, height, title)
-       VALUES ($1, 'integration-admin', 'ready', 'local', $2, $3, $4, $5, 'webp', $6, 800, 600, $7)`,
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local',$2,$3,$4,$5,$7,800,600,GREATEST(1,1),$6,800,600,GREATEST(1,1),$6,800,600,GREATEST(1,1),$6)`,
       [
         row.id,
         row.device,

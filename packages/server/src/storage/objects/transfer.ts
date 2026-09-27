@@ -80,23 +80,6 @@ export type StorageTransferExpectation = Readonly<{
   md5?: string;
 }>;
 
-export function missingThumbnailSourceError({
-  imageId,
-  backend,
-  key
-}: {
-  imageId: string;
-  backend: string;
-  key: string;
-}) {
-  return new ApiError(
-    409,
-    "storage_thumbnail_missing",
-    "图片当前位置的缩略图不存在，请先在检查页运行“存储维护”",
-    { image_id: imageId, backend, prefix: "thumbs", key }
-  );
-}
-
 function objectConflict(
   target: StorageAccess,
   prefix: StoragePrefix,
@@ -134,7 +117,7 @@ function updateHashes(hashes: Hash[], chunk: unknown) {
 }
 
 /** Read an object as a stream and calculate strong integrity metadata. */
-export async function digestStorageObject(
+async function digestStorageObject(
   storage: StorageAccess,
   prefix: StoragePrefix,
   key: string,
@@ -216,6 +199,7 @@ export async function verifyStorageTarget(input: {
     if (!digestMatchesExpected(existing, expected)) {
       throw objectConflict(storage, prefix, key, storage.config.slug);
     }
+    await storage.driver.ensureDurable?.(prefix, key, { signal });
   }
   return {
     [verifiedStorageTarget]: true,
@@ -703,6 +687,7 @@ export async function ensureVerifiedObjectAtDestination(input: {
     if (!sameDigest(targetDigest, sourceDigest)) {
       throw objectConflict(target, prefix, key, source.config.slug);
     }
+    await target.driver.ensureDurable?.(prefix, key, { signal });
     return { created: false };
   }
 

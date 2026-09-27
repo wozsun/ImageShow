@@ -307,7 +307,7 @@ export function useShowData(
       const updated: ShowImage = {
         id: current.id,
         title: snapshot.title,
-        thumb_url: snapshot.thumb_url,
+        base_url: snapshot.base_url,
         width: snapshot.width,
         height: snapshot.height
       };

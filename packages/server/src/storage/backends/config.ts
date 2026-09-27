@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   isHttpsEndpoint,
-  isHttpsUrl,
   publicBaseUrlSchema,
   publicUrlUsesSiteHost
 } from "../../core/url-validation.ts";
@@ -28,11 +27,6 @@ const httpsEndpoint = z
   .trim()
   .max(2048)
   .refine(isHttpsEndpoint, "endpoint must use HTTPS");
-const optionalHttpsUrl = z
-  .string()
-  .trim()
-  .max(2048)
-  .refine((value) => !value || isHttpsUrl(value), "URL must use HTTPS");
 
 const s3SettingsPatchShape = {
   endpoint: httpsEndpoint.optional(),
@@ -46,7 +40,7 @@ const s3SettingsPatchShape = {
     .trim()
     .regex(/^\/?(?:[a-zA-Z0-9._-]+\/?)*$/, "root_path must be a simple absolute path")
     .optional(),
-  public_base_url: optionalHttpsUrl.optional(),
+  public_base_url: publicBaseUrlSchema.optional(),
   connect_timeout_seconds: z.coerce.number().int().min(1).max(120).optional(),
   idle_timeout_seconds: z.coerce.number().int().min(1).max(300).optional(),
   task_timeout_seconds: z.coerce.number().int().min(15).max(3_600).optional()
@@ -73,17 +67,6 @@ const withS3SettingsDefaults = (settings: z.infer<typeof s3SettingsPatchSchema>)
 });
 
 export const s3SettingsSchema = s3SettingsPatchSchema.transform(withS3SettingsDefaults);
-
-// Configuration packages retain recognized settings; an invalid current value
-// rejects only that backend entry.
-export const looseS3SettingsSchema = z
-  .object({
-    ...s3SettingsPatchShape,
-    connect_timeout_seconds: z.number().int().min(1).max(120).optional(),
-    idle_timeout_seconds: z.number().int().min(1).max(300).optional(),
-    task_timeout_seconds: z.number().int().min(15).max(3_600).optional()
-  })
-  .transform(withS3SettingsDefaults);
 
 export type S3Settings = z.infer<typeof s3SettingsSchema>;
 export type S3SettingsPatch = z.infer<typeof s3SettingsPatchSchema>;
@@ -157,14 +140,6 @@ export type StorageBackendUpdateInput = {
 export type StorageBackendTestInput = {
   slug?: string;
   s3?: S3SettingsPatch;
-};
-
-export type StorageBackendImportInput = {
-  slug: string;
-  display_name: string;
-  enabled: boolean;
-  is_default: boolean;
-  config: S3Settings;
 };
 
 export function storageDriverSignature(config: StorageConfig) {

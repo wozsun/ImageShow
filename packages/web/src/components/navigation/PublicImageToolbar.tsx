@@ -300,9 +300,9 @@ export function PublicImageToolbar({
                   <p>请先确认筛选条件</p>
                 )}
               </section>
-              <section className="public-toolbar-share-item" aria-label="随机 API 链接">
+              <section className="public-toolbar-share-item" aria-label="随机图片API">
                 <header className="public-toolbar-share-heading">
-                  <strong>随机 API 链接</strong>
+                  <strong>随机图片API</strong>
                   <p>按当前筛选条件随机获取图片</p>
                 </header>
                 {randomUrl ? (
@@ -310,10 +310,10 @@ export function PublicImageToolbar({
                     <input
                       readOnly
                       value={randomUrl}
-                      aria-label="随机 API 链接"
+                      aria-label="随机图片API"
                       onClick={(event) => event.currentTarget.select()}
                     />
-                    <CopyButton value={randomUrl} ariaLabel="复制随机 API 链接" />
+                    <CopyButton value={randomUrl} ariaLabel="复制随机图片API链接" />
                   </div>
                 ) : (
                   <p role={randomLinkError ? "alert" : undefined}>

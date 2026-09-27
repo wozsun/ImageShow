@@ -27,7 +27,7 @@ await runIntegrationScenario(async ({ databasePools: { pool } }) => {
             {
               backend: "local",
               namespace_identity: "history-namespace",
-              prefix: "full",
+              prefix: "large",
               key: "history.webp"
             }
           ]

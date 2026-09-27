@@ -1,3 +1,4 @@
+import { imageVariantUrl } from "@imageshow/shared/browser";
 import { storageObjectKey } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../icon/AdminIcon.js";
 import { ImageDraftFields } from "../../form/ImageDraftFields.js";
@@ -85,9 +86,9 @@ export function ImageMetadataEditorCard({
       className={`image-editor-row${cardChanged ? " is-changed" : ""}${saveStatePresentation ? ` ${saveStatePresentation.rowClassName}` : ""}`}
     >
       <div className="image-editor-preview">
-        <ImageThumbnailFrame src={item.thumb_url} onClick={onPreview} />
-        {item.image_size ? (
-          <span className="image-editor-preview-size">{formatBytes(item.image_size)}</span>
+        <ImageThumbnailFrame src={imageVariantUrl(item, "small")} onClick={onPreview} />
+        {item.variants.large.byte_size ? (
+          <span className="image-editor-preview-size">{formatBytes(item.variants.large.byte_size)}</span>
         ) : null}
       </div>
       <div className="image-editor-content">
@@ -96,7 +97,7 @@ export function ImageMetadataEditorCard({
             <div className="image-editor-head-name">
               <strong
                 className="image-editor-title-desktop"
-                title={storageObjectKey(item.id, item.ext)}
+                title={storageObjectKey(item.id)}
               >
                 {item.id}
               </strong>
@@ -112,14 +113,14 @@ export function ImageMetadataEditorCard({
               ) : null}
             </div>
             <span className="image-editor-desktop-summary">
-              {formatDimensions(item.width, item.height)} · {formatImageClassification(item)} ·{" "}
+              {formatDimensions(item.variants.large.width, item.variants.large.height)} · {formatImageClassification(item)} ·{" "}
               {storageName}
             </span>
             <span className="image-editor-summary-line image-editor-mobile-summary">
-              {formatDimensions(item.width, item.height)} · {formatImageClassification(item)}
+              {formatDimensions(item.variants.large.width, item.variants.large.height)} · {formatImageClassification(item)}
             </span>
             <span className="image-editor-summary-line image-editor-mobile-summary">
-              {item.image_size ? formatBytes(item.image_size) : "大小未记录"} · {storageName}
+              {item.variants.large.byte_size ? formatBytes(item.variants.large.byte_size) : "大小未记录"} · {storageName}
             </span>
           </div>
           {multipleItems && (

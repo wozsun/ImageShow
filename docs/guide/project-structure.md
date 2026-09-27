@@ -129,6 +129,7 @@ core / config
   并处理优雅退出。
 - `src/admin-password-cli.ts` 是管理员密码恢复入口。
 - `src/healthcheck-cli.ts` 是容器 readiness 检查入口。
+- `core/database/application-host.ts` 持有单实例宿主锁，覆盖启动初始化及业务运行；数据库启动只负责当前结构的干净安装与只读 readiness。
 - `images/mutation-sync-policy.ts` 只定义图片变更总量的纯决策与结果契约；
   `images/mutation-sync.ts` 持有写栅栏并执行精准发布或安排全量重建，领域 SQL 只负责在
   自己的事务边界 COUNT、推进 revision 和按决策读取有限 ID。
@@ -148,7 +149,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `core/database/` | PostgreSQL pool、事务、advisory lock、公开 fallback 准入、schema 装配和 readiness；`readiness/` 只承载数据库基线断言的内部职责。 |
 | `core/redis/` | 唯一 Redis client、连接与能力探测、JSON、pipeline、条件字符串、窗口限流命令及其通用 Lua；不持有 ready-cache 等业务命令，也不导入其他业务领域。 |
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、静态编码协商、条件请求与 Range 解析。 |
-| `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；普通保存与磁盘重载共用 FIFO 写租约内“持久化后发布”入口，配置包在同一租约内把候选文件持久化与数据库结果核对及收敛决定后的单次内存发布分离。配置包按当前默认配置逐项投影，存储后端按支持的结构与能力逐条识别；`runtime-config-environment.ts` 是全部 RuntimeConfig 叶子到首次 seed 变量的唯一映射。启动、热加载和配置包都只读取当前结构，未知字段统一投影删除。 |
+| `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store；保存与磁盘重载共用 FIFO 写租约内“持久化后发布”入口。`runtime-config-environment.ts` 是全部 RuntimeConfig 叶子到首次 seed 变量的唯一映射。启动和磁盘重载按当前默认结构投影，补齐缺失字段、删除未知字段并保留合法值；表单保存严格校验完整结构。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；`validation/` 按图片、Ingestion、存储、用户和词表职责拥有请求 schema，并集中保留通用 HTTP 原语与 `validation_error` 映射；业务工作委托给领域模块。 |
 | `images/` | 图片读写、展示投影、分类与元数据变更；`trash/` 拥有回收站和永久删除，`serving/` 拥有寻址与图片响应；`metadata-tags.ts` 拥有 HTTP 与 JSONL 共用的标签归一化契约，`page-window.ts` 唯一计算安全数字页窗口，`storage-location/` 拥有正式图片后端位置 CAS、revision、mutation fence 和 cache handoff，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型及其领域查询类型。 |
 | `storage/` | 只在根层保留横切 `maintenance-lock.ts`；`backends/`、`drivers/`、`objects/` 与 `cleanup/` 分别拥有注册表及 Endpoint 重绑定证明、驱动、对象原语及跨图片传输准入、持久清理。`storage/` 不修改正式图片位置或相应 revision，也不交接 ready-cache。`backends/config.ts` 保留 S3 配置 schema、归一化和存储领域输入类型，HTTP create / update / test schema 位于路由边界。 |
@@ -166,25 +167,25 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 ### 配置与资源入口
 
 `config/runtime-config.ts` 持有当前 schema、默认值、严格保存校验与启动归一化。
-`config/bundle/` 组合可移植配置与存储注册表：`format.ts` 负责包结构和预览，
-`runtime-projection.ts` 负责宽松导入与目标站点字段保留，`service.ts` 负责写入编排。
-配置包依赖运行配置 schema；日常运行配置不反向依赖包导入算法。
+`normalize-schema.ts` 唯一校验三档图片处理参数及跨档约束。
+`config/app-settings.ts` 拥有公开 / 后台最小投影与完整配置保存，组合存储注册表的 Host 冲突校验；
+基础 schema 与 store 不反向依赖该入口。`routes/settings.ts` 提供普通管理员所需的只读投影，
+完整配置读取、保存和磁盘重载均由超级管理员权限保护。
 
 `routes/assets.ts` 统一主站与资源 Host 的静态文件、编码协商和条件响应；`routes/spa.ts`
 只负责最终 HTML 快照、内联站点配置与嵌入页策略。二者复用 HTTP 层能力，资源响应的公开
 CORS 头由 `core/http/headers.ts` 统一设置。
 
-`config/runtime-config-store.ts` 唯一拥有进程内 RuntimeConfig、listener 与 FIFO 写租约。普通设置、
-高级配置和磁盘重载都先完成所需原子文件写入，再替换内存并逐个通知 listener；同步 listener
-异常只记录结构化错误，不中断后续 listener 或反转已持久化结果。`config/bundle/service.ts` 在同一
-租约内先完成导入后端的存储探测，再通过 store 的专用阶段持久化候选文件并等待 PostgreSQL 事务结果；只有正常提交、确认
-已提交或结果 unknown 时才发布候选，确认回滚只恢复旧文件且不发布中间快照。
+`config/runtime-config-store.ts` 唯一拥有进程内 RuntimeConfig、listener 与 FIFO 写租约。
+站点配置保存、日志等级修改和磁盘重载先完成所需原子文件写入，再替换内存并逐个通知 listener；
+同步 listener 异常只记录结构化错误，不中断后续 listener 或反转已持久化结果。
+站点配置保存与重载返回同一快照的完整配置和后台投影，响应使用 `private, no-store`。
 
 `config/site-host.ts` 是图片资源根 URL 和 Host 判断的共同入口：域名为空或 `example.com`
 时接受格式合法的访问 Host，使用 `/images` 同源路径，不向配置、共享缓存或队列写入请求域名；
 显式域名生成 `https://<site.domain>/images` 地址。`routes/resource-host.ts` 在公共资源、OPTIONS 与 SPA 之前
 区分主站、本地图片与静态资源公开 Host；`routes/public.ts` 注册主站公开资源
-`/images/full/*` 与 `/images/thumbs/*`；`routes/admin-images.ts` 注册 `/images/original/:id`，
+`/images/large/*`、`/images/medium/*` 与 `/images/small/*`；`routes/admin-images.ts` 注册 `/images/original/:id`，
 显式复用管理员会话中间件。未匹配请求使用通用路由处理。
 公开资源不读取管理员会话，local / S3 已配置公开 URL 的对象使用直链；图片 URL 由服务端生成，
 公开站点配置只投影页面实际消费的字段。
@@ -202,7 +203,7 @@ Host 准入同步读取注册表最后发布的本地公开地址，不触发数
 存储读取仍按 TTL / revision 重新加载，local 地址保存完成前加载并发布新快照。普通主站请求不增加存储读取。
 `images/serving/stored-image.ts` 的本地公开入口固定 local，跳过图片记录查询，与主站入口共用 driver 和
 `stored-object-response.ts` 的条件请求 / 范围 / 取消与资源释放逻辑，不建立 ETag 或正文缓存。
-高级配置验证、保存及设置重载复用注册表的主站 Host 冲突校验；保存和重载在 RuntimeConfig 写租约内执行，
+站点配置保存及磁盘重载复用注册表的主站 Host 冲突校验；保存和重载在 RuntimeConfig 写租约内执行，
 访问配置变更不退休 driver。
 
 `images/presenter.ts` 的公开卡片、后台列表 / 编辑快照及 Ingestion completed 投影，
@@ -213,12 +214,7 @@ S3 直链规则，随机 JSON 也按批次投影。公开列表、详情、资�
 再以请求取消信号读取注册表；注册表冷加载按 revision 合并，并拥有独立的有界数据库作用域。
 配置快照缓存 24 小时，应用内配置写入主动失效，具体规则见[存储说明](storage.md#注册表缓存)。
 
-`selection.ts` 将运行时默认尺寸交给 `random/query.ts`，后者校验 `size=thumb|full`，为 proxy /
-redirect 补齐默认值，仅 JSON 保留未指定状态；尺寸不加入筛选、固定 seed 或近期去重签名。
-`routes/random.ts` 按尺寸选用现有对象读取与 URL
-生成能力；`random/json-presentation.ts` 在同一批次投影中按需提供全图、缩略图或两种 URL。
-shared 随机 JSON DTO 保证至少包含一种 URL；Web 的 `lib/gallery/random-url.ts` 可按显式输入追加
-尺寸参数，未指定时保留 API 的缺省行为。
+`selection.ts` 将默认 medium 交给 `random/query.ts`，统一校验 size=large|medium|small；尺寸不参与筛选与 seed。JSON 返回固定 url 和所选档位尺寸、体积，省略 size。普通图片响应由 shared 的 `image-addresses.ts` 在 HTTP / SSE 边界构造地址表，前端在请求边界绑定根，组件使用 `imageVariantUrl` 按需拼接。
 
 `core/http/media-type.ts` 统一提取 HTTP 媒体类型首段并归一化外围空白，再由 Node 稳定的
 `MIMEType.parse()` 校验语法和规范大小写。JSON 请求体仅接受 `application/json` 或具有非空
@@ -270,6 +266,9 @@ Web 按图片 ID 与认证身份隔离查询，等待已有认证探针完成后
 
 `storage/drivers/local.ts` 在缓冲写和流式写入创建候选前及 link 发布前检查取消，
 缓冲写同时向文件写入传递 signal。取消后等待已开始的文件 I/O 收口并清理候选。
+正式发布复用 `local-publication.ts` 的文件与目录同步；已有目标接管及副本清理前通过
+driver 的 `ensureDurable` 确认 local 对象，managed driver 将确认过程纳入引用生命周期。
+`stream-buffer.ts` 统一成品缓冲资源上限与登记长度校验，与上传准入上限分离。
 每次自检使用独立随机 key，读写受请求 signal 控制，清理使用独立 10 秒准入预算并等待已开始
 的文件 I/O 收口；失败或取消仅删除本次探针对象。
 
@@ -283,8 +282,8 @@ Content-MD5 校验上传，其余 S3 与 local 使用写后回读。跨后端流
 `storage/backends/config.ts` 分别定义可编辑的 S3 设置与服务端维护的能力结果；`record.ts`
 在同一 `storage_backend.config` JSONB 中解析和保存两者。`drivers/s3.ts` 使用同一流式 PUT
 路径探测正确与错误 Content-MD5，SDK 仅添加协议要求的自动校验。`backends/probe.ts`
-统一完成候选验证和临时 driver 收口；创建、连接参数变更及配置包导入先探测再持久化。
-`self-test.ts` 只在探测连接与当前连接仍相同时回写结果，后台输入及配置包只传递可编辑设置。
+统一完成候选验证和临时 driver 收口；创建或连接参数变更先探测再持久化。
+`self-test.ts` 只在探测连接与当前连接仍相同时回写结果，后台输入只传递可编辑设置。
 `backends/read-model.ts` 将结果投影为管理员 DTO 的 `content_md5: boolean | null`，
 `StorageBackendCard.tsx` 通过同一网格列将默认按钮与其下方的能力文字居中对齐；`StorageSettings.tsx` 通过已有列表查询
 刷新状态，连接测试结束只失效该查询。
@@ -296,7 +295,7 @@ Content-MD5 校验上传，其余 S3 与 local 使用写后回读。跨后端流
 `routes/` 当前保留 18 个直属文件。`admin-vocabulary.ts` 在一个 HTTP 能力边界中声明 tags、
 themes 与 authors 三组同构 CRUD，通用 registrar 为文件内私有实现；每组仍分别注入自己的
 schema、查询、变更和删除权限，不把领域业务搬进路由。`public.ts` 私有持有 Hono 请求到
-`StoredResponseRequest` 的 header / signal 投影，共同服务该文件内 `full` 与 thumbnail 入口。
+`StoredResponseRequest` 的 header / signal 投影，共同服务该文件内三档入口。
 其余短 registrar 即使只有一个导出，也分别拥有独立 URL、鉴权 / 权限、中间件顺序、Host
 或缓存契约；不按行数与相邻文件合并。`http-app.ts` 仍显式展示公开路由、管理员 session、
 CSRF、请求体限制和各管理能力的装配顺序。
@@ -304,7 +303,7 @@ CSRF、请求体限制和各管理能力的装配顺序。
 `routes/validation/parse.ts` 唯一把 Zod 问题映射为稳定的
 HTTP `validation_error`，`primitives.ts` 只复用 UUID、slug、HTTPS 和安全整数等无业务语义原语，
 其余文件分别拥有对应请求 schema。存储创建、测试、迁移、重排和路径参数共用同一 HTTP slug
-原语及错误提示，配置包保留独立的领域校验。公开列表、后台列表与画廊统计的领域查询类型由各自
+原语及错误提示。公开列表、后台列表与画廊统计的领域查询类型由各自
 `images/read-models/` 模块导出，路由 schema 以 `z.ZodType` 对其作编译期约束；图片更新直接使用
 `@imageshow/shared/browser` 的 `ImageUpdateItemInputDto`。JSONL 与 HTTP 共用
 `images/metadata-tags.ts` 的标签归一化 schema，cursor 复用 `core/uuid.ts` 的规范 UUID 原语，
@@ -416,11 +415,11 @@ Endpoint 重绑定的双向随机挑战与精确探针清理位于 `storage/back
 每次执行一个 attempt，失败退避释放许可。
 `checks/storage-check.ts` 只生成无写入权限的存储预览；显式写维护按稳定职责拆分：
 `checks/storage-maintenance-plan.ts` 重读 PostgreSQL、Ingestion 引用和完整存储快照并生成候选，
-`checks/storage-thumbnail-repair.ts` 负责缩略图写入与校验，`checks/storage-orphan-cleanup.ts`
+`checks/storage-variant-repair.ts` 负责一致副本恢复与校验，`checks/storage-orphan-cleanup.ts`
 负责确认删除和空目录修剪，`checks/storage-maintenance.ts` 保留独占位置锁、执行顺序，并把对象
 维护与持久彻底删除任务维护汇总为单一检查页操作。
-缩略图维修只为数据库已采用的缩略图执行生成前对象探测；生成后复用独占锁内的位置及 driver，
-保留发布前对象探测、0 标记、写后摘要及数据库未知写结果回读。
+档位维修只从其他物理后端采用匹配已登记尺寸、体积和摘要的同档对象，完整解码后发布；没有一致副本时报告备份恢复，不重新编码或修改事实。跨后端副本删除前复核当前位置对应档位，位置未知或内容未确认时保留副本；维修发布失败不交给孤儿删除任务，重启后仍以 PostgreSQL 事实核验。已交给永久删除的回收站图片跳过补回，普通回收站图片仍可维修。
+
 本地 driver 在完整列举时按需捕获本次有界目录信息，维护编排将维修 / 删除涉及的对象交给修剪，
 由 driver 重读受影响目录及祖先；未变化目录复用捕获事实，原有扫描预算与 rmdir 边界保留。
 这组写维护只从显式维护入口调用，不接入普通请求热路径或通用后台任务。
@@ -442,6 +441,10 @@ Endpoint 重绑定的双向随机挑战与精确探针清理位于 `storage/back
 revision、交接同一 mutation sync。
 
 ### 内容接入
+
+`images/variants/encoding.ts` 拥有三档质量网格、等价编码复用和流式完整解码核验；`record.ts` 拥有数据库事实投影，`scratch.ts` 拥有有界工作文件生命周期。通用发布原语在 `storage/drivers/local-publication.ts`。
+
+`shared/browser/image-variants.ts` 提供 NormalizeProfile、限制、档位映射及地址拼接；设置页独立配置三档参数。正式对象键固定为 WebP，外部原图代理和接入输入按各自的多格式契约处理。
 
 `images/ingestion/` 是 Upload 与 Import 共用的统一内容接入领域，稳定子目录表达允许依赖方向：
 
@@ -509,8 +512,8 @@ revision / 实例校验、TTL 与派生注册表，不进入核心重建或增�
 提前拒绝超过单集合容量的任务，并在源读取中再次限制实际成员数；超限不发布截断索引。
 `keys.ts` 为设备与轴提供固定后缀集合，`derived/touch.ts` 将同一集合传入领域 Lua 的注册表校验。
 
-`shared/browser/images.ts` 统一派生稳定对象键与成品宽高设备分类，后台编辑 DTO 传递 ext，
-编辑器仅在副标题 / tooltip 展示边界派生相同文本；公共卡片不增加字段。prepared 保留亮度检测值，
+`shared/browser/images.ts` 统一派生稳定对象键与成品宽高设备分类，正式成品固定为 WebP，
+编辑器在副标题 / tooltip 展示边界使用当前档位事实；公共卡片不增加字段。prepared 保留亮度检测值，
 自动设备由成品宽高派生，手动选择保持独立。`raw/paths.ts` 从冻结的 producer token 和 generation
 恢复 prepared 文件引用，预览、提交、取消和孤儿扫描共用该规则。
 
@@ -615,7 +618,7 @@ hooks ──► lib
   slug 仍按原文字规则匹配。匹配器将 UTF-16 索引合并为原文高亮区间，全部词条建议复用 `MatchedText`，
   不插入 HTML；后台筛选与编辑建议共用主题强调色高亮并保持字重，公开筛选使用公开主题色。
   编辑候选选择返回原 slug；拼音搜索只影响候选和高亮，不改变手动输入合法 slug 时的既有新建流程。
-  数据库、DTO、原有 slug 与图片请求均不变。配置 JSON 编辑器的代码查找沿用 CodeMirror 文本规则。
+  数据库、DTO、原有 slug 与图片请求均不变。
   `useImeSearchInput` 在两端搜索输入中复用 `useImeInputSession`，分开显示中的临时文字与已提交查询。composition 期间不发布查询，结束后提交；清空及收起统一重置输入，失焦时恢复已确认查询并拦截迟到的 composition 事件。普通英文输入保持即时搜索，不使用防抖计时器。
   `SlugComboInput` 与 `TagInput` 同样只用已确认查询计算候选与高亮，组词期间保留上一次结果；
   词条编辑继续由各自的 `useImeInputSession` 保护失焦提交、候选选择和迟到事件，不改变表单提交时机。
@@ -795,10 +798,11 @@ hooks ──► lib
   页面滚动边界归一化放在 `lib/ui/`，由共享采样 Hook 提供给各页面交互状态机。图片编辑
   保存时，数据窗口用权威快照原位更新唯一命中卡片并保持其他卡片对象；缺少快照时才以同一
   cursor 条件重验证。筛选成员、几何和游标变化继续由数据窗口原子提交。`LazyGalleryImage` 在资源地址
-  变化时清除旧地址的完成与失败状态，旧任务由既有任务清理和结果围栏隔离；DTO 缺失合法宽高时，
-  同一就绪结果把真实比例提交给数据窗口，数据窗口按帧合并后只重排唯一 typed-array 布局，并以
-  可见首卡 ID 与卡内偏移维持锚点。离开画廊时只保留最近一次历史条目的查询、几何身份、数据窗口和
-  锚点；`GalleryPage` 以路由导航类型与条目 key 决定恢复，仅 `POP` 且条目匹配时复用。
+  变化时清除旧地址的完成与失败状态，旧任务由既有任务清理和结果围栏隔离。卡片比例来自服务端
+  已登记的三档尺寸；完整 DTO 释放后，紧凑布局继续保存比例供占位使用。水合、编辑和容器尺寸
+  变化由数据窗口更新布局，并以可见首卡 ID 与卡内偏移维持锚点。离开画廊时只保留最近一次
+  历史条目的查询、几何身份、数据窗口和锚点；`GalleryPage` 以路由导航类型与条目 key 决定恢复，
+  仅 `POP` 且条目匹配时复用。
   主动导航的 `PUSH` / `REPLACE` 创建新数据窗口并回到顶部，包括已在画廊时再次点击画廊导航。
   首次 CSS 几何实测后才决定历史会话复用，不以忽略系统滚动条或安全区的估值清除会话；后续
   resize 仍由当前窗口重排。`lib/api/image-data-revision.ts` 记录当前页面实例内图片 mutation 失效边界的会话代次；离页期间在同一实例发生
@@ -834,7 +838,7 @@ hooks ──► lib
   移动端底部控件挂载在导航裁切、位移与 inert 区域之外；画廊排序位于原右下悬浮组的返回顶部下方，展映左下为尺寸控制、右下为排序及页面传入的播放和画面控制。
   移动端复用 `public-round-control` / `public-round-surface` 的 48px 点击区、40px 表面、21px 图标、公开配色与按压效果，仅将圆角设为 8px。展映两侧间距为 8px，左侧 column-reverse、右侧 column，边缘间距和底部提示保留既有布局；画廊沿用自身安全区与触控底部间距。
   显隐完全复用 `public-floating-controls`：常态 .8、导航收起后 .3、5 秒后以 180ms 动画淡至 .1，悬停与键盘可见焦点恢复 .95；无常驻 .65 覆盖。弹窗期间由页面统一隐藏底部控件。
-  分享内的页面链接和随机 API 链接分别通过只读输入框展示，菜单打开时不自动聚焦或选择文本，点击链接框全选，复制使用完整 URL。路由 Hook 的 `getPageUrl` 从已解析筛选与宿主传入的有效排序 / 展映模式构造页面链接，只包含这些浏览参数；嵌入路径映射到主站对应入口，菜单按 embedded 状态提示。标签条件未就绪时不生成页面链接，API 链接继续使用既有预算与投影规则。
+  分享内的“页面链接”和“随机图片API”分别通过只读输入框展示，菜单打开时不自动聚焦或选择文本，点击链接框全选，复制使用完整 URL。路由 Hook 的 `getPageUrl` 从已解析筛选与宿主传入的有效排序 / 展映模式构造页面链接，只包含这些浏览参数；嵌入路径映射到主站对应入口，菜单按 embedded 状态提示。标签条件未就绪时不生成页面链接，API 链接继续使用既有预算与投影规则。
   `PublicToolbarPopover` 复用 AnchoredPopup / useAnchoredMenu 提供分享与展映画面菜单，不新增定位或焦点所有者。
 - `pages/show/` 就近拥有公开展映编排、真实图片查询与 `pixi/` 生产运行时。
   三种排序共用 `GET /api/images?view=show`，首次接收的随机批次只在 Web 洗牌。
@@ -853,8 +857,8 @@ hooks ──► lib
   先无重复领取全部候选，只有有限筛选结果不足以填满活动槽时才循环复用。`mode=waterfall|float`
   是正式 URL 状态，省略或无效时回退 `site.show.mode`，读取默认值不改写 URL。
   `ShowPage` 从同一公开配置中的 `site.show.autoplay` 初始化播放状态，访客启停只属于当前挂载。
-  该字段默认值由 Shared 唯一提供，首次播种通过 `SITE_SHOW_AUTOPLAY`；普通设置 DTO 不包含
-  `site.show`、`site.home.browse_target` 或 `site.gallery.enabled`，这些新增项由配置文件或高级配置维护。
+  该字段默认值由 Shared 唯一提供，首次播种通过 `SITE_SHOW_AUTOPLAY`；完整 RuntimeConfig 由站点配置页维护。
+  后台设置投影只提供图片 / 词表分页和接入控件实际需要的参数，公开页面使用独立的公开配置投影。
   `ShowPage` 根据当前查询构造明确目标模式的链接，`ShowToolbarControls` 以 React Router `Link` 渲染；
   `ShowSizeControls` 通过导航的 leadingControls 插槽将缩小、放大和复原放在桌面筛选左侧或移动端左下，只挂载一份并保留性能提示的返回焦点引用；
   `ShowToolbarControls` 提供“瀑布 / 漂浮”，761–900px 将模式切换收进“画面”菜单；移动端 `ShowMobileControls` 通过链接直接切换场景。
@@ -863,7 +867,7 @@ hooks ──► lib
   手动切换始终保留显式 `mode`，筛选与顺序更新保留模式参数的显式或缺省状态，模式切换不重建图片查询。
   `pixi/show-pixi-runtime.ts` 唯一持有 Pixi Application、ticker、ResizeObserver、页面可见性、
   reduced-motion、context lost / restored、场景租约和共享纹理 LRU；纹理入口直接读取真实
-  `thumb_url`，按屏幕尺寸选择 LOD、限制并发与像素预算，并在 WebGL2 生成 mipmap。
+  small 地址，按屏幕尺寸选择 LOD、限制并发与像素预算，并在 WebGL2 生成 mipmap。
   `ShowPixiStage` 用 Effect Event 将实例的列数、尺寸、手动位移、运动、补图和打开图片回调
   接到最新已提交的 React props；回调更新不重建实例。异步初始化与卸载仍由创建 Effect
   管理，DOM 键盘代理直接使用 JSX 事件并保留实际返回焦点目标。
@@ -948,9 +952,16 @@ hooks ──► lib
   场景切换先销毁旧控制器及输入对象但保留预算内纹理，
   路由卸载再统一释放 Canvas、ticker、事件、observer、Bitmap 与纹理引用。
 - `pages/admin/` 按稳定页面职责分为 `shell/`、`account/`、`images/`、`check/`、`storage/`
-  与 `advanced-config/`；只有 `LogPage.tsx`、`Overview.tsx`、`SettingsPage.tsx`、
+  与 `settings/`；只有 `LogPage.tsx`、`Overview.tsx`、
   `UserAdmin.tsx`、`VocabularyAdmin.tsx` 及其单个卡片等没有形成三文件族的页面留在根层。
   每个页面专属查询、操作 Hook、对话框和状态机都留在同一目录，不上移为虚假的跨页面公共层。
+  `settings/SettingsPage.tsx` 唯一拥有完整配置查询、编辑草稿与保存 / 重载请求。字段定义
+  由 `settings-fields.ts` 以 RuntimeConfig 的全部叶子路径约束，`SettingsFieldControl.tsx`
+  提供当前字段类型的表单控件。卡片按用途分组并在独立列中自然排列，模块开关位于标题右侧，
+  根路径页面归入首页入口。数值显示允许范围，
+  多行文本默认占两个单行配置的高度；容器变窄时改为单列。成功响应直接发布完整配置与后台
+  投影，避免再次读取；数字和多行列表在提交前结算失焦编辑，失败保留草稿，重载脏草稿和域名
+  变更通过确认窗口提交。
   词表和存储列表共用 `SortOrderInput` 持有数字草稿，聚焦数字框自动全选，减一 / 输入 / 加一属于同一编辑区域，
   区域内切换焦点不保存；Enter 或移出整个区域才调用 `useSortOrderSave` 单项写入并由查询所有者回读。
   保存状态按条目隔离，只禁用提交中的卡片；不同条目的提交依次完成写入与回读，单项失败不阻塞后续提交。
@@ -996,10 +1007,10 @@ hooks ──► lib
 - `LogPage.tsx` 保存等级成功后取消旧日志读取，将已确认等级写入所有现有日志文件查询，
   只刷新当前活动文件一次；刷新失败保留确认值，不新增等级查询或延时同步。
 - `SettingsPage.tsx` 仅拥有当前未保存表单，后台回读只在 clean 状态更新；保存与重载禁用整个表单，
-  使用 15 秒请求期限，成功由 POST 返回值直接更新唯一 settings 查询，失败保留提交内容。
+  使用 15 秒请求期限，成功由 POST 返回值直接更新 runtimeConfig 查询及最小后台 settings 投影，失败保留提交内容。
 - `VocabularyAdminCard.tsx` 按字段对照上一权威基线维护 clean / dirty，同 slug 回读只同步 clean 字段，
   成功保存立即采用规范化值，切换词条身份重新初始化。
-- `lib/api/client.ts` 集中 JSON 解析失败、凭据和 401；`apiResponse` 为配置包提供原始文件响应。
+- `lib/api/client.ts` 集中 JSON 解析失败、凭据和 401。
   元数据与接入完成复用词表成员比较，仅新词条超出已有缓存时失效一次 `ingestionVocabulary`。
   `lib/api/request-deadline.ts` 拥有单次请求从连接到完整响应体读取的 30 秒期限和失败中止；
   回调负责完整读取正文，期限封装不重试请求，也不承诺取消服务端写入。
@@ -1062,8 +1073,7 @@ hooks ──► lib
 - `pages/admin/shell/admin-route-modules.ts` 集中拥有后台路由页面的生命周期级动态加载器；
   `AuthenticatedAdminShell` 的 `React.lazy` 与桌面 / 移动导航意图共用这些 Promise。
   `AdminNavigation` 只为角色过滤后可见的内部页面绑定模块键，外部“首页”出口不猜测
-  根路由目标。键盘 focus 与 pointerdown 立即预加载；普通后台页的鼠标 hover 立即加载，
-  高成本高级配置页只有持续 150 ms 的细指针 hover 才加载，离开或取消会清除 dwell。
+  根路由目标。键盘 focus、pointerdown 与细指针 hover 按同一规则立即预加载。
   预加载只能取得页面 JS、CSS 与静态依赖，不能挂载页面或提前执行查询；正式导航复用
   同一个页面生命周期 Promise。
   冷启动资源所有权分为公开、后台登录、图片管理员与超级管理员四层；直接访问无权 URL
@@ -1159,7 +1169,7 @@ SPA 与嵌入页的脚本 CSP 允许所配置资源 origin；ALTCHA Worker 从�
 
 主站与独立 Host 共用 `createAssetHandler()`；资源 Host 边界将公开根目录下的相对路径映射到内部 `/assets/`，
 不查询数据库、不跳转主站，也不开放 API 或 SPA。两者共享静态压缩协商、条件请求、缓存头与无凭据 CORS。
-资源 URL 是 RuntimeConfig 部署字段，配置包与站点域名一样排除此值，并保留目标实例当前配置。
+资源 URL 是 RuntimeConfig 字段，由站点配置表单与当前配置 schema 统一管理。
 
 Web 继续使用 entries-aware 的入口根集合分块，`minShareCount: 2` 表示模块至少被两个真实
 动态根共同引用才形成共享块。资源边界的判断顺序固定为权限、路由 / 能力意图、请求经济性：

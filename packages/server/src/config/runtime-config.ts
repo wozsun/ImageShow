@@ -1,3 +1,4 @@
+import { normalizeSchema } from "./normalize-schema.ts";
 import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import { type RuntimeConfig } from "@imageshow/shared/browser";
@@ -27,12 +28,6 @@ import {
   loginGlobalMaxAttempts,
   loginGlobalWindowSeconds,
   loginMaxFailures,
-  normalizeMaxLongEdge,
-  normalizeMaxSizeKb,
-  normalizeConcurrency,
-  normalizeMinQuality,
-  normalizeQuality,
-  normalizeQualityStep,
   randomDefaultMethod,
   randomImageSize,
   randomWindowSeconds,
@@ -51,9 +46,6 @@ import {
   siteIcon,
   siteHeaderName,
   siteTitle,
-  skipWebpUnderKb,
-  thumbnailLongEdge,
-  thumbnailQuality,
   uploadBrowserConcurrency,
   uploadMaxItems,
   uploadRawConcurrency,
@@ -62,7 +54,7 @@ import {
 } from "./field-schemas.ts";
 import { publicBaseUrlSchema, publicUrlUsesSiteHost } from "../core/url-validation.ts";
 
-export const runtimeConfigSchema = z.strictObject({
+const runtimeConfigSchema = z.strictObject({
   site: z.strictObject({
     domain: siteDomain,
     icon: siteIcon,
@@ -135,21 +127,7 @@ export const runtimeConfigSchema = z.strictObject({
         path: [0]
       })
   }),
-  normalize: z
-    .strictObject({
-      concurrency: normalizeConcurrency,
-      quality: normalizeQuality,
-      quality_step: normalizeQualityStep,
-      min_quality: normalizeMinQuality,
-      max_long_edge: normalizeMaxLongEdge,
-      max_size_kb: normalizeMaxSizeKb,
-      skip_webp_under_kb: skipWebpUnderKb
-    })
-    .refine((value) => value.min_quality <= value.quality, {
-      message: "min_quality must not exceed quality",
-      path: ["min_quality"]
-    }),
-  thumbnail: z.strictObject({ long_edge: thumbnailLongEdge, quality: thumbnailQuality }),
+  normalize: normalizeSchema,
   admin: z.strictObject({
     login_background: loginBackground,
     image_page_size: imagePageSize,

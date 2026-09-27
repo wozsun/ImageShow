@@ -2,9 +2,8 @@ import { createReadStream } from "node:fs";
 import { link, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { finished } from "node:stream/promises";
-import { getIngestionMaxFileBytes } from "../../../config/app-settings.ts";
 import { ApiError } from "../../../core/api-error.ts";
-import { openedReadToBuffer } from "../../../storage/objects/stream-buffer.ts";
+import { openedReadToBuffer, STORAGE_BUFFER_MAX_BYTES } from "../../../storage/objects/stream-buffer.ts";
 import { ingestionPreparedPath } from "./paths.ts";
 import {
   pruneIngestionTempParents,
@@ -30,7 +29,7 @@ export async function writeIngestionPreparedFile(
   }
 }
 
-export function readIngestionPreparedFile(file: string, signal?: AbortSignal) {
+export function readIngestionPreparedFile(file: string, expectedSize: number, signal?: AbortSignal) {
   const path = ingestionPreparedPath(file);
   return withActiveIngestionTempPaths([path], async () => {
     const body = createReadStream(path, { signal });
@@ -43,7 +42,8 @@ export function readIngestionPreparedFile(file: string, signal?: AbortSignal) {
           totalSize: undefined,
           backend: "local"
         },
-        getIngestionMaxFileBytes()
+        STORAGE_BUFFER_MAX_BYTES,
+        expectedSize
       );
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {

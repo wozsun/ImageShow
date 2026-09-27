@@ -436,6 +436,13 @@
   color: var(--admin-color-text-secondary);
   font-size: 14px;
 }
+.ingestion-job-head strong > span {
+  color: inherit;
+  font: inherit;
+}
+.ingestion-job-title-compact {
+  display: none;
+}
 .ingestion-job-meta {
   display: flex;
   align-items: baseline;
@@ -764,6 +771,12 @@ button.ingestion-empty-state.upload-dropzone:not(:disabled):hover,
   }
   .ingestion-job-head .ingestion-job-size-summary {
     display: block;
+  }
+  .ingestion-job-title-full {
+    display: none;
+  }
+  .ingestion-job-title-compact {
+    display: inline;
   }
   .ingestion-job-actions {
     grid-area: actions;

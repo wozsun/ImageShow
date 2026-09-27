@@ -1,3 +1,4 @@
+import { imageVariantUrl } from "@imageshow/shared/browser";
 import { imageDevice } from "@imageshow/shared/browser";
 import type {
   CompletedIngestionImageDto,
@@ -136,7 +137,7 @@ function activeIngestionJob(
   const prepared = item.prepared;
   const detected = prepared
     ? {
-        device: imageDevice(prepared.width, prepared.height),
+        device: imageDevice(prepared.variants.large.width, prepared.variants.large.height),
         brightness: prepared.detected_brightness
       }
     : undefined;
@@ -206,8 +207,8 @@ function activeIngestionJob(
     previewFull: prepared?.preview_full_url ?? existing?.previewFull,
     objectUrl: prepared ? undefined : existing?.objectUrl,
     draft,
-    width: prepared?.width ?? existing?.width ?? 0,
-    height: prepared?.height ?? existing?.height ?? 0,
+    width: prepared?.variants.large.width ?? existing?.width ?? 0,
+    height: prepared?.variants.large.height ?? existing?.height ?? 0,
     originalWidth: prepared?.original_width ?? existing?.originalWidth,
     originalHeight: prepared?.original_height ?? existing?.originalHeight,
     transferProgress: item.progress,
@@ -260,9 +261,8 @@ function activeIngestionJob(
       ? existing.browserDisplayReleased
       : true,
     originalSize: prepared?.original_size ?? existing?.originalSize,
-    finalSize: prepared?.size ?? existing?.finalSize,
-    quality: prepared ? prepared.quality : existing?.quality,
-    transcoded: prepared?.transcoded ?? existing?.transcoded,
+    variants: prepared?.variants ?? existing?.variants,
+    variantQuality: prepared?.variant_quality ?? existing?.variantQuality,
     storageSlug: item.storage_slug,
     failureStage: failed ? (item.commit ? "commit" : "prepare") : undefined,
     commitFailureCheckpoint: failed && item.commit ? "committing" : undefined,
@@ -299,8 +299,7 @@ function completedIngestionJob(
     originalWidth: existing?.originalWidth,
     originalHeight: existing?.originalHeight,
     originalSize: existing?.originalSize ?? existing?.file?.size,
-    quality: existing?.quality,
-    transcoded: existing?.transcoded,
+    variantQuality: existing?.variantQuality,
     file: existing?.file,
     fileFingerprint: existing?.fileFingerprint,
     downloadUrl: existing?.downloadUrl,
@@ -347,8 +346,8 @@ export function completedIngestionJobPatch(
   return {
     status: "done",
     message: "已完成",
-    preview: completed.thumb_url,
-    previewFull: completed.object_url,
+    preview: imageVariantUrl(completed, "small"),
+    previewFull: imageVariantUrl(completed, "medium"),
     objectUrl: undefined,
     draft: {
       device: completed.device,
@@ -361,15 +360,14 @@ export function completedIngestionJobPatch(
       original: completed.original,
       tags: completed.tags
     },
-    width: completed.width,
-    height: completed.height,
+    width: completed.variants.large.width,
+    height: completed.variants.large.height,
     ...(display
       ? {
           originalWidth: display.original_width,
           originalHeight: display.original_height,
           originalSize: display.original_size,
-          quality: display.quality,
-          transcoded: display.transcoded,
+          variantQuality: display.variant_quality,
           ...(manifestSource ? { manifestSource } : {}),
           ...(display.manifest_line === undefined
             ? {}
@@ -379,8 +377,8 @@ export function completedIngestionJobPatch(
             : { batchPosition: display.batch_position })
         }
       : {}),
-    finalSize: completed.image_size,
-    md5: completed.md5,
+    variants: completed.variants,
+    md5: completed.large_md5,
     imageTime: completed.image_time,
     storageSlug: completed.storage_slug,
     duplicates: [],

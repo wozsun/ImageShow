@@ -1,3 +1,4 @@
+import { imageVariantUrl } from "@imageshow/shared/browser";
 import { storageObjectKey } from "@imageshow/shared/browser";
 import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from "react";
 import { adminPermissions } from "@imageshow/shared/browser";
@@ -184,7 +185,7 @@ export function ImageMetadataEditorDialog({
   } as const;
   const modalSubtitle = singleItem
     ? activeItems[0]
-      ? storageObjectKey(activeItems[0].id, activeItems[0].ext)
+      ? storageObjectKey(activeItems[0].id)
       : ""
     : `${activeItems.length} 张图片`;
 
@@ -419,10 +420,10 @@ export function ImageMetadataEditorDialog({
                   onPreview={(opener) => {
                     previewReturnFocusRef.current = opener;
                     setPreview({
-                      src: item.object_url,
-                      thumbSrc: item.thumb_url,
-                      width: item.width,
-                      height: item.height
+                      src: imageVariantUrl(item, "medium"),
+                      thumbSrc: imageVariantUrl(item, "small"),
+                      width: item.variants.medium.width,
+                      height: item.variants.medium.height
                     });
                   }}
                 />

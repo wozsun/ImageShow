@@ -1,3 +1,4 @@
+import { clearVariantScratchAtStartup } from "./images/variants/scratch.ts";
 import { serve } from "@hono/node-server";
 import { appConfig } from "@imageshow/shared";
 import { bootstrapEnvironment } from "./config/bootstrap-env.ts";
@@ -42,6 +43,7 @@ import {
 } from "./storage/backends/registry.ts";
 import { createHttpApp } from "./http-app.ts";
 import { closeAllAdminSessionConnections } from "./users/admin-session-connections.ts";
+import { acquireApplicationHost } from "./core/database/application-host.ts";
 
 let coordinatorInitialization: Promise<unknown> | null = null;
 let unsubscribeBusinessAvailabilityGate: (() => void) | null = null;
@@ -49,25 +51,33 @@ let server: ReturnType<typeof serve> | null = null;
 let shuttingDown = false;
 let shutdownPromise: Promise<void> | null = null;
 let shutdownExitCode = 0;
+const startupAbort = new AbortController();
+let startupPromise: Promise<void> | null = null;
+let applicationHost: Awaited<ReturnType<typeof acquireApplicationHost>> | undefined;
 
 async function settleCoordinatorInitialization() {
   const current = coordinatorInitialization;
   if (current) await current.catch(() => undefined);
 }
 
-try {
+async function initializeApplication() {
   configureDatabasePools(deploymentConfig.database);
+  applicationHost = await acquireApplicationHost();
+  applicationHost.signal.addEventListener("abort", () => void shutdown("application host ownership lost", 1), { once: true });
+  startupAbort.signal.throwIfAborted();
   initializeRuntimeConfig();
   configureRuntimeLogger(() => getRuntimeConfig().log);
+  configureSharpRuntime();
   const app = createHttpApp();
   await ensureRuntimeDirectories();
+  await clearVariantScratchAtStartup();
   await initializeDatabaseSchema();
   await assertLocalImageHostForSite(getRuntimeConfig().site.domain);
   await ensureSuperAdmin({
     username: bootstrapEnvironment.adminUsername,
     password: bootstrapEnvironment.adminPassword
   });
-  configureSharpRuntime();
+  startupAbort.signal.throwIfAborted();
   markRuntimeInitializationComplete();
 
   unsubscribeBusinessAvailabilityGate = onBusinessAvailabilityGateOpen(() => {
@@ -88,9 +98,6 @@ try {
   server = serve({ fetch: app.fetch, port: serverPort });
   logger.info(`ImageShow listening on :${serverPort}`);
   startRedisOperationalMonitor();
-} catch (error) {
-  logger.error("application startup failed", error);
-  await shutdown("startup failure", 1);
 }
 
 function shutdown(signal: string, exitCode = 0) {
@@ -100,6 +107,7 @@ function shutdown(signal: string, exitCode = 0) {
     return shutdownPromise;
   }
   shuttingDown = true;
+  startupAbort.abort(new Error(`Application stopping: ${signal}`));
   unsubscribeBusinessAvailabilityGate?.();
   unsubscribeBusinessAvailabilityGate = null;
   logger.info(`received ${signal}, shutting down`);
@@ -107,6 +115,7 @@ function shutdown(signal: string, exitCode = 0) {
   hardExit.unref();
   shutdownPromise = (async () => {
     try {
+      await startupPromise?.catch(() => undefined);
       const currentServer = server;
       server = null;
       closeAllAdminSessionConnections();
@@ -136,6 +145,7 @@ function shutdown(signal: string, exitCode = 0) {
       logger.error("application shutdown failed", error);
     } finally {
       await redis.quit().catch(() => redis.disconnect());
+      await applicationHost?.close().catch(() => undefined);
       await closeDatabasePools();
       logger.info("application resources released");
       clearTimeout(hardExit);
@@ -147,3 +157,9 @@ function shutdown(signal: string, exitCode = 0) {
 
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
+
+startupPromise = initializeApplication();
+try { await startupPromise; } catch (error) {
+  logger.error("application startup failed", error);
+  await shutdown("startup failure", 1);
+}

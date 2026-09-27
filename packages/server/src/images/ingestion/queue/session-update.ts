@@ -43,7 +43,7 @@ export async function updateIngestionSessions(
       session.status !== "discarded" &&
       session.prepared
     ) {
-      decisionMd5Set.add(session.prepared.md5);
+      decisionMd5Set.add(session.prepared.variants.large.md5);
     }
   });
   const decisionMd5s = [...decisionMd5Set];
@@ -100,7 +100,7 @@ export async function updateIngestionSessions(
         const metadata = input.metadata ?? current.metadata;
         const refreshedDuplicateCount = current.prepared
           ? input.duplicate_decision
-            ? (duplicateCounts.get(current.prepared.md5) ?? 0)
+            ? (duplicateCounts.get(current.prepared.variants.large.md5) ?? 0)
             : current.prepared.duplicate_count
           : 0;
         const prepared = current.prepared

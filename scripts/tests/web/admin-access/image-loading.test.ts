@@ -66,7 +66,7 @@ test("[Web/后台访问] 缩略图真实挂载只请求一次并忽略快速换�
       const container = document.createElement("div");
       document.body.append(container);
       const root = createRoot(container);
-      const prefix = `https://img.example.test/images/full/${lateOutcome}`;
+      const prefix = `https://img.example.test/images/large/${lateOutcome}`;
       const sourceA = `${prefix}-a.webp`;
       const sourceB = `${prefix}-b.webp`;
       const sourceC = `${prefix}-c.webp`;

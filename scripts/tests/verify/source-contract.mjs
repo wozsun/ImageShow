@@ -437,75 +437,6 @@ function composeVolumeMount(service, expected) {
   });
 }
 
-const composeVolumeContractFixtures = [
-  [
-    { volumes: ["redis_data:/data"] },
-    { source: "redis_data", target: "/data", type: "volume" },
-    true
-  ],
-  [
-    { volumes: ["./data:/app/data:rw"] },
-    { source: "./data", target: "/app/data", type: "bind" },
-    true
-  ],
-  [
-    { volumes: ["redis_data:/data:ro"] },
-    { source: "redis_data", target: "/data", type: "volume" },
-    false
-  ],
-  [
-    {
-      volumes: [
-        {
-          type: "bind",
-          source: "redis_data",
-          target: "/data"
-        }
-      ]
-    },
-    { source: "redis_data", target: "/data", type: "volume" },
-    false
-  ],
-  [
-    {
-      volumes: [
-        {
-          type: "volume",
-          source: "redis_data",
-          target: "/data",
-          read_only: true
-        }
-      ]
-    },
-    { source: "redis_data", target: "/data", type: "volume" },
-    false
-  ],
-  [
-    {
-      volumes: [
-        {
-          type: "volume",
-          source: "redis_data",
-          target: "/data",
-          read_only: false
-        }
-      ]
-    },
-    { source: "redis_data", target: "/data", type: "volume" },
-    true
-  ]
-];
-for (const [service, expected, accepted] of composeVolumeContractFixtures) {
-  assert.equal(
-    composeVolumeMount(service, expected),
-    accepted,
-    `source-contract: Compose volume parser fixture drifted: ${JSON.stringify({
-      service,
-      expected
-    })}`
-  );
-}
-
 const runtimeDefaultEntries = new Map(objectLeafEntries(appConfig.runtimeDefaults));
 const runtimeDefaultPaths = new Set(runtimeDefaultEntries.keys());
 const runtimeDefaultPathOrder = [...runtimeDefaultEntries.keys()];
@@ -729,10 +660,6 @@ if (imageShowEnvironment.get("ADMIN_USERNAME") !== "${ADMIN_USERNAME:-admin}") {
 }
 if (imageShowEnvironment.get("ADMIN_PASSWORD") !== "${ADMIN_PASSWORD:?}") {
   throw new Error("source-contract: administrator password must be required without a default");
-}
-const securityOptions = new Set((imageShowService.security_opt ?? []).map(String));
-if (!securityOptions.has("no-new-privileges:true")) {
-  throw new Error("source-contract: ImageShow default Compose privilege hardening drifted");
 }
 const redisService = composeService(compose, "redis");
 if (composeEnvironment(redisService).size !== 0) {

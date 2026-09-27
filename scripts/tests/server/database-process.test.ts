@@ -85,6 +85,7 @@ test("[Server/数据库与进程] Worker 慢类型不阻塞后来任务，停止
       logger: { debug() {}, warn() {}, error: (...args: unknown[]) => errors.push(args) }
     },
     "../storage/objects/removal-admission.ts": { STORAGE_OBJECT_REMOVAL_CONCURRENCY: 1 },
+    "../images/preparation/execution.ts": { recoverPreparationJob: async () => undefined },
     "./handlers.ts": {
       handleBackgroundJob: async (job: Job, signal: AbortSignal) => {
         started.push(job.id);

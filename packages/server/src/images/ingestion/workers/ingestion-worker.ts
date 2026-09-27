@@ -599,7 +599,7 @@ export class IngestionSessionWorker {
     if (session.status === "committing") {
       const bytes = Math.max(
         1,
-        (session.prepared?.size ?? 0) + (session.prepared?.thumbnail_size ?? 0)
+        Object.values(session.prepared?.variants ?? {}).reduce((sum, variant) => sum + variant.bytes, 0)
       );
       return withIngestionCommitAdmission(bytes, signal, () => {
         onExecution(session);

@@ -76,7 +76,7 @@ if acceptance == 'upload' then
   if redis.call('ZSCORE', display_key, intent.display_order_key) then
     error('INGESTION_QUEUE_STRUCTURE canonical_missing')
   end
-  if tonumber(intent.expires_at or 0) <= now then
+  if intent.expires_at <= now then
     redis.call('DEL', intent_key)
     return { -3 }
   end
@@ -260,7 +260,7 @@ if action == 'progress' then
   if expected_token == '' or current.execution_token ~= expected_token then
     return { -4 }
   end
-  if tonumber(current.progress_seq) >= max_safe_integer then
+  if current.progress_seq >= max_safe_integer then
     return redis.error_reply('INGESTION_CANONICAL progress_sequence_exhausted')
   end
   local progress = cjson.decode(payload_json)
@@ -281,7 +281,7 @@ if action == 'progress' then
   current.phase = progress.phase
   current.message = progress.message
   current.progress = progress.progress
-  current.progress_seq = tonumber(current.progress_seq or 0) + 1
+  current.progress_seq = current.progress_seq + 1
   apply_projection_delta(metadata_key, before, projection(current))
   local serialized = encode_snapshot(current)
   store_snapshot(canonical_key, current, serialized, display_order_key)

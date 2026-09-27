@@ -1391,7 +1391,7 @@ export function useIngestionQueue(
   const removeLibraryDuplicate = useCallback((imageId: string) => {
     const md5 = jobsRef.current
       .flatMap((job) => job.duplicates)
-      .find((duplicate) => duplicate.id === imageId)?.md5;
+      .find((duplicate) => duplicate.id === imageId)?.large_md5;
     if (md5) invalidateIngestionDuplicateDetails(md5);
   }, []);
 

@@ -1,8 +1,3 @@
-import {
-  publicImageOrders,
-  type GalleryOrder
-} from "@imageshow/shared/browser";
-
 export type SelectOption = { value: string; label: string };
 
 const deviceLabels: Record<string, string> = { pc: "桌面端", mb: "移动端" };
@@ -79,19 +74,6 @@ export const commonImageBrightnessOptions: readonly SelectOption[] = [
   { value: "light", label: brightnessOptionLabel("light") },
   { value: "dark", label: brightnessOptionLabel("dark") }
 ];
-
-const galleryOrderLabels: Record<GalleryOrder, string> = {
-  latest: "最新优先",
-  oldest: "最旧优先",
-  random: "随机打乱"
-};
-
-export const galleryOrderSelectOptions: readonly SelectOption[] = publicImageOrders.map(
-  (value) => ({
-    value,
-    label: galleryOrderLabels[value]
-  })
-);
 
 const storageBackendLabels: Record<string, string> = { local: "本地存储" };
 

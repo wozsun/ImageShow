@@ -14,8 +14,6 @@ import type { IntegrationRuntime } from "./integration-runtime.mts";
 type CommitIntentModule =
   typeof import("../../../../packages/server/src/images/ingestion/commit/intent.ts");
 type CoreUuidModule = typeof import("../../../../packages/server/src/core/uuid.ts");
-type ImagePathsModule =
-  typeof import("../../../../packages/server/src/storage/objects/image-paths.ts");
 type ImageTimeModule = typeof import("../../../../packages/server/src/images/image-time.ts");
 type IngestionIdentityModule =
   typeof import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
@@ -31,7 +29,7 @@ type IngestionTransitionsModule =
   typeof import("../../../../packages/server/src/images/ingestion/sessions/transitions.ts");
 type PreparedFilesModule =
   typeof import("../../../../packages/server/src/images/ingestion/raw/prepared.ts");
-type StorageObjectPrefix = "full" | "thumbs";
+type StorageObjectPrefix = "large" | "medium" | "small";
 
 export type ReadyIngestionFixture = {
   commitIntent: CommitIntentModule;
@@ -51,6 +49,7 @@ export type ReadyIngestionFixture = {
   runtime: IntegrationRuntime;
   sessionId: string;
   preparedImageFile: string;
+  preparedMediumFile: string;
   preparedThumbnailFile: string;
   thumbnailBody: Buffer;
 };
@@ -64,6 +63,7 @@ async function cleanupFixtureResources(fixture: ReadyIngestionFixture) {
     repositoryKeys,
     runtime,
     preparedImageFile,
+      preparedMediumFile,
     preparedThumbnailFile
   } = fixture;
   const errors: unknown[] = [];
@@ -76,7 +76,7 @@ async function cleanupFixtureResources(fixture: ReadyIngestionFixture) {
       Array.isArray(payload.objects)
         ? payload.objects.flatMap(({ key, prefix }) =>
             typeof key === "string"
-              && (prefix === "full" || prefix === "thumbs")
+              && (prefix === "large" || prefix === "medium" || prefix === "small")
               ? [{ key, prefix }]
               : []
           )
@@ -91,8 +91,9 @@ async function cleanupFixtureResources(fixture: ReadyIngestionFixture) {
   }
   try {
     const objects: Array<{ key: string; prefix: StorageObjectPrefix }> = [
-      { prefix: "full", key: finalObjectKey },
-      { prefix: "thumbs", key: finalThumbnailKey },
+      { prefix: "large", key: finalObjectKey },
+      { prefix: "medium", key: finalObjectKey },
+      { prefix: "small", key: finalThumbnailKey },
       ...guardedObjects
     ];
     const uniqueObjects = [
@@ -105,7 +106,7 @@ async function cleanupFixtureResources(fixture: ReadyIngestionFixture) {
   try {
     const { removeIngestionPreparedFiles } =
       await import("../../../../packages/server/src/images/ingestion/raw/prepared.ts");
-    await removeIngestionPreparedFiles([preparedImageFile, preparedThumbnailFile]);
+    await removeIngestionPreparedFiles([preparedImageFile, preparedMediumFile, preparedThumbnailFile]);
   } catch (error) {
     errors.push(error);
   }
@@ -145,9 +146,6 @@ export async function createReadyIngestionFixture(
   const imageTime = (await import(
     runtime.moduleUrl("packages/server/src/images/image-time.ts")
   )) as ImageTimeModule;
-  const imagePaths = (await import(
-    runtime.moduleUrl("packages/server/src/storage/objects/image-paths.ts")
-  )) as ImagePathsModule;
   const preparedFiles = (await import(
     runtime.moduleUrl("packages/server/src/images/ingestion/raw/prepared.ts")
   )) as PreparedFilesModule;
@@ -214,41 +212,65 @@ export async function createReadyIngestionFixture(
     generation,
     execution_token: executionToken
   };
-  const preparedImageFile = paths.ingestionPreparedFile(preparedInput, "image");
-  const preparedThumbnailFile = paths.ingestionPreparedFile(preparedInput, "thumb");
+  const preparedImageFile = paths.ingestionPreparedFile(preparedInput, "large");
+  const preparedMediumFile = paths.ingestionPreparedFile(preparedInput, "medium");
+  const preparedThumbnailFile = paths.ingestionPreparedFile(preparedInput, "small");
   const imageBody = Buffer.from(`integration-image:${label}:${imageId}`);
   const thumbnailBody = Buffer.from(`integration-thumbnail:${label}:${imageId}`);
-  const finalObjectKey = storageObjectKey(imageId, "webp");
-  const finalThumbnailKey = imagePaths.thumbnailObjectKey(
-    imagePaths.parseImageObjectKey(finalObjectKey)!.id
-  );
+  const finalObjectKey = storageObjectKey(imageId);
+  const finalThumbnailKey = finalObjectKey;
   const repositoryKeys = sessionKeys.ingestionSessionKeys(owner, "import", sessionId);
   const storage = await runtime.storageRegistry.resolveStorageAccess(storageSlug);
   const repository = new repositoryModule.IngestionSessionRepository(runtime.redisClient.redis);
   const prepared: IngestionPreparedManifest = {
     producer_execution_token: executionToken,
-    prepared_image_sha256: createHash("sha256").update(imageBody).digest("hex"),
-    prepared_thumbnail_sha256: createHash("sha256").update(thumbnailBody).digest("hex"),
     original_size: imageBody.length,
     original_width: 1200,
     original_height: 800,
-    width: 1200,
-    height: 800,
-    ext: "webp",
-    md5: createHash("md5").update(imageBody).digest("hex"),
-    size: imageBody.length,
-    thumbnail_size: thumbnailBody.length,
-    quality: 90,
-    transcoded: true,
     detected_brightness: "dark",
     duplicate_count: 0,
-    generation
+    generation,
+    variants: {
+      large: {
+        width: 1200,
+        height: 800,
+        bytes: imageBody.length,
+        md5: createHash("md5").update(imageBody).digest("hex"),
+        sha256: createHash("sha256").update(imageBody).digest("hex"),
+        quality: 80,
+        effort: 4,
+        passthrough: false,
+        over_target: false
+      },
+      medium: {
+        width: 1200,
+        height: 800,
+        bytes: imageBody.length,
+        md5: createHash("md5").update(imageBody).digest("hex"),
+        sha256: createHash("sha256").update(imageBody).digest("hex"),
+        quality: 80,
+        effort: 4,
+        passthrough: false,
+        over_target: false
+      },
+      small: {
+        width: 1200,
+        height: 800,
+        bytes: thumbnailBody.length,
+        md5: createHash("md5").update(thumbnailBody).digest("hex"),
+        sha256: createHash("sha256").update(thumbnailBody).digest("hex"),
+        quality: 80,
+        effort: 4,
+        passthrough: false,
+        over_target: false
+      }
+    }
   };
   const commitRequest: IngestionCommitItemInputDto = {
     session_id: sessionId,
     image_id: imageId,
     expected_version: 0,
-    expected_md5: prepared.md5,
+    expected_md5: prepared.variants.large.md5,
     commit_request_id: randomUUID(),
     duplicate_decision: "upload",
     metadata
@@ -261,6 +283,7 @@ export async function createReadyIngestionFixture(
       imageBody,
       new AbortController().signal
     );
+    await preparedFiles.writeIngestionPreparedFile(preparedMediumFile, imageBody, new AbortController().signal);
     await preparedFiles.writeIngestionPreparedFile(
       preparedThumbnailFile,
       thumbnailBody,
@@ -315,6 +338,7 @@ export async function createReadyIngestionFixture(
       runtime,
       sessionId,
       preparedImageFile,
+      preparedMediumFile,
       preparedThumbnailFile,
       thumbnailBody
     };
@@ -338,6 +362,7 @@ export async function createReadyIngestionFixture(
         runtime,
         sessionId,
         preparedImageFile,
+      preparedMediumFile,
         preparedThumbnailFile,
         thumbnailBody
       } satisfies ReadyIngestionFixture);

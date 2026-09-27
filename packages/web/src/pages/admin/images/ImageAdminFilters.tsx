@@ -31,9 +31,9 @@ export const emptyImageAdminFilters: ImageAdminFilterValues = {
   author: ""
 };
 
-export const imageAdminDoubleRowMaxWidth = 947;
+const imageAdminDoubleRowMaxWidth = 947;
 
-export function isImageAdminDoubleRowWidth(width: number) {
+function isImageAdminDoubleRowWidth(width: number) {
   return width > 0 && width <= imageAdminDoubleRowMaxWidth;
 }
 
@@ -47,7 +47,7 @@ const doubleRowFilterGroups = {
   secondary: ["theme", "tag"]
 } as const satisfies Record<string, readonly (keyof ImageAdminFilterValues)[]>;
 
-export function imageAdminFilterDomGroups(doubleRowLayout: boolean) {
+function imageAdminFilterDomGroups(doubleRowLayout: boolean) {
   return doubleRowLayout ? doubleRowFilterGroups : singleRowFilterGroups;
 }
 

@@ -12,7 +12,7 @@ PostgreSQL 是正式图片、词表、账号、存储注册表和持久任务的
 ## 启动与结构契约
 
 数据库启动由干净初始化与轻量 readiness 组成。空数据库在一个事务中执行完整 `schema.sql`，
-然后进行只读 readiness；非空数据库只做只读核对。停机备份与恢复步骤见
+然后进行只读 readiness；当前结构的非空数据库只做只读核对。停机备份与恢复步骤见
 [数据维护与恢复](../DEPLOY.md#数据维护与恢复)。
 干净初始化或 readiness 失败都会回滚本次事务。全部连接固定使用
 `search_path=public`；单实例部署按顺序完成 schema 和管理员播种。readiness 在启动事务的
@@ -42,7 +42,7 @@ readiness 的结论只由这套运行时最小契约决定；应用未消费的�
 
 readiness 不复制 `schema.sql` 的可空性、默认值、无消费者 CHECK、触发器或普通查询索引；作者
 身份 CHECK 与复合唯一索引，以及主题的可空性与无默认值要求，
-因当前读写直接依赖而属于明确例外。
+以及三档事实的非空要求，因当前读写直接依赖而属于明确例外。
 应用未消费的表、列、索引和约束位于启动契约之外。破坏性清理由维护者在停机、备份和恢复验证后
 单独执行。
 
@@ -101,10 +101,9 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 | `brightness` | 亮度：`dark` / `light`，上传默认自动识别 |
 | `theme` | 可空主题外键；SQL `NULL` / API `null` 表示无主题，无默认值 |
 | `author` | 作者 slug，可空，外键 → `author.slug`，删除作者时自动置空 |
-| `ext` | 扩展名：`jpg` / `png` / `webp` / `gif` / `avif` |
-| `md5` | 文件 MD5，32 位十六进制；用于判重 |
-| `width` / `height` | 像素尺寸 |
-| `image_size` / `thumbnail_size` | 标准化图片字节数 / 缩略图字节数 |
+| `l_width` / `l_height` / `l_byte_size` / `l_md5` | large 的尺寸、字节数和 MD5；MD5 用于入库判重，索引不唯一 |
+| `m_width` / `m_height` / `m_byte_size` / `m_md5` | medium 的尺寸、字节数和 MD5 |
+| `s_width` / `s_height` / `s_byte_size` / `s_md5` | small 的尺寸、字节数和 MD5 |
 | `title` / `description` / `source` / `original` | 标题 / 描述 / 来源页面 / 外部原图链接；原图链接仅向已认证管理员返回，原图入口独立要求有效管理员会话；标题和描述在去除首尾空白后分别最多 80 / 500 个普通汉字，外部链接仅允许 HTTPS |
 | `image_time` | 图片展示 / 图库排序时间；JSONL 可指定，同一前端批次未指定时共享 `batch_time`，省略时使用会话创建时间 |
 | `deleted_at` | 移入回收站时间 |
@@ -113,21 +112,11 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 | `updated_at` | 图片元数据最后更新时间 |
 
 图片分类直接由 `device`、`brightness` 与 `theme` 表达，不参与对象路径。图片的
-正式对象键只由 UUID 和扩展名派生，不保存于图片主表，外层 `full` / `thumbs` prefix 由存储层管理。随机候选由
-统一 Redis ready-image ZSET 投影维护，PostgreSQL 不保存分类连续编号。
+正式对象键只由 UUID 派生，固定 WebP，外层 `large` / `medium` / `small` 由存储层管理。随机候选由统一 Redis ready-image 投影维护。
 
-成功提交的图片以正式完整展示图与正式缩略图同时存在为数据库外对象不变量。正常缩略图 GET
-只按 `storage_slug + id + ext` 解析唯一地址并读取正式对象，不查询 repair 状态、不探测
-存在性、不读取完整图降级，也不在请求中写对象或 `thumbnail_size`。缺图返回 404；分类编辑
-不为路径搬迁读取或搬动对象，只有显式自动亮度检测会读取现有缩略图。存储后端迁移缺少缩略图
-时返回结构化 `storage_thumbnail_missing`，要求先运行检查页“存储维护”。
+每张正式图片均有三个独立对象，三档尺寸、体积和摘要非空且有效。读取只定位所选档位，缺失返回 404；分类编辑不改写对象事实，自动亮度读取 small。存储迁移逐档验证登记的体积与摘要。
 
-检查页显式维护是独立的管理员同步操作：它在全局存储位置写锁内重读当前图片位置，只为
-原图仍存在且缩略图确实缺失的记录生成、强摘要回读并写回 `thumbnail_size`。该路径不创建
-`background_job`，也不把修复字节写入 JSONB；数据库回写未确认时会清理本次候选并逐项报告
-失败。维修写对象前用现有合法值 `thumbnail_size=0` 标记尚未最终采用的候选；即使数据库
-最终更新和候选清理同时无法确认，后续显式维护仍会重新进入该记录，而不需要新表、任务或
-修复 payload。它是当前唯一会生成缩略图的维修入口。
+检查页维修在独占位置锁内查找其他物理后端的同键同档副本，只有尺寸、体积、MD5 和完整解码全部通过才恢复目标。没有一致副本时报告从备份恢复；不重新编码或修改三档事实。
 
 选中删除和清空回收站都在回收站成员 advisory lock 内开启短事务，解析当时仍为 deleted 的
 精确 ID 集合，为每张尚无删除任务的图片创建一条 `trash.purge`。`background_job.target_id`
@@ -139,7 +128,7 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 包括耗尽失败或异常成功的任务；`purge_pending` 从任务存在性查询得出，不持久化到 metadata。
 
 Worker 每次领取一张图片的任务，在单图存储 mutation lock 内核对当前 execution token、目标状态
-与对象位置，再交给共享对象清理准入。原图、缩略图删除成功或已不存在后，以图片 ID、deleted
+与对象位置，再交给共享对象清理准入。large / medium / small 三档对象删除成功或已不存在后，以图片 ID、deleted
 状态与对象位置为条件删除 metadata。不可逆对象删除开始后，在锁保护下收口，不因执行期限
 到达而丢弃数据库收尾。每张图片独立失败与重试；失败缓存失效的任务在目标行已消失时仍可重试完成。
 
@@ -311,7 +300,7 @@ HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退�
 派生 registry 的 TTL、LRU、结果数和成员数上限约束，不参与核心完整性判定。
 
 图片编辑把 metadata、必要的 author / theme / tag 创建和完整标签替换放进同一张图片的单个
-事务；分类变化不改变对象位置、`thumbnail_size` 或创建清理回执。实际变化只推进一次
+事务；分类变化不改变对象位置、三档文件事实 或创建清理回执。实际变化只推进一次
 `ready_image_revision`；事务任一步失败会
 完整回滚该图片，纯 no-op 不推进。并发编辑采用 last-write-wins，不存储逐图编辑版本，也不
 以 `ready_image_revision` 充当编辑冲突仲裁。
@@ -322,7 +311,7 @@ HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退�
 时间戳。身份两列必须同时为空或同时非空；provider 是 1–32 位小写字母数字与内部连字符组成的
 稳定 token，ID 非空。两列均非空时 `(identity_provider, identity_id)` 唯一，因此不同 provider
 可以复用同一 ID，同一 provider 的同一 ID 只能属于一位作者；数据库 CHECK 不枚举当前平台。
-首版作者领域只支持 `weibo`，并只从严格的 `https://weibo.com/u/<UID>` 主页链接派生 1–20 位
+当前作者领域只支持 `weibo`，并只从严格的 `https://weibo.com/u/<UID>` 主页链接派生 1–20 位
 非零开头数字 UID。管理员不能独立写入身份列；链接清空、换成未识别 HTTPS 地址或换绑 UID 时，
 Server 在同一作者事务中同步清空或替换身份。管理端作者 DTO 只返回
 `derived_identity: null | { provider: "weibo"; id: string }`，公共图片和 Ingestion DTO 仍只消费

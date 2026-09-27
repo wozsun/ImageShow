@@ -1,4 +1,5 @@
 import type { Context, MiddlewareHandler } from "hono";
+import { imageVariants } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { isAllowedSiteHost } from "../config/site-host.ts";
 import {
@@ -10,7 +11,7 @@ import { publishedLocalPublicUrl } from "../storage/backends/registry.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { noStoreCacheControl, setPublicResourceCors } from "../core/http/headers.ts";
 import { serveLocalStoredObject } from "../images/serving/stored-image.ts";
-import { parseImageObjectKey, thumbnailObjectKey } from "../storage/objects/image-paths.ts";
+import { parseImageObjectKey } from "../storage/objects/image-paths.ts";
 import type { AssetHandler } from "./assets.ts";
 import { assertAllowedImageReferer } from "./image-referer.ts";
 
@@ -42,14 +43,10 @@ function resourcePreflight(c: Context) {
 
 function localImageObject(path: string, base: URL) {
   const root = base.pathname.replace(/\/+$/, "");
-  const prefix = path.startsWith(`${root}/full/`)
-    ? "full"
-    : path.startsWith(`${root}/thumbs/`)
-      ? "thumbs"
-      : null;
+  const prefix = imageVariants.find((value) => path.startsWith(`${root}/${value}/`));
   const key = prefix ? path.slice(`${root}/${prefix}/`.length) : "";
   const parsed = parseImageObjectKey(key);
-  return prefix && parsed && (prefix !== "thumbs" || thumbnailObjectKey(parsed.id) === key)
+  return prefix && parsed
     ? ({ prefix, key } as const)
     : null;
 }

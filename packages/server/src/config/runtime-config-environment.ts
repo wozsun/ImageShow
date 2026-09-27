@@ -157,34 +157,19 @@ export const runtimeConfigEnvironmentBindings = [
     environmentVariable: "NORMALIZE_CONCURRENCY",
     valueKind: "number"
   },
-  { path: "normalize.quality", environmentVariable: "NORMALIZE_QUALITY", valueKind: "number" },
-  {
-    path: "normalize.quality_step",
-    environmentVariable: "NORMALIZE_QUALITY_STEP",
-    valueKind: "number"
-  },
-  {
-    path: "normalize.min_quality",
-    environmentVariable: "NORMALIZE_MIN_QUALITY",
-    valueKind: "number"
-  },
-  {
-    path: "normalize.max_long_edge",
-    environmentVariable: "NORMALIZE_MAX_LONG_EDGE",
-    valueKind: "number"
-  },
-  {
-    path: "normalize.max_size_kb",
-    environmentVariable: "NORMALIZE_MAX_SIZE_KB",
-    valueKind: "number"
-  },
-  {
-    path: "normalize.skip_webp_under_kb",
-    environmentVariable: "NORMALIZE_SKIP_WEBP_UNDER_KB",
-    valueKind: "number"
-  },
-  { path: "thumbnail.long_edge", environmentVariable: "THUMBNAIL_LONG_EDGE", valueKind: "number" },
-  { path: "thumbnail.quality", environmentVariable: "THUMBNAIL_QUALITY", valueKind: "number" },
+  { path: "normalize.quality_step", environmentVariable: "NORMALIZE_QUALITY_STEP", valueKind: "number" },
+  { path: "normalize.large.quality", environmentVariable: "NORMALIZE_LARGE_QUALITY", valueKind: "number" },
+  { path: "normalize.large.min_quality", environmentVariable: "NORMALIZE_LARGE_MIN_QUALITY", valueKind: "number" },
+  { path: "normalize.large.max_long_edge", environmentVariable: "NORMALIZE_LARGE_MAX_LONG_EDGE", valueKind: "number" },
+  { path: "normalize.large.max_size_kb", environmentVariable: "NORMALIZE_LARGE_MAX_SIZE_KB", valueKind: "number" },
+  { path: "normalize.medium.quality", environmentVariable: "NORMALIZE_MEDIUM_QUALITY", valueKind: "number" },
+  { path: "normalize.medium.min_quality", environmentVariable: "NORMALIZE_MEDIUM_MIN_QUALITY", valueKind: "number" },
+  { path: "normalize.medium.max_long_edge", environmentVariable: "NORMALIZE_MEDIUM_MAX_LONG_EDGE", valueKind: "number" },
+  { path: "normalize.medium.max_size_kb", environmentVariable: "NORMALIZE_MEDIUM_MAX_SIZE_KB", valueKind: "number" },
+  { path: "normalize.small.quality", environmentVariable: "NORMALIZE_SMALL_QUALITY", valueKind: "number" },
+  { path: "normalize.small.min_quality", environmentVariable: "NORMALIZE_SMALL_MIN_QUALITY", valueKind: "number" },
+  { path: "normalize.small.max_long_edge", environmentVariable: "NORMALIZE_SMALL_MAX_LONG_EDGE", valueKind: "number" },
+  { path: "normalize.small.max_size_kb", environmentVariable: "NORMALIZE_SMALL_MAX_SIZE_KB", valueKind: "number" },
   {
     path: "admin.login_background",
     environmentVariable: "ADMIN_LOGIN_BACKGROUND",

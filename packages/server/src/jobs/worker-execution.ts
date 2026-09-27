@@ -244,11 +244,12 @@ export class WorkerExecutionCoordinator<Job, Result> {
       Math.max(1, this.options.leaseRenewalIntervalMs)
     );
     renewalTimer.unref();
+    const taskTimeoutMs = this.options.taskTimeoutMs;
     const deadlineTimer = setTimeout(
       () => {
-        this.abort(record, new WorkerTaskTimeoutError(this.options.taskTimeoutMs));
+        this.abort(record, new WorkerTaskTimeoutError(taskTimeoutMs));
       },
-      Math.max(1, this.options.taskTimeoutMs)
+      Math.max(1, taskTimeoutMs)
     );
     deadlineTimer.unref();
 

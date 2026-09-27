@@ -13,16 +13,19 @@ export const publicBaseUrlSchema = z
         url.protocol !== "https:" ||
         url.username ||
         url.password ||
+        !/^https:\/\//iu.test(value) ||
         /[\\?#\s]/u.test(value) ||
         !matchesSiteHost(url.host, "")
       )
         throw new Error("Invalid public URL");
-      const segments = url.pathname
+      // URL parsing removes dot segments, so validate the supplied path first.
+      const rawPath = value.replace(/^https:\/\/[^/]+/iu, "");
+      const segments = rawPath
         .split("/")
         .filter(Boolean)
         .map((part) => {
           const decoded = decodeURIComponent(part);
-          if (decoded === "." || decoded === ".." || /[/\\\u0000-\u0020\u007f]/u.test(decoded)) {
+          if (decoded === "." || decoded === ".." || /[/\\\u0000-\u001f\u007f]/u.test(decoded)) {
             throw new Error("Invalid public URL path");
           }
           return encodeURIComponent(decoded);

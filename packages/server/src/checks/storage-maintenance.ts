@@ -13,7 +13,7 @@ import {
   type MaintenanceItem,
   type MaintenanceOutcome
 } from "./storage-maintenance-plan.ts";
-import { repairStorageThumbnail } from "./storage-thumbnail-repair.ts";
+import { repairStorageVariant } from "./storage-variant-repair.ts";
 import { maintainTrashPurgeTasks } from "../images/trash/purge-maintenance.ts";
 
 function summarizeMaintenance(
@@ -45,7 +45,7 @@ async function maintainStorageUnderLock(
   type IndexedItem = Readonly<{ index: number; item: MaintenanceItem }>;
   type RemovalCandidate = Extract<MaintenanceCandidate, { kind: "remove" }>;
   const settled: IndexedItem[] = [];
-  const repairs: Array<Readonly<{ index: number; imageId: string }>> = [];
+  const repairs: Array<Readonly<{ index: number; imageId: string; prefix: Extract<MaintenanceCandidate, { kind: "repair" }>["prefix"] }>> = [];
   const removals: Array<
     Readonly<{
       index: number;
@@ -56,49 +56,25 @@ async function maintainStorageUnderLock(
     if (candidate.kind === "result") {
       settled.push({ index, item: candidate.item });
     } else if (candidate.kind === "repair") {
-      repairs.push({ index, imageId: candidate.imageId });
+      repairs.push({ index, imageId: candidate.imageId, prefix: candidate.prefix });
     } else {
       removals.push({ index, candidate });
     }
   }
-  // Each candidate is scheduled only by its actual resource owner. Repairs
-  // and removals may progress together, while neither producer can overfill
-  // the other resource's FIFO queue.
-  const [repairOutcome, removalOutcome] = await Promise.allSettled([
-    mapWithWorkerPool(
-      repairs,
-      getRuntimeConfig().normalize.concurrency,
-      async ({ index, imageId }) => ({
-        index,
-        item: await repairStorageThumbnail(
-          imageId,
-          scheduleSignal,
-          lockSignal
-        )
-      }),
-      { signal: scheduleSignal }
-    ),
-    mapWithWorkerPool(
-      removals,
-      STORAGE_OBJECT_REMOVAL_CONCURRENCY,
-      async ({ index, candidate }) => ({
-        index,
-        item: await removeStorageMaintenanceCandidate(
-          candidate,
-          scheduleSignal,
-          lockSignal
-        )
-      }),
-      { signal: scheduleSignal }
-    )
-  ]);
-  // The caller signal stops new scheduling, but already-started storage work
-  // deliberately finishes with the write-lock signal. Keep the advisory lock
-  // until both resource pools have settled before propagating either failure.
-  if (repairOutcome.status === "rejected") throw repairOutcome.reason;
-  if (removalOutcome.status === "rejected") throw removalOutcome.reason;
-  const repaired = repairOutcome.value;
-  const removed = removalOutcome.value;
+  // Retained replicas may be repair sources. Finish repairs before orphan removal.
+  const repaired = await mapWithWorkerPool(
+    repairs, getRuntimeConfig().normalize.concurrency,
+    async ({ index, imageId, prefix }) => ({ index, item: await repairStorageVariant(imageId, prefix, scheduleSignal, lockSignal) }),
+    { signal: scheduleSignal }
+  );
+  const failedKeys = new Set(repaired.filter(({ item }) => item.outcome === "failed").map(({ item }) => item.key));
+  const removed = await mapWithWorkerPool(
+    removals, STORAGE_OBJECT_REMOVAL_CONCURRENCY,
+    async ({ index, candidate }) => ({ index, item: failedKeys.has(candidate.key)
+      ? { action: "remove_object" as const, outcome: "skipped" as const, backend: candidate.backend, prefix: candidate.prefix, key: candidate.key, reason: "保留修复失败图片的副本供人工恢复" }
+      : await removeStorageMaintenanceCandidate(candidate, scheduleSignal, lockSignal) }),
+    { signal: scheduleSignal }
+  );
   const items = [...settled, ...repaired, ...removed]
     .sort((left, right) => left.index - right.index)
     .map(({ item }) => item);

@@ -1,3 +1,4 @@
+import { packImageAddresses, type ImageWireResponse } from "@imageshow/shared/browser";
 import type { Context } from "hono";
 import type {
   ApiErrorResponseDto,
@@ -19,9 +20,9 @@ import {
 } from "./content-response.ts";
 
 export function apiSuccess(): { ok: true };
-export function apiSuccess<T extends Record<string, unknown>>(fields: T): ApiSuccessResponseDto<T>;
+export function apiSuccess<T extends Record<string, unknown>>(fields: T): ApiSuccessResponseDto<ImageWireResponse<T>>;
 export function apiSuccess(fields: Record<string, unknown> = {}) {
-  return { ok: true as const, ...fields };
+  return { ok: true as const, ...packImageAddresses(fields) };
 }
 
 export function apiSuccessEtag<T extends Record<string, unknown>>(fields: T) {
@@ -99,7 +100,7 @@ export function handleApiError(context: Context, error: unknown) {
       error: error.message,
       details: error.details
     } satisfies ApiErrorResponseDto;
-    return context.json(payload, error.status as never);
+    return context.json(packImageAddresses(payload), error.status as never);
   }
   const unhandled = error as { name?: string };
   if (unhandled?.name === "redis_unavailable") {
@@ -151,7 +152,7 @@ export function apiErrorResponse(
     error: error.message,
     ...(Object.keys(details).length ? { details } : {})
   };
-  return new Response(JSON.stringify(payload), {
+  return new Response(JSON.stringify(packImageAddresses(payload)), {
     status: error.status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",

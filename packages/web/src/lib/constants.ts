@@ -3,7 +3,6 @@ export {
   adminBasePath,
   publicHomeBrowsePath,
   publicRootPath,
-  slugMaxLength,
   slugPattern
 } from "@imageshow/shared/browser";
 

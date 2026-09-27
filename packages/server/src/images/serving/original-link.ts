@@ -4,7 +4,6 @@ import type { StorageRegistryAccess } from "../../storage/backends/registry.ts";
 
 type OriginalComparableImage = {
   id: string;
-  ext: string;
   storage_slug: string;
 };
 
@@ -28,6 +27,7 @@ export async function displayUrlForOriginalComparison(
   return publicImageUrl(
     image,
     image.storage_slug,
+    "large",
     access
   );
 }

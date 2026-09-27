@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { link, mkdir, open, opendir, rm, rmdir, writeFile, access } from "node:fs/promises";
+import { link, open, opendir, rm, rmdir, writeFile, access } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { runtimePaths } from "../../config/bootstrap-env.ts";
-import { getIngestionMaxFileBytes } from "../../config/app-settings.ts";
+import { makeDurableDirectory, syncDirectory, syncFile } from "./local-publication.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { safeStoragePath, STORAGE_PREFIXES, type StoragePrefix } from "../objects/keys.ts";
 import type {
@@ -15,6 +15,7 @@ import type {
   StoragePruneOptions,
   StorageRemoveOptions,
   StorageRequestOptions,
+  StorageBufferReadOptions,
   StorageServerCopyOptions,
   StorageServerCopySource,
   StorageSelfTest,
@@ -23,7 +24,7 @@ import type {
 import { parseSingleByteRange } from "../../core/http/byte-range.ts";
 import { localObjectEtag } from "../objects/validator.ts";
 import { isMissingFileError } from "../objects/not-found.ts";
-import { openedReadToBuffer } from "../objects/stream-buffer.ts";
+import { openedReadToBuffer, STORAGE_BUFFER_MAX_BYTES } from "../objects/stream-buffer.ts";
 import {
   batchStorageKeys,
   STORAGE_ADMIN_LIST_MAX_KEYS,
@@ -117,6 +118,7 @@ async function withLocalCandidate(candidate: string, publish: () => Promise<void
   }
   try {
     await rm(candidate, { force: true });
+    await syncDirectory(dirname(candidate));
   } catch (cleanupError) {
     if (publishFailed) {
       throw new AggregateError(
@@ -212,11 +214,12 @@ export class LocalStorageDriver implements StorageDriver {
   }
 
   async readBuffer(
-    prefix: StoragePrefix, key: string, options: StorageRequestOptions = {}
+    prefix: StoragePrefix, key: string, options: StorageBufferReadOptions = {}
   ) {
     return openedReadToBuffer(
       await this.openRead(prefix, key, undefined, options),
-      getIngestionMaxFileBytes()
+      STORAGE_BUFFER_MAX_BYTES,
+      options.expectedSize
     );
   }
 
@@ -229,15 +232,17 @@ export class LocalStorageDriver implements StorageDriver {
   ) {
     options.signal?.throwIfAborted();
     const target = safeStoragePath(prefix, key);
-    await mkdir(dirname(target), { recursive: true });
+    await makeDurableDirectory(dirname(target));
     options.signal?.throwIfAborted();
     const candidate = `${target}.candidate-${randomUUID()}`;
     await withLocalCandidate(candidate, async () => {
       await writeFile(candidate, body, { flag: "wx", signal: options.signal });
+      await syncFile(candidate);
       // Linking a complete same-directory candidate makes publication atomic
       // and refuses to overwrite an object that appeared concurrently.
       options.signal?.throwIfAborted();
       await link(candidate, target);
+      await syncDirectory(dirname(target));
     });
   }
 
@@ -254,7 +259,7 @@ export class LocalStorageDriver implements StorageDriver {
     }
     options.signal?.throwIfAborted();
     const target = safeStoragePath(prefix, key);
-    await mkdir(dirname(target), { recursive: true });
+    await makeDurableDirectory(dirname(target));
     options.signal?.throwIfAborted();
     const candidateToken = options.atomicCandidateToken ?? randomUUID();
     if (options.atomicCandidateToken && !uuidV7TokenPattern.test(candidateToken)) {
@@ -271,9 +276,19 @@ export class LocalStorageDriver implements StorageDriver {
           "Storage stream length did not match its declared size"
         );
       }
+      await syncFile(candidate);
       options.signal?.throwIfAborted();
       await link(candidate, target);
+      await syncDirectory(dirname(target));
     });
+  }
+
+  async ensureDurable(prefix: StoragePrefix, key: string, options: StorageRequestOptions = {}) {
+    options.signal?.throwIfAborted();
+    const path = safeStoragePath(prefix, key);
+    await syncFile(path);
+    await makeDurableDirectory(dirname(path));
+    options.signal?.throwIfAborted();
   }
 
   async removeObjects(
@@ -355,8 +370,8 @@ export class LocalStorageDriver implements StorageDriver {
     const key = `.storage-test-${randomUUID()}`;
     let testError: unknown;
     try {
-      await this.writeBuffer("full", key, Buffer.from("ok"), "text/plain", options);
-      if (!(await this.exists("full", key, options))) {
+      await this.writeBuffer("large", key, Buffer.from("ok"), "text/plain", options);
+      if (!(await this.exists("large", key, options))) {
         throw new Error("Local self-test object could not be read back");
       }
     } catch (error) {
@@ -365,7 +380,7 @@ export class LocalStorageDriver implements StorageDriver {
     try {
       // The caller may cancel after publication. Cleanup has its own budget
       // and only owns this probe's unique object, including uncertain writes.
-      const [removed] = await this.removeObjects([{ prefix: "full", key }], {
+      const [removed] = await this.removeObjects([{ prefix: "large", key }], {
         signal: AbortSignal.timeout(10_000)
       });
       if (removed?.status !== "removed" && removed?.status !== "missing") {

@@ -2369,27 +2369,49 @@ await runIntegrationScenario(async (runtime) => {
     original_size: 10,
     original_width: 100,
     original_height: 100,
-    width: 100,
-    height: 100,
-    ext: "webp" as const,
-    md5: "1".repeat(32),
-    prepared_image_sha256: "2".repeat(64),
-    prepared_thumbnail_sha256: "3".repeat(64),
-    size: 8,
-    thumbnail_size: 4,
-    quality: 90,
-    transcoded: true,
     detected_brightness: "dark" as const,
     duplicate_count: 2,
-    generation: coreUuid.randomUuidV7()
+    generation: coreUuid.randomUuidV7(),
+    variants: {
+      large: {
+        width: 100,
+        height: 100,
+        bytes: 8,
+        md5: "1".repeat(32),
+        sha256: "2".repeat(64),
+        quality: null,
+        effort: null,
+        passthrough: true,
+        over_target: false
+      },
+      medium: {
+        width: 100,
+        height: 100,
+        bytes: 8,
+        md5: "1".repeat(32),
+        sha256: "2".repeat(64),
+        quality: 75,
+        effort: 4,
+        passthrough: false,
+        over_target: false
+      },
+      small: {
+        width: 100,
+        height: 100,
+        bytes: 4,
+        md5: "3".repeat(32),
+        sha256: "3".repeat(64),
+        quality: 65,
+        effort: 4,
+        passthrough: false,
+        over_target: false
+      }
+    }
   };
   const stateBeforeMissingPreparedHashes = await readActiveSchemaState();
-  for (const omittedHash of [
-    "prepared_image_sha256",
-    "prepared_thumbnail_sha256"
-  ]) {
-    const preparedWithoutHash = { ...preparedManifest };
-    Reflect.deleteProperty(preparedWithoutHash, omittedHash);
+  for (const variant of ["large", "medium", "small"] as const) {
+    const preparedWithoutHash = structuredClone(preparedManifest);
+    Reflect.deleteProperty(preparedWithoutHash.variants[variant], "sha256");
     const missingHashCandidate = {
       ...extendedHeartbeat.session,
       status: "ready" as const,
@@ -2416,7 +2438,7 @@ await runIntegrationScenario(async (runtime) => {
         missingHashCandidate,
         heartbeatAt + 9
       ),
-      /INGESTION_QUEUE_STRUCTURE prepared_fields/
+      /INGESTION_QUEUE_STRUCTURE variant_fields/
     );
     assert.deepEqual(
       await readActiveSchemaState(),
@@ -2473,7 +2495,7 @@ await runIntegrationScenario(async (runtime) => {
           commit_request_id: commitRequestId,
           commit_intent_hash: "2".repeat(64),
           created_by: ingestionOwner,
-          expected_md5: preparedManifest.md5,
+          expected_md5: preparedManifest.variants.large.md5,
           duplicate_decision: "upload" as const,
           metadata: { ...ingestionMetadata, tags: [] }
         },
@@ -2565,6 +2587,7 @@ await runIntegrationScenario(async (runtime) => {
     resolvingUpload.session,
     heartbeatAt + 14
   );
+  assert.deepEqual(completedReceipt.display?.variant_quality, { large: null, medium: 75, small: 65 });
   const publishedCompletionMutations: Parameters<typeof ingestionRepository.mutateSemantic>[] = [];
   const completionMutationClockLowerBound = Date.now();
   await ingestionCommitCompletion.publishCompletedReceipt(
@@ -2592,6 +2615,16 @@ await runIntegrationScenario(async (runtime) => {
     ...runtimeAvailability.getRedisOperationalState()
   };
   const invalidCompletedIdentities = [
+    ...[0, 101, 80.5, "80"].map((quality) => ({
+      receipt: {
+        ...completedReceipt,
+        display: {
+          ...completedReceipt.display,
+          variant_quality: { large: null, medium: quality, small: 65 }
+        }
+      },
+      code: "ingestion_queue_structure_invalid"
+    })),
     {
       receipt: { ...completedReceipt, commit_intent_hash: "x" },
       code: "ingestion_queue_structure_invalid"
@@ -2624,6 +2657,9 @@ await runIntegrationScenario(async (runtime) => {
     )
   );
   for (const invalid of invalidCompletedIdentities) {
+    if (invalid.code === "ingestion_queue_structure_invalid") {
+      assert.throws(() => ingestionSessionCodec.parseStoredIngestionSession(JSON.stringify(invalid.receipt)));
+    }
     await assert.rejects(
       productionIngestionRepository.mutateSemantic(
         resolvingUpload.session,
@@ -2708,8 +2744,7 @@ await runIntegrationScenario(async (runtime) => {
     "终态收据不得再走 semantic mutation"
   );
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5)
-       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         completedUpload.session.image_id,
         ingestionOwner,
@@ -2728,6 +2763,7 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.equal(completedStatus[0].status, "completed");
   assert.equal(completedStatus[0].redis_status, "completed");
+  assert.deepEqual(completedStatus[0].display?.variant_quality, { large: null, medium: 75, small: 65 });
   assert.deepEqual(
     completedStatus[0].display,
     completedUpload.session.display
@@ -2748,8 +2784,7 @@ await runIntegrationScenario(async (runtime) => {
   const statusBarrierRepository = repositoryWithOverrides(ingestionRepository, {
     async readSessions() {
       await database.pool.query(
-        `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5)
-       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3)`,
+        `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
         [
         statusBarrierImageId,
         ingestionOwner,
@@ -2808,8 +2843,7 @@ await runIntegrationScenario(async (runtime) => {
   }
   const pgOnlyImageId = coreUuid.randomUuidV7();
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5)
-       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         pgOnlyImageId,
         ingestionOwner,

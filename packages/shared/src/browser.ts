@@ -13,3 +13,6 @@ export * from "./browser/storage.ts";
 export * from "./browser/ingestion.ts";
 export * from "./browser/admin.ts";
 export * from "./browser/log-safety.ts";
+export * from "./browser/image-variants.ts";
+
+export * from "./browser/image-addresses.ts";

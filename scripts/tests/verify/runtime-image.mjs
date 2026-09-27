@@ -766,6 +766,10 @@ try {
     throw new Error(`unexpected runtime config layout output: ${runtimeConfigLayout.stdout}`);
   }
   await waitFor("ImageShow HTTP", applicationProbe, 30_000);
+  await runDocker(["cp", resolve(workspaceRoot, "scripts/tests/verify/normalize-encoding.mjs"), `${names.app}:/tmp/normalize-encoding.mjs`]);
+  await runDocker(["exec", "--user", "node", names.app, "node", "--test", "/tmp/normalize-encoding.mjs"], { stdio: "inherit", timeoutMs: 120_000 });
+  await runDocker(["cp", resolve(workspaceRoot, "scripts/tests/verify/storage-publication.mjs"), `${names.app}:/tmp/storage-publication.mjs`]);
+  await runDocker(["exec", "--user", "node", names.app, "node", "--test", "/tmp/storage-publication.mjs"], { stdio: "inherit", timeoutMs: 120_000 });
   const coldShape = await schemaShape();
   if (!coldShape) {
     throw new Error(`unexpected schema shape before restart: ${coldShape}`);

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CompletedIngestionDisplayDto } from "@imageshow/shared/browser";
+import type { CompletedIngestionDisplayDto, IngestionVariantQualityDto } from "@imageshow/shared/browser";
 
 const ingestionQueueTypes = ["upload", "import"] as const;
 export type IngestionQueueType = (typeof ingestionQueueTypes)[number];
@@ -50,26 +50,30 @@ export function ingestionSessionPairKey(pair: IngestionSessionPair) {
 const importDownloadSchema = z.strictObject({ url: nonEmptyString });
 export type ImportDownload = Readonly<z.infer<typeof importDownloadSchema>>;
 
+const variantFactsSchema = z.strictObject({
+  width: positiveInteger, height: positiveInteger, bytes: positiveInteger,
+  md5: digest(16), sha256: digest(32), quality: z.number().int().min(1).max(100).nullable(),
+  effort: z.number().int().min(0).max(6).nullable(), passthrough: z.boolean(), over_target: z.boolean()
+});
 const preparedSchema = z.strictObject({
   producer_execution_token: nonEmptyString,
   original_size: positiveInteger,
   original_width: positiveInteger,
   original_height: positiveInteger,
-  width: positiveInteger,
-  height: positiveInteger,
-  ext: z.enum(["jpg", "png", "webp", "gif", "avif"]),
-  md5: digest(16),
-  prepared_image_sha256: digest(32),
-  prepared_thumbnail_sha256: digest(32),
-  size: positiveInteger,
-  thumbnail_size: positiveInteger,
-  quality: nonNegativeInteger.nullable(),
-  transcoded: z.boolean(),
+  variants: z.strictObject({ large: variantFactsSchema, medium: variantFactsSchema, small: variantFactsSchema }),
   detected_brightness: z.enum(["dark", "light"]),
   duplicate_count: nonNegativeInteger,
   generation: nonEmptyString
 });
 export type IngestionPreparedManifest = Readonly<z.infer<typeof preparedSchema>>;
+
+export function ingestionVariantQuality(prepared: IngestionPreparedManifest): IngestionVariantQualityDto {
+  return {
+    large: prepared.variants.large.quality,
+    medium: prepared.variants.medium.quality,
+    small: prepared.variants.small.quality
+  };
+}
 
 const commitSchema = z.strictObject({
   commit_request_id: nonEmptyString,
@@ -144,8 +148,11 @@ const completedDisplaySchema = z.strictObject({
   original_width: positiveInteger,
   original_height: positiveInteger,
   original_size: positiveInteger,
-  quality: nonNegativeInteger.nullable(),
-  transcoded: z.boolean()
+  variant_quality: z.strictObject({
+    large: variantFactsSchema.shape.quality,
+    medium: variantFactsSchema.shape.quality,
+    small: variantFactsSchema.shape.quality
+  })
 });
 
 export function completedIngestionDisplay(
@@ -159,8 +166,7 @@ export function completedIngestionDisplay(
     original_width: session.prepared.original_width,
     original_height: session.prepared.original_height,
     original_size: session.prepared.original_size,
-    quality: session.prepared.quality,
-    transcoded: session.prepared.transcoded
+    variant_quality: ingestionVariantQuality(session.prepared)
   };
 }
 

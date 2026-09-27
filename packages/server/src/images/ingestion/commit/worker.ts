@@ -1,8 +1,7 @@
-import { storageObjectKey } from "@imageshow/shared/browser";
+import { imageVariants, storageObjectKey } from "@imageshow/shared/browser";
 import { ingestionPreparedPath, ingestionPreparedFiles } from "../raw/paths.ts";
 import { withActiveIngestionTempPaths } from "../raw/lease-registry.ts";
 import { updateIngestionExecutionProgress } from "../execution/session.ts";
-import { contentType } from "../../../storage/objects/keys.ts";
 import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
 import { ApiError } from "../../../core/api-error.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../../core/database/advisory-locks.ts";
@@ -18,7 +17,6 @@ import {
   assertStorageWriteTarget,
   resolveStorageAccessForConfig
 } from "../../../storage/backends/registry.ts";
-import { thumbnailObjectKey } from "../../../storage/objects/image-paths.ts";
 import {
   imageStorageMutationLockKey,
   tryWithStorageLocationReadAndAdvisoryLocks
@@ -62,7 +60,7 @@ export async function commitIngestionSessionSnapshot(
   const prepared = session.prepared;
   const commit = session.commit;
   const preparedFiles = ingestionPreparedFiles(session, prepared);
-  const finalObjectKey = storageObjectKey(session.image_id, prepared.ext);
+  const finalObjectKey = storageObjectKey(session.image_id);
   let databaseCommitted = false;
   const candidateGuardToken = randomUuidV7();
   try {
@@ -80,7 +78,7 @@ export async function commitIngestionSessionSnapshot(
       tryWithStorageLocationReadAndAdvisoryLocks(
         [
           ...vocabularyLocks,
-          { key: `imageshow:ingestion:content:${prepared.md5}` },
+          { key: `imageshow:ingestion:content:${prepared.variants.large.md5}` },
           {
             key: `imageshow:ingestion:session:${session.session_id}`,
             acquisition: "try"
@@ -92,41 +90,20 @@ export async function commitIngestionSessionSnapshot(
           const storage = resolveStorageAccessForConfig(
             await assertStorageWriteTarget(session.storage_slug)
           );
-          const thumbnailKey = thumbnailObjectKey(session.image_id);
           // A guard may own only an absent target or content this frozen
           // commit can adopt. Reject unrelated pre-existing bytes before the
           // guard exists, otherwise its handler could delete those bytes when
           // this commit fails without publishing PostgreSQL truth.
-          const [imageTarget, thumbnailTarget] = await verifyCommitTargets(
-            [
-              {
-                storage,
-                prefix: "full",
-                key: finalObjectKey,
-                expected: {
-                  size: prepared.size,
-                  sha256: prepared.prepared_image_sha256,
-                  md5: prepared.md5
-                }
-              },
-              {
-                storage,
-                prefix: "thumbs",
-                key: thumbnailKey,
-                expected: {
-                  size: prepared.thumbnail_size,
-                  sha256: prepared.prepared_thumbnail_sha256
-                }
-              }
-            ],
-            combinedSignal
-          );
-          // Register the exact formal candidates before either write. The job
+          const targets = await verifyCommitTargets(imageVariants.map((variant) => ({
+            storage, prefix: variant, key: finalObjectKey,
+            expected: { size: prepared.variants[variant].bytes, sha256: prepared.variants[variant].sha256, md5: prepared.variants[variant].md5 }
+          })), combinedSignal);
+          // Register the exact formal candidates before any write. The job
           // worker takes the same image storage lock, so it cannot observe the
           // guard until this commit has either published PostgreSQL truth or
           // released the lock after failure/cancel. Missing objects are safe;
           // unreferenced created objects therefore always have durable owner.
-          const guardedObjects: MoveCleanupObjectInput[] = [imageTarget, thumbnailTarget].map(
+          const guardedObjects: MoveCleanupObjectInput[] = targets.map(
             ({ storage: targetStorage, prefix, key }) => ({
               prefix,
               key,
@@ -153,7 +130,7 @@ export async function commitIngestionSessionSnapshot(
               message: "写入所选存储并校验完整性",
               progress: Math.min(
                 95,
-                Math.floor((bytes / (prepared.size + prepared.thumbnail_size)) * 95)
+                Math.floor((bytes / imageVariants.reduce((sum, variant) => sum + prepared.variants[variant].bytes, 0)) * 95)
               )
             });
           };
@@ -171,38 +148,17 @@ export async function commitIngestionSessionSnapshot(
                   prepared,
                   commit.duplicate_decision
                 );
-                await writeVerifiedFileToStorage({
-                  target: imageTarget,
-                  sourcePath: ingestionPreparedPath(preparedFiles[0]),
-                  contentType: contentType(prepared.ext),
-                  onProgress: (bytes) => reportUpload(bytes),
-                  sourceMismatch: {
-                    status: 409,
-                    code: "storage_object_conflict",
-                    message: "准备好的图片文件与完整性信息不一致"
-                  },
-                  ownedIngestionCandidateGuard: {
-                    imageId: session.image_id,
-                    token: candidateGuardToken
-                  },
-                  signal: executionSignal
-                });
-                await writeVerifiedFileToStorage({
-                  target: thumbnailTarget,
-                  sourcePath: ingestionPreparedPath(preparedFiles[1]),
-                  contentType: "image/webp",
-                  onProgress: (bytes) => reportUpload(prepared.size + bytes),
-                  sourceMismatch: {
-                    status: 409,
-                    code: "storage_object_conflict",
-                    message: "准备好的缩略图与完整性信息不一致"
-                  },
-                  ownedIngestionCandidateGuard: {
-                    imageId: session.image_id,
-                    token: candidateGuardToken
-                  },
-                  signal: executionSignal
-                });
+                let uploaded = 0;
+                for (const [index, variant] of imageVariants.entries()) {
+                  await writeVerifiedFileToStorage({
+                    target: targets[index]!, sourcePath: ingestionPreparedPath(preparedFiles[index]!),
+                    contentType: "image/webp", onProgress: (bytes) => reportUpload(uploaded + bytes),
+                    sourceMismatch: { status: 409, code: "storage_object_conflict", message: "准备好的三档文件与完整性信息不一致" },
+                    ownedIngestionCandidateGuard: { imageId: session.image_id, token: candidateGuardToken },
+                    signal: executionSignal
+                  });
+                  uploaded += prepared.variants[variant].bytes;
+                }
                 executionSignal.throwIfAborted();
               }
             )

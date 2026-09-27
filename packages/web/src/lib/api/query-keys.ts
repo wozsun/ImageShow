@@ -16,6 +16,7 @@ export const queryKeys = {
   ingestionVocabulary: ["ingestion-vocabulary"] as const,
   users: ["users"] as const,
   settings: ["settings"] as const,
+  runtimeConfig: ["runtime-config"] as const,
   adminPreferences: ["admin-preferences"] as const,
   logs: ["admin-logs"] as const,
   storageBackends: ["storage-backends"] as const,

@@ -82,7 +82,7 @@ export function useCompletedIngestionInvalidation() {
         items.push(entry.item);
       }
       if (!items.length) return;
-      for (const md5 of new Set(items.map((item) => item.md5))) {
+      for (const md5 of new Set(items.map((item) => item.large_md5))) {
         invalidateIngestionDuplicateDetails(md5);
       }
       schedule();

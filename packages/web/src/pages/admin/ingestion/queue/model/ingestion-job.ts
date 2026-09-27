@@ -1,6 +1,8 @@
 import type {
   Brightness,
   Device,
+  ImageVariantsDto,
+  IngestionVariantQualityDto,
   ImportItemInputDto,
   ServerIngestionStatusDto,
   UploadIntentItemInputDto
@@ -97,9 +99,8 @@ export type IngestionJob = {
   batchPosition?: number;
   browserDisplayReleased?: boolean;
   originalSize?: number;
-  finalSize?: number;
-  quality?: number | null;
-  transcoded?: boolean;
+  variants?: ImageVariantsDto;
+  variantQuality?: IngestionVariantQualityDto;
   storageSlug: string;
   failureStage?: "create" | "prepare" | "commit" | "cancel";
   commitFailureCheckpoint?: CommitFailureCheckpoint;

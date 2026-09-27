@@ -1,3 +1,4 @@
+import { unpackImageAddresses } from "@imageshow/shared/browser";
 import type { ApiErrorResponseDto } from "@imageshow/shared/browser";
 
 let csrfToken = "";
@@ -63,7 +64,7 @@ async function parseApiResponse<T>(response: Response): Promise<T> {
   const body = await response.text();
   let data: unknown = {};
   try {
-    data = JSON.parse(body);
+    data = unpackImageAddresses(JSON.parse(body));
   } catch {
     if (response.ok) {
       throw new ApiClientError(
@@ -93,12 +94,6 @@ async function parseApiResponse<T>(response: Response): Promise<T> {
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return parseApiResponse<T>(await fetchApi(path, init));
-}
-
-export async function apiResponse(path: string, init: RequestInit = {}) {
-  const response = await fetchApi(path, init);
-  if (!response.ok) await parseApiResponse<never>(response);
-  return response;
 }
 
 export async function apiWithEtag<T>(

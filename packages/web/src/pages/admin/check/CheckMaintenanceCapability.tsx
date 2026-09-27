@@ -233,7 +233,7 @@ function StorageMaintenanceDialog({
     .reduce((total, issue) => total + issue.count, 0);
   const title = "存储维护";
   const description =
-    "修复缩略图与孤儿对象，并维护已请求彻底删除的持久任务。普通回收站图片和有效内容接入仍会保留。";
+    "从其他后端的同档一致副本恢复缺失文件，清理无引用对象，并维护已请求彻底删除的持久任务。普通回收站图片和有效内容接入仍会保留。";
   return (
     <DialogFrame
       className="modal edit-modal"
@@ -275,12 +275,12 @@ function StorageMaintenanceDialog({
               {summary && (
                 <dl className="storage-maintenance-preview">
                   <div>
-                    <dt>可重建缩略图</dt>
-                    <dd>{summary.repairable_thumbnails.toLocaleString()}</dd>
+                    <dt>待尝试恢复对象</dt>
+                    <dd>{summary.recovery_candidates.toLocaleString()}</dd>
                   </div>
                   <div>
-                    <dt>缺失原图</dt>
-                    <dd>{summary.missing_originals.toLocaleString()}</dd>
+                    <dt>三档缺失对象合计</dt>
+                    <dd>{summary.missing_objects.toLocaleString()}</dd>
                   </div>
                   <div>
                     <dt>可清理对象</dt>
@@ -312,6 +312,7 @@ function StorageMaintenanceDialog({
             </section>
             <p className="notice-line">
               以上仅为当前检查预览。执行时服务端会在独占维护锁内重新读取数据库和完整存储快照；
+              恢复需找到尺寸、体积和摘要一致的同档副本，没有可用副本时会报告失败并保留文件供人工恢复。
               {summary && (
                 summary.blocked_namespaces
                 || summary.unavailable_logical_backends

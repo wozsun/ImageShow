@@ -11,7 +11,7 @@
 使用外部数据库时，可参考：
 
 ```bash
-docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 \
+docker run -d --name imageshow --restart unless-stopped \
   -p 127.0.0.1:5518:5518 \
   -e SITE_DOMAIN=img.example.com -e TZ=UTC \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD="${ADMIN_PASSWORD:?}" \
@@ -26,7 +26,11 @@ docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 \
   初始管理员变量只用于创建账号，不覆盖已有账号。
 - `.env.example` 列出可用变量；额外变量须显式加入 Compose 的 `environment`。
   已有 `config.json` 时，运行配置以文件为准，见[环境变量](CONFIG.md#环境变量)。
-- 应用停止宽限至少为 **50 秒**，允许请求和后台任务排空。
+- 默认部署沿用 Docker 的 10 秒停止宽限；超时未退出的进程会被强制终止。
+  应用内部的退出上限为 8 秒，在默认容器停止宽限内完成收尾；超过上限时应用以失败状态退出。
+- 镜像入口在整理数据目录权限后通过 `gosu node` 运行应用。默认 Compose 沿用 Docker 的安全配置，
+  不显式设置 `security_opt`；如需阻止进程通过 setuid / setgid 程序或文件能力获得额外权限，
+  部署方可按需启用 `no-new-privileges`，具体语义见 [Docker 安全选项](https://docs.docker.com/reference/cli/docker/container/run/#optional-security-options---security-opt)。
 - 外部 PostgreSQL 的权限与连接要求见[数据库说明](guide/database.md#运行期连接与公开回源)；
   Redis 使用应用专用逻辑库，认证与命令权限见[安全说明](guide/security.md)。
 
@@ -53,7 +57,7 @@ docker compose logs --tail 100 imageshow
 
 配置文件修改后可在后台重新读取；部署环境变量变更需重新创建容器。
 启停不会替代数据库结构维护。数据库须满足[当前安装契约](guide/database.md#启动与结构契约)，
-非空数据库不自动补表、改列或回填。
+非空数据库启动只读核对，不自动修改既有结构或业务数据。
 
 ## 数据维护与恢复
 
@@ -83,6 +87,23 @@ docker compose logs --tail 100 imageshow
 随后核查图片数量、图片访问和后台操作。Redis 故障时后台返回 `503 redis_unavailable`，公开只读
 请求可有界回源 PostgreSQL；`/random` 的非白名单请求必须完成 Redis 频次计数，计数失败
 同样返回 503，白名单请求仍可回源。重连后自动重新校验。
+
+镜像为正常初始化预留 30 秒启动宽限；较慢环境可按实际启动耗时配置 `healthcheck.start_period`。
+
+## 版本更新
+
+6.6.0 以当前数据库结构与 large / medium / small 三档图片为运行基线，也支持空环境新安装。
+既有数据库须预先满足当前读写要求，启动只执行最小只读 readiness；结构维护由实例维护者
+按实际差异处理。历史版本的操作记录见 [GitHub Releases](https://github.com/wozsun/ImageShow/releases)。
+
+替换镜像前保留 PostgreSQL、Redis、配置和正式对象的一致备份。更新后按上文确认服务就绪，
+核查图片数量与业务功能。历史升级归档与备份由维护者管理，应用不读取或自动删除这些材料。
+三档资源契约见[三档图片与地址协议](guide/three-tier-images.md)。
+
+目录、对象键、公开资源路径和随机接口的 `size` 参数统一使用 `large`、`medium`、`small`，
+中图编码配置为 `normalize.medium`；数据库的 `l_`、`m_`、`s_` 列前缀保持不变。
+已有实例由维护者停机调整存储与配置，应用只读取当前结构；同步更新外部图片链接、
+随机接口调用和受影响的浏览器 / CDN 缓存，再开放访问。运行配置的归一化不会代替手动迁移。
 
 ## 管理员密码恢复
 

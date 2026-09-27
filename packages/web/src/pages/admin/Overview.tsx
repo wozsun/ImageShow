@@ -1,3 +1,4 @@
+import { imageVariantUrl } from "@imageshow/shared/browser";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
@@ -146,21 +147,10 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
     { label: "暗色", value: data?.dark },
     { label: "亮色", value: data?.light }
   ];
-  // 原图大小 + 缩略图大小，用「+」拼成卡片副标题。
-  const sizePair = (first?: number, second?: number) =>
-    first === undefined || second === undefined
-      ? undefined
-      : `${formatBytes(first)} + ${formatBytes(second)}`;
-  // 卡片副标题只显示「X + Y」两个体积；hover 的 title 再标明每段各是什么，避免用户不清楚 + 两边的含义。
-  const sizeTitle = (
-    firstLabel: string,
-    first: number | undefined,
-    secondLabel: string,
-    second: number | undefined
-  ) =>
-    first === undefined || second === undefined
-      ? undefined
-      : `${firstLabel} ${formatBytes(first)} + ${secondLabel} ${formatBytes(second)}`;
+  const totalSize = (large?: number, medium?: number, small?: number) =>
+    large === undefined || medium === undefined || small === undefined ? undefined : formatBytes(large + medium + small);
+  const sizeTitle = (large?: number, medium?: number, small?: number) =>
+    large === undefined || medium === undefined || small === undefined ? undefined : `大图 ${formatBytes(large)} + 中图 ${formatBytes(medium)} + 小图 ${formatBytes(small)}`;
   const redisCacheState = redisCacheStateLabel(redisCache);
   const currentCoreSize =
     redisCache?.current_core_memory_bytes === null ||
@@ -200,18 +190,18 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
       hintTitle: redisMemoryTitle,
       to: `${adminBasePath}/check`
     },
-    // 本地存储 / 其它存储的图片与缩略图占用，以及当前存储后端数。
+    // 本地存储 / 其它存储的三档合计占用，以及当前存储后端数。
     {
       label: "本地存储",
       value: data?.local,
-      hint: sizePair(data?.local_image_size, data?.local_thumb_size),
-      hintTitle: sizeTitle("原图", data?.local_image_size, "缩略图", data?.local_thumb_size)
+      hint: totalSize(data?.local_large_bytes, data?.local_medium_bytes, data?.local_small_bytes),
+      hintTitle: sizeTitle(data?.local_large_bytes, data?.local_medium_bytes, data?.local_small_bytes)
     },
     {
       label: "其它存储",
       value: data?.nonlocal,
-      hint: sizePair(data?.nonlocal_image_size, data?.nonlocal_thumb_size),
-      hintTitle: sizeTitle("原图", data?.nonlocal_image_size, "缩略图", data?.nonlocal_thumb_size)
+      hint: totalSize(data?.nonlocal_large_bytes, data?.nonlocal_medium_bytes, data?.nonlocal_small_bytes),
+      hintTitle: sizeTitle(data?.nonlocal_large_bytes, data?.nonlocal_medium_bytes, data?.nonlocal_small_bytes)
     },
     {
       label: "存储后端",
@@ -277,7 +267,7 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
                       void detailCapability.open(img, event.currentTarget);
                     }}
                   >
-                    <ThumbnailImage src={img.thumb_url} alt="" />
+                    <ThumbnailImage src={imageVariantUrl(img, "small")} alt="" />
                   </button>
                 ))}
               </div>

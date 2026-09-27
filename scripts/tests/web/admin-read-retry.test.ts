@@ -450,18 +450,6 @@ for (const { name, options, data } of sharedReads) {
       ? client.fetchQuery(ingestionVocabularyQueryOptions)
       : client.fetchQuery(storageOptionsQueryOptions);
 
-  test(`[Web/后台只读重试] ${name}首次成功及缓存命中不增加请求`, async (t) => {
-    let requests = 0;
-    const { client, clock } = createReadHarness(t, async () => {
-      requests += 1;
-      return Response.json(data);
-    });
-    assert.deepEqual(await read(client), data);
-    assert.deepEqual(await read(client), data);
-    await clock.advanceBy(4_000);
-    assert.equal(requests, 1);
-  });
-
   test(`[Web/后台只读重试] ${name}并发准备共享恢复请求及成功缓存`, async (t) => {
     let requests = 0;
     const { client, clock } = createReadHarness(t, async () => {
@@ -478,8 +466,13 @@ for (const { name, options, data } of sharedReads) {
     await clock.advanceBy(1);
     assert.deepEqual(await Promise.all([first, second]), [data, data]);
     assert.deepEqual(await read(client), data);
-    assert.equal(requests, 2);
+    await clock.advanceBy(4_000);
+    assert.equal(requests, 2, "恢复后复用缓存，不产生额外请求");
   });
+
+  // Both consumers use the same Query retry/deadline owner. Exercise its full
+  // failure matrix once, after proving each consumer's recovery and caching.
+  if (name !== "词表") continue;
 
   test(`[Web/后台只读重试] ${name}持续失败最多四次且退避结束前不报错`, async (t) => {
     const requestTimes: number[] = [];

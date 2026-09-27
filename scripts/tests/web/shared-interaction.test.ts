@@ -95,7 +95,7 @@ test("[Web/共享交互] 浏览器错误上报和控制台只发送清洗后的�
     restoreGlobals();
     restoreConsole();
   });
-  reportAdminUiError("advanced_config.json_parse", new SyntaxError("synthetic-private-value"), {
+  reportAdminUiError("settings.save", new SyntaxError("synthetic-private-value"), {
     secret_access_key: "synthetic-private-value",
     image_id: "synthetic-image"
   });

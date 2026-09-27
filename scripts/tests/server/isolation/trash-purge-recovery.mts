@@ -14,7 +14,6 @@ await runIntegrationScenario(async (runtime) => {
   };
   const jobs = await import("../../../../packages/server/src/jobs/repository.ts");
   const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
-  const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
   const trash = await import("../../../../packages/server/src/images/trash/purge.ts");
   const trashMutations = await import("../../../../packages/server/src/images/trash/mutations.ts");
   const trashMembershipLock =
@@ -31,8 +30,7 @@ await runIntegrationScenario(async (runtime) => {
   const localAccess = await registry.resolveStorageAccess("local");
   const foregroundImage = randomUUID();
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5)
-       VALUES ($1, 'integration-admin', 'ready', 'local', 'pc', 'dark', NULL, 'webp', $2)`,
+    `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
     [
      foregroundImage,
      "0".repeat(32)
@@ -53,15 +51,12 @@ await runIntegrationScenario(async (runtime) => {
   };
 
   const uncertainImage = randomUUID();
-  const uncertainObjectKey = storageObjectKey(uncertainImage, "webp");
-  const uncertainThumbKey = imagePaths.thumbnailObjectKey(
-    imagePaths.parseImageObjectKey(uncertainObjectKey)!.id
-  );
+  const uncertainObjectKey = storageObjectKey(uncertainImage);
+  const uncertainThumbKey = uncertainObjectKey;
   const uncertainFull = Buffer.from("uncertain-purge-full");
   const uncertainThumbnail = Buffer.from("uncertain-purge-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, deleted_at)
-       VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, now())`,
+    `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,now(),1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
       uncertainImage,
       createHash("md5").update(uncertainFull).digest("hex"),
@@ -69,13 +64,13 @@ await runIntegrationScenario(async (runtime) => {
     ]
   );
   await localAccess.driver.writeBuffer(
-    "full",
+    "large",
     uncertainObjectKey,
     uncertainFull,
     "image/webp"
   );
   await localAccess.driver.writeBuffer(
-    "thumbs",
+    "small",
     uncertainThumbKey,
     uncertainThumbnail,
     "image/webp"
@@ -161,15 +156,12 @@ await runIntegrationScenario(async (runtime) => {
   );
 
   const admittedCancelImage = randomUUID();
-  const admittedCancelObjectKey = storageObjectKey(admittedCancelImage, "webp");
-  const admittedCancelThumbKey = imagePaths.thumbnailObjectKey(
-    imagePaths.parseImageObjectKey(admittedCancelObjectKey)!.id
-  );
+  const admittedCancelObjectKey = storageObjectKey(admittedCancelImage);
+  const admittedCancelThumbKey = admittedCancelObjectKey;
   const admittedCancelFull = Buffer.from("admitted-cancel-purge-full");
   const admittedCancelThumbnail = Buffer.from("admitted-cancel-purge-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, deleted_at)
-       VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, now())`,
+    `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,now(),1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
       admittedCancelImage,
       createHash("md5").update(admittedCancelFull).digest("hex"),
@@ -177,13 +169,13 @@ await runIntegrationScenario(async (runtime) => {
     ]
   );
   await localAccess.driver.writeBuffer(
-    "full",
+    "large",
     admittedCancelObjectKey,
     admittedCancelFull,
     "image/webp"
   );
   await localAccess.driver.writeBuffer(
-    "thumbs",
+    "small",
     admittedCancelThumbKey,
     admittedCancelThumbnail,
     "image/webp"
@@ -245,23 +237,20 @@ await runIntegrationScenario(async (runtime) => {
     "物理删除开始后的调度取消必须继续完成 metadata 删除"
   );
   assert.equal(
-    await localAccess.driver.exists("full", admittedCancelObjectKey),
+    await localAccess.driver.exists("large", admittedCancelObjectKey),
     false
   );
   assert.equal(
-    await localAccess.driver.exists("thumbs", admittedCancelThumbKey),
+    await localAccess.driver.exists("small", admittedCancelThumbKey),
     false
   );
   const interruptedImage = randomUUID();
-  const interruptedObjectKey = storageObjectKey(interruptedImage, "webp");
-  const interruptedThumbKey = imagePaths.thumbnailObjectKey(
-    imagePaths.parseImageObjectKey(interruptedObjectKey)!.id
-  );
+  const interruptedObjectKey = storageObjectKey(interruptedImage);
+  const interruptedThumbKey = interruptedObjectKey;
   const interruptedFull = Buffer.from("interrupted-purge-full");
   const interruptedThumbnail = Buffer.from("interrupted-purge-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, deleted_at)
-       VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, now())`,
+    `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,now(),1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
       interruptedImage,
       createHash("md5").update(interruptedFull).digest("hex"),
@@ -269,13 +258,13 @@ await runIntegrationScenario(async (runtime) => {
     ]
   );
   await localAccess.driver.writeBuffer(
-    "full",
+    "large",
     interruptedObjectKey,
     interruptedFull,
     "image/webp"
   );
   await localAccess.driver.writeBuffer(
-    "thumbs",
+    "small",
     interruptedThumbKey,
     interruptedThumbnail,
     "image/webp"
@@ -315,15 +304,12 @@ await runIntegrationScenario(async (runtime) => {
   );
 
   const concurrentImage = randomUUID();
-  const concurrentObjectKey = storageObjectKey(concurrentImage, "webp");
-  const concurrentThumbKey = imagePaths.thumbnailObjectKey(
-    imagePaths.parseImageObjectKey(concurrentObjectKey)!.id
-  );
+  const concurrentObjectKey = storageObjectKey(concurrentImage);
+  const concurrentThumbKey = concurrentObjectKey;
   const concurrentFull = Buffer.from("concurrent-trash-full");
   const concurrentThumbnail = Buffer.from("concurrent-trash-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size)
-       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
       concurrentImage,
       createHash("md5").update(concurrentFull).digest("hex"),
@@ -331,13 +317,13 @@ await runIntegrationScenario(async (runtime) => {
     ]
   );
   await localAccess.driver.writeBuffer(
-    "full",
+    "large",
     concurrentObjectKey,
     concurrentFull,
     "image/webp"
   );
   await localAccess.driver.writeBuffer(
-    "thumbs",
+    "small",
     concurrentThumbKey,
     concurrentThumbnail,
     "image/webp"
@@ -394,11 +380,11 @@ await runIntegrationScenario(async (runtime) => {
       0
     );
     assert.equal(
-      await localAccess.driver.exists("full", concurrentObjectKey),
+      await localAccess.driver.exists("large", concurrentObjectKey),
       false
     );
     assert.equal(
-      await localAccess.driver.exists("thumbs", concurrentThumbKey),
+      await localAccess.driver.exists("small", concurrentThumbKey),
       false
     );
   } finally {
@@ -414,13 +400,12 @@ await runIntegrationScenario(async (runtime) => {
   await database.pool.query("DELETE FROM metadata WHERE status='deleted'");
   const createTrashImage = async (ageSeconds: number) => {
     const id = randomUUID();
-    const objectKey = storageObjectKey(id, "webp");
-    const thumbKey = imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(objectKey)!.id);
+    const objectKey = storageObjectKey(id);
+    const thumbKey = objectKey;
     const full = Buffer.from("watermark-full-" + id);
     const thumbnail = Buffer.from("watermark-thumb-" + id);
     await database.pool.query(
-      `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, thumbnail_size, deleted_at)
-       VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, clock_timestamp() - ($4 || ' seconds')::interval)`,
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,clock_timestamp() - ($4 || ' seconds')::interval,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
       [
         id,
         createHash("md5").update(full).digest("hex"),
@@ -429,13 +414,14 @@ await runIntegrationScenario(async (runtime) => {
       ]
     );
     await localAccess.driver.writeBuffer(
-      "full",
+      "large",
       objectKey,
       full,
       "image/webp"
     );
+    await localAccess.driver.writeBuffer("medium", objectKey, Buffer.from("watermark-medium-" + id), "image/webp");
     await localAccess.driver.writeBuffer(
-      "thumbs",
+      "small",
       thumbKey,
       thumbnail,
       "image/webp"
@@ -536,7 +522,11 @@ await runIntegrationScenario(async (runtime) => {
   localAccess.driver.removeObjects = async (objects, options) => {
     if (objects.some((object) => object.key === failedItem.objectKey)) {
       failedRemoveObserved = true;
-      throw new Error("injected trash purge driver failure");
+      const remaining = objects.filter((object) => object.key !== failedItem.objectKey || object.prefix !== "medium");
+      return [
+        ...await originalFailedRemove(remaining, options),
+        { prefix: "medium", key: failedItem.objectKey, status: "unknown", error: { code: "injected", message: "medium deletion unconfirmed" } }
+      ];
     }
     return originalFailedRemove(objects, options);
   };
@@ -551,6 +541,10 @@ await runIntegrationScenario(async (runtime) => {
       }
     );
     assert.equal(failedRemoveObserved, true);
+    assert.equal(await localAccess.driver.exists("large", failedItem.objectKey), false);
+    assert.equal(await localAccess.driver.exists("small", failedItem.objectKey), false);
+    assert.equal(await localAccess.driver.exists("medium", failedItem.objectKey), true);
+    assert.equal((await database.pool.query("SELECT id FROM metadata WHERE id=$1", [failedItem.id])).rowCount, 1);
   } finally {
     localAccess.driver.removeObjects = originalFailedRemove;
   }
@@ -570,7 +564,7 @@ await runIntegrationScenario(async (runtime) => {
   const retryingTrashCheck = await databaseCheck.checkTrash();
   assert.equal(
     retryingTrashCheck.candidates.find((item) => item.id === failedItem.id)?.object_key,
-    storageObjectKey(failedItem.id, "webp")
+    storageObjectKey(failedItem.id)
   );
   assert.equal(retryingTrashCheck.purge_pending_count, 1);
   assert.equal(retryingTrashCheck.job_counts.retrying, 1);
@@ -625,8 +619,12 @@ await runIntegrationScenario(async (runtime) => {
     /ownership was lost/
   );
   assert.equal(await jobs.markBackgroundJobSucceeded(failedJob), false);
-  assert.equal(await localAccess.driver.exists("full", failedItem.objectKey), true);
+  assert.equal(await localAccess.driver.exists("medium", failedItem.objectKey), true);
   await finishTrashPurgeJob(renewedJob);
+  for (const prefix of ["large", "medium", "small"] as const) {
+    assert.equal(await localAccess.driver.exists(prefix, failedItem.objectKey), false);
+  }
+  assert.equal((await database.pool.query("SELECT id FROM metadata WHERE id=$1", [failedItem.id])).rowCount, 0);
 
   const succeededItem = await createTrashImage(0);
   const succeededJob = randomUUID();

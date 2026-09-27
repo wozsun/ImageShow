@@ -9,6 +9,8 @@ import "./server/database-process.test.ts";
 import "./server/cache.test.ts";
 import "./server/storage.test.ts";
 import "./server/images.test.ts";
+import "./server/normalize.test.ts";
+import "./server/image-addresses.test.ts";
 import "./server/tag-filter.test.ts";
 import "./server/ingestion.test.ts";
 import "./server/ingestion-events.test.ts";

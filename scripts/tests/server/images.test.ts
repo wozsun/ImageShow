@@ -1,10 +1,10 @@
+import { defaultNormalizeProfile } from "@imageshow/shared/browser";
 import { storageObjectKey } from "@imageshow/shared/browser";
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
-  readFile,
   rm,
   writeFile
 } from "node:fs/promises";
@@ -22,8 +22,7 @@ import {
   detectDeviceFromUserAgent
 } from "../../../packages/shared/src/browser.ts";
 import {
-  getIngestionMaxLongEdge,
-  parseSettingsInput
+  getIngestionMaxLongEdge
 } from "../../../packages/server/src/config/app-settings.ts";
 import { initializeRuntimeConfig } from "../../../packages/server/src/config/runtime-config-store.ts";
 import { ApiError } from "../../../packages/server/src/core/api-error.ts";
@@ -90,15 +89,12 @@ import {
   parseImageTime
 } from "../../../packages/server/src/images/image-time.ts";
 import {
-  servePublicStoredObject,
-  servePublicStoredThumbnail
+  servePublicStoredObject
 } from "../../../packages/server/src/images/serving/stored-image.ts";
 import { serveAdminExternalOriginal } from "../../../packages/server/src/images/serving/external-original.ts";
 import {
   configureSharpRuntime,
-  md5Buffer,
-  transcodeStoredImage,
-  type StoredImageTranscodeSettings
+  transcodeStoredImage
 } from "../../../packages/server/src/images/processing.ts";
 import { buildImageFilterSql } from "../../../packages/server/src/images/read-models/image-filter-sql.ts";
 import {
@@ -152,8 +148,7 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
       return {
         rows: [
           {
-            id: fault === "format" ? "invalid" : id,
-            ext: "webp",
+            id,
             created_by: "owner",
             storage_slug: "local",
             device: "pc",
@@ -165,11 +160,19 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
             description: "",
             source: "",
             original: "",
-            width: 100,
-            height: 100,
-            image_size: 10,
-            md5: "a".repeat(32),
-            image_time: "2026-09-15T00:00:00.000Z"
+            l_width: 1200,
+            l_height: 800,
+            l_byte_size: "120000",
+            l_md5: "a".repeat(32),
+            m_width: 900,
+            m_height: 600,
+            m_byte_size: "80000",
+            m_md5: "b".repeat(32),
+            s_width: 600,
+            s_height: 400,
+            s_byte_size: "40000",
+            s_md5: "c".repeat(32),
+            image_time: fault === "format" ? "invalid" : "2026-09-15T00:00:00.000Z"
           }
         ]
       };
@@ -210,7 +213,7 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
   }
   fault = "format";
   registry.invalidateStorageBackendRegistry();
-  await assert.rejects(readCommittedIngestionResultsByImageIds([id]), TypeError);
+  await assert.rejects(readCommittedIngestionResultsByImageIds([id]), RangeError);
   fault = "missing";
   registry.invalidateStorageBackendRegistry();
   await assert.rejects(
@@ -226,6 +229,12 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
   assert.equal(results.size, 1);
   assert.equal(results.get(id)?.created_by, "owner");
   assert.equal(results.get(id)?.item.id, id);
+  assert.equal(results.get(id)?.item.large_md5, "a".repeat(32));
+  assert.deepEqual(results.get(id)?.item.variants, {
+    large: { width: 1200, height: 800, byte_size: 120000 },
+    medium: { width: 900, height: 600, byte_size: 80000 },
+    small: { width: 600, height: 400, byte_size: 40000 }
+  });
 });
 
 test("[Server/主题] null 保留给未设置，写入必须使用 JSON null 且不限制标签作者", async () => {
@@ -419,32 +428,6 @@ test("[Server/图片] 输入校验统一图片更新、标签归一化、图片�
       s3: { unknown_option: true }
     }).success,
     false
-  );
-  assert.throws(() => parseSettingsInput({}));
-  assert.throws(() => parseSettingsInput({ site: {} }));
-  assert.throws(() => parseSettingsInput({ site: { home: {} } }));
-  assert.throws(() => parseSettingsInput({ site: { gallery: {} } }));
-  assert.throws(() => parseSettingsInput({ unknown_group: true }));
-  assert.equal(parseSettingsInput({ site: { root: "gallery" } }).site?.root, "gallery");
-  assert.equal(
-    parseSettingsInput({ ingestion: { list_page_size: 100 } }).ingestion?.list_page_size,
-    100
-  );
-  assert.throws(() => parseSettingsInput({ ingestion: { list_page_size: 101 } }));
-  assert.equal(
-    parseSettingsInput({ ingestion: { commit_concurrency: 16 } }).ingestion?.commit_concurrency,
-    16
-  );
-  assert.throws(() => parseSettingsInput({ ingestion: { commit_concurrency: 17 } }));
-  assert.throws(() => parseSettingsInput({ upload: { list_page_size: 20 } }));
-  assert.throws(() => parseSettingsInput({ import: { keep_original_link: [] } }));
-  assert.throws(() => parseSettingsInput({ import: { auto_import: false } }));
-  assert.throws(() => parseSettingsInput({ weibo: { source_enabled: false } }));
-  assert.throws(() => parseSettingsInput({ normalize: { quality_step: 10 } }));
-  assert.throws(() =>
-    parseSettingsInput({
-      site: { unknown_site_key: "gallery" }
-    })
   );
   assert.equal(isHttpsUrl("https://example.com/image.jpg", { requireDomain: true }), true);
   assert.equal(isHttpsUrl("https://127.0.0.1/image.jpg", { requireDomain: true }), false);
@@ -1342,7 +1325,6 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   const item = servingReadyCacheItem();
   const record = {
     id: item.id,
-    ext: item.ext,
     storage_slug: item.storage_slug
   };
   const request = {
@@ -1370,7 +1352,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   let thumbnailExistsCalls = 0;
   let servingRecord = record;
   const resolvedObject = (
-    prefix: "full" | "thumbs",
+    prefix: "large" | "medium" | "small",
     key: string,
     publicUrl = "",
     storageSlug = "local"
@@ -1390,7 +1372,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   const baseDependencies = {
     readImageServingRecordById: async () => servingRecord,
     resolveReadableObject: async (
-      prefix: "full" | "thumbs",
+      prefix: "large" | "medium" | "small",
       key: string,
       backend: string
     ) =>
@@ -1411,22 +1393,20 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
     }
   };
 
-  const objectResponse = await servePublicStoredObject(
-    storageObjectKey(item.id, item.ext),
+  const objectResponse = await servePublicStoredObject("large", storageObjectKey(item.id),
     request,
     baseDependencies as never
   );
   assert.equal(objectResponse.status, 206);
-  assert.equal(streamCalls[0]?.object.prefix, "full");
-  assert.equal(streamCalls[0]?.contentType, "image/jpeg");
+  assert.equal(streamCalls[0]?.object.prefix, "large");
+  assert.equal(streamCalls[0]?.contentType, "image/webp");
   assert.equal(streamCalls[0]?.cacheControl, immutableCacheControl);
   assertForwardedRequest(streamCalls[0]?.request);
 
   const getRequest = { ...request, isHead: false };
   for (const storageSlug of ["local", "s3-private"]) {
     servingRecord = { ...record, storage_slug: storageSlug };
-    const stableResponse = await servePublicStoredObject(
-      storageObjectKey(item.id, item.ext),
+    const stableResponse = await servePublicStoredObject("large", storageObjectKey(item.id),
       getRequest,
       baseDependencies as never
     );
@@ -1439,13 +1419,12 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   }
   servingRecord = { ...record, storage_slug: "s3-public" };
 
-  const redirectResponse = await servePublicStoredObject(
-    storageObjectKey(item.id, item.ext),
+  const redirectResponse = await servePublicStoredObject("large", storageObjectKey(item.id),
     request,
     {
       ...baseDependencies,
       resolveReadableObject: async (
-        prefix: "full" | "thumbs",
+        prefix: "large" | "medium" | "small",
         key: string
       ) =>
         resolvedObject(
@@ -1468,21 +1447,19 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   servingRecord = record;
 
   streamCalls.length = 0;
-  const thumbnailResponse = await servePublicStoredThumbnail(
-    storageObjectKey(item.id, item.ext).replace(/\.[^.]+$/, ".webp"),
+  const thumbnailResponse = await servePublicStoredObject("small", storageObjectKey(item.id),
     request,
     baseDependencies as never
   );
   assert.equal(thumbnailResponse.status, 206);
   assert.equal(streamCalls.length, 1);
-  assert.equal(streamCalls[0]?.object.prefix, "thumbs");
+  assert.equal(streamCalls[0]?.object.prefix, "small");
   assert.equal(streamCalls[0]?.cacheControl, immutableCacheControl);
   assertForwardedRequest(streamCalls[0]?.request);
 
   for (const storageSlug of ["local", "s3-private"]) {
     servingRecord = { ...record, storage_slug: storageSlug };
-    const stableThumbnail = await servePublicStoredThumbnail(
-      storageObjectKey(item.id, item.ext).replace(/\.[^.]+$/, ".webp"),
+    const stableThumbnail = await servePublicStoredObject("small", storageObjectKey(item.id),
       getRequest,
       baseDependencies as never
     );
@@ -1496,13 +1473,12 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
 
   streamCalls.length = 0;
   servingRecord = { ...record, storage_slug: "s3-public" };
-  const thumbnailRedirect = await servePublicStoredThumbnail(
-    storageObjectKey(item.id, item.ext).replace(/\.[^.]+$/, ".webp"),
+  const thumbnailRedirect = await servePublicStoredObject("small", storageObjectKey(item.id),
     request,
     {
       ...baseDependencies,
       resolveReadableObject: async (
-        prefix: "full" | "thumbs",
+        prefix: "large" | "medium" | "small",
         key: string
       ) =>
         resolvedObject(prefix, key, "https://cdn.example.com/thumb.webp")
@@ -1522,8 +1498,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   servingRecord = record;
 
   await assert.rejects(
-    servePublicStoredThumbnail(
-      storageObjectKey(item.id, item.ext).replace(/\.[^.]+$/, ".webp"),
+    servePublicStoredObject("small", storageObjectKey(item.id),
       request,
       {
         ...baseDependencies,
@@ -1538,8 +1513,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
   );
 
   await assert.rejects(
-    servePublicStoredThumbnail(
-      storageObjectKey(item.id, item.ext).replace(/\.[^.]+$/, ".webp"),
+    servePublicStoredObject("small", storageObjectKey(item.id),
       request,
       {
         ...baseDependencies,
@@ -1556,7 +1530,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
 
   let invalidKeyRead = false;
   await assert.rejects(
-    servePublicStoredObject(`${item.id}.jpg/../secret`, request, {
+    servePublicStoredObject("large", `${item.id}.jpg/../secret`, request, {
       ...baseDependencies,
       readImageServingRecordById: async () => {
         invalidKeyRead = true;
@@ -1571,7 +1545,7 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
 
   let invalidThumbnailKeyRead = false;
   await assert.rejects(
-    servePublicStoredThumbnail(storageObjectKey(item.id, item.ext), request, {
+    servePublicStoredObject("small", `${item.id.slice(-2)}/${item.id}.jpg`, request, {
       ...baseDependencies,
       readImageServingRecordById: async () => {
         invalidThumbnailKeyRead = true;
@@ -1589,7 +1563,6 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   const record = {
     id: item.id,
     original: item.original,
-    ext: item.ext,
     storage_slug: item.storage_slug,
     updated_at: item.updated_at
   };
@@ -1602,7 +1575,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
       return record;
     },
     displayUrlForOriginalComparison: async () =>
-      `https://img.example.com/images/full/${storageObjectKey(item.id, item.ext)}`,
+      `https://img.example.com/images/large/${storageObjectKey(item.id)}`,
     supportsDirectAccess: async () => direct,
     proxyExternalImage: async (...args: unknown[]) => {
       proxyCalls.push(args);
@@ -1707,7 +1680,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
     { ...record, original: "" },
     {
       ...record,
-      original: `https://img.example.com/images/full/${storageObjectKey(item.id, item.ext)}`
+      original: `https://img.example.com/images/large/${storageObjectKey(item.id)}`
     }
   ]) {
     await assert.rejects(
@@ -1833,268 +1806,34 @@ test("[Server/图片] 原图代理使用私有重验证缓存，条件请求及 
   );
 });
 
-test("[Server/图片] 图片标准化只信任 Sharp 编解码结果并保留既有格式与质量边界", async () => {
-  initializeRuntimeConfig();
-  configureSharpRuntime();
-  assert.equal(sharp.concurrency(), 1, "每图 Sharp 线程数由 Server 内部基线固定");
-  const fixtureRoot = await createTestDirectory("imageshow-processing-");
-  const width = 640;
-  const height = 480;
-  const pixels = Buffer.alloc(width * height * 3);
-  let randomState = 0x4163_2026;
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      for (let channel = 0; channel < 3; channel += 1) {
-        randomState = (Math.imul(randomState, 1_664_525) + 1_013_904_223) >>> 0;
-        pixels[(y * width + x) * 3 + channel] =
-          (x * 3 + y * 2 + channel * 41 + (randomState >>> 29)) & 255;
-      }
-    }
-  }
-  const source = () => sharp(pixels, { raw: { width, height, channels: 3 } });
-  const settings: StoredImageTranscodeSettings = {
-    quality: 80,
-    quality_step: 5,
-    min_quality: 20,
-    max_long_edge: 4500,
-    max_size_kb: 100 * 1024,
-    skip_webp_under_kb: 0
-  };
-  const invalidImage = (code: string) => (error: unknown) => {
-    assert.ok(error instanceof ApiError);
-    assert.equal(error.status, 400);
-    assert.equal(error.code, code);
-    return true;
-  };
-
+test("[Server/图片] 标准化生成三档 WebP、保留来源尺寸并响应取消", async () => {
+  initializeRuntimeConfig(); configureSharpRuntime();
+  assert.equal(sharp.concurrency(), 1);
+  const root = await createTestDirectory("imageshow-processing-");
+  const settings = defaultNormalizeProfile();
   try {
-    const fixturePaths = Object.fromEntries(
-      ["jpg", "png", "webp", "gif", "avif"].map((ext) => [
-        ext,
-        join(fixtureRoot, `source.${ext}`)
-      ])
-    );
-    await source().jpeg({ quality: 90 }).toFile(fixturePaths.jpg!);
-    await source().png().toFile(fixturePaths.png!);
-    await source().webp({ quality: 90 }).toFile(fixturePaths.webp!);
-    await source().gif().toFile(fixturePaths.gif!);
-    await source().avif({ quality: 90 }).toFile(fixturePaths.avif!);
-
-    for (const [format, path] of Object.entries(fixturePaths)) {
+    for (const format of ["jpeg", "png", "webp", "gif", "avif"] as const) {
+      const path = join(root, "source." + format);
+      await sharp({create:{width:800,height:400,channels:3,background:"#4578ab"}}).toFormat(format).toFile(path);
       const result = await transcodeStoredImage(path, settings);
-      assert.equal(result.ext, "webp", `${format} 应标准化为 WebP`);
-      assert.equal(result.sourceWidth, width);
-      assert.equal(result.sourceHeight, height);
-      assert.equal(result.width, width);
-      assert.equal(result.height, height);
-      assert.equal(result.size, result.processed.byteLength);
-      assert.equal(result.md5, md5Buffer(result.processed));
-      assert.equal(result.transcoded, true);
-      const outputMetadata = await sharp(result.processed).metadata();
-      assert.equal(outputMetadata.format, "webp");
-      assert.equal(outputMetadata.width, result.width);
-      assert.equal(outputMetadata.height, result.height);
-    }
-
-    const orientedPath = join(fixtureRoot, "oriented.jpg");
-    await source()
-      .withMetadata({ orientation: 6 })
-      .jpeg({ quality: 90 })
-      .toFile(orientedPath);
-    const oriented = await transcodeStoredImage(orientedPath, settings);
-    assert.deepEqual(
-      [oriented.sourceWidth, oriented.sourceHeight],
-      [height, width]
-    );
-    assert.deepEqual([oriented.width, oriented.height], [height, width]);
-
-    const frameWidth = 96;
-    const frameHeight = 64;
-    const frameSize = frameWidth * frameHeight * 3;
-    const frames = Buffer.alloc(frameSize * 2);
-    frames.fill(32, 0, frameSize);
-    frames.fill(224, frameSize);
-    for (const format of ["gif", "webp"] as const) {
-      const path = join(fixtureRoot, `animated.${format}`);
-      const animation = sharp(frames, {
-        raw: {
-          width: frameWidth,
-          height: frameHeight * 2,
-          channels: 3,
-          pageHeight: frameHeight
-        }
-      });
-      if (format === "gif") {
-        await animation.gif({ delay: [80, 120], loop: 0 }).toFile(path);
-      } else {
-        await animation.webp({ delay: [80, 120], loop: 0 }).toFile(path);
-      }
-      const inputMetadata = await sharp(path).metadata();
-      assert.equal(inputMetadata.pages, 2);
-      const normalized = await transcodeStoredImage(path, settings);
-      const outputMetadata = await sharp(normalized.processed, {
-        animated: true
-      }).metadata();
-      assert.deepEqual(
-        [normalized.sourceWidth, normalized.sourceHeight],
-        [frameWidth, frameHeight]
-      );
-      assert.deepEqual(
-        [normalized.width, normalized.height],
-        [frameWidth, frameHeight]
-      );
-      assert.equal(outputMetadata.pages, undefined, "默认读取仍只处理首帧");
-      if (format === "webp") {
-        const inputBytes = await readFile(path);
-        const skipped = await transcodeStoredImage(path, {
-          ...settings,
-          skip_webp_under_kb: (inputBytes.byteLength + 1) / 1024
-        });
-        assert.equal(skipped.transcoded, false);
-        assert.deepEqual(skipped.processed, inputBytes);
-        assert.equal(
-          (await sharp(skipped.processed, { animated: true }).metadata()).pages,
-          2,
-          "跳过转码的 animated WebP 应保留完整动画"
-        );
+      assert.deepEqual([result.sourceWidth,result.sourceHeight],[800,400]);
+      for (const variant of ["large","medium","small"] as const) {
+        const output = result.variants[variant];
+        const metadata = await sharp(output.data).metadata();
+        assert.equal(metadata.format,"webp");
+        assert.equal(output.data.length,output.facts.bytes);
+        assert.equal(createHash("md5").update(output.data).digest("hex"),output.facts.md5);
+        assert.deepEqual([metadata.width,metadata.height],variant==="small"?[600,300]:[800,400]);
       }
     }
-
-    const webpBytes = await readFile(fixturePaths.webp!);
-    const equalThreshold = await transcodeStoredImage(fixturePaths.webp!, {
-      ...settings,
-      skip_webp_under_kb: webpBytes.byteLength / 1024
-    });
-    assert.equal(equalThreshold.transcoded, true, "等于阈值时仍须转码");
-    const aboveThreshold = await transcodeStoredImage(fixturePaths.webp!, {
-      ...settings,
-      skip_webp_under_kb: (webpBytes.byteLength + 1) / 1024
-    });
-    assert.equal(aboveThreshold.transcoded, false);
-    assert.equal(aboveThreshold.quality, null);
-    assert.deepEqual(aboveThreshold.processed, webpBytes);
-    assert.equal(aboveThreshold.md5, md5Buffer(webpBytes));
-
-    const qualitySizes = new Map<number, number>();
-    const qualityPipeline = sharp(fixturePaths.png!).rotate().resize({
-      width: settings.max_long_edge,
-      height: settings.max_long_edge,
-      fit: "inside",
-      withoutEnlargement: true
-    });
-    for (let quality = 10; quality <= 100; quality += 5) {
-      const encoded = await qualityPipeline
-        .clone()
-        .webp({ quality })
-        .toBuffer({ resolveWithObject: true });
-      qualitySizes.set(quality, encoded.info.size);
-    }
-    const qualitySettings = {
-      quality: 100,
-      quality_step: 15,
-      min_quality: 10
-    };
-    const simulateQuality = (maxBytes: number) => {
-      let quality = qualitySettings.quality;
-      let lastDropMultiplier = 1;
-      while (true) {
-        const size = qualitySizes.get(quality)!;
-        if (quality <= qualitySettings.min_quality) {
-          return { quality, successfulQuality: quality };
-        }
-        if (size <= maxBytes) {
-          const successfulQuality = quality;
-          for (let index = 0; index < lastDropMultiplier - 1; index += 1) {
-            const nextQuality = Math.min(
-              qualitySettings.quality,
-              quality + qualitySettings.quality_step
-            );
-            if (nextQuality <= quality || qualitySizes.get(nextQuality)! > maxBytes) break;
-            quality = nextQuality;
-          }
-          return { quality, successfulQuality };
-        }
-        lastDropMultiplier = Math.min(
-          3,
-          Math.max(1, Math.floor(size / maxBytes))
-        );
-        quality = Math.max(
-          qualitySettings.min_quality,
-          quality - qualitySettings.quality_step * lastDropMultiplier
-        );
-      }
-    };
-    let backfillCase: { maxBytes: number; quality: number } | undefined;
-    for (let maxBytes = 50 * 1024; maxBytes < qualitySizes.get(100)!; maxBytes += 1) {
-      const simulated = simulateQuality(maxBytes);
-      if (simulated.quality > simulated.successfulQuality) {
-        backfillCase = { maxBytes, quality: simulated.quality };
-        break;
-      }
-    }
-    assert.ok(backfillCase, "测试素材应能触发跨档降质后的质量回填");
-    const backfilled = await transcodeStoredImage(fixturePaths.png!, {
-      ...settings,
-      ...qualitySettings,
-      max_size_kb: (backfillCase.maxBytes + 0.5) / 1024
-    });
-    assert.equal(backfilled.quality, backfillCase.quality);
-    assert.ok(backfilled.size <= backfillCase.maxBytes);
-
-    const tiffPath = join(fixtureRoot, "unsupported.tiff");
-    const svgPath = join(fixtureRoot, "unsupported.svg");
-    await source().tiff().toFile(tiffPath);
-    await writeFile(
-      svgPath,
-      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="32" />'
-    );
-    await assert.rejects(
-      transcodeStoredImage(tiffPath, settings),
-      invalidImage("unsupported_file_type")
-    );
-    await assert.rejects(
-      transcodeStoredImage(svgPath, settings),
-      invalidImage("unsupported_file_type")
-    );
-
-    const truncatedPath = join(fixtureRoot, "truncated.jpg");
-    const completeJpeg = await source().jpeg({ quality: 90 }).toBuffer();
-    await writeFile(
-      truncatedPath,
-      completeJpeg.subarray(0, Math.floor(completeJpeg.byteLength * 0.8))
-    );
-    assert.equal((await sharp(truncatedPath).metadata()).format, "jpeg");
-    await assert.rejects(
-      transcodeStoredImage(truncatedPath, settings),
-      invalidImage("unsupported_file_type")
-    );
-
-    const corruptPath = join(fixtureRoot, "corrupt.jpg");
-    await writeFile(corruptPath, Buffer.from([0xff, 0xd8, 0xff, 0x00]));
-    await assert.rejects(
-      transcodeStoredImage(corruptPath, settings),
-      invalidImage("unsupported_file_type")
-    );
-
-    const inputLimit = getIngestionMaxLongEdge();
-    const oversizedPath = join(fixtureRoot, "oversized.png");
-    await sharp({
-      create: {
-        width: inputLimit + 1,
-        height: 1,
-        channels: 3,
-        background: "#000000"
-      }
-    })
-      .png()
-      .toFile(oversizedPath);
-    await assert.rejects(
-      transcodeStoredImage(oversizedPath, settings),
-      invalidImage("image_too_large")
-    );
-  } finally {
-    await rm(fixtureRoot, { recursive: true, force: true });
-  }
+    const corrupt = join(root,"corrupt.jpg");await writeFile(corrupt,Buffer.from([0xff,0xd8,0,0]));
+    await assert.rejects(transcodeStoredImage(corrupt,settings));
+    await assert.rejects(transcodeStoredImage(corrupt,settings,AbortSignal.abort()),{name:"AbortError"});
+    const unsupported = join(root,"source.tiff");await sharp({create:{width:32,height:16,channels:3,background:"red"}}).tiff().toFile(unsupported);
+    await assert.rejects(transcodeStoredImage(unsupported,settings));
+    const oversized=join(root,"oversized.png");await sharp({create:{width:getIngestionMaxLongEdge()+1,height:1,channels:3,background:"black"}}).png().toFile(oversized);
+    await assert.rejects(transcodeStoredImage(oversized,settings));
+  } finally {await rm(root,{recursive:true,force:true});}
 });
 test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保持一致", () => {
   const parsedTime = parseImageTime("2020-05-01 00:00:00", {
@@ -2428,10 +2167,10 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   const omittedDevice = parseQuery("");
   const explicitAuto = parseQuery("device=auto");
   assert.equal(omittedDevice.device, "auto");
-  assert.equal(omittedDevice.size, "full");
-  for (const defaultSize of ["full", "thumb"] as const) {
+  assert.equal(omittedDevice.size, "medium");
+  for (const defaultSize of ["large", "medium", "small"] as const) {
     for (const mode of ["proxy", "redirect", "json"]) {
-      for (const explicitSize of ["", "full", "thumb"]) {
+      for (const explicitSize of ["", "large", "medium", "small"]) {
         const query = parseRandomQuery(
           new URL(
             `https://img.example.com/random?mode=${mode}${explicitSize ? `&size=${explicitSize}` : ""}`
@@ -2440,7 +2179,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
           defaultSize
         );
         assert.ok(!(query instanceof Response));
-        assert.equal(query.size, explicitSize || (mode === "json" ? null : defaultSize));
+        assert.equal(query.size, explicitSize || defaultSize);
       }
     }
   }
@@ -2454,7 +2193,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
     assert.fail("auto 随机查询未完成归一化");
   }
   assert.equal(normalizedOmitted.signature, normalizedAuto.signature);
-  for (const size of ["thumb", "full"] as const) {
+  for (const size of ["small", "large"] as const) {
     const sized = normalizeRandomQuery(parseQuery(`size=${size.toUpperCase()}`), maps);
     assert.ok(!(sized instanceof Response));
     assert.equal(sized.size, size);
@@ -2529,12 +2268,12 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
     "device=invalid",
     "size=",
     "size=%20",
-    "size=small",
+    "size=invalid-size",
     "size=%20full",
-    "size=thumb&size=thumb",
-    "size=full&size=thumb",
-    "size=thumb&limit=2",
-    `size=full&id=${imageId}&seed=synthetic-seed`
+    "size=small&size=small",
+    "size=large&size=small",
+    "size=small&limit=2",
+    `size=large&id=${imageId}&seed=synthetic-seed`
   ]) {
     const result = parseRandomQuery(
       new URL("https://img.example.com/random?" + search),
@@ -2661,81 +2400,19 @@ test("[Server/图片] 图片处理共享许可并同时限制 commit 数量和�
   );
   assert.equal(await pools.commit(10, signal, async () => "released"), "released");
 });
-test("[Server/图片] 标准化取消等待当前编码与缩略图收口，停止降质及质量回补", async (t) => {
-  initializeRuntimeConfig();
-  const root = await createTestDirectory("encode-cancel-");
-  t.after(() => rm(root, { recursive: true, force: true }));
-  const path = join(root, "source.png");
-  await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } })
-    .png()
-    .toFile(path);
-  const settings = {
-    quality: 90,
-    min_quality: 10,
-    quality_step: 10,
-    max_size_kb: 1,
-    skip_webp_under_kb: 0,
-    max_long_edge: 100
-  };
-  const preCancelled = new AbortController();
-  preCancelled.abort(new Error("already cancelled"));
-  await assert.rejects(
-    transcodeStoredImage("missing-file", settings, preCancelled.signal),
-    (e) => e === preCancelled.signal.reason
-  );
-  const original = sharp.prototype.toBuffer;
-  t.after(() => {
-    sharp.prototype.toBuffer = original;
-  });
-  for (const cancelAt of [1, 2, 3]) {
-    const abort = new AbortController();
-    const reason = new Error("cancel encode " + cancelAt);
-    let releaseEncode!: () => void;
-    let releaseThumbnail!: () => void;
-    let markStarted!: () => void;
-    const encodeGate = new Promise<void>((resolve) => {
-      releaseEncode = resolve;
-    });
-    const thumbnailGate = new Promise<void>((resolve) => {
-      releaseThumbnail = resolve;
-    });
-    const started = new Promise<void>((resolve) => {
-      markStarted = resolve;
-    });
-    const qualities: number[] = [];
-    sharp.prototype.toBuffer = async function (
-      this: { options: { webpQuality: number } },
-      options: { resolveWithObject?: boolean }
-    ) {
-      if (!options?.resolveWithObject) {
-        await thumbnailGate;
-        return Buffer.from("thumbnail");
-      }
-      qualities.push(this.options.webpQuality);
-      if (qualities.length === cancelAt) {
-        markStarted();
-        await encodeGate;
-      }
-      return {
-        data: Buffer.from("image"),
-        info: { width: 8, height: 8, size: qualities.length === 1 ? 4096 : 512 }
-      };
-    } as typeof sharp.prototype.toBuffer;
-    let settled = false;
-    const pending = transcodeStoredImage(path, settings, abort.signal).finally(() => {
-      settled = true;
-    });
-    const rejected = assert.rejects(pending, (error) => error === reason);
-    await started;
-    abort.abort(reason);
-    await delay(0);
-    assert.equal(settled, false);
-    releaseEncode();
-    await delay(0);
-    assert.equal(settled, false, "仍在编码的缩略图必须一起收口");
-    assert.equal(qualities.length, cancelAt, "取消后不能进入下一轮或继续回补");
-    releaseThumbnail();
-    await rejected;
+test("[Server/图片] 标准化取消等待当前编码收口且不进入后续质量或档位", async (t) => {
+  initializeRuntimeConfig(); const root=await createTestDirectory("encode-cancel-");
+  t.after(()=>rm(root,{recursive:true,force:true}));const path=join(root,"source.png");
+  await sharp({create:{width:8,height:8,channels:3,background:"red"}}).png().toFile(path);
+  const settings=defaultNormalizeProfile();
+  await assert.rejects(transcodeStoredImage("missing-file",settings,AbortSignal.abort()),{name:"AbortError"});
+  const original=sharp.prototype.toBuffer;t.after(()=>{sharp.prototype.toBuffer=original;});
+  for(const cancelAt of [1,2,3]) {
+    const abort=new AbortController(),reason=new Error("cancel encode");
+    let release!:()=>void,start!:()=>void;const gate=new Promise<void>(r=>{release=r;});const started=new Promise<void>(r=>{start=r;});let encodes=0;
+    sharp.prototype.toBuffer=async function(){if(++encodes===cancelAt){start();await gate;}return {data:Buffer.alloc(900*1024),info:{width:8,height:8}};} as typeof sharp.prototype.toBuffer;
+    let settled=false;const pending=transcodeStoredImage(path,settings,abort.signal).finally(()=>{settled=true;});
+    const rejected=assert.rejects(pending,e=>e===reason);await started;abort.abort(reason);await delay(0);assert.equal(settled,false);release();await rejected;assert.equal(encodes,cancelAt);
   }
 });
 test("[Server/图片] 安全抓取在预取消时不联网，原图代理头部及正文取消传到上游且不 fallback", async (t) => {

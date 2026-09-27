@@ -24,6 +24,11 @@ export type StorageRequestOptions = {
   signal?: AbortSignal;
 };
 
+export type StorageBufferReadOptions = StorageRequestOptions & {
+  /** Persisted byte length, independent of current upload admission settings. */
+  expectedSize?: number;
+};
+
 export type StorageStreamWriteOptions = StorageRequestOptions & {
   atomicCandidateToken?: string;
   /** Expected hexadecimal MD5 when the destination protocol can verify it. */
@@ -88,6 +93,8 @@ export type StorageSelfTest = {
 
 export interface StorageDriver {
   close?(): void | Promise<void>;
+  /** Confirm an existing local object before adopting it or deleting its last replica. */
+  ensureDurable?(prefix: StoragePrefix, key: string, options?: StorageRequestOptions): Promise<void>;
   exists(
     prefix: StoragePrefix,
     key: string,
@@ -102,7 +109,7 @@ export interface StorageDriver {
   readBuffer(
     prefix: StoragePrefix,
     key: string,
-    options?: StorageRequestOptions
+    options?: StorageBufferReadOptions
   ): Promise<Buffer>;
   writeBuffer(
     prefix: StoragePrefix,

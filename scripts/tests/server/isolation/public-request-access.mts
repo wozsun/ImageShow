@@ -27,15 +27,16 @@ await runIntegrationScenario(async (runtime) => {
     requireRedis: async () => undefined
   });
   const id = "00000000-0000-7000-8000-0000000000c1";
-  const key = storageObjectKey(id, "webp");
+  const key = storageObjectKey(id);
   const bytes = Buffer.from("synthetic image bytes for access contracts");
   const local = new LocalStorageDriver();
   await runtime.databasePools.pool.query(
-    "INSERT INTO metadata(id,created_by,status,storage_slug,device,brightness,ext,md5) VALUES($1,'integration-admin','ready','local','pc','dark','webp',$2)",
+    "INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local','pc','dark',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)",
     [id, "1".repeat(32)]
   );
-  await local.writeBuffer("full", key, bytes, "image/webp");
-  await local.writeBuffer("thumbs", key, bytes, "image/webp");
+  await local.writeBuffer("large", key, bytes, "image/webp");
+  await local.writeBuffer("medium", key, bytes, "image/webp");
+  await local.writeBuffer("small", key, bytes, "image/webp");
   const request = (
     path: string,
     headers: Record<string, string> = {},
@@ -127,7 +128,7 @@ await runIntegrationScenario(async (runtime) => {
 
   const openRead = mock.method(LocalStorageDriver.prototype, "openRead");
   try {
-    for (const prefix of ["full", "thumbs"]) {
+    for (const prefix of ["large", "small"]) {
       const path = `/images/${prefix}/${key}`;
       const readable = await request(path, { Referer: "https://portal.example.test/article?q=1" });
       assert.equal(readable.status, 200);
@@ -170,17 +171,17 @@ await runIntegrationScenario(async (runtime) => {
       401
     );
     await updateStorageBackend("local", { public_base_url: "https://media.example.test/pictures" });
-    const redirected = await request(`/images/full/${key}`, {
+    const redirected = await request(`/images/large/${key}`, {
       Referer: "https://images.example.test/"
     });
     assert.equal(redirected.status, 302);
     assert.equal(redirected.headers.get("Vary"), "Referer");
     assert.equal(
       redirected.headers.get("Location"),
-      `https://media.example.test/pictures/full/${key}`
+      `https://media.example.test/pictures/large/${key}`
     );
     await redirected.arrayBuffer();
-    for (const prefix of ["full", "thumbs"]) {
+    for (const prefix of ["large", "small"]) {
       const path = `/pictures/${prefix}/${key}`;
       for (const referer of [
         "",

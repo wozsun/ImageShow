@@ -31,11 +31,6 @@ import {
 } from "../../../../packages/web/src/pages/admin/images/image-list-selection.ts";
 
 import {
-  imageAdminDoubleRowMaxWidth,
-  imageAdminFilterDomGroups,
-  isImageAdminDoubleRowWidth
-} from "../../../../packages/web/src/pages/admin/images/ImageAdminFilters.tsx";
-import {
   galleryCard,
   adminImageListItem,
   createConfigStreamHarness
@@ -354,7 +349,6 @@ test("[Web/后台访问] 图片管理保留连续选择、直接分页和管理�
   ]);
   assert.deepEqual([...navigationModules("super")].sort(), [
     "account",
-    "advancedConfig",
     "check",
     "images",
     "logs",
@@ -1341,30 +1335,6 @@ test("[Web/后台访问] 共享 FacetSelector 在原按钮位置内联搜索并�
     }
   }
 });
-test("[Web/后台访问] 后台筛选布局按容器宽度选择字段分组", () => {
-  assert.deepEqual(
-    imageAdminFilterDomGroups(false),
-    {
-      primary: ["device", "brightness", "theme"],
-      secondary: ["tag", "author"]
-    },
-    "后台单行与移动布局必须保持设备、亮度、主题、标签、作者的 DOM 顺序"
-  );
-  assert.deepEqual(
-    imageAdminFilterDomGroups(true),
-    {
-      primary: ["device", "brightness", "author"],
-      secondary: ["theme", "tag"]
-    },
-    "后台双行必须把作者放在首行，并让主题与标签依次位于第二行"
-  );
-  assert.equal(imageAdminDoubleRowMaxWidth, 947);
-  assert.equal(isImageAdminDoubleRowWidth(0), false);
-  assert.equal(isImageAdminDoubleRowWidth(946.99), true);
-  assert.equal(isImageAdminDoubleRowWidth(947), true);
-  assert.equal(isImageAdminDoubleRowWidth(947.01), false);
-  assert.equal(isImageAdminDoubleRowWidth(948), false);
-});
 test("[Web/后台访问] 后台图片筛选在临界视口保持清空、无障碍名称与搜索交互", async () => {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
@@ -1394,7 +1364,17 @@ test("[Web/后台访问] 后台图片筛选在临界视口保持清空、无障�
   ];
   const structures: string[][] = [];
 
-  for (const width of [760, 761, 999, 1000, 1389, 1390]) {
+  for (const [width, primary, secondary] of [
+    [760, ["device", "brightness", "theme"], ["tag", "author"]],
+    [761, ["device", "brightness", "author"], ["theme", "tag"]],
+    [986.99, ["device", "brightness", "author"], ["theme", "tag"]],
+    [987, ["device", "brightness", "author"], ["theme", "tag"]],
+    [987.01, ["device", "brightness", "theme"], ["tag", "author"]],
+    [999, ["device", "brightness", "theme"], ["tag", "author"]],
+    [1000, ["device", "brightness", "theme"], ["tag", "author"]],
+    [1389, ["device", "brightness", "theme"], ["tag", "author"]],
+    [1390, ["device", "brightness", "theme"], ["tag", "author"]]
+  ] as const) {
     const { window, document } = parseHTML(
       "<!doctype html><html><body><div id=root></div></body></html>"
     );
@@ -1625,6 +1605,13 @@ test("[Web/后台访问] 后台图片筛选在临界视口保持清空、无障�
       }
       const adminPanel = container.querySelector<HTMLElement>(".image-list-filter-panel");
       assert.ok(adminPanel);
+      for (const [row, fields] of [["primary", primary], ["secondary", secondary]] as const) {
+        const actual: string[] = [...adminPanel.querySelectorAll(`.image-list-filter-${row} .image-list-filter-field`)]
+          .map((element) => [...element.classList]
+            .find((name) => name !== "image-list-filter-field")!
+            .replace("image-list-filter-", ""));
+        assert.deepEqual(actual, fields, `${width}px 下 ${row} 行保持可用的字段顺序`);
+      }
       const controls = [...container.querySelectorAll<HTMLElement>(".facet-select-control")];
       assert.equal(controls.length, 3);
       assert.equal(document.querySelector(".facet-search-input"), null);

@@ -66,7 +66,7 @@ export async function pruneStorageMaintenanceDirectories(
     scheduleSignal.throwIfAborted();
     try {
       const changedObjects = items.flatMap((item) =>
-        (item.action === "repair_thumbnail" || item.action === "remove_object") &&
+        (item.action === "repair_variant" || item.action === "remove_object") &&
         group.slugs.includes(item.backend) &&
         item.prefix !== "*" &&
         (item.action === "remove_object" || item.key !== "*")

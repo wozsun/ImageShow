@@ -1,3 +1,4 @@
+import { STORAGE_PREFIXES } from "../../storage/objects/keys.ts";
 import { storageObjectKey } from "@imageshow/shared/browser";
 import type {
   ImagePurgeRequestDto,
@@ -9,7 +10,6 @@ import { runWithAdvisoryLockAcquisitionSignal } from "../../core/database/adviso
 import { pool } from "../../core/database/pools.ts";
 import { withTransactionOnClient } from "../../core/database/transactions.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
-import { thumbnailRef } from "../../storage/objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../../storage/maintenance-lock.ts";
 import {
   assertStorageRemovalResults,
@@ -22,7 +22,6 @@ import type { BackgroundJob } from "../../jobs/types.ts";
 
 type PurgeRow = {
   id: string;
-  ext: string;
   storage_slug: string;
   status: string;
 };
@@ -46,7 +45,6 @@ type PurgeWaitState = {
 
 const purgeReturnColumns = [
   "metadata.id",
-  "metadata.ext",
   "metadata.storage_slug",
   "metadata.status"
 ].join(", ");
@@ -312,12 +310,8 @@ async function purgeJobImage(
         throw new Error("Trash purge target is not in the trash");
       }
 
-      const thumb = thumbnailRef({ id: row.id, storage_slug: row.storage_slug });
       const removals = await removeStorageObjectsAndConfirm(
-        [
-          { prefix: thumb.prefix, key: thumb.key, storageSlug: row.storage_slug },
-          { prefix: "full", key: storageObjectKey(row.id, row.ext), storageSlug: row.storage_slug }
-        ],
+        STORAGE_PREFIXES.map((prefix) => ({ prefix, key: storageObjectKey(row.id!), storageSlug: row.storage_slug })),
         { signal: lockSignal },
         admissionSignal
       );
@@ -331,9 +325,9 @@ async function purgeJobImage(
       const deleted = await pool.query(
         `DELETE FROM metadata
           WHERE id=$1 AND status='deleted'
-            AND storage_slug=$2 AND ext=$3
+            AND storage_slug=$2
           RETURNING id`,
-        [row.id, row.storage_slug, row.ext]
+        [row.id, row.storage_slug]
       );
       lockSignal.throwIfAborted();
       if (deleted.rowCount !== 1) {

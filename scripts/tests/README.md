@@ -88,12 +88,12 @@ PowerShell 中使用 `$env:IMAGESHOW_DATABASE_SCENARIO = "cold-redis"`、
 
 | 职责 | `IMAGESHOW_STORAGE_INGESTION_SCENARIO` 值 |
 | --- | --- |
-| 配置与身份 | `config-bundle-consistency`、`auth-author-contracts` |
+| 配置与身份 | `runtime-settings`、`auth-author-contracts` |
 | 后台任务 | `background-job-history` |
 | 图片写入与分类 | `image-update-consistency`、`image-update-locking`、`image-snapshot-cancellation`、`image-classification-consistency`、`vocabulary-order` |
 | 查询与缓存 | `image-read-consistency`、`tag-filter-consistency`、`device-index`、`derived-cache-budgets`、`random-size`、`public-request-access`、`public-image-browse`、`public-gallery-concurrency`、`ready-cache-read-model`、`ready-cache-recovery`、`redis-business-commands` |
 | 存储与回收站 | `local-io-lifecycle`、`storage-registry-lifecycle`、`storage-migration-recovery`、`storage-cleanup-recovery`、`storage-lock-admission`、`trash-purge-recovery` |
-| 存储维护 | `storage-thumbnail-recovery`、`storage-maintenance-cancellation` |
+| 存储维护 | `storage-variant-recovery`、`storage-maintenance-cancellation` |
 | 接入服务与队列 | `ingestion-service-contracts`、`ingestion-action-protocol`、`ingestion-upload-lifecycle`、`ingestion-import-queue`、`ingestion-queue-actions`、`ingestion-http-boundaries`、`redis-canonical` |
 | 正式提交 | `ingestion-commit-guards`、`commit-success`、`commit-conflict`、`commit-recovery` |
 | 接入文件生命周期 | `ingestion-raw-lifecycle`、`ingestion-orphan-lifecycle` |
@@ -116,6 +116,8 @@ Web 队列场景值为 `strict-mode`、
   数据或文件副作用、取消和资源释放；它不接触部署中的现有实例。
 - 运行时镜像门禁另行验证生产镜像冷启动、HTTP、schema 和重启；局部测试通过不能替代
   `npm run verify:release`。
+- 三档编码与缓存使用隔离 Linux 生产镜像验收，`verify/normalize-encoding.mjs` 由镜像门禁复制后以 node 用户执行。
+- local 发布的故障注入验证文件与目录同步、发布失败及恢复边界；真实掉电持久性还依赖文件系统、磁盘和 PostgreSQL 部署配置。
 
 ## 数据与产物
 

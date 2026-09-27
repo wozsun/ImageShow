@@ -5,7 +5,6 @@ import type { ReadyImageCacheItem } from "../ready-cache/model.ts";
 
 type StoredImageServingRecord = {
   id: string;
-  ext: string;
   storage_slug: string;
 };
 
@@ -32,7 +31,6 @@ function readDatabase<T>(
 function storedImageServingRecord(item: ReadyImageCacheItem): StoredImageServingRecord {
   return {
     id: item.id,
-    ext: item.ext,
     storage_slug: item.storage_slug
   };
 }
@@ -55,7 +53,7 @@ export async function readImageServingRecordById(
     async (reader) =>
       (
         await reader.query<ImageServingRecord>(
-          `SELECT id, original, ext, storage_slug, updated_at::text AS updated_at
+          `SELECT id, original, storage_slug, updated_at::text AS updated_at
          FROM metadata
         WHERE id=$1
           AND status IN ('ready', 'deleted')

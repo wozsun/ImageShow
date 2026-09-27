@@ -91,6 +91,8 @@ export async function createIntegrationRuntime(): Promise<IntegrationRuntime> {
   };
   try {
     runtimeConfigStore.initializeRuntimeConfig();
+    const { configureSharpRuntime } = await import("../../../../packages/server/src/images/processing.ts");
+    configureSharpRuntime();
     await redisClient.pingRedis();
     await adminBootstrap.ensureSuperAdmin({
       username: "integration-admin",

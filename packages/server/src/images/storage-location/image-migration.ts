@@ -1,3 +1,5 @@
+import { imageVariants } from "@imageshow/shared/browser";
+import { imageVariantColumns, storedVariantFacts, type ImageVariantRecord } from "../variants/record.ts";
 import { storageObjectKey } from "@imageshow/shared/browser";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../core/database/advisory-locks.ts";
@@ -11,7 +13,6 @@ import {
   getStorageBackend,
   resolveStorageAccessForConfig
 } from "../../storage/backends/registry.ts";
-import { thumbnailObjectKey } from "../../storage/objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../../storage/maintenance-lock.ts";
 import {
   captureMoveCleanupObjects,
@@ -20,41 +21,28 @@ import {
   type CapturedMoveCleanupObject,
   type MoveCleanupObjectInput
 } from "../../storage/cleanup/service.ts";
-import { contentType, type ReadablePrefix } from "../../storage/objects/keys.ts";
+import { type ReadablePrefix } from "../../storage/objects/keys.ts";
 import {
-  ensureVerifiedObjectAtDestination,
-  missingThumbnailSourceError
+  ensureVerifiedObjectAtDestination
 } from "../../storage/objects/transfer.ts";
 import { shareStorageNamespace } from "../../storage/objects/namespace.ts";
 import { withImageTransferAdmission } from "../../storage/objects/image-transfer-admission.ts";
 
 const neverAbortedStorageMigrationSignal = new AbortController().signal;
 
-export type ImageStorageMigrationRecord = {
+export type ImageStorageMigrationRecord = ImageVariantRecord & {
   id: string;
-  ext: string;
   storage_slug: string;
-  md5: string;
-  image_size: string | number;
-  thumbnail_size: string | number;
 };
 
 export type ImageStorageMigrationResult = "migrated" | "unchanged" | "missing";
 
 type ImageStorageLocationState = {
   storage_slug: string;
-  ext: string;
   status: string;
 };
 
-const imageStorageMigrationColumns = [
-  "id",
-  "ext",
-  "storage_slug",
-  "md5",
-  "image_size",
-  "thumbnail_size"
-].join(", ");
+const imageStorageMigrationColumns = `id, storage_slug, ${imageVariantColumns}`;
 
 async function enqueueMigrationCandidateCleanup(
   image: ImageStorageMigrationRecord,
@@ -70,7 +58,7 @@ async function enqueueMigrationCandidateCleanup(
       image_id: image.id,
       source_backend: image.storage_slug,
       target_backend: target,
-      object_key: storageObjectKey(image.id, image.ext),
+      object_key: storageObjectKey(image.id),
       cleanup_reason: reason,
       ...(originalError
         ? { original_error: originalError }
@@ -93,7 +81,7 @@ async function readImageStorageLocationState(
 ): Promise<ImageStorageLocationState | undefined> {
   return (
     await pool.query(
-      `SELECT storage_slug, ext, status
+      `SELECT storage_slug, status
        FROM metadata
       WHERE id=$1`,
       [imageId]
@@ -103,10 +91,9 @@ async function readImageStorageLocationState(
 
 function hasLocation(
   state: ImageStorageLocationState,
-  storageSlug: string,
-  ext: string
+  storageSlug: string
 ) {
-  return state.storage_slug === storageSlug && state.ext === ext;
+  return state.storage_slug === storageSlug;
 }
 
 function migrationOutcomeUnknown(
@@ -119,7 +106,7 @@ function migrationOutcomeUnknown(
     image_id: image.id,
     source_backend: image.storage_slug,
     target_backend: target,
-    object_key: storageObjectKey(image.id, image.ext),
+    object_key: storageObjectKey(image.id),
     original_error: errorMessage(originalError),
     ...details
   };
@@ -150,7 +137,7 @@ async function settleSwitchError(
     });
   }
 
-  if (state && hasLocation(state, target, image.ext)) {
+  if (state && hasLocation(state, target)) {
     try {
       // The transaction normally committed the deterministic cleanup receipt.
       // Re-enqueueing also covers a lost response or an out-of-protocol writer.
@@ -164,7 +151,7 @@ async function settleSwitchError(
         image_id: image.id,
         source_backend: image.storage_slug,
         target_backend: target,
-        object_key: storageObjectKey(image.id, image.ext),
+        object_key: storageObjectKey(image.id),
         original_error: originalError,
         cleanup_error: cleanupError,
         retained_source_objects: sourceCleanup
@@ -177,7 +164,7 @@ async function settleSwitchError(
           image_id: image.id,
           source_backend: image.storage_slug,
           target_backend: target,
-          object_key: storageObjectKey(image.id, image.ext)
+          object_key: storageObjectKey(image.id)
         }
       );
     }
@@ -185,13 +172,13 @@ async function settleSwitchError(
       image_id: image.id,
       source_backend: image.storage_slug,
       target_backend: target,
-      object_key: storageObjectKey(image.id, image.ext),
+      object_key: storageObjectKey(image.id),
       original_error: originalError
     });
     return state;
   }
 
-  if (state && hasLocation(state, image.storage_slug, image.ext)) {
+  if (state && hasLocation(state, image.storage_slug)) {
     await enqueueMigrationCandidateCleanup(
       image,
       target,
@@ -204,7 +191,6 @@ async function settleSwitchError(
 
   throw migrationOutcomeUnknown(image, target, originalError, {
     actual_storage_slug: state?.storage_slug ?? null,
-    actual_ext: state?.ext ?? null,
     actual_status: state?.status ?? null,
     target_candidates: created,
     retained_source_objects: sourceCleanup
@@ -236,7 +222,6 @@ async function migrateImageToStorageBackendWhileLocked(
   const sourceAccess = resolveStorageAccessForConfig(source);
   const destinationAccess = resolveStorageAccessForConfig(destination);
   const sharedNamespace = shareStorageNamespace(source, destination);
-  const thumbKey = thumbnailObjectKey(current.id);
   const created: CapturedMoveCleanupObject[] = [];
   const sourceObjects: MoveCleanupObjectInput[] = [];
 
@@ -282,53 +267,11 @@ async function migrateImageToStorageBackendWhileLocked(
 
   let sourceCleanup: CapturedMoveCleanupObject[];
   try {
-    try {
-      await materialize(
-        "full",
-        storageObjectKey(current.id, current.ext),
-        { size: current.image_size, md5: current.md5 },
-        contentType(current.ext)
-      );
-    } catch (error) {
-      if (error instanceof ApiError
-        && error.code === "storage_source_object_not_found") {
-        return "missing";
-      }
-      throw error;
-    }
-    signal.throwIfAborted();
-    try {
-      await materialize(
-        "thumbs",
-        thumbKey,
-        { size: current.thumbnail_size },
-        "image/webp"
-      );
-    } catch (error) {
-      if (error instanceof ApiError
-        && error.code === "storage_source_object_not_found") {
-        throw missingThumbnailSourceError({
-          imageId: current.id,
-          backend: current.storage_slug,
-          key: thumbKey
-        });
-      }
-      throw error;
-    }
-
-    if (!sharedNamespace) {
-      sourceObjects.push(
-        {
-          prefix: "full",
-          key: storageObjectKey(current.id, current.ext),
-          backend: current.storage_slug
-        },
-        {
-          prefix: "thumbs",
-          key: thumbKey,
-          backend: current.storage_slug
-        }
-      );
+    for (const variant of imageVariants) {
+      const facts = storedVariantFacts(current, variant);
+      const key = storageObjectKey(current.id);
+      await materialize(variant, key, { size: facts.byte_size, md5: facts.md5 }, "image/webp");
+      if (!sharedNamespace) sourceObjects.push({ prefix: variant, key, backend: current.storage_slug });
     }
     sourceCleanup = await captureMoveCleanupObjects(sourceObjects);
     signal.throwIfAborted();
@@ -340,6 +283,7 @@ async function migrateImageToStorageBackendWhileLocked(
       "storage_migration_prepare_failed",
       error
     );
+    if (error instanceof ApiError && error.code === "storage_source_object_not_found") return "missing";
     throw error;
   }
 
@@ -359,13 +303,11 @@ async function migrateImageToStorageBackendWhileLocked(
                   updated_at=now()
             WHERE id=$1
               AND storage_slug=$3
-              AND ext=$4
           RETURNING status`,
           [
             current.id,
             target,
-            current.storage_slug,
-            current.ext
+            current.storage_slug
           ]
         );
         const status = String(result.rows[0]?.status ?? "");
@@ -410,7 +352,7 @@ async function migrateImageToStorageBackendWhileLocked(
         }
       );
     }
-    if (state && hasLocation(state, target, current.ext)) {
+    if (state && hasLocation(state, target)) {
       await enqueueCapturedObjectsForCleanup(
         current.id,
         sourceCleanup,
@@ -420,8 +362,7 @@ async function migrateImageToStorageBackendWhileLocked(
     }
     if (state && hasLocation(
       state,
-      current.storage_slug,
-      current.ext
+      current.storage_slug
     )) {
       await enqueueMigrationCandidateCleanup(
         current,
@@ -437,7 +378,6 @@ async function migrateImageToStorageBackendWhileLocked(
       new Error("storage migration compare-and-swap affected no rows"),
       {
         actual_storage_slug: state?.storage_slug ?? null,
-        actual_ext: state?.ext ?? null,
         actual_status: state?.status ?? null,
         target_candidates: created,
         retained_source_objects: sourceCleanup
@@ -452,7 +392,7 @@ export function migrateImageToStorageBackend(
   options: { expectedSource?: string; signal?: AbortSignal } = {}
 ): Promise<ImageStorageMigrationResult> {
   const migrateWithImageLock = () =>
-    withImageStorageMutationLock(image.id, (lockSignal) => {
+    withImageStorageMutationLock(image.id, async (lockSignal) => {
       const operationSignal = options.signal
         ? AbortSignal.any([options.signal, lockSignal])
         : lockSignal;

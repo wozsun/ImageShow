@@ -21,18 +21,16 @@ await runIntegrationScenario(async (runtime) => {
   const cleanupJob = await import("../../../../packages/server/src/storage/cleanup/job.ts");
   const jobs = await import("../../../../packages/server/src/jobs/repository.ts");
   const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
-  const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
   const objectTransfer =
     await import("../../../../packages/server/src/storage/objects/transfer.ts");
   const localAccess = await registry.resolveStorageAccess("local");
   const foregroundImage = randomUUID();
-  const foregroundObjectKey = storageObjectKey(foregroundImage, "jpg");
-  const foregroundNextKey = storageObjectKey(foregroundImage, "webp");
+  const foregroundObjectKey = storageObjectKey(foregroundImage);
+  const foregroundNextKey = storageObjectKey(randomUUID());
   const foregroundFull = Buffer.from("move-cleanup-owned-full");
   const foregroundThumb = Buffer.from("move-cleanup-owned-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, thumbnail_size)
-       VALUES ($1, 'integration-admin', 'local', 'pc', 'light', NULL, 'webp', $2, $3)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','light',NULL,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,$3),$2)`,
     [
       foregroundImage,
       createHash("md5").update(foregroundFull).digest("hex"),
@@ -40,19 +38,19 @@ await runIntegrationScenario(async (runtime) => {
     ]
   );
   for (const key of [foregroundObjectKey, foregroundNextKey]) {
-    await localAccess.driver.writeBuffer("full", key, foregroundFull, "image/webp");
+    await localAccess.driver.writeBuffer("large", key, foregroundFull, "image/webp");
   }
   await localAccess.driver.writeBuffer(
-    "thumbs",
-    imagePaths.thumbnailObjectKey(foregroundImage),
+    "small",
+    storageObjectKey(foregroundImage),
     foregroundThumb,
     "image/webp"
   );
   const foregroundCleanupObjects = await cleanup.captureMoveCleanupObjects([
-    { prefix: "full", key: foregroundObjectKey, backend: "local" },
+    { prefix: "large", key: foregroundObjectKey, backend: "local" },
     {
-      prefix: "thumbs",
-      key: imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(foregroundObjectKey)!.id),
+      prefix: "small",
+      key: foregroundObjectKey,
       backend: "local"
     }
   ]);
@@ -77,10 +75,7 @@ await runIntegrationScenario(async (runtime) => {
         Object.keys(object).sort().join(",") === "backend,key,namespace_identity,prefix"
     )
   );
-  await database.pool.query("UPDATE metadata SET ext=$2, brightness='dark' WHERE id=$1", [
-    foregroundImage,
-    "jpg"
-  ]);
+  await database.pool.query("UPDATE metadata SET brightness='dark' WHERE id=$1", [foregroundImage]);
   const adoptedToken = randomUUID();
   const adoptedCleanupJob = (
     await database.pool.query(
@@ -94,23 +89,20 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.equal(await jobs.markBackgroundJobSucceeded(adoptedCleanupJob), true);
   assert.equal(
-    await localAccess.driver.exists("full", foregroundObjectKey),
+    await localAccess.driver.exists("large", foregroundObjectKey),
     true,
     "删除边界重新采用的原图必须保留"
   );
   assert.equal(
     await localAccess.driver.exists(
-      "thumbs",
-      imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(foregroundObjectKey)!.id)
+      "small",
+      foregroundObjectKey
     ),
     true,
     "删除边界重新采用的缩略图必须保留"
   );
 
-  await database.pool.query("UPDATE metadata SET ext=$2, brightness='light' WHERE id=$1", [
-    foregroundImage,
-    "webp"
-  ]);
+  await database.pool.query("DELETE FROM metadata WHERE id=$1", [foregroundImage]);
   await cleanup.enqueueCapturedObjectsForCleanupWithoutLocationLock(
     foregroundImage,
     foregroundCleanupObjects,
@@ -131,29 +123,26 @@ await runIntegrationScenario(async (runtime) => {
     await jobs.markBackgroundJobSucceeded(unreferencedCleanupJob),
     true
   );
-  assert.equal(await localAccess.driver.exists("full", foregroundObjectKey), false);
+  assert.equal(await localAccess.driver.exists("large", foregroundObjectKey), false);
   assert.equal(
     await localAccess.driver.exists(
-      "thumbs",
-      imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(foregroundObjectKey)!.id)
+      "small",
+      foregroundObjectKey
     ),
-    true
+    false
   );
-  assert.equal(await localAccess.driver.exists("full", foregroundNextKey), true);
+  assert.equal(await localAccess.driver.exists("large", foregroundNextKey), true);
 
   const uncertainCleanupImage = randomUUID();
-  const uncertainCleanupKey = storageObjectKey(
-    uncertainCleanupImage,
-    "webp"
-  );
+  const uncertainCleanupKey = storageObjectKey(uncertainCleanupImage);
   await localAccess.driver.writeBuffer(
-    "full",
+    "large",
     uncertainCleanupKey,
     Buffer.from("move-cleanup-delete-response-loss"),
     "image/webp"
   );
   const uncertainCleanupObjects = await cleanup.captureMoveCleanupObjects([
-    { prefix: "full", key: uncertainCleanupKey, backend: "local" }
+    { prefix: "large", key: uncertainCleanupKey, backend: "local" }
   ]);
   await cleanup.enqueueCapturedObjectsForCleanupWithoutLocationLock(
     uncertainCleanupImage,
@@ -179,7 +168,7 @@ await runIntegrationScenario(async (runtime) => {
     const results = await originalCleanupRemoveObjects(objects, options);
     if (
       loseCleanupDeleteResponse &&
-      objects.some((object) => object.prefix === "full" && object.key === uncertainCleanupKey)
+      objects.some((object) => object.prefix === "large" && object.key === uncertainCleanupKey)
     ) {
       loseCleanupDeleteResponse = false;
       throw new Error("injected move cleanup delete response loss");
@@ -197,7 +186,7 @@ await runIntegrationScenario(async (runtime) => {
     localAccess.driver.removeObjects = originalCleanupRemoveObjects;
   }
   assert.equal(
-    await localAccess.driver.exists("full", uncertainCleanupKey),
+    await localAccess.driver.exists("large", uncertainCleanupKey),
     false,
     "删除响应丢失后对象可以已经不存在"
   );
@@ -216,11 +205,11 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(await jobs.markBackgroundJobSucceeded(retryJob), true);
 
   const latePublishImage = randomUUID();
-  const latePublishKey = storageObjectKey(latePublishImage, "webp");
+  const latePublishKey = storageObjectKey(latePublishImage);
   const latePublishBody = Buffer.from("late-published-after-client-rejection");
   const latePublishObjects = await cleanup.captureMoveCleanupObjects([
     {
-      prefix: "full",
+      prefix: "large",
       key: latePublishKey,
       backend: "local"
     }
@@ -255,7 +244,7 @@ await runIntegrationScenario(async (runtime) => {
     true
   );
   await localAccess.driver.writeBuffer(
-    "full",
+    "large",
     latePublishKey,
     latePublishBody,
     "image/webp"
@@ -283,16 +272,13 @@ await runIntegrationScenario(async (runtime) => {
     true
   );
   assert.equal(
-    await localAccess.driver.exists("full", latePublishKey),
+    await localAccess.driver.exists("large", latePublishKey),
     false,
     "不确定请求窗口结束后必须清理迟到发布的候选对象"
   );
 
   const guardedLatePublishImage = randomUUID();
-  const guardedLatePublishKey = storageObjectKey(
-    guardedLatePublishImage,
-    "webp"
-  );
+  const guardedLatePublishKey = storageObjectKey(guardedLatePublishImage);
   const guardedLatePublishBody = Buffer.from("ingestion-guarded-late-publish");
   const guardedLatePublishToken = randomUUID();
   let lateGuardPublish;
@@ -309,7 +295,7 @@ await runIntegrationScenario(async (runtime) => {
         return false;
       },
       async writeStream(toPrefix, toKey) {
-        assert.equal(toPrefix, "full");
+        assert.equal(toPrefix, "large");
         assert.equal(toKey, guardedLatePublishKey);
         const armedBeforeWrite = (
           await database.pool.query(
@@ -325,7 +311,7 @@ await runIntegrationScenario(async (runtime) => {
         lateGuardPublish = new Promise((resolve, reject) => {
           setTimeout(() => {
             localAccess.driver
-              .writeBuffer("full", guardedLatePublishKey, guardedLatePublishBody, "image/webp")
+              .writeBuffer("large", guardedLatePublishKey, guardedLatePublishBody, "image/webp")
               .then(resolve, reject);
           }, 50);
         });
@@ -335,7 +321,7 @@ await runIntegrationScenario(async (runtime) => {
   };
   const guardedTarget = await objectTransfer.verifyStorageTarget({
     storage: guardedTransferStorage,
-    prefix: "full",
+    prefix: "large",
     key: guardedLatePublishKey,
     expected: {
       size: guardedLatePublishBody.length,
@@ -344,7 +330,7 @@ await runIntegrationScenario(async (runtime) => {
   });
   await cleanup.enqueueObjectsForCleanup(
     guardedLatePublishImage,
-    [{ prefix: "full", key: guardedLatePublishKey, backend: "local" }],
+    [{ prefix: "large", key: guardedLatePublishKey, backend: "local" }],
     "ingestion_commit_candidate_guard",
     { guardToken: guardedLatePublishToken }
   );
@@ -401,7 +387,7 @@ await runIntegrationScenario(async (runtime) => {
   );
   await lateGuardPublish;
   assert.equal(
-    await localAccess.driver.exists("full", guardedLatePublishKey),
+    await localAccess.driver.exists("large", guardedLatePublishKey),
     true,
     "客户端失败后远端仍可在保护窗口内迟到发布"
   );
@@ -429,17 +415,14 @@ await runIntegrationScenario(async (runtime) => {
     true
   );
   assert.equal(
-    await localAccess.driver.exists("full", guardedLatePublishKey),
+    await localAccess.driver.exists("large", guardedLatePublishKey),
     false,
     "预建 guard 必须在完整窗口后删除迟到发布且未入库的正式候选"
   );
 
   for (const contentMd5 of [false, true]) {
     const settledGuardImage = randomUUID();
-    const settledGuardKey = storageObjectKey(
-      settledGuardImage,
-      "webp"
-    );
+    const settledGuardKey = storageObjectKey(settledGuardImage);
     const settledGuardToken = randomUUID();
     let settledTargetBody: Buffer | undefined;
     const settledSourceBody = Buffer.from("ingestion-guard-settled-upload");
@@ -455,7 +438,7 @@ await runIntegrationScenario(async (runtime) => {
       driver: controlledStorageDriver({
         async openRead(prefix, key) {
           const body = settledTargetBody;
-          assert.equal(prefix, "full");
+          assert.equal(prefix, "large");
           assert.ok(body);
           assert.equal(key, settledGuardKey);
           return {
@@ -490,7 +473,7 @@ await runIntegrationScenario(async (runtime) => {
     };
     const settledTarget = await objectTransfer.verifyStorageTarget({
       storage: settledTransferStorage,
-      prefix: "full",
+      prefix: "large",
       key: settledGuardKey,
       expected: {
         size: settledSourceBody.length,
@@ -499,7 +482,7 @@ await runIntegrationScenario(async (runtime) => {
     });
     await cleanup.enqueueObjectsForCleanup(
       settledGuardImage,
-      [{ prefix: "full", key: settledGuardKey, backend: "local" }],
+      [{ prefix: "large", key: settledGuardKey, backend: "local" }],
       "ingestion_commit_candidate_guard",
       { guardToken: settledGuardToken }
     );
@@ -540,18 +523,15 @@ await runIntegrationScenario(async (runtime) => {
   }
 
   const admittedCleanupImage = randomUUID();
-  const admittedCleanupKey = storageObjectKey(
-    admittedCleanupImage,
-    "webp"
-  );
+  const admittedCleanupKey = storageObjectKey(admittedCleanupImage);
   await localAccess.driver.writeBuffer(
-    "full",
+    "large",
     admittedCleanupKey,
     Buffer.from("move-cleanup-admitted-cancel"),
     "image/webp"
   );
   const admittedCleanupObjects = await cleanup.captureMoveCleanupObjects([
-    { prefix: "full", key: admittedCleanupKey, backend: "local" }
+    { prefix: "large", key: admittedCleanupKey, backend: "local" }
   ]);
   await cleanup.enqueueCapturedObjectsForCleanupWithoutLocationLock(
     admittedCleanupImage,
@@ -594,23 +574,23 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(admittedCleanupDeleteStarted, true);
   assert.deepEqual(admittedCleanupResult, { status: "succeeded" });
   assert.equal(
-    await localAccess.driver.exists("full", admittedCleanupKey),
+    await localAccess.driver.exists("large", admittedCleanupKey),
     false,
     "已准入的 move cleanup 必须接收删除结果"
   );
   assert.equal(await jobs.markBackgroundJobSucceeded(admittedCleanupJob), true);
 
   const abortedImage = randomUUID();
-  const abortedObjectKey = storageObjectKey(abortedImage, "webp");
+  const abortedObjectKey = storageObjectKey(abortedImage);
   const abortedBody = Buffer.from("cancelled-move-cleanup");
   await localAccess.driver.writeBuffer(
-    "thumbs",
+    "small",
     abortedObjectKey,
     abortedBody,
     "image/webp"
   );
   const [abortedCleanupObject] = await cleanup.captureMoveCleanupObjects([
-    { prefix: "thumbs", key: abortedObjectKey, backend: "local" }
+    { prefix: "small", key: abortedObjectKey, backend: "local" }
   ]);
   await cleanup.enqueueCapturedObjectsForCleanupWithoutLocationLock(
     abortedImage,
@@ -631,7 +611,7 @@ await runIntegrationScenario(async (runtime) => {
     const result = await query();
     if (
       typeof text === "string" &&
-      text.includes("SELECT id, ext, storage_slug") &&
+      text.includes("SELECT id, storage_slug") &&
       Array.isArray(values) &&
       values[0] === abortedImage
     ) {
@@ -652,7 +632,7 @@ await runIntegrationScenario(async (runtime) => {
     restoreCleanupQuery();
   }
   assert.deepEqual(
-    await localAccess.driver.readBuffer("thumbs", abortedObjectKey),
+    await localAccess.driver.readBuffer("small", abortedObjectKey),
     abortedBody,
     "取消后不得删除尚未开始处理的捕获对象"
   );
@@ -660,5 +640,5 @@ await runIntegrationScenario(async (runtime) => {
     "DELETE FROM background_job WHERE id=$1",
     [abortedReceipt.id]
   );
-  await removeDriverObject(localAccess.driver, "thumbs", abortedObjectKey);
+  await removeDriverObject(localAccess.driver, "small", abortedObjectKey);
 });

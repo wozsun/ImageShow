@@ -936,7 +936,7 @@ test("[Web/公开导航] 公开图库筛选与随机图链接使用同一当前�
     }),
     "https://img.example.com/random?device=pc&theme=!archive,stage&author=alice&tag=live&mode=json"
   );
-  for (const size of ["thumb", "full"] as const) {
+  for (const size of ["small", "large"] as const) {
     const url = new URL(
       buildRandomUrl({
         origin: "https://img.example.com",

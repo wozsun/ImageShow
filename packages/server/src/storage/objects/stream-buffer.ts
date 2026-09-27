@@ -3,6 +3,9 @@ import { finished } from "node:stream/promises";
 import { ApiError } from "../../core/api-error.ts";
 import type { OpenedRead } from "../drivers/driver.ts";
 
+/** Memory safety for completed objects; unrelated to admission of new uploads. */
+export const STORAGE_BUFFER_MAX_BYTES = 256 * 1024 * 1024;
+
 async function streamToBuffer(stream: Readable, limit = Number.MAX_SAFE_INTEGER) {
   const chunks: Buffer[] = [];
   let total = 0;
@@ -22,22 +25,29 @@ async function streamToBuffer(stream: Readable, limit = Number.MAX_SAFE_INTEGER)
 
 export async function openedReadToBuffer(
   opened: OpenedRead,
-  limit: number
+  limit: number,
+  expectedSize?: number
 ) {
-  if (opened.size !== undefined && opened.size > limit) {
-    opened.body.destroy();
-    throw new ApiError(
-      400,
-      "object_too_large",
-      "图片大小超过限制",
-      { limit }
-    );
-  }
+  const closed = finished(opened.body, { cleanup: true }).catch(() => undefined);
   try {
-    return await streamToBuffer(opened.body, limit);
-  } catch (error) {
+    if (!Number.isSafeInteger(limit) || limit < 0 ||
+        (expectedSize !== undefined && (!Number.isSafeInteger(expectedSize) || expectedSize < 0))) {
+      throw new RangeError("Invalid object buffer size");
+    }
+    if ((opened.size ?? 0) > limit || (expectedSize ?? 0) > limit) {
+      throw new ApiError(400, "object_too_large", "图片大小超过缓冲读取限制", { limit });
+    }
+    if (expectedSize !== undefined && opened.size !== undefined && opened.size !== expectedSize) {
+      throw new ApiError(502, "storage_read_size_mismatch", "对象体积与登记信息不一致");
+    }
+    const buffer = await streamToBuffer(opened.body, expectedSize ?? limit);
+    if (expectedSize !== undefined && buffer.length !== expectedSize) {
+      throw new ApiError(502, "storage_read_size_mismatch", "对象体积与登记信息不一致");
+    }
+    return buffer;
+  } finally {
     opened.body.destroy();
-    throw error;
+    await closed;
   }
 }
 

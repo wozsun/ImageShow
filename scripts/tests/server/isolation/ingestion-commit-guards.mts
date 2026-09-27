@@ -23,7 +23,6 @@ await runIntegrationScenario(async (runtime) => {
   const cleanupJob = await import("../../../../packages/server/src/storage/cleanup/job.ts");
   const jobs = await import("../../../../packages/server/src/jobs/repository.ts");
   const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
-  const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
   const runtimeConfigStore =
     await import("../../../../packages/server/src/config/runtime-config-store.ts");
   const objectAccess = await import("../../../../packages/server/src/storage/objects/access.ts");
@@ -112,8 +111,9 @@ await runIntegrationScenario(async (runtime) => {
       generation: commitGeneration,
       execution_token: commitPreparationToken
     },
-    "image"
+    "large"
   );
+  const commitMediumKey = ingestionPaths.ingestionPreparedFile({session_id: commitSessionId, image_id: commitImageId, generation: commitGeneration, execution_token: commitPreparationToken}, "medium");
   const commitThumbnailKey = ingestionPaths.ingestionPreparedFile(
     {
       session_id: commitSessionId,
@@ -121,7 +121,7 @@ await runIntegrationScenario(async (runtime) => {
       generation: commitGeneration,
       execution_token: commitPreparationToken
     },
-    "thumb"
+    "small"
   );
   const commitImageBody = Buffer.from("current-real-commit-image-" + commitImageId);
   const commitThumbnailBody = Buffer.from("current-real-commit-thumbnail-" + commitImageId);
@@ -130,6 +130,7 @@ await runIntegrationScenario(async (runtime) => {
     commitImageBody,
     new AbortController().signal
   );
+  await preparedFiles.writeIngestionPreparedFile(commitMediumKey, commitImageBody, new AbortController().signal);
   await preparedFiles.writeIngestionPreparedFile(
     commitThumbnailKey,
     commitThumbnailBody,
@@ -137,26 +138,55 @@ await runIntegrationScenario(async (runtime) => {
   );
   const realPrepared = {
     producer_execution_token: commitPreparationToken,
-    prepared_image_sha256: createHash("sha256")
-      .update(commitImageBody)
-      .digest("hex"),
-    prepared_thumbnail_sha256: createHash("sha256")
-      .update(commitThumbnailBody)
-      .digest("hex"),
     original_size: commitImageBody.length,
     original_width: 1200,
     original_height: 800,
-    width: 1200,
-    height: 800,
-    ext: "webp" as const,
-    md5: createHash("md5").update(commitImageBody).digest("hex"),
-    size: commitImageBody.length,
-    thumbnail_size: commitThumbnailBody.length,
-    quality: 90,
-    transcoded: true,
     detected_brightness: "dark" as const,
     duplicate_count: 0,
-    generation: commitGeneration
+    generation: commitGeneration,
+    variants: {
+      large: {
+        width: 1200,
+        height: 800,
+        bytes: commitImageBody.length,
+        md5: createHash("md5").update(commitImageBody).digest("hex"),
+        sha256: createHash("sha256")
+      .update(commitImageBody)
+      .digest("hex"),
+        quality: 80,
+        effort: 4,
+        passthrough: false,
+        over_target: false
+      },
+      medium: {
+        width: 1200,
+        height: 800,
+        bytes: commitImageBody.length,
+        md5: createHash("md5").update(commitImageBody).digest("hex"),
+        sha256: createHash("sha256")
+      .update(commitImageBody)
+      .digest("hex"),
+        quality: 80,
+        effort: 4,
+        passthrough: false,
+        over_target: false
+      },
+      small: {
+        width: 1200,
+        height: 800,
+        bytes: commitThumbnailBody.length,
+        md5: createHash("md5")
+      .update(commitThumbnailBody)
+      .digest("hex"),
+        sha256: createHash("sha256")
+      .update(commitThumbnailBody)
+      .digest("hex"),
+        quality: 80,
+        effort: 4,
+        passthrough: false,
+        over_target: false
+      }
+    }
   };
   const commitReady = preparedSession(
     (
@@ -228,7 +258,7 @@ await runIntegrationScenario(async (runtime) => {
     session_id: commitSessionId,
     image_id: commitImageId,
     expected_version: commitPolicyReady.version,
-    expected_md5: realPrepared.md5,
+    expected_md5: realPrepared.variants.large.md5,
     commit_request_id: coreUuid.randomUuidV7(),
     duplicate_decision: "upload" as const,
     metadata: {
@@ -416,14 +446,9 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(frozenCommitSession.commit.created_by, commitActor);
   const realCommitCoordinator =
     new ingestionIrreversibleCoordinator.IngestionIrreversibleCoordinator();
-  const committedObjectKey = storageObjectKey(
-    frozenCommitSession.image_id,
-    frozenCommitSession.prepared.ext
-  );
-  const committedObjectPrefix = "full";
-  const committedThumbnailKey = imagePaths.thumbnailObjectKey(
-    imagePaths.parseImageObjectKey(committedObjectKey)!.id
-  );
+  const committedObjectKey = storageObjectKey(frozenCommitSession.image_id);
+  const committedObjectPrefix = "large";
+  const committedThumbnailKey = committedObjectKey;
   const commitStorageAccess = await registry.resolveStorageAccess("local");
   const originalCommitWrite = commitStorageAccess.driver.writeStream.bind(
     commitStorageAccess.driver
@@ -491,7 +516,7 @@ await runIntegrationScenario(async (runtime) => {
   let siblingPreflightAborted = false;
   let siblingPreflightDrained = false;
   commitStorageAccess.driver.exists = async (prefix, key, options) => {
-    if (prefix === "thumbs" && key === committedThumbnailKey) {
+    if (prefix === "small" && key === committedThumbnailKey) {
       siblingPreflightStarted = true;
       const preflightSignal = options?.signal;
       await new Promise((_, reject) => {
@@ -587,12 +612,11 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(commitWriteCalls, 0, "候选 guard 未落库前不得开始正式写入");
   const conflictingCommitActor = "current-conflicting-actor-" + randomUUID();
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, width, height, image_size, thumbnail_size, image_time, title)
-       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 1200, 800, $4, $5, $6, $7)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,image_time,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,$6,$7,1200,800,GREATEST(1,$4),$3,1200,800,GREATEST(1,$4),$3,1200,800,GREATEST(1,$5),$3)`,
     [
       commitImageId,
       conflictingCommitActor,
-      realPrepared.md5,
+      realPrepared.variants.large.md5,
       commitImageBody.length,
       commitThumbnailBody.length,
       commitImageTime.iso,
@@ -612,7 +636,7 @@ await runIntegrationScenario(async (runtime) => {
         error instanceof Error
           && "code" in error && error.code === "ingestion_image_owner_conflict"
     );
-    assert.equal(commitWriteCalls, 2, "guard 成功后 full/thumb 才能开始写入");
+    assert.equal(commitWriteCalls, 3, "guard 成功后三档才能开始写入");
     assert.equal(
       (await database.pool.query(
         "SELECT created_by FROM metadata WHERE id=$1",
@@ -643,8 +667,10 @@ await runIntegrationScenario(async (runtime) => {
       [
         { prefix: committedObjectPrefix, key: committedObjectKey },
         { prefix: committedObjectPrefix, key: commitFullCandidateKey },
-        { prefix: "thumbs", key: committedThumbnailKey },
-        { prefix: "thumbs", key: commitThumbnailCandidateKey }
+        { prefix: "medium", key: committedObjectKey },
+        { prefix: "medium", key: commitFullCandidateKey },
+        { prefix: "small", key: committedThumbnailKey },
+        { prefix: "small", key: commitThumbnailCandidateKey }
       ]
     );
     await database.pool.query(
@@ -679,7 +705,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     assert.equal(
       await objectAccess.storageObjectExists(
-        "thumbs",
+        "small",
         committedThumbnailKey,
         "local"
       ),
@@ -708,7 +734,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     assert.equal(
       commitWriteCalls,
-      2,
+      3,
       "旧 guard 未收口时不得旁路其删除租约"
     );
     await database.pool.query("UPDATE background_job SET status='succeeded' WHERE id=$1", [
@@ -720,7 +746,7 @@ await runIntegrationScenario(async (runtime) => {
       frozenCommitSession,
       new AbortController().signal
     );
-    assert.equal(commitWriteCalls, 4, "同一 guard 只能放行持锁的本次重试");
+    assert.equal(commitWriteCalls, 6, "同一 guard 只能放行持锁的本次重试");
     let retriedCommitGuardJob = (
       await database.pool.query(
         "SELECT * FROM background_job WHERE type='move.cleanup' " +
@@ -738,7 +764,7 @@ await runIntegrationScenario(async (runtime) => {
     const retriedThumbnailCandidateKey =
       committedThumbnailKey + ".candidate-" + retriedCommitGuardJob.payload.guard_token;
     await commitStorageAccess.driver.writeBuffer(
-      "thumbs",
+      "small",
       retriedThumbnailCandidateKey,
       Buffer.from("simulated-post-commit-local-candidate"),
       "image/webp"
@@ -765,7 +791,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     assert.equal(
       await objectAccess.storageObjectExists(
-        "thumbs",
+        "small",
         committedThumbnailKey,
         "local"
       ),
@@ -774,7 +800,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     assert.equal(
       await objectAccess.storageObjectExists(
-        "thumbs",
+        "small",
         retriedThumbnailCandidateKey,
         "local"
       ),
@@ -853,7 +879,7 @@ await runIntegrationScenario(async (runtime) => {
         storageSlug: "local"
       },
       {
-        prefix: "thumbs",
+        prefix: "small",
         key: committedThumbnailKey,
         storageSlug: "local"
       }

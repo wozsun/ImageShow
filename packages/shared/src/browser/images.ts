@@ -1,8 +1,9 @@
+import { imageVariants, type ImageVariantsDto } from "./image-variants.ts";
 import { slugMaxLength, slugPattern, type Brightness, type Device } from "./common.ts";
 
 /** Stable physical identity, independent of editable image classification. */
-export function storageObjectKey(id: string, ext: string) {
-  return `${id.slice(-2)}/${id}.${ext}`;
+export function storageObjectKey(id: string) {
+  return `${id.slice(-2)}/${id}.webp`;
 }
 
 export function imageDevice(width: number, height: number): Device {
@@ -58,7 +59,7 @@ export type GalleryStatsDto = {
 export type ShowImageCardDto = {
   id: string;
   title: string;
-  thumb_url: string;
+  base_url: string;
   width: number;
   height: number;
 };
@@ -84,7 +85,8 @@ export type PublicImageDetailDto = Pick<
 > & {
   id: string;
   description: string;
-  object_url: string;
+  base_url: string;
+  variants: ImageVariantsDto;
   original_url: string | null;
   source: string | null;
 };
@@ -100,7 +102,7 @@ export type PublicImageDetailResponseDto = {
   item: PublicImageDetailDto;
 };
 
-export const randomImageSizes = ["thumb", "full"] as const;
+export const randomImageSizes = imageVariants;
 export type RandomImageSize = (typeof randomImageSizes)[number];
 
 export type RandomImageJsonItemDto = {
@@ -114,7 +116,9 @@ export type RandomImageJsonItemDto = {
   width: number;
   height: number;
   image_time: string;
-} & ({ object_url: string; thumb_url?: string } | { object_url?: never; thumb_url: string });
+  url: string;
+  byte_size: number;
+};
 
 export type RandomImageJsonResponseDto = {
   count: number;
@@ -124,11 +128,9 @@ export type RandomImageJsonResponseDto = {
 export type AdminImageListItemDto = ImageDetailItemDto & {
   status: "ready" | "deleted";
   purge_pending: boolean;
-  ext: string;
   storage_slug: string;
-  md5: string;
+  large_md5: string;
   original: string;
-  image_size: number;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -137,12 +139,11 @@ export type AdminImageListItemDto = ImageDetailItemDto & {
 /**
  * Fields consumed by the shared admin detail dialog.
  *
- * This deliberately excludes list/edit-only fields such as ext,
- * original, image_size and status so compact callers do not over-fetch.
+ * List/edit-only fields remain outside this compact response.
  */
 export type AdminImageDetailItemDto = ImageDetailItemDto & {
   storage_label: string;
-  md5: string;
+  large_md5: string;
   created_at: string;
   updated_at: string;
 };
@@ -159,13 +160,11 @@ export type EditableImageSnapshotDto = {
   theme: string | null;
   author: string;
   tags: string[];
-  thumb_url: string;
-  object_url: string;
+  base_url: string;
+  variants: ImageVariantsDto;
   original_url: string | null;
   width: number;
   height: number;
-  image_size: number;
-  ext: string;
   storage_slug: string;
 };
 
@@ -176,7 +175,7 @@ export type AdminImageListResponseDto = {
 
 export type ImageAdminInfoDto = {
   id: string;
-  md5: string;
+  large_md5: string;
   storage_label: string;
   created_at: string;
   updated_at: string;

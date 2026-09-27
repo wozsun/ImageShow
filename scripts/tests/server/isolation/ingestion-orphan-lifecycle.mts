@@ -7,7 +7,7 @@ import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
   const fixture = await createIngestionScenarioFixture(runtime);
-  const { access, createImage } = await createMaintenanceFixture(runtime);
+  const { access, body, createImage } = await createMaintenanceFixture(runtime);
   const { randomUuidV7 } = await import("../../../../packages/server/src/core/uuid.ts");
   const identity =
     await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
@@ -32,7 +32,7 @@ await runIntegrationScenario(async (runtime) => {
     image_id: randomUuidV7()
   };
   const generation = randomUuidV7();
-  const makePrepared = (kind: "image" | "thumb" = "image") =>
+  const makePrepared = (kind: "large" | "medium" | "small" = "large") =>
     paths.ingestionPreparedFile(
       {
         ...pair,
@@ -97,15 +97,15 @@ await runIntegrationScenario(async (runtime) => {
         : Math.min(cutoffs.fileCutoff, cutoffs.partCutoff) - 10_000;
     await utimes(path, new Date(modified), new Date(modified));
   }
-  const image = await createImage();
+  const image = await createImage({thumbnail:body});
   const orphanFull = "orphan/full.webp";
   const orphanThumb = "orphan/thumb.webp";
-  await access.driver.writeBuffer("full", orphanFull, Buffer.from("orphan"), "image/webp");
-  await access.driver.writeBuffer("thumbs", orphanThumb, Buffer.from("orphan"), "image/webp");
+  await access.driver.writeBuffer("large", orphanFull, Buffer.from("orphan"), "image/webp");
+  await access.driver.writeBuffer("small", orphanThumb, Buffer.from("orphan"), "image/webp");
   const before = await checkStorage();
   assert.ok(before.orphan_objects.some((item) => item.key === orphanFull));
-  assert.ok(before.orphan_thumbs.some((item) => item.key === orphanThumb));
-  assert.ok(before.missing_thumbs.some((item) => item.id === image.id));
+  assert.ok(before.orphan_objects.some((item) => item.key === orphanThumb));
+  assert.equal(before.missing_objects.some((item) => item.id === image.id), false);
   assert.equal(before.stale_ingestion_raw_files.count, 1);
   assert.equal(before.stale_ingestion_part_files.count, 3);
   assert.equal(before.stale_ingestion_prepared_files.count, 1);
@@ -131,13 +131,13 @@ await runIntegrationScenario(async (runtime) => {
   });
   const maintained = (await maintainStorageAndPurgeTasks()).storage;
   assert.equal(maintained.failed, 0);
-  assert.equal(maintained.items.find((item) => item.image_id === image.id)?.outcome, "repaired");
+  assert.equal(maintained.repaired, 0);
   assert.equal(
-    Number((await image.row()).thumbnail_size),
-    (await access.driver.readBuffer("thumbs", image.thumb)).length
+    Number((await image.row()).s_byte_size),
+    (await access.driver.readBuffer("small", image.thumb)).length
   );
-  assert.equal(await access.driver.exists("full", orphanFull), false);
-  assert.equal(await access.driver.exists("thumbs", orphanThumb), false);
+  assert.equal(await access.driver.exists("large", orphanFull), false);
+  assert.equal(await access.driver.exists("small", orphanThumb), false);
   const repeated = (await maintainStorageAndPurgeTasks()).storage;
   assert.equal(repeated.repaired, 0);
   assert.equal(repeated.removed, 0);

@@ -26,7 +26,7 @@ function imagePlaceholder(card: ShowImageCardDto | GalleryImageCard): PublicImag
     image_time: "",
     ...card,
     description: "",
-    object_url: "",
+    variants: { large: { width: 0, height: 0, byte_size: 0 }, medium: { width: 0, height: 0, byte_size: 0 }, small: { width: card.width, height: card.height, byte_size: 0 } },
     original_url: null,
     source: null
   };

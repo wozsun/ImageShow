@@ -1,7 +1,6 @@
-export type { AdminSettings, Brightness, Device } from "@imageshow/shared/browser";
+export type { Brightness, Device } from "@imageshow/shared/browser";
 import type {
   AdminUserDto,
-  AdvancedConfigPreviewDto,
   AdminImageDetailItemDto,
   AdminImageListItemDto,
   AuthorDto,
@@ -13,7 +12,6 @@ import type {
   ImageAdminInfoDto,
   PublicImageDetailDto,
   RandomMethod,
-  RuntimeConfigChangeSummaryDto,
   StorageBackendAdminDto,
   StorageBackendS3Dto,
   TagDto,
@@ -38,8 +36,6 @@ export type S3Settings = Omit<StorageBackendS3Dto, "secret_access_key_configured
   secret_access_key?: string;
 };
 export type StorageBackendAdmin = StorageBackendAdminDto;
-export type AdvancedConfigPreview = AdvancedConfigPreviewDto;
-export type RuntimeConfigChangeSummary = RuntimeConfigChangeSummaryDto;
 export type AdminUser = AdminUserDto;
 
 export type FacetOption = FacetOptionDto;

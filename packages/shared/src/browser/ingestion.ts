@@ -1,3 +1,4 @@
+import type { ImageVariant, ImageVariantsDto } from "./image-variants.ts";
 import { normalizeHttpsUrlInput, type Brightness, type Device } from "./common.ts";
 import type {
   AdminImageListItemDto,
@@ -213,18 +214,18 @@ export type ImportAcceptResultDto = {
   items: ImportAcceptItemDto[];
 };
 
+/** Final encoder quality; null means the source WebP was preserved. */
+export type IngestionVariantQualityDto = Record<ImageVariant, number | null>;
+
 export type ServerIngestionPreparedDto = {
   preview_url: string;
   preview_full_url: string;
-  width: number;
-  height: number;
   original_width: number;
   original_height: number;
   md5: string;
   original_size: number;
-  size: number;
-  quality: number | null;
-  transcoded: boolean;
+  variants: ImageVariantsDto;
+  variant_quality: IngestionVariantQualityDto;
   detected_brightness: Brightness;
   duplicate_count: number;
 };
@@ -263,8 +264,7 @@ export type CompletedIngestionDisplayDto = {
   original_width: number;
   original_height: number;
   original_size: number;
-  quality: number | null;
-  transcoded: boolean;
+  variant_quality: IngestionVariantQualityDto;
 };
 
 /** Formal image fields consumed by Ingestion cards and completion invalidation. */
@@ -272,10 +272,9 @@ export type CompletedIngestionImageDto = ImageCardBaseDto & {
   description: string;
   source: string | null;
   original: string;
-  object_url: string;
+  variants: ImageVariantsDto;
   storage_slug: string;
-  md5: string;
-  image_size: number;
+  large_md5: string;
 };
 
 export type CompletedServerIngestionItemDto = IngestionSessionPairDto & {

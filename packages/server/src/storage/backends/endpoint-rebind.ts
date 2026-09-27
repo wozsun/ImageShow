@@ -16,7 +16,7 @@ function endpointMismatch(reason: string) {
 async function removeChallengeObject(driver: StorageDriver, key: string) {
   const [result] = await driver.removeObjects([
     {
-      prefix: "full",
+      prefix: "large",
       key
     }
   ]);
@@ -39,11 +39,11 @@ async function verifyBidirectionalChallenge(
 
   try {
     signal?.throwIfAborted();
-    await current.writeBuffer("full", currentKey, currentChallenge, "application/octet-stream", {
+    await current.writeBuffer("large", currentKey, currentChallenge, "application/octet-stream", {
       signal
     });
     const readThroughCandidate = await candidate.readBuffer(
-      "full",
+      "large",
       currentKey,
       { signal }
     );
@@ -52,14 +52,14 @@ async function verifyBidirectionalChallenge(
     }
 
     await candidate.writeBuffer(
-      "full",
+      "large",
       candidateKey,
       candidateChallenge,
       "application/octet-stream",
       { signal }
     );
     const readThroughCurrent = await current.readBuffer(
-      "full",
+      "large",
       candidateKey,
       { signal }
     );

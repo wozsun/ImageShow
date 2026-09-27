@@ -452,11 +452,8 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
   });
   const storageResult = {
     ok: true,
-    missing_objects: [],
-    missing_thumbs: [],
-    pending_thumbnail_repairs: [],
+    missing_objects: [{ id: "00000000-0000-7000-8000-000000000001", prefix: "medium", backend: "local", namespace: "local" }],
     orphan_objects: [],
-    orphan_thumbs: [],
     stale_ingestion_raw_files: { count: 0, oldest_modified_at: null },
     stale_ingestion_part_files: { count: 0, oldest_modified_at: null },
     stale_ingestion_prepared_files: { count: 0, oldest_modified_at: null },
@@ -464,7 +461,7 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
     incomplete_ingestion_temp_scan: [],
     incomplete_listings: [],
     unavailable_backends: []
-  };
+  } satisfies Awaited<ReturnType<typeof import("../../../../packages/server/src/checks/storage-check.ts").checkStorage>> & { ok: boolean };
   const trashResult = {
     ok: true,
     deleted_count: 5,
@@ -626,6 +623,9 @@ test("[Web/后台访问] 存储维护直接合并存储对象与持久彻底删�
       '[role="dialog"][aria-label="存储维护"]'
     );
     assert.ok(maintenanceDialog);
+    assert.match(maintenanceDialog.textContent ?? "", /待尝试恢复对象1/u);
+    assert.match(maintenanceDialog.textContent ?? "", /三档缺失对象合计1/u);
+    assert.match(maintenanceDialog.textContent ?? "", /同档一致副本/u);
     assert.match(document.body.textContent ?? "", /持久彻底删除任务/);
     assert.match(document.body.textContent ?? "", /将重试耗尽任务2/);
     assert.match(document.body.textContent ?? "", /将重试异常成功任务2/);

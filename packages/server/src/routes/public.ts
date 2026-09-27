@@ -1,5 +1,5 @@
 import type { Context, Hono } from "hono";
-import type { PublicImageDetailResponseDto, RuntimeConfig } from "@imageshow/shared/browser";
+import { imageVariants, type PublicImageDetailResponseDto, type RuntimeConfig } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
@@ -32,8 +32,7 @@ import {
   listPublicImages
 } from "../images/read-models/public-images.ts";
 import {
-  servePublicStoredObject,
-  servePublicStoredThumbnail
+  servePublicStoredObject
 } from "../images/serving/stored-image.ts";
 import type { StoredResponseRequest } from "../images/serving/stored-object-response.ts";
 import { requireImageReferer } from "./image-referer.ts";
@@ -129,16 +128,9 @@ export function registerPublicRoutes(app: Hono) {
     return cacheableApiSuccess(c, response, privateRevalidationCacheControl);
   });
 
-  app.get("/images/full/*", requireImageReferer, async (c) =>
-    servePublicStoredObject(
-      c.req.path.slice("/images/full/".length),
-      storedResponseRequest(c)
-    )
-  );
-  app.get("/images/thumbs/*", requireImageReferer, async (c) =>
-    servePublicStoredThumbnail(
-      c.req.path.slice("/images/thumbs/".length),
-      storedResponseRequest(c)
-    )
-  );
+  for (const prefix of imageVariants) {
+    app.get(`/images/${prefix}/*`, requireImageReferer, async (c) =>
+      servePublicStoredObject(prefix, c.req.path.slice(`/images/${prefix}/`.length), storedResponseRequest(c))
+    );
+  }
 }

@@ -28,8 +28,7 @@ await runIntegrationScenario(async (runtime) => {
   const committedFixtures = async (ids: readonly string[], owners: string[], imageTime: string) => {
     for (const [index, id] of ids.entries()) {
       await runtime.databasePools.pool.query(
-        `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_time)
-       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, $4)`,
+        `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,image_time,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,$4,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
         [
         id,
         owners[index],

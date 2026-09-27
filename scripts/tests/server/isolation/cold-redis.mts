@@ -59,8 +59,7 @@ try {
   await redisClient.pingRedis();
   if (mode === "seed") {
     await databasePools.pool.query(
-      `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_time, title)
-       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, $4, $5)`,
+      `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,image_time,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,$4,$5,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
       [
         persistedImageId,
         owner,

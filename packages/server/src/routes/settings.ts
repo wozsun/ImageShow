@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import {
   adminApiBasePath,
   type RuntimeConfig,
+  type RuntimeConfigResponseDto,
   type AdminSettingsResponseDto
 } from "@imageshow/shared/browser";
 import {
@@ -13,12 +14,11 @@ import { readJsonBody } from "../core/http/json-body.ts";
 import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import {
   getSettingsForAdmin,
-  parseSettingsInput,
   saveAppSettings
 } from "../config/app-settings.ts";
 import { getRuntimeConfig, reloadRuntimeConfigFromDisk } from "../config/runtime-config-store.ts";
 import { assertLocalImageHostForSite } from "../storage/backends/registry.ts";
-import { privateRevalidationCacheControl } from "../core/http/headers.ts";
+import { privateNoStoreCacheControl, privateRevalidationCacheControl } from "../core/http/headers.ts";
 
 const settingsRepresentation = createApiSuccessSnapshot(
   (config: RuntimeConfig) =>
@@ -35,18 +35,30 @@ export function registerSettingsRoutes(app: Hono) {
     });
   });
 
+  app.get(`${adminApiBasePath}/settings/runtime`, requireSuperAdmin, (c) => {
+    c.header("Cache-Control", privateNoStoreCacheControl);
+    const config = getRuntimeConfig();
+    return c.json(apiSuccess({
+      config,
+      settings: getSettingsForAdmin(config)
+    } satisfies RuntimeConfigResponseDto));
+  });
+
   app.post(`${adminApiBasePath}/settings`, requireSuperAdmin, async (c) => {
-    const input = parseSettingsInput(await readJsonBody(c));
-    await saveAppSettings(input);
+    const config = await saveAppSettings(await readJsonBody(c));
+    c.header("Cache-Control", privateNoStoreCacheControl);
     return c.json(
-      apiSuccess({ settings: getSettingsForAdmin() } satisfies AdminSettingsResponseDto)
+      apiSuccess({ config, settings: getSettingsForAdmin(config) } satisfies RuntimeConfigResponseDto)
     );
   });
 
   app.post(`${adminApiBasePath}/settings/reload`, requireSuperAdmin, async (c) => {
-    await reloadRuntimeConfigFromDisk((config) => assertLocalImageHostForSite(config.site.domain));
+    const config = await reloadRuntimeConfigFromDisk((candidate) =>
+      assertLocalImageHostForSite(candidate.site.domain)
+    );
+    c.header("Cache-Control", privateNoStoreCacheControl);
     return c.json(
-      apiSuccess({ settings: getSettingsForAdmin() } satisfies AdminSettingsResponseDto)
+      apiSuccess({ config, settings: getSettingsForAdmin(config) } satisfies RuntimeConfigResponseDto)
     );
   });
 }

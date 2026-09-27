@@ -33,7 +33,6 @@ import {
 import { parse } from "../../../packages/server/src/routes/validation/parse.ts";
 import {
   normalizePartialContentRange,
-  parseSingleByteRange,
   totalSizeFromContentRange
 } from "../../../packages/server/src/core/http/byte-range.ts";
 import { finalizeSecurityHeaders } from "../../../packages/server/src/core/http/headers.ts";
@@ -152,7 +151,7 @@ async function status(host, path, method = "GET") {
 
 assert.equal(await status("img.example.com", "/random", "POST"), 405);
 assert.equal(await status("IMG.EXAMPLE.COM", "/api/ping", "OPTIONS"), 204);
-for (const path of ["/images/full/example.webp", "/images/thumbs/example.webp"]) {
+for (const path of ["/images/large/example.webp", "/images/small/example.webp"]) {
   assert.equal(await status("img.example.com", path, "OPTIONS"), 204);
 }
 for (const method of ["GET", "HEAD", "OPTIONS"]) {
@@ -184,8 +183,8 @@ for (const domain of ["", "example.com"]) {
     const response = await app.request("http://internal.test/api/site-config", { headers: { Host: host } });
     assert.equal(response.status, 200);
     for (const scheme of ["http", "https"]) {
-      assert.equal(new URL(imageResourceBaseUrl() + "/thumbs/test.webp", scheme + "://" + host).href,
-        scheme + "://" + host + "/images/thumbs/test.webp");
+      assert.equal(new URL(imageResourceBaseUrl() + "/small/test.webp", scheme + "://" + host).href,
+        scheme + "://" + host + "/images/small/test.webp");
     }
   }
   for (const host of ["", "bad host", "evil.test/path", "user@evil.test", "one.test,two.test", "local.test:0", "local.test:65536"]) {
@@ -506,7 +505,10 @@ test("[Server/HTTP 与鉴权] 随机 JSON 卡片复用 canonical 字段且不额
   });
   const item = servingReadyCacheItem({
     author: "photographer",
-    title: "Random card"
+    title: "Random card",
+    l_byte_size: "123456",
+    m_byte_size: "65432",
+    s_byte_size: "1024"
   });
   let storageQueries = 0;
   context.mock.method(pool, "query", async (sql: string) => {
@@ -528,26 +530,14 @@ test("[Server/HTTP 与鉴权] 随机 JSON 卡片复用 canonical 字段且不额
   });
   invalidateStorageBackendRegistry();
   try {
-    const [presented] = await presentRandomJsonItems([item]);
-    assert.equal(storageQueries, 1);
-    assert.equal(presented.id, item.id);
-    assert.equal(presented.title, "Random card");
-    assert.equal(presented.author, "photographer");
-    assert.ok(presented.object_url);
-    assert.ok(presented.thumb_url);
-    assert.match(presented.object_url, /\/full\//);
-    assert.match(presented.thumb_url, /\/thumbs\//);
-    for (const size of ["thumb", "full"] as const) {
-      const cards = await presentRandomJsonItems([item, item], { size });
-      assert.equal(storageQueries, 1, "the registry is shared across size variants");
-      for (const card of cards) {
-        assert.deepEqual(
-          card,
-          size === "thumb"
-            ? Object.fromEntries(Object.entries(presented).filter(([key]) => key !== "object_url"))
-            : Object.fromEntries(Object.entries(presented).filter(([key]) => key !== "thumb_url"))
-        );
-      }
+    for (const [size, bytes] of [["large", 123456], ["medium", 65432], ["small", 1024]] as const) {
+      const [presented] = await presentRandomJsonItems([item], { size, origin: "https://example.test" });
+      assert.equal(storageQueries, 1);
+      assert.equal(presented!.id, item.id);
+      assert.equal(presented!.title, "Random card");
+      assert.equal(presented!.author, "photographer");
+      assert.equal(new URL(presented!.url).pathname, "/images/" + size + "/" + item.id.slice(-2) + "/" + item.id + ".webp");
+      assert.equal(presented!.byte_size, bytes);
     }
   } finally {
     invalidateStorageBackendRegistry();
@@ -556,22 +546,20 @@ test("[Server/HTTP 与鉴权] 随机 JSON 卡片复用 canonical 字段且不额
 test("[Server/HTTP 与鉴权] Redis ready 投影、管理员权限和密码验证保留当前安全边界", async () => {
   const item = readyImageCacheItemFromRow({
     id: imageId,
-    ext: "avif",
     device: "pc",
     brightness: "dark",
     theme: null,
     storage_slug: "local",
     author: "alice",
     tags: ["stage", "concert", "stage"],
-    width: 1920,
-    height: 1080,
-    image_size: 2048,
+    l_width: 1920, l_height: 1080, l_byte_size: 2048, l_md5: "0123456789abcdef0123456789abcdef",
+    m_width: 1920, m_height: 1080, m_byte_size: 2048, m_md5: "0123456789abcdef0123456789abcdef",
+    s_width: 1920, s_height: 1080, s_byte_size: 2048, s_md5: "0123456789abcdef0123456789abcdef",
     sort_score: "1785844800654321",
     title: "title",
     description: "description",
     source: "https://example.com/post",
     original: "https://example.com/image.jpg",
-    md5: "0123456789abcdef0123456789abcdef",
     cursor_created_at: "2026-08-04T12:00:01.000Z",
     cursor_updated_at: "2026-08-04T12:00:02.000Z"
   });
@@ -988,10 +976,6 @@ test("[Server/HTTP 与鉴权] HTTP 范围、缓存验证器和安全响应头遵
   for (const field of ["dev", "ino", "size", "mtimeNs", "ctimeNs"] as const) {
     assert.notEqual(localObjectEtag({ ...stats, [field]: stats[field] + 1n }), localEtag, field);
   }
-  assert.deepEqual(parseSingleByteRange("bytes=0-9", 100), { start: 0, end: 9 });
-  assert.deepEqual(parseSingleByteRange("bytes=-10", 100), { start: 90, end: 99 });
-  assert.deepEqual(parseSingleByteRange("bytes=95-", 100), { start: 95, end: 99 });
-  assert.throws(() => parseSingleByteRange("bytes=100-101", 100));
   assert.equal(normalizePartialContentRange("bytes 0-9/100"), "bytes 0-9/100");
   assert.equal(totalSizeFromContentRange("bytes */100"), 100);
 

@@ -8,19 +8,17 @@ import {
   safeResponseHeaderValue,
   safeRedirectLocation
 } from "../core/http/headers.ts";
-import { requestClientIp, requestHasTrustedReferer } from "../core/http/request-security.ts";
+import { requestClientIp, requestHasTrustedReferer, requestIsSecure } from "../core/http/request-security.ts";
 import { ApiError } from "../core/api-error.ts";
 import { reserveRandomRequest } from "../random/rate-limit.ts";
 import { apiErrorResponse, apiSuccess } from "../core/http/responses.ts";
 import { presentRandomJsonItems } from "../random/json-presentation.ts";
 import { selectRandomImages } from "../random/selection.ts";
 import { resolveReadableObject } from "../storage/objects/access.ts";
-import { contentType } from "../storage/objects/keys.ts";
 import {
-  assertCanonicalImageObjectKey,
-  thumbnailObjectKey
+  assertCanonicalImageObjectKey
 } from "../storage/objects/image-paths.ts";
-import { publicImageUrlsForConfig } from "../storage/objects/public-urls.ts";
+import { publicImageUrlForConfig } from "../storage/objects/public-urls.ts";
 import { getStorageBackend } from "../storage/backends/registry.ts";
 import { webReadableFromNode } from "../storage/objects/stream-buffer.ts";
 
@@ -62,7 +60,7 @@ async function respondRandom(c: Context, url: URL) {
   if (selection.mode === "json") {
     const items = await presentRandomJsonItems(
       selection.items,
-      { signal, size: selection.size }
+      { signal, size: selection.size, origin: `${requestIsSecure(c) ? "https" : "http"}://${url.host}` }
     );
     const body = JSON.stringify(
       apiSuccess({
@@ -93,14 +91,12 @@ async function respondRandom(c: Context, url: URL) {
     "Cache-Control": noStoreCacheControl,
     "X-Image-Info": safeResponseHeaderValue("X-Image-Info", imageInfo)
   };
-  const thumbnail = selection.size === "thumb";
+  const variant = selection.size;
   if (selection.mode === "proxy") {
-    const key = thumbnail
-      ? thumbnailObjectKey(picked.id)
-      : storageObjectKey(picked.id, picked.ext);
+    const key = storageObjectKey(picked.id);
     assertCanonicalImageObjectKey(key);
     const opened = await (
-      await resolveReadableObject(thumbnail ? "thumbs" : "full", key, picked.storage_slug, {
+      await resolveReadableObject(variant, key, picked.storage_slug, {
         signal
       })
     ).open(undefined, {
@@ -109,7 +105,7 @@ async function respondRandom(c: Context, url: URL) {
     // 候选集合变化时固定 seed 也可能换图，后续 Range 请求不保证命中同一对象。
     const headers = new Headers({
       ...baseHeaders,
-      "Content-Type": contentType(thumbnail ? "webp" : picked.ext)
+      "Content-Type": "image/webp"
     });
     const contentLength = responseContentLengthValue(opened.size);
     if (contentLength !== undefined) {
@@ -122,8 +118,7 @@ async function respondRandom(c: Context, url: URL) {
   }
 
   const config = await getStorageBackend(picked.storage_slug, { signal });
-  const urls = publicImageUrlsForConfig(picked, config);
-  const location = thumbnail ? urls.thumb_url : urls.object_url;
+  const location = publicImageUrlForConfig(picked, config, variant);
   return new Response(null, {
     status: 302,
     headers: {

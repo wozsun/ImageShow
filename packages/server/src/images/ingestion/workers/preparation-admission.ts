@@ -9,7 +9,7 @@ import { DynamicConcurrencyLimiter } from "../../../core/concurrency.ts";
  * The single process-wide owner shared by Upload and Import for work that can
  * retain processed image buffers while staging them. Its capacity follows the
  * sole public Normalize setting, but remains held after CPU normalization
- * releases its shared permit and until the ready canonical references both
+ * releases its shared permit and until the ready canonical references all
  * published local prepared files.
  */
 const ingestionPreparationAdmission = new DynamicConcurrencyLimiter(

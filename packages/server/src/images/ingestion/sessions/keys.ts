@@ -1,7 +1,7 @@
 import type { IngestionQueueType } from "./model.ts";
 import { ingestionOwnerKey } from "./identity.ts";
 
-const ingestionRuntimePrefix = "imageshow:ingestion";
+const ingestionRuntimePrefix = "imageshow:ingestion:variants";
 
 export const ingestionCanonicalKeyRoot = `${ingestionRuntimePrefix}:session:`;
 export const ingestionOwnerQueueKeyRoot = `${ingestionRuntimePrefix}:owner:`;

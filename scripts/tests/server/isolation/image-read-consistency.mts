@@ -34,8 +34,7 @@ await runIntegrationScenario(async (runtime) => {
   try {
     for (const [index, id] of duplicateIds.entries()) {
       await database.pool.query(
-        `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
-       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3)`,
+        `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,$3,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
         [
           id,
           duplicateMd5,
@@ -83,8 +82,7 @@ await runIntegrationScenario(async (runtime) => {
   );
   for (const [position, id] of paginationIds.entries()) {
     await database.pool.query(
-      `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, author, image_time, deleted_at, title)
-       VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, $4, now(), $5)`,
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,image_time,deleted_at,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,$3,$4,now(),$5,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
       [
         id,
         String(position + 4).repeat(32),
@@ -173,8 +171,7 @@ await runIntegrationScenario(async (runtime) => {
       snapshotRead.then(() => assert.fail("snapshot count must be intercepted"))
     ]);
     await database.pool.query(
-      `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, author, image_time, deleted_at, title)
-       VALUES ($1, 'integration-admin', 'deleted', 'local', 'pc', 'dark', NULL, 'webp', $2, 'alice', '2026-08-16T00:00:00.000Z', now(), 'pagination-concurrent')`,
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,image_time,deleted_at,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','deleted','local','pc','dark',NULL,'alice','2026-08-16T00:00:00.000Z',now(),'pagination-concurrent',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)`,
       [
           concurrentPaginationId,
           "8".repeat(32)
@@ -271,8 +268,7 @@ await runIntegrationScenario(async (runtime) => {
   for (const [position, id] of matrixIds.entries()) {
     const [device, brightness] = matrixAxes[position];
     await database.pool.query(
-      `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, author, image_time, title)
-       VALUES ($1, 'integration-admin', 'ready', 'local', $2, $3, $4, 'webp', $5, $6, $7, $8)`,
+      `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,image_time,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local',$2,$3,$4,$6,$7,$8,1,1,GREATEST(1,1),$5,1,1,GREATEST(1,1),$5,1,1,GREATEST(1,1),$5)`,
       [
         id,
         device,

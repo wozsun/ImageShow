@@ -339,7 +339,7 @@ export function ImageAdminDetails({
   const loading = !admin && query.isFetching && !adminInfo;
   const failed = !admin && query.isError && !query.isFetching;
   const fallback = unresolvedValue(admin, loading, failed);
-  const md5 = refreshedAdminInfo?.md5 || adminItem?.md5 || adminInfo?.md5 || fallback;
+  const md5 = refreshedAdminInfo?.large_md5 || adminItem?.large_md5 || adminInfo?.large_md5 || fallback;
   const refreshedPublicStorageLabel =
     !admin
       && !query.isStale

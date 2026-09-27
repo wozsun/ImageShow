@@ -8,6 +8,7 @@ import type {
   StoragePruneOptions,
   StorageRemoveOptions,
   StorageRequestOptions,
+  StorageBufferReadOptions,
   StorageServerCopyOptions,
   StorageServerCopySource,
   StorageSelfTest,
@@ -103,7 +104,11 @@ class ManagedStorageDriver implements StorageDriver {
     }
   }
 
-  readBuffer(prefix: StoragePrefix, key: string, options?: StorageRequestOptions) {
+  ensureDurable(prefix: StoragePrefix, key: string, options?: StorageRequestOptions) {
+    return this.usingReference(async () => { await this.driver.ensureDurable?.(prefix, key, options); });
+  }
+
+  readBuffer(prefix: StoragePrefix, key: string, options?: StorageBufferReadOptions) {
     return this.usingReference(() => this.driver.readBuffer(prefix, key, options));
   }
 

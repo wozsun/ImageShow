@@ -64,8 +64,7 @@ import {
 import {
   assertCanonicalImageObjectKey,
   isCanonicalImageObjectKey,
-  parseImageObjectKey,
-  thumbnailObjectKey
+  parseImageObjectKey
 } from "../../../packages/server/src/storage/objects/image-paths.ts";
 import { storageConfigFromRow } from "../../../packages/server/src/storage/backends/record.ts";
 import {
@@ -298,9 +297,26 @@ test("[Server/存储] local / S3 配置只按实际连接参数复用 driver", (
     "https://user:pass@images.example.com",
     "https://images.example.com/?token=x",
     "https://images.example.com/#x",
-    "https://images.example.com/%2fsecret"
+    "https://images.example.com/%2fsecret",
+    "https://images.example.com/%5csecret",
+    "https://images.example.com/%00secret",
+    "https://images.example.com/%1fsecret",
+    "https://images.example.com/%7fsecret",
+    "https://images.example.com/%2e%2e/secret",
+    "https://images.example.com/a/../secret",
+    "https://images.example.com/%broken"
   ]) {
     assert.equal(storageBackendUpdateInput.safeParse({ public_base_url }).success, false);
+    assert.equal(storageBackendUpdateInput.safeParse({ s3: { public_base_url } }).success, false);
+    for (const type of ["local", "s3"]) {
+      assert.throws(() => storageConfigFromRow({ slug: type, type, config: { public_base_url } }));
+    }
+  }
+  for (const type of ["local", "s3"]) {
+    const public_base_url = "https://IMAGES.example.com/root%20path/%E5%9B%BE%E7%89%87/";
+    const config = storageConfigFromRow({ slug: type, type, config: { public_base_url } });
+    assert.equal(config.type === "local" ? config.public_base_url : config.s3.public_base_url,
+      "https://images.example.com/root%20path/%E5%9B%BE%E7%89%87");
   }
   const current = s3SettingsSchema.parse({
     endpoint: "objects.example.com",
@@ -422,7 +438,7 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
       }
     };
     const backend = new S3StorageDriver(config, { client });
-    const listing = backend.listKeys("full", {
+    const listing = backend.listKeys("large", {
       maxKeys: STORAGE_ADMIN_LIST_MAX_KEYS
     });
     const first = await listing.next();
@@ -467,7 +483,7 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
   const truncatedBackend = new S3StorageDriver(config, { client: truncatedClient });
   let truncatedObserved = 0;
   const truncated = await consumeListing(
-    truncatedBackend.listKeys("full", {
+    truncatedBackend.listKeys("large", {
       maxKeys: STORAGE_ADMIN_LIST_MAX_KEYS
     }),
     (batch) => {
@@ -502,7 +518,7 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
   };
   const slowBackend = new S3StorageDriver(config, { client: slowClient });
   const pendingPage = slowBackend
-    .listKeys("full", {
+    .listKeys("large", {
       signal: cancel.signal
     })
     .next();
@@ -525,7 +541,7 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
   };
   const deniedBackend = new S3StorageDriver(config, { client: deniedClient });
   await assert.rejects(
-    deniedBackend.listKeys("full").next(),
+    deniedBackend.listKeys("large").next(),
     (error) => error === permissionError
   );
   assert.equal(responseBody.destroyed, true);
@@ -546,7 +562,7 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
       }
     });
     await assert.rejects(
-      failureBackend.listKeys("full").next(),
+      failureBackend.listKeys("large").next(),
       (error) => error === serviceError
     );
     assert.equal(failureBody.destroyed, true);
@@ -567,7 +583,7 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
     client: invalidPageClient
   });
   await assert.rejects(
-    () => consumeListing(invalidPageBackend.listKeys("full"), () => undefined),
+    () => consumeListing(invalidPageBackend.listKeys("large"), () => undefined),
     (error) => error instanceof Error
       && "code" in error
       && error.code === "storage_list_invalid"
@@ -592,7 +608,7 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
   });
   await assert.rejects(
     () => consumeListing(
-      repeatedTokenBackend.listKeys("full"),
+      repeatedTokenBackend.listKeys("large"),
       () => undefined
     ),
     (error) => error instanceof Error
@@ -618,7 +634,7 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
   });
   await assert.rejects(
     () => consumeListing(
-      noProgressBackend.listKeys("full"),
+      noProgressBackend.listKeys("large"),
       () => undefined
     ),
     (error) => error instanceof Error
@@ -642,7 +658,7 @@ test("[Server/存储] S3 键列举按需分页并保持有界、可取消和错�
   });
   await assert.rejects(
     () => consumeListing(
-      outsidePrefixBackend.listKeys("full"),
+      outsidePrefixBackend.listKeys("large"),
       () => undefined
     ),
     (error) => error instanceof Error
@@ -686,13 +702,13 @@ test("[Server/存储] S3 删除响应丢失后允许 move.cleanup 的幂等确�
   const backend = new S3StorageDriver(config, { client });
   const first = await backend.removeObjects([
     {
-      prefix: "full",
+      prefix: "large",
       key: "candidate.webp"
     }
   ]);
   const retry = await backend.removeObjects([
     {
-      prefix: "full",
+      prefix: "large",
       key: "candidate.webp"
     }
   ]);
@@ -870,7 +886,7 @@ test("[Server/存储] 已预检的 S3 目标按能力上传或回读，并复用
       try {
         fixture.state.capability = supported ? "enforced" : "unsupported";
         fixture.requests.length = 0;
-        for (const prefix of ["full", "thumbs"] as const) {
+        for (const prefix of ["large", "small"] as const) {
           const key = `${String(supported)}.webp`;
           const target = await verifyStorageTarget({ storage, prefix, key, expected });
           const result = await writeVerifiedFileToStorage({
@@ -903,7 +919,7 @@ test("[Server/存储] 已预检的 S3 目标按能力上传或回读，并复用
         fixture.requests.length = 0;
         const target = await verifyStorageTarget({
           storage,
-          prefix: "full",
+          prefix: "large",
           key: `${String(supported)}.webp`,
           expected
         });
@@ -916,9 +932,9 @@ test("[Server/存储] 已预检的 S3 目标按能力上传或回读，并复用
           fixture.requests.map((request) => request.method),
           ["HEAD", "GET"]
         );
-        fixture.objects.set("full/conflict.webp", Buffer.alloc(body.length));
+        fixture.objects.set("large/conflict.webp", Buffer.alloc(body.length));
         await assert.rejects(
-          verifyStorageTarget({ storage, prefix: "full", key: "conflict.webp", expected }),
+          verifyStorageTarget({ storage, prefix: "large", key: "conflict.webp", expected }),
           { code: "storage_object_conflict" }
         );
 
@@ -926,7 +942,7 @@ test("[Server/存储] 已预检的 S3 目标按能力上传或回读，并复用
           fixture.state.readBody = (stored) => Buffer.alloc(stored.length);
           const corrupt = await verifyStorageTarget({
             storage,
-            prefix: "full",
+            prefix: "large",
             key: `corrupt-${supported}.webp`,
             expected
           });
@@ -971,10 +987,10 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
       $metadata: { httpStatusCode: 404 }
     });
   const fullObject = (key: string): StorageObjectReference => ({
-    prefix: "full",
+    prefix: "large",
     key
   });
-  const physical = (key: string) => `full/${key}`;
+  const physical = (key: string) => `large/${key}`;
   const memoryS3 = (initial: readonly string[], handler?: DeleteHandler) => {
     const objects = new Set(initial);
     const deleteBatches: string[][] = [];
@@ -1261,7 +1277,7 @@ test("[Server/存储] S3 provider 中性 1…N 删除保持逐项结果、顺序
         const body = Buffer.from(
           '<?xml version="1.0" encoding="UTF-8"?>' +
             '<DeleteResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">' +
-            "<Deleted><Key>full/checksum.bin</Key></Deleted>" +
+            "<Deleted><Key>l/checksum.bin</Key></Deleted>" +
             "</DeleteResult>"
         );
         response.writeHead(200, {
@@ -1382,9 +1398,9 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
         copyCalls += 1;
         assert.deepEqual(command.input, {
           Bucket: "copy-target-bucket",
-          CopySource: "source-bucket/migration/full/object.webp",
+          CopySource: "source-bucket/migration/large/object.webp",
           CopySourceIfMatch: '"source-etag"',
-          Key: "migration/full/object.webp"
+          Key: "migration/large/object.webp"
         });
         return {};
       },
@@ -1460,7 +1476,7 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
           config: config("copy-target", "copy-target-bucket"),
           driver: compatibleTarget
         },
-        prefix: "full",
+        prefix: "large",
         key: "object.webp",
         expected: { size: body.byteLength, md5: expectedMd5 },
         contentType: "image/webp"
@@ -1482,7 +1498,7 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
           ),
           driver: streamTarget
         },
-        prefix: "full",
+        prefix: "large",
         key: "object.webp",
         expected: { size: body.byteLength, md5: expectedMd5 },
         contentType: "image/webp"
@@ -1500,7 +1516,7 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
           config: config("copy-target", "copy-target-bucket"),
           driver: compatibleTarget
         },
-        prefix: "full",
+        prefix: "large",
         key: "object.webp",
         expected: { size: body.byteLength, md5: "0".repeat(32) },
         contentType: "image/webp"
@@ -1520,7 +1536,7 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
           config: config("existing-target", "existing-target-bucket"),
           driver: existingTarget
         },
-        prefix: "full",
+        prefix: "large",
         key: "source-missing.webp",
         expected: { size: body.byteLength, md5: expectedMd5 },
         contentType: "image/webp"
@@ -1562,7 +1578,7 @@ test("[Server/存储] 流式迁移到不支持 MD5 的后端以目标正文完�
   try {
     for (const corrupt of [false, true]) {
       const key = `image-${corrupt}.webp`;
-      fixture.objects.set(`source/full/${key}`, body);
+      fixture.objects.set(`source/large/${key}`, body);
       fixture.state.beforeRequest = async (request) => {
         fixture.state.readBody =
           corrupt && request.method === "GET" && request.key.startsWith("target/")
@@ -1572,7 +1588,7 @@ test("[Server/存储] 流式迁移到不支持 MD5 的后端以目标正文完�
       const transfer = ensureVerifiedObjectAtDestination({
         source,
         target,
-        prefix: "full",
+        prefix: "large",
         key,
         expected: { size: body.length, md5: createHash("md5").update(body).digest("hex") },
         contentType: "image/webp",
@@ -1581,7 +1597,7 @@ test("[Server/存储] 流式迁移到不支持 MD5 的后端以目标正文完�
       if (corrupt) await assert.rejects(transfer, { code: "storage_transfer_integrity_failed" });
       else {
         assert.deepEqual(await transfer, { created: true });
-        assert.deepEqual(fixture.objects.get(`target/full/${key}`), body);
+        assert.deepEqual(fixture.objects.get(`target/large/${key}`), body);
         assert.equal(
           fixture.requests.find((request) => request.method === "PUT")!.headers["content-md5"],
           undefined
@@ -1703,7 +1719,7 @@ test("[Server/存储] 跨 driver 迁移在目标提前拒绝、退休与取消�
     const transfer = ensureVerifiedObjectAtDestination({
       source: { config: config(`${mode}-source`, `${mode}-source-key`), driver: source },
       target: { config: config(`${mode}-target`, `${mode}-target-key`), driver: target },
-      prefix: "full",
+      prefix: "large",
       key: `${mode}.webp`,
       expected: { size: 16 },
       contentType: "image/webp",
@@ -1809,7 +1825,7 @@ test("[Server/存储] 预存在迁移目标只在源完整性通过后读取目�
           }
         })
       },
-      prefix: "full",
+      prefix: "large",
       key: "existing.webp",
       expected: {
         size: wrongBody.byteLength,
@@ -1852,7 +1868,7 @@ test("[Server/存储] S3 Range 错误释放响应体并保留权威对象总长�
     destroy() {}
   };
   const backend = new S3StorageDriver(config, { client });
-  await assert.rejects(backend.openRead("full", "range.webp", "bytes=1234-1235"), (error) => {
+  await assert.rejects(backend.openRead("large", "range.webp", "bytes=1234-1235"), (error) => {
     const value = error as {
       status?: number;
       code?: string;
@@ -1888,7 +1904,7 @@ test("[Server/存储] S3 Range 错误释放响应体并保留权威对象总长�
     }
   });
   await assert.rejects(
-    fallbackBackend.openRead("full", "fallback.webp", "bytes=2048-"),
+    fallbackBackend.openRead("large", "fallback.webp", "bytes=2048-"),
     (error) => (error as { details?: { total_size?: number } }).details?.total_size === 2048
   );
   assert.equal(fallbackCommands, 2);
@@ -2108,7 +2124,7 @@ test(
         leasedDriverClosed += 1;
       })
     );
-    const opened = await managed.openRead("full", "leased.webp");
+    const opened = await managed.openRead("large", "leased.webp");
     let closeSettled = false;
     const closing = managed.close().then(() => {
       closeSettled = true;
@@ -2117,7 +2133,7 @@ test(
     assert.equal(closeSettled, false);
     assert.equal(leasedDriverClosed, 0);
     await assert.rejects(
-      managed.exists("full", "new-operation.webp"),
+      managed.exists("large", "new-operation.webp"),
       (error) =>
         error instanceof Error
         && "code" in error
@@ -2136,7 +2152,7 @@ test(
         listingDriverClosed += 1;
       })
     );
-    const leasedListing = listingManaged.listKeys("full");
+    const leasedListing = listingManaged.listKeys("large");
     const firstBatch = await leasedListing.next();
     assert.equal(firstBatch.done, false);
     const listingClose = listingManaged.close();
@@ -2158,7 +2174,7 @@ test(
         finishPendingExists = resolve;
       });
     const pendingManaged = manageTestStorageDriver(pendingDriver);
-    const pendingExists = pendingManaged.exists("full", "pending.webp");
+    const pendingExists = pendingManaged.exists("large", "pending.webp");
     const pendingClose = pendingManaged.close();
     await delay(10);
     assert.equal(pendingDriverClosed, 0);
@@ -2182,7 +2198,7 @@ test(
           })();
       }
       const lifecycleManaged = manageTestStorageDriver(driver);
-      const listing = lifecycleManaged.listKeys("full");
+      const listing = lifecycleManaged.listKeys("large");
       assert.equal((await listing.next()).done, false);
       const lifecycleClose = lifecycleManaged.close();
       await delay(10);
@@ -2205,7 +2221,7 @@ test(
           closed += 1;
         })
       );
-      await lifecycleManaged.openRead("full", `${ending}.webp`);
+      await lifecycleManaged.openRead("large", `${ending}.webp`);
       const lifecycleClose = lifecycleManaged.close();
       await delay(10);
       body.destroy(ending === "error" ? new Error("stream failed") : undefined);
@@ -2379,39 +2395,33 @@ test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空
     ])
   );
 
-  const canonicalKey = storageObjectKey(imageId, "avif");
-  assert.equal(canonicalKey, "8d/" + imageId + ".avif");
-  assert.equal(thumbnailObjectKey(imageId), "8d/" + imageId + ".webp");
+  const canonicalKey = storageObjectKey(imageId);
+  assert.equal(canonicalKey, "8d/" + imageId + ".webp");
   assert.equal(isCanonicalImageObjectKey(canonicalKey), true);
-  assert.equal(isCanonicalImageObjectKey("00/" + imageId + ".avif"), false);
-  assert.equal(isCanonicalImageObjectKey(imageId + ".avif"), false);
+  assert.equal(isCanonicalImageObjectKey("00/" + imageId + ".webp"), false);
+  assert.equal(isCanonicalImageObjectKey(imageId + ".webp"), false);
   assert.equal(
-    isCanonicalImageObjectKey("nested/" + imageId + ".avif"),
+    isCanonicalImageObjectKey("nested/" + imageId + ".webp"),
     false
   );
   assert.throws(
-    () => assertCanonicalImageObjectKey("nested/" + imageId + ".avif"),
+    () => assertCanonicalImageObjectKey("nested/" + imageId + ".webp"),
     /Invalid image object key/
   );
-  assert.throws(
-    () => thumbnailObjectKey("nested/" + imageId + ".avif"),
-    /Invalid image UUID/
-  );
-  assert.deepEqual(parseImageObjectKey(thumbnailObjectKey(imageId)), { id: imageId, ext: "webp" });
-  assert.deepEqual(parseImageObjectKey(canonicalKey), { id: imageId, ext: "avif" });
-  assert.equal(parseImageObjectKey(`ff/${imageId}.avif`), null);
+  assert.deepEqual(parseImageObjectKey(canonicalKey), { id: imageId });
+  assert.equal(parseImageObjectKey(`ff/${imageId}.webp`), null);
   assert.equal(
-    storageS3ObjectName(first, "full", canonicalKey),
-    "images/full/" + canonicalKey
+    storageS3ObjectName(first, "large", canonicalKey),
+    "images/large/" + canonicalKey
   );
-  assert.equal(s3ListPrefix(first, "thumbs"), "images/thumbs/");
+  assert.equal(s3ListPrefix(first, "small"), "images/small/");
   assert.equal(
-    s3CopySource(first, "full", canonicalKey),
-    "gallery/images/full/" + canonicalKey
+    s3CopySource(first, "large", canonicalKey),
+    "gallery/images/large/" + canonicalKey
   );
   assert.equal(contentType("webp"), "image/webp");
   assert.throws(
-    () => storageS3ObjectName(first, "full", "../escape.webp"),
+    () => storageS3ObjectName(first, "large", "../escape.webp"),
     /Unsafe storage path/
   );
 });
@@ -2431,12 +2441,12 @@ const directory = join(process.env.IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY, "storag
 const driver = new LocalStorageDriver();
 const stopped = new AbortController(); const reason = new Error("cancelled"); stopped.abort(reason);
 for (const work of [
-  () => driver.writeBuffer("full","pre.bin",Buffer.from("x"),"text/plain",{signal:stopped.signal}),
+  () => driver.writeBuffer("large","pre.bin",Buffer.from("x"),"text/plain",{signal:stopped.signal}),
   () => driver.selfTest({signal:stopped.signal})
 ]) await assert.rejects(work,(error)=>error===reason);
 await assert.rejects(fsp.access(directory));
-await fsp.mkdir(join(directory,"full"),{recursive:true});
-await fsp.writeFile(join(directory,"full/source.bin"),"source");
+await fsp.mkdir(join(directory,"large"),{recursive:true});
+await fsp.writeFile(join(directory,"large/source.bin"),"source");
 const originalWrite = fsp.writeFile; const originalMkdir = fsp.mkdir;
 try {
   const abort = new AbortController();
@@ -2444,18 +2454,18 @@ try {
     assert.equal(options.signal,abort.signal);
     await originalWrite(path,body,options); abort.abort(reason);
   }; syncBuiltinESMExports();
-  await assert.rejects(driver.writeBuffer("full","buffer.bin",Buffer.from("x"),"text/plain",{signal:abort.signal}),(error)=>error===reason);
-  assert.deepEqual(await fsp.readdir(join(directory,"full")),["source.bin"]);
+  await assert.rejects(driver.writeBuffer("large","buffer.bin",Buffer.from("x"),"text/plain",{signal:abort.signal}),(error)=>error===reason);
+  assert.deepEqual(await fsp.readdir(join(directory,"large")),["source.bin"]);
 } finally {fsp.writeFile=originalWrite;syncBuiltinESMExports();}
 for (const method of ["buffer","stream"]) {
   const abort = new AbortController();
   try {
     fsp.mkdir = async (...args) => {const value=await originalMkdir(...args);abort.abort(reason);return value;};syncBuiltinESMExports();
     const body=Readable.from(["source"]);
-    const work = method==="buffer" ? driver.writeBuffer("full","mkdir.bin",Buffer.from("x"),"text/plain",{signal:abort.signal})
-      : driver.writeStream("full","mkdir.bin",body,6,"text/plain",{signal:abort.signal});
+    const work = method==="buffer" ? driver.writeBuffer("large","mkdir.bin",Buffer.from("x"),"text/plain",{signal:abort.signal})
+      : driver.writeStream("large","mkdir.bin",body,6,"text/plain",{signal:abort.signal});
     await assert.rejects(work,(error)=>error===reason);body.destroy();
-    assert.deepEqual(await fsp.readdir(join(directory,"full")),["source.bin"]);
+    assert.deepEqual(await fsp.readdir(join(directory,"large")),["source.bin"]);
   } finally {fsp.mkdir=originalMkdir;syncBuiltinESMExports();}
 }
 // Aborting as opendir resolves must still close the acquired iterator.
@@ -2474,13 +2484,13 @@ for (const populated of [false,true]) {
   } finally {fsp.opendir=originalOpendir;syncBuiltinESMExports();}
 }
 // The maintenance snapshot reuses unchanged branches and re-reads mutated parents.
-const capturedRoot = join(directory, "thumbs");
+const capturedRoot = join(directory, "small");
 await fsp.mkdir(join(capturedRoot, "removed/nested"), { recursive: true });
 await fsp.mkdir(join(capturedRoot, "kept"), { recursive: true });
 await fsp.writeFile(join(capturedRoot, "removed/nested/old.webp"), "old");
 await fsp.writeFile(join(capturedRoot, "kept/live.webp"), "live");
 const snapshot = { directories: new Map(), entries: 0, complete: true };
-for await (const batch of driver.listKeys("thumbs", { directorySnapshot: snapshot })) assert.ok(batch.length > 0);
+for await (const batch of driver.listKeys("small", { directorySnapshot: snapshot })) assert.ok(batch.length > 0);
 assert.equal(snapshot.complete, true);
 assert.equal(snapshot.entries, 5);
 await fsp.unlink(join(capturedRoot, "removed/nested/old.webp"));
@@ -2488,30 +2498,30 @@ await fsp.mkdir(join(capturedRoot, "removed/new-empty"));
 const opened = [];
 try {
   fsp.opendir = async (...args) => { opened.push(args[0]); return originalOpendir(...args); }; syncBuiltinESMExports();
-  assert.equal(await driver.pruneEmptyDirs({ prefix: "thumbs", directorySnapshot: snapshot,
-    changedObjects: [{ prefix: "thumbs", key: "removed/nested/old.webp" }] }), 3);
+  assert.equal(await driver.pruneEmptyDirs({ prefix: "small", directorySnapshot: snapshot,
+    changedObjects: [{ prefix: "small", key: "removed/nested/old.webp" }] }), 3);
   assert.ok(opened.includes(join(capturedRoot, "removed")));
   assert.ok(!opened.includes(join(capturedRoot, "kept")));
   assert.equal(await fsp.readFile(join(capturedRoot, "kept/live.webp"), "utf8"), "live");
   for (const useSnapshot of [true, false]) {
-    await assert.rejects(driver.pruneEmptyDirs({ prefix: "thumbs", maxEntries: 1,
+    await assert.rejects(driver.pruneEmptyDirs({ prefix: "small", maxEntries: 1,
       ...(useSnapshot ? { directorySnapshot: snapshot } : {}) }), /bounded entry limit/);
   }
 } finally { fsp.opendir = originalOpendir; syncBuiltinESMExports(); }
 const overflow = { directories: new Map(), entries: 100000, complete: true };
-for await (const batch of driver.listKeys("thumbs", { directorySnapshot: overflow })) assert.ok(batch.length > 0);
+for await (const batch of driver.listKeys("small", { directorySnapshot: overflow })) assert.ok(batch.length > 0);
 assert.equal(overflow.complete, false);
 assert.equal(overflow.directories.size, 0);
 await fsp.mkdir(join(capturedRoot, "fallback-empty"));
-assert.equal(await driver.pruneEmptyDirs({ prefix: "thumbs", directorySnapshot: overflow }), 1);
+assert.equal(await driver.pruneEmptyDirs({ prefix: "small", directorySnapshot: overflow }), 1);
 assert.equal(await fsp.readFile(join(capturedRoot, "kept/live.webp"), "utf8"), "live");
 // Real concurrent probes must not touch an existing file or one another.
-await fsp.mkdir(join(directory,"full"),{recursive:true});
-await fsp.writeFile(join(directory,"full/.storage-test"),"existing");
+await fsp.mkdir(join(directory,"large"),{recursive:true});
+await fsp.writeFile(join(directory,"large/.storage-test"),"existing");
 const outcomes = await Promise.all(Array.from({length:12},()=>driver.selfTest()));
 assert.ok(outcomes.every((result)=>result.writable));
-assert.deepEqual((await fsp.readdir(join(directory,"full"))).sort(),[".storage-test", "source.bin"]);
-assert.equal(await fsp.readFile(join(directory,"full/.storage-test"),"utf8"),"existing");
+assert.deepEqual((await fsp.readdir(join(directory,"large"))).sort(),[".storage-test", "source.bin"]);
+assert.equal(await fsp.readFile(join(directory,"large/.storage-test"),"utf8"),"existing");
 const cancelledProbe = new LocalStorageDriver();const cancel = new AbortController();
 const write = cancelledProbe.writeBuffer.bind(cancelledProbe);
 cancelledProbe.writeBuffer = async (...args) => {await write(...args);cancel.abort(reason);};
@@ -2523,7 +2533,7 @@ cancelledProbe.removeObjects = async (objects,options) => {
 const [failed,succeeded]=await Promise.allSettled([cancelledProbe.selfTest({signal:cancel.signal}),driver.selfTest()]);
 assert.equal(failed.status,"rejected");assert.equal(failed.reason,reason);
 assert.equal(succeeded.status,"fulfilled");
-assert.deepEqual((await fsp.readdir(join(directory,"full"))).sort(),[".storage-test", "source.bin"]);
+assert.deepEqual((await fsp.readdir(join(directory,"large"))).sort(),[".storage-test", "source.bin"]);
 console.log("local-contract-ok");
 `;
   try {

@@ -24,7 +24,6 @@ import type { GalleryCompactGeometry } from "./compact-masonry-layout.js";
 import {
   GalleryDataWindow,
   type GalleryDataWindowViewport,
-  type GalleryIntrinsicSize,
   type GalleryPageIntent,
   type GalleryPageRequest
 } from "./gallery-data-window.js";
@@ -137,8 +136,6 @@ export function useGalleryDataWindow({
     y: number;
     offset: number;
   } | null>(null);
-  const measurementFrameRef = useRef<number | null>(null);
-  const pendingMeasurementsRef = useRef(new Map<string, GalleryIntrinsicSize>());
   const routeRestorationRef = useRef<{
     controller: GalleryDataWindow;
     anchor: GalleryScrollAnchor;
@@ -430,12 +427,7 @@ export function useGalleryDataWindow({
         window.cancelAnimationFrame(anchorFrameRef.current);
         anchorFrameRef.current = null;
       }
-      if (measurementFrameRef.current !== null) {
-        window.cancelAnimationFrame(measurementFrameRef.current);
-        measurementFrameRef.current = null;
-      }
       pendingAnchorRef.current = null;
-      pendingMeasurementsRef.current.clear();
       if (requestPauseRef.current?.controller === controller) {
         requestPauseRef.current = null;
       }
@@ -489,25 +481,6 @@ export function useGalleryDataWindow({
     });
     window.dispatchEvent(new Event(pageScrollRestoredEvent));
   }, [controller, geometryReady, snapshot, windowRef]);
-
-  const reportIntrinsicSize = useCallback(
-    (
-      id: string,
-      width: number,
-      height: number
-    ) => {
-      if (!controller.needsIntrinsicMeasurement(id)) return;
-      pendingMeasurementsRef.current.set(id, { id, width, height });
-      if (measurementFrameRef.current !== null) return;
-      measurementFrameRef.current = window.requestAnimationFrame(() => {
-        measurementFrameRef.current = null;
-        const measurements = [...pendingMeasurementsRef.current.values()];
-        pendingMeasurementsRef.current.clear();
-        preserveAnchor(() => controller.resolveIntrinsicSizes(measurements));
-      });
-    },
-    [controller, preserveAnchor]
-  );
 
   const debugMetrics = useMemo<GalleryDataWindowMetrics | null>(() => {
     if (import.meta.env?.DEV !== true) return null;
@@ -634,7 +607,6 @@ export function useGalleryDataWindow({
     retry,
     refreshImage,
     removeImage,
-    reportIntrinsicSize,
     debugMetrics
   };
 }

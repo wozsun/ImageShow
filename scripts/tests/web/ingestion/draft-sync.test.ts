@@ -702,6 +702,15 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
       id: "deferred-card",
       attemptKey: "deferred-attempt",
       status: "ready",
+      originalWidth: 6000,
+      originalHeight: 4000,
+      originalSize: 2 * 1024 * 1024,
+      variantQuality: { large: null, medium: 75, small: 65 },
+      variants: {
+        large: { width: 4200, height: 2800, byte_size: 700 * 1024 },
+        medium: { width: 2200, height: 1467, byte_size: 300 * 1024 },
+        small: { width: 600, height: 400, byte_size: 50 * 1024 }
+      },
       serverAccepted: true,
       serverVersion: 1,
       sessionId: "T".repeat(43),
@@ -752,6 +761,19 @@ test("[Web/内容接入] 任务卡片连续文本只在失焦发布一次并围�
       await Promise.resolve();
     });
 
+    assert.match(container.querySelector(".ingestion-job-meta-copy")?.textContent ?? "", /6000×4000/u);
+    assert.equal(container.querySelector(".ingestion-job-meta-copy [title]")?.getAttribute("title"), "大图：4200×2800\n中图：2200×1467\n小图：600×400");
+    const size = container.querySelector(".ingestion-job-size")!;
+    assert.equal(size.textContent, "2.0 MB↓1.0 MB");
+    assert.equal(size.querySelector("[title]")?.getAttribute("title"), "大图：原样保留 · 700 KB\n中图：75 · 300 KB\n小图：65 · 50.0 KB");
+    const summary = container.querySelector(".ingestion-job-size-summary")!;
+    assert.equal(summary.textContent, "2.0 MB → 1.0 MB");
+    assert.equal(summary.querySelector("[title]")?.getAttribute("title"), size.querySelector("[title]")?.getAttribute("title"));
+    assert.equal(container.querySelector(".ingestion-job-title-compact")?.textContent, "#00000000008e");
+    await React.act(async () => {
+      setHarnessJob?.((current) => ({ ...current, variantQuality: undefined }));
+    });
+    assert.equal(size.querySelector("[title]")?.getAttribute("title"), "大图：700 KB\n中图：300 KB\n小图：50.0 KB");
     const title = container.querySelector<HTMLInputElement>("input[placeholder='标题']")!;
     for (const value of ["慢", "慢速", "慢速输入"]) {
       await React.act(async () => {

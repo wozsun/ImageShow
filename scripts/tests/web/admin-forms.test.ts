@@ -7,17 +7,9 @@ import {
   type RuntimeConfig
 } from "../../../packages/shared/src/browser.ts";
 import type { StorageBackendAdmin } from "../../../packages/web/src/lib/types.ts";
-import {
-  ApiClientError,
-  authExpiredEvent,
-  clearCsrfToken
-} from "../../../packages/web/src/lib/api/client.ts";
+import { ApiClientError } from "../../../packages/web/src/lib/api/client.ts";
 import { invalidateImageDataAfterMetadataSave } from "../../../packages/web/src/lib/api/query-invalidation.ts";
 import { queryKeys } from "../../../packages/web/src/lib/api/query-keys.ts";
-import {
-  configBundleRecognitionNotice,
-  configBundleSlugMappingError
-} from "../../../packages/web/src/pages/admin/advanced-config/ConfigBundleImportDialog.tsx";
 import {
   imageMetadataCardSaveState,
   changedMetadataUpdate,
@@ -62,25 +54,24 @@ import {
 } from "../support/dom-events.ts";
 import { installControlledClock } from "../support/controlled-clock.ts";
 
-test("[Web/后台表单] 存储维护预览区分可修复、缺失原图、可清理与受阻项", () => {
+test("[Web/后台表单] 存储维护预览按三档对象区分恢复候选、可清理与受阻项", () => {
   assert.deepEqual(
     storageMaintenancePreview({
-      missing_objects: [{ id: "missing-source", backend: "local", namespace: "local" }],
-      missing_thumbs: [
-        { id: "missing-source", backend: "local", namespace: "local" },
-        { id: "repairable", backend: "local", namespace: "local" },
-        { id: "blocked", backend: "archive", namespace: "archive" },
-        { id: "broken-alias", backend: "broken-alias", namespace: "shared" }
+      missing_objects: [
+        { id: "00000000-0000-7000-8000-000000000001", prefix: "large", backend: "local", namespace: "local" },
+        { id: "00000000-0000-7000-8000-000000000001", prefix: "medium", backend: "local", namespace: "local" },
+        { id: "00000000-0000-7000-8000-000000000001", prefix: "small", backend: "local", namespace: "local" },
+        { id: "00000000-0000-7000-8000-000000000002", prefix: "medium", backend: "archive", namespace: "archive" },
+        { id: "00000000-0000-7000-8000-000000000003", prefix: "small", backend: "broken-alias", namespace: "shared" }
       ],
-      pending_thumbnail_repairs: [{ id: "pending", backend: "local", namespace: "local" }],
       orphan_objects: [
-        { key: "orphan-full", backend: "local", namespace: "local" },
-        { key: "shared-orphan", backend: "working-alias", namespace: "shared" }
+        { key: "01/00000000-0000-7000-8000-000000000101.webp", prefix: "large", backend: "local", namespace: "local" },
+        { key: "02/00000000-0000-7000-8000-000000000102.webp", prefix: "medium", backend: "working-alias", namespace: "shared" },
+        { key: "03/00000000-0000-7000-8000-000000000103.webp", prefix: "small", backend: "archive", namespace: "archive" }
       ],
-      orphan_thumbs: [{ key: "orphan-thumb", backend: "archive", namespace: "archive" }],
       incomplete_listings: [
-        { backend: "archive", namespace: "archive", prefix: "full" },
-        { backend: "archive", namespace: "archive", prefix: "thumbs" }
+        { backend: "archive", namespace: "archive", prefix: "large" },
+        { backend: "archive", namespace: "archive", prefix: "small" }
       ],
       unavailable_backends: [
         {
@@ -96,8 +87,8 @@ test("[Web/后台表单] 存储维护预览区分可修复、缺失原图、可�
       ]
     }),
     {
-      repairable_thumbnails: 2,
-      missing_originals: 1,
+      recovery_candidates: 3,
+      missing_objects: 5,
       removable_objects: 2,
       blocked_namespaces: 2,
       unavailable_logical_backends: 1,
@@ -106,61 +97,6 @@ test("[Web/后台表单] 存储维护预览区分可修复、缺失原图、可�
     }
   );
   assert.equal(storageMaintenancePreview({ missing_objects: [] }), null);
-});
-test("[Web/后台表单] 配置包预览明确提示目标版本的采用、回退、忽略与跳过结果", () => {
-  const partialNotice = configBundleRecognitionNotice({
-    config_values: {
-      recognized: 37,
-      defaulted: 9,
-      ignored: 3
-    },
-    skipped_storage_backends: 2
-  });
-  assert.match(partialNotice, /采用 37 个运行时配置项/u);
-  assert.match(partialNotice, /9 个运行时配置项使用当前默认值/u);
-  assert.match(partialNotice, /忽略 3 个未知或错误的运行时配置字段/u);
-  assert.match(partialNotice, /跳过 2 个无法安全识别的存储后端/u);
-
-  const exactNotice = configBundleRecognitionNotice({
-    config_values: {
-      recognized: 46,
-      defaulted: 0,
-      ignored: 0
-    },
-    skipped_storage_backends: 0
-  });
-  assert.match(exactNotice, /采用 46 个运行时配置项/u);
-  assert.match(exactNotice, /0 个运行时配置项使用当前默认值/u);
-});
-test("[Web/后台表单] 配置包冲突重命名在提交前执行与服务端一致的 slug 长度边界", () => {
-  const preview = {
-    conflicts: ["archive"],
-    existing_slugs: ["local", "archive"],
-    storage_backends: [
-      {
-        slug: "archive",
-        display_name: "Archive",
-        enabled: true,
-        is_default: false
-      }
-    ]
-  };
-  assert.equal(
-    configBundleSlugMappingError(
-      preview,
-      { archive: "a".repeat(33) },
-      "archive"
-    ),
-    "slug 不能超过 32 个字符"
-  );
-  assert.equal(
-    configBundleSlugMappingError(
-      preview,
-      { archive: "a".repeat(32) },
-      "archive"
-    ),
-    ""
-  );
 });
 test("[Web/后台表单] 站点配置与后台认证初始失败真实挂载保持 bootstrap 反馈语义", async () => {
   const { window, document } = parseHTML(
@@ -1818,48 +1754,6 @@ test("[Web/后台表单] 后台配置首载失败可重试，配置到达前不�
   assert.equal(h.document.querySelector("button")?.textContent, "74");
   assert.equal(mounts, 1, "已有设置的后台失败不能重挂内容接入与编辑状态");
 });
-test("[Web/后台表单] 配置包原始响应复用认证与 CSRF 边界且不探测 auth/me", async (t) => {
-  const { apiResponse, getCsrfToken, setCsrfToken } =
-    await import("../../../packages/web/src/lib/api/client.ts");
-  const originalFetch = globalThis.fetch;
-  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
-  const events = new EventTarget();
-  Object.defineProperty(globalThis, "window", { configurable: true, value: events });
-  t.after(() => {
-    globalThis.fetch = originalFetch;
-    clearCsrfToken();
-    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
-    else delete (globalThis as any).window;
-  });
-  let expired = 0;
-  events.addEventListener(authExpiredEvent, () => expired++);
-  const calls: string[] = [];
-  setCsrfToken("export-token");
-  globalThis.fetch = async (path, init) => {
-    calls.push(String(path));
-    assert.equal(init?.credentials, "same-origin");
-    assert.equal(
-      new Headers(init?.headers).get("x-csrf-token"),
-      calls.length === 1 ? "export-token" : null
-    );
-    return calls.length === 1
-      ? new Response("proxy error", { status: 401 })
-      : new Response(new Uint8Array([1, 2, 3]), {
-          headers: { "Content-Disposition": 'attachment; filename="config.zip"' }
-        });
-  };
-  await assert.rejects(
-    apiResponse("/api/admin/advanced-config/export", { method: "POST" }),
-    (e: any) => e.status === 401 && e.message === "HTTP 401"
-  );
-  assert.equal(expired, 1);
-  assert.equal(getCsrfToken(), "");
-  const response = await apiResponse("/api/admin/advanced-config/export", { method: "POST" });
-  assert.deepEqual([...new Uint8Array(await response.arrayBuffer())], [1, 2, 3]);
-  assert.match(response.headers.get("content-disposition")!, /config.zip/);
-  assert.equal(calls.length, 2);
-  assert.ok(calls.every((path) => !path.includes("/auth/me")));
-});
 test("[Web/后台表单] 日志等级保存隔离旧读取，跨文件缓存采用确认值且刷新失败不回退", async (t) => {
   const h = await createConfigStreamHarness(t, { honorAbort: false });
   const clock = installControlledClock(t, h.window);
@@ -2543,7 +2437,7 @@ test("[Web/后台表单] 词条卡片同 slug 按字段保护 dirty，clean 跟�
     await h.render(null);
   }
 });
-test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控件并在超时、失败和卸载后收口", async (t) => {
+test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，并在超时、失败和卸载后收口", async (t) => {
   const h = await createConfigStreamHarness(t);
   const clock = installControlledClock(t, h.window);
   const { registerHooks } = await import("node:module");
@@ -2555,7 +2449,7 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
     }
   });
   const { SettingsPage } =
-    await import("../../../packages/web/src/pages/admin/SettingsPage.tsx").finally(() =>
+    await import("../../../packages/web/src/pages/admin/settings/SettingsPage.tsx").finally(() =>
       hooks.deregister()
     );
   const { appConfig } = await import("../../../packages/shared/src/app-config.ts");
@@ -2575,14 +2469,14 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
     AbortSignal.timeout = originalTimeout;
   });
   let settings = structuredClone(appConfig.runtimeDefaults) as RuntimeConfig;
-  client.setQueryData(queryKeys.settings, { settings });
+  client.setQueryData(queryKeys.runtimeConfig, { config: settings, settings });
   await h.render(
     h.React.createElement(QueryClientProvider, { client }, h.React.createElement(SettingsPage))
   );
   const input = () =>
-    h.document.querySelector<HTMLInputElement>('input[placeholder="导航和后台显示名称"]')!;
+    h.document.querySelector<HTMLInputElement>('input[aria-label="页头名称"]')!;
   const titleInput = () =>
-    h.document.querySelector<HTMLInputElement>('input[placeholder="浏览器标签页标题"]')!;
+    h.document.querySelector<HTMLInputElement>('input[aria-label="网页标题"]')!;
   const edit = async (value: string) =>
     h.React.act(async () => {
       inputText(h.window, input(), value);
@@ -2590,7 +2484,7 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
     });
   const publish = async (name: string) => {
     settings = { ...settings, site: { ...settings.site, header_name: name } };
-    await h.React.act(async () => client.setQueryData(queryKeys.settings, { settings }));
+    await h.React.act(async () => client.setQueryData(queryKeys.runtimeConfig, { config: settings, settings }));
     await h.flush();
   };
   const save = () =>
@@ -2606,13 +2500,13 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
     await Promise.resolve();
   });
   const assetsInput = h.document.querySelector<HTMLInputElement>(
-    'input[placeholder*="asset.example.com"]'
+    'input[aria-label="静态资源公开 URL"]'
   )!;
   const sizeTrigger = h.document.querySelector<HTMLButtonElement>('[aria-label="随机图默认尺寸"]')!;
   assert.equal(assetsInput.value, "");
   await h.React.act(async () => sizeTrigger.click());
   const thumbOption = [...h.document.querySelectorAll<HTMLElement>('[role="option"]')].find(
-    (element) => element.textContent?.includes("缩略")
+    (element) => element.textContent?.includes("小图")
   )!;
   assert.ok(thumbOption);
   await h.React.act(async () => thumbOption.click());
@@ -2620,7 +2514,17 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
     inputText(h.window, assetsInput, "https://asset.example.com///static///");
     await Promise.resolve();
   });
-  const number = h.document.querySelector<HTMLInputElement>('input[type="number"]')!;
+  const origins = h.document.querySelector<HTMLTextAreaElement>('textarea[aria-label="额外允许来源"]')!;
+  await h.React.act(async () => {
+    inputText(h.window, origins, "https://embed.example.org\n\n https://*.example.net ");
+    dispatchDomEvent(h.window, origins, "focusout");
+  });
+  const delay = h.document.querySelector<HTMLInputElement>('input[aria-label="微博请求间隔（秒）最大值"]')!;
+  await h.React.act(async () => {
+    inputText(h.window, delay, "12");
+    dispatchDomEvent(h.window, delay, "focusout");
+  });
+  const number = h.document.querySelector<HTMLInputElement>('input[aria-label="概览最近上传展示数量"]')!;
   await h.React.act(async () => {
     inputText(h.window, number, "47");
     await Promise.resolve();
@@ -2640,11 +2544,16 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
   );
   assert.equal(JSON.parse(String(h.pending[0].body)).site.title, "独立标题草稿");
   assert.equal(JSON.parse(String(h.pending[0].body)).site.header_name, "unsaved");
-  assert.equal(JSON.parse(String(h.pending[0].body)).site.random_size, "thumb");
+  assert.equal(JSON.parse(String(h.pending[0].body)).site.random_size, "small");
   assert.equal(
     JSON.parse(String(h.pending[0].body)).site.assets_base_url,
     "https://asset.example.com///static///"
   );
+  const submitted = JSON.parse(String(h.pending[0].body)) as RuntimeConfig;
+  assert.deepEqual(submitted.embed.allowed_origins, ["https://embed.example.org", "https://*.example.net"]);
+  assert.deepEqual(submitted.weibo.request_delay_seconds, [settings.weibo.request_delay_seconds[0], 12]);
+  assert.deepEqual(submitted.normalize, settings.normalize, "完整保存保留未编辑的图片处理设置");
+  assert.deepEqual(submitted.security, settings.security, "完整保存保留未编辑的登录与限流设置");
   delete (h.document as any).activeElement;
   assert.equal(h.pending.length, 1);
   assert.equal(locked(), true);
@@ -2667,9 +2576,8 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
   assert.match(h.document.querySelector('[role="alert"]')!.textContent!, /超时/);
   await edit("normalized input ");
   await h.React.act(async () => save().click());
-  const successfulSave = h.respond(1, {
-    settings: { ...settings, site: { ...settings.site, header_name: "normalized input" } }
-  });
+  const savedConfig = { ...settings, site: { ...settings.site, header_name: "normalized input" } };
+  const successfulSave = h.respond(1, { config: savedConfig, settings: savedConfig });
   await Promise.resolve();
   await clock.advanceBy(499);
   assert.equal(locked(), true, "成功反馈期限前保持保存锁定");
@@ -2690,9 +2598,49 @@ test("[Web/后台表单] 站点配置保留未保存值，保存锁住所有控�
   await failedSave;
   assert.equal(locked(), false);
   assert.equal(input().value, "retain after failure");
+  const reload = () => h.document.querySelector<HTMLButtonElement>(".settings-head-actions button")!;
+  const dialog = () => h.document.querySelector<HTMLFormElement>(".confirm-dialog form")!;
+  const finishDialog = async () => {
+    await h.React.act(async () =>
+      dispatchDomEvent(h.window, h.document.querySelector(".confirm-dialog")!, "animationend")
+    );
+    await h.flush();
+  };
+  const submitConfirmation = () =>
+    h.React.act(async () => dispatchDomEvent(h.window, dialog(), "submit"));
+  await h.React.act(async () => reload().click());
+  assert.match(dialog().textContent!, /未保存的修改/);
+  assert.equal(h.pending.length, 3, "重载脏草稿先等待确认");
+  await h.React.act(async () => dialog().querySelector<HTMLButtonElement>('button[type="button"]')!.click());
+  await finishDialog();
+  assert.equal(input().value, "retain after failure", "取消重载保留草稿");
+  assert.equal(locked(), false);
+  await h.React.act(async () => reload().click());
+  await submitConfirmation();
+  assert.equal(h.pending[3].path, "/api/admin/settings/reload");
+  settings = { ...settings, site: { ...settings.site, header_name: "from file" } };
+  await h.respond(3, { config: settings, settings });
+  await clock.advanceBy(500);
+  await h.flush();
+  await finishDialog();
+  assert.equal(input().value, "from file");
+  assert.equal(h.pending.length, 4, "重载响应直接发布配置，无额外读取");
+  const domain = h.document.querySelector<HTMLInputElement>('input[aria-label="站点域名"]')!;
+  await h.React.act(async () => inputText(h.window, domain, "new.example.org"));
+  await h.React.act(async () => save().click());
+  assert.match(dialog().textContent!, /new.example.org/);
+  assert.equal(h.pending.length, 4, "域名变化确认后才提交");
+  await submitConfirmation();
+  assert.equal(JSON.parse(String(h.pending[4].body)).site.domain, "new.example.org");
+  settings = { ...settings, site: { ...settings.site, domain: "new.example.org" } };
+  await h.respond(4, { config: settings, settings });
+  await clock.advanceBy(500);
+  await h.flush();
+  await finishDialog();
+  await edit("leave during save");
   await h.React.act(async () => save().click());
   await h.render(null);
-  assert.equal(h.pending[3].signal?.aborted, true);
+  assert.equal(h.pending[5].signal?.aborted, true);
 });
 test("[Web/后台表单] 词表首份请求尚未完成时新词条提交隔离旧响应", async () => {
   const { QueryClient, QueryObserver } = await import("@tanstack/react-query");

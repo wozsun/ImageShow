@@ -1,4 +1,4 @@
-import { storageObjectKey } from "@imageshow/shared/browser";
+import { imageVariants, storageObjectKey, type ImageVariant } from "@imageshow/shared/browser";
 import { ApiError } from "../../core/api-error.ts";
 import { pool } from "../../core/database/pools.ts";
 import { logger } from "../../core/logger.ts";
@@ -10,8 +10,7 @@ import {
 import type { BackgroundJob } from "../../jobs/types.ts";
 import { getStorageBackend } from "../backends/registry.ts";
 import {
-  assertCanonicalImageObjectKey,
-  thumbnailObjectKey
+  assertCanonicalImageObjectKey
 } from "../objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../maintenance-lock.ts";
 import {
@@ -41,12 +40,12 @@ function cleanupObjectsFromPayload(job: BackgroundJob): CapturedMoveCleanupObjec
       !object.backend ||
       typeof object.namespace_identity !== "string" ||
       !object.namespace_identity ||
-      !["full", "thumbs"].includes(String(object.prefix))
+      !imageVariants.includes(object.prefix as ImageVariant)
     ) {
       return null;
     }
     objects.push({
-      prefix: object.prefix as "full" | "thumbs",
+      prefix: object.prefix as ImageVariant,
       key: object.key,
       backend: object.backend,
       namespace_identity: object.namespace_identity
@@ -66,12 +65,10 @@ function cleanupConfirmationDelay(job: BackgroundJob) {
 
 function metadataReferencesObject(
   object: CapturedMoveCleanupObject,
-  row: { id: string; ext: string; storage_slug: string }
+  row: { id: string; storage_slug: string }
 ) {
-  assertCanonicalImageObjectKey(storageObjectKey(row.id, row.ext));
-  return object.prefix === "full"
-    ? storageObjectKey(row.id, row.ext) === object.key
-    : thumbnailObjectKey(row.id) === object.key;
+  assertCanonicalImageObjectKey(storageObjectKey(row.id));
+  return storageObjectKey(row.id) === object.key;
 }
 
 export async function handleMoveCleanupJob(
@@ -144,7 +141,7 @@ export async function handleMoveCleanupJob(
     // compared with the same latest metadata snapshot before one batch starts.
     const latest = (
       await pool.query(
-        `SELECT id, ext, storage_slug
+        `SELECT id, storage_slug
          FROM metadata
         WHERE id=$1`,
         [job.target_id]
@@ -152,7 +149,6 @@ export async function handleMoveCleanupJob(
     ).rows[0] as
       | {
           id: string;
-          ext: string;
           storage_slug: string;
         }
       | undefined;

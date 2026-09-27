@@ -1,32 +1,6 @@
 import type { AdminRole, LogLevel } from "./common.ts";
 import type { AdminImageDetailItemDto } from "./images.ts";
 
-export type AdvancedConfigBackendPreviewDto = {
-  slug: string;
-  display_name: string;
-  enabled: boolean;
-  is_default: boolean;
-};
-
-export type AdvancedConfigPreviewDto = {
-  format: string | null;
-  application_version: string | null;
-  exported_at: string | null;
-  config_values: {
-    recognized: number;
-    defaulted: number;
-    ignored: number;
-  };
-  storage_backends: AdvancedConfigBackendPreviewDto[];
-  skipped_storage_backends: number;
-  conflicts: string[];
-  existing_slugs: string[];
-};
-
-export type AdvancedConfigPreviewResponseDto = {
-  preview: AdvancedConfigPreviewDto;
-};
-
 export type AdminUserDto = {
   username: string;
   role: AdminRole;
@@ -63,10 +37,12 @@ export type AdminOverviewDto = {
   total: number;
   local: number;
   nonlocal: number;
-  local_image_size: number;
-  local_thumb_size: number;
-  nonlocal_image_size: number;
-  nonlocal_thumb_size: number;
+  local_large_bytes: number;
+  local_small_bytes: number;
+  local_medium_bytes: number;
+  nonlocal_large_bytes: number;
+  nonlocal_small_bytes: number;
+  nonlocal_medium_bytes: number;
   theme_count: number;
   backend_count: number;
   pc: number;

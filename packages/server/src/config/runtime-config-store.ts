@@ -61,7 +61,7 @@ function notifyRuntimeConfigChange() {
   }
 }
 
-/** Serialize every writer, including a config import's persistence and settlement window. */
+/** Serialize config writers and storage Host changes against one current snapshot. */
 export async function withRuntimeConfigWriteLease<T>(work: () => T | Promise<T>): Promise<T> {
   if (runtimeConfigWriteLeaseContext.getStore()) return await work();
 
@@ -91,12 +91,6 @@ function persistAndPublishRuntimeConfig(
   return publishRuntimeConfig(next);
 }
 
-function assertRuntimeConfigWriteLeaseHeld() {
-  if (!runtimeConfigWriteLeaseContext.getStore()) {
-    throw new Error("Runtime config package stage requires the write lease");
-  }
-}
-
 export function updateRuntimeConfig(patch: RuntimeConfigPatch) {
   return withRuntimeConfigWriteLease(() => {
     const next = mergeRuntimeConfig(getRuntimeConfig(), patch);
@@ -106,19 +100,6 @@ export function updateRuntimeConfig(patch: RuntimeConfigPatch) {
 
 export function replaceRuntimeConfig(next: RuntimeConfig) {
   return withRuntimeConfigWriteLease(() => persistAndPublishRuntimeConfig(next));
-}
-
-/** Persist a config-bundle candidate or rollback snapshot without publishing. */
-export function persistRuntimeConfigForBundleImport(next: RuntimeConfig) {
-  assertRuntimeConfigWriteLeaseHeld();
-  getRuntimeConfig();
-  writeRuntimeConfigFile(next);
-}
-
-/** Publish a successfully persisted config-bundle candidate exactly once. */
-export function publishRuntimeConfigForBundleImport(next: RuntimeConfig) {
-  assertRuntimeConfigWriteLeaseHeld();
-  return publishRuntimeConfig(next);
 }
 
 export function reloadRuntimeConfigFromDisk(validate?: (config: RuntimeConfig) => Promise<void>) {

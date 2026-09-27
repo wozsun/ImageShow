@@ -41,7 +41,7 @@ export function galleryCardDto(
     brightness: "dark",
     theme: null,
     author: "",
-    thumb_url: "/images/thumbs/" + id + ".webp",
+    base_url: "/images",
     width,
     height,
     tags: [],
@@ -126,8 +126,8 @@ export function adminImageListItem(
     description: "",
     source: null,
     original: "fixture.jpg",
-    object_url: "/images/full/01/00000000-0000-7000-8000-000000000001.jpg",
-    thumb_url: "/images/thumbs/01/00000000-0000-7000-8000-000000000001.webp",
+    base_url: "/images",
+    variants: { large: {width:1600,height:900,byte_size:1}, medium: {width:1200,height:675,byte_size:1}, small: {width:600,height:338,byte_size:1} },
     device: "pc",
     brightness: "dark",
     theme: null,
@@ -139,10 +139,8 @@ export function adminImageListItem(
     image_time: timestamp,
     status: "ready",
     purge_pending: false,
-    ext: "jpg",
     storage_slug: "local",
-    md5: "00000000000000000000000000000000",
-    image_size: 1,
+    large_md5: "00000000000000000000000000000000",
     deleted_at: null,
     created_at: timestamp,
     updated_at: timestamp,
@@ -164,13 +162,11 @@ export function editableImage(
     theme: "theme",
     author: "author",
     tags: ["tag"],
-    thumb_url: "/thumb/" + id,
-    object_url: "/image/" + id,
+    base_url: "/images",
+    variants: { large: {width:1920,height:1080,byte_size:1024}, medium: {width:1200,height:675,byte_size:800}, small: {width:600,height:338,byte_size:200} },
     original_url: "/images/original/" + id,
     width: 1920,
     height: 1080,
-    image_size: 1024,
-    ext: "jpg",
     storage_slug: "local",
     ...overrides
   };
@@ -459,13 +455,7 @@ export async function createPublicNavigationHarness(
   };
 }
 export function showImages(count: number): ShowImageCardDto[] {
-  return Array.from({ length: count }, (_, index) => ({
-    id: `00000000-0000-7000-8000-${String(index).padStart(12, "0")}`,
-    title: `Image ${index}`,
-    thumb_url: `/images/thumbs/${index}.webp`,
-    width: index % 2 ? 1600 : 900,
-    height: index % 2 ? 900 : 1600
-  }));
+  return Array.from({ length: count }, (_, index) => ({id: `00000000-0000-7000-8000-${String(index).padStart(12, "0")}`,title: `Image ${index}`,width: index % 2 ? 1600 : 900,height: index % 2 ? 900 : 1600,base_url:"/images"}));
 }
 export function createCameraTestElement(width = 800, height = 600) {
   const listeners = new Map<string, Set<(event: Record<string, unknown>) => void>>();
@@ -775,7 +765,7 @@ export async function createTextureRecoveryHarness(
     requests,
     hold(id: string) {
       const pending = Promise.withResolvers<void>();
-      holds.set(`https://textures.example/${id}.webp`, pending.promise);
+      holds.set(`https://textures.example/small/${id.slice(-2)}/${id}.webp`, pending.promise);
       t.after(() => pending.resolve());
       return pending.resolve;
     },
@@ -784,7 +774,7 @@ export async function createTextureRecoveryHarness(
       failurePhase = phase;
     },
     setStatus(id: string, status: number) {
-      statuses.set(`https://textures.example/${id}.webp`, status);
+      statuses.set(`https://textures.example/small/${id.slice(-2)}/${id}.webp`, status);
     },
     setDecodeFailure(value: boolean) {
       decodeFails = value;
@@ -799,13 +789,13 @@ export async function createTextureRecoveryHarness(
     card(
       id: string,
       onOpen: (image: { id: string }, key: string) => void = () => undefined,
-      thumbUrl = `https://textures.example/${id}.webp`
+      baseUrl = "https://textures.example"
     ) {
       const card = new ShowPixiCard(cache, onOpen, {} as Renderer, coordinator);
       cards.push(card);
       card.assign(
         id,
-        { ...showImages(1)[0], id, width: 128, height: 128, thumb_url: thumbUrl },
+        {...showImages(1)[0],id,width: 128,height: 128,base_url:baseUrl},
         100,
         100,
         0.04

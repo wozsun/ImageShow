@@ -1,4 +1,3 @@
-import { materializeImportedRuntimeConfig } from "../../../packages/server/src/config/bundle/runtime-projection.ts";
 import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 import {
@@ -14,7 +13,6 @@ import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { createTestDirectory } from "../support/test-directory.ts";
 import { runProcess } from "../support/process-runner.ts";
-import { appConfig } from "../../../packages/shared/src/app-config.ts";
 import { type RuntimeConfig } from "../../../packages/shared/src/browser.ts";
 import {
   normalizeRuntimeConfig,
@@ -23,19 +21,8 @@ import {
 } from "../../../packages/server/src/config/runtime-config.ts";
 import { runtimeConfigFromEnvironment } from "../../../packages/server/src/config/bootstrap-env.ts";
 import { runtimeConfigEnvironmentBindings } from "../../../packages/server/src/config/runtime-config-environment.ts";
-import {
-  buildConfigBundle,
-  parseConfigBundle,
-  projectConfigBundlePreview,
-  resolveImportedStorageBackends
-} from "../../../packages/server/src/config/bundle/format.ts";
 import { effectiveEmbedAncestorSources } from "../../../packages/server/src/config/embed-ancestors.ts";
 import { isTrustedReferer } from "../../../packages/server/src/config/trusted-origins.ts";
-import { ApiError } from "../../../packages/server/src/core/api-error.ts";
-import {
-  s3SettingsSchema,
-  type StorageBackendRecord
-} from "../../../packages/server/src/storage/backends/config.ts";
 import { storageBackendLabel } from "../../../packages/server/src/storage/backends/label.ts";
 
 test("[Server/配置] 来源白名单匹配完整 Referer 并保留协议、端口与子域边界", () => {
@@ -127,7 +114,7 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   assert.deepEqual(defaults.import.keep_original_link, ["url", "jsonl", "weibo"]);
   assert.equal(defaults.weibo.source_enabled, true);
   assert.equal(defaults.site.root, "home");
-  assert.equal(defaults.site.random_size, "full");
+  assert.equal(defaults.site.random_size, "medium");
   assert.equal(defaults.site.assets_base_url, "");
   for (const assets_base_url of [
     "http://asset.example.com",
@@ -162,7 +149,7 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
     commit_concurrency: 8
   });
   assert.equal(defaults.normalize.concurrency, 2);
-  assert.equal(defaults.normalize.max_long_edge, 4_200);
+  assert.equal(defaults.normalize.large.max_long_edge, 4_200);
   assert.equal(defaults.admin.recent_uploads, 16);
   const drift = structuredClone(defaults) as Record<string, unknown>;
   delete drift.embed;
@@ -198,13 +185,6 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   (driftSite.home as Record<string, unknown>).unknown_option = true;
 
   const normalized = normalizeRuntimeConfig(drift);
-  assert.deepEqual(Object.keys(normalized.site).slice(0, 5), [
-    "domain",
-    "icon",
-    "title",
-    "description",
-    "header_name"
-  ]);
   assert.deepEqual(normalized.embed, { enabled: false, allowed_origins: [] });
   assert.equal(normalized.import.auto_import, true);
   assert.deepEqual(normalized.import.keep_original_link, ["url", "jsonl", "weibo"]);
@@ -216,7 +196,7 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   assert.equal(normalized.weibo.source_enabled, true);
   assert.equal(normalized.site.description, "画廊与随机图片API");
   assert.equal(normalized.site.root, "home");
-  assert.equal(normalized.site.random_size, "full");
+  assert.equal(normalized.site.random_size, "medium");
   assert.equal(normalized.site.assets_base_url, "");
   assert.equal(
     normalized.site.show.autoplay,
@@ -336,7 +316,7 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   siteLimits.site.home.banner_title = "题".repeat(81);
   assert.throws(() => parseRuntimeConfig(siteLimits));
 
-  for (const maxLongEdge of [300, 32_000]) {
+  for (const maxLongEdge of [2_200, 16_000]) {
     const current = structuredClone(defaults);
     current.ingestion.max_long_edge = maxLongEdge;
     assert.equal(parseRuntimeConfig(current).ingestion.max_long_edge, maxLongEdge);
@@ -399,17 +379,17 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
     current.normalize.concurrency = normalizeConcurrency;
     assert.throws(() => parseRuntimeConfig(current));
   }
-  for (const normalizedLongEdge of [300, 32_000]) {
+  for (const normalizedLongEdge of [2_200, 16_000]) {
     const current = structuredClone(defaults);
-    current.normalize.max_long_edge = normalizedLongEdge;
+    current.normalize.large.max_long_edge = normalizedLongEdge;
     assert.equal(
-      parseRuntimeConfig(current).normalize.max_long_edge,
+      parseRuntimeConfig(current).normalize.large.max_long_edge,
       normalizedLongEdge
     );
   }
-  for (const normalizedLongEdge of [299, 32_001]) {
+  for (const normalizedLongEdge of [511, 16_001]) {
     const current = structuredClone(defaults);
-    current.normalize.max_long_edge = normalizedLongEdge;
+    current.normalize.large.max_long_edge = normalizedLongEdge;
     assert.throws(() => parseRuntimeConfig(current));
   }
   for (const recentUploads of [1, 60]) {
@@ -428,12 +408,12 @@ test("[Server/配置] 运行时配置同时支持严格保存与启动归一化"
   validCurrentValues.ingestion.max_long_edge = 24_000;
   validCurrentValues.ingestion.list_page_size = 40;
   validCurrentValues.normalize.concurrency = 6;
-  validCurrentValues.normalize.max_long_edge = 4_500;
+  validCurrentValues.normalize.large.max_long_edge = 4_500;
   validCurrentValues.admin.recent_uploads = 12;
   const preservedCurrentValues = normalizeRuntimeConfig(validCurrentValues);
   assert.deepEqual(preservedCurrentValues.ingestion, validCurrentValues.ingestion);
   assert.equal(preservedCurrentValues.normalize.concurrency, 6);
-  assert.equal(preservedCurrentValues.normalize.max_long_edge, 4_500);
+  assert.equal(preservedCurrentValues.normalize.large.max_long_edge, 4_500);
   assert.equal(preservedCurrentValues.admin.recent_uploads, 12);
 
   for (const method of ["proxy", "redirect"] as const) {
@@ -527,9 +507,9 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
     SITE_SHOW_ORDER: "oldest",
     SITE_GALLERY_ENABLED: "false",
     SITE_ROBOTS_ENABLED: "false",
-    SITE_RANDOM_SIZE: "thumb",
+    SITE_RANDOM_SIZE: "small",
     SITE_ASSETS_BASE_URL: " https://ASSET.example.com:443///static//nested/// ",
-    NORMALIZE_SKIP_WEBP_UNDER_KB: "0",
+    NORMALIZE_LARGE_MAX_SIZE_KB: "700",
     IMPORT_KEEP_ORIGINAL_LINK: '["weibo","url"]',
     WEIBO_SOURCE_ENABLED: "false",
     EMBED_ALLOWED_ORIGINS: '["https://portal.example.com","https://*.trusted.example.net"]'
@@ -550,9 +530,9 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
   });
   assert.equal(environmentConfig.site.gallery.enabled, false);
   assert.equal(environmentConfig.site.robots_enabled, false);
-  assert.equal(environmentConfig.site.random_size, "thumb");
+  assert.equal(environmentConfig.site.random_size, "small");
   assert.equal(environmentConfig.site.assets_base_url, "https://asset.example.com/static/nested");
-  assert.equal(environmentConfig.normalize.skip_webp_under_kb, 0);
+  assert.equal(environmentConfig.normalize.large.max_size_kb, 700);
   assert.deepEqual(environmentConfig.import.keep_original_link, ["weibo", "url"]);
   assert.equal(environmentConfig.weibo.source_enabled, false);
   assert.deepEqual(
@@ -582,7 +562,7 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
   );
 
   for (const [environment, expected] of [
-    [{ SITE_RANDOM_SIZE: "small" }, /SITE_RANDOM_SIZE.*site\.random_size/],
+    [{ SITE_RANDOM_SIZE: "invalid-size" }, /SITE_RANDOM_SIZE.*site\.random_size/],
     [
       { SITE_ASSETS_BASE_URL: "http://asset.example.com" },
       /SITE_ASSETS_BASE_URL.*site\.assets_base_url/
@@ -621,8 +601,8 @@ test("[Server/配置] 完整环境播种严格覆盖全部已映射 RuntimeConfi
     [{ SITE_HEADER_NAME: "" }, /SITE_HEADER_NAME.*site\.header_name/],
     [{ SITE_TITLE: "  " }, /SITE_TITLE.*site\.title/],
     [
-      { NORMALIZE_QUALITY: "10", NORMALIZE_MIN_QUALITY: "20" },
-      /NORMALIZE_QUALITY.*normalize\.min_quality/
+      { NORMALIZE_LARGE_QUALITY: "10", NORMALIZE_LARGE_MIN_QUALITY: "20" },
+      /NORMALIZE_LARGE_QUALITY.*normalize\.large\.min_quality/
     ],
     [
       { WEIBO_REQUEST_DELAY_SECONDS: "[6,5]" },
@@ -679,9 +659,7 @@ import {
 } from ${JSON.stringify(runtimeConfigStoreUrl)};
 import {
   getSettingsForAdmin,
-  parseSettingsInput,
   resolveIngestionSnapshotLimit,
-  saveAppSettings,
   siteConfigPayload
 } from ${JSON.stringify(appSettingsUrl)};
 
@@ -714,7 +692,7 @@ if (scenario === "seed") {
     order: "oldest"
   });
   assert.equal(generated.site.gallery.enabled, false);
-  assert.equal(generated.normalize.skip_webp_under_kb, 0);
+  assert.equal(generated.normalize.large.max_size_kb, 700);
   const persisted = JSON.parse(await readFile(join(root, "config.json"), "utf8"));
   assert.deepEqual(persisted, generated);
   assert.deepEqual(Object.keys(persisted.site).slice(0, 5), ["domain", "icon", "title", "description", "header_name"]);
@@ -774,85 +752,14 @@ assert.deepEqual(siteConfigPayload().site.show, {
 });
 assert.equal(siteConfigPayload().site.gallery.enabled, true);
 assert.deepEqual(siteConfigPayload().site.gallery, { enabled: true, order: "latest" });
-assert.equal("description" in getSettingsForAdmin().site, false);
-for (const field of ["icp", "mps", "footer"]) {
-  assert.equal(field in getSettingsForAdmin().site, false);
-  assert.throws(() => parseSettingsInput({ site: { [field]: "footer text" } }));
-}
-assert.equal(getSettingsForAdmin().site.root, "home");
-assert.equal("browse_target" in getSettingsForAdmin().site.home, false);
-assert.equal("show" in getSettingsForAdmin().site, false);
-assert.equal("enabled" in getSettingsForAdmin().site.gallery, false);
-assert.deepEqual(getSettingsForAdmin().ingestion, {
-  max_file_size_mb: 100,
-  max_long_edge: 32000,
-  list_page_size: 20,
-  commit_concurrency: 8
+assert.deepEqual(getSettingsForAdmin(), {
+  ingestion: { max_file_size_mb: 100, max_long_edge: 32000, list_page_size: 20 },
+  upload: { max_items: 200, browser_concurrency: 2 },
+  import: { keep_original_link: ["url", "jsonl", "weibo"], auto_import: true, max_items: 200 },
+  weibo: { max_items: 10 },
+  admin: { image_page_size: getRuntimeConfig().admin.image_page_size }
 });
-assert.deepEqual(getSettingsForAdmin().upload, {
-  max_items: 200,
-  browser_concurrency: 2
-});
-assert.deepEqual(getSettingsForAdmin().import, {
-  keep_original_link: ["url", "jsonl", "weibo"],
-  auto_import: true,
-  max_items: 200
-});
-assert.deepEqual(getSettingsForAdmin().weibo, {
-  max_items: 10
-});
-assert.deepEqual(getSettingsForAdmin().normalize, {
-  concurrency: 2,
-  quality: 80,
-  min_quality: 20,
-  max_long_edge: 4200,
-  max_size_kb: 500,
-  skip_webp_under_kb: 700
-});
-assert.equal("quality_step" in getSettingsForAdmin().normalize, false);
-assert.deepEqual(new Set(Object.keys(getSettingsForAdmin())), new Set([
-  "site",
-  "ingestion",
-  "upload",
-  "import",
-  "weibo",
-  "normalize",
-  "thumbnail",
-  "admin"
-]));
-assert.equal("unknown_section" in getSettingsForAdmin(), false);
 assert.equal("unknown_section" in siteConfigPayload(), false);
-assert.equal(parseSettingsInput({ site: { root: "gallery" } }).site?.root, "gallery");
-assert.deepEqual(parseSettingsInput({ site: { title: "  网页标题  ", header_name: "  页头文字  " } }).site, {
-  title: "网页标题", header_name: "页头文字"
-});
-assert.equal(parseSettingsInput({ site: { root: "show" } }).site.root, "show");
-for (const site of [
-  { home: { browse_target: "show" } },
-  { gallery: { enabled: false } },
-  { show: { autoplay: false } },
-  { show: { mode: "float" } }
-]) assert.throws(() => parseSettingsInput({ site }), "普通设置拒绝尚未开放的新字段");
-assert.equal(
-  parseSettingsInput({ ingestion: { list_page_size: 100 } })
-    .ingestion?.list_page_size,
-  100
-);
-assert.throws(() => parseSettingsInput({ ingestion: { list_page_size: 101 } }));
-assert.equal(
-  parseSettingsInput({ ingestion: { commit_concurrency: 16 } })
-    .ingestion?.commit_concurrency,
-  16
-);
-assert.throws(() => parseSettingsInput({ ingestion: { commit_concurrency: 17 } }));
-assert.throws(() => parseSettingsInput({ upload: { list_page_size: 20 } }));
-assert.throws(() => parseSettingsInput({ import: { keep_original_link: [] } }));
-assert.throws(() => parseSettingsInput({ import: { auto_import: false } }));
-assert.throws(() => parseSettingsInput({ weibo: { source_enabled: false } }));
-assert.throws(() => parseSettingsInput({ normalize: { quality_step: 10 } }));
-assert.throws(() => parseSettingsInput({ site: { [unknownSiteKey]: "gallery" } }));
-assert.throws(() => parseSettingsInput({ site: { description: "越权普通设置" } }));
-assert.throws(() => parseSettingsInput({ unknown_section: { enabled: false } }));
 const persisted = JSON.parse(await readFile(join(root, "config.json"), "utf8"));
 assert.deepEqual(persisted, normalized);
 assert.equal(unknownSiteKey in persisted.site, false);
@@ -860,13 +767,12 @@ assert.equal("unknown" in persisted.site, false);
 assert.equal("unknown" in persisted.site.home, false);
 assert.equal("unknown_section" in persisted, false);
 
-await saveAppSettings(parseSettingsInput({
+await updateRuntimeConfig({
   ingestion: { list_page_size: 37, commit_concurrency: 12 }
-}));
+});
 assert.equal(getRuntimeConfig().ingestion.list_page_size, 37);
 assert.equal(getRuntimeConfig().ingestion.commit_concurrency, 12);
 assert.equal(getSettingsForAdmin().ingestion.list_page_size, 37);
-assert.equal(getSettingsForAdmin().ingestion.commit_concurrency, 12);
 assert.equal(resolveIngestionSnapshotLimit(undefined), 37);
 assert.equal(resolveIngestionSnapshotLimit(0), 0);
 assert.equal(resolveIngestionSnapshotLimit(12), 12);
@@ -879,20 +785,18 @@ await updateRuntimeConfig({
   weibo: { source_enabled: false },
   normalize: { quality_step: 11 }
 });
-await saveAppSettings(parseSettingsInput({
-  normalize: { quality: 79 },
+await updateRuntimeConfig({
+  normalize: { large: { quality: 79 } },
   admin: { recent_uploads: 15 }
-}));
+});
 assert.deepEqual(getRuntimeConfig().import.keep_original_link, ["jsonl"]);
 assert.equal(getRuntimeConfig().import.auto_import, false);
 assert.equal(getRuntimeConfig().weibo.source_enabled, false);
 assert.equal(getRuntimeConfig().normalize.quality_step, 11);
-assert.equal(getRuntimeConfig().normalize.quality, 79);
+assert.equal(getRuntimeConfig().normalize.large.quality, 79);
 assert.deepEqual(siteConfigPayload().site.gallery, { enabled: true, order: "latest" });
 assert.deepEqual(getSettingsForAdmin().import.keep_original_link, ["jsonl"]);
 assert.equal(getSettingsForAdmin().import.auto_import, false);
-assert.equal("source_enabled" in getSettingsForAdmin().weibo, false);
-assert.equal("quality_step" in getSettingsForAdmin().normalize, false);
 
 const mixed = structuredClone(getRuntimeConfig());
 mixed.site.root = "gallery";
@@ -928,7 +832,7 @@ console.log("config-existing-ok");
           SITE_SHOW_DRIFT_SPEED: "42",
           SITE_SHOW_ORDER: "oldest",
           SITE_GALLERY_ENABLED: "false",
-          NORMALIZE_SKIP_WEBP_UNDER_KB: "0"
+          NORMALIZE_LARGE_MAX_SIZE_KB: "700"
         },
         output: /config-seed-ok/
       },
@@ -972,7 +876,7 @@ console.log("config-existing-ok");
             SITE_MPS: undefined,
             SITE_FOOTER: undefined,
             SITE_GALLERY_ENABLED: undefined,
-            NORMALIZE_SKIP_WEBP_UNDER_KB: undefined,
+            NORMALIZE_LARGE_MAX_SIZE_KB: undefined,
             UPLOAD_MAX_ITEMS: undefined,
             ...scenario.environment
           },
@@ -984,237 +888,6 @@ console.log("config-existing-ok");
   } finally {
     await rm(helperRoot, { recursive: true, force: true });
   }
-});
-test("[Server/配置] 配置包按目标版本能力宽松识别并保留导入安全边界", () => {
-  const s3 = s3SettingsSchema.parse({
-    endpoint: "objects.example.com",
-    bucket: "gallery",
-    access_key_id: "key",
-    secret_access_key: "secret"
-  });
-  const backends = [
-    {
-      slug: "local",
-      sort_order: 0,
-      display_name: "本地",
-      type: "local",
-      enabled: true,
-      is_default: true
-    },
-    {
-      slug: "archive",
-      sort_order: -1,
-      display_name: "归档",
-      type: "s3",
-      enabled: true,
-      is_default: false,
-      s3
-    }
-  ] satisfies StorageBackendRecord[];
-  const packageRuntime = runtimeConfigDefaults();
-  packageRuntime.site.header_name = "来源站点";
-  packageRuntime.site.title = "来源网页标题";
-  packageRuntime.site.assets_base_url = "https://source-assets.example.com/static";
-  packageRuntime.site.random_size = "thumb";
-  packageRuntime.site.description = "来源说明";
-  const pkg = buildConfigBundle(
-    packageRuntime,
-    backends,
-    "current-build",
-    new Date("2026-08-11T00:00:00.000Z")
-  );
-  assert.equal(pkg.format, "imageshow-config");
-  assert.equal(pkg.application_version, "current-build");
-  assert.equal(pkg.config.site.root, "home");
-  assert.equal("assets_base_url" in pkg.config.site, false);
-  assert.equal(pkg.config.site.random_size, "thumb");
-  assert.deepEqual(pkg.storage_backends, [
-    {
-      slug: "archive",
-      display_name: "归档",
-      enabled: true,
-      is_default: false,
-      s3
-    }
-  ]);
-  const complete = parseConfigBundle(pkg);
-  assert.deepEqual(complete.config, pkg.config);
-  assert.ok(complete.config_values.recognized > 0);
-  assert.equal(complete.config_values.defaulted, 0);
-  assert.equal(complete.config_values.ignored, 0);
-  assert.equal(complete.skipped_storage_backends, 0);
-
-  const source = structuredClone(pkg) as unknown as Record<string, unknown>;
-  source.format = "future-config";
-  delete source.application_version;
-  source.unused_package_field = true;
-  const sourceConfig = source.config as Record<string, Record<string, unknown>>;
-  const sourceSite = sourceConfig.site!;
-  sourceSite.header_name = "  已采用站点  ";
-  delete sourceSite.description;
-  sourceSite.root = "future-root";
-  sourceSite.domain = "must-not-cross.example.com";
-  sourceSite.unknown_site_field = true;
-  sourceConfig.future_group = { enabled: true };
-  sourceConfig.normalize!.quality = 50;
-  sourceConfig.normalize!.min_quality = 40;
-  sourceConfig.thumbnail!.quality = 101;
-  sourceConfig.thumbnail!.long_edge = "640";
-
-  const sourceBackends = source.storage_backends as Array<Record<string, unknown>>;
-  const sourceArchive = sourceBackends[0]!;
-  sourceArchive.future_backend_field = true;
-  (sourceArchive.s3 as Record<string, unknown>).future_s3_field = true;
-  sourceBackends.push(
-    { ...structuredClone(sourceArchive), display_name: "重复 slug" },
-    {
-      slug: "missing-settings",
-      display_name: "缺少设置",
-      enabled: true,
-      is_default: false
-    },
-    {
-      ...structuredClone(sourceArchive),
-      slug: "disabled-default",
-      display_name: "停用默认",
-      enabled: false,
-      is_default: true
-    },
-    {
-      ...structuredClone(sourceArchive),
-      slug: "wrong-setting-type",
-      display_name: "错误设置类型",
-      s3: {
-        ...(sourceArchive.s3 as Record<string, unknown>),
-        task_timeout_seconds: "300"
-      }
-    }
-  );
-
-  const parsed = parseConfigBundle(source);
-  const defaults = runtimeConfigDefaults();
-  assert.equal(parsed.format, "future-config");
-  assert.equal(parsed.application_version, null);
-  assert.equal(parsed.config.site.header_name, "已采用站点");
-  assert.equal(parsed.config.site.description, defaults.site.description);
-  assert.equal(parsed.config.site.root, defaults.site.root);
-  assert.equal("domain" in parsed.config.site, false);
-  assert.equal(parsed.config.normalize.quality, 50);
-  assert.equal(parsed.config.normalize.min_quality, 40);
-  assert.equal(parsed.config.thumbnail.quality, defaults.thumbnail.quality);
-  assert.equal(parsed.config.thumbnail.long_edge, defaults.thumbnail.long_edge);
-  assert.ok(parsed.config_values.recognized > 0);
-  assert.ok(parsed.config_values.defaulted > 0);
-  assert.ok(parsed.config_values.ignored > 0);
-  assert.equal(parsed.storage_backends.length, 1);
-  assert.equal(parsed.storage_backends[0]!.slug, "archive");
-  assert.equal(parsed.storage_backends[0]!.s3.secret_access_key, "secret");
-  assert.equal("future_s3_field" in parsed.storage_backends[0]!.s3, false);
-  assert.equal(parsed.skipped_storage_backends, 4);
-  const materialized = materializeImportedRuntimeConfig(
-    parsed.config,
-    "target.example.com",
-    "https://target-assets.example.com/static"
-  );
-  assert.equal(materialized.site.domain, "target.example.com");
-  assert.equal(materialized.site.assets_base_url, "https://target-assets.example.com/static");
-  assert.equal(materialized.site.random_size, "thumb");
-
-  const preview = projectConfigBundlePreview(parsed, new Set(["local", "archive"]));
-  assert.deepEqual(preview.config_values, parsed.config_values);
-  assert.equal(preview.skipped_storage_backends, 4);
-  assert.deepEqual(preview.conflicts, ["archive"]);
-  assert.deepEqual(
-    resolveImportedStorageBackends(parsed, new Set(["local", "archive"]), {
-      archive: "archive-imported"
-    }).map((backend) => backend.slug),
-    ["archive-imported"]
-  );
-  assert.throws(
-    () => resolveImportedStorageBackends(
-      parsed,
-      new Set(["local", "archive"]),
-      {}
-    ),
-    (error) => error instanceof ApiError
-      && error.code === "config_storage_slug_conflict"
-  );
-  assert.throws(
-    () =>
-      resolveImportedStorageBackends(parsed, new Set(["local", "archive"]), {
-        archive: "bad_slug"
-      }),
-    (error) =>
-      error instanceof ApiError &&
-      error.status === 400 &&
-      error.code === "config_slug_mapping_invalid"
-  );
-
-  const empty = parseConfigBundle({});
-  const { domain: _domain, assets_base_url: _assets, ...portableSiteDefaults } = defaults.site;
-  assert.equal(empty.format, null);
-  assert.equal(empty.application_version, null);
-  assert.equal(empty.exported_at, null);
-  assert.deepEqual(empty.config, { ...defaults, site: portableSiteDefaults });
-  assert.equal(empty.config_values.recognized, 0);
-  assert.ok(empty.config_values.defaulted > 0);
-  assert.equal(empty.storage_backends.length, 0);
-
-  const loneCombinationValue = parseConfigBundle({
-    config: { normalize: { quality: 10 } }
-  });
-  assert.equal(loneCombinationValue.config.normalize.quality, defaults.normalize.quality);
-  assert.equal(loneCombinationValue.config_values.ignored, 1);
-
-  const competingNormalizeValues = parseConfigBundle({
-    config: { normalize: { quality: 10, min_quality: 30 } }
-  });
-  assert.equal(
-    competingNormalizeValues.config.normalize.quality,
-    defaults.normalize.quality,
-    "只回退造成组合无效的 quality"
-  );
-  assert.equal(competingNormalizeValues.config.normalize.min_quality, 30);
-  assert.equal(competingNormalizeValues.config_values.ignored, 1);
-
-  const competingAltchaValues = parseConfigBundle({
-    config: { altcha: { cost: 100_000, counter_range: [100, 2_000] } }
-  });
-  assert.equal(competingAltchaValues.config.altcha.cost, defaults.altcha.cost);
-  assert.deepEqual(
-    competingAltchaValues.config.altcha.counter_range,
-    [100, 2_000],
-    "有效 counter_range 必须在 cost 回退后保留"
-  );
-  assert.equal(competingAltchaValues.config_values.ignored, 1);
-
-  for (const scalarRoot of [null, false, 0, "", []]) {
-    assert.throws(
-      () => parseConfigBundle(scalarRoot),
-      (error) =>
-        error instanceof ApiError
-          && error.status === 400
-          && error.code === "config_package_invalid"
-    );
-  }
-
-  assert.throws(
-    () =>
-      parseConfigBundle({
-        storage_backends: Array.from({ length: 101 }, () => null)
-      }),
-    (error) =>
-      error instanceof ApiError
-        && error.status === 400
-        && error.code === "config_package_invalid"
-  );
-  assert.throws(
-    () => parseConfigBundle({ content: "x".repeat(appConfig.configBundle.maxBytes) }),
-    (error) =>
-      error instanceof ApiError
-        && error.status === 413
-        && error.code === "config_package_too_large"
-  );
 });
 test("[Server/配置] SPA 复用已发布快照并同步配置、验证器和嵌入权限", async () => {
   const repositoryRoot = resolve(import.meta.dirname, "../../..");
@@ -1268,10 +941,7 @@ import {
   initializeRuntimeConfig,
   updateRuntimeConfig,
   replaceRuntimeConfig,
-  reloadRuntimeConfigFromDisk,
-  withRuntimeConfigWriteLease,
-  persistRuntimeConfigForBundleImport,
-  publishRuntimeConfigForBundleImport
+  reloadRuntimeConfigFromDisk
 } from ${JSON.stringify(runtimeConfigStoreUrl)};
 import { registerSpaRoutes } from ${JSON.stringify(spaRoutesUrl)};
 import { registerAssetRoutes, createAssetHandler } from ${JSON.stringify(new URL("./assets.js", spaRoutesUrl).href)};
@@ -1332,9 +1002,11 @@ async function verifyJsonSnapshots() {
     const body = await response.text();
     const result = JSON.parse(body);
     assert.equal(result.ok, true);
-    const settings = path.endsWith("/settings") ? result.settings : result;
-    assert.equal(settings.site.title, getRuntimeConfig().site.title);
-    if (result.settings) assert.equal(settings.thumbnail.quality, getRuntimeConfig().thumbnail.quality);
+    if (result.settings) {
+      assert.equal(result.settings.admin.image_page_size, getRuntimeConfig().admin.image_page_size);
+    } else {
+      assert.equal(result.site.title, getRuntimeConfig().site.title);
+    }
     assert.match(response.headers.get("cache-control"), result.settings ? /private/ : /public/);
     assert.equal(response.headers.get("content-length"), String(Buffer.byteLength(body)));
     const etag = response.headers.get("etag");
@@ -1425,7 +1097,7 @@ for (const sequence of ["$$", "$&", "$" + String.fromCharCode(96), "$'"]) {
 await updateRuntimeConfig(originalConfig);
 
 // A private configuration change keeps the same public representation.
-await updateRuntimeConfig({ thumbnail: { quality: originalConfig.thumbnail.quality === 75 ? 76 : 75 } });
+await updateRuntimeConfig({ admin: { image_page_size: originalConfig.admin.image_page_size === 50 ? 60 : 50 } });
 const privateChangeEtags = await verifyJsonSnapshots();
 assert.equal(privateChangeEtags[0], initialJsonEtags[0]);
 assert.notEqual(privateChangeEtags[1], initialJsonEtags[1]);
@@ -1448,20 +1120,6 @@ await reloadRuntimeConfigFromDisk();
 await verifyJsonSnapshots();
 assert.match(await html(), /Reloaded snapshot/);
 
-await withRuntimeConfigWriteLease(async () => {
-  const beforeImport = structuredClone(getRuntimeConfig());
-  const candidate = structuredClone(beforeImport);
-  candidate.site.title = "Imported snapshot";
-  persistRuntimeConfigForBundleImport(candidate);
-  await verifyJsonSnapshots();
-  assert.match(await html(), /Reloaded snapshot/);
-  persistRuntimeConfigForBundleImport(beforeImport);
-  assert.match(await html(), /Reloaded snapshot/);
-  persistRuntimeConfigForBundleImport(candidate);
-  publishRuntimeConfigForBundleImport(candidate);
-  await verifyJsonSnapshots();
-  assert.match(await html(), /Imported snapshot/);
-});
 await replaceRuntimeConfig(originalConfig);
 
 // All embedded public pages share the same enable switch and ancestor policy.

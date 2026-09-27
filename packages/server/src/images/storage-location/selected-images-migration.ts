@@ -1,3 +1,4 @@
+import { imageVariantColumns } from "../variants/record.ts";
 import type { ImageStorageMigrationItemResultDto } from "@imageshow/shared/browser";
 import { ApiError } from "../../core/api-error.ts";
 import { mapWithWorkerPool } from "../../core/concurrency.ts";
@@ -28,8 +29,7 @@ export async function migrateSelectedImagesToStorageBackend(
     options.signal?.throwIfAborted();
     const rows = (
       await pool.query(
-        `SELECT id, ext, storage_slug, md5,
-              image_size, thumbnail_size
+        `SELECT id, storage_slug, ${imageVariantColumns}
          FROM metadata
         WHERE id = ANY($1::uuid[])`,
         [ids]

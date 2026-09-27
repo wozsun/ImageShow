@@ -82,9 +82,9 @@ const storageIngestionScenarios = [
     script: join(isolationRoot, "ingestion-orphan-lifecycle.mts")
   },
   {
-    id: "storage-thumbnail-recovery",
-    name: "缩略图维修、并发恢复与失败补偿",
-    script: join(isolationRoot, "storage-thumbnail-recovery.mts")
+    id: "storage-variant-recovery",
+    name: "三档副本恢复、并发恢复与失败补偿",
+    script: join(isolationRoot, "storage-variant-recovery.mts")
   },
   {
     id: "local-io-lifecycle",
@@ -202,9 +202,9 @@ const storageIngestionScenarios = [
     script: join(isolationRoot, "auth-author-contracts.mts")
   },
   {
-    id: "config-bundle-consistency",
-    name: "配置包导入的文件、内存与 PostgreSQL 事务一致性及权限",
-    script: join(isolationRoot, "config-bundle-consistency.mts")
+    id: "runtime-settings",
+    name: "完整站点配置的权限、持久化、重载和监听器隔离",
+    script: join(isolationRoot, "runtime-settings.mts")
   },
   {
     id: "redis-canonical",
@@ -1271,7 +1271,7 @@ test("[Server/数据库集成] 数据库以单一基线初始化空库并对现�
             "p",
             ["id"]
           );
-          await client.query(`ALTER TABLE background_job DROP CONSTRAINT ${quoteIdentifier(name)}`);
+          await client.query(`ALTER TABLE background_job DROP CONSTRAINT ${quoteIdentifier(name)} CASCADE`);
         });
         const missingPrimaryKeyResult = await initialize(missingPrimaryKey, true);
         assert.notEqual(missingPrimaryKeyResult.code, 0);

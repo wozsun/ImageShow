@@ -17,11 +17,13 @@ const canRead = cacheIsReady
   && !readsAreBlocked
   && requestIsAuthorized;
 
-return importStorageBackends(
-  importedBackends,
-  persistCandidateConfig,
-  recordTransactionId,
-  signal
+return api<RuntimeConfigResponseDto>(
+  `${adminApiBasePath}/settings`,
+  {
+    method: "POST",
+    signal,
+    body: JSON.stringify(config)
+  }
 );
 ```
 

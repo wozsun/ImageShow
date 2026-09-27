@@ -8,7 +8,7 @@ import { logger } from "../core/logger.ts";
 import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
 import { resolveStorageAccess } from "../storage/backends/registry.ts";
 import { isStorageObjectNotFound } from "../storage/objects/not-found.ts";
-import { thumbnailRef } from "../storage/objects/image-paths.ts";
+import { imageObjectKey } from "../storage/objects/image-paths.ts";
 import {
   imageStorageMutationLockKey,
   withStorageLocationReadAndAdvisoryLocksOnClient
@@ -43,7 +43,7 @@ type UpdateImageRecord = {
   theme: string | null;
   width: number | string | null;
   height: number | string | null;
-  ext: string;
+  s_byte_size: number | string;
   storage_slug: string;
   author: string | null;
   title: string;
@@ -73,9 +73,9 @@ const updateImageColumns = [
   "device",
   "brightness",
   "theme",
-  "width",
-  "height",
-  "ext",
+  "l_width AS width",
+  "l_height AS height",
+  "s_byte_size",
   "storage_slug",
   "author",
   "title",
@@ -95,12 +95,13 @@ async function detectImageBrightness(
   signal: AbortSignal
 ) {
   if (image.status !== "ready") return undefined;
-  const thumb = thumbnailRef(image);
-  const storage = await resolveStorageAccess(thumb.slug);
+  const storage = await resolveStorageAccess(image.storage_slug);
   signal.throwIfAborted();
   let thumbnail: Buffer;
   try {
-    thumbnail = await storage.driver.readBuffer(thumb.prefix, thumb.key, { signal });
+    thumbnail = await storage.driver.readBuffer("small", imageObjectKey(image.id), {
+      signal, expectedSize: Number(image.s_byte_size)
+    });
   } catch (error) {
     signal.throwIfAborted();
     if (isStorageObjectNotFound(error)) return undefined;
@@ -187,7 +188,6 @@ async function commitImageUpdate({
     if (sourceImage) {
       if (
         locked.storage_slug !== sourceImage.storage_slug ||
-        locked.ext !== sourceImage.ext ||
         locked.device !== sourceImage.device ||
         locked.brightness !== sourceImage.brightness ||
         locked.theme !== sourceImage.theme

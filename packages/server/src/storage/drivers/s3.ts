@@ -15,7 +15,6 @@ import {
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { createHash, hash, randomBytes, randomUUID } from "node:crypto";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
-import { getIngestionMaxFileBytes } from "../../config/app-settings.ts";
 import { missingS3Fields, type S3StorageConfig } from "../backends/config.ts";
 import {
   s3CopySource,
@@ -23,7 +22,7 @@ import {
   storageS3ObjectName,
   type StoragePrefix
 } from "../objects/keys.ts";
-import { openedReadToBuffer } from "../objects/stream-buffer.ts";
+import { openedReadToBuffer, STORAGE_BUFFER_MAX_BYTES } from "../objects/stream-buffer.ts";
 import type {
   OpenedRead,
   StorageDriver,
@@ -31,6 +30,7 @@ import type {
   StoragePruneOptions,
   StorageRemoveOptions,
   StorageRequestOptions,
+  StorageBufferReadOptions,
   StorageServerCopyOptions,
   StorageServerCopySource,
   StorageSelfTest,
@@ -347,12 +347,12 @@ export class S3StorageDriver implements StorageDriver {
   async readBuffer(
     prefix: StoragePrefix,
     key: string,
-    options: StorageRequestOptions = {}
+    options: StorageBufferReadOptions = {}
   ) {
-    const limit = await getIngestionMaxFileBytes();
     return openedReadToBuffer(
       await this.openRead(prefix, key, undefined, options),
-      limit
+      STORAGE_BUFFER_MAX_BYTES,
+      options.expectedSize
     );
   }
 
@@ -682,7 +682,7 @@ export class S3StorageDriver implements StorageDriver {
     let testError: unknown;
     try {
       const contentMd5 = await this.probeContentMd5(keys, options);
-      if (!(await this.exists("full", keys[0], options))) {
+      if (!(await this.exists("large", keys[0], options))) {
         throw new ApiError(
           502,
           "storage_test_failed",
@@ -706,7 +706,7 @@ export class S3StorageDriver implements StorageDriver {
       // cancelled. Cleanup therefore uses its own bounded S3 request budget.
       const removed = await this.removeObjects(
         keys.map((key) => ({
-          prefix: "full",
+          prefix: "large",
           key
         }))
       );
@@ -748,7 +748,7 @@ export class S3StorageDriver implements StorageDriver {
       const body = Readable.from([bytes]);
       const closed = finished(body, { cleanup: true }).catch(() => undefined);
       try {
-        await this.writeStream("full", key, body, bytes.length, "application/octet-stream", {
+        await this.writeStream("large", key, body, bytes.length, "application/octet-stream", {
           ...options,
           expectedMd5
         });
@@ -760,7 +760,7 @@ export class S3StorageDriver implements StorageDriver {
     const verifyReadback = async () => {
       await put(validKey);
       const readback = await openedReadToBuffer(
-        await this.openRead("full", validKey, undefined, options),
+        await this.openRead("large", validKey, undefined, options),
         bytes.length
       );
       if (!readback.equals(bytes)) {

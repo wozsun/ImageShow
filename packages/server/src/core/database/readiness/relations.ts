@@ -5,6 +5,7 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
     await database.query<{
       table_name: string;
       relation_kind: string;
+      persistence: string;
       column_name: string;
       type_name: string;
       type_modifier: number;
@@ -13,6 +14,7 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
     }>(
       `SELECT relation.relname AS table_name,
             relation.relkind::text AS relation_kind,
+            relation.relpersistence::text AS persistence,
             attribute.attname AS column_name,
             type.typname AS type_name,
             attribute.atttypmod::int AS type_modifier,
@@ -51,7 +53,8 @@ export async function assertRequiredTablesAndColumns(database: DatabaseReader) {
       const actual = actualColumns.get(`${table}.${column}`);
       if (!actual
         || actual.type_name !== expectedType
-        || actual.type_modifier !== -1) {
+        || actual.type_modifier !== -1
+        || (table === "metadata" && /^[lms]_(width|height|byte_size|md5)$/.test(column) && !actual.not_null)) {
         incompatible.push(`${table}.${column}`);
       }
     }

@@ -8,7 +8,7 @@ import {
   type Device
 } from "@imageshow/shared/browser";
 
-const READY_IMAGE_CACHE_NAMESPACE = "imageshow:cache:images";
+const READY_IMAGE_CACHE_NAMESPACE = "imageshow:cache:variants";
 export const READY_IMAGE_CACHE_PREFIX = `${READY_IMAGE_CACHE_NAMESPACE}:`;
 export const READY_IMAGE_DERIVED_PREFIX = `${READY_IMAGE_CACHE_PREFIX}derived:`;
 export const READY_IMAGE_META_KEY = `${READY_IMAGE_CACHE_PREFIX}meta`;

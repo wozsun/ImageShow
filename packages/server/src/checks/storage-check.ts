@@ -1,3 +1,4 @@
+import { STORAGE_PREFIXES, type StoragePrefix } from "../storage/objects/keys.ts";
 import { storageObjectKey } from "@imageshow/shared/browser";
 import { appConfig } from "@imageshow/shared";
 import { pool } from "../core/database/pools.ts";
@@ -6,8 +7,7 @@ import { inspectIngestionTempOrphans } from "../images/ingestion/raw/orphan-scan
 import { ingestionOrphanCutoffs } from "../images/ingestion/cleanup/retention.ts";
 import { resolveStorageAccess } from "../storage/backends/registry.ts";
 import {
-  assertCanonicalImageObjectKey,
-  thumbnailRef
+  assertCanonicalImageObjectKey
 } from "../storage/objects/image-paths.ts";
 import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/objects/key-listing.ts";
 import {
@@ -22,7 +22,7 @@ import {
 } from "./storage-inventory.ts";
 
 const storageRowsQuery = `
-  SELECT id, ext, status, storage_slug, thumbnail_size
+  SELECT id, status, storage_slug
     FROM metadata`;
 
 export async function checkStorage(signal?: AbortSignal) {
@@ -31,10 +31,7 @@ export async function checkStorage(signal?: AbortSignal) {
     .rows as ImageStorageReferenceRow[];
   const groups = await storageBackendGroups();
   const missingObjects: Array<Record<string, unknown>> = [];
-  const missingThumbs: Array<Record<string, unknown>> = [];
-  const pendingThumbnailRepairs: Array<Record<string, unknown>> = [];
   const orphanObjects: Array<Record<string, unknown>> = [];
-  const orphanThumbs: Array<Record<string, unknown>> = [];
   const unavailableBackends: Array<Record<string, unknown>> = [];
   const activeBeforeEnumeration = await activeIngestionStorageReferences({ signal });
   const { referencesByBackend: referencesBeforeEnumeration } = activeBeforeEnumeration;
@@ -43,7 +40,7 @@ export async function checkStorage(signal?: AbortSignal) {
   const incompleteListings: Array<{
     backend: string;
     namespace: string;
-    prefix: "full" | "thumbs";
+    prefix: StoragePrefix;
     scanned: number;
     limit: number;
   }> = [];
@@ -92,11 +89,7 @@ export async function checkStorage(signal?: AbortSignal) {
     if (!captured) continue;
     const { group, backend } = captured;
     const namespace = storageBackendGroupName(group);
-    const { full, thumbs } = captured.snapshot;
-    const listings = [
-      ["full", full],
-      ["thumbs", thumbs]
-    ] as const;
+    const listings = STORAGE_PREFIXES.map((prefix) => [prefix, captured.snapshot[prefix]] as const);
     for (const [prefix, listing] of listings) {
       if (!listing.complete) {
         incompleteListings.push({
@@ -118,28 +111,28 @@ export async function checkStorage(signal?: AbortSignal) {
       (row) => aliases.has(row.storage_slug)
         && (row.status === "ready" || row.status === "deleted")
     );
-    const fullSet = new Set(full.keys);
-    const thumbSet = new Set(thumbs.keys);
+    const largeListing = captured.snapshot.large;
+    const largeSet = new Set(largeListing.keys);
     for (const row of retainedDuringEnumeration) {
-      assertCanonicalImageObjectKey(storageObjectKey(row.id, row.ext));
+      assertCanonicalImageObjectKey(storageObjectKey(row.id));
     }
     for (const slug of group.slugs) {
       const rowsForSlug = retainedDuringEnumeration.filter((row) => row.storage_slug === slug);
       const sample =
         rowsForSlug.find((row) => (
-          fullSet.has(storageObjectKey(row.id, row.ext))
+          largeSet.has(storageObjectKey(row.id))
         ))
           ?? rowsForSlug[0];
       if (!sample) continue;
       try {
         const access = await resolveStorageAccess(slug);
         const readable = await access.driver.exists(
-          "full",
-          storageObjectKey(sample.id, sample.ext),
+          "large",
+          storageObjectKey(sample.id),
           { signal }
         );
-        if (full.complete
-          && fullSet.has(storageObjectKey(sample.id, sample.ext))
+        if (largeListing.complete
+          && largeSet.has(storageObjectKey(sample.id))
           && !readable) {
           unavailableBackends.push({
             backend: slug,
@@ -158,63 +151,23 @@ export async function checkStorage(signal?: AbortSignal) {
         });
       }
     }
-    const referencedFullKeys = new Set(
-      retainedDuringEnumeration.map((row) => storageObjectKey(row.id, row.ext))
-    );
-    const referencedThumbKeys = new Set(
-      retainedDuringEnumeration.map((row) => thumbnailRef(row).key)
-    );
+    const referenced = new Map(STORAGE_PREFIXES.map((prefix) => [prefix,
+      new Set(retainedDuringEnumeration.map((row) => storageObjectKey(row.id)))
+    ]));
     const activeReferences = mergeActiveIngestionStorageReferences(
-      ...group.slugs.flatMap((slug) => [
-        referencesBeforeEnumeration.get(slug) ?? new Map(),
-        referencesAfterEnumeration.get(slug) ?? new Map()
-      ])
+      ...group.slugs.flatMap((slug) => [referencesBeforeEnumeration.get(slug) ?? new Map(), referencesAfterEnumeration.get(slug) ?? new Map()])
     );
     for (const ingestionReference of activeReferences.values()) {
-      for (const reference of ingestionFinalStorageReferences(ingestionReference)) {
-        if (reference.prefix === "full") referencedFullKeys.add(reference.key);
-        if (reference.prefix === "thumbs") referencedThumbKeys.add(reference.key);
-      }
+      for (const reference of ingestionFinalStorageReferences(ingestionReference)) referenced.get(reference.prefix)!.add(reference.key);
     }
-
-    for (const image of retainedBeforeEnumeration) {
-      if (full.complete && !fullSet.has(storageObjectKey(image.id, image.ext))) {
-        missingObjects.push({
-          id: image.id,
-          object_key: storageObjectKey(image.id, image.ext),
-          prefix: "full",
-          backend: image.storage_slug,
-          namespace
-        });
+    for (const [prefix, listing] of listings) {
+      const present = new Set(listing.keys);
+      for (const image of retainedBeforeEnumeration) {
+        const key = storageObjectKey(image.id);
+        if (listing.complete && !present.has(key)) missingObjects.push({ id: image.id, object_key: key, prefix, backend: image.storage_slug, namespace });
       }
-      const thumbKey = thumbnailRef(image).key;
-      if (thumbs.complete && !thumbSet.has(thumbKey)) {
-        missingThumbs.push({
-          id: image.id,
-          object_key: storageObjectKey(image.id, image.ext),
-          thumb_key: thumbKey,
-          backend: image.storage_slug,
-          namespace
-        });
-      } else if (thumbSet.has(thumbKey) && Number(image.thumbnail_size) <= 0) {
-        pendingThumbnailRepairs.push({
-          id: image.id,
-          object_key: storageObjectKey(image.id, image.ext),
-          thumb_key: thumbKey,
-          backend: image.storage_slug,
-          namespace,
-          reason: "缩略图尚未由数据库确认真实大小，需要重新校验并采用"
-        });
-      }
-    }
-    for (const key of full.keys) {
-      if (!referencedFullKeys.has(key)) {
-        orphanObjects.push({ prefix: "full", key, backend, namespace });
-      }
-    }
-    for (const key of thumbs.keys) {
-      if (!referencedThumbKeys.has(key)) {
-        orphanThumbs.push({ key, backend, namespace });
+      for (const key of listing.keys) {
+        if (!referenced.get(prefix)!.has(key)) orphanObjects.push({ prefix, key, backend, namespace });
       }
     }
   }
@@ -226,10 +179,7 @@ export async function checkStorage(signal?: AbortSignal) {
   });
   return {
     missing_objects: missingObjects,
-    missing_thumbs: missingThumbs,
-    pending_thumbnail_repairs: pendingThumbnailRepairs,
     orphan_objects: orphanObjects,
-    orphan_thumbs: orphanThumbs,
     stale_ingestion_raw_files: staleTemp.raw,
     stale_ingestion_part_files: staleTemp.part,
     stale_ingestion_prepared_files: staleTemp.prepared,

@@ -1,8 +1,8 @@
+import { defaultNormalizeProfile } from "./browser/image-variants.ts";
 import {
   adminImagePageLimit,
   altchaSolveTimeoutMs,
   brightnesses,
-  configBundleMaxBytes,
   devices,
   imageDescriptionMaxLength,
   imageTitleMaxLength,
@@ -37,11 +37,6 @@ export const appConfig = {
   },
 
   randomQuery: randomQueryLimits,
-
-  configBundle: {
-    maxBytes: configBundleMaxBytes,
-    maxStorageBackends: 100
-  },
 
   ingestion: {
     batchHardLimit: ingestionBatchHardLimit,
@@ -136,7 +131,7 @@ export const appConfig = {
     queueSliceMaxJobs: 50,
     queueSliceMaxMs: 2_000,
     drainTimeoutMs: 10_000,
-    shutdownHardExitMs: 45_000,
+    shutdownHardExitMs: 8_000,
 
     sampleLimit: 100
   },
@@ -173,7 +168,7 @@ export const appConfig = {
         order: "latest"
       },
       random_method: "redirect",
-      random_size: "full",
+      random_size: "medium",
       assets_base_url: "",
       robots_enabled: false,
       icp: "",
@@ -206,16 +201,7 @@ export const appConfig = {
       source_enabled: true,
       request_delay_seconds: [2, 5]
     },
-    normalize: {
-      concurrency: 2,
-      quality: 80,
-      quality_step: 5,
-      min_quality: 20,
-      max_long_edge: 4200,
-      max_size_kb: 500,
-      skip_webp_under_kb: 700
-    },
-    thumbnail: { long_edge: 512, quality: 75 },
+    normalize: { concurrency: 2, ...defaultNormalizeProfile() },
     admin: {
       login_background: "",
       image_page_size: adminImagePageLimit,

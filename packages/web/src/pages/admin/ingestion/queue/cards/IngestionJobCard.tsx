@@ -6,7 +6,7 @@ import {
   ingestionCardBrightnessSelectOptions,
   ingestionCardDeviceSelectOptions
 } from "../../../../../lib/ui/select-options.js";
-import { formatBytes } from "../../../../../lib/ui/formatters.js";
+import { formatBytes, shortImageId } from "../../../../../lib/ui/formatters.js";
 import type {
   FacetOption,
   ImageDraft,
@@ -38,15 +38,9 @@ function formatPixelDimensions(width?: number, height?: number) {
   return width && height ? `${width}×${height}` : "0000×0000";
 }
 
-function formatJobDimensions(job: IngestionJob, hasFinalSize: boolean) {
-  const finalDimensions = formatPixelDimensions(job.width, job.height);
-  const originalDimensions =
-    job.originalWidth && job.originalHeight
-      ? formatPixelDimensions(job.originalWidth, job.originalHeight)
-      : hasFinalSize
-        ? "—"
-        : formatPixelDimensions(job.width, job.height);
-  return `${originalDimensions} → ${hasFinalSize ? finalDimensions : formatPixelDimensions()}`;
+function variantSizeDetail(label: string, bytes: number, quality: number | null | undefined) {
+  const qualityText = quality === null ? "原样保留" : quality === undefined ? "" : String(quality);
+  return `${label}：${qualityText ? `${qualityText} · ` : ""}${formatBytes(bytes)}`;
 }
 
 type IngestionJobCardProps = {
@@ -101,7 +95,8 @@ export const IngestionJobCard = memo(function IngestionJobCard({
       && (job.duplicateCount ?? 0) > 0;
   const retryable = ingestionJobRetryKind(job) !== null;
   const statusLabel = ingestionJobStatusLabel(job);
-  const hasFinalSize = typeof job.finalSize === "number";
+  const variants = job.variants;
+  const hasFinalSize = variants !== undefined;
   const originalSize = job.originalSize ?? job.file?.size;
   const hasOriginalSize = typeof originalSize === "number";
   const displayName =
@@ -112,12 +107,24 @@ export const IngestionJobCard = memo(function IngestionJobCard({
     job.imageId ||
     job.id;
   const originalSizeText = hasOriginalSize ? formatBytes(originalSize) : "—";
-  const finalSizeText = hasFinalSize ? formatBytes(job.finalSize ?? 0) : "—";
-  const dimensionsText = formatJobDimensions(job, hasFinalSize);
-  const qualityText =
-    job.quality != null
-      ? String(job.quality)
-      : job.transcoded === false ? "跳过转码" : "";
+  const finalSizeText = variants
+    ? formatBytes(variants.large.byte_size + variants.medium.byte_size + variants.small.byte_size)
+    : "—";
+  const variantSizeDetails = variants
+    ? [
+        variantSizeDetail("大图", variants.large.byte_size, job.variantQuality?.large),
+        variantSizeDetail("中图", variants.medium.byte_size, job.variantQuality?.medium),
+        variantSizeDetail("小图", variants.small.byte_size, job.variantQuality?.small)
+      ].join("\n")
+    : undefined;
+  const dimensionsText = formatPixelDimensions(job.originalWidth, job.originalHeight);
+  const variantDimensionsDetails = variants
+    ? [
+        `大图：${formatPixelDimensions(variants.large.width, variants.large.height)}`,
+        `中图：${formatPixelDimensions(variants.medium.width, variants.medium.height)}`,
+        `小图：${formatPixelDimensions(variants.small.width, variants.small.height)}`
+      ].join("\n")
+    : undefined;
   const showsTransferProgress =
     ["uploading", "downloading"].includes(job.status)
       && typeof job.transferProgress === "number";
@@ -125,14 +132,9 @@ export const IngestionJobCard = memo(function IngestionJobCard({
   const transferProgressLabel = job.status === "downloading" ? "下载进度" : "上传进度";
   const statusDetailText = ingestionJobStatusDetail(job);
   const sourcePositionText = importPositionText(job);
-  const metaText = [sourcePositionText, storageDisplayName, dimensionsText, statusDetailText]
+  const metaPrefix = [sourcePositionText, storageDisplayName]
     .filter(Boolean)
     .join(" · ");
-  const sizeSummaryText = `${
-    hasFinalSize && !hasOriginalSize
-      ? finalSizeText
-      : `${originalSizeText} → ${finalSizeText}`
-  }${qualityText ? ` · ${qualityText}` : ""}`;
   const automaticClassificationLabel = ingestionAutomaticClassificationLabel(job);
   const previewSrc = job.preview;
   const openPreview: ((opener: HTMLElement) => void) | undefined = ingestionJobPreviewAvailable(job)
@@ -177,8 +179,8 @@ export const IngestionJobCard = memo(function IngestionJobCard({
         </div>
         <span className="ingestion-job-size is-vertical">
           <span>{originalSizeText}</span>
-          <small>{qualityText ? `↓ ${qualityText}` : "↓"}</small>
-          <span>{finalSizeText}</span>
+          <small>↓</small>
+          <span title={variantSizeDetails}>{finalSizeText}</span>
         </span>
       </div>
       <div className="ingestion-job-head">
@@ -186,10 +188,15 @@ export const IngestionJobCard = memo(function IngestionJobCard({
           <b className={`ingestion-status-label${confirmDuplicate ? " is-duplicate-pending" : ""}`}>
             【{statusLabel}】
           </b>
-          {displayName}
+          <span className={job.imageId ? "ingestion-job-title-full" : undefined}>{displayName}</span>
+          {job.imageId && <span className="ingestion-job-title-compact">{shortImageId(job.imageId)}</span>}
         </strong>
         <span className="ingestion-job-meta">
-          <span className="ingestion-job-meta-copy">{metaText}</span>
+          <span className="ingestion-job-meta-copy">
+            {metaPrefix && `${metaPrefix} · `}
+            <span title={variantDimensionsDetails}>{dimensionsText}</span>
+            {statusDetailText && ` · ${statusDetailText}`}
+          </span>
           {showsTransferProgress && (
             <output
               className="transfer-progress-value"
@@ -199,7 +206,10 @@ export const IngestionJobCard = memo(function IngestionJobCard({
             </output>
           )}
         </span>
-        <span className="ingestion-job-size-summary">{sizeSummaryText}</span>
+        <span className="ingestion-job-size-summary">
+          {(!hasFinalSize || hasOriginalSize) && `${originalSizeText} → `}
+          <span title={variantSizeDetails}>{finalSizeText}</span>
+        </span>
       </div>
       <div className="ingestion-job-actions">
         {retryable && (

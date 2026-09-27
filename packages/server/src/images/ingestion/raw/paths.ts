@@ -1,3 +1,4 @@
+import { imageVariants, type ImageVariant } from "@imageshow/shared/browser";
 import { join, normalize, sep } from "node:path";
 import { runtimePaths } from "../../../config/bootstrap-env.ts";
 import { ApiError } from "../../../core/api-error.ts";
@@ -7,7 +8,7 @@ const sessionIdPattern = /^[A-Za-z0-9_-]{43}$/u;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const rawNamePattern = /^([0-9a-f-]{36})\.raw$/iu;
 const partNamePattern = /^([0-9a-f-]{36})\.([0-9a-f-]{36})\.part$/iu;
-const preparedNamePattern = /^([0-9a-f-]{36})\.([0-9a-f-]{36})\.(image|thumb)\.webp(\.part)?$/iu;
+const preparedNamePattern = /^([0-9a-f-]{36})\.([0-9a-f-]{36})\.(large|medium|small)\.webp(\.part)?$/iu;
 
 function assertPathSegment(
   value: string,
@@ -98,7 +99,7 @@ export function ingestionPreparedFile(
     generation: string;
     execution_token: string;
   },
-  kind: "image" | "thumb"
+  kind: ImageVariant
 ) {
   return [
     assertPathSegment(input.session_id, sessionIdPattern, false),
@@ -120,15 +121,15 @@ export function ingestionPreparedPath(file: string) {
   return join(rawDirectory({ session_id: session, image_id: image }), name);
 }
 
-/** Reconstruct both file references from the frozen producer, never the current execution. */
+/** Reconstruct all file references from the frozen producer, never the current execution. */
 export function ingestionPreparedFiles(
   pair: IngestionSessionPair,
   prepared: Pick<IngestionPreparedManifest, "generation" | "producer_execution_token">
-): [string, string] {
+): string[] {
   const identity = {
     ...pair,
     generation: prepared.generation,
     execution_token: prepared.producer_execution_token
   };
-  return [ingestionPreparedFile(identity, "image"), ingestionPreparedFile(identity, "thumb")];
+  return imageVariants.map((variant) => ingestionPreparedFile(identity, variant));
 }

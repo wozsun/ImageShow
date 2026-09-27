@@ -1,3 +1,4 @@
+import { imageVariantUrl } from "@imageshow/shared/browser";
 import { Container, type Renderer } from "pixi.js";
 import type { ShowOrder } from "@imageshow/shared/browser";
 import { ShowDataPool, type ShowCandidateUsage } from "../show-data-pool.js";
@@ -308,7 +309,7 @@ export class ShowPixiWaterfallScene implements ShowPixiSceneController {
     const visibleItems: ShowPixiVisibleItem[] = [];
     const textureLods = this.#textureCache.fitResidentLods(
       desired.map((slot) => ({
-        url: slot.image.thumb_url,
+        url: imageVariantUrl(slot.image, "small"),
         lod: showPixiTextureLod(slot.image, slot.width * scale, slot.height / slot.width)
       }))
     );

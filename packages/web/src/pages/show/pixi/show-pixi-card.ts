@@ -1,3 +1,4 @@
+import { imageVariantUrl } from "@imageshow/shared/browser";
 import {
   Color,
   Container,
@@ -256,7 +257,7 @@ export class ShowPixiCard {
     textureLod?: ShowPixiTextureLod
   ) {
     const identityChanged = this.image?.id !== image.id || this.key !== key;
-    const resolvedTextureUrl = image.thumb_url;
+    const resolvedTextureUrl = imageVariantUrl(image, "small");
     const lod =
       textureLod ?? showPixiTextureLod(
         image,

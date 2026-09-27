@@ -118,8 +118,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     for (const [position, imageId] of imageIds.entries()) {
       await runtime.databasePools.pool.query(
-        `INSERT INTO metadata (id, created_by, status, storage_slug, device, brightness, theme, ext, md5, author, image_time, title)
-       VALUES ($1, 'integration-admin', 'ready', 'local', $2, $3, $4, 'webp', $5, $6, $7, $8)`,
+        `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,theme,author,image_time,title,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','ready','local',$2,$3,$4,$6,$7,$8,1,1,GREATEST(1,1),$5,1,1,GREATEST(1,1),$5,1,1,GREATEST(1,1),$5)`,
         [
           imageId,
           position === 1 ? "mb" : "pc",
@@ -143,7 +142,7 @@ await runIntegrationScenario(async (runtime) => {
       altcha: { enabled: false }
     });
     const displayed = await publicUrls.publicImageUrl(
-      { id: imageIds[2], ext: "webp" }, "local"
+      { id: imageIds[2]! }, "local", "large"
     );
     await runtime.databasePools.pool.query(
       "UPDATE metadata SET original=$2, source=$3 WHERE id=$1",
@@ -259,7 +258,7 @@ await runIntegrationScenario(async (runtime) => {
     assert.deepEqual(
       {
         id: databaseResources.id,
-        ext: databaseResources.ext,
+        ext: "webp",
         storage_slug: databaseResources.storage_slug
       },
       storedResource
@@ -364,7 +363,7 @@ await runIntegrationScenario(async (runtime) => {
     assert.deepEqual(
       {
         id: trashedResources.id,
-        ext: trashedResources.ext,
+        ext: "webp",
         storage_slug: trashedResources.storage_slug
       },
       storedResource
@@ -380,7 +379,7 @@ await runIntegrationScenario(async (runtime) => {
       deletedPage.items[0].original_url,
       databaseDetails[0].original_url
     );
-    assert.equal(deletedPage.items[0].object_url, databaseDetails[0].object_url);
+    assert.equal(deletedPage.items[0].base_url, databaseDetails[0].base_url);
     assert.equal((await detailRequest()).status, 404);
     await assertOriginalDenied();
     const trashedOriginal = await resourceRequest(`imageshow_session=${trashAdminId}`);

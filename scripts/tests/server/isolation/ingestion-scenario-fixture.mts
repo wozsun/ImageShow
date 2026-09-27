@@ -76,22 +76,47 @@ export async function createIngestionScenarioFixture(runtime: IntegrationRuntime
   const body = Buffer.from("queue-prepared-fixture");
   const preparedTemplate: IngestionPreparedManifest = {
     producer_execution_token: templateId,
-    prepared_image_sha256: createHash("sha256").update(body).digest("hex"),
-    prepared_thumbnail_sha256: createHash("sha256").update(body).digest("hex"),
     original_size: body.length,
     original_width: 1200,
     original_height: 800,
-    width: 1200,
-    height: 800,
-    ext: "webp",
-    md5: createHash("md5").update(body).digest("hex"),
-    size: body.length,
-    thumbnail_size: body.length,
-    quality: 90,
-    transcoded: true,
     detected_brightness: "dark",
     duplicate_count: 0,
-    generation: templateId
+    generation: templateId,
+    variants: {
+      large: {
+        width: 1200,
+        height: 800,
+        bytes: body.length,
+        md5: createHash("md5").update(body).digest("hex"),
+        sha256: createHash("sha256").update(body).digest("hex"),
+        quality: 80,
+        effort: 4,
+        passthrough: false,
+        over_target: false
+      },
+      medium: {
+        width: 1200,
+        height: 800,
+        bytes: body.length,
+        md5: createHash("md5").update(body).digest("hex"),
+        sha256: createHash("sha256").update(body).digest("hex"),
+        quality: 80,
+        effort: 4,
+        passthrough: false,
+        over_target: false
+      },
+      small: {
+        width: 1200,
+        height: 800,
+        bytes: body.length,
+        md5: createHash("md5").update(body).digest("hex"),
+        sha256: createHash("sha256").update(body).digest("hex"),
+        quality: 80,
+        effort: 4,
+        passthrough: false,
+        over_target: false
+      }
+    }
   };
   const transitions =
     await import("../../../../packages/server/src/images/ingestion/sessions/transitions.ts");

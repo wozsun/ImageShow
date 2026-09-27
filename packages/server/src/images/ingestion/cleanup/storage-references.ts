@@ -18,7 +18,7 @@ export type ActiveIngestionStorageReference = {
   queue: "upload" | "import";
   status: string;
   storage_slug: string;
-  commit_ext: string | null;
+  committing: boolean;
   raw_generation: string;
   prepared: Pick<IngestionPreparedManifest, "generation" | "producer_execution_token"> | null;
   discard_at: number;
@@ -38,7 +38,7 @@ function activeStorageReference(
     queue: active.queue,
     status: active.status,
     storage_slug: active.storage_slug,
-    commit_ext: active.commit ? prepared!.ext : null,
+    committing: Boolean(active.commit),
     raw_generation: active.raw_generation,
     prepared: prepared
       ? {
@@ -58,7 +58,7 @@ function storageProjection(session: StoredIngestionSession) {
     active.image_id,
     active.queue,
     active.storage_slug,
-    active.commit_ext ?? "",
+    active.committing ? "1" : "0",
     active.raw_generation,
     active.prepared?.generation ?? "",
     active.prepared?.producer_execution_token ?? ""

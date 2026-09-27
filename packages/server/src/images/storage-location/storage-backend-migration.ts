@@ -1,3 +1,4 @@
+import { imageVariantColumns } from "../variants/record.ts";
 import { storageObjectKey } from "@imageshow/shared/browser";
 import type { StorageBackendMigrationErrorSampleDto } from "@imageshow/shared/browser";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
@@ -61,8 +62,7 @@ async function readStorageBackendImageMigrationRows(
 ) {
   return (
     await pool.query(
-      `SELECT id, ext, storage_slug, md5,
-            image_size, thumbnail_size
+      `SELECT id, storage_slug, ${imageVariantColumns}
        FROM metadata
       WHERE storage_slug=$1
         AND id <= $2::uuid
@@ -83,8 +83,7 @@ async function* streamStorageBackendImageMigrationRows(
     signal?.throwIfAborted();
     const rows = (
       await pool.query(
-        `SELECT id, ext, storage_slug, md5,
-              image_size, thumbnail_size
+        `SELECT id, storage_slug, ${imageVariantColumns}
          FROM metadata
         WHERE storage_slug=$1
           AND ($2::uuid IS NULL OR id > $2::uuid)
@@ -143,7 +142,7 @@ async function migrateBackendImages(
         status: "missing",
         error: {
           id: image.id,
-          object_key: storageObjectKey(image.id, image.ext),
+          object_key: storageObjectKey(image.id),
           code: "source_object_missing",
           message: "源存储对象不存在"
         }
@@ -154,7 +153,7 @@ async function migrateBackendImages(
         status: "failed",
         error: {
           id: image.id,
-          object_key: storageObjectKey(image.id, image.ext),
+          object_key: storageObjectKey(image.id),
           code: error instanceof ApiError
             ? error.code
             : "storage_migration_failed",

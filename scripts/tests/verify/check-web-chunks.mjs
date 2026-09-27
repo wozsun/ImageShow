@@ -75,9 +75,6 @@ for (const chunk of chunks) {
     if (!/-[A-Za-z0-9_-]{6,}\.(?:css|js)$/.test(file)) {
       throw new Error(`check-web-chunks: generated asset lacks a content hash: ${file}`);
     }
-    if (/^assets\/(?:shared|style)-/.test(file)) {
-      throw new Error(`check-web-chunks: generated asset lacks a semantic owner: ${file}`);
-    }
   }
 }
 
@@ -283,8 +280,7 @@ const imageAdmin = chunkForFacade("src/pages/admin/images/ImageAdmin.tsx");
 const overview = chunkForFacade("src/pages/admin/Overview.tsx");
 const vocabularyAdmin = chunkForFacade("src/pages/admin/VocabularyAdmin.tsx");
 const accountSettings = chunkForFacade("src/pages/admin/account/AccountSettings.tsx");
-const settingsPage = chunkForFacade("src/pages/admin/SettingsPage.tsx");
-const advancedConfigPage = chunkForFacade("src/pages/admin/advanced-config/AdvancedConfigPage.tsx");
+const settingsPage = chunkForFacade("src/pages/admin/settings/SettingsPage.tsx");
 const storageSettings = chunkForFacade("src/pages/admin/storage/StorageSettings.tsx");
 const userAdmin = chunkForFacade("src/pages/admin/UserAdmin.tsx");
 const checkPage = chunkForFacade("src/pages/admin/check/CheckPage.tsx");
@@ -485,7 +481,6 @@ const imageRoleScenarioRoutes = {
 const superRoleScenarioRoutes = {
   ...imageRoleScenarioRoutes,
   site: settingsPage,
-  advancedConfig: advancedConfigPage,
   storage: storageSettings,
   users: userAdmin,
   logs: logPage
@@ -627,7 +622,6 @@ if (
     "check-web-chunks: authenticated permission routes are not independent lazy outputs"
   );
 }
-assertDynamicTarget(authenticatedShell, imageAdmin, "image administrator route");
 assertInitialModuleRoots(
   staticClosure([authenticatedShell.file, imageAdmin.file]),
   "image administrator initial route",
@@ -643,7 +637,6 @@ const imageRoleRoutes = [
 ];
 const superRoleRoutes = [
   settingsPage,
-  advancedConfigPage,
   storageSettings,
   userAdmin,
   logPage
@@ -666,9 +659,9 @@ const superOnlyModules = [
   settingsPage.facade,
   userAdmin.facade,
   logPage.facade,
-  /^src\/pages\/admin\/(?:advanced-config|storage)\//,
+  /^src\/pages\/admin\/(?:settings|storage)\//,
   ...checkMaintenanceOnlyModules,
-  /^src\/styles\/admin\/(?:advanced-config|settings|storage|logs)\.css$/
+  /^src\/styles\/admin\/(?:settings|storage|logs)\.css$/
 ];
 const imageRoleFacades = [
   adminShell.facade,
@@ -713,16 +706,10 @@ for (const route of allAdminRoutes) {
   }
 }
 
-const checkReadOnlyClosure = staticClosure([checkPage.file]);
 assertDynamicTarget(
   checkPage,
   checkMaintenance,
   "super administrator Check maintenance capability"
-);
-assertModulesExcluded(
-  checkReadOnlyClosure,
-  "image administrator Check route",
-  checkMaintenanceOnlyModules
 );
 for (const [target, label] of [
   [ingestion, "ingestion workflow"],

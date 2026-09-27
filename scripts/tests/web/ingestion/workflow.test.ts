@@ -69,7 +69,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
   const windowDuplicateMd5 = "e".repeat(32);
   const windowDuplicateItem = adminImageListItem({
     id: "00000000-0000-7034-8000-00000000008e",
-    md5: windowDuplicateMd5
+    large_md5: windowDuplicateMd5
   });
   const fetchStub = async (input: RequestInfo | URL) => {
     const path = new URL(String(input), "https://imageshow.test").pathname;
@@ -920,8 +920,8 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
           imageId: "00000000-0000-7031-8000-00000000008e",
           serverAccepted: true,
           status: "received",
-          preview: "https://img.example/images/thumbs/new-incarnation.webp",
-          previewFull: "https://img.example/images/full/new-incarnation.webp"
+          preview: "https://img.example/images/small/new-incarnation.webp",
+          previewFull: "https://img.example/images/large/new-incarnation.webp"
         })
       ]);
       await Promise.resolve();
@@ -985,7 +985,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       sessionId: focusSessionId,
       imageId: focusImageId,
       serverAccepted: true,
-      preview: "https://img.example/images/thumbs/first-bound-focus.webp"
+      preview: "https://img.example/images/small/first-bound-focus.webp"
     });
     await React.act(async () => {
       setHarnessJobs?.([firstBoundFocus]);
@@ -1020,7 +1020,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
       imageId: focusImageId,
       serverAccepted: true,
       status: "ready",
-      preview: "https://img.example/images/thumbs/event-first-focus.webp"
+      preview: "https://img.example/images/small/event-first-focus.webp"
     });
     await React.act(async () => {
       setHarnessJobs?.([eventFirstCanonical]);

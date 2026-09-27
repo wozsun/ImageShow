@@ -70,8 +70,8 @@ export async function fetchPublicImageCardPage(
   const columns = [
     "id",
     "title",
-    "width",
-    "height",
+    "s_width AS width",
+    "s_height AS height",
     "storage_slug",
     "image_time::text AS cursor_image_time",
     ...(view === "gallery" ? [

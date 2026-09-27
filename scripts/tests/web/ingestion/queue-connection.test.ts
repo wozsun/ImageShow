@@ -5467,8 +5467,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
                           original_width: 1600,
                           original_height: 900,
                           original_size: 1,
-                          quality: 80,
-                          transcoded: false
+                          variant_quality: { large: 80, medium: 75, small: 70 }
                         },
                         completed_item: adminImageListItem({
                           id: completedImageId,
@@ -5571,8 +5570,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
                     original_width: 1600,
                     original_height: 900,
                     original_size: 1,
-                    quality: 80,
-                    transcoded: false
+                    variant_quality: { large: 80, medium: 75, small: 70 }
                   },
                   redis_status: "completed",
                   redis_version: 6,
@@ -5657,8 +5655,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
                   original_width: 1600,
                   original_height: 900,
                   original_size: 1,
-                  quality: 80,
-                  transcoded: false
+                  variant_quality: { large: 80, medium: 75, small: 70 }
                 },
                 completed_item: adminImageListItem({ id: completedImageId })
               })),

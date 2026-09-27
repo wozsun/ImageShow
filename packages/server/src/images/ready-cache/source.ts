@@ -15,7 +15,6 @@ export type ReadyImageSourceSnapshot = {
 };
 
 export const readyImageSourceColumns = `m.id::text AS id,
-  m.ext,
   m.device,
   m.brightness,
   m.theme,
@@ -26,15 +25,23 @@ export const readyImageSourceColumns = `m.id::text AS id,
       FROM image_tag it
      WHERE it.image_id=m.id
   ), '{}'::text[]) AS tags,
-  m.width,
-  m.height,
-  m.image_size,
+  m.l_width,
+  m.l_height,
+  m.l_byte_size,
+  m.m_width,
+  m.m_height,
+  m.m_byte_size,
+  m.s_width,
+  m.s_height,
+  m.s_byte_size,
+  m.l_md5,
+  m.m_md5,
+  m.s_md5,
   (extract(epoch FROM m.image_time) * 1000000)::bigint::text AS sort_score,
   m.title,
   m.description,
   m.source,
   m.original,
-  m.md5,
   to_char(
     m.created_at AT TIME ZONE 'UTC',
     'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'

@@ -531,10 +531,10 @@ test("[Web/内容接入] 异步提交仅发送冻结意图并由 pair 状态完�
     });
     assert.equal(hydrated?.status, "done");
     assert.equal(hydrated?.resultState, "hydrated");
-    assert.equal(hydrated?.md5, completedItem.md5);
-    assert.equal(hydrated?.width, completedItem.width);
-    assert.equal(hydrated?.height, completedItem.height);
-    assert.equal(hydrated?.finalSize, completedItem.image_size);
+    assert.equal(hydrated?.md5, completedItem.large_md5);
+    assert.equal(hydrated?.width, completedItem.variants.large.width);
+    assert.equal(hydrated?.height, completedItem.variants.large.height);
+    assert.deepEqual(hydrated?.variants, completedItem.variants);
 
     const lostResponseReady = ingestionJob({
       id: "commit-response-lost",

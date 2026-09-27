@@ -86,7 +86,7 @@ test("[Web/内容接入] 重复详情请求单飞执行并及时合并到最新�
     const libraryItems = md5s.map((md5) =>
       adminImageListItem({
         id: webUuidV7(),
-        md5
+        large_md5: md5
       })
     );
     const responseFor = (indexes: readonly number[]) =>
@@ -227,7 +227,7 @@ test("[Web/内容接入] 新完成图片按 MD5 精确刷新仍在展示的重�
   );
   const React = await import("react");
   const md5 = "e".repeat(32);
-  const completedItem = adminImageListItem({ id: webUuidV7(), md5 });
+  const completedItem = adminImageListItem({ id: webUuidV7(), large_md5: md5 });
   let fetchCalls = 0;
   const observedCounts: number[] = [];
   const fetchStub = async (input: unknown) => {
@@ -428,7 +428,7 @@ test("[Web/内容接入] 重复归零 CAS 失败保留可操作卡片并允许�
     const { createRoot } = await import("react-dom/client");
     const { useIngestionDuplicateDetails } =
       await import("../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionDuplicateDetails.ts");
-    const duplicate = adminImageListItem({ id: webUuidV7(), md5 });
+    const duplicate = adminImageListItem({ id: webUuidV7(), large_md5: md5 });
     const jobs = [
       ingestionJob({
         id: "duplicate-zero-cas",

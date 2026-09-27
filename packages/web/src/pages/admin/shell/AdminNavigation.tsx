@@ -113,13 +113,6 @@ const adminNavigationModel = {
         },
         {
           kind: "link",
-          to: `${adminBasePath}/advanced-config`,
-          icon: "settings-3-line",
-          label: "高级配置",
-          routeModule: "advancedConfig"
-        },
-        {
-          kind: "link",
           to: `${adminBasePath}/storage`,
           icon: "hard-drive-2-line",
           label: "存储管理",

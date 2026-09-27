@@ -101,8 +101,7 @@ await runIntegrationScenario(async (runtime) => {
         );
         assert.deepEqual(getPublicPgFallbackAdmissionSnapshot(), { active: 0, queued: 0 });
         await pool.query(
-          `INSERT INTO metadata(id, created_by, status, storage_slug, device, brightness, ext, md5)
-       VALUES ('00000000-0000-7000-8000-0000000000aa', 'integration-admin', 'ready', 'local', 'pc', 'dark', 'webp', $1)`,
+          `INSERT INTO metadata (id,created_by,status,storage_slug,device,brightness,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ('00000000-0000-7000-8000-0000000000aa','integration-admin','ready','local','pc','dark',1,1,GREATEST(1,1),$1,1,1,GREATEST(1,1),$1,1,1,GREATEST(1,1),$1)`,
           ["a".repeat(32)]
         );
         const beforeFilteredReads = checkouts;

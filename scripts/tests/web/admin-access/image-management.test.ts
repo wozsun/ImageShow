@@ -46,10 +46,12 @@ test("[Web/后台访问] 概览渲染当前、历史与未知 Redis 占用且重
     total: 7,
     local: 7,
     nonlocal: 0,
-    local_image_size: 1_024,
-    local_thumb_size: 256,
-    nonlocal_image_size: 0,
-    nonlocal_thumb_size: 0,
+    local_large_bytes: 1_024,
+    local_medium_bytes: 512,
+    nonlocal_medium_bytes: 0,
+    local_small_bytes: 256,
+    nonlocal_large_bytes: 0,
+    nonlocal_small_bytes: 0,
     theme_count: 1,
     backend_count: 1,
     pc: 7,
@@ -440,8 +442,6 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
       title: "原图入口真值表",
       description: "",
       source: null,
-      object_url: "https://img.example.com/images/full/544.webp",
-      thumb_url: "",
       device: "pc",
       brightness: "dark",
       theme: "night",
@@ -450,7 +450,25 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
       width: 1600,
       height: 900,
       original_url: originalUrl,
-      image_time: "2026-09-01T00:00:00.000Z"
+      image_time: "2026-09-01T00:00:00.000Z",
+      base_url: "/images",
+      variants: {
+        large: {
+          width: 1600,
+          height: 900,
+          byte_size: 1024
+        },
+        medium: {
+          width: 1200,
+          height: 675,
+          byte_size: 800
+        },
+        small: {
+          width: 600,
+          height: 338,
+          byte_size: 200
+        }
+      }
     });
     type AuthScenario = "pending" | "expired" | "guest" | "image" | "super";
     type OriginalActionSnapshot = Readonly<{
@@ -470,7 +488,6 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
       originalUrl = "https://img.example.com/images/original/00000000-0000-7000-8000-000000000544",
       sourceUrl = null,
       admin = false,
-      objectUrl,
       detailLoading = false,
       detailError = ""
     }: {
@@ -478,7 +495,6 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
       originalUrl?: string | null;
       sourceUrl?: string | null;
       admin?: boolean;
-      objectUrl?: string;
       detailLoading?: boolean;
       detailError?: string;
     }): Promise<OriginalActionSnapshot> => {
@@ -557,8 +573,7 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
                     : React.createElement(ImageDetailModal, {
                         item: {
                           ...publicItem(originalUrl),
-                          source: sourceUrl,
-                          ...(objectUrl === undefined ? {} : { object_url: objectUrl })
+                          source: sourceUrl
                         },
                         admin: false,
                         detailLoading,
@@ -607,17 +622,17 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
     };
 
     for (const state of [
-      { objectUrl: "", detailLoading: true },
-      { objectUrl: "", detailError: "详情加载失败" },
-      { objectUrl: "  " }
+      { detailLoading: true },
+      { detailError: "详情加载失败" },
+      {}
     ]) {
       const pendingTitle = await renderScenario({ auth: "guest", ...state });
       assert.equal(pendingTitle.titleText, "原图入口真值表");
-      assert.equal(pendingTitle.titleHref, null, "占位标题不得生成当前页空链接");
-      assert.equal(pendingTitle.titleFocusable, false, "无直链标题不占用 Tab 焦点");
+      assert.equal(pendingTitle.titleHref, "/images/large/44/00000000-0000-7000-8000-000000000544.webp", "卡片地址可直接打开大图，详情加载不阻塞标题链接");
+      assert.equal(pendingTitle.titleFocusable, true);
     }
     const loadedTitle = await renderScenario({ auth: "guest" });
-    assert.equal(loadedTitle.titleHref, "https://img.example.com/images/full/544.webp");
+    assert.equal(loadedTitle.titleHref, "/images/large/44/00000000-0000-7000-8000-000000000544.webp");
     assert.equal(loadedTitle.titleFocusable, true);
 
     for (const auth of ["pending", "expired", "guest"] as const) {

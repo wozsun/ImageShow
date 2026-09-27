@@ -25,7 +25,6 @@ await runIntegrationScenario(async (runtime) => {
     ...(await import("../../../../packages/server/src/core/database/advisory-locks.ts"))
   };
   const registry = await import("../../../../packages/server/src/storage/backends/registry.ts");
-  const imagePaths = await import("../../../../packages/server/src/storage/objects/image-paths.ts");
   const storageMigration =
     await import("../../../../packages/server/src/images/storage-location/image-migration.ts");
   const storageMigrationAdmission =
@@ -54,11 +53,10 @@ await runIntegrationScenario(async (runtime) => {
     body: Buffer | null,
     md5?: string
   ) => {
-    const key = storageObjectKey(id, "webp");
+    const key = storageObjectKey(id);
 
     await database.pool.query(
-      `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size, status, deleted_at)
-       VALUES ($1, 'integration-admin', $2, 'pc', 'dark', NULL, 'webp', $3, $4, $4, 'deleted', now())`,
+      `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
       [
         id,
         storageSlug,
@@ -70,10 +68,11 @@ await runIntegrationScenario(async (runtime) => {
       ]
     );
     if (body) {
-      await localAccess.driver.writeBuffer("full", key, body, "image/webp");
+      await localAccess.driver.writeBuffer("large", key, body, "image/webp");
+      await localAccess.driver.writeBuffer("medium", key, body, "image/webp");
       await localAccess.driver.writeBuffer(
-        "thumbs",
-        imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(key)!.id),
+        "small",
+        key,
         body,
         "image/webp"
       );
@@ -143,14 +142,13 @@ await runIntegrationScenario(async (runtime) => {
     ).rows[0]?.storage_slug,
     "local-migration"
   );
-  assert.equal(await localAccess.driver.exists("full", migratedKey), true);
+  assert.equal(await localAccess.driver.exists("large", migratedKey), true);
 
   const thumbnailMissingMigrationId = randomUUID();
-  const thumbnailMissingMigrationKey = storageObjectKey(thumbnailMissingMigrationId, "webp");
+  const thumbnailMissingMigrationKey = storageObjectKey(thumbnailMissingMigrationId);
   const thumbnailMissingMigrationBody = Buffer.from("migration-without-thumbnail");
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size)
-       VALUES ($1, 'integration-admin', 'local', 'pc', 'dark', NULL, 'webp', $2, $3, 0)`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin','local','pc','dark',NULL,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,$3),$2,1,1,GREATEST(1,0),$2)`,
     [
       thumbnailMissingMigrationId,
       createHash("md5").update(thumbnailMissingMigrationBody).digest("hex"),
@@ -158,7 +156,7 @@ await runIntegrationScenario(async (runtime) => {
     ]
   );
   await localAccess.driver.writeBuffer(
-    "full",
+    "large",
     thumbnailMissingMigrationKey,
     thumbnailMissingMigrationBody,
     "image/webp"
@@ -172,8 +170,8 @@ await runIntegrationScenario(async (runtime) => {
     {
       id: thumbnailMissingMigrationId,
       status: "failed",
-      code: "storage_thumbnail_missing",
-      message: "图片当前位置的缩略图不存在，请先在检查页运行“存储维护”"
+      code: "source_missing",
+      message: "Image storage source is missing"
     }
   ]);
   assert.equal(
@@ -188,7 +186,7 @@ await runIntegrationScenario(async (runtime) => {
     "DELETE FROM metadata WHERE id=$1",
     [thumbnailMissingMigrationId]
   );
-  await removeDriverObject(localAccess.driver, "full", thumbnailMissingMigrationKey);
+  await removeDriverObject(localAccess.driver, "large", thumbnailMissingMigrationKey);
 
   const backendErrorIds = {
     missing: randomUUID(),
@@ -207,8 +205,8 @@ await runIntegrationScenario(async (runtime) => {
   );
   await removeDriverObject(
     localAccess.driver,
-    "thumbs",
-    imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(backendKnownErrorKey)!.id)
+    "small",
+    backendKnownErrorKey
   );
   const backendUnknownErrorKey = await addMigrationImage(
     backendErrorIds.unknown,
@@ -217,7 +215,7 @@ await runIntegrationScenario(async (runtime) => {
   );
   const originalBackendErrorOpenRead = localAccess.driver.openRead;
   localAccess.driver.openRead = async function (...args) {
-    if (args[0] === "full" && args[1] === backendUnknownErrorKey) {
+    if (args[0] === "large" && args[1] === backendUnknownErrorKey) {
       throw new Error("injected backend migration driver failure");
     }
     return originalBackendErrorOpenRead.apply(this, args);
@@ -234,7 +232,7 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(backendMigrationReport.migration.source, "local-migration");
   assert.equal(backendMigrationReport.migration.target, "local");
   assert.equal(backendMigrationReport.migration.migrated, 2);
-  assert.equal(backendMigrationReport.migration.missing, 1);
+  assert.equal(backendMigrationReport.migration.missing, 2);
   assert.equal(backendMigrationReport.migration.error_count, 3);
   assert.equal(backendMigrationReport.migration.error_samples.length, 3);
   assert.ok(
@@ -251,7 +249,7 @@ await runIntegrationScenario(async (runtime) => {
     ),
     {
       [backendErrorIds.missing]: "source_object_missing",
-      [backendErrorIds.known]: "storage_thumbnail_missing",
+      [backendErrorIds.known]: "source_object_missing",
       [backendErrorIds.unknown]: "storage_migration_failed"
     }
   );
@@ -268,11 +266,11 @@ await runIntegrationScenario(async (runtime) => {
     backendErrorFixtureIds
   ]);
   for (const key of [backendKnownErrorKey, backendUnknownErrorKey]) {
-    await removeDriverObject(localAccess.driver, "full", key);
+    await removeDriverObject(localAccess.driver, "large", key);
     await removeDriverObject(
       localAccess.driver,
-      "thumbs",
-      imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(key)!.id)
+      "small",
+      key
     );
   }
 
@@ -304,10 +302,10 @@ await runIntegrationScenario(async (runtime) => {
   const originalExistingTargetExists = existingTargetAccess.driver.exists;
   const originalExistingTargetOpenRead = existingTargetAccess.driver.openRead;
   const existingTargetIds = [randomUUID(), randomUUID()];
-  const existingTargetKeys = new Set(existingTargetIds.map((id) => storageObjectKey(id, "webp")));
+  const existingTargetKeys = new Set(existingTargetIds.map((id) => storageObjectKey(id)));
   let existingTargetDigestReads = 0;
   missingSourceAccess.driver.openRead = async function (prefix, key, ...rest) {
-    if (prefix === "full" && existingTargetKeys.has(key)) {
+    if (prefix === "large" && existingTargetKeys.has(key)) {
       throw new apiError.ApiError(
         404,
         "storage_object_not_found",
@@ -317,11 +315,11 @@ await runIntegrationScenario(async (runtime) => {
     return originalMissingSourceOpenRead.call(this, prefix, key, ...rest);
   };
   existingTargetAccess.driver.exists = async function (prefix, key, ...rest) {
-    if (prefix === "full" && existingTargetKeys.has(key)) return true;
+    if (prefix === "large" && existingTargetKeys.has(key)) return true;
     return originalExistingTargetExists.call(this, prefix, key, ...rest);
   };
   existingTargetAccess.driver.openRead = async function (prefix, key, ...rest) {
-    if (prefix === "full" && existingTargetKeys.has(key)) {
+    if (prefix === "large" && existingTargetKeys.has(key)) {
       existingTargetDigestReads += 1;
       throw new Error("existing target must remain unread when source is missing");
     }
@@ -331,8 +329,7 @@ await runIntegrationScenario(async (runtime) => {
     for (const [index, id] of existingTargetIds.entries()) {
       const expectedBody = "existing-target-" + index;
       await database.pool.query(
-        `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size, status, deleted_at)
-       VALUES ($1, 'integration-admin', $2, 'pc', 'dark', NULL, 'webp', $3, $4, $4, 'deleted', now())`,
+        `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
         [
           id,
           existingTargetSource,
@@ -344,7 +341,7 @@ await runIntegrationScenario(async (runtime) => {
 
     const existingTargetSourceRecord = (
       await database.pool.query(
-        "SELECT id, ext, storage_slug, md5, image_size, thumbnail_size " +
+        "SELECT * " +
           "FROM metadata WHERE id=$1",
         [existingTargetIds[0]]
       )
@@ -462,12 +459,11 @@ await runIntegrationScenario(async (runtime) => {
     }
   };
   const addAbortMigrationImage = async (id: string, storageSlug: string) => {
-    const key = storageObjectKey(id, "webp");
+    const key = storageObjectKey(id);
 
     const body = Buffer.from("migration-abort-" + storageSlug + "-" + id);
     await database.pool.query(
-      `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, image_size, thumbnail_size, status, deleted_at)
-       VALUES ($1, 'integration-admin', $2, 'pc', 'dark', NULL, 'webp', $3, $4, $4, 'deleted', now())`,
+      `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,deleted_at,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'integration-admin',$2,'pc','dark',NULL,'deleted',now(),1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3,1,1,GREATEST(1,$4),$3)`,
       [
         id,
         storageSlug,
@@ -475,10 +471,11 @@ await runIntegrationScenario(async (runtime) => {
         body.byteLength
       ]
     );
-    await localAccess.driver.writeBuffer("full", key, body, "image/webp");
+    await localAccess.driver.writeBuffer("large", key, body, "image/webp");
+    await localAccess.driver.writeBuffer("medium", key, body, "image/webp");
     await localAccess.driver.writeBuffer(
-      "thumbs",
-      imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(key)!.id),
+      "small",
+      key,
       body,
       "image/webp"
     );
@@ -486,11 +483,11 @@ await runIntegrationScenario(async (runtime) => {
   };
   const removeAbortMigrationImages = async (fixtures: Array<{ id: string; key: string }>) => {
     for (const fixture of fixtures) {
-      await removeDriverObject(localAccess.driver, "full", fixture.key);
+      await removeDriverObject(localAccess.driver, "large", fixture.key);
       await removeDriverObject(
         localAccess.driver,
-        "thumbs",
-        imagePaths.thumbnailObjectKey(imagePaths.parseImageObjectKey(fixture.key)!.id)
+        "small",
+        fixture.key
       );
     }
     await database.pool.query("DELETE FROM background_job WHERE target_id=ANY($1::text[])", [
@@ -522,7 +519,7 @@ await runIntegrationScenario(async (runtime) => {
     listAbortFixtures.length
   );
   localAccess.driver.openRead = async function (...args) {
-    if (args[0] === "full" && listAbortKeys.has(args[1])) {
+    if (args[0] === "large" && listAbortKeys.has(args[1])) {
       listAbortReadCount += 1;
       if (listAbortReadCount === expectedListAbortReads) {
         markListAbortReadsStarted();
@@ -595,7 +592,7 @@ await runIntegrationScenario(async (runtime) => {
     markBackendAbortReadStarted = resolve;
   });
   localAccess.driver.openRead = async function (...args) {
-    if (args[0] === "full" && backendAbortKeys.has(args[1])) {
+    if (args[0] === "large" && backendAbortKeys.has(args[1])) {
       backendAbortReadCount += 1;
       markBackendAbortReadStarted();
       await backendAbortReadGate;
@@ -672,11 +669,10 @@ await runIntegrationScenario(async (runtime) => {
             storageMigration.migrateImageToStorageBackend(
               {
                 id: responseLossId,
-                ext: "webp",
                 storage_slug: "local",
-                md5: createHash("md5").update(responseLossBody).digest("hex"),
-                image_size: responseLossBody.byteLength,
-                thumbnail_size: responseLossBody.byteLength
+                l_width:1, l_height:1, l_byte_size:responseLossBody.byteLength, l_md5:createHash("md5").update(responseLossBody).digest("hex"),
+                m_width:1, m_height:1, m_byte_size:responseLossBody.byteLength, m_md5:createHash("md5").update(responseLossBody).digest("hex"),
+                s_width:1, s_height:1, s_byte_size:responseLossBody.byteLength, s_md5:createHash("md5").update(responseLossBody).digest("hex")
               },
               "local-migration"
             ),

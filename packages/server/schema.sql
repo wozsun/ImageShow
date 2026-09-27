@@ -91,21 +91,27 @@ CREATE TABLE metadata (
   brightness TEXT NOT NULL,
   theme TEXT,
   author TEXT,
-  ext TEXT NOT NULL,
-  md5 TEXT NOT NULL,
-  width INTEGER NOT NULL DEFAULT 0,
-  height INTEGER NOT NULL DEFAULT 0,
-  image_size BIGINT NOT NULL DEFAULT 0,
-  thumbnail_size BIGINT NOT NULL DEFAULT 0,
+  l_width INTEGER NOT NULL CHECK (l_width > 0),
+  l_height INTEGER NOT NULL CHECK (l_height > 0),
+  l_byte_size BIGINT NOT NULL CHECK (l_byte_size > 0),
+  l_md5 TEXT NOT NULL CHECK (l_md5 ~ '^[a-f0-9]{32}$'),
+  m_width INTEGER NOT NULL CHECK (m_width > 0),
+  m_height INTEGER NOT NULL CHECK (m_height > 0),
+  m_byte_size BIGINT NOT NULL CHECK (m_byte_size > 0),
+  m_md5 TEXT NOT NULL CHECK (m_md5 ~ '^[a-f0-9]{32}$'),
+  s_width INTEGER NOT NULL CHECK (s_width > 0),
+  s_height INTEGER NOT NULL CHECK (s_height > 0),
+  s_byte_size BIGINT NOT NULL CHECK (s_byte_size > 0),
+  s_md5 TEXT NOT NULL CHECK (s_md5 ~ '^[a-f0-9]{32}$'),
   title TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',
   source TEXT NOT NULL DEFAULT '',
   original TEXT NOT NULL DEFAULT '',
   image_time TIMESTAMPTZ NOT NULL DEFAULT now(),
-  deleted_at TIMESTAMPTZ,
   created_by TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at TIMESTAMPTZ,
   CHECK (status IN ('ready', 'deleted')),
   CHECK (device IN ('pc', 'mb')),
   CHECK (brightness IN ('dark', 'light')),
@@ -115,12 +121,6 @@ CREATE TABLE metadata (
   CHECK (author <> ''),
   CHECK (length(author) <= 32),
   CHECK (author ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'),
-  CHECK (ext IN ('jpg', 'png', 'webp', 'gif', 'avif')),
-  CHECK (md5 ~ '^[a-f0-9]{32}$'),
-  CHECK (width >= 0),
-  CHECK (height >= 0),
-  CHECK (image_size >= 0),
-  CHECK (thumbnail_size >= 0),
   CHECK (length(source) <= 2048),
   CHECK (source = '' OR source ~* '^https://'),
   CHECK (length(original) <= 2048),
@@ -135,8 +135,8 @@ CREATE INDEX idx_metadata_storage_slug ON metadata(storage_slug);
 CREATE INDEX idx_metadata_theme ON metadata(theme);
 CREATE INDEX idx_metadata_author ON metadata(author);
 
-CREATE INDEX idx_metadata_md5
-ON metadata(md5);
+CREATE INDEX idx_metadata_l_md5
+ON metadata(l_md5);
 
 -- State and gallery cursor reads
 CREATE INDEX idx_metadata_status_deleted

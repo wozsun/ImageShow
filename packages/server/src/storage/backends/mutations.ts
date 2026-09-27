@@ -7,8 +7,7 @@ import {
 } from "../../core/database/transactions.ts";
 import type {
   S3StorageConfig,
-  StorageBackendCreateInput,
-  StorageBackendImportInput
+  StorageBackendCreateInput
 } from "./config.ts";
 import { storedS3ConfigJson } from "./record.ts";
 import { validateStorageBackendCandidate } from "./probe.ts";
@@ -76,88 +75,6 @@ export async function createStorageBackend(
       });
   } finally {
     // An auto-commit may succeed even if the response is lost.
-    invalidateStorageBackendRegistry();
-  }
-}
-
-export async function importStorageBackends(
-  backends: StorageBackendImportInput[],
-  beforeCommit: () => void | Promise<void>,
-  onTransactionId: (transactionId: string) => void,
-  signal?: AbortSignal
-) {
-  const configs: S3StorageConfig[] = [];
-  for (const backend of backends) {
-    const config: S3StorageConfig = {
-      slug: backend.slug,
-      type: "s3",
-      s3: backend.config
-    };
-    const result = await validateStorageBackendCandidate(
-      config, undefined, undefined, signal
-    );
-    configs.push({ ...config, capabilities: result.capabilities });
-  }
-  signal?.throwIfAborted();
-  try {
-    await withTransaction(
-      async (client) => {
-        signal?.throwIfAborted();
-        const lowestSortOrder = Number(
-          (await client.query("SELECT COALESCE(MIN(sort_order), 0) AS value FROM storage_backend"))
-            .rows[0]?.value ?? 0
-        );
-
-        for (const [index, backend] of backends.entries()) {
-          await client.query(
-            `INSERT INTO storage_backend(
-               slug, display_name, type, config, enabled, is_default,
-               sort_order
-             )
-             VALUES($1, $2, $3, $4::jsonb, $5, false, $6)`,
-            [
-              backend.slug,
-              backend.display_name,
-              "s3",
-              storedS3ConfigJson(configs[index]!),
-              backend.enabled,
-              Math.max(sortOrderMin, Math.min(sortOrderMax, lowestSortOrder - index - 1))
-            ]
-          );
-        }
-
-        const importedDefault = backends.find((backend) => backend.is_default);
-        if (importedDefault) {
-          await client.query(
-            `UPDATE storage_backend
-                SET is_default=false, updated_at=now()
-              WHERE is_default`
-          );
-          await client.query(
-            `UPDATE storage_backend
-                SET is_default=true, updated_at=now()
-              WHERE slug=$1`,
-            [importedDefault.slug]
-          );
-        }
-        signal?.throwIfAborted();
-        await beforeCommit();
-      },
-      { onTransactionId }
-    );
-  } catch (error) {
-    if (error
-      && typeof error === "object"
-      && (error as { code?: string }).code === "23505") {
-      throw new ApiError(
-        409,
-        "storage_backend_exists",
-        "导入的存储后端 slug 已存在"
-      );
-    }
-    throw error;
-  } finally {
-    // A successful COMMIT response can be lost with the transaction connection.
     invalidateStorageBackendRegistry();
   }
 }

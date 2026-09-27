@@ -121,7 +121,7 @@ await runIntegrationScenario(async (runtime) => {
     const prepared = {
       ...realPrepared,
       producer_execution_token: executionToken,
-      md5: createHash("md5").update(label).digest("hex"),
+      variants: { ...realPrepared.variants, large: { ...realPrepared.variants.large, md5: createHash("md5").update(label).digest("hex") } },
       generation
     };
     return preparedSession(
@@ -152,12 +152,11 @@ await runIntegrationScenario(async (runtime) => {
   const actionFirst = await createActionReadySession("first");
   const actionSecond = await createActionReadySession("second");
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
-       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         actionFirst.image_id,
         actionOwner,
-        actionFirst.prepared.md5
+        actionFirst.prepared?.variants.large.md5
       ]
   );
   const activePgStatus = await ingestionSessionView.readIngestionStatuses(
@@ -853,7 +852,7 @@ await runIntegrationScenario(async (runtime) => {
     session_id: duplicateRecoveryReady.session_id,
     image_id: duplicateRecoveryReady.image_id,
     expected_version: duplicateRecoveryReady.version,
-    expected_md5: duplicateRecoveryReady.prepared.md5,
+    expected_md5: duplicateRecoveryReady.prepared?.variants.large.md5,
     commit_request_id: coreUuid.randomUuidV7(),
     duplicate_decision: "upload" as const,
     metadata: duplicateRecoveryReady.metadata
@@ -874,12 +873,11 @@ await runIntegrationScenario(async (runtime) => {
   );
   const duplicateRecoveryImageId = coreUuid.randomUuidV7();
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
-       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         duplicateRecoveryImageId,
         actionOwner,
-        duplicateRecoveryReady.prepared.md5
+        duplicateRecoveryReady.prepared?.variants.large.md5
       ]
   );
   const duplicateRecoverySummaryBefore = (
@@ -942,12 +940,11 @@ await runIntegrationScenario(async (runtime) => {
   const duplicateIntentReady = await createActionReadySession("duplicate-before-intent");
   const duplicateIntentImageId = coreUuid.randomUuidV7();
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
-       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         duplicateIntentImageId,
         actionOwner,
-        duplicateIntentReady.prepared.md5
+        duplicateIntentReady.prepared?.variants.large.md5
       ]
   );
   const [duplicateIntentResult] = await ingestionCommitIntent.acceptIngestionCommitIntents(
@@ -958,7 +955,7 @@ await runIntegrationScenario(async (runtime) => {
         session_id: duplicateIntentReady.session_id,
         image_id: duplicateIntentReady.image_id,
         expected_version: duplicateIntentReady.version,
-        expected_md5: duplicateIntentReady.prepared.md5,
+        expected_md5: duplicateIntentReady.prepared?.variants.large.md5,
         commit_request_id: coreUuid.randomUuidV7(),
         duplicate_decision: "upload" as const,
         metadata: duplicateIntentReady.metadata
@@ -1184,7 +1181,7 @@ await runIntegrationScenario(async (runtime) => {
           session_id: completedCommitActionReady.session_id,
           image_id: completedCommitActionReady.image_id,
           expected_version: completedCommitActionReady.version,
-          expected_md5: completedCommitActionReady.prepared.md5,
+          expected_md5: completedCommitActionReady.prepared?.variants.large.md5,
           commit_request_id: completedCommitActionId,
           duplicate_decision: "upload" as const,
           metadata: completedCommitActionReady.metadata
@@ -1202,12 +1199,11 @@ await runIntegrationScenario(async (runtime) => {
   assert.ok(completedCommitActionCurrent);
   assert.equal(completedCommitActionCurrent.status, "committing");
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
-       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         completedCommitActionReady.image_id,
         actionOwner,
-        completedCommitActionReady.prepared.md5
+        completedCommitActionReady.prepared?.variants.large.md5
       ]
   );
   const completedCommitActionPage = await ingestionQueueSnapshot.readStableIngestionQueueSnapshot({
@@ -1386,7 +1382,7 @@ await runIntegrationScenario(async (runtime) => {
     session_id: clearCompletedReady.session_id,
     image_id: clearCompletedReady.image_id,
     expected_version: clearCompletedReady.version,
-    expected_md5: clearCompletedReady.prepared.md5,
+    expected_md5: clearCompletedReady.prepared?.variants.large.md5,
     commit_request_id: coreUuid.randomUuidV7(),
     duplicate_decision: "upload" as const,
     metadata: clearCompletedReady.metadata
@@ -1406,12 +1402,11 @@ await runIntegrationScenario(async (runtime) => {
     )
   );
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
-       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         clearCompletedReady.image_id,
         actionOwner,
-        clearCompletedReady.prepared.md5
+        clearCompletedReady.prepared?.variants.large.md5
       ]
   );
   await ingestionCommitCompletion.publishCompletedReceipt(
@@ -1435,7 +1430,7 @@ await runIntegrationScenario(async (runtime) => {
     session_id: deferredCompletedReady.session_id,
     image_id: deferredCompletedReady.image_id,
     expected_version: deferredCompletedReady.version,
-    expected_md5: deferredCompletedReady.prepared.md5,
+    expected_md5: deferredCompletedReady.prepared?.variants.large.md5,
     commit_request_id: coreUuid.randomUuidV7(),
     duplicate_decision: "upload" as const,
     metadata: deferredCompletedReady.metadata
@@ -1455,12 +1450,11 @@ await runIntegrationScenario(async (runtime) => {
     )
   );
   await database.pool.query(
-    `INSERT INTO metadata (id, created_by, storage_slug, device, brightness, theme, ext, md5, status)
-       VALUES ($1, $2, 'local', 'pc', 'dark', NULL, 'webp', $3, 'ready')`,
+    `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
         deferredCompletedReady.image_id,
         actionOwner,
-        deferredCompletedReady.prepared.md5
+        deferredCompletedReady.prepared?.variants.large.md5
       ]
   );
   await ingestionCommitCompletion.publishCompletedReceipt(
@@ -1829,7 +1823,7 @@ await runIntegrationScenario(async (runtime) => {
       {
         ...pairOf(commitFailedReady),
         expected_version: commitFailedReady.version,
-        expected_md5: commitFailedReady.prepared.md5,
+        expected_md5: commitFailedReady.prepared?.variants.large.md5,
         commit_request_id: frozenCommitId,
         duplicate_decision: "upload",
         metadata: commitFailedReady.metadata
