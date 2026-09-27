@@ -1,8 +1,21 @@
-import { imageVariants, type ImageVariant, type ImageVariantsDto } from "@imageshow/shared/browser";
+import { imageVariants, type ImageVariant, type ImageVariantsDto, type ImageVariantSizesDto } from "@imageshow/shared/browser";
 
 const imageVariantColumnPrefixes = { large: "l", medium: "m", small: "s" } as const;
 
 type DatabaseNumber = number | string;
+export type ImageVariantSizeRecord = Record<"l_byte_size" | "m_byte_size" | "s_byte_size", DatabaseNumber>;
+
+export const imageVariantSizeColumns = imageVariants.map((variant) =>
+  `${imageVariantColumnPrefixes[variant]}_byte_size`
+).join(", ");
+
+export function presentImageVariantSizes(row: ImageVariantSizeRecord): ImageVariantSizesDto {
+  return {
+    large: { byte_size: Number(row.l_byte_size) },
+    medium: { byte_size: Number(row.m_byte_size) },
+    small: { byte_size: Number(row.s_byte_size) }
+  };
+}
 export type ImageVariantRecord = Record<"l_width" | "l_height" | "l_byte_size" | "m_width" | "m_height" | "m_byte_size" | "s_width" | "s_height" | "s_byte_size", DatabaseNumber>
   & Record<"l_md5" | "m_md5" | "s_md5", string>;
 

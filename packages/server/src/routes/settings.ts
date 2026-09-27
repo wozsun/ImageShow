@@ -16,7 +16,9 @@ import {
   getSettingsForAdmin,
   saveAppSettings
 } from "../config/app-settings.ts";
-import { getRuntimeConfig, reloadRuntimeConfigFromDisk } from "../config/runtime-config-store.ts";
+import { getRuntimeConfig, reloadRuntimeConfigFromDisk, runtimeConfigRevision } from "../config/runtime-config-store.ts";
+import { parse } from "./validation/parse.ts";
+import { runtimeConfigSaveInput } from "./validation/settings.ts";
 import { assertLocalImageHostForSite } from "../storage/backends/registry.ts";
 import { privateNoStoreCacheControl, privateRevalidationCacheControl } from "../core/http/headers.ts";
 
@@ -40,15 +42,17 @@ export function registerSettingsRoutes(app: Hono) {
     const config = getRuntimeConfig();
     return c.json(apiSuccess({
       config,
+      revision: runtimeConfigRevision(config),
       settings: getSettingsForAdmin(config)
     } satisfies RuntimeConfigResponseDto));
   });
 
   app.post(`${adminApiBasePath}/settings`, requireSuperAdmin, async (c) => {
-    const config = await saveAppSettings(await readJsonBody(c));
+    const input = parse(runtimeConfigSaveInput, await readJsonBody(c));
+    const config = await saveAppSettings(input.config, input.revision);
     c.header("Cache-Control", privateNoStoreCacheControl);
     return c.json(
-      apiSuccess({ config, settings: getSettingsForAdmin(config) } satisfies RuntimeConfigResponseDto)
+      apiSuccess({ config, revision: runtimeConfigRevision(config), settings: getSettingsForAdmin(config) } satisfies RuntimeConfigResponseDto)
     );
   });
 
@@ -58,7 +62,7 @@ export function registerSettingsRoutes(app: Hono) {
     );
     c.header("Cache-Control", privateNoStoreCacheControl);
     return c.json(
-      apiSuccess({ config, settings: getSettingsForAdmin(config) } satisfies RuntimeConfigResponseDto)
+      apiSuccess({ config, revision: runtimeConfigRevision(config), settings: getSettingsForAdmin(config) } satisfies RuntimeConfigResponseDto)
     );
   });
 }

@@ -73,9 +73,9 @@ export function stopIngestionSessionWorker() {
   ingestionOrphanCleanupWorker.stop();
 }
 
-export function drainIngestionSessionWorker() {
+export function drainIngestionSessionWorker(timeoutMs: number) {
   return Promise.all([
-    ingestionSessionWorker.drain(),
-    ingestionOrphanCleanupWorker.drain()
+    ingestionSessionWorker.drain(timeoutMs),
+    ingestionOrphanCleanupWorker.drain(timeoutMs)
   ]);
 }

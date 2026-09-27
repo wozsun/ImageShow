@@ -510,6 +510,7 @@ export function ShowPage({
       )}
       {selected && (
         <PublicImageDetail
+          view="show"
           card={selected}
           onClose={() => setSelected(null)}
           onTrashCommitted={(imageId) => {

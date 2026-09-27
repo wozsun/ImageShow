@@ -1014,7 +1014,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         status: 200,
         headers: { "content-type": "application/json" }
       });
-    const image = (serial: string): AdminImageListItemDto => ({...galleryCard(`00000000-0000-7000-8000-${serial}`),description: "",original_url: null,source: null,status: "deleted",purge_pending: false,storage_slug: "local",original: "",deleted_at: "2026-08-15T00:00:00.000Z",created_at: "2026-08-14T00:00:00.000Z",updated_at: "2026-08-15T00:00:00.000Z",base_url:"/images",variants:{large:{width:1600,height:900,byte_size:1024},medium:{width:1200,height:675,byte_size:800},small:{width:600,height:338,byte_size:200}},large_md5:serial.padStart(32, "0").slice(-32)});
+    const image = (serial: string): AdminImageListItemDto => ({...galleryCard(`00000000-0000-7000-8000-${serial}`),device: "pc", brightness: "dark", author: "", image_time: "2026-09-01T00:00:00.000Z",description: "",original_url: null,source: null,status: "deleted",purge_pending: false,storage_slug: "local",original: "",deleted_at: "2026-08-15T00:00:00.000Z",created_at: "2026-08-14T00:00:00.000Z",updated_at: "2026-08-15T00:00:00.000Z",base_url:"/images",variants:{large:{width:1600,height:900,byte_size:1024},medium:{width:1200,height:675,byte_size:800},small:{width:600,height:338,byte_size:200}},large_md5:serial.padStart(32, "0").slice(-32)});
     const waitFor = async (condition: () => boolean, message: string) => {
       for (let attempt = 0; attempt < 120; attempt += 1) {
         await React.act(async () => {

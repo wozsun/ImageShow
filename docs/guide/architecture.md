@@ -128,6 +128,8 @@ Ingestion 另有一个单实例 Redis worker，不把会话复制进通用任务
 和 Redis 监测。Redis 通过能力校验后才开放业务门并启动协调器及 Worker；CLI 不会因导入
 HTTP 应用而启动主服务。
 
-停机先停止接收请求和领取任务，再在统一期限内排空 HTTP、Worker、存储 driver、Redis 和
-PostgreSQL；重复信号复用同一次收口。RuntimeConfig 的文件持久化和内存发布有唯一写入
+停机先停止接收请求和领取任务，启动等待与 HTTP、Worker、存储 driver 收尾共用 6 秒截止时间，
+随后在 8 秒总上限内关闭 Redis、宿主租约和 PostgreSQL；重复信号复用同一次收口。
+工作超时或失败时记录未完成阶段并以失败状态退出，不提前释放仍有活动工作的宿主租约，
+不把中断退出当作正常排空；重启沿用现行恢复机制。RuntimeConfig 的文件持久化和内存发布有唯一写入
 所有者，详见[配置、缓存与 Worker 的交接](flows.md#配置缓存与-worker-的交接)。

@@ -74,10 +74,7 @@ export async function fetchPublicImageCardPage(
     "s_height AS height",
     "storage_slug",
     "image_time::text AS cursor_image_time",
-    ...(view === "gallery" ? [
-      "device", "brightness", "theme", "author", "image_time"
-    ]
-    : [])
+    ...(view === "gallery" ? ["theme"] : [])
   ].join(", ");
   let selection: string;
   let ordering: string;

@@ -87,24 +87,9 @@
   margin: 0;
 }
 
-.image-detail-admin-uuid,
-.image-detail-admin-md5 {
+.image-detail-admin-uuid {
   font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
   overflow-wrap: anywhere;
-}
-
-.image-detail-admin-md5 {
-  display: grid;
-  grid-template-areas: "value";
-  min-width: 0;
-}
-
-.image-detail-admin-md5 > span {
-  grid-area: value;
-  min-width: 0;
-}
-.image-detail-admin-md5-reserve {
-  visibility: hidden;
 }
 
 .image-detail-admin-error {

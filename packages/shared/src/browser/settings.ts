@@ -218,4 +218,10 @@ export type AdminSettingsResponseDto = {
 
 export type RuntimeConfigResponseDto = AdminSettingsResponseDto & {
   config: RuntimeConfig;
+  revision: string;
+};
+
+export type RuntimeConfigSaveRequestDto = {
+  config: RuntimeConfig;
+  revision: string;
 };

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { RuntimeConfig, RuntimeConfigResponseDto } from "@imageshow/shared/browser";
+import type { RuntimeConfigResponseDto, RuntimeConfigSaveRequestDto } from "@imageshow/shared/browser";
 import { api } from "../../../lib/api/client.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
@@ -36,7 +36,7 @@ const savePresentation = {
   error: { icon: "close-line", label: "保存配置失败" }
 } as const;
 
-type SettingsAction = { kind: "save"; config: RuntimeConfig } | { kind: "reload" };
+type SettingsAction = ({ kind: "save" } & RuntimeConfigSaveRequestDto) | { kind: "reload" };
 
 export function SettingsPage() {
   const query = useQuery({
@@ -47,7 +47,7 @@ export function SettingsPage() {
     ),
     gcTime: 0
   });
-  if (query.data) return <SettingsPageContent serverConfig={query.data.config} />;
+  if (query.data) return <SettingsPageContent snapshot={query.data} />;
   if (query.isError) {
     return (
       <QueryErrorState
@@ -61,12 +61,14 @@ export function SettingsPage() {
   return <div className="center" role="status">加载中</div>;
 }
 
-function SettingsPageContent({ serverConfig }: { serverConfig: RuntimeConfig }) {
+function SettingsPageContent({ snapshot }: { snapshot: RuntimeConfigResponseDto }) {
+  const serverConfig = snapshot.config;
   const client = useQueryClient();
-  const [draft, setDraft] = useState<RuntimeConfig | null>(null);
-  const config = draft ?? serverConfig;
-  const configRef = useRef(config);
-  configRef.current = config;
+  const [draft, setDraft] = useState<RuntimeConfigSaveRequestDto | null>(null);
+  const current = draft ?? { config: serverConfig, revision: snapshot.revision };
+  const config = current.config;
+  const configRef = useRef(current);
+  configRef.current = current;
   const [actionError, setActionError] = useState("");
   const [confirmation, setConfirmation] = useState<SettingsAction | null>(null);
   const actionRef = useRef<AbortController | null>(null);
@@ -104,7 +106,9 @@ function SettingsPageContent({ serverConfig }: { serverConfig: RuntimeConfig }) 
           {
             method: "POST",
             signal,
-            body: action.kind === "save" ? JSON.stringify(action.config) : undefined
+            body: action.kind === "save"
+              ? JSON.stringify({ config: action.config, revision: action.revision } satisfies RuntimeConfigSaveRequestDto)
+              : undefined
           }
         );
         signal.throwIfAborted();
@@ -139,9 +143,9 @@ function SettingsPageContent({ serverConfig }: { serverConfig: RuntimeConfig }) 
     if (locked || actionRef.current) return;
     const submitted = settleField();
     returnFocusRef.current = trigger;
-    const action: SettingsAction = kind === "save" ? { kind, config: submitted } : { kind };
-    const changesDomain = submitted.site.domain.trim().toLowerCase() !== serverConfig.site.domain;
-    const discardsDraft = JSON.stringify(submitted) !== JSON.stringify(serverConfig);
+    const action: SettingsAction = kind === "save" ? { kind, ...submitted } : { kind };
+    const changesDomain = submitted.config.site.domain.trim().toLowerCase() !== serverConfig.site.domain;
+    const discardsDraft = JSON.stringify(submitted.config) !== JSON.stringify(serverConfig);
     if ((kind === "save" && changesDomain) || (kind === "reload" && discardsDraft)) {
       setActionError("");
       setConfirmation(action);
@@ -158,9 +162,9 @@ function SettingsPageContent({ serverConfig }: { serverConfig: RuntimeConfig }) 
       disabled={locked}
       onChange={(value) => {
         if (locked || actionRef.current) return;
-        const next = replaceSettingsField(configRef.current, path, value);
+        const next = { config: replaceSettingsField(configRef.current.config, path, value), revision: configRef.current.revision };
         configRef.current = next;
-        setDraft(JSON.stringify(next) === JSON.stringify(serverConfig) ? null : next);
+        setDraft(JSON.stringify(next.config) === JSON.stringify(serverConfig) ? null : next);
       }}
     />
   );

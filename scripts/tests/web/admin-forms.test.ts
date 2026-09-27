@@ -2469,7 +2469,7 @@ test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，�
     AbortSignal.timeout = originalTimeout;
   });
   let settings = structuredClone(appConfig.runtimeDefaults) as RuntimeConfig;
-  client.setQueryData(queryKeys.runtimeConfig, { config: settings, settings });
+  client.setQueryData(queryKeys.runtimeConfig, { config: settings, settings, revision: settings.site.header_name.padEnd(43, "_") });
   await h.render(
     h.React.createElement(QueryClientProvider, { client }, h.React.createElement(SettingsPage))
   );
@@ -2484,7 +2484,7 @@ test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，�
     });
   const publish = async (name: string) => {
     settings = { ...settings, site: { ...settings.site, header_name: name } };
-    await h.React.act(async () => client.setQueryData(queryKeys.runtimeConfig, { config: settings, settings }));
+    await h.React.act(async () => client.setQueryData(queryKeys.runtimeConfig, { config: settings, settings, revision: settings.site.header_name.padEnd(43, "_") }));
     await h.flush();
   };
   const save = () =>
@@ -2538,18 +2538,19 @@ test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，�
     save().click();
   });
   assert.equal(
-    JSON.parse(String(h.pending[0].body)).admin.recent_uploads,
+    JSON.parse(String(h.pending[0].body)).config.admin.recent_uploads,
     47,
     "锁定前同步结算数字输入，提交当前可见值"
   );
-  assert.equal(JSON.parse(String(h.pending[0].body)).site.title, "独立标题草稿");
-  assert.equal(JSON.parse(String(h.pending[0].body)).site.header_name, "unsaved");
-  assert.equal(JSON.parse(String(h.pending[0].body)).site.random_size, "small");
+  assert.equal(JSON.parse(String(h.pending[0].body)).config.site.title, "独立标题草稿");
+  assert.equal(JSON.parse(String(h.pending[0].body)).config.site.header_name, "unsaved");
+  assert.equal(JSON.parse(String(h.pending[0].body)).config.site.random_size, "small");
   assert.equal(
-    JSON.parse(String(h.pending[0].body)).site.assets_base_url,
+    JSON.parse(String(h.pending[0].body)).config.site.assets_base_url,
     "https://asset.example.com///static///"
   );
-  const submitted = JSON.parse(String(h.pending[0].body)) as RuntimeConfig;
+  assert.equal(JSON.parse(String(h.pending[0].body)).revision, "fresh".padEnd(43, "_"), "后台刷新不能替换草稿原始版本");
+  const submitted = JSON.parse(String(h.pending[0].body)).config as RuntimeConfig;
   assert.deepEqual(submitted.embed.allowed_origins, ["https://embed.example.org", "https://*.example.net"]);
   assert.deepEqual(submitted.weibo.request_delay_seconds, [settings.weibo.request_delay_seconds[0], 12]);
   assert.deepEqual(submitted.normalize, settings.normalize, "完整保存保留未编辑的图片处理设置");
@@ -2577,7 +2578,7 @@ test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，�
   await edit("normalized input ");
   await h.React.act(async () => save().click());
   const savedConfig = { ...settings, site: { ...settings.site, header_name: "normalized input" } };
-  const successfulSave = h.respond(1, { config: savedConfig, settings: savedConfig });
+  const successfulSave = h.respond(1, { config: savedConfig, settings: savedConfig, revision: "s".repeat(43) });
   await Promise.resolve();
   await clock.advanceBy(499);
   assert.equal(locked(), true, "成功反馈期限前保持保存锁定");
@@ -2590,7 +2591,7 @@ test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，�
   assert.equal(input().value, "after save");
   await edit("retain after failure");
   await h.React.act(async () => save().click());
-  const failedSave = h.respond(2, { error: "save failure" }, 503);
+  const failedSave = h.respond(2, { error: "配置已更新，草稿已保留", code: "config_revision_conflict" }, 409);
   await Promise.resolve();
   await clock.advanceBy(499);
   assert.equal(locked(), true, "失败反馈期限前保持保存锁定");
@@ -2598,6 +2599,7 @@ test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，�
   await failedSave;
   assert.equal(locked(), false);
   assert.equal(input().value, "retain after failure");
+  assert.match(h.document.querySelector('[role="alert"]')!.textContent!, /草稿已保留/);
   const reload = () => h.document.querySelector<HTMLButtonElement>(".settings-head-actions button")!;
   const dialog = () => h.document.querySelector<HTMLFormElement>(".confirm-dialog form")!;
   const finishDialog = async () => {
@@ -2619,7 +2621,7 @@ test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，�
   await submitConfirmation();
   assert.equal(h.pending[3].path, "/api/admin/settings/reload");
   settings = { ...settings, site: { ...settings.site, header_name: "from file" } };
-  await h.respond(3, { config: settings, settings });
+  await h.respond(3, { config: settings, settings, revision: settings.site.header_name.padEnd(43, "_") });
   await clock.advanceBy(500);
   await h.flush();
   await finishDialog();
@@ -2631,9 +2633,9 @@ test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，�
   assert.match(dialog().textContent!, /new.example.org/);
   assert.equal(h.pending.length, 4, "域名变化确认后才提交");
   await submitConfirmation();
-  assert.equal(JSON.parse(String(h.pending[4].body)).site.domain, "new.example.org");
+  assert.equal(JSON.parse(String(h.pending[4].body)).config.site.domain, "new.example.org");
   settings = { ...settings, site: { ...settings.site, domain: "new.example.org" } };
-  await h.respond(4, { config: settings, settings });
+  await h.respond(4, { config: settings, settings, revision: settings.site.header_name.padEnd(43, "_") });
   await clock.advanceBy(500);
   await h.flush();
   await finishDialog();

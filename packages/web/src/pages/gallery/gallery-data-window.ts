@@ -93,9 +93,7 @@ function estimateCardBytes(item: GalleryImageCard) {
     item.id.length +
     item.title.length +
     (item.theme?.length ?? 0) +
-    item.author.length +
     item.base_url.length +
-    item.image_time.length +
     item.tags.reduce((total, tag) => total + tag.length, 0);
   return stringCharacters * 2 + item.tags.length * 8 + 96;
 }
@@ -135,14 +133,10 @@ function galleryCardsEqual(
   return (
     left.id === right.id &&
     left.title === right.title &&
-    left.device === right.device &&
-    left.brightness === right.brightness &&
     left.theme === right.theme &&
-    left.author === right.author &&
     left.base_url === right.base_url &&
     left.width === right.width &&
     left.height === right.height &&
-    left.image_time === right.image_time &&
     left.tags.length === right.tags.length &&
     left.tags.every((tag, index) => tag === right.tags[index])
   );
@@ -155,15 +149,11 @@ function galleryCardFromSnapshot(
   const next = {
     id: current.id,
     title: snapshot.title,
-    device: snapshot.device,
-    brightness: snapshot.brightness,
     theme: snapshot.theme,
-    author: snapshot.author,
     base_url: snapshot.base_url,
     width: snapshot.width,
     height: snapshot.height,
-    tags: [...snapshot.tags],
-    image_time: current.image_time
+    tags: [...snapshot.tags]
   } satisfies GalleryImageCard;
   return galleryCardsEqual(current, next) ? current : next;
 }

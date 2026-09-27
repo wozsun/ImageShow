@@ -30,6 +30,7 @@ import {
 } from "./list-filters.ts";
 import { fetchAdminImageOffsetRows } from "./pagination.ts";
 import { storageBackendLabel } from "../../storage/backends/label.ts";
+import { presentImageVariantSizes, type ImageVariantSizeRecord } from "../variants/record.ts";
 
 export type AdminImageListQuery = {
   status: "ready" | "deleted";
@@ -143,8 +144,7 @@ export async function getAdminImageSnapshots(
 export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> {
   const row = (
     await pool.query(
-      `SELECT m.id,
-            m.l_md5 AS large_md5,
+      `SELECT m.l_byte_size, m.m_byte_size, m.s_byte_size,
             m.storage_slug,
             m.created_at::text AS created_at,
             m.updated_at::text AS updated_at,
@@ -156,19 +156,16 @@ export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> 
       [id]
     )
   ).rows[0] as
-    | {
-        id: string;
-        large_md5: string;
+    | (ImageVariantSizeRecord & {
         storage_slug: string;
         created_at: string;
         updated_at: string;
         storage_display_name: string;
-      }
+      })
     | undefined;
   if (!row) throw new ApiError(404, "not_found", "Image not found");
   return {
-    id: row.id,
-    large_md5: row.large_md5,
+    variants: presentImageVariantSizes(row),
     storage_label: storageBackendLabel(row),
     created_at: row.created_at ?? "",
     updated_at: row.updated_at ?? ""

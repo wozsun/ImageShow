@@ -1,5 +1,12 @@
 import { imageVariantUrl } from "@imageshow/shared/browser";
-import { imageVariantColumns, presentImageVariants, type ImageVariantRecord } from "./variants/record.ts";
+import {
+  imageVariantColumns,
+  imageVariantSizeColumns,
+  presentImageVariants,
+  presentImageVariantSizes,
+  type ImageVariantRecord,
+  type ImageVariantSizeRecord
+} from "./variants/record.ts";
 import {
   type AdminImageDetailItemDto,
   type AdminImageListItemDto,
@@ -9,7 +16,8 @@ import {
   type EditableImageSnapshotDto,
   type GalleryImageCardDto,
   type ShowImageCardDto,
-  type PublicImageDetailDto
+  type PublicImageDetailDto,
+  type PublicImageView
 } from "@imageshow/shared/browser";
 import { storageBackendLabel } from "../storage/backends/label.ts";
 import type { StorageConfig } from "../storage/backends/config.ts";
@@ -27,7 +35,7 @@ type DatabaseNumber = number | string;
 type DatabaseTimestamp = string | Date;
 type PublicImageTimeRecord = { image_time: DatabaseTimestamp } | { sort_score: number };
 
-type AdminImageCommonRecord = ImageVariantRecord & {
+type ImageMetadataRecord = {
   id: string;
   device: Device;
   brightness: Brightness;
@@ -39,6 +47,8 @@ type AdminImageCommonRecord = ImageVariantRecord & {
   source: string;
   original: string;
 };
+
+type AdminImageCommonRecord = ImageMetadataRecord & ImageVariantRecord;
 
 type IngestionImageRecord = AdminImageCommonRecord & {
   image_time: DatabaseTimestamp;
@@ -58,7 +68,7 @@ export type ImageRecord = IngestionImageRecord & {
 export type ImageRecordWithTags = ImageRecord & { tags: string[] };
 
 /** Exact row returned by the compact overview detail projection. */
-export type AdminImageDetailRecordWithTags = AdminImageCommonRecord & {
+export type AdminImageDetailRecordWithTags = ImageMetadataRecord & ImageVariantSizeRecord & {
   storage_display_name: string;
   image_time: DatabaseTimestamp;
   created_at: DatabaseTimestamp;
@@ -124,7 +134,7 @@ export const adminImageDetailPresentationColumnsWithTags = [
   "device",
   "brightness",
   "theme",
-  imageVariantColumns,
+  imageVariantSizeColumns,
   "storage_slug",
   "author",
   "title",
@@ -155,14 +165,10 @@ export const editableImagePresentationColumnsWithTags = [
 export type PublicImageCardRecord = Pick<
   AdminImageCommonRecord,
   | "id"
-  | "device"
-  | "brightness"
   | "theme"
   | "storage_slug"
-  | "author"
   | "title"
-> &
-  PublicImageTimeRecord & { width: DatabaseNumber; height: DatabaseNumber };
+> & { width: DatabaseNumber; height: DatabaseNumber };
 
 export type PublicImageDetailRecord = Pick<
   AdminImageCommonRecord,
@@ -172,11 +178,10 @@ export type PublicImageDetailRecord = Pick<
   | "source"
   | "original"
   | "author"
-  | "device"
   | "brightness"
   | "theme"
 > &
-  PublicImageTimeRecord & ImageVariantRecord & { tags: string[] };
+  PublicImageTimeRecord & { tags: string[] };
 
 export type PublicShowImageRecord = Pick<
   PublicImageCardRecord,
@@ -210,7 +215,7 @@ function serializeNullableTimestamp(value: DatabaseTimestamp | null) {
 }
 
 function presentImageBase(
-  row: AdminImageCommonRecord,
+  row: ImageMetadataRecord,
   tags: string[],
   configs: ReadonlyMap<string, StorageConfig>
 ) {
@@ -226,15 +231,12 @@ function presentImageBase(
     author: row.author ?? "",
     tags,
     base_url,
-    variants: presentImageVariants(row),
-    width: Number(row.s_width),
-    height: Number(row.s_height),
     storage_slug: row.storage_slug
   };
 }
 
 function presentAdminImageBase(
-  row: AdminImageCommonRecord,
+  row: ImageMetadataRecord,
   tags: string[],
   configs: ReadonlyMap<string, StorageConfig>
 ) {
@@ -250,6 +252,9 @@ export async function ingestionImageItemsWithTags(rows: IngestionImageRecordWith
   const configs = await storageConfigsForRows(rows);
   return rows.map((row): CompletedIngestionImageDto => ({
     ...presentImageBase(row, row.tags, configs),
+    variants: presentImageVariants(row),
+    width: Number(row.s_width),
+    height: Number(row.s_height),
     original: row.original,
     large_md5: row.l_md5,
     image_time: serializeTimestamp(row.image_time)
@@ -265,6 +270,9 @@ function adminImageListItem(
   return {
     ...base,
     original: row.original,
+    variants: presentImageVariants(row),
+    width: Number(row.s_width),
+    height: Number(row.s_height),
     status: row.status,
     purge_pending: row.purge_pending,
     large_md5: row.l_md5,
@@ -292,7 +300,7 @@ export async function adminImageDetailItemsWithTags(rows: AdminImageDetailRecord
     const { storage_slug: storageSlug, ...base } = presentAdminImageBase(row, row.tags, configs);
     return {
       ...base,
-      large_md5: row.l_md5,
+      variants: presentImageVariantSizes(row),
       storage_label: storageBackendLabel({
         storage_slug: storageSlug,
         storage_display_name: row.storage_display_name
@@ -311,6 +319,9 @@ export async function editableImageSnapshotsWithTags(rows: EditableImageSnapshot
     const base = presentAdminImageBase(row, row.tags, configs);
     return {
       ...base,
+      variants: presentImageVariants(row),
+      width: Number(row.s_width),
+      height: Number(row.s_height),
       original: row.original
     };
   });
@@ -318,23 +329,20 @@ export async function editableImageSnapshotsWithTags(rows: EditableImageSnapshot
 
 export async function publicImageDetail(
   row: PublicImageDetailRecord,
+  view: PublicImageView,
   access: StorageRegistryAccess = {},
   includeOriginal = false
-): Promise<PublicImageDetailDto> {
+): Promise<PublicImageDetailDto<PublicImageView>> {
   const configs = await storageConfigsForRows([row], access);
   const base_url = publicImageBaseUrl(configs.get(row.storage_slug)!);
   return {
-    id: row.id,
     author: row.author ?? "",
-    device: row.device,
     brightness: row.brightness,
-    theme: row.theme,
-    tags: row.tags,
+    ...(view === "show" ? { theme: row.theme, tags: row.tags } : {}),
     image_time: serializePublicImageTime(row),
     description: row.description,
     source: row.source || null,
     base_url,
-    variants: presentImageVariants(row),
     original_url: includeOriginal ? adminOriginalAccessUrl(
       row.id,
       row.original,
@@ -373,12 +381,8 @@ function publicImageCard(
 ): GalleryImageCardDto {
   return {
     ...publicShowImageCard(row, configs),
-    device: row.device,
-    brightness: row.brightness,
     theme: row.theme,
-    author: row.author ?? "",
-    tags,
-    image_time: serializePublicImageTime(row)
+    tags
   };
 }
 

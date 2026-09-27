@@ -27,7 +27,9 @@ docker run -d --name imageshow --restart unless-stopped \
 - `.env.example` 列出可用变量；额外变量须显式加入 Compose 的 `environment`。
   已有 `config.json` 时，运行配置以文件为准，见[环境变量](CONFIG.md#环境变量)。
 - 默认部署沿用 Docker 的 10 秒停止宽限；超时未退出的进程会被强制终止。
-  应用内部的退出上限为 8 秒，在默认容器停止宽限内完成收尾；超过上限时应用以失败状态退出。
+  应用内部的退出上限为 8 秒：启动等待与活动工作共用前 6 秒的截止时间，预留最多 2 秒释放连接。
+  这是一项时间上限，不保证所有工作都能正常收尾。工作超时或收尾失败时以失败状态退出，
+  不提前释放仍可能执行提交的宿主租约；中断工作由重启后的现行恢复机制接管。
 - 镜像入口在整理数据目录权限后通过 `gosu node` 运行应用。默认 Compose 沿用 Docker 的安全配置，
   不显式设置 `security_opt`；如需阻止进程通过 setuid / setgid 程序或文件能力获得额外权限，
   部署方可按需启用 `no-new-privileges`，具体语义见 [Docker 安全选项](https://docs.docker.com/reference/cli/docker/container/run/#optional-security-options---security-opt)。

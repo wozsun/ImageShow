@@ -61,12 +61,8 @@ await runIntegrationScenario(async (runtime) => {
   const showKeys = ["id", "title", "base_url", "width", "height"].sort();
   const galleryKeys = [
     ...showKeys,
-    "author",
-    "device",
-    "brightness",
     "theme",
-    "tags",
-    "image_time"
+    "tags"
   ].sort();
   const expected = (order: "latest" | "oldest" | "random") => {
     if (order !== "random") {
@@ -184,25 +180,25 @@ await runIntegrationScenario(async (runtime) => {
     }
     const empty = await get("/api/images?view=show&limit=1&theme=unmatched");
     assert.deepEqual(await empty.json(), { ok: true, items: [], next_cursor: null });
-    const detailPath = `/api/images/${ids[0]}`;
+    const detailPath = `/api/images/${ids[0]}?view=show`;
     const detail = await get(detailPath);
     const detailBody = await detail.json();
-    assert.deepEqual(
-      sortedKeys(detailBody.item),
-      [
-        "id",
-        "author",
-        "device",
-        "brightness",
-        "theme",
-        "tags",
-        "image_time",
-        "description",
-        "source",
-        "variants",
-        "original_url"
-      ].sort()
-    );
+    for (const view of ["show", "gallery"] as const) {
+      const path = `/api/images/${ids[0]}?view=${view}`;
+      const response = await get(path);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.item.base_url, "/images");
+      assert.equal(body.item.brightness, "dark");
+      if (view === "show") {
+        assert.equal(body.item.theme, null);
+        assert.deepEqual(body.item.tags, []);
+      }
+      assert.equal((await get(path, response.headers.get("etag")!)).status, 304);
+    }
+    for (const query of ["", "?view=unknown", "?view=show&extra=1"]) {
+      assert.equal((await get(`/api/images/${ids[0]}${query}`)).status, 400);
+    }
     assert.equal(detailBody.item.source, null);
     assert.equal(detailBody.item.original_url, null);
     const detailEtag = detail.headers.get("etag")!;

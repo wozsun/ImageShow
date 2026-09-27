@@ -19,6 +19,19 @@ export type RuntimeConfigFileSnapshot = {
   needsWriteBack: boolean;
 };
 
+export class RuntimeConfigPublicationError extends Error {
+  readonly fileState: "candidate" | "different" | "unreadable";
+
+  constructor(
+    fileState: RuntimeConfigPublicationError["fileState"],
+    cause: unknown
+  ) {
+    super("Runtime config was replaced but durability could not be confirmed", { cause });
+    this.name = "RuntimeConfigPublicationError";
+    this.fileState = fileState;
+  }
+}
+
 export function readRuntimeConfigFile(): RuntimeConfigFileSnapshot | null {
   if (!existsSync(runtimePaths.configFile)) return null;
 
@@ -50,18 +63,30 @@ export function readRuntimeConfigFile(): RuntimeConfigFileSnapshot | null {
 export function writeRuntimeConfigFile(value: RuntimeConfig) {
   mkdirSync(runtimePaths.configDirectory, { recursive: true });
   const temporaryPath = `${runtimePaths.configFile}.${process.pid}.${randomUUID()}.tmp`;
+  const contents = `${JSON.stringify(value, null, 2)}\n`;
+  let replaced = false;
   try {
     const temporaryFile = openSync(temporaryPath, "wx", 0o600);
     try {
-      writeFileSync(temporaryFile, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+      writeFileSync(temporaryFile, contents, "utf8");
       fsyncSync(temporaryFile);
     } finally {
       closeSync(temporaryFile);
     }
     renameSync(temporaryPath, runtimePaths.configFile);
+    replaced = true;
     syncRuntimeConfigDirectory();
+  } catch (error) {
+    if (!replaced) throw error;
+    let fileState: RuntimeConfigPublicationError["fileState"] = "unreadable";
+    try {
+      fileState = readFileSync(runtimePaths.configFile, "utf8") === contents ? "candidate" : "different";
+    } catch {
+      // Keep the failed read distinct from a confirmed candidate on disk.
+    }
+    throw new RuntimeConfigPublicationError(fileState, error);
   } finally {
-    rmSync(temporaryPath, { force: true });
+    if (!replaced) rmSync(temporaryPath, { force: true });
   }
 }
 

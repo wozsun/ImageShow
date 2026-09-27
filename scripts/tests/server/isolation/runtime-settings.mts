@@ -43,6 +43,7 @@ await runIntegrationScenario(async (runtime) => {
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
 
+  const save = (config: unknown, revision = store.runtimeConfigRevision()) => request("", { config, revision });
   const initial = structuredClone(store.getRuntimeConfig());
   for (const role of ["image", ""]) {
     assert.equal((await request("/runtime", undefined, role)).status, 403);
@@ -73,13 +74,30 @@ await runIntegrationScenario(async (runtime) => {
   candidate.security.random_limit_max_requests = 15;
   candidate.altcha.counter_range = [1000, 3000];
   candidate.log.max_files = 8;
-  const saved = await request("", candidate);
+  const originalRevision = store.runtimeConfigRevision();
+  const saved = await save(candidate, originalRevision);
   assert.equal(saved.status, 200);
   const response = await saved.json();
   assert.deepEqual(response.config, candidate);
   assert.equal(response.settings.admin.image_page_size, candidate.admin.image_page_size);
   assert.deepEqual(await persisted(), candidate);
   assert.deepEqual(store.getRuntimeConfig(), candidate);
+
+  assert.equal(typeof response.revision, "string");
+  assert.notEqual(response.revision, originalRevision);
+  const stale = await save(initial, originalRevision);
+  assert.equal(stale.status, 409);
+  assert.equal((await stale.json()).code, "config_revision_conflict");
+  assert.deepEqual(await persisted(), candidate);
+  const concurrentRevision = store.runtimeConfigRevision();
+  const writes = await Promise.all([
+    save(initial, concurrentRevision), save(candidate, concurrentRevision)
+  ]);
+  assert.deepEqual(writes.map((value) => value.status).sort(), [200, 409]);
+  await save(candidate);
+  for (const body of [{ config: candidate }, { config: candidate, revision: "invalid" }]) {
+    assert.equal((await request("", body)).status, 400);
+  }
 
   for (const invalid of [
     {},
@@ -88,7 +106,7 @@ await runIntegrationScenario(async (runtime) => {
     { ...candidate, weibo: { ...candidate.weibo, request_delay_seconds: [5, 2] } },
     { ...candidate, unknown_group: true }
   ]) {
-    assert.equal((await request("", invalid)).status, 400);
+    assert.equal((await save(invalid)).status, 400);
     assert.deepEqual(store.getRuntimeConfig(), candidate);
     assert.deepEqual(await persisted(), candidate);
   }
@@ -102,7 +120,7 @@ await runIntegrationScenario(async (runtime) => {
   });
   syncBuiltinESMExports();
   try {
-    assert.equal((await request("", initial)).status, 500);
+    assert.equal((await save(initial)).status, 500);
     assert.deepEqual(store.getRuntimeConfig(), candidate);
     assert.deepEqual(await persisted(), candidate);
   } finally {

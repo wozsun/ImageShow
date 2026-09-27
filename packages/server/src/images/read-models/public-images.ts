@@ -1,4 +1,3 @@
-import { imageVariantColumns } from "../variants/record.ts";
 import type {
   Brightness,
   Device,
@@ -128,12 +127,11 @@ async function getPublicImageRecordWithAccess(
   const load = async (reader: DatabaseReader) => {
     const result = await reader.query(
       `SELECT id,
-              ${imageVariantColumns},
               storage_slug,
               description,
               source,
               original,
-              author, device, brightness, theme, image_time,
+              author, brightness, theme, image_time,
               ${imageTagsPresentationColumn}
          FROM metadata
         WHERE id=$1 AND status='ready'
@@ -150,13 +148,14 @@ async function getPublicImageRecordWithAccess(
 
 export async function getPublicImage(
   id: string,
+  view: PublicImageView,
   signal?: AbortSignal,
   includeOriginal = false
-): Promise<PublicImageDetailDto> {
+): Promise<PublicImageDetailDto<PublicImageView>> {
   const row = await (signal
     ? withPublicDatabaseRead(signal, (database) => (
         getPublicImageRecordWithAccess(id, database)
       ))
     : getPublicImageRecordWithAccess(id, {}));
-  return publicImageDetail(row, { signal }, includeOriginal);
+  return publicImageDetail(row, view, { signal }, includeOriginal);
 }

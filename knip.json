@@ -12,7 +12,8 @@
         "scripts/tests/verify/check-web-chunks.mjs",
         "scripts/tests/verify/runtime-image.mjs",
         "scripts/tests/verify/normalize-encoding.mjs",
-        "scripts/tests/verify/storage-publication.mjs"
+        "scripts/tests/verify/storage-publication.mjs",
+        "scripts/tests/verify/config-publication.mjs"
       ],
       "ignoreDependencies": [
         "@aws-sdk/client-s3",

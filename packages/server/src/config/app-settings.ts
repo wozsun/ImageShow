@@ -10,6 +10,7 @@ import { parseRuntimeConfig } from "./runtime-config.ts";
 import {
   getRuntimeConfig,
   replaceRuntimeConfig,
+  runtimeConfigRevision,
   withRuntimeConfigWriteLease
 } from "./runtime-config-store.ts";
 import { effectiveEmbedAncestorSources } from "./embed-ancestors.ts";
@@ -79,8 +80,12 @@ export function siteConfigPayload(runtime: RuntimeConfig = getRuntimeConfig()): 
   };
 }
 
-export function saveAppSettings(value: unknown) {
+export function saveAppSettings(value: unknown, revision: string) {
   return withRuntimeConfigWriteLease(async () => {
+    if (revision !== runtimeConfigRevision()) {
+      throw new ApiError(409, "config_revision_conflict",
+        "配置已被其他页面或重新加载操作更新，本次未保存，草稿已保留。请记录需要保留的修改，再读取配置文件核对最新配置。");
+    }
     let config: RuntimeConfig;
     try {
       config = parseRuntimeConfig(value);

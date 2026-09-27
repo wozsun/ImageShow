@@ -118,6 +118,7 @@ Web 队列场景值为 `strict-mode`、
   `npm run verify:release`。
 - 三档编码与缓存使用隔离 Linux 生产镜像验收，`verify/normalize-encoding.mjs` 由镜像门禁复制后以 node 用户执行。
 - local 发布的故障注入验证文件与目录同步、发布失败及恢复边界；真实掉电持久性还依赖文件系统、磁盘和 PostgreSQL 部署配置。
+- Linux 镜像另行验证配置替换前后的同步失败、写入阻断与显式重载恢复；未完成 HTTP 请求验证退出截止时间及重启恢复。
 
 ## 数据与产物
 

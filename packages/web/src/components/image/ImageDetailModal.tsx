@@ -1,4 +1,4 @@
-import { imageVariantUrl } from "@imageshow/shared/browser";
+import { imageDevice, imageVariantUrl } from "@imageshow/shared/browser";
 import {
   Component,
   Suspense,
@@ -14,8 +14,7 @@ import { ProgressiveImage } from "./ProgressiveImage.js";
 import {
   displayNameOrSlug,
   imageDisplayTitle,
-  formatDate,
-  formatDimensions
+  formatDate
 } from "../../lib/ui/formatters.js";
 import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";
 import type {
@@ -212,12 +211,13 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
         ? "打开来源页面"
         : "暂无来源";
   const originalHref = showAdminDetails ? (item.original_url?.trim() ?? "") : "";
-  const displayWidth = item.variants.medium.width || item.width;
-  const displayHeight = item.variants.medium.height || item.height;
+  const displayDevice = props.admin
+    ? item.device
+    : imageDevice(props.item.width, props.item.height);
   const imageAspectRatio =
-    displayWidth > 0 && displayHeight > 0
-      ? `${displayWidth} / ${displayHeight}`
-      : "16 / 9";
+    "width" in item && "height" in item && item.width > 0 && item.height > 0
+      ? `${item.width} / ${item.height}`
+      : item.device === "mb" ? "9 / 16" : "16 / 9";
 
   return (
     <DialogLayerPortal>
@@ -326,7 +326,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                         ? "加载中"
                         : detailError
                           ? "加载失败"
-                          : deviceOptionLabel(item.device)}
+                          : deviceOptionLabel(displayDevice)}
                     </dd>
                     <dt>亮度</dt>
                     <dd>
@@ -350,8 +350,6 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                         </dd>
                       </>
                     )}
-                    <dt>尺寸</dt>
-                    <dd>{formatDimensions(displayWidth, displayHeight)}</dd>
                     {imageTime && (
                       <>
                         <dt>图片时间</dt>
@@ -379,7 +377,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                     </a>
                     {originalHref && (
                       <a
-                        className="button pressable image-detail-original"
+                        className="button secondary pressable image-detail-original"
                         href={originalHref}
                         target="_blank"
                         rel="noreferrer noopener"
@@ -387,6 +385,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                         aria-label="打开原图"
                         title="打开原图"
                       >
+                        <Icon name="external-link-line" />
                         原图
                       </a>
                     )}

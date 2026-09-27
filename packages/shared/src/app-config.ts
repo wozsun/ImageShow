@@ -13,6 +13,9 @@ import {
 } from "./browser/common.ts";
 import type { ImportSourceTypeDto } from "./browser/ingestion.ts";
 
+const shutdownHardExitMs = 8_000;
+const shutdownCleanupReserveMs = 2_000;
+
 export const appConfig = {
   // Container-internal HTTP port. Keep Dockerfile and Compose target ports in sync.
   applicationPort: 5518,
@@ -130,8 +133,9 @@ export const appConfig = {
     tickIntervalMs: 5_000,
     queueSliceMaxJobs: 50,
     queueSliceMaxMs: 2_000,
-    drainTimeoutMs: 10_000,
-    shutdownHardExitMs: 8_000,
+    drainTimeoutMs: shutdownHardExitMs - shutdownCleanupReserveMs,
+    shutdownHardExitMs,
+    shutdownCleanupReserveMs,
 
     sampleLimit: 100
   },

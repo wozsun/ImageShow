@@ -348,6 +348,7 @@ export function GalleryPage({
         )}
         {selected && (
           <PublicImageDetail
+            view="gallery"
             card={selected}
             onClose={() => setSelected(null)}
             onTrashCommitted={async (imageId) => {

@@ -769,7 +769,9 @@ try {
   await runDocker(["cp", resolve(workspaceRoot, "scripts/tests/verify/normalize-encoding.mjs"), `${names.app}:/tmp/normalize-encoding.mjs`]);
   await runDocker(["exec", "--user", "node", names.app, "node", "--test", "/tmp/normalize-encoding.mjs"], { stdio: "inherit", timeoutMs: 120_000 });
   await runDocker(["cp", resolve(workspaceRoot, "scripts/tests/verify/storage-publication.mjs"), `${names.app}:/tmp/storage-publication.mjs`]);
-  await runDocker(["exec", "--user", "node", names.app, "node", "--test", "/tmp/storage-publication.mjs"], { stdio: "inherit", timeoutMs: 120_000 });
+    await runDocker(["exec", "--user", "node", names.app, "node", "--test", "/tmp/storage-publication.mjs"], { stdio: "inherit", timeoutMs: 120_000 });
+    await runDocker(["cp", resolve(workspaceRoot, "scripts/tests/verify/config-publication.mjs"), `${names.app}:/tmp/config-publication.mjs`]);
+    await runDocker(["exec", "--user", "node", names.app, "node", "--test", "/tmp/config-publication.mjs"], { stdio: "inherit", timeoutMs: 120_000 });
   const coldShape = await schemaShape();
   if (!coldShape) {
     throw new Error(`unexpected schema shape before restart: ${coldShape}`);
@@ -840,11 +842,40 @@ try {
     throw new Error(`unexpected schema shape after restart: ${restartedShape}`);
   }
 
+  // Keep an HTTP body incomplete so server.close cannot finish voluntarily.
+  const beforeDeadlineLogs = resultText(await runDocker(["logs", names.app]));
+  const deadlineStarted = performance.now();
+  await runDocker([
+    "exec", names.app, "node", "--input-type=module", "--eval",
+    "const { connect } = await import('node:net'); " +
+    "const { once } = await import('node:events'); " +
+    "const socket = connect(5518, '127.0.0.1'); socket.on('error', () => {}); " +
+    "await once(socket, 'connect'); " +
+    "socket.write('POST /api/admin/auth/login HTTP/1.1\\r\\nHost: example.test\\r\\n" +
+    "Content-Type: application/json\\r\\nContent-Length: 100\\r\\n\\r\\n{'); " +
+    "await new Promise(resolve => setTimeout(resolve, 100)); " +
+    "process.kill(1, 'SIGTERM'); setInterval(() => {}, 1000);"
+  ], { allowFailure: true, timeoutMs: 15_000 });
+  await waitFor("ImageShow bounded incomplete shutdown",
+    (timeoutMs) => stoppedContainerProbe(names.app, 1, timeoutMs), 15_000);
+  if (performance.now() - deadlineStarted > appConfig.backgroundJob.shutdownHardExitMs + 3_000) {
+    throw new Error("incomplete HTTP body exceeded application exit budget");
+  }
+  const deadlineLogs = resultText(await runDocker(["logs", names.app]));
+  if (!/application shutdown incomplete/.test(deadlineLogs) ||
+      (deadlineLogs.match(/application resources released/g) ?? []).length !==
+      (beforeDeadlineLogs.match(/application resources released/g) ?? []).length) {
+    throw new Error("incomplete shutdown must report failure without claiming released resources");
+  }
+  await runDocker(["start", names.app], { timeoutMs: 60_000 });
+  await waitFor("ImageShow recovery after deadline exit", applicationProbe, 30_000);
+  if (await schemaShape() !== coldShape) throw new Error("deadline exit changed persistent schema");
+
   await cleanup();
   console.log(
     `[runtime-image] verified ${imageId}; Docker health, immutable image ID, ` +
       "startup failure cleanup, repeated signals, explicit PostgreSQL/Redis release, " +
-      "cold/restart HTTP and persistent schema passed; temporary Docker resources removed"
+      "bounded incomplete shutdown, cold/restart HTTP and persistent schema passed; temporary Docker resources removed"
   );
 } catch (error) {
   if (!interruptedSignal) {

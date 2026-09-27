@@ -222,6 +222,10 @@ export const galleryStatsQuery = z.strictObject({
   author: galleryStatsSelector("作者").optional()
 }) satisfies z.ZodType<GalleryStatsQuery>;
 
+export const imageDetailQuery = z.strictObject({
+  view: z.enum(publicImageViews)
+});
+
 export const listQuery = z.strictObject({
   ...imageListFilterFields,
   status: z.literal("ready").default("ready"),

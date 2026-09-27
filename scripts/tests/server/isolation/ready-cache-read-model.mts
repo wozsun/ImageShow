@@ -154,7 +154,7 @@ await runIntegrationScenario(async (runtime) => {
     ]);
     // Before the ready projection is initialized, detail reads use PostgreSQL.
     const databaseDetails = await Promise.all(
-      imageIds.map((id) => publicImages.getPublicImage(id, undefined, true))
+      imageIds.map((id) => publicImages.getPublicImage(id, "show", undefined, true))
     );
     assert.equal(
       databaseDetails[0].original_url,
@@ -170,7 +170,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     const sessionId = await login();
     const detailRequest = (cookie = "", etag = "") =>
-      app.request(`http://images.example/api/images/${imageIds[0]}`, {
+      app.request(`http://images.example/api/images/${imageIds[0]}?view=show`, {
         headers: { cookie, ...(etag ? { "If-None-Match": etag } : {}) }
       });
     const sessionCookie = `imageshow_session=${sessionId}`;
@@ -199,7 +199,7 @@ await runIntegrationScenario(async (runtime) => {
       // Concurrent consumers may share a PostgreSQL row, never its identity-dependent DTO.
       const projections = await Promise.all(
         [false, true, false, true].map((include) =>
-          publicImages.getPublicImage(imageIds[0], undefined, include)
+          publicImages.getPublicImage(imageIds[0], "show", undefined, include)
         )
       );
       assert.deepEqual(
@@ -284,8 +284,18 @@ await runIntegrationScenario(async (runtime) => {
       expectedOrder
     );
     assert.equal(adminPage.total, 3);
+    for (const item of adminPage.items) {
+      const info = await adminImages.getAdminImageInfo(item.id);
+      assert.deepEqual(info.variants, {
+        large: { byte_size: item.variants.large.byte_size },
+        medium: { byte_size: item.variants.medium.byte_size },
+        small: { byte_size: item.variants.small.byte_size }
+      });
+      assert.equal(Date.parse(info.created_at), Date.parse(item.created_at));
+      assert.ok(info.storage_label);
+    }
     const cachedDetails = await Promise.all(
-      imageIds.map((id) => publicImages.getPublicImage(id, undefined, true))
+      imageIds.map((id) => publicImages.getPublicImage(id, "show", undefined, true))
     );
     assert.deepEqual(cachedDetails, databaseDetails);
     const cachedOriginal = await readServingResources();
@@ -333,11 +343,9 @@ await runIntegrationScenario(async (runtime) => {
     for (const item of adminPage.items) {
       assert.equal(
         item.original_url,
-        databaseDetails.find((detail) => detail.id === item.id)?.original_url
+        databaseDetails[imageIds.indexOf(item.id)]?.original_url
       );
-      assert.equal(item.source, databaseDetails.find((detail) => (
-        detail.id === item.id
-      ))?.source);
+      assert.equal(item.source, databaseDetails[imageIds.indexOf(item.id)]?.source);
     }
     const publicPage = await publicImages.listPublicImages(
       {
@@ -388,7 +396,7 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(trashedOriginal.headers.get("Cache-Control"), "private, no-cache");
     await trash.restoreImages([imageIds[0]]);
     assert.equal(
-      (await publicImages.getPublicImage(imageIds[0], undefined, true)).original_url,
+      (await publicImages.getPublicImage(imageIds[0], "show", undefined, true)).original_url,
       databaseDetails[0].original_url
     );
   } catch (error) {

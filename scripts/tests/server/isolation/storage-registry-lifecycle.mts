@@ -109,7 +109,7 @@ await runIntegrationScenario(async (runtime) => {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(config)
+            body: JSON.stringify({ config, revision: runtime.runtimeConfigStore.runtimeConfigRevision() })
           }
         );
       const savedConfig = structuredClone(runtime.runtimeConfigStore.getRuntimeConfig());

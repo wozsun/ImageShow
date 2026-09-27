@@ -18,6 +18,12 @@ import {
   type ImageLoadTaskHandle
 } from "./image-load-scheduler.js";
 
+function loadedImageAspectRatio(image: HTMLImageElement) {
+  return image.naturalWidth > 0 && image.naturalHeight > 0
+    ? `${image.naturalWidth} / ${image.naturalHeight}`
+    : null;
+}
+
 export function ProgressiveImage({
   imageKey,
   thumbSrc = "",
@@ -49,6 +55,7 @@ export function ProgressiveImage({
   const [thumbVisible, setThumbVisible] = useState(Boolean(thumbSrc));
   const [thumbFailed, setThumbFailed] = useState(false);
   const [decodeResult, setDecodeResult] = useState<ImageElementLoadResult | null>(null);
+  const [intrinsicAspectRatio, setIntrinsicAspectRatio] = useState<string | null>(null);
   const thumbRendered = Boolean(thumbSrc
     && thumbSrc !== fullSrc
     && thumbVisible
@@ -72,6 +79,7 @@ export function ProgressiveImage({
     setFullReady(false);
     setFullFailed(false);
     setDecodeResult(null);
+    setIntrinsicAspectRatio(null);
     if (!image || !fullSrc) return;
 
     let current = true;
@@ -84,7 +92,10 @@ export function ProgressiveImage({
           { src: fullSrc },
           signal
         );
-        if (current) setDecodeResult(result);
+        if (current) {
+          setDecodeResult(result);
+          setIntrinsicAspectRatio(loadedImageAspectRatio(image));
+        }
       }
     });
     fullTaskRef.current = task;
@@ -114,7 +125,12 @@ export function ProgressiveImage({
         image,
         { src: thumbSrc },
         signal
-      ).then(() => undefined)
+      ).then(() => {
+        if (current) {
+          const ratio = loadedImageAspectRatio(image);
+          setIntrinsicAspectRatio((currentRatio) => currentRatio ?? ratio);
+        }
+      })
     });
     thumbTaskRef.current = task;
     void task.result.then((result) => {
@@ -166,7 +182,7 @@ export function ProgressiveImage({
   return (
     <div
       className={`progressive-image ${className} ${stateClass}`.trim()}
-      style={style}
+      style={{ ...style, aspectRatio: intrinsicAspectRatio ?? style?.aspectRatio }}
       onClick={onClick}
     >
       {thumbRendered && (

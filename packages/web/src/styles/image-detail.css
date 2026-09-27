@@ -217,7 +217,7 @@
   flex-wrap: nowrap;
   justify-content: flex-start;
 }
-.image-detail-source.is-disabled {
+.image-detail-actions .button.is-disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -260,16 +260,6 @@
   border-color: var(--color-detail-chip-border);
 }
 
-.image-detail-modal .image-detail-actions .button {
-  color: var(--color-detail-text-strong);
-  background: var(--color-detail-action-fill);
-}
-
-.image-detail-modal .image-detail-actions .image-detail-original {
-  border-color: var(--color-detail-action-border);
-}
-
-.image-detail-modal .image-detail-actions .button.secondary,
 .image-detail-modal .image-detail-title-row > .close,
 .image-detail-modal > .image-detail-mobile-close {
   color: var(--color-detail-text-primary);
@@ -277,18 +267,19 @@
   border-color: var(--color-detail-border);
 }
 
-.image-detail-modal .image-detail-actions .button.image-detail-source {
+.image-detail-modal .image-detail-actions .button.secondary {
+  color: var(--color-detail-text-primary);
   border-color: var(--color-detail-panel-border);
   background: transparent;
 }
 
-.image-detail-modal .image-detail-actions .image-detail-source:not(.is-disabled) {
+.image-detail-modal .image-detail-actions .button.secondary:not(.is-disabled) {
   background: var(--color-detail-secondary-action-surface);
 }
 
 .image-detail-modal
   .image-detail-actions
-  .image-detail-source:not(.is-disabled):is(:hover, :focus-visible) {
+  .button.secondary:not(.is-disabled):is(:hover, :focus-visible) {
   background: var(--color-detail-secondary-action-hover-surface);
   border-color: var(--color-detail-secondary-action-hover-border);
 }

@@ -60,6 +60,21 @@ async function settleCoordinatorInitialization() {
   if (current) await current.catch(() => undefined);
 }
 
+async function waitForShutdownStage<T>(work: Promise<T>, deadline: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Shutdown stage deadline exceeded")),
+          Math.max(0, deadline - performance.now()));
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function initializeApplication() {
   configureDatabasePools(deploymentConfig.database);
   applicationHost = await acquireApplicationHost();
@@ -111,11 +126,17 @@ function shutdown(signal: string, exitCode = 0) {
   unsubscribeBusinessAvailabilityGate?.();
   unsubscribeBusinessAvailabilityGate = null;
   logger.info(`received ${signal}, shutting down`);
-  const hardExit = setTimeout(() => process.exit(1), appConfig.backgroundJob.shutdownHardExitMs);
-  hardExit.unref();
+  const deadline = performance.now() + appConfig.backgroundJob.shutdownHardExitMs;
+  const drainDeadline = deadline - appConfig.backgroundJob.shutdownCleanupReserveMs;
+  let stage = "startup";
+  const hardExit = setTimeout(() => {
+    logger.error("application shutdown hard deadline exceeded; interrupted work will recover on restart", { stage });
+    process.exit(1);
+  }, appConfig.backgroundJob.shutdownHardExitMs);
   shutdownPromise = (async () => {
     try {
-      await startupPromise?.catch(() => undefined);
+      await waitForShutdownStage(startupPromise?.catch(() => undefined) ?? Promise.resolve(), drainDeadline);
+      stage = "drain";
       const currentServer = server;
       server = null;
       closeAllAdminSessionConnections();
@@ -125,31 +146,39 @@ function shutdown(signal: string, exitCode = 0) {
       stopRedisOperationalMonitor();
       stopBackgroundJobWorker();
       stopIngestionSessionWorker();
-      const backgroundJobWorkerDrain = drainBackgroundJobWorker();
-      const ingestionWorkerDrain = drainIngestionSessionWorker();
+      const remainingDrainMs = Math.max(0, drainDeadline - performance.now());
+      const backgroundJobWorkerDrain = drainBackgroundJobWorker(remainingDrainMs);
+      const ingestionWorkerDrain = drainIngestionSessionWorker(remainingDrainMs);
       // Mark every cached driver as retiring before waiting for HTTP bodies.
       // Existing leases may drain; shutdown-time work cannot create a new
       // driver from a stale or freshly loaded registry snapshot.
       const storageRegistryClose = closeStorageBackendRegistry();
-      await settleCoordinatorInitialization();
-      const readyImageCacheStop = stopReadyImageCacheCoordinator();
-      await Promise.all([
+      const readyImageCacheStop = settleCoordinatorInitialization().then(() => stopReadyImageCacheCoordinator());
+      const [, backgroundDrained, ingestionDrained] = await waitForShutdownStage(Promise.all([
         serverClose,
         backgroundJobWorkerDrain,
         ingestionWorkerDrain,
         readyImageCacheStop,
         storageRegistryClose
-      ]);
-    } catch (error) {
-      shutdownExitCode = 1;
-      logger.error("application shutdown failed", error);
-    } finally {
-      await redis.quit().catch(() => redis.disconnect());
-      await applicationHost?.close().catch(() => undefined);
-      await closeDatabasePools();
+      ]), drainDeadline);
+      if (!backgroundDrained || ingestionDrained.some((drained) => !drained)) {
+        throw new Error("Application work did not finish draining");
+      }
+      stage = "connections";
+      await waitForShutdownStage((async () => {
+        await redis.quit().catch(() => redis.disconnect());
+        await applicationHost?.close();
+        await closeDatabasePools();
+      })(), deadline);
       logger.info("application resources released");
       clearTimeout(hardExit);
       process.exit(shutdownExitCode);
+    } catch (error) {
+      // Do not release the host lease or dependencies while timed-out work may
+      // still be committing. Process termination leaves recovery to its owners.
+      logger.error("application shutdown incomplete; exiting for recovery", { stage, error });
+      clearTimeout(hardExit);
+      process.exit(1);
     }
   })();
   return shutdownPromise;

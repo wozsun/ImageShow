@@ -452,23 +452,6 @@ test("[Web/后台访问] 图片详情根据链接显示原图并保持来源、�
       original_url: originalUrl,
       image_time: "2026-09-01T00:00:00.000Z",
       base_url: "/images",
-      variants: {
-        large: {
-          width: 1600,
-          height: 900,
-          byte_size: 1024
-        },
-        medium: {
-          width: 1200,
-          height: 675,
-          byte_size: 800
-        },
-        small: {
-          width: 600,
-          height: 338,
-          byte_size: 200
-        }
-      }
     });
     type AuthScenario = "pending" | "expired" | "guest" | "image" | "super";
     type OriginalActionSnapshot = Readonly<{

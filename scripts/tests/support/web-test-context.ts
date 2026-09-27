@@ -37,15 +37,11 @@ export function galleryCardDto(
   return {
     id,
     title: id,
-    device: "pc",
-    brightness: "dark",
     theme: null,
-    author: "",
     base_url: "/images",
     width,
     height,
-    tags: [],
-    image_time: "2026-09-01T00:00:00.000Z"
+    tags: []
   };
 }
 export function galleryCard(

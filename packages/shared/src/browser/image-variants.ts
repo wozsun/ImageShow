@@ -3,6 +3,7 @@ export type ImageVariant = (typeof imageVariants)[number];
 
 export type ImageVariantDimensions = { width: number; height: number; byte_size: number };
 export type ImageVariantsDto = Record<ImageVariant, ImageVariantDimensions>;
+export type ImageVariantSizesDto = Record<ImageVariant, Pick<ImageVariantDimensions, "byte_size">>;
 export type BoundImageAddress = { id: string; base_url: string };
 
 export function imageVariantUrl(image: BoundImageAddress, variant: ImageVariant) {

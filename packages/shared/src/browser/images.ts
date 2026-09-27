@@ -1,4 +1,4 @@
-import { imageVariants, type ImageVariantsDto } from "./image-variants.ts";
+import { imageVariants, type ImageVariantsDto, type ImageVariantSizesDto } from "./image-variants.ts";
 import { slugMaxLength, slugPattern, type Brightness, type Device } from "./common.ts";
 
 /** Stable physical identity, independent of editable image classification. */
@@ -77,29 +77,27 @@ export type ImageCardBaseDto = ShowImageCardDto & {
  * Stable image attributes used by the Gallery. Display names belong to the
  * session-scoped Gallery facets response rather than every cursor page.
  */
-export type GalleryImageCardDto = ImageCardBaseDto;
+export type GalleryImageCardDto = ShowImageCardDto & Pick<ImageCardBaseDto, "theme" | "tags">;
 
-export type PublicImageDetailDto = Pick<
+export type PublicImageDetailDto<View extends PublicImageView = "show"> = Pick<
   ImageCardBaseDto,
-  "device" | "brightness" | "theme" | "author" | "tags" | "image_time"
+  "brightness" | "author" | "image_time"
 > & {
-  id: string;
   description: string;
   base_url: string;
-  variants: ImageVariantsDto;
   original_url: string | null;
   source: string | null;
-};
+} & (View extends "show" ? Pick<ImageCardBaseDto, "theme" | "tags"> : {});
 
-export type ImageDetailItemDto = ImageCardBaseDto & PublicImageDetailDto;
+export type ImageDetailItemDto = PublicImageDetailDto & { id: string; title: string; device: Device };
 
 export type PublicImageListResponseDto<View extends PublicImageView = "gallery"> = {
   items: Array<View extends "show" ? ShowImageCardDto : GalleryImageCardDto>;
   next_cursor: string | null;
 };
 
-export type PublicImageDetailResponseDto = {
-  item: PublicImageDetailDto;
+export type PublicImageDetailResponseDto<View extends PublicImageView = "show"> = {
+  item: PublicImageDetailDto<View>;
 };
 
 export const randomImageSizes = imageVariants;
@@ -125,7 +123,8 @@ export type RandomImageJsonResponseDto = {
   items: RandomImageJsonItemDto[];
 };
 
-export type AdminImageListItemDto = ImageDetailItemDto & {
+export type AdminImageListItemDto = ImageDetailItemDto & ShowImageCardDto & {
+  variants: ImageVariantsDto;
   status: "ready" | "deleted";
   purge_pending: boolean;
   storage_slug: string;
@@ -142,8 +141,8 @@ export type AdminImageListItemDto = ImageDetailItemDto & {
  * List/edit-only fields remain outside this compact response.
  */
 export type AdminImageDetailItemDto = ImageDetailItemDto & {
+  variants: ImageVariantSizesDto;
   storage_label: string;
-  large_md5: string;
   created_at: string;
   updated_at: string;
 };
@@ -174,8 +173,7 @@ export type AdminImageListResponseDto = {
 };
 
 export type ImageAdminInfoDto = {
-  id: string;
-  large_md5: string;
+  variants: ImageVariantSizesDto;
   storage_label: string;
   created_at: string;
   updated_at: string;

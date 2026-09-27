@@ -1,5 +1,5 @@
 import type { Context, Hono } from "hono";
-import { imageVariants, type PublicImageDetailResponseDto, type RuntimeConfig } from "@imageshow/shared/browser";
+import { imageVariants, type PublicImageDetailResponseDto, type PublicImageView, type RuntimeConfig } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
@@ -20,6 +20,7 @@ import {
 } from "../core/http/responses.ts";
 import {
   galleryStatsQuery,
+  imageDetailQuery,
   imageListQueryValues,
   listQuery
 } from "./validation/images.ts";
@@ -120,12 +121,16 @@ export function registerPublicRoutes(app: Hono) {
 
   app.get("/api/images/:id", blockCrossSiteFetch, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
+    const { view } = parse(imageDetailQuery, c.req.query());
     appendVaryHeader(c, "Cookie");
     const includeOriginal = Boolean(await readAdminSession(c));
     const response = {
-      item: await getPublicImage(id, c.req.raw.signal, includeOriginal)
-    } satisfies PublicImageDetailResponseDto;
-    return cacheableApiSuccess(c, response, privateRevalidationCacheControl);
+      item: await getPublicImage(id, view, c.req.raw.signal, includeOriginal)
+    } satisfies PublicImageDetailResponseDto<PublicImageView>;
+    return cacheableContentResponse(c, JSON.stringify({ ok: true, ...response }), {
+      cacheControl: privateRevalidationCacheControl,
+      contentType: "application/json; charset=UTF-8"
+    });
   });
 
   for (const prefix of imageVariants) {

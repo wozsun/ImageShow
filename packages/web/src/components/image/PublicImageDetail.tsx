@@ -1,6 +1,7 @@
 import { useMemo, useState, type RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { PublicImageDetailResponseDto, ShowImageCardDto } from "@imageshow/shared/browser";
+import type { PublicImageDetailResponseDto, PublicImageView, ShowImageCardDto } from "@imageshow/shared/browser";
+import { imageDevice } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import {
@@ -18,15 +19,14 @@ import { useOptionalAuthSessionQuery } from "../../hooks/useAuthSession.js";
 
 function imagePlaceholder(card: ShowImageCardDto | GalleryImageCard): PublicImageItem {
   return {
-    device: "pc",
     brightness: "light",
     theme: null,
     author: "",
     tags: [],
     image_time: "",
     ...card,
+    device: imageDevice(card.width, card.height),
     description: "",
-    variants: { large: { width: 0, height: 0, byte_size: 0 }, medium: { width: 0, height: 0, byte_size: 0 }, small: { width: card.width, height: card.height, byte_size: 0 } },
     original_url: null,
     source: null
   };
@@ -34,6 +34,7 @@ function imagePlaceholder(card: ShowImageCardDto | GalleryImageCard): PublicImag
 
 export function PublicImageDetail({
   card,
+  view,
   onClose,
   onTrashCommitted,
   onTrashed,
@@ -41,14 +42,13 @@ export function PublicImageDetail({
   onItemRefreshRequested,
   returnFocusRef
 }: {
-  card: ShowImageCardDto | GalleryImageCard;
   onClose: () => void;
   onTrashCommitted?: (imageId: string) => void | Promise<void>;
   onTrashed?: (imageId: string) => void;
   onItemUpdated?: (item: EditableImageSnapshot) => void;
   onItemRefreshRequested?: (imageId: string) => void;
   returnFocusRef: RefObject<HTMLElement | null>;
-}) {
+} & ({ view: "show"; card: ShowImageCardDto } | { view: "gallery"; card: GalleryImageCard })) {
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
   const [trashCommitted, setTrashCommitted] = useState(false);
   const authQuery = useOptionalAuthSessionQuery();
@@ -56,14 +56,14 @@ export function PublicImageDetail({
     ? authQuery.data.username
     : null;
   const { data, isPending, isFetching, isError, error, refetch } =
-    useQuery<PublicImageDetailResponseDto>({
-      queryKey: [...queryKeys.publicImageDetail, card.id, authIdentity],
+    useQuery<PublicImageDetailResponseDto<PublicImageView>>({
+      queryKey: [...queryKeys.publicImageDetail, card.id, authIdentity, view],
       // The tiny metadata request is reusable across StrictMode's simulated
       // remount. Full-image DOM work remains owned and cancelled by the modal.
       queryFn: async ({ queryKey, client }) => {
         const validation = publicDetailValidation(client, card.id);
-        const response = await api<PublicImageDetailResponseDto>(
-          `/api/images/${encodeURIComponent(card.id)}`,
+        const response = await api<PublicImageDetailResponseDto<PublicImageView>>(
+          `/api/images/${encodeURIComponent(card.id)}?view=${view}`,
           {
             credentials: authIdentity ? "same-origin" : "omit",
             ...(validation || client.getQueryState(queryKey)?.isInvalidated
@@ -77,7 +77,7 @@ export function PublicImageDetail({
       gcTime: 0,
       enabled: !trashCommitted && !(authQuery?.isPending && authQuery.isFetching)
     });
-  const detail = data?.item.id === card.id ? data.item : null;
+  const detail = data?.item ?? null;
   const item = useMemo(
     () => ({ ...placeholder, ...(detail ?? {}) }),
     [placeholder, detail]

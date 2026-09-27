@@ -21,7 +21,7 @@ import {
   type ImageEditorTarget,
   type ImageMetadataSaveCommit
 } from "./editor/image-editor-capability-loader.js";
-import { errorMessage, formatDate } from "../../lib/ui/formatters.js";
+import { errorMessage, formatBytes, formatDate } from "../../lib/ui/formatters.js";
 import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { storageBackendLabel } from "../../lib/ui/select-options.js";
 import { useImageEditorCapability } from "./editor/useImageEditorCapability.js";
@@ -35,8 +35,6 @@ import type {
 // 公开详情可在已确认的管理员会话中独立加载本模块；这里只带入管理详情自身样式，
 // 完整的管理表单色契约继续等到用户明确打开编辑器时再加载。
 import "../../styles/admin/image-details.css";
-
-const md5WidthPlaceholder = "0".repeat(32);
 
 type AdminDetailSource = AdminImageDetailItem | AdminImageListItem;
 
@@ -137,7 +135,7 @@ export function ImageAdminDetails({
     ...adminInfoOptions,
     enabled: accessConfirmed && expanded && (!admin || !adminStorageLabel)
   });
-  const adminInfo = query.data?.id === imageId ? query.data : undefined;
+  const adminInfo = query.data;
 
   useEffect(() => {
     if (
@@ -166,9 +164,9 @@ export function ImageAdminDetails({
   );
   const editTarget = useMemo<ImageEditorTarget>(
     () => ({
-      sources: [adminItem ?? { id: imageId }]
+      sources: [adminListItem ?? { id: imageId }]
     }),
-    [adminItem, imageId]
+    [adminListItem, imageId]
   );
   const editorCapability = useImageEditorCapability({
     onPreparationError: handlePreparationFailure,
@@ -271,7 +269,7 @@ export function ImageAdminDetails({
         });
 
       if (adjacentDataResult.status === "fulfilled"
-        && adjacentDataResult.value?.id === imageId) {
+        && adjacentDataResult.value !== null) {
         setRefreshedAdminInfo(adjacentDataResult.value);
       }
       if (snapshotResult.status === "rejected") {
@@ -339,7 +337,6 @@ export function ImageAdminDetails({
   const loading = !admin && query.isFetching && !adminInfo;
   const failed = !admin && query.isError && !query.isFetching;
   const fallback = unresolvedValue(admin, loading, failed);
-  const md5 = refreshedAdminInfo?.large_md5 || adminItem?.large_md5 || adminInfo?.large_md5 || fallback;
   const refreshedPublicStorageLabel =
     !admin
       && !query.isStale
@@ -360,6 +357,13 @@ export function ImageAdminDetails({
       : fallback);
   const createdAt =
     refreshedAdminInfo?.created_at ?? adminItem?.created_at ?? adminInfo?.created_at;
+  const variants = refreshedAdminInfo?.variants ?? adminItem?.variants ?? adminInfo?.variants;
+  const totalBytes = variants
+    ? variants.large.byte_size + variants.medium.byte_size + variants.small.byte_size
+    : null;
+  const variantSizeTitle = variants
+    ? `大图：${formatBytes(variants.large.byte_size)}\n中图：${formatBytes(variants.medium.byte_size)}\n小图：${formatBytes(variants.small.byte_size)}`
+    : undefined;
   const updatedAt =
     refreshedAdminInfo?.updated_at ?? adminItem?.updated_at ?? adminInfo?.updated_at;
   const prefetchAdminInfo = () => {
@@ -411,15 +415,11 @@ export function ImageAdminDetails({
           <dl>
             <dt>UUID</dt>
             <dd className="image-detail-admin-uuid">{imageId}</dd>
-            <dt>MD5</dt>
-            <dd className="image-detail-admin-md5">
-              <span className="image-detail-admin-md5-reserve" aria-hidden="true">
-                {md5WidthPlaceholder}
-              </span>
-              <span>{md5}</span>
-            </dd>
             <dt>存储</dt>
-            <dd>{storage}</dd>
+            <dd title={variantSizeTitle}>
+              {storage}
+              {totalBytes !== null && <> · {formatBytes(totalBytes)}</>}
+            </dd>
             <dt>入库时间</dt>
             <dd>{createdAt ? formatDate(createdAt) : fallback}</dd>
             <dt>更新时间</dt>

@@ -91,7 +91,7 @@ test("[Web/后台访问] 无会话上下文的公开详情保持访客身份并�
   client.setQueryData(queryKeys.me, auth);
   client.setQueryData(queryKeys.galleryFacets, { themes: [], tags: [], authors: [] });
   client.setQueryData([...queryKeys.adminImageInfo, id], { item });
-  client.setQueryData([...queryKeys.publicImageDetail, id, auth.username], { item });
+  client.setQueryData([...queryKeys.publicImageDetail, id, auth.username, "gallery"], { item });
   await h.render(
     h.React.createElement(
       h.React.StrictMode,
@@ -100,6 +100,7 @@ test("[Web/后台访问] 无会话上下文的公开详情保持访客身份并�
         QueryClientProvider,
         { client },
         h.React.createElement(PublicImageDetail, {
+              view: "gallery",
           card: galleryCard(id),
           onClose() {},
           returnFocusRef: { current: null }
@@ -109,7 +110,7 @@ test("[Web/后台访问] 无会话上下文的公开详情保持访客身份并�
   );
   assert.deepEqual(
     h.pending.map((request) => request.path),
-    [`/api/images/${id}`]
+    [`/api/images/${id}?view=gallery`]
   );
   assert.equal(h.pending[0]!.credentials, "omit");
   await h.respond(0, { ok: true, item: { ...item, original_url: null } });
@@ -123,7 +124,7 @@ test("[Web/后台访问] 无会话上下文的公开详情保持访客身份并�
   assert.equal(h.document.querySelector(".image-detail-original"), null);
   assert.deepEqual(
     h.pending.map((request) => request.path),
-    [`/api/images/${id}`]
+    [`/api/images/${id}?view=gallery`]
   );
   assert.equal(storage.get("site_session_hint"), "1", "访客详情不修改普通页面的登录提示");
   await h.render(null);
@@ -175,7 +176,7 @@ test("[Web/后台访问] 公开详情等待首次认证，按身份读取并隔�
     version_settings: { enabled: true, link_enabled: true }
   });
   const guest = { ok: true, authenticated: false, altcha_enabled: false, login_background: "" };
-  const detailRequests = () => h.pending.filter((request) => request.path === `/api/images/${id}`);
+  const detailRequests = () => h.pending.filter((request) => request.path === `/api/images/${id}?view=gallery`);
   const originalLink = () =>
     h.document.querySelector<HTMLAnchorElement>(".image-detail-original")?.getAttribute("href") ??
     null;
@@ -197,6 +198,7 @@ test("[Web/后台访问] 公开详情等待首次认证，按身份读取并隔�
             AuthSessionProvider,
             null,
             h.React.createElement(PublicImageDetail, {
+              view: "gallery",
               card,
               onClose() {},
               returnFocusRef: { current: null }
@@ -247,7 +249,7 @@ test("[Web/后台访问] 公开详情等待首次认证，按身份读取并隔�
     detailRequests()[4]!.resolve(Response.json({ ok: true, item: { ...item, original_url: null } }))
   );
   await settle(
-    () => client.getQueryState([...queryKeys.publicImageDetail, id, null])?.status === "success"
+    () => client.getQueryState([...queryKeys.publicImageDetail, id, null, "gallery"])?.status === "success"
   );
   await h.React.act(async () => detailRequests()[3]!.resolve(Response.json({ ok: true, item })));
   await h.flush();
@@ -258,6 +260,49 @@ test("[Web/后台访问] 公开详情等待首次认证，按身份读取并隔�
   );
   await h.render(null);
   await h.flush();
+});
+
+test("[Web/后台访问] 公开详情切图和切换视图隔离迟到响应并采用最新地址", async (t) => {
+  const { PublicImageDetail } = await import("../../../../packages/web/src/components/image/PublicImageDetail.tsx");
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const h = await createConfigStreamHarness(t, { honorAbort: false });
+  Object.assign(h.window, { scrollTo() {}, scrollY: 0 });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  t.after(() => client.clear());
+  client.setQueryData(queryKeys.galleryFacets, { themes: [], tags: [], authors: [] });
+  const first = galleryCard("00000000-0000-7000-8000-000000000601");
+  const second = galleryCard("00000000-0000-7000-8000-000000000602");
+  const render = (card: typeof first, view: "show" | "gallery") => h.render(
+    h.React.createElement(QueryClientProvider, { client }, h.React.createElement(PublicImageDetail, {
+      card, view, onClose() {}, returnFocusRef: { current: null }
+    }))
+  );
+  const payload = (source: string) => ({ item: {
+    author: "", brightness: "dark", image_time: "2026-09-01T00:00:00.000Z",
+    description: "", source, original_url: null, base_url: "https://new.example.test/images"
+  } });
+  const sourceLink = () => h.document.querySelector(".image-detail-source")?.getAttribute("href");
+  await render(first, "gallery");
+  await render(second, "gallery");
+  assert.deepEqual(h.pending.map((request) => request.path), [
+    `/api/images/${first.id}?view=gallery`, `/api/images/${second.id}?view=gallery`
+  ]);
+  await h.respond(1, payload("https://source.example/second"));
+  await h.flush();
+  assert.equal(sourceLink(), "https://source.example/second");
+  assert.equal(h.document.querySelector(".image-detail-title-link")?.getAttribute("href"),
+    `https://new.example.test/images/large/02/${second.id}.webp`);
+  await h.respond(0, payload("https://source.example/first"));
+  await h.flush();
+  assert.equal(sourceLink(), "https://source.example/second");
+  await render(second, "show");
+  assert.equal(h.pending[2].path, `/api/images/${second.id}?view=show`);
+  assert.equal(sourceLink(), null);
+  await h.respond(2, { item: { ...payload("https://source.example/show").item, theme: "view-theme", tags: ["view-tag"] } });
+  await h.flush();
+  assert.equal(sourceLink(), "https://source.example/show");
+  assert.match(h.document.querySelector(".image-detail-public-properties")!.textContent!, /view-theme/);
+  await h.render(null);
 });
 
 test("[Web/后台访问] 图片管理保留连续选择、直接分页和管理员外观语义", () => {

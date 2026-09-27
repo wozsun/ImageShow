@@ -1,8 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { hash } from "node:crypto";
 import type { RuntimeConfig } from "@imageshow/shared/browser";
 import { runtimeConfigFromEnvironment, runtimePaths } from "./bootstrap-env.ts";
 import {
   readRuntimeConfigFile,
+  RuntimeConfigPublicationError,
   writeRuntimeConfigFile
 } from "./runtime-config-file.ts";
 import {
@@ -10,8 +12,10 @@ import {
   type RuntimeConfigPatch
 } from "./runtime-config.ts";
 import { logger } from "../core/logger.ts";
+import { ApiError } from "../core/api-error.ts";
 
 let runtimeConfig: RuntimeConfig | undefined;
+let publicationUncertain = false;
 const runtimeConfigWriteLeaseContext = new AsyncLocalStorage<boolean>();
 let runtimeConfigWriteLeaseTail = Promise.resolve();
 
@@ -34,6 +38,10 @@ export function getRuntimeConfig() {
     );
   }
   return runtimeConfig;
+}
+
+export function runtimeConfigRevision(config: RuntimeConfig = getRuntimeConfig()) {
+  return hash("sha256", JSON.stringify(config), "base64url");
 }
 
 type RuntimeConfigListener = () => void;
@@ -85,9 +93,24 @@ function publishRuntimeConfig(next: RuntimeConfig) {
 
 function persistAndPublishRuntimeConfig(
   next: RuntimeConfig,
-  shouldWriteFile = true
+  shouldWriteFile = true,
+  reconcilePublication = false
 ) {
-  if (shouldWriteFile) writeRuntimeConfigFile(next);
+  if (publicationUncertain && !reconcilePublication) {
+    throw new ApiError(409, "config_publication_uncertain",
+      "上次配置文件替换后的持久化结果尚未确认，当前运行配置未切换。请检查磁盘后读取配置文件核对。");
+  }
+  try {
+    if (shouldWriteFile) writeRuntimeConfigFile(next);
+  } catch (error) {
+    if (!(error instanceof RuntimeConfigPublicationError)) throw error;
+    publicationUncertain = true;
+    logger.error("runtime_config_publication_uncertain", { file_state: error.fileState, error });
+    throw new ApiError(500, "config_publication_uncertain",
+      "配置文件已替换，但持久化确认失败，当前运行配置未切换。草稿已保留，请检查磁盘后读取配置文件核对。",
+      { file_state: error.fileState });
+  }
+  publicationUncertain = false;
   return publishRuntimeConfig(next);
 }
 
@@ -112,7 +135,8 @@ export function reloadRuntimeConfigFromDisk(validate?: (config: RuntimeConfig) =
     await validate?.(snapshot.config);
     return persistAndPublishRuntimeConfig(
       snapshot.config,
-      snapshot.needsWriteBack
+      snapshot.needsWriteBack || publicationUncertain,
+      true
     );
   });
 }
