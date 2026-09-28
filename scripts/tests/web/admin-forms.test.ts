@@ -7,6 +7,7 @@ import {
   type RuntimeConfig
 } from "../../../packages/shared/src/browser.ts";
 import type { StorageBackendAdmin } from "../../../packages/web/src/lib/types.ts";
+import type { VocabularyColumnId } from "../../../packages/web/src/pages/admin/VocabularyAdminItem.tsx";
 import { ApiClientError } from "../../../packages/web/src/lib/api/client.ts";
 import { invalidateImageDataAfterMetadataSave } from "../../../packages/web/src/lib/api/query-invalidation.ts";
 import { queryKeys } from "../../../packages/web/src/lib/api/query-keys.ts";
@@ -2367,10 +2368,11 @@ for (const kind of ["user", "storage"] as const) {
   });
 }
 
-test("[Web/后台表单] 词条卡片同 slug 按字段保护 dirty，clean 跟随权威且成功保存立即归于 clean", async (t) => {
+test("[Web/后台表单] 词条两种视图按字段保护 dirty，clean 跟随权威且成功保存立即归于 clean", async (t) => {
   const h = await createConfigStreamHarness(t);
-  const { VocabularyAdminCard } =
-    await import("../../../packages/web/src/pages/admin/VocabularyAdminCard.tsx");
+  const clock = installControlledClock(t, h.window);
+  const { VocabularyAdminItem } =
+    await import("../../../packages/web/src/pages/admin/VocabularyAdminItem.tsx");
   for (const kind of ["themes", "tags", "authors"] as const) {
     let item: {
       slug: string;
@@ -2396,10 +2398,12 @@ test("[Web/后台表单] 词条卡片同 slug 按字段保护 dirty，clean 跟�
       sortBusy: false,
       onSortSave: async (value: number) => value
     } as const;
+    let viewMode: "card" | "list" = "card";
+    const columns: VocabularyColumnId[] = ["slug", "display", ...(kind === "authors" ? ["link" as const] : []), "count", "sort", "actions"];
     const render = async () =>
-      h.render(h.React.createElement(VocabularyAdminCard, { ...props, item }));
+      h.render(h.React.createElement(VocabularyAdminItem, { ...props, item, columns, viewMode }));
     await render();
-    const display = () => h.document.querySelector<HTMLInputElement>(".entity-display-input")!;
+    const display = () => h.document.querySelector<HTMLInputElement>(".vocabulary-display-input")!;
     const change = async (value: string) =>
       h.React.act(async () => {
         inputText(h.window, display(), value);
@@ -2409,15 +2413,16 @@ test("[Web/后台表单] 词条卡片同 slug 按字段保护 dirty，clean 跟�
     await render();
     assert.equal(display().value, "fresh");
     await change(" mine ");
+    viewMode = "list";
     item = { ...item, display_name: "remote", link: "https://example.com/fresh" };
     await render();
     assert.equal(display().value, " mine ");
     if (kind === "authors")
       assert.equal(
-        h.document.querySelector<HTMLInputElement>(".entity-link-input")!.value,
+        h.document.querySelector<HTMLInputElement>(".vocabulary-link-input")!.value,
         item.link
       );
-    const save = h.document.querySelector<HTMLButtonElement>(".entity-card-foot .button")!;
+    const save = h.document.querySelector<HTMLButtonElement>(".vocabulary-action-button")!;
     refreshFails = true;
     await h.React.act(async () => save.click());
     const requestIndex = h.pending.length - 1;
@@ -2425,6 +2430,7 @@ test("[Web/后台表单] 词条卡片同 slug 按字段保护 dirty，clean 跟�
       requestIndex,
       kind === "authors" ? { item: { ...item, display_name: "mine" } } : { ok: true }
     );
+    await h.React.act(async () => clock.advanceBy(500));
     assert.equal(display().value, "mine");
     // Props stay stale after failed refresh; the next authority update should still replace clean saved input.
     item = { ...item, display_name: "new authority" };
@@ -2437,6 +2443,67 @@ test("[Web/后台表单] 词条卡片同 slug 按字段保护 dirty，clean 跟�
     await h.render(null);
   }
 });
+test("[Web/后台表单] 词条图标在视图切换中保留保存状态、失败草稿与删除权限", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const clock = installControlledClock(t, h.window);
+  const { VocabularyAdminItem } = await import("../../../packages/web/src/pages/admin/VocabularyAdminItem.tsx");
+  for (const kind of ["themes", "tags", "authors"] as const) {
+    const item = { slug: kind, display_name: "before", link: "", image_count: 0, sort_order: 1 };
+    const columns: VocabularyColumnId[] = ["slug", "display", ...(kind === "authors" ? ["link" as const] : []), "count", "sort", "actions"];
+    let deleted = 0;
+    let errors = 0;
+    const render = (viewMode: "card" | "list", canDelete = true) => h.render(h.React.createElement(VocabularyAdminItem, {
+      kind, item, columns, viewMode, canDelete, sortBusy: false,
+      onChanged() {}, onDelete() { deleted++; }, onError() { errors++; }, onSortSave: async (value) => value
+    }));
+    const action = () => h.document.querySelector<HTMLButtonElement>(".vocabulary-action-button");
+    const input = () => h.document.querySelector<HTMLInputElement>(".vocabulary-display-input")!;
+    const edit = (value: string) => h.React.act(async () => inputText(h.window, input(), value));
+    const click = () => h.React.act(async () => action()!.click());
+    await render("card", false);
+    assert.equal(action(), null);
+    await edit(" changed ");
+    assert.match(action()!.getAttribute("aria-label")!, /^保存/);
+    await render("list", false);
+    assert.equal(input().value, " changed ");
+    await click();
+    const request = h.pending.length - 1;
+    assert.deepEqual(JSON.parse(String(h.pending[request]!.body)), kind === "authors"
+      ? { display_name: "changed", link: "" } : { display_name: "changed" });
+    await render("card", false);
+    assert.equal(action()!.classList.contains("is-pending"), true);
+    assert.equal(input().disabled, true);
+    await click();
+    assert.equal(h.pending.length, request + 1);
+    await h.respond(request, { error: "save_failed" }, 500);
+    await h.React.act(async () => clock.advanceBy(500));
+    assert.equal(errors, 1);
+    assert.equal(input().value, " changed ");
+    assert.equal(action()!.classList.contains("is-error"), true);
+    await click();
+    await h.respond(request + 1, kind === "authors" ? { item: { ...item, display_name: "changed" } } : { ok: true });
+    await h.React.act(async () => clock.advanceBy(500));
+    await render("list");
+    assert.equal(action()!.classList.contains("is-success"), true);
+    assert.equal(action()!.disabled, true);
+    await click();
+    assert.equal(deleted, 0, "成功反馈不能误触删除");
+    await edit("next");
+    assert.equal(action()!.classList.contains("is-idle"), true);
+    assert.match(action()!.getAttribute("aria-label")!, /^保存/);
+    await click();
+    await h.respond(request + 2, kind === "authors" ? { item: { ...item, display_name: "next" } } : { ok: true });
+    await h.React.act(async () => clock.advanceBy(500));
+    await h.React.act(async () => clock.advanceBy(3_000));
+    assert.match(action()!.getAttribute("aria-label")!, /^删除/);
+    await click();
+    assert.equal(deleted, 1);
+    await render("card", false);
+    assert.equal(action(), null);
+    await h.render(null);
+  }
+});
+
 test("[Web/后台表单] 站点配置完整草稿支持保存与重载确认，并在超时、失败和卸载后收口", async (t) => {
   const h = await createConfigStreamHarness(t);
   const clock = installControlledClock(t, h.window);

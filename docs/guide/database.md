@@ -267,7 +267,7 @@ HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退�
 | `username` (PK) | 用户名 |
 | `password_hash` | Argon2id PHC 密码哈希；数据库约束基本格式和长度，应用校验参数安全范围 |
 | `role` | `super` / `image` |
-| `preferences` | 管理员界面偏好 JSONB；顶层必须是对象、最大 4 KiB，保存 `color_scheme`、`image_sort_by`、`image_sort_order` |
+| `preferences` | 管理员界面偏好 JSONB；顶层必须是对象、最大 4 KiB，保存外观、图片排序与缩略图模式，以及主题 / 标签 / 作者各自的展现模式，键和值域见下文 |
 | `created_at` / `updated_at` | 时间戳 |
 
 仅在数据库没有 super 时，首次启动才使用 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 创建首个 super；已有 super 的账号、密码和偏好始终以 PostgreSQL 为准。偏好 PATCH 使用 JSONB 顶层合并，不同键的并发修改由同一账号行串行化后各自保留；API 只返回当前 shared schema 认识的键。`color_scheme` 只接受 `light` / `dark` / `system`，缺失时使用 `system` 并由浏览器实时解析。默认值集中在 shared，数据库只保存用户选择的模式，不保存自动模式解析出的设备明暗结果。
@@ -275,6 +275,14 @@ HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退�
 图片列表偏好 `image_sort_by` 接受 `image_time` / `created_at`，`image_sort_order` 接受
 `latest` / `oldest`；缺失时分别使用 `image_time` / `latest`。排序选择沿用已有 JSONB 原子合并，
 不需要新增列或数据库结构维护。偏好在下次进入图片页时初始化列表，不强制重排其他已打开窗口。
+
+`image_thumbnail_fit` 接受 `cover` / `contain`，分别对应缩略图“填充” / “完整”，缺失时使用 `cover`。
+沿用同一账号偏好存储与同步机制，只改变后台列表缩略图在固定图片框中的显示方式，不改变正式图片文件或列表排序。
+
+`theme_view_mode`、`tag_view_mode`、`author_view_mode` 分别保存主题、标签、作者管理的展现模式，
+各自接受 `list` / `card`，缺失时默认 `card`。三个页面的选择相互独立，并随账号同步；
+切换只改变当前布局，保留当前页和仍挂载词条的编辑状态，不触发词表重新查询。
+这三项继续使用已有 JSONB 顶层合并，不需要数据库结构维护。
 
 ## tag / theme / image_tag —— 标签与主题
 

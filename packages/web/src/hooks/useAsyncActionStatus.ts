@@ -43,6 +43,15 @@ export function useAsyncActionStatus({
     };
   }, []);
 
+  const reset = useCallback(() => {
+    if (runningRef.current) return;
+    if (resetTimerRef.current !== null) {
+      window.clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = null;
+    }
+    setStatus("idle");
+  }, []);
+
   const run = useCallback(
     async (operation: () => Promise<boolean>) => {
       if (runningRef.current) return false;
@@ -92,6 +101,7 @@ export function useAsyncActionStatus({
   return {
     status,
     pending: status === "pending",
+    reset,
     run
   };
 }

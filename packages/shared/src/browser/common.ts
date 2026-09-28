@@ -83,10 +83,15 @@ export const defaultAdminImageSort: Readonly<AdminImageSort> = {
 // 管理端界面偏好以 PostgreSQL 为权威，并由浏览器本地存储提供首帧与离线兜底。
 // 将键和值域集中在 shared；新增偏好时，类型、服务端校验和前端投影会同步暴露缺口。
 export const adminColorSchemes = ["light", "dark", "system"] as const;
+const vocabularyViewModes = ["list", "card"] as const;
 export const adminPreferenceValueOptions = {
   color_scheme: adminColorSchemes,
   image_sort_by: adminImageSortFields,
-  image_sort_order: adminImageOrders
+  image_sort_order: adminImageOrders,
+  image_thumbnail_fit: ["cover", "contain"],
+  theme_view_mode: vocabularyViewModes,
+  tag_view_mode: vocabularyViewModes,
+  author_view_mode: vocabularyViewModes
 } as const;
 export const adminPreferencesMaxBytes = 4 * 1024;
 
@@ -103,7 +108,11 @@ export type AdminPreferenceValues = {
 export const defaultAdminPreferences: Readonly<AdminPreferenceValues> = Object.freeze({
   color_scheme: "system",
   image_sort_by: defaultAdminImageSort.sort_by,
-  image_sort_order: defaultAdminImageSort.order
+  image_sort_order: defaultAdminImageSort.order,
+  image_thumbnail_fit: "cover",
+  theme_view_mode: "card",
+  tag_view_mode: "card",
+  author_view_mode: "card"
 });
 
 export type AdminPreferences = Partial<AdminPreferenceValues>;

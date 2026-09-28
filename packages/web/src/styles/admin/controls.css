@@ -1,6 +1,70 @@
 :root {
   /* 后台页面与可独立懒加载的管理编辑器共用卡片集合密度。 */
   --admin-card-grid-gap: 6px;
+  --admin-toggle-thumb-width: 12px;
+  --admin-toggle-thumb-height: 22px;
+  --admin-toggle-edge-gap: 5px;
+  --admin-toggle-label-gap: 3px;
+}
+
+button.state-toggle-button {
+  position: relative;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 var(--admin-toggle-edge-gap) 0
+    calc(var(--admin-toggle-edge-gap) + var(--admin-toggle-thumb-width) + var(--admin-toggle-label-gap));
+  border: 1px solid var(--admin-color-border-control);
+  border-radius: 6px;
+  color: var(--admin-color-text-label);
+  background: var(--admin-color-surface-primary);
+  font-size: 13px;
+  line-height: 1;
+}
+button.state-toggle-button[data-shifted="true"] {
+  padding: 0
+    calc(var(--admin-toggle-edge-gap) + var(--admin-toggle-thumb-width) + var(--admin-toggle-label-gap)) 0
+    var(--admin-toggle-edge-gap);
+}
+.state-toggle-label {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.state-toggle-thumb {
+  position: absolute;
+  top: 50%;
+  left: var(--admin-toggle-edge-gap);
+  width: var(--admin-toggle-thumb-width);
+  height: var(--admin-toggle-thumb-height);
+  border: 1px solid var(--admin-color-control-border-hover);
+  border-radius: 4px;
+  background: var(--admin-color-control-switch-thumb);
+  box-shadow: 0 1px 2px var(--admin-shadow-control-resting);
+  transform: translateY(-50%);
+  transition: left 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.state-toggle-button[data-shifted="true"] .state-toggle-thumb {
+  left: calc(100% - var(--admin-toggle-edge-gap) - var(--admin-toggle-thumb-width));
+}
+button.state-toggle-button:focus-visible {
+  outline-offset: -3px;
+}
+@media (max-width: 760px) {
+  button.state-toggle-button {
+    --admin-toggle-thumb-height: 20px;
+    --admin-toggle-edge-gap: 4px;
+    --admin-toggle-label-gap: 2px;
+
+    font-size: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .state-toggle-thumb {
+    transition: none;
+  }
 }
 
 :root[data-ui-context="admin"] :is(input, textarea)::placeholder,
@@ -88,6 +152,13 @@
     color 0.16s ease,
     background-color 0.16s ease,
     border-color 0.16s ease;
+}
+/* 进入结果态时立即呈现结果配色，避免解锁后仍短暂显示可操作的旧颜色。 */
+.async-action-button:is(.is-success, .is-error),
+:is(.admin, [data-admin-dialog]) button.async-action-button:is(.is-success, .is-error) {
+  transition:
+    transform var(--pressable-transition-duration, 0.08s) ease,
+    filter 0.16s ease;
 }
 .async-action-label-slot {
   display: inline-grid;

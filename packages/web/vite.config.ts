@@ -322,7 +322,7 @@ export default defineConfig({
           groups: [
             {
               name: "query-vendor",
-              test: /[\\/]node_modules[\\/]@tanstack[\\/]/,
+              test: /[\\/]node_modules[\\/]@tanstack[\\/](?:react-query|query-core)[\\/]/,
               priority: 5
             },
             {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   adminPermissions,
   isThemeSlug,
@@ -10,6 +10,7 @@ import {
   type AdminPermission
 } from "@imageshow/shared/browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { tableFeatures, useTable, type ColumnDef } from "@tanstack/react-table";
 import { api, isApiClientError } from "../../lib/api/client.js";
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
@@ -18,7 +19,11 @@ import { AdminPagination } from "../../components/navigation/AdminPagination.js"
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { useActionFeedbackTarget } from "../../components/feedback/ActionFeedbackRegion.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
-import { VocabularyAdminCard } from "./VocabularyAdminCard.js";
+import {
+  VocabularyAdminItem,
+  vocabularyColumnLabels,
+  type VocabularyColumnId
+} from "./VocabularyAdminItem.js";
 import {
   adminApiBasePath,
   slugFormatHint,
@@ -36,12 +41,26 @@ import {
 } from "../../lib/api/query-invalidation.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { useAdminPermissions } from "../../hooks/useAuthSession.js";
+import { useAdminPreference } from "../../hooks/useAdminPreferences.js";
 import { useSortOrderSave } from "../../hooks/useSortOrderSave.js";
 import "../../styles/admin/entity.css";
+import "../../styles/admin/vocabulary.css";
 
 type VocabularyKind = "tags" | "themes" | "authors";
 type VocabularyEntry = Tag | Theme | Author;
 type VocabularyMutation = "" | "delete";
+
+const vocabularyFeatures = tableFeatures({});
+const vocabularyColumns: ColumnDef<typeof vocabularyFeatures, VocabularyEntry>[] =
+  Object.entries(vocabularyColumnLabels).map(([id, header]) => ({ id, header }));
+const termColumns = vocabularyColumns.filter((column) => column.id !== "link");
+const emptyVocabulary: VocabularyEntry[] = [];
+const vocabularyRowId = (item: VocabularyEntry) => item.slug;
+const VIEW_PREFERENCES = {
+  themes: "theme_view_mode",
+  tags: "tag_view_mode",
+  authors: "author_view_mode"
+} as const;
 
 const COPY = {
   tags: {
@@ -84,7 +103,7 @@ const DELETE_PERMISSIONS = {
 export function VocabularyAdmin({ kind }: { kind: VocabularyKind }) {
   return (
     <AdminSettingsBoundary>
-      {(settings) => <VocabularyAdminContent kind={kind} settings={settings} />}
+      {(settings) => <VocabularyAdminContent key={kind} kind={kind} settings={settings} />}
     </AdminSettingsBoundary>
   );
 }
@@ -98,6 +117,7 @@ function VocabularyAdminContent({
 }) {
   const copy = COPY[kind];
   const isAuthor = kind === "authors";
+  const [viewMode, setViewMode] = useAdminPreference(VIEW_PREFERENCES[kind]);
   const queryKey = QUERY_KEYS[kind];
   const permissions = useAdminPermissions();
   const canDelete = permissions.includes(DELETE_PERMISSIONS[kind]);
@@ -106,7 +126,7 @@ function VocabularyAdminContent({
     data,
     error: listError,
     isError: listFailed,
-    isFetching,
+    isPending,
     refetch
   } = useQuery<AdminEntityListResponseDto<VocabularyEntry>>({
     queryKey,
@@ -149,6 +169,36 @@ function VocabularyAdminContent({
   const [confirmDelete, setConfirmDelete] = useState<VocabularyEntry | null>(null);
   const [page, setPage] = useState(1);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const listContentRef = useRef<HTMLDivElement | null>(null);
+  const scrollAnchorRef = useRef<{
+    element: HTMLElement;
+    offset: number;
+  } | null>(null);
+
+  const changeView = (nextView: "list" | "card") => {
+    if (nextView === viewMode) return;
+    const viewport = listRef.current;
+    if (viewport && viewport.scrollTop > 0) {
+      const viewportTop = viewport.getBoundingClientRect().top;
+      const anchor = Array.from(viewport.querySelectorAll<HTMLElement>("[data-vocabulary-slug]"))
+        .find((element) => element.getBoundingClientRect().bottom > viewportTop);
+      scrollAnchorRef.current = anchor ? {
+        element: anchor,
+        offset: anchor.getBoundingClientRect().top - viewportTop
+      } : null;
+    }
+    setViewMode(nextView);
+  };
+
+  useLayoutEffect(() => {
+    const anchor = scrollAnchorRef.current;
+    scrollAnchorRef.current = null;
+    const viewport = listRef.current;
+    if (!viewport || !anchor?.element.isConnected) return;
+    const viewportTop = viewport.getBoundingClientRect().top;
+    const delta = anchor.element.getBoundingClientRect().top - viewportTop - anchor.offset;
+    viewport.scrollTop += delta;
+  }, [viewMode]);
 
   useEffect(() => {
     if (canDelete) return;
@@ -178,10 +228,19 @@ function VocabularyAdminContent({
         error
       )
   });
-  const order = data?.items ?? [];
+  const order = data?.items ?? emptyVocabulary;
   const operationBusy = sorting.busy;
   const totalPages = Math.max(1, Math.ceil(order.length / pageSize));
-  const pageItems = order.slice((page - 1) * pageSize, page * pageSize);
+  const pageItems = useMemo(
+    () => order.slice((page - 1) * pageSize, page * pageSize),
+    [order, page, pageSize]
+  );
+  const table = useTable({
+    features: vocabularyFeatures,
+    columns: isAuthor ? vocabularyColumns : termColumns,
+    data: pageItems,
+    getRowId: vocabularyRowId
+  });
   useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
@@ -246,92 +305,137 @@ function VocabularyAdminContent({
   };
 
   return (
-    <section className="workspace workspace-paged">
-      <WorkspaceHeader
-        title={`${copy.noun}管理`}
-        description={`第 ${page} / ${totalPages} 页 · 共 ${order.length} 个${copy.noun}${isFetching ? " · 加载中" : ""}`}
-        feedbackTarget={feedbackTarget}
-      />
-      <form className="admin-create-form" onSubmit={create}>
-        <div className="admin-create-field entity-slug-field">
-          <input
-            className="entity-create-slug"
-            value={slug}
-            onChange={(event) => {
-              setSlug(event.target.value.toLowerCase());
-              setCreateError("");
-            }}
-            placeholder={copy.slugPlaceholder}
-            disabled={externalBusy}
-            maxLength={32}
-            aria-invalid={Boolean(slugError)}
-          />
-          {slugError && (
-            <p className="admin-field-error" role="alert">
-              {slugError}
-            </p>
-          )}
-        </div>
-        <input
-          value={display}
-          onChange={(event) => setDisplay(event.target.value)}
-          placeholder={copy.displayPlaceholder}
-          disabled={externalBusy}
-          maxLength={64}
+    <section className="workspace workspace-paged workspace-contained vocabulary-page">
+      <div className="vocabulary-toolbar" data-kind={kind}>
+        <WorkspaceHeader
+          title={`${copy.noun}管理`}
+          description={`第 ${page} / ${totalPages} 页 · 共 ${order.length} 个${copy.noun}${isPending ? " · 加载中" : ""}`}
+          feedbackTarget={feedbackTarget}
         />
-        {isAuthor && (
+        <form className="admin-create-form" onSubmit={create}>
+          <div className="admin-create-field entity-slug-field">
+            <input
+              className="entity-create-slug"
+              value={slug}
+              onChange={(event) => {
+                setSlug(event.target.value.toLowerCase());
+                setCreateError("");
+              }}
+              placeholder={copy.slugPlaceholder}
+              disabled={externalBusy}
+              maxLength={32}
+              aria-invalid={Boolean(slugError)}
+            />
+            {slugError && (
+              <p className="admin-field-error" role="alert">
+                {slugError}
+              </p>
+            )}
+          </div>
           <input
-            value={link}
-            onChange={(event) => setLink(event.target.value)}
-            placeholder="作者主页链接（HTTPS，可选）"
+            className="vocabulary-create-display"
+            value={display}
+            onChange={(event) => setDisplay(event.target.value)}
+            placeholder={copy.displayPlaceholder}
             disabled={externalBusy}
-            maxLength={2048}
+            maxLength={64}
           />
-        )}
-        <button
-          className="button"
-          type="submit"
-          disabled={operationBusy || !slug.trim() || slugInvalid}
-        >
-          <AdminIcon name="add-line" />
-          <StableButtonLabel
-            idle={`新建${copy.noun}`}
-            busyText="新建中"
-            busy={createAction.pending}
-          />
-        </button>
-      </form>
-      <div className="admin-scroll-region" ref={listRef}>
-        <div className="entity-admin-grid entity-vocabulary-grid">
-          {pageItems.map((item) => {
-            return (
-              <VocabularyAdminCard
-                key={`${kind}:${item.slug}`}
-                kind={kind}
-                item={item}
-                canDelete={canDelete}
-                sortBusy={externalBusy || sorting.isSaving(item.slug)}
-                onSortSave={(value) => sorting.save(item.slug, value)}
-                onChanged={async (item) => {
-                  if (item) await acceptAuthorItem(item);
-                  else await refreshVocabulary();
-                }}
-                onDelete={() => setConfirmDelete(item)}
-                onError={(error) => reportAdminUiError(`vocabulary_admin.${kind}.update`, error)}
-              />
-            );
-          })}
-          {listFailed && (
-            <QueryErrorState
-              error={listError}
-              onRetry={() => void refetch()}
-              reportContext={`vocabulary_admin.${kind}.load`}
+          {isAuthor && (
+            <input
+              className="vocabulary-create-link"
+              value={link}
+              onChange={(event) => setLink(event.target.value)}
+              placeholder="作者主页链接（HTTPS，可选）"
+              disabled={externalBusy}
+              maxLength={2048}
             />
           )}
-          {!listFailed && !order.length && !isFetching && <p className="muted">{copy.empty}</p>}
+          <button
+            className="button vocabulary-create-button"
+            type="submit"
+            disabled={operationBusy || !slug.trim() || slugInvalid}
+          >
+            <AdminIcon name="add-line" />
+            <StableButtonLabel
+              idle={`新建${copy.noun}`}
+              busyText="新建中"
+              busy={createAction.pending}
+            />
+          </button>
+        </form>
+        <button
+          type="button"
+          className="state-toggle-button vocabulary-view-switch"
+          data-shifted={viewMode === "list"}
+          aria-pressed={viewMode === "list"}
+          aria-label={`${copy.noun}以${viewMode === "card" ? "卡片" : "列表"}显示；点击切换为${viewMode === "card" ? "列表" : "卡片"}`}
+          title={`切换为${viewMode === "card" ? "列表" : "卡片"}`}
+          onClick={() => changeView(viewMode === "card" ? "list" : "card")}
+        >
+          <span className="state-toggle-label">{viewMode === "card" ? "卡片" : "列表"}</span>
+          <span className="state-toggle-thumb" aria-hidden="true" />
+        </button>
+      </div>
+      <div className="vocabulary-content">
+        <div
+          className="vocabulary-collection"
+          data-view={viewMode}
+          data-kind={kind}
+          role={viewMode === "list" ? "table" : "list"}
+          aria-label={`${copy.noun}${viewMode === "list" ? "列表" : "卡片"}`}
+        >
+          <div className="vocabulary-header" role="rowgroup" hidden={viewMode !== "list"}>
+            {table.getHeaderGroups().map((group) => (
+              <div className="vocabulary-header-row" role="row" key={group.id}>
+                {group.headers.map((header) => (
+                  <div
+                    className={`vocabulary-column-${header.column.id}`}
+                    role="columnheader"
+                    key={header.id}
+                    title={header.column.id === "count" ? "全部关联图片（包含回收站）" : undefined}
+                  >
+                    <table.FlexRender header={header} />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="admin-scroll-region vocabulary-scroll" ref={listRef}>
+            <div ref={listContentRef} className="vocabulary-items" role={viewMode === "list" ? "rowgroup" : undefined}>
+              {table.getRowModel().rows.map((row) => {
+                const item = row.original;
+                return (
+                  <VocabularyAdminItem
+                    key={`${kind}:${row.id}`}
+                    kind={kind}
+                    item={item}
+                    columns={row.getAllCells().map((cell) => cell.column.id as VocabularyColumnId)}
+                    viewMode={viewMode}
+                    canDelete={canDelete}
+                    sortBusy={externalBusy || sorting.isSaving(item.slug)}
+                    onSortSave={(value) => sorting.save(item.slug, value)}
+                    onChanged={async (item) => {
+                      if (item) await acceptAuthorItem(item);
+                      else await refreshVocabulary();
+                    }}
+                    onDelete={() => setConfirmDelete(item)}
+                    onError={(error) => reportAdminUiError(`vocabulary_admin.${kind}.update`, error)}
+                  />
+                );
+              })}
+            </div>
+            {listFailed && (
+              <QueryErrorState
+                error={listError}
+                onRetry={() => void refetch()}
+                reportContext={`vocabulary_admin.${kind}.load`}
+              />
+            )}
+            {!listFailed && !order.length && !isPending && <p className="muted vocabulary-empty">{copy.empty}</p>}
+          </div>
         </div>
       </div>
-      <OverlayScrollbar targetRef={listRef} pageEdge />
+      <OverlayScrollbar targetRef={listRef} contentRef={listContentRef} pageEdge />
       <AdminPagination
         ariaLabel={`${copy.noun}分页`}
         page={page}

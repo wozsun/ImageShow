@@ -1852,29 +1852,29 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
             )
           );
         });
-      const sortButtons = () => [
+      const viewButtons = () => [
         ...container.querySelectorAll<HTMLButtonElement>(
-          '[role="group"][aria-label="图片列表排序"] > button'
+          '[role="group"][aria-label="图片列表排序与缩略图显示"] > button'
         )
       ];
-      const labels = () => sortButtons().map((button) => button.textContent);
+      const labels = () => viewButtons().map((button) => button.textContent);
       const cacheKey = `imageshow.admin.preferences.${username}`;
       try {
         await render(1);
         await waitFor(() => requests.length === 1, "default sort did not load once in Strict Mode");
-        assert.deepEqual(labels(), ["图片", "最新"]);
+        assert.deepEqual(labels(), ["图片", "最新", "填充"]);
         assert.equal(patches.length, 0, "reading defaults must not write preferences");
         await click(buttonWithText("下一页"));
         await waitFor(
           () => requests.at(-1)?.searchParams.get("page") === "2",
           "page 2 did not load"
         );
-        await click(sortButtons()[0]!);
+        await click(viewButtons()[0]!);
         await waitFor(() => patches.length === 1, "field preference was not queued");
         assert.equal(requests.at(-1)?.searchParams.get("page"), "1");
-        await click(sortButtons()[1]!);
-        await click(sortButtons()[0]!);
-        assert.deepEqual(labels(), ["图片", "最旧"]);
+        await click(viewButtons()[1]!);
+        await click(viewButtons()[0]!);
+        assert.deepEqual(labels(), ["图片", "最旧", "填充"]);
         releaseFirstPatch();
         await waitFor(
           () => saved.image_sort_by === "image_time"
@@ -1899,7 +1899,7 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
           4
         );
         await render(2);
-        assert.deepEqual(labels(), ["图片", "最旧"], "re-entry must restore the saved selection");
+        assert.deepEqual(labels(), ["图片", "最旧", "填充"], "re-entry must restore the saved selection");
         const requestCount = requests.length;
         localStorage.setItem(
           cacheKey,
@@ -1916,20 +1916,20 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
         await React.act(async () => window.dispatchEvent(storageEvent));
         assert.deepEqual(
           labels(),
-          ["图片", "最旧"],
+          ["图片", "最旧", "填充"],
           "another window must not reorder the active list"
         );
         assert.equal(requests.length, requestCount);
         await render(3);
         assert.deepEqual(
           labels(),
-          ["入库", "最新"],
+          ["入库", "最新", "填充"],
           "the next visit consumes synchronized preferences"
         );
         offline = true;
-        await click(sortButtons()[1]!);
+        await click(viewButtons()[1]!);
         await waitFor(() => patches.length === 4, "offline preference was not attempted");
-        assert.deepEqual(labels(), ["入库", "最旧"]);
+        assert.deepEqual(labels(), ["入库", "最旧", "填充"]);
         assert.equal(
           JSON.parse(localStorage.getItem(cacheKey)!).pending.image_sort_order,
           "oldest"
@@ -1942,6 +1942,20 @@ test("[Web/后台访问] 图片后台真实挂载保持排序偏好、弹窗页�
             Object.keys(JSON.parse(localStorage.getItem(cacheKey)!).pending).length === 0,
           "reconnection did not persist the pending preference"
         );
+        await click(buttonWithText("下一页"));
+        await waitFor(() => requests.at(-1)?.searchParams.get("page") === "2", "thumbnail scenario page 2");
+        await click(container.querySelector<HTMLElement>('.admin-image-card-checkbox-hit-area')!);
+        const selectedBefore = container.querySelectorAll('.admin-image-card.is-selected').length;
+        assert.equal(selectedBefore, 1);
+        const beforeFit = requests.length;
+        await click(viewButtons()[2]!);
+        await waitFor(() => saved.image_thumbnail_fit === "contain", "thumbnail preference was not saved");
+        assert.equal(container.querySelector('.admin-image-grid')?.getAttribute('data-thumbnail-fit'), "contain");
+        assert.equal(requests.length, beforeFit, "缩略图模式不重新查询或重置页码");
+        assert.equal(container.querySelectorAll('.admin-image-card.is-selected').length, selectedBefore);
+        assert.deepEqual(patches.at(-1), { image_thumbnail_fit: "contain" });
+        await render(4);
+        assert.equal(viewButtons()[2]!.textContent, "完整", "重新进入恢复缩略图偏好");
       } finally {
         releaseFirstPatch();
         await React.act(async () => root.unmount());

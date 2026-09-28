@@ -13,6 +13,62 @@ import { queryKeys } from "../../../../packages/web/src/lib/api/query-keys.ts";
 
 import { createConfigStreamHarness } from "../../support/web-test-context.ts";
 
+test("[Web/后台访问] 独立视图偏好默认卡片，接收跨窗口 pending 只同步外观并支持重入恢复", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const { AdminPreferencesProvider, useAdminPreference } = await import("../../../../packages/web/src/hooks/useAdminPreferences.tsx");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  t.after(() => { client.clear(); clearCsrfToken(); });
+  setCsrfToken("view-preference-test");
+  const key = "imageshow.admin.preferences.views";
+  const stored = new Map<string, string>();
+  Object.assign(h.window, { localStorage: {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => stored.set(key, value)
+  } });
+  let values: string[] = [];
+  let setTag!: (value: "card" | "list") => void;
+  function Probe() {
+    const [theme] = useAdminPreference("theme_view_mode");
+    const [tag, updateTag] = useAdminPreference("tag_view_mode");
+    const [author] = useAdminPreference("author_view_mode");
+    const [fit] = useAdminPreference("image_thumbnail_fit");
+    values = [theme, tag, author, fit]; setTag = updateTag;
+    return null;
+  }
+  const mount = () => h.render(h.React.createElement(QueryClientProvider, { client },
+    h.React.createElement(AdminPreferencesProvider, {
+      username: "views", serverPreferences: {}, serverPreferencesEtag: "initial",
+      serverPreferencesUpdatedAt: Date.now()
+    }, h.React.createElement(Probe))));
+  await mount();
+  assert.deepEqual(values, ["card", "card", "card", "cover"]);
+  const receive = async (snapshot: object) => h.React.act(async () => {
+    stored.set(key, JSON.stringify(snapshot));
+    h.window.dispatchEvent(Object.assign(new Event("storage"), { key, storageArea: h.window.localStorage }));
+  });
+  const pending = { theme_view_mode: "list" };
+  await receive({ values: pending, pending });
+  await h.flush();
+  assert.deepEqual(values, ["list", "card", "card", "cover"]);
+  assert.equal(h.pending.length, 0, "接收页面不代发另一窗口的写入");
+  await receive({ values: pending, pending: {} });
+  assert.equal(h.pending.length, 0);
+  await h.React.act(async () => setTag("list"));
+  assert.deepEqual(JSON.parse(String(h.pending[0]!.body)), { tag_view_mode: "list" });
+  await h.respond(0, { preferences: { theme_view_mode: "list", tag_view_mode: "list" } });
+  assert.deepEqual(values, ["list", "list", "card", "cover"]);
+  const stranded = { author_view_mode: "list", image_thumbnail_fit: "contain" };
+  await receive({ values: stranded, pending: stranded });
+  assert.equal(h.pending.length, 1);
+  await h.render(null);
+  client.clear();
+  await mount();
+  assert.deepEqual(JSON.parse(String(h.pending[1]!.body)), stranded);
+  await h.respond(1, { preferences: stranded });
+  assert.deepEqual(JSON.parse(stored.get(key)!).pending, {});
+});
+
 test("[Web/后台访问] 偏好队列随账号卸载终止，迟到响应不写入新账号且原账号可恢复", async (t) => {
   const h = await createConfigStreamHarness(t, { honorAbort: false });
   const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");

@@ -81,6 +81,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const [filters, setFilters] = useState<ImageAdminFilterValues>(emptyImageAdminFilters);
   const [preferredSortBy, setPreferredSortBy] = useAdminPreference("image_sort_by");
   const [preferredOrder, setPreferredOrder] = useAdminPreference("image_sort_order");
+  const [thumbnailFit, setThumbnailFit] = useAdminPreference("image_thumbnail_fit");
   // Account preferences seed each visit; other windows must not reorder an active list.
   const [sort, setSort] = useState<AdminImageSort>(() => ({
     sort_by: preferredSortBy,
@@ -266,6 +267,10 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const nextSortFieldLabel = sort.sort_by === "image_time" ? "入库" : "图片";
   const sortOrderLabel = sort.order === "latest" ? "最新" : "最旧";
   const nextSortOrderLabel = sort.order === "latest" ? "最旧" : "最新";
+  const thumbnailFitLabel = thumbnailFit === "cover" ? "填充" : "完整";
+  const thumbnailFitHelp = thumbnailFit === "cover"
+    ? "缩略图填充显示；点击完整显示，保留比例且不裁切"
+    : "缩略图完整显示；点击填充显示，铺满图片框";
   const pageStatusSuffix = isFetching
     ? " · 加载中"
     : hasCurrentPageData
@@ -377,9 +382,10 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                 variant="page"
               />
             )}
-            <div className="image-list-sort-control" role="group" aria-label="图片列表排序">
+            <div className="image-list-view-controls" role="group" aria-label="图片列表排序与缩略图显示">
               <button
                 type="button"
+                className="state-toggle-button"
                 data-shifted={sort.sort_by === "created_at"}
                 disabled={interfaceBusy}
                 aria-label={`按${sortFieldLabel}时间排序；点击切换为${nextSortFieldLabel}时间`}
@@ -391,12 +397,13 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                   })
                 }
               >
-                <span className="image-list-sort-label">{sortFieldLabel}</span>
-                <span className="image-list-sort-thumb" aria-hidden="true" />
+                <span className="state-toggle-label">{sortFieldLabel}</span>
+                <span className="state-toggle-thumb" aria-hidden="true" />
               </button>
-              <span className="image-list-sort-divider" aria-hidden="true" />
+              <span className="image-list-view-divider" aria-hidden="true" />
               <button
                 type="button"
+                className="state-toggle-button"
                 data-shifted={sort.order === "oldest"}
                 disabled={interfaceBusy}
                 aria-label={`${sortOrderLabel}优先；点击切换为${nextSortOrderLabel}优先`}
@@ -408,8 +415,22 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
                   })
                 }
               >
-                <span className="image-list-sort-label">{sortOrderLabel}</span>
-                <span className="image-list-sort-thumb" aria-hidden="true" />
+                <span className="state-toggle-label">{sortOrderLabel}</span>
+                <span className="state-toggle-thumb" aria-hidden="true" />
+              </button>
+              <span className="image-list-view-divider" aria-hidden="true" />
+              <button
+                type="button"
+                className="state-toggle-button"
+                data-shifted={thumbnailFit === "contain"}
+                disabled={interfaceBusy}
+                aria-label={thumbnailFitHelp}
+                aria-pressed={thumbnailFit === "contain"}
+                title={thumbnailFitHelp}
+                onClick={() => setThumbnailFit(thumbnailFit === "cover" ? "contain" : "cover")}
+              >
+                <span className="state-toggle-label">{thumbnailFitLabel}</span>
+                <span className="state-toggle-thumb" aria-hidden="true" />
               </button>
             </div>
             <div className="image-list-batch-actions">
@@ -548,7 +569,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
         </div>
       </div>
       <div key={`grid:${scopeKey}:${pageNumber}`} className="admin-scroll-region" ref={gridRef}>
-        <div className="admin-image-grid">
+        <div className="admin-image-grid" data-thumbnail-fit={thumbnailFit}>
           {items.map((item) => (
             <AdminImageCard
               key={item.id}

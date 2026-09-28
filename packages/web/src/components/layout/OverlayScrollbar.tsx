@@ -28,6 +28,7 @@ function handleTransform(top: number) {
 
 type OverlayScrollbarProps = {
   targetRef?: RefObject<HTMLElement | null>;
+  contentRef?: RefObject<HTMLElement | null>;
   containerRef?: RefObject<HTMLElement | null>;
   topInsetRef?: RefObject<HTMLElement | null>;
   pageEdge?: boolean;
@@ -38,6 +39,7 @@ type OverlayScrollbarProps = {
 
 export function OverlayScrollbar({
   targetRef,
+  contentRef,
   containerRef,
   topInsetRef,
   pageEdge,
@@ -74,6 +76,7 @@ export function OverlayScrollbar({
   return (
     <OverlayScrollbarHandle
       targetRef={targetRef}
+      contentRef={contentRef}
       containerRef={containerRef}
       topInsetRef={topInsetRef}
       pageEdge={pageEdge}
@@ -85,6 +88,7 @@ export function OverlayScrollbar({
 
 function OverlayScrollbarHandle({
   targetRef,
+  contentRef,
   containerRef,
   topInsetRef,
   pageEdge,
@@ -261,6 +265,7 @@ function OverlayScrollbarHandle({
 
     observer = new ResizeObserver(scheduleRecompute);
     observer.observe(el ?? document.body);
+    if (contentRef?.current) observer.observe(contentRef.current);
     if (containerRef?.current) observer.observe(containerRef.current);
     if (topInsetRef?.current) observer.observe(topInsetRef.current);
     // 页面锁的权威状态由 html.modal-open 表达。只观察根元素 class，避免恢复
@@ -282,7 +287,7 @@ function OverlayScrollbarHandle({
       window.clearTimeout(hideTimer.current);
       if (el) el.classList.remove("overlay-scroll-host");
     };
-  }, [containerRef, pageEdge, targetRef, topInsetRef]);
+  }, [containerRef, contentRef, pageEdge, targetRef, topInsetRef]);
 
   const onHandlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();

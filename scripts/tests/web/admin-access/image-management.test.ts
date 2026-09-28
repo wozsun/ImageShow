@@ -836,6 +836,8 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
       await import("../../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
     const { VocabularyAdmin } =
       await import("../../../../packages/web/src/pages/admin/VocabularyAdmin.tsx");
+    const { AdminPreferencesProvider } =
+      await import("../../../../packages/web/src/hooks/useAdminPreferences.tsx");
     const client = new QueryClient({
       defaultOptions: {
         queries: {
@@ -897,7 +899,11 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
                   React.createElement(
                     ActionFeedbackProvider,
                     null,
-                    React.createElement(VocabularyAdmin, { kind: "authors" })
+                    React.createElement(AdminPreferencesProvider, {
+                      username: "author-profile-test", serverPreferences: {},
+                      serverPreferencesEtag: 'W/"author-profile-preferences"',
+                      serverPreferencesUpdatedAt: Date.now()
+                    }, React.createElement(VocabularyAdmin, { kind: "authors" }))
                   )
                 )
               )
@@ -908,7 +914,7 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
       await settleUntil(
         () =>
           authorGets >= 1 &&
-          Boolean(container.querySelector("input[aria-label='作者 author-profile-test 链接']"))
+          Boolean(container.querySelector("input[aria-label='作者 author-profile-test 主页链接']"))
       );
       await React.act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
@@ -916,14 +922,10 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
       await settleUntil(() => client.getQueryState(queryKeys.authors)?.fetchStatus === "idle");
       const authorGetsBeforeSave = authorGets;
       const linkInput = container.querySelector<HTMLInputElement>(
-        "input[aria-label='作者 author-profile-test 链接']"
+        "input[aria-label='作者 author-profile-test 主页链接']"
       );
-      const card = container.querySelector<HTMLElement>(".entity-card");
       assert.ok(linkInput);
-      assert.ok(card);
       assert.equal(linkInput.getAttribute("title"), null);
-      assert.equal(card.querySelectorAll(".entity-card-link-row").length, 1);
-      const initialCardChildren = card.childElementCount;
 
       await React.act(async () => {
         inputText(
@@ -972,9 +974,7 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
       assert.equal(linkInput.value, committedAuthor.link);
       assert.equal(linkInput.getAttribute("title"), "平台: weibo; UID: 4444444444");
       assert.equal(authorGets, authorGetsBeforeSave);
-      assert.equal(card.childElementCount, initialCardChildren);
-      assert.equal(card.querySelectorAll(".entity-card-link-row").length, 1);
-      assert.equal(card.querySelectorAll("[role='tooltip']").length, 0);
+      assert.equal(container.querySelector("input[aria-label='作者 author-profile-test 主页链接']"), linkInput);
       assert.equal(
         client.getQueryState(queryKeys.authors)?.isInvalidated,
         false
@@ -998,7 +998,7 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
       });
       await settleUntil(
         () =>
-          container.querySelector<HTMLInputElement>(".entity-card input")?.value ===
+          container.querySelector<HTMLInputElement>(".vocabulary-item .entity-slug")?.value ===
           createdAuthor.slug
       );
       assert.deepEqual(client.getQueryData(queryKeys.authors), {

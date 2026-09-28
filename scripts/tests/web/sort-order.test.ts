@@ -33,6 +33,8 @@ async function sortingPage(t: TestContext, kind: Kind) {
   const { MemoryRouter } = await import("react-router");
   const { AuthSessionProvider } =
     await import("../../../packages/web/src/hooks/useAuthSession.tsx");
+  const { AdminPreferencesProvider } =
+    await import("../../../packages/web/src/hooks/useAdminPreferences.tsx");
   const { ActionFeedbackProvider } =
     await import("../../../packages/web/src/components/feedback/ActionFeedbackRegion.tsx");
   const { storageBackendS3FormSettings } =
@@ -110,7 +112,10 @@ async function sortingPage(t: TestContext, kind: Kind) {
             null,
             kind === "storage"
               ? h.React.createElement(StorageSettings)
-              : h.React.createElement(VocabularyAdmin, { kind })
+              : h.React.createElement(AdminPreferencesProvider, {
+                  username: "sort-tester", serverPreferences: {},
+                  serverPreferencesEtag: "initial", serverPreferencesUpdatedAt: Date.now()
+                }, h.React.createElement(VocabularyAdmin, { kind }))
           )
         )
       )
@@ -231,13 +236,13 @@ test("[Web/后台排序] 作者资料保存与排序回读重叠时采用同时�
   await h.enter("a");
   await h.respond(0, { ok: true });
   assert.equal(h.pending[1].path, h.path);
-  const otherCard = h.input("b").closest(".entity-card")!;
-  const name = otherCard.querySelector<HTMLInputElement>(".entity-display-input")!;
+  const otherCard = h.input("b").closest(".vocabulary-item")!;
+  const name = otherCard.querySelector<HTMLInputElement>(".vocabulary-display-input")!;
   assert.equal(name.disabled, false);
   await h.React.act(async () => {
     inputText(h.window, name, "updated");
   });
-  await h.emit(otherCard.querySelector(".entity-card-foot .button")!, "click");
+  await h.emit(otherCard.querySelector(".vocabulary-action-button")!, "click");
   assert.equal(h.pending[2].path, `${h.path}/b`);
   const fresh = h.response({ a: 1001 }).items!;
   const item = { ...fresh.find((row) => row.slug === "b")!, display_name: "updated" };
@@ -267,15 +272,15 @@ test("[Web/后台排序] 作者同值顺序保持服务器排列，无法确定�
   });
   await h.flush();
   const order = () =>
-    [...h.document.querySelectorAll<HTMLInputElement>(".entity-card .entity-slug")].map(
+    [...h.document.querySelectorAll<HTMLInputElement>(".vocabulary-item .entity-slug")].map(
       (input) => input.value
     );
   const saveName = async (slug: string, value: string) => {
-    const card = h.input(slug).closest(".entity-card")!;
+    const card = h.input(slug).closest(".vocabulary-item")!;
     await h.React.act(async () => {
-      inputText(h.window, card.querySelector<HTMLInputElement>(".entity-display-input")!, value);
+      inputText(h.window, card.querySelector<HTMLInputElement>(".vocabulary-display-input")!, value);
     });
-    await h.emit(card.querySelector(".entity-card-foot .button")!, "click");
+    await h.emit(card.querySelector(".vocabulary-action-button")!, "click");
   };
   const renamed = { ...ab, display_name: "renamed" };
   await saveName("a-b", renamed.display_name);

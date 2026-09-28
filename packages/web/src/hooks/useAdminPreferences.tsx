@@ -413,6 +413,7 @@ export function AdminPreferencesProvider({
         return;
       }
       const next = readCachedPreferences(username);
+      if (sameCache(cacheRef.current, next)) return;
       const scope = syncScopeRef.current;
       if (scope) {
         scope.storageRevision += 1;
@@ -424,11 +425,12 @@ export function AdminPreferencesProvider({
       void cancelPreferenceReads().catch(() => undefined);
       cacheRef.current = next;
       setCache(next);
-      enqueueSync(next.pending);
+      // 接收页面只同步外观；发起修改的页面负责写入，避免每个窗口重复 PATCH。
+      // 未确认的 pending 仍持久保留，由原页面、重新进入或网络恢复继续同步。
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, [cancelPreferenceReads, enqueueSync, username]);
+  }, [cancelPreferenceReads, username]);
 
   useEffect(() => {
     const retryPendingPreferences = () => {

@@ -409,6 +409,10 @@ await runIntegrationScenario(async (runtime) => {
   for (const body of [
     { image_sort_by: "updated_at" },
     { image_sort_order: "random" },
+    { image_thumbnail_fit: "stretch" },
+    { theme_view_mode: "grid" },
+    { tag_view_mode: "grid" },
+    { author_view_mode: "grid" },
     { image_sort_by: "image_time", username: "someone-else" },
     {}
   ])
@@ -439,6 +443,17 @@ await runIntegrationScenario(async (runtime) => {
     }
   }
   assert.deepEqual(await preferenceStore.readAdminPreferences("preference-peer"), {});
+  for (const image_thumbnail_fit of ["cover", "contain"] as const) {
+    for (const view of ["card", "list"] as const) {
+      const patch = { image_thumbnail_fit, theme_view_mode: view, tag_view_mode: view === "card" ? "list" : "card", author_view_mode: view };
+      const response = await preferenceRequest(patch);
+      assert.equal(response.status, 200);
+      assert.deepEqual((await response.json()).preferences, {
+        color_scheme: "dark", image_sort_by: "created_at", image_sort_order: "oldest", ...patch
+      });
+      assert.deepEqual(await preferenceStore.readAdminPreferences("preference-peer"), {});
+    }
+  }
   const savedPreferences = await preferenceRequest();
   const authWithPreferences = await authMe();
   const authPayload = await authWithPreferences.json();

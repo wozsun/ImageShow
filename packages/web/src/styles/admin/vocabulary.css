@@ -1,0 +1,338 @@
+.vocabulary-toolbar {
+  container: vocabulary-toolbar / inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 10px;
+  flex: 0 0 auto;
+  margin-bottom: 16px;
+}
+.vocabulary-toolbar > .workspace-head {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.vocabulary-toolbar > .admin-create-form {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  margin-bottom: 0;
+}
+.vocabulary-create-button {
+  white-space: nowrap;
+}
+.vocabulary-view-switch {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: start;
+  justify-self: end;
+  width: 64px;
+  height: 36px;
+}
+.vocabulary-page > .admin-pagination {
+  flex: 0 0 auto;
+}
+
+.vocabulary-content {
+  container: vocabulary / inline-size;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.vocabulary-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-anchor: none;
+  padding-bottom: 8px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.vocabulary-scroll.page-edge-scroll-host {
+  margin-inline-end: calc(-1 * var(--workspace-inline-padding));
+  padding-inline-end: calc(var(--workspace-inline-padding) + 2px);
+}
+.vocabulary-collection {
+  --vocabulary-columns: minmax(120px, 1fr) minmax(160px, 2fr) 76px 150px 36px;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.vocabulary-collection[data-kind="authors"] {
+  --vocabulary-columns: minmax(120px, 0.8fr) minmax(150px, 1.2fr) minmax(180px, 2fr) 76px 150px 36px;
+}
+.vocabulary-header {
+  flex: 0 0 auto;
+  margin-inline-end: 2px;
+  border-bottom: 1px solid var(--admin-color-border-card);
+  color: var(--admin-color-text-secondary);
+  font-size: 13px;
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
+}
+@media (hover: hover) and (pointer: fine) and (forced-colors: none) {
+  .vocabulary-header {
+    scrollbar-width: none;
+  }
+}
+.vocabulary-header-row,
+.vocabulary-collection[data-view="list"] .vocabulary-item {
+  display: grid;
+  grid-template-columns: var(--vocabulary-columns);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+}
+.vocabulary-collection[data-view="list"] .vocabulary-item {
+  min-height: 56px;
+}
+.vocabulary-collection[data-view="list"] .vocabulary-item + .vocabulary-item {
+  border-top: 1px solid var(--admin-color-border-card);
+}
+.vocabulary-collection[data-view="list"] :is(.vocabulary-item-identity, .vocabulary-item-footer) {
+  display: contents;
+}
+.vocabulary-cell {
+  min-width: 0;
+}
+.vocabulary-cell > input {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+}
+.vocabulary-cell > .entity-slug {
+  height: auto;
+  line-height: 20px;
+}
+.vocabulary-collection[data-view="list"] .vocabulary-cell > .entity-slug {
+  font-size: 14px;
+}
+.vocabulary-column-count,
+.vocabulary-cell-count {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.vocabulary-collection[data-view="list"] .vocabulary-cell-count {
+  font-size: 13px;
+}
+.vocabulary-column-sort,
+.vocabulary-column-actions {
+  text-align: center;
+}
+.vocabulary-cell-sort {
+  display: flex;
+  justify-content: center;
+}
+.vocabulary-item-actions {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 34px;
+}
+.vocabulary-item-actions > .icon {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+}
+.vocabulary-action-button {
+  /* 将隐藏的状态文字定位在按钮内，避免越过词条滚动区撑高整页。 */
+  position: relative;
+}
+.vocabulary-action-button.is-success:disabled {
+  opacity: 1;
+  cursor: default;
+}
+/* 图标保持定宽，完整状态文字继续供按钮名称与即时反馈使用。 */
+.vocabulary-action-button .async-action-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.vocabulary-collection[data-view="card"] .vocabulary-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+  align-content: start;
+  gap: var(--admin-card-grid-gap);
+}
+.vocabulary-collection[data-view="card"] .vocabulary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--admin-color-border-card);
+  border-radius: 10px;
+  background: var(--admin-color-surface-primary);
+}
+.vocabulary-item-identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+.vocabulary-item-identity > .vocabulary-cell-slug {
+  flex: 0 0 120px;
+}
+.vocabulary-item-identity > .vocabulary-cell-display {
+  flex: 1 1 0;
+}
+.vocabulary-item-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  min-height: 34px;
+}
+.vocabulary-collection[data-view="card"] .vocabulary-cell-count {
+  margin-right: auto;
+}
+.vocabulary-item-footer > :is(.vocabulary-cell-sort, .vocabulary-cell-actions) {
+  flex: 0 0 auto;
+}
+.vocabulary-empty {
+  padding: 16px 0;
+}
+
+/* 列宽由实际内容区决定，作者的链接列需要更早折行。 */
+@container vocabulary (max-width: 880px) {
+  .vocabulary-collection[data-view="list"][data-kind="authors"] .vocabulary-item {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .vocabulary-collection[data-view="list"][data-kind="authors"] .vocabulary-item-identity,
+  .vocabulary-collection[data-view="list"][data-kind="authors"] .vocabulary-item-footer {
+    display: flex;
+  }
+  .vocabulary-collection[data-kind="authors"] .vocabulary-cell-count {
+    margin-right: auto;
+  }
+  .vocabulary-collection[data-kind="authors"] .vocabulary-header {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+@container vocabulary (max-width: 700px) {
+  .vocabulary-collection[data-view="list"] .vocabulary-item {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .vocabulary-collection[data-view="list"] .vocabulary-item-identity,
+  .vocabulary-collection[data-view="list"] .vocabulary-item-footer {
+    display: flex;
+  }
+  .vocabulary-cell-count {
+    margin-right: auto;
+  }
+  .vocabulary-header {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* 按 170px 标识、280px 输入框及按钮间距预留单行空间；作者多一个链接框。 */
+@container vocabulary-toolbar (max-width: 660px) {
+  .vocabulary-toolbar > .workspace-head {
+    grid-column: 1;
+  }
+  .vocabulary-toolbar > .admin-create-form {
+    grid-column: 1 / -1;
+  }
+  .vocabulary-view-switch {
+    grid-row: 1;
+  }
+}
+@container vocabulary-toolbar (max-width: 950px) {
+  .vocabulary-toolbar[data-kind="authors"] > .workspace-head {
+    grid-column: 1;
+  }
+  .vocabulary-toolbar[data-kind="authors"] > .admin-create-form {
+    grid-column: 1 / -1;
+  }
+  .vocabulary-toolbar[data-kind="authors"] > .vocabulary-view-switch {
+    grid-row: 1;
+  }
+}
+
+@media (min-width: 761px) {
+  .vocabulary-toolbar > .admin-create-form {
+    flex-wrap: nowrap;
+  }
+  .vocabulary-toolbar .entity-slug-field,
+  .vocabulary-toolbar .entity-create-slug {
+    min-width: 0;
+  }
+  .vocabulary-toolbar .entity-create-slug {
+    width: 100%;
+  }
+  .vocabulary-toolbar > .admin-create-form > input {
+    flex-basis: 280px;
+    min-width: 0;
+  }
+  .vocabulary-create-button {
+    flex: 0 0 auto;
+  }
+
+  /* 三个字段先一起收缩，再将链接与新建操作整组移到第二行。 */
+  @container vocabulary-toolbar (max-width: 640px) {
+    .vocabulary-toolbar[data-kind="authors"] > .admin-create-form {
+      display: grid;
+      grid-template-columns: minmax(0, 170px) minmax(0, 1fr) max-content;
+      grid-template-areas:
+        "slug display display"
+        "link link create";
+    }
+    .vocabulary-toolbar[data-kind="authors"] .entity-slug-field {
+      grid-area: slug;
+    }
+    .vocabulary-toolbar[data-kind="authors"] .vocabulary-create-display {
+      grid-area: display;
+    }
+    .vocabulary-toolbar[data-kind="authors"] .vocabulary-create-link {
+      grid-area: link;
+    }
+    .vocabulary-toolbar[data-kind="authors"] > .admin-create-form > input {
+      width: 100%;
+      max-width: none;
+    }
+    .vocabulary-toolbar[data-kind="authors"] .vocabulary-create-button {
+      grid-area: create;
+      justify-self: end;
+    }
+  }
+}
+
+@media (max-width: 760px) {
+  .vocabulary-toolbar > .workspace-head {
+    grid-column: 1;
+  }
+  .vocabulary-toolbar > .admin-create-form {
+    grid-column: 1 / -1;
+  }
+  .vocabulary-view-switch {
+    grid-row: 1;
+    width: 54px;
+  }
+}

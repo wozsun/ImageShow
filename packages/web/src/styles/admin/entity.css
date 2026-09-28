@@ -13,7 +13,7 @@
   padding-right: 2px;
 }
 
-/* 主题 / 标签 / 用户管理：卡片网格（共用 .entity-* 类）。 */
+/* 后台实体的新建表单；词表集合布局由 vocabulary.css 拥有。 */
 .admin-create-form {
   display: flex;
   flex-wrap: wrap;
@@ -68,9 +68,6 @@
   gap: var(--admin-card-grid-gap);
   align-content: start;
 }
-.entity-vocabulary-grid {
-  padding-bottom: 8px;
-}
 .entity-card {
   display: flex;
   flex-direction: column;
@@ -105,15 +102,6 @@
   text-overflow: ellipsis;
   cursor: text;
 }
-.entity-display-input {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.entity-link-input {
-  flex: 1 1 0;
-  min-width: 0;
-}
 /* 页脚只有文字时也以相同最小高度保持卡片对齐。 */
 .entity-card-foot {
   display: flex;
@@ -136,11 +124,6 @@
   width: 36px;
   flex: 0 0 36px;
 }
-.entity-count {
-  margin-right: auto;
-  white-space: nowrap;
-}
-
 .user-card .entity-card-foot {
   justify-content: flex-end;
 }
