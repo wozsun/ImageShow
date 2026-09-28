@@ -131,7 +131,7 @@ async function getPublicImageRecordWithAccess(
               description,
               source,
               original,
-              author, brightness, theme, image_time,
+              device, author, brightness, theme, image_time,
               ${imageTagsPresentationColumn}
          FROM metadata
         WHERE id=$1 AND status='ready'

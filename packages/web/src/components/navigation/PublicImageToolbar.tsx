@@ -92,14 +92,22 @@ export function PublicToolbarPopover({
   const id = useId();
   const menu = useAnchoredMenu({
     triggerRef,
-    getSize: () => ({
-      minWidth,
-      maxWidth: window.innerWidth - 24,
-      align: "end",
-      flipThreshold: 180,
-      minAvailable: 120,
-      maxHeight: 420
-    }),
+    getSize: () => {
+      const toolbar = triggerRef.current?.closest<HTMLElement>(".gallery-toolbar");
+      const toolbarRect = toolbar?.getBoundingClientRect();
+      const toolbarStyle = toolbar ? getComputedStyle(toolbar) : null;
+      return {
+        minWidth,
+        horizontalBounds: toolbarRect && toolbarStyle ? {
+          left: toolbarRect.left + Number.parseFloat(toolbarStyle.paddingLeft),
+          right: toolbarRect.right - Number.parseFloat(toolbarStyle.paddingRight)
+        } : undefined,
+        align: "end",
+        flipThreshold: 180,
+        minAvailable: 120,
+        maxHeight: 420
+      };
+    },
     initialMaxHeight: 420,
     closeOnEscape: true,
     closeOnFocusOutside: true,

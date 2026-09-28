@@ -1,15 +1,15 @@
-import { imageVariants, type ImageVariant, type ImageVariantsDto, type ImageVariantSizesDto } from "@imageshow/shared/browser";
+import { imageVariants, type ImageVariant, type ImageVariantsDto, type ImageVariantByteSizesDto } from "@imageshow/shared/browser";
 
 const imageVariantColumnPrefixes = { large: "l", medium: "m", small: "s" } as const;
 
 type DatabaseNumber = number | string;
-export type ImageVariantSizeRecord = Record<"l_byte_size" | "m_byte_size" | "s_byte_size", DatabaseNumber>;
+export type ImageVariantByteSizeRecord = Record<"l_byte_size" | "m_byte_size" | "s_byte_size", DatabaseNumber>;
 
-export const imageVariantSizeColumns = imageVariants.map((variant) =>
+export const imageVariantByteSizeColumns = imageVariants.map((variant) =>
   `${imageVariantColumnPrefixes[variant]}_byte_size`
 ).join(", ");
 
-export function presentImageVariantSizes(row: ImageVariantSizeRecord): ImageVariantSizesDto {
+export function presentImageVariantByteSizes(row: ImageVariantByteSizeRecord): ImageVariantByteSizesDto {
   return {
     large: { byte_size: Number(row.l_byte_size) },
     medium: { byte_size: Number(row.m_byte_size) },

@@ -19,7 +19,7 @@ import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { useMediaQuery } from "../../hooks/useMediaQuery.js";
 import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
 import { useRefreshGlint, useRefreshGlintRun } from "../../hooks/useRefreshGlint.js";
-import { publicFilterOptionState } from "../../lib/gallery/public-filter-options.js";
+import { publicFilterOptionState, themesWithUnsetLast } from "../../lib/gallery/public-filter-options.js";
 import type { GalleryFilters } from "../../lib/gallery/gallery-query.js";
 import {
   boundedHomeRevealIndexes,
@@ -30,7 +30,6 @@ import {
   deviceOptions,
   facetLabel,
   homeRevealItemLimits,
-  homeThemesWithUnsetLast,
   selectedSlugs
 } from "./home-ui.js";
 import { useOneShotSectionReveal } from "./useOneShotSectionReveal.js";
@@ -238,7 +237,7 @@ export function HomeCatalog({
   const brightnessCounts = new Map(
     stats?.brightnesses.map((item) => [item.brightness, item.image_count]) ?? []
   );
-  const themes = homeThemesWithUnsetLast(stats?.themes ?? []);
+  const themes = themesWithUnsetLast(stats?.themes ?? []);
   const themeRevealIndexes = boundedHomeRevealIndexes(
     themes,
     themeSet,

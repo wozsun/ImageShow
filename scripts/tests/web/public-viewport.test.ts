@@ -383,6 +383,23 @@ test("[Web/公开视口] 菜单在公开页安全边界内定位，后台保留�
   assert.equal(safe.style.left, 56);
   assert.equal(safe.style.width, 688);
   assert.equal(safe.style.maxHeight, 462);
+  const bounded = computeAnchoredPosition(rect, {
+    ...size, horizontalBounds: { left: 48, right: 736 }
+  });
+  assert.equal(bounded.style.left, 48);
+  assert.equal(bounded.style.width, 688);
+  h.document.documentElement.removeAttribute("data-public-viewport");
+  for (const [viewportWidth, inset] of [[320, 10], [360, 10], [361, 16], [390, 16], [430, 16], [760, 16], [761, 28]]) {
+    Object.assign(h.window, { innerWidth: viewportWidth });
+    const anchor = { ...rect, left: viewportWidth - inset - 40, right: viewportWidth - inset };
+    const position = computeAnchoredPosition(anchor, {
+      ...size, minWidth: 480, align: "end",
+      horizontalBounds: { left: inset, right: viewportWidth - inset }
+    }).style;
+    assert.equal(position.width, Math.min(480, viewportWidth - 2 * inset));
+    assert.equal(Number(position.left) + Number(position.width), viewportWidth - inset);
+    if (viewportWidth <= 512) assert.equal(position.left, inset);
+  }
 });
 
 test("[Web/公开视口] 已打开菜单随安全区单独变化重排，关闭后释放观察资源", async (t) => {

@@ -49,6 +49,44 @@ const facets = {
   authors: [{ slug: "artist", display_name: "作者", link: "" }]
 };
 
+test("[Web/公开筛选] 未设置主题在默认、选中与搜索结果中保持末尾", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  Object.assign(h.window, { scrollTo() {}, scrollY: 0 });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  t.after(() => client.clear());
+  const themes = [
+    { slug: "null", display_name: "未设置", image_count: 0 },
+    { slug: "city", display_name: "城市", image_count: 4 },
+    { slug: "unset-style", display_name: "未设置风格", image_count: 2 }
+  ];
+  const filters = { ...emptyGalleryFilters, theme: "null" };
+  const stats: GalleryStatsDto = {
+    total_images: 6, matching_images: 0, themes, tags: [], authors: [],
+    devices: [], brightnesses: [], categories: []
+  };
+  client.setQueryData([...queryKeys.galleryStats, ""], stats);
+  client.setQueryData([...queryKeys.galleryStats, galleryStatsSearch(filters, "")], stats);
+  await h.render(h.React.createElement(QueryClientProvider, { client }, h.React.createElement(PublicFilterDialog, {
+    filters, unresolvedTags: [], facets: { themes, tags: [], authors: [] },
+    facetsLoading: false, facetsError: null, retryVocabulary() {},
+    returnFocusRef: { current: null }, onClose() {}, onApply() {}, view: "gallery"
+  })));
+  const order = () => Array.from(h.document.querySelectorAll('[data-filter-section="theme"] [data-filter-option]'))
+    .map((node) => node.getAttribute("data-filter-option"));
+  assert.deepEqual(order(), ["city", "unset-style", "null"]);
+  const unset = h.document.querySelector<HTMLButtonElement>('[data-filter-section="theme"] [data-filter-option="null"]')!;
+  assert.equal(unset.getAttribute("aria-pressed"), "true");
+  assert.equal(unset.disabled, false);
+  const search = h.document.querySelector<HTMLInputElement>('input[type="search"]')!;
+  await h.React.act(async () => inputText(h.window, search, "未设置"));
+  await h.flush();
+  assert.deepEqual(order(), ["unset-style", "null"]);
+  await h.React.act(async () => inputText(h.window, search, "城市"));
+  await h.flush();
+  assert.deepEqual(order(), ["city"]);
+  await h.render(null);
+});
+
 test("[Web/公开筛选] 主题和作者共享 32 项及字符边界，拒绝混合条件和无效片段", () => {
   const slugs = Array.from({ length: 33 }, (_, index) => `s${index}`);
   for (const field of ["theme", "author"] as const) {

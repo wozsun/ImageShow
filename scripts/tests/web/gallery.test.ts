@@ -9,9 +9,9 @@ import {
 import { createGalleryTaxonomyDisplayFormatter } from "../../../packages/web/src/lib/gallery/card-display.ts";
 import {
   boundedHomeRevealIndexes,
-  homeRevealItemLimits,
-  homeThemesWithUnsetLast
+  homeRevealItemLimits
 } from "../../../packages/web/src/pages/home/home-ui.ts";
+import { themesWithUnsetLast } from "../../../packages/web/src/lib/gallery/public-filter-options.ts";
 import { galleryColumnCount } from "../../../packages/web/src/lib/gallery/gallery-columns.ts";
 import {
   advancePublicImageNavigation,
@@ -46,7 +46,7 @@ test("[Web/画廊] 首页目录、瀑布流、分页预载与滚动导航组成�
   const portrait = { slug: "portrait", image_count: 4 };
   const stage = { slug: "stage", image_count: 3 };
   assert.deepEqual(
-    homeThemesWithUnsetLast([unset, portrait, stage]).map(({ slug }) => slug),
+    themesWithUnsetLast([unset, portrait, stage]).map(({ slug }) => slug),
     ["portrait", "stage", "null"]
   );
   const revealItems = Array.from({ length: 40 }, (_, index) => ({

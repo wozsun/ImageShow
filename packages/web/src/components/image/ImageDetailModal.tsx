@@ -1,4 +1,4 @@
-import { imageDevice, imageVariantUrl } from "@imageshow/shared/browser";
+import { imageVariantUrl } from "@imageshow/shared/browser";
 import {
   Component,
   Suspense,
@@ -211,9 +211,6 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
         ? "打开来源页面"
         : "暂无来源";
   const originalHref = showAdminDetails ? (item.original_url?.trim() ?? "") : "";
-  const displayDevice = props.admin
-    ? item.device
-    : imageDevice(props.item.width, props.item.height);
   const imageAspectRatio =
     "width" in item && "height" in item && item.width > 0 && item.height > 0
       ? `${item.width} / ${item.height}`
@@ -326,7 +323,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                         ? "加载中"
                         : detailError
                           ? "加载失败"
-                          : deviceOptionLabel(displayDevice)}
+                          : deviceOptionLabel(item.device)}
                     </dd>
                     <dt>亮度</dt>
                     <dd>

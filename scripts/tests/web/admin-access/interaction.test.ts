@@ -278,7 +278,7 @@ test("[Web/后台访问] 公开详情切图和切换视图隔离迟到响应并�
     }))
   );
   const payload = (source: string) => ({ item: {
-    author: "", brightness: "dark", image_time: "2026-09-01T00:00:00.000Z",
+    device: "mb", author: "", brightness: "dark", image_time: "2026-09-01T00:00:00.000Z",
     description: "", source, original_url: null, base_url: "https://new.example.test/images"
   } });
   const sourceLink = () => h.document.querySelector(".image-detail-source")?.getAttribute("href");
@@ -290,6 +290,7 @@ test("[Web/后台访问] 公开详情切图和切换视图隔离迟到响应并�
   await h.respond(1, payload("https://source.example/second"));
   await h.flush();
   assert.equal(sourceLink(), "https://source.example/second");
+  assert.match(h.document.querySelector(".image-detail-public-properties")!.textContent!, /移动端/);
   assert.equal(h.document.querySelector(".image-detail-title-link")?.getAttribute("href"),
     `https://new.example.test/images/large/02/${second.id}.webp`);
   await h.respond(0, payload("https://source.example/first"));
@@ -302,6 +303,7 @@ test("[Web/后台访问] 公开详情切图和切换视图隔离迟到响应并�
   await h.flush();
   assert.equal(sourceLink(), "https://source.example/show");
   assert.match(h.document.querySelector(".image-detail-public-properties")!.textContent!, /view-theme/);
+  assert.match(h.document.querySelector(".image-detail-public-properties")!.textContent!, /移动端/);
   await h.render(null);
 });
 

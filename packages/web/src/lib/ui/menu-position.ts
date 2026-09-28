@@ -15,6 +15,7 @@ export type AnchoredMenuPosition = {
 export type AnchoredMenuSize = {
   minWidth: number;
   maxWidth?: number;
+  horizontalBounds?: { left: number; right: number };
   align?: "start" | "end";
   gap?: number;
   flipThreshold: number;
@@ -135,7 +136,8 @@ export function computeAnchoredPosition(
   const viewportRight = publicStyle
     ? Math.min(visibleLeft + visibleWidth, fixedOrigin.left + window.innerWidth - safe("right"))
     : visibleLeft + visibleWidth;
-  const viewportWidth = viewportRight - viewportLeft;
+  const horizontalLeft = Math.max(viewportLeft, size.horizontalBounds?.left ?? viewportLeft + 8);
+  const horizontalRight = Math.min(viewportRight, size.horizontalBounds?.right ?? viewportRight - 8);
   const availableBelow = Math.max(0, viewportBottom - rect.bottom - gap - 8);
   const availableAbove = Math.max(0, rect.top - viewportTop - gap - 8);
   const openAbove =
@@ -151,12 +153,12 @@ export function computeAnchoredPosition(
     size.maxWidth ?? Number.POSITIVE_INFINITY,
     Math.max(size.minWidth, rect.width)
   );
-  const width = Math.min(desiredWidth, Math.max(0, viewportWidth - 16));
+  const width = Math.min(desiredWidth, Math.max(0, horizontalRight - horizontalLeft));
   const desiredLeft = size.align === "end" ? rect.right - width : rect.left;
   return {
     placement: openAbove ? "above" : "below",
     style: {
-      left: Math.max(viewportLeft + 8, Math.min(desiredLeft, viewportRight - width - 8)),
+      left: Math.max(horizontalLeft, Math.min(desiredLeft, horizontalRight - width)),
       width,
       maxHeight,
       // top 与 getBoundingClientRect() 使用同一坐标系。不要用 bottom 反推位置：

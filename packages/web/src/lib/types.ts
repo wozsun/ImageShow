@@ -20,7 +20,7 @@ import type {
 
 export type GalleryImageCard = GalleryImageCardDto;
 export type ImageDetailItem = ImageDetailItemDto;
-export type PublicImageItem = GalleryImageCard & PublicImageDetailDto & Pick<ImageDetailItemDto, "device">;
+export type PublicImageItem = GalleryImageCard & PublicImageDetailDto;
 export type AdminImageDetailItem = AdminImageDetailItemDto;
 export type EditableImageSnapshot = EditableImageSnapshotDto;
 export type AdminImageListItem = AdminImageListItemDto;

@@ -76,8 +76,7 @@ readiness 不复制 `schema.sql` 的可空性、默认值、无消费者 CHECK�
 
 图片投影协调器只在当前进程内保留四态、一个活动校验或重建任务，以及 PostgreSQL / Redis
 revision；图片事务与投影发布共用一个短写栅栏。Redis 重连、revision 不一致或重建失败时
-读门保持关闭并继续走上述 PostgreSQL 回源，不维护独立 publication、release task 或跨实例
-代际状态。
+读门保持关闭并继续走上述 PostgreSQL 回源。
 校验失败后通过现有 `cache.rebuild` 任务恢复；如果同次数据库故障也使任务入库失败，协调器
 保留待校验 / 重建意图，每隔 5 秒最多启动一次恢复尝试。有效缓存先重新校验，确需重建时才
 重建；Redis 重连、显式请求与 mutation 仍合并到同一活动任务。停止时清除重试计时器，

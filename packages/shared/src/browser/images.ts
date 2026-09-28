@@ -1,4 +1,4 @@
-import { imageVariants, type ImageVariantsDto, type ImageVariantSizesDto } from "./image-variants.ts";
+import { imageVariants, type ImageVariantsDto, type ImageVariantByteSizesDto } from "./image-variants.ts";
 import { slugMaxLength, slugPattern, type Brightness, type Device } from "./common.ts";
 
 /** Stable physical identity, independent of editable image classification. */
@@ -79,9 +79,10 @@ export type ImageCardBaseDto = ShowImageCardDto & {
  */
 export type GalleryImageCardDto = ShowImageCardDto & Pick<ImageCardBaseDto, "theme" | "tags">;
 
+/** 标题及画廊主题、标签复用列表当前值，详情请求不负责刷新这些字段。 */
 export type PublicImageDetailDto<View extends PublicImageView = "show"> = Pick<
   ImageCardBaseDto,
-  "brightness" | "author" | "image_time"
+  "device" | "brightness" | "author" | "image_time"
 > & {
   description: string;
   base_url: string;
@@ -89,7 +90,7 @@ export type PublicImageDetailDto<View extends PublicImageView = "show"> = Pick<
   source: string | null;
 } & (View extends "show" ? Pick<ImageCardBaseDto, "theme" | "tags"> : {});
 
-export type ImageDetailItemDto = PublicImageDetailDto & { id: string; title: string; device: Device };
+export type ImageDetailItemDto = PublicImageDetailDto & { id: string; title: string };
 
 export type PublicImageListResponseDto<View extends PublicImageView = "gallery"> = {
   items: Array<View extends "show" ? ShowImageCardDto : GalleryImageCardDto>;
@@ -141,7 +142,7 @@ export type AdminImageListItemDto = ImageDetailItemDto & ShowImageCardDto & {
  * List/edit-only fields remain outside this compact response.
  */
 export type AdminImageDetailItemDto = ImageDetailItemDto & {
-  variants: ImageVariantSizesDto;
+  variants: ImageVariantByteSizesDto;
   storage_label: string;
   created_at: string;
   updated_at: string;
@@ -173,7 +174,7 @@ export type AdminImageListResponseDto = {
 };
 
 export type ImageAdminInfoDto = {
-  variants: ImageVariantSizesDto;
+  variants: ImageVariantByteSizesDto;
   storage_label: string;
   created_at: string;
   updated_at: string;

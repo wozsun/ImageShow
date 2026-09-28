@@ -181,6 +181,7 @@ await runIntegrationScenario(async (runtime) => {
     const empty = await get("/api/images?view=show&limit=1&theme=unmatched");
     assert.deepEqual(await empty.json(), { ok: true, items: [], next_cursor: null });
     const detailPath = `/api/images/${ids[0]}?view=show`;
+    await pool.query("UPDATE metadata SET device='mb' WHERE id=$1", [ids[0]]);
     const detail = await get(detailPath);
     const detailBody = await detail.json();
     for (const view of ["show", "gallery"] as const) {
@@ -190,6 +191,7 @@ await runIntegrationScenario(async (runtime) => {
       const body = await response.json();
       assert.equal(body.item.base_url, "/images");
       assert.equal(body.item.brightness, "dark");
+      assert.equal(body.item.device, "mb", "横图详情保留人工选择的移动端分类");
       if (view === "show") {
         assert.equal(body.item.theme, null);
         assert.deepEqual(body.item.tags, []);
@@ -223,6 +225,11 @@ await runIntegrationScenario(async (runtime) => {
 
     await coordinator.initializeReadyImageCacheCoordinator();
     await coordinator.ensureReadyImageCacheCurrent();
+    for (const view of ["show", "gallery"] as const) {
+      assert.equal((await reads.getPublicImage(ids[0]!, view)).device, "mb");
+    }
+    await pool.query("UPDATE metadata SET device='pc' WHERE id=$1", [ids[0]]);
+    await coordinator.requestReadyImageCacheRebuild();
     let connections = 0;
     const restoreConnections = interceptPoolConnections(pool, () => {
       connections += 1;

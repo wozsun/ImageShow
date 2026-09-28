@@ -29,15 +29,6 @@ type HomeFacetCount = {
   slug: string;
 };
 
-export function homeThemesWithUnsetLast<T extends { slug: string }>(items: readonly T[]) {
-  const configured: T[] = [];
-  const unset: T[] = [];
-  for (const item of items) {
-    (item.slug === unsetThemeFilter ? unset : configured).push(item);
-  }
-  return [...configured, ...unset];
-}
-
 export function boundedHomeRevealIndexes(
   items: readonly HomeFacetCount[],
   selected: ReadonlySet<string>,

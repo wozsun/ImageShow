@@ -1,11 +1,11 @@
 import { imageVariantUrl } from "@imageshow/shared/browser";
 import {
   imageVariantColumns,
-  imageVariantSizeColumns,
+  imageVariantByteSizeColumns,
   presentImageVariants,
-  presentImageVariantSizes,
+  presentImageVariantByteSizes,
   type ImageVariantRecord,
-  type ImageVariantSizeRecord
+  type ImageVariantByteSizeRecord
 } from "./variants/record.ts";
 import {
   type AdminImageDetailItemDto,
@@ -68,7 +68,7 @@ export type ImageRecord = IngestionImageRecord & {
 export type ImageRecordWithTags = ImageRecord & { tags: string[] };
 
 /** Exact row returned by the compact overview detail projection. */
-export type AdminImageDetailRecordWithTags = ImageMetadataRecord & ImageVariantSizeRecord & {
+export type AdminImageDetailRecordWithTags = ImageMetadataRecord & ImageVariantByteSizeRecord & {
   storage_display_name: string;
   image_time: DatabaseTimestamp;
   created_at: DatabaseTimestamp;
@@ -134,7 +134,7 @@ export const adminImageDetailPresentationColumnsWithTags = [
   "device",
   "brightness",
   "theme",
-  imageVariantSizeColumns,
+  imageVariantByteSizeColumns,
   "storage_slug",
   "author",
   "title",
@@ -173,6 +173,7 @@ export type PublicImageCardRecord = Pick<
 export type PublicImageDetailRecord = Pick<
   AdminImageCommonRecord,
   | "id"
+  | "device"
   | "storage_slug"
   | "description"
   | "source"
@@ -300,7 +301,7 @@ export async function adminImageDetailItemsWithTags(rows: AdminImageDetailRecord
     const { storage_slug: storageSlug, ...base } = presentAdminImageBase(row, row.tags, configs);
     return {
       ...base,
-      variants: presentImageVariantSizes(row),
+      variants: presentImageVariantByteSizes(row),
       storage_label: storageBackendLabel({
         storage_slug: storageSlug,
         storage_display_name: row.storage_display_name
@@ -336,6 +337,7 @@ export async function publicImageDetail(
   const configs = await storageConfigsForRows([row], access);
   const base_url = publicImageBaseUrl(configs.get(row.storage_slug)!);
   return {
+    device: row.device,
     author: row.author ?? "",
     brightness: row.brightness,
     ...(view === "show" ? { theme: row.theme, tags: row.tags } : {}),

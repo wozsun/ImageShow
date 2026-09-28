@@ -30,7 +30,7 @@ import {
 } from "./list-filters.ts";
 import { fetchAdminImageOffsetRows } from "./pagination.ts";
 import { storageBackendLabel } from "../../storage/backends/label.ts";
-import { presentImageVariantSizes, type ImageVariantSizeRecord } from "../variants/record.ts";
+import { presentImageVariantByteSizes, type ImageVariantByteSizeRecord } from "../variants/record.ts";
 
 export type AdminImageListQuery = {
   status: "ready" | "deleted";
@@ -156,7 +156,7 @@ export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> 
       [id]
     )
   ).rows[0] as
-    | (ImageVariantSizeRecord & {
+    | (ImageVariantByteSizeRecord & {
         storage_slug: string;
         created_at: string;
         updated_at: string;
@@ -165,7 +165,7 @@ export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> 
     | undefined;
   if (!row) throw new ApiError(404, "not_found", "Image not found");
   return {
-    variants: presentImageVariantSizes(row),
+    variants: presentImageVariantByteSizes(row),
     storage_label: storageBackendLabel(row),
     created_at: row.created_at ?? "",
     updated_at: row.updated_at ?? ""
