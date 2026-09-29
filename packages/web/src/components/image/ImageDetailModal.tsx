@@ -264,8 +264,6 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                           className="image-detail-title-link"
                           href={imageVariantUrl(item, "large")}
                           target="_blank"
-                          rel="noreferrer noopener"
-                          referrerPolicy="no-referrer"
                           title="在新标签页打开图片直链"
                         >
                           {title}
@@ -306,8 +304,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                             <a
                               href={authorLink}
                               target="_blank"
-                              rel="noreferrer noopener"
-                              referrerPolicy="no-referrer"
+                              rel="noreferrer"
                             >
                               {authorLabel}
                             </a>
@@ -349,7 +346,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                     )}
                     {imageTime && (
                       <>
-                        <dt>图片时间</dt>
+                        <dt>发布时间</dt>
                         <dd>{formatDate(imageTime)}</dd>
                       </>
                     )}
@@ -359,8 +356,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                       className={`button secondary image-detail-source${sourceAvailable ? " pressable" : " is-disabled"}`}
                       href={item.source || undefined}
                       target="_blank"
-                      rel="noreferrer noopener"
-                      referrerPolicy="no-referrer"
+                      rel="noreferrer"
                       aria-disabled={!sourceAvailable}
                       aria-label={sourceStateLabel}
                       title={sourceStateLabel}
@@ -377,8 +373,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                         className="button secondary pressable image-detail-original"
                         href={originalHref}
                         target="_blank"
-                        rel="noreferrer noopener"
-                        referrerPolicy="no-referrer"
+                        rel="noreferrer"
                         aria-label="打开原图"
                         title="打开原图"
                       >

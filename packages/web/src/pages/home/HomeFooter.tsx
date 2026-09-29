@@ -25,7 +25,7 @@ function footerNodes(nodes: NodeListOf<ChildNode>, prefix = ""): ReactNode[] {
     const children = footerNodes(element.childNodes, `${key}-`);
     const href = footerLink(element.getAttribute("href"));
     return href ? (
-      <a key={key} href={href} target="_blank" rel="noopener noreferrer">
+      <a key={key} href={href} target="_blank" rel="noreferrer">
         {children}
       </a>
     ) : (
@@ -60,7 +60,7 @@ export function HomeFooter({
       {showRegistrations && (
         <div className="home-footer-registrations">
           {icp && (
-            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">
+            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">
               {icp}
             </a>
           )}
@@ -69,7 +69,7 @@ export function HomeFooter({
             <a
               href={`https://beian.mps.gov.cn/#/query/webSearch?code=${mps.replace(/\D/g, "")}`}
               target="_blank"
-              rel="noopener noreferrer"
+              rel="noreferrer"
             >
               {mps}
             </a>

@@ -44,7 +44,7 @@ const EmbeddedPageLayout = lazy(() =>
 
 function PublicPageNotFound() {
   return (
-    <main className="center" role="main">
+    <main className="center">
       <div className="query-error-state">
         <strong>404</strong>
         <p>当前没有启用的公开页面</p>

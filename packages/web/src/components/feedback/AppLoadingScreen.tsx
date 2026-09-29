@@ -2,7 +2,7 @@ export type AppLoadingExtraDots = 0 | 1 | 2 | 3;
 
 export function AppLoadingText({ extraDots = 0 }: { extraDots?: AppLoadingExtraDots }) {
   return (
-    <span className="app-loading-text" role="status" aria-live="polite" aria-label="加载中">
+    <span className="app-loading-text" role="status" aria-label="加载中">
       <span aria-hidden="true">
         加载中…{".".repeat(extraDots)}
         <span className="app-loading-reserved-dots">{".".repeat(3 - extraDots)}</span>

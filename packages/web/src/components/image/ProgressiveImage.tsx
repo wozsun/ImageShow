@@ -191,7 +191,6 @@ export function ProgressiveImage({
           className="progressive-image-thumb"
           alt={fullSrc ? "" : alt}
           aria-hidden={fullSrc ? "true" : undefined}
-          loading="eager"
           decoding="async"
           referrerPolicy="no-referrer"
         />
@@ -208,7 +207,6 @@ export function ProgressiveImage({
             ref={setFullImageRef}
             className="progressive-image-full"
             alt={alt}
-            loading="eager"
             decoding="async"
             referrerPolicy="no-referrer"
             data-image-role="full"

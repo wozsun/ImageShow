@@ -308,8 +308,6 @@ export function FacetSelector({
             id={statusId}
             className="facet-search-status"
             role="status"
-            aria-live="polite"
-            aria-atomic="true"
           >
             {searchStatus}
           </span>

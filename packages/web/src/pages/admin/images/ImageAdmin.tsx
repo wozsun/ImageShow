@@ -293,7 +293,7 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
               />
             )}
           </div>
-          <p role="status" aria-live="polite" aria-atomic="true">
+          <p role="status">
             {operationText ||
               `第 ${pageNumber} / ${totalPages} 页 · 共 ${total} 项${pageStatusSuffix}`}
           </p>
@@ -368,8 +368,6 @@ function ImageAdminContent({ settings }: { settings: AdminSettings }) {
             <span
               className={`image-list-selection-status${selected.length ? "" : " is-empty"}`}
               role="status"
-              aria-live="polite"
-              aria-atomic="true"
             >
               {selected.length ? `已选 ${selected.length}` : "未选择图片"}
             </span>

@@ -184,7 +184,7 @@ test("[Web/公开导航] 首页页脚按配置展示备案和受限 HTML，安�
     {
       href: "https://example.com/project?q=1&x=2",
       target: "_blank",
-      rel: "noopener noreferrer"
+      rel: "noreferrer"
     }
   );
   assert.equal(h.document.querySelectorAll("footer br").length, 1);

@@ -166,7 +166,6 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
         <img
           ref={setImageRef}
           alt={alt}
-          loading="eager"
           fetchPriority={visibility.inViewport ? "high" : "auto"}
           decoding="async"
           width={width}

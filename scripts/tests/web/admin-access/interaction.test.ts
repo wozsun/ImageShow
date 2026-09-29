@@ -290,6 +290,11 @@ test("[Web/后台访问] 公开详情切图和切换视图隔离迟到响应并�
   await h.respond(1, payload("https://source.example/second"));
   await h.flush();
   assert.equal(sourceLink(), "https://source.example/second");
+  assert.equal(
+    h.document.querySelector(".image-detail-source")?.getAttribute("rel")?.split(/\s+/).includes("noreferrer"),
+    true,
+    "来源入口禁止向外部站点发送 Referer"
+  );
   assert.match(h.document.querySelector(".image-detail-public-properties")!.textContent!, /移动端/);
   assert.equal(h.document.querySelector(".image-detail-title-link")?.getAttribute("href"),
     `https://new.example.test/images/large/02/${second.id}.webp`);

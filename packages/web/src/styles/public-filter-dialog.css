@@ -397,8 +397,8 @@
   overscroll-behavior: contain;
 }
 .public-filter-section {
-  padding-bottom: 30px;
-  margin-bottom: 26px;
+  padding-bottom: 20px;
+  margin-bottom: 16px;
   border-bottom: 1px solid var(--public-color-filter-border);
 }
 .public-filter-section:last-child {
@@ -409,8 +409,8 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
-  padding-bottom: 24px;
-  margin-bottom: 24px;
+  padding-bottom: 20px;
+  margin-bottom: 16px;
   border-bottom: 1px solid var(--public-color-filter-border);
 }
 .public-filter-fixed-group > .public-filter-section {
@@ -420,7 +420,7 @@
 }
 .public-filter-section-heading {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
@@ -621,6 +621,11 @@
   gap: 8px;
   margin-left: auto;
   max-width: 100%;
+}
+.public-filter-scroll > .public-filter-section:first-child .public-filter-section-actions {
+  /* 搜索首区沿用设备标题的自然行高，36px 按钮组向上下等量伸出。 */
+  font-size: 18px;
+  margin-block: min(0px, calc((1lh - 36px) / 2));
 }
 .public-filter-dialog .public-filter-group-button {
   min-height: 32px;
@@ -1029,6 +1034,11 @@
   }
   .public-filter-scroll {
     padding: 22px 15px;
+  }
+  .public-filter-section,
+  .public-filter-fixed-group {
+    padding-bottom: 16px;
+    margin-bottom: 12px;
   }
   .public-filter-fixed-group {
     grid-template-columns: minmax(0, 1fr);

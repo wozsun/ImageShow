@@ -140,10 +140,6 @@ export function ActionFeedback({
       role={announce
         ? feedback.status === "error" ? "alert" : "status"
         : undefined}
-      aria-live={announce
-        ? feedback.status === "error" ? "assertive" : "polite"
-        : undefined}
-      aria-atomic={announce ? "true" : undefined}
       style={style}
       title={text}
       onMouseEnter={() => setHovered(true)}
