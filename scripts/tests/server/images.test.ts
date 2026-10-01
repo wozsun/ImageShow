@@ -2283,7 +2283,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
     assert.equal((result as Response).status, 400, search);
   }
 });
-test("[Server/图片] 固定 seed 保留 Unicode 原值并限制单张和互斥参数", () => {
+test("[Server/图片] 固定 seed 保留 Unicode 原值并支持 JSON 数量和互斥参数", () => {
   const parse = (search: string) =>
     parseRandomQuery(new URL(`https://img.example.com/random?${search}`), "redirect");
   for (const seed of ["wallpaper", "Wallpaper", "  wallpaper  ", "2026-09-15", "图😀".repeat(64)]) {
@@ -2298,9 +2298,11 @@ test("[Server/图片] 固定 seed 保留 Unicode 原值并限制单张和互斥�
   const ordinary = parse("");
   assert.ok(!(ordinary instanceof Response));
   assert.equal(ordinary.seed, null);
-  const explicit = parse("seed=fixed&mode=json&limit=1");
-  assert.ok(!(explicit instanceof Response));
-  assert.equal(explicit.limit, 1);
+  for (const limit of [1, 2, 200, 201]) {
+    const explicit = parse(`seed=fixed&mode=json&limit=${limit}`);
+    assert.ok(!(explicit instanceof Response));
+    assert.equal(explicit.limit, Math.min(limit, 200));
+  }
   for (const search of [
     "seed=",
     "seed=+%20",
@@ -2309,7 +2311,7 @@ test("[Server/图片] 固定 seed 保留 Unicode 原值并限制单张和互斥�
     "seed=%7F",
     `seed=${encodeURIComponent("😀".repeat(129))}`,
     "seed=a&seed=a",
-    "seed=fixed&mode=json&limit=2",
+    "seed=fixed&mode=json&limit=0",
     "seed=fixed&limit=1",
     `seed=fixed&id=${imageId}`
   ]) {

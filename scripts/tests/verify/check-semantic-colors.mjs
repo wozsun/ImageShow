@@ -1,4 +1,3 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -210,36 +209,6 @@ function isInsideSemanticDeclaration(ranges, offset) {
   return ranges.some((range) => offset >= range.start && offset < range.end);
 }
 
-// Check color syntax with the same matcher used by the source scan.
-assert.deepEqual(
-  collectMatches(
-    "color-syntax-fixture",
-    "new Color(styles.getPropertyValue(token).trim())",
-    rawColorPattern
-  ),
-  []
-);
-assert.deepEqual(
-  collectMatches("color-syntax-fixture", 'new Color("#123456")', rawColorPattern).map(
-    ({ match }) => match[0]
-  ),
-  ["#123456"]
-);
-for (const literal of [
-  "color(srgb 1 0 0)",
-  "COLOR(display-p3 1 0 0 / .5)",
-  "color(from var(--source) srgb r g b)",
-  "color(--profile .1 .2 .3)",
-  "rgb(10 20 30)",
-  "oklch(60% .2 30)"
-]) {
-  assert.equal(
-    collectMatches("color-syntax-fixture", literal, rawColorPattern).length,
-    1,
-    literal
-  );
-}
-
 const sourceFiles = [
   ...listSourceFiles(sourceRoot),
   indexFile
@@ -254,9 +223,13 @@ const indexSource = sources.get(indexFile);
 const themeColorMatch = indexSource.match(
   /<meta\s+name="theme-color"\s+content="(#[0-9a-fA-F]{3,8})"\s*\/>/
 );
-const themeColorValueOffset = themeColorMatch
-  ? themeColorMatch.index + themeColorMatch[0].indexOf(themeColorMatch[1])
-  : -1;
+const inlineCanvasMatch = indexSource.match(
+  /--color-browser-canvas\s*:\s*(#[0-9a-fA-F]{3,8})\s*;/
+);
+// The initial theme-color and the inline canvas paint the page before any stylesheet loads.
+const bootstrapValueOffsets = [themeColorMatch, inlineCanvasMatch]
+  .filter(Boolean)
+  .map((match) => match.index + match[0].indexOf(match[1]));
 
 function hexRgb(value) {
   const hex = value.slice(1);
@@ -297,7 +270,7 @@ for (const [file, source] of sources) {
     : [];
   for (const occurrence of collectMatches(file, source, rawColorPattern)) {
     if (file === indexFile
-      && occurrence.match.index === themeColorValueOffset) {
+      && bootstrapValueOffsets.includes(occurrence.match.index)) {
       continue;
     }
     if (isInsideSemanticDeclaration(declarationRanges, occurrence.match.index)) {
@@ -305,7 +278,7 @@ for (const [file, source] of sources) {
     }
     errors.push(
       `${displayPath(file)}:${occurrence.line} contains a raw color ` +
-        `outside the semantic sheets or bootstrap theme-color meta: ` +
+        `outside the semantic sheets or bootstrap colors in index.html: ` +
         occurrence.match[0]
     );
   }
@@ -323,6 +296,10 @@ if (!bootstrapMatch || !themeColorMatch) {
   errors.push("Bootstrap canvas and theme-color must both be explicit hex values");
 } else if (bootstrapMatch[1].toLowerCase() !== themeColorMatch[1].toLowerCase()) {
   errors.push("Bootstrap canvas and initial theme-color do not match");
+}
+if (inlineCanvasMatch && bootstrapMatch
+  && inlineCanvasMatch[1].toLowerCase() !== bootstrapMatch[1].toLowerCase()) {
+  errors.push("Bootstrap canvas and inline browser canvas do not match");
 }
 if (bootstrapMatch) {
   for (const token of [

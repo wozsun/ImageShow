@@ -33,7 +33,7 @@
   --color-dark-control-action-text: #79b8ff;
 
   /* Bootstrap */
-  --bootstrap-color-canvas: #070b15;
+  --bootstrap-color-canvas: #070809;
   --bootstrap-color-text: #f2f7ff;
   /*
    * React 接管后台颜色域前，通用控件也必须留在暗色安全基线。公开页和后台页
@@ -62,7 +62,7 @@
   --bootstrap-color-feedback-error-text: #cc7975;
 
   /* Public foundations */
-  --public-color-canvas: #070b15;
+  --public-color-canvas: #070809;
   --public-color-surface-default: #142036;
   --color-public-text-primary: #f2f7ff;
   --public-color-text-secondary: #afbdd0;

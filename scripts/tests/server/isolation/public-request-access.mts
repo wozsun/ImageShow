@@ -37,16 +37,28 @@ await runIntegrationScenario(async (runtime) => {
   await local.writeBuffer("large", key, bytes, "image/webp");
   await local.writeBuffer("medium", key, bytes, "image/webp");
   await local.writeBuffer("small", key, bytes, "image/webp");
-  const request = (
+  const request = async (
     path: string,
     headers: Record<string, string> = {},
     method = "GET",
     host = "images.example.test"
-  ) =>
-    app.request(`http://internal.test${path}`, {
+  ) => {
+    const response = await app.request(`http://internal.test${path}`, {
       method,
-      headers: { Host: host, "X-Forwarded-Proto": "https", "X-Real-IP": "192.0.2.1", ...headers }
+      headers: { Host: host, Origin: "https://untrusted.example.test", "Sec-Fetch-Site": "cross-site", "X-Forwarded-Proto": "https", "X-Real-IP": "192.0.2.1", ...headers }
     });
+    if (path.startsWith("/random?") && host === "images.example.test") {
+      assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
+      assert.equal(response.headers.get("Access-Control-Allow-Credentials"), null);
+      assert.equal(response.headers.get("Access-Control-Expose-Headers"), "Retry-After");
+    }
+    if (/^\/images\/(large|medium|small)\//.test(path) && host === "images.example.test") {
+      assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
+      assert.equal(response.headers.get("Access-Control-Allow-Credentials"), null);
+      assert.equal(response.headers.get("Access-Control-Expose-Headers"), "ETag, Content-Range, Accept-Ranges");
+    }
+    return response;
+  };
   const random = (query = "mode=json") => `/random?id=${id}&${query}`;
   const expectStatus = async (response: Response, status: number) => {
     assert.equal(response.status, status, await response.clone().text());
@@ -62,6 +74,28 @@ await runIntegrationScenario(async (runtime) => {
     );
     assert.equal((await response.json()).code, "random_rate_limited");
   };
+
+  const preflight = await request(random(), {
+    "Access-Control-Request-Method": "GET",
+    "Access-Control-Request-Headers": "content-type"
+  }, "OPTIONS");
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("Access-Control-Allow-Methods"), "GET, HEAD");
+  assert.equal(preflight.headers.get("Access-Control-Allow-Headers"), "Content-Type");
+  assert.equal(await preflight.text(), "");
+  const wrongHost = await request(random(), {}, "GET", "other.example.test");
+  assert.equal(wrongHost.status, 404);
+  assert.equal(wrongHost.headers.get("Access-Control-Allow-Origin"), null);
+  const privateApi = await request("/api/images?view=gallery&limit=1");
+  assert.equal(privateApi.status, 403);
+  assert.equal(privateApi.headers.get("Access-Control-Allow-Origin"), null);
+  const coldApp = createHttpApp({ businessGateIsOpen: () => false, requireRedis: async () => undefined });
+  const cold = await coldApp.request(`http://internal.test${random()}`, {
+    headers: { Host: "images.example.test", Origin: "https://untrusted.example.test" }
+  });
+  assert.equal(cold.status, 503);
+  assert.equal(cold.headers.get("Access-Control-Allow-Origin"), "*");
+  await cold.arrayBuffer();
 
   await expectStatus(await request(random("mode=proxy")), 200);
   await expectStatus(await request(random("mode=redirect"), {}, "HEAD"), 302);
@@ -128,8 +162,25 @@ await runIntegrationScenario(async (runtime) => {
 
   const openRead = mock.method(LocalStorageDriver.prototype, "openRead");
   try {
-    for (const prefix of ["large", "small"]) {
+    for (const prefix of ["large", "medium", "small"]) {
       const path = `/images/${prefix}/${key}`;
+      const beforePreflight = openRead.mock.callCount();
+      const preflight = await request(path, {
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "range, if-none-match, if-modified-since, if-range"
+      }, "OPTIONS");
+      assert.equal(preflight.status, 204);
+      assert.equal(preflight.headers.get("Access-Control-Allow-Methods"), "GET, HEAD");
+      assert.equal(preflight.headers.get("Access-Control-Allow-Headers"), "range, if-none-match, if-modified-since, if-range");
+      await preflight.arrayBuffer();
+      await expectStatus(await request(path, {
+        "Access-Control-Request-Method": "POST"
+      }, "OPTIONS"), 403);
+      await expectStatus(await request(path, {
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "authorization"
+      }, "OPTIONS"), 403);
+      assert.equal(openRead.mock.callCount(), beforePreflight);
       const readable = await request(path, { Referer: "https://portal.example.test/article?q=1" });
       assert.equal(readable.status, 200);
       assert.equal(readable.headers.get("Vary"), "Referer");
@@ -166,10 +217,14 @@ await runIntegrationScenario(async (runtime) => {
         );
       }
     }
-    await expectStatus(
-      await request(`/images/original/${id}`, { Referer: "https://portal.example.test/" }),
-      401
-    );
+    const original = await request(`/images/original/${id}`, { Referer: "https://portal.example.test/" });
+    assert.equal(original.headers.get("Access-Control-Allow-Origin"), null);
+    await expectStatus(original, 401);
+    const originalPreflight = await request(`/images/original/${id}`, {
+      "Access-Control-Request-Method": "GET"
+    }, "OPTIONS");
+    assert.equal(originalPreflight.headers.get("Access-Control-Allow-Origin"), null);
+    await expectStatus(originalPreflight, 403);
     await updateStorageBackend("local", { public_base_url: "https://media.example.test/pictures" });
     const redirected = await request(`/images/large/${key}`, {
       Referer: "https://images.example.test/"

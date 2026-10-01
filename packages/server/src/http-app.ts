@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { compress } from "hono/compress";
 import {
   adminApiBasePath,
+  imageVariants,
   ingestionDuplicatesPath,
   ingestionStatusPath
 } from "@imageshow/shared/browser";
@@ -41,7 +42,7 @@ import { registerStorageRoutes } from "./routes/storage.ts";
 import { createAssetHandler, registerAssetRoutes } from "./routes/assets.ts";
 import { registerSpaRoutes } from "./routes/spa.ts";
 import { registerIngestionRoutes } from "./routes/ingestion.ts";
-import { resourceHostBoundary } from "./routes/resource-host.ts";
+import { publicSiteCors, resourceHostBoundary } from "./routes/resource-host.ts";
 import {
   auditAdminMutation,
   markAdminReadRequest
@@ -80,10 +81,15 @@ export function createHttpApp(
     finalizeSecurityHeaders(c);
   });
   const serveAssets = createAssetHandler();
+  app.use("/random", publicSiteCors("Retry-After"));
+  for (const variant of imageVariants) {
+    app.use(`/images/${variant}/*`, publicSiteCors());
+  }
   app.use(
     "*",
     resourceHostBoundary(() => availability.businessGateIsOpen(), serveAssets)
   );
+  registerRandomRoutes(app);
   app.options(
     "*",
     async (c, next) => {
@@ -125,7 +131,6 @@ export function createHttpApp(
 
   registerHealthRoutes(app);
   registerPublicRoutes(app);
-  registerRandomRoutes(app);
   app.use(`${adminApiBasePath}/*`, async (_c, next) => {
     await availability.requireRedis();
     await next();

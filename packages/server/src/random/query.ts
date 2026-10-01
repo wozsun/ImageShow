@@ -272,7 +272,7 @@ function parseTargetedIds(query: URLSearchParams): string[] | Response {
   return [...new Set(ids)].sort();
 }
 
-function parseSeed(query: URLSearchParams, limit: number): string | null | Response {
+function parseSeed(query: URLSearchParams): string | null | Response {
   const seed = query.get("seed");
   if (seed === null) return null;
   if (
@@ -287,12 +287,6 @@ function parseSeed(query: URLSearchParams, limit: number): string | null | Respo
         maxCharacters: appConfig.randomQuery.maxSeedCharacters,
         hint: "Use a non-blank string without control characters"
       }
-    );
-  }
-  if (limit !== 1) {
-    return apiErrorResponse(
-      { status: 400, message: "Bad Request: seed only supports one image" },
-      { field: "limit", hint: "Omit limit or use limit=1 with mode=json" }
     );
   }
   return seed;
@@ -333,7 +327,7 @@ export function parseRandomQuery(
   }
   const limit = parseJsonLimit(query, explicitMode);
   if (limit instanceof Response) return limit;
-  const seed = parseSeed(query, limit);
+  const seed = parseSeed(query);
   if (seed instanceof Response) return seed;
   const targetedCombinationError = targetedIdCombinationError(query);
   if (targetedCombinationError) return targetedCombinationError;

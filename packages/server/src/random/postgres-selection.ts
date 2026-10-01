@@ -88,7 +88,7 @@ export async function sampleReadyImagesFromPostgres(
 ) {
   signal?.throwIfAborted();
   if (seededStart !== undefined) {
-    return selectSeededImage(plan, seededStart, reader, signal);
+    return selectSeededImages(plan, seededStart, limit, reader, signal);
   }
   const clause = filterClause(plan);
   const bounds = (
@@ -154,14 +154,16 @@ export async function sampleReadyImagesFromPostgres(
 }
 
 /** Matches the Redis suffix window, including UUID ordering for equal suffixes. */
-async function selectSeededImage(
+async function selectSeededImages(
   plan: ImageFilterPlan,
   start: number,
+  limit: number,
   reader: DatabaseReader,
   signal?: AbortSignal
 ) {
   const clause = filterClause(plan);
   const pivot = bind(clause.params, start.toString(16).padStart(12, "0"));
+  const limitParameter = bind(clause.params, limit);
   const phases = [0, 1]
     .map(
       (phase) => `(
@@ -170,20 +172,21 @@ async function selectSeededImage(
      WHERE ${clause.sql}
        AND right(m.id::text, 12) ${phase === 0 ? ">=" : "<"} ${pivot}
      ORDER BY right(m.id::text, 12), m.id
-     LIMIT 1
+     LIMIT ${limitParameter}
   )`
     )
     .join(" UNION ALL ");
   const rows = (
     await reader.query(
       `WITH selected AS (
-       SELECT id FROM (${phases}) candidates
+       SELECT id, phase, suffix FROM (${phases}) candidates
         ORDER BY phase, suffix, id
-        LIMIT 1
+        LIMIT ${limitParameter}
      )
      SELECT ${readyImageSourceColumns}
        FROM metadata m
-       JOIN selected ON selected.id=m.id`,
+       JOIN selected ON selected.id=m.id
+      ORDER BY selected.phase, selected.suffix, selected.id`,
       clause.params
     )
   ).rows as ReadyImageSourceRow[];

@@ -17,6 +17,15 @@ import { assertAllowedImageReferer } from "./image-referer.ts";
 
 const corsRequestHeaders = new Set(["range", "if-none-match", "if-modified-since", "if-range"]);
 
+export function publicSiteCors(exposedHeaders?: string): MiddlewareHandler {
+  return async (c, next) => {
+    await next();
+    if (isAllowedSiteHost(c.req.header("host") ?? "")) {
+      setPublicResourceCors(c.res, exposedHeaders);
+    }
+  };
+}
+
 function resourcePreflight(c: Context) {
   const requestedMethod = c.req.header("access-control-request-method") ?? "";
   const requestedHeaders = (c.req.header("access-control-request-headers") ?? "")
@@ -113,7 +122,14 @@ export function resourceHostBoundary(
         { phase: "cold_start" }
       );
     }
-    if (!localBase && !assetsBase) return next();
+    if (!localBase && !assetsBase) {
+      if (c.req.method === "OPTIONS"
+        && imageVariants.some((variant) => c.req.path.startsWith(`/images/${variant}/`))) {
+        await c.req.raw.body?.cancel().catch(() => undefined);
+        return resourcePreflight(c);
+      }
+      return next();
+    }
     // Image and static resource URLs may share a Host with separate namespaces.
     const path = new URL(c.req.url).pathname;
     if (localBase) {

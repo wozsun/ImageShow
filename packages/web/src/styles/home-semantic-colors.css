@@ -7,7 +7,7 @@
   --public-color-home-grain-line: rgba(255, 255, 255, 0.12);
   --public-color-home-grain-dot: rgba(255, 255, 255, 0.18);
   --public-color-home-loading-surface: var(--public-color-canvas);
-  --public-color-home-filter-surface: rgba(7, 11, 21, 0.32);
+  --public-color-home-filter-surface: rgba(7, 8, 9, 0.32);
   --public-color-home-toolbar-description: rgba(218, 229, 244, 0.68);
   --public-color-home-reset-text: rgba(225, 235, 248, 0.78);
   --public-color-home-reset-surface: rgba(87, 130, 190, 0.1);

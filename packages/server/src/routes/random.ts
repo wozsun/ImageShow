@@ -5,7 +5,6 @@ import { withPublicDatabaseRead } from "../core/database/public-fallback.ts";
 import {
   noStoreCacheControl,
   responseContentLengthValue,
-  safeResponseHeaderValue,
   safeRedirectLocation
 } from "../core/http/headers.ts";
 import { requestClientIp, requestHasTrustedReferer, requestIsSecure } from "../core/http/request-security.ts";
@@ -27,6 +26,17 @@ export function registerRandomRoutes(app: Hono) {
 }
 
 async function handleRandomImage(c: Context) {
+  if (c.req.method === "OPTIONS") {
+    await c.req.raw.body?.cancel().catch(() => undefined);
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Cache-Control": noStoreCacheControl,
+        "Access-Control-Allow-Methods": "GET, HEAD",
+        "Access-Control-Allow-Headers": "Content-Type"
+      }
+    });
+  }
   if (c.req.method !== "GET" && c.req.method !== "HEAD") {
     return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
   }
@@ -86,10 +96,8 @@ async function respondRandom(c: Context, url: URL) {
       message: "Not Found: No available images"
     });
   }
-  const imageInfo = `${picked.device}-${picked.brightness}-${picked.theme ?? ""}-${picked.id}`;
   const baseHeaders = {
-    "Cache-Control": noStoreCacheControl,
-    "X-Image-Info": safeResponseHeaderValue("X-Image-Info", imageInfo)
+    "Cache-Control": noStoreCacheControl
   };
   const variant = selection.size;
   if (selection.mode === "proxy") {

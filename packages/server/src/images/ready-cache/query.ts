@@ -454,7 +454,7 @@ export async function sampleReadyImages(
         index,
         { start: seededStart },
         undefined,
-        1,
+        limit,
         signal
       );
       return result.cached && result.value !== null

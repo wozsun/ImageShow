@@ -88,23 +88,34 @@ await runIntegrationScenario(async (runtime) => {
     seed: string,
     filter = "device=all",
     client = "seed-client",
-    mode = "json"
+    mode = "json",
+    limit?: number
   ) => {
     const result = await selectRandomImages(
       new URL(
-        `http://imageshow.test/random?seed=${encodeURIComponent(seed)}&${filter}&mode=${mode}`
+        `http://imageshow.test/random?seed=${encodeURIComponent(seed)}&${filter}&mode=${mode}${limit === undefined ? "" : `&limit=${limit}`}`
       ),
       "Mozilla/5.0 (Windows NT 10.0)",
       client
     );
     assert.ok(!(result instanceof Response));
-    assert.equal(result.items.length, 1);
-    return result.items[0]!.id;
+    assert.equal(result.items.length, Math.min(limit ?? 1, ids.length));
+    return result.items.map((item) => item.id);
   };
-  const coldSeeds = new Map<string, string>();
+  const coldSeeds = new Map<string, string[]>();
   const allPlan = createImageFilterPlan({});
   try {
-    for (const seed of seedCases) coldSeeds.set(seed, await seeded(seed));
+    for (const seed of seedCases) {
+      const batch = await seeded(seed, "device=all", "seed-client", "json", 200);
+      assert.deepEqual([...batch].sort(), [...ids].sort());
+      coldSeeds.set(seed, batch);
+      for (const limit of [1, 3, 5]) {
+        assert.deepEqual(
+          await seeded(seed, "device=all", "seed-client", "json", limit),
+          batch.slice(0, limit)
+        );
+      }
+    }
     // Explicit pivots exercise inclusive edges and UUID tie-breaking without
     // deriving the expected result from the seed hash implementation.
     for (const [start, expectedId] of [
@@ -115,7 +126,7 @@ await runIntegrationScenario(async (runtime) => {
     ] as const) {
       const result = await sampleReadyImagesFromPostgres(
         allPlan,
-        1,
+        200,
         new Set(ids),
         pool,
         undefined,
@@ -123,7 +134,7 @@ await runIntegrationScenario(async (runtime) => {
       );
       assert.deepEqual(
         result.map((item) => item.id),
-        [expectedId]
+        [...ids.slice(ids.indexOf(expectedId)), ...ids.slice(0, ids.indexOf(expectedId))]
       );
     }
     // Cold coordinator forces PostgreSQL; each cursor can cross view and size.
@@ -244,9 +255,15 @@ await runIntegrationScenario(async (runtime) => {
       assert.equal(connections, 0, "所有两档页与尾段碰撞均在热 Redis 命中");
       for (const seed of seedCases) {
         for (const mode of ["json", "redirect", "proxy"]) {
-          assert.equal(
+          assert.deepEqual(
             await seeded(seed, "device=all", "another-client", mode),
-            coldSeeds.get(seed)
+            coldSeeds.get(seed)!.slice(0, 1)
+          );
+        }
+        for (const limit of [3, 5, 200]) {
+          assert.deepEqual(
+            await seeded(seed, "device=all", "another-client", "json", limit),
+            coldSeeds.get(seed)!.slice(0, limit)
           );
         }
       }
@@ -256,11 +273,11 @@ await runIntegrationScenario(async (runtime) => {
         [0xdddddddddddd, ids[3]],
         [0xffffffffffff, ids[5]]
       ] as const) {
-        const result = await sampleReadyImages(allPlan, 1, new Set(ids), undefined, false, start);
+        const result = await sampleReadyImages(allPlan, 200, new Set(ids), undefined, false, start);
         assert.ok(result.cached);
         assert.deepEqual(
           result.value.map((item) => item.id),
-          [expectedId]
+          [...ids.slice(ids.indexOf(expectedId)), ...ids.slice(0, ids.indexOf(expectedId))]
         );
       }
       assert.equal(connections, 0, "固定 seed 热路径与 PostgreSQL 冷路径选图相同且不查询数据库");
@@ -268,38 +285,41 @@ await runIntegrationScenario(async (runtime) => {
       restoreConnections();
     }
 
-    const desktop = await seeded("wallpaper", "device=pc&brightness=dark&theme=null");
-    assert.equal(await seeded("wallpaper", "theme=null,null&brightness=DARK&device=auto"), desktop);
+    const desktop = await seeded("wallpaper", "device=pc&brightness=dark&theme=null", "seed-client", "json", 5);
+    assert.deepEqual(await seeded("wallpaper", "theme=null,null&brightness=DARK&device=auto", "seed-client", "json", 5), desktop);
     const emptySeed = await selectRandomImages(
       new URL("http://imageshow.test/random?seed=empty&device=mb")
     );
     assert.ok(emptySeed instanceof Response);
     assert.equal(emptySeed.status, 404);
     const recentBefore = await redis.keys("imageshow:random_recent:*");
-    for (let i = 0; i < 4; i++) assert.equal(await seeded("wallpaper"), coldSeeds.get("wallpaper"));
+    for (let i = 0; i < 4; i++) {
+      assert.deepEqual(await seeded("wallpaper", "device=all", "seed-client", "json", 5), coldSeeds.get("wallpaper")!.slice(0, 5));
+    }
     assert.deepEqual(
       await redis.keys("imageshow:random_recent:*"),
       recentBefore,
       "seed 不创建客户端近期历史"
     );
-    const jsonSeed = await get("/random?device=all&seed=wallpaper&mode=json");
+    const jsonSeed = await get("/random?device=all&seed=wallpaper&mode=json&limit=5");
     assert.equal(jsonSeed.status, 200);
     assert.match(jsonSeed.headers.get("cache-control")!, /no-store/);
     const seedBody = await jsonSeed.json();
+    assert.equal(seedBody.count, 5);
     assert.deepEqual(
       seedBody.items.map((item: { id: string }) => item.id),
-      [coldSeeds.get("wallpaper")]
+      coldSeeds.get("wallpaper")!.slice(0, 5)
     );
     const redirected = await get("/random?seed=wallpaper&mode=redirect&device=all");
     assert.equal(redirected.status, 302);
-    assert.ok(redirected.headers.get("location")?.includes(coldSeeds.get("wallpaper")!));
+    assert.ok(redirected.headers.get("location")?.includes(coldSeeds.get("wallpaper")![0]!));
     // Removing the tail forces wraparound; both stores must keep the same
     // membership and tie order after a rebuild and a candidate deletion.
     await pool.query("UPDATE metadata SET status='deleted' WHERE id=$1", [ids[5]]);
     await coordinator.requestReadyImageCacheRebuild();
     const wrappedPg = await sampleReadyImagesFromPostgres(
       allPlan,
-      1,
+      200,
       new Set(ids),
       pool,
       undefined,
@@ -307,7 +327,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     const wrappedRedis = await sampleReadyImages(
       allPlan,
-      1,
+      200,
       new Set(ids),
       undefined,
       false,
@@ -315,16 +335,18 @@ await runIntegrationScenario(async (runtime) => {
     );
     assert.deepEqual(
       wrappedPg.map((item) => item.id),
-      [ids[0]]
+      ids.slice(0, -1)
     );
     assert.ok(wrappedRedis.cached);
     assert.deepEqual(
       wrappedRedis.value.map((item) => item.id),
-      [ids[0]]
+      ids.slice(0, -1)
     );
     await pool.query("UPDATE metadata SET status='ready' WHERE id=$1", [ids[5]]);
     await coordinator.requestReadyImageCacheRebuild();
-    for (const seed of seedCases) assert.equal(await seeded(seed), coldSeeds.get(seed));
+    for (const seed of seedCases) {
+      assert.deepEqual(await seeded(seed, "device=all", "seed-client", "json", 200), coldSeeds.get(seed));
+    }
 
     // Each order preserves its value boundary after the anchor is removed.
     for (const order of ["latest", "oldest", "random"] as const) {

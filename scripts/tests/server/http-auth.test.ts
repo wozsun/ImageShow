@@ -151,8 +151,8 @@ async function status(host, path, method = "GET") {
 
 assert.equal(await status("img.example.com", "/random", "POST"), 405);
 assert.equal(await status("IMG.EXAMPLE.COM", "/api/ping", "OPTIONS"), 204);
-for (const path of ["/images/large/example.webp", "/images/small/example.webp"]) {
-  assert.equal(await status("img.example.com", path, "OPTIONS"), 204);
+for (const path of ["/images/large/example.webp", "/images/medium/example.webp", "/images/small/example.webp"]) {
+  assert.equal(await status("img.example.com", path, "OPTIONS"), 403);
 }
 for (const method of ["GET", "HEAD", "OPTIONS"]) {
   assert.equal(await status("img.example.com", "/images/original/not-a-uuid", method), method === "OPTIONS" ? 204 : 401);

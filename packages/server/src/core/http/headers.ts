@@ -1,8 +1,11 @@
 import type { Context } from "hono";
 
-export function setPublicResourceCors(response: Response) {
+export function setPublicResourceCors(
+  response: Response,
+  exposedHeaders = "ETag, Content-Range, Accept-Ranges"
+) {
   response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set("Access-Control-Expose-Headers", "ETag, Content-Range, Accept-Ranges");
+  response.headers.set("Access-Control-Expose-Headers", exposedHeaders);
 }
 
 const commonSecurityHeaders: Readonly<Record<string, string>> = {
