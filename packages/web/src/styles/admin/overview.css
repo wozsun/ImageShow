@@ -1,8 +1,8 @@
 :root {
-  --admin-color-overview-label: light-dark(#4a5563, #bfc8d2);
-  --admin-color-overview-hint: light-dark(#8a93a2, #8b949e);
-  --admin-color-overview-chip: light-dark(#64748b, #a5aeb9);
-  --admin-color-overview-recent-surface: light-dark(#f1f4f8, #151a21);
+  --admin-color-overview-label: var(--admin-color-text-label);
+  --admin-color-overview-hint: var(--admin-color-text-subtle);
+  --admin-color-overview-chip: var(--admin-color-text-secondary);
+  --admin-color-overview-recent-surface: var(--admin-color-surface-subtle);
 }
 
 .overview-grid {

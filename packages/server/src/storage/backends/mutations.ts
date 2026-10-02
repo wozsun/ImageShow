@@ -1,4 +1,4 @@
-import { sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
+import { nextSortOrderSql } from "../../core/database/sort-order-sql.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { pool } from "../../core/database/pools.ts";
 import {
@@ -56,8 +56,7 @@ export async function createStorageBackend(
        )
        VALUES(
          $1, $2, $3, $4::jsonb, true,
-         (SELECT GREATEST(${sortOrderMin}, LEAST(COALESCE(MIN(sort_order), 0)::bigint - 1, ${sortOrderMax}))
-          FROM storage_backend)
+         ${nextSortOrderSql("storage_backend", "prepend")}
        )`,
         [input.slug, input.display_name, "s3", storedS3ConfigJson(config)]
       )

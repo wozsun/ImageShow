@@ -4,6 +4,7 @@ import type {
   IngestionCancelItemResultDto
 } from "@imageshow/shared/browser";
 import { appConfig } from "@imageshow/shared";
+import { neverAbortedSignal } from "../../../core/abort.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { DynamicConcurrencyLimiter } from "../../../core/concurrency.ts";
 import { logger } from "../../../core/logger.ts";
@@ -84,7 +85,6 @@ const defaultDependencies: CancelIngestionSessionsDependencies = {
   scheduleCleanup: (work) => ingestionCleanupRetryQueue.enqueue(work)
 };
 
-const cancelMutationSignal = new AbortController().signal;
 const cancelMutationLimiter = new DynamicConcurrencyLimiter(
   () => appConfig.ingestionRuntime.queueActionBatchSize,
   (signal) => signal.reason ?? new Error("Ingestion cancellation stopped")
@@ -254,9 +254,8 @@ async function cancelLoadedIngestionSessions(
   dependencies: CancelIngestionSessionsDependencies = defaultDependencies
 ) {
   if (!loaded.length) return [];
-  const scheduleCleanup =
-    dependencies.scheduleCleanup ??
-    ((work: () => Promise<void>) => ingestionCleanupRetryQueue.enqueue(work));
+  const scheduleCleanup = dependencies.scheduleCleanup
+    ?? ((work) => ingestionCleanupRetryQueue.enqueue(work));
   const sessionsPendingCleanup = new Map<string, IngestionSessionSnapshot>();
   const rememberSessionForCleanup = (session: IngestionSessionSnapshot) => {
     sessionsPendingCleanup.set(pairKey(session), session);
@@ -299,7 +298,7 @@ async function cancelLoadedIngestionSessions(
           pair.image_id,
           loaded[index]!.owner
         );
-        return cancelMutationLimiter.run(cancelMutationSignal, async () => {
+        return cancelMutationLimiter.run(neverAbortedSignal, async () => {
           if (committedResult) {
             if (options.expiryCutoff !== undefined) {
               await expireCommittedSession(

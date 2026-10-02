@@ -73,27 +73,22 @@ import {
 } from "../images/ingestion/queue/session-view.ts";
 import { createWeiboImportBatchManifest } from "../images/ingestion/sources/weibo.ts";
 import { WeiboImportError } from "../images/ingestion/sources/weibo-types.ts";
-import type { AdminSession } from "../users/admin-session.ts";
+import { adminSessionOf } from "../core/http/admin-session-context.ts";
 import { getIngestionVocabulary } from "../vocab/vocab-cache.ts";
 
-function authenticatedSession(c: Context) {
-  const session = c.get("session") as AdminSession | undefined;
-  if (!session) {
-    throw new ApiError(401, "unauthorized", "Unauthorized");
-  }
-  return session;
+function authenticatedUsername(c: Context) {
+  return adminSessionOf(c).username;
 }
 
-function authenticatedUsername(c: Context) {
-  return authenticatedSession(c).username;
+function manifestApiError(error: unknown) {
+  return error instanceof JsonlManifestError
+    ? new ApiError(400, error.code, error.message)
+    : error;
 }
 
 function ingestionActionScope(c: Context) {
   const value = c.req.header(ingestionActionScopeHeader) ?? "";
-  if (
-    !/^[A-Za-z0-9_-]{32}$/u.test(value) ||
-    Buffer.byteLength(value, "utf8") > appConfig.ingestionRuntime.tokenMaxBytes
-  ) {
+  if (!/^[A-Za-z0-9_-]{32}$/u.test(value)) {
     throw new ApiError(
       409,
       "ingestion_action_scope_stale",
@@ -135,7 +130,7 @@ export function registerIngestionRoutes(app: Hono) {
     return streamIngestionQueueEvents(c, {
       repository: ingestionSessionRepository,
       tokens: ingestionTokenService,
-      session: authenticatedSession(c),
+      session: adminSessionOf(c),
       queue: input.queue
     });
   });
@@ -159,7 +154,7 @@ export function registerIngestionRoutes(app: Hono) {
         await readStableIngestionQueueSnapshot({
           repository: ingestionSessionRepository,
           tokens: ingestionTokenService,
-          session: authenticatedSession(c),
+          session: adminSessionOf(c),
           actionScope: ingestionActionScope(c),
           queue: input.queue,
           offset: input.offset,
@@ -173,7 +168,6 @@ export function registerIngestionRoutes(app: Hono) {
 
   app.post(ingestionDuplicatesPath, async (c) => {
     const input = parse(ingestionDuplicateDetailsInput, await readJsonBody(c));
-    authenticatedSession(c);
     const snapshots = await readDuplicateSnapshotsByMd5(input.md5s);
     const response: IngestionDuplicateDetailsResultDto = {
       items: input.md5s.map((md5) => {
@@ -243,10 +237,7 @@ export function registerIngestionRoutes(app: Hono) {
         )
       );
     } catch (error) {
-      if (error instanceof JsonlManifestError) {
-        throw new ApiError(400, error.code, error.message);
-      }
-      throw error;
+      throw manifestApiError(error);
     }
   });
 
@@ -275,9 +266,6 @@ export function registerIngestionRoutes(app: Hono) {
         )
       );
     } catch (error) {
-      if (error instanceof JsonlManifestError) {
-        throw new ApiError(400, error.code, error.message);
-      }
       if (error instanceof WeiboImportError) {
         let status: 400 | 422 | 502 = 422;
         if (error.code === "weibo_invalid_url"
@@ -292,7 +280,7 @@ export function registerIngestionRoutes(app: Hono) {
           status = 502;
         throw new ApiError(status, error.code, error.message);
       }
-      throw error;
+      throw manifestApiError(error);
     }
   });
 
@@ -343,7 +331,7 @@ export function registerIngestionRoutes(app: Hono) {
   app.post(ingestionActionPath, async (c) => {
     const input = parse(ingestionQueueActionInput, await readJsonBody(c));
     const response = (await ingestionExecutionControl.runQueueAction({
-      session: authenticatedSession(c),
+      session: adminSessionOf(c),
       actionScope: ingestionActionScope(c),
       request: input
     })) satisfies IngestionQueueActionResultDto;

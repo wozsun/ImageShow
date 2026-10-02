@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import { createS3HttpFixture } from "../../support/s3-http-fixture.ts";
 import { Hono } from "hono";
-import type { AdminSession } from "../../../../packages/server/src/users/admin-session.ts";
+import type { AdminSession } from "../../../../packages/server/src/core/http/admin-session-context.ts";
 
 await runIntegrationScenario(async (runtime) => {
   const databasePools = runtime.databasePools;

@@ -5,7 +5,7 @@ import type {
   UploadIntentSnapshot
 } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
 import { activeSession, requiredValue } from "./ingestion-scenario-fixture.mts";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID, randomUUIDv7 } from "node:crypto";
 import { createIngestionScenarioFixture } from "./ingestion-scenario-fixture.mts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
@@ -282,10 +282,7 @@ await runIntegrationScenario(async (runtime) => {
     };
     const accepted = activeResult(
       await ingestionRepository.acceptImportSession(
-        {
-          ...withoutHash,
-          semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(withoutHash)
-        },
+        withoutHash,
         ingestionSessionIdentity.createIngestionDisplayOrderKey(
           batchKey,
           position,
@@ -503,11 +500,7 @@ await runIntegrationScenario(async (runtime) => {
   };
   const replacement = activeResult(
     await ingestionRepository.acceptImportSession(
-      {
-        ...replacementWithoutHash,
-        semantic_hash:
-          ingestionSessionProjection.ingestionSessionSemanticHash(replacementWithoutHash)
-      },
+      replacementWithoutHash,
       ingestionSessionIdentity.createIngestionDisplayOrderKey(
         coreUuid.randomUuidV7At(new Date(serviceNow + 19_500)),
         0,
@@ -801,7 +794,7 @@ await runIntegrationScenario(async (runtime) => {
   for (const [conversionIndex, position] of [4, 1, 3, 0, 2].entries()) {
     const intent = uploadOrderIntents[position];
     assert.ok(intent);
-    const token = coreUuid.randomUuidV7();
+    const token = randomUUIDv7();
     await ingestionRepository.claimUploadIntent(
       uploadOrderOwner,
       {
@@ -832,17 +825,14 @@ await runIntegrationScenario(async (runtime) => {
       accepted_at: 0,
       accepted_order: 0,
       execution_token: "",
-      raw_generation: coreUuid.randomUuidV7(),
+      raw_generation: randomUUIDv7(),
       raw_size: intent.expected_size,
       discard_at: 0
     };
     convertedUploadOrderSessions[position] = activeSession(
       (
         await ingestionRepository.convertUploadIntent(
-          {
-            ...withoutHash,
-            semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(withoutHash)
-          },
+          withoutHash,
           token,
           serviceNow + 33_000 + conversionIndex
         )
@@ -880,10 +870,7 @@ await runIntegrationScenario(async (runtime) => {
     };
     const accepted = activeResult(
       await ingestionRepository.acceptImportSession(
-        {
-          ...withoutHash,
-          semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(withoutHash)
-        },
+        withoutHash,
         displayOrderKey(sessionId, position, createdAt),
         createdAt
       )
@@ -1031,11 +1018,7 @@ await runIntegrationScenario(async (runtime) => {
     ingestionRepository.mutateSemantic(
       acceptedImport.session,
       acceptedImport.session.version,
-      {
-        ...expiredImportWithoutHash,
-        semantic_hash:
-          ingestionSessionProjection.ingestionSessionSemanticHash(expiredImportWithoutHash)
-      },
+      expiredImportWithoutHash,
       acceptedImport.session.discard_at
     ),
     (error: unknown) =>
@@ -1051,8 +1034,7 @@ await runIntegrationScenario(async (runtime) => {
         phase: "downloading" as const,
         message: "downloading",
         progress: 0,
-        execution_token: coreUuid.randomUuidV7(),
-        semantic_hash: ""
+        execution_token: randomUUIDv7()
       },
       importCreatedAt + 1
     )
@@ -1077,9 +1059,8 @@ await runIntegrationScenario(async (runtime) => {
         message: "received",
         progress: 100,
         execution_token: "",
-        raw_generation: coreUuid.randomUuidV7(),
-        raw_size: 10,
-        semantic_hash: ""
+        raw_generation: randomUUIDv7(),
+        raw_size: 10
       },
       importCreatedAt + 2
     )
@@ -1106,8 +1087,7 @@ await runIntegrationScenario(async (runtime) => {
         message: "failed",
         progress: null,
         execution_token: "",
-        error: { code: "download_failed", message: "failed" },
-        semantic_hash: ""
+        error: { code: "download_failed", message: "failed" }
       },
       importCreatedAt + 3
     )
@@ -1128,8 +1108,7 @@ await runIntegrationScenario(async (runtime) => {
         execution_token: "",
         raw_generation: "",
         raw_size: 0,
-        error: undefined,
-        semantic_hash: ""
+        error: undefined
       },
       importCreatedAt + 4
     )
@@ -1235,11 +1214,7 @@ await runIntegrationScenario(async (runtime) => {
   };
   await assert.rejects(
     ingestionRepository.acceptImportSession(
-      {
-        ...exhaustedOrderWithoutHash,
-        semantic_hash:
-          ingestionSessionProjection.ingestionSessionSemanticHash(exhaustedOrderWithoutHash)
-      },
+      exhaustedOrderWithoutHash,
       displayOrderKey(
         exhaustedOrderSessionId,
         45,

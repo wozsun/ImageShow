@@ -80,20 +80,20 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-scrollbar-light-track-thumb) transparent;
+  scrollbar-color: var(--color-scrollbar-track-thumb) transparent;
 }
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 *::-webkit-scrollbar-thumb {
-  background: var(--color-scrollbar-light-thumb);
+  background: var(--color-scrollbar-thumb);
   background-clip: padding-box;
   border: 3px solid transparent;
   border-radius: 999px;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: var(--color-scrollbar-light-thumb-hover);
+  background: var(--color-scrollbar-thumb-hover);
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-corner {
@@ -126,7 +126,7 @@ html.has-overlay-scrollbar body::-webkit-scrollbar {
   right: 0;
   width: 6px;
   border-radius: 999px;
-  background: var(--color-overlay-scrollbar-light);
+  background: var(--color-overlay-scrollbar);
   opacity: 0;
   pointer-events: none;
   transition:
@@ -141,7 +141,7 @@ html.has-overlay-scrollbar body::-webkit-scrollbar {
 .overlay-scrollbar-handle:hover,
 .overlay-scrollbar-handle.is-dragging {
   width: 10px;
-  background: var(--color-overlay-scrollbar-light-active);
+  background: var(--color-overlay-scrollbar-active);
 }
 .overlay-scrollbar-handle.is-dark {
   background: var(--color-overlay-scrollbar-dark);
@@ -399,7 +399,7 @@ input[aria-invalid="true"] {
 .select-menu > button.is-selected {
   position: relative;
   color: var(--color-control-action-text);
-  background: var(--color-control-surface-hover);
+  background: var(--color-control-surface-selected);
 }
 .select-menu > button.is-selected::after {
   content: "✓";
@@ -800,7 +800,7 @@ button.active,
 }
 .facet-search-results button:hover,
 .facet-search-results button:focus-visible {
-  background: var(--color-control-surface-subtle-hover);
+  background: var(--color-control-surface-hover);
   border-color: var(--color-control-border-hover);
 }
 
@@ -827,7 +827,7 @@ button.active,
   color: var(--color-control-text-secondary);
 }
 .facet-selected-list button {
-  background: var(--color-control-surface-hover);
+  background: var(--color-control-surface-selected);
   border-color: var(--color-control-border-selected);
   color: var(--color-control-action-text);
 }
@@ -853,7 +853,7 @@ button.active,
 }
 .facet-mode-switch button.active {
   color: var(--color-control-action-text);
-  background: var(--color-control-surface-hover);
+  background: var(--color-control-surface-selected);
   border-color: var(--color-control-border-selected);
 }
 

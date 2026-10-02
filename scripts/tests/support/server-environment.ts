@@ -36,8 +36,19 @@ Object.assign(process.env, {
   ADMIN_PASSWORD: randomUUID()
 });
 
+const { configureDatabasePools, closeDatabasePools } =
+  await import("../../../packages/server/src/core/database/pools.ts");
+configureDatabasePools({
+  host: "database.invalid",
+  port: 5432,
+  name: "imageshow_test",
+  user: "imageshow_test",
+  password: process.env.DATABASE_PASSWORD!
+});
+
 after(async () => {
   const errors: unknown[] = [];
+  await closeDatabasePools();
   try {
     await terminateSharedTestProcesses();
   } catch (error) {

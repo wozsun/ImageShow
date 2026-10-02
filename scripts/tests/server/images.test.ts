@@ -15,6 +15,8 @@ import { createTestDirectory } from "../support/test-directory.ts";
 import { Hono } from "hono";
 import ipaddr from "ipaddr.js";
 import sharp from "sharp";
+import { neverAbortedSignal } from "../../../packages/server/src/core/abort.ts";
+import { limitProtectedAdminRequestBody } from "../../../packages/server/src/core/http/request-body-limit.ts";
 import {
   adminApiBasePath,
   ingestionBatchHardLimit,
@@ -130,13 +132,6 @@ test("[Server/图片] 完成结果统一分类图片与存储配置断连并保�
   const { readCommittedIngestionResultsByImageIds } =
     await import("../../../packages/server/src/images/read-models/ingestion-results.ts");
   initializeRuntimeConfig();
-  database.configureDatabasePools({
-    host: "database.invalid",
-    port: 5432,
-    name: "imageshow_test",
-    user: "imageshow_test",
-    password: process.env.DATABASE_PASSWORD!
-  });
   const id = "00000000-0000-7000-8000-000000000001";
   const connectionError = Object.assign(new Error("connection refused"), { code: "ECONNREFUSED" });
   let fault: "metadata" | "storage" | "format" | "missing" | "none" = "metadata";
@@ -941,6 +936,7 @@ test("[Server/图片] 图片 1..N 路由拒绝越权、重复 ID 与错误正文
     }
     await next();
   });
+  app.use(`${adminApiBasePath}/*`, limitProtectedAdminRequestBody);
   registerAdminImageRoutes(app as unknown as Hono);
   registerPublicRoutes(app as unknown as Hono);
 
@@ -1617,7 +1613,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
   direct = true;
   const directRedirect = await serveAdminExternalOriginal(
     item.id,
-    { userAgent: "fixture-agent" },
+    { signal: neverAbortedSignal, userAgent: "fixture-agent" },
     dependencies as never
   );
   assert.equal(readCount, 2);
@@ -1646,7 +1642,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
     for (const method of ["GET", "HEAD"] as const) {
       const response = await serveAdminExternalOriginal(
         item.id,
-        { method },
+        { signal: neverAbortedSignal, method },
         {
           ...dependencies,
           readImageServingRecordById: async () => ({ ...record, original })
@@ -1663,7 +1659,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
     await assert.rejects(
       serveAdminExternalOriginal(
         item.id,
-        {},
+        { signal: neverAbortedSignal },
         {
           ...dependencies,
           readImageServingRecordById: async () => ({
@@ -1686,7 +1682,7 @@ test("[Server/图片] external original serving 保持 direct/proxy、validator 
     await assert.rejects(
       serveAdminExternalOriginal(
         item.id,
-        {},
+        { signal: neverAbortedSignal },
         {
           ...dependencies,
           readImageServingRecordById: async () => unavailable
@@ -1815,7 +1811,7 @@ test("[Server/图片] 标准化生成三档 WebP、保留来源尺寸并响应�
     for (const format of ["jpeg", "png", "webp", "gif", "avif"] as const) {
       const path = join(root, "source." + format);
       await sharp({create:{width:800,height:400,channels:3,background:"#4578ab"}}).toFormat(format).toFile(path);
-      const result = await transcodeStoredImage(path, settings);
+      const result = await transcodeStoredImage(path, settings, neverAbortedSignal);
       assert.deepEqual([result.sourceWidth,result.sourceHeight],[800,400]);
       for (const variant of ["large","medium","small"] as const) {
         const output = result.variants[variant];
@@ -1827,12 +1823,12 @@ test("[Server/图片] 标准化生成三档 WebP、保留来源尺寸并响应�
       }
     }
     const corrupt = join(root,"corrupt.jpg");await writeFile(corrupt,Buffer.from([0xff,0xd8,0,0]));
-    await assert.rejects(transcodeStoredImage(corrupt,settings));
+    await assert.rejects(transcodeStoredImage(corrupt, settings, neverAbortedSignal));
     await assert.rejects(transcodeStoredImage(corrupt,settings,AbortSignal.abort()),{name:"AbortError"});
     const unsupported = join(root,"source.tiff");await sharp({create:{width:32,height:16,channels:3,background:"red"}}).tiff().toFile(unsupported);
-    await assert.rejects(transcodeStoredImage(unsupported,settings));
+    await assert.rejects(transcodeStoredImage(unsupported, settings, neverAbortedSignal));
     const oversized=join(root,"oversized.png");await sharp({create:{width:getIngestionMaxLongEdge()+1,height:1,channels:3,background:"black"}}).png().toFile(oversized);
-    await assert.rejects(transcodeStoredImage(oversized,settings));
+    await assert.rejects(transcodeStoredImage(oversized, settings, neverAbortedSignal));
   } finally {await rm(root,{recursive:true,force:true});}
 });
 test("[Server/图片] 图片时间、UUIDv7、游标、分类和统一筛选保持一致", () => {
@@ -2259,15 +2255,28 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   assert.equal(targeted.limit, 2);
   assert.equal(targeted.device, "auto");
 
+  // Blank optional values mean "not provided", so they neither filter nor conflict with id.
+  const blank = parseQuery("device=&brightness=%20&theme=,&author=&tag=,&tag=all:&mode=&size=&limit=");
+  assert.equal(blank.device, "auto");
+  assert.equal(blank.brightness, null);
+  assert.deepEqual(blank.theme, { include: [], exclude: [] });
+  assert.deepEqual(blank.author, { include: [], exclude: [] });
+  assert.equal(blank.tag, null);
+  assert.equal(blank.mode, "redirect");
+  assert.equal(blank.size, "medium");
+  assert.equal(blank.limit, 1);
+  assert.deepEqual(parseQuery("tag=all:a,,b&tag=c,").tag, { anyOf: [["a", "b"], ["c"]] });
+  assert.deepEqual(parseQuery(`id=${imageId}&device=&theme=&tag=`).ids, [imageId]);
+
   for (const search of [
     "tag=live&tag=!blocked",
     "device=pc&device=mb",
     "id=00000000008d&brightness=dark",
+    "id=",
+    "id=,",
     "limit=2",
     "unknown=value",
     "device=invalid",
-    "size=",
-    "size=%20",
     "size=invalid-size",
     "size=%20full",
     "size=small&size=small",
@@ -2561,7 +2570,16 @@ test("[Server/图片] 管理员原图等待共享探测时单个 HTTP 取消不�
   assert.equal(other.signal.aborted, false);
   resolveProbe(true);
   assert.equal((await second).status, 302);
-  assert.equal((await serveAdminExternalOriginal(item.id, {}, dependencies as never)).status, 302);
+  assert.equal(
+    (
+      await serveAdminExternalOriginal(
+        item.id,
+        { signal: neverAbortedSignal },
+        dependencies as never
+      )
+    ).status,
+    302
+  );
 });
 
 test("[Server/图片] URL 补全后的长度边界在草稿与正式输入间保持闭合", () => {

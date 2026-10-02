@@ -7,6 +7,7 @@ import {
   type Ticker
 } from "pixi.js";
 import type { ShowOrder } from "@imageshow/shared/browser";
+import { reducedMotionQuery } from "../../../lib/ui/reduced-motion.js";
 import type { ShowImage } from "../show-layout.js";
 import type { ShowCandidateUsage } from "../show-data-pool.js";
 import { ShowPixiFloatScene } from "./show-pixi-float-scene.js";
@@ -246,7 +247,7 @@ export class ShowPixiRuntime {
     app.ticker.add(this.#tick);
     this.#resizeObserver = new ResizeObserver(() => this.#resize());
     this.#resizeObserver.observe(host);
-    this.#motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    this.#motionQuery = window.matchMedia(reducedMotionQuery);
     const onMotionChange = () => {
       this.#reducedMotion = this.#motionQuery.matches;
       this.#applyMotionState();

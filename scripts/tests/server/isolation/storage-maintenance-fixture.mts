@@ -1,9 +1,8 @@
 import { storageObjectKey } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomUUIDv7 } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import sharp from "sharp";
-import { randomUuidV7 } from "../../../../packages/server/src/core/uuid.ts";
 import type { Pool } from "pg";
 import type { IntegrationRuntime } from "./integration-runtime.mts";
 
@@ -36,7 +35,7 @@ export async function createMaintenanceFixture(runtime: IntegrationRuntime) {
   const createImage = async (
     options: { source?: boolean; thumbnail?: Buffer; confirmedSize?: number } = {}
   ) => {
-    const id = randomUuidV7();
+    const id = randomUUIDv7();
     const key = storageObjectKey(id);
     const thumb = key;
     const small = options.thumbnail ?? body;

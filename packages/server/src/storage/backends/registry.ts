@@ -88,7 +88,7 @@ function publishStorageBackends(backends: StorageBackendRecord[]) {
 
 function storageDriverForConfig(config: StorageConfig) {
   assertRegistryOpen();
-  if (config.slug === "(test)") {
+  if (config.temporary) {
     return manageStorageDriver(createStorageDriver(config));
   }
   const signature = storageDriverSignature(config);
@@ -286,8 +286,7 @@ export async function assertStorageWriteTarget(slug: string): Promise<StorageCon
 function defaultStorageRecord(backends: readonly StorageBackendRecord[]): StorageBackendRecord {
   const record =
     backends.find((backend) => backend.is_default) ??
-    backends.find((backend) => backend.slug === "local") ??
-    backends[0];
+    backends.find((backend) => backend.slug === "local");
   if (!record) {
     throw new ApiError(
       503,

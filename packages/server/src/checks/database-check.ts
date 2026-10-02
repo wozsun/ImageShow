@@ -1,11 +1,11 @@
 import { appConfig } from "@imageshow/shared";
-import { storageObjectKey } from "@imageshow/shared/browser";
 import type {
   AdminTrashCheckDto,
   AdminTrashCheckIssueDto,
   AdminTrashPurgeJobDto,
   TrashPurgeJobStateDto
 } from "@imageshow/shared/browser";
+import { imageObjectKey } from "../storage/objects/image-paths.ts";
 import { pool } from "../core/database/pools.ts";
 import { withReadOnlyRepeatableReadTransaction } from "../core/database/transactions.ts";
 import { getReadyImageCacheCoordinatorStatus } from "../images/ready-cache/coordinator.ts";
@@ -120,7 +120,7 @@ export async function checkTrash() {
       )
     ).rows.map((candidate) => ({
       ...candidate,
-      object_key: storageObjectKey(candidate.id)
+      object_key: imageObjectKey(candidate.id)
     }));
     const normalizedJobCounts: AdminTrashCheckDto["job_counts"] = {
       pending: 0,

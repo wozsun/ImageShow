@@ -2,21 +2,12 @@ import {
   defaultAdminPreferences,
   type AdminColorScheme
 } from "@imageshow/shared/browser";
+import { ensureMeta } from "./document-meta.js";
 import {
   readSystemPrefersDark,
   resolveUiColorContext,
   type UiColorContext
 } from "./color-scheme.js";
-
-function ensureMeta(name: string) {
-  let meta = document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
-  if (!meta) {
-    meta = document.createElement("meta");
-    meta.name = name;
-    document.head.appendChild(meta);
-  }
-  return meta;
-}
 
 function syncBrowserSurface(root: HTMLElement) {
   const styles = getComputedStyle(root);

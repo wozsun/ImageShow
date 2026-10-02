@@ -1,8 +1,8 @@
 :root {
   /* Shared detail defaults; admin dialogs remap surfaces and controls locally. */
-  --color-detail-backdrop-clear: rgba(13, 18, 28, 0);
-  --color-detail-surface: #11161d;
-  --color-detail-surface-raised: #191f28;
+  --color-detail-backdrop-clear: rgba(0, 0, 0, 0);
+  --color-detail-surface: #111416;
+  --color-detail-surface-raised: #191c20;
   --color-detail-image-surface: #090909;
   --color-detail-border: rgba(160, 174, 192, 0.24);
   --color-detail-panel-border: rgba(184, 194, 208, 0.3);
@@ -13,14 +13,14 @@
   --color-detail-action-text: #91c7ff;
   --color-detail-success: #8fd8a3;
   --color-detail-error: #f08a92;
-  --color-detail-fade-clear: rgba(25, 31, 40, 0);
+  --color-detail-fade-clear: rgba(0, 0, 0, 0);
   --color-detail-chip-text: #dce9ff;
   --color-detail-chip-surface: rgba(61, 121, 216, 0.18);
   --color-detail-chip-border: rgba(145, 199, 255, 0.34);
   --color-detail-action-surface: rgba(255, 255, 255, 0.03);
   --color-detail-action-hover: rgba(255, 255, 255, 0.04);
   --color-detail-secondary-action-surface: rgba(255, 255, 255, 0.01);
-  --color-detail-secondary-action-hover-surface: #252e3a;
+  --color-detail-secondary-action-hover-surface: #282c31;
   --color-detail-secondary-action-hover-border: #8f9ba9;
   --color-detail-danger-border: rgba(240, 138, 146, 0.34);
   --color-detail-danger-action-text: #ffd9dd;

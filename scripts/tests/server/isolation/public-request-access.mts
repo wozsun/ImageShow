@@ -101,9 +101,11 @@ await runIntegrationScenario(async (runtime) => {
   await expectStatus(await request(random("mode=redirect"), {}, "HEAD"), 302);
   await expectStatus(await request(random()), 200);
   await expectLimited(await request(random()));
-  await expectStatus(await request(random("mode=json&limit=1")), 200);
-  await expectStatus(await request(random("mode=json&limit=2"), {}, "HEAD"), 200);
+  // Break-even is 3 / 2 = 1 image: limit=1 shares the image budget, larger limits use batch slots.
   await expectLimited(await request(random("mode=json&limit=1")));
+  await expectStatus(await request(random("mode=json&limit=2")), 200);
+  await expectStatus(await request(random("mode=json&limit=2"), {}, "HEAD"), 200);
+  await expectLimited(await request(random("mode=json&limit=2")));
   await expectStatus(await request(random(), { "X-Real-IP": "192.0.2.2" }), 200);
 
   for (const referer of [
@@ -117,14 +119,15 @@ await runIntegrationScenario(async (runtime) => {
     }
   }
   await expectLimited(await request(random(), { Referer: "https://untrusted.example.test/" }));
-  await expectLimited(await request(random("mode=json&limit=1"), { Referer: "not-a-url" }));
+  await expectLimited(await request(random("mode=json&limit=2"), { Referer: "not-a-url" }));
 
+  // Rejected requests keep their charge; a limit that is not a count spends a batch slot.
   const failures = { "X-Real-IP": "192.0.2.3" };
   await expectStatus(await request(random("mode=invalid"), failures), 400);
-  await expectStatus(await request(random("mode=json&limit="), failures), 400);
-  await expectStatus(await request(random("mode=json&limit=1&limit=1"), failures), 400);
-  await expectLimited(await request(random("mode=json&limit=1"), failures));
-  await expectStatus(await request(random(), failures), 200);
+  await expectStatus(await request(random("mode=json&limit=0"), failures), 400);
+  await expectStatus(await request(random("mode=json&limit=2&limit=2"), failures), 400);
+  await expectLimited(await request(random("mode=json&limit=2"), failures));
+  await expectStatus(await request(random("mode=json&limit="), failures), 200);
   await expectStatus(await request(random(), failures), 200);
   await expectLimited(await request(random(), failures));
 
@@ -147,6 +150,19 @@ await runIntegrationScenario(async (runtime) => {
   await delay(1100);
   await expectStatus(await request(random(), expiring), 200);
   await updateRuntimeConfig({ security: { random_window_seconds: 60, random_max_requests: 3 } });
+
+  // Break-even 4 / 2 = 2: small batches spend their size, and a cost that does not fit applies nothing.
+  await updateRuntimeConfig({ security: { random_max_requests: 4 } });
+  const weighted = { "X-Real-IP": "192.0.2.8" };
+  await expectStatus(await request(random("mode=json&limit=2"), weighted), 200);
+  await expectStatus(await request(random(), weighted), 200);
+  await expectLimited(await request(random("mode=json&limit=2"), weighted));
+  await expectStatus(await request(random("mode=json&limit=1"), weighted), 200);
+  await expectLimited(await request(random(), weighted));
+  await expectStatus(await request(random("mode=json&limit=3"), weighted), 200);
+  await expectStatus(await request(random("mode=json&limit=3"), weighted), 200);
+  await expectLimited(await request(random("mode=json&limit=3"), weighted));
+  await updateRuntimeConfig({ security: { random_max_requests: 3 } });
 
   // White-list changes apply to the next request, including after disk reload.
   await updateRuntimeConfig({ embed: { allowed_origins: ["https://replacement.example.test"] } });

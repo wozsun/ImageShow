@@ -78,13 +78,7 @@ export async function serveStaticWithValidators(c: Context, handler: Handler) {
       })
     ) {
       await cancelResponseBody(fullResponse);
-      const headers = new Headers(fullResponse.headers);
-      headers.delete("Content-Length");
-      headers.delete("Content-Encoding");
-      headers.delete("Content-Range");
-      const response = new Response(null, { status: 304, headers });
-      response.headers.delete("Content-Length");
-      response.headers.delete("Content-Encoding");
+      const response = new Response(null, { status: 304, headers: fullResponse.headers });
       const adopted = adoptStaticResponse(c, response);
       adopted.headers.delete("Content-Length");
       adopted.headers.delete("Content-Encoding");

@@ -27,8 +27,7 @@ export const loginRateLimiter = {
         windowSeconds: limits.login_global_window_seconds
       }
     ]);
-    if (!identity?.allowed
-      || !global?.allowed) {
+    if (!identity.allowed || !global.allowed) {
       throw new ApiError(
         429,
         "too_many_login_attempts",

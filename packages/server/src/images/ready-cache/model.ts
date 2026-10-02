@@ -106,12 +106,6 @@ export function readyImageCacheItemFromRow(row: ReadyImageSourceRow): ReadyImage
   const tags = Array.isArray(row.tags)
     ? [...new Set(row.tags.map(String))].sort()
     : [];
-  if (
-    tags.length > 50 ||
-    tags.some((tag) => tag.length > slugMaxLength || !slugPattern.test(tag))
-  ) {
-    throw new Error("Ready-image cache row contains invalid tags");
-  }
   const item: ReadyImageCacheItem = {
     id: String(row.id ?? "").toLowerCase(),
     device: row.device as Device,
@@ -142,6 +136,17 @@ export function readyImageCacheItemFromRow(row: ReadyImageSourceRow): ReadyImage
     created_at: timestamp(row.cursor_created_at, "created_at"),
     updated_at: timestamp(row.cursor_updated_at, "updated_at")
   };
+  validateReadyImageCacheItem(item);
+  return item;
+}
+
+function validateReadyImageCacheItem(item: ReadyImageCacheItem) {
+  if (
+    item.tags.length > 50 ||
+    item.tags.some((tag) => tag.length > slugMaxLength || !slugPattern.test(tag))
+  ) {
+    throw new Error("Ready-image cache row contains invalid tags");
+  }
   if (
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(item.id) ||
     !devices.includes(item.device) ||
@@ -158,7 +163,6 @@ export function readyImageCacheItemFromRow(row: ReadyImageSourceRow): ReadyImage
   }
   for (const field of ["l_width","l_height","l_byte_size","m_width","m_height","m_byte_size","s_width","s_height","s_byte_size"] as const) if (Number(item[field]) <= 0) throw new Error("Invalid variant dimension or byte size");
   for (const field of ["l_md5","m_md5","s_md5"] as const) if (!/^[a-f0-9]{32}$/.test(item[field])) throw new Error("Invalid variant MD5");
-  return item;
 }
 
 const cacheFields = ["id","device","brightness","theme","storage_slug","author","tags","sort_score","title","description","source","original","created_at","updated_at","l_width","l_height","l_byte_size","m_width","m_height","m_byte_size","s_width","s_height","s_byte_size","l_md5","m_md5","s_md5"] as const;
@@ -179,7 +183,15 @@ export function parseReadyImageCacheItem(raw: string | null): ReadyImageCacheIte
       } else if (typeof entry !== "string") return null;
     }
     const fields = Object.fromEntries(cacheFields.map((field, index) => [field, value[index]]));
-    return readyImageCacheItemFromRow({ ...fields, cursor_created_at: fields.created_at, cursor_updated_at: fields.updated_at } as ReadyImageSourceRow);
+    const item = {
+      ...fields,
+      width: fields.s_width,
+      height: fields.s_height
+    } as ReadyImageCacheItem;
+    timestamp(item.created_at, "created_at");
+    timestamp(item.updated_at, "updated_at");
+    validateReadyImageCacheItem(item);
+    return item;
   } catch { return null; }
 }
 

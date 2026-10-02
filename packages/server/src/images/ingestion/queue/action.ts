@@ -2,7 +2,7 @@ import type {
   IngestionQueueActionInputDto,
   IngestionQueueActionResultDto
 } from "@imageshow/shared/browser";
-import type { AdminSession } from "../../../users/admin-session.ts";
+import type { AdminSession } from "../../../core/http/admin-session-context.ts";
 import {
   replayIngestionQueueActionBatch,
   requireIngestionActionScope

@@ -257,6 +257,15 @@ export class ReadyImageCacheCoordinator {
       && connection.epoch !== epoch;
   }
 
+  private isStopped() {
+    return this.phase === "stopped";
+  }
+
+  private assertConnectionEpoch(epoch: number, message: string) {
+    const connection = this.dependencies.getRedisConnectionState();
+    if (!connection.ready || connection.epoch !== epoch) throw new Error(message);
+  }
+
   private async validateCurrentConnection(
     epoch: number,
     signal: AbortSignal
@@ -265,23 +274,14 @@ export class ReadyImageCacheCoordinator {
     let rebuildRequired = false;
     await this.dependencies.withWriteFence(async () => {
       signal.throwIfAborted();
-      const before = this.dependencies.getRedisConnectionState();
-      if (!before.ready || before.epoch !== epoch) {
-        throw new Error("Redis connection changed before cache validation");
-      }
+      this.assertConnectionEpoch(epoch, "Redis connection changed before cache validation");
       await this.dependencies.clearDisposableCaches();
       signal.throwIfAborted();
-      const afterCleanup = this.dependencies.getRedisConnectionState();
-      if (!afterCleanup.ready || afterCleanup.epoch !== epoch) {
-        throw new Error("Redis connection changed during cache cleanup");
-      }
+      this.assertConnectionEpoch(epoch, "Redis connection changed during cache cleanup");
       const revision = (await this.dependencies.getRevision()).revision;
       const validation = await this.dependencies.validateCache(revision);
       signal.throwIfAborted();
-      const afterValidation = this.dependencies.getRedisConnectionState();
-      if (!afterValidation.ready || afterValidation.epoch !== epoch) {
-        throw new Error("Redis connection changed during cache validation");
-      }
+      this.assertConnectionEpoch(epoch, "Redis connection changed during cache validation");
       this.meta = validation.meta;
       if (!validation.valid) {
         this.phase = "unavailable";
@@ -321,6 +321,7 @@ export class ReadyImageCacheCoordinator {
           this.phase = "unavailable";
           this.reason = "validating";
           const validation = await this.validateCurrentConnection(epoch, signal);
+          signal.throwIfAborted();
           if (validation.meta && !validation.rebuildRequired) {
             return { meta: validation.meta, rebuilt: false };
           }
@@ -369,7 +370,7 @@ export class ReadyImageCacheCoordinator {
   }
 
   private async recordRefreshFailure(error: unknown, rebuildRequired: boolean) {
-    if (this.getStatus().reason === "stopped") return;
+    if (this.isStopped()) return;
     if (error instanceof ReadyImageCacheRefreshDeferredError) {
       this.phase = "unavailable";
       this.reason = "mutation_rebuild_required";
@@ -382,7 +383,7 @@ export class ReadyImageCacheCoordinator {
       ? `degraded:${errorMessage(error)}`
       : operational.reason;
     this.meta = await this.dependencies.readMeta().catch(() => this.meta);
-    if (this.getStatus().reason === "stopped") return;
+    if (this.isStopped()) return;
     await this.dependencies
       .handleValidationFailure(error, "ready_image_cache_refresh_failed")
       .catch((handlingError) => {
@@ -496,7 +497,7 @@ export class ReadyImageCacheCoordinator {
         if (result.rebuilt) return result.meta;
       } catch (error) {
         options.signal?.throwIfAborted();
-        if (this.reason === "stopped") throw error;
+        if (this.isStopped()) throw error;
         if (active.progress.fulfillsRebuildRequest) throw error;
       }
     }
@@ -654,7 +655,5 @@ export class ReadyImageCacheCoordinator {
     this.clearRecoveryTimer();
     this.activeAbort?.abort(stopped);
     await this.activeTask?.promise.catch(() => undefined);
-    this.phase = "stopped";
-    this.reason = "stopped";
   }
 }

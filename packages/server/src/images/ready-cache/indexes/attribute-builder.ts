@@ -1,10 +1,12 @@
+import { randomUUIDv7 } from "node:crypto";
 import { microsecondsTimestamp } from "../../../core/microseconds.ts";
 import { unsetThemeFilter } from "@imageshow/shared/browser";
+import { withTransactionOnClient } from "../../../core/database/transactions.ts";
+import { neverAbortedSignal } from "../../../core/abort.ts";
 import { pool, type DatabaseReader } from "../../../core/database/pools.ts";
 import { withPublicDatabaseRead } from "../../../core/database/public-fallback.ts";
 import { getRedisConnectionState, redis } from "../../../core/redis/client.ts";
 import { execRedisPipeline } from "../../../core/redis/pipeline.ts";
-import { randomUuidV7 } from "../../../core/uuid.ts";
 import { getReadyImageCacheCoordinatorStatus } from "../coordinator.ts";
 import { READY_IMAGE_DERIVED_CACHE_POLICY } from "../derived/policy.ts";
 import { parseNonNegativeInteger } from "../derived/registry-metadata.ts";
@@ -133,10 +135,8 @@ async function buildAttributeIndexSource(
 ) {
   let count = 0;
   let cursor: ReadyImageAttributeIndexCursor | null = null;
-  try {
-    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+  return withTransactionOnClient(client, async () => {
     if ((await getReadyImageRevision(client)).revision !== revision) {
-      await client.query("ROLLBACK");
       return null;
     }
     for (;;) {
@@ -144,7 +144,6 @@ async function buildAttributeIndexSource(
       const rows = await readAttributeIndexBatch(client, spec, cursor, signal);
       if (!rows.length) break;
       if (count + rows.length > READY_IMAGE_DERIVED_CACHE_POLICY.maxResultMembers) {
-        await client.query("ROLLBACK");
         return null;
       }
       await writeAttributeIndexBatch(temporaryKey, rows, signal);
@@ -172,12 +171,8 @@ async function buildAttributeIndexSource(
       if (rows.length < ATTRIBUTE_INDEX_BATCH_SIZE) break;
     }
     signal?.throwIfAborted();
-    await client.query("COMMIT");
     return count;
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  }
+  }, { mode: "read_only_repeatable_read" });
 }
 
 export async function buildReadyImageAttributeIndex(
@@ -208,7 +203,7 @@ export async function buildReadyImageAttributeIndex(
   if (expectedCount !== null && expectedCount > READY_IMAGE_DERIVED_CACHE_POLICY.maxResultMembers) {
     return null;
   }
-  const temporaryKey = readyImageAttributeIndexTemporaryKey(randomUuidV7().replaceAll("-", ""));
+  const temporaryKey = readyImageAttributeIndexTemporaryKey(randomUUIDv7().replaceAll("-", ""));
   try {
     const build = async (client: DatabaseReader, databaseSignal: AbortSignal) => {
       const buildSignal = signal
@@ -248,7 +243,7 @@ export async function buildReadyImageAttributeIndex(
     }
     const client = await pool.connect();
     try {
-      return await build(client, signal ?? new AbortController().signal);
+      return await build(client, signal ?? neverAbortedSignal);
     } finally {
       client.release();
     }

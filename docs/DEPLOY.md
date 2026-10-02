@@ -1,126 +1,54 @@
-# 生产单实例部署与反向代理
+# 安装与维护
 
-本文说明当前生产部署要求。首次安装见[快速开始](guide/getting-started.md)，
-配置参数见[配置说明](CONFIG.md)，内部契约见[技术参考](README.md#技术参考)。
+本页写给负责服务器的人：安装、配置域名、日常维护、备份和排错。
 
-## 支持的生产拓扑
+## 准备工作
 
-运行一个 ImageShow 应用容器，连接 PostgreSQL 18 与 Redis 8；数据库可以独立部署。
-应用端口只向回环或私有网络开放，由可信反向代理提供 HTTPS。同一数据库只运行一个应用实例。
+- 一台装有 Docker 和 Docker Compose 的服务器，不需要安装 Node.js。
+- 对外开放时：一个域名，以及 Nginx 等反向代理和 HTTPS 证书。
+- 足够的磁盘空间存放图片，另备一个备份位置。
 
-使用外部数据库时，可参考：
+ImageShow 由三个容器组成：应用本身、PostgreSQL 数据库和 Redis 缓存，Compose 会一起启动它们。
 
-```bash
-docker run -d --name imageshow --restart unless-stopped \
-  -p 127.0.0.1:5518:5518 \
-  -e SITE_DOMAIN=img.example.com -e TZ=UTC \
-  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD="${ADMIN_PASSWORD:?}" \
-  -e DATABASE_HOST=db.example.internal -e DATABASE_NAME=imageshow \
-  -e DATABASE_USER=imageshow -e DATABASE_PASSWORD="${DATABASE_PASSWORD:?}" \
-  -e REDIS_HOST=redis.example.internal \
-  -v /srv/imageshow/data:/app/data \
-  wozsun/imageshow:latest
-```
+## 首次安装
 
-- Compose 部署须在 `.env` 中填写 `DATABASE_PASSWORD`、`ADMIN_PASSWORD` 和实际 `SITE_DOMAIN`。
-  初始管理员变量只用于创建账号，不覆盖已有账号。
-- `.env.example` 列出可用变量；额外变量须显式加入 Compose 的 `environment`。
-  已有 `config.json` 时，运行配置以文件为准，见[环境变量](CONFIG.md#环境变量)。
-- 默认部署沿用 Docker 的 10 秒停止宽限；超时未退出的进程会被强制终止。
-  应用内部的退出上限为 8 秒：启动等待与活动工作共用前 6 秒的截止时间，预留最多 2 秒释放连接。
-  这是一项时间上限，不保证所有工作都能正常收尾。工作超时或收尾失败时以失败状态退出，
-  不提前释放仍可能执行提交的宿主租约；中断工作由重启后的现行恢复机制接管。
-- 镜像入口在整理数据目录权限后通过 `gosu node` 运行应用。默认 Compose 沿用 Docker 的安全配置，
-  不显式设置 `security_opt`；如需阻止进程通过 setuid / setgid 程序或文件能力获得额外权限，
-  部署方可按需启用 `no-new-privileges`，具体语义见 [Docker 安全选项](https://docs.docker.com/reference/cli/docker/container/run/#optional-security-options---security-opt)。
-- 外部 PostgreSQL 的权限与连接要求见[数据库说明](guide/database.md#运行期连接与公开回源)；
-  Redis 使用应用专用逻辑库，认证与命令权限见[安全说明](guide/security.md)。
+1. 新建一个部署目录，放入仓库中的 [compose.yaml](../compose.yaml) 和 [.env.example](../.env.example)，然后复制出 `.env`：
 
-## 持久化目录
+   ```bash
+   cp .env.example .env
+   ```
 
-默认 Compose 的目录均相对部署目录：
+2. 编辑 `.env`，填写两个不同的强密码和你的域名（不带 `https://` 和路径）：
 
-| 宿主目录 | 容器目录 | 内容 |
-| --- | --- | --- |
-| `./data` | `/app/data` | 配置、本地图片、临时文件和日志 |
-| `./postgres` | `/var/lib/postgresql` | PostgreSQL 数据 |
-| `./redis` | `/data` | Redis 持久化文件 |
+   ```ini
+   DATABASE_PASSWORD=
+   ADMIN_USERNAME=admin
+   ADMIN_PASSWORD=
+   SITE_DOMAIN=img.example.com
+   ```
 
-调整挂载位置前，先停止应用和数据库服务，完整复制原有数据并保留恢复副本；不要把空目录
-直接挂到已有实例。数据库目录只能在数据库停机时进行文件级复制。
+   管理员密码 8–128 位，需同时包含字母和数字。这个账号只在第一次启动时创建，之后修改 `.env` 不会改变它。
 
-## 日常启停
+3. 启动：
 
-```bash
-docker compose stop imageshow
-docker compose up -d imageshow
-docker compose logs --tail 100 imageshow
-```
+   ```bash
+   docker compose pull
+   docker compose up -d
+   ```
 
-配置文件修改后可在后台重新读取；部署环境变量变更需重新创建容器。
-启停不会替代数据库结构维护。数据库须满足[当前安装契约](guide/database.md#启动与结构契约)，
-非空数据库启动只读核对，不自动修改既有结构或业务数据。
+   应用只监听本机的 `127.0.0.1:5518`，需要通过反向代理对外提供服务。
 
-## 数据维护与恢复
+4. 把域名解析到服务器，按[配置域名与 HTTPS](#配置域名与-https)设置反向代理。
+5. 打开 `https://img.example.com/admin`，用管理员账号登录并添加图片。
 
-维护前完成需要保留的上传 / 导入并保存草稿，停止应用，备份 PostgreSQL、Redis、`data/`
-和外部正式存储对象。明确操作范围，保留可恢复的镜像与配置。
+> [!TIP]
+> **先在本机试用**
+>
+> 把 `SITE_DOMAIN` 留空，启动后直接访问 `http://127.0.0.1:5518/admin`。以后要绑定域名时，在后台「站点配置」中修改。
 
-恢复时确认数据库、配置和对象属于同一备份状态，先在隔离环境核对正常 / 回收站图片数量及
-对象内容，再恢复服务。永久删除后的文件不能仅靠恢复数据库找回。存储结构和对象维护见
-[存储指南](guide/storage.md)。手工修改存储注册表后应重启应用，浏览器 / CDN 缓存按实际变更处理。
+## 配置域名与 HTTPS
 
-Redis 数据丢失会使登录会话和未完成接入失效，已提交的 PostgreSQL 数据与正式图片不受影响。
-确需重置 Redis 时，先停应用并备份，确认可以丢弃这些临时状态，再核对主机与 `REDIS_DB`，
-只对应用专用逻辑库执行 `FLUSHDB`；运行中清空或局部删除 key 不受支持。
-`data/temp` 由应用管理，不作为任务恢复来源。
-
-不使用 `docker compose down -v` 代替普通停机，也不使用全量 prune 清理部署资源。
-
-## 健康检查与故障定位
-
-```bash
-docker compose ps
-docker inspect --format '{{.State.Health.Status}} {{.Image}}' imageshow
-docker compose logs --tail 100 imageshow
-```
-
-`/livez` 表示进程存活，`/readyz` 核对数据库与 Redis 就绪状态。恢复访问以镜像自带的健康检查为准，
-随后核查图片数量、图片访问和后台操作。Redis 故障时后台返回 `503 redis_unavailable`，公开只读
-请求可有界回源 PostgreSQL；`/random` 的非白名单请求必须完成 Redis 频次计数，计数失败
-同样返回 503，白名单请求仍可回源。重连后自动重新校验。
-
-镜像为正常初始化预留 30 秒启动宽限；较慢环境可按实际启动耗时配置 `healthcheck.start_period`。
-
-## 版本更新
-
-6.6.0 以当前数据库结构与 large / medium / small 三档图片为运行基线，也支持空环境新安装。
-既有数据库须预先满足当前读写要求，启动只执行最小只读 readiness；结构维护由实例维护者
-按实际差异处理。历史版本的操作记录见 [GitHub Releases](https://github.com/wozsun/ImageShow/releases)。
-
-替换镜像前保留 PostgreSQL、Redis、配置和正式对象的一致备份。更新后按上文确认服务就绪，
-核查图片数量与业务功能。历史升级归档与备份由维护者管理，应用不读取或自动删除这些材料。
-三档资源契约见[三档图片与地址协议](guide/three-tier-images.md)。
-
-目录、对象键、公开资源路径和随机接口的 `size` 参数统一使用 `large`、`medium`、`small`，
-中图编码配置为 `normalize.medium`；数据库的 `l_`、`m_`、`s_` 列前缀保持不变。
-已有实例由维护者停机调整存储与配置，应用只读取当前结构；同步更新外部图片链接、
-随机接口调用和受影响的浏览器 / CDN 缓存，再开放访问。运行配置的归一化不会代替手动迁移。
-
-## 管理员密码恢复
-
-优先在后台账号页修改密码。无法登录时，在交互式终端执行，按提示隐藏输入并确认新密码：
-
-```bash
-docker exec -it imageshow imageshow reset-password <username>
-```
-
-源码环境使用 `npm run admin:reset-password -- <username>`。改密后其他旧密码会话失效。
-
-## 反向代理与 HTTPS
-
-证书覆盖主站域名，将页面、API 和 `/images` 原样转发到应用。代理覆盖请求来源头，
-不要追加访客提供的转发链。最小 Nginx 示例：
+反向代理把所有请求原样转发给应用即可。以 Nginx 为例：
 
 ```nginx
 server {
@@ -151,27 +79,174 @@ server {
 }
 ```
 
-Compose 网络内可将上游改为 `http://imageshow:5518`。请求体上限须覆盖应用设置；示例支持最高
-200 MiB 单图与 128 MiB JSONL。流式上传可为 `/api/admin/ingestion/` 单独设置
-`proxy_request_buffering off`，保留同一上游与超时。
+几点说明：
 
-配置[本地图片公开 URL](guide/image-resources.md#本地存储公开-url)或
-[静态资源公开 URL](CONFIG.md#siteassets_base_url)时，为对应域名配置证书和代理，
-同样保留 Host、完整路径及配置的路径前缀；每个代理块都须设置 `proxy_set_header Host $host`。
+- `client_max_body_size` 要大于站点允许的上传大小。示例的 256m 足够最大设置（单张图片 200 MiB、清单 128 MiB）。
+- 访客 IP 用于登录和随机图的频率限制。示例用 `$remote_addr` 覆盖这两个请求头，不要直接透传访客发来的值。
+- 示例使用标准 HTTPS 端口 443。使用其他端口时，主站域名设置和转发的 Host 都必须包含实际端口，并相应调整监听及跳转地址。
+- Nginx 也运行在同一 Compose 网络中时，上游可以写成 `http://imageshow:5518`。
+- 想让大文件上传边传边处理，可以为 `/api/admin/ingestion/` 单独加一个 location，设置 `proxy_request_buffering off`，其余配置相同。
 
-CDN 保留完整查询参数并遵守应用缓存头，不额外强制缓存或改写正文、安全头。应用负责压缩，
-代理保留 `Accept-Encoding` 并透传编码、长度、验证器与缓存响应头，不重复编码。
-`index.html` 由应用注入站点配置，不能交给代理直接静态托管。配置变更不会自动刷新 CDN。
+需要独立图片域名或 CDN 时，见[进阶部署](#进阶部署)。
 
-外部图片存储需允许无凭据跨域读取，供展映加载图片。外部原图入口 `/images/original/*`
-只允许管理员访问，反向代理 / CDN 必须透传会话 Cookie 并遵守 `private, no-cache`，不得强制共享缓存。
-调整原图访问策略时，部署方须清理该路径在 CDN / 代理中的既存缓存，同时清理公开详情
-`/api/images/*` 的既存表示。应用响应头不能撤回浏览器已缓存或已下载的内容，也不能限制
-外部源站自身公开的原图地址；部署时需纳入此边界。
-详细缓存规则见[图片资源](guide/image-resources.md)。嵌入与 HSTS 见[安全说明](guide/security.md)。
+## 日常维护
 
-完整图与缩略图的应用入口校验 Referer，允许空值、本站及子域和 `embed.allowed_origins`。
-代理须透传 Referer，图片共享缓存须遵守 `Vary: Referer`；启用策略或收紧白名单后清理对应
-既存共享缓存。不支持此 Vary 维度的 CDN 应在边缘执行相同规则或正确区分缓存，应用校验
-不能约束直接命中 CDN 或 S3 / COS 的请求。`/random` 保持 `no-store`，不可强制共享缓存，
-并依赖代理覆盖的真实 IP 头执行两档限流；不要把所有访客映射到代理 IP 或透传访客伪造的 IP 头。
+### 常用命令
+
+在部署目录执行：
+
+```bash
+docker compose ps                         # 查看状态
+docker compose logs --tail 100 imageshow  # 查看最近日志
+docker compose stop imageshow             # 停止应用
+docker compose up -d imageshow            # 启动应用
+```
+
+修改 `.env` 后，执行 `docker compose up -d` 重新创建容器才会生效。注意站点设置只在第一次启动时从环境变量生成，之后以配置文件 `data/config.json` 为准；直接修改这个文件后，在后台「站点配置」点击「读取配置文件」或重启应用。
+
+> [!CAUTION]
+> **不要删除数据卷**
+>
+> 不要用 `docker compose down -v` 停止服务，也不要用 `docker system prune` 之类的命令清理；它们可能删除数据。普通停机用 `stop` 即可。
+
+### 升级
+
+1. 阅读新版本的 [Release 说明](https://github.com/wozsun/ImageShow/releases)，确认是否需要手动处理数据库。
+2. [备份](#备份与恢复)。
+3. 拉取新镜像并重启：
+
+   ```bash
+   docker compose pull
+   docker compose up -d
+   ```
+
+4. 确认容器状态为 `healthy`，登录后台，抽查图片能否打开。
+
+应用启动时只检查数据库结构是否满足要求，不会自动修改已有数据库。检查不通过时应用不会就绪，原因见日志。
+
+### 定期检查
+
+- 站点能打开，图片能显示，管理员能登录。
+- 服务器剩余磁盘空间。
+- 后台「检查」页没有异常。
+- 备份按计划完成，并定期试着恢复一次。
+
+## 备份与恢复
+
+### 数据存在哪里
+
+| 部署目录下 | 内容 |
+| --- | --- |
+| `data/` | 配置文件、本地存储的图片、日志、临时文件 |
+| `postgres/` | 数据库：图片信息、分类、账号、存储设置 |
+| `redis/` | 缓存、登录状态、未完成的上传和导入任务 |
+
+使用云端存储时，那部分图片在服务商处，需要单独备份。只备份图片文件不够：分类、账号和设置都在数据库里。
+
+### 备份步骤
+
+1. 提前通知使用者，让管理员完成正在进行的上传和导入。
+2. 停止应用：`docker compose stop imageshow`。
+3. 备份数据库（可用 `pg_dump`，或停止数据库容器后复制 `postgres/` 目录）、`data/` 目录和云端存储中的图片；`redis/` 可一并备份。
+4. 启动应用，确认一切正常。
+
+### 恢复
+
+- 数据库、配置和图片要来自**同一时间点**的备份，混用会导致图片和记录对不上。
+- 最好先在另一个环境恢复，核对图片数量（包括回收站）和图片能否打开，再替换正式环境。
+- 永久删除的图片文件，只恢复数据库是找不回来的，必须同时恢复图片文件。
+- 手动修改过数据库中的存储设置后，需要重启应用。
+
+Redis 只保存派生和临时数据。即使它的数据丢失，已入库的图片和设置也不受影响，只是管理员需要重新登录，未完成的上传和导入需要重新添加。
+
+## 常见问题
+
+先记下页面提示和发生时间，然后查看状态和日志：
+
+```bash
+docker compose ps
+docker compose logs --tail 100 imageshow
+```
+
+| 现象 | 可能原因与处理 |
+| --- | --- |
+| 容器不是 `healthy` | 看日志中的错误。镜像给启动留出 30 秒宽限；机器较慢时，在 `compose.yaml` 的 `imageshow` 服务下添加 `healthcheck`，只设置更长的 `start_period`（如 `120s`），其余参数沿用镜像设置 |
+| 网页打不开，返回 502 | 应用未启动或代理上游地址写错；确认应用容器在运行、代理指向 `127.0.0.1:5518` |
+| 用域名访问返回 404 | 访问的域名与 `SITE_DOMAIN` 或后台设置的主站域名不一致 |
+| 提示 `redis_unavailable` | Redis 未运行或连不上。应用刚启动、尚未完成 Redis 校验时，业务请求返回 503；成功启动后 Redis 短暂中断，部分公开浏览仍可用，后台和需要限流的随机图请求需等它恢复。应用会自动重连 |
+| 图片显示不出来 | 到后台「检查」页查看存储状态；使用云端存储时确认网络和密钥 |
+| 上传大文件失败 | 代理的 `client_max_body_size` 或超时设置太小 |
+
+服务恢复后，再到「检查」页确认数据是否完整。发现文件缺失时，先不要做清理操作，核对备份后再处理。
+
+## 忘记管理员密码
+
+能登录时，在后台「账户」页修改。无法登录时，在服务器上执行：
+
+```bash
+docker exec -it imageshow imageshow reset-password <用户名>
+```
+
+按提示输入新密码。成功后会清除所有管理员的登录会话。如果提示 Redis 会话清理失败，目标账号的旧会话仍会失效，但其他管理员的会话尚未清除；等 Redis 恢复后重新执行命令。
+
+## 进阶部署
+
+### 使用外部数据库或 Redis
+
+支持 PostgreSQL 18 和 Redis 8。一个数据库只能对应一个应用实例。示例：
+
+```bash
+docker run -d --name imageshow --restart unless-stopped \
+  -p 127.0.0.1:5518:5518 \
+  -e SITE_DOMAIN=img.example.com -e TZ=UTC \
+  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD="${ADMIN_PASSWORD:?}" \
+  -e DATABASE_HOST=db.example.internal -e DATABASE_NAME=imageshow \
+  -e DATABASE_USER=imageshow -e DATABASE_PASSWORD="${DATABASE_PASSWORD:?}" \
+  -e REDIS_HOST=redis.example.internal \
+  -v /srv/imageshow/data:/app/data \
+  wozsun/imageshow:latest
+```
+
+- 全部环境变量见[配置参考](CONFIG.md#环境变量)。使用 Compose 时，`.env` 中新增的变量还要在 `compose.yaml` 的 `environment` 中写上才会生效。
+- Redis 请给 ImageShow 单独使用一个逻辑库（`REDIS_DB`），不要与其他程序共用。
+- 外部 Redis 需要密码时使用 `REDIS_PASSWORD`。
+- 数据库账号需要对应用使用的表有 `SELECT`、`INSERT`、`UPDATE`、`DELETE` 权限，初始化空数据库时还需要建表权限。外部 PostgreSQL 需要支持 `client_connection_check_interval`。
+- 空数据库会在一个事务中自动初始化。已有数据的数据库只做只读检查：应用不会自动建表、补列或修改已有结构，版本升级需要调整结构时按 Release 说明手动处理；额外的表、列和索引会被忽略。
+
+### 独立图片与静态资源域名
+
+- 本地存储的图片可以使用独立域名，在「存储管理」中编辑本地存储的「公开 URL」。这个域名只提供三档图片，不提供页面、API 或原图；修改地址不会移动文件。
+- 前端静态文件可以使用独立域名，见配置项 [site.assets_base_url](CONFIG.md#静态资源地址)。
+
+这些域名同样需要证书和反向代理，代理到 ImageShow 并保留 Host、完整路径和路径前缀。
+
+### 使用 CDN
+
+CDN 可以加速图片和静态文件，但需要遵守以下规则，否则可能泄露原图或让防盗链失效：
+
+- 保留完整的查询参数，遵守应用返回的缓存头，不要强制缓存或改写内容。
+- 应用自己负责压缩：保留 `Accept-Encoding`，原样传递编码、长度和缓存相关的响应头。
+- 页面 HTML 由应用动态生成，不能交给 CDN 或代理当静态文件托管。
+- `/random` 不能缓存。
+- 保留应用的 `Access-Control-Allow-Origin` 和 `Access-Control-Expose-Headers`，并允许 `OPTIONS` 预检到达应用；不要重复添加冲突的 CORS 头。随机图和三档公开图片允许匿名跨站读取，具体用法见[随机图 API](api/random.md#跨站读取)。
+- 登录和 `/random` 的频率限制按访客 IP 计算。CDN 回源时 `$remote_addr` 是 CDN 节点地址，需要先用 Nginx 的 `set_real_ip_from`（填 CDN 回源地址段）和 `real_ip_header`（填 CDN 提供的访客 IP 请求头）恢复访客 IP，再覆盖 `X-Real-IP` 和 `X-Forwarded-For`。不要让所有访客共用 CDN 节点的 IP，也不要透传访客自己发来的 IP 头。
+- 原图 `/images/original/*` 只允许管理员访问：必须透传登录 Cookie，遵守 `private, no-cache`。
+- 图片防盗链按 Referer 判断：必须透传 Referer，并按 `Vary: Referer` 区分缓存；不支持的 CDN 需要在边缘实现相同规则。
+
+修改站点设置、收紧防盗链或原图访问后，CDN 不会自动更新，需要手动清理对应缓存（原图相关的还包括 `/api/images/*`）。另外要注意：
+
+- 已经被下载或缓存在浏览器中的内容无法收回。
+- 直接访问 CDN 或云存储源站的请求不经过应用检查。
+- 云端存储或独立 CDN 的 small 图片需要允许主站匿名跨域读取，展映页才能正常加载；向其他网站提供三档图片的跨站 fetch 时，对应档位也需要 CORS。公开图片可使用 `Access-Control-Allow-Origin: *`，仍需单独设置该服务的防盗链规则。
+
+### 更换数据目录
+
+先停止应用和数据库，完整复制原目录并保留一份副本，再修改挂载路径。数据库目录只能在数据库停止时复制。不要把空目录挂到已有实例上。
+
+### 清空 Redis
+
+一般不需要。确实要清空时：先停止应用并备份，确认可以丢弃登录状态和未完成的上传、导入任务，核对 Redis 地址和 `REDIS_DB` 后，只对该逻辑库执行 `FLUSHDB`。不要在应用运行时清空或删除部分数据。
+
+### 容器安全选项
+
+镜像会先整理数据目录权限，再以普通用户 `node` 运行应用。如果希望进一步禁止进程提权，可以在 Compose 中为应用加上 `security_opt: ["no-new-privileges:true"]`，说明见 [Docker 文档](https://docs.docker.com/reference/cli/docker/container/run/#optional-security-options---security-opt)。

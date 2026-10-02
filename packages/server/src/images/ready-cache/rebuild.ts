@@ -55,13 +55,6 @@ async function observeReadyImageCacheMemory(
   }
 }
 
-async function clearReadyImageCacheForRebuild(
-  client: Redis,
-  signal?: AbortSignal
-) {
-  await clearReadyImageCacheData(client, signal);
-}
-
 function wait(ms: number, signal?: AbortSignal) {
   signal?.throwIfAborted();
   return delay(ms, undefined, { signal }).catch((error: unknown) => {
@@ -81,7 +74,6 @@ function addSamples(
     const position = firstPosition + index;
     const item = items[index];
     if (
-      item &&
       samples.length < SAMPLE_SIZE &&
       (position === 0
         || position === total - 1
@@ -106,7 +98,7 @@ async function buildAttempt(
   );
   await withReadyImageCacheWriteFence(async () => {
     await writeReadyImageCacheMeta(progress, client);
-    await clearReadyImageCacheForRebuild(client, signal);
+    await clearReadyImageCacheData(client, signal);
     progress = { ...progress, lastUpdatedAt: new Date().toISOString() };
     await writeReadyImageCacheMeta(progress, client);
   });
@@ -219,7 +211,7 @@ async function discardFailedBuild(error: unknown, client: Redis) {
         // A failed fixed-namespace build is never readable. Release its memory
         // before publishing the degraded marker so no partial projection remains
         // for sessions, limits, and the next rebuild attempt.
-        await clearReadyImageCacheForRebuild(client);
+        await clearReadyImageCacheData(client);
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError);
       }

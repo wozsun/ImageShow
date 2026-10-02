@@ -3,6 +3,7 @@ import type {
   AdminPostgresqlStatusDto,
   AdminRedisStatusDto
 } from "@imageshow/shared/browser";
+import { withTransactionOnClient } from "../core/database/transactions.ts";
 import { deploymentConfig } from "../config/deployment-config.ts";
 import { pool } from "../core/database/pools.ts";
 import {
@@ -36,23 +37,23 @@ export async function readAdminPostgresqlStatus(): Promise<AdminPostgresqlStatus
   const startedAt = performance.now();
   const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-    await client.query(`SET LOCAL statement_timeout='${STATUS_QUERY_TIMEOUT_MS}ms'`);
-    const row = (
-      await client.query(`
-      SELECT current_setting('server_version') AS version,
-             count(*) AS total_images,
-             count(*) FILTER (WHERE status='ready') AS ready_images,
-             (SELECT revision::text
-                FROM ready_image_revision
-               WHERE singleton=1) AS authoritative_revision,
-             (SELECT count(*)
-                FROM background_job
-               WHERE status='failed') AS abnormal_jobs
-        FROM metadata
-    `)
-    ).rows[0] as Record<string, unknown> | undefined;
-    await client.query("COMMIT");
+    const row = await withTransactionOnClient(client, async () => {
+      await client.query(`SET LOCAL statement_timeout='${STATUS_QUERY_TIMEOUT_MS}ms'`);
+      return (
+        await client.query(`
+          SELECT current_setting('server_version') AS version,
+                 count(*) AS total_images,
+                 count(*) FILTER (WHERE status='ready') AS ready_images,
+                 (SELECT revision::text
+                    FROM ready_image_revision
+                   WHERE singleton=1) AS authoritative_revision,
+                 (SELECT count(*)
+                    FROM background_job
+                   WHERE status='failed') AS abnormal_jobs
+            FROM metadata
+        `)
+      ).rows[0] as Record<string, unknown> | undefined;
+    });
     if (!row || typeof row.version !== "string") {
       throw new Error("PostgreSQL status summary is incomplete");
     }
@@ -69,9 +70,6 @@ export async function readAdminPostgresqlStatus(): Promise<AdminPostgresqlStatus
       authoritative_revision: authoritativeRevision,
       abnormal_jobs: nonNegativeInteger(row.abnormal_jobs, "abnormal job count")
     };
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
   } finally {
     client.release();
   }

@@ -1,4 +1,4 @@
-import { storageObjectKey } from "@imageshow/shared/browser";
+import { imageObjectKey } from "../storage/objects/image-paths.ts";
 import { pool } from "../core/database/pools.ts";
 import {
   STORAGE_ADMIN_LIST_MAX_KEYS,
@@ -157,7 +157,7 @@ function buildMaintenanceCandidates(
   const candidates = [...initial];
   const retained = new Map(rows
     .filter((row) => row.status === "ready" || row.status === "deleted")
-    .map((row) => [storageObjectKey(row.id), row]));
+    .map((row) => [imageObjectKey(row.id), row]));
   const inspectedSlugs = new Set(groups.flatMap(({ group }) => group.slugs));
   const repairs = new Set<string>();
   const addRepair = (row: MaintenanceImage, prefix: StoragePrefix) => {
@@ -173,9 +173,9 @@ function buildMaintenanceCandidates(
     );
     for (const prefix of STORAGE_PREFIXES) {
       const present = new Set(snapshot[prefix].keys);
-      const referenced = new Set(retainedRows.map((row) => storageObjectKey(row.id)));
+      const referenced = new Set(retainedRows.map((row) => imageObjectKey(row.id)));
       for (const row of retainedRows) {
-        if (!row.purging && !present.has(storageObjectKey(row.id))) addRepair(row, prefix);
+        if (!row.purging && !present.has(imageObjectKey(row.id))) addRepair(row, prefix);
       }
       for (const active of activeReferences.values()) {
         for (const reference of ingestionFinalStorageReferences(active)) {

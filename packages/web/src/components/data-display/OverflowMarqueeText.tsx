@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { reducedMotionQuery } from "../../lib/ui/reduced-motion.js";
 
 type OverflowMarqueeTextProps = {
   text: string;
@@ -57,7 +58,7 @@ export function OverflowMarqueeText({
     const content = contentRef.current;
     if (!viewport || !track || !content) return;
 
-    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const motionQuery = window.matchMedia(reducedMotionQuery);
     const interactionOwner = viewport.closest<HTMLElement>(
       "button, a, [tabindex]"
     ) ?? viewport;

@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import type { IngestionSessionPairDto } from "@imageshow/shared/browser";
+import { ingestionAcceptanceBinding } from "../queue/model/acceptance-binding.js";
 import type { IngestionJob } from "../queue/model/ingestion-job.js";
 import { uploadRaw } from "../queue/ingestion-http-client.js";
 import {
@@ -90,13 +91,7 @@ export async function runRawUploadBatch({
             status: "accepted",
             target: {
               ...current,
-              sessionId: accepted.session_id,
-              imageId: accepted.image_id,
-              serverAccepted: true,
-              serverVersion: accepted.version,
-              serverSemanticRevision: accepted.last_semantic_revision,
-              serverHandoffPending: true,
-              serverHandoffRevision: accepted.last_semantic_revision,
+              ...ingestionAcceptanceBinding(accepted),
               status: "cancelling",
               message: "正在取消上传",
               transferProgress: 100
@@ -106,13 +101,7 @@ export async function runRawUploadBatch({
         queue.bindServerJob(
           job.id,
           {
-            sessionId: accepted.session_id,
-            imageId: accepted.image_id,
-            serverAccepted: true,
-            serverVersion: accepted.version,
-            serverSemanticRevision: accepted.last_semantic_revision,
-            serverHandoffPending: true,
-            serverHandoffRevision: accepted.last_semantic_revision,
+            ...ingestionAcceptanceBinding(accepted),
             status: cancelling ? "cancelling" : "received",
             message: cancelling
               ? "正在取消上传"

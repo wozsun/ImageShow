@@ -19,7 +19,7 @@ export type GalleryRestorationSession = {
 
 let retainedSession: GalleryRestorationSession | null = null;
 
-function geometryMatches(
+function geometryWithinRestoreTolerance(
   left: GalleryCompactGeometry,
   right: GalleryCompactGeometry
 ) {
@@ -39,7 +39,7 @@ export function reusableGalleryRestorationSession(
 ) {
   return retainedSession?.imageQuery === imageQuery &&
     retainedSession.navigationKey === navigationKey &&
-    (!geometry || geometryMatches(retainedSession.geometry, geometry))
+    (!geometry || geometryWithinRestoreTolerance(retainedSession.geometry, geometry))
     ? retainedSession
     : null;
 }

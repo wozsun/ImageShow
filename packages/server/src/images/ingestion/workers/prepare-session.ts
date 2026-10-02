@@ -1,9 +1,9 @@
+import { randomUUIDv7 } from "node:crypto";
 import { imageVariants } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../../core/database/advisory-locks.ts";
 import { logger } from "../../../core/logger.ts";
-import { randomUuidV7 } from "../../../core/uuid.ts";
 import { removeIngestionPreparedFiles, writeIngestionPreparedFile } from "../raw/prepared.ts";
 import { detectBrightness } from "../../brightness.ts";
 import { withNormalizationAdmission } from "../../normalization-admission.ts";
@@ -29,7 +29,6 @@ import type {
   IngestionSessionSnapshot,
   StoredIngestionSession
 } from "../sessions/model.ts";
-import { ingestionSessionSemanticHash } from "../sessions/projection.ts";
 import { IngestionSessionRepository } from "../repository.ts";
 import { withIngestionPreparationAdmission } from "./preparation-admission.ts";
 
@@ -95,7 +94,7 @@ export async function prepareIngestionSessionSnapshot(
     || !session.raw_generation) {
     throw new ApiError(409, "invalid_ingestion_state", "内容接入任务不能进入处理阶段");
   }
-  const preparedGeneration = randomUuidV7();
+  const preparedGeneration = randomUUIDv7();
   const attemptIdentity = {
     session_id: session.session_id,
     image_id: session.image_id,
@@ -156,7 +155,7 @@ export async function prepareIngestionSessionSnapshot(
     current = await refreshIngestionExecutionSession(repository, current);
     const duplicateCount = await getDuplicateMatchCountByMd5(normalized.variants.large.facts.md5);
     return mutateIngestionExecution(repository, current, (latest) => {
-      const nextWithoutHash = {
+      return {
         ...latest,
         status: "ready" as const,
         phase: "ready",
@@ -181,12 +180,7 @@ export async function prepareIngestionSessionSnapshot(
           duplicate_count: duplicateCount,
           generation: preparedGeneration
         },
-        error: undefined,
-        semantic_hash: ""
-      };
-      return {
-        ...nextWithoutHash,
-        semantic_hash: ingestionSessionSemanticHash(nextWithoutHash)
+        error: undefined
       };
     });
   };

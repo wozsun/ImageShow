@@ -6,6 +6,7 @@ import { withAdvisoryLocksOnClient } from "../core/database/advisory-locks.ts";
 import { pool } from "../core/database/pools.ts";
 import { logger } from "../core/logger.ts";
 import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
+import { withTransactionOnClient } from "../core/database/transactions.ts";
 import { resolveStorageAccess } from "../storage/backends/registry.ts";
 import { isStorageObjectNotFound } from "../storage/objects/not-found.ts";
 import { imageObjectKey } from "../storage/objects/image-paths.ts";
@@ -164,178 +165,158 @@ async function commitImageUpdate({
   signal: AbortSignal;
 }): Promise<ImageUpdateTransactionOutcome> {
   let client: PoolClient | undefined;
-  let committed = false;
   try {
     signal.throwIfAborted();
     client = await pool.connect();
     signal.throwIfAborted();
-    await client.query("BEGIN");
-    const locked = (
-      await client.query(`SELECT ${updateImageColumns} FROM metadata WHERE id=$1 FOR UPDATE`, [
-        item.id
-      ])
-    ).rows[0] as UpdateImageRecord | undefined;
-    signal.throwIfAborted();
-    if (!locked) throw new ApiError(404, "not_found", "Image not found");
+    return await withTransactionOnClient(client, async (transaction) => {
+      const locked = (
+        await transaction.query(`SELECT ${updateImageColumns} FROM metadata WHERE id=$1 FOR UPDATE`, [
+          item.id
+        ])
+      ).rows[0] as UpdateImageRecord | undefined;
+      signal.throwIfAborted();
+      if (!locked) throw new ApiError(404, "not_found", "Image not found");
 
-    if (classificationRequested && locked.status !== "ready") {
-      throw new ApiError(
-        409,
-        "invalid_image_state",
-        "Only ready images can change category"
-      );
-    }
-    if (sourceImage) {
-      if (
-        locked.storage_slug !== sourceImage.storage_slug ||
-        locked.device !== sourceImage.device ||
-        locked.brightness !== sourceImage.brightness ||
-        locked.theme !== sourceImage.theme
-      ) {
+      if (classificationRequested && locked.status !== "ready") {
+        throw new ApiError(
+          409,
+          "invalid_image_state",
+          "Only ready images can change category"
+        );
+      }
+      // Auto brightness implies a classification request, so the ready check
+      // above already rechecked status; only the object location remains.
+      if (sourceImage && locked.storage_slug !== sourceImage.storage_slug) {
         throw new ApiError(
           409,
           "image_location_changed",
           "Image location changed while preparing the category update"
         );
       }
-    }
 
-    const currentTags =
-      resolvedTags === null
-        ? null
-        : (
-            await client.query(
-              `SELECT tag_slug
-             FROM image_tag
-            WHERE image_id=$1
-            ORDER BY tag_slug`,
-              [item.id]
-            )
-          ).rows.map((row) => String(row.tag_slug));
-    signal.throwIfAborted();
-
-    const nextClassification = {
-      device:
-        resolveOptionalDeviceWith(item.device, () => detectImageDevice(locked))
-          ?? locked.device,
-      brightness:
-        (item.brightness === "auto" ? detectedBrightness : item.brightness)
-          ?? locked.brightness,
-      theme: item.theme === undefined ? locked.theme : item.theme
-    };
-    const nextAuthor = item.author === undefined
-      ? locked.author
-      : item.author || null;
-    const nextFields = {
-      title: item.title ?? locked.title,
-      description: item.description ?? locked.description,
-      source: item.source ?? locked.source,
-      original: item.original ?? locked.original
-    };
-    const classificationChanged =
-      nextClassification.device !== locked.device ||
-      nextClassification.brightness !== locked.brightness ||
-      nextClassification.theme !== locked.theme;
-    const authorChanged = nextAuthor !== locked.author;
-    const fieldsChanged =
-      (item.title !== undefined && nextFields.title !== locked.title) ||
-      (item.description !== undefined
-        && nextFields.description !== locked.description) ||
-      (item.source !== undefined && nextFields.source !== locked.source) ||
-      (item.original !== undefined && nextFields.original !== locked.original);
-    const metadataChanged = classificationChanged
-      || authorChanged
-      || fieldsChanged;
-    const tagsChanged = resolvedTags !== null
-      && !sameTags(resolvedTags, currentTags ?? []);
-    const changed = metadataChanged || tagsChanged;
-    const changedEntityKinds = new Set<EntityCacheKind>();
-    const createdEntityKinds = new Set<EntityCacheKind>();
-
-    if (!changed) {
+      const currentTags =
+        resolvedTags === null
+          ? null
+          : (
+              await transaction.query(
+                `SELECT tag_slug
+               FROM image_tag
+              WHERE image_id=$1
+              ORDER BY tag_slug`,
+                [item.id]
+              )
+            ).rows.map((row) => String(row.tag_slug));
       signal.throwIfAborted();
-      await client.query("COMMIT");
-      committed = true;
-      return { changed, changedEntityKinds, createdEntityKinds };
-    }
 
-    if (
-      locked.theme !== nextClassification.theme &&
-      nextClassification.theme !== null &&
-      (await ensureThemeWithMutationLockHeld(
-        client,
-        nextClassification.theme
-      ))
-    ) {
-      createdEntityKinds.add("theme");
-    }
-    if (
-      authorChanged &&
-      nextAuthor &&
-      (await ensureAuthorWithMutationLockHeld(client, nextAuthor))
-    ) {
-      createdEntityKinds.add("author");
-    }
+      const nextClassification = {
+        device:
+          resolveOptionalDeviceWith(item.device, () => detectImageDevice(locked))
+            ?? locked.device,
+        brightness:
+          (item.brightness === "auto" ? detectedBrightness : item.brightness)
+            ?? locked.brightness,
+        theme: item.theme === undefined ? locked.theme : item.theme
+      };
+      const nextAuthor = item.author === undefined
+        ? locked.author
+        : item.author || null;
+      const nextFields = {
+        title: item.title ?? locked.title,
+        description: item.description ?? locked.description,
+        source: item.source ?? locked.source,
+        original: item.original ?? locked.original
+      };
+      const classificationChanged =
+        nextClassification.device !== locked.device ||
+        nextClassification.brightness !== locked.brightness ||
+        nextClassification.theme !== locked.theme;
+      const authorChanged = nextAuthor !== locked.author;
+      const fieldsChanged =
+        (item.title !== undefined && nextFields.title !== locked.title) ||
+        (item.description !== undefined
+          && nextFields.description !== locked.description) ||
+        (item.source !== undefined && nextFields.source !== locked.source) ||
+        (item.original !== undefined && nextFields.original !== locked.original);
+      const metadataChanged = classificationChanged
+        || authorChanged
+        || fieldsChanged;
+      const tagsChanged = resolvedTags !== null
+        && !sameTags(resolvedTags, currentTags ?? []);
+      const changed = metadataChanged || tagsChanged;
+      const changedEntityKinds = new Set<EntityCacheKind>();
+      const createdEntityKinds = new Set<EntityCacheKind>();
 
-    if (metadataChanged) {
-      signal.throwIfAborted();
-      const updated = await client.query(
-        `UPDATE metadata
-            SET device=$2,
-                brightness=$3,
-                theme=$4,
-                title=$5,
-                description=$6,
-                source=$7,
-                original=$8,
-                author=$9,
-                updated_at=now()
-          WHERE id=$1
-          RETURNING id`,
-        [
-          item.id,
-          nextClassification.device,
-          nextClassification.brightness,
-          nextClassification.theme,
-          nextFields.title,
-          nextFields.description,
-          nextFields.source,
-          nextFields.original,
-          nextAuthor
-        ]
-      );
-      if (!updated.rowCount) {
-        throw new ApiError(
-          409,
-          "image_location_changed",
-          "Image location changed before the update was committed"
+      if (!changed) {
+        signal.throwIfAborted();
+        return { changed, changedEntityKinds, createdEntityKinds };
+      }
+
+      if (
+        locked.theme !== nextClassification.theme &&
+        nextClassification.theme !== null &&
+        (await ensureThemeWithMutationLockHeld(
+          transaction,
+          nextClassification.theme
+        ))
+      ) {
+        createdEntityKinds.add("theme");
+      }
+      if (
+        authorChanged &&
+        nextAuthor &&
+        (await ensureAuthorWithMutationLockHeld(transaction, nextAuthor))
+      ) {
+        createdEntityKinds.add("author");
+      }
+
+      if (metadataChanged) {
+        signal.throwIfAborted();
+        await transaction.query(
+          `UPDATE metadata
+              SET device=$2,
+                  brightness=$3,
+                  theme=$4,
+                  title=$5,
+                  description=$6,
+                  source=$7,
+                  original=$8,
+                  author=$9,
+                  updated_at=now()
+            WHERE id=$1`,
+          [
+            item.id,
+            nextClassification.device,
+            nextClassification.brightness,
+            nextClassification.theme,
+            nextFields.title,
+            nextFields.description,
+            nextFields.source,
+            nextFields.original,
+            nextAuthor
+          ]
         );
       }
-    }
 
-    if (tagsChanged) {
-      const tagMutation = await replaceImageTagAssociations(
-        client,
-        item.id,
-        resolvedTags ?? [],
-        signal
-      );
-      if (tagMutation.createdTag) createdEntityKinds.add("tag");
-    }
-    if (locked.theme !== nextClassification.theme) {
-      changedEntityKinds.add("theme");
-    }
-    if (authorChanged) changedEntityKinds.add("author");
-    if (tagsChanged) changedEntityKinds.add("tag");
+      if (tagsChanged) {
+        const tagMutation = await replaceImageTagAssociations(
+          transaction,
+          item.id,
+          resolvedTags ?? [],
+          signal
+        );
+        if (tagMutation.createdTag) createdEntityKinds.add("tag");
+      }
+      if (locked.theme !== nextClassification.theme) {
+        changedEntityKinds.add("theme");
+      }
+      if (authorChanged) changedEntityKinds.add("author");
+      if (tagsChanged) changedEntityKinds.add("tag");
 
-    await bumpReadyImageRevision(client);
-    signal.throwIfAborted();
-    await client.query("COMMIT");
-    committed = true;
-    return { changed, changedEntityKinds, createdEntityKinds };
-  } catch (error) {
-    if (!committed) await client?.query("ROLLBACK").catch(() => undefined);
-    throw error;
+      await bumpReadyImageRevision(transaction);
+      signal.throwIfAborted();
+      return { changed, changedEntityKinds, createdEntityKinds };
+    });
   } finally {
     client?.release();
   }

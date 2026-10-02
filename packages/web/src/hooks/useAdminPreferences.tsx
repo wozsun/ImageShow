@@ -93,7 +93,6 @@ function emptyCache(): CachedAdminPreferences {
 }
 
 function writeCachedPreferences(username: string, cache: CachedAdminPreferences) {
-  if (typeof window === "undefined") return false;
   try {
     window.localStorage.setItem(
       localPreferenceKey(username),
@@ -107,7 +106,6 @@ function writeCachedPreferences(username: string, cache: CachedAdminPreferences)
 }
 
 function readCachedPreferences(username: string): CachedAdminPreferences {
-  if (typeof window === "undefined") return emptyCache();
   try {
     const storage = window.localStorage;
     const raw = storage.getItem(localPreferenceKey(username));

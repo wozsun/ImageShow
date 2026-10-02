@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type PointerEvent
 } from "react";
+import { reducedMotionPreferred } from "../../lib/ui/reduced-motion.js";
 import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
 import { imageDisplayTitle } from "../../lib/ui/formatters.js";
 import {
@@ -44,7 +45,7 @@ export const GalleryTile = memo(function GalleryTile({
     revealRegistry.prepare(position.index, {
       initialViewport: position.y < window.innerHeight,
       order: revealOrder,
-      reduceMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+      reduceMotion: reducedMotionPreferred()
     })
   );
   const entrance = useOneShotAnimation(reveal.variant !== "settled");

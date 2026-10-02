@@ -171,6 +171,15 @@ test("[Server/日志] HTTP 日志生成服务端关联号、记录路由模板�
   });
   const app = new Hono();
   app.onError((error, c) => handleApiError(c, error));
+  app.use("*", async (context, next) => {
+    context.set("session", {
+      id: "synthetic-session",
+      username: "synthetic-admin",
+      csrf: "synthetic-csrf",
+      role: "super"
+    });
+    await next();
+  });
   app.use("*", auditAdminMutation);
   app.post("/synthetic/:id", () => {
     throw new Error("password=synthetic-private-value\nforged");

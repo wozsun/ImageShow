@@ -22,7 +22,6 @@ export type ProcessRunOptions = {
   allowFailure?: boolean;
   cwd?: string;
   env?: NodeJS.ProcessEnv;
-  onSpawn?: (pid: number) => void;
   timeoutMs?: number;
 };
 
@@ -112,52 +111,11 @@ export function createProcessRunner(options: ProcessRunnerOptions = {}) {
     return child;
   };
 
-  const terminateProcess = async (child: ChildProcess) => {
-    if (!child.connected || child.exitCode !== null || child.signalCode !== null) {
-      await forceTerminateProcessTree(child);
-      return;
-    }
-    // IPC helpers are resource owners too. Let them close their own detached
-    // children and directories before falling back to terminating their tree.
-    await new Promise<void>((resolveTermination, rejectTermination) => {
-      let settled = false;
-      let forcing = false;
-      const finish = (error?: unknown) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeout);
-        child.off("close", onClose);
-        if (error) rejectTermination(error);
-        else resolveTermination();
-      };
-      const onClose = (code: number | null) => {
-        const interruptedCode = interruption === "SIGINT" ? 130 : 143;
-        finish(
-          !forcing && code !== 0 && code !== interruptedCode
-            ? new Error(`IPC helper ${child.pid} exited with ${code} during cleanup`)
-            : undefined
-        );
-      };
-      const force = () => {
-        if (settled || forcing) return;
-        forcing = true;
-        void forceTerminateProcessTree(child).then(() => finish(), finish);
-      };
-      const timeout = setTimeout(force, 5_000);
-      child.once("close", onClose);
-      try {
-        child.send({ type: "imageshow:shutdown", signal: interruption ?? "SIGTERM" }, (error) => {
-          if (error) force();
-        });
-      } catch {
-        force();
-      }
-    });
-  };
-
   const terminateActiveProcesses = async () => {
     const processes = [...activeProcesses];
-    const results = await Promise.allSettled(processes.map(terminateProcess));
+    const results = await Promise.allSettled(
+      processes.map((child) => forceTerminateProcessTree(child))
+    );
     const errors = results.flatMap((result) =>
       result.status === "rejected" ? [result.reason] : []
     );
@@ -240,29 +198,6 @@ export function createProcessRunner(options: ProcessRunnerOptions = {}) {
           resolveProcess({ code: exitCode, stdout, stderr });
         });
       });
-      try {
-        if (!child.pid) throw new Error(`${command} did not expose a child PID`);
-        options.onSpawn?.(child.pid);
-      } catch (error) {
-        void forceTerminateProcessTree(child).then(
-          () => {
-            releaseActiveProcess(child);
-            finish(() => rejectProcess(error));
-          },
-          (terminationError) => {
-            releaseFailedProcessTree(child);
-            releaseActiveProcess(child);
-            finish(() =>
-              rejectProcess(
-                new AggregateError(
-                  [error, terminationError],
-                  `${command} spawn callback failed and its process tree did not terminate`
-                )
-              )
-            );
-          }
-        );
-      }
     });
 
   // The suite owns registered temporary directories even between helper
@@ -272,7 +207,6 @@ export function createProcessRunner(options: ProcessRunnerOptions = {}) {
   return {
     installInterruptionHandlers,
     runProcess,
-    spawnProcess,
     terminateActiveProcesses,
     uninstallInterruptionHandlers
   };
@@ -280,7 +214,6 @@ export function createProcessRunner(options: ProcessRunnerOptions = {}) {
 
 const sharedProcessRunner = createProcessRunner({ handleProcessInterruption: true });
 export const runProcess = sharedProcessRunner.runProcess;
-export const spawnSharedTestProcess = sharedProcessRunner.spawnProcess;
 export const terminateSharedTestProcesses = sharedProcessRunner.terminateActiveProcesses;
 export function suspendSharedTestInterruptionHandling() {
   sharedProcessRunner.uninstallInterruptionHandlers();

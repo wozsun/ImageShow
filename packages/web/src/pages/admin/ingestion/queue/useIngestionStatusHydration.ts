@@ -18,8 +18,7 @@ import {
 } from "./model/server-ingestion-job.js";
 import { ingestionStatusEventPatch } from "./model/ingestion-status-state.js";
 import type {
-  DetachedProvisionalHandoff,
-  HandoffRetryGate,
+  IngestionHandoffs,
   ServerQueueConnectionSnapshot
 } from "./model/ingestion-handoff-runtime.js";
 import type { ServerIngestionQueueController } from "./useServerIngestionQueue.js";
@@ -33,11 +32,7 @@ import type { ServerIngestionQueueController } from "./useServerIngestionQueue.j
 export function useIngestionStatusHydration({
   server,
   serverConnectionRef,
-  handoffJobsRef,
-  retryGatesRef,
-  detachedHandoffsRef,
-  completedPairsRef,
-  completedReceiptHydrationsRef,
+  handoffsRef,
   jobsRef,
   dispatch,
   ensureDraftSnapshot,
@@ -49,15 +44,11 @@ export function useIngestionStatusHydration({
   statusRetryEpoch,
   bumpHandoffEpoch,
   reportError,
-  revokeObjectUrl
+  releasePreview
 }: {
   server: ServerIngestionQueueController;
   serverConnectionRef: RefObject<ServerQueueConnectionSnapshot>;
-  handoffJobsRef: RefObject<Map<string, IngestionJob>>;
-  retryGatesRef: RefObject<Map<string, HandoffRetryGate>>;
-  detachedHandoffsRef: RefObject<Map<string, DetachedProvisionalHandoff>>;
-  completedPairsRef: RefObject<Set<string>>;
-  completedReceiptHydrationsRef: RefObject<Map<string, IngestionSessionPairDto>>;
+  handoffsRef: RefObject<IngestionHandoffs>;
   jobsRef: RefObject<IngestionJob[]>;
   dispatch: (action: IngestionQueueAction) => boolean;
   ensureDraftSnapshot: (job: IngestionJob) => void;
@@ -69,13 +60,13 @@ export function useIngestionStatusHydration({
   statusRetryEpoch: number;
   bumpHandoffEpoch: () => void;
   reportError: (message: string, retryable?: boolean) => void;
-  revokeObjectUrl: (job: IngestionJob) => void;
+  releasePreview: (job: IngestionJob) => void;
 }) {
   useEffect(() => {
     if (
       server.status !== "ready" ||
-      (!handoffJobsRef.current.size
-        && !completedReceiptHydrationsRef.current.size)
+      (!handoffsRef.current.hasPending("job")
+        && !handoffsRef.current.hasPending("receipt"))
     )
       return;
     const controller = new AbortController();
@@ -89,9 +80,9 @@ export function useIngestionStatusHydration({
         completedReceipt?: IngestionSessionPairDto;
       }
     >();
-    for (const [pairKey, job] of handoffJobsRef.current) {
+    for (const [pairKey, job] of handoffsRef.current.entries("job")) {
       const eligible = (() => {
-        const retryAfter = retryGatesRef.current.get(pairKey);
+        const retryAfter = handoffsRef.current.get("retry", pairKey);
         return (
           retryAfter === undefined ||
           retryAfter.connectionGeneration !== server.connectionGeneration ||
@@ -110,7 +101,7 @@ export function useIngestionStatusHydration({
         }
       });
     }
-    for (const [pairKey, completedReceipt] of completedReceiptHydrationsRef.current) {
+    for (const [pairKey, completedReceipt] of handoffsRef.current.entries("receipt")) {
       entriesByPair.set(pairKey, {
         ...entriesByPair.get(pairKey),
         pairKey,
@@ -131,7 +122,7 @@ export function useIngestionStatusHydration({
       let retryImmediately = false;
       let minimumCoverageRevision: number | null = null;
       const requireSnapshotCoverage = (pairKey: string, revision: number) => {
-        retryGatesRef.current.set(pairKey, {
+        handoffsRef.current.set("retry", pairKey, {
           connectionGeneration: server.connectionGeneration,
           revision,
           mode: "coverage"
@@ -161,10 +152,10 @@ export function useIngestionStatusHydration({
           if (!status) continue;
           const activeHandoff =
             entry.job !== undefined
-              && handoffJobsRef.current.get(entry.pairKey) === entry.job;
+              && handoffsRef.current.get("job", entry.pairKey) === entry.job;
           const activeCompletedReceipt =
             entry.completedReceipt !== undefined &&
-            completedReceiptHydrationsRef.current.get(entry.pairKey) === entry.completedReceipt;
+            handoffsRef.current.get("receipt", entry.pairKey) === entry.completedReceipt;
           if (!activeHandoff && !activeCompletedReceipt) continue;
           completedInvalidations.push(...completedIngestionObservations([status]));
           if (activeCompletedReceipt) {
@@ -179,7 +170,7 @@ export function useIngestionStatusHydration({
           }
           const entryJob = entry.job;
           if (!activeHandoff || !entryJob) continue;
-          const awaitsCompleted = completedPairsRef.current.has(entry.pairKey);
+          const awaitsCompleted = handoffsRef.current.has("completed", entry.pairKey);
           if (status.status === "present"
             && entryJob.serverDraftPending === true) {
             ensureDraftSnapshot(entryJob);
@@ -191,10 +182,10 @@ export function useIngestionStatusHydration({
               status.item.last_semantic_revision
             );
             if (retry.retryImmediately) {
-              retryGatesRef.current.delete(entry.pairKey);
+              handoffsRef.current.delete("retry", entry.pairKey);
               retryImmediately = true;
             } else {
-              retryGatesRef.current.set(entry.pairKey, {
+              handoffsRef.current.set("retry", entry.pairKey, {
                 connectionGeneration: server.connectionGeneration,
                 revision: retry.retryAfterRevision,
                 mode: "state-change"
@@ -217,9 +208,7 @@ export function useIngestionStatusHydration({
                 serverHandoffPending: true,
                 serverHandoffRevision: status.item.last_semantic_revision
               };
-              if (current.objectUrl?.startsWith("blob:")
-                && !next.objectUrl?.startsWith("blob:"))
-                revokeObjectUrl(current);
+              // The queue releases the replaced preview only if this patch applies.
               presentPatches.set(current.id, next);
             }
             requireSnapshotCoverage(
@@ -241,10 +230,7 @@ export function useIngestionStatusHydration({
               if (current) presentPatches.set(current.id, patch);
               else completedJobs.push({ ...retainedJob, ...patch });
             }
-            handoffJobsRef.current.delete(entry.pairKey);
-            retryGatesRef.current.delete(entry.pairKey);
-            detachedHandoffsRef.current.delete(entry.pairKey);
-            completedPairsRef.current.delete(entry.pairKey);
+            handoffsRef.current.finishStatusRead(entry.pairKey);
             retireDraftPairs(new Set([entry.pairKey]));
             handoffChanged = true;
             resolvedExternalStatuses.add(entry.pairKey);
@@ -258,10 +244,10 @@ export function useIngestionStatusHydration({
                 status.redis_last_semantic_revision ?? 0
               );
               if (retry.retryImmediately) {
-                retryGatesRef.current.delete(entry.pairKey);
+                handoffsRef.current.delete("retry", entry.pairKey);
                 retryImmediately = true;
               } else {
-                retryGatesRef.current.set(entry.pairKey, {
+                handoffsRef.current.set("retry", entry.pairKey, {
                   connectionGeneration: server.connectionGeneration,
                   revision: retry.retryAfterRevision,
                   mode: "state-change"
@@ -272,8 +258,8 @@ export function useIngestionStatusHydration({
             if (status.redis_status === "completed") {
               const revision = status.redis_last_semantic_revision;
               if (revision === undefined) {
-                const previous = retryGatesRef.current.get(entry.pairKey);
-                retryGatesRef.current.set(entry.pairKey, {
+                const previous = handoffsRef.current.get("retry", entry.pairKey);
+                handoffsRef.current.set("retry", entry.pairKey, {
                   connectionGeneration: server.connectionGeneration,
                   revision: Math.max(
                     previous?.connectionGeneration === server.connectionGeneration
@@ -303,13 +289,10 @@ export function useIngestionStatusHydration({
               else completedJobs.push(completedJob);
             }
           }
-          handoffJobsRef.current.delete(entry.pairKey);
-          retryGatesRef.current.delete(entry.pairKey);
-          detachedHandoffsRef.current.delete(entry.pairKey);
-          completedPairsRef.current.delete(entry.pairKey);
+          handoffsRef.current.finishStatusRead(entry.pairKey);
           handoffChanged = true;
           resolvedExternalStatuses.add(entry.pairKey);
-          revokeObjectUrl(entryJob);
+          releasePreview(entryJob);
         }
         if (presentPatches.size) {
           dispatch({ type: "patch-many", patches: presentPatches });
@@ -358,7 +341,7 @@ export function useIngestionStatusHydration({
     reportError,
     resolveExternalStatuses,
     retireDraftPairs,
-    revokeObjectUrl,
+    releasePreview,
     server.connectionGeneration,
     server.ensureRevision,
     server.status,

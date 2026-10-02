@@ -10,10 +10,7 @@ let fallbackScheduler: ImageLoadScheduler | undefined;
 
 function defaultScheduler() {
   if (!fallbackScheduler) {
-    const concurrency =
-      typeof window !== "undefined" && window.matchMedia
-        ? preferredImageLoadConcurrency(window.matchMedia.bind(window))
-        : 6;
+    const concurrency = preferredImageLoadConcurrency(window.matchMedia.bind(window));
     fallbackScheduler = new ImageLoadScheduler(concurrency);
   }
   return fallbackScheduler;

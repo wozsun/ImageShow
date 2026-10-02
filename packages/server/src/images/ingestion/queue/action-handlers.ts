@@ -72,13 +72,23 @@ function skipped(
   return { ...pair(session), status: "skipped", code, message };
 }
 
-function failed(session: StoredIngestionSession, error: unknown): ActionItem {
+function failedResult(
+  session: StoredIngestionSession,
+  result: { code?: string; message?: string }
+): ActionItem {
   return {
     ...pair(session),
     status: "failed",
+    code: result.code,
+    message: result.message
+  };
+}
+
+function failed(session: StoredIngestionSession, error: unknown): ActionItem {
+  return failedResult(session, {
     code: error instanceof ApiError ? error.code : "ingestion_action_failed",
     message: error instanceof Error ? error.message : "内容接入队列操作失败"
-  };
+  });
 }
 
 const queueActionMutationAttempts = 8;
@@ -328,12 +338,7 @@ async function commitReadyAction(
     accepted.forEach((result, index) => {
       const selectedItem = selected[index]!;
       if (result.status === "failed") {
-        results.set(pairKey(selectedItem.session), {
-          ...pair(selectedItem.session),
-          status: "failed",
-          code: result.code,
-          message: result.message
-        });
+        results.set(pairKey(selectedItem.session), failedResult(selectedItem.session, result));
         return;
       }
       if (result.status === "completed") {
@@ -353,11 +358,7 @@ async function commitReadyAction(
       );
     });
   }
-  return input.sessions.map(
-    (session) =>
-      results.get(pairKey(session)) ??
-      skipped(session, "ingestion_action_predicate_changed", "当前任务未被处理")
-  );
+  return input.sessions.map((session) => results.get(pairKey(session))!);
 }
 
 async function retryFailedAction(
@@ -381,14 +382,7 @@ async function retryFailedAction(
         const [result] = await acceptIngestionCommitIntents(input.repository, input.owner, [
           commitInput(session, session.commit.commit_request_id)
         ]);
-        if (!result || result.status === "failed") {
-          return {
-            ...pair(session),
-            status: "failed",
-            code: result?.code,
-            message: result?.message ?? "重试响应缺少当前任务"
-          };
-        }
+        if (result.status === "failed") return failedResult(session, result);
         return changed(session, result.status === "completed" ? result.completed_item : undefined);
       }
       const [result] = await updateIngestionSessions(input.repository, input.owner, [
@@ -398,14 +392,7 @@ async function retryFailedAction(
           retry_prepare: true
         }
       ]);
-      if (!result || result.status === "failed") {
-        return {
-          ...pair(session),
-          status: "failed",
-          code: result?.code,
-          message: result?.message ?? "重试响应缺少当前任务"
-        };
-      }
+      if (result.status === "failed") return failedResult(session, result);
       return changed(session, undefined, result.last_semantic_revision);
     } catch (error) {
       return failed(session, error);
@@ -542,12 +529,7 @@ async function clearQueueAction(
         return;
       }
       if (result.status === "failed") {
-        results.set(pairKey(session), {
-          ...pair(session),
-          status: "failed",
-          code: result.code,
-          message: result.message
-        });
+        results.set(pairKey(session), failedResult(session, result));
         return;
       }
       try {
@@ -645,11 +627,7 @@ async function clearQueueAction(
       pending = nextPending;
     }
   }
-  return input.sessions.map(
-    (session) =>
-      results.get(pairKey(session)) ??
-      skipped(session, "ingestion_action_predicate_changed", "当前任务未被处理")
-  );
+  return input.sessions.map((session) => results.get(pairKey(session))!);
 }
 
 export function executeIngestionQueueActionBatch(

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { randomUUIDv7 } from "node:crypto";
 import { Dir, type Dirent } from "node:fs";
 import { mkdir, readFile, readdir, stat, utimes, writeFile } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import { setImmediate as nextTurn } from "node:timers/promises";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { installProperties } from "../../support/property-descriptors.ts";
 import {
   activeSession,
@@ -22,12 +24,10 @@ await runIntegrationScenario(async (runtime) => {
   const { ingestionRepository: repository } = fixture;
   const { body } = await createMaintenanceFixture(runtime);
   const { appConfig } = await import("@imageshow/shared");
-  const { randomUuidV7, randomUuidV7At } =
+  const { randomUuidV7At } =
     await import("../../../../packages/server/src/core/uuid.ts");
   const identity =
     await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
-  const { ingestionSessionSemanticHash } =
-    await import("../../../../packages/server/src/images/ingestion/sessions/projection.ts");
   const { semanticIngestionSession } =
     await import("../../../../packages/server/src/images/ingestion/sessions/transitions.ts");
   const { IngestionSessionService } =
@@ -77,7 +77,7 @@ await runIntegrationScenario(async (runtime) => {
       observedUploadRepository,
       new IngestionTokenService({ rootKey: new Uint8Array(32).fill(39) })
     );
-    const batchKey = randomUuidV7();
+    const batchKey = randomUUIDv7();
     const intents = (
       await service.createUploadIntents(
         "raw-lock-owner",
@@ -194,7 +194,8 @@ await runIntegrationScenario(async (runtime) => {
           service,
           "raw-lock-owner",
           intent.credential,
-          new Response(body).body
+          new Response(body).body,
+          neverAbortedSignal
         )
       )
     );
@@ -215,7 +216,7 @@ await runIntegrationScenario(async (runtime) => {
       const queued = activeSession(
         (
           await repository.acceptImportSession(
-            { ...template, semantic_hash: ingestionSessionSemanticHash(template) },
+            template,
             fixture.displayOrderKey(sessionId, 0, now),
             now
           )
@@ -230,8 +231,8 @@ await runIntegrationScenario(async (runtime) => {
               status,
               phase: status === "preparing" ? "prepare-waiting" : "failed",
               message: status,
-              execution_token: status === "preparing" ? randomUuidV7() : "",
-              raw_generation: randomUuidV7(),
+              execution_token: status === "preparing" ? randomUUIDv7() : "",
+              raw_generation: randomUUIDv7(),
               raw_size: body.length
             })
           )
@@ -337,7 +338,7 @@ await runIntegrationScenario(async (runtime) => {
     );
     assert.equal(cancellation[0]?.status, "discarded");
     assert.equal(scheduled.length, 1);
-    const newGeneration = randomUuidV7();
+    const newGeneration = randomUUIDv7();
     const newRaw = raw.ingestionRawPath(retired.session, newGeneration);
     await writeFile(newRaw, "next generation");
     await scheduled[0]!();
@@ -350,7 +351,7 @@ await runIntegrationScenario(async (runtime) => {
 
   const cursorPair = {
     session_id: identity.createIngestionSessionId("raw-cursor", "import", "tail"),
-    image_id: randomUuidV7()
+    image_id: randomUUIDv7()
   };
   const cursorNow = Date.now();
   const cursorPaths = Array.from({ length: 9 }, (_, index) =>

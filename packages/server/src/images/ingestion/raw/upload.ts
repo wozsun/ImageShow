@@ -1,7 +1,7 @@
+import { randomUUIDv7 } from "node:crypto";
 import { getIngestionMaxFileBytes } from "../../../config/app-settings.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../../core/database/advisory-locks.ts";
-import { randomUuidV7 } from "../../../core/uuid.ts";
 import { assertStorageWriteTarget } from "../../../storage/backends/registry.ts";
 import { withStorageLocationReadLock } from "../../../storage/maintenance-lock.ts";
 import {
@@ -20,18 +20,17 @@ export async function receiveUploadIntentBody(
   owner: string,
   credential: string,
   body: ReadableStream<Uint8Array> | null,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   if (!body) throw new ApiError(400, "empty_body", "Empty upload body");
   const claims = service.verifyUploadCredential(credential, owner);
-  const admissionSignal = signal ?? new AbortController().signal;
-  return withRawUploadAdmission(admissionSignal, () =>
+  return withRawUploadAdmission(signal, () =>
     receiveUploadIntentBodyUnderAdmission(
       service,
       owner,
       claims,
       body,
-      admissionSignal
+      signal
     )
   );
 }
@@ -43,7 +42,7 @@ async function receiveUploadIntentBodyUnderAdmission(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal
 ) {
-  const executionToken = randomUuidV7();
+  const executionToken = randomUUIDv7();
   const intentPair = {
     session_id: claims.session_id,
     candidate_image_id: claims.candidate_image_id,
@@ -54,7 +53,7 @@ async function receiveUploadIntentBodyUnderAdmission(
     intentPair,
     executionToken
   );
-  const rawGeneration = randomUuidV7();
+  const rawGeneration = randomUUIDv7();
   const pair = {
     session_id: claimed.session_id,
     image_id: claimed.candidate_image_id

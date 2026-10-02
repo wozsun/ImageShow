@@ -74,17 +74,14 @@ export function ActionFeedbackProvider({ children }: { children: ReactNode }) {
     [fallbackHost, hosts, register]
   );
 
-  const fallback =
-    typeof document === "undefined"
-      ? null
-      : createPortal(
-          <div
-            ref={setFallbackHost}
-            className="action-feedback-region action-feedback-fallback-region"
-            data-feedback-fallback="true"
-          />,
-          document.body
-        );
+  const fallback = createPortal(
+    <div
+      ref={setFallbackHost}
+      className="action-feedback-region action-feedback-fallback-region"
+      data-feedback-fallback="true"
+    />,
+    document.body
+  );
 
   return (
     <ActionFeedbackRegionContext.Provider value={registry}>

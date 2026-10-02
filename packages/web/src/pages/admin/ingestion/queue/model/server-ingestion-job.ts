@@ -517,9 +517,6 @@ function ingestionJobFromKnownCompletedResult(
   completed: CompletedIngestionImageDto,
   display?: CompletedIngestionDisplayDto
 ): IngestionJob {
-  if (existing.objectUrl?.startsWith("blob:")) {
-    URL.revokeObjectURL(existing.objectUrl);
-  }
   return {
     ...existing,
     originalSize: existing.originalSize ?? existing.file?.size,

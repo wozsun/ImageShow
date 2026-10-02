@@ -76,10 +76,31 @@ function parsedItem(raw: string | null, expectedMember?: string) {
   return item;
 }
 
+function reportFilterResolutionFailure(
+  error: unknown,
+  signature: string,
+  kind: "filter" | "random"
+) {
+  if (isReadyImageCoreCacheError(error)) {
+    reportReadyImageCacheFailure(error);
+    return;
+  }
+  const failure = kind === "filter"
+    ? {
+        code: "derived_filter_resolution_failed",
+        event: "ready_image_derived_filter_resolution_failed"
+      } as const
+    : {
+        code: "derived_random_resolution_failed",
+        event: "ready_image_derived_random_resolution_failed"
+      } as const;
+  recordReadyImageCacheError("derived", failure.code, error);
+  logger.warn(failure.event, { signature, error });
+}
+
 async function readCache<T>(
   work: () => Promise<T>,
-  scope: "core" | "derived" = "core",
-  discardDerived?: () => Promise<void>,
+  index?: ReadyImageFilterIndex,
   signal?: AbortSignal
 ): Promise<ReadyImageCacheResult<T>> {
   try {
@@ -90,11 +111,11 @@ async function readCache<T>(
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error;
     if (isRedisUnavailableError(error)) throw error;
-    if (scope === "core" || isReadyImageCoreCacheError(error)) {
+    if (!index || index.kind === "core" || isReadyImageCoreCacheError(error)) {
       reportReadyImageCacheFailure(error);
     } else {
       recordReadyImageCacheError("derived", "derived_read_failed", error);
-      await discardDerived?.().catch(() => undefined);
+      await discardReadyImageQueryIndex(index).catch(() => undefined);
       logger.warn("ready_image_derived_cache_read_failed", {
         error: error
       });
@@ -240,10 +261,7 @@ async function readPageFromIndex<T>(
         );
         return window ? location.present(window) : null;
       },
-      index.kind === "core" ? "core" : "derived",
-      async () => {
-        await discardReadyImageQueryIndex(index);
-      }
+      index
     );
     if (!result.cached || result.value === null) {
       // A rebuilding/revision transition is a legitimate fallback, but a
@@ -301,19 +319,7 @@ async function resolvedReadyImagePage<T>(
         error
       };
     }
-    if (isReadyImageCoreCacheError(error)) {
-      reportReadyImageCacheFailure(error);
-    } else {
-      recordReadyImageCacheError(
-        "derived",
-        "derived_filter_resolution_failed",
-        error
-      );
-      logger.warn("ready_image_derived_filter_resolution_failed", {
-        signature: plan.signature,
-        error: error
-      });
-    }
+    reportFilterResolutionFailure(error, plan.signature, "filter");
     return { status: "fallback" };
   }
 }
@@ -351,10 +357,7 @@ async function readRandomWindowFromIndex(
         return null;
       return { items, total: index.count ?? items.length, hasMore: members.length > limit };
     },
-    index.kind === "core" ? "core" : "derived",
-    async () => {
-      await discardReadyImageQueryIndex(index);
-    },
+    index,
     signal
   );
 }
@@ -467,29 +470,14 @@ export async function sampleReadyImages(
         limit,
         recent
       ),
-      index.kind === "core" ? "core" : "derived",
-      async () => {
-        await discardReadyImageQueryIndex(index);
-      },
+      index,
       signal
     );
     if (!result.cached || result.value === null) return { cached: false };
     return { cached: true, value: result.value };
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error;
-    if (isReadyImageCoreCacheError(error)) {
-      reportReadyImageCacheFailure(error);
-    } else {
-      recordReadyImageCacheError(
-        "derived",
-        "derived_random_resolution_failed",
-        error
-      );
-      logger.warn("ready_image_derived_random_resolution_failed", {
-        signature: plan.signature,
-        error: error
-      });
-    }
+    reportFilterResolutionFailure(error, plan.signature, "random");
     return { cached: false };
   }
 }

@@ -6,9 +6,14 @@ import {
   type ServerIngestionStatusDto,
   type IngestionSessionPairDto
 } from "@imageshow/shared/browser";
+import {
+  ingestionAcceptanceBinding,
+  type AcceptedIngestionResult
+} from "./model/acceptance-binding.js";
 import type { IngestionJob } from "./model/ingestion-job.js";
 import {
   completedIngestionObservations,
+  type IngestionQueueProducerApi,
   type IngestionQueueApi
 } from "./ingestion-queue-contract.js";
 import {
@@ -32,6 +37,33 @@ export type IngestionQueueCancelOutcome = Readonly<{
   releasedRevision?: number;
   releasedSummary?: IngestionQueueSummaryDto;
 }>;
+
+export function bindTerminalAcceptanceForCancellation(
+  queue: IngestionQueueProducerApi,
+  jobId: string,
+  result: AcceptedIngestionResult,
+  connectionGeneration: number | null
+): IngestionQueueCancelOutcome | null {
+  if (result.status === "accepted") return null;
+  const discarded = result.status === "discarded";
+  queue.bindServerJob(
+    jobId,
+    {
+      ...ingestionAcceptanceBinding(result),
+      status: discarded ? "cancelled" : "finalized",
+      failureStage: undefined,
+      ...(discarded ? {} : { resultState: "recovering" as const }),
+      message: discarded ? "已取消" : "图片已写入图库，无法取消"
+    },
+    connectionGeneration,
+    result.accepted_order
+  );
+  return {
+    succeeded: discarded,
+    pair: { session_id: result.session_id, image_id: result.image_id },
+    ...(discarded ? {} : { terminal: "completed" as const })
+  };
+}
 
 function releasedServerStatus(job: IngestionJob): ServerIngestionStatusDto | null {
   if (job.serverStatus && job.serverStatus !== "missing") {

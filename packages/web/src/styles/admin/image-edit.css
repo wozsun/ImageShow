@@ -1,5 +1,5 @@
 :root {
-  --admin-color-edit-row-surface: light-dark(#f7f8fa, #151a21);
+  --admin-color-edit-row-surface: var(--admin-color-surface-raised);
 }
 
 .edit-modal form.image-editor-modal {

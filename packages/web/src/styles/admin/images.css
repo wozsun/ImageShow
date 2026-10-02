@@ -1,6 +1,7 @@
 :root {
-  --admin-color-workflow-filter-surface: light-dark(#f3f6fa, #141b25);
-  --admin-shadow-panel: light-dark(rgba(32, 42, 56, 0.16), rgba(0, 0, 0, 0.48));
+  --admin-color-image-card-border: light-dark(#e3e6eb, var(--admin-color-border-default));
+  --admin-color-workflow-filter-surface: var(--admin-color-surface-subtle);
+  --admin-shadow-panel: light-dark(rgba(24, 28, 33, 0.16), rgba(0, 0, 0, 0.48));
 }
 
 .image-list-toolbar {
@@ -97,7 +98,7 @@
   align-items: center;
   gap: 10px;
   background: var(--admin-color-surface-primary);
-  border: 1px solid var(--admin-color-border-default);
+  border: 1px solid var(--admin-color-image-card-border);
   border-radius: 8px;
   padding: 8px;
   transition:

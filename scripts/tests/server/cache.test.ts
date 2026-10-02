@@ -253,7 +253,7 @@ test("[Server/缓存与 Redis] serving record 统一 Redis 命中、空命中与
 
   const cached = await readImageServingRecordById(
     item.id,
-    {},
+    { reader },
     dependencies
   );
   assert.deepEqual(cached, readyRow);
@@ -762,6 +762,31 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
     coordinator.requestRebuild(),
     /Ready-image cache coordinator is stopped/
   );
+
+  // Stop can land while an invalid validation still holds the write fence;
+  // releasing the fence must not continue that refresh into a rebuild.
+  const fenceHeld = Promise.withResolvers<void>();
+  const releaseFence = Promise.withResolvers<void>();
+  validate = async () => ({
+    valid: false as const,
+    reason: "revision_mismatch",
+    meta: persistedMeta
+  });
+  afterWriteFence = async () => {
+    fenceHeld.resolve();
+    await releaseFence.promise;
+  };
+  const fencedCoordinator = new ReadyImageCacheCoordinator(dependencies);
+  const fencedInitialization = fencedCoordinator.initialize();
+  await fenceHeld.promise;
+  const rebuildsBeforeFencedStop = rebuildCalls;
+  const fencedStop = fencedCoordinator.stop();
+  releaseFence.resolve();
+  await fencedStop;
+  await fencedInitialization;
+  assert.equal(rebuildCalls, rebuildsBeforeFencedStop);
+  assert.equal(fencedCoordinator.getStatus().reason, "stopped");
+  assert.equal(fencedCoordinator.getStatus().readable, false);
 });
 test("[Server/缓存与 Redis] 共享读取独立取消、最后离开释放作用域及失败后重试", async () => {
   const admission = createPublicDatabaseAdmission({
@@ -1449,7 +1474,7 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
   assert.deepEqual(
     await reserveRedisWindowsCommand(windowClient, [
       { key: "login:user", capacity: 3, windowSeconds: 30 },
-      { key: "login:global", capacity: 5, windowSeconds: 60 }
+      { key: "random:images", capacity: 5, windowSeconds: 60, cost: 2 }
     ]),
     [
       {
@@ -1469,23 +1494,30 @@ test("[Server/缓存与 Redis] Redis 窗口与 ready-image 脚本各归所属边
   assert.deepEqual(windowCalls, [[
     "2",
     "login:user",
-    "login:global",
+    "random:images",
     "3",
     "30",
+    "1",
     "5",
-    "60"
+    "60",
+    "2"
   ]]);
-  await assert.rejects(
-    reserveRedisWindowsCommand(
-      {
-        async imageshowReserveWindows() {
-          return [1, 1, 0, 30];
-        }
-      },
-      [{ key: "broken", capacity: 1, windowSeconds: 30 }]
-    ),
-    /inconsistent state/
-  );
+  for (const [cost, reply] of [
+    [1, [1, 1, 0, 30]],
+    [2, [1, 2, 1, 30]]
+  ] as const) {
+    await assert.rejects(
+      reserveRedisWindowsCommand(
+        {
+          async imageshowReserveWindows() {
+            return reply;
+          }
+        },
+        [{ key: "broken", capacity: 2, windowSeconds: 30, cost }]
+      ),
+      /inconsistent state/
+    );
+  }
   await assert.rejects(
     reserveRedisWindowsCommand(
       {

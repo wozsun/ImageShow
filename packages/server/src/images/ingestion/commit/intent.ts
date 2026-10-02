@@ -1,3 +1,4 @@
+import { randomUUIDv7 } from "node:crypto";
 import type {
   AdminImageListItemDto,
   ImageDraftDto,
@@ -7,7 +8,6 @@ import type {
 import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { mapWithWorkerPool } from "../../../core/concurrency.ts";
-import { randomUuidV7 } from "../../../core/uuid.ts";
 import {
   committedIngestionResultForOwner,
   readCommittedIngestionResultsByImageIds
@@ -20,7 +20,6 @@ import type {
   StoredIngestionSession
 } from "../sessions/model.ts";
 import {
-  ingestionSessionSemanticHash,
   semanticIngestionSessionHash
 } from "../sessions/projection.ts";
 import {
@@ -356,21 +355,17 @@ export async function acceptIngestionCommitIntents(
                   "内容接入任务版本已变化"
                 );
               }
-              const retryWithoutHash = {
+              const retry = {
                 ...stored,
                 status: "committing" as const,
                 phase: "committing",
                 message: "提交重试已受理，等待写入图片库",
                 progress: null,
-                execution_token: randomUuidV7(),
-                error: undefined,
-                semantic_hash: ""
+                execution_token: randomUUIDv7(),
+                error: undefined
               };
               try {
-                const retried = await repository.mutateSemantic(stored, stored.version, {
-                  ...retryWithoutHash,
-                  semantic_hash: ingestionSessionSemanticHash(retryWithoutHash)
-                });
+                const retried = await repository.mutateSemantic(stored, stored.version, retry);
                 return {
                   ...pair,
                   status: "accepted",
@@ -428,8 +423,8 @@ export async function acceptIngestionCommitIntents(
           duplicateSnapshots.get(stored.prepared.variants.large.md5)!,
           input.duplicate_decision
         );
-        const executionToken = randomUuidV7();
-        const nextWithoutHash = {
+        const executionToken = randomUUIDv7();
+        const next = {
           ...stored,
           metadata,
           duplicate_decision: input.duplicate_decision,
@@ -446,12 +441,7 @@ export async function acceptIngestionCommitIntents(
             duplicate_decision: input.duplicate_decision,
             metadata
           },
-          error: undefined,
-          semantic_hash: ""
-        };
-        const next = {
-          ...nextWithoutHash,
-          semantic_hash: ingestionSessionSemanticHash(nextWithoutHash)
+          error: undefined
         };
         try {
           const accepted = await repository.mutateSemantic(

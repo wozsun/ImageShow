@@ -24,7 +24,6 @@ const sessionGlobalQuery = {
 } as const;
 
 const inlinedSiteConfig: SiteConfig | undefined = (() => {
-  if (typeof document === "undefined") return undefined;
   const raw = document.getElementById("__site_config__")?.textContent;
   if (!raw) return undefined;
   try {

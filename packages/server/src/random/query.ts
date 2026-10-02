@@ -1,7 +1,7 @@
 import { appConfig } from "@imageshow/shared";
 import {
+  normalizeTagExpression,
   parseTagFilter,
-  resolveTagExpression,
   TagFilterError,
   type TagExpression,
   randomMethods as randomMethodValues,
@@ -36,7 +36,11 @@ export type ParsedRandomQuery = {
   author: RandomSelectorGroup;
 };
 
+/** Submitted names that match no vocabulary entry and therefore no image. */
+type RandomIgnoredSelectors = Record<"theme" | "tag" | "author", string[]>;
+
 export type NormalizedRandomQuery = ParsedRandomQuery & {
+  ignored: RandomIgnoredSelectors;
   signature: string;
 };
 
@@ -165,36 +169,81 @@ function parseSelectorGroup(
   };
 }
 
-function targetedIdCombinationError(query: URLSearchParams) {
-  if (!query.has("id")) return null;
-  const incompatible = [
-    ...new Set(
-      [...query.keys()].filter(
-        (key) =>
-          key !== "id" &&
-          key !== "mode" &&
-          key !== "size" &&
-          key !== "limit" &&
-          !(key === "device" && query.get(key)?.toLowerCase() === "auto")
-      )
-    )
-  ].sort();
+type RandomSelectionFilters = Pick<
+  ParsedRandomQuery,
+  "seed" | "device" | "brightness" | "theme" | "tag" | "author"
+>;
+
+export function hasSelectors(group: RandomSelectorGroup) {
+  return group.include.length > 0 || group.exclude.length > 0;
+}
+
+function targetedIdConflictError(filters: RandomSelectionFilters) {
+  const active = {
+    author: hasSelectors(filters.author),
+    brightness: filters.brightness !== null,
+    device: filters.device !== "auto",
+    seed: filters.seed !== null,
+    tag: filters.tag !== null,
+    theme: hasSelectors(filters.theme)
+  };
+  const incompatible = Object.entries(active)
+    .filter(([, isActive]) => isActive)
+    .map(([field]) => field);
   if (!incompatible.length) return null;
   return apiErrorResponse(
-    { status: 400, message: "Bad Request: id cannot be combined with filters" },
+    { status: 400, message: "Bad Request: id cannot be combined with seed or filters" },
     {
       field: "id",
       incompatible,
-      hint: "id can only be combined with device=auto, mode, size, and limit"
+      hint: "id can only be combined with mode, size, limit, and device=auto"
     }
   );
+}
+
+/** Drops blank tag terms and segments; the shared parser itself keeps rejecting them. */
+function compactTagFilterValues(values: readonly string[]): string[] {
+  return values.flatMap((value) => {
+    const raw = value.trim();
+    const all = /^all:/iu.test(raw);
+    const terms = (all ? raw.slice(4) : raw)
+      .split(",")
+      .map((term) => term.trim())
+      .filter(Boolean);
+    return terms.length ? [`${all ? "all:" : ""}${terms.join(",")}`] : [];
+  });
+}
+
+/** Reads a positive count capped at the JSON maximum; null means the value is not a count. */
+function parseLimitCount(raw: string): number | null {
+  if (!/^\d+$/u.test(raw)) return null;
+  const significant = raw.replace(/^0+/u, "");
+  if (!significant) return null;
+  const maximum = String(appConfig.randomQuery.maxJsonItems);
+  if (
+    significant.length > maximum.length ||
+    (significant.length === maximum.length && significant > maximum)
+  ) {
+    return appConfig.randomQuery.maxJsonItems;
+  }
+  return Number(significant);
+}
+
+/**
+ * Image count used by rate limiting before any other validation. A blank or
+ * missing limit asks for one image; null marks a limit that is not a count.
+ */
+export function requestedRandomImageCount(query: URLSearchParams): number | null {
+  const raw = query.get("limit")?.trim();
+  return raw ? parseLimitCount(raw) : 1;
 }
 
 function parseJsonLimit(
   query: URLSearchParams,
   explicitMode: string | null
 ): number | Response {
-  if (!query.has("limit")) return 1;
+  const raw = query.get("limit")?.trim();
+  if (!raw) return 1;
   if (explicitMode !== "json") {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: limit requires mode=json" },
@@ -204,30 +253,14 @@ function parseJsonLimit(
       }
     );
   }
-
-  const raw = query.get("limit") ?? "";
-  if (!/^\d+$/u.test(raw)) {
+  const count = parseLimitCount(raw);
+  if (count === null) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid result count" },
       { field: "limit", hint: "Use a positive integer" }
     );
   }
-  const significant = raw.replace(/^0+/u, "");
-  if (!significant) {
-    return apiErrorResponse(
-      { status: 400, message: "Bad Request: Invalid result count" },
-      { field: "limit", hint: "Use a positive integer" }
-    );
-  }
-
-  const maximum = String(appConfig.randomQuery.maxJsonItems);
-  if (
-    significant.length > maximum.length ||
-    (significant.length === maximum.length && significant > maximum)
-  ) {
-    return appConfig.randomQuery.maxJsonItems;
-  }
-  return Number(significant);
+  return count;
 }
 
 function parseTargetedIds(query: URLSearchParams): string[] | Response {
@@ -310,15 +343,15 @@ export function parseRandomQuery(
   const queryError = invalidQueryParameters(query);
   if (queryError) return queryError;
 
-  const explicitMode = query.get("mode")?.toLowerCase() ?? null;
-  if (query.has("mode") && (!explicitMode || !randomMethods.has(explicitMode))) {
+  // Blank values of optional parameters mean "not provided"; blank seed and id stay invalid.
+  const explicitMode = query.get("mode")?.trim().toLowerCase() || null;
+  if (explicitMode && !randomMethods.has(explicitMode)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid mode" },
       { field: "mode" }
     );
   }
-  const size = query.get("size")?.toLowerCase()
-    ?? defaultSize;
+  const size = query.get("size")?.trim().toLowerCase() || defaultSize;
   if (!randomSizes.has(size)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid size" },
@@ -329,32 +362,14 @@ export function parseRandomQuery(
   if (limit instanceof Response) return limit;
   const seed = parseSeed(query);
   if (seed instanceof Response) return seed;
-  const targetedCombinationError = targetedIdCombinationError(query);
-  if (targetedCombinationError) return targetedCombinationError;
-  if (query.has("id")) {
-    const ids = parseTargetedIds(query);
-    if (ids instanceof Response) return ids;
-    return {
-      mode: (explicitMode ?? defaultMode) as RandomMethod,
-      size: size as RandomImageSize,
-      limit,
-      ids,
-      seed,
-      device: "auto",
-      brightness: null,
-      theme: { include: [], exclude: [] },
-      tag: null,
-      author: { include: [], exclude: [] }
-    };
-  }
-  const brightness = query.get("brightness")?.toLowerCase() || null;
+  const brightness = query.get("brightness")?.trim().toLowerCase() || null;
   if (brightness && !isRandomBrightness(brightness)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid brightness" },
       { field: "brightness" }
     );
   }
-  const device = query.get("device")?.toLowerCase() || "auto";
+  const device = query.get("device")?.trim().toLowerCase() || "auto";
   if (!randomRequestDevices.has(device)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid device" },
@@ -366,7 +381,7 @@ export function parseRandomQuery(
   if (theme instanceof Response) return theme;
   let tag: ReturnType<typeof parseTagFilter>;
   try {
-    tag = parseTagFilter(query.getAll("tag"), "mixed");
+    tag = parseTagFilter(compactTagFilterValues(query.getAll("tag")), "mixed");
   } catch (error) {
     if (!(error instanceof TagFilterError)) throw error;
     return apiErrorResponse({ status: 400, message: error.message }, { field: "tag" });
@@ -381,11 +396,7 @@ export function parseRandomQuery(
     );
   }
 
-  return {
-    mode: (explicitMode ?? defaultMode) as RandomMethod,
-    size: size as RandomImageSize,
-    limit,
-    ids: [],
+  const filters: RandomSelectionFilters = {
     seed,
     device: device as RandomRequestDevice,
     brightness: brightness as RandomBrightness | null,
@@ -393,70 +404,101 @@ export function parseRandomQuery(
     tag: tag.expression,
     author: author.selectors
   };
-}
+  let ids: string[] = [];
+  if (query.has("id")) {
+    const conflictError = targetedIdConflictError(filters);
+    if (conflictError) return conflictError;
+    const targetedIds = parseTargetedIds(query);
+    if (targetedIds instanceof Response) return targetedIds;
+    ids = targetedIds;
+  }
 
-function normalizeSelectorGroup(
-  field: "theme" | "author",
-  noun: string,
-  selectors: RandomSelectorGroup,
-  map: ReadonlyMap<string, string>
-): RandomSelectorGroup | Response {
-  const include: string[] = [];
-  const exclude: string[] = [];
-  for (const term of selectors.include) {
-    const slug = map.get(term);
-    if (!slug) {
-      return apiErrorResponse(
-        { status: 404, message: `Not Found: Unknown ${noun} selector` },
-        { field, value: term }
-      );
-    }
-    include.push(slug);
-  }
-  for (const term of selectors.exclude) {
-    const slug = map.get(term);
-    if (slug) exclude.push(slug);
-  }
   return {
-    include: [...new Set(include)].sort(),
-    exclude: [...new Set(exclude)].sort()
+    mode: (explicitMode ?? defaultMode) as RandomMethod,
+    size: size as RandomImageSize,
+    limit,
+    ids,
+    ...filters
   };
 }
 
+/** Keeps known names as slugs and records the rest, which match no image. */
+function knownSelectorGroup(
+  selectors: RandomSelectorGroup,
+  map: ReadonlyMap<string, string>,
+  ignored: string[]
+): RandomSelectorGroup {
+  const known = (terms: string[]) => {
+    const slugs: string[] = [];
+    for (const term of terms) {
+      const slug = map.get(term);
+      if (slug) slugs.push(slug);
+      else ignored.push(term);
+    }
+    return [...new Set(slugs)].sort();
+  };
+  return {
+    include: known(selectors.include),
+    exclude: known(selectors.exclude)
+  };
+}
+
+/** An all-clause naming an unknown tag cannot match, so only fully known clauses remain. */
+function knownTagExpression(
+  expression: TagExpression,
+  map: ReadonlyMap<string, string>,
+  ignored: string[]
+): TagExpression {
+  if (!expression) return null;
+  const clauses: string[][] = [];
+  for (const clause of expression.anyOf) {
+    const slugs = clause.flatMap((term) => {
+      const slug = map.get(term);
+      return slug ? [slug] : [];
+    });
+    if (slugs.length === clause.length) clauses.push(slugs);
+    else ignored.push(...clause.filter((term) => !map.has(term)));
+  }
+  return clauses.length ? normalizeTagExpression(clauses) : null;
+}
+
+export function ignoredSelectorDetails(ignored: RandomIgnoredSelectors) {
+  const fields = Object.entries(ignored)
+    .filter(([, terms]) => terms.length > 0)
+    .map(([field, terms]) => [field, [...new Set(terms)].sort()] as const);
+  return fields.length ? { ignored: Object.fromEntries(fields) } : {};
+}
+
+/**
+ * Unknown names match no image: they drop out of include lists and tag
+ * clauses before planning, so they never reach index keys, dedupe or seed
+ * signatures. A filter left with nothing that can match returns 404 at once.
+ */
 export function normalizeRandomQuery(
   query: ParsedRandomQuery,
   maps: RandomSelectorMaps
 ): NormalizedRandomQuery | Response {
-  const theme = normalizeSelectorGroup(
-    "theme",
-    "theme",
-    query.theme,
-    maps.theme
-  );
-  if (theme instanceof Response) return theme;
-  let tag: TagExpression;
-  try {
-    tag = resolveTagExpression(query.tag, maps.tag);
-  } catch (error) {
-    if (!(error instanceof TagFilterError)) throw error;
+  const ignored: RandomIgnoredSelectors = { theme: [], tag: [], author: [] };
+  const theme = knownSelectorGroup(query.theme, maps.theme, ignored.theme);
+  const tag = knownTagExpression(query.tag, maps.tag, ignored.tag);
+  const author = knownSelectorGroup(query.author, maps.author, ignored.author);
+  const unmatchable =
+    (query.theme.include.length > 0 && theme.include.length === 0) ||
+    (query.tag !== null && tag === null) ||
+    (query.author.include.length > 0 && author.include.length === 0);
+  if (unmatchable) {
     return apiErrorResponse(
-      { status: 404, message: error.message },
-      { field: "tag", value: error.term }
+      { status: 404, message: "Not Found: No available images for the selected filters" },
+      ignoredSelectorDetails(ignored)
     );
   }
-  const author = normalizeSelectorGroup(
-    "author",
-    "author",
-    query.author,
-    maps.author
-  );
-  if (author instanceof Response) return author;
 
   const normalized = {
     ...query,
     theme,
     tag,
-    author
+    author,
+    ignored
   };
   return {
     ...normalized,

@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { reducedMotionPreferred } from "../lib/ui/reduced-motion.js";
 import type { PublicFilterSectionKey } from "../lib/gallery/public-filter-draft.js";
 
 export function usePublicFilterScroll(sectionKey: string, searching: boolean) {
@@ -125,7 +126,7 @@ export function usePublicFilterScroll(sectionKey: string, searching: boolean) {
       sectionScrollTarget.current = to;
       if (
         Math.abs(to - from) < 1 ||
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        reducedMotionPreferred()
       ) {
         root.scrollTop = to;
         return;

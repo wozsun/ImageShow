@@ -5,6 +5,7 @@ import type {
   RefObject,
   SyntheticEvent
 } from "react";
+import { reducedMotionPreferred } from "../../lib/ui/reduced-motion.js";
 import { homeNumberFormatter } from "./home-ui.js";
 
 export function HomeBackground({
@@ -76,7 +77,7 @@ export function HomeHero({
 
   const scrollToCatalog = () => {
     onCatalogIntent();
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduceMotion = reducedMotionPreferred();
     catalogRef.current?.scrollIntoView({
       behavior: reduceMotion ? "auto" : "smooth",
       block: "start"

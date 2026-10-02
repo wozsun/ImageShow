@@ -1,8 +1,8 @@
+import { randomUUIDv7 } from "node:crypto";
 import { brightnesses } from "@imageshow/shared/browser";
 import { readyImageFilterOperations } from "../derived/filter-operations.ts";
 import { logger } from "../../../core/logger.ts";
 import { getRedisConnectionState, redis } from "../../../core/redis/client.ts";
-import { randomUuidV7 } from "../../../core/uuid.ts";
 import {
   imageFilterPlanHasAllAxes,
   type ImageFilterPlan,
@@ -106,7 +106,7 @@ export async function buildReadyImageFilterIndex(
   ) {
     return null;
   }
-  const token = randomUuidV7().replaceAll("-", "");
+  const token = randomUUIDv7().replaceAll("-", "");
   const temporaryKeys: string[] = [];
   let sequence = 0;
   const temporaryKey = () => {

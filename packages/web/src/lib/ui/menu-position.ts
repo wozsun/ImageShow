@@ -27,10 +27,6 @@ const defaultFixedPositionOrigin: FixedPositionOrigin = { left: 0, top: 0 };
 const fixedOriginProbeSelector = "[data-anchored-fixed-origin]";
 
 export function measureFixedPositionOrigin(): FixedPositionOrigin {
-  if (typeof document === "undefined" || !document.body) {
-    return defaultFixedPositionOrigin;
-  }
-
   let probe = document.querySelector<HTMLElement>(fixedOriginProbeSelector);
   const temporary = !probe;
   if (!probe) {

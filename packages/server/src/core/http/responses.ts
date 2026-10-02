@@ -4,6 +4,7 @@ import type {
   ApiErrorResponseDto,
   ApiSuccessResponseDto
 } from "@imageshow/shared/browser";
+import { isRedisUnavailableError } from "../runtime-availability.ts";
 import { ApiError } from "../api-error.ts";
 import { logger } from "../logger.ts";
 import { requestLogContext } from "./request-security.ts";
@@ -102,8 +103,7 @@ export function handleApiError(context: Context, error: unknown) {
     } satisfies ApiErrorResponseDto;
     return context.json(packImageAddresses(payload), error.status as never);
   }
-  const unhandled = error as { name?: string };
-  if (unhandled?.name === "redis_unavailable") {
+  if (isRedisUnavailableError(error)) {
     const payload = {
       ok: false,
       code: "redis_unavailable",

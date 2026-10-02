@@ -175,7 +175,17 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
     globalThis,
     "window"
   );
-  Reflect.deleteProperty(globalThis, "window");
+  let pendingFailureReloads = 0;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      location: {
+        reload: () => {
+          pendingFailureReloads += 1;
+        }
+      }
+    }
+  });
   try {
     const retryableLoader = createPublicRouteModuleLoader(() => {
       retryImportCount += 1;
@@ -185,17 +195,13 @@ test("[Web/后台访问] 后台模块预加载只响应可执行意图并复用�
     });
     retryableLoader.preload();
     retryableLoader.preload();
-    const routeNavigation = retryableLoader.load();
+    void retryableLoader.load();
     assert.equal(retryImportCount, 1);
     attempts[0]!.reject(new Error("passive preload failed"));
     await new Promise<void>((resolve) => setImmediate(resolve));
     assert.equal(retryableLoader.passivePreloadFailed(), true);
-    assert.equal(retryImportCount, 2);
-    attempts[1]!.resolve({ page: "gallery" });
-    assert.deepEqual(await routeNavigation, { page: "gallery" });
-    assert.equal(retryableLoader.passivePreloadFailed(), false);
-    assert.deepEqual(await retryableLoader.load(), { page: "gallery" });
-    assert.equal(retryImportCount, 2);
+    assert.equal(retryImportCount, 1, "失败模块不能在当前文档重试");
+    assert.equal(pendingFailureReloads, 1);
   } finally {
     if (routeWindowDescriptor) {
       Object.defineProperty(globalThis, "window", routeWindowDescriptor);

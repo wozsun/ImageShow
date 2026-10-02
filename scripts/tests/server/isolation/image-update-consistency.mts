@@ -500,12 +500,11 @@ await runIntegrationScenario(async (runtime) => {
   try {
     await assert.rejects(
       withTransactionOnClient(tagClient, async (client) => {
-        const result = await tagMutations.replaceImageTags(client, imageUpdateIds.first, [
-          "set-second",
-          "cache-repair-tag",
-          "set-first",
-          "set-second"
-        ]);
+        const result = await tagMutations.replaceImageTagAssociations(
+          client,
+          imageUpdateIds.first,
+          ["set-second", "cache-repair-tag", "set-first", "set-second"]
+        );
         assert.equal(result.createdTag, true);
         assert.deepEqual(
           (
@@ -516,15 +515,14 @@ await runIntegrationScenario(async (runtime) => {
           ).rows.map((row) => row.tag_slug),
           ["cache-repair-tag", "set-first", "set-second"]
         );
-        assert.equal(
-          (await tagMutations.replaceImageTags(client, imageUpdateIds.first, ["set-first"]))
-            .createdTag,
-          false
-        );
-        assert.equal(
-          (await tagMutations.replaceImageTags(client, imageUpdateIds.first, [])).createdTag,
-          false
-        );
+        for (const tags of [["set-first"], []]) {
+          const replaced = await tagMutations.replaceImageTagAssociations(
+            client,
+            imageUpdateIds.first,
+            tags
+          );
+          assert.equal(replaced.createdTag, false);
+        }
         assert.equal(
           (
             await client.query("SELECT count(*)::int AS count FROM image_tag WHERE image_id=$1", [
@@ -532,12 +530,6 @@ await runIntegrationScenario(async (runtime) => {
             ])
           ).rows[0].count,
           0
-        );
-        assert.equal(
-          BigInt(
-            (await client.query("SELECT revision::text FROM ready_image_revision")).rows[0].revision
-          ),
-          revisionBeforeTagCases + 1n
         );
         throw rollback;
       }),

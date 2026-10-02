@@ -1,3 +1,4 @@
+import { neverAbortedSignal } from "../../core/abort.ts";
 import { ApiError } from "../../core/api-error.ts";
 import {
   getStorageBackend,
@@ -22,8 +23,6 @@ import {
   type StorageKeyListOptions
 } from "./key-listing.ts";
 import { withStorageObjectRemovalAdmission } from "./removal-admission.ts";
-
-const neverAbortedStorageRemovalSignal = new AbortController().signal;
 
 export async function storageObjectExists(
   prefix: StoragePrefix,
@@ -53,13 +52,13 @@ export type ResolvedStorageRemovalResult = StorageRemovalResult & {
 export async function removeStorageObjectsAndConfirm(
   objects: readonly StorageRemovalRequest[],
   options: StorageRemoveOptions = {},
-  admissionSignal: AbortSignal = options.signal ?? neverAbortedStorageRemovalSignal
+  admissionSignal: AbortSignal = options.signal ?? neverAbortedSignal
 ): Promise<ResolvedStorageRemovalResult[]> {
   if (!objects.length) {
     throw new RangeError("Storage cleanup requires at least one object");
   }
   const operationSignal = options.signal
-    ?? neverAbortedStorageRemovalSignal;
+    ?? neverAbortedSignal;
   operationSignal.throwIfAborted();
   admissionSignal.throwIfAborted();
   const resolved = await Promise.all(
@@ -159,7 +158,7 @@ export async function collectStorageNamespaceSnapshot(
   );
   try {
     const [large, medium, small] = await Promise.all(tasks);
-    return { large: large!, medium: medium!, small: small! };
+    return { large, medium, small };
   } catch (error) {
     siblingAbort.abort(error);
     await Promise.allSettled(tasks);

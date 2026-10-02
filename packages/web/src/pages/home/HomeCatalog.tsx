@@ -14,6 +14,7 @@ import {
   type ReactNode,
   type RefObject
 } from "react";
+import { reducedMotionQuery } from "../../lib/ui/reduced-motion.js";
 import { OverflowMarqueeText } from "../../components/data-display/OverflowMarqueeText.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { useMediaQuery } from "../../hooks/useMediaQuery.js";
@@ -225,7 +226,7 @@ export function HomeCatalog({
   onCatalogIntent: () => void;
 }) {
   const refreshGlintRun = useRefreshGlintRun(isRefreshing);
-  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const reduceMotion = useMediaQuery(reducedMotionQuery);
   const themeSet = new Set(selectedSlugs(filters.theme));
   const tagSet = new Set(basicTagSelection(filters.tag).selected);
   const [selectionError, setSelectionError] = useState<{

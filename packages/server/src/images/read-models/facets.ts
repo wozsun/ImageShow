@@ -6,7 +6,7 @@ import {
   publicPgFallbackWorkLimitExceeded,
   type PublicDatabaseReadAccess
 } from "../../core/database/public-fallback.ts";
-import { pool, type DatabaseReader } from "../../core/database/pools.ts";
+import type { DatabaseReader } from "../../core/database/pools.ts";
 import { createImageFilterPlan } from "../filter-plan.ts";
 import { readReadyImageCountSnapshot } from "../ready-cache/counts/query.ts";
 import {
@@ -25,7 +25,7 @@ async function facetVocabulary(
     themes: Record<string, number>;
     authors: Record<string, number>;
   },
-  database: PublicDatabaseReadAccess = {}
+  database: Required<PublicDatabaseReadAccess>
 ): Promise<GalleryFacetsDto> {
   const [themeVocab, tagVocab, authorVocab] = await Promise.all([
     getThemeVocab(database),
@@ -72,32 +72,25 @@ async function readFacetsFromPostgres(reader: DatabaseReader) {
 }
 
 async function getPublicGalleryFacetsWithAccess(
-  signal: AbortSignal | undefined,
-  database: PublicDatabaseReadAccess
+  signal: AbortSignal,
+  database: Required<PublicDatabaseReadAccess>
 ): Promise<GalleryFacetsDto> {
   const cached = await readReadyImageCountSnapshot(
     createImageFilterPlan({}),
     signal,
-    Boolean(database.reader)
+    true
   );
   if (cached.cached) return facetVocabulary(cached.value, database);
-  return database.reader
-    ? readFacetsFromPostgres(database.reader)
-    : coalesce(
-        "gallery-facets:postgres",
-        () => readFacetsFromPostgres(pool)
-      );
+  return readFacetsFromPostgres(database.reader);
 }
 
-export function getPublicGalleryFacets(signal?: AbortSignal): Promise<GalleryFacetsDto> {
-  return signal
-    ? coalesce(
-        "gallery-facets:public",
-        (sharedSignal) =>
-          withPublicDatabaseRead(sharedSignal, (database, databaseSignal) =>
-            getPublicGalleryFacetsWithAccess(databaseSignal, database)
-          ),
-        signal
-      )
-    : getPublicGalleryFacetsWithAccess(undefined, {});
+export function getPublicGalleryFacets(signal: AbortSignal): Promise<GalleryFacetsDto> {
+  return coalesce(
+    "gallery-facets:public",
+    (sharedSignal) =>
+      withPublicDatabaseRead(sharedSignal, (database, databaseSignal) =>
+        getPublicGalleryFacetsWithAccess(databaseSignal, database)
+      ),
+    signal
+  );
 }

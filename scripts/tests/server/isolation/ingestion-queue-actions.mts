@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import type { IngestionSessionSnapshot } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
 import type { IngestionSessionRepository } from "../../../../packages/server/src/images/ingestion/repository.ts";
 import type { runIngestionQueueAction } from "../../../../packages/server/src/images/ingestion/queue/action.ts";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID, randomUUIDv7 } from "node:crypto";
 import { createIngestionScenarioFixture } from "./ingestion-scenario-fixture.mts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
@@ -52,10 +52,7 @@ await runIntegrationScenario(async (runtime) => {
     await import("../../../../packages/server/src/images/ingestion/queue/session-update.ts");
   const ingestionSessionIdentity =
     await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
-  const ingestionSessionProjection =
-    await import("../../../../packages/server/src/images/ingestion/sessions/projection.ts");
 
-  const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
   const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
   const {
     ingestionRepository,
@@ -102,10 +99,7 @@ await runIntegrationScenario(async (runtime) => {
     const queued = activeSession(
       (
         await ingestionRepository.acceptImportSession(
-          {
-            ...withoutHash,
-            semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(withoutHash)
-          },
+          withoutHash,
           displayOrderKey(
             sessionId,
             batchPosition,
@@ -116,8 +110,8 @@ await runIntegrationScenario(async (runtime) => {
       ).session
     );
     if (!makeReady) return queued;
-    const generation = coreUuid.randomUuidV7();
-    const executionToken = coreUuid.randomUuidV7();
+    const generation = randomUUIDv7();
+    const executionToken = randomUUIDv7();
     const prepared = {
       ...realPrepared,
       producer_execution_token: executionToken,
@@ -202,7 +196,7 @@ await runIntegrationScenario(async (runtime) => {
   });
   const applyActionRequest = {
     queue: "import" as const,
-    action_request_id: coreUuid.randomUuidV7(),
+    action_request_id: randomUUIDv7(),
     action: "apply_metadata" as const,
     action_watermark: actionPage.action_watermark,
     metadata: { title: "bounded action" }
@@ -798,7 +792,7 @@ await runIntegrationScenario(async (runtime) => {
   const actionAfterWatermark = await createActionReadySession("after-watermark");
   const commitActionRequest = {
     queue: "import" as const,
-    action_request_id: coreUuid.randomUuidV7(),
+    action_request_id: randomUUIDv7(),
     action: "commit_ready" as const,
     action_watermark: commitActionPage.action_watermark
   };
@@ -853,7 +847,7 @@ await runIntegrationScenario(async (runtime) => {
     image_id: duplicateRecoveryReady.image_id,
     expected_version: duplicateRecoveryReady.version,
     expected_md5: duplicateRecoveryReady.prepared?.variants.large.md5,
-    commit_request_id: coreUuid.randomUuidV7(),
+    commit_request_id: randomUUIDv7(),
     duplicate_decision: "upload" as const,
     metadata: duplicateRecoveryReady.metadata
   };
@@ -871,7 +865,7 @@ await runIntegrationScenario(async (runtime) => {
       duplicateRecoveryReady.session_id
     )
   );
-  const duplicateRecoveryImageId = coreUuid.randomUuidV7();
+  const duplicateRecoveryImageId = randomUUIDv7();
   await database.pool.query(
     `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
@@ -938,7 +932,7 @@ await runIntegrationScenario(async (runtime) => {
   );
 
   const duplicateIntentReady = await createActionReadySession("duplicate-before-intent");
-  const duplicateIntentImageId = coreUuid.randomUuidV7();
+  const duplicateIntentImageId = randomUUIDv7();
   await database.pool.query(
     `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,status,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,'ready',1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [
@@ -956,7 +950,7 @@ await runIntegrationScenario(async (runtime) => {
         image_id: duplicateIntentReady.image_id,
         expected_version: duplicateIntentReady.version,
         expected_md5: duplicateIntentReady.prepared?.variants.large.md5,
-        commit_request_id: coreUuid.randomUuidV7(),
+        commit_request_id: randomUUIDv7(),
         duplicate_decision: "upload" as const,
         metadata: duplicateIntentReady.metadata
       }
@@ -1044,7 +1038,7 @@ await runIntegrationScenario(async (runtime) => {
   });
   const queuedActionResult = await runAction(ingestionRepository, {
     queue: "import" as const,
-    action_request_id: coreUuid.randomUuidV7(),
+    action_request_id: randomUUIDv7(),
     action: "apply_metadata" as const,
     action_watermark: queuedActionPage.action_watermark,
     metadata: { author: "queued-default-author" }
@@ -1173,7 +1167,7 @@ await runIntegrationScenario(async (runtime) => {
   const completedCommitActionReady = await createActionReadySession(
     "commit-action-completed-retry"
   );
-  const completedCommitActionId = coreUuid.randomUuidV7();
+  const completedCommitActionId = randomUUIDv7();
   assert.equal(
     (
       await ingestionCommitIntent.acceptIngestionCommitIntents(ingestionRepository, actionOwner, [
@@ -1284,7 +1278,7 @@ await runIntegrationScenario(async (runtime) => {
   });
   const clearQueueVersionRaceResult = await runAction(clearQueueVersionRaceRepository, {
     queue: "import" as const,
-    action_request_id: coreUuid.randomUuidV7(),
+    action_request_id: randomUUIDv7(),
     action: "clear_queue" as const,
     action_watermark: clearQueueVersionRacePage.action_watermark
   });
@@ -1345,7 +1339,7 @@ await runIntegrationScenario(async (runtime) => {
   });
   const filteredClearVersionRaceResult = await runAction(filteredClearVersionRaceRepository, {
     queue: "import" as const,
-    action_request_id: coreUuid.randomUuidV7(),
+    action_request_id: randomUUIDv7(),
     action: "clear_uncommitted" as const,
     action_watermark: filteredClearVersionRacePage.action_watermark
   });
@@ -1383,7 +1377,7 @@ await runIntegrationScenario(async (runtime) => {
     image_id: clearCompletedReady.image_id,
     expected_version: clearCompletedReady.version,
     expected_md5: clearCompletedReady.prepared?.variants.large.md5,
-    commit_request_id: coreUuid.randomUuidV7(),
+    commit_request_id: randomUUIDv7(),
     duplicate_decision: "upload" as const,
     metadata: clearCompletedReady.metadata
   };
@@ -1431,7 +1425,7 @@ await runIntegrationScenario(async (runtime) => {
     image_id: deferredCompletedReady.image_id,
     expected_version: deferredCompletedReady.version,
     expected_md5: deferredCompletedReady.prepared?.variants.large.md5,
-    commit_request_id: coreUuid.randomUuidV7(),
+    commit_request_id: randomUUIDv7(),
     duplicate_decision: "upload" as const,
     metadata: deferredCompletedReady.metadata
   };
@@ -1474,7 +1468,7 @@ await runIntegrationScenario(async (runtime) => {
     });
   const clearCompletedActionRequest = {
     queue: "import" as const,
-    action_request_id: coreUuid.randomUuidV7(),
+    action_request_id: randomUUIDv7(),
     action: "clear_completed" as const,
     action_watermark: deferredCompletedExecutionPage.action_watermark,
     max_semantic_revision: clearCompletedPage.revision
@@ -1574,7 +1568,7 @@ await runIntegrationScenario(async (runtime) => {
     const result = await runAction(ingestionRepository, {
       queue: "import",
       action: "apply_metadata",
-      action_request_id: coreUuid.randomUuidV7(),
+      action_request_id: randomUUIDv7(),
       action_watermark: actionPage.action_watermark,
       items: [pairOf(session)],
       metadata
@@ -1602,7 +1596,7 @@ await runIntegrationScenario(async (runtime) => {
   await runAction(ingestionRepository, {
     queue: "import",
     action: "apply_metadata",
-    action_request_id: coreUuid.randomUuidV7(),
+    action_request_id: randomUUIDv7(),
     action_watermark: clearPage.action_watermark,
     metadata: { author: "" }
   });
@@ -1612,7 +1606,7 @@ await runIntegrationScenario(async (runtime) => {
   const exactClear = {
     queue: "import" as const,
     action: "apply_metadata" as const,
-    action_request_id: coreUuid.randomUuidV7(),
+    action_request_id: randomUUIDv7(),
     action_watermark: clearPage.action_watermark,
     items: [pairOf(handoffTarget)],
     metadata: { theme: null, tags: [], author: "" }
@@ -1659,8 +1653,8 @@ await runIntegrationScenario(async (runtime) => {
   );
   const incarnationResult = await runAction(ingestionRepository, {
     ...exactClear,
-    action_request_id: coreUuid.randomUuidV7(),
-    items: [{ ...pairOf(laterTarget), image_id: coreUuid.randomUuidV7() }]
+    action_request_id: randomUUIDv7(),
+    items: [{ ...pairOf(laterTarget), image_id: randomUUIDv7() }]
   });
   assert.equal(incarnationResult.items[0].status, "skipped");
   assert.deepEqual((await readActive(laterTarget)).metadata, laterTarget.metadata);
@@ -1674,16 +1668,13 @@ await runIntegrationScenario(async (runtime) => {
     ...importCanonicalWithoutHash,
     owner: foreignOwner,
     session_id: foreignSessionId,
-    image_id: coreUuid.randomUuidV7(),
+    image_id: randomUUIDv7(),
     metadata: laterTarget.metadata
   };
   const foreign = activeSession(
     (
       await ingestionRepository.acceptImportSession(
-        {
-          ...foreignDraft,
-          semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(foreignDraft)
-        },
+        foreignDraft,
         displayOrderKey(foreignSessionId, 1, Date.now()),
         Date.now()
       )
@@ -1691,7 +1682,7 @@ await runIntegrationScenario(async (runtime) => {
   );
   const foreignResult = await runAction(ingestionRepository, {
     ...exactClear,
-    action_request_id: coreUuid.randomUuidV7(),
+    action_request_id: randomUUIDv7(),
     items: [pairOf(foreign)]
   });
   assert.equal(foreignResult.items[0].status, "skipped");
@@ -1815,7 +1806,7 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(committedRetry.status, "failed", "准备完成的图片不能走重新下载");
 
   const commitFailedReady = await createActionReadySession("retry-frozen-commit");
-  const frozenCommitId = coreUuid.randomUuidV7();
+  const frozenCommitId = randomUUIDv7();
   const [acceptedCommit] = await ingestionCommitIntent.acceptIngestionCommitIntents(
     ingestionRepository,
     actionOwner,
@@ -1880,7 +1871,7 @@ await runIntegrationScenario(async (runtime) => {
   const allRetryRequest = {
     queue: "import" as const,
     action: "retry_failed" as const,
-    action_request_id: coreUuid.randomUuidV7(),
+    action_request_id: randomUUIDv7(),
     action_watermark: allRetryPage.action_watermark
   };
   const allRetryResult = await runAction(retryRepository, allRetryRequest);

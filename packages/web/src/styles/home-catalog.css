@@ -27,7 +27,7 @@
   min-width: 0;
   padding: clamp(24px, 3vw, 38px);
   background: var(--public-color-home-card-surface);
-  border: 1px solid var(--public-color-border-default);
+  border: 1px solid var(--public-color-home-border);
   border-radius: 28px;
   box-shadow:
     0 24px 70px var(--public-shadow-home-glass),
@@ -58,7 +58,7 @@
   background: linear-gradient(
     90deg,
     var(--public-color-action-primary),
-    var(--public-color-border-default)
+    var(--public-color-home-border)
   );
   opacity: 0.72;
   transform: scaleX(1);
@@ -180,7 +180,7 @@
   place-items: center;
   color: var(--color-public-text-primary);
   background: var(--public-color-home-option-surface);
-  border: 1px solid var(--public-color-border-default);
+  border: 1px solid var(--public-color-home-border);
   border-radius: 14px;
   cursor: pointer;
   transition:
@@ -326,7 +326,7 @@
   gap: var(--home-tag-mode-gap);
   padding: 2px;
   background: var(--public-color-home-option-surface);
-  border: 1px solid var(--public-color-border-default);
+  border: 1px solid var(--public-color-home-border);
   border-radius: 12px;
 }
 
@@ -472,7 +472,7 @@
   align-content: center;
   color: var(--color-public-text-primary);
   background: var(--public-color-home-option-surface);
-  border: 1px solid var(--public-color-border-default);
+  border: 1px solid var(--public-color-home-border);
   border-radius: 13px;
   text-align: left;
   cursor: pointer;

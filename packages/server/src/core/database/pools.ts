@@ -12,23 +12,8 @@ export type DatabaseConnectionConfig = Readonly<{
   password: string;
 }>;
 
-let configuredConnection: DatabaseConnectionConfig | null = null;
-
 export let pool: pg.Pool;
 let advisoryLockPool: pg.Pool | null = null;
-
-function sameConnection(
-  left: DatabaseConnectionConfig,
-  right: DatabaseConnectionConfig
-) {
-  return (
-    left.host === right.host &&
-    left.port === right.port &&
-    left.name === right.name &&
-    left.user === right.user &&
-    left.password === right.password
-  );
-}
 
 function requireAdvisoryLockPool() {
   if (!advisoryLockPool) {
@@ -38,13 +23,6 @@ function requireAdvisoryLockPool() {
 }
 
 export function configureDatabasePools(databaseConfig: DatabaseConnectionConfig) {
-  if (configuredConnection) {
-    if (!sameConnection(configuredConnection, databaseConfig)) {
-      throw new Error("PostgreSQL pools are already configured for another database");
-    }
-    return;
-  }
-
   const nextPoolConfig = {
     host: databaseConfig.host,
     port: databaseConfig.port,
@@ -70,7 +48,6 @@ export function configureDatabasePools(databaseConfig: DatabaseConnectionConfig)
   nextAdvisoryLockPool.on("error", (error) => {
     logger.error("idle PostgreSQL advisory-lock client error", error);
   });
-  configuredConnection = Object.freeze({ ...databaseConfig });
   pool = nextPool;
   advisoryLockPool = nextAdvisoryLockPool;
 }

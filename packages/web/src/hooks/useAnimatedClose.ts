@@ -6,6 +6,7 @@ import {
   type AnimationEvent
 } from "react";
 import { flushSync } from "react-dom";
+import { reducedMotionPreferred } from "../lib/ui/reduced-motion.js";
 
 export function useAnimatedClose(onClose: () => void, fallbackMs = 170) {
   const [closing, setClosing] = useState(false);
@@ -53,7 +54,7 @@ export function useAnimatedClose(onClose: () => void, fallbackMs = 170) {
       closeCallbackRef.current = afterClose
         ?? prepareClose?.()
         ?? onCloseRef.current;
-      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      if (reducedMotionPreferred()) {
         closeCallbackRef.current();
         return;
       }

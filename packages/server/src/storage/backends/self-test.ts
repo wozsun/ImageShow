@@ -75,7 +75,7 @@ export async function testStorageBackend(
     effective, undefined, undefined, signal
   );
   if (effective.type === "s3"
-    && effective.slug !== "(test)"
+    && !effective.temporary
     && result.capabilities) {
     await saveProbedCapabilities(effective, result.capabilities, signal);
   }

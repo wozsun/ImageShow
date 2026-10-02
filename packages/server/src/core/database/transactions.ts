@@ -11,9 +11,12 @@ type TransactionOptions =
       onTransactionId?: never;
     };
 
-export async function withTransactionOnClient<T>(
-  client: PoolClient,
-  work: (client: PoolClient) => Promise<T>,
+export async function withTransactionOnClient<
+  T,
+  Client extends Pick<PoolClient, "query"> = PoolClient
+>(
+  client: Client,
+  work: (client: Client) => Promise<T>,
   options: TransactionOptions = {}
 ): Promise<T> {
   try {

@@ -26,11 +26,9 @@ import {
 } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
-import test, { after, type TestContext } from "node:test";
+import test, { type TestContext } from "node:test";
 import {
-  pool,
-  configureDatabasePools,
-  closeDatabasePools
+  pool
 } from "../../../packages/server/src/core/database/pools.ts";
 import { createTestDirectory } from "../support/test-directory.ts";
 import { runProcess } from "../support/process-runner.ts";
@@ -62,8 +60,7 @@ import {
   storageS3ObjectName
 } from "../../../packages/server/src/storage/objects/keys.ts";
 import {
-  assertCanonicalImageObjectKey,
-  isCanonicalImageObjectKey,
+  imageObjectKey,
   parseImageObjectKey
 } from "../../../packages/server/src/storage/objects/image-paths.ts";
 import { storageConfigFromRow } from "../../../packages/server/src/storage/backends/record.ts";
@@ -143,19 +140,11 @@ test(
 );
 
 function mockCleanupLeaseReads(context: TestContext) {
-  configureDatabasePools({
-    host: "database.invalid",
-    port: 5432,
-    name: "imageshow_test",
-    user: "imageshow_test",
-    password: process.env.DATABASE_PASSWORD!
-  });
   context.mock.method(pool, "query", async (sql: string) => {
     assert.match(sql, /background_job/u);
     return { rows: [] };
   });
 }
-after(closeDatabasePools);
 
 function s3CommandName(command: unknown) {
   return (command as { constructor: { name: string } }).constructor.name;
@@ -2397,18 +2386,15 @@ test("[Server/存储] local 与 S3 对象命名、当前类型和物理命名空
 
   const canonicalKey = storageObjectKey(imageId);
   assert.equal(canonicalKey, "8d/" + imageId + ".webp");
-  assert.equal(isCanonicalImageObjectKey(canonicalKey), true);
-  assert.equal(isCanonicalImageObjectKey("00/" + imageId + ".webp"), false);
-  assert.equal(isCanonicalImageObjectKey(imageId + ".webp"), false);
-  assert.equal(
-    isCanonicalImageObjectKey("nested/" + imageId + ".webp"),
-    false
-  );
+  assert.equal(imageObjectKey(imageId), canonicalKey);
   assert.throws(
-    () => assertCanonicalImageObjectKey("nested/" + imageId + ".webp"),
-    /Invalid image object key/
+    () => imageObjectKey("nested/" + imageId),
+    /Invalid image UUID/
   );
   assert.deepEqual(parseImageObjectKey(canonicalKey), { id: imageId });
+  assert.equal(parseImageObjectKey("00/" + imageId + ".webp"), null);
+  assert.equal(parseImageObjectKey(imageId + ".webp"), null);
+  assert.equal(parseImageObjectKey("nested/" + imageId + ".webp"), null);
   assert.equal(parseImageObjectKey(`ff/${imageId}.webp`), null);
   assert.equal(
     storageS3ObjectName(first, "large", canonicalKey),

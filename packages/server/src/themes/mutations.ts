@@ -1,5 +1,6 @@
-import { sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
 import type { PoolClient } from "pg";
+import { nextSortOrderSql } from "../core/database/sort-order-sql.ts";
+import { readVocabularyMutationImpact } from "../vocab/mutation-impact.ts";
 import { pool } from "../core/database/pools.ts";
 import {
   assertVocabularyCreated,
@@ -16,20 +17,18 @@ import {
 import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
 
 async function insertTheme(
-  client: PoolClient,
-  slug: string
+  client: Pick<PoolClient, "query">,
+  slug: string,
+  displayName = ""
 ) {
   if (!slug) return false;
   assertVocabularySlug("theme", slug);
   const result = await client.query(
-    `INSERT INTO theme(slug, sort_order)
-     VALUES($1, (
-       SELECT GREATEST(${sortOrderMin}, LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, ${sortOrderMax}))
-       FROM theme
-     ))
+    `INSERT INTO theme(slug, display_name, sort_order)
+     VALUES($1, $2, ${nextSortOrderSql("theme")})
      ON CONFLICT (slug) DO NOTHING
      RETURNING slug`,
-    [slug]
+    [slug, displayName]
   );
   return Boolean(result.rowCount);
 }
@@ -52,18 +51,9 @@ export async function createTheme(slug: string, displayName: string) {
   await withVocabularyMutationLock("theme", slug, (signal) =>
     withVocabularyMutationSync("theme", async () => {
       signal.throwIfAborted();
-      const result = await pool.query(
-        `INSERT INTO theme(slug, display_name, sort_order)
-       VALUES($1, $2, (
-         SELECT GREATEST(${sortOrderMin}, LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, ${sortOrderMax}))
-         FROM theme
-       ))
-       ON CONFLICT (slug) DO NOTHING
-       RETURNING slug`,
-        [slug, displayName]
-      );
+      const inserted = await insertTheme(pool, slug, displayName);
       signal.throwIfAborted();
-      assertVocabularyCreated("theme", slug, result.rowCount);
+      assertVocabularyCreated("theme", slug, inserted ? 1 : 0);
     })
   );
 }
@@ -92,30 +82,13 @@ async function deleteThemeUnderLock(
     signal.throwIfAborted();
     if (!theme.rowCount) return { deleted: false, affected: [] as { id: string }[] };
 
-    const affectedCount = Number(
-      (
-        await client.query(
-          `SELECT count(*)::int AS count
-         FROM metadata
-        WHERE theme=$1 AND status='ready'`,
-          [slug]
-        )
-      ).rows[0]?.count ?? 0
+    const { affectedCount, affected } = await readVocabularyMutationImpact(
+      client,
+      "theme",
+      slug,
+      mutationBatch,
+      signal
     );
-    signal.throwIfAborted();
-    const decision = mutationBatch.decide(affectedCount);
-    const affected =
-      decision.mode === "exact"
-        ? (
-            await client.query<{ id: string }>(
-              `SELECT id FROM metadata
-            WHERE theme=$1 AND status='ready'
-            ORDER BY id`,
-              [slug]
-            )
-          ).rows
-        : [];
-    signal.throwIfAborted();
     await client.query(
       `UPDATE metadata SET theme=NULL, updated_at=now() WHERE theme=$1`,
       [slug]

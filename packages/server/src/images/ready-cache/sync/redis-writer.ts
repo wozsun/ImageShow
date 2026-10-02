@@ -78,7 +78,6 @@ function* sortedSetEntries(members: Array<string | number>) {
   for (let index = 0; index < members.length; index += 2) {
     const score = members[index];
     const member = members[index + 1];
-    if (score === undefined || member === undefined) continue;
     yield [score, String(member)] as const;
   }
 }

@@ -1,12 +1,13 @@
-import { imageVariants, storageObjectKey } from "@imageshow/shared/browser";
+import { randomUUIDv7 } from "node:crypto";
+import { imageVariants } from "@imageshow/shared/browser";
 import { ingestionPreparedPath, ingestionPreparedFiles } from "../raw/paths.ts";
 import { withActiveIngestionTempPaths } from "../raw/lease-registry.ts";
 import { updateIngestionExecutionProgress } from "../execution/session.ts";
 import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
+import { imageObjectKey } from "../../../storage/objects/image-paths.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../../core/database/advisory-locks.ts";
 import { logger } from "../../../core/logger.ts";
-import { randomUuidV7 } from "../../../core/uuid.ts";
 import { resolveTagSlugs } from "../../../tags/query.ts";
 import {
   invalidateEntityCountCaches,
@@ -60,9 +61,9 @@ export async function commitIngestionSessionSnapshot(
   const prepared = session.prepared;
   const commit = session.commit;
   const preparedFiles = ingestionPreparedFiles(session, prepared);
-  const finalObjectKey = storageObjectKey(session.image_id);
+  const finalObjectKey = imageObjectKey(session.image_id);
   let databaseCommitted = false;
-  const candidateGuardToken = randomUuidV7();
+  const candidateGuardToken = randomUUIDv7();
   try {
     const resolvedTags = await resolveTagSlugs(commit.metadata.tags);
     const vocabularyLocks = vocabularyAssociationLockRequests([

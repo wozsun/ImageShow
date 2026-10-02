@@ -149,7 +149,7 @@ test("[Server/标签] 查询签名统一等价写法并保留全部和分支边�
   assert.equal(imageFilterPlanWithout(plan(["all:a,b", "c"]), "tag").signature, plan([]).signature);
 });
 
-test("[Server/标签] 随机查询接受混合条件并统一未知标签与总词项限制", () => {
+test("[Server/标签] 随机查询接受混合条件、忽略未知名称并限制总词项", async () => {
   const parse = (search: string) =>
     parseRandomQuery(new URL("https://img.example.com/random?" + search), "redirect");
   const parsed = parse("tag=all:a,b&tag=c&theme=!blocked&author=owner");
@@ -167,9 +167,21 @@ test("[Server/标签] 随机查询接受混合条件并统一未知标签与总�
   assert.ok(!(normalized instanceof Response));
   assert.deepEqual(normalized.tag, { anyOf: [["a", "b"], ["c"]] });
   assert.deepEqual(normalized.theme, { include: [], exclude: ["blocked"] });
-  const unknown = normalizeRandomQuery(parsed, { ...maps, tag: new Map([["c", "c"]]) });
-  assert.ok(unknown instanceof Response);
-  assert.equal(unknown.status, 404);
+  // Unknown names match nothing and stay out of the signature used by indexes, dedupe and seed.
+  const unknownBranch = normalizeRandomQuery(parsed, { ...maps, tag: new Map([["c", "c"]]) });
+  assert.ok(!(unknownBranch instanceof Response));
+  assert.deepEqual(unknownBranch.tag, { anyOf: [["c"]] });
+  const knownOnly = parse("tag=c&theme=!blocked&author=owner");
+  assert.ok(!(knownOnly instanceof Response));
+  const knownNormalized = normalizeRandomQuery(knownOnly, maps);
+  assert.ok(!(knownNormalized instanceof Response));
+  assert.equal(unknownBranch.signature, knownNormalized.signature);
+  const unmatchable = normalizeRandomQuery(parsed, { ...maps, tag: new Map(), author: new Map() });
+  assert.ok(unmatchable instanceof Response);
+  assert.equal(unmatchable.status, 404);
+  assert.deepEqual((await unmatchable.json()).details, {
+    ignored: { tag: ["a", "b", "c"], author: ["owner"] }
+  });
   const repeated = Array.from({ length: 32 }, (_, i) => `t${i}`).join(",");
   assert.ok(!(parse(`tag=${repeated}&theme=${repeated}`) instanceof Response));
   const excessive = parse(`tag=${repeated}&theme=${repeated}&author=a`);

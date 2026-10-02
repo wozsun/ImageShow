@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import { parseTagFilter } from "../../../../packages/shared/src/browser/tag-filter.ts";
 
@@ -107,7 +108,7 @@ await runIntegrationScenario(async (runtime) => {
     ]);
   };
   await vocab.refreshEntityVocabularies(["tag", "theme", "author"]);
-  assertEmpty(await getPublicGalleryStats());
+  assertEmpty(await getPublicGalleryStats({}, neverAbortedSignal));
   const emptyCounts = await readCounts(createImageFilterPlan({}));
   assert.equal(emptyCounts.selects, 4, "empty unfiltered fallback needs only four business reads");
   assert.equal(emptyCounts.snapshot.total, 0);
@@ -531,16 +532,32 @@ await runIntegrationScenario(async (runtime) => {
       ]) {
         for (const prefix of [
           "/api/images?view=show&limit=60",
-          "/api/gallery-stats?",
-          "/random?device=all&mode=json"
+          "/api/gallery-stats?"
         ]) {
           const response = await get(`${prefix}&tag=${tag}`);
           assert.equal(response.status, 404, `${backend}: unknown ${prefix} ${tag}`);
         }
       }
+      // /random lets unknown tags match nothing, so only expressions left empty are 404.
+      for (const [tag, expected] of [
+        ["matrix-missing", []],
+        ["all:matrix-a,matrix-missing", []],
+        ["matrix-a,matrix-missing", ids(rows.filter((row) => Boolean(row.mask & 1)))]
+      ] as const) {
+        const label = `${backend}: unknown /random ${tag}`;
+        const response = await get(`/random?device=all&mode=json&limit=200&tag=${tag}`);
+        const body = await response.json();
+        if (expected.length) {
+          assert.equal(response.status, 200, label);
+          assert.deepEqual(ids(body.items), expected, label);
+        } else {
+          assert.equal(response.status, 404, label);
+          assert.deepEqual(body.details, { ignored: { tag: ["matrix-missing"] } }, label);
+        }
+      }
       const facets = await (await get("/api/gallery-facets")).json();
       assert.ok(facets.tags.some((tag: { slug: string }) => tag.slug === "matrix-empty"));
-      const desktopStats = await getPublicGalleryStats({ device: "pc" });
+      const desktopStats = await getPublicGalleryStats({ device: "pc" }, neverAbortedSignal);
       assert.equal(
         desktopStats.tags.find((tag) => tag.slug === "matrix-symbols")?.image_count,
         0,
@@ -598,7 +615,7 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal((await updateImages([{ id: changed.id, tags: [] }])).updated, 1);
     assert.equal((await (await get(path)).json()).items.length, 16);
     const assertMembership = async (present: boolean) => {
-      const stats = await getPublicGalleryStats();
+      const stats = await getPublicGalleryStats({}, neverAbortedSignal);
       for (const field of ["themes", "tags", "authors"] as const) {
         assert.equal(
           stats[field].some((item) => item.slug === "matrix-empty"),
@@ -624,13 +641,14 @@ await runIntegrationScenario(async (runtime) => {
       await import("../../../../packages/server/src/themes/mutations.ts");
     await updateThemeDisplayName("matrix-empty", "已重命名");
     assert.equal(
-      (await getPublicGalleryStats()).themes.find((item) => item.slug === "matrix-empty")
+      (await getPublicGalleryStats({}, neverAbortedSignal)).themes
+        .find((item) => item.slug === "matrix-empty")
         ?.display_name,
       "已重命名"
     );
     await pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [rows.map((row) => row.id)]);
     await coordinator.requestReadyImageCacheRebuild();
-    assertEmpty(await getPublicGalleryStats());
+    assertEmpty(await getPublicGalleryStats({}, neverAbortedSignal));
     console.log(
       JSON.stringify({ backends: 2, cases: cases.length, statsCases, mutationTransitions: 7 })
     );

@@ -2,7 +2,7 @@ import { createWriteStream } from "node:fs";
 import { join } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { storageObjectKey } from "@imageshow/shared/browser";
+import { imageObjectKey } from "../storage/objects/image-paths.ts";
 import { errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/database/pools.ts";
 import { imageVariantColumns, storedVariantFacts, type ImageVariantRecord } from "../images/variants/record.ts";
@@ -39,7 +39,7 @@ async function readVerifiedVariant(
 
 /** The caller holds the global storage location write lock through publication. */
 export async function repairStorageVariant(imageId: string, prefix: StoragePrefix, scheduleSignal: AbortSignal, signal = scheduleSignal): Promise<MaintenanceItem> {
-  const key = storageObjectKey(imageId);
+  const key = imageObjectKey(imageId);
   let backend = "unknown";
   const result = (outcome: MaintenanceItem["outcome"], details: Partial<MaintenanceItem> = {}): MaintenanceItem => ({ action: "repair_variant", outcome, backend, prefix, key, image_id: imageId, ...details });
   try {

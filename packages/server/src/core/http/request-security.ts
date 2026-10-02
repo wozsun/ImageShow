@@ -7,7 +7,7 @@ import { appendVaryHeader } from "./headers.ts";
 import { isTrustedReferer } from "../../config/trusted-origins.ts";
 
 export function requestLogContext(context: Context) {
-  let requestId = context.get("logRequestId") as string | undefined;
+  let requestId = context.get("logRequestId");
   if (!requestId) {
     requestId = randomUUID();
     context.set("logRequestId", requestId);

@@ -79,10 +79,7 @@ export function AnchoredPopup({
     },
     [popupRef]
   );
-  const dialogPortalTarget =
-    typeof document === "undefined"
-      ? null
-      : dialogPortalTargetRef?.current ?? null;
+  const dialogPortalTarget = dialogPortalTargetRef?.current ?? null;
 
   useLayoutEffect(() => {
     if (dialogPortalTarget) return;
@@ -98,7 +95,6 @@ export function AnchoredPopup({
     );
   }, [dialogPortalTarget, style]);
 
-  if (typeof document === "undefined") return null;
   const portalTarget = dialogPortalTarget ?? document.body;
   const portalStyle = localizePopupStyle(
     style,

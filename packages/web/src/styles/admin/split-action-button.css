@@ -1,6 +1,6 @@
 :root {
-  --admin-color-split-menu-border: light-dark(#d5dce5, #353c45);
-  --admin-color-split-menu-focus-surface: light-dark(#f1f4f8, #151a21);
+  --admin-color-split-menu-border: light-dark(var(--admin-color-border-default), #353c45);
+  --admin-color-split-menu-focus-surface: var(--admin-color-control-surface-hover);
 }
 
 .split-action-button {

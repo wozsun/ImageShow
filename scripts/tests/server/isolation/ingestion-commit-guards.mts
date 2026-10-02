@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { access } from "node:fs/promises";
 import { removeDriverObject } from "./storage-fixture.mts";
 import { interceptSqlQueries } from "./database-faults.mts";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID, randomUUIDv7 } from "node:crypto";
 import { createIngestionScenarioFixture } from "./ingestion-scenario-fixture.mts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
@@ -43,13 +43,10 @@ await runIntegrationScenario(async (runtime) => {
     await import("../../../../packages/server/src/images/ingestion/queue/session-update.ts");
   const ingestionSessionIdentity =
     await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
-  const ingestionSessionProjection =
-    await import("../../../../packages/server/src/images/ingestion/sessions/projection.ts");
   const ingestionSessionKeys =
     await import("../../../../packages/server/src/images/ingestion/sessions/keys.ts");
   const ingestionPaths =
     await import("../../../../packages/server/src/images/ingestion/raw/paths.ts");
-  const coreUuid = await import("../../../../packages/server/src/core/uuid.ts");
   const imageTime = await import("../../../../packages/server/src/images/image-time.ts");
   const {
     ingestionRepository,
@@ -88,11 +85,7 @@ await runIntegrationScenario(async (runtime) => {
   const commitQueued = activeSession(
     (
       await ingestionRepository.acceptImportSession(
-        {
-          ...commitQueuedWithoutHash,
-          semantic_hash:
-            ingestionSessionProjection.ingestionSessionSemanticHash(commitQueuedWithoutHash)
-        },
+        commitQueuedWithoutHash,
         displayOrderKey(
           commitSessionId,
           46,
@@ -102,8 +95,8 @@ await runIntegrationScenario(async (runtime) => {
       )
     ).session
   );
-  const commitPreparationToken = coreUuid.randomUuidV7();
-  const commitGeneration = coreUuid.randomUuidV7();
+  const commitPreparationToken = randomUUIDv7();
+  const commitGeneration = randomUUIDv7();
   const commitImageKey = ingestionPaths.ingestionPreparedFile(
     {
       session_id: commitSessionId,
@@ -234,7 +227,7 @@ await runIntegrationScenario(async (runtime) => {
     owner: commitActor,
     request: {
       queue: "import" as const,
-      action_request_id: coreUuid.randomUuidV7(),
+      action_request_id: randomUUIDv7(),
       action: "apply_metadata" as const,
       action_watermark: "batch-handler-receives-verified-watermark",
       metadata: {
@@ -259,7 +252,7 @@ await runIntegrationScenario(async (runtime) => {
     image_id: commitImageId,
     expected_version: commitPolicyReady.version,
     expected_md5: realPrepared.variants.large.md5,
-    commit_request_id: coreUuid.randomUuidV7(),
+    commit_request_id: randomUUIDv7(),
     duplicate_decision: "upload" as const,
     metadata: {
       ...commitPolicyReady.metadata,
@@ -274,7 +267,7 @@ await runIntegrationScenario(async (runtime) => {
       imageTime.parseImageTime("2026-08-23T01:02:08.456Z").date,
       47
     ),
-    commit_request_id: coreUuid.randomUuidV7()
+    commit_request_id: randomUUIDv7()
   };
   let concurrentCommitReads = 0;
   let releaseConcurrentCommitReads!: () => void;
@@ -623,6 +616,15 @@ await runIntegrationScenario(async (runtime) => {
       "conflicting owner"
     ]
   );
+  const readReadyRevision = async () =>
+    BigInt(
+      (
+        await database.pool.query<{ revision: string }>(
+          "SELECT revision::text AS revision FROM ready_image_revision WHERE singleton=1"
+        )
+      ).rows[0]!.revision
+    );
+  const revisionBeforeOwnerConflict = await readReadyRevision();
   let commitGuardJob;
   try {
     await assert.rejects(
@@ -637,6 +639,11 @@ await runIntegrationScenario(async (runtime) => {
           && "code" in error && error.code === "ingestion_image_owner_conflict"
     );
     assert.equal(commitWriteCalls, 3, "guard 成功后三档才能开始写入");
+    assert.equal(
+      await readReadyRevision(),
+      revisionBeforeOwnerConflict,
+      "未写入正式图片的提交不得推进 ready revision"
+    );
     assert.equal(
       (await database.pool.query(
         "SELECT created_by FROM metadata WHERE id=$1",

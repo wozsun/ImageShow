@@ -1,11 +1,8 @@
 import type { Context, Next } from "hono";
+import { adminSessionOf } from "./http/admin-session-context.ts";
 import { ApiError } from "./api-error.ts";
 import { requestLogContext } from "./http/request-security.ts";
 import { logger } from "./logger.ts";
-
-function adminSession(c: Context) {
-  return c.get("session") as { username?: string; role?: string } | undefined;
-}
 
 function mutationMethod(method: string) {
   return method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
@@ -54,10 +51,10 @@ export async function auditAdminMutation(c: Context, next: Next) {
   }
 
   const started = Date.now();
-  const session = adminSession(c);
+  const session = adminSessionOf(c);
   const base = {
-    actor: session?.username ?? "unknown",
-    role: session?.role ?? "unknown"
+    actor: session.username,
+    role: session.role
   };
 
   try {

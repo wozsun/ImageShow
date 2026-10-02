@@ -4,7 +4,7 @@ import {
   repositoryWithOverrides
 } from "./ingestion-scenario-fixture.mts";
 import type {
-  IngestionSessionSnapshot,
+  PendingIngestionSession,
   StoredIngestionSession
 } from "../../../../packages/server/src/images/ingestion/sessions/model.ts";
 import type { IngestionSessionService } from "../../../../packages/server/src/images/ingestion/session-service.ts";
@@ -295,7 +295,7 @@ await runIntegrationScenario(async (runtime) => {
   );
 
   const originalRuntimeConfig = structuredClone(runtimeConfigStore.getRuntimeConfig());
-  const policyTemplates: IngestionSessionSnapshot[] = [];
+  const policyTemplates: PendingIngestionSession[] = [];
   const policyService = new ingestionSessionService.IngestionSessionService(
     repositoryWithOverrides(ingestionRepository, {
       acceptImportSession: async (template, displayOrderKey, now) => {

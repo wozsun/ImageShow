@@ -1,15 +1,15 @@
+import { randomUUIDv7 } from "node:crypto";
 import { STORAGE_PREFIXES } from "../../storage/objects/keys.ts";
-import { storageObjectKey } from "@imageshow/shared/browser";
 import type {
   ImagePurgeRequestDto,
   ImagePurgeResponseDto
 } from "@imageshow/shared/browser";
 import { setTimeout as delay } from "node:timers/promises";
 import type { PoolClient } from "pg";
+import { imageObjectKey } from "../../storage/objects/image-paths.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../core/database/advisory-locks.ts";
 import { pool } from "../../core/database/pools.ts";
 import { withTransactionOnClient } from "../../core/database/transactions.ts";
-import { randomUuidV7 } from "../../core/uuid.ts";
 import { withImageStorageMutationLock } from "../../storage/maintenance-lock.ts";
 import {
   assertStorageRemovalResults,
@@ -185,7 +185,7 @@ async function queueTrashPurge(
   if (!plan.queueableIds.length) return plan;
 
   const jobs = plan.queueableIds.map((imageId) => ({
-    id: randomUuidV7(),
+    id: randomUUIDv7(),
     target_id: imageId,
     idempotency_key: `trash.purge:${imageId}`
   }));
@@ -311,7 +311,7 @@ async function purgeJobImage(
       }
 
       const removals = await removeStorageObjectsAndConfirm(
-        STORAGE_PREFIXES.map((prefix) => ({ prefix, key: storageObjectKey(row.id!), storageSlug: row.storage_slug })),
+        STORAGE_PREFIXES.map((prefix) => ({ prefix, key: imageObjectKey(row.id!), storageSlug: row.storage_slug })),
         { signal: lockSignal },
         admissionSignal
       );

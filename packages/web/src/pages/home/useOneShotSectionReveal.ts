@@ -4,15 +4,9 @@ import {
   useRef,
   useState
 } from "react";
+import { reducedMotionQuery, reducedMotionPreferred } from "../../lib/ui/reduced-motion.js";
 
 const sectionRevealRootMargin = "140px 0px";
-
-function reducedMotionPreferred() {
-  return (
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
-  );
-}
 
 export function useOneShotSectionReveal(armed: boolean) {
   const sectionRef = useRef<HTMLElement | null>(null);
@@ -29,7 +23,7 @@ export function useOneShotSectionReveal(armed: boolean) {
     const section = sectionRef.current;
     if (!section) return;
 
-    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const motionQuery = window.matchMedia(reducedMotionQuery);
     if (motionQuery.matches
       || typeof IntersectionObserver === "undefined") {
       revealImmediately();

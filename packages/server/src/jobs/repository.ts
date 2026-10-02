@@ -1,9 +1,9 @@
+import { randomUUIDv7 } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import type { PoolClient } from "pg";
 import { errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/database/pools.ts";
 import { logger } from "../core/logger.ts";
-import { randomUuidV7 } from "../core/uuid.ts";
 import {
   parseBackgroundJobType,
   type BackgroundJob,
@@ -36,7 +36,7 @@ export async function enqueueRerunnableJobs(
       jobs.map((job) => [
         job.idempotencyKey,
         {
-          id: randomUuidV7(),
+          id: randomUUIDv7(),
           type: job.type,
           target_id: job.targetId,
           payload: job.payload,
@@ -159,7 +159,7 @@ function backgroundJobFromRow(row: BackgroundJobRow): BackgroundJob {
 }
 
 export async function claimBackgroundJob(type: BackgroundJobType) {
-  const executionToken = randomUuidV7();
+  const executionToken = randomUUIDv7();
   const result = await pool.query(
     `UPDATE background_job
      SET status='running', execution_token=$2, updated_at=now()

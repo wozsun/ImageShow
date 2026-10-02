@@ -54,7 +54,7 @@ async function fetchApi(path: string, init: RequestInit = {}) {
   const response = await fetch(path, { ...init, headers, credentials });
   if (response.status === 401 && !path.includes("/auth/login") && !path.includes("/auth/me")) {
     clearCsrfToken();
-    if (typeof window !== "undefined") window.dispatchEvent(new Event(authExpiredEvent));
+    window.dispatchEvent(new Event(authExpiredEvent));
   }
   return response;
 }

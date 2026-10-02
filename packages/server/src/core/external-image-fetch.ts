@@ -77,32 +77,34 @@ const externalImageDispatcher = new Agent({
   }
 });
 
-function tlsCertificateErrorCode(error: unknown) {
+function* errorCauses(error: unknown) {
   const seen = new Set<unknown>();
   let current = error;
   while (current && typeof current === "object" && !seen.has(current)) {
     seen.add(current);
-    const code = (current as { code?: unknown }).code;
+    yield current as { code?: unknown; message?: unknown; cause?: unknown };
+    current = (current as { cause?: unknown }).cause;
+  }
+}
+
+function tlsCertificateErrorCode(error: unknown) {
+  for (const current of errorCauses(error)) {
+    const code = current.code;
     if (typeof code === "string" && tlsCertificateErrorCodes.has(code)) return code;
-    const message = (current as { message?: unknown }).message;
+    const message = current.message;
     if (
       typeof message === "string" &&
       /\b(certificate|cert|self[- ]signed|hostname\/IP does not match|altname)\b/i.test(message)
     ) {
       return "TLS_CERTIFICATE_INVALID";
     }
-    current = (current as { cause?: unknown }).cause;
   }
   return "";
 }
 
 function hasErrorCode(error: unknown, expectedCode: string) {
-  const seen = new Set<unknown>();
-  let current = error;
-  while (current && typeof current === "object" && !seen.has(current)) {
-    seen.add(current);
-    if ((current as { code?: unknown }).code === expectedCode) return true;
-    current = (current as { cause?: unknown }).cause;
+  for (const current of errorCauses(error)) {
+    if (current.code === expectedCode) return true;
   }
   return false;
 }

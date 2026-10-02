@@ -14,7 +14,7 @@ import {
 import { repositoryWithOverrides } from "./ingestion-scenario-fixture.mts";
 import assert from "node:assert/strict";
 import sharp from "sharp";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomUUIDv7 } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
 import { createIngestionScenarioFixture } from "./ingestion-scenario-fixture.mts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
@@ -188,7 +188,7 @@ await runIntegrationScenario(async (runtime) => {
   const originalIntentHash = await redisClient.redis.hgetall(liveIntentKey);
   for (const [field, value] of [
     ["unexpected", "leaks"],
-    ["execution_token", coreUuid.randomUuidV7()]
+    ["execution_token", randomUUIDv7()]
   ]) {
     await redisClient.redis.hset(liveIntentKey, field, value);
     const malformedIntentHash = await redisClient.redis.hgetall(liveIntentKey);
@@ -211,7 +211,7 @@ await runIntegrationScenario(async (runtime) => {
           candidate_image_id: ingestionImageId,
           request_hash: ingestionIntent.request_hash
         },
-        coreUuid.randomUuidV7(),
+        randomUUIDv7(),
         ingestionIntent.created_at + 1
       ),
       (error: unknown) =>
@@ -253,7 +253,7 @@ await runIntegrationScenario(async (runtime) => {
         candidate_image_id: ingestionImageId,
         request_hash: ingestionIntent.request_hash
       },
-      coreUuid.randomUuidV7(),
+      randomUUIDv7(),
       ingestionIntent.created_at + 1
     ),
     (error: unknown) =>
@@ -294,7 +294,7 @@ await runIntegrationScenario(async (runtime) => {
         candidate_image_id: ingestionImageId,
         request_hash: ingestionIntent.request_hash
       },
-      coreUuid.randomUuidV7(),
+      randomUUIDv7(),
       ingestionIntent.created_at + 1
     )
   );
@@ -404,7 +404,7 @@ await runIntegrationScenario(async (runtime) => {
         candidate_image_id: expiredIntentImageId,
         request_hash: expiredIntent.request_hash
       },
-      coreUuid.randomUuidV7(),
+      randomUUIDv7(),
       expiredIntent.created_at + intentTtlMs
     ),
     (error: unknown) =>
@@ -418,7 +418,7 @@ await runIntegrationScenario(async (runtime) => {
     null
   );
 
-  const ingestionExecutionToken = coreUuid.randomUuidV7();
+  const ingestionExecutionToken = randomUUIDv7();
   const firstIntentClaimedAt = initialIntent.expires_at - 1;
   const firstClaimedIngestionIntent = await ingestionRepository.claimUploadIntent(
     ingestionOwner,
@@ -434,7 +434,7 @@ await runIntegrationScenario(async (runtime) => {
     firstClaimedIngestionIntent.expires_at,
     firstIntentClaimedAt + intentTtlMs
   );
-  const takeoverToken = coreUuid.randomUuidV7();
+  const takeoverToken = randomUUIDv7();
   await assert.rejects(
     ingestionRepository.claimUploadIntent(
       ingestionOwner,
@@ -591,7 +591,7 @@ await runIntegrationScenario(async (runtime) => {
     accepted_at: 0,
     accepted_order: 0,
     execution_token: "",
-    raw_generation: coreUuid.randomUuidV7(),
+    raw_generation: randomUUIDv7(),
     raw_size: 10,
     discard_at: 0
   };
@@ -748,7 +748,7 @@ await runIntegrationScenario(async (runtime) => {
     {
       ...ingestionMetadata,
       idempotency_key: "unknown-convert-result",
-      batch_key: coreUuid.randomUuidV7(),
+      batch_key: randomUUIDv7(),
       batch_position: 49,
       expected_size: unknownRawBody.length,
       max_long_edge: 16
@@ -830,7 +830,7 @@ await runIntegrationScenario(async (runtime) => {
         ingestionSessionTransitions.semanticIngestionSession(receivedRetry, {
           status: "preparing",
           phase: "prepare-waiting",
-          execution_token: coreUuid.randomUuidV7()
+          execution_token: randomUUIDv7()
         })
       )
     ).session
@@ -1209,7 +1209,7 @@ await runIntegrationScenario(async (runtime) => {
     created_at: canonicalCreatedAt + 10
   };
   await ingestionRepository.createUploadIntent(clockIntent);
-  const clockExecutionToken = coreUuid.randomUuidV7();
+  const clockExecutionToken = randomUUIDv7();
   const claimedClockIntent = await ingestionRepository.claimUploadIntent(
     ingestionOwner,
     {
@@ -1226,7 +1226,7 @@ await runIntegrationScenario(async (runtime) => {
     image_id: clockImageId,
     image_time: claimedClockIntent.resolved_image_time,
     request_hash: clockRequestHash,
-    raw_generation: coreUuid.randomUuidV7()
+    raw_generation: randomUUIDv7()
   };
   const clockCanonical = {
     ...clockCanonicalWithoutHash,
@@ -1794,11 +1794,14 @@ await runIntegrationScenario(async (runtime) => {
   assert.equal(reusedViaIntent.kind, "canonical");
   assert.equal(reusedViaIntent.session.image_id, convertedUpload.session.image_id);
   assert.equal(ingestionListenerCalls, 1);
+  // The repository recomputes semantic_hash, so a stale caller value cannot
+  // turn an unchanged session into a semantic change.
+  const staleHashUpload = { ...convertedUpload.session, semantic_hash: "f".repeat(64) };
   const unchangedUpload = activeResult(
     await ingestionRepository.mutateSemantic(
       convertedUpload.session,
       convertedUpload.session.version,
-      { ...convertedUpload.session, semantic_hash: "f".repeat(64) },
+      staleHashUpload,
       canonicalCreatedAt + 2
     )
   );
@@ -1813,7 +1816,7 @@ await runIntegrationScenario(async (runtime) => {
     phase: "prepare-waiting" as const,
     message: "waiting for normalization admission",
     progress: null,
-    execution_token: coreUuid.randomUuidV7(),
+    execution_token: randomUUIDv7(),
     semantic_hash: ""
   };
   const preparingUpload = {
@@ -1951,12 +1954,7 @@ await runIntegrationScenario(async (runtime) => {
     ingestionRepository.mutateSemantic(
       extendedHeartbeat.session,
       extendedHeartbeat.session.version,
-      {
-        ...changedImageTimeWithoutHash,
-        semantic_hash: ingestionSessionProjection.ingestionSessionSemanticHash(
-          changedImageTimeWithoutHash
-        )
-      },
+      changedImageTimeWithoutHash,
       heartbeatAt + 1
     )
   );
@@ -2003,8 +2001,7 @@ await runIntegrationScenario(async (runtime) => {
       extendedHeartbeat.session.version,
       {
         ...extendedHeartbeat.session,
-        status: "ready" as const,
-        semantic_hash: "b".repeat(64)
+        status: "ready" as const
       },
       heartbeatAt + 2
     )
@@ -2365,13 +2362,13 @@ await runIntegrationScenario(async (runtime) => {
   );
 
   const preparedManifest = {
-    producer_execution_token: coreUuid.randomUuidV7(),
+    producer_execution_token: randomUUIDv7(),
     original_size: 10,
     original_width: 100,
     original_height: 100,
     detected_brightness: "dark" as const,
     duplicate_count: 2,
-    generation: coreUuid.randomUuidV7(),
+    generation: randomUUIDv7(),
     variants: {
       large: {
         width: 100,
@@ -2457,8 +2454,7 @@ await runIntegrationScenario(async (runtime) => {
         message: "duplicate decision required",
         progress: 100,
         execution_token: "",
-        prepared: preparedManifest,
-        semantic_hash: ""
+        prepared: preparedManifest
       },
       heartbeatAt + 10
     )
@@ -2471,15 +2467,14 @@ await runIntegrationScenario(async (runtime) => {
       readyDuplicate.session.version,
       {
         ...readyDuplicate.session,
-        duplicate_decision: "upload" as const,
-        semantic_hash: ""
+        duplicate_decision: "upload" as const
       },
       heartbeatAt + 11
     )
   );
   assert.equal(readyDecided.metadata.duplicate_pending, 0);
   assert.equal(readyDecided.metadata.ready, 1);
-  const commitRequestId = coreUuid.randomUuidV7();
+  const commitRequestId = randomUUIDv7();
   const committing = activeResult(
     await ingestionRepository.mutateSemantic(
       readyDecided.session,
@@ -2490,7 +2485,7 @@ await runIntegrationScenario(async (runtime) => {
         phase: "committing" as const,
         message: "committing",
         progress: null,
-        execution_token: coreUuid.randomUuidV7(),
+        execution_token: randomUUIDv7(),
         commit: {
           commit_request_id: commitRequestId,
           commit_intent_hash: "2".repeat(64),
@@ -2498,8 +2493,7 @@ await runIntegrationScenario(async (runtime) => {
           expected_md5: preparedManifest.variants.large.md5,
           duplicate_decision: "upload" as const,
           metadata: { ...ingestionMetadata, tags: [] }
-        },
-        semantic_hash: ""
+        }
       },
       heartbeatAt + 12
     )
@@ -2595,7 +2589,7 @@ await runIntegrationScenario(async (runtime) => {
       readSession: async () => resolvingUpload.session,
       mutateSemantic: async (...args) => {
         publishedCompletionMutations.push(args);
-        return { changed: true, session: args[2], metadata: resolvingUpload.metadata };
+        return { changed: true, session: completedReceipt, metadata: resolvingUpload.metadata };
       }
     }),
     resolvingUpload.session,
@@ -2636,7 +2630,7 @@ await runIntegrationScenario(async (runtime) => {
     {
       receipt: {
         ...completedReceipt,
-        commit_request_id: coreUuid.randomUuidV7()
+        commit_request_id: randomUUIDv7()
       },
       code: "ingestion_session_state_conflict"
     },
@@ -2772,7 +2766,7 @@ await runIntegrationScenario(async (runtime) => {
     completedStatus[0].redis_last_semantic_revision,
     completedUpload.session.last_semantic_revision
   );
-  const statusBarrierImageId = coreUuid.randomUuidV7();
+  const statusBarrierImageId = randomUUIDv7();
   const statusBarrierReceipt = {
     ...completedUpload.session,
     session_id: "B".repeat(43),
@@ -2841,7 +2835,7 @@ await runIntegrationScenario(async (runtime) => {
     restoreStatusQueries();
     await database.pool.query("DELETE FROM metadata WHERE id=$1", [statusBarrierImageId]);
   }
-  const pgOnlyImageId = coreUuid.randomUuidV7();
+  const pgOnlyImageId = randomUUIDv7();
   await database.pool.query(
     `INSERT INTO metadata (id,created_by,storage_slug,device,brightness,theme,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,$2,'local','pc','dark',NULL,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3,1,1,GREATEST(1,1),$3)`,
     [

@@ -29,14 +29,8 @@ export function useAdminColorScheme(
   }, [colorScheme, currentSystemPreference, enabled]);
 
   useLayoutEffect(() => {
-    if (!enabled) return;
-    const mediaQuery =
-      colorScheme === "system" &&
-      typeof window !== "undefined" &&
-      typeof window.matchMedia === "function"
-        ? window.matchMedia(systemColorSchemeMediaQuery)
-        : null;
-    if (!mediaQuery) return;
+    if (!enabled || colorScheme !== "system") return;
+    const mediaQuery = window.matchMedia(systemColorSchemeMediaQuery);
 
     const handleChange = (event: MediaQueryListEvent) => {
       setSystemPrefersDark(event.matches);

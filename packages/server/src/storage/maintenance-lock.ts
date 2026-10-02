@@ -114,14 +114,18 @@ function withStorageLocationReadAndAdvisoryLock<T>(
   key: string,
   work: StorageLockWork<T>
 ): Promise<T> {
-  return withStorageLocationReadAndAdvisoryLocks([{ key }], work);
+  return withStorageLocationAndAdvisoryLocks("read", [{ key }], work);
 }
 
-function withStorageLocationReadAndAdvisoryLocks<T>(
+function withStorageLocationAndAdvisoryLocks<T>(
+  mode: "read" | "write",
   locks: readonly Omit<AdvisoryLockRequest, "acquisition">[],
   work: StorageLockWork<T>
 ): Promise<T> {
   const held = storageLocationLockContext.getStore();
+  if (mode === "write" && held?.mode === "read") {
+    throw new Error("Cannot upgrade a storage location read lock to a write lock");
+  }
   if (held) {
     held.signal.throwIfAborted();
     return queueAdditionalLockWork(held, () =>
@@ -135,11 +139,11 @@ function withStorageLocationReadAndAdvisoryLocks<T>(
   }
   return withAdvisoryLocks(
     [
-      { key: storageLocationLockKey, mode: "shared" },
+      { key: storageLocationLockKey, mode: mode === "read" ? "shared" : "exclusive" },
       ...locks
     ],
     (signal, lockClient) =>
-      storageLocationLockContext.run(storageLocationContext("read", signal, lockClient, true), () =>
+      storageLocationLockContext.run(storageLocationContext(mode, signal, lockClient, true), () =>
         work(signal, lockClient)
       )
   );
@@ -218,27 +222,5 @@ export async function withStorageLocationWriteAndAdvisoryLock<T>(
   key: string,
   work: StorageLockWork<T>
 ): Promise<T> {
-  const held = storageLocationLockContext.getStore();
-  if (held?.mode === "read") {
-    throw new Error("Cannot upgrade a storage location read lock to a write lock");
-  }
-  if (held?.mode === "write") {
-    held.signal.throwIfAborted();
-    return queueAdditionalLockWork(held, () =>
-      withAdvisoryLocksOnClient(held.lockClient, held.signal, [{ key }], (signal, lockClient) =>
-        storageLocationLockContext.run(
-          additionalLockContext(held),
-          () => work(signal, lockClient)
-        )
-      )
-    );
-  }
-  return withAdvisoryLocks([
-      { key: storageLocationLockKey },
-      { key }
-    ], (signal, lockClient) =>
-    storageLocationLockContext.run(storageLocationContext("write", signal, lockClient, true), () =>
-      work(signal, lockClient)
-    )
-  );
+  return withStorageLocationAndAdvisoryLocks("write", [{ key }], work);
 }

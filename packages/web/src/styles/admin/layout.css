@@ -196,7 +196,7 @@ body:has(.admin > .workspace-contained) {
   background: transparent;
 }
 .admin > aside .admin-brand-name:hover {
-  color: var(--admin-color-action-primary-dark);
+  color: var(--admin-color-action-text);
   background: transparent;
   font-weight: 800;
 }

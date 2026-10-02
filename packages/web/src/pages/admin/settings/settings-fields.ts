@@ -39,7 +39,7 @@ export const settingsSections = {
   security: {
     column: "right",
     title: "登录与请求限制",
-    description: "会话时长影响后续签发的会话；限流调整影响后续请求，已有计数按各自窗口到期。"
+    description: "会话时长影响后续签发的会话；限流调整影响后续请求，已有计数按各自窗口到期。随机 API 单次不超过“图片额度 ÷ 批量请求次数”（向下取整，至少 1）张时按张数计入图片额度，更多时计 1 次批量请求。"
   },
   altcha: {
     column: "left",
@@ -530,14 +530,14 @@ const settingsFields = {
   },
   "security.random_max_requests": {
     group: "rate",
-    label: "单 IP 普通随机请求次数上限",
+    label: "单 IP 随机图片额度（张）",
     kind: "number",
     min: 1,
     max: 10000
   },
   "security.random_limit_max_requests": {
     group: "rate",
-    label: "单 IP 带 limit 随机请求次数上限",
+    label: "单 IP 批量请求次数上限",
     kind: "number",
     min: 1,
     max: 10000

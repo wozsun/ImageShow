@@ -10,10 +10,6 @@ export const normalizedUuidV7Schema = normalizedUuidSchema.pipe(
   z.uuidv7({ error: "必须使用 RFC 9562 UUIDv7" })
 );
 
-export function randomUuidV7() {
-  return randomUUIDv7();
-}
-
 export function randomUuidV7At(date: Date, randA?: number) {
   const timestamp = date.getTime();
   if (!Number.isSafeInteger(timestamp) || timestamp < 0 || timestamp > UUID_V7_MAX_TIMESTAMP) {

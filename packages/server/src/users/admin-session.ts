@@ -5,6 +5,7 @@ import type {
 } from "@imageshow/shared/browser";
 import { randomBytes } from "node:crypto";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { adminSessionOf, type AdminSession } from "../core/http/admin-session-context.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { ApiError } from "../core/api-error.ts";
 import { pool } from "../core/database/pools.ts";
@@ -31,13 +32,6 @@ import { adminSessionKey } from "./admin-session-key.ts";
 import { closeAdminSessionConnections } from "./admin-session-connections.ts";
 
 const adminSessionCookie = "imageshow_session";
-
-export type AdminSession = {
-  id: string;
-  username: string;
-  csrf: string;
-  role: AdminRole;
-};
 
 type StoredAdminSession = {
   username: string;
@@ -340,7 +334,7 @@ export async function requireAdminSession(context: Context, next: Next) {
 }
 
 export async function requireAdminCsrf(context: Context, next: Next) {
-  const session = context.get("session") as { csrf: string } | undefined;
+  const session = context.get("session");
   if (!session || context.req.header("x-csrf-token") !== session.csrf) {
     throw new ApiError(403, "csrf_invalid", "CSRF token invalid");
   }
@@ -348,12 +342,8 @@ export async function requireAdminCsrf(context: Context, next: Next) {
 }
 
 export async function deleteAdminSession(context: Context) {
-  const session =
-    (context.get("session") as AdminSession | undefined)
-      ?? await readAdminSession(context);
-  if (session) {
-    await runRequiredRedisCommand(() => redis.del(adminSessionKey(session.id)));
-    closeAdminSessionConnections([session.id]);
-  }
+  const session = adminSessionOf(context);
+  await runRequiredRedisCommand(() => redis.del(adminSessionKey(session.id)));
+  closeAdminSessionConnections([session.id]);
   deleteCookie(context, adminSessionCookie, { path: "/" });
 }

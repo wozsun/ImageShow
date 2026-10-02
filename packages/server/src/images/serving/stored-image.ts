@@ -23,7 +23,7 @@ import {
 export async function serveLocalStoredObject(
   prefix: StoragePrefix,
   key: string,
-  request: StoredResponseRequest = {}
+  request: StoredResponseRequest & { signal: AbortSignal }
 ) {
   const parsed = parseImageObjectKey(key);
   if (!parsed) {
@@ -59,18 +59,18 @@ function immutableRedirect(location: string) {
 export async function servePublicStoredObject(
   prefix: StoragePrefix,
   key: string,
-  request: StoredResponseRequest = {},
+  request: StoredResponseRequest & { signal: AbortSignal },
   dependencies: StoredImageServingDependencies = defaultStoredImageServingDependencies
 ) {
   const parsed = parseImageObjectKey(key);
   if (!parsed) {
     throw new ApiError(404, "not_found", "Object not found");
   }
-  const signal = request.signal ?? new AbortController().signal;
+  const signal = request.signal;
   const record = await withPublicDatabaseRead(signal, (database) =>
     dependencies.readImageServingRecordById(parsed.id, database)
   );
-  if (!record || record.id !== parsed.id) {
+  if (!record) {
     throw new ApiError(404, "not_found", "Object not found");
   }
   const object = await dependencies.resolveReadableObject(prefix, key, record.storage_slug, {

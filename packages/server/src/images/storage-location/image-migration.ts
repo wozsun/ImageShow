@@ -1,6 +1,7 @@
 import { imageVariants } from "@imageshow/shared/browser";
+import { neverAbortedSignal } from "../../core/abort.ts";
+import { imageObjectKey } from "../../storage/objects/image-paths.ts";
 import { imageVariantColumns, storedVariantFacts, type ImageVariantRecord } from "../variants/record.ts";
-import { storageObjectKey } from "@imageshow/shared/browser";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../core/database/advisory-locks.ts";
 import { pool } from "../../core/database/pools.ts";
@@ -27,8 +28,6 @@ import {
 } from "../../storage/objects/transfer.ts";
 import { shareStorageNamespace } from "../../storage/objects/namespace.ts";
 import { withImageTransferAdmission } from "../../storage/objects/image-transfer-admission.ts";
-
-const neverAbortedStorageMigrationSignal = new AbortController().signal;
 
 export type ImageStorageMigrationRecord = ImageVariantRecord & {
   id: string;
@@ -58,7 +57,7 @@ async function enqueueMigrationCandidateCleanup(
       image_id: image.id,
       source_backend: image.storage_slug,
       target_backend: target,
-      object_key: storageObjectKey(image.id),
+      object_key: imageObjectKey(image.id),
       cleanup_reason: reason,
       ...(originalError
         ? { original_error: originalError }
@@ -106,7 +105,7 @@ function migrationOutcomeUnknown(
     image_id: image.id,
     source_backend: image.storage_slug,
     target_backend: target,
-    object_key: storageObjectKey(image.id),
+    object_key: imageObjectKey(image.id),
     original_error: errorMessage(originalError),
     ...details
   };
@@ -151,7 +150,7 @@ async function settleSwitchError(
         image_id: image.id,
         source_backend: image.storage_slug,
         target_backend: target,
-        object_key: storageObjectKey(image.id),
+        object_key: imageObjectKey(image.id),
         original_error: originalError,
         cleanup_error: cleanupError,
         retained_source_objects: sourceCleanup
@@ -164,7 +163,7 @@ async function settleSwitchError(
           image_id: image.id,
           source_backend: image.storage_slug,
           target_backend: target,
-          object_key: storageObjectKey(image.id)
+          object_key: imageObjectKey(image.id)
         }
       );
     }
@@ -172,7 +171,7 @@ async function settleSwitchError(
       image_id: image.id,
       source_backend: image.storage_slug,
       target_backend: target,
-      object_key: storageObjectKey(image.id),
+      object_key: imageObjectKey(image.id),
       original_error: originalError
     });
     return state;
@@ -269,7 +268,7 @@ async function migrateImageToStorageBackendWhileLocked(
   try {
     for (const variant of imageVariants) {
       const facts = storedVariantFacts(current, variant);
-      const key = storageObjectKey(current.id);
+      const key = imageObjectKey(current.id);
       await materialize(variant, key, { size: facts.byte_size, md5: facts.md5 }, "image/webp");
       if (!sharedNamespace) sourceObjects.push({ prefix: variant, key, backend: current.storage_slug });
     }
@@ -403,7 +402,7 @@ export function migrateImageToStorageBackend(
         operationSignal
       );
     });
-  const signal = options.signal ?? neverAbortedStorageMigrationSignal;
+  const signal = options.signal ?? neverAbortedSignal;
   return withImageTransferAdmission(signal, () =>
     options.signal
       ? runWithAdvisoryLockAcquisitionSignal(

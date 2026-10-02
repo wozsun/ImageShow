@@ -141,6 +141,11 @@ const activeSessionSchema = z
   });
 export type IngestionSessionSnapshot = Readonly<z.infer<typeof activeSessionSchema>>;
 
+/** A proposed active snapshot; only the repository assigns its semantic hash. */
+export type PendingIngestionSession = Omit<IngestionSessionSnapshot, "semantic_hash">;
+export type PendingStoredIngestionSession = PendingIngestionSession
+  | CompletedIngestionReceipt | DiscardedIngestionReceipt;
+
 const completedDisplaySchema = z.strictObject({
   source_type: z.enum(ingestionSourceTypes),
   batch_position: batchPosition.optional(),

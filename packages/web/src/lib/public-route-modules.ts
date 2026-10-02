@@ -40,7 +40,7 @@ export function createPublicRouteModuleLoader<T>(importModule: () => Promise<T>)
 
   return {
     load: () => {
-      if (passivePreloadFailed && typeof window !== "undefined") {
+      if (passivePreloadFailed) {
         // A native module import failure is cached for the whole document, so
         // retrying the same specifier from React.lazy cannot recover it. Keep
         // the recovery at the loader boundary as well as on intent links:
@@ -51,14 +51,11 @@ export function createPublicRouteModuleLoader<T>(importModule: () => Promise<T>)
       }
       if (!pending?.passive) return start(false);
       return pending.promise.catch(() => {
-        if (typeof window !== "undefined") {
-          // Native module maps retain a failed import for this document. The
-          // router has already committed the target URL, so a single reload
-          // gives normal navigation a fresh module map without looping.
-          window.location.reload();
-          return new Promise<T>(() => undefined);
-        }
-        return start(false);
+        // Native module maps retain a failed import for this document. The
+        // router has already committed the target URL, so a single reload
+        // gives normal navigation a fresh module map without looping.
+        window.location.reload();
+        return new Promise<T>(() => undefined);
       });
     },
     preload: () => {

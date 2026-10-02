@@ -9,7 +9,8 @@ import type {
   DiscardedIngestionReceipt,
   IngestionQueueMetadata,
   IngestionQueueType,
-  StoredIngestionSession
+  StoredIngestionSession,
+  PendingStoredIngestionSession
 } from "./model.ts";
 import { ingestionSessionSemanticHash } from "./projection.ts";
 
@@ -17,7 +18,7 @@ export function redisJsonValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-export function normalizedSemanticSession(next: StoredIngestionSession): StoredIngestionSession {
+export function normalizedSemanticSession(next: PendingStoredIngestionSession): StoredIngestionSession {
   const value = redisJsonValue(next);
   if (value.status === "completed") {
     const receipt: CompletedIngestionReceipt = {
@@ -85,6 +86,15 @@ export function redisReplyArray(value: unknown, context: string) {
   return value;
 }
 
+const mutationConflicts: Readonly<Record<number, readonly [410 | 409, string, string]>> = {
+  [-1]: [410, "ingestion_session_missing", "内容接入任务已过期或被丢弃"],
+  [-2]: [409, "ingestion_incarnation_conflict", "内容接入任务身份已被替换"],
+  [-3]: [409, "ingestion_version_conflict", "内容接入任务版本已变化"],
+  [-4]: [409, "ingestion_execution_fenced", "内容接入执行权已转移"],
+  [-5]: [410, "ingestion_session_expired", "内容接入任务已经到期"],
+  [-6]: [409, "ingestion_session_not_expired", "内容接入任务的有效期已经刷新"]
+};
+
 export function parseCanonicalReply(
   raw: unknown,
   operation: "create" | "mutate"
@@ -93,28 +103,8 @@ export function parseCanonicalReply(
   const code = redisReplyInteger(reply[0], "canonical status");
   if (code < 0) {
     if (operation === "create") throwIngestionCommandConflict(code);
-    if (code === -1) {
-      throw new ApiError(410, "ingestion_session_missing", "内容接入任务已过期或被丢弃");
-    }
-    if (code === -2) {
-      throw new ApiError(409, "ingestion_incarnation_conflict", "内容接入任务身份已被替换");
-    }
-    if (code === -3) {
-      throw new ApiError(409, "ingestion_version_conflict", "内容接入任务版本已变化");
-    }
-    if (code === -4) {
-      throw new ApiError(409, "ingestion_execution_fenced", "内容接入执行权已转移");
-    }
-    if (code === -5) {
-      throw new ApiError(410, "ingestion_session_expired", "内容接入任务已经到期");
-    }
-    if (code === -6) {
-      throw new ApiError(
-        409,
-        "ingestion_session_not_expired",
-        "内容接入任务的有效期已经刷新"
-      );
-    }
+    const conflict = mutationConflicts[code];
+    if (conflict) throw new ApiError(...conflict);
     throwIngestionCommandConflict(code);
   }
   if (![0, 1, 2, 3, 4, 5].includes(code)) {
@@ -122,16 +112,10 @@ export function parseCanonicalReply(
   }
   const serialized = redisReplyString(reply[1] ?? "", "canonical snapshot");
   const metadataJson = redisReplyString(reply[2], "queue metadata");
-  let metadataValue: unknown;
-  try {
-    metadataValue = JSON.parse(metadataJson);
-  } catch {
-    throw new Error("Redis ingestion command returned invalid queue metadata JSON");
-  }
   return {
     code,
     session: serialized ? parseStoredIngestionSession(serialized) : undefined,
-    metadata: parseIngestionQueueMetadata(metadataValue)
+    metadata: parseMetadataJson(metadataJson, "queue metadata")
   };
 }
 

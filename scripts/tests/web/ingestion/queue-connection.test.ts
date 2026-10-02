@@ -3371,8 +3371,9 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
                 (job) => job.id === crossGenerationImageId && job.status === "done"
               )
           );
-          assert.ok(
-            revokedObjectUrls.includes("blob:cross-generation-visible"),
+          assert.equal(
+            revokedObjectUrls.filter((url) => url === "blob:cross-generation-visible").length,
+            1,
             "满 local 页移除跨代 handoff 卡时必须释放浏览器 Blob URL"
           );
           assert.ok(releaseCrossGenerationHydrated);
@@ -3810,8 +3811,9 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           assert.equal(releaseRaceReleased, true);
           assert.equal(ownerView().pendingHandoff, false);
           assert.equal(ownerView().pendingDraft, false);
-          assert.ok(
-            revokedObjectUrls.includes("blob:old-incarnation-owner"),
+          assert.equal(
+            revokedObjectUrls.filter((url) => url === "blob:old-incarnation-owner").length,
+            1,
             "同 session 新 image 接管时必须释放旧 canonical 的 Blob URL"
           );
           assert.equal(
@@ -5583,8 +5585,9 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
           await settleUntil(
             () => adminImageInvalidations === invalidationsBeforeOffPageCompletion + 1
           );
-          assert.ok(
-            revokedObjectUrls.includes("blob:off-page-completion-preview"),
+          assert.equal(
+            revokedObjectUrls.filter((url) => url === "blob:off-page-completion-preview").length,
+            1,
             "compact 离页完成水合后也必须回收原本地预览 URL"
           );
           assert.equal(

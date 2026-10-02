@@ -13,8 +13,7 @@ import { getReadyImageRevision } from "./ready-cache/revision.ts";
 import {
   READY_IMAGE_EXACT_SYNC_MAX_ITEMS,
   decideImageMutationSync,
-  type ImageMutationSyncDecision,
-  type ImageMutationSyncResult
+  type ImageMutationSyncDecision
 } from "./mutation-sync-policy.ts";
 
 type ImageMutationSyncPlan = { id: string };
@@ -25,19 +24,19 @@ export type ImageMutationSyncBatch = {
 };
 
 type FlushableImageMutationSyncBatch = ImageMutationSyncBatch & {
-  flush(): Promise<ImageMutationSyncResult>;
+  flush(): Promise<boolean>;
 };
 
 function createImageMutationSyncBatch(startingRevision: string): FlushableImageMutationSyncBatch {
   const imageIds = new Set<string>();
   let declaredDecision: ImageMutationSyncDecision | null = null;
   let forcedRebuildCount = 0;
-  let flushPromise: Promise<ImageMutationSyncResult> | null = null;
+  let flushPromise: Promise<boolean> | null = null;
   const requireRebuild = (affectedCount: number) => {
     forcedRebuildCount = Math.max(forcedRebuildCount, affectedCount);
     imageIds.clear();
   };
-  const flush = async (): Promise<ImageMutationSyncResult> => {
+  const flush = async (): Promise<boolean> => {
     const actualCount = imageIds.size;
     let decision = forcedRebuildCount
       ? ({ mode: "rebuild", affectedCount: forcedRebuildCount } as const)
@@ -53,7 +52,7 @@ function createImageMutationSyncBatch(startingRevision: string): FlushableImageM
       decision = { mode: "rebuild", affectedCount: actualCount };
     }
     if (decision.mode === "none") {
-      return { ...decision, cacheAction: "none" };
+      return false;
     }
     let committedRevision: string;
     try {
@@ -62,21 +61,21 @@ function createImageMutationSyncBatch(startingRevision: string): FlushableImageM
       imageIds.clear();
       reportReadyImageCacheFailure(error);
       logger.warn("ready_image_cache_mutation_revision_read_failed", error);
-      return { ...decision, cacheAction: "rebuild_requested" };
+      return true;
     }
     if (committedRevision === startingRevision) {
       imageIds.clear();
-      return { ...decision, cacheAction: "not_needed" };
+      return false;
     }
     const coordinator = getReadyImageCacheCoordinatorStatus();
     if (!coordinator.initialized) {
       imageIds.clear();
-      return { ...decision, cacheAction: "not_initialized" };
+      return false;
     }
     if (readyImageCachePlannedMutationIsActive()) {
       imageIds.clear();
       requestReadyImageCacheRebuildAfterMutation(decision.affectedCount);
-      return { ...decision, cacheAction: "rebuild_requested" };
+      return true;
     }
     if (decision.mode === "rebuild") {
       try {
@@ -85,10 +84,7 @@ function createImageMutationSyncBatch(startingRevision: string): FlushableImageM
         logger.warn("ready_image_derived_cache_cleanup_failed", error);
       }
       const requested = requestReadyImageCacheRebuildAfterMutation(decision.affectedCount);
-      return {
-        ...decision,
-        cacheAction: requested ? "rebuild_requested" : "not_initialized"
-      };
+      return requested;
     }
     const pendingImageIds = [...imageIds];
     imageIds.clear();
@@ -97,11 +93,11 @@ function createImageMutationSyncBatch(startingRevision: string): FlushableImageM
         pendingImageIds,
         committedRevision
       );
-      return { ...decision, cacheAction: "synchronized" };
+      return false;
     } catch (error) {
       reportReadyImageCacheFailure(error);
       logger.warn("ready_image_cache_mutation_sync_failed", error);
-      return { ...decision, cacheAction: "rebuild_requested" };
+      return true;
     }
   };
   return {
@@ -144,9 +140,9 @@ function createImageMutationSyncBatch(startingRevision: string): FlushableImageM
  * locks must acquire those locks first so the process fence cannot form a lock
  * cycle with PostgreSQL.
  */
-async function withImageMutationSyncResult<T>(
+export async function withImageMutationSync<T>(
   work: (target: ImageMutationSyncBatch) => Promise<T>
-): Promise<{ value: T; sync: ImageMutationSyncResult }> {
+): Promise<T> {
   return withReadyImageCacheWriteFence(async () => {
     const startingRevision = (await getReadyImageRevision()).revision;
     const target = createImageMutationSyncBatch(startingRevision);
@@ -159,14 +155,14 @@ async function withImageMutationSyncResult<T>(
       workFailed = true;
       workError = error;
     }
-    const sync = await target.flush();
+    const rebuildRequested = await target.flush();
     try {
       const coordinator = getReadyImageCacheCoordinatorStatus();
       if (coordinator.initialized) {
         const finalRevision = (await getReadyImageRevision()).revision;
         const appliedRevision = coordinator.meta?.appliedRevision;
         if (
-          sync.cacheAction !== "rebuild_requested" &&
+          !rebuildRequested &&
           finalRevision !== startingRevision &&
           finalRevision !== appliedRevision
         ) {
@@ -179,14 +175,8 @@ async function withImageMutationSyncResult<T>(
       reportReadyImageCacheFailure(error);
     }
     if (workFailed) throw workError;
-    return { value: value as T, sync };
+    return value as T;
   });
-}
-
-export async function withImageMutationSync<T>(
-  work: (target: ImageMutationSyncBatch) => Promise<T>
-): Promise<T> {
-  return (await withImageMutationSyncResult(work)).value;
 }
 
 /**

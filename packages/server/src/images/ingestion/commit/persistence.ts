@@ -1,8 +1,9 @@
 import { imageVariants, imageDevice } from "@imageshow/shared/browser";
+import { bumpReadyImageRevision } from "../../ready-cache/revision.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { withTransaction } from "../../../core/database/transactions.ts";
 import { ensureAuthorWithMutationLockHeld } from "../../../authors/mutations.ts";
-import { replaceImageTags } from "../../../tags/mutations.ts";
+import { replaceImageTagAssociations } from "../../../tags/mutations.ts";
 import { ensureThemeWithMutationLockHeld } from "../../../themes/mutations.ts";
 import type { EntityCacheKind } from "../../../vocab/vocab-cache.ts";
 import { resolveClassification } from "../../classification.ts";
@@ -84,16 +85,16 @@ export async function persistIngestionImage(
       ]
     );
     if (
-      (await replaceImageTags(
+      (await replaceImageTagAssociations(
         client,
         session.image_id,
-        resolvedTags,
-        new AbortController().signal
+        resolvedTags
       ))
         .createdTag
     ) {
       createdEntityKinds.add("tag");
     }
+    await bumpReadyImageRevision(client);
     return {
       inserted: true,
       image: {

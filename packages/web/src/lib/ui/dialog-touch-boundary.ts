@@ -8,6 +8,7 @@ import {
 } from "./dialog-scroll-boundary.js";
 import {
   classifyMovementIntent,
+  touchWithIdentifier,
   type ClientPoint
 } from "./movement-intent.js";
 import { topDialogFrame } from "./dialog-layer.js";
@@ -31,17 +32,6 @@ function preservesNativeTextGesture(
     (selection.anchorNode && frame.contains(selection.anchorNode)) ||
     (selection.focusNode && frame.contains(selection.focusNode))
   );
-}
-
-function touchWithIdentifier(
-  touches: TouchList,
-  identifier: number
-) {
-  for (let index = 0; index < touches.length; index += 1) {
-    const touch = touches.item(index);
-    if (touch?.identifier === identifier) return touch;
-  }
-  return null;
 }
 
 type ActiveTouchGesture = {

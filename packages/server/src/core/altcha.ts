@@ -96,29 +96,16 @@ async function reserveChallengeRequest(c: Context) {
       windowSeconds: security.login_global_window_seconds
     }
   ]);
-  if (!ipReservation || !globalReservation) {
-    throw new Error("ALTCHA rate-limit reservations are missing");
-  }
+  if (ipReservation.allowed && globalReservation.allowed) return;
+  const rejected = ipReservation.allowed ? globalReservation : ipReservation;
+  c.header(
+    "Retry-After",
+    safeResponseHeaderValue("Retry-After", String(rejected.retryAfterSeconds))
+  );
   if (!ipReservation.allowed) {
-    c.header(
-      "Retry-After",
-      safeResponseHeaderValue(
-        "Retry-After",
-        String(ipReservation.retryAfterSeconds)
-      )
-    );
     throw new ApiError(429, "altcha_rate_limited", "安全验证请求过于频繁，请稍后再试");
   }
-  if (!globalReservation.allowed) {
-    c.header(
-      "Retry-After",
-      safeResponseHeaderValue(
-        "Retry-After",
-        String(globalReservation.retryAfterSeconds)
-      )
-    );
-    throw new ApiError(429, "altcha_global_rate_limited", "安全验证服务请求过于频繁，请稍后再试");
-  }
+  throw new ApiError(429, "altcha_global_rate_limited", "安全验证服务请求过于频繁，请稍后再试");
 }
 
 export async function issueAltchaChallenge(c: Context) {

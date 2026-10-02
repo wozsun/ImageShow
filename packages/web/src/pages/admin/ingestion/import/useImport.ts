@@ -3,12 +3,14 @@ import {
   ingestionBatchHardLimit,
   type IngestionSessionPairDto
 } from "@imageshow/shared/browser";
+import { ingestionAcceptanceBinding } from "../queue/model/acceptance-binding.js";
 import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 import { isApiClientError } from "../../../../lib/api/client.js";
 import { normalizeAuthor, normalizeTheme } from "../../../../lib/image-draft.js";
 
 import {
   cancelServerIngestionJobs,
+  bindTerminalAcceptanceForCancellation,
   type IngestionQueueCancelOutcome
 } from "../queue/ingestion-cancel.js";
 import { createUrlImportJobs } from "../queue/model/import-job-source.js";
@@ -159,27 +161,7 @@ export function useImport(options: {
             }
             continue;
           }
-          const binding = {
-            sessionId: result.session_id,
-            imageId: result.image_id,
-            imageTime: result.resolved_image_time,
-            serverAccepted: true,
-            ...(result.status === "accepted"
-              ? {
-                  serverVersion: result.version,
-                  serverSemanticRevision: result.last_semantic_revision,
-                  serverHandoffPending: true,
-                  serverHandoffRevision: result.last_semantic_revision
-                }
-              : result.status === "completed"
-                ? {
-                    serverVersion: result.version,
-                    serverSemanticRevision: result.last_semantic_revision,
-                    serverHandoffPending: true,
-                    serverHandoffRevision: result.last_semantic_revision
-                  }
-                : {})
-          };
+          const binding = ingestionAcceptanceBinding(result);
           if (current.status === "cancelling") {
             if (result.status === "accepted") {
               cancellationAcceptOutcomes.current.set(job.id, {
@@ -202,32 +184,13 @@ export function useImport(options: {
                 }
               });
             }
-            if (result.status === "discarded") {
-              queue.bindServerJob(
-                job.id,
-                {
-                  ...binding,
-                  status: "cancelled",
-                  failureStage: undefined,
-                  message: "已取消"
-                },
-                requestConnectionGeneration,
-                result.accepted_order
-              );
-            } else if (result.status === "completed") {
-              queue.bindServerJob(
-                job.id,
-                {
-                  ...binding,
-                  status: "finalized",
-                  failureStage: undefined,
-                  resultState: "recovering",
-                  message: "图片已写入图库，无法取消"
-                },
-                requestConnectionGeneration,
-                result.accepted_order
-              );
-            } else {
+            const terminal = bindTerminalAcceptanceForCancellation(
+              queue,
+              job.id,
+              result,
+              requestConnectionGeneration
+            );
+            if (!terminal) {
               queue.bindServerJob(
                 job.id,
                 binding,
@@ -490,62 +453,15 @@ export function useImport(options: {
             });
             continue;
           }
-          const binding = {
-            sessionId: result.session_id,
-            imageId: result.image_id,
-            imageTime: result.resolved_image_time,
-            serverAccepted: true,
-            ...(result.status === "accepted" || result.status === "completed"
-              ? {
-                  serverVersion: result.version,
-                  serverSemanticRevision: result.last_semantic_revision,
-                  serverHandoffPending: true,
-                  serverHandoffRevision: result.last_semantic_revision
-                }
-              : {})
-          };
-          if (result.status === "discarded") {
-            queue.bindServerJob(
-              current.id,
-              {
-                ...binding,
-                status: "cancelled",
-                failureStage: undefined,
-                message: "已取消"
-              },
-              requestConnectionGeneration,
-              result.accepted_order
-            );
-            outcomes.set(current.id, {
-              succeeded: true,
-              pair: {
-                session_id: result.session_id,
-                image_id: result.image_id
-              }
-            });
-            continue;
-          }
-          if (result.status === "completed") {
-            queue.bindServerJob(
-              current.id,
-              {
-                ...binding,
-                status: "finalized",
-                failureStage: undefined,
-                resultState: "recovering",
-                message: "图片已写入图库，无法取消"
-              },
-              requestConnectionGeneration,
-              result.accepted_order
-            );
-            outcomes.set(current.id, {
-              succeeded: false,
-              pair: {
-                session_id: result.session_id,
-                image_id: result.image_id
-              },
-              terminal: "completed"
-            });
+          const binding = ingestionAcceptanceBinding(result);
+          const terminal = bindTerminalAcceptanceForCancellation(
+            queue,
+            current.id,
+            result,
+            requestConnectionGeneration
+          );
+          if (terminal) {
+            outcomes.set(current.id, terminal);
             continue;
           }
           queue.bindServerJob(

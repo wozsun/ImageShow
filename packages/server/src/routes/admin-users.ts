@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import {
+  adminPermissions,
   adminApiBasePath,
   type AdminUsersResponseDto
 } from "@imageshow/shared/browser";
@@ -8,7 +9,7 @@ import {
   privateCacheableApiSuccess
 } from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
-import { requireSuperAdmin } from "../users/admin-authorization.ts";
+import { requireAdminPermission } from "../users/admin-authorization.ts";
 import { redis } from "../core/redis/client.ts";
 import { adminUsernameInput } from "../users/credentials.ts";
 import { parse } from "./validation/parse.ts";
@@ -30,8 +31,8 @@ import {
 const sessionRedis = adminSessionRedisClient(redis);
 
 export function registerAdminUserRoutes(app: Hono) {
-  app.use(`${adminApiBasePath}/users`, requireSuperAdmin);
-  app.use(`${adminApiBasePath}/users/*`, requireSuperAdmin);
+  app.use(`${adminApiBasePath}/users`, requireAdminPermission(adminPermissions.usersManage));
+  app.use(`${adminApiBasePath}/users/*`, requireAdminPermission(adminPermissions.usersManage));
 
   app.get(`${adminApiBasePath}/users`, async (c) => {
     const response = {

@@ -1,7 +1,7 @@
+import { randomUUIDv7 } from "node:crypto";
 import { access } from "node:fs/promises";
 import { appConfig } from "@imageshow/shared";
 import { ApiError } from "../../../core/api-error.ts";
-import { randomUuidV7 } from "../../../core/uuid.ts";
 import {
   committedIngestionResultForOwner,
   readCommittedIngestionResultsByImageIds
@@ -63,7 +63,7 @@ const defaultDependencies: IngestionSessionRecoveryDependencies = {
       () => false
     );
   },
-  newExecutionToken: randomUuidV7
+  newExecutionToken: randomUUIDv7
 };
 
 /**

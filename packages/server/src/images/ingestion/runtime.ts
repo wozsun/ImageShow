@@ -2,7 +2,7 @@ import type {
   IngestionCancelItemInputDto,
   IngestionQueueActionInputDto
 } from "@imageshow/shared/browser";
-import type { AdminSession } from "../../users/admin-session.ts";
+import type { AdminSession } from "../../core/http/admin-session-context.ts";
 import { cancelIngestionSessions } from "./cancel/coordinator.ts";
 import { IngestionIrreversibleCoordinator } from "./execution/irreversible-coordinator.ts";
 import { runIngestionQueueAction } from "./queue/action.ts";

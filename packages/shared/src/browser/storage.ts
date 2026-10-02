@@ -13,14 +13,13 @@ export type StorageBackendDeletionState = {
 export function storageBackendDeletionStateFromBlockers(
   blockers: readonly StorageBackendDeleteBlocker[]
 ): StorageBackendDeletionState {
-  const uniqueBlockers = [...new Set(blockers)];
   return {
-    action: uniqueBlockers.includes("images")
+    action: blockers.includes("images")
       ? "migrate"
-      : uniqueBlockers.length
+      : blockers.length
         ? "blocked"
         : "delete",
-    blockers: uniqueBlockers
+    blockers: [...blockers]
   };
 }
 

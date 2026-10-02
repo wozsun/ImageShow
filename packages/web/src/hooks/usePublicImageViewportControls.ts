@@ -6,6 +6,7 @@ import {
   useState,
   type RefObject
 } from "react";
+import { reducedMotionPreferred } from "../lib/ui/reduced-motion.js";
 import { isPageScrollLocked } from "./usePageScrollLock.js";
 import { usePageScrollMovement } from "./usePageScrollMovement.js";
 import { usePublicNavigationTopEdgeReveal } from "./usePublicNavigationTopEdgeReveal.js";
@@ -264,7 +265,7 @@ function useBackToTopVisibility(enabled: boolean) {
 }
 
 export function scrollPublicImagePageToTop() {
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduceMotion = reducedMotionPreferred();
   window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
 }
 

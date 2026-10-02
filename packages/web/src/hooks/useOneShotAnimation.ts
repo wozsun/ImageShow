@@ -5,13 +5,7 @@ import {
   useRef,
   useState
 } from "react";
-
-const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
-
-function reducedMotionPreferred() {
-  return typeof window !== "undefined"
-    && window.matchMedia?.(reducedMotionQuery).matches === true;
-}
+import { reducedMotionQuery, reducedMotionPreferred } from "../lib/ui/reduced-motion.js";
 
 /**
  * Keeps a CSS entrance class active for only one animation lifecycle.

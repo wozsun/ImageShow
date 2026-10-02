@@ -7,6 +7,7 @@ import {
   type RefObject,
   type SyntheticEvent
 } from "react";
+import { reducedMotionQuery, reducedMotionPreferred } from "../../lib/ui/reduced-motion.js";
 import {
   HomeEntranceController,
   type HomeEntranceSnapshot
@@ -22,13 +23,6 @@ type HomeBackgroundDecode = {
   image: HTMLImageElement;
   readiness: Promise<boolean>;
 };
-
-function reducedMotionPreferred() {
-  return (
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
-  );
-}
 
 export function useHomeEntrance(
   source: string,
@@ -143,7 +137,7 @@ export function useHomeEntrance(
     });
     controller.start();
 
-    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const motionQuery = window.matchMedia(reducedMotionQuery);
     const revealForReducedMotion = () => {
       if (motionQuery.matches) controller.revealImmediately();
     };

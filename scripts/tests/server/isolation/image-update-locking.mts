@@ -109,6 +109,83 @@ await runIntegrationScenario(async (runtime) => {
     count * 2
   );
 
+  // Auto brightness reads its source outside the row lock; apply each
+  // concurrent change right after that read, before the commit rechecks it.
+  const updateAfterSourceRead = async (id: string, changeSql: string) => {
+    let changed = false;
+    const restoreSourceRead = interceptSqlQueries(
+      runtime.databasePools.pool,
+      async (sql, values, query) => {
+        const result = await query();
+        if (
+          !changed
+          && sql.startsWith("SELECT id, device, brightness")
+          && Array.isArray(values)
+          && values[0] === id
+        ) {
+          changed = true;
+          await runtime.databasePools.pool.query(changeSql, [id]);
+        }
+        return result;
+      }
+    );
+    try {
+      const result = await updateImages([
+        { id, device: "pc", brightness: "auto", theme: "pool-theme" }
+      ]);
+      assert.equal(changed, true);
+      return result;
+    } finally {
+      restoreSourceRead();
+    }
+  };
+  const resultCodes = (result: Awaited<ReturnType<typeof updateImages>>) =>
+    result.results.map((item) =>
+      item.status === "failed"
+        ? item.code
+        : item.status
+    );
+
+  const concurrentId = images[0]!.id;
+  const concurrent = await updateAfterSourceRead(
+    concurrentId,
+    "UPDATE metadata SET device='mb', brightness='light', theme=NULL WHERE id=$1"
+  );
+  assert.deepEqual(
+    [concurrent.updated, concurrent.failed],
+    [1, 0],
+    "并发分类变化不代表存储位置变化，自动亮度提交允许后写覆盖"
+  );
+  const classified = (
+    await runtime.databasePools.pool.query(
+      "SELECT device, theme FROM metadata WHERE id=$1",
+      [concurrentId]
+    )
+  ).rows[0];
+  assert.deepEqual(classified, { device: "pc", theme: "pool-theme" });
+
+  const trashed = await updateAfterSourceRead(
+    images[3]!.id,
+    "UPDATE metadata SET status='deleted', deleted_at=clock_timestamp() WHERE id=$1"
+  );
+  assert.deepEqual(
+    resultCodes(trashed),
+    ["invalid_image_state"],
+    "源图读取后移入回收站的图片不得提交分类"
+  );
+  await runtime.databasePools.pool.query(
+    "INSERT INTO storage_backend(slug, display_name, type) VALUES ('moved-target', 'moved-target', 's3')"
+  );
+  const moved = await updateAfterSourceRead(
+    images[4]!.id,
+    "UPDATE metadata SET storage_slug='moved-target' WHERE id=$1"
+  );
+  assert.deepEqual(
+    resultCodes(moved),
+    ["image_location_changed"],
+    "源图读取后存储位置变化时不得提交自动亮度"
+  );
+
   const overlappingId = images[0]!.id;
   const completed: number[] = [];
   const overlapping = await settleWithin(

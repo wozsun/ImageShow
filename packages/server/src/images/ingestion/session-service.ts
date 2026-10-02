@@ -1,3 +1,4 @@
+import { randomUUIDv7 } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import type {
   ImportAcceptItemDto,
@@ -5,13 +6,13 @@ import type {
   UploadIntentItemDto,
   UploadIntentItemInputDto
 } from "@imageshow/shared/browser";
+import { queueIdleTtlMs } from "./sessions/expiry.ts";
 import {
   getIngestionMaxFileBytes,
   getIngestionMaxLongEdge
 } from "../../config/app-settings.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
-import { randomUuidV7 } from "../../core/uuid.ts";
 import {
   assertStorageWriteTarget,
   getDefaultStorageSlug
@@ -31,11 +32,10 @@ import {
   createIngestionSessionId
 } from "./sessions/identity.ts";
 import type {
-  IngestionSessionSnapshot,
+  PendingIngestionSession,
   StoredIngestionSession,
   UploadIntentSnapshot
 } from "./sessions/model.ts";
-import { ingestionSessionSemanticHash } from "./sessions/projection.ts";
 import { IngestionSessionRepository } from "./repository.ts";
 import {
   IngestionTokenService,
@@ -114,21 +114,7 @@ function normalizedImageTime(value?: string, batchTime?: string, now?: Date) {
   }
 }
 
-function providedImageTime(value?: string, batchTime?: string) {
-  if (!value && !batchTime) return null;
-  return normalizedImageTime(value, batchTime).iso;
-}
-
-function withSessionSemanticHash(
-  session: Omit<IngestionSessionSnapshot, "semantic_hash">
-): IngestionSessionSnapshot {
-  const semantic_hash = ingestionSessionSemanticHash(
-    session as Omit<IngestionSessionSnapshot, "semantic_hash">
-  );
-  return { ...session, semantic_hash };
-}
-
-async function resolvedStorageSlug(storageSlug?: string) {
+function resolvedStorageSlug(storageSlug?: string) {
   return storageSlug ?? getDefaultStorageSlug();
 }
 
@@ -320,7 +306,6 @@ export class IngestionSessionService {
           }
           const storageSlug = await this.#dependencies.resolveStorageSlug(item.storage_slug);
           await this.#dependencies.assertStorageWriteTarget(storageSlug);
-          const explicitTime = providedImageTime(item.image_time, item.batch_time);
           const resolvedTime = normalizedImageTime(
             item.image_time,
             item.batch_time,
@@ -335,7 +320,9 @@ export class IngestionSessionService {
             queue: "upload",
             source_type: "upload",
             batch_key: item.batch_key,
-            provided_image_time: explicitTime,
+            provided_image_time: item.image_time || item.batch_time
+              ? resolvedTime.iso
+              : null,
             batch_position: item.batch_position,
             import_download: null,
             metadata: draftMetadata(item),
@@ -449,7 +436,6 @@ export class IngestionSessionService {
               : await this.#dependencies.resolveStorageSlug(item.storage_slug);
           if (!options.cancelIfMissing)
             await this.#dependencies.assertStorageWriteTarget(storageSlug);
-          const explicitTime = providedImageTime(item.image_time, item.batch_time);
           const resolvedTime = normalizedImageTime(
             item.image_time,
             item.batch_time,
@@ -470,7 +456,9 @@ export class IngestionSessionService {
             queue: "import",
             source_type: item.source_type,
             batch_key: item.batch_key,
-            provided_image_time: explicitTime,
+            provided_image_time: item.image_time || item.batch_time
+              ? resolvedTime.iso
+              : null,
             batch_position: item.batch_position,
             import_download: { url: item.download_url },
             metadata: draftMetadata(item),
@@ -482,7 +470,7 @@ export class IngestionSessionService {
             resolvedTime.date,
             item.batch_position
           );
-          const template = withSessionSemanticHash({
+          const template: PendingIngestionSession = {
             owner,
             queue: "import",
             source_type: item.source_type,
@@ -507,8 +495,8 @@ export class IngestionSessionService {
             execution_token: "",
             raw_generation: "",
             raw_size: 0,
-            discard_at: now + appConfig.ingestionRuntime.importSessionIdleTtlSeconds * 1000
-          });
+            discard_at: now + queueIdleTtlMs("import")
+          };
           results.push({
             input: item,
             result: (
@@ -566,13 +554,13 @@ export class IngestionSessionService {
     rawGeneration: string,
     rawSize: number,
     now = Date.now()
-  ) {
+  ): PendingIngestionSession {
     assertImageIdentity(
       intent.candidate_image_id,
       intent.resolved_image_time,
       intent.batch_position
     );
-    return withSessionSemanticHash({
+    return {
       owner: intent.owner,
       queue: "upload",
       source_type: "upload",
@@ -595,11 +583,11 @@ export class IngestionSessionService {
       execution_token: "",
       raw_generation: rawGeneration,
       raw_size: rawSize,
-      discard_at: now + appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds * 1000
-    });
+      discard_at: now + queueIdleTtlMs("upload")
+    };
   }
 
   newExecutionToken() {
-    return randomUuidV7();
+    return randomUUIDv7();
   }
 }

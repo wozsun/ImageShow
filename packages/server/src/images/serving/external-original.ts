@@ -145,15 +145,15 @@ type ExternalOriginalRequest = {
   method?: "GET" | "HEAD";
   ifNoneMatch?: string;
   ifModifiedSince?: string;
-  signal?: AbortSignal;
+  signal: AbortSignal;
 };
 
 export async function serveAdminExternalOriginal(
   id: string,
-  request: ExternalOriginalRequest = {},
+  request: ExternalOriginalRequest,
   dependencies: ExternalOriginalServingDependencies = defaultExternalOriginalServingDependencies
 ) {
-  const signal = request.signal ?? new AbortController().signal;
+  const signal = request.signal;
   const original = await resolveExternalOriginal(id, signal, dependencies);
   signal.throwIfAborted();
   const direct = await raceWithAbortSignal(

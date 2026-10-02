@@ -27,10 +27,7 @@ export class RedisUnavailableError extends Error {
 }
 
 export function isRedisUnavailableError(error: unknown): error is RedisUnavailableError {
-  return (
-    error instanceof RedisUnavailableError ||
-    (error instanceof Error && error.name === "redis_unavailable")
-  );
+  return error instanceof RedisUnavailableError;
 }
 
 let initializationComplete = false;

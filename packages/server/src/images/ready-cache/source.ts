@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from "pg";
+import { withReadOnlyRepeatableReadTransaction } from "../../core/database/transactions.ts";
 import { pool } from "../../core/database/pools.ts";
 import {
   READY_IMAGE_REBUILD_BATCH_SIZE,
@@ -101,9 +102,7 @@ export async function readReadyImageSourceSnapshot(
   ) => Promise<void>,
   signal?: AbortSignal
 ): Promise<ReadyImageSourceSnapshot> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+  return withReadOnlyRepeatableReadTransaction(async (client) => {
     const revision = (await getReadyImageRevision(client)).revision;
     const total = Number(
       (await client.query("SELECT count(*)::int AS count FROM metadata WHERE status='ready'"))
@@ -127,12 +126,6 @@ export async function readReadyImageSourceSnapshot(
     if (processed !== total) {
       throw new Error("Ready-image cache source count changed inside snapshot");
     }
-    await client.query("COMMIT");
     return { revision, total, processed };
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }

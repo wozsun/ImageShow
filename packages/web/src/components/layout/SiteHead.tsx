@@ -1,18 +1,9 @@
 import { useEffect, useLayoutEffect } from "react";
 import { useLocation } from "react-router";
+import { ensureMeta } from "../../lib/ui/document-meta.js";
 import { adminBasePath } from "../../lib/constants.js";
 import { useSiteConfig } from "../../lib/api/site-queries.js";
 import { applyUiColorContext } from "../../lib/ui/apply-ui-color-context.js";
-
-function ensureMeta(name: string) {
-  let meta = document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
-  if (!meta) {
-    meta = document.createElement("meta");
-    meta.name = name;
-    document.head.appendChild(meta);
-  }
-  return meta;
-}
 
 function isAdminRoute(pathname: string) {
   return pathname === adminBasePath

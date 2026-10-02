@@ -16,6 +16,7 @@ import type {
   ShowDensity,
   SiteShowSettings
 } from "@imageshow/shared/browser";
+import { reducedMotionQuery } from "../../lib/ui/reduced-motion.js";
 import { AppLoadingRegion } from "../../components/feedback/AppLoadingScreen.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
@@ -152,7 +153,7 @@ export function ShowPage({
   const dialogOpen = Boolean(selected) || densityWarningOpen || filterDialog.active;
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const sizeControlRef = useRef<HTMLButtonElement | null>(null);
-  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const reducedMotion = useMediaQuery(reducedMotionQuery);
   const data = useShowData(
     filters,
     sourceKey,

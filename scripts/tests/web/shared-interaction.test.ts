@@ -110,7 +110,6 @@ test("[Web/共享交互] 浏览器错误上报和控制台只发送清洗后的�
 test("[Web/共享交互] 媒体查询保持当前快照、独立订阅及卸载清理", async (t) => {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
-  const { renderToString } = await import("react-dom/server");
   const { useMediaQuery, mobileViewportMediaQuery } =
     await import("../../../packages/web/src/hooks/useMediaQuery.ts");
   const { window, document } = parseHTML("<html><body><div id=root></div></body></html>");
@@ -237,15 +236,6 @@ test("[Web/共享交互] 媒体查询保持当前快照、独立订阅及卸载�
   await React.act(async () => root.unmount());
   unmounted = true;
   assert.ok([...queries.values()].every((query) => query.listeners.size === 0));
-  const restoreNoWindow = installProperties(globalThis, { window: undefined });
-  try {
-    assert.equal(
-      renderToString(React.createElement(Probe, { query: motionQuery })),
-      "<output>false</output>"
-    );
-  } finally {
-    restoreNoWindow();
-  }
 });
 
 test("[Web/共享交互] Web UUID 只使用安全随机源并设置 UUIDv7 时间、版本与 variant", () => {
@@ -1311,8 +1301,7 @@ test("[Web/共享交互] 弹窗触摸边界按意图区分纵向与标签横向 
         clientY: number;
       }>
     ) =>
-      ({
-        length: points.length,
+      Object.assign(points, {
         item: (index: number) => points[index] ?? null
       }) as unknown as TouchList;
     let prevented = 0;

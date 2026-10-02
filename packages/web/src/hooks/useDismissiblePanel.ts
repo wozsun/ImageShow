@@ -38,7 +38,7 @@ function useTransientPanelSemantics({ open, transient }: { open: boolean; transi
 
   const prepareForClose = useCallback(
     ({ restoreFocus = false }: TransientPanelCloseOptions = {}) => {
-      if (!transient || typeof document === "undefined") return;
+      if (!transient) return;
 
       const panel = panelRef.current;
       const activeElement = document.activeElement;

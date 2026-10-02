@@ -91,10 +91,10 @@
   border-radius: 5px;
 }
 .show-toolbar-mode a:hover {
-  background: var(--color-dark-control-surface-subtle-hover);
+  background: var(--color-dark-control-surface-hover);
 }
 .show-toolbar-mode a.is-active {
-  background: var(--color-dark-control-surface-hover);
+  background: var(--color-dark-control-surface-selected);
   color: var(--color-dark-control-action-text);
 }
 .show-toolbar-mode a:focus-visible {

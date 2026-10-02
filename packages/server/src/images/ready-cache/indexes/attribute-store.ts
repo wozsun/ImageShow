@@ -1,7 +1,7 @@
+import { randomUUIDv7 } from "node:crypto";
 import type { DatabaseReader } from "../../../core/database/pools.ts";
 import { publishReadyImageAttributeIndexCommand } from "../redis/commands.ts";
 import { getRedisConnectionState, redis } from "../../../core/redis/client.ts";
-import { randomUuidV7 } from "../../../core/uuid.ts";
 import { getReadyImageCacheCoordinatorStatus } from "../coordinator.ts";
 import {
   discardReadyImageDerivedResult,
@@ -111,7 +111,7 @@ export async function publishReadyImageAttributeIndex(options: {
       }
 
       const now = new Date().toISOString();
-      const instanceToken = randomUuidV7().replaceAll("-", "");
+      const instanceToken = randomUUIDv7().replaceAll("-", "");
       const published = await publishReadyImageAttributeIndexCommand(redis, {
         key,
         metaKey,

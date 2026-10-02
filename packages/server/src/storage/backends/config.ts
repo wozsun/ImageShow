@@ -96,6 +96,8 @@ export function mergeS3Settings(
 
 type StorageConfigBase = {
   slug: string;
+  /** Unpersisted probe configuration; its driver is owned by the probe. */
+  temporary?: boolean;
   /** Configured identities proven to be aliases of the current namespace. */
   namespace_identities?: string[];
 };

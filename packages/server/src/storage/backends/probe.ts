@@ -1,4 +1,3 @@
-import { storageObjectKey } from "@imageshow/shared/browser";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
 import {
@@ -12,7 +11,7 @@ import {
   resolveStorageAccessForConfig
 } from "./registry.ts";
 import type { StorageDriver } from "../drivers/driver.ts";
-import { assertCanonicalImageObjectKey } from "../objects/image-paths.ts";
+import { imageObjectKey } from "../objects/image-paths.ts";
 import { verifyStorageEndpointRebind } from "./endpoint-rebind.ts";
 
 export type ExistingStorageProbe = {
@@ -26,10 +25,9 @@ async function assertExistingObjectReadable(
   signal?: AbortSignal
 ) {
   try {
-    assertCanonicalImageObjectKey(storageObjectKey(existingObject.id));
     const opened = await driver.openRead(
       "large",
-      storageObjectKey(existingObject.id),
+      imageObjectKey(existingObject.id),
       "bytes=0-0",
       { signal }
     );
@@ -69,7 +67,7 @@ export async function validateStorageBackendCandidate(
   signal?: AbortSignal
 ) {
   signal?.throwIfAborted();
-  const testConfig = { ...config, slug: "(test)" };
+  const testConfig = { ...config, temporary: true };
   const driver = resolveStorageAccessForConfig(testConfig).driver;
   try {
     if (existingObject) {
@@ -115,12 +113,13 @@ export async function resolveStorageTestConfig(
   const currentS3 = current?.type === "s3" ? current.s3 : undefined;
   const candidate = mergeS3Settings(input.s3, currentS3);
   const config: StorageConfig = {
-    slug: "(test)",
+    slug: current?.slug ?? "",
+    temporary: true,
     type: "s3",
     s3: candidate
   };
   if (current && storageDriverSignature(current) === storageDriverSignature(config)) {
-    config.slug = current.slug;
+    delete config.temporary;
   }
   return config;
 }

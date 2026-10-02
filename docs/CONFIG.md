@@ -1,750 +1,214 @@
-# 配置说明
-
-本页逐项说明应用配置和部署环境变量。部署步骤见[部署说明](DEPLOY.md)，存储后端的连接设置见[存储指南](guide/storage.md)。
-
-## 修改与生效
-
-应用配置保存在 `data/config.json`，容器内路径为 `/app/data/config.json`。超级管理员可在「设置 → 站点配置」通过分组表单修改全部应用运行配置。直接编辑文件后，需在后台点击「读取配置文件」或重启应用。
-
-配置文件使用纯 JSON，不支持注释。启动和读取文件时会补齐缺失项、删除未知项并保留合法值；已知项的值非法时会报错。站点配置维护一份完整草稿；保存时严格校验全部字段，成功后一次性持久化并发布。读取文件会在确认后替换未保存的草稿；域名变化也需确认接入条件。保存或读取失败时保留草稿。配置加载成功后影响后续操作；图片处理设置不会自动重新处理已入库图片，页面默认值必要时需刷新或重新进入页面才能看到。
-
-环境变量的修改规则见[环境变量](#环境变量)。管理员账号、个人外观、作者信息和存储后端在对应后台页面管理，不属于 `config.json`。
-完整配置读取返回当前快照摘要，保存时携带草稿开始编辑时的摘要。配置已被其他页面、日志等级修改或重载更新时，保存返回冲突并保留草稿；请记录需要保留的修改，再读取配置文件核对最新值，不会自动合并或覆盖新配置。
-若提示“配置文件已替换，但持久化确认失败”，磁盘文件可能已经变化，当前进程仍沿用之前的运行配置。此时后续保存被阻止；检查磁盘故障后显式读取配置文件，服务端重新校验并完成持久化后才发布内存配置。替换前失败不改变原配置文件。
-本地图片公开 URL 在存储编辑弹窗设置，保存在存储记录中，详见[图片公开入口](guide/image-resources.md#本地存储公开-url)。
-
-## RuntimeConfig 参数目录
-
-三档参数统一归入 `normalize`，分别控制新图片的大、中、小档处理规格，见[三档图片与地址协议](guide/three-tier-images.md)。
-
-以下列出 `config.json` 的全部配置项。数值除明确注明外均为整数；`KiB` 为 1024 字节，`MiB` 为 1024 KiB，`px` 为像素，时间项按名称使用秒。
-
-每项列出的环境变量只在配置文件不存在时用于生成初始值。已有配置文件时，以文件为准。Compose 标为“默认注入”的变量已在仓库部署清单中映射；“显式映射”表示使用前需自行加入清单，单独填写 `.env` 不会生效。
-
-### site
-
-#### site.domain
-
-- 环境变量：`SITE_DOMAIN`
-- Compose：默认注入
-- 类型、默认值与范围：字符串；默认 `"example.com"`；0–259 字符，空值或 DNS 域名，可带 1–65535 端口
-
-站点对外访问的域名，例如 `img.example.com`，不要填写协议或路径；需要指定端口时可写成 `img.example.com:8443`。设置实际域名后，未配置的其他域名访问返回 404；独立图片和静态资源 Host 仅开放各自资源。修改前应先准备好对应域名和反向代理。空值或 `example.com` 表示使用当前访问域名，不限定一个固定域名。
-
-#### site.icon
-
-- 环境变量：`SITE_ICON`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `"/assets/brand/favicon.svg"`；1–2048 字符的站内绝对路径或 HTTPS URL
-
-浏览器标签页等位置使用的站点图标。可以填写站内绝对路径，例如 `/assets/brand/favicon.svg`，或外部 HTTPS 图片地址。
-
-#### site.title
-
-- 环境变量：`SITE_TITLE`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `"ImageShow"`；去空白后非空
-
-网页标题，用于浏览器标签页及服务端生成的 HTML 标题。可在站点配置页修改。
-
-#### site.description
-
-- 环境变量：`SITE_DESCRIPTION`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `"画廊与随机图片API"`；去空白后 0–200 字符
-
-站点的网页描述，供浏览器页面信息和搜索引擎使用，不是首页横幅正文。设为空字符串时使用网页标题（`site.title`）。
-
-#### site.header_name
-
-- 环境变量：`SITE_HEADER_NAME`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `"ImageShow"`；去空白后非空
-
-页头显示名称，用于公开页面导航和后台品牌文字，与网页标题独立。可在站点配置页修改。
-
-#### site.version.enabled
-
-- 环境变量：`SITE_VERSION_ENABLED`
-- Compose：显式映射
-- 类型、默认值与范围：布尔；默认 `true`
-
-是否在后台显示版本信息卡片。关闭只隐藏版本信息，不影响应用运行。
-
-#### site.version.link_enabled
-
-- 环境变量：`SITE_VERSION_LINK_ENABLED`
-- Compose：显式映射
-- 类型、默认值与范围：布尔；默认 `true`
-
-后台版本信息是否可点击跳转到对应的 GitHub Release。仅在 `site.version.enabled=true` 时有可见效果。
-
-#### site.root
-
-- 环境变量：`SITE_ROOT`
-- Compose：显式映射
-- 类型、默认值与范围：枚举；默认 `"home"`；`home`、`show`、`gallery`
-
-访问站点根路径 `/` 时展示的页面：`home` 为首页，`show` 为展映，`gallery` 为画廊。如果所选页面已关闭，会依次选择仍启用的画廊、展映或首页；三者都关闭时返回 404。可在站点配置页修改。
-
-#### site.home.enabled
-
-- 环境变量：`SITE_HOME_ENABLED`
-- Compose：显式映射
-- 类型、默认值与范围：布尔；默认 `true`
-
-是否开放公开首页及 `/home` 入口。关闭后，原本指向首页的访问会使用仍启用的公开页面；全部公开页面关闭时返回 404。嵌入首页还需要开启 `embed.enabled`。
-
-#### site.home.browse_target
-
-- 环境变量：`SITE_HOME_BROWSE_TARGET`
-- Compose：显式映射
-- 类型、默认值与范围：枚举；默认 `"show"`；`gallery`、`show`
-
-首页选择筛选条件后进入的图片页面：`show` 为展映，`gallery` 为画廊。目标页面关闭时改用另一个仍启用的图片页面；两者都关闭时浏览入口不可用。嵌入首页使用对应的嵌入页面。
-
-#### site.home.background
-
-- 环境变量：`SITE_HOME_BACKGROUND`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `""`；空值或最长 2048 字符的站内绝对路径 / HTTPS URL
-
-首页背景图片。空字符串表示使用本站随机图；指定站内绝对路径或 HTTPS 地址后使用固定背景。可在站点配置页修改。
-
-#### site.home.banner_label
-
-- 环境变量：`SITE_HOME_BANNER_LABEL`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `"ImageShow · A FAN-MADE PHOTO HANDBOOK"`；1–160 字符
-
-首页主标题上方的短标识文字，可填写站点定位、主题或简短介绍。可在站点配置页修改。
-
-#### site.home.banner_title
-
-- 环境变量：`SITE_HOME_BANNER_TITLE`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `"我们一起，\n收藏这些瞬间。"`；1–80 字符，可换行
-
-首页主标题，支持换行。编辑 JSON 时用 `\n` 表示换行；在站点配置页可直接输入多行文字。
-
-#### site.show.enabled
-
-- 环境变量：`SITE_SHOW_ENABLED`
-- Compose：显式映射
-- 类型、默认值与范围：布尔；默认 `true`
-
-是否开放展映页面 `/show`。嵌入展映 `/embed/show` 还需要开启 `embed.enabled`。关闭后，指向展映的访问会使用仍启用的公开页面。
-
-#### site.show.autoplay
-
-- 环境变量：`SITE_SHOW_AUTOPLAY`
-- Compose：显式映射
-- 类型、默认值与范围：布尔；默认 `true`
-
-进入展映时是否自动播放。设为 `false` 时初始暂停，访客仍可手动播放、暂停、拖动和缩放；系统启用“减少动态效果”时优先保持暂停。修改后重新进入或刷新展映页面采用新值，同一次浏览中切换模式或筛选不会重置播放状态。
-
-#### site.show.mode
-
-- 环境变量：`SITE_SHOW_MODE`
-- Compose：显式映射
-- 类型、默认值与范围：枚举；默认 `"waterfall"`；`waterfall`、`float`
-
-展映的默认布局：`waterfall` 为瀑布流，`float` 为漂浮图片。链接中显式指定的 `mode` 优先；访客手动切换只影响当前浏览链接，不修改站点配置。
-
-#### site.show.density
-
-- 环境变量：`SITE_SHOW_DENSITY`
-- Compose：显式映射
-- 类型、默认值与范围：枚举；默认 `"balanced"`；`relaxed`、`balanced`、`dense`
-
-展映的初始图片密度。`relaxed` 较疏、`balanced` 适中、`dense` 较密；瀑布流对应较少、标准、较多列，漂浮模式对应较大、标准、较小图片。访客可以在展映中继续调整，不会保存为全站配置。
-
-#### site.show.drift_speed
-
-- 环境变量：`SITE_SHOW_DRIFT_SPEED`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `28`；10–60 CSS px/s
-
-展映自动播放的基准移动速度，单位为每秒屏幕像素。数值越大移动越快；漂浮模式中不同图片会略有速度差异。此项不改变手动拖动和缩放速度。
-
-#### site.show.order
-
-- 环境变量：`SITE_SHOW_ORDER`
-- Compose：显式映射
-- 类型、默认值与范围：枚举；默认 `"random"`；`random`、`latest`、`oldest`
-
-展映默认顺序：`random` 乱序，`latest` 按图片时间从新到旧，`oldest` 从旧到新。链接中显式指定的 `order` 优先，访客切换顺序不修改站点配置。
-
-#### site.gallery.enabled
-
-- 环境变量：`SITE_GALLERY_ENABLED`
-- Compose：显式映射
-- 类型、默认值与范围：布尔；默认 `true`
-
-是否开放画廊页面 `/gallery`。嵌入画廊 `/embed/gallery` 还需要开启 `embed.enabled`。关闭后，指向画廊的访问会使用仍启用的公开页面。
-
-#### site.gallery.order
-
-- 环境变量：`SITE_GALLERY_ORDER`
-- Compose：显式映射
-- 类型、默认值与范围：枚举；默认 `"latest"`；`random`、`latest`、`oldest`
-
-画廊默认排序：`random` 乱序，`latest` 按图片时间从新到旧，`oldest` 从旧到新。访客可在页面切换并保留筛选条件。可在站点配置页修改。
-
-#### site.random_method
-
-- 环境变量：`SITE_RANDOM_METHOD`
-- Compose：显式映射
-- 类型、默认值与范围：枚举；默认 `"redirect"`；`proxy`、`redirect`
-
-随机图入口 `/random` 未指定返回方式时采用的行为。`redirect` 跳转到图片地址，`proxy` 由站点直接返回图片内容；后者会占用站点传输带宽。调用方可以用 `mode` 参数覆盖默认值，也可以显式请求 `mode=json` 获取图片信息。可在站点配置页修改。
-
-#### site.random_size
-
-- 环境变量：`SITE_RANDOM_SIZE`
-- Compose：显式映射
-- 类型、默认值与范围：枚举；默认 `"medium"`；`large`、`medium`、`small`
-
-随机图 `proxy` / `redirect` / `json` 未指定 `size` 时均使用此默认档位，显式 `size` 优先。
-`mode=json` 每张图片仅通过 `url` 字段返回所选档位的地址。可在站点配置页修改。
-
-#### site.assets_base_url
-
-- 环境变量：`SITE_ASSETS_BASE_URL`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `""`；0–2048 字符的 HTTPS 根地址，可带路径前缀
-
-前端静态资源的公开根地址，留空使用主站 `/assets/`。例如 `https://asset.example.com` 对应
-`https://asset.example.com/资源名`；`https://asset.example.com/static` 对应
-`https://asset.example.com/static/资源名`。该地址直接代表静态资源目录，不自动追加 `/assets`。
-须使用独立于主站的 Host，不能包含凭据、查询参数或片段；
-路径中连续的斜杠会合并，末尾斜杠会自动去除。可与本地图片共用资源 Host，按各自路径提供资源。
-
-可在站点配置页修改。先接入域名并保留 Host、路径回源到同一 ImageShow，
-再保存设置并刷新页面；不需要重建镜像。新 HTML 中的 JS、CSS、预加载以及其依赖随此地址加载，
-`/assets/` 下的站点图标也随配置切换。登录验证 Worker 始终从主站加载。
-主站 `/assets/` 继续直接返回资源，独立 Host 不开放 SPA、API 或管理功能。
-
-静态资源继续使用现有预压缩、ETag、304 和缓存策略。
-已经打开的页面继续沿其加载时的资源地址运行；切换时应先保留旧地址，并按部署缓存策略刷新 HTML。
-
-#### site.robots_enabled
-
-- 环境变量：`SITE_ROBOTS_ENABLED`
-- Compose：显式映射
-- 类型、默认值与范围：布尔；默认 `false`
-
-是否提供 `/robots.txt`。`false` 时该路径返回 404；`true` 时仅允许爬虫抓取已启用的首页，禁止抓取画廊、接口、图片资源和后台。这是给爬虫的访问约定，不限制用户直接访问。
-
-#### site.icp
-
-- 环境变量：`SITE_ICP`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `""`；去除首尾空白后为 0–200 字符
-
-普通首页底部第一行左侧的 ICP 备案号，填写完整显示文字。非空时链接到工信部备案查询网站，留空隐藏该项。ICP 与公安备案号均非空时，中间显示分隔竖线。嵌入首页不展示此项。
-
-#### site.mps
-
-- 环境变量：`SITE_MPS`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `""`；去除首尾空白后为 0–200 字符
-
-普通首页底部第一行右侧的公安备案号，填写完整显示文字。数字部分用作公安备案查询链接的 `code`，请只填写该备案号及其省份、备案名称，不附带其他数字。留空隐藏该项。只有一个备案项时居中显示，窄屏空间不足时按 ICP、公安备案的顺序换行。嵌入首页不展示此项。
-
-#### site.footer
-
-- 环境变量：`SITE_FOOTER`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `""`；去除首尾空白后为 0–2000 字符，包含 HTML 标记
-
-备案号下方的自定义页脚内容，不自动添加前缀。支持纯文字，以及受限 HTML：`<a href="https://…">` 链接和 `<br>` 换行。只使用合法且不含用户名、密码的 HTTPS 链接，统一在新标签页打开；其余输入属性不采用，无效链接保留文字，其他 HTML 元素及其内容不展示，不解析 Markdown。
-
-例如在 JSON 配置文件中填写：
+# 配置参考
+
+本页列出全部配置项的默认值和取值范围，安装步骤见[安装与维护](DEPLOY.md)。
+
+## 配置如何生效
+
+- 配置保存在 `data/config.json`（容器内为 `/app/data/config.json`）。超级管理员可以在后台「设置 → 站点配置」修改本页的所有配置项。
+- 直接编辑文件后，在后台点击「读取配置文件」或重启应用。文件是纯 JSON，不能写注释。
+- 应用启动和读取文件时，会补上缺少的项、删除不认识的项，并在内容变化时写回文件。某一项的值不合法时会报错，整份配置不会生效。
+- 配置文件不存在时（通常是第一次启动），应用用环境变量生成初始配置；文件存在后，这些初始配置变量不再覆盖文件。数据库、Redis 连接和时区等部署变量仍在每次启动时读取。
+- 图片处理相关设置只影响之后添加的图片。
+- 管理员账号、个人外观、主题标签作者和存储后端不在配置文件里，在后台对应页面管理。
+
+如果保存时提示配置已被其他页面修改，先记下自己的改动，再读取配置文件核对最新值后重新保存。如果提示“配置文件已替换，但持久化确认失败”，先排查磁盘问题，再点击「读取配置文件」恢复；提示消失前不要把保存当作成功。
+
+单位说明：KiB = 1024 字节，MiB = 1024 KiB；时间单位都是秒。数值除 `ingestion.max_file_size_mb` 和 `log.max_size_mb` 可用小数外，均使用整数。
+
+## 站点
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `site.domain` | `"example.com"` | 主站域名，如 `img.example.com`，可带端口，不写协议和路径。设置后，除已配置的图片和静态资源域名外，其他域名返回 404。留空或保持 `example.com` 表示不限制域名 |
+| `site.title` | `"ImageShow"` | 浏览器标签页上的网页标题，不能为空 |
+| `site.header_name` | `"ImageShow"` | 页面顶部和后台显示的站点名称，不能为空 |
+| `site.description` | `"画廊与随机图片API"` | 网页描述，供搜索引擎使用，最多 200 字；留空时使用网页标题 |
+| `site.icon` | `"/assets/brand/favicon.svg"` | 站点图标，以 `/` 开头的站内路径或 HTTPS 地址，不能为空，最多 2048 字符 |
+| `site.version.enabled` | `true` | 在后台显示版本信息 |
+| `site.version.link_enabled` | `true` | 版本信息可点击打开 GitHub Release |
+| `site.root` | `"home"` | 打开站点根路径 `/` 时显示的页面：`home` 首页、`gallery` 画廊、`show` 展映。所选页面关闭时，依次改用画廊、展映、首页 |
+| `site.robots_enabled` | `false` | 提供 `/robots.txt`，只允许搜索引擎抓取首页。关闭时该地址返回 404 |
+| `site.random_method` | `"redirect"` | `/random` 默认的返回方式：`redirect` 跳转到图片地址；`proxy` 由本站直接返回图片，会占用本站带宽 |
+| `site.random_size` | `"medium"` | `/random` 默认的图片尺寸：`large`、`medium`、`small` |
+| `site.assets_base_url` | `""` | 前端静态文件的独立地址，见[静态资源地址](#静态资源地址) |
+
+### 首页与页脚
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `site.home.enabled` | `true` | 开放首页 `/home` |
+| `site.home.browse_target` | `"show"` | 在首页选好条件后进入的页面：`show` 展映或 `gallery` 画廊 |
+| `site.home.background` | `""` | 首页背景图，留空使用本站随机图；可填以 `/` 开头的站内路径或 HTTPS 地址，最多 2048 字符 |
+| `site.home.banner_label` | `"ImageShow · A FAN-MADE PHOTO HANDBOOK"` | 首页大标题上方的小字，1–160 字 |
+| `site.home.banner_title` | `"我们一起，\n收藏这些瞬间。"` | 首页大标题，1–80 字，在 JSON 中用 `\n` 换行 |
+| `site.icp` | `""` | ICP 备案号，显示在首页底部并链接到备案查询网站，最多 200 字 |
+| `site.mps` | `""` | 公安备案号，最多 200 字。只填备案号及其省份名称，其中的数字会用来生成查询链接 |
+| `site.footer` | `""` | 自定义页脚，见[自定义页脚](#自定义页脚) |
+
+首页底部依次显示 ICP 备案号、公安备案号和自定义页脚，三项都为空时不显示页脚。嵌入的首页只显示自定义页脚。
+
+### 画廊与展映
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `site.gallery.enabled` | `true` | 开放画廊 `/gallery` |
+| `site.gallery.order` | `"latest"` | 画廊默认排序：`latest` 最新优先、`oldest` 最旧优先、`random` 随机 |
+| `site.show.enabled` | `true` | 开放展映 `/show` |
+| `site.show.autoplay` | `true` | 进入展映时自动播放。系统开启了“减少动态效果”时保持暂停 |
+| `site.show.mode` | `"waterfall"` | 展映默认模式：`waterfall` 瀑布流、`float` 漂浮 |
+| `site.show.density` | `"balanced"` | 展映默认密度：`relaxed` 宽松、`balanced` 均衡、`dense` 紧凑 |
+| `site.show.drift_speed` | `28` | 自动播放速度，10–60 像素/秒 |
+| `site.show.order` | `"random"` | 展映默认排序，取值同画廊 |
+
+链接中的 `mode`、`order` 参数优先于这些默认值。访客在页面上的调整只影响自己当前的浏览。
+
+### 自定义页脚
+
+`site.footer` 最多 2000 字，支持纯文字，以及两种 HTML：`<a href="https://…">` 链接和 `<br>` 换行。链接必须是 HTTPS，会在新标签页打开；其他 HTML 标签不显示，也不支持 Markdown。
 
 ```json
 "footer": "Powered by <a href=\"https://github.com/wozsun/ImageShow\">ImageShow</a>"
 ```
 
-环境变量可用单引号包住内容：`SITE_FOOTER='Powered by <a href="https://github.com/wozsun/ImageShow">ImageShow</a>'`。
-留空隐藏该项；页脚不额外显示版权行。普通首页展示已配置的 ICP、公安备案号与 `footer`，三个字段全部留空时整个页脚隐藏。嵌入首页仅展示 `footer`，留空时不渲染页脚，也不保留备案占位或页脚空白。
+用环境变量设置时，用单引号包住整个值：
+
+```ini
+SITE_FOOTER='Powered by <a href="https://github.com/wozsun/ImageShow">ImageShow</a>'
+```
+
+### 静态资源地址
+
+`site.assets_base_url` 让前端的 JS、CSS 等文件从独立域名加载，留空时使用主站的 `/assets/`。
+
+- 地址直接对应静态文件目录，不会自动加 `/assets`：`https://asset.example.com/static` 对应 `https://asset.example.com/static/文件名`。
+- 必须是 HTTPS，域名不能与主站相同，不能带账号密码、查询参数或 `#`。可以与本地存储的图片公开地址共用一个域名。
+- 先配置好域名和反向代理（保留 Host 和路径，转发到 ImageShow），再保存设置并刷新页面，不需要重新构建。
+- 已经打开的页面仍使用旧地址，切换期间请保持旧地址可用。登录验证所需的脚本始终从主站加载。
+
+## 外部嵌入
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `embed.enabled` | `false` | 开放 `/embed/home`、`/embed/gallery`、`/embed/show`，供其他网站用 iframe 嵌入。对应的首页、画廊、展映也必须开启 |
+| `embed.allowed_origins` | `[]` | 允许嵌入本站的其他网站，JSON 数组，最多 32 个 |
+
+开启后，本站自身默认可以嵌入；设置了 `site.domain` 时，该域名及其子域名的 HTTPS 页面也可以。其他网站需要加入 `embed.allowed_origins`，例如：
+
+```json
+["https://portal.example.com", "https://*.trusted.example.net"]
+```
+
+- 每项是一个 HTTPS 网站地址，可带端口，不能带路径、账号密码，不能是 IP 或 HTTP。每项最多 320 字符，去重后的列表以空格连接时总长最多 4096 字符。
+- `*.` 开头表示该域名下的所有子域名，但不包括域名本身。只填写你信任的网站，不要对公共托管平台的整个域名使用通配。
+- 这个列表还用于图片防盗链和 `/random` 的频率限制豁免，这两项不受 `embed.enabled` 影响。Referer 可以伪造，所以它只是轻量限制，不是身份验证。
+
+`/random` 和三档公开图片的匿名 CORS 使用 `*`，不由这个列表控制，见[跨站读取](api/random.md#跨站读取)。
+
+嵌入的页面始终以访客身份显示，没有管理功能和原图入口。宿主网站可以通过[宿主光标协议](api/embed-cursor.md)显示自定义光标，通过[嵌入安全区协议](api/embed-safe-area.md)调整嵌入页在手机全面屏上避开的边距。
+
+## 上传与导入
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `ingestion.max_file_size_mb` | `100` | 单张原图的大小上限（MiB），大于 0、最大 200。上传和导入共用 |
+| `ingestion.max_long_edge` | `32000` | 原图长边上限（像素），300–32000。超过直接拒绝，不会先缩小 |
+| `ingestion.list_page_size` | `20` | 上传、导入和批量编辑列表每页条数，1–100 |
+| `ingestion.commit_concurrency` | `8` | 服务器同时入库的图片数，1–16。调高会增加数据库、存储和内存压力 |
+| `upload.max_items` | `200` | 每批上传的文件数，1–1000 |
+| `upload.browser_concurrency` | `2` | 每个浏览器页面同时上传的文件数，1–8 |
+| `upload.raw_concurrency` | `5` | 服务器同时接收的上传数，所有用户共享，1–8 |
+| `import.keep_original_link` | `["url", "jsonl", "weibo"]` | 哪些导入方式保留原图链接：`url` 链接导入、`jsonl` 清单导入、`weibo` 微博导入。`[]` 表示都不保留 |
+| `import.auto_import` | `true` | 解析没有问题时自动开始导入；设为 `false` 时先显示解析结果，由管理员确认 |
+| `import.fetch_timeout_seconds` | `30` | 下载一张图片的超时时间，5–300 秒 |
+| `import.max_items` | `200` | 每批链接或清单导入的条数，1–1000 |
+| `weibo.max_items` | `10` | 每批微博链接数（按帖子计，不是图片数），1–50 |
+| `weibo.source_enabled` | `true` | 把微博帖子页面记为图片来源 |
+| `weibo.request_delay_seconds` | `[2, 5]` | 相邻两次微博请求之间随机等待的秒数 `[最短, 最长]`，每项 0–60，最短不能大于最长 |
+
+保留的原图链接只有管理员能看到。原图链接和微博来源是否保留，以任务首次提交时的设置为准；已经提交的任务重试时沿用原来的选择。修改设置不会改动已入库的图片。
+
+## 图片处理
+
+每张图片入库时生成大、中、小三种尺寸的 WebP 文件：小图用于画廊、展映和后台列表，中图用于图片详情和随机图默认尺寸，大图是详情标题打开的完整图片。
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `normalize.concurrency` | `2` | 服务器同时处理的图片数，1–8 |
+| `normalize.quality_step` | `5` | 文件超过目标大小时，每次降低的质量值，1–20 |
+
+每种尺寸有四个配置项，路径为 `normalize.<large|medium|small>.<字段>`：
+
+| 字段 | large 默认（范围） | medium 默认（范围） | small 默认（范围） | 含义 |
+| --- | --- | --- | --- | --- |
+| `quality` | 80（50–100） | 80（50–100） | 80（50–100） | 初始压缩质量 |
+| `min_quality` | 60（1–80） | 60（1–80） | 60（1–80） | 最低质量，不能高于初始质量 |
+| `max_long_edge` | 4200（512–16000） | 2200（256–8000） | 600（128–2000） | 长边上限（像素） |
+| `max_size_kb` | 700（256–5120） | 350（128–2560） | 60（8–1280） | 目标文件大小（KiB） |
+
+处理规则：
+
+- 图片按比例缩小到长边上限以内，不会放大。
+- 从初始质量开始压缩，超过目标大小就按 `quality_step` 降低质量；降到最低质量仍超出时也照常入库。
+- 长边和目标大小都必须满足 small ≤ medium ≤ large，否则无法保存。
+- 原图本身是 WebP、长边不超限且小于 large 的目标大小时，large 直接使用原文件。
+
+## 后台、登录与日志
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `admin.login_background` | `""` | 登录页背景图，留空使用本站随机图；可填以 `/` 开头的站内路径或 HTTPS 地址，最多 2048 字符 |
+| `admin.image_page_size` | `60` | 后台图片列表每页数量，10–200 |
+| `admin.recent_uploads` | `16` | 后台概览中“最近上传”的数量，1–60 |
+| `security.session_ttl_seconds` | `604800` | 登录有效期（默认 7 天），300–31536000。登录或页面重新验证登录状态时续期 |
+| `security.login_failure_window_seconds` | `60` | 同一 IP + 用户名的登录次数统计时长，30–300 秒 |
+| `security.login_max_failures` | `5` | 上述时长内允许的登录尝试次数，3–500。登录成功后清零 |
+| `security.login_global_window_seconds` | `180` | 全站登录次数统计时长，60–600 秒 |
+| `security.login_global_max_attempts` | `10` | 上述时长内全站允许的登录尝试总数，5–1000。多人使用时应留足余量 |
+| `security.random_window_seconds` | `60` | `/random` 频率限制的统计时长，1–3600 秒 |
+| `security.random_max_requests` | `60` | 每个 IP 在统计时长内可从 `/random` 取得的图片张数，1–10000。不带 `limit` 的请求计 1 张；`limit` 不超过“本项 ÷ `random_limit_max_requests`”（向下取整，至少 1）时按 `limit` 计张数 |
+| `security.random_limit_max_requests` | `10` | 每个 IP 在统计时长内，`limit` 超过上述分界值的 `/random` 请求次数上限，1–10000。默认分界值为 60 ÷ 10 = 6 |
+| `altcha.enabled` | `true` | 登录时进行人机验证（自托管的 ALTCHA）。关闭后账号密码校验和次数限制仍然有效 |
+| `altcha.ttl_seconds` | `300` | 一次验证的有效期，90–3600 秒 |
+| `altcha.cost` | `5000` | 验证计算量，1000–100000。值越大计算越慢，在手机上尤其明显 |
+| `altcha.counter_range` | `[2000, 5000]` | 每次验证工作量的随机范围 `[最小, 最大]`，每项 100–100000，最小不能大于最大，且 `cost × 最大值` 不超过 100000000 |
+| `log.level` | `"WARN"` | 日志级别：`DEBUG`、`INFO`、`WARN`、`ERROR`、`OFF`。可在后台「日志」页直接修改 |
+| `log.max_size_mb` | `10` | 日志文件达到这个大小（MiB）后换新文件，大于 0、最大 1024 |
+| `log.max_files` | `5` | 保留的历史日志文件数，1–100 |
 
-以上三个字段可在站点配置的“首页与页脚”卡片中修改并保存。
-也可修改 `data/config.json` 后手动读取配置文件或重启应用生效；已有配置文件时，环境变量不会覆盖这些值。
-三个播种环境变量均不进入默认 Compose，首次安装如需使用，应自行显式映射进应用容器。
+`/random` 的两种请求分别计数，超出后返回 `429` 和 `Retry-After`。来自本站或 `embed.allowed_origins` 中网站的请求（按 Referer 判断）不计数。访客 IP 取自反向代理设置的 `X-Real-IP` 或 `X-Forwarded-For`，配置方法见[安装与维护](DEPLOY.md#配置域名与-https)。
 
-### embed
-
-#### embed.enabled
-
-- 环境变量：`EMBED_ENABLED`
-- Compose：显式映射
-- 类型、默认值与范围：布尔；默认 `false`
-
-是否开放 `/embed/home`、`/embed/show` 和 `/embed/gallery`，供其他网页通过 iframe 嵌入；对应的首页、展映或画廊也必须启用。默认允许本站同源页面嵌入；配置实际站点域名后，还允许该域名的 HTTPS 来源及同端口子域。其他来源通过 `embed.allowed_origins` 添加。
-
-三个嵌入页面始终按访客展示，独立打开与 iframe 内行为一致：不探测或恢复管理员会话，不显示图片管理功能或原图入口；图片详情请求不携带登录凭据。普通页面与后台继续使用既有登录状态。
-
-嵌入页随此开关默认提供[鼠标事件桥接](guide/embed-cursor.md)，宿主连接后自动接管并绘制
-自定义光标。不新增配置项或额外启用参数；未接入协议时保持默认光标与交互。
-
-#### embed.allowed_origins
-
-- 环境变量：`EMBED_ALLOWED_ORIGINS`
-- Compose：显式映射
-- 类型、默认值与范围：严格 JSON 数组；默认 `[]`；最多 32 个 HTTPS DNS origin，每项不超过 320 字符且总长不超过 4096 字符
-
-额外允许嵌入本站的网页来源，例如 `["https://portal.example.com", "https://*.trusted.example.net"]`。精确地址只允许对应来源；最左侧的 `*.` 允许该域名下的子域。来源可带端口，但不能包含路径、账号密码、IP 地址或 HTTP 协议。
-
-只填写自己信任的站点，不要将公共托管平台的整个域名设为通配来源。空数组表示不额外放行来源，不会取消本站的默认嵌入范围。
-
-此列表同时用于 `/random` 的 Referer 限流豁免和应用图片的轻量防盗链；这两项策略不受
-`embed.enabled` 控制。显式站点域名的 HTTPS 来源及同端口子域也在白名单内；未设置实际
-域名时仅隐式允许当前请求同源，不推导父域或通配子域。精确来源不会自动允许其子域，
-`*.example.com` 不包含 `example.com` 本身。Referer 可省略或伪造，白名单不承担身份认证。
-
-### ingestion
-
-#### ingestion.max_file_size_mb
-
-- 环境变量：`INGESTION_MAX_FILE_SIZE_MB`
-- Compose：显式映射
-- 类型、默认值与范围：数值；默认 `100`；大于 0 且不超过 200 MiB
-
-本地上传和远程导入共用的单张原始图片体积上限，超过时拒绝接收。该值针对处理前的文件；成品压缩目标由 `normalize.<档位>.max_size_kb` 设置。调高会允许更大的原图，也增加传输、临时空间和图片处理的资源需求。
-
-#### ingestion.max_long_edge
-
-- 环境变量：`INGESTION_MAX_LONG_EDGE`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `32000`；300–32000 px
-
-允许接收的原始图片长边上限，长边是宽、高中的较大值。超过时拒绝接收，不会先缩小再接受；入库图片的缩小尺寸由 `normalize.<档位>.max_long_edge` 决定。
-
-#### ingestion.list_page_size
-
-- 环境变量：`INGESTION_LIST_PAGE_SIZE`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `20`；1–100 项
-
-上传、导入队列和批量编辑列表每页显示的项目数。只影响列表分页，不限制一次可提交的总数量。可在站点配置页修改。
-
-#### ingestion.commit_concurrency
-
-- 环境变量：`INGESTION_COMMIT_CONCURRENCY`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `8`；1–16
-
-服务器同时进行最终入库的图片数上限，由所有上传和导入任务共同使用。调高可能提高入库速度，也会增加数据库、存储和内存压力；实际同时执行数量还受可用资源限制。修改后影响后续任务，已经开始的任务继续完成。可在站点配置页修改。
-
-### upload、import 与 weibo
-
-#### upload.max_items
-
-- 环境变量：`UPLOAD_MAX_ITEMS`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `200`；1–1000 项
-
-本地上传一次可选择和创建的文件数量上限。超出时需分批上传；每张图片仍分别受原始体积和尺寸限制。
-
-#### upload.browser_concurrency
-
-- 环境变量：`UPLOAD_BROWSER_CONCURRENCY`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `2`；1–8
-
-单个活动上传页面同时推进的文件数量，包括预览准备和文件传输。调高可能加快上传，但会增加浏览器内存和网络占用；多个页面仍共同受服务器接收能力限制。修改后影响后续文件，可在站点配置页修改。
-
-#### upload.raw_concurrency
-
-- 环境变量：`UPLOAD_RAW_CONCURRENCY`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `5`；1–8
-
-服务器同时接收本地上传文件的数量上限，由所有客户端共享。超过容量的请求等待空位。调低后已开始的传输继续完成，后续文件按新上限进入。
-
-#### import.keep_original_link
-
-- 环境变量：`IMPORT_KEEP_ORIGINAL_LINK`
-- Compose：显式映射
-- 类型、默认值与范围：严格 JSON 字符串数组；默认 `["url", "jsonl", "weibo"]`；成员仅可为 `url`、`jsonl`、`weibo`，规范化去重，空白名单为 `[]`
-
-哪些导入来源保留原始图片链接：`url` 为 URL 导入，`jsonl` 为 JSONL 导入，`weibo` 为微博导入。未列出的来源仍正常下载和入库，只是不自动保留原图链接；`[]` 表示全部不保留。
-
-修改影响后续导入及尚未确认提交的任务，已经确认提交的内容和正式入库图片不会因此改写。登记的独立原图仅供管理员访问；管理员在公开页面及后台图片详情均可使用原图按钮，访客不显示该按钮。
-
-#### import.auto_import
-
-- 环境变量：`IMPORT_AUTO_IMPORT`
-- Compose：显式映射
-- 类型、默认值与范围：布尔；默认 `true`
-
-解析内容没有问题项时，是否自动加入导入队列。`true` 直接开始，`false` 先展示解析结果、由管理员确认后开始；有问题项时仍需处理或确认。修改后影响新解析的内容。
-
-#### import.fetch_timeout_seconds
-
-- 环境变量：`IMPORT_FETCH_TIMEOUT_SECONDS`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `30`；5–300 秒
-
-导入外部图片时，每次下载允许等待的最长时间。超时会使该项下载失败，可在解决网络或源站问题后重试。较大值适合较慢的源站，但失败请求也会占用更久。
-
-#### import.max_items
-
-- 环境变量：`IMPORT_MAX_ITEMS`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `200`；1–1000 项
-
-一次 URL 或 JSONL 导入允许的图片条目数，超出时需拆成多个批次。微博链接数量由 `weibo.max_items` 控制，微博解析出的图片数不受本项限制。
-
-#### weibo.max_items
-
-- 环境变量：`WEIBO_MAX_ITEMS`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `10`；1–50 条
-
-一次微博导入允许提交的微博链接数量，计数单位是帖子链接，不是图片。单条微博包含多张图片时，会分别生成图片任务。
-
-#### weibo.source_enabled
-
-- 环境变量：`WEIBO_SOURCE_ENABLED`
-- Compose：显式映射
-- 类型、默认值与范围：布尔；默认 `true`
-
-微博导入是否保留帖子页面作为图片的来源链接。关闭后，尚未确认提交的任务不保存该来源；不影响图片下载，也不控制原图链接。
-
-重新开启只影响新解析的内容，以及仍保留来源信息、尚未确认提交的任务；不会自动找回此前已省略的来源，也不会修改正式入库的图片。
-
-#### weibo.request_delay_seconds
-
-- 环境变量：`WEIBO_REQUEST_DELAY_SECONDS`
-- Compose：显式映射
-- 类型、默认值与范围：严格 JSON 二元整数数组；默认 `[2, 5]`；两项均为 0–60 秒且下界不高于上界
-
-相邻微博帖子请求之间随机等待的秒数，格式为 `[最短时间, 最长时间]`。例如 `[2, 5]` 表示每次等待 2–5 秒，设为相同数值可固定间隔。较长间隔会降低请求频率并延长批次解析时间；修改不打断已经开始的等待。
-
-### normalize
-
-`normalize.concurrency` 默认 2，范围 1–8；环境变量 `NORMALIZE_CONCURRENCY`。它限制服务器图片处理并发。
-`normalize.quality_step` 默认 5，范围 1–20；环境变量 `NORMALIZE_QUALITY_STEP`。超过体积目标时沿质量网格降低，最低档仍超目标也允许入库。
-
-`large`、`medium`、`small` 分别拥有以下字段，均可在站点配置页独立修改。
-
-| 字段 | large 默认 / 范围 | medium 默认 / 范围 | small 默认 / 范围 |
-| --- | --- | --- | --- |
-| quality | 80 / 50–100 | 80 / 50–100 | 80 / 50–100 |
-| min_quality | 60 / 1–80 | 60 / 1–80 | 60 / 1–80 |
-| max_long_edge | 4200 / 512–16000 px | 2200 / 256–8000 px | 600 / 128–2000 px |
-| max_size_kb | 700 / 256–5120 KiB | 350 / 128–2560 KiB | 60 / 8–1280 KiB |
-
-环境变量使用 `NORMALIZE_<LARGE|MEDIUM|SMALL>_<QUALITY|MIN_QUALITY|MAX_LONG_EDGE|MAX_SIZE_KB>`。
-例如 `NORMALIZE_MEDIUM_QUALITY=85`。需要经 Compose 环境变量初始化时，显式加入服务 environment；已有配置文件仍以文件为准。
-
-每档最低质量不得高于初始质量；长边与体积均须满足 small ≤ medium ≤ large，不满足时拒绝保存。
-缩小保持比例且不放大。仅 large 对合法 WebP 使用原字节保留：长边符合限制且文件体积严格小于 large 的体积目标；
-此阈值共用 large.max_size_kb，不单独编辑。medium 和 small 始终编码。
-WebP effort 固定为 4，读取时不编码。等价尺寸与质量的编码结果可复用，
-每张图片编码缓存上限为 128 MiB 内存与 256 MiB 临时磁盘；三档正式对象仍独立保存。
-修改参数仅作用于之后接入的图片，已有图片不会自动重压。
-
-#### normalize.concurrency
-
-- 环境变量：`NORMALIZE_CONCURRENCY`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `2`；1–8
-
-限制服务器图片处理并发。
-
-#### normalize.quality_step
-
-- 环境变量：`NORMALIZE_QUALITY_STEP`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `5`；1–20
-
-超目标时降低质量的步长，最低质量仍超目标也允许入库。
-
-#### normalize.large.quality
-
-- 环境变量：`NORMALIZE_LARGE_QUALITY`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `80`；50–100
-
-初始编码质量。
-
-#### normalize.large.min_quality
-
-- 环境变量：`NORMALIZE_LARGE_MIN_QUALITY`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `60`；1–80
-
-最低编码质量，不得高于本档初始质量。
-
-#### normalize.large.max_long_edge
-
-- 环境变量：`NORMALIZE_LARGE_MAX_LONG_EDGE`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `4200`；512–16000 px
-
-长边上限；保持比例，不放大。
-
-#### normalize.large.max_size_kb
-
-- 环境变量：`NORMALIZE_LARGE_MAX_SIZE_KB`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `700`；256–5120 KiB
-
-目标体积；到达最低质量后允许超出。
-
-#### normalize.medium.quality
-
-- 环境变量：`NORMALIZE_MEDIUM_QUALITY`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `80`；50–100
-
-初始编码质量。
-
-#### normalize.medium.min_quality
-
-- 环境变量：`NORMALIZE_MEDIUM_MIN_QUALITY`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `60`；1–80
-
-最低编码质量，不得高于本档初始质量。
-
-#### normalize.medium.max_long_edge
-
-- 环境变量：`NORMALIZE_MEDIUM_MAX_LONG_EDGE`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `2200`；256–8000 px
-
-长边上限；保持比例，不放大。
-
-#### normalize.medium.max_size_kb
-
-- 环境变量：`NORMALIZE_MEDIUM_MAX_SIZE_KB`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `350`；128–2560 KiB
-
-目标体积；到达最低质量后允许超出。
-
-#### normalize.small.quality
-
-- 环境变量：`NORMALIZE_SMALL_QUALITY`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `80`；50–100
-
-初始编码质量。
-
-#### normalize.small.min_quality
-
-- 环境变量：`NORMALIZE_SMALL_MIN_QUALITY`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `60`；1–80
-
-最低编码质量，不得高于本档初始质量。
-
-#### normalize.small.max_long_edge
-
-- 环境变量：`NORMALIZE_SMALL_MAX_LONG_EDGE`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `600`；128–2000 px
-
-长边上限；保持比例，不放大。
-
-#### normalize.small.max_size_kb
-
-- 环境变量：`NORMALIZE_SMALL_MAX_SIZE_KB`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `60`；8–1280 KiB
-
-目标体积；到达最低质量后允许超出。
-
-### admin、security、altcha 与 log
-
-#### admin.login_background
-
-- 环境变量：`ADMIN_LOGIN_BACKGROUND`
-- Compose：显式映射
-- 类型、默认值与范围：字符串；默认 `""`；空值或最长 2048 字符的站内绝对路径 / HTTPS URL
-
-管理员登录页的背景图片。空字符串表示使用本站随机图，也可指定站内绝对路径或 HTTPS 图片地址。可在站点配置页修改。
-
-#### admin.image_page_size
-
-- 环境变量：`ADMIN_IMAGE_PAGE_SIZE`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `60`；10–200 项
-
-后台图片管理列表每页显示的图片数。较大值便于一次查看更多图片，但会增加单页加载量；不影响公开画廊和展映。可在站点配置页修改。
-
-#### admin.recent_uploads
-
-- 环境变量：`ADMIN_RECENT_UPLOADS`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `16`；1–60 项
-
-后台概览中“最近上传”显示的图片数量，不限制图库总量或上传批次大小。可在站点配置页修改。
-
-#### security.session_ttl_seconds
-
-- 环境变量：`SECURITY_SESSION_TTL_SECONDS`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `604800`；300–31536000 秒
-
-管理员登录会话的有效闲置时长，默认 604800 秒，即 7 天。登录成功或页面重新验证登录状态成功时更新期限；普通操作或一直挂着后台不保证无限续期。修改影响新登录和后续续期，过期后需要重新登录。
-
-#### security.login_failure_window_seconds
-
-- 环境变量：`SECURITY_LOGIN_FAILURE_WINDOW_SECONDS`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `60`；30–300 秒
-
-同一访问 IP 与用户名组合的登录尝试统计窗口，与 `security.login_max_failures` 配合。窗口越长，连续失败后的限制持续越久；该组合成功登录后会清除其计数。
-
-#### security.login_max_failures
-
-- 环境变量：`SECURITY_LOGIN_MAX_FAILURES`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `5`；3–500 次
-
-同一 IP 与用户名组合在上述窗口内允许的登录尝试次数。达到限制后继续尝试会被暂时拒绝，需稍后再试；成功登录会清除该组合的计数。较低值限制更严格，也更容易影响连续输错密码的管理员。
-
-#### security.login_global_window_seconds
-
-- 环境变量：`SECURITY_LOGIN_GLOBAL_WINDOW_SECONDS`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `180`；60–600 秒
-
-全站登录尝试的统计窗口，与 `security.login_global_max_attempts` 配合，所有 IP 和用户名共同计数。它用于限制总登录频率，不因某个账号登录成功而清空。
-
-#### security.login_global_max_attempts
-
-- 环境变量：`SECURITY_LOGIN_GLOBAL_MAX_ATTEMPTS`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `10`；5–1000 次
-
-全站在上述窗口内允许的登录尝试总次数。达到限制后，其他来源的登录也需等待；多人使用的实例应为正常登录保留足够余量。该项与单个 IP、用户名组合的限制同时生效。
-
-#### security.random_window_seconds
-
-- 环境变量：`SECURITY_RANDOM_WINDOW_SECONDS`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `60`；1–3600 秒
-
-`/random` 每 IP 两档独立计数的固定窗口时长。每档窗口从该 IP 首次计数时开始，后续请求
-不延长有效期。修改时长后，新窗口使用新值，已存在的窗口保留原到期时间。
-
-#### security.random_max_requests
-
-- 环境变量：`SECURITY_RANDOM_MAX_REQUESTS`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `60`；1–10000 次
-
-每 IP 在窗口内不带 `limit` 参数的 `/random` 请求上限。GET / HEAD 及所有返回模式共用
-该档额度；请求在参数校验前计数，后续失败不退还额度。超限返回 `429 random_rate_limited`
-及整数秒 `Retry-After`。空、无效或非白名单 Referer 均正常计数，白名单 Referer 不计数。
-IP 由可信代理覆盖的 `X-Real-IP` 或单值 `X-Forwarded-For` 提供；无法取得时共用 `unknown` 额度。
-
-#### security.random_limit_max_requests
-
-- 环境变量：`SECURITY_RANDOM_LIMIT_MAX_REQUESTS`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `10`；1–10000 次
-
-每 IP 在窗口内带 `limit` 参数的 `/random` 请求上限，和不带参数的档位互不消耗额度。
-按精确小写参数是否出现分档；`limit=1`、空值和重复参数都进入本档，参数合法性仍由随机
-API 校验。白名单豁免规则与上一档一致。计数依赖 Redis；非白名单请求遇到 Redis 命令失败
-返回 `503 redis_unavailable`，白名单请求仍可使用原有 PostgreSQL 有界回源。
-
-#### altcha.enabled
-
-- 环境变量：`ALTCHA_ENABLED`
-- Compose：显式映射
-- 类型、默认值与范围：布尔；默认 `true`
-
-是否启用登录时的自托管 ALTCHA 验证。开启后，浏览器需完成验证才能提交登录；关闭不取消账号密码校验和登录频率限制。修改影响之后获取的登录验证。
-
-#### altcha.ttl_seconds
-
-- 环境变量：`ALTCHA_TTL_SECONDS`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `300`；90–3600 秒
-
-一次登录验证的有效时间。超过后需要重新获取并完成验证；较短时间减少验证结果可使用的时长，也更容易影响较慢设备。修改影响新发起的验证。
-
-#### altcha.cost
-
-- 环境变量：`ALTCHA_COST`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `5000`；1000–100000
-
-单次验证计算的成本。数值越大，浏览器需要的计算时间通常越长；应结合较慢的手机设置，避免登录等待过久。它与 `altcha.counter_range` 上界的乘积不能超过 100000000，修改影响新发起的验证。
-
-#### altcha.counter_range
-
-- 环境变量：`ALTCHA_COUNTER_RANGE`
-- Compose：显式映射
-- 类型、默认值与范围：严格 JSON 二元整数数组；默认 `[2000, 5000]`；两项均为 100–100000，下界不高于上界，且 `cost × 上界 <= 100000000`
-
-每次登录验证工作量的取值范围，格式为 `[下界, 上界]`。较大的范围值会增加可能的计算量和耗时；下界不能大于上界，且上界必须满足与 `altcha.cost` 的乘积限制。修改影响新发起的验证。
-
-#### log.level
-
-- 环境变量：`LOG_LEVEL`
-- Compose：显式映射
-- 类型、默认值与范围：枚举；默认 `"WARN"`；`DEBUG`、`INFO`、`WARN`、`ERROR`、`OFF`
-
-记录到控制台和文件的最低日志级别：`DEBUG` 包含调试信息，`INFO` 包含日常运行信息，`WARN` 仅记录警告和错误，`ERROR` 仅记录错误，`OFF` 关闭日志。调试级别会产生更多内容；可在后台日志页修改，立即影响后续记录。
-
-日志在输出前统一清洗敏感字段并转义控制字符，结构化上下文最多 8 KiB，超限保留截断标记。
-这不改变日志等级和轮转配置；详细内容与定位边界见[日志与错误上报](guide/security.md#日志与错误上报)。
-
-#### log.max_size_mb
-
-- 环境变量：`LOG_MAX_SIZE_MB`
-- Compose：显式映射
-- 类型、默认值与范围：数值；默认 `10`；大于 0 且不超过 1024 MiB
-
-当前日志文件达到该体积后，在后续写入时换用新文件，并将原文件保留为历史日志。单条日志可能使文件略微超过阈值；此项不是整个日志目录的容量上限。
-
-#### log.max_files
-
-- 环境变量：`LOG_MAX_FILES`
-- Compose：显式映射
-- 类型、默认值与范围：整数；默认 `5`；1–100 个文件
-
-轮转时保留的历史日志文件数量，不包含当前正在写入的 `app.log`。超过保留数量时，轮转会淘汰最早的历史文件；修改影响后续轮转。
+日志会自动隐去密码、密钥、Cookie、令牌等敏感信息，单条附加信息最多 8 KiB。
 
 ## 环境变量
 
-`.env` 是 Docker Compose 的变量来源，只有 `compose.yaml` 中显式映射的值才会进入容器。修改已映射的部署变量后，用 `docker compose up -d` 重新创建受影响的容器；已有 `config.json` 时，应用配置的环境变量不再覆盖文件。
+Docker Compose 从 `.env` 读取变量，但只有在 `compose.yaml` 的 `environment` 中列出的变量才会传给容器。修改后执行 `docker compose up -d` 重新创建容器。
 
 ### 数据库、管理员与时区
 
-下表默认值以仓库 Compose 部署为准。数据库名、用户和密码同时供应用与内置 PostgreSQL 使用；接入现有数据库时，应填写实际身份，修改变量不会替现有数据库改名或重设账号密码。
-
-| 变量 | 默认值与要求 | 用途 |
+| 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `DATABASE_NAME` | `imageshow`；非空 | ImageShow 使用的 PostgreSQL 数据库名。 |
-| `DATABASE_USER` | `imageshow`；非空 | 连接该数据库的用户名。 |
-| `DATABASE_PASSWORD` | 无默认值，必填且非空 | 数据库连接密码；使用独立的随机强密码。 |
-| `DATABASE_HOST` | `postgresql`；非空 | PostgreSQL 主机名。默认连接 Compose 内置服务；外部数据库需额外映射此变量。 |
-| `DATABASE_PORT` | `5432`；1–65535 | PostgreSQL 连接端口，自定义时需额外映射。 |
-| `REDIS_HOST` | `redis`；非空 | Redis 主机名。默认连接 Compose 内置服务；外部 Redis 需额外映射。 |
-| `REDIS_PORT` | `6379`；1–65535 | Redis 连接端口，自定义时需额外映射。 |
-| `REDIS_DB` | `0`；0–15 | ImageShow 专用的 Redis 逻辑库编号，不要与其他应用混用。自定义时需额外映射。 |
-| `REDIS_PASSWORD` | `""`；最多 512 字符 | Redis 密码。空值表示不认证；内置 Redis 使用私有网络且无密码，外部 Redis 按需额外映射。 |
-| `ADMIN_USERNAME` | `admin`；1–32 字符 | 首个超级管理员的用户名，仅在数据库没有超级管理员时使用。自动去除首尾空白并转为小写，只允许字母、数字和连字符，首尾不能是连字符。 |
-| `ADMIN_PASSWORD` | 无默认值，必填；8–128 字符且同时包含字母和数字 | 首个超级管理员的密码。已有账号时不会被此变量覆盖，日后在账号页面改密。 |
-| `TZ` | `UTC`；IANA 时区名称 | 本地时间的解释和显示时区，例如 `Asia/Shanghai`；自定义时需额外映射。 |
+| `DATABASE_PASSWORD` | 无，必填 | 数据库密码，使用随机强密码 |
+| `DATABASE_NAME` | 必填，Compose 默认 `imageshow` | 数据库名 |
+| `DATABASE_USER` | 必填，Compose 默认 `imageshow` | 数据库用户名 |
+| `DATABASE_HOST` | `postgresql` | 数据库地址，默认连接 Compose 内置的数据库 |
+| `DATABASE_PORT` | `5432` | 数据库端口 |
+| `REDIS_HOST` | `redis` | Redis 地址，默认连接 Compose 内置的 Redis |
+| `REDIS_PORT` | `6379` | Redis 端口 |
+| `REDIS_DB` | `0` | ImageShow 专用的 Redis 逻辑库编号（0–15），不要与其他程序共用 |
+| `REDIS_PASSWORD` | `""` | Redis 密码，留空表示不认证。内置 Redis 在私有网络中，不需要密码 |
+| `ADMIN_USERNAME` | 必填，Compose 默认 `admin` | 第一个超级管理员的用户名，1–32 位，只能用字母、数字和连字符，首尾不能是连字符，会转为小写 |
+| `ADMIN_PASSWORD` | 无，必填 | 第一个超级管理员的密码，8–128 位，需同时包含字母和数字 |
+| `TZ` | `UTC` | 服务器时区，如 `Asia/Shanghai`；导入图片的时间没有指定时区时，按此时区解释 |
 
-默认 Compose 持续要求两个密码非空；管理员初始化完成后，仍应保留部署文件所需的变量。密码恢复步骤见[部署说明](DEPLOY.md#管理员密码恢复)。
+- 数据库名、用户名和密码同时用于应用和内置数据库。连接已有数据库时填写它的实际信息；修改这些变量不会改动已有数据库的账号。
+- 管理员账号只在数据库中还没有超级管理员时创建，之后修改变量不会改变已有账号。默认 Compose 仍要求这两个密码非空，请一直保留。
+- 默认 `compose.yaml` 向应用传入数据库名、用户名、密码、管理员变量和 `SITE_DOMAIN`。`DATABASE_HOST`、`REDIS_*`、`TZ` 等需要自己加到 `environment` 中。
 
-### 应用配置的初始值
+### 用环境变量设置初始配置
 
-完整变量名和默认值见上方参数目录及根目录 `.env.example`。应用配置中，默认 Compose 仅映射 `SITE_DOMAIN`，未设置时传入空值。
+本页的每个配置项都可以用环境变量设置初始值。变量名就是配置路径转为大写、`.` 换成 `_`，例如 `site.home.enabled` 对应 `SITE_HOME_ENABLED`，`normalize.medium.quality` 对应 `NORMALIZE_MEDIUM_QUALITY`。完整列表见仓库中的 [.env.example](../.env.example)。
 
-需要使用其他初始值时，在 `.env` 填写合法值，并为 `services.imageshow.environment` 增加对应映射，例如：
+在这些初始配置变量中，默认 `compose.yaml` 只传入 `SITE_DOMAIN`。使用其他初始配置变量时，先写进 `.env`，再加到 `compose.yaml`：
 
 ```yaml
 services:
@@ -754,7 +218,7 @@ services:
       EMBED_ALLOWED_ORIGINS: ${EMBED_ALLOWED_ORIGINS:?set EMBED_ALLOWED_ORIGINS}
 ```
 
-布尔值只接受 `true`、`false`；数字不能带首尾空白；数组使用 JSON，不支持逗号列表。允许空字符串的项目可显式设为空，数字 `0` 和布尔 `false` 也会按原值使用。例如：
+写法要求：布尔值只能是 `true` 或 `false`；数字前后不能有空格；数组使用 JSON 格式。例如：
 
 ```ini
 SITE_ROOT=gallery
@@ -763,11 +227,4 @@ WEIBO_REQUEST_DELAY_SECONDS='[0,0]'
 EMBED_ALLOWED_ORIGINS='["https://portal.example.com","https://*.trusted.example.net"]'
 ```
 
-这些值只参与第一次生成配置文件。已有安装请修改配置文件或站点配置，避免误以为重新启动就会覆盖配置。
-
-### 本地开发变量
-
-| 变量 | 默认值与要求 | 用途 |
-| --- | --- | --- |
-| `NODE_ENV` | 源码运行默认 `development`，生产镜像设为 `production` | 区分运行环境；生产镜像的数据目录固定为 `/app/data`。 |
-| `IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY` | 未设置时使用当前工作目录下的 `data/` | 本地开发时指定独立的数据目录，涵盖配置、存储、临时文件和日志；生产环境忽略此变量。 |
+再次提醒：这些变量只在配置文件不存在时使用。已经安装过的站点请在后台或配置文件中修改。

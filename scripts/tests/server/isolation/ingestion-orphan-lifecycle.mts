@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUIDv7 } from "node:crypto";
 import { mkdir, readFile, utimes, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { activeSession, createIngestionScenarioFixture } from "./ingestion-scenario-fixture.mts";
@@ -8,11 +9,8 @@ import { runIntegrationScenario } from "./integration-runtime.mts";
 await runIntegrationScenario(async (runtime) => {
   const fixture = await createIngestionScenarioFixture(runtime);
   const { access, body, createImage } = await createMaintenanceFixture(runtime);
-  const { randomUuidV7 } = await import("../../../../packages/server/src/core/uuid.ts");
   const identity =
     await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
-  const { ingestionSessionSemanticHash } =
-    await import("../../../../packages/server/src/images/ingestion/sessions/projection.ts");
   const { semanticIngestionSession } =
     await import("../../../../packages/server/src/images/ingestion/sessions/transitions.ts");
   const paths = await import("../../../../packages/server/src/images/ingestion/raw/paths.ts");
@@ -29,19 +27,19 @@ await runIntegrationScenario(async (runtime) => {
   const cutoffs = ingestionOrphanCutoffs(now);
   const pair = {
     session_id: identity.createIngestionSessionId("orphan-owner", "import", "active"),
-    image_id: randomUuidV7()
+    image_id: randomUUIDv7()
   };
-  const generation = randomUuidV7();
+  const generation = randomUUIDv7();
   const makePrepared = (kind: "large" | "medium" | "small" = "large") =>
     paths.ingestionPreparedFile(
       {
         ...pair,
         generation,
-        execution_token: randomUuidV7()
+        execution_token: randomUUIDv7()
       },
       kind
     );
-  const producerToken = randomUuidV7();
+  const producerToken = randomUUIDv7();
   const [activeImage, activeThumb] = paths.ingestionPreparedFiles(pair, {
     generation,
     producer_execution_token: producerToken
@@ -58,7 +56,7 @@ await runIntegrationScenario(async (runtime) => {
   const queued = activeSession(
     (
       await fixture.ingestionRepository.acceptImportSession(
-        { ...template, semantic_hash: ingestionSessionSemanticHash(template) },
+        template,
         fixture.displayOrderKey(pair.session_id, 0, now),
         now
       )
@@ -76,10 +74,10 @@ await runIntegrationScenario(async (runtime) => {
     })
   );
   const activeRaw = paths.ingestionRawPath(pair, generation);
-  const orphanRaw = paths.ingestionRawPath(pair, randomUuidV7());
-  const recentRaw = paths.ingestionRawPath(pair, randomUuidV7());
-  const orphanPart = paths.ingestionRawPartPath(pair, randomUuidV7(), randomUuidV7());
-  const leasedPart = paths.ingestionRawPartPath(pair, randomUuidV7(), randomUuidV7());
+  const orphanRaw = paths.ingestionRawPath(pair, randomUUIDv7());
+  const recentRaw = paths.ingestionRawPath(pair, randomUUIDv7());
+  const orphanPart = paths.ingestionRawPartPath(pair, randomUUIDv7(), randomUUIDv7());
+  const leasedPart = paths.ingestionRawPartPath(pair, randomUUIDv7(), randomUUIDv7());
   const retained = [
     activeRaw,
     recentRaw,

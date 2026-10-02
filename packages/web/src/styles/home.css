@@ -310,7 +310,7 @@
 .home-filter-reset {
   color: var(--public-color-home-reset-text);
   background: var(--public-color-home-reset-surface);
-  border: 1px solid var(--public-color-border-default);
+  border: 1px solid var(--public-color-home-border);
 }
 
 .home-filter-reset-icon {
@@ -339,7 +339,7 @@
 .home-gallery-entry.is-disabled {
   color: var(--public-color-home-toolbar-description);
   background: var(--public-color-home-reset-surface);
-  border-color: var(--public-color-border-default);
+  border-color: var(--public-color-home-border);
   box-shadow: none;
   cursor: default;
 }

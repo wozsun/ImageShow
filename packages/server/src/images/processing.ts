@@ -22,7 +22,7 @@ export type PreparedStoredImage = {
 export async function transcodeStoredImage(
   path: string,
   settings: NormalizeProfile,
-  signal = new AbortController().signal
+  signal: AbortSignal
 ): Promise<PreparedStoredImage> {
   signal.throwIfAborted();
   const metadata = await sharp(path).metadata();

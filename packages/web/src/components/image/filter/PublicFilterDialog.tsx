@@ -1,5 +1,6 @@
 import { useId, useMemo, useRef, useState, type RefObject } from "react";
 import { publicTagGroupLimit, type GalleryFacetsDto } from "@imageshow/shared/browser";
+import { reducedMotionQuery } from "../../../lib/ui/reduced-motion.js";
 import { DialogFrame } from "../../feedback/DialogFrame.js";
 import { OverlayScrollbar } from "../../layout/OverlayScrollbar.js";
 import { PublicFilterSection, publicFilterIcons } from "./PublicFilterSection.js";
@@ -172,7 +173,7 @@ export function PublicFilterDialog({
   const counts = draftError ? undefined : matching.displayData;
   const matchingCount = counts?.matching_images;
   const availabilityUnverified = matching.availabilityUnverified || Boolean(draftError);
-  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const reduceMotion = useMediaQuery(reducedMotionQuery);
   const [sheetEntered, setSheetEntered] = useState(false);
   const refreshGlintRun = useRefreshGlintRun(previewUpdating);
   const glint = useRefreshGlint(refreshGlintRun, previewUpdating, reduceMotion);

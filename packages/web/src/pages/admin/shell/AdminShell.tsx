@@ -92,6 +92,7 @@ export function AdminShell({ siteHeaderName }: { siteHeaderName: string }) {
   return (
     <AuthenticatedAdminShell
       role={role}
+      permissions={data.permissions}
       username={data.username}
       serverPreferences={data.preferences}
       serverPreferencesEtag={data.preferences_etag}

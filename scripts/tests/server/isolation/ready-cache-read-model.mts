@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 type AdminImagesReadModelModule =
@@ -101,7 +102,11 @@ await runIntegrationScenario(async (runtime) => {
     coreUuid.randomUuidV7At(imageDate, 3)
   ];
   const expectedOrder = [...imageIds].sort().reverse();
-  const readServingResources = () => serving.readImageServingRecordById(imageIds[0]);
+  const readServingResources = () =>
+    serving.readImageServingRecordById(
+      imageIds[0],
+      { reader: runtime.databasePools.pool }
+    );
   const errors: unknown[] = [];
   try {
     await runtime.databasePools.pool.query(
@@ -154,7 +159,7 @@ await runIntegrationScenario(async (runtime) => {
     ]);
     // Before the ready projection is initialized, detail reads use PostgreSQL.
     const databaseDetails = await Promise.all(
-      imageIds.map((id) => publicImages.getPublicImage(id, "show", undefined, true))
+      imageIds.map((id) => publicImages.getPublicImage(id, "show", neverAbortedSignal, true))
     );
     assert.equal(
       databaseDetails[0].original_url,
@@ -199,7 +204,7 @@ await runIntegrationScenario(async (runtime) => {
       // Concurrent consumers may share a PostgreSQL row, never its identity-dependent DTO.
       const projections = await Promise.all(
         [false, true, false, true].map((include) =>
-          publicImages.getPublicImage(imageIds[0], "show", undefined, include)
+          publicImages.getPublicImage(imageIds[0], "show", neverAbortedSignal, include)
         )
       );
       assert.deepEqual(
@@ -295,7 +300,7 @@ await runIntegrationScenario(async (runtime) => {
       assert.ok(info.storage_label);
     }
     const cachedDetails = await Promise.all(
-      imageIds.map((id) => publicImages.getPublicImage(id, "show", undefined, true))
+      imageIds.map((id) => publicImages.getPublicImage(id, "show", neverAbortedSignal, true))
     );
     assert.deepEqual(cachedDetails, databaseDetails);
     const cachedOriginal = await readServingResources();
@@ -396,7 +401,9 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(trashedOriginal.headers.get("Cache-Control"), "private, no-cache");
     await trash.restoreImages([imageIds[0]]);
     assert.equal(
-      (await publicImages.getPublicImage(imageIds[0], "show", undefined, true)).original_url,
+      (
+        await publicImages.getPublicImage(imageIds[0], "show", neverAbortedSignal, true)
+      ).original_url,
       databaseDetails[0].original_url
     );
   } catch (error) {

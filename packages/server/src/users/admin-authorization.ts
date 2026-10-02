@@ -3,7 +3,7 @@ import {
   type AdminPermission,
   type AdminRole
 } from "@imageshow/shared/browser";
-import type { Context, MiddlewareHandler, Next } from "hono";
+import type { MiddlewareHandler } from "hono";
 import { ApiError } from "../core/api-error.ts";
 
 const rolePermissionGrants = {
@@ -11,27 +11,14 @@ const rolePermissionGrants = {
   image: new Set<AdminPermission>()
 } satisfies Record<AdminRole, ReadonlySet<AdminPermission>>;
 
-type AdminAuthorizationSession = {
-  role?: AdminRole;
-};
-
 export function adminPermissionsForRole(role: AdminRole): AdminPermission[] {
   return [...rolePermissionGrants[role]];
 }
 
-function adminSessionHasPermission(
-  session: AdminAuthorizationSession | undefined,
-  permission: AdminPermission
-) {
-  return session?.role
-    ? rolePermissionGrants[session.role].has(permission)
-    : false;
-}
-
 export function requireAdminPermission(permission: AdminPermission): MiddlewareHandler {
   return async (context, next) => {
-    const session = context.get("session") as AdminAuthorizationSession | undefined;
-    if (!adminSessionHasPermission(session, permission)) {
+    const session = context.get("session");
+    if (!session || !rolePermissionGrants[session.role].has(permission)) {
       throw new ApiError(
         403,
         "forbidden",
@@ -41,12 +28,4 @@ export function requireAdminPermission(permission: AdminPermission): MiddlewareH
     }
     await next();
   };
-}
-
-export async function requireSuperAdmin(context: Context, next: Next) {
-  const session = context.get("session") as AdminAuthorizationSession | undefined;
-  if (session?.role !== "super") {
-    throw new ApiError(403, "forbidden", "Super admin only");
-  }
-  await next();
 }

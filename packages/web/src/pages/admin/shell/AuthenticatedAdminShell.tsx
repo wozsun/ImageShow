@@ -1,8 +1,10 @@
 import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
-import type {
-  AdminPreferences,
-  AdminRole
+import {
+  adminPermissions,
+  type AdminPermission,
+  type AdminPreferences,
+  type AdminRole
 } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
@@ -25,7 +27,7 @@ import { adminRouteModuleLoaders } from "./admin-route-modules.js";
 import {
   AdminNavigationLinks,
   AdminSiteNavigation,
-  adminNavigationForRole
+  adminNavigationForPermissions
 } from "./AdminNavigation.js";
 import { AdminBrand } from "./AdminBrand.js";
 // 认证成功后才加载后台导航、布局与共享管理控件；登录页不会下载这一块。
@@ -80,6 +82,7 @@ const LogPage = lazy(() =>
 
 type AuthenticatedAdminShellProps = {
   role: AdminRole;
+  permissions: readonly AdminPermission[];
   username: string;
   serverPreferences: AdminPreferences;
   serverPreferencesEtag: string;
@@ -93,6 +96,7 @@ type AuthenticatedAdminShellProps = {
 
 function AuthenticatedAdminLayout({
   role,
+  permissions,
   siteHeaderName,
   applicationVersion,
   versionEnabled,
@@ -106,8 +110,11 @@ function AuthenticatedAdminLayout({
   const navScrollRef = useRef<HTMLDivElement | null>(null);
   const [colorScheme, setColorScheme] = useAdminPreference("color_scheme");
   const [colorSchemeCycle, setColorSchemeCycle] = useState<AdminColorSchemeCycle | null>(null);
-  const isSuper = role === "super";
-  const navigation = adminNavigationForRole(role);
+  const canManageSettings = permissions.includes(adminPermissions.settingsManage);
+  const canManageStorage = permissions.includes(adminPermissions.storageManage);
+  const canManageUsers = permissions.includes(adminPermissions.usersManage);
+  const canManageLogs = permissions.includes(adminPermissions.logsManage);
+  const navigation = adminNavigationForPermissions(role, permissions);
 
   const resolvedColorScheme = useAdminColorScheme(colorScheme);
   useLayoutEffect(() => {
@@ -189,17 +196,17 @@ function AuthenticatedAdminLayout({
         <RouteLoadBoundary resetKey={routeLocation.pathname}>
           <Suspense fallback={<div className="center">加载中</div>}>
             <Routes>
-              <Route index element={<Overview canManageStorage={isSuper} />} />
+              <Route index element={<Overview canManageStorage={canManageStorage} />} />
               <Route path="images" element={<ImageAdmin />} />
               <Route path="tags" element={<VocabularyAdmin key="tags" kind="tags" />} />
               <Route path="themes" element={<VocabularyAdmin key="themes" kind="themes" />} />
               <Route path="authors" element={<VocabularyAdmin key="authors" kind="authors" />} />
               <Route path="account" element={<AccountSettings />} />
-              {isSuper && <Route path="site" element={<SettingsPage />} />}
-              {isSuper && <Route path="storage" element={<StorageSettings />} />}
-              {isSuper && <Route path="users" element={<UserAdmin />} />}
+              {canManageSettings && <Route path="site" element={<SettingsPage />} />}
+              {canManageStorage && <Route path="storage" element={<StorageSettings />} />}
+              {canManageUsers && <Route path="users" element={<UserAdmin />} />}
               <Route path="check" element={<CheckPage />} />
-              {isSuper && <Route path="logs" element={<LogPage />} />}
+              {canManageLogs && <Route path="logs" element={<LogPage />} />}
               <Route path="*" element={<Navigate to={adminBasePath} replace />} />
             </Routes>
           </Suspense>

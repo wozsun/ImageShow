@@ -141,12 +141,7 @@ export type AdminImageListItemDto = ImageDetailItemDto & ShowImageCardDto & {
  *
  * List/edit-only fields remain outside this compact response.
  */
-export type AdminImageDetailItemDto = ImageDetailItemDto & {
-  variants: ImageVariantByteSizesDto;
-  storage_label: string;
-  created_at: string;
-  updated_at: string;
-};
+export type AdminImageDetailItemDto = ImageDetailItemDto & ImageAdminInfoDto;
 
 /** Exact recovery payload consumed by the image metadata editor. */
 export type EditableImageSnapshotDto = {

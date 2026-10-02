@@ -58,6 +58,10 @@ export type AdminRole = "super" | "image";
 export const logLevels = ["DEBUG", "INFO", "WARN", "ERROR", "OFF"] as const;
 export type LogLevel = (typeof logLevels)[number];
 export const adminPermissions = {
+  logsManage: "logs.manage",
+  usersManage: "users.manage",
+  settingsManage: "settings.manage",
+  storageManage: "storage.manage",
   imageStorageMigrate: "image.storage.migrate",
   imageTrashPurge: "image.trash.purge",
   tagDelete: "tag.delete",

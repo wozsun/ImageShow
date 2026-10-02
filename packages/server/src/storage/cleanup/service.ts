@@ -1,6 +1,8 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { ApiError } from "../../core/api-error.ts";
 import { withAdvisoryLock } from "../../core/database/advisory-locks.ts";
 import type { PoolClient } from "pg";
+import { neverAbortedSignal } from "../../core/abort.ts";
 import type { ReadablePrefix } from "../objects/keys.ts";
 import { getStorageBackend } from "../backends/registry.ts";
 import { withStorageLocationReadLock } from "../maintenance-lock.ts";
@@ -118,24 +120,10 @@ export async function setIngestionCandidateGuardConfirmationDeadline(
   confirmAbsentAfter: Date | null,
   options: Readonly<{ signal?: AbortSignal }> = {}
 ) {
-  let lastError: unknown;
-  for (const delayMs of cleanupPersistenceRetryDelaysMs) {
-    options.signal?.throwIfAborted();
-    await wait(delayMs);
-    options.signal?.throwIfAborted();
-    try {
-      await persistIngestionGuardDeadline(
-        imageId,
-        guardToken,
-        confirmAbsentAfter
-      );
-      options.signal?.throwIfAborted();
-      return;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError;
+  await persistCleanupWithRetry(
+    () => persistIngestionGuardDeadline(imageId, guardToken, confirmAbsentAfter),
+    options.signal
+  );
 }
 
 export async function captureMoveCleanupObjects(
@@ -192,28 +180,47 @@ export async function enqueueCapturedObjectsForCleanupWithoutLocationLock(
   options: Readonly<{ confirmAbsentAfter?: Date }> = {}
 ) {
   if (!objects.length) return;
-  const signal = new AbortController().signal;
   await enqueueMoveCleanupWithRetry(
     imageId,
     objects,
     reason,
-    signal,
+    neverAbortedSignal,
     undefined,
     options.confirmAbsentAfter
   );
 }
 
-/**
- * Queue cleanup against the physical namespace observed at enqueue time. The
- * deterministic key still deduplicates active work; terminal history can be
- * reset by the repository when the same object needs cleanup again.
- */
-function wait(delayMs: number) {
-  return delayMs > 0
-    ? new Promise<void>((resolve) => setTimeout(resolve, delayMs))
-    : Promise.resolve();
+async function persistCleanupWithRetry(
+  persist: () => Promise<unknown>,
+  signal?: AbortSignal
+) {
+  let lastError: unknown;
+  for (const delayMs of cleanupPersistenceRetryDelaysMs) {
+    signal?.throwIfAborted();
+    if (delayMs > 0) {
+      await delay(delayMs, undefined, { signal }).catch((error: unknown) => {
+        signal?.throwIfAborted();
+        throw error;
+      });
+    }
+    signal?.throwIfAborted();
+    try {
+      await persist();
+      signal?.throwIfAborted();
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
+/**
+ * Queue cleanup against the physical namespace observed at enqueue time. The
+ * deterministic key still deduplicates active work, so retrying persistence
+ * cannot queue the same object twice; terminal history can be reset by the
+ * repository when the same object needs cleanup again.
+ */
 async function enqueueMoveCleanupWithRetry(
   imageId: string,
   objects: readonly CapturedMoveCleanupObject[],
@@ -222,23 +229,13 @@ async function enqueueMoveCleanupWithRetry(
   guardToken?: string,
   confirmAbsentAfter?: Date
 ) {
-  let lastError: unknown;
-  for (const delayMs of cleanupPersistenceRetryDelaysMs) {
-    signal.throwIfAborted();
-    await wait(delayMs);
-    signal.throwIfAborted();
-    try {
-      await enqueueMoveCleanupJob(imageId, objects, reason, {
-        guardToken,
-        confirmAbsentAfter
-      });
-      signal.throwIfAborted();
-      return;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError;
+  await persistCleanupWithRetry(
+    () => enqueueMoveCleanupJob(imageId, objects, reason, {
+      guardToken,
+      confirmAbsentAfter
+    }),
+    signal
+  );
 }
 
 /**

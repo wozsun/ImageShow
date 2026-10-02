@@ -83,12 +83,12 @@
   padding: 8px;
   border-radius: 7px;
   color: var(--color-public-text-primary);
-  border: 1px solid var(--color-dark-control-border);
-  background: var(--color-dark-control-surface);
+  border: 1px solid var(--public-color-filter-control-border);
+  background: var(--public-color-filter-option);
 }
 .public-filter-icon-button:hover {
-  border-color: var(--color-dark-control-border-hover);
-  background: var(--color-dark-control-surface-hover);
+  border-color: var(--public-color-filter-control-border-hover);
+  background: var(--public-color-filter-hover);
 }
 .public-filter-icon-button .app-icon {
   width: 18px;
@@ -108,7 +108,7 @@
   margin: 0 28px;
   padding: 4px 12px;
   background: var(--public-color-filter-search);
-  border: 1px solid var(--color-dark-control-border);
+  border: 1px solid var(--public-color-filter-control-border);
   border-radius: 10px;
 }
 .public-filter-search:focus-within {
@@ -164,7 +164,7 @@
 }
 .public-filter-search button.public-filter-search-accessory:hover {
   color: var(--color-public-text-primary);
-  border-color: var(--color-dark-control-border-hover);
+  border-color: var(--public-color-filter-control-border-hover);
 }
 .public-filter-selection {
   position: relative;
@@ -214,7 +214,7 @@
   color: var(--public-color-filter-muted);
 }
 .public-filter-chip-nav:hover:not(:disabled) {
-  background: var(--color-dark-control-surface-subtle-hover);
+  background: var(--public-color-filter-hover);
 }
 .public-filter-chip-nav:focus-visible {
   outline: 1px solid var(--public-color-filter-action);
@@ -257,7 +257,7 @@
   flex: 0 0 auto;
   min-height: 30px;
   padding: 5px 8px;
-  border: 1px solid var(--public-color-gallery-menu-selection-border);
+  border: 1px solid var(--public-color-filter-selection-border);
   border-radius: 6px;
   color: var(--color-public-text-primary);
   background: var(--public-color-filter-selected);
@@ -310,7 +310,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   border-right: 1px solid var(--public-color-filter-border);
-  background: var(--color-dark-canvas);
+  background: var(--public-color-filter-surface);
 }
 .public-filter-directory-caption {
   padding: 0 12px 8px;
@@ -360,17 +360,17 @@
   padding: 2px 5px;
   font-size: 11px;
   border-radius: 4px;
-  background: var(--public-color-gallery-control-surface);
+  background: var(--public-color-filter-option);
 }
 .public-filter-directory button[aria-current] {
   color: var(--public-color-filter-action);
   background: var(--public-color-filter-selected);
-  border-color: var(--public-color-gallery-menu-selection-border);
+  border-color: var(--public-color-filter-selection-border);
 }
 .public-filter-directory button:not([aria-current]):not(:disabled):hover,
 .public-filter-mode button:not([aria-pressed="true"]):not(:disabled):hover,
 .public-filter-segment:not([aria-pressed="true"]):not(:disabled):hover {
-  background: var(--color-dark-control-surface-subtle-hover);
+  background: var(--public-color-filter-hover);
 }
 .public-filter-directory button[aria-current]::before {
   content: "";
@@ -522,9 +522,9 @@
   min-height: 60px;
   padding: 10px 12px;
   text-align: left;
-  color: var(--color-public-text-primary);
+  color: var(--color-public-text-strong);
   background: var(--public-color-filter-option);
-  border: 1px solid var(--color-dark-control-border);
+  border: 1px solid var(--public-color-filter-control-border);
   border-radius: 9px;
   transition:
     color 0.16s ease,
@@ -533,7 +533,7 @@
 }
 .public-filter-option[aria-pressed="true"] {
   background: var(--public-color-filter-selected);
-  border-color: var(--public-color-gallery-menu-selection-border);
+  border-color: var(--public-color-filter-selection-border);
 }
 .public-filter-option.is-excluded {
   border-style: dashed;
@@ -593,8 +593,8 @@
 }
 .public-filter-option[aria-pressed="true"] .public-filter-check {
   color: var(--public-color-filter-action-text);
-  border-color: var(--color-dark-control-action);
-  background: var(--color-dark-control-action);
+  border-color: var(--color-action-fill);
+  background: var(--color-action-fill);
 }
 .is-tags .public-filter-option {
   min-height: 56px;
@@ -637,7 +637,7 @@
   font-size: 12px;
 }
 .public-filter-group-button:not(:disabled):hover {
-  background: var(--color-dark-control-surface-subtle-hover);
+  background: var(--public-color-filter-hover);
 }
 .public-filter-section-tag {
   container: public-filter-tags / inline-size;
@@ -690,7 +690,7 @@
   text-align: left;
 }
 .public-filter-tag-group button:not(:disabled):hover {
-  background: var(--color-dark-control-surface-subtle-hover);
+  background: var(--public-color-filter-hover);
 }
 .public-filter-tag-group button[aria-pressed="true"] {
   background: var(--public-color-filter-selected);
@@ -731,14 +731,14 @@
 .public-filter-group-marks > span {
   display: grid;
   place-items: center;
-  border: 1px solid var(--public-color-gallery-menu-selection-border);
+  border: 1px solid var(--public-color-filter-selection-border);
   border-radius: 3px;
   color: var(--public-color-filter-action);
   font-size: 10px;
   line-height: 1;
 }
 .public-filter-group-marks > .is-current {
-  background: var(--color-dark-control-action);
+  background: var(--color-action-fill);
   color: var(--public-color-filter-action-text);
 }
 .public-filter-muted {
@@ -778,14 +778,14 @@
   padding: 6px 10px;
   min-height: 34px;
   color: var(--color-public-text-primary);
-  background: var(--color-dark-control-surface);
-  border: 1px solid var(--color-dark-control-border);
+  background: var(--public-color-filter-option);
+  border: 1px solid var(--public-color-filter-control-border);
   border-radius: 6px;
 }
 .public-filter-notice button:hover,
 .public-filter-empty button:hover {
-  background: var(--color-dark-control-surface-hover);
-  border-color: var(--color-dark-control-border-hover);
+  background: var(--public-color-filter-hover);
+  border-color: var(--public-color-filter-control-border-hover);
 }
 .public-filter-empty {
   padding: 40px 0;
@@ -890,12 +890,12 @@
   min-height: 38px;
   padding: 6px 14px;
   color: var(--color-public-text-primary);
-  background: var(--color-dark-control-surface);
-  border: 1px solid var(--color-dark-control-border);
+  background: var(--public-color-filter-option);
+  border: 1px solid var(--public-color-filter-control-border);
 }
 .public-filter-cancel:hover {
-  background: var(--color-dark-control-surface-hover);
-  border-color: var(--color-dark-control-border-hover);
+  background: var(--public-color-filter-hover);
+  border-color: var(--public-color-filter-control-border-hover);
 }
 .public-filter-apply {
   display: flex;
@@ -920,8 +920,9 @@
 }
 
 @media (hover: hover) {
-  .public-filter-option:not(:disabled):hover {
-    border-color: var(--public-color-gallery-menu-selection-border);
+  .public-filter-option:not([aria-pressed="true"]):not(:disabled):hover {
+    border-color: var(--public-color-filter-control-border-hover);
+    background: var(--public-color-filter-hover);
   }
   .public-filter-apply:not(:disabled):hover .app-icon {
     transform: translateX(3px);

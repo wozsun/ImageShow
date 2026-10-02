@@ -17,7 +17,7 @@ export type ReadyImageRevisionSnapshot = {
 
 function parseRevision(value: unknown): ReadyImageRevision {
   const revision = String(value ?? "");
-  if (!/^\d+$/.test(revision) || BigInt(revision) < 0n) {
+  if (!/^\d+$/.test(revision)) {
     throw new Error("PostgreSQL returned an invalid ready-image revision");
   }
   return revision;

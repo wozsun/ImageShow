@@ -161,9 +161,6 @@ body:has(.gallery-page) {
   height: 40px;
   padding-left: 14px;
   padding-right: 30px;
-  color: var(--color-dark-control-text-primary);
-  background: var(--color-dark-control-surface);
-  border-color: var(--color-dark-control-border);
 }
 .gallery-toolbar .select-trigger:hover {
   border-color: var(--color-dark-control-border-hover);
@@ -176,17 +173,6 @@ body:has(.gallery-page) {
   background: var(--public-color-gallery-menu-surface);
   border: 1px solid var(--public-color-border-default);
   box-shadow: 0 18px 42px var(--public-shadow-gallery-menu);
-}
-.select-menu.public-gallery-menu > button {
-  color: var(--color-dark-control-text-primary);
-}
-.select-menu.public-gallery-menu > button:hover,
-.select-menu.public-gallery-menu > button:focus-visible,
-.select-menu.public-gallery-menu > button.is-selected {
-  background: var(--color-dark-control-surface-hover);
-}
-.select-menu.public-gallery-menu > button.is-selected {
-  color: var(--color-dark-control-action-text);
 }
 .public-toolbar-popover {
   position: fixed;
@@ -232,8 +218,8 @@ body:has(.gallery-page) {
   gap: 8px;
   align-items: center;
 }
-.public-toolbar-share-link input,
-.public-toolbar-share-link .copy-button {
+/* Low specificity keeps the shared copied / failed feedback colors visible. */
+.public-toolbar-share-link :where(input, .copy-button) {
   color: var(--color-public-text-primary);
   background: var(--public-color-gallery-code-surface);
   border: 1px solid var(--public-color-border-default);
@@ -251,7 +237,7 @@ body:has(.gallery-page) {
   height: 40px;
   padding: 8px;
 }
-.public-toolbar-share-link .copy-button:hover {
+.public-toolbar-share-link .copy-button:not(.is-copied, .is-failed):hover {
   border-color: var(--public-color-gallery-menu-selection-border);
 }
 @media (min-width: 761px) {

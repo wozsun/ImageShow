@@ -12,6 +12,8 @@ import {
   rememberServedIds
 } from "./dedupe.ts";
 import {
+  hasSelectors,
+  ignoredSelectorDetails,
   normalizeRandomQuery,
   parseRandomQuery,
   type RandomSelectorGroup
@@ -30,10 +32,6 @@ export type RandomImageSelection = {
   size: RandomImageSize;
   items: SelectedReadyImage[];
 };
-
-function hasSelectors(group: RandomSelectorGroup) {
-  return group.include.length > 0 || group.exclude.length > 0;
-}
 
 export async function selectRandomImages(
   url: URL,
@@ -131,12 +129,15 @@ export async function selectRandomImages(
       query.tag !== null ||
       hasSelectors(query.author)
     );
-    return apiErrorResponse({
-      status: 404,
-      message: hasFilters
-        ? "Not Found: No available images for the selected filters"
-        : "Not Found: No available images"
-    });
+    return apiErrorResponse(
+      {
+        status: 404,
+        message: hasFilters
+          ? "Not Found: No available images for the selected filters"
+          : "Not Found: No available images"
+      },
+      ignoredSelectorDetails(query.ignored)
+    );
   }
   if (query.seed === null) {
     await rememberServedIds(

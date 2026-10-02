@@ -1,6 +1,6 @@
+import { randomUUIDv7 } from "node:crypto";
 import { getIngestionMaxFileBytes } from "../../../config/app-settings.ts";
 import { ApiError } from "../../../core/api-error.ts";
-import { randomUuidV7 } from "../../../core/uuid.ts";
 import { fetchImportImageToFile } from "./fetch.ts";
 import { withIngestionExecutionHeartbeat } from "../execution/heartbeat.ts";
 import {
@@ -11,7 +11,6 @@ import { removeIngestionRawPart } from "../raw/files.ts";
 import { withActiveIngestionTempPaths } from "../raw/lease-registry.ts";
 import { ingestionRawPartPath, ingestionRawPath } from "../raw/paths.ts";
 import type { IngestionSessionSnapshot } from "../sessions/model.ts";
-import { ingestionSessionSemanticHash } from "../sessions/projection.ts";
 import { IngestionSessionRepository } from "../repository.ts";
 
 export type DownloadIngestionSessionDependencies = Readonly<{
@@ -39,7 +38,7 @@ export async function downloadIngestionSessionSnapshot(
   ) {
     throw new ApiError(409, "invalid_ingestion_state", "导入任务不能进入下载阶段");
   }
-  const rawGeneration = randomUuidV7();
+  const rawGeneration = randomUUIDv7();
   const rawPath = ingestionRawPath(session, rawGeneration);
   const partPath = ingestionRawPartPath(
     session,
@@ -95,7 +94,7 @@ export async function downloadIngestionSessionSnapshot(
         const current = await progressUpdateChain;
         executionSignal.throwIfAborted();
         return mutateIngestionExecution(repository, current, (latest) => {
-          const nextWithoutHash = {
+          return {
             ...latest,
             status: "received" as const,
             phase: "prepare-waiting",
@@ -104,12 +103,7 @@ export async function downloadIngestionSessionSnapshot(
             execution_token: "",
             raw_generation: rawGeneration,
             raw_size: rawSize,
-            error: undefined,
-            semantic_hash: ""
-          };
-          return {
-            ...nextWithoutHash,
-            semantic_hash: ingestionSessionSemanticHash(nextWithoutHash)
+            error: undefined
           };
         });
       } catch (error) {

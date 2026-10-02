@@ -1,14 +1,11 @@
 import { STORAGE_PREFIXES, type StoragePrefix } from "../storage/objects/keys.ts";
-import { storageObjectKey } from "@imageshow/shared/browser";
 import { appConfig } from "@imageshow/shared";
 import { pool } from "../core/database/pools.ts";
 import { errorMessage } from "../core/api-error.ts";
 import { inspectIngestionTempOrphans } from "../images/ingestion/raw/orphan-scanner.ts";
 import { ingestionOrphanCutoffs } from "../images/ingestion/cleanup/retention.ts";
 import { resolveStorageAccess } from "../storage/backends/registry.ts";
-import {
-  assertCanonicalImageObjectKey
-} from "../storage/objects/image-paths.ts";
+import { imageObjectKey } from "../storage/objects/image-paths.ts";
 import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/objects/key-listing.ts";
 import {
   activeIngestionStorageReferences,
@@ -113,14 +110,15 @@ export async function checkStorage(signal?: AbortSignal) {
     );
     const largeListing = captured.snapshot.large;
     const largeSet = new Set(largeListing.keys);
+    // Reject any non-canonical image ID before probing a backend.
     for (const row of retainedDuringEnumeration) {
-      assertCanonicalImageObjectKey(storageObjectKey(row.id));
+      imageObjectKey(row.id);
     }
     for (const slug of group.slugs) {
       const rowsForSlug = retainedDuringEnumeration.filter((row) => row.storage_slug === slug);
       const sample =
         rowsForSlug.find((row) => (
-          largeSet.has(storageObjectKey(row.id))
+          largeSet.has(imageObjectKey(row.id))
         ))
           ?? rowsForSlug[0];
       if (!sample) continue;
@@ -128,11 +126,11 @@ export async function checkStorage(signal?: AbortSignal) {
         const access = await resolveStorageAccess(slug);
         const readable = await access.driver.exists(
           "large",
-          storageObjectKey(sample.id),
+          imageObjectKey(sample.id),
           { signal }
         );
         if (largeListing.complete
-          && largeSet.has(storageObjectKey(sample.id))
+          && largeSet.has(imageObjectKey(sample.id))
           && !readable) {
           unavailableBackends.push({
             backend: slug,
@@ -152,7 +150,7 @@ export async function checkStorage(signal?: AbortSignal) {
       }
     }
     const referenced = new Map(STORAGE_PREFIXES.map((prefix) => [prefix,
-      new Set(retainedDuringEnumeration.map((row) => storageObjectKey(row.id)))
+      new Set(retainedDuringEnumeration.map((row) => imageObjectKey(row.id)))
     ]));
     const activeReferences = mergeActiveIngestionStorageReferences(
       ...group.slugs.flatMap((slug) => [referencesBeforeEnumeration.get(slug) ?? new Map(), referencesAfterEnumeration.get(slug) ?? new Map()])
@@ -163,7 +161,7 @@ export async function checkStorage(signal?: AbortSignal) {
     for (const [prefix, listing] of listings) {
       const present = new Set(listing.keys);
       for (const image of retainedBeforeEnumeration) {
-        const key = storageObjectKey(image.id);
+        const key = imageObjectKey(image.id);
         if (listing.complete && !present.has(key)) missingObjects.push({ id: image.id, object_key: key, prefix, backend: image.storage_slug, namespace });
       }
       for (const key of listing.keys) {

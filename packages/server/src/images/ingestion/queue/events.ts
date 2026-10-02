@@ -12,10 +12,8 @@ import { streamSSE } from "hono/streaming";
 import { raceWithAbortSignal } from "../../../core/abort.ts";
 import { logger } from "../../../core/logger.ts";
 import { registerAdminSessionConnection } from "../../../users/admin-session-connections.ts";
-import {
-  validateAdminSessionById,
-  type AdminSession
-} from "../../../users/admin-session.ts";
+import type { AdminSession } from "../../../core/http/admin-session-context.ts";
+import { validateAdminSessionById } from "../../../users/admin-session.ts";
 import {
   openIngestionActionScope,
   requireIngestionActionScope,

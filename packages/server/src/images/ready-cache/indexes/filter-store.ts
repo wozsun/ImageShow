@@ -1,10 +1,10 @@
+import { randomUUIDv7 } from "node:crypto";
 import { getRedisConnectionState, redis } from "../../../core/redis/client.ts";
 import {
   storeReadyImageFilterSetCommand,
   type ReadyImageFilterSetOperation
 } from "../redis/commands.ts";
 import { execRedisPipeline } from "../../../core/redis/pipeline.ts";
-import { randomUuidV7 } from "../../../core/uuid.ts";
 import { getReadyImageCacheCoordinatorStatus } from "../coordinator.ts";
 import {
   discardReadyImageDerivedResult,
@@ -148,7 +148,7 @@ export async function publishReadyImageFilterIndex(options: {
       ) {
         return null;
       }
-      const instanceToken = randomUuidV7().replaceAll("-", "");
+      const instanceToken = randomUUIDv7().replaceAll("-", "");
       const transaction = redis.multi();
       transaction.del(finalKey, metaKey);
       if (options.count > 0) {

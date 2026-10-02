@@ -1,6 +1,6 @@
 import { storageObjectKey } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID, randomUUIDv7 } from "node:crypto";
 import type {
   ImageDraftDto,
   IngestionCommitItemInputDto
@@ -204,8 +204,8 @@ export async function createReadyIngestionFixture(
     ...withoutHash,
     semantic_hash: projection.ingestionSessionSemanticHash(withoutHash)
   };
-  const generation = coreUuid.randomUuidV7();
-  const executionToken = coreUuid.randomUuidV7();
+  const generation = randomUUIDv7();
+  const executionToken = randomUUIDv7();
   const preparedInput = {
     session_id: sessionId,
     image_id: imageId,

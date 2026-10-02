@@ -9,12 +9,12 @@ export const mobileViewportMediaQuery = "(max-width: 760px)";
  */
 export function useMediaQuery(query: string) {
   const store = useMemo(() => {
-    const mediaQuery = typeof window === "undefined" ? null : window.matchMedia(query);
+    const mediaQuery = window.matchMedia(query);
     return {
-      getSnapshot: () => mediaQuery?.matches ?? false,
+      getSnapshot: () => mediaQuery.matches,
       subscribe: (notify: () => void) => {
-        mediaQuery?.addEventListener("change", notify);
-        return () => mediaQuery?.removeEventListener("change", notify);
+        mediaQuery.addEventListener("change", notify);
+        return () => mediaQuery.removeEventListener("change", notify);
       }
     };
   }, [query]);

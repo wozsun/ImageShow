@@ -7,6 +7,17 @@ const environmentState = globalThis as typeof globalThis & {
 
 if (!environmentState[environmentKey]) {
   const { window, document } = parseHTML("<!doctype html><html><body></body></html>");
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (media: string) => ({
+      media,
+      matches: false,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {}
+    })
+  });
   // linkedom ignores AddEventListenerOptions.signal. Model its cancellation
   // on the shared prototype so every test document retires scoped listeners.
   const eventTargetPrototype = window.EventTarget.prototype;

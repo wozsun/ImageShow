@@ -222,9 +222,9 @@ export function safeLogValue(value: unknown): SafeLogValue {
 
 export function formatLogContext(value: unknown): string {
   const text = JSON.stringify(safeLogValue(value));
-  const encoder = new TextEncoder();
-  if (encoder.encode(text).byteLength <= 8_192) return text;
-  const preview = new TextDecoder().decode(encoder.encode(text).subarray(0, 4_000), {
+  const encoded = new TextEncoder().encode(text);
+  if (encoded.byteLength <= 8_192) return text;
+  const preview = new TextDecoder().decode(encoded.subarray(0, 4_000), {
     stream: true
   });
   return JSON.stringify({ truncated: true, preview });

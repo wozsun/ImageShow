@@ -11,11 +11,9 @@ import {
   toNamespacedPath
 } from "node:path";
 import { pathToFileURL } from "node:url";
-import test, { after } from "node:test";
+import test from "node:test";
 import {
-  pool,
-  configureDatabasePools,
-  closeDatabasePools
+  pool
 } from "../../../packages/server/src/core/database/pools.ts";
 import { createTestDirectory } from "../support/test-directory.ts";
 import { runProcess } from "../support/process-runner.ts";
@@ -396,6 +394,15 @@ test("[Server/HTTP 与鉴权] 写路由集中拒绝无效 JSON、未知字段和
     markAdminReadRequest(context);
     await next();
   });
+  app.use("*", async (context, next) => {
+    context.set("session", {
+      id: "synthetic-session",
+      username: "synthetic-admin",
+      csrf: "synthetic-csrf",
+      role: "super"
+    });
+    await next();
+  });
   app.use("/*", auditAdminMutation);
   app.use("/write", limitAdminLoginBody);
   app.post("/write", async (context) => {
@@ -492,17 +499,9 @@ test("[Server/HTTP 与鉴权] 写路由集中拒绝无效 JSON、未知字段和
     logger.warn = originalWarn;
   }
 });
-after(closeDatabasePools);
 
 test("[Server/HTTP 与鉴权] 随机 JSON 卡片复用 canonical 字段且不额外读取详情", async (context) => {
   initializeRuntimeConfig();
-  configureDatabasePools({
-    host: "database.invalid",
-    port: 5432,
-    name: "imageshow_test",
-    user: "imageshow_test",
-    password: process.env.DATABASE_PASSWORD!
-  });
   const item = servingReadyCacheItem({
     author: "photographer",
     title: "Random card",

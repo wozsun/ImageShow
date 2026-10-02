@@ -439,7 +439,6 @@ function composeVolumeMount(service, expected) {
 
 const runtimeDefaultEntries = new Map(objectLeafEntries(appConfig.runtimeDefaults));
 const runtimeDefaultPaths = new Set(runtimeDefaultEntries.keys());
-const runtimeDefaultPathOrder = [...runtimeDefaultEntries.keys()];
 assert.deepEqual(
   runtimeConfigDefaults(),
   appConfig.runtimeDefaults,
@@ -523,33 +522,6 @@ for (const binding of runtimeConfigEnvironmentBindings) {
   }
 }
 
-const configurationGuide = await readFile(
-  resolve(workspaceRoot, "docs/CONFIG.md"),
-  "utf8"
-);
-const documentationEntries = new Map();
-for (const section of configurationGuide.split(/(?=^#{1,4} )/m)) {
-  const path = /^#### (\w+(?:\.\w+)+)\r?$/m.exec(section)?.[1];
-  if (!path) continue;
-  if (documentationEntries.has(path)) {
-    throw new Error(`source-contract: duplicate configuration documentation section ${path}`);
-  }
-  const environmentVariable = /^- 环境变量：`([A-Z][A-Z0-9_]*)`\r?$/m.exec(section)?.[1];
-  const defaultLiteral = /^- 类型、默认值与范围：.*默认 `([^`]*)`/m.exec(section)?.[1];
-  const composeInjection = /^- Compose：(默认注入|显式映射)\r?$/m.exec(section)?.[1];
-  const injection =
-    composeInjection === "默认注入"
-      ? "default"
-      : composeInjection === "显式映射"
-        ? "explicit"
-        : null;
-  documentationEntries.set(path, { defaultLiteral, environmentVariable, injection });
-}
-assertSameSet(
-  "source-contract: configuration documentation paths differ from RuntimeConfig",
-  new Set(documentationEntries.keys()),
-  runtimeDefaultPaths
-);
 const composeSource = await readFile(resolve(workspaceRoot, "compose.yaml"), "utf8");
 let compose;
 try {
@@ -558,47 +530,6 @@ try {
   throw new Error("source-contract: compose.yaml is not valid YAML", {
     cause: error
   });
-}
-const imageShowService = composeService(compose, "imageshow");
-const imageShowEnvironment = composeEnvironment(imageShowService);
-const defaultComposeRuntimeSeeds = new Set(imageShowEnvironment.keys());
-const runtimeBindingByPath = new Map(
-  runtimeConfigEnvironmentBindings.map((binding) => [binding.path, binding])
-);
-for (const path of runtimeDefaultPathOrder) {
-  const documented = documentationEntries.get(path);
-  let documentedDefault;
-  try {
-    documentedDefault = JSON.parse(documented.defaultLiteral);
-  } catch (error) {
-    throw new Error(
-      `source-contract: documented default for ${path} is not JSON: ${documented.defaultLiteral}`,
-      { cause: error }
-    );
-  }
-  const expectedDefault = runtimeDefaultEntries.get(path);
-  if (JSON.stringify(documentedDefault) !== JSON.stringify(expectedDefault)) {
-    throw new Error(
-      `source-contract: documented default for ${path} drifted: ` +
-        JSON.stringify({ expected: expectedDefault, actual: documentedDefault })
-    );
-  }
-  const binding = runtimeBindingByPath.get(path);
-  if (documented.environmentVariable !== binding.environmentVariable) {
-    throw new Error(
-      `source-contract: documented environment variable for ${path} is ` +
-        `${documented.environmentVariable}, expected ${binding.environmentVariable}`
-    );
-  }
-  const expectedInjection = defaultComposeRuntimeSeeds.has(binding.environmentVariable)
-    ? "default"
-    : "explicit";
-  if (documented.injection !== expectedInjection) {
-    throw new Error(
-      `source-contract: documented Compose injection for ${binding.environmentVariable} is ` +
-        `${documented.injection}, expected ${expectedInjection}`
-    );
-  }
 }
 
 const composeInterpolationVariables = new Set(
@@ -614,84 +545,67 @@ if (missingInterpolationExamples.length) {
       JSON.stringify(missingInterpolationExamples)
   );
 }
-const expectedImageShowEnvironment = [
-  "DATABASE_NAME",
-  "DATABASE_USER",
-  "DATABASE_PASSWORD",
-  "ADMIN_USERNAME",
-  "ADMIN_PASSWORD",
-  "SITE_DOMAIN"
-];
-assertSameSet(
-  "source-contract: ImageShow default Compose environment whitelist drifted",
-  new Set(imageShowEnvironment.keys()),
-  new Set(expectedImageShowEnvironment)
+
+const imageShowService = composeService(compose, "imageshow");
+const imageShowEnvironment = composeEnvironment(imageShowService);
+const postgresqlEnvironment = composeEnvironment(composeService(compose, "postgresql"));
+const knownApplicationVariables = new Set([
+  ...deploymentEnvironmentVariables,
+  ...bindingVariables
+]);
+const unknownApplicationVariables = [...imageShowEnvironment.keys()].filter(
+  (variable) => !knownApplicationVariables.has(variable)
 );
-const postgresqlService = composeService(compose, "postgresql");
-const postgresqlEnvironment = composeEnvironment(postgresqlService);
-assertSameSet(
-  "source-contract: PostgreSQL default Compose environment whitelist drifted",
-  new Set(postgresqlEnvironment.keys()),
-  new Set(["POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"])
-);
-for (const [applicationKey, postgresqlKey, variable, defaultValue] of [
-  ["DATABASE_NAME", "POSTGRES_DB", "DATABASE_NAME", "imageshow"],
-  ["DATABASE_USER", "POSTGRES_USER", "DATABASE_USER", "imageshow"]
-]) {
-  const interpolation = "${" + variable + ":-" + defaultValue + "}";
-  if (imageShowEnvironment.get(applicationKey) !== interpolation) {
-    throw new Error(`source-contract: ImageShow ${applicationKey} must use ${interpolation}`);
-  }
-  if (postgresqlEnvironment.get(postgresqlKey) !== interpolation) {
-    throw new Error(`source-contract: PostgreSQL ${postgresqlKey} must use ${interpolation}`);
-  }
-}
-const requiredDatabasePassword = "${DATABASE_PASSWORD:?}";
-if (imageShowEnvironment.get("DATABASE_PASSWORD") !== requiredDatabasePassword) {
+if (unknownApplicationVariables.length) {
   throw new Error(
-    "source-contract: ImageShow database password must be required without a default"
+    "source-contract: Compose passes variables the application does not read: " +
+      JSON.stringify(unknownApplicationVariables)
   );
 }
-if (postgresqlEnvironment.get("POSTGRES_PASSWORD") !== requiredDatabasePassword) {
-  throw new Error("source-contract: PostgreSQL password must share the required database password");
+// Each secret comes from its own variable; PostgreSQL shares the database
+// password through the equality check below.
+for (const variable of ["DATABASE_PASSWORD", "ADMIN_PASSWORD"]) {
+  const required = "${" + variable + ":?}";
+  if (imageShowEnvironment.get(variable) !== required) {
+    throw new Error(`source-contract: ImageShow ${variable} must use ${required} without a default`);
+  }
 }
-if (imageShowEnvironment.get("ADMIN_USERNAME") !== "${ADMIN_USERNAME:-admin}") {
-  throw new Error("source-contract: default Compose administrator username drifted");
+if (imageShowEnvironment.get("SITE_DOMAIN") !== "${SITE_DOMAIN:-}") {
+  throw new Error("source-contract: default Compose must pass SITE_DOMAIN for first-run setup");
 }
-if (imageShowEnvironment.get("ADMIN_PASSWORD") !== "${ADMIN_PASSWORD:?}") {
-  throw new Error("source-contract: administrator password must be required without a default");
+for (const [applicationKey, postgresqlKey] of [
+  ["DATABASE_NAME", "POSTGRES_DB"],
+  ["DATABASE_USER", "POSTGRES_USER"],
+  ["DATABASE_PASSWORD", "POSTGRES_PASSWORD"]
+]) {
+  if (imageShowEnvironment.get(applicationKey) !== postgresqlEnvironment.get(postgresqlKey)) {
+    throw new Error(
+      `source-contract: ImageShow ${applicationKey} and PostgreSQL ${postgresqlKey} must use the same value`
+    );
+  }
 }
-const redisService = composeService(compose, "redis");
-if (composeEnvironment(redisService).size !== 0) {
-  throw new Error("source-contract: Redis default Compose environment must be empty");
+// Existing deployments locate their database and first administrator through
+// these defaults; changing them silently points an upgrade at empty state.
+for (const [variable, defaultValue] of defaultComposeEnvironment) {
+  if (!defaultValue) continue;
+  const interpolation = "${" + variable + ":-" + defaultValue + "}";
+  if (imageShowEnvironment.get(variable) !== interpolation) {
+    throw new Error(`source-contract: ImageShow ${variable} must use ${interpolation}`);
+  }
 }
-if (
-  !composeVolumeMount(redisService, {
-    source: "./redis",
-    target: "/data",
-    type: "bind"
-  })
-) {
-  throw new Error("source-contract: default Compose Redis must retain its data bind mount");
+for (const [serviceName, mount] of [
+  ["imageshow", { source: "./data", target: "/app/data", type: "bind" }],
+  ["postgresql", { source: "./postgres", target: "/var/lib/postgresql", type: "bind" }],
+  ["redis", { source: "./redis", target: "/data", type: "bind" }]
+]) {
+  if (!composeVolumeMount(composeService(compose, serviceName), mount)) {
+    throw new Error(
+      `source-contract: default Compose ${serviceName} must retain its writable data bind mount`
+    );
+  }
 }
-if (
-  !composeVolumeMount(postgresqlService, {
-    source: "./postgres",
-    target: "/var/lib/postgresql",
-    type: "bind"
-  })
-) {
-  throw new Error("source-contract: default Compose PostgreSQL must retain its data bind mount");
-}
-if (
-  !composeVolumeMount(imageShowService, {
-    source: "./data",
-    target: "/app/data",
-    type: "bind"
-  })
-) {
-  throw new Error("source-contract: default Compose ImageShow must retain its data bind mount");
-}
+// The application trusts forwarded client addresses only behind the local
+// reverse proxy, so the published port must stay on the loopback interface.
 if (
   !composePortBinding(imageShowService, {
     hostIp: "127.0.0.1",

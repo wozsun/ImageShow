@@ -1,8 +1,8 @@
-import { sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
 import type { PoolClient } from "pg";
+import { clampSortOrderSql, nextSortOrderSql } from "../core/database/sort-order-sql.ts";
+import { readVocabularyMutationImpact } from "../vocab/mutation-impact.ts";
 import { pool } from "../core/database/pools.ts";
 import { withTransaction } from "../core/database/transactions.ts";
-import { ApiError } from "../core/api-error.ts";
 import { withImageMutationSync } from "../images/mutation-sync.ts";
 import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
 import {
@@ -21,10 +21,7 @@ export async function createTag(slug: string, displayName = "") {
       signal.throwIfAborted();
       const created = await pool.query(
         `INSERT INTO tag(slug, display_name, sort_order)
-       VALUES($1, $2, (
-         SELECT GREATEST(${sortOrderMin}, LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, ${sortOrderMax}))
-         FROM tag
-       ))
+       VALUES($1, $2, ${nextSortOrderSql("tag")})
        ON CONFLICT (slug) DO NOTHING
        RETURNING slug`,
         [slug, displayName]
@@ -52,35 +49,13 @@ export async function deleteTag(slug: string) {
       withVocabularyMutationSync("tag", async () => {
         const mutation = await withTransaction(async (client) => {
           signal.throwIfAborted();
-          const affectedCount = Number(
-            (
-              await client.query(
-                `SELECT count(*)::int AS count
-             FROM metadata m
-             JOIN image_tag it ON it.image_id=m.id
-            WHERE it.tag_slug=$1
-              AND m.status='ready'`,
-                [slug]
-              )
-            ).rows[0]?.count ?? 0
+          const { affectedCount, affected } = await readVocabularyMutationImpact(
+            client,
+            "tag",
+            slug,
+            mutationBatch,
+            signal
           );
-          signal.throwIfAborted();
-          const decision = mutationBatch.decide(affectedCount);
-          const affected =
-            decision.mode === "exact"
-              ? ((
-                  await client.query(
-                    `SELECT m.id
-               FROM metadata m
-               JOIN image_tag it ON it.image_id=m.id
-              WHERE it.tag_slug=$1
-                AND m.status='ready'
-              ORDER BY m.id`,
-                    [slug]
-                  )
-                ).rows as Array<{ id: string }>)
-              : [];
-          signal.throwIfAborted();
           const deleted = await client.query(
             "DELETE FROM tag WHERE slug = $1",
             [slug]
@@ -97,29 +72,6 @@ export async function deleteTag(slug: string) {
     )
   );
   assertVocabularyFound("tag", result.rowCount);
-}
-
-export async function replaceImageTags(
-  client: PoolClient,
-  imageId: string,
-  slugs: string[],
-  signal?: AbortSignal
-) {
-  signal?.throwIfAborted();
-  const image = await client.query("SELECT l_md5 FROM metadata WHERE id = $1", [imageId]);
-  if (!image.rowCount) throw new ApiError(404, "not_found", "Image not found");
-  const { createdTag } = await replaceImageTagAssociations(
-    client,
-    imageId,
-    slugs,
-    signal
-  );
-  await bumpReadyImageRevision(client);
-  signal?.throwIfAborted();
-  return {
-    createdTag,
-    large_md5: String(image.rows[0]?.l_md5 ?? "")
-  };
 }
 
 /**
@@ -144,9 +96,8 @@ export async function replaceImageTagAssociations(
        )
        INSERT INTO tag(slug, sort_order)
        SELECT slug,
-              GREATEST(${sortOrderMin}, LEAST(
-                (SELECT COALESCE(MAX(sort_order), 0)::bigint FROM tag)
-                  + row_number() OVER (ORDER BY ord DESC), ${sortOrderMax}))
+              ${clampSortOrderSql(`(SELECT COALESCE(MAX(sort_order), 0)::bigint FROM tag)
+                + row_number() OVER (ORDER BY ord DESC)`)}
          FROM missing
         ORDER BY ord
        ON CONFLICT (slug) DO NOTHING

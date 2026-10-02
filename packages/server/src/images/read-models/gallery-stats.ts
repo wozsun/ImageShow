@@ -6,7 +6,6 @@ import {
   withPublicDatabaseRead,
   type PublicDatabaseReadAccess
 } from "../../core/database/public-fallback.ts";
-import { pool } from "../../core/database/pools.ts";
 import {
   readReadyImageCountSnapshot,
   type ReadyImageCountSnapshot
@@ -64,69 +63,46 @@ function presentGalleryStats(
 
 async function getPublicGalleryStatsWithAccess(
   query: GalleryStatsQuery,
-  signal: AbortSignal | undefined,
-  database: PublicDatabaseReadAccess
+  signal: AbortSignal,
+  database: Required<PublicDatabaseReadAccess>
 ): Promise<GalleryStatsDto> {
   const { plan, tagCounts } = await resolveGalleryStatsPlan(query, database);
   const cached = await readReadyImageCountSnapshot(
     plan,
     signal,
-    Boolean(database.reader),
+    true,
     tagCounts
   );
   if (cached.cached) {
     return presentGalleryStats(cached.value, await readGalleryStatsVocabulary(database), query);
   }
-  if (database.reader) {
-    const result = await readPublicGalleryCountSnapshot(
-      plan,
-      database.reader,
-      signal ?? new AbortController().signal,
-      cached.context,
-      tagCounts
-    );
-    return presentGalleryStats(result.snapshot, result.vocabulary, query);
-  }
-  const load = async () => {
-    const client = await pool.connect();
-    try {
-      return await readPublicGalleryCountSnapshot(
-        plan,
-        client,
-        new AbortController().signal,
-        cached.context,
-        tagCounts
-      );
-    } finally {
-      client.release();
-    }
-  };
-  const result = await coalesce(
-    `gallery-stats:postgres:${tagCounts?.signature ?? plan.signature}`,
-    load
+  const result = await readPublicGalleryCountSnapshot(
+    plan,
+    database.reader,
+    signal,
+    cached.context,
+    tagCounts
   );
   return presentGalleryStats(result.snapshot, result.vocabulary, query);
 }
 
 export function getPublicGalleryStats(
-  query: GalleryStatsQuery = {},
-  signal?: AbortSignal
+  query: GalleryStatsQuery,
+  signal: AbortSignal
 ): Promise<GalleryStatsDto> {
-  return signal
-    ? coalesce(
-        `gallery-stats:public:${JSON.stringify([
-          query.device,
-          query.brightness,
-          query.theme,
-          query.tag,
-          query.author,
-          query.tag_scope
-        ])}`,
-        (sharedSignal) =>
-          withPublicDatabaseRead(sharedSignal, (database, databaseSignal) =>
-            getPublicGalleryStatsWithAccess(query, databaseSignal, database)
-          ),
-        signal
-      )
-    : getPublicGalleryStatsWithAccess(query, undefined, {});
+  return coalesce(
+    `gallery-stats:public:${JSON.stringify([
+      query.device,
+      query.brightness,
+      query.theme,
+      query.tag,
+      query.author,
+      query.tag_scope
+    ])}`,
+    (sharedSignal) =>
+      withPublicDatabaseRead(sharedSignal, (database, databaseSignal) =>
+        getPublicGalleryStatsWithAccess(query, databaseSignal, database)
+      ),
+    signal
+  );
 }

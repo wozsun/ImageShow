@@ -4,55 +4,46 @@
  * The bootstrap canvas is intentionally independent from either application
  * domain: before React owns the route, every entry point stays dark.
  *
- * Browse controls and dark admin controls share a fixed dark palette. Other
- * public and admin roles have separate source tokens. Shared controls
- * consume the context aliases at the end of this file; the lazy admin color
- * sheet remaps those aliases only after SiteHead selects the admin domain.
+ * The fixed dark palette serves the bootstrap baseline, the always-dark
+ * public domain and the admin dark branch. Shared controls consume the
+ * context aliases at the end of this file; they default to that dark
+ * baseline, which the public domain keeps. The lazy admin color sheet remaps
+ * those aliases only after SiteHead selects the admin domain.
  *
  * Raw color values belong in the semantic color sheets for their real loading
  * boundary; page styles only consume the tokens.
  */
 :root {
-  /* Shared by public browse buttons and the admin dark branch. */
-  --color-dark-canvas: #090d13;
-  --color-dark-surface-muted: #1a1f26;
+  /* Fixed dark palette: bootstrap baseline, public domain and admin dark branch. */
+  --color-dark-canvas: #070809;
+  --color-dark-surface-muted: #1a1d21;
+  --color-dark-surface-raised: #15181c;
   --color-dark-border-default: #282e36;
+  --color-dark-border-muted: #252b33;
   --color-dark-warning-text: #f2cc60;
   --color-dark-scrollbar: rgba(201, 209, 217, 0.32);
   --color-dark-scrollbar-active: rgba(201, 209, 217, 0.56);
   --color-dark-control-text-primary: #d8dfe7;
   --color-dark-control-text-secondary: #a5aeb9;
-  --color-dark-control-text-on-action: #fff;
-  --color-dark-control-surface: #10151c;
-  --color-dark-control-surface-hover: #162638;
-  --color-dark-control-surface-subtle-hover: #191e25;
+  --color-dark-control-text-tertiary: #8b949e;
+  --color-dark-control-surface: #101316;
+  --color-dark-control-surface-hover: #191c20;
+  --color-dark-control-surface-selected: #162638;
   --color-dark-control-border: #636c76;
   --color-dark-control-border-hover: #6e7681;
   --color-dark-control-border-selected: #619de7;
-  --color-dark-control-action: #1f6feb;
   --color-dark-control-action-text: #79b8ff;
+  --color-dark-shadow-control-floating: rgba(0, 0, 0, 0.48);
+  --color-dark-close: #ff7b72;
+  --color-dark-close-hover: #ffa198;
 
-  /* Bootstrap */
+  /* The primary action fill is the same in every domain and appearance. */
+  --color-action-fill: #1f6feb;
+  --color-action-fill-text: #fff;
+
+  /* Bootstrap; its feedback roles are also the public feedback roles. */
   --bootstrap-color-canvas: #070809;
   --bootstrap-color-text: #f2f7ff;
-  /*
-   * React 接管后台颜色域前，通用控件也必须留在暗色安全基线。公开页和后台页
-   * 随后分别用自己的语义色覆写这些别名，避免后台首帧短暂暴露公开页浅色按钮。
-   */
-  --bootstrap-color-control-text-primary: #f0f6fc;
-  --bootstrap-color-control-text-secondary: #b1bac4;
-  --bootstrap-color-control-text-tertiary: #8b949e;
-  --bootstrap-color-control-surface: #161b22;
-  --bootstrap-color-control-surface-muted: #21262d;
-  --bootstrap-color-control-surface-hover: #1d2e40;
-  --bootstrap-color-control-surface-subtle-hover: #20252c;
-  --bootstrap-color-control-border: #636c76;
-  --bootstrap-color-control-border-subtle: #30363d;
-  --bootstrap-color-control-border-muted: #2d333b;
-  --bootstrap-color-control-border-hover: #6e7681;
-  --bootstrap-color-control-border-selected: #619de7;
-  --bootstrap-color-control-action-text: #79b8ff;
-  --bootstrap-color-control-invalid: #cc7975;
   --bootstrap-color-feedback-success-text: #8fd8a3;
   --bootstrap-color-feedback-success-surface: #173126;
   --bootstrap-color-feedback-success-border: #4d795b;
@@ -63,114 +54,49 @@
 
   /* Public foundations */
   --public-color-canvas: #070809;
-  --public-color-surface-default: #142036;
+  --public-color-surface-default: #111418;
   --color-public-text-primary: #f2f7ff;
   --public-color-text-secondary: #afbdd0;
   --public-color-loading-text: rgba(175, 189, 208, 0.64);
   --color-public-text-strong: #fff;
-  --public-color-border-default: rgba(155, 190, 239, 0.28);
+  --public-color-border-default: rgba(184, 194, 208, 0.26);
   --public-color-action-primary: #91c7ff;
   --public-color-action-strong: #2f6fc9;
   --public-color-selection-strong: #2056e0;
   --public-color-action-soft: rgba(85, 150, 235, 0.34);
   --public-color-accent: #df8caf;
-
-  /* Shared control roles in the public domain */
-  --public-color-control-text-primary: #20242a;
-  --public-color-control-text-secondary: #66717f;
-  --public-color-control-text-tertiary: #97a1b0;
-  --public-color-control-surface: #fff;
-  --public-color-control-surface-muted: #eef2f7;
-  --public-color-control-surface-hover: #eef5ff;
-  --public-color-control-surface-subtle-hover: #f1f3f6;
-  --public-color-control-border: #c9d1dc;
-  --public-color-control-border-subtle: #dce2ea;
-  --public-color-control-border-muted: #dce3ec;
-  --public-color-control-border-hover: #aeb8c5;
-  --public-color-control-border-selected: #9fc2f5;
-  --public-color-control-action: #1f6feb;
-  --public-color-control-invalid: #d64545;
-  --public-color-thumbnail-surface: #e8edf3;
-  --public-color-thumbnail-placeholder: #9aa6b4;
-  --public-color-image-placeholder-dark: #111820;
-  --public-shadow-control-floating: rgba(20, 30, 44, 0.18);
-
-  /* Shared feedback roles in the public domain */
-  --public-color-feedback-success-text: #245236;
-  --public-color-feedback-success-surface: #eaf8ee;
-  --public-color-feedback-success-border: #9fd3ad;
-  --public-color-feedback-danger-text: #8a2d24;
-  --public-color-feedback-danger-surface: #fff2f0;
-  --public-color-feedback-danger-border: #de8b83;
-  --public-color-feedback-error-text: #a12b2b;
-  --public-color-close: #d98c8c;
-  --public-color-close-hover: #c25b5b;
-
-  /* Scrollbars */
-  --color-scrollbar-light-track-thumb: rgba(20, 30, 44, 0.3);
-  --color-scrollbar-light-thumb: rgba(20, 30, 44, 0.26);
-  --color-scrollbar-light-thumb-hover: rgba(20, 30, 44, 0.42);
-  --color-overlay-scrollbar-light: rgba(20, 30, 44, 0.34);
-  --color-overlay-scrollbar-light-active: rgba(20, 30, 44, 0.54);
-  --color-overlay-scrollbar-dark: rgba(230, 237, 243, 0.34);
-  --color-overlay-scrollbar-dark-active: rgba(230, 237, 243, 0.62);
+  --public-color-image-placeholder-dark: var(--public-color-surface-default);
 
   /* Shared backdrop for the generic cross-domain dialog skeleton. */
-  --color-modal-overlay: rgba(13, 18, 28, 0.76);
+  --color-modal-overlay: rgba(0, 0, 0, 0.76);
 
-  /* Context aliases consumed by shared base components. */
+  /*
+   * Context aliases consumed by shared base components. The defaults are the
+   * dark baseline: bootstrap and the public domain keep them, the admin
+   * domain remaps them.
+   */
   --color-native-focus-outline: CanvasText;
   --color-browser-canvas: var(--bootstrap-color-canvas);
-  --color-control-text-primary: var(--public-color-control-text-primary);
-  --color-control-text-secondary: var(--public-color-control-text-secondary);
-  --color-control-text-tertiary: var(--public-color-control-text-tertiary);
-  --color-control-text-on-action: var(--color-public-text-strong);
-  --color-control-surface: var(--public-color-control-surface);
-  --color-control-surface-muted: var(--public-color-control-surface-muted);
-  --color-control-surface-hover: var(--public-color-control-surface-hover);
-  --color-control-surface-subtle-hover: var(--public-color-control-surface-subtle-hover);
-  --color-control-border: var(--public-color-control-border);
-  --color-control-border-subtle: var(--public-color-control-border-subtle);
-  --color-control-border-muted: var(--public-color-control-border-muted);
-  --color-control-border-hover: var(--public-color-control-border-hover);
-  --color-control-border-selected: var(--public-color-control-border-selected);
-  --color-control-action: var(--public-color-control-action);
-  --color-control-action-text: var(--public-color-control-action);
-  --color-control-invalid: var(--public-color-control-invalid);
-  --color-thumbnail-surface: var(--public-color-thumbnail-surface);
-  --color-thumbnail-placeholder: var(--public-color-thumbnail-placeholder);
+  --color-control-text-primary: var(--color-dark-control-text-primary);
+  --color-control-text-secondary: var(--color-dark-control-text-secondary);
+  --color-control-text-tertiary: var(--color-dark-control-text-tertiary);
+  --color-control-text-on-action: var(--color-action-fill-text);
+  --color-control-surface: var(--color-dark-control-surface);
+  --color-control-surface-muted: var(--color-dark-surface-muted);
+  --color-control-surface-hover: var(--color-dark-control-surface-hover);
+  --color-control-surface-selected: var(--color-dark-control-surface-selected);
+  --color-control-border: var(--color-dark-control-border);
+  --color-control-border-subtle: var(--color-dark-border-default);
+  --color-control-border-muted: var(--color-dark-border-muted);
+  --color-control-border-hover: var(--color-dark-control-border-hover);
+  --color-control-border-selected: var(--color-dark-control-border-selected);
+  --color-control-action: var(--color-action-fill);
+  --color-control-action-text: var(--color-dark-control-action-text);
+  --color-control-invalid: var(--bootstrap-color-feedback-danger-text);
+  --color-thumbnail-surface: var(--color-dark-surface-muted);
+  --color-thumbnail-placeholder: var(--color-dark-control-text-tertiary);
   --color-image-placeholder-dark: var(--public-color-image-placeholder-dark);
-  --color-shadow-control-floating: var(--public-shadow-control-floating);
-  --color-feedback-success-text: var(--public-color-feedback-success-text);
-  --color-feedback-success-surface: var(--public-color-feedback-success-surface);
-  --color-feedback-success-border: var(--public-color-feedback-success-border);
-  --color-feedback-danger-text: var(--public-color-feedback-danger-text);
-  --color-feedback-danger-surface: var(--public-color-feedback-danger-surface);
-  --color-feedback-danger-border: var(--public-color-feedback-danger-border);
-  --color-feedback-error-text: var(--public-color-feedback-error-text);
-  --color-close: var(--public-color-close);
-  --color-close-hover: var(--public-color-close-hover);
-}
-
-:root[data-ui-context="public"] {
-  --color-browser-canvas: var(--public-color-canvas);
-}
-
-:root[data-ui-context="bootstrap"] {
-  --color-control-text-primary: var(--bootstrap-color-control-text-primary);
-  --color-control-text-secondary: var(--bootstrap-color-control-text-secondary);
-  --color-control-text-tertiary: var(--bootstrap-color-control-text-tertiary);
-  --color-control-surface: var(--bootstrap-color-control-surface);
-  --color-control-surface-muted: var(--bootstrap-color-control-surface-muted);
-  --color-control-surface-hover: var(--bootstrap-color-control-surface-hover);
-  --color-control-surface-subtle-hover: var(--bootstrap-color-control-surface-subtle-hover);
-  --color-control-border: var(--bootstrap-color-control-border);
-  --color-control-border-subtle: var(--bootstrap-color-control-border-subtle);
-  --color-control-border-muted: var(--bootstrap-color-control-border-muted);
-  --color-control-border-hover: var(--bootstrap-color-control-border-hover);
-  --color-control-border-selected: var(--bootstrap-color-control-border-selected);
-  --color-control-action-text: var(--bootstrap-color-control-action-text);
-  --color-control-invalid: var(--bootstrap-color-control-invalid);
+  --color-shadow-control-floating: var(--color-dark-shadow-control-floating);
   --color-feedback-success-text: var(--bootstrap-color-feedback-success-text);
   --color-feedback-success-surface: var(--bootstrap-color-feedback-success-surface);
   --color-feedback-success-border: var(--bootstrap-color-feedback-success-border);
@@ -178,4 +104,18 @@
   --color-feedback-danger-surface: var(--bootstrap-color-feedback-danger-surface);
   --color-feedback-danger-border: var(--bootstrap-color-feedback-danger-border);
   --color-feedback-error-text: var(--bootstrap-color-feedback-error-text);
+  --color-close: var(--color-dark-close);
+  --color-close-hover: var(--color-dark-close-hover);
+  --color-scrollbar-track-thumb: var(--color-dark-scrollbar);
+  --color-scrollbar-thumb: var(--color-dark-scrollbar);
+  --color-scrollbar-thumb-hover: var(--color-dark-scrollbar-active);
+  --color-overlay-scrollbar: var(--color-dark-scrollbar);
+  --color-overlay-scrollbar-active: var(--color-dark-scrollbar-active);
+  /* Always-dark panels keep this tone even inside the light admin appearance. */
+  --color-overlay-scrollbar-dark: var(--color-dark-scrollbar);
+  --color-overlay-scrollbar-dark-active: var(--color-dark-scrollbar-active);
+}
+
+:root[data-ui-context="public"] {
+  --color-browser-canvas: var(--public-color-canvas);
 }

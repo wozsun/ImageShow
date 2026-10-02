@@ -1,7 +1,7 @@
 :root {
-  --public-color-gallery-sky-left: #151820;
-  --public-color-gallery-sky-center: #0e1623;
-  --public-color-gallery-sky-right: #101c2a;
+  --public-color-gallery-sky-left: #0c0d0f;
+  --public-color-gallery-sky-center: #080a0d;
+  --public-color-gallery-sky-right: #0a0d11;
   --public-color-gallery-star-primary: rgba(255, 255, 255, 0.82);
   --public-color-gallery-star-primary-halo: rgba(164, 171, 194, 0.24);
   --public-color-gallery-star-secondary: rgba(182, 205, 231, 0.68);
@@ -13,52 +13,55 @@
   --public-color-gallery-mask-strong: rgba(0, 0, 0, 0.84);
   --public-color-gallery-mask-soft: rgba(0, 0, 0, 0.52);
   --public-color-gallery-mask-edge: rgba(0, 0, 0, 0.9);
-  --public-color-gallery-control-surface: var(--color-dark-surface-muted);
-  --public-color-gallery-menu-surface: rgba(12, 19, 34, 0.98);
+  --public-color-gallery-menu-surface: rgba(15, 17, 19, 0.98);
   --public-shadow-gallery-menu: rgba(0, 2, 8, 0.5);
   --public-color-gallery-menu-selection-border: var(--color-dark-control-border-selected);
-  --public-color-gallery-code-surface: rgba(86, 128, 185, 0.14);
+  --public-color-gallery-code-surface: rgba(255, 255, 255, 0.04);
   --public-shadow-gallery-tile: rgba(0, 3, 10, 0.28);
   --public-color-gallery-tile-border-hover: rgba(145, 199, 255, 0.5);
   --public-color-card-edge-light: rgba(221, 237, 255, 0.85);
   --public-shadow-gallery-tile-hover: rgba(66, 148, 255, 0.34);
-  --public-color-gallery-tile-surface: #0d1422;
-  --public-color-gallery-tile-surface-raised: #18243a;
-  --public-color-gallery-tile-overlay-clear: rgba(14, 18, 28, 0);
-  --public-color-gallery-tile-overlay: rgba(14, 18, 28, 0.78);
-  --public-color-gallery-back-to-top: rgba(10, 16, 28, 0.94);
+  --public-color-gallery-tile-surface: #0b0d10;
+  --public-color-gallery-tile-surface-raised: #161a20;
+  --public-color-gallery-tile-overlay-clear: rgba(0, 0, 0, 0);
+  --public-color-gallery-tile-overlay: rgba(10, 12, 15, 0.78);
+  --public-color-gallery-back-to-top: rgba(15, 17, 19, 0.94);
   --public-shadow-gallery-back-to-top: rgba(0, 3, 10, 0.38);
   --public-color-show-hint-text: color-mix(in srgb, var(--public-color-text-secondary) 70%, #fff);
   --public-color-show-hint-outline: rgba(24, 28, 35, 0.7);
-  --public-color-filter-surface: var(--color-dark-canvas);
-  --public-color-filter-header: color-mix(
-    in srgb,
-    var(--color-dark-control-surface) 65%,
-    var(--color-dark-canvas)
-  );
-  --public-color-filter-search: var(--color-dark-canvas);
-  --public-color-filter-option: var(--color-dark-control-surface);
+  --public-color-filter-surface: #0a0b0c;
+  --public-color-filter-header: #0f1113;
+  --public-color-filter-search: var(--public-color-filter-surface);
+  --public-color-filter-option: #0e1013;
   --public-color-filter-border: var(--color-dark-border-default);
+  --public-color-filter-control-border: var(--color-dark-control-border);
+  --public-color-filter-control-border-hover: var(--color-dark-control-border-hover);
+  --public-color-filter-selection-border: var(--color-dark-control-border-selected);
+  --public-color-filter-hover: #16191e;
   --public-color-filter-muted: color-mix(
     in srgb,
-    var(--color-dark-control-text-secondary) 80%,
+    var(--color-dark-control-text-secondary) 70%,
     var(--color-dark-control-text-primary)
   );
-  --public-color-filter-directory-text: var(--color-dark-control-text-secondary);
+  --public-color-filter-directory-text: color-mix(
+    in srgb,
+    var(--color-dark-control-text-secondary) 90%,
+    var(--color-dark-control-text-primary)
+  );
   --public-color-filter-directory-label: color-mix(
     in srgb,
-    var(--color-dark-control-text-secondary) 40%,
+    var(--color-dark-control-text-secondary) 25%,
     var(--color-dark-control-text-primary)
   );
   --public-color-filter-chip-mask: #000;
-  --public-color-filter-selected: var(--color-dark-control-surface-hover);
+  --public-color-filter-selected: #182432;
   --public-color-filter-action: var(--color-dark-control-action-text);
   --public-color-filter-action-fill: color-mix(
     in srgb,
-    var(--color-dark-control-action) 80%,
-    var(--color-dark-control-surface)
+    var(--color-action-fill) 80%,
+    var(--public-color-filter-option)
   );
-  --public-color-filter-action-text: var(--color-dark-control-text-on-action);
+  --public-color-filter-action-text: var(--color-action-fill-text);
   --public-color-filter-warning: var(--color-dark-warning-text);
 }
 
@@ -70,9 +73,4 @@
   --color-public-text-primary: #e5ecf4;
   --color-public-text-strong: #edf2f8;
   --color-public-navigation-text: #e8edf3;
-}
-
-.public-filter-dialog {
-  --color-overlay-scrollbar-dark: var(--color-dark-scrollbar);
-  --color-overlay-scrollbar-dark-active: var(--color-dark-scrollbar-active);
 }

@@ -5,7 +5,7 @@ import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import { Hono } from "hono";
 import type { RuntimeConfig } from "@imageshow/shared/browser";
-import type { AdminSession } from "../../../../packages/server/src/users/admin-session.ts";
+import type { AdminSession } from "../../../../packages/server/src/core/http/admin-session-context.ts";
 import { installProperties } from "../../support/property-descriptors.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 

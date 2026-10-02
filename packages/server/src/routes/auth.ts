@@ -1,7 +1,6 @@
-import type { Context, Hono } from "hono";
+import type { Hono } from "hono";
 import { z } from "zod";
 import { adminApiBasePath, type AuthStateDto } from "@imageshow/shared/browser";
-import { ApiError } from "../core/api-error.ts";
 import {
   apiSuccess,
   apiSuccessEtag
@@ -24,12 +23,12 @@ import {
 } from "../users/session-invalidation.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { getEffectiveLoginBackground } from "../config/app-settings.ts";
+import { adminSessionOf } from "../core/http/admin-session-context.ts";
 import {
   createAdminSession,
   deleteAdminSession,
   readAdminSessionProbe,
-  authorizeAdminSessionCredentialTransition,
-  type AdminSession
+  authorizeAdminSessionCredentialTransition
 } from "../users/admin-session.ts";
 import { adminPermissionsForRole } from "../users/admin-authorization.ts";
 import { readAdminPreferences } from "../users/preferences.ts";
@@ -40,10 +39,6 @@ const adminLoginInput = z.strictObject({
   password: z.string().min(1).max(128),
   altcha: z.unknown().optional()
 });
-
-function authenticatedSession(context: Context) {
-  return context.get("session") as AdminSession | undefined;
-}
 
 export function registerPublicAuthRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/auth/challenge`, blockCrossSiteFetch, async (c) => {
@@ -105,8 +100,7 @@ export function registerProtectedAuthRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/auth/password`, async (c) => {
-    const session = authenticatedSession(c);
-    if (!session) throw new ApiError(401, "unauthorized", "Unauthorized");
+    const session = adminSessionOf(c);
     const input = parse(passwordChangeInput, await readJsonBody(c));
     const [staleCredentialVersion, validCredentialVersion] = await changeAdminPassword(
       session.username,

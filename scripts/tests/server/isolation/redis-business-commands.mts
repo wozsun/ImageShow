@@ -34,7 +34,8 @@ await runIntegrationScenario(async () => {
       "1",
       reserveKey,
       "2",
-      "60"
+      "60",
+      "1"
     ),
     [1, 1, 1, 60]
   );
@@ -42,7 +43,8 @@ await runIntegrationScenario(async () => {
     "1",
     reserveKey,
     "2",
-    "60"
+    "60",
+    "1"
   );
   assert.deepEqual(repeatedReservation.slice(0, 3), [1, 2, 1]);
 
@@ -53,7 +55,8 @@ await runIntegrationScenario(async () => {
         "1",
         businessPrefix + "window:concurrent:" + String(index),
         "1",
-        "60"
+        "60",
+        "1"
       )
     )
   );
@@ -66,7 +69,7 @@ await runIntegrationScenario(async () => {
   const pipelineWindow = businessPrefix + "pipeline:window";
   const pipeline = redisClient.redis.pipeline() as BusinessPipeline;
   pipeline.set(pipelineMarker, "pipeline-value");
-  pipeline.imageshowReserveWindows("1", pipelineWindow, "1", "60");
+  pipeline.imageshowReserveWindows("1", pipelineWindow, "1", "60", "1");
   pipeline.get(pipelineMarker);
   const pipelineResults = await pipeline.exec();
   assert.equal(pipelineResults?.length, 3);
@@ -78,7 +81,7 @@ await runIntegrationScenario(async () => {
   const multiWindow = businessPrefix + "multi:window";
   const transaction = redisClient.redis.multi() as BusinessPipeline;
   transaction.set(multiMarker, "multi-value");
-  transaction.imageshowReserveWindows("1", multiWindow, "1", "60");
+  transaction.imageshowReserveWindows("1", multiWindow, "1", "60", "1");
   transaction.get(multiMarker);
   const transactionResults = await transaction.exec();
   assert.equal(transactionResults?.length, 3);

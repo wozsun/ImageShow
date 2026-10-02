@@ -6,7 +6,7 @@ import {
   getRedisOperationalState,
   onRedisOperationalStateChange
 } from "../../../core/runtime-availability.ts";
-import type { AdminSession } from "../../../users/admin-session.ts";
+import type { AdminSession } from "../../../core/http/admin-session-context.ts";
 import type {
   IngestionQueueMetadata,
   IngestionQueueType

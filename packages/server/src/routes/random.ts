@@ -1,4 +1,3 @@
-import { storageObjectKey } from "@imageshow/shared/browser";
 import type { Context, Hono } from "hono";
 import type { RandomImageJsonResponseDto } from "@imageshow/shared/browser";
 import { withPublicDatabaseRead } from "../core/database/public-fallback.ts";
@@ -12,11 +11,10 @@ import { ApiError } from "../core/api-error.ts";
 import { reserveRandomRequest } from "../random/rate-limit.ts";
 import { apiErrorResponse, apiSuccess } from "../core/http/responses.ts";
 import { presentRandomJsonItems } from "../random/json-presentation.ts";
+import { requestedRandomImageCount } from "../random/query.ts";
 import { selectRandomImages } from "../random/selection.ts";
 import { resolveReadableObject } from "../storage/objects/access.ts";
-import {
-  assertCanonicalImageObjectKey
-} from "../storage/objects/image-paths.ts";
+import { imageObjectKey } from "../storage/objects/image-paths.ts";
 import { publicImageUrlForConfig } from "../storage/objects/public-urls.ts";
 import { getStorageBackend } from "../storage/backends/registry.ts";
 import { webReadableFromNode } from "../storage/objects/stream-buffer.ts";
@@ -45,7 +43,7 @@ async function handleRandomImage(c: Context) {
   if (!requestHasTrustedReferer(c)) {
     const reservation = await reserveRandomRequest(
       requestClientIp(c),
-      url.searchParams.has("limit")
+      requestedRandomImageCount(url.searchParams)
     );
     if (!reservation.allowed) {
       c.header("Retry-After", String(reservation.retryAfterSeconds));
@@ -82,10 +80,7 @@ async function respondRandom(c: Context, url: URL) {
       "Cache-Control": noStoreCacheControl,
       "Content-Type": "application/json; charset=utf-8"
     });
-    const contentLength = responseContentLengthValue(Buffer.byteLength(body));
-    if (contentLength !== undefined) {
-      headers.set("Content-Length", contentLength);
-    }
+    headers.set("Content-Length", String(Buffer.byteLength(body)));
     return new Response(c.req.method === "HEAD" ? null : body, { headers });
   }
 
@@ -101,8 +96,7 @@ async function respondRandom(c: Context, url: URL) {
   };
   const variant = selection.size;
   if (selection.mode === "proxy") {
-    const key = storageObjectKey(picked.id);
-    assertCanonicalImageObjectKey(key);
+    const key = imageObjectKey(picked.id);
     const opened = await (
       await resolveReadableObject(variant, key, picked.storage_slug, {
         signal

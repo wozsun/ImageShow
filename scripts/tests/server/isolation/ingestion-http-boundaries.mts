@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUIDv7 } from "node:crypto";
 import { createServer } from "node:http";
 import { getRequestListener } from "@hono/node-server";
 import { listenForFetch } from "../../support/http-listen.ts";
@@ -19,9 +20,6 @@ await runIntegrationScenario(async (runtime) => {
     await import("../../../../packages/server/src/images/ingestion/queue/action-scope.ts");
   const { createIngestionSessionId } =
     await import("../../../../packages/server/src/images/ingestion/sessions/identity.ts");
-  const { ingestionSessionSemanticHash } =
-    await import("../../../../packages/server/src/images/ingestion/sessions/projection.ts");
-  const { randomUuidV7 } = await import("../../../../packages/server/src/core/uuid.ts");
   const config = structuredClone(runtime.runtimeConfigStore.getRuntimeConfig());
   config.altcha.enabled = false;
   await runtime.runtimeConfigStore.replaceRuntimeConfig(config);
@@ -61,17 +59,14 @@ await runIntegrationScenario(async (runtime) => {
         ...fixture.importTemplate,
         owner: "integration-admin",
         session_id: sessionId,
-        image_id: randomUuidV7(),
+        image_id: randomUUIDv7(),
         image_time: new Date().toISOString()
       };
       const now = Date.now();
       const session = activeSession(
         (
           await fixture.productionIngestionRepository.acceptImportSession(
-            {
-              ...template,
-              semantic_hash: ingestionSessionSemanticHash(template)
-            },
+            template,
             fixture.displayOrderKey(sessionId, index, now),
             now
           )
@@ -93,7 +88,7 @@ await runIntegrationScenario(async (runtime) => {
         JSON.stringify({
           queue: "import",
           action: "apply_metadata",
-          action_request_id: randomUuidV7(),
+          action_request_id: randomUUIDv7(),
           action_watermark,
           items: pairs.slice(0, 3600),
           metadata: { title }

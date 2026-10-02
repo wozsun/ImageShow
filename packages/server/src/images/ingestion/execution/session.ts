@@ -1,5 +1,5 @@
 import { ApiError } from "../../../core/api-error.ts";
-import type { IngestionSessionSnapshot } from "../sessions/model.ts";
+import type { IngestionSessionSnapshot, PendingIngestionSession } from "../sessions/model.ts";
 import { IngestionSessionRepository } from "../repository.ts";
 
 const executionMutationAttempts = 8;
@@ -113,7 +113,7 @@ export function heartbeatIngestionExecution(
 export function mutateIngestionExecution(
   repository: IngestionSessionRepository,
   expected: IngestionSessionSnapshot,
-  next: (current: IngestionSessionSnapshot) => IngestionSessionSnapshot,
+  next: (current: IngestionSessionSnapshot) => PendingIngestionSession,
   now = Date.now()
 ) {
   return retryIngestionExecutionMutation(

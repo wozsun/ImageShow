@@ -57,7 +57,7 @@ function normalizedGeometry(geometry: GalleryCompactGeometry): GalleryCompactGeo
   };
 }
 
-function geometryMatches(
+function geometryEquals(
   left: GalleryCompactGeometry,
   right: GalleryCompactGeometry
 ) {
@@ -196,7 +196,7 @@ export class CompactMasonryLayout {
 
   setGeometry(geometry: GalleryCompactGeometry) {
     const normalized = normalizedGeometry(geometry);
-    if (geometryMatches(this.#geometry, normalized)) return false;
+    if (geometryEquals(this.#geometry, normalized)) return false;
     this.#geometry = normalized;
     this.#resetColumns();
     this.#rebuildPositions();

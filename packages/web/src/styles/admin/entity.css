@@ -1,6 +1,6 @@
 :root {
-  --admin-color-entity-surface-pinned: light-dark(#f7f9fc, #151a21);
-  --admin-color-entity-slug-surface: light-dark(#eef2f7, #1a1f26);
+  --admin-color-entity-surface-pinned: var(--admin-color-surface-raised);
+  --admin-color-entity-slug-surface: var(--admin-color-control-surface-muted);
   --admin-color-role-super-text: light-dark(#1559b7, #79c0ff);
   --admin-color-role-super-surface: light-dark(#dbeafe, #103969);
   --admin-color-role-image-text: light-dark(#3730a3, #a5b4fc);

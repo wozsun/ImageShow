@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import {
+  adminPermissions,
   adminApiBasePath,
   type RuntimeConfig,
   type RuntimeConfigResponseDto,
@@ -11,7 +12,7 @@ import {
   createApiSuccessSnapshot
 } from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
-import { requireSuperAdmin } from "../users/admin-authorization.ts";
+import { requireAdminPermission } from "../users/admin-authorization.ts";
 import {
   getSettingsForAdmin,
   saveAppSettings
@@ -29,6 +30,14 @@ const settingsRepresentation = createApiSuccessSnapshot(
     }) satisfies AdminSettingsResponseDto
 );
 
+function runtimeConfigResponse(config: RuntimeConfig) {
+  return apiSuccess({
+    config,
+    revision: runtimeConfigRevision(config),
+    settings: getSettingsForAdmin(config)
+  } satisfies RuntimeConfigResponseDto);
+}
+
 export function registerSettingsRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/settings`, (c) => {
     return cacheableContentResponse(c, settingsRepresentation(getRuntimeConfig()), {
@@ -37,32 +46,36 @@ export function registerSettingsRoutes(app: Hono) {
     });
   });
 
-  app.get(`${adminApiBasePath}/settings/runtime`, requireSuperAdmin, (c) => {
-    c.header("Cache-Control", privateNoStoreCacheControl);
-    const config = getRuntimeConfig();
-    return c.json(apiSuccess({
-      config,
-      revision: runtimeConfigRevision(config),
-      settings: getSettingsForAdmin(config)
-    } satisfies RuntimeConfigResponseDto));
-  });
+  app.get(
+    `${adminApiBasePath}/settings/runtime`,
+    requireAdminPermission(adminPermissions.settingsManage),
+    (c) => {
+      c.header("Cache-Control", privateNoStoreCacheControl);
+      const config = getRuntimeConfig();
+      return c.json(runtimeConfigResponse(config));
+    }
+  );
 
-  app.post(`${adminApiBasePath}/settings`, requireSuperAdmin, async (c) => {
-    const input = parse(runtimeConfigSaveInput, await readJsonBody(c));
-    const config = await saveAppSettings(input.config, input.revision);
-    c.header("Cache-Control", privateNoStoreCacheControl);
-    return c.json(
-      apiSuccess({ config, revision: runtimeConfigRevision(config), settings: getSettingsForAdmin(config) } satisfies RuntimeConfigResponseDto)
-    );
-  });
+  app.post(
+    `${adminApiBasePath}/settings`,
+    requireAdminPermission(adminPermissions.settingsManage),
+    async (c) => {
+      const input = parse(runtimeConfigSaveInput, await readJsonBody(c));
+      const config = await saveAppSettings(input.config, input.revision);
+      c.header("Cache-Control", privateNoStoreCacheControl);
+      return c.json(runtimeConfigResponse(config));
+    }
+  );
 
-  app.post(`${adminApiBasePath}/settings/reload`, requireSuperAdmin, async (c) => {
-    const config = await reloadRuntimeConfigFromDisk((candidate) =>
-      assertLocalImageHostForSite(candidate.site.domain)
-    );
-    c.header("Cache-Control", privateNoStoreCacheControl);
-    return c.json(
-      apiSuccess({ config, revision: runtimeConfigRevision(config), settings: getSettingsForAdmin(config) } satisfies RuntimeConfigResponseDto)
-    );
-  });
+  app.post(
+    `${adminApiBasePath}/settings/reload`,
+    requireAdminPermission(adminPermissions.settingsManage),
+    async (c) => {
+      const config = await reloadRuntimeConfigFromDisk((candidate) =>
+        assertLocalImageHostForSite(candidate.site.domain)
+      );
+      c.header("Cache-Control", privateNoStoreCacheControl);
+      return c.json(runtimeConfigResponse(config));
+    }
+  );
 }

@@ -2,15 +2,9 @@ import {
   useCallback,
   useState
 } from "react";
+import { reducedMotionPreferred } from "../lib/ui/reduced-motion.js";
 
 let publicNavigationHasAppeared = false;
-
-function reducedMotionPreferred() {
-  return (
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
-  );
-}
 
 export function usePublicNavigationEntrance() {
   const [entrance] = useState(() => {

@@ -7,32 +7,30 @@
  */
 :root {
   /* Foundations */
-  --admin-color-canvas: light-dark(#f4f7fb, var(--color-dark-canvas));
+  --admin-color-canvas: light-dark(#fafbfc, var(--color-dark-canvas));
   --admin-color-surface-primary: light-dark(#fff, var(--color-dark-control-surface));
+  --admin-color-surface-raised: light-dark(#fdfdfe, var(--color-dark-surface-raised));
+  --admin-color-surface-subtle: light-dark(#f8f9fb, var(--color-dark-surface-raised));
   --admin-color-text-primary: light-dark(#172033, var(--color-dark-control-text-primary));
-  --admin-color-text-secondary: light-dark(#5f6c7d, var(--color-dark-control-text-secondary));
+  --admin-color-text-secondary: light-dark(#596472, var(--color-dark-control-text-secondary));
   --admin-color-text-label: light-dark(#3e4a5c, #bfc8d2);
-  --admin-color-text-subtle: light-dark(#8b97a7, #8b949e);
-  --admin-color-text-on-emphasis: var(--color-dark-control-text-on-action);
-  --admin-color-border-control: light-dark(#c8d3e1, var(--color-dark-control-border));
-  --admin-color-border-default: light-dark(#d8e1ec, var(--color-dark-border-default));
-  --admin-color-border-muted: light-dark(#e0e7ef, #252b33);
-  --admin-color-border-card: light-dark(#dbe4ee, #282e36);
-  --admin-color-action-primary: var(--color-dark-control-action);
-  --admin-color-action-primary-dark: light-dark(#1559b7, #79c0ff);
+  --admin-color-text-subtle: light-dark(#626c79, var(--color-dark-control-text-tertiary));
+  --admin-color-text-on-emphasis: var(--color-action-fill-text);
+  --admin-color-border-control: light-dark(#cbd0d7, var(--color-dark-control-border));
+  --admin-color-border-default: light-dark(#dbdfe5, var(--color-dark-border-default));
+  --admin-color-border-muted: light-dark(#e5e8ec, var(--color-dark-border-muted));
+  --admin-color-border-card: light-dark(#dde1e6, #282e36);
+  --admin-color-action-primary: var(--color-action-fill);
   --admin-color-action-text: light-dark(#1559b7, var(--color-dark-control-action-text));
-  --admin-color-thumbnail-surface: light-dark(#e8eef5, #1a1f26);
+  --admin-color-thumbnail-surface: light-dark(#f0f2f5, var(--color-dark-surface-muted));
 
   /* Controls and shared states */
-  --admin-color-control-text-tertiary: light-dark(#97a1b0, #8b949e);
-  --admin-color-control-placeholder: light-dark(#9ba5b1, #555d67);
-  --admin-color-control-surface-muted: light-dark(#eef2f7, var(--color-dark-surface-muted));
-  --admin-color-control-surface-hover: light-dark(#eef5ff, var(--color-dark-control-surface-hover));
-  --admin-color-control-surface-subtle-hover: light-dark(
-    #f1f3f6,
-    var(--color-dark-control-surface-subtle-hover)
-  );
-  --admin-color-control-border-hover: light-dark(#aeb8c5, var(--color-dark-control-border-hover));
+  --admin-color-control-text-tertiary: var(--admin-color-text-subtle);
+  --admin-color-control-placeholder: light-dark(#6b7581, #757e89);
+  --admin-color-control-surface-muted: light-dark(#f4f6f8, var(--color-dark-surface-muted));
+  --admin-color-control-surface-hover: light-dark(#eef0f3, var(--color-dark-control-surface-hover));
+  --admin-color-control-surface-selected: light-dark(#eef5ff, var(--color-dark-control-surface-selected));
+  --admin-color-control-border-hover: light-dark(#aab1ba, var(--color-dark-control-border-hover));
   --admin-color-control-border-selected: light-dark(
     #9fc2f5,
     var(--color-dark-control-border-selected)
@@ -45,17 +43,20 @@
     rgba(228, 189, 88, 0.34),
     rgba(221, 193, 126, 0.46)
   );
-  --admin-color-tag-action: light-dark(#6b7686, #a5aeb9);
+  --admin-color-tag-action: var(--admin-color-text-secondary);
   --admin-color-tag-action-hover: light-dark(#384150, #d8dfe7);
-  --admin-color-close: light-dark(#d98c8c, #ff7b72);
-  --admin-color-close-hover: light-dark(#c25b5b, #ffa198);
-  --admin-color-thumbnail-placeholder: light-dark(#9aa6b4, #8b949e);
-  --admin-color-image-placeholder-dark: #080b10;
-  --admin-shadow-control-floating: light-dark(rgba(20, 30, 44, 0.18), rgba(0, 0, 0, 0.48));
-  --admin-shadow-control-resting: light-dark(rgba(20, 30, 44, 0.12), rgba(0, 0, 0, 0.38));
+  --admin-color-close: light-dark(#c96a64, var(--color-dark-close));
+  --admin-color-close-hover: light-dark(#c25b5b, var(--color-dark-close-hover));
+  --admin-color-thumbnail-placeholder: light-dark(#9aa6b4, var(--color-dark-control-text-tertiary));
+  --admin-color-image-placeholder-dark: var(--color-dark-canvas);
+  --admin-shadow-control-floating: light-dark(
+    rgba(24, 28, 33, 0.18),
+    var(--color-dark-shadow-control-floating)
+  );
+  --admin-shadow-control-resting: light-dark(rgba(24, 28, 33, 0.12), rgba(0, 0, 0, 0.38));
   --admin-shadow-modal: light-dark(rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.58));
-  --admin-shadow-menu: light-dark(rgba(13, 18, 28, 0.16), rgba(0, 0, 0, 0.46));
-  --admin-shadow-card-hover: light-dark(rgba(13, 18, 28, 0.08), rgba(0, 0, 0, 0.4));
+  --admin-shadow-menu: light-dark(rgba(24, 28, 33, 0.16), rgba(0, 0, 0, 0.46));
+  --admin-shadow-card-hover: light-dark(rgba(24, 28, 33, 0.08), rgba(0, 0, 0, 0.4));
 
   /* Base scrollbars must follow the admin appearance instead of the public palette. */
   --admin-color-scrollbar-track-thumb: light-dark(rgba(20, 30, 44, 0.3), rgba(201, 209, 217, 0.28));
@@ -133,14 +134,14 @@
   --admin-color-pending-text-subtle: light-dark(#3776a1, #5d87ab);
   --admin-color-pending-surface-subtle: light-dark(#f2f7ff, #0a1723);
   --admin-color-pending-border-subtle: light-dark(#d7e2e6, #253d55);
-
-  /* Context aliases consumed by base.css while the admin domain is active. */
 }
 
+/* Context aliases consumed by base.css while the admin domain is active. */
 :root[data-ui-context="admin"],
 [data-admin-dialog],
 .login form {
   color: var(--admin-color-text-primary);
+  --color-modal-overlay: light-dark(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.76));
   --color-browser-canvas: var(--admin-color-canvas);
   --color-control-text-primary: var(--admin-color-text-primary);
   --color-control-text-secondary: var(--admin-color-text-secondary);
@@ -149,7 +150,7 @@
   --color-control-surface: var(--admin-color-surface-primary);
   --color-control-surface-muted: var(--admin-color-control-surface-muted);
   --color-control-surface-hover: var(--admin-color-control-surface-hover);
-  --color-control-surface-subtle-hover: var(--admin-color-control-surface-subtle-hover);
+  --color-control-surface-selected: var(--admin-color-control-surface-selected);
   --color-control-border: var(--admin-color-border-control);
   --color-control-border-subtle: var(--admin-color-border-default);
   --color-control-border-muted: var(--admin-color-border-muted);
@@ -171,11 +172,11 @@
   --color-feedback-error-text: var(--admin-color-danger-text);
   --color-close: var(--admin-color-close);
   --color-close-hover: var(--admin-color-close-hover);
-  --color-scrollbar-light-track-thumb: var(--admin-color-scrollbar-track-thumb);
-  --color-scrollbar-light-thumb: var(--admin-color-scrollbar-thumb);
-  --color-scrollbar-light-thumb-hover: var(--admin-color-scrollbar-thumb-hover);
-  --color-overlay-scrollbar-light: var(--admin-color-overlay-scrollbar);
-  --color-overlay-scrollbar-light-active: var(--admin-color-overlay-scrollbar-active);
+  --color-scrollbar-track-thumb: var(--admin-color-scrollbar-track-thumb);
+  --color-scrollbar-thumb: var(--admin-color-scrollbar-thumb);
+  --color-scrollbar-thumb-hover: var(--admin-color-scrollbar-thumb-hover);
+  --color-overlay-scrollbar: var(--admin-color-overlay-scrollbar);
+  --color-overlay-scrollbar-active: var(--admin-color-overlay-scrollbar-active);
 }
 
 :root[data-ui-context="admin"][data-color-scheme="light"],
@@ -195,24 +196,23 @@
  */
 :root[data-ui-context="admin"] [data-admin-dialog] {
   --color-detail-surface: var(--admin-color-surface-primary);
-  --color-detail-surface-raised: light-dark(#fafbfd, #151a21);
+  --color-detail-surface-raised: var(--admin-color-surface-raised);
   --color-detail-border: var(--admin-color-border-default);
-  --color-detail-panel-border: light-dark(#dfe5ed, #3b424b);
+  --color-detail-panel-border: light-dark(var(--admin-color-border-card), #3b424b);
   --color-detail-shadow: var(--admin-shadow-control-resting);
   --color-detail-text-primary: var(--admin-color-text-primary);
   --color-detail-text-secondary: var(--admin-color-text-secondary);
   --color-detail-action-text: var(--admin-color-action-text);
   --color-detail-success: var(--admin-color-success-text);
   --color-detail-error: var(--admin-color-danger-text);
-  --color-detail-fade-clear: light-dark(rgba(250, 251, 253, 0), rgba(21, 26, 33, 0));
   --color-detail-chip-text: var(--admin-color-text-primary);
   --color-detail-chip-surface: var(--admin-color-control-surface-muted);
   --color-detail-chip-border: var(--admin-color-border-control);
   --color-detail-action-surface: var(--admin-color-surface-primary);
-  --color-detail-action-hover: var(--admin-color-control-surface-subtle-hover);
+  --color-detail-action-hover: var(--admin-color-control-surface-hover);
   --color-detail-secondary-action-surface: light-dark(transparent, rgba(255, 255, 255, 0.01));
   --color-detail-secondary-action-hover-surface: light-dark(
-    var(--admin-color-control-surface-subtle-hover),
+    var(--admin-color-control-surface-hover),
     color-mix(in srgb, var(--color-detail-surface-raised) 92%, var(--admin-color-text-primary))
   );
   --color-detail-secondary-action-hover-border: var(--admin-color-control-border-hover);

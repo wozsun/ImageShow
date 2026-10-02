@@ -2,23 +2,15 @@ import { errorMessage } from "../../../core/api-error.ts";
 import type {
   DiscardedIngestionReceipt,
   IngestionSessionError,
-  IngestionSessionSnapshot
+  IngestionSessionSnapshot,
+  PendingIngestionSession
 } from "./model.ts";
-import { ingestionSessionSemanticHash } from "./projection.ts";
 
 export function semanticIngestionSession(
   current: IngestionSessionSnapshot,
   changes: Partial<IngestionSessionSnapshot>
-): IngestionSessionSnapshot {
-  const withoutHash = {
-    ...current,
-    ...changes,
-    semantic_hash: ""
-  };
-  return {
-    ...withoutHash,
-    semantic_hash: ingestionSessionSemanticHash(withoutHash)
-  };
+): PendingIngestionSession {
+  return { ...current, ...changes };
 }
 
 export function failedIngestionSession(

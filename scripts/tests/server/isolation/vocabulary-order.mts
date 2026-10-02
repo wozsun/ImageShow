@@ -2,7 +2,8 @@ import { sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
-import type { AdminSession } from "../../../../packages/server/src/users/admin-session.ts";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
+import type { AdminSession } from "../../../../packages/server/src/core/http/admin-session-context.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import { interceptSqlQueries, withCommitFault } from "./database-faults.mts";
 
@@ -207,7 +208,7 @@ await runIntegrationScenario(async (runtime) => {
           ["order-max-b", sortOrderMax]
         ]
       );
-      const stats = await getPublicGalleryStats();
+      const stats = await getPublicGalleryStats({}, neverAbortedSignal);
       const expectedOrder = slugs(await entity.list());
       const visible = (items: readonly { slug: string }[]) =>
         slugs(items).filter((slug) => slug !== "null");
@@ -322,13 +323,13 @@ await runIntegrationScenario(async (runtime) => {
       1
     );
     assert.equal(
-      (await getPublicGalleryStats()).total_images,
+      (await getPublicGalleryStats({}, neverAbortedSignal)).total_images,
       0,
       "public counts only include ready images"
     );
     assert.equal((await restoreImages([imageId])).restored, 1);
     await assertAssociationCounts();
-    assert.equal((await getPublicGalleryStats()).total_images, 1);
+    assert.equal((await getPublicGalleryStats({}, neverAbortedSignal)).total_images, 1);
     assert.equal((await moveImagesToTrash([imageId])).trashed, 1);
     await themes.deleteTheme(countSlug);
     await authors.deleteAuthor(countSlug);

@@ -2,58 +2,25 @@
 
 [![Publish Release](https://github.com/wozsun/ImageShow/actions/workflows/publish-release.yml/badge.svg)](https://github.com/wozsun/ImageShow/actions/workflows/publish-release.yml)
 
-ImageShow 是面向个人服务器的自托管图片画廊，集图片展示、随机图 API 和轻量后台管理于一体，方便收藏、整理和分享图片。
+ImageShow 是一个可以部署在自己服务器上的图片画廊，用来收藏、整理、浏览和分享图片。
 
-## 功能
+## 可以做什么
 
-- **浏览与展映**：首页、瀑布流画廊、图片详情，以及瀑布流和漂浮两种自动展映模式；桌面工具栏集中提供筛选、排序、展映控制与分享，移动端将浏览控制保留在底部两侧，支持全屏观看与全面屏安全区适配。
-- **分类筛选**：画廊与展映通过统一弹窗浏览设备、明暗、主题、标签和作者目录，支持搜索、包含 / 排除、标签任一 / 全部及最多 9 组标签组合（组间或）、匹配数量预览；确认后一次应用，取消保留原条件。
-- **随机图 API**：按条件获取图片、跳转链接或 JSON，支持固定种子选图和完整图 / 缩略图。
-- **上传与导入**：支持本地文件、URL、JSONL 和微博链接。
-- **图片管理**：属性编辑、批量操作、分类维护、回收站和恢复；列表缩略图可切换填充 / 完整显示并记住账号选择；外部原图仅供管理员访问。
-- **主题、标签与作者管理**：默认卡片，可切换列表，三个页面分别保存账号偏好；行内修改显示名、作者主页链接及排序，编辑时原位切换保存图标，保留单项删除确认。
-- **存储管理**：本地存储与 S3 兼容对象存储，可迁移图片并设置图片公开地址。
-- **三档图片**：大图用于细节、中图用于详情与主站供图、小图用于列表和展映；每档可独立配置，见[三档图片与地址协议](docs/guide/three-tier-images.md)。
-- **站点管理**：管理员权限、完整站点配置、页脚备案信息、日志、检查与页面嵌入，可设置独立静态资源地址；嵌入页始终按访客展示，首页页脚仅保留自定义内容，并支持[宿主自定义光标协作](docs/guide/embed-cursor.md)与[安全区同步](docs/guide/embed-safe-area.md)。
+- **浏览图片**：在画廊中查看图片，或以瀑布流、漂浮两种方式自动展映，支持手机和电脑。
+- **整理收藏**：按横竖分类、明暗、主题、标签和作者查找图片，也能组合或排除条件。
+- **添加图片**：上传本地文件，通过图片链接、微博链接或批量清单导入。
+- **管理图库**：编辑图片信息、批量整理，移入回收站的图片可以恢复。
+- **分享图片**：分享筛选后的画廊和展映页面，将画廊嵌入其他网站，或通过随机图片链接为网页配图。
+- **管理自己的站点**：设置名称、首页文案和管理员权限，选择本地或云端存储。
 
-## 快速部署
+## 开始使用
 
-需要 Docker 和 Docker Compose；公网访问还需域名和 HTTPS 反向代理。
+准备一台装有 Docker 的服务器，按照[安装说明](docs/DEPLOY.md#首次安装)完成安装，登录后台添加图片，再从首页进入画廊或展映。
 
-1. 新建部署目录，将 [compose.yaml](compose.yaml) 和 [.env.example](.env.example) 放入其中，执行：
+## 文档
 
-   ```bash
-   cp .env.example .env
-   ```
-
-2. 编辑 `.env`，填写两个不同的随机强密码，并设置实际域名（不带协议或路径）：
-
-   ```ini
-   DATABASE_PASSWORD=
-   ADMIN_USERNAME=admin
-   ADMIN_PASSWORD=
-   SITE_DOMAIN=img.example.com
-   ```
-
-   管理员密码须为 8–128 位，且同时包含字母和数字。
-
-3. 在部署目录启动服务：
-
-   ```bash
-   docker compose pull
-   docker compose up -d
-   ```
-
-4. 将域名解析到服务器，开放 `80`、`443` 端口，并配置 HTTPS 反向代理至
-   `http://127.0.0.1:5518`。配置见[反向代理示例](docs/DEPLOY.md#反向代理与-https)。
-
-打开 `https://img.example.com/admin`，使用初始账号上传图片；打开站点根地址即可浏览。
-临时本机体验可将 `SITE_DOMAIN` 留空，访问 `http://127.0.0.1:5518/admin`。
-数据保存在部署目录的 `data/`、`postgres/`、`redis/`，请妥善备份。
-
-## 使用说明
-
-[文档入口](docs/README.md) · [部署与恢复](docs/DEPLOY.md) · [配置说明](docs/CONFIG.md) · [随机图 API](docs/guide/random-api.md)
+- 部署：[安装与维护](docs/DEPLOY.md)、[配置参考](docs/CONFIG.md)
+- 接入：[随机图 API](docs/api/random.md)、[嵌入页面](docs/api/embed.md)，以及嵌入页的[宿主光标协议](docs/api/embed-cursor.md)和[安全区协议](docs/api/embed-safe-area.md)
 
 ## 许可
 

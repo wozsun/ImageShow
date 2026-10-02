@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import type { AdminSession } from "../../../../packages/server/src/users/admin-session.ts";
+import type { AdminSession } from "../../../../packages/server/src/core/http/admin-session-context.ts";
 import type { Hono as HonoApp } from "hono";
 
 import { runIntegrationScenario } from "./integration-runtime.mts";

@@ -2,7 +2,11 @@ import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseHTML } from "linkedom";
-import { type IngestionVocabularyDto } from "../../../../packages/shared/src/browser.ts";
+import {
+  adminPermissions,
+  type AdminPermission,
+  type IngestionVocabularyDto
+} from "../../../../packages/shared/src/browser.ts";
 
 import {
   authExpiredEvent,
@@ -23,7 +27,9 @@ import {
   resolveAdminPaginationCommit,
   shouldCommitAdminPaginationInput
 } from "../../../../packages/web/src/components/navigation/admin-pagination-model.ts";
-import { adminNavigationForRole } from "../../../../packages/web/src/pages/admin/shell/AdminNavigation.tsx";
+import {
+  adminNavigationForPermissions
+} from "../../../../packages/web/src/pages/admin/shell/AdminNavigation.tsx";
 
 import {
   ImageListSelectionController,
@@ -382,9 +388,9 @@ test("[Web/后台访问] 图片管理保留连续选择、直接分页和管理�
   assert.equal(shouldCommitAdminPaginationInput("Enter", false, 13), true);
   assert.equal(shouldCommitAdminPaginationInput("Enter", true, 13), false);
 
-  const navigationModules = (role: "image" | "super") =>
+  const navigationModules = (role: "image" | "super", permissions: readonly AdminPermission[]) =>
     new Set(
-      Object.values(adminNavigationForRole(role)).flatMap((entries) =>
+      Object.values(adminNavigationForPermissions(role, permissions)).flatMap((entries) =>
         entries.flatMap((entry) =>
           entry.kind === "link"
             ? [entry.routeModule].filter((value) => value !== undefined)
@@ -392,14 +398,14 @@ test("[Web/后台访问] 图片管理保留连续选择、直接分页和管理�
         )
       )
     );
-  assert.deepEqual([...navigationModules("image")].sort(), [
+  assert.deepEqual([...navigationModules("image", [])].sort(), [
     "account",
     "check",
     "images",
     "overview",
     "vocabulary"
   ]);
-  assert.deepEqual([...navigationModules("super")].sort(), [
+  assert.deepEqual([...navigationModules("super", Object.values(adminPermissions))].sort(), [
     "account",
     "check",
     "images",
@@ -410,6 +416,19 @@ test("[Web/后台访问] 图片管理保留连续选择、直接分页和管理�
     "users",
     "vocabulary"
   ]);
+
+  assert.deepEqual(
+    [...navigationModules("super", [])].sort(),
+    [...navigationModules("image", [])].sort(),
+    "角色展示不能绕过服务端返回的页面权限"
+  );
+  assert.deepEqual(
+    [...navigationModules("super", [adminPermissions.logsManage])].filter(
+      (module) => ["logs", "site", "storage", "users"].includes(module)
+    ),
+    ["logs"],
+    "页面能力应独立过滤导航与预加载入口"
+  );
 
   assert.equal(resolveUiColorContext("public", "light", false), "dark");
   assert.equal(resolveUiColorContext("admin", "system", true), "dark");

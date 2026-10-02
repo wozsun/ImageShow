@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import { interceptPoolConnections } from "./database-faults.mts";
 
@@ -148,7 +149,7 @@ await runIntegrationScenario(async (runtime) => {
         assert.deepEqual(sortedKeys(value.items[0]!), showKeys);
         visited.push(...value.items.map((item) => item.id));
         const galleryQuery = { ...query, view: "gallery" } as const;
-        const gallery = await reads.listPublicImages(galleryQuery, undefined, now);
+        const gallery = await reads.listPublicImages(galleryQuery, neverAbortedSignal, now);
         assert.deepEqual(
           gallery.items.map((item) => item.id),
           value.items.map((item) => item.id)
@@ -237,7 +238,7 @@ await runIntegrationScenario(async (runtime) => {
     await coordinator.initializeReadyImageCacheCoordinator();
     await coordinator.ensureReadyImageCacheCurrent();
     for (const view of ["show", "gallery"] as const) {
-      assert.equal((await reads.getPublicImage(ids[0]!, view)).device, "mb");
+      assert.equal((await reads.getPublicImage(ids[0]!, view, neverAbortedSignal)).device, "mb");
     }
     await pool.query("UPDATE metadata SET device='pc' WHERE id=$1", [ids[0]]);
     await coordinator.requestReadyImageCacheRebuild();
@@ -365,7 +366,7 @@ await runIntegrationScenario(async (runtime) => {
           device: "pc",
           cursor: anchor.value.next_cursor!
         },
-        undefined,
+        neverAbortedSignal,
         now
       );
       assert.deepEqual(
@@ -374,7 +375,7 @@ await runIntegrationScenario(async (runtime) => {
       );
       const filtered = await reads.listPublicImages(
         { ...anchor.query, device: "mb", cursor: anchor.value.next_cursor! },
-        undefined,
+        neverAbortedSignal,
         now
       );
       assert.deepEqual(filtered, { items: [], next_cursor: null });
@@ -405,7 +406,11 @@ await runIntegrationScenario(async (runtime) => {
       redis.sendCommand = originalSend;
     }
     await redis.zrem(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY, readyImageMember(ids[0]!));
-    const recovered = await reads.listPublicImages({ ...anchor.query, limit: 800 }, undefined, now);
+    const recovered = await reads.listPublicImages(
+      { ...anchor.query, limit: 800 },
+      neverAbortedSignal,
+      now
+    );
     assert.deepEqual(
       recovered.items.map((item) => item.id),
       expected("random"),

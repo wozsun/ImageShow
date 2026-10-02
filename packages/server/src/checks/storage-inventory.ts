@@ -1,4 +1,4 @@
-import { storageObjectKey } from "@imageshow/shared/browser";
+import { imageObjectKey } from "../storage/objects/image-paths.ts";
 import { errorMessage } from "../core/api-error.ts";
 import type { ActiveIngestionStorageReference } from "../images/ingestion/cleanup/storage-references.ts";
 export { activeIngestionStorageReferences } from "../images/ingestion/cleanup/storage-references.ts";
@@ -24,7 +24,7 @@ export function ingestionFinalStorageReferences(
   reference: Pick<ActiveIngestionStorageReference, "image_id" | "committing">
 ): IngestionFinalStorageReference[] {
   if (!reference.committing) return [];
-  const key = storageObjectKey(reference.image_id);
+  const key = imageObjectKey(reference.image_id);
   return STORAGE_PREFIXES.map((prefix) => ({ prefix, key }));
 }
 
@@ -44,7 +44,7 @@ export function mergeStorageReferenceRows(
   const rowsByObjectLocation = new Map<string, ImageStorageReferenceRow>();
   for (const rows of snapshots) {
     for (const row of rows) {
-      rowsByObjectLocation.set(`${row.storage_slug}\0${storageObjectKey(row.id)}`, row);
+      rowsByObjectLocation.set(`${row.storage_slug}\0${imageObjectKey(row.id)}`, row);
     }
   }
   return [...rowsByObjectLocation.values()];

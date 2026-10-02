@@ -77,8 +77,7 @@ export function useChipStripScroll(focusFallbackRef?: RefObject<HTMLElement | nu
       }
     };
     const onWheel = (event: WheelEvent) => {
-      const finePointer = ownerWindow?.matchMedia?.("(any-pointer: fine)")
-        .matches ?? true;
+      const finePointer = window.matchMedia("(any-pointer: fine)").matches;
       if (!finePointer) return;
       const delta = chipStripVerticalWheelPixels({
         clientWidth: box.clientWidth,

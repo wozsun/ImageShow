@@ -26,7 +26,7 @@ export type { BackgroundJobOutcome } from "./handler-outcome.ts";
 
 export async function handleBackgroundJob(
   job: BackgroundJob,
-  signal: AbortSignal = new AbortController().signal
+  signal: AbortSignal
 ): Promise<BackgroundJobOutcome> {
   const handler = backgroundJobHandlers[job.type];
   return runWithAdvisoryLockAcquisitionSignal(

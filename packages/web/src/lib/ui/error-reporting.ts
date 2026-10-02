@@ -10,7 +10,6 @@ export function reportAdminUiError(context: string, error: unknown, metadata?: u
     ...(metadata === undefined ? {} : { metadata: safeLogValue(metadata) })
   };
   console.error("[ImageShow]", report);
-  if (typeof window === "undefined") return;
 
   void api(`${adminApiBasePath}/logs/client-errors`, {
     method: "POST",

@@ -1,6 +1,7 @@
-import type { Redis } from "ioredis";
 import { appConfig } from "@imageshow/shared";
+import type { Redis } from "ioredis";
 import type { CompletedIngestionImageDto } from "@imageshow/shared/browser";
+import { queueIdleTtlMs } from "./sessions/expiry.ts";
 import {
   ingestionCanonicalKeyPrefix,
   ingestionDisplayQueueKey,
@@ -34,6 +35,8 @@ import type {
   IngestionSessionPair,
   IngestionSessionSnapshot,
   StoredIngestionSession,
+  PendingIngestionSession,
+  PendingStoredIngestionSession,
   UploadIntentSnapshot
 } from "./sessions/model.ts";
 import { ingestionSessionSemanticHash } from "./sessions/projection.ts";
@@ -59,6 +62,11 @@ import {
 export type { IngestionQueueMutation } from "./sessions/listener-hub.ts";
 
 export const ingestionSessionIncarnationMismatch = Symbol("ingestion-session-incarnation-mismatch");
+
+type UploadIntentPair = Readonly<Pick<
+  UploadIntentSnapshot,
+  "session_id" | "candidate_image_id" | "request_hash"
+>>;
 
 type MutateSemanticOptions = Readonly<{
   allowStaleSemanticNoOp?: boolean;
@@ -95,11 +103,7 @@ export class IngestionSessionRepository {
   async mutateUploadIntent(
     action: "claim" | "heartbeat" | "release",
     owner: string,
-    pair: Readonly<{
-      session_id: string;
-      candidate_image_id: string;
-      request_hash: string;
-    }>,
+    pair: UploadIntentPair,
     token: string,
     now = Date.now()
   ) {
@@ -115,11 +119,7 @@ export class IngestionSessionRepository {
 
   claimUploadIntent(
     owner: string,
-    pair: Readonly<{
-      session_id: string;
-      candidate_image_id: string;
-      request_hash: string;
-    }>,
+    pair: UploadIntentPair,
     token: string,
     now?: number
   ) {
@@ -128,11 +128,7 @@ export class IngestionSessionRepository {
 
   heartbeatUploadIntent(
     owner: string,
-    pair: Readonly<{
-      session_id: string;
-      candidate_image_id: string;
-      request_hash: string;
-    }>,
+    pair: UploadIntentPair,
     token: string,
     now?: number
   ) {
@@ -141,11 +137,7 @@ export class IngestionSessionRepository {
 
   releaseUploadIntent(
     owner: string,
-    pair: Readonly<{
-      session_id: string;
-      candidate_image_id: string;
-      request_hash: string;
-    }>,
+    pair: UploadIntentPair,
     token: string,
     now?: number
   ) {
@@ -154,7 +146,7 @@ export class IngestionSessionRepository {
 
   async createCanonical(
     acceptance: IngestionQueueType,
-    template: IngestionSessionSnapshot,
+    template: PendingIngestionSession,
     executionToken = "",
     now = Date.now(),
     displayOrderKey = "",
@@ -170,10 +162,6 @@ export class IngestionSessionRepository {
       normalizedTemplate.queue,
       normalizedTemplate.session_id
     );
-    const ttlSeconds =
-      normalizedTemplate.queue === "upload"
-        ? appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds
-        : appConfig.ingestionRuntime.importSessionIdleTtlSeconds;
     const raw = await this.#run(
       "imageshowCreateIngestionCanonical",
       ingestionUploadIntentKey(
@@ -188,7 +176,7 @@ export class IngestionSessionRepository {
       keys.expires,
       acceptance,
       now,
-      ttlSeconds * 1000,
+      queueIdleTtlMs(normalizedTemplate.queue),
       JSON.stringify(normalizedTemplate),
       executionToken,
       displayOrderKey,
@@ -215,7 +203,7 @@ export class IngestionSessionRepository {
   }
 
   convertUploadIntent(
-    template: IngestionSessionSnapshot,
+    template: PendingIngestionSession,
     executionToken: string,
     now?: number
   ) {
@@ -223,7 +211,7 @@ export class IngestionSessionRepository {
   }
 
   acceptImportSession(
-    template: IngestionSessionSnapshot,
+    template: PendingIngestionSession,
     displayOrderKey: string,
     now?: number,
     cancelIfMissing = false
@@ -286,23 +274,11 @@ export class IngestionSessionRepository {
     });
   }
 
-  async mutateSemantic(
-    current: Pick<StoredIngestionSession, "owner" | "queue"> & IngestionSessionPair,
-    expectedVersion: number,
-    next: StoredIngestionSession,
-    now = Date.now(),
-    options: MutateSemanticOptions = {}
+  async #mutateCanonical(
+    current: Pick<StoredIngestionSession, "owner" | "queue" | "session_id">,
+    ...arguments_: Array<string | number>
   ) {
-    const normalizedNext = normalizedSemanticSession(next);
-    const keys = ingestionSessionKeys(
-      current.owner,
-      current.queue,
-      current.session_id
-    );
-    const ttlSeconds =
-      current.queue === "upload"
-        ? appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds
-        : appConfig.ingestionRuntime.importSessionIdleTtlSeconds;
+    const keys = ingestionSessionKeys(current.owner, current.queue, current.session_id);
     const raw = await this.#run(
       "imageshowMutateIngestionCanonical",
       keys.canonical,
@@ -311,17 +287,31 @@ export class IngestionSessionRepository {
       keys.metadata,
       keys.runnable,
       keys.expires,
+      ...arguments_
+    );
+    return parseCanonicalReply(raw, "mutate");
+  }
+
+  async mutateSemantic(
+    current: Pick<StoredIngestionSession, "owner" | "queue"> & IngestionSessionPair,
+    expectedVersion: number,
+    next: PendingStoredIngestionSession,
+    now = Date.now(),
+    options: MutateSemanticOptions = {}
+  ) {
+    const normalizedNext = normalizedSemanticSession(next);
+    const result = await this.#mutateCanonical(
+      current,
       "semantic",
       current.session_id,
       current.image_id,
       expectedVersion,
       "",
       now,
-      ttlSeconds * 1000,
+      queueIdleTtlMs(current.queue),
       JSON.stringify(normalizedNext),
       options.allowStaleSemanticNoOp ? "1" : "0"
     );
-    const result = parseCanonicalReply(raw, "mutate");
     if (!result.session) {
       throw new Error("Redis ingestion mutation omitted its canonical snapshot");
     }
@@ -394,33 +384,17 @@ export class IngestionSessionRepository {
     payload: string,
     now: number
   ) {
-    const keys = ingestionSessionKeys(
-      current.owner,
-      current.queue,
-      current.session_id
-    );
-    const ttlSeconds =
-      current.queue === "upload"
-        ? appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds
-        : appConfig.ingestionRuntime.importSessionIdleTtlSeconds;
-    const raw = await this.#run(
-      "imageshowMutateIngestionCanonical",
-      keys.canonical,
-      keys.owner,
-      keys.display,
-      keys.metadata,
-      keys.runnable,
-      keys.expires,
+    const result = await this.#mutateCanonical(
+      current,
       action,
       current.session_id,
       current.image_id,
       expectedVersion,
       executionToken,
       now,
-      ttlSeconds * 1000,
+      queueIdleTtlMs(current.queue),
       payload
     );
-    const result = parseCanonicalReply(raw, "mutate");
     if (!result.session) {
       throw new Error("Redis ingestion mutation omitted its canonical snapshot");
     }
@@ -441,19 +415,8 @@ export class IngestionSessionRepository {
     expectedVersion: number,
     now = Date.now()
   ) {
-    const keys = ingestionSessionKeys(
-      current.owner,
-      current.queue,
-      current.session_id
-    );
-    const raw = await this.#run(
-      "imageshowMutateIngestionCanonical",
-      keys.canonical,
-      keys.owner,
-      keys.display,
-      keys.metadata,
-      keys.runnable,
-      keys.expires,
+    const result = await this.#mutateCanonical(
+      current,
       "delete",
       current.session_id,
       current.image_id,
@@ -463,7 +426,6 @@ export class IngestionSessionRepository {
       1,
       "{}"
     );
-    const result = parseCanonicalReply(raw, "mutate");
     if (current.status !== "discarded") {
       this.#listeners.publish({
         owner: current.owner,
@@ -480,7 +442,7 @@ export class IngestionSessionRepository {
     current: StoredIngestionSession,
     expectedVersion: number,
     cutoff: number,
-    next?: StoredIngestionSession
+    next?: PendingStoredIngestionSession
   ) {
     if (!Number.isSafeInteger(cutoff) || cutoff < 0) {
       throw new RangeError("Redis ingestion expiry cutoff is invalid");
@@ -498,39 +460,23 @@ export class IngestionSessionRepository {
           : "Active ingestion expiry requires a completed, discarded, " + "or resolving transition"
       );
     }
-    const keys = ingestionSessionKeys(
-      current.owner,
-      current.queue,
-      current.session_id
-    );
-    const ttlSeconds =
-      current.queue === "upload"
-        ? appConfig.ingestionRuntime.uploadSessionIdleTtlSeconds
-        : appConfig.ingestionRuntime.importSessionIdleTtlSeconds;
     const expectedToken = "execution_token" in current
       ? current.execution_token
       : "";
     const payload = next
       ? JSON.stringify(normalizedSemanticSession(next))
       : "{}";
-    const raw = await this.#run(
-      "imageshowMutateIngestionCanonical",
-      keys.canonical,
-      keys.owner,
-      keys.display,
-      keys.metadata,
-      keys.runnable,
-      keys.expires,
+    const result = await this.#mutateCanonical(
+      current,
       "expire",
       current.session_id,
       current.image_id,
       expectedVersion,
       expectedToken,
       cutoff,
-      terminal ? 1 : ttlSeconds * 1000,
+      terminal ? 1 : queueIdleTtlMs(current.queue),
       payload
     );
-    const result = parseCanonicalReply(raw, "mutate");
     if (!terminal && !result.session) {
       throw new Error("Redis ingestion expiry omitted its transition snapshot");
     }

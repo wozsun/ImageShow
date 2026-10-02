@@ -22,6 +22,14 @@ await runIntegrationScenario(async (runtime) => {
   const coordinatorModule = (await import(
     runtime.moduleUrl("packages/server/src/images/ingestion/execution/irreversible-coordinator.ts")
   )) as IrreversibleCoordinatorModule;
+  const readReadyRevision = async () =>
+    BigInt(
+      (
+        await runtime.databasePools.pool.query<{ revision: string }>(
+          "SELECT revision::text AS revision FROM ready_image_revision WHERE singleton=1"
+        )
+      ).rows[0]!.revision
+    );
   const s3 = await createS3HttpFixture();
   try {
     for (const capability of ["local", "supported", "unsupported", "unknown"] as const) {
@@ -60,6 +68,7 @@ await runIntegrationScenario(async (runtime) => {
           assert.equal(preparedView.original_width, fixture.prepared.original_width);
           assert.equal(preparedView.original_height, fixture.prepared.original_height);
           s3.requests.length = 0;
+          const revisionBeforeCommit = await readReadyRevision();
           const item = await commitWorker.commitIngestionSessionSnapshot(
             fixture.repository,
             new coordinatorModule.IngestionIrreversibleCoordinator(),
@@ -67,6 +76,11 @@ await runIntegrationScenario(async (runtime) => {
             new AbortController().signal
           );
           assert.equal(item?.id, fixture.imageId);
+          assert.equal(
+            await readReadyRevision(),
+            revisionBeforeCommit + 1n,
+            "正式提交在持久化事务内推进 ready revision"
+          );
           if (capability !== "local") {
             assert.deepEqual(
               Object.fromEntries(

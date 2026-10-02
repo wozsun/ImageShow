@@ -6,9 +6,10 @@ const reserveRedisWindowsScript = `
 local output = {}
 local blocked = false
 for index = 1, #KEYS do
-  local argument = (index - 1) * 2
+  local argument = (index - 1) * 3
   local capacity = ARGV[argument + 1]
   local duration = ARGV[argument + 2]
+  local cost = ARGV[argument + 3]
   if blocked then
     output[#output + 1] = -1
     output[#output + 1] = 0
@@ -16,11 +17,12 @@ for index = 1, #KEYS do
     output[#output + 1] = duration
   else
     local increment = redis.call(
-      'INCREX', KEYS[index], 'BYINT', '1', 'UBOUND', capacity,
+      'INCREX', KEYS[index], 'BYINT', cost, 'UBOUND', capacity,
       'EX', duration, 'ENX'
     )
     local ttl = redis.call('TTL', KEYS[index])
-    local allowed = increment[2] == 1
+    -- INCREX returns the applied amount; a cost crossing the bound applies nothing.
+    local allowed = increment[2] == tonumber(cost)
     output[#output + 1] = allowed and 1 or 0
     output[#output + 1] = increment[1]
     output[#output + 1] = increment[2]
@@ -41,6 +43,8 @@ export type RedisWindow = {
   key: string;
   capacity: number;
   windowSeconds: number;
+  /** Units reserved by this request; defaults to one. */
+  cost?: number;
 };
 
 export type RedisWindowReservation = {
@@ -116,7 +120,8 @@ export async function reserveRedisWindowsCommand(
     ...windows.map((window) => window.key),
     ...windows.flatMap((window) => [
       String(window.capacity),
-      String(window.windowSeconds)
+      String(window.windowSeconds),
+      String(window.cost ?? 1)
     ])
   );
   if (!Array.isArray(raw) || raw.length !== windows.length * 4) {
@@ -129,11 +134,11 @@ export async function reserveRedisWindowsCommand(
     const current = integer(raw[offset + 1], "reservation value");
     const increment = integer(raw[offset + 2], "reservation increment");
     const ttl = integer(raw[offset + 3], "reservation TTL");
+    const appliedCost = state === 1 ? (window.cost ?? 1) : 0;
     if (
       ![-1, 0, 1].includes(state) ||
       current < 0 ||
-      ![0, 1].includes(increment) ||
-      (state === 1) !== (increment === 1)
+      increment !== appliedCost
     ) {
       throw new Error("Redis window script returned inconsistent state");
     }
@@ -154,21 +159,18 @@ function assertWindow(window: RedisWindow) {
   if (!Number.isSafeInteger(window.windowSeconds) || window.windowSeconds < 1) {
     throw new Error("Redis window duration must be a positive safe integer");
   }
+  const cost = window.cost ?? 1;
+  if (!Number.isSafeInteger(cost) || cost < 1 || cost > window.capacity) {
+    throw new Error("Redis window cost must be a positive safe integer within capacity");
+  }
 }
 
 /**
- * Reserves one token in each fixed window in one atomic Redis operation.
+ * Reserves each window's cost (one token by default) in one atomic Redis operation.
  * A rejected window short-circuits the remaining broader windows, preventing
  * one already-blocked identity from consuming a shared global allowance.
  * INCREX owns each cap and initial TTL; TTL reads never extend the window.
  */
-async function reserveRedisWindowsUnchecked(
-  windows: readonly RedisWindow[],
-  client: RedisWindowCommandSource
-): Promise<RedisWindowReservation[]> {
-  return reserveRedisWindowsCommand(client, windows);
-}
-
 export function reserveRedisWindows(
   windows: readonly RedisWindow[],
   client: RedisWindowCommandSource = redis
@@ -176,6 +178,6 @@ export function reserveRedisWindows(
   if (!windows.length) return Promise.resolve([]);
   windows.forEach(assertWindow);
   return client === redis
-    ? runRequiredRedisCommand(() => reserveRedisWindowsUnchecked(windows, client))
-    : reserveRedisWindowsUnchecked(windows, client);
+    ? runRequiredRedisCommand(() => reserveRedisWindowsCommand(client, windows))
+    : reserveRedisWindowsCommand(client, windows);
 }

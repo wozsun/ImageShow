@@ -1,4 +1,4 @@
-import { imageVariants, storageObjectKey, type ImageVariant } from "@imageshow/shared/browser";
+import { imageVariants, type ImageVariant } from "@imageshow/shared/browser";
 import { ApiError } from "../../core/api-error.ts";
 import { pool } from "../../core/database/pools.ts";
 import { logger } from "../../core/logger.ts";
@@ -9,9 +9,7 @@ import {
 } from "../../jobs/handler-outcome.ts";
 import type { BackgroundJob } from "../../jobs/types.ts";
 import { getStorageBackend } from "../backends/registry.ts";
-import {
-  assertCanonicalImageObjectKey
-} from "../objects/image-paths.ts";
+import { imageObjectKey } from "../objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../maintenance-lock.ts";
 import {
   assertStorageRemovalResults,
@@ -67,8 +65,7 @@ function metadataReferencesObject(
   object: CapturedMoveCleanupObject,
   row: { id: string; storage_slug: string }
 ) {
-  assertCanonicalImageObjectKey(storageObjectKey(row.id));
-  return storageObjectKey(row.id) === object.key;
+  return imageObjectKey(row.id) === object.key;
 }
 
 export async function handleMoveCleanupJob(

@@ -1,26 +1,21 @@
 # 长期契约测试与本地门禁
 
-本目录随 Git 保存，覆盖当前核心行为、错误处理、权限、取消、缓存失效和资源释放。
-测试使用合成数据、模拟请求及自动创建的隔离实例，无需个人凭据、现有图片或业务数据库。
-固定 UUID、会话标识和 token 使用明确合成的测试值，不复制真实环境标识；运行时创建的
-测试对象可使用其生成或返回的身份。格式、排序、分片与身份竞争场景保留相应协议约束。
-源码门禁检查实际依赖方向、循环和配置 / 部署同步；配置通过现有解析接口验证，
-源码执行沿用 Server 的 TypeScript 路径映射，无需预先构建。具体业务由行为测试验证，不重复固定
-内部函数名、文件清单、调用写法或手写响应的字节数。
+本目录随 Git 保存，覆盖当前核心行为、错误处理、权限、取消、缓存失效和资源释放。测试使用合成数据、模拟请求及自动创建的隔离实例，无需个人凭据、现有图片或业务数据库。固定 UUID、会话标识和 token 使用明确合成的测试值，不复制真实环境标识；运行时创建的测试对象可使用其生成或返回的身份。格式、排序、分片与身份竞争场景保留相应协议约束。源码门禁检查依赖方向、循环，配置默认值、`.env.example` 与 Compose 之间的一致性，以及默认 Compose 的可写数据挂载和仅本机回环的端口映射；配置通过现有解析接口验证，源码执行沿用 Server 的 TypeScript 路径映射，无需预先构建。具体业务由行为测试验证，不固定内部函数名、文件清单、调用写法、文档格式或手写响应的字节数，也不测试测试工具自身。
+
+## 新增测试
+
+完整验收 `npm run verify:release` 是唯一的通过标准。新功能、重构和普通修复默认不新增测试：行为变化使现有断言失效时原地修改；只有数据完整性、权限与安全、取消与资源释放、故障恢复或公开接口契约在完整验收中没有任何覆盖，或缺陷曾漏过完整验收时，才在所属领域的现有用例中补最少的断言，并清理被覆盖的重复断言。不写内部函数、单个组件或 Hook 的单元测试；新增测试文件、统一入口装配、场景选择器或支撑工具需要先说明理由并经维护者同意。
 
 ## 首次运行
 
-需要满足根包 `engines` 的 Node.js / npm，以及本机可运行 Linux 容器的 Docker Engine。
-Docker CLI 应连接本机 daemon，测试通过本机回环地址连接隔离服务。
-依赖安装和隔离镜像拉取需要网络；测试用图片由代码生成。下载仓库后在根目录执行：
+需要满足根包 `engines` 的 Node.js / npm，以及本机可运行 Linux 容器的 Docker Engine。Docker CLI 应连接本机 daemon，测试通过本机回环地址连接隔离服务。依赖安装和隔离镜像拉取需要网络；测试用图片由代码生成。下载仓库后在根目录执行：
 
 ```bash
 npm ci
 npm run verify:release
 ```
 
-完整门禁自行构建项目，并依次运行源码检查、构建检查、行为测试和隔离生产镜像验收。
-默认命令不加载部署 `.env`，Server 测试会清除宿主 shell 的 RuntimeConfig 种子，不需要预先启动项目或准备根目录 `data/`、`tests/`。
+完整门禁自行构建项目，并依次运行源码检查、构建检查、行为测试和隔离生产镜像验收。默认命令不加载部署 `.env`，Server 测试会清除宿主 shell 的 RuntimeConfig 种子，不需要预先启动项目或准备根目录 `data/`、`tests/`。
 
 ## 入口与分层
 
@@ -36,14 +31,11 @@ npm run verify:release
 | `support/` | DOM / 全局属性恢复、可控时钟、进程树和隔离目录等窄职责支撑 |
 | `tsconfig.json` | 测试源码专用的无产物类型检查，不进入生产构建 |
 
-颜色识别用例随 `verify/check-semantic-colors.mjs` 执行，再扫描项目源码；静态压缩的实际
-收益、Zstd 解码窗口和重复装配用例随 `verify/check-web-chunks.mjs` 执行，再检查最终产物的
-长度、解压往返和分析元数据。`server/http-static.test.ts` 覆盖编码协商、条件请求与单范围，
-并由 Server 统一入口装配。两类测试各归所属门禁，不依赖现有运行数据。
+静态压缩模块的实际收益、Zstd 解码窗口与重复装配随 `verify/check-web-chunks.mjs` 验证，再检查最终产物的长度、解压往返和分析元数据。`server/http-static.test.ts` 覆盖编码协商、条件请求与单范围，并由 Server 统一入口装配。两者都不依赖现有运行数据。
 
 | 命令 | 范围与前提 |
 | --- | --- |
-| `npm run verify:source` | 生产与测试源码类型、依赖、配置、文档与样式契约；已安装依赖 |
+| `npm run verify:source` | 生产与测试源码类型、无用代码、依赖方向、配置与版本一致性、生成图标、文档链接与语义颜色；已安装依赖 |
 | `npm run verify:build` | 生产构建与 Web 产物边界；已安装依赖 |
 | `npm run verify:runtime` | Server / Web 测试与隔离生产镜像；先完成项目构建 |
 | `npm run verify:release` | 按 source → build → runtime 依次运行，失败即停 |
@@ -55,17 +47,14 @@ node --test --test-isolation=none scripts/tests/final-server.test.ts
 npm run test:final:web
 ```
 
-领域测试使用名称前缀，可在统一入口中选择；筛选后应看到实际执行的匹配用例，不能把只有入口
-文件或全部跳过的结果当成通过。例如：
+领域测试使用名称前缀，可在统一入口中选择；筛选后应看到实际执行的匹配用例，不能把只有入口文件或全部跳过的结果当成通过。例如：
 
 ```bash
 npx tsx --test --test-name-pattern="^\[Server/内容接入\]" scripts/tests/final-server.test.ts
 npx tsx --import ./scripts/tests/support/web-assets.mjs --test --test-name-pattern="^\[Web/展映\]" scripts/tests/final-web.test.ts
 ```
 
-数据库集成、其中的存储 / 接入跨域合同与 Web 队列 Hook 还提供进程环境变量选择内部具名场景。
-数据库始终先自行准备本次 PostgreSQL / Redis；每个跨域合同使用独立数据库并清空一次性 Redis，
-Web 场景始终建立自己的 DOM、请求模拟与 React root：
+数据库集成、其中的存储 / 接入跨域合同与 Web 队列 Hook 还提供进程环境变量选择内部具名场景。数据库始终先自行准备本次 PostgreSQL / Redis；每个跨域合同使用独立数据库并清空一次性 Redis，Web 场景始终建立自己的 DOM、请求模拟与 React root：
 
 ```bash
 IMAGESHOW_DATABASE_SCENARIO=cold-redis npx tsx --test \
@@ -77,14 +66,9 @@ IMAGESHOW_WEB_QUEUE_SCENARIO=handoff-completion npx tsx --import ./scripts/tests
   --test-name-pattern="Server 内容接入队列 Hook" scripts/tests/web/ingestion.test.ts
 ```
 
-PowerShell 中使用 `$env:IMAGESHOW_DATABASE_SCENARIO = "cold-redis"`、
-`$env:IMAGESHOW_STORAGE_INGESTION_SCENARIO = "commit-success"` 或
-`$env:IMAGESHOW_WEB_QUEUE_SCENARIO = "handoff-completion"` 设置同名变量；运行后用
-`Remove-Item Env:IMAGESHOW_DATABASE_SCENARIO` 或对应名称清除。`verify:*` 总入口会主动移除
-全部场景选择器，保证完整门禁不会因 shell 残留变量而少跑。
+PowerShell 中使用 `$env:IMAGESHOW_DATABASE_SCENARIO = "cold-redis"`、`$env:IMAGESHOW_STORAGE_INGESTION_SCENARIO = "commit-success"` 或 `$env:IMAGESHOW_WEB_QUEUE_SCENARIO = "handoff-completion"` 设置同名变量；运行后用 `Remove-Item Env:IMAGESHOW_DATABASE_SCENARIO` 或对应名称清除。`verify:*` 总入口会主动移除全部场景选择器，保证完整门禁不会因 shell 残留变量而少跑。
 
-数据库场景值为 `schema-baseline`、`storage-ingestion`、`cold-redis`、`readiness`。
-`storage-ingestion` 下的独立场景按职责列于下表，每次只选择一个值：
+数据库场景值为 `schema-baseline`、`storage-ingestion`、`cold-redis`、`readiness`。`storage-ingestion` 下的独立场景按职责列于下表，每次只选择一个值：
 
 | 职责 | `IMAGESHOW_STORAGE_INGESTION_SCENARIO` 值 |
 | --- | --- |
@@ -98,39 +82,26 @@ PowerShell 中使用 `$env:IMAGESHOW_DATABASE_SCENARIO = "cold-redis"`、
 | 正式提交 | `ingestion-commit-guards`、`commit-success`、`commit-conflict`、`commit-recovery` |
 | 接入文件生命周期 | `ingestion-raw-lifecycle`、`ingestion-orphan-lifecycle` |
 
-Web 定向命令使用 `--import ./scripts/tests/support/web-assets.mjs` 加载组件样式桩；
-真实 CSS 排版由浏览器验收覆盖，`test:final:web` 已包含此选项。
+Web 定向命令使用 `--import ./scripts/tests/support/web-assets.mjs` 加载组件样式桩；真实 CSS 排版由浏览器验收覆盖，`test:final:web` 已包含此选项。
 
-Web 队列场景值为 `strict-mode`、
-`empty-reconnect`、`reconnect-pagination`、`handoff-completion`。
-不设置变量时执行完整场景，未知值会失败而不是产生零测试通过。
+Web 队列场景值为 `strict-mode`、`empty-reconnect`、`reconnect-pagination`、`handoff-completion`。不设置变量时执行完整场景，未知值会失败而不是产生零测试通过。
 
 ## 证据边界
 
 - 纯规则测试证明输入到输出的领域契约，不证明真实数据库、文件系统或浏览器排版。
-- `linkedom` 组件测试通过公开 DOM 事件验证 React 交互、请求、取消和卸载，不把模拟视口当成
-  CSS 排版或 GPU 呈现验收。
-- 数据库集成测试使用一次性 PostgreSQL / Redis 和合成图片；strict `.mts` 场景分别验证
-  schema、readiness、配置与图片事务、权限与会话、真实 Redis canonical 和业务命令、接入
-  队列与正式提交、存储迁移及维护、raw 租约与孤儿清理，以及读模型重建。故障用例验证真实
-  数据或文件副作用、取消和资源释放；它不接触部署中的现有实例。
-- 运行时镜像门禁另行验证生产镜像冷启动、HTTP、schema 和重启；局部测试通过不能替代
-  `npm run verify:release`。
+- `linkedom` 组件测试通过公开 DOM 事件验证 React 交互、请求、取消和卸载，不把模拟视口当成 CSS 排版或 GPU 呈现验收。
+- 数据库集成测试使用一次性 PostgreSQL / Redis 和合成图片；strict `.mts` 场景分别验证 schema、readiness、配置与图片事务、权限与会话、真实 Redis canonical 和业务命令、接入队列与正式提交、存储迁移及维护、raw 租约与孤儿清理，以及读模型重建。故障用例验证真实数据或文件副作用、取消和资源释放；它不接触部署中的现有实例。
+- 运行时镜像门禁另行验证生产镜像冷启动、HTTP、schema 和重启；局部测试通过不能替代 `npm run verify:release`。
 - 三档编码与缓存使用隔离 Linux 生产镜像验收，`verify/normalize-encoding.mjs` 由镜像门禁复制后以 node 用户执行。
 - local 发布的故障注入验证文件与目录同步、发布失败及恢复边界；真实掉电持久性还依赖文件系统、磁盘和 PostgreSQL 部署配置。
 - Linux 镜像另行验证配置替换前后的同步失败、写入阻断与显式重载恢复；未完成 HTTP 请求验证退出截止时间及重启恢复。
 
 ## 数据与产物
 
-Server 测试在导入应用模块前设置独立数据路径；宿主机生成的配置、日志、图片和临时脚本
-进入根目录 `tests/tmp/` 下的唯一目录，用完清理。数据库、Redis、应用容器、网络和临时镜像
-由测试独立创建和清理。根目录 `data/` 专用于应用数据。
+Server 测试在导入应用模块前设置独立数据路径；宿主机生成的配置、日志、图片和临时脚本进入根目录 `tests/tmp/` 下的唯一目录，用完清理。数据库、Redis、应用容器、网络和临时镜像由测试独立创建和清理。根目录 `data/` 专用于应用数据。
 
-辅助进程由共享进程管理器登记。使用 IPC 的辅助进程遵循 `imageshow:shutdown` 协议，
-中断时先清理各自持有的子进程和目录，再退出；关闭请求超时后强制终止，并拒绝中断后新建资源。
+辅助进程由共享进程管理器登记，中断时终止其进程树并清理登记的目录，拒绝中断后新建资源。门禁通过 IPC 向 Server 验收和隔离镜像验收发送 `imageshow:shutdown`，它们先清理各自持有的子进程和目录再退出；关闭请求超时后强制终止。
 
-临时复现、性能测量、真实 COS 等外部资源验收、原始运行产物和额外工作树留在根目录
-`tests/`，由 Git 忽略，不是本目录的前置依赖。固定夹具只保存可公开的合成数据。
+临时复现、性能测量、真实 COS 等外部资源验收、原始运行产物和额外工作树留在根目录 `tests/`，由 Git 忽略，不是本目录的前置依赖。固定夹具只保存可公开的合成数据。
 
-GitHub Actions 负责镜像构建与发布，本目录的测试和门禁在本地运行；测试不进入生产镜像。
-结论、比较决策和验收说明放入本地 `.agents/report/`，原始运行产物留在根目录 `tests/`。
+GitHub Actions 负责镜像构建与发布，本目录的测试和门禁在本地运行；测试不进入生产镜像。结论、比较决策和验收说明放入本地 `.agents/report/`，原始运行产物留在根目录 `tests/`。

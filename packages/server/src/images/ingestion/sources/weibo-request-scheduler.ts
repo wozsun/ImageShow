@@ -1,5 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { abortSignalError, raceWithAbortSignal } from "../../../core/abort.ts";
+import { abortSignalError, neverAbortedSignal, raceWithAbortSignal } from "../../../core/abort.ts";
 import { WeiboImportError } from "./weibo-types.ts";
 
 type WeiboRequestDelayRange = {
@@ -30,8 +30,6 @@ type WeiboRequestSchedulerOptions = {
   now?: () => number;
   wait?: (delayMs: number, signal: AbortSignal) => Promise<void>;
 };
-
-const neverAbortedSignal = new AbortController().signal;
 
 function waitForDelay(delayMs: number, signal: AbortSignal) {
   signal.throwIfAborted();

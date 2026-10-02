@@ -1,8 +1,10 @@
 import { Fragment, useState } from "react";
 import { NavLink } from "react-router";
-import type {
-  AdminColorScheme,
-  AdminRole
+import {
+  adminPermissions,
+  type AdminPermission,
+  type AdminColorScheme,
+  type AdminRole
 } from "@imageshow/shared/browser";
 import { AdminIcon, type AdminIconName } from "../../../components/icon/AdminIcon.js";
 import { adminBasePath } from "../../../lib/constants.js";
@@ -16,7 +18,7 @@ type AdminNavigationLink = {
   label: string;
   icon: AdminIconName;
   end?: boolean;
-  superOnly?: boolean;
+  permission?: AdminPermission;
   desktopClassName?: string;
   routeModule?: AdminRouteModuleKey;
 };
@@ -27,7 +29,6 @@ type AdminNavigationGroup = {
   label: string;
   icon: AdminIconName;
   items: readonly AdminNavigationLink[];
-  superOnly?: boolean;
   desktopDefaultOpenRoles?: readonly AdminRole[];
   desktopDefaultOpen?: boolean;
 };
@@ -102,13 +103,13 @@ const adminNavigationModel = {
       id: "settings",
       icon: "settings-3-line",
       label: "设置",
-      superOnly: true,
       items: [
         {
           kind: "link",
           to: `${adminBasePath}/site`,
           icon: "settings-3-line",
           label: "站点配置",
+          permission: adminPermissions.settingsManage,
           routeModule: "site"
         },
         {
@@ -116,6 +117,7 @@ const adminNavigationModel = {
           to: `${adminBasePath}/storage`,
           icon: "hard-drive-2-line",
           label: "存储管理",
+          permission: adminPermissions.storageManage,
           routeModule: "storage"
         },
         {
@@ -123,6 +125,7 @@ const adminNavigationModel = {
           to: `${adminBasePath}/users`,
           icon: "group-line",
           label: "用户管理",
+          permission: adminPermissions.usersManage,
           routeModule: "users"
         }
       ]
@@ -139,7 +142,7 @@ const adminNavigationModel = {
       to: `${adminBasePath}/logs`,
       icon: "history-line",
       label: "日志",
-      superOnly: true,
+      permission: adminPermissions.logsManage,
       routeModule: "logs"
     }
   ],
@@ -154,19 +157,27 @@ const adminNavigationModel = {
   ]
 } as const satisfies AdminNavigationSections;
 
-function navigationEntriesForRole(
+function navigationItemPermitted(
+  item: Readonly<{ permission?: AdminPermission }>,
+  permissions: readonly AdminPermission[]
+) {
+  return !item.permission || permissions.includes(item.permission);
+}
+
+function navigationEntriesForPermissions(
   entries: readonly AdminNavigationEntry[],
-  role: AdminRole
+  role: AdminRole,
+  permissions: readonly AdminPermission[]
 ): AdminNavigationEntry[] {
-  const isSuper = role === "super";
   const visibleEntries: AdminNavigationEntry[] = [];
   for (const entry of entries) {
-    if (entry.superOnly && !isSuper) continue;
     if (entry.kind === "link") {
-      visibleEntries.push(entry);
+      if (navigationItemPermitted(entry, permissions)) visibleEntries.push(entry);
       continue;
     }
-    const items = entry.items.filter((item) => !item.superOnly || isSuper);
+    const items = entry.items.filter((item) =>
+      navigationItemPermitted(item, permissions)
+    );
     if (items.length) {
       visibleEntries.push({
         ...entry,
@@ -178,11 +189,14 @@ function navigationEntriesForRole(
   return visibleEntries;
 }
 
-export function adminNavigationForRole(role: AdminRole): AdminNavigationSections {
+export function adminNavigationForPermissions(
+  role: AdminRole,
+  permissions: readonly AdminPermission[]
+): AdminNavigationSections {
   return {
-    site: navigationEntriesForRole(adminNavigationModel.site, role),
-    main: navigationEntriesForRole(adminNavigationModel.main, role),
-    account: navigationEntriesForRole(adminNavigationModel.account, role)
+    site: navigationEntriesForPermissions(adminNavigationModel.site, role, permissions),
+    main: navigationEntriesForPermissions(adminNavigationModel.main, role, permissions),
+    account: navigationEntriesForPermissions(adminNavigationModel.account, role, permissions)
   };
 }
 

@@ -1,6 +1,7 @@
-import { sortOrderMin, sortOrderMax } from "@imageshow/shared/browser";
 import type { Pool, PoolClient } from "pg";
 import type { AuthorDto } from "@imageshow/shared/browser";
+import { nextSortOrderSql } from "../core/database/sort-order-sql.ts";
+import { readVocabularyMutationImpact } from "../vocab/mutation-impact.ts";
 import { withTransaction } from "../core/database/transactions.ts";
 import { ApiError } from "../core/api-error.ts";
 import {
@@ -61,10 +62,7 @@ export async function ensureAuthorWithMutationLockHeld(
   if (!slug) return false;
   const result = await client.query(
     `INSERT INTO author(slug, sort_order)
-     VALUES($1, (
-       SELECT GREATEST(${sortOrderMin}, LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, ${sortOrderMax}))
-       FROM author
-     ))
+     VALUES($1, ${nextSortOrderSql("author")})
      ON CONFLICT (slug) DO NOTHING
      RETURNING slug`,
     [slug]
@@ -101,8 +99,7 @@ export async function createAuthor(
              $3,
              $4,
              $5,
-             (SELECT GREATEST(${sortOrderMin}, LEAST(COALESCE(MAX(sort_order), 0)::bigint + 1, ${sortOrderMax}))
-              FROM author)
+             ${nextSortOrderSql("author")}
            )
            ON CONFLICT (slug) DO NOTHING
            RETURNING slug,
@@ -195,33 +192,13 @@ async function deleteAuthorUnderLock(
     if (!author.rowCount) {
       return { deleted: false, affected: [] as ClearedAuthorImage[] };
     }
-    const affectedCount = Number(
-      (
-        await client.query(
-          `SELECT count(*)::int AS count
-         FROM metadata
-        WHERE author=$1
-          AND status='ready'`,
-          [slug]
-        )
-      ).rows[0]?.count ?? 0
+    const { affectedCount, affected } = await readVocabularyMutationImpact(
+      client,
+      "author",
+      slug,
+      mutationBatch,
+      signal
     );
-    signal.throwIfAborted();
-    const decision = mutationBatch.decide(affectedCount);
-    const affected =
-      decision.mode === "exact"
-        ? ((
-            await client.query(
-              `SELECT id
-           FROM metadata
-          WHERE author=$1
-            AND status='ready'
-          ORDER BY id`,
-              [slug]
-            )
-          ).rows as ClearedAuthorImage[])
-        : [];
-    signal.throwIfAborted();
     await client.query(
       `UPDATE metadata
           SET author=NULL, updated_at=now()

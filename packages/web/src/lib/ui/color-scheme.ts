@@ -13,9 +13,6 @@ export type AdminColorSchemeCycle = Readonly<{
 export const systemColorSchemeMediaQuery = "(prefers-color-scheme: dark)";
 
 export function readSystemPrefersDark() {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-    return true;
-  }
   return window.matchMedia(systemColorSchemeMediaQuery).matches;
 }
 

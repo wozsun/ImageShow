@@ -60,106 +60,31 @@ type DynamicConcurrencyHooks = {
   onStarted?: () => void;
 };
 
-type DynamicConcurrencyQueueEntry = {
-  signal: AbortSignal;
-  abort: () => void;
-  run: () => void;
-};
-
 export class DynamicConcurrencyLimiter {
-  private active = 0;
-  private queue: DynamicConcurrencyQueueEntry[] = [];
-  private readonly limit: () => number;
-  private readonly cancellationError: (signal: AbortSignal) => unknown;
+  private readonly weighted: DynamicWeightedLimiter;
 
   constructor(
     limit: () => number,
     cancellationError: (signal: AbortSignal) => unknown
   ) {
-    this.limit = limit;
-    this.cancellationError = cancellationError;
+    this.weighted = new DynamicWeightedLimiter(limit, cancellationError);
   }
 
-  async run<Result>(
+  run<Result>(
     signal: AbortSignal,
     work: () => Promise<Result>,
     hooks: DynamicConcurrencyHooks = {}
   ): Promise<Result> {
-    await this.acquire(signal, hooks.onQueued);
-    try {
-      if (signal.aborted) throw this.cancellationError(signal);
-      hooks.onStarted?.();
-      return await work();
-    } finally {
-      this.active = Math.max(0, this.active - 1);
-      this.drain();
-    }
+    return this.weighted.run(1, signal, work, hooks);
   }
 
-  /** Re-evaluate a changed dynamic limit and fill any newly available slots. */
   refresh() {
-    this.drain();
+    this.weighted.refresh();
   }
 
   snapshot() {
-    return {
-      limit: this.currentLimit(),
-      active: this.active,
-      waiting: this.queue.length
-    } as const;
-  }
-
-  private acquire(signal: AbortSignal, onQueued?: () => void) {
-    if (signal.aborted) throw this.cancellationError(signal);
-    if (this.queue.length === 0 && this.active < this.currentLimit()) {
-      this.active += 1;
-      return Promise.resolve();
-    }
-
-    onQueued?.();
-    return new Promise<void>((resolve, reject) => {
-      let settled = false;
-      const entry: DynamicConcurrencyQueueEntry = {
-        signal,
-        abort: () => {
-          if (settled) return;
-          settled = true;
-          signal.removeEventListener("abort", entry.abort);
-          this.queue = this.queue.filter((item) => item !== entry);
-          reject(this.cancellationError(signal));
-          this.drain();
-        },
-        run: () => {
-          if (settled) return;
-          settled = true;
-          signal.removeEventListener("abort", entry.abort);
-          this.active += 1;
-          resolve();
-        }
-      };
-      this.queue.push(entry);
-      signal.addEventListener("abort", entry.abort, { once: true });
-      if (signal.aborted) entry.abort();
-    });
-  }
-
-  private currentLimit() {
-    const configured = this.limit();
-    return Number.isFinite(configured)
-      ? Math.max(1, Math.floor(configured))
-      : 1;
-  }
-
-  private drain() {
-    while (this.active < this.currentLimit()) {
-      const next = this.queue.shift();
-      if (!next) return;
-      if (next.signal.aborted) {
-        next.abort();
-        continue;
-      }
-      next.run();
-    }
+    const { limit, activeWeight, waiting } = this.weighted.snapshot();
+    return { limit, active: activeWeight, waiting } as const;
   }
 }
 
@@ -205,7 +130,7 @@ export class DynamicWeightedLimiter {
       hooks.onStarted?.();
       return await work();
     } finally {
-      this.activeWeight = Math.max(0, this.activeWeight - acquiredWeight);
+      this.activeWeight -= acquiredWeight;
       this.drain();
     }
   }

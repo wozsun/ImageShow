@@ -81,21 +81,28 @@ export type EditableImageSnapshotRecordWithTags = AdminImageCommonRecord & {
   tags: string[];
 };
 
+/** Image metadata columns around the variant column set chosen by the caller. */
+function imageMetadataPresentationColumns(variantColumns: string) {
+  return [
+    "id",
+    "device",
+    "brightness",
+    "theme",
+    variantColumns,
+    "storage_slug",
+    "author",
+    "title",
+    "description",
+    "source",
+    "original"
+  ].join(", ");
+}
+
 /**
  * Shared image fields for formal Ingestion results and admin list rows.
  */
 const ingestionImagePresentationColumns = [
-  "id",
-  "device",
-  "brightness",
-  "theme",
-  imageVariantColumns,
-  "storage_slug",
-  "author",
-  "title",
-  "description",
-  "source",
-  "original",
+  imageMetadataPresentationColumns(imageVariantColumns),
   "image_time"
 ].join(", ");
 
@@ -130,17 +137,7 @@ export const ingestionImagePresentationColumnsWithTags = [
 ].join(", ");
 
 export const adminImageDetailPresentationColumnsWithTags = [
-  "id",
-  "device",
-  "brightness",
-  "theme",
-  imageVariantByteSizeColumns,
-  "storage_slug",
-  "author",
-  "title",
-  "description",
-  "source",
-  "original",
+  imageMetadataPresentationColumns(imageVariantByteSizeColumns),
   "image_time",
   "created_at",
   "updated_at",
@@ -148,17 +145,7 @@ export const adminImageDetailPresentationColumnsWithTags = [
 ].join(", ");
 
 export const editableImagePresentationColumnsWithTags = [
-  "id",
-  "device",
-  "brightness",
-  "theme",
-  imageVariantColumns,
-  "storage_slug",
-  "author",
-  "title",
-  "description",
-  "source",
-  "original",
+  imageMetadataPresentationColumns(imageVariantColumns),
   imageTagsPresentationColumn
 ].join(", ");
 
@@ -216,8 +203,7 @@ function serializeNullableTimestamp(value: DatabaseTimestamp | null) {
 }
 
 function presentImageBase(
-  row: ImageMetadataRecord,
-  tags: string[],
+  row: ImageMetadataRecord & { tags: string[] },
   configs: ReadonlyMap<string, StorageConfig>
 ) {
   const base_url = publicImageBaseUrl(configs.get(row.storage_slug)!);
@@ -230,18 +216,17 @@ function presentImageBase(
     brightness: row.brightness,
     theme: row.theme,
     author: row.author ?? "",
-    tags,
+    tags: row.tags,
     base_url,
     storage_slug: row.storage_slug
   };
 }
 
 function presentAdminImageBase(
-  row: ImageMetadataRecord,
-  tags: string[],
+  row: ImageMetadataRecord & { tags: string[] },
   configs: ReadonlyMap<string, StorageConfig>
 ) {
-  const base = presentImageBase(row, tags, configs);
+  const base = presentImageBase(row, configs);
   return {
     ...base,
     original_url: adminOriginalAccessUrl(row.id, row.original, imageVariantUrl(base, "large"))
@@ -252,7 +237,7 @@ export async function ingestionImageItemsWithTags(rows: IngestionImageRecordWith
   if (!rows.length) return [];
   const configs = await storageConfigsForRows(rows);
   return rows.map((row): CompletedIngestionImageDto => ({
-    ...presentImageBase(row, row.tags, configs),
+    ...presentImageBase(row, configs),
     variants: presentImageVariants(row),
     width: Number(row.s_width),
     height: Number(row.s_height),
@@ -263,11 +248,10 @@ export async function ingestionImageItemsWithTags(rows: IngestionImageRecordWith
 }
 
 function adminImageListItem(
-  row: ImageRecord,
-  tags: string[],
+  row: ImageRecordWithTags,
   configs: ReadonlyMap<string, StorageConfig>
 ): AdminImageListItemDto {
-  const base = presentAdminImageBase(row, tags, configs);
+  const base = presentAdminImageBase(row, configs);
   return {
     ...base,
     original: row.original,
@@ -289,7 +273,6 @@ export async function adminImageListItemsWithTags(rows: ImageRecordWithTags[]) {
   const configs = await storageConfigsForRows(rows);
   return rows.map((row) => adminImageListItem(
     row,
-    row.tags,
     configs
   ));
 }
@@ -298,7 +281,7 @@ export async function adminImageDetailItemsWithTags(rows: AdminImageDetailRecord
   if (!rows.length) return [];
   const configs = await storageConfigsForRows(rows);
   return rows.map((row): AdminImageDetailItemDto => {
-    const { storage_slug: storageSlug, ...base } = presentAdminImageBase(row, row.tags, configs);
+    const { storage_slug: storageSlug, ...base } = presentAdminImageBase(row, configs);
     return {
       ...base,
       variants: presentImageVariantByteSizes(row),
@@ -317,7 +300,7 @@ export async function editableImageSnapshotsWithTags(rows: EditableImageSnapshot
   if (!rows.length) return [];
   const configs = await storageConfigsForRows(rows);
   return rows.map((row): EditableImageSnapshotDto => {
-    const base = presentAdminImageBase(row, row.tags, configs);
+    const base = presentAdminImageBase(row, configs);
     return {
       ...base,
       variants: presentImageVariants(row),

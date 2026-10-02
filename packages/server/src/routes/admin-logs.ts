@@ -1,10 +1,11 @@
-import type { Context, Hono } from "hono";
+import type { Hono } from "hono";
 import { z } from "zod";
-import { adminApiBasePath } from "@imageshow/shared/browser";
+import { adminPermissions, adminApiBasePath } from "@imageshow/shared/browser";
+import { adminSessionOf } from "../core/http/admin-session-context.ts";
 import { apiSuccess } from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
 import { requestLogContext } from "../core/http/request-security.ts";
-import { requireSuperAdmin } from "../users/admin-authorization.ts";
+import { requireAdminPermission } from "../users/admin-authorization.ts";
 import { readRecentLogFile, updateLogLevel } from "../core/log-files.ts";
 import { logger } from "../core/logger.ts";
 import { parse } from "./validation/parse.ts";
@@ -18,40 +19,39 @@ const clientErrorInput = z.strictObject({
   metadata: z.unknown().optional()
 });
 
-function adminSession(c: Context) {
-  return c.get("session") as
-    | {
-        username?: string;
-        role?: string;
-      }
-    | undefined;
-}
-
 export function registerAdminLogRoutes(app: Hono) {
-  app.get(`${adminApiBasePath}/logs`, requireSuperAdmin, async (c) => {
-    const url = new URL(c.req.url);
-    return c.json(
-      apiSuccess(
-        await readRecentLogFile({
-          file: url.searchParams.get("file"),
-          limit: url.searchParams.get("limit")
-        })
-      )
-    );
-  });
+  app.get(
+    `${adminApiBasePath}/logs`,
+    requireAdminPermission(adminPermissions.logsManage),
+    async (c) => {
+      const url = new URL(c.req.url);
+      return c.json(
+        apiSuccess(
+          await readRecentLogFile({
+            file: url.searchParams.get("file"),
+            limit: url.searchParams.get("limit")
+          })
+        )
+      );
+    }
+  );
 
-  app.post(`${adminApiBasePath}/logs/level`, requireSuperAdmin, async (c) => {
-    const body = parse(logLevelInput, await readJsonBody(c));
-    return c.json(apiSuccess(await updateLogLevel(body.level)));
-  });
+  app.post(
+    `${adminApiBasePath}/logs/level`,
+    requireAdminPermission(adminPermissions.logsManage),
+    async (c) => {
+      const body = parse(logLevelInput, await readJsonBody(c));
+      return c.json(apiSuccess(await updateLogLevel(body.level)));
+    }
+  );
 
   app.post(`${adminApiBasePath}/logs/client-errors`, async (c) => {
     const body = parse(clientErrorInput, await readJsonBody(c));
-    const session = adminSession(c);
+    const session = adminSessionOf(c);
     logger.error("admin_ui_error", {
       ...requestLogContext(c),
-      actor: session?.username ?? "unknown",
-      role: session?.role ?? "unknown",
+      actor: session.username,
+      role: session.role,
       context: body.context,
       error: body.error,
       metadata: body.metadata

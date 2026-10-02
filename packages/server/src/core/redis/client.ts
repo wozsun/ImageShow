@@ -185,17 +185,6 @@ function requiredCommandProbeKeys() {
 
 type RedisPipelineResult = [Error | null, unknown];
 
-function requiredPipelineResult(
-  results: RedisPipelineResult[],
-  index: number
-) {
-  const result = results[index];
-  if (!result) {
-    throw new Error("Redis required-command probe returned incomplete results");
-  }
-  return result;
-}
-
 function validPipelineReply(
   result: RedisPipelineResult,
   validate: (reply: unknown) => boolean
@@ -361,24 +350,26 @@ export async function readRequiredRedisCommandCapabilities(
   if (!results || results.length !== 18) {
     throw new Error("Redis required-command probe returned invalid results");
   }
-  const arringResult = requiredPipelineResult(results, 0);
-  const expirationResult = requiredPipelineResult(results, 1);
-  const arlastitemsResult = requiredPipelineResult(results, 2);
-  const conditionalSetSeedResult = requiredPipelineResult(results, 3);
-  const conditionalSetInitialTtlResult = requiredPipelineResult(results, 4);
-  const conditionalSetSuccessResult = requiredPipelineResult(results, 5);
-  const conditionalSetKeptTtlResult = requiredPipelineResult(results, 6);
-  const conditionalSetFailureResult = requiredPipelineResult(results, 7);
-  const conditionalSetValueResult = requiredPipelineResult(results, 8);
-  const conditionalSetMissingResult = requiredPipelineResult(results, 9);
-  const conditionalSetMissingExistsResult = requiredPipelineResult(results, 10);
-  const conditionalDeleteSeedResult = requiredPipelineResult(results, 11);
-  const conditionalDeleteFailureResult = requiredPipelineResult(results, 12);
-  const conditionalDeleteValueResult = requiredPipelineResult(results, 13);
-  const conditionalDeleteSuccessResult = requiredPipelineResult(results, 14);
-  const conditionalDeleteExistsResult = requiredPipelineResult(results, 15);
-  const conditionalDeleteMissingResult = requiredPipelineResult(results, 16);
-  const cleanupResult = requiredPipelineResult(results, 17);
+  const [
+    arringResult,
+    expirationResult,
+    arlastitemsResult,
+    conditionalSetSeedResult,
+    conditionalSetInitialTtlResult,
+    conditionalSetSuccessResult,
+    conditionalSetKeptTtlResult,
+    conditionalSetFailureResult,
+    conditionalSetValueResult,
+    conditionalSetMissingResult,
+    conditionalSetMissingExistsResult,
+    conditionalDeleteSeedResult,
+    conditionalDeleteFailureResult,
+    conditionalDeleteValueResult,
+    conditionalDeleteSuccessResult,
+    conditionalDeleteExistsResult,
+    conditionalDeleteMissingResult,
+    cleanupResult
+  ] = results;
   const [arringError, arringReply] = arringResult;
   const [expirationError, expirationReply] = expirationResult;
   const [arlastitemsError, arlastitemsReply] = arlastitemsResult;

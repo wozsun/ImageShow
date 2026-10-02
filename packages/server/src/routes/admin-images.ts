@@ -19,8 +19,7 @@ import { readJsonBody } from "../core/http/json-body.ts";
 import { logger } from "../core/logger.ts";
 import {
   imageUpdatePath,
-  getRequestBodyBytes,
-  limitImageUpdateBody
+  getRequestBodyBytes
 } from "../core/http/request-body-limit.ts";
 import {
   adminImageListQuery,
@@ -150,7 +149,7 @@ export function registerAdminImageRoutes(app: Hono) {
     }
   );
 
-  app.post(imageUpdatePath, limitImageUpdateBody, async (c) => {
+  app.post(imageUpdatePath, async (c) => {
     const startedAt = performance.now();
     const input = parse(
       imageUpdateInput,

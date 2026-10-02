@@ -20,6 +20,7 @@ import {
 import { facetDisplayName } from "../../lib/ui/formatters.js";
 import {
   classifyMovementIntent,
+  touchWithIdentifier,
   type ClientPoint
 } from "../../lib/ui/movement-intent.js";
 import type { FacetOption } from "../../lib/types.js";
@@ -40,14 +41,6 @@ type TouchEditorFocusCandidate = {
 function isTagEditorSurface(target: EventTarget | null) {
   return !(target instanceof Element
     && target.closest("button, input"));
-}
-
-function touchWithIdentifier(touches: TouchList, identifier: number) {
-  for (let index = 0; index < touches.length; index += 1) {
-    const touch = touches[index];
-    if (touch?.identifier === identifier) return touch;
-  }
-  return null;
 }
 
 export function TagInput({

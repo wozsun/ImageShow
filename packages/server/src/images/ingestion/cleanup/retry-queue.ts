@@ -1,9 +1,9 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { appConfig } from "@imageshow/shared";
+import { neverAbortedSignal } from "../../../core/abort.ts";
 import { DynamicConcurrencyLimiter } from "../../../core/concurrency.ts";
 import { logger } from "../../../core/logger.ts";
 
-const signal = new AbortController().signal;
 const limiter = new DynamicConcurrencyLimiter(
   () => 1,
   (aborted) => aborted.reason
@@ -14,7 +14,7 @@ async function retryCleanup(work: () => Promise<void>) {
   const attempts = appConfig.ingestionRuntime.cleanupRetryMaxAttempts;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      await limiter.run(signal, work);
+      await limiter.run(neverAbortedSignal, work);
       return;
     } catch (error) {
       if (attempt === attempts) {

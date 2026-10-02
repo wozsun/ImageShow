@@ -1,6 +1,6 @@
 import { imageVariantColumns } from "../variants/record.ts";
-import { storageObjectKey } from "@imageshow/shared/browser";
 import type { StorageBackendMigrationErrorSampleDto } from "@imageshow/shared/browser";
+import { imageObjectKey } from "../../storage/objects/image-paths.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { mapWithWorkerPool } from "../../core/concurrency.ts";
 import { pool } from "../../core/database/pools.ts";
@@ -142,7 +142,7 @@ async function migrateBackendImages(
         status: "missing",
         error: {
           id: image.id,
-          object_key: storageObjectKey(image.id),
+          object_key: imageObjectKey(image.id),
           code: "source_object_missing",
           message: "源存储对象不存在"
         }
@@ -153,7 +153,7 @@ async function migrateBackendImages(
         status: "failed",
         error: {
           id: image.id,
-          object_key: storageObjectKey(image.id),
+          object_key: imageObjectKey(image.id),
           code: error instanceof ApiError
             ? error.code
             : "storage_migration_failed",

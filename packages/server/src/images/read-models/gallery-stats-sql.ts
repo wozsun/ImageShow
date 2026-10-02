@@ -1,5 +1,6 @@
 import { appConfig } from "@imageshow/shared";
 import { unsetThemeFilter, type Brightness, type Device } from "@imageshow/shared/browser";
+import { withTransactionOnClient } from "../../core/database/transactions.ts";
 import {
   publicPgFallbackWorkLimitExceeded,
   type PublicDatabaseReadAccess
@@ -248,9 +249,7 @@ export async function readPublicGalleryCountSnapshot(
   tagCounts?: GalleryTagCountPlans
 ) {
   signal.throwIfAborted();
-  await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
-  let result: { snapshot: ReadyImageCountSnapshot; vocabulary: GalleryStatsVocabulary | null };
-  try {
+  const result = await withTransactionOnClient(client, async () => {
     const unfiltered = isUnfilteredReadyImagePlan(plan);
     // The unfiltered path always uses four business SELECTs, without a revision query.
     const globalStats =
@@ -314,8 +313,7 @@ export async function readPublicGalleryCountSnapshot(
       ? await readTagGroupCounts(client, plan, categories.matching, tagCounts.groups)
       : undefined;
     signal.throwIfAborted();
-    await client.query("COMMIT");
-    result = {
+    return {
       snapshot: {
         total,
         matching: categories.matching,
@@ -329,10 +327,7 @@ export async function readPublicGalleryCountSnapshot(
       } satisfies ReadyImageCountSnapshot,
       vocabulary: facets.vocabulary
     };
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  }
+  }, { mode: "read_only_repeatable_read" });
   const vocabulary = result.vocabulary ?? (await readGalleryStatsVocabulary({ reader: client }));
   signal.throwIfAborted();
   return { snapshot: result.snapshot, vocabulary };

@@ -1,3 +1,4 @@
+import { randomUUIDv7 } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import {
   getRuntimeConfig,
@@ -9,7 +10,6 @@ import {
   getRedisOperationalState,
   onRedisOperationalStateChange
 } from "../../../core/runtime-availability.ts";
-import { randomUuidV7 } from "../../../core/uuid.ts";
 import {
   committedIngestionResultForOwner,
   readCommittedIngestionResultsByImageIds
@@ -188,15 +188,14 @@ export class IngestionSessionWorker {
   #runnableCursorScore = 0;
   #runnableFrozenTailScore = 0;
   #runnableBlockedLanes = new Set<IngestionWorkerLane>();
-  // Commit refills advance through their own frozen-tail pass. They never
+  // Lane refills advance through their own frozen-tail pass. They never
   // rewind the shared cross-lane cursor, and a full window retains its page
   // boundary so the next refill cannot skip the remainder of that page.
-  #commitRefillCursorScore = 0;
-  #commitRefillFrozenTailScore = 0;
-  readonly #preCommitRefillCursors = {
+  readonly #refillCursors = {
     import: { cursorScore: 0, frozenTailScore: 0 },
-    upload: { cursorScore: 0, frozenTailScore: 0 }
-  } satisfies Record<IngestionPreCommitLane, { cursorScore: number; frozenTailScore: number }>;
+    upload: { cursorScore: 0, frozenTailScore: 0 },
+    commit: { cursorScore: 0, frozenTailScore: 0 }
+  } satisfies Record<IngestionWorkerLane, { cursorScore: number; frozenTailScore: number }>;
 
   constructor(
     repository = new IngestionSessionRepository(),
@@ -252,9 +251,7 @@ export class IngestionSessionWorker {
     this.#runnableCursorScore = 0;
     this.#runnableFrozenTailScore = 0;
     this.#runnableBlockedLanes.clear();
-    this.#commitRefillCursorScore = 0;
-    this.#commitRefillFrozenTailScore = 0;
-    for (const cursor of Object.values(this.#preCommitRefillCursors)) {
+    for (const cursor of Object.values(this.#refillCursors)) {
       cursor.cursorScore = 0;
       cursor.frozenTailScore = 0;
     }
@@ -350,20 +347,20 @@ export class IngestionSessionWorker {
     return this.#ensureTick();
   }
 
-  #activeCommitCount() {
+  #heldDispatchSlotCount(lane: IngestionWorkerLane) {
     let count = 0;
     for (const item of this.#active.values()) {
-      if (item.lane === "commit") count += 1;
+      // Commit work keeps its dispatch slot until it settles.
+      if (item.lane === lane && item.dispatchSlotHeld) count += 1;
     }
     return count;
   }
 
-  #heldPreCommitDispatchSlotCount(lane: IngestionPreCommitLane) {
-    let count = 0;
-    for (const item of this.#active.values()) {
-      if (item.lane === lane && item.dispatchSlotHeld) count += 1;
-    }
-    return count;
+  #dispatchWindow(lane: IngestionWorkerLane) {
+    return ingestionWorkerDispatchWindows(
+      this.#normalizeConcurrency,
+      this.#commitConcurrency
+    )[lane];
   }
 
   async #runTick(
@@ -379,21 +376,21 @@ export class IngestionSessionWorker {
       return;
     }
     if (await this.#recovery.drainExpired()) return;
-    if (options.refillCommit) await this.#refillCommitDispatchWindow();
+    if (options.refillCommit) await this.#refillLane("commit");
     for (const lane of options.refillPreCommit) {
       if (!this.#accepting) return;
-      await this.#refillPreCommitLane(lane);
+      await this.#refillLane(lane);
     }
     if (!options.runGeneral || !this.#accepting) return;
     await this.#scanRunnablePage();
   }
 
-  async #refillPreCommitLane(lane: IngestionPreCommitLane) {
-    if (this.#heldPreCommitDispatchSlotCount(lane) >= this.#normalizeConcurrency) {
+  async #refillLane(lane: IngestionWorkerLane) {
+    if (this.#heldDispatchSlotCount(lane) >= this.#dispatchWindow(lane)) {
       return;
     }
     const limit = appConfig.ingestionRuntime.ingestionSessionScanBatchSize;
-    const cursor = this.#preCommitRefillCursors[lane];
+    const cursor = this.#refillCursors[lane];
     const page = await this.repository.discoverRunnablePage(
       cursor.cursorScore,
       cursor.frozenTailScore,
@@ -401,7 +398,7 @@ export class IngestionSessionWorker {
     );
     if (!this.#accepting) return;
     for (const { session } of page.items) {
-      if (this.#heldPreCommitDispatchSlotCount(lane) >= this.#normalizeConcurrency) {
+      if (this.#heldDispatchSlotCount(lane) >= this.#dispatchWindow(lane)) {
         return;
       }
       if (session.status === "completed" || session.status === "discarded") {
@@ -417,43 +414,11 @@ export class IngestionSessionWorker {
     }
     cursor.cursorScore = page.lastScannedScore;
     cursor.frozenTailScore = page.frozenTailScore;
-    if (this.#heldPreCommitDispatchSlotCount(lane) < this.#normalizeConcurrency) {
-      // Continue one bounded page at a time without rewinding the cross-lane
-      // cursor or allowing a later runnable item to overtake an earlier one.
-      this.#preCommitRefillRequested.add(lane);
-    }
-  }
-
-  async #refillCommitDispatchWindow() {
-    const limit = appConfig.ingestionRuntime.ingestionSessionScanBatchSize;
-    if (this.#activeCommitCount() >= ingestionCommitDispatchWindow(this.#commitConcurrency)) return;
-    const page = await this.repository.discoverRunnablePage(
-      this.#commitRefillCursorScore,
-      this.#commitRefillFrozenTailScore,
-      limit
-    );
-    if (!this.#accepting) return;
-    for (const { session } of page.items) {
-      if (this.#activeCommitCount() >= ingestionCommitDispatchWindow(this.#commitConcurrency))
-        return;
-      if (session.status !== "committing") continue;
-      this.#startSession(session, "commit");
-    }
-    if (ingestionRunnablePassComplete(
-      page,
-      this.#commitRefillCursorScore
-    )) {
-      this.#commitRefillCursorScore = 0;
-      this.#commitRefillFrozenTailScore = 0;
-      return;
-    }
-    this.#commitRefillCursorScore = page.lastScannedScore;
-    this.#commitRefillFrozenTailScore = page.frozenTailScore;
-    if (this.#activeCommitCount() < ingestionCommitDispatchWindow(this.#commitConcurrency)) {
-      // Continue one bounded Redis page at a time. Timer-driven general scans
-      // can join between pages, so sparse Commit work cannot monopolize the
-      // shared Worker loop.
-      this.#commitRefillRequested = true;
+    if (this.#heldDispatchSlotCount(lane) < this.#dispatchWindow(lane)) {
+      // Refill one frozen-tail page at a time. A full window retains its page
+      // boundary so later work cannot overtake the unprocessed remainder.
+      if (lane === "commit") this.#commitRefillRequested = true;
+      else this.#preCommitRefillRequested.add(lane);
     }
   }
 
@@ -497,7 +462,7 @@ export class IngestionSessionWorker {
     lane: IngestionWorkerLane
   ) {
     const key = pairKey(session);
-    if (this.#active.has(key)) return false;
+    if (this.#active.has(key)) return;
     const controller = new AbortController();
     const active: ActiveIngestion = {
       pair: session,
@@ -534,7 +499,7 @@ export class IngestionSessionWorker {
         if (
           lane === "commit" &&
           this.#accepting &&
-          this.#activeCommitCount() <= this.#commitConcurrency
+          this.#heldDispatchSlotCount("commit") <= this.#commitConcurrency
         ) {
           this.#scheduleCommitRefill();
         } else if (lane !== "commit" && active.dispatchSlotHeld) {
@@ -543,7 +508,6 @@ export class IngestionSessionWorker {
         }
       });
     this.#active.set(key, active);
-    return true;
   }
 
   #releasePreCommitDispatchSlot(active: ActiveIngestion) {
@@ -636,7 +600,7 @@ export class IngestionSessionWorker {
         ? "服务器正在下载原图"
         : "原图素材已接收，等待图片处理许可",
       progress: status === "downloading" ? 0 : null,
-      execution_token: randomUuidV7(),
+      execution_token: randomUUIDv7(),
       error: undefined
     });
     return (await this.repository.mutateSemantic(
@@ -680,11 +644,6 @@ export class IngestionSessionWorker {
         );
         return;
       }
-      if (
-        !("execution_token" in current) ||
-        !["downloading", "preparing", "committing", "resolving"].includes(current.status)
-      )
-        return;
       if (current.status === "resolving") {
         await cancelIngestionSessions(
           this.repository,

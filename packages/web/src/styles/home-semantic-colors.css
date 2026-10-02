@@ -4,6 +4,7 @@
   --public-color-home-photo-mask-right: rgba(5, 9, 18, 0.12);
   --public-color-home-photo-mask-top: rgba(5, 8, 16, 0.06);
   --public-color-home-photo-mask-bottom: rgba(4, 7, 14, 0.28);
+  --public-color-home-border: rgba(155, 190, 239, 0.28);
   --public-color-home-grain-line: rgba(255, 255, 255, 0.12);
   --public-color-home-grain-dot: rgba(255, 255, 255, 0.18);
   --public-color-home-loading-surface: var(--public-color-canvas);

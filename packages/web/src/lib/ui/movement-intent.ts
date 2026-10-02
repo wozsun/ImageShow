@@ -24,3 +24,12 @@ export function classifyMovementIntent(
     ? "horizontal"
     : "vertical";
 }
+
+/** Finds the tracked touch so a gesture owner keeps following one finger. */
+export function touchWithIdentifier(touches: TouchList, identifier: number) {
+  for (let index = 0; index < touches.length; index += 1) {
+    const touch = touches[index];
+    if (touch.identifier === identifier) return touch;
+  }
+  return null;
+}

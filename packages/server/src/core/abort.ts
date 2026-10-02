@@ -1,3 +1,5 @@
+export const neverAbortedSignal = new AbortController().signal;
+
 export function abortSignalError(
   signal: AbortSignal,
   fallbackMessage = "Operation aborted"
