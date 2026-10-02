@@ -20,14 +20,15 @@ await runIntegrationScenario(async (runtime) => {
     await import("../../../../packages/server/src/images/ready-cache/indexes/attribute.ts");
   const { buildReadyImageAttributeIndex } =
     await import("../../../../packages/server/src/images/ready-cache/indexes/attribute-builder.ts");
-  const { clearReadyImageDisposableCaches } =
+  const { clearReadyImageDisposableCaches, discardReadyImageDerivedResult } =
     await import("../../../../packages/server/src/images/ready-cache/derived/lifecycle.ts");
   const { READY_IMAGE_DERIVED_CACHE_POLICY: policy } =
     await import("../../../../packages/server/src/images/ready-cache/derived/policy.ts");
   const {
     READY_IMAGE_STATS_KEY,
     READY_IMAGE_DERIVED_REGISTRY_LRU_KEY,
-    readyImageAttributeIndexKey
+    readyImageAttributeIndexKey,
+    readyImageFilterKey
   } = await import("../../../../packages/server/src/images/ready-cache/keys.ts");
   const { sampleReadyImages } =
     await import("../../../../packages/server/src/images/ready-cache/query.ts");
@@ -166,6 +167,44 @@ await runIntegrationScenario(async (runtime) => {
       "device=pc&tag=device-selected",
       pc.filter(({ tagged }) => tagged)
     );
+
+    // A visitor who leaves cancels only its own wait, not the build shared with others.
+    await discardReadyImageDerivedResult(readyImageFilterKey(combined.signature), "filter");
+    const sendCommand = redis.sendCommand;
+    let setOperations = 0;
+    let setOperationHeld!: () => void;
+    const setOperationReached = new Promise<void>((resolve) => {
+      setOperationHeld = resolve;
+    });
+    let releaseSetOperation!: () => void;
+    const setOperationGate = new Promise<void>((resolve) => {
+      releaseSetOperation = resolve;
+    });
+    redis.sendCommand = async function (command, ...args) {
+      if (command.args.includes("ZINTERSTORE")) {
+        setOperations += 1;
+        setOperationHeld();
+        await setOperationGate;
+      }
+      return sendCommand.call(this, command, ...args);
+    };
+    try {
+      const leaving = new AbortController();
+      const leavingVisitor = resolveReadyImageFilterIndex(combined, leaving.signal);
+      const stayingVisitor = resolveReadyImageFilterIndex(combined, neverAbortedSignal);
+      await Promise.race([
+        setOperationReached,
+        stayingVisitor.then(() => assert.fail("shared build must reach the set operation"))
+      ]);
+      leaving.abort(new Error("first visitor left"));
+      releaseSetOperation();
+      await assert.rejects(leavingVisitor, /first visitor left/);
+      assert.equal((await stayingVisitor)?.count, pc.filter(({ tagged }) => tagged).length);
+      assert.equal(setOperations, 1, "the staying visitor joined the shared build");
+    } finally {
+      releaseSetOperation();
+      redis.sendCommand = sendCommand;
+    }
     const axis = await publishedIndex(
       createImageFilterPlan({ devices: ["pc"], brightnesses: ["light"] })
     );

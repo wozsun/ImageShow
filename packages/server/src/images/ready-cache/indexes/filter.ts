@@ -113,13 +113,10 @@ async function resolveReadyImageFilterIndexWithMode(
       scheduleReadyImageFilterIndexBuild(plan);
       return null;
     }
-    const { signal } = options;
-    const built = await coalesce(`ready-image-filter:${plan.signature}`, () =>
-      buildReadyImageFilterIndex(
-        plan,
-        revision,
-        signal
-      )
+    const built = await coalesce(
+      `ready-image-filter:${plan.signature}`,
+      (sharedSignal) => buildReadyImageFilterIndex(plan, revision, sharedSignal),
+      options.signal
     );
     if (currentRevision() !== revision) continue;
     if (built) return built;

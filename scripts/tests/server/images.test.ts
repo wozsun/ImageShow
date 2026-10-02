@@ -2266,6 +2266,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   assert.equal(targeted.mode, "json");
   assert.equal(targeted.limit, 2);
   assert.equal(targeted.device, "auto");
+  assert.deepEqual(parseQuery("id=" + imageId + "&device=all").ids, [imageId]);
 
   // Blank optional values mean "not provided", so they neither filter nor conflict with id.
   const blank = parseQuery("device=&brightness=%20&theme=,&author=&tag=,&tag=all:&mode=&size=&limit=");
@@ -2284,6 +2285,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
     "tag=live&tag=!blocked",
     "device=pc&device=mb",
     "id=00000000008d&brightness=dark",
+    "id=00000000008d&device=pc",
     "id=",
     "id=,",
     "limit=2",

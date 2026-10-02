@@ -182,7 +182,7 @@ function targetedIdConflictError(filters: RandomSelectionFilters) {
   const active = {
     author: hasSelectors(filters.author),
     brightness: filters.brightness !== null,
-    device: filters.device !== "auto",
+    device: filters.device === "pc" || filters.device === "mb",
     seed: filters.seed !== null,
     tag: filters.tag !== null,
     theme: hasSelectors(filters.theme)
@@ -196,7 +196,7 @@ function targetedIdConflictError(filters: RandomSelectionFilters) {
     {
       field: "id",
       incompatible,
-      hint: "id can only be combined with mode, size, limit, and device=auto"
+      hint: "id can only be combined with mode, size, limit, and device=auto or device=all"
     }
   );
 }

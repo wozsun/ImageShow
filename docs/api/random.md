@@ -146,7 +146,7 @@ curl "https://img.example.com/random?device=all&mode=json"
 /random?id=000000000001,000000000002&mode=json&limit=2
 ```
 
-使用 `id` 时，只能再搭配 `mode`、`size`、`limit`（以及 `device=auto`）。回收站中的图片不会被选中。
+使用 `id` 时，只能再搭配 `mode`、`size`、`limit`，以及 `device=auto` 或 `device=all`（指定图片时不按横竖筛选）。回收站中的图片不会被选中。
 
 ## 来源检查与频率限制
 
