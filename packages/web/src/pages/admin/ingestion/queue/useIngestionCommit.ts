@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
-import type { IngestionJob } from "./model/ingestion-job.js";
+import { findIngestionAttempt, type IngestionJob } from "./model/ingestion-job.js";
 import {
   createIngestionCommitIntent,
   ingestionJobCanStartCommit,
@@ -54,9 +54,7 @@ export function useIngestionCommit(options: {
         const selectedPairs = new Set<string>();
         const patches = new Map<string, Partial<IngestionJob>>();
         for (const requested of jobs) {
-          const current = jobsRef.current.find(
-            (job) => job.id === requested.id && job.attemptKey === requested.attemptKey
-          );
+          const current = findIngestionAttempt(jobsRef.current, requested);
           const request: IngestionCommitRequest = current?.commitIntent
             ? "resume"
             : "new";
@@ -80,9 +78,7 @@ export function useIngestionCommit(options: {
             commitIntent,
             failureStage: undefined,
             commitFailureCheckpoint: undefined,
-            resultState: "pending",
-            resultError: undefined,
-            message: "正在受理提交意图"
+            resultState: "pending"
           };
           patches.set(current.id, patch);
           selected.push({ ...current, ...patch, commitIntent });

@@ -6,6 +6,7 @@ import { interceptSqlQueries } from "./database-faults.mts";
 import { removeDriverObject } from "./storage-fixture.mts";
 import { randomUUID } from "node:crypto";
 
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import { createS3HttpFixture } from "../../support/s3-http-fixture.ts";
 import { Hono } from "hono";
@@ -49,7 +50,7 @@ await runIntegrationScenario(async (runtime) => {
     try {
       await backendUpdate.updateStorageBackend("local", {
         public_base_url: "https://IMAGES.example.test///pictures///"
-      });
+      }, neverAbortedSignal);
       assert.equal(registry.publishedLocalPublicUrl(), "https://images.example.test/pictures");
       assert.equal((await registry.resolveStorageAccess("local")).driver, local);
       assert.equal(
@@ -59,7 +60,7 @@ await runIntegrationScenario(async (runtime) => {
       await assert.rejects(
         backendUpdate.updateStorageBackend("local", {
           public_base_url: "https://main.example.test/pictures"
-        }),
+        }, neverAbortedSignal),
         { code: "storage_public_url_host_conflict" }
       );
       assert.equal(registry.publishedLocalPublicUrl(), "https://images.example.test/pictures");
@@ -227,7 +228,7 @@ await runIntegrationScenario(async (runtime) => {
       ]) {
         await backendUpdate.updateStorageBackend("local", {
           public_base_url: `https://images.example.test${localRoot}`
-        });
+        }, neverAbortedSignal);
         await runtime.runtimeConfigStore.updateRuntimeConfig({
           site: { assets_base_url: `https://images.example.test${assetRoot}` }
         });
@@ -253,7 +254,7 @@ await runIntegrationScenario(async (runtime) => {
       }
       await backendUpdate.updateStorageBackend("local", {
         public_base_url: "https://images.example.test/pictures"
-      });
+      }, neverAbortedSignal);
       await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { assets_base_url: "" } });
       await database.pool.query(
         "INSERT INTO metadata (id,storage_slug,device,brightness,created_by,l_width,l_height,l_byte_size,l_md5,m_width,m_height,m_byte_size,m_md5,s_width,s_height,s_byte_size,s_md5) VALUES ($1,'local','pc','light','integration-admin',1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2,1,1,GREATEST(1,1),$2)",
@@ -286,14 +287,14 @@ await runIntegrationScenario(async (runtime) => {
       }
       await backendUpdate.updateStorageBackend("local", {
         public_base_url: "https://new-images.example.test"
-      });
+      }, neverAbortedSignal);
       assert.equal((await request("images.example.test")).status, 404);
       const newResponse = await request("new-images.example.test", `/large/${key}`);
       assert.equal(newResponse.headers.get("ETag"), etag);
       await newResponse.body?.cancel();
       await backendUpdate.updateStorageBackend("local", {
         public_base_url: "https://new-images.example.test/图片"
-      });
+      }, neverAbortedSignal);
       const encodedUrl = publicUrls.directStorageObjectUrl(
         await registry.getStorageBackend("local"),
         "small",
@@ -307,7 +308,7 @@ await runIntegrationScenario(async (runtime) => {
       assert.deepEqual(Buffer.from(await encodedResponse.arrayBuffer()), bytes);
       await backendUpdate.updateStorageBackend("local", {
         public_base_url: "https://new-images.example.test"
-      });
+      }, neverAbortedSignal);
       await removeDriverObject(local, "large", key);
       const missing = await request("new-images.example.test", `/large/${key}`);
       assert.equal(missing.status, 404);
@@ -315,11 +316,11 @@ await runIntegrationScenario(async (runtime) => {
       registry.invalidateStorageBackendRegistry();
       assert.equal((await registry.getStorageBackend("local")).type, "local");
       assert.equal(registry.publishedLocalPublicUrl(), "https://new-images.example.test");
-      await backendUpdate.updateStorageBackend("local", { public_base_url: "" });
+      await backendUpdate.updateStorageBackend("local", { public_base_url: "" }, neverAbortedSignal);
       assert.equal((await request("new-images.example.test", `/small/${key}`)).status, 404);
     } finally {
       await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { assets_base_url: "" } });
-      await backendUpdate.updateStorageBackend("local", { public_base_url: "" });
+      await backendUpdate.updateStorageBackend("local", { public_base_url: "" }, neverAbortedSignal);
       await removeDriverObject(local, "large", key);
       await removeDriverObject(local, "small", key);
       await runtime.runtimeConfigStore.updateRuntimeConfig({ site: { domain: originalDomain } });
@@ -347,7 +348,10 @@ await runIntegrationScenario(async (runtime) => {
   registry.invalidateStorageBackendRegistry();
   const registryExampleKey = storageObjectKey("00000000-0000-7000-8000-0000000000aa");
   const projectedRegistryUrls = await publicUrls.publicImageUrl(
-    { id: "00000000-0000-7000-8000-0000000000aa" }, registryBackend, "large"
+    { id: "00000000-0000-7000-8000-0000000000aa" },
+    registryBackend,
+    "large",
+    { mode: "internal" }
   );
   assert.equal(
     projectedRegistryUrls,
@@ -362,7 +366,10 @@ await runIntegrationScenario(async (runtime) => {
     height: 600,
     storage_slug: registryBackend
   };
-  const cards = await publicShowImageCards([card, { ...card, storage_slug: "local" }]);
+  const cards = await publicShowImageCards(
+    [card, { ...card, storage_slug: "local" }],
+    { mode: "internal" }
+  );
   assert.equal(cards[0]!.base_url, "https://cdn.example.com/images");
   assert.equal(cards[1]!.base_url, "/images");
   const firstRegistryAccess = await registry.resolveStorageAccess(registryBackend);
@@ -377,7 +384,7 @@ await runIntegrationScenario(async (runtime) => {
 
   await backendUpdate.updateStorageBackend(registryBackend, {
     s3: { public_base_url: "https://assets.example.com" }
-  });
+  }, neverAbortedSignal);
   const presentationRegistryAccess = await registry.resolveStorageAccess(registryBackend);
   assert.equal(presentationRegistryAccess.driver, firstRegistryAccess.driver);
   assert.equal(
@@ -495,7 +502,7 @@ await runIntegrationScenario(async (runtime) => {
   inaccessibleAliasAccess.driver.listKeys = visibleStorageListing;
   inaccessibleAliasAccess.driver.exists = async () => false;
   try {
-    const aliasCheck = await storageCheck.checkStorage();
+    const aliasCheck = await storageCheck.checkStorage(neverAbortedSignal);
     assert.ok(
       aliasCheck.unavailable_backends.some(
         (entry) =>
@@ -533,7 +540,8 @@ await runIntegrationScenario(async (runtime) => {
   const delayedReadable = await objectAccess.resolveReadableObject(
     "large",
     delayedReadKey,
-    delayedReadBackend
+    delayedReadBackend,
+    { mode: "internal" }
   );
   await database.pool.query(
     "DELETE FROM storage_backend WHERE slug=$1",
@@ -568,7 +576,7 @@ await runIntegrationScenario(async (runtime) => {
       slug: "capability",
       display_name: "Capability",
       s3: s3.settings
-    });
+    }, neverAbortedSignal);
     assert.deepEqual((await readConfig()).capabilities, { content_md5: true });
     const first = await registry.resolveStorageAccess("capability");
     const { secret_access_key: _secret, ...publicSettings } = s3.settings;
@@ -589,10 +597,10 @@ await runIntegrationScenario(async (runtime) => {
       s3: { ...publicSettings, secret_access_key_configured: true }
     });
     s3.requests.length = 0;
-    await backendUpdate.updateStorageBackend("capability", { display_name: "Renamed" });
+    await backendUpdate.updateStorageBackend("capability", { display_name: "Renamed" }, neverAbortedSignal);
     await backendUpdate.updateStorageBackend("capability", {
       s3: { public_base_url: "https://cdn.example.test" }
-    });
+    }, neverAbortedSignal);
     assert.equal(s3.requests.length, 0);
     assert.equal((await registry.resolveStorageAccess("capability")).driver, first.driver);
     assert.deepEqual((await readConfig()).capabilities, { content_md5: true });
@@ -606,7 +614,7 @@ await runIntegrationScenario(async (runtime) => {
     s3.state.capability = "ignored";
     await backendUpdate.updateStorageBackend("capability", {
       s3: { access_key_id: s3.settings.access_key_id }
-    });
+    }, neverAbortedSignal);
     assert.deepEqual((await readConfig()).capabilities, { content_md5: false });
     const unsupportedDto = await capDto();
     assert.equal(unsupportedDto?.type === "s3" && unsupportedDto.content_md5, false);
@@ -617,21 +625,29 @@ await runIntegrationScenario(async (runtime) => {
     );
 
     s3.state.capability = "enforced";
-    await selfTest.testStorageBackend(await probe.resolveStorageTestConfig({ slug: "capability" }));
+    await selfTest.testStorageBackend(
+      await probe.resolveStorageTestConfig({ slug: "capability" }),
+      neverAbortedSignal
+    );
     assert.deepEqual((await readConfig()).capabilities, { content_md5: true });
     s3.state.capability = "unsupported";
     await selfTest.testStorageBackend(
       await probe.resolveStorageTestConfig({
         slug: "capability",
         s3: { access_key_id: randomUUID() }
-      })
+      }),
+      neverAbortedSignal
     );
     assert.deepEqual(
       (await readConfig()).capabilities,
       { content_md5: true },
       "未保存连接的探测结果仅属于草稿"
     );
-    await backendUpdate.updateStorageBackend("capability", { s3: { access_key_id: randomUUID() } });
+    await backendUpdate.updateStorageBackend(
+      "capability",
+      { s3: { access_key_id: randomUUID() } },
+      neverAbortedSignal
+    );
     assert.deepEqual((await readConfig()).capabilities, { content_md5: false });
     assert.notEqual((await registry.resolveStorageAccess("capability")).driver, first.driver);
 
@@ -642,7 +658,11 @@ await runIntegrationScenario(async (runtime) => {
       message: "controlled access failure"
     });
     await assert.rejects(
-      backendUpdate.updateStorageBackend("capability", { s3: { secret_access_key: randomUUID() } }),
+      backendUpdate.updateStorageBackend(
+        "capability",
+        { s3: { secret_access_key: randomUUID() } },
+        neverAbortedSignal
+      ),
       { name: "AccessDenied" }
     );
     await assert.rejects(
@@ -650,7 +670,7 @@ await runIntegrationScenario(async (runtime) => {
         slug: "rejected",
         display_name: "Rejected",
         s3: s3.settings
-      }),
+      }, neverAbortedSignal),
       { name: "AccessDenied" }
     );
     assert.deepEqual(await readConfig(), snapshot);
@@ -669,13 +689,18 @@ await runIntegrationScenario(async (runtime) => {
       }
     };
     const checking = selfTest.testStorageBackend(
-      await probe.resolveStorageTestConfig({ slug: "capability" })
+      await probe.resolveStorageTestConfig({ slug: "capability" }),
+      neverAbortedSignal
     );
     const outcome = assert.rejects(checking, { code: "storage_backend_changed" });
     try {
       await reached.promise;
       s3.state.capability = "ignored";
-      await backendUpdate.updateStorageBackend("capability", { s3: { region: "new-region" } });
+      await backendUpdate.updateStorageBackend(
+        "capability",
+        { s3: { region: "new-region" } },
+        neverAbortedSignal
+      );
       release.resolve();
       await outcome;
       assert.deepEqual((await readConfig()).capabilities, { content_md5: false });
@@ -729,7 +754,7 @@ await runIntegrationScenario(async (runtime) => {
       slug: "capability-peer",
       display_name: "Peer",
       s3: s3.settings
-    });
+    }, neverAbortedSignal);
     try {
       const { getStorageBackendsForAdmin, listStorageBackendOptions } =
         await import("../../../../packages/server/src/storage/backends/read-model.ts");
@@ -799,7 +824,10 @@ await runIntegrationScenario(async (runtime) => {
         await database.pool.query("SELECT slug, sort_order FROM storage_backend ORDER BY slug")
       ).rows;
       const slug = "sort-created";
-      await mutations.createStorageBackend({ slug, display_name: "Created", s3: s3.settings });
+      await mutations.createStorageBackend(
+        { slug, display_name: "Created", s3: s3.settings },
+        neverAbortedSignal
+      );
       assert.equal(
         (await database.pool.query("SELECT sort_order FROM storage_backend WHERE slug=$1", [slug]))
           .rows[0].sort_order,

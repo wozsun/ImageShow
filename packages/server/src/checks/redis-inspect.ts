@@ -37,7 +37,7 @@ type RedisInspectionDependencies = {
   ping: typeof pingRedis;
   readMeta: typeof readReadyImageCacheMeta;
   readRequiredCommands(
-    signal?: AbortSignal
+    signal: AbortSignal
   ): ReturnType<typeof readRequiredRedisCommandCapabilities>;
   readProjection: typeof readReadyImageCacheAdminStatus;
   coordinatorStatus: typeof getReadyImageCacheCoordinatorStatus;
@@ -113,10 +113,10 @@ function deadlineInspectionResponse(options: {
 }
 
 export async function inspectRedisState(
-  signal?: AbortSignal,
+  signal: AbortSignal,
   options: RedisInspectionOptions = {}
 ) {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const { dependencies = defaultRedisInspectionDependencies, ...deepOptions } = options;
   const deadlineMs = resolveRedisDeepInspectionDeadlineMs(deepOptions.deadlineMs);
   const deadlineAt = performance.now() + deadlineMs;
@@ -128,7 +128,7 @@ export async function inspectRedisState(
     deadlineMs
   );
   const operationSignal = AbortSignal.any([
-    ...(signal ? [signal] : []),
+    signal,
     deadline.signal,
     inspection.signal
   ]);
@@ -161,9 +161,7 @@ export async function inspectRedisState(
       ...deepOptions,
       deadlineMs: remainingMs,
       client: dependencies.client,
-      signal: signal
-        ? AbortSignal.any([signal, inspection.signal])
-        : inspection.signal
+      signal: AbortSignal.any([signal, inspection.signal])
     }).then((value) => {
       deepInspection = value;
       return value;
@@ -267,7 +265,7 @@ export async function inspectRedisState(
       issues
     };
   } catch (error) {
-    if (signal?.aborted) {
+    if (signal.aborted) {
       inspection.abort(abortSignalError(signal, "Redis inspection aborted"));
       await Promise.allSettled(inspectionTasks);
       throw abortSignalError(signal, "Redis inspection aborted");

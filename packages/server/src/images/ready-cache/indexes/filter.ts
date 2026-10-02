@@ -1,3 +1,4 @@
+import { neverAbortedSignal } from "../../../core/abort.ts";
 import { coalesce } from "../../../core/coalesce.ts";
 import { logger } from "../../../core/logger.ts";
 import { redis } from "../../../core/redis/client.ts";
@@ -41,11 +42,11 @@ export type ReadyImageFilterIndex = FilterIndex;
 export type ReadyImageFilterIndexValidation =
   { status: "valid"; count: number } | { status: "revision_changed" | "invalid" };
 
-type ReadyImageFilterIndexResolution =
+/** Public reads may fall back to PostgreSQL; admin reads require Redis. */
+export type ReadyImageIndexReadAccess =
   | {
       mode: "fallback";
-      signal?: AbortSignal;
-      background: boolean;
+      signal: AbortSignal;
     }
   | {
       mode: "required";
@@ -60,13 +61,12 @@ function currentRevision() {
 
 async function resolveReadyImageFilterIndexWithMode(
   plan: ImageFilterPlan,
-  options: ReadyImageFilterIndexResolution
+  options: ReadyImageIndexReadAccess
 ): Promise<ReadyImageFilterIndex | null> {
   const required = options.mode === "required";
-  const signal = options.mode === "fallback" ? options.signal : undefined;
   const direct = resolveDirectReadyImageFilterKey(plan);
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    signal?.throwIfAborted();
+    if (options.mode === "fallback") options.signal.throwIfAborted();
     if (required) await requireOperationalRedis();
     if (!readyImageCacheIsReadable()) {
       if (required) await requireOperationalRedis();
@@ -90,37 +90,35 @@ async function resolveReadyImageFilterIndexWithMode(
       };
     }
     if (direct) {
-      const attribute = required
+      const attribute = options.mode === "required"
         ? await runRequiredRedisCommand(() => readReadyImageAttributeIndex(direct, revision))
         : await resolveReadyImageAttributeIndex(
             direct,
             revision,
-            signal,
-            options.background
+            options.signal
           );
       if (currentRevision() !== revision) continue;
       if (attribute) return { kind: "attribute", ...attribute };
-      if (required) {
-        scheduleReadyImageFilterIndexBuild(plan);
-        return null;
-      }
-      continue;
+      // A missing attribute index only builds in the background; retrying
+      // within this request cannot find it.
+      if (required) scheduleReadyImageFilterIndexBuild(plan);
+      return null;
     }
     const cached = required
       ? await runRequiredRedisCommand(() => readReadyImageFilterIndex(plan.signature, revision))
       : await readReadyImageFilterIndex(plan.signature, revision);
     if (currentRevision() !== revision) continue;
     if (cached) return cached;
-    if (required) {
+    if (options.mode === "required") {
       scheduleReadyImageFilterIndexBuild(plan);
       return null;
     }
+    const { signal } = options;
     const built = await coalesce(`ready-image-filter:${plan.signature}`, () =>
       buildReadyImageFilterIndex(
         plan,
         revision,
-        signal,
-        options.background
+        signal
       )
     );
     if (currentRevision() !== revision) continue;
@@ -131,17 +129,15 @@ async function resolveReadyImageFilterIndexWithMode(
 
 export async function resolveReadyImageFilterIndex(
   plan: ImageFilterPlan,
-  signal?: AbortSignal,
-  background = false
+  signal: AbortSignal
 ): Promise<ReadyImageFilterIndex | null> {
   try {
     return await resolveReadyImageFilterIndexWithMode(plan, {
       mode: "fallback",
-      signal,
-      background
+      signal
     });
   } catch (error) {
-    if (signal?.aborted) throw signal.reason ?? error;
+    if (signal.aborted) throw signal.reason ?? error;
     if (isReadyImageCoreCacheError(error)) throw error;
     recordReadyImageCacheError(
       "derived",
@@ -163,7 +159,7 @@ export async function resolveReadyImageFilterIndex(
 }
 
 function scheduleReadyImageFilterIndexBuild(plan: ImageFilterPlan) {
-  void resolveReadyImageFilterIndex(plan, undefined, true).catch(() => undefined);
+  void resolveReadyImageFilterIndex(plan, neverAbortedSignal).catch(() => undefined);
 }
 
 /**

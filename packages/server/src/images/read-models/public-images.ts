@@ -43,7 +43,7 @@ export type PublicImageListQuery = {
 async function listPublicImageRowsWithAccess(
   query: PublicImageListQuery,
   signal: AbortSignal,
-  database: Required<PublicDatabaseReadAccess>,
+  database: PublicDatabaseReadAccess,
   now: number
 ): Promise<PublicImagePageRows> {
   const limit = query.limit;
@@ -59,8 +59,7 @@ async function listPublicImageRowsWithAccess(
     limit,
     context,
     position,
-    signal,
-    true
+    signal
   );
   if (cached.status === "hit") {
     return {
@@ -94,15 +93,15 @@ export async function listPublicImages(
   return {
     items:
       page.view === "show"
-        ? await publicShowImageCards(page.rows, { signal })
-        : await publicImageCardsWithTags(page.rows, { signal }),
+        ? await publicShowImageCards(page.rows, { mode: "public", signal })
+        : await publicImageCardsWithTags(page.rows, { mode: "public", signal }),
     next_cursor: page.nextCursor
   };
 }
 
 async function getPublicImageRecordWithAccess(
   id: string,
-  database: Required<PublicDatabaseReadAccess>
+  database: PublicDatabaseReadAccess
 ): Promise<PublicImageDetailRecord> {
   const cached = await readReadyImageById(id);
   if (cached.cached) {
@@ -136,5 +135,5 @@ export async function getPublicImage(
   const row = await withPublicDatabaseRead(signal, (database) =>
     getPublicImageRecordWithAccess(id, database)
   );
-  return publicImageDetail(row, view, { signal }, includeOriginal);
+  return publicImageDetail(row, view, { mode: "public", signal }, includeOriginal);
 }

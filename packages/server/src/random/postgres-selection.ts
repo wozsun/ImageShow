@@ -57,9 +57,9 @@ async function readCandidates(
   comparison: ">=" | "<",
   limit: number,
   reader: DatabaseReader,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const clause = filterClause(plan);
   const pivotParameter = bind(clause.params, pivot);
   const limitParameter = bind(clause.params, limit);
@@ -74,7 +74,7 @@ async function readCandidates(
       clause.params
     )
   ).rows as ReadyImageSourceRow[];
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   return rows.map(readyImageCacheItemFromRow);
 }
 
@@ -83,10 +83,10 @@ export async function sampleReadyImagesFromPostgres(
   limit: number,
   recent: ReadonlySet<string>,
   reader: DatabaseReader,
-  signal?: AbortSignal,
+  signal: AbortSignal,
   seededStart?: number
 ) {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   if (seededStart !== undefined) {
     return selectSeededImages(plan, seededStart, limit, reader, signal);
   }
@@ -115,7 +115,7 @@ export async function sampleReadyImagesFromPostgres(
       clause.params
     )
   ).rows[0];
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   if (!bounds?.min_id || !bounds.max_id) return [];
 
   const pivot = randomPivot(bounds.min_id, bounds.max_id);
@@ -159,7 +159,7 @@ async function selectSeededImages(
   start: number,
   limit: number,
   reader: DatabaseReader,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   const clause = filterClause(plan);
   const pivot = bind(clause.params, start.toString(16).padStart(12, "0"));
@@ -190,6 +190,6 @@ async function selectSeededImages(
       clause.params
     )
   ).rows as ReadyImageSourceRow[];
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   return rows.map(readyImageCacheItemFromRow);
 }

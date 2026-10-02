@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { removeDriverObject } from "./storage-fixture.mts";
 import { interceptSqlQueries, withCommitFault } from "./database-faults.mts";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -105,7 +106,8 @@ await runIntegrationScenario(async (runtime) => {
   ];
   const migrationReport = await imageStorageMigration.migrateSelectedImagesToStorageBackend(
     orderedMigrationIds,
-    "local-migration"
+    "local-migration",
+    { signal: neverAbortedSignal }
   );
   assert.equal(migrationReport.requested, 5);
   assert.equal(migrationReport.migrated, 1);
@@ -129,7 +131,8 @@ await runIntegrationScenario(async (runtime) => {
     (
       await imageStorageMigration.migrateSelectedImagesToStorageBackend(
         [migrationIds.unchanged],
-        "local-migration"
+        "local-migration",
+        { signal: neverAbortedSignal }
       )
     ).results,
     [{ id: migrationIds.unchanged, status: "unchanged" }]
@@ -164,7 +167,8 @@ await runIntegrationScenario(async (runtime) => {
   const thumbnailMissingMigration =
     await imageStorageMigration.migrateSelectedImagesToStorageBackend(
       [thumbnailMissingMigrationId],
-      "local-migration"
+      "local-migration",
+      { signal: neverAbortedSignal }
     );
   assert.deepEqual(thumbnailMissingMigration.results, [
     {
@@ -224,7 +228,8 @@ await runIntegrationScenario(async (runtime) => {
   try {
     backendMigrationReport = await backendMigration.migrateStorageBackendImages(
       "local-migration",
-      "local"
+      "local",
+      { signal: neverAbortedSignal }
     );
   } finally {
     localAccess.driver.openRead = originalBackendErrorOpenRead;
@@ -349,14 +354,16 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(
       await storageMigration.migrateImageToStorageBackend(
         existingTargetSourceRecord,
-        existingTargetDestination
+        existingTargetDestination,
+        { signal: neverAbortedSignal }
       ),
       "missing"
     );
 
     const selectedMissing = await imageStorageMigration.migrateSelectedImagesToStorageBackend(
       [existingTargetIds[0]],
-      existingTargetDestination
+      existingTargetDestination,
+      { signal: neverAbortedSignal }
     );
     assert.deepEqual(selectedMissing.results, [
       {
@@ -369,7 +376,8 @@ await runIntegrationScenario(async (runtime) => {
 
     const backendExistingTargetMissing = await backendMigration.migrateStorageBackendImages(
       existingTargetSource,
-      existingTargetDestination
+      existingTargetDestination,
+      { signal: neverAbortedSignal }
     );
     assert.equal(backendExistingTargetMissing.migration.migrated, 0);
     assert.equal(backendExistingTargetMissing.migration.missing, 2);
@@ -417,7 +425,8 @@ await runIntegrationScenario(async (runtime) => {
   }
   const backendOverflowReport = await backendMigration.migrateStorageBackendImages(
     backendOverflowSource,
-    "local"
+    "local",
+    { signal: neverAbortedSignal }
   );
   assert.equal(backendOverflowReport.migration.missing, 101);
   assert.equal(backendOverflowReport.migration.error_count, 101);
@@ -674,7 +683,8 @@ await runIntegrationScenario(async (runtime) => {
                 m_width:1, m_height:1, m_byte_size:responseLossBody.byteLength, m_md5:createHash("md5").update(responseLossBody).digest("hex"),
                 s_width:1, s_height:1, s_byte_size:responseLossBody.byteLength, s_md5:createHash("md5").update(responseLossBody).digest("hex")
               },
-              "local-migration"
+              "local-migration",
+              { signal: neverAbortedSignal }
             ),
           async () => undefined,
           () => {

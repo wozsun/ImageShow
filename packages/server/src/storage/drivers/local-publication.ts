@@ -29,7 +29,7 @@ export async function syncFile(path: string) {
   await syncDirectory(dirname(path));
 }
 
-export async function digestLocalFile(path: string, signal?: AbortSignal) {
+export async function digestLocalFile(path: string, signal: AbortSignal) {
   const md5 = createHash("md5");
   const sha256 = createHash("sha256");
   let bytes = 0;

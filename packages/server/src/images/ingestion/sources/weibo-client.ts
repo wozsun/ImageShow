@@ -1,3 +1,4 @@
+import { errorMessage } from "../../../core/api-error.ts";
 import {
   WeiboImportError,
   type WeiboImportErrorCode
@@ -12,10 +13,6 @@ const weiboUserAgent = [
 const weiboRequestTimeoutMs = 15_000;
 const weiboVisitorResponseMaxBytes = 64 * 1024;
 const weiboStatusResponseMaxBytes = 4 * 1024 * 1024;
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function parseCallbackJson(text: string) {
   const start = text.indexOf("{");
@@ -102,18 +99,18 @@ async function readWeiboResponseText(
 
 async function requestAndParseWeiboResponse<Result>(
   input: string | URL,
-  init: RequestInit,
+  init: RequestInit & { signal: AbortSignal },
   code: Extract<WeiboImportErrorCode, "weibo_visitor_failed" | "weibo_request_failed">,
   context: string,
   maxResponseBytes: number,
   parseResponse: (response: Response, text: string) => Result
 ) {
-  const callerSignal = init.signal ?? undefined;
+  const callerSignal = init.signal;
   try {
-    const timeoutSignal = AbortSignal.timeout(weiboRequestTimeoutMs);
-    const requestSignal = callerSignal
-      ? AbortSignal.any([callerSignal, timeoutSignal])
-      : timeoutSignal;
+    const requestSignal = AbortSignal.any([
+      callerSignal,
+      AbortSignal.timeout(weiboRequestTimeoutMs)
+    ]);
     const response = await fetch(input, {
       ...init,
       signal: requestSignal
@@ -126,13 +123,13 @@ async function requestAndParseWeiboResponse<Result>(
     );
     return parseResponse(response, text);
   } catch (error) {
-    if (callerSignal?.aborted) throw callerSignal.reason ?? error;
+    if (callerSignal.aborted) throw callerSignal.reason ?? error;
     if (error instanceof WeiboImportError) throw error;
     throw new WeiboImportError(code, `${context}：${errorMessage(error)}`);
   }
 }
 
-export async function createWeiboVisitorCookie(signal?: AbortSignal) {
+export async function createWeiboVisitorCookie(signal: AbortSignal) {
   const fingerprint = JSON.stringify({
     os: "1",
     browser: "Chrome136,0,0,0",
@@ -219,7 +216,7 @@ export async function createWeiboVisitorCookie(signal?: AbortSignal) {
 export async function fetchWeiboStatus(
   identifier: string,
   cookie: string,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   const endpoint = `https://weibo.com/ajax/statuses/show?id=${encodeURIComponent(identifier)}`;
   return requestAndParseWeiboResponse(

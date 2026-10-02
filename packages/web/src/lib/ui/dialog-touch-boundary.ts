@@ -26,7 +26,7 @@ function preservesNativeTextGesture(
     )
   )
     return true;
-  const selection = ownerDocument.getSelection?.();
+  const selection = ownerDocument.getSelection();
   if (!selection || selection.isCollapsed) return false;
   return Boolean(
     (selection.anchorNode && frame.contains(selection.anchorNode)) ||

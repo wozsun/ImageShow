@@ -1744,6 +1744,7 @@ test("[Server/图片] 原图代理使用私有重验证缓存，条件请求及 
         "png",
         {
           method,
+          signal: neverAbortedSignal,
           validators: { resourceUpdatedAt: updatedAt }
         },
         baseHeaders
@@ -1770,6 +1771,7 @@ test("[Server/图片] 原图代理使用私有重验证缓存，条件请求及 
     "png",
     {
       method: "GET",
+      signal: neverAbortedSignal,
       validators: {
         resourceUpdatedAt: updatedAt,
         ifNoneMatch: proxyEtagForUpstream(url, '"origin"')!
@@ -1791,13 +1793,23 @@ test("[Server/图片] 原图代理使用私有重验证缓存，条件请求及 
       }),
       { status: 503 }
     );
-  const fallback = await proxyExternalImage(url, "png", { method: "GET" }, baseHeaders);
+  const fallback = await proxyExternalImage(
+    url,
+    "png",
+    { method: "GET", signal: neverAbortedSignal },
+    baseHeaders
+  );
   assert.equal(fallback.status, 302);
   assert.equal(fallback.headers.get("Location"), url);
   assert.equal(fallback.headers.get("Cache-Control"), "no-store");
   assert.equal(failedBodyCancelled, 1);
   await assert.rejects(
-    proxyExternalImage("https://127.0.0.1/private.png", "png", { method: "GET" }, baseHeaders),
+    proxyExternalImage(
+      "https://127.0.0.1/private.png",
+      "png",
+      { method: "GET", signal: neverAbortedSignal },
+      baseHeaders
+    ),
     (error: { code?: string }) => error.code === "external_image_rejected"
   );
 });

@@ -80,18 +80,6 @@ export class GalleryImageVisibilityController {
       });
       return () => undefined;
     }
-    if (typeof IntersectionObserver === "undefined") {
-      const visible = {
-        inViewport: true,
-        inLoadRange: true,
-        inResidenceRange: true
-      };
-      this.#records.set(target, { state: visible, listener });
-      listener(visible);
-      return () => {
-        this.#records.delete(target);
-      };
-    }
 
     this.#records.set(target, {
       state: {
@@ -120,13 +108,7 @@ export class GalleryImageVisibilityController {
 
   updateViewportHeight(viewportHeight: number) {
     const next = Math.max(1, Math.ceil(viewportHeight));
-    if (
-      this.#disposed ||
-      typeof IntersectionObserver === "undefined" ||
-      next === this.#viewportHeight
-    ) {
-      return;
-    }
+    if (this.#disposed || next === this.#viewportHeight) return;
     this.#viewportHeight = next;
     if (this.#records.size === 0) return;
     for (const observer of this.#observers.values()) observer.disconnect();
@@ -152,7 +134,6 @@ export class GalleryImageVisibilityController {
   }
 
   #createObservers() {
-    if (typeof IntersectionObserver === "undefined") return;
     for (const kind of observerKinds) {
       const observer = new IntersectionObserver(
         (entries) => {

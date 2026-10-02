@@ -4,9 +4,9 @@ import type {
   ImagePurgeRequestDto,
   ImagePurgeResponseDto
 } from "@imageshow/shared/browser";
-import { setTimeout as delay } from "node:timers/promises";
 import type { PoolClient } from "pg";
 import { imageObjectKey } from "../../storage/objects/image-paths.ts";
+import { abortableDelay } from "../../core/abort.ts";
 import { runWithAdvisoryLockAcquisitionSignal } from "../../core/database/advisory-locks.ts";
 import { pool } from "../../core/database/pools.ts";
 import { withTransactionOnClient } from "../../core/database/transactions.ts";
@@ -35,7 +35,7 @@ type QueuePlan = Pick<
 };
 
 type PurgeOptions = {
-  signal?: AbortSignal;
+  signal: AbortSignal;
 };
 
 type PurgeWaitState = {
@@ -229,27 +229,18 @@ async function readPurgeWaitState(ids: string[]): Promise<PurgeWaitState> {
 
 async function waitForPurgeTargets(
   plan: QueuePlan,
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<ImagePurgeResponseDto> {
   const deadline = Date.now() + purgeRequestWaitMs;
   let state = await readPurgeWaitState(plan.targetIds);
   while (state.remaining && !state.deferred && Date.now() < deadline) {
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     const remainingWaitMs = Math.min(
       purgeRequestPollMs,
       deadline - Date.now()
     );
     if (remainingWaitMs <= 0) break;
-    try {
-      await delay(
-        remainingWaitMs,
-        undefined,
-        signal ? { signal } : undefined
-      );
-    } catch (error) {
-      if (signal?.aborted) throw signal.reason;
-      throw error;
-    }
+    await abortableDelay(remainingWaitMs, signal);
     state = await readPurgeWaitState(plan.targetIds);
   }
   return {
@@ -270,7 +261,7 @@ async function waitForPurgeTargets(
  */
 export async function purgeImages(
   request: ImagePurgeRequestDto,
-  options: PurgeOptions = {}
+  options: PurgeOptions
 ): Promise<ImagePurgeResponseDto> {
   const plan = await withTrashMembershipLock((client) =>
     withTransactionOnClient(

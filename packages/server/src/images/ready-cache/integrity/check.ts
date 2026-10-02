@@ -64,7 +64,7 @@ export async function validateBuiltReadyImageCache(
   stats: ReadyImageStats,
   samples: ReadyImageCacheItem[],
   client: Redis,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   const persisted = await readReadyImageIntegrity(client);
   if (!sameReadyImageCardinalities(persisted, expected)) {

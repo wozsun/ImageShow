@@ -1,5 +1,4 @@
 import { imageVariants } from "@imageshow/shared/browser";
-import { neverAbortedSignal } from "../../core/abort.ts";
 import { imageObjectKey } from "../../storage/objects/image-paths.ts";
 import { imageVariantColumns, storedVariantFacts, type ImageVariantRecord } from "../variants/record.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
@@ -388,27 +387,19 @@ async function migrateImageToStorageBackendWhileLocked(
 export function migrateImageToStorageBackend(
   image: ImageStorageMigrationRecord,
   target: string,
-  options: { expectedSource?: string; signal?: AbortSignal } = {}
+  options: { expectedSource?: string; signal: AbortSignal }
 ): Promise<ImageStorageMigrationResult> {
-  const migrateWithImageLock = () =>
-    withImageStorageMutationLock(image.id, async (lockSignal) => {
-      const operationSignal = options.signal
-        ? AbortSignal.any([options.signal, lockSignal])
-        : lockSignal;
-      return migrateImageToStorageBackendWhileLocked(
-        image,
-        target,
-        options.expectedSource,
-        operationSignal
-      );
-    });
-  const signal = options.signal ?? neverAbortedSignal;
+  const { signal } = options;
   return withImageTransferAdmission(signal, () =>
-    options.signal
-      ? runWithAdvisoryLockAcquisitionSignal(
-          options.signal,
-          migrateWithImageLock
+    runWithAdvisoryLockAcquisitionSignal(signal, () =>
+      withImageStorageMutationLock(image.id, (lockSignal) =>
+        migrateImageToStorageBackendWhileLocked(
+          image,
+          target,
+          options.expectedSource,
+          AbortSignal.any([signal, lockSignal])
         )
-      : migrateWithImageLock()
+      )
+    )
   );
 }

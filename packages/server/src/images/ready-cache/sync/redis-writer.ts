@@ -87,10 +87,10 @@ export async function writeReadyImageCacheBatch(
   cardinalities: ReadyImageCardinalities,
   stats: ReadyImageStats,
   client: Redis,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   if (!items.length) return;
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const itemEntries: Array<readonly [string, string]> = [];
   const suffixMembers: Array<string | number> = [];
   const allIndexMembers: Array<string | number> = [];
@@ -129,7 +129,7 @@ export async function writeReadyImageCacheBatch(
     });
   }
   await writer.flush();
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
 }
 
 export async function measureReadyImageCoreMemory(

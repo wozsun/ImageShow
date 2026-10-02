@@ -173,11 +173,11 @@ async function closeTempDirectoryBestEffort(directory: Dir | null) {
 
 export async function openIngestionTempScanDirectory(
   path: string,
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<IngestionTempScanDirectory | null> {
   const identity = tempPathIdentity(path);
   for (;;) {
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     const pruning = pruningTempDirectories.get(identity);
     if (pruning) {
       await pruning;
@@ -191,7 +191,7 @@ export async function openIngestionTempScanDirectory(
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       if (!directory) {
         releaseScanningTempDirectory(identity);
         return null;

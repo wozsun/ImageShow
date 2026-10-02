@@ -57,13 +57,10 @@ export function useHomeEntrance(
 
     let decode = decodeRef.current;
     if (decode?.image !== image) {
-      const readiness =
-        typeof image.decode !== "function"
-          ? Promise.resolve(true)
-          : image.decode().then(
-              () => true,
-              () => image.complete && image.naturalWidth > 0
-            );
+      const readiness = image.decode().then(
+        () => true,
+        () => image.complete && image.naturalWidth > 0
+      );
       decode = { image, readiness };
       decodeRef.current = decode;
     }

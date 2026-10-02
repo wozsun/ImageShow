@@ -206,10 +206,10 @@ export async function readIngestionPreview(
   owner: string,
   pair: IngestionSessionPairDto,
   variant: "thumb" | "full",
-  requestSignal?: AbortSignal
+  requestSignal: AbortSignal
 ) {
   const session = await preparedSession(repository, owner, pair);
-  requestSignal?.throwIfAborted();
+  requestSignal.throwIfAborted();
   const current = await preparedSession(repository, owner, pair);
   if (
     current.version !== session.version ||

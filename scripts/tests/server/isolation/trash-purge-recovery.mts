@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { BackgroundJob } from "../../../../packages/server/src/jobs/types.ts";
 import { interceptSqlQueries } from "./database-faults.mts";
 
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -112,7 +113,7 @@ await runIntegrationScenario(async (runtime) => {
   const uncertainPurgePromise = trash.purgeImages({
     scope: "selected",
     ids: [uncertainImage]
-  });
+  }, { signal: neverAbortedSignal });
   const uncertainPurgeJob = await claimTrashPurgeJob();
   try {
     await assert.rejects(
@@ -341,7 +342,7 @@ await runIntegrationScenario(async (runtime) => {
     concurrentPurgePromise = trash.purgeImages({
       scope: "selected",
       ids: [concurrentImage]
-    });
+    }, { signal: neverAbortedSignal });
     let captureIsWaiting = false;
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const waiting = await database.pool.query(
@@ -432,7 +433,7 @@ await runIntegrationScenario(async (runtime) => {
   const oldest = await createTrashImage(3);
   const middle = await createTrashImage(2);
   const newest = await createTrashImage(1);
-  const allPurgePromise = trash.purgeImages({ scope: "all" });
+  const allPurgePromise = trash.purgeImages({ scope: "all" }, { signal: neverAbortedSignal });
   const allPurgeJob = await claimTrashPurgeJob();
   const duplicateRequest = trash.purgeImages(
     { scope: "selected", ids: [middle.id, newest.id] },
@@ -482,7 +483,7 @@ await runIntegrationScenario(async (runtime) => {
   const selectedPurgePromise = trash.purgeImages({
     scope: "selected",
     ids: [addedAfterCapture.id]
-  });
+  }, { signal: neverAbortedSignal });
   await finishTrashPurgeJob(await claimTrashPurgeJob());
   const selectedPurge = await selectedPurgePromise;
   assert.deepEqual(selectedPurge, {
@@ -496,7 +497,7 @@ await runIntegrationScenario(async (runtime) => {
   const ignoredPurge = await trash.purgeImages({
     scope: "selected",
     ids: [foregroundImage]
-  });
+  }, { signal: neverAbortedSignal });
   assert.deepEqual(ignoredPurge, {
     requested: 1,
     queued: 0,
@@ -511,7 +512,7 @@ await runIntegrationScenario(async (runtime) => {
   const failedPurgePromise = trash.purgeImages({
     scope: "selected",
     ids: [failedItem.id, independentItem.id]
-  });
+  }, { signal: neverAbortedSignal });
   const batchJobs = [await claimTrashPurgeJob(), await claimTrashPurgeJob()];
   const failedJob = batchJobs.find((job) => job.target_id === failedItem.id);
   const independentJob = batchJobs.find((job) => job.target_id === independentItem.id);
@@ -586,7 +587,7 @@ await runIntegrationScenario(async (runtime) => {
     await trash.purgeImages({
       scope: "selected",
       ids: [failedItem.id]
-    }),
+    }, { signal: neverAbortedSignal }),
     {
       requested: 1,
       queued: 0,

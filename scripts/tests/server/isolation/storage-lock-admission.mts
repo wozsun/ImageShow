@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { removeDriverObject } from "./storage-fixture.mts";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -113,7 +114,7 @@ await runIntegrationScenario(async (runtime) => {
             storageSlug: "local"
           }
         ],
-        {},
+        { signal: neverAbortedSignal },
         new AbortController().signal
       )
       .then(
@@ -130,7 +131,7 @@ await runIntegrationScenario(async (runtime) => {
             storageSlug: "local"
           }
         ],
-        {},
+        { signal: neverAbortedSignal },
         queuedAdmission.signal
       )
       .then(

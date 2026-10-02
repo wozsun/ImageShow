@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { normalizeAuthor, normalizeTheme } from "../../../../lib/image-draft.js";
-import type { IngestionJob } from "./model/ingestion-job.js";
+import { findIngestionAttempt, type IngestionJob } from "./model/ingestion-job.js";
 import { updateStoredIngestions } from "./ingestion-http-client.js";
 import {
   ingestionJobIsRetryableFailure,
@@ -36,9 +36,7 @@ export function useIngestionRetry({
   const retry = useCallback(
     async (target: IngestionJob) => {
       if (bulkActive.current) return;
-      const current = queue.jobsRef.current.find(
-        (job) => job.id === target.id && job.attemptKey === target.attemptKey
-      );
+      const current = findIngestionAttempt(queue.jobsRef.current, target);
       if (!current || current.status !== target.status) return;
       const kind = ingestionJobRetryKind(current);
       const key = `${current.id}\0${current.attemptKey}`;
@@ -74,9 +72,7 @@ export function useIngestionRetry({
             throw new Error(result?.message ?? "重试响应缺少当前任务");
         }
       } catch (error) {
-        const latest = queue.jobsRef.current.find(
-          (job) => job.id === current.id && job.attemptKey === current.attemptKey
-        );
+        const latest = findIngestionAttempt(queue.jobsRef.current, current);
         if (
           mounted.current &&
           !controller.signal.aborted &&

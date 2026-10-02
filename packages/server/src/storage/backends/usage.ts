@@ -57,9 +57,9 @@ export function assertPhysicalLocationChangeAllowed(
 
 export async function readStorageBackendSnapshot(
   slug: string,
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<StorageBackendSnapshot> {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const row = (
     await pool.query(
       `SELECT backend.slug,
@@ -75,7 +75,7 @@ export async function readStorageBackendSnapshot(
       [slug]
     )
   ).rows[0] as StorageBackendSnapshotRow | undefined;
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   if (!row) {
     throw new ApiError(
       404,
@@ -87,7 +87,7 @@ export async function readStorageBackendSnapshot(
     countUnresolvedMoveCleanupJobs(slug),
     activeIngestionStorageCounts({ signal })
   ]);
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   return {
     ...row,
     ingestion_session_count: activeIngestionCounts.get(slug) ?? 0,
@@ -98,9 +98,9 @@ export async function readStorageBackendSnapshot(
 /** Fresh configuration only; callers decide whether occupancy is relevant. */
 export async function readStorageBackendConfiguration(
   slug: string,
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<StorageBackendConfigRow> {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const row = (
     await pool.query<StorageBackendConfigRow>(
       `SELECT slug, type, config, namespace_identities
@@ -108,7 +108,7 @@ export async function readStorageBackendConfiguration(
       [slug]
     )
   ).rows[0];
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   if (!row) {
     throw new ApiError(
       404,
@@ -121,9 +121,9 @@ export async function readStorageBackendConfiguration(
 
 export async function readStorageBackendUsage(
   slug: string,
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<StorageBackendUsage> {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const [images, cleanupJobCount, ingestionCounts] = await Promise.all([
     pool.query<{ count: number }>(
       "SELECT count(*)::int AS count FROM metadata WHERE storage_slug=$1",
@@ -132,7 +132,7 @@ export async function readStorageBackendUsage(
     countUnresolvedMoveCleanupJobs(slug),
     activeIngestionStorageCounts({ signal })
   ]);
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   return {
     image_count: Number(images.rows[0]?.count ?? 0),
     ingestion_session_count: ingestionCounts.get(slug) ?? 0,

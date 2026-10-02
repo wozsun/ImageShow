@@ -138,9 +138,9 @@ export async function writeReadyImageStatsAndIntegrity(
   stats: ReadyImageStats,
   cardinalities: ReadyImageCardinalities,
   client: Redis,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const expected = new Map(cardinalities);
   expected.set(READY_IMAGE_STATS_KEY, stats.size);
   const writer = new RedisPipelineBatcher(client);
@@ -169,7 +169,7 @@ export async function writeReadyImageStatsAndIntegrity(
     });
   }
   await writer.flush();
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   return expected;
 }
 

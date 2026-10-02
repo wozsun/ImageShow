@@ -12,11 +12,11 @@ export function initializeReadyImageCacheCoordinator() {
   return coordinator.initialize();
 }
 
-export function requestReadyImageCacheRebuild(options: { signal?: AbortSignal } = {}) {
+export function requestReadyImageCacheRebuild(options: { signal: AbortSignal }) {
   return coordinator.requestRebuild(options);
 }
 
-export function ensureReadyImageCacheCurrent(options: { signal?: AbortSignal } = {}) {
+export function ensureReadyImageCacheCurrent(options: { signal: AbortSignal }) {
   return coordinator.ensureCurrent(options);
 }
 
@@ -24,11 +24,8 @@ export function readyImageCacheIsReadable() {
   return coordinator.readyImageCacheIsReadable();
 }
 
-export function withReadyImageCacheRead<T>(
-  work: () => Promise<T>,
-  options: { waitForFence?: boolean; signal?: AbortSignal } = {}
-) {
-  return coordinator.withRead(work, options);
+export function withReadyImageCacheRead<T>(work: () => Promise<T>) {
+  return coordinator.withRead(work);
 }
 
 export function getReadyImageCacheCoordinatorStatus() {

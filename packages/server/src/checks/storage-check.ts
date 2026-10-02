@@ -22,8 +22,8 @@ const storageRowsQuery = `
   SELECT id, status, storage_slug
     FROM metadata`;
 
-export async function checkStorage(signal?: AbortSignal) {
-  signal?.throwIfAborted();
+export async function checkStorage(signal: AbortSignal) {
+  signal.throwIfAborted();
   const rowsBeforeEnumeration = (await pool.query(storageRowsQuery))
     .rows as ImageStorageReferenceRow[];
   const groups = await storageBackendGroups();
@@ -72,9 +72,11 @@ export async function checkStorage(signal?: AbortSignal) {
     activeIngestionStorageReferences({ signal })
   ]);
   const rowsAfterEnumeration = rowsAfterEnumerationResult.rows as ImageStorageReferenceRow[];
-  const rowsReferencedDuringEnumeration = mergeStorageReferenceRows(
-    rowsBeforeEnumeration,
-    rowsAfterEnumeration
+  const withObjectKeys = (rows: readonly ImageStorageReferenceRow[]) =>
+    rows.map((row) => ({ ...row, objectKey: imageObjectKey(row.id) }));
+  const keyedRowsBeforeEnumeration = withObjectKeys(rowsBeforeEnumeration);
+  const rowsReferencedDuringEnumeration = withObjectKeys(
+    mergeStorageReferenceRows(rowsBeforeEnumeration, rowsAfterEnumeration)
   );
   const { referencesByBackend: referencesAfterEnumeration } = activeReferencesAfterEnumeration;
   const tempReferencePaths = new Set([
@@ -100,7 +102,7 @@ export async function checkStorage(signal?: AbortSignal) {
     }
 
     const aliases = new Set(group.slugs);
-    const retainedBeforeEnumeration = rowsBeforeEnumeration.filter(
+    const retainedBeforeEnumeration = keyedRowsBeforeEnumeration.filter(
       (row) => aliases.has(row.storage_slug)
         && (row.status === "ready" || row.status === "deleted")
     );
@@ -110,27 +112,21 @@ export async function checkStorage(signal?: AbortSignal) {
     );
     const largeListing = captured.snapshot.large;
     const largeSet = new Set(largeListing.keys);
-    // Reject any non-canonical image ID before probing a backend.
-    for (const row of retainedDuringEnumeration) {
-      imageObjectKey(row.id);
-    }
     for (const slug of group.slugs) {
       const rowsForSlug = retainedDuringEnumeration.filter((row) => row.storage_slug === slug);
       const sample =
-        rowsForSlug.find((row) => (
-          largeSet.has(imageObjectKey(row.id))
-        ))
+        rowsForSlug.find((row) => largeSet.has(row.objectKey))
           ?? rowsForSlug[0];
       if (!sample) continue;
       try {
         const access = await resolveStorageAccess(slug);
         const readable = await access.driver.exists(
           "large",
-          imageObjectKey(sample.id),
+          sample.objectKey,
           { signal }
         );
         if (largeListing.complete
-          && largeSet.has(imageObjectKey(sample.id))
+          && largeSet.has(sample.objectKey)
           && !readable) {
           unavailableBackends.push({
             backend: slug,
@@ -140,7 +136,7 @@ export async function checkStorage(signal?: AbortSignal) {
           });
         }
       } catch (error) {
-        signal?.throwIfAborted();
+        signal.throwIfAborted();
         unavailableBackends.push({
           backend: slug,
           namespace,
@@ -150,7 +146,7 @@ export async function checkStorage(signal?: AbortSignal) {
       }
     }
     const referenced = new Map(STORAGE_PREFIXES.map((prefix) => [prefix,
-      new Set(retainedDuringEnumeration.map((row) => imageObjectKey(row.id)))
+      new Set(retainedDuringEnumeration.map((row) => row.objectKey))
     ]));
     const activeReferences = mergeActiveIngestionStorageReferences(
       ...group.slugs.flatMap((slug) => [referencesBeforeEnumeration.get(slug) ?? new Map(), referencesAfterEnumeration.get(slug) ?? new Map()])
@@ -161,7 +157,7 @@ export async function checkStorage(signal?: AbortSignal) {
     for (const [prefix, listing] of listings) {
       const present = new Set(listing.keys);
       for (const image of retainedBeforeEnumeration) {
-        const key = imageObjectKey(image.id);
+        const key = image.objectKey;
         if (listing.complete && !present.has(key)) missingObjects.push({ id: image.id, object_key: key, prefix, backend: image.storage_slug, namespace });
       }
       for (const key of listing.keys) {

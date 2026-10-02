@@ -1,4 +1,3 @@
-import { neverAbortedSignal } from "../../core/abort.ts";
 import { ApiError } from "../../core/api-error.ts";
 import {
   getStorageBackend,
@@ -24,15 +23,6 @@ import {
 } from "./key-listing.ts";
 import { withStorageObjectRemovalAdmission } from "./removal-admission.ts";
 
-export async function storageObjectExists(
-  prefix: StoragePrefix,
-  key: string,
-  slug?: string,
-  options?: StorageRequestOptions
-) {
-  return (await resolveStorageAccess(slug)).driver.exists(prefix, key, options);
-}
-
 export type StorageRemovalRequest = Readonly<{
   prefix: StoragePrefix;
   key: string;
@@ -51,14 +41,13 @@ export type ResolvedStorageRemovalResult = StorageRemovalResult & {
  */
 export async function removeStorageObjectsAndConfirm(
   objects: readonly StorageRemovalRequest[],
-  options: StorageRemoveOptions = {},
-  admissionSignal: AbortSignal = options.signal ?? neverAbortedSignal
+  options: StorageRemoveOptions & { signal: AbortSignal },
+  admissionSignal: AbortSignal
 ): Promise<ResolvedStorageRemovalResult[]> {
   if (!objects.length) {
     throw new RangeError("Storage cleanup requires at least one object");
   }
-  const operationSignal = options.signal
-    ?? neverAbortedSignal;
+  const operationSignal = options.signal;
   operationSignal.throwIfAborted();
   admissionSignal.throwIfAborted();
   const resolved = await Promise.all(
@@ -146,13 +135,11 @@ export function assertStorageRemovalResults(
 /** Collect every current namespace through one driver and cancel sibling scans on failure. */
 export async function collectStorageNamespaceSnapshot(
   slug: string,
-  options: StorageKeyListOptions = {}
+  options: StorageKeyListOptions & { signal: AbortSignal }
 ) {
   const { driver } = await resolveStorageAccess(slug);
   const siblingAbort = new AbortController();
-  const signal = options.signal
-    ? AbortSignal.any([options.signal, siblingAbort.signal])
-    : siblingAbort.signal;
+  const signal = AbortSignal.any([options.signal, siblingAbort.signal]);
   const tasks = STORAGE_PREFIXES.map((prefix) =>
     collectStorageKeyListing(driver.listKeys(prefix, { ...options, signal }))
   );
@@ -162,7 +149,7 @@ export async function collectStorageNamespaceSnapshot(
   } catch (error) {
     siblingAbort.abort(error);
     await Promise.allSettled(tasks);
-    options.signal?.throwIfAborted();
+    options.signal.throwIfAborted();
     throw error;
   }
 }
@@ -190,7 +177,7 @@ export async function resolveReadableObject(
   prefix: ReadablePrefix,
   key: string,
   slug: string,
-  access: StorageRegistryAccess = {}
+  access: StorageRegistryAccess
 ): Promise<ResolvedReadableObject> {
   const config = await getStorageBackend(slug, access);
   return {

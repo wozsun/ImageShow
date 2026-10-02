@@ -17,11 +17,6 @@ function observeVisibility(
   element: Element,
   listener: VisibilityListener
 ) {
-  if (typeof IntersectionObserver === "undefined") {
-    listener(true);
-    return () => undefined;
-  }
-
   visibilityObserver ??= new IntersectionObserver((entries) => {
     for (const entry of entries) {
       visibilityListeners.get(entry.target)?.(entry.isIntersecting && entry.intersectionRatio > 0);
@@ -64,7 +59,7 @@ export function OverflowMarqueeText({
     ) ?? viewport;
     const pauseReasons = new Set<"focus" | "pointer">();
     let animation: Animation | undefined;
-    let visible = typeof IntersectionObserver === "undefined";
+    let visible = false;
 
     const cancelAnimation = (updateState = true) => {
       animation?.cancel();
@@ -138,12 +133,9 @@ export function OverflowMarqueeText({
       visible = nextVisible;
       measure();
     });
-    const observer =
-      typeof ResizeObserver === "undefined"
-        ? undefined
-        : new ResizeObserver(measure);
-    observer?.observe(viewport);
-    observer?.observe(content);
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    observer.observe(content);
     motionQuery.addEventListener("change", measure);
     interactionOwner.addEventListener("pointerenter", onPointerEnter);
     interactionOwner.addEventListener("pointerleave", onPointerLeave);
@@ -151,13 +143,13 @@ export function OverflowMarqueeText({
     interactionOwner.addEventListener("blur", onBlur);
 
     let active = true;
-    void document.fonts?.ready.then(() => {
+    void document.fonts.ready.then(() => {
       if (active) measure();
     });
     return () => {
       active = false;
       cancelAnimation(false);
-      observer?.disconnect();
+      observer.disconnect();
       stopObservingVisibility();
       motionQuery.removeEventListener("change", measure);
       interactionOwner.removeEventListener("pointerenter", onPointerEnter);

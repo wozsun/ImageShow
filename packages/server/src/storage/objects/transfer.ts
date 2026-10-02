@@ -152,11 +152,11 @@ async function verifyWrittenObject(input: {
   key: string;
   expected: StorageObjectDigest;
   sourceSlug: string;
-  signal?: AbortSignal;
+  signal: AbortSignal;
 }) {
   const { storage, prefix, key, expected, sourceSlug, signal } = input;
   const stored = await digestStorageObject(storage, prefix, key, { signal }).catch(() => {
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     throw transferIntegrityFailure(storage, prefix, key, sourceSlug);
   });
   if (!sameDigest(stored, expected)) {
@@ -185,7 +185,7 @@ export async function verifyStorageTarget(input: {
   prefix: StoragePrefix;
   key: string;
   expected: StorageObjectDigest;
-  signal?: AbortSignal;
+  signal: AbortSignal;
 }): Promise<VerifiedStorageTarget> {
   const { storage, prefix, key, signal } = input;
   const expected = { ...input.expected };
@@ -262,7 +262,7 @@ export async function writeVerifiedFileToStorage(input: {
     imageId: string;
     token: string;
   }>;
-  signal?: AbortSignal;
+  signal: AbortSignal;
 }): Promise<{ created: boolean; sourceDigest: StorageObjectDigest }> {
   const {
     target,
@@ -318,7 +318,7 @@ export async function writeVerifiedFileToStorage(input: {
       new Date(Date.now() + s3UncertaintyWindowMs * (verifyUpload ? 2 : 3)),
       { signal }
     );
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
   }
 
   try {
@@ -329,7 +329,7 @@ export async function writeVerifiedFileToStorage(input: {
     const body = Readable.from(
       (async function* () {
         for await (const chunk of source) {
-          signal?.throwIfAborted();
+          signal.throwIfAborted();
           transferred += (chunk as Buffer).byteLength;
           yield chunk;
           if (onProgress && Date.now() - lastProgressAt >= 500) {
@@ -471,7 +471,7 @@ async function openTransferSource(
   prefix: StoragePrefix,
   key: string,
   expectedSize: number,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   let opened;
   try {
@@ -513,7 +513,7 @@ async function validateTransferSource(
   prefix: StoragePrefix,
   key: string,
   expected: StorageTransferExpectation,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   const opened = await openTransferSource(
     source,
@@ -538,13 +538,13 @@ async function validateOpenedTransferSource(
   key: string,
   opened: Awaited<ReturnType<typeof openTransferSource>>,
   expected: StorageTransferExpectation,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   const md5 = expected.md5 ? createHash("md5") : undefined;
   let size = 0;
   try {
     for await (const chunk of opened.body) {
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       const bytes = Buffer.isBuffer(chunk)
         ? chunk
         : Buffer.from(chunk as Uint8Array);
@@ -555,7 +555,7 @@ async function validateOpenedTransferSource(
   } finally {
     await releaseTransferReadable(opened.body);
   }
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const actualMd5 = md5?.digest("hex");
   if (size !== expected.size
     || (expected.md5 !== undefined && actualMd5 !== expected.md5)) {
@@ -569,7 +569,7 @@ function verifiedTransferReadable(input: {
   key: string;
   opened: Awaited<ReturnType<typeof openTransferSource>>;
   expected: StorageTransferExpectation;
-  signal?: AbortSignal;
+  signal: AbortSignal;
 }) {
   const { source, prefix, key, opened, expected, signal } = input;
   let digest: StorageObjectDigest | undefined;
@@ -580,7 +580,7 @@ function verifiedTransferReadable(input: {
       let size = 0;
       try {
         for await (const chunk of opened.body) {
-          signal?.throwIfAborted();
+          signal.throwIfAborted();
           const bytes = Buffer.isBuffer(chunk)
             ? chunk
             : Buffer.from(chunk as Uint8Array);
@@ -590,7 +590,7 @@ function verifiedTransferReadable(input: {
           yield bytes;
         }
         await finished(opened.body, { cleanup: true });
-        signal?.throwIfAborted();
+        signal.throwIfAborted();
         const actualMd5 = md5?.digest("hex");
         if (size !== expected.size
           || (expected.md5 !== undefined && actualMd5 !== expected.md5)) {
@@ -624,7 +624,7 @@ export async function ensureVerifiedObjectAtDestination(input: {
   expected: StorageTransferExpectation;
   contentType: string;
   cleanupCandidate?: CandidateCleanup;
-  signal?: AbortSignal;
+  signal: AbortSignal;
 }): Promise<VerifiedObjectTransfer> {
   const { source, target, prefix, key, contentType, signal } = input;
   const expected = normalizeTransferExpectation(
@@ -725,7 +725,7 @@ export async function ensureVerifiedObjectAtDestination(input: {
         expected,
         signal
       );
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       attempted = true;
       await target.driver.copyFromServerSource(serverCopySource, prefix, key, {
         signal,
@@ -770,7 +770,7 @@ export async function ensureVerifiedObjectAtDestination(input: {
         });
       }
     }
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     return { created: true };
   } catch (error) {
     await releaseOpenedTransferSource(opened, streamedBody);

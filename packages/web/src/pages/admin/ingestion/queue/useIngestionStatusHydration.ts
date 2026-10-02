@@ -3,7 +3,7 @@ import {
   ingestionStatusBatchMaxItems,
   type IngestionSessionPairDto
 } from "@imageshow/shared/browser";
-import type { IngestionJob } from "./model/ingestion-job.js";
+import { findIngestionAttempt, type IngestionJob } from "./model/ingestion-job.js";
 import { getIngestionStatuses } from "./ingestion-http-client.js";
 import {
   completedIngestionObservations,
@@ -194,10 +194,7 @@ export function useIngestionStatusHydration({
             continue;
           }
           if (status.status === "present") {
-            const current = jobsRef.current.find(
-              (job) => job.id === entryJob.id
-                && job.attemptKey === entryJob.attemptKey
-            );
+            const current = findIngestionAttempt(jobsRef.current, entryJob);
             if (current) {
               const next = {
                 ...ingestionJobFromServerItem(

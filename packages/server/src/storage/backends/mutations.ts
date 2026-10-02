@@ -29,7 +29,7 @@ function isForeignKeyViolation(error: unknown) {
 
 export async function createStorageBackend(
   input: StorageBackendCreateInput,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   if (input.slug === "local") {
     throw new ApiError(
@@ -43,11 +43,9 @@ export async function createStorageBackend(
     type: "s3",
     s3: input.s3
   };
-  const result = await validateStorageBackendCandidate(
-    config, undefined, undefined, signal
-  );
+  const result = await validateStorageBackendCandidate(config, { signal });
   config.capabilities = result.capabilities;
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   try {
     await pool
       .query(

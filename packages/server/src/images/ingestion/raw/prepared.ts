@@ -29,7 +29,7 @@ export async function writeIngestionPreparedFile(
   }
 }
 
-export function readIngestionPreparedFile(file: string, expectedSize: number, signal?: AbortSignal) {
+export function readIngestionPreparedFile(file: string, expectedSize: number, signal: AbortSignal) {
   const path = ingestionPreparedPath(file);
   return withActiveIngestionTempPaths([path], async () => {
     const body = createReadStream(path, { signal });

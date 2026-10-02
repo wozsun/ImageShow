@@ -1,5 +1,5 @@
-import { setTimeout as delay } from "node:timers/promises";
 import type { Redis } from "ioredis";
+import { abortableDelay } from "../../core/abort.ts";
 import { errorMessage } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
 import { redis } from "../../core/redis/client.ts";
@@ -38,7 +38,7 @@ const SAMPLE_SIZE = 32;
 
 async function observeReadyImageCacheMemory(
   client: Redis,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   try {
     const bytes = await measureReadyImageCoreMemory(client, signal);
@@ -47,20 +47,12 @@ async function observeReadyImageCacheMemory(
       measuredAt: new Date().toISOString()
     };
   } catch (error) {
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     logger.warn("ready_image_cache_memory_observation_failed", {
       error: error
     });
     return { bytes: null, measuredAt: "" };
   }
-}
-
-function wait(ms: number, signal?: AbortSignal) {
-  signal?.throwIfAborted();
-  return delay(ms, undefined, { signal }).catch((error: unknown) => {
-    signal?.throwIfAborted();
-    throw error;
-  });
 }
 
 function addSamples(
@@ -87,7 +79,7 @@ function addSamples(
 async function buildAttempt(
   previousRevision: string,
   client: Redis,
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<{ changed: true } | { changed: false; meta: ReadyImageCacheMeta }> {
   const startedAt = new Date().toISOString();
   const previousMeta = await readReadyImageCacheMeta(client).catch(() => null);
@@ -158,10 +150,10 @@ async function buildAttempt(
     client,
     signal
   );
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
 
   return withReadyImageCacheWriteFence(async () => {
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     const beforePublish = (await getReadyImageRevision()).revision;
     if (compareReadyImageRevisions(snapshot.revision, beforePublish) !== 0) {
       return { changed: true };
@@ -257,7 +249,7 @@ async function discardFailedBuild(error: unknown, client: Redis) {
 }
 
 export async function rebuildReadyImageCache(
-  options: { signal?: AbortSignal; client?: Redis } = {}
+  options: { signal: AbortSignal; client?: Redis }
 ): Promise<ReadyImageCacheMeta> {
   const client = options.client ?? redis;
   let previousRevision =
@@ -265,12 +257,12 @@ export async function rebuildReadyImageCache(
       ?.appliedRevision ?? "0";
   try {
     for (let attempt = 0; attempt < READY_IMAGE_REBUILD_MAX_ATTEMPTS; attempt += 1) {
-      options.signal?.throwIfAborted();
+      options.signal.throwIfAborted();
       const result = await buildAttempt(previousRevision, client, options.signal);
       if (!result.changed) return result.meta;
       previousRevision = (await getReadyImageRevision()).revision;
       if (attempt + 1 < READY_IMAGE_REBUILD_MAX_ATTEMPTS) {
-        await wait(READY_IMAGE_REBUILD_QUIET_MS, options.signal);
+        await abortableDelay(READY_IMAGE_REBUILD_QUIET_MS, options.signal);
       }
     }
     throw new Error("Ready-image cache rebuild could not reach a stable revision");

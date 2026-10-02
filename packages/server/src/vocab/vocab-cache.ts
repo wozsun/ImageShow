@@ -2,10 +2,7 @@ import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { randomUUID } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import { coalesce } from "../core/coalesce.ts";
-import {
-  publicPgFallbackWorkLimitExceeded,
-  type PublicDatabaseReadAccess
-} from "../core/database/public-fallback.ts";
+import { publicPgFallbackWorkLimitExceeded } from "../core/database/public-fallback.ts";
 import {
   pool,
   type DatabaseReader
@@ -40,7 +37,9 @@ const ADMIN_AUTHOR_LIST_KEY = "imageshow:admin:authors";
 export type EntityCacheKind = "theme" | "tag" | "author";
 export type VocabEntry = FacetOptionDto;
 export type AuthorVocabEntry = VocabEntry & { link: string };
-export type VocabularyReadAccess = PublicDatabaseReadAccess & {
+/** Public reads pass their admission-bound reader; other reads use the pool. */
+export type VocabularyReadAccess = {
+  reader?: DatabaseReader;
   redisMode?: "optional" | "required";
 };
 

@@ -18,7 +18,7 @@ export type StoredResponseRequest = {
   ifModifiedSince?: string;
   ifRange?: string;
   isHead?: boolean;
-  signal?: AbortSignal;
+  signal: AbortSignal;
 };
 
 function sameObjectVersion(left: OpenedRead, right: OpenedRead) {
@@ -60,9 +60,9 @@ export async function streamResolvedObject(
   object: ResolvedReadableObject,
   contentTypeValue: string,
   cacheControl: string,
-  request: StoredResponseRequest = {}
+  request: StoredResponseRequest
 ) {
-  request.signal?.throwIfAborted();
+  request.signal.throwIfAborted();
   const storageRequest = { signal: request.signal };
   const validateBeforeRange = Boolean(
     request.range

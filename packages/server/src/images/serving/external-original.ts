@@ -44,11 +44,13 @@ function externalImageExt(url: string) {
 
 async function originalSupportsDirectAccess(
   url: string,
-  userAgent: string
+  userAgent: string,
+  signal: AbortSignal
 ) {
   try {
     const response = await safeFetchExternalImage(url, {
       method: "GET",
+      signal,
       timeoutMs: externalImageProxyTimeoutMs,
       headers: {
         "User-Agent": userAgent || externalImageProxyUserAgent,
@@ -101,10 +103,10 @@ async function cachedOriginalSupportsDirectAccess(
   const cached = await getOriginalDirectCache(cacheKey);
   if (cached) return cached.direct;
 
-  return coalesce(`original-direct:${cacheKey}`, async () => {
+  return coalesce(`original-direct:${cacheKey}`, async (sharedSignal) => {
     const raced = await getOriginalDirectCache(cacheKey);
     if (raced) return raced.direct;
-    const direct = await originalSupportsDirectAccess(url, userAgent);
+    const direct = await originalSupportsDirectAccess(url, userAgent, sharedSignal);
     await setOriginalDirectCache(cacheKey, direct);
     return direct;
   });
@@ -132,7 +134,7 @@ async function resolveExternalOriginal(
   }
   const displayUrl = await dependencies.displayUrlForOriginalComparison(
     record,
-    { signal }
+    { mode: "public", signal }
   );
   if (!hasDistinctOriginalUrl(original, displayUrl)) {
     throw new ApiError(404, "not_found", "Original link not found");

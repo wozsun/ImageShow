@@ -24,8 +24,7 @@ export function useOneShotSectionReveal(armed: boolean) {
     if (!section) return;
 
     const motionQuery = window.matchMedia(reducedMotionQuery);
-    if (motionQuery.matches
-      || typeof IntersectionObserver === "undefined") {
+    if (motionQuery.matches) {
       revealImmediately();
       return;
     }

@@ -20,10 +20,7 @@ import {
 } from "../../../../packages/web/src/lib/api/client.ts";
 import { webUuidV7 } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-identity.ts";
 import { reduceIngestionQueue } from "../../../../packages/web/src/pages/admin/ingestion/queue/model/ingestion-queue-state.ts";
-import {
-  cancelServerIngestionJob,
-  cancelServerIngestionJobs
-} from "../../../../packages/web/src/pages/admin/ingestion/queue/ingestion-cancel.ts";
+import { cancelServerIngestionJobs } from "../../../../packages/web/src/pages/admin/ingestion/queue/ingestion-cancel.ts";
 import {
   acceptImports,
   createUploadIntents,
@@ -744,7 +741,11 @@ test("[Web/内容接入] 取消只在服务端明确丢弃后报告成功", asyn
     throw new Error(`unexpected fetch ${path}`);
   }) as typeof fetch;
   try {
-    assert.equal(await cancelServerIngestionJob(queue, jobs[0]!), false);
+    const unconfirmedJob = jobs[0]!;
+    assert.equal(
+      (await cancelServerIngestionJobs(queue, [unconfirmedJob])).get(unconfirmedJob.id)?.succeeded,
+      false
+    );
     assert.equal(jobs[0]?.status, "failed");
     assert.equal(jobs[0]?.failureStage, "cancel");
     assert.match(jobs[0]?.message ?? "", /尚未确认/);
@@ -795,7 +796,11 @@ test("[Web/内容接入] 取消只在服务端明确丢弃后报告成功", asyn
       redis_last_semantic_revision: 9
     };
     cancelStatus = "completed";
-    assert.equal(await cancelServerIngestionJob(queue, jobs[0]!), false);
+    const completedJob = jobs[0]!;
+    assert.equal(
+      (await cancelServerIngestionJobs(queue, [completedJob])).get(completedJob.id)?.succeeded,
+      false
+    );
     assert.equal(jobs[0]?.status, "finalized");
     assert.deepEqual(
       paths.slice(-2),

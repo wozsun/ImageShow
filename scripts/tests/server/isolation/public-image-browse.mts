@@ -10,6 +10,8 @@ await runIntegrationScenario(async (runtime) => {
   const { registerRandomRoutes } = await import("../../../../packages/server/src/routes/random.ts");
   const { selectRandomImages } =
     await import("../../../../packages/server/src/random/selection.ts");
+  const { withPublicDatabaseRead } =
+    await import("../../../../packages/server/src/core/database/public-fallback.ts");
   const { sampleReadyImagesFromPostgres } =
     await import("../../../../packages/server/src/random/postgres-selection.ts");
   const { sampleReadyImages } =
@@ -85,6 +87,10 @@ await runIntegrationScenario(async (runtime) => {
   const pages: Array<{ query: Query; value: Awaited<ReturnType<typeof reads.listPublicImages>> }> =
     [];
   const seedCases = ["wallpaper", "Wallpaper", " 图😀 ", "2026-09-15"];
+  const selectRandom = (url: URL, userAgent = "", client = "") =>
+    withPublicDatabaseRead(neverAbortedSignal, (database, signal) =>
+      selectRandomImages(url, userAgent, client, signal, database)
+    );
   const seeded = async (
     seed: string,
     filter = "device=all",
@@ -92,7 +98,7 @@ await runIntegrationScenario(async (runtime) => {
     mode = "json",
     limit?: number
   ) => {
-    const result = await selectRandomImages(
+    const result = await selectRandom(
       new URL(
         `http://imageshow.test/random?seed=${encodeURIComponent(seed)}&${filter}&mode=${mode}${limit === undefined ? "" : `&limit=${limit}`}`
       ),
@@ -130,7 +136,7 @@ await runIntegrationScenario(async (runtime) => {
         200,
         new Set(ids),
         pool,
-        undefined,
+        neverAbortedSignal,
         start
       );
       assert.deepEqual(
@@ -236,12 +242,12 @@ await runIntegrationScenario(async (runtime) => {
     );
 
     await coordinator.initializeReadyImageCacheCoordinator();
-    await coordinator.ensureReadyImageCacheCurrent();
+    await coordinator.ensureReadyImageCacheCurrent({ signal: neverAbortedSignal });
     for (const view of ["show", "gallery"] as const) {
       assert.equal((await reads.getPublicImage(ids[0]!, view, neverAbortedSignal)).device, "mb");
     }
     await pool.query("UPDATE metadata SET device='pc' WHERE id=$1", [ids[0]]);
-    await coordinator.requestReadyImageCacheRebuild();
+    await coordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
     let connections = 0;
     const restoreConnections = interceptPoolConnections(pool, () => {
       connections += 1;
@@ -274,7 +280,7 @@ await runIntegrationScenario(async (runtime) => {
         [0xdddddddddddd, ids[3]],
         [0xffffffffffff, ids[5]]
       ] as const) {
-        const result = await sampleReadyImages(allPlan, 200, new Set(ids), undefined, false, start);
+        const result = await sampleReadyImages(allPlan, 200, new Set(ids), neverAbortedSignal, start);
         assert.ok(result.cached);
         assert.deepEqual(
           result.value.map((item) => item.id),
@@ -288,7 +294,7 @@ await runIntegrationScenario(async (runtime) => {
 
     const desktop = await seeded("wallpaper", "device=pc&brightness=dark&theme=null", "seed-client", "json", 5);
     assert.deepEqual(await seeded("wallpaper", "theme=null,null&brightness=DARK&device=auto", "seed-client", "json", 5), desktop);
-    const emptySeed = await selectRandomImages(
+    const emptySeed = await selectRandom(
       new URL("http://imageshow.test/random?seed=empty&device=mb")
     );
     assert.ok(emptySeed instanceof Response);
@@ -317,21 +323,20 @@ await runIntegrationScenario(async (runtime) => {
     // Removing the tail forces wraparound; both stores must keep the same
     // membership and tie order after a rebuild and a candidate deletion.
     await pool.query("UPDATE metadata SET status='deleted' WHERE id=$1", [ids[5]]);
-    await coordinator.requestReadyImageCacheRebuild();
+    await coordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
     const wrappedPg = await sampleReadyImagesFromPostgres(
       allPlan,
       200,
       new Set(ids),
       pool,
-      undefined,
+      neverAbortedSignal,
       0xffffffffffff
     );
     const wrappedRedis = await sampleReadyImages(
       allPlan,
       200,
       new Set(ids),
-      undefined,
-      false,
+      neverAbortedSignal,
       0xffffffffffff
     );
     assert.deepEqual(
@@ -344,7 +349,7 @@ await runIntegrationScenario(async (runtime) => {
       ids.slice(0, -1)
     );
     await pool.query("UPDATE metadata SET status='ready' WHERE id=$1", [ids[5]]);
-    await coordinator.requestReadyImageCacheRebuild();
+    await coordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
     for (const seed of seedCases) {
       assert.deepEqual(await seeded(seed, "device=all", "seed-client", "json", 200), coldSeeds.get(seed));
     }
@@ -357,7 +362,7 @@ await runIntegrationScenario(async (runtime) => {
       await pool.query("UPDATE metadata SET status='deleted' WHERE id=$1", [
         anchor.value.items[0]!.id
       ]);
-      await coordinator.requestReadyImageCacheRebuild();
+      await coordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
       const continuation = await reads.listPublicImages(
         {
           ...anchor.query,
@@ -382,7 +387,7 @@ await runIntegrationScenario(async (runtime) => {
       await pool.query("UPDATE metadata SET status='ready' WHERE id=$1", [
         anchor.value.items[0]!.id
       ]);
-      await coordinator.requestReadyImageCacheRebuild();
+      await coordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
     }
     const anchor = pages.find(
       (page) => page.query.order === "random" && page.query.view === "show"
@@ -416,7 +421,7 @@ await runIntegrationScenario(async (runtime) => {
       expected("random"),
       "核心缺项有界回源，不能把缺项当作末页"
     );
-    await coordinator.requestReadyImageCacheRebuild();
+    await coordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
 
     now = Date.parse("2026-09-08T23:59:55Z");
     const late = await get("/api/images?view=show&order=random&limit=1");

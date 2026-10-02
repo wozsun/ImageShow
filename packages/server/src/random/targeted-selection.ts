@@ -3,7 +3,6 @@ import {
   publicPgFallbackWorkLimitExceeded,
   type PublicDatabaseReadAccess
 } from "../core/database/public-fallback.ts";
-import { pool, type DatabaseReader } from "../core/database/pools.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { readTargetedReadyImages } from "../images/ready-cache/query.ts";
 import {
@@ -28,10 +27,10 @@ function shuffled(items: SelectedReadyImage[]) {
 export async function pickTargetedImages(
   ids: string[],
   limit: number,
-  signal?: AbortSignal,
-  database: PublicDatabaseReadAccess = {}
+  signal: AbortSignal,
+  database: PublicDatabaseReadAccess
 ): Promise<SelectedReadyImage[] | Response> {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const cached = await readTargetedReadyImages(ids);
   let candidates: SelectedReadyImage[];
   if (cached.cached) {
@@ -40,10 +39,9 @@ export async function pickTargetedImages(
     const maximumCandidates = appConfig.publicPgFallback.maximumTargetedCandidates;
     const fullIds = ids.filter((id) => id.length > 12);
     const suffixes = ids.filter((id) => id.length === 12);
-    const read = async (reader: DatabaseReader) =>
-      (
-        await reader.query(
-          `WITH candidate_ids AS MATERIALIZED (
+    const rows = (
+      await database.reader.query(
+        `WITH candidate_ids AS MATERIALIZED (
          SELECT id
            FROM metadata
           WHERE status='ready' AND id=ANY($1::uuid[])
@@ -59,10 +57,9 @@ export async function pickTargetedImages(
          FROM metadata m
          JOIN candidate_ids candidate ON candidate.id=m.id
         ORDER BY m.id`,
-          [fullIds, suffixes, maximumCandidates + 1]
-        )
-      ).rows as ReadyImageSourceRow[];
-    const rows = await read(database.reader ?? pool);
+        [fullIds, suffixes, maximumCandidates + 1]
+      )
+    ).rows as ReadyImageSourceRow[];
     if (rows.length > maximumCandidates) {
       throw publicPgFallbackWorkLimitExceeded(
         "Targeted random selection exceeds the supported candidate limit"
@@ -70,7 +67,7 @@ export async function pickTargetedImages(
     }
     candidates = rows.map(readyImageCacheItemFromRow);
   }
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   if (!candidates.length) {
     return apiErrorResponse({
       status: 404,

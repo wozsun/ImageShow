@@ -8,6 +8,7 @@ import {
   waitForStorageLockWait
 } from "./storage-maintenance-fixture.mts";
 import { removeDriverObject } from "./storage-fixture.mts";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -35,8 +36,11 @@ await runIntegrationScenario(async (runtime) => {
         })()
       : originalList(prefix, options);
   try {
-    assert.ok((await checkStorage()).incomplete_listings.some((item) => item.prefix === "large"));
-    assert.ok((await maintainStorageAndPurgeTasks()).storage.failed > 0);
+    assert.ok(
+      (await checkStorage(neverAbortedSignal)).incomplete_listings
+        .some((item) => item.prefix === "large")
+    );
+    assert.ok((await maintainStorageAndPurgeTasks(neverAbortedSignal)).storage.failed > 0);
     assert.equal(await access.driver.exists("large", incompleteKey), true);
   } finally {
     access.driver.listKeys = originalList;
@@ -140,7 +144,9 @@ await runIntegrationScenario(async (runtime) => {
           [image.id]
         )
       ).rows[0]!;
-      migrationPending = migration.migrateImageToStorageBackend(source, "local-maintenance");
+      migrationPending = migration.migrateImageToStorageBackend(source, "local-maintenance", {
+        signal: neverAbortedSignal
+      });
       void migrationPending.catch(() => undefined);
       await waitForStorageLockWait(pool, true);
       assert.equal((await image.row()).storage_slug, "local");

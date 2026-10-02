@@ -43,6 +43,8 @@ type ReadyImageCacheRefreshResult = {
 type ReadyImageCacheRefreshTask = {
   promise: Promise<ReadyImageCacheRefreshResult>;
   progress: { fulfillsRebuildRequest: boolean };
+  /** The pending refresh started as this task settled, if any. */
+  successor: ReadyImageCacheRefreshTask | null;
 };
 
 type ReadyImageCacheCoordinatorStatus = {
@@ -87,10 +89,8 @@ function redisConnectionIsUsable(
   );
 }
 
-function waitForTask<T>(task: Promise<T>, signal?: AbortSignal) {
-  return signal
-    ? raceWithAbortSignal(signal, task, "Cache coordination wait aborted")
-    : task;
+function waitForTask<T>(task: Promise<T>, signal: AbortSignal) {
+  return raceWithAbortSignal(signal, task, "Cache coordination wait aborted");
 }
 
 async function scheduleRebuildJob() {
@@ -194,7 +194,7 @@ export class ReadyImageCacheCoordinator {
 
   withRead<T>(
     work: () => Promise<T>,
-    options: { waitForFence?: boolean; signal?: AbortSignal } = {}
+    options: { waitForFence: true; signal: AbortSignal } | { waitForFence?: false } = {}
   ): Promise<ReadyImageCacheReadLease<T>> {
     if (!options.waitForFence && !this.isReadable()) {
       return Promise.resolve({ acquired: false });
@@ -463,17 +463,21 @@ export class ReadyImageCacheCoordinator {
           this.activeTask = null;
           this.activeAbort = null;
           this.startPendingRefresh();
+          activeTask.successor = this.activeTask;
         }
       });
-    activeTask = { promise: task, progress };
+    activeTask = { promise: task, progress, successor: null };
     this.activeAbort = controller;
     this.activeTask = activeTask;
     return task;
   }
 
-  async requestRebuild(options: { signal?: AbortSignal } = {}): Promise<ReadyImageCacheMeta> {
+  async requestRebuild(options: { signal: AbortSignal }): Promise<ReadyImageCacheMeta> {
+    // Follow the refresh started when the awaited task settled; it may already
+    // have finished by the time this caller resumes.
+    let successor: ReadyImageCacheRefreshTask | null = null;
     for (;;) {
-      options.signal?.throwIfAborted();
+      options.signal.throwIfAborted();
       if (this.phase === "stopped") {
         throw new Error("Ready-image cache coordinator is stopped");
       }
@@ -482,31 +486,34 @@ export class ReadyImageCacheCoordinator {
         this.queueRefresh(true);
         throw new ReadyImageCacheRefreshDeferredError();
       }
-      const active = this.activeTask;
+      const active: ReadyImageCacheRefreshTask | null = successor ?? this.activeTask;
       if (!active) {
         return (await waitForTask(
           this.startRefresh(true),
           options.signal
         )).meta;
       }
-      if (!active.progress.fulfillsRebuildRequest) {
+      // A settled successor only reports its result; queue a rebuild behind
+      // the live task alone so a chain of finished tasks cannot repeat it.
+      if (active === this.activeTask && !active.progress.fulfillsRebuildRequest) {
         this.queueRefresh(true);
       }
       try {
         const result = await waitForTask(active.promise, options.signal);
         if (result.rebuilt) return result.meta;
       } catch (error) {
-        options.signal?.throwIfAborted();
+        options.signal.throwIfAborted();
         if (this.isStopped()) throw error;
         if (active.progress.fulfillsRebuildRequest) throw error;
       }
+      successor = active.successor;
     }
   }
 
-  async ensureCurrent(options: { signal?: AbortSignal } = {}) {
+  async ensureCurrent(options: { signal: AbortSignal }) {
     const { signal } = options;
     for (;;) {
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       if (this.phase === "stopped") {
         throw new Error("Ready-image cache coordinator is stopped");
       }
@@ -517,9 +524,9 @@ export class ReadyImageCacheCoordinator {
       }
       const lease = await this.withRead(
         async () => {
-          signal?.throwIfAborted();
+          signal.throwIfAborted();
           const revision = (await this.dependencies.getRevision()).revision;
-          signal?.throwIfAborted();
+          signal.throwIfAborted();
           return this.meta?.state === "ready"
             && this.meta.appliedRevision === revision
             ? this.meta
@@ -527,7 +534,7 @@ export class ReadyImageCacheCoordinator {
         },
         { waitForFence: true, signal }
       );
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       if (lease.acquired && lease.value) return lease.value;
       if (this.mutationHolds > 0) return this.requestRebuild(options);
       return (await waitForTask(

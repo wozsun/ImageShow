@@ -22,7 +22,7 @@ export type ExistingStorageProbe = {
 async function assertExistingObjectReadable(
   driver: StorageDriver,
   existingObject: ExistingStorageProbe,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   try {
     const opened = await driver.openRead(
@@ -45,7 +45,7 @@ async function assertExistingObjectReadable(
     if (received) return;
     throw new Error("Storage returned an empty object probe");
   } catch (error) {
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     throw new ApiError(
       502,
       "storage_access_probe_failed",
@@ -60,13 +60,17 @@ async function assertExistingObjectReadable(
 
 export async function validateStorageBackendCandidate(
   config: StorageConfig,
-  existingObject?: ExistingStorageProbe,
-  endpointRebind?: {
-    currentConfig: StorageConfig;
-  },
-  signal?: AbortSignal
+  {
+    existingObject,
+    endpointRebind,
+    signal
+  }: {
+    existingObject?: ExistingStorageProbe;
+    endpointRebind?: { currentConfig: StorageConfig };
+    signal: AbortSignal;
+  }
 ) {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const testConfig = { ...config, temporary: true };
   const driver = resolveStorageAccessForConfig(testConfig).driver;
   try {
@@ -88,7 +92,7 @@ export async function validateStorageBackendCandidate(
         "Storage backend did not confirm write access"
       );
     }
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     return result;
   } finally {
     await Promise.resolve()

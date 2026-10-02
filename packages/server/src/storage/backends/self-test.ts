@@ -12,21 +12,16 @@ import {
 } from "./config.ts";
 import { validateStorageBackendCandidate } from "./probe.ts";
 import { storageConfigFromRow, type StorageBackendConfigRow } from "./record.ts";
-import {
-  invalidateStorageBackendRegistry,
-  resolveStorageAccess
-} from "./registry.ts";
+import { invalidateStorageBackendRegistry } from "./registry.ts";
 
 async function saveProbedCapabilities(
   config: S3StorageConfig,
   capabilities: S3Capabilities,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   const save = () =>
     withAdvisoryLock(`imageshow:storage-backend:${config.slug}`, async (lockSignal, client) => {
-      const combinedSignal = signal
-        ? AbortSignal.any([signal, lockSignal])
-        : lockSignal;
+      const combinedSignal = AbortSignal.any([signal, lockSignal]);
       try {
         await withTransactionOnClient(client, async () => {
           combinedSignal.throwIfAborted();
@@ -62,22 +57,19 @@ async function saveProbedCapabilities(
         invalidateStorageBackendRegistry();
       }
     });
-  await (signal ? runWithAdvisoryLockAcquisitionSignal(signal, save) : save());
+  await runWithAdvisoryLockAcquisitionSignal(signal, save);
 }
 
 export async function testStorageBackend(
-  config?: StorageConfig,
-  signal?: AbortSignal
+  config: StorageConfig,
+  signal: AbortSignal
 ) {
-  signal?.throwIfAborted();
-  const effective = config ?? (await resolveStorageAccess()).config;
-  const result = await validateStorageBackendCandidate(
-    effective, undefined, undefined, signal
-  );
-  if (effective.type === "s3"
-    && !effective.temporary
+  signal.throwIfAborted();
+  const result = await validateStorageBackendCandidate(config, { signal });
+  if (config.type === "s3"
+    && !config.temporary
     && result.capabilities) {
-    await saveProbedCapabilities(effective, result.capabilities, signal);
+    await saveProbedCapabilities(config, result.capabilities, signal);
   }
   return result;
 }

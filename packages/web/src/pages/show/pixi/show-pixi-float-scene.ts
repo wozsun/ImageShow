@@ -170,9 +170,9 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
     this.#wheelScrollRemainingY = 0;
     this.#dragging = true;
     try {
-      this.#inputElement.setPointerCapture?.(event.pointerId);
+      this.#inputElement.setPointerCapture(event.pointerId);
     } catch {
-      // A detached canvas or a synthetic event may reject capture.
+      // A detached canvas or an inactive pointer rejects capture.
     }
     if (event.cancelable) event.preventDefault();
   };
@@ -812,8 +812,8 @@ export class ShowPixiFloatScene implements ShowPixiSceneController {
 
   #releasePointer(pointerId: number) {
     try {
-      if (this.#inputElement.hasPointerCapture?.(pointerId)) {
-        this.#inputElement.releasePointerCapture?.(pointerId);
+      if (this.#inputElement.hasPointerCapture(pointerId)) {
+        this.#inputElement.releasePointerCapture(pointerId);
       }
     } catch {
       // Capture may already be gone after visibility or scene changes.

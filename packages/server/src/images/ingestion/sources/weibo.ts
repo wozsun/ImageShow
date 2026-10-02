@@ -19,11 +19,8 @@ import {
   type WeiboPostParseError
 } from "./weibo-types.ts";
 
-type WeiboExtractionOptions = {
-  signal?: AbortSignal;
-};
-
-type WeiboManifestOptions = WeiboExtractionOptions & {
+type WeiboManifestOptions = {
+  signal: AbortSignal;
   timeZone?: string;
   sourceEnabled: boolean;
 };

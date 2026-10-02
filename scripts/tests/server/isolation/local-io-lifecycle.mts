@@ -4,6 +4,7 @@ import { once } from "node:events";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { removeDriverObject } from "./storage-fixture.mts";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import { settleWithin } from "./storage-maintenance-fixture.mts";
 
@@ -93,12 +94,12 @@ await runIntegrationScenario(async (runtime) => {
       "application/octet-stream"
     );
     assert.equal((await driver.readBuffer("large", "oversized.bin", { expectedSize: 2048 })).length, 2048);
-    assert.equal((await prepared.readIngestionPreparedFile(preparedFile, 2048)).length, 2048);
+    assert.equal((await prepared.readIngestionPreparedFile(preparedFile, 2048, neverAbortedSignal)).length, 2048);
     await assert.rejects(driver.readBuffer("large", "oversized.bin", { expectedSize: 2049 }),
       { code: "storage_read_size_mismatch" });
-    await assert.rejects(prepared.readIngestionPreparedFile(preparedFile, 2049),
+    await assert.rejects(prepared.readIngestionPreparedFile(preparedFile, 2049, neverAbortedSignal),
       { code: "storage_read_size_mismatch" });
-    await assert.rejects(prepared.readIngestionPreparedFile(preparedFile, 2047),
+    await assert.rejects(prepared.readIngestionPreparedFile(preparedFile, 2047, neverAbortedSignal),
       { code: "object_too_large" });
     const { openedReadToBuffer } = await import("../../../../packages/server/src/storage/objects/stream-buffer.ts");
     for (const declared of [true, false]) {

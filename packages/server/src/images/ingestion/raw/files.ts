@@ -29,9 +29,9 @@ export async function statIngestionTempIfExists(path: string) {
 export async function publishIngestionRawPart(
   partPath: string,
   rawPath: string,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   try {
     await link(partPath, rawPath);
   } catch (error) {
@@ -79,7 +79,7 @@ export async function receiveUploadRaw(
     expected_size: number;
     maximum_size: number;
     max_long_edge: number;
-    signal?: AbortSignal;
+    signal: AbortSignal;
     heartbeat?: () => Promise<void>;
   }>
 ) {
@@ -92,9 +92,7 @@ export async function receiveUploadRaw(
   await mkdir(dirname(rawPath), { recursive: true });
   let total = 0;
   const heartbeatController = new AbortController();
-  const combinedSignal = input.signal
-    ? AbortSignal.any([input.signal, heartbeatController.signal])
-    : heartbeatController.signal;
+  const combinedSignal = AbortSignal.any([input.signal, heartbeatController.signal]);
   let stopped = false;
   let pendingHeartbeat = Promise.resolve();
   const queueHeartbeat = () => {

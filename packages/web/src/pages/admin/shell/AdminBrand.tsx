@@ -47,18 +47,16 @@ export function AdminBrand({
     const fit = () => fitName(name);
     fit();
 
-    const observer = typeof ResizeObserver === "undefined"
-      ? undefined
-      : new ResizeObserver(fit);
-    observer?.observe(root);
+    const observer = new ResizeObserver(fit);
+    observer.observe(root);
 
     let active = true;
-    void document.fonts?.ready.then(() => {
+    void document.fonts.ready.then(() => {
       if (active) fit();
     });
     return () => {
       active = false;
-      observer?.disconnect();
+      observer.disconnect();
     };
   }, [siteHeaderName, visibleVersion]);
 

@@ -3,6 +3,7 @@ import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { mock } from "node:test";
 import { storageObjectKey } from "@imageshow/shared/browser";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -241,7 +242,11 @@ await runIntegrationScenario(async (runtime) => {
     }, "OPTIONS");
     assert.equal(originalPreflight.headers.get("Access-Control-Allow-Origin"), null);
     await expectStatus(originalPreflight, 403);
-    await updateStorageBackend("local", { public_base_url: "https://media.example.test/pictures" });
+    await updateStorageBackend(
+      "local",
+      { public_base_url: "https://media.example.test/pictures" },
+      neverAbortedSignal
+    );
     const redirected = await request(`/images/large/${key}`, {
       Referer: "https://images.example.test/"
     });

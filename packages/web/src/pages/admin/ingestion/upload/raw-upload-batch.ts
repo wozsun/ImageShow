@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 import type { IngestionSessionPairDto } from "@imageshow/shared/browser";
 import { ingestionAcceptanceBinding } from "../queue/model/acceptance-binding.js";
-import type { IngestionJob } from "../queue/model/ingestion-job.js";
+import { findIngestionAttempt, type IngestionJob } from "../queue/model/ingestion-job.js";
 import { uploadRaw } from "../queue/ingestion-http-client.js";
 import {
   isCurrentIngestionAttempt,
@@ -75,9 +75,7 @@ export async function runRawUploadBatch({
           }
         });
         const accepted = await request.promise;
-        const current = queue.jobsRef.current.find(
-          (item) => item.id === job.id && item.attemptKey === job.attemptKey
-        );
+        const current = findIngestionAttempt(queue.jobsRef.current, job);
         if (!current) return;
         const cancelling = current.status === "cancelling";
         if (!cancelling && !isCurrentIngestionAttempt(
@@ -93,7 +91,6 @@ export async function runRawUploadBatch({
               ...current,
               ...ingestionAcceptanceBinding(accepted),
               status: "cancelling",
-              message: "正在取消上传",
               transferProgress: 100
             }
           });
@@ -103,9 +100,6 @@ export async function runRawUploadBatch({
           {
             ...ingestionAcceptanceBinding(accepted),
             status: cancelling ? "cancelling" : "received",
-            message: cancelling
-              ? "正在取消上传"
-              : "上传已接收，等待图片处理许可",
             transferProgress: 100
           },
           rawConnectionGeneration,

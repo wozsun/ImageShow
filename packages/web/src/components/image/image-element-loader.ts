@@ -6,7 +6,6 @@ export type ImageElementSource = {
 };
 
 export type ImageElementLoadResult = {
-  decodeAttempted: boolean;
   decoded: boolean;
 };
 
@@ -62,20 +61,16 @@ export function loadImageElement(
     const decodeLoadedImage = () => {
       if (decodeStarted || settled) return;
       decodeStarted = true;
-      if (typeof element.decode !== "function") {
-        finish("resolve", { decodeAttempted: false, decoded: true });
-        return;
-      }
       void element.decode().then(
-        () => finish("resolve", { decodeAttempted: true, decoded: true }),
+        () => finish("resolve", { decoded: true }),
         () => {
           if (signal.aborted) {
             finish("reject", signal.reason ?? imageAbortError());
             return;
           }
           // A decode rejection does not necessarily mean the already loaded
-          // image is undisplayable. Record the attempt and release the slot.
-          finish("resolve", { decodeAttempted: true, decoded: false });
+          // image is undisplayable. Report it undecoded and release the slot.
+          finish("resolve", { decoded: false });
         }
       );
     };

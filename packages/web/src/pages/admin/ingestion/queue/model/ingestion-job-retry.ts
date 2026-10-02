@@ -5,10 +5,8 @@ import { ingestionJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
 
 export function ingestionJobRetryKind(job: IngestionJob) {
   if (job.failureStage === "cancel" || ingestionJobNeedsDuplicateConfirmation(job)) return null;
-  if (job.failureStage === "commit" || job.status === "finalized") {
-    return (job.status === "failed" ||
-      (job.status === "finalized" && job.resultState === "error")) &&
-      ingestionJobCanStartCommit(job, "resume")
+  if (job.failureStage === "commit") {
+    return job.status === "failed" && ingestionJobCanStartCommit(job, "resume")
       ? ("commit" as const)
       : null;
   }
@@ -54,7 +52,6 @@ export function resetJobForPrepareRetry(job: IngestionJob): IngestionJob {
     originalHeight: job.originalHeight,
     originalSize: job.originalSize,
     status: "queued",
-    message: "等待重试",
     duplicates: [],
     duplicateDecision: "upload",
     ...prepareRetryIdentity(job)
@@ -74,8 +71,7 @@ function prepareRetryIdentity(job: IngestionJob) {
     return {
       attemptKey: job.attemptKey,
       importAcceptItemInput: job.importAcceptItemInput,
-      importAcceptRejected: job.importAcceptRejected,
-      message: "重新获取内容接入会话"
+      importAcceptRejected: job.importAcceptRejected
     };
   }
   return { attemptKey: webUuidV7() };

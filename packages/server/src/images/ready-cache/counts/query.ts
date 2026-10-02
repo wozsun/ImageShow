@@ -147,13 +147,12 @@ async function readGlobalStats(revision: string, expectedTotal: number) {
 
 export async function readReadyImageCountSnapshot(
   plan: ImageFilterPlan,
-  signal?: AbortSignal,
-  background = false,
+  signal: AbortSignal,
   tagCounts?: GalleryTagCountPlans
 ): Promise<ReadyImageCountResult> {
   try {
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       const status = getReadyImageCacheCoordinatorStatus();
       const meta = status.readable && status.meta?.state === "ready"
         ? status.meta
@@ -203,8 +202,7 @@ export async function readReadyImageCountSnapshot(
       if (!(await ensureReadyImageAttributeIndexes(
         candidateKeys,
         revision,
-        signal,
-        background
+        signal
       ))) {
         return fallback;
       }
@@ -212,8 +210,7 @@ export async function readReadyImageCountSnapshot(
       const plans = [...Object.values(preflight.plans), ...(tagCounts?.groups ?? [])];
       const indexes = await resolveReadyImageCountIndexes(
         plans,
-        signal,
-        background
+        signal
       );
       if (!indexes) return fallback;
       const lease = await withReadyImageCacheRead(async () => {
@@ -258,7 +255,7 @@ export async function readReadyImageCountSnapshot(
     }
     return { cached: false };
   } catch (error) {
-    if (signal?.aborted) throw signal.reason ?? error;
+    if (signal.aborted) throw signal.reason ?? error;
     if (isReadyImageCoreCacheError(error)) {
       reportReadyImageCacheFailure(error);
     } else {

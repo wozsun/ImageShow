@@ -7,13 +7,16 @@ import type { SelectedReadyImage } from "./selection-model.ts";
 
 export async function presentRandomJsonItems(
   picked: SelectedReadyImage[],
-  { signal, size, origin }: { signal?: AbortSignal; size: RandomImageSize; origin: string }
+  { signal, size, origin }: { signal: AbortSignal; size: RandomImageSize; origin: string }
 ): Promise<RandomImageJsonItemDto[]> {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   if (!picked.length) return [];
-  const configs = await getStorageBackendConfigs(picked.map((item) => item.storage_slug), { signal });
+  const configs = await getStorageBackendConfigs(
+    picked.map((item) => item.storage_slug),
+    { mode: "public", signal }
+  );
   return picked.map((item) => {
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     const facts = storedVariantFacts(item, size);
     return {
       id: item.id, title: item.title, author: item.author,

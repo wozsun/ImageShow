@@ -155,8 +155,7 @@ async function commitBatch(
           duplicates: result.duplicates,
           duplicateCount: result.duplicate_count ?? result.duplicates.length,
           duplicateDecision: "undecided",
-          ...(result.version ? { serverVersion: result.version } : {}),
-          message: result.message
+          ...(result.version ? { serverVersion: result.version } : {})
         });
       } else {
         options.updateJob(current.id, {
@@ -188,12 +187,7 @@ async function commitBatch(
       serverImageId: current.imageId,
       failureStage: undefined,
       commitFailureCheckpoint: undefined,
-      resultState: "recovering",
-      resultError: undefined,
-      message:
-        result.status === "completed"
-          ? "服务端已确认写入，正在读取结果"
-          : "提交已受理，等待服务器写入"
+      resultState: "recovering"
     });
   }
   return { accepted, completed };

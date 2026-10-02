@@ -95,7 +95,7 @@ export function ingestionStatusEventPatch(
       item.status === "committing" || item.status === "resolving"
         ? "pending"
         : undefined,
-    message: item.error?.message || item.message,
+    message: failed ? item.error?.message || item.message : undefined,
     transferProgress: item.progress
   };
 }

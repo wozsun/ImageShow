@@ -216,7 +216,7 @@ export const IngestionJobCard = memo(function IngestionJobCard({
           <button
             type="button"
             className="icon"
-            title={job.status === "finalized" ? "重新获取结果" : "重试"}
+            title="重试"
             onClick={() => onRetry(job)}
             disabled={busy}
           >

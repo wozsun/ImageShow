@@ -39,8 +39,7 @@ export async function tryWithReadyImageCacheReadFence<T>(
   return { acquired: true, value: await runWithReadFence(work) };
 }
 
-function waitForFenceTurn(promise: Promise<void>, signal?: AbortSignal) {
-  if (!signal) return promise;
+function waitForFenceTurn(promise: Promise<void>, signal: AbortSignal) {
   signal.throwIfAborted();
   return new Promise<void>((resolve, reject) => {
     const aborted = () => {
@@ -62,14 +61,14 @@ function waitForFenceTurn(promise: Promise<void>, signal?: AbortSignal) {
  */
 export async function withReadyImageCacheReadFence<T>(
   work: () => Promise<T>,
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<T> {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   while (queuedOrActiveWriters > 0) {
     const pendingWriters = writerQueueTail;
     await waitForFenceTurn(pendingWriters, signal);
   }
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   return runWithReadFence(work);
 }
 

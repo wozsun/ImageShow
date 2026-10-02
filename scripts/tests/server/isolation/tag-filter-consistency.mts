@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { setTimeout as delay } from "node:timers/promises";
 import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
+import { pollUntil } from "../../support/polling.ts";
 import { parseTagFilter } from "../../../../packages/shared/src/browser/tag-filter.ts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -277,7 +277,7 @@ await runIntegrationScenario(async (runtime) => {
           assert.equal(mismatch.selects, Object.keys(query).length ? 8 : 4);
         }
         const rejectedPlan = await resolveImageFilterPlan({ tag: budgetTags.join(",") });
-        const rejected = await readReadyImageCountSnapshot(rejectedPlan);
+        const rejected = await readReadyImageCountSnapshot(rejectedPlan, neverAbortedSignal);
         assert.equal(rejected.cached, false, "over-budget statistics use the database");
         if (!rejected.cached)
           assert.deepEqual(rejected.context, context, "fallback carries validated global members");
@@ -315,7 +315,7 @@ await runIntegrationScenario(async (runtime) => {
         } finally {
           await setStatus("ready");
           writer.release();
-          await coordinator.requestReadyImageCacheRebuild();
+          await coordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
         }
       }
       for (const groups of statsGroups)
@@ -380,12 +380,10 @@ await runIntegrationScenario(async (runtime) => {
                 { ...axes, tag: groups, tag_scope: scope },
                 {}
               );
-              let cached = await readReadyImageCountSnapshot(plan, undefined, false, tagCounts);
-              const deadline = Date.now() + 5_000;
-              while (!cached.cached && Date.now() < deadline) {
-                await delay(20);
-                cached = await readReadyImageCountSnapshot(plan, undefined, false, tagCounts);
-              }
+              const cached = await pollUntil(
+                () => readReadyImageCountSnapshot(plan, neverAbortedSignal, tagCounts),
+                (snapshot) => snapshot.cached
+              );
               assert.equal(cached.cached, true, `${label}: must use Redis`);
               if (cached.cached) {
                 assert.equal(cached.value.matching, expectedMatching, label);
@@ -453,21 +451,24 @@ await runIntegrationScenario(async (runtime) => {
         const label = `${backend}: ${query}`;
         if (backend === "Redis") {
           const plan = await resolveImageFilterPlan({ ...entry.axis, tag: entry.tags });
-          let sampled = await sampleReadyImages(plan, 200);
-          const deadline = Date.now() + 5_000;
           // Prior stats reads may still be publishing attribute indexes; require
           // a real Redis hit after that bounded warm-up, never accept fallback.
-          while (!sampled.cached && Date.now() < deadline) {
-            await delay(20);
-            sampled = await sampleReadyImages(plan, 200);
-          }
+          const sampled = await pollUntil(
+            () => sampleReadyImages(plan, 200, new Set(), neverAbortedSignal),
+            (result) => result.cached
+          );
           assert.equal(sampled.cached, true, `${label}: random must hit Redis`);
           if (sampled.cached) assert.deepEqual(ids(sampled.value), expected, label);
-          let page = await readReadyImageCursorPage(plan, 100, createImageBrowseContext("latest"));
-          while (page.status === "fallback" && Date.now() < deadline) {
-            await delay(20);
-            page = await readReadyImageCursorPage(plan, 100, createImageBrowseContext("latest"));
-          }
+          const page = await pollUntil(
+            () => readReadyImageCursorPage(
+              plan,
+              100,
+              createImageBrowseContext("latest"),
+              undefined,
+              neverAbortedSignal
+            ),
+            (result) => result.status !== "fallback"
+          );
           assert.equal(page.status, "hit", `${label}: page must hit Redis`);
           if (page.status === "hit") assert.deepEqual(ids(page.value.items), expected, label);
         }
@@ -568,12 +569,10 @@ await runIntegrationScenario(async (runtime) => {
     // the set-operation budget must preserve every branch through PostgreSQL.
     for (const slug of budgetTags) {
       const plan = await resolveImageFilterPlan({ tag: [slug] });
-      const deadline = Date.now() + 5_000;
-      let sampled = await sampleReadyImages(plan, 200);
-      while (!sampled.cached && Date.now() < deadline) {
-        await delay(20);
-        sampled = await sampleReadyImages(plan, 200);
-      }
+      const sampled = await pollUntil(
+        () => sampleReadyImages(plan, 200, new Set(), neverAbortedSignal),
+        (result) => result.cached
+      );
       assert.equal(sampled.cached, true, `warm source ${slug}`);
     }
     for (const entry of [
@@ -591,7 +590,7 @@ await runIntegrationScenario(async (runtime) => {
         author: base.author,
         tag: parseTagFilter(entry.tags, "mixed").expression
       });
-      assert.equal((await sampleReadyImages(plan, 200)).cached, false);
+      assert.equal((await sampleReadyImages(plan, 200, new Set(), neverAbortedSignal)).cached, false);
       const query = new URLSearchParams({ device: "all", mode: "json", limit: "200" });
       entry.tags.forEach((tag) => query.append("tag", tag));
       const response = await get(`/random?${query}`);
@@ -647,7 +646,7 @@ await runIntegrationScenario(async (runtime) => {
       "已重命名"
     );
     await pool.query("DELETE FROM metadata WHERE id=ANY($1::uuid[])", [rows.map((row) => row.id)]);
-    await coordinator.requestReadyImageCacheRebuild();
+    await coordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
     assertEmpty(await getPublicGalleryStats({}, neverAbortedSignal));
     console.log(
       JSON.stringify({ backends: 2, cases: cases.length, statsCases, mutationTransitions: 7 })

@@ -60,7 +60,6 @@ export function createManifestImportJobs(
     batchKey,
     kind: "import",
     status: "queued",
-    message: "等待下载",
     preview: "",
     draft: createManifestItemDraft(item, defaults, retainOriginalLink),
     width: 0,

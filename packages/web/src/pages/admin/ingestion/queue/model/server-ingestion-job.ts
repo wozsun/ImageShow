@@ -14,7 +14,6 @@ import {
   classificationOverrideFor,
   draftWithDetectedClassification
 } from "./ingestion-attribute-policy.js";
-import { ingestionDuplicateMessage } from "./duplicate-match.js";
 
 export function serverIngestionPairKey(
   pair: Pick<ServerIngestionItemDto, "session_id" | "image_id">
@@ -195,14 +194,7 @@ function activeIngestionJob(
     batchKey: existing?.batchKey ?? pairKey,
     kind: item.queue,
     status: activeIngestionClientStatus(item),
-    message:
-      item.status === "ready"
-        ? semanticPending && existing
-          ? existing.message
-          : duplicateDecision === "confirmed"
-            ? "已确认提交副本"
-            : ingestionDuplicateMessage(duplicateCount)
-        : item.error?.message || item.message,
+    message: failed ? item.error?.message || item.message : undefined,
     preview: prepared?.preview_url ?? existing?.preview ?? "",
     previewFull: prepared?.preview_full_url ?? existing?.previewFull,
     objectUrl: prepared ? undefined : existing?.objectUrl,
@@ -271,7 +263,6 @@ function activeIngestionJob(
       item.status === "committing" || item.status === "resolving"
         ? "pending"
         : undefined,
-    resultError: undefined,
     serverStatus: item.status,
     serverPhase: item.phase,
     serverError: item.error?.message ?? "",
@@ -345,7 +336,6 @@ export function completedIngestionJobPatch(
       : undefined;
   return {
     status: "done",
-    message: "已完成",
     preview: imageVariantUrl(completed, "small"),
     previewFull: imageVariantUrl(completed, "medium"),
     objectUrl: undefined,
@@ -387,7 +377,6 @@ export function completedIngestionJobPatch(
     failureStage: undefined,
     commitFailureCheckpoint: undefined,
     resultState: "hydrated",
-    resultError: undefined,
     serverStatus: "completed",
     serverPhase: undefined,
     serverError: "",
@@ -463,11 +452,9 @@ export function completedIngestionReceiptOwnerPatch(
     serverSessionId: existing.sessionId,
     serverImageId: existing.imageId,
     status: "done",
-    message: "已完成",
     resultState: existing.resultState === "hydrated"
       ? "hydrated"
       : "recovering",
-    resultError: undefined,
     failureStage: undefined,
     commitFailureCheckpoint: undefined,
     serverStatus: "completed",

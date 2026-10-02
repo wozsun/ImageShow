@@ -91,10 +91,9 @@ export function resolveDirectReadyImageFilterKey(plan: ImageFilterPlan) {
 export async function buildReadyImageFilterIndex(
   plan: ImageFilterPlan,
   revision: string,
-  signal?: AbortSignal,
-  background = false
+  signal: AbortSignal
 ): Promise<ReadyImageFilterIndex | null> {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const startingStatus = getReadyImageCacheCoordinatorStatus();
   const startingMeta = startingStatus.meta;
   const startingConnection = getRedisConnectionState();
@@ -154,8 +153,7 @@ export async function buildReadyImageFilterIndex(
     !(await ensureReadyImageAttributeIndexes(
       attributeKeys,
       revision,
-      signal,
-      background
+      signal
     ))
   ) {
     return null;
@@ -204,7 +202,7 @@ export async function buildReadyImageFilterIndex(
       difference: "zdiffstore"
     } as const;
     for (let index = 0; index < execution.operations.length; index += 1) {
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       const operation = execution.operations[index]!;
       operation.result.count = await storeReadyImageFilterSetOperation(
         commands[operation.kind],

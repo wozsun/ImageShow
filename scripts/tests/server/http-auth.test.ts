@@ -28,6 +28,7 @@ import {
   galleryStatsQuery,
   listQuery
 } from "../../../packages/server/src/routes/validation/images.ts";
+import { neverAbortedSignal } from "../../../packages/server/src/core/abort.ts";
 import { parse } from "../../../packages/server/src/routes/validation/parse.ts";
 import {
   normalizePartialContentRange,
@@ -35,7 +36,7 @@ import {
 } from "../../../packages/server/src/core/http/byte-range.ts";
 import { finalizeSecurityHeaders } from "../../../packages/server/src/core/http/headers.ts";
 import { readJsonBody } from "../../../packages/server/src/core/http/json-body.ts";
-import { limitAdminLoginBody } from "../../../packages/server/src/core/http/request-body-limit.ts";
+import { limitStandardApiBody } from "../../../packages/server/src/core/http/request-body-limit.ts";
 import {
   assertSameOrigin,
   requestClientIp,
@@ -404,7 +405,7 @@ test("[Server/HTTP 与鉴权] 写路由集中拒绝无效 JSON、未知字段和
     await next();
   });
   app.use("/*", auditAdminMutation);
-  app.use("/write", limitAdminLoginBody);
+  app.use("/write", limitStandardApiBody);
   app.post("/write", async (context) => {
     const input = parse(
       imageUpdateInput,
@@ -510,27 +511,35 @@ test("[Server/HTTP 与鉴权] 随机 JSON 卡片复用 canonical 字段且不额
     s_byte_size: "1024"
   });
   let storageQueries = 0;
-  context.mock.method(pool, "query", async (sql: string) => {
-    assert.match(sql, /FROM storage_backend/);
-    storageQueries += 1;
-    return {
-      rows: [
-        {
-          slug: "local",
-          display_name: "Local",
-          type: "local",
-          config: {},
-          enabled: true,
-          is_default: true,
-          namespace_identities: []
-        }
-      ]
-    };
-  });
+  // A request-bound presentation reads the registry through the public read scope.
+  context.mock.method(pool, "connect", (async () => ({
+    query: async (sql: string) => {
+      assert.match(sql, /FROM storage_backend/);
+      storageQueries += 1;
+      return {
+        rows: [
+          {
+            slug: "local",
+            display_name: "Local",
+            type: "local",
+            config: {},
+            enabled: true,
+            is_default: true,
+            namespace_identities: []
+          }
+        ]
+      };
+    },
+    release() {}
+  })) as never);
   invalidateStorageBackendRegistry();
   try {
     for (const [size, bytes] of [["large", 123456], ["medium", 65432], ["small", 1024]] as const) {
-      const [presented] = await presentRandomJsonItems([item], { size, origin: "https://example.test" });
+      const [presented] = await presentRandomJsonItems([item], {
+        size,
+        origin: "https://example.test",
+        signal: neverAbortedSignal
+      });
       assert.equal(storageQueries, 1);
       assert.equal(presented!.id, item.id);
       assert.equal(presented!.title, "Random card");

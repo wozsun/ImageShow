@@ -55,7 +55,7 @@ export class IngestionIrreversibleCoordinator {
     pair: IngestionSessionPair,
     verify: () => Promise<void>,
     start: () => Promise<T>,
-    signal?: AbortSignal
+    signal: AbortSignal
   ): Promise<T> {
     return this.#critical(pair, async () => {
       const key = pairKey(pair);
@@ -67,7 +67,7 @@ export class IngestionIrreversibleCoordinator {
       // verify() settles through a Promise reaction. A pause/stop can enqueue
       // an abort between its final caller-side check and this continuation, so
       // the coordinator owns the last synchronous check at the state boundary.
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       record.state = "database_started";
       // Calling the function inside this critical section starts the database
       // transaction in the same boundary as the state transition.

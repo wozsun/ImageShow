@@ -60,9 +60,6 @@ export function ingestionJobStatusDetail(job: IngestionJob): string | null {
         : "写入图库中";
     case "finalized":
       if (job.resultState === "recovering") return "正在确认提交结果";
-      if (job.resultState === "error") {
-        return job.message || "已写入图库，但结果读取失败";
-      }
       return "已写入图库，等待结果";
     case "cancelling":
       return "正在取消并清理暂存数据";

@@ -1,8 +1,7 @@
-import { setTimeout as delay } from "node:timers/promises";
 import { ApiError } from "../../core/api-error.ts";
 import { withAdvisoryLock } from "../../core/database/advisory-locks.ts";
 import type { PoolClient } from "pg";
-import { neverAbortedSignal } from "../../core/abort.ts";
+import { abortableDelay, neverAbortedSignal } from "../../core/abort.ts";
 import type { ReadablePrefix } from "../objects/keys.ts";
 import { getStorageBackend } from "../backends/registry.ts";
 import { withStorageLocationReadLock } from "../maintenance-lock.ts";
@@ -197,12 +196,7 @@ async function persistCleanupWithRetry(
   let lastError: unknown;
   for (const delayMs of cleanupPersistenceRetryDelaysMs) {
     signal?.throwIfAborted();
-    if (delayMs > 0) {
-      await delay(delayMs, undefined, { signal }).catch((error: unknown) => {
-        signal?.throwIfAborted();
-        throw error;
-      });
-    }
+    if (delayMs > 0) await abortableDelay(delayMs, signal ?? neverAbortedSignal);
     signal?.throwIfAborted();
     try {
       await persist();

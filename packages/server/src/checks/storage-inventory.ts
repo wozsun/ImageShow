@@ -68,7 +68,7 @@ export async function storageBackendGroups(): Promise<StorageBackendGroup[]> {
 
 export async function collectStorageBackendGroupSnapshot(
   group: StorageBackendGroup,
-  options: StorageKeyListOptions = {}
+  options: StorageKeyListOptions & { signal: AbortSignal }
 ) {
   const errors: Array<{ backend: string; error: string }> = [];
   for (const backend of group.backends) {
@@ -79,7 +79,7 @@ export async function collectStorageBackendGroupSnapshot(
       );
       return { backend: backend.slug, snapshot, errors };
     } catch (error) {
-      options.signal?.throwIfAborted();
+      options.signal.throwIfAborted();
       errors.push({ backend: backend.slug, error: errorMessage(error) });
     }
   }

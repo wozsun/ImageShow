@@ -6,7 +6,7 @@ import {
   apiSuccessEtag
 } from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
-import { limitAdminLoginBody } from "../core/http/request-body-limit.ts";
+import { limitStandardApiBody } from "../core/http/request-body-limit.ts";
 import {
   assertSameOrigin,
   blockCrossSiteFetch
@@ -51,7 +51,7 @@ export function registerPublicAuthRoutes(app: Hono) {
       assertSameOrigin(c);
       await next();
     },
-    limitAdminLoginBody,
+    limitStandardApiBody,
     async (c) => {
       const body = parse(adminLoginInput, await readJsonBody(c));
       await verifyAltchaProof(body.altcha);

@@ -148,7 +148,7 @@ export async function createUploadJobs({
               ? "图片大小超过限制"
               : tooWide
                 ? "图片长边超过限制"
-                : "等待上传",
+                : undefined,
             preview: objectUrl,
             objectUrl,
             draft: preview.draft,

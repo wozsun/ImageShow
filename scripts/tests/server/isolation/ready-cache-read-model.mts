@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
+import { pollUntil } from "../../support/polling.ts";
 
 type AdminImagesReadModelModule =
   typeof import("../../../../packages/server/src/images/read-models/admin-images.ts");
@@ -147,7 +148,7 @@ await runIntegrationScenario(async (runtime) => {
       altcha: { enabled: false }
     });
     const displayed = await publicUrls.publicImageUrl(
-      { id: imageIds[2]! }, "local", "large"
+      { id: imageIds[2]! }, "local", "large", { mode: "internal" }
     );
     await runtime.databasePools.pool.query(
       "UPDATE metadata SET original=$2, source=$3 WHERE id=$1",
@@ -269,13 +270,18 @@ await runIntegrationScenario(async (runtime) => {
       storedResource
     );
     await coordinator.initializeReadyImageCacheCoordinator();
-    await coordinator.requestReadyImageCacheRebuild();
+    await coordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
     assert.equal(coordinator.getReadyImageCacheCoordinatorStatus().readable, true);
     const plan = await filterPlan.resolveImageFilterPlan(
       { theme, tag, author },
       { redisMode: "required" }
     );
-    assert.ok(await filterIndex.resolveReadyImageFilterIndex(plan));
+    // The derived indexes build in the background; wait for the published result.
+    const index = await pollUntil(
+      () => filterIndex.resolveReadyImageFilterIndex(plan, neverAbortedSignal),
+      (resolved) => resolved !== null
+    );
+    assert.ok(index);
     const adminPage = await adminImages.listAdminImages({
       status: "ready",
       theme,
@@ -336,7 +342,7 @@ await runIntegrationScenario(async (runtime) => {
       "UPDATE admin_account SET role='super' WHERE username='integration-admin'"
     );
     const trashAdminId = await login();
-    const snapshots = await adminImages.getAdminImageSnapshots(imageIds);
+    const snapshots = await adminImages.getAdminImageSnapshots(imageIds, neverAbortedSignal);
     assert.deepEqual(
       snapshots.items.map((item) => item.original_url),
       databaseDetails.map((item) => item.original_url)
@@ -427,7 +433,7 @@ await runIntegrationScenario(async (runtime) => {
     () => runtime.databasePools.pool.query("DELETE FROM theme WHERE slug=$1", [theme]),
     () => runtime.databasePools.pool.query("DELETE FROM author WHERE slug=$1", [author]),
     () => vocabCache.refreshEntityVocabularies(["theme", "tag", "author"]),
-    () => coordinator.requestReadyImageCacheRebuild()
+    () => coordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal })
   ];
   for (const cleanup of cleanupSteps) {
     try {

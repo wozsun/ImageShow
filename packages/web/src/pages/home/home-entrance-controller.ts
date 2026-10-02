@@ -29,7 +29,7 @@ type HomeEntranceControllerOptions = {
 };
 
 const defaultScheduler: HomeEntranceScheduler = {
-  now: () => globalThis.performance?.now() ?? Date.now(),
+  now: () => performance.now(),
   setTimer: (callback, delayMs) => globalThis.setTimeout(callback, delayMs),
   clearTimer: (handle) => globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>)
 };

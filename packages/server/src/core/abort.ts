@@ -1,4 +1,21 @@
+import { setMaxListeners } from "node:events";
+import { setTimeout as delay } from "node:timers/promises";
+
 export const neverAbortedSignal = new AbortController().signal;
+// Many concurrent waits share this signal; it never fires, so its listener
+// count is not a leak and must not trigger MaxListenersExceededWarning.
+setMaxListeners(0, neverAbortedSignal);
+
+/** Waits `delayMs`; cancellation rejects with the signal's own reason. */
+export async function abortableDelay(delayMs: number, signal: AbortSignal) {
+  signal.throwIfAborted();
+  try {
+    await delay(delayMs, undefined, { signal });
+  } catch (error) {
+    signal.throwIfAborted();
+    throw error;
+  }
+}
 
 export function abortSignalError(
   signal: AbortSignal,

@@ -397,7 +397,8 @@ await runIntegrationScenario(async (runtime) => {
     const preview = await scanner.inspectIngestionTempOrphans({
       keep,
       fileCutoff: cursorNow,
-      partCutoff: cursorNow
+      partCutoff: cursorNow,
+      signal: neverAbortedSignal
     });
     assert.equal(preview.complete, false);
     assert.equal((await readdir(dirname(tail))).length, cursorPaths.length);
@@ -409,7 +410,8 @@ await runIntegrationScenario(async (runtime) => {
         keep,
         fileCutoff: cursorNow,
         partCutoff: cursorNow,
-        signal: slice.signal
+        signal: slice.signal,
+        stopSignal: neverAbortedSignal
       });
       removed += report.removed;
       if (slice.signal.aborted) assert.equal(report.complete, false);
@@ -432,7 +434,9 @@ await runIntegrationScenario(async (runtime) => {
         await scanner.cleanupIngestionTempOrphans({
           keep,
           fileCutoff: cursorNow,
-          partCutoff: cursorNow
+          partCutoff: cursorNow,
+          signal: neverAbortedSignal,
+          stopSignal: neverAbortedSignal
         })
       ).removed;
     }
@@ -449,7 +453,9 @@ await runIntegrationScenario(async (runtime) => {
     await scanner.cleanupIngestionTempOrphans({
       keep: protectedRawPaths,
       fileCutoff: cursorNow,
-      partCutoff: cursorNow
+      partCutoff: cursorNow,
+      signal: neverAbortedSignal,
+      stopSignal: neverAbortedSignal
     });
     await scanner.closeIngestionTempCleanupCursor();
     await assert.rejects(stat(dirname(tail)), { code: "ENOENT" });

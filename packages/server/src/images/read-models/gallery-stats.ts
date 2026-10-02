@@ -64,13 +64,12 @@ function presentGalleryStats(
 async function getPublicGalleryStatsWithAccess(
   query: GalleryStatsQuery,
   signal: AbortSignal,
-  database: Required<PublicDatabaseReadAccess>
+  database: PublicDatabaseReadAccess
 ): Promise<GalleryStatsDto> {
   const { plan, tagCounts } = await resolveGalleryStatsPlan(query, database);
   const cached = await readReadyImageCountSnapshot(
     plan,
     signal,
-    true,
     tagCounts
   );
   if (cached.cached) {

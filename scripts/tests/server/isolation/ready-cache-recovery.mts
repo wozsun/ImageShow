@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUIDv7 } from "node:crypto";
 import { connect, createServer, type Socket } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 // Only this scenario's application connection passes through the relay. Closing
@@ -64,7 +65,7 @@ try {
         ]
     );
     await probeRedisOperationalState();
-    const originalMeta = await rebuildReadyImageCache();
+    const originalMeta = await rebuildReadyImageCache({ signal: neverAbortedSignal });
     assert.equal(originalMeta.itemCount, 1);
     let scheduleAttempts = 0;
     const query = pool.query;

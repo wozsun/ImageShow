@@ -22,7 +22,7 @@ function equivalentUrl(left: string, right: string) {
 
 export async function displayUrlForOriginalComparison(
   image: OriginalComparableImage,
-  access: StorageRegistryAccess = {}
+  access: StorageRegistryAccess
 ) {
   return publicImageUrl(
     image,

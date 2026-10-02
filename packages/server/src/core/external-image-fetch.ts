@@ -41,7 +41,7 @@ export type SafeExternalImageFetchOptions = {
   headers?: HeadersInit;
   targetOriginReferer?: boolean;
   timeoutMs: number;
-  signal?: AbortSignal;
+  signal: AbortSignal;
   imageValidation?: ImageValidation;
 };
 
@@ -160,7 +160,7 @@ function imageMimeFromExt(ext?: string) {
     : "";
 }
 
-async function responseWithSniffedImageBody(response: Response, signal?: AbortSignal) {
+async function responseWithSniffedImageBody(response: Response, signal: AbortSignal) {
   if (!response.body) throw externalImageRejected("empty_image_response");
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -177,7 +177,7 @@ async function responseWithSniffedImageBody(response: Response, signal?: AbortSi
       detectedMime = imageMimeFromExt(detected?.ext);
       if (detectedMime) break;
     }
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     if (!detectedMime) throw externalImageRejected("unsupported_image_body");
   } catch (error) {
     await reader.cancel().catch(() => undefined);
@@ -211,24 +211,24 @@ async function responseWithSniffedImageBody(response: Response, signal?: AbortSi
   return new Response(body, { status: response.status, statusText: response.statusText, headers });
 }
 
-function abortError(signal?: AbortSignal) {
-  if (signal?.aborted) {
+function abortError(signal: AbortSignal) {
+  if (signal.aborted) {
     return new ApiError(409, "external_image_cancelled", "外部图片请求已取消");
   }
   return new ApiError(400, "external_url_timeout", "外部图片请求超时");
 }
 
 async function fetchWithTimeout(url: URL, options: SafeExternalImageFetchOptions) {
-  if (options.signal?.aborted) throw abortError(options.signal);
+  if (options.signal.aborted) throw abortError(options.signal);
   assertTlsCertificateVerificationEnabled();
   const controller = new AbortController();
   const abort = () => controller.abort();
-  options.signal?.addEventListener("abort", abort, { once: true });
+  options.signal.addEventListener("abort", abort, { once: true });
   const timer = setTimeout(abort, options.timeoutMs);
   let handedOff = false;
   const cleanup = () => {
     clearTimeout(timer);
-    options.signal?.removeEventListener("abort", abort);
+    options.signal.removeEventListener("abort", abort);
   };
   try {
     const headers = new Headers(options.headers);
@@ -270,7 +270,7 @@ export async function safeFetchExternalImage(
 ): Promise<Response> {
   let current = input;
   for (let redirects = 0; redirects <= maxExternalRedirects; redirects += 1) {
-    if (options.signal?.aborted) throw abortError(options.signal);
+    if (options.signal.aborted) throw abortError(options.signal);
     const url = await validateExternalImageUrl(current);
     const response = await fetchWithTimeout(url, options);
     if (isRedirect(response.status)) {
@@ -296,7 +296,7 @@ export async function safeFetchExternalImage(
         return await responseWithSniffedImageBody(response, options.signal);
       return response;
     } catch (error) {
-      if (options.signal?.aborted || (error as Error).name === "AbortError")
+      if (options.signal.aborted || (error as Error).name === "AbortError")
         throw abortError(options.signal);
       throw error;
     }

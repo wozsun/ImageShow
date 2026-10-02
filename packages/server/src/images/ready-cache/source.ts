@@ -1,4 +1,4 @@
-import type { Pool, PoolClient } from "pg";
+import type { PoolClient } from "pg";
 import { withReadOnlyRepeatableReadTransaction } from "../../core/database/transactions.ts";
 import { pool } from "../../core/database/pools.ts";
 import {
@@ -52,16 +52,11 @@ export const readyImageSourceColumns = `m.id::text AS id,
     'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
   ) AS cursor_updated_at`;
 
-export async function readReadyImageSourceItems(
-  ids: readonly string[],
-  executor: Pool | PoolClient = pool,
-  signal?: AbortSignal
-) {
+export async function readReadyImageSourceItems(ids: readonly string[]) {
   const uniqueIds = [...new Set(ids)];
   if (!uniqueIds.length) return [];
-  signal?.throwIfAborted();
   const rows = (
-    await executor.query(
+    await pool.query(
       `SELECT ${readyImageSourceColumns}
        FROM metadata m
       WHERE m.status='ready' AND m.id=ANY($1::uuid[])
@@ -69,16 +64,15 @@ export async function readReadyImageSourceItems(
       [uniqueIds]
     )
   ).rows as ReadyImageSourceRow[];
-  signal?.throwIfAborted();
   return rows.map(readyImageCacheItemFromRow);
 }
 
 async function readBatch(
   client: PoolClient,
   afterId: string | null,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const rows = (
     await client.query(
       `SELECT ${readyImageSourceColumns}
@@ -90,7 +84,7 @@ async function readBatch(
       [afterId, READY_IMAGE_REBUILD_BATCH_SIZE]
     )
   ).rows as ReadyImageSourceRow[];
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   return rows.map(readyImageCacheItemFromRow);
 }
 
@@ -100,7 +94,7 @@ export async function readReadyImageSourceSnapshot(
     items: ReadyImageCacheItem[],
     snapshot: ReadyImageSourceSnapshot
   ) => Promise<void>,
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<ReadyImageSourceSnapshot> {
   return withReadOnlyRepeatableReadTransaction(async (client) => {
     const revision = (await getReadyImageRevision(client)).revision;
@@ -115,7 +109,7 @@ export async function readReadyImageSourceSnapshot(
     let afterId: string | null = null;
     let processed = 0;
     for (;;) {
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       const items = await readBatch(client, afterId, signal);
       if (!items.length) break;
       processed += items.length;

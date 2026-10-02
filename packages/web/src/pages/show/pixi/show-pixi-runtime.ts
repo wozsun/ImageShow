@@ -184,8 +184,7 @@ export class ShowPixiRuntime {
     this.#textureCache = new ShowPixiTextureCache(
       showPixiTextureCacheOptions(
         initialWidth,
-        typeof WebGL2RenderingContext !== "undefined" &&
-          renderer.gl instanceof WebGL2RenderingContext
+        renderer.gl instanceof WebGL2RenderingContext
       )
     );
     app.canvas.className = "show-pixi-canvas";
@@ -556,9 +555,9 @@ export class ShowPixiRuntime {
   }
 
   #createLongTaskObserver() {
+    // Long-task entries are not baseline; Safari and Firefox do not report them.
     if (
       !this.#statsElement ||
-      typeof PerformanceObserver === "undefined" ||
       !PerformanceObserver.supportedEntryTypes.includes("longtask")
     )
       return null;

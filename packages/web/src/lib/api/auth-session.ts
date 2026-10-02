@@ -12,7 +12,6 @@ export type AuthState = AuthStateDto;
 const sessionProbeHintKey = "site_session_hint";
 
 export function hasSessionProbeHint() {
-  if (typeof localStorage === "undefined") return false;
   try {
     return localStorage.getItem(sessionProbeHintKey) === "1";
   } catch {
@@ -21,7 +20,6 @@ export function hasSessionProbeHint() {
 }
 
 export function rememberSessionProbeHint() {
-  if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(sessionProbeHintKey, "1");
   } catch {
@@ -30,7 +28,6 @@ export function rememberSessionProbeHint() {
 }
 
 export function clearSessionProbeHint() {
-  if (typeof localStorage === "undefined") return;
   try {
     localStorage.removeItem(sessionProbeHintKey);
   } catch {

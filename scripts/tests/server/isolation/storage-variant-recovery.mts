@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createMaintenanceFixture } from "./storage-maintenance-fixture.mts";
 import { createS3HttpFixture } from "../../support/s3-http-fixture.ts";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -36,7 +37,7 @@ await runIntegrationScenario(async (runtime) => {
     const confirm = access.driver.ensureDurable!.bind(access.driver);
     access.driver.ensureDurable = async () => { throw new Error("synthetic fsync failure"); };
     try {
-      const result = await maintainStorageAndPurgeTasks();
+      const result = await maintainStorageAndPurgeTasks(neverAbortedSignal);
       assert.ok(result.storage.items.some((item) => item.image_id === image.id && item.outcome === "failed"));
       for (const prefix of ["large", "medium", "small"] as const) {
         assert.deepEqual(await source.driver.readBuffer(prefix, image.key), body);
@@ -44,7 +45,7 @@ await runIntegrationScenario(async (runtime) => {
     } finally {
       access.driver.ensureDurable = confirm;
     }
-    await maintainStorageAndPurgeTasks();
+    await maintainStorageAndPurgeTasks(neverAbortedSignal);
     for (const prefix of ["large", "medium", "small"] as const) assert.equal(await source.driver.exists(prefix, image.key), false);
 
     // A failed publication must remain distinguishable from a healthy object
@@ -67,19 +68,19 @@ await runIntegrationScenario(async (runtime) => {
           }
         };
         try {
-          const first = await maintainStorageAndPurgeTasks();
+          const first = await maintainStorageAndPurgeTasks(neverAbortedSignal);
           assert.ok(first.storage.items.some((item) => item.image_id === current.id && item.outcome === "failed"));
         } finally {
           target.driver.writeStream = write;
         }
-        const retried = await maintainStorageAndPurgeTasks();
+        const retried = await maintainStorageAndPurgeTasks(neverAbortedSignal);
         assert.ok(retried.storage.items.some((item) => item.image_id === current.id && item.outcome === "failed"));
         assert.deepEqual(await replica.driver.readBuffer(damagedPrefix, current.key), body, "重复维护保留唯一健康来源");
         assert.equal((await runtime.databasePools.pool.query("SELECT id FROM metadata WHERE id=$1", [current.id])).rowCount, 1);
         // Explicit restoration of this test's damaged object allows replicas to retire.
         await target.driver.removeObjects([{ prefix: damagedPrefix, key: current.key }]);
         await target.driver.writeBuffer(damagedPrefix, current.key, body, "image/webp");
-        await maintainStorageAndPurgeTasks();
+        await maintainStorageAndPurgeTasks(neverAbortedSignal);
         assert.deepEqual(await target.driver.readBuffer(damagedPrefix, current.key), body);
         for (const prefix of ["large", "medium", "small"] as const) {
           assert.equal(await replica.driver.exists(prefix, current.key), false);
@@ -99,13 +100,13 @@ await runIntegrationScenario(async (runtime) => {
           })()
         : list(prefix, options);
       try {
-        const result = await maintainStorageAndPurgeTasks();
+        const result = await maintainStorageAndPurgeTasks(neverAbortedSignal);
         assert.ok(result.storage.items.some((item) => item.action === "inspect_namespace" && item.outcome === "failed"));
         for (const prefix of ["large", "medium", "small"] as const) assert.deepEqual(await source.driver.readBuffer(prefix, current.key), body);
       } finally {
         access.driver.listKeys = list;
       }
-      await maintainStorageAndPurgeTasks();
+      await maintainStorageAndPurgeTasks(neverAbortedSignal);
       for (const prefix of ["large", "medium", "small"] as const) {
         assert.deepEqual(await access.driver.readBuffer(prefix, current.key), body);
         assert.equal(await source.driver.exists(prefix, current.key), false);
@@ -117,7 +118,7 @@ await runIntegrationScenario(async (runtime) => {
     for (const prefix of ["large", "medium", "small"] as const) await source.driver.writeBuffer(prefix, purging.key, body, "image/webp");
     await runtime.databasePools.pool.query("UPDATE metadata SET status='deleted',deleted_at=now() WHERE id=$1", [purging.id]);
     await runtime.databasePools.pool.query("INSERT INTO background_job(id,type,status,target_id,error) VALUES ($1,'trash.purge','failed',$2,'exhausted')", [randomUUID(), purging.id]);
-    const maintenance = await maintainStorageAndPurgeTasks();
+    const maintenance = await maintainStorageAndPurgeTasks(neverAbortedSignal);
     assert.equal(maintenance.storage.items.some((item) => item.action === "repair_variant" && item.image_id === purging.id), false);
     assert.equal(await access.driver.exists("large", purging.key), false, "不补回已经永久删除的档位");
     assert.equal(await access.driver.exists("small", purging.key), false);

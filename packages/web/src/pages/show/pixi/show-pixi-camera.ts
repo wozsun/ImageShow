@@ -82,9 +82,9 @@ export class ShowPixiCamera {
     this.#wheelPanRemainingY = 0;
     this.#wheelIdleMs = 0;
     try {
-      this.#element.setPointerCapture?.(event.pointerId);
+      this.#element.setPointerCapture(event.pointerId);
     } catch {
-      // A detached canvas or a synthetic test event may reject capture.
+      // A detached canvas or an inactive pointer rejects capture.
     }
     if (this.#pointers.size >= 2) this.#beginPinch();
     else this.#dragging = true;
@@ -129,8 +129,8 @@ export class ShowPixiCamera {
     const wasPinching = this.#pinch !== null;
     this.#pointers.delete(event.pointerId);
     try {
-      if (this.#element.hasPointerCapture?.(event.pointerId)) {
-        this.#element.releasePointerCapture?.(event.pointerId);
+      if (this.#element.hasPointerCapture(event.pointerId)) {
+        this.#element.releasePointerCapture(event.pointerId);
       }
     } catch {
       // Pointer capture may already have been released by the browser.
@@ -322,8 +322,8 @@ export class ShowPixiCamera {
     if (enabled) return;
     for (const pointerId of this.#pointers.keys()) {
       try {
-        if (this.#element.hasPointerCapture?.(pointerId)) {
-          this.#element.releasePointerCapture?.(pointerId);
+        if (this.#element.hasPointerCapture(pointerId)) {
+          this.#element.releasePointerCapture(pointerId);
         }
       } catch {
         // The browser may release captures before a visibility transition.

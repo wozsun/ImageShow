@@ -5,14 +5,14 @@ import { cleanupIngestionTempOrphans } from "../raw/orphan-scanner.ts";
 import { ingestionOrphanCutoffs } from "./retention.ts";
 import { activeIngestionStorageReferences } from "./storage-references.ts";
 
-export async function cleanupIngestionOrphans(now = Date.now(), signal?: AbortSignal) {
-  signal?.throwIfAborted();
+export async function cleanupIngestionOrphans(now: number, signal: AbortSignal) {
+  signal.throwIfAborted();
   if (!getRedisOperationalState().available) {
     return { skipped: true, temp_removed: 0, incomplete_temp_scans: 0 };
   }
   const timeoutMs = appConfig.ingestionRuntime.orphanCleanupCycleTimeoutSeconds * 1000;
   const timeout = AbortSignal.timeout(timeoutMs);
-  const cycleSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  const cycleSignal = AbortSignal.any([signal, timeout]);
   try {
     const references = await activeIngestionStorageReferences({ signal: cycleSignal });
     const result = await cleanupIngestionTempOrphans({
@@ -27,7 +27,7 @@ export async function cleanupIngestionOrphans(now = Date.now(), signal?: AbortSi
       incomplete_temp_scans: result.complete ? 0 : 1
     };
   } catch (error) {
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     if (!timeout.aborted) throw error;
     logger.warn("ingestion_orphan_temp_cycle_timeout", { timeout_ms: timeoutMs });
     return { skipped: false, temp_removed: 0, incomplete_temp_scans: 1 };

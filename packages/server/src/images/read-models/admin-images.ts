@@ -109,12 +109,12 @@ export async function listAdminImages(
 
 export async function getAdminImageSnapshots(
   ids: string[],
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<ImageSnapshotResponseDto> {
   const canonicalIds = [...new Set(ids.map((id) => id.toLowerCase()))];
   const read = () =>
     withAdvisoryLocks(imageUpdateLockRequests(canonicalIds), async () => {
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       const result = await pool.query(
         `SELECT ${editableImagePresentationColumnsWithTags}
            FROM metadata
@@ -122,14 +122,14 @@ export async function getAdminImageSnapshots(
             AND status = 'ready'`,
         [canonicalIds]
       );
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       // Metadata and tags come from one SQL statement, so this is an
       // authoritative point-in-time projection even if another admin mutates
       // the image immediately before or after the snapshot.
       const projected = await editableImageSnapshotsWithTags(
         result.rows as EditableImageSnapshotRecordWithTags[]
       );
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       const itemsById = new Map(projected.map((item) => [item.id, item]));
       return {
         items: canonicalIds.flatMap((id) => {
@@ -138,7 +138,7 @@ export async function getAdminImageSnapshots(
         })
       };
     });
-  return signal ? runWithAdvisoryLockAcquisitionSignal(signal, read) : read();
+  return runWithAdvisoryLockAcquisitionSignal(signal, read);
 }
 
 export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> {

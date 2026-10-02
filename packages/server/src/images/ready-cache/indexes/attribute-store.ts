@@ -83,15 +83,15 @@ export async function publishReadyImageAttributeIndex(options: {
   temporaryKey: string;
   startingMeta: ReadyImageCacheMeta;
   connectionEpoch: number;
-  signal?: AbortSignal;
+  signal: AbortSignal;
   reader: DatabaseReader;
 }): Promise<ReadyImageAttributeIndex | null> {
   const key = readyImageAttributeIndexKey(options.spec);
   const metaKey = readyImageAttributeIndexMetaKey(key);
-  options.signal?.throwIfAborted();
+  options.signal.throwIfAborted();
   try {
     return await withReadyImageCacheWriteFence(async () => {
-      options.signal?.throwIfAborted();
+      options.signal.throwIfAborted();
       const status = getReadyImageCacheCoordinatorStatus();
       const connection = getRedisConnectionState();
       if (
@@ -105,7 +105,7 @@ export async function publishReadyImageAttributeIndex(options: {
         return null;
       }
       const sourceRevision = (await getReadyImageRevision(options.reader)).revision;
-      options.signal?.throwIfAborted();
+      options.signal.throwIfAborted();
       if (sourceRevision !== options.revision) {
         return null;
       }
@@ -122,13 +122,13 @@ export async function publishReadyImageAttributeIndex(options: {
         instanceToken,
         ttlSeconds: READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds
       });
-      options.signal?.throwIfAborted();
+      options.signal.throwIfAborted();
       if (!published) {
         return null;
       }
 
       const publishedRevision = (await getReadyImageRevision(options.reader)).revision;
-      options.signal?.throwIfAborted();
+      options.signal.throwIfAborted();
       const publishedStatus = getReadyImageCacheCoordinatorStatus();
       const publishedConnection = getRedisConnectionState();
       if (
@@ -150,7 +150,7 @@ export async function publishReadyImageAttributeIndex(options: {
         count: options.count,
         itemCount: options.startingMeta.itemCount
       });
-      options.signal?.throwIfAborted();
+      options.signal.throwIfAborted();
       const registeredStatus = getReadyImageCacheCoordinatorStatus();
       const registeredConnection = getRedisConnectionState();
       if (

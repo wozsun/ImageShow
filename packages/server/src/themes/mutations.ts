@@ -21,8 +21,6 @@ async function insertTheme(
   slug: string,
   displayName = ""
 ) {
-  if (!slug) return false;
-  assertVocabularySlug("theme", slug);
   const result = await client.query(
     `INSERT INTO theme(slug, display_name, sort_order)
      VALUES($1, $2, ${nextSortOrderSql("theme")})
@@ -38,10 +36,12 @@ async function insertTheme(
  * This avoids acquiring the same advisory lock from the transaction client
  * after the caller's vocabulary/image compound lease is already held.
  */
-export function ensureThemeWithMutationLockHeld(
+export async function ensureThemeWithMutationLockHeld(
   client: PoolClient,
   slug: string
 ) {
+  if (!slug) return false;
+  assertVocabularySlug("theme", slug);
   return insertTheme(client, slug);
 }
 

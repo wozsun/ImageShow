@@ -7,6 +7,7 @@ import { Readable } from "node:stream";
 import { controlledStorageDriver, removeDriverObject } from "./storage-fixture.mts";
 import type { StorageAccess } from "../../../../packages/server/src/storage/objects/transfer.ts";
 import { interceptSqlQueries } from "./database-faults.mts";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -326,7 +327,8 @@ await runIntegrationScenario(async (runtime) => {
     expected: {
       size: guardedLatePublishBody.length,
       sha256: createHash("sha256").update(guardedLatePublishBody).digest("hex")
-    }
+    },
+    signal: neverAbortedSignal
   });
   await cleanup.enqueueObjectsForCleanup(
     guardedLatePublishImage,
@@ -355,7 +357,8 @@ await runIntegrationScenario(async (runtime) => {
       ownedIngestionCandidateGuard: {
         imageId: guardedLatePublishImage,
         token: guardedLatePublishToken
-      }
+      },
+      signal: neverAbortedSignal
     }),
     /injected PutObject response loss/
   );
@@ -478,7 +481,8 @@ await runIntegrationScenario(async (runtime) => {
       expected: {
         size: settledSourceBody.length,
         sha256: createHash("sha256").update(settledSourceBody).digest("hex")
-      }
+      },
+      signal: neverAbortedSignal
     });
     await cleanup.enqueueObjectsForCleanup(
       settledGuardImage,
@@ -494,7 +498,8 @@ await runIntegrationScenario(async (runtime) => {
         ownedIngestionCandidateGuard: {
           imageId: settledGuardImage,
           token: settledGuardToken
-        }
+        },
+        signal: neverAbortedSignal
       }),
       {
         created: true,

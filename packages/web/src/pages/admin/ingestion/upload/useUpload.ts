@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
 import { ingestionBatchHardLimit } from "@imageshow/shared/browser";
 import { ingestionAcceptanceBinding } from "../queue/model/acceptance-binding.js";
-import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
+import { findIngestionAttempt, type IngestionJob, type IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 
 import {
   cancelServerIngestionJobs,
-  bindTerminalAcceptanceForCancellation,
+  replayAcceptanceForCancellation,
   type IngestionQueueCancelOutcome
 } from "../queue/ingestion-cancel.js";
 import {
@@ -135,7 +135,6 @@ export function useUpload(options: {
           uploadIntentItemInput: inputs[index],
           status: "queued",
           failureStage: undefined,
-          message: "正在签发上传意图",
           transferProgress: 0
         });
       }
@@ -171,9 +170,7 @@ export function useUpload(options: {
       try {
         for (const [index, job] of candidates.entries()) {
           const result = results[index];
-          const current = queue.jobsRef.current.find(
-            (item) => item.id === job.id && item.attemptKey === job.attemptKey
-          );
+          const current = findIngestionAttempt(queue.jobsRef.current, job);
           if (!current) continue;
           const cancelling = current.status === "cancelling";
           if (!result) {
@@ -207,8 +204,7 @@ export function useUpload(options: {
               job.id,
               {
                 ...ingestionAcceptanceBinding(result),
-                status: "cancelled",
-                message: "该上传尝试已取消"
+                status: "cancelled"
               },
               intentConnectionGeneration,
               result.accepted_order
@@ -231,8 +227,7 @@ export function useUpload(options: {
               {
                 ...ingestionAcceptanceBinding(result),
                 status: "finalized",
-                resultState: "recovering",
-                message: "图片已写入图库，正在读取结果"
+                resultState: "recovering"
               },
               intentConnectionGeneration,
               result.accepted_order
@@ -247,8 +242,7 @@ export function useUpload(options: {
                 target: {
                   ...current,
                   ...ingestionAcceptanceBinding(result),
-                  status: "cancelling",
-                  message: "正在取消上传"
+                  status: "cancelling"
                 }
               });
             }
@@ -256,8 +250,7 @@ export function useUpload(options: {
               job.id,
               {
                 ...ingestionAcceptanceBinding(result),
-                status: cancelling ? "cancelling" : "received",
-                message: cancelling ? "正在取消上传" : "服务器已接管上传任务"
+                status: cancelling ? "cancelling" : "received"
               },
               intentConnectionGeneration,
               result.accepted_order
@@ -270,7 +263,7 @@ export function useUpload(options: {
               attemptKey: job.attemptKey,
               status: "discarded"
             });
-            queue.updateJob(job.id, { status: "cancelled", message: "已取消" });
+            queue.updateJob(job.id, { status: "cancelled", failureStage: undefined });
             continue;
           }
           queue.updateJob(job.id, {
@@ -278,7 +271,6 @@ export function useUpload(options: {
             imageId: result.candidate_image_id,
             imageTime: result.resolved_image_time,
             status: "uploading",
-            message: "上传原图中",
             transferProgress: 0
           });
           uploads.push({ job, credential: result.credential });
@@ -377,16 +369,13 @@ export function useUpload(options: {
       const pending = new Set<Promise<void>>();
       const active = new Set<Promise<void>>();
       for (const job of jobs) {
-        const current = queue.jobsRef.current.find(
-          (item) => item.id === job.id && item.attemptKey === job.attemptKey
-        );
+        const current = findIngestionAttempt(queue.jobsRef.current, job);
         if (!current) continue;
         const intent = pendingIntents.current.get(current.id);
         if (intent?.attemptKey === current.attemptKey) {
           queue.updateJob(current.id, {
             status: "cancelling",
-            failureStage: undefined,
-            message: "正在取消上传"
+            failureStage: undefined
           });
           pending.add(intent.settled);
         }
@@ -394,8 +383,7 @@ export function useUpload(options: {
         if (upload?.attemptKey === current.attemptKey) {
           queue.updateJob(current.id, {
             status: "cancelling",
-            failureStage: undefined,
-            message: "正在取消上传"
+            failureStage: undefined
           });
           upload.abort();
           active.add(upload.settled);
@@ -426,9 +414,7 @@ export function useUpload(options: {
             cancellable.push(ownerOutcome.target);
           continue;
         }
-        const current = queue.jobsRef.current.find(
-          (item) => item.id === job.id && item.attemptKey === job.attemptKey
-        );
+        const current = findIngestionAttempt(queue.jobsRef.current, job);
         if (!current) continue;
         if (current.status === "cancelled") {
           outcomes.set(current.id, {
@@ -457,87 +443,14 @@ export function useUpload(options: {
         }
       }
 
-      for (let offset = 0; offset < replay.length; offset += maxItems) {
-        const chunk = replay.slice(offset, offset + maxItems);
-        const requestConnectionGeneration = queue.captureServerConnectionGeneration();
-        let results: Awaited<ReturnType<typeof createUploadIntents>>["items"];
-        try {
-          results = (
-            await createUploadIntents({
-              items: chunk.map((job) => job.uploadIntentItemInput!)
-            })
-          ).items;
-        } catch (error) {
-          for (const job of chunk) {
-            const current = queue.jobsRef.current.find(
-              (item) => item.id === job.id && item.attemptKey === job.attemptKey
-            );
-            if (!current) continue;
-            queue.updateJob(current.id, {
-              status: "failed",
-              failureStage: "cancel",
-              message: `取消结果暂时无法确认：${
-                error instanceof Error ? error.message : String(error)
-              }`
-            });
-          }
-          continue;
-        }
-        for (const [index, job] of chunk.entries()) {
-          const result = results[index];
-          const current = queue.jobsRef.current.find(
-            (item) => item.id === job.id && item.attemptKey === job.attemptKey
-          );
-          if (!current) continue;
-          if (!result || result.status === "failed") {
-            queue.updateJob(current.id, {
-              status: "failed",
-              failureStage: "cancel",
-              message: result?.message
-                ?? "服务端是否已接管任务暂时无法确认，请重试取消"
-            });
-            continue;
-          }
-          if (result.status === "intent") {
-            queue.updateJob(current.id, { status: "cancelled", message: "已取消" });
-            outcomes.set(current.id, { succeeded: true });
-            continue;
-          }
-          const binding = ingestionAcceptanceBinding(result);
-          const terminal = bindTerminalAcceptanceForCancellation(
-            queue,
-            current.id,
-            result,
-            requestConnectionGeneration
-          );
-          if (terminal) {
-            outcomes.set(current.id, terminal);
-            continue;
-          }
-          queue.bindServerJob(
-            current.id,
-            {
-              ...binding,
-              status: "cancelling",
-              failureStage: undefined,
-              message: "正在取消上传"
-            },
-            requestConnectionGeneration,
-            result.accepted_order
-          );
-          const bound = queue.jobsRef.current.find(
-            (item) => item.id === current.id && item.attemptKey === current.attemptKey
-          );
-          cancellable.push(
-            bound ?? {
-              ...current,
-              ...binding,
-              status: "cancelling",
-              message: "正在取消上传"
-            }
-          );
-        }
-      }
+      cancellable.push(...await replayAcceptanceForCancellation(queue, replay, outcomes, {
+        maxItems,
+        request: async (chunk) => (
+          await createUploadIntents({
+            items: chunk.map((job) => job.uploadIntentItemInput!)
+          })
+        ).items
+      }));
 
       const cancelled = await cancelServerIngestionJobs(queue, cancellable, undefined, {
         allowDetached: true,
@@ -574,9 +487,7 @@ export function useUpload(options: {
         const selected: IngestionJob[] = [];
         for (const target of targets) {
           if (!mounted.current) return;
-          let current = queue.jobsRef.current.find(
-            (job) => job.id === target.id && job.attemptKey === target.attemptKey
-          );
+          let current = findIngestionAttempt(queue.jobsRef.current, target);
           if (
             !current?.file ||
             current.status !== target.status ||
@@ -590,9 +501,7 @@ export function useUpload(options: {
             if (activeUploads.current.get(current.id) === active)
               activeUploads.current.delete(current.id);
           }
-          current = queue.jobsRef.current.find(
-            (job) => job.id === target.id && job.attemptKey === target.attemptKey
-          );
+          current = findIngestionAttempt(queue.jobsRef.current, target);
           if (
             !current?.file ||
             current.status !== target.status ||

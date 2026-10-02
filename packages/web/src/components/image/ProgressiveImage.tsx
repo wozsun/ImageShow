@@ -156,9 +156,7 @@ export function ProgressiveImage({
     };
     frameId = window.requestAnimationFrame(() => {
       frameId = undefined;
-      const animations = typeof frame.getAnimations === "function"
-        ? frame.getAnimations()
-        : [];
+      const animations = frame.getAnimations();
       if (!animations.length) {
         finish();
         return;
@@ -210,9 +208,6 @@ export function ProgressiveImage({
             decoding="async"
             referrerPolicy="no-referrer"
             data-image-role="full"
-            data-image-decode-attempted={
-              decodeResult ? String(decodeResult.decodeAttempted) : undefined
-            }
             data-image-decoded={decodeResult ? String(decodeResult.decoded) : undefined}
           />
         </div>

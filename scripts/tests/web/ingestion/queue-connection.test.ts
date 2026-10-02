@@ -451,8 +451,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             serverSemanticRevision: revision,
             serverHandoffPending: true,
             serverHandoffRevision: revision,
-            status: "received",
-            message: "服务器已接管上传任务"
+            status: "received"
           },
           queue.server.connectionGeneration,
           61
@@ -486,8 +485,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             serverHandoffPending: true,
             serverHandoffRevision: undefined,
             status: "finalized",
-            resultState: "recovering",
-            message: "图片已写入图库，正在读取结果"
+            resultState: "recovering"
           },
           queue.server.connectionGeneration,
           62
@@ -512,8 +510,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             serverHandoffPending: true,
             serverHandoffRevision: undefined,
             status: "finalized",
-            resultState: "recovering",
-            message: "图片已写入图库，正在读取结果"
+            resultState: "recovering"
           },
           queue.server.connectionGeneration,
           1
@@ -548,8 +545,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             serverHandoffPending: true,
             serverHandoffRevision: undefined,
             status: "finalized",
-            resultState: "recovering",
-            message: "图片已写入图库，正在读取结果"
+            resultState: "recovering"
           },
           null,
           4
@@ -584,8 +580,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             serverSemanticRevision: 1,
             serverHandoffPending: true,
             serverHandoffRevision: 1,
-            status: "received",
-            message: "服务器已接管上传任务"
+            status: "received"
           },
           null,
           5
@@ -626,8 +621,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             serverSemanticRevision: 1,
             serverHandoffPending: true,
             serverHandoffRevision: 1,
-            status: "received",
-            message: "服务器已接管上传任务"
+            status: "received"
           },
           null,
           2
@@ -673,8 +667,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             serverHandoffPending: true,
             serverHandoffRevision: undefined,
             status: "finalized",
-            resultState: "recovering",
-            message: "图片已写入图库，正在读取结果"
+            resultState: "recovering"
           },
           queue.server.connectionGeneration,
           3
@@ -713,8 +706,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             serverHandoffPending: true,
             serverHandoffRevision: undefined,
             status: "finalized",
-            resultState: "recovering",
-            message: "图片已写入图库，正在读取结果"
+            resultState: "recovering"
           },
           queue.server.connectionGeneration,
           4
@@ -762,8 +754,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             serverSemanticRevision: 111,
             serverHandoffPending: true,
             serverHandoffRevision: 111,
-            status: "received",
-            message: "服务器已接管旧 incarnation"
+            status: "received"
           },
           queue.server.connectionGeneration,
           6
@@ -778,8 +769,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             serverSemanticRevision: 112,
             serverHandoffPending: true,
             serverHandoffRevision: 112,
-            status: "received",
-            message: "服务器已接管新 incarnation"
+            status: "received"
           },
           queue.server.connectionGeneration,
           7
@@ -832,8 +822,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             serverSemanticRevision: 113,
             serverHandoffPending: true,
             serverHandoffRevision: 113,
-            status: "received",
-            message: "服务器已接管离页任务"
+            status: "received"
           },
           queue.server.connectionGeneration,
           8
@@ -848,8 +837,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             serverSemanticRevision: 114,
             serverHandoffPending: true,
             serverHandoffRevision: 114,
-            status: "received",
-            message: "服务器已接管可见任务"
+            status: "received"
           },
           queue.server.connectionGeneration,
           9
@@ -884,8 +872,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
             serverSemanticRevision: 115,
             serverHandoffPending: true,
             serverHandoffRevision: 115,
-            status: "received",
-            message: "服务器在新连接加载期间接管任务"
+            status: "received"
           },
           requestGeneration,
           10
@@ -914,8 +901,7 @@ test("[Web/内容接入] Server 内容接入队列 Hook 在重连与任意分页
               serverVersion: 2,
               serverSemanticRevision: 2,
               serverHandoffPending: false,
-              status: "ready",
-              message: "等待提交"
+              status: "ready"
             },
             queue.server.connectionGeneration,
             10 + index

@@ -99,6 +99,7 @@ async function respondRandom(c: Context, url: URL) {
     const key = imageObjectKey(picked.id);
     const opened = await (
       await resolveReadableObject(variant, key, picked.storage_slug, {
+        mode: "public",
         signal
       })
     ).open(undefined, {
@@ -119,7 +120,7 @@ async function respondRandom(c: Context, url: URL) {
     });
   }
 
-  const config = await getStorageBackend(picked.storage_slug, { signal });
+  const config = await getStorageBackend(picked.storage_slug, { mode: "public", signal });
   const location = publicImageUrlForConfig(picked, config, variant);
   return new Response(null, {
     status: 302,

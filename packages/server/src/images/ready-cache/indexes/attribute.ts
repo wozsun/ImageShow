@@ -18,215 +18,69 @@ import {
 export type { ReadyImageAttributeIndex } from "./attribute-store.ts";
 export { readReadyImageAttributeIndex } from "./attribute-store.ts";
 
-const ATTRIBUTE_INDEX_BUILD_MAX_CONCURRENCY = 1;
+// Builds run one at a time on this queue; requests never wait for them.
+let attributeIndexBuildTail: Promise<void> = Promise.resolve();
+const pendingAttributeIndexBuilds = new Set<string>();
 
-type ReadyImageAttributeIndexBuildTask = {
-  controller: AbortController;
-  promise: Promise<ReadyImageAttributeIndex | null>;
-  waiters: number;
-  settled: boolean;
-  keepAlive: boolean;
-};
-
-let activeAttributeIndexBuilds = 0;
-let attributeIndexBackgroundTail: Promise<void> = Promise.resolve();
-const attributeIndexBuildSlotWaiters = new Set<() => void>();
-const attributeIndexBuildTasks = new Map<string, ReadyImageAttributeIndexBuildTask>();
-
-async function buildAttributeIndex(
+function scheduleAttributeIndexBuild(
+  key: string,
   spec: ReadyImageAttributeIndexSpec,
-  revision: string,
-  signal?: AbortSignal,
-  waitForSlot = false,
-  publicFallback = false
+  revision: string
 ) {
-  if (waitForSlot) {
-    while (activeAttributeIndexBuilds >= ATTRIBUTE_INDEX_BUILD_MAX_CONCURRENCY) {
-      signal?.throwIfAborted();
-      await new Promise<void>((resolve, reject) => {
-        const available = () => {
-          cleanup();
-          resolve();
-        };
-        const aborted = () => {
-          cleanup();
-          reject(signal?.reason ?? new Error(
-            "Attribute index build wait aborted"
-          ));
-        };
-        const cleanup = () => {
-          attributeIndexBuildSlotWaiters.delete(available);
-          signal?.removeEventListener("abort", aborted);
-        };
-        attributeIndexBuildSlotWaiters.add(available);
-        signal?.addEventListener("abort", aborted, { once: true });
-      });
-    }
-  } else if (activeAttributeIndexBuilds >= ATTRIBUTE_INDEX_BUILD_MAX_CONCURRENCY) {
-    return null;
+  const buildKey = `${key}:${revision}`;
+  if (pendingAttributeIndexBuilds.has(buildKey)
+    || pendingAttributeIndexBuilds.size >= READY_IMAGE_DERIVED_CACHE_POLICY.maxResults) {
+    return;
   }
-  signal?.throwIfAborted();
-  activeAttributeIndexBuilds += 1;
-  try {
-    return await buildReadyImageAttributeIndex(
-      spec,
-      revision,
-      signal,
-      publicFallback
-    );
-  } finally {
-    activeAttributeIndexBuilds -= 1;
-    const waiters = [...attributeIndexBuildSlotWaiters];
-    attributeIndexBuildSlotWaiters.clear();
-    waiters.forEach((notify) => notify());
-  }
-}
-
-function enqueueBackgroundAttributeIndexBuild(
-  signal: AbortSignal,
-  build: () => Promise<ReadyImageAttributeIndex | null>
-) {
-  return new Promise<ReadyImageAttributeIndex | null>((resolve, reject) => {
-    setImmediate(() => {
-      const queued = attributeIndexBackgroundTail.then(() => {
-        signal.throwIfAborted();
-        return build();
-      });
-      attributeIndexBackgroundTail = queued.then(
+  pendingAttributeIndexBuilds.add(buildKey);
+  setImmediate(() => {
+    attributeIndexBuildTail = attributeIndexBuildTail
+      .then(() => buildReadyImageAttributeIndex(spec, revision))
+      .then(
         () => undefined,
-        () => undefined
-      );
-      queued.then(resolve, reject);
-    });
-  });
-}
-
-function waitForAttributeIndexBuild(
-  task: ReadyImageAttributeIndexBuildTask,
-  signal?: AbortSignal
-) {
-  if (!signal) return task.promise;
-  signal.throwIfAborted();
-  return new Promise<ReadyImageAttributeIndex | null>((resolve, reject) => {
-    const aborted = () => {
-      signal.removeEventListener("abort", aborted);
-      reject(signal.reason ?? new Error("Attribute index wait aborted"));
-    };
-    signal.addEventListener("abort", aborted, { once: true });
-    task.promise.then(
-      (value) => {
-        signal.removeEventListener("abort", aborted);
-        resolve(value);
-      },
-      (error) => {
-        signal.removeEventListener("abort", aborted);
-        reject(error);
-      }
-    );
-  });
-}
-
-function attributeIndexBuildTask(
-  taskKey: string,
-  spec: ReadyImageAttributeIndexSpec,
-  revision: string,
-  background: boolean
-) {
-  const existing = attributeIndexBuildTasks.get(taskKey);
-  if (existing) {
-    if (background) existing.keepAlive = true;
-    return existing;
-  }
-  if (attributeIndexBuildTasks.size >= READY_IMAGE_DERIVED_CACHE_POLICY.maxResults) {
-    return null;
-  }
-
-  const controller = new AbortController();
-  let task!: ReadyImageAttributeIndexBuildTask;
-  const build = (waitForSlot = false) =>
-    buildAttributeIndex(
-      spec,
-      revision,
-      controller.signal,
-      waitForSlot,
-      background
-    );
-  const started = background
-    ? enqueueBackgroundAttributeIndexBuild(
-        controller.signal,
-        () => build(true)
+        (error: unknown) => {
+          logger.warn("ready_image_attribute_index_build_failed", {
+            key,
+            revision,
+            error: error
+          });
+        }
       )
-    : build();
-  const promise = started
-    .catch((error) => {
-      if (!controller.signal.aborted) {
-        logger.warn("ready_image_attribute_index_build_failed", {
-          key: readyImageAttributeIndexKey(spec),
-          revision,
-          error: error
-        });
-      }
-      return null;
-    })
-    .finally(() => {
-      task.settled = true;
-      if (attributeIndexBuildTasks.get(taskKey) === task) {
-        attributeIndexBuildTasks.delete(taskKey);
-      }
-    });
-  task = {
-    controller,
-    promise,
-    waiters: 0,
-    settled: false,
-    keepAlive: background
-  };
-  attributeIndexBuildTasks.set(taskKey, task);
-  return task;
+      .finally(() => {
+        pendingAttributeIndexBuilds.delete(buildKey);
+      });
+  });
 }
 
+/**
+ * Returns the published index. A missing index is scheduled for a background
+ * build; null means no usable index for this request.
+ */
 export async function resolveReadyImageAttributeIndex(
   key: string,
   revision: string,
-  signal?: AbortSignal,
-  background = false
+  signal: AbortSignal
 ): Promise<ReadyImageAttributeIndex | null> {
   const spec = readyImageAttributeIndexSpec(key);
   if (!spec || readyImageAttributeIndexKey(spec) !== key) return null;
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   try {
     const cached = await readReadyImageAttributeIndex(key, revision);
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     if (cached) return cached;
-    const buildKey = `${key}:${revision}`;
-    const task = attributeIndexBuildTask(
-      buildKey,
-      spec,
-      revision,
-      background
-    );
-    if (!task) return null;
-    if (background) return null;
-    task.waiters += 1;
-    try {
-      return await waitForAttributeIndexBuild(task, signal);
-    } finally {
-      task.waiters -= 1;
-      if (!task.keepAlive && !task.settled && task.waiters === 0) {
-        task.controller.abort(new Error("Ready-image attribute index build has no active waiters"));
-      }
-    }
+    scheduleAttributeIndexBuild(key, spec, revision);
+    return null;
   } catch (error) {
-    if (signal?.aborted) throw signal.reason ?? error;
+    if (signal.aborted) throw signal.reason ?? error;
     return null;
   }
 }
 
+/** Schedules every missing index and returns null unless all are published. */
 export async function ensureReadyImageAttributeIndexes(
   keys: Iterable<string>,
   revision: string,
-  signal?: AbortSignal,
-  background = false
+  signal: AbortSignal
 ) {
   const indexes = new Map<string, ReadyImageAttributeIndex>();
   let missing = false;
@@ -234,11 +88,9 @@ export async function ensureReadyImageAttributeIndexes(
     const index = await resolveReadyImageAttributeIndex(
       key,
       revision,
-      signal,
-      background
+      signal
     );
     if (!index) {
-      if (!background) return null;
       missing = true;
       continue;
     }

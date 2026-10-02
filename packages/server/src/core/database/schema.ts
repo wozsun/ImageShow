@@ -2,8 +2,10 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PoolClient } from "pg";
+import { errorMessage } from "../api-error.ts";
 import { assertDatabaseReadiness } from "./readiness.ts";
 import { pool } from "./pools.ts";
+import { withTransactionOnClient } from "./transactions.ts";
 
 export async function initializeDatabaseSchema() {
   const client = await pool.connect();
@@ -39,9 +41,8 @@ async function databaseHasNoUserRelations(client: PoolClient) {
 }
 
 function databaseReadinessError(error: unknown) {
-  const reason = error instanceof Error ? error.message : String(error);
   return new Error(
-    `PostgreSQL database is non-empty but is not ready for the current application: ${reason}`,
+    `PostgreSQL database is non-empty but is not ready for the current application: ${errorMessage(error)}`,
     { cause: error }
   );
 }
@@ -51,16 +52,15 @@ async function initializeDatabaseSchemaOnClient(client: PoolClient) {
   const schema = empty
     ? await readFile(databaseSchemaPath(), "utf8")
     : null;
-  await client.query("BEGIN");
-  try {
-    if (schema) await client.query(schema);
-    await assertCoreDatabaseReady(client);
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    if (!empty) throw databaseReadinessError(error);
-    throw error;
-  }
+  await withTransactionOnClient(client, async (transaction) => {
+    try {
+      if (schema) await transaction.query(schema);
+      await assertCoreDatabaseReady(transaction);
+    } catch (error) {
+      if (!empty) throw databaseReadinessError(error);
+      throw error;
+    }
+  });
 }
 
 export async function pingDatabase() {

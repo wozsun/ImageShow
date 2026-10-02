@@ -2,6 +2,7 @@ import "../support/server-environment.ts";
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
+import { neverAbortedSignal } from "../../../packages/server/src/core/abort.ts";
 import { coalesce } from "../../../packages/server/src/core/coalesce.ts";
 import { appConfig } from "../../../packages/shared/src/app-config.ts";
 import { readRequiredRedisCommandCapabilities } from "../../../packages/server/src/core/redis/client.ts";
@@ -373,14 +374,14 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
     await finishManualProbe.promise;
     return capabilities;
   };
-  rebuild = async ({ signal } = {}) => {
+  rebuild = async ({ signal }) => {
     rebuildCalls += 1;
     manualRebuildEntered.resolve();
     await finishManualRebuild.promise;
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     return persistedMeta;
   };
-  const slowProbeRebuild = coordinator.requestRebuild();
+  const slowProbeRebuild = coordinator.requestRebuild({ signal: neverAbortedSignal });
   assert.equal(coordinator.getStatus().readable, false);
   assert.equal(coordinator.getStatus().rebuilding, true);
   assert.equal(coordinator.getStatus().reason, "rebuilding");
@@ -415,16 +416,16 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
     currentValidationHeldAtFence.resolve();
     await finishCurrentValidationFence.promise;
   };
-  rebuild = async ({ signal } = {}) => {
+  rebuild = async ({ signal }) => {
     rebuildCalls += 1;
     pendingRebuildEntered.resolve();
     await finishPendingRebuild.promise;
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     return persistedMeta;
   };
   coordinator.handleRedisOperationalStateChange(operational);
   await currentValidationEntered.promise;
-  const rebuildAfterCurrentValidation = coordinator.requestRebuild();
+  const rebuildAfterCurrentValidation = coordinator.requestRebuild({ signal: neverAbortedSignal });
   assert.equal(coordinator.getStatus().readable, false);
   assert.equal(coordinator.getStatus().rebuilding, true);
   finishCurrentValidation.resolve();
@@ -476,17 +477,17 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
       meta: persistedMeta
     };
   };
-  rebuild = async ({ signal } = {}) => {
+  rebuild = async ({ signal }) => {
     rebuildCalls += 1;
     const meta = await reconnectRebuild.promise;
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     return meta;
   };
   const rebuildCallsBeforeReconnect = rebuildCalls;
   const cleanupCallsBeforeReconnect = cleanupCalls;
   coordinator.handleRedisOperationalStateChange(operational);
   await reconnectValidationEntered.promise;
-  const joinedRebuild = coordinator.requestRebuild();
+  const joinedRebuild = coordinator.requestRebuild({ signal: neverAbortedSignal });
   assert.equal(coordinator.getStatus().readable, false);
   assert.equal(coordinator.getStatus().rebuilding, true);
   assert.equal(coordinator.getStatus().reason, "rebuilding");
@@ -528,7 +529,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
     ...operational,
     connectionEpoch: 3
   });
-  assert.equal((await coordinator.ensureCurrent()).appliedRevision, "2");
+  assert.equal((await coordinator.ensureCurrent({ signal: neverAbortedSignal })).appliedRevision, "2");
   assert.equal(validationCalls - validationCallsBeforeDrift, 2);
   assert.equal(coordinator.getStatus().readable, true);
 
@@ -547,7 +548,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   const rebuildCallsBeforeFailedValidation = rebuildCalls;
   coordinator.handleRedisOperationalStateChange(operational);
   await failedValidationEntered.promise;
-  const rebuildAfterFailedValidation = coordinator.requestRebuild();
+  const rebuildAfterFailedValidation = coordinator.requestRebuild({ signal: neverAbortedSignal });
   finishFailedValidation.resolve();
   assert.equal(
     (await rebuildAfterFailedValidation).appliedRevision,
@@ -558,10 +559,10 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
 
   revision = "3";
   const mutationRebuild = Promise.withResolvers<ReturnType<typeof readyCacheMeta>>();
-  rebuild = async ({ signal } = {}) => {
+  rebuild = async ({ signal }) => {
     rebuildCalls += 1;
     const meta = await mutationRebuild.promise;
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     return meta;
   };
   const releaseFirst = coordinator.beginPlannedMutation(5);
@@ -569,7 +570,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   assert.equal(coordinator.plannedMutationIsActive(), true);
   assert.equal(coordinator.getStatus().readable, false);
   await assert.rejects(
-    coordinator.requestRebuild(),
+    coordinator.requestRebuild({ signal: neverAbortedSignal }),
     /rebuild deferred until mutation completes/
   );
   assert.equal(coordinator.getStatus().rebuilding, true);
@@ -578,7 +579,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   assert.equal(releaseSecond(false), true);
   assert.equal(coordinator.plannedMutationIsActive(), false);
   await delay(0);
-  const mutationJoin = coordinator.requestRebuild();
+  const mutationJoin = coordinator.requestRebuild({ signal: neverAbortedSignal });
   persistedMeta = readyCacheMeta("3");
   mutationRebuild.resolve(persistedMeta);
   assert.equal((await mutationJoin).appliedRevision, "3");
@@ -616,7 +617,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   await validationFinishedInsideFence.promise;
   assert.equal(releaseUnchangedMutation(false), false);
   finishFence.resolve();
-  assert.equal((await coordinator.ensureCurrent()).appliedRevision, "3");
+  assert.equal((await coordinator.ensureCurrent({ signal: neverAbortedSignal })).appliedRevision, "3");
   assert.equal(validationCalls - validationCallsBeforeMutationOverlap, 2);
   assert.equal(coordinator.getStatus().readable, true);
   afterWriteFence = async () => undefined;
@@ -633,7 +634,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
     rebuildCalls += 1;
     throw staleRefreshFailure;
   };
-  const staleRefresh = coordinator.requestRebuild();
+  const staleRefresh = coordinator.requestRebuild({ signal: neverAbortedSignal });
   const staleRefreshRejected = assert.rejects(
     staleRefresh,
     (error: Error) => error === staleRefreshFailure
@@ -650,7 +651,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   coordinator.handleRedisOperationalStateChange(operational);
   finishFailureHandling.resolve();
   await staleRefreshRejected;
-  assert.equal((await coordinator.ensureCurrent()).appliedRevision, "3");
+  assert.equal((await coordinator.ensureCurrent({ signal: neverAbortedSignal })).appliedRevision, "3");
   assert.equal(validationCalls - validationCallsBeforeFailureOverlap, 1);
   assert.equal(coordinator.getStatus().readable, true);
   handleValidationFailure = async () => {
@@ -668,9 +669,9 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
     await finishRebuildFailure.promise;
     throw rebuildFailure;
   };
-  const firstFailedRebuild = coordinator.requestRebuild();
+  const firstFailedRebuild = coordinator.requestRebuild({ signal: neverAbortedSignal });
   await rebuildFailureStarted.promise;
-  const joinedFailedRebuild = coordinator.requestRebuild();
+  const joinedFailedRebuild = coordinator.requestRebuild({ signal: neverAbortedSignal });
   finishRebuildFailure.resolve();
   await Promise.all([
     assert.rejects(
@@ -702,7 +703,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   await degradedValidationEntered.promise;
   assert.equal(coordinator.getStatus().readable, false);
   finishDegradedValidation.resolve();
-  assert.equal((await coordinator.ensureCurrent()).appliedRevision, "3");
+  assert.equal((await coordinator.ensureCurrent({ signal: neverAbortedSignal })).appliedRevision, "3");
   assert.equal(coordinator.getStatus().readable, true);
 
   revision = "4";
@@ -714,13 +715,13 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
     finalRebuildEntered.resolve();
     return finishFinalRebuild.promise;
   };
-  const finalRebuild = coordinator.requestRebuild();
+  const finalRebuild = coordinator.requestRebuild({ signal: neverAbortedSignal });
   await finalRebuildEntered.promise;
   const lateJoinStarted = Promise.withResolvers<ReturnType<typeof coordinator.requestRebuild>>();
   finishFinalRebuild.resolve(persistedMeta);
   queueMicrotask(() =>
     queueMicrotask(() => {
-      lateJoinStarted.resolve(coordinator.requestRebuild());
+      lateJoinStarted.resolve(coordinator.requestRebuild({ signal: neverAbortedSignal }));
     })
   );
   const lateJoin = await lateJoinStarted.promise;
@@ -736,13 +737,13 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   assert.equal(coordinator.getStatus().readable, true);
 
   const shutdownRebuild = Promise.withResolvers<ReturnType<typeof readyCacheMeta>>();
-  rebuild = async ({ signal } = {}) => {
+  rebuild = async ({ signal }) => {
     rebuildCalls += 1;
     const meta = await shutdownRebuild.promise;
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     return meta;
   };
-  const activeRebuild = coordinator.requestRebuild();
+  const activeRebuild = coordinator.requestRebuild({ signal: neverAbortedSignal });
   const activeRebuildRejected = assert.rejects(
     activeRebuild,
     /Ready-image cache coordinator stopped/
@@ -759,7 +760,7 @@ test("[Server/缓存与 Redis] ready cache coordinator 收口重连、revision�
   assert.equal(coordinator.getStatus().readable, false);
   assert.equal(coordinator.getStatus().reason, "stopped");
   await assert.rejects(
-    coordinator.requestRebuild(),
+    coordinator.requestRebuild({ signal: neverAbortedSignal }),
     /Ready-image cache coordinator is stopped/
   );
 
@@ -1268,6 +1269,7 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
   };
   const complete = await inspectRedisKeyspaceDeep({
     client: client as never,
+    signal: neverAbortedSignal,
     deadlineMs: 1_000,
     maxKeys: 10,
     pipelineMaxCommands: 2,
@@ -1311,6 +1313,7 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
         ]
       ]
     } as never,
+    signal: neverAbortedSignal,
     deadlineMs: 1_000,
     maxKeys: 2,
     pipelineMaxCommands: 2
@@ -1336,6 +1339,7 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
   };
   const timedOut = await inspectRedisKeyspaceDeep({
     client: slowClient as never,
+    signal: neverAbortedSignal,
     deadlineMs: 5,
     maxKeys: 10,
     pipelineMaxCommands: 2
@@ -1366,6 +1370,7 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
   await assert.rejects(
     inspectRedisKeyspaceDeep({
       client: client as never,
+      signal: neverAbortedSignal,
       deadlineMs: 0
     }),
     /deadlineMs must be an integer/
@@ -1373,6 +1378,7 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
   await assert.rejects(
     inspectRedisKeyspaceDeep({
       client: client as never,
+      signal: neverAbortedSignal,
       maxKeys: 1_000_001
     }),
     /maxKeys must be an integer/
@@ -1380,6 +1386,7 @@ test("[Server/缓存与 Redis] Redis 手动深检保持截止时间、键上限�
   await assert.rejects(
     inspectRedisKeyspaceDeep({
       client: client as never,
+      signal: neverAbortedSignal,
       pipelineMaxCommands: 1_001
     }),
     /pipelineMaxCommands must be an integer/
@@ -2380,7 +2387,7 @@ test("[Server/缓存与 Redis] Redis 手动检查总期限覆盖连接与固定�
     readProjection: async () => null,
     coordinatorStatus: () => ({ readable: true, reason: "ready" })
   };
-  const pingDeadline = await inspectRedisState(undefined, {
+  const pingDeadline = await inspectRedisState(neverAbortedSignal, {
     deadlineMs: 20,
     dependencies: dependencyBase as never
   });
@@ -2392,7 +2399,7 @@ test("[Server/缓存与 Redis] Redis 手动检查总期限覆盖连接与固定�
   assert.equal(fixedCommandCalls, 0);
 
   const pendingInfo = Promise.withResolvers<string>();
-  const fixedDeadline = await inspectRedisState(undefined, {
+  const fixedDeadline = await inspectRedisState(neverAbortedSignal, {
     deadlineMs: 20,
     dependencies: {
       ...dependencyBase,
@@ -2417,7 +2424,7 @@ test("[Server/缓存与 Redis] Redis 手动检查总期限覆盖连接与固定�
   let scanCallsAfterFixedFailure = 0;
   const fixedFailure = new Error("controlled Redis INFO failure");
   await assert.rejects(
-    inspectRedisState(undefined, {
+    inspectRedisState(neverAbortedSignal, {
       deadlineMs: 1_000,
       dependencies: {
         ...dependencyBase,

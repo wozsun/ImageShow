@@ -3,8 +3,8 @@ import { inspectRedisState } from "./redis-inspect.ts";
 import { checkStorage } from "./storage-check.ts";
 import { captureAdminCheck } from "./status-errors.ts";
 
-export async function checkSystemState(signal?: AbortSignal) {
-  signal?.throwIfAborted();
+export async function checkSystemState(signal: AbortSignal) {
+  signal.throwIfAborted();
   const [database, redis, storage, trash] = await Promise.all([
     captureAdminCheck(checkDatabase, "query", "database_check_failed"),
     captureAdminCheck(
@@ -21,6 +21,6 @@ export async function checkSystemState(signal?: AbortSignal) {
   ]);
   // captureAdminCheck intentionally converts resource failures into DTOs, but
   // a disconnected caller is cancellation, not a storage health result.
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   return { database, redis, storage, trash };
 }

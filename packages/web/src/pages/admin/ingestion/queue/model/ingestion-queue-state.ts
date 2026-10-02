@@ -55,7 +55,6 @@ export type IngestionServerBinding = {
     | "serverHandoffProvisionalTotal"
     | "serverAcceptedOrder"
     | "status"
-    | "message"
     | "failureStage"
     | "resultState"
     | "serverAccepted"
@@ -346,7 +345,6 @@ function patchJob(job: IngestionJob, patch: Partial<IngestionJob>) {
       serverAccepted: undefined,
       commitIntent: undefined,
       resultState: undefined,
-      resultError: undefined,
       ...(has("transferProgress") ? {} : { transferProgress: undefined })
     };
     const changes = (Object.keys(nextPatch) as Array<keyof IngestionJob>).some(
@@ -483,12 +481,7 @@ function mergeCanonicalHandoff(
           )
         : canonical.serverSemanticRevision,
     serverAttemptKey: local.attemptKey,
-    ...(cancelling
-      ? {
-          status: local.status,
-          message: local.message
-        }
-      : {})
+    ...(cancelling ? { status: local.status } : {})
   };
 }
 

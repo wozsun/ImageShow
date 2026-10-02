@@ -26,7 +26,15 @@ import { createStorageDriver } from "../drivers/factory.ts";
 import type { StorageDriver } from "../drivers/driver.ts";
 import { manageStorageDriver } from "../drivers/lifecycle.ts";
 
-export type StorageRegistryAccess = { signal?: AbortSignal };
+/**
+ * Public reads share one bounded load under public database admission and
+ * cancel only their own wait; internal reads load through the pool.
+ */
+export type StorageRegistryAccess =
+  | { mode: "internal" }
+  | { mode: "public"; signal: AbortSignal };
+
+const internalRegistryAccess: StorageRegistryAccess = { mode: "internal" };
 
 const storageCacheTtlMs = appConfig.storageRegistry.ttlSeconds * 1000;
 let storageCache: StorageBackendRecord[] | null = null;
@@ -133,7 +141,7 @@ function loadStorageBackendsForRevision(
   revision: number,
   access: StorageRegistryAccess
 ) {
-  return access.signal
+  return access.mode === "public"
     ? coalesce(
         `storage-registry:public:${revision}`,
         (sharedSignal) =>
@@ -145,14 +153,14 @@ function loadStorageBackendsForRevision(
 
 async function withCurrentStorageBackends<Result>(
   select: (backends: StorageBackendRecord[]) => Result,
-  access: StorageRegistryAccess = {}
+  access: StorageRegistryAccess = internalRegistryAccess
 ): Promise<Result> {
   while (true) {
-    access.signal?.throwIfAborted();
+    if (access.mode === "public") access.signal.throwIfAborted();
     assertRegistryOpen();
     if (storageCache && Date.now() < storageCacheExpiresAt) {
       if (
-        access.signal &&
+        access.mode === "public" &&
         storageCache.length > appConfig.publicPgFallback.maximumStorageBackendRows
       ) {
         throw publicPgFallbackWorkLimitExceeded(
@@ -163,7 +171,7 @@ async function withCurrentStorageBackends<Result>(
     }
     const revision = registryRevision;
     const loaded = await loadStorageBackendsForRevision(revision, access);
-    access.signal?.throwIfAborted();
+    if (access.mode === "public") access.signal.throwIfAborted();
     assertRegistryOpen();
     if (revision !== registryRevision) continue;
     publishStorageBackends(loaded);
@@ -204,14 +212,14 @@ export async function closeStorageBackendRegistry() {
 }
 
 export async function listStorageBackends(
-  access: StorageRegistryAccess = {}
+  access?: StorageRegistryAccess
 ): Promise<StorageBackendRecord[]> {
   return withCurrentStorageBackends((backends) => backends, access);
 }
 
 export async function getStorageBackend(
   slug: string,
-  access: StorageRegistryAccess = {}
+  access?: StorageRegistryAccess
 ): Promise<StorageConfig> {
   return withCurrentStorageBackends(
     (backends) => storageConfigFromRecord(storageRecordBySlug(backends, slug)),
@@ -222,7 +230,7 @@ export async function getStorageBackend(
 /** Response-scoped configs selected from one current registry revision. */
 export function getStorageBackendConfigs(
   slugs: readonly string[],
-  access: StorageRegistryAccess = {}
+  access?: StorageRegistryAccess
 ): Promise<ReadonlyMap<string, StorageConfig>> {
   return withCurrentStorageBackends((backends) => {
     const records = new Map(backends.map((backend) => [backend.slug, backend]));
@@ -299,7 +307,7 @@ function defaultStorageRecord(backends: readonly StorageBackendRecord[]): Storag
 
 export async function resolveStorageAccess(
   slug?: string,
-  access: StorageRegistryAccess = {}
+  access?: StorageRegistryAccess
 ) {
   return withCurrentStorageBackends((backends) => {
     const record = slug

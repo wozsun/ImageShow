@@ -23,13 +23,16 @@ import {
 export async function serveLocalStoredObject(
   prefix: StoragePrefix,
   key: string,
-  request: StoredResponseRequest & { signal: AbortSignal }
+  request: StoredResponseRequest
 ) {
   const parsed = parseImageObjectKey(key);
   if (!parsed) {
     throw new ApiError(404, "not_found", "Object not found");
   }
-  const object = await resolveReadableObject(prefix, key, "local", { signal: request.signal });
+  const object = await resolveReadableObject(prefix, key, "local", {
+    mode: "public",
+    signal: request.signal
+  });
   // This is the local object's origin, regardless of its current database location.
   return streamResolvedObject(object, "image/webp", immutableCacheControl, request);
 }
@@ -59,7 +62,7 @@ function immutableRedirect(location: string) {
 export async function servePublicStoredObject(
   prefix: StoragePrefix,
   key: string,
-  request: StoredResponseRequest & { signal: AbortSignal },
+  request: StoredResponseRequest,
   dependencies: StoredImageServingDependencies = defaultStoredImageServingDependencies
 ) {
   const parsed = parseImageObjectKey(key);
@@ -74,14 +77,12 @@ export async function servePublicStoredObject(
     throw new ApiError(404, "not_found", "Object not found");
   }
   const object = await dependencies.resolveReadableObject(prefix, key, record.storage_slug, {
+    mode: "public",
     signal
   });
   if (object.publicUrl) return immutableRedirect(object.publicUrl);
   return dependencies
-    .streamResolvedObject(object, "image/webp", immutableCacheControl, {
-      ...request,
-      signal
-    })
+    .streamResolvedObject(object, "image/webp", immutableCacheControl, request)
     .catch((error: unknown) => {
       if (isStorageObjectNotFound(error)) {
         throw new ApiError(404, "not_found", "Object not found");

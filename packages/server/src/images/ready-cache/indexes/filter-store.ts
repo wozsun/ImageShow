@@ -110,11 +110,11 @@ export async function publishReadyImageFilterIndex(options: {
   connectionEpoch: number;
   sourceKeys: string[];
   sourceStates: Map<string, ReadyImageSourceIndexState>;
-  signal?: AbortSignal;
+  signal: AbortSignal;
 }): Promise<ReadyImageFilterIndex | null> {
   const finalKey = readyImageFilterKey(options.signature);
   const metaKey = readyImageFilterMetaKey(options.signature);
-  options.signal?.throwIfAborted();
+  options.signal.throwIfAborted();
   const cardinality = await redis.zcard(options.temporaryKey);
   if (cardinality !== options.count) {
     throw new Error("Ready-image filter result changed before publication");

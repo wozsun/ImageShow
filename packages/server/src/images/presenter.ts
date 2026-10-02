@@ -180,7 +180,7 @@ type PublicImageUrlRecord = Pick<AdminImageCommonRecord, "storage_slug">;
 
 function storageConfigsForRows(
   rows: readonly PublicImageUrlRecord[],
-  access: StorageRegistryAccess = {}
+  access?: StorageRegistryAccess
 ) {
   return getStorageBackendConfigs(
     rows.map((row) => row.storage_slug),
@@ -314,7 +314,7 @@ export async function editableImageSnapshotsWithTags(rows: EditableImageSnapshot
 export async function publicImageDetail(
   row: PublicImageDetailRecord,
   view: PublicImageView,
-  access: StorageRegistryAccess = {},
+  access: StorageRegistryAccess,
   includeOriginal = false
 ): Promise<PublicImageDetailDto<PublicImageView>> {
   const configs = await storageConfigsForRows([row], access);
@@ -352,7 +352,7 @@ function publicShowImageCard(
 
 export async function publicShowImageCards(
   rows: PublicShowImageRecord[],
-  access: StorageRegistryAccess = {}
+  access: StorageRegistryAccess
 ) {
   if (!rows.length) return [];
   const configs = await storageConfigsForRows(rows, access);
@@ -373,7 +373,7 @@ function publicImageCard(
 
 export async function publicImageCardsWithTags(
   rows: Array<PublicImageCardRecord & { tags: string[] }>,
-  access: StorageRegistryAccess = {}
+  access: StorageRegistryAccess
 ) {
   if (!rows.length) return [];
   const configs = await storageConfigsForRows(rows, access);

@@ -4,7 +4,7 @@ import type {
   IngestionQueueSummaryDto,
   IngestionSessionPairDto
 } from "@imageshow/shared/browser";
-import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
+import { findIngestionAttempt, type IngestionJob, type IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 
 import type { IngestionQueueCancelOutcome } from "../queue/ingestion-cancel.js";
 import {
@@ -118,9 +118,7 @@ export function useIngestionQueueWorkflowActions({
       const cancellationTargets: IngestionJob[] = [];
       const unresolved: UnresolvedLocalClear[] = [];
       for (const target of captured) {
-        let current = queue.jobsRef.current.find(
-          (job) => job.id === target.id && job.attemptKey === target.attemptKey
-        );
+        let current = findIngestionAttempt(queue.jobsRef.current, target);
         if (!current && queue.jobsRef.current.some((job) => job.id === target.id)) {
           // 同一 UI id 已进入新的 attempt；它不属于冻结集合，旧 attempt 也已不再
           // 由当前 owner 持有。保留新任务即可，不能让旧确认永久变成不可达重试。
@@ -133,9 +131,7 @@ export function useIngestionQueueWorkflowActions({
           // placeholder 在冻结后可能已被 canonical 页面替换。把同一 attempt 的本地
           // 意图恢复给 owner，再由原幂等身份核对并取消已接管 pair。
           queue.appendJobs([target]);
-          current = queue.jobsRef.current.find(
-            (job) => job.id === target.id && job.attemptKey === target.attemptKey
-          );
+          current = findIngestionAttempt(queue.jobsRef.current, target);
         }
         if (!current) {
           if (targetNeedsOwner) {

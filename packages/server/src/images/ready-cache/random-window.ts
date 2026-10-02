@@ -20,7 +20,7 @@ export async function readReadyImageRandomMembers(
   position: ImageBrowsePosition | undefined,
   limit: number,
   expectedCoreCount: number,
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<string[] | null> {
   const key = READY_IMAGE_ID_SUFFIX_LOOKUP_KEY;
   const counts = redis.pipeline();
@@ -58,7 +58,7 @@ export async function readReadyImageRandomMembers(
   let scanned = 0;
   const selected: string[] = [];
   while (selected.length < limit + 1) {
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     const end = phase === 0 ? total : cut;
     if (start >= end) {
       if (phase === 1) return selected;

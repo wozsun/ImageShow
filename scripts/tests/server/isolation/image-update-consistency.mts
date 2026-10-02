@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -173,7 +174,7 @@ await runIntegrationScenario(async (runtime) => {
     )
   );
 
-  const redisDeepCheck = await redisInspect.inspectRedisState(undefined, {
+  const redisDeepCheck = await redisInspect.inspectRedisState(neverAbortedSignal, {
     deadlineMs: 5_000,
     maxKeys: 10_000,
     pipelineMaxCommands: 16
@@ -385,7 +386,7 @@ await runIntegrationScenario(async (runtime) => {
       : { title: "right-b", tags: ["right-tag"] }
   );
 
-  await readyCacheCoordinator.ensureReadyImageCacheCurrent();
+  await readyCacheCoordinator.ensureReadyImageCacheCurrent({ signal: neverAbortedSignal });
   const revisionBeforeReadyCacheFailure = await readReadyRevision();
   const originalRedisSendCommand = redisClient.redis.sendCommand;
   let readyCacheFailureInjected = false;
@@ -431,7 +432,7 @@ await runIntegrationScenario(async (runtime) => {
     "https://example.com/ready-cache-failure-committed"
   );
   assert.equal(
-    (await readyCacheCoordinator.ensureReadyImageCacheCurrent()).appliedRevision,
+    (await readyCacheCoordinator.ensureReadyImageCacheCurrent({ signal: neverAbortedSignal })).appliedRevision,
     String(await readReadyRevision())
   );
 

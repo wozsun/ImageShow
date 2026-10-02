@@ -2,6 +2,7 @@ import "../../support/web-environment.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { installProperties } from "../../support/property-descriptors.ts";
+import { waitForTurns } from "../../support/polling.ts";
 import {
   ingestionUpdatePath,
   type IngestionQueueSummaryDto
@@ -97,13 +98,6 @@ test("[Web/内容接入] 浏览器上传 lane 统一约束页面工作并响应�
     return { promise, resolve };
   };
   const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
-  const waitFor = async (predicate: () => boolean, message: string) => {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      if (predicate()) return;
-      await nextTurn();
-    }
-    assert.fail(message);
-  };
 
   await t.test("后续选择不能在既有凭据与 raw 交接之间插入预览", async (subtest) => {
     const lane = new BrowserUploadLane(1);
@@ -133,7 +127,7 @@ test("[Web/内容接入] 浏览器上传 lane 统一约束页面工作并响应�
       ]);
     });
 
-    await waitFor(
+    await waitForTurns(
       () => starts.includes("first-raw"),
       "first credential did not hand off to raw"
     );
@@ -177,14 +171,14 @@ test("[Web/内容接入] 浏览器上传 lane 统一约束页面工作并响应�
       run("credential", releases[2]),
       run("next", releases[3])
     ];
-    await waitFor(() => starts.length === 2, "initial page capacity was not filled");
+    await waitForTurns(() => starts.length === 2, "initial page capacity was not filled");
     assert.deepEqual(starts, ["preview", "raw"]);
     lane.setLimit(3);
-    await waitFor(() => starts.length === 3, "raised page capacity did not drain");
+    await waitForTurns(() => starts.length === 3, "raised page capacity did not drain");
     assert.deepEqual(starts, ["preview", "raw", "credential"]);
     assert.equal(maximumActive, 3);
     releases[0].resolve();
-    await waitFor(() => starts.length === 4, "FIFO page waiter did not resume");
+    await waitForTurns(() => starts.length === 4, "FIFO page waiter did not resume");
     releases.slice(1).forEach((release) => release.resolve());
     await Promise.all(runs);
   });
@@ -200,14 +194,14 @@ test("[Web/内容接入] 浏览器上传 lane 统一约束页面工作并响应�
         await release.promise;
       })
     );
-    await waitFor(() => starts.length === 2, "initial page work did not start");
+    await waitForTurns(() => starts.length === 2, "initial page work did not start");
     lane.setLimit(1);
     releases[0].resolve();
     await runs[0];
     await nextTurn();
     assert.deepEqual(starts, [0, 1]);
     releases[1].resolve();
-    await waitFor(() => starts.length === 3, "lowered page lane never resumed");
+    await waitForTurns(() => starts.length === 3, "lowered page lane never resumed");
     releases[2].resolve();
     await Promise.all(runs);
   });
@@ -239,7 +233,7 @@ test("[Web/内容接入] 浏览器上传 lane 统一约束页面工作并响应�
     const handoff = lane.run(handoffSignal, async () => {
       starts.push("cancelled-handoff");
     });
-    await waitFor(() => starts.length === 1, "first page work did not start");
+    await waitForTurns(() => starts.length === 1, "first page work did not start");
     const waitingError = new Error("waiting upload cancelled");
     waitingController.abort(waitingError);
     await assert.rejects(waiting, (error) => error === waitingError);

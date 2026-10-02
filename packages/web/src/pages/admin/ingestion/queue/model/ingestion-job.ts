@@ -26,7 +26,15 @@ export type IngestionCommitIntent = {
   md5: string;
   metadata: ImageDraft;
 };
-type IngestionResultState = "pending" | "recovering" | "error" | "hydrated";
+type IngestionResultState = "pending" | "recovering" | "hydrated";
+
+/** The job still running `target`'s attempt; a retried or replaced job does not match. */
+export function findIngestionAttempt(
+  jobs: readonly IngestionJob[],
+  target: Readonly<{ id: string; attemptKey: string }>
+) {
+  return jobs.find((job) => job.id === target.id && job.attemptKey === target.attemptKey);
+}
 
 export type IngestionJob = {
   id: string;
@@ -45,7 +53,9 @@ export type IngestionJob = {
     | "done"
     | "failed"
     | "cancelled";
-  message: string;
+  // 失败原因，只在处理失败与取消失败时展示；进入这两种状态的路径负责写入，
+  // 正常阶段的详情由状态派生，不写 message。
+  message?: string;
   preview: string;
   previewFull?: string;
   objectUrl?: string;
@@ -106,7 +116,6 @@ export type IngestionJob = {
   commitFailureCheckpoint?: CommitFailureCheckpoint;
   commitIntent?: IngestionCommitIntent;
   resultState?: IngestionResultState;
-  resultError?: string;
   // 最近一次由当前 attempt/session 接受的服务端权威快照。可见详情由这些
   // 字段和客户端状态集中派生，不直接展示服务端正常阶段 message。
   serverStatus?: ServerIngestionStatusDto | "missing";

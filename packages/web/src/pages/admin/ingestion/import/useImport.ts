@@ -4,13 +4,14 @@ import {
   type IngestionSessionPairDto
 } from "@imageshow/shared/browser";
 import { ingestionAcceptanceBinding } from "../queue/model/acceptance-binding.js";
-import type { IngestionJob, IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
+import { findIngestionAttempt, type IngestionJob, type IngestionAttributeDefaults } from "../queue/model/ingestion-job.js";
 import { isApiClientError } from "../../../../lib/api/client.js";
 import { normalizeAuthor, normalizeTheme } from "../../../../lib/image-draft.js";
 
 import {
-  cancelServerIngestionJobs,
   bindTerminalAcceptanceForCancellation,
+  cancelServerIngestionJobs,
+  replayAcceptanceForCancellation,
   type IngestionQueueCancelOutcome
 } from "../queue/ingestion-cancel.js";
 import { createUrlImportJobs } from "../queue/model/import-job-source.js";
@@ -94,8 +95,7 @@ export function useImport(options: {
           importAcceptItemInput: inputs[index],
           importAcceptRejected: false,
           status: "queued",
-          failureStage: undefined,
-          message: "正在提交导入任务"
+          failureStage: undefined
         });
       }
       const promise = (async () => {
@@ -112,9 +112,7 @@ export function useImport(options: {
               isApiClientError(error) &&
               ["import_batch_limit_exceeded", "validation_error"].includes(error.code);
             for (const job of jobs) {
-              const current = queue.jobsRef.current.find(
-                (item) => item.id === job.id && item.attemptKey === job.attemptKey
-              );
+              const current = findIngestionAttempt(queue.jobsRef.current, job);
               if (!current) continue;
               if (
                 rejectedBeforeAccept &&
@@ -137,9 +135,7 @@ export function useImport(options: {
 
         for (const [index, job] of jobs.entries()) {
           const result = results[index];
-          const current = queue.jobsRef.current.find(
-            (item) => item.id === job.id && item.attemptKey === job.attemptKey
-          );
+          const current = findIngestionAttempt(queue.jobsRef.current, job);
           if (!current) continue;
           if (!result) {
             if (current.status !== "cancelling") {
@@ -170,8 +166,7 @@ export function useImport(options: {
                 target: {
                   ...current,
                   ...binding,
-                  status: "cancelling",
-                  message: "正在取消导入"
+                  status: "cancelling"
                 }
               });
             } else if (result.status === "completed" || result.status === "discarded") {
@@ -205,8 +200,7 @@ export function useImport(options: {
               job.id,
               {
                 ...binding,
-                status: "cancelled",
-                message: "该导入尝试已取消"
+                status: "cancelled"
               },
               requestConnectionGeneration,
               result.accepted_order
@@ -217,8 +211,7 @@ export function useImport(options: {
               {
                 ...binding,
                 status: "finalized",
-                resultState: "recovering",
-                message: "图片已写入图库，正在读取结果"
+                resultState: "recovering"
               },
               requestConnectionGeneration,
               result.accepted_order
@@ -228,8 +221,7 @@ export function useImport(options: {
               job.id,
               {
                 ...binding,
-                status: "queued",
-                message: "等待服务器下载"
+                status: "queued"
               },
               requestConnectionGeneration,
               result.accepted_order
@@ -323,15 +315,12 @@ export function useImport(options: {
       const attempts = new Map(jobs.map((job) => [job.id, job.attemptKey]));
       const pending = new Set<Promise<void>>();
       for (const job of jobs) {
-        const current = queue.jobsRef.current.find(
-          (item) => item.id === job.id && item.attemptKey === job.attemptKey
-        );
+        const current = findIngestionAttempt(queue.jobsRef.current, job);
         if (!current) continue;
         if (!current.importAcceptItemInput && !current.sessionId && !current.imageId) {
           queue.updateJob(job.id, {
             status: "cancelled",
-            failureStage: undefined,
-            message: "已取消"
+            failureStage: undefined
           });
           continue;
         }
@@ -339,8 +328,7 @@ export function useImport(options: {
         if (accept) {
           queue.updateJob(job.id, {
             status: "cancelling",
-            failureStage: undefined,
-            message: "正在取消导入"
+            failureStage: undefined
           });
           pending.add(accept);
         }
@@ -378,9 +366,7 @@ export function useImport(options: {
             cancellable.push(acceptOutcome.target);
           continue;
         }
-        const current = queue.jobsRef.current.find(
-          (item) => item.id === id && item.attemptKey === attemptKey
-        );
+        const current = findIngestionAttempt(queue.jobsRef.current, { id, attemptKey });
         if (!current) continue;
         if (current.status === "cancelled") {
           outcomes.set(id, {
@@ -404,85 +390,22 @@ export function useImport(options: {
         } else if (current.sessionId && current.imageId) {
           cancellable.push(current);
         } else if (current.importAcceptRejected) {
-          queue.updateJob(id, { status: "cancelled", failureStage: undefined, message: "已取消" });
+          queue.updateJob(id, { status: "cancelled", failureStage: undefined });
           outcomes.set(id, { succeeded: true });
         } else {
           replay.push(current);
         }
       }
 
-      for (let offset = 0; offset < replay.length; offset += maxItems) {
-        const chunk = replay.slice(offset, offset + maxItems);
-        const requestConnectionGeneration = queue.captureServerConnectionGeneration();
-        let results: Awaited<ReturnType<typeof acceptImports>>["items"];
-        try {
-          results = (
-            await acceptImports({
-              items: chunk.map(buildImportAcceptItemInput),
-              cancel_if_missing: true
-            })
-          ).items;
-        } catch (error) {
-          for (const job of chunk) {
-            const current = queue.jobsRef.current.find(
-              (item) => item.id === job.id && item.attemptKey === job.attemptKey
-            );
-            if (!current) continue;
-            queue.updateJob(current.id, {
-              status: "failed",
-              failureStage: "cancel",
-              message: `取消结果暂时无法确认：${
-                error instanceof Error ? error.message : String(error)
-              }`
-            });
-          }
-          continue;
-        }
-        for (const [index, job] of chunk.entries()) {
-          const result = results[index];
-          const current = queue.jobsRef.current.find(
-            (item) => item.id === job.id && item.attemptKey === job.attemptKey
-          );
-          if (!current) continue;
-          if (!result || result.status === "failed") {
-            queue.updateJob(current.id, {
-              status: "failed",
-              failureStage: "cancel",
-              message: result?.message
-                ?? "服务端是否已接管任务暂时无法确认，请重试取消"
-            });
-            continue;
-          }
-          const binding = ingestionAcceptanceBinding(result);
-          const terminal = bindTerminalAcceptanceForCancellation(
-            queue,
-            current.id,
-            result,
-            requestConnectionGeneration
-          );
-          if (terminal) {
-            outcomes.set(current.id, terminal);
-            continue;
-          }
-          queue.bindServerJob(
-            current.id,
-            binding,
-            requestConnectionGeneration,
-            result.accepted_order
-          );
-          const bound = queue.jobsRef.current.find(
-            (item) => item.id === current.id && item.attemptKey === current.attemptKey
-          );
-          cancellable.push(
-            bound ?? {
-              ...current,
-              ...binding,
-              status: "cancelling",
-              message: "正在取消导入"
-            }
-          );
-        }
-      }
+      cancellable.push(...await replayAcceptanceForCancellation(queue, replay, outcomes, {
+        maxItems,
+        request: async (chunk) => (
+          await acceptImports({
+            items: chunk.map(buildImportAcceptItemInput),
+            cancel_if_missing: true
+          })
+        ).items
+      }));
 
       const cancelled = await cancelServerIngestionJobs(queue, cancellable, undefined, {
         allowDetached: true
@@ -516,10 +439,7 @@ export function useImport(options: {
     async (targets: readonly IngestionJob[]) => {
       const selected: IngestionJob[] = [];
       for (const target of targets) {
-        const current = queue.jobsRef.current.find(
-          (job) => job.id === target.id
-            && job.attemptKey === target.attemptKey
-        );
+        const current = findIngestionAttempt(queue.jobsRef.current, target);
         if (
           !current ||
           current.status !== target.status ||

@@ -136,7 +136,6 @@ export function createUrlImportJobs(
     batchKey,
     kind: "import",
     status: "queued",
-    message: "等待下载",
     preview: "",
     draft: createUrlImportDraft(downloadUrl, defaults, retainOriginalLink),
     width: 0,

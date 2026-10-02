@@ -33,13 +33,12 @@ import {
 
 export async function resolveReadyImageCountIndexes(
   plans: ImageFilterPlan[],
-  signal?: AbortSignal,
-  background = false
+  signal: AbortSignal
 ) {
   const indexes = new Map<string, ReadyImageFilterIndex>();
   for (const plan of plans) {
     if (indexes.has(plan.signature)) continue;
-    const index = await resolveReadyImageFilterIndex(plan, signal, background);
+    const index = await resolveReadyImageFilterIndex(plan, signal);
     if (!index) return null;
     indexes.set(plan.signature, index);
   }

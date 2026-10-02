@@ -17,16 +17,16 @@ type SelectedImageStorageMigrationMetrics = {
 
 type SelectedImageStorageMigrationOptions = {
   onMetrics?: (metrics: SelectedImageStorageMigrationMetrics) => void;
-  signal?: AbortSignal;
+  signal: AbortSignal;
 };
 
 export async function migrateSelectedImagesToStorageBackend(
   ids: string[],
   target: string,
-  options: SelectedImageStorageMigrationOptions = {}
+  options: SelectedImageStorageMigrationOptions
 ) {
   const execute = async () => {
-    options.signal?.throwIfAborted();
+    options.signal.throwIfAborted();
     const rows = (
       await pool.query(
         `SELECT id, storage_slug, ${imageVariantColumns}
@@ -35,10 +35,10 @@ export async function migrateSelectedImagesToStorageBackend(
         [ids]
       )
     ).rows as ImageStorageMigrationRecord[];
-    options.signal?.throwIfAborted();
+    options.signal.throwIfAborted();
     if (rows.some((row) => row.storage_slug !== target)) {
       await assertStorageWriteTarget(target);
-      options.signal?.throwIfAborted();
+      options.signal.throwIfAborted();
     }
     const rowsById = new Map(rows.map((row) => [row.id.toLowerCase(), row]));
     let maxImageDurationMs = 0;
@@ -114,6 +114,6 @@ export async function migrateSelectedImagesToStorageBackend(
   };
 
   const affectedCount = new Set(ids.map((id) => id.toLowerCase())).size;
-  options.signal?.throwIfAborted();
+  options.signal.throwIfAborted();
   return withPlannedImageMutation(affectedCount, execute);
 }

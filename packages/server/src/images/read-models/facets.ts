@@ -25,7 +25,7 @@ async function facetVocabulary(
     themes: Record<string, number>;
     authors: Record<string, number>;
   },
-  database: Required<PublicDatabaseReadAccess>
+  database: PublicDatabaseReadAccess
 ): Promise<GalleryFacetsDto> {
   const [themeVocab, tagVocab, authorVocab] = await Promise.all([
     getThemeVocab(database),
@@ -73,12 +73,11 @@ async function readFacetsFromPostgres(reader: DatabaseReader) {
 
 async function getPublicGalleryFacetsWithAccess(
   signal: AbortSignal,
-  database: Required<PublicDatabaseReadAccess>
+  database: PublicDatabaseReadAccess
 ): Promise<GalleryFacetsDto> {
   const cached = await readReadyImageCountSnapshot(
     createImageFilterPlan({}),
-    signal,
-    true
+    signal
   );
   if (cached.cached) return facetVocabulary(cached.value, database);
   return readFacetsFromPostgres(database.reader);

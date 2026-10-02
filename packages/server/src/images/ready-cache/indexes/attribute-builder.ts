@@ -3,7 +3,7 @@ import { microsecondsTimestamp } from "../../../core/microseconds.ts";
 import { unsetThemeFilter } from "@imageshow/shared/browser";
 import { withTransactionOnClient } from "../../../core/database/transactions.ts";
 import { neverAbortedSignal } from "../../../core/abort.ts";
-import { pool, type DatabaseReader } from "../../../core/database/pools.ts";
+import type { DatabaseReader } from "../../../core/database/pools.ts";
 import { withPublicDatabaseRead } from "../../../core/database/public-fallback.ts";
 import { getRedisConnectionState, redis } from "../../../core/redis/client.ts";
 import { execRedisPipeline } from "../../../core/redis/pipeline.ts";
@@ -94,21 +94,21 @@ async function readAttributeIndexBatch(
   client: DatabaseReader,
   spec: ReadyImageAttributeIndexSpec,
   cursor: ReadyImageAttributeIndexCursor | null,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const query = attributeSourceQuery(spec, cursor);
   const rows = (await client.query(query.text, query.values)).rows as ReadyImageAttributeIndexRow[];
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   return rows;
 }
 
 async function writeAttributeIndexBatch(
   key: string,
   rows: ReadyImageAttributeIndexRow[],
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const entries = rows.map(
     (row) => [readyImageSortScore(row.sort_score), readyImageMember(row.id)] as const
   );
@@ -121,7 +121,7 @@ async function writeAttributeIndexBatch(
       READY_IMAGE_DERIVED_CACHE_POLICY.temporaryTtlSeconds
     );
     await execRedisPipeline(transaction);
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
   }
 }
 
@@ -131,7 +131,7 @@ async function buildAttributeIndexSource(
   revision: string,
   temporaryKey: string,
   connectionEpoch: number,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   let count = 0;
   let cursor: ReadyImageAttributeIndexCursor | null = null;
@@ -140,7 +140,7 @@ async function buildAttributeIndexSource(
       return null;
     }
     for (;;) {
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       const rows = await readAttributeIndexBatch(client, spec, cursor, signal);
       if (!rows.length) break;
       if (count + rows.length > READY_IMAGE_DERIVED_CACHE_POLICY.maxResultMembers) {
@@ -170,18 +170,19 @@ async function buildAttributeIndexSource(
       }
       if (rows.length < ATTRIBUTE_INDEX_BATCH_SIZE) break;
     }
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     return count;
   }, { mode: "read_only_repeatable_read" });
 }
 
+/**
+ * Background-only: the build holds a public read admission like any other
+ * public fallback, and no request waits for it.
+ */
 export async function buildReadyImageAttributeIndex(
   spec: ReadyImageAttributeIndexSpec,
-  revision: string,
-  signal?: AbortSignal,
-  publicFallback = false
+  revision: string
 ): Promise<ReadyImageAttributeIndex | null> {
-  signal?.throwIfAborted();
   const status = getReadyImageCacheCoordinatorStatus();
   const startingMeta = status.meta;
   const connection = getRedisConnectionState();
@@ -197,7 +198,6 @@ export async function buildReadyImageAttributeIndex(
     READY_IMAGE_DERIVED_INDEX_PREFIX.length
   );
   const expectedCount = parseNonNegativeInteger(await redis.hget(READY_IMAGE_STATS_KEY, statField));
-  signal?.throwIfAborted();
   // Avoid reading and materializing an index that registration cannot retain.
   // The keyset loop independently enforces the cap on the source snapshot.
   if (expectedCount !== null && expectedCount > READY_IMAGE_DERIVED_CACHE_POLICY.maxResultMembers) {
@@ -205,22 +205,19 @@ export async function buildReadyImageAttributeIndex(
   }
   const temporaryKey = readyImageAttributeIndexTemporaryKey(randomUUIDv7().replaceAll("-", ""));
   try {
-    const build = async (client: DatabaseReader, databaseSignal: AbortSignal) => {
-      const buildSignal = signal
-        ? AbortSignal.any([signal, databaseSignal])
-        : databaseSignal;
+    return await withPublicDatabaseRead(neverAbortedSignal, async ({ reader }, signal) => {
       const count = await buildAttributeIndexSource(
-        client,
+        reader,
         spec,
         revision,
         temporaryKey,
         connection.epoch,
-        buildSignal
+        signal
       );
-      buildSignal.throwIfAborted();
+      signal.throwIfAborted();
       if (count === null) return null;
       const cardinality = await redis.zcard(temporaryKey);
-      buildSignal.throwIfAborted();
+      signal.throwIfAborted();
       if (cardinality !== count) {
         throw new Error("Ready-image attribute index cardinality differs from its source");
       }
@@ -231,22 +228,10 @@ export async function buildReadyImageAttributeIndex(
         temporaryKey,
         startingMeta,
         connectionEpoch: connection.epoch,
-        signal: buildSignal,
-        reader: client
+        signal,
+        reader
       });
-    };
-    if (publicFallback) {
-      if (!signal) throw new Error("Public attribute index build needs a signal");
-      return await withPublicDatabaseRead(signal, ({ reader }, databaseSignal) =>
-        build(reader, databaseSignal)
-      );
-    }
-    const client = await pool.connect();
-    try {
-      return await build(client, signal ?? neverAbortedSignal);
-    } finally {
-      client.release();
-    }
+    });
   } finally {
     await redis.unlink(temporaryKey).catch(() => undefined);
   }

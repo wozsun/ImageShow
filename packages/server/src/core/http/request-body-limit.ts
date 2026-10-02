@@ -117,9 +117,7 @@ export function getRequestBodyBytes(c: Context) {
   return Number.isFinite(declared) ? Math.max(0, declared) : 0;
 }
 
-const limitStandardApiBody = measuredBodyLimit(standardApiBodyMaxBytes);
-
-export const limitAdminLoginBody = limitStandardApiBody;
+export const limitStandardApiBody = measuredBodyLimit(standardApiBodyMaxBytes);
 
 const limitIngestionControlBody = measuredBodyLimit(ingestionControlBodyMaxBytes);
 // Select each protected body tier after session and CSRF checks.

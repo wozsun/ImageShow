@@ -41,6 +41,7 @@ import {
   S3Client
 } from "@aws-sdk/client-s3";
 import { adminApiBasePath } from "../../../packages/shared/src/browser.ts";
+import { neverAbortedSignal } from "../../../packages/server/src/core/abort.ts";
 import { ApiError } from "../../../packages/server/src/core/api-error.ts";
 import { storageBackendUpdateInput } from "../../../packages/server/src/routes/validation/storage.ts";
 import { handleApiError } from "../../../packages/server/src/core/http/responses.ts";
@@ -877,11 +878,12 @@ test("[Server/存储] 已预检的 S3 目标按能力上传或回读，并复用
         fixture.requests.length = 0;
         for (const prefix of ["large", "small"] as const) {
           const key = `${String(supported)}.webp`;
-          const target = await verifyStorageTarget({ storage, prefix, key, expected });
+          const target = await verifyStorageTarget({ storage, prefix, key, expected, signal: neverAbortedSignal });
           const result = await writeVerifiedFileToStorage({
             target,
             sourcePath,
-            contentType: "image/webp"
+            contentType: "image/webp",
+            signal: neverAbortedSignal
           });
           assert.equal(result.created, true);
           assert.deepEqual(fixture.objects.get(`${prefix}/${key}`), body);
@@ -910,10 +912,11 @@ test("[Server/存储] 已预检的 S3 目标按能力上传或回读，并复用
           storage,
           prefix: "large",
           key: `${String(supported)}.webp`,
-          expected
+          expected,
+          signal: neverAbortedSignal
         });
         assert.equal(
-          (await writeVerifiedFileToStorage({ target, sourcePath, contentType: "image/webp" }))
+          (await writeVerifiedFileToStorage({ target, sourcePath, contentType: "image/webp", signal: neverAbortedSignal }))
             .created,
           false
         );
@@ -923,7 +926,7 @@ test("[Server/存储] 已预检的 S3 目标按能力上传或回读，并复用
         );
         fixture.objects.set("large/conflict.webp", Buffer.alloc(body.length));
         await assert.rejects(
-          verifyStorageTarget({ storage, prefix: "large", key: "conflict.webp", expected }),
+          verifyStorageTarget({ storage, prefix: "large", key: "conflict.webp", expected, signal: neverAbortedSignal }),
           { code: "storage_object_conflict" }
         );
 
@@ -933,7 +936,8 @@ test("[Server/存储] 已预检的 S3 目标按能力上传或回读，并复用
             storage,
             prefix: "large",
             key: `corrupt-${supported}.webp`,
-            expected
+            expected,
+            signal: neverAbortedSignal
           });
           let cleanupKey = "";
           await assert.rejects(
@@ -943,7 +947,8 @@ test("[Server/存储] 已预检的 S3 目标按能力上传或回读，并复用
               contentType: "image/webp",
               cleanupCandidate: async (object) => {
                 cleanupKey = object.key;
-              }
+              },
+              signal: neverAbortedSignal
             }),
             { code: "storage_transfer_integrity_failed" }
           );
@@ -1468,7 +1473,8 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
         prefix: "large",
         key: "object.webp",
         expected: { size: body.byteLength, md5: expectedMd5 },
-        contentType: "image/webp"
+        contentType: "image/webp",
+        signal: neverAbortedSignal
       }),
       { created: true }
     );
@@ -1490,7 +1496,8 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
         prefix: "large",
         key: "object.webp",
         expected: { size: body.byteLength, md5: expectedMd5 },
-        contentType: "image/webp"
+        contentType: "image/webp",
+        signal: neverAbortedSignal
       }),
       { created: true }
     );
@@ -1508,7 +1515,8 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
         prefix: "large",
         key: "object.webp",
         expected: { size: body.byteLength, md5: "0".repeat(32) },
-        contentType: "image/webp"
+        contentType: "image/webp",
+        signal: neverAbortedSignal
       }),
       (error) => error instanceof ApiError
         && error.code === "storage_source_integrity_failed"
@@ -1528,7 +1536,8 @@ test("[Server/存储] S3 迁移优先使用条件 CopyObject，跨凭据时单�
         prefix: "large",
         key: "source-missing.webp",
         expected: { size: body.byteLength, md5: expectedMd5 },
-        contentType: "image/webp"
+        contentType: "image/webp",
+        signal: neverAbortedSignal
       }),
       (error) => error instanceof ApiError
         && error.code === "storage_source_object_not_found"
@@ -1581,7 +1590,8 @@ test("[Server/存储] 流式迁移到不支持 MD5 的后端以目标正文完�
         key,
         expected: { size: body.length, md5: createHash("md5").update(body).digest("hex") },
         contentType: "image/webp",
-        cleanupCandidate: async () => {}
+        cleanupCandidate: async () => {},
+        signal: neverAbortedSignal
       });
       if (corrupt) await assert.rejects(transfer, { code: "storage_transfer_integrity_failed" });
       else {
@@ -1820,7 +1830,8 @@ test("[Server/存储] 预存在迁移目标只在源完整性通过后读取目�
         size: wrongBody.byteLength,
         md5: createHash("md5").update(expectedBody).digest("hex")
       },
-      contentType: "image/webp"
+      contentType: "image/webp",
+      signal: neverAbortedSignal
     }),
     (error) => error instanceof ApiError
       && error.code === "storage_source_integrity_failed"

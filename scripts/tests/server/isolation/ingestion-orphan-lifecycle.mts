@@ -4,6 +4,7 @@ import { mkdir, readFile, utimes, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { activeSession, createIngestionScenarioFixture } from "./ingestion-scenario-fixture.mts";
 import { createMaintenanceFixture } from "./storage-maintenance-fixture.mts";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -100,7 +101,7 @@ await runIntegrationScenario(async (runtime) => {
   const orphanThumb = "orphan/thumb.webp";
   await access.driver.writeBuffer("large", orphanFull, Buffer.from("orphan"), "image/webp");
   await access.driver.writeBuffer("small", orphanThumb, Buffer.from("orphan"), "image/webp");
-  const before = await checkStorage();
+  const before = await checkStorage(neverAbortedSignal);
   assert.ok(before.orphan_objects.some((item) => item.key === orphanFull));
   assert.ok(before.orphan_objects.some((item) => item.key === orphanThumb));
   assert.equal(before.missing_objects.some((item) => item.id === image.id), false);
@@ -114,20 +115,20 @@ await runIntegrationScenario(async (runtime) => {
   });
 
   await leases.withActiveIngestionTempPaths([leasedPart], async () => {
-    const report = await cleanupIngestionOrphans(now);
+    const report = await cleanupIngestionOrphans(now, neverAbortedSignal);
     assert.deepEqual(report, { skipped: false, temp_removed: 4, incomplete_temp_scans: 0 });
     assert.equal(await readFile(leasedPart, "utf8"), "raw-data");
   });
-  assert.equal((await cleanupIngestionOrphans(now)).temp_removed, 1);
+  assert.equal((await cleanupIngestionOrphans(now, neverAbortedSignal)).temp_removed, 1);
   for (const path of retained) assert.equal(await readFile(path, "utf8"), "raw-data");
   for (const path of disposable) await assert.rejects(readFile(path), { code: "ENOENT" });
-  const after = await checkStorage();
+  const after = await checkStorage(neverAbortedSignal);
   assert.deepEqual(after.ingestion_temp_space, {
     total_bytes: 40,
     retained_bytes: 24,
     complete: true
   });
-  const maintained = (await maintainStorageAndPurgeTasks()).storage;
+  const maintained = (await maintainStorageAndPurgeTasks(neverAbortedSignal)).storage;
   assert.equal(maintained.failed, 0);
   assert.equal(maintained.repaired, 0);
   assert.equal(
@@ -136,7 +137,7 @@ await runIntegrationScenario(async (runtime) => {
   );
   assert.equal(await access.driver.exists("large", orphanFull), false);
   assert.equal(await access.driver.exists("small", orphanThumb), false);
-  const repeated = (await maintainStorageAndPurgeTasks()).storage;
+  const repeated = (await maintainStorageAndPurgeTasks(neverAbortedSignal)).storage;
   assert.equal(repeated.repaired, 0);
   assert.equal(repeated.removed, 0);
 });

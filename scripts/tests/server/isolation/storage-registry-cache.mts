@@ -38,7 +38,7 @@ await runIntegrationScenario(async ({ databasePools: { pool }, storageRegistry: 
   });
   const signal = () => AbortSignal.timeout(15_000);
   const read = (requestSignal = signal()) =>
-    registry.listStorageBackends({ signal: requestSignal });
+    registry.listStorageBackends({ mode: "public", signal: requestSignal });
   const idle = () =>
     assert.deepEqual(getPublicPgFallbackAdmissionSnapshot(), { active: 0, queued: 0 });
   const holdResult = () => {

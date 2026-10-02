@@ -28,7 +28,7 @@ async function removeChallengeObject(driver: StorageDriver, key: string) {
 async function verifyBidirectionalChallenge(
   current: StorageDriver,
   candidate: StorageDriver,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   const probeId = randomUUID();
   const currentKey = `${storageProbePrefix}rebind-${probeId}-current`;
@@ -38,7 +38,7 @@ async function verifyBidirectionalChallenge(
   let verificationError: unknown;
 
   try {
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     await current.writeBuffer("large", currentKey, currentChallenge, "application/octet-stream", {
       signal
     });
@@ -103,7 +103,7 @@ async function verifyBidirectionalChallenge(
       }
     );
   }
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   if (verificationError) {
     throw verificationError instanceof ApiError &&
       verificationError.code === "storage_endpoint_rebind_mismatch"
@@ -116,8 +116,8 @@ async function verifyBidirectionalChallenge(
 export async function verifyStorageEndpointRebind(input: {
   current: StorageDriver;
   candidate: StorageDriver;
-  signal?: AbortSignal;
+  signal: AbortSignal;
 }) {
   await verifyBidirectionalChallenge(input.current, input.candidate, input.signal);
-  input.signal?.throwIfAborted();
+  input.signal.throwIfAborted();
 }

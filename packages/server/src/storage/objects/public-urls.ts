@@ -35,6 +35,6 @@ export function publicImageUrlForConfig(image: { id: string }, config: StorageCo
   return imageVariantUrl({ id: image.id, base_url: publicImageBaseUrl(config) }, variant);
 }
 
-export async function publicImageUrl(image: { id: string }, slug: string, variant: ImageVariant, access: StorageRegistryAccess = {}) {
+export async function publicImageUrl(image: { id: string }, slug: string, variant: ImageVariant, access: StorageRegistryAccess) {
   return publicImageUrlForConfig(image, await getStorageBackend(slug, access), variant);
 }

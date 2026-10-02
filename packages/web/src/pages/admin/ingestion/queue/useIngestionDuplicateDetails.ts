@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IngestionDuplicateDetailsResultDto } from "@imageshow/shared/browser";
 import type { IngestionJob } from "./model/ingestion-job.js";
-import { ingestionDuplicateMessage } from "./model/duplicate-match.js";
 import { getIngestionDuplicateDetails } from "./ingestion-http-client.js";
 
 const invalidationListeners = new Set<(md5: string) => void>();
@@ -239,22 +238,17 @@ export function useIngestionDuplicateDetails({
         || !job.md5) continue;
       const snapshot = snapshots.get(job.md5);
       if (!snapshot) continue;
-      patches.set(
-        job.id,
-        snapshot.match_count > 0
-          ? {
-              duplicates: snapshot.duplicates,
-              duplicateCount: snapshot.match_count,
-              message: ingestionDuplicateMessage(snapshot.match_count)
-            }
-          : {
-              // Keep the last actionable duplicate state until the Server decision
-              // CAS succeeds. Clearing count first would hide both confirm/cancel
-              // controls and leave an undecided card with no reachable recovery.
-              message: "图库中的重复图片已不存在，正在恢复可提交状态"
-            }
-      );
-      if (snapshot.match_count === 0 && job.serverVersion) {
+      if (snapshot.match_count > 0) {
+        patches.set(job.id, {
+          duplicates: snapshot.duplicates,
+          duplicateCount: snapshot.match_count
+        });
+        continue;
+      }
+      // Keep the last actionable duplicate state until the Server decision
+      // CAS succeeds. Clearing count first would hide both confirm/cancel
+      // controls and leave an undecided card with no reachable recovery.
+      if (job.serverVersion) {
         const key = `${job.id}\0${job.serverVersion}`;
         if (!pendingDecisionRef.current.has(key)) {
           pendingDecisionRef.current.add(key);

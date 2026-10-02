@@ -29,7 +29,7 @@ function storedImageServingRecord(item: ReadyImageCacheItem): StoredImageServing
 
 export async function readImageServingRecordById(
   id: string,
-  database: Required<PublicDatabaseReadAccess>,
+  database: PublicDatabaseReadAccess,
   dependencies: ImageServingRecordDependencies = defaultImageServingRecordDependencies
 ): Promise<ImageServingRecord | null> {
   const cached = await dependencies.readReadyImageById(id);

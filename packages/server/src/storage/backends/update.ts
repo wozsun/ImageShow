@@ -236,14 +236,13 @@ async function updateStorageBackendUnderLock(
       nextConfig.type === "s3" &&
       nextConfig.capabilities === undefined);
   if (needsProbe) {
-    const result = await validateStorageBackendCandidate(
-      nextConfig,
+    const result = await validateStorageBackendCandidate(nextConfig, {
       existingObject,
-      verifiedEndpointRebind
+      endpointRebind: verifiedEndpointRebind
         ? { currentConfig }
         : undefined,
       signal
-    );
+    });
     if (nextConfig.type === "s3") {
       nextConfig.capabilities = result.capabilities;
     }
@@ -391,7 +390,7 @@ async function settleStorageBackendUpdate(work: (receipt: StorageUpdateReceipt) 
 export async function updateStorageBackend(
   slug: string,
   input: StorageBackendUpdateInput,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   const backendLockKey = `imageshow:storage-backend:${slug}`;
   const needsLocationWriteLock = input.s3
@@ -403,7 +402,7 @@ export async function updateStorageBackend(
         updateStorageBackendUnderLock(
           slug,
           input,
-          signal ? AbortSignal.any([signal, lockSignal]) : lockSignal,
+          AbortSignal.any([signal, lockSignal]),
           lockClient,
           receipt
         );
@@ -412,7 +411,7 @@ export async function updateStorageBackend(
         ? withStorageLocationWriteAndAdvisoryLock(backendLockKey, work)
         : withAdvisoryLock(backendLockKey, work);
     });
-  const run = () => (signal ? runWithAdvisoryLockAcquisitionSignal(signal, update) : update());
+  const run = () => runWithAdvisoryLockAcquisitionSignal(signal, update);
   if (slug === "local" && input.public_base_url !== undefined) {
     await withRuntimeConfigWriteLease(async () => {
       await run();

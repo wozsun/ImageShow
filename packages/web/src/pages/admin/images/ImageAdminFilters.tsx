@@ -66,9 +66,7 @@ function useImageAdminDoubleRowLayout(enabled: boolean) {
     };
     update();
 
-    const ownerWindow = filterBar.ownerDocument.defaultView;
-    if (typeof ownerWindow?.ResizeObserver !== "function") return;
-    const observer = new ownerWindow.ResizeObserver(update);
+    const observer = new ResizeObserver(update);
     observer.observe(filterBar);
     return () => observer.disconnect();
   }, [enabled]);

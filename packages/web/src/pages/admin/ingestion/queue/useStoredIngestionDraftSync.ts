@@ -13,7 +13,6 @@ import type { ImageDraft } from "../../../../lib/types.js";
 import type { IngestionJob } from "./model/ingestion-job.js";
 import { isApiClientError } from "../../../../lib/api/client.js";
 import type { IngestionQueueAction } from "./model/ingestion-queue-state.js";
-import { ingestionDuplicateMessage } from "./model/duplicate-match.js";
 import { getIngestionStatuses, updateStoredIngestions } from "./ingestion-http-client.js";
 import {
   completedIngestionObservations,
@@ -750,11 +749,7 @@ export function useStoredIngestionDraftSync({
             ...(result.duplicate_count === 0 ? { duplicates: [] } : {}),
             serverVersion: result.version,
             serverSemanticRevision: result.last_semantic_revision,
-            serverDraftPending: true,
-            message:
-              result.duplicate_decision === "confirmed"
-                ? "已确认提交副本"
-                : ingestionDuplicateMessage(result.duplicate_count)
+            serverDraftPending: true
           }
         });
         const patched = jobsRef.current.find((job) => job.id === id);

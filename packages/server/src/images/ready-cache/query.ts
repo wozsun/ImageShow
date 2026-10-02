@@ -21,7 +21,8 @@ import {
   resolveReadyImageFilterIndex,
   resolveReadyImageFilterIndexForRequiredRead,
   validateReadyImageFilterIndex,
-  type ReadyImageFilterIndex
+  type ReadyImageFilterIndex,
+  type ReadyImageIndexReadAccess
 } from "./indexes/filter.ts";
 import {
   ReadyImageCoreCacheError,
@@ -292,16 +293,14 @@ async function resolvedReadyImagePage<T>(
   } | null>,
   limit: number,
   order: PublicImageOrder,
-  signal: AbortSignal | undefined,
-  background: boolean,
-  mode: ReadyImagePageReadMode,
+  access: ReadyImageIndexReadAccess,
   read?: (index: ReadyImageFilterIndex) => Promise<ReadyImagePageReadResult<T>>
 ): Promise<ReadyImagePageReadResult<T>> {
   try {
     const index =
-      mode === "required"
+      access.mode === "required"
         ? await resolveReadyImageFilterIndexForRequiredRead(plan)
-        : await resolveReadyImageFilterIndex(plan, signal, background);
+        : await resolveReadyImageFilterIndex(plan, access.signal);
     if (!index) return { status: "fallback" };
     if (read) return await read(index);
     return readPageFromIndex(
@@ -309,10 +308,12 @@ async function resolvedReadyImagePage<T>(
       (readMode) => locate(index, readMode),
       limit,
       order,
-      mode
+      access.mode
     );
   } catch (error) {
-    if (signal?.aborted) throw signal.reason ?? error;
+    if (access.mode === "fallback" && access.signal.aborted) {
+      throw access.signal.reason ?? error;
+    }
     if (isRedisUnavailableError(error)) {
       return {
         status: "redis_unavailable",
@@ -329,7 +330,7 @@ async function readRandomWindowFromIndex(
   context: Pick<ImageBrowseContext, "start">,
   position: ImageBrowsePosition | undefined,
   limit: number,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   return readCache(
     async () => {
@@ -366,9 +367,8 @@ export function readReadyImageCursorPage(
   plan: ImageFilterPlan,
   limit: number,
   context: ImageBrowseContext,
-  position?: ImageBrowsePosition,
-  signal?: AbortSignal,
-  background = false
+  position: ImageBrowsePosition | undefined,
+  signal: AbortSignal
 ): Promise<ReadyImagePageReadResult<ReadyImageCachePage>> {
   return resolvedReadyImagePage<ReadyImageCachePage>(
     plan,
@@ -397,9 +397,7 @@ export function readReadyImageCursorPage(
     },
     limit,
     context.order,
-    signal,
-    background,
-    "fallback",
+    { mode: "fallback", signal },
     context.order === "random"
       ? async (index) => {
           const result = await readRandomWindowFromIndex(index, context, position, limit, signal);
@@ -435,22 +433,19 @@ export function readReadyImagePageWindow(
     }),
     window.limit,
     order,
-    undefined,
-    false,
-    "required"
+    { mode: "required" }
   );
 }
 
 export async function sampleReadyImages(
   plan: ImageFilterPlan,
   limit: number,
-  recent: ReadonlySet<string> = new Set(),
-  signal?: AbortSignal,
-  background = false,
+  recent: ReadonlySet<string>,
+  signal: AbortSignal,
   seededStart?: number
 ): Promise<ReadyImageCacheResult<ReadyImageCacheItem[]>> {
   try {
-    const index = await resolveReadyImageFilterIndex(plan, signal, background);
+    const index = await resolveReadyImageFilterIndex(plan, signal);
     if (!index) return { cached: false };
     if (seededStart !== undefined) {
       const result = await readRandomWindowFromIndex(
@@ -476,7 +471,7 @@ export async function sampleReadyImages(
     if (!result.cached || result.value === null) return { cached: false };
     return { cached: true, value: result.value };
   } catch (error) {
-    if (signal?.aborted) throw signal.reason ?? error;
+    if (signal.aborted) throw signal.reason ?? error;
     reportFilterResolutionFailure(error, plan.signature, "random");
     return { cached: false };
   }

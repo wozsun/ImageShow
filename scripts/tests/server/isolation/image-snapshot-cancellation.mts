@@ -4,6 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { getRequestListener } from "@hono/node-server";
 import { listenForFetch } from "../../support/http-listen.ts";
 import { interceptSqlQueries } from "./database-faults.mts";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import { createMaintenanceFixture, settleWithin } from "./storage-maintenance-fixture.mts";
 
@@ -147,7 +148,7 @@ await runIntegrationScenario(async (runtime) => {
       })
     });
     assert.equal(update.status, 200, await update.clone().text());
-    const normalized = await getAdminImageSnapshots([image.id]);
+    const normalized = await getAdminImageSnapshots([image.id], neverAbortedSignal);
     assert.deepEqual(
       Object.fromEntries(
         ["title", "description", "source", "original"].map((field) => [

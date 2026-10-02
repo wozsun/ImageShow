@@ -12,10 +12,10 @@ import {
 } from "./download-progress.ts";
 import { publishIngestionRawPart } from "../raw/files.ts";
 
-async function fetchImportResponse(url: string, limitBytes: number, externalSignal?: AbortSignal) {
+async function fetchImportResponse(url: string, limitBytes: number, signal: AbortSignal) {
   try {
     const response = await safeFetchExternalImage(url, {
-      signal: externalSignal,
+      signal,
       timeoutMs: getRuntimeConfig().import.fetch_timeout_seconds * 1000,
       headers: { Accept: "image/*,*/*", "Accept-Encoding": "identity" },
       targetOriginReferer: true,
@@ -44,7 +44,7 @@ export async function fetchImportImageToFile(
   target: string,
   part: string,
   limitBytes: number,
-  signal?: AbortSignal,
+  signal: AbortSignal,
   onProgress?: (progress: number) => void
 ) {
   const fetched = await fetchImportResponse(url, limitBytes, signal);
@@ -87,9 +87,9 @@ export async function fetchImportImageToFile(
     await rm(part, { force: true });
     if ((error as Error).name === "AbortError") {
       throw new ApiError(
-        signal?.aborted ? 409 : 400,
-        signal?.aborted ? "ingestion_cancelled" : "import_timeout",
-        signal?.aborted ? "导入已取消" : "下载超时",
+        signal.aborted ? 409 : 400,
+        signal.aborted ? "ingestion_cancelled" : "import_timeout",
+        signal.aborted ? "导入已取消" : "下载超时",
         { url }
       );
     }

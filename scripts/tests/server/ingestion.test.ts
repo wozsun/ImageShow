@@ -14,6 +14,7 @@ import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { installProperties } from "../support/property-descriptors.ts";
 import { createTestDirectory } from "../support/test-directory.ts";
+import { waitForTurns } from "../support/polling.ts";
 import { runProcess } from "../support/process-runner.ts";
 import { Hono } from "hono";
 import { appConfig } from "@imageshow/shared";
@@ -25,6 +26,7 @@ import {
   getRuntimeConfig,
   initializeRuntimeConfig
 } from "../../../packages/server/src/config/runtime-config-store.ts";
+import { neverAbortedSignal } from "../../../packages/server/src/core/abort.ts";
 import { ApiError } from "../../../packages/server/src/core/api-error.ts";
 import {
   DynamicConcurrencyLimiter,
@@ -751,7 +753,8 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
       transactionStarted = true;
       await transactionGate;
       return "committed";
-    }
+    },
+    neverAbortedSignal
   );
   while (!transactionStarted) await delay(0);
   const resolving = await coordinator.cancelBoundary(
@@ -792,7 +795,8 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
     async () => {
       lateTransactionStarted = true;
       return "must-not-start";
-    }
+    },
+    neverAbortedSignal
   );
   releaseDiscard();
   assert.deepEqual(await cancelling, {
@@ -811,7 +815,8 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
       async () => undefined,
       () => {
         throw new Error("transaction did not start");
-      }
+      },
+      neverAbortedSignal
     )
   );
   assert.equal(synchronousStartFailure.state(pair), "cancellable");
@@ -865,7 +870,8 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
     async () => {
       firstStarted = true;
       await firstGate;
-    }
+    },
+    neverAbortedSignal
   );
   while (!firstStarted) await delay(0);
   let drainSettled = false;
@@ -883,7 +889,8 @@ test("[Server/内容接入] 不可逆协调器在同一 pair 边界区分可取�
     async () => {
       secondStarted = true;
       await secondGate;
-    }
+    },
+    neverAbortedSignal
   );
   while (!secondStarted) await delay(0);
   releaseFirst();
@@ -1037,13 +1044,6 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
   initializeRuntimeConfig();
   const limit = getRuntimeConfig().normalize.concurrency;
   const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
-  const waitFor = async (predicate: () => boolean, message: string) => {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      if (predicate()) return;
-      await nextTurn();
-    }
-    assert.fail(message);
-  };
 
   await t.test("两种来源合计最多持有 N 个 准备与本地结果发布", async (subtest) => {
     const itemCount = limit + 2;
@@ -1069,7 +1069,7 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
       })
     );
 
-    await waitFor(
+    await waitForTurns(
       () => starts.length === limit,
       "shared Ingestion preparation capacity did not fill"
     );
@@ -1081,7 +1081,7 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
     );
 
     gates[0].resolve();
-    await waitFor(
+    await waitForTurns(
       () => starts.length === limit + 1,
       "Upload / Import did not share the released preparation permit"
     );
@@ -1129,7 +1129,7 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
       })
     );
 
-    await waitFor(
+    await waitForTurns(
       () => materializationStarts.length === limit * 2,
       "Import did not fill the current and successor batches"
     );
@@ -1143,11 +1143,11 @@ test("[Server/内容接入] Upload 与 Import 共用唯一 Prepare/Publish owner
     );
 
     gates[0].resolve();
-    await waitFor(
+    await waitForTurns(
       () => preparationStarts.length === limit + 1,
       "prepared publication completion did not admit the first successor"
     );
-    await waitFor(
+    await waitForTurns(
       () => materializationStarts.length === itemCount,
       "successor normalization admission did not refill Import materialization"
     );
@@ -1284,13 +1284,6 @@ test("[Server/内容接入] Import 后继窗口在 Normalize 准入时交接并�
   initializeRuntimeConfig();
   const limit = getRuntimeConfig().normalize.concurrency;
   const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
-  const waitFor = async (predicate: () => boolean, message: string) => {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      if (predicate()) return;
-      await nextTurn();
-    }
-    assert.fail(message);
-  };
 
   await t.test("仅预取一批并在图片处理许可交接后立即补位", async (subtest) => {
     const gates = Array.from({ length: limit + 1 }, () => Promise.withResolvers<void>());
@@ -1305,7 +1298,7 @@ test("[Server/内容接入] Import 后继窗口在 Normalize 准入时交接并�
         return index;
       })
     );
-    await waitFor(
+    await waitForTurns(
       () => starts.length === limit,
       "Import successor window did not fill"
     );
@@ -1319,7 +1312,7 @@ test("[Server/内容接入] Import 后继窗口在 Normalize 准入时交接并�
       firstSettled = true;
     });
     markNormalizationAdmitted[0]?.();
-    await waitFor(
+    await waitForTurns(
       () => starts.length === limit + 1,
       "Normalize admission did not release the next Import successor"
     );
@@ -1370,7 +1363,7 @@ test("[Server/内容接入] Import 后继窗口在 Normalize 准入时交接并�
         await gate.promise;
       })
     );
-    await waitFor(() => starts.length === limit, "Import window did not fill");
+    await waitForTurns(() => starts.length === limit, "Import window did not fill");
 
     const waitingController = new AbortController();
     const cancellation = new Error("cancel waiting Import successor");
@@ -1486,13 +1479,6 @@ console.log("import-prefetch-reload-ok");
 test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重载和取消释放语义", async (t) => {
   type Gate = ReturnType<typeof Promise.withResolvers<void>>;
   const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
-  const waitFor = async (predicate: () => boolean, message: string) => {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      if (predicate()) return;
-      await nextTurn();
-    }
-    assert.fail(message);
-  };
   const cancellationError = (signal: AbortSignal) => signal.reason ?? new Error("cancelled");
 
   await t.test("数量许可不让新请求越过队列并在提额通知后补位", async (subtest) => {
@@ -1511,7 +1497,7 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
         await release.promise;
       });
     const first = run("first", releases[0]);
-    await waitFor(() => starts.length === 1, "first permit did not start");
+    await waitForTurns(() => starts.length === 1, "first permit did not start");
     const second = run("second", releases[1]);
     await nextTurn();
     limit = 2;
@@ -1524,7 +1510,7 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
       waiting: 2
     });
     limiter.refresh();
-    await waitFor(() => starts.length === 2, "raised limit did not drain FIFO head");
+    await waitForTurns(() => starts.length === 2, "raised limit did not drain FIFO head");
     assert.deepEqual(starts, ["first", "second"]);
     assert.deepEqual(limiter.snapshot(), {
       limit: 2,
@@ -1532,7 +1518,7 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
       waiting: 1
     });
     releases[0].resolve();
-    await waitFor(() => starts.length === 3, "third permit did not start");
+    await waitForTurns(() => starts.length === 3, "third permit did not start");
     assert.deepEqual(starts, ["first", "second", "third"]);
     releases[1].resolve();
     releases[2].resolve();
@@ -1560,7 +1546,7 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
         await release.promise;
       })
     );
-    await waitFor(() => starts.length === 2, "initial permits were not filled");
+    await waitForTurns(() => starts.length === 2, "initial permits were not filled");
     limit = 1;
     limiter.refresh();
     releases[0].resolve();
@@ -1568,7 +1554,7 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
     await nextTurn();
     assert.deepEqual(starts, [0, 1]);
     releases[1].resolve();
-    await waitFor(() => starts.length === 3, "lowered limiter never resumed");
+    await waitForTurns(() => starts.length === 3, "lowered limiter never resumed");
     releases[2].resolve();
     await Promise.all(runs);
   });
@@ -1600,7 +1586,7 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
     const handoff = limiter.run(handoffSignal, async () => {
       starts.push("cancelled-handoff");
     });
-    await waitFor(() => starts.length === 1, "first permit did not start");
+    await waitForTurns(() => starts.length === 1, "first permit did not start");
     const waitingError = new Error("waiting cancelled");
     waitingController.abort(waitingError);
     await assert.rejects(waiting, (error) => error === waitingError);
@@ -1680,7 +1666,7 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
       starts.push("third");
       await releases[2].promise;
     });
-    await waitFor(() => starts.length === 1, "oversized head did not start alone");
+    await waitForTurns(() => starts.length === 1, "oversized head did not start alone");
     assert.deepEqual(starts, ["oversized"]);
     assert.deepEqual(limiter.snapshot(), {
       limit: 3,
@@ -1690,7 +1676,7 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
     });
     limit = 7;
     limiter.refresh();
-    await waitFor(() => starts.length === 2, "weighted raise did not start FIFO head");
+    await waitForTurns(() => starts.length === 2, "weighted raise did not start FIFO head");
     assert.deepEqual(starts, ["oversized", "second"]);
     assert.deepEqual(limiter.snapshot(), {
       limit: 7,
@@ -1701,7 +1687,7 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
     await nextTurn();
     assert.deepEqual(starts, ["oversized", "second"]);
     releases[0].resolve();
-    await waitFor(() => starts.length === 3, "weighted queue did not continue");
+    await waitForTurns(() => starts.length === 3, "weighted queue did not continue");
     releases[1].resolve();
     releases[2].resolve();
     await Promise.all([oversized, second, third]);
@@ -1755,13 +1741,6 @@ test("[Server/内容接入] 动态数量与加权许可器保持 FIFO、热重�
 });
 test("[Server/内容接入] 微博上游调度保持串行、公平、随机节奏与单一访客身份", async (t) => {
   const nextTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
-  const waitFor = async (predicate: () => boolean, message: string) => {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      if (predicate()) return;
-      await nextTurn();
-    }
-    assert.fail(message);
-  };
   const schedulerWithoutDelay = (
     createVisitorIdentity: (signal: AbortSignal) => Promise<string> = async () => "visitor"
   ) =>
@@ -1791,9 +1770,9 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
       request("a1", true),
       request("a2"),
       request("a3")
-    ]);
-    await waitFor(() => order.length === 1, "first Weibo request did not start");
-    const second = scheduler.scheduleBatch([request("b1"), request("b2")]);
+    ], neverAbortedSignal);
+    await waitForTurns(() => order.length === 1, "first Weibo request did not start");
+    const second = scheduler.scheduleBatch([request("b1"), request("b2")], neverAbortedSignal);
     firstRelease.resolve();
     await Promise.all([first, second]);
     assert.deepEqual(order, ["a1", "b1", "a2", "b2", "a3"]);
@@ -1814,12 +1793,12 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
       async () => {
         order.push("post-a");
       }
-    ]);
+    ], neverAbortedSignal);
     const second = scheduler.scheduleBatch([
       async () => {
         order.push("post-b");
       }
-    ]);
+    ], neverAbortedSignal);
     await Promise.all([first, second]);
     assert.equal(creations, 1);
     assert.deepEqual(order, [
@@ -1850,7 +1829,7 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
     const request = async () => {
       now += 100;
     };
-    await scheduler.scheduleBatch([request, request, request]);
+    await scheduler.scheduleBatch([request, request, request], neverAbortedSignal);
     assert.deepEqual(waits, [2_500, 5_000]);
   });
 
@@ -1914,12 +1893,12 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
       ],
       activeController.signal
     );
-    await waitFor(() => activeStarted, "active Weibo request did not start");
+    await waitForTurns(() => activeStarted, "active Weibo request did not start");
     const activeRejected = assert.rejects(
       active,
       (error) => error === activeCancellation
     );
-    const next = activeScheduler.scheduleBatch([async () => "next"]);
+    const next = activeScheduler.scheduleBatch([async () => "next"], neverAbortedSignal);
     activeController.abort(activeCancellation);
     await activeRejected;
     assert.deepEqual(await next, [{ status: "fulfilled", value: "next" }]);
@@ -1953,8 +1932,8 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
       [async () => assert.fail("cancelled batch must not start a post request")],
       firstController.signal
     );
-    await waitFor(() => creations === 1, "visitor creation did not start");
-    const next = scheduler.scheduleBatch([async (identity) => identity]);
+    await waitForTurns(() => creations === 1, "visitor creation did not start");
+    const next = scheduler.scheduleBatch([async (identity) => identity], neverAbortedSignal);
     const firstRejected = assert.rejects(first, (error) => error === cancellation);
     firstController.abort(cancellation);
     await firstRejected;
@@ -1978,7 +1957,7 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
         attempts += 1;
         return identity;
       }
-    ]);
+    ], neverAbortedSignal);
     assert.equal(results[0]?.status, "rejected");
     assert.deepEqual(results[1], { status: "fulfilled", value: "visitor-2" });
     assert.equal(attempts, 2);
@@ -1997,7 +1976,7 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
         async () => {
           afterLimitStarted = true;
         }
-      ]),
+      ], neverAbortedSignal),
       (error) => error === limitError
     );
     assert.equal(afterLimitStarted, false);
@@ -2012,7 +1991,7 @@ test("[Server/内容接入] 微博上游调度保持串行、公平、随机节�
         async () => {
           afterFatalStarted = true;
         }
-      ]),
+      ], neverAbortedSignal),
       (error) => error === fatalError
     );
     assert.equal(afterFatalStarted, false);
@@ -2393,7 +2372,8 @@ test("[Server/内容接入] 取消批次只查询一次 PG 并在查询期间封
               async () => undefined,
               async () => {
                 databaseStarts += 1;
-              }
+              },
+              neverAbortedSignal
             )
             .then(
               () => "started" as const,
@@ -2609,7 +2589,8 @@ test("[Server/内容接入] 已启动事务的 expiry 只通过原子 cutoff 收
     const transaction = coordinator.beginDatabaseTransaction(
       pair,
       async () => undefined,
-      async () => transactionGate
+      async () => transactionGate,
+      neverAbortedSignal
     );
     while (coordinator.state(pair) !== "database_started") await delay(0);
     const transitions: string[] = [];

@@ -9,7 +9,7 @@ import {
   type PublicDatabaseAdmission
 } from "./public-admission.ts";
 
-export type PublicDatabaseReadAccess = { reader?: DatabaseReader };
+export type PublicDatabaseReadAccess = { reader: DatabaseReader };
 
 type PublicDatabaseReadScopeDependencies = {
   pool: Pick<Pool, "connect">;
@@ -36,7 +36,7 @@ export function createPublicDatabaseReadScope(dependencies: PublicDatabaseReadSc
 
   return async <T>(
     requestSignal: AbortSignal,
-    work: (access: { reader: DatabaseReader }, signal: AbortSignal) => Promise<T>
+    work: (access: PublicDatabaseReadAccess, signal: AbortSignal) => Promise<T>
   ): Promise<T> => {
     requestSignal.throwIfAborted();
     const operationAbort = new AbortController();
@@ -196,7 +196,7 @@ const runPublicDatabaseReadScope = createPublicDatabaseReadScope({
 
 export function withPublicDatabaseRead<T>(
   requestSignal: AbortSignal,
-  work: (access: { reader: DatabaseReader }, signal: AbortSignal) => Promise<T>
+  work: (access: PublicDatabaseReadAccess, signal: AbortSignal) => Promise<T>
 ) {
   return runPublicDatabaseReadScope(requestSignal, work);
 }

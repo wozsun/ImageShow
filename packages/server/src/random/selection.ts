@@ -25,7 +25,6 @@ import {
 import { pickTargetedImages } from "./targeted-selection.ts";
 import { sampleReadyImagesFromPostgres } from "./postgres-selection.ts";
 import type { PublicDatabaseReadAccess } from "../core/database/public-fallback.ts";
-import { pool } from "../core/database/pools.ts";
 
 export type RandomImageSelection = {
   mode: RandomMethod;
@@ -35,12 +34,12 @@ export type RandomImageSelection = {
 
 export async function selectRandomImages(
   url: URL,
-  userAgent = "",
-  clientId = "",
-  signal?: AbortSignal,
-  database: PublicDatabaseReadAccess = {}
+  userAgent: string,
+  clientId: string,
+  signal: AbortSignal,
+  database: PublicDatabaseReadAccess
 ): Promise<RandomImageSelection | Response> {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const { random_method, random_size } = getRuntimeConfig().site;
   const parsed = parseRandomQuery(
     url,
@@ -69,7 +68,7 @@ export async function selectRandomImages(
       resolveAuthorTermMap(terms, database)
     ))
   ]);
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const query = normalizeRandomQuery(parsed, {
     theme: themeMap,
     tag: tagMap,
@@ -102,13 +101,12 @@ export async function selectRandomImages(
     query.seed === null
       ? await recentlyServedIds(clientId, query.signature)
       : new Set<string>();
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const cached = await sampleReadyImages(
     plan,
     query.limit,
     recent,
     signal,
-    Boolean(database.reader),
     seededStart
   );
   const items = cached.cached
@@ -117,7 +115,7 @@ export async function selectRandomImages(
         plan,
         query.limit,
         recent,
-        database.reader ?? pool,
+        database.reader,
         signal,
         seededStart
       );

@@ -78,16 +78,14 @@ function isWithinPanelSurface(
   panel: HTMLElement,
   trigger: HTMLElement,
   auxiliarySurface: HTMLElement | null,
-  event: Pick<Event, "composedPath" | "target">,
+  event: Pick<Event, "composedPath">,
   portalSelector: string
 ) {
-  const path = event.composedPath?.() ?? (event.target ? [event.target] : []);
-  return path.some((entry) => {
+  return event.composedPath().some((entry) => {
     if (entry === panel
       || entry === trigger
       || entry === auxiliarySurface) return true;
     if (
-      typeof Node !== "undefined" &&
       entry instanceof Node &&
       (panel.contains(entry)
         || trigger.contains(entry)

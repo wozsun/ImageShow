@@ -44,14 +44,14 @@ type IngestionTempScanBudget = {
 async function ingestionTempFileEntry(
   imagePath: string,
   file: Dirent,
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<IngestionTempFileEntry | null> {
   if (!file.isFile()) return null;
   const parsedName = parseIngestionTempFileName(file.name);
   if (!parsedName) return null;
   const path = join(imagePath, file.name);
   const info = await statIngestionTempIfExists(path);
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   if (!info?.isFile()) return null;
   return {
     path,
@@ -64,13 +64,13 @@ async function ingestionTempFileEntry(
 async function* directoryEntries(
   path: string,
   budget: IngestionTempScanBudget,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
-  signal?.throwIfAborted();
+  signal.throwIfAborted();
   const directory = await openDirectoryIfExists(path);
   if (!directory) return;
   for await (const entry of directory) {
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     if (budget.remaining <= 0) {
       budget.complete = false;
       return;
@@ -82,7 +82,7 @@ async function* directoryEntries(
 
 async function* listIngestionTempFiles(
   budget: IngestionTempScanBudget,
-  signal?: AbortSignal
+  signal: AbortSignal
 ) {
   const root = ingestionTempRoot();
   for await (const session of directoryEntries(root, budget, signal)) {
@@ -164,17 +164,17 @@ type TempCleanupStep =
 
 async function nextTempCleanupFile(
   budget: IngestionTempScanBudget,
-  signal?: AbortSignal
+  signal: AbortSignal
 ): Promise<TempCleanupStep> {
   for (;;) {
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     if (budget.remaining <= 0) {
       tempCleanupCursor.passSplit = true;
       return { kind: "paused" };
     }
     if (!tempCleanupCursor.root) {
       tempCleanupCursor.root = await openDirectoryIfExists(ingestionTempRoot());
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       if (!tempCleanupCursor.root) return { kind: "complete", complete: true };
     }
 
@@ -183,7 +183,7 @@ async function nextTempCleanupFile(
       const entry = tempCleanupCursor.pendingSession
         ?? await tempCleanupCursor.root.read();
       tempCleanupCursor.pendingSession = entry;
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       if (!entry) {
         await closeTempCleanupRoot();
         const complete = !tempCleanupCursor.passSplit;
@@ -213,7 +213,7 @@ async function nextTempCleanupFile(
       const entry = currentSession.pendingImage
         ?? await currentSession.directory.read();
       currentSession.pendingImage = entry;
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       if (!entry) {
         const path = currentSession.path;
         await closeTempCleanupSession();
@@ -240,7 +240,7 @@ async function nextTempCleanupFile(
     const file = currentImage.pendingFile
       ?? await currentImage.directory.read();
     currentImage.pendingFile = file;
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
     if (!file) {
       const path = currentImage.path;
       await closeTempCleanupImage();
@@ -264,7 +264,7 @@ async function removeInactiveIngestionTempEntry(
     keep: ReadonlySet<string>;
     fileCutoff: number;
     partCutoff: number;
-    signal?: AbortSignal;
+    signal: AbortSignal;
   }>
 ) {
   const identity = tempPathIdentity(entry.path);
@@ -274,12 +274,12 @@ async function removeInactiveIngestionTempEntry(
   const cutoff = entry.kind === "part" ? input.partCutoff : input.fileCutoff;
   if (entry.modifiedAt >= cutoff) return false;
   const removed = await tryWithInactiveIngestionTempPath(entry.path, async () => {
-    input.signal?.throwIfAborted();
+    input.signal.throwIfAborted();
     if (input.keep.has(identity) || ingestionTempPathIsActive(entry.path)) {
       return false;
     }
     const current = await statIngestionTempIfExists(entry.path);
-    input.signal?.throwIfAborted();
+    input.signal.throwIfAborted();
     if (!current?.isFile() || current.mtimeMs >= cutoff) return false;
     if (ingestionTempPathIsActive(entry.path)) return false;
     await rm(entry.path, { force: true });
@@ -293,8 +293,8 @@ export async function cleanupIngestionTempOrphans(
     keep: ReadonlySet<string>;
     fileCutoff: number;
     partCutoff: number;
-    signal?: AbortSignal;
-    stopSignal?: AbortSignal;
+    signal: AbortSignal;
+    stopSignal: AbortSignal;
   }>
 ) {
   const budget: IngestionTempScanBudget = {
@@ -316,11 +316,11 @@ export async function cleanupIngestionTempOrphans(
       acknowledgeTempCleanupFile();
     }
   } catch (error) {
-    if (input.stopSignal?.aborted) {
+    if (input.stopSignal.aborted) {
       await closeIngestionTempCleanupCursor();
       input.stopSignal.throwIfAborted();
     }
-    if (input.signal?.aborted) {
+    if (input.signal.aborted) {
       // A cycle timeout is a time slice, not a new pass. Keep the bounded
       // three-handle DFS cursor so slow directory prefixes cannot starve the
       // tail forever. Worker stop closes the cursor explicitly above and in
@@ -338,7 +338,7 @@ export async function inspectIngestionTempOrphans(
     keep: ReadonlySet<string>;
     fileCutoff: number;
     partCutoff: number;
-    signal?: AbortSignal;
+    signal: AbortSignal;
   }>
 ) {
   const budget: IngestionTempScanBudget = {
@@ -355,7 +355,7 @@ export async function inspectIngestionTempOrphans(
   let retainedBytes = 0;
   for await (const entry of listIngestionTempFiles(budget, input.signal)) {
     totalBytes += entry.size;
-    input.signal?.throwIfAborted();
+    input.signal.throwIfAborted();
     const retained =
       keep.has(tempPathIdentity(entry.path)) || ingestionTempPathIsActive(entry.path);
     if (retained) {

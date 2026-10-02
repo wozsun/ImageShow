@@ -1,5 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { abortSignalError, neverAbortedSignal, raceWithAbortSignal } from "../../../core/abort.ts";
+import { abortSignalError, raceWithAbortSignal } from "../../../core/abort.ts";
 import { WeiboImportError } from "./weibo-types.ts";
 
 type WeiboRequestDelayRange = {
@@ -120,7 +120,7 @@ class WeiboRequestScheduler {
 
   scheduleBatch<Result>(
     requests: readonly WeiboScheduledRequest<Result>[],
-    signal: AbortSignal = neverAbortedSignal
+    signal: AbortSignal
   ): Promise<PromiseSettledResult<Result>[]> {
     signal.throwIfAborted();
     if (!requests.length) return Promise.resolve([]);

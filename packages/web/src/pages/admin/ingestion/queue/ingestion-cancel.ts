@@ -1,16 +1,18 @@
 import {
   ingestionBatchHardLimit,
   ingestionStatusBatchMaxItems,
+  type ImportAcceptItemDto,
   type IngestionCancelItemResultDto,
   type IngestionQueueSummaryDto,
   type ServerIngestionStatusDto,
-  type IngestionSessionPairDto
+  type IngestionSessionPairDto,
+  type UploadIntentItemDto
 } from "@imageshow/shared/browser";
 import {
   ingestionAcceptanceBinding,
   type AcceptedIngestionResult
 } from "./model/acceptance-binding.js";
-import type { IngestionJob } from "./model/ingestion-job.js";
+import { findIngestionAttempt, type IngestionJob } from "./model/ingestion-job.js";
 import {
   completedIngestionObservations,
   type IngestionQueueProducerApi,
@@ -52,8 +54,7 @@ export function bindTerminalAcceptanceForCancellation(
       ...ingestionAcceptanceBinding(result),
       status: discarded ? "cancelled" : "finalized",
       failureStage: undefined,
-      ...(discarded ? {} : { resultState: "recovering" as const }),
-      message: discarded ? "已取消" : "图片已写入图库，无法取消"
+      ...(discarded ? {} : { resultState: "recovering" as const })
     },
     connectionGeneration,
     result.accepted_order
@@ -101,24 +102,12 @@ function pairFor(job: IngestionJob) {
     : null;
 }
 
-function currentAttempt(
-  queue: IngestionQueueApi,
-  target: {
-    id: string;
-    attemptKey: string;
-  }
-) {
-  return queue.jobsRef.current.find(
-    (item) => item.id === target.id && item.attemptKey === target.attemptKey
-  );
-}
-
 function markCancelFailure(
   queue: IngestionQueueApi,
   target: { id: string; attemptKey: string },
   message: string
 ) {
-  const current = currentAttempt(queue, target);
+  const current = findIngestionAttempt(queue.jobsRef.current, target);
   if (!current) return;
   queue.updateJob(current.id, {
     status: "failed",
@@ -132,7 +121,7 @@ function applyCancelResult(
   target: CancelTarget,
   result: IngestionCancelItemResultDto | undefined
 ) {
-  const current = currentAttempt(queue, target);
+  const current = findIngestionAttempt(queue.jobsRef.current, target);
   const releaseContext = target.releasedSummary
     ? { releasedSummary: target.releasedSummary }
     : {};
@@ -146,7 +135,7 @@ function applyCancelResult(
   }
   if (result?.status === "discarded") {
     if (current) {
-      queue.updateJob(current.id, { status: "cancelled", message: "已取消" });
+      queue.updateJob(current.id, { status: "cancelled", failureStage: undefined });
     }
     return {
       succeeded: true,
@@ -159,11 +148,8 @@ function applyCancelResult(
     if (current) {
       queue.updateJob(current.id, {
         status: result.status === "completed" ? "finalized" : "committing",
-        resultState: "recovering",
-        message:
-          result.status === "completed"
-            ? "图片已写入图库，无法取消"
-            : "数据库提交已经开始，正在确认最终结果"
+        failureStage: undefined,
+        resultState: "recovering"
       });
     }
     return {
@@ -183,6 +169,84 @@ function applyCancelResult(
     pair: target.pair,
     ...releaseContext
   } satisfies IngestionQueueCancelOutcome;
+}
+
+type AcceptanceReplayItem = ImportAcceptItemDto | UploadIntentItemDto;
+
+/**
+ * Replays the original acceptance request for jobs that never received a
+ * server identity, so cancellation learns whether the server already owns
+ * them. Unconfirmed results stay on the job as a cancel failure; accepted
+ * jobs are bound as cancelling and returned for the stored-job cancel pass.
+ */
+export async function replayAcceptanceForCancellation(
+  queue: IngestionQueueProducerApi,
+  jobs: readonly IngestionJob[],
+  outcomes: Map<string, IngestionQueueCancelOutcome>,
+  source: Readonly<{
+    maxItems: number;
+    request: (chunk: IngestionJob[]) => Promise<readonly AcceptanceReplayItem[]>;
+  }>
+) {
+  const cancellable: IngestionJob[] = [];
+  for (let offset = 0; offset < jobs.length; offset += source.maxItems) {
+    const chunk = jobs.slice(offset, offset + source.maxItems);
+    const requestConnectionGeneration = queue.captureServerConnectionGeneration();
+    let results: readonly AcceptanceReplayItem[];
+    try {
+      results = await source.request(chunk);
+    } catch (error) {
+      const message = `取消结果暂时无法确认：${
+        error instanceof Error ? error.message : String(error)
+      }`;
+      for (const job of chunk) markCancelFailure(queue, job, message);
+      continue;
+    }
+    for (const [index, job] of chunk.entries()) {
+      const result = results[index];
+      const current = findIngestionAttempt(queue.jobsRef.current, job);
+      if (!current) continue;
+      if (!result || result.status === "failed") {
+        markCancelFailure(
+          queue,
+          current,
+          result?.message ?? "服务端是否已接管任务暂时无法确认，请重试取消"
+        );
+        continue;
+      }
+      // An upload intent was never taken over by the server.
+      if (result.status === "intent") {
+        queue.updateJob(current.id, { status: "cancelled", failureStage: undefined });
+        outcomes.set(current.id, { succeeded: true });
+        continue;
+      }
+      const terminal = bindTerminalAcceptanceForCancellation(
+        queue,
+        current.id,
+        result,
+        requestConnectionGeneration
+      );
+      if (terminal) {
+        outcomes.set(current.id, terminal);
+        continue;
+      }
+      const binding = ingestionAcceptanceBinding(result);
+      const cancelling = {
+        status: "cancelling",
+        failureStage: undefined
+      } as const;
+      queue.bindServerJob(
+        current.id,
+        { ...binding, ...cancelling },
+        requestConnectionGeneration,
+        result.accepted_order
+      );
+      cancellable.push(
+        findIngestionAttempt(queue.jobsRef.current, current) ?? { ...current, ...binding, ...cancelling }
+      );
+    }
+  }
+  return cancellable;
 }
 
 /**
@@ -213,7 +277,7 @@ export async function cancelServerIngestionJobs(
       pair: jobPair,
       ...(releasedSummary ? { releasedSummary } : {})
     });
-    const mounted = currentAttempt(queue, job);
+    const mounted = findIngestionAttempt(queue.jobsRef.current, job);
     const current = mounted ?? (
       options.allowDetached && pairFor(job) ? job : null
     );
@@ -231,14 +295,13 @@ export async function cancelServerIngestionJobs(
       abort?.(current);
       queue.updateJob(current.id, {
         status: "cancelling",
-        failureStage: undefined,
-        message: "正在取消内容接入任务"
+        failureStage: undefined
       });
     }
     const pair = pairFor(current);
     if (!pair) {
       if (options.allowUnacceptedUpload && current.kind === "upload") {
-        queue.updateJob(current.id, { status: "cancelled", message: "已取消" });
+        queue.updateJob(current.id, { status: "cancelled", failureStage: undefined });
         outcomes.set(current.id, { succeeded: true });
       } else {
         markCancelFailure(
@@ -267,7 +330,7 @@ export async function cancelServerIngestionJobs(
       queue.observeCompletedIngestions(completedIngestionObservations(statuses));
       for (const [index, target] of chunk.entries()) {
         const status = statuses[index];
-        const current = currentAttempt(queue, target);
+        const current = findIngestionAttempt(queue.jobsRef.current, target);
         if (!status || status.status === "missing") {
           markCancelFailure(
             queue,
@@ -301,8 +364,8 @@ export async function cancelServerIngestionJobs(
           if (current) {
             queue.updateJob(current.id, {
               status: "finalized",
-              resultState: "recovering",
-              message: "图片已写入图库，无法取消"
+              failureStage: undefined,
+              resultState: "recovering"
             });
           }
           outcomes.set(target.id, {
@@ -345,22 +408,4 @@ export async function cancelServerIngestionJobs(
     }
   }
   return outcomes;
-}
-
-export async function cancelServerIngestionJob(
-  queue: IngestionQueueApi,
-  job: IngestionJob,
-  abort?: () => void,
-  options: {
-    allowDetached?: boolean;
-    allowUnacceptedUpload?: boolean;
-  } = {}
-) {
-  const outcomes = await cancelServerIngestionJobs(
-    queue,
-    [job],
-    abort ? () => abort() : undefined,
-    options
-  );
-  return outcomes.get(job.id)?.succeeded ?? false;
 }

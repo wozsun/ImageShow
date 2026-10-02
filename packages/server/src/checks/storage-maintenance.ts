@@ -35,11 +35,9 @@ function summarizeMaintenance(
 
 async function maintainStorageUnderLock(
   lockSignal: AbortSignal,
-  callerSignal?: AbortSignal
+  callerSignal: AbortSignal
 ) {
-  const scheduleSignal = callerSignal
-    ? AbortSignal.any([callerSignal, lockSignal])
-    : lockSignal;
+  const scheduleSignal = AbortSignal.any([callerSignal, lockSignal]);
   const plan = await buildStorageMaintenancePlan(scheduleSignal);
   scheduleSignal.throwIfAborted();
   type IndexedItem = Readonly<{ index: number; item: MaintenanceItem }>;
@@ -93,20 +91,18 @@ async function maintainStorageUnderLock(
   );
 }
 
-function maintainStorage(callerSignal?: AbortSignal) {
-  callerSignal?.throwIfAborted();
-  const maintain = () =>
+function maintainStorage(callerSignal: AbortSignal) {
+  callerSignal.throwIfAborted();
+  return runWithAdvisoryLockAcquisitionSignal(callerSignal, () =>
     withStorageLocationWriteLock((lockSignal) =>
       maintainStorageUnderLock(lockSignal, callerSignal)
-    );
-  return callerSignal
-    ? runWithAdvisoryLockAcquisitionSignal(callerSignal, maintain)
-    : maintain();
+    )
+  );
 }
 
-export async function maintainStorageAndPurgeTasks(callerSignal?: AbortSignal) {
+export async function maintainStorageAndPurgeTasks(callerSignal: AbortSignal) {
   const storage = await maintainStorage(callerSignal);
-  callerSignal?.throwIfAborted();
+  callerSignal.throwIfAborted();
   const trashPurge = await maintainTrashPurgeTasks();
   return { storage, trash_purge: trashPurge };
 }

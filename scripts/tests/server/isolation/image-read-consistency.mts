@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 import { interceptPoolConnections, interceptSqlQueries } from "./database-faults.mts";
+import { pollUntil } from "../../support/polling.ts";
 
 await runIntegrationScenario(async (runtime) => {
   const databasePools = runtime.databasePools;
@@ -291,7 +292,7 @@ await runIntegrationScenario(async (runtime) => {
   ]);
   await vocabCache.refreshEntityVocabularies(["theme", "tag", "author"]);
   await runtimeAvailability.requireOperationalRedis();
-  await readyCacheCoordinator.requestReadyImageCacheRebuild();
+  await readyCacheCoordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
   assert.equal(
     readyCacheCoordinator.getReadyImageCacheCoordinatorStatus().readable,
     true
@@ -368,10 +369,12 @@ await runIntegrationScenario(async (runtime) => {
     const plan = await imageFilterPlan.resolveImageFilterPlan(entry.query, {
       redisMode: "required"
     });
-    assert.ok(
-      await readyCacheFilterIndex.resolveReadyImageFilterIndex(plan),
-      "matrix index must be warm: " + entry.name
+    // Attribute indexes build in the background; warm each one before the matrix.
+    const index = await pollUntil(
+      () => readyCacheFilterIndex.resolveReadyImageFilterIndex(plan, neverAbortedSignal),
+      (resolved) => resolved !== null
     );
+    assert.ok(index, "matrix index must be warm: " + entry.name);
   }
 
   const redisMatrixPages = new Map<
@@ -487,7 +490,9 @@ await runIntegrationScenario(async (runtime) => {
     }
     return rebuildingRedisSendCommand.call(this, command, ...args);
   };
-  const controlledRebuild = readyCacheCoordinator.requestReadyImageCacheRebuild();
+  const controlledRebuild = readyCacheCoordinator.requestReadyImageCacheRebuild({
+    signal: neverAbortedSignal
+  });
   let restoreFallbackConnections = () => {};
   try {
     await Promise.race([
@@ -560,13 +565,13 @@ await runIntegrationScenario(async (runtime) => {
     redisClient.redis.sendCommand = paginationRedisSendCommand;
     restoreInterruptedPage();
   }
-  assert.deepEqual(await ingestionOrphanCleanup.cleanupIngestionOrphans(), {
+  assert.deepEqual(await ingestionOrphanCleanup.cleanupIngestionOrphans(Date.now(), neverAbortedSignal), {
     skipped: true,
     temp_removed: 0,
     incomplete_temp_scans: 0
   });
   await runtimeAvailability.requireOperationalRedis();
-  await readyCacheCoordinator.requestReadyImageCacheRebuild();
+  await readyCacheCoordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
 
   const vocabularyRedisSendCommand = redisClient.redis.sendCommand;
   const interruptedVocabulary = new Error("controlled vocabulary GET failure");
@@ -598,7 +603,7 @@ await runIntegrationScenario(async (runtime) => {
     restoreInterruptedVocabulary();
   }
   await runtimeAvailability.requireOperationalRedis();
-  await readyCacheCoordinator.requestReadyImageCacheRebuild();
+  await readyCacheCoordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
 
   const sortRows = matrixIds.map((id, index) => ({
     id,
@@ -612,7 +617,7 @@ await runIntegrationScenario(async (runtime) => {
       [row.id, row.image_time, row.created_at, row.unset ? null : matrixTheme]
     );
   }
-  await readyCacheCoordinator.requestReadyImageCacheRebuild();
+  await readyCacheCoordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
   for (const status of ["ready", "deleted"] as const) {
     if (status === "deleted") {
       await database.pool.query(

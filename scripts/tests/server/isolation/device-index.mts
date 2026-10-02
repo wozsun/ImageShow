@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
+import { interceptPoolConnections } from "./database-faults.mts";
+import { pollUntil } from "../../support/polling.ts";
 
 await runIntegrationScenario(async (runtime) => {
   const { pool } = runtime.databasePools;
@@ -15,6 +18,8 @@ await runIntegrationScenario(async (runtime) => {
     await import("../../../../packages/server/src/images/ready-cache/indexes/filter.ts");
   const { resolveReadyImageAttributeIndex } =
     await import("../../../../packages/server/src/images/ready-cache/indexes/attribute.ts");
+  const { buildReadyImageAttributeIndex } =
+    await import("../../../../packages/server/src/images/ready-cache/indexes/attribute-builder.ts");
   const { clearReadyImageDisposableCaches } =
     await import("../../../../packages/server/src/images/ready-cache/derived/lifecycle.ts");
   const { READY_IMAGE_DERIVED_CACHE_POLICY: policy } =
@@ -47,6 +52,12 @@ await runIntegrationScenario(async (runtime) => {
   const pcPlan = createImageFilterPlan({ devices: ["pc"] });
   const mbPlan = createImageFilterPlan({ devices: ["mb"] });
   const lruTags = Array.from({ length: policy.maxResults }, (_, i) => `device-lru-${i}`);
+  // Requests never wait for derived builds; poll until the background queue publishes.
+  const publishedIndex = (plan: typeof pcPlan) =>
+    pollUntil(
+      () => resolveReadyImageFilterIndex(plan, neverAbortedSignal),
+      (index) => index !== null
+    );
   const read = async (
     query: string,
     expected: readonly { id: string }[],
@@ -90,34 +101,47 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal((await coordinator.initializeReadyImageCacheCoordinator()).readable, true);
     await clearReadyImageDisposableCaches();
 
-    const concurrent = await Promise.all(
-      Array.from({ length: 8 }, () => resolveReadyImageFilterIndex(pcPlan))
-    );
-    const first = concurrent[0];
+    let buildConnections = 0;
+    const restoreBuildConnections = interceptPoolConnections(pool, () => {
+      buildConnections += 1;
+    });
+    let first: Awaited<ReturnType<typeof publishedIndex>>;
+    try {
+      const concurrent = await Promise.all(
+        Array.from({ length: 8 }, () => resolveReadyImageFilterIndex(pcPlan, neverAbortedSignal))
+      );
+      assert.ok(
+        concurrent.every((index) => index === null),
+        "first reads fall back instead of waiting for the attribute build"
+      );
+      first = await publishedIndex(pcPlan);
+    } finally {
+      restoreBuildConnections();
+    }
+    assert.equal(buildConnections, 1, "concurrent first reads share one background build");
     assert.ok(first);
     assert.equal(first.kind, "attribute");
     assert.equal(first.count, pc.length);
     assert.equal(first.key, readyImageAttributeIndexKey({ kind: "device", value: "pc" }));
-    assert.ok(
-      concurrent.every((index) => index?.instanceToken === first.instanceToken),
-      "concurrent first reads share one published index"
-    );
     assert.equal(
       await redis.zcard(READY_IMAGE_DERIVED_REGISTRY_LRU_KEY),
       1,
-      "one device request retains one complete candidate set"
+      "concurrent first reads publish one complete candidate set"
     );
     assert.ok(first.metaKey);
     assert.ok((await redis.ttl(first.key)) > policy.ttlSeconds - 5);
     await redis.expire(first.key, 30);
     await redis.expire(first.metaKey, 30);
-    assert.equal((await resolveReadyImageFilterIndex(pcPlan))?.instanceToken, first.instanceToken);
+    assert.equal(
+      (await resolveReadyImageFilterIndex(pcPlan, neverAbortedSignal))?.instanceToken,
+      first.instanceToken
+    );
     assert.ok((await redis.ttl(first.key)) > policy.ttlSeconds - 5, "index hit renews sliding TTL");
     assert.ok(
       (await redis.ttl(first.metaKey)) > policy.ttlSeconds - 5,
       "metadata renews with the index"
     );
-    assert.equal((await resolveReadyImageFilterIndex(mbPlan))?.count, mb.length);
+    assert.equal((await publishedIndex(mbPlan))?.count, mb.length);
 
     for (const [query, expected, agent] of [
       ["device=pc", pc, "synthetic-unknown-agent"],
@@ -128,21 +152,21 @@ await runIntegrationScenario(async (runtime) => {
       ["device=auto", rows, "synthetic-unknown-agent"]
     ] as const)
       await read(query, expected, agent);
-    const sampled = await sampleReadyImages(pcPlan, 200);
+    const sampled = await sampleReadyImages(pcPlan, 200, new Set(), neverAbortedSignal);
     assert.ok(sampled.cached);
     if (sampled.cached)
       assert.deepEqual(ids(sampled.value), ids(pc), "both brightness groups remain complete");
 
     const combined = await resolveImageFilterPlan({ device: "pc", tag: "device-selected" });
     assert.equal(
-      (await resolveReadyImageFilterIndex(combined))?.count,
+      (await publishedIndex(combined))?.count,
       pc.filter(({ tagged }) => tagged).length
     );
     await read(
       "device=pc&tag=device-selected",
       pc.filter(({ tagged }) => tagged)
     );
-    const axis = await resolveReadyImageFilterIndex(
+    const axis = await publishedIndex(
       createImageFilterPlan({ devices: ["pc"], brightnesses: ["light"] })
     );
     assert.equal(
@@ -157,7 +181,7 @@ await runIntegrationScenario(async (runtime) => {
     await redis.pexpire(first.key, 1);
     await redis.pexpire(first.metaKey, 1);
     await delay(10);
-    const rebuilt = await resolveReadyImageFilterIndex(pcPlan);
+    const rebuilt = await publishedIndex(pcPlan);
     assert.equal(rebuilt?.count, pc.length);
     assert.notEqual(
       rebuilt?.instanceToken,
@@ -166,7 +190,7 @@ await runIntegrationScenario(async (runtime) => {
     );
 
     await clearReadyImageDisposableCaches();
-    const beforeEviction = await resolveReadyImageFilterIndex(pcPlan);
+    const beforeEviction = await publishedIndex(pcPlan);
     assert.ok(beforeEviction?.metaKey);
     await pool.query(
       "INSERT INTO tag(slug,display_name) SELECT value,value FROM unnest($1::text[]) value",
@@ -175,7 +199,11 @@ await runIntegrationScenario(async (runtime) => {
     const revision = coordinator.getReadyImageCacheCoordinatorStatus().meta!.appliedRevision;
     for (const tag of lruTags) {
       const key = readyImageAttributeIndexKey({ kind: "tag", value: tag });
-      assert.equal((await resolveReadyImageAttributeIndex(key, revision))?.count, 0);
+      const index = await pollUntil(
+        () => resolveReadyImageAttributeIndex(key, revision, neverAbortedSignal),
+        (resolved) => resolved !== null
+      );
+      assert.equal(index?.count, 0);
     }
     assert.equal(await redis.zcard(READY_IMAGE_DERIVED_REGISTRY_LRU_KEY), policy.maxResults);
     assert.equal(
@@ -183,7 +211,7 @@ await runIntegrationScenario(async (runtime) => {
       0,
       "capacity eviction removes the oldest device result and metadata together"
     );
-    const afterEviction = await resolveReadyImageFilterIndex(pcPlan);
+    const afterEviction = await publishedIndex(pcPlan);
     assert.equal(afterEviction?.count, pc.length);
     assert.notEqual(afterEviction?.instanceToken, beforeEviction.instanceToken);
     await read("device=pc", pc);
@@ -191,16 +219,16 @@ await runIntegrationScenario(async (runtime) => {
 
     const changed = pc[0]!;
     assert.equal((await moveImagesToTrash([changed.id])).trashed, 1);
-    assert.equal((await resolveReadyImageFilterIndex(pcPlan))?.count, pc.length - 1);
+    assert.equal((await publishedIndex(pcPlan))?.count, pc.length - 1);
     await read(
       "device=pc",
       pc.filter(({ id }) => id !== changed.id)
     );
     assert.equal((await restoreImages([changed.id])).restored, 1);
-    assert.equal((await resolveReadyImageFilterIndex(pcPlan))?.count, pc.length);
+    assert.equal((await publishedIndex(pcPlan))?.count, pc.length);
     assert.equal((await updateImages([{ id: changed.id, device: "mb" }])).updated, 1);
-    assert.equal((await resolveReadyImageFilterIndex(pcPlan))?.count, pc.length - 1);
-    assert.equal((await resolveReadyImageFilterIndex(mbPlan))?.count, mb.length + 1);
+    assert.equal((await publishedIndex(pcPlan))?.count, pc.length - 1);
+    assert.equal((await publishedIndex(mbPlan))?.count, mb.length + 1);
     await read("device=mb", [...mb, changed]);
 
     await clearReadyImageDisposableCaches();
@@ -214,7 +242,12 @@ await runIntegrationScenario(async (runtime) => {
       return Reflect.apply(originalConnect, pool, args);
     }) as typeof pool.connect;
     try {
-      assert.equal(await resolveReadyImageFilterIndex(pcPlan), null);
+      assert.equal(await resolveReadyImageFilterIndex(pcPlan, neverAbortedSignal), null);
+      const overCapRevision = coordinator.getReadyImageCacheCoordinatorStatus().meta!.appliedRevision;
+      assert.equal(
+        await buildReadyImageAttributeIndex({ kind: "device", value: "pc" }, overCapRevision),
+        null
+      );
       assert.equal(
         databaseConnections,
         0,
@@ -227,12 +260,12 @@ await runIntegrationScenario(async (runtime) => {
     }
     const cancelled = AbortSignal.abort(new Error("synthetic cancellation"));
     await assert.rejects(resolveReadyImageFilterIndex(pcPlan, cancelled), /synthetic cancellation/);
-    assert.equal((await resolveReadyImageFilterIndex(pcPlan))?.count, pc.length - 1);
+    assert.equal((await publishedIndex(pcPlan))?.count, pc.length - 1);
 
     await pool.query("UPDATE metadata SET device='mb' WHERE id=ANY($1::uuid[])", [ids(rows)]);
     await pool.query("UPDATE ready_image_revision SET revision=revision+1 WHERE singleton=1");
-    await coordinator.requestReadyImageCacheRebuild();
-    assert.equal((await resolveReadyImageFilterIndex(pcPlan))?.count, 0);
+    await coordinator.requestReadyImageCacheRebuild({ signal: neverAbortedSignal });
+    assert.equal((await publishedIndex(pcPlan))?.count, 0);
     await read("device=pc", []);
     await read("device=mb", rows);
     console.log(JSON.stringify({ device_index_contracts: "passed", synthetic_rows: rows.length }));

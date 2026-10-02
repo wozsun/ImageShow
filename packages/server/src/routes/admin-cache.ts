@@ -6,6 +6,7 @@ import {
 } from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
+import { neverAbortedSignal } from "../core/abort.ts";
 import { requestReadyImageCacheRebuild } from "../images/ready-cache/coordinator.ts";
 import { readAdminCheckStatus } from "../checks/lightweight-status.ts";
 
@@ -16,7 +17,8 @@ export function registerAdminCacheRoutes(app: Hono) {
     `${readyImageCachePath}/rebuild`,
     requireAdminPermission(adminPermissions.cacheMaintenanceRebuild),
     async (c) => {
-      void requestReadyImageCacheRebuild().catch(() => undefined);
+      // The rebuild belongs to the coordinator, not to this request.
+      void requestReadyImageCacheRebuild({ signal: neverAbortedSignal }).catch(() => undefined);
       const status = await readAdminCheckStatus();
       return c.json(apiSuccess(status satisfies AdminCheckStatusDto));
     }

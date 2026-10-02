@@ -24,7 +24,7 @@ export const externalImageProxyUserAgent =
 
 export type ExternalProxyRequest = {
   method: "GET" | "HEAD";
-  signal?: AbortSignal;
+  signal: AbortSignal;
   validators?: {
     ifNoneMatch?: string;
     ifModifiedSince?: string;
@@ -47,9 +47,9 @@ export async function proxyExternalImage(
   request: ExternalProxyRequest,
   baseHeaders: Record<string, string> = {}
 ): Promise<Response> {
-  request.signal?.throwIfAborted();
+  request.signal.throwIfAborted();
   const redirectFallback = async () => {
-    request.signal?.throwIfAborted();
+    request.signal.throwIfAborted();
     return new Response(null, {
       status: 302,
       headers: {
@@ -155,7 +155,7 @@ export async function proxyExternalImage(
     }
     return new Response(upstream.body, { status: upstream.status, headers });
   } catch (error) {
-    request.signal?.throwIfAborted();
+    request.signal.throwIfAborted();
     if (isExternalImageRejection(error)) {
       throw error;
     }

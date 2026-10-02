@@ -808,8 +808,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
         serverHandoffRevision: 10,
         serverHandoffDisplayPage: 1,
         serverHandoffProvisionalTotal: true,
-        status: "queued",
-        message: "等待服务器下载"
+        status: "queued"
       }
     }
   );
@@ -872,8 +871,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
         serverHandoffPending: true,
         serverHandoffRevision: 12,
         serverHandoffDisplayPage: 1,
-        status: "received",
-        message: "服务器已接管新 incarnation"
+        status: "received"
       }
     }
   );
@@ -947,8 +945,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
         serverHandoffPending: true,
         serverHandoffRevision: undefined,
         status: "finalized",
-        resultState: "recovering",
-        message: "图片已写入图库，正在读取结果"
+        resultState: "recovering"
       }
     }
   ).jobs[0]!;
@@ -1173,8 +1170,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
       binding: {
         sessionId,
         imageId,
-        status: "received",
-        message: "服务器已接管"
+        status: "received"
       }
     }
   ).jobs[0]!;

@@ -66,10 +66,11 @@ const emptySnapshot: GalleryDebugSnapshot = {
 };
 
 function currentJsHeapBytes() {
-  const memory = globalThis.performance as Performance & {
+  // `memory` is a non-standard Chromium extension.
+  const { memory } = performance as Performance & {
     memory?: { usedJSHeapSize?: number };
   };
-  const used = memory?.memory?.usedJSHeapSize;
+  const used = memory?.usedJSHeapSize;
   return typeof used === "number" && Number.isFinite(used)
     ? Math.max(0, used)
     : null;

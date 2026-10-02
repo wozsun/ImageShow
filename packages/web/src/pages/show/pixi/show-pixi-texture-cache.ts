@@ -134,73 +134,26 @@ async function bitmapTexture(
     return response.blob().catch(transportFailure);
   }, signal);
   if (signal.aborted) throw signal.reason;
-  if (typeof createImageBitmap === "function") {
-    let bitmap: ImageBitmap;
-    try {
-      bitmap = await resizedBitmap(blob, normalizedLod(lod));
-    } catch {
-      const source = await createImageBitmap(blob);
-      const canvas = document.createElement("canvas");
-      canvas.width = lod.pixelWidth;
-      canvas.height = lod.pixelHeight;
-      const context = canvas.getContext("2d", { alpha: false });
-      if (!context) {
-        source.close();
-        throw new Error("无法创建缩略图 LOD 解码画布");
-      }
-      const crop = coverSourceRectangle(
-        source.width,
-        source.height,
-        lod.pixelHeight / lod.pixelWidth
-      );
-      context.drawImage(
-        source,
-        crop.x,
-        crop.y,
-        crop.width,
-        crop.height,
-        0,
-        0,
-        lod.pixelWidth,
-        lod.pixelHeight
-      );
-      source.close();
-      bitmap = await createImageBitmap(canvas);
-    }
-    if (signal.aborted) {
-      bitmap.close();
-      throw signal.reason;
-    }
-    const source = new ImageSource({
-      resource: bitmap,
-      autoGenerateMipmaps: generateMipmaps,
-      scaleMode: "linear"
-    });
-    return {
-      bitmap,
-      texture: new Texture({ source })
-    };
-  }
-
-  const objectUrl = URL.createObjectURL(blob);
+  let bitmap: ImageBitmap;
   try {
-    const image = new Image();
-    image.decoding = "async";
-    image.src = objectUrl;
-    await image.decode();
-    if (signal.aborted) throw signal.reason;
+    bitmap = await resizedBitmap(blob, normalizedLod(lod));
+  } catch {
+    const source = await createImageBitmap(blob);
     const canvas = document.createElement("canvas");
     canvas.width = lod.pixelWidth;
     canvas.height = lod.pixelHeight;
     const context = canvas.getContext("2d", { alpha: false });
-    if (!context) throw new Error("无法创建缩略图 LOD 解码画布");
+    if (!context) {
+      source.close();
+      throw new Error("无法创建缩略图 LOD 解码画布");
+    }
     const crop = coverSourceRectangle(
-      image.naturalWidth,
-      image.naturalHeight,
+      source.width,
+      source.height,
       lod.pixelHeight / lod.pixelWidth
     );
     context.drawImage(
-      image,
+      source,
       crop.x,
       crop.y,
       crop.width,
@@ -210,18 +163,22 @@ async function bitmapTexture(
       lod.pixelWidth,
       lod.pixelHeight
     );
-    const source = new ImageSource({
-      resource: canvas,
-      autoGenerateMipmaps: generateMipmaps,
-      scaleMode: "linear"
-    });
-    return {
-      bitmap: null,
-      texture: new Texture({ source })
-    };
-  } finally {
-    URL.revokeObjectURL(objectUrl);
+    source.close();
+    bitmap = await createImageBitmap(canvas);
   }
+  if (signal.aborted) {
+    bitmap.close();
+    throw signal.reason;
+  }
+  const source = new ImageSource({
+    resource: bitmap,
+    autoGenerateMipmaps: generateMipmaps,
+    scaleMode: "linear"
+  });
+  return {
+    bitmap,
+    texture: new Texture({ source })
+  };
 }
 
 export class ShowPixiTextureCache {
@@ -508,7 +465,7 @@ export class ShowPixiTextureCache {
       )
         .then(({ bitmap, texture }) => {
           if (this.#destroyed || this.#entries.get(entry.key) !== entry) {
-            bitmap?.close();
+            bitmap.close();
             texture.destroy(true);
             return;
           }
@@ -518,7 +475,7 @@ export class ShowPixiTextureCache {
           );
           const projected = this.#reservedPixels - entry.reservedPixels + actualPixels;
           if (projected > this.#options.maximumPixels) {
-            bitmap?.close();
+            bitmap.close();
             texture.destroy(true);
             this.#discardFailedEntry(entry);
             return;

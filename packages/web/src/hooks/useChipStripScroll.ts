@@ -66,7 +66,6 @@ export function useChipStripScroll(focusFallbackRef?: RefObject<HTMLElement | nu
     const control = wrapRef.current;
     const box = scrollRef.current;
     if (!control || !box) return;
-    const ownerWindow = box.ownerDocument.defaultView;
     const releaseWheelTarget = () => {
       wheelTargetRef.current = null;
     };
@@ -115,14 +114,11 @@ export function useChipStripScroll(focusFallbackRef?: RefObject<HTMLElement | nu
     for (const type of directInputEvents) {
       control.addEventListener(type, releaseWheelTarget, { passive: true });
     }
-    const resizeObserver =
-      typeof ownerWindow?.ResizeObserver === "function"
-        ? new ownerWindow.ResizeObserver(() => {
-            releaseWheelTarget();
-            refreshScrollAvailability();
-          })
-        : null;
-    resizeObserver?.observe(box);
+    const resizeObserver = new ResizeObserver(() => {
+      releaseWheelTarget();
+      refreshScrollAvailability();
+    });
+    resizeObserver.observe(box);
     refreshScrollAvailability();
     return () => {
       control.removeEventListener("wheel", onWheel);
@@ -131,7 +127,7 @@ export function useChipStripScroll(focusFallbackRef?: RefObject<HTMLElement | nu
       for (const type of directInputEvents) {
         control.removeEventListener(type, releaseWheelTarget);
       }
-      resizeObserver?.disconnect();
+      resizeObserver.disconnect();
     };
   }, [refreshScrollAvailability]);
 

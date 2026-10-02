@@ -70,7 +70,7 @@ export type RedisDeepInspectionResult =
 
 export type RedisDeepInspectionOptions = {
   client: RedisDeepInspectionClient;
-  signal?: AbortSignal;
+  signal: AbortSignal;
   deadlineMs?: number;
   maxKeys?: number;
   pipelineMaxCommands?: number;
@@ -242,9 +242,7 @@ export async function inspectRedisKeyspaceDeep(
   const deadline = new AbortController();
   const deadlineError = new Error("Redis deep inspection deadline reached");
   const timer = setTimeout(() => deadline.abort(deadlineError), deadlineMs);
-  const operationSignal = options.signal
-    ? AbortSignal.any([options.signal, deadline.signal])
-    : deadline.signal;
+  const operationSignal = AbortSignal.any([options.signal, deadline.signal]);
   const state = {
     scanned_keys: 0,
     prefix_counts: emptyPrefixCounts(),
@@ -337,7 +335,7 @@ export async function inspectRedisKeyspaceDeep(
     } while (cursor !== "0");
     return measuredResult(state, now);
   } catch (error) {
-    if (options.signal?.aborted) {
+    if (options.signal.aborted) {
       throw abortSignalError(options.signal, "Redis deep inspection aborted");
     }
     if (deadline.signal.aborted) {

@@ -477,12 +477,11 @@ test("[Web/内容接入] 重复归零 CAS 失败保留可操作卡片并允许�
     });
     await settleUntil(() => decisionCalls === 1 && Boolean(details?.error));
     assert.match(details?.error ?? "", /重复状态恢复失败/);
-    const firstPatch = appliedPatches[0]?.get(jobs[0]!.id);
-    assert.ok(firstPatch);
-    assert.equal("duplicateCount" in firstPatch, false);
-    assert.equal("duplicates" in firstPatch, false);
-    assert.equal(jobs[0]?.duplicateCount, 1);
-    assert.equal(jobs[0]?.duplicates.length, 1);
+    // Until the decision CAS succeeds, no patch clears the actionable duplicate state.
+    assert.ok(appliedPatches.every((patches) => {
+      const patch = patches.get(jobs[0]!.id);
+      return !patch || (!("duplicateCount" in patch) && !("duplicates" in patch));
+    }));
     await React.act(async () => {
       details!.refresh();
       await Promise.resolve();

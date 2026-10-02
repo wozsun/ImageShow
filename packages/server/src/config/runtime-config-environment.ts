@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { RuntimeConfig } from "@imageshow/shared/browser";
+import { errorMessage } from "../core/api-error.ts";
 import {
   mergeRuntimeConfig,
   runtimeConfigDefaults,
@@ -265,7 +266,7 @@ function parseStrictJsonValue(source: string) {
           return JSON.parse(source.slice(start, index)) as string;
         } catch (error) {
           throw new Error(
-            `invalid JSON string at character ${start + 1}: ${error instanceof Error ? error.message : String(error)}`
+            `invalid JSON string at character ${start + 1}: ${errorMessage(error)}`
           );
         }
       } else if (character.charCodeAt(0) < 0x20) {
@@ -433,7 +434,7 @@ export function runtimeConfigFromEnvironment(
       setPatchValue(patch, binding.path, parseEnvironmentValue(binding, value));
     } catch (error) {
       throw new Error(
-        `Invalid ${binding.environmentVariable} for RuntimeConfig path ${binding.path}: ${error instanceof Error ? error.message : String(error)}`,
+        `Invalid ${binding.environmentVariable} for RuntimeConfig path ${binding.path}: ${errorMessage(error)}`,
         { cause: error }
       );
     }

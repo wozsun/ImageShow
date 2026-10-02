@@ -12,6 +12,7 @@ import { removeDriverObject } from "./storage-fixture.mts";
 import { interceptSqlQueries } from "./database-faults.mts";
 import { createHash, randomUUID, randomUUIDv7 } from "node:crypto";
 import { createIngestionScenarioFixture } from "./ingestion-scenario-fixture.mts";
+import { neverAbortedSignal } from "../../../../packages/server/src/core/abort.ts";
 import { runIntegrationScenario } from "./integration-runtime.mts";
 
 await runIntegrationScenario(async (runtime) => {
@@ -26,6 +27,8 @@ await runIntegrationScenario(async (runtime) => {
   const runtimeConfigStore =
     await import("../../../../packages/server/src/config/runtime-config-store.ts");
   const objectAccess = await import("../../../../packages/server/src/storage/objects/access.ts");
+  const localObjectExists = async (prefix: "large" | "medium" | "small", key: string) =>
+    (await registry.resolveStorageAccess("local")).driver.exists(prefix, key);
   const preparedFiles =
     await import("../../../../packages/server/src/images/ingestion/raw/prepared.ts");
   const redisClient = await import("../../../../packages/server/src/core/redis/client.ts");
@@ -702,28 +705,25 @@ await runIntegrationScenario(async (runtime) => {
       new AbortController().signal
     );
     assert.equal(
-      await objectAccess.storageObjectExists(
+      await localObjectExists(
         committedObjectPrefix,
-        committedObjectKey,
-        "local"
+        committedObjectKey
       ),
       false,
       "PG 失败后 guard 必须删除未引用 full 候选"
     );
     assert.equal(
-      await objectAccess.storageObjectExists(
+      await localObjectExists(
         "small",
-        committedThumbnailKey,
-        "local"
+        committedThumbnailKey
       ),
       false,
       "PG 失败后 guard 必须删除未引用 thumbnail 候选"
     );
     assert.equal(
-      await objectAccess.storageObjectExists(
+      await localObjectExists(
         committedObjectPrefix,
-        commitFullCandidateKey,
-        "local"
+        commitFullCandidateKey
       ),
       false,
       "guard 必须清理 local 原子写入崩溃候选"
@@ -788,28 +788,25 @@ await runIntegrationScenario(async (runtime) => {
       new AbortController().signal
     );
     assert.equal(
-      await objectAccess.storageObjectExists(
+      await localObjectExists(
         committedObjectPrefix,
-        committedObjectKey,
-        "local"
+        committedObjectKey
       ),
       true,
       "PG 引用建立后 guard 必须永久保留正式对象"
     );
     assert.equal(
-      await objectAccess.storageObjectExists(
+      await localObjectExists(
         "small",
-        committedThumbnailKey,
-        "local"
+        committedThumbnailKey
       ),
       true,
       "PG 引用建立后 guard 必须永久保留正式缩略图"
     );
     assert.equal(
-      await objectAccess.storageObjectExists(
+      await localObjectExists(
         "small",
-        retriedThumbnailCandidateKey,
-        "local"
+        retriedThumbnailCandidateKey
       ),
       false,
       "PG 正式引用不应保留 local 原子写入临时候选"
@@ -890,6 +887,6 @@ await runIntegrationScenario(async (runtime) => {
         key: committedThumbnailKey,
         storageSlug: "local"
       }
-    ])
+    ], { signal: neverAbortedSignal }, neverAbortedSignal)
   );
 });

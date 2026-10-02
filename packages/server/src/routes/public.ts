@@ -44,7 +44,7 @@ const siteConfigRepresentation = createApiSuccessSnapshot((config: RuntimeConfig
   siteConfigPayload(config)
 );
 
-function storedResponseRequest(context: Context): StoredResponseRequest & { signal: AbortSignal } {
+function storedResponseRequest(context: Context): StoredResponseRequest {
   return {
     range: context.req.header("range"),
     ifNoneMatch: context.req.header("if-none-match"),
