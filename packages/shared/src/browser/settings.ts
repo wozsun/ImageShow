@@ -3,6 +3,9 @@ import type { LogLevel, SiteVersionSettings } from "./common.ts";
 import type { ImportSourceTypeDto } from "./ingestion.ts";
 import type { PublicImageOrder, RandomImageSize } from "./images.ts";
 
+// Shipped with the Web build; used when site.icon is empty.
+export const builtInSiteIconPath = "/assets/brand/favicon.svg";
+
 export const siteRoots = ["home", "show", "gallery"] as const;
 export type SiteRoot = (typeof siteRoots)[number];
 

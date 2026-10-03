@@ -366,7 +366,10 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": target,
-      "/random": target
+      "/random": target,
+      // Trailing slash keeps the built-in /assets/ files on the Vite dev server.
+      "/asset/": target,
+      "/favicon.ico": target
     }
   }
 });

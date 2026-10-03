@@ -55,9 +55,11 @@ export const siteDomain = z
 export const siteIcon = z
   .string()
   .trim()
-  .min(1)
   .max(2048)
-  .refine(isRootRelativeOrHttpsUrl, "站点图标必须是站内绝对路径或 HTTPS URL");
+  .refine(
+    (value) => !value || isRootRelativeOrHttpsUrl(value),
+    "站点图标必须是站内绝对路径或 HTTPS URL"
+  );
 export const siteDescription = z.string().trim().max(200);
 export const siteFooterText = z.string().trim().max(200);
 export const siteFooter = z.string().trim().max(2000);

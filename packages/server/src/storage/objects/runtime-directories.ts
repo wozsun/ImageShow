@@ -6,6 +6,7 @@ import { STORAGE_PREFIXES } from "./keys.ts";
 export async function ensureRuntimeDirectories() {
   await mkdir(runtimePaths.configDirectory, { recursive: true });
   await mkdir(runtimePaths.storageDirectory, { recursive: true });
+  await mkdir(runtimePaths.assetDirectory, { recursive: true });
   await mkdir(runtimePaths.logDirectory, { recursive: true });
   await mkdir(runtimePaths.tempDirectory, { recursive: true });
   for (const prefix of STORAGE_PREFIXES) {

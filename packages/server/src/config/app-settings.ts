@@ -1,8 +1,9 @@
 import { z } from "zod";
-import type {
-  AdminSettings,
-  RuntimeConfig,
-  SiteConfigDto
+import {
+  builtInSiteIconPath,
+  type AdminSettings,
+  type RuntimeConfig,
+  type SiteConfigDto
 } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { assertLocalImageHostForSite } from "../storage/backends/registry.ts";
@@ -49,14 +50,20 @@ export function resolveIngestionSnapshotLimit(requestedLimit?: number) {
   return requestedLimit ?? getRuntimeConfig().ingestion.list_page_size;
 }
 
+function effectiveSiteIcon(runtime: RuntimeConfig) {
+  const icon = runtime.site.icon || builtInSiteIconPath;
+  // Build assets follow the static resource address; other paths are used as configured.
+  return icon.startsWith("/assets/")
+    ? `${staticResourceBaseUrl(runtime)}${icon.slice("/assets".length)}`
+    : icon;
+}
+
 export function siteConfigPayload(runtime: RuntimeConfig = getRuntimeConfig()): SiteConfigDto {
-  const { icon, title, description, header_name, root, home, show, gallery, icp, mps, footer } =
+  const { title, description, header_name, root, home, show, gallery, icp, mps, footer } =
     runtime.site;
   return {
     site: {
-      icon: icon.startsWith("/assets/")
-        ? `${staticResourceBaseUrl(runtime)}${icon.slice("/assets".length)}`
-        : icon,
+      icon: effectiveSiteIcon(runtime),
       title,
       description: description || title,
       header_name,

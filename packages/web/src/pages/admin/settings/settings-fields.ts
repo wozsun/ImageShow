@@ -1,4 +1,8 @@
-import { variantSettingLimits, type RuntimeConfig } from "@imageshow/shared/browser";
+import {
+  builtInSiteIconPath,
+  variantSettingLimits,
+  type RuntimeConfig
+} from "@imageshow/shared/browser";
 
 export const settingsSections = {
   site: {
@@ -183,7 +187,8 @@ const settingsFields = {
     label: "站点图标",
     kind: "text",
     maxLength: 2048,
-    hint: "站内绝对路径或 HTTPS URL。"
+    placeholder: builtInSiteIconPath,
+    hint: "留空使用内置图标；可填站内绝对路径或 HTTPS URL，自定义图标放入 data/asset 后填写 /asset/文件名。该目录文件缓存 1 年，更换时请改用新文件名，同名覆盖需手动刷新 CDN 缓存。"
   },
   "site.version.enabled": {
     group: "visibility",

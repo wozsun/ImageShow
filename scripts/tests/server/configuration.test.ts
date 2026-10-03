@@ -929,7 +929,7 @@ test("[Server/配置] SPA 复用已发布快照并同步配置、验证器和嵌
   ).href;
   const helperSource = `
 import assert from "node:assert/strict";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { setTimeout as delay } from "node:timers/promises";
@@ -1195,7 +1195,8 @@ registerSpaRoutes(resources);
 const request = (host, path, method = "GET", headers = {}) => resources.request("http://internal.test" + path, {
   method, headers: { Host: host, ...headers }
 });
-await updateRuntimeConfig({ site: { domain: "main.example.test", icon: "/assets/brand/favicon.svg" } });
+// An empty site icon resolves to the built-in icon, which follows the static resource address.
+await updateRuntimeConfig({ site: { domain: "main.example.test", icon: "" } });
 const oldPage = await request("main.example.test", "/admin");
 const oldPageEtag = oldPage.headers.get("etag");
 const mainPath = parseHTML(await oldPage.text()).document.querySelector('script[type="module"][src]').getAttribute("src");
@@ -1269,6 +1270,55 @@ assert.equal((await request("asset.example.test", "/assets/missing.js")).status,
 const restoredPage = await request("main.example.test", "/admin");
 const restoredDoc = parseHTML(await restoredPage.text()).document;
 assert.ok(restoredDoc.querySelector('script[type="module"][src]').getAttribute("src").startsWith("/assets/"));
+
+// Operator images under data/asset are served on the main Host as long-lived public resources.
+const assetRoot = join(root, "asset");
+await mkdir(join(assetRoot, "sub"), { recursive: true });
+await writeFile(join(assetRoot, "logo.svg"), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+await writeFile(join(assetRoot, "sub", "中文 图.png"), Buffer.from([1, 2, 3]));
+await writeFile(join(assetRoot, ".hidden.png"), Buffer.from([1]));
+await writeFile(join(assetRoot, "note.txt"), "text");
+const logo = await request("main.example.test", "/asset/logo.svg");
+assert.equal(logo.status, 200);
+assert.match(logo.headers.get("Content-Type"), /^image[/]svg[+]xml/);
+assert.match(logo.headers.get("Cache-Control"), /immutable/);
+assert.match(logo.headers.get("Content-Security-Policy"), /sandbox/);
+assert.equal(logo.headers.get("Access-Control-Allow-Origin"), "*");
+await logo.text();
+assert.equal((await request("main.example.test", "/asset/logo.svg", "GET", { "If-None-Match": logo.headers.get("ETag") })).status, 304);
+await writeFile(join(assetRoot, "logo.svg"), '<svg xmlns="http://www.w3.org/2000/svg" width="1"/>');
+const replaced = await request("main.example.test", "/asset/logo.svg", "GET", { "If-None-Match": logo.headers.get("ETag") });
+assert.equal(replaced.status, 200);
+assert.match(await replaced.text(), /width/);
+const nested = await request("main.example.test", "/asset/sub/" + encodeURIComponent("中文 图.png"));
+assert.equal(nested.status, 200);
+assert.deepEqual([...Buffer.from(await nested.arrayBuffer())], [1, 2, 3]);
+for (const forbidden of ["/asset/.hidden.png", "/asset/note.txt", "/asset/missing.png"]) {
+  const result = await request("main.example.test", forbidden);
+  assert.equal(result.status, 404, forbidden);
+  assert.equal(result.headers.get("Cache-Control"), "no-store");
+}
+
+// /favicon.ico redirects to the effective icon; custom data/asset files stay on the main Host.
+const faviconLocation = async () => {
+  const response = await request("main.example.test", "/favicon.ico");
+  assert.equal(response.status, 302);
+  return response.headers.get("Location");
+};
+assert.equal(await faviconLocation(), "/assets/brand/favicon.svg");
+await updateRuntimeConfig({ site: { assets_base_url: "https://asset.example.test/static" } });
+assert.equal(await faviconLocation(), "https://asset.example.test/static/brand/favicon.svg");
+assert.equal((await request("asset.example.test", "/asset/logo.svg")).status, 404);
+assert.equal((await request("asset.example.test", "/static/asset/logo.svg")).status, 404);
+await updateRuntimeConfig({ site: { icon: "/asset/sub/中文 图.png" } });
+assert.equal(await faviconLocation(), "/asset/sub/" + encodeURIComponent("中文 图.png"));
+const customPage = parseHTML(await (await request("main.example.test", "/admin")).text()).document;
+assert.equal(customPage.querySelector('link[rel="icon"]').getAttribute("href"), "/asset/sub/中文 图.png");
+await updateRuntimeConfig({ site: { icon: "/.//evil.example.test/x.png" } });
+assert.equal(await faviconLocation(), "/evil.example.test/x.png");
+await updateRuntimeConfig({ site: { icon: "https://cdn.example.test/icon.png" } });
+assert.equal(await faviconLocation(), "https://cdn.example.test/icon.png");
+await updateRuntimeConfig({ site: { icon: "", assets_base_url: "" } });
 console.log("spa-description-ok");
 `;
   try {

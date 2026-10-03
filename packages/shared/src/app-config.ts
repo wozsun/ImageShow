@@ -143,7 +143,7 @@ export const appConfig = {
   runtimeDefaults: {
     site: {
       domain: "example.com",
-      icon: "/assets/brand/favicon.svg",
+      icon: "",
       title: "ImageShow",
       description: "画廊与随机图片API",
       header_name: "ImageShow",

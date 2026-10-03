@@ -35,6 +35,7 @@ const dataDirectory =
 export const runtimePaths = Object.freeze({
   configDirectory: dataDirectory,
   storageDirectory: join(dataDirectory, "storage"),
+  assetDirectory: join(dataDirectory, "asset"),
   tempDirectory: join(dataDirectory, "temp"),
   logDirectory: join(dataDirectory, "log"),
   configFile: join(dataDirectory, "config.json")

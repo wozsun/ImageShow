@@ -23,7 +23,7 @@
 | `site.title` | `"ImageShow"` | 浏览器标签页上的网页标题，不能为空 |
 | `site.header_name` | `"ImageShow"` | 页面顶部和后台显示的站点名称，不能为空 |
 | `site.description` | `"画廊与随机图片API"` | 网页描述，供搜索引擎使用，最多 200 字；留空时使用网页标题 |
-| `site.icon` | `"/assets/brand/favicon.svg"` | 站点图标，以 `/` 开头的站内路径或 HTTPS 地址，不能为空，最多 2048 字符 |
+| `site.icon` | `""` | 站点图标，留空使用内置图标；可填以 `/` 开头的站内路径或 HTTPS 地址，最多 2048 字符。自定义图标见[自定义静态资源](#自定义静态资源) |
 | `site.version.enabled` | `true` | 在后台显示版本信息 |
 | `site.version.link_enabled` | `true` | 版本信息可点击打开 GitHub Release |
 | `site.root` | `"home"` | 打开站点根路径 `/` 时显示的页面：`home` 首页、`gallery` 画廊、`show` 展映。所选页面关闭时，依次改用画廊、展映、首页 |
@@ -38,7 +38,7 @@
 | --- | --- | --- |
 | `site.home.enabled` | `true` | 开放首页 `/home` |
 | `site.home.browse_target` | `"show"` | 在首页选好条件后进入的页面：`show` 展映或 `gallery` 画廊 |
-| `site.home.background` | `""` | 首页背景图，留空使用本站随机图；可填以 `/` 开头的站内路径或 HTTPS 地址，最多 2048 字符 |
+| `site.home.background` | `""` | 首页背景图，留空使用本站随机图；可填以 `/` 开头的站内路径（如[自定义静态资源](#自定义静态资源)）或 HTTPS 地址，最多 2048 字符 |
 | `site.home.banner_label` | `"ImageShow · A FAN-MADE PHOTO HANDBOOK"` | 首页大标题上方的小字，1–160 字 |
 | `site.home.banner_title` | `"我们一起，\n收藏这些瞬间。"` | 首页大标题，1–80 字，在 JSON 中用 `\n` 换行 |
 | `site.icp` | `""` | ICP 备案号，显示在首页底部并链接到备案查询网站，最多 200 字 |
@@ -75,6 +75,23 @@
 ```ini
 SITE_FOOTER='Powered by <a href="https://github.com/wozsun/ImageShow">ImageShow</a>'
 ```
+
+### 自定义静态资源
+
+`data/asset/`（容器内为 `/app/data/asset/`）存放自己的图标、背景图等图片，随 `data/` 一起挂载和备份，应用启动时会自动创建这个目录。放入的文件通过主站的 `/asset/` 访问：
+
+| 文件位置 | 访问地址 |
+| --- | --- |
+| `data/asset/logo.png` | `/asset/logo.png` |
+| `data/asset/bg/home.webp` | `/asset/bg/home.webp` |
+
+例如把图标放到 `data/asset/logo.png`，再把 `site.icon` 设为 `/asset/logo.png`。
+
+- 支持 SVG、PNG、ICO、WebP、JPEG、GIF、AVIF 图片，可以建子目录；以 `.` 开头的文件和目录不会提供，文件名不要包含 `%`、`#`、`?`。
+- 注意区分 `/asset/`（你放入的文件）和 `/assets/`（应用自带的文件，内置图标就在其中）。
+- 只能通过主站访问，不随[静态资源地址](#静态资源地址)切换域名。
+- 文件按长期不变的资源缓存（1 年）。更换图片时请使用新文件名并更新对应配置；同名覆盖后，浏览器可能继续使用旧文件，使用 CDN 时还需手动刷新该地址的 CDN 缓存。
+- 浏览器自动请求的 `/favicon.ico` 会跳转到当前的站点图标。
 
 ### 静态资源地址
 
@@ -156,7 +173,7 @@ SITE_FOOTER='Powered by <a href="https://github.com/wozsun/ImageShow">ImageShow<
 
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
-| `admin.login_background` | `""` | 登录页背景图，留空使用本站随机图；可填以 `/` 开头的站内路径或 HTTPS 地址，最多 2048 字符 |
+| `admin.login_background` | `""` | 登录页背景图，留空使用本站随机图；可填以 `/` 开头的站内路径（如[自定义静态资源](#自定义静态资源)）或 HTTPS 地址，最多 2048 字符 |
 | `admin.image_page_size` | `60` | 后台图片列表每页数量，10–200 |
 | `admin.recent_uploads` | `16` | 后台概览中“最近上传”的数量，1–60 |
 | `security.session_ttl_seconds` | `604800` | 登录有效期（默认 7 天），300–31536000。登录或页面重新验证登录状态时续期 |
