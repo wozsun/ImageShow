@@ -1348,9 +1348,9 @@ export function useIngestionQueue(
   );
 
   const removeLibraryDuplicate = useCallback((imageId: string) => {
+    // Duplicates are grouped by the job's own MD5.
     const md5 = jobsRef.current
-      .flatMap((job) => job.duplicates)
-      .find((duplicate) => duplicate.id === imageId)?.large_md5;
+      .find((job) => job.duplicates.some((duplicate) => duplicate.id === imageId))?.md5;
     if (md5) invalidateIngestionDuplicateDetails(md5);
   }, []);
 

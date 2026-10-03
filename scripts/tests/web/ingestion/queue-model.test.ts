@@ -1109,8 +1109,6 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
     metadata: localPlaceholder.draft,
     storage_slug: "local",
     prepared: {
-      preview_url: "/prepared/small",
-      preview_full_url: "/prepared/large",
       original_width: 6000,
       original_height: 4000,
       md5: "a".repeat(32),
@@ -1125,6 +1123,15 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
       duplicate_count: 0
     }
   });
+  // Prepared previews are addressed by the pair the Server routes on.
+  assert.equal(
+    restoredPrepared.preview,
+    `/api/admin/ingestion/preview/${"A".repeat(43)}/00000000-0000-7091-8000-00000000008e`
+  );
+  assert.equal(
+    restoredPrepared.previewFull,
+    `/api/admin/ingestion/preview/${"A".repeat(43)}/00000000-0000-7091-8000-00000000008e/full`
+  );
   assert.equal(restoredPrepared.originalWidth, 6000);
   assert.equal(restoredPrepared.originalHeight, 4000);
   assert.deepEqual(restoredPrepared.variantQuality, { large: 85, medium: 80, small: 70 });

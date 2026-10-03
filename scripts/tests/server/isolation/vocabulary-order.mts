@@ -22,6 +22,8 @@ await runIntegrationScenario(async (runtime) => {
     await import("../../../../packages/server/src/users/admin-session.ts");
   const { getPublicGalleryStats } =
     await import("../../../../packages/server/src/images/read-models/gallery-stats.ts");
+  const { getPublicGalleryFacets } =
+    await import("../../../../packages/server/src/images/read-models/facets.ts");
   const { updateImages } = await import("../../../../packages/server/src/images/image-update.ts");
   const { moveImagesToTrash, restoreImages } =
     await import("../../../../packages/server/src/images/trash/mutations.ts");
@@ -209,6 +211,7 @@ await runIntegrationScenario(async (runtime) => {
         ]
       );
       const stats = await getPublicGalleryStats({}, neverAbortedSignal);
+      const facets = await getPublicGalleryFacets(neverAbortedSignal);
       const expectedOrder = slugs(await entity.list());
       const visible = (items: readonly { slug: string }[]) =>
         slugs(items).filter((slug) => slug !== "null");
@@ -217,9 +220,16 @@ await runIntegrationScenario(async (runtime) => {
         expectedOrder
       );
       const populated = entity.kind === "tag" ? update.tags : ["order-auto"];
+      // Public order comes from the facets; statistics only carry counted members.
       assert.deepEqual(
-        visible(stats[entity.field]),
-        expectedOrder.filter((slug) => populated.includes(slug))
+        visible(facets[entity.field]),
+        entity.kind === "tag"
+          ? expectedOrder
+          : expectedOrder.filter((slug) => populated.includes(slug))
+      );
+      assert.deepEqual(
+        visible(stats[entity.field]).sort(),
+        expectedOrder.filter((slug) => populated.includes(slug)).sort()
       );
     }
     for (const baseline of [

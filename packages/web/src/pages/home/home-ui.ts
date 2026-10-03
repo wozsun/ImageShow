@@ -1,5 +1,5 @@
 import { unsetThemeFilter } from "@imageshow/shared/browser";
-import type { GalleryStatsFacetDto } from "@imageshow/shared/browser";
+import type { FacetOptionDto, GalleryStatsFacetDto } from "@imageshow/shared/browser";
 import { displayNameOrSlug } from "../../lib/ui/formatters.js";
 import { publicFilterOptionState } from "../../lib/gallery/public-filter-options.js";
 
@@ -24,13 +24,8 @@ export const homeRevealItemLimits = {
   themes: 9
 } as const;
 
-type HomeFacetCount = {
-  image_count: number;
-  slug: string;
-};
-
 export function boundedHomeRevealIndexes(
-  items: readonly HomeFacetCount[],
+  items: readonly GalleryStatsFacetDto[],
   selected: ReadonlySet<string>,
   availabilityUnverified: boolean,
   limit: number
@@ -54,6 +49,31 @@ export function selectedSlugs(value: string) {
     .split(",").filter(Boolean);
 }
 
+/**
+ * Lists the members counted by the statistics in session facet order. A member
+ * newer than the loaded facets keeps its slug until the facets revalidate.
+ */
+export function homeFacetOptions(
+  counts: readonly GalleryStatsFacetDto[],
+  facets: readonly FacetOptionDto[]
+): Array<GalleryStatsFacetDto & FacetOptionDto> {
+  const imageCounts = new Map(counts.map((item) => [item.slug, item.image_count]));
+  const named = facets
+    .filter((entry) => imageCounts.has(entry.slug))
+    .map((entry) => ({
+      slug: entry.slug,
+      display_name: entry.display_name,
+      image_count: imageCounts.get(entry.slug)!
+    }));
+  const namedSlugs = new Set(named.map((item) => item.slug));
+  return [
+    ...named,
+    ...counts
+      .filter((item) => !namedSlugs.has(item.slug))
+      .map((item) => ({ ...item, display_name: "" }))
+  ];
+}
+
 export function facetLabel(item: { slug: string; display_name?: string }) {
   if (item.slug === unsetThemeFilter && !item.display_name?.trim()) return "未设置";
   return displayNameOrSlug(item);
@@ -64,7 +84,7 @@ export function countLabel(count: number) {
 }
 
 export function selectedFacetLabels(
-  items: readonly GalleryStatsFacetDto[],
+  items: readonly FacetOptionDto[],
   value: string
 ) {
   const names = new Map(items.map((item) => [item.slug, facetLabel(item)]));
@@ -72,5 +92,5 @@ export function selectedFacetLabels(
     .split(",")
     .map((slug) => slug.replace(/^!/, ""))
     .filter(Boolean)
-    .map((slug) => names.get(slug) ?? slug);
+    .map((slug) => names.get(slug) ?? facetLabel({ slug }));
 }

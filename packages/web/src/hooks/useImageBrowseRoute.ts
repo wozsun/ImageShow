@@ -31,10 +31,12 @@ export function useImageBrowseRoute() {
   );
   const requiresVocabulary = params.has("tag");
   const vocabularyError = requiresVocabulary ? facetsQuery.error : null;
+  // A failed background refresh keeps a loaded vocabulary that resolves every tag;
+  // an unresolved tag still reports the failed refresh instead of an unknown tag.
   const error =
     parsed.error instanceof TagFilterError && parsed.error.kind === "unknown"
       ? (vocabularyError ?? parsed.error)
-      : (parsed.error ?? vocabularyError);
+      : (parsed.error ?? (facetsQuery.data ? null : vocabularyError));
   const ready = !error && (!requiresVocabulary || Boolean(facetsQuery.data));
   const linkParams = new URLSearchParams(params);
   if (ready && linkParams.has("tag")) {

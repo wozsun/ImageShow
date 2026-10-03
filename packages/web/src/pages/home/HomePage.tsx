@@ -19,6 +19,7 @@ import { AppHeader } from "../../components/navigation/AppHeader.js";
 import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
 import { usePublicFilterStats } from "../../hooks/usePublicFilterStats.js";
+import { useGalleryFacets } from "../../lib/api/site-queries.js";
 import { publicHomeBrowsePath } from "../../lib/constants.js";
 import {
   emptyGalleryFilters,
@@ -91,6 +92,10 @@ export function HomePage({
   );
   const statsQuery = usePublicFilterStats(statsSearch);
   const stats = statsQuery.displayData;
+  const facetsQuery = useGalleryFacets();
+  const facets = facetsQuery.data;
+  // A failed background refresh keeps the loaded facets on display.
+  const catalogFailed = statsQuery.isError || (facetsQuery.isError && !facets);
   const background = site.home.background;
   const bannerLabel = site.home.banner_label;
   const bannerTitle = site.home.banner_title;
@@ -158,6 +163,7 @@ export function HomePage({
             filters={filters}
             browsePath={browsePath}
             stats={stats}
+            facets={facets}
             isPending={statsQuery.isPending}
             isError={statsQuery.isError}
             isPlaceholderData={statsQuery.isPlaceholderData}
@@ -179,14 +185,18 @@ export function HomePage({
         armed={entrance.catalogArmed}
         filters={filters}
         stats={stats}
-        isPending={statsQuery.isPending}
-        isError={statsQuery.isError}
+        facets={facets}
+        isPending={statsQuery.isPending || facetsQuery.isPending}
+        isError={catalogFailed}
         isRefreshing={statsQuery.isFetching}
         availabilityUnverified={statsQuery.availabilityUnverified}
         onFiltersChange={updateFilters}
         tagMode={tagMode}
         onTagModeChange={setTagMode}
-        onRetry={() => void statsQuery.refetch()}
+        onRetry={() => {
+          if (statsQuery.isError) void statsQuery.refetch();
+          if (facetsQuery.isError) void facetsQuery.refetch();
+        }}
         onCatalogIntent={entrance.revealImmediately}
       />
       <HomeFooter site={site} embedded={embedded} />

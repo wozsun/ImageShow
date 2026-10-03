@@ -55,6 +55,8 @@ await runIntegrationScenario(async (runtime) => {
   }
   const { getPublicGalleryStats } =
     await import("../../../../packages/server/src/images/read-models/gallery-stats.ts");
+  const { getPublicGalleryFacets } =
+    await import("../../../../packages/server/src/images/read-models/facets.ts");
   const { readPublicGalleryCountSnapshot } =
     await import("../../../../packages/server/src/images/read-models/gallery-stats-sql.ts");
   const { parseReadyImageGlobalStats } =
@@ -74,7 +76,7 @@ await runIntegrationScenario(async (runtime) => {
     const client = await pool.connect();
     const statements: string[] = [];
     try {
-      const result = await readPublicGalleryCountSnapshot(
+      const snapshot = await readPublicGalleryCountSnapshot(
         plan,
         {
           query: (async (text: string, values?: unknown[]) => {
@@ -88,7 +90,7 @@ await runIntegrationScenario(async (runtime) => {
         context
       );
       return {
-        ...result,
+        snapshot,
         selects: statements.filter((sql) => /^SELECT\b/i.test(sql.trim())).length
       };
     } finally {
@@ -240,12 +242,7 @@ await runIntegrationScenario(async (runtime) => {
             rows.length
           )
         };
-        // Compare the real SQL paths under the same data, including cold vocabulary.
-        await runtime.redisClient.redis.del(
-          "imageshow:theme_vocab",
-          "imageshow:tag_vocab",
-          "imageshow:author_vocab"
-        );
+        // Compare the real SQL paths under the same data.
         for (const query of [
           {},
           { device: "pc" as const },
@@ -262,9 +259,8 @@ await runIntegrationScenario(async (runtime) => {
             `global member reuse: ${JSON.stringify(query)}`
           );
           assert.equal(full.selects, Object.keys(query).length ? 7 : 4);
-          // Warm vocabulary keeps the filtered path at six groups plus one revision read.
-          const warm = await readCounts(plan, context);
-          assert.equal(warm.selects, Object.keys(query).length ? 7 : 4);
+          // Reused members keep the filtered path at six groups plus one revision read.
+          assert.equal(mixed.selects, Object.keys(query).length ? 7 : 4);
           const mismatch = await readCounts(plan, {
             revision: "999999999",
             globalStats: new Map([["total", 9999]])
@@ -640,7 +636,7 @@ await runIntegrationScenario(async (runtime) => {
       await import("../../../../packages/server/src/themes/mutations.ts");
     await updateThemeDisplayName("matrix-empty", "已重命名");
     assert.equal(
-      (await getPublicGalleryStats({}, neverAbortedSignal)).themes
+      (await getPublicGalleryFacets(neverAbortedSignal)).themes
         .find((item) => item.slug === "matrix-empty")
         ?.display_name,
       "已重命名"

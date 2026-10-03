@@ -5,7 +5,7 @@ import {
   TagFilterError,
   type TagMatchMode
 } from "@imageshow/shared/browser";
-import type { GalleryStatsDto } from "@imageshow/shared/browser";
+import type { GalleryFacetsDto, GalleryStatsDto } from "@imageshow/shared/browser";
 import {
   useRef,
   useState,
@@ -30,6 +30,7 @@ import {
   deviceLabels,
   deviceOptions,
   facetLabel,
+  homeFacetOptions,
   homeRevealItemLimits,
   selectedSlugs
 } from "./home-ui.js";
@@ -201,6 +202,7 @@ export function HomeCatalog({
   armed,
   filters,
   stats,
+  facets,
   isPending,
   isError,
   isRefreshing,
@@ -215,6 +217,7 @@ export function HomeCatalog({
   armed: boolean;
   filters: GalleryFilters;
   stats: GalleryStatsDto | undefined;
+  facets: GalleryFacetsDto | undefined;
   isPending: boolean;
   isError: boolean;
   isRefreshing: boolean;
@@ -238,7 +241,16 @@ export function HomeCatalog({
   const brightnessCounts = new Map(
     stats?.brightnesses.map((item) => [item.brightness, item.image_count]) ?? []
   );
-  const themes = themesWithUnsetLast(stats?.themes ?? []);
+  // Counts and names arrive separately; the catalog waits for both so its first display
+  // never switches labels.
+  const options = stats && facets
+    ? {
+        themes: themesWithUnsetLast(homeFacetOptions(stats.themes, facets.themes)),
+        tags: homeFacetOptions(stats.tags, facets.tags),
+        authors: homeFacetOptions(stats.authors, facets.authors)
+      }
+    : null;
+  const themes = options?.themes ?? [];
   const themeRevealIndexes = boundedHomeRevealIndexes(
     themes,
     themeSet,
@@ -246,13 +258,13 @@ export function HomeCatalog({
     homeRevealItemLimits.themes
   );
   const tagRevealIndexes = boundedHomeRevealIndexes(
-    stats?.tags ?? [],
+    options?.tags ?? [],
     tagSet,
     availabilityUnverified,
     homeRevealItemLimits.tags
   );
   const authorRevealIndexes = boundedHomeRevealIndexes(
-    stats?.authors ?? [],
+    options?.authors ?? [],
     authorSet,
     availabilityUnverified,
     homeRevealItemLimits.authors
@@ -332,7 +344,7 @@ export function HomeCatalog({
         </HomeRevealSection>
       )}
 
-      {stats && (
+      {options && (
         <>
           <HomeRevealSection
             armed={armed}
@@ -470,7 +482,7 @@ export function HomeCatalog({
                   index="02"
                   eyebrow="TAGS"
                   title="标签"
-                  count={stats.tags.length}
+                  count={options.tags.length}
                   refreshGlintRun={refreshGlintRun}
                   isRefreshing={isRefreshing}
                   reduceMotion={reduceMotion}
@@ -510,7 +522,7 @@ export function HomeCatalog({
                   </p>
                 )}
                 <SelectorOptions className="home-tag-options">
-                  {stats.tags.map((item) => {
+                  {options.tags.map((item) => {
                     const selected = tagSet.has(item.slug);
                     const { disabled, locked } = publicFilterOptionState({
                       selected,
@@ -567,7 +579,7 @@ export function HomeCatalog({
                   index="03"
                   eyebrow="CONTRIBUTORS"
                   title="作者"
-                  count={stats.authors.length}
+                  count={options.authors.length}
                   refreshGlintRun={refreshGlintRun}
                   isRefreshing={isRefreshing}
                   reduceMotion={reduceMotion}
@@ -578,7 +590,7 @@ export function HomeCatalog({
                   </p>
                 )}
                 <SelectorOptions className="home-author-options">
-                  {stats.authors.map((item) => {
+                  {options.authors.map((item) => {
                     const selected = authorSet.has(item.slug);
                     const { disabled, locked } = publicFilterOptionState({
                       selected,

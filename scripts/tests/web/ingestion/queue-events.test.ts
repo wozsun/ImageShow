@@ -821,11 +821,7 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
   });
   for (const key of allKeys) authorProfileClient.setQueryData(key, {});
   await invalidateVocabularyData(authorProfileClient);
-  for (const key of [
-    queryKeys.galleryFacets,
-    queryKeys.galleryStats,
-    queryKeys.ingestionVocabulary
-  ]) {
+  for (const key of [queryKeys.galleryFacets, queryKeys.ingestionVocabulary]) {
     assert.equal(invalidated(authorProfileClient, key), true, key[0]);
   }
   for (const key of [
@@ -853,7 +849,6 @@ test("[Web/内容接入] 内容接入写后缓存每批只失效受新增图片�
     const affected: readonly (readonly unknown[])[] = [
       listKey,
       queryKeys.galleryFacets,
-      queryKeys.galleryStats,
       queryKeys.ingestionVocabulary
     ];
     for (const key of allKeys) {

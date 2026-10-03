@@ -83,12 +83,7 @@ test("[Web/内容接入] 重复详情请求单飞执行并及时合并到最新�
           serverAccepted: true
         })
       );
-    const libraryItems = md5s.map((md5) =>
-      adminImageListItem({
-        id: webUuidV7(),
-        large_md5: md5
-      })
-    );
+    const libraryItems = md5s.map(() => adminImageListItem({ id: webUuidV7() }));
     const responseFor = (indexes: readonly number[]) =>
       new Response(
         JSON.stringify({
@@ -428,7 +423,7 @@ test("[Web/内容接入] 重复归零 CAS 失败保留可操作卡片并允许�
     const { createRoot } = await import("react-dom/client");
     const { useIngestionDuplicateDetails } =
       await import("../../../../packages/web/src/pages/admin/ingestion/queue/useIngestionDuplicateDetails.ts");
-    const duplicate = adminImageListItem({ id: webUuidV7(), large_md5: md5 });
+    const duplicate = adminImageListItem({ id: webUuidV7() });
     const jobs = [
       ingestionJob({
         id: "duplicate-zero-cas",

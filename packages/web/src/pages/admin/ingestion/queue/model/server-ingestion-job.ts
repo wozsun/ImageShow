@@ -1,4 +1,4 @@
-import { imageVariantUrl } from "@imageshow/shared/browser";
+import { imageVariantUrl, ingestionPreviewUrl } from "@imageshow/shared/browser";
 import { imageDevice } from "@imageshow/shared/browser";
 import type {
   CompletedIngestionImageDto,
@@ -195,8 +195,8 @@ function activeIngestionJob(
     kind: item.queue,
     status: activeIngestionClientStatus(item),
     message: failed ? item.error?.message || item.message : undefined,
-    preview: prepared?.preview_url ?? existing?.preview ?? "",
-    previewFull: prepared?.preview_full_url ?? existing?.previewFull,
+    preview: prepared ? ingestionPreviewUrl(item) : existing?.preview ?? "",
+    previewFull: prepared ? ingestionPreviewUrl(item, true) : existing?.previewFull,
     objectUrl: prepared ? undefined : existing?.objectUrl,
     draft,
     width: prepared?.variants.large.width ?? existing?.width ?? 0,

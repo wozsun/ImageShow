@@ -260,7 +260,6 @@ function adminImageListItem(
     height: Number(row.s_height),
     status: row.status,
     purge_pending: row.purge_pending,
-    large_md5: row.l_md5,
     deleted_at: serializeNullableTimestamp(row.deleted_at),
     image_time: serializeTimestamp(row.image_time),
     created_at: serializeTimestamp(row.created_at),

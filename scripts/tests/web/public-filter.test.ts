@@ -38,6 +38,7 @@ import { PublicFilterErrorState } from "../../../packages/web/src/components/fee
 import { PublicFilterDialog } from "../../../packages/web/src/components/image/filter/PublicFilterDialog.tsx";
 import { HomeCatalog } from "../../../packages/web/src/pages/home/HomeCatalog.tsx";
 import { queryKeys } from "../../../packages/web/src/lib/api/query-keys.ts";
+import { useGalleryFacets, useGalleryStats } from "../../../packages/web/src/lib/api/site-queries.ts";
 import { inputText } from "../support/dom-events.ts";
 
 const facets = {
@@ -62,7 +63,7 @@ test("[Web/公开筛选] 未设置主题在默认、选中与搜索结果中保�
   const filters = { ...emptyGalleryFilters, theme: "null" };
   const stats: GalleryStatsDto = {
     total_images: 6, matching_images: 0, themes, tags: [], authors: [],
-    devices: [], brightnesses: [], categories: []
+    devices: [], brightnesses: []
   };
   client.setQueryData([...queryKeys.galleryStats, ""], stats);
   client.setQueryData([...queryKeys.galleryStats, galleryStatsSearch(filters, "")], stats);
@@ -164,7 +165,6 @@ test("[Web/公开筛选] 取消标签使重复组拆开超额时仍可继续移�
     tags: options,
     devices: [],
     brightnesses: [],
-    categories: [],
     tag_groups: [
       { tag: group, image_count: 1 },
       { tag: group, image_count: 1 }
@@ -339,18 +339,17 @@ test("[Web/首页] 第 33 个主题或作者被拒绝，移除已有项后可以
   const h = await createConfigStreamHarness(t);
   const options = Array.from({ length: 33 }, (_, i) => ({
     slug: `s${i}`,
-    display_name: `选项${i}`,
-    image_count: 1
+    display_name: `选项${i}`
   }));
+  const counts = options.map(({ slug }) => ({ slug, image_count: 1 }));
   const stats: GalleryStatsDto = {
     total_images: 33,
     matching_images: 33,
-    themes: options,
-    authors: options.map((option) => ({ ...option, link: "" })),
+    themes: counts,
+    authors: counts,
     tags: [],
     devices: [],
-    brightnesses: [],
-    categories: []
+    brightnesses: []
   };
   let selected = emptyGalleryFilters;
   function Probe() {
@@ -371,6 +370,11 @@ test("[Web/首页] 第 33 个主题或作者被拒绝，移除已有项后可以
       armed: false,
       filters,
       stats,
+      facets: {
+        themes: options,
+        tags: [],
+        authors: options.map((option) => ({ ...option, link: "" }))
+      },
       isPending: false,
       isError: false,
       isRefreshing: false,
@@ -433,8 +437,7 @@ test("[Web/公开筛选] 弹窗拒绝第 33 项且保留当前可应用的包含
           authors: options,
           tags: [],
           devices: [],
-          brightnesses: [],
-          categories: []
+          brightnesses: []
         };
         client.setQueryData([...queryKeys.galleryStats, ""], stats);
         client.setQueryData([...queryKeys.galleryStats, galleryStatsSearch(filters)], stats);
@@ -670,8 +673,7 @@ test("[Web/公开筛选] 名称优先展示，搜索仅在 slug 独立命中时�
     tags: options,
     authors: options,
     devices: [],
-    brightnesses: [],
-    categories: []
+    brightnesses: []
   };
   client.setQueryData([...queryKeys.galleryStats, ""], stats);
   await h.render(
@@ -783,7 +785,6 @@ test("[Web/公开筛选] 统计共享查询、取消旧请求，失败仍显示�
     total_images: 4,
     devices: [],
     brightnesses: [],
-    categories: [],
     themes: [],
     tags: [],
     authors: []
@@ -804,6 +805,47 @@ test("[Web/公开筛选] 统计共享查询、取消旧请求，失败仍显示�
   await h.respond(3, { ...stats, matching_images: 2 });
   assert.equal(observed.displayData?.matching_images, 2);
   assert.equal(observed.availabilityUnverified, false);
+  await h.render(null);
+});
+
+test("[Web/公开筛选] 统计出现会话词表未包含的成员时重新校验一次词表", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  t.after(() => client.clear());
+  let tagNames = "";
+  function Probe() {
+    useGalleryStats();
+    tagNames = useGalleryFacets().data?.tags.map((tag) => tag.display_name).join(",") ?? "";
+    return null;
+  }
+  await h.render(
+    h.React.createElement(QueryClientProvider, { client }, h.React.createElement(Probe))
+  );
+  const requests = (path: string) =>
+    h.pending.flatMap((request, index) => (request.path === path ? [index] : []));
+  const facets = (tags: Array<[slug: string, name: string]>) => ({
+    themes: [],
+    tags: tags.map(([slug, display_name]) => ({ slug, display_name })),
+    authors: []
+  });
+  await h.respond(requests("/api/gallery-facets")[0]!, facets([["night", "夜景"]]));
+  const stats: GalleryStatsDto = {
+    total_images: 2,
+    matching_images: 2,
+    devices: [],
+    brightnesses: [],
+    themes: [],
+    tags: [
+      { slug: "night", image_count: 1 },
+      { slug: "rain", image_count: 1 }
+    ],
+    authors: []
+  };
+  await h.respond(requests("/api/gallery-stats")[0]!, stats);
+  const facetRequests = requests("/api/gallery-facets");
+  assert.equal(facetRequests.length, 2, "新成员触发一次词表重新校验");
+  await h.respond(facetRequests[1]!, facets([["night", "夜景"], ["rain", "雨天"]]));
+  assert.equal(tagNames, "夜景,雨天");
   await h.render(null);
 });
 

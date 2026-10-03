@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, type QueryClient } from "@tanstack/react-query";
 import { api } from "./client.js";
 import { requestWithDeadline } from "./request-deadline.js";
 import { queryKeys } from "./query-keys.js";
@@ -14,7 +14,7 @@ export type GalleryFacets = GalleryFacetsDto;
 export type GalleryStats = GalleryStatsDto;
 
 // site-config 与 gallery-facets 是「会话级近乎不变」的全局数据：只有在管理员保存站点设置、
-// 改动主题 / 标签 / 作者或内容接入完成后才需要显式失效。这里关闭自动后台刷新，避免组件重挂、
+// 改动主题 / 标签 / 作者、内容接入完成，或统计出现词表未包含的成员时才需要显式失效。这里关闭自动后台刷新，避免组件重挂、
 // 路由切换和窗口重新聚焦时反复请求；gcTime 同设 Infinity，使离开画廊再返回也不必重新拉取。
 // 任何页面都应改用下面两个 hook，而非各自内联 useQuery，既减少请求也统一了取数方式。
 const sessionGlobalQuery = {
@@ -56,14 +56,45 @@ export function useGalleryFacets(enabled = true) {
   });
 }
 
+const facetMembers = ["themes", "tags", "authors"] as const;
+const revalidatedUnknownMembers = new WeakMap<QueryClient, string>();
+
+/**
+ * Statistics are fresher than the session facets, so a counted member the
+ * facets lack means the vocabulary changed. Revalidate the facets once while
+ * the same set of members stays unknown; a rename keeps its slug and needs a reload.
+ */
+function revalidateFacetsForUnknownMembers(client: QueryClient, stats: GalleryStats) {
+  const facets = client.getQueryData<GalleryFacets>(queryKeys.galleryFacets);
+  if (!facets) return;
+  const unknown = facetMembers
+    .flatMap((field) => {
+      const known = new Set(facets[field].map((entry) => entry.slug));
+      return stats[field]
+        .filter((member) => !known.has(member.slug))
+        .map((member) => `${field}:${member.slug}`);
+    })
+    .join(",");
+  if (!unknown) {
+    revalidatedUnknownMembers.delete(client);
+    return;
+  }
+  if (revalidatedUnknownMembers.get(client) === unknown) return;
+  revalidatedUnknownMembers.set(client, unknown);
+  void client.invalidateQueries({ queryKey: queryKeys.galleryFacets });
+}
+
 export function useGalleryStats(search = "", enabled = true) {
   return useQuery<GalleryStats>({
     queryKey: [...queryKeys.galleryStats, search],
-    queryFn: ({ signal }) =>
-      api(
+    queryFn: async ({ signal, client }) => {
+      const stats = await api<GalleryStats>(
         search ? `/api/gallery-stats?${search}` : "/api/gallery-stats",
         { signal }
-      ),
+      );
+      revalidateFacetsForUnknownMembers(client, stats);
+      return stats;
+    },
     placeholderData: keepPreviousData,
     enabled,
     staleTime: 30_000,

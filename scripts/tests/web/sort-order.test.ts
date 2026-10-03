@@ -94,7 +94,7 @@ async function sortingPage(t: TestContext, kind: Kind) {
   const projections =
     kind === "storage"
       ? [queryKeys.storageOptions]
-      : [queryKeys.galleryFacets, queryKeys.galleryStats, queryKeys.ingestionVocabulary];
+      : [queryKeys.galleryFacets, queryKeys.ingestionVocabulary];
   for (const projection of projections) client.setQueryData(projection, {});
   client.setQueryData(queryKeys.adminImages, {});
   await h.render(

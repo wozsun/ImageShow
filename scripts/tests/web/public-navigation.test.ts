@@ -489,6 +489,14 @@ test("[Web/公开导航] 真实画廊与展映页面刷新词表后按完整原�
       assert.ok((show ? [200, 500, 800] : [60, 120, 180]).includes(Number(params.get("limit"))));
       await h.respond(h.pending.indexOf(request), { items: [], next_cursor: null });
       assert.doesNotMatch(h.document.body.textContent!, /标签筛选错误|标签词表读取失败/);
+      // A failed background refresh keeps the vocabulary that already resolves the tags.
+      await h.React.act(async () => {
+        void client.invalidateQueries({ queryKey: queryKeys.galleryFacets });
+      });
+      const refresh = h.pending.filter((request) => request.path === "/api/gallery-facets").at(-1)!;
+      await h.respond(h.pending.indexOf(refresh), { error: "busy" }, 503);
+      assert.equal(client.getQueryState(queryKeys.galleryFacets)?.status, "error");
+      assert.doesNotMatch(h.document.body.textContent!, /标签词表读取失败/);
       await h.React.act(async () => {
         void navigate(
           path + "?theme=city,!forest&author=alice,!other&device=pc&brightness=light&order=oldest"

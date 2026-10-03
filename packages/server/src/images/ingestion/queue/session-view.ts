@@ -6,7 +6,6 @@ import type {
   IngestionStatusItemDto,
   PreparedVariantFacts
 } from "@imageshow/shared/browser";
-import { ingestionPreviewPath } from "@imageshow/shared/browser";
 import { ApiError } from "../../../core/api-error.ts";
 import { privateNoStoreCacheControl } from "../../../core/http/headers.ts";
 import { readIngestionPreparedFile } from "../raw/prepared.ts";
@@ -25,15 +24,6 @@ import {
   IngestionSessionRepository
 } from "../repository.ts";
 
-function previewPath(
-  session: Pick<IngestionSessionSnapshot, "session_id" | "image_id">,
-  full = false
-) {
-  return `${ingestionPreviewPath}/${encodeURIComponent(
-    session.session_id
-  )}/${encodeURIComponent(session.image_id)}${full ? "/full" : ""}`;
-}
-
 function variantDimensions(
   { width, height, bytes }: Pick<PreparedVariantFacts, "width" | "height" | "bytes">
 ) {
@@ -45,8 +35,6 @@ export function presentIngestionSession(
 ): ActiveServerIngestionItemDto {
   const prepared = session.prepared
     ? {
-        preview_url: previewPath(session),
-        preview_full_url: previewPath(session, true),
         original_width: session.prepared.original_width,
         original_height: session.prepared.original_height,
         md5: session.prepared.variants.large.md5,

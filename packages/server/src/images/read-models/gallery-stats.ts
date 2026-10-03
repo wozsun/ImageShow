@@ -11,15 +11,18 @@ import {
   type ReadyImageCountSnapshot
 } from "../ready-cache/counts/query.ts";
 import { resolveGalleryStatsPlan, type GalleryStatsQuery } from "./gallery-stats-plan.ts";
-import {
-  readGalleryStatsVocabulary,
-  readPublicGalleryCountSnapshot,
-  type GalleryStatsVocabulary
-} from "./gallery-stats-sql.ts";
+import { readPublicGalleryCountSnapshot } from "./gallery-stats-sql.ts";
+
+// Display names and order come from the session facets on the client. Sorting
+// by slug keeps the bytes, and so the ETag, identical across Redis and PostgreSQL.
+function memberCounts(counts: Record<string, number>) {
+  return Object.keys(counts)
+    .sort()
+    .map((slug) => ({ slug, image_count: counts[slug]! }));
+}
 
 function presentGalleryStats(
   snapshot: ReadyImageCountSnapshot,
-  vocabulary: GalleryStatsVocabulary,
   query: GalleryStatsQuery
 ): GalleryStatsDto {
   return {
@@ -41,23 +44,10 @@ function presentGalleryStats(
       brightness,
       image_count: snapshot.brightnesses[brightness] ?? 0
     })),
-    categories: devices.flatMap((device) =>
-      brightnesses.map((brightness) => ({
-        device,
-        brightness,
-        image_count: snapshot.axes[`${device}:${brightness}`] ?? 0
-      }))
-    ),
     // Membership comes from the count snapshot, even when filtered counts are zero.
-    themes: vocabulary.themes
-      .filter((entry) => Object.hasOwn(snapshot.themes, entry.slug))
-      .map((entry) => ({ ...entry, image_count: snapshot.themes[entry.slug] ?? 0 })),
-    tags: vocabulary.tags
-      .filter((entry) => Object.hasOwn(snapshot.tags, entry.slug))
-      .map((entry) => ({ ...entry, image_count: snapshot.tags[entry.slug] ?? 0 })),
-    authors: vocabulary.authors
-      .filter((entry) => Object.hasOwn(snapshot.authors, entry.slug))
-      .map((entry) => ({ ...entry, image_count: snapshot.authors[entry.slug] ?? 0 }))
+    themes: memberCounts(snapshot.themes),
+    tags: memberCounts(snapshot.tags),
+    authors: memberCounts(snapshot.authors)
   };
 }
 
@@ -72,17 +62,15 @@ async function getPublicGalleryStatsWithAccess(
     signal,
     tagCounts
   );
-  if (cached.cached) {
-    return presentGalleryStats(cached.value, await readGalleryStatsVocabulary(database), query);
-  }
-  const result = await readPublicGalleryCountSnapshot(
+  if (cached.cached) return presentGalleryStats(cached.value, query);
+  const snapshot = await readPublicGalleryCountSnapshot(
     plan,
     database.reader,
     signal,
     cached.context,
     tagCounts
   );
-  return presentGalleryStats(result.snapshot, result.vocabulary, query);
+  return presentGalleryStats(snapshot, query);
 }
 
 export function getPublicGalleryStats(

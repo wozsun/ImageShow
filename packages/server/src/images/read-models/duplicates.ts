@@ -51,9 +51,9 @@ export async function readDuplicateSnapshotsByMd5(md5s: readonly string[]) {
     ])
   );
   presented.forEach((item, index) => {
-    const snapshot = result.get(item.large_md5);
-    const row = rows[index];
-    if (!snapshot || !row) return;
+    const row = rows[index]!;
+    const snapshot = result.get(row.l_md5);
+    if (!snapshot) return;
     snapshot.matchCount = Number(row.duplicate_match_count);
     snapshot.items.push(item);
   });

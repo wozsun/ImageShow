@@ -1,5 +1,5 @@
 import { basicTagSelection } from "@imageshow/shared/browser";
-import type { GalleryStatsDto } from "@imageshow/shared/browser";
+import type { GalleryFacetsDto, GalleryStatsDto } from "@imageshow/shared/browser";
 import { Link } from "react-router";
 import { Icon } from "../../components/icon/Icon.js";
 import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
@@ -20,6 +20,7 @@ export function HomeFilterBar({
   entranceReady,
   filters,
   stats,
+  facets,
   isPending,
   isError,
   isPlaceholderData,
@@ -29,6 +30,7 @@ export function HomeFilterBar({
   entranceReady: boolean;
   filters: GalleryFilters;
   stats: GalleryStatsDto | undefined;
+  facets: GalleryFacetsDto | undefined;
   isPending: boolean;
   isError: boolean;
   isPlaceholderData: boolean;
@@ -43,11 +45,11 @@ export function HomeFilterBar({
         filters.brightness
           ? brightnessLabels[filters.brightness]
           : "",
-        selectedFacetLabels(stats.themes, filters.theme).join("/"),
-        selectedFacetLabels(stats.tags, tagSelection.selected.join(",")).join(
+        selectedFacetLabels(facets?.themes ?? [], filters.theme).join("/"),
+        selectedFacetLabels(facets?.tags ?? [], tagSelection.selected.join(",")).join(
           tagSelection.mode === "all" ? "&" : "/"
         ),
-        selectedFacetLabels(stats.authors, filters.author).join("/")
+        selectedFacetLabels(facets?.authors ?? [], filters.author).join("/")
       ].filter(Boolean)
     : [];
   const destination = browsePath ? galleryHref(filters, browsePath) : null;

@@ -68,8 +68,7 @@ test("[Web/内容接入] 上传与导入窗口真实挂载保持双行摘要、�
   let fetchCount = 0;
   const windowDuplicateMd5 = "e".repeat(32);
   const windowDuplicateItem = adminImageListItem({
-    id: "00000000-0000-7034-8000-00000000008e",
-    large_md5: windowDuplicateMd5
+    id: "00000000-0000-7034-8000-00000000008e"
   });
   const fetchStub = async (input: RequestInfo | URL) => {
     const path = new URL(String(input), "https://imageshow.test").pathname;

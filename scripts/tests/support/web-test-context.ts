@@ -9,6 +9,7 @@ import {
 } from "pixi.js";
 import {
   type AdminImageListItemDto,
+  type CompletedIngestionImageDto,
   type GalleryImageCardDto,
   type ImageUpdateResponseDto,
   type PublicImageListResponseDto,
@@ -112,9 +113,10 @@ export function ingestionJob(patch: Partial<IngestionJob> = {}): IngestionJob {
     ...patch
   };
 }
+/** Serves as an admin list item and as a completed ingestion image, which also carries its MD5. */
 export function adminImageListItem(
-  patch: Partial<AdminImageListItemDto> = {}
-): AdminImageListItemDto {
+  patch: Partial<AdminImageListItemDto & CompletedIngestionImageDto> = {}
+): AdminImageListItemDto & CompletedIngestionImageDto {
   const timestamp = "2026-08-13T00:00:00.000Z";
   return {
     id: "00000000-0000-7000-8000-000000000001",

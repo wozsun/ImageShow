@@ -88,7 +88,6 @@ export function invalidateVocabularyData(client: QueryClient, listKey?: readonly
   return invalidate(client, [
     ...(listKey ? [listKey] : []),
     queryKeys.galleryFacets,
-    queryKeys.galleryStats,
     queryKeys.ingestionVocabulary
   ]);
 }
@@ -100,7 +99,7 @@ export function invalidateDataAfterSortOrderSave(client: QueryClient, listKey: r
       client,
       listKey === queryKeys.storageBackends
         ? [queryKeys.storageOptions]
-        : [queryKeys.galleryFacets, queryKeys.galleryStats, queryKeys.ingestionVocabulary]
+        : [queryKeys.galleryFacets, queryKeys.ingestionVocabulary]
     )
   ]);
 }

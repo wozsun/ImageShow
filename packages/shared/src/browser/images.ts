@@ -36,7 +36,8 @@ export type GalleryFacetsDto = {
   authors: Array<FacetOptionDto & { link: string }>;
 };
 
-export type GalleryStatsFacetDto = FacetOptionDto & {
+export type GalleryStatsFacetDto = {
+  slug: string;
   image_count: number;
 };
 
@@ -46,14 +47,9 @@ export type GalleryStatsDto = {
   tag_groups?: Array<{ tag: string; image_count: number }>;
   devices: Array<{ device: Device; image_count: number }>;
   brightnesses: Array<{ brightness: Brightness; image_count: number }>;
-  categories: Array<{
-    device: Device;
-    brightness: Brightness;
-    image_count: number;
-  }>;
   themes: GalleryStatsFacetDto[];
   tags: GalleryStatsFacetDto[];
-  authors: Array<GalleryStatsFacetDto & { link: string }>;
+  authors: GalleryStatsFacetDto[];
 };
 
 export type ShowImageCardDto = {
@@ -129,7 +125,6 @@ export type AdminImageListItemDto = ImageDetailItemDto & ShowImageCardDto & {
   status: "ready" | "deleted";
   purge_pending: boolean;
   storage_slug: string;
-  large_md5: string;
   original: string;
   deleted_at: string | null;
   created_at: string;

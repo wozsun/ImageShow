@@ -1,18 +1,8 @@
 import { appConfig } from "@imageshow/shared";
 import { unsetThemeFilter, type Brightness, type Device } from "@imageshow/shared/browser";
 import { withTransactionOnClient } from "../../core/database/transactions.ts";
-import {
-  publicPgFallbackWorkLimitExceeded,
-  type PublicDatabaseReadAccess
-} from "../../core/database/public-fallback.ts";
+import { publicPgFallbackWorkLimitExceeded } from "../../core/database/public-fallback.ts";
 import type { DatabaseReader } from "../../core/database/pools.ts";
-import {
-  getAuthorVocab,
-  getTagVocab,
-  getThemeVocab,
-  type AuthorVocabEntry,
-  type VocabEntry
-} from "../../vocab/vocab-cache.ts";
 import { imageFilterPlanWithout, type ImageFilterPlan } from "../filter-plan.ts";
 import type { GalleryTagCountPlans } from "./gallery-stats-plan.ts";
 import {
@@ -28,23 +18,6 @@ import { buildImageFilterSql, type ImageFilterAxis } from "./image-filter-sql.ts
 type CountRow = { image_count: number };
 type CategoryRow = CountRow & { device: Device; brightness: Brightness };
 type MemberCountRow = CountRow & { slug: string };
-type FacetCountRow = MemberCountRow & VocabEntry;
-type AuthorCountRow = MemberCountRow & AuthorVocabEntry;
-
-export type GalleryStatsVocabulary = {
-  themes: VocabEntry[];
-  tags: VocabEntry[];
-  authors: AuthorVocabEntry[];
-};
-
-export async function readGalleryStatsVocabulary(database: PublicDatabaseReadAccess) {
-  const [themes, tags, authors] = await Promise.all([
-    getThemeVocab(database),
-    getTagVocab(database),
-    getAuthorVocab(database)
-  ]);
-  return { themes, tags, authors };
-}
 
 function count(value: unknown) {
   const result = nonNegativeReadyImageCount(value);
@@ -145,61 +118,44 @@ async function readFacetCounts(
     return {
       themes: countsForGlobalMembers(themeRows, globalStats, "theme:"),
       tags: countsForGlobalMembers(tagRows, globalStats, "tag:"),
-      authors: countsForGlobalMembers(authorRows, globalStats, "author:"),
-      vocabulary: null
+      authors: countsForGlobalMembers(authorRows, globalStats, "author:")
     };
   }
 
-  const themeRows = await filteredRows<FacetCountRow>(
+  // Without a revision snapshot, membership is every value on a ready image.
+  const themeRows = await filteredRows<MemberCountRow>(
     client,
     plan,
     ["theme"],
     (where, limit) =>
-      `SELECT slug, display_name, image_count FROM (
-       SELECT t.slug, t.display_name,
-              (count(m.id) FILTER (WHERE ${where}))::int AS image_count,
-              t.sort_order, false AS is_unset
-         FROM theme t JOIN metadata m ON m.theme=t.slug AND m.status='ready'
-        GROUP BY t.slug, t.display_name, t.sort_order
-       UNION ALL
-       SELECT '${unsetThemeFilter}', '未设置',
-              (count(*) FILTER (WHERE ${where}))::int, 0, true
-         FROM metadata m WHERE m.theme IS NULL AND m.status='ready'
-       HAVING count(*) > 0
-     ) facets ORDER BY is_unset DESC, sort_order DESC, slug ASC LIMIT ${limit}`
+      `SELECT coalesce(m.theme, '${unsetThemeFilter}') AS slug,
+            (count(*) FILTER (WHERE ${where}))::int AS image_count
+       FROM metadata m WHERE m.status='ready' GROUP BY m.theme LIMIT ${limit}`
   );
-  const tagRows = await filteredRows<FacetCountRow>(
+  const tagRows = await filteredRows<MemberCountRow>(
     client,
     tagCandidates,
     [],
     (where, limit) =>
-      `SELECT t.slug, t.display_name,
-            (count(m.id) FILTER (WHERE ${where}))::int AS image_count
-       FROM tag t JOIN image_tag facet_it ON facet_it.tag_slug=t.slug
-       JOIN metadata m ON m.id=facet_it.image_id AND m.status='ready'
-      GROUP BY t.slug, t.display_name, t.sort_order
-      ORDER BY t.sort_order DESC, t.slug ASC LIMIT ${limit}`
+      `SELECT facet_it.tag_slug AS slug,
+            (count(*) FILTER (WHERE ${where}))::int AS image_count
+       FROM metadata m JOIN image_tag facet_it ON facet_it.image_id=m.id
+      WHERE m.status='ready' GROUP BY facet_it.tag_slug LIMIT ${limit}`
   );
-  const authorRows = await filteredRows<AuthorCountRow>(
+  const authorRows = await filteredRows<MemberCountRow>(
     client,
     plan,
     ["author"],
     (where, limit) =>
-      `SELECT a.slug, a.display_name, a.link,
-            (count(m.id) FILTER (WHERE ${where}))::int AS image_count
-       FROM author a JOIN metadata m ON m.author=a.slug AND m.status='ready'
-      GROUP BY a.slug, a.display_name, a.link, a.sort_order
-      ORDER BY a.sort_order DESC, a.slug ASC LIMIT ${limit}`
+      `SELECT m.author AS slug,
+            (count(*) FILTER (WHERE ${where}))::int AS image_count
+       FROM metadata m WHERE m.status='ready' AND m.author IS NOT NULL
+      GROUP BY m.author LIMIT ${limit}`
   );
   return {
     themes: countsBy(themeRows, (row) => row.slug),
     tags: countsBy(tagRows, (row) => row.slug),
-    authors: countsBy(authorRows, (row) => row.slug),
-    vocabulary: {
-      themes: themeRows.map(({ slug, display_name }) => ({ slug, display_name })),
-      tags: tagRows.map(({ slug, display_name }) => ({ slug, display_name })),
-      authors: authorRows.map(({ slug, display_name, link }) => ({ slug, display_name, link }))
-    } satisfies GalleryStatsVocabulary
+    authors: countsBy(authorRows, (row) => row.slug)
   };
 }
 
@@ -249,7 +205,7 @@ export async function readPublicGalleryCountSnapshot(
   tagCounts?: GalleryTagCountPlans
 ) {
   signal.throwIfAborted();
-  const result = await withTransactionOnClient(client, async () => {
+  const snapshot = await withTransactionOnClient(client, async () => {
     const unfiltered = isUnfilteredReadyImagePlan(plan);
     // The unfiltered path always uses four business SELECTs, without a revision query.
     const globalStats =
@@ -314,21 +270,17 @@ export async function readPublicGalleryCountSnapshot(
       : undefined;
     signal.throwIfAborted();
     return {
-      snapshot: {
-        total,
-        matching: categories.matching,
-        axes: categories.axes,
-        devices,
-        brightnesses,
-        ...(tagGroups ? { tagGroups } : {}),
-        themes: facets.themes,
-        tags: facets.tags,
-        authors: facets.authors
-      } satisfies ReadyImageCountSnapshot,
-      vocabulary: facets.vocabulary
-    };
+      total,
+      matching: categories.matching,
+      axes: categories.axes,
+      devices,
+      brightnesses,
+      ...(tagGroups ? { tagGroups } : {}),
+      themes: facets.themes,
+      tags: facets.tags,
+      authors: facets.authors
+    } satisfies ReadyImageCountSnapshot;
   }, { mode: "read_only_repeatable_read" });
-  const vocabulary = result.vocabulary ?? (await readGalleryStatsVocabulary({ reader: client }));
   signal.throwIfAborted();
-  return { snapshot: result.snapshot, vocabulary };
+  return snapshot;
 }

@@ -99,6 +99,13 @@ export const ingestionPreviewPath = "/api/admin/ingestion/preview";
 export const ingestionActionScopeHeader = "x-imageshow-ingestion-action-scope";
 export const uploadCredentialHeader = "x-imageshow-upload-credential";
 
+/** Preview of a prepared ingestion image; `full` selects the full-size view. */
+export function ingestionPreviewUrl(pair: IngestionSessionPairDto, full = false) {
+  return `${ingestionPreviewPath}/${encodeURIComponent(
+    pair.session_id
+  )}/${encodeURIComponent(pair.image_id)}${full ? "/full" : ""}`;
+}
+
 export const ingestionQueueTypes = ["upload", "import"] as const;
 export type IngestionQueueTypeDto = (typeof ingestionQueueTypes)[number];
 
@@ -218,8 +225,6 @@ export type ImportAcceptResultDto = {
 export type IngestionVariantQualityDto = Record<ImageVariant, number | null>;
 
 export type ServerIngestionPreparedDto = {
-  preview_url: string;
-  preview_full_url: string;
   original_width: number;
   original_height: number;
   md5: string;

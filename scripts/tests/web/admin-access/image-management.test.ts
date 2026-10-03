@@ -861,11 +861,7 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
     client.setQueryData(queryKeys.settings, {
       settings: { admin: { image_page_size: 20 } }
     });
-    for (const key of [
-      queryKeys.galleryFacets,
-      queryKeys.galleryStats,
-      queryKeys.ingestionVocabulary
-    ])
+    for (const key of [queryKeys.galleryFacets, queryKeys.ingestionVocabulary])
       client.setQueryData(key, {});
     const container = document.getElementById("root");
     assert.ok(container);
@@ -979,11 +975,7 @@ test("[Web/后台访问] 作者列表空闲时保存采用权威 DTO，新建前
         client.getQueryState(queryKeys.authors)?.isInvalidated,
         false
       );
-      for (const key of [
-        queryKeys.galleryFacets,
-        queryKeys.galleryStats,
-        queryKeys.ingestionVocabulary
-      ]) {
+      for (const key of [queryKeys.galleryFacets, queryKeys.ingestionVocabulary]) {
         assert.equal(client.getQueryState(key)?.isInvalidated, true, key[0]);
       }
       const createInput = container.querySelector<HTMLInputElement>(".entity-create-slug");

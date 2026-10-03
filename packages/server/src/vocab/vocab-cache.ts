@@ -35,8 +35,8 @@ const ADMIN_TAG_LIST_KEY = "imageshow:admin:tags";
 const ADMIN_AUTHOR_LIST_KEY = "imageshow:admin:authors";
 
 export type EntityCacheKind = "theme" | "tag" | "author";
-export type VocabEntry = FacetOptionDto;
-export type AuthorVocabEntry = VocabEntry & { link: string };
+type VocabEntry = FacetOptionDto;
+type AuthorVocabEntry = VocabEntry & { link: string };
 /** Public reads pass their admission-bound reader; other reads use the pool. */
 export type VocabularyReadAccess = {
   reader?: DatabaseReader;
