@@ -1,10 +1,10 @@
 import type { useImageBrowseRoute } from "../../hooks/useImageBrowseRoute.js";
 import type { usePublicImageViewportControls } from "../../hooks/usePublicImageViewportControls.js";
 import type { usePublicFilterDialog } from "../../hooks/usePublicFilterDialog.js";
-import type { ShowOrder, ShowMode } from "@imageshow/shared/browser";
+import type { ShowClusterGroup, ShowOrder, ShowMode } from "@imageshow/shared/browser";
 import type { ReactNode } from "react";
 import { AppHeader } from "./AppHeader.js";
-import { PublicImageOrderControl, PublicImageToolbar } from "./PublicImageToolbar.js";
+import { PublicImageToolbar } from "./PublicImageToolbar.js";
 import { mobileViewportMediaQuery, useMediaQuery } from "../../hooks/useMediaQuery.js";
 
 export function PublicImageNavigation({
@@ -15,9 +15,12 @@ export function PublicImageNavigation({
   filterDialog,
   order,
   mode,
+  group,
   onOrderChange,
   leadingControls,
   viewControls,
+  filterControls,
+  summary,
   mobileTrailingControls,
   floatingControlsHidden = false
 }: {
@@ -28,14 +31,16 @@ export function PublicImageNavigation({
   filterDialog: ReturnType<typeof usePublicFilterDialog>;
   order: ShowOrder;
   mode?: ShowMode;
+  group?: ShowClusterGroup;
   onOrderChange: (order: ShowOrder) => void;
   leadingControls?: ReactNode;
   viewControls?: ReactNode;
+  filterControls?: ReactNode;
+  summary?: string;
   mobileTrailingControls?: ReactNode;
   floatingControlsHidden?: boolean;
 }) {
   const mobile = useMediaQuery(mobileViewportMediaQuery);
-  const orderControl = <PublicImageOrderControl order={order} onChange={onOrderChange} compact />;
   return (
     <>
       <div className="public-navigation-frame">
@@ -55,7 +60,7 @@ export function PublicImageNavigation({
             filters={route.filters}
             facets={route.facets}
             randomUrl={route.randomLink.url}
-            pageUrl={route.getPageUrl(order, mode)}
+            pageUrl={route.getPageUrl(order, mode, group)}
             randomLinkError={route.randomLink.error}
             filterInvalid={Boolean(route.error)}
             filtersOpen={filterDialog.active}
@@ -68,6 +73,8 @@ export function PublicImageNavigation({
             onOrderChange={onOrderChange}
             leadingControls={leadingControls}
             viewControls={viewControls}
+            filterControls={filterControls}
+            summary={summary}
           />
         </div>
       </div>
@@ -88,10 +95,9 @@ export function PublicImageNavigation({
             data-show-control=""
             data-public-navigation-visible={controls.headerVisible || controls.toolbarVisible}
             role="group"
-            aria-label="展映播放与模式"
+            aria-label="展映播放、顺序与模式"
             hidden={floatingControlsHidden}
           >
-            {orderControl}
             {mobileTrailingControls}
           </div>
         </>

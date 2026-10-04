@@ -13,7 +13,9 @@ import {
   type CSSProperties
 } from "react";
 import type {
+  ShowClusterGroup,
   ShowDensity,
+  ShowOrder,
   SiteShowSettings
 } from "@imageshow/shared/browser";
 import { reducedMotionQuery } from "../../lib/ui/reduced-motion.js";
@@ -28,18 +30,22 @@ import { usePublicImageViewportControls } from "../../hooks/usePublicImageViewpo
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
 import {
   imageBrowseApiSearchParams,
+  showClusterGroupFromSearchParams,
   showModeFromSearchParams,
   showOrderFromSearchParams,
   updateImageBrowseSearchParams
 } from "../../lib/gallery/gallery-query.js";
 import { publicNavigationAutoHideDelayMs } from "../../lib/ui/public-navigation.js";
 import {
+  ShowClusterGroupControl,
   ShowPlaybackButton,
   ShowMobileControls,
   ShowSizeControls,
-  ShowToolbarControls
+  ShowToolbarControls,
+  showClusterGroupLabels
 } from "./ShowControls.js";
 import type { ShowImage } from "./show-layout.js";
+import { useShowClusters } from "./useShowClusters.js";
 import { useShowData } from "./useShowData.js";
 import { showInitialBatchLimit } from "./show-browse.js";
 import {
@@ -52,7 +58,8 @@ import {
   smallerShowWaterfallImages,
   type ShowWaterfallDensity
 } from "./pixi/show-pixi-layout.js";
-import { ShowPixiStage } from "./pixi/ShowPixiStage.js";
+import { ShowPixiStage, type ShowPixiStageHandle } from "./pixi/ShowPixiStage.js";
+import type { ShowClusterFocus } from "./pixi/show-pixi-cluster-scene.js";
 import type { ShowPixiSceneKind } from "./pixi/show-pixi-types.js";
 import "../../styles/public-core.css";
 import "../../styles/gallery.css";
@@ -125,6 +132,12 @@ export function ShowPage({
     ),
     [configuredScene, routeQuery]
   );
+  // 星群按分类聚成星团，不叠加访客筛选；它的数据由 useShowClusters 负责，展映的单一图片流停用。
+  const clusterMode = scene === "cluster";
+  const clusterGroup = useMemo(
+    () => showClusterGroupFromSearchParams(new URLSearchParams(routeQuery)),
+    [routeQuery]
+  );
   const sourceKey = useMemo(
     () =>
       filtersReady
@@ -153,6 +166,8 @@ export function ShowPage({
   const dialogOpen = Boolean(selected) || densityWarningOpen || filterDialog.active;
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const sizeControlRef = useRef<HTMLButtonElement | null>(null);
+  const stageRef = useRef<ShowPixiStageHandle | null>(null);
+  const [clusterFocus, setClusterFocus] = useState<ShowClusterFocus | null>(null);
   const reducedMotion = useMediaQuery(reducedMotionQuery);
   const data = useShowData(
     filters,
@@ -166,10 +181,17 @@ export function ShowPage({
       floatSizeIndex,
       device: filters.device
     }),
-    filtersReady
+    filtersReady && !clusterMode
   );
-  const playbackRunning = running && !data.initialLoading && !data.error
-    && data.images.length > 0;
+  const clusterData = useShowClusters(clusterGroup, order, clusterMode);
+  const clusterImages = useMemo(
+    () => clusterData.clusters.flatMap((cluster) => cluster.images),
+    [clusterData.clusters]
+  );
+  const browseImages = clusterMode ? clusterImages : data.images;
+  const playbackRunning = running && (clusterMode
+    ? clusterData.clusters.length > 0
+    : !data.initialLoading && !data.error && data.images.length > 0);
   const navigationControls = usePublicImageViewportControls({
     autoHideAfterMs:
       playbackRunning && !reducedMotion && motionActive
@@ -233,13 +255,40 @@ export function ShowPage({
   }, [resetManualNavigation, sourceKey]);
 
   useEffect(() => {
+    // 离开星群或换了一组星群后，场景从总览重新开始。
+    setClusterFocus(null);
+  }, [clusterMode, clusterData.dataKey]);
+
+  useEffect(() => {
+    if (!clusterMode || dialogOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      // 打开着的菜单与输入框自己处理这些按键。
+      if (
+        document.querySelector(
+          '.public-gallery-menu, .show-mobile-flyout-options, .public-navigation-stack [aria-expanded="true"]'
+        ) ||
+        (event.target instanceof HTMLElement && event.target.closest("input, textarea, select"))
+      )
+        return;
+      if (event.key === "Escape") stageRef.current?.clusterCommand({ type: "exit" });
+      else if (event.key === "ArrowLeft" || event.key === "ArrowUp")
+        stageRef.current?.clusterCommand({ type: "step", direction: -1 });
+      else if (event.key === "ArrowRight" || event.key === "ArrowDown")
+        stageRef.current?.clusterCommand({ type: "step", direction: 1 });
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [clusterMode, dialogOpen]);
+
+  useEffect(() => {
     if (selected) {
-      const updated = data.images.find((image) => image.id === selected.id);
+      const updated = browseImages.find((image) => image.id === selected.id);
       if (updated && updated !== selected) setSelected(updated);
     }
     if (
       !selected ||
-      data.images.some((image) => image.id === selected.id) ||
+      browseImages.some((image) => image.id === selected.id) ||
       !detailReturnFocusRef.current?.matches("[data-show-pixi-proxy]")
     )
       return;
@@ -249,7 +298,7 @@ export function ShowPage({
     detailReturnFocusRef.current =
       fallback
         ?? document.querySelector<HTMLElement>(".show-pixi-canvas-host");
-  }, [data.images, selected]);
+  }, [browseImages, selected]);
 
   useEffect(() => {
     let frame: number | undefined;
@@ -297,8 +346,16 @@ export function ShowPage({
     ));
   }, [waterfallDensity]);
 
+  const changeOrder = (nextOrder: ShowOrder) =>
+    setRouteSearchParams((current) =>
+      updateImageBrowseSearchParams(current, { order: nextOrder })
+    );
   const getShowModeHref = (nextScene: ShowPixiSceneKind) => {
     const params = updateImageBrowseSearchParams(routeSearchParams, { mode: nextScene });
+    return `?${readableFilterSearch(params)}`;
+  };
+  const getClusterGroupHref = (group: ShowClusterGroup) => {
+    const params = updateImageBrowseSearchParams(routeSearchParams, { group });
     return `?${readableFilterSearch(params)}`;
   };
   const floatSizeDescription = `当前尺寸档位 ${floatSizeIndex + 1}/${showFloatSizeSteps.length}`;
@@ -310,11 +367,31 @@ export function ShowPage({
   const smallerDisabled =
     scene === "waterfall"
       ? waterfallColumns >= waterfallDensity.maximumColumns - 0.001
-      : floatSizeIndex <= 0;
+      : scene === "float"
+        ? floatSizeIndex <= 0
+        : !clusterFocus;
   const largerDisabled =
     scene === "waterfall"
       ? waterfallColumns <= waterfallDensity.minimumColumns + 0.001
-      : floatSizeIndex >= showFloatSizeSteps.length - 1;
+      : scene === "float"
+        ? floatSizeIndex >= showFloatSizeSteps.length - 1
+        : clusterData.clusters.length === 0;
+  const pointerHint =
+    scene === "waterfall"
+      ? "拖动平移；滚轮纵移；Ctrl + 滚轮或双指缩放"
+      : scene === "float"
+        ? "上下拖动或滚轮纵移；Ctrl + 滚轮调整尺寸"
+        : clusterFocus
+          ? "拖动旋转；滚轮缩放，缩到最小回到星群；方向键切换星团"
+          : "拖动转动星群；点击星团或滚轮放大进入";
+  const touchHint =
+    scene === "waterfall"
+      ? "拖动平移；点按 ± 或双指缩放"
+      : scene === "float"
+        ? "上下拖动；点按 ± 调整尺寸"
+        : clusterFocus
+          ? "拖动旋转；双指缩放，缩到最小回到星群"
+          : "拖动转动星群；点按星团进入";
 
   return (
     <main
@@ -336,6 +413,8 @@ export function ShowPage({
           <ShowMobileControls
             scene={scene}
             getSceneHref={getShowModeHref}
+            order={order}
+            onOrderChange={changeOrder}
             onRunningChange={setRunning}
             reducedMotion={reducedMotion}
             running={running && !reducedMotion}
@@ -348,10 +427,19 @@ export function ShowPage({
         filterDialog={filterDialog}
         order={order}
         mode={scene}
-        onOrderChange={(nextOrder) =>
-          setRouteSearchParams((current) =>
-            updateImageBrowseSearchParams(current, { order: nextOrder })
-          )
+        group={clusterMode ? clusterGroup : undefined}
+        onOrderChange={changeOrder}
+        filterControls={
+          clusterMode ? (
+            <ShowClusterGroupControl group={clusterGroup} getGroupHref={getClusterGroupHref} />
+          ) : undefined
+        }
+        summary={
+          !clusterMode
+            ? undefined
+            : clusterFocus
+              ? `${clusterFocus.name} · ${clusterFocus.total} 张`
+              : `按${showClusterGroupLabels[clusterGroup]}分组`
         }
         viewControls={
           <>
@@ -368,11 +456,24 @@ export function ShowPage({
             sizeControlRef={sizeControlRef}
             largerDisabled={largerDisabled}
             smallerDisabled={smallerDisabled}
+            resetDisabled={clusterMode && !clusterFocus}
+            labels={
+              clusterMode
+                ? {
+                    group: "星群缩放",
+                    decrease: "缩小；缩到最小回到星群",
+                    increase: clusterFocus ? "放大" : "进入屏幕中间的星团",
+                    reset: "回到星群"
+                  }
+                : undefined
+            }
             sizeDescription={
               scene === "waterfall" ? waterfallSizeDescription : floatSizeDescription
             }
             onDecreaseSize={() => {
-              if (scene === "float")
+              if (scene === "cluster")
+                stageRef.current?.clusterCommand({ type: "zoom", direction: -1 });
+              else if (scene === "float")
                 setFloatSizeIndex((current) => clampShowFloatSizeIndex(current - 1));
               else
                 requestWaterfallColumns(
@@ -380,7 +481,9 @@ export function ShowPage({
                 );
             }}
             onIncreaseSize={() => {
-              if (scene === "float")
+              if (scene === "cluster")
+                stageRef.current?.clusterCommand({ type: "zoom", direction: 1 });
+              else if (scene === "float")
                 setFloatSizeIndex((current) => clampShowFloatSizeIndex(current + 1));
               else
                 requestWaterfallColumns(
@@ -388,13 +491,23 @@ export function ShowPage({
                 );
             }}
             onReset={() => {
-              if (scene === "waterfall") setWaterfallColumns(waterfallDensity.defaultColumns);
+              if (scene === "cluster") stageRef.current?.clusterCommand({ type: "exit" });
+              else if (scene === "waterfall") setWaterfallColumns(waterfallDensity.defaultColumns);
               else setFloatSizeIndex(defaultShowFloatSizeIndex);
             }}
           />
         }
       />
       <ShowPixiStage
+        controlRef={stageRef}
+        clusters={clusterData.clusters}
+        clusterDataKey={clusterData.dataKey}
+        onClusterFocusChange={(focus, automatic) => {
+          setClusterFocus(focus);
+          // 访客自己回到星群总览时带出导航：分组、排序与画面切换都在那里。
+          if (!focus && !automatic) resetManualNavigation();
+        }}
+        onNeedClusterImages={clusterData.needImages}
         dataKey={data.committedKey}
         dialogOpen={dialogOpen}
         floatSizeIndex={floatSizeIndex}
@@ -418,18 +531,20 @@ export function ShowPage({
         waterfallColumns={waterfallColumns}
       >
         <p className="show-interaction-hint public-floating-label">
-          <span className="show-interaction-hint-pointer">
-            {scene === "waterfall"
-              ? "拖动平移；滚轮纵移；Ctrl + 滚轮或双指缩放"
-              : "上下拖动或滚轮纵移；Ctrl + 滚轮调整尺寸"}
-          </span>
-          <span className="show-interaction-hint-touch">
-            {scene === "waterfall"
-              ? "拖动平移；点按 ± 或双指缩放"
-              : "上下拖动；点按 ± 调整尺寸"}
-          </span>
+          <span className="show-interaction-hint-pointer">{pointerHint}</span>
+          <span className="show-interaction-hint-touch">{touchHint}</span>
         </p>
-        {Boolean(filterError) && (
+        {clusterMode && clusterData.loading && (
+          <AppLoadingRegion className="show-loading" extraDots={3} />
+        )}
+        {clusterMode && Boolean(clusterData.error) && (
+          <div className="show-query-state">
+            <QueryErrorState error={clusterData.error} onRetry={clusterData.retry} />
+          </div>
+        )}
+        {clusterMode && !clusterData.loading && !clusterData.error
+          && !clusterData.clusters.length && <p className="show-empty">暂无图片</p>}
+        {!clusterMode && Boolean(filterError) && (
           <div className="show-query-state">
             <PublicFilterErrorState
               error={filterError}
@@ -438,17 +553,16 @@ export function ShowPage({
             />
           </div>
         )}
-        {!filterError && (!filtersReady || data.initialLoading) && (
+        {!clusterMode && !filterError && (!filtersReady || data.initialLoading) && (
           <AppLoadingRegion className="show-loading" extraDots={3} />
         )}
-        {filtersReady && Boolean(data.error) && !data.initialLoading && (
+        {!clusterMode && filtersReady && Boolean(data.error) && !data.initialLoading && (
           <div className="show-query-state">
             <QueryErrorState error={data.error} onRetry={data.retry} />
           </div>
         )}
-        {filtersReady && !data.error && !data.initialLoading && !data.images.length && (
-          <p className="show-empty">暂无图片</p>
-        )}
+        {!clusterMode && filtersReady && !data.error && !data.initialLoading
+          && !data.images.length && <p className="show-empty">暂无图片</p>}
       </ShowPixiStage>
       {filterDialog.session && (
         <PublicFilterDialog
@@ -515,10 +629,11 @@ export function ShowPage({
           card={selected}
           onClose={() => setSelected(null)}
           onTrashCommitted={(imageId) => {
-            data.removeImage(imageId);
+            if (clusterMode) clusterData.removeImage(imageId);
+            else data.removeImage(imageId);
           }}
-          onItemUpdated={data.updateImage}
-          onItemRefreshRequested={data.refreshImage}
+          onItemUpdated={clusterMode ? clusterData.updateImage : data.updateImage}
+          onItemRefreshRequested={clusterMode ? clusterData.refreshImage : data.refreshImage}
           returnFocusRef={detailReturnFocusRef}
         />
       )}

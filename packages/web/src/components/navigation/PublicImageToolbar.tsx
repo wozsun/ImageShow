@@ -19,12 +19,12 @@ import {
   publicFilterSections
 } from "../../lib/gallery/public-filter-draft.js";
 
-const orderLabels: Record<ShowOrder, string> = {
+export const publicImageOrderLabels: Record<ShowOrder, string> = {
   random: "随机模式",
   latest: "最新优先",
   oldest: "最旧优先"
 };
-const orderIcons: Record<ShowOrder, IconName> = {
+export const publicImageOrderIcons: Record<ShowOrder, IconName> = {
   random: "shuffle-line",
   latest: "sort-desc",
   oldest: "sort-asc"
@@ -42,7 +42,7 @@ export function PublicImageOrderControl({
   if (compact) {
     const next =
       publicImageOrders[(publicImageOrders.indexOf(order) + 1) % publicImageOrders.length]!;
-    const label = `排列顺序：${orderLabels[order]}；点击切换为${orderLabels[next]}`;
+    const label = `排列顺序：${publicImageOrderLabels[order]}；点击切换为${publicImageOrderLabels[next]}`;
     return (
       <button
         type="button"
@@ -52,7 +52,7 @@ export function PublicImageOrderControl({
         onClick={() => onChange(next)}
       >
         <span className="public-round-surface">
-          <Icon name={orderIcons[order]} />
+          <Icon name={publicImageOrderIcons[order]} />
         </span>
       </button>
     );
@@ -64,7 +64,7 @@ export function PublicImageOrderControl({
       ariaLabel="排列顺序"
       className="public-toolbar-order"
       menuClassName="public-gallery-menu"
-      options={publicImageOrders.map((value) => ({ value, label: orderLabels[value] }))}
+      options={publicImageOrders.map((value) => ({ value, label: publicImageOrderLabels[value] }))}
     />
   );
 }
@@ -175,6 +175,8 @@ export function PublicImageToolbar({
   onOrderChange,
   leadingControls,
   viewControls,
+  filterControls,
+  summary: summaryOverride,
   compact = false
 }: {
   embedded: boolean;
@@ -195,6 +197,9 @@ export function PublicImageToolbar({
   onOrderChange: (order: ShowOrder) => void;
   leadingControls?: ReactNode;
   viewControls?: ReactNode;
+  /** 当前画面不使用筛选时，占据筛选按钮位置的控件及对应的摘要文字。 */
+  filterControls?: ReactNode;
+  summary?: string;
   compact?: boolean;
 }) {
   const entrance = useOneShotAnimation(animateEntrance);
@@ -203,20 +208,22 @@ export function PublicImageToolbar({
   const chips = publicFilterChips(draft, tag, facets);
   const count = chips.length;
   const hasFilters = count > 0 || filterInvalid;
-  const summary = filterInvalid
-    ? "筛选条件待处理"
-    : count
-      ? publicFilterSections
-          .flatMap((section) => {
-            const group = chips.filter((chip) => chip.section === section);
-            if (!group.length) return [];
-            if (section === "device" || section === "brightness") return [group[0].label];
-            return [
-              `${group[0].exclude ? "排除" : ""}${publicFilterLabels[section]} ${group.length} 项`
-            ];
-          })
-          .join(" · ")
-      : "全部图片";
+  const summary =
+    summaryOverride ??
+    (filterInvalid
+      ? "筛选条件待处理"
+      : count
+        ? publicFilterSections
+            .flatMap((section) => {
+              const group = chips.filter((chip) => chip.section === section);
+              if (!group.length) return [];
+              if (section === "device" || section === "brightness") return [group[0].label];
+              return [
+                `${group[0].exclude ? "排除" : ""}${publicFilterLabels[section]} ${group.length} 项`
+              ];
+            })
+            .join(" · ")
+        : "全部图片");
 
   return (
     <section
@@ -234,35 +241,37 @@ export function PublicImageToolbar({
     >
       <div className="public-toolbar-leading">
         {!compact && leadingControls}
-        <div
-          className={`public-filter-buttons${hasFilters ? " has-filters" : ""}`}
-          role="group"
-          aria-label="筛选操作"
-        >
-          <button
-            ref={filterToggleRef}
-            type="button"
-            className="public-toolbar-button public-filter-trigger"
-            aria-haspopup="dialog"
-            aria-expanded={filtersOpen}
-            onClick={onOpenFilters}
+        {filterControls ?? (
+          <div
+            className={`public-filter-buttons${hasFilters ? " has-filters" : ""}`}
+            role="group"
+            aria-label="筛选操作"
           >
-            {!hasFilters && <Icon name="filter-3-line" />}
-            {hasFilters ? "重新筛选" : "筛选"}
-          </button>
-          {hasFilters && (
             <button
+              ref={filterToggleRef}
               type="button"
-              className="public-toolbar-button public-filter-clear"
-              onClick={() => {
-                filterToggleRef.current?.focus({ preventScroll: true });
-                onClearFilters();
-              }}
+              className="public-toolbar-button public-filter-trigger"
+              aria-haspopup="dialog"
+              aria-expanded={filtersOpen}
+              onClick={onOpenFilters}
             >
-              清空
+              {!hasFilters && <Icon name="filter-3-line" />}
+              {hasFilters ? "重新筛选" : "筛选"}
             </button>
-          )}
-        </div>
+            {hasFilters && (
+              <button
+                type="button"
+                className="public-toolbar-button public-filter-clear"
+                onClick={() => {
+                  filterToggleRef.current?.focus({ preventScroll: true });
+                  onClearFilters();
+                }}
+              >
+                清空
+              </button>
+            )}
+          </div>
+        )}
       </div>
       {!compact && (
         <span className="public-toolbar-summary" title={summary}>

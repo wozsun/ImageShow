@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import { API as TypeScriptAPI } from "typescript/unstable/sync";
+import { isStringLiteralLikeNode, isTemplateLiteralLikeNode } from "typescript/unstable/ast/is";
 
 const workspaceRoot = path.resolve(import.meta.dirname, "../../..");
 const webRoot = path.join(workspaceRoot, "packages/web");
@@ -169,7 +171,7 @@ const namedColorPattern = new RegExp(
 const semanticDefinitionPattern =
   /(--(?:bootstrap-color|public-color|public-shadow|admin-color|admin-shadow|color)-[\w-]+)\s*:/g;
 const semanticReferencePattern =
-  /var\((--(?:bootstrap-color|public-color|public-shadow|admin-color|admin-shadow|color)-[\w-]+)/g;
+  /(?:var\(\s*|getPropertyValue\(\s*["'])(--(?:bootstrap-color|public-color|public-shadow|admin-color|admin-shadow|color)-[\w-]+)/g;
 const semanticDeclarationPattern =
   /--(?:bootstrap-color|public-color|public-shadow|admin-color|admin-shadow|color)-[\w-]+\s*:\s*[^;]+;/g;
 function listSourceFiles(directory) {
@@ -214,6 +216,36 @@ const sourceFiles = [
   indexFile
 ];
 const sources = new Map(sourceFiles.map((file) => [file, fs.readFileSync(file, "utf8")]));
+// Only literal text can carry CSS colors in TypeScript. Identifiers and calls
+// such as Math.tan belong to code, even when their spelling is a CSS color.
+const colorSources = new Map(sources);
+const typeScriptApi = new TypeScriptAPI({ cwd: workspaceRoot });
+let typeScriptSnapshot;
+try {
+  typeScriptSnapshot = typeScriptApi.updateSnapshot({
+    openProjects: [path.join(webRoot, "tsconfig.check.json")]
+  });
+  const programs = typeScriptSnapshot.getProjects().map((project) => project.program);
+  for (const [file, source] of sources) {
+    if (!file.endsWith(".ts") && !file.endsWith(".tsx")) continue;
+    const sourceFile = programs.map((program) => program.getSourceFile(file)).find(Boolean);
+    if (!sourceFile) throw new Error(`Color check could not parse ${displayPath(file)}`);
+    const literalSource = source.replace(/[^\r\n]/g, " ").split("");
+    function visit(node) {
+      if (isStringLiteralLikeNode(node) || isTemplateLiteralLikeNode(node)) {
+        for (let offset = node.getStart(sourceFile); offset < node.end; offset++) {
+          literalSource[offset] = source[offset];
+        }
+      }
+      node.forEachChild(visit);
+    }
+    visit(sourceFile);
+    colorSources.set(file, literalSource.join(""));
+  }
+} finally {
+  typeScriptSnapshot?.dispose();
+  typeScriptApi.close();
+}
 const errors = [];
 const publicSemanticSource = sources.get(publicSemanticFile);
 const bootstrapMatch = publicSemanticSource.match(
@@ -261,7 +293,7 @@ function contrastRatio(first, second) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-for (const [file, source] of sources) {
+for (const [file, source] of colorSources) {
   if (file.endsWith("semantic-colors.css")) {
     continue;
   }

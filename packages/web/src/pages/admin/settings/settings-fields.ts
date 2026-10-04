@@ -297,7 +297,7 @@ const settingsFields = {
     group: "show",
     label: "展映默认模式",
     kind: "select",
-    options: { waterfall: "瀑布", float: "漂浮" }
+    options: { waterfall: "瀑布", float: "漂浮", cluster: "星群" }
   },
   "site.show.density": {
     group: "show",

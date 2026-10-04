@@ -4,6 +4,7 @@ import {
   readableFilterSearch,
   tagFilterValues,
   TagFilterError,
+  type ShowClusterGroup,
   type ShowOrder,
   type ShowMode
 } from "@imageshow/shared/browser";
@@ -83,11 +84,12 @@ export function useImageBrowseRoute() {
         author: parsed.filters.author
       })
     : { url: null, error: null };
-  const getPageUrl = (order: ShowOrder, mode?: ShowMode) => {
+  const getPageUrl = (order: ShowOrder, mode?: ShowMode, group?: ShowClusterGroup) => {
     if (!ready) return null;
     const pageParams = galleryRouteSearchParams(parsed.filters);
     pageParams.set("order", order);
     if (mode) pageParams.set("mode", mode);
+    if (group) pageParams.set("group", group);
     const pathname =
       location.pathname === "/embed/gallery"
         ? "/gallery"

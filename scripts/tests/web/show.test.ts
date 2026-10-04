@@ -11,7 +11,12 @@ import {
   type Rectangle,
   type Renderer
 } from "pixi.js";
-import { emptyGalleryFilters } from "../../../packages/web/src/lib/gallery/gallery-query.ts";
+import {
+  emptyGalleryFilters,
+  showModeFromSearchParams,
+  showOrderFromSearchParams,
+  updateImageBrowseSearchParams
+} from "../../../packages/web/src/lib/gallery/gallery-query.ts";
 import {
   showCardRect,
   showRectsIntersect,
@@ -50,6 +55,7 @@ import {
   createConfigStreamHarness
 } from "../support/web-test-context.ts";
 import { installProperties } from "../support/property-descriptors.ts";
+import { dispatchDomEvent } from "../support/dom-events.ts";
 import {
   imageMatchesFilters,
   shuffledImageBatch
@@ -158,6 +164,7 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
       instance: {
         setScene() {},
         setImages() {},
+        setClusters() {},
         setWaterfallColumns() {},
         setFloatSizeIndex() {},
         setSpeed() {},
@@ -201,6 +208,12 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
     },
     onOpen: (image: (typeof images)[number], opener: HTMLElement) => {
       calls.push({ name: "open", revision, args: [image, opener] });
+    },
+    onClusterFocusChange: (focus: Parameters<Options["onClusterFocusChange"]>[0], automatic: boolean) => {
+      calls.push({ name: "cluster-focus", revision, args: [focus, automatic] });
+    },
+    onNeedClusterImages: (key: string, retainedIds: readonly string[]) => {
+      calls.push({ name: "cluster-need", revision, args: [key, retainedIds] });
     }
   });
   const pendingRender = Promise.withResolvers<void>();
@@ -225,6 +238,8 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
             {
               key,
               dataKey: "stage",
+              clusterDataKey: "theme:latest:0",
+              clusters: [],
               dialogOpen: false,
               floatSizeIndex: 5,
               images,
@@ -252,15 +267,20 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
       options.onMotionActiveChange(true);
       options.onNeedImages(usage);
       options.onOpen(images[0], "slot");
+      options.onClusterFocusChange({ key: "theme:test", name: "测试", total: 2 }, false);
+      options.onNeedClusterImages("theme:test", [images[0].id]);
     });
     assert.deepEqual(
       calls.map(({ name, revision }) => [name, revision]),
-      ["columns", "float", "movement", "motion", "need", "open"].map((name) => [name, revision])
+      ["columns", "float", "movement", "motion", "need", "open", "cluster-focus", "cluster-need"]
+        .map((name) => [name, revision])
     );
     assert.deepEqual(calls[2].args, [12, "touch"]);
     assert.equal(calls[4].args[0], usage);
     assert.equal(calls[5].args[0], images[0]);
     assert.equal(calls[5].args[1], creations[0].host);
+    assert.deepEqual(calls[6].args, [{ key: "theme:test", name: "测试", total: 2 }, false]);
+    assert.deepEqual(calls[7].args, ["theme:test", [images[0].id]]);
   };
   await React.act(async () => render(1));
   assert.equal(creations.length, 1, "Strict Mode 丢弃的 setup 不创建实例");
@@ -304,6 +324,8 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
       options.onMotionActiveChange(true);
       options.onNeedImages(usage);
       options.onVisibleItems([]);
+      options.onClusterFocusChange(null, true);
+      options.onNeedClusterImages("theme:test", [images[0].id]);
     }
   });
   assert.equal(calls.length, 0, "已退休 Effect 不再发布运动或补图状态");
@@ -464,46 +486,52 @@ test("[Web/展映] Pixi float 只暴露有界图片尺寸档位", () => {
   assert.equal(clampShowFloatSizeIndex(100), 10);
   assert.equal(clampShowFloatSizeIndex(2.6), 3);
 });
-test("[Web/展映] 模式切换提示和状态播报使用瀑布与漂浮显示名", async (t) => {
-  const React = await import("react");
-  t.after(installProperties(globalThis, { React }));
-  const { renderToStaticMarkup } = await import("react-dom/server");
-  const { MemoryRouter } = await import("react-router");
+test("[Web/展映] 移动端从展开选项切换三种画面与排序并保留独立 URL 选择", async (t) => {
+  const h = await createConfigStreamHarness(t);
+  const { React } = h;
+  const { MemoryRouter, useLocation, useSearchParams } = await import("react-router");
   const { ShowMobileControls } =
     await import("../../../packages/web/src/pages/show/ShowControls.tsx");
-  const render = (scene: "waterfall" | "float") =>
-    renderToStaticMarkup(
-      React.createElement(
-        MemoryRouter,
-        null,
-        React.createElement(ShowMobileControls, {
-          onRunningChange() {},
-          getSceneHref: (nextScene) => `/show?mode=${nextScene}`,
-          reducedMotion: false,
-          running: true,
-          scene
-        })
-      )
-    );
-
-  const assertModeLabels = (
-    scene: "waterfall" | "float",
-    currentLabel: string,
-    nextLabel: string
-  ) => {
-    const { document } = parseHTML(`<html><body>${render(scene)}</body></html>`);
-    const sceneControl = document.querySelector(".show-scene-control");
-    const expectedControlLabel = `当前画面：${currentLabel}；点击切换为${nextLabel}`;
-    assert.equal(sceneControl?.getAttribute("aria-label"), expectedControlLabel);
-    assert.equal(sceneControl?.getAttribute("title"), expectedControlLabel);
-    assert.equal(
-      sceneControl?.getAttribute("href"),
-      `/show?mode=${scene === "waterfall" ? "float" : "waterfall"}`
-    );
+  let search = "";
+  function Browse() {
+    const [params, setParams] = useSearchParams();
+    search = useLocation().search;
+    return React.createElement(ShowMobileControls, {
+      onRunningChange() {},
+      getSceneHref: (mode) => `?${updateImageBrowseSearchParams(params, { mode })}`,
+      order: showOrderFromSearchParams(params, "random"),
+      onOrderChange: (order) => setParams(updateImageBrowseSearchParams(params, { order })),
+      reducedMotion: false,
+      running: true,
+      scene: showModeFromSearchParams(params, "waterfall")
+    });
+  }
+  await h.render(React.createElement(
+    MemoryRouter,
+    { initialEntries: ["/show?group=tag"] },
+    React.createElement(Browse)
+  ));
+  const click = async (selector: string) => {
+    const target = h.document.querySelector(selector);
+    assert.ok(target, selector);
+    await React.act(async () => dispatchDomEvent(h.window, target, "click", { button: 0 }));
   };
-
-  assertModeLabels("waterfall", "瀑布", "漂浮");
-  assertModeLabels("float", "漂浮", "瀑布");
+  for (const mode of ["cluster", "float", "waterfall"] as const) {
+    await click('button[aria-label^="展映画面："]');
+    assert.equal(h.document.querySelectorAll('.show-mobile-flyout-options a').length, 3);
+    await click(`a[href*="mode=${mode}"]`);
+    const params = new URLSearchParams(search);
+    assert.equal(params.get("mode"), mode);
+    assert.equal(params.get("group"), "tag");
+    assert.equal(params.has("order"), false);
+    assert.equal(h.document.querySelector('.show-mobile-flyout-options'), null);
+  }
+  await click('button[aria-label^="排列顺序："]');
+  await click('button[aria-label="最旧优先"]');
+  assert.equal(new URLSearchParams(search).get("order"), "oldest");
+  assert.equal(new URLSearchParams(search).get("mode"), "waterfall");
+  assert.equal(new URLSearchParams(search).get("group"), "tag");
+  assert.equal(h.document.querySelector('.show-mobile-flyout-options'), null);
 });
 test("[Web/展映] Show Pixi 窄相机保持中心缩放、坐标换算与 resize 不漂移", () => {
   const target = createCameraTestElement();
@@ -1024,6 +1052,7 @@ test("[Web/展映] 悬浮卡片缩放时快照、边框与透视命中边界保�
   for (const [key, value] of Object.entries(globals))
     Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
   let snapshotCount = 0;
+  const snapshots: InstanceType<typeof RenderTexture>[] = [];
   let snapshot!: { frame: Rectangle; photo: number[]; texture: InstanceType<typeof RenderTexture> };
   let renderScale = 1;
   let card!: InstanceType<typeof ShowPixiCard>;
@@ -1040,6 +1069,7 @@ test("[Web/展映] 悬浮卡片缩放时快照、边框与透视命中边界保�
         width: Math.floor(frame.width),
         height: Math.floor(frame.height)
       });
+      snapshots.push(texture);
       snapshot = {
         frame: frame.clone(),
         photo: photoRect(card.width, card.height),
@@ -1132,7 +1162,7 @@ test("[Web/展映] 悬浮卡片缩放时快照、边框与透视命中边界保�
     "倾斜后旧矩形角落不能继续成为透明命中区"
   );
   const initialCount = snapshotCount;
-  for (const scale of [1.02, 1.05, 1.08, 1.03, 0.96, 1]) {
+  for (const scale of [1.02, 1.05, 1.08, 1.03, 0.99, 1]) {
     renderScale = scale;
     card.setRenderScale(scale);
     card.update(16);
@@ -1140,17 +1170,22 @@ test("[Web/展映] 悬浮卡片缩放时快照、边框与透视命中边界保�
     assert.equal(card.root.hitArea, perspectiveHitArea, "透视帧复用同一命中多边形");
   }
   assert.equal(snapshotCount, initialCount, "同档连续缩放不逐帧重新截图");
+  const initialSnapshotWidth = snapshot.frame.width;
   card.assign("zoom", image, 400.75, 601.125, 0, true);
   for (let frame = 0; frame < 50; frame += 1) {
     card.update(16, true);
     assertAligned();
   }
-  assert.equal(snapshotCount, initialCount, "Float 平滑尺寸变化继续复用快照");
+  assert.ok(snapshotCount > initialCount, "卡片变大后更新快照，保持悬浮清晰度");
+  assert.ok(snapshotCount - initialCount < 10, "平滑尺寸变化按档位更新快照，不逐帧创建纹理");
+  assert.ok(snapshot.frame.width > initialSnapshotWidth * 1.4);
+  assert.ok(snapshots.slice(0, -1).every((texture) => texture.destroyed), "尺寸变化释放旧快照");
+  const resizedCount = snapshotCount;
   renderScale = 1.3;
   card.setRenderScale(1.3);
   card.update(16);
   assertAligned();
-  assert.equal(snapshotCount, initialCount + 1, "跨分辨率档位仅重建一次快照");
+  assert.equal(snapshotCount, resizedCount + 1, "跨分辨率档位仅重建一次快照");
   card.clearPointerHover();
   assert.equal(card.root.hitArea, restingHitArea, "离开透视后恢复稳定矩形命中区");
   assert.equal(card.visual.children.length, 1, "离开悬浮释放快照和边框网格");
@@ -3176,7 +3211,7 @@ test("[Web/展映] 不同图片操作保留各自尚未完成的确认回读", a
     });
 });
 
-test("[Web/展映] 漂浮候选耗尽时删除当前图仍释放卡片与可访问项", (t) => {
+test("[Web/展映] 漂浮与星群删除释放卡片，星群故障恢复保留编辑权威性", async (t) => {
   const h = createFloatSceneHarness(t, { count: 80, hasMore: true, sizeIndex: 0 });
   const id = h.visibleItems()[0]!.image.id;
   h.scene.setImages(
@@ -3188,4 +3223,180 @@ test("[Web/展映] 漂浮候选耗尽时删除当前图仍释放卡片与可访�
   h.advance(20);
   assert.ok(h.visibleItems().every((item) => item.image.id !== id));
   assert.ok(h.visibleItems().length > 0);
+
+  await t.test("星群图片流与场景同步", async (t) => {
+    const h = await createConfigStreamHarness(t, { honorAbort: false });
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+    const { queryKeys } = await import("../../../packages/web/src/lib/api/query-keys.ts");
+    const { QueryErrorState } = await import("../../../packages/web/src/components/feedback/QueryErrorState.tsx");
+    const { useShowClusters } = await import("../../../packages/web/src/pages/show/useShowClusters.ts");
+    const { ShowPixiClusterScene } = await import("../../../packages/web/src/pages/show/pixi/show-pixi-cluster-scene.ts");
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+    t.after(() => client.clear());
+    const themes = [
+      { slug: "main", display_name: "主分类", image_count: 100 },
+      { slug: "single", display_name: "单图分类", image_count: 1 }
+    ];
+    client.setQueryData(queryKeys.galleryFacets, { themes, tags: [], authors: [] });
+    client.setQueryData([...queryKeys.galleryStats, ""], { themes, tags: [], authors: [], total_images: 101 });
+    // 仅替代无 GPU 环境里的光晕画布；实际图片流、场景和卡片生命周期照常运行。
+    t.mock.method(Object.getPrototypeOf(h.document.createElement("canvas")), "getContext", () => ({
+      createRadialGradient: () => ({
+        addColorStop(_offset: number, color: string) {
+          assert.ok(color.trim(), "异步初始化使用公共颜色，不依赖仍处于星群模式的宿主 class");
+        }
+      }),
+      fillRect() {}
+    }));
+    t.mock.method(Texture, "from", () => new Texture());
+    t.mock.method(Math, "random", () => 0.5);
+    const target = h.document.createElement("div") as unknown as HTMLElement;
+    let leases = 0;
+    let visibleItems: readonly ShowPixiVisibleItem[] = [];
+    let focus: { key: string; total: number } | null = null;
+    const focusedCluster = () => focus;
+    let current!: ReturnType<typeof useShowClusters>;
+    const scene = new ShowPixiClusterScene({
+      width: 1440,
+      height: 900,
+      clusters: [],
+      dataKey: "",
+      inputElement: target,
+      textureCache: {
+        fitResidentLods: unchangedTextureLods,
+        acquire: () => {
+          leases++;
+          return { release() { leases--; } };
+        }
+      } as unknown as ShowPixiTextureCache,
+      renderer: {} as Renderer,
+      running: false,
+      reducedMotion: false,
+      speed: 28,
+      onNeedClusterImages: (key, retainedIds) => current.needImages(key, retainedIds),
+      onClusterFocusChange: (value) => { focus = value; },
+      onOpen() {},
+      onVisibleItems: (items) => { visibleItems = items; },
+      onManualVerticalMovement() {}
+    });
+    t.after(() => {
+      scene.destroy();
+      assert.equal(leases, 0);
+    });
+    function Probe({ enabled = true }: { enabled?: boolean }) {
+      current = useShowClusters("theme", "latest", enabled);
+      h.React.useEffect(
+        () => scene.setClusters(current.clusters, current.dataKey),
+        [current.clusters, current.dataKey]
+      );
+      return current.error
+        ? h.React.createElement(QueryErrorState, { error: current.error, onRetry: current.retry })
+        : null;
+    }
+    const render = (enabled = true) => h.render(
+      h.React.createElement(QueryClientProvider, { client }, h.React.createElement(Probe, { enabled }))
+    );
+    const advance = async () => h.React.act(async () => {
+      for (let frame = 0; frame < 120; frame++) scene.update(16);
+    });
+    const images = showImages(101);
+    await render();
+    await h.respond(0, { items: images.slice(0, 100), next_cursor: null });
+    await h.respond(1, { error: "分类读取失败" }, 503);
+    assert.ok(h.document.querySelector('[role="alert"]'), "部分首批成功仍须显示恢复入口");
+    await advance();
+    assert.equal(h.pending.length, 2, "失败分类不自动轮询");
+    await h.React.act(async () => h.document.querySelector("button")!.click());
+    await h.respond(2, { items: images.slice(0, 100), next_cursor: null });
+    await h.respond(3, { items: [images[100]], next_cursor: null });
+    assert.equal(h.document.querySelector('[role="alert"]'), null);
+    await advance();
+    assert.ok(scene.stats().activeSprites > 0);
+    const retainedIds = images.slice(0, 45).map((image) => image.id);
+    await h.React.act(async () => current.needImages("theme:main", retainedIds));
+    await h.respond(4, { error: "续取失败" }, 503);
+    assert.ok(h.document.querySelector('[role="alert"]'), "已有星团时续取失败仍可见");
+    await h.React.act(async () => {
+      for (let frame = 0; frame < 100; frame++) current.needImages("theme:main", retainedIds);
+    });
+    assert.equal(h.pending.length, 5);
+    await h.React.act(async () => h.document.querySelector("button")!.click());
+    await h.respond(5, { items: images.slice(0, 100), next_cursor: null });
+    await h.respond(6, { items: [images[100]], next_cursor: null });
+    assert.equal(h.document.querySelector('[role="alert"]'), null);
+
+    await h.React.act(async () => current.needImages("theme:main", retainedIds));
+    await h.React.act(async () => {
+      current.updateImage(editableImage(images[0]!.id, { ...images[0]!, theme: "main", title: "已确认标题" }));
+      current.updateImage(editableImage(images[2]!.id, { ...images[2]!, theme: "single" }));
+      current.removeImage(images[1]!.id);
+      current.needImages("theme:main", retainedIds);
+    });
+    assert.equal(h.pending.length, 8, "编辑发布不能为同一星团创建并发续页");
+    await h.respond(7, { items: images.slice(0, 100), next_cursor: null });
+    const admitted = current.clusters.flatMap((cluster) => cluster.images);
+    assert.ok(admitted.every((image) => image.id !== images[1]!.id), "迟到分页不能复活已删除图片");
+    assert.ok(admitted.every((image) => image.id !== images[2]!.id), "改到别的分类的图片离开原星团，迟到分页不能接回");
+    assert.ok(admitted.filter((image) => image.id === images[0]!.id).every((image) => image.title === "已确认标题"));
+
+    await h.React.act(async () => current.refreshImage(images[0]!.id));
+    assert.equal(h.pending[8]!.path, "/api/admin/images/snapshot");
+    assert.deepEqual(JSON.parse(String(h.pending[8]!.body)), { ids: [images[0]!.id] });
+    await h.React.act(async () => current.refreshImage(images[0]!.id));
+    assert.equal(h.pending[8]!.signal?.aborted, true);
+    await h.respond(9, { items: [editableImage(images[0]!.id, { ...images[0]!, theme: "main", title: "最新回读" })] });
+    await h.respond(8, { items: [editableImage(images[0]!.id, { ...images[0]!, theme: "main", title: "过时回读" })] });
+    assert.equal(current.clusters[0]!.images[0]!.title, "最新回读");
+    await h.React.act(async () => current.refreshImage(images[0]!.id));
+    await h.respond(10, { error: "回读拒绝" }, 403);
+    assert.equal(current.clusters[0]!.images[0]!.title, "最新回读", "失败不移除已提交图片");
+
+    const queuedImages = showImages(601);
+    for (let page = 1; page <= 4; page++) {
+      const request = h.pending.length;
+      await h.React.act(async () => current.needImages("theme:main", retainedIds));
+      await h.respond(request, {
+        items: queuedImages.slice(page * 100 + 1, page * 100 + 101),
+        next_cursor: `page-${page}`
+      });
+      assert.ok(current.clusters[0]!.images.length <= 360, "保留驻留图仍受原 DTO 上限约束");
+    }
+    assert.ok(current.clusters[0]!.images.some((image) => image.id === images[0]!.id), "续取截断后仍保留槽位持有的旧图");
+    await advance();
+    scene.command({ type: "zoom", direction: 1 });
+    assert.ok(focus);
+    if (focusedCluster()?.key !== "theme:main") scene.command({ type: "step", direction: 1 });
+    await advance();
+    await advance();
+    const visible = visibleItems[0]!;
+    assert.ok(visible);
+    const visibleIds = visibleItems.map((item) => item.image.id);
+    await h.React.act(async () => current.updateImage(
+      editableImage(visible.image.id, { ...visible.image, theme: "main", title: "暂停时编辑旧卡片" })
+    ));
+    await advance();
+    assert.deepEqual(visibleItems.map((item) => item.image.id), visibleIds, "暂停期间可见集合保持不变");
+    assert.equal(
+      visibleItems.find((item) => item.image.id === visible.image.id)?.image.title,
+      "暂停时编辑旧卡片",
+      "同 ID 编辑也重新发布键盘与读屏代理数据"
+    );
+    await h.React.act(async () => {
+      for (const image of queuedImages) current.removeImage(image.id);
+    });
+    await advance();
+    assert.equal(scene.stats().activeSprites, 0, "末图删除后销毁整个星团的卡片");
+    assert.equal(scene.stats().retainedDtos, 0);
+    assert.equal(leases, 0);
+    assert.equal(focus, null);
+    assert.deepEqual(visibleItems, []);
+    await h.React.act(async () => current.retry());
+    await h.respond(15, { items: [images[0]], next_cursor: null });
+    await h.respond(16, { items: [images[100]], next_cursor: null });
+    await h.React.act(async () => current.refreshImage(images[0]!.id));
+    await render(false);
+    assert.equal(h.pending[17]!.signal?.aborted, true, "退出星群取消定向回读");
+    await h.respond(17, { items: [editableImage(images[0]!.id)] });
+    assert.deepEqual(current.clusters, []);
+  });
 });

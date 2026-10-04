@@ -29,6 +29,11 @@
   --public-shadow-gallery-back-to-top: rgba(0, 3, 10, 0.38);
   --public-color-show-hint-text: color-mix(in srgb, var(--public-color-text-secondary) 70%, #fff);
   --public-color-show-hint-outline: rgba(24, 28, 35, 0.7);
+  --public-color-ambient-glow-core: rgba(160, 190, 255, 0.5);
+  --public-color-ambient-glow-soft: rgba(160, 190, 255, 0.18);
+  --public-color-ambient-glow-clear: rgba(160, 190, 255, 0);
+  --public-color-show-cluster-label: #fff;
+  --public-color-show-cluster-orbit: rgba(255, 255, 255, 0.09);
   --public-color-filter-surface: #0a0b0c;
   --public-color-filter-header: #0f1113;
   --public-color-filter-search: var(--public-color-filter-surface);

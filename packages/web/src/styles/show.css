@@ -113,6 +113,84 @@
   flex: 1;
 }
 
+/* 星群模式：筛选位置上的三选项分组切换，相邻选项共用一条分隔线。 */
+.show-cluster-groups .public-toolbar-button {
+  flex: 1;
+  min-width: 0;
+  padding-inline: 8px;
+  color: var(--color-dark-control-text-secondary);
+  text-decoration: none;
+  border-radius: 0;
+}
+.show-cluster-groups .public-toolbar-button + .public-toolbar-button {
+  border-left: 0;
+}
+.show-cluster-groups .public-toolbar-button:first-child {
+  border-radius: 8px 0 0 8px;
+}
+.show-cluster-groups .public-toolbar-button:last-child {
+  border-radius: 0 8px 8px 0;
+}
+.show-cluster-groups .public-toolbar-button.is-active {
+  background: var(--color-dark-control-surface-selected);
+  color: var(--color-dark-control-action-text);
+}
+
+/* 移动端浮动按钮的选项向左展开，不遮住同一列的其他按钮。 */
+.show-mobile-flyout {
+  position: relative;
+  display: grid;
+}
+.show-mobile-flyout-options {
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  display: flex;
+  gap: 6px;
+  padding-right: 2px;
+  transform: translateY(-50%);
+  animation: show-mobile-flyout-in 0.16s ease-out;
+}
+.show-mobile-flyout-option {
+  min-width: 52px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0 12px;
+  color: var(--color-public-text-primary);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  text-decoration: none;
+  background: var(--public-color-gallery-back-to-top);
+  border: 1px solid var(--public-color-border-default);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px var(--public-shadow-gallery-back-to-top);
+}
+.show-mobile-flyout-option.is-active {
+  color: var(--public-color-action-primary);
+  border-color: var(--public-color-action-primary);
+}
+.show-mobile-flyout-option:focus-visible {
+  outline: 2px solid var(--public-color-action-primary);
+  outline-offset: 2px;
+}
+.show-page .public-floating-controls:has(.show-mobile-flyout-options) {
+  opacity: 0.95;
+  animation: none;
+}
+@keyframes show-mobile-flyout-in {
+  from {
+    opacity: 0;
+    transform: translate(8px, -50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .show-mobile-flyout-options {
+    animation: none;
+  }
+}
+
 .show-density-dialog {
   touch-action: pan-x pan-y;
 }

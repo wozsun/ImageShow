@@ -1,16 +1,20 @@
 import {
   useEffect,
   useEffectEvent,
+  useImperativeHandle,
   useLayoutEffect,
   useRef,
   useState,
   type PointerEvent,
-  type ReactNode
+  type ReactNode,
+  type Ref
 } from "react";
 import type { ShowOrder } from "@imageshow/shared/browser";
 import { PublicStarfield } from "../../../components/layout/PublicStarfield.js";
 import type { ShowImage } from "../show-layout.js";
 import type { ShowCandidateUsage } from "../show-data-pool.js";
+import type { ShowCluster } from "../useShowClusters.js";
+import type { ShowClusterCommand, ShowClusterFocus } from "./show-pixi-cluster-scene.js";
 import { ShowPixiRuntime } from "./show-pixi-runtime.js";
 import type {
   ShowPixiSceneKind,
@@ -22,17 +26,26 @@ function imageLabel(image: ShowImage) {
   return title || `图片 ${image.id.slice(-12)}`;
 }
 
+export type ShowPixiStageHandle = {
+  clusterCommand: (command: ShowClusterCommand) => void;
+};
+
 export function ShowPixiStage({
   children,
+  clusterDataKey,
+  clusters,
+  controlRef,
   dataKey,
   dialogOpen,
   floatSizeIndex,
   images,
   hasMore,
+  onClusterFocusChange,
   onColumnsChange,
   onFloatSizeIndexChange,
   onManualVerticalMovement,
   onMotionActiveChange,
+  onNeedClusterImages,
   onNeedImages,
   onOpen,
   order,
@@ -43,15 +56,20 @@ export function ShowPixiStage({
   waterfallColumns
 }: {
   children?: ReactNode;
+  clusterDataKey: string;
+  clusters: readonly ShowCluster[];
+  controlRef?: Ref<ShowPixiStageHandle>;
   dataKey: string;
   dialogOpen: boolean;
   floatSizeIndex: number;
   images: readonly ShowImage[];
   hasMore: boolean;
+  onClusterFocusChange: (focus: ShowClusterFocus | null, automatic: boolean) => void;
   onColumnsChange: (columns: number) => number;
   onFloatSizeIndexChange: (index: number) => number;
   onManualVerticalMovement: (delta: number, pointerType?: string) => void;
   onMotionActiveChange: (active: boolean) => void;
+  onNeedClusterImages: (key: string, retainedIds: readonly string[]) => void;
   onNeedImages: (usage: ShowCandidateUsage) => void;
   onOpen: (image: ShowImage, opener: HTMLElement) => void;
   order: ShowOrder;
@@ -66,6 +84,8 @@ export function ShowPixiStage({
   const statsRef = useRef<HTMLOutputElement | null>(null);
   const runtimeRef = useRef<ShowPixiRuntime | null>(null);
   // Effect 创建的实例保持不变，回调由 React 读取最新已提交的 props。
+  const handleClusterFocusChange = useEffectEvent(onClusterFocusChange);
+  const handleNeedClusterImages = useEffectEvent(onNeedClusterImages);
   const handleColumnsChange = useEffectEvent(onColumnsChange);
   const handleFloatSizeIndexChange = useEffectEvent(onFloatSizeIndexChange);
   const handleManualVerticalMovement = useEffectEvent(onManualVerticalMovement);
@@ -117,12 +137,20 @@ export function ShowPixiStage({
           hasMore,
           dataKey,
           order,
+          clusters,
+          clusterDataKey,
           waterfallColumns,
           floatSizeIndex,
           running,
           reducedMotion,
           speed,
           statsElement: statsRef.current,
+          onClusterFocusChange: (focus, automatic) => {
+            if (!disposed) handleClusterFocusChange(focus, automatic);
+          },
+          onNeedClusterImages: (key, retainedIds) => {
+            if (!disposed) handleNeedClusterImages(key, retainedIds);
+          },
           onColumnsChange: handleColumnsChange,
           onFloatSizeIndexChange: handleFloatSizeIndexChange,
           onManualVerticalMovement: handleManualVerticalMovement,
@@ -173,6 +201,14 @@ export function ShowPixiStage({
     runtime?.setImages(images, dataKey, order, hasMore);
   }, [runtime, images, dataKey, order, hasMore]);
   useEffect(() => {
+    runtime?.setClusters(clusters, clusterDataKey);
+  }, [runtime, clusters, clusterDataKey]);
+  useImperativeHandle(
+    controlRef,
+    () => ({ clusterCommand: (command) => runtime?.clusterCommand(command) }),
+    [runtime]
+  );
+  useEffect(() => {
     runtime?.setWaterfallColumns(waterfallColumns);
   }, [runtime, waterfallColumns]);
   useEffect(() => {
@@ -194,11 +230,9 @@ export function ShowPixiStage({
     );
   }, [runtime, visibleItems, dialogOpen]);
 
-  const sceneClassName = scene === "waterfall" ? "is-waterfall" : "is-float";
-
   return (
     <div
-      className={`show-viewport show-pixi-viewport ${sceneClassName}`}
+      className={`show-viewport show-pixi-viewport is-${scene}`}
       data-show-pixi-stage=""
       data-show-scene={scene}
     >

@@ -21,8 +21,12 @@ export type RandomMethod = (typeof randomMethods)[number];
 export type GalleryOrder = PublicImageOrder;
 export type ShowOrder = PublicImageOrder;
 
-export const showModes = ["waterfall", "float"] as const;
+export const showModes = ["waterfall", "float", "cluster"] as const;
 export type ShowMode = (typeof showModes)[number];
+
+/** 星群模式把图片按一种分类聚成星团；分组维度是访客的浏览选择，不是站点配置。 */
+export const showClusterGroups = ["theme", "tag", "author"] as const;
+export type ShowClusterGroup = (typeof showClusterGroups)[number];
 
 export const showDensities = ["relaxed", "balanced", "dense"] as const;
 export type ShowDensity = (typeof showDensities)[number];

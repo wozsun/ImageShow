@@ -372,6 +372,7 @@ test("[Web/公开导航] 真实画廊与展映页面刷新词表后按完整原�
       ({
         setScene() {},
         setImages() {},
+        setClusters() {},
         setWaterfallColumns() {},
         setFloatSizeIndex() {},
         setSpeed() {},

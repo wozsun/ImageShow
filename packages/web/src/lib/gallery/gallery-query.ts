@@ -7,9 +7,11 @@ import {
   tagExpressionValues,
   readableFilterSearch,
   detectDeviceFromUserAgent,
+  showClusterGroups,
   showModes,
   publicImageOrders,
   TagFilterError,
+  type ShowClusterGroup,
   type ShowMode,
   type ShowOrder,
   type PublicImageView,
@@ -33,6 +35,7 @@ const galleryDevices = new Set(["pc", "mb", "auto"]);
 const galleryBrightnesses = new Set(["dark", "light"]);
 const showOrderSet = new Set<ShowOrder>(publicImageOrders);
 const showModeSet = new Set<ShowMode>(showModes);
+const showClusterGroupSet = new Set<ShowClusterGroup>(showClusterGroups);
 
 export const emptyGalleryFilters: GalleryFilters = {
   device: "",
@@ -168,10 +171,17 @@ export function showModeFromSearchParams(
   return showModeSet.has(value) ? value : fallback;
 }
 
+export function showClusterGroupFromSearchParams(params: URLSearchParams): ShowClusterGroup {
+  const value = params.get("group")?.trim().toLowerCase() as ShowClusterGroup;
+  return showClusterGroupSet.has(value) ? value : "theme";
+}
+
 /** Patch user choices without materializing defaults from the resolved view. */
 export function updateImageBrowseSearchParams(
   current: URLSearchParams,
-  changes: Partial<GalleryFilters & { order: ShowOrder; mode: ShowMode }>
+  changes: Partial<
+    GalleryFilters & { order: ShowOrder; mode: ShowMode; group: ShowClusterGroup }
+  >
 ) {
   const params = new URLSearchParams(current);
   for (const [key, value] of Object.entries(changes)) {

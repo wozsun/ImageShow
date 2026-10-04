@@ -10,6 +10,12 @@ import type { ShowOrder } from "@imageshow/shared/browser";
 import { reducedMotionQuery } from "../../../lib/ui/reduced-motion.js";
 import type { ShowImage } from "../show-layout.js";
 import type { ShowCandidateUsage } from "../show-data-pool.js";
+import type { ShowCluster } from "../useShowClusters.js";
+import {
+  ShowPixiClusterScene,
+  type ShowClusterCommand,
+  type ShowClusterFocus
+} from "./show-pixi-cluster-scene.js";
 import { ShowPixiFloatScene } from "./show-pixi-float-scene.js";
 import {
   ShowPixiTextureCache,
@@ -30,16 +36,20 @@ type ShowPixiRuntimeOptions = {
   hasMore: boolean;
   dataKey: string;
   order: ShowOrder;
+  clusters: readonly ShowCluster[];
+  clusterDataKey: string;
   waterfallColumns: number;
   floatSizeIndex: number;
   running: boolean;
   reducedMotion: boolean;
   speed: number;
   statsElement: HTMLOutputElement | null;
+  onClusterFocusChange: (focus: ShowClusterFocus | null, automatic: boolean) => void;
   onColumnsChange: (columns: number) => number;
   onFloatSizeIndexChange: (index: number) => number;
   onManualVerticalMovement: (delta: number, pointerType?: string) => void;
   onMotionActiveChange: (active: boolean) => void;
+  onNeedClusterImages: (key: string, retainedIds: readonly string[]) => void;
   onNeedImages: (usage: ShowCandidateUsage) => void;
   onOpen: (image: ShowImage, key: string) => void;
   onVisibleItems: (items: readonly ShowPixiVisibleItem[]) => void;
@@ -107,6 +117,8 @@ export class ShowPixiRuntime {
   #hasMore: boolean;
   #dataKey: string;
   #order: ShowOrder;
+  #clusters: readonly ShowCluster[];
+  #clusterDataKey: string;
   #waterfallColumns: number;
   #floatSizeIndex: number;
   #running: boolean;
@@ -171,6 +183,8 @@ export class ShowPixiRuntime {
     this.#hasMore = options.hasMore;
     this.#dataKey = options.dataKey;
     this.#order = options.order;
+    this.#clusters = options.clusters;
+    this.#clusterDataKey = options.clusterDataKey;
     this.#waterfallColumns = options.waterfallColumns;
     this.#floatSizeIndex = options.floatSizeIndex;
     this.#running = options.running;
@@ -321,6 +335,16 @@ export class ShowPixiRuntime {
     this.#scene?.setImages(images, dataKey, order, hasMore);
   }
 
+  setClusters(clusters: readonly ShowCluster[], dataKey: string) {
+    this.#clusters = clusters;
+    this.#clusterDataKey = dataKey;
+    if (this.#scene instanceof ShowPixiClusterScene) this.#scene.setClusters(clusters, dataKey);
+  }
+
+  clusterCommand(command: ShowClusterCommand) {
+    if (this.#scene instanceof ShowPixiClusterScene) this.#scene.command(command);
+  }
+
   setWaterfallColumns(columns: number) {
     this.#waterfallColumns = columns;
     if (this.#scene instanceof ShowPixiWaterfallScene) {
@@ -337,6 +361,7 @@ export class ShowPixiRuntime {
     this.#speed = speed;
     if (this.#scene instanceof ShowPixiWaterfallScene) this.#scene.setSpeed(speed);
     if (this.#scene instanceof ShowPixiFloatScene) this.#scene.setSpeed(speed);
+    if (this.#scene instanceof ShowPixiClusterScene) this.#scene.setSpeed(speed);
   }
 
   setRunning(running: boolean) {
@@ -452,13 +477,23 @@ export class ShowPixiRuntime {
             onColumnsChange: this.#options.onColumnsChange,
             onManualVerticalMovement: this.#options.onManualVerticalMovement
           })
-        : new ShowPixiFloatScene({
-            ...common,
-            inputElement: this.app.canvas,
-            onManualVerticalMovement: this.#options.onManualVerticalMovement,
-            onSizeIndexChange: this.#options.onFloatSizeIndexChange,
-            sizeIndex: this.#floatSizeIndex
-          });
+        : kind === "float"
+          ? new ShowPixiFloatScene({
+              ...common,
+              inputElement: this.app.canvas,
+              onManualVerticalMovement: this.#options.onManualVerticalMovement,
+              onSizeIndexChange: this.#options.onFloatSizeIndexChange,
+              sizeIndex: this.#floatSizeIndex
+            })
+          : new ShowPixiClusterScene({
+              ...common,
+              clusters: this.#clusters,
+              dataKey: this.#clusterDataKey,
+              inputElement: this.app.canvas,
+              onClusterFocusChange: this.#options.onClusterFocusChange,
+              onManualVerticalMovement: this.#options.onManualVerticalMovement,
+              onNeedClusterImages: this.#options.onNeedClusterImages
+            });
     this.app.stage.addChild(this.#scene.root);
   }
 

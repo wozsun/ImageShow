@@ -55,9 +55,9 @@
 | `site.gallery.order` | `"latest"` | 画廊默认排序：`latest` 最新优先、`oldest` 最旧优先、`random` 随机 |
 | `site.show.enabled` | `true` | 开放展映 `/show` |
 | `site.show.autoplay` | `true` | 进入展映时自动播放。系统开启了“减少动态效果”时保持暂停 |
-| `site.show.mode` | `"waterfall"` | 展映默认模式：`waterfall` 瀑布流、`float` 漂浮 |
-| `site.show.density` | `"balanced"` | 展映默认密度：`relaxed` 宽松、`balanced` 均衡、`dense` 紧凑 |
-| `site.show.drift_speed` | `28` | 自动播放速度，10–60 像素/秒 |
+| `site.show.mode` | `"waterfall"` | 展映默认模式：`waterfall` 瀑布流、`float` 漂浮、`cluster` 星群（按主题、标签或作者把图片聚成星团，不使用筛选） |
+| `site.show.density` | `"balanced"` | 瀑布流与漂浮的默认密度：`relaxed` 宽松、`balanced` 均衡、`dense` 紧凑 |
+| `site.show.drift_speed` | `28` | 自动播放速度，10–60 像素/秒；星群的转动速度按它与默认值的比例快慢 |
 | `site.show.order` | `"random"` | 展映默认排序，取值同画廊 |
 
 链接中的 `mode`、`order` 参数优先于这些默认值。访客在页面上的调整只影响自己当前的浏览。

@@ -653,7 +653,9 @@ export class ShowPixiCard {
 
   #ensurePerspectiveSurface() {
     const aspect = this.height / Math.max(1, this.width);
-    const scaleBucket = Math.round(Math.log2(this.#renderScale) * 4);
+    // The snapshot follows the card's on-screen size, whether that comes from
+    // the scene's scale or from the card being redrawn at another size.
+    const scaleBucket = Math.round(Math.log2(this.#renderScale * Math.max(1, this.width)) * 4);
     const sourceSignature = [
       this.#texture?.uid ?? "placeholder",
       this.#focused || this.#hovered ? "active" : "resting",
@@ -691,10 +693,15 @@ export class ShowPixiCard {
         textureSourceOptions: { scaleMode: "linear" }
       });
     } catch {
+      this.surface.disableRenderGroup();
       this.#setSurfaceBorderVisible(true);
       this.#perspectiveUnavailableSignature = sourceSignature;
       return null;
     }
+    // Rendering a target turns it into a render group. Left enabled, the
+    // surface would apply its ancestors' alpha a second time once it is shown
+    // again, so a card in a dimmed parent would turn murky after one hover.
+    this.surface.disableRenderGroup();
     // Pixi rounds the generated extent; retain the actual texture dimensions
     // with the requested origin so fractional frames do not shift the photo.
     this.#perspectiveFrame.set(frame.x, frame.y, texture.width, texture.height);
