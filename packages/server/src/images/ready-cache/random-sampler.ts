@@ -2,6 +2,7 @@ import { appConfig } from "@imageshow/shared";
 import {
   sampleReadyImageCoreIndexCommand,
   sampleReadyImageDerivedIndexCommand,
+  type RedisReadyImageSamplePair,
   type RedisReadyImageSampleResult
 } from "./redis/commands.ts";
 import { redis } from "../../core/redis/client.ts";
@@ -17,8 +18,7 @@ import {
 } from "./keys.ts";
 import {
   parseReadyImageCacheItem,
-  readyImageMember,
-  type ReadyImageCacheItem
+  readyImageMember
 } from "./model.ts";
 
 type ReadyImageCoreSampleInput = Parameters<typeof sampleReadyImageCoreIndexCommand>[1];
@@ -57,10 +57,10 @@ function parsedSampleItem(raw: string | null, expectedMember: string) {
   return item;
 }
 
-function sampledReadyImageItems(result: RedisReadyImageSampleResult): ReadyImageCacheItem[] | null {
+function sampledReadyImagePairs(result: RedisReadyImageSampleResult): RedisReadyImageSamplePair[] | null {
   switch (result.status) {
     case "ok":
-      return result.pairs.map(({ member, value }) => parsedSampleItem(value, member));
+      return [...result.pairs];
     case "empty":
       return [];
     case "revision_changed":
@@ -117,17 +117,25 @@ export async function sampleResolvedReadyImageIndex(
           bounds
         });
   if (dependencies.currentRevision() !== index.revision) return null;
-  const items = sampledReadyImageItems(result);
-  if (!items) return null;
+  const pairs = sampledReadyImagePairs(result);
+  if (!pairs) return null;
   // ZRANDMEMBER 的正数 count 不保证返回顺序随机，全量候选尤其可能保持固定顺序。
-  for (let position = items.length - 1; position > 0; position -= 1) {
+  for (let position = pairs.length - 1; position > 0; position -= 1) {
     const swap = Math.floor(Math.random() * (position + 1));
-    [items[position], items[swap]] = [items[swap]!, items[position]!];
+    [pairs[position], pairs[swap]] = [pairs[swap]!, pairs[position]!];
   }
-  const fresh: ReadyImageCacheItem[] = [];
-  const fallback: ReadyImageCacheItem[] = [];
-  items.forEach((item) => {
-    (recent.has(item.id) ? fallback : fresh).push(item);
+  // Recent history stores image ids; sampled members use the readyImageMember
+  // encoding, applied here without rejecting a malformed history entry.
+  // Choosing by member first parses only the items that are returned.
+  const recentMembers = new Set(
+    [...recent].map((id) => id.toLowerCase().replaceAll("-", ""))
+  );
+  const fresh: RedisReadyImageSamplePair[] = [];
+  const fallback: RedisReadyImageSamplePair[] = [];
+  pairs.forEach((pair) => {
+    (recentMembers.has(pair.member) ? fallback : fresh).push(pair);
   });
-  return [...fresh, ...fallback].slice(0, limit);
+  return [...fresh, ...fallback]
+    .slice(0, limit)
+    .map(({ member, value }) => parsedSampleItem(value, member));
 }

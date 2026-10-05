@@ -47,17 +47,6 @@ export async function selectRandomImages(
     random_size
   );
   if (parsed instanceof Response) return parsed;
-  if (parsed.ids.length) {
-    const items = await pickTargetedImages(
-      parsed.ids,
-      parsed.limit,
-      signal,
-      database
-    );
-    return items instanceof Response
-      ? items
-      : { mode: parsed.mode, size: parsed.size, items };
-  }
 
   const [themeMap, tagMap, authorMap] = await Promise.all([
     resolveSelectorMap(parsed.theme, (terms) => (
@@ -75,6 +64,7 @@ export async function selectRandomImages(
     author: authorMap
   });
   if (query instanceof Response) return query;
+  const targeted = query.ids.length > 0;
   const axes = resolveCandidateAxes(
     query.device,
     query.brightness,
@@ -88,7 +78,7 @@ export async function selectRandomImages(
     author: query.author
   });
   const seededStart =
-    query.seed === null
+    query.seed === null || targeted
       ? undefined
       : Number.parseInt(
           hash("sha256", JSON.stringify(["random", query.seed, plan.signature]), "hex").slice(
@@ -102,23 +92,40 @@ export async function selectRandomImages(
       ? await recentlyServedIds(clientId, query.signature)
       : new Set<string>();
   signal.throwIfAborted();
-  const cached = await sampleReadyImages(
-    plan,
-    query.limit,
-    recent,
-    signal,
-    seededStart
-  );
-  const items = cached.cached
-    ? cached.value
-    : await sampleReadyImagesFromPostgres(
+  let items: SelectedReadyImage[];
+  if (targeted) {
+    const picked = await pickTargetedImages(
+      {
+        ids: query.ids,
         plan,
-        query.limit,
-        recent,
-        database.reader,
-        signal,
-        seededStart
-      );
+        limit: query.limit,
+        seed: query.seed,
+        recent
+      },
+      signal,
+      database
+    );
+    if (picked instanceof Response) return picked;
+    items = picked;
+  } else {
+    const cached = await sampleReadyImages(
+      plan,
+      query.limit,
+      recent,
+      signal,
+      seededStart
+    );
+    items = cached.cached
+      ? cached.value
+      : await sampleReadyImagesFromPostgres(
+          plan,
+          query.limit,
+          recent,
+          database.reader,
+          signal,
+          seededStart
+        );
+  }
   if (!items.length) {
     const hasFilters = Boolean(
       axes.device !== "auto" ||

@@ -401,19 +401,9 @@ local function validate_core(
   return STATUS_OK
 end
 
-local function sample_count(
-  index_count,
-  limit,
-  recent_size,
-  history_size
-)
-  local requested
-  if limit <= 1 then
-    requested = math.max(8, math.min(64, history_size + 1))
-  else
-    requested = math.min(index_count, limit + recent_size)
-  end
-  return math.min(index_count, requested)
+-- Distinct members beyond the recent ones always leave limit fresh choices.
+local function sample_count(index_count, limit, recent_size)
+  return math.min(index_count, limit + recent_size)
 end
 
 local function sample_members(
@@ -480,9 +470,7 @@ local core_status = validate_core(
 if core_status ~= STATUS_OK then return {core_status, 0} end
 if expected_count == 0 then return {STATUS_EMPTY, 0} end
 
-local requested = sample_count(
-  expected_count, limit, recent_size, history_size
-)
+local requested = sample_count(expected_count, limit, recent_size)
 local output, _, missing_members = sample_members(
   KEYS[3], KEYS[4], requested, STATUS_CORE_INVALID
 )
@@ -570,9 +558,7 @@ if index_count ~= expected_index_count then
 end
 if expected_index_count == 0 then return {STATUS_EMPTY, 0} end
 
-local requested = sample_count(
-  expected_index_count, limit, recent_size, history_size
-)
+local requested = sample_count(expected_index_count, limit, recent_size)
 local output, _, missing_members = sample_members(
   KEYS[5], KEYS[4], requested, STATUS_DERIVED_INVALID
 )

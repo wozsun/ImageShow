@@ -86,6 +86,24 @@ export function isRandomBrightness(value: string): value is RandomBrightness {
   return randomBrightnessSet.has(value as RandomBrightness);
 }
 
+/** Value compared when a single-value parameter is repeated; seed is used verbatim. */
+function comparableSingleValue(key: string, value: string) {
+  if (key === "seed") return value;
+  const trimmed = value.trim();
+  if (key === "limit") return trimmed.replace(/^0+(?=\d)/u, "");
+  return trimmed.toLowerCase();
+}
+
+/**
+ * First non-blank value of a single-value parameter. Repeats that are blank or
+ * equal after normalization count once; conflicting repeats are rejected by
+ * invalidQueryParameters. A parameter given only as blanks stays blank.
+ */
+function singleQueryValue(query: URLSearchParams, key: string): string | null {
+  const values = query.getAll(key);
+  return values.find((value) => value.trim()) ?? values[0] ?? null;
+}
+
 function invalidQueryParameters(query: URLSearchParams) {
   for (const key of query.keys()) {
     if (!randomAllowedQuery.has(key)) {
@@ -96,28 +114,24 @@ function invalidQueryParameters(query: URLSearchParams) {
     }
   }
   for (const key of randomSingleValueQuery) {
-    if (query.getAll(key).length > 1) {
+    const values = new Set(
+      query.getAll(key)
+        .filter((value) => value.trim())
+        .map((value) => comparableSingleValue(key, value))
+    );
+    if (values.size > 1) {
       return apiErrorResponse(
         { status: 400, message: "Bad Request: Duplicate query parameter" },
-        { field: key, hint: "This parameter only accepts a single value" }
+        { field: key, hint: "Repeat this parameter only with the same value" }
       );
     }
   }
   return null;
 }
 
-function mixedSelectorsError(noun: string, include: string[], exclude: string[]) {
-  if (!include.length || !exclude.length) return null;
-  return apiErrorResponse(
-    { status: 400, message: `Bad Request: Cannot mix include and exclude ${noun} selectors` },
-    { include, exclude, hint: `Use either include ${noun}s or exclude ${noun}s, not both` }
-  );
-}
-
 function parseSelectorGroup(
   query: URLSearchParams,
-  field: "theme" | "author",
-  noun: string
+  field: "theme" | "author"
 ) {
   const include: string[] = [];
   const exclude: string[] = [];
@@ -129,7 +143,9 @@ function parseSelectorGroup(
       if (!part) continue;
       const excluded = part.startsWith("!");
       const submittedTerm = (excluded ? part.slice(1) : part).trim();
-      if (!submittedTerm || disallowedSelectorCharacters.test(submittedTerm)) {
+      // An empty exclusion names nothing, like an empty list item.
+      if (excluded && !submittedTerm) continue;
+      if (disallowedSelectorCharacters.test(submittedTerm)) {
         return apiErrorResponse(
           { status: 400, message: "Bad Request: Invalid selector" },
           { field, value: part }
@@ -159,46 +175,17 @@ function parseSelectorGroup(
     }
   }
 
-  const uniqueInclude = [...new Set(include)];
-  const uniqueExclude = [...new Set(exclude)];
-  const mixed = mixedSelectorsError(noun, uniqueInclude, uniqueExclude);
-  if (mixed) return mixed;
   return {
-    selectors: { include: uniqueInclude, exclude: uniqueExclude },
+    selectors: {
+      include: [...new Set(include)],
+      exclude: [...new Set(exclude)]
+    },
     submittedCount
   };
 }
 
-type RandomSelectionFilters = Pick<
-  ParsedRandomQuery,
-  "seed" | "device" | "brightness" | "theme" | "tag" | "author"
->;
-
 export function hasSelectors(group: RandomSelectorGroup) {
   return group.include.length > 0 || group.exclude.length > 0;
-}
-
-function targetedIdConflictError(filters: RandomSelectionFilters) {
-  const active = {
-    author: hasSelectors(filters.author),
-    brightness: filters.brightness !== null,
-    device: filters.device === "pc" || filters.device === "mb",
-    seed: filters.seed !== null,
-    tag: filters.tag !== null,
-    theme: hasSelectors(filters.theme)
-  };
-  const incompatible = Object.entries(active)
-    .filter(([, isActive]) => isActive)
-    .map(([field]) => field);
-  if (!incompatible.length) return null;
-  return apiErrorResponse(
-    { status: 400, message: "Bad Request: id cannot be combined with seed or filters" },
-    {
-      field: "id",
-      incompatible,
-      hint: "id can only be combined with mode, size, limit, and device=auto or device=all"
-    }
-  );
 }
 
 /** Drops blank tag terms and segments; the shared parser itself keeps rejecting them. */
@@ -234,7 +221,7 @@ function parseLimitCount(raw: string): number | null {
  * missing limit asks for one image; null marks a limit that is not a count.
  */
 export function requestedRandomImageCount(query: URLSearchParams): number | null {
-  const raw = query.get("limit")?.trim();
+  const raw = singleQueryValue(query, "limit")?.trim();
   return raw ? parseLimitCount(raw) : 1;
 }
 
@@ -242,8 +229,11 @@ function parseJsonLimit(
   query: URLSearchParams,
   explicitMode: string | null
 ): number | Response {
-  const raw = query.get("limit")?.trim();
+  const raw = singleQueryValue(query, "limit")?.trim();
   if (!raw) return 1;
+  const count = parseLimitCount(raw);
+  // Every mode can return one image, so limit=1 is the same as omitting it.
+  if (count === 1) return 1;
   if (explicitMode !== "json") {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: limit requires mode=json" },
@@ -253,7 +243,6 @@ function parseJsonLimit(
       }
     );
   }
-  const count = parseLimitCount(raw);
   if (count === null) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid result count" },
@@ -306,7 +295,7 @@ function parseTargetedIds(query: URLSearchParams): string[] | Response {
 }
 
 function parseSeed(query: URLSearchParams): string | null | Response {
-  const seed = query.get("seed");
+  const seed = singleQueryValue(query, "seed");
   if (seed === null) return null;
   if (
     !seed.trim() ||
@@ -344,14 +333,14 @@ export function parseRandomQuery(
   if (queryError) return queryError;
 
   // Blank values of optional parameters mean "not provided"; blank seed and id stay invalid.
-  const explicitMode = query.get("mode")?.trim().toLowerCase() || null;
+  const explicitMode = singleQueryValue(query, "mode")?.trim().toLowerCase() || null;
   if (explicitMode && !randomMethods.has(explicitMode)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid mode" },
       { field: "mode" }
     );
   }
-  const size = query.get("size")?.trim().toLowerCase() || defaultSize;
+  const size = singleQueryValue(query, "size")?.trim().toLowerCase() || defaultSize;
   if (!randomSizes.has(size)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid size" },
@@ -362,14 +351,16 @@ export function parseRandomQuery(
   if (limit instanceof Response) return limit;
   const seed = parseSeed(query);
   if (seed instanceof Response) return seed;
-  const brightness = query.get("brightness")?.trim().toLowerCase() || null;
+  const submittedBrightness = singleQueryValue(query, "brightness")?.trim().toLowerCase();
+  // brightness=all is the explicit spelling of "not specified".
+  const brightness = submittedBrightness === "all" ? null : submittedBrightness || null;
   if (brightness && !isRandomBrightness(brightness)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid brightness" },
       { field: "brightness" }
     );
   }
-  const device = query.get("device")?.trim().toLowerCase() || "auto";
+  const device = singleQueryValue(query, "device")?.trim().toLowerCase() || "auto";
   if (!randomRequestDevices.has(device)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid device" },
@@ -377,7 +368,7 @@ export function parseRandomQuery(
     );
   }
 
-  const theme = parseSelectorGroup(query, "theme", "theme");
+  const theme = parseSelectorGroup(query, "theme");
   if (theme instanceof Response) return theme;
   let tag: ReturnType<typeof parseTagFilter>;
   try {
@@ -386,7 +377,7 @@ export function parseRandomQuery(
     if (!(error instanceof TagFilterError)) throw error;
     return apiErrorResponse({ status: 400, message: error.message }, { field: "tag" });
   }
-  const author = parseSelectorGroup(query, "author", "author");
+  const author = parseSelectorGroup(query, "author");
   if (author instanceof Response) return author;
   const selectorCount = theme.submittedCount + tag.termCount + author.submittedCount;
   if (selectorCount > appConfig.randomQuery.maxSelectorCount) {
@@ -396,18 +387,8 @@ export function parseRandomQuery(
     );
   }
 
-  const filters: RandomSelectionFilters = {
-    seed,
-    device: device as RandomRequestDevice,
-    brightness: brightness as RandomBrightness | null,
-    theme: theme.selectors,
-    tag: tag.expression,
-    author: author.selectors
-  };
   let ids: string[] = [];
   if (query.has("id")) {
-    const conflictError = targetedIdConflictError(filters);
-    if (conflictError) return conflictError;
     const targetedIds = parseTargetedIds(query);
     if (targetedIds instanceof Response) return targetedIds;
     ids = targetedIds;
@@ -418,11 +399,20 @@ export function parseRandomQuery(
     size: size as RandomImageSize,
     limit,
     ids,
-    ...filters
+    seed,
+    device: device as RandomRequestDevice,
+    brightness: brightness as RandomBrightness | null,
+    theme: theme.selectors,
+    tag: tag.expression,
+    author: author.selectors
   };
 }
 
-/** Keeps known names as slugs and records the rest, which match no image. */
+/**
+ * Keeps known names as slugs and records the rest, which match no image. Each
+ * image has one theme and one author, so a list mixing both forms selects the
+ * included slugs that are not excluded.
+ */
 function knownSelectorGroup(
   selectors: RandomSelectorGroup,
   map: ReadonlyMap<string, string>,
@@ -437,9 +427,13 @@ function knownSelectorGroup(
     }
     return [...new Set(slugs)].sort();
   };
+  const include = known(selectors.include);
+  const exclude = known(selectors.exclude);
+  if (!selectors.include.length) return { include, exclude };
+  const excluded = new Set(exclude);
   return {
-    include: known(selectors.include),
-    exclude: known(selectors.exclude)
+    include: include.filter((slug) => !excluded.has(slug)),
+    exclude: []
   };
 }
 
@@ -503,12 +497,14 @@ export function normalizeRandomQuery(
   return {
     ...normalized,
     // Compact keys are the existing Redis dedupe-key serialization, not DTO fields.
+    // Untargeted requests keep their previous keys; ids only append a scope.
     signature: JSON.stringify({
       "d": normalized.device === "auto" ? "" : normalized.device,
       "b": normalized.brightness ?? "",
       "t": normalized.theme,
       tag: normalized.tag,
-      "a": normalized.author
+      "a": normalized.author,
+      ...(normalized.ids.length ? { "i": normalized.ids } : {})
     })
   };
 }

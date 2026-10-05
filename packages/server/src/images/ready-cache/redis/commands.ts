@@ -237,7 +237,7 @@ type RedisReadyImageSampleStatus =
   | "core_missing_item"
   | "derived_missing_item";
 
-type RedisReadyImageSamplePair = {
+export type RedisReadyImageSamplePair = {
   member: string;
   value: string | null;
 };
@@ -306,12 +306,8 @@ function expectedReadyImageSampleCount(
   indexCount: number,
   bounds: ReturnType<typeof readyImageSampleBounds>
 ) {
-  if (indexCount === 0) return 0;
-  const requested =
-    bounds.limit <= 1
-      ? Math.max(8, Math.min(64, bounds.historySize + 1))
-      : Math.min(indexCount, bounds.limit + bounds.recentSize);
-  return Math.min(indexCount, requested);
+  // Mirrors sample_count in the sampling scripts.
+  return Math.min(indexCount, bounds.limit + bounds.recentSize);
 }
 
 function readyImageSampleReply(

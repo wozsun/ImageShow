@@ -31,8 +31,35 @@ await runIntegrationScenario(async ({ redisClient: { redis } }) => {
   assert.equal(await storeReadyImageStatsResult(firstStats, oneMiB, 1000), true);
   assert.equal(await redis.get(firstStats), oneMiB);
   await redis.expire(firstStats, 30);
-  assert.equal(await touchReadyImageStatsResult(firstStats, oneMiB, 1000), true);
+  const firstAccess = touchReadyImageStatsResult(firstStats, oneMiB, 1000);
+  const [firstAccessScore, concurrentAccesses] = await Promise.all([
+    firstAccess.then(() => redis.zscore(READY_IMAGE_DERIVED_REGISTRY_LRU_KEY, firstStats)),
+    Promise.all([
+      firstAccess,
+      ...Array.from({ length: 7 }, () => touchReadyImageStatsResult(firstStats, oneMiB, 1000))
+    ])
+  ]);
+  assert.ok(concurrentAccesses.every(Boolean));
+  assert.equal(
+    await redis.zscore(READY_IMAGE_DERIVED_REGISTRY_LRU_KEY, firstStats),
+    firstAccessScore,
+    "concurrent accesses in one interval preserve the first registered LRU position"
+  );
   assert.ok((await redis.ttl(firstStats)) > policy.ttlSeconds - 5);
+  // The same result is registered at most once per interval in one process;
+  // a read after the interval refreshes the TTL again.
+  await redis.expire(firstStats, 30);
+  assert.equal(await touchReadyImageStatsResult(firstStats, oneMiB, 1000), true);
+  assert.ok((await redis.ttl(firstStats)) <= 30, "a repeat within the interval is not re-registered");
+  const realNow = Date.now;
+  const afterInterval = realNow() + policy.accessRegistrationIntervalMs;
+  Date.now = () => afterInterval;
+  try {
+    assert.equal(await touchReadyImageStatsResult(firstStats, oneMiB, 1000), true);
+  } finally {
+    Date.now = realNow;
+  }
+  assert.ok((await redis.ttl(firstStats)) > policy.ttlSeconds - 5, "the interval elapsed");
   assert.equal(await storeReadyImageStatsResult(firstStats, oneMiB + " ", 1000), false);
   assert.equal(await redis.exists(firstStats), 0, "oversized replacement removes the prior result");
 

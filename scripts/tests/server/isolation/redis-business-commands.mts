@@ -435,11 +435,12 @@ await runIntegrationScenario(async () => {
     sampleAttributeToken,
     "attribute",
     "1",
-    "0",
+    "1",
     "30",
     "200",
     "250000"
   ];
+  // Members sampled are limit plus the recent count, leaving limit fresh choices.
   const attributeSample = await businessRedis.imageshowSampleReadyImageDerivedIndex(
     ...derivedSampleArguments
   );

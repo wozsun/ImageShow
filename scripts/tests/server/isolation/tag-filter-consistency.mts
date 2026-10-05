@@ -140,6 +140,11 @@ await runIntegrationScenario(async (runtime) => {
       headers: { "cache-control": "no-cache", Referer: "http://imageshow.test/gallery" }
     });
   const ids = (items: Array<{ id: string }>) => items.map((item) => item.id).sort();
+  // 32 requested ids (the per-request maximum) spread over every axis, theme,
+  // author and tag mask, so each case also runs inside an id scope.
+  const scopeIds = new Set(
+    rows.filter((_row, index) => (index * 5) % 64 < 32).map((row) => row.id)
+  );
   type Row = (typeof rows)[number];
   type Case = { tags: string[]; match: (row: Row) => boolean; axis?: Record<string, string> };
   const cases: Case[] = [];
@@ -455,6 +460,12 @@ await runIntegrationScenario(async (runtime) => {
           );
           assert.equal(sampled.cached, true, `${label}: random must hit Redis`);
           if (sampled.cached) assert.deepEqual(ids(sampled.value), expected, label);
+          // A single image samples limit + recent members; the reply check must agree.
+          const single = await sampleReadyImages(plan, 1, new Set(), neverAbortedSignal);
+          assert.equal(single.cached, true, `${label}: single random must hit Redis`);
+          if (single.cached) {
+            assert.equal(single.value.length, Math.min(1, expected.length), label);
+          }
           const page = await pollUntil(
             () => readReadyImageCursorPage(
               plan,
@@ -468,18 +479,24 @@ await runIntegrationScenario(async (runtime) => {
           assert.equal(page.status, "hit", `${label}: page must hit Redis`);
           if (page.status === "hit") assert.deepEqual(ids(page.value.items), expected, label);
         }
-        const random = await get(
-          `/random?device=all&mode=json&limit=200&${query}`.replace(
-            "device=all&",
-            entry.axis?.device ? "" : "device=all&"
-          )
+        const randomPath = `/random?device=all&mode=json&limit=200&${query}`.replace(
+          "device=all&",
+          entry.axis?.device ? "" : "device=all&"
         );
+        const random = await get(randomPath);
         assert.equal(random.status, expected.length ? 200 : 404, label);
         assert.match(random.headers.get("cache-control")!, /no-store/, label);
         if (expected.length) {
           const body = await random.json();
           assert.equal(body.count, expected.length, label);
           assert.deepEqual(ids(body.items), expected, label);
+        }
+        // Inside an id scope the same filters keep the meaning of both stores.
+        const scopedExpected = ids(rows.filter((row) => scopeIds.has(row.id) && entry.match(row)));
+        const scoped = await get(`${randomPath}&id=${[...scopeIds].join(",")}`);
+        assert.equal(scoped.status, scopedExpected.length ? 200 : 404, `${label}: id scope`);
+        if (scopedExpected.length) {
+          assert.deepEqual(ids((await scoped.json()).items), scopedExpected, `${label}: id scope`);
         }
         for (const view of ["show", "gallery"]) {
           const response = await get(`/api/images?view=${view}&limit=800&${query}`);

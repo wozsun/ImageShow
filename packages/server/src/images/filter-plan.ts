@@ -5,6 +5,7 @@ import {
   parseGalleryTagFilter,
   resolveTagExpression,
   TagFilterError,
+  unsetThemeFilter,
   type TagExpression,
   type Brightness,
   type Device
@@ -78,6 +79,49 @@ export function createImageFilterPlan(input: {
   const author = normalizedGroup(input.author, "author");
   const signature = JSON.stringify({ axes, theme, tag, author });
   return { axes, theme, tag, author, signature };
+}
+
+function matchesSelectorGroup(
+  value: string | null,
+  group: ImageSelectorGroup,
+  nullSelector: string | null
+) {
+  const excluded = group.exclude.length > 0;
+  const terms = excluded ? group.exclude : group.include;
+  if (!terms.length) return true;
+  const matched = value === null
+    ? nullSelector !== null && terms.includes(nullSelector)
+    : terms.some((term) => term !== nullSelector && term === value);
+  return excluded ? !matched : matched;
+}
+
+/**
+ * In-memory form of buildImageFilterSql for a bounded candidate list, so a
+ * plan has one meaning whether it runs in PostgreSQL, Redis or here. The
+ * ready-image cache stores a missing author as "".
+ */
+export function imageMatchesFilterPlan(
+  image: {
+    device: Device;
+    brightness: Brightness;
+    theme: string | null;
+    author: string;
+    tags: readonly string[];
+  },
+  plan: ImageFilterPlan
+) {
+  if (!plan.axes.some((axis) => (
+    axis.device === image.device && axis.brightness === image.brightness
+  ))) {
+    return false;
+  }
+  if (!matchesSelectorGroup(image.theme, plan.theme, unsetThemeFilter)
+    || !matchesSelectorGroup(image.author || null, plan.author, null)) {
+    return false;
+  }
+  if (!plan.tag) return true;
+  const tags = new Set(image.tags);
+  return plan.tag.anyOf.some((clause) => clause.every((tag) => tags.has(tag)));
 }
 
 async function resolveSelector(

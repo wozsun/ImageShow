@@ -2269,7 +2269,42 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   assert.equal(targeted.device, "auto");
   assert.deepEqual(parseQuery("id=" + imageId + "&device=all").ids, [imageId]);
 
-  // Blank optional values mean "not provided", so they neither filter nor conflict with id.
+  // Scope, filters and selection combine freely; repeats of one value count once.
+  const combined = parseQuery(
+    `id=${imageId}&seed=s&device=pc&brightness=dark&theme=stage&tag=live&author=photographer&mode=json&limit=2`
+  );
+  assert.deepEqual(combined.ids, [imageId]);
+  assert.equal(combined.seed, "s");
+  assert.equal(combined.device, "pc");
+  assert.equal(combined.limit, 2);
+  assert.equal(parseQuery("brightness=ALL").brightness, null);
+  for (const mode of ["proxy", "redirect", "json"]) {
+    assert.equal(parseQuery(`limit=1&mode=${mode}`).limit, 1, mode);
+  }
+  assert.equal(parseQuery("size=small&size=SMALL").size, "small");
+  assert.equal(parseQuery("device=&device=pc").device, "pc");
+  assert.equal(parseQuery("seed=x&seed=&seed=x").seed, "x");
+  assert.equal(parseQuery("mode=json&limit=&limit=02&limit=2").limit, 2);
+  assert.deepEqual(parseQuery("theme=stage,!&author=!,").theme, { include: ["stage"], exclude: [] });
+  const signatureOf = (search: string) => {
+    const result = normalizeRandomQuery(parseQuery(search), maps);
+    assert.ok(!(result instanceof Response), search);
+    return result;
+  };
+  const mixed = signatureOf("theme=舞台,!unknown-theme&author=!nobody,photographer");
+  assert.deepEqual(mixed.theme, { include: ["stage"], exclude: [] });
+  assert.deepEqual(mixed.author, { include: ["photographer"], exclude: [] });
+  assert.equal(mixed.signature, signatureOf("theme=stage&author=photographer").signature);
+  assert.equal(signatureOf("brightness=all").signature, signatureOf("").signature);
+  const emptiedByExclusion = normalizeRandomQuery(parseQuery("theme=舞台,!stage"), maps);
+  assert.ok(emptiedByExclusion instanceof Response);
+  assert.equal(emptiedByExclusion.status, 404);
+  const targetedSignature = signatureOf(`id=${imageId}`).signature;
+  assert.notEqual(targetedSignature, signatureOf("").signature);
+  assert.equal(signatureOf(`id=${imageId}&device=auto`).signature, targetedSignature);
+  assert.notEqual(signatureOf(`id=${imageId}&device=all`).signature, targetedSignature);
+
+  // Blank optional values mean "not provided", so they do not filter.
   const blank = parseQuery("device=&brightness=%20&theme=,&author=&tag=,&tag=all:&mode=&size=&limit=");
   assert.equal(blank.device, "auto");
   assert.equal(blank.brightness, null);
@@ -2285,19 +2320,18 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
   for (const search of [
     "tag=live&tag=!blocked",
     "device=pc&device=mb",
-    "id=00000000008d&brightness=dark",
-    "id=00000000008d&device=pc",
     "id=",
     "id=,",
     "limit=2",
+    "limit=0",
+    "mode=json&limit=2&limit=3",
     "unknown=value",
     "device=invalid",
+    "brightness=invalid",
     "size=invalid-size",
     "size=%20full",
-    "size=small&size=small",
     "size=large&size=small",
-    "size=small&limit=2",
-    `size=large&id=${imageId}&seed=synthetic-seed`
+    "size=small&limit=2"
   ]) {
     const result = parseRandomQuery(
       new URL("https://img.example.com/random?" + search),
@@ -2307,7 +2341,7 @@ test("[Server/图片] 随机图查询以 auto 归一缺省设备并接受完整�
     assert.equal((result as Response).status, 400, search);
   }
 });
-test("[Server/图片] 固定 seed 保留 Unicode 原值并支持 JSON 数量和互斥参数", () => {
+test("[Server/图片] 固定 seed 保留 Unicode 原值并支持 JSON 数量与组合参数", () => {
   const parse = (search: string) =>
     parseRandomQuery(new URL(`https://img.example.com/random?${search}`), "redirect");
   for (const seed of ["wallpaper", "Wallpaper", "  wallpaper  ", "2026-09-15", "图😀".repeat(64)]) {
@@ -2327,6 +2361,11 @@ test("[Server/图片] 固定 seed 保留 Unicode 原值并支持 JSON 数量和�
     assert.ok(!(explicit instanceof Response));
     assert.equal(explicit.limit, Math.min(limit, 200));
   }
+  for (const search of ["seed=a&seed=a", "seed=a&mode=redirect&limit=1", `seed=a&id=${imageId}`]) {
+    const result = parse(search);
+    assert.ok(!(result instanceof Response), search);
+    assert.equal(result.seed, "a", search);
+  }
   for (const search of [
     "seed=",
     "seed=+%20",
@@ -2334,10 +2373,10 @@ test("[Server/图片] 固定 seed 保留 Unicode 原值并支持 JSON 数量和�
     "seed=%0A",
     "seed=%7F",
     `seed=${encodeURIComponent("😀".repeat(129))}`,
-    "seed=a&seed=a",
-    "seed=fixed&mode=json&limit=0",
-    "seed=fixed&limit=1",
-    `seed=fixed&id=${imageId}`
+    "seed=a&seed=b",
+    "seed=a&seed=a%20",
+    "seed=&seed=",
+    "seed=fixed&mode=json&limit=0"
   ]) {
     const result = parse(search);
     assert.ok(result instanceof Response, search);

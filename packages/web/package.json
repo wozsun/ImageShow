@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/web",
-  "version": "6.7.2",
+  "version": "6.7.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,7 +14,7 @@
     "@imageshow/shared": "file:../shared",
     "@tanstack/react-query": "^5.104.1",
     "@tanstack/react-table": "^9.2.6",
-    "altcha": "^3.2.4",
+    "altcha": "^3.3.0",
     "pinyin-pro": "^3.29.4",
     "pixi.js": "^8.22.0",
     "react": "^19.3.0",
@@ -25,7 +25,7 @@
     "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
+    "@vitejs/plugin-react": "^6.1.2",
     "remixicon": "^4.9.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.2"

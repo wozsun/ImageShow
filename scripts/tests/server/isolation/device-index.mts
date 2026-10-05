@@ -137,6 +137,18 @@ await runIntegrationScenario(async (runtime) => {
       (await resolveReadyImageFilterIndex(pcPlan, neverAbortedSignal))?.instanceToken,
       first.instanceToken
     );
+    assert.ok((await redis.ttl(first.key)) <= 30, "a hit within the access interval is not re-registered");
+    const realNow = Date.now;
+    const afterInterval = realNow() + policy.accessRegistrationIntervalMs;
+    Date.now = () => afterInterval;
+    try {
+      assert.equal(
+        (await resolveReadyImageFilterIndex(pcPlan, neverAbortedSignal))?.instanceToken,
+        first.instanceToken
+      );
+    } finally {
+      Date.now = realNow;
+    }
     assert.ok((await redis.ttl(first.key)) > policy.ttlSeconds - 5, "index hit renews sliding TTL");
     assert.ok(
       (await redis.ttl(first.metaKey)) > policy.ttlSeconds - 5,

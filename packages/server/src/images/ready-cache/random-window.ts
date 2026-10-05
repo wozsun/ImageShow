@@ -8,6 +8,21 @@ import { readyImageMember } from "./model.ts";
 
 const scanLimit = 4_096;
 const scanBatch = 256;
+const minimumFirstBatch = 16;
+
+/**
+ * Members expected to yield limit + 1 matches, with twice the index's share of
+ * the suffix order as margin. Later batches keep the full size, so a short
+ * first batch costs at most one extra batch read and never changes the order
+ * or the scan budget.
+ */
+function firstBatchSize(limit: number, indexCount: number, total: number) {
+  const share = total > 0 ? Math.max(indexCount, 1) / total : 1;
+  return Math.min(
+    scanBatch,
+    Math.max(minimumFirstBatch, Math.ceil(((limit + 1) * 2) / share))
+  );
+}
 
 /**
  * Walks the existing suffix index, probing the canonical filter membership.
@@ -56,6 +71,7 @@ export async function readReadyImageRandomMembers(
     }
   }
   let scanned = 0;
+  let batch = firstBatchSize(limit, index.count, total);
   const selected: string[] = [];
   while (selected.length < limit + 1) {
     signal.throwIfAborted();
@@ -66,8 +82,9 @@ export async function readReadyImageRandomMembers(
       start = 0;
       continue;
     }
-    const count = Math.min(scanBatch, end - start, scanLimit - scanned);
+    const count = Math.min(batch, end - start, scanLimit - scanned);
     if (count <= 0) return null;
+    batch = scanBatch;
     const members = await redis.zrange(key, String(start), String(start + count - 1));
     if (members.length !== count) {
       throw new ReadyImageCoreCacheError("Ready-image suffix window is incomplete");

@@ -123,10 +123,11 @@ await runIntegrationScenario(async (runtime) => {
   await expectLimited(await request(random("mode=json&limit=2"), { Referer: "not-a-url" }));
 
   // Rejected requests keep their charge; a limit that is not a count spends a batch slot.
+  // A repeated limit is charged by its first non-blank value, the same one parsing reads.
   const failures = { "X-Real-IP": "192.0.2.3" };
   await expectStatus(await request(random("mode=invalid"), failures), 400);
   await expectStatus(await request(random("mode=json&limit=0"), failures), 400);
-  await expectStatus(await request(random("mode=json&limit=2&limit=2"), failures), 400);
+  await expectStatus(await request(random("mode=json&limit=&limit=2&limit=3"), failures), 400);
   await expectLimited(await request(random("mode=json&limit=2"), failures));
   await expectStatus(await request(random("mode=json&limit="), failures), 200);
   await expectStatus(await request(random(), failures), 200);

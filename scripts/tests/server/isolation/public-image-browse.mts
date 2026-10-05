@@ -109,6 +109,20 @@ await runIntegrationScenario(async (runtime) => {
     assert.equal(result.items.length, Math.min(limit ?? 1, ids.length));
     return result.items.map((item) => item.id);
   };
+  // A full id plus a suffix shared by two images: four requested candidates.
+  const targetedIds = [ids[0]!, ids[2]!, ids[3]!, ids[4]!];
+  const desktopAgent = "Mozilla/5.0 (Windows NT 10.0)";
+  const mobileAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)";
+  const sorted = (values: string[]) => [...values].sort();
+  const targeted = async (query: string, userAgent = desktopAgent, client = "") => {
+    const result = await selectRandom(
+      new URL(`http://imageshow.test/random?id=${ids[0]},${ids[2]},dddddddddddd&mode=json&${query}`),
+      userAgent,
+      client
+    );
+    assert.ok(!(result instanceof Response), query);
+    return result.items.map((item) => item.id);
+  };
   const coldSeeds = new Map<string, string[]>();
   const allPlan = createImageFilterPlan({});
   try {
@@ -122,6 +136,16 @@ await runIntegrationScenario(async (runtime) => {
           batch.slice(0, limit)
         );
       }
+    }
+    // Requested ids order by seed and image id only, so the cold PostgreSQL
+    // result is the reference for the warm Redis path below.
+    const targetedSeed = await targeted("seed=wallpaper&device=all&limit=200");
+    assert.deepEqual(sorted(targetedSeed), sorted(targetedIds));
+    for (const limit of [1, 3]) {
+      assert.deepEqual(
+        await targeted(`seed=wallpaper&device=all&limit=${limit}`),
+        targetedSeed.slice(0, limit)
+      );
     }
     // Explicit pivots exercise inclusive edges and UUID tie-breaking without
     // deriving the expected result from the seed hash implementation.
@@ -241,6 +265,24 @@ await runIntegrationScenario(async (runtime) => {
       [ids[0]]
     );
 
+    // ids[0] is now portrait: requested ids follow the visitor's device like
+    // any other request, without falling back to the other device.
+    assert.deepEqual(await targeted("limit=200", mobileAgent), [ids[0]]);
+    assert.deepEqual(sorted(await targeted("limit=200")), sorted(targetedIds.slice(1)));
+    assert.deepEqual(sorted(await targeted("limit=200", "unrecognized-client")), sorted(targetedIds));
+    assert.deepEqual(sorted(await targeted("device=all&limit=200", mobileAgent)), sorted(targetedIds));
+    assert.deepEqual(
+      await targeted("seed=wallpaper&limit=200", mobileAgent),
+      [ids[0]],
+      "seed orders only the candidates left by the device filter"
+    );
+    const noPortrait = await selectRandom(
+      new URL(`http://imageshow.test/random?id=${ids[2]}`),
+      mobileAgent
+    );
+    assert.ok(noPortrait instanceof Response);
+    assert.equal(noPortrait.status, 404);
+
     await coordinator.initializeReadyImageCacheCoordinator();
     await coordinator.ensureReadyImageCacheCurrent({ signal: neverAbortedSignal });
     for (const view of ["show", "gallery"] as const) {
@@ -287,6 +329,10 @@ await runIntegrationScenario(async (runtime) => {
           [...ids.slice(ids.indexOf(expectedId)), ...ids.slice(0, ids.indexOf(expectedId))]
         );
       }
+      assert.deepEqual(
+        await targeted("seed=wallpaper&device=all&limit=200", desktopAgent, "another-client"),
+        targetedSeed
+      );
       assert.equal(connections, 0, "固定 seed 热路径与 PostgreSQL 冷路径选图相同且不查询数据库");
     } finally {
       restoreConnections();
@@ -302,6 +348,10 @@ await runIntegrationScenario(async (runtime) => {
     const recentBefore = await redis.keys("imageshow:random_recent:*");
     for (let i = 0; i < 4; i++) {
       assert.deepEqual(await seeded("wallpaper", "device=all", "seed-client", "json", 5), coldSeeds.get("wallpaper")!.slice(0, 5));
+      assert.deepEqual(
+        await targeted("seed=wallpaper&device=all&limit=200", desktopAgent, "seed-client"),
+        targetedSeed
+      );
     }
     assert.deepEqual(
       await redis.keys("imageshow:random_recent:*"),
@@ -320,6 +370,25 @@ await runIntegrationScenario(async (runtime) => {
     const redirected = await get("/random?seed=wallpaper&mode=redirect&device=all");
     assert.equal(redirected.status, 302);
     assert.ok(redirected.headers.get("location")?.includes(coldSeeds.get("wallpaper")![0]!));
+    // Without a seed, requested ids first avoid the client's recent images and
+    // reuse them only when nothing else is left.
+    const recentPick = async (search: string) => {
+      const result = await selectRandom(
+        new URL(`http://imageshow.test/random?${search}&device=all`),
+        desktopAgent,
+        "recent-client"
+      );
+      assert.ok(!(result instanceof Response), search);
+      return result.items.map((item) => item.id);
+    };
+    const firstPick = await recentPick(`id=${ids[1]},${ids[2]}`);
+    const secondPick = await recentPick(`id=${ids[1]},${ids[2]}`);
+    assert.deepEqual(sorted([...firstPick, ...secondPick]), sorted([ids[1]!, ids[2]!]));
+    for (let i = 0; i < 3; i++) assert.deepEqual(await recentPick(`id=${ids[1]}`), [ids[1]]);
+    assert.ok(
+      (await redis.keys("imageshow:random_recent:*")).length > recentBefore.length,
+      "不带 seed 的指定图片请求记录近期历史"
+    );
     // Removing the tail forces wraparound; both stores must keep the same
     // membership and tie order after a rebuild and a candidate deletion.
     await pool.query("UPDATE metadata SET status='deleted' WHERE id=$1", [ids[5]]);
