@@ -6,6 +6,11 @@ export const clusterCardSide = 46;
 export const clusterExpand = 1.2;
 export const clusterCardGrowth = 1.15;
 
+/** 星群环上最多同时有多少个星团；分类更多时转过换位点的星团原地换成下一个分类。 */
+export const clusterRingCapacity = 24;
+/** 星团待上屏的图片少于这么多张时请求续页；首批与续页保留时也按它留出余量。 */
+export const clusterQueueReserve = 24;
+
 // 星团竖向略微压扁，行距更紧，放大后上下相邻的图更容易同时看全。
 const clusterSquash = 0.82;
 const goldenAngle = Math.PI * (3 - Math.sqrt(5));
@@ -21,6 +26,12 @@ export function clusterShownCount(total: number) {
 /** 星群总览里每个星团只画一部分图片：星团在总览里很小，画满只会多发图片请求。 */
 function clusterOverviewCount(shown: number) {
   return shown <= 16 ? shown : Math.round(12 + shown * 0.25);
+}
+
+/** 星群总览里星团的球半径：按总览实际画出的数量算，各星团的疏密因此一致。 */
+export function clusterOverviewRadius(shown: number) {
+  // 总览只画朝向观看者的一面，没有背面的图片垫底，所以排得比展开后更密一些。
+  return Math.max(48, clusterCardSide * Math.sqrt(clusterOverviewCount(shown) / (3.2 * Math.PI)));
 }
 
 export function clusterCardSize(image: { width: number; height: number }) {
@@ -77,13 +88,9 @@ export function clusterSphereLayout(count: number, random: () => number = Math.r
     if (nearest) nearest.overview = true;
   }
   // 同样的卡片大小下，半径按数量的平方根取，球面上单位面积的图片数不随星团大小变化。
-  // 总览只画朝向观看者的一面，没有背面的图片垫底，所以排得更密一些。
   return {
     radius: Math.max(58, clusterCardSide * Math.sqrt(count / (2.2 * Math.PI))),
-    overviewRadius: Math.max(
-      48,
-      clusterCardSide * Math.sqrt(clusterOverviewCount(count) / (3.2 * Math.PI))
-    ),
+    overviewRadius: clusterOverviewRadius(count),
     points
   };
 }

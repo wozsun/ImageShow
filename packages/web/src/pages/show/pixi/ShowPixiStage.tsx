@@ -14,7 +14,11 @@ import { PublicStarfield } from "../../../components/layout/PublicStarfield.js";
 import type { ShowImage } from "../show-layout.js";
 import type { ShowCandidateUsage } from "../show-data-pool.js";
 import type { ShowCluster } from "../useShowClusters.js";
-import type { ShowClusterCommand, ShowClusterFocus } from "./show-pixi-cluster-scene.js";
+import type {
+  ShowClusterCommand,
+  ShowClusterEntry,
+  ShowClusterFocus
+} from "./show-pixi-cluster-scene.js";
 import { ShowPixiRuntime } from "./show-pixi-runtime.js";
 import type {
   ShowPixiSceneKind,
@@ -64,7 +68,7 @@ export function ShowPixiStage({
   floatSizeIndex: number;
   images: readonly ShowImage[];
   hasMore: boolean;
-  onClusterFocusChange: (focus: ShowClusterFocus | null, automatic: boolean) => void;
+  onClusterFocusChange: (focus: ShowClusterFocus | null, entry?: ShowClusterEntry) => void;
   onColumnsChange: (columns: number) => number;
   onFloatSizeIndexChange: (index: number) => number;
   onManualVerticalMovement: (delta: number, pointerType?: string) => void;
@@ -145,8 +149,8 @@ export function ShowPixiStage({
           reducedMotion,
           speed,
           statsElement: statsRef.current,
-          onClusterFocusChange: (focus, automatic) => {
-            if (!disposed) handleClusterFocusChange(focus, automatic);
+          onClusterFocusChange: (focus, entry) => {
+            if (!disposed) handleClusterFocusChange(focus, entry);
           },
           onNeedClusterImages: (key, retainedIds) => {
             if (!disposed) handleNeedClusterImages(key, retainedIds);

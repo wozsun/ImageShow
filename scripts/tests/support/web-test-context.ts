@@ -492,6 +492,7 @@ export function createCameraTestElement(width = 800, height = 600) {
         clientX: 0,
         clientY: 0,
         deltaMode: 0,
+        deltaX: 0,
         deltaY: 0,
         pointerId: 1,
         pointerType: "mouse",
@@ -746,6 +747,7 @@ export async function createTextureRecoveryHarness(
     maximumPixels,
     maximumInFlight,
     maximumUnreferenced,
+    maximumSourceBytes: 32 * 1_024 * 1_024,
     generateMipmaps
   });
   const cards: InstanceType<typeof ShowPixiCard>[] = [];

@@ -79,6 +79,7 @@ export class ShowPixiCamera {
     });
     this.#velocityX = 0;
     this.#velocityY = 0;
+    this.#wheelPanRemainingX = 0;
     this.#wheelPanRemainingY = 0;
     this.#wheelIdleMs = 0;
     try {
@@ -154,17 +155,25 @@ export class ShowPixiCamera {
   readonly #handleWheel = (event: WheelEvent) => {
     if (!this.#inputEnabled) return;
     const lineHeight = 16;
-    const normalizedDelta =
-      event.deltaY *
-      (event.deltaMode === 1
-          ? lineHeight
-          : event.deltaMode === 2
-            ? this.#height
-            : 1);
-    if (!Number.isFinite(normalizedDelta) || normalizedDelta === 0) return;
+    const unit = event.deltaMode === 1
+      ? lineHeight
+      : event.deltaMode === 2
+        ? this.#height
+        : 1;
+    // Shift + wheel pans sideways; most browsers already report it as deltaX.
+    const shifted = event.shiftKey && !event.ctrlKey && event.deltaX === 0;
+    const normalizedDelta = shifted ? 0 : event.deltaY * unit;
+    const normalizedDeltaX = (shifted ? event.deltaY : event.deltaX) * unit;
+    if (!Number.isFinite(normalizedDelta) || !Number.isFinite(normalizedDeltaX)) return;
+    // Ctrl + wheel only zooms; a purely horizontal Ctrl gesture changes nothing.
+    const idle = event.ctrlKey
+      ? normalizedDelta === 0
+      : normalizedDelta === 0 && normalizedDeltaX === 0;
+    if (idle) return;
     this.#velocityX = 0;
     this.#velocityY = 0;
     if (event.ctrlKey) {
+      this.#wheelPanRemainingX = 0;
       this.#wheelPanRemainingY = 0;
       const anchor = this.#eventPoint(event.clientX, event.clientY);
       const nextScale =
@@ -173,10 +182,17 @@ export class ShowPixiCamera {
       this.#wheelIdleMs = 140;
     } else {
       // A plain wheel follows document scrolling semantics: wheel down moves
-      // the world upward. Horizontal wheel/trackpad deltas are intentionally
-      // ignored; camera zoom is reserved for Ctrl + wheel and pinch. Accumulate
-      // wheel ticks and consume them from the shared ticker so a mechanical
-      // wheel does not move the world in visible coordinate jumps.
+      // the world upward, and a horizontal trackpad swipe (or Shift + wheel)
+      // pans sideways like a horizontal drag. Camera zoom is reserved for
+      // Ctrl + wheel and pinch. Accumulate wheel ticks and consume them from
+      // the shared ticker so a mechanical wheel does not move the world in
+      // visible coordinate jumps.
+      const maximumPendingX = Math.max(720, this.#width * 1.5);
+      this.#wheelPanRemainingX = clamp(
+        this.#wheelPanRemainingX - clamp(normalizedDeltaX, -720, 720),
+        -maximumPendingX,
+        maximumPendingX
+      );
       const maximumPending = Math.max(720, this.#height * 1.5);
       this.#wheelPanRemainingY = clamp(
         this.#wheelPanRemainingY - clamp(normalizedDelta, -720, 720),
@@ -200,6 +216,7 @@ export class ShowPixiCamera {
   #pinch: PinchState | null = null;
   #velocityX = 0;
   #velocityY = 0;
+  #wheelPanRemainingX = 0;
   #wheelPanRemainingY = 0;
   #wheelIdleMs = 0;
   #listenerCount = 0;
@@ -250,7 +267,7 @@ export class ShowPixiCamera {
     return (
       this.#dragging ||
       Math.hypot(this.#velocityX, this.#velocityY) >= this.#minimumVelocity ||
-      Math.abs(this.#wheelPanRemainingY) >= wheelPanStopDistance
+      Math.hypot(this.#wheelPanRemainingX, this.#wheelPanRemainingY) >= wheelPanStopDistance
     );
   }
 
@@ -334,6 +351,7 @@ export class ShowPixiCamera {
     this.#pinch = null;
     this.#velocityX = 0;
     this.#velocityY = 0;
+    this.#wheelPanRemainingX = 0;
     this.#wheelPanRemainingY = 0;
     this.#wheelIdleMs = 0;
   }
@@ -359,16 +377,20 @@ export class ShowPixiCamera {
       if (this.#wheelIdleMs === 0) this.#onZoomEnd(this.scale);
     }
     if (!this.#inputEnabled || this.#dragging || this.#pinch) return;
-    if (Math.abs(this.#wheelPanRemainingY) >= wheelPanStopDistance) {
+    if (Math.hypot(this.#wheelPanRemainingX, this.#wheelPanRemainingY) >= wheelPanStopDistance) {
       const progress = 1 - Math.exp(-elapsed / wheelPanResponseMs);
+      const deltaX = this.#wheelPanRemainingX * progress;
       const deltaY = this.#wheelPanRemainingY * progress;
-      this.#panFromInput(0, deltaY);
+      this.#panFromInput(deltaX, deltaY);
+      this.#wheelPanRemainingX -= deltaX;
       this.#wheelPanRemainingY -= deltaY;
-      if (Math.abs(this.#wheelPanRemainingY) < wheelPanStopDistance) {
-        this.#panFromInput(0, this.#wheelPanRemainingY);
+      if (Math.hypot(this.#wheelPanRemainingX, this.#wheelPanRemainingY) < wheelPanStopDistance) {
+        this.#panFromInput(this.#wheelPanRemainingX, this.#wheelPanRemainingY);
+        this.#wheelPanRemainingX = 0;
         this.#wheelPanRemainingY = 0;
       }
     } else {
+      this.#wheelPanRemainingX = 0;
       this.#wheelPanRemainingY = 0;
     }
     if (Math.hypot(this.#velocityX, this.#velocityY) < this.#minimumVelocity) {

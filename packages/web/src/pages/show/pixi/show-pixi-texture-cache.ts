@@ -41,6 +41,7 @@ export type ShowPixiTextureCacheOptions = {
   maximumPixels: number;
   maximumInFlight: number;
   maximumUnreferenced: number;
+  maximumSourceBytes: number;
   generateMipmaps: boolean;
 };
 
@@ -111,18 +112,13 @@ async function resizedBitmap(blob: Blob, lod: ReturnType<typeof normalizedLod>) 
   }
 }
 
-async function bitmapTexture(
-  url: string,
-  lod: ShowPixiTextureLod,
-  generateMipmaps: boolean,
-  signal: AbortSignal
-) {
+async function downloadBitmapSource(url: string, signal: AbortSignal) {
   const transportFailure = (error: unknown): never => {
     if (signal.aborted) throw error;
     throw new TextureTransportError(error instanceof Error ? error.message : "缩略图网络请求失败");
   };
   // Bound transport through the last response byte; decoding owns no network slot timer.
-  const blob = await requestWithDeadline(async (requestSignal) => {
+  return requestWithDeadline(async (requestSignal) => {
     const response = await fetch(url, {
       credentials: "omit",
       mode: "cors",
@@ -133,6 +129,14 @@ async function bitmapTexture(
     }
     return response.blob().catch(transportFailure);
   }, signal);
+}
+
+async function bitmapTexture(
+  blob: Blob,
+  lod: ShowPixiTextureLod,
+  generateMipmaps: boolean,
+  signal: AbortSignal
+) {
   if (signal.aborted) throw signal.reason;
   let bitmap: ImageBitmap;
   try {
@@ -182,6 +186,8 @@ async function bitmapTexture(
 }
 
 export class ShowPixiTextureCache {
+  readonly #sources = new Map<string, Blob>();
+  readonly #sourceRequests = new Map<string, Promise<Blob>>();
   readonly #blockedOrigins = new Set<string>();
   readonly #entries = new Map<string, TextureEntry>();
   readonly #failedUrls = new Map<string, boolean>();
@@ -198,6 +204,8 @@ export class ShowPixiTextureCache {
   #evictions = 0;
   #availabilityScheduled = false;
   #availabilityRevision = 0;
+  #sourceBytes = 0;
+  #sourceHits = 0;
 
   constructor(options: ShowPixiTextureCacheOptions) {
     this.#options = {
@@ -205,11 +213,12 @@ export class ShowPixiTextureCache {
       maximumPixels: Math.max(1, Math.floor(options.maximumPixels)),
       maximumInFlight: Math.max(1, Math.floor(options.maximumInFlight)),
       maximumUnreferenced: Math.max(0, Math.floor(options.maximumUnreferenced)),
+      maximumSourceBytes: Math.max(0, Math.floor(options.maximumSourceBytes)),
       generateMipmaps: options.generateMipmaps
     };
-    // Show retains at most 800 DTOs. Keeping at least 1,024 failed URL
-    // tombstones prevents a broken CDN/CORS policy from turning sprite
-    // recycling into an unbounded request loop while keeping memory bounded.
+    // Failed URL tombstones stay bounded: at least 1,024 entries keep the cards
+    // currently cycling on screen from re-requesting a broken CDN/CORS URL,
+    // while older records fall back to the per-origin transport pause.
     this.#maximumFailedUrls = Math.max(1_024, this.#options.maximumEntries);
   }
 
@@ -311,14 +320,41 @@ export class ShowPixiTextureCache {
   }
 
   fitResidentLods(
-    requests: readonly { url: string; lod: ShowPixiTextureLod }[]
+    requests: readonly { url: string; lod: ShowPixiTextureLod }[],
+    retained: readonly { url: string; lod: ShowPixiTextureLod }[] = []
   ): ShowPixiTextureLod[] {
     const urls = requests.map(({ url }) => this.#resourceUrl(url));
     const lods = requests.map(({ lod }) => normalizedLod(lod));
+    // Retained leases keep their current LOD; only the requested set shrinks.
+    // A texture also present in the requested set is counted once, there.
+    const requestedKeys = new Set(
+      requests.map(({ url, lod }) => {
+        const normalized = normalizedLod(lod);
+        return `${this.#resourceUrl(url)}\n${normalized.pixelWidth}x${normalized.pixelHeight}`;
+      })
+    );
+    const retainedPixels = new Map<string, number>();
+    for (const { url, lod } of retained) {
+      const normalized = normalizedLod(lod);
+      const key = `${this.#resourceUrl(url)}\n${normalized.pixelWidth}x${normalized.pixelHeight}`;
+      if (requestedKeys.has(key)) continue;
+      retainedPixels.set(
+        key,
+        mipmappedPixels(
+          normalized.pixelWidth * normalized.pixelHeight,
+          this.#options.generateMipmaps
+        )
+      );
+    }
     // Reserve space for old/new LODs to overlap while cards replace leases.
     // Waiting for capacity cannot resolve when the resident set itself is too
     // large: even a successful detail image load cannot free a referenced LOD.
-    const budget = this.#options.maximumPixels * 0.8;
+    // Retained leases never squeeze the requested set below half the budget.
+    const budget = Math.max(
+      this.#options.maximumPixels * 0.4,
+      this.#options.maximumPixels * 0.8
+        - [...retainedPixels.values()].reduce((sum, pixels) => sum + pixels, 0)
+    );
     for (;;) {
       const unique = new Map<string, number>();
       for (let index = 0; index < lods.length; index += 1) {
@@ -403,7 +439,10 @@ export class ShowPixiTextureCache {
       lod512,
       rejected: this.#rejected,
       failures: this.#failures,
-      evictions: this.#evictions
+      evictions: this.#evictions,
+      sourceEntries: this.#sources.size,
+      sourceBytes: this.#sourceBytes,
+      sourceHits: this.#sourceHits
     };
   }
 
@@ -417,6 +456,9 @@ export class ShowPixiTextureCache {
       if (entry.state === "ready") this.#unload(entry);
     }
     this.#entries.clear();
+    this.#sources.clear();
+    this.#sourceRequests.clear();
+    this.#sourceBytes = 0;
     this.#blockedOrigins.clear();
     this.#failedUrls.clear();
     this.#originTransportFailures.clear();
@@ -457,12 +499,9 @@ export class ShowPixiTextureCache {
       entry.state = "loading";
       entry.controller = new AbortController();
       this.#inFlight += 1;
-      void bitmapTexture(
-        entry.url,
-        entry,
-        this.#options.generateMipmaps,
-        entry.controller.signal
-      )
+      const signal = entry.controller.signal;
+      void this.#readSource(entry.url, signal)
+        .then((blob) => bitmapTexture(blob, entry, this.#options.generateMipmaps, signal))
         .then(({ bitmap, texture }) => {
           if (this.#destroyed || this.#entries.get(entry.key) !== entry) {
             bitmap.close();
@@ -496,9 +535,6 @@ export class ShowPixiTextureCache {
         })
         .catch((error: unknown) => {
           if (this.#destroyed || this.#entries.get(entry.key) !== entry) return;
-          if (error instanceof TextureTransportError) {
-            this.#recordTransportFailure(entry.url);
-          }
           const transportFailure = error instanceof TextureTransportError;
           this.#discardFailedEntry(entry, { blockUrl: true, transportFailure });
         })
@@ -510,6 +546,53 @@ export class ShowPixiTextureCache {
           this.#pump();
         });
     }
+  }
+
+  #readSource(url: string, signal: AbortSignal): Promise<Blob> {
+    const cached = this.#sources.get(url);
+    if (cached) {
+      this.#sources.delete(url);
+      this.#sources.set(url, cached);
+      this.#sourceHits += 1;
+      return Promise.resolve(cached);
+    }
+    const pending = this.#sourceRequests.get(url);
+    if (pending) {
+      this.#sourceHits += 1;
+      return pending;
+    }
+    // Loading leases live through decoding; their signals are aborted only
+    // when this cache is destroyed, so all LODs can share the same download.
+    const request = downloadBitmapSource(url, signal)
+      .then((blob) => {
+        if (!this.#destroyed && blob.size <= this.#options.maximumSourceBytes) {
+          while (this.#sources.size >= this.#options.maximumEntries
+            || this.#sourceBytes + blob.size > this.#options.maximumSourceBytes) {
+            const oldest = this.#sources.keys().next().value;
+            if (oldest === undefined) break;
+            this.#forgetSource(oldest);
+          }
+          this.#sources.set(url, blob);
+          this.#sourceBytes += blob.size;
+        }
+        return blob;
+      })
+      .catch((error: unknown) => {
+        if (!this.#destroyed && error instanceof TextureTransportError) {
+          this.#recordTransportFailure(url);
+        }
+        throw error;
+      })
+      .finally(() => this.#sourceRequests.delete(url));
+    this.#sourceRequests.set(url, request);
+    return request;
+  }
+
+  #forgetSource(url: string) {
+    const blob = this.#sources.get(url);
+    if (!blob) return;
+    this.#sourceBytes -= blob.size;
+    this.#sources.delete(url);
   }
 
   #trimUnreferenced() {
@@ -560,7 +643,10 @@ export class ShowPixiTextureCache {
     } = {}
   ) {
     if (countFailure) this.#failures += 1;
-    if (blockUrl) this.#rememberFailedUrl(entry.url, transportFailure);
+    if (blockUrl) {
+      this.#forgetSource(entry.url);
+      this.#rememberFailedUrl(entry.url, transportFailure);
+    }
     if (this.#entries.get(entry.key) === entry) {
       this.#entries.delete(entry.key);
       this.#reservedPixels = Math.max(

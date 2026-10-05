@@ -15,6 +15,7 @@ import { usePublicNavigationTopEdgeReveal } from "../../hooks/usePublicNavigatio
 import { Icon } from "../icon/Icon.js";
 import { MobileNavigation } from "./MobileNavigation.js";
 import { usePublicRoutePreloadIntents } from "../../lib/public-route-modules.js";
+import { imageBrowseNavigationHref } from "../../lib/gallery/gallery-query.js";
 
 export function AppHeader({
   animateEntrance,
@@ -28,6 +29,8 @@ export function AppHeader({
   visible?: boolean;
 } = {}) {
   const { pathname } = useLocation();
+  const showHref = imageBrowseNavigationHref("/show", browseSearch);
+  const galleryHref = imageBrowseNavigationHref("/gallery", browseSearch);
   const { data } = useSiteConfig();
   const { data: auth } = useAuthSessionQuery();
   const headerRef = useRef<HTMLElement | null>(null);
@@ -159,7 +162,7 @@ export function AppHeader({
         )}
         {showEnabled && (
           <NavLink
-            to={browseSearch ? `/show?${browseSearch}` : "/show"}
+            to={showHref}
             className={navClassName("/show")}
             {...showPreloadProps}
           >
@@ -169,7 +172,7 @@ export function AppHeader({
         )}
         {galleryEnabled && (
           <NavLink
-            to={browseSearch ? `/gallery?${browseSearch}` : "/gallery"}
+            to={galleryHref}
             className={navClassName("/gallery")}
             {...galleryPreloadProps}
           >
@@ -193,7 +196,7 @@ export function AppHeader({
         )}
         {showEnabled && (
           <NavLink
-            to={browseSearch ? `/show?${browseSearch}` : "/show"}
+            to={showHref}
             className={navClassName("/show")}
             {...showPreloadProps}
           >
@@ -203,7 +206,7 @@ export function AppHeader({
         )}
         {galleryEnabled && (
           <NavLink
-            to={browseSearch ? `/gallery?${browseSearch}` : "/gallery"}
+            to={galleryHref}
             className={navClassName("/gallery")}
             {...galleryPreloadProps}
           >

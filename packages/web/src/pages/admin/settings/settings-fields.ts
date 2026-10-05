@@ -302,12 +302,14 @@ const settingsFields = {
   "site.show.density": {
     group: "show",
     label: "展映默认密度",
+    hint: "用于瀑布和漂浮；星群按分类图片数决定密度。",
     kind: "select",
     options: { relaxed: "宽松", balanced: "均衡", dense: "紧凑" }
   },
   "site.show.drift_speed": {
     group: "show",
-    label: "展映漂浮速度",
+    label: "展映播放速度",
+    hint: "调整瀑布滚动、漂浮移动，以及星群转动与自动播放的速度。",
     kind: "number",
     min: 10,
     max: 60

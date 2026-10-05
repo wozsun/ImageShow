@@ -24,6 +24,9 @@ export type ShowPixiTextureStats = {
   rejected: number;
   failures: number;
   evictions: number;
+  sourceEntries: number;
+  sourceBytes: number;
+  sourceHits: number;
 };
 
 export type ShowPixiSceneStats = {

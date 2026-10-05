@@ -168,6 +168,8 @@ export function ShowPage({
   const sizeControlRef = useRef<HTMLButtonElement | null>(null);
   const stageRef = useRef<ShowPixiStageHandle | null>(null);
   const [clusterFocus, setClusterFocus] = useState<ShowClusterFocus | null>(null);
+  // 点按进入星团后导航自动隐藏，与自动播放时一致；回到星群或以其他方式进入时恢复原有规则。
+  const [clusterClicked, setClusterClicked] = useState(false);
   const reducedMotion = useMediaQuery(reducedMotionQuery);
   const data = useShowData(
     filters,
@@ -190,11 +192,11 @@ export function ShowPage({
   );
   const browseImages = clusterMode ? clusterImages : data.images;
   const playbackRunning = running && (clusterMode
-    ? clusterData.clusters.length > 0
+    ? clusterImages.length > 0
     : !data.initialLoading && !data.error && data.images.length > 0);
   const navigationControls = usePublicImageViewportControls({
     autoHideAfterMs:
-      playbackRunning && !reducedMotion && motionActive
+      (playbackRunning && !reducedMotion && motionActive) || (clusterFocus && clusterClicked)
         ? publicNavigationAutoHideDelayMs
         : undefined,
     headerPresent: !embedded,
@@ -259,6 +261,14 @@ export function ShowPage({
     setClusterFocus(null);
   }, [clusterMode, clusterData.dataKey]);
 
+  const clusterFocused = clusterFocus !== null;
+  // Esc 与“回到星群”按钮是访客明确要回到总览：带出导航，分组、排序与画面切换都在那里；
+  // 已在总览时按 Esc 同样带出导航。滚轮缩放与双指缩回星群时由场景收放导航，± 按钮缩放不改变导航。
+  const exitCluster = useCallback(() => {
+    if (clusterFocused) stageRef.current?.clusterCommand({ type: "exit" });
+    resetManualNavigation();
+  }, [clusterFocused, resetManualNavigation]);
+
   useEffect(() => {
     if (!clusterMode || dialogOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -271,7 +281,7 @@ export function ShowPage({
         (event.target instanceof HTMLElement && event.target.closest("input, textarea, select"))
       )
         return;
-      if (event.key === "Escape") stageRef.current?.clusterCommand({ type: "exit" });
+      if (event.key === "Escape") exitCluster();
       else if (event.key === "ArrowLeft" || event.key === "ArrowUp")
         stageRef.current?.clusterCommand({ type: "step", direction: -1 });
       else if (event.key === "ArrowRight" || event.key === "ArrowDown")
@@ -279,7 +289,7 @@ export function ShowPage({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [clusterMode, dialogOpen]);
+  }, [clusterMode, dialogOpen, exitCluster]);
 
   useEffect(() => {
     if (selected) {
@@ -375,15 +385,15 @@ export function ShowPage({
       ? waterfallColumns <= waterfallDensity.minimumColumns + 0.001
       : scene === "float"
         ? floatSizeIndex >= showFloatSizeSteps.length - 1
-        : clusterData.clusters.length === 0;
+        : clusterImages.length === 0;
   const pointerHint =
     scene === "waterfall"
-      ? "拖动平移；滚轮纵移；Ctrl + 滚轮或双指缩放"
+      ? "拖动平移；滚轮纵移，Shift + 滚轮横移；Ctrl + 滚轮或双指缩放"
       : scene === "float"
         ? "上下拖动或滚轮纵移；Ctrl + 滚轮调整尺寸"
         : clusterFocus
-          ? "拖动旋转；滚轮缩放，缩到最小回到星群；方向键切换星团"
-          : "拖动转动星群；点击星团或滚轮放大进入";
+          ? "拖动或 Shift + 滚轮旋转；滚轮缩放，缩到最小回到星群；方向键切换星团"
+          : "拖动或 Shift + 滚轮转动星群；点击星团或滚轮放大进入";
   const touchHint =
     scene === "waterfall"
       ? "拖动平移；点按 ± 或双指缩放"
@@ -491,7 +501,7 @@ export function ShowPage({
                 );
             }}
             onReset={() => {
-              if (scene === "cluster") stageRef.current?.clusterCommand({ type: "exit" });
+              if (scene === "cluster") exitCluster();
               else if (scene === "waterfall") setWaterfallColumns(waterfallDensity.defaultColumns);
               else setFloatSizeIndex(defaultShowFloatSizeIndex);
             }}
@@ -502,10 +512,10 @@ export function ShowPage({
         controlRef={stageRef}
         clusters={clusterData.clusters}
         clusterDataKey={clusterData.dataKey}
-        onClusterFocusChange={(focus, automatic) => {
+        onClusterFocusChange={(focus, entry) => {
           setClusterFocus(focus);
-          // 访客自己回到星群总览时带出导航：分组、排序与画面切换都在那里。
-          if (!focus && !automatic) resetManualNavigation();
+          if (!focus) setClusterClicked(false);
+          else if (entry) setClusterClicked(entry === "click");
         }}
         onNeedClusterImages={clusterData.needImages}
         dataKey={data.committedKey}
@@ -543,7 +553,7 @@ export function ShowPage({
           </div>
         )}
         {clusterMode && !clusterData.loading && !clusterData.error
-          && !clusterData.clusters.length && <p className="show-empty">暂无图片</p>}
+          && !clusterImages.length && <p className="show-empty">暂无图片</p>}
         {!clusterMode && Boolean(filterError) && (
           <div className="show-query-state">
             <PublicFilterErrorState

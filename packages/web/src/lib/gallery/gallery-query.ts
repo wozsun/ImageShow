@@ -221,3 +221,18 @@ export function galleryHref(
   const query = readableFilterSearch(galleryRouteSearchParams(filters));
   return query ? `${pathname}?${query}` : pathname;
 }
+
+/** Carry explicit choices supported by the destination, including invalid filters to repair. */
+export function imageBrowseNavigationHref(pathname: "/show" | "/gallery", search: string) {
+  const fields = new Set([
+    ...Object.keys(emptyGalleryFilters),
+    "order",
+    ...(pathname === "/show" ? ["mode", "group"] : [])
+  ]);
+  const params = new URLSearchParams();
+  for (const [key, value] of new URLSearchParams(search)) {
+    if (fields.has(key)) params.append(key, value);
+  }
+  const query = readableFilterSearch(params);
+  return query ? `${pathname}?${query}` : pathname;
+}

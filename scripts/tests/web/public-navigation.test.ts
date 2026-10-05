@@ -524,6 +524,29 @@ test("[Web/公开导航] 真实画廊与展映页面刷新词表后按完整原�
       assert.equal(recovered.get("theme"), null);
       assert.equal(recovered.get("author"), null);
       await h.respond(h.pending.indexOf(imageRequests()[1]), { items: [], next_cursor: null });
+      if (show && !embedded) {
+        await h.React.act(async () => {
+          void navigate("/show?mode=cluster&group=author&order=oldest&tag=missing&device=mb&theme=city&unused=1");
+        });
+        await h.flush();
+        const galleryLinks = [...h.document.querySelectorAll('a')].filter((link) => link.textContent === "画廊");
+        assert.equal(galleryLinks.length, 1, "桌面导航按目标页面生成链接");
+        for (const link of galleryLinks) {
+          assert.equal(link.getAttribute("href"), "/gallery?order=oldest&tag=missing&device=mb&theme=city");
+        }
+        const share = h.document.querySelector<HTMLButtonElement>('button[aria-label="分享"]');
+        assert.ok(share);
+        await h.React.act(async () => share.click());
+        const pageLink = h.document.querySelector<HTMLInputElement>('input[aria-label="页面链接"]');
+        assert.ok(pageLink);
+        assert.equal(pageLink.value, "https://img.example/show?order=oldest&mode=cluster&group=author");
+        const randomLink = h.document.querySelector<HTMLInputElement>('input[aria-label="随机图片API"]');
+        assert.ok(randomLink);
+        const randomParams = new URL(randomLink.value).searchParams;
+        assert.equal(randomParams.get("device"), "all");
+        assert.equal(randomParams.get("theme"), null);
+        assert.equal(randomParams.get("tag"), null);
+      }
     });
   }
 });

@@ -19,11 +19,15 @@ import {
   shuffledImageBatch
 } from "../../lib/gallery/image-browse.js";
 import type { EditableImageSnapshot } from "../../lib/types.js";
-import { clusterShownCount } from "./show-cluster-layout.js";
+import {
+  clusterQueueReserve,
+  clusterRingCapacity,
+  clusterShownCount
+} from "./show-cluster-layout.js";
 import { showContinuationLimit } from "./show-data-pool.js";
 import type { ShowImage } from "./show-layout.js";
 
-/** 一个星团：一种分类下的图片流，保留槽位持有的图片与待轮换队列。 */
+/** 一个星团：一种分类下的图片流，保留槽位持有的图片与待轮换队列。还没取得首批图片时 images 为空。 */
 export type ShowCluster = {
   key: string;
   name: string;
@@ -50,10 +54,14 @@ type ClusterFeed = {
 };
 
 const statsField = { theme: "themes", tag: "tags", author: "authors" } as const;
-// 总览同时展示的星团数量；标签与作者可能很多，只取图片最多的若干个。
-const maximumClusters = 12;
+// 每个分类都轮流成为星团；数量极多时只取图片最多的这些，限制轮换队列与各自持有的图片。
+const maximumClusters = 120;
+// 一开始只取环上最多能放下的分类，外加轮换时最先出场的两个；其余的由场景在出场前请求。
+const initialFeeds = clusterRingCapacity + 2;
 const firstPageTiers = [60, 120, 180] as const;
 const maximumRetainedImages = 360;
+// 全部分类合计保留的图片数据按 6.7.0 的 12 × 360 分摊；每个分类至少放得下自己的首批。
+const maximumRetainedTotal = 12 * 360;
 const maximumConcurrentRequests = 3;
 const noClusters: readonly ShowCluster[] = [];
 
@@ -64,10 +72,9 @@ const noClusters: readonly ShowCluster[] = [];
 export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabled: boolean) {
   const facets = useGalleryFacets(enabled);
   const stats = useGalleryStats("", enabled);
-  const [generation, setGeneration] = useState(0);
-  // 分组、排序或一次重试对应一个 dataKey：场景据此整体重建，而不是把新旧星群混在一起。
-  const dataKey = `${group}:${order}:${generation}`;
-  // settled：这一组星群的首批请求都已返回（成功或失败）。
+  // 分组或排序变化才重建；失败重试保留已展示星团及其游标。
+  const dataKey = `${group}:${order}`;
+  // settled：这一组星群一开始的首批请求都已返回（成功或失败）。
   const [published, setPublished] = useState({ dataKey, clusters: noClusters, settled: false });
   const [failure, setFailure] = useState<unknown>(null);
   const feedsRef = useRef(new Map<string, ClusterFeed>());
@@ -77,6 +84,9 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
   const removedImageIdsRef = useRef(new Set<string>());
   const confirmedImageEditsRef = useRef(new Map<string, ShowImage>());
   const targetedRequestsRef = useRef(new Map<string, AbortController>());
+  // 已发布过带图片的星群：之后的请求随到随发，重试首批失败的分类时也不再等它；
+  // 还没有任何星团时仍等一开始的首批全部返回，环只排一次。
+  const showingRef = useRef(false);
 
   const members = useMemo(() => {
     if (!enabled || !stats.data || !facets.data) return null;
@@ -90,18 +100,17 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
         name: names.get(entry.slug) || (entry.slug === unsetThemeFilter ? "未设置" : entry.slug),
         total: entry.image_count
       }));
-    // 统计与词表的后台刷新不重建星群；切换分组、排序或重试才重新取图。
+    // 后台刷新不重建星群；切换分组或排序才重新选取成员。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, group, Boolean(stats.data), Boolean(facets.data), generation]);
+  }, [enabled, group, order, Boolean(stats.data), Boolean(facets.data)]);
 
   const publish = useCallback(() => {
-    setPublished({
-      dataKey,
-      settled: true,
-      clusters: [...feedsRef.current.values()]
-        .filter((feed) => feed.images.length > 0)
-        .map((feed) => ({ key: feed.key, name: feed.name, total: feed.total, images: feed.images }))
-    });
+    // 已取过却没有任何图片的分类（统计比实际旧）不发布，场景不会为它留位置。
+    const clusters = [...feedsRef.current.values()]
+      .filter((feed) => !(feed.started && feed.images.length === 0))
+      .map((feed) => ({ key: feed.key, name: feed.name, total: feed.total, images: feed.images }));
+    showingRef.current = clusters.some((cluster) => cluster.images.length > 0);
+    setPublished({ dataKey, settled: true, clusters });
   }, [dataKey]);
 
   const pump = useCallback(() => {
@@ -113,9 +122,16 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
       feed.requesting = true;
       inFlightRef.current += 1;
       const first = !feed.started;
-      const limit = first
-        ? imageBatchTier(clusterShownCount(feed.total) + 24, firstPageTiers)
-        : showContinuationLimit;
+      let continueEmptyPage = false;
+      const firstLimit = imageBatchTier(
+        clusterShownCount(feed.total) + clusterQueueReserve,
+        firstPageTiers
+      );
+      const limit = first ? firstLimit : showContinuationLimit;
+      const retainedLimit = Math.min(
+        maximumRetainedImages,
+        Math.max(firstLimit, Math.floor(maximumRetainedTotal / feedsRef.current.size))
+      );
       const read = (cursor: string) =>
         api<PublicImageListResponseDto<"show">>(
           `/api/images?${readableFilterSearch(
@@ -157,7 +173,7 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
             // 续页里的图都已删除或离开分类：场景等不到新的图片数组，由这里接着取，最多连续两次。
             if (!first && feed.emptyPages < 2) {
               feed.emptyPages += 1;
-              queueRef.current.push(feed.key);
+              continueEmptyPage = true;
             }
           } else {
             feed.emptyPages = 0;
@@ -166,7 +182,12 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
             for (const image of combined)
               if (feed.retainedIds.has(image.id)) held.set(image.id, image);
             // 槽位仍持有的图必须留在 owner 中，否则队列截断后编辑、删除与回读会失去目标。
-            const queued = combined.slice(-(maximumRetainedImages - held.size));
+            // 正在环上续页的分类至少留下尚未上屏的余量与这一页，截掉的只是已经展示过的部分。
+            const keepLimit = Math.min(
+              maximumRetainedImages,
+              Math.max(retainedLimit, held.size + clusterQueueReserve + accepted.length)
+            );
+            const queued = combined.slice(-(keepLimit - held.size));
             for (const image of queued) held.delete(image.id);
             feed.images = [...held.values(), ...queued];
           }
@@ -180,9 +201,14 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
           if (controller.signal.aborted) return;
           feed.requesting = false;
           inFlightRef.current -= 1;
-          const feeds = [...feedsRef.current.values()];
-          // 首批全部返回后一次发布，星群环只排一次；之后的续取随到随发。
-          if (feeds.every((candidate) => candidate.started || candidate.failed)) publish();
+          if (continueEmptyPage) queueRef.current.push(feed.key);
+          const feeds = [...feedsRef.current.values()].slice(0, initialFeeds);
+          // 一开始的首批全部返回后一次发布，星群环只排一次；之后的请求随到随发。
+          if (
+            showingRef.current ||
+            feeds.every((candidate) => candidate.started || candidate.failed)
+          )
+            publish();
           pump();
         });
     }
@@ -194,6 +220,7 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
     feedsRef.current = new Map();
     queueRef.current = [];
     inFlightRef.current = 0;
+    showingRef.current = false;
     removedImageIdsRef.current.clear();
     confirmedImageEditsRef.current.clear();
     setPublished({ dataKey, clusters: noClusters, settled: members?.length === 0 });
@@ -214,7 +241,7 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
           requesting: false,
           emptyPages: 0
         });
-        queueRef.current.push(key);
+        if (feedsRef.current.size <= initialFeeds) queueRef.current.push(key);
       }
       pump();
     }
@@ -226,14 +253,17 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
     };
   }, [dataKey, group, members, pump]);
 
-  /** 场景消耗到队列末尾附近时请求续取；全部同屏的小星团没有可轮换的图，不发请求。 */
+  /**
+   * 场景请求图片：还没上过环的分类取首批，消耗到队列末尾附近的星团取续页；
+   * 全部同屏的小星团没有可轮换的图，不发续页请求。
+   */
   const needImages = useCallback(
     (key: string, retainedIds: readonly string[]) => {
       const feed = feedsRef.current.get(key);
       if (!feed) return;
       feed.retainedIds = new Set(retainedIds);
-      if (!feed.started || feed.failed || feed.requesting || queueRef.current.includes(key)) return;
-      if (feed.total <= clusterShownCount(feed.total)) return;
+      if (feed.failed || feed.requesting || queueRef.current.includes(key)) return;
+      if (feed.started && feed.total <= clusterShownCount(feed.total)) return;
       queueRef.current.push(key);
       pump();
     },
@@ -319,7 +349,15 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
 
   // 切换分组或排序后的第一次渲染里，状态还是上一组的星群：不属于当前 dataKey 的一律不交给场景。
   const current = enabled && published.dataKey === dataKey;
-  const clusters = current ? published.clusters : noClusters;
+  const clusters = useMemo(() => {
+    if (!current) return noClusters;
+    const names = new Map(facets.data?.[statsField[group]].map((entry) => [entry.slug, entry.display_name]));
+    return published.clusters.map((cluster) => {
+      // 星团键是“分组:slug”。
+      const name = names.get(cluster.key.slice(group.length + 1));
+      return name && name !== cluster.name ? { ...cluster, name } : cluster;
+    });
+  }, [current, published.clusters, facets.data, group]);
   const settled = current && published.settled;
   const sourceError = (stats.data ? null : stats.error) ?? (facets.data ? null : facets.error) ?? null;
   const error = enabled ? (sourceError ?? (settled ? failure : null)) : null;
@@ -337,7 +375,19 @@ export function useShowClusters(group: ShowClusterGroup, order: ShowOrder, enabl
         void stats.refetch({ cancelRefetch: false });
         void facets.refetch({ cancelRefetch: false });
       }
-      setGeneration((current) => current + 1);
+      setFailure(null);
+      let retryingFirstPage = false;
+      for (const feed of feedsRef.current.values()) {
+        if (!feed.failed) continue;
+        retryingFirstPage ||= !feed.started;
+        feed.failed = false;
+        feed.emptyPages = 0;
+        queueRef.current.push(feed.key);
+      }
+      if (retryingFirstPage && !clusters.some((cluster) => cluster.images.length > 0)) {
+        setPublished((previous) => ({ ...previous, settled: false }));
+      }
+      pump();
     }
   };
 }

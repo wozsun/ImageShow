@@ -74,19 +74,21 @@ export function useImageBrowseRoute() {
     if (ready && signature(next) === signature(parsed.filters)) return;
     updateSearchParams((current) => updateImageBrowseSearchParams(current, next));
   };
-  const randomLink = ready
-    ? randomLinkResult({
-        origin: window.location.origin,
-        device: galleryRandomRequestDevice(parsed.filters.device),
-        brightness: parsed.filters.brightness || "random",
-        theme: parsed.filters.theme,
-        tag: parsed.filters.tag,
-        author: parsed.filters.author
-      })
-    : { url: null, error: null };
+  const getRandomLink = (mode?: ShowMode) => {
+    if (!ready && mode !== "cluster") return { url: null, error: null };
+    const filters = mode === "cluster" ? emptyGalleryFilters : parsed.filters;
+    return randomLinkResult({
+      origin: window.location.origin,
+      device: galleryRandomRequestDevice(filters.device),
+      brightness: filters.brightness || "random",
+      theme: filters.theme,
+      tag: filters.tag,
+      author: filters.author
+    });
+  };
   const getPageUrl = (order: ShowOrder, mode?: ShowMode, group?: ShowClusterGroup) => {
-    if (!ready) return null;
-    const pageParams = galleryRouteSearchParams(parsed.filters);
+    if (!ready && mode !== "cluster") return null;
+    const pageParams = galleryRouteSearchParams(mode === "cluster" ? emptyGalleryFilters : parsed.filters);
     pageParams.set("order", order);
     if (mode) pageParams.set("mode", mode);
     if (group) pageParams.set("group", group);
@@ -107,7 +109,7 @@ export function useImageBrowseRoute() {
     updateFilter,
     clearFilters,
     applyFilters,
-    randomLink,
+    getRandomLink,
     getPageUrl,
     facetsError: facetsQuery.error,
     facetsLoading: facetsQuery.isPending,

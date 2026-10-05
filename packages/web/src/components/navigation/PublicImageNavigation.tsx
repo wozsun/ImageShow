@@ -41,6 +41,7 @@ export function PublicImageNavigation({
   floatingControlsHidden?: boolean;
 }) {
   const mobile = useMediaQuery(mobileViewportMediaQuery);
+  const randomLink = route.getRandomLink(mode);
   return (
     <>
       <div className="public-navigation-frame">
@@ -59,10 +60,10 @@ export function PublicImageNavigation({
             animateEntrance={animateEntrance}
             filters={route.filters}
             facets={route.facets}
-            randomUrl={route.randomLink.url}
+            randomUrl={randomLink.url}
             pageUrl={route.getPageUrl(order, mode, group)}
-            randomLinkError={route.randomLink.error}
-            filterInvalid={Boolean(route.error)}
+            randomLinkError={randomLink.error}
+            filterInvalid={mode !== "cluster" && Boolean(route.error)}
             filtersOpen={filterDialog.active}
             toolbarVisible={controls.toolbarVisible}
             toolbarRef={controls.toolbarRef}
@@ -85,7 +86,7 @@ export function PublicImageNavigation({
             data-show-control=""
             data-public-navigation-visible={controls.headerVisible || controls.toolbarVisible}
             role="group"
-            aria-label="图片大小"
+            aria-label={mode === "cluster" ? "星群缩放" : "图片大小"}
             hidden={floatingControlsHidden}
           >
             {leadingControls}

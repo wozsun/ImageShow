@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import { parseHTML } from "linkedom";
 import {
   Container,
+  Graphics,
   Point,
   Texture,
   type FederatedPointerEvent,
@@ -209,8 +210,8 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
     onOpen: (image: (typeof images)[number], opener: HTMLElement) => {
       calls.push({ name: "open", revision, args: [image, opener] });
     },
-    onClusterFocusChange: (focus: Parameters<Options["onClusterFocusChange"]>[0], automatic: boolean) => {
-      calls.push({ name: "cluster-focus", revision, args: [focus, automatic] });
+    onClusterFocusChange: (...args: Parameters<Options["onClusterFocusChange"]>) => {
+      calls.push({ name: "cluster-focus", revision, args });
     },
     onNeedClusterImages: (key: string, retainedIds: readonly string[]) => {
       calls.push({ name: "cluster-need", revision, args: [key, retainedIds] });
@@ -267,7 +268,7 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
       options.onMotionActiveChange(true);
       options.onNeedImages(usage);
       options.onOpen(images[0], "slot");
-      options.onClusterFocusChange({ key: "theme:test", name: "测试", total: 2 }, false);
+      options.onClusterFocusChange({ key: "theme:test", name: "测试", total: 2 }, "click");
       options.onNeedClusterImages("theme:test", [images[0].id]);
     });
     assert.deepEqual(
@@ -279,7 +280,7 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
     assert.equal(calls[4].args[0], usage);
     assert.equal(calls[5].args[0], images[0]);
     assert.equal(calls[5].args[1], creations[0].host);
-    assert.deepEqual(calls[6].args, [{ key: "theme:test", name: "测试", total: 2 }, false]);
+    assert.deepEqual(calls[6].args, [{ key: "theme:test", name: "测试", total: 2 }, "click"]);
     assert.deepEqual(calls[7].args, ["theme:test", [images[0].id]]);
   };
   await React.act(async () => render(1));
@@ -324,7 +325,7 @@ test("[Web/展映] Stage 回调读取已提交版本并保持异步实例生命�
       options.onMotionActiveChange(true);
       options.onNeedImages(usage);
       options.onVisibleItems([]);
-      options.onClusterFocusChange(null, true);
+      options.onClusterFocusChange(null);
       options.onNeedClusterImages("theme:test", [images[0].id]);
     }
   });
@@ -889,8 +890,9 @@ test("[Web/展映] 纹理缓存保留原图比例做居中裁剪，共享引用�
   const cache = new ShowPixiTextureCache({
     maximumEntries: 2,
     maximumPixels: 100_000,
-    maximumInFlight: 1,
+    maximumInFlight: 2,
     maximumUnreferenced: 0,
+    maximumSourceBytes: 10,
     generateMipmaps: false
   });
   t.after(() => {
@@ -936,6 +938,34 @@ test("[Web/展映] 纹理缓存保留原图比例做居中裁剪，共享引用�
   secondLease.release();
   assert.equal(cache.stats().entries, 0);
   assert.equal(cache.stats().reservedPixels, 0);
+  assert.ok(bitmaps.every((bitmap) => bitmap.closed));
+  const acquireSize = (url: string, size: number) => {
+    let held!: ReturnType<ShowPixiTextureCache["acquire"]>;
+    const ready = new Promise<Texture | null>((resolve) => {
+      held = cache.acquire(url, { pixelWidth: size, pixelHeight: size, sourceRatio: 1 }, resolve);
+    });
+    return { ready, release: () => held.release() };
+  };
+  const smaller = acquireSize("https://images.example/tall.webp", 32);
+  assert.equal((await smaller.ready)?.width, 32);
+  smaller.release();
+  assert.equal(requests, 1, "纹理淘汰与换档仍复用同一图片字节");
+  const concurrent = [32, 64].map((size) => acquireSize("https://images.example/other.webp", size));
+  const decoded = await Promise.all(concurrent.map((item) => item.ready));
+  assert.deepEqual(decoded.map((item) => item?.width), [32, 64]);
+  assert.equal(requests, 2, "同地址不同档位的在途加载只下载一次");
+  concurrent.forEach((item) => item.release());
+  const third = acquireSize("https://images.example/third.webp", 32);
+  await third.ready;
+  third.release();
+  assert.equal(cache.stats().sourceBytes, 10);
+  const evicted = acquireSize("https://images.example/tall.webp", 32);
+  await evicted.ready;
+  evicted.release();
+  assert.equal(requests, 4, "字节预算淘汰最久未使用图片，之后正常重新读取");
+  cache.destroy();
+  assert.equal(cache.stats().sourceBytes, 0);
+  assert.equal(cache.stats().sourceEntries, 0);
   assert.ok(bitmaps.every((bitmap) => bitmap.closed));
 });
 test("[Web/展映] 详情暂停导航保持原显隐状态，关闭后只在自动播放时重新计时", async (t) => {
@@ -3253,9 +3283,10 @@ test("[Web/展映] 漂浮与星群删除释放卡片，星群故障恢复保留�
     const target = h.document.createElement("div") as unknown as HTMLElement;
     let leases = 0;
     let visibleItems: readonly ShowPixiVisibleItem[] = [];
-    let focus: { key: string; total: number } | null = null;
+    let focus: { key: string; name: string; total: number } | null = null;
     const focusedCluster = () => focus;
     let current!: ReturnType<typeof useShowClusters>;
+    const navigation: number[] = [];
     const scene = new ShowPixiClusterScene({
       width: 1440,
       height: 900,
@@ -3277,7 +3308,7 @@ test("[Web/展映] 漂浮与星群删除释放卡片，星群故障恢复保留�
       onClusterFocusChange: (value) => { focus = value; },
       onOpen() {},
       onVisibleItems: (items) => { visibleItems = items; },
-      onManualVerticalMovement() {}
+      onManualVerticalMovement: (delta) => navigation.push(delta)
     });
     t.after(() => {
       scene.destroy();
@@ -3307,22 +3338,27 @@ test("[Web/展映] 漂浮与星群删除释放卡片，星群故障恢复保留�
     await advance();
     assert.equal(h.pending.length, 2, "失败分类不自动轮询");
     await h.React.act(async () => h.document.querySelector("button")!.click());
-    await h.respond(2, { items: images.slice(0, 100), next_cursor: null });
-    await h.respond(3, { items: [images[100]], next_cursor: null });
+    const retryDataKey = current.dataKey;
+    assert.equal(current.loading, false, "部分失败重试期间保留已展示画面");
+    const heldImages = current.clusters[0]!.images;
+    await h.respond(2, { items: [images[100]], next_cursor: null });
+    assert.equal(current.dataKey, retryDataKey);
+    assert.equal(current.clusters[0]!.images, heldImages, "重试失败分类保留成功分类的图片与场景身份");
+    assert.equal(scene.stats().retainedDtos, 101, "首批失败分类重试成功后加入已有场景");
     assert.equal(h.document.querySelector('[role="alert"]'), null);
     await advance();
     assert.ok(scene.stats().activeSprites > 0);
     const retainedIds = images.slice(0, 45).map((image) => image.id);
     await h.React.act(async () => current.needImages("theme:main", retainedIds));
-    await h.respond(4, { error: "续取失败" }, 503);
+    await h.respond(3, { error: "续取失败" }, 503);
     assert.ok(h.document.querySelector('[role="alert"]'), "已有星团时续取失败仍可见");
     await h.React.act(async () => {
       for (let frame = 0; frame < 100; frame++) current.needImages("theme:main", retainedIds);
     });
-    assert.equal(h.pending.length, 5);
+    assert.equal(h.pending.length, 4);
     await h.React.act(async () => h.document.querySelector("button")!.click());
-    await h.respond(5, { items: images.slice(0, 100), next_cursor: null });
-    await h.respond(6, { items: [images[100]], next_cursor: null });
+    await h.respond(4, { items: images.slice(0, 100), next_cursor: null });
+    assert.equal(current.dataKey, retryDataKey, "续页重试不重建星群");
     assert.equal(h.document.querySelector('[role="alert"]'), null);
 
     await h.React.act(async () => current.needImages("theme:main", retainedIds));
@@ -3332,23 +3368,23 @@ test("[Web/展映] 漂浮与星群删除释放卡片，星群故障恢复保留�
       current.removeImage(images[1]!.id);
       current.needImages("theme:main", retainedIds);
     });
-    assert.equal(h.pending.length, 8, "编辑发布不能为同一星团创建并发续页");
-    await h.respond(7, { items: images.slice(0, 100), next_cursor: null });
+    assert.equal(h.pending.length, 6, "编辑发布不能为同一星团创建并发续页");
+    await h.respond(5, { items: images.slice(0, 100), next_cursor: null });
     const admitted = current.clusters.flatMap((cluster) => cluster.images);
     assert.ok(admitted.every((image) => image.id !== images[1]!.id), "迟到分页不能复活已删除图片");
     assert.ok(admitted.every((image) => image.id !== images[2]!.id), "改到别的分类的图片离开原星团，迟到分页不能接回");
     assert.ok(admitted.filter((image) => image.id === images[0]!.id).every((image) => image.title === "已确认标题"));
 
     await h.React.act(async () => current.refreshImage(images[0]!.id));
-    assert.equal(h.pending[8]!.path, "/api/admin/images/snapshot");
-    assert.deepEqual(JSON.parse(String(h.pending[8]!.body)), { ids: [images[0]!.id] });
+    assert.equal(h.pending[6]!.path, "/api/admin/images/snapshot");
+    assert.deepEqual(JSON.parse(String(h.pending[6]!.body)), { ids: [images[0]!.id] });
     await h.React.act(async () => current.refreshImage(images[0]!.id));
-    assert.equal(h.pending[8]!.signal?.aborted, true);
-    await h.respond(9, { items: [editableImage(images[0]!.id, { ...images[0]!, theme: "main", title: "最新回读" })] });
-    await h.respond(8, { items: [editableImage(images[0]!.id, { ...images[0]!, theme: "main", title: "过时回读" })] });
+    assert.equal(h.pending[6]!.signal?.aborted, true);
+    await h.respond(7, { items: [editableImage(images[0]!.id, { ...images[0]!, theme: "main", title: "最新回读" })] });
+    await h.respond(6, { items: [editableImage(images[0]!.id, { ...images[0]!, theme: "main", title: "过时回读" })] });
     assert.equal(current.clusters[0]!.images[0]!.title, "最新回读");
     await h.React.act(async () => current.refreshImage(images[0]!.id));
-    await h.respond(10, { error: "回读拒绝" }, 403);
+    await h.respond(8, { error: "回读拒绝" }, 403);
     assert.equal(current.clusters[0]!.images[0]!.title, "最新回读", "失败不移除已提交图片");
 
     const queuedImages = showImages(601);
@@ -3363,11 +3399,45 @@ test("[Web/展映] 漂浮与星群删除释放卡片，星群故障恢复保留�
     }
     assert.ok(current.clusters[0]!.images.some((image) => image.id === images[0]!.id), "续取截断后仍保留槽位持有的旧图");
     await advance();
+    // 两指不会同时落下：先落下的手指在确认距离内的位移不能唤出导航，否则放大时导航会先出现再收起。
+    Object.assign(target, { setPointerCapture() {} });
+    const touch = (type: string, pointerId: number, y: number) => {
+      const event = new window.Event(type);
+      Object.assign(event, { pointerId, pointerType: "touch", button: 0, buttons: 1, clientX: 700, clientY: y });
+      target.dispatchEvent(event);
+    };
+    navigation.length = 0;
+    touch("pointerdown", 1, 400);
+    touch("pointermove", 1, 420);
+    touch("pointerdown", 2, 300);
+    touch("pointermove", 1, 430);
+    touch("pointermove", 2, 290);
+    touch("pointerup", 1, 430);
+    touch("pointerup", 2, 290);
+    assert.ok(navigation.length > 0 && navigation.every((delta) => delta > 0), "捏合放大只收起导航");
+    navigation.length = 0;
+    touch("pointerdown", 3, 300);
+    touch("pointermove", 3, 320);
+    assert.deepEqual(navigation, [], "单指拖动未走过确认距离前不推动导航");
+    touch("pointermove", 3, 345);
+    assert.deepEqual(navigation, [-45], "走过确认距离后补交暂存的位移");
+    touch("pointerup", 3, 345);
+    await advance();
     scene.command({ type: "zoom", direction: 1 });
     assert.ok(focus);
     if (focusedCluster()?.key !== "theme:main") scene.command({ type: "step", direction: 1 });
     await advance();
     await advance();
+    const requestsBeforeNames = h.pending.length;
+    await h.React.act(async () => {
+      client.setQueryData(queryKeys.galleryFacets, {
+        themes: themes.map((theme) => ({ ...theme, display_name: `${theme.display_name}更新` })),
+        tags: [], authors: []
+      });
+    });
+    await h.flush();
+    assert.equal(focusedCluster()?.name, "主分类更新", "词表更新同步当前星团名称与导航摘要");
+    assert.equal(h.pending.length, requestsBeforeNames, "名称更新不重新加载星团图片");
     const visible = visibleItems[0]!;
     assert.ok(visible);
     const visibleIds = visibleItems.map((item) => item.image.id);
@@ -3381,18 +3451,38 @@ test("[Web/展映] 漂浮与星群删除释放卡片，星群故障恢复保留�
       "暂停时编辑旧卡片",
       "同 ID 编辑也重新发布键盘与读屏代理数据"
     );
+    scene.command({ type: "exit" });
+    await advance();
+    const orbit = scene.root.children.find((child) => child instanceof Graphics) as Graphics;
+    assert.ok(orbit.context.instructions.length > 0);
     await h.React.act(async () => {
       for (const image of queuedImages) current.removeImage(image.id);
     });
+    assert.equal(orbit.context.instructions.length, 0, "同一发布移除全部星团时立即清除环线");
     await advance();
     assert.equal(scene.stats().activeSprites, 0, "末图删除后销毁整个星团的卡片");
     assert.equal(scene.stats().retainedDtos, 0);
     assert.equal(leases, 0);
     assert.equal(focus, null);
     assert.deepEqual(visibleItems, []);
+    const countBeforeRetry = h.pending.length;
     await h.React.act(async () => current.retry());
+    assert.equal(h.pending.length, countBeforeRetry, "没有失败项时重试不重建或重新接纳删除结果");
+    assert.equal(current.loading, false, "没有失败项时重试不进入加载状态");
+    await render(false);
+    await render();
+    await h.respond(13, { error: "分类读取失败" }, 503);
+    await h.respond(14, { error: "分类读取失败" }, 503);
+    assert.ok(current.error);
+    assert.equal(current.loading, false);
+    await h.React.act(async () => current.retry());
+    assert.equal(current.error, null);
+    assert.equal(current.loading, true, "全部首批失败后，重试挂起期间显示加载而非空结果");
     await h.respond(15, { items: [images[0]], next_cursor: null });
+    assert.equal(current.loading, true, "等待所有首批重试返回后才发布星群");
     await h.respond(16, { items: [images[100]], next_cursor: null });
+    assert.equal(current.loading, false);
+    assert.equal(current.clusters.length, 2);
     await h.React.act(async () => current.refreshImage(images[0]!.id));
     await render(false);
     assert.equal(h.pending[17]!.signal?.aborted, true, "退出星群取消定向回读");

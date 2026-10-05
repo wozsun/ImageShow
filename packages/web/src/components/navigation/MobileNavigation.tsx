@@ -46,7 +46,10 @@ export function MobileNavigation({
       if (!rootRef.current?.contains(event.target as Node)) exit.requestClose();
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") exit.requestClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        exit.requestClose();
+      }
     };
     document.addEventListener("pointerdown", closeOutside);
     document.addEventListener("keydown", closeOnEscape);

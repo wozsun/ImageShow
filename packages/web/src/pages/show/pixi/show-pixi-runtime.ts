@@ -14,6 +14,7 @@ import type { ShowCluster } from "../useShowClusters.js";
 import {
   ShowPixiClusterScene,
   type ShowClusterCommand,
+  type ShowClusterEntry,
   type ShowClusterFocus
 } from "./show-pixi-cluster-scene.js";
 import { ShowPixiFloatScene } from "./show-pixi-float-scene.js";
@@ -44,7 +45,7 @@ type ShowPixiRuntimeOptions = {
   reducedMotion: boolean;
   speed: number;
   statsElement: HTMLOutputElement | null;
-  onClusterFocusChange: (focus: ShowClusterFocus | null, automatic: boolean) => void;
+  onClusterFocusChange: (focus: ShowClusterFocus | null, entry?: ShowClusterEntry) => void;
   onColumnsChange: (columns: number) => number;
   onFloatSizeIndexChange: (index: number) => number;
   onManualVerticalMovement: (delta: number, pointerType?: string) => void;
@@ -97,6 +98,7 @@ export function showPixiTextureCacheOptions(
     maximumPixels: compact ? 24_000_000 : 52_000_000,
     maximumInFlight: compact ? 12 : 16,
     maximumUnreferenced: compact ? 48 : 96,
+    maximumSourceBytes: (compact ? 16 : 32) * 1_024 * 1_024,
     generateMipmaps
   };
 }

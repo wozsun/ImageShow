@@ -250,7 +250,7 @@ test("[Web/公开筛选] 无效链接逐字段恢复，弹窗取消不丢条件�
   );
   assert.equal(route.ready, false);
   assert.equal(route.getPageUrl("latest"), null);
-  assert.equal(route.randomLink.url, null);
+  assert.equal(route.getRandomLink().url, null);
   await h.React.act(async () => dialog.open());
   const session = dialog.session!;
   const draft = createPublicFilterDraft(
@@ -275,7 +275,7 @@ test("[Web/公开筛选] 无效链接逐字段恢复，弹窗取消不丢条件�
   assert.equal(route.ready, true);
   assert.equal(route.params.toString(), "device=pc&brightness=dark");
   assert.ok(route.getPageUrl("latest"));
-  assert.ok(route.randomLink.url);
+  assert.ok(route.getRandomLink().url);
   assert.equal(h.pending.length, 0);
   await h.React.act(async () => route.updateFilter("theme", "city,!forest"));
   await h.React.act(async () => route.clearFilters());
